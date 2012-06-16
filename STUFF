@@ -1,0 +1,40 @@
+
+
+* lexer
+
+* parser
+
+* desugar
+   - get rid of immediately applied functions:
+
+             (function () { /* ... */ })();
+
+         can become nothing but:
+
+             { /* ... */ }
+
+         if there are no 'vars' inside it.  if there are, we hoist the
+         vars to the toplevel of the function and convert them to
+         lets, then replace it with the { }
+
+* lambda lifting
+
+* optimizations
+
+* ffi
+
+  - we need some sort of DSL for external C-linkage functions.  bonus points for a syntax that allows objc messages as well.
+    maybe something like:
+
+  @extern void print_internal_i32 (@i32(theInt))
+  @extern void print_internal_d64 (@d64(theDouble))
+  @extern void print_internal_string (@string(theString))
+
+  function print(theObj) {
+    if (theObj === null)
+      print_internal_string ("null");
+    else if (typeof(theObj) == "undefined")
+      print_internal_string ("undefined");
+    else if (typeof(theObj) == "object")
+      print_internal_string (theObj.toString());
+  }
