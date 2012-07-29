@@ -1,5 +1,5 @@
 TOPDIR=$(shell pwd)
-NODE_PATH=$(TOPDIR)/esprima:$(TOPDIR)/lib
+NODE_PATH=$(TOPDIR)/node-llvm/build/default:$(TOPDIR)/esprima:$(TOPDIR)/lib
 
 NJS_SHELL=/Users/toshok/src/coffeekit/coffeekit-internal/external-deps/spidermonkey-osx/js
 LLVM_CXXFLAGS="`$LLVM_CONFIG --cxxflags` -fno-rtti"
@@ -9,28 +9,26 @@ LLVM_LIBS:="$LLVM_LDFLAGS $LLVM_LIBS -lstdc++"
 
 CFLAGS=-Iruntime
 
-all: foo
+all: build-llvm build-node-llvm build-lib
 
-make-llvm:
-	cd llvm && ./configure --disable-jit
+test:
+	$(MAKE) -C test check
+
+# because we have a test directory..
+.PHONY: test
+
+LLVM_CONFIGURE_ARGS=--disable-jit --enable-static
+configure-llvm:
+	cd llvm && ./configure $(LLVM_CONFIGURE_ARGS)
+
+build-llvm: configure-llvm
 	$(MAKE) -C llvm
 
-foo-tmp.ll: foo.js
-	-NJS_SHELL=$(NJS_SHELL) ./ejs -f foo.js 2> foo-tmp.ll
+install-llvm:
+	$(MAKE) -C llvm install
 
-foo.ll: foo-tmp.ll
-	llvm-as < foo-tmp.ll | opt -mem2reg -simplifycfg | llvm-dis > foo.ll
+build-node-llvm:
+	$(MAKE) -C node-llvm
 
-foo.s: foo.ll
-	llc -march=x86-64 -O0 foo.ll
-	sed -e s/vmovsd/movsd/ < foo.s > foo.sed.s && mv foo.sed.s foo.s
-
-foo: foo.s main.o runtime/libecho.a
-	gcc -o foo foo.s main.o -Lruntime -lecho
-
-clean:
-	rm -f foo foo.sed.s foo.s foo.ll foo-tmp.ll main.o
-
-
-test-foo:
-	NJS_SHELL=$(NJS_SHELL) ./ejs -f foo.js
+build-lib:
+	$(MAKE) -C lib
