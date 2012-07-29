@@ -1,6 +1,6 @@
-lexer = require './lexer'
-parser = require './parser'
-definitions = require './definitions'
+lexer = require 'lexer'
+parser = require 'parser'
+definitions = require 'definitions'
 tokens = definitions.tokens
 
 class Type
