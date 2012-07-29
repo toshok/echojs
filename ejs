@@ -1,0 +1,22 @@
+#!/usr/bin/env node
+
+var fs = require('fs'),
+    esprima = require('esprima'),
+    compiler = require('compiler'),
+    files = process.argv.splice(2);
+
+if (files.length === 0) {
+    console.log('Usage:');
+    console.log('   ejs file.js');
+    process.exit(1);
+}
+
+files.forEach(function (filename) {
+console.log (1);
+    var content = fs.readFileSync(filename, 'utf-8');
+console.log (2);
+    var parse_tree = esprima.parse(content);
+console.log (3);
+    var compiled = compiler.compile(parse_tree);
+console.log (4);
+});
