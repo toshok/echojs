@@ -1,3 +1,4 @@
+#include <fstream>
 #include "node-llvm.h"
 #include "type.h"
 #include "module.h"
@@ -22,6 +23,7 @@ namespace jsllvm {
     NODE_SET_PROTOTYPE_METHOD(s_ct, "getOrInsertExternalFunction", Module::GetOrInsertExternalFunction);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "getFunction", Module::GetFunction);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", Module::Dump);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "writeToFile", Module::WriteToFile);
 
     s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
     target->Set(String::NewSymbol("Module"),
@@ -52,10 +54,12 @@ namespace jsllvm {
   Handle<Value> Module::New(const Arguments& args)
   {
     HandleScope scope;
-    REQ_UTF8_ARG(0, name);
-    printf ("name = %s\n", *name);
-    Module* module = new Module(new llvm::Module(*name, llvm::getGlobalContext()));
-    module->Wrap(args.This());
+    if (args.Length()) {
+      REQ_UTF8_ARG(0, name);
+      printf ("name = %s\n", *name);
+      Module* module = new Module(new llvm::Module(*name, llvm::getGlobalContext()));
+      module->Wrap(args.This());
+    }
     return scope.Close(args.This());
   }
 
@@ -133,6 +137,21 @@ namespace jsllvm {
     HandleScope scope;
     Module* module = ObjectWrap::Unwrap<Module>(args.This());
     module->llvm_module->dump();
+    return scope.Close(Undefined());
+  }
+
+  Handle<Value> Module::WriteToFile (const Arguments& args)
+  {
+    HandleScope scope;
+    Module* module = ObjectWrap::Unwrap<Module>(args.This());
+
+    REQ_UTF8_ARG(0, path);
+
+    std::ofstream output_file(*path);
+    llvm::raw_os_ostream raw_stream(output_file);
+    module->llvm_module->print(raw_stream, NULL);
+    output_file.close();
+
     return scope.Close(Undefined());
   }
 

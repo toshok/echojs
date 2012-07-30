@@ -23,6 +23,7 @@ namespace jsllvm {
     static v8::Handle<v8::Value> GetOrInsertExternalFunction (const v8::Arguments& args);
     static v8::Handle<v8::Value> GetFunction (const v8::Arguments& args);
     static v8::Handle<v8::Value> Dump (const v8::Arguments& args);
+    static v8::Handle<v8::Value> WriteToFile (const v8::Arguments& args);
 
     static v8::Persistent<v8::FunctionTemplate> s_ct;
     static v8::Persistent<v8::Function> s_func;

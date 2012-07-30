@@ -27,6 +27,7 @@ namespace jsllvm {
     LLVM_SET_METHOD(s_ct, getVoidTy);
 
     LLVM_SET_PROTOTYPE_METHOD(s_ct, isVoid);
+    LLVM_SET_PROTOTYPE_METHOD(s_ct, dump);
 #undef LLVM_SET_METHOD
 #undef LLVM_SET_PROTOTYPE_METHOD
 
@@ -87,6 +88,14 @@ namespace jsllvm {
     Type* type = ObjectWrap::Unwrap<Type>(args.This());
     Handle<Boolean> result = v8::Boolean::New(type->llvm_ty->isVoidTy());
     return scope.Close(result);
+  }
+
+  Handle<Value> Type::dump(const Arguments& args)
+  {
+    HandleScope scope;
+    Type* type = ObjectWrap::Unwrap<Type>(args.This());
+    type->llvm_ty->dump();
+    return scope.Close(Undefined());
   }
 
   Type::Type(llvm::Type *llvm_ty) : llvm_ty(llvm_ty)

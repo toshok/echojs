@@ -90,4 +90,4 @@ def build(bld):
   obj.cxxflags = ["-I/usr/local/include", "-D_DEBUG", "-D_GNU_SOURCE", "-D__STDC_LIMIT_MACROS", "-D__STDC_CONSTANT_MACROS", "-g", "-fno-exceptions", "-fno-rtti", "-fno-common", "-Woverloaded-virtual", "-Wcast-qual"]
 #  obj.cxxflags = ["-g", "-D_FILE_OFFSET_BITS=64", "-D_LARGEFILE_SOURCE", "-Wall"]
   obj.target = "llvm"
-  obj.source = ["node-llvm.cpp", "type.cpp", "value.cpp", "function.cpp", "irbuilder.cpp", "basicblock.cpp", "phinode.cpp", "module.cpp", "constant.cpp", "constantfp.cpp"]
+  obj.source = ["node-llvm.cpp", "functiontype.cpp", "type.cpp", "value.cpp", "function.cpp", "irbuilder.cpp", "basicblock.cpp", "phinode.cpp", "module.cpp", "constant.cpp", "constantfp.cpp"]

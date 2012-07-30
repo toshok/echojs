@@ -9,11 +9,14 @@
 #include "llvm/Module.h"
 #include "llvm/Analysis/Verifier.h"
 #include "llvm/Support/IRBuilder.h"
+#include "llvm/Support/raw_os_ostream.h"
 
 #define REQ_FUN_ARG(I, VAR)                                             \
-  if (args.Length() <= (I) || !args[I]->IsFunction())                   \
+  if (args.Length() <= (I) || !args[I]->IsFunction()) {			\
+    printf ("in function %s\n", __PRETTY_FUNCTION__);			\
     return ThrowException(Exception::TypeError(                         \
 					       String::New("Argument " #I " must be a function"))); \
+  }									\
   Local<Function> VAR = Local<Function>::Cast(args[I]);
 
 #define REQ_ARRAY_ARG(I, VAR)                                           \
@@ -54,9 +57,11 @@
   String::Utf8Value VAR(VAR##_str);
 
 #define REQ_LLVM_VAL_ARG(I, VAR)					\
-  if (args.Length() <= (I) || !args[I]->IsObject() /* XXX || !jsllvm::Value::HasInstance(args[I]) */) \
+  if (args.Length() <= (I) || !args[I]->IsObject() /* XXX || !jsllvm::Value::HasInstance(args[I]) */) {	\
+    printf ("in function %s\n", __PRETTY_FUNCTION__);			\
     return ThrowException(Exception::TypeError(				\
 					       String::New("Argument " #I " must be an llvm Value"))); \
+  }									\
   ::llvm::Value* VAR = jsllvm::Value::GetLLVMObj(args[I]);
 
 #define REQ_LLVM_TYPE_ARG(I, VAR)					\

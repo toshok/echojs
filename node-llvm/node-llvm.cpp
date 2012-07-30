@@ -1,5 +1,6 @@
 #include "node-llvm.h"
 #include "type.h"
+#include "functiontype.h"
 #include "value.h"
 #include "function.h"
 #include "basicblock.h"
@@ -13,6 +14,7 @@ extern "C" {
   static void init (v8::Handle<v8::Object> target)
   {
     jsllvm::Type::Init(target);
+    jsllvm::FunctionType::Init(target);
     jsllvm::Value::Init(target);
     jsllvm::Function::Init(target);
     jsllvm::BasicBlock::Init(target);

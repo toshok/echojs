@@ -51,7 +51,6 @@ namespace jsllvm {
 
   Handle< ::v8::Value> BasicBlock::New(const Arguments& args)
   {
-    printf ("in ::New(const Arguments&)\n");
     HandleScope scope;
 
     if (args.Length()) {

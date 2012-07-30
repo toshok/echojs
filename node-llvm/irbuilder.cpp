@@ -36,6 +36,7 @@ namespace jsllvm {
     NODE_SET_METHOD(s_func, "createPhi", IRBuilder::CreatePhi);
     NODE_SET_METHOD(s_func, "createGlobalStringPtr", IRBuilder::CreateGlobalStringPtr);
     NODE_SET_METHOD(s_func, "createPointerCast", IRBuilder::CreatePointerCast);
+    NODE_SET_METHOD(s_func, "createFPCast", IRBuilder::CreateFPCast);
 
     target->Set(String::NewSymbol("IRBuilder"),
 		s_func);
@@ -60,9 +61,7 @@ namespace jsllvm {
     HandleScope scope;
     llvm::BasicBlock *llvm_bb = IRBuilder::builder.GetInsertBlock();
     if (llvm_bb) {
-      printf ("creating basic block\n");
       Handle<v8::Value> result = BasicBlock::New(llvm_bb);
-      printf ("returning basic block\n");
       return scope.Close(result);
     }
     else
@@ -86,6 +85,17 @@ namespace jsllvm {
     REQ_UTF8_ARG(2,name);
 
     Handle<v8::Value> result = Value::New(builder.CreatePointerCast(val, ty, *name));
+    return scope.Close(result);
+  }
+
+  v8::Handle<v8::Value> IRBuilder::CreateFPCast(const v8::Arguments& args)
+  {
+    HandleScope scope;
+    REQ_LLVM_VAL_ARG(0,val);
+    REQ_LLVM_TYPE_ARG(1,ty);
+    REQ_UTF8_ARG(2,name);
+
+    Handle<v8::Value> result = Value::New(builder.CreateFPCast(val, ty, *name));
     return scope.Close(result);
   }
 

@@ -35,11 +35,14 @@ namespace jsllvm {
 
     static v8::Handle<v8::Value> New(const v8::Arguments& args);
     static v8::Handle<v8::Value> isVoid(const v8::Arguments& args);
+    static v8::Handle<v8::Value> dump(const v8::Arguments& args);
 
     static v8::Handle<v8::Value> pointerTo(v8::Local<v8::String> property, const v8::AccessorInfo& info);
 
     static v8::Persistent<v8::FunctionTemplate> s_ct;
     static v8::Persistent<v8::Function> s_func;
+
+    friend class FunctionType;
   };
 
 };

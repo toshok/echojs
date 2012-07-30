@@ -1,6 +1,7 @@
 #include "node-llvm.h"
 #include "type.h"
 #include "function.h"
+#include "functiontype.h"
 #include "value.h"
 
 using namespace node;
@@ -16,16 +17,17 @@ namespace jsllvm {
 
     s_ct = Persistent<FunctionTemplate>::New(t);
     s_ct->InstanceTemplate()->SetInternalFieldCount(1);
-    s_ct->SetClassName(String::NewSymbol("Function"));
+    s_ct->SetClassName(String::NewSymbol("LLVMFunction"));
 
     s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("args"), Function::GetArgs);
     s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("argSize"), Function::GetArgSize);
     s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("returnType"), Function::GetReturnType);
+    s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("type"), Function::GetType);
 
     NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", Function::Dump);
 
     s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
-    target->Set(String::NewSymbol("Function"),
+    target->Set(String::NewSymbol("LLVMFunction"),
 		s_func);
   }
 
@@ -44,9 +46,7 @@ namespace jsllvm {
   Handle<v8::Value> Function::New(const Arguments& args)
   {
     HandleScope scope;
-    Function* fun = new Function();
-    fun->Wrap(args.This());
-    return args.This();
+    return scope.Close(args.This());
   }
 
   Handle<v8::Value> Function::New(llvm::Function *llvm_fun)
@@ -95,6 +95,14 @@ namespace jsllvm {
     HandleScope scope;
     Function* fun = ObjectWrap::Unwrap<Function>(info.This());
     Handle<v8::Value> result = Type::New(fun->llvm_fun->getReturnType());
+    return scope.Close(result);
+  }
+
+  Handle<v8::Value> Function::GetType (Local<String> property, const AccessorInfo& info)
+  {
+    HandleScope scope;
+    Function* fun = ObjectWrap::Unwrap<Function>(info.This());
+    Handle<v8::Value> result = FunctionType::New(fun->llvm_fun->getFunctionType());
     return scope.Close(result);
   }
 
