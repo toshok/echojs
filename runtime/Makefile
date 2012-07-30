@@ -1,6 +1,7 @@
 
 SOURCES=object.c \
-	ops.c
+	ops.c \
+	main.c
 
 OBJECTS=$(SOURCES:%.c=%.o)
 
