@@ -2,21 +2,55 @@
 
 var fs = require('fs'),
     esprima = require('esprima'),
+    //ast = require('echo-ast'),
     compiler = require('compiler'),
+    llvm = require('llvm'),
+    child_process = require('child_process'),
     files = process.argv.splice(2);
 
 if (files.length === 0) {
     console.log('Usage:');
-    console.log('   ejs file.js');
+    console.log('   ejs file1.js file2.js file.js ...');
     process.exit(1);
 }
 
 files.forEach(function (filename) {
-console.log (1);
     var content = fs.readFileSync(filename, 'utf-8');
-console.log (2);
     var parse_tree = esprima.parse(content);
-console.log (3);
-    var compiled = compiler.compile(parse_tree);
-console.log (4);
+    if (0) {
+      var ast = ast.buildAST(parse_tree);
+      var compiled_module = compiler.compile(ast);
+    }
+    else {
+      var compiled_module = compiler.compile(parse_tree);
+    }
+
+    var ll_filename = "/tmp/" + filename + ".ll";
+    var bc_filename = "/tmp/" + filename + ".bc";
+    var bc_opt_filename = "/tmp/" + filename + ".bc.opt";
+    var ll_opt_filename = "/tmp/" + filename + ".ll.opt";
+    var s_filename = "/tmp/" + filename + ".s";
+    var o_filename = filename + ".o";
+    var exe_filename = filename + ".exe";
+
+    compiled_module.writeToFile(ll_filename);
+      child_process.spawn("llvm-as", ["-o="+bc_filename, ll_filename]).on("exit", function (code) {
+      console.log("llvm-as code = " + code);
+	child_process.spawn("opt", ["-o="+bc_opt_filename, bc_filename]).on("exit", function (code) {
+	console.log("opt code = " + code);
+	child_process.spawn("llvm-dis", ["-o="+ll_opt_filename, bc_opt_filename]).on("exit", function (code) {
+	  console.log("llvm-dis code = " + code);
+	  child_process.spawn("llc", ["-march=x86-64", "-O2", "-o="+s_filename, ll_opt_filename]).on("exit", function(code) {
+	    console.log("llc code = " + code);
+	      var clang = child_process.spawn("clang", ["-o", exe_filename, s_filename, "../runtime/libecho.a"]).on("exit", function(code) {
+	      console.log("clang code = " + code);
+	      console.log ("done");
+	    });
+	    clang.stderr.on ("data", function (data) {
+			     console.log("" + data);
+			   });
+	  });
+	});
+      });
+    });
 });
