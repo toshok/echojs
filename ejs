@@ -5,7 +5,7 @@ esprima = require 'esprima'
 ast = require 'echo-ast'
 compiler = require 'compiler'
 llvm = require 'llvm'
-child_process = require 'child_process'
+{ spawn } = require 'child_process'
 
 argv = process.argv.splice 2
 
@@ -58,22 +58,31 @@ files.forEach (filename) ->
     o_filename = "#{filename}.o"
     exe_filename = "#{filename}.exe"
 
+    llvm_as_args = ["-o=#{bc_filename}", ll_filename]
+    opt_args = ["-o=#{bc_opt_filename}", bc_filename]
+    llvm_dis_args = ["-o=#{ll_opt_filename}", bc_opt_filename]
+    llc_args = ["-march=x86-64", "-O2", "-o=#{s_filename}", ll_opt_filename]
+
+    clang_args = ["-o", options.output_filename || (if options.compile_only then o_filename else exe_filename), s_filename]
+    if options.compile_only
+      clang_args.unshift "-c"
+    else
+      clang_args.push "../runtime/libecho.a"
+
     compiled_module.writeToFile ll_filename
-    llvm_as = child_process.spawn "llvm-as", ["-o=#{bc_filename}", ll_filename]
+    llvm_as = spawn "llvm-as", llvm_as_args
+    llvm_as.stderr.on "data", (data) -> console.log "#{data}"
     llvm_as.on "exit", (code) ->
-      opt = child_process.spawn "opt", ["-o=#{bc_opt_filename}", bc_filename]
+      opt = spawn "opt", opt_args
+      opt.stderr.on "data", (data) -> console.log "#{data}"
       opt.on "exit", (code) ->
-        llvm_dis = child_process.spawn "llvm-dis", ["-o=#{ll_opt_filename}", bc_opt_filename]
+        llvm_dis = spawn "llvm-dis", llvm_dis_args
+        llvm_dis.stderr.on "data", (data) -> console.log "#{data}"
         llvm_dis.on "exit", (code) ->
-          llc = child_process.spawn "llc", ["-march=x86-64", "-O2", "-o=#{s_filename}", ll_opt_filename]
+          llc = spawn "llc", llc_args
+          llc.stderr.on "data", (data) -> console.log "#{data}"
           llc.on "exit", (code) ->
-            clang_args = ["-o", options.output_filename || (if options.compile_only then o_filename else exe_filename), s_filename]
-            if options.compile_only
-              clang_args.unshift "-c"
-            else
-              clang_args.push "../runtime/libecho.a"
-            clang = child_process.spawn "clang", clang_args
+            clang = spawn "clang", clang_args
+            clang.stderr.on "data", (data) -> console.log "#{data}"
             clang.on "exit", (code) ->
               console.log "done."
-            clang.stderr.on "data", (data) ->
-              console.log "#{data}"
