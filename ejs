@@ -1,56 +1,79 @@
-#!/usr/bin/env node
+#!/usr/bin/env coffee
 
-var fs = require('fs'),
-    esprima = require('esprima'),
-    //ast = require('echo-ast'),
-    compiler = require('compiler'),
-    llvm = require('llvm'),
-    child_process = require('child_process'),
-    files = process.argv.splice(2);
+fs = require 'fs'
+esprima = require 'esprima'
+ast = require 'echo-ast'
+compiler = require 'compiler'
+llvm = require 'llvm'
+child_process = require 'child_process'
 
-if (files.length === 0) {
-    console.log('Usage:');
-    console.log('   ejs file1.js file2.js file.js ...');
-    process.exit(1);
-}
+argv = process.argv.splice 2
 
-files.forEach(function (filename) {
-    var content = fs.readFileSync(filename, 'utf-8');
-    var parse_tree = esprima.parse(content);
-    if (0) {
-      var ast = ast.buildAST(parse_tree);
-      var compiled_module = compiler.compile(ast);
-    }
-    else {
-      var compiled_module = compiler.compile(parse_tree);
-    }
+console.log argv
 
-    var ll_filename = "/tmp/" + filename + ".ll";
-    var bc_filename = "/tmp/" + filename + ".bc";
-    var bc_opt_filename = "/tmp/" + filename + ".bc.opt";
-    var ll_opt_filename = "/tmp/" + filename + ".ll.opt";
-    var s_filename = "/tmp/" + filename + ".s";
-    var o_filename = filename + ".o";
-    var exe_filename = filename + ".exe";
+options =
+  # our defaults:
+  compile_only: false,
+  output_filename: null
 
-    compiled_module.writeToFile(ll_filename);
-      child_process.spawn("llvm-as", ["-o="+bc_filename, ll_filename]).on("exit", function (code) {
-      console.log("llvm-as code = " + code);
-	child_process.spawn("opt", ["-o="+bc_opt_filename, bc_filename]).on("exit", function (code) {
-	console.log("opt code = " + code);
-	child_process.spawn("llvm-dis", ["-o="+ll_opt_filename, bc_opt_filename]).on("exit", function (code) {
-	  console.log("llvm-dis code = " + code);
-	  child_process.spawn("llc", ["-march=x86-64", "-O2", "-o="+s_filename, ll_opt_filename]).on("exit", function(code) {
-	    console.log("llc code = " + code);
-	      var clang = child_process.spawn("clang", ["-o", exe_filename, s_filename, "../runtime/libecho.a"]).on("exit", function(code) {
-	      console.log("clang code = " + code);
-	      console.log ("done");
-	    });
-	    clang.stderr.on ("data", function (data) {
-			     console.log("" + data);
-			   });
-	  });
-	});
-      });
-    });
-});
+args =
+  "-c": { flag: "compile_only", help: "compile only, do not link." },
+  "-o": { option: "output_filename", help: "name of the output file." }
+
+files = []
+for ai in [0..argv.length-1]
+  console.log argv[ai]
+  if args[argv[ai]]?
+    console.log 1
+    o = args[argv[ai]]
+    if o.flag?
+      options[o.flag] = true
+    else if o.option?
+      options[o.option] = argv[++ai]
+  else
+    console.log 2
+    # end of options signals the rest of the array is files
+    files = argv.splice ai
+
+if files.length is 0
+    console.log 'Usage:';
+    console.log '   ejs [options] file1.js file2.js file.js ...'
+    process.exit 1
+
+
+files.forEach (filename) ->
+    content = fs.readFileSync filename, 'utf-8'
+    parse_tree = esprima.parse content
+    if false
+      ast = ast.buildAST parse_tree
+      compiled_module = compiler.compile ast
+    else
+      compiled_module = compiler.compile parse_tree
+
+    ll_filename = "/tmp/#{filename}.ll"
+    bc_filename = "/tmp/#{filename}.bc"
+    bc_opt_filename = "/tmp/#{filename}.bc.opt"
+    ll_opt_filename = "/tmp/#{filename}.ll.opt"
+    s_filename = "/tmp/#{filename}.s"
+    o_filename = "#{filename}.o"
+    exe_filename = "#{filename}.exe"
+
+    compiled_module.writeToFile ll_filename
+    llvm_as = child_process.spawn "llvm-as", ["-o=#{bc_filename}", ll_filename]
+    llvm_as.on "exit", (code) ->
+      opt = child_process.spawn "opt", ["-o=#{bc_opt_filename}", bc_filename]
+      opt.on "exit", (code) ->
+        llvm_dis = child_process.spawn "llvm-dis", ["-o=#{ll_opt_filename}", bc_opt_filename]
+        llvm_dis.on "exit", (code) ->
+          llc = child_process.spawn "llc", ["-march=x86-64", "-O2", "-o=#{s_filename}", ll_opt_filename]
+          llc.on "exit", (code) ->
+            clang_args = ["-o", options.output_filename || (if options.compile_only then o_filename else exe_filename), s_filename]
+            if options.compile_only
+              clang_args.unshift "-c"
+            else
+              clang_args.push "../runtime/libecho.a"
+            clang = child_process.spawn "clang", clang_args
+            clang.on "exit", (code) ->
+              console.log "done."
+            clang.stderr.on "data", (data) ->
+              console.log "#{data}"
