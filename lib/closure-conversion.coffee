@@ -101,6 +101,16 @@ LocateEnvVisitor = class LocateEnvVisitor extends NodeVisitor
                 n
 
 
+#
+#   This pass walks the tree and moves all function expressions to the toplevel.
+#
+#   at the point where this pass runs there are a couple of assumptions:
+# 
+#   1. there are no function declarations anywhere in the program.  They have all
+#      been converted to 'var X = %makeClosure(%env_Y, function (%env) { ... })'
+# 
+#   2. There are no free variables in the function expressions.
+#
 class LambdaLift extends NodeVisitor
         constructor: (module) ->
                 super
