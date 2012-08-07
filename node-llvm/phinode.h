@@ -20,6 +20,7 @@ namespace jsllvm {
 
     static v8::Handle<v8::Value> New(const v8::Arguments& args);
     static v8::Handle<v8::Value> Dump(const v8::Arguments& args);
+    static v8::Handle<v8::Value> ToString(const v8::Arguments& args);
     static v8::Handle<v8::Value> AddIncoming(const v8::Arguments& args);
 
     static v8::Persistent<v8::FunctionTemplate> s_ct;

@@ -23,6 +23,7 @@ namespace jsllvm {
     NODE_SET_PROTOTYPE_METHOD(s_ct, "getOrInsertExternalFunction", Module::GetOrInsertExternalFunction);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "getFunction", Module::GetFunction);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", Module::Dump);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", Module::ToString);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "writeToFile", Module::WriteToFile);
 
     s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
@@ -138,6 +139,19 @@ namespace jsllvm {
     Module* module = ObjectWrap::Unwrap<Module>(args.This());
     module->llvm_module->dump();
     return scope.Close(Undefined());
+  }
+
+
+  Handle<Value> Module::ToString(const Arguments& args)
+  {
+    HandleScope scope;
+    Module* module = ObjectWrap::Unwrap<Module>(args.This());
+
+    std::string str;
+    llvm::raw_string_ostream str_ostream(str);
+    module->llvm_module->print(str_ostream, NULL);
+
+    return scope.Close(String::New(str.c_str(), str.size()));
   }
 
   Handle<Value> Module::WriteToFile (const Arguments& args)

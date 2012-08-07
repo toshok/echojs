@@ -31,6 +31,8 @@ namespace jsllvm {
 #undef LLVM_SET_METHOD
 #undef LLVM_SET_PROTOTYPE_METHOD
 
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", Type::ToString);
+
     s_func = Persistent<Function>::New(s_ct->GetFunction());
     target->Set(String::NewSymbol("Type"),
 		s_func);
@@ -88,6 +90,18 @@ namespace jsllvm {
     Type* type = ObjectWrap::Unwrap<Type>(args.This());
     Handle<Boolean> result = v8::Boolean::New(type->llvm_ty->isVoidTy());
     return scope.Close(result);
+  }
+
+  Handle<Value> Type::ToString(const Arguments& args)
+  {
+    HandleScope scope;
+    Type* type = ObjectWrap::Unwrap<Type>(args.This());
+
+    std::string str;
+    llvm::raw_string_ostream str_ostream(str);
+    type->llvm_ty->print(str_ostream);
+
+    return scope.Close(String::New(str.c_str(), str.size()));
   }
 
   Handle<Value> Type::dump(const Arguments& args)

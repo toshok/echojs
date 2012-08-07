@@ -18,6 +18,7 @@ namespace jsllvm {
 
     NODE_SET_PROTOTYPE_METHOD (s_ct, "dump", Value::Dump);
     NODE_SET_PROTOTYPE_METHOD (s_ct, "setName", Value::SetName);
+    NODE_SET_PROTOTYPE_METHOD (s_ct, "toString", Value::ToString);
 
     s_func = Persistent<Function>::New(s_ct->GetFunction());
     target->Set(String::NewSymbol("Value"),
@@ -71,6 +72,18 @@ namespace jsllvm {
     String::Utf8Value utf8(name);
     val->llvm_val->setName(*utf8);
     return scope.Close(Undefined());
+  }
+
+  Handle< ::v8::Value> Value::ToString(const Arguments& args)
+  {
+    HandleScope scope;
+    Value* val = ObjectWrap::Unwrap<Value>(args.This());
+
+    std::string str;
+    llvm::raw_string_ostream str_ostream(str);
+    val->llvm_val->print(str_ostream);
+
+    return scope.Close(String::New(str.c_str(), str.size()));
   }
 
   Persistent<FunctionTemplate> Value::s_ct;

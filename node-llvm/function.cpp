@@ -25,6 +25,7 @@ namespace jsllvm {
     s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("type"), Function::GetType);
 
     NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", Function::Dump);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", Function::ToString);
 
     s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
     target->Set(String::NewSymbol("LLVMFunction"),
@@ -64,6 +65,18 @@ namespace jsllvm {
     Function* fun = ObjectWrap::Unwrap<Function>(args.This());
     fun->llvm_fun->dump();
     return scope.Close(Undefined());
+  }
+
+  Handle<v8::Value> Function::ToString(const Arguments& args)
+  {
+    HandleScope scope;
+    Function* fun = ObjectWrap::Unwrap<Function>(args.This());
+
+    std::string str;
+    llvm::raw_string_ostream str_ostream(str);
+    fun->llvm_fun->print(str_ostream);
+
+    return scope.Close(String::New(str.c_str(), str.size()));
   }
 
   Handle<v8::Value> Function::GetArgSize (Local<String> property, const AccessorInfo& info)

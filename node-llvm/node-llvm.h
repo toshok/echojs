@@ -10,6 +10,7 @@
 #include "llvm/Analysis/Verifier.h"
 #include "llvm/Support/IRBuilder.h"
 #include "llvm/Support/raw_os_ostream.h"
+#include "llvm/Support/raw_ostream.h"
 
 #define REQ_FUN_ARG(I, VAR)                                             \
   if (args.Length() <= (I) || !args[I]->IsFunction()) {			\

@@ -20,6 +20,7 @@ namespace jsllvm {
     s_ct->SetClassName(String::NewSymbol("PHINode"));
 
     NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", PHINode::Dump);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", PHINode::ToString);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "addIncoming", PHINode::AddIncoming);
 
     s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
@@ -63,6 +64,18 @@ namespace jsllvm {
     PHINode* phi = ObjectWrap::Unwrap<PHINode>(args.This());
     phi->llvm_phi->dump();
     return scope.Close(Undefined());
+  }
+
+  Handle<v8::Value> PHINode::ToString(const Arguments& args)
+  {
+    HandleScope scope;
+    PHINode* phi = ObjectWrap::Unwrap<PHINode>(args.This());
+
+    std::string str;
+    llvm::raw_string_ostream str_ostream(str);
+    phi->llvm_phi->print(str_ostream);
+
+    return scope.Close(String::New(str.c_str(), str.size()));
   }
 
   Handle<v8::Value> PHINode::AddIncoming (const Arguments& args)
