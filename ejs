@@ -2,36 +2,29 @@
 
 fs = require 'fs'
 esprima = require 'esprima'
-ast = require 'echo-ast'
 compiler = require 'compiler'
-llvm = require 'llvm'
 { spawn } = require 'child_process'
 
 argv = process.argv.splice 2
 
-console.log argv
-
 options =
   # our defaults:
-  compile_only: false,
+  compile_only:    false,
   output_filename: null
 
 args =
-  "-c": { flag: "compile_only", help: "compile only, do not link." },
+  "-c": { flag:   "compile_only",    help: "compile only, do not link." },
   "-o": { option: "output_filename", help: "name of the output file." }
 
 files = []
 for ai in [0..argv.length-1]
-  console.log argv[ai]
   if args[argv[ai]]?
-    console.log 1
     o = args[argv[ai]]
     if o.flag?
       options[o.flag] = true
     else if o.option?
       options[o.option] = argv[++ai]
   else
-    console.log 2
     # end of options signals the rest of the array is files
     files = argv.splice ai
 
@@ -44,11 +37,7 @@ if files.length is 0
 files.forEach (filename) ->
     content = fs.readFileSync filename, 'utf-8'
     parse_tree = esprima.parse content
-    if false
-      ast = ast.buildAST parse_tree
-      compiled_module = compiler.compile ast
-    else
-      compiled_module = compiler.compile parse_tree
+    compiled_module = compiler.compile parse_tree
 
     ll_filename = "/tmp/#{filename}.ll"
     bc_filename = "/tmp/#{filename}.bc"
