@@ -4,3 +4,6 @@
 [submodule "llvm"]
 	path = llvm
 	url = http://llvm.org/git/llvm.git
+[submodule "escodegen"]
+	path = escodegen
+	url = https://github.com/Constellation/escodegen.git

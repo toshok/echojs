@@ -32,104 +32,35 @@
 
 ###
 
-ast = require './echo-ast'
+syntax = (require 'esprima').Syntax
+{ NodeVisitor } = require 'nodevisitor'
 
-class EchoPrettyPrintVisitor extends ast.NodeVisitor
-  constructor: ->
-    super
-    @reset()
+exports.VarToLet = class VarToLet extends NodeVisitor
+        constructor: ->
+                @funcStack = []
+                super
 
-  reset: ->
-    @value = ""
+        visitFunction: (n) ->
+                func = n
+                @varsStack.unshift []
+                super
+                vars = @varsStack.shift()
+                n.body = vars.concat n.body
+                n
 
-  visitIdentifier: (id) ->
-    @value += id.name
-  visitNumber: (n) ->
-    @value += n.value
+        visitVariableDeclaration: (n) ->
+                if n.kind is "let"
+                        return n
 
-  visitFunction: (func) ->
-    @value += "function "
-    @visitNode func.name
-    @value += " ("
-    @visitNodes func.parameters
-    @value += ") "
-    @visitNode func.body
+                decls = n.decls
+                currentVars = @varsStack[0]
+                
+                currentVars.unshift
 
-  visitExpressionStatement: (exprstmt) ->
-    super
-    @value += "; "
-
-  visitVar: (decl)   -> @stringifyDecl "var", decl
-  visitLet: (decl)   -> @stringifyDecl "let", decl
-  visitConst: (decl) -> @stringifyDecl "const", decl
-
-  visitBlock: (block) ->
-    @value += " { "
-    @visitNodes block.statements, " "
-    @value += " } "
-
-  visitAssignment: (assign) ->
-    @visitNode assign.lhs
-    @value+= " #{assign.op} "
-    @visitNode assign.rhs
-
-  stringifyDecl: (t, decl) ->
-    @value += "#{t} "
-    @visitNode decl.name
-    if decl.initializer
-      @value += " = "
-      @visitNode decl.initializer
-    @value += "; "
+                if decl.initializer
+                        @replaceCurrentNode new ast.ExpressionStatement new ast.Assignment ast.AssignOp.assign, decl.name, @visitNode decl.initializer
+                else
+                        @removeCurrentNode()
 
 
-class DesugarVarToLetPass extends ast.NodeVisitor
-  constructor: ->
-    @funcStack = []
-    super
-
-  visitFunction: (func) ->
-    @funcStack.unshift(func)
-    super
-    @funcStack.shift()
-
-  visitVar: (decl) ->
-    currentFunc = @funcStack[0]
-    currentFunc.body.prependChild (new ast.Let (decl.name))
-    if decl.initializer
-      @replaceCurrentNode new ast.ExpressionStatement new ast.Assignment ast.AssignOp.assign, decl.name, @visitNode decl.initializer
-    else
-      @removeCurrentNode()
-
-
-class DesugarRemoveIIFEPass extends ast.NodeVisitor
-  constructor: -> @classStack = []
-  visitCall: (call) ->
-    if call.callee instance Function
-    else
-      super call
-
-
-testfunc = new ast.Function (new ast.Identifier "testFunction"),
-                            [new ast.Identifier "x"],
-                            new ast.Block [
-                              (new ast.Var (new ast.Identifier "test"), (new ast.Number 5)),
-                              (new ast.Block [
-                                (new ast.Var (new ast.Identifier "test2"), (new ast.Number 10))
-                              ])
-                            ]
-
-pp = new EchoPrettyPrintVisitor
-pp.reset()
-pp.visitNode testfunc
-
-console.log "before #{pp.value}"
-
-desugar = new DesugarVarToLetPass
-desugar.visitNode testfunc
-
-pp.reset()
-pp.visitNode testfunc
-
-console.log "after #{pp.value}"
-
-console.log "done"
+exports.RemoveIIFE = class RemoveIIFE extends NodeVisitor
