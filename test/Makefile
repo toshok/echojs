@@ -1,9 +1,14 @@
 TOPDIR=$(shell pwd)/..
 NODE_PATH=$(TOPDIR)/node-llvm/build/default:$(TOPDIR)/lib/coffee:$(TOPDIR)/lib:$(TOPDIR)/esprima:$(TOPDIR)/escodegen
 
-check: test-foo test-hello
+check: check-llvm test-foo test-hello
 	./hello.js.exe
 	./foo.js.exe
+
+check-llvm:
+	@coffee -c terminal.coffee
+	@coffee -c echo-assert.coffee
+	@NODE_PATH=$(NODE_PATH):. coffee llvm-test.coffee
 
 test-foo:
 	@echo [ejs] foo.js.exe

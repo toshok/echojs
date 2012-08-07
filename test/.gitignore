@@ -1,2 +1,5 @@
 *.js.exe
 *.js.o
+echo-assert.js
+terminal.js
+llvm-test.js
