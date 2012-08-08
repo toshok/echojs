@@ -22,6 +22,8 @@ namespace jsllvm {
 
 
     NODE_SET_METHOD(s_ct, "get", FunctionType::Get);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", FunctionType::Dump);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", FunctionType::ToString);
 
     s_func = Persistent<Function>::New(s_ct->GetFunction());
     target->Set(String::NewSymbol("FunctionType"),
@@ -74,6 +76,26 @@ namespace jsllvm {
 
   FunctionType::~FunctionType()
   {
+  }
+
+  Handle<Value> FunctionType::ToString(const Arguments& args)
+  {
+    HandleScope scope;
+    FunctionType* type = ObjectWrap::Unwrap<FunctionType>(args.This());
+
+    std::string str;
+    llvm::raw_string_ostream str_ostream(str);
+    type->llvm_ty->print(str_ostream);
+
+    return scope.Close(String::New(str_ostream.str().c_str()));
+  }
+
+  Handle<Value> FunctionType::Dump(const Arguments& args)
+  {
+    HandleScope scope;
+    FunctionType* type = ObjectWrap::Unwrap<FunctionType>(args.This());
+    type->llvm_ty->dump();
+    return scope.Close(Undefined());
   }
 
   v8::Persistent<v8::FunctionTemplate> FunctionType::s_ct;

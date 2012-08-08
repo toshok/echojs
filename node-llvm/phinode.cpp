@@ -75,7 +75,7 @@ namespace jsllvm {
     llvm::raw_string_ostream str_ostream(str);
     phi->llvm_phi->print(str_ostream);
 
-    return scope.Close(String::New(str.c_str(), str.size()));
+    return scope.Close(String::New(str_ostream.str().c_str()));
   }
 
   Handle<v8::Value> PHINode::AddIncoming (const Arguments& args)

@@ -57,7 +57,6 @@ namespace jsllvm {
     HandleScope scope;
     if (args.Length()) {
       REQ_UTF8_ARG(0, name);
-      printf ("name = %s\n", *name);
       Module* module = new Module(new llvm::Module(*name, llvm::getGlobalContext()));
       module->Wrap(args.This());
     }
@@ -151,7 +150,7 @@ namespace jsllvm {
     llvm::raw_string_ostream str_ostream(str);
     module->llvm_module->print(str_ostream, NULL);
 
-    return scope.Close(String::New(str.c_str(), str.size()));
+    return scope.Close(String::New(str_ostream.str().c_str()));
   }
 
   Handle<Value> Module::WriteToFile (const Arguments& args)
