@@ -1,7 +1,9 @@
 TOPDIR=$(shell pwd)/..
 NODE_PATH=$(TOPDIR)/node-llvm/build/default:$(TOPDIR)/lib/coffee:$(TOPDIR)/lib:$(TOPDIR)/esprima:$(TOPDIR)/escodegen
 
-check: check-llvm test-foo test-hello
+HELLOS=test-hello1 test-hello2 test-hello3
+
+check: check-llvm $(HELLOS)
 	./hello.js.exe
 	./foo.js.exe
 
@@ -14,13 +16,12 @@ test-foo:
 	@echo [ejs] foo.js.exe
 	@NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs foo.js
 
-test-hello:
-	@echo [ejs] hello.js.exe
-	@NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs hello.js
+test-%: %.js.exe
+	@EXE=`echo $<`; ./$$EXE
 
-test-hello2:
-	@echo [ejs] hello2.js.exe
-	@NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs hello2.js
+%.js.exe: %.js
+	@echo [ejs] $<
+	@NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $<
 
 test-set:
 	NODE_PATH=$(NODE_PATH) coffee ../lib/set.coffee
