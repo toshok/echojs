@@ -21,10 +21,10 @@ typedef struct _EJSValue EJSClosureEnv;
 
 typedef EJSBool (*EJSFunc) (EJSContext* context, EJSValue* this);
 
-typedef EJSValue* (*EJSClosureFunc0) (EJSContext* context, EJSValue* closure, int argc);
-typedef EJSValue* (*EJSClosureFunc1) (EJSContext* context, EJSValue* closure, int argc, EJSValue* arg1);
-typedef EJSValue* (*EJSClosureFunc2) (EJSContext* context, EJSValue* closure, int argc, EJSValue* arg1, EJSValue* arg2);
-typedef EJSValue* (*EJSClosureFunc3) (EJSContext* context, EJSValue* closure, int argc, EJSValue* arg1, EJSValue* arg2, EJSValue* arg3);
+typedef EJSValue* (*EJSClosureFunc0) (EJSContext* context, EJSValue* env, int argc);
+typedef EJSValue* (*EJSClosureFunc1) (EJSContext* context, EJSValue* env, int argc, EJSValue* arg1);
+typedef EJSValue* (*EJSClosureFunc2) (EJSContext* context, EJSValue* env, int argc, EJSValue* arg1, EJSValue* arg2);
+typedef EJSValue* (*EJSClosureFunc3) (EJSContext* context, EJSValue* env, int argc, EJSValue* arg1, EJSValue* arg2, EJSValue* arg3);
 
 struct _EJSValue {
   EJSValueType type;
@@ -79,7 +79,7 @@ EJSValue* _ejs_string_new_utf8 (char* str);
 EJSValue* _ejs_number_new (double value);
 EJSValue* _ejs_boolean_new (EJSBool value);
 
-EJSValue* _ejs_closure_new (EJSClosureFunc0 func, EJSClosureEnv* env);
+EJSValue* _ejs_closure_new (EJSClosureEnv* env, EJSClosureFunc0 func);
 
 EJSBool _ejs_object_setprop (EJSValue* obj, EJSValue* key, EJSValue* value);
 EJSBool _ejs_object_getprop (EJSValue* obj, EJSValue* key, EJSValue** value);

@@ -106,8 +106,9 @@ _ejs_op_or (EJSValue* lhs, EJSValue* rhs, EJSValue** result)
   return TRUE;
 }
 
+EJSValue* _ejs_print;
 void
-_ejs_print (EJSValue* val)
+_ejs_print_impl (EJSContext *context, EJSValue* env, int argc, EJSValue *val)
 {
   if (EJSVAL_IS_NUMBER(val)) {
     printf (EJS_NUMBER_FORMAT "\n", val->u.n.data);

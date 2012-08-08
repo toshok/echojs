@@ -45,7 +45,7 @@ _ejs_boolean_new (EJSBool value)
 }
 
 EJSValue*
-_ejs_closure_new (EJSClosureFunc0 func, EJSClosureEnv* env)
+_ejs_closure_new (EJSClosureEnv* env, EJSClosureFunc0 func)
 {
   EJSValue* rv = (EJSValue*)calloc(1, sizeof (EJSValue));
   rv->type = EJSValueTypeClosure;;
@@ -80,26 +80,26 @@ EJSValue*
 _ejs_invoke_closure_0 (EJSContext* context, EJSValue* closure, int argc)
 {
   assert (EJSVAL_IS_CLOSURE(closure));
-  return ((EJSClosureFunc0)closure->u.closure.func) (context, closure, argc);
+  return ((EJSClosureFunc0)closure->u.closure.func) (context, closure->u.closure.env, argc);
 }
 
 EJSValue*
 _ejs_invoke_closure_1 (EJSContext* context, EJSValue* closure, int argc, EJSValue* arg1)
 {
   assert (EJSVAL_IS_CLOSURE(closure));
-  return ((EJSClosureFunc1)closure->u.closure.func) (context, closure, argc, arg1);
+  return ((EJSClosureFunc1)closure->u.closure.func) (context, closure->u.closure.env, argc, arg1);
 }
 
 EJSValue*
 _ejs_invoke_closure_2 (EJSContext* context, EJSValue* closure, int argc, EJSValue* arg1, EJSValue* arg2)
 {
   assert (EJSVAL_IS_CLOSURE(closure));
-  return ((EJSClosureFunc2)closure->u.closure.func) (context, closure, argc, arg1, arg2);
+  return ((EJSClosureFunc2)closure->u.closure.func) (context, closure->u.closure.env, argc, arg1, arg2);
 }
 
 EJSValue*
 _ejs_invoke_closure_3 (EJSContext* context, EJSValue* closure, int argc, EJSValue* arg1, EJSValue* arg2, EJSValue* arg3)
 {
   assert (EJSVAL_IS_CLOSURE(closure));
-  return ((EJSClosureFunc3)closure->u.closure.func) (context, closure, argc, arg1, arg2, arg3);
+  return ((EJSClosureFunc3)closure->u.closure.func) (context, closure->u.closure.env, argc, arg1, arg2, arg3);
 }
