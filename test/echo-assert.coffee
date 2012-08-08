@@ -1,9 +1,9 @@
 terminal = require 'terminal'
 
-red = -> terminal.ANSIStyle('red')
+red    = -> terminal.ANSIStyle('red')
 yellow = -> terminal.ANSIStyle('yellow')
-green = -> terminal.ANSIStyle('green')
-reset = ->terminal.ANSIStyle('default')
+green  = -> terminal.ANSIStyle('green')
+reset  = -> terminal.ANSIStyle('default')
 
 num_asserts = 0
 num_failures = 0
