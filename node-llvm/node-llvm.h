@@ -4,6 +4,9 @@
 #include <v8.h>
 #include <node.h>
 
+#include <sstream>
+#include <string>
+
 #include "llvm/DerivedTypes.h"
 #include "llvm/LLVMContext.h"
 #include "llvm/Module.h"
@@ -82,5 +85,7 @@
     return ThrowException(Exception::TypeError(				\
 					       String::New("Argument " #I " must be an llvm Function"))); \
   ::llvm::Function* VAR = jsllvm::Function::GetLLVMObj(args[I]);
+
+extern std::string& trim(std::string& str);
 
 #endif /* NODE_LLVM_H */

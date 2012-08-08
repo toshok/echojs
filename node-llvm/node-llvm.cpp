@@ -10,6 +10,14 @@
 #include "constant.h"
 #include "constantfp.h"
 
+std::string& trim(std::string& str)
+{
+  str.erase(0, str.find_first_not_of(" \n"));       //prefixing spaces
+  str.erase(str.find_last_not_of(" \n")+1);         //surfixing spaces
+  return str;
+}
+
+
 extern "C" {
   static void init (v8::Handle<v8::Object> target)
   {

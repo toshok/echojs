@@ -76,7 +76,7 @@ namespace jsllvm {
     llvm::raw_string_ostream str_ostream(str);
     fun->llvm_fun->print(str_ostream);
 
-    return scope.Close(String::New(str_ostream.str().c_str()));
+    return scope.Close(String::New(trim(str_ostream.str()).c_str()));
   }
 
   Handle<v8::Value> Function::GetArgSize (Local<String> property, const AccessorInfo& info)

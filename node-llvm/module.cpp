@@ -150,7 +150,7 @@ namespace jsllvm {
     llvm::raw_string_ostream str_ostream(str);
     module->llvm_module->print(str_ostream, NULL);
 
-    return scope.Close(String::New(str_ostream.str().c_str()));
+    return scope.Close(String::New(trim(str_ostream.str()).c_str()));
   }
 
   Handle<Value> Module::WriteToFile (const Arguments& args)
