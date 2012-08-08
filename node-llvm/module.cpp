@@ -3,6 +3,7 @@
 #include "type.h"
 #include "module.h"
 #include "function.h"
+#include "value.h"
 
 using namespace node;
 using namespace v8;
@@ -20,6 +21,7 @@ namespace jsllvm {
     s_ct->SetClassName(String::NewSymbol("Module"));
 
     NODE_SET_PROTOTYPE_METHOD(s_ct, "getOrInsertFunction", Module::GetOrInsertFunction);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "getOrInsertGlobal", Module::GetOrInsertGlobal);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "getOrInsertExternalFunction", Module::GetOrInsertExternalFunction);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "getFunction", Module::GetFunction);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", Module::Dump);
@@ -43,7 +45,7 @@ namespace jsllvm {
   {
   }
 
-  Handle<Value> Module::New(llvm::Module *llvm_module)
+  Handle<v8::Value> Module::New(llvm::Module *llvm_module)
   {
     HandleScope scope;
     Local<Object> new_instance = Module::s_func->NewInstance();
@@ -52,32 +54,32 @@ namespace jsllvm {
     return scope.Close(new_instance);
   }
 
-  Handle<Value> Module::New(const Arguments& args)
+  Handle<v8::Value> Module::New(const Arguments& args)
   {
     HandleScope scope;
     if (args.Length()) {
       REQ_UTF8_ARG(0, name);
-      Module* module = new Module(new llvm::Module(*name, llvm::getGlobalContext()));
+      Module* module = new Module(new llvm::Module(std::string(*name), llvm::getGlobalContext()));
       module->Wrap(args.This());
     }
     return scope.Close(args.This());
   }
 
-  Handle<Value> Module::GetOrInsertFunction (const Arguments& args)
+  Handle<v8::Value> Module::GetOrInsertFunction (const Arguments& args)
   {
     HandleScope scope;
     Module* module = ObjectWrap::Unwrap<Module>(args.This());
 
     REQ_UTF8_ARG(0, name);
-    REQ_INT_ARG(1, fun_argc);
+    REQ_LLVM_TYPE_ARG(1, returnType);
+    REQ_ARRAY_ARG(2, paramTypes);
 
-    std::vector< llvm::Type*> arg_types;
-    for (int i = 0; i < fun_argc; i ++) {
-      arg_types.push_back (/*XXX EjsValueType*/llvm::Type::getInt32Ty(llvm::getGlobalContext())->getPointerTo());
+    std::vector< llvm::Type*> param_types;
+    for (int i = 0; i < paramTypes->Length(); i ++) {
+      param_types.push_back (Type::GetLLVMObj(paramTypes->Get(i)));
     }
 
-    llvm::FunctionType *FT = llvm::FunctionType::get(/*XXX EjsValueType*/llvm::Type::getInt32Ty(llvm::getGlobalContext())->getPointerTo(),
-							 arg_types, false);
+    llvm::FunctionType *FT = llvm::FunctionType::get(returnType, param_types, false);
 
     llvm::Function* f = static_cast< llvm::Function*>(module->llvm_module->getOrInsertFunction(*name, FT));
 
@@ -94,11 +96,22 @@ namespace jsllvm {
       AI->setName(Args[Idx]);
 #endif
 
-    Handle<Value> result = Function::New(f);
+    Handle<v8::Value> result = Function::New(f);
     return scope.Close(result);
   }
 
-  Handle<Value> Module::GetOrInsertExternalFunction (const Arguments& args)
+  Handle<v8::Value> Module::GetOrInsertGlobal (const Arguments& args)
+  {
+    HandleScope scope;
+    Module* module = ObjectWrap::Unwrap<Module>(args.This());
+
+    REQ_UTF8_ARG(0, name);
+    REQ_LLVM_TYPE_ARG(1, type);
+
+    return scope.Close(Value::New(module->llvm_module->getOrInsertGlobal(*name, type)));
+  }
+
+  Handle<v8::Value> Module::GetOrInsertExternalFunction (const Arguments& args)
   {
     HandleScope scope;
     Module* module = ObjectWrap::Unwrap<Module>(args.This());
@@ -115,11 +128,11 @@ namespace jsllvm {
     llvm::Function* f = static_cast< llvm::Function*>(module->llvm_module->getOrInsertFunction(*name, FT));
     f->setLinkage (llvm::Function::ExternalLinkage);
 
-    Handle<Value> result = Function::New(f);
+    Handle<v8::Value> result = Function::New(f);
     return scope.Close(result);
   }
 
-  Handle<Value> Module::GetFunction (const Arguments& args)
+  Handle<v8::Value> Module::GetFunction (const Arguments& args)
   {
     HandleScope scope;
     Module* module = ObjectWrap::Unwrap<Module>(args.This());
@@ -128,11 +141,11 @@ namespace jsllvm {
 	
     llvm::Function* f = static_cast< llvm::Function*>(module->llvm_module->getFunction(*name));
 
-    Handle<Value> result = Function::New(f);
+    Handle<v8::Value> result = Function::New(f);
     return scope.Close(result);
   }
 
-  Handle<Value> Module::Dump (const Arguments& args)
+  Handle<v8::Value> Module::Dump (const Arguments& args)
   {
     HandleScope scope;
     Module* module = ObjectWrap::Unwrap<Module>(args.This());
@@ -141,7 +154,7 @@ namespace jsllvm {
   }
 
 
-  Handle<Value> Module::ToString(const Arguments& args)
+  Handle<v8::Value> Module::ToString(const Arguments& args)
   {
     HandleScope scope;
     Module* module = ObjectWrap::Unwrap<Module>(args.This());
@@ -153,7 +166,7 @@ namespace jsllvm {
     return scope.Close(String::New(trim(str_ostream.str()).c_str()));
   }
 
-  Handle<Value> Module::WriteToFile (const Arguments& args)
+  Handle<v8::Value> Module::WriteToFile (const Arguments& args)
   {
     HandleScope scope;
     Module* module = ObjectWrap::Unwrap<Module>(args.This());

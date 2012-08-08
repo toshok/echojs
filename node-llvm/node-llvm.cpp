@@ -1,6 +1,7 @@
 #include "node-llvm.h"
 #include "type.h"
 #include "functiontype.h"
+#include "structtype.h"
 #include "value.h"
 #include "function.h"
 #include "basicblock.h"
@@ -23,6 +24,7 @@ extern "C" {
   {
     jsllvm::Type::Init(target);
     jsllvm::FunctionType::Init(target);
+    jsllvm::StructType::Init(target);
     jsllvm::Value::Init(target);
     jsllvm::Function::Init(target);
     jsllvm::BasicBlock::Init(target);

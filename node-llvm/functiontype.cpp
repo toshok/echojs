@@ -22,6 +22,10 @@ namespace jsllvm {
 
 
     NODE_SET_METHOD(s_ct, "get", FunctionType::Get);
+
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "getReturnType", FunctionType::GetReturnType);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "getParamType", FunctionType::GetParamType);
+
     NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", FunctionType::Dump);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", FunctionType::ToString);
 
@@ -76,6 +80,23 @@ namespace jsllvm {
 
   FunctionType::~FunctionType()
   {
+  }
+
+  Handle<Value> FunctionType::GetReturnType(const Arguments& args)
+  {
+    HandleScope scope;
+    FunctionType* type = ObjectWrap::Unwrap<FunctionType>(args.This());
+    return scope.Close(Type::New(type->llvm_ty->getReturnType()));
+  }
+
+  Handle<Value> FunctionType::GetParamType(const Arguments& args)
+  {
+    HandleScope scope;
+
+    REQ_INT_ARG(0, i);
+
+    FunctionType* type = ObjectWrap::Unwrap<FunctionType>(args.This());
+    return scope.Close(Type::New(type->llvm_ty->getParamType(i)));
   }
 
   Handle<Value> FunctionType::ToString(const Arguments& args)

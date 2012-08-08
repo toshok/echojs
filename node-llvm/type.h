@@ -44,6 +44,7 @@ namespace jsllvm {
     static v8::Persistent<v8::Function> s_func;
 
     friend class FunctionType;
+    friend class StructType;
   };
 
 };
