@@ -47,9 +47,11 @@ free = (exp) ->
                 when syntax.Identifier          then new Set [exp.name]
                 when syntax.ReturnStatement     then free exp.argument
                 when syntax.BinaryExpression    then (free exp.left).union free exp.right
+                when syntax.LogicalExpression   then (free exp.left).union free exp.right
                 when syntax.MemberExpression    then free exp.object # we don't traverse into the property
                 when syntax.CallExpression      then Set.union.apply null, [(free exp.callee)].concat (map free, exp.arguments)
                 when syntax.Literal             then new Set
+                when syntax.IfStatement         then Set.union.apply null, [(free exp.test), (free exp.cconsequent), free (exp.alternate)]
                 
                 else throw "shouldn't reach here, type of node = #{exp.type}"
                 #else new Set
@@ -122,6 +124,11 @@ class LambdaLift extends NodeVisitor
                 name =  "__ejs_function_#{x}#{@gen}"
                 @gen += 1
                 name
+
+        genAnonymousFunctionName: ->
+                name =  "__ejs_anonymous_#{@gen}"
+                @gen += 1
+                name
         
         currentMapping: -> if @mappings.length > 0 then @mappings[0] else {}
 
@@ -135,12 +142,16 @@ class LambdaLift extends NodeVisitor
                         n.body = @visit n.body
                         n
                 else
-                        global_name = @genGlobalFunctionName n.id.name
+                        if n.id?.name?
+                                global_name = @genGlobalFunctionName n.id.name
+                                @currentMapping()[n.id.name] = global_name
+                        else
+                                @genAnonymousFunctionName()
 
-                        @currentMapping()[n.id.name] = global_name
-                
                         n.type = syntax.FunctionDeclaration
-                        n.id.name = global_name
+                        n.id =
+                                type: syntax.Identifier
+                                name: global_name
 
                         @functions.push n
 
@@ -206,6 +217,16 @@ class SubstituteVariables extends NodeVisitor
                 
         visitFunction: (n) ->
                 if n.ejs_env.closed.empty()
+                        n.body.body.unshift
+                                type: syntax.VariableDeclaration,
+                                declarations: [{
+                                        type: syntax.VariableDeclarator
+                                        id:  create_identifier "%env_#{n.ejs_env.id}"
+                                        init:
+                                                type: syntax.Literal
+                                                value: null
+                                }],
+                                kind: "var"
                         super
                 else
                         # okay, we know we need a fresh environment in this function
@@ -261,7 +282,7 @@ class SubstituteVariables extends NodeVisitor
                                 #  name so we can use it when generating the native function.
                                 # n.id = null
                                 n.type = syntax.FunctionExpression
-                                n.params.unshift create_identifier "%env"
+                                #n.params.unshift create_identifier "%env"
                                 
                                 return {
                                         type: syntax.VariableDeclaration,
@@ -285,7 +306,7 @@ class SubstituteVariables extends NodeVisitor
 
                 n.arguments.unshift { type: syntax.Literal, value: arg_count }
                 n.arguments.unshift n.callee
-                n.arguments.unshift { type: syntax.Literal, value: null }
+                n.arguments.unshift { type: syntax.Literal, value: null } # this should be the EjsContext corresponding to this thread
                 n.callee = create_identifier "%invokeClosure"
                 n
 

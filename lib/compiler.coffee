@@ -1,4 +1,5 @@
 esprima = require 'esprima'
+escodegen = require 'escodegen'
 syntax = esprima.Syntax
 debug = require 'debug'
 
@@ -13,59 +14,56 @@ llvm = require 'llvm'
 # special key for parent scope when performing lookups
 PARENT_SCOPE_KEY = ":parent:"
 
-EJS_CONTEXT_NAME = "__ejs_context"
-EJS_THIS_NAME = "__ejs_this"
-EJS_ENV = "__ejs_env"
-
-EjsContextType = llvm.Type.getInt32Ty().pointerTo
-EjsValueType = llvm.Type.getInt32Ty().pointerTo
-EjsFuncType = (llvm.FunctionType.get EjsValueType, [EjsContextType, EjsValueType, llvm.Type.getInt32Ty()]).pointerTo
+EJS_CONTEXT = "%context"
+EJS_ENV = "%env"
+EJS_ARGC = "%argc"
 
 stringType = llvm.Type.getInt8Ty().pointerTo
 boolType = llvm.Type.getInt8Ty()
 voidType = llvm.Type.getVoidTy()
+int32Type = llvm.Type.getInt32Ty()
+
+ejsContextType = llvm.StructType.create "EjsContext", [int32Type]
+ejsValueType = llvm.StructType.create "EjsValue", [int32Type]
+
+EjsContextType = ejsContextType.pointerTo
+EjsValueType = ejsValueType.pointerTo
+EjsClosureEnvType = EjsValueType
+EjsFuncType = (llvm.FunctionType.get EjsValueType, [EjsContextType, EjsClosureEnvType, llvm.Type.getInt32Ty()]).pointerTo
 
 BUILTIN_ARGS = [
-  { name: EJS_CONTEXT_NAME, llvm_type: EjsContextType, type: syntax.Identifier }
-  { name: EJS_THIS_NAME,    llvm_type: EjsValueType, type: syntax.Identifier }
-  { name: EJS_ENV,          llvm_type: EjsValueType, type: syntax.Identifier }
+  { name: EJS_CONTEXT, llvm_type: EjsContextType,    type: syntax.Identifier }
+  { name: EJS_ENV,     llvm_type: EjsClosureEnvType, type: syntax.Identifier }
+  { name: EJS_ARGC,    llvm_type: int32Type,         type: syntax.Identifier }
 ]
-
-# marks an llvm function using its calling convention -- if ffi = true, we don't insert the 2 special ejs args into the call
-ffi_c = (func) ->
-  func.ffi = true
-  func.ffi_type = "C"
-  return func
-
-ffi_objc = (func) ->
-  func.ffi = true
-  func.ffi_type = "ObjC"
-  return func
-
 
 class LLVMIRVisitor extends NodeVisitor
         constructor: (@module) ->
                 @current_scope = {}
 
                 # build up our runtime method table
+                @builtins = {
+                        invokeClosure: [
+                                module.getOrInsertExternalFunction "_ejs_invoke_closure_0", EjsValueType, EjsContextType, EjsValueType, llvm.Type.getInt32Ty()
+                                module.getOrInsertExternalFunction "_ejs_invoke_closure_1", EjsValueType, EjsContextType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType
+                                module.getOrInsertExternalFunction "_ejs_invoke_closure_2", EjsValueType, EjsContextType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType
+                                module.getOrInsertExternalFunction "_ejs_invoke_closure_3", EjsValueType, EjsContextType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType
+                        ]
+                        makeClosure: module.getOrInsertExternalFunction "_ejs_closure_new", EjsValueType, EjsClosureEnvType, EjsFuncType
+                }
+                
                 @ejs = {
-                    invoke_closure: [
-                        ffi_c module.getOrInsertExternalFunction "_ejs_invoke_closure_0", EjsValueType, EjsContextType, EjsValueType, llvm.Type.getInt32Ty()
-                        ffi_c module.getOrInsertExternalFunction "_ejs_invoke_closure_1", EjsValueType, EjsContextType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType
-                        ffi_c module.getOrInsertExternalFunction "_ejs_invoke_closure_2", EjsValueType, EjsContextType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType
-                        ffi_c module.getOrInsertExternalFunction "_ejs_invoke_closure_3", EjsValueType, EjsContextType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType
-                    ]
-                    number_new:      ffi_c module.getOrInsertExternalFunction "_ejs_number_new", EjsValueType, llvm.Type.getDoubleTy()
-                    string_new_utf8: ffi_c module.getOrInsertExternalFunction "_ejs_string_new_utf8", EjsValueType, stringType
-                    closure_new:     ffi_c module.getOrInsertExternalFunction "_ejs_closure_new", EjsValueType, EjsFuncType, EjsValueType
-                    print:           ffi_c module.getOrInsertExternalFunction "_ejs_print", voidType, EjsValueType
-                    "binop+":        ffi_c module.getOrInsertExternalFunction "_ejs_op_add", boolType, EjsValueType, EjsValueType, EjsValueType.pointerTo
-                    "binop-":        ffi_c module.getOrInsertExternalFunction "_ejs_op_sub", boolType, EjsValueType, EjsValueType, EjsValueType.pointerTo
-                    "logop||":       ffi_c module.getOrInsertExternalFunction "_ejs_op_or", boolType, EjsValueType, EjsValueType, EjsValueType.pointerTo
-                    "binop===":      ffi_c module.getOrInsertExternalFunction "_ejs_op_strict_eq", boolType, EjsValueType, EjsValueType, EjsValueType.pointerTo
-                    truthy:          ffi_c module.getOrInsertExternalFunction "_ejs_truthy", boolType, EjsValueType, boolType.pointerTo
-                    object_setprop:  ffi_c module.getOrInsertExternalFunction "_ejs_object_setprop", boolType, EjsValueType, EjsValueType, EjsValueType
-                    object_getprop:  ffi_c module.getOrInsertExternalFunction "_ejs_object_getprop", boolType, EjsValueType, EjsValueType, EjsValueType.pointerTo
+                        object_new:      module.getOrInsertExternalFunction "_ejs_object_new", EjsValueType, EjsValueType
+                        number_new:      module.getOrInsertExternalFunction "_ejs_number_new", EjsValueType, llvm.Type.getDoubleTy()
+                        string_new_utf8: module.getOrInsertExternalFunction "_ejs_string_new_utf8", EjsValueType, stringType
+                        print:           module.getOrInsertGlobal "_ejs_print", EjsValueType
+                        "binop+":        module.getOrInsertExternalFunction "_ejs_op_add", boolType, EjsValueType, EjsValueType, EjsValueType.pointerTo
+                        "binop-":        module.getOrInsertExternalFunction "_ejs_op_sub", boolType, EjsValueType, EjsValueType, EjsValueType.pointerTo
+                        "logop||":       module.getOrInsertExternalFunction "_ejs_op_or", boolType, EjsValueType, EjsValueType, EjsValueType.pointerTo
+                        "binop===":      module.getOrInsertExternalFunction "_ejs_op_strict_eq", boolType, EjsValueType, EjsValueType, EjsValueType.pointerTo
+                        truthy:          module.getOrInsertExternalFunction "_ejs_truthy", boolType, EjsValueType, boolType.pointerTo
+                        object_setprop:  module.getOrInsertExternalFunction "_ejs_object_setprop", boolType, EjsValueType, EjsValueType, EjsValueType
+                        object_getprop:  module.getOrInsertExternalFunction "_ejs_object_getprop", boolType, EjsValueType, EjsValueType, EjsValueType.pointerTo
                 }
 
         pushScope: (new_scope) ->
@@ -103,42 +101,42 @@ class LLVMIRVisitor extends NodeVisitor
             allocas
 
         visitProgram: (n) ->
-                funcs = []
-                nonfunc = []
+#                 funcs = []
+#                 nonfunc = []
 
-                for child in n.body
-                        if child.type is syntax.FunctionDeclaration
-                                funcs.push child
-                        else
-                                nonfunc.push child
+#                 for child in n.body
+#                         if child.type is syntax.FunctionDeclaration
+#                                 funcs.push child
+#                         else
+#                                nonfunc.push child
 
-                # generate the IR for all the functions first
-                @visit func for func in funcs
+                # generate the IR for all the functions
+                @visit func for func in n.body
 
-                ir_func = @currentFunction
-                ir_args = ir_func.args
-                if top?
-                        # XXX this block needs reworking to mirror what happens in visitFunction (particularly the distinction between entry/body_bb)
-                        @currentFunction = ir_func
-                        # Create a new basic block to start insertion into.
-                        entry_bb = new llvm.BasicBlock "entry", ir_func
-                        llvm.IRBuilder.setInsertPoint entry_bb
-                        ir_func.entry_bb = entry_bb
-                        new_scope = {}
-                        ir_func.topScope = new_scope
-                        @current_scope = new_scope
+#                 ir_func = @currentFunction
+#                 ir_args = ir_func.args
+#                 if top?
+#                         # XXX this block needs reworking to mirror what happens in visitFunction (particularly the distinction between entry/body_bb)
+#                         @currentFunction = ir_func
+#                         # Create a new basic block to start insertion into.
+#                         entry_bb = new llvm.BasicBlock "entry", ir_func
+#                         llvm.IRBuilder.setInsertPoint entry_bb
+#                         ir_func.entry_bb = entry_bb
+#                         new_scope = {}
+#                         ir_func.topScope = new_scope
+#                         @current_scope = new_scope
 
-                allocas = []
-                for i in [0..BUILTIN_ARGS.length-1]
-                        ir_args[i].setName BUILTIN_ARGS[i].name
-                        allocas[i] = llvm.IRBuilder.createAlloca EjsValueType, "local_#{BUILTIN_ARGS[i].name}"
-                        new_scope[BUILTIN_ARGS[i].name] = allocas[i]
-                        llvm.IRBuilder.createStore ir_args[i], allocas[i]
+#                 allocas = []
+#                 for i in [0..BUILTIN_ARGS.length-1]
+#                         ir_args[i].setName BUILTIN_ARGS[i].name
+#                         allocas[i] = llvm.IRBuilder.createAlloca EjsValueType, "local_#{BUILTIN_ARGS[i].name}"
+#                         new_scope[BUILTIN_ARGS[i].name] = allocas[i]
+#                         llvm.IRBuilder.createStore ir_args[i], allocas[i]
 
-                for i in [0..nonfunc.length-1]
-                        ir = @visit nonfunc[i]
+#                 for i in [0..nonfunc.length-1]
+#                         ir = @visit nonfunc[i]
 
-                ir_func
+#                 ir_func
 
         visitBlock: (n) ->
                 new_scope = {}
@@ -193,6 +191,7 @@ class LLVMIRVisitor extends NodeVisitor
                         allocas = @createAllocas @currentFunction, n.declarations, scope
                         for i in [0..n.declarations.length-1]
                                 initializer = @visit n.declarations[i].init
+                                console.log "initializer = #{initializer}"
                                 llvm.IRBuilder.createStore initializer, allocas[i]
                 else if n.kind is "let"
                         # lets are not hoisted to the containing function's toplevel, but instead are bound in the lexical block they inhabit
@@ -250,7 +249,13 @@ class LLVMIRVisitor extends NodeVisitor
                 name = "_ejs_anonymous"
                 if n?.id?.name?
                         name = n.id.name
-                ir_func = @module.getOrInsertFunction name, n.params.length
+
+                console.log type for type in (builtin.llvm_type for builtin in BUILTIN_ARGS).concat(EjsValueType for i in [0..(n.params.length-BUILTIN_ARGS.length)])
+
+                ir_func = @module.getOrInsertFunction name, EjsValueType, (builtin.llvm_type for builtin in BUILTIN_ARGS).concat(if n.params.length is BUILTIN_ARGS.length then [] else (EjsValueType for i in [0..(n.params.length-BUILTIN_ARGS.length)]))
+                console.log "ir_func = #{ir_func}"
+                console.log "#{n.params.length} - #{BUILTIN_ARGS.length}"
+                console.log "[0..#{(n.params.length-BUILTIN_ARGS.length)}]"
                 @currentFunction = ir_func
 
                 ir_args = ir_func.args
@@ -277,8 +282,9 @@ class LLVMIRVisitor extends NodeVisitor
                 i = 0
                 # store the arguments on the stack
                 for param in n.params
+                        console.log "   param : #{param.name}"
                         if param.type is syntax.Identifier
-                                allocas[i] = llvm.IRBuilder.createAlloca EjsValueType, "local_#{param.name}"
+                                allocas[i] = llvm.IRBuilder.createAlloca ir_func.type.getParamType(i), "local_#{param.name}"
                                 i += 1
                         else
                                 debug.log "we don't handle destructured args at the moment."
@@ -314,6 +320,12 @@ class LLVMIRVisitor extends NodeVisitor
 
                 llvm.IRBuilder.setInsertPoint insertBlock
 
+                console.log "#############"
+                console.log "#############"
+                console.log "#############"
+                console.log "#############"
+                console.log "ir_func = #{ir_func}"
+                
                 return ir_func
 
         visitBinaryExpression: (n) ->
@@ -344,7 +356,7 @@ class LLVMIRVisitor extends NodeVisitor
                 return llvm.IRBuilder.createLoad _this, "load_this"
 
         createLoadContext: () ->
-                _context = findIdentifierInScope EJS_CONTEXT_NAME, @current_scope
+                _context = findIdentifierInScope EJS_CONTEXT, @current_scope
                 return llvm.IRBuilder.createLoad _context, "load_context"
 
         visitCallExpression: (n) ->
@@ -352,19 +364,51 @@ class LLVMIRVisitor extends NodeVisitor
 
                 args = n.arguments
 
-                if n.callee.type is syntax.MemberExpression
+                if n.callee.type is syntax.Identifier and n.callee.name[0] == '%'
+                        callee = @builtins[n.callee.name.slice(1)]
+                        if callee.length  # replace with a better Array test
+                                callee = callee[n.arguments.length - BUILTIN_ARGS.length]
+                else if n.callee.type is syntax.MemberExpression
                         debug.log "creating property load!"
                         callee = @createPropertyLoad n.callee.object, n.callee.property
-                else if n.callee.type is syntax.Identifier and n.callee.name is "%invokeClosure"
-                        callee = @ejs.invoke_closure[n.arguments.length - 3]
                 else
                         callee = @visit n.callee
 
                 # At this point we assume callee is a function object
 
-                argv = (@visit arg for arg in args)
-                
-                if not callee.ffi?
+                if true
+                        argv = []
+                        i = 0
+                        console.log "args!!!!!!!!!!!!!!!!!!!"
+                        for arg in args
+                                param_type = callee.type.getParamType(i)
+                                console.log "#{param_type}"
+                                if param_type.toString() is "%EjsValue*"
+                                        console.log 1
+                                        argv[i] = @visit arg
+                                else if param_type.toString() is "%EjsClosureEnvType*"
+                                        console.log 2
+                                        console.log arg
+                                        argv[i] = @visit arg
+                                        console.log argv[i]
+                                else if param_type.toString() is "%EjsContext*"
+                                        console.log 3
+                                        argv[i] = @createLoadContext()
+                                else if param_type.toString() is "i32"
+                                        console.log 4
+                                        argv[i] = llvm.Constant.getIntegerValue param_type, arg.value # XXX this is a shitty way to do type conversion
+                                else if param_type.toString() is EjsFuncType.toString()
+                                        console.log 5
+                                        console.log arg
+                                        f = arg #@visit arg
+                                        console.log 5.5
+                                        argv[i] = llvm.IRBuilder.createPointerCast f, EjsFuncType, "func_cast"
+                                        console.log 6
+                                else
+                                        throw "Unhandled case, param_type = #{param_type}"
+                                i += 1
+                else
+                        argv = (@visit arg for arg in args)
                         # we insert the extra BUILTIN_ARGS since we're calling a JS function
                         argv.unshift @createLoadThis()
                         argv.unshift @createLoadContext()
@@ -378,9 +422,21 @@ class LLVMIRVisitor extends NodeVisitor
                 # this isn't invalid in JS.  if argSize > args.length, the args are undefined.
                 # if argSize < args.length, the args are still passed
 
-                arg.dump() for arg in argv
+#                argv[0] = llvm.IRBuilder.createPointerCast argv[0], EjsContextType, "context_cast"
+#                argv[2] = llvm.Constant.getIntegerValue llvm.Type.getInt32Ty(), 1
                 
-                debug.log "callee == #{callee}, argSize = #{callee.argSize}, argv.length = #{argv.length}"
+                debug.log "callee == #{callee}"
+                debug.log "  argSize = #{callee.argSize}"
+                debug.log "  argv.length = #{argv.length}"
+                (debug.log "arg:  #{arg}") for arg in argv
+
+                console.log "=================="
+                console.log "=================="
+                console.log "=================="
+                console.log "=================="
+                console.log "=================="
+                console.log "=================="
+                
                 return llvm.IRBuilder.createCall callee, argv, if callee.returnType and callee.returnType.isVoid() then "" else "calltmp"
 
         visitNewExpression: (n) ->
@@ -411,21 +467,31 @@ class LLVMIRVisitor extends NodeVisitor
                 val = n.name
                 alloca = findIdentifierInScope val, @current_scope
                 if alloca?
+                        console.log "wtf2"
                         return llvm.IRBuilder.createLoad alloca, "load_#{val}"
 
                 func = null
 
                 # we should probably insert a global scope at the toplevel (above the actual user-level global scope) that includes all these renamings/functions?
                 if val is "print"
-                        func = @ejs.print
+                        func = llvm.IRBuilder.createLoad @ejs.print, "load_print"
                 else
                         func = @module.getFunction val
 
                 if func?
+                        console.log func
+                        console.log "wtf1"
                         return func
 
+                console.log "wtf"
+                
                 throw "Symbol '#{val}' not found in current scope"
 
+
+        visitObjectExpression: (n) ->
+                obj = llvm.IRBuilder.createCall @ejs.object_new, [llvm.Constant.getNull EjsValueType], "objtmp"
+                # XXX missing support for properties
+                return obj
 
         visitExpressionStatement: (n) ->
                 @visit n.expression
@@ -437,7 +503,10 @@ class LLVMIRVisitor extends NodeVisitor
                 else if typeof n.value is "string"
                         debug.log "literal string: #{n.value}"
                         c = llvm.IRBuilder.createGlobalStringPtr n.value, "strconst"
-                        return llvm.IRBuilder.createCall @ejs.string_new_utf8, [c], "strtmp"
+                        strcall = llvm.IRBuilder.createCall @ejs.string_new_utf8, [c], "strtmp"
+                        console.log "string_new_utf8 = #{@ejs.string_new_utf8}"
+                        console.log "strcall = #{strcall}"
+                        return strcall
                 else if typeof n.value is "number"
                         debug.log "literal number: #{n.value}"
                         c = llvm.ConstantFP.getDouble n.value
@@ -457,7 +526,7 @@ insert_toplevel_func = (tree) ->
                 type: syntax.FunctionDeclaration,
                 id:
                         type: syntax.Identifier
-                        name: "__ejs_toplevel_#{module_name}",
+                        name: "_ejs_script"    #   TODO this needs to be something like "__ejs_toplevel_#{module_name}" so we can compile multiple files
                 params: [] # TODO we need the toplevel parameters (context?) here
                 body:
                         type: syntax.BlockStatement
@@ -472,10 +541,19 @@ exports.compile = (tree) ->
         tree = insert_toplevel_func tree
         
         tree = closure_conversion.convert tree
-                
+
+        console.log "================="
+        console.log "================="
+        console.log "================="
+        console.log escodegen.generate tree
+        
         module = new llvm.Module "compiledfoo"
         
         visitor = new LLVMIRVisitor module
         visitor.visit tree
 
+        console.log "================="
+        console.log "================="
+        console.log "================="
+        console.log "#{module}"
         module
