@@ -2,8 +2,9 @@ TOPDIR=$(shell pwd)/..
 NODE_PATH=$(TOPDIR)/node-llvm/build/default:$(TOPDIR)/lib/coffee:$(TOPDIR)/lib:$(TOPDIR)/esprima:$(TOPDIR)/escodegen
 
 HELLOS=$(patsubst %.js,test-%,$(wildcard hello*.js))
+CONDS=$(patsubst %.js,test-%,$(wildcard cond*.js))
 
-check: check-llvm $(HELLOS)
+check: check-llvm $(HELLOS) $(CONDS)
 
 check-llvm:
 	@coffee -c terminal.coffee

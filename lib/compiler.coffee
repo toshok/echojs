@@ -130,11 +130,12 @@ class LLVMIRVisitor extends NodeVisitor
                 llvm.IRBuilder.createCondBr cmp, else_bb, then_bb
 
                 llvm.IRBuilder.setInsertPoint then_bb
-                then_val = @visit n.thenPart
+                then_val = @visit n.consequent
                 llvm.IRBuilder.createBr merge_bb
 
                 llvm.IRBuilder.setInsertPoint else_bb
-                else_val = @visit n.elsePart
+                else_val = @visit n.alternate
+                llvm.IRBuilder.createBr merge_bb
 
                 llvm.IRBuilder.setInsertPoint merge_bb
                 merge_bb
@@ -303,14 +304,48 @@ class LLVMIRVisitor extends NodeVisitor
 
         visitLogicalExpression: (n) ->
                 debug.log "operator = '#{n.operator}'"
-                builtin = "logop#{n.operator}"
-                callee = @ejs[builtin]
-                # allocate space on the stack for the result
-                result = @createAlloca @currentFunction, EjsValueType, "result_#{builtin}"
-                # call the add method
-                rv = llvm.IRBuilder.createCall callee, [(@visit n.left), (@visit n.right), result], "result"
-                # load and return the result
-                return llvm.IRBuilder.createLoad result, "result_#{builtin}_load"
+                result = @createAlloca @currentFunction, EjsValueType, "result_#{n.operator}"
+
+                left_visited = @visit n.left
+                truthy_stackalloc = @createAlloca @currentFunction, boolType, "truthy_result"
+                llvm.IRBuilder.createCall @ejs.truthy, [left_visited, truthy_stackalloc], "cond_truthy"
+                cond_truthy = llvm.IRBuilder.createLoad truthy_stackalloc, "truthy_load"
+
+                insertBlock = llvm.IRBuilder.getInsertBlock()
+                insertFunc = insertBlock.parent
+                
+                left_bb  = new llvm.BasicBlock "cond_left", insertFunc
+                right_bb  = new llvm.BasicBlock "cond_right", insertFunc
+                merge_bb = new llvm.BasicBlock "cond_merge", insertFunc
+
+                # we invert the test here - check if the condition is false/0
+                cmp = llvm.IRBuilder.createICmpEq cond_truthy, (llvm.Constant.getIntegerValue boolType, 0), "cmpresult"
+                llvm.IRBuilder.createCondBr cmp, right_bb, left_bb
+
+                llvm.IRBuilder.setInsertPoint left_bb
+                # inside the then branch, left was truthy
+                if n.operator is "||"
+                        # for || we short circuit out here
+                        llvm.IRBuilder.createStore left_visited, result
+                else if n.operator is "&&"
+                        # for && we evaluate the second and store it
+                        llvm.IRBuilder.createStore (@visit n.right), result
+                else
+                        throw "Internal error 99.1"
+                llvm.IRBuilder.createBr right_bb
+
+                llvm.IRBuilder.setInsertPoint right_bb
+                llvm.IRBuilder.createStore (@visit n.right), result
+                llvm.IRBuilder.createBr merge_bb
+
+                llvm.IRBuilder.setInsertPoint merge_bb
+                rv = llvm.IRBuilder.createLoad result, "result_#{n.operator}_load"
+
+                llvm.IRBuilder.setInsertPoint merge_bb
+
+                rv
+
+                
 
         createLoadThis: () ->
                 _this = findIdentifierInScope EJS_THIS_NAME, @current_scope

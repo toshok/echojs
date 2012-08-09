@@ -89,23 +89,6 @@ _ejs_truthy (EJSValue* val, EJSBool *result)
   return FALSE;
 }
 
-// XXX this is bad since it's eager
-EJSBool
-_ejs_op_or (EJSValue* lhs, EJSValue* rhs, EJSValue** result)
-{
-  EJSBool truthy_lhs;
-  EJSBool truthy_rhs;
-
-  if (!_ejs_truthy(lhs, &truthy_lhs))
-    return FALSE;
-  if (!_ejs_truthy(rhs, &truthy_rhs))
-    return FALSE;
-
-  *result = _ejs_boolean_new(truthy_lhs || truthy_rhs);
-
-  return TRUE;
-}
-
 EJSValue* _ejs_print;
 void
 _ejs_print_impl (EJSValue* env, int argc, EJSValue *val)

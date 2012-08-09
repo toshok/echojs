@@ -9,8 +9,6 @@ EJSBool _ejs_op_add (EJSValue* lhs, EJSValue* rhs, EJSValue** result);
 EJSBool _ejs_op_sub (EJSValue* lhs, EJSValue* rhs, EJSValue** result);
 EJSBool _ejs_op_strict_eq (EJSValue* lhs, EJSValue* rhs, EJSValue** result);
 
-EJSBool _ejs_op_or (EJSValue* lhs, EJSValue* rhs, EJSValue** result);
-
 EJSBool _ejs_truthy (EJSValue* val, EJSBool *result);
 
 extern EJSValue* _ejs_print;
