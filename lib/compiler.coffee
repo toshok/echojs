@@ -69,6 +69,11 @@ class LLVMIRVisitor extends NodeVisitor
         popScope: ->
                 @current_scope = @current_scope[PARENT_SCOPE_KEY]
 
+        visitWithScope: (scope, children) ->
+                @pushScope scope
+                @visit child for child in children
+                @popScope()
+                
         createAlloca: (func, type, name) ->
                 saved_insert_point = llvm.IRBuilder.getInsertBlock()
                 llvm.IRBuilder.setInsertPoint func.entry_bb
@@ -97,54 +102,14 @@ class LLVMIRVisitor extends NodeVisitor
             allocas
 
         visitProgram: (n) ->
-#                 funcs = []
-#                 nonfunc = []
-
-#                 for child in n.body
-#                         if child.type is syntax.FunctionDeclaration
-#                                 funcs.push child
-#                         else
-#                                nonfunc.push child
-
-                # generate the IR for all the functions
+                # by the time we make it here the program has been
+                # transformed so that there is nothing at the toplevel
+                # but function declarations.
                 @visit func for func in n.body
-
-#                 ir_func = @currentFunction
-#                 ir_args = ir_func.args
-#                 if top?
-#                         # XXX this block needs reworking to mirror what happens in visitFunction (particularly the distinction between entry/body_bb)
-#                         @currentFunction = ir_func
-#                         # Create a new basic block to start insertion into.
-#                         entry_bb = new llvm.BasicBlock "entry", ir_func
-#                         llvm.IRBuilder.setInsertPoint entry_bb
-#                         ir_func.entry_bb = entry_bb
-#                         new_scope = {}
-#                         ir_func.topScope = new_scope
-#                         @current_scope = new_scope
-
-#                 allocas = []
-#                 for i in [0..BUILTIN_ARGS.length-1]
-#                         ir_args[i].setName BUILTIN_ARGS[i].name
-#                         allocas[i] = llvm.IRBuilder.createAlloca EjsValueType, "local_#{BUILTIN_ARGS[i].name}"
-#                         new_scope[BUILTIN_ARGS[i].name] = allocas[i]
-#                         llvm.IRBuilder.createStore ir_args[i], allocas[i]
-
-#                 for i in [0..nonfunc.length-1]
-#                         ir = @visit nonfunc[i]
-
-#                 ir_func
 
         visitBlock: (n) ->
                 new_scope = {}
-
-                @pushScope new_scope
-
-                debug.log "hi22"
-                @visit statement for statement in n.body
-                debug.log "hi23"
-                
-                @popScope()
-
+                @visitWithScope new_scope, n.body
                 n
 
         visitIf: (n) ->
@@ -301,11 +266,7 @@ class LLVMIRVisitor extends NodeVisitor
                 body_bb = new llvm.BasicBlock "body", ir_func
                 llvm.IRBuilder.setInsertPoint body_bb
 
-                @pushScope new_scope
-
-                @visit n.body
-
-                @popScope()
+                @visitWithScope new_scope, [n.body]
 
                 # XXX more needed here - this lacks all sorts of control flow stuff.
                 # Finish off the function.
