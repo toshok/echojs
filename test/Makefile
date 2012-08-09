@@ -1,11 +1,9 @@
 TOPDIR=$(shell pwd)/..
 NODE_PATH=$(TOPDIR)/node-llvm/build/default:$(TOPDIR)/lib/coffee:$(TOPDIR)/lib:$(TOPDIR)/esprima:$(TOPDIR)/escodegen
 
-HELLOS=test-hello1 test-hello2 test-hello3
+HELLOS=$(patsubst %.js,test-%,$(wildcard hello*.js))
 
 check: check-llvm $(HELLOS)
-	./hello.js.exe
-	./foo.js.exe
 
 check-llvm:
 	@coffee -c terminal.coffee
@@ -30,5 +28,5 @@ run-node:
 	NODE_PATH=$(NODE_PATH) node
 
 clean:
-	rm -f *.o *.exe
+	rm -f *.o *.js.exe
 

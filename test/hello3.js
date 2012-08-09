@@ -1,9 +1,2 @@
-function hello_outer (x) {
-  function hello_inner () {
-      print (x);
-  }
-
-  hello_inner();
-}
-
-hello_outer('hello world');
+function outer_hello() { var x = "hello world"; function inner_hello() { print (x); } inner_hello(); }
+outer_hello();

@@ -14,7 +14,7 @@ EJSBool _ejs_op_or (EJSValue* lhs, EJSValue* rhs, EJSValue** result);
 EJSBool _ejs_truthy (EJSValue* val, EJSBool *result);
 
 extern EJSValue* _ejs_print;
-extern void _ejs_print_impl (EJSContext *context, EJSValue* env, int argc, EJSValue *val);
+extern void _ejs_print_impl (EJSValue* env, int argc, EJSValue *val);
 
 
 #endif // _ejs_ops_h

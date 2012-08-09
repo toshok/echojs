@@ -1,15 +1,15 @@
 
 indent = 0
-debug_level = 1
+debug_level = 0
 
-exports.log = (msg, level) ->
-  level = level || 0
-  if level < debug_level
+exports.log = (msg, level = 9) ->
+  return
+  if level <= debug_level
     return
   str = ""
   str += "  " for i in [0..indent-1]
   str += msg
-  console.log str
+  console.warn str
 
 exports.indent = () -> indent += 1
 exports.unindent = () -> indent -= 1

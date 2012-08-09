@@ -54,6 +54,8 @@ _ejs_closure_new (EJSClosureEnv* env, EJSClosureFunc0 func)
   return rv;
 }
 
+EJSValue* onlyprop;
+
 EJSBool
 _ejs_object_setprop (EJSValue* obj, EJSValue* key, EJSValue* value)
 {
@@ -61,6 +63,8 @@ _ejs_object_setprop (EJSValue* obj, EJSValue* key, EJSValue* value)
     printf ("setprop on !object\n");
     return FALSE;
   }
+
+  onlyprop = value;
 
   return TRUE;
 }
@@ -73,33 +77,34 @@ _ejs_object_getprop (EJSValue* obj, EJSValue* key, EJSValue** value)
     return FALSE;
   }
 
+  *value = onlyprop;
   return TRUE;
 }
 
 EJSValue*
-_ejs_invoke_closure_0 (EJSContext* context, EJSValue* closure, int argc)
+_ejs_invoke_closure_0 (EJSValue* closure, int argc)
 {
   assert (EJSVAL_IS_CLOSURE(closure));
-  return ((EJSClosureFunc0)closure->u.closure.func) (context, closure->u.closure.env, argc);
+  return ((EJSClosureFunc0)closure->u.closure.func) (closure->u.closure.env, argc);
 }
 
 EJSValue*
-_ejs_invoke_closure_1 (EJSContext* context, EJSValue* closure, int argc, EJSValue* arg1)
+_ejs_invoke_closure_1 (EJSValue* closure, int argc, EJSValue* arg1)
 {
   assert (EJSVAL_IS_CLOSURE(closure));
-  return ((EJSClosureFunc1)closure->u.closure.func) (context, closure->u.closure.env, argc, arg1);
+  return ((EJSClosureFunc1)closure->u.closure.func) (closure->u.closure.env, argc, arg1);
 }
 
 EJSValue*
-_ejs_invoke_closure_2 (EJSContext* context, EJSValue* closure, int argc, EJSValue* arg1, EJSValue* arg2)
+_ejs_invoke_closure_2 (EJSValue* closure, int argc, EJSValue* arg1, EJSValue* arg2)
 {
   assert (EJSVAL_IS_CLOSURE(closure));
-  return ((EJSClosureFunc2)closure->u.closure.func) (context, closure->u.closure.env, argc, arg1, arg2);
+  return ((EJSClosureFunc2)closure->u.closure.func) (closure->u.closure.env, argc, arg1, arg2);
 }
 
 EJSValue*
-_ejs_invoke_closure_3 (EJSContext* context, EJSValue* closure, int argc, EJSValue* arg1, EJSValue* arg2, EJSValue* arg3)
+_ejs_invoke_closure_3 (EJSValue* closure, int argc, EJSValue* arg1, EJSValue* arg2, EJSValue* arg3)
 {
   assert (EJSVAL_IS_CLOSURE(closure));
-  return ((EJSClosureFunc3)closure->u.closure.func) (context, closure->u.closure.env, argc, arg1, arg2, arg3);
+  return ((EJSClosureFunc3)closure->u.closure.func) (closure->u.closure.env, argc, arg1, arg2, arg3);
 }

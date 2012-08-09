@@ -52,6 +52,7 @@ free = (exp) ->
                 when syntax.CallExpression      then Set.union.apply null, [(free exp.callee)].concat (map free, exp.arguments)
                 when syntax.Literal             then new Set
                 when syntax.IfStatement         then Set.union.apply null, [(free exp.test), (free exp.cconsequent), free (exp.alternate)]
+                when syntax.AssignmentExpression then (free exp.left).union free exp.right
                 
                 else throw "shouldn't reach here, type of node = #{exp.type}"
                 #else new Set
@@ -146,7 +147,7 @@ class LambdaLift extends NodeVisitor
                                 global_name = @genGlobalFunctionName n.id.name
                                 @currentMapping()[n.id.name] = global_name
                         else
-                                @genAnonymousFunctionName()
+                                global_name = @genAnonymousFunctionName()
 
                         n.type = syntax.FunctionDeclaration
                         n.id =
@@ -183,15 +184,16 @@ class SubstituteVariables extends NodeVisitor
                 if n.ejs_substitute?
                         a = @currentMapping()[n.name]
                         if not a?
-                                console.log "missing mapping for #{n.name}"
-                                throw "InternalError"
+                                console.warn "missing mapping for #{n.name}"
+                                throw "InternalError 2"
 
                         return a
                 n
-                
-         visitVariableDeclaration: (n) ->
+
+        visitVariableDeclaration: (n) ->
                 rv = []
                 for decl in n.declarations
+                        decl.init = @visit decl.init
                         a = @currentMapping()[decl.id.name]
                         if a?
                                 rv.push {
@@ -243,6 +245,22 @@ class SubstituteVariables extends NodeVisitor
                                 }],
                                 kind: "var"
 
+                        # we need to push assignments of any closed over parameters into the environment at this point
+                        for param in n.params
+                                if n.ejs_env.closed.member param.name
+                                        n.body.body.splice 1, 0, {
+                                                type: syntax.ExpressionStatement
+                                                expression:
+                                                        type: syntax.AssignmentExpression,
+                                                        operator: "="
+                                                        left:
+                                                                type: syntax.MemberExpression,
+                                                                computed: false,
+                                                                object: create_identifier "%env_#{n.ejs_env.id}"
+                                                                property: create_identifier param.name
+                                                        right: create_identifier param.name
+                                        }
+
                         # XXX if there are existing mappings prepend "%env." (a MemberExpression) to them
 
                         # add mappings for all variables in .closed from "x" to "%env.x"
@@ -266,6 +284,14 @@ class SubstituteVariables extends NodeVisitor
                 # with:
                 #   var X = makeClosure(%current_env, function () { ...body... });
                 #
+                #
+                # function expressions are easier:
+                # 
+                #    function X () { ...body... }
+                #
+                # replace inline with:
+                #
+                #    makeClosure(%current_env, function () { ...body... })
 
                 if n.ejs_env.parent
                         if n.type is syntax.FunctionDeclaration
@@ -282,15 +308,18 @@ class SubstituteVariables extends NodeVisitor
                                 #  name so we can use it when generating the native function.
                                 # n.id = null
                                 n.type = syntax.FunctionExpression
-                                #n.params.unshift create_identifier "%env"
                                 
                                 return {
                                         type: syntax.VariableDeclaration,
                                         declarations: [var_decl]
                                         kind: "var"
                                 }
-                        else
-                                throw "Internal Error"
+                        else # n.type is syntax.FunctionExpression
+                                call_exp =
+                                        type: syntax.CallExpression,
+                                        callee: create_identifier "%makeClosure"
+                                        arguments: [ (create_identifier "%env_#{n.ejs_env.parent.id}"), n ]
+                                return call_exp
                 n        
                 
         visitCallExpression: (n) ->
@@ -300,21 +329,20 @@ class SubstituteVariables extends NodeVisitor
                 #   X (arg1, arg2, ...)
                 # 
                 # with
-                #   invokeClosure(%ctx, X, %argCount, arg1, arg2, ...);
+                #   invokeClosure(X, %argCount, arg1, arg2, ...);
 
                 arg_count = n.arguments.length
 
                 n.arguments.unshift { type: syntax.Literal, value: arg_count }
                 n.arguments.unshift n.callee
-                n.arguments.unshift { type: syntax.Literal, value: null } # this should be the EjsContext corresponding to this thread
                 n.callee = create_identifier "%invokeClosure"
                 n
 
 
 
 exports.convert = (tree) ->
-        #console.log "before:"
-        #console.log escodegen.generate tree
+        #console.warn "before:"
+        #console.warn escodegen.generate tree
 
         # first we decorate the tree with free variable usage
         free tree
@@ -323,20 +351,20 @@ exports.convert = (tree) ->
         locate_envs = new LocateEnvVisitor
         tree2 = locate_envs.visit tree
 
-        #console.log "after LocateEnvVisitor:"
-        #console.log escodegen.generate tree2
+        #console.warn "after LocateEnvVisitor:"
+        #console.warn escodegen.generate tree2
 
         substitute_vars = new SubstituteVariables tree2
         tree3 = substitute_vars.visit tree2
 
-        #console.log "after SubstituteVariables:"
-        #console.log escodegen.generate tree3
+        #console.warn "after SubstituteVariables:"
+        #console.warn escodegen.generate tree3
 
         lambda_lift = new LambdaLift tree3
         tree4 = lambda_lift.visit tree3
 
-        #console.log "after LambdaLift:"
-        #console.log escodegen.generate tree4
+        #console.warn "after LambdaLift:"
+        #console.warn escodegen.generate tree4
 
         tree4
         

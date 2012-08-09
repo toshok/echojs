@@ -108,9 +108,12 @@ _ejs_op_or (EJSValue* lhs, EJSValue* rhs, EJSValue** result)
 
 EJSValue* _ejs_print;
 void
-_ejs_print_impl (EJSContext *context, EJSValue* env, int argc, EJSValue *val)
+_ejs_print_impl (EJSValue* env, int argc, EJSValue *val)
 {
-  if (EJSVAL_IS_NUMBER(val)) {
+  if (val == NULL) {
+    printf ("(null)\n");
+  }
+  else if (EJSVAL_IS_NUMBER(val)) {
     printf (EJS_NUMBER_FORMAT "\n", val->u.n.data);
   }
   else if (EJSVAL_IS_STRING(val)) {
