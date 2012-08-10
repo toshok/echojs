@@ -32,14 +32,22 @@ free = (exp) ->
                 when syntax.FunctionDeclaration
                         exp.ejs_free_vars = (free exp.body).subtract (param_names exp.params)
                         exp.ejs_decls = exp.body.ejs_decls.union (param_names exp.params)
+                        if exp?.id
+                                exp.ejs_free_vars.remove exp.id.name
+                                exp.ejs_decls.add exp.id.name
+                        exp.ejs_free_vars
                 when syntax.FunctionExpression
                         exp.ejs_free_vars = (free exp.body).subtract (param_names exp.params)
                         exp.ejs_decls = exp.body.ejs_decls.union (param_names exp.params)
+                        if exp?.id
+                                exp.ejs_free_vars.remove exp.id.name
+                                exp.ejs_decls.add exp.id.name
+                        exp.ejs_free_vars
                 when syntax.BlockStatement
                         decls = decl_names collect_decls exp.body
                         uses = Set.union.apply null, map free, exp.body
-                        uses.subtract decls
                         exp.ejs_decls = decls
+                        exp.ejs_free_vars = uses.subtract decls
                 when syntax.CatchClause         then (free exp.body).subtract (new Set [exp.param.name])
                 when syntax.VariableDeclaration then Set.union.apply null, (map free, exp.declarations)
                 when syntax.VariableDeclarator  then free exp.init
