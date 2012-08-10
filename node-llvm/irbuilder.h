@@ -16,6 +16,7 @@ namespace jsllvm {
 
     static v8::Handle<v8::Value> New(const v8::Arguments& args);
     static v8::Handle<v8::Value> SetInsertPoint(const v8::Arguments& args);
+    static v8::Handle<v8::Value> SetInsertPointStartBB(const v8::Arguments& args);
     static v8::Handle<v8::Value> GetInsertBlock(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateRet(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreatePointerCast(const v8::Arguments& args);

@@ -23,6 +23,7 @@ namespace jsllvm {
     s_func = Persistent<Function>::New(s_ct->GetFunction());
 
     NODE_SET_METHOD(s_func, "setInsertPoint", IRBuilder::SetInsertPoint);
+    NODE_SET_METHOD(s_func, "setInsertPointStartBB", IRBuilder::SetInsertPointStartBB);
     NODE_SET_METHOD(s_func, "getInsertBlock", IRBuilder::GetInsertBlock);
     NODE_SET_METHOD(s_func, "createRet", IRBuilder::CreateRet);
     NODE_SET_METHOD(s_func, "createCall", IRBuilder::CreateCall);
@@ -53,6 +54,15 @@ namespace jsllvm {
     REQ_LLVM_BB_ARG(0, bb);
     if (bb != NULL)
       IRBuilder::builder.SetInsertPoint (bb);
+    return scope.Close(Undefined());
+  }
+
+  v8::Handle<v8::Value> IRBuilder::SetInsertPointStartBB(const v8::Arguments& args)
+  {
+    HandleScope scope;
+    REQ_LLVM_BB_ARG(0, bb);
+    if (bb != NULL)
+      IRBuilder::builder.SetInsertPoint (bb, bb->getFirstInsertionPt());
     return scope.Close(Undefined());
   }
 

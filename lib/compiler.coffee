@@ -76,7 +76,7 @@ class LLVMIRVisitor extends NodeVisitor
                 
         createAlloca: (func, type, name) ->
                 saved_insert_point = llvm.IRBuilder.getInsertBlock()
-                llvm.IRBuilder.setInsertPoint func.entry_bb
+                llvm.IRBuilder.setInsertPointStartBB func.entry_bb
                 alloca = llvm.IRBuilder.createAlloca type, name
                 llvm.IRBuilder.setInsertPoint saved_insert_point
                 alloca
@@ -86,7 +86,7 @@ class LLVMIRVisitor extends NodeVisitor
 
             # the allocas are always allocated in the function entry_bb so the mem2reg opt pass can regenerate the ssa form for us
             saved_insert_point = llvm.IRBuilder.getInsertBlock()
-            llvm.IRBuilder.setInsertPoint func.entry_bb
+            llvm.IRBuilder.setInsertPointStartBB func.entry_bb
 
             j = 0
             for i in [0..names.length-1]
@@ -418,21 +418,11 @@ class LLVMIRVisitor extends NodeVisitor
                 # this isn't invalid in JS.  if argSize > args.length, the args are undefined.
                 # if argSize < args.length, the args are still passed
 
-#                argv[0] = llvm.IRBuilder.createPointerCast argv[0], EjsContextType, "context_cast"
-#                argv[2] = llvm.Constant.getIntegerValue llvm.Type.getInt32Ty(), 1
-                
                 debug.log "callee == #{callee}"
                 debug.log "  argSize = #{callee.argSize}"
                 debug.log "  argv.length = #{argv.length}"
                 (debug.log "arg:  #{arg}") for arg in argv
 
-                debug.log "=================="
-                debug.log "=================="
-                debug.log "=================="
-                debug.log "=================="
-                debug.log "=================="
-                debug.log "=================="
-                
                 return llvm.IRBuilder.createCall callee, argv, if callee.returnType and callee.returnType.isVoid() then "" else "calltmp"
 
         visitNewExpression: (n) ->
@@ -579,10 +569,7 @@ exports.compile = (tree) ->
         
         tree = closure_conversion.convert tree
 
-        debug.log "================="
-        debug.log "================="
-        debug.log "================="
-        debug.log escodegen.generate tree
+        #console.warn escodegen.generate tree
         
         module = new llvm.Module "compiledfoo"
 
@@ -592,8 +579,4 @@ exports.compile = (tree) ->
         visitor = new LLVMIRVisitor module
         visitor.visit tree
 
-        debug.log "================="
-        debug.log "================="
-        debug.log "================="
-        debug.log "#{module}"
         module
