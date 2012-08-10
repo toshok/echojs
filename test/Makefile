@@ -11,19 +11,12 @@ check-llvm:
 	@coffee -c echo-assert.coffee
 	@NODE_PATH=$(NODE_PATH):. coffee llvm-test.coffee
 
-test-foo:
-	@echo [ejs] foo.js.exe
-	@NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs foo.js
-
 test-%: %.js.exe
 	@EXE=`echo $<`; ./$$EXE
 
 %.js.exe: %.js
 	@echo [ejs] $<
 	@NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $<
-
-test-set:
-	NODE_PATH=$(NODE_PATH) coffee ../lib/set.coffee
 
 run-node:
 	NODE_PATH=$(NODE_PATH) node
