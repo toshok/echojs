@@ -3,3 +3,4 @@
 echo-assert.js
 terminal.js
 llvm-test.js
+set.js
