@@ -286,12 +286,6 @@ class LLVMIRVisitor extends NodeVisitor
 
                 llvm.IRBuilder.setInsertPoint insertBlock
 
-                debug.log "#############"
-                debug.log "#############"
-                debug.log "#############"
-                debug.log "#############"
-                debug.log "ir_func = #{ir_func}"
-                
                 return ir_func
 
         visitUnaryExpression: (n) ->
@@ -302,9 +296,8 @@ class LLVMIRVisitor extends NodeVisitor
                         throw "Internal error: unary operator '#{n.operator}' not implemented"
                 # allocate space on the stack for the result
                 result = @createAlloca @currentFunction, EjsValueType, "result_#{builtin}"
-                args = [(@visit n.argument), result]
                 # call the add method
-                rv = llvm.IRBuilder.createCall callee, args, "result"
+                rv = llvm.IRBuilder.createCall callee, [(@visit n.argument), result], "result"
                 # load and return the result
                 return llvm.IRBuilder.createLoad result, "result_#{builtin}_load"
                 
@@ -317,9 +310,8 @@ class LLVMIRVisitor extends NodeVisitor
                         throw "Internal error: unhandled binary operator '#{n.operator}'"
                 # allocate space on the stack for the result
                 result = @createAlloca @currentFunction, EjsValueType, "result_#{builtin}"
-                args = [(@visit n.left), (@visit n.right), result]
                 # call the add method
-                rv = llvm.IRBuilder.createCall callee, args, "result"
+                rv = llvm.IRBuilder.createCall callee, [(@visit n.left), (@visit n.right), result], "result"
                 # load and return the result
                 return llvm.IRBuilder.createLoad result, "result_#{builtin}_load"
 
