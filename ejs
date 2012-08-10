@@ -48,7 +48,7 @@ files.forEach (filename) ->
     exe_filename = "#{filename}.exe"
 
     llvm_as_args = ["-o=#{bc_filename}", ll_filename]
-    opt_args = ["-o=#{bc_opt_filename}", bc_filename]
+    opt_args = ["-O3", "-mem2reg", "-o=#{bc_opt_filename}", bc_filename]
     llvm_dis_args = ["-o=#{ll_opt_filename}", bc_opt_filename]
     llc_args = ["-march=x86-64", "-O2", "-o=#{s_filename}", ll_opt_filename]
 
