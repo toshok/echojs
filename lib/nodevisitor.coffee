@@ -152,6 +152,11 @@ exports.NodeVisitor = class NodeVisitor
                 n.right = @visit n.right
                 n
 
+        visitUnaryExpression: (n) ->
+                # we don't visit the operator since it's not a separate node
+                n.argument = @visit n.argument
+                n
+
         visitMemberExpression: (n) ->
                 n.object = @visit n.object
                 n.property = @visit n.property
@@ -223,6 +228,7 @@ exports.NodeVisitor = class NodeVisitor
                         when syntax.NewExpression        then rv = @visitNewExpression new_n
                         when syntax.ThisExpression       then rv = @visitThisExpression new_n
                         when syntax.BinaryExpression     then rv = @visitBinaryExpression new_n
+                        when syntax.UnaryExpression      then rv = @visitUnaryExpression new_n
                         when syntax.MemberExpression     then rv = @visitMemberExpression new_n
                         when syntax.RelationalExpression then rv = @visitRelationalExpression new_n
                         when syntax.SequenceExpression   then rv = @visitSequenceExpression new_n

@@ -14,9 +14,6 @@ llvm = require 'llvm'
 # special key for parent scope when performing lookups
 PARENT_SCOPE_KEY = ":parent:"
 
-EJS_ENV = "%env"
-EJS_ARGC = "%argc"
-
 stringType = llvm.Type.getInt8Ty().pointerTo
 boolType = llvm.Type.getInt8Ty()
 voidType = llvm.Type.getVoidTy()
@@ -29,8 +26,8 @@ EjsClosureEnvType = EjsValueType
 EjsFuncType = (llvm.FunctionType.get EjsValueType, [EjsClosureEnvType, llvm.Type.getInt32Ty()]).pointerTo
 
 BUILTIN_ARGS = [
-  { name: EJS_ENV,     llvm_type: EjsClosureEnvType, type: syntax.Identifier }
-  { name: EJS_ARGC,    llvm_type: int32Type,         type: syntax.Identifier }
+  { llvm_type: EjsClosureEnvType } # %env
+  { llvm_type: int32Type }         # %argc
 ]
 
 class LLVMIRVisitor extends NodeVisitor
@@ -51,8 +48,11 @@ class LLVMIRVisitor extends NodeVisitor
                 @ejs = {
                         object_new:      module.getOrInsertExternalFunction "_ejs_object_new", EjsValueType, EjsValueType
                         number_new:      module.getOrInsertExternalFunction "_ejs_number_new", EjsValueType, llvm.Type.getDoubleTy()
+                        boolean_new:     module.getOrInsertExternalFunction "_ejs_boolean_new", EjsValueType, boolType
                         string_new_utf8: module.getOrInsertExternalFunction "_ejs_string_new_utf8", EjsValueType, stringType
                         print:           module.getOrInsertGlobal "_ejs_print", EjsValueType
+                        "unop!":         module.getOrInsertExternalFunction "_ejs_op_not", boolType, EjsValueType, EjsValueType.pointerTo
+                        "binop%":        module.getOrInsertExternalFunction "_ejs_op_mod", boolType, EjsValueType, EjsValueType, EjsValueType.pointerTo
                         "binop+":        module.getOrInsertExternalFunction "_ejs_op_add", boolType, EjsValueType, EjsValueType, EjsValueType.pointerTo
                         "binop-":        module.getOrInsertExternalFunction "_ejs_op_sub", boolType, EjsValueType, EjsValueType, EjsValueType.pointerTo
                         "logop||":       module.getOrInsertExternalFunction "_ejs_op_or", boolType, EjsValueType, EjsValueType, EjsValueType.pointerTo
@@ -142,7 +142,11 @@ class LLVMIRVisitor extends NodeVisitor
                 
         visitReturn: (n) ->
                 debug.log "visitReturn"
-                llvm.IRBuilder.createRet (@visit n.argument)
+                if n.argument
+                        llvm.IRBuilder.createRet (@visit n.argument)
+                else
+                        llvm.IRBuilder.createRet (llvm.Constant.getNull EjsValueType) # this should be undefined, not null
+                        
 
         visitVariableDeclaration: (n) ->
                                 
@@ -290,10 +294,27 @@ class LLVMIRVisitor extends NodeVisitor
                 
                 return ir_func
 
+        visitUnaryExpression: (n) ->
+                debug.log "operator = '#{n.operator}'"
+                builtin = "unop#{n.operator}"
+                callee = @ejs[builtin]
+                if not callee
+                        throw "Internal error: unary operator '#{n.operator}' not implemented"
+                # allocate space on the stack for the result
+                result = @createAlloca @currentFunction, EjsValueType, "result_#{builtin}"
+                args = [(@visit n.argument), result]
+                # call the add method
+                rv = llvm.IRBuilder.createCall callee, args, "result"
+                # load and return the result
+                return llvm.IRBuilder.createLoad result, "result_#{builtin}_load"
+                
+                
         visitBinaryExpression: (n) ->
                 debug.log "operator = '#{n.operator}'"
                 builtin = "binop#{n.operator}"
                 callee = @ejs[builtin]
+                if not callee
+                        throw "Internal error: unhandled binary operator '#{n.operator}'"
                 # allocate space on the stack for the result
                 result = @createAlloca @currentFunction, EjsValueType, "result_#{builtin}"
                 args = [(@visit n.left), (@visit n.right), result]
@@ -332,7 +353,7 @@ class LLVMIRVisitor extends NodeVisitor
                         llvm.IRBuilder.createStore (@visit n.right), result
                 else
                         throw "Internal error 99.1"
-                llvm.IRBuilder.createBr right_bb
+                llvm.IRBuilder.createBr merge_bb
 
                 llvm.IRBuilder.setInsertPoint right_bb
                 llvm.IRBuilder.createStore (@visit n.right), result
@@ -492,7 +513,11 @@ class LLVMIRVisitor extends NodeVisitor
                         debug.log "literal number: #{n.value}"
                         c = llvm.ConstantFP.getDouble n.value
                         return llvm.IRBuilder.createCall @ejs.number_new, [c], "numtmp"
-                throw "Internal error 1"
+                else if typeof n.value is "boolean"
+                        debug.log "literal boolean: #{n.value}"
+                        c = llvm.Constant.getIntegerValue boolType, (if n.value then 1 else 0)
+                        return llvm.IRBuilder.createCall @ejs.boolean_new, [c], "booltmp"
+                throw "Internal error: unrecognized literal of type #{typeof n.value}"
 
 class AddFunctionsVisitor extends NodeVisitor
         constructor: (@module) ->
@@ -510,8 +535,8 @@ class AddFunctionsVisitor extends NodeVisitor
                         
                 debug.log "BUILTIN_ARGS.length = #{BUILTIN_ARGS.length}"
 
-                for i in [(BUILTIN_ARGS.length - 1)..0]
-                  n.params.unshift BUILTIN_ARGS[i]
+                for i in [0..(BUILTIN_ARGS.length - 1)]
+                        n.params[i].llvm_type = BUILTIN_ARGS[i].llvm_type
                 
                 n.ir_func = @module.getOrInsertFunction n.ir_name, EjsValueType, (param.llvm_type for param in n.params)
                 debug.log "ADDFUNCTIONVISITOR:     ########## #{n.ir_name}"
@@ -544,7 +569,10 @@ insert_toplevel_func = (tree) ->
                 id:
                         type: syntax.Identifier
                         name: "_ejs_script"    #   TODO this needs to be something like "__ejs_toplevel_#{module_name}" so we can compile multiple files
-                params: [] # TODO we need the toplevel parameters (env?) here
+                params: [
+                        { type: syntax.Identifier, name: "%env" }
+                        { type: syntax.Identifier, name: "%argc" }
+                ]
                 body:
                         type: syntax.BlockStatement
                         body: tree.body

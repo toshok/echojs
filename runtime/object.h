@@ -15,6 +15,7 @@ typedef enum {
 typedef struct _EJSContext* EJSContext;
 
 typedef struct _EJSValue EJSValue;
+typedef struct _EJSFieldMap EJSFieldMap;
 
 // for now we just build environments out of EJS objects
 typedef struct _EJSValue EJSClosureEnv;
@@ -33,6 +34,8 @@ struct _EJSValue {
     // object members
     struct {
       EJSValue *proto;
+      EJSFieldMap* map;
+      EJSValue **fields;
       // field/property map
     } o;
 

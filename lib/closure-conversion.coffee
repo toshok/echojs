@@ -1,5 +1,6 @@
 esprima = require 'esprima'
 syntax = esprima.Syntax
+escodegen = require 'escodegen'
 
 { Set } = require 'set'
 { NodeVisitor } = require 'nodevisitor'
@@ -28,32 +29,29 @@ free = (exp) ->
                 when syntax.Program
                         decls = decl_names collect_decls exp.body
                         uses = Set.union.apply null, (map free, exp.body)
+                        exp.ejs_decls = decls
                         exp.ejs_free_vars = uses.subtract decls
                 when syntax.FunctionDeclaration
                         exp.ejs_free_vars = (free exp.body).subtract (param_names exp.params)
                         exp.ejs_decls = exp.body.ejs_decls.union (param_names exp.params)
-                        if exp?.id
-                                exp.ejs_free_vars.remove exp.id.name
-                                exp.ejs_decls.add exp.id.name
                         exp.ejs_free_vars
                 when syntax.FunctionExpression
                         exp.ejs_free_vars = (free exp.body).subtract (param_names exp.params)
                         exp.ejs_decls = exp.body.ejs_decls.union (param_names exp.params)
-                        if exp?.id
-                                exp.ejs_free_vars.remove exp.id.name
-                                exp.ejs_decls.add exp.id.name
                         exp.ejs_free_vars
                 when syntax.BlockStatement
                         decls = decl_names collect_decls exp.body
                         uses = Set.union.apply null, map free, exp.body
                         exp.ejs_decls = decls
                         exp.ejs_free_vars = uses.subtract decls
+                        exp.ejs_free_vars
                 when syntax.CatchClause         then (free exp.body).subtract (new Set [exp.param.name])
                 when syntax.VariableDeclaration then Set.union.apply null, (map free, exp.declarations)
                 when syntax.VariableDeclarator  then free exp.init
                 when syntax.ExpressionStatement then free exp.expression
                 when syntax.Identifier          then new Set [exp.name]
                 when syntax.ReturnStatement     then free exp.argument
+                when syntax.UnaryExpression     then free exp.argument
                 when syntax.BinaryExpression    then (free exp.left).union free exp.right
                 when syntax.LogicalExpression   then (free exp.left).union free exp.right
                 when syntax.MemberExpression    then free exp.object # we don't traverse into the property
@@ -170,6 +168,9 @@ class LambdaLift extends NodeVisitor
                         n.body = @visit n.body
                         @mappings = @mappings.slice(1)
 
+                        n.params.unshift create_identifier "%argc"
+                        n.params.unshift create_identifier "%env_#{n.ejs_env.parent.id}"
+                        
                         return {
                                 type: syntax.Identifier,
                                 name: global_name
@@ -279,7 +280,7 @@ class SubstituteVariables extends NodeVisitor
                                 new_mapping[sym] =
                                         type: syntax.MemberExpression,
                                         computed: false,
-                                        object: create_identifier "%env"
+                                        object: create_identifier "%env_#{n.ejs_env.id}"
                                         property: create_identifier sym
 
                         @mappings.unshift new_mapping
@@ -307,16 +308,31 @@ class SubstituteVariables extends NodeVisitor
                                         type: syntax.CallExpression,
                                         callee: create_identifier "%makeClosure"
                                         arguments: [ (create_identifier "%env_#{n.ejs_env.parent.id}"), n ]
-                                var_decl =
-                                        type: syntax.VariableDeclarator
-                                        id: n.id
-                                        init: call_exp
 
                                 # this is kinda lame... not sure if it's necessary.  at the very least we need to keep track of the function's
                                 #  name so we can use it when generating the native function.
                                 # n.id = null
                                 n.type = syntax.FunctionExpression
-                                
+
+                                if n.id.name? and n.ejs_env.parent.closed.member n.id.name
+                                        assign = 
+                                                type: syntax.ExpressionStatement
+                                                expression:
+                                                        type: syntax.AssignmentExpression,
+                                                        operator: "="
+                                                        left:
+                                                                type: syntax.MemberExpression,
+                                                                computed: false,
+                                                                object: create_identifier "%env_#{n.ejs_env.parent.id}"
+                                                                property: create_identifier n.id.name
+                                                        right: call_exp
+                                        return assign
+                                        
+                                var_decl =
+                                        type: syntax.VariableDeclarator
+                                        id: n.id
+                                        init: call_exp
+
                                 return {
                                         type: syntax.VariableDeclaration,
                                         declarations: [var_decl]

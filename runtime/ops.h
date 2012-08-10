@@ -5,6 +5,7 @@
 #include "ejs.h"
 #include "object.h"
 
+EJSBool _ejs_op_not (EJSValue* exp, EJSValue** result);
 EJSBool _ejs_op_add (EJSValue* lhs, EJSValue* rhs, EJSValue** result);
 EJSBool _ejs_op_sub (EJSValue* lhs, EJSValue* rhs, EJSValue** result);
 EJSBool _ejs_op_strict_eq (EJSValue* lhs, EJSValue* rhs, EJSValue** result);

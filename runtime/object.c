@@ -4,12 +4,49 @@
 
 #include "object.h"
 
+// really terribly performing field maps
+struct _EJSFieldMap {
+  char **names;
+  int allocated;
+  int num;
+};
+
+EJSFieldMap*
+_ejs_fieldmap_new (int initial_allocation)
+{
+  EJSFieldMap* rv = (EJSFieldMap*)calloc(1, sizeof (EJSFieldMap));
+  rv->names = (char**)malloc(sizeof(char*) * initial_allocation);
+  rv->num = 0;
+  rv->allocated = initial_allocation;
+  return rv;
+}
+
+int
+_ejs_fieldmap_lookup (EJSFieldMap *map, char *name, EJSBool add_if_not_found)
+{
+  int i;
+  for (i = 0; i < map->num; i ++) {
+    if (!strcmp (map->names[i], name))
+      return i;
+  }
+  
+  int idx = -1;
+  if (add_if_not_found) {
+    idx = map->num++;
+    map->names[idx] = strdup (name);
+  }
+
+  return idx;
+}
+
 EJSValue*
 _ejs_object_new (EJSValue *proto)
 {
   EJSValue* rv = (EJSValue*)calloc(1, sizeof (EJSValue));
   rv->type = EJSValueTypeObject;
   rv->u.o.proto = proto;
+  rv->u.o.map = _ejs_fieldmap_new (8);
+  rv->u.o.fields = (EJSValue**)calloc(8, sizeof (EJSValue*));
   return rv;
 }
 
@@ -54,8 +91,6 @@ _ejs_closure_new (EJSClosureEnv* env, EJSClosureFunc0 func)
   return rv;
 }
 
-EJSValue* onlyprop;
-
 EJSBool
 _ejs_object_setprop (EJSValue* obj, EJSValue* key, EJSValue* value)
 {
@@ -63,8 +98,13 @@ _ejs_object_setprop (EJSValue* obj, EJSValue* key, EJSValue* value)
     printf ("setprop on !object\n");
     return FALSE;
   }
+  if (!EJSVAL_IS_STRING(key)) {
+    printf ("key isn't a string\n");
+    return FALSE;
+  }
 
-  onlyprop = value;
+  int field_index = _ejs_fieldmap_lookup (obj->u.o.map, key->u.s.data, TRUE);
+  obj->u.o.fields[field_index] = value;
 
   return TRUE;
 }
@@ -76,8 +116,18 @@ _ejs_object_getprop (EJSValue* obj, EJSValue* key, EJSValue** value)
     printf ("setprop on !object\n");
     return FALSE;
   }
+  if (!EJSVAL_IS_STRING(key)) {
+    printf ("key isn't a string\n");
+    return FALSE;
+  }
 
-  *value = onlyprop;
+  int field_index = _ejs_fieldmap_lookup (obj->u.o.map, key->u.s.data, FALSE);
+
+  if (field_index == -1)
+    *value = NULL; // should be a global Undefined() EJSValue
+  else
+    *value = obj->u.o.fields[field_index];
+
   return TRUE;
 }
 
