@@ -21,6 +21,12 @@ test-%: %.js.exe
 run-node:
 	NODE_PATH=$(NODE_PATH) node
 
+set.js: ../lib/set.coffee
+	@NODE_PATH=$(NODE_PATH):. coffee -c -o . ../lib/set.coffee
+
+self-test: set.js.exe
+	./set.js.exe
+
 clean:
 	rm -f *.o *.js.exe
 

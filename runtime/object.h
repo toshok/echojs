@@ -84,8 +84,8 @@ EJSValue* _ejs_boolean_new (EJSBool value);
 
 EJSValue* _ejs_closure_new (EJSClosureEnv* env, EJSClosureFunc0 func);
 
-EJSBool _ejs_object_setprop (EJSValue* obj, EJSValue* key, EJSValue* value);
-EJSBool _ejs_object_getprop (EJSValue* obj, EJSValue* key, EJSValue** value);
+EJSValue* _ejs_object_setprop (EJSValue* obj, EJSValue* key, EJSValue* value);
+EJSValue* _ejs_object_getprop (EJSValue* obj, EJSValue* key);
 
 EJSValue* _ejs_invoke_closure_0 (EJSValue* closure, int argc);
 EJSValue* _ejs_invoke_closure_1 (EJSValue* closure, int argc, EJSValue *arg1);

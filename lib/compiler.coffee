@@ -51,15 +51,14 @@ class LLVMIRVisitor extends NodeVisitor
                         boolean_new:     module.getOrInsertExternalFunction "_ejs_boolean_new", EjsValueType, boolType
                         string_new_utf8: module.getOrInsertExternalFunction "_ejs_string_new_utf8", EjsValueType, stringType
                         print:           module.getOrInsertGlobal "_ejs_print", EjsValueType
-                        "unop!":         module.getOrInsertExternalFunction "_ejs_op_not", boolType, EjsValueType, EjsValueType.pointerTo
-                        "binop%":        module.getOrInsertExternalFunction "_ejs_op_mod", boolType, EjsValueType, EjsValueType, EjsValueType.pointerTo
-                        "binop+":        module.getOrInsertExternalFunction "_ejs_op_add", boolType, EjsValueType, EjsValueType, EjsValueType.pointerTo
-                        "binop-":        module.getOrInsertExternalFunction "_ejs_op_sub", boolType, EjsValueType, EjsValueType, EjsValueType.pointerTo
-                        "logop||":       module.getOrInsertExternalFunction "_ejs_op_or", boolType, EjsValueType, EjsValueType, EjsValueType.pointerTo
-                        "binop===":      module.getOrInsertExternalFunction "_ejs_op_strict_eq", boolType, EjsValueType, EjsValueType, EjsValueType.pointerTo
-                        truthy:          module.getOrInsertExternalFunction "_ejs_truthy", boolType, EjsValueType, boolType.pointerTo
-                        object_setprop:  module.getOrInsertExternalFunction "_ejs_object_setprop", boolType, EjsValueType, EjsValueType, EjsValueType
-                        object_getprop:  module.getOrInsertExternalFunction "_ejs_object_getprop", boolType, EjsValueType, EjsValueType, EjsValueType.pointerTo
+                        "unop!":         module.getOrInsertExternalFunction "_ejs_op_not", EjsValueType, EjsValueType
+                        "binop%":        module.getOrInsertExternalFunction "_ejs_op_mod", EjsValueType, EjsValueType, EjsValueType
+                        "binop+":        module.getOrInsertExternalFunction "_ejs_op_add", EjsValueType, EjsValueType, EjsValueType
+                        "binop-":        module.getOrInsertExternalFunction "_ejs_op_sub", EjsValueType, EjsValueType, EjsValueType
+                        "binop===":      module.getOrInsertExternalFunction "_ejs_op_strict_eq", EjsValueType, EjsValueType, EjsValueType
+                        truthy:          module.getOrInsertExternalFunction "_ejs_truthy", boolType, EjsValueType
+                        object_setprop:  module.getOrInsertExternalFunction "_ejs_object_setprop", EjsValueType, EjsValueType, EjsValueType, EjsValueType
+                        object_getprop:  module.getOrInsertExternalFunction "_ejs_object_getprop", EjsValueType, EjsValueType, EjsValueType
                 }
 
         pushScope: (new_scope) ->
@@ -114,9 +113,7 @@ class LLVMIRVisitor extends NodeVisitor
 
         visitIf: (n) ->
                 # first we convert our conditional EJSValue to a boolean
-                truthy_stackalloc = @createAlloca @currentFunction, boolType, "truthy_result"
-                llvm.IRBuilder.createCall @ejs.truthy, [@visit(n.test), truthy_stackalloc], "cond_truthy"
-                cond_truthy = llvm.IRBuilder.createLoad truthy_stackalloc, "truthy_load"
+                cond_truthy = llvm.IRBuilder.createCall @ejs.truthy, [@visit(n.test)], "cond_truthy"
 
                 insertBlock = llvm.IRBuilder.getInsertBlock()
                 insertFunc = insertBlock.parent
@@ -184,21 +181,12 @@ class LLVMIRVisitor extends NodeVisitor
 
         createPropertyLoad: (obj,propname) ->
                 # we assume propname is a identifier here...
-                debug.log "createPropertyLoad"
-                debug.log 1
-                debug.log "pname = #{pname}"
                 pname = propname.name
-                debug.log 2
-                result = @createAlloca @currentFunction, EjsValueType, "result"
-                debug.log 3
 
-                debug.log "pname = #{pname}"
                 c = llvm.IRBuilder.createGlobalStringPtr pname, "strconst"
                 strcall = llvm.IRBuilder.createCall @ejs.string_new_utf8, [c], "strtmp"
                 
-                rv = llvm.IRBuilder.createCall @ejs.object_getprop, [obj, strcall, result], "propload_#{pname}"
-                debug.log 4
-                llvm.IRBuilder.createLoad result, "result_propload"
+                return llvm.IRBuilder.createCall @ejs.object_getprop, [obj, strcall], "getprop_#{pname}"
 
         visitMemberExpression: (n) ->
                 @createPropertyLoad (@visit n.object), n.property
@@ -294,12 +282,7 @@ class LLVMIRVisitor extends NodeVisitor
                 callee = @ejs[builtin]
                 if not callee
                         throw "Internal error: unary operator '#{n.operator}' not implemented"
-                # allocate space on the stack for the result
-                result = @createAlloca @currentFunction, EjsValueType, "result_#{builtin}"
-                # call the add method
-                rv = llvm.IRBuilder.createCall callee, [(@visit n.argument), result], "result"
-                # load and return the result
-                return llvm.IRBuilder.createLoad result, "result_#{builtin}_load"
+                return llvm.IRBuilder.createCall callee, [(@visit n.argument)], "result"
                 
                 
         visitBinaryExpression: (n) ->
@@ -308,21 +291,15 @@ class LLVMIRVisitor extends NodeVisitor
                 callee = @ejs[builtin]
                 if not callee
                         throw "Internal error: unhandled binary operator '#{n.operator}'"
-                # allocate space on the stack for the result
-                result = @createAlloca @currentFunction, EjsValueType, "result_#{builtin}"
                 # call the add method
-                rv = llvm.IRBuilder.createCall callee, [(@visit n.left), (@visit n.right), result], "result"
-                # load and return the result
-                return llvm.IRBuilder.createLoad result, "result_#{builtin}_load"
+                return llvm.IRBuilder.createCall callee, [(@visit n.left), (@visit n.right)], "result_#{builtin}"
 
         visitLogicalExpression: (n) ->
                 debug.log "operator = '#{n.operator}'"
                 result = @createAlloca @currentFunction, EjsValueType, "result_#{n.operator}"
 
                 left_visited = @visit n.left
-                truthy_stackalloc = @createAlloca @currentFunction, boolType, "truthy_result"
-                llvm.IRBuilder.createCall @ejs.truthy, [left_visited, truthy_stackalloc], "cond_truthy"
-                cond_truthy = llvm.IRBuilder.createLoad truthy_stackalloc, "truthy_load"
+                cond_truthy = llvm.IRBuilder.createCall @ejs.truthy, [left_visited], "cond_truthy"
 
                 insertBlock = llvm.IRBuilder.getInsertBlock()
                 insertFunc = insertBlock.parent
@@ -569,7 +546,7 @@ exports.compile = (tree) ->
         
         tree = closure_conversion.convert tree
 
-        #console.warn escodegen.generate tree
+        console.warn escodegen.generate tree
         
         module = new llvm.Module "compiledfoo"
 

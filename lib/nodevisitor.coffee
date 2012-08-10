@@ -140,6 +140,12 @@ exports.NodeVisitor = class NodeVisitor
                 n.right = @visit n.right
                 n
                 
+        visitConditionalExpression: (n) ->
+                n.test = @visit n.test
+                n.consequent = @visit n.consequent
+                n.alternate = @visit n.alternate
+                n
+                
         visitLogicalExpression: (n) ->
                 n.left = @visit n.left
                 # we don't visit the operator since it's not a separate node
@@ -153,6 +159,11 @@ exports.NodeVisitor = class NodeVisitor
                 n
 
         visitUnaryExpression: (n) ->
+                # we don't visit the operator since it's not a separate node
+                n.argument = @visit n.argument
+                n
+
+        visitUpdateExpression: (n) ->
                 # we don't visit the operator since it's not a separate node
                 n.argument = @visit n.argument
                 n
@@ -179,6 +190,10 @@ exports.NodeVisitor = class NodeVisitor
 
         visitObjectExpression: (n) ->
                 n.properties = filter (@visit property for property in n.properties)
+                n
+
+        visitArrayExpression: (n) ->
+                n.elements = filter (@visit element for element in n.elements)
                 n
 
         visitProperty: (n) ->
@@ -224,15 +239,18 @@ exports.NodeVisitor = class NodeVisitor
                         when syntax.VariableDeclarator   then rv = @visitVariableDeclarator new_n
                         when syntax.LabeledStatement     then rv = @visitLabeledStatement new_n
                         when syntax.AssignmentExpression then rv = @visitAssignmentExpression new_n
+                        when syntax.ConditionalExpression then rv = @visitConditionalExpression new_n
                         when syntax.LogicalExpression    then rv = @visitLogicalExpression new_n
                         when syntax.NewExpression        then rv = @visitNewExpression new_n
                         when syntax.ThisExpression       then rv = @visitThisExpression new_n
                         when syntax.BinaryExpression     then rv = @visitBinaryExpression new_n
                         when syntax.UnaryExpression      then rv = @visitUnaryExpression new_n
+                        when syntax.UpdateExpression     then rv = @visitUpdateExpression new_n
                         when syntax.MemberExpression     then rv = @visitMemberExpression new_n
                         when syntax.RelationalExpression then rv = @visitRelationalExpression new_n
                         when syntax.SequenceExpression   then rv = @visitSequenceExpression new_n
                         when syntax.ObjectExpression     then rv = @visitObjectExpression new_n
+                        when syntax.ArrayExpression      then rv = @visitArrayExpression new_n
                         when syntax.Identifier           then rv = @visitIdentifier new_n
                         when syntax.Literal              then rv = @visitLiteral new_n
                         when syntax.CallExpression       then rv = @visitCallExpression new_n

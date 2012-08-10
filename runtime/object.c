@@ -91,44 +91,42 @@ _ejs_closure_new (EJSClosureEnv* env, EJSClosureFunc0 func)
   return rv;
 }
 
-EJSBool
+EJSValue*
 _ejs_object_setprop (EJSValue* obj, EJSValue* key, EJSValue* value)
 {
   if (!EJSVAL_IS_OBJECT(obj)) {
     printf ("setprop on !object\n");
-    return FALSE;
+    return NULL;
   }
   if (!EJSVAL_IS_STRING(key)) {
     printf ("key isn't a string\n");
-    return FALSE;
+    return NULL;
   }
 
   int field_index = _ejs_fieldmap_lookup (obj->u.o.map, key->u.s.data, TRUE);
   obj->u.o.fields[field_index] = value;
 
-  return TRUE;
+  return NULL;
 }
 
-EJSBool
-_ejs_object_getprop (EJSValue* obj, EJSValue* key, EJSValue** value)
+EJSValue*
+_ejs_object_getprop (EJSValue* obj, EJSValue* key)
 {
   if (!EJSVAL_IS_OBJECT(obj)) {
     printf ("setprop on !object\n");
-    return FALSE;
+    return NULL;
   }
   if (!EJSVAL_IS_STRING(key)) {
     printf ("key isn't a string\n");
-    return FALSE;
+    return NULL;
   }
 
   int field_index = _ejs_fieldmap_lookup (obj->u.o.map, key->u.s.data, FALSE);
 
   if (field_index == -1)
-    *value = NULL; // should be a global Undefined() EJSValue
+    return NULL; // should be a global Undefined() EJSValue
   else
-    *value = obj->u.o.fields[field_index];
-
-  return TRUE;
+    return obj->u.o.fields[field_index];
 }
 
 EJSValue*

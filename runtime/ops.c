@@ -3,25 +3,19 @@
 #include "ops.h"
 #include "math.h"
 
-EJSBool
-_ejs_op_not (EJSValue* exp, EJSValue** result)
+EJSValue*
+_ejs_op_not (EJSValue* exp)
 {
-  EJSBool truthy;
-  _ejs_truthy (exp, &truthy);
-  *result = _ejs_boolean_new (!truthy);
-
-  return TRUE;
+  EJSBool truthy= _ejs_truthy (exp);
+  return _ejs_boolean_new (!truthy);
 }
 
-EJSBool
-_ejs_op_mod (EJSValue* lhs, EJSValue* rhs, EJSValue** result)
+EJSValue*
+_ejs_op_mod (EJSValue* lhs, EJSValue* rhs)
 {
-  *result = NULL;
-
   if (EJSVAL_IS_NUMBER(lhs)) {
     if (EJSVAL_IS_NUMBER(rhs)) {
-      *result = _ejs_number_new (fmod(EJSVAL_TO_NUMBER(lhs), EJSVAL_TO_NUMBER(rhs)));
-      return TRUE;
+      return _ejs_number_new (fmod(EJSVAL_TO_NUMBER(lhs), EJSVAL_TO_NUMBER(rhs)));
     }
     else {
       // need to call valueOf() on the object, or convert the string to a number
@@ -37,18 +31,15 @@ _ejs_op_mod (EJSValue* lhs, EJSValue* rhs, EJSValue** result)
     abort();
   }
 
-  return FALSE;
+  return NULL;
 }
 
-EJSBool
-_ejs_op_add (EJSValue* lhs, EJSValue* rhs, EJSValue** result)
+EJSValue*
+_ejs_op_add (EJSValue* lhs, EJSValue* rhs)
 {
-  *result = NULL;
-
   if (EJSVAL_IS_NUMBER(lhs)) {
     if (EJSVAL_IS_NUMBER(rhs)) {
-      *result = _ejs_number_new (EJSVAL_TO_NUMBER(lhs) + EJSVAL_TO_NUMBER(rhs));
-      return TRUE;
+      return _ejs_number_new (EJSVAL_TO_NUMBER(lhs) + EJSVAL_TO_NUMBER(rhs));
     }
     else {
       // need to call valueOf() on the object, or convert the string to a number
@@ -64,18 +55,15 @@ _ejs_op_add (EJSValue* lhs, EJSValue* rhs, EJSValue** result)
     abort();
   }
 
-  return FALSE;
+  return NULL;
 }
 
-EJSBool
-_ejs_op_sub (EJSValue* lhs, EJSValue* rhs, EJSValue** result)
+EJSValue*
+_ejs_op_sub (EJSValue* lhs, EJSValue* rhs)
 {
-  *result = NULL;
-
   if (EJSVAL_IS_NUMBER(lhs)) {
     if (EJSVAL_IS_NUMBER(rhs)) {
-      *result = _ejs_number_new (EJSVAL_TO_NUMBER(lhs) - EJSVAL_TO_NUMBER(rhs));
-      return TRUE;
+      return _ejs_number_new (EJSVAL_TO_NUMBER(lhs) - EJSVAL_TO_NUMBER(rhs));
     }
     else {
       // need to call valueOf() on the object, or convert the string to a number
@@ -91,18 +79,15 @@ _ejs_op_sub (EJSValue* lhs, EJSValue* rhs, EJSValue** result)
     abort();
   }
 
-  return FALSE;
+  return NULL;
 }
 
-EJSBool
-_ejs_op_strict_eq (EJSValue* lhs, EJSValue* rhs, EJSValue** result)
+EJSValue*
+_ejs_op_strict_eq (EJSValue* lhs, EJSValue* rhs)
 {
-  *result = NULL;
-
   if (EJSVAL_IS_NUMBER(lhs)) {
     if (EJSVAL_IS_NUMBER(rhs)) {
-      *result = _ejs_boolean_new (EJSVAL_TO_NUMBER(lhs) == EJSVAL_TO_NUMBER(rhs));
-      return TRUE;
+      return _ejs_boolean_new (EJSVAL_TO_NUMBER(lhs) == EJSVAL_TO_NUMBER(rhs));
     }
   }
 
@@ -110,17 +95,13 @@ _ejs_op_strict_eq (EJSValue* lhs, EJSValue* rhs, EJSValue** result)
 }
 
 EJSBool
-_ejs_truthy (EJSValue* val, EJSBool *result)
+_ejs_truthy (EJSValue* val)
 {
-  *result = FALSE;
-
   if (EJSVAL_IS_NUMBER(val)) {
-    *result = EJSVAL_TO_NUMBER(val) != 0;
-    return TRUE;
+    return EJSVAL_TO_NUMBER(val) != 0;
   }
   else if (EJSVAL_IS_BOOLEAN(val)) {
-    *result = EJSVAL_TO_BOOLEAN(val);
-    return TRUE;
+    return EJSVAL_TO_BOOLEAN(val);
   }
 
   abort();

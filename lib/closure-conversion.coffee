@@ -50,17 +50,30 @@ free = (exp) ->
                 when syntax.VariableDeclarator  then free exp.init
                 when syntax.ExpressionStatement then free exp.expression
                 when syntax.Identifier          then new Set [exp.name]
+                when syntax.ForStatement        then Set.union.apply null, (map free, [exp.init, exp.test, exp.update, exp.body])
+                when syntax.ForInStatement      then Set.union.apply null, (map free, [exp.left, exp.right, exp.body])
+                when syntax.UpdateExpression    then free exp.argument
                 when syntax.ReturnStatement     then free exp.argument
                 when syntax.UnaryExpression     then free exp.argument
                 when syntax.BinaryExpression    then (free exp.left).union free exp.right
                 when syntax.LogicalExpression   then (free exp.left).union free exp.right
                 when syntax.MemberExpression    then free exp.object # we don't traverse into the property
                 when syntax.CallExpression      then Set.union.apply null, [(free exp.callee)].concat (map free, exp.arguments)
+                when syntax.NewExpression       then Set.union.apply null, [(free exp.callee)].concat (map free, exp.arguments)
+                when syntax.SequenceExpression  then Set.union.apply null, map free, exp.expressions
+                when syntax.ConditionalExpression then Set.union.apply null, [(free exp.test), (free exp.cconsequent), free (exp.alternate)]
                 when syntax.Literal             then new Set
+                when syntax.ThisExpression      then new Set
+                when syntax.ObjectExpression
+                        return new Set if exp.properties.length is 0
+                        Set.union.apply null, map free (p.value for p in exp.properties)
+                when syntax.ArrayExpression
+                        return new Set if exp.elements.length is 0
+                        Set.union.apply null, map free, exp.elements
                 when syntax.IfStatement         then Set.union.apply null, [(free exp.test), (free exp.cconsequent), free (exp.alternate)]
                 when syntax.AssignmentExpression then (free exp.left).union free exp.right
                 
-                else throw "shouldn't reach here, type of node = #{exp.type}"
+                else throw "Internal error: unhandled node type '#{exp.type}' in free()"
                 #else new Set
 
 #
