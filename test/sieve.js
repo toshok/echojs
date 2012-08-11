@@ -1,4 +1,4 @@
-
+if (typeof console === "undefined") { console = { log: print }; }
 
 function primes (n) {
   function primes_internal (cur, remaining, filter) {
@@ -6,7 +6,7 @@ function primes (n) {
       return;
     else {
       if (!filter(cur)) {
-	print (cur);
+	console.log (cur);
 	primes_internal (cur+1, remaining-1, function(test) {
 			   return test%cur === 0 || filter (test);
 			 });

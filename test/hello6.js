@@ -1,6 +1,8 @@
+if (typeof console === "undefined") { console = { log: print }; }
+
 function hello_outer (x) {
   function hello_inner () {
-      print (x);
+      console.log (x);
   }
 
   hello_inner();

@@ -1,5 +1,7 @@
+if (typeof console === "undefined") { console = { log: print }; }
+
 function print_hello() {
-  print ("hello world");
+  console.log ("hello world");
 }
 
 print_hello();

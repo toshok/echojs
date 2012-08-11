@@ -1,7 +1,9 @@
+if (typeof console === "undefined") { console = { log: print }; }
+
 var a = 4 || 5;
 var b = 4 && 5;
 
 if (a === 4 && b === 5)
-  print ("hello world");
+  console.log ("hello world");
 else
-  print ("goodbyte world");
+  console.log ("goodbyte world");
