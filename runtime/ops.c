@@ -11,6 +11,18 @@ _ejs_op_not (EJSValue* exp)
 }
 
 EJSValue*
+_ejs_op_typeof (EJSValue* exp)
+{
+  if (exp == NULL) {
+    return _ejs_string_new_utf8 ("object");
+  }
+  else if (EJSVAL_IS_UNDEFINED(exp)) {
+    return _ejs_string_new_utf8 ("undefined");
+  }
+  abort();
+}
+
+EJSValue*
 _ejs_op_mod (EJSValue* lhs, EJSValue* rhs)
 {
   if (EJSVAL_IS_NUMBER(lhs)) {
@@ -88,6 +100,11 @@ _ejs_op_strict_eq (EJSValue* lhs, EJSValue* rhs)
   if (EJSVAL_IS_NUMBER(lhs)) {
     if (EJSVAL_IS_NUMBER(rhs)) {
       return _ejs_boolean_new (EJSVAL_TO_NUMBER(lhs) == EJSVAL_TO_NUMBER(rhs));
+    }
+  }
+  else if (EJSVAL_IS_STRING(lhs)) {
+    if (EJSVAL_IS_STRING(rhs)) {
+      return _ejs_boolean_new (!strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs)));
     }
   }
 

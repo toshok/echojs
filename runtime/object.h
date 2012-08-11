@@ -9,7 +9,8 @@ typedef enum {
   EJSValueTypeBoolean,
   EJSValueTypeNumber,
   EJSValueTypeString,
-  EJSValueTypeClosure
+  EJSValueTypeClosure,
+  EJSValueTypeUndefined
 } EJSValueType;
 
 typedef struct _EJSContext* EJSContext;
@@ -68,6 +69,7 @@ struct _EJSValue {
 #define EJSVAL_IS_STRING(v)  (v->type == EJSValueTypeString)
 #define EJSVAL_IS_BOOLEAN(v) (v->type == EJSValueTypeBoolean)
 #define EJSVAL_IS_CLOSURE(v) (v->type == EJSValueTypeClosure)
+#define EJSVAL_IS_UNDEFINED(v) (v->type == EJSValueTypeUndefined)
 
 #define EJSVAL_TO_STRING(v) (v->u.s.data)
 #define EJSVAL_TO_NUMBER(v) (v->u.n.data)
@@ -82,6 +84,8 @@ EJSValue* _ejs_string_new_utf8 (char* str);
 EJSValue* _ejs_number_new (double value);
 EJSValue* _ejs_boolean_new (EJSBool value);
 
+EJSValue* _ejs_undefined_new ();
+
 EJSValue* _ejs_closure_new (EJSClosureEnv* env, EJSClosureFunc0 func);
 
 EJSValue* _ejs_object_setprop (EJSValue* obj, EJSValue* key, EJSValue* value);
@@ -91,5 +95,8 @@ EJSValue* _ejs_invoke_closure_0 (EJSValue* closure, int argc);
 EJSValue* _ejs_invoke_closure_1 (EJSValue* closure, int argc, EJSValue *arg1);
 EJSValue* _ejs_invoke_closure_2 (EJSValue* closure, int argc, EJSValue *arg1, EJSValue *arg2);
 EJSValue* _ejs_invoke_closure_3 (EJSValue* closure, int argc, EJSValue *arg1, EJSValue *arg2, EJSValue *arg3);
+
+extern EJSValue* _ejs_undefined;
+extern EJSValue* _ejs_global;
 
 #endif // _ejs_object_h_

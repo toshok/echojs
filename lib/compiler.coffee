@@ -51,7 +51,10 @@ class LLVMIRVisitor extends NodeVisitor
                         boolean_new:     module.getOrInsertExternalFunction "_ejs_boolean_new", EjsValueType, boolType
                         string_new_utf8: module.getOrInsertExternalFunction "_ejs_string_new_utf8", EjsValueType, stringType
                         print:           module.getOrInsertGlobal "_ejs_print", EjsValueType
+                        undefined:       module.getOrInsertGlobal "_ejs_undefined", EjsValueType
+                        global:          module.getOrInsertGlobal "_ejs_global", EjsValueType
                         "unop!":         module.getOrInsertExternalFunction "_ejs_op_not", EjsValueType, EjsValueType
+                        "unoptypeof":    module.getOrInsertExternalFunction "_ejs_op_typeof", EjsValueType, EjsValueType
                         "binop%":        module.getOrInsertExternalFunction "_ejs_op_mod", EjsValueType, EjsValueType, EjsValueType
                         "binop+":        module.getOrInsertExternalFunction "_ejs_op_add", EjsValueType, EjsValueType, EjsValueType
                         "binop-":        module.getOrInsertExternalFunction "_ejs_op_sub", EjsValueType, EjsValueType, EjsValueType
@@ -61,6 +64,10 @@ class LLVMIRVisitor extends NodeVisitor
                         object_getprop:  module.getOrInsertExternalFunction "_ejs_object_getprop", EjsValueType, EjsValueType, EjsValueType
                 }
 
+        loadNullEjsValue: -> llvm.Constant.getNull EjsValueType
+        loadUndefinedEjsValue: -> llvm.IRBuilder.createLoad @ejs.undefined, "load_undefined"                
+        loadGlobal: -> llvm.IRBuilder.createLoad @ejs.global, "load_global"
+        
         pushScope: (new_scope) ->
                 new_scope[PARENT_SCOPE_KEY] = @current_scope
                 @current_scope = new_scope
@@ -140,9 +147,9 @@ class LLVMIRVisitor extends NodeVisitor
         visitReturn: (n) ->
                 debug.log "visitReturn"
                 if n.argument
-                        llvm.IRBuilder.createRet (@visit n.argument)
+                        llvm.IRBuilder.createRet @visit n.argument
                 else
-                        llvm.IRBuilder.createRet (llvm.Constant.getNull EjsValueType) # this should be undefined, not null
+                        llvm.IRBuilder.createRet @loadNullEjsValue()
                         
 
         visitVariableDeclaration: (n) ->
@@ -153,8 +160,8 @@ class LLVMIRVisitor extends NodeVisitor
 
                         allocas = @createAllocas @currentFunction, n.declarations, scope
                         for i in [0..n.declarations.length-1]
-                                initializer = @visit n.declarations[i].init
-                                debug.log "initializer = #{initializer}"
+                                console.warn "######## visiting n.declarations[#{i}].init in LLVMIRVisitor"
+                                initializer = @visitOrUndefined n.declarations[i].init
                                 llvm.IRBuilder.createStore initializer, allocas[i]
                 else if n.kind is "let"
                         # lets are not hoisted to the containing function's toplevel, but instead are bound in the lexical block they inhabit
@@ -162,7 +169,9 @@ class LLVMIRVisitor extends NodeVisitor
 
                         allocas = @createAllocas @currentFunction, n.declarations.length, scope
                         for i in [0..n.declarations.length-1]
-                                llvm.IRBuilder.createStore (@visit n.declarations[i].init), allocas[i]
+                                console.warn "######## visiting n.declarations[#{i}].init in LLVMIRVisitor"
+                                initializer = @visitOrUndefined n.declarations[i].init
+                                llvm.IRBuilder.createStore initializer, allocas[i]
                 else if n.kind is "const"
                         for i in [0..n.declarations.length-1]
                                 u = n.declarations[i]
@@ -196,8 +205,13 @@ class LLVMIRVisitor extends NodeVisitor
                 rhs = n.right
 
                 if lhs.type is syntax.Identifier
-                        result = llvm.IRBuilder.createStore (@visit rhs), (findIdentifierInScope lhs.value, @current_scope)
-                        result;
+                        dest = findIdentifierInScope lhs.value, @current_scope
+                        rhvalue = @visit rhs
+                        if dest
+                                result = llvm.IRBuilder.createStore rhvalue, dest
+                        else
+                                result = @createPropertyStore @loadGlobal(), lhs, rhvalue
+                        result
                 else if lhs.type is syntax.MemberExpression
                         return @createPropertyStore (@visit lhs.object), lhs.property, @visit rhs
                 else
@@ -263,7 +277,7 @@ class LLVMIRVisitor extends NodeVisitor
 
                 # XXX more needed here - this lacks all sorts of control flow stuff.
                 # Finish off the function.
-                llvm.IRBuilder.createRet (llvm.Constant.getNull EjsValueType)
+                llvm.IRBuilder.createRet @loadNullEjsValue()
 
                 # insert an unconditional branch from entry_bb to body here, now that we're
                 # sure we're not going to be inserting allocas into the entry_bb anymore.
@@ -276,13 +290,16 @@ class LLVMIRVisitor extends NodeVisitor
 
                 return ir_func
 
+        visitOrNull: (n) -> @visit n || @loadNullEjsValue()
+        visitOrUndefined: (n) -> @visit n || @loadUndefinedEjsValue()
+        
         visitUnaryExpression: (n) ->
                 debug.log "operator = '#{n.operator}'"
                 builtin = "unop#{n.operator}"
                 callee = @ejs[builtin]
                 if not callee
                         throw "Internal error: unary operator '#{n.operator}' not implemented"
-                return llvm.IRBuilder.createCall callee, [(@visit n.argument)], "result"
+                return llvm.IRBuilder.createCall callee, [@visitOrNull n.argument], "result"
                 
                 
         visitBinaryExpression: (n) ->
@@ -356,8 +373,10 @@ class LLVMIRVisitor extends NodeVisitor
                 else
                         callee = @visit n.callee
 
+                if not callee
+                        throw "Internal error: callee should not be null"
+                        
                 # At this point we assume callee is a function object
-
                 argv = []
                 i = 0
                 debug.log "args!!!!!!!!!!!!!!!!!!! #{args.length} of them"
@@ -366,11 +385,11 @@ class LLVMIRVisitor extends NodeVisitor
                         debug.log "#{param_type}"
                         if param_type.toString() is "%EjsValue*"
                                 debug.log 1
-                                argv[i] = @visit arg
+                                argv[i] = @visitOrNull arg
                         else if param_type.toString() is "%EjsClosureEnvType*"
                                 debug.log 2
                                 debug.log arg
-                                argv[i] = @visit arg
+                                argv[i] = @visitOrNull arg
                                 debug.log argv[i]
                         else if param_type.toString() is "i32"
                                 debug.log 4
@@ -379,7 +398,7 @@ class LLVMIRVisitor extends NodeVisitor
                         else if param_type.toString() is EjsFuncType.toString()
                                 debug.log 5
                                 debug.log arg
-                                f = @visit arg
+                                f = @visit arg || throw "Internal error: callee should not be null"
                                 debug.log 5.5
                                 debug.log "f = #{f}"
                                 argv[i] = llvm.IRBuilder.createPointerCast f, EjsFuncType, "func_cast"
@@ -426,41 +445,50 @@ class LLVMIRVisitor extends NodeVisitor
                 @createLoadThis()
 
         visitIdentifier: (n) ->
-                debug.log "identifier #{n.name}"
+                console.warn "identifier #{n.name}"
                 val = n.name
                 alloca = findIdentifierInScope val, @current_scope
                 if alloca?
-                        debug.log "wtf2"
+                        console.warn "wtf2"
                         rv = llvm.IRBuilder.createLoad alloca, "load_#{val}"
-                        debug.log "#{rv}"
+                        console.warn "#{rv}"
                         return rv
 
-                func = null
-
+                rv = null
                 # we should probably insert a global scope at the toplevel (above the actual user-level global scope) that includes all these renamings/functions?
                 if val is "print"
-                        func = llvm.IRBuilder.createLoad @ejs.print, "load_print"
+                        rv = llvm.IRBuilder.createLoad @ejs.print, "load_print"
+                else if val is "undefined"
+                        rv = llvm.IRBuilder.createLoad @ejs.undefined, "load_undefined"
                 else
                         debug.log "calling getFunction for #{val}"
-                        func = @module.getFunction val
+                        rv = @module.getFunction val
 
-                if not func
-                        throw "Symbol '#{val}' not found in current scope"
+                if not rv
+                        console.warn "Symbol '#{val}' not found in current scope"
+                        rv = @createPropertyLoad @loadGlobal(), n
 
-                func
+                console.warn "returning #{rv}"
+                rv
 
         visitObjectExpression: (n) ->
-                obj = llvm.IRBuilder.createCall @ejs.object_new, [llvm.Constant.getNull EjsValueType], "objtmp"
-                # XXX missing support for properties
+                obj = llvm.IRBuilder.createCall @ejs.object_new, [@loadNullEjsValue()], "objtmp"
+                for property in n.properties
+                        key = property.key
+                        val = @visit property.value
+                        @createPropertyStore obj, key, val
                 return obj
 
+        visitArrayExpression: (n) ->
+                throw new "Internal error: array expressions unsupported"
+                
         visitExpressionStatement: (n) ->
                 @visit n.expression
 
         visitLiteral: (n) ->
                 if n.value is null
                         debug.log "literal: null"
-                        return llvm.Constant.getNull EjsValueType # this isn't properly typed...  dunno what to do about this here
+                        return @loadNullEjsValue() # this isn't properly typed...  dunno what to do about this here
                 else if typeof n.value is "string"
                         debug.log "literal string: #{n.value}"
                         c = llvm.IRBuilder.createGlobalStringPtr n.value, "strconst"

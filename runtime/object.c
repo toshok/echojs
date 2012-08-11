@@ -85,9 +85,17 @@ EJSValue*
 _ejs_closure_new (EJSClosureEnv* env, EJSClosureFunc0 func)
 {
   EJSValue* rv = (EJSValue*)calloc(1, sizeof (EJSValue));
-  rv->type = EJSValueTypeClosure;;
+  rv->type = EJSValueTypeClosure;
   rv->u.closure.func = func;
   rv->u.closure.env = env;
+  return rv;
+}
+
+EJSValue*
+_ejs_undefined_new ()
+{
+  EJSValue* rv = (EJSValue*)calloc(1, sizeof (EJSValue));
+  rv->type = EJSValueTypeUndefined;
   return rv;
 }
 
@@ -124,7 +132,7 @@ _ejs_object_getprop (EJSValue* obj, EJSValue* key)
   int field_index = _ejs_fieldmap_lookup (obj->u.o.map, key->u.s.data, FALSE);
 
   if (field_index == -1)
-    return NULL; // should be a global Undefined() EJSValue
+    return _ejs_undefined;
   else
     return obj->u.o.fields[field_index];
 }

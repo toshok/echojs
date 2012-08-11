@@ -6,6 +6,7 @@
 #include "object.h"
 
 EJSValue* _ejs_op_not (EJSValue* exp);
+EJSValue* _ejs_op_typeof (EJSValue* exp);
 EJSValue* _ejs_op_add (EJSValue* lhs, EJSValue* rhs);
 EJSValue* _ejs_op_sub (EJSValue* lhs, EJSValue* rhs);
 EJSValue* _ejs_op_strict_eq (EJSValue* lhs, EJSValue* rhs);

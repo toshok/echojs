@@ -103,6 +103,7 @@ LocateEnvVisitor = class LocateEnvVisitor extends NodeVisitor
 
         visitVariableDeclarator: (n) ->
                 # we override this because we don't want to visit the id, just the initializer
+                console.warn "######## visiting n.init in LocateEnvVisitor"
                 n.init = @visit n.init
                 n
 
@@ -203,13 +204,16 @@ class SubstituteVariables extends NodeVisitor
         currentMapping: -> if @mappings.length > 0 then @mappings[0] else {}
         
         visitIdentifier: (n) ->
+                console.warn "visitIdentifier #{n.name}"
                 if n.ejs_substitute?
                         a = @currentMapping()[n.name]
-                        if not a?
+                        if not a
                                 console.warn "missing mapping for #{n.name}"
                                 throw "InternalError 2"
 
+                        console.warn "     => #{escodegen.generate a}"
                         return a
+                console.warn "     => #{escodegen.generate n}"
                 n
 
         visitVariableDeclaration: (n) ->
@@ -228,7 +232,7 @@ class SubstituteVariables extends NodeVisitor
                                                         computed: false,
                                                         object: @currentMapping()["%env"]
                                                         property: create_identifier decl.id.name
-                                                right: decl.init
+                                                right: decl.init || { type: syntax.Literal, value: null } # this should really be undefined
                                 }
                         else
                                 rv.push {
@@ -371,6 +375,7 @@ class SubstituteVariables extends NodeVisitor
                 arg_count = n.arguments.length
 
                 n.arguments.unshift { type: syntax.Literal, value: arg_count }
+                console.warn "callee = #{escodegen.generate n.callee}"
                 n.arguments.unshift n.callee
                 n.callee = create_identifier "%invokeClosure"
                 n

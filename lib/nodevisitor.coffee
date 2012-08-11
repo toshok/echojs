@@ -24,6 +24,8 @@ hasOwn = Object.hasOwnProperty
 
 exports.NodeVisitor = class NodeVisitor
         constructor: ->
+               @indent = 0
+
 
         shallowCopy: (o) ->
                 new_o = {}
@@ -71,7 +73,9 @@ exports.NodeVisitor = class NodeVisitor
                 
         visitIf: (n) ->
                 n.test = @visit n.test
+                console.warn "#{(' ' for i in [0..@indent]).join('')}n.consequent ==.... >"
                 n.consequent = @visit n.consequent
+                console.warn "#{(' ' for i in [0..@indent]).join('')}n.alternate ==.... >"
                 n.alternate = @visit n.alternate
                 n
                 
@@ -125,7 +129,9 @@ exports.NodeVisitor = class NodeVisitor
                 n
 
         visitVariableDeclarator: (n) ->
+                console.warn "#{(' ' for i in [0..@indent]).join('')}n.id ==.... >"
                 n.id = @visit n.id
+                console.warn "#{(' ' for i in [0..@indent]).join('')}n.init ==.... >"
                 n.init = @visit n.init
                 n
                                 
@@ -207,10 +213,11 @@ exports.NodeVisitor = class NodeVisitor
                 n
                 
         visit: (n) ->
+                console.warn "#{(' ' for i in [0..@indent]).join('')}child is null!>" if not n?
                 return null if not n?
 
-                indent = indent + 1
-#                debug "#{n.type}>"
+                @indent += 1
+                console.warn "#{(' ' for i in [0..@indent]).join('')}#{n.type}>"
 
                 new_n = @shallowCopy n
                 rv = null
@@ -257,7 +264,7 @@ exports.NodeVisitor = class NodeVisitor
                         when syntax.Property             then rv = @visitProperty new_n
                         else
                             throw "PANIC: unknown operation #{n.type}"
-#                debug "<#{n.type}"
-                indent = indent - 1
+                console.warn "#{(' ' for i in [0..@indent]).join('')}<#{n.type}"
+                @indent -= 1
                 rv
 
