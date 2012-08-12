@@ -119,8 +119,37 @@ class LLVMIRVisitor extends NodeVisitor
                 @visitWithScope new_scope, n.body
                 n
 
+        visitFor: (n) ->
+                debug.log "visitFor"
+                insertBlock = llvm.IRBuilder.getInsertBlock()
+                insertFunc = insertBlock.parent
+
+                init_bb = new llvm.BasicBlock "for_init", insertFunc
+                test_bb = new llvm.BasicBlock "for_test", insertFunc
+                body_bb = new llvm.BasicBlock "for_body", insertFunc
+                merge_bb = new llvm.BasicBlock "for_merge", insertFunc
+
+                llvm.IRBuilder.createBr init_bb
+                
+                llvm.IRBuilder.setInsertPoint init_bb
+                @visit n.init
+                llvm.IRBuilder.createBr test_bb
+
+                llvm.IRBuilder.setInsertPoint test_bb
+                cond_truthy = llvm.IRBuilder.createCall @ejs.truthy, [@visit(n.test)], "cond_truthy"
+                cmp = llvm.IRBuilder.createICmpEq cond_truthy, (llvm.Constant.getIntegerValue boolType, 0), "cmpresult"
+                llvm.IRBuilder.createCondBr cmp, merge_bb, body_bb
+
+                llvm.IRBuilder.setInsertPoint body_bb
+                @visit n.body
+                @visit n.update
+                llvm.IRBuilder.createBr test_bb
+                
+                llvm.IRBuilder.setInsertPoint merge_bb
+                merge_bb
+                
+                
         visitWhile: (n) ->
-                # first we convert our conditional EJSValue to a boolean
                 insertBlock = llvm.IRBuilder.getInsertBlock()
                 insertFunc = insertBlock.parent
                 
@@ -315,8 +344,8 @@ class LLVMIRVisitor extends NodeVisitor
 
                 return ir_func
 
-        visitOrNull: (n) -> @visit n || @loadNullEjsValue()
-        visitOrUndefined: (n) -> @visit n || @loadUndefinedEjsValue()
+        visitOrNull: (n) -> (@visit n) || @loadNullEjsValue()
+        visitOrUndefined: (n) -> (@visit n) || @loadUndefinedEjsValue()
         
         visitUnaryExpression: (n) ->
                 debug.log "operator = '#{n.operator}'"
@@ -601,7 +630,9 @@ exports.compile = (tree) ->
 
         visitor = new AddFunctionsVisitor module
         tree = visitor.visit tree
-        
+
+        debug.log escodegen.generate tree
+
         visitor = new LLVMIRVisitor module
         visitor.visit tree
 
