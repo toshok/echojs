@@ -18,6 +18,10 @@ test-%: %.js.exe
 	@echo [ejs] $<
 	@NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $<
 
+v8-%.js.exe: v8/%.js
+	@echo [ejs] $<
+	@NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $<
+
 run-node:
 	NODE_PATH=$(NODE_PATH) node
 
