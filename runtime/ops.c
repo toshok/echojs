@@ -71,6 +71,30 @@ _ejs_op_add (EJSValue* lhs, EJSValue* rhs)
 }
 
 EJSValue*
+_ejs_op_lt (EJSValue* lhs, EJSValue* rhs)
+{
+  if (EJSVAL_IS_NUMBER(lhs)) {
+    if (EJSVAL_IS_NUMBER(rhs)) {
+      return _ejs_boolean_new (EJSVAL_TO_NUMBER(lhs) < EJSVAL_TO_NUMBER(rhs));
+    }
+    else {
+      // need to call valueOf() on the object, or convert the string to a number
+      abort();
+    }
+  }
+  else if (EJSVAL_IS_STRING(lhs)) {
+    // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
+    abort();
+  }
+  else {
+    // object+... how does js implement this anyway?
+    abort();
+  }
+
+  return NULL;
+}
+
+EJSValue*
 _ejs_op_sub (EJSValue* lhs, EJSValue* rhs)
 {
   if (EJSVAL_IS_NUMBER(lhs)) {
