@@ -19,7 +19,7 @@ specialized version.
 Why "Echo?"
 -----------
 
-Originally (check git history, before ed3020dde7d33018720b26484e98390ab6c69718) echo was based directly on narcissus.  See http://en.wikipedia.org/wiki/Echo_and_Narcissus
+Originally (check git history, before [ed3020dde](https://github.com/toshok/echo-js/commit/ed3020dde7d33018720b26484e98390ab6c69718)) echo was based directly on narcissus.  See http://en.wikipedia.org/wiki/Echo_and_Narcissus
 
 What works?
 -----------
@@ -27,7 +27,7 @@ What works?
 Not much at present.  There are no constructors, no prototypes, no
 "this", no builtin objects at all.
 
-What does work is very simple code.  closures do work (test/sieve.js
+What does work is very simple code.  closures do work ([test/sieve.js](https://github.com/toshok/echo-js/blob/master/test/sieve.js)
 uses them.  a whole lot of them.), so you can do pretty interesting
 things, even with the limitted feature set at present.
 
@@ -76,7 +76,7 @@ Big thanks
 Echo wouldn't be as far along as it is now (and certainly wouldn't be
 as fun to work on) if not for the following:
 
-1. Esprima:   ariya/esprima
-2. Escodegen: Constellation/escodegen
+1. Esprima:   [ariya/esprima](https://github.com/ariya/esprima)
+2. Escodegen: [Constellation/escodegen](https://github.com/Constellation/escodegen)
 3. LLVM:      http://llvm.org/git/llvm.git
-4. Narcissus: mozilla/narcissus
+4. Narcissus: [mozilla/narcissus](https://github.com/mozilla/narcissus)
