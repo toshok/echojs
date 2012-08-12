@@ -1,23 +1,15 @@
 TOPDIR=$(shell pwd)
-NODE_PATH=$(TOPDIR)/node-llvm/build/default:$(TOPDIR)/esprima:$(TOPDIR)/lib
 
-NJS_SHELL=/Users/toshok/src/coffeekit/coffeekit-internal/external-deps/spidermonkey-osx/js
 LLVM_CXXFLAGS="`$LLVM_CONFIG --cxxflags` -fno-rtti"
 LLVM_LDFLAGS=`$LLVM_CONFIG --ldflags`
 LLVM_LIBS=`$LLVM_CONFIG --libs core bitwriter jit x86codegen`
 LLVM_LIBS:="$LLVM_LDFLAGS $LLVM_LIBS -lstdc++"
+LLVM_CONFIGURE_ARGS=--disable-jit --enable-static
 
 CFLAGS=-Iruntime
 
-all: build-llvm build-node-llvm build-lib
+all: build-llvm build-node-llvm build-lib test
 
-test:
-	$(MAKE) -C test check
-
-# because we have a test directory..
-.PHONY: test
-
-LLVM_CONFIGURE_ARGS=--disable-jit --enable-static
 configure-llvm:
 	cd llvm && ./configure $(LLVM_CONFIGURE_ARGS)
 
@@ -32,3 +24,9 @@ build-node-llvm:
 
 build-lib:
 	$(MAKE) -C lib
+
+test:
+	$(MAKE) -C test check
+
+# because we have a test directory..
+.PHONY: test
