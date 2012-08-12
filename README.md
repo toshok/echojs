@@ -67,7 +67,8 @@ generate new code, but there's no reason a JS interpreter (say,
 narcissus) couldn't be embedded to fill that role.
 
 I'm fighting hard the urge to rebase the C runtime on top of the awesome
-LLJS.  What has two thumbs and wants to write a GC in JS?
+[LLJS](http://mbebenita.github.com/LLJS/) syntax and compiling that directly to efficient native code.
+What has two thumbs and wants to write a GC in JS?
 
 
 Big thanks
