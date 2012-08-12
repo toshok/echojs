@@ -2,14 +2,8 @@
 indent = 0
 debug_level = 0
 
-exports.log = (msg, level = 9) ->
-  return
-  if level <= debug_level
-    return
-  str = ""
-  str += "  " for i in [0..indent-1]
-  str += msg
-  console.warn str
+exports.log = (msg, level = 1) ->
+        console.warn "#{(' ' for i in [0..indent]).join('')}#{msg}" if debug_level >= level
 
 exports.indent = () -> indent += 1
 exports.unindent = () -> indent -= 1

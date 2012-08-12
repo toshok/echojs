@@ -1,6 +1,7 @@
 esprima = require 'esprima'
 syntax = esprima.Syntax
 escodegen = require 'escodegen'
+debug = require 'debug'
 
 { Set } = require 'set'
 { NodeVisitor } = require 'nodevisitor'
@@ -52,6 +53,7 @@ free = (exp) ->
                 when syntax.Identifier          then new Set [exp.name]
                 when syntax.ForStatement        then Set.union.apply null, (map free, [exp.init, exp.test, exp.update, exp.body])
                 when syntax.ForInStatement      then Set.union.apply null, (map free, [exp.left, exp.right, exp.body])
+                when syntax.WhileStatement      then Set.union.apply null, (map free, [exp.test, exp.body])
                 when syntax.UpdateExpression    then free exp.argument
                 when syntax.ReturnStatement     then free exp.argument
                 when syntax.UnaryExpression     then free exp.argument
@@ -103,7 +105,6 @@ LocateEnvVisitor = class LocateEnvVisitor extends NodeVisitor
 
         visitVariableDeclarator: (n) ->
                 # we override this because we don't want to visit the id, just the initializer
-                console.warn "######## visiting n.init in LocateEnvVisitor"
                 n.init = @visit n.init
                 n
 
@@ -204,16 +205,13 @@ class SubstituteVariables extends NodeVisitor
         currentMapping: -> if @mappings.length > 0 then @mappings[0] else {}
         
         visitIdentifier: (n) ->
-                console.warn "visitIdentifier #{n.name}"
                 if n.ejs_substitute?
                         a = @currentMapping()[n.name]
                         if not a
-                                console.warn "missing mapping for #{n.name}"
+                                debug.log "missing mapping for #{n.name}"
                                 throw "InternalError 2"
 
-                        console.warn "     => #{escodegen.generate a}"
                         return a
-                console.warn "     => #{escodegen.generate n}"
                 n
 
         visitVariableDeclaration: (n) ->
@@ -375,7 +373,6 @@ class SubstituteVariables extends NodeVisitor
                 arg_count = n.arguments.length
 
                 n.arguments.unshift { type: syntax.Literal, value: arg_count }
-                console.warn "callee = #{escodegen.generate n.callee}"
                 n.arguments.unshift n.callee
                 n.callee = create_identifier "%invokeClosure"
                 n
@@ -399,8 +396,8 @@ exports.convert = (tree) ->
         substitute_vars = new SubstituteVariables tree2
         tree3 = substitute_vars.visit tree2
 
-        #console.warn "after SubstituteVariables:"
-        #console.warn escodegen.generate tree3
+        debug.log "after SubstituteVariables:"
+        debug.log escodegen.generate tree3
 
         lambda_lift = new LambdaLift tree3
         tree4 = lambda_lift.visit tree3

@@ -57,6 +57,7 @@ class LLVMIRVisitor extends NodeVisitor
                         "unoptypeof":    module.getOrInsertExternalFunction "_ejs_op_typeof", EjsValueType, EjsValueType
                         "binop%":        module.getOrInsertExternalFunction "_ejs_op_mod", EjsValueType, EjsValueType, EjsValueType
                         "binop+":        module.getOrInsertExternalFunction "_ejs_op_add", EjsValueType, EjsValueType, EjsValueType
+                        "binop<":        module.getOrInsertExternalFunction "_ejs_op_lt", EjsValueType, EjsValueType, EjsValueType
                         "binop-":        module.getOrInsertExternalFunction "_ejs_op_sub", EjsValueType, EjsValueType, EjsValueType
                         "binop===":      module.getOrInsertExternalFunction "_ejs_op_strict_eq", EjsValueType, EjsValueType, EjsValueType
                         truthy:          module.getOrInsertExternalFunction "_ejs_truthy", boolType, EjsValueType
@@ -118,6 +119,32 @@ class LLVMIRVisitor extends NodeVisitor
                 @visitWithScope new_scope, n.body
                 n
 
+        visitWhile: (n) ->
+                # first we convert our conditional EJSValue to a boolean
+                insertBlock = llvm.IRBuilder.getInsertBlock()
+                insertFunc = insertBlock.parent
+                
+                while_bb  = new llvm.BasicBlock "while_start", insertFunc
+                body_bb = new llvm.BasicBlock "while_body", insertFunc
+                merge_bb = new llvm.BasicBlock "while_merge", insertFunc
+
+                llvm.IRBuilder.createBr while_bb
+                llvm.IRBuilder.setInsertPoint while_bb
+                
+                cond_truthy = llvm.IRBuilder.createCall @ejs.truthy, [@visit(n.test)], "cond_truthy"
+                cmp = llvm.IRBuilder.createICmpEq cond_truthy, (llvm.Constant.getIntegerValue boolType, 0), "cmpresult"
+                
+                llvm.IRBuilder.createCondBr cmp, merge_bb, body_bb
+
+                llvm.IRBuilder.setInsertPoint body_bb
+                @visit n.body
+                llvm.IRBuilder.createBr while_bb
+                
+                llvm.IRBuilder.setInsertPoint merge_bb
+                merge_bb
+                
+        
+                                
         visitIf: (n) ->
                 # first we convert our conditional EJSValue to a boolean
                 cond_truthy = llvm.IRBuilder.createCall @ejs.truthy, [@visit(n.test)], "cond_truthy"
@@ -160,7 +187,6 @@ class LLVMIRVisitor extends NodeVisitor
 
                         allocas = @createAllocas @currentFunction, n.declarations, scope
                         for i in [0..n.declarations.length-1]
-                                console.warn "######## visiting n.declarations[#{i}].init in LLVMIRVisitor"
                                 initializer = @visitOrUndefined n.declarations[i].init
                                 llvm.IRBuilder.createStore initializer, allocas[i]
                 else if n.kind is "let"
@@ -169,7 +195,6 @@ class LLVMIRVisitor extends NodeVisitor
 
                         allocas = @createAllocas @currentFunction, n.declarations.length, scope
                         for i in [0..n.declarations.length-1]
-                                console.warn "######## visiting n.declarations[#{i}].init in LLVMIRVisitor"
                                 initializer = @visitOrUndefined n.declarations[i].init
                                 llvm.IRBuilder.createStore initializer, allocas[i]
                 else if n.kind is "const"
@@ -352,8 +377,6 @@ class LLVMIRVisitor extends NodeVisitor
 
                 rv
 
-                
-
         createLoadThis: () ->
                 _this = findIdentifierInScope EJS_THIS_NAME, @current_scope
                 return llvm.IRBuilder.createLoad _this, "load_this"
@@ -445,13 +468,11 @@ class LLVMIRVisitor extends NodeVisitor
                 @createLoadThis()
 
         visitIdentifier: (n) ->
-                console.warn "identifier #{n.name}"
+                debug.log "identifier #{n.name}"
                 val = n.name
                 alloca = findIdentifierInScope val, @current_scope
                 if alloca?
-                        console.warn "wtf2"
                         rv = llvm.IRBuilder.createLoad alloca, "load_#{val}"
-                        console.warn "#{rv}"
                         return rv
 
                 rv = null
@@ -465,10 +486,10 @@ class LLVMIRVisitor extends NodeVisitor
                         rv = @module.getFunction val
 
                 if not rv
-                        console.warn "Symbol '#{val}' not found in current scope"
+                        debug.log "Symbol '#{val}' not found in current scope"
                         rv = @createPropertyLoad @loadGlobal(), n
 
-                console.warn "returning #{rv}"
+                debug.log "returning #{rv}"
                 rv
 
         visitObjectExpression: (n) ->
@@ -574,7 +595,7 @@ exports.compile = (tree) ->
         
         tree = closure_conversion.convert tree
 
-        console.warn escodegen.generate tree
+        debug.log escodegen.generate tree
         
         module = new llvm.Module "compiledfoo"
 
