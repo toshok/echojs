@@ -230,9 +230,9 @@ class LLVMIRVisitor extends NodeVisitor
                 rhs = n.right
 
                 if lhs.type is syntax.Identifier
-                        dest = findIdentifierInScope lhs.value, @current_scope
+                        dest = findIdentifierInScope lhs.name, @current_scope
                         rhvalue = @visit rhs
-                        if dest
+                        if dest?
                                 result = llvm.IRBuilder.createStore rhvalue, dest
                         else
                                 result = @createPropertyStore @loadGlobal(), lhs, rhvalue
