@@ -141,8 +141,11 @@ namespace jsllvm {
 	
     llvm::Function* f = static_cast< llvm::Function*>(module->llvm_module->getFunction(*name));
 
-    Handle<v8::Value> result = Function::New(f);
-    return scope.Close(result);
+    if (f) {
+      Handle<v8::Value> result = Function::New(f);
+      return scope.Close(result);
+    }
+    return scope.Close(Null());
   }
 
   Handle<v8::Value> Module::Dump (const Arguments& args)
