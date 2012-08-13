@@ -624,14 +624,14 @@ exports.compile = (tree) ->
         
         tree = closure_conversion.convert tree
 
-        debug.log escodegen.generate tree
+        debug.log -> escodegen.generate tree
         
         module = new llvm.Module "compiledfoo"
 
         visitor = new AddFunctionsVisitor module
         tree = visitor.visit tree
 
-        debug.log escodegen.generate tree
+        debug.log -> escodegen.generate tree
 
         visitor = new LLVMIRVisitor module
         visitor.visit tree

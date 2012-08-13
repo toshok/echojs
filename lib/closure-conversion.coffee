@@ -391,19 +391,19 @@ exports.convert = (tree) ->
         tree2 = locate_envs.visit tree
 
         debug.log "after LocateEnvVisitor:"
-        debug.log escodegen.generate tree2
+        debug.log -> escodegen.generate tree2
 
         substitute_vars = new SubstituteVariables tree2
         tree3 = substitute_vars.visit tree2
 
         debug.log "after SubstituteVariables:"
-        debug.log escodegen.generate tree3
+        debug.log -> escodegen.generate tree3
 
         lambda_lift = new LambdaLift tree3
         tree4 = lambda_lift.visit tree3
 
         debug.log "after LambdaLift:"
-        debug.log escodegen.generate tree4
+        debug.log -> escodegen.generate tree4
 
         tree4
         

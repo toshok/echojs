@@ -3,7 +3,11 @@ indent = 0
 debug_level = 0
 
 exports.log = (msg, level = 1) ->
-        console.warn "#{(' ' for i in [0..indent]).join('')}#{msg}" if debug_level >= level
+        if debug_level < level
+                return
+        if typeof msg isnt "string"
+                msg = msg()
+        console.warn "#{(' ' for i in [0..indent]).join('')}#{msg}"
 
 exports.indent = () -> indent += 1
 exports.unindent = () -> indent -= 1
