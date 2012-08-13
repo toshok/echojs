@@ -214,6 +214,25 @@ class SubstituteVariables extends NodeVisitor
                         return a
                 n
 
+        visitFor: (n) ->
+                # for loops complicate things.
+                # if any of the variables declared in n.init are closed over
+                # we promote all of them outside of n.init.
+
+                init = @visit n.init
+                n.test = @visit n.test
+                n.update = @visit n.update
+                n.body = @visit n.body
+                if Array.isArray init
+                        n.init = null
+                        return {
+                                type: syntax.BlockStatement
+                                body: init.concat [n]
+                        }
+                else
+                        n.init = init
+                        n
+                
         visitVariableDeclaration: (n) ->
                 rv = []
                 for decl in n.declarations
@@ -380,8 +399,8 @@ class SubstituteVariables extends NodeVisitor
 
 
 exports.convert = (tree) ->
-        #console.warn "before:"
-        #console.warn escodegen.generate tree
+        debug.log "before:"
+        debug.log -> escodegen.generate tree
 
         # first we decorate the tree with free variable usage
         free tree

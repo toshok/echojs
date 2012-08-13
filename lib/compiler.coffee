@@ -80,7 +80,15 @@ class LLVMIRVisitor extends NodeVisitor
                 @pushScope scope
                 @visit child for child in children
                 @popScope()
-                
+
+        findIdentifierInScope: (ident, scope) ->
+                while scope?
+                        if scope[ident]?
+                                return scope[ident]
+                        scope = scope[PARENT_SCOPE_KEY]
+                return null
+
+                                
         createAlloca: (func, type, name) ->
                 saved_insert_point = llvm.IRBuilder.getInsertBlock()
                 llvm.IRBuilder.setInsertPointStartBB func.entry_bb
@@ -107,6 +115,35 @@ class LLVMIRVisitor extends NodeVisitor
             llvm.IRBuilder.setInsertPoint saved_insert_point
 
             allocas
+
+        createPropertyStore: (obj,propname,rhs) ->
+                # we assume propname is a identifier here...
+                pname = propname.name
+                debug.log "createPropertyStore #{obj}.#{pname}"
+
+                c = llvm.IRBuilder.createGlobalStringPtr pname, "strconst"
+                strcall = llvm.IRBuilder.createCall @ejs.string_new_utf8, [c], "strtmp"
+                                
+                llvm.IRBuilder.createCall @ejs.object_setprop, [obj, strcall, rhs], "propstore_#{pname}"
+
+        createPropertyLoad: (obj,propname) ->
+                # we assume propname is a identifier here...
+                pname = propname.name
+
+                c = llvm.IRBuilder.createGlobalStringPtr pname, "strconst"
+                strcall = llvm.IRBuilder.createCall @ejs.string_new_utf8, [c], "strtmp"
+                
+                return llvm.IRBuilder.createCall @ejs.object_getprop, [obj, strcall], "getprop_#{pname}"
+
+        createLoadThis: () ->
+                _this = @findIdentifierInScope EJS_THIS_NAME, @current_scope
+                return llvm.IRBuilder.createLoad _this, "load_this"
+
+
+        visitOrNull: (n) -> (@visit n) || @loadNullEjsValue()
+        visitOrUndefined: (n) -> (@visit n) || @loadUndefinedEjsValue()
+        
+
 
         visitProgram: (n) ->
                 # by the time we make it here the program has been
@@ -232,25 +269,6 @@ class LLVMIRVisitor extends NodeVisitor
                                 initializer_ir = @visit u.init
                                 # XXX bind the initializer to u.name in the current basic block and mark it as constant
 
-        createPropertyStore: (obj,propname,rhs) ->
-                # we assume propname is a identifier here...
-                pname = propname.name
-                debug.log "createPropertyStore #{obj}.#{pname}"
-
-                c = llvm.IRBuilder.createGlobalStringPtr pname, "strconst"
-                strcall = llvm.IRBuilder.createCall @ejs.string_new_utf8, [c], "strtmp"
-                                
-                llvm.IRBuilder.createCall @ejs.object_setprop, [obj, strcall, rhs], "propstore_#{pname}"
-
-        createPropertyLoad: (obj,propname) ->
-                # we assume propname is a identifier here...
-                pname = propname.name
-
-                c = llvm.IRBuilder.createGlobalStringPtr pname, "strconst"
-                strcall = llvm.IRBuilder.createCall @ejs.string_new_utf8, [c], "strtmp"
-                
-                return llvm.IRBuilder.createCall @ejs.object_getprop, [obj, strcall], "getprop_#{pname}"
-
         visitMemberExpression: (n) ->
                 @createPropertyLoad (@visit n.object), n.property
                 
@@ -259,7 +277,7 @@ class LLVMIRVisitor extends NodeVisitor
                 rhs = n.right
 
                 if lhs.type is syntax.Identifier
-                        dest = findIdentifierInScope lhs.name, @current_scope
+                        dest = @findIdentifierInScope lhs.name, @current_scope
                         rhvalue = @visit rhs
                         if dest?
                                 result = llvm.IRBuilder.createStore rhvalue, dest
@@ -344,9 +362,6 @@ class LLVMIRVisitor extends NodeVisitor
 
                 return ir_func
 
-        visitOrNull: (n) -> (@visit n) || @loadNullEjsValue()
-        visitOrUndefined: (n) -> (@visit n) || @loadUndefinedEjsValue()
-        
         visitUnaryExpression: (n) ->
                 debug.log "operator = '#{n.operator}'"
                 builtin = "unop#{n.operator}"
@@ -405,10 +420,6 @@ class LLVMIRVisitor extends NodeVisitor
                 llvm.IRBuilder.setInsertPoint merge_bb
 
                 rv
-
-        createLoadThis: () ->
-                _this = findIdentifierInScope EJS_THIS_NAME, @current_scope
-                return llvm.IRBuilder.createLoad _this, "load_this"
 
         visitCallExpression: (n) ->
                 debug.log "visitCall #{JSON.stringify n}"
@@ -499,7 +510,7 @@ class LLVMIRVisitor extends NodeVisitor
         visitIdentifier: (n) ->
                 debug.log "identifier #{n.name}"
                 val = n.name
-                alloca = findIdentifierInScope val, @current_scope
+                alloca = @findIdentifierInScope val, @current_scope
                 if alloca?
                         rv = llvm.IRBuilder.createLoad alloca, "load_#{val}"
                         return rv
@@ -592,13 +603,6 @@ class AddFunctionsVisitor extends NodeVisitor
                 # we don't need to recurse here since we won't have nested functions at this point
                 n
                         
-findIdentifierInScope = (ident, scope) ->
-        while scope?
-                if scope[ident]?
-                        return scope[ident]
-                scope = scope[PARENT_SCOPE_KEY]
-        return null
-
 insert_toplevel_func = (tree) ->
         module_name = "testmodule"
         toplevel =
