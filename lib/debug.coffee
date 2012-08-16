@@ -5,7 +5,7 @@ debug_level = 0
 exports.log = (msg, level = 1) ->
         if debug_level < level
                 return
-        if typeof msg isnt "string"
+        if typeof msg is "function"
                 msg = msg()
         console.warn "#{(' ' for i in [0..indent]).join('')}#{msg}"
 
