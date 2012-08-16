@@ -11,6 +11,7 @@ EJSValue* _ejs_op_add (EJSValue* lhs, EJSValue* rhs);
 EJSValue* _ejs_op_lt (EJSValue* lhs, EJSValue* rhs);
 EJSValue* _ejs_op_sub (EJSValue* lhs, EJSValue* rhs);
 EJSValue* _ejs_op_strict_eq (EJSValue* lhs, EJSValue* rhs);
+EJSValue* _ejs_op_eq (EJSValue* lhs, EJSValue* rhs);
 
 EJSBool _ejs_truthy (EJSValue* val);
 

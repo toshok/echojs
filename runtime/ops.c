@@ -135,6 +135,23 @@ _ejs_op_strict_eq (EJSValue* lhs, EJSValue* rhs)
   abort();
 }
 
+EJSValue*
+_ejs_op_eq (EJSValue* lhs, EJSValue* rhs)
+{
+  if (EJSVAL_IS_NUMBER(lhs)) {
+    if (EJSVAL_IS_NUMBER(rhs)) {
+      return _ejs_boolean_new (EJSVAL_TO_NUMBER(lhs) == EJSVAL_TO_NUMBER(rhs));
+    }
+  }
+  else if (EJSVAL_IS_STRING(lhs)) {
+    if (EJSVAL_IS_STRING(rhs)) {
+      return _ejs_boolean_new (!strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs)));
+    }
+  }
+
+  abort();
+}
+
 EJSBool
 _ejs_truthy (EJSValue* val)
 {

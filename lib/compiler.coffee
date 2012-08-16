@@ -118,24 +118,36 @@ class LLVMIRVisitor extends NodeVisitor
 
                 allocas
 
-        createPropertyStore: (obj,propname,rhs) ->
-                # we assume propname is a identifier here...
-                pname = propname.name
-                debug.log "createPropertyStore #{obj}.#{pname}"
+        createPropertyStore: (obj,prop,rhs,computed) ->
+                console.warn "in createPropertyStore, computed = #{computed}>"
+                if computed
+                        # we store obj[prop], prop can be any value
+                        loadprop = @visit prop
+                        pname = "computed"
+                else
+                        # we store obj.prop, prop is an id
+                        pname = prop.name
+                        debug.log "createPropertyStore #{obj}.#{pname}"
 
-                c = llvm.IRBuilder.createGlobalStringPtr pname, "strconst"
-                strcall = llvm.IRBuilder.createCall @ejs.string_new_utf8, [c], "strtmp"
+                        c = llvm.IRBuilder.createGlobalStringPtr pname, "strconst"
+                        loadprop = llvm.IRBuilder.createCall @ejs.string_new_utf8, [c], "strtmp"
                                 
-                llvm.IRBuilder.createCall @ejs.object_setprop, [obj, strcall, rhs], "propstore_#{pname}"
-
-        createPropertyLoad: (obj,propname) ->
-                # we assume propname is a identifier here...
-                pname = propname.name
-
-                c = llvm.IRBuilder.createGlobalStringPtr pname, "strconst"
-                strcall = llvm.IRBuilder.createCall @ejs.string_new_utf8, [c], "strtmp"
+                rv = llvm.IRBuilder.createCall @ejs.object_setprop, [obj, loadprop, rhs], "propstore_#{pname}"
+                console.warn "in createPropertyStore<"
+                rv
                 
-                return llvm.IRBuilder.createCall @ejs.object_getprop, [obj, strcall], "getprop_#{pname}"
+        createPropertyLoad: (obj,prop,computed) ->
+                if computed
+                        # we load obj[prop], prop can be any value
+                        loadprop = @visit prop
+                        pname = "computed"
+                else
+                        # we load obj.prop, prop is an id
+                        pname = prop.name
+                        c = llvm.IRBuilder.createGlobalStringPtr pname, "strconst"
+                        loadprop = llvm.IRBuilder.createCall @ejs.string_new_utf8, [c], "strtmp"
+                
+                llvm.IRBuilder.createCall @ejs.object_getprop, [obj, loadprop], "getprop_#{pname}"
 
         createLoadThis: () ->
                 _this = @findIdentifierInScope "%this", @current_scope
@@ -304,22 +316,22 @@ class LLVMIRVisitor extends NodeVisitor
                                 # XXX bind the initializer to u.name in the current basic block and mark it as constant
 
         visitMemberExpression: (n) ->
-                @createPropertyLoad (@visit n.object), n.property
+                @createPropertyLoad (@visit n.object), n.property, n.computed
                 
         visitAssignmentExpression: (n) ->
                 lhs = n.left
                 rhs = n.right
 
+                rhvalue = @visit rhs
                 if lhs.type is syntax.Identifier
                         dest = @findIdentifierInScope lhs.name, @current_scope
-                        rhvalue = @visit rhs
                         if dest?
                                 result = llvm.IRBuilder.createStore rhvalue, dest
                         else
-                                result = @createPropertyStore @loadGlobal(), lhs, rhvalue
+                                result = @createPropertyStore @loadGlobal(), lhs, rhvalue, false
                         result
                 else if lhs.type is syntax.MemberExpression
-                        return @createPropertyStore (@visit lhs.object), lhs.property, @visit rhs
+                        return @createPropertyStore (@visit lhs.object), lhs.property, rhvalue, lhs.computed
                 else
                         throw "unhandled assign lhs"
 
@@ -473,7 +485,7 @@ class LLVMIRVisitor extends NodeVisitor
                                 callee = callee[n.arguments.length - BUILTIN_ARGS.length]
                 else if n.callee.type is syntax.MemberExpression
                         debug.log "creating property load!"
-                        callee = @createPropertyLoad n.callee.object, n.callee.property
+                        callee = @createPropertyLoad n.callee.object, n.callee.property, n.callee.computed
                 else
                         callee = @visit n.callee
 
@@ -568,7 +580,7 @@ class LLVMIRVisitor extends NodeVisitor
 
                 if not rv
                         debug.log "Symbol '#{val}' not found in current scope"
-                        rv = @createPropertyLoad @loadGlobal(), n
+                        rv = @createPropertyLoad @loadGlobal(), n, false
 
                 debug.log "returning #{rv}"
                 rv
@@ -578,7 +590,7 @@ class LLVMIRVisitor extends NodeVisitor
                 for property in n.properties
                         key = property.key
                         val = @visit property.value
-                        @createPropertyStore obj, key, val
+                        @createPropertyStore obj, key, val, false
                 return obj
 
         visitArrayExpression: (n) ->
@@ -586,7 +598,9 @@ class LLVMIRVisitor extends NodeVisitor
                 i = 0;
                 for el in n.elements
                         val = @visit el
-                        @createPropertyStore obj, [(llvm.IRBuilder.createCall @ejs.number_new, [i], "numtmp")], val
+                        console.warn "val = #{val}"
+                        index = type: syntax.Literal, value: i
+                        @createPropertyStore obj, index, val, true
                         i++
                 obj
                 
@@ -686,5 +700,6 @@ exports.compile = (tree) ->
         visitor = new LLVMIRVisitor module
         visitor.visit tree
         debug.setLevel 0
-        
+
+        module.dump()
         module

@@ -10,7 +10,9 @@ typedef enum {
   EJSValueTypeNumber,
   EJSValueTypeString,
   EJSValueTypeClosure,
-  EJSValueTypeUndefined
+  EJSValueTypeUndefined,
+
+  EJSValueTypeArray
 } EJSValueType;
 
 typedef struct _EJSContext* EJSContext;
@@ -37,8 +39,17 @@ struct _EJSValue {
       EJSValue *proto;
       EJSFieldMap* map;
       EJSValue **fields;
-      // field/property map
     } o;
+
+    // array members
+    struct {
+      EJSValue *proto;
+      EJSFieldMap* map;
+      EJSValue **fields;
+      int array_length;
+      int array_alloc;
+      EJSValue **elements;
+    } a;
 
     // number members
     struct {
@@ -64,14 +75,17 @@ struct _EJSValue {
   } u;
 };
 
+#define EJSVAL_IS_PRIMITIVE(v) (EJSVAL_IS_NUMBER(v) || EJSVAL_IS_STRING(v) || EJSVAL_IS_BOOLEAN(v) || EJSVAL_IS_UNDEFINED(v))
+
 #define EJSVAL_IS_OBJECT(v)  (v->type == EJSValueTypeObject)
+#define EJSVAL_IS_ARRAY(v)  (v->type == EJSValueTypeArray)
 #define EJSVAL_IS_NUMBER(v)  (v->type == EJSValueTypeNumber)
 #define EJSVAL_IS_STRING(v)  (v->type == EJSValueTypeString)
 #define EJSVAL_IS_BOOLEAN(v) (v->type == EJSValueTypeBoolean)
 #define EJSVAL_IS_CLOSURE(v) (v->type == EJSValueTypeClosure)
 #define EJSVAL_IS_UNDEFINED(v) (v->type == EJSValueTypeUndefined)
 
-#define EJSVAL_TO_STRING(v) (v->u.s.data)
+#define EJSVAL_TO_STRING(v) ((char*)v->u.s.data)
 #define EJSVAL_TO_NUMBER(v) (v->u.n.data)
 #define EJSVAL_TO_BOOLEAN(v) (v->u.b.data)
 #define EJSVAL_TO_CLOSURE_FUNC(v) (v->u.closure.func)
@@ -80,6 +94,7 @@ struct _EJSValue {
 #define EJS_NUMBER_FORMAT "%g"
 
 EJSValue* _ejs_object_new (EJSValue *proto);
+EJSValue* _ejs_array_new (int numElements);
 EJSValue* _ejs_string_new_utf8 (char* str);
 EJSValue* _ejs_number_new (double value);
 EJSValue* _ejs_boolean_new (EJSBool value);
@@ -98,5 +113,7 @@ EJSValue* _ejs_invoke_closure_3 (EJSValue* closure, int argc, EJSValue *arg1, EJ
 
 extern EJSValue* _ejs_undefined;
 extern EJSValue* _ejs_global;
+
+void _ejs_dump_value (EJSValue* val);
 
 #endif // _ejs_object_h_
