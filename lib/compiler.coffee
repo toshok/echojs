@@ -188,26 +188,26 @@ class LLVMIRVisitor extends NodeVisitor
 
                 llvm.IRBuilder.createBr init_bb
                 
-                @continueStack.unshift label: n.label, dest: test_bb # this isn't right - we want to branch to the update instruction, not to the test
-                @breakStack.unshift    label: n.label, dest: merge_bb
-                
                 llvm.IRBuilder.setInsertPoint init_bb
                 @visit n.init
                 llvm.IRBuilder.createBr test_bb
-
-                @continueStack.shift()
-                @breakStack.shift()
 
                 llvm.IRBuilder.setInsertPoint test_bb
                 cond_truthy = llvm.IRBuilder.createCall @ejs.truthy, [@visit(n.test)], "cond_truthy"
                 cmp = llvm.IRBuilder.createICmpEq cond_truthy, (llvm.Constant.getIntegerValue boolType, 0), "cmpresult"
                 llvm.IRBuilder.createCondBr cmp, merge_bb, body_bb
 
+                @continueStack.unshift label: n.label, dest: test_bb # this isn't right - we want to branch to the update instruction, not to the test
+                @breakStack.unshift    label: n.label, dest: merge_bb
+                
                 llvm.IRBuilder.setInsertPoint body_bb
                 @visit n.body
                 @visit n.update
                 llvm.IRBuilder.createBr test_bb
                 
+                @continueStack.shift()
+                @breakStack.shift()
+
                 llvm.IRBuilder.setInsertPoint merge_bb
                 merge_bb
                 
