@@ -32,7 +32,11 @@ exports.NodeVisitor = class NodeVisitor
         visitBlock: (n) ->
                 n.body = filter (@visit child for child in n.body)
                 n
-                
+
+        visitLabeledStatement: (n) ->
+                @visit n.body
+                n
+
         visitExpressionStatement: (n) ->
                 n.expression = @visit n.expression
                 n
@@ -206,6 +210,7 @@ exports.NodeVisitor = class NodeVisitor
                         when syntax.Program              then rv = @visitProgram new_n
                         when syntax.FunctionDeclaration  then rv = @visitFunction new_n # XXX esprima distinguishes between these two.  hallelujah
                         when syntax.FunctionExpression   then rv = @visitFunction new_n  # XXX
+                        when syntax.LabeledStatement     then rv = @visitLabeledStatement new_n
                         when syntax.BlockStatement       then rv = @visitBlock new_n
                         when syntax.ExpressionStatement  then rv = @visitExpressionStatement new_n
                         when syntax.SwitchStatement      then rv = @visitSwitch new_n

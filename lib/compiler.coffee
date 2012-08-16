@@ -47,6 +47,7 @@ class LLVMIRVisitor extends NodeVisitor
                 
                 @ejs = {
                         object_new:      module.getOrInsertExternalFunction "_ejs_object_new", EjsValueType, EjsValueType
+                        array_new:       module.getOrInsertExternalFunction "_ejs_array_new", EjsValueType, int32Type
                         number_new:      module.getOrInsertExternalFunction "_ejs_number_new", EjsValueType, llvm.Type.getDoubleTy()
                         boolean_new:     module.getOrInsertExternalFunction "_ejs_boolean_new", EjsValueType, boolType
                         string_new_utf8: module.getOrInsertExternalFunction "_ejs_string_new_utf8", EjsValueType, stringType
@@ -60,6 +61,7 @@ class LLVMIRVisitor extends NodeVisitor
                         "binop<":        module.getOrInsertExternalFunction "_ejs_op_lt", EjsValueType, EjsValueType, EjsValueType
                         "binop-":        module.getOrInsertExternalFunction "_ejs_op_sub", EjsValueType, EjsValueType, EjsValueType
                         "binop===":      module.getOrInsertExternalFunction "_ejs_op_strict_eq", EjsValueType, EjsValueType, EjsValueType
+                        "binop==":       module.getOrInsertExternalFunction "_ejs_op_eq", EjsValueType, EjsValueType, EjsValueType
                         truthy:          module.getOrInsertExternalFunction "_ejs_truthy", boolType, EjsValueType
                         object_setprop:  module.getOrInsertExternalFunction "_ejs_object_setprop", EjsValueType, EjsValueType, EjsValueType, EjsValueType
                         object_getprop:  module.getOrInsertExternalFunction "_ejs_object_getprop", EjsValueType, EjsValueType, EjsValueType
@@ -96,25 +98,25 @@ class LLVMIRVisitor extends NodeVisitor
                 llvm.IRBuilder.setInsertPoint saved_insert_point
                 alloca
 
-        createAllocas: (func, names, scope) ->
-            allocas = []
+        createAllocas: (func, ids, scope) ->
+                allocas = []
 
-            # the allocas are always allocated in the function entry_bb so the mem2reg opt pass can regenerate the ssa form for us
-            saved_insert_point = llvm.IRBuilder.getInsertBlock()
-            llvm.IRBuilder.setInsertPointStartBB func.entry_bb
+                # the allocas are always allocated in the function entry_bb so the mem2reg opt pass can regenerate the ssa form for us
+                saved_insert_point = llvm.IRBuilder.getInsertBlock()
+                llvm.IRBuilder.setInsertPointStartBB func.entry_bb
 
-            j = 0
-            for i in [0..names.length-1]
-                name = names[i].id.name
-                if !scope[name]
-                    allocas[j] = llvm.IRBuilder.createAlloca EjsValueType, "local_#{name}"
-                    scope[name] = allocas[j]
-                    j++
+                j = 0
+                for i in [0..ids.length-1]
+                        name = ids[i].id.name
+                        if !scope[name]
+                                allocas[j] = llvm.IRBuilder.createAlloca EjsValueType, "local_#{name}"
+                                scope[name] = allocas[j]
+                                j++
 
-            # reinstate the IRBuilder to its previous insert point so we can insert the actual initializations
-            llvm.IRBuilder.setInsertPoint saved_insert_point
+                # reinstate the IRBuilder to its previous insert point so we can insert the actual initializations
+                llvm.IRBuilder.setInsertPoint saved_insert_point
 
-            allocas
+                allocas
 
         createPropertyStore: (obj,propname,rhs) ->
                 # we assume propname is a identifier here...
@@ -136,7 +138,7 @@ class LLVMIRVisitor extends NodeVisitor
                 return llvm.IRBuilder.createCall @ejs.object_getprop, [obj, strcall], "getprop_#{pname}"
 
         createLoadThis: () ->
-                _this = @findIdentifierInScope EJS_THIS_NAME, @current_scope
+                _this = @findIdentifierInScope "%this", @current_scope
                 return llvm.IRBuilder.createLoad _this, "load_this"
 
 
@@ -156,8 +158,26 @@ class LLVMIRVisitor extends NodeVisitor
                 @visitWithScope new_scope, n.body
                 n
 
+        visitLabeledStatement: (n) ->
+                n.body.label = n.label.name
+                @visit n.body
+
+        visitBreak: (n) ->
+                if not n.label
+                        llvm.IRBuilder.createBr @breakStack[0].dest
+                else
+                        el = el for el in @breakStack when el.label is n.label.name
+                        llvm.IRBuilder.createBr el.dest
+
+                
+        visitContinue: (n) ->
+                if not n.label
+                        llvm.IRBuilder.createBr @continueStack[0].dest
+                else
+                        el = el for el in @continueStack when el.label is n.label.name
+                        llvm.IRBuilder.createBr el.dest
+
         visitFor: (n) ->
-                debug.log "visitFor"
                 insertBlock = llvm.IRBuilder.getInsertBlock()
                 insertFunc = insertBlock.parent
 
@@ -168,9 +188,15 @@ class LLVMIRVisitor extends NodeVisitor
 
                 llvm.IRBuilder.createBr init_bb
                 
+                @continueStack.unshift label: n.label, dest: test_bb # this isn't right - we want to branch to the update instruction, not to the test
+                @breakStack.unshift    label: n.label, dest: merge_bb
+                
                 llvm.IRBuilder.setInsertPoint init_bb
                 @visit n.init
                 llvm.IRBuilder.createBr test_bb
+
+                @continueStack.shift()
+                @breakStack.shift()
 
                 llvm.IRBuilder.setInsertPoint test_bb
                 cond_truthy = llvm.IRBuilder.createCall @ejs.truthy, [@visit(n.test)], "cond_truthy"
@@ -184,7 +210,6 @@ class LLVMIRVisitor extends NodeVisitor
                 
                 llvm.IRBuilder.setInsertPoint merge_bb
                 merge_bb
-                
                 
         visitWhile: (n) ->
                 insertBlock = llvm.IRBuilder.getInsertBlock()
@@ -202,15 +227,20 @@ class LLVMIRVisitor extends NodeVisitor
                 
                 llvm.IRBuilder.createCondBr cmp, merge_bb, body_bb
 
+                @continueStack.unshift label: n.label, dest: while_bb
+                @breakStack.unshift    label: n.label, dest: merge_bb
+                
                 llvm.IRBuilder.setInsertPoint body_bb
                 @visit n.body
                 llvm.IRBuilder.createBr while_bb
-                
+
+                @continueStack.shift()
+                @breakStack.shift()
+                                
                 llvm.IRBuilder.setInsertPoint merge_bb
                 merge_bb
                 
         
-                                
         visitIf: (n) ->
                 # first we convert our conditional EJSValue to a boolean
                 cond_truthy = llvm.IRBuilder.createCall @ejs.truthy, [@visit(n.test)], "cond_truthy"
@@ -259,7 +289,7 @@ class LLVMIRVisitor extends NodeVisitor
                         # lets are not hoisted to the containing function's toplevel, but instead are bound in the lexical block they inhabit
                         scope = @current_scope;
 
-                        allocas = @createAllocas @currentFunction, n.declarations.length, scope
+                        allocas = @createAllocas @currentFunction, n.declarations, scope
                         for i in [0..n.declarations.length-1]
                                 initializer = @visitOrUndefined n.declarations[i].init
                                 llvm.IRBuilder.createStore initializer, allocas[i]
@@ -345,6 +375,13 @@ class LLVMIRVisitor extends NodeVisitor
                 body_bb = new llvm.BasicBlock "body", ir_func
                 llvm.IRBuilder.setInsertPoint body_bb
 
+                # stacks of destinations used by continue and break, of the form [{label:..., dest:...}].
+                # 
+                #  when we see an unlabeled "break" or "continue" we insert a branch to the top bb
+                #  when we see a labeled "break" or "continue" we search the stack for the label and branch to that bb
+                @continueStack = []
+                @breakStack = []
+                
                 @visitWithScope new_scope, [n.body]
 
                 # XXX more needed here - this lacks all sorts of control flow stuff.
@@ -541,7 +578,13 @@ class LLVMIRVisitor extends NodeVisitor
                 return obj
 
         visitArrayExpression: (n) ->
-                throw new "Internal error: array expressions unsupported"
+                obj = llvm.IRBuilder.createCall @ejs.array_new, [(llvm.Constant.getIntegerValue int32Type, n.elements.length)], "arrtmp"
+                i = 0;
+                for el in n.elements
+                        val = @visit el
+                        @createPropertyStore obj, [(llvm.IRBuilder.createCall @ejs.number_new, [i], "numtmp")], val
+                        i++
+                obj
                 
         visitExpressionStatement: (n) ->
                 @visit n.expression
@@ -587,8 +630,6 @@ class AddFunctionsVisitor extends NodeVisitor
                         n.params[i].llvm_type = BUILTIN_ARGS[i].llvm_type
                 
                 n.ir_func = @module.getOrInsertFunction n.ir_name, EjsValueType, (param.llvm_type for param in n.params)
-                debug.log "ADDFUNCTIONVISITOR:     ########## #{n.ir_name}"
-                debug.log "      #{n.ir_func}"
 
                 ir_args = n.ir_func.args
                 i = 0
@@ -637,7 +678,9 @@ exports.compile = (tree) ->
 
         debug.log -> escodegen.generate tree
 
+        debug.setLevel 1
         visitor = new LLVMIRVisitor module
         visitor.visit tree
-
+        debug.setLevel 0
+        
         module

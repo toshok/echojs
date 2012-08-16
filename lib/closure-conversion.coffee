@@ -40,6 +40,7 @@ free = (exp) ->
                         exp.ejs_free_vars = (free exp.body).subtract (param_names exp.params)
                         exp.ejs_decls = exp.body.ejs_decls.union (param_names exp.params)
                         exp.ejs_free_vars
+                when syntax.LabeledStatement then free exp.body
                 when syntax.BlockStatement
                         decls = decl_names collect_decls exp.body
                         uses = Set.union.apply null, map free, exp.body
@@ -54,6 +55,8 @@ free = (exp) ->
                 when syntax.ForStatement        then Set.union.apply null, (map free, [exp.init, exp.test, exp.update, exp.body])
                 when syntax.ForInStatement      then Set.union.apply null, (map free, [exp.left, exp.right, exp.body])
                 when syntax.WhileStatement      then Set.union.apply null, (map free, [exp.test, exp.body])
+                when syntax.BreakStatement      then new Set
+                when syntax.ContinueStatement   then new Set
                 when syntax.UpdateExpression    then free exp.argument
                 when syntax.ReturnStatement     then free exp.argument
                 when syntax.UnaryExpression     then free exp.argument
