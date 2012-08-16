@@ -184,6 +184,7 @@ class LLVMIRVisitor extends NodeVisitor
                 init_bb = new llvm.BasicBlock "for_init", insertFunc
                 test_bb = new llvm.BasicBlock "for_test", insertFunc
                 body_bb = new llvm.BasicBlock "for_body", insertFunc
+                update_bb = new llvm.BasicBlock "for_update", insertFunc
                 merge_bb = new llvm.BasicBlock "for_merge", insertFunc
 
                 llvm.IRBuilder.createBr init_bb
@@ -197,11 +198,14 @@ class LLVMIRVisitor extends NodeVisitor
                 cmp = llvm.IRBuilder.createICmpEq cond_truthy, (llvm.Constant.getIntegerValue boolType, 0), "cmpresult"
                 llvm.IRBuilder.createCondBr cmp, merge_bb, body_bb
 
-                @continueStack.unshift label: n.label, dest: test_bb # this isn't right - we want to branch to the update instruction, not to the test
+                @continueStack.unshift label: n.label, dest: update_bb
                 @breakStack.unshift    label: n.label, dest: merge_bb
                 
                 llvm.IRBuilder.setInsertPoint body_bb
                 @visit n.body
+                llvm.IRBuilder.createBr update_bb
+
+                llvm.IRBuilder.setInsertPoint update_bb
                 @visit n.update
                 llvm.IRBuilder.createBr test_bb
                 
