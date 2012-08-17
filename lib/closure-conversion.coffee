@@ -194,9 +194,7 @@ class LambdaLift extends NodeVisitor
                                 name: global_name
                         }
 
-create_identifier = (x) ->
-        type: syntax.Identifier,
-        name: x
+create_identifier = (x) -> type: syntax.Identifier, name: x
 
 # 1) allocates the environment at the start of the n
 # 2) adds mappings for all .closed variables

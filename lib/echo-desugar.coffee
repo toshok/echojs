@@ -32,35 +32,77 @@
 
 ###
 
-syntax = (require 'esprima').Syntax
+esprima = require 'esprima'
+escodegen = require 'escodegen'
+syntax = esprima.Syntax
+debug = require 'debug'
+
 { NodeVisitor } = require 'nodevisitor'
 
-exports.VarToLet = class VarToLet extends NodeVisitor
+class VarToLet extends NodeVisitor
         constructor: ->
-                @funcStack = []
+                @varsStack = []
                 super
-
+                
         visitFunction: (n) ->
                 func = n
                 @varsStack.unshift []
                 super
                 vars = @varsStack.shift()
-                n.body = vars.concat n.body
+                n.body.body = vars.concat n.body.body
                 n
 
+        # this is broken for const.
         visitVariableDeclaration: (n) ->
-                if n.kind is "let"
-                        return n
+                super
 
-                decls = n.decls
-                currentVars = @varsStack[0]
+                # if we're already a let or const, don't do anything
+                return n if n.kind is "let" or n.kind is "const"
+
+                console.warn "before: #{escodegen.generate n}"
                 
-                currentVars.unshift
+                currentVars = @varsStack[0]
 
-                if decl.initializer
-                        @replaceCurrentNode new ast.ExpressionStatement new ast.Assignment ast.AssignOp.assign, decl.name, @visitNode decl.initializer
+                assignments = []
+                top_decl = type: syntax.VariableDeclaration, kind: "let", declarations: []
+                for decl in n.declarations
+                        top_decl.declarations.push type: syntax.VariableDeclarator, id: {type: syntax.Identifier, name: decl.id.name}, init: null
+                        if decl.init?
+                                assignments.push type: syntax.ExpressionStatement, expression: {type: syntax.AssignmentExpression, operator: "=", left: {type: syntax.Identifier, name: decl.id.name}, right: decl.init}
+
+                currentVars.push top_decl
+
+                console.warn "after:"
+                console.warn escodegen.generate top_decl
+                for asn in assignments
+                        console.warn escodegen.generate asn
+                        
+                return if assignments.length > 0 then assignments else null
+
+
+class RemoveIIFE extends NodeVisitor
+        visitCallExpression: (n) ->
+                if n.callee.type is syntax.FunctionExpression and n.callee.params.length is 0  # let's limit this to 0-arg IIFE's for now
+                        n.callee.body
                 else
-                        @removeCurrentNode()
+                        n
 
+class FlattenExpressionStatements extends NodeVisitor
+        visitExpressionStatement: (n) ->
+                super
+                return n.expression if n.expression.type is syntax.BlockStatement
+                n
 
-exports.RemoveIIFE = class RemoveIIFE extends NodeVisitor
+exports.desugar = (tree) ->
+        debug.log -> escodegen.generate tree
+
+        var_to_let = new VarToLet
+        tree = var_to_let.visit tree
+
+        remove_iife = new RemoveIIFE
+        tree = remove_iife.visit tree
+
+        flatten_exp_stmt = new FlattenExpressionStatements
+        tree = flatten_exp_stmt.visit tree
+        
+        return tree

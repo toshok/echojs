@@ -4,6 +4,7 @@ COFFEE_FILES=\
 	typeinfer.coffee		\
 	debug.coffee			\
 	echo-util.coffee		\
+	echo-desugar.coffee		\
 	closure-conversion.coffee	\
 	set.coffee
 

@@ -8,6 +8,7 @@ debug.setLevel 0
 { Set } = require 'set'
 { NodeVisitor } = require 'nodevisitor'
 closure_conversion = require 'closure-conversion'
+{ desugar } = require 'echo-desugar'
 
 llvm = require 'llvm'
 
@@ -119,7 +120,6 @@ class LLVMIRVisitor extends NodeVisitor
                 allocas
 
         createPropertyStore: (obj,prop,rhs,computed) ->
-                console.warn "in createPropertyStore, computed = #{computed}>"
                 if computed
                         # we store obj[prop], prop can be any value
                         loadprop = @visit prop
@@ -133,7 +133,6 @@ class LLVMIRVisitor extends NodeVisitor
                         loadprop = llvm.IRBuilder.createCall @ejs.string_new_utf8, [c], "strtmp"
                                 
                 rv = llvm.IRBuilder.createCall @ejs.object_setprop, [obj, loadprop, rhs], "propstore_#{pname}"
-                console.warn "in createPropertyStore<"
                 rv
                 
         createPropertyLoad: (obj,prop,computed) ->
@@ -598,7 +597,6 @@ class LLVMIRVisitor extends NodeVisitor
                 i = 0;
                 for el in n.elements
                         val = @visit el
-                        console.warn "val = #{val}"
                         index = type: syntax.Literal, value: i
                         @createPropertyStore obj, index, val, true
                         i++
@@ -684,7 +682,9 @@ debug.setLevel 0
 exports.compile = (tree) ->
 
         tree = insert_toplevel_func tree
-        
+
+        tree = desugar tree
+                
         tree = closure_conversion.convert tree
 
         debug.log -> escodegen.generate tree
@@ -696,10 +696,8 @@ exports.compile = (tree) ->
 
         debug.log -> escodegen.generate tree
 
-        debug.setLevel 1
         visitor = new LLVMIRVisitor module
         visitor.visit tree
-        debug.setLevel 0
 
         module.dump()
         module
