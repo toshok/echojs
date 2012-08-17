@@ -81,11 +81,20 @@ class VarToLet extends NodeVisitor
 
 
 class RemoveIIFE extends NodeVisitor
+        constructor: ->
+                @validLocation = false
+                
+        visitExpressionStatement: (n) ->
+                @validLocation = n.expression.type is syntax.CallExpression
+                n.expression = @visit n.expression
+                n
+                
         visitCallExpression: (n) ->
-                if n.callee.type is syntax.FunctionExpression and n.callee.params.length is 0  # let's limit this to 0-arg IIFE's for now
-                        n.callee.body
-                else
-                        n
+                return n if not @validLocation
+
+                @validLocation = false
+                return (@visit n.callee.body) if n.callee.type is syntax.FunctionExpression and n.callee.params.length is 0  # let's limit this to 0-arg IIFE's for now
+                n
 
 class FlattenExpressionStatements extends NodeVisitor
         visitExpressionStatement: (n) ->
