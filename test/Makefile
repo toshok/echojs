@@ -32,5 +32,5 @@ self-test: set.js.exe
 	./set.js.exe
 
 clean:
-	rm -f *.o *.js.exe
+	rm -f *.o *.js.exe terminal.js echo-assert.js
 
