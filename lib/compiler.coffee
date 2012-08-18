@@ -177,16 +177,11 @@ class LLVMIRVisitor extends NodeVisitor
                 iife_bb = null
                 
                 if n.fromIIFE
-                        console.warn 1
                         insertBlock = llvm.IRBuilder.getInsertBlock()
-                        console.warn 2
                         insertFunc = insertBlock.parent
-                        console.warn 3
                         
                         iife_rv = @createAlloca @currentFunction, EjsValueType, "%iife_rv"
-                        console.warn 4
                         iife_bb = new llvm.BasicBlock "iife_dest", insertFunc
-                        console.warn 5
 
                 @pushIIFEInfo iife_rv: iife_rv, iife_dest_bb: iife_bb
 
@@ -197,7 +192,6 @@ class LLVMIRVisitor extends NodeVisitor
                         llvm.IRBuilder.createBr iife_bb
                         llvm.IRBuilder.setInsertPoint iife_bb
                         rv = llvm.IRBuilder.createLoad iife_rv, "%iife_rv_load"
-                        console.warn "iife rv!"
                         rv
                 else
                         n
@@ -319,12 +313,8 @@ class LLVMIRVisitor extends NodeVisitor
                 debug.log "visitReturn"
                 if @iifeStack[0].iife_rv?
                         if n.argument?
-                                console.log "1.1"
-                                console.log "#{@visit n.argument}"
-                                console.log "#{@iifeStack[0].iife_rv}"
                                 llvm.IRBuilder.createStore (@visit n.argument), @iifeStack[0].iife_rv
                         else
-                                console.log "1.2"
                                 llvm.IRBuilder.createStore @loadUndefinedEjsValue(), @iifeStack[0].iife_rv
                         llvm.IRBuilder.createBr @iifeStack[0].iife_dest_bb
                 else
@@ -744,5 +734,4 @@ exports.compile = (tree) ->
         visitor = new LLVMIRVisitor module
         visitor.visit tree
 
-        module.dump()
         module

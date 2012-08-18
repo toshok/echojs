@@ -59,8 +59,6 @@ class VarToLet extends NodeVisitor
                 # if we're already a let or const, don't do anything
                 return n if n.kind is "let" or n.kind is "const"
 
-                console.warn "before: #{escodegen.generate n}"
-                
                 currentVars = @varsStack[0]
 
                 assignments = []
@@ -72,11 +70,6 @@ class VarToLet extends NodeVisitor
 
                 currentVars.push top_decl
 
-                console.warn "after:"
-                console.warn escodegen.generate top_decl
-                for asn in assignments
-                        console.warn escodegen.generate asn
-                        
                 return if assignments.length > 0 then assignments else null
 
 
