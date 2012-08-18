@@ -71,6 +71,12 @@ class LLVMIRVisitor extends NodeVisitor
         loadNullEjsValue: -> llvm.Constant.getNull EjsValueType
         loadUndefinedEjsValue: -> llvm.IRBuilder.createLoad @ejs.undefined, "load_undefined"                
         loadGlobal: -> llvm.IRBuilder.createLoad @ejs.global, "load_global"
+
+        pushIIFEInfo: (info) ->
+                @iifeStack.unshift info
+                
+        popIIFEInfo: ->
+                @iifeStack.shift
         
         pushScope: (new_scope) ->
                 new_scope[PARENT_SCOPE_KEY] = @current_scope
@@ -166,8 +172,35 @@ class LLVMIRVisitor extends NodeVisitor
 
         visitBlock: (n) ->
                 new_scope = {}
+
+                iife_rv = null
+                iife_bb = null
+                
+                if n.fromIIFE
+                        console.warn 1
+                        insertBlock = llvm.IRBuilder.getInsertBlock()
+                        console.warn 2
+                        insertFunc = insertBlock.parent
+                        console.warn 3
+                        
+                        iife_rv = @createAlloca @currentFunction, EjsValueType, "%iife_rv"
+                        console.warn 4
+                        iife_bb = new llvm.BasicBlock "iife_dest", insertFunc
+                        console.warn 5
+
+                @pushIIFEInfo iife_rv: iife_rv, iife_dest_bb: iife_bb
+
                 @visitWithScope new_scope, n.body
-                n
+
+                @popIIFEInfo()
+                if iife_bb
+                        llvm.IRBuilder.createBr iife_bb
+                        llvm.IRBuilder.setInsertPoint iife_bb
+                        rv = llvm.IRBuilder.createLoad iife_rv, "%iife_rv_load"
+                        console.warn "iife rv!"
+                        rv
+                else
+                        n
 
         visitLabeledStatement: (n) ->
                 n.body.label = n.label.name
@@ -284,10 +317,21 @@ class LLVMIRVisitor extends NodeVisitor
                 
         visitReturn: (n) ->
                 debug.log "visitReturn"
-                if n.argument
-                        llvm.IRBuilder.createRet @visit n.argument
+                if @iifeStack[0].iife_rv?
+                        if n.argument?
+                                console.log "1.1"
+                                console.log "#{@visit n.argument}"
+                                console.log "#{@iifeStack[0].iife_rv}"
+                                llvm.IRBuilder.createStore (@visit n.argument), @iifeStack[0].iife_rv
+                        else
+                                console.log "1.2"
+                                llvm.IRBuilder.createStore @loadUndefinedEjsValue(), @iifeStack[0].iife_rv
+                        llvm.IRBuilder.createBr @iifeStack[0].iife_dest_bb
                 else
-                        llvm.IRBuilder.createRet @loadNullEjsValue()
+                        if n.argument
+                                llvm.IRBuilder.createRet @visit n.argument
+                        else
+                                llvm.IRBuilder.createRet @loadUndefinedEjsValue()
                         
 
         visitVariableDeclaration: (n) ->
@@ -396,6 +440,7 @@ class LLVMIRVisitor extends NodeVisitor
                 #  when we see a labeled "break" or "continue" we search the stack for the label and branch to that bb
                 @continueStack = []
                 @breakStack = []
+                @iifeStack = []
                 
                 @visitWithScope new_scope, [n.body]
 

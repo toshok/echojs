@@ -81,26 +81,13 @@ class VarToLet extends NodeVisitor
 
 
 class RemoveIIFE extends NodeVisitor
-        constructor: ->
-                @validLocation = false
-                
-        visitExpressionStatement: (n) ->
-                @validLocation = n.expression.type is syntax.CallExpression
-                n.expression = @visit n.expression
-                n
-                
         visitCallExpression: (n) ->
-                return n if not @validLocation
-
-                @validLocation = false
-                return (@visit n.callee.body) if n.callee.type is syntax.FunctionExpression and n.callee.params.length is 0  # let's limit this to 0-arg IIFE's for now
-                n
-
-class FlattenExpressionStatements extends NodeVisitor
-        visitExpressionStatement: (n) ->
-                super
-                return n.expression if n.expression.type is syntax.BlockStatement
-                n
+                if n.callee.type is syntax.FunctionExpression and n.callee.params.length is 0  # let's limit this to 0-arg IIFE's for now
+                        body = @visit n.callee.body
+                        body.fromIIFE = true
+                        body
+                else
+                        super
 
 exports.desugar = (tree) ->
         debug.log -> escodegen.generate tree
@@ -111,7 +98,4 @@ exports.desugar = (tree) ->
         remove_iife = new RemoveIIFE
         tree = remove_iife.visit tree
 
-        flatten_exp_stmt = new FlattenExpressionStatements
-        tree = flatten_exp_stmt.visit tree
-        
         return tree
