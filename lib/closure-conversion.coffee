@@ -157,7 +157,7 @@ class LambdaLift extends NodeVisitor
                         n
                 else
                         if n.id?.name?
-                                global_name = util.genGlobalFunctionName n.id.name
+                                global_name = genGlobalFunctionName n.id.name
                                 @currentMapping()[n.id.name] = global_name
                         else
                                 global_name = genAnonymousFunctionName()
