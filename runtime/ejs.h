@@ -13,4 +13,6 @@ typedef char EJSBool;
 #define FALSE 0
 #endif
 
+void _ejs_init();
+
 #endif // _ejs_h_

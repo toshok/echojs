@@ -2,6 +2,7 @@
 SOURCES=object.c \
 	ops.c \
 	init.c \
+	require.c \
 	main.c
 
 OBJECTS=$(SOURCES:%.c=%.o)
@@ -16,3 +17,5 @@ test: $(OBJECTS)
 
 clean:
 	rm -f test $(OBJECTS)
+
+$(OBJECTS): %.o: object.h ejs.h ops.h

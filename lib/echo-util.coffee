@@ -8,3 +8,14 @@ exports.foldl = foldl = (f, z, arr) ->
         return z if arr.length is 0
         return foldl f, (f z, arr[0]), (arr.slice 1)
 
+gen = 0
+exports.genGlobalFunctionName = (x) ->
+        name =  "__ejs_function_#{x}#{gen}"
+        gen += 1
+        name
+
+exports.genAnonymousFunctionName = ->
+        name =  "__ejs_anonymous_#{gen}"
+        gen += 1
+        name
+        

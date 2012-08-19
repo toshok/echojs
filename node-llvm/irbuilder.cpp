@@ -121,7 +121,7 @@ namespace jsllvm {
     for (unsigned i = 0, e = argv->Length(); i != e; ++i) {
       llvm::Value* arg = Value::GetLLVMObj(argv->Get(i));
       ArgsV.push_back(arg);
-      if (ArgsV.back() == 0) break; // XXX throw an exception here
+      if (ArgsV.back() == 0) abort(); // XXX throw an exception here
     }
 
     Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateCall(callee, ArgsV, *name));

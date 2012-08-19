@@ -23,6 +23,12 @@ _ejs_op_typeof (EJSValue* exp)
 }
 
 EJSValue*
+_ejs_op_delete (EJSValue* obj, EJSValue* prop)
+{
+  return _ejs_true;
+}
+
+EJSValue*
 _ejs_op_mod (EJSValue* lhs, EJSValue* rhs)
 {
   if (EJSVAL_IS_NUMBER(lhs)) {
@@ -76,6 +82,30 @@ _ejs_op_lt (EJSValue* lhs, EJSValue* rhs)
   if (EJSVAL_IS_NUMBER(lhs)) {
     if (EJSVAL_IS_NUMBER(rhs)) {
       return _ejs_boolean_new (EJSVAL_TO_NUMBER(lhs) < EJSVAL_TO_NUMBER(rhs));
+    }
+    else {
+      // need to call valueOf() on the object, or convert the string to a number
+      abort();
+    }
+  }
+  else if (EJSVAL_IS_STRING(lhs)) {
+    // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
+    abort();
+  }
+  else {
+    // object+... how does js implement this anyway?
+    abort();
+  }
+
+  return NULL;
+}
+
+EJSValue*
+_ejs_op_le (EJSValue* lhs, EJSValue* rhs)
+{
+  if (EJSVAL_IS_NUMBER(lhs)) {
+    if (EJSVAL_IS_NUMBER(rhs)) {
+      return _ejs_boolean_new (EJSVAL_TO_NUMBER(lhs) <= EJSVAL_TO_NUMBER(rhs));
     }
     else {
       // need to call valueOf() on the object, or convert the string to a number
@@ -167,8 +197,8 @@ _ejs_truthy (EJSValue* val)
 }
 
 EJSValue* _ejs_print;
-void
-_ejs_print_impl (EJSValue* env, int argc, EJSValue *val)
+EJSValue*
+_ejs_print_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue *val)
 {
   if (val == NULL) {
     printf ("(null)\n");
@@ -182,4 +212,5 @@ _ejs_print_impl (EJSValue* env, int argc, EJSValue *val)
   else {
     abort();
   }
+  return _ejs_undefined;
 }

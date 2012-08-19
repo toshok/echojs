@@ -5,7 +5,7 @@ debug = require 'debug'
 
 { Set } = require 'set'
 { NodeVisitor } = require 'nodevisitor'
-{ deep_copy_object, map, foldl } = require 'echo-util'
+{ genGlobalFunctionName, genAnonymousFunctionName, deep_copy_object, map, foldl } = require 'echo-util'
 
 decl_names = (arr) ->
         result = []
@@ -141,20 +141,9 @@ LocateEnvVisitor = class LocateEnvVisitor extends NodeVisitor
 class LambdaLift extends NodeVisitor
         constructor: (module) ->
                 super
-                @gen = 0
                 @functions = []
                 @mappings = []
 
-        genGlobalFunctionName: (x) ->
-                name =  "__ejs_function_#{x}#{@gen}"
-                @gen += 1
-                name
-
-        genAnonymousFunctionName: ->
-                name =  "__ejs_anonymous_#{@gen}"
-                @gen += 1
-                name
-        
         currentMapping: -> if @mappings.length > 0 then @mappings[0] else {}
 
         visitProgram: (program) ->
@@ -168,10 +157,10 @@ class LambdaLift extends NodeVisitor
                         n
                 else
                         if n.id?.name?
-                                global_name = @genGlobalFunctionName n.id.name
+                                global_name = util.genGlobalFunctionName n.id.name
                                 @currentMapping()[n.id.name] = global_name
                         else
-                                global_name = @genAnonymousFunctionName()
+                                global_name = genAnonymousFunctionName()
 
                         n.type = syntax.FunctionDeclaration
                         n.id =
@@ -187,6 +176,7 @@ class LambdaLift extends NodeVisitor
                         @mappings = @mappings.slice(1)
 
                         n.params.unshift create_identifier "%argc"
+                        n.params.unshift create_identifier "%this"
                         n.params.unshift create_identifier "%env_#{n.ejs_env.parent.id}"
                         
                         return {
@@ -388,11 +378,32 @@ class SubstituteVariables extends NodeVisitor
                 #   X (arg1, arg2, ...)
                 # 
                 # with
-                #   invokeClosure(X, %argCount, arg1, arg2, ...);
+                #   invokeClosure(X, %this, %argCount, arg1, arg2, ...);
 
                 arg_count = n.arguments.length
 
                 n.arguments.unshift { type: syntax.Literal, value: arg_count }
+                if n.callee.type is syntax.MemberExpression
+                        n.arguments.unshift @shallowCopy n.callee.object
+                else
+                        n.arguments.unshift { type: syntax.Identifier, name: "undefined" }
+                n.arguments.unshift n.callee
+                n.callee = create_identifier "%invokeClosure"
+                n
+
+        visitNewExpression: (n) ->
+                super
+
+                # we need to replace calls of the form:
+                #   new X (arg1, arg2, ...)
+                # 
+                # with
+                #   invokeClosure(X, %this, %argCount, arg1, arg2, ...);
+
+                arg_count = n.arguments.length
+
+                n.arguments.unshift { type: syntax.Literal, value: arg_count }
+                n.arguments.unshift { type: syntax.Literal, value: null } # this gets replaced during codegen
                 n.arguments.unshift n.callee
                 n.callee = create_identifier "%invokeClosure"
                 n
