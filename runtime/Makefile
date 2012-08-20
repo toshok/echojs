@@ -1,5 +1,6 @@
 
-SOURCES=object.c \
+SOURCES=array.c \
+	object.c \
 	ops.c \
 	init.c \
 	require.c \

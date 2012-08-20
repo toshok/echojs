@@ -15,6 +15,7 @@ typedef enum {
   EJSValueTypeArray
 } EJSValueType;
 
+
 typedef struct _EJSContext* EJSContext;
 
 typedef struct _EJSValue EJSValue;
@@ -28,26 +29,42 @@ typedef EJSValue* (*EJSClosureFunc1) (EJSValue* env, EJSValue* _this, int argc, 
 typedef EJSValue* (*EJSClosureFunc2) (EJSValue* env, EJSValue* _this, int argc, EJSValue* arg1, EJSValue* arg2);
 typedef EJSValue* (*EJSClosureFunc3) (EJSValue* env, EJSValue* _this, int argc, EJSValue* arg1, EJSValue* arg2, EJSValue* arg3);
 
+typedef struct {
+  EJSValue *proto;
+  EJSFieldMap* map;
+  EJSValue **fields;
+} EJSObject;
+
+typedef struct {
+  /* object header */
+  EJSValue *proto;
+  EJSFieldMap* map;
+  EJSValue **fields;
+
+  int array_length;
+  int array_alloc;
+  EJSValue **elements;
+} EJSArray;
+
+typedef struct {
+  /* object header */
+  EJSValue *proto;
+  EJSFieldMap* map;
+  EJSValue **fields;
+
+  EJSClosureFunc0 func; /* this will be cast to the right arity */
+  EJSClosureEnv* env;
+  EJSBool bound_this;
+  EJSValue *_this;
+} EJSClosure;
+
 struct _EJSValue {
   EJSValueType type;
 
   union {
-    // object members
-    struct {
-      EJSValue *proto;
-      EJSFieldMap* map;
-      EJSValue **fields;
-    } o;
-
-    // array members
-    struct {
-      EJSValue *proto;
-      EJSFieldMap* map;
-      EJSValue **fields;
-      int array_length;
-      int array_alloc;
-      EJSValue **elements;
-    } a;
+    EJSObject o;
+    EJSArray a;
+    EJSClosure closure;
 
     // number members
     struct {
@@ -64,14 +81,6 @@ struct _EJSValue {
     struct {
       EJSBool data;
     } b;
-
-    // closure members
-    struct {
-      EJSClosureFunc0 func; /* this will be cast to the right arity */
-      EJSClosureEnv* env;
-      EJSBool bound_this;
-      EJSValue *_this;
-    } closure;
   } u;
 };
 
@@ -94,7 +103,6 @@ struct _EJSValue {
 #define EJS_NUMBER_FORMAT "%g"
 
 EJSValue* _ejs_object_new (EJSValue *proto);
-EJSValue* _ejs_array_new (int numElements);
 EJSValue* _ejs_string_new_utf8 (const char* str);
 EJSValue* _ejs_number_new (double value);
 EJSValue* _ejs_boolean_new (EJSBool value);

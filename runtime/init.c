@@ -17,4 +17,6 @@ _ejs_init()
   _ejs_print = _ejs_closure_new (NULL, (EJSClosureFunc0)_ejs_print_impl);
   _ejs_require = _ejs_closure_new (NULL, (EJSClosureFunc0)_ejs_require_impl);
   _ejs_global = _ejs_object_new(NULL);
+
+  _ejs_array_init();
 }

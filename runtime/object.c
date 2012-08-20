@@ -4,6 +4,7 @@
 
 #include "object.h"
 #include "math.h"
+#include "array.h"
 
 // really terribly performing field maps
 struct _EJSFieldMap {
@@ -56,6 +57,9 @@ _ejs_array_new (int numElements)
 {
   EJSValue* rv = _ejs_object_new(NULL/* XXX should be array prototype*/);
   rv->type = EJSValueTypeArray;
+  rv->u.a.proto = _ejs_array_get_prototype();
+  rv->u.a.map = _ejs_fieldmap_new (8);
+  rv->u.a.fields = (EJSValue**)calloc(8, sizeof (EJSValue*));
   rv->u.a.array_length = 0;
   rv->u.a.array_alloc = numElements;
   rv->u.a.elements = (EJSValue**)calloc(rv->u.a.array_alloc, sizeof (EJSValue*));
@@ -98,6 +102,8 @@ _ejs_closure_new (EJSClosureEnv* env, EJSClosureFunc0 func)
 {
   EJSValue* rv = (EJSValue*)calloc(1, sizeof (EJSValue));
   rv->type = EJSValueTypeClosure;
+  rv->u.closure.map = _ejs_fieldmap_new (8);
+  rv->u.closure.fields = (EJSValue**)calloc(8, sizeof (EJSValue*));
   rv->u.closure.func = func;
   rv->u.closure.env = env;
   return rv;
@@ -185,10 +191,15 @@ _ejs_object_getprop (EJSValue* obj, EJSValue* key)
 
   int field_index = _ejs_fieldmap_lookup (obj->u.o.map, key->u.s.data, FALSE);
 
-  if (field_index == -1)
-    return _ejs_undefined;
-  else
+  if (field_index == -1) {
+    if (obj->u.o.proto)
+      return _ejs_object_getprop (obj->u.o.proto, key);
+    else
+      return _ejs_undefined;
+  }
+  else {
     return obj->u.o.fields[field_index];
+  }
 }
 
 EJSValue*
