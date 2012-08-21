@@ -15,9 +15,9 @@ run-tests: $(patsubst %.js,test-%,$(TESTS))
 test-%: echo-% %.ejs-out %.node-out
 	-@test_js=`echo $@|sed -e s,test-,,`; \
 	if cmp -s $$test_js.ejs-out $$test_js.node-out ; then \
-		echo SUCCESS; \
+		echo "\033[32mSUCCESS\033[0m"; \
 	else \
-		echo FAILURE; \
+		echo "\033[31mFAILURE\033[0m"; \
 		diff $$test_js.ejs-out $$test_js.node-out > $$test_js.diff; \
 	fi
 
