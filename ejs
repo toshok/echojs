@@ -76,7 +76,7 @@ files.forEach (filename) ->
               clang = spawn "clang", clang_args
               clang.stderr.on "data", (data) -> console.warn "#{data}"
               clang.on "exit", (code) ->
-                console.warn "done."
+                #console.warn "done."
 
 generate_require_map = ->
   sanitize = (filename, c_callable) ->
