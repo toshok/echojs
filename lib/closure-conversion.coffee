@@ -175,8 +175,6 @@ class LambdaLift extends NodeVisitor
                         n.body = @visit n.body
                         @mappings = @mappings.slice(1)
 
-                        n.params.unshift create_identifier "%argc"
-                        n.params.unshift create_identifier "%this"
                         n.params.unshift create_identifier "%env_#{n.ejs_env.parent.id}"
                         
                         return {
@@ -382,11 +380,6 @@ class SubstituteVariables extends NodeVisitor
 
                 arg_count = n.arguments.length
 
-                n.arguments.unshift { type: syntax.Literal, value: arg_count }
-                if n.callee.type is syntax.MemberExpression
-                        n.arguments.unshift @shallowCopy n.callee.object
-                else
-                        n.arguments.unshift { type: syntax.Identifier, name: "undefined" }
                 n.arguments.unshift n.callee
                 n.callee = create_identifier "%invokeClosure"
                 n
@@ -402,8 +395,6 @@ class SubstituteVariables extends NodeVisitor
 
                 arg_count = n.arguments.length
 
-                n.arguments.unshift { type: syntax.Literal, value: arg_count }
-                n.arguments.unshift { type: syntax.Literal, value: null } # this gets replaced during codegen
                 n.arguments.unshift n.callee
                 n.callee = create_identifier "%invokeClosure"
                 n

@@ -16,24 +16,25 @@ llvm = require 'llvm'
 PARENT_SCOPE_KEY = ":parent:"
 
 stringType = llvm.Type.getInt8Ty().pointerTo
-boolType = llvm.Type.getInt8Ty()
-voidType = llvm.Type.getVoidTy()
-int32Type = llvm.Type.getInt32Ty()
+boolType   = llvm.Type.getInt8Ty()
+voidType   = llvm.Type.getVoidTy()
+int32Type  = llvm.Type.getInt32Ty()
+int64Type  = llvm.Type.getInt64Ty()
 
 ejsValueType = llvm.StructType.create "EjsValue", [int32Type]
 
 EjsValueType = ejsValueType.pointerTo
 EjsClosureEnvType = EjsValueType
-EjsClosureFuncType = (llvm.FunctionType.get EjsValueType, [EjsClosureEnvType, llvm.Type.getInt32Ty()]).pointerTo
+EjsClosureFuncType = (llvm.FunctionType.get EjsValueType, [EjsClosureEnvType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType.pointerTo]).pointerTo
 
-BUILTIN_ARGS = [
-  { llvm_type: EjsClosureEnvType } # %env
-  { llvm_type: EjsValueType }      # %this
-  { llvm_type: int32Type }         # %argc
+BUILTIN_PARAMS = [
+  { type: syntax.Identifier, name: "%env",  llvm_type: EjsClosureEnvType }
+  { type: syntax.Identifier, name: "%this", llvm_type: EjsValueType }
+  { type: syntax.Identifier, name: "%argc", llvm_type: int32Type }
 ]
 
-takes_builtin = (n) ->
-        n.takes_builtin = true
+takes_builtins = (n) ->
+        n.takes_builtins = true
         n
         
 class LLVMIRVisitor extends NodeVisitor
@@ -42,10 +43,15 @@ class LLVMIRVisitor extends NodeVisitor
                 # build up our runtime method table
                 @builtins = {
                         invokeClosure: [
-                                takes_builtin module.getOrInsertExternalFunction "_ejs_invoke_closure_0", EjsValueType, EjsValueType, EjsValueType, llvm.Type.getInt32Ty()
-                                takes_builtin module.getOrInsertExternalFunction "_ejs_invoke_closure_1", EjsValueType, EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType
-                                takes_builtin module.getOrInsertExternalFunction "_ejs_invoke_closure_2", EjsValueType, EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType
-                                takes_builtin module.getOrInsertExternalFunction "_ejs_invoke_closure_3", EjsValueType, EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType
+                                null,
+                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_0", EjsValueType, EjsValueType, EjsValueType, llvm.Type.getInt32Ty()
+                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_1", EjsValueType, EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType
+                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_2", EjsValueType, EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType
+                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_3", EjsValueType, EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType
+                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_4", EjsValueType, EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType, EjsValueType
+                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_5", EjsValueType, EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType
+                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_6", EjsValueType, EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType
+                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_7", EjsValueType, EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType
                         ]
                         makeClosure: module.getOrInsertExternalFunction "_ejs_closure_new", EjsValueType, EjsClosureEnvType, EjsClosureFuncType
                 }
@@ -432,27 +438,42 @@ class LLVMIRVisitor extends NodeVisitor
 
 
                 allocas = []
-                i = 0
-                # store the arguments on the stack
-                for param in n.params
-                        debug.log "   param : #{param.name}"
+
+                # create allocas for the builtin args
+                for i in [0...BUILTIN_PARAMS.length]
+                        alloca = llvm.IRBuilder.createAlloca BUILTIN_PARAMS[i].llvm_type, "local_#{n.params[i].name}"
+                        new_scope[n.params[i].name] = alloca
+                        allocas.push alloca
+
+                # create an alloca to store our 'EJSValue** args' parameter, so we can pull the formal parameters out of it
+                args_alloca = llvm.IRBuilder.createAlloca EjsValueType.pointerTo, "local_%args"
+                allocas.push args_alloca
+
+                # now create allocas for the formal parameters
+                for param in n.params[BUILTIN_PARAMS.length..]
                         if param.type is syntax.Identifier
-                                allocas[i] = llvm.IRBuilder.createAlloca ir_func.type.getParamType(i), "local_#{param.name}"
-                                i += 1
+                                alloca = llvm.IRBuilder.createAlloca EjsValueType, "local_#{param.name}"
+                                new_scope[param.name] = alloca
+                                allocas.push alloca
                         else
                                 debug.log "we don't handle destructured args at the moment."
                                 throw "we don't handle destructured args at the moment."
 
-                i = 0
-                for param in n.params
-                        # store the allocas in the scope we're going to push onto the scope stack
-                        new_scope[param.name] = allocas[i]
+                # now store the arguments (use .. to include our args array) onto the stack
+                for i in [0..BUILTIN_PARAMS.length]
                         llvm.IRBuilder.createStore ir_args[i], allocas[i]
-                        i += 1
+
+
+                # now pull the named parameters from our args array
+                args_load = llvm.IRBuilder.createLoad args_alloca, "args_load"
+                for i in [BUILTIN_PARAMS.length+1..n.params.length]
+                        arg_ptr = llvm.IRBuilder.createGetElementPointer args_load, (llvm.Constant.getIntegerValue int32Type, i-BUILTIN_PARAMS.length-1), "arg#{i-BUILTIN_PARAMS.length-1}_ptr"
+                        arg = llvm.IRBuilder.createLoad arg_ptr, "arg#{i-BUILTIN_PARAMS.length-1}_load"
+                        llvm.IRBuilder.createStore arg, allocas[i]
 
                 body_bb = new llvm.BasicBlock "body", ir_func
                 llvm.IRBuilder.setInsertPoint body_bb
-
+                
                 # stacks of destinations used by continue and break, of the form [{label:..., dest:...}].
                 # 
                 #  when we see an unlabeled "break" or "continue" we insert a branch to the top bb
@@ -543,41 +564,43 @@ class LLVMIRVisitor extends NodeVisitor
 
                 rv
 
-        visitArgs: (callee, args, force_this) ->
+        visitArgs: (callee, args, thisArg) ->
                 argv = []
 
                 debug.log "args!!!!!!!!!!!!!!!!!!! #{args.length} of them"
-                
-                if callee.takes_builtin
-                        argv.push @visitOrNull args[0]        # % env
-                        argv.push if force_this then force_this else @visitOrUndefined args[1]   # %this
-                        argv.push llvm.Constant.getIntegerValue int32Type, args[2].value # argc
 
-                if argv.length < args.length
-                        for i in [argv.length...args.length]
-                                param_type = callee.type.getParamType(i)
-                                if param_type.toString() is "%EjsValue*"
-                                        argv.push @visitOrNull args[i]
-                                else if param_type.toString() is "%EjsClosureEnvType*"
-                                        argv.push @visitOrNull args[i]
-                                else if param_type.toString() is "i32"
-                                        argv.push llvm.Constant.getIntegerValue param_type, args[i].value # XXX this is a shitty way to do type conversion
-                                else if param_type.toString() is EjsClosureFuncType.toString()
-                                        f = @visit args[i] || throw "Internal error: callee should not be null"
-                                        argv.push llvm.IRBuilder.createPointerCast f, EjsClosureFuncType, "func_cast"
-                                else
-                                        throw "Unhandled case, param_type #{i} = #{param_type}"
+                args_offset = 0
+                if callee.takes_builtins
+                        argv.push @visitOrNull args[0]                                      # % env
+                        argv.push thisArg                                                   # %this
+                        argv.push llvm.Constant.getIntegerValue int32Type, args.length-1    # argc. subtract 1 for our use of args[0] above
+                        args_offset = 1 # we used args[0] already, so skip it in the loop below
+
+                debug.log "args_offset = #{args_offset}"
+                if args.length > args_offset
+                        argv.push @visitOrNull args[i] for i in [args_offset...args.length]
+
                 argv
                                 
         visitCallExpression: (n) ->
                 debug.log "visitCall #{JSON.stringify n}"
+                debug.log "          arguments length = #{n.arguments.length}"
+                debug.log "          arguments[#{i}] =  #{JSON.stringify n.arguments[i]}" for i in [0...n.arguments.length]
 
                 args = n.arguments
 
+                obj = @loadNullEjsValue()
+                
                 if n.callee.type is syntax.Identifier and n.callee.name[0] == '%'
+                        debug.log "builtin"
                         callee = @builtins[n.callee.name.slice(1)]
                         if callee.length  # replace with a better Array test
-                                callee = callee[n.arguments.length - BUILTIN_ARGS.length]
+                                callee = callee[n.arguments.length]
+                        if n.callee.name is "%invokeClosure"
+                                # hack to pull out the proper "this" if the closure is a member expression
+                                closure = args[0]
+                                if closure.type is syntax.MemberExpression
+                                        obj = @visit closure.object
                 else if n.callee.type is syntax.MemberExpression
                         debug.log "creating property load!"
                         obj = @visit n.callee.object
@@ -586,10 +609,10 @@ class LLVMIRVisitor extends NodeVisitor
                         callee = @visit n.callee
 
                 if not callee
-                        throw "Internal error: callee should not be null"
+                        throw "Internal error: callee should not be null in visitCallExpression"
 
                 # At this point we assume callee is a function object
-                argv = @visitArgs callee, args
+                argv = @visitArgs callee, args, obj
 
                 debug.log "done visiting args"
 
@@ -598,11 +621,6 @@ class LLVMIRVisitor extends NodeVisitor
                 # this isn't invalid in JS.  if argSize > args.length, the args are undefined.
                 # if argSize < args.length, the args are still passed
 
-                debug.log "callee == #{callee}"
-                debug.log "  argSize = #{callee.argSize}"
-                debug.log "  argv.length = #{argv.length}"
-                (debug.log "arg:  #{arg}") for arg in argv
-                
                 llvm.IRBuilder.createCall callee, argv, if callee.returnType and callee.returnType.isVoid() then "" else "calltmp"
                 
         visitNewExpression: (n) ->
@@ -611,7 +629,7 @@ class LLVMIRVisitor extends NodeVisitor
                 if n.callee.type is syntax.Identifier and n.callee.name[0] == '%'
                         ctor = @builtins[n.callee.name.slice(1)]
                         if ctor.length  # replace with a better Array test
-                                ctor = ctor[n.arguments.length - BUILTIN_ARGS.length]
+                                ctor = ctor[n.arguments.length]
                 else if n.callee.type is syntax.MemberExpression
                         debug.log "creating property load!"
                         ctor = @createPropertyLoad (@visit n.callee.object), n.callee.property, n.callee.computed
@@ -709,27 +727,24 @@ class AddFunctionsVisitor extends NodeVisitor
                 if n?.id?.name?
                         n.ir_name = n.id.name
 
-                debug.log "n.params.length is #{n.params.length}"
-                for param in n.params
-                        debug.log "   param : #{param.name}"
-                        param.llvm_type = EjsValueType
-                        
-                debug.log "BUILTIN_ARGS.length = #{BUILTIN_ARGS.length}"
+                # at this point point n.params includes %env as its first param, and is followed by all the formal parameters from the original
+                # script source.  we insert %this and %argc between these.  the LLVMIR phase later removes the actual formal parameters and
+                # adds the "EJSValue** args" array, loading the formal parameter values from that.
+                #
 
-                for i in [0...BUILTIN_ARGS.length]
-                        n.params[i].llvm_type = BUILTIN_ARGS[i].llvm_type
+                n.params[0].llvm_type = BUILTIN_PARAMS[0].llvm_type
+                n.params.splice 1, 0, BUILTIN_PARAMS[1]
+                n.params.splice 2, 0, BUILTIN_PARAMS[2]
+
+                # set the types of all later arguments to be EjsValueType
+                param.llvm_type = EjsValueType for param in n.params[BUILTIN_PARAMS.length..]
+
+                # the LLVMIR func we allocate takes the proper EJSValue** parameter in the 4th spot instead of all the parameters
+                n.ir_func = takes_builtins @module.getOrInsertFunction n.ir_name, EjsValueType, (param.llvm_type for param in BUILTIN_PARAMS).concat EjsValueType.pointerTo
                 
-                n.ir_func = takes_builtin @module.getOrInsertFunction n.ir_name, EjsValueType, (param.llvm_type for param in n.params)
-
                 ir_args = n.ir_func.args
-                i = 0
-                for param in n.params
-                        if param.type is syntax.Identifier
-                                ir_args[i].setName param.name
-                        else
-                                ir_args[i].setName "__ejs_destructured_param"
-                        i += 1
-
+                (ir_args[i].setName n.params[i].name) for i in [0...BUILTIN_PARAMS.length]
+                ir_args[BUILTIN_PARAMS.length].setName "%args"
 
                 # we don't need to recurse here since we won't have nested functions at this point
                 n
@@ -747,8 +762,6 @@ insert_toplevel_func = (tree, filename) ->
                         name: "_ejs_toplevel_#{sanitize filename}"
                 params: [
                         { type: syntax.Identifier, name: "%env" }
-                        { type: syntax.Identifier, name: "%this" }
-                        { type: syntax.Identifier, name: "%argc" }
                         { type: syntax.Identifier, name: "exports" }
                 ]
                 body:
@@ -756,8 +769,6 @@ insert_toplevel_func = (tree, filename) ->
                         body: tree.body
         tree.body = [toplevel]
         tree
-
-debug.setLevel 0
 
 exports.compile = (tree, filename) ->
 
@@ -778,5 +789,5 @@ exports.compile = (tree, filename) ->
 
         visitor = new LLVMIRVisitor module
         visitor.visit tree
-        
+
         module

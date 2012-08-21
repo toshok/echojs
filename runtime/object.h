@@ -19,26 +19,29 @@ typedef enum {
 typedef struct _EJSContext* EJSContext;
 
 typedef struct _EJSValue EJSValue;
-typedef struct _EJSFieldMap EJSFieldMap;
+typedef struct _EJSPropertyMap EJSPropertyMap;
 
 // for now we just build environments out of EJS objects
 typedef struct _EJSValue EJSClosureEnv;
 
-typedef EJSValue* (*EJSClosureFunc0) (EJSValue* env, EJSValue* _this, int argc);
-typedef EJSValue* (*EJSClosureFunc1) (EJSValue* env, EJSValue* _this, int argc, EJSValue* arg1);
-typedef EJSValue* (*EJSClosureFunc2) (EJSValue* env, EJSValue* _this, int argc, EJSValue* arg1, EJSValue* arg2);
-typedef EJSValue* (*EJSClosureFunc3) (EJSValue* env, EJSValue* _this, int argc, EJSValue* arg1, EJSValue* arg2, EJSValue* arg3);
+typedef EJSValue* (*EJSClosureFunc) (EJSValue* env, EJSValue* _this, int argc, EJSValue** args);
+
+typedef struct {
+  EJSBool configurable;
+  EJSBool writable;
+  EJSBool enumerable;
+} EJSPropertyDesc;
 
 typedef struct {
   EJSValue *proto;
-  EJSFieldMap* map;
+  EJSPropertyMap* map;
   EJSValue **fields;
 } EJSObject;
 
 typedef struct {
   /* object header */
   EJSValue *proto;
-  EJSFieldMap* map;
+  EJSPropertyMap* map;
   EJSValue **fields;
 
   int array_length;
@@ -49,10 +52,10 @@ typedef struct {
 typedef struct {
   /* object header */
   EJSValue *proto;
-  EJSFieldMap* map;
+  EJSPropertyMap* map;
   EJSValue **fields;
 
-  EJSClosureFunc0 func; /* this will be cast to the right arity */
+  EJSClosureFunc func;
   EJSClosureEnv* env;
   EJSBool bound_this;
   EJSValue *_this;
@@ -102,14 +105,13 @@ struct _EJSValue {
 
 #define EJS_NUMBER_FORMAT "%g"
 
-EJSValue* _ejs_object_new (EJSValue *proto);
 EJSValue* _ejs_string_new_utf8 (const char* str);
 EJSValue* _ejs_number_new (double value);
 EJSValue* _ejs_boolean_new (EJSBool value);
 
 EJSValue* _ejs_undefined_new ();
 
-EJSValue* _ejs_closure_new (EJSClosureEnv* env, EJSClosureFunc0 func);
+EJSValue* _ejs_closure_new (EJSClosureEnv* env, EJSClosureFunc func);
 
 EJSValue* _ejs_object_setprop (EJSValue* obj, EJSValue* key, EJSValue* value);
 EJSValue* _ejs_object_getprop (EJSValue* obj, EJSValue* key);
@@ -118,6 +120,10 @@ EJSValue* _ejs_invoke_closure_0 (EJSValue* closure, EJSValue* _this, int argc);
 EJSValue* _ejs_invoke_closure_1 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1);
 EJSValue* _ejs_invoke_closure_2 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1, EJSValue *arg2);
 EJSValue* _ejs_invoke_closure_3 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1, EJSValue *arg2, EJSValue *arg3);
+EJSValue* _ejs_invoke_closure_4 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1, EJSValue *arg2, EJSValue *arg3, EJSValue *arg4);
+EJSValue* _ejs_invoke_closure_5 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1, EJSValue *arg2, EJSValue *arg3, EJSValue *arg4, EJSValue *arg5);
+EJSValue* _ejs_invoke_closure_6 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1, EJSValue *arg2, EJSValue *arg3, EJSValue *arg4, EJSValue *arg5, EJSValue *arg6);
+EJSValue* _ejs_invoke_closure_7 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1, EJSValue *arg2, EJSValue *arg3, EJSValue *arg4, EJSValue *arg5, EJSValue *arg6, EJSValue *arg7);
 
 extern EJSValue* _ejs_undefined;
 extern EJSValue* _ejs_true;
@@ -125,5 +131,14 @@ extern EJSValue* _ejs_false;
 extern EJSValue* _ejs_global;
 
 void _ejs_dump_value (EJSValue* val);
+
+
+extern EJSValue* _ejs_Object;
+
+EJSValue* _ejs_object_new (EJSValue *proto);
+
+EJSValue* _ejs_object_get_prototype();
+
+void _ejs_object_init();
 
 #endif // _ejs_object_h_

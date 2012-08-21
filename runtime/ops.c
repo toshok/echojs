@@ -198,16 +198,20 @@ _ejs_truthy (EJSValue* val)
 
 EJSValue* _ejs_print;
 EJSValue*
-_ejs_print_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue *val)
+_ejs_print_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  if (val == NULL) {
+  if (argc < 1)
+    return _ejs_undefined;
+
+  EJSValue *arg = args[0];
+  if (arg == NULL) {
     printf ("(null)\n");
   }
-  else if (EJSVAL_IS_NUMBER(val)) {
-    printf (EJS_NUMBER_FORMAT "\n", val->u.n.data);
+  else if (EJSVAL_IS_NUMBER(arg)) {
+    printf (EJS_NUMBER_FORMAT "\n", arg->u.n.data);
   }
-  else if (EJSVAL_IS_STRING(val)) {
-    printf ("%s\n", val->u.s.data);
+  else if (EJSVAL_IS_STRING(arg)) {
+    printf ("%s\n", arg->u.s.data);
   }
   else {
     abort();
