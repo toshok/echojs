@@ -27,6 +27,7 @@ namespace jsllvm {
 #define LLVM_TYPE_METHOD(name) static v8::Handle<v8::Value> name(const v8::Arguments& args)
 
     LLVM_TYPE_METHOD(getDoubleTy);
+    LLVM_TYPE_METHOD(getInt64Ty);
     LLVM_TYPE_METHOD(getInt32Ty);
     LLVM_TYPE_METHOD(getInt8Ty);
     LLVM_TYPE_METHOD(getVoidTy);

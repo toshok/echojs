@@ -31,6 +31,8 @@ namespace jsllvm {
     NODE_SET_METHOD(s_func, "createAlloca", IRBuilder::CreateAlloca);
     NODE_SET_METHOD(s_func, "createLoad", IRBuilder::CreateLoad);
     NODE_SET_METHOD(s_func, "createStore", IRBuilder::CreateStore);
+    NODE_SET_METHOD(s_func, "createExtractElement", IRBuilder::CreateExtractElement);
+    NODE_SET_METHOD(s_func, "createGetElementPointer", IRBuilder::CreateGetElementPointer);
     NODE_SET_METHOD(s_func, "createICmpEq", IRBuilder::CreateICmpEq);
     NODE_SET_METHOD(s_func, "createCondBr", IRBuilder::CreateCondBr);
     NODE_SET_METHOD(s_func, "createBr", IRBuilder::CreateBr);
@@ -170,6 +172,30 @@ namespace jsllvm {
     REQ_LLVM_VAL_ARG(1, ptr);
 
     Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateStore(val,ptr));
+    return scope.Close(result);
+  }
+
+  v8::Handle<v8::Value> IRBuilder::CreateExtractElement(const v8::Arguments& args)
+  {
+    HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(0, val);
+    REQ_LLVM_VAL_ARG(1, idx);
+    REQ_UTF8_ARG(2, name);
+
+    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateExtractElement(val,idx, *name));
+    return scope.Close(result);
+  }
+
+  v8::Handle<v8::Value> IRBuilder::CreateGetElementPointer(const v8::Arguments& args)
+  {
+    HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(0, val);
+    REQ_LLVM_VAL_ARG(1, idx);
+    REQ_UTF8_ARG(2, name);
+
+    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateGEP(val,idx, *name));
     return scope.Close(result);
   }
 
