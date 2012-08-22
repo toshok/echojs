@@ -62,8 +62,6 @@ class LLVMIRVisitor extends NodeVisitor
                         number_new:       module.getOrInsertExternalFunction "_ejs_number_new", EjsValueType, llvm.Type.getDoubleTy()
                         boolean_new:      module.getOrInsertExternalFunction "_ejs_boolean_new", EjsValueType, boolType
                         string_new_utf8:  module.getOrInsertExternalFunction "_ejs_string_new_utf8", EjsValueType, stringType
-                        print:            module.getOrInsertGlobal "_ejs_print", EjsValueType
-                        require:          module.getOrInsertGlobal "_ejs_require", EjsValueType
                         undefined:        module.getOrInsertGlobal "_ejs_undefined", EjsValueType
                         global:           module.getOrInsertGlobal "_ejs_global", EjsValueType
                         "unop!":          module.getOrInsertExternalFunction "_ejs_op_not", EjsValueType, EjsValueType
@@ -595,7 +593,7 @@ class LLVMIRVisitor extends NodeVisitor
 
                 args = n.arguments
 
-                obj = @loadNullEjsValue()
+                obj = @loadUndefinedEjsValue()
                 
                 if n.callee.type is syntax.Identifier and n.callee.name[0] == '%'
                         debug.log "builtin"
