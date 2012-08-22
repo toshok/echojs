@@ -417,12 +417,12 @@ class LLVMIRVisitor extends NodeVisitor
                 # to be reflected in jsllvm.cpp too).  maybe we can pass the names to this method and it can do it all
                 # there?
 
-                debug.log param.llvm_type for param in n.params
-
                 ir_func = n.ir_func
                 ir_args = n.ir_func.args
+                debug.log ""
                 debug.log "ir_func = #{ir_func}"
-                debug.log "params = #{n.params.length}"
+
+                debug.log "param #{param.llvm_type} #{param.name}" for param in n.params
 
                 @currentFunction = ir_func
 
@@ -459,17 +459,23 @@ class LLVMIRVisitor extends NodeVisitor
                                 debug.log "we don't handle destructured args at the moment."
                                 throw "we don't handle destructured args at the moment."
 
+                debug.log "alloca #{alloca}" for alloca in allocas
+                
                 # now store the arguments (use .. to include our args array) onto the stack
                 for i in [0..BUILTIN_PARAMS.length]
-                        llvm.IRBuilder.createStore ir_args[i], allocas[i]
-
+                        store = llvm.IRBuilder.createStore ir_args[i], allocas[i]
+                        debug.log "store #{store} *builtin"
 
                 # now pull the named parameters from our args array
                 args_load = llvm.IRBuilder.createLoad args_alloca, "args_load"
-                for i in [BUILTIN_PARAMS.length+1..n.params.length]
-                        arg_ptr = llvm.IRBuilder.createGetElementPointer args_load, (llvm.Constant.getIntegerValue int32Type, i-BUILTIN_PARAMS.length-1), "arg#{i-BUILTIN_PARAMS.length-1}_ptr"
-                        arg = llvm.IRBuilder.createLoad arg_ptr, "arg#{i-BUILTIN_PARAMS.length-1}_load"
-                        llvm.IRBuilder.createStore arg, allocas[i]
+                if n.params.length > BUILTIN_PARAMS.length
+                        for i in [BUILTIN_PARAMS.length...n.params.length]
+                                debug.log "user param #{n.params[i].name}"
+                                arg_ptr = llvm.IRBuilder.createGetElementPointer args_load, (llvm.Constant.getIntegerValue int32Type, i-BUILTIN_PARAMS.length), "arg#{i-BUILTIN_PARAMS.length}_ptr"
+                                debug.log "arg_ptr = #{arg_ptr}"
+                                arg = llvm.IRBuilder.createLoad arg_ptr, "arg#{i-BUILTIN_PARAMS.length-1}_load"
+                                store = llvm.IRBuilder.createStore arg, allocas[i+1]
+                                debug.log "store #{store}"
 
                 body_bb = new llvm.BasicBlock "body", ir_func
                 llvm.IRBuilder.setInsertPoint body_bb
@@ -496,7 +502,7 @@ class LLVMIRVisitor extends NodeVisitor
                 @currentFunction = null
 
                 llvm.IRBuilder.setInsertPoint insertBlock
-
+                
                 return ir_func
 
         visitUnaryExpression: (n) ->
@@ -774,8 +780,11 @@ exports.compile = (tree, filename) ->
 
         tree = insert_toplevel_func tree, filename
 
-        tree = desugar tree
-                
+        #tree = desugar tree
+        #debug.setLevel 0
+        #debug.log -> escodegen.generate tree
+        #debug.setLevel 0
+        
         tree = closure_conversion.convert tree
 
         debug.log -> escodegen.generate tree

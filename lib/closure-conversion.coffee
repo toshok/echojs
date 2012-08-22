@@ -150,7 +150,7 @@ class LambdaLift extends NodeVisitor
                 super
                 program.body = @functions.concat program.body
                 program
-                
+                        
         visitFunction: (n) ->
                 if n.type is syntax.FunctionDeclaration
                         n.body = @visit n.body
