@@ -71,7 +71,7 @@ echo-%:
 %.node-out: %.js
 	@node $< > $@
 
-%.js.exe: %.js
+%.js.exe: %.js $(TOPDIR)/runtime/libecho.a
 	-@NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $<
 
 v8-%.js.exe: v8/%.js
@@ -80,8 +80,8 @@ v8-%.js.exe: v8/%.js
 run-node:
 	NODE_PATH=$(NODE_PATH) node
 
-set.js: ../lib/set.coffee
-	@NODE_PATH=$(NODE_PATH):. coffee -b -c -o . ../lib/set.coffee
+set.js: $(TOPDIR)/lib/set.coffee
+	@NODE_PATH=$(NODE_PATH):. coffee -b -c -o . $(TOPDIR)/lib/set.coffee
 
 self-test: set.js.exe
 	./set.js.exe

@@ -10,13 +10,17 @@ SOURCES= \
 
 OBJECTS=$(SOURCES:%.c=%.o)
 
-CFLAGS=-I. -Wall -g -O0
+CFLAGS=-I. -Wall -g -O2
 
 libecho.a: $(OBJECTS)
 	$(AR) cru $@ $(OBJECTS)
 
-test: $(OBJECTS)
-	$(CC) -o $@ $(OBJECTS)
+$(OBJECTS): %.o: %.c
+	@mkdir -p .deps
+	@$(CC) -MM $(CFLAGS) $< > .deps/$@-deps
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
 	rm -f test $(OBJECTS)
+
+-include $(patsubst %.o,.deps/%.o-deps,$(OBJECTS))
