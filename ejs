@@ -1,5 +1,6 @@
 #!/usr/bin/env coffee
 
+path = require 'path'
 fs = require 'fs'
 esprima = require 'esprima'
 compiler = require 'compiler'
@@ -71,7 +72,7 @@ files.forEach (filename) ->
 
               clang_args = ["-o", options.output_filename || "#{files[0]}.exe"].concat s_filenames
               clang_args.push map_filename
-              clang_args.push "../runtime/libecho.a"
+              clang_args.push path.resolve (path.dirname process.argv[1]), "runtime/libecho.a"
 
               clang = spawn "clang", clang_args
               clang.stderr.on "data", (data) -> console.warn "#{data}"
