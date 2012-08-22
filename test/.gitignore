@@ -5,3 +5,10 @@ terminal.js
 llvm-test.js
 set.js
 *.diff
+*.ejs-out
+*.node-out
+.failures
+.successes
+.xfail
+.xsuccess
+.expected-failures
