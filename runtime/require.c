@@ -1,11 +1,12 @@
 #include "ejs.h"
 #include "object.h"
 #include "require.h"
+#include "value.h"
 
 extern EJSRequire _ejs_require_map[];
 
 EJSValue* _ejs_require;
-EJSValue*
+static EJSValue*
 _ejs_require_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
   if (argc < 1)
@@ -33,4 +34,11 @@ _ejs_require_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
   }
 
   return NULL;
+}
+
+void
+_ejs_require_init(EJSValue* global)
+{
+  _ejs_require = _ejs_closure_new (NULL, _ejs_require_impl);
+  _ejs_object_setprop (global, _ejs_string_new_utf8("require"), _ejs_require);
 }

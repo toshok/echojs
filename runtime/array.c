@@ -1,5 +1,6 @@
 #include <assert.h>
 
+#include "value.h"
 #include "array.h"
 
 EJSValue* _ejs_Array;
@@ -48,7 +49,7 @@ _ejs_array_get_prototype()
 }
 
 void
-_ejs_array_init()
+_ejs_array_init(EJSValue *global)
 {
   _ejs_Array = _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Array_impl);
   _ejs_Array_proto = _ejs_object_new(NULL);
@@ -57,4 +58,6 @@ _ejs_array_init()
   _ejs_object_setprop (_ejs_Array_proto, _ejs_string_new_utf8("prototype"),  _ejs_object_get_prototype());
   _ejs_object_setprop (_ejs_Array_proto, _ejs_string_new_utf8("push"),       _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_push));
   _ejs_object_setprop (_ejs_Array_proto, _ejs_string_new_utf8("pop"),        _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_pop));
+
+  _ejs_object_setprop (global, _ejs_string_new_utf8("Array"), _ejs_Array);
 }

@@ -2,6 +2,7 @@
 #include <string.h>
 #include <assert.h>
 
+#include "value.h"
 #include "object.h"
 #include "math.h"
 #include "array.h"
@@ -101,7 +102,7 @@ EJSValue*
 _ejs_closure_new (EJSClosureEnv* env, EJSClosureFunc func)
 {
   EJSValue* rv = (EJSValue*)calloc(1, sizeof (EJSValue));
-  rv->type = EJSValueTypeClosure;
+  rv->type = EJSValueTypeFunction;
   rv->u.closure.map = _ejs_propertymap_new (8);
   rv->u.closure.fields = (EJSValue**)calloc(8, sizeof (EJSValue*));
   rv->u.closure.func = func;
@@ -322,7 +323,7 @@ _ejs_object_get_prototype()
 }
 
 void
-_ejs_object_init()
+_ejs_object_init(EJSValue *global)
 {
   _ejs_Object = _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Object_impl);
   _ejs_Object_proto = _ejs_object_new(NULL);
@@ -330,4 +331,6 @@ _ejs_object_init()
   _ejs_object_setprop (_ejs_Object,       _ejs_string_new_utf8("prototype"),  _ejs_Object_proto);
   _ejs_object_setprop (_ejs_Object_proto, _ejs_string_new_utf8("prototype"),  NULL);
   _ejs_object_setprop (_ejs_Object_proto, _ejs_string_new_utf8("toString"),   _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Object_prototype_toString));
+
+  _ejs_object_setprop (global, _ejs_string_new_utf8("Object"), _ejs_Object);
 }

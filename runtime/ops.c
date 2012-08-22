@@ -1,4 +1,5 @@
 #include "ejs.h"
+#include "value.h"
 #include "object.h"
 #include "ops.h"
 #include "math.h"

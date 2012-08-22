@@ -4,6 +4,7 @@ SOURCES=array.c \
 	ops.c \
 	init.c \
 	require.c \
+	string.c \
 	main.c
 
 OBJECTS=$(SOURCES:%.c=%.o)
