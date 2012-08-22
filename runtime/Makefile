@@ -1,10 +1,11 @@
 
-SOURCES=array.c \
-	object.c \
-	ops.c \
-	init.c \
-	require.c \
-	string.c \
+SOURCES= \
+	ejs-array.c \
+	ejs-init.c \
+	ejs-object.c \
+	ejs-ops.c \
+	ejs-require.c \
+	ejs-string.c \
 	main.c
 
 OBJECTS=$(SOURCES:%.c=%.o)
@@ -19,5 +20,3 @@ test: $(OBJECTS)
 
 clean:
 	rm -f test $(OBJECTS)
-
-$(OBJECTS): %.o: object.h ejs.h ops.h

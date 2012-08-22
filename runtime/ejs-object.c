@@ -1,11 +1,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <math.h>
 
-#include "value.h"
-#include "object.h"
-#include "math.h"
-#include "array.h"
+#include "ejs-value.h"
+#include "ejs-object.h"
+#include "ejs-array.h"
 
 // really terribly performing property maps
 struct _EJSPropertyMap {

@@ -1,8 +1,8 @@
 #include "ejs.h"
-#include "ops.h"
-#include "require.h"
-#include "array.h"
-#include "value.h"
+#include "ejs-ops.h"
+#include "ejs-require.h"
+#include "ejs-array.h"
+#include "ejs-value.h"
 #include "ejs-string.h"
 
 EJSValue* _ejs_undefined;

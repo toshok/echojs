@@ -3,9 +3,9 @@
 #define _ejs_value_h
 
 #include "ejs.h"
-#include "object.h"
-#include "array.h"
-#include "function.h"
+#include "ejs-object.h"
+#include "ejs-array.h"
+#include "ejs-function.h"
 
 typedef enum {
   // the primitives

@@ -1,7 +1,7 @@
 #include <assert.h>
 
-#include "value.h"
-#include "array.h"
+#include "ejs-value.h"
+#include "ejs-array.h"
 
 EJSValue* _ejs_Array;
 static EJSValue*

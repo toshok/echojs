@@ -3,7 +3,7 @@
 #define _ejs_require_h
 
 #include "ejs.h"
-#include "function.h"
+#include "ejs-function.h"
 
 typedef struct {
   const char* name;

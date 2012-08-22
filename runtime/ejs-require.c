@@ -1,7 +1,7 @@
 #include "ejs.h"
-#include "object.h"
-#include "require.h"
-#include "value.h"
+#include "ejs-object.h"
+#include "ejs-require.h"
+#include "ejs-value.h"
 
 extern EJSRequire _ejs_require_map[];
 

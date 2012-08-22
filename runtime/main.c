@@ -1,7 +1,7 @@
 #include "ejs.h"
-#include "value.h"
-#include "require.h"
-#include "function.h"
+#include "ejs-value.h"
+#include "ejs-require.h"
+#include "ejs-function.h"
 
 extern const char *entry_filename;
 

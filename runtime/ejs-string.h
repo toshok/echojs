@@ -1,7 +1,7 @@
 #ifndef _ejs_string_h_
 #define _ejs_string_h_
 
-#include "object.h"
+#include "ejs-object.h"
 
 typedef struct {
   /* object header */

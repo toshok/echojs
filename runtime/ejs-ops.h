@@ -3,7 +3,7 @@
 #define _ejs_ops_h
 
 #include "ejs.h"
-#include "object.h"
+#include "ejs-object.h"
 
 EJSValue* _ejs_op_not (EJSValue* exp);
 EJSValue* _ejs_op_typeof (EJSValue* exp);
