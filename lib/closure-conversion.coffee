@@ -23,6 +23,13 @@ collect_decls = (body) ->
        statement for statement in body when statement.type is syntax.VariableDeclaration or statement.type is syntax.FunctionDeclaration
 
 # TODO: convert this to a visitor
+free_blocklike = (exp,body) ->
+        decls = decl_names collect_decls body
+        uses = Set.union.apply null, map free, body
+        exp.ejs_decls = decls
+        exp.ejs_free_vars = uses.subtract decls
+        exp.ejs_free_vars
+        
 free = (exp) ->
         if not exp?
                 return new Set
@@ -42,19 +49,21 @@ free = (exp) ->
                         exp.ejs_free_vars
                 when syntax.LabeledStatement then free exp.body
                 when syntax.BlockStatement
-                        decls = decl_names collect_decls exp.body
-                        uses = Set.union.apply null, map free, exp.body
-                        exp.ejs_decls = decls
-                        exp.ejs_free_vars = uses.subtract decls
-                        exp.ejs_free_vars
+                        free_blocklike exp, exp.body
+                when syntax.TryStatement        then Set.union.apply null, [(free exp.block)].concat (map free, exp.handlers)
                 when syntax.CatchClause         then (free exp.body).subtract (new Set [exp.param.name])
                 when syntax.VariableDeclaration then Set.union.apply null, (map free, exp.declarations)
                 when syntax.VariableDeclarator  then free exp.init
                 when syntax.ExpressionStatement then free exp.expression
                 when syntax.Identifier          then new Set [exp.name]
+                when syntax.ThrowStatement      then free exp.argument
                 when syntax.ForStatement        then Set.union.apply null, (map free, [exp.init, exp.test, exp.update, exp.body])
                 when syntax.ForInStatement      then Set.union.apply null, (map free, [exp.left, exp.right, exp.body])
                 when syntax.WhileStatement      then Set.union.apply null, (map free, [exp.test, exp.body])
+                when syntax.SwitchStatement     then Set.union.apply null, [(free exp.discriminant)].concat (map free, exp.cases)
+                when syntax.SwitchCase
+                        free_blocklike exp, exp.consequent
+                when syntax.EmptyStatement      then new Set
                 when syntax.BreakStatement      then new Set
                 when syntax.ContinueStatement   then new Set
                 when syntax.UpdateExpression    then free exp.argument
@@ -69,9 +78,10 @@ free = (exp) ->
                 when syntax.ConditionalExpression then Set.union.apply null, [(free exp.test), (free exp.cconsequent), free (exp.alternate)]
                 when syntax.Literal             then new Set
                 when syntax.ThisExpression      then new Set
+                when syntax.Property            then free exp.value # we skip the key
                 when syntax.ObjectExpression
                         return new Set if exp.properties.length is 0
-                        Set.union.apply null, map free (p.value for p in exp.properties)
+                        Set.union.apply null, map free, (p.value for p in exp.properties)
                 when syntax.ArrayExpression
                         return new Set if exp.elements.length is 0
                         Set.union.apply null, map free, exp.elements
@@ -102,15 +112,27 @@ LocateEnvVisitor = class LocateEnvVisitor extends NodeVisitor
                 @env_id += 1
                 n.ejs_env = new_env
                 @envs.unshift new_env
-                super
+                # don't visit the parameters for the same reason we don't visit the id's of variable declarators below:
+                # we don't want a function to look like:  function foo (%env_1.x) { }
+                # instead of                              function foo (x) { }
+                n.body = @visit n.body
                 @envs = @envs.slice 1
                 n
 
         visitVariableDeclarator: (n) ->
+                # don't visit the id, as that will cause us to mark it ejs_substitute = true, and we'll end up with things like:
+                #   var %env_1.x = blah
+                # instead of what we want:
+                #   var x = blah
                 # we override this because we don't want to visit the id, just the initializer
                 n.init = @visit n.init
                 n
 
+        visitProperty: (n) ->
+                # we don't visit property keys here
+                n.value = @visit n.value
+                n
+        
         visitIdentifier: (n) ->
                 # find the environment in the env-stack that includes this variable's decl.  add it to the env's .closed set.
                 current_env = @envs[0]
@@ -195,12 +217,11 @@ class SubstituteVariables extends NodeVisitor
         
         visitIdentifier: (n) ->
                 if n.ejs_substitute?
-                        a = @currentMapping()[n.name]
-                        if not a
+                        if not @currentMapping().hasOwnProperty n.name
                                 debug.log "missing mapping for #{n.name}"
                                 throw "InternalError 2"
 
-                        return a
+                        return @currentMapping()[n.name]
                 n
 
         visitFor: (n) ->
@@ -226,8 +247,7 @@ class SubstituteVariables extends NodeVisitor
                 rv = []
                 for decl in n.declarations
                         decl.init = @visit decl.init
-                        a = @currentMapping()[decl.id.name]
-                        if a?
+                        if @currentMapping().hasOwnProperty decl.id.name
                                 rv.push {
                                         type: syntax.ExpressionStatement,
                                         expression:
@@ -407,7 +427,7 @@ exports.convert = (tree) ->
 
         # first we decorate the tree with free variable usage
         free tree
-
+        
         # traverse the tree accumulating info about which function level defined a given variable.
         locate_envs = new LocateEnvVisitor
         tree2 = locate_envs.visit tree

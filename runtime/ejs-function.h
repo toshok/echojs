@@ -3,6 +3,7 @@
 #define _ejs_function_h_
 
 #include "ejs.h"
+#include "ejs-object.h"
 
 // for now we just build environments out of EJS objects
 typedef struct _EJSValue EJSClosureEnv;
@@ -32,8 +33,14 @@ EJSValue* _ejs_invoke_closure_4 (EJSValue* closure, EJSValue* _this, int argc, E
 EJSValue* _ejs_invoke_closure_5 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1, EJSValue *arg2, EJSValue *arg3, EJSValue *arg4, EJSValue *arg5);
 EJSValue* _ejs_invoke_closure_6 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1, EJSValue *arg2, EJSValue *arg3, EJSValue *arg4, EJSValue *arg5, EJSValue *arg6);
 EJSValue* _ejs_invoke_closure_7 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1, EJSValue *arg2, EJSValue *arg3, EJSValue *arg4, EJSValue *arg5, EJSValue *arg6, EJSValue *arg7);
+EJSValue* _ejs_invoke_closure_8 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1, EJSValue *arg2, EJSValue *arg3, EJSValue *arg4, EJSValue *arg5, EJSValue *arg6, EJSValue *arg7, EJSValue *arg8);
+EJSValue* _ejs_invoke_closure_9 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1, EJSValue *arg2, EJSValue *arg3, EJSValue *arg4, EJSValue *arg5, EJSValue *arg6, EJSValue *arg7, EJSValue *arg8, EJSValue *arg9);
+EJSValue* _ejs_invoke_closure_10 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1, EJSValue *arg2, EJSValue *arg3, EJSValue *arg4, EJSValue *arg5, EJSValue *arg6, EJSValue *arg7, EJSValue *arg8, EJSValue *arg9, EJSValue *arg10);
 
-EJSValue* _ejs_closure_new (EJSClosureEnv* env, EJSClosureFunc func);
+extern EJSValue* _ejs_closure_new (EJSClosureEnv* env, EJSClosureFunc func);
 
+extern EJSValue* _ejs_Function;
+extern EJSValue* _ejs_function_get_prototype();
+extern void _ejs_function_init(EJSValue *global);
 
 #endif

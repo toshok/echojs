@@ -18,6 +18,8 @@ typedef struct {
   EJSValue **fields;
 } EJSObject;
 
+EJSPropertyMap* _ejs_propertymap_new (int initial_allocation);
+int _ejs_propertymap_lookup (EJSPropertyMap *map, char *name, EJSBool add_if_not_found);
 
 EJSValue* _ejs_object_setprop (EJSValue* obj, EJSValue* key, EJSValue* value);
 EJSValue* _ejs_object_getprop (EJSValue* obj, EJSValue* key);

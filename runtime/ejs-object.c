@@ -48,8 +48,8 @@ _ejs_object_new (EJSValue *proto)
   EJSValue* rv = (EJSValue*)calloc(1, sizeof (EJSValue));
   rv->type = EJSValueTypeObject;
   rv->u.a.proto = proto ? proto : _ejs_object_get_prototype();
-  rv->u.o.map = _ejs_propertymap_new (8);
-  rv->u.o.fields = (EJSValue**)calloc(8, sizeof (EJSValue*));
+  rv->u.o.map = _ejs_propertymap_new (40);
+  rv->u.o.fields = (EJSValue**)calloc(40, sizeof (EJSValue*));
   return rv;
 }
 
@@ -59,10 +59,10 @@ _ejs_array_new (int numElements)
   EJSValue* rv = _ejs_object_new(NULL/* XXX should be array prototype*/);
   rv->type = EJSValueTypeArray;
   rv->u.a.proto = _ejs_array_get_prototype();
-  rv->u.a.map = _ejs_propertymap_new (8);
-  rv->u.a.fields = (EJSValue**)calloc(8, sizeof (EJSValue*));
+  rv->u.a.map = _ejs_propertymap_new (40);
+  rv->u.a.fields = (EJSValue**)calloc(40, sizeof (EJSValue*));
   rv->u.a.array_length = 0;
-  rv->u.a.array_alloc = numElements;
+  rv->u.a.array_alloc = numElements + 40;
   rv->u.a.elements = (EJSValue**)calloc(rv->u.a.array_alloc, sizeof (EJSValue*));
   return rv;
 }
@@ -95,18 +95,6 @@ _ejs_boolean_new (EJSBool value)
   EJSValue* rv = (EJSValue*)calloc(1, sizeof (EJSValue));
   rv->type = EJSValueTypeBoolean;
   rv->u.b.data = value;
-  return rv;
-}
-
-EJSValue*
-_ejs_closure_new (EJSClosureEnv* env, EJSClosureFunc func)
-{
-  EJSValue* rv = (EJSValue*)calloc(1, sizeof (EJSValue));
-  rv->type = EJSValueTypeFunction;
-  rv->u.closure.map = _ejs_propertymap_new (8);
-  rv->u.closure.fields = (EJSValue**)calloc(8, sizeof (EJSValue*));
-  rv->u.closure.func = func;
-  rv->u.closure.env = env;
   return rv;
 }
 
@@ -159,6 +147,11 @@ _ejs_object_setprop (EJSValue* obj, EJSValue* key, EJSValue* value)
 EJSValue*
 _ejs_object_getprop (EJSValue* obj, EJSValue* key)
 {
+  if (!obj) {
+    printf ("attempt to get property '%s' on null object.\n", EJSVAL_TO_STRING(key));
+    return _ejs_undefined; // XXX this should really throw an exception
+  }
+
   if (EJSVAL_IS_PRIMITIVE(obj)) {
     printf ("getprop on primitive.  returning undefined\n");
     return _ejs_undefined;
@@ -263,6 +256,30 @@ _ejs_invoke_closure_7 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* a
 {
   assert (EJSVAL_IS_CLOSURE(closure));
   EJSValue *args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7 };
+  return closure->u.closure.func (closure->u.closure.env, _this, argc, args);
+}
+
+EJSValue*
+_ejs_invoke_closure_8 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* arg1, EJSValue* arg2, EJSValue* arg3, EJSValue* arg4, EJSValue* arg5, EJSValue* arg6, EJSValue* arg7, EJSValue* arg8)
+{
+  assert (EJSVAL_IS_CLOSURE(closure));
+  EJSValue *args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8 };
+  return closure->u.closure.func (closure->u.closure.env, _this, argc, args);
+}
+
+EJSValue*
+_ejs_invoke_closure_9 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* arg1, EJSValue* arg2, EJSValue* arg3, EJSValue* arg4, EJSValue* arg5, EJSValue* arg6, EJSValue* arg7, EJSValue* arg8, EJSValue* arg9)
+{
+  assert (EJSVAL_IS_CLOSURE(closure));
+  EJSValue *args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9 };
+  return closure->u.closure.func (closure->u.closure.env, _this, argc, args);
+}
+
+EJSValue*
+_ejs_invoke_closure_10 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* arg1, EJSValue* arg2, EJSValue* arg3, EJSValue* arg4, EJSValue* arg5, EJSValue* arg6, EJSValue* arg7, EJSValue* arg8, EJSValue* arg9, EJSValue* arg10)
+{
+  assert (EJSVAL_IS_CLOSURE(closure));
+  EJSValue *args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10 };
   return closure->u.closure.func (closure->u.closure.env, _this, argc, args);
 }
 

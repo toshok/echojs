@@ -32,7 +32,7 @@ module = new llvm.Module "test_module"
 assert.eq "module1", "#{module}", "; ModuleID = 'test_module'"
 
 # add an extern reference to 'int puts(char*)' to the module
-puts = module.getOrInsertExternalFunction "puts", llvm.Type.getInt32Ty(), llvm.Type.getInt8Ty().pointerTo
+puts = module.getOrInsertExternalFunction "puts", llvm.Type.getInt32Ty(), [llvm.Type.getInt8Ty().pointerTo]
 
 assert.eq "module-extern-func", "#{module}", "; ModuleID = 'test_module'\n\ndeclare i32 @puts(i8*)"
 

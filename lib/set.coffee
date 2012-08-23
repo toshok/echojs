@@ -45,19 +45,19 @@ exports.Set = class Set
 
 # Set tests
 
-# s1 = new Set [1, 2, 3, 4]
-# s2 = new Set [5, 6, 7, 8]
+s1 = new Set [1, 2, 3, 4]
+s2 = new Set [5, 6, 7, 8]
 
 # console.log "should be { 1 2 3 4 5 6 7 8 }:    #{(s1.union s2).toString()}"
 
 
-# s3 = new Set [1, 2, 3, 4, 5, 6, 7, 8]
-# s4 = new Set [5, 6, 7, 8]
+s3 = new Set [1, 2, 3, 4, 5, 6, 7, 8]
+s4 = new Set [5, 6, 7, 8]
 
 # console.log "should be { 1 2 3 4 }:    #{(s3.subtract s4).toString()}"
 
-# s5 = new Set [1, 2, 3, 4];
-# s6 = new Set [3, 4, 5];
+s5 = new Set [1, 2, 3, 4];
+s6 = new Set [3, 4, 5];
 
 # console.log "should be { 3 4 }:    #{(s5.intersect s6).toString()}"
 

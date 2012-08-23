@@ -36,16 +36,20 @@ if files.length is 0
 files_remaining = files.length
 s_filenames = []
 
+base_filenames = (path.basename file for file in files)
+
 files.forEach (filename) ->
     content = fs.readFileSync filename, 'utf-8'
-    parse_tree = esprima.parse content
-    compiled_module = compiler.compile parse_tree, filename
+    parse_tree = esprima.parse content, loc: true, raw: true
 
-    ll_filename = "/tmp/#{filename}.ll"
-    bc_filename = "/tmp/#{filename}.bc"
-    bc_opt_filename = "/tmp/#{filename}.bc.opt"
-    ll_opt_filename = "/tmp/#{filename}.ll.opt"
-    s_filename = "/tmp/#{filename}.s"
+    base_filename = path.basename filename
+    compiled_module = compiler.compile parse_tree, base_filename
+
+    ll_filename = "/tmp/#{base_filename}.ll"
+    bc_filename = "/tmp/#{base_filename}.bc"
+    bc_opt_filename = "/tmp/#{base_filename}.bc.opt"
+    ll_opt_filename = "/tmp/#{base_filename}.ll.opt"
+    s_filename = "/tmp/#{base_filename}.s"
 
     llvm_as_args = ["-o=#{bc_filename}", ll_filename]
     opt_args = ["-O3", "-mem2reg", "-o=#{bc_opt_filename}", bc_filename]
@@ -85,20 +89,20 @@ generate_require_map = ->
     if c_callable
       filename = filename.replace /[.,-\/\\]/, "_" # this is insanely inadequate
     filename
-  map_path = "/tmp/#{files[0]}-require-map.c"
+  map_path = "/tmp/#{path.basename files[0]}-require-map.c"
   map = fs.createWriteStream map_path
   map.write "typedef struct _EJSValue EJSValue;\n"
   map.write "typedef EJSValue* (*ToplevelFunc) (EJSValue *env, EJSValue *this, int argc, EJSValue *exports);\n"
   map.write "typedef struct { const char* name;  ToplevelFunc func;  EJSValue *cached_exports; } EJSRequire;\n"
-  files.forEach (filename) ->
+  base_filenames.forEach (filename) ->
     sanitized = sanitize filename, true
     map.write "extern EJSValue* _ejs_toplevel_#{sanitized} (EJSValue* env, EJSValue *this, int argc, EJSValue *exports);\n"
 
   map.write "EJSRequire _ejs_require_map[] = {\n"
-  files.forEach (filename) ->
+  base_filenames.forEach (filename) ->
     map.write "  { \"#{sanitize filename, false}\", _ejs_toplevel_#{sanitize filename, true}, 0 },\n"
   map.write "  { 0, 0, 0 }\n"
   map.write "};\n"
-  map.write "const char *entry_filename = \"#{sanitize files[0], false}\";\n";
+  map.write "const char *entry_filename = \"#{sanitize base_filenames[0], false}\";\n";
   map.end()
   map_path

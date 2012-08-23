@@ -88,7 +88,10 @@ exports.NodeVisitor = class NodeVisitor
                 
         visitTry: (n) ->
                 n.block = @visit n.block
-                n.handlers = filter (@visit handler for handler in n.handlers)
+                if n.handlers?
+                        n.handlers = filter (@visit handler for handler in n.handlers)
+                else
+                        n.handlers = null
                 n.finalizer = @visit n.finalizer
                 n
 
@@ -161,7 +164,8 @@ exports.NodeVisitor = class NodeVisitor
 
         visitMemberExpression: (n) ->
                 n.object = @visit n.object
-                #n.property = @visit n.property
+                if n.computed
+                        n.property = @visit n.property
                 n
                 
         visitRelationalExpression: (n) ->

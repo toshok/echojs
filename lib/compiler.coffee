@@ -44,39 +44,58 @@ class LLVMIRVisitor extends NodeVisitor
                 @builtins = {
                         invokeClosure: [
                                 null,
-                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_0", EjsValueType, EjsValueType, EjsValueType, llvm.Type.getInt32Ty()
-                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_1", EjsValueType, EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType
-                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_2", EjsValueType, EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType
-                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_3", EjsValueType, EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType
-                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_4", EjsValueType, EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType, EjsValueType
-                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_5", EjsValueType, EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType
-                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_6", EjsValueType, EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType
-                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_7", EjsValueType, EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType
+                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_0", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty()]
+                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_1", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType]
+                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_2", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType]
+                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_3", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType]
+                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_4", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType, EjsValueType]
+                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_5", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType]
+                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_6", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType]
+                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_7", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType]
+                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_8", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType]
+                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_9", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType]
+                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_10", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType]
                         ]
-                        makeClosure: module.getOrInsertExternalFunction "_ejs_closure_new", EjsValueType, EjsClosureEnvType, EjsClosureFuncType
+                        makeClosure: module.getOrInsertExternalFunction "_ejs_closure_new", EjsValueType, [EjsClosureEnvType, EjsClosureFuncType]
                 }
                 
                 @ejs = {
-                        object_new:       module.getOrInsertExternalFunction "_ejs_object_new", EjsValueType, EjsValueType
-                        array_new:        module.getOrInsertExternalFunction "_ejs_array_new", EjsValueType, int32Type
-                        number_new:       module.getOrInsertExternalFunction "_ejs_number_new", EjsValueType, llvm.Type.getDoubleTy()
-                        boolean_new:      module.getOrInsertExternalFunction "_ejs_boolean_new", EjsValueType, boolType
-                        string_new_utf8:  module.getOrInsertExternalFunction "_ejs_string_new_utf8", EjsValueType, stringType
-                        undefined:        module.getOrInsertGlobal "_ejs_undefined", EjsValueType
-                        global:           module.getOrInsertGlobal "_ejs_global", EjsValueType
-                        "unop!":          module.getOrInsertExternalFunction "_ejs_op_not", EjsValueType, EjsValueType
-                        "unoptypeof":     module.getOrInsertExternalFunction "_ejs_op_typeof", EjsValueType, EjsValueType
-                        delete:           module.getOrInsertExternalFunction "_ejs_op_delete", EjsValueType, EjsValueType, EjsValueType
-                        "binop%":         module.getOrInsertExternalFunction "_ejs_op_mod", EjsValueType, EjsValueType, EjsValueType
-                        "binop+":         module.getOrInsertExternalFunction "_ejs_op_add", EjsValueType, EjsValueType, EjsValueType
-                        "binop<":         module.getOrInsertExternalFunction "_ejs_op_lt", EjsValueType, EjsValueType, EjsValueType
-                        "binop<=":        module.getOrInsertExternalFunction "_ejs_op_le", EjsValueType, EjsValueType, EjsValueType
-                        "binop-":         module.getOrInsertExternalFunction "_ejs_op_sub", EjsValueType, EjsValueType, EjsValueType
-                        "binop===":       module.getOrInsertExternalFunction "_ejs_op_strict_eq", EjsValueType, EjsValueType, EjsValueType
-                        "binop==":        module.getOrInsertExternalFunction "_ejs_op_eq", EjsValueType, EjsValueType, EjsValueType
-                        truthy:           module.getOrInsertExternalFunction "_ejs_truthy", boolType, EjsValueType
-                        object_setprop:   module.getOrInsertExternalFunction "_ejs_object_setprop", EjsValueType, EjsValueType, EjsValueType, EjsValueType
-                        object_getprop:   module.getOrInsertExternalFunction "_ejs_object_getprop", EjsValueType, EjsValueType, EjsValueType
+                        object_new:        module.getOrInsertExternalFunction "_ejs_object_new", EjsValueType, [EjsValueType]
+                        array_new:         module.getOrInsertExternalFunction "_ejs_array_new", EjsValueType, [int32Type]
+                        number_new:        module.getOrInsertExternalFunction "_ejs_number_new", EjsValueType, [llvm.Type.getDoubleTy()]
+                        boolean_new:       module.getOrInsertExternalFunction "_ejs_boolean_new", EjsValueType, [boolType]
+                        string_new_utf8:   module.getOrInsertExternalFunction "_ejs_string_new_utf8", EjsValueType, [stringType]
+                        regexp_new_utf8:   module.getOrInsertExternalFunction "_ejs_regexp_new_utf8", EjsValueType, [stringType]
+                        undefined:         module.getOrInsertGlobal "_ejs_undefined", EjsValueType
+                        global:            module.getOrInsertGlobal "_ejs_global", EjsValueType
+                        "unop-":           module.getOrInsertExternalFunction "_ejs_op_neg", EjsValueType, [EjsValueType]
+                        "unop+":           module.getOrInsertExternalFunction "_ejs_op_plus", EjsValueType, [EjsValueType]
+                        "unop!":           module.getOrInsertExternalFunction "_ejs_op_not", EjsValueType, [EjsValueType]
+                        "unoptypeof":      module.getOrInsertExternalFunction "_ejs_op_typeof", EjsValueType, [EjsValueType]
+                        "unopdelete":      module.getOrInsertExternalFunction "_ejs_op_delete", EjsValueType, [EjsValueType, EjsValueType] # this is a unop, but ours only works for memberexpressions
+                        "unopvoid":        module.getOrInsertExternalFunction "_ejs_op_void", EjsValueType, [EjsValueType]
+                        "binop&":          module.getOrInsertExternalFunction "_ejs_op_bitwise_and", EjsValueType, [EjsValueType, EjsValueType]
+                        "binop|":          module.getOrInsertExternalFunction "_ejs_op_bitwise_or", EjsValueType, [EjsValueType, EjsValueType]
+                        "binop>>":         module.getOrInsertExternalFunction "_ejs_op_rsh", EjsValueType, [EjsValueType, EjsValueType]
+                        "binop>>>":        module.getOrInsertExternalFunction "_ejs_op_ursh", EjsValueType, [EjsValueType, EjsValueType]
+                        "binop%":          module.getOrInsertExternalFunction "_ejs_op_mod", EjsValueType, [EjsValueType, EjsValueType]
+                        "binop+":          module.getOrInsertExternalFunction "_ejs_op_add", EjsValueType, [EjsValueType, EjsValueType]
+                        "binop*":          module.getOrInsertExternalFunction "_ejs_op_mult", EjsValueType, [EjsValueType, EjsValueType]
+                        "binop/":          module.getOrInsertExternalFunction "_ejs_op_div", EjsValueType, [EjsValueType, EjsValueType]
+                        "binop<":          module.getOrInsertExternalFunction "_ejs_op_lt", EjsValueType, [EjsValueType, EjsValueType]
+                        "binop<=":         module.getOrInsertExternalFunction "_ejs_op_le", EjsValueType, [EjsValueType, EjsValueType]
+                        "binop>":          module.getOrInsertExternalFunction "_ejs_op_gt", EjsValueType, [EjsValueType, EjsValueType]
+                        "binop>=":         module.getOrInsertExternalFunction "_ejs_op_ge", EjsValueType, [EjsValueType, EjsValueType]
+                        "binop-":          module.getOrInsertExternalFunction "_ejs_op_sub", EjsValueType, [EjsValueType, EjsValueType]
+                        "binop===":        module.getOrInsertExternalFunction "_ejs_op_strict_eq", EjsValueType, [EjsValueType, EjsValueType]
+                        "binop==":         module.getOrInsertExternalFunction "_ejs_op_eq", EjsValueType, [EjsValueType, EjsValueType]
+                        "binop!==":        module.getOrInsertExternalFunction "_ejs_op_strict_neq", EjsValueType, [EjsValueType, EjsValueType]
+                        "binop!=":         module.getOrInsertExternalFunction "_ejs_op_neq", EjsValueType, [EjsValueType, EjsValueType]
+                        "binopinstanceof": module.getOrInsertExternalFunction "_ejs_op_instanceof", EjsValueType, [EjsValueType, EjsValueType]
+                        "binopin":         module.getOrInsertExternalFunction "_ejs_op_in", EjsValueType, [EjsValueType, EjsValueType]
+                        truthy:            module.getOrInsertExternalFunction "_ejs_truthy", boolType, [EjsValueType]
+                        object_setprop:    module.getOrInsertExternalFunction "_ejs_object_setprop", EjsValueType, [EjsValueType, EjsValueType, EjsValueType]
+                        object_getprop:    module.getOrInsertExternalFunction "_ejs_object_getprop", EjsValueType, [EjsValueType, EjsValueType]
                 }
 
                 @initGlobalScope();
@@ -92,10 +111,7 @@ class LLVMIRVisitor extends NodeVisitor
                 @iifeStack.shift
 
         initGlobalScope: ->
-                @current_scope =
-                        "print": @ejs.print
-                        "require": @ejs.require
-                        "undefined": @ejs.undefined
+                @current_scope = {}
 
         pushScope: (new_scope) ->
                 new_scope[PARENT_SCOPE_KEY] = @current_scope
@@ -111,7 +127,7 @@ class LLVMIRVisitor extends NodeVisitor
 
         findIdentifierInScope: (ident, scope) ->
                 while scope?
-                        if scope[ident]?
+                        if scope.hasOwnProperty ident
                                 return scope[ident]
                         scope = scope[PARENT_SCOPE_KEY]
                 return null
@@ -134,10 +150,10 @@ class LLVMIRVisitor extends NodeVisitor
                 j = 0
                 for i in [0...ids.length]
                         name = ids[i].id.name
-                        if !scope[name]
+                        if !scope.hasOwnProperty name
                                 allocas[j] = llvm.IRBuilder.createAlloca EjsValueType, "local_#{name}"
                                 scope[name] = allocas[j]
-                                j++
+                                j = j + 1
 
                 # reinstate the IRBuilder to its previous insert point so we can insert the actual initializations
                 llvm.IRBuilder.setInsertPoint saved_insert_point
@@ -151,8 +167,12 @@ class LLVMIRVisitor extends NodeVisitor
                         pname = "computed"
                 else
                         # we store obj.prop, prop is an id
-                        pname = prop.name
-                        debug.log "createPropertyStore #{obj}.#{pname}"
+                        if prop.type is syntax.Identifier
+                                pname = prop.name
+                        else # prop.type is syntax.Literal
+                                pname = prop.value
+
+                        debug.log "createPropertyStore #{obj}[#{pname}]"
 
                         c = llvm.IRBuilder.createGlobalStringPtr pname, "strconst"
                         loadprop = llvm.IRBuilder.createCall @ejs.string_new_utf8, [c], "strtmp"
@@ -300,7 +320,28 @@ class LLVMIRVisitor extends NodeVisitor
                                 
                 llvm.IRBuilder.setInsertPoint merge_bb
                 merge_bb
+
+        visitUpdateExpression: (n) ->
+                result = @createAlloca @currentFunction, EjsValueType, "%update_result"
+                argument = @visit n.argument
+                c = llvm.ConstantFP.getDouble 1
+                num = llvm.IRBuilder.createCall @ejs.number_new, [c], "numtmp"
+                if not n.prefix
+                        # postfix updates store the argument before the op
+                        llvm.IRBuilder.createStore argument, result
+
+                # argument = argument $op 1
+                temp = llvm.IRBuilder.createCall @ejs["binop#{if n.operator is '++' then '+' else '-'}"], [argument, num], "update_temp"
                 
+                @storeValueInDest temp, n.argument
+                
+                # return result
+                if n.prefix
+                        argument = @visit n.argument
+                        # prefix updates store the argument after the op
+                        llvm.IRBuilder.createStore argument, result
+                llvm.IRBuilder.createLoad result, "%update_result_load"
+
         visitConditionalExpression: (n) ->
                 @visitIfOrCondExp n, true
                         
@@ -384,12 +425,8 @@ class LLVMIRVisitor extends NodeVisitor
 
         visitMemberExpression: (n) ->
                 @createPropertyLoad (@visit n.object), n.property, n.computed
-                
-        visitAssignmentExpression: (n) ->
-                lhs = n.left
-                rhs = n.right
 
-                rhvalue = @visit rhs
+        storeValueInDest: (rhvalue, lhs) ->
                 if lhs.type is syntax.Identifier
                         dest = @findIdentifierInScope lhs.name, @current_scope
                         if dest?
@@ -402,13 +439,30 @@ class LLVMIRVisitor extends NodeVisitor
                 else
                         throw "unhandled assign lhs"
 
+        visitAssignmentExpression: (n) ->
+                lhs = n.left
+                rhs = n.right
+
+                rhvalue = @visit rhs
+                @storeValueInDest rhvalue, lhs
+
+                # we need to visit lhs after the store so that we load the value                
+                @visit lhs
+
         visitFunction: (n) ->
+                #console.warn "        function #{n.ir_name} at line #{n.loc?.start.line}"
+                        
                 # save off the insert point so we can get back to it after generating this function
                 insertBlock = llvm.IRBuilder.getInsertBlock()
 
                 for param in n.params
+                        debug.log param.type
+                        if param.type is syntax.MemberExpression
+                                debug.log param.object.type
+                                debug.log param.property.name
                         if param.type isnt syntax.Identifier
                                 debug.log "we don't handle destructured/defaulted parameters yet"
+                                console.warn JSON.stringify param
                                 throw "we don't handle destructured/defaulted parameters yet"
 
                 # XXX this methods needs to be augmented so that we can pass actual types (or the builtin args need
@@ -455,6 +509,7 @@ class LLVMIRVisitor extends NodeVisitor
                                 allocas.push alloca
                         else
                                 debug.log "we don't handle destructured args at the moment."
+                                console.warn JSON.stringify param
                                 throw "we don't handle destructured args at the moment."
 
                 debug.log "alloca #{alloca}" for alloca in allocas
@@ -506,17 +561,24 @@ class LLVMIRVisitor extends NodeVisitor
         visitUnaryExpression: (n) ->
                 debug.log "operator = '#{n.operator}'"
 
+                builtin = "unop#{n.operator}"
+                callee = @ejs[builtin]
+                
                 if n.operator is "delete"
                         if n.argument.type is syntax.MemberExpression
-                                return llvm.IRBuilder.createCall @ejs.delete, [(@visitOrNull n.argument.object), (@visitOrNull n.argument.property)], "result"
+                                return llvm.IRBuilder.createCall callee, [(@visitOrNull n.argument.object), (@visitOrNull n.argument.property)], "result"
                         return
                 else
-                        builtin = "unop#{n.operator}"
-                        callee = @ejs[builtin]
                         if not callee
                                 throw "Internal error: unary operator '#{n.operator}' not implemented"
                         return llvm.IRBuilder.createCall callee, [@visitOrNull n.argument], "result"
                 
+
+        visitSequenceExpression: (n) ->
+                rv = null
+                for exp in n.expressions
+                        rv = @visit exp
+                rv
                 
         visitBinaryExpression: (n) ->
                 debug.log "operator = '#{n.operator}'"
@@ -598,7 +660,7 @@ class LLVMIRVisitor extends NodeVisitor
                 if n.callee.type is syntax.Identifier and n.callee.name[0] == '%'
                         debug.log "builtin"
                         callee = @builtins[n.callee.name.slice(1)]
-                        if callee.length  # replace with a better Array test
+                        if callee.length # replace with a better Array test
                                 callee = callee[n.arguments.length]
                         if n.callee.name is "%invokeClosure"
                                 # hack to pull out the proper "this" if the closure is a member expression
@@ -613,6 +675,7 @@ class LLVMIRVisitor extends NodeVisitor
                         callee = @visit n.callee
 
                 if not callee
+                        console.warn "visitCall #{JSON.stringify n}"
                         throw "Internal error: callee should not be null in visitCallExpression"
 
                 # At this point we assume callee is a function object
@@ -683,8 +746,8 @@ class LLVMIRVisitor extends NodeVisitor
         visitObjectExpression: (n) ->
                 obj = llvm.IRBuilder.createCall @ejs.object_new, [@loadNullEjsValue()], "objtmp"
                 for property in n.properties
-                        key = property.key
                         val = @visit property.value
+                        key = property.key
                         @createPropertyStore obj, key, val, false
                 return obj
 
@@ -695,7 +758,7 @@ class LLVMIRVisitor extends NodeVisitor
                         val = @visit el
                         index = type: syntax.Literal, value: i
                         @createPropertyStore obj, index, val, true
-                        i++
+                        i = i + 1
                 obj
                 
         visitExpressionStatement: (n) ->
@@ -705,13 +768,18 @@ class LLVMIRVisitor extends NodeVisitor
                 if n.value is null
                         debug.log "literal: null"
                         return @loadNullEjsValue() # this isn't properly typed...  dunno what to do about this here
-                else if typeof n.value is "string"
+                else if typeof n.raw is "string" and (n.raw[0] is '"' or n.raw[0] is "'")
                         debug.log "literal string: #{n.value}"
                         c = llvm.IRBuilder.createGlobalStringPtr n.value, "strconst"
                         strcall = llvm.IRBuilder.createCall @ejs.string_new_utf8, [c], "strtmp"
-                        debug.log "string_new_utf8 = #{@ejs.string_new_utf8}"
                         debug.log "strcall = #{strcall}"
                         return strcall
+                else if typeof n.raw is "string" and n.raw[0] is '/'
+                        debug.log "literal regexp: #{n.raw}"
+                        c = llvm.IRBuilder.createGlobalStringPtr n.raw, "strconst"
+                        regexpcall = llvm.IRBuilder.createCall @ejs.regexp_new_utf8, [c], "regexptmp"
+                        debug.log "regexpcall = #{strcall}"
+                        return regexpcall
                 else if typeof n.value is "number"
                         debug.log "literal number: #{n.value}"
                         c = llvm.ConstantFP.getDouble n.value
@@ -720,6 +788,7 @@ class LLVMIRVisitor extends NodeVisitor
                         debug.log "literal boolean: #{n.value}"
                         c = llvm.Constant.getIntegerValue boolType, (if n.value then 1 else 0)
                         return llvm.IRBuilder.createCall @ejs.boolean_new, [c], "booltmp"
+                console.warn "n.raw[0] = #{n.raw[0]}"
                 throw "Internal error: unrecognized literal of type #{typeof n.value}"
 
 class AddFunctionsVisitor extends NodeVisitor
@@ -744,7 +813,7 @@ class AddFunctionsVisitor extends NodeVisitor
                 param.llvm_type = EjsValueType for param in n.params[BUILTIN_PARAMS.length..]
 
                 # the LLVMIR func we allocate takes the proper EJSValue** parameter in the 4th spot instead of all the parameters
-                n.ir_func = takes_builtins @module.getOrInsertFunction n.ir_name, EjsValueType, (param.llvm_type for param in BUILTIN_PARAMS).concat EjsValueType.pointerTo
+                n.ir_func = takes_builtins @module.getOrInsertFunction n.ir_name, EjsValueType, (param.llvm_type for param in BUILTIN_PARAMS).concat [EjsValueType.pointerTo]
                 
                 ir_args = n.ir_func.args
                 (ir_args[i].setName n.params[i].name) for i in [0...BUILTIN_PARAMS.length]
@@ -756,7 +825,7 @@ class AddFunctionsVisitor extends NodeVisitor
 insert_toplevel_func = (tree, filename) ->
         sanitize = (filename) ->
                 filename = filename.replace /\.js$/, ""
-                filename = filename.replace /[.,-\/\\]/, "_" # this is insanely inadequate
+                filename = filename.replace /[.,-\/\\]/g, "_" # this is insanely inadequate
                 filename
         
         toplevel =
@@ -776,6 +845,8 @@ insert_toplevel_func = (tree, filename) ->
 
 exports.compile = (tree, filename) ->
 
+        #console.warn "compiling #{filename}"
+        
         tree = insert_toplevel_func tree, filename
 
         #tree = desugar tree

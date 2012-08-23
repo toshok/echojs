@@ -118,12 +118,14 @@ namespace jsllvm {
 
     REQ_UTF8_ARG(0, name);
     REQ_LLVM_TYPE_ARG(1, return_type);
+    REQ_ARRAY_ARG(2, paramTypes);
 
-    std::vector< llvm::Type*> arg_types;
-    for (int i = 0, e = args.Length() - 2; i < e; i ++) {
-      arg_types.push_back (jsllvm::Type::GetLLVMObj(args[i+2]));
+    std::vector< llvm::Type*> param_types;
+    for (int i = 0; i < paramTypes->Length(); i ++) {
+      param_types.push_back (Type::GetLLVMObj(paramTypes->Get(i)));
     }
-    llvm::FunctionType *FT = llvm::FunctionType::get(return_type, arg_types, false);
+
+    llvm::FunctionType *FT = llvm::FunctionType::get(return_type, param_types, false);
 
     llvm::Function* f = static_cast< llvm::Function*>(module->llvm_module->getOrInsertFunction(*name, FT));
     f->setLinkage (llvm::Function::ExternalLinkage);
