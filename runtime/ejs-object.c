@@ -134,8 +134,15 @@ _ejs_object_setprop (EJSValue* obj, EJSValue* key, EJSValue* value)
   }
 
   if (!EJSVAL_IS_STRING(key)) {
-    printf ("key isn't a string\n");
-    return NULL;
+    if (EJSVAL_IS_NUMBER(key)) {
+      char buf[128];
+      snprintf(buf, sizeof(buf), EJS_NUMBER_FORMAT, EJSVAL_TO_NUMBER(key));
+      key = _ejs_string_new_utf8(buf);
+    }
+    else {
+      printf ("key isn't a string\n");
+      return NULL;
+    }
   }
 
   int prop_index = _ejs_propertymap_lookup (obj->u.o.map, key->u.s.data, TRUE);
@@ -179,8 +186,15 @@ _ejs_object_getprop (EJSValue* obj, EJSValue* key)
   }
 
   if (!EJSVAL_IS_STRING(key)) {
-    printf ("key isn't a string\n");
-    return NULL;
+    if (EJSVAL_IS_NUMBER(key)) {
+      char buf[128];
+      snprintf(buf, sizeof(buf), EJS_NUMBER_FORMAT, EJSVAL_TO_NUMBER(key));
+      key = _ejs_string_new_utf8(buf);
+    }
+    else {
+      printf ("key isn't a string\n");
+      return NULL;
+    }
   }
 
   int prop_index = _ejs_propertymap_lookup (obj->u.o.map, key->u.s.data, FALSE);

@@ -68,10 +68,19 @@ _ejs_op_typeof (EJSValue* exp)
   if (exp == NULL) {
     return _ejs_string_new_utf8 ("object");
   }
-  else if (EJSVAL_IS_UNDEFINED(exp)) {
-    return _ejs_string_new_utf8 ("undefined");
+  char *rv;
+  switch (exp->type) {
+  case EJSValueTypeBoolean:   rv = "boolean"; break;
+  case EJSValueTypeNumber:    rv = "number"; break;
+  case EJSValueTypeString:    rv = "string"; break;
+  case EJSValueTypeUndefined: rv = "undefined"; break;
+
+  case EJSValueTypeArray:     rv = "object"; break;
+  case EJSValueTypeObject:    rv = "object"; break;
+  case EJSValueTypeFunction:  rv = "function"; break;
   }
-  abort();
+
+  return _ejs_string_new_utf8 (rv);
 }
 
 EJSValue*
