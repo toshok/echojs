@@ -2,6 +2,7 @@
 SOURCES= \
 	ejs-array.c \
 	ejs-init.c \
+	ejs-console.c \
 	ejs-function.c \
 	ejs-object.c \
 	ejs-ops.c \

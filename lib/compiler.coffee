@@ -25,6 +25,7 @@ ejsValueType = llvm.StructType.create "EjsValue", [int32Type]
 
 EjsValueType = ejsValueType.pointerTo
 EjsClosureEnvType = EjsValueType
+EjsPropIteratorType = EjsValueType
 EjsClosureFuncType = (llvm.FunctionType.get EjsValueType, [EjsClosureEnvType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType.pointerTo]).pointerTo
 
 BUILTIN_PARAMS = [
@@ -66,8 +67,18 @@ class LLVMIRVisitor extends NodeVisitor
                         boolean_new:       module.getOrInsertExternalFunction "_ejs_boolean_new", EjsValueType, [boolType]
                         string_new_utf8:   module.getOrInsertExternalFunction "_ejs_string_new_utf8", EjsValueType, [stringType]
                         regexp_new_utf8:   module.getOrInsertExternalFunction "_ejs_regexp_new_utf8", EjsValueType, [stringType]
+                        truthy:            module.getOrInsertExternalFunction "_ejs_truthy", boolType, [EjsValueType]
+                        object_setprop:    module.getOrInsertExternalFunction "_ejs_object_setprop", EjsValueType, [EjsValueType, EjsValueType, EjsValueType]
+                        object_getprop:    module.getOrInsertExternalFunction "_ejs_object_getprop", EjsValueType, [EjsValueType, EjsValueType]
+                        object_getprop_utf8:  module.getOrInsertExternalFunction "_ejs_object_getprop_utf8", EjsValueType, [EjsValueType, stringType]
+                        object_setprop_utf8:  module.getOrInsertExternalFunction "_ejs_object_setprop_utf8", EjsValueType, [EjsValueType, stringType, EjsValueType]
+                        prop_iterator_new: module.getOrInsertExternalFunction "_ejs_property_iterator_new", EjsPropIteratorType, [EjsValueType]
+                        prop_iterator_current: module.getOrInsertExternalFunction "_ejs_property_iterator_current", stringType, [EjsPropIteratorType]
+                        prop_iterator_next: module.getOrInsertExternalFunction "_ejs_property_iterator_next", voidType, [EjsPropIteratorType]
+                        prop_iterator_free: module.getOrInsertExternalFunction "_ejs_property_iterator_free", voidType, [EjsPropIteratorType]
                         undefined:         module.getOrInsertGlobal "_ejs_undefined", EjsValueType
                         global:            module.getOrInsertGlobal "_ejs_global", EjsValueType
+                        
                         "unop-":           module.getOrInsertExternalFunction "_ejs_op_neg", EjsValueType, [EjsValueType]
                         "unop+":           module.getOrInsertExternalFunction "_ejs_op_plus", EjsValueType, [EjsValueType]
                         "unop!":           module.getOrInsertExternalFunction "_ejs_op_not", EjsValueType, [EjsValueType]
@@ -93,9 +104,6 @@ class LLVMIRVisitor extends NodeVisitor
                         "binop!=":         module.getOrInsertExternalFunction "_ejs_op_neq", EjsValueType, [EjsValueType, EjsValueType]
                         "binopinstanceof": module.getOrInsertExternalFunction "_ejs_op_instanceof", EjsValueType, [EjsValueType, EjsValueType]
                         "binopin":         module.getOrInsertExternalFunction "_ejs_op_in", EjsValueType, [EjsValueType, EjsValueType]
-                        truthy:            module.getOrInsertExternalFunction "_ejs_truthy", boolType, [EjsValueType]
-                        object_setprop:    module.getOrInsertExternalFunction "_ejs_object_setprop", EjsValueType, [EjsValueType, EjsValueType, EjsValueType]
-                        object_getprop:    module.getOrInsertExternalFunction "_ejs_object_getprop", EjsValueType, [EjsValueType, EjsValueType]
                 }
 
                 @initGlobalScope();
@@ -163,8 +171,7 @@ class LLVMIRVisitor extends NodeVisitor
         createPropertyStore: (obj,prop,rhs,computed) ->
                 if computed
                         # we store obj[prop], prop can be any value
-                        loadprop = @visit prop
-                        pname = "computed"
+                        llvm.IRBuilder.createCall @ejs.object_setprop, [obj, (@visit prop), rhs], "propstore_computed"
                 else
                         # we store obj.prop, prop is an id
                         if prop.type is syntax.Identifier
@@ -175,23 +182,20 @@ class LLVMIRVisitor extends NodeVisitor
                         debug.log "createPropertyStore #{obj}[#{pname}]"
 
                         c = llvm.IRBuilder.createGlobalStringPtr pname, "strconst"
-                        loadprop = llvm.IRBuilder.createCall @ejs.string_new_utf8, [c], "strtmp"
-                                
-                rv = llvm.IRBuilder.createCall @ejs.object_setprop, [obj, loadprop, rhs], "propstore_#{pname}"
-                rv
+                        llvm.IRBuilder.createCall @ejs.object_setprop_utf8, [obj, c, rhs], "propstore_#{pname}"
                 
         createPropertyLoad: (obj,prop,computed) ->
                 if computed
                         # we load obj[prop], prop can be any value
                         loadprop = @visit prop
                         pname = "computed"
+                        llvm.IRBuilder.createCall @ejs.object_getprop, [obj, loadprop], "getprop_#{pname}"
                 else
                         # we load obj.prop, prop is an id
                         pname = prop.name
                         c = llvm.IRBuilder.createGlobalStringPtr pname, "strconst"
-                        loadprop = llvm.IRBuilder.createCall @ejs.string_new_utf8, [c], "strtmp"
+                        llvm.IRBuilder.createCall @ejs.object_getprop_utf8, [obj, c], "getprop_#{pname}"
                 
-                llvm.IRBuilder.createCall @ejs.object_getprop, [obj, loadprop], "getprop_#{pname}"
 
         createLoadThis: () ->
                 _this = @findIdentifierInScope "%this", @current_scope
@@ -291,7 +295,7 @@ class LLVMIRVisitor extends NodeVisitor
 
                 llvm.IRBuilder.setInsertPoint merge_bb
                 merge_bb
-                
+                                
         visitWhile: (n) ->
                 insertBlock = llvm.IRBuilder.getInsertBlock()
                 insertFunc = insertBlock.parent
@@ -321,6 +325,46 @@ class LLVMIRVisitor extends NodeVisitor
                 llvm.IRBuilder.setInsertPoint merge_bb
                 merge_bb
 
+        visitForIn: (n) ->
+                insertBlock = llvm.IRBuilder.getInsertBlock()
+                insertFunc = insertBlock.parent
+                
+                iterator = llvm.IRBuilder.createCall @ejs.prop_iterator_new, [@visit n.right], "iterator"
+
+                # make sure we get an alloca if there's a "var"
+                console.warn "n.left.type = #{n.left.type}"
+                if n.left[0]?
+                        @visit n.left
+                        lhs = n.left[0].declarations[0].id
+                else
+                        lhs = n.left
+                console.warn "lhs is #{JSON.stringify lhs}"
+                
+                forin_bb  = new llvm.BasicBlock "forin_start", insertFunc
+                body_bb   = new llvm.BasicBlock "forin_body",  insertFunc
+                merge_bb  = new llvm.BasicBlock "forin_merge", insertFunc
+                                
+                llvm.IRBuilder.createBr forin_bb
+                llvm.IRBuilder.setInsertPoint forin_bb
+
+                current = llvm.IRBuilder.createCall @ejs.prop_iterator_current, [iterator], "iterator_current"
+
+                cmp = llvm.IRBuilder.createICmpEq current, (llvm.Constant.getNull stringType), "cmpresult"
+                
+                llvm.IRBuilder.createCondBr cmp, merge_bb, body_bb
+
+                llvm.IRBuilder.setInsertPoint body_bb
+                strcall = llvm.IRBuilder.createCall @ejs.string_new_utf8, [current], "strtmp"
+                @storeValueInDest strcall, lhs
+                @visit n.body
+                llvm.IRBuilder.createCall @ejs.prop_iterator_next, [iterator], ""
+                llvm.IRBuilder.createBr forin_bb
+
+                llvm.IRBuilder.setInsertPoint merge_bb
+                llvm.IRBuilder.createCall @ejs.prop_iterator_free, [iterator], ""
+                merge_bb
+                
+                
         visitUpdateExpression: (n) ->
                 result = @createAlloca @currentFunction, EjsValueType, "%update_result"
                 argument = @visit n.argument
@@ -437,7 +481,7 @@ class LLVMIRVisitor extends NodeVisitor
                 else if lhs.type is syntax.MemberExpression
                         return @createPropertyStore (@visit lhs.object), lhs.property, rhvalue, lhs.computed
                 else
-                        throw "unhandled assign lhs"
+                        throw "unhandled lhs type #{lhs.type}"
 
         visitAssignmentExpression: (n) ->
                 lhs = n.left
@@ -450,7 +494,7 @@ class LLVMIRVisitor extends NodeVisitor
                 @visit lhs
 
         visitFunction: (n) ->
-                #console.warn "        function #{n.ir_name} at line #{n.loc?.start.line}"
+                console.warn "        function #{n.ir_name} at line #{n.loc?.start.line}"
                         
                 # save off the insert point so we can get back to it after generating this function
                 insertBlock = llvm.IRBuilder.getInsertBlock()
@@ -630,7 +674,7 @@ class LLVMIRVisitor extends NodeVisitor
 
                 rv
 
-        visitArgs: (callee, args, thisArg) ->
+        visitArgs: (callee, args) ->
                 argv = []
 
                 debug.log "args!!!!!!!!!!!!!!!!!!! #{args.length} of them"
@@ -638,7 +682,7 @@ class LLVMIRVisitor extends NodeVisitor
                 args_offset = 0
                 if callee.takes_builtins
                         argv.push @visitOrNull args[0]                                      # % env
-                        argv.push thisArg                                                   # %this
+                        argv.push null                                                      # %this
                         argv.push llvm.Constant.getIntegerValue int32Type, args.length-1    # argc. subtract 1 for our use of args[0] above
                         args_offset = 1 # we used args[0] already, so skip it in the loop below
 
@@ -679,7 +723,10 @@ class LLVMIRVisitor extends NodeVisitor
                         throw "Internal error: callee should not be null in visitCallExpression"
 
                 # At this point we assume callee is a function object
-                argv = @visitArgs callee, args, obj
+                argv = @visitArgs callee, args
+
+                if callee.takes_builtins
+                        argv[1] = obj
 
                 debug.log "done visiting args"
 
@@ -708,10 +755,12 @@ class LLVMIRVisitor extends NodeVisitor
                 
 
                 # ctor isn't the constructor here, by virtue of closure conversion.
-                # 
-                obj = llvm.IRBuilder.createCall @ejs.object_new, [@loadNullEjsValue()], "objtmp"
 
-                argv = @visitArgs ctor, args, obj
+                argv = @visitArgs ctor, args
+
+                obj = llvm.IRBuilder.createCall @ejs.object_new, [argv[0]], "objtmp"
+                if ctor.takes_builtins
+                        argv[1] = obj
 
                 llvm.IRBuilder.createCall ctor, argv, "newtmp"
                 obj
@@ -845,7 +894,7 @@ insert_toplevel_func = (tree, filename) ->
 
 exports.compile = (tree, filename) ->
 
-        #console.warn "compiling #{filename}"
+        console.warn "compiling #{filename}"
         
         tree = insert_toplevel_func tree, filename
 

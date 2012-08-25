@@ -7,10 +7,12 @@ TESTS=$(wildcard *[0-9].js)
 
 
 EXPECTED_FAILURES= \
+	forin2.js \
 	func1.js \
 	iife2.js \
 	instanceof1.js
 
+# forin2 fails because we don't properly handle deleting properties while iterating
 # func1 fails because we can't print out closures at the moment (which should really be renamed to JS's Function objects)
 # iife2 fails because of number formatting and/or arithmetic
 # instanceof1 fails because _ejs_op_instanceof isn't implemented and just aborts

@@ -1,6 +1,7 @@
 #include <assert.h>
 
 #include "ejs-value.h"
+#include "ejs-object.h"
 #include "ejs-function.h"
 
 EJSValue*
@@ -59,7 +60,7 @@ void
 _ejs_function_init(EJSValue *global)
 {
   _ejs_Function = _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Function_impl);
-  _ejs_Function_proto = _ejs_object_new(NULL);
+  _ejs_Function_proto = _ejs_object_new(_ejs_object_get_prototype());
 
   _ejs_object_setprop (_ejs_Function,       _ejs_string_new_utf8("prototype"),  _ejs_Function_proto);
   _ejs_object_setprop (_ejs_Function_proto, _ejs_string_new_utf8("prototype"),  _ejs_function_get_prototype());

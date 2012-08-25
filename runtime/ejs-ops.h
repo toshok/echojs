@@ -33,7 +33,4 @@ EJSValue* _ejs_op_in (EJSValue* lhs, EJSValue* rhs);
 
 EJSBool _ejs_truthy (EJSValue* val);
 
-extern EJSValue* _ejs_print;
-extern EJSValue* _ejs_print_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args);
-
 #endif // _ejs_ops_h

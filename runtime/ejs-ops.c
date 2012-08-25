@@ -484,6 +484,9 @@ _ejs_op_in (EJSValue* lhs, EJSValue* rhs)
 EJSBool
 _ejs_truthy (EJSValue* val)
 {
+  if (!val || EJSVAL_IS_UNDEFINED(val))
+    return FALSE;
+
   if (EJSVAL_IS_NUMBER(val)) {
     return EJSVAL_TO_NUMBER(val) != 0;
   }
@@ -495,25 +498,3 @@ _ejs_truthy (EJSValue* val)
   return FALSE;
 }
 
-EJSValue* _ejs_print;
-EJSValue*
-_ejs_print_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
-{
-  if (argc < 1)
-    return _ejs_undefined;
-
-  EJSValue *arg = args[0];
-  if (arg == NULL) {
-    printf ("(null)\n");
-  }
-  else if (EJSVAL_IS_NUMBER(arg)) {
-    printf (EJS_NUMBER_FORMAT "\n", arg->u.n.data);
-  }
-  else if (EJSVAL_IS_STRING(arg)) {
-    printf ("%s\n", arg->u.s.data);
-  }
-  else {
-    abort();
-  }
-  return _ejs_undefined;
-}

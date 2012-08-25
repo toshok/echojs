@@ -41,6 +41,18 @@ _ejs_Array_prototype_pop (EJSValue* env, EJSValue* _this, int argc, EJSValue **a
   return ARRAY_ELEMENTS(_this)[--ARRAY_LEN(_this)];
 }
 
+static EJSValue*
+_ejs_Array_prototype_slice (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  abort();
+}
+
+static EJSValue*
+_ejs_Array_prototype_splice (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  abort();
+}
+
 static EJSValue* _ejs_Array_proto;
 EJSValue*
 _ejs_array_get_prototype()
@@ -54,10 +66,12 @@ _ejs_array_init(EJSValue *global)
   _ejs_Array = _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Array_impl);
   _ejs_Array_proto = _ejs_object_new(NULL);
 
-  _ejs_object_setprop (_ejs_Array,       _ejs_string_new_utf8("prototype"),  _ejs_Array_proto);
-  _ejs_object_setprop (_ejs_Array_proto, _ejs_string_new_utf8("prototype"),  _ejs_object_get_prototype());
-  _ejs_object_setprop (_ejs_Array_proto, _ejs_string_new_utf8("push"),       _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_push));
-  _ejs_object_setprop (_ejs_Array_proto, _ejs_string_new_utf8("pop"),        _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_pop));
+  _ejs_object_setprop_utf8 (_ejs_Array,       "prototype",  _ejs_Array_proto);
+  _ejs_object_setprop_utf8 (_ejs_Array_proto, "prototype",  _ejs_object_get_prototype());
+  _ejs_object_setprop_utf8 (_ejs_Array_proto, "push",       _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_push));
+  _ejs_object_setprop_utf8 (_ejs_Array_proto, "pop",        _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_pop));
+  _ejs_object_setprop_utf8 (_ejs_Array_proto, "slice",      _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_slice));
+  _ejs_object_setprop_utf8 (_ejs_Array_proto, "splice",     _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_splice));
 
   _ejs_object_setprop (global, _ejs_string_new_utf8("Array"), _ejs_Array);
 }

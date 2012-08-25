@@ -25,7 +25,7 @@ _ejs_propertymap_new (int initial_allocation)
 }
 
 int
-_ejs_propertymap_lookup (EJSPropertyMap *map, char *name, EJSBool add_if_not_found)
+_ejs_propertymap_lookup (EJSPropertyMap *map, const char *name, EJSBool add_if_not_found)
 {
   int i;
   for (i = 0; i < map->num; i ++) {
@@ -110,7 +110,7 @@ EJSValue*
 _ejs_object_setprop (EJSValue* obj, EJSValue* key, EJSValue* value)
 {
   if (EJSVAL_IS_PRIMITIVE(obj)) {
-    printf ("setprop on primitive.  ignoring\n");
+    printf ("setprop on primitive.  ignoring\n" );
     return value;
   }
 
@@ -148,7 +148,7 @@ _ejs_object_setprop (EJSValue* obj, EJSValue* key, EJSValue* value)
   int prop_index = _ejs_propertymap_lookup (obj->u.o.map, key->u.s.data, TRUE);
   obj->u.o.fields[prop_index] = value;
 
-  return NULL;
+  return value;
 }
 
 EJSValue*
@@ -157,6 +157,28 @@ _ejs_object_getprop (EJSValue* obj, EJSValue* key)
   if (!obj) {
     printf ("attempt to get property '%s' on null object.\n", EJSVAL_TO_STRING(key));
     return _ejs_undefined; // XXX this should really throw an exception
+  }
+
+  if (EJSVAL_IS_STRING(obj)) {
+    // check if key is an integer, or a string that we can convert to an int
+    int idx = -1;
+    if (EJSVAL_IS_NUMBER(key)) {
+      double n = EJSVAL_TO_NUMBER(key);
+      if (floor(n) == n) {
+	idx = (int)n;
+      }
+    }
+
+    if (idx != -1) {
+      char c[2];
+      c[1] = obj->u.s.data[idx];
+      c[2] = '\0';
+      return _ejs_string_new_utf8 (c);
+    }
+
+    if (EJSVAL_IS_STRING(key) && !strcmp ("length", EJSVAL_TO_STRING(key))) {
+      return _ejs_number_new (obj->u.s.len);
+    }
   }
 
   if (EJSVAL_IS_PRIMITIVE(obj)) {
@@ -202,6 +224,54 @@ _ejs_object_getprop (EJSValue* obj, EJSValue* key)
   if (prop_index == -1) {
     if (obj->u.o.proto)
       return _ejs_object_getprop (obj->u.o.proto, key);
+    else
+      return _ejs_undefined;
+  }
+  else {
+    return obj->u.o.fields[prop_index];
+  }
+}
+
+EJSValue*
+_ejs_object_setprop_utf8 (EJSValue* obj, const char *key, EJSValue* value)
+{
+  if (EJSVAL_IS_PRIMITIVE(obj)) {
+    printf ("setprop on primitive.  ignoring\n");
+    return value;
+  }
+
+  int prop_index = _ejs_propertymap_lookup (obj->u.o.map, key, TRUE);
+  obj->u.o.fields[prop_index] = value;
+
+  return value;
+}
+
+EJSValue*
+_ejs_object_getprop_utf8 (EJSValue* obj, const char *key)
+{
+  if (!obj) {
+    printf ("attempt to get property '%s' on null object.\n", key);
+    return _ejs_undefined; // XXX this should really throw an exception
+  }
+
+  if (EJSVAL_IS_PRIMITIVE(obj)) {
+    printf ("getprop(%s) on primitive.  returning undefined\n", key);
+    return _ejs_undefined;
+  }
+
+  if (EJSVAL_IS_ARRAY(obj)) {
+    if (!strcmp ("length", key)) {
+      return _ejs_number_new (obj->u.a.array_length);
+    }
+
+    // if we fail there, we fall back to the object impl below
+  }
+
+  int prop_index = _ejs_propertymap_lookup (obj->u.o.map, key, FALSE);
+
+  if (prop_index == -1) {
+    if (obj->u.o.proto)
+      return _ejs_object_getprop_utf8 (obj->u.o.proto, key);
     else
       return _ejs_undefined;
   }
@@ -346,7 +416,13 @@ _ejs_Object_prototype_toString (EJSValue* env, EJSValue* _this, int argc, EJSVal
   return _ejs_string_new_utf8 ("[object Object]");
 }
 
-static EJSValue* _ejs_Object_proto;
+static EJSValue*
+_ejs_Object_prototype_hasOwnProperty (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  abort();
+}
+
+static EJSValue* _ejs_Object_proto = NULL;
 EJSValue*
 _ejs_object_get_prototype()
 {
@@ -359,9 +435,62 @@ _ejs_object_init(EJSValue *global)
   _ejs_Object = _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Object_impl);
   _ejs_Object_proto = _ejs_object_new(NULL);
 
-  _ejs_object_setprop (_ejs_Object,       _ejs_string_new_utf8("prototype"),  _ejs_Object_proto);
-  _ejs_object_setprop (_ejs_Object_proto, _ejs_string_new_utf8("prototype"),  NULL);
-  _ejs_object_setprop (_ejs_Object_proto, _ejs_string_new_utf8("toString"),   _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Object_prototype_toString));
+  _ejs_object_setprop_utf8 (_ejs_Object,       "prototype",  _ejs_Object_proto);
+  _ejs_object_setprop_utf8 (_ejs_Object_proto, "prototype",  NULL);
+  _ejs_object_setprop_utf8 (_ejs_Object_proto, "toString",   _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Object_prototype_toString));
+  _ejs_object_setprop_utf8 (_ejs_Object_proto, "hasOwnProperty",   _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Object_prototype_hasOwnProperty));
 
   _ejs_object_setprop (global, _ejs_string_new_utf8("Object"), _ejs_Object);
+}
+
+
+
+/* property iterators */
+struct _EJSPropertyIterator {
+  EJSValue *forObj;
+  char **names;
+  int num;
+  int current;
+};
+
+EJSPropertyIterator*
+_ejs_property_iterator_new (EJSValue *forObj)
+{
+  // totally broken, only iterator over forObj's property map, not prototype properties
+  EJSPropertyIterator* iterator = (EJSPropertyIterator*)calloc(1, sizeof (EJSPropertyIterator));
+
+  EJSPropertyMap *map = forObj->u.o.map;
+
+  if (map) {
+    int i;
+
+    iterator->forObj = forObj;
+    iterator->num = map->num;
+    iterator->names = (char**)malloc(sizeof(char*) * iterator->num);
+    for (i = 0; i < iterator->num; i ++)
+      iterator->names[i] = strdup(map->names[i]);
+  }
+  return iterator;
+}
+
+char *
+_ejs_property_iterator_current (EJSPropertyIterator* iterator)
+{
+  return iterator->current < iterator->num ? iterator->names[iterator->current] : NULL;
+}
+
+void
+_ejs_property_iterator_next (EJSPropertyIterator* iterator)
+{
+  iterator->current ++;
+}
+
+void
+_ejs_property_iterator_free (EJSPropertyIterator *iterator)
+{
+  int i;
+  for (i = 0; i < iterator->num; i ++)
+    free(iterator->names[i]);
+  free (iterator->names);
+  free (iterator);
 }

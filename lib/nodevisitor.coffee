@@ -28,7 +28,13 @@ exports.NodeVisitor = class NodeVisitor
                 n.params = filter (@visit param for param in n.params)
                 n.body = @visit n.body
                 n
+
+        visitFunctionDeclaration: (n) ->
+                @visitFunction n
                 
+        visitFunctionExpression: (n) ->
+                @visitFunction n
+
         visitBlock: (n) ->
                 n.body = filter (@visit child for child in n.body)
                 n
@@ -212,8 +218,8 @@ exports.NodeVisitor = class NodeVisitor
                 rv = null
                 switch new_n.type
                         when syntax.Program              then rv = @visitProgram new_n
-                        when syntax.FunctionDeclaration  then rv = @visitFunction new_n # XXX esprima distinguishes between these two.  hallelujah
-                        when syntax.FunctionExpression   then rv = @visitFunction new_n  # XXX
+                        when syntax.FunctionDeclaration  then rv = @visitFunctionDeclaration new_n
+                        when syntax.FunctionExpression   then rv = @visitFunctionExpression new_n
                         when syntax.LabeledStatement     then rv = @visitLabeledStatement new_n
                         when syntax.BlockStatement       then rv = @visitBlock new_n
                         when syntax.ExpressionStatement  then rv = @visitExpressionStatement new_n

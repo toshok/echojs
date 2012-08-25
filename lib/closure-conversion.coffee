@@ -172,37 +172,37 @@ class LambdaLift extends NodeVisitor
                 super
                 program.body = @functions.concat program.body
                 program
-                        
-        visitFunction: (n) ->
-                if n.type is syntax.FunctionDeclaration
-                        n.body = @visit n.body
-                        n
+
+        visitFunctionDeclaration: (n) ->
+                n.body = @visit n.body
+                n
+
+        visitFunctionExpression: (n) ->
+                if n.id?.name?
+                        global_name = genGlobalFunctionName n.id.name
+                        @currentMapping()[n.id.name] = global_name
                 else
-                        if n.id?.name?
-                                global_name = genGlobalFunctionName n.id.name
-                                @currentMapping()[n.id.name] = global_name
-                        else
-                                global_name = genAnonymousFunctionName()
+                        global_name = genAnonymousFunctionName()
 
-                        n.type = syntax.FunctionDeclaration
-                        n.id =
-                                type: syntax.Identifier
-                                name: global_name
+                n.type = syntax.FunctionDeclaration
+                n.id =
+                        type: syntax.Identifier
+                        name: global_name
 
-                        @functions.push n
+                @functions.push n
 
-                        new_mapping = deep_copy_object @currentMapping()
+                new_mapping = deep_copy_object @currentMapping()
 
-                        @mappings.unshift new_mapping
-                        n.body = @visit n.body
-                        @mappings = @mappings.slice(1)
+                @mappings.unshift new_mapping
+                n.body = @visit n.body
+                @mappings = @mappings.slice(1)
 
-                        n.params.unshift create_identifier "%env_#{n.ejs_env.parent.id}"
-                        
-                        return {
-                                type: syntax.Identifier,
-                                name: global_name
-                        }
+                n.params.unshift create_identifier "%env_#{n.ejs_env.parent.id}"
+                
+                return {
+                        type: syntax.Identifier,
+                        name: global_name
+                }
 
 create_identifier = (x) -> type: syntax.Identifier, name: x
 
