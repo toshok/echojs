@@ -9,6 +9,7 @@ TESTS=$(wildcard *[0-9].js)
 EXPECTED_FAILURES= \
 	forin2.js \
 	func1.js \
+	function-overriding1.js \
 	iife2.js \
 	instanceof1.js
 
@@ -16,14 +17,16 @@ EXPECTED_FAILURES= \
 # func1 fails because we can't print out closures at the moment (which should really be renamed to JS's Function objects)
 # iife2 fails because of number formatting and/or arithmetic
 # instanceof1 fails because _ejs_op_instanceof isn't implemented and just aborts
+# function-overriding1.js fail because we don't throw an exception on a null function, we just crash.
 
 
-check: check-llvm run-tests
+check: check-llvm check-set run-tests
 
-check-llvm:
-	@coffee -c terminal.coffee
-	@coffee -c echo-assert.coffee
+check-llvm: terminal.js echo-assert.js
 	@NODE_PATH=$(NODE_PATH):. coffee llvm-test.coffee
+
+check-set: terminal.js echo-assert.js
+	@NODE_PATH=$(NODE_PATH):. coffee set-test.coffee
 
 run-tests: clean-results prepare-xfail $(patsubst %.js,test-%,$(TESTS)) format-results
 
@@ -66,6 +69,9 @@ test-%: echo-% %.ejs-out %.node-out
 		fi \
 	fi
 
+%.js: %.coffee
+	@coffee -c $<
+
 echo-%:
 	-@test_js=`echo $@|sed -e s,echo-,,`; \
 	/bin/echo -n "$$test_js:   "
@@ -85,12 +91,7 @@ v8-%.js.exe: v8/%.js $(TOPDIR)/runtime/libecho.a
 run-node:
 	NODE_PATH=$(NODE_PATH) node
 
-set.js: $(TOPDIR)/lib/set.coffee
-	@NODE_PATH=$(NODE_PATH):. coffee -b -c -o . $(TOPDIR)/lib/set.coffee
-
-self-test: set.js.exe
-	./set.js.exe
-
 clean: clean-results
 	rm -f *.o *.js.exe terminal.js echo-assert.js *.diff
 
+.INTERMEDIATE: terminal.js echo-assert.js
