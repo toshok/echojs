@@ -49,4 +49,5 @@ _ejs_init(int argc, char** argv)
   }
 
   _ejs_object_setprop_utf8 (_ejs_process, "argv", _argv);
+  _ejs_object_setprop_utf8 (_ejs_global, "process", _ejs_process);
 }

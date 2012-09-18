@@ -8,7 +8,8 @@ extern EJSRequire _ejs_require_map[];
 
 static EJSRequire builtin_module_map[] = {
   { "path", _ejs_path_module_func, 0 },
-  { "fs", _ejs_fs_module_func, 0 }
+  { "fs", _ejs_fs_module_func, 0 },
+  { "child_process", _ejs_child_process_module_func, 0 }
 };
 static int num_builtin_modules = sizeof(builtin_module_map) / sizeof(builtin_module_map[0]);
 
