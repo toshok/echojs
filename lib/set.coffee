@@ -43,6 +43,7 @@ exports.Set = class Set
         @union: (sets...) ->
                 (foldl ((a,b) -> a.union b), (new Set), [sets...])
 
+###
 # Set tests
 
 s1 = new Set [1, 2, 3, 4]
@@ -61,3 +62,4 @@ s6 = new Set [3, 4, 5];
 
 console.log "should be { 3 4 }:    #{(s5.intersect s6).toString()}"
 
+###
