@@ -15,4 +15,5 @@
 *.ll
 *.s
 
+*.exe
 ejs.js
