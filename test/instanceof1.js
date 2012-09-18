@@ -1,5 +1,3 @@
-if (typeof console === "undefined") { console = { log: print }; }
-
 function Foo() {
 }
 

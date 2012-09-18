@@ -1,5 +1,3 @@
-if (typeof console === "undefined") { console = { log: print }; }
-
 var i, j;
 
 outer: for (j = 0; j < 10; j = j + 1) {

@@ -1,5 +1,3 @@
-if (typeof console === "undefined") { console = { log: print }; }
-
 j = 0;
 outer: while (j < 10) {
   var i = 0;

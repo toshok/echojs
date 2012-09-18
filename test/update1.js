@@ -1,5 +1,3 @@
-if (typeof console === "undefined") { console = { log: print }; }
-
 var i = 0;
 console.log(i++);
 console.log(++i);

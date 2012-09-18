@@ -1,5 +1,3 @@
-if (typeof console === "undefined") { console = { log: print }; }
-
 var baz = console.invalidfield;
 
 foo = {};

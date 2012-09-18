@@ -1,5 +1,3 @@
-if (typeof console === "undefined") { console = { log: print }; }
-
 function primes (n) {
   function primes_internal (cur, remaining, filter) {
     if (remaining === 0)
