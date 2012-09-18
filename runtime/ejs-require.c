@@ -47,11 +47,13 @@ _ejs_require_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
     }
     if (!strcmp (_ejs_require_map[i].name, EJSVAL_TO_STRING(arg))) {
       if (!_ejs_require_map[i].cached_exports) {
-	//	printf ("require'ing %s.\n", EJSVAL_TO_STRING(arg));
+	printf ("require'ing %s.\n", EJSVAL_TO_STRING(arg));
 	_ejs_require_map[i].cached_exports = _ejs_object_new(NULL);
+	EJSValue* prev_exports = _ejs_object_getprop_utf8 (_ejs_global, "exports");
 	_ejs_object_setprop_utf8(_ejs_global, "exports", _ejs_require_map[i].cached_exports);
 	_ejs_require_map[i].func (NULL, _ejs_undefined, 1, &_ejs_require_map[i].cached_exports);
-	_ejs_object_setprop_utf8(_ejs_global, "exports", _ejs_undefined);
+	_ejs_object_setprop_utf8(_ejs_global, "exports", prev_exports);
+	printf ("done require'ing %s.\n", EJSVAL_TO_STRING(arg));
       }
       return _ejs_require_map[i].cached_exports;
     }
