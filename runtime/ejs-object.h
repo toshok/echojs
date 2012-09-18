@@ -14,6 +14,7 @@ typedef struct {
 } EJSPropertyDesc;
 
 typedef struct {
+  EJSValueTag tag;
   EJSValue *proto;
   EJSPropertyMap* map;
   EJSValue **fields;
@@ -36,6 +37,8 @@ void _ejs_property_iterator_free (EJSPropertyIterator *iterator);
 extern EJSValue* _ejs_Object;
 
 EJSValue* _ejs_object_new (EJSValue *proto);
+EJSObject* _ejs_object_alloc_instance();
+void      _ejs_init_object (EJSObject *obj, EJSValue *proto);
 
 EJSValue* _ejs_object_get_prototype();
 

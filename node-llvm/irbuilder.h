@@ -29,6 +29,7 @@ namespace jsllvm {
     static v8::Handle<v8::Value> CreateExtractElement(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateGetElementPointer(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateICmpEq(const v8::Arguments& args);
+    static v8::Handle<v8::Value> CreateICmpSGt(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateBr(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateCondBr(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreatePhi(const v8::Arguments& args);

@@ -5,11 +5,11 @@
 
 typedef struct {
   /* object header */
-  EJSValue *proto;
-  EJSPropertyMap* map;
-  EJSValue **fields;
+  EJSObject obj;
 
-
+  /* regexp specific data */
+  int pattern_len;
+  char *pattern;
 } EJSRegexp;
 
 
@@ -17,6 +17,7 @@ extern EJSValue* _ejs_Regexp;
 
 EJSValue* _ejs_regexp_get_prototype();
 
+EJSObject* _ejs_regexp_alloc_instance();
 void _ejs_regexp_init(EJSValue* global);
 
 EJSValue* _ejs_regexp_new_utf8 (const char* str);

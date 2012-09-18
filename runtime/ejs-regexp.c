@@ -3,17 +3,25 @@
 #include "ejs-value.h"
 #include "ejs-regexp.h"
 
+EJSObject* _ejs_regexp_alloc_instance()
+{
+  return (EJSObject*)calloc(1, sizeof (EJSRegexp));
+}
+
 EJSValue*
 _ejs_regexp_new_utf8 (const char* str)
 {
   int str_len = strlen(str);
-  int value_size = sizeof (EJSValueType) + sizeof (int) + str_len + 1;
+  int value_size = sizeof (EJSRegexp) + str_len;
 
-  EJSValue* rv = (EJSValue*)calloc(1, value_size);
-  rv->type = EJSValueTypeString;
-  rv->u.s.len = str_len;
-  memmove (&rv->u.s.data, str, str_len + 1);
-  return rv;
+  EJSRegexp* rv = (EJSRegexp*)calloc(1, value_size);
+
+  _ejs_init_object ((EJSObject*)rv, _ejs_regexp_get_prototype());
+
+  rv->pattern_len = str_len;
+  rv->pattern = strdup(str);
+
+  return (EJSValue*)rv;
 }
 
 EJSValue* _ejs_Regexp;
@@ -42,11 +50,10 @@ _ejs_regexp_get_prototype()
 void
 _ejs_regexp_init(EJSValue *global)
 {
-  _ejs_Regexp = _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Regexp_impl);
+  _ejs_Regexp = _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Regexp_impl);
   _ejs_Regexp_proto = _ejs_object_new(NULL);
 
   _ejs_object_setprop_utf8 (_ejs_Regexp,       "prototype",  _ejs_Regexp_proto);
-  _ejs_object_setprop_utf8 (_ejs_Regexp_proto, "prototype",  _ejs_regexp_get_prototype());
 
   _ejs_object_setprop_utf8 (global, "RegExp", _ejs_Regexp);
 }

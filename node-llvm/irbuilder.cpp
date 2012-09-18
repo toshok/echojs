@@ -34,6 +34,7 @@ namespace jsllvm {
     NODE_SET_METHOD(s_func, "createExtractElement", IRBuilder::CreateExtractElement);
     NODE_SET_METHOD(s_func, "createGetElementPointer", IRBuilder::CreateGetElementPointer);
     NODE_SET_METHOD(s_func, "createICmpEq", IRBuilder::CreateICmpEq);
+    NODE_SET_METHOD(s_func, "createICmpSGt", IRBuilder::CreateICmpSGt);
     NODE_SET_METHOD(s_func, "createCondBr", IRBuilder::CreateCondBr);
     NODE_SET_METHOD(s_func, "createBr", IRBuilder::CreateBr);
     NODE_SET_METHOD(s_func, "createPhi", IRBuilder::CreatePhi);
@@ -208,6 +209,18 @@ namespace jsllvm {
     REQ_UTF8_ARG(2, name);
 
     Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateICmpEQ(left, right, *name));
+    return scope.Close(result);
+  }
+
+  v8::Handle<v8::Value> IRBuilder::CreateICmpSGt(const v8::Arguments& args)
+  {
+    HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(0, left);
+    REQ_LLVM_VAL_ARG(1, right);
+    REQ_UTF8_ARG(2, name);
+
+    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateICmpSGT(left, right, *name));
     return scope.Close(result);
   }
 

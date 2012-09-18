@@ -41,75 +41,68 @@ takes_builtins = (n) ->
 class LLVMIRVisitor extends NodeVisitor
         constructor: (@module) ->
 
+                make_invoke_closure = (n) ->
+                        takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_#{n}", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty()].concat (EjsValueType for i in [0...n])
+                        
                 # build up our runtime method table
                 @builtins = {
-                        invokeClosure: [
-                                null,
-                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_0", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty()]
-                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_1", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType]
-                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_2", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType]
-                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_3", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType]
-                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_4", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType, EjsValueType]
-                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_5", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType]
-                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_6", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType]
-                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_7", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType]
-                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_8", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType]
-                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_9", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType]
-                                takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure_10", EjsValueType, [EjsValueType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType, EjsValueType]
-                        ]
-                        makeClosure: module.getOrInsertExternalFunction "_ejs_closure_new", EjsValueType, [EjsClosureEnvType, EjsClosureFuncType]
+                        invokeClosure: [null].concat (make_invoke_closure n for n in [0..10])
+                        makeClosure: module.getOrInsertExternalFunction "_ejs_function_new", EjsValueType, [EjsClosureEnvType, EjsClosureFuncType]
                 }
                 
                 @ejs = {
-                        object_new:        module.getOrInsertExternalFunction "_ejs_object_new", EjsValueType, [EjsValueType]
-                        array_new:         module.getOrInsertExternalFunction "_ejs_array_new", EjsValueType, [int32Type]
-                        number_new:        module.getOrInsertExternalFunction "_ejs_number_new", EjsValueType, [llvm.Type.getDoubleTy()]
-                        boolean_new:       module.getOrInsertExternalFunction "_ejs_boolean_new", EjsValueType, [boolType]
-                        string_new_utf8:   module.getOrInsertExternalFunction "_ejs_string_new_utf8", EjsValueType, [stringType]
-                        regexp_new_utf8:   module.getOrInsertExternalFunction "_ejs_regexp_new_utf8", EjsValueType, [stringType]
-                        truthy:            module.getOrInsertExternalFunction "_ejs_truthy", boolType, [EjsValueType]
-                        object_setprop:    module.getOrInsertExternalFunction "_ejs_object_setprop", EjsValueType, [EjsValueType, EjsValueType, EjsValueType]
-                        object_getprop:    module.getOrInsertExternalFunction "_ejs_object_getprop", EjsValueType, [EjsValueType, EjsValueType]
-                        object_getprop_utf8:  module.getOrInsertExternalFunction "_ejs_object_getprop_utf8", EjsValueType, [EjsValueType, stringType]
-                        object_setprop_utf8:  module.getOrInsertExternalFunction "_ejs_object_setprop_utf8", EjsValueType, [EjsValueType, stringType, EjsValueType]
-                        prop_iterator_new: module.getOrInsertExternalFunction "_ejs_property_iterator_new", EjsPropIteratorType, [EjsValueType]
+                        object_new:            module.getOrInsertExternalFunction "_ejs_object_new",                EjsValueType, [EjsValueType]
+                        array_new:             module.getOrInsertExternalFunction "_ejs_array_new",                 EjsValueType, [int32Type]
+                        number_new:            module.getOrInsertExternalFunction "_ejs_number_new",                EjsValueType, [llvm.Type.getDoubleTy()]
+                        boolean_new:           module.getOrInsertExternalFunction "_ejs_boolean_new",               EjsValueType, [boolType]
+                        string_new_utf8:       module.getOrInsertExternalFunction "_ejs_string_new_utf8",           EjsValueType, [stringType]
+                        regexp_new_utf8:       module.getOrInsertExternalFunction "_ejs_regexp_new_utf8",           EjsValueType, [stringType]
+                        truthy:                module.getOrInsertExternalFunction "_ejs_truthy",                    boolType, [EjsValueType]
+                        object_setprop:        module.getOrInsertExternalFunction "_ejs_object_setprop",            EjsValueType, [EjsValueType, EjsValueType, EjsValueType]
+                        object_getprop:        module.getOrInsertExternalFunction "_ejs_object_getprop",            EjsValueType, [EjsValueType, EjsValueType]
+                        object_getprop_utf8:   module.getOrInsertExternalFunction "_ejs_object_getprop_utf8",       EjsValueType, [EjsValueType, stringType]
+                        object_setprop_utf8:   module.getOrInsertExternalFunction "_ejs_object_setprop_utf8",       EjsValueType, [EjsValueType, stringType, EjsValueType]
+                        prop_iterator_new:     module.getOrInsertExternalFunction "_ejs_property_iterator_new",     EjsPropIteratorType, [EjsValueType]
                         prop_iterator_current: module.getOrInsertExternalFunction "_ejs_property_iterator_current", stringType, [EjsPropIteratorType]
-                        prop_iterator_next: module.getOrInsertExternalFunction "_ejs_property_iterator_next", voidType, [EjsPropIteratorType]
-                        prop_iterator_free: module.getOrInsertExternalFunction "_ejs_property_iterator_free", voidType, [EjsPropIteratorType]
-                        undefined:         module.getOrInsertGlobal "_ejs_undefined", EjsValueType
-                        global:            module.getOrInsertGlobal "_ejs_global", EjsValueType
+                        prop_iterator_next:    module.getOrInsertExternalFunction "_ejs_property_iterator_next",    voidType, [EjsPropIteratorType]
+                        prop_iterator_free:    module.getOrInsertExternalFunction "_ejs_property_iterator_free",    voidType, [EjsPropIteratorType]
+                        undefined:             module.getOrInsertGlobal           "_ejs_undefined",                 EjsValueType
+                        global:                module.getOrInsertGlobal           "_ejs_global",                    EjsValueType
                         
-                        "unop-":           module.getOrInsertExternalFunction "_ejs_op_neg", EjsValueType, [EjsValueType]
-                        "unop+":           module.getOrInsertExternalFunction "_ejs_op_plus", EjsValueType, [EjsValueType]
-                        "unop!":           module.getOrInsertExternalFunction "_ejs_op_not", EjsValueType, [EjsValueType]
-                        "unoptypeof":      module.getOrInsertExternalFunction "_ejs_op_typeof", EjsValueType, [EjsValueType]
-                        "unopdelete":      module.getOrInsertExternalFunction "_ejs_op_delete", EjsValueType, [EjsValueType, EjsValueType] # this is a unop, but ours only works for memberexpressions
-                        "unopvoid":        module.getOrInsertExternalFunction "_ejs_op_void", EjsValueType, [EjsValueType]
+                        "unop-":           module.getOrInsertExternalFunction "_ejs_op_neg",         EjsValueType, [EjsValueType]
+                        "unop+":           module.getOrInsertExternalFunction "_ejs_op_plus",        EjsValueType, [EjsValueType]
+                        "unop!":           module.getOrInsertExternalFunction "_ejs_op_not",         EjsValueType, [EjsValueType]
+                        "unoptypeof":      module.getOrInsertExternalFunction "_ejs_op_typeof",      EjsValueType, [EjsValueType]
+                        "unopdelete":      module.getOrInsertExternalFunction "_ejs_op_delete",      EjsValueType, [EjsValueType, EjsValueType] # this is a unop, but ours only works for memberexpressions
+                        "unopvoid":        module.getOrInsertExternalFunction "_ejs_op_void",        EjsValueType, [EjsValueType]
                         "binop&":          module.getOrInsertExternalFunction "_ejs_op_bitwise_and", EjsValueType, [EjsValueType, EjsValueType]
-                        "binop|":          module.getOrInsertExternalFunction "_ejs_op_bitwise_or", EjsValueType, [EjsValueType, EjsValueType]
-                        "binop>>":         module.getOrInsertExternalFunction "_ejs_op_rsh", EjsValueType, [EjsValueType, EjsValueType]
-                        "binop>>>":        module.getOrInsertExternalFunction "_ejs_op_ursh", EjsValueType, [EjsValueType, EjsValueType]
-                        "binop%":          module.getOrInsertExternalFunction "_ejs_op_mod", EjsValueType, [EjsValueType, EjsValueType]
-                        "binop+":          module.getOrInsertExternalFunction "_ejs_op_add", EjsValueType, [EjsValueType, EjsValueType]
-                        "binop*":          module.getOrInsertExternalFunction "_ejs_op_mult", EjsValueType, [EjsValueType, EjsValueType]
-                        "binop/":          module.getOrInsertExternalFunction "_ejs_op_div", EjsValueType, [EjsValueType, EjsValueType]
-                        "binop<":          module.getOrInsertExternalFunction "_ejs_op_lt", EjsValueType, [EjsValueType, EjsValueType]
-                        "binop<=":         module.getOrInsertExternalFunction "_ejs_op_le", EjsValueType, [EjsValueType, EjsValueType]
-                        "binop>":          module.getOrInsertExternalFunction "_ejs_op_gt", EjsValueType, [EjsValueType, EjsValueType]
-                        "binop>=":         module.getOrInsertExternalFunction "_ejs_op_ge", EjsValueType, [EjsValueType, EjsValueType]
-                        "binop-":          module.getOrInsertExternalFunction "_ejs_op_sub", EjsValueType, [EjsValueType, EjsValueType]
-                        "binop===":        module.getOrInsertExternalFunction "_ejs_op_strict_eq", EjsValueType, [EjsValueType, EjsValueType]
-                        "binop==":         module.getOrInsertExternalFunction "_ejs_op_eq", EjsValueType, [EjsValueType, EjsValueType]
-                        "binop!==":        module.getOrInsertExternalFunction "_ejs_op_strict_neq", EjsValueType, [EjsValueType, EjsValueType]
-                        "binop!=":         module.getOrInsertExternalFunction "_ejs_op_neq", EjsValueType, [EjsValueType, EjsValueType]
-                        "binopinstanceof": module.getOrInsertExternalFunction "_ejs_op_instanceof", EjsValueType, [EjsValueType, EjsValueType]
-                        "binopin":         module.getOrInsertExternalFunction "_ejs_op_in", EjsValueType, [EjsValueType, EjsValueType]
+                        "binop|":          module.getOrInsertExternalFunction "_ejs_op_bitwise_or",  EjsValueType, [EjsValueType, EjsValueType]
+                        "binop>>":         module.getOrInsertExternalFunction "_ejs_op_rsh",         EjsValueType, [EjsValueType, EjsValueType]
+                        "binop>>>":        module.getOrInsertExternalFunction "_ejs_op_ursh",        EjsValueType, [EjsValueType, EjsValueType]
+                        "binop%":          module.getOrInsertExternalFunction "_ejs_op_mod",         EjsValueType, [EjsValueType, EjsValueType]
+                        "binop+":          module.getOrInsertExternalFunction "_ejs_op_add",         EjsValueType, [EjsValueType, EjsValueType]
+                        "binop*":          module.getOrInsertExternalFunction "_ejs_op_mult",        EjsValueType, [EjsValueType, EjsValueType]
+                        "binop/":          module.getOrInsertExternalFunction "_ejs_op_div",         EjsValueType, [EjsValueType, EjsValueType]
+                        "binop<":          module.getOrInsertExternalFunction "_ejs_op_lt",          EjsValueType, [EjsValueType, EjsValueType]
+                        "binop<=":         module.getOrInsertExternalFunction "_ejs_op_le",          EjsValueType, [EjsValueType, EjsValueType]
+                        "binop>":          module.getOrInsertExternalFunction "_ejs_op_gt",          EjsValueType, [EjsValueType, EjsValueType]
+                        "binop>=":         module.getOrInsertExternalFunction "_ejs_op_ge",          EjsValueType, [EjsValueType, EjsValueType]
+                        "binop-":          module.getOrInsertExternalFunction "_ejs_op_sub",         EjsValueType, [EjsValueType, EjsValueType]
+                        "binop===":        module.getOrInsertExternalFunction "_ejs_op_strict_eq",   EjsValueType, [EjsValueType, EjsValueType]
+                        "binop==":         module.getOrInsertExternalFunction "_ejs_op_eq",          EjsValueType, [EjsValueType, EjsValueType]
+                        "binop!==":        module.getOrInsertExternalFunction "_ejs_op_strict_neq",  EjsValueType, [EjsValueType, EjsValueType]
+                        "binop!=":         module.getOrInsertExternalFunction "_ejs_op_neq",         EjsValueType, [EjsValueType, EjsValueType]
+                        "binopinstanceof": module.getOrInsertExternalFunction "_ejs_op_instanceof",  EjsValueType, [EjsValueType, EjsValueType]
+                        "binopin":         module.getOrInsertExternalFunction "_ejs_op_in",          EjsValueType, [EjsValueType, EjsValueType]
                 }
 
                 @initGlobalScope();
 
         loadNullEjsValue: -> llvm.Constant.getNull EjsValueType
-        loadUndefinedEjsValue: -> llvm.IRBuilder.createLoad @ejs.undefined, "load_undefined"                
+        loadUndefinedEjsValue: ->
+                undef = llvm.IRBuilder.createLoad @ejs.undefined, "load_undefined"
+                undef.isundefined = true
+                undef
         loadGlobal: -> llvm.IRBuilder.createLoad @ejs.global, "load_global"
 
         pushIIFEInfo: (info) ->
@@ -150,7 +143,8 @@ class LLVMIRVisitor extends NodeVisitor
 
         createAllocas: (func, ids, scope) ->
                 allocas = []
-
+                new_allocas = []
+                
                 # the allocas are always allocated in the function entry_bb so the mem2reg opt pass can regenerate the ssa form for us
                 saved_insert_point = llvm.IRBuilder.getInsertBlock()
                 llvm.IRBuilder.setInsertPointStartBB func.entry_bb
@@ -161,12 +155,17 @@ class LLVMIRVisitor extends NodeVisitor
                         if !scope.hasOwnProperty name
                                 allocas[j] = llvm.IRBuilder.createAlloca EjsValueType, "local_#{name}"
                                 scope[name] = allocas[j]
-                                j = j + 1
+                                new_allocas[j] = true
+                        else
+                                allocas[j] = scope[name]
+                                new_allocas[j] = false
+                        j = j + 1
+                                
 
                 # reinstate the IRBuilder to its previous insert point so we can insert the actual initializations
                 llvm.IRBuilder.setInsertPoint saved_insert_point
 
-                allocas
+                { allocas: allocas, new_allocas: new_allocas }
 
         createPropertyStore: (obj,prop,rhs,computed) ->
                 if computed
@@ -275,9 +274,12 @@ class LLVMIRVisitor extends NodeVisitor
                 llvm.IRBuilder.createBr test_bb
 
                 llvm.IRBuilder.setInsertPoint test_bb
-                cond_truthy = llvm.IRBuilder.createCall @ejs.truthy, [@visit(n.test)], "cond_truthy"
-                cmp = llvm.IRBuilder.createICmpEq cond_truthy, (llvm.Constant.getIntegerValue boolType, 0), "cmpresult"
-                llvm.IRBuilder.createCondBr cmp, merge_bb, body_bb
+                if n.test
+                        cond_truthy = llvm.IRBuilder.createCall @ejs.truthy, [@visit(n.test)], "cond_truthy"
+                        cmp = llvm.IRBuilder.createICmpEq cond_truthy, (llvm.Constant.getIntegerValue boolType, 0), "cmpresult"
+                        llvm.IRBuilder.createCondBr cmp, merge_bb, body_bb
+                else
+                        llvm.IRBuilder.createBr body_bb
 
                 @continueStack.unshift label: n.label, dest: update_bb
                 @breakStack.unshift    label: n.label, dest: merge_bb
@@ -332,13 +334,11 @@ class LLVMIRVisitor extends NodeVisitor
                 iterator = llvm.IRBuilder.createCall @ejs.prop_iterator_new, [@visit n.right], "iterator"
 
                 # make sure we get an alloca if there's a "var"
-                console.warn "n.left.type = #{n.left.type}"
                 if n.left[0]?
                         @visit n.left
                         lhs = n.left[0].declarations[0].id
                 else
                         lhs = n.left
-                console.warn "lhs is #{JSON.stringify lhs}"
                 
                 forin_bb  = new llvm.BasicBlock "forin_start", insertFunc
                 body_bb   = new llvm.BasicBlock "forin_body",  insertFunc
@@ -449,18 +449,32 @@ class LLVMIRVisitor extends NodeVisitor
                         # vars are hoisted to the containing function's toplevel scope
                         scope = @currentFunction.topScope
 
-                        allocas = @createAllocas @currentFunction, n.declarations, scope
+                        {allocas,new_allocas} = @createAllocas @currentFunction, n.declarations, scope
                         for i in [0...n.declarations.length]
-                                initializer = @visitOrUndefined n.declarations[i].init
-                                llvm.IRBuilder.createStore initializer, allocas[i]
+                                if not n.declarations[i].init?
+                                        # there was not an initializer. we only store undefined
+                                        # if the alloca is newly allocated.
+                                        if new_allocas[i]
+                                                initializer = @visitOrUndefined n.declarations[i].init
+                                                llvm.IRBuilder.createStore initializer, allocas[i]
+                                else
+                                        initializer = @visitOrUndefined n.declarations[i].init
+                                        llvm.IRBuilder.createStore initializer, allocas[i]
                 else if n.kind is "let"
                         # lets are not hoisted to the containing function's toplevel, but instead are bound in the lexical block they inhabit
                         scope = @current_scope;
 
-                        allocas = @createAllocas @currentFunction, n.declarations, scope
+                        {allocas,new_allocas} = @createAllocas @currentFunction, n.declarations, scope
                         for i in [0...n.declarations.length]
-                                initializer = @visitOrUndefined n.declarations[i].init
-                                llvm.IRBuilder.createStore initializer, allocas[i]
+                                if not n.declarations[i].init?
+                                        # there was not an initializer. we only store undefined
+                                        # if the alloca is newly allocated.
+                                        if new_allocas[i]
+                                                initializer = @visitOrUndefined n.declarations[i].init
+                                                llvm.IRBuilder.createStore initializer, allocas[i]
+                                else
+                                        initializer = @visitOrUndefined n.declarations[i].init
+                                        llvm.IRBuilder.createStore initializer, allocas[i]
                 else if n.kind is "const"
                         for i in [0...n.declarations.length]
                                 u = n.declarations[i]
@@ -488,10 +502,19 @@ class LLVMIRVisitor extends NodeVisitor
                 rhs = n.right
 
                 rhvalue = @visit rhs
+                if n.operator.length is 2
+                        # cribbed from visitBinaryExpression
+                        builtin = "binop#{n.operator[0]}"
+                        callee = @ejs[builtin]
+                        if not callee
+                                throw "Internal error: unhandled binary operator '#{n.operator}'"
+                        rhvalue = llvm.IRBuilder.createCall callee, [(@visit lhs), rhvalue], "result_#{builtin}"
+                        
                 @storeValueInDest rhvalue, lhs
 
-                # we need to visit lhs after the store so that we load the value                
-                @visit lhs
+                # we need to visit lhs after the store so that we load the value, but only if it's used
+                if not n.result_not_used
+                        @visit lhs
 
         visitFunction: (n) ->
                 console.warn "        function #{n.ir_name} at line #{n.loc?.start.line}"
@@ -563,20 +586,43 @@ class LLVMIRVisitor extends NodeVisitor
                         store = llvm.IRBuilder.createStore ir_args[i], allocas[i]
                         debug.log "store #{store} *builtin"
 
-                # now pull the named parameters from our args array
+                # initialize all our named parameters to undefined
                 args_load = llvm.IRBuilder.createLoad args_alloca, "args_load"
                 if n.params.length > BUILTIN_PARAMS.length
                         for i in [BUILTIN_PARAMS.length...n.params.length]
-                                debug.log "user param #{n.params[i].name}"
+                                store = llvm.IRBuilder.createStore @loadUndefinedEjsValue(), allocas[i+1]
+                                
+                body_bb = new llvm.BasicBlock "body", ir_func
+                llvm.IRBuilder.setInsertPoint body_bb
+
+                insertFunc = body_bb.parent
+                
+                # now pull the named parameters from our args array for the ones that were passed in.
+                # any arg that isn't specified
+                if n.params.length > BUILTIN_PARAMS.length
+                        load_argc = llvm.IRBuilder.createLoad allocas[2], "argc" # FIXME, magic number alert
+                        
+                        for i in [BUILTIN_PARAMS.length...n.params.length]
+                                then_bb  = new llvm.BasicBlock "arg_then", insertFunc
+                                else_bb  = new llvm.BasicBlock "arg_else", insertFunc
+                                merge_bb = new llvm.BasicBlock "arg_merge", insertFunc
+
+                                cmp = llvm.IRBuilder.createICmpSGt load_argc, (llvm.Constant.getIntegerValue int32Type, i-BUILTIN_PARAMS.length), "argcmpresult"
+                                llvm.IRBuilder.createCondBr cmp, then_bb, else_bb
+                                
+                                llvm.IRBuilder.setInsertPoint then_bb
                                 arg_ptr = llvm.IRBuilder.createGetElementPointer args_load, (llvm.Constant.getIntegerValue int32Type, i-BUILTIN_PARAMS.length), "arg#{i-BUILTIN_PARAMS.length}_ptr"
                                 debug.log "arg_ptr = #{arg_ptr}"
                                 arg = llvm.IRBuilder.createLoad arg_ptr, "arg#{i-BUILTIN_PARAMS.length-1}_load"
                                 store = llvm.IRBuilder.createStore arg, allocas[i+1]
                                 debug.log "store #{store}"
+                                llvm.IRBuilder.createBr merge_bb
 
-                body_bb = new llvm.BasicBlock "body", ir_func
-                llvm.IRBuilder.setInsertPoint body_bb
-                
+                                llvm.IRBuilder.setInsertPoint else_bb
+                                llvm.IRBuilder.createBr merge_bb
+
+                                llvm.IRBuilder.setInsertPoint merge_bb
+                                
                 # stacks of destinations used by continue and break, of the form [{label:..., dest:...}].
                 # 
                 #  when we see an unlabeled "break" or "continue" we insert a branch to the top bb
@@ -599,7 +645,9 @@ class LLVMIRVisitor extends NodeVisitor
                 @currentFunction = null
 
                 llvm.IRBuilder.setInsertPoint insertBlock
-                
+
+                console.log "ir_func = #{ir_func}"
+                                
                 return ir_func
 
         visitUnaryExpression: (n) ->
@@ -758,7 +806,9 @@ class LLVMIRVisitor extends NodeVisitor
 
                 argv = @visitArgs ctor, args
 
-                obj = llvm.IRBuilder.createCall @ejs.object_new, [argv[0]], "objtmp"
+                proto = @createPropertyLoad argv[0], { name: "prototype" }, false
+                
+                obj = llvm.IRBuilder.createCall @ejs.object_new, [proto], "objtmp"
                 if ctor.takes_builtins
                         argv[1] = obj
 
@@ -811,6 +861,7 @@ class LLVMIRVisitor extends NodeVisitor
                 obj
                 
         visitExpressionStatement: (n) ->
+                n.expression.result_not_used = true
                 @visit n.expression
 
         visitLiteral: (n) ->
@@ -852,7 +903,6 @@ class AddFunctionsVisitor extends NodeVisitor
                 # at this point point n.params includes %env as its first param, and is followed by all the formal parameters from the original
                 # script source.  we insert %this and %argc between these.  the LLVMIR phase later removes the actual formal parameters and
                 # adds the "EJSValue** args" array, loading the formal parameter values from that.
-                #
 
                 n.params[0].llvm_type = BUILTIN_PARAMS[0].llvm_type
                 n.params.splice 1, 0, BUILTIN_PARAMS[1]
@@ -883,14 +933,39 @@ insert_toplevel_func = (tree, filename) ->
                         type: syntax.Identifier
                         name: "_ejs_toplevel_#{sanitize filename}"
                 params: [
-                        { type: syntax.Identifier, name: "%env" }
-                        { type: syntax.Identifier, name: "exports" }
+                        { type: syntax.Identifier, name: "%env_unused" }
                 ]
                 body:
                         type: syntax.BlockStatement
                         body: tree.body
+                toplevel: true
         tree.body = [toplevel]
         tree
+
+class MoveFunctionDeclsToStartOfBlock extends NodeVisitor
+        constructor: ->
+                @prepends = []
+                
+        visitFunction: (n) ->
+                @prepends.unshift []
+                super
+                # we're assuming n.body is a BlockStatement here...
+                n.body.body = @prepends.shift().concat n.body.body
+                n
+        
+        visitBlock: (n) ->
+                super
+
+                new_body = []
+                for child in n.body
+                        if child.type is syntax.FunctionDeclaration
+                                @prepends[0].push child
+                        else
+                                new_body.push child
+                n.body = new_body
+                n
+                
+
 
 exports.compile = (tree, filename) ->
 
@@ -898,16 +973,23 @@ exports.compile = (tree, filename) ->
         
         tree = insert_toplevel_func tree, filename
 
+        visitor = new MoveFunctionDeclsToStartOfBlock
+        tree = visitor.visit tree
+        debug.log -> escodegen.generate tree
+
+        toplevel_name = tree.body[0].id.name
+        
         #tree = desugar tree
-        #debug.setLevel 0
         #debug.log -> escodegen.generate tree
-        #debug.setLevel 0
         
         tree = closure_conversion.convert tree
 
+        debug.log "after closure conversion"
         debug.log -> escodegen.generate tree
-        
+                
         module = new llvm.Module "compiled-#{filename}"
+
+        module.toplevel_name = toplevel_name
 
         visitor = new AddFunctionsVisitor module
         tree = visitor.visit tree

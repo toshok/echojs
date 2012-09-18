@@ -43,6 +43,9 @@ exports.NodeVisitor = class NodeVisitor
                 @visit n.body
                 n
 
+        visitEmptyStatement: (n) ->
+                n
+
         visitExpressionStatement: (n) ->
                 n.expression = @visit n.expression
                 n
@@ -257,6 +260,7 @@ exports.NodeVisitor = class NodeVisitor
                         when syntax.Literal              then rv = @visitLiteral new_n
                         when syntax.CallExpression       then rv = @visitCallExpression new_n
                         when syntax.Property             then rv = @visitProperty new_n
+                        when syntax.EmptyStatement       then rv = @visitEmptyStatement new_n
                         else
                             throw "PANIC: unknown operation #{n.type}"
                         

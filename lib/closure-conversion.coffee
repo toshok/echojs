@@ -30,7 +30,7 @@ free_blocklike = (exp,body) ->
         exp.ejs_free_vars = uses.subtract decls
         exp.ejs_free_vars
         
-free = (exp) ->
+exports.free = free = (exp) ->
         if not exp?
                 return new Set
         switch exp.type
@@ -116,7 +116,7 @@ LocateEnvVisitor = class LocateEnvVisitor extends NodeVisitor
                 # we don't want a function to look like:  function foo (%env_1.x) { }
                 # instead of                              function foo (x) { }
                 n.body = @visit n.body
-                @envs = @envs.slice 1
+                @envs.shift()
                 n
 
         visitVariableDeclarator: (n) ->
@@ -132,18 +132,20 @@ LocateEnvVisitor = class LocateEnvVisitor extends NodeVisitor
                 # we don't visit property keys here
                 n.value = @visit n.value
                 n
-        
+
         visitIdentifier: (n) ->
                 # find the environment in the env-stack that includes this variable's decl.  add it to the env's .closed set.
                 current_env = @envs[0]
                 env = current_env
                 while env?
                         if env.decls.member n.name
-                                if env.closed.member n.name
-                                        n.ejs_substitute = true
-                                else if env isnt current_env
-                                        env.closed.add n.name
-                                        n.ejs_substitute = true
+#                                if env.closed.member n.name
+#                                        n.ejs_substitute = true
+#                                else if env isnt current_env
+#                                        env.closed.add n.name
+#                                        n.ejs_substitute = true
+                                env.closed.add n.name
+                                n.ejs_substitute = true
                                 return n
                         else
                                 env = env.parent
@@ -206,6 +208,29 @@ class LambdaLift extends NodeVisitor
 
 create_identifier = (x) -> type: syntax.Identifier, name: x
 
+# this should move to echo-desugar.coffee
+FuncsToVars = class FuncsToVars extends NodeVisitor
+        constructor: (module) ->
+                super
+
+        visitFunctionDeclaration: (n) ->
+                if n.toplevel
+                        super
+                else
+                        func_exp = n
+                        func_exp.type = syntax.FunctionExpression
+                        func_exp.body = @visit func_exp.body
+                        return {
+                                type: syntax.VariableDeclaration,
+                                declarations: [{
+                                        type: syntax.VariableDeclarator
+                                        id: create_identifier n.id.name
+                                        init: func_exp
+                                }],
+                                kind: "var"
+                        }
+
+                
 # 1) allocates the environment at the start of the n
 # 2) adds mappings for all .closed variables
 class SubstituteVariables extends NodeVisitor
@@ -268,8 +293,8 @@ class SubstituteVariables extends NodeVisitor
                                 }
                 rv                        
                 
-                
         visitFunction: (n) ->
+                ###
                 if n.ejs_env.closed.empty()
                         n.body.body.unshift
                                 type: syntax.VariableDeclaration,
@@ -283,52 +308,91 @@ class SubstituteVariables extends NodeVisitor
                                 kind: "var"
                         super
                 else
-                        # okay, we know we need a fresh environment in this function
+                ###
+                # okay, we know we need a fresh environment in this function
+                
+                env_name = "%env_#{n.ejs_env.id}"
+
+                # insert environment creation (at the start of the function body)
+                n.body.body.unshift
+                        type: syntax.VariableDeclaration,
+                        declarations: [{
+                                type: syntax.VariableDeclarator
+                                id:  create_identifier env_name
+                                init:
+                                        type: syntax.ObjectExpression
+                                        properties: []
+                        }],
+                        kind: "var"
+
+                if n.ejs_env.parent?
+                        n.body.body.splice 1, 0, {
+                                type: syntax.ExpressionStatement
+                                expression:
+                                        type: syntax.AssignmentExpression,
+                                        operator: "="
+                                        left:
+                                                type: syntax.MemberExpression,
+                                                computed: false,
+                                                object: create_identifier env_name
+                                                property: create_identifier "%env_#{n.ejs_env.parent.id}"
+                                        right: create_identifier "%env_#{n.ejs_env.parent.id}"
+                        }
                         
-                        # insert environment creation (at the start of the function body)
-                        n.body.body.unshift
-                                type: syntax.VariableDeclaration,
-                                declarations: [{
-                                        type: syntax.VariableDeclarator
-                                        id:  create_identifier "%env_#{n.ejs_env.id}"
-                                        init:
-                                                type: syntax.ObjectExpression
-                                                properties: []
-                                }],
-                                kind: "var"
 
-                        # we need to push assignments of any closed over parameters into the environment at this point
-                        for param in n.params
-                                if n.ejs_env.closed.member param.name
-                                        n.body.body.splice 1, 0, {
-                                                type: syntax.ExpressionStatement
-                                                expression:
-                                                        type: syntax.AssignmentExpression,
-                                                        operator: "="
-                                                        left:
-                                                                type: syntax.MemberExpression,
-                                                                computed: false,
-                                                                object: create_identifier "%env_#{n.ejs_env.id}"
-                                                                property: create_identifier param.name
-                                                        right: create_identifier param.name
-                                        }
+                # we need to push assignments of any closed over parameters into the environment at this point
+                for param in n.params
+                        if n.ejs_env.closed.member param.name
+                                n.body.body.splice 1, 0, {
+                                        type: syntax.ExpressionStatement
+                                        expression:
+                                                type: syntax.AssignmentExpression,
+                                                operator: "="
+                                                left:
+                                                        type: syntax.MemberExpression,
+                                                        computed: false,
+                                                        object: create_identifier env_name
+                                                        property: create_identifier param.name
+                                                right: create_identifier param.name
+                                }
 
-                        # XXX if there are existing mappings prepend "%env." (a MemberExpression) to them
+                new_mapping = deep_copy_object @currentMapping()
 
-                        # add mappings for all variables in .closed from "x" to "%env.x"
+                flatten_memberexp = (exp) ->
+                        if exp.type isnt syntax.MemberExpression
+                                [exp]
+                        else
+                                (flatten_memberexp exp.object).concat [exp.property]
 
-                        new_mapping = deep_copy_object @currentMapping()
-                        new_mapping["%env"] = create_identifier "%env_#{n.ejs_env.id}"
-                        n.ejs_env.closed.map (sym) ->
-                                new_mapping[sym] =
+                prepend_environment = (exps) ->
+                        obj = create_identifier env_name
+                        for prop in exps
+                                obj = {
                                         type: syntax.MemberExpression,
                                         computed: false,
-                                        object: create_identifier "%env_#{n.ejs_env.id}"
-                                        property: create_identifier sym
+                                        object: obj
+                                        property: prop
+                                }
+                        obj
 
-                        @mappings.unshift new_mapping
-                        super
-                        @mappings = @mappings.slice(1)
+                # if there are existing mappings prepend "%env." (a MemberExpression) to them
+                for mapped of new_mapping
+                        val = new_mapping[mapped]
+                        new_mapping[mapped] = prepend_environment flatten_memberexp val
+                
+                # add mappings for all variables in .closed from "x" to "%env.x"
+
+                new_mapping["%env"] = create_identifier env_name
+                n.ejs_env.closed.map (sym) ->
+                        new_mapping[sym] =
+                                type: syntax.MemberExpression,
+                                computed: false,
+                                object: create_identifier env_name
+                                property: create_identifier sym
+
+                @mappings.unshift new_mapping
+                super
+                @mappings = @mappings.slice(1)
 
                 # we need to replace function declarations of the form:
                 #   function X () { ...body... }
@@ -347,40 +411,7 @@ class SubstituteVariables extends NodeVisitor
 
                 if n.ejs_env.parent
                         if n.type is syntax.FunctionDeclaration
-                                call_exp =
-                                        type: syntax.CallExpression,
-                                        callee: create_identifier "%makeClosure"
-                                        arguments: [ (create_identifier "%env_#{n.ejs_env.parent.id}"), n ]
-
-                                # this is kinda lame... not sure if it's necessary.  at the very least we need to keep track of the function's
-                                #  name so we can use it when generating the native function.
-                                # n.id = null
-                                n.type = syntax.FunctionExpression
-
-                                if n.id.name? and n.ejs_env.parent.closed.member n.id.name
-                                        assign = 
-                                                type: syntax.ExpressionStatement
-                                                expression:
-                                                        type: syntax.AssignmentExpression,
-                                                        operator: "="
-                                                        left:
-                                                                type: syntax.MemberExpression,
-                                                                computed: false,
-                                                                object: create_identifier "%env_#{n.ejs_env.parent.id}"
-                                                                property: create_identifier n.id.name
-                                                        right: call_exp
-                                        return assign
-                                        
-                                var_decl =
-                                        type: syntax.VariableDeclarator
-                                        id: n.id
-                                        init: call_exp
-
-                                return {
-                                        type: syntax.VariableDeclaration,
-                                        declarations: [var_decl]
-                                        kind: "var"
-                                }
+                                throw "there should be no FunctionDeclarations at this point"
                         else # n.type is syntax.FunctionExpression
                                 call_exp =
                                         type: syntax.CallExpression,
@@ -425,27 +456,33 @@ exports.convert = (tree) ->
         debug.log "before:"
         debug.log -> escodegen.generate tree
 
-        # first we decorate the tree with free variable usage
-        free tree
+        funcs_to_vars = new FuncsToVars tree
+        tree2 = funcs_to_vars.visit tree
+
+        debug.log "after FuncsToVars:"
+        debug.log -> escodegen.generate tree2
         
+        # first we decorate the tree with free variable usage
+        free tree2
+
         # traverse the tree accumulating info about which function level defined a given variable.
         locate_envs = new LocateEnvVisitor
-        tree2 = locate_envs.visit tree
+        tree3 = locate_envs.visit tree2
 
         debug.log "after LocateEnvVisitor:"
-        debug.log -> escodegen.generate tree2
-
-        substitute_vars = new SubstituteVariables tree2
-        tree3 = substitute_vars.visit tree2
-
-        debug.log "after SubstituteVariables:"
         debug.log -> escodegen.generate tree3
 
-        lambda_lift = new LambdaLift tree3
-        tree4 = lambda_lift.visit tree3
+        substitute_vars = new SubstituteVariables tree3
+        tree4 = substitute_vars.visit tree3
 
-        debug.log "after LambdaLift:"
+        debug.log "after SubstituteVariables:"
         debug.log -> escodegen.generate tree4
 
-        tree4
+        lambda_lift = new LambdaLift tree4
+        tree5 = lambda_lift.visit tree4
+
+        debug.log "after LambdaLift:"
+        debug.log -> escodegen.generate tree5
+
+        tree5
         

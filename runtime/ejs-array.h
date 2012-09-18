@@ -5,18 +5,21 @@
 
 typedef struct {
   /* object header */
-  EJSValue *proto;
-  EJSPropertyMap* map;
-  EJSValue **fields;
+  EJSObject obj;
 
+  /* array data */
   int array_length;
   int array_alloc;
   EJSValue **elements;
 } EJSArray;
 
+#define EJS_ARRAY_ALLOC(obj) (((EJSArray*)obj)->array_alloc)
+#define EJS_ARRAY_LEN(obj) (((EJSArray*)obj)->array_length)
+#define EJS_ARRAY_ELEMENTS(obj) (((EJSArray*)obj)->elements)
 
 extern EJSValue* _ejs_Array;
 
+EJSObject* _ejs_array_alloc_instance();
 EJSValue* _ejs_array_new (int numElements);
 EJSValue* _ejs_array_get_prototype();
 

@@ -26,7 +26,7 @@ _ejs_require_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
     return NULL;
   }
 
-  int i = 0;
+  int i;
   for (i = 0; i < num_builtin_modules; i ++) {
     if (!strcmp (builtin_module_map[i].name, EJSVAL_TO_STRING(arg))) {
       if (!builtin_module_map[i].cached_exports) {
@@ -48,7 +48,9 @@ _ejs_require_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
       if (!_ejs_require_map[i].cached_exports) {
 	//	printf ("require'ing %s.\n", EJSVAL_TO_STRING(arg));
 	_ejs_require_map[i].cached_exports = _ejs_object_new(NULL);
+	_ejs_object_setprop_utf8(_ejs_global, "exports", _ejs_require_map[i].cached_exports);
 	_ejs_require_map[i].func (NULL, _ejs_undefined, 1, &_ejs_require_map[i].cached_exports);
+	_ejs_object_setprop_utf8(_ejs_global, "exports", _ejs_undefined);
       }
       return _ejs_require_map[i].cached_exports;
     }
@@ -61,6 +63,6 @@ _ejs_require_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 void
 _ejs_require_init(EJSValue* global)
 {
-  _ejs_require = _ejs_closure_new (NULL, _ejs_require_impl);
-  _ejs_object_setprop (global, _ejs_string_new_utf8("require"), _ejs_require);
+  _ejs_require = _ejs_function_new (NULL, _ejs_require_impl);
+  _ejs_object_setprop_utf8 (global, "require", _ejs_require);
 }

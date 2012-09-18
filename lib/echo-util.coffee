@@ -9,8 +9,13 @@ exports.foldl = foldl = (f, z, arr) ->
         return foldl f, (f z, arr[0]), (arr.slice 1)
 
 gen = 0
+exports.genFreshFileName = (x) ->
+        name = "#{x}.#{gen}"
+        gen += 1
+        name
+
 exports.genGlobalFunctionName = (x) ->
-        name =  "__ejs_function_#{x}#{gen}"
+        name =  "__ejs_function_#{x}_#{gen}"
         gen += 1
         name
 

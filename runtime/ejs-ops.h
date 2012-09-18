@@ -5,6 +5,13 @@
 #include "ejs.h"
 #include "ejs-object.h"
 
+/* returns an EJSPrimString* */
+EJSValue* NumberToString(double d);
+EJSValue* ToString(EJSValue *exp);
+double ToDouble(EJSValue *exp);
+EJSValue* ToObject(EJSValue *exp);
+EJSValue* ToBoolean(EJSValue *exp);
+
 EJSValue* _ejs_op_neg (EJSValue* exp);
 EJSValue* _ejs_op_not (EJSValue* exp);
 EJSValue* _ejs_op_void (EJSValue* exp);

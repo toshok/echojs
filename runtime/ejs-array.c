@@ -1,7 +1,22 @@
 #include <assert.h>
 
+#include "ejs-ops.h"
 #include "ejs-value.h"
 #include "ejs-array.h"
+
+#define EJSOBJ_IS_ARRAY(obj) (((EJSObject*)obj)->proto == _ejs_Array_proto)
+
+EJSObject* _ejs_array_alloc_instance()
+{
+  return (EJSObject*)calloc(1, sizeof (EJSArray));
+}
+
+static EJSValue* _ejs_Array_proto;
+EJSValue*
+_ejs_array_get_prototype()
+{
+  return _ejs_Array_proto;
+}
 
 EJSValue* _ejs_Array;
 static EJSValue*
@@ -9,36 +24,47 @@ _ejs_Array_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
   if (EJSVAL_IS_UNDEFINED(_this)) {
     // called as a function
-    printf ("called Array() as a function!\n");
-    return NULL;
+
+    if (argc == 0) {
+      return _ejs_array_new(10);
+    }
+    else if (argc == 1 && EJSVAL_IS_NUMBER(args[0])) {
+      return _ejs_array_new((int)EJSVAL_TO_NUMBER(args[0]));
+    }
+    else {
+      EJSValue* rv = _ejs_array_new(argc);
+      int i;
+
+      for (i = 0; i < argc; i ++) {
+	_ejs_object_setprop (rv, _ejs_number_new (i), args[i]);
+      }
+
+      return rv;
+    }
   }
   else {
     // called as a constructor
-    printf ("called Array() as a constructor!\n");
-    return NULL;
+    return _this;
   }
 }
-
-#define ARRAY_LEN(obj) (obj->u.a.array_length)
-#define ARRAY_ELEMENTS(obj) (obj->u.a.elements)
 
 static EJSValue*
 _ejs_Array_prototype_push (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
   int i;
-  assert (EJSVAL_IS_ARRAY(_this));
+  assert (EJSOBJ_IS_ARRAY(_this));
   for (i = 0; i < argc; i ++)
-    ARRAY_ELEMENTS(_this)[ARRAY_LEN(_this)++] = args[i];
-  return _ejs_number_new (ARRAY_LEN(_this));
+    EJS_ARRAY_ELEMENTS(_this)[EJS_ARRAY_LEN(_this)++] = args[i];
+  return _ejs_number_new (EJS_ARRAY_LEN(_this));
 }
 
 static EJSValue*
 _ejs_Array_prototype_pop (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  assert (EJSVAL_IS_ARRAY(_this));
-  if (ARRAY_LEN(_this) == 0)
+  assert (EJSOBJ_IS_ARRAY(_this));
+  if (EJS_ARRAY_LEN(_this) == 0)
     return _ejs_undefined;
-  return ARRAY_ELEMENTS(_this)[--ARRAY_LEN(_this)];
+  return EJS_ARRAY_ELEMENTS(_this)[--EJS_ARRAY_LEN(_this)];
 }
 
 static EJSValue*
@@ -53,25 +79,47 @@ _ejs_Array_prototype_splice (EJSValue* env, EJSValue* _this, int argc, EJSValue 
   abort();
 }
 
-static EJSValue* _ejs_Array_proto;
-EJSValue*
-_ejs_array_get_prototype()
+static EJSValue*
+_ejs_Array_prototype_indexOf (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  return _ejs_Array_proto;
+  if (argc != 1)
+    return _ejs_number_new (-1);
+
+  int i;
+  int rv = -1;
+  EJSValue *needle = args[0];
+  if (needle == NULL) {
+    for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
+      if (EJS_ARRAY_ELEMENTS(_this)[i] == NULL) {
+	rv = i;
+	break;
+      }
+    }
+  }
+  else {
+    for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
+      if (EJSVAL_TO_BOOLEAN(_ejs_op_strict_eq (needle, EJS_ARRAY_ELEMENTS(_this)[i]))) {
+	rv = i;
+	break;
+      }
+    }
+  }
+
+  return _ejs_number_new (rv);
 }
 
 void
 _ejs_array_init(EJSValue *global)
 {
-  _ejs_Array = _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Array_impl);
+  _ejs_Array = _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Array_impl);
   _ejs_Array_proto = _ejs_object_new(NULL);
 
   _ejs_object_setprop_utf8 (_ejs_Array,       "prototype",  _ejs_Array_proto);
-  _ejs_object_setprop_utf8 (_ejs_Array_proto, "prototype",  _ejs_object_get_prototype());
-  _ejs_object_setprop_utf8 (_ejs_Array_proto, "push",       _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_push));
-  _ejs_object_setprop_utf8 (_ejs_Array_proto, "pop",        _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_pop));
-  _ejs_object_setprop_utf8 (_ejs_Array_proto, "slice",      _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_slice));
-  _ejs_object_setprop_utf8 (_ejs_Array_proto, "splice",     _ejs_closure_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_splice));
+  _ejs_object_setprop_utf8 (_ejs_Array_proto, "push",       _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_push));
+  _ejs_object_setprop_utf8 (_ejs_Array_proto, "pop",        _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_pop));
+  _ejs_object_setprop_utf8 (_ejs_Array_proto, "slice",      _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_slice));
+  _ejs_object_setprop_utf8 (_ejs_Array_proto, "splice",     _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_splice));
+  _ejs_object_setprop_utf8 (_ejs_Array_proto, "indexOf",    _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_indexOf));
 
-  _ejs_object_setprop (global, _ejs_string_new_utf8("Array"), _ejs_Array);
+  _ejs_object_setprop_utf8 (global,           "Array",      _ejs_Array);
 }

@@ -9,6 +9,8 @@ SOURCES= \
 	ejs-regexp.c \
 	ejs-require.c \
 	ejs-string.c \
+	ejs-date.c \
+	ejs-number.c \
 	ejs-builtin-modules.c \
 	main.c
 

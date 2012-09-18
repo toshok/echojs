@@ -5,17 +5,17 @@
 
 typedef struct {
   /* object header */
-  EJSValue *proto;
-  EJSPropertyMap* map;
-  EJSValue **fields;
+  EJSObject obj;
 
-
+  /* string specific data */
+  int len;
+  char *str;
 } EJSString;
-
 
 extern EJSValue* _ejs_String;
 
 EJSValue* _ejs_string_get_prototype();
+EJSObject* _ejs_string_alloc_instance();
 
 void _ejs_string_init(EJSValue* global);
 
