@@ -18,6 +18,7 @@ typedef struct {
   EJSValue *proto;
   EJSPropertyMap* map;
   EJSValue **fields;
+  int allocated_fields;
 } EJSObject;
 
 EJSPropertyMap* _ejs_propertymap_new (int initial_allocation);

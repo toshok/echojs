@@ -50,6 +50,13 @@ _ejs_propertymap_lookup (EJSPropertyMap *map, const char *name, EJSBool add_if_n
       map->allocated = new_allocated;
     }
     map->names[idx] = strdup (name);
+
+#if DEBUG_PROPMAP
+    printf ("after inserting item, map %p is %d long:\n", map, map->num);
+    for (i = 0; i < map->num; i ++) {
+      printf ("  [%d]: %p %s\n", i, map->names[i], map->names[i]);
+    }
+#endif
   }
 
   return idx;
@@ -120,6 +127,7 @@ _ejs_init_object (EJSObject *obj, EJSValue *proto)
   obj->proto = proto;
   obj->map = _ejs_propertymap_new (40);
   obj->fields = (EJSValue**)calloc(40, sizeof (EJSValue*));
+  obj->allocated_fields = 40;
 }
 
 EJSValue*
@@ -262,6 +270,13 @@ _ejs_object_setprop (EJSValue* val, EJSValue* key, EJSValue* value)
   }
 
   int prop_index = _ejs_propertymap_lookup (obj->map, EJSVAL_TO_STRING(key), TRUE);
+  if (prop_index >= obj->allocated_fields) {
+    int new_allocated = obj->allocated_fields + 20;
+    EJSValue** new_fields = (EJSValue**)malloc (sizeof(EJSValue*) * new_allocated);
+    memmove (new_fields, obj->fields, sizeof(EJSValue*) * obj->allocated_fields);
+    obj->fields = new_fields;
+    obj->allocated_fields = new_allocated;
+  }
   obj->fields[prop_index] = value;
 
   return value;
@@ -323,8 +338,10 @@ _ejs_object_getprop (EJSValue* obj_, EJSValue* key)
     }
 
     if (is_index) {
-      if (idx < 0 || idx > EJS_ARRAY_LEN(obj))
+      if (idx < 0 || idx > EJS_ARRAY_LEN(obj)) {
+	printf ("getprop(%d) on an array, returning undefined\n", idx);
 	return _ejs_undefined;
+      }
       return EJS_ARRAY_ELEMENTS(obj)[idx];
     }
 
@@ -353,10 +370,21 @@ _ejs_object_getprop (EJSValue* obj_, EJSValue* key)
     if (EJSVAL_IS_STRING(key) && !strcmp("prototype", EJSVAL_TO_STRING(key)))
       return obj->proto;
 
-    if (obj->proto)
+#if DEBUG_PROPERTIES
+    EJSValue *toStr = ToString(key);
+#endif
+    if (obj->proto) {
+#if DEBUG_PROPERTIES
+      printf ("walking up prototype chain for property %s\n", EJSVAL_TO_STRING(toStr));
+#endif
       return _ejs_object_getprop (obj->proto, key);
-    else
+    }
+    else {
+#if DEBUG_PROPERTIES
+      printf ("failed to find property %s, returning undefined\n", EJSVAL_TO_STRING(toStr));
+#endif
       return _ejs_undefined;
+    }
   }
   else {
     return obj->fields[prop_index];
@@ -373,6 +401,13 @@ _ejs_object_setprop_utf8 (EJSValue* val, const char *key, EJSValue* value)
 
   EJSObject *obj = (EJSObject*)val;
   int prop_index = _ejs_propertymap_lookup (obj->map, key, TRUE);
+  if (prop_index >= obj->allocated_fields) {
+    int new_allocated = obj->allocated_fields + 20;
+    EJSValue** new_fields = (EJSValue**)malloc (sizeof(EJSValue*) * new_allocated);
+    memmove (new_fields, obj->fields, sizeof(EJSValue*) * obj->allocated_fields);
+    obj->fields = new_fields;
+    obj->allocated_fields = new_allocated;
+  }
   obj->fields[prop_index] = value;
 
   return value;
@@ -409,10 +444,18 @@ _ejs_object_getprop_utf8 (EJSValue* val, const char *key)
     if (!strcmp(key, "prototype"))
       return obj->proto;
 
-    if (obj->proto)
+    if (obj->proto) {
+#if DEBUG_PROPERTIES
+      printf ("walking up prototype chain for property %s\n", key);
+#endif
       return _ejs_object_getprop_utf8 (obj->proto, key);
-    else
+    }
+    else {
+#if DEBUG_PROPERTIES
+      printf ("failed to find property %s, returning undefined\n", key);
+#endif
       return _ejs_undefined;
+    }
   }
   else {
     return obj->fields[prop_index];
