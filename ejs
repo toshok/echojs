@@ -4,6 +4,7 @@ path = require 'path'
 fs = require 'fs'
 esprima = require 'esprima'
 compiler = require 'compiler'
+util = require 'echo-util'
 { spawn } = require 'child_process'
 
 argv = process.argv.splice 2
@@ -13,6 +14,7 @@ options =
   output_filename: null
 
 args =
+  "-s": { flag:   "combine_scripts", help: "treat all toplevels as being 1 context, evaluating them in the order present on the command line" }
   "-o": { option: "output_filename", help: "name of the output file." }
 
 files = []
@@ -33,16 +35,18 @@ if files.length is 0
     console.warn '   ejs [options] file1.js file2.js file.js ...'
     process.exit 1
 
-files_remaining = files.length
+files_remaining = 0
+
 s_filenames = []
 
 base_filenames = (path.basename file for file in files)
 
-files.forEach (filename) ->
-    content = fs.readFileSync filename, 'utf-8'
+compiled_modules = []
+
+compileFile = (filename, content, compileCallback) ->
     parse_tree = esprima.parse content, loc: true, raw: true
 
-    base_filename = path.basename filename
+    base_filename = util.genFreshFileName path.basename filename
     compiled_module = compiler.compile parse_tree, base_filename
 
     ll_filename = "/tmp/#{base_filename}.ll"
@@ -57,6 +61,9 @@ files.forEach (filename) ->
     llc_args = ["-march=x86-64", "-O2", "-o=#{s_filename}", ll_opt_filename]
 
     compiled_module.writeToFile ll_filename
+
+    compiled_modules.push filename: filename, module_toplevel: compiled_module.toplevel_name
+
     llvm_as = spawn "llvm-as", llvm_as_args
     llvm_as.stderr.on "data", (data) -> console.warn "#{data}"
     llvm_as.on "exit", (code) ->
@@ -70,39 +77,59 @@ files.forEach (filename) ->
           llc.stderr.on "data", (data) -> console.warn "#{data}"
           llc.on "exit", (code) ->
             s_filenames.push s_filename
-            files_remaining = files_remaining - 1
-            if files_remaining is 0
-              map_filename = generate_require_map()
-
-              clang_args = ["-o", options.output_filename || "#{files[0]}.exe"].concat s_filenames
-              clang_args.push map_filename
-              clang_args.push path.resolve (path.dirname process.argv[1]), "runtime/libecho.a"
-
-              clang = spawn "clang", clang_args
-              clang.stderr.on "data", (data) -> console.warn "#{data}"
-              clang.on "exit", (code) ->
-                #console.warn "done."
+            compileCallback()
 
 generate_require_map = ->
   sanitize = (filename, c_callable) ->
     filename = filename.replace /\.js$/, ""
     if c_callable
-      filename = filename.replace /[.,-\/\\]/, "_" # this is insanely inadequate
+      filename = filename.replace /[.,-\/\\]/g, "_" # this is insanely inadequate
     filename
-  map_path = "/tmp/#{path.basename files[0]}-require-map.c"
+  map_path = "/tmp/#{util.genFreshFileName path.basename files[0]}-require-map.c"
   map = fs.createWriteStream map_path
   map.write "typedef struct _EJSValue EJSValue;\n"
+  map.write "typedef int EJSBool;\n"
   map.write "typedef EJSValue* (*ToplevelFunc) (EJSValue *env, EJSValue *this, int argc, EJSValue *exports);\n"
   map.write "typedef struct { const char* name;  ToplevelFunc func;  EJSValue *cached_exports; } EJSRequire;\n"
-  base_filenames.forEach (filename) ->
+  compiled_modules.forEach ({ filename, module_toplevel }) ->
     sanitized = sanitize filename, true
-    map.write "extern EJSValue* _ejs_toplevel_#{sanitized} (EJSValue* env, EJSValue *this, int argc, EJSValue *exports);\n"
+    map.write "extern EJSValue* #{module_toplevel} (EJSValue* env, EJSValue *this, int argc, EJSValue *exports);\n"
+
 
   map.write "EJSRequire _ejs_require_map[] = {\n"
-  base_filenames.forEach (filename) ->
-    map.write "  { \"#{sanitize filename, false}\", _ejs_toplevel_#{sanitize filename, true}, 0 },\n"
+  compiled_modules.forEach ({ filename, module_toplevel }) ->
+    map.write "  { \"#{sanitize (path.basename filename), false}\", #{module_toplevel}, 0 },\n"
   map.write "  { 0, 0, 0 }\n"
   map.write "};\n"
   map.write "const char *entry_filename = \"#{sanitize base_filenames[0], false}\";\n";
   map.end()
   map_path
+
+
+file_compiled = ->
+        console.log "done compiling file"
+        files_remaining = files_remaining - 1
+        console.log "files remaining == #{files_remaining}"
+        if files_remaining is 0
+                map_filename = generate_require_map compiled_modules
+
+                clang_args = ["-o", options.output_filename || "#{files[0]}.exe"].concat s_filenames
+                clang_args.push map_filename
+                clang_args.push path.resolve (path.dirname process.argv[1]), "runtime/libecho.a"
+
+                clang = spawn "clang", clang_args
+                clang.stderr.on "data", (data) -> console.warn "#{data}"
+                clang.on "exit", (code) ->
+                        console.warn "done."
+
+if options.combine_scripts
+        script_content = ""
+        files.forEach (filename) ->
+                script_content = script_content + fs.readFileSync filename, 'utf-8'
+        files_remaining = 1
+        compileFile files[0], script_content, file_compiled
+else
+        files_remaining = files.length
+        files.forEach (filename) ->
+                compileFile filename, (fs.readFileSync filename, 'utf-8'), file_compiled
+                
