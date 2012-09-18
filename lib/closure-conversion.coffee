@@ -283,7 +283,7 @@ class SubstituteVariables extends NodeVisitor
                                                         computed: false,
                                                         object: @currentMapping()["%env"]
                                                         property: create_identifier decl.id.name
-                                                right: decl.init || { type: syntax.Literal, value: null } # this should really be undefined
+                                                right: decl.init || { type: syntax.Identifier, name: "undefined" }
                                 }
                         else
                                 rv.push {
