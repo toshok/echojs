@@ -50,8 +50,8 @@ format-results:
 	failure_count=`cat .failures 2>/dev/null| wc -l | sed -e 's, ,,g'`; \
 	xfail_count=`cat .xfail 2>/dev/null| wc -l | sed -e 's, ,,g'`; \
 	xsuccess_count=`cat .xsuccess 2>/dev/null| wc -l | sed -e 's, ,,g'`; \
-	echo "$$success_count successes, $$xsuccess_count unexpected"; \
-	echo "$$failure_count failures, $$xfail_count expected"
+	echo "$$success_count expected successes, $$xsuccess_count unexpected"; \
+	echo "$$failure_count unexpected failures, $$xfail_count expected"
 
 compile-tests: $(patsubst %.js,%.js.exe,$(TESTS))
 
