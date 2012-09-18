@@ -12,23 +12,25 @@ argv = process.argv.slice 2
 options =
   # our defaults:
   output_filename: null
+  combine_scripts: false
 
 args =
   "-s": { flag:   "combine_scripts", help: "treat all toplevels as being 1 context, evaluating them in the order present on the command line" }
   "-o": { option: "output_filename", help: "name of the output file." }
 
 files = []
-for ai in [0..argv.length-1]
-  if args[argv[ai]]?
-    o = args[argv[ai]]
-    if o.flag?
-      options[o.flag] = true
-    else if o.option?
-      options[o.option] = argv[++ai]
-  else
-    # end of options signals the rest of the array is files
-    files = argv.splice ai
-    break
+if argv.length > 0
+  for ai in [0..argv.length-1]
+    if args[argv[ai]]?
+      o = args[argv[ai]]
+      if o.flag?
+        options[o.flag] = true
+      else if o.option?
+        options[o.option] = argv[++ai]
+    else
+      # end of options signals the rest of the array is files
+      files = argv.slice ai
+      break
 
 if files.length is 0
     console.warn 'Usage:';
