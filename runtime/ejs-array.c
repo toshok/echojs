@@ -89,6 +89,59 @@ _ejs_Array_prototype_slice (EJSValue* env, EJSValue* _this, int argc, EJSValue *
 }
 
 static EJSValue*
+_ejs_Array_prototype_join (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  if (EJS_ARRAY_LEN(_this) == 0)
+    return _ejs_string_new_utf8 ("");
+
+  char* separator;
+  int separator_len;
+
+  if (argc > 0) {
+    EJSValue* sepToString = ToString(args[0]);
+    separator_len = EJSVAL_TO_STRLEN(sepToString);
+    separator = EJSVAL_TO_STRING(sepToString);
+  }
+  else {
+    separator = ",";
+    separator_len = 1;
+  }
+  
+  char* result;
+  int result_len = 0;
+
+  EJSValue** strings = (EJSValue**)malloc (sizeof (EJSValue*) * EJS_ARRAY_LEN(_this));
+  int i;
+
+  for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
+    strings[i] = ToString(EJS_ARRAY_ELEMENTS(_this)[i]);
+    result_len += EJSVAL_TO_STRLEN(strings[i]);
+  }
+
+  result_len += separator_len * (EJS_ARRAY_LEN(_this)-1) + 1/* \0 terminator */;
+
+  result = (char*)malloc (result_len);
+  int offset = 0;
+  for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
+    int slen = EJSVAL_TO_STRLEN(strings[i]);
+    memmove (result + offset, EJSVAL_TO_STRING(strings[i]), slen);
+    offset += slen;
+    if (i < EJS_ARRAY_LEN(_this)-1) {
+      memmove (result + offset, separator, separator_len);
+      offset += separator_len;
+    }
+  }
+  result[result_len-1] = 0;
+
+  EJSValue* rv = _ejs_string_new_utf8(result);
+
+  free (result);
+  free (strings);
+
+  return rv;
+}
+
+static EJSValue*
 _ejs_Array_prototype_splice (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
   abort();
@@ -135,6 +188,7 @@ _ejs_array_init(EJSValue *global)
   _ejs_object_setprop_utf8 (_ejs_Array_proto, "slice",      _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_slice));
   _ejs_object_setprop_utf8 (_ejs_Array_proto, "splice",     _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_splice));
   _ejs_object_setprop_utf8 (_ejs_Array_proto, "indexOf",    _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_indexOf));
+  _ejs_object_setprop_utf8 (_ejs_Array_proto, "join",       _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_join));
 
   _ejs_object_setprop_utf8 (global,           "Array",      _ejs_Array);
 }
