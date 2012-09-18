@@ -7,17 +7,34 @@ compiler = require 'compiler'
 util = require 'echo-util'
 { spawn } = require 'child_process'
 
+# this needs to be ".slice 1" for the ejs compiled form.
+# we probably need some global property so we can do:
+# 
+#  slice_count = if ejs? then 1 else 2
+#  argv = process.argv.slice slice_count
+# 
 argv = process.argv.slice 2
 
 options =
   # our defaults:
   output_filename: null
   combine_scripts: false
+  show_help: false
 
 args =
-  "-s": { flag:   "combine_scripts", help: "treat all toplevels as being 1 context, evaluating them in the order present on the command line" }
-  "-o": { option: "output_filename", help: "name of the output file." }
+  "-s":     { flag:   "combine_scripts", help: "treat all toplevels as being 1 context, evaluating them in the order present on the command line" }
+  "-o":     { option: "output_filename", help: "name of the output file." }
+  "--help": { flag:   "show_help",       help: "output this help info." }
 
+output_usage = ->
+    console.warn 'Usage:';
+    console.warn '   ejs [options] file1.js file2.js file.js ...'
+        
+output_options = ->
+    console.warn 'Options:'
+    for a of args
+        console.warn "   #{a}:  #{args[a].help}"
+                
 files = []
 if argv.length > 0
   for ai in [0..argv.length-1]
@@ -32,10 +49,15 @@ if argv.length > 0
       files = argv.slice ai
       break
 
+if options.show_help
+    output_usage()
+    console.warn ''
+    output_options()
+    process.exit 0
+        
 if files.length is 0
-    console.warn 'Usage:';
-    console.warn '   ejs [options] file1.js file2.js file.js ...'
-    process.exit 1
+    output_usage()
+    process.exit 0
 
 files_remaining = 0
 
