@@ -277,15 +277,19 @@ _ejs_object_getprop (EJSValue* obj_, EJSValue* key)
 
   if (EJSVAL_IS_STRING(obj_)) {
     // check if key is an integer, or a string that we can convert to an int
-    int idx = -1;
+    EJSBool is_index = FALSE;
+    int idx = 0;
     if (EJSVAL_IS_NUMBER(key)) {
       double n = EJSVAL_TO_NUMBER(key);
       if (floor(n) == n) {
 	idx = (int)n;
+	is_index = TRUE;
       }
     }
 
-    if (idx != -1) {
+    if (is_index) {
+      if (idx < 0 || idx >  EJSVAL_TO_STRLEN(obj_))
+	return _ejs_undefined;
       char c[2];
       c[1] = EJSVAL_TO_STRING(obj_)[idx];
       c[2] = '\0';
@@ -308,15 +312,19 @@ _ejs_object_getprop (EJSValue* obj_, EJSValue* key)
 
   if (EJSVAL_IS_ARRAY(obj)) {
     // check if key is an integer, or a string that we can convert to an int
-    int idx = -1;
+    EJSBool is_index = FALSE;
+    int idx = 0;
     if (EJSVAL_IS_NUMBER(key)) {
       double n = EJSVAL_TO_NUMBER(key);
       if (floor(n) == n) {
 	idx = (int)n;
+	is_index = TRUE;
       }
     }
 
-    if (idx != -1) {
+    if (is_index) {
+      if (idx < 0 || idx > EJS_ARRAY_LEN(obj))
+	return _ejs_undefined;
       return EJS_ARRAY_ELEMENTS(obj)[idx];
     }
 
@@ -335,7 +343,7 @@ _ejs_object_getprop (EJSValue* obj_, EJSValue* key)
     }
     else {
       printf ("key isn't a string\n");
-      return NULL;
+      return _ejs_undefined;
     }
   }
 
