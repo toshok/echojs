@@ -48,67 +48,67 @@ function getTestCases() {
     array[item++] = new TestCase(   SECTION,
                                     "var myarr = new Array(); myarr[Math.pow(2,32)-2]='hi'; myarr[Math.pow(2,32)-2]",
                                     "hi",
-                                    eval("var myarr = new Array(); myarr[Math.pow(2,32)-2]='hi'; myarr[Math.pow(2,32)-2]")
+                                    function () {var myarr = new Array(); myarr[Math.pow(2,32)-2]='hi'; return myarr[Math.pow(2,32)-2]; }
                                 );
     array[item++] = new TestCase(   SECTION,
                                     "var myarr = new Array(); myarr[Math.pow(2,32)-2]='hi'; myarr.length",
                                     (Math.pow(2,32)-1),
-                                    eval("var myarr = new Array(); myarr[Math.pow(2,32)-2]='hi'; myarr.length")
+                                    function () { var myarr = new Array(); myarr[Math.pow(2,32)-2]='hi'; return myarr.length; }
                                 );
     array[item++] = new TestCase(   SECTION,
                                     "var myarr = new Array(); myarr[Math.pow(2,32)-3]='hi'; myarr[Math.pow(2,32)-3]",
                                     "hi",
-                                    eval("var myarr = new Array(); myarr[Math.pow(2,32)-3]='hi'; myarr[Math.pow(2,32)-3]")
+                                    function () { var myarr = new Array(); myarr[Math.pow(2,32)-3]='hi'; return myarr[Math.pow(2,32)-3]; }
                                 );
     array[item++] = new TestCase(   SECTION,
                                     "var myarr = new Array(); myarr[Math.pow(2,32)-3]='hi'; myarr.length",
                                     (Math.pow(2,32)-2),
-                                    eval("var myarr = new Array(); myarr[Math.pow(2,32)-3]='hi'; myarr.length")
+                                    function () { var myarr = new Array(); myarr[Math.pow(2,32)-3]='hi'; return myarr.length; }
                                 );
 
     array[item++] = new TestCase(   SECTION,
                                     "var myarr = new Array(); myarr[Math.pow(2,31)-2]='hi'; myarr[Math.pow(2,31)-2]",
                                     "hi",
-                                    eval("var myarr = new Array(); myarr[Math.pow(2,31)-2]='hi'; myarr[Math.pow(2,31)-2]")
+                                    function () { var myarr = new Array(); myarr[Math.pow(2,31)-2]='hi'; return myarr[Math.pow(2,31)-2]; }
                                 );
     array[item++] = new TestCase(   SECTION,
                                     "var myarr = new Array(); myarr[Math.pow(2,31)-2]='hi'; myarr.length",
                                     (Math.pow(2,31)-1),
-                                    eval("var myarr = new Array(); myarr[Math.pow(2,31)-2]='hi'; myarr.length")
+                                    function () { var myarr = new Array(); myarr[Math.pow(2,31)-2]='hi'; return myarr.length; }
                                 );
 
     array[item++] = new TestCase(   SECTION,
                                     "var myarr = new Array(); myarr[Math.pow(2,31)-1]='hi'; myarr[Math.pow(2,31)-1]",
                                     "hi",
-                                    eval("var myarr = new Array(); myarr[Math.pow(2,31)-1]='hi'; myarr[Math.pow(2,31)-1]")
+                                    function () { var myarr = new Array(); myarr[Math.pow(2,31)-1]='hi'; return myarr[Math.pow(2,31)-1]; }
                                 );
     array[item++] = new TestCase(   SECTION,
                                     "var myarr = new Array(); myarr[Math.pow(2,31)-1]='hi'; myarr.length",
                                     (Math.pow(2,31)),
-                                    eval("var myarr = new Array(); myarr[Math.pow(2,31)-1]='hi'; myarr.length")
+                                    function () { var myarr = new Array(); myarr[Math.pow(2,31)-1]='hi'; return myarr.length; }
                                 );
 
 
     array[item++] = new TestCase(   SECTION,
                                     "var myarr = new Array(); myarr[Math.pow(2,31)]='hi'; myarr[Math.pow(2,31)]",
                                     "hi",
-                                    eval("var myarr = new Array(); myarr[Math.pow(2,31)]='hi'; myarr[Math.pow(2,31)]")
+                                    function () { var myarr = new Array(); myarr[Math.pow(2,31)]='hi'; return myarr[Math.pow(2,31)]; }
                                 );
     array[item++] = new TestCase(   SECTION,
                                     "var myarr = new Array(); myarr[Math.pow(2,31)]='hi'; myarr.length",
                                     (Math.pow(2,31)+1),
-                                    eval("var myarr = new Array(); myarr[Math.pow(2,31)]='hi'; myarr.length")
+                                    function () { var myarr = new Array(); myarr[Math.pow(2,31)]='hi'; return myarr.length; }
                                 );
 
     array[item++] = new TestCase(   SECTION,
                                     "var myarr = new Array(); myarr[Math.pow(2,30)-2]='hi'; myarr[Math.pow(2,30)-2]",
                                     "hi",
-                                    eval("var myarr = new Array(); myarr[Math.pow(2,30)-2]='hi'; myarr[Math.pow(2,30)-2]")
+                                    function () { var myarr = new Array(); myarr[Math.pow(2,30)-2]='hi'; return myarr[Math.pow(2,30)-2]; }
                                 );
     array[item++] = new TestCase(   SECTION,
                                     "var myarr = new Array(); myarr[Math.pow(2,30)-2]='hi'; myarr.length",
                                     (Math.pow(2,30)-1),
-                                    eval("var myarr = new Array(); myarr[Math.pow(2,30)-2]='hi'; myarr.length")
+                                    function () { var myarr = new Array(); myarr[Math.pow(2,30)-2]='hi'; return myarr.length; }
                                 );
     return ( array );
 }

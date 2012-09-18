@@ -58,17 +58,17 @@ function getTestCases() {
     array[item++] = new TestCase(   SECTION,
                                     "MYARR = new Array();MYARR.getClass = Object.prototype.toString;MYARR.getClass()",
                                     "[object Array]",
-                                    eval("MYARR = Array();MYARR.getClass = Object.prototype.toString;MYARR.getClass()") );
+                                    function () { MYARR = Array();MYARR.getClass = Object.prototype.toString; return MYARR.getClass(); } );
 
     array[item++] = new TestCase(   SECTION,
                                     "(Array()).length",
-                                    0,          (
-                                    Array()).length );
+                                    0,
+                                    function () { return Array().length; } );
 
     array[item++] = new TestCase(   SECTION,
                                     "Array().toString()",
                                     "",
-                                    Array().toString() );
+                                    function () { return Array().toString(); } );
 
 
     return ( array );

@@ -65,13 +65,13 @@ function getTestCases() {
     array[item++] = new TestCase( SECTION,
                                     "var arr = Array(1,2,3); arr.toString = Object.prototype.toString; arr.toString()",
                                     "[object Array]",
-                                    eval("var arr = Array(1,2,3); arr.toString = Object.prototype.toString; arr.toString()") );
+                                    function () { var arr = Array(1,2,3); arr.toString = Object.prototype.toString; return arr.toString(); } );
 
 
     array[item++] = new TestCase( SECTION,	"(Array(1,2)).length",      2,                  (Array(1,2)).length );
-    array[item++] = new TestCase( SECTION,	"var arr = (Array(1,2)); arr[0]",  1,           eval("var arr = (Array(1,2)); arr[0]") );
-    array[item++] = new TestCase( SECTION,	"var arr = (Array(1,2)); arr[1]",  2,           eval("var arr = (Array(1,2)); arr[1]") );
-    array[item++] = new TestCase( SECTION,	"var arr = (Array(1,2)); String(arr)",  "1,2",  eval("var arr = (Array(1,2)); String(arr)") );
+    array[item++] = new TestCase( SECTION,	"var arr = (Array(1,2)); arr[0]",  1,           function () { var arr = (Array(1,2)); return arr[0]; } );
+    array[item++] = new TestCase( SECTION,	"var arr = (Array(1,2)); arr[1]",  2,           function () { var arr = (Array(1,2)); return arr[1]; } );
+    array[item++] = new TestCase( SECTION,	"var arr = (Array(1,2)); String(arr)",  "1,2",  function () { var arr = (Array(1,2)); return String(arr); } );
 
     return ( array );
 }

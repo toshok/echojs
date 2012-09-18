@@ -1,3 +1,5 @@
+var print = console.log;
+
 /* The contents of this file are subject to the Netscape Public
  * License Version 1.1 (the "License"); you may not use this file
  * except in compliance with the License. You may obtain a copy of
@@ -16,7 +18,7 @@
  * Copyright (C) 1998 Netscape Communications Corporation. All
  * Rights Reserved.
  *
- * Contributor(s): 
+ * Contributor(s):
  *
  */
 /*
@@ -66,7 +68,7 @@ function TestCase( n, d, e,	a )	{
 	this.reason		 = "";
 	this.bugnumber	  =	BUGNUMBER;
 
-	this.passed	= getTestCaseResult( this.expect, this.actual );
+	this.passed	= getTestCaseResult( this.expect, this.actual() );
 	if ( DEBUG ) {
 		writeLineToLog(	"added " + this.description	);
 	}
@@ -110,7 +112,7 @@ function test() {
     for ( tc=0; tc < testcases.length; tc++ ) {
         testcases[tc].passed = writeTestCaseResult(
                             testcases[tc].expect,
-                            testcases[tc].actual,
+                            testcases[tc].actual(),
                             testcases[tc].description +" = "+ testcases[tc].actual );
         testcases[tc].reason += ( testcases[tc].passed ) ? "" : "wrong value ";
     }
@@ -233,8 +235,8 @@ var     TIME_YEAR_0      = -62167219200000;
 
 
 /*
- * Originally, the test suite used a hard-coded value TZ_DIFF = -8. 
- * But that was only valid for testers in the Pacific Standard Time Zone! 
+ * Originally, the test suite used a hard-coded value TZ_DIFF = -8.
+ * But that was only valid for testers in the Pacific Standard Time Zone!
  * We calculate the proper number dynamically for any tester. We just
  * have to be careful not to use a date subject to Daylight Savings Time...
 */
@@ -244,14 +246,14 @@ function getTimeZoneDiff()
 }
 
 
-/* 
- * Date test "ResultArrays" are hard-coded for Pacific Standard Time. 
+/*
+ * Date test "ResultArrays" are hard-coded for Pacific Standard Time.
  * We must adjust them for the tester's own timezone -
  */
 function adjustResultArray(ResultArray, msMode)
 {
-  // If the tester's system clock is in PST, no need to continue - 
-  if (!PST_DIFF) {return;} 
+  // If the tester's system clock is in PST, no need to continue -
+  if (!PST_DIFF) {return;}
 
   /* The date testcases instantiate Date objects in two different ways:
    *
@@ -263,21 +265,21 @@ function adjustResultArray(ResultArray, msMode)
    *
    * In the first case we must correct those values expected for local measurements,
    * like dt.getHours() etc. No correction is necessary for dt.getUTCHours() etc.
-   * 
+   *
    * In the second case, it is exactly the other way around -
-  */ 
+  */
   if (msMode)
   {
     // The hard-coded UTC milliseconds from Time 0 derives from a UTC date.
     // Shift to the right by the offset between UTC and the tester.
     var t = ResultArray[TIME]  +  TZ_DIFF*msPerHour;
 
-    // Use our date arithmetic functions to determine the local hour, day, etc. 
-    ResultArray[HOURS] = HourFromTime(t); 
+    // Use our date arithmetic functions to determine the local hour, day, etc.
+    ResultArray[HOURS] = HourFromTime(t);
     ResultArray[DAY] = WeekDay(t);
     ResultArray[DATE] = DateFromTime(t);
     ResultArray[MONTH] = MonthFromTime(t);
-    ResultArray[YEAR] = YearFromTime(t);  
+    ResultArray[YEAR] = YearFromTime(t);
   }
   else
   {
@@ -285,9 +287,9 @@ function adjustResultArray(ResultArray, msMode)
     // Shift to the left by the offset between PST and the tester.
     var t = ResultArray[TIME]  -  PST_DIFF*msPerHour;
 
-    // Use our date arithmetic functions to determine the UTC hour, day, etc. 
+    // Use our date arithmetic functions to determine the UTC hour, day, etc.
     ResultArray[TIME] = t;
-    ResultArray[UTC_HOURS] = HourFromTime(t); 
+    ResultArray[UTC_HOURS] = HourFromTime(t);
     ResultArray[UTC_DAY] = WeekDay(t);
     ResultArray[UTC_DATE] = DateFromTime(t);
     ResultArray[UTC_MONTH] = MonthFromTime(t);

@@ -50,73 +50,73 @@ function getTestCases() {
     array[item++] = new TestCase(   SECTION,
                                     "Array() +''",
                                     "",
-                                    Array() +"" );
+                                    function () { return Array() +""; } );
 
     array[item++] = new TestCase(   SECTION,
                                     "typeof Array()",
                                     "object",
-                                    typeof Array() );
+                                    function () { return typeof Array(); } );
 
     array[item++] = new TestCase(   SECTION,
                                     "var arr = Array(); arr.getClass = Object.prototype.toString; arr.getClass()",
                                     "[object Array]",
-                                    eval("var arr = Array(); arr.getClass = Object.prototype.toString; arr.getClass()") );
+                                    function () { var arr = Array(); arr.getClass = Object.prototype.toString; return arr.getClass(); } );
 
     array[item++] = new TestCase(   SECTION,
                                     "var arr = Array(); arr.toString == Array.prototype.toString",
                                     true,
-                                    eval("var arr = Array(); arr.toString == Array.prototype.toString") );
+                                    function() { var arr = Array(); return arr.toString == Array.prototype.toString; } );
 
     array[item++] = new TestCase(   SECTION,
                                     "Array().length",
                                     0,
-                                    Array().length );
+                                    function () { return Array().length; } );
 
 
     array[item++] = new TestCase(   SECTION,
                                     "Array(1,2,3) +''",
                                     "1,2,3",
-                                    Array(1,2,3) +"" );
+                                    function () { return Array(1,2,3) +""; } );
 
     array[item++] = new TestCase(   SECTION,
                                     "typeof Array(1,2,3)",
                                     "object",
-                                    typeof Array(1,2,3) );
+                                    function () { return typeof Array(1,2,3); } );
 
     array[item++] = new TestCase(   SECTION,
                                     "var arr = Array(1,2,3); arr.getClass = Object.prototype.toString; arr.getClass()",
                                     "[object Array]",
-                                    eval("var arr = Array(1,2,3); arr.getClass = Object.prototype.toString; arr.getClass()") );
+                                    function() { var arr = Array(1,2,3); arr.getClass = Object.prototype.toString; return arr.getClass(); } );
 
     array[item++] = new TestCase(   SECTION,
                                     "var arr = Array(1,2,3); arr.toString == Array.prototype.toString",
                                     true,
-                                    eval("var arr = Array(1,2,3); arr.toString == Array.prototype.toString") );
+                                    function() { var arr = Array(1,2,3); return arr.toString == Array.prototype.toString; } );
 
     array[item++] = new TestCase(   SECTION,
                                     "Array(1,2,3).length",
                                     3,
-                                    Array(1,2,3).length );
+                                    function () { return Array(1,2,3).length; } );
 
     array[item++] = new TestCase(   SECTION,
                                     "typeof Array(12345)",
                                     "object",
-                                    typeof Array(12345) );
+                                    function () { return typeof Array(12345); } );
 
     array[item++] = new TestCase(   SECTION,
                                     "var arr = Array(12345); arr.getClass = Object.prototype.toString; arr.getClass()",
                                     "[object Array]",
-                                    eval("var arr = Array(12345); arr.getClass = Object.prototype.toString; arr.getClass()") );
+                                    function() { var arr = Array(12345); arr.getClass = Object.prototype.toString; return arr.getClass(); } );
 
     array[item++] = new TestCase(   SECTION,
                                     "var arr = Array(1,2,3,4,5); arr.toString == Array.prototype.toString",
                                     true,
-                                    eval("var arr = Array(1,2,3,4,5); arr.toString == Array.prototype.toString") );
+                                    function() { var arr = Array(1,2,3,4,5); return arr.toString == Array.prototype.toString; } );
 
     array[item++] = new TestCase(   SECTION,
                                     "Array(12345).length",
                                     12345,
-                                    Array(12345).length );
+                                    function () { return Array(12345).length; } );
 
     return ( array );
 }

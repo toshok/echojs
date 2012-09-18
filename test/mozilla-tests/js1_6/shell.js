@@ -47,6 +47,8 @@ var SECT_PREFIX = 'Section ';
 var SECT_SUFFIX = ' of test -';
 var callStack = new Array();
 
+var print = console.log;
+
 function writeLineToLog( string ) {
     print( string + "\n");
 }

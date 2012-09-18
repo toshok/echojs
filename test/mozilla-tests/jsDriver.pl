@@ -149,7 +149,7 @@ sub main {
 sub execute_tests {
     my (@test_list) = @_;
     my ($test, $shell_command, $line, @output, $path);
-    my $file_param = " -f ";
+    my $file_param = " ";
     my ($last_suite, $last_test_dir);
     
 # Don't run any shell.js files as tests; they are only utility files
@@ -491,7 +491,7 @@ sub usage {
      "(-e|--engine) <type> ...  Specify the type of engine(s) to test.\n" .
      "                          <type> is one or more of\n" .
      "                          (squirrelfish|smopt|smdebug|lcopt|lcdebug|xpcshell|" .
-     "rhino|rhinoi|rhinoms|rhinomsi|rhino9|rhinoms9).\n" .
+     "rhino|rhinoi|rhinoms|rhinomsi|rhino9|rhinoms9|ejs).\n" .
      "(-f|--file) <file>        Redirect output to file named <file>.\n" .
      "                          (default is " .
      "results-<engine-type>-<date-stamp>.html)\n" .
@@ -520,8 +520,11 @@ sub usage {
 sub get_engine_command {
     
     my $retval;
-    
-    if ($opt_engine_type eq "rhino") {
+   
+    if ($opt_engine_type eq "ejs") {
+        &dd ("getting ejs engine command.");
+        $retval = &get_ejs_engine_command;
+    } elsif ($opt_engine_type eq "rhino") {
         &dd ("getting rhino engine command.");
         $opt_rhino_opt = 0;
         $opt_rhino_ms = 0;
@@ -576,6 +579,15 @@ sub get_engine_command {
     
     return $retval;
     
+}
+
+#
+# get the shell command used to run ejs
+#
+sub get_ejs_engine_command {
+	my $retval = "./ejs-driver.sh ";
+
+	return $retval;
 }
 
 #

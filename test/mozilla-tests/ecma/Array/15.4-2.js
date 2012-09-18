@@ -52,20 +52,20 @@ function getTestCases() {
     var array = new Array();
     var item = 0;
 
-    array[item++] = new TestCase( SECTION, "var arr=new Array();  arr[Math.pow(2,16)] = 'hi'; arr.length",      Math.pow(2,16)+1,   eval("var arr=new Array();  arr[Math.pow(2,16)] = 'hi'; arr.length") );
+    array[item++] = new TestCase( SECTION, "var arr=new Array();  arr[Math.pow(2,16)] = 'hi'; arr.length",      Math.pow(2,16)+1,   function () { var arr=new Array();  arr[Math.pow(2,16)] = 'hi'; return arr.length; } );
 
-    array[item++] = new TestCase( SECTION, "var arr=new Array();  arr[Math.pow(2,30)-2] = 'hi'; arr.length",    Math.pow(2,30)-1,   eval("var arr=new Array();  arr[Math.pow(2,30)-2] = 'hi'; arr.length") );
-    array[item++] = new TestCase( SECTION, "var arr=new Array();  arr[Math.pow(2,30)-1] = 'hi'; arr.length",    Math.pow(2,30),     eval("var arr=new Array();  arr[Math.pow(2,30)-1] = 'hi'; arr.length") );
-    array[item++] = new TestCase( SECTION, "var arr=new Array();  arr[Math.pow(2,30)] = 'hi'; arr.length",      Math.pow(2,30)+1,   eval("var arr=new Array();  arr[Math.pow(2,30)] = 'hi'; arr.length") );
+    array[item++] = new TestCase( SECTION, "var arr=new Array();  arr[Math.pow(2,30)-2] = 'hi'; arr.length",    Math.pow(2,30)-1,   function () { var arr=new Array();  arr[Math.pow(2,30)-2] = 'hi'; return arr.length; } );
+    array[item++] = new TestCase( SECTION, "var arr=new Array();  arr[Math.pow(2,30)-1] = 'hi'; arr.length",    Math.pow(2,30),     function () { var arr=new Array();  arr[Math.pow(2,30)-1] = 'hi'; return arr.length; } );
+    array[item++] = new TestCase( SECTION, "var arr=new Array();  arr[Math.pow(2,30)] = 'hi'; arr.length",      Math.pow(2,30)+1,   function () { var arr=new Array();  arr[Math.pow(2,30)] = 'hi'; return arr.length; } );
 
-    array[item++] = new TestCase( SECTION, "var arr=new Array();  arr[Math.pow(2,31)-2] = 'hi'; arr.length",    Math.pow(2,31)-1,   eval("var arr=new Array();  arr[Math.pow(2,31)-2] = 'hi'; arr.length") );
-    array[item++] = new TestCase( SECTION, "var arr=new Array();  arr[Math.pow(2,31)-1] = 'hi'; arr.length",    Math.pow(2,31),     eval("var arr=new Array();  arr[Math.pow(2,31)-1] = 'hi'; arr.length") );
-    array[item++] = new TestCase( SECTION, "var arr=new Array();  arr[Math.pow(2,31)] = 'hi'; arr.length",      Math.pow(2,31)+1,   eval("var arr=new Array();  arr[Math.pow(2,31)] = 'hi'; arr.length") );
+    array[item++] = new TestCase( SECTION, "var arr=new Array();  arr[Math.pow(2,31)-2] = 'hi'; arr.length",    Math.pow(2,31)-1,   function () { var arr=new Array();  arr[Math.pow(2,31)-2] = 'hi'; return arr.length; } );
+    array[item++] = new TestCase( SECTION, "var arr=new Array();  arr[Math.pow(2,31)-1] = 'hi'; arr.length",    Math.pow(2,31),     function () { var arr=new Array();  arr[Math.pow(2,31)-1] = 'hi'; return arr.length; } );
+    array[item++] = new TestCase( SECTION, "var arr=new Array();  arr[Math.pow(2,31)] = 'hi'; arr.length",      Math.pow(2,31)+1,   function () { var arr=new Array();  arr[Math.pow(2,31)] = 'hi'; return arr.length; } );
 
-    array[item++] = new TestCase( SECTION, "var arr = new Array(0,1,2,3,4,5); arr.length = 2; String(arr)",     "0,1",              eval("var arr = new Array(0,1,2,3,4,5); arr.length = 2; String(arr)") );
-    array[item++] = new TestCase( SECTION, "var arr = new Array(0,1); arr.length = 3; String(arr)",             "0,1,",             eval("var arr = new Array(0,1); arr.length = 3; String(arr)") );
-//    array[item++] = new TestCase( SECTION, "var arr = new Array(0,1,2,3,4,5); delete arr[0]; arr.length",       5,                  eval("var arr = new Array(0,1,2,3,4,5); delete arr[0]; arr.length") );
-//    array[item++] = new TestCase( SECTION, "var arr = new Array(0,1,2,3,4,5); delete arr[6]; arr.length",       5,                  eval("var arr = new Array(0,1,2,3,4,5); delete arr[6]; arr.length") );
+    array[item++] = new TestCase( SECTION, "var arr = new Array(0,1,2,3,4,5); arr.length = 2; String(arr)",     "0,1",              function () { var arr = new Array(0,1,2,3,4,5); arr.length = 2; return String(arr); } );
+    array[item++] = new TestCase( SECTION, "var arr = new Array(0,1); arr.length = 3; String(arr)",             "0,1,",             function () { var arr = new Array(0,1); arr.length = 3; return String(arr); } );
+//    array[item++] = new TestCase( SECTION, "var arr = new Array(0,1,2,3,4,5); delete arr[0]; arr.length",       5,                  function () { var arr = new Array(0,1,2,3,4,5); delete arr[0]; return arr.length; } );
+//    array[item++] = new TestCase( SECTION, "var arr = new Array(0,1,2,3,4,5); delete arr[6]; arr.length",       5,                  function () { var arr = new Array(0,1,2,3,4,5); delete arr[6]; return arr.length; } );
 
     return ( array );
 }

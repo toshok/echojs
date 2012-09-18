@@ -16,8 +16,8 @@
  * Copyright (C) 1998 Netscape Communications Corporation. All
  * Rights Reserved.
  *
- * Contributor(s): 
- * 
+ * Contributor(s):
+ *
  */
 /**
     File Name:          15.6.4.2-4.js
@@ -47,15 +47,15 @@ function getTestCases() {
     var item = 0;
 
     array[item++] = new TestCase(   SECTION,
-                                    "tostr=Boolean.prototype.toString; x=new String( 'hello' ); x.toString=tostr; x.toString()",
+                                    "var tostr=Boolean.prototype.toString; x=new String( 'hello' ); x.toString=tostr; x.toString()",
                                     "error",
-                                    "tostr=Boolean.prototype.toString; x=new String( 'hello' ); x.toString=tostr; x.toString()" );
+                                    function() { tostr=Boolean.prototype.toString; x=new String( 'hello' ); x.toString=tostr; return x.toString(); } );
     return ( array );
 }
 
 function test() {
     for ( tc=0; tc < testcases.length; tc++ ) {
-        testcases[tc].actual = eval(testcases[tc].actual);
+        testcases[tc].actual = testcases[tc].actual();
 
         testcases[tc].passed = writeTestCaseResult(
                             testcases[tc].expect,
