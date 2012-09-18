@@ -635,7 +635,7 @@ class LLVMIRVisitor extends NodeVisitor
 
                 # XXX more needed here - this lacks all sorts of control flow stuff.
                 # Finish off the function.
-                llvm.IRBuilder.createRet @loadNullEjsValue()
+                llvm.IRBuilder.createRet @loadUndefinedEjsValue()
 
                 # insert an unconditional branch from entry_bb to body here, now that we're
                 # sure we're not going to be inserting allocas into the entry_bb anymore.
