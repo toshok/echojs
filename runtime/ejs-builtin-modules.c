@@ -25,15 +25,11 @@ _ejs_path_module_func (EJSValue* env, EJSValue* _this, int argc, EJSValue** args
 EJSValue*
 _ejs_fs_module_func (EJSValue* env, EJSValue* _this, int argc, EJSValue** args)
 {
-  EJSValue* exports = args[0];
-
   return _ejs_undefined;
 }
 
 EJSValue*
 _ejs_child_process_module_func (EJSValue* env, EJSValue* _this, int argc, EJSValue** args)
 {
-  EJSValue* exports = args[0];
-
   return _ejs_undefined;
 }
