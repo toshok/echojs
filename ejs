@@ -7,7 +7,7 @@ compiler = require 'compiler'
 util = require 'echo-util'
 { spawn } = require 'child_process'
 
-argv = process.argv.splice 2
+argv = process.argv.slice 2
 
 options =
   # our defaults:

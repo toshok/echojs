@@ -15,6 +15,14 @@ typedef union _EJSValue EJSValue;
 #define FALSE 0
 #endif
 
+#ifndef MIN
+#define MIN(a,b) (a) > (b) ? (b) : (a)
+#endif
+
+#ifndef MAX
+#define MAX(a,b) (a) > (b) ? (a) : (b)
+#endif
+
 void _ejs_init();
 
 extern EJSValue* _ejs_undefined;

@@ -70,7 +70,22 @@ _ejs_Array_prototype_pop (EJSValue* env, EJSValue* _this, int argc, EJSValue **a
 static EJSValue*
 _ejs_Array_prototype_slice (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  abort();
+  int len = EJS_ARRAY_LEN(_this);
+  int begin = argc > 0 ? (int)EJSVAL_TO_NUMBER(args[0]) : 0;
+  int end = argc > 1 ? (int)EJSVAL_TO_NUMBER(args[1]) : len;
+
+  begin = MIN(begin, len);
+  end = MIN(end, len);
+
+  EJSValue* rv = _ejs_array_new(end-begin);
+  int i, rv_i;
+
+  rv_i = 0;
+  for (i = begin; i < end; i ++, rv_i++) {
+    _ejs_object_setprop (rv, _ejs_number_new (rv_i), EJS_ARRAY_ELEMENTS(_this)[i]);
+  }
+
+  return rv;
 }
 
 static EJSValue*
