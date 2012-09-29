@@ -27,7 +27,7 @@ options =
 args =
         "-s":       { flag:    "combine_scripts",   help: "treat all toplevels as being 1 context, evaluating them in the order present on the command line" }
         "-o":       { option:  "output_filename",   help: "name of the output file." }
-        "-cxx":     { flag:    "link_with_cxx",     help: "use clang++ to do the final link (default = no)" }
+        "--cxx":    { flag:    "link_with_cxx",     help: "use clang++ to do the final link (default = no)" }
         "--module": { handler: add_external_module, help: "--module library.a,module-name,module_init,link_flags" }
         "--help":   { flag:    "show_help",         help: "output this help info." }
 
@@ -42,18 +42,28 @@ output_options = ->
 
 if argv.length > 0
         for ai in [0..argv.length-1]
-                if args[argv[ai]]?
-                        o = args[argv[ai]]
-                        if o.flag?
-                                options[o.flag] = true
-                        else if o.option?
-                                options[o.option] = argv[++ai]
-                        else if o.handler?
-                                o.handler argv[++ai]
+                console.warn "arg[#{ai}] = #{argv[ai]}"
+
+        skipNext = false
+        for ai in [0..argv.length-1]
+                if skipNext
+                        skipNext = false
                 else
-                        # end of options signals the rest of the array is files
-                        files = argv.slice ai
-                        break
+                        if args[argv[ai]]?
+                                o = args[argv[ai]]
+                                if o.flag?
+                                        options[o.flag] = true
+                                else if o.option?
+                                        options[o.option] = argv[++ai]
+                                        skipNext = true
+                                else if o.handler?
+                                        o.handler argv[++ai]
+                                        skipNext = true
+                        else
+                                console.warn "files start at #{ai}"
+                                # end of options signals the rest of the array is files
+                                files = argv.slice ai
+                                break
 
 if options.show_help
         output_usage()
