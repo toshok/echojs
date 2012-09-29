@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <string.h>
 #include <math.h>
 
 #include "ejs-value.h"
@@ -100,6 +101,38 @@ _ejs_String_prototype_charCodeAt (EJSValue* env, EJSValue* _this, int argc, EJSV
 }
 
 static EJSValue*
+_ejs_String_prototype_indexOf (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  int idx = -1;
+  if (argc == 0)
+    return _ejs_number_new(idx);
+
+  EJSValue* haystack = ToString(_this);
+  char* haystack_cstr;
+  if (EJSVAL_IS_STRING(haystack)) {
+    haystack_cstr = EJSVAL_TO_STRING(haystack);
+  }
+  else {
+    haystack_cstr = EJSVAL_TO_STRING(((EJSString*)haystack)->primStr);
+  }
+
+  EJSValue* needle = ToString(args[0]);
+  char *needle_cstr;
+  if (EJSVAL_IS_STRING(needle)) {
+    needle_cstr = EJSVAL_TO_STRING(needle);
+  }
+  else {
+    needle_cstr = EJSVAL_TO_STRING(((EJSString*)needle)->primStr);
+  }
+  
+  char* p = strstr(haystack_cstr, needle_cstr);
+  if (p == NULL)
+    return _ejs_number_new(idx);
+
+  return _ejs_number_new (p - haystack_cstr);
+}
+
+static EJSValue*
 _ejs_String_prototype_split (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
   // for now let's just not split anything at all, return the original string as element0 of the array.
@@ -120,6 +153,7 @@ _ejs_string_init(EJSValue *global)
 #define PROTO_METHOD(x) _ejs_object_setprop_utf8 (_ejs_String_proto, #x, _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_String_prototype_##x))
 
   PROTO_METHOD(charCodeAt);
+  PROTO_METHOD(indexOf);
   PROTO_METHOD(toString);
   PROTO_METHOD(split);
 
