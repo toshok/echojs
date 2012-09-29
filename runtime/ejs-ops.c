@@ -444,8 +444,9 @@ _ejs_op_strict_eq (EJSValue* lhs, EJSValue* rhs)
   else if (EJSVAL_IS_BOOLEAN(lhs)) {
     return _ejs_boolean_new (rhs && EJSVAL_IS_BOOLEAN(rhs) && EJSVAL_TO_BOOLEAN(lhs) == EJSVAL_TO_BOOLEAN(rhs));
   }
-
-  abort();
+  else {
+    return _ejs_boolean_new (lhs == rhs);
+  }
 }
 
 EJSValue*
@@ -462,8 +463,9 @@ _ejs_op_strict_neq (EJSValue* lhs, EJSValue* rhs)
   else if (EJSVAL_IS_BOOLEAN(lhs)) {
     return _ejs_boolean_new (!rhs || !EJSVAL_IS_BOOLEAN(rhs) || EJSVAL_TO_BOOLEAN(lhs) != EJSVAL_TO_BOOLEAN(rhs));
   }
-
-  abort();
+  else {
+    return _ejs_boolean_new (lhs != rhs);
+  }
 }
 
 EJSValue*
