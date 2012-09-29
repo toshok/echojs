@@ -207,6 +207,7 @@ class LambdaLift extends NodeVisitor
                 }
 
 create_identifier = (x) -> type: syntax.Identifier, name: x
+create_string_literal = (x) -> type: syntax.Literal, value: x, raw: "\"#{x}\""
 
 # this should move to echo-desugar.coffee
 FuncsToVars = class FuncsToVars extends NodeVisitor
@@ -398,7 +399,7 @@ class SubstituteVariables extends NodeVisitor
                 #   function X () { ...body... }
                 # 
                 # with:
-                #   var X = makeClosure(%current_env, function () { ...body... });
+                #   var X = makeClosure(%current_env, "X", function () { ...body... });
                 #
                 #
                 # function expressions are easier:
@@ -407,7 +408,7 @@ class SubstituteVariables extends NodeVisitor
                 #
                 # replace inline with:
                 #
-                #    makeClosure(%current_env, function () { ...body... })
+                #    makeClosure(%current_env, "X", function () { ...body... })
 
                 if n.ejs_env.parent
                         if n.type is syntax.FunctionDeclaration
@@ -416,7 +417,7 @@ class SubstituteVariables extends NodeVisitor
                                 call_exp =
                                         type: syntax.CallExpression,
                                         callee: create_identifier "%makeClosure"
-                                        arguments: [ (create_identifier "%env_#{n.ejs_env.parent.id}"), n ]
+                                        arguments: [ (create_identifier "%env_#{n.ejs_env.parent.id}"), (create_string_literal if n.id then n.id.name else ""), n ]
                                 return call_exp
                 n        
                 

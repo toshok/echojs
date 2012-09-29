@@ -4,12 +4,12 @@ assert = require 'echo-assert'
 
 #### TYPE TESTS
 assert.eq "type1", "#{llvm.Type.getInt8Ty()}",           "i8"
-assert.eq "type2", "#{llvm.Type.getInt8Ty().pointerTo}", "i8*"
+assert.eq "type2", "#{llvm.Type.getInt8Ty().pointerTo()}", "i8*"
 
 #### FUNCTIONTYPE TESTS
 int8ty = llvm.Type.getInt8Ty()
 assert.eq "functype1", "#{llvm.FunctionType.get int8ty, [int8ty]}", "i8 (i8)"
-assert.eq "functype2", "#{(llvm.FunctionType.get int8ty, [int8ty]).pointerTo}", "i8 (i8)*"
+assert.eq "functype2", "#{(llvm.FunctionType.get int8ty, [int8ty]).pointerTo()}", "i8 (i8)*"
 
 
 #### CONSTANT TESTS
@@ -32,13 +32,13 @@ module = new llvm.Module "test_module"
 assert.eq "module1", "#{module}", "; ModuleID = 'test_module'"
 
 # add an extern reference to 'int puts(char*)' to the module
-puts = module.getOrInsertExternalFunction "puts", llvm.Type.getInt32Ty(), [llvm.Type.getInt8Ty().pointerTo]
+puts = module.getOrInsertExternalFunction "puts", llvm.Type.getInt32Ty(), [llvm.Type.getInt8Ty().pointerTo()]
 
 assert.eq "module-extern-func", "#{module}", "; ModuleID = 'test_module'\n\ndeclare i32 @puts(i8*)"
 
 # now create a call to this function
-#puts_type = llvm.FunctionType.get llvm.Type.getInt32Ty(), [llvm.Type.getInt8Ty().pointerTo]
-puts_call = llvm.IRBuilder.createCall puts, [llvm.Constant.getNull llvm.Type.getInt8Ty().pointerTo], "puts_rv"
+#puts_type = llvm.FunctionType.get llvm.Type.getInt32Ty(), [llvm.Type.getInt8Ty().pointerTo()]
+puts_call = llvm.IRBuilder.createCall puts, [llvm.Constant.getNull llvm.Type.getInt8Ty().pointerTo()], "puts_rv"
 
 assert.eq "module-call-extern-func", "#{puts_call}", "%puts_rv = call i32 @puts(i8* null)"
 

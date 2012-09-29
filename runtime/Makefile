@@ -1,5 +1,6 @@
 
 SOURCES= \
+	ejs-arguments.c \
 	ejs-array.c \
 	ejs-init.c \
 	ejs-console.c \

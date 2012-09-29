@@ -15,7 +15,7 @@ llvm = require 'llvm'
 # special key for parent scope when performing lookups
 PARENT_SCOPE_KEY = ":parent:"
 
-stringType = llvm.Type.getInt8Ty().pointerTo
+stringType = llvm.Type.getInt8Ty().pointerTo()
 boolType   = llvm.Type.getInt8Ty()
 voidType   = llvm.Type.getVoidTy()
 int32Type  = llvm.Type.getInt32Ty()
@@ -23,10 +23,10 @@ int64Type  = llvm.Type.getInt64Ty()
 
 ejsValueType = llvm.StructType.create "EjsValue", [int32Type]
 
-EjsValueType = ejsValueType.pointerTo
+EjsValueType = ejsValueType.pointerTo()
 EjsClosureEnvType = EjsValueType
 EjsPropIteratorType = EjsValueType
-EjsClosureFuncType = (llvm.FunctionType.get EjsValueType, [EjsClosureEnvType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType.pointerTo]).pointerTo
+EjsClosureFuncType = (llvm.FunctionType.get EjsValueType, [EjsClosureEnvType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType.pointerTo()]).pointerTo()
 
 BUILTIN_PARAMS = [
   { type: syntax.Identifier, name: "%env",  llvm_type: EjsClosureEnvType }
@@ -47,11 +47,12 @@ class LLVMIRVisitor extends NodeVisitor
                 # build up our runtime method table
                 @builtins = {
                         invokeClosure: [null].concat (make_invoke_closure n for n in [0..10])
-                        makeClosure: module.getOrInsertExternalFunction "_ejs_function_new", EjsValueType, [EjsClosureEnvType, EjsClosureFuncType]
+                        makeClosure: module.getOrInsertExternalFunction "_ejs_function_new", EjsValueType, [EjsClosureEnvType, EjsValueType, EjsClosureFuncType]
                 }
                 
                 @ejs = {
                         object_new:            module.getOrInsertExternalFunction "_ejs_object_new",                EjsValueType, [EjsValueType]
+                        arguments_new:         module.getOrInsertExternalFunction "_ejs_arguments_new",             EjsValueType, [int32Type, EjsValueType.pointerTo()]
                         array_new:             module.getOrInsertExternalFunction "_ejs_array_new",                 EjsValueType, [int32Type]
                         number_new:            module.getOrInsertExternalFunction "_ejs_number_new",                EjsValueType, [llvm.Type.getDoubleTy()]
                         boolean_new:           module.getOrInsertExternalFunction "_ejs_boolean_new",               EjsValueType, [boolType]
@@ -565,7 +566,8 @@ class LLVMIRVisitor extends NodeVisitor
                         allocas.push alloca
 
                 # create an alloca to store our 'EJSValue** args' parameter, so we can pull the formal parameters out of it
-                args_alloca = llvm.IRBuilder.createAlloca EjsValueType.pointerTo, "local_%args"
+                args_alloca = llvm.IRBuilder.createAlloca EjsValueType.pointerTo(), "local_%args"
+                new_scope["%args"] = args_alloca
                 allocas.push args_alloca
 
                 # now create allocas for the formal parameters
@@ -700,7 +702,7 @@ class LLVMIRVisitor extends NodeVisitor
                 llvm.IRBuilder.createCondBr cmp, right_bb, left_bb
 
                 llvm.IRBuilder.setInsertPoint left_bb
-                # inside the then branch, left was truthy
+                # inside the else branch, left was truthy
                 if n.operator is "||"
                         # for || we short circuit out here
                         llvm.IRBuilder.createStore left_visited, result
@@ -712,7 +714,15 @@ class LLVMIRVisitor extends NodeVisitor
                 llvm.IRBuilder.createBr merge_bb
 
                 llvm.IRBuilder.setInsertPoint right_bb
-                llvm.IRBuilder.createStore (@visit n.right), result
+                # inside the then branch, left was falsy
+                if n.operator is "||"
+                        # for || we evaluate the second and store it
+                        llvm.IRBuilder.createStore (@visit n.right), result
+                else if n.operator is "&&"
+                        # for && we short circuit out here
+                        llvm.IRBuilder.createStore left_visited, result
+                else
+                        throw "Internal error 99.1"
                 llvm.IRBuilder.createBr merge_bb
 
                 llvm.IRBuilder.setInsertPoint merge_bb
@@ -831,6 +841,26 @@ class LLVMIRVisitor extends NodeVisitor
                         rv = llvm.IRBuilder.createLoad source, "load_#{val}"
                         return rv
 
+                # special handling of the arguments object here, so we
+                # only initialize/create it if the function is
+                # actually going to use it.
+                if val is "arguments"
+                        arguments_alloca = @createAlloca @currentFunction, EjsValueType, "local_arguments_object"
+                        saved_insert_point = llvm.IRBuilder.getInsertBlock()
+                        llvm.IRBuilder.setInsertPoint @currentFunction.entry_bb
+                        
+                        load_argc = llvm.IRBuilder.createLoad @currentFunction.topScope["%argc"], "argc_load"
+                        load_args = llvm.IRBuilder.createLoad @currentFunction.topScope["%args"], "args_load"
+
+                        arguments_object = llvm.IRBuilder.createCall @ejs.arguments_new, [load_argc, load_args], "argstmp"
+                        llvm.IRBuilder.createStore arguments_object, arguments_alloca
+                        @currentFunction.topScope["arguments"] = arguments_alloca
+
+                        llvm.IRBuilder.setInsertPoint saved_insert_point
+                        rv = llvm.IRBuilder.createLoad arguments_alloca, "load_arguments"
+                        return rv
+                        
+                        
                 rv = null
                 debug.log "calling getFunction for #{val}"
                 rv = @module.getFunction val
@@ -912,7 +942,7 @@ class AddFunctionsVisitor extends NodeVisitor
                 param.llvm_type = EjsValueType for param in n.params[BUILTIN_PARAMS.length..]
 
                 # the LLVMIR func we allocate takes the proper EJSValue** parameter in the 4th spot instead of all the parameters
-                n.ir_func = takes_builtins @module.getOrInsertFunction n.ir_name, EjsValueType, (param.llvm_type for param in BUILTIN_PARAMS).concat [EjsValueType.pointerTo]
+                n.ir_func = takes_builtins @module.getOrInsertFunction n.ir_name, EjsValueType, (param.llvm_type for param in BUILTIN_PARAMS).concat [EjsValueType.pointerTo()]
                 
                 ir_args = n.ir_func.args
                 (ir_args[i].setName n.params[i].name) for i in [0...BUILTIN_PARAMS.length]
@@ -986,7 +1016,7 @@ exports.compile = (tree, filename) ->
 
         debug.log "after closure conversion"
         debug.log -> escodegen.generate tree
-                
+
         module = new llvm.Module "compiled-#{filename}"
 
         module.toplevel_name = toplevel_name

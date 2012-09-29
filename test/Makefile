@@ -1,7 +1,7 @@
 #.SILENT:    # this makes everything quiet, so we don't really need @'s
 
 TOPDIR=$(shell pwd)/..
-NODE_PATH=$(TOPDIR)/node-llvm/build/default:$(TOPDIR)/lib/coffee:$(TOPDIR)/lib:$(TOPDIR)/esprima:$(TOPDIR)/escodegen
+NODE_PATH=$(TOPDIR)/node-llvm/build/Release:$(TOPDIR)/lib/coffee:$(TOPDIR)/lib:$(TOPDIR)/esprima:$(TOPDIR)/escodegen
 
 TESTS=$(wildcard *[0-9].js)
 
@@ -9,7 +9,6 @@ TESTS=$(wildcard *[0-9].js)
 EXPECTED_FAILURES= \
 	date1.js \
 	forin2.js \
-	func1.js \
 	function-overriding1.js \
 	iife2.js \
 	instanceof1.js \
@@ -17,7 +16,6 @@ EXPECTED_FAILURES= \
 
 # date1 fails because we test the Date() function, which returns the current time.  this differs from the current time when the node test runs.  bleah.
 # forin2 fails because we don't properly handle deleting properties while iterating
-# func1 fails because we can't print out closures at the moment (which should really be renamed to JS's Function objects)
 # iife2 fails because of number formatting and/or arithmetic
 # instanceof1 fails because _ejs_op_instanceof isn't implemented and just aborts
 # function-overriding1.js fail because we don't throw an exception on a null function, we just crash.
@@ -92,7 +90,7 @@ echo-%:
 	@node $< > $@
 
 %.js.exe: %.js $(TOPDIR)/runtime/libecho.a
-	-@NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $<
+	-NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $<
 
 v8-%.js.exe: v8/%.js $(TOPDIR)/runtime/libecho.a
 	NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $<

@@ -1,8 +1,35 @@
 #include <assert.h>
+#include <math.h>
 
 #include "ejs-ops.h"
 #include "ejs-value.h"
 #include "ejs-array.h"
+
+static EJSValue* _ejs_array_specop_get (EJSValue* obj, EJSValue* propertyName);
+static EJSValue* _ejs_array_specop_get_own_property (EJSValue* obj, EJSValue* propertyName);
+static EJSValue* _ejs_array_specop_get_property (EJSValue* obj, EJSValue* propertyName);
+static void      _ejs_array_specop_put (EJSValue *obj, EJSValue* propertyName, EJSValue* val, EJSBool flag);
+static EJSBool   _ejs_array_specop_can_put (EJSValue *obj, EJSValue* propertyName);
+static EJSBool   _ejs_array_specop_has_property (EJSValue *obj, EJSValue* propertyName);
+static EJSBool   _ejs_array_specop_delete (EJSValue *obj, EJSValue* propertyName, EJSBool flag);
+static EJSValue* _ejs_array_specop_default_value (EJSValue *obj, const char *hint);
+static void      _ejs_array_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag);
+
+extern EJSSpecOps _ejs_object_specops;
+
+EJSSpecOps _ejs_array_specops = {
+  "Array",
+  _ejs_array_specop_get,
+  _ejs_array_specop_get_own_property,
+  _ejs_array_specop_get_property,
+  _ejs_array_specop_put,
+  _ejs_array_specop_can_put,
+  _ejs_array_specop_has_property,
+  _ejs_array_specop_delete,
+  _ejs_array_specop_default_value,
+  _ejs_array_specop_define_own_property
+};
+
 
 #define EJSOBJ_IS_ARRAY(obj) (((EJSObject*)obj)->proto == _ejs_Array_proto)
 
@@ -10,6 +37,21 @@ EJSObject* _ejs_array_alloc_instance()
 {
   return (EJSObject*)calloc(1, sizeof (EJSArray));
 }
+
+EJSValue*
+_ejs_array_new (int numElements)
+{
+  EJSArray* rv = (EJSArray*)calloc(1, sizeof(EJSArray));
+
+  _ejs_init_object ((EJSObject*)rv, _ejs_array_get_prototype());
+  rv->obj.ops = &_ejs_array_specops;
+
+  rv->array_length = 0;
+  rv->array_alloc = numElements + 40;
+  rv->elements = (EJSValue**)calloc(rv->array_alloc, sizeof (EJSValue*));
+  return (EJSValue*)rv;
+}
+
 
 static EJSValue* _ejs_Array_proto;
 EJSValue*
@@ -142,6 +184,21 @@ _ejs_Array_prototype_join (EJSValue* env, EJSValue* _this, int argc, EJSValue **
 }
 
 static EJSValue*
+_ejs_Array_prototype_forEach (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  if (argc < 1)
+    abort();
+
+  EJSValue *fun = args[0];
+
+  int i;
+  for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
+    _ejs_invoke_closure_1 (fun, NULL, 1, EJS_ARRAY_ELEMENTS(_this)[i]);
+  }
+  return _ejs_undefined;
+}
+
+static EJSValue*
 _ejs_Array_prototype_splice (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
   abort();
@@ -179,16 +236,100 @@ _ejs_Array_prototype_indexOf (EJSValue* env, EJSValue* _this, int argc, EJSValue
 void
 _ejs_array_init(EJSValue *global)
 {
-  _ejs_Array = _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Array_impl);
+  _ejs_Array = _ejs_function_new_utf8 (NULL, "Array", (EJSClosureFunc)_ejs_Array_impl);
   _ejs_Array_proto = _ejs_object_new(NULL);
 
   _ejs_object_setprop_utf8 (_ejs_Array,       "prototype",  _ejs_Array_proto);
-  _ejs_object_setprop_utf8 (_ejs_Array_proto, "push",       _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_push));
-  _ejs_object_setprop_utf8 (_ejs_Array_proto, "pop",        _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_pop));
-  _ejs_object_setprop_utf8 (_ejs_Array_proto, "slice",      _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_slice));
-  _ejs_object_setprop_utf8 (_ejs_Array_proto, "splice",     _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_splice));
-  _ejs_object_setprop_utf8 (_ejs_Array_proto, "indexOf",    _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_indexOf));
-  _ejs_object_setprop_utf8 (_ejs_Array_proto, "join",       _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Array_prototype_join));
+
+#define PROTO_METHOD(x) _ejs_object_setprop_utf8 (_ejs_Array_proto, #x,       _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_Array_prototype_##x))
+  PROTO_METHOD(push);
+  PROTO_METHOD(pop);
+  PROTO_METHOD(slice);
+  PROTO_METHOD(splice);
+  PROTO_METHOD(indexOf);
+  PROTO_METHOD(join);
+  PROTO_METHOD(forEach);
 
   _ejs_object_setprop_utf8 (global,           "Array",      _ejs_Array);
+}
+
+static EJSValue*
+_ejs_array_specop_get (EJSValue* obj, EJSValue* propertyName)
+{
+  EJSArray* arr = (EJSArray*)&obj->o;
+
+  // check if propertyName is an integer, or a string that we can convert to an int
+  EJSBool is_index = FALSE;
+  int idx = 0;
+  if (EJSVAL_IS_NUMBER(propertyName)) {
+    double n = EJSVAL_TO_NUMBER(propertyName);
+    if (floor(n) == n) {
+      idx = (int)n;
+      is_index = TRUE;
+    }
+  }
+
+  if (is_index) {
+    if (idx < 0 || idx > EJS_ARRAY_LEN(arr)) {
+      printf ("getprop(%d) on an array, returning undefined\n", idx);
+      return _ejs_undefined;
+    }
+    return EJS_ARRAY_ELEMENTS(arr)[idx];
+  }
+
+  // we also handle the length getter here
+  if (EJSVAL_IS_STRING(propertyName) && !strcmp ("length", EJSVAL_TO_STRING(propertyName))) {
+    return _ejs_number_new (EJS_ARRAY_LEN(arr));
+  }
+
+  // otherwise we fallback to the object implementation
+  return _ejs_object_specops.get (obj, propertyName);
+}
+
+static EJSValue*
+_ejs_array_specop_get_own_property (EJSValue* obj, EJSValue* propertyName)
+{
+  return _ejs_object_specops.get_own_property (obj, propertyName);
+}
+
+static EJSValue*
+_ejs_array_specop_get_property (EJSValue* obj, EJSValue* propertyName)
+{
+  return _ejs_object_specops.get_property (obj, propertyName);
+}
+
+static void
+_ejs_array_specop_put (EJSValue *obj, EJSValue* propertyName, EJSValue* val, EJSBool flag)
+{
+  _ejs_object_specops.put (obj, propertyName, val, flag);
+}
+
+static EJSBool
+_ejs_array_specop_can_put (EJSValue *obj, EJSValue* propertyName)
+{
+  return _ejs_object_specops.can_put (obj, propertyName);
+}
+
+static EJSBool
+_ejs_array_specop_has_property (EJSValue *obj, EJSValue* propertyName)
+{
+  return _ejs_object_specops.has_property (obj, propertyName);
+}
+
+static EJSBool
+_ejs_array_specop_delete (EJSValue *obj, EJSValue* propertyName, EJSBool flag)
+{
+  return _ejs_object_specops._delete (obj, propertyName, flag);
+}
+
+static EJSValue*
+_ejs_array_specop_default_value (EJSValue *obj, const char *hint)
+{
+  return _ejs_object_specops.default_value (obj, hint);
+}
+
+static void
+_ejs_array_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag)
+{
+  _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
 }

@@ -17,8 +17,6 @@ namespace jsllvm {
     s_ct->InstanceTemplate()->SetInternalFieldCount(1);
     s_ct->SetClassName(String::NewSymbol("Type"));
 
-    s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("pointerTo"), Type::pointerTo);
-
 #define LLVM_SET_METHOD(obj, name) NODE_SET_METHOD(obj, #name, Type::name)
 #define LLVM_SET_PROTOTYPE_METHOD(obj, name) NODE_SET_PROTOTYPE_METHOD(obj, #name, Type::name)
     LLVM_SET_METHOD(s_ct, getDoubleTy);
@@ -27,6 +25,7 @@ namespace jsllvm {
     LLVM_SET_METHOD(s_ct, getInt8Ty);
     LLVM_SET_METHOD(s_ct, getVoidTy);
 
+    LLVM_SET_PROTOTYPE_METHOD(s_ct, pointerTo);
     LLVM_SET_PROTOTYPE_METHOD(s_ct, isVoid);
     LLVM_SET_PROTOTYPE_METHOD(s_ct, dump);
 #undef LLVM_SET_METHOD
@@ -76,10 +75,10 @@ namespace jsllvm {
     return args.This();
   }
 
-  Handle<Value> Type::pointerTo(Local<String> property, const AccessorInfo& info)
+  Handle<Value> Type::pointerTo(const Arguments& args)
   {
     HandleScope scope;
-    Type* type = ObjectWrap::Unwrap<Type>(info.This());
+    Type* type = ObjectWrap::Unwrap<Type>(args.This());
     Local<Object> new_instance = s_func->NewInstance();
     Type* new_type = new Type(type->llvm_ty->getPointerTo());
     new_type->Wrap(new_instance);

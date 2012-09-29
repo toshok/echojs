@@ -23,9 +23,18 @@ typedef union _EJSValue EJSValue;
 #define MAX(a,b) (a) > (b) ? (a) : (b)
 #endif
 
+#if __cplusplus
+#define EJS_BEGIN_DECLS extern "C" {
+#define EJS_END_DECLS };
+#else
+#define EJS_BEGIN_DECLS
+#define EJS_END_DECLS
+#endif
+
 void _ejs_init();
 
 extern EJSValue* _ejs_undefined;
+extern EJSValue* _ejs_nan;
 extern EJSValue* _ejs_true;
 extern EJSValue* _ejs_false;
 extern EJSValue* _ejs_global;

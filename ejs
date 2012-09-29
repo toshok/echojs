@@ -7,141 +7,174 @@ compiler = require 'compiler'
 util = require 'echo-util'
 { spawn } = require 'child_process'
 
-# this needs to be ".slice 1" for the ejs compiled form.
-# we probably need some global property so we can do:
-# 
-#  slice_count = if ejs? then 1 else 2
-#  argv = process.argv.slice slice_count
-# 
-argv = process.argv.slice 2
+slice_count = if __ejs? then 1 else 2
+argv = process.argv.slice slice_count
+
+external_modules = []
+files = []
+
+add_external_module = (modinfo) ->
+        [library,module_name,module_entrypoint,link_flags] = modinfo.split ','
+        external_modules.push { library, module_name, module_entrypoint, link_flags }
 
 options =
-  # our defaults:
-  output_filename: null
-  combine_scripts: false
-  show_help: false
+        # our defaults:
+        output_filename: null
+        combine_scripts: false
+        show_help: false
+        link_with_cxx: false
 
 args =
-  "-s":     { flag:   "combine_scripts", help: "treat all toplevels as being 1 context, evaluating them in the order present on the command line" }
-  "-o":     { option: "output_filename", help: "name of the output file." }
-  "--help": { flag:   "show_help",       help: "output this help info." }
+        "-s":       { flag:    "combine_scripts",   help: "treat all toplevels as being 1 context, evaluating them in the order present on the command line" }
+        "-o":       { option:  "output_filename",   help: "name of the output file." }
+        "-cxx":     { flag:    "link_with_cxx",     help: "use clang++ to do the final link (default = no)" }
+        "--module": { handler: add_external_module, help: "--module library.a,module-name,module_init,link_flags" }
+        "--help":   { flag:    "show_help",         help: "output this help info." }
 
 output_usage = ->
-    console.warn 'Usage:';
-    console.warn '   ejs [options] file1.js file2.js file.js ...'
+        console.warn 'Usage:';
+        console.warn '   ejs [options] file1.js file2.js file.js ...'
         
 output_options = ->
-    console.warn 'Options:'
-    for a of args
-        console.warn "   #{a}:  #{args[a].help}"
-                
-files = []
+        console.warn 'Options:'
+        for a of args
+                console.warn "   #{a}:  #{args[a].help}"
+
 if argv.length > 0
-  for ai in [0..argv.length-1]
-    if args[argv[ai]]?
-      o = args[argv[ai]]
-      if o.flag?
-        options[o.flag] = true
-      else if o.option?
-        options[o.option] = argv[++ai]
-    else
-      # end of options signals the rest of the array is files
-      files = argv.slice ai
-      break
+        for ai in [0..argv.length-1]
+                if args[argv[ai]]?
+                        o = args[argv[ai]]
+                        if o.flag?
+                                options[o.flag] = true
+                        else if o.option?
+                                options[o.option] = argv[++ai]
+                        else if o.handler?
+                                o.handler argv[++ai]
+                else
+                        # end of options signals the rest of the array is files
+                        files = argv.slice ai
+                        break
 
 if options.show_help
-    output_usage()
-    console.warn ''
-    output_options()
-    process.exit 0
+        output_usage()
+        console.warn ''
+        output_options()
+        process.exit 0
         
 if files.length is 0
-    output_usage()
-    process.exit 0
+        output_usage()
+        process.exit 0
 
 files_remaining = 0
 
-s_filenames = []
+o_filenames = []
 
 base_filenames = (path.basename file for file in files)
 
 compiled_modules = []
 
 compileFile = (filename, content, compileCallback) ->
-    parse_tree = esprima.parse content, loc: true, raw: true
+        try
+                parse_tree = esprima.parse content, loc: true, raw: true
+        catch e
+                console.warn "parse error at #{filename}:"
+                process.exit -1
 
-    base_filename = util.genFreshFileName path.basename filename
-    compiled_module = compiler.compile parse_tree, base_filename
+        base_filename = util.genFreshFileName path.basename filename
+        compiled_module = compiler.compile parse_tree, base_filename
 
-    ll_filename = "/tmp/#{base_filename}.ll"
-    bc_filename = "/tmp/#{base_filename}.bc"
-    bc_opt_filename = "/tmp/#{base_filename}.bc.opt"
-    ll_opt_filename = "/tmp/#{base_filename}.ll.opt"
-    s_filename = "/tmp/#{base_filename}.s"
+        ll_filename = "/tmp/#{base_filename}.ll"
+        bc_filename = "/tmp/#{base_filename}.bc"
+        bc_opt_filename = "/tmp/#{base_filename}.bc.opt"
+        ll_opt_filename = "/tmp/#{base_filename}.ll.opt"
+        s_filename = "/tmp/#{base_filename}.s"
+        o_filename = "/tmp/#{base_filename}.o"
 
-    llvm_as_args = ["-o=#{bc_filename}", ll_filename]
-    opt_args = ["-O3", "-mem2reg", "-o=#{bc_opt_filename}", bc_filename]
-    llvm_dis_args = ["-o=#{ll_opt_filename}", bc_opt_filename]
-    llc_args = ["-march=x86-64", "-O2", "-o=#{s_filename}", ll_opt_filename]
+        llvm_as_args = ["-o=#{bc_filename}", ll_filename]
+        opt_args = ["-O3", "-mem2reg", "-o=#{bc_opt_filename}", bc_filename]
+        llvm_dis_args = ["-o=#{ll_opt_filename}", bc_opt_filename]
+        llc_args = ["-march=x86-64", "-O2", "-o=#{s_filename}", ll_opt_filename]
+        clang_args = ["-march=x86-64", "-O2", "-c", "-o", o_filename, s_filename]
 
-    compiled_module.writeToFile ll_filename
+        compiled_module.writeToFile ll_filename
 
-    compiled_modules.push filename: filename, module_toplevel: compiled_module.toplevel_name
+        compiled_modules.push filename: filename, module_toplevel: compiled_module.toplevel_name
 
-    llvm_as = spawn "llvm-as", llvm_as_args
-    llvm_as.stderr.on "data", (data) -> console.warn "#{data}"
-    llvm_as.on "exit", (code) ->
-      opt = spawn "opt", opt_args
-      opt.stderr.on "data", (data) -> console.warn "#{data}"
-      opt.on "exit", (code) ->
-        llvm_dis = spawn "llvm-dis", llvm_dis_args
-        llvm_dis.stderr.on "data", (data) -> console.warn "#{data}"
-        llvm_dis.on "exit", (code) ->
-          llc = spawn "llc", llc_args
-          llc.stderr.on "data", (data) -> console.warn "#{data}"
-          llc.on "exit", (code) ->
-            s_filenames.push s_filename
-            compileCallback()
+        llvm_as = spawn "llvm-as", llvm_as_args
+        llvm_as.stderr.on "data", (data) -> console.warn "#{data}"
+        llvm_as.on "exit", (code) ->
+                opt = spawn "opt", opt_args
+                opt.stderr.on "data", (data) -> console.warn "#{data}"
+                opt.on "exit", (code) ->
+                        llvm_dis = spawn "llvm-dis", llvm_dis_args
+                        llvm_dis.stderr.on "data", (data) -> console.warn "#{data}"
+                        llvm_dis.on "exit", (code) ->
+                                llc = spawn "llc", llc_args
+                                llc.stderr.on "data", (data) -> console.warn "#{data}"
+                                llc.on "exit", (code) ->
+                                        clang = spawn "clang", clang_args
+                                        clang.stderr.on "data", (data) -> console.warn "#{data}"
+                                        clang.on "exit", (code) ->
+                                                o_filenames.push o_filename
+                                                compileCallback()
 
 generate_require_map = ->
-  sanitize = (filename, c_callable) ->
-    filename = filename.replace /\.js$/, ""
-    if c_callable
-      filename = filename.replace /[.,-\/\\]/g, "_" # this is insanely inadequate
-    filename
-  map_path = "/tmp/#{util.genFreshFileName path.basename files[0]}-require-map.c"
-  map = fs.createWriteStream map_path
-  map.write "typedef struct _EJSValue EJSValue;\n"
-  map.write "typedef int EJSBool;\n"
-  map.write "typedef EJSValue* (*ToplevelFunc) (EJSValue *env, EJSValue *this, int argc, EJSValue *exports);\n"
-  map.write "typedef struct { const char* name;  ToplevelFunc func;  EJSValue *cached_exports; } EJSRequire;\n"
-  compiled_modules.forEach ({ filename, module_toplevel }) ->
-    sanitized = sanitize filename, true
-    map.write "extern EJSValue* #{module_toplevel} (EJSValue* env, EJSValue *this, int argc, EJSValue *exports);\n"
+        sanitize = (filename, c_callable) ->
+                filename = filename.replace /\.js$/, ""
+                if c_callable
+                        filename = filename.replace /[.,-\/\\]/g, "_" # this is insanely inadequate
+                filename
+        map_path = "/tmp/#{util.genFreshFileName path.basename files[0]}-require-map.#{if options.link_with_cxx then 'cpp' else 'c'}"
+        map = fs.createWriteStream map_path
+        if options.link_with_cxx
+                map.write "extern \"C\" {"
+        map.write "typedef struct _EJSValue EJSValue;\n"
+        map.write "typedef int EJSBool;\n"
+        map.write "typedef EJSValue* (*ExternalModuleEntry) (EJSValue *exports);\n"
+        map.write "typedef struct { const char* name;  ExternalModuleEntry func;  EJSValue *cached_exports; } EJSExternalModuleRequire;\n"
+        map.write "typedef EJSValue* (*ToplevelFunc) (EJSValue *env, EJSValue *_this, int argc, EJSValue **args);\n"
+        map.write "typedef struct { const char* name;  ToplevelFunc func;  EJSValue *cached_exports; } EJSRequire;\n"
+        external_modules.forEach ({ module_entrypoint }) ->
+                map.write "extern EJSValue* #{module_entrypoint} (EJSValue *exports);\n"
 
+        compiled_modules.forEach ({ filename, module_toplevel }) ->
+                sanitized = sanitize filename, true
+                map.write "extern EJSValue* #{module_toplevel} (EJSValue* env, EJSValue *_this, int argc, EJSValue **args);\n"
 
-  map.write "EJSRequire _ejs_require_map[] = {\n"
-  compiled_modules.forEach ({ filename, module_toplevel }) ->
-    map.write "  { \"#{sanitize (path.basename filename), false}\", #{module_toplevel}, 0 },\n"
-  map.write "  { 0, 0, 0 }\n"
-  map.write "};\n"
-  map.write "const char *entry_filename = \"#{sanitize base_filenames[0], false}\";\n";
-  map.end()
-  map_path
+        map.write "EJSRequire _ejs_require_map[] = {\n"
+        compiled_modules.forEach ({ filename, module_toplevel }) ->
+                map.write "  { \"#{sanitize (path.basename filename), false}\", #{module_toplevel}, 0 },\n"
+        map.write "  { 0, 0, 0 }\n"
+        map.write "};\n"
+
+        map.write "EJSExternalModuleRequire _ejs_external_module_require_map[] = {\n"
+        external_modules.forEach ({ module_name, module_entrypoint }) ->
+                map.write "  { \"#{module_name}\", #{module_entrypoint}, 0 },\n"
+        map.write "  { 0, 0, 0 }\n"
+        map.write "};\n"
+        
+        map.write "const char *entry_filename = \"#{sanitize base_filenames[0], false}\";\n";
+
+        if options.link_with_cxx
+                map.write "};"
+        map.end()
+        map_path
 
 
 file_compiled = ->
-        console.log "done compiling file"
         files_remaining = files_remaining - 1
-        console.log "files remaining == #{files_remaining}"
         if files_remaining is 0
                 map_filename = generate_require_map compiled_modules
 
-                clang_args = ["-o", options.output_filename || "#{files[0]}.exe"].concat s_filenames
+                clang_args = ["-v", "-o", options.output_filename || "#{files[0]}.exe"].concat o_filenames
                 clang_args.push map_filename
                 clang_args.push path.resolve (path.dirname process.argv[1]), "runtime/libecho.a"
+                for extern_module in external_modules
+                        clang_args.push extern_module.library
+                        clang_args = clang_args.concat extern_module.link_flags.split " "
 
-                clang = spawn "clang", clang_args
+                console.warn "clang command line #{(if options.link_with_cxx then 'clang++' else 'clang')} #{clang_args.join ' '}"
+                clang = spawn (if options.link_with_cxx then "g++" else "clang"), clang_args
                 clang.stderr.on "data", (data) -> console.warn "#{data}"
                 clang.on "exit", (code) ->
                         console.warn "done."
@@ -156,4 +189,3 @@ else
         files_remaining = files.length
         files.forEach (filename) ->
                 compileFile filename, (fs.readFileSync filename, 'utf-8'), file_compiled
-                

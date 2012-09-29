@@ -1,3 +1,5 @@
+#include <math.h>
+
 #include "ejs.h"
 #include "ejs-ops.h"
 #include "ejs-require.h"
@@ -13,6 +15,7 @@
 #include "ejs-function.h"
 
 EJSValue* _ejs_undefined;
+EJSValue* _ejs_nan;
 EJSValue* _ejs_true;
 EJSValue* _ejs_false;
 
@@ -39,6 +42,11 @@ _ejs_init(int argc, char** argv)
   _ejs_undefined = _ejs_undefined_new ();
   _ejs_object_setprop_utf8 (_ejs_global, "undefined", _ejs_undefined);
 
+  _ejs_nan = _ejs_number_new(nan("7734"));
+  _ejs_object_setprop_utf8 (_ejs_global, "NaN", _ejs_nan);
+
   _ejs_true = _ejs_boolean_new_internal (TRUE);
   _ejs_false = _ejs_boolean_new_internal (FALSE);
+
+  _ejs_object_setprop_utf8 (_ejs_global, "__ejs", _ejs_true);
 }

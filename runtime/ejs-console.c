@@ -19,7 +19,7 @@ void
 _ejs_console_init(EJSValue* global)
 {
   EJSValue* _ejs_console = _ejs_object_new (NULL);
-  _ejs_object_setprop_utf8 (_ejs_console, "log", _ejs_function_new (NULL, _ejs_log_impl));
-  _ejs_object_setprop_utf8 (_ejs_console, "warn", _ejs_function_new (NULL, _ejs_log_impl)); // FIXME there's no distinction between log and warn for now...
+  _ejs_object_setprop_utf8 (_ejs_console, "log", _ejs_function_new_utf8 (NULL, "log", _ejs_log_impl));
+  _ejs_object_setprop_utf8 (_ejs_console, "warn", _ejs_function_new_utf8 (NULL, "warn", _ejs_log_impl)); // FIXME there's no distinction between log and warn for now...
   _ejs_object_setprop_utf8 (global, "console", _ejs_console);
 }

@@ -11,11 +11,15 @@ typedef struct {
   double number;
 } EJSNumber;
 
+EJS_BEGIN_DECLS
+
 extern EJSValue* _ejs_Number;
 
 EJSValue* _ejs_number_get_prototype();
 EJSObject* _ejs_number_alloc_instance();
 
 void _ejs_number_init(EJSValue* global);
+
+EJS_END_DECLS
 
 #endif /* _ejs_number_h */

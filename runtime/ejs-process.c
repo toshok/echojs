@@ -24,6 +24,6 @@ _ejs_process_init(EJSValue* global, int argc, char **argv)
   }
 
   _ejs_object_setprop_utf8 (_ejs_process, "argv", _argv);
-  _ejs_object_setprop_utf8 (_ejs_process, "exit", _ejs_function_new (NULL, _ejs_process_exit_impl));
+  _ejs_object_setprop_utf8 (_ejs_process, "exit", _ejs_function_new_utf8 (NULL, "exit", _ejs_process_exit_impl));
   _ejs_object_setprop_utf8 (global, "process", _ejs_process);
 }

@@ -99,13 +99,15 @@ _ejs_Date_prototype_getTimezoneOffset (EJSValue* env, EJSValue* _this, int argc,
 void
 _ejs_date_init(EJSValue *global)
 {
-  _ejs_Date = _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Date_impl);
+  _ejs_Date = _ejs_function_new_utf8 (NULL, "Date", (EJSClosureFunc)_ejs_Date_impl);
   _ejs_Date_proto = _ejs_object_new(NULL);
 
   _ejs_object_setprop_utf8 (_ejs_Date,       "prototype",  _ejs_Date_proto);
 
-  _ejs_object_setprop_utf8 (_ejs_Date_proto, "toString",          _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Date_prototype_toString));
-  _ejs_object_setprop_utf8 (_ejs_Date_proto, "getTimezoneOffset", _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Date_prototype_getTimezoneOffset));
+#define PROTO_METHOD(x) _ejs_object_setprop_utf8 (_ejs_Date_proto, #x, _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_Date_prototype_##x))
+
+  PROTO_METHOD(toString);
+  PROTO_METHOD(getTimezoneOffset);
 
   _ejs_object_setprop_utf8 (global, "Date", _ejs_Date);
 }

@@ -4,6 +4,7 @@
 #include "ejs.h"
 #include "ejs-value.h"
 #include "ejs-object.h"
+#include "ejs-number.h"
 #include "ejs-string.h"
 #include "ejs-ops.h"
 
@@ -65,10 +66,16 @@ EJSValue* ToObject(EJSValue *exp)
   switch (exp->tag) {
   case EJSValueTagBoolean:
     abort();
-  case EJSValueTagNumber:
-    abort();
-  case EJSValueTagString:
-    return _ejs_invoke_closure_1 (_ejs_String, _ejs_undefined, 1, exp);
+  case EJSValueTagNumber: {
+    EJSObject* new_number = _ejs_number_alloc_instance();
+    _ejs_init_object (new_number, _ejs_number_get_prototype());
+    return _ejs_invoke_closure_1 (_ejs_Number, (EJSValue*)new_number, 1, exp);
+  }
+  case EJSValueTagString: {
+    EJSObject* new_str = _ejs_string_alloc_instance();
+    _ejs_init_object (new_str, _ejs_string_get_prototype());
+    return _ejs_invoke_closure_1 (_ejs_String, (EJSValue*)new_str, 1, exp);
+  }
   case EJSValueTagUndefined:
     return exp; // XXX
   case EJSValueTagObject:
@@ -426,11 +433,16 @@ _ejs_op_sub (EJSValue* lhs, EJSValue* rhs)
 EJSValue*
 _ejs_op_strict_eq (EJSValue* lhs, EJSValue* rhs)
 {
-  if (EJSVAL_IS_NUMBER(lhs)) {
-    return _ejs_boolean_new (EJSVAL_IS_NUMBER(rhs) && EJSVAL_TO_NUMBER(lhs) == EJSVAL_TO_NUMBER(rhs));
+  if (!lhs)
+    return _ejs_boolean_new (rhs == NULL);
+  else if (EJSVAL_IS_NUMBER(lhs)) {
+    return _ejs_boolean_new (rhs && EJSVAL_IS_NUMBER(rhs) && EJSVAL_TO_NUMBER(lhs) == EJSVAL_TO_NUMBER(rhs));
   }
   else if (EJSVAL_IS_STRING(lhs)) {
-    return _ejs_boolean_new (EJSVAL_IS_STRING(rhs) && !strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs)));
+    return _ejs_boolean_new (rhs && EJSVAL_IS_STRING(rhs) && !strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs)));
+  }
+  else if (EJSVAL_IS_BOOLEAN(lhs)) {
+    return _ejs_boolean_new (rhs && EJSVAL_IS_BOOLEAN(rhs) && EJSVAL_TO_BOOLEAN(lhs) == EJSVAL_TO_BOOLEAN(rhs));
   }
 
   abort();
@@ -439,11 +451,16 @@ _ejs_op_strict_eq (EJSValue* lhs, EJSValue* rhs)
 EJSValue*
 _ejs_op_strict_neq (EJSValue* lhs, EJSValue* rhs)
 {
-  if (EJSVAL_IS_NUMBER(lhs)) {
-    return _ejs_boolean_new (!EJSVAL_IS_NUMBER(rhs) || EJSVAL_TO_NUMBER(lhs) != EJSVAL_TO_NUMBER(rhs));
+  if (!lhs)
+    return _ejs_boolean_new (rhs != NULL);
+  else if (EJSVAL_IS_NUMBER(lhs)) {
+    return _ejs_boolean_new (!rhs || !EJSVAL_IS_NUMBER(rhs) || EJSVAL_TO_NUMBER(lhs) != EJSVAL_TO_NUMBER(rhs));
   }
   else if (EJSVAL_IS_STRING(lhs)) {
-    return _ejs_boolean_new (!EJSVAL_IS_STRING(rhs) || strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs)));
+    return _ejs_boolean_new (!rhs || !EJSVAL_IS_STRING(rhs) || strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs)));
+  }
+  else if (EJSVAL_IS_BOOLEAN(lhs)) {
+    return _ejs_boolean_new (!rhs || !EJSVAL_IS_BOOLEAN(rhs) || EJSVAL_TO_BOOLEAN(lhs) != EJSVAL_TO_BOOLEAN(rhs));
   }
 
   abort();
@@ -453,6 +470,9 @@ EJSValue*
 _ejs_op_eq (EJSValue* lhs, EJSValue* rhs)
 {
   if (lhs == NULL) {
+    return _ejs_boolean_new (rhs == NULL || EJSVAL_IS_UNDEFINED(rhs));
+  }
+  else if (EJSVAL_IS_UNDEFINED(lhs)) {
     return _ejs_boolean_new (rhs == NULL || EJSVAL_IS_UNDEFINED(rhs));
   }
   else if (EJSVAL_IS_NUMBER(lhs)) {
@@ -482,7 +502,10 @@ EJSValue*
 _ejs_op_neq (EJSValue* lhs, EJSValue* rhs)
 {
   if (lhs == NULL) {
-    return _ejs_boolean_new (rhs != NULL);
+    return _ejs_boolean_new (rhs != NULL && !EJSVAL_IS_UNDEFINED(rhs));
+  }
+  else if (EJSVAL_IS_UNDEFINED(lhs)) {
+    return _ejs_boolean_new (rhs != NULL && !EJSVAL_IS_UNDEFINED(rhs));
   }
   else if (EJSVAL_IS_NUMBER(lhs)) {
     return _ejs_boolean_new (!rhs || (EJSVAL_TO_NUMBER(lhs) != ToDouble(rhs)));
@@ -510,6 +533,8 @@ _ejs_op_neq (EJSValue* lhs, EJSValue* rhs)
 EJSValue*
 _ejs_op_instanceof (EJSValue* lhs, EJSValue* rhs)
 {
+  if (EJSVAL_IS_PRIMITIVE(lhs))
+    return _ejs_false;
   abort();
 }
 

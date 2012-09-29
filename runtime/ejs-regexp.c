@@ -50,7 +50,7 @@ _ejs_regexp_get_prototype()
 void
 _ejs_regexp_init(EJSValue *global)
 {
-  _ejs_Regexp = _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Regexp_impl);
+  _ejs_Regexp = _ejs_function_new_utf8 (NULL, "Regexp", (EJSClosureFunc)_ejs_Regexp_impl);
   _ejs_Regexp_proto = _ejs_object_new(NULL);
 
   _ejs_object_setprop_utf8 (_ejs_Regexp,       "prototype",  _ejs_Regexp_proto);

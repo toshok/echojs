@@ -36,7 +36,7 @@ foreground = (color) -> "3#{color}"
 background = (color) -> "4#{color}"
 
 makeANSI = (code) ->
-        return "\033[#{code}m"
+        return "\x1b[#{code}m"
 
 mustacheEnvironment =
         'reset'          :makeANSI(reset)

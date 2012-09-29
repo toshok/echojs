@@ -4,17 +4,50 @@
 #include "ejs-object.h"
 #include "ejs-function.h"
 
+static EJSValue* _ejs_function_specop_get (EJSValue* obj, EJSValue* propertyName);
+static EJSValue* _ejs_function_specop_get_own_property (EJSValue* obj, EJSValue* propertyName);
+static EJSValue* _ejs_function_specop_get_property (EJSValue* obj, EJSValue* propertyName);
+static void      _ejs_function_specop_put (EJSValue *obj, EJSValue* propertyName, EJSValue* val, EJSBool flag);
+static EJSBool   _ejs_function_specop_can_put (EJSValue *obj, EJSValue* propertyName);
+static EJSBool   _ejs_function_specop_has_property (EJSValue *obj, EJSValue* propertyName);
+static EJSBool   _ejs_function_specop_delete (EJSValue *obj, EJSValue* propertyName, EJSBool flag);
+static EJSValue* _ejs_function_specop_default_value (EJSValue *obj, const char *hint);
+static void      _ejs_function_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag);
+
+extern EJSSpecOps _ejs_object_specops;
+
+EJSSpecOps _ejs_function_specops = {
+  "Function",
+  _ejs_function_specop_get,
+  _ejs_function_specop_get_own_property,
+  _ejs_function_specop_get_property,
+  _ejs_function_specop_put,
+  _ejs_function_specop_can_put,
+  _ejs_function_specop_has_property,
+  _ejs_function_specop_delete,
+  _ejs_function_specop_default_value,
+  _ejs_function_specop_define_own_property
+};
+
 EJSValue*
-_ejs_function_new (EJSClosureEnv* env, EJSClosureFunc func)
+_ejs_function_new (EJSClosureEnv* env, EJSValue *name, EJSClosureFunc func)
 {
   EJSFunction *rv = (EJSFunction*)calloc (1, sizeof(EJSFunction));
 
   _ejs_init_object ((EJSObject*)rv, _ejs_function_get_prototype());
+  rv->obj.ops = &_ejs_function_specops;
 
+  rv->name = name;
   rv->func = func;
   rv->env = env;
 
   return (EJSValue*)rv;
+}
+
+EJSValue*
+_ejs_function_new_utf8 (EJSClosureEnv* env, const char *name, EJSClosureFunc func)
+{
+  return _ejs_function_new (env, _ejs_string_new_utf8 (name), func);
 }
 
 
@@ -37,14 +70,34 @@ _ejs_function_get_prototype()
 static EJSValue*
 _ejs_Function_prototype_toString (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  abort();
+  char terrible_fixed_buffer[256];
+
+  assert (EJSVAL_IS_FUNCTION(_this));
+  EJSFunction* func = (EJSFunction*)_this;
+
+  snprintf (terrible_fixed_buffer, sizeof (terrible_fixed_buffer), "[Function: %s]", EJSVAL_TO_STRING(func->name));
+  return _ejs_string_new_utf8(terrible_fixed_buffer);
 }
 
 // ECMA262 15.3.4.3
 static EJSValue*
 _ejs_Function_prototype_apply (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  abort();
+  assert (EJSVAL_IS_FUNCTION(_this));
+  EJSValue* thisArg = args[0];
+  EJSArray* argArray = (EJSArray*)args[1];
+
+  int apply_argc = EJS_ARRAY_LEN(argArray);
+  EJSValue** apply_args = NULL;
+  if (argc) {
+    apply_args = malloc(sizeof(EJSValue*) * argc);
+    int i;
+    for (i = 0; i < argc; i ++) {
+      apply_args[i] = EJS_ARRAY_ELEMENTS(argArray)[i];
+    }
+  }
+
+  return EJSVAL_TO_FUNC(_this) (EJSVAL_TO_ENV(_this), thisArg, apply_argc, apply_args);
 }
 
 // ECMA262 15.3.4.4
@@ -73,7 +126,7 @@ _ejs_Function_prototype_bind (EJSValue* env, EJSValue* _this, int argc, EJSValue
 void
 _ejs_function_init(EJSValue *global)
 {
-  _ejs_Function = _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Function_impl);
+  _ejs_Function = _ejs_function_new_utf8 (NULL, "Function", (EJSClosureFunc)_ejs_Function_impl);
   _ejs_Function_proto = _ejs_object_new(_ejs_object_get_prototype());
 
   // ECMA262 15.3.3.1
@@ -81,8 +134,8 @@ _ejs_function_init(EJSValue *global)
   // ECMA262 15.3.3.2
   _ejs_object_setprop_utf8 (_ejs_Function,       "length",     _ejs_number_new(1)); // FIXME:  { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }.
 
-#define OBJ_METHOD(x) _ejs_object_setprop_utf8 (_ejs_Function, #x, _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Function_##x))
-#define PROTO_METHOD(x) _ejs_object_setprop_utf8 (_ejs_Function_proto, #x, _ejs_function_new (NULL, (EJSClosureFunc)_ejs_Function_prototype_##x))
+#define OBJ_METHOD(x) _ejs_object_setprop_utf8 (_ejs_Function, #x, _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_Function_##x))
+#define PROTO_METHOD(x) _ejs_object_setprop_utf8 (_ejs_Function_proto, #x, _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_Function_prototype_##x))
 
   PROTO_METHOD(toString);
   PROTO_METHOD(apply);
@@ -184,3 +237,58 @@ _ejs_invoke_closure_10 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* 
   return EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
 }
 
+
+
+static EJSValue*
+_ejs_function_specop_get (EJSValue* obj, EJSValue* propertyName)
+{
+  return _ejs_object_specops.get (obj, propertyName);
+}
+
+static EJSValue*
+_ejs_function_specop_get_own_property (EJSValue* obj, EJSValue* propertyName)
+{
+  return _ejs_object_specops.get_own_property (obj, propertyName);
+}
+
+static EJSValue*
+_ejs_function_specop_get_property (EJSValue* obj, EJSValue* propertyName)
+{
+  return _ejs_object_specops.get_property (obj, propertyName);
+}
+
+static void
+_ejs_function_specop_put (EJSValue *obj, EJSValue* propertyName, EJSValue* val, EJSBool flag)
+{
+  _ejs_object_specops.put (obj, propertyName, val, flag);
+}
+
+static EJSBool
+_ejs_function_specop_can_put (EJSValue *obj, EJSValue* propertyName)
+{
+  return _ejs_object_specops.can_put (obj, propertyName);
+}
+
+static EJSBool
+_ejs_function_specop_has_property (EJSValue *obj, EJSValue* propertyName)
+{
+  return _ejs_object_specops.has_property (obj, propertyName);
+}
+
+static EJSBool
+_ejs_function_specop_delete (EJSValue *obj, EJSValue* propertyName, EJSBool flag)
+{
+  return _ejs_object_specops._delete (obj, propertyName, flag);
+}
+
+static EJSValue*
+_ejs_function_specop_default_value (EJSValue *obj, const char *hint)
+{
+  return _ejs_object_specops.default_value (obj, hint);
+}
+
+static void
+_ejs_function_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag)
+{
+  _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
+}

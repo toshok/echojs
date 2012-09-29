@@ -12,6 +12,7 @@ typedef struct {
   char *pattern;
 } EJSRegexp;
 
+EJS_BEGIN_DECLS
 
 extern EJSValue* _ejs_Regexp;
 
@@ -21,5 +22,7 @@ EJSObject* _ejs_regexp_alloc_instance();
 void _ejs_regexp_init(EJSValue* global);
 
 EJSValue* _ejs_regexp_new_utf8 (const char* str);
+
+EJS_END_DECLS
 
 #endif /* _ejs_regexp_h */

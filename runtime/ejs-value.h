@@ -8,6 +8,9 @@
 #include "ejs-function.h"
 
 typedef struct {
+} EJSObjectHeader;
+
+typedef struct {
   EJSValueTag tag;
   double data;
 } EJSPrimNumber;
@@ -52,6 +55,8 @@ union _EJSValue {
 
 #define EJS_NUMBER_FORMAT "%g"
 
+EJS_BEGIN_DECLS
+
 void _ejs_dump_value (EJSValue* val);
 
 EJSValue* _ejs_string_new_utf8 (const char* str);
@@ -61,5 +66,6 @@ EJSValue* _ejs_boolean_new (EJSBool value);
 
 EJSValue* _ejs_undefined_new ();
 
+EJS_END_DECLS
 
 #endif /* _ejs_value_h */

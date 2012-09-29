@@ -5,6 +5,10 @@
 #include "ejs.h"
 #include "ejs-value.h"
 
+EJS_BEGIN_DECLS
+
 void _ejs_process_init(EJSValue* global, int argc, char** argv);
+
+EJS_END_DECLS
 
 #endif

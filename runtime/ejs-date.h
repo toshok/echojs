@@ -15,11 +15,15 @@ typedef struct {
 
 extern EJSValue* _ejs_Date;
 
+EJS_BEGIN_DECLS
+
 EJSValue* _ejs_date_get_prototype();
 
 EJSValue* _ejs_date_new_unix (int timestamp);
 
 EJSObject* _ejs_date_alloc_instance();
 void _ejs_date_init(EJSValue* global);
+
+EJS_END_DECLS
 
 #endif /* _ejs_date_h */

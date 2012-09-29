@@ -5,6 +5,8 @@
 #include "ejs.h"
 #include "ejs-object.h"
 
+EJS_BEGIN_DECLS
+
 /* returns an EJSPrimString* */
 EJSValue* NumberToString(double d);
 EJSValue* ToString(EJSValue *exp);
@@ -39,5 +41,7 @@ EJSValue* _ejs_op_instanceof (EJSValue* lhs, EJSValue* rhs);
 EJSValue* _ejs_op_in (EJSValue* lhs, EJSValue* rhs);
 
 EJSBool _ejs_truthy (EJSValue* val);
+
+EJS_END_DECLS
 
 #endif // _ejs_ops_h

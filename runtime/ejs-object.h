@@ -13,13 +13,37 @@ typedef struct {
   EJSBool enumerable;
 } EJSPropertyDesc;
 
+typedef EJSValue* (*SpecOpGet) (EJSValue* obj, EJSValue* propertyName);
+typedef EJSValue* (*SpecOpGetOwnProperty) (EJSValue* obj, EJSValue* propertyName);
+typedef EJSValue* (*SpecOpGetProperty) (EJSValue* obj, EJSValue* propertyName);
+typedef void      (*SpecOpPut) (EJSValue* obj, EJSValue* propertyName, EJSValue* val, EJSBool flag);
+typedef EJSBool   (*SpecOpCanPut) (EJSValue* obj, EJSValue* propertyName);
+typedef EJSBool   (*SpecOpHasProperty) (EJSValue* obj, EJSValue* propertyName);
+typedef EJSBool   (*SpecOpDelete) (EJSValue* obj, EJSValue* propertyName, EJSBool flag);
+typedef EJSValue* (*SpecOpDefaultValue) (EJSValue* obj, const char *hint);
+typedef void      (*SpecOpDefineOwnProperty) (EJSValue* obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag);
+
+typedef struct {
+  const char* class_name;
+  SpecOpGet get;
+  SpecOpGetOwnProperty get_own_property;
+  SpecOpGetProperty get_property;
+  SpecOpPut put;
+  SpecOpCanPut can_put;
+  SpecOpHasProperty has_property;
+  SpecOpDelete _delete;
+  SpecOpDefaultValue default_value;
+  SpecOpDefineOwnProperty define_own_property;
+} EJSSpecOps;
+
 typedef struct {
   EJSValueTag tag;
   EJSValue *proto;
+  EJSSpecOps *ops;
   EJSPropertyMap* map;
-  EJSValue **fields;
-  int allocated_fields;
 } EJSObject;
+
+EJS_BEGIN_DECLS
 
 EJSPropertyMap* _ejs_propertymap_new (int initial_allocation);
 int _ejs_propertymap_lookup (EJSPropertyMap *map, const char *name, EJSBool add_if_not_found);
@@ -44,5 +68,7 @@ void      _ejs_init_object (EJSObject *obj, EJSValue *proto);
 EJSValue* _ejs_object_get_prototype();
 
 void _ejs_object_init(EJSValue *global);
+
+EJS_END_DECLS
 
 #endif // _ejs_object_h_
