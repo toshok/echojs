@@ -80,17 +80,17 @@ _ejs_llvm_FunctionType_prototype_dump(EJSValue* env, EJSValue* _this, int argc, 
 void
 _ejs_llvm_FunctionType_init (EJSValue* exports)
 {
-  _ejs_llvm_FunctionType = _ejs_function_new (NULL, (EJSClosureFunc)_ejs_llvm_FunctionType_impl);
+  _ejs_llvm_FunctionType = _ejs_function_new_utf8 (NULL, "LLVMFunction", (EJSClosureFunc)_ejs_llvm_FunctionType_impl);
   _ejs_llvm_FunctionType_proto = _ejs_object_new(_ejs_llvm_Type_get_prototype());
 
   _ejs_object_setprop_utf8 (_ejs_llvm_FunctionType,       "prototype",  _ejs_llvm_FunctionType_proto);
-  _ejs_object_setprop_utf8 (_ejs_llvm_FunctionType,       "get",        _ejs_function_new (NULL, (EJSClosureFunc)_ejs_llvm_FunctionType_get));
+  _ejs_object_setprop_utf8 (_ejs_llvm_FunctionType,       "get",        _ejs_function_new_utf8 (NULL, "get", (EJSClosureFunc)_ejs_llvm_FunctionType_get));
 
-  _ejs_object_setprop_utf8 (_ejs_llvm_FunctionType_proto, "getReturnType",   _ejs_function_new (NULL, (EJSClosureFunc)_ejs_llvm_FunctionType_prototype_getReturnType));
-  _ejs_object_setprop_utf8 (_ejs_llvm_FunctionType_proto, "getParamType",   _ejs_function_new (NULL, (EJSClosureFunc)_ejs_llvm_FunctionType_prototype_getParamType));
+  _ejs_object_setprop_utf8 (_ejs_llvm_FunctionType_proto, "getReturnType",   _ejs_function_new_utf8 (NULL, "getReturnType", (EJSClosureFunc)_ejs_llvm_FunctionType_prototype_getReturnType));
+  _ejs_object_setprop_utf8 (_ejs_llvm_FunctionType_proto, "getParamType",   _ejs_function_new_utf8 (NULL, "getParamType", (EJSClosureFunc)_ejs_llvm_FunctionType_prototype_getParamType));
 
-  _ejs_object_setprop_utf8 (_ejs_llvm_FunctionType_proto, "dump",   _ejs_function_new (NULL, (EJSClosureFunc)_ejs_llvm_FunctionType_prototype_dump));
-  _ejs_object_setprop_utf8 (_ejs_llvm_FunctionType_proto, "toString",   _ejs_function_new (NULL, (EJSClosureFunc)_ejs_llvm_FunctionType_prototype_toString));
+  _ejs_object_setprop_utf8 (_ejs_llvm_FunctionType_proto, "dump",   _ejs_function_new_utf8 (NULL, "dump", (EJSClosureFunc)_ejs_llvm_FunctionType_prototype_dump));
+  _ejs_object_setprop_utf8 (_ejs_llvm_FunctionType_proto, "toString",   _ejs_function_new_utf8 (NULL, "toString", (EJSClosureFunc)_ejs_llvm_FunctionType_prototype_toString));
 
   _ejs_object_setprop_utf8 (exports,              "FunctionType", _ejs_llvm_FunctionType);
 }

@@ -62,15 +62,15 @@ _ejs_llvm_StructType_prototype_dump(EJSValue* env, EJSValue* _this, int argc, EJ
 void
 _ejs_llvm_StructType_init (EJSValue* exports)
 {
-  _ejs_llvm_StructType = _ejs_function_new (NULL, (EJSClosureFunc)_ejs_llvm_StructType_impl);
+  _ejs_llvm_StructType = _ejs_function_new_utf8 (NULL, "LLVMStructType", (EJSClosureFunc)_ejs_llvm_StructType_impl);
   _ejs_llvm_StructType_proto = _ejs_object_new(_ejs_llvm_Type_get_prototype());
 
   _ejs_object_setprop_utf8 (_ejs_llvm_StructType,       "prototype",  _ejs_llvm_StructType_proto);
 
-  _ejs_object_setprop_utf8 (_ejs_llvm_StructType,       "create",  _ejs_function_new (NULL, (EJSClosureFunc)_ejs_llvm_StructType_create));
+  _ejs_object_setprop_utf8 (_ejs_llvm_StructType,       "create",  _ejs_function_new_utf8 (NULL, "create", (EJSClosureFunc)_ejs_llvm_StructType_create));
 
-  _ejs_object_setprop_utf8 (_ejs_llvm_StructType_proto, "dump",   _ejs_function_new (NULL, (EJSClosureFunc)_ejs_llvm_StructType_prototype_dump));
-  _ejs_object_setprop_utf8 (_ejs_llvm_StructType_proto, "toString",   _ejs_function_new (NULL, (EJSClosureFunc)_ejs_llvm_StructType_prototype_toString));
+  _ejs_object_setprop_utf8 (_ejs_llvm_StructType_proto, "dump",   _ejs_function_new_utf8 (NULL, "dump", (EJSClosureFunc)_ejs_llvm_StructType_prototype_dump));
+  _ejs_object_setprop_utf8 (_ejs_llvm_StructType_proto, "toString",   _ejs_function_new_utf8 (NULL, "toString", (EJSClosureFunc)_ejs_llvm_StructType_prototype_toString));
 
   _ejs_object_setprop_utf8 (exports,              "StructType", _ejs_llvm_StructType);
 }

@@ -94,20 +94,20 @@ _ejs_llvm_Type_getLLVMObj(EJSValue* val)
 void
 _ejs_llvm_Type_init (EJSValue* exports)
 {
-  _ejs_llvm_Type = _ejs_function_new (NULL, (EJSClosureFunc)_ejs_llvm_Type_impl);
+  _ejs_llvm_Type = _ejs_function_new_utf8 (NULL, "LLVMType", (EJSClosureFunc)_ejs_llvm_Type_impl);
   _ejs_llvm_Type_proto = _ejs_object_new(NULL);
 
   _ejs_object_setprop_utf8 (_ejs_llvm_Type,       "prototype",  _ejs_llvm_Type_proto);
-  _ejs_object_setprop_utf8 (_ejs_llvm_Type,       "getDoubleTy",  _ejs_function_new (NULL, (EJSClosureFunc)_ejs_llvm_Type_getDoubleTy));
-  _ejs_object_setprop_utf8 (_ejs_llvm_Type,       "getInt64Ty",  _ejs_function_new (NULL, (EJSClosureFunc)_ejs_llvm_Type_getInt64Ty));
-  _ejs_object_setprop_utf8 (_ejs_llvm_Type,       "getInt32Ty",  _ejs_function_new (NULL, (EJSClosureFunc)_ejs_llvm_Type_getInt32Ty));
-  _ejs_object_setprop_utf8 (_ejs_llvm_Type,       "getInt8Ty",  _ejs_function_new (NULL, (EJSClosureFunc)_ejs_llvm_Type_getInt8Ty));
-  _ejs_object_setprop_utf8 (_ejs_llvm_Type,       "getVoidTy",  _ejs_function_new (NULL, (EJSClosureFunc)_ejs_llvm_Type_getVoidTy));
+  _ejs_object_setprop_utf8 (_ejs_llvm_Type,       "getDoubleTy",  _ejs_function_new_utf8 (NULL, "getDoubleTy", (EJSClosureFunc)_ejs_llvm_Type_getDoubleTy));
+  _ejs_object_setprop_utf8 (_ejs_llvm_Type,       "getInt64Ty",  _ejs_function_new_utf8 (NULL, "getInt64Ty", (EJSClosureFunc)_ejs_llvm_Type_getInt64Ty));
+  _ejs_object_setprop_utf8 (_ejs_llvm_Type,       "getInt32Ty",  _ejs_function_new_utf8 (NULL, "getInt32Ty", (EJSClosureFunc)_ejs_llvm_Type_getInt32Ty));
+  _ejs_object_setprop_utf8 (_ejs_llvm_Type,       "getInt8Ty",  _ejs_function_new_utf8 (NULL, "getInt8Ty", (EJSClosureFunc)_ejs_llvm_Type_getInt8Ty));
+  _ejs_object_setprop_utf8 (_ejs_llvm_Type,       "getVoidTy",  _ejs_function_new_utf8 (NULL, "getVoidTy", (EJSClosureFunc)_ejs_llvm_Type_getVoidTy));
 
-  _ejs_object_setprop_utf8 (_ejs_llvm_Type_proto, "pointerTo",   _ejs_function_new (NULL, (EJSClosureFunc)_ejs_llvm_Type_prototype_pointerTo));
-  _ejs_object_setprop_utf8 (_ejs_llvm_Type_proto, "isVoid",   _ejs_function_new (NULL, (EJSClosureFunc)_ejs_llvm_Type_prototype_isVoid));
-  _ejs_object_setprop_utf8 (_ejs_llvm_Type_proto, "dump",   _ejs_function_new (NULL, (EJSClosureFunc)_ejs_llvm_Type_prototype_dump));
-  _ejs_object_setprop_utf8 (_ejs_llvm_Type_proto, "toString",   _ejs_function_new (NULL, (EJSClosureFunc)_ejs_llvm_Type_prototype_toString));
+  _ejs_object_setprop_utf8 (_ejs_llvm_Type_proto, "pointerTo",   _ejs_function_new_utf8 (NULL, "pointerTo", (EJSClosureFunc)_ejs_llvm_Type_prototype_pointerTo));
+  _ejs_object_setprop_utf8 (_ejs_llvm_Type_proto, "isVoid",   _ejs_function_new_utf8 (NULL, "isVoid", (EJSClosureFunc)_ejs_llvm_Type_prototype_isVoid));
+  _ejs_object_setprop_utf8 (_ejs_llvm_Type_proto, "dump",   _ejs_function_new_utf8 (NULL, "dump", (EJSClosureFunc)_ejs_llvm_Type_prototype_dump));
+  _ejs_object_setprop_utf8 (_ejs_llvm_Type_proto, "toString",   _ejs_function_new_utf8 (NULL, "toString", (EJSClosureFunc)_ejs_llvm_Type_prototype_toString));
 
   _ejs_object_setprop_utf8 (exports,              "Type", _ejs_llvm_Type);
 }
