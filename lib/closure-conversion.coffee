@@ -47,38 +47,36 @@ exports.free = free = (exp) ->
                         exp.ejs_free_vars = (free exp.body).subtract (param_names exp.params)
                         exp.ejs_decls = exp.body.ejs_decls.union (param_names exp.params)
                         exp.ejs_free_vars
-                when syntax.LabeledStatement then free exp.body
-                when syntax.BlockStatement
-                        free_blocklike exp, exp.body
-                when syntax.TryStatement        then Set.union.apply null, [(free exp.block)].concat (map free, exp.handlers)
-                when syntax.CatchClause         then (free exp.body).subtract (new Set [exp.param.name])
-                when syntax.VariableDeclaration then Set.union.apply null, (map free, exp.declarations)
-                when syntax.VariableDeclarator  then free exp.init
-                when syntax.ExpressionStatement then free exp.expression
-                when syntax.Identifier          then new Set [exp.name]
-                when syntax.ThrowStatement      then free exp.argument
-                when syntax.ForStatement        then Set.union.apply null, (map free, [exp.init, exp.test, exp.update, exp.body])
-                when syntax.ForInStatement      then Set.union.apply null, (map free, [exp.left, exp.right, exp.body])
-                when syntax.WhileStatement      then Set.union.apply null, (map free, [exp.test, exp.body])
-                when syntax.SwitchStatement     then Set.union.apply null, [(free exp.discriminant)].concat (map free, exp.cases)
-                when syntax.SwitchCase
-                        free_blocklike exp, exp.consequent
-                when syntax.EmptyStatement      then new Set
-                when syntax.BreakStatement      then new Set
-                when syntax.ContinueStatement   then new Set
-                when syntax.UpdateExpression    then free exp.argument
-                when syntax.ReturnStatement     then free exp.argument
-                when syntax.UnaryExpression     then free exp.argument
-                when syntax.BinaryExpression    then (free exp.left).union free exp.right
-                when syntax.LogicalExpression   then (free exp.left).union free exp.right
-                when syntax.MemberExpression    then free exp.object # we don't traverse into the property
-                when syntax.CallExpression      then Set.union.apply null, [(free exp.callee)].concat (map free, exp.arguments)
-                when syntax.NewExpression       then Set.union.apply null, [(free exp.callee)].concat (map free, exp.arguments)
-                when syntax.SequenceExpression  then Set.union.apply null, map free, exp.expressions
+                when syntax.LabeledStatement      then free exp.body
+                when syntax.BlockStatement        then free_blocklike exp, exp.body
+                when syntax.TryStatement          then Set.union.apply null, [(free exp.block)].concat (map free, exp.handlers)
+                when syntax.CatchClause           then (free exp.body).subtract (new Set [exp.param.name])
+                when syntax.VariableDeclaration   then Set.union.apply null, (map free, exp.declarations)
+                when syntax.VariableDeclarator    then free exp.init
+                when syntax.ExpressionStatement   then free exp.expression
+                when syntax.Identifier            then new Set [exp.name]
+                when syntax.ThrowStatement        then free exp.argument
+                when syntax.ForStatement          then Set.union.apply null, (map free, [exp.init, exp.test, exp.update, exp.body])
+                when syntax.ForInStatement        then Set.union.apply null, (map free, [exp.left, exp.right, exp.body])
+                when syntax.WhileStatement        then Set.union.apply null, (map free, [exp.test, exp.body])
+                when syntax.SwitchStatement       then Set.union.apply null, [free exp.discriminant].concat (map free, exp.cases)
+                when syntax.SwitchCase            then free_blocklike exp, exp.consequent
+                when syntax.EmptyStatement        then new Set
+                when syntax.BreakStatement        then new Set
+                when syntax.ContinueStatement     then new Set
+                when syntax.UpdateExpression      then free exp.argument
+                when syntax.ReturnStatement       then free exp.argument
+                when syntax.UnaryExpression       then free exp.argument
+                when syntax.BinaryExpression      then (free exp.left).union free exp.right
+                when syntax.LogicalExpression     then (free exp.left).union free exp.right
+                when syntax.MemberExpression      then free exp.object # we don't traverse into the property
+                when syntax.CallExpression        then Set.union.apply null, [(free exp.callee)].concat (map free, exp.arguments)
+                when syntax.NewExpression         then Set.union.apply null, [(free exp.callee)].concat (map free, exp.arguments)
+                when syntax.SequenceExpression    then Set.union.apply null, map free, exp.expressions
                 when syntax.ConditionalExpression then Set.union.apply null, [(free exp.test), (free exp.cconsequent), free (exp.alternate)]
-                when syntax.Literal             then new Set
-                when syntax.ThisExpression      then new Set
-                when syntax.Property            then free exp.value # we skip the key
+                when syntax.Literal               then new Set
+                when syntax.ThisExpression        then new Set
+                when syntax.Property              then free exp.value # we skip the key
                 when syntax.ObjectExpression
                         return new Set if exp.properties.length is 0
                         Set.union.apply null, map free, (p.value for p in exp.properties)
