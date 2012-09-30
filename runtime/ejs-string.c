@@ -77,6 +77,12 @@ _ejs_String_prototype_toString (EJSValue* env, EJSValue* _this, int argc, EJSVal
 }
 
 static EJSValue*
+_ejs_String_prototype_replace (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  abort();
+}
+
+static EJSValue*
 _ejs_String_prototype_charCodeAt (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
   EJSValue* primStr;
@@ -153,6 +159,7 @@ _ejs_string_init(EJSValue *global)
 #define PROTO_METHOD(x) _ejs_object_setprop_utf8 (_ejs_String_proto, #x, _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_String_prototype_##x))
 
   PROTO_METHOD(charCodeAt);
+  PROTO_METHOD(replace);
   PROTO_METHOD(indexOf);
   PROTO_METHOD(toString);
   PROTO_METHOD(split);
