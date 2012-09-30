@@ -42,6 +42,8 @@ EJSValue* _ejs_op_in (EJSValue* lhs, EJSValue* rhs);
 
 EJSBool _ejs_truthy (EJSValue* val);
 
+void _ejs_throw (EJSValue* exp);
+
 EJS_END_DECLS
 
 #endif // _ejs_ops_h

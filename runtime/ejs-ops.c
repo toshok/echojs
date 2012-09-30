@@ -552,3 +552,9 @@ _ejs_truthy (EJSValue* val)
   return _ejs_true == ToBoolean(val);
 }
 
+
+void
+_ejs_throw (EJSValue* exp)
+{
+  abort();
+}
