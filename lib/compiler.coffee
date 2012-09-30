@@ -239,6 +239,77 @@ class LLVMIRVisitor extends NodeVisitor
                 else
                         n
 
+        visitSwitch: (n) ->
+                insertBlock = llvm.IRBuilder.getInsertBlock()
+                insertFunc = insertBlock.parent
+
+                switch_bb = new llvm.BasicBlock "switch", insertFunc
+
+                llvm.IRBuilder.createBr switch_bb
+                llvm.IRBuilder.setInsertPoint switch_bb
+                
+                # find the default: case first
+                defaultCase = null
+                (if not _case.test then defaultCase = _case) for _case in n.cases
+
+                # for each case, create 2 basic blocks
+                for _case in n.cases
+                        if _case isnt defaultCase
+                                _case.dest_check = new llvm.BasicBlock "case_dest_check_bb", insertFunc
+
+                for _case in n.cases
+                        _case.bb = new llvm.BasicBlock "case_bb", insertFunc
+
+                merge_bb = new llvm.BasicBlock "switch_merge", insertFunc
+
+                discr = @visit n.discriminant
+
+                case_checks = []
+                for _case in n.cases
+                        if defaultCase isnt _case
+                                case_checks.push test: _case.test, dest_check: _case.dest_check, body: _case.bb
+
+                if defaultCase?
+                        case_checks.push dest_check: defaultCase.bb
+                else
+                        case_checks.push dest_check: merge_bb
+
+                @breakStack.unshift dest: merge_bb
+
+                # insert all the code for the tests
+                llvm.IRBuilder.createBr case_checks[0].dest_check
+                llvm.IRBuilder.setInsertPoint case_checks[0].dest_check
+                for casenum in [0...case_checks.length-1]
+                        test = @visit case_checks[casenum].test
+                        discTest = llvm.IRBuilder.createCall @ejs["binop==="], [discr, test], "test"
+                        disc_truthy = llvm.IRBuilder.createCall @ejs.truthy, [discTest], "disc_truthy"
+                        disc_cmp = llvm.IRBuilder.createICmpEq disc_truthy, (llvm.Constant.getIntegerValue boolType, 0), "disccmpresult"
+                        llvm.IRBuilder.createCondBr disc_cmp, case_checks[casenum+1].dest_check, case_checks[casenum].body
+                        llvm.IRBuilder.setInsertPoint case_checks[casenum+1].dest_check
+
+
+                case_bodies = []
+                
+                # now insert all the code for the case consequents
+                for _case in n.cases
+                        case_bodies.push bb:_case.bb, consequent:_case.consequent
+
+                case_bodies.push bb:merge_bb
+                
+                for casenum in [0...case_bodies.length-1]
+                        llvm.IRBuilder.setInsertPoint case_bodies[casenum].bb
+                        for c of case_bodies[casenum].consequent
+                                @visit case_bodies[casenum].consequent[c]
+                        llvm.IRBuilder.createBr case_bodies[casenum+1].bb
+                        
+                llvm.IRBuilder.setInsertPoint merge_bb
+                @breakStack.shift()
+                
+                
+        visitCase: (n) ->
+                throw "we shouldn't get here, case statements are handled in visitSwitch"
+                        
+                
         visitLabeledStatement: (n) ->
                 n.body.label = n.label.name
                 @visit n.body

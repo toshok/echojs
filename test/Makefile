@@ -12,7 +12,8 @@ EXPECTED_FAILURES= \
 	function-overriding1.js \
 	iife2.js \
 	instanceof1.js \
-	object5.js
+	object5.js \
+	switch1.js
 
 # date1 fails because we test the Date() function, which returns the current time.  this differs from the current time when the node test runs.  bleah.
 # forin2 fails because we don't properly handle deleting properties while iterating
@@ -20,6 +21,7 @@ EXPECTED_FAILURES= \
 # instanceof1 fails because _ejs_op_instanceof isn't implemented and just aborts
 # function-overriding1.js fail because we don't throw an exception on a null function, we just crash.
 # object5 fails because don't handle get/setprop using undefined or null keys
+# switch1 fails because we don't actually compile switch statements yet
 
 
 check: check-unit-tests run-tests

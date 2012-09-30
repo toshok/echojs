@@ -57,7 +57,7 @@ exports.NodeVisitor = class NodeVisitor
                 
         visitCase: (n) ->
                 n.test = @visit n.test
-                n.consequent = @visit n.consequent
+                n.consequent = filter (@visit _con for _con in n.consequent)
                 n
                 
         visitFor: (n) ->
