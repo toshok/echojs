@@ -67,6 +67,7 @@ class LLVMIRVisitor extends NodeVisitor
                         prop_iterator_current: module.getOrInsertExternalFunction "_ejs_property_iterator_current", stringType, [EjsPropIteratorType]
                         prop_iterator_next:    module.getOrInsertExternalFunction "_ejs_property_iterator_next",    voidType, [EjsPropIteratorType]
                         prop_iterator_free:    module.getOrInsertExternalFunction "_ejs_property_iterator_free",    voidType, [EjsPropIteratorType]
+                        throw:                 module.getOrInsertExternalFunction "_ejs_throw",                     voidType, [EjsValueType]
                         undefined:             module.getOrInsertGlobal           "_ejs_undefined",                 EjsValueType
                         global:                module.getOrInsertGlobal           "_ejs_global",                    EjsValueType
                         
@@ -304,7 +305,7 @@ class LLVMIRVisitor extends NodeVisitor
                         
                 llvm.IRBuilder.setInsertPoint merge_bb
                 @breakStack.shift()
-                
+                merge_bb
                 
         visitCase: (n) ->
                 throw "we shouldn't get here, case statements are handled in visitSwitch"
@@ -991,6 +992,10 @@ class LLVMIRVisitor extends NodeVisitor
                         return llvm.IRBuilder.createCall @ejs.boolean_new, [c], "booltmp"
                 console.warn "n.raw[0] = #{n.raw[0]}"
                 throw "Internal error: unrecognized literal of type #{typeof n.value}"
+
+        visitThrow: (n) ->
+                arg = @visit n.argument
+                return llvm.IRBuilder.createCall @ejs.throw, [arg], ""
 
 class AddFunctionsVisitor extends NodeVisitor
         constructor: (@module) ->
