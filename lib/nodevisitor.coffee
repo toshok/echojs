@@ -51,7 +51,7 @@ exports.NodeVisitor = class NodeVisitor
                 n
                 
         visitSwitch: (n) ->
-                n.disciminant = @visit n.discriminant
+                n.discriminant = @visit n.discriminant
                 n.cases = filter (@visit _case for _case in n.cases)
                 n
                 
