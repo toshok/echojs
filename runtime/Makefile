@@ -14,6 +14,7 @@ SOURCES= \
 	ejs-date.c \
 	ejs-number.c \
 	ejs-builtin-modules.c \
+	ejs-uri.c \
 	main.c
 
 OBJECTS=$(SOURCES:%.c=%.o)

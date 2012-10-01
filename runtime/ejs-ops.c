@@ -33,13 +33,13 @@ EJSValue* ToString(EJSValue *exp)
   case EJSValueTagObject: {
     EJSValue* toString = _ejs_object_getprop_utf8 (exp, "toString");
     if (!EJSVAL_IS_FUNCTION(toString))
-      abort();
+      NOT_IMPLEMENTED();
 
     // should we be checking if this is a string?  i'd assume so...
     return _ejs_invoke_closure_0 (toString, exp, 0);
   }
   default:
-    abort();
+    NOT_IMPLEMENTED();
   }
 }
 
@@ -57,15 +57,20 @@ double ToDouble(EJSValue *exp)
   case EJSValueTagObject:
     return 0; // XXX .length if exp is an array and .length > 0, otherwise NaN
   default:
-    abort();
+    NOT_IMPLEMENTED();
   }
+}
+
+int ToInteger(EJSValue *exp)
+{
+  return (int)ToDouble(exp);
 }
 
 EJSValue* ToObject(EJSValue *exp)
 {
   switch (exp->tag) {
   case EJSValueTagBoolean:
-    abort();
+    NOT_IMPLEMENTED();
   case EJSValueTagNumber: {
     EJSObject* new_number = _ejs_number_alloc_instance();
     _ejs_init_object (new_number, _ejs_number_get_prototype());
@@ -81,12 +86,15 @@ EJSValue* ToObject(EJSValue *exp)
   case EJSValueTagObject:
     return exp;
   default:
-    abort();
+    NOT_IMPLEMENTED();
   }
 }
 
 EJSValue* ToBoolean(EJSValue *exp)
 {
+  if (exp == NULL)
+    return _ejs_false;
+
   switch (exp->tag) {
   case EJSValueTagBoolean:
     return exp;
@@ -99,7 +107,7 @@ EJSValue* ToBoolean(EJSValue *exp)
   case EJSValueTagObject:
     return _ejs_false; // XXX this breaks for any of the builtin objects that wrap primitive types.
   default:
-    abort();
+    NOT_IMPLEMENTED();
   }
 }
 
@@ -148,7 +156,7 @@ _ejs_op_typeof (EJSValue* exp)
 	rv = "object";
       break;
     default:
-      abort();
+      NOT_IMPLEMENTED();
   }
 
   return _ejs_string_new_utf8 (rv);
@@ -169,16 +177,16 @@ _ejs_op_mod (EJSValue* lhs, EJSValue* rhs)
     }
     else {
       // need to call valueOf() on the object, or convert the string to a number
-      abort();
+      NOT_IMPLEMENTED();
     }
   }
   else if (EJSVAL_IS_STRING(lhs)) {
     // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-    abort();
+    NOT_IMPLEMENTED();
   }
   else {
     // object+... how does js implement this anyway?
-    abort();
+    NOT_IMPLEMENTED();
   }
 
   return NULL;
@@ -193,16 +201,16 @@ _ejs_op_bitwise_and (EJSValue* lhs, EJSValue* rhs)
     }
     else {
       // need to call valueOf() on the object, or convert the string to a number
-      abort();
+      NOT_IMPLEMENTED();
     }
   }
   else if (EJSVAL_IS_STRING(lhs)) {
     // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-    abort();
+    NOT_IMPLEMENTED();
   }
   else {
     // object+... how does js implement this anyway?
-    abort();
+    NOT_IMPLEMENTED();
   }
 
   return NULL;
@@ -217,16 +225,16 @@ _ejs_op_bitwise_or (EJSValue* lhs, EJSValue* rhs)
     }
     else {
       // need to call valueOf() on the object, or convert the string to a number
-      abort();
+      NOT_IMPLEMENTED();
     }
   }
   else if (EJSVAL_IS_STRING(lhs)) {
     // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-    abort();
+    NOT_IMPLEMENTED();
   }
   else {
     // object+... how does js implement this anyway?
-    abort();
+    NOT_IMPLEMENTED();
   }
 
   return NULL;
@@ -241,16 +249,16 @@ _ejs_op_rsh (EJSValue* lhs, EJSValue* rhs)
     }
     else {
       // need to call valueOf() on the object, or convert the string to a number
-      abort();
+      NOT_IMPLEMENTED();
     }
   }
   else if (EJSVAL_IS_STRING(lhs)) {
     // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-    abort();
+    NOT_IMPLEMENTED();
   }
   else {
     // object+... how does js implement this anyway?
-    abort();
+    NOT_IMPLEMENTED();
   }
 
   return NULL;
@@ -265,16 +273,16 @@ _ejs_op_ursh (EJSValue* lhs, EJSValue* rhs)
     }
     else {
       // need to call valueOf() on the object, or convert the string to a number
-      abort();
+      NOT_IMPLEMENTED();
     }
   }
   else if (EJSVAL_IS_STRING(lhs)) {
     // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-    abort();
+    NOT_IMPLEMENTED();
   }
   else {
     // object+... how does js implement this anyway?
-    abort();
+    NOT_IMPLEMENTED();
   }
 
   return NULL;
@@ -298,7 +306,7 @@ _ejs_op_add (EJSValue* lhs, EJSValue* rhs)
   }
   else {
     // object+... how does js implement this anyway?
-    abort();
+    NOT_IMPLEMENTED();
   }
 
   return NULL;
@@ -312,11 +320,11 @@ _ejs_op_mult (EJSValue* lhs, EJSValue* rhs)
   }
   else if (EJSVAL_IS_STRING(lhs)) {
     // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-    abort();
+    NOT_IMPLEMENTED();
   }
   else {
     // object+... how does js implement this anyway?
-    abort();
+    NOT_IMPLEMENTED();
   }
 
   return NULL;
@@ -330,11 +338,11 @@ _ejs_op_div (EJSValue* lhs, EJSValue* rhs)
   }
   else if (EJSVAL_IS_STRING(lhs)) {
     // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-    abort();
+    NOT_IMPLEMENTED();
   }
   else {
     // object+... how does js implement this anyway?
-    abort();
+    NOT_IMPLEMENTED();
   }
 
   return NULL;
@@ -347,12 +355,19 @@ _ejs_op_lt (EJSValue* lhs, EJSValue* rhs)
     return _ejs_boolean_new (EJSVAL_TO_NUMBER(lhs) < ToDouble (rhs));
   }
   else if (EJSVAL_IS_STRING(lhs)) {
-    // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-    abort();
+    EJSValue* rhs_string = ToString(rhs);
+    EJSValue* rhs_primStr;
+
+    if (EJSVAL_IS_STRING(rhs_string))
+      rhs_primStr = rhs_string;
+    else
+      rhs_primStr = ((EJSString*)rhs_string)->primStr;
+
+    return _ejs_boolean_new (strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs_primStr)) < 0);
   }
   else {
     // object+... how does js implement this anyway?
-    abort();
+    NOT_IMPLEMENTED();
   }
 
   return NULL;
@@ -365,12 +380,19 @@ _ejs_op_le (EJSValue* lhs, EJSValue* rhs)
     return _ejs_boolean_new (EJSVAL_TO_NUMBER(lhs) <= ToDouble (rhs));
   }
   else if (EJSVAL_IS_STRING(lhs)) {
-    // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-    abort();
+    EJSValue* rhs_string = ToString(rhs);
+    EJSValue* rhs_primStr;
+
+    if (EJSVAL_IS_STRING(rhs_string))
+      rhs_primStr = rhs_string;
+    else
+      rhs_primStr = ((EJSString*)rhs_string)->primStr;
+
+    return _ejs_boolean_new (strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs_primStr)) <= 0);
   }
   else {
     // object+... how does js implement this anyway?
-    abort();
+    NOT_IMPLEMENTED();
   }
 
   return NULL;
@@ -383,12 +405,19 @@ _ejs_op_gt (EJSValue* lhs, EJSValue* rhs)
     return _ejs_boolean_new (EJSVAL_TO_NUMBER(lhs) > ToDouble (rhs));
   }
   else if (EJSVAL_IS_STRING(lhs)) {
-    // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-    abort();
+    EJSValue* rhs_string = ToString(rhs);
+    EJSValue* rhs_primStr;
+
+    if (EJSVAL_IS_STRING(rhs_string))
+      rhs_primStr = rhs_string;
+    else
+      rhs_primStr = ((EJSString*)rhs_string)->primStr;
+
+    return _ejs_boolean_new (strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs_primStr)) > 0);
   }
   else {
     // object+... how does js implement this anyway?
-    abort();
+    NOT_IMPLEMENTED();
   }
 
   return NULL;
@@ -401,12 +430,19 @@ _ejs_op_ge (EJSValue* lhs, EJSValue* rhs)
     return _ejs_boolean_new (EJSVAL_TO_NUMBER(lhs) >= ToDouble (rhs));
   }
   else if (EJSVAL_IS_STRING(lhs)) {
-    // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-    abort();
+    EJSValue* rhs_string = ToString(rhs);
+    EJSValue* rhs_primStr;
+
+    if (EJSVAL_IS_STRING(rhs_string))
+      rhs_primStr = rhs_string;
+    else
+      rhs_primStr = ((EJSString*)rhs_string)->primStr;
+
+    return _ejs_boolean_new (strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs_primStr)) >= 0);
   }
   else {
     // object+... how does js implement this anyway?
-    abort();
+    NOT_IMPLEMENTED();
   }
 
   return NULL;
@@ -420,11 +456,11 @@ _ejs_op_sub (EJSValue* lhs, EJSValue* rhs)
   }
   else if (EJSVAL_IS_STRING(lhs)) {
     // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-    abort();
+    NOT_IMPLEMENTED();
   }
   else {
     // object+... how does js implement this anyway?
-    abort();
+    NOT_IMPLEMENTED();
   }
 
   return NULL;
@@ -497,7 +533,7 @@ _ejs_op_eq (EJSValue* lhs, EJSValue* rhs)
     return _ejs_boolean_new (rhs && lhs == rhs);
   }
 
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 EJSValue*
@@ -529,7 +565,7 @@ _ejs_op_neq (EJSValue* lhs, EJSValue* rhs)
     return _ejs_boolean_new (!rhs || lhs != rhs);
   }
 
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 EJSValue*
@@ -537,13 +573,13 @@ _ejs_op_instanceof (EJSValue* lhs, EJSValue* rhs)
 {
   if (EJSVAL_IS_PRIMITIVE(lhs))
     return _ejs_false;
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 EJSValue*
 _ejs_op_in (EJSValue* lhs, EJSValue* rhs)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 EJSBool
@@ -556,5 +592,34 @@ _ejs_truthy (EJSValue* val)
 void
 _ejs_throw (EJSValue* exp)
 {
-  abort();
+  NOT_IMPLEMENTED();
+}
+
+EJSValue*
+_ejs_isNaN (EJSValue *env, EJSValue* _this, int argc, EJSValue** args)
+{
+  NOT_IMPLEMENTED();
+}
+
+EJSValue*
+_ejs_isFinite (EJSValue *env, EJSValue* _this, int argc, EJSValue** args)
+{
+  NOT_IMPLEMENTED();
+}
+
+EJSValue*
+_ejs_parseInt (EJSValue *env, EJSValue* _this, int argc, EJSValue** args)
+{
+  NOT_IMPLEMENTED();
+}
+
+EJSValue*
+_ejs_parseFloat (EJSValue *env, EJSValue* _this, int argc, EJSValue** args)
+{
+  if (argc == 0)
+    return _ejs_nan;
+
+  EJSValue* arg0 = ToString(args[0]);
+
+  return _ejs_number_new (strtod (EJSVAL_TO_STRING(arg0), NULL));
 }

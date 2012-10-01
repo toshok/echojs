@@ -60,6 +60,7 @@ EJS_BEGIN_DECLS
 void _ejs_dump_value (EJSValue* val);
 
 EJSValue* _ejs_string_new_utf8 (const char* str);
+EJSValue* _ejs_string_new_utf8_len (const char* str, int len);
 
 EJSValue* _ejs_number_new (double value);
 EJSValue* _ejs_boolean_new (EJSBool value);

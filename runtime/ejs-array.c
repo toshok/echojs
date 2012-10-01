@@ -187,7 +187,7 @@ static EJSValue*
 _ejs_Array_prototype_forEach (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
   if (argc < 1)
-    abort();
+    NOT_IMPLEMENTED();
 
   EJSValue *fun = args[0];
 
@@ -201,7 +201,7 @@ _ejs_Array_prototype_forEach (EJSValue* env, EJSValue* _this, int argc, EJSValue
 static EJSValue*
 _ejs_Array_prototype_splice (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 static EJSValue*

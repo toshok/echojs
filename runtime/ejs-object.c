@@ -1,3 +1,5 @@
+//#define DEBUG_PROPERTIES 1
+
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -109,7 +111,7 @@ EJSPropertyIterator*
 _ejs_property_iterator_new (EJSValue *forVal)
 {
   if (EJSVAL_IS_PRIMITIVE(forVal))
-    abort();
+    NOT_IMPLEMENTED();
 
   EJSObject* forObj = (EJSObject*)forVal;
 
@@ -209,6 +211,18 @@ _ejs_string_new_utf8 (const char* str)
 }
 
 EJSValue*
+_ejs_string_new_utf8_len (const char* str, int len)
+{
+  int value_size = sizeof(EJSPrimString) + len + 1; /* +1 here for the \0 byte */
+
+  EJSPrimString* rv = (EJSPrimString*)calloc(1, value_size);
+  rv->tag = EJSValueTagString;
+  rv->len = len;
+  strncpy (EJSVAL_TO_STRING(rv), str, len);
+  return (EJSValue*)rv;
+}
+
+EJSValue*
 _ejs_number_new (double value)
 {
   EJSPrimNumber* rv = (EJSPrimNumber*)calloc(1, sizeof (EJSPrimNumber));
@@ -245,7 +259,7 @@ _ejs_object_setprop (EJSValue* val, EJSValue* key, EJSValue* value)
 {
   if (EJSVAL_IS_PRIMITIVE(val)) {
     printf ("setprop on primitive.  ignoring\n" );
-    abort();
+    NOT_IMPLEMENTED();
   }
 
   EJSObject* obj = (EJSObject*)val;
@@ -301,7 +315,7 @@ _ejs_object_getprop (EJSValue* obj, EJSValue* key)
 {
   if (!obj || EJSVAL_IS_UNDEFINED(obj)) {
     printf ("throw TypeError\n");
-    abort();
+    NOT_IMPLEMENTED();
   }
 
   if (EJSVAL_IS_PRIMITIVE(obj)) {
@@ -387,21 +401,21 @@ _ejs_Object_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 static EJSValue*
 _ejs_Object_getPrototypeOf (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 // ECMA262: 15.2.3.3
 static EJSValue*
 _ejs_Object_getOwnPropertyDescriptor (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 // ECMA262: 15.2.3.4
 static EJSValue*
 _ejs_Object_getOwnPropertyNames (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 // FIXME ECMA262: 15.2.3.5
@@ -425,14 +439,14 @@ _ejs_Object_create (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 static EJSValue*
 _ejs_Object_defineProperty (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 // ECMA262: 15.2.3.7
 static EJSValue*
 _ejs_Object_defineProperties (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 // ECMA262: 15.2.3.8
@@ -453,35 +467,35 @@ _ejs_Object_freeze (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 static EJSValue*
 _ejs_Object_preventExtensions (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 // ECMA262: 15.2.3.11
 static EJSValue*
 _ejs_Object_isSealed (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 // ECMA262: 15.2.3.12
 static EJSValue*
 _ejs_Object_isFrozen (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 // ECMA262: 15.2.3.13
 static EJSValue*
 _ejs_Object_isExtensible (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 // ECMA262: 15.2.3.14
 static EJSValue*
 _ejs_Object_keys (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 // ECMA262: 15.2.4.2
@@ -498,14 +512,14 @@ _ejs_Object_prototype_toString (EJSValue* env, EJSValue* _this, int argc, EJSVal
 static EJSValue*
 _ejs_Object_prototype_toLocaleString (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 // ECMA262: 15.2.4.4
 static EJSValue*
 _ejs_Object_prototype_valueOf (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 // ECMA262: 15.2.4.5
@@ -532,14 +546,14 @@ _ejs_Object_prototype_hasOwnProperty (EJSValue* env, EJSValue* _this, int argc, 
 static EJSValue*
 _ejs_Object_prototype_isPrototypeOf (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 // ECMA262: 15.2.4.7
 static EJSValue*
 _ejs_Object_prototype_propertyIsEnumerable (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 static EJSValue* _ejs_Object_proto = NULL;
@@ -631,47 +645,47 @@ _ejs_object_specop_get (EJSValue* obj_, EJSValue* propertyName)
 static EJSValue*
 _ejs_object_specop_get_own_property (EJSValue* obj, EJSValue* propertyName)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 static EJSValue*
 _ejs_object_specop_get_property (EJSValue* obj, EJSValue* propertyName)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 static void
 _ejs_object_specop_put (EJSValue* obj, EJSValue* propertyName, EJSValue* val, EJSBool flag)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 static EJSBool
 _ejs_object_specop_can_put (EJSValue* obj, EJSValue* propertyName)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 static EJSBool
 _ejs_object_specop_has_property (EJSValue* obj, EJSValue* propertyName)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 static EJSBool
 _ejs_object_specop_delete (EJSValue* obj, EJSValue* propertyName, EJSBool flag)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 static EJSValue*
 _ejs_object_specop_default_value (EJSValue* obj, const char *hint)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 static void
 _ejs_object_specop_define_own_property (EJSValue* obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }

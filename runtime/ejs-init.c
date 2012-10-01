@@ -13,6 +13,7 @@
 #include "ejs-console.h"
 #include "ejs-process.h"
 #include "ejs-function.h"
+#include "ejs-uri.h"
 
 EJSValue* _ejs_undefined;
 EJSValue* _ejs_nan;
@@ -45,8 +46,23 @@ _ejs_init(int argc, char** argv)
   _ejs_nan = _ejs_number_new(nan("7734"));
   _ejs_object_setprop_utf8 (_ejs_global, "NaN", _ejs_nan);
 
+#define GLOBAL_METHOD(x) _ejs_object_setprop_utf8 (_ejs_global, #x, _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_##x))
+
+  GLOBAL_METHOD(isNaN);
+  GLOBAL_METHOD(isFinite);
+  GLOBAL_METHOD(parseInt);
+  GLOBAL_METHOD(parseFloat);
+
+  GLOBAL_METHOD(decodeURI);
+  GLOBAL_METHOD(decodeURIComponent);
+  GLOBAL_METHOD(encodeURI);
+  GLOBAL_METHOD(encodeURIComponent);
+
+#undef GLOBAL_METHOD
+
   _ejs_true = _ejs_boolean_new_internal (TRUE);
   _ejs_false = _ejs_boolean_new_internal (FALSE);
+
 
   _ejs_object_setprop_utf8 (_ejs_global, "__ejs", _ejs_true);
 }

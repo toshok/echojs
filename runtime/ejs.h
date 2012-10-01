@@ -31,6 +31,11 @@ typedef union _EJSValue EJSValue;
 #define EJS_END_DECLS
 #endif
 
+#define NOT_IMPLEMENTED() do { \
+    printf ("%s not implemented.\n", __PRETTY_FUNCTION__);	\
+    abort();							\
+  } while (0)
+
 void _ejs_init();
 
 extern EJSValue* _ejs_undefined;

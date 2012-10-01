@@ -79,7 +79,13 @@ _ejs_String_prototype_toString (EJSValue* env, EJSValue* _this, int argc, EJSVal
 static EJSValue*
 _ejs_String_prototype_replace (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  abort();
+  NOT_IMPLEMENTED();
+}
+
+static EJSValue*
+_ejs_String_prototype_charAt (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  NOT_IMPLEMENTED();
 }
 
 static EJSValue*
@@ -104,6 +110,12 @@ _ejs_String_prototype_charCodeAt (EJSValue* env, EJSValue* _this, int argc, EJSV
     return _ejs_nan;
 
   return _ejs_number_new (EJSVAL_TO_STRING(primStr)[idx]);
+}
+
+static EJSValue*
+_ejs_String_prototype_concat (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  NOT_IMPLEMENTED();
 }
 
 static EJSValue*
@@ -139,6 +151,72 @@ _ejs_String_prototype_indexOf (EJSValue* env, EJSValue* _this, int argc, EJSValu
 }
 
 static EJSValue*
+_ejs_String_prototype_lastIndexOf (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  NOT_IMPLEMENTED();
+}
+
+static EJSValue*
+_ejs_String_prototype_localeCompare (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  NOT_IMPLEMENTED();
+}
+
+static EJSValue*
+_ejs_String_prototype_match (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  NOT_IMPLEMENTED();
+}
+
+static EJSValue*
+_ejs_String_prototype_search (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  NOT_IMPLEMENTED();
+}
+
+static EJSValue*
+_ejs_String_prototype_substring (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  NOT_IMPLEMENTED();
+}
+
+static EJSValue*
+_ejs_String_prototype_toLowerCase (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  NOT_IMPLEMENTED();
+}
+
+static EJSValue*
+_ejs_String_prototype_toLocaleLowerCase (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  NOT_IMPLEMENTED();
+}
+
+static EJSValue*
+_ejs_String_prototype_toUpperCase (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  NOT_IMPLEMENTED();
+}
+
+static EJSValue*
+_ejs_String_prototype_toLocaleUpperCase (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  NOT_IMPLEMENTED();
+}
+
+static EJSValue*
+_ejs_String_prototype_trim (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  NOT_IMPLEMENTED();
+}
+
+static EJSValue*
+_ejs_String_prototype_valueOf (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  NOT_IMPLEMENTED();
+}
+
+static EJSValue*
 _ejs_String_prototype_split (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
   // for now let's just not split anything at all, return the original string as element0 of the array.
@@ -146,6 +224,38 @@ _ejs_String_prototype_split (EJSValue* env, EJSValue* _this, int argc, EJSValue 
   EJSValue* rv = _ejs_array_new (1);
   _ejs_object_setprop (rv, _ejs_number_new (0), _this);
   return rv;
+}
+
+static EJSValue*
+_ejs_String_prototype_slice (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  // assert argc >= 1
+
+  EJSValue* start = args[0];
+  EJSValue* end = argc > 1 ? args[1] : _ejs_undefined;
+
+  // Call CheckObjectCoercible passing the this value as its argument.
+  // Let S be the result of calling ToString, giving it the this value as its argument.
+  EJSValue* S = ToString(_this);
+  // Let len be the number of characters in S.
+  int len = EJSVAL_TO_STRLEN(S);
+  // Let intStart be ToInteger(start).
+  int intStart = ToInteger(start);
+
+  // If end is undefined, let intEnd be len; else let intEnd be ToInteger(end).
+  int intEnd = end == _ejs_undefined ? len : ToInteger(end);
+
+  // If intStart is negative, let from be max(len + intStart,0); else let from be min(intStart, len).
+  int from = intStart < 0 ? MAX(len + intStart, 0) : MIN(intStart, len);
+
+  // If intEnd is negative, let to be max(len + intEnd,0); else let to be min(intEnd, len).
+  int to = intEnd < 0 ? MAX(len + intEnd, 0) : MIN(intEnd, len);
+
+  // Let span be max(to – from,0).
+  int span = MAX(to - from, 0);
+
+  // Return a String containing span consecutive characters from S beginning with the character at position from.
+  return _ejs_string_new_utf8_len (EJSVAL_TO_STRING(S), span);
 }
 
 void
@@ -158,11 +268,25 @@ _ejs_string_init(EJSValue *global)
 
 #define PROTO_METHOD(x) _ejs_object_setprop_utf8 (_ejs_String_proto, #x, _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_String_prototype_##x))
 
+  PROTO_METHOD(charAt);
   PROTO_METHOD(charCodeAt);
-  PROTO_METHOD(replace);
+  PROTO_METHOD(concat);
   PROTO_METHOD(indexOf);
-  PROTO_METHOD(toString);
+  PROTO_METHOD(lastIndexOf);
+  PROTO_METHOD(localeCompare);
+  PROTO_METHOD(match);
+  PROTO_METHOD(replace);
+  PROTO_METHOD(search);
+  PROTO_METHOD(slice);
   PROTO_METHOD(split);
+  PROTO_METHOD(substring);
+  PROTO_METHOD(toLocaleLowerCase);
+  PROTO_METHOD(toLocaleUpperCase);
+  PROTO_METHOD(toLowerCase);
+  PROTO_METHOD(toString);
+  PROTO_METHOD(toUpperCase);
+  PROTO_METHOD(trim);
+  PROTO_METHOD(valueOf);
 
   _ejs_object_setprop_utf8 (global, "String", _ejs_String);
 }
@@ -187,8 +311,8 @@ _ejs_string_specop_get (EJSValue* obj, EJSValue* propertyName)
     if (idx < 0 || idx > EJSVAL_TO_STRLEN(estr->primStr))
       return _ejs_undefined;
     char c[2];
-    c[1] = EJSVAL_TO_STRING(estr->primStr)[idx];
-    c[2] = '\0';
+    c[0] = EJSVAL_TO_STRING(estr->primStr)[idx];
+    c[1] = '\0';
     return _ejs_string_new_utf8 (c);
   }
 

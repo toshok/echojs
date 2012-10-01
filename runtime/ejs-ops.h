@@ -11,6 +11,7 @@ EJS_BEGIN_DECLS
 EJSValue* NumberToString(double d);
 EJSValue* ToString(EJSValue *exp);
 double ToDouble(EJSValue *exp);
+int ToInteger(EJSValue *exp);
 EJSValue* ToObject(EJSValue *exp);
 EJSValue* ToBoolean(EJSValue *exp);
 
@@ -43,6 +44,11 @@ EJSValue* _ejs_op_in (EJSValue* lhs, EJSValue* rhs);
 EJSBool _ejs_truthy (EJSValue* val);
 
 void _ejs_throw (EJSValue* exp);
+
+EJSValue* _ejs_isNaN (EJSValue *env, EJSValue* _this, int argc, EJSValue** args);
+EJSValue* _ejs_isFinite (EJSValue *env, EJSValue* _this, int argc, EJSValue** args);
+EJSValue* _ejs_parseInt (EJSValue *env, EJSValue* _this, int argc, EJSValue** args);
+EJSValue* _ejs_parseFloat (EJSValue *env, EJSValue* _this, int argc, EJSValue** args);
 
 EJS_END_DECLS
 

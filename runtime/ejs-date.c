@@ -19,7 +19,7 @@ _ejs_date_new_unix (int timestamp)
   time_t t = (time_t)timestamp;
 
   if (!localtime_r(&t, &rv->tm))
-    abort();
+    NOT_IMPLEMENTED();
 
   return (EJSValue*)rv;
 }
@@ -34,7 +34,7 @@ _ejs_Date_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
       return _ejs_date_new_unix(time(NULL));
     }
     else {
-      abort();
+      NOT_IMPLEMENTED();
     }
   }
   else {
@@ -48,7 +48,7 @@ _ejs_Date_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
       time_t t = (time_t)time(NULL);
 
       if (!gmtime_r(&t, &date->tm))
-	abort();
+	NOT_IMPLEMENTED();
     }
     else {
       // there are all sorts of validation steps here that are missing from ejs

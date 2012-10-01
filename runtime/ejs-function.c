@@ -1,3 +1,5 @@
+//#define DEBUG_FUNCTIONS 1
+
 #include <assert.h>
 
 #include "ejs-value.h"
@@ -28,6 +30,19 @@ EJSSpecOps _ejs_function_specops = {
   _ejs_function_specop_default_value,
   _ejs_function_specop_define_own_property
 };
+
+#if DEBUG_FUNCTIONS
+static int indent_level = 0;
+#define INDENT_AMOUNT 1
+
+static void indent(char ch)
+{
+  int i;
+  for (i = 0; i < indent_level; i ++)
+    putchar (ch);
+}
+
+#endif
 
 EJSValue*
 _ejs_function_new (EJSClosureEnv* env, EJSValue *name, EJSClosureFunc func)
@@ -120,7 +135,7 @@ _ejs_Function_prototype_call (EJSValue* env, EJSValue* _this, int argc, EJSValue
 static EJSValue*
 _ejs_Function_prototype_bind (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  abort();
+  NOT_IMPLEMENTED();
 }
 
 void
@@ -149,12 +164,23 @@ _ejs_function_init(EJSValue *global)
 }
 
 
-
 EJSValue*
 _ejs_invoke_closure_0 (EJSValue* closure, EJSValue* _this, int argc)
 {
   assert (EJSVAL_IS_FUNCTION(closure));
-  return EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, NULL);
+#if DEBUG_FUNCTIONS
+  EJSValue* closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  indent('*');
+  printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
+  indent_level += INDENT_AMOUNT;
+#endif
+  EJSValue* rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, NULL);
+#if DEBUG_FUNCTIONS
+  indent_level -= INDENT_AMOUNT;
+  indent(' ');
+  printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));
+#endif
+  return rv;
 }
 
 EJSValue*
@@ -162,7 +188,19 @@ _ejs_invoke_closure_1 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* a
 {
   assert (EJSVAL_IS_FUNCTION(closure));
   EJSValue *args[] = { arg1 };
-  return EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+#if DEBUG_FUNCTIONS
+  EJSValue* closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  indent('*');
+  printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
+  indent_level += INDENT_AMOUNT;
+#endif
+  EJSValue* rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+#if DEBUG_FUNCTIONS
+  indent_level -= INDENT_AMOUNT;
+  indent(' ');
+  printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));
+#endif
+  return rv;
 }
 
 EJSValue*
@@ -170,7 +208,19 @@ _ejs_invoke_closure_2 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* a
 {
   assert (EJSVAL_IS_FUNCTION(closure));
   EJSValue *args[] = { arg1, arg2 };
-  return EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+#if DEBUG_FUNCTIONS
+  EJSValue* closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  indent('*');
+  printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
+  indent_level += INDENT_AMOUNT;
+#endif
+  EJSValue* rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+#if DEBUG_FUNCTIONS
+  indent_level -= INDENT_AMOUNT;
+  indent(' ');
+  printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));
+#endif
+  return rv;
 }
 
 EJSValue*
@@ -178,7 +228,19 @@ _ejs_invoke_closure_3 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* a
 {
   assert (EJSVAL_IS_FUNCTION(closure));
   EJSValue *args[] = { arg1, arg2, arg3 };
-  return EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+#if DEBUG_FUNCTIONS
+  EJSValue* closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  indent('*');
+  printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
+  indent_level += INDENT_AMOUNT;
+#endif
+  EJSValue* rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+#if DEBUG_FUNCTIONS
+  indent_level -= INDENT_AMOUNT;
+  indent(' ');
+  printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));
+#endif
+  return rv;
 }
 
 EJSValue*
@@ -186,7 +248,19 @@ _ejs_invoke_closure_4 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* a
 {
   assert (EJSVAL_IS_FUNCTION(closure));
   EJSValue *args[] = { arg1, arg2, arg3, arg4 };
-  return EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+#if DEBUG_FUNCTIONS
+  EJSValue* closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  indent('*');
+  printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
+  indent_level += INDENT_AMOUNT;
+#endif
+  EJSValue* rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+#if DEBUG_FUNCTIONS
+  indent_level -= INDENT_AMOUNT;
+  indent(' ');
+  printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));
+#endif
+  return rv;
 }
 
 EJSValue*
@@ -194,7 +268,19 @@ _ejs_invoke_closure_5 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* a
 {
   assert (EJSVAL_IS_FUNCTION(closure));
   EJSValue *args[] = { arg1, arg2, arg3, arg4, arg5 };
-  return EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+#if DEBUG_FUNCTIONS
+  EJSValue* closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  indent('*');
+  printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
+  indent_level += INDENT_AMOUNT;
+#endif
+  EJSValue* rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+#if DEBUG_FUNCTIONS
+  indent_level -= INDENT_AMOUNT;
+  indent(' ');
+  printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));
+#endif
+  return rv;
 }
 
 EJSValue*
@@ -202,7 +288,19 @@ _ejs_invoke_closure_6 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* a
 {
   assert (EJSVAL_IS_FUNCTION(closure));
   EJSValue *args[] = { arg1, arg2, arg3, arg4, arg5, arg6 };
-  return EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+#if DEBUG_FUNCTIONS
+  EJSValue* closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  indent('*');
+  printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
+  indent_level += INDENT_AMOUNT;
+#endif
+  EJSValue* rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+#if DEBUG_FUNCTIONS
+  indent_level -= INDENT_AMOUNT;
+  indent(' ');
+  printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));
+#endif
+  return rv;
 }
 
 EJSValue*
@@ -210,7 +308,19 @@ _ejs_invoke_closure_7 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* a
 {
   assert (EJSVAL_IS_FUNCTION(closure));
   EJSValue *args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7 };
-  return EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+#if DEBUG_FUNCTIONS
+  EJSValue* closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  indent('*');
+  printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
+  indent_level += INDENT_AMOUNT;
+#endif
+  EJSValue* rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+#if DEBUG_FUNCTIONS
+  indent_level -= INDENT_AMOUNT;
+  indent(' ');
+  printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));
+#endif
+  return rv;
 }
 
 EJSValue*
@@ -218,7 +328,19 @@ _ejs_invoke_closure_8 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* a
 {
   assert (EJSVAL_IS_FUNCTION(closure));
   EJSValue *args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8 };
-  return EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+#if DEBUG_FUNCTIONS
+  EJSValue* closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  indent('*');
+  printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
+  indent_level += INDENT_AMOUNT;
+#endif
+  EJSValue* rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+#if DEBUG_FUNCTIONS
+  indent_level -= INDENT_AMOUNT;
+  indent(' ');
+  printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));
+#endif
+  return rv;
 }
 
 EJSValue*
@@ -226,7 +348,19 @@ _ejs_invoke_closure_9 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* a
 {
   assert (EJSVAL_IS_FUNCTION(closure));
   EJSValue *args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9 };
-  return EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+#if DEBUG_FUNCTIONS
+  EJSValue* closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  indent('*');
+  printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
+  indent_level += INDENT_AMOUNT;
+#endif
+  EJSValue* rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+#if DEBUG_FUNCTIONS
+  indent_level -= INDENT_AMOUNT;
+  indent(' ');
+  printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));
+#endif
+  return rv;
 }
 
 EJSValue*
@@ -234,7 +368,19 @@ _ejs_invoke_closure_10 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* 
 {
   assert (EJSVAL_IS_FUNCTION(closure));
   EJSValue *args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10 };
-  return EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+#if DEBUG_FUNCTIONS
+  EJSValue* closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  indent('*');
+  printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
+  indent_level += INDENT_AMOUNT;
+#endif
+  EJSValue* rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+#if DEBUG_FUNCTIONS
+  indent_level -= INDENT_AMOUNT;
+  indent(' ');
+  printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));
+#endif
+  return rv;
 }
 
 
