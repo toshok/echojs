@@ -79,7 +79,43 @@ _ejs_String_prototype_toString (EJSValue* env, EJSValue* _this, int argc, EJSVal
 static EJSValue*
 _ejs_String_prototype_replace (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  NOT_IMPLEMENTED();
+  if (argc == 0)
+    return _this;
+
+  EJSValue *thisStr = ToString(_this);
+  EJSValue *searchValue = args[0];
+  EJSValue *replaceValue = argc > 1 ? args[1] : _ejs_undefined;
+
+  if (EJSVAL_IS_OBJECT(searchValue) && !strcmp ("RegExp", ((EJSObject*)searchValue)->ops->class_name)) {
+    NOT_IMPLEMENTED();
+  }
+  else {
+    EJSValue* searchValueStr = ToString(searchValue);
+    EJSValue* replaceValueStr = ToString(replaceValue);
+    char *p = strstr (EJSVAL_TO_STRING(thisStr), EJSVAL_TO_STRING(searchValueStr));
+    if (p == NULL)
+      return _this;
+    else {
+      int len1 = p - EJSVAL_TO_STRING(thisStr);
+      int len2 = EJSVAL_TO_STRLEN(replaceValueStr);
+      int len3 = strlen(p + EJSVAL_TO_STRLEN(searchValueStr));
+
+      int new_len = len1;
+      new_len += len2;
+      new_len += len3;
+      new_len += 1; // for the \0
+
+      char* result = (char*)calloc(new_len, 1);
+      char*p = result;
+      strncpy (p, EJSVAL_TO_STRING(thisStr), len1); p += len1;
+      strcpy (p, EJSVAL_TO_STRING(replaceValueStr)); p += len2;
+      strcpy (p, p + EJSVAL_TO_STRLEN(searchValueStr));
+
+      EJSValue *rv = _ejs_string_new_utf8 (result);
+      free (result);
+      return rv;
+    }
+  }
 }
 
 static EJSValue*
