@@ -1,4 +1,4 @@
-//#define DEBUG_PROPERTIES 1
+#define DEBUG_PROPERTIES 0
 
 #include <stdlib.h>
 #include <string.h>
@@ -314,7 +314,7 @@ EJSValue*
 _ejs_object_getprop (EJSValue* obj, EJSValue* key)
 {
   if (!obj || EJSVAL_IS_UNDEFINED(obj)) {
-    printf ("throw TypeError\n");
+    printf ("throw TypeError, key is %s\n", EJSVAL_TO_STRING(ToString(key)));
     NOT_IMPLEMENTED();
   }
 
