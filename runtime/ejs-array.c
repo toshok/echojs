@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <string.h>
 #include <math.h>
 
 #include "ejs-ops.h"
@@ -91,6 +92,105 @@ _ejs_Array_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 }
 
 static EJSValue*
+_ejs_Array_prototype_shift (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  // 1. Let O be the result of calling ToObject passing the this value as the argument.
+  EJSValue* O = ToObject(_this);
+
+  // EJS fast path for arrays
+  if (!strcmp (O->o.ops->class_name, "Array")) {
+    int len = EJS_ARRAY_LEN(O);
+    if (len == 0) {
+      return _ejs_undefined;
+    }
+    EJSValue* first = EJS_ARRAY_ELEMENTS(O)[0];
+    memmove (EJS_ARRAY_ELEMENTS(O), EJS_ARRAY_ELEMENTS(O) + 1, sizeof(EJSValue*) * len-1);
+    EJS_ARRAY_LEN(O) --;
+    return first;
+  }
+
+  NOT_IMPLEMENTED();
+#if notyet
+  // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
+  EJSValue* lenVal = O->o.ops->get (O, _ejs_string_new_utf8 ("length"));
+
+  // 3. Let len be ToUint32(lenVal).
+  int len = ToUint32(lenVal);
+
+  // 4. If len is zero, then
+  if (len == 0) {
+    //   a. Call the [[Put]] internal method of O with arguments "length", 0, and true.
+    O->o.ops->put (O, _ejs_string_new_utf8 ("length"), 0, TRUE);
+    //   b. Return undefined.
+    return _ejs_undefined;
+  }
+
+  // 5. Let first be the result of calling the [[Get]] internal method of O with argument "0".
+  EJSValue* first = O->o.ops->get (O, _ejs_string_new_utf8 ("0"));
+
+  // 6. Let k be 1.
+  int k = 1;
+  // 7. Repeat, while k < len
+  while (k < len) {
+    //   a. Let from be ToString(k).
+    //   b. Let to be ToString(k–1).
+    //   c. Let fromPresent be the result of calling the [[HasProperty]] internal method of O with argument from.
+    //   d. If fromPresent is true, then
+    //     i. Let fromVal be the result of calling the [[Get]] internal method of O with argument from.
+    //     ii. Call the [[Put]] internal method of O with arguments to, fromVal, and true.
+    //   e. Else, fromPresent is false
+    //     i. Call the [[Delete]] internal method of O with arguments to and true.
+    //   f. Increase k by 1.
+    k++;
+  }
+  // 8. Call the [[Delete]] internal method of O with arguments ToString(len–1) and true.
+  // 9. Call the [[Put]] internal method of O with arguments "length", (len–1) , and true.
+  // 10. Return first.
+#endif
+}
+
+static EJSValue*
+_ejs_Array_prototype_unshift (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  // 1. Let O be the result of calling ToObject passing the this value as the argument.
+  EJSValue* O = ToObject(_this);
+
+  // EJS fast path for arrays
+  if (!strcmp (O->o.ops->class_name, "Array")) {
+    int len = EJS_ARRAY_LEN(O);
+    memmove (EJS_ARRAY_ELEMENTS(O) + argc, EJS_ARRAY_ELEMENTS(O), sizeof(EJSValue*) * len);
+    memmove (EJS_ARRAY_ELEMENTS(O), args, sizeof(EJSValue*) * argc);
+    EJS_ARRAY_LEN(O) += argc;
+    return _ejs_number_new (len + argc);
+  }
+
+  NOT_IMPLEMENTED();
+
+  // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
+  // 3. Let len be ToUint32(lenVal).
+  // 4. Let argCount be the number of actual arguments.
+  // 5. Let k be len.
+  // 6. Repeat, while k > 0,
+  //   a. Let from be ToString(k–1).
+  //   b. Let to be ToString(k+argCount –1).
+  //   c. Let fromPresent be the result of calling the [[HasProperty]] internal method of O with argument from.
+  //   d. If fromPresent is true, then
+  //      i. Let fromValue be the result of calling the [[Get]] internal method of O with argument from.
+  //      ii. Call the [[Put]] internal method of O with arguments to, fromValue, and true.
+  //   e. Else, fromPresent is false
+  //      i. Call the [[Delete]] internal method of O with arguments to, and true.
+  //   f. Decrease k by 1.
+  // 7. Let j be 0.
+  // 8. Let items be an internal List whose elements are, in left to right order, the arguments that were passed to this function invocation.
+  // 9. Repeat, while items is not empty
+  //   a. Remove the first element from items and let E be the value of that element.
+  //   b. Call the [[Put]] internal method of O with arguments ToString(j), E, and true.
+  //   c. Increase j by 1.
+  // 10. Call the [[Put]] internal method of O with arguments "length", len+argCount, and true.
+  // 11. Return len+argCount.
+}
+
+static EJSValue*
 _ejs_Array_prototype_push (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
   int i;
@@ -107,6 +207,31 @@ _ejs_Array_prototype_pop (EJSValue* env, EJSValue* _this, int argc, EJSValue **a
   if (EJS_ARRAY_LEN(_this) == 0)
     return _ejs_undefined;
   return EJS_ARRAY_ELEMENTS(_this)[--EJS_ARRAY_LEN(_this)];
+}
+
+static EJSValue*
+_ejs_Array_prototype_concat (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  int numElements;
+
+  // hacky fast path for everything being an array
+  numElements = EJS_ARRAY_LEN(_this);
+  int i;
+  for (i = 0; i < argc; i ++) {
+    numElements += EJS_ARRAY_LEN(args[i]);
+  }
+
+  EJSValue* rv = _ejs_array_new(numElements);
+  numElements = 0;
+  memmove (EJS_ARRAY_ELEMENTS(rv) + numElements, EJS_ARRAY_ELEMENTS(_this), sizeof(EJSValue*) * EJS_ARRAY_LEN(_this));
+  numElements += EJS_ARRAY_LEN(_this);
+  for (i = 0; i < argc; i ++) {
+    memmove (EJS_ARRAY_ELEMENTS(rv) + numElements, EJS_ARRAY_ELEMENTS(args[i]), sizeof(EJSValue*) * EJS_ARRAY_LEN(args[i]));
+    numElements += EJS_ARRAY_LEN(args[i]);
+  }
+  EJS_ARRAY_LEN(rv) = numElements;
+
+  return rv;
 }
 
 static EJSValue*
@@ -233,6 +358,15 @@ _ejs_Array_prototype_indexOf (EJSValue* env, EJSValue* _this, int argc, EJSValue
   return _ejs_number_new (rv);
 }
 
+static EJSValue*
+_ejs_Array_isArray (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+{
+  if (argc == 0 || args[0] == NULL || args[0]->tag != EJSValueTagObject)
+    return _ejs_false;
+
+  return _ejs_boolean_new (!strcmp (((EJSObject*)args[0])->ops->class_name, "Array"));
+}
+
 void
 _ejs_array_init(EJSValue *global)
 {
@@ -241,9 +375,15 @@ _ejs_array_init(EJSValue *global)
 
   _ejs_object_setprop_utf8 (_ejs_Array,       "prototype",  _ejs_Array_proto);
 
+#define OBJ_METHOD(x) _ejs_object_setprop_utf8 (_ejs_Array, #x, _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_Array_##x))
 #define PROTO_METHOD(x) _ejs_object_setprop_utf8 (_ejs_Array_proto, #x,       _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_Array_prototype_##x))
+  OBJ_METHOD(isArray);
+
   PROTO_METHOD(push);
   PROTO_METHOD(pop);
+  PROTO_METHOD(shift);
+  PROTO_METHOD(unshift);
+  PROTO_METHOD(concat);
   PROTO_METHOD(slice);
   PROTO_METHOD(splice);
   PROTO_METHOD(indexOf);
