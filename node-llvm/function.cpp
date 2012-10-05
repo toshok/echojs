@@ -25,6 +25,7 @@ namespace jsllvm {
     s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("type"), Function::GetType);
 
     NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", Function::Dump);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "setOnlyReadsMemory", Function::SetOnlyReadsMemory);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", Function::ToString);
 
     s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
@@ -64,6 +65,15 @@ namespace jsllvm {
     HandleScope scope;
     Function* fun = ObjectWrap::Unwrap<Function>(args.This());
     fun->llvm_fun->dump();
+    return scope.Close(Undefined());
+  }
+
+  Handle<v8::Value> Function::SetOnlyReadsMemory (const Arguments& args)
+  {
+    HandleScope scope;
+    Function* fun = ObjectWrap::Unwrap<Function>(args.This());
+    REQ_BOOL_ARG(0, flag);
+    fun->llvm_fun->setOnlyReadsMemory(flag);
     return scope.Close(Undefined());
   }
 
