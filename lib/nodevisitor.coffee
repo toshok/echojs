@@ -10,7 +10,7 @@ filter = (x) ->
                         rv.push y
         rv
         
-hasOwn = Object.hasOwnProperty
+hasOwn = Object.prototype.hasOwnProperty
 
 exports.NodeVisitor = class NodeVisitor
         constructor: ->
