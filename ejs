@@ -101,7 +101,7 @@ compileFile = (filename, content, compileCallback) ->
         o_filename = "/tmp/#{base_filename}.o"
 
         llvm_as_args = ["-o=#{bc_filename}", ll_filename]
-        opt_args = ["-O3", "-mem2reg", "-o=#{bc_opt_filename}", bc_filename]
+        opt_args = ["-O3", "-early-cse", "-mem2reg", "-o=#{bc_opt_filename}", bc_filename]
         llvm_dis_args = ["-o=#{ll_opt_filename}", bc_opt_filename]
         llc_args = ["-march=x86-64", "-O2", "-o=#{s_filename}", ll_opt_filename]
         clang_args = ["-march=x86-64", "-O2", "-c", "-o", o_filename, s_filename]
@@ -130,10 +130,20 @@ compileFile = (filename, content, compileCallback) ->
 
 generate_require_map = ->
         sanitize = (filename, c_callable) ->
-                filename = filename.replace /\.js$/, ""
-                if c_callable
-                        filename = filename.replace /[.,-\/\\]/g, "_" # this is insanely inadequate
-                filename
+                if __ejs?
+                        filename = filename.replace ".js", ""
+                        if c_callable
+                                filename = filename.replace ".", "_"
+                                filename = filename.replace ",", "_"
+                                filename = filename.replace "-", "_"
+                                filename = filename.replace "/", "_"
+                                filename = filename.replace "\\", "_"
+                        filename
+                else                                
+                        filename = filename.replace /\.js$/, ""
+                        if c_callable
+                                filename = filename.replace /[.,-\/\\]/g, "_" # this is insanely inadequate
+                        filename
         map_path = "/tmp/#{util.genFreshFileName path.basename files[0]}-require-map.#{if options.link_with_cxx then 'cpp' else 'c'}"
         map = fs.createWriteStream map_path
         if options.link_with_cxx
