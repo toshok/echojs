@@ -11,6 +11,7 @@ closure_conversion = require 'closure-conversion'
 { desugar } = require 'echo-desugar'
 
 llvm = require 'llvm'
+irbuilder = llvm.IRBuilder
 
 # special key for parent scope when performing lookups
 PARENT_SCOPE_KEY = ":parent:"
@@ -29,13 +30,17 @@ EjsPropIteratorType = EjsValueType
 EjsClosureFuncType = (llvm.FunctionType.get EjsValueType, [EjsClosureEnvType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType.pointerTo()]).pointerTo()
 
 BUILTIN_PARAMS = [
-  { type: syntax.Identifier, name: "%env",  llvm_type: EjsClosureEnvType }
-  { type: syntax.Identifier, name: "%this", llvm_type: EjsValueType }
-  { type: syntax.Identifier, name: "%argc", llvm_type: int32Type }
+  { type: syntax.Identifier, name: "%closure", llvm_type: EjsClosureEnvType }
+  { type: syntax.Identifier, name: "%this",    llvm_type: EjsValueType }
+  { type: syntax.Identifier, name: "%argc",    llvm_type: int32Type }
 ]
 
 takes_builtins = (n) ->
         n.takes_builtins = true
+        n
+
+only_reads_memory = (n) ->
+        n.setOnlyReadsMemory(true)
         n
         
 class LLVMIRVisitor extends NodeVisitor
@@ -60,8 +65,8 @@ class LLVMIRVisitor extends NodeVisitor
                         regexp_new_utf8:       module.getOrInsertExternalFunction "_ejs_regexp_new_utf8",           EjsValueType, [stringType]
                         truthy:                module.getOrInsertExternalFunction "_ejs_truthy",                    boolType, [EjsValueType]
                         object_setprop:        module.getOrInsertExternalFunction "_ejs_object_setprop",            EjsValueType, [EjsValueType, EjsValueType, EjsValueType]
-                        object_getprop:        module.getOrInsertExternalFunction "_ejs_object_getprop",            EjsValueType, [EjsValueType, EjsValueType]
-                        object_getprop_utf8:   module.getOrInsertExternalFunction "_ejs_object_getprop_utf8",       EjsValueType, [EjsValueType, stringType]
+                        object_getprop:        only_reads_memory module.getOrInsertExternalFunction "_ejs_object_getprop",           EjsValueType, [EjsValueType, EjsValueType]
+                        object_getprop_utf8:   only_reads_memory module.getOrInsertExternalFunction "_ejs_object_getprop_utf8",      EjsValueType, [EjsValueType, stringType]
                         object_setprop_utf8:   module.getOrInsertExternalFunction "_ejs_object_setprop_utf8",       EjsValueType, [EjsValueType, stringType, EjsValueType]
                         prop_iterator_new:     module.getOrInsertExternalFunction "_ejs_property_iterator_new",     EjsPropIteratorType, [EjsValueType]
                         prop_iterator_current: module.getOrInsertExternalFunction "_ejs_property_iterator_current", stringType, [EjsPropIteratorType]
@@ -102,10 +107,10 @@ class LLVMIRVisitor extends NodeVisitor
 
         loadNullEjsValue: -> llvm.Constant.getNull EjsValueType
         loadUndefinedEjsValue: ->
-                undef = llvm.IRBuilder.createLoad @ejs.undefined, "load_undefined"
+                undef = irbuilder.createLoad @ejs.undefined, "load_undefined"
                 undef.isundefined = true
                 undef
-        loadGlobal: -> llvm.IRBuilder.createLoad @ejs.global, "load_global"
+        loadGlobal: -> irbuilder.createLoad @ejs.global, "load_global"
 
         pushIIFEInfo: (info) ->
                 @iifeStack.unshift info
@@ -133,14 +138,14 @@ class LLVMIRVisitor extends NodeVisitor
                         if scope.hasOwnProperty ident
                                 return scope[ident]
                         scope = scope[PARENT_SCOPE_KEY]
-                return null
+                null
 
                                 
         createAlloca: (func, type, name) ->
-                saved_insert_point = llvm.IRBuilder.getInsertBlock()
-                llvm.IRBuilder.setInsertPointStartBB func.entry_bb
-                alloca = llvm.IRBuilder.createAlloca type, name
-                llvm.IRBuilder.setInsertPoint saved_insert_point
+                saved_insert_point = irbuilder.getInsertBlock()
+                irbuilder.setInsertPointStartBB func.entry_bb
+                alloca = irbuilder.createAlloca type, name
+                irbuilder.setInsertPoint saved_insert_point
                 alloca
 
         createAllocas: (func, ids, scope) ->
@@ -148,14 +153,14 @@ class LLVMIRVisitor extends NodeVisitor
                 new_allocas = []
                 
                 # the allocas are always allocated in the function entry_bb so the mem2reg opt pass can regenerate the ssa form for us
-                saved_insert_point = llvm.IRBuilder.getInsertBlock()
-                llvm.IRBuilder.setInsertPointStartBB func.entry_bb
+                saved_insert_point = irbuilder.getInsertBlock()
+                irbuilder.setInsertPointStartBB func.entry_bb
 
                 j = 0
                 for i in [0...ids.length]
                         name = ids[i].id.name
                         if !scope.hasOwnProperty name
-                                allocas[j] = llvm.IRBuilder.createAlloca EjsValueType, "local_#{name}"
+                                allocas[j] = irbuilder.createAlloca EjsValueType, "local_#{name}"
                                 scope[name] = allocas[j]
                                 new_allocas[j] = true
                         else
@@ -165,14 +170,14 @@ class LLVMIRVisitor extends NodeVisitor
                                 
 
                 # reinstate the IRBuilder to its previous insert point so we can insert the actual initializations
-                llvm.IRBuilder.setInsertPoint saved_insert_point
+                irbuilder.setInsertPoint saved_insert_point
 
                 { allocas: allocas, new_allocas: new_allocas }
 
         createPropertyStore: (obj,prop,rhs,computed) ->
                 if computed
                         # we store obj[prop], prop can be any value
-                        llvm.IRBuilder.createCall @ejs.object_setprop, [obj, (@visit prop), rhs], "propstore_computed"
+                        irbuilder.createCall @ejs.object_setprop, [obj, (@visit prop), rhs], "propstore_computed"
                 else
                         # we store obj.prop, prop is an id
                         if prop.type is syntax.Identifier
@@ -182,25 +187,25 @@ class LLVMIRVisitor extends NodeVisitor
 
                         debug.log "createPropertyStore #{obj}[#{pname}]"
 
-                        c = llvm.IRBuilder.createGlobalStringPtr pname, "strconst"
-                        llvm.IRBuilder.createCall @ejs.object_setprop_utf8, [obj, c, rhs], "propstore_#{pname}"
+                        c = irbuilder.createGlobalStringPtr pname, "strconst"
+                        irbuilder.createCall @ejs.object_setprop_utf8, [obj, c, rhs], "propstore_#{pname}"
                 
         createPropertyLoad: (obj,prop,computed) ->
                 if computed
                         # we load obj[prop], prop can be any value
                         loadprop = @visit prop
                         pname = "computed"
-                        llvm.IRBuilder.createCall @ejs.object_getprop, [obj, loadprop], "getprop_#{pname}"
+                        irbuilder.createCall @ejs.object_getprop, [obj, loadprop], "getprop_#{pname}"
                 else
                         # we load obj.prop, prop is an id
                         pname = prop.name
-                        c = llvm.IRBuilder.createGlobalStringPtr pname, "strconst"
-                        llvm.IRBuilder.createCall @ejs.object_getprop_utf8, [obj, c], "getprop_#{pname}"
+                        c = irbuilder.createGlobalStringPtr pname, "propname_#{pname}"
+                        irbuilder.createCall @ejs.object_getprop_utf8, [obj, c], "getprop_#{pname}"
                 
 
         createLoadThis: () ->
                 _this = @findIdentifierInScope "%this", @current_scope
-                return llvm.IRBuilder.createLoad _this, "load_this"
+                return irbuilder.createLoad _this, "load_this"
 
 
         visitOrNull: (n) -> (@visit n) || @loadNullEjsValue()
@@ -221,7 +226,7 @@ class LLVMIRVisitor extends NodeVisitor
                 iife_bb = null
                 
                 if n.fromIIFE
-                        insertBlock = llvm.IRBuilder.getInsertBlock()
+                        insertBlock = irbuilder.getInsertBlock()
                         insertFunc = insertBlock.parent
                         
                         iife_rv = @createAlloca @currentFunction, EjsValueType, "%iife_rv"
@@ -233,21 +238,21 @@ class LLVMIRVisitor extends NodeVisitor
 
                 @popIIFEInfo()
                 if iife_bb
-                        llvm.IRBuilder.createBr iife_bb
-                        llvm.IRBuilder.setInsertPoint iife_bb
-                        rv = llvm.IRBuilder.createLoad iife_rv, "%iife_rv_load"
+                        irbuilder.createBr iife_bb
+                        irbuilder.setInsertPoint iife_bb
+                        rv = irbuilder.createLoad iife_rv, "%iife_rv_load"
                         rv
                 else
                         n
 
         visitSwitch: (n) ->
-                insertBlock = llvm.IRBuilder.getInsertBlock()
+                insertBlock = irbuilder.getInsertBlock()
                 insertFunc = insertBlock.parent
 
                 switch_bb = new llvm.BasicBlock "switch", insertFunc
 
-                llvm.IRBuilder.createBr switch_bb
-                llvm.IRBuilder.setInsertPoint switch_bb
+                irbuilder.createBr switch_bb
+                irbuilder.setInsertPoint switch_bb
                 
                 # find the default: case first
                 defaultCase = null
@@ -278,15 +283,15 @@ class LLVMIRVisitor extends NodeVisitor
                 @breakStack.unshift dest: merge_bb
 
                 # insert all the code for the tests
-                llvm.IRBuilder.createBr case_checks[0].dest_check
-                llvm.IRBuilder.setInsertPoint case_checks[0].dest_check
+                irbuilder.createBr case_checks[0].dest_check
+                irbuilder.setInsertPoint case_checks[0].dest_check
                 for casenum in [0...case_checks.length-1]
                         test = @visit case_checks[casenum].test
-                        discTest = llvm.IRBuilder.createCall @ejs["binop==="], [discr, test], "test"
-                        disc_truthy = llvm.IRBuilder.createCall @ejs.truthy, [discTest], "disc_truthy"
-                        disc_cmp = llvm.IRBuilder.createICmpEq disc_truthy, (llvm.Constant.getIntegerValue boolType, 0), "disccmpresult"
-                        llvm.IRBuilder.createCondBr disc_cmp, case_checks[casenum+1].dest_check, case_checks[casenum].body
-                        llvm.IRBuilder.setInsertPoint case_checks[casenum+1].dest_check
+                        discTest = irbuilder.createCall @ejs["binop==="], [discr, test], "test"
+                        disc_truthy = irbuilder.createCall @ejs.truthy, [discTest], "disc_truthy"
+                        disc_cmp = irbuilder.createICmpEq disc_truthy, (llvm.Constant.getIntegerValue boolType, 0), "disccmpresult"
+                        irbuilder.createCondBr disc_cmp, case_checks[casenum+1].dest_check, case_checks[casenum].body
+                        irbuilder.setInsertPoint case_checks[casenum+1].dest_check
 
 
                 case_bodies = []
@@ -298,12 +303,12 @@ class LLVMIRVisitor extends NodeVisitor
                 case_bodies.push bb:merge_bb
                 
                 for casenum in [0...case_bodies.length-1]
-                        llvm.IRBuilder.setInsertPoint case_bodies[casenum].bb
+                        irbuilder.setInsertPoint case_bodies[casenum].bb
                         for c of case_bodies[casenum].consequent
                                 @visit case_bodies[casenum].consequent[c]
-                        llvm.IRBuilder.createBr case_bodies[casenum+1].bb
+                        irbuilder.createBr case_bodies[casenum+1].bb
                         
-                llvm.IRBuilder.setInsertPoint merge_bb
+                irbuilder.setInsertPoint merge_bb
                 @breakStack.shift()
                 merge_bb
                 
@@ -317,21 +322,21 @@ class LLVMIRVisitor extends NodeVisitor
 
         visitBreak: (n) ->
                 if not n.label
-                        llvm.IRBuilder.createBr @breakStack[0].dest
+                        irbuilder.createBr @breakStack[0].dest
                 else
                         el = el for el in @breakStack when el.label is n.label.name
-                        llvm.IRBuilder.createBr el.dest
+                        irbuilder.createBr el.dest
 
                 
         visitContinue: (n) ->
                 if not n.label
-                        llvm.IRBuilder.createBr @continueStack[0].dest
+                        irbuilder.createBr @continueStack[0].dest
                 else
                         el = el for el in @continueStack when el.label is n.label.name
-                        llvm.IRBuilder.createBr el.dest
+                        irbuilder.createBr el.dest
 
         visitFor: (n) ->
-                insertBlock = llvm.IRBuilder.getInsertBlock()
+                insertBlock = irbuilder.getInsertBlock()
                 insertFunc = insertBlock.parent
 
                 init_bb = new llvm.BasicBlock "for_init", insertFunc
@@ -340,71 +345,71 @@ class LLVMIRVisitor extends NodeVisitor
                 update_bb = new llvm.BasicBlock "for_update", insertFunc
                 merge_bb = new llvm.BasicBlock "for_merge", insertFunc
 
-                llvm.IRBuilder.createBr init_bb
+                irbuilder.createBr init_bb
                 
-                llvm.IRBuilder.setInsertPoint init_bb
+                irbuilder.setInsertPoint init_bb
                 @visit n.init
-                llvm.IRBuilder.createBr test_bb
+                irbuilder.createBr test_bb
 
-                llvm.IRBuilder.setInsertPoint test_bb
+                irbuilder.setInsertPoint test_bb
                 if n.test
-                        cond_truthy = llvm.IRBuilder.createCall @ejs.truthy, [@visit(n.test)], "cond_truthy"
-                        cmp = llvm.IRBuilder.createICmpEq cond_truthy, (llvm.Constant.getIntegerValue boolType, 0), "cmpresult"
-                        llvm.IRBuilder.createCondBr cmp, merge_bb, body_bb
+                        cond_truthy = irbuilder.createCall @ejs.truthy, [@visit(n.test)], "cond_truthy"
+                        cmp = irbuilder.createICmpEq cond_truthy, (llvm.Constant.getIntegerValue boolType, 0), "cmpresult"
+                        irbuilder.createCondBr cmp, merge_bb, body_bb
                 else
-                        llvm.IRBuilder.createBr body_bb
+                        irbuilder.createBr body_bb
 
                 @continueStack.unshift label: n.label, dest: update_bb
                 @breakStack.unshift    label: n.label, dest: merge_bb
                 
-                llvm.IRBuilder.setInsertPoint body_bb
+                irbuilder.setInsertPoint body_bb
                 @visit n.body
-                llvm.IRBuilder.createBr update_bb
+                irbuilder.createBr update_bb
 
-                llvm.IRBuilder.setInsertPoint update_bb
+                irbuilder.setInsertPoint update_bb
                 @visit n.update
-                llvm.IRBuilder.createBr test_bb
+                irbuilder.createBr test_bb
                 
                 @continueStack.shift()
                 @breakStack.shift()
 
-                llvm.IRBuilder.setInsertPoint merge_bb
+                irbuilder.setInsertPoint merge_bb
                 merge_bb
                                 
         visitWhile: (n) ->
-                insertBlock = llvm.IRBuilder.getInsertBlock()
+                insertBlock = irbuilder.getInsertBlock()
                 insertFunc = insertBlock.parent
                 
                 while_bb  = new llvm.BasicBlock "while_start", insertFunc
                 body_bb = new llvm.BasicBlock "while_body", insertFunc
                 merge_bb = new llvm.BasicBlock "while_merge", insertFunc
 
-                llvm.IRBuilder.createBr while_bb
-                llvm.IRBuilder.setInsertPoint while_bb
+                irbuilder.createBr while_bb
+                irbuilder.setInsertPoint while_bb
                 
-                cond_truthy = llvm.IRBuilder.createCall @ejs.truthy, [@visit(n.test)], "cond_truthy"
-                cmp = llvm.IRBuilder.createICmpEq cond_truthy, (llvm.Constant.getIntegerValue boolType, 0), "cmpresult"
+                cond_truthy = irbuilder.createCall @ejs.truthy, [@visit(n.test)], "cond_truthy"
+                cmp = irbuilder.createICmpEq cond_truthy, (llvm.Constant.getIntegerValue boolType, 0), "cmpresult"
                 
-                llvm.IRBuilder.createCondBr cmp, merge_bb, body_bb
+                irbuilder.createCondBr cmp, merge_bb, body_bb
 
                 @continueStack.unshift label: n.label, dest: while_bb
                 @breakStack.unshift    label: n.label, dest: merge_bb
                 
-                llvm.IRBuilder.setInsertPoint body_bb
+                irbuilder.setInsertPoint body_bb
                 @visit n.body
-                llvm.IRBuilder.createBr while_bb
+                irbuilder.createBr while_bb
 
                 @continueStack.shift()
                 @breakStack.shift()
                                 
-                llvm.IRBuilder.setInsertPoint merge_bb
+                irbuilder.setInsertPoint merge_bb
                 merge_bb
 
         visitForIn: (n) ->
-                insertBlock = llvm.IRBuilder.getInsertBlock()
+                insertBlock = irbuilder.getInsertBlock()
                 insertFunc = insertBlock.parent
                 
-                iterator = llvm.IRBuilder.createCall @ejs.prop_iterator_new, [@visit n.right], "iterator"
+                iterator = irbuilder.createCall @ejs.prop_iterator_new, [@visit n.right], "iterator"
 
                 # make sure we get an alloca if there's a "var"
                 if n.left[0]?
@@ -417,24 +422,24 @@ class LLVMIRVisitor extends NodeVisitor
                 body_bb   = new llvm.BasicBlock "forin_body",  insertFunc
                 merge_bb  = new llvm.BasicBlock "forin_merge", insertFunc
                                 
-                llvm.IRBuilder.createBr forin_bb
-                llvm.IRBuilder.setInsertPoint forin_bb
+                irbuilder.createBr forin_bb
+                irbuilder.setInsertPoint forin_bb
 
-                current = llvm.IRBuilder.createCall @ejs.prop_iterator_current, [iterator], "iterator_current"
+                current = irbuilder.createCall @ejs.prop_iterator_current, [iterator], "iterator_current"
 
-                cmp = llvm.IRBuilder.createICmpEq current, (llvm.Constant.getNull stringType), "cmpresult"
+                cmp = irbuilder.createICmpEq current, (llvm.Constant.getNull stringType), "cmpresult"
                 
-                llvm.IRBuilder.createCondBr cmp, merge_bb, body_bb
+                irbuilder.createCondBr cmp, merge_bb, body_bb
 
-                llvm.IRBuilder.setInsertPoint body_bb
-                strcall = llvm.IRBuilder.createCall @ejs.string_new_utf8, [current], "strtmp"
+                irbuilder.setInsertPoint body_bb
+                strcall = irbuilder.createCall @ejs.string_new_utf8, [current], "strtmp"
                 @storeValueInDest strcall, lhs
                 @visit n.body
-                llvm.IRBuilder.createCall @ejs.prop_iterator_next, [iterator], ""
-                llvm.IRBuilder.createBr forin_bb
+                irbuilder.createCall @ejs.prop_iterator_next, [iterator], ""
+                irbuilder.createBr forin_bb
 
-                llvm.IRBuilder.setInsertPoint merge_bb
-                llvm.IRBuilder.createCall @ejs.prop_iterator_free, [iterator], ""
+                irbuilder.setInsertPoint merge_bb
+                irbuilder.createCall @ejs.prop_iterator_free, [iterator], ""
                 merge_bb
                 
                 
@@ -442,13 +447,13 @@ class LLVMIRVisitor extends NodeVisitor
                 result = @createAlloca @currentFunction, EjsValueType, "%update_result"
                 argument = @visit n.argument
                 c = llvm.ConstantFP.getDouble 1
-                num = llvm.IRBuilder.createCall @ejs.number_new, [c], "numtmp"
+                num = irbuilder.createCall @ejs.number_new, [c], "numtmp"
                 if not n.prefix
                         # postfix updates store the argument before the op
-                        llvm.IRBuilder.createStore argument, result
+                        irbuilder.createStore argument, result
 
                 # argument = argument $op 1
-                temp = llvm.IRBuilder.createCall @ejs["binop#{if n.operator is '++' then '+' else '-'}"], [argument, num], "update_temp"
+                temp = irbuilder.createCall @ejs["binop#{if n.operator is '++' then '+' else '-'}"], [argument, num], "update_temp"
                 
                 @storeValueInDest temp, n.argument
                 
@@ -456,8 +461,8 @@ class LLVMIRVisitor extends NodeVisitor
                 if n.prefix
                         argument = @visit n.argument
                         # prefix updates store the argument after the op
-                        llvm.IRBuilder.createStore argument, result
-                llvm.IRBuilder.createLoad result, "%update_result_load"
+                        irbuilder.createStore argument, result
+                irbuilder.createLoad result, "%update_result_load"
 
         visitConditionalExpression: (n) ->
                 @visitIfOrCondExp n, true
@@ -466,13 +471,14 @@ class LLVMIRVisitor extends NodeVisitor
                 @visitIfOrCondExp n, false
 
         visitIfOrCondExp: (n, load_result) ->
+
                 if load_result
                         cond_val = @createAlloca @currentFunction, EjsValueType, "%cond_val"
-                        
+                
                 # first we convert our conditional EJSValue to a boolean
-                cond_truthy = llvm.IRBuilder.createCall @ejs.truthy, [@visit(n.test)], "cond_truthy"
+                cond_truthy = irbuilder.createCall @ejs.truthy, [@visit(n.test)], "cond_truthy"
 
-                insertBlock = llvm.IRBuilder.getInsertBlock()
+                insertBlock = irbuilder.getInsertBlock()
                 insertFunc = insertBlock.parent
 
                 then_bb  = new llvm.BasicBlock "then", insertFunc
@@ -480,24 +486,24 @@ class LLVMIRVisitor extends NodeVisitor
                 merge_bb = new llvm.BasicBlock "merge", insertFunc
 
                 # we invert the test here - check if the condition is false/0
-                cmp = llvm.IRBuilder.createICmpEq cond_truthy, (llvm.Constant.getIntegerValue boolType, 0), "cmpresult"
-                llvm.IRBuilder.createCondBr cmp, else_bb, then_bb
+                cmp = irbuilder.createICmpEq cond_truthy, (llvm.Constant.getIntegerValue boolType, 0), "cmpresult"
+                irbuilder.createCondBr cmp, else_bb, then_bb
 
-                llvm.IRBuilder.setInsertPoint then_bb
+                irbuilder.setInsertPoint then_bb
                 then_val = @visit n.consequent
                 if load_result
-                        llvm.IRBuilder.createStore then_val, cond_val
-                llvm.IRBuilder.createBr merge_bb
+                        irbuilder.createStore then_val, cond_val
+                irbuilder.createBr merge_bb
 
-                llvm.IRBuilder.setInsertPoint else_bb
+                irbuilder.setInsertPoint else_bb
                 else_val = @visit n.alternate
                 if load_result
-                        llvm.IRBuilder.createStore else_val, cond_val
-                llvm.IRBuilder.createBr merge_bb
+                        irbuilder.createStore else_val, cond_val
+                irbuilder.createBr merge_bb
 
-                llvm.IRBuilder.setInsertPoint merge_bb
+                irbuilder.setInsertPoint merge_bb
                 if load_result
-                        llvm.IRBuilder.createLoad cond_val, "cond_val_load"
+                        irbuilder.createLoad cond_val, "cond_val_load"
                 else
                         merge_bb
                 
@@ -505,19 +511,18 @@ class LLVMIRVisitor extends NodeVisitor
                 debug.log "visitReturn"
                 if @iifeStack[0].iife_rv?
                         if n.argument?
-                                llvm.IRBuilder.createStore (@visit n.argument), @iifeStack[0].iife_rv
+                                irbuilder.createStore (@visit n.argument), @iifeStack[0].iife_rv
                         else
-                                llvm.IRBuilder.createStore @loadUndefinedEjsValue(), @iifeStack[0].iife_rv
-                        llvm.IRBuilder.createBr @iifeStack[0].iife_dest_bb
+                                irbuilder.createStore @loadUndefinedEjsValue(), @iifeStack[0].iife_rv
+                        irbuilder.createBr @iifeStack[0].iife_dest_bb
                 else
                         if n.argument
-                                llvm.IRBuilder.createRet @visit n.argument
+                                irbuilder.createRet @visit n.argument
                         else
-                                llvm.IRBuilder.createRet @loadUndefinedEjsValue()
+                                irbuilder.createRet @loadUndefinedEjsValue()
                         
 
         visitVariableDeclaration: (n) ->
-                                
                 if n.kind is "var"
                         # vars are hoisted to the containing function's toplevel scope
                         scope = @currentFunction.topScope
@@ -529,10 +534,10 @@ class LLVMIRVisitor extends NodeVisitor
                                         # if the alloca is newly allocated.
                                         if new_allocas[i]
                                                 initializer = @visitOrUndefined n.declarations[i].init
-                                                llvm.IRBuilder.createStore initializer, allocas[i]
+                                                irbuilder.createStore initializer, allocas[i]
                                 else
                                         initializer = @visitOrUndefined n.declarations[i].init
-                                        llvm.IRBuilder.createStore initializer, allocas[i]
+                                        irbuilder.createStore initializer, allocas[i]
                 else if n.kind is "let"
                         # lets are not hoisted to the containing function's toplevel, but instead are bound in the lexical block they inhabit
                         scope = @current_scope;
@@ -544,10 +549,10 @@ class LLVMIRVisitor extends NodeVisitor
                                         # if the alloca is newly allocated.
                                         if new_allocas[i]
                                                 initializer = @visitOrUndefined n.declarations[i].init
-                                                llvm.IRBuilder.createStore initializer, allocas[i]
+                                                irbuilder.createStore initializer, allocas[i]
                                 else
                                         initializer = @visitOrUndefined n.declarations[i].init
-                                        llvm.IRBuilder.createStore initializer, allocas[i]
+                                        irbuilder.createStore initializer, allocas[i]
                 else if n.kind is "const"
                         for i in [0...n.declarations.length]
                                 u = n.declarations[i]
@@ -555,13 +560,21 @@ class LLVMIRVisitor extends NodeVisitor
                                 # XXX bind the initializer to u.name in the current basic block and mark it as constant
 
         visitMemberExpression: (n) ->
-                @createPropertyLoad (@visit n.object), n.property, n.computed
+                obj_result = @createAlloca @currentFunction, EjsValueType, "result_obj"
+                obj_visit = @visit n.object
+                irbuilder.createStore obj_visit, obj_result
+                obj_load = irbuilder.createLoad obj_result, "obj_load"
+                rv = @createPropertyLoad obj_load, n.property, n.computed
+                load_result = @createAlloca @currentFunction, EjsValueType, "load_result"
+                irbuilder.createStore rv, load_result
+                if not n.result_not_used
+                        irbuilder.createLoad load_result, "rv"
 
         storeValueInDest: (rhvalue, lhs) ->
                 if lhs.type is syntax.Identifier
                         dest = @findIdentifierInScope lhs.name, @current_scope
                         if dest?
-                                result = llvm.IRBuilder.createStore rhvalue, dest
+                                result = irbuilder.createStore rhvalue, dest
                         else
                                 result = @createPropertyStore @loadGlobal(), lhs, rhvalue, false
                         result
@@ -581,8 +594,8 @@ class LLVMIRVisitor extends NodeVisitor
                         callee = @ejs[builtin]
                         if not callee
                                 throw "Internal error: unhandled binary operator '#{n.operator}'"
-                        rhvalue = llvm.IRBuilder.createCall callee, [(@visit lhs), rhvalue], "result_#{builtin}"
-                        
+                        rhvalue = irbuilder.createCall callee, [(@visit lhs), rhvalue], "result_#{builtin}"
+                
                 @storeValueInDest rhvalue, lhs
 
                 # we need to visit lhs after the store so that we load the value, but only if it's used
@@ -591,9 +604,9 @@ class LLVMIRVisitor extends NodeVisitor
 
         visitFunction: (n) ->
                 console.warn "        function #{n.ir_name} at line #{n.loc?.start.line}"
-                        
+                
                 # save off the insert point so we can get back to it after generating this function
-                insertBlock = llvm.IRBuilder.getInsertBlock()
+                insertBlock = irbuilder.getInsertBlock()
 
                 for param in n.params
                         debug.log param.type
@@ -620,7 +633,7 @@ class LLVMIRVisitor extends NodeVisitor
 
                 # Create a new basic block to start insertion into.
                 entry_bb = new llvm.BasicBlock "entry", ir_func
-                llvm.IRBuilder.setInsertPoint entry_bb
+                irbuilder.setInsertPoint entry_bb
 
                 new_scope = {}
 
@@ -633,19 +646,19 @@ class LLVMIRVisitor extends NodeVisitor
 
                 # create allocas for the builtin args
                 for i in [0...BUILTIN_PARAMS.length]
-                        alloca = llvm.IRBuilder.createAlloca BUILTIN_PARAMS[i].llvm_type, "local_#{n.params[i].name}"
+                        alloca = irbuilder.createAlloca BUILTIN_PARAMS[i].llvm_type, "local_#{n.params[i].name}"
                         new_scope[n.params[i].name] = alloca
                         allocas.push alloca
 
                 # create an alloca to store our 'EJSValue** args' parameter, so we can pull the formal parameters out of it
-                args_alloca = llvm.IRBuilder.createAlloca EjsValueType.pointerTo(), "local_%args"
+                args_alloca = irbuilder.createAlloca EjsValueType.pointerTo(), "local_%args"
                 new_scope["%args"] = args_alloca
                 allocas.push args_alloca
 
                 # now create allocas for the formal parameters
                 for param in n.params[BUILTIN_PARAMS.length..]
                         if param.type is syntax.Identifier
-                                alloca = llvm.IRBuilder.createAlloca EjsValueType, "local_#{param.name}"
+                                alloca = irbuilder.createAlloca EjsValueType, "local_#{param.name}"
                                 new_scope[param.name] = alloca
                                 allocas.push alloca
                         else
@@ -654,49 +667,49 @@ class LLVMIRVisitor extends NodeVisitor
                                 throw "we don't handle destructured args at the moment."
 
                 debug.log "alloca #{alloca}" for alloca in allocas
-                
+        
                 # now store the arguments (use .. to include our args array) onto the stack
                 for i in [0..BUILTIN_PARAMS.length]
-                        store = llvm.IRBuilder.createStore ir_args[i], allocas[i]
+                        store = irbuilder.createStore ir_args[i], allocas[i]
                         debug.log "store #{store} *builtin"
 
                 # initialize all our named parameters to undefined
-                args_load = llvm.IRBuilder.createLoad args_alloca, "args_load"
+                args_load = irbuilder.createLoad args_alloca, "args_load"
                 if n.params.length > BUILTIN_PARAMS.length
                         for i in [BUILTIN_PARAMS.length...n.params.length]
-                                store = llvm.IRBuilder.createStore @loadUndefinedEjsValue(), allocas[i+1]
-                                
+                                store = irbuilder.createStore @loadUndefinedEjsValue(), allocas[i+1]
+                        
                 body_bb = new llvm.BasicBlock "body", ir_func
-                llvm.IRBuilder.setInsertPoint body_bb
+                irbuilder.setInsertPoint body_bb
 
                 insertFunc = body_bb.parent
-                
+        
                 # now pull the named parameters from our args array for the ones that were passed in.
                 # any arg that isn't specified
                 if n.params.length > BUILTIN_PARAMS.length
-                        load_argc = llvm.IRBuilder.createLoad allocas[2], "argc" # FIXME, magic number alert
-                        
+                        load_argc = irbuilder.createLoad allocas[2], "argc" # FIXME, magic number alert
+                
                         for i in [BUILTIN_PARAMS.length...n.params.length]
                                 then_bb  = new llvm.BasicBlock "arg_then", insertFunc
                                 else_bb  = new llvm.BasicBlock "arg_else", insertFunc
                                 merge_bb = new llvm.BasicBlock "arg_merge", insertFunc
 
-                                cmp = llvm.IRBuilder.createICmpSGt load_argc, (llvm.Constant.getIntegerValue int32Type, i-BUILTIN_PARAMS.length), "argcmpresult"
-                                llvm.IRBuilder.createCondBr cmp, then_bb, else_bb
-                                
-                                llvm.IRBuilder.setInsertPoint then_bb
-                                arg_ptr = llvm.IRBuilder.createGetElementPointer args_load, (llvm.Constant.getIntegerValue int32Type, i-BUILTIN_PARAMS.length), "arg#{i-BUILTIN_PARAMS.length}_ptr"
+                                cmp = irbuilder.createICmpSGt load_argc, (llvm.Constant.getIntegerValue int32Type, i-BUILTIN_PARAMS.length), "argcmpresult"
+                                irbuilder.createCondBr cmp, then_bb, else_bb
+                        
+                                irbuilder.setInsertPoint then_bb
+                                arg_ptr = irbuilder.createGetElementPointer args_load, (llvm.Constant.getIntegerValue int32Type, i-BUILTIN_PARAMS.length), "arg#{i-BUILTIN_PARAMS.length}_ptr"
                                 debug.log "arg_ptr = #{arg_ptr}"
-                                arg = llvm.IRBuilder.createLoad arg_ptr, "arg#{i-BUILTIN_PARAMS.length-1}_load"
-                                store = llvm.IRBuilder.createStore arg, allocas[i+1]
+                                arg = irbuilder.createLoad arg_ptr, "arg#{i-BUILTIN_PARAMS.length-1}_load"
+                                store = irbuilder.createStore arg, allocas[i+1]
                                 debug.log "store #{store}"
-                                llvm.IRBuilder.createBr merge_bb
+                                irbuilder.createBr merge_bb
 
-                                llvm.IRBuilder.setInsertPoint else_bb
-                                llvm.IRBuilder.createBr merge_bb
+                                irbuilder.setInsertPoint else_bb
+                                irbuilder.createBr merge_bb
 
-                                llvm.IRBuilder.setInsertPoint merge_bb
-                                
+                                irbuilder.setInsertPoint merge_bb
+                        
                 # stacks of destinations used by continue and break, of the form [{label:..., dest:...}].
                 # 
                 #  when we see an unlabeled "break" or "continue" we insert a branch to the top bb
@@ -704,24 +717,22 @@ class LLVMIRVisitor extends NodeVisitor
                 @continueStack = []
                 @breakStack = []
                 @iifeStack = []
-                
+        
                 @visitWithScope new_scope, [n.body]
 
                 # XXX more needed here - this lacks all sorts of control flow stuff.
                 # Finish off the function.
-                llvm.IRBuilder.createRet @loadUndefinedEjsValue()
+                irbuilder.createRet @loadUndefinedEjsValue()
 
                 # insert an unconditional branch from entry_bb to body here, now that we're
                 # sure we're not going to be inserting allocas into the entry_bb anymore.
-                llvm.IRBuilder.setInsertPoint entry_bb
-                llvm.IRBuilder.createBr body_bb
+                irbuilder.setInsertPoint entry_bb
+                irbuilder.createBr body_bb
 
                 @currentFunction = null
 
-                llvm.IRBuilder.setInsertPoint insertBlock
+                irbuilder.setInsertPoint insertBlock
 
-                console.log "ir_func = #{ir_func}"
-                                
                 return ir_func
 
         visitUnaryExpression: (n) ->
@@ -729,15 +740,14 @@ class LLVMIRVisitor extends NodeVisitor
 
                 builtin = "unop#{n.operator}"
                 callee = @ejs[builtin]
-                
+        
                 if n.operator is "delete"
                         if n.argument.type is syntax.MemberExpression
-                                return llvm.IRBuilder.createCall callee, [(@visitOrNull n.argument.object), (@visitOrNull n.argument.property)], "result"
-                        return
+                                return irbuilder.createCall callee, [(@visitOrNull n.argument.object), (@visitOrNull n.argument.property)], "result"
                 else
                         if not callee
                                 throw "Internal error: unary operator '#{n.operator}' not implemented"
-                        return llvm.IRBuilder.createCall callee, [@visitOrNull n.argument], "result"
+                        irbuilder.createCall callee, [@visitOrNull n.argument], "result"
                 
 
         visitSequenceExpression: (n) ->
@@ -753,149 +763,145 @@ class LLVMIRVisitor extends NodeVisitor
                 if not callee
                         throw "Internal error: unhandled binary operator '#{n.operator}'"
                 # call the add method
-                return llvm.IRBuilder.createCall callee, [(@visit n.left), (@visit n.right)], "result_#{builtin}"
+                return irbuilder.createCall callee, [(@visit n.left), (@visit n.right)], "result_#{builtin}"
 
         visitLogicalExpression: (n) ->
                 debug.log "operator = '#{n.operator}'"
                 result = @createAlloca @currentFunction, EjsValueType, "result_#{n.operator}"
 
                 left_visited = @visit n.left
-                cond_truthy = llvm.IRBuilder.createCall @ejs.truthy, [left_visited], "cond_truthy"
+                cond_truthy = irbuilder.createCall @ejs.truthy, [left_visited], "cond_truthy"
 
-                insertBlock = llvm.IRBuilder.getInsertBlock()
+                insertBlock = irbuilder.getInsertBlock()
                 insertFunc = insertBlock.parent
-                
+        
                 left_bb  = new llvm.BasicBlock "cond_left", insertFunc
                 right_bb  = new llvm.BasicBlock "cond_right", insertFunc
                 merge_bb = new llvm.BasicBlock "cond_merge", insertFunc
 
                 # we invert the test here - check if the condition is false/0
-                cmp = llvm.IRBuilder.createICmpEq cond_truthy, (llvm.Constant.getIntegerValue boolType, 0), "cmpresult"
-                llvm.IRBuilder.createCondBr cmp, right_bb, left_bb
+                cmp = irbuilder.createICmpEq cond_truthy, (llvm.Constant.getIntegerValue boolType, 0), "cmpresult"
+                irbuilder.createCondBr cmp, right_bb, left_bb
 
-                llvm.IRBuilder.setInsertPoint left_bb
+                irbuilder.setInsertPoint left_bb
                 # inside the else branch, left was truthy
                 if n.operator is "||"
                         # for || we short circuit out here
-                        llvm.IRBuilder.createStore left_visited, result
+                        irbuilder.createStore left_visited, result
                 else if n.operator is "&&"
                         # for && we evaluate the second and store it
-                        llvm.IRBuilder.createStore (@visit n.right), result
+                        irbuilder.createStore (@visit n.right), result
                 else
                         throw "Internal error 99.1"
-                llvm.IRBuilder.createBr merge_bb
+                irbuilder.createBr merge_bb
 
-                llvm.IRBuilder.setInsertPoint right_bb
+                irbuilder.setInsertPoint right_bb
                 # inside the then branch, left was falsy
                 if n.operator is "||"
                         # for || we evaluate the second and store it
-                        llvm.IRBuilder.createStore (@visit n.right), result
+                        irbuilder.createStore (@visit n.right), result
                 else if n.operator is "&&"
                         # for && we short circuit out here
-                        llvm.IRBuilder.createStore left_visited, result
+                        irbuilder.createStore left_visited, result
                 else
                         throw "Internal error 99.1"
-                llvm.IRBuilder.createBr merge_bb
+                irbuilder.createBr merge_bb
 
-                llvm.IRBuilder.setInsertPoint merge_bb
-                rv = llvm.IRBuilder.createLoad result, "result_#{n.operator}_load"
+                irbuilder.setInsertPoint merge_bb
+                rv = irbuilder.createLoad result, "result_#{n.operator}_load"
 
-                llvm.IRBuilder.setInsertPoint merge_bb
+                irbuilder.setInsertPoint merge_bb
 
                 rv
 
-        visitArgs: (callee, args) ->
+        visitArgsForCall: (callee, pullThisFromArg0, args) ->
                 argv = []
-
-                debug.log "args!!!!!!!!!!!!!!!!!!! #{args.length} of them"
 
                 args_offset = 0
                 if callee.takes_builtins
-                        argv.push @visitOrNull args[0]                                      # % env
-                        argv.push null                                                      # %this
-                        argv.push llvm.Constant.getIntegerValue int32Type, args.length-1    # argc. subtract 1 for our use of args[0] above
-                        args_offset = 1 # we used args[0] already, so skip it in the loop below
+                        args_offset = 1
+                        if pullThisFromArg0 and args[0].type is syntax.MemberExpression
+                                thisArg = @visit args[0].object
+                                closure = @createPropertyLoad thisArg, args[0].property, args[0].computed
+                        else
+                                thisArg = @loadUndefinedEjsValue()
+                                closure = @visit args[0]
+                        
+                        argv.push closure                                                   # %closure
+                        argv.push thisArg                                                   # %this
+                        argv.push llvm.Constant.getIntegerValue int32Type, args.length-1    # %argc. -1 because we pulled out the first arg to send as the closure
 
-                debug.log "args_offset = #{args_offset}"
                 if args.length > args_offset
                         argv.push @visitOrNull args[i] for i in [args_offset...args.length]
 
                 argv
-                                
+
+        visitArgsForConstruct: (callee, args) ->
+                argv = []
+
+                ctor = @visit args[0]
+
+                proto = @createPropertyLoad ctor, { name: "prototype" }, false
+                
+                thisArg = irbuilder.createCall @ejs.object_new, [proto], "objtmp"
+                                                
+                argv.push ctor                                                      # %closure
+                argv.push thisArg                                                   # %this
+                argv.push llvm.Constant.getIntegerValue int32Type, args.length-1    # %argc. -1 because we pulled out the first arg to send as the closure
+
+                if args.length > 1
+                        argv.push @visitOrNull args[i] for i in [1...args.length]
+
+                argv
+                                                                
         visitCallExpression: (n) ->
                 debug.log "visitCall #{JSON.stringify n}"
                 debug.log "          arguments length = #{n.arguments.length}"
                 debug.log "          arguments[#{i}] =  #{JSON.stringify n.arguments[i]}" for i in [0...n.arguments.length]
-
-                args = n.arguments
-
-                obj = @loadUndefinedEjsValue()
                 
-                if n.callee.type is syntax.Identifier and n.callee.name[0] == '%'
-                        debug.log "builtin"
-                        callee = @builtins[n.callee.name.slice(1)]
-                        if callee.length # replace with a better Array test
-                                callee = callee[n.arguments.length]
-                        if n.callee.name is "%invokeClosure"
-                                # hack to pull out the proper "this" if the closure is a member expression
-                                closure = args[0]
-                                if closure.type is syntax.MemberExpression
-                                        obj = @visit closure.object
-                else if n.callee.type is syntax.MemberExpression
-                        debug.log "creating property load!"
-                        obj = @visit n.callee.object
-                        callee = @createPropertyLoad obj, n.callee.property, n.callee.computed
-                else
-                        callee = @visit n.callee
+                obj_load = @loadUndefinedEjsValue()
+                args_offset = 0
 
+                if n.callee.type isnt syntax.Identifier or n.callee.name[0] isnt '%'
+                        throw "invalid call to #{JSON.stringify n.callee}"
+
+                callee = @builtins[n.callee.name.slice(1)]
+                if Array.isArray callee
+                        callee = callee[n.arguments.length]
                 if not callee
-                        console.warn "visitCall #{JSON.stringify n}"
                         throw "Internal error: callee should not be null in visitCallExpression"
 
-                # At this point we assume callee is a function object
-                argv = @visitArgs callee, args
+                pullThisFromArg0 = n.callee.name is "%invokeClosure"
 
-                if callee.takes_builtins
-                        argv[1] = obj
-
-                debug.log "done visiting args"
+                argv = @visitArgsForCall callee, pullThisFromArg0, n.arguments
 
                 # we're dealing with a function here
                 # if callee.argSize isnt args.length
                 # this isn't invalid in JS.  if argSize > args.length, the args are undefined.
                 # if argSize < args.length, the args are still passed
 
-                llvm.IRBuilder.createCall callee, argv, if callee.returnType and callee.returnType.isVoid() then "" else "calltmp"
+                call_result = @createAlloca @currentFunction, EjsValueType, "call_result"
+                calltmp = irbuilder.createCall callee, argv, if callee.returnType and callee.returnType.isVoid() then "" else "calltmp"
+                store = irbuilder.createStore calltmp, call_result
+                irbuilder.createLoad call_result, "call_result_load"
+                
                 
         visitNewExpression: (n) ->
-                args = n.arguments
-
-                if n.callee.type is syntax.Identifier and n.callee.name[0] == '%'
-                        ctor = @builtins[n.callee.name.slice(1)]
-                        if ctor.length  # replace with a better Array test
-                                ctor = ctor[n.arguments.length]
-                else if n.callee.type is syntax.MemberExpression
-                        debug.log "creating property load!"
-                        ctor = @createPropertyLoad (@visit n.callee.object), n.callee.property, n.callee.computed
-                else
-                        ctor = @visit n.callee
-
-                if not ctor
+                if n.callee.type isnt syntax.Identifier or n.callee.name[0] isnt '%'
+                        throw "invalid ctor #{JSON.stringify n.callee}"
+                        
+                callee = @builtins[n.callee.name.slice(1)]
+                if Array.isArray callee
+                        callee = callee[n.arguments.length]
+                if not callee
                         throw "Internal error: ctor should not be null"
+        
+
+                argv = @visitArgsForConstruct callee, n.arguments
+
+                irbuilder.createCall callee, argv, "newtmp"
                 
-
-                # ctor isn't the constructor here, by virtue of closure conversion.
-
-                argv = @visitArgs ctor, args
-
-                proto = @createPropertyLoad argv[0], { name: "prototype" }, false
-                
-                obj = llvm.IRBuilder.createCall @ejs.object_new, [proto], "objtmp"
-                if ctor.takes_builtins
-                        argv[1] = obj
-
-                llvm.IRBuilder.createCall ctor, argv, "newtmp"
-                obj
+                argv[1]
 
         visitPropertyAccess: (n) ->
                 debug.log "property access: #{nc[1].value}" #NC-USAGE
@@ -910,7 +916,7 @@ class LLVMIRVisitor extends NodeVisitor
                 val = n.name
                 source = @findIdentifierInScope val, @current_scope
                 if source?
-                        rv = llvm.IRBuilder.createLoad source, "load_#{val}"
+                        rv = irbuilder.createLoad source, "load_#{val}"
                         return rv
 
                 # special handling of the arguments object here, so we
@@ -918,21 +924,20 @@ class LLVMIRVisitor extends NodeVisitor
                 # actually going to use it.
                 if val is "arguments"
                         arguments_alloca = @createAlloca @currentFunction, EjsValueType, "local_arguments_object"
-                        saved_insert_point = llvm.IRBuilder.getInsertBlock()
-                        llvm.IRBuilder.setInsertPoint @currentFunction.entry_bb
-                        
-                        load_argc = llvm.IRBuilder.createLoad @currentFunction.topScope["%argc"], "argc_load"
-                        load_args = llvm.IRBuilder.createLoad @currentFunction.topScope["%args"], "args_load"
+                        saved_insert_point = irbuilder.getInsertBlock()
+                        irbuilder.setInsertPoint @currentFunction.entry_bb
 
-                        arguments_object = llvm.IRBuilder.createCall @ejs.arguments_new, [load_argc, load_args], "argstmp"
-                        llvm.IRBuilder.createStore arguments_object, arguments_alloca
+                        load_argc = irbuilder.createLoad @currentFunction.topScope["%argc"], "argc_load"
+                        load_args = irbuilder.createLoad @currentFunction.topScope["%args"], "args_load"
+
+                        arguments_object = irbuilder.createCall @ejs.arguments_new, [load_argc, load_args], "argstmp"
+                        irbuilder.createStore arguments_object, arguments_alloca
                         @currentFunction.topScope["arguments"] = arguments_alloca
 
-                        llvm.IRBuilder.setInsertPoint saved_insert_point
-                        rv = llvm.IRBuilder.createLoad arguments_alloca, "load_arguments"
+                        irbuilder.setInsertPoint saved_insert_point
+                        rv = irbuilder.createLoad arguments_alloca, "load_arguments"
                         return rv
-                        
-                        
+
                 rv = null
                 debug.log "calling getFunction for #{val}"
                 rv = @module.getFunction val
@@ -945,15 +950,15 @@ class LLVMIRVisitor extends NodeVisitor
                 rv
 
         visitObjectExpression: (n) ->
-                obj = llvm.IRBuilder.createCall @ejs.object_new, [@loadNullEjsValue()], "objtmp"
+                obj = irbuilder.createCall @ejs.object_new, [@loadNullEjsValue()], "objtmp"
                 for property in n.properties
                         val = @visit property.value
                         key = property.key
                         @createPropertyStore obj, key, val, false
-                return obj
+                obj
 
         visitArrayExpression: (n) ->
-                obj = llvm.IRBuilder.createCall @ejs.array_new, [(llvm.Constant.getIntegerValue int32Type, n.elements.length)], "arrtmp"
+                obj = irbuilder.createCall @ejs.array_new, [(llvm.Constant.getIntegerValue int32Type, n.elements.length)], "arrtmp"
                 i = 0;
                 for el in n.elements
                         val = @visit el
@@ -972,30 +977,29 @@ class LLVMIRVisitor extends NodeVisitor
                         return @loadNullEjsValue() # this isn't properly typed...  dunno what to do about this here
                 else if typeof n.raw is "string" and (n.raw[0] is '"' or n.raw[0] is "'")
                         debug.log "literal string: #{n.value}"
-                        c = llvm.IRBuilder.createGlobalStringPtr n.value, "strconst"
-                        strcall = llvm.IRBuilder.createCall @ejs.string_new_utf8, [c], "strtmp"
+                        c = irbuilder.createGlobalStringPtr n.value, "strconst"
+                        strcall = irbuilder.createCall @ejs.string_new_utf8, [c], "strtmp"
                         debug.log "strcall = #{strcall}"
                         return strcall
                 else if typeof n.raw is "string" and n.raw[0] is '/'
                         debug.log "literal regexp: #{n.raw}"
-                        c = llvm.IRBuilder.createGlobalStringPtr n.raw, "strconst"
-                        regexpcall = llvm.IRBuilder.createCall @ejs.regexp_new_utf8, [c], "regexptmp"
+                        c = irbuilder.createGlobalStringPtr n.raw, "strconst"
+                        regexpcall = irbuilder.createCall @ejs.regexp_new_utf8, [c], "regexptmp"
                         debug.log "regexpcall = #{strcall}"
                         return regexpcall
                 else if typeof n.value is "number"
                         debug.log "literal number: #{n.value}"
                         c = llvm.ConstantFP.getDouble n.value
-                        return llvm.IRBuilder.createCall @ejs.number_new, [c], "numtmp"
+                        return irbuilder.createCall @ejs.number_new, [c], "numtmp"
                 else if typeof n.value is "boolean"
                         debug.log "literal boolean: #{n.value}"
                         c = llvm.Constant.getIntegerValue boolType, (if n.value then 1 else 0)
-                        return llvm.IRBuilder.createCall @ejs.boolean_new, [c], "booltmp"
-                console.warn "n.raw[0] = #{n.raw[0]}"
+                        return irbuilder.createCall @ejs.boolean_new, [c], "booltmp"
                 throw "Internal error: unrecognized literal of type #{typeof n.value}"
 
         visitThrow: (n) ->
                 arg = @visit n.argument
-                return llvm.IRBuilder.createCall @ejs.throw, [arg], ""
+                return irbuilder.createCall @ejs.throw, [arg], ""
 
 class AddFunctionsVisitor extends NodeVisitor
         constructor: (@module) ->
@@ -1029,9 +1033,20 @@ class AddFunctionsVisitor extends NodeVisitor
                         
 insert_toplevel_func = (tree, filename) ->
         sanitize = (filename) ->
-                filename = filename.replace /\.js$/, ""
-                filename = filename.replace /[.,-\/\\]/g, "_" # this is insanely inadequate
-                filename
+                if __ejs?
+                        filename = filename.replace ".js", ""
+                        if c_callable
+                                filename = filename.replace ".", "_"
+                                filename = filename.replace ",", "_"
+                                filename = filename.replace "-", "_"
+                                filename = filename.replace "/", "_"
+                                filename = filename.replace "\\", "_"
+                                filename
+                        filename
+                else
+                        filename = filename.replace /\.js$/, ""
+                        filename = filename.replace /[.,-\/\\]/g, "_" # this is insanely inadequate
+                        filename
         
         toplevel =
                 type: syntax.FunctionDeclaration,
@@ -1087,6 +1102,9 @@ exports.compile = (tree, filename) ->
         
         #tree = desugar tree
         #debug.log -> escodegen.generate tree
+
+        debug.log "before closure conversion"
+        debug.log -> escodegen.generate tree
         
         tree = closure_conversion.convert tree
 
