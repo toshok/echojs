@@ -195,49 +195,17 @@ _ejs_op_mod (EJSValue* lhs, EJSValue* rhs)
 EJSValue*
 _ejs_op_bitwise_and (EJSValue* lhs, EJSValue* rhs)
 {
-  if (EJSVAL_IS_NUMBER(lhs)) {
-    if (EJSVAL_IS_NUMBER(rhs)) {
-      return _ejs_number_new ((unsigned int)EJSVAL_TO_NUMBER(lhs) & (unsigned int)EJSVAL_TO_NUMBER(rhs));
-    }
-    else {
-      // need to call valueOf() on the object, or convert the string to a number
-      NOT_IMPLEMENTED();
-    }
-  }
-  else if (EJSVAL_IS_STRING(lhs)) {
-    // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-    NOT_IMPLEMENTED();
-  }
-  else {
-    // object+... how does js implement this anyway?
-    NOT_IMPLEMENTED();
-  }
-
-  return NULL;
+  int lhs_int = ToInteger(lhs);
+  int rhs_int = ToInteger(rhs);
+  return _ejs_number_new (lhs_int & rhs_int);
 }
 
 EJSValue*
 _ejs_op_bitwise_or (EJSValue* lhs, EJSValue* rhs)
 {
-  if (EJSVAL_IS_NUMBER(lhs)) {
-    if (EJSVAL_IS_NUMBER(rhs)) {
-      return _ejs_number_new ((unsigned int)EJSVAL_TO_NUMBER(lhs) | (unsigned int)EJSVAL_TO_NUMBER(rhs));
-    }
-    else {
-      // need to call valueOf() on the object, or convert the string to a number
-      NOT_IMPLEMENTED();
-    }
-  }
-  else if (EJSVAL_IS_STRING(lhs)) {
-    // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-    NOT_IMPLEMENTED();
-  }
-  else {
-    // object+... how does js implement this anyway?
-    NOT_IMPLEMENTED();
-  }
-
-  return NULL;
+  int lhs_int = ToInteger(lhs);
+  int rhs_int = ToInteger(rhs);
+  return _ejs_number_new (lhs_int | rhs_int);
 }
 
 EJSValue*
