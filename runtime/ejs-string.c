@@ -121,7 +121,28 @@ _ejs_String_prototype_replace (EJSValue* env, EJSValue* _this, int argc, EJSValu
 static EJSValue*
 _ejs_String_prototype_charAt (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  NOT_IMPLEMENTED();
+  EJSValue* primStr;
+
+  if (EJSVAL_IS_STRING(_this)) {
+    primStr = _this;
+  }
+  else {
+    EJSString *str = (EJSString*)_this;
+    primStr = str->primStr;
+  }
+
+  int idx = 0;
+  if (argc > 0 && EJSVAL_IS_NUMBER(args[0])) {
+    idx = (int)EJSVAL_TO_NUMBER(args[0]);
+  }
+
+  if (idx < 0 || idx > EJSVAL_TO_STRLEN(primStr))
+    return _ejs_string_new_utf8 ("");
+
+  char c[2];
+  c[0] = EJSVAL_TO_STRING(primStr)[idx];
+  c[1] = '\0';
+  return _ejs_string_new_utf8 (c);
 }
 
 static EJSValue*
