@@ -99,7 +99,10 @@ echo-%:
 	-@EXE=`echo $<`; ./$$EXE > $@
 
 .%.node-out: %.js
-	@node $< > $@
+	@NODE_PATH=$(NODE_PATH) node $< > $@
+
+esprima-roundtrip%.js.exe: esprima-roundtrip%.js $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js
+	-NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $< $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js
 
 %.js.exe: %.js $(TOPDIR)/runtime/libecho.a
 	-NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $<
