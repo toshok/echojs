@@ -23,9 +23,11 @@ namespace jsllvm {
     s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("argSize"), Function::GetArgSize);
     s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("returnType"), Function::GetReturnType);
     s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("type"), Function::GetType);
+    s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("doesNotThrow"), Function::GetDoesNotThrow);
 
     NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", Function::Dump);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "setOnlyReadsMemory", Function::SetOnlyReadsMemory);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "setDoesNotThrow", Function::SetDoesNotThrow);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", Function::ToString);
 
     s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
@@ -74,6 +76,15 @@ namespace jsllvm {
     Function* fun = ObjectWrap::Unwrap<Function>(args.This());
     REQ_BOOL_ARG(0, flag);
     fun->llvm_fun->setOnlyReadsMemory(flag);
+    return scope.Close(Undefined());
+  }
+
+  Handle<v8::Value> Function::SetDoesNotThrow (const Arguments& args)
+  {
+    HandleScope scope;
+    Function* fun = ObjectWrap::Unwrap<Function>(args.This());
+    REQ_BOOL_ARG(0, flag);
+    fun->llvm_fun->setDoesNotThrow(flag);
     return scope.Close(Undefined());
   }
 
@@ -126,6 +137,14 @@ namespace jsllvm {
     HandleScope scope;
     Function* fun = ObjectWrap::Unwrap<Function>(info.This());
     Handle<v8::Value> result = FunctionType::New(fun->llvm_fun->getFunctionType());
+    return scope.Close(result);
+  }
+
+  Handle<v8::Value> Function::GetDoesNotThrow (Local<String> property, const AccessorInfo& info)
+  {
+    HandleScope scope;
+    Function* fun = ObjectWrap::Unwrap<Function>(info.This());
+    Handle<v8::Value> result = Boolean::New(fun->llvm_fun->doesNotThrow());
     return scope.Close(result);
   }
 

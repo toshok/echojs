@@ -2,6 +2,8 @@
 #include "irbuilder.h"
 #include "type.h"
 #include "value.h"
+#include "landingpad.h"
+#include "switch.h"
 #include "basicblock.h"
 
 using namespace node;
@@ -27,6 +29,7 @@ namespace jsllvm {
     NODE_SET_METHOD(s_func, "getInsertBlock", IRBuilder::GetInsertBlock);
     NODE_SET_METHOD(s_func, "createRet", IRBuilder::CreateRet);
     NODE_SET_METHOD(s_func, "createCall", IRBuilder::CreateCall);
+    NODE_SET_METHOD(s_func, "createInvoke", IRBuilder::CreateInvoke);
     NODE_SET_METHOD(s_func, "createFAdd", IRBuilder::CreateFAdd);
     NODE_SET_METHOD(s_func, "createAlloca", IRBuilder::CreateAlloca);
     NODE_SET_METHOD(s_func, "createLoad", IRBuilder::CreateLoad);
@@ -41,6 +44,12 @@ namespace jsllvm {
     NODE_SET_METHOD(s_func, "createGlobalStringPtr", IRBuilder::CreateGlobalStringPtr);
     NODE_SET_METHOD(s_func, "createPointerCast", IRBuilder::CreatePointerCast);
     NODE_SET_METHOD(s_func, "createFPCast", IRBuilder::CreateFPCast);
+    NODE_SET_METHOD(s_func, "createUnreachable", IRBuilder::CreateUnreachable);
+
+    NODE_SET_METHOD(s_func, "createSwitch", IRBuilder::CreateSwitch);
+
+    NODE_SET_METHOD(s_func, "createLandingPad", IRBuilder::CreateLandingPad);
+    NODE_SET_METHOD(s_func, "createResume", IRBuilder::CreateResume);
 
     target->Set(String::NewSymbol("IRBuilder"),
 		s_func);
@@ -112,6 +121,13 @@ namespace jsllvm {
     return scope.Close(result);
   }
 
+  v8::Handle<v8::Value> IRBuilder::CreateUnreachable(const v8::Arguments& args)
+  {
+    HandleScope scope;
+    Handle<v8::Value> result = Value::New(builder.CreateUnreachable());
+    return scope.Close(result);
+  }
+
   v8::Handle<v8::Value> IRBuilder::CreateCall(const v8::Arguments& args)
   {
     HandleScope scope;
@@ -128,6 +144,27 @@ namespace jsllvm {
     }
 
     Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateCall(callee, ArgsV, *name));
+    return scope.Close(result);
+  }
+
+  v8::Handle<v8::Value> IRBuilder::CreateInvoke(const v8::Arguments& args)
+  {
+    HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(0, callee);
+    REQ_ARRAY_ARG(1, argv);
+    REQ_LLVM_BB_ARG(2, normal_dest);
+    REQ_LLVM_BB_ARG(3, unwind_dest);
+    REQ_UTF8_ARG(4, name);
+
+    std::vector<llvm::Value*> ArgsV;
+    for (unsigned i = 0, e = argv->Length(); i != e; ++i) {
+      llvm::Value* arg = Value::GetLLVMObj(argv->Get(i));
+      ArgsV.push_back(arg);
+      if (ArgsV.back() == 0) abort(); // XXX throw an exception here
+    }
+
+    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateInvoke(callee, normal_dest, unwind_dest, ArgsV, *name));
     return scope.Close(result);
   }
 
@@ -266,6 +303,41 @@ namespace jsllvm {
     REQ_UTF8_ARG(1, name);
 
     Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateGlobalStringPtr(*val, *name));
+    return scope.Close(result);
+  }
+
+  v8::Handle<v8::Value> IRBuilder::CreateSwitch(const v8::Arguments& args)
+  {
+    HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(0, V);
+    REQ_LLVM_BB_ARG(1, Dest);
+    REQ_INT_ARG(2, num_cases);
+
+    Handle<v8::Value> result = Switch::New(IRBuilder::builder.CreateSwitch(V, Dest, num_cases));
+    return scope.Close(result);
+  }
+
+  v8::Handle<v8::Value> IRBuilder::CreateLandingPad(const v8::Arguments& args)
+  {
+    HandleScope scope;
+
+    REQ_LLVM_TYPE_ARG(0, ty);
+    REQ_LLVM_VAL_ARG(1, persFn);
+    REQ_INT_ARG(2, num_clauses);
+    REQ_UTF8_ARG(3, name);
+
+    Handle<v8::Value> result = LandingPad::New(IRBuilder::builder.CreateLandingPad(ty, persFn, num_clauses, *name));
+    return scope.Close(result);
+  }
+
+  v8::Handle<v8::Value> IRBuilder::CreateResume(const v8::Arguments& args)
+  {
+    HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(0, val);
+
+    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateResume(val));
     return scope.Close(result);
   }
 

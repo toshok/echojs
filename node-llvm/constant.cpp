@@ -21,6 +21,7 @@ namespace jsllvm {
     s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
 
     NODE_SET_METHOD(s_func, "getNull", Constant::GetNull);
+    NODE_SET_METHOD(s_func, "getAggregateZero", Constant::GetAggregateZero);
     NODE_SET_METHOD(s_func, "getBoolValue", Constant::GetBoolValue);
     NODE_SET_METHOD(s_func, "getIntegerValue", Constant::GetIntegerValue);
 
@@ -46,6 +47,14 @@ namespace jsllvm {
     HandleScope scope;
     REQ_LLVM_TYPE_ARG(0, ty);
     Handle<v8::Value> result = Value::New(llvm::Constant::getNullValue(ty));
+    return scope.Close(result);
+  }
+
+  Handle<v8::Value> Constant::GetAggregateZero (const Arguments& args)
+  {
+    HandleScope scope;
+    REQ_LLVM_TYPE_ARG(0, ty);
+    Handle<v8::Value> result = Value::New(llvm::ConstantAggregateZero::get(ty));
     return scope.Close(result);
   }
 

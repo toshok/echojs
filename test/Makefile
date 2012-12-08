@@ -105,7 +105,7 @@ esprima-roundtrip%.js.exe: esprima-roundtrip%.js $(TOPDIR)/esprima/esprima.js $(
 	-NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $< $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js
 
 %.js.exe: %.js $(TOPDIR)/runtime/libecho.a
-	-NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $<
+	-NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --cxx $<
 
 v8-%.js.exe: v8/%.js $(TOPDIR)/runtime/libecho.a
 	NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $<

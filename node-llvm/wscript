@@ -96,9 +96,11 @@ def build(bld):
                 "function.cpp",
                 "functiontype.cpp",
                 "irbuilder.cpp",
+                "landingpad.cpp",
                 "module.cpp",
                 "node-llvm.cpp",
                 "phinode.cpp",
                 "structtype.cpp",
+                "switch.cpp",
                 "type.cpp",
                 "value.cpp"]

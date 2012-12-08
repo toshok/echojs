@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "ejs.h"
+#include "ejs-exception.h"
 #include "ejs-value.h"
 #include "ejs-object.h"
 #include "ejs-number.h"
@@ -560,7 +561,13 @@ _ejs_truthy (EJSValue* val)
 void
 _ejs_throw (EJSValue* exp)
 {
-  NOT_IMPLEMENTED();
+  _ejs_exception_throw ((EJSObject*)ToObject(exp));
+}
+
+void
+_ejs_rethrow ()
+{
+  _ejs_exception_rethrow ();
 }
 
 EJSValue*

@@ -15,6 +15,7 @@ namespace jsllvm {
 
     static v8::Handle<v8::Value> New (const v8::Arguments& args);
     static v8::Handle<v8::Value> GetNull (const v8::Arguments& args);
+    static v8::Handle<v8::Value> GetAggregateZero (const v8::Arguments& args);
     static v8::Handle<v8::Value> GetBoolValue (const v8::Arguments& args);
     static v8::Handle<v8::Value> GetIntegerValue (const v8::Arguments& args);
 

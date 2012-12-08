@@ -108,19 +108,19 @@ compileFile = (filename, content, compileCallback) ->
         compiled_modules.push filename: filename, module_toplevel: compiled_module.toplevel_name
 
         llvm_as = spawn "llvm-as", llvm_as_args
-        llvm_as.stderr.on "data", (data) -> #console.warn "#{data}"
+        llvm_as.stderr.on "data", (data) -> console.warn "#{data}"
         llvm_as.on "exit", (code) ->
                 opt = spawn "opt", opt_args
-                opt.stderr.on "data", (data) -> #console.warn "#{data}"
+                opt.stderr.on "data", (data) -> console.warn "#{data}"
                 opt.on "exit", (code) ->
                         llvm_dis = spawn "llvm-dis", llvm_dis_args
-                        llvm_dis.stderr.on "data", (data) -> #console.warn "#{data}"
+                        llvm_dis.stderr.on "data", (data) -> console.warn "#{data}"
                         llvm_dis.on "exit", (code) ->
                                 llc = spawn "llc", llc_args
-                                llc.stderr.on "data", (data) -> #console.warn "#{data}"
+                                llc.stderr.on "data", (data) -> console.warn "#{data}"
                                 llc.on "exit", (code) ->
                                         clang = spawn "clang", clang_args
-                                        clang.stderr.on "data", (data) -> #console.warn "#{data}"
+                                        clang.stderr.on "data", (data) -> console.warn "#{data}"
                                         clang.on "exit", (code) ->
                                                 o_filenames.push o_filename
                                                 compileCallback()
@@ -190,8 +190,8 @@ file_compiled = ->
                         clang_args.push extern_module.library
                         clang_args = clang_args.concat extern_module.link_flags.split " "
 
-                clang = spawn (if options.link_with_cxx then "g++" else "clang"), clang_args
-                clang.stderr.on "data", (data) -> #console.warn "#{data}"
+                clang = spawn (if options.link_with_cxx then "clang++" else "clang"), clang_args
+                clang.stderr.on "data", (data) -> console.warn "#{data}"
                 clang.on "exit", (code) ->
                         console.warn "done."
 

@@ -10,6 +10,8 @@
 #include "module.h"
 #include "constant.h"
 #include "constantfp.h"
+#include "landingpad.h"
+#include "switch.h"
 
 std::string& trim(std::string& str)
 {
@@ -33,6 +35,8 @@ extern "C" {
     jsllvm::Module::Init(target);
     jsllvm::Constant::Init(target);
     jsllvm::ConstantFP::Init(target);
+    jsllvm::LandingPad::Init(target);
+    jsllvm::Switch::Init(target);
   }
 
   NODE_MODULE(llvm, init);

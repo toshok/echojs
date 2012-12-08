@@ -3,6 +3,7 @@
 #define _ejs_object_h_
 
 #include "ejs.h"
+#include "ejs-object.h"
 
 typedef struct _EJSPropertyMap EJSPropertyMap;
 typedef struct _EJSPropertyIterator EJSPropertyIterator;
