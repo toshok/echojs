@@ -7,6 +7,8 @@ compiler = require 'compiler'
 util = require 'echo-util'
 { spawn } = require 'child_process'
 
+# if we're running under coffee/node, argv will be ["coffee", ".../ejs", ...]
+# if we're running the compiled ejs.exe, argv will be [".../ejs.js.exe", ...]
 slice_count = if __ejs? then 1 else 2
 argv = process.argv.slice slice_count
 
@@ -205,3 +207,7 @@ else
         files_remaining = files.length
         files.forEach (filename) ->
                 compileFile filename, (fs.readFileSync filename, 'utf-8'), file_compiled
+
+# Local Variables:
+# mode: coffee
+# End:
