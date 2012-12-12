@@ -74,8 +74,7 @@ namespace jsllvm {
   {
     HandleScope scope;
     Function* fun = ObjectWrap::Unwrap<Function>(args.This());
-    REQ_BOOL_ARG(0, flag);
-    fun->llvm_fun->setOnlyReadsMemory(flag);
+    fun->llvm_fun->setOnlyReadsMemory();
     return scope.Close(Undefined());
   }
 
@@ -83,8 +82,7 @@ namespace jsllvm {
   {
     HandleScope scope;
     Function* fun = ObjectWrap::Unwrap<Function>(args.This());
-    REQ_BOOL_ARG(0, flag);
-    fun->llvm_fun->setDoesNotThrow(flag);
+    fun->llvm_fun->setDoesNotThrow();
     return scope.Close(Undefined());
   }
 

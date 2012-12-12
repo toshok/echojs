@@ -3,7 +3,7 @@ escodegen = require 'escodegen'
 syntax = esprima.Syntax
 debug = require 'debug'
 
-debug.setLevel 0
+debug.setLevel 1 #if __ejs? then 1 else 0
 
 { Set } = require 'set'
 { NodeVisitor } = require 'nodevisitor'
@@ -46,11 +46,11 @@ takes_builtins = (n) ->
         n
 
 only_reads_memory = (n) ->
-        n.setOnlyReadsMemory true
+        n.setOnlyReadsMemory()
         n
 
 does_not_throw = (n) ->
-        n.setDoesNotThrow true
+        n.setDoesNotThrow()
         n
 
 class ExitableScope
@@ -84,17 +84,23 @@ class TryExitableScope extends ExitableScope
         
         @unwindStack: []
                 
-        constructor: (@cleanup_alloca, @cleanup_bb, @unwind_bb) ->
+        constructor: (@cleanup_alloca, @cleanup_bb, @create_unwind_bb) ->
+                @isTry = true
                 @destinations = []
                 super()
 
         enter: ->
-                TryExitableScope.unwindStack.unshift @unwind_bb
+                TryExitableScope.unwindStack.unshift @
                 super
                 
         leave: ->
                 TryExitableScope.unwindStack.shift()
                 super
+
+        getUnwindBlock: ->
+                return @unwind_block if @unwind_block?
+                @unwind_block = @create_unwind_bb()
+                
         
         lookupDestinationIdForScope: (scope, reason) ->
                 for i in [0...@destinations.length]
@@ -121,7 +127,7 @@ class TryExitableScope extends ExitableScope
                         if label?
                                 scope = LoopExitableScope.findLabeled label
                         else
-                                scope = LoopExitableScope.findFirst()
+                                scope = TryExitableScope.findFirstNonTry()
                         
                         reason = @lookupDestinationIdForScope scope, @REASON_BREAK
                 else
@@ -130,11 +136,16 @@ class TryExitableScope extends ExitableScope
                 irbuilder.createStore reason, @cleanup_alloca
                 irbuilder.createBr @cleanup_bb
 
+        @findFirstNonTry: (stack = ExitableScope.scopeStack) ->
+                return stack if not stack.isTry
+                return @findFirstNonTry stack.parent
+
 class SwitchExitableScope extends ExitableScope
         constructor: (@merge_bb) ->
                 super()
 
         exitAft: (fromBreak, label = null) ->
+                console.log "SwitchExitableScope.exitAft"
                 irbuilder.createBr @merge_bb
 
 class LoopExitableScope extends ExitableScope
@@ -146,6 +157,7 @@ class LoopExitableScope extends ExitableScope
                 irbuilder.createBr @fore_bb
                 
         exitAft: (fromBreak, label = null) ->
+                console.log "LoopExitableScope.exitAft"
                 irbuilder.createBr @aft_bb
 
         @findLabeled: (l, stack = ExitableScope.scopeStack) ->
@@ -441,13 +453,17 @@ class LLVMIRVisitor extends NodeVisitor
                 @visit n.body
 
         visitBreak: (n) ->
+                console.log "0"
                 # unlabeled breaks just exit our enclosing exitable scope
                 ExitableScope.scopeStack.exitAft true if not n.label
-
+                console.log "1"
                 # for the labeled case, we search up the stack for the right scope and exitAft that one
                 scope = LoopExitableScope.findLabeled n.label
+                console.log "2"
                 # XXX check if scope is null, throw if so
+                console.log "3"
                 scope.exitAft true
+                console.log "4"
 
         visitContinue: (n) ->
                 # unlabeled continue just exit our enclosing exitable scope
@@ -1134,14 +1150,14 @@ class LLVMIRVisitor extends NodeVisitor
                         insertBlock = irbuilder.getInsertBlock()
                         insertFunc = insertBlock.parent
                         normal_block  = new llvm.BasicBlock "normal", insertFunc
-                        calltmp = irbuilder.createInvoke callee, argv, normal_block, TryExitableScope.unwindStack[0], callname
+                        calltmp = irbuilder.createInvoke callee, argv, normal_block, TryExitableScope.unwindStack[0].getUnwindBlock(), callname
                         # after we've made our call we need to change the insertion point to our continuation
                         irbuilder.setInsertPoint normal_block
                 calltmp
         
         visitThrow: (n) ->
                 arg = @visit n.argument
-                @createCall @ejs.throw, [arg], ""
+                @createCall @ejs.throw, [arg], "", true
 
         visitTry: (n) ->
                 console.log "visitTry"
@@ -1149,19 +1165,15 @@ class LLVMIRVisitor extends NodeVisitor
                 insertFunc = insertBlock.parent
 
                 # the reason we ended up in the finally block
-                if not @cleanup_alloca?
-                        @cleanup_alloca = @createAlloca @currentFunction, int32Type, "cleanup_reason"
-                caught_result_storage = @createAlloca @currentFunction, EjsValueType,    "caught_result_storage"
-                exception_storage =     @createAlloca @currentFunction, int8PointerType, "exception_storage"
+                if not @currentFunction.cleanup_alloca?
+                        @currentFunction.cleanup_alloca = @createAlloca @currentFunction, int32Type, "cleanup_reason"
+                if not @currentFunction.caught_result_storage?
+                        @currentFunction.caught_result_storage = @createAlloca @currentFunction, EjsValueType, "caught_result_storage"
+                if not @currentFunction.exception_storage?
+                        @currentFunction.exception_storage = @createAlloca @currentFunction, int8PointerType, "exception_storage"
                 # XXX these stores should be in the entry block too, right after the allocas
                 #irbuilder.createStore (llvm.Constant.getAggregateZero ejsValueType), caught_result_storage
-                irbuilder.createStore (llvm.Constant.getNull int8PointerType), exception_storage
-
-                # the unwind destination for all exceptions we get back through irbuilder.createInvoke
-                unwind_block = new llvm.BasicBlock "exception", insertFunc
-
-                # block which calls _Unwind_Resume
-                unwind_resume_block = new llvm.BasicBlock "unwind_resume", insertFunc
+                irbuilder.createStore (llvm.Constant.getNull int8PointerType), @currentFunction.exception_storage
 
                 # the merge bb where everything branches to after successfully leaving a catch/finally block
                 merge_block = new llvm.BasicBlock "try_merge", insertFunc
@@ -1174,11 +1186,7 @@ class LLVMIRVisitor extends NodeVisitor
                 else
                         branch_target = merge_block
 
-                # if we have a catch clause, create catchBlock
-                if n.handlers.length > 0
-                        catch_block = new llvm.BasicBlock "catch_bb", insertFunc
-
-                scope = new TryExitableScope @cleanup_alloca, branch_target, unwind_block
+                scope = new TryExitableScope @currentFunction.cleanup_alloca, branch_target, (-> new llvm.BasicBlock "exception", insertFunc)
                 scope.enter()
 
                 @visit n.block
@@ -1188,49 +1196,53 @@ class LLVMIRVisitor extends NodeVisitor
                 
                 # at the end of the try block branch to the cleanup block with REASON_FALLOFF
                 scope.exitAft false
-                
-                # catch block
-                if catch_block?
-                        irbuilder.setInsertPoint catch_block
-                        console.log 3
-                        @visit n.handlers[0]
-                        console.log 4
-                        irbuilder.createBr branch_target # XXX this should probably be to the cleanup block?
 
-                # if we have a handler then branch to it unconditionally, otherwise resumeunwind?
-                irbuilder.setInsertPoint unwind_block
+                if scope.unwind_block
+                        # if we have a catch clause, create catch_block
+                        if n.handlers.length > 0
+                                catch_block = new llvm.BasicBlock "catch_bb", insertFunc
 
-                clause_count = if catch_block? then 1 else 0
-                casted_personality = irbuilder.createPointerCast @ejs.personality, int8PointerType, "personality"
-                caught_result = irbuilder.createLandingPad EjsValueType, casted_personality, clause_count, "caught_result"
-                caught_result.setCleanup true
+                                irbuilder.setInsertPoint catch_block
+                                console.log 3
+                                @visit n.handlers[0]
+                                console.log 4
+                                irbuilder.createBr branch_target # XXX this should probably be to the cleanup block?
+
+                        # if we have a handler then branch to it unconditionally, otherwise resumeunwind?
+                        irbuilder.setInsertPoint scope.unwind_block
+
+                        clause_count = if catch_block? then 1 else 0
+                        casted_personality = irbuilder.createPointerCast @ejs.personality, int8PointerType, "personality"
+                        caught_result = irbuilder.createLandingPad EjsValueType, casted_personality, clause_count, "caught_result"
+                        caught_result.setCleanup true
                 
-                if catch_block?
-                        caught_result.addClause @ejs.exception_typeinfo
-                        # XXX more here.  store the exception, check if it's actually an ejs exception and branch to internal/external exception handlers
-                        irbuilder.createBr catch_block
-                else if finally_block?
-                        irbuilder.createBr finally_block
+                        if catch_block?
+                                caught_result.addClause @ejs.exception_typeinfo
+                                # XXX more here.  store the exception, check if it's actually an ejs exception and branch to internal/external exception handlers
+                                irbuilder.createBr catch_block
+                        else if finally_block?
+                                irbuilder.createBr finally_block
+
+                        # Unwind Resume Block (calls _Unwind_Resume)
+                        unwind_resume_block = new llvm.BasicBlock "unwind_resume", insertFunc
+                        irbuilder.setInsertPoint unwind_resume_block
+                        irbuilder.createResume irbuilder.createLoad @currentFunction.caught_result_storage, "load_caught_result"
 
                 scope.leave()
-
-                # Unwind Resume Block
-                irbuilder.setInsertPoint unwind_resume_block
-                irbuilder.createResume irbuilder.createLoad caught_result_storage, "load_caught_result"
 
                 # Finally Block
                 if n.finalizer?
                         irbuilder.setInsertPoint finally_block
                         @visit n.finalizer
 
-                        cleanup_reason = irbuilder.createLoad @cleanup_alloca, "cleanup_reason_load"
+                        cleanup_reason = irbuilder.createLoad @currentFunction.cleanup_alloca, "cleanup_reason_load"
 
                         if @returnValueAlloca?
                                 return_tramp = new llvm.BasicBlock "return_tramp", insertFunc
                                 irbuilder.setInsertPoint return_tramp
                                 
                                 if @finallyStack.length > 0
-                                        irbuilder.createStore (llvm.Constant.getIntegerValue int32Type, ExitableScope.REASON_RETURN), @cleanup_alloca
+                                        irbuilder.createStore (llvm.Constant.getIntegerValue int32Type, ExitableScope.REASON_RETURN), @currentFunction.cleanup_alloca
                                         irbuilder.createBr @finallyStack[0]
                                 else
                                         rv = irbuilder.createLoad @returnValueAlloca, "rv"
@@ -1242,6 +1254,7 @@ class LLVMIRVisitor extends NodeVisitor
                                 switch_stmt.addCase (llvm.Constant.getIntegerValue int32Type, ExitableScope.REASON_RETURN), return_tramp
                         
                 irbuilder.setInsertPoint merge_block
+                console.log "done with try"
 
 class AddFunctionsVisitor extends NodeVisitor
         constructor: (@module) ->
@@ -1307,9 +1320,11 @@ insert_toplevel_func = (tree, filename) ->
 
 class MoveFunctionDeclsToStartOfBlock extends NodeVisitor
         constructor: ->
+                console.log "MoveFunctionDeclsToStartOfBlock.ctor"
                 @prepends = []
                 
         visitFunction: (n) ->
+                console.log "MoveFunctionDeclsToStartOfBlock.visitFunction"
                 @prepends.unshift []
                 super
                 # we're assuming n.body is a BlockStatement here...
@@ -1317,6 +1332,7 @@ class MoveFunctionDeclsToStartOfBlock extends NodeVisitor
                 n
         
         visitBlock: (n) ->
+                console.log "MoveFunctionDeclsToStartOfBlock.visitBlock"
                 super
 
                 new_body = []
@@ -1336,10 +1352,22 @@ exports.compile = (tree, filename) ->
         
         tree = insert_toplevel_func tree, filename
 
+        console.warn "moving function decls to start of block"
+        console.warn " tree = #{tree}"
+        console.warn " tree.type = #{tree.type}"
+        console.warn " tree.body = #{tree.body}"
+        console.warn " tree.body.length = #{tree.body.length}"
+        console.warn " tree.body[0].type = #{tree.body[0].type}"
+
+        debug.log -> escodegen.generate tree
+        
         visitor = new MoveFunctionDeclsToStartOfBlock
         tree = visitor.visit tree
         debug.log -> escodegen.generate tree
 
+        console.warn "getting toplevel name"
+        console.warn " tree body length = #{tree.body.length}"
+        
         toplevel_name = tree.body[0].id.name
         
         #tree = desugar tree
