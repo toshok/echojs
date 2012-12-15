@@ -1,6 +1,7 @@
 #include <math.h>
 
 #include "ejs.h"
+#include "ejs-gc.h"
 #include "ejs-ops.h"
 #include "ejs-require.h"
 #include "ejs-array.h"
@@ -27,6 +28,10 @@ extern EJSValue* _ejs_boolean_new_internal (EJSBool value);
 void
 _ejs_init(int argc, char** argv)
 {
+  _ejs_gc_init();
+
+  _ejs_gc_add_named_root (_ejs_global);
+
   _ejs_global = _ejs_object_new(NULL);
 
   _ejs_function_init(_ejs_global);
@@ -63,6 +68,8 @@ _ejs_init(int argc, char** argv)
   _ejs_true = _ejs_boolean_new_internal (TRUE);
   _ejs_false = _ejs_boolean_new_internal (FALSE);
 
+  _ejs_gc_add_named_root (_ejs_true);
+  _ejs_gc_add_named_root (_ejs_false);
 
   _ejs_object_setprop_utf8 (_ejs_global, "__ejs", _ejs_true);
 }

@@ -18,6 +18,8 @@ extern EJSValue* _ejs_String;
 EJSValue* _ejs_string_get_prototype();
 EJSObject* _ejs_string_alloc_instance();
 
+void _ejs_string_finalize(EJSString* str);
+
 void _ejs_string_init(EJSValue* global);
 
 EJS_END_DECLS

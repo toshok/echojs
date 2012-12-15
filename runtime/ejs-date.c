@@ -6,13 +6,13 @@
 
 EJSObject* _ejs_date_alloc_instance()
 {
-  return (EJSObject*)calloc(1, sizeof (EJSDate));
+  return (EJSObject*)_ejs_gc_new (EJSDate);
 }
 
 EJSValue*
 _ejs_date_new_unix (int timestamp)
 {
-  EJSDate* rv = (EJSDate*)calloc(1, sizeof (EJSDate));
+  EJSDate* rv = _ejs_gc_new (EJSDate);
 
   _ejs_init_object ((EJSObject*)rv, _ejs_date_get_prototype());
 
@@ -110,4 +110,5 @@ _ejs_date_init(EJSValue *global)
   PROTO_METHOD(getTimezoneOffset);
 
   _ejs_object_setprop_utf8 (global, "Date", _ejs_Date);
+  _ejs_gc_add_named_root (_ejs_Date_proto);
 }

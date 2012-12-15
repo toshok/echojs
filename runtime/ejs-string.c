@@ -6,7 +6,7 @@
 #include "ejs-string.h"
 #include "ejs-ops.h"
 
-static EJSValue* _ejs_string_specop_get (EJSValue* obj, EJSValue* propertyName);
+static EJSValue* _ejs_string_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr);
 static EJSValue* _ejs_string_specop_get_own_property (EJSValue* obj, EJSValue* propertyName);
 static EJSValue* _ejs_string_specop_get_property (EJSValue* obj, EJSValue* propertyName);
 static void      _ejs_string_specop_put (EJSValue *obj, EJSValue* propertyName, EJSValue* val, EJSBool flag);
@@ -33,7 +33,13 @@ EJSSpecOps _ejs_string_specops = {
 
 EJSObject* _ejs_string_alloc_instance()
 {
-  return (EJSObject*)calloc(1, sizeof (EJSString));
+  return (EJSObject*)_ejs_gc_new (EJSString);
+}
+
+void
+_ejs_string_finalize (EJSString* str)
+{
+  _ejs_object_finalize ((EJSObject*)str);
 }
 
 EJSValue* _ejs_String;
@@ -86,7 +92,7 @@ _ejs_String_prototype_replace (EJSValue* env, EJSValue* _this, int argc, EJSValu
   EJSValue *searchValue = args[0];
   EJSValue *replaceValue = argc > 1 ? args[1] : _ejs_undefined;
 
-  if (EJSVAL_IS_OBJECT(searchValue) && !strcmp ("RegExp", ((EJSObject*)searchValue)->ops->class_name)) {
+  if (EJSVAL_IS_OBJECT(searchValue) && !strcmp (CLASSNAME(searchValue), "RegExp")){
     NOT_IMPLEMENTED();
   }
   else {
@@ -346,17 +352,18 @@ _ejs_string_init(EJSValue *global)
   PROTO_METHOD(valueOf);
 
   _ejs_object_setprop_utf8 (global, "String", _ejs_String);
+  _ejs_gc_add_named_root (_ejs_String_proto);
 }
 
 static EJSValue*
-_ejs_string_specop_get (EJSValue* obj, EJSValue* propertyName)
+_ejs_string_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr)
 {
-  EJSString* estr = (EJSString*)&obj->o;
+  EJSString* estr = (EJSString*)obj;
 
   // check if propertyName is an integer, or a string that we can convert to an int
   EJSBool is_index = FALSE;
   int idx = 0;
-  if (EJSVAL_IS_NUMBER(propertyName)) {
+  if (!isCStr && EJSVAL_IS_NUMBER(propertyName)) {
     double n = EJSVAL_TO_NUMBER(propertyName);
     if (floor(n) == n) {
       idx = (int)n;
@@ -374,12 +381,13 @@ _ejs_string_specop_get (EJSValue* obj, EJSValue* propertyName)
   }
 
   // we also handle the length getter here
-  if (EJSVAL_IS_STRING(propertyName) && !strcmp ("length", EJSVAL_TO_STRING(propertyName))) {
+  if ((isCStr && !strcmp("length", (char*)propertyName))
+      || (!isCStr && EJSVAL_IS_STRING(propertyName) && !strcmp ("length", EJSVAL_TO_STRING(propertyName)))) {
     return _ejs_number_new (EJSVAL_TO_STRLEN(estr->primStr));
   }
 
   // otherwise we fallback to the object implementation
-  return _ejs_object_specops.get (obj, propertyName);
+  return _ejs_object_specops.get (obj, propertyName, isCStr);
 }
 
 static EJSValue*

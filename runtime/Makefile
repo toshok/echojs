@@ -5,6 +5,7 @@ SOURCES= \
 	ejs-init.c \
 	ejs-console.c \
 	ejs-exception.c \
+	ejs-gc.c \
 	ejs-process.c \
 	ejs-function.c \
 	ejs-object.c \

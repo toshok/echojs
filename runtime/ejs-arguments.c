@@ -5,7 +5,7 @@
 #include "ejs-value.h"
 #include "ejs-arguments.h"
 
-static EJSValue* _ejs_arguments_specop_get (EJSValue* obj, EJSValue* propertyName);
+static EJSValue* _ejs_arguments_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr);
 static EJSValue* _ejs_arguments_specop_get_own_property (EJSValue* obj, EJSValue* propertyName);
 static EJSValue* _ejs_arguments_specop_get_property (EJSValue* obj, EJSValue* propertyName);
 static void      _ejs_arguments_specop_put (EJSValue *obj, EJSValue* propertyName, EJSValue* val, EJSBool flag);
@@ -35,13 +35,13 @@ EJSSpecOps _ejs_arguments_specops = {
 
 EJSObject* _ejs_arguments_alloc_instance()
 {
-  return (EJSObject*)calloc(1, sizeof (EJSArguments));
+  return (EJSObject*)_ejs_gc_new (EJSArguments);
 }
 
 EJSValue*
 _ejs_arguments_new (int numElements, EJSValue** args)
 {
-  EJSArguments* rv = (EJSArguments*)calloc(1, sizeof(EJSArguments));
+  EJSArguments* rv = _ejs_gc_new (EJSArguments);
 
   _ejs_init_object ((EJSObject*)rv, _ejs_arguments_get_prototype());
   rv->obj.ops = &_ejs_arguments_specops;
@@ -64,17 +64,18 @@ void
 _ejs_arguments_init(EJSValue *global)
 {
   _ejs_Arguments_proto = _ejs_object_new(NULL);
+  _ejs_gc_add_named_root (_ejs_Arguments_proto);
 }
 
 static EJSValue*
-_ejs_arguments_specop_get (EJSValue* obj, EJSValue* propertyName)
+_ejs_arguments_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr)
 {
   EJSArguments* arguments = (EJSArguments*)&obj->o;
 
   // check if propertyName is an integer, or a string that we can convert to an int
   EJSBool is_index = FALSE;
   int idx = 0;
-  if (EJSVAL_IS_NUMBER(propertyName)) {
+  if (!isCStr && EJSVAL_IS_NUMBER(propertyName)) {
     double n = EJSVAL_TO_NUMBER(propertyName);
     if (floor(n) == n) {
       idx = (int)n;
@@ -91,12 +92,13 @@ _ejs_arguments_specop_get (EJSValue* obj, EJSValue* propertyName)
   }
 
   // we also handle the length getter here
-  if (EJSVAL_IS_STRING(propertyName) && !strcmp ("length", EJSVAL_TO_STRING(propertyName))) {
+  if ((isCStr && !strcmp("length", (char*)propertyName))
+      || (!isCStr && EJSVAL_IS_STRING(propertyName) && !strcmp ("length", EJSVAL_TO_STRING(propertyName)))) {
     return _ejs_number_new (arguments->argc);
   }
 
   // otherwise we fallback to the object implementation
-  return _ejs_object_specops.get (obj, propertyName);
+  return _ejs_object_specops.get (obj, propertyName, isCStr);
 }
 
 static EJSValue*

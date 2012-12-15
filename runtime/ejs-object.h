@@ -3,7 +3,15 @@
 #define _ejs_object_h_
 
 #include "ejs.h"
-#include "ejs-object.h"
+#include "ejs-gc.h"
+
+// really terribly performing property maps
+struct _EJSPropertyMap {
+  char **names;
+  EJSValue **fields;
+  int allocated;
+  int num;
+};
 
 typedef struct _EJSPropertyMap EJSPropertyMap;
 typedef struct _EJSPropertyIterator EJSPropertyIterator;
@@ -14,7 +22,7 @@ typedef struct {
   EJSBool enumerable;
 } EJSPropertyDesc;
 
-typedef EJSValue* (*SpecOpGet) (EJSValue* obj, EJSValue* propertyName);
+typedef EJSValue* (*SpecOpGet) (EJSValue* obj, void* propertyName, EJSBool isCStr);
 typedef EJSValue* (*SpecOpGetOwnProperty) (EJSValue* obj, EJSValue* propertyName);
 typedef EJSValue* (*SpecOpGetProperty) (EJSValue* obj, EJSValue* propertyName);
 typedef void      (*SpecOpPut) (EJSValue* obj, EJSValue* propertyName, EJSValue* val, EJSBool flag);
@@ -37,8 +45,13 @@ typedef struct {
   SpecOpDefineOwnProperty define_own_property;
 } EJSSpecOps;
 
+#define OP(o,op) (((EJSObject*)o)->ops->op)
+
+#define CLASSNAME(o) OP(o,class_name)
+
 typedef struct {
-  EJSValueTag tag;
+  GCObjectHeader header;
+
   EJSValue *proto;
   EJSSpecOps *ops;
   EJSPropertyMap* map;
@@ -46,8 +59,11 @@ typedef struct {
 
 EJS_BEGIN_DECLS
 
+typedef void (*EJSValueFunc)(EJSValue *value);
+
 EJSPropertyMap* _ejs_propertymap_new (int initial_allocation);
 int _ejs_propertymap_lookup (EJSPropertyMap *map, const char *name, EJSBool add_if_not_found);
+void _ejs_propertymap_foreach_value (EJSPropertyMap *map, EJSValueFunc foreach_func);
 
 EJSValue* _ejs_object_setprop (EJSValue* obj, EJSValue* key, EJSValue* value);
 EJSValue* _ejs_object_getprop (EJSValue* obj, EJSValue* key);
@@ -65,6 +81,8 @@ extern EJSValue* _ejs_Object;
 EJSValue* _ejs_object_new (EJSValue *proto);
 EJSObject* _ejs_object_alloc_instance();
 void      _ejs_init_object (EJSObject *obj, EJSValue *proto);
+
+void _ejs_object_finalize(EJSObject *obj);
 
 EJSValue* _ejs_object_get_prototype();
 

@@ -36,7 +36,7 @@ typedef union _EJSValue EJSValue;
     abort();							\
   } while (0)
 
-void _ejs_init();
+void _ejs_init(int argc, char** argv);
 
 extern EJSValue* _ejs_undefined;
 extern EJSValue* _ejs_nan;

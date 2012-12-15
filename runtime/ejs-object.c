@@ -14,7 +14,7 @@
 #include "ejs-number.h"
 #include "ejs-array.h"
 
-static EJSValue* _ejs_object_specop_get (EJSValue* obj, EJSValue* propertyName);
+static EJSValue* _ejs_object_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr);
 static EJSValue* _ejs_object_specop_get_own_property (EJSValue* obj, EJSValue* propertyName);
 static EJSValue* _ejs_object_specop_get_property (EJSValue* obj, EJSValue* propertyName);
 static void      _ejs_object_specop_put (EJSValue* obj, EJSValue* propertyName, EJSValue* val, EJSBool flag);
@@ -38,14 +38,6 @@ EJSSpecOps _ejs_object_specops = {
 };
 
 
-// really terribly performing property maps
-struct _EJSPropertyMap {
-  char **names;
-  EJSValue **fields;
-  int allocated;
-  int num;
-};
-
 EJSPropertyMap*
 _ejs_propertymap_new (int initial_allocation)
 {
@@ -55,6 +47,24 @@ _ejs_propertymap_new (int initial_allocation)
   rv->num = 0;
   rv->allocated = initial_allocation;
   return rv;
+}
+
+void
+_ejs_propertymap_free (EJSPropertyMap *map)
+{
+  for (int i = 0; i < map->num; i ++) {
+    free (map->names[i]);
+  }
+  free (map->names);
+  free (map->fields);
+  free(map);
+}
+
+void
+_ejs_propertymap_foreach_value (EJSPropertyMap* map, EJSValueFunc foreach_func)
+{
+  for (int i = 0; i < map->num; i ++)
+    foreach_func (map->fields[i]);
 }
 
 int
@@ -160,9 +170,9 @@ _ejs_property_iterator_free (EJSPropertyIterator *iterator)
 void
 _ejs_init_object (EJSObject *obj, EJSValue *proto)
 {
-  obj->tag = EJSValueTagObject;
+  EJSVAL_SET_TAG(obj, EJSValueTagObject);
   obj->proto = proto;
-  obj->map = _ejs_propertymap_new (40);
+  obj->map = _ejs_propertymap_new (5);
   obj->ops = &_ejs_object_specops;
 }
 
@@ -192,7 +202,15 @@ _ejs_object_new (EJSValue *proto)
 
 EJSObject* _ejs_object_alloc_instance()
 {
-  return (EJSObject*)calloc(1, sizeof (EJSValue));
+  EJSObject* rv = _ejs_gc_new(EJSObject);
+  EJSVAL_SET_TAG(rv, EJSValueTagObject);
+  return rv;
+}
+
+void _ejs_object_finalize(EJSObject *obj)
+{
+  _ejs_propertymap_free (obj->map);
+  obj->ops = NULL;
 }
 
 #define offsetof(t,f) (int)(long)(&((t*)NULL)->f)
@@ -201,10 +219,10 @@ EJSValue*
 _ejs_string_new_utf8 (const char* str)
 {
   int str_len = strlen(str);
-  int value_size = sizeof(EJSPrimString) + str_len; /* no +1 here since PrimString already includes 1 byte */
+  size_t value_size = sizeof(EJSPrimString) + str_len; /* no +1 here since PrimString already includes 1 byte */
 
-  EJSPrimString* rv = (EJSPrimString*)calloc(1, value_size);
-  rv->tag = EJSValueTagString;
+  EJSPrimString* rv = (EJSPrimString*)_ejs_gc_alloc(value_size);
+  EJSVAL_SET_TAG(rv, EJSValueTagString);
   rv->len = str_len;
   strcpy (EJSVAL_TO_STRING(rv), str);
   return (EJSValue*)rv;
@@ -213,10 +231,10 @@ _ejs_string_new_utf8 (const char* str)
 EJSValue*
 _ejs_string_new_utf8_len (const char* str, int len)
 {
-  int value_size = sizeof(EJSPrimString) + len + 1; /* +1 here for the \0 byte */
+  size_t value_size = sizeof(EJSPrimString) + len + 1; /* +1 here for the \0 byte */
 
-  EJSPrimString* rv = (EJSPrimString*)calloc(1, value_size);
-  rv->tag = EJSValueTagString;
+  EJSPrimString* rv = (EJSPrimString*)_ejs_gc_alloc(value_size);
+  EJSVAL_SET_TAG(rv, EJSValueTagString);
   rv->len = len;
   strncpy (EJSVAL_TO_STRING(rv), str, len);
   return (EJSValue*)rv;
@@ -225,8 +243,8 @@ _ejs_string_new_utf8_len (const char* str, int len)
 EJSValue*
 _ejs_number_new (double value)
 {
-  EJSPrimNumber* rv = (EJSPrimNumber*)calloc(1, sizeof (EJSPrimNumber));
-  rv->tag = EJSValueTagNumber;
+  EJSPrimNumber* rv = _ejs_gc_new (EJSPrimNumber);
+  EJSVAL_SET_TAG(rv, EJSValueTagNumber);
   rv->data = value;
   return (EJSValue*)rv;
 }
@@ -234,8 +252,8 @@ _ejs_number_new (double value)
 EJSValue*
 _ejs_boolean_new_internal (EJSBool value)
 {
-  EJSPrimBool* rv = (EJSPrimBool*)calloc(1, sizeof (EJSPrimBool));
-  rv->tag = EJSValueTagBoolean;
+  EJSPrimBool* rv = _ejs_gc_new (EJSPrimBool);
+  EJSVAL_SET_TAG(rv, EJSValueTagBoolean);
   rv->data = value;
   return (EJSValue*)rv;
 }
@@ -249,8 +267,8 @@ _ejs_boolean_new (EJSBool value)
 EJSValue*
 _ejs_undefined_new ()
 {
-  EJSValueTag* rv = (EJSValueTag*)malloc(sizeof (EJSValueTag));
-  *rv = EJSValueTagUndefined;
+  GCObjectHeader* rv = _ejs_gc_new(GCObjectHeader);
+  EJSVAL_SET_TAG(rv, EJSValueTagUndefined);
   return (EJSValue*)rv;
 }
 
@@ -322,7 +340,7 @@ _ejs_object_getprop (EJSValue* obj, EJSValue* key)
     obj = ToObject(obj);
   }
 
-  return obj->o.ops->get (obj, key);
+  return OP(obj,get)(obj, key, FALSE);
 }
 
 EJSValue*
@@ -346,11 +364,14 @@ _ejs_object_setprop_utf8 (EJSValue* val, const char *key, EJSValue* value)
 }
 
 EJSValue*
-_ejs_object_getprop_utf8 (EJSValue* val, const char *key)
+_ejs_object_getprop_utf8 (EJSValue* obj, const char *key)
 {
-  // bleah, for now create an EJSValue for the key, until we get some smarts in specops::get and friends
-  EJSValue *value_key = _ejs_string_new_utf8(key);
-  return _ejs_object_getprop (val, value_key);
+  if (!obj || EJSVAL_IS_UNDEFINED(obj)) {
+    printf ("throw TypeError, key is %s\n", key);
+    NOT_IMPLEMENTED();
+  }
+
+  return OP(obj,get)(obj, (void*)key, TRUE);
 }
 
 void
@@ -360,22 +381,16 @@ _ejs_dump_value (EJSValue* val)
     printf ("undefined\n");
   }
   else if (EJSVAL_IS_NUMBER(val)) {
-    printf (EJS_NUMBER_FORMAT "\n", EJSVAL_TO_NUMBER(val));
+    printf ("number: " EJS_NUMBER_FORMAT "\n", EJSVAL_TO_NUMBER(val));
   }
   else if (EJSVAL_IS_BOOLEAN(val)) {
-    printf ("%s\n", EJSVAL_TO_BOOLEAN(val) ? "true" : "false");
+    printf ("boolean: %s\n", EJSVAL_TO_BOOLEAN(val) ? "true" : "false");
   }
   else if (EJSVAL_IS_STRING(val)) {
-    printf ("'%s'\n", EJSVAL_TO_STRING(val));
-  }
-  else if (EJSVAL_IS_ARRAY(val)) {
-    printf ("<array>\n");
+    printf ("string: '%s'\n", EJSVAL_TO_STRING(val));
   }
   else if (EJSVAL_IS_OBJECT(val)) {
-    printf ("<object>\n");
-  }
-  else if (EJSVAL_IS_FUNCTION(val)) {
-    printf ("<closure>\n");
+    printf ("<object %s>\n", CLASSNAME(val));
   }
 }
 
@@ -504,7 +519,7 @@ _ejs_Object_prototype_toString (EJSValue* env, EJSValue* _this, int argc, EJSVal
 {
   char buf[1024];
   EJSValue* thisObj = ToObject(_this);
-  snprintf (buf, sizeof(buf), "[object %s]", thisObj->o.ops->class_name);
+  snprintf (buf, sizeof(buf), "[object %s]", CLASSNAME(thisObj));
   return _ejs_string_new_utf8 (buf);
 }
 
@@ -603,36 +618,40 @@ _ejs_object_init (EJSValue *global)
 #undef OBJ_METHOD
 
   _ejs_object_setprop_utf8 (global, "Object", _ejs_Object);
+  _ejs_gc_add_named_root (_ejs_Object_proto);
 }
 
 
 
 
 static EJSValue*
-_ejs_object_specop_get (EJSValue* obj_, EJSValue* propertyName)
+_ejs_object_specop_get (EJSValue* obj_, void* propertyName, EJSBool isCStr)
 {
   EJSObject* obj = &obj_->o;
 
-  propertyName = ToString(propertyName);
+  char *pname;
+  if (isCStr)
+    pname = (char*)propertyName;
+  else {
+    propertyName = ToString(propertyName);
+    pname = EJSVAL_TO_STRING(propertyName);
+  }
 
-  int prop_index = _ejs_propertymap_lookup (obj->map, EJSVAL_TO_STRING(propertyName), FALSE);
+  int prop_index = _ejs_propertymap_lookup (obj->map, pname, FALSE);
 
   if (prop_index == -1) {
-    if (EJSVAL_IS_STRING(propertyName) && !strcmp("prototype", EJSVAL_TO_STRING(propertyName)))
+    if (!strcmp("prototype", pname));
       return obj->proto;
 
-#if DEBUG_PROPERTIES
-    EJSValue *toStr = ToString(propertyName);
-#endif
     if (obj->proto) {
 #if DEBUG_PROPERTIES
-      printf ("walking up prototype chain for property %s\n", EJSVAL_TO_STRING(toStr));
+      printf ("walking up prototype chain for property %s\n", pname);
 #endif
-      return _ejs_object_getprop (obj->proto, propertyName);
+      return OP(obj->proto,get) (obj->proto, propertyName, isCStr);
     }
     else {
 #if DEBUG_PROPERTIES
-      printf ("failed to find property %s, returning undefined\n", EJSVAL_TO_STRING(toStr));
+      printf ("failed to find property %s, returning undefined\n", pname);
 #endif
       return _ejs_undefined;
     }

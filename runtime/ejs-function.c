@@ -6,7 +6,7 @@
 #include "ejs-object.h"
 #include "ejs-function.h"
 
-static EJSValue* _ejs_function_specop_get (EJSValue* obj, EJSValue* propertyName);
+static EJSValue* _ejs_function_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr);
 static EJSValue* _ejs_function_specop_get_own_property (EJSValue* obj, EJSValue* propertyName);
 static EJSValue* _ejs_function_specop_get_property (EJSValue* obj, EJSValue* propertyName);
 static void      _ejs_function_specop_put (EJSValue *obj, EJSValue* propertyName, EJSValue* val, EJSBool flag);
@@ -47,7 +47,7 @@ static void indent(char ch)
 EJSValue*
 _ejs_function_new (EJSClosureEnv* env, EJSValue *name, EJSClosureFunc func)
 {
-  EJSFunction *rv = (EJSFunction*)calloc (1, sizeof(EJSFunction));
+  EJSFunction *rv = _ejs_gc_new(EJSFunction);
 
   _ejs_init_object ((EJSObject*)rv, _ejs_function_get_prototype());
   rv->obj.ops = &_ejs_function_specops;
@@ -57,6 +57,12 @@ _ejs_function_new (EJSClosureEnv* env, EJSValue *name, EJSClosureFunc func)
   rv->env = env;
 
   return (EJSValue*)rv;
+}
+
+void
+_ejs_function_finalize (EJSFunction* fun)
+{
+  _ejs_object_finalize ((EJSObject*)fun);
 }
 
 EJSValue*
@@ -161,6 +167,7 @@ _ejs_function_init(EJSValue *global)
 #undef OBJ_METHOD
 
   _ejs_object_setprop_utf8 (global, "Function", _ejs_Function);
+  _ejs_gc_add_named_root (_ejs_Function_proto);
 }
 
 
@@ -386,9 +393,9 @@ _ejs_invoke_closure_10 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* 
 
 
 static EJSValue*
-_ejs_function_specop_get (EJSValue* obj, EJSValue* propertyName)
+_ejs_function_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr)
 {
-  return _ejs_object_specops.get (obj, propertyName);
+  return _ejs_object_specops.get (obj, propertyName, isCStr);
 }
 
 static EJSValue*

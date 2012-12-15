@@ -4,7 +4,7 @@
 #include "ejs-value.h"
 #include "ejs-number.h"
 
-static EJSValue* _ejs_number_specop_get (EJSValue* obj, EJSValue* propertyName);
+static EJSValue* _ejs_number_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr);
 static EJSValue* _ejs_number_specop_get_own_property (EJSValue* obj, EJSValue* propertyName);
 static EJSValue* _ejs_number_specop_get_property (EJSValue* obj, EJSValue* propertyName);
 static void      _ejs_number_specop_put (EJSValue *obj, EJSValue* propertyName, EJSValue* val, EJSBool flag);
@@ -31,7 +31,7 @@ EJSSpecOps _ejs_number_specops = {
 
 EJSObject* _ejs_number_alloc_instance()
 {
-  return (EJSObject*)calloc(1, sizeof (EJSNumber));
+  return (EJSObject*)_ejs_gc_new (EJSNumber);
 }
 
 EJSValue* _ejs_Number;
@@ -46,7 +46,7 @@ _ejs_Number_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
       num = ToDouble(args[0]);
     }
 
-    EJSNumber* rv = (EJSNumber*)calloc(1, sizeof(EJSNumber));
+    EJSNumber* rv = _ejs_gc_new (EJSNumber);
 
     _ejs_init_object ((EJSObject*)rv, _ejs_number_get_prototype());
 
@@ -97,13 +97,14 @@ _ejs_number_init(EJSValue *global)
   PROTO_METHOD(toString);
 
   _ejs_object_setprop_utf8 (global, "Number", _ejs_Number);
+  _ejs_gc_add_named_root (_ejs_Number_proto);
 }
 
 
 static EJSValue*
-_ejs_number_specop_get (EJSValue* obj, EJSValue* propertyName)
+_ejs_number_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr)
 {
-  return _ejs_object_specops.get (obj, propertyName);
+  return _ejs_object_specops.get (obj, propertyName, isCStr);
 }
 
 static EJSValue*

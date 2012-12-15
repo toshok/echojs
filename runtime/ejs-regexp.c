@@ -3,7 +3,7 @@
 #include "ejs-value.h"
 #include "ejs-regexp.h"
 
-static EJSValue* _ejs_regexp_specop_get (EJSValue* obj, EJSValue* propertyName);
+static EJSValue* _ejs_regexp_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr);
 static EJSValue* _ejs_regexp_specop_get_own_property (EJSValue* obj, EJSValue* propertyName);
 static EJSValue* _ejs_regexp_specop_get_property (EJSValue* obj, EJSValue* propertyName);
 static void      _ejs_regexp_specop_put (EJSValue *obj, EJSValue* propertyName, EJSValue* val, EJSBool flag);
@@ -30,16 +30,16 @@ EJSSpecOps _ejs_regexp_specops = {
 
 EJSObject* _ejs_regexp_alloc_instance()
 {
-  return (EJSObject*)calloc(1, sizeof (EJSRegexp));
+  return (EJSObject*)_ejs_gc_new(EJSRegexp);
 }
 
 EJSValue*
 _ejs_regexp_new_utf8 (const char* str)
 {
   int str_len = strlen(str);
-  int value_size = sizeof (EJSRegexp) + str_len;
+  size_t value_size = sizeof (EJSRegexp) + str_len;
 
-  EJSRegexp* rv = (EJSRegexp*)calloc(1, value_size);
+  EJSRegexp* rv = (EJSRegexp*)_ejs_gc_alloc (value_size);
 
   _ejs_init_object ((EJSObject*)rv, _ejs_regexp_get_prototype());
   ((EJSObject*)rv)->ops = &_ejs_regexp_specops;
@@ -108,13 +108,14 @@ _ejs_regexp_init(EJSValue *global)
 #undef PROTO_METHOD
 
   _ejs_object_setprop_utf8 (global, "RegExp", _ejs_Regexp);
+  _ejs_gc_add_named_root (_ejs_Regexp_proto);
 }
 
 
 static EJSValue*
-_ejs_regexp_specop_get (EJSValue* obj, EJSValue* propertyName)
+_ejs_regexp_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr)
 {
-  return _ejs_object_specops.get (obj, propertyName);
+  return _ejs_object_specops.get (obj, propertyName, isCStr);
 }
 
 static EJSValue*

@@ -21,7 +21,7 @@ EJSValue* NumberToString(double d)
 // temporary strings for non-PrimString objects only to throw them away after concatenation?
 EJSValue* ToString(EJSValue *exp)
 {
-  switch (exp->tag) {
+  switch (EJSVAL_TAG(exp)) {
   case EJSValueTagBoolean:
     return _ejs_string_new_utf8 (EJSVAL_TO_BOOLEAN(exp) ? "true" : "false");
   case EJSValueTagNumber: {
@@ -46,7 +46,7 @@ EJSValue* ToString(EJSValue *exp)
 
 double ToDouble(EJSValue *exp)
 {
-  switch (exp->tag) {
+  switch (EJSVAL_TAG(exp)) {
   case EJSValueTagBoolean:
     return EJSVAL_TO_BOOLEAN(exp) ? 1 : 0;
   case EJSValueTagNumber:
@@ -69,7 +69,7 @@ int ToInteger(EJSValue *exp)
 
 EJSValue* ToObject(EJSValue *exp)
 {
-  switch (exp->tag) {
+  switch (EJSVAL_TAG(exp)) {
   case EJSValueTagBoolean:
     NOT_IMPLEMENTED();
   case EJSValueTagNumber: {
@@ -96,7 +96,7 @@ EJSValue* ToBoolean(EJSValue *exp)
   if (exp == NULL)
     return _ejs_false;
 
-  switch (exp->tag) {
+  switch (EJSVAL_TAG(exp)) {
   case EJSValueTagBoolean:
     return exp;
   case EJSValueTagNumber:
@@ -145,7 +145,7 @@ _ejs_op_typeof (EJSValue* exp)
     rv = "object";
   }
   else 
-    switch (exp->tag) {
+    switch (EJSVAL_TAG(exp)) {
     case EJSValueTagBoolean:   rv = "boolean"; break;
     case EJSValueTagNumber:    rv = "number"; break;
     case EJSValueTagString:    rv = "string"; break;
