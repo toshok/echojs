@@ -55,6 +55,9 @@ llen(GCObjectPtr l)
 int
 lindex(GCObjectPtr l, GCObjectPtr el)
 {
+  if (l == NULL)
+    return -1;
+
   if (el == NULL)
     return -1;
 
@@ -249,8 +252,8 @@ points_to_heap_object(GCObjectPtr ptr)
   return lindex (heap, ptr) >= 0;
 }
 
-void
-_ejs_gc_collect()
+static void
+_ejs_gc_collect_internal(EJSBool shutting_down)
 {
   jmp_buf jmpbuf;
   setjmp (jmpbuf);
@@ -263,56 +266,63 @@ _ejs_gc_collect()
   int white_objs = 0;
   int total_objs = 0;
 
-  // mark from our roots
-  for (RootSetEntry *entry = root_set; entry; entry = entry->next) {
-    num_roots++;
-    set_black (*entry->root);
-    if (EJSVAL_IS_OBJECT(*entry->root)) {
-      _scan_from_ejsobject(*entry->root);
+  if (!shutting_down) {
+    // mark from our roots
+    for (RootSetEntry *entry = root_set; entry; entry = entry->next) {
+      if (*entry->root == NULL) continue;
+
+      num_roots++;
+      set_black (*entry->root);
+      if (EJSVAL_IS_OBJECT(*entry->root)) {
+	_scan_from_ejsobject(*entry->root);
+      }
     }
   }
 
   //printf ("stack: top %p, bottom %p\n", &stack_top, stack_bottom);
 
-  // XXX mark conservatively from thread stacks, pinning objects that are referenced in this pass
+  if (!shutting_down) {
+#define USE_CHARP 0
+    // XXX mark conservatively from thread stacks, pinning objects that are referenced in this pass
 #if USE_CHARP
-  char *gcptr;
-  for (gcptr = (char*)&stack_top; gcptr < (char*)stack_bottom; gcptr ++)
+    char *gcptr;
+    for (gcptr = (char*)&stack_top; gcptr < (char*)stack_bottom; gcptr ++)
 #else
-  GCObjectPtr *gcptr;
-  for (gcptr = &stack_top; gcptr < stack_bottom; gcptr ++)
+    GCObjectPtr *gcptr;
+    for (gcptr = &stack_top; gcptr < stack_bottom; gcptr ++)
 #endif
     {
-    GCObjectPtr candidate = *(GCObjectPtr*)gcptr;
-    if (points_to_heap_object(candidate)) {
-      //printf ("Found conservative reference to %p on stack\n", candidate);
-      if (is_white(candidate)) {
-	from_heap_to_worklist (candidate);
+      GCObjectPtr candidate = *(GCObjectPtr*)gcptr;
+      if (points_to_heap_object(candidate)) {
+        //printf ("Found conservative reference to %p on stack\n", candidate);
+        if (is_white(candidate)) {
+	  from_heap_to_worklist (candidate);
+        }
       }
     }
-  }
 
-  // XXX mark conservatively from registers
-  GCObjectPtr *register_gcptrs = (GCObjectPtr*)jmpbuf;
+    // XXX mark conservatively from registers
+    GCObjectPtr *register_gcptrs = (GCObjectPtr*)jmpbuf;
 
-  for (int i = 0; i < 16/* x86-64 specific*/; i ++) {
-    GCObjectPtr candidate = (GCObjectPtr)register_gcptrs[i];
-    if (points_to_heap_object (candidate)) {
-      //printf ("Found conservative reference to %p in registers\n", candidate);
-      from_heap_to_worklist (candidate);
+    for (int i = 0; i < 16/* x86-64 specific*/; i ++) {
+      GCObjectPtr candidate = (GCObjectPtr)register_gcptrs[i];
+      if (points_to_heap_object (candidate)) {
+        //printf ("Found conservative reference to %p in registers\n", candidate);
+        from_heap_to_worklist (candidate);
+      }
     }
-  }
 
-  GCObjectPtr p;
-  while ((p = work_list)) {
-    _scan_from_ejsobject(p);
-    from_worklist_to_heap(p);
+    GCObjectPtr p;
+    while ((p = work_list)) {
+      _scan_from_ejsobject(p);
+      from_worklist_to_heap(p);
+    }
   }
 
   total_objs = num_roots;
 
   // sweep the entire heap, freeing white nodes
-  p = heap;
+  GCObjectPtr p = heap;
   while (p) {
     GCObjectPtr next = p->next_link;
     total_objs++;
@@ -336,7 +346,7 @@ _ejs_gc_collect()
 	break;
       }
       default:
-	 // XXX this should use _ejs_value_finalize()
+	// XXX this should use _ejs_value_finalize()
 	break;
       }
       free(p);
@@ -347,41 +357,56 @@ _ejs_gc_collect()
   unsigned int tmp = black_mask;
   black_mask = white_mask;
   white_mask = tmp;
-#if false
-  printf ("_ejs_gc_collect stats:\n");
+
+  printf ("_ejs_gc_collect %sstats:\n", shutting_down ? "shutdown " : "");
   printf ("   num_roots: %d\n", num_roots);
   printf ("   total objects: %d\n", total_objs);
   printf ("   garbage objects: %d\n", white_objs);
-#endif
 
-  // sanity check, verify the heap is entirely white
-  p = heap;
-  while (p) {
-    if (!is_white(p)) {
-      printf ("sanity check failed.  non-white object in heap after polarity reversal.\n");
-      printf ("it is %s\n", is_gray(p) ? "gray" : "black");
+  if (shutting_down) {
+    // sanity check, make sure the heap is empty
+    if (heap) {
+      printf ("heap is not empty after shutdown\n");
       abort();
     }
-    p = p->next_link;
-  }  
+  }
+  else {
+    // sanity check, verify the heap is entirely white
+    p = heap;
+    while (p) {
+      if (!is_white(p)) {
+	printf ("sanity check failed.  non-white object in heap after polarity reversal.\n");
+	printf ("it is %s\n", is_gray(p) ? "gray" : "black");
+	abort();
+      }
+      p = p->next_link;
+    }
+  }
+
+  if (shutting_down) {
+    // null out/free from our roots
+    RootSetEntry *entry = root_set;
+    while (entry) {
+      RootSetEntry *next = entry->next;
+      *entry->root = NULL;
+      if (entry->name) free(entry->name);
+      free(entry);
+      entry = next;
+    }
+  }
+
+}
+
+void
+_ejs_gc_collect()
+{
+  _ejs_gc_collect_internal(FALSE);
 }
 
 void
 _ejs_gc_shutdown()
 {
-  // walk the entire heap freeing everything, and null out our root set
-  GCObjectPtr p = heap;
-  while (p) {
-    GCObjectPtr next = p->next_link;
-    free(p);
-    p = next;
-  }
-
-  for (RootSetEntry *entry = root_set; entry; entry = entry->next) {
-    *entry->root = NULL;
-    if (entry->name) free (entry->name);
-    free (entry);
-  }
+  _ejs_gc_collect_internal(TRUE);
 }
 
 int age = 0;
