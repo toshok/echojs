@@ -155,8 +155,10 @@ _ejs_function_init(EJSValue *global)
   // ECMA262 15.3.3.2
   _ejs_object_setprop_utf8 (_ejs_Function,       "length",     _ejs_number_new(1)); // FIXME:  { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }.
 
-#define OBJ_METHOD(x) _ejs_object_setprop_utf8 (_ejs_Function, #x, _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_Function_##x))
-#define PROTO_METHOD(x) _ejs_object_setprop_utf8 (_ejs_Function_proto, #x, _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_Function_prototype_##x))
+  EJSValue __attribute__((gcroot)) *tmpfunc;
+
+#define OBJ_METHOD(x) do { tmpfunc = _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_Function_##x); _ejs_object_setprop_utf8 (_ejs_Function, #x, tmpfunc); } while (0)
+#define PROTO_METHOD(x) do { tmpfunc = _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_Function_prototype_##x); _ejs_object_setprop_utf8 (_ejs_Function_proto, #x, tmpfunc); } while (0)
 
   PROTO_METHOD(toString);
   PROTO_METHOD(apply);

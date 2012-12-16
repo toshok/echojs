@@ -179,6 +179,10 @@ class LLVMIRVisitor extends NodeVisitor
                         invokeClosure: [null].concat (make_invoke_closure n for n in [0..10])
                         makeClosure: module.getOrInsertExternalFunction "_ejs_function_new", EjsValueType, [EjsClosureEnvType, EjsValueType, EjsClosureFuncType]
                 }
+
+                @llvm_intrinsics = {
+                        gcroot: module.getOrInsertIntrinsic "@llvm.gcroot"
+                }
                 
                 @ejs = {
                         personality:           module.getOrInsertExternalFunction "__ejs_personality_v0",           int32Type, [int32Type, int32Type, int64Type, int8PointerType, int8PointerType]
@@ -274,6 +278,10 @@ class LLVMIRVisitor extends NodeVisitor
                 saved_insert_point = irbuilder.getInsertBlock()
                 irbuilder.setInsertPointStartBB func.entry_bb
                 alloca = irbuilder.createAlloca type, name
+                if type is EjsValueType
+                        # EjsValues are rooted
+                        @createCall @llvm_intrinsics.gcroot, [(irbuilder.createPointerCast alloca, int8PointerType.pointerTo(), "rooted_alloca"), llvm.Constant.getNull int8PointerType], ""
+
                 irbuilder.setInsertPoint saved_insert_point
                 alloca
 
@@ -306,7 +314,9 @@ class LLVMIRVisitor extends NodeVisitor
         createPropertyStore: (obj,prop,rhs,computed) ->
                 if computed
                         # we store obj[prop], prop can be any value
-                        @createCall @ejs.object_setprop, [obj, (@visit prop), rhs], "propstore_computed"
+                        prop_alloca = @createAlloca @currentFunction, EjsValueType, "prop_alloca"
+                        irbuilder.createStore (@visit prop), prop_alloca
+                        @createCall @ejs.object_setprop, [obj, (irbuilder.createLoad prop_alloca, "%prop_alloca"), rhs], "propstore_computed"
                 else
                         # we store obj.prop, prop is an id
                         if prop.type is syntax.Identifier
@@ -654,7 +664,7 @@ class LLVMIRVisitor extends NodeVisitor
                         irbuilder.createBr @iifeStack[0].iife_dest_bb
                 else
                         rv = if n.argument? then (@visit n.argument) else @loadUndefinedEjsValue()
-
+                        
                         if @finallyStack.length > 0
                                 if not @returnValueAlloca?
                                         @returnValueAlloca = @createAlloca @currentFunction, EjsValueType, "returnValue"
@@ -662,7 +672,10 @@ class LLVMIRVisitor extends NodeVisitor
                                 irbuilder.createStore (llvm.Constant.getIntegerValue int32Type, ExitableScope.REASON_RETURN), @cleanup_alloca
                                 irbuilder.createBr @finallyStack[0]
                         else
-                                irbuilder.createRet rv
+                                return_alloca = @createAlloca @currentFunction, EjsValueType, "return_alloca"
+                                irbuilder.createStore rv, return_alloca
+                        
+                                irbuilder.createRet irbuilder.createLoad return_alloca, "return_load"
                                                 
 
         visitVariableDeclaration: (n) ->
@@ -722,7 +735,9 @@ class LLVMIRVisitor extends NodeVisitor
                                 result = @createPropertyStore @loadGlobal(), lhs, rhvalue, false
                         result
                 else if lhs.type is syntax.MemberExpression
-                        return @createPropertyStore (@visit lhs.object), lhs.property, rhvalue, lhs.computed
+                        object_alloca = @createAlloca @currentFunction, EjsValueType, "object_alloca"
+                        irbuilder.createStore (@visit lhs.object), object_alloca
+                        result = @createPropertyStore (irbuilder.createLoad object_alloca, "load_object"), lhs.property, rhvalue, lhs.computed
                 else
                         throw "unhandled lhs type #{lhs.type}"
 
@@ -901,8 +916,15 @@ class LLVMIRVisitor extends NodeVisitor
                 callee = @ejs[builtin]
                 if not callee
                         throw "Internal error: unhandled binary operator '#{n.operator}'"
+
+                left_visited = @createAlloca @currentFunction, EjsValueType, "binop_left"
+                irbuilder.createStore (@visit n.left), left_visited
+                
+                right_visited = @createAlloca @currentFunction, EjsValueType, "binop_right"
+                irbuilder.createStore (@visit n.right), right_visited
+                
                 # call the add method
-                return @createCall callee, [(@visit n.left), (@visit n.right)], "result_#{builtin}"
+                @createCall callee, [(irbuilder.createLoad left_visited, "binop_left_load"), (irbuilder.createLoad right_visited, "binop_right_load")], "result_#{builtin}"
 
         visitLogicalExpression: (n) ->
                 debug.log "operator = '#{n.operator}'"
@@ -1278,6 +1300,9 @@ class AddFunctionsVisitor extends NodeVisitor
 
                 # the LLVMIR func we allocate takes the proper EJSValue** parameter in the 4th spot instead of all the parameters
                 n.ir_func = takes_builtins @module.getOrInsertFunction n.ir_name, EjsValueType, (param.llvm_type for param in BUILTIN_PARAMS).concat [EjsValueType.pointerTo()]
+
+                # enable shadow stack map for gc roots
+                n.ir_func.setGC "shadow-stack"
                 
                 ir_args = n.ir_func.args
                 (ir_args[i].setName n.params[i].name) for i in [0...BUILTIN_PARAMS.length]

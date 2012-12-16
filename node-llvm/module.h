@@ -19,6 +19,7 @@ namespace jsllvm {
     virtual ~Module();
 
     static v8::Handle<v8::Value> New(const v8::Arguments& args);
+    static v8::Handle<v8::Value> GetOrInsertIntrinsic (const v8::Arguments& args);
     static v8::Handle<v8::Value> GetOrInsertFunction (const v8::Arguments& args);
     static v8::Handle<v8::Value> GetOrInsertGlobal (const v8::Arguments& args);
     static v8::Handle<v8::Value> GetOrInsertExternalFunction (const v8::Arguments& args);

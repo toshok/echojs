@@ -249,6 +249,56 @@ points_to_heap_object(GCObjectPtr ptr)
   return lindex (heap, ptr) >= 0;
 }
 
+/// @brief The map for a single function's stack frame.  One of these is
+///        compiled as constant data into the executable for each function.
+///
+/// Storage of metadata values is elided if the %metadata parameter to
+/// @llvm.gcroot is null.
+struct FrameMap {
+  int32_t NumRoots;    //< Number of roots in stack frame.
+  int32_t NumMeta;     //< Number of metadata entries.  May be < NumRoots.
+  const void *Meta[0]; //< Metadata for each root.
+};
+
+/// @brief A link in the dynamic shadow stack.  One of these is embedded in
+///        the stack frame of each function on the call stack.
+struct StackEntry {
+  struct StackEntry *Next;    //< Link to next stack entry (the caller's).
+  const struct FrameMap *Map; //< Pointer to constant FrameMap.
+  void *Roots[0];      //< Stack roots (in-place array).
+};
+
+/// @brief The head of the singly-linked list of StackEntries.  Functions push
+///        and pop onto this in their prologue and epilogue.
+///
+/// Since there is only a global list, this technique is not threadsafe.
+struct StackEntry *llvm_gc_root_chain;
+
+/// @brief Calls Visitor(root, meta) for each GC root on the stack.
+///        root and meta are exactly the values passed to
+///        @llvm.gcroot.
+///
+/// Visitor could be a function to recursively mark live objects.  Or itp
+/// might copy them to another heap or generation.
+///
+/// @param Visitor A function to invoke for every GC root on the stack.
+void visitLLVMGCRoots()
+{
+  for (struct StackEntry *R = llvm_gc_root_chain; R; R = R->Next) {
+    unsigned i = 0;
+
+    // For roots [NumMeta, NumRoots), the metadata pointer is null.
+    for (unsigned e = R->Map->NumRoots; i != e; ++i) {
+      GCObjectPtr candidate = (GCObjectPtr)R->Roots[i];
+      if (candidate == NULL) continue;
+      if (is_white (candidate)) {
+	printf ("Found reference to %p on stack\n", candidate);
+	from_heap_to_worklist (candidate);
+      }
+    }
+  }
+}
+
 void
 _ejs_gc_collect()
 {
@@ -266,42 +316,17 @@ _ejs_gc_collect()
   // mark from our roots
   for (RootSetEntry *entry = root_set; entry; entry = entry->next) {
     num_roots++;
-    set_black (*entry->root);
-    if (EJSVAL_IS_OBJECT(*entry->root)) {
-      _scan_from_ejsobject(*entry->root);
+    if (*entry->root) {
+      set_black (*entry->root);
+      if (EJSVAL_IS_OBJECT(*entry->root)) {
+	_scan_from_ejsobject(*entry->root);
+      }
     }
   }
 
   //printf ("stack: top %p, bottom %p\n", &stack_top, stack_bottom);
 
-  // XXX mark conservatively from thread stacks, pinning objects that are referenced in this pass
-#if USE_CHARP
-  char *gcptr;
-  for (gcptr = (char*)&stack_top; gcptr < (char*)stack_bottom; gcptr ++)
-#else
-  GCObjectPtr *gcptr;
-  for (gcptr = &stack_top; gcptr < stack_bottom; gcptr ++)
-#endif
-    {
-    GCObjectPtr candidate = *(GCObjectPtr*)gcptr;
-    if (points_to_heap_object(candidate)) {
-      //printf ("Found conservative reference to %p on stack\n", candidate);
-      if (is_white(candidate)) {
-	from_heap_to_worklist (candidate);
-      }
-    }
-  }
-
-  // XXX mark conservatively from registers
-  GCObjectPtr *register_gcptrs = (GCObjectPtr*)jmpbuf;
-
-  for (int i = 0; i < 16/* x86-64 specific*/; i ++) {
-    GCObjectPtr candidate = (GCObjectPtr)register_gcptrs[i];
-    if (points_to_heap_object (candidate)) {
-      //printf ("Found conservative reference to %p in registers\n", candidate);
-      from_heap_to_worklist (candidate);
-    }
-  }
+  visitLLVMGCRoots();
 
   GCObjectPtr p;
   while ((p = work_list)) {
@@ -347,12 +372,10 @@ _ejs_gc_collect()
   unsigned int tmp = black_mask;
   black_mask = white_mask;
   white_mask = tmp;
-#if false
   printf ("_ejs_gc_collect stats:\n");
   printf ("   num_roots: %d\n", num_roots);
   printf ("   total objects: %d\n", total_objs);
   printf ("   garbage objects: %d\n", white_objs);
-#endif
 
   // sanity check, verify the heap is entirely white
   p = heap;
@@ -390,10 +413,10 @@ EJSBool _ejs_gc_started;
 GCObjectPtr
 _ejs_gc_alloc(size_t size)
 {
-  if (_ejs_gc_started && age++ == 2000) {
+  //if (_ejs_gc_started && age++ == 20) {
     _ejs_gc_collect();
     age = 0;
-  }
+  //}
   GCObjectPtr ptr = (GCObjectPtr)calloc (1, size);
   heap = attach (heap, ptr);
   return ptr;

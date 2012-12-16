@@ -23,6 +23,7 @@ main(int argc, char** argv)
 
   _ejs_invoke_closure_1 (_ejs_require, NULL, 1, entry_name);
 #if GC_ON_SHUTDOWN
+  _ejs_gc_collect();
   _ejs_gc_shutdown();
 #endif
   return 0;

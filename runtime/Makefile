@@ -26,6 +26,9 @@ CFLAGS=-I. -Wall -g -O0
 libecho.a: $(OBJECTS)
 	$(AR) cru $@ $(OBJECTS)
 
+CC=llvm-gcc
+
+
 $(OBJECTS): %.o: %.c
 	@mkdir -p .deps
 	@$(CC) -MM $(CFLAGS) $< > .deps/$@-deps
