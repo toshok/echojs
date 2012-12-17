@@ -6,6 +6,7 @@
 #include <setjmp.h>
 
 #include "ejs-gc.h"
+#include "ejs-require.h"
 #include "ejs-value.h"
 #include "ejs-string.h"
 
@@ -23,6 +24,10 @@ static int page_size;
 // #define MAP_FD -1
 // #endif
 
+extern EJSRequire _ejs_require_map[];
+
+StackEntry *llvm_gc_root_chain;
+
 static GCObjectPtr heap;
 static GCObjectPtr work_list;
 
@@ -35,39 +40,6 @@ typedef struct _RootSetEntry {
 RootSetEntry *root_set;
 
 /* a stupid simple gc for ejs */
-
-static GCObjectPtr *stack_bottom;
-
-void
-_ejs_gc_set_stack_bottom (GCObjectPtr* bottom)
-{
-  stack_bottom = bottom;
-}
-
-int
-llen(GCObjectPtr l)
-{
-  if (l == NULL)
-    return 0;
-  return 1 + llen(l->next_link);
-}
-
-int
-lindex(GCObjectPtr l, GCObjectPtr el)
-{
-  if (el == NULL)
-    return -1;
-
-  int n = 0;
-  do {
-    if (l == el)
-      return n;
-    l = l->next_link;
-    n++;
-  } while (l);
-
-  return -1;
-}
 
 static void*
 alloc_page()
@@ -237,43 +209,6 @@ _scan_from_ejsobject(GCObjectPtr obj)
   }
 }
 
-static EJSBool
-points_to_heap_object(GCObjectPtr ptr)
-{
-  if (ptr == NULL)
-    return FALSE;
-
-  if ((unsigned int)ptr & 0x7)
-    return FALSE;
-
-  return lindex (heap, ptr) >= 0;
-}
-
-/// @brief The map for a single function's stack frame.  One of these is
-///        compiled as constant data into the executable for each function.
-///
-/// Storage of metadata values is elided if the %metadata parameter to
-/// @llvm.gcroot is null.
-struct FrameMap {
-  int32_t NumRoots;    //< Number of roots in stack frame.
-  int32_t NumMeta;     //< Number of metadata entries.  May be < NumRoots.
-  const void *Meta[0]; //< Metadata for each root.
-};
-
-/// @brief A link in the dynamic shadow stack.  One of these is embedded in
-///        the stack frame of each function on the call stack.
-struct StackEntry {
-  struct StackEntry *Next;    //< Link to next stack entry (the caller's).
-  const struct FrameMap *Map; //< Pointer to constant FrameMap.
-  void *Roots[0];      //< Stack roots (in-place array).
-};
-
-/// @brief The head of the singly-linked list of StackEntries.  Functions push
-///        and pop onto this in their prologue and epilogue.
-///
-/// Since there is only a global list, this technique is not threadsafe.
-struct StackEntry *llvm_gc_root_chain;
-
 /// @brief Calls Visitor(root, meta) for each GC root on the stack.
 ///        root and meta are exactly the values passed to
 ///        @llvm.gcroot.
@@ -284,7 +219,7 @@ struct StackEntry *llvm_gc_root_chain;
 /// @param Visitor A function to invoke for every GC root on the stack.
 void visitLLVMGCRoots()
 {
-  for (struct StackEntry *R = llvm_gc_root_chain; R; R = R->Next) {
+  for (StackEntry *R = llvm_gc_root_chain; R; R = R->Next) {
     unsigned i = 0;
 
     // For roots [NumMeta, NumRoots), the metadata pointer is null.
@@ -292,52 +227,49 @@ void visitLLVMGCRoots()
       GCObjectPtr candidate = (GCObjectPtr)R->Roots[i];
       if (candidate == NULL) continue;
       if (is_white (candidate)) {
+#if spew
 	printf ("Found reference to %p on stack\n", candidate);
+#endif
 	from_heap_to_worklist (candidate);
       }
     }
   }
 }
 
-void
-_ejs_gc_collect()
+static void
+_ejs_gc_collect_inner(EJSBool shutting_down)
 {
-  jmp_buf jmpbuf;
-  setjmp (jmpbuf);
-
-  GCObjectPtr stack_top = NULL;
-
   // very simple stop the world collector
 
   int num_roots = 0;
   int white_objs = 0;
   int total_objs = 0;
 
-  // mark from our roots
-  for (RootSetEntry *entry = root_set; entry; entry = entry->next) {
-    num_roots++;
-    if (*entry->root) {
-      set_black (*entry->root);
-      if (EJSVAL_IS_OBJECT(*entry->root)) {
-	_scan_from_ejsobject(*entry->root);
+  if (!shutting_down) {
+    // mark from our roots
+    for (RootSetEntry *entry = root_set; entry; entry = entry->next) {
+      num_roots++;
+      if (*entry->root) {
+	set_black (*entry->root);
+	if (EJSVAL_IS_OBJECT(*entry->root)) {
+	  _scan_from_ejsobject(*entry->root);
+	}
       }
     }
+
+    visitLLVMGCRoots();
+
+    GCObjectPtr p;
+    while ((p = work_list)) {
+      _scan_from_ejsobject(p);
+      from_worklist_to_heap(p);
+    }
+
+    total_objs = num_roots;
   }
-
-  //printf ("stack: top %p, bottom %p\n", &stack_top, stack_bottom);
-
-  visitLLVMGCRoots();
-
-  GCObjectPtr p;
-  while ((p = work_list)) {
-    _scan_from_ejsobject(p);
-    from_worklist_to_heap(p);
-  }
-
-  total_objs = num_roots;
 
   // sweep the entire heap, freeing white nodes
-  p = heap;
+  GCObjectPtr p = heap;
   while (p) {
     GCObjectPtr next = p->next_link;
     total_objs++;
@@ -372,39 +304,51 @@ _ejs_gc_collect()
   unsigned int tmp = black_mask;
   black_mask = white_mask;
   white_mask = tmp;
+#if spew
   printf ("_ejs_gc_collect stats:\n");
   printf ("   num_roots: %d\n", num_roots);
   printf ("   total objects: %d\n", total_objs);
   printf ("   garbage objects: %d\n", white_objs);
+#endif
 
-  // sanity check, verify the heap is entirely white
-  p = heap;
-  while (p) {
-    if (!is_white(p)) {
-      printf ("sanity check failed.  non-white object in heap after polarity reversal.\n");
-      printf ("it is %s\n", is_gray(p) ? "gray" : "black");
-      abort();
+  if (shutting_down) {
+    // NULL out all of our roots
+
+    RootSetEntry *entry = root_set;
+    while (entry) {
+      RootSetEntry *next = entry->next;
+      *entry->root = NULL;
+      if (entry->name) free (entry->name);
+      free (entry);
+      entry = next;
     }
-    p = p->next_link;
-  }  
+
+    root_set = NULL;
+  }
+  else {
+    // sanity check, verify the heap is entirely white
+    p = heap;
+    while (p) {
+      if (!is_white(p)) {
+	printf ("sanity check failed.  non-white object in heap after polarity reversal.\n");
+	printf ("it is %s\n", is_gray(p) ? "gray" : "black");
+	abort();
+      }
+      p = p->next_link;
+    }  
+  }
+}
+
+void
+_ejs_gc_collect()
+{
+  _ejs_gc_collect_inner(FALSE);
 }
 
 void
 _ejs_gc_shutdown()
 {
-  // walk the entire heap freeing everything, and null out our root set
-  GCObjectPtr p = heap;
-  while (p) {
-    GCObjectPtr next = p->next_link;
-    free(p);
-    p = next;
-  }
-
-  for (RootSetEntry *entry = root_set; entry; entry = entry->next) {
-    *entry->root = NULL;
-    if (entry->name) free (entry->name);
-    free (entry);
-  }
+  _ejs_gc_collect_inner(TRUE);
 }
 
 int age = 0;
@@ -413,11 +357,12 @@ EJSBool _ejs_gc_started;
 GCObjectPtr
 _ejs_gc_alloc(size_t size)
 {
-  //if (_ejs_gc_started && age++ == 20) {
+  if (_ejs_gc_started && age++ == 500) {
     _ejs_gc_collect();
     age = 0;
-  //}
+  }
   GCObjectPtr ptr = (GCObjectPtr)calloc (1, size);
+  ptr->tag = white_mask;
   heap = attach (heap, ptr);
   return ptr;
 }

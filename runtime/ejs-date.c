@@ -99,16 +99,25 @@ _ejs_Date_prototype_getTimezoneOffset (EJSValue* env, EJSValue* _this, int argc,
 void
 _ejs_date_init(EJSValue *global)
 {
-  _ejs_Date = _ejs_function_new_utf8 (NULL, "Date", (EJSClosureFunc)_ejs_Date_impl);
+  START_SHADOW_STACK_FRAME;
+
+  _ejs_gc_add_named_root (_ejs_Date_proto);
+
+  ADD_STACK_ROOT(EJSValue*, _ejs_Date, _ejs_function_new_utf8 (NULL, "Date", (EJSClosureFunc)_ejs_Date_impl));
   _ejs_Date_proto = _ejs_object_new(NULL);
 
   _ejs_object_setprop_utf8 (_ejs_Date,       "prototype",  _ejs_Date_proto);
 
-#define PROTO_METHOD(x) _ejs_object_setprop_utf8 (_ejs_Date_proto, #x, _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_Date_prototype_##x))
+#define OBJ_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_Date_##x)); _ejs_object_setprop (_ejs_Date, funcname, tmpfunc); } while (0)
+#define PROTO_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_Date_prototype_##x)); _ejs_object_setprop (_ejs_Date_proto, funcname, tmpfunc); } while (0)
 
   PROTO_METHOD(toString);
   PROTO_METHOD(getTimezoneOffset);
 
+#undef OBJ_METHOD
+#undef PROTO_METHOD
+
   _ejs_object_setprop_utf8 (global, "Date", _ejs_Date);
-  _ejs_gc_add_named_root (_ejs_Date_proto);
+
+  END_SHADOW_STACK_FRAME;
 }

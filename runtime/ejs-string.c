@@ -324,12 +324,17 @@ _ejs_String_prototype_slice (EJSValue* env, EJSValue* _this, int argc, EJSValue 
 void
 _ejs_string_init(EJSValue *global)
 {
-  _ejs_String = _ejs_function_new_utf8 (NULL, "String", (EJSClosureFunc)_ejs_String_impl);
+  START_SHADOW_STACK_FRAME;
+
+  _ejs_gc_add_named_root (_ejs_String_proto);
+
+  ADD_STACK_ROOT(EJSValue*, _ejs_String, _ejs_function_new_utf8 (NULL, "String", (EJSClosureFunc)_ejs_String_impl));
   _ejs_String_proto = _ejs_object_new(NULL);
 
   _ejs_object_setprop_utf8 (_ejs_String,       "prototype",  _ejs_String_proto);
 
-#define PROTO_METHOD(x) _ejs_object_setprop_utf8 (_ejs_String_proto, #x, _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_String_prototype_##x))
+#define OBJ_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_String_##x)); _ejs_object_setprop (_ejs_String, funcname, tmpfunc); } while (0)
+#define PROTO_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_String_prototype_##x)); _ejs_object_setprop (_ejs_String_proto, funcname, tmpfunc); } while (0)
 
   PROTO_METHOD(charAt);
   PROTO_METHOD(charCodeAt);
@@ -351,8 +356,12 @@ _ejs_string_init(EJSValue *global)
   PROTO_METHOD(trim);
   PROTO_METHOD(valueOf);
 
+#undef OBJ_METHOD
+#undef PROTO_METHOD
+
   _ejs_object_setprop_utf8 (global, "String", _ejs_String);
-  _ejs_gc_add_named_root (_ejs_String_proto);
+
+  END_SHADOW_STACK_FRAME;
 }
 
 static EJSValue*

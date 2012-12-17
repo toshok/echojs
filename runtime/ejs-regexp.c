@@ -94,21 +94,28 @@ _ejs_Regexp_prototype_test (EJSValue* env, EJSValue* _this, int argc, EJSValue *
 void
 _ejs_regexp_init(EJSValue *global)
 {
-  _ejs_Regexp = _ejs_function_new_utf8 (NULL, "RegExp", (EJSClosureFunc)_ejs_Regexp_impl);
+  START_SHADOW_STACK_FRAME;
+
+  _ejs_gc_add_named_root (_ejs_Regexp_proto);
+
+  ADD_STACK_ROOT(EJSValue*, _ejs_Regexp, _ejs_function_new_utf8 (NULL, "RegExp", (EJSClosureFunc)_ejs_Regexp_impl));
   _ejs_Regexp_proto = _ejs_object_new(NULL);
 
   _ejs_object_setprop_utf8 (_ejs_Regexp,       "prototype",  _ejs_Regexp_proto);
 
-#define PROTO_METHOD(x) _ejs_object_setprop_utf8 (_ejs_Regexp_proto, #x, _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_Regexp_prototype_##x))
+#define OBJ_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_Regexp_##x)); _ejs_object_setprop (_ejs_Regexp, funcname, tmpfunc); } while (0)
+#define PROTO_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_Regexp_prototype_##x)); _ejs_object_setprop (_ejs_Regexp_proto, funcname, tmpfunc); } while (0)
 
   PROTO_METHOD(exec);
   PROTO_METHOD(match);
   PROTO_METHOD(test);
 
+#undef OBJ_METHOD
 #undef PROTO_METHOD
 
   _ejs_object_setprop_utf8 (global, "RegExp", _ejs_Regexp);
-  _ejs_gc_add_named_root (_ejs_Regexp_proto);
+
+  END_SHADOW_STACK_FRAME;
 }
 
 

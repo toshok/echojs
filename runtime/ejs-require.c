@@ -33,6 +33,7 @@ _ejs_require_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
     if (!strcmp (builtin_module_map[i].name, EJSVAL_TO_STRING(arg))) {
       if (!builtin_module_map[i].cached_exports) {
 	//	printf ("require'ing %s.\n", EJSVAL_TO_STRING(arg));
+	__ejs_gc_add_named_root (&builtin_module_map[i].cached_exports, "builtin-module-export");
 	builtin_module_map[i].cached_exports = _ejs_object_new(NULL);
 	builtin_module_map[i].func(NULL, _ejs_undefined, 1, &builtin_module_map[i].cached_exports);
       }
@@ -48,6 +49,7 @@ _ejs_require_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 
     if (!strcmp (_ejs_external_module_require_map[i].name, EJSVAL_TO_STRING(arg))) {
       if (!_ejs_external_module_require_map[i].cached_exports) {
+	__ejs_gc_add_named_root (&_ejs_external_module_require_map[i].cached_exports, "external-module-exports");
 	_ejs_external_module_require_map[i].cached_exports = _ejs_object_new(NULL);
 	_ejs_external_module_require_map[i].func(_ejs_external_module_require_map[i].cached_exports);
       }
@@ -64,13 +66,17 @@ _ejs_require_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
     }
     if (!strcmp (_ejs_require_map[i].name, EJSVAL_TO_STRING(arg))) {
       if (!_ejs_require_map[i].cached_exports) {
+	START_SHADOW_STACK_FRAME;
 	//	printf ("require'ing %s.\n", EJSVAL_TO_STRING(arg));
+	__ejs_gc_add_named_root (&_ejs_require_map[i].cached_exports, "require-module-exports");
 	_ejs_require_map[i].cached_exports = _ejs_object_new(NULL);
-	EJSValue* prev_exports = _ejs_object_getprop_utf8 (_ejs_global, "exports");
-	_ejs_object_setprop_utf8(_ejs_global, "exports", _ejs_require_map[i].cached_exports);
+	ADD_STACK_ROOT(EJSValue*, exports_name, _ejs_string_new_utf8("exports"));
+	ADD_STACK_ROOT(EJSValue*, prev_exports, _ejs_object_getprop_utf8 (_ejs_global, "exports"));
+	_ejs_object_setprop(_ejs_global, exports_name, _ejs_require_map[i].cached_exports);
 	_ejs_require_map[i].func (NULL, _ejs_undefined, 1, &_ejs_require_map[i].cached_exports);
-	_ejs_object_setprop_utf8(_ejs_global, "exports", prev_exports);
+	_ejs_object_setprop(_ejs_global, exports_name, prev_exports);
 	//	printf ("done require'ing %s.\n", EJSVAL_TO_STRING(arg));
+	END_SHADOW_STACK_FRAME;
       }
       return _ejs_require_map[i].cached_exports;
     }
@@ -83,6 +89,9 @@ _ejs_require_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 void
 _ejs_require_init(EJSValue* global)
 {
-  _ejs_require = _ejs_function_new_utf8 (NULL, "require", _ejs_require_impl);
+  START_SHADOW_STACK_FRAME;
+  ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new_utf8 (NULL, "require", _ejs_require_impl));
+  _ejs_require = tmpfunc;
   _ejs_object_setprop_utf8 (global, "require", _ejs_require);
+  END_SHADOW_STACK_FRAME;
 }

@@ -68,7 +68,14 @@ _ejs_function_finalize (EJSFunction* fun)
 EJSValue*
 _ejs_function_new_utf8 (EJSClosureEnv* env, const char *name, EJSClosureFunc func)
 {
-  return _ejs_function_new (env, _ejs_string_new_utf8 (name), func);
+  START_SHADOW_STACK_FRAME;
+
+  ADD_STACK_ROOT(EJSValue*, function_name, _ejs_string_new_utf8 (name));
+
+  ADD_STACK_ROOT(EJSValue*, rv, _ejs_function_new (env, function_name, func));
+
+  END_SHADOW_STACK_FRAME;
+  return rv;
 }
 
 
@@ -126,7 +133,10 @@ static EJSValue*
 _ejs_Function_prototype_call (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
   assert (EJSVAL_IS_FUNCTION(_this));
-  EJSValue* thisArg = _ejs_undefined;
+
+  START_SHADOW_STACK_FRAME;
+
+  ADD_STACK_ROOT(EJSValue*, thisArg, _ejs_undefined);
   
   if (argc > 0) {
     thisArg = args[0];
@@ -134,7 +144,10 @@ _ejs_Function_prototype_call (EJSValue* env, EJSValue* _this, int argc, EJSValue
     argc --;
   }
 
-  return EJSVAL_TO_FUNC(_this) (EJSVAL_TO_ENV(_this), thisArg, argc, argc == 0 ? NULL : args);
+  ADD_STACK_ROOT(EJSValue*, rv, EJSVAL_TO_FUNC(_this) (EJSVAL_TO_ENV(_this), thisArg, argc, argc == 0 ? NULL : args));
+
+  END_SHADOW_STACK_FRAME;
+  return rv;
 }
 
 // ECMA262 15.3.4.5
@@ -147,7 +160,11 @@ _ejs_Function_prototype_bind (EJSValue* env, EJSValue* _this, int argc, EJSValue
 void
 _ejs_function_init(EJSValue *global)
 {
-  _ejs_Function = _ejs_function_new_utf8 (NULL, "Function", (EJSClosureFunc)_ejs_Function_impl);
+  START_SHADOW_STACK_FRAME;
+
+  _ejs_gc_add_named_root (_ejs_Function_proto);
+
+  ADD_STACK_ROOT(EJSValue*, _ejs_Function, _ejs_function_new_utf8 (NULL, "Function", (EJSClosureFunc)_ejs_Function_impl));
   _ejs_Function_proto = _ejs_object_new(_ejs_object_get_prototype());
 
   // ECMA262 15.3.3.1
@@ -155,10 +172,8 @@ _ejs_function_init(EJSValue *global)
   // ECMA262 15.3.3.2
   _ejs_object_setprop_utf8 (_ejs_Function,       "length",     _ejs_number_new(1)); // FIXME:  { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }.
 
-  EJSValue __attribute__((gcroot)) *tmpfunc;
-
-#define OBJ_METHOD(x) do { tmpfunc = _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_Function_##x); _ejs_object_setprop_utf8 (_ejs_Function, #x, tmpfunc); } while (0)
-#define PROTO_METHOD(x) do { tmpfunc = _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_Function_prototype_##x); _ejs_object_setprop_utf8 (_ejs_Function_proto, #x, tmpfunc); } while (0)
+#define OBJ_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_Function_##x)); _ejs_object_setprop (_ejs_Function, funcname, tmpfunc); } while (0)
+#define PROTO_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_Function_prototype_##x)); _ejs_object_setprop (_ejs_Function_proto, funcname, tmpfunc); } while (0)
 
   PROTO_METHOD(toString);
   PROTO_METHOD(apply);
@@ -169,7 +184,8 @@ _ejs_function_init(EJSValue *global)
 #undef OBJ_METHOD
 
   _ejs_object_setprop_utf8 (global, "Function", _ejs_Function);
-  _ejs_gc_add_named_root (_ejs_Function_proto);
+
+  END_SHADOW_STACK_FRAME;
 }
 
 

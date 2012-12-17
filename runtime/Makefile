@@ -26,7 +26,7 @@ CFLAGS=-I. -Wall -g -O0
 libecho.a: $(OBJECTS)
 	$(AR) cru $@ $(OBJECTS)
 
-CC=llvm-gcc
+CC=clang
 
 
 $(OBJECTS): %.o: %.c

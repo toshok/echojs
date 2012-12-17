@@ -260,25 +260,30 @@ _ejs_op_ursh (EJSValue* lhs, EJSValue* rhs)
 EJSValue*
 _ejs_op_add (EJSValue* lhs, EJSValue* rhs)
 {
+  START_SHADOW_STACK_FRAME;
+
+  EJSValue* rv = NULL;
+
   if (EJSVAL_IS_NUMBER(lhs)) {
-    return _ejs_number_new (EJSVAL_TO_NUMBER(lhs) + ToDouble (rhs));
+    rv = _ejs_number_new (EJSVAL_TO_NUMBER(lhs) + ToDouble (rhs));
   }
   else if (EJSVAL_IS_STRING(lhs)) {
-    EJSValue *rhstring = ToString(rhs);
+    ADD_STACK_ROOT(EJSValue*, rhstring, ToString(rhs));
 
     char *combined = malloc (EJSVAL_TO_STRLEN(lhs) + EJSVAL_TO_STRLEN(rhstring) + 1);
     strcpy (combined, EJSVAL_TO_STRING(lhs));
     strcpy (combined + EJSVAL_TO_STRLEN(lhs), EJSVAL_TO_STRING(rhstring));
     EJSValue* result = _ejs_string_new_utf8(combined);
     free(combined);
-    return result;
+    rv = result;
   }
   else {
     // object+... how does js implement this anyway?
     NOT_IMPLEMENTED();
   }
 
-  return NULL;
+  END_SHADOW_STACK_FRAME;
+  return rv;
 }
 
 EJSValue*
