@@ -15,8 +15,6 @@ static EJSBool   _ejs_arguments_specop_delete (EJSValue *obj, EJSValue* property
 static EJSValue* _ejs_arguments_specop_default_value (EJSValue *obj, const char *hint);
 static void      _ejs_arguments_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag);
 
-extern EJSSpecOps _ejs_object_specops;
-
 EJSSpecOps _ejs_arguments_specops = {
   "Arguments",
   _ejs_arguments_specop_get,
@@ -43,8 +41,7 @@ _ejs_arguments_new (int numElements, EJSValue** args)
 {
   EJSArguments* rv = _ejs_gc_new (EJSArguments);
 
-  _ejs_init_object ((EJSObject*)rv, _ejs_arguments_get_prototype());
-  rv->obj.ops = &_ejs_arguments_specops;
+  _ejs_init_object ((EJSObject*)rv, _ejs_arguments_get_prototype(), &_ejs_arguments_specops);
 
   rv->argc = numElements;
   rv->args = (EJSValue**)calloc(numElements, sizeof (EJSValue*));

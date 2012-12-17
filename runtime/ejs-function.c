@@ -16,8 +16,6 @@ static EJSBool   _ejs_function_specop_delete (EJSValue *obj, EJSValue* propertyN
 static EJSValue* _ejs_function_specop_default_value (EJSValue *obj, const char *hint);
 static void      _ejs_function_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag);
 
-extern EJSSpecOps _ejs_object_specops;
-
 EJSSpecOps _ejs_function_specops = {
   "Function",
   _ejs_function_specop_get,
@@ -49,8 +47,7 @@ _ejs_function_new (EJSClosureEnv* env, EJSValue *name, EJSClosureFunc func)
 {
   EJSFunction *rv = _ejs_gc_new(EJSFunction);
 
-  _ejs_init_object ((EJSObject*)rv, _ejs_function_get_prototype());
-  rv->obj.ops = &_ejs_function_specops;
+  _ejs_init_object ((EJSObject*)rv, _ejs_function_get_prototype(), &_ejs_function_specops);
 
   rv->name = name;
   rv->func = func;

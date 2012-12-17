@@ -16,8 +16,6 @@ static EJSBool   _ejs_array_specop_delete (EJSValue *obj, EJSValue* propertyName
 static EJSValue* _ejs_array_specop_default_value (EJSValue *obj, const char *hint);
 static void      _ejs_array_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag);
 
-extern EJSSpecOps _ejs_object_specops;
-
 EJSSpecOps _ejs_array_specops = {
   "Array",
   _ejs_array_specop_get,
@@ -44,8 +42,7 @@ _ejs_array_new (int numElements)
 {
   EJSArray* rv = _ejs_gc_new (EJSArray);
 
-  _ejs_init_object ((EJSObject*)rv, _ejs_array_get_prototype());
-  rv->obj.ops = &_ejs_array_specops;
+  _ejs_init_object ((EJSObject*)rv, _ejs_array_get_prototype(), &_ejs_array_specops);
 
   rv->array_length = 0;
   rv->array_alloc = numElements + 40;
@@ -386,9 +383,10 @@ _ejs_array_init(EJSValue *global)
   START_SHADOW_STACK_FRAME;
 
   _ejs_gc_add_named_root (_ejs_Array_proto);
-
-  ADD_STACK_ROOT(EJSValue*, _ejs_Array, _ejs_function_new_utf8 (NULL, "Array", (EJSClosureFunc)_ejs_Array_impl));
   _ejs_Array_proto = _ejs_object_new(NULL);
+
+  ADD_STACK_ROOT(EJSValue*, tmpobj, _ejs_function_new_utf8 (NULL, "Array", (EJSClosureFunc)_ejs_Array_impl));
+  _ejs_Array = tmpobj;
 
   _ejs_object_setprop_utf8 (_ejs_Array,       "prototype",  _ejs_Array_proto);
 

@@ -15,6 +15,7 @@ typedef struct {
 EJS_BEGIN_DECLS
 
 extern EJSValue* _ejs_Regexp;
+extern EJSSpecOps _ejs_regexp_specops;
 
 EJSValue* _ejs_regexp_get_prototype();
 

@@ -16,8 +16,6 @@ static EJSBool   _ejs_string_specop_delete (EJSValue *obj, EJSValue* propertyNam
 static EJSValue* _ejs_string_specop_default_value (EJSValue *obj, const char *hint);
 static void      _ejs_string_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag);
 
-extern EJSSpecOps _ejs_object_specops;
-
 EJSSpecOps _ejs_string_specops = {
   "String",
   _ejs_string_specop_get,
@@ -46,7 +44,7 @@ EJSValue* _ejs_String;
 static EJSValue*
 _ejs_String_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  if (EJSVAL_IS_UNDEFINED(_this)) {
+  if (!_this || EJSVAL_IS_UNDEFINED(_this)) {
     if (argc > 0)
       return ToString(args[0]);
     else
@@ -327,9 +325,10 @@ _ejs_string_init(EJSValue *global)
   START_SHADOW_STACK_FRAME;
 
   _ejs_gc_add_named_root (_ejs_String_proto);
-
-  ADD_STACK_ROOT(EJSValue*, _ejs_String, _ejs_function_new_utf8 (NULL, "String", (EJSClosureFunc)_ejs_String_impl));
   _ejs_String_proto = _ejs_object_new(NULL);
+  
+  ADD_STACK_ROOT(EJSValue*, tmpobj, _ejs_function_new_utf8 (NULL, "String", (EJSClosureFunc)_ejs_String_impl));
+  _ejs_String = tmpobj;
 
   _ejs_object_setprop_utf8 (_ejs_String,       "prototype",  _ejs_String_proto);
 

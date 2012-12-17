@@ -168,12 +168,12 @@ _ejs_property_iterator_free (EJSPropertyIterator *iterator)
 ///
 
 void
-_ejs_init_object (EJSObject *obj, EJSValue *proto)
+_ejs_init_object (EJSObject *obj, EJSValue *proto, EJSSpecOps *ops)
 {
   EJSVAL_SET_TAG(obj, EJSValueTagObject);
   obj->proto = proto;
   obj->map = _ejs_propertymap_new (5);
-  obj->ops = &_ejs_object_specops;
+  obj->ops = ops;
 }
 
 EJSValue*
@@ -182,21 +182,34 @@ _ejs_object_new (EJSValue *proto)
   if (proto == NULL) proto = _ejs_object_get_prototype();
 
   EJSObject *obj;
+  EJSSpecOps *ops;
 
-  if (proto == _ejs_array_get_prototype())
+  if (proto == _ejs_array_get_prototype()) {
     obj = _ejs_array_alloc_instance();
-  else if (proto == _ejs_string_get_prototype())
+    ops = &_ejs_array_specops;
+  }
+  else if (proto == _ejs_string_get_prototype()) {
     obj = _ejs_string_alloc_instance();
-  else if (proto == _ejs_number_get_prototype())
+    ops = &_ejs_string_specops;
+  }
+  else if (proto == _ejs_number_get_prototype()) {
     obj = _ejs_number_alloc_instance();
-  else if (proto == _ejs_regexp_get_prototype())
+    ops = &_ejs_number_specops;
+  }
+  else if (proto == _ejs_regexp_get_prototype()) {
     obj = _ejs_regexp_alloc_instance();
-  else if (proto == _ejs_date_get_prototype())
+    ops = &_ejs_regexp_specops;
+  }
+  else if (proto == _ejs_date_get_prototype()) {
     obj = _ejs_date_alloc_instance();
-  else
+    ops = &_ejs_date_specops;
+  }
+  else {
     obj = _ejs_object_alloc_instance();
+    ops = &_ejs_object_specops;
+  }
 
-  _ejs_init_object (obj, proto);
+  _ejs_init_object (obj, proto, ops);
   return (EJSValue*)obj;
 }
 
@@ -369,6 +382,10 @@ _ejs_object_getprop_utf8 (EJSValue* obj, const char *key)
   if (!obj || EJSVAL_IS_UNDEFINED(obj)) {
     printf ("throw TypeError, key is %s\n", key);
     NOT_IMPLEMENTED();
+  }
+
+  if (EJSVAL_IS_PRIMITIVE(obj)) {
+    obj = ToObject(obj);
   }
 
   return OP(obj,get)(obj, (void*)key, TRUE);
@@ -585,9 +602,10 @@ _ejs_object_init (EJSValue *global)
 
   // FIXME ECMA262 15.2.4
   _ejs_gc_add_named_root (_ejs_Object_proto);
-
-  ADD_STACK_ROOT(EJSValue*, _ejs_Object, _ejs_function_new_utf8 (NULL, "Object", (EJSClosureFunc)_ejs_Object_impl));
   _ejs_Object_proto = _ejs_object_new(NULL);
+
+  ADD_STACK_ROOT(EJSValue*, tmpobj, _ejs_function_new_utf8 (NULL, "Object", (EJSClosureFunc)_ejs_Object_impl));
+  _ejs_Object = tmpobj;
 
   // ECMA262 15.2.3.1
   _ejs_object_setprop_utf8 (_ejs_Object,       "prototype",    _ejs_Object_proto); // FIXME: {[[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }

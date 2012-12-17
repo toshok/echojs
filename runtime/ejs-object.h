@@ -77,10 +77,11 @@ void _ejs_property_iterator_next (EJSPropertyIterator* iterator);
 void _ejs_property_iterator_free (EJSPropertyIterator *iterator);
 
 extern EJSValue* _ejs_Object;
+extern EJSSpecOps _ejs_object_specops;
 
 EJSValue* _ejs_object_new (EJSValue *proto);
 EJSObject* _ejs_object_alloc_instance();
-void      _ejs_init_object (EJSObject *obj, EJSValue *proto);
+void      _ejs_init_object (EJSObject *obj, EJSValue *proto, EJSSpecOps *ops);
 
 void _ejs_object_finalize(EJSObject *obj);
 

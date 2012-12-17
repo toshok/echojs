@@ -14,8 +14,6 @@ static EJSBool   _ejs_number_specop_delete (EJSValue *obj, EJSValue* propertyNam
 static EJSValue* _ejs_number_specop_default_value (EJSValue *obj, const char *hint);
 static void      _ejs_number_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag);
 
-extern EJSSpecOps _ejs_object_specops;
-
 EJSSpecOps _ejs_number_specops = {
   "Number",
   _ejs_number_specop_get,
@@ -48,7 +46,7 @@ _ejs_Number_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 
     EJSNumber* rv = _ejs_gc_new (EJSNumber);
 
-    _ejs_init_object ((EJSObject*)rv, _ejs_number_get_prototype());
+    _ejs_init_object ((EJSObject*)rv, _ejs_number_get_prototype(), &_ejs_number_specops);
 
     rv->number = num;
 
@@ -90,9 +88,10 @@ _ejs_number_init(EJSValue *global)
   START_SHADOW_STACK_FRAME;
 
   _ejs_gc_add_named_root (_ejs_Number_proto);
-
-  ADD_STACK_ROOT(EJSValue*, _ejs_Number, _ejs_function_new_utf8 (NULL, "Number", (EJSClosureFunc)_ejs_Number_impl));
   _ejs_Number_proto = _ejs_object_new(NULL);
+
+  ADD_STACK_ROOT(EJSValue*, tmpobj, _ejs_function_new_utf8 (NULL, "Number", (EJSClosureFunc)_ejs_Number_impl));
+  _ejs_Number = tmpobj;
 
   _ejs_object_setprop_utf8 (_ejs_Number,       "prototype",  _ejs_Number_proto);
 
