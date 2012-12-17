@@ -640,7 +640,7 @@ _ejs_object_specop_get (EJSValue* obj_, void* propertyName, EJSBool isCStr)
   int prop_index = _ejs_propertymap_lookup (obj->map, pname, FALSE);
 
   if (prop_index == -1) {
-    if (!strcmp("prototype", pname));
+    if (!strcmp("prototype", pname))
       return obj->proto;
 
     if (obj->proto) {
