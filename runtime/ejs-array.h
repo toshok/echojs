@@ -26,8 +26,6 @@ EJSObject* _ejs_array_alloc_instance();
 EJSValue* _ejs_array_new (int numElements);
 EJSValue* _ejs_array_get_prototype();
 
-void _ejs_array_finalize(EJSArray *obj);
-
 void _ejs_array_foreach_element (EJSArray* arr, EJSValueFunc foreach_func);
 
 void _ejs_array_init(EJSValue *global);

@@ -23,6 +23,8 @@ static EJSBool   _ejs_object_specop_has_property (EJSValue* obj, EJSValue* prope
 static EJSBool   _ejs_object_specop_delete (EJSValue* obj, EJSValue* propertyName, EJSBool flag);
 static EJSValue* _ejs_object_specop_default_value (EJSValue* obj, const char *hint);
 static void      _ejs_object_specop_define_own_property (EJSValue* obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag);
+static void      _ejs_object_specop_finalize (EJSValue* obj);
+static void      _ejs_object_specop_scan (EJSValue* obj, EJSValueFunc scan_func);
 
 EJSSpecOps _ejs_object_specops = {
   "Object",
@@ -34,7 +36,9 @@ EJSSpecOps _ejs_object_specops = {
   _ejs_object_specop_has_property,
   _ejs_object_specop_delete,
   _ejs_object_specop_default_value,
-  _ejs_object_specop_define_own_property
+  _ejs_object_specop_define_own_property,
+  _ejs_object_specop_finalize,
+  _ejs_object_specop_scan
 };
 
 
@@ -218,12 +222,6 @@ EJSObject* _ejs_object_alloc_instance()
   EJSObject* rv = _ejs_gc_new(EJSObject);
   EJSVAL_SET_TAG(rv, EJSValueTagObject);
   return rv;
-}
-
-void _ejs_object_finalize(EJSObject *obj)
-{
-  _ejs_propertymap_free (obj->map);
-  obj->ops = NULL;
 }
 
 #define offsetof(t,f) (int)(long)(&((t*)NULL)->f)
@@ -730,4 +728,20 @@ static void
 _ejs_object_specop_define_own_property (EJSValue* obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag)
 {
   NOT_IMPLEMENTED();
+}
+
+void 
+_ejs_object_specop_finalize(EJSValue *obj)
+{
+  EJSObject *o = (EJSObject*)obj;
+  _ejs_propertymap_free (o->map);
+  o->ops = NULL;
+}
+
+static void
+_ejs_object_specop_scan (EJSValue* obj, EJSValueFunc scan_func)
+{
+  EJSObject *ejsobj = (EJSObject*)obj;
+  _ejs_propertymap_foreach_value (ejsobj->map, scan_func);
+  scan_func (ejsobj->proto);
 }

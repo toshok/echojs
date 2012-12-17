@@ -15,6 +15,8 @@ static EJSBool   _ejs_string_specop_has_property (EJSValue *obj, EJSValue* prope
 static EJSBool   _ejs_string_specop_delete (EJSValue *obj, EJSValue* propertyName, EJSBool flag);
 static EJSValue* _ejs_string_specop_default_value (EJSValue *obj, const char *hint);
 static void      _ejs_string_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag);
+static void      _ejs_string_specop_finalize (EJSValue *obj);
+static void      _ejs_string_specop_scan (EJSValue* obj, EJSValueFunc scan_func);
 
 EJSSpecOps _ejs_string_specops = {
   "String",
@@ -26,18 +28,14 @@ EJSSpecOps _ejs_string_specops = {
   _ejs_string_specop_has_property,
   _ejs_string_specop_delete,
   _ejs_string_specop_default_value,
-  _ejs_string_specop_define_own_property
+  _ejs_string_specop_define_own_property,
+  _ejs_string_specop_finalize,
+  _ejs_string_specop_scan
 };
 
 EJSObject* _ejs_string_alloc_instance()
 {
   return (EJSObject*)_ejs_gc_new (EJSString);
-}
-
-void
-_ejs_string_finalize (EJSString* str)
-{
-  _ejs_object_finalize ((EJSObject*)str);
 }
 
 EJSValue* _ejs_String;
@@ -444,4 +442,18 @@ static void
 _ejs_string_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag)
 {
   _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
+}
+
+static void
+_ejs_string_specop_finalize (EJSValue *obj)
+{
+  _ejs_object_specops.finalize (obj);
+}
+
+static void
+_ejs_string_specop_scan (EJSValue* obj, EJSValueFunc scan_func)
+{
+  EJSString* ejss = (EJSString*)obj;
+  scan_func (ejss->primStr);
+  _ejs_object_specops.scan (obj, scan_func);
 }

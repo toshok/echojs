@@ -6,7 +6,6 @@
 #include <setjmp.h>
 
 #include "ejs-gc.h"
-#include "ejs-require.h"
 #include "ejs-value.h"
 #include "ejs-string.h"
 
@@ -23,8 +22,6 @@ static int page_size;
 // #else
 // #define MAP_FD -1
 // #endif
-
-extern EJSRequire _ejs_require_map[];
 
 StackEntry *llvm_gc_root_chain;
 
@@ -183,29 +180,9 @@ _scan_ejsvalue (EJSValue *obj)
 static void
 _scan_from_ejsobject(GCObjectPtr obj)
 {
-  switch (EJSVAL_TAG(obj)) {
-  case EJSValueTagObject: {
-    EJSObject *ejsobj = (EJSObject*)obj;
-    _ejs_propertymap_foreach_value (ejsobj->map, _scan_ejsvalue);
-    _scan_ejsvalue (ejsobj->proto);
-
-    if (!strcmp (CLASSNAME(ejsobj), "Array")) {
-      EJSArray* ejsa = (EJSArray*)ejsobj;
-      _ejs_array_foreach_element (ejsa, _scan_ejsvalue);
-    }
-    else if (!strcmp (CLASSNAME(ejsobj), "String")) {
-      EJSString* ejss = (EJSString*)ejsobj;
-      _scan_ejsvalue (ejss->primStr);
-    }
-    else if (!strcmp (CLASSNAME(ejsobj), "Function")) {
-      EJSFunction *ejsf = (EJSFunction*)ejsobj;
-      _scan_ejsvalue (ejsf->name);
-      _scan_ejsvalue (ejsf->env);
-      if (ejsf->bound_this)
-	_scan_ejsvalue (ejsf->_this);
-    }
-    break;
-  }
+  if (EJSVAL_IS_OBJECT(obj)) {
+    EJSValue* val = (EJSValue*)obj;
+    OP(val,scan)(obj, _scan_ejsvalue);
   }
 }
 
@@ -277,25 +254,11 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
       white_objs++;
       heap = detach (heap, p);
 
-      EJSObject *ejsobj = (EJSObject*)p;
+      if (EJSVAL_TAG(p) == EJSValueTagObject) {
+	EJSValue *ejsval = (EJSValue*)p;
+	OP(ejsval,finalize)(ejsval);
+      }
 
-      switch (EJSVAL_TAG(p)) {
-      case EJSValueTagObject: {
-	if (!strcmp (CLASSNAME(ejsobj), "Array")) {
-	  _ejs_array_finalize ((EJSArray*)ejsobj);
-	}
-	else if (!strcmp (CLASSNAME(ejsobj), "String")) {
-	  _ejs_string_finalize ((EJSString*)ejsobj);
-	}
-	else if (!strcmp (CLASSNAME(ejsobj), "Function")) {
-	  _ejs_function_finalize ((EJSFunction*)ejsobj);
-	}
-	break;
-      }
-      default:
-	 // XXX this should use _ejs_value_finalize()
-	break;
-      }
       free(p);
     }
     p = next;
@@ -304,14 +267,15 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
   unsigned int tmp = black_mask;
   black_mask = white_mask;
   white_mask = tmp;
-#if spew
-  printf ("_ejs_gc_collect stats:\n");
-  printf ("   num_roots: %d\n", num_roots);
-  printf ("   total objects: %d\n", total_objs);
-  printf ("   garbage objects: %d\n", white_objs);
-#endif
 
   if (shutting_down) {
+#if spew
+    printf ("_ejs_gc_collect stats:\n");
+    printf ("   num_roots: %d\n", num_roots);
+    printf ("   total objects: %d\n", total_objs);
+    printf ("   garbage objects: %d\n", white_objs);
+#endif
+
     // NULL out all of our roots
 
     RootSetEntry *entry = root_set;
@@ -351,15 +315,15 @@ _ejs_gc_shutdown()
   _ejs_gc_collect_inner(TRUE);
 }
 
-int age = 0;
-EJSBool _ejs_gc_started;
+size_t alloced_size;
 
 GCObjectPtr
 _ejs_gc_alloc(size_t size)
 {
-  if (_ejs_gc_started && age++ == 500) {
+  alloced_size += size;
+  if (alloced_size > 1024 * 1024) {
     _ejs_gc_collect();
-    age = 0;
+    alloced_size = 0;
   }
   GCObjectPtr ptr = (GCObjectPtr)calloc (1, size);
   ptr->tag = white_mask;
