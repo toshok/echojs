@@ -463,26 +463,22 @@ class LLVMIRVisitor extends NodeVisitor
                 @visit n.body
 
         visitBreak: (n) ->
-                console.log "0"
-                # unlabeled breaks just exit our enclosing exitable scope
-                ExitableScope.scopeStack.exitAft true if not n.label
-                console.log "1"
+                # unlabeled breaks just exit our enclosing exitable scope.  breaks are valid in
+                # switch statements, though, so we can't just use LoopExitableScope.findFirst()
+                return TryExitableScope.findFirstNonTry().exitAft true if not n.label
                 # for the labeled case, we search up the stack for the right scope and exitAft that one
-                scope = LoopExitableScope.findLabeled n.label
-                console.log "2"
+                scope = LoopExitableScope.findLabeled n.label.name
                 # XXX check if scope is null, throw if so
-                console.log "3"
                 scope.exitAft true
-                console.log "4"
 
         visitContinue: (n) ->
                 # unlabeled continue just exit our enclosing exitable scope
-                ExitableScope.scopeStack.exitFore if not n.label
+                return LoopExitableScope.findFirst().exitFore() if not n.label
 
                 # for the labeled case, we search up the stack for the right scope and exitFore that one
-                scope = LoopExitableScope.findLabeled n.label
+                scope = LoopExitableScope.findLabeled n.label.name
                 # XXX check if scope is null, throw if so
-                scope.exitFore true
+                scope.exitFore()
                 
         visitFor: (n) ->
                 insertBlock = irbuilder.getInsertBlock()
