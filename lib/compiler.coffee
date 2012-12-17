@@ -670,7 +670,7 @@ class LLVMIRVisitor extends NodeVisitor
                                 if not @returnValueAlloca?
                                         @returnValueAlloca = @createAlloca @currentFunction, EjsValueType, "returnValue"
                                 irbuilder.createStore rv, @returnValueAlloca
-                                irbuilder.createStore (llvm.Constant.getIntegerValue int32Type, ExitableScope.REASON_RETURN), @cleanup_alloca
+                                irbuilder.createStore (llvm.Constant.getIntegerValue int32Type, ExitableScope.REASON_RETURN), @currentFunction.cleanup_alloca
                                 irbuilder.createBr @finallyStack[0]
                         else
                                 return_alloca = @createAlloca @currentFunction, EjsValueType, "return_alloca"
