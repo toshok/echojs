@@ -282,7 +282,7 @@ _ejs_gc_collect_internal(EJSBool shutting_down)
   //printf ("stack: top %p, bottom %p\n", &stack_top, stack_bottom);
 
   if (!shutting_down) {
-#define USE_CHARP 0
+#define USE_CHARP 1
     // XXX mark conservatively from thread stacks, pinning objects that are referenced in this pass
 #if USE_CHARP
     char *gcptr;
@@ -358,10 +358,12 @@ _ejs_gc_collect_internal(EJSBool shutting_down)
   black_mask = white_mask;
   white_mask = tmp;
 
+#if spew
   printf ("_ejs_gc_collect %sstats:\n", shutting_down ? "shutdown " : "");
   printf ("   num_roots: %d\n", num_roots);
   printf ("   total objects: %d\n", total_objs);
   printf ("   garbage objects: %d\n", white_objs);
+#endif
 
   if (shutting_down) {
     // sanity check, make sure the heap is empty
