@@ -27,7 +27,8 @@ EJSSpecOps _ejs_number_specops = {
   _ejs_number_specop_delete,
   _ejs_number_specop_default_value,
   _ejs_number_specop_define_own_property,
-  _ejs_number_specop_finalize
+  _ejs_number_specop_finalize,
+  _ejs_number_specop_scan
 };
 
 EJSObject* _ejs_number_alloc_instance()
@@ -170,4 +171,10 @@ static void
 _ejs_number_specop_finalize (EJSValue *obj)
 {
   _ejs_object_specops.finalize (obj);
+}
+
+static void
+_ejs_number_specop_scan (EJSValue* obj, EJSValueFunc scan_func)
+{
+  _ejs_object_specops.scan (obj, scan_func);
 }

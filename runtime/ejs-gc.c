@@ -182,7 +182,7 @@ _scan_from_ejsobject(GCObjectPtr obj)
 {
   if (EJSVAL_IS_OBJECT(obj)) {
     EJSValue* val = (EJSValue*)obj;
-    OP(val,scan)(obj, _scan_ejsvalue);
+    OP(val,scan)(val, _scan_ejsvalue);
   }
 }
 
