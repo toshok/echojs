@@ -145,7 +145,6 @@ class SwitchExitableScope extends ExitableScope
                 super()
 
         exitAft: (fromBreak, label = null) ->
-                console.log "SwitchExitableScope.exitAft"
                 irbuilder.createBr @merge_bb
 
 class LoopExitableScope extends ExitableScope
@@ -157,7 +156,6 @@ class LoopExitableScope extends ExitableScope
                 irbuilder.createBr @fore_bb
                 
         exitAft: (fromBreak, label = null) ->
-                console.log "LoopExitableScope.exitAft"
                 irbuilder.createBr @aft_bb
 
         @findLabeled: (l, stack = ExitableScope.scopeStack) ->
@@ -1179,7 +1177,6 @@ class LLVMIRVisitor extends NodeVisitor
                 @createCall @ejs.throw, [arg], "", true
 
         visitTry: (n) ->
-                console.log "visitTry"
                 insertBlock = irbuilder.getInsertBlock()
                 insertFunc = insertBlock.parent
 
@@ -1222,9 +1219,7 @@ class LLVMIRVisitor extends NodeVisitor
                                 catch_block = new llvm.BasicBlock "catch_bb", insertFunc
 
                                 irbuilder.setInsertPoint catch_block
-                                console.log 3
                                 @visit n.handlers[0]
-                                console.log 4
                                 irbuilder.createBr branch_target # XXX this should probably be to the cleanup block?
 
                         # if we have a handler then branch to it unconditionally, otherwise resumeunwind?
@@ -1273,7 +1268,6 @@ class LLVMIRVisitor extends NodeVisitor
                                 switch_stmt.addCase (llvm.Constant.getIntegerValue int32Type, ExitableScope.REASON_RETURN), return_tramp
                         
                 irbuilder.setInsertPoint merge_block
-                console.log "done with try"
 
 class AddFunctionsVisitor extends NodeVisitor
         constructor: (@module) ->
