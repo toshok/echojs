@@ -49,10 +49,13 @@ _ejs_init(int argc, char** argv)
   _ejs_console_init(_ejs_global);
   _ejs_process_init(_ejs_global, argc, argv);
 
-  ADD_STACK_ROOT(EJSValue*, _ejs_undefined, _ejs_undefined_new ());
+  ADD_STACK_ROOT(EJSValue*, tmpobj, _ejs_undefined_new ());
+  _ejs_undefined = tmpobj;
   _ejs_object_setprop_utf8 (_ejs_global, "undefined", _ejs_undefined);
 
-  ADD_STACK_ROOT(EJSValue*, _ejs_nan, _ejs_number_new(nan("7734")));
+  ADD_STACK_ROOT(EJSValue*, tmpobj2, _ejs_number_new(nan("7734")));
+  _ejs_nan = tmpobj2;
+
   _ejs_object_setprop_utf8 (_ejs_global, "NaN", _ejs_nan);
 
 #define GLOBAL_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, name, _ejs_string_new_utf8 (#x)); _ejs_object_setprop (_ejs_global, name, _ejs_function_new (NULL, name, (EJSClosureFunc)_ejs_##x)); } while (0)

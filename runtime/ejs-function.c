@@ -158,9 +158,10 @@ _ejs_function_init(EJSValue *global)
   START_SHADOW_STACK_FRAME;
 
   _ejs_gc_add_named_root (_ejs_Function_proto);
-
-  ADD_STACK_ROOT(EJSValue*, _ejs_Function, _ejs_function_new_utf8 (NULL, "Function", (EJSClosureFunc)_ejs_Function_impl));
   _ejs_Function_proto = _ejs_object_new(_ejs_object_get_prototype());
+
+  ADD_STACK_ROOT(EJSValue*, tmpobj, _ejs_function_new_utf8 (NULL, "Function", (EJSClosureFunc)_ejs_Function_impl));
+  _ejs_Function = tmpobj;
 
   // ECMA262 15.3.3.1
   _ejs_object_setprop_utf8 (_ejs_Function,       "prototype",  _ejs_Function_proto); // FIXME:  { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }.
