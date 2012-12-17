@@ -12,6 +12,7 @@
 #include "llvm/Module.h"
 #include "llvm/Constants.h"
 #include "llvm/Analysis/Verifier.h"
+#include "llvm/Intrinsics.h"
 #include "llvm/IRBuilder.h"
 #include "llvm/Support/raw_os_ostream.h"
 #include "llvm/Support/raw_ostream.h"

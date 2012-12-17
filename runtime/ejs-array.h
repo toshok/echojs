@@ -20,12 +20,11 @@ typedef struct {
 EJS_BEGIN_DECLS
 
 extern EJSValue* _ejs_Array;
+extern EJSSpecOps _ejs_array_specops;
 
 EJSObject* _ejs_array_alloc_instance();
 EJSValue* _ejs_array_new (int numElements);
 EJSValue* _ejs_array_get_prototype();
-
-void _ejs_array_finalize(EJSArray *obj);
 
 void _ejs_array_foreach_element (EJSArray* arr, EJSValueFunc foreach_func);
 

@@ -68,6 +68,8 @@ EJSValue* _ejs_boolean_new (EJSBool value);
 
 EJSValue* _ejs_undefined_new ();
 
+void _ejs_value_finalize(EJSValue *val);
+
 EJS_END_DECLS
 
 #endif /* _ejs_value_h */

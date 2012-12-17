@@ -23,6 +23,8 @@ static int page_size;
 // #define MAP_FD -1
 // #endif
 
+StackEntry *llvm_gc_root_chain;
+
 static GCObjectPtr heap;
 static GCObjectPtr work_list;
 
@@ -35,42 +37,6 @@ typedef struct _RootSetEntry {
 RootSetEntry *root_set;
 
 /* a stupid simple gc for ejs */
-
-static GCObjectPtr *stack_bottom;
-
-void
-_ejs_gc_set_stack_bottom (GCObjectPtr* bottom)
-{
-  stack_bottom = bottom;
-}
-
-int
-llen(GCObjectPtr l)
-{
-  if (l == NULL)
-    return 0;
-  return 1 + llen(l->next_link);
-}
-
-int
-lindex(GCObjectPtr l, GCObjectPtr el)
-{
-  if (l == NULL)
-    return -1;
-
-  if (el == NULL)
-    return -1;
-
-  int n = 0;
-  do {
-    if (l == el)
-      return n;
-    l = l->next_link;
-    n++;
-  } while (l);
-
-  return -1;
-}
 
 static void*
 alloc_page()
@@ -214,52 +180,42 @@ _scan_ejsvalue (EJSValue *obj)
 static void
 _scan_from_ejsobject(GCObjectPtr obj)
 {
-  switch (EJSVAL_TAG(obj)) {
-  case EJSValueTagObject: {
-    EJSObject *ejsobj = (EJSObject*)obj;
-    _ejs_propertymap_foreach_value (ejsobj->map, _scan_ejsvalue);
-    _scan_ejsvalue (ejsobj->proto);
-
-    if (!strcmp (CLASSNAME(ejsobj), "Array")) {
-      EJSArray* ejsa = (EJSArray*)ejsobj;
-      _ejs_array_foreach_element (ejsa, _scan_ejsvalue);
-    }
-    else if (!strcmp (CLASSNAME(ejsobj), "String")) {
-      EJSString* ejss = (EJSString*)ejsobj;
-      _scan_ejsvalue (ejss->primStr);
-    }
-    else if (!strcmp (CLASSNAME(ejsobj), "Function")) {
-      EJSFunction *ejsf = (EJSFunction*)ejsobj;
-      _scan_ejsvalue (ejsf->name);
-      _scan_ejsvalue (ejsf->env);
-      if (ejsf->bound_this)
-	_scan_ejsvalue (ejsf->_this);
-    }
-    break;
-  }
+  if (EJSVAL_IS_OBJECT(obj)) {
+    EJSValue* val = (EJSValue*)obj;
+    OP(val,scan)(obj, _scan_ejsvalue);
   }
 }
 
-static EJSBool
-points_to_heap_object(GCObjectPtr ptr)
+/// @brief Calls Visitor(root, meta) for each GC root on the stack.
+///        root and meta are exactly the values passed to
+///        @llvm.gcroot.
+///
+/// Visitor could be a function to recursively mark live objects.  Or itp
+/// might copy them to another heap or generation.
+///
+/// @param Visitor A function to invoke for every GC root on the stack.
+void visitLLVMGCRoots()
 {
-  if (ptr == NULL)
-    return FALSE;
+  for (StackEntry *R = llvm_gc_root_chain; R; R = R->Next) {
+    unsigned i = 0;
 
-  if ((unsigned int)ptr & 0x7)
-    return FALSE;
-
-  return lindex (heap, ptr) >= 0;
+    // For roots [NumMeta, NumRoots), the metadata pointer is null.
+    for (unsigned e = R->Map->NumRoots; i != e; ++i) {
+      GCObjectPtr candidate = (GCObjectPtr)R->Roots[i];
+      if (candidate == NULL) continue;
+      if (is_white (candidate)) {
+#if spew
+	printf ("Found reference to %p on stack\n", candidate);
+#endif
+	from_heap_to_worklist (candidate);
+      }
+    }
+  }
 }
 
 static void
-_ejs_gc_collect_internal(EJSBool shutting_down)
+_ejs_gc_collect_inner(EJSBool shutting_down)
 {
-  jmp_buf jmpbuf;
-  setjmp (jmpbuf);
-
-  GCObjectPtr stack_top = NULL;
-
   // very simple stop the world collector
 
   int num_roots = 0;
@@ -269,57 +225,25 @@ _ejs_gc_collect_internal(EJSBool shutting_down)
   if (!shutting_down) {
     // mark from our roots
     for (RootSetEntry *entry = root_set; entry; entry = entry->next) {
-      if (*entry->root == NULL) continue;
-
       num_roots++;
-      set_black (*entry->root);
-      if (EJSVAL_IS_OBJECT(*entry->root)) {
-	_scan_from_ejsobject(*entry->root);
-      }
-    }
-  }
-
-  //printf ("stack: top %p, bottom %p\n", &stack_top, stack_bottom);
-
-  if (!shutting_down) {
-#define USE_CHARP 1
-    // XXX mark conservatively from thread stacks, pinning objects that are referenced in this pass
-#if USE_CHARP
-    char *gcptr;
-    for (gcptr = (char*)&stack_top; gcptr < (char*)stack_bottom; gcptr ++)
-#else
-    GCObjectPtr *gcptr;
-    for (gcptr = &stack_top; gcptr < stack_bottom; gcptr ++)
-#endif
-    {
-      GCObjectPtr candidate = *(GCObjectPtr*)gcptr;
-      if (points_to_heap_object(candidate)) {
-        //printf ("Found conservative reference to %p on stack\n", candidate);
-        if (is_white(candidate)) {
-	  from_heap_to_worklist (candidate);
-        }
+      if (*entry->root) {
+	set_black (*entry->root);
+	if (EJSVAL_IS_OBJECT(*entry->root)) {
+	  _scan_from_ejsobject(*entry->root);
+	}
       }
     }
 
-    // XXX mark conservatively from registers
-    GCObjectPtr *register_gcptrs = (GCObjectPtr*)jmpbuf;
-
-    for (int i = 0; i < 16/* x86-64 specific*/; i ++) {
-      GCObjectPtr candidate = (GCObjectPtr)register_gcptrs[i];
-      if (points_to_heap_object (candidate)) {
-        //printf ("Found conservative reference to %p in registers\n", candidate);
-        from_heap_to_worklist (candidate);
-      }
-    }
+    visitLLVMGCRoots();
 
     GCObjectPtr p;
     while ((p = work_list)) {
       _scan_from_ejsobject(p);
       from_worklist_to_heap(p);
     }
-  }
 
-  total_objs = num_roots;
+    total_objs = num_roots;
+  }
 
   // sweep the entire heap, freeing white nodes
   GCObjectPtr p = heap;
@@ -330,25 +254,11 @@ _ejs_gc_collect_internal(EJSBool shutting_down)
       white_objs++;
       heap = detach (heap, p);
 
-      EJSObject *ejsobj = (EJSObject*)p;
+      if (EJSVAL_TAG(p) == EJSValueTagObject) {
+	EJSValue *ejsval = (EJSValue*)p;
+	OP(ejsval,finalize)(ejsval);
+      }
 
-      switch (EJSVAL_TAG(p)) {
-      case EJSValueTagObject: {
-	if (!strcmp (CLASSNAME(ejsobj), "Array")) {
-	  _ejs_array_finalize ((EJSArray*)ejsobj);
-	}
-	else if (!strcmp (CLASSNAME(ejsobj), "String")) {
-	  _ejs_string_finalize ((EJSString*)ejsobj);
-	}
-	else if (!strcmp (CLASSNAME(ejsobj), "Function")) {
-	  _ejs_function_finalize ((EJSFunction*)ejsobj);
-	}
-	break;
-      }
-      default:
-	// XXX this should use _ejs_value_finalize()
-	break;
-      }
       free(p);
     }
     p = next;
@@ -358,19 +268,26 @@ _ejs_gc_collect_internal(EJSBool shutting_down)
   black_mask = white_mask;
   white_mask = tmp;
 
+  if (shutting_down) {
 #if spew
-  printf ("_ejs_gc_collect %sstats:\n", shutting_down ? "shutdown " : "");
-  printf ("   num_roots: %d\n", num_roots);
-  printf ("   total objects: %d\n", total_objs);
-  printf ("   garbage objects: %d\n", white_objs);
+    printf ("_ejs_gc_collect stats:\n");
+    printf ("   num_roots: %d\n", num_roots);
+    printf ("   total objects: %d\n", total_objs);
+    printf ("   garbage objects: %d\n", white_objs);
 #endif
 
-  if (shutting_down) {
-    // sanity check, make sure the heap is empty
-    if (heap) {
-      printf ("heap is not empty after shutdown\n");
-      abort();
+    // NULL out all of our roots
+
+    RootSetEntry *entry = root_set;
+    while (entry) {
+      RootSetEntry *next = entry->next;
+      *entry->root = NULL;
+      if (entry->name) free (entry->name);
+      free (entry);
+      entry = next;
     }
+
+    root_set = NULL;
   }
   else {
     // sanity check, verify the heap is entirely white
@@ -382,46 +299,34 @@ _ejs_gc_collect_internal(EJSBool shutting_down)
 	abort();
       }
       p = p->next_link;
-    }
+    }  
   }
-
-  if (shutting_down) {
-    // null out/free from our roots
-    RootSetEntry *entry = root_set;
-    while (entry) {
-      RootSetEntry *next = entry->next;
-      *entry->root = NULL;
-      if (entry->name) free(entry->name);
-      free(entry);
-      entry = next;
-    }
-  }
-
 }
 
 void
 _ejs_gc_collect()
 {
-  _ejs_gc_collect_internal(FALSE);
+  _ejs_gc_collect_inner(FALSE);
 }
 
 void
 _ejs_gc_shutdown()
 {
-  _ejs_gc_collect_internal(TRUE);
+  _ejs_gc_collect_inner(TRUE);
 }
 
-int age = 0;
-EJSBool _ejs_gc_started;
+size_t alloced_size;
 
 GCObjectPtr
 _ejs_gc_alloc(size_t size)
 {
-  if (_ejs_gc_started && age++ == 2000) {
+  alloced_size += size;
+  if (alloced_size > 1024 * 1024) {
     _ejs_gc_collect();
-    age = 0;
+    alloced_size = 0;
   }
   GCObjectPtr ptr = (GCObjectPtr)calloc (1, size);
+  ptr->tag = white_mask;
   heap = attach (heap, ptr);
   return ptr;
 }

@@ -31,6 +31,8 @@ typedef EJSBool   (*SpecOpHasProperty) (EJSValue* obj, EJSValue* propertyName);
 typedef EJSBool   (*SpecOpDelete) (EJSValue* obj, EJSValue* propertyName, EJSBool flag);
 typedef EJSValue* (*SpecOpDefaultValue) (EJSValue* obj, const char *hint);
 typedef void      (*SpecOpDefineOwnProperty) (EJSValue* obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag);
+typedef void      (*SpecOpFinalize) (EJSValue* obj);
+typedef void      (*SpecOpScan) (EJSValue* obj, EJSValueFunc scan_func);
 
 typedef struct {
   const char* class_name;
@@ -43,6 +45,9 @@ typedef struct {
   SpecOpDelete _delete;
   SpecOpDefaultValue default_value;
   SpecOpDefineOwnProperty define_own_property;
+
+  SpecOpFinalize finalize;
+  SpecOpScan scan;
 } EJSSpecOps;
 
 #define OP(o,op) (((EJSObject*)o)->ops->op)
@@ -58,8 +63,6 @@ typedef struct {
 } EJSObject;
 
 EJS_BEGIN_DECLS
-
-typedef void (*EJSValueFunc)(EJSValue *value);
 
 EJSPropertyMap* _ejs_propertymap_new (int initial_allocation);
 int _ejs_propertymap_lookup (EJSPropertyMap *map, const char *name, EJSBool add_if_not_found);
@@ -77,10 +80,11 @@ void _ejs_property_iterator_next (EJSPropertyIterator* iterator);
 void _ejs_property_iterator_free (EJSPropertyIterator *iterator);
 
 extern EJSValue* _ejs_Object;
+extern EJSSpecOps _ejs_object_specops;
 
 EJSValue* _ejs_object_new (EJSValue *proto);
 EJSObject* _ejs_object_alloc_instance();
-void      _ejs_init_object (EJSObject *obj, EJSValue *proto);
+void      _ejs_init_object (EJSObject *obj, EJSValue *proto, EJSSpecOps *ops);
 
 void _ejs_object_finalize(EJSObject *obj);
 

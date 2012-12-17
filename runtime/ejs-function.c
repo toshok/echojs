@@ -15,8 +15,8 @@ static EJSBool   _ejs_function_specop_has_property (EJSValue *obj, EJSValue* pro
 static EJSBool   _ejs_function_specop_delete (EJSValue *obj, EJSValue* propertyName, EJSBool flag);
 static EJSValue* _ejs_function_specop_default_value (EJSValue *obj, const char *hint);
 static void      _ejs_function_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag);
-
-extern EJSSpecOps _ejs_object_specops;
+static void      _ejs_function_specop_finalize (EJSValue *obj);
+static void      _ejs_function_specop_scan (EJSValue* obj, EJSValueFunc scan_func);
 
 EJSSpecOps _ejs_function_specops = {
   "Function",
@@ -28,7 +28,9 @@ EJSSpecOps _ejs_function_specops = {
   _ejs_function_specop_has_property,
   _ejs_function_specop_delete,
   _ejs_function_specop_default_value,
-  _ejs_function_specop_define_own_property
+  _ejs_function_specop_define_own_property,
+  _ejs_function_specop_finalize,
+  _ejs_function_specop_scan
 };
 
 #if DEBUG_FUNCTIONS
@@ -49,8 +51,7 @@ _ejs_function_new (EJSClosureEnv* env, EJSValue *name, EJSClosureFunc func)
 {
   EJSFunction *rv = _ejs_gc_new(EJSFunction);
 
-  _ejs_init_object ((EJSObject*)rv, _ejs_function_get_prototype());
-  rv->obj.ops = &_ejs_function_specops;
+  _ejs_init_object ((EJSObject*)rv, _ejs_function_get_prototype(), &_ejs_function_specops);
 
   rv->name = name;
   rv->func = func;
@@ -59,16 +60,17 @@ _ejs_function_new (EJSClosureEnv* env, EJSValue *name, EJSClosureFunc func)
   return (EJSValue*)rv;
 }
 
-void
-_ejs_function_finalize (EJSFunction* fun)
-{
-  _ejs_object_finalize ((EJSObject*)fun);
-}
-
 EJSValue*
 _ejs_function_new_utf8 (EJSClosureEnv* env, const char *name, EJSClosureFunc func)
 {
-  return _ejs_function_new (env, _ejs_string_new_utf8 (name), func);
+  START_SHADOW_STACK_FRAME;
+
+  ADD_STACK_ROOT(EJSValue*, function_name, _ejs_string_new_utf8 (name));
+
+  ADD_STACK_ROOT(EJSValue*, rv, _ejs_function_new (env, function_name, func));
+
+  END_SHADOW_STACK_FRAME;
+  return rv;
 }
 
 
@@ -126,7 +128,10 @@ static EJSValue*
 _ejs_Function_prototype_call (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
   assert (EJSVAL_IS_FUNCTION(_this));
-  EJSValue* thisArg = _ejs_undefined;
+
+  START_SHADOW_STACK_FRAME;
+
+  ADD_STACK_ROOT(EJSValue*, thisArg, _ejs_undefined);
   
   if (argc > 0) {
     thisArg = args[0];
@@ -134,7 +139,10 @@ _ejs_Function_prototype_call (EJSValue* env, EJSValue* _this, int argc, EJSValue
     argc --;
   }
 
-  return EJSVAL_TO_FUNC(_this) (EJSVAL_TO_ENV(_this), thisArg, argc, argc == 0 ? NULL : args);
+  ADD_STACK_ROOT(EJSValue*, rv, EJSVAL_TO_FUNC(_this) (EJSVAL_TO_ENV(_this), thisArg, argc, argc == 0 ? NULL : args));
+
+  END_SHADOW_STACK_FRAME;
+  return rv;
 }
 
 // ECMA262 15.3.4.5
@@ -147,7 +155,11 @@ _ejs_Function_prototype_bind (EJSValue* env, EJSValue* _this, int argc, EJSValue
 void
 _ejs_function_init(EJSValue *global)
 {
-  _ejs_Function = _ejs_function_new_utf8 (NULL, "Function", (EJSClosureFunc)_ejs_Function_impl);
+  START_SHADOW_STACK_FRAME;
+
+  _ejs_gc_add_named_root (_ejs_Function_proto);
+
+  ADD_STACK_ROOT(EJSValue*, _ejs_Function, _ejs_function_new_utf8 (NULL, "Function", (EJSClosureFunc)_ejs_Function_impl));
   _ejs_Function_proto = _ejs_object_new(_ejs_object_get_prototype());
 
   // ECMA262 15.3.3.1
@@ -155,8 +167,8 @@ _ejs_function_init(EJSValue *global)
   // ECMA262 15.3.3.2
   _ejs_object_setprop_utf8 (_ejs_Function,       "length",     _ejs_number_new(1)); // FIXME:  { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }.
 
-#define OBJ_METHOD(x) _ejs_object_setprop_utf8 (_ejs_Function, #x, _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_Function_##x))
-#define PROTO_METHOD(x) _ejs_object_setprop_utf8 (_ejs_Function_proto, #x, _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_Function_prototype_##x))
+#define OBJ_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_Function_##x)); _ejs_object_setprop (_ejs_Function, funcname, tmpfunc); } while (0)
+#define PROTO_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_Function_prototype_##x)); _ejs_object_setprop (_ejs_Function_proto, funcname, tmpfunc); } while (0)
 
   PROTO_METHOD(toString);
   PROTO_METHOD(apply);
@@ -167,7 +179,8 @@ _ejs_function_init(EJSValue *global)
 #undef OBJ_METHOD
 
   _ejs_object_setprop_utf8 (global, "Function", _ejs_Function);
-  _ejs_gc_add_named_root (_ejs_Function_proto);
+
+  END_SHADOW_STACK_FRAME;
 }
 
 
@@ -444,4 +457,21 @@ static void
 _ejs_function_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag)
 {
   _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
+}
+
+static void
+_ejs_function_specop_finalize (EJSValue *obj)
+{
+  _ejs_object_specops.finalize (obj);
+}
+
+static void
+_ejs_function_specop_scan (EJSValue* obj, EJSValueFunc scan_func)
+{
+  EJSFunction* f = (EJSFunction*)obj;
+  scan_func (f->name);
+  scan_func (f->env);
+  if (f->bound_this)
+    scan_func (f->_this);
+  _ejs_object_specops.scan (obj, scan_func);
 }

@@ -20,6 +20,7 @@ namespace jsllvm {
     s_ct->InstanceTemplate()->SetInternalFieldCount(1);
     s_ct->SetClassName(String::NewSymbol("Module"));
 
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "getOrInsertIntrinsic", Module::GetOrInsertIntrinsic);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "getOrInsertFunction", Module::GetOrInsertFunction);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "getOrInsertGlobal", Module::GetOrInsertGlobal);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "getOrInsertExternalFunction", Module::GetOrInsertExternalFunction);
@@ -63,6 +64,40 @@ namespace jsllvm {
       module->Wrap(args.This());
     }
     return scope.Close(args.This());
+  }
+
+  Handle<v8::Value> Module::GetOrInsertIntrinsic (const Arguments& args)
+  {
+    HandleScope scope;
+    Module* module = ObjectWrap::Unwrap<Module>(args.This());
+
+    REQ_UTF8_ARG(0, id);
+#if false
+    REQ_ARRAY_ARG(1, paramTypes);
+
+    std::vector< llvm::Type*> param_types;
+    for (int i = 0; i < paramTypes->Length(); i ++) {
+      param_types.push_back (Type::GetLLVMObj(paramTypes->Get(i)));
+    }
+#endif
+    char *idstr = *id;
+    llvm::Intrinsic::ID intrinsic_id;
+
+    if (!strcmp (idstr, "@llvm.gcroot")) {
+      intrinsic_id = llvm::Intrinsic::gcroot;
+    }
+    else {
+      abort();
+    }
+
+#if false
+    llvm::Function* f = llvm::Intrinsic::getDeclaration (module->llvm_module, intrinsic_id, param_types);
+#else
+    llvm::Function* f = llvm::Intrinsic::getDeclaration (module->llvm_module, intrinsic_id);
+#endif
+
+    Handle<v8::Value> result = Function::New(f);
+    return scope.Close(result);
   }
 
   Handle<v8::Value> Module::GetOrInsertFunction (const Arguments& args)

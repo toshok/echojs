@@ -23,6 +23,8 @@ static EJSBool   _ejs_object_specop_has_property (EJSValue* obj, EJSValue* prope
 static EJSBool   _ejs_object_specop_delete (EJSValue* obj, EJSValue* propertyName, EJSBool flag);
 static EJSValue* _ejs_object_specop_default_value (EJSValue* obj, const char *hint);
 static void      _ejs_object_specop_define_own_property (EJSValue* obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag);
+static void      _ejs_object_specop_finalize (EJSValue* obj);
+static void      _ejs_object_specop_scan (EJSValue* obj, EJSValueFunc scan_func);
 
 EJSSpecOps _ejs_object_specops = {
   "Object",
@@ -34,7 +36,9 @@ EJSSpecOps _ejs_object_specops = {
   _ejs_object_specop_has_property,
   _ejs_object_specop_delete,
   _ejs_object_specop_default_value,
-  _ejs_object_specop_define_own_property
+  _ejs_object_specop_define_own_property,
+  _ejs_object_specop_finalize,
+  _ejs_object_specop_scan
 };
 
 
@@ -168,12 +172,12 @@ _ejs_property_iterator_free (EJSPropertyIterator *iterator)
 ///
 
 void
-_ejs_init_object (EJSObject *obj, EJSValue *proto)
+_ejs_init_object (EJSObject *obj, EJSValue *proto, EJSSpecOps *ops)
 {
   EJSVAL_SET_TAG(obj, EJSValueTagObject);
   obj->proto = proto;
   obj->map = _ejs_propertymap_new (5);
-  obj->ops = &_ejs_object_specops;
+  obj->ops = ops;
 }
 
 EJSValue*
@@ -182,21 +186,34 @@ _ejs_object_new (EJSValue *proto)
   if (proto == NULL) proto = _ejs_object_get_prototype();
 
   EJSObject *obj;
+  EJSSpecOps *ops;
 
-  if (proto == _ejs_array_get_prototype())
+  if (proto == _ejs_array_get_prototype()) {
     obj = _ejs_array_alloc_instance();
-  else if (proto == _ejs_string_get_prototype())
+    ops = &_ejs_array_specops;
+  }
+  else if (proto == _ejs_string_get_prototype()) {
     obj = _ejs_string_alloc_instance();
-  else if (proto == _ejs_number_get_prototype())
+    ops = &_ejs_string_specops;
+  }
+  else if (proto == _ejs_number_get_prototype()) {
     obj = _ejs_number_alloc_instance();
-  else if (proto == _ejs_regexp_get_prototype())
+    ops = &_ejs_number_specops;
+  }
+  else if (proto == _ejs_regexp_get_prototype()) {
     obj = _ejs_regexp_alloc_instance();
-  else if (proto == _ejs_date_get_prototype())
+    ops = &_ejs_regexp_specops;
+  }
+  else if (proto == _ejs_date_get_prototype()) {
     obj = _ejs_date_alloc_instance();
-  else
+    ops = &_ejs_date_specops;
+  }
+  else {
     obj = _ejs_object_alloc_instance();
+    ops = &_ejs_object_specops;
+  }
 
-  _ejs_init_object (obj, proto);
+  _ejs_init_object (obj, proto, ops);
   return (EJSValue*)obj;
 }
 
@@ -205,12 +222,6 @@ EJSObject* _ejs_object_alloc_instance()
   EJSObject* rv = _ejs_gc_new(EJSObject);
   EJSVAL_SET_TAG(rv, EJSValueTagObject);
   return rv;
-}
-
-void _ejs_object_finalize(EJSObject *obj)
-{
-  _ejs_propertymap_free (obj->map);
-  obj->ops = NULL;
 }
 
 #define offsetof(t,f) (int)(long)(&((t*)NULL)->f)
@@ -369,6 +380,10 @@ _ejs_object_getprop_utf8 (EJSValue* obj, const char *key)
   if (!obj || EJSVAL_IS_UNDEFINED(obj)) {
     printf ("throw TypeError, key is %s\n", key);
     NOT_IMPLEMENTED();
+  }
+
+  if (EJSVAL_IS_PRIMITIVE(obj)) {
+    obj = ToObject(obj);
   }
 
   return OP(obj,get)(obj, (void*)key, TRUE);
@@ -581,17 +596,22 @@ _ejs_object_get_prototype()
 void
 _ejs_object_init (EJSValue *global)
 {
+  START_SHADOW_STACK_FRAME;
+
   // FIXME ECMA262 15.2.4
-  _ejs_Object = _ejs_function_new_utf8 (NULL, "Object", (EJSClosureFunc)_ejs_Object_impl);
+  _ejs_gc_add_named_root (_ejs_Object_proto);
   _ejs_Object_proto = _ejs_object_new(NULL);
+
+  ADD_STACK_ROOT(EJSValue*, tmpobj, _ejs_function_new_utf8 (NULL, "Object", (EJSClosureFunc)_ejs_Object_impl));
+  _ejs_Object = tmpobj;
 
   // ECMA262 15.2.3.1
   _ejs_object_setprop_utf8 (_ejs_Object,       "prototype",    _ejs_Object_proto); // FIXME: {[[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }
   // ECMA262: 15.2.4.1
   _ejs_object_setprop_utf8 (_ejs_Object_proto, "constructor",  _ejs_Object);
 
-#define OBJ_METHOD(x) _ejs_object_setprop_utf8 (_ejs_Object, #x, _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_Object_##x))
-#define PROTO_METHOD(x) _ejs_object_setprop_utf8 (_ejs_Object_proto, #x, _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_Object_prototype_##x))
+#define OBJ_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_Object_##x)); _ejs_object_setprop (_ejs_Object, funcname, tmpfunc); } while (0)
+#define PROTO_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_Object_prototype_##x)); _ejs_object_setprop (_ejs_Object_proto, funcname, tmpfunc); } while (0)
 
   OBJ_METHOD(getPrototypeOf);
   OBJ_METHOD(getOwnPropertyDescriptor);
@@ -618,7 +638,8 @@ _ejs_object_init (EJSValue *global)
 #undef OBJ_METHOD
 
   _ejs_object_setprop_utf8 (global, "Object", _ejs_Object);
-  _ejs_gc_add_named_root (_ejs_Object_proto);
+
+  END_SHADOW_STACK_FRAME;
 }
 
 
@@ -707,4 +728,20 @@ static void
 _ejs_object_specop_define_own_property (EJSValue* obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag)
 {
   NOT_IMPLEMENTED();
+}
+
+void 
+_ejs_object_specop_finalize(EJSValue *obj)
+{
+  EJSObject *o = (EJSObject*)obj;
+  _ejs_propertymap_free (o->map);
+  o->ops = NULL;
+}
+
+static void
+_ejs_object_specop_scan (EJSValue* obj, EJSValueFunc scan_func)
+{
+  EJSObject *ejsobj = (EJSObject*)obj;
+  _ejs_propertymap_foreach_value (ejsobj->map, scan_func);
+  scan_func (ejsobj->proto);
 }

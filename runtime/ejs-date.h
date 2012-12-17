@@ -13,9 +13,10 @@ typedef struct {
 } EJSDate;
 
 
-extern EJSValue* _ejs_Date;
-
 EJS_BEGIN_DECLS
+
+extern EJSValue* _ejs_Date;
+extern EJSSpecOps _ejs_date_specops;
 
 EJSValue* _ejs_date_get_prototype();
 

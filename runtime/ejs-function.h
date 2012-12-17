@@ -41,8 +41,6 @@ EJSValue* _ejs_invoke_closure_10 (EJSValue* closure, EJSValue* _this, int argc, 
 extern EJSValue* _ejs_function_new (EJSClosureEnv* env, EJSValue* name, EJSClosureFunc func);
 extern EJSValue* _ejs_function_new_utf8 (EJSClosureEnv* env, const char* name, EJSClosureFunc func);
 
-extern void _ejs_function_finalize(EJSFunction* fun);
-
 extern EJSValue* _ejs_Function;
 extern EJSValue* _ejs_function_get_prototype();
 extern void _ejs_function_init(EJSValue *global);

@@ -15,8 +15,8 @@ static EJSBool   _ejs_array_specop_has_property (EJSValue *obj, EJSValue* proper
 static EJSBool   _ejs_array_specop_delete (EJSValue *obj, EJSValue* propertyName, EJSBool flag);
 static EJSValue* _ejs_array_specop_default_value (EJSValue *obj, const char *hint);
 static void      _ejs_array_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag);
-
-extern EJSSpecOps _ejs_object_specops;
+static void      _ejs_array_specop_finalize (EJSValue *obj);
+static void      _ejs_array_specop_scan (EJSValue* obj, EJSValueFunc scan_func);
 
 EJSSpecOps _ejs_array_specops = {
   "Array",
@@ -28,7 +28,9 @@ EJSSpecOps _ejs_array_specops = {
   _ejs_array_specop_has_property,
   _ejs_array_specop_delete,
   _ejs_array_specop_default_value,
-  _ejs_array_specop_define_own_property
+  _ejs_array_specop_define_own_property,
+  _ejs_array_specop_finalize,
+  _ejs_array_specop_scan
 };
 
 
@@ -44,20 +46,12 @@ _ejs_array_new (int numElements)
 {
   EJSArray* rv = _ejs_gc_new (EJSArray);
 
-  _ejs_init_object ((EJSObject*)rv, _ejs_array_get_prototype());
-  rv->obj.ops = &_ejs_array_specops;
+  _ejs_init_object ((EJSObject*)rv, _ejs_array_get_prototype(), &_ejs_array_specops);
 
   rv->array_length = 0;
   rv->array_alloc = numElements + 40;
   rv->elements = (EJSValue**)calloc(rv->array_alloc, sizeof (EJSValue*));
   return (EJSValue*)rv;
-}
-
-void
-_ejs_array_finalize (EJSArray *array)
-{
-  free (array->elements);
-  _ejs_object_finalize((EJSObject*)array);
 }
 
 void
@@ -383,13 +377,19 @@ _ejs_Array_isArray (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 void
 _ejs_array_init(EJSValue *global)
 {
-  _ejs_Array = _ejs_function_new_utf8 (NULL, "Array", (EJSClosureFunc)_ejs_Array_impl);
+  START_SHADOW_STACK_FRAME;
+
+  _ejs_gc_add_named_root (_ejs_Array_proto);
   _ejs_Array_proto = _ejs_object_new(NULL);
+
+  ADD_STACK_ROOT(EJSValue*, tmpobj, _ejs_function_new_utf8 (NULL, "Array", (EJSClosureFunc)_ejs_Array_impl));
+  _ejs_Array = tmpobj;
 
   _ejs_object_setprop_utf8 (_ejs_Array,       "prototype",  _ejs_Array_proto);
 
-#define OBJ_METHOD(x) _ejs_object_setprop_utf8 (_ejs_Array, #x, _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_Array_##x))
-#define PROTO_METHOD(x) _ejs_object_setprop_utf8 (_ejs_Array_proto, #x,       _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_Array_prototype_##x))
+#define OBJ_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_Array_##x)); _ejs_object_setprop (_ejs_Array, funcname, tmpfunc); } while (0)
+#define PROTO_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_Array_prototype_##x)); _ejs_object_setprop (_ejs_Array_proto, funcname, tmpfunc); } while (0)
+
   OBJ_METHOD(isArray);
 
   PROTO_METHOD(push);
@@ -404,7 +404,8 @@ _ejs_array_init(EJSValue *global)
   PROTO_METHOD(forEach);
 
   _ejs_object_setprop_utf8 (global,           "Array",      _ejs_Array);
-  _ejs_gc_add_named_root (_ejs_Array_proto);
+
+  END_SHADOW_STACK_FRAME;
 }
 
 static EJSValue*
@@ -487,4 +488,18 @@ static void
 _ejs_array_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag)
 {
   _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
+}
+
+static void
+_ejs_array_specop_finalize (EJSValue *obj)
+{
+  free (((EJSArray*)obj)->elements);
+  _ejs_object_specops.finalize (obj);
+}
+
+static void
+_ejs_array_specop_scan (EJSValue* obj, EJSValueFunc scan_func)
+{
+  _ejs_array_foreach_element ((EJSArray*)obj, scan_func);
+  _ejs_object_specops.scan (obj, scan_func);
 }

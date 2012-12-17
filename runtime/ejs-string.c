@@ -15,8 +15,8 @@ static EJSBool   _ejs_string_specop_has_property (EJSValue *obj, EJSValue* prope
 static EJSBool   _ejs_string_specop_delete (EJSValue *obj, EJSValue* propertyName, EJSBool flag);
 static EJSValue* _ejs_string_specop_default_value (EJSValue *obj, const char *hint);
 static void      _ejs_string_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag);
-
-extern EJSSpecOps _ejs_object_specops;
+static void      _ejs_string_specop_finalize (EJSValue *obj);
+static void      _ejs_string_specop_scan (EJSValue* obj, EJSValueFunc scan_func);
 
 EJSSpecOps _ejs_string_specops = {
   "String",
@@ -28,7 +28,9 @@ EJSSpecOps _ejs_string_specops = {
   _ejs_string_specop_has_property,
   _ejs_string_specop_delete,
   _ejs_string_specop_default_value,
-  _ejs_string_specop_define_own_property
+  _ejs_string_specop_define_own_property,
+  _ejs_string_specop_finalize,
+  _ejs_string_specop_scan
 };
 
 EJSObject* _ejs_string_alloc_instance()
@@ -36,17 +38,11 @@ EJSObject* _ejs_string_alloc_instance()
   return (EJSObject*)_ejs_gc_new (EJSString);
 }
 
-void
-_ejs_string_finalize (EJSString* str)
-{
-  _ejs_object_finalize ((EJSObject*)str);
-}
-
 EJSValue* _ejs_String;
 static EJSValue*
 _ejs_String_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 {
-  if (EJSVAL_IS_UNDEFINED(_this)) {
+  if (!_this || EJSVAL_IS_UNDEFINED(_this)) {
     if (argc > 0)
       return ToString(args[0]);
     else
@@ -324,12 +320,18 @@ _ejs_String_prototype_slice (EJSValue* env, EJSValue* _this, int argc, EJSValue 
 void
 _ejs_string_init(EJSValue *global)
 {
-  _ejs_String = _ejs_function_new_utf8 (NULL, "String", (EJSClosureFunc)_ejs_String_impl);
+  START_SHADOW_STACK_FRAME;
+
+  _ejs_gc_add_named_root (_ejs_String_proto);
   _ejs_String_proto = _ejs_object_new(NULL);
+  
+  ADD_STACK_ROOT(EJSValue*, tmpobj, _ejs_function_new_utf8 (NULL, "String", (EJSClosureFunc)_ejs_String_impl));
+  _ejs_String = tmpobj;
 
   _ejs_object_setprop_utf8 (_ejs_String,       "prototype",  _ejs_String_proto);
 
-#define PROTO_METHOD(x) _ejs_object_setprop_utf8 (_ejs_String_proto, #x, _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_String_prototype_##x))
+#define OBJ_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_String_##x)); _ejs_object_setprop (_ejs_String, funcname, tmpfunc); } while (0)
+#define PROTO_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_String_prototype_##x)); _ejs_object_setprop (_ejs_String_proto, funcname, tmpfunc); } while (0)
 
   PROTO_METHOD(charAt);
   PROTO_METHOD(charCodeAt);
@@ -351,8 +353,12 @@ _ejs_string_init(EJSValue *global)
   PROTO_METHOD(trim);
   PROTO_METHOD(valueOf);
 
+#undef OBJ_METHOD
+#undef PROTO_METHOD
+
   _ejs_object_setprop_utf8 (global, "String", _ejs_String);
-  _ejs_gc_add_named_root (_ejs_String_proto);
+
+  END_SHADOW_STACK_FRAME;
 }
 
 static EJSValue*
@@ -436,4 +442,18 @@ static void
 _ejs_string_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag)
 {
   _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
+}
+
+static void
+_ejs_string_specop_finalize (EJSValue *obj)
+{
+  _ejs_object_specops.finalize (obj);
+}
+
+static void
+_ejs_string_specop_scan (EJSValue* obj, EJSValueFunc scan_func)
+{
+  EJSString* ejss = (EJSString*)obj;
+  scan_func (ejss->primStr);
+  _ejs_object_specops.scan (obj, scan_func);
 }

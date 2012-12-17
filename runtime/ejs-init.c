@@ -16,21 +16,25 @@
 #include "ejs-function.h"
 #include "ejs-uri.h"
 
-EJSValue* _ejs_undefined;
-EJSValue* _ejs_nan;
-EJSValue* _ejs_true;
-EJSValue* _ejs_false;
+EJSValue* _ejs_undefined = NULL;
+EJSValue* _ejs_nan = NULL;
+EJSValue* _ejs_true = NULL;
+EJSValue* _ejs_false = NULL;
 
-EJSValue* _ejs_global;
+EJSValue* _ejs_global = NULL;
 
 extern EJSValue* _ejs_boolean_new_internal (EJSBool value);
 
 void
 _ejs_init(int argc, char** argv)
 {
+  START_SHADOW_STACK_FRAME;
+
   _ejs_gc_init();
 
   _ejs_gc_add_named_root (_ejs_global);
+  _ejs_gc_add_named_root (_ejs_true);
+  _ejs_gc_add_named_root (_ejs_false);
 
   _ejs_global = _ejs_object_new(NULL);
 
@@ -45,13 +49,13 @@ _ejs_init(int argc, char** argv)
   _ejs_console_init(_ejs_global);
   _ejs_process_init(_ejs_global, argc, argv);
 
-  _ejs_undefined = _ejs_undefined_new ();
+  ADD_STACK_ROOT(EJSValue*, _ejs_undefined, _ejs_undefined_new ());
   _ejs_object_setprop_utf8 (_ejs_global, "undefined", _ejs_undefined);
 
-  _ejs_nan = _ejs_number_new(nan("7734"));
+  ADD_STACK_ROOT(EJSValue*, _ejs_nan, _ejs_number_new(nan("7734")));
   _ejs_object_setprop_utf8 (_ejs_global, "NaN", _ejs_nan);
 
-#define GLOBAL_METHOD(x) _ejs_object_setprop_utf8 (_ejs_global, #x, _ejs_function_new_utf8 (NULL, #x, (EJSClosureFunc)_ejs_##x))
+#define GLOBAL_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, name, _ejs_string_new_utf8 (#x)); _ejs_object_setprop (_ejs_global, name, _ejs_function_new (NULL, name, (EJSClosureFunc)_ejs_##x)); } while (0)
 
   GLOBAL_METHOD(isNaN);
   GLOBAL_METHOD(isFinite);
@@ -67,9 +71,6 @@ _ejs_init(int argc, char** argv)
 
   _ejs_true = _ejs_boolean_new_internal (TRUE);
   _ejs_false = _ejs_boolean_new_internal (FALSE);
-
-  _ejs_gc_add_named_root (_ejs_true);
-  _ejs_gc_add_named_root (_ejs_false);
 
   _ejs_object_setprop_utf8 (_ejs_global, "__ejs", _ejs_true);
 }

@@ -10,6 +10,8 @@ typedef char EJSBool;
 typedef struct _EJSContext* EJSContext;
 typedef union _EJSValue EJSValue;
 
+typedef void (*EJSValueFunc)(EJSValue *value);
+
 #ifndef TRUE
 #define TRUE 1
 #define FALSE 0

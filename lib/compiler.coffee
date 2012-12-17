@@ -3,7 +3,7 @@ escodegen = require 'escodegen'
 syntax = esprima.Syntax
 debug = require 'debug'
 
-debug.setLevel 1 #if __ejs? then 1 else 0
+debug.setLevel if __ejs? then 1 else 0
 
 { Set } = require 'set'
 { NodeVisitor } = require 'nodevisitor'
@@ -179,6 +179,10 @@ class LLVMIRVisitor extends NodeVisitor
                         invokeClosure: [null].concat (make_invoke_closure n for n in [0..10])
                         makeClosure: module.getOrInsertExternalFunction "_ejs_function_new", EjsValueType, [EjsClosureEnvType, EjsValueType, EjsClosureFuncType]
                 }
+
+                @llvm_intrinsics = {
+                        gcroot: module.getOrInsertIntrinsic "@llvm.gcroot"
+                }
                 
                 @ejs = {
                         personality:           module.getOrInsertExternalFunction "__ejs_personality_v0",           int32Type, [int32Type, int32Type, int64Type, int8PointerType, int8PointerType]
@@ -274,6 +278,10 @@ class LLVMIRVisitor extends NodeVisitor
                 saved_insert_point = irbuilder.getInsertBlock()
                 irbuilder.setInsertPointStartBB func.entry_bb
                 alloca = irbuilder.createAlloca type, name
+                if type is EjsValueType
+                        # EjsValues are rooted
+                        @createCall @llvm_intrinsics.gcroot, [(irbuilder.createPointerCast alloca, int8PointerType.pointerTo(), "rooted_alloca"), llvm.Constant.getNull int8PointerType], ""
+
                 irbuilder.setInsertPoint saved_insert_point
                 alloca
 
@@ -306,7 +314,9 @@ class LLVMIRVisitor extends NodeVisitor
         createPropertyStore: (obj,prop,rhs,computed) ->
                 if computed
                         # we store obj[prop], prop can be any value
-                        @createCall @ejs.object_setprop, [obj, (@visit prop), rhs], "propstore_computed"
+                        prop_alloca = @createAlloca @currentFunction, EjsValueType, "prop_alloca"
+                        irbuilder.createStore (@visit prop), prop_alloca
+                        @createCall @ejs.object_setprop, [obj, (irbuilder.createLoad prop_alloca, "%prop_alloca"), rhs], "propstore_computed"
                 else
                         # we store obj.prop, prop is an id
                         if prop.type is syntax.Identifier
@@ -453,26 +463,22 @@ class LLVMIRVisitor extends NodeVisitor
                 @visit n.body
 
         visitBreak: (n) ->
-                console.log "0"
-                # unlabeled breaks just exit our enclosing exitable scope
-                ExitableScope.scopeStack.exitAft true if not n.label
-                console.log "1"
+                # unlabeled breaks just exit our enclosing exitable scope.  breaks are valid in
+                # switch statements, though, so we can't just use LoopExitableScope.findFirst()
+                return TryExitableScope.findFirstNonTry().exitAft true if not n.label
                 # for the labeled case, we search up the stack for the right scope and exitAft that one
-                scope = LoopExitableScope.findLabeled n.label
-                console.log "2"
+                scope = LoopExitableScope.findLabeled n.label.name
                 # XXX check if scope is null, throw if so
-                console.log "3"
                 scope.exitAft true
-                console.log "4"
 
         visitContinue: (n) ->
                 # unlabeled continue just exit our enclosing exitable scope
-                ExitableScope.scopeStack.exitFore if not n.label
+                return LoopExitableScope.findFirst().exitFore() if not n.label
 
                 # for the labeled case, we search up the stack for the right scope and exitFore that one
-                scope = LoopExitableScope.findLabeled n.label
+                scope = LoopExitableScope.findLabeled n.label.name
                 # XXX check if scope is null, throw if so
-                scope.exitFore true
+                scope.exitFore()
                 
         visitFor: (n) ->
                 insertBlock = irbuilder.getInsertBlock()
@@ -583,14 +589,15 @@ class LLVMIRVisitor extends NodeVisitor
         visitUpdateExpression: (n) ->
                 result = @createAlloca @currentFunction, EjsValueType, "%update_result"
                 argument = @visit n.argument
-                c = llvm.ConstantFP.getDouble 1
-                num = @createCall @ejs.number_new, [c], "numtmp"
+                one = @createAlloca @currentFunction, EjsValueType, "one"
+                irbuilder.createStore (@createCall @ejs.number_new, [llvm.ConstantFP.getDouble 1], "numtmp"), one
+                
                 if not n.prefix
                         # postfix updates store the argument before the op
                         irbuilder.createStore argument, result
 
                 # argument = argument $op 1
-                temp = @createCall @ejs["binop#{if n.operator is '++' then '+' else '-'}"], [argument, num], "update_temp"
+                temp = @createCall @ejs["binop#{if n.operator is '++' then '+' else '-'}"], [argument, (irbuilder.createLoad one, "load_one")], "update_temp"
                 
                 @storeValueInDest temp, n.argument
                 
@@ -654,15 +661,18 @@ class LLVMIRVisitor extends NodeVisitor
                         irbuilder.createBr @iifeStack[0].iife_dest_bb
                 else
                         rv = if n.argument? then (@visit n.argument) else @loadUndefinedEjsValue()
-
+                        
                         if @finallyStack.length > 0
                                 if not @returnValueAlloca?
                                         @returnValueAlloca = @createAlloca @currentFunction, EjsValueType, "returnValue"
                                 irbuilder.createStore rv, @returnValueAlloca
-                                irbuilder.createStore (llvm.Constant.getIntegerValue int32Type, ExitableScope.REASON_RETURN), @cleanup_alloca
+                                irbuilder.createStore (llvm.Constant.getIntegerValue int32Type, ExitableScope.REASON_RETURN), @currentFunction.cleanup_alloca
                                 irbuilder.createBr @finallyStack[0]
                         else
-                                irbuilder.createRet rv
+                                return_alloca = @createAlloca @currentFunction, EjsValueType, "return_alloca"
+                                irbuilder.createStore rv, return_alloca
+                        
+                                irbuilder.createRet irbuilder.createLoad return_alloca, "return_load"
                                                 
 
         visitVariableDeclaration: (n) ->
@@ -722,7 +732,9 @@ class LLVMIRVisitor extends NodeVisitor
                                 result = @createPropertyStore @loadGlobal(), lhs, rhvalue, false
                         result
                 else if lhs.type is syntax.MemberExpression
-                        return @createPropertyStore (@visit lhs.object), lhs.property, rhvalue, lhs.computed
+                        object_alloca = @createAlloca @currentFunction, EjsValueType, "object_alloca"
+                        irbuilder.createStore (@visit lhs.object), object_alloca
+                        result = @createPropertyStore (irbuilder.createLoad object_alloca, "load_object"), lhs.property, rhvalue, lhs.computed
                 else
                         throw "unhandled lhs type #{lhs.type}"
 
@@ -801,7 +813,7 @@ class LLVMIRVisitor extends NodeVisitor
                 # now create allocas for the formal parameters
                 for param in n.params[BUILTIN_PARAMS.length..]
                         if param.type is syntax.Identifier
-                                alloca = irbuilder.createAlloca EjsValueType, "local_#{param.name}"
+                                alloca = @createAlloca @currentFunction, EjsValueType, "local_#{param.name}"
                                 new_scope[param.name] = alloca
                                 allocas.push alloca
                         else
@@ -901,8 +913,15 @@ class LLVMIRVisitor extends NodeVisitor
                 callee = @ejs[builtin]
                 if not callee
                         throw "Internal error: unhandled binary operator '#{n.operator}'"
+
+                left_visited = @createAlloca @currentFunction, EjsValueType, "binop_left"
+                irbuilder.createStore (@visit n.left), left_visited
+                
+                right_visited = @createAlloca @currentFunction, EjsValueType, "binop_right"
+                irbuilder.createStore (@visit n.right), right_visited
+                
                 # call the add method
-                return @createCall callee, [(@visit n.left), (@visit n.right)], "result_#{builtin}"
+                @createCall callee, [(irbuilder.createLoad left_visited, "binop_left_load"), (irbuilder.createLoad right_visited, "binop_right_load")], "result_#{builtin}"
 
         visitLogicalExpression: (n) ->
                 debug.log "operator = '#{n.operator}'"
@@ -1278,6 +1297,9 @@ class AddFunctionsVisitor extends NodeVisitor
 
                 # the LLVMIR func we allocate takes the proper EJSValue** parameter in the 4th spot instead of all the parameters
                 n.ir_func = takes_builtins @module.getOrInsertFunction n.ir_name, EjsValueType, (param.llvm_type for param in BUILTIN_PARAMS).concat [EjsValueType.pointerTo()]
+
+                # enable shadow stack map for gc roots
+                n.ir_func.setGC "shadow-stack"
                 
                 ir_args = n.ir_func.args
                 (ir_args[i].setName n.params[i].name) for i in [0...BUILTIN_PARAMS.length]
@@ -1320,11 +1342,9 @@ insert_toplevel_func = (tree, filename) ->
 
 class MoveFunctionDeclsToStartOfBlock extends NodeVisitor
         constructor: ->
-                console.log "MoveFunctionDeclsToStartOfBlock.ctor"
                 @prepends = []
                 
         visitFunction: (n) ->
-                console.log "MoveFunctionDeclsToStartOfBlock.visitFunction"
                 @prepends.unshift []
                 super
                 # we're assuming n.body is a BlockStatement here...
@@ -1332,7 +1352,6 @@ class MoveFunctionDeclsToStartOfBlock extends NodeVisitor
                 n
         
         visitBlock: (n) ->
-                console.log "MoveFunctionDeclsToStartOfBlock.visitBlock"
                 super
 
                 new_body = []
