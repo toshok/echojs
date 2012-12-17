@@ -3,7 +3,7 @@ escodegen = require 'escodegen'
 syntax = esprima.Syntax
 debug = require 'debug'
 
-debug.setLevel 1 #if __ejs? then 1 else 0
+debug.setLevel if __ejs? then 1 else 0
 
 { Set } = require 'set'
 { NodeVisitor } = require 'nodevisitor'
@@ -593,14 +593,15 @@ class LLVMIRVisitor extends NodeVisitor
         visitUpdateExpression: (n) ->
                 result = @createAlloca @currentFunction, EjsValueType, "%update_result"
                 argument = @visit n.argument
-                c = llvm.ConstantFP.getDouble 1
-                num = @createCall @ejs.number_new, [c], "numtmp"
+                one = @createAlloca @currentFunction, EjsValueType, "one"
+                irbuilder.createStore (@createCall @ejs.number_new, [llvm.ConstantFP.getDouble 1], "numtmp"), one
+                
                 if not n.prefix
                         # postfix updates store the argument before the op
                         irbuilder.createStore argument, result
 
                 # argument = argument $op 1
-                temp = @createCall @ejs["binop#{if n.operator is '++' then '+' else '-'}"], [argument, num], "update_temp"
+                temp = @createCall @ejs["binop#{if n.operator is '++' then '+' else '-'}"], [argument, (irbuilder.createLoad one, "load_one")], "update_temp"
                 
                 @storeValueInDest temp, n.argument
                 
@@ -816,7 +817,7 @@ class LLVMIRVisitor extends NodeVisitor
                 # now create allocas for the formal parameters
                 for param in n.params[BUILTIN_PARAMS.length..]
                         if param.type is syntax.Identifier
-                                alloca = irbuilder.createAlloca EjsValueType, "local_#{param.name}"
+                                alloca = @createAlloca @currentFunction, EjsValueType, "local_#{param.name}"
                                 new_scope[param.name] = alloca
                                 allocas.push alloca
                         else
@@ -1345,11 +1346,9 @@ insert_toplevel_func = (tree, filename) ->
 
 class MoveFunctionDeclsToStartOfBlock extends NodeVisitor
         constructor: ->
-                console.log "MoveFunctionDeclsToStartOfBlock.ctor"
                 @prepends = []
                 
         visitFunction: (n) ->
-                console.log "MoveFunctionDeclsToStartOfBlock.visitFunction"
                 @prepends.unshift []
                 super
                 # we're assuming n.body is a BlockStatement here...
@@ -1357,7 +1356,6 @@ class MoveFunctionDeclsToStartOfBlock extends NodeVisitor
                 n
         
         visitBlock: (n) ->
-                console.log "MoveFunctionDeclsToStartOfBlock.visitBlock"
                 super
 
                 new_body = []
