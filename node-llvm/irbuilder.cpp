@@ -4,6 +4,7 @@
 #include "value.h"
 #include "landingpad.h"
 #include "switch.h"
+#include "callinvoke.h"
 #include "basicblock.h"
 
 using namespace node;
@@ -143,7 +144,7 @@ namespace jsllvm {
       if (ArgsV.back() == 0) abort(); // XXX throw an exception here
     }
 
-    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateCall(callee, ArgsV, *name));
+    Handle<v8::Value> result = Call::New(IRBuilder::builder.CreateCall(callee, ArgsV, *name));
     return scope.Close(result);
   }
 
@@ -164,7 +165,7 @@ namespace jsllvm {
       if (ArgsV.back() == 0) abort(); // XXX throw an exception here
     }
 
-    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateInvoke(callee, normal_dest, unwind_dest, ArgsV, *name));
+    Handle<v8::Value> result = Invoke::New(IRBuilder::builder.CreateInvoke(callee, normal_dest, unwind_dest, ArgsV, *name));
     return scope.Close(result);
   }
 

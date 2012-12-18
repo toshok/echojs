@@ -24,6 +24,7 @@ namespace jsllvm {
     s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("returnType"), Function::GetReturnType);
     s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("type"), Function::GetType);
     s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("doesNotThrow"), Function::GetDoesNotThrow);
+    s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("onlyReadsMemory"), Function::GetOnlyReadsMemory);
 
     NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", Function::Dump);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "setOnlyReadsMemory", Function::SetOnlyReadsMemory);
@@ -153,6 +154,14 @@ namespace jsllvm {
     HandleScope scope;
     Function* fun = ObjectWrap::Unwrap<Function>(info.This());
     Handle<v8::Value> result = Boolean::New(fun->llvm_fun->doesNotThrow());
+    return scope.Close(result);
+  }
+
+  Handle<v8::Value> Function::GetOnlyReadsMemory (Local<String> property, const AccessorInfo& info)
+  {
+    HandleScope scope;
+    Function* fun = ObjectWrap::Unwrap<Function>(info.This());
+    Handle<v8::Value> result = Boolean::New(fun->llvm_fun->onlyReadsMemory());
     return scope.Close(result);
   }
 

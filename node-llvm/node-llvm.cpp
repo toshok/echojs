@@ -12,6 +12,7 @@
 #include "constantfp.h"
 #include "landingpad.h"
 #include "switch.h"
+#include "callinvoke.h"
 
 std::string& trim(std::string& str)
 {
@@ -37,6 +38,8 @@ extern "C" {
     jsllvm::ConstantFP::Init(target);
     jsllvm::LandingPad::Init(target);
     jsllvm::Switch::Init(target);
+    jsllvm::Call::Init(target);
+    jsllvm::Invoke::Init(target);
   }
 
   NODE_MODULE(llvm, init);

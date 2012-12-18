@@ -91,6 +91,7 @@ def build(bld):
 #  obj.cxxflags = ["-g", "-D_FILE_OFFSET_BITS=64", "-D_LARGEFILE_SOURCE", "-Wall"]
   obj.target = "llvm"
   obj.source = ["basicblock.cpp",
+  	        "callinvoke.cpp",
                 "constant.cpp",
                 "constantfp.cpp",
                 "function.cpp",

@@ -188,9 +188,9 @@ class LLVMIRVisitor extends NodeVisitor
                         object_new:            module.getOrInsertExternalFunction "_ejs_object_new",                EjsValueType, [EjsValueType]
                         arguments_new:         module.getOrInsertExternalFunction "_ejs_arguments_new",             EjsValueType, [int32Type, EjsValueType.pointerTo()]
                         array_new:             module.getOrInsertExternalFunction "_ejs_array_new",                 EjsValueType, [int32Type]
-                        number_new:            module.getOrInsertExternalFunction "_ejs_number_new",                EjsValueType, [llvm.Type.getDoubleTy()]
+                        number_new:            only_reads_memory module.getOrInsertExternalFunction "_ejs_number_new",                EjsValueType, [llvm.Type.getDoubleTy()]
                         boolean_new:           module.getOrInsertExternalFunction "_ejs_boolean_new",               EjsValueType, [boolType]
-                        string_new_utf8:       does_not_throw module.getOrInsertExternalFunction "_ejs_string_new_utf8",           EjsValueType, [stringType]
+                        string_new_utf8:       only_reads_memory does_not_throw module.getOrInsertExternalFunction "_ejs_string_new_utf8",           EjsValueType, [stringType]
                         regexp_new_utf8:       module.getOrInsertExternalFunction "_ejs_regexp_new_utf8",           EjsValueType, [stringType]
                         truthy:                module.getOrInsertExternalFunction "_ejs_truthy",                    boolType, [EjsValueType]
                         object_setprop:        module.getOrInsertExternalFunction "_ejs_object_setprop",            EjsValueType, [EjsValueType, EjsValueType, EjsValueType]
@@ -588,7 +588,9 @@ class LLVMIRVisitor extends NodeVisitor
                 result = @createAlloca @currentFunction, EjsValueType, "%update_result"
                 argument = @visit n.argument
                 one = @createAlloca @currentFunction, EjsValueType, "one"
-                irbuilder.createStore (@createCall @ejs.number_new, [llvm.ConstantFP.getDouble 1], "numtmp"), one
+                call = @createCall @ejs.number_new, [llvm.ConstantFP.getDouble 1], "numtmp"
+                call.setOnlyReadsMemory()
+                irbuilder.createStore call, one
                 
                 if not n.prefix
                         # postfix updates store the argument before the op
@@ -1148,7 +1150,9 @@ class LLVMIRVisitor extends NodeVisitor
                 else if typeof n.value is "number"
                         debug.log "literal number: #{n.value}"
                         c = llvm.ConstantFP.getDouble n.value
-                        return @createCall @ejs.number_new, [c], "numtmp"
+                        call = @createCall @ejs.number_new, [c], "numtmp"
+                        call.setOnlyReadsMemory()
+                        return call
                 else if typeof n.value is "boolean"
                         debug.log "literal boolean: #{n.value}"
                         c = llvm.Constant.getIntegerValue boolType, (if n.value then 1 else 0)
@@ -1163,11 +1167,15 @@ class LLVMIRVisitor extends NodeVisitor
                 # for some builtins we know they won't throw, so we can skip this step and still use createCall.
                 if TryExitableScope.unwindStack.length is 0 or callee.doesNotThrow or not canThrow
                         calltmp = irbuilder.createCall callee, argv, callname
+                        if callee.onlyReadsMemory
+                                calltmp.setOnlyReadsMemory
                 else
                         insertBlock = irbuilder.getInsertBlock()
                         insertFunc = insertBlock.parent
                         normal_block  = new llvm.BasicBlock "normal", insertFunc
                         calltmp = irbuilder.createInvoke callee, argv, normal_block, TryExitableScope.unwindStack[0].getUnwindBlock(), callname
+                        if callee.onlyReadsMemory
+                                calltmp.setOnlyReadsMemory
                         # after we've made our call we need to change the insertion point to our continuation
                         irbuilder.setInsertPoint normal_block
                 calltmp
