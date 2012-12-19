@@ -189,10 +189,9 @@ class LLVMIRVisitor extends NodeVisitor
                         arguments_new:         module.getOrInsertExternalFunction "_ejs_arguments_new",             EjsValueType, [int32Type, EjsValueType.pointerTo()]
                         array_new:             module.getOrInsertExternalFunction "_ejs_array_new",                 EjsValueType, [int32Type]
                         number_new:            only_reads_memory module.getOrInsertExternalFunction "_ejs_number_new",                EjsValueType, [llvm.Type.getDoubleTy()]
-                        boolean_new:           module.getOrInsertExternalFunction "_ejs_boolean_new",               EjsValueType, [boolType]
                         string_new_utf8:       only_reads_memory does_not_throw module.getOrInsertExternalFunction "_ejs_string_new_utf8",           EjsValueType, [stringType]
                         regexp_new_utf8:       module.getOrInsertExternalFunction "_ejs_regexp_new_utf8",           EjsValueType, [stringType]
-                        truthy:                module.getOrInsertExternalFunction "_ejs_truthy",                    boolType, [EjsValueType]
+                        truthy:                only_reads_memory module.getOrInsertExternalFunction "_ejs_truthy",                    boolType, [EjsValueType]
                         object_setprop:        module.getOrInsertExternalFunction "_ejs_object_setprop",            EjsValueType, [EjsValueType, EjsValueType, EjsValueType]
                         object_getprop:        only_reads_memory module.getOrInsertExternalFunction "_ejs_object_getprop",           EjsValueType, [EjsValueType, EjsValueType]
                         object_getprop_utf8:   only_reads_memory module.getOrInsertExternalFunction "_ejs_object_getprop_utf8",      EjsValueType, [EjsValueType, stringType]
@@ -204,6 +203,9 @@ class LLVMIRVisitor extends NodeVisitor
                         throw:                 module.getOrInsertExternalFunction "_ejs_throw",                     voidType, [EjsValueType]
                         rethrow:               module.getOrInsertExternalFunction "_ejs_rethrow",                   voidType, [EjsValueType]
                         undefined:             module.getOrInsertGlobal           "_ejs_undefined",                 EjsValueType
+                        "true":                module.getOrInsertGlobal           "_ejs_true",                      EjsValueType
+                        "false":               module.getOrInsertGlobal           "_ejs_false",                     EjsValueType
+                        "null":                module.getOrInsertGlobal           "_ejs_null",                      EjsValueType
                         global:                module.getOrInsertGlobal           "_ejs_global",                    EjsValueType
                         exception_typeinfo:    module.getOrInsertGlobal           "EJS_EHTYPE_ejsvalue",            EjsExceptionTypeInfoType
                         
@@ -221,22 +223,27 @@ class LLVMIRVisitor extends NodeVisitor
                         "binop+":          module.getOrInsertExternalFunction "_ejs_op_add",         EjsValueType, [EjsValueType, EjsValueType]
                         "binop*":          module.getOrInsertExternalFunction "_ejs_op_mult",        EjsValueType, [EjsValueType, EjsValueType]
                         "binop/":          module.getOrInsertExternalFunction "_ejs_op_div",         EjsValueType, [EjsValueType, EjsValueType]
-                        "binop<":          module.getOrInsertExternalFunction "_ejs_op_lt",          EjsValueType, [EjsValueType, EjsValueType]
-                        "binop<=":         module.getOrInsertExternalFunction "_ejs_op_le",          EjsValueType, [EjsValueType, EjsValueType]
-                        "binop>":          module.getOrInsertExternalFunction "_ejs_op_gt",          EjsValueType, [EjsValueType, EjsValueType]
-                        "binop>=":         module.getOrInsertExternalFunction "_ejs_op_ge",          EjsValueType, [EjsValueType, EjsValueType]
+                        "binop<":          only_reads_memory module.getOrInsertExternalFunction "_ejs_op_lt",          EjsValueType, [EjsValueType, EjsValueType]
+                        "binop<=":         only_reads_memory module.getOrInsertExternalFunction "_ejs_op_le",          EjsValueType, [EjsValueType, EjsValueType]
+                        "binop>":          only_reads_memory module.getOrInsertExternalFunction "_ejs_op_gt",          EjsValueType, [EjsValueType, EjsValueType]
+                        "binop>=":         only_reads_memory module.getOrInsertExternalFunction "_ejs_op_ge",          EjsValueType, [EjsValueType, EjsValueType]
                         "binop-":          module.getOrInsertExternalFunction "_ejs_op_sub",         EjsValueType, [EjsValueType, EjsValueType]
-                        "binop===":        module.getOrInsertExternalFunction "_ejs_op_strict_eq",   EjsValueType, [EjsValueType, EjsValueType]
-                        "binop==":         module.getOrInsertExternalFunction "_ejs_op_eq",          EjsValueType, [EjsValueType, EjsValueType]
-                        "binop!==":        module.getOrInsertExternalFunction "_ejs_op_strict_neq",  EjsValueType, [EjsValueType, EjsValueType]
-                        "binop!=":         module.getOrInsertExternalFunction "_ejs_op_neq",         EjsValueType, [EjsValueType, EjsValueType]
+                        "binop===":        only_reads_memory module.getOrInsertExternalFunction "_ejs_op_strict_eq",   EjsValueType, [EjsValueType, EjsValueType]
+                        "binop==":         only_reads_memory module.getOrInsertExternalFunction "_ejs_op_eq",          EjsValueType, [EjsValueType, EjsValueType]
+                        "binop!==":        only_reads_memory module.getOrInsertExternalFunction "_ejs_op_strict_neq",  EjsValueType, [EjsValueType, EjsValueType]
+                        "binop!=":         only_reads_memory module.getOrInsertExternalFunction "_ejs_op_neq",         EjsValueType, [EjsValueType, EjsValueType]
                         "binopinstanceof": module.getOrInsertExternalFunction "_ejs_op_instanceof",  EjsValueType, [EjsValueType, EjsValueType]
                         "binopin":         module.getOrInsertExternalFunction "_ejs_op_in",          EjsValueType, [EjsValueType, EjsValueType]
                 }
 
                 @initGlobalScope();
 
-        loadNullEjsValue: -> llvm.Constant.getNull EjsValueType
+        loadBoolEjsValue: (n) ->
+                irbuilder.createLoad (if n then @ejs['true'] else @ejs['false']), "load_bool"
+        loadNullEjsValue: ->
+                nullval = irbuilder.createLoad @ejs['null'], "load_null"
+                nullval.isundefined = true
+                nullval
         loadUndefinedEjsValue: ->
                 undef = irbuilder.createLoad @ejs.undefined, "load_undefined"
                 undef.isundefined = true
@@ -276,9 +283,9 @@ class LLVMIRVisitor extends NodeVisitor
                 saved_insert_point = irbuilder.getInsertBlock()
                 irbuilder.setInsertPointStartBB func.entry_bb
                 alloca = irbuilder.createAlloca type, name
-                if type is EjsValueType
-                        # EjsValues are rooted
-                        @createCall @llvm_intrinsics.gcroot, [(irbuilder.createPointerCast alloca, int8PointerType.pointerTo(), "rooted_alloca"), llvm.Constant.getNull int8PointerType], ""
+                #if type is EjsValueType
+                #        # EjsValues are rooted
+                #        @createCall @llvm_intrinsics.gcroot, [(irbuilder.createPointerCast alloca, int8PointerType.pointerTo(), "rooted_alloca"), llvm.Constant.getNull int8PointerType], ""
 
                 irbuilder.setInsertPoint saved_insert_point
                 alloca
@@ -426,7 +433,9 @@ class LLVMIRVisitor extends NodeVisitor
                 for casenum in [0...case_checks.length-1]
                         test = @visit case_checks[casenum].test
                         discTest = @createCall @ejs["binop==="], [discr, test], "test"
+                        discTest.setReadOnlyMemory()
                         disc_truthy = @createCall @ejs.truthy, [discTest], "disc_truthy"
+                        disc_truthy.setReadOnlyMemory()
                         disc_cmp = irbuilder.createICmpEq disc_truthy, (llvm.Constant.getIntegerValue boolType, 0), "disccmpresult"
                         irbuilder.createCondBr disc_cmp, case_checks[casenum+1].dest_check, case_checks[casenum].body
                         irbuilder.setInsertPoint case_checks[casenum+1].dest_check
@@ -497,6 +506,7 @@ class LLVMIRVisitor extends NodeVisitor
                 irbuilder.setInsertPoint test_bb
                 if n.test
                         cond_truthy = @createCall @ejs.truthy, [@visit(n.test)], "cond_truthy"
+                        cond_truthy.setOnlyReadsMemory()
                         cmp = irbuilder.createICmpEq cond_truthy, (llvm.Constant.getIntegerValue boolType, 0), "cmpresult"
                         irbuilder.createCondBr cmp, merge_bb, body_bb
                 else
@@ -530,6 +540,7 @@ class LLVMIRVisitor extends NodeVisitor
                 irbuilder.setInsertPoint while_bb
                 
                 cond_truthy = @createCall @ejs.truthy, [@visit(n.test)], "cond_truthy"
+                cond_truthy.setOnlyReadsMemory()
                 cmp = irbuilder.createICmpEq cond_truthy, (llvm.Constant.getIntegerValue boolType, 0), "cmpresult"
                 
                 irbuilder.createCondBr cmp, merge_bb, body_bb
@@ -621,6 +632,7 @@ class LLVMIRVisitor extends NodeVisitor
                 
                 # first we convert our conditional EJSValue to a boolean
                 cond_truthy = @createCall @ejs.truthy, [@visit(n.test)], "cond_truthy"
+                cond_truthy.setOnlyReadsMemory()
 
                 insertBlock = irbuilder.getInsertBlock()
                 insertFunc = insertBlock.parent
@@ -929,6 +941,7 @@ class LLVMIRVisitor extends NodeVisitor
 
                 left_visited = @visit n.left
                 cond_truthy = @createCall @ejs.truthy, [left_visited], "cond_truthy"
+                cond_truthy.setOnlyReadsMemory()
 
                 insertBlock = irbuilder.getInsertBlock()
                 insertFunc = insertBlock.parent
@@ -1155,8 +1168,7 @@ class LLVMIRVisitor extends NodeVisitor
                         return call
                 else if typeof n.value is "boolean"
                         debug.log "literal boolean: #{n.value}"
-                        c = llvm.Constant.getIntegerValue boolType, (if n.value then 1 else 0)
-                        return @createCall @ejs.boolean_new, [c], "booltmp"
+                        return @loadBoolEjsValue n.value
                 throw "Internal error: unrecognized literal of type #{typeof n.value}"
 
         createCall: (callee, argv, callname, canThrow) ->
@@ -1301,7 +1313,7 @@ class AddFunctionsVisitor extends NodeVisitor
                 n.ir_func = takes_builtins @module.getOrInsertFunction n.ir_name, EjsValueType, (param.llvm_type for param in BUILTIN_PARAMS).concat [EjsValueType.pointerTo()]
 
                 # enable shadow stack map for gc roots
-                n.ir_func.setGC "shadow-stack"
+                #n.ir_func.setGC "shadow-stack"
                 
                 ir_args = n.ir_func.args
                 (ir_args[i].setName n.params[i].name) for i in [0...BUILTIN_PARAMS.length]

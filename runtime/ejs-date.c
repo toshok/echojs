@@ -2,19 +2,20 @@
 
 #include "ejs-ops.h"
 #include "ejs-value.h"
+#include "ejs-function.h"
 #include "ejs-date.h"
 
-static EJSValue* _ejs_date_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr);
-static EJSValue* _ejs_date_specop_get_own_property (EJSValue* obj, EJSValue* propertyName);
-static EJSValue* _ejs_date_specop_get_property (EJSValue* obj, EJSValue* propertyName);
-static void      _ejs_date_specop_put (EJSValue *obj, EJSValue* propertyName, EJSValue* val, EJSBool flag);
-static EJSBool   _ejs_date_specop_can_put (EJSValue *obj, EJSValue* propertyName);
-static EJSBool   _ejs_date_specop_has_property (EJSValue *obj, EJSValue* propertyName);
-static EJSBool   _ejs_date_specop_delete (EJSValue *obj, EJSValue* propertyName, EJSBool flag);
-static EJSValue* _ejs_date_specop_default_value (EJSValue *obj, const char *hint);
-static void      _ejs_date_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag);
-static void      _ejs_date_specop_finalize (EJSValue *obj);
-static void      _ejs_date_specop_scan (EJSValue* obj, EJSValueFunc scan_func);
+static ejsval _ejs_date_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr);
+static ejsval _ejs_date_specop_get_own_property (ejsval obj, ejsval propertyName);
+static ejsval _ejs_date_specop_get_property (ejsval obj, ejsval propertyName);
+static void      _ejs_date_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
+static EJSBool   _ejs_date_specop_can_put (ejsval obj, ejsval propertyName);
+static EJSBool   _ejs_date_specop_has_property (ejsval obj, ejsval propertyName);
+static EJSBool   _ejs_date_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
+static ejsval _ejs_date_specop_default_value (ejsval obj, const char *hint);
+static void      _ejs_date_specop_define_own_property (ejsval obj, ejsval propertyName, ejsval propertyDescriptor, EJSBool flag);
+static void      _ejs_date_specop_finalize (EJSObject* obj);
+static void      _ejs_date_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
 
 EJSSpecOps _ejs_date_specops = {
   "Date",
@@ -36,24 +37,26 @@ EJSObject* _ejs_date_alloc_instance()
   return (EJSObject*)_ejs_gc_new (EJSDate);
 }
 
-EJSValue*
+ejsval
 _ejs_date_new_unix (int timestamp)
 {
   EJSDate* rv = _ejs_gc_new (EJSDate);
 
-  _ejs_init_object ((EJSObject*)rv, _ejs_date_get_prototype(), NULL/*XXX*/);
+  _ejs_init_object ((EJSObject*)rv, _ejs_Date_proto, &_ejs_date_specops);
 
   time_t t = (time_t)timestamp;
 
   if (!localtime_r(&t, &rv->tm))
     NOT_IMPLEMENTED();
 
-  return (EJSValue*)rv;
+  return OBJECT_TO_EJSVAL((EJSObject*)rv);
 }
 
-EJSValue* _ejs_Date;
-static EJSValue*
-_ejs_Date_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+ejsval _ejs_Date;
+ejsval _ejs_Date_proto;
+
+static ejsval
+_ejs_Date_impl (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   if (EJSVAL_IS_UNDEFINED(_this)) {
     // called as a function
@@ -67,7 +70,7 @@ _ejs_Date_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
   else {
     printf ("called Date() as a constructor!\n");
 
-    EJSDate* date = (EJSDate*) _this;
+    EJSDate* date = (EJSDate*) EJSVAL_TO_OBJECT(_this);
 
     // new Date (year, month [, date [, hours [, minutes [, seconds [, ms ] ] ] ] ] )
 
@@ -92,17 +95,10 @@ _ejs_Date_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
   }
 }
 
-static EJSValue* _ejs_Date_proto;
-EJSValue*
-_ejs_date_get_prototype()
+static ejsval
+_ejs_Date_prototype_toString (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-  return _ejs_Date_proto;
-}
-
-static EJSValue*
-_ejs_Date_prototype_toString (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
-{
-  EJSDate *date = (EJSDate*)_this;
+  EJSDate *date = (EJSDate*)EJSVAL_TO_OBJECT(_this);
 
   // returns strings of the format 'Tue Aug 28 2012 16:45:58 GMT-0700 (PDT)'
 
@@ -115,29 +111,29 @@ _ejs_Date_prototype_toString (EJSValue* env, EJSValue* _this, int argc, EJSValue
   return _ejs_string_new_utf8 (date_buf);
 }
 
-static EJSValue*
-_ejs_Date_prototype_getTimezoneOffset (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_Date_prototype_getTimezoneOffset (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-  EJSDate *date = (EJSDate*)_this;
+  EJSDate *date = (EJSDate*)EJSVAL_TO_OBJECT(_this);
 
-  return _ejs_number_new (date->tm.tm_gmtoff);
+  return NUMBER_TO_EJSVAL (date->tm.tm_gmtoff);
 }
 
 void
-_ejs_date_init(EJSValue *global)
+_ejs_date_init(ejsval global)
 {
   START_SHADOW_STACK_FRAME;
 
   _ejs_gc_add_named_root (_ejs_Date_proto);
-  _ejs_Date_proto = _ejs_object_new(NULL);
+  _ejs_Date_proto = _ejs_object_new(_ejs_null);
 
-  ADD_STACK_ROOT(EJSValue*, tmpobj, _ejs_function_new_utf8 (NULL, "Date", (EJSClosureFunc)_ejs_Date_impl));
+  ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "Date", (EJSClosureFunc)_ejs_Date_impl));
   _ejs_Date = tmpobj;
 
   _ejs_object_setprop_utf8 (_ejs_Date,       "prototype",  _ejs_Date_proto);
 
-#define OBJ_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_Date_##x)); _ejs_object_setprop (_ejs_Date, funcname, tmpfunc); } while (0)
-#define PROTO_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_Date_prototype_##x)); _ejs_object_setprop (_ejs_Date_proto, funcname, tmpfunc); } while (0)
+#define OBJ_METHOD(x) do { ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Date_##x)); _ejs_object_setprop (_ejs_Date, funcname, tmpfunc); } while (0)
+#define PROTO_METHOD(x) do { ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Date_prototype_##x)); _ejs_object_setprop (_ejs_Date_proto, funcname, tmpfunc); } while (0)
 
   PROTO_METHOD(toString);
   PROTO_METHOD(getTimezoneOffset);
@@ -150,68 +146,68 @@ _ejs_date_init(EJSValue *global)
   END_SHADOW_STACK_FRAME;
 }
 
-static EJSValue*
-_ejs_date_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr)
+static ejsval
+_ejs_date_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr)
 {
   return _ejs_object_specops.get (obj, propertyName, isCStr);
 }
 
-static EJSValue*
-_ejs_date_specop_get_own_property (EJSValue* obj, EJSValue* propertyName)
+static ejsval
+_ejs_date_specop_get_own_property (ejsval obj, ejsval propertyName)
 {
   return _ejs_object_specops.get_own_property (obj, propertyName);
 }
 
-static EJSValue*
-_ejs_date_specop_get_property (EJSValue* obj, EJSValue* propertyName)
+static ejsval
+_ejs_date_specop_get_property (ejsval obj, ejsval propertyName)
 {
   return _ejs_object_specops.get_property (obj, propertyName);
 }
 
 static void
-_ejs_date_specop_put (EJSValue *obj, EJSValue* propertyName, EJSValue* val, EJSBool flag)
+_ejs_date_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag)
 {
   _ejs_object_specops.put (obj, propertyName, val, flag);
 }
 
 static EJSBool
-_ejs_date_specop_can_put (EJSValue *obj, EJSValue* propertyName)
+_ejs_date_specop_can_put (ejsval obj, ejsval propertyName)
 {
   return _ejs_object_specops.can_put (obj, propertyName);
 }
 
 static EJSBool
-_ejs_date_specop_has_property (EJSValue *obj, EJSValue* propertyName)
+_ejs_date_specop_has_property (ejsval obj, ejsval propertyName)
 {
   return _ejs_object_specops.has_property (obj, propertyName);
 }
 
 static EJSBool
-_ejs_date_specop_delete (EJSValue *obj, EJSValue* propertyName, EJSBool flag)
+_ejs_date_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
 {
   return _ejs_object_specops._delete (obj, propertyName, flag);
 }
 
-static EJSValue*
-_ejs_date_specop_default_value (EJSValue *obj, const char *hint)
+static ejsval
+_ejs_date_specop_default_value (ejsval obj, const char *hint)
 {
   return _ejs_object_specops.default_value (obj, hint);
 }
 
 static void
-_ejs_date_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag)
+_ejs_date_specop_define_own_property (ejsval obj, ejsval propertyName, ejsval propertyDescriptor, EJSBool flag)
 {
   _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
 }
 
 static void
-_ejs_date_specop_finalize (EJSValue *obj)
+_ejs_date_specop_finalize (EJSObject* obj)
 {
   _ejs_object_specops.finalize (obj);
 }
 
 static void
-_ejs_date_specop_scan (EJSValue* obj, EJSValueFunc scan_func)
+_ejs_date_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
   _ejs_object_specops.scan (obj, scan_func);
 }

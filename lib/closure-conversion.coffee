@@ -137,13 +137,13 @@ LocateEnvVisitor = class LocateEnvVisitor extends NodeVisitor
                 env = current_env
                 while env?
                         if env.decls.member n.name
-#                                if env.closed.member n.name
-#                                        n.ejs_substitute = true
-#                                else if env isnt current_env
-#                                        env.closed.add n.name
-#                                        n.ejs_substitute = true
-                                env.closed.add n.name
-                                n.ejs_substitute = true
+                                if env.closed.member n.name
+                                        n.ejs_substitute = true
+                                else if env isnt current_env
+                                        env.closed.add n.name
+                                        n.ejs_substitute = true
+#                                env.closed.add n.name
+#                                n.ejs_substitute = true
                                 return n
                         else
                                 env = env.parent
@@ -266,7 +266,24 @@ class SubstituteVariables extends NodeVisitor
                 else
                         n.init = init
                         n
-                
+
+        visitForIn: (n) ->
+                # for-in loops complicate things.
+
+                left = @visit n.left
+                n.right = @visit n.right
+                n.body = @visit n.body
+                if Array.isArray left
+                        n.left = create_identifier left[0].declarations[0].id.name
+                        return {
+                                type: syntax.BlockStatement
+                                body: left.concat [n]
+                        }
+                else
+                        n.left = left
+                        n
+
+
         visitVariableDeclaration: (n) ->
                 rv = []
                 for decl in n.declarations
@@ -470,13 +487,13 @@ exports.convert = (tree) ->
 
         debug.log "after LocateEnvVisitor:"
         debug.log -> escodegen.generate tree3
-
+        
         substitute_vars = new SubstituteVariables tree3
         tree4 = substitute_vars.visit tree3
 
         debug.log "after SubstituteVariables:"
         debug.log -> escodegen.generate tree4
-
+        
         lambda_lift = new LambdaLift tree4
         tree5 = lambda_lift.visit tree4
 

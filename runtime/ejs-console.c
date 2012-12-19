@@ -2,14 +2,15 @@
 #include "ejs-gc.h"
 #include "ejs-ops.h"
 #include "ejs-value.h"
+#include "ejs-function.h"
 
-static EJSValue*
-_ejs_console_log (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_console_log (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   START_SHADOW_STACK_FRAME;
 
   if (argc > 0) {
-    ADD_STACK_ROOT(EJSValue*, strval, ToString(args[0]));
+    ADD_STACK_ROOT(ejsval, strval, ToString(args[0]));
 
     fprintf (stdout, "%s\n", EJSVAL_TO_STRING(strval));
   }
@@ -19,13 +20,13 @@ _ejs_console_log (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
   return _ejs_undefined;
 }
 
-static EJSValue*
-_ejs_console_warn (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_console_warn (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   START_SHADOW_STACK_FRAME;
 
   if (argc > 0) {
-    ADD_STACK_ROOT(EJSValue*, strval, ToString(args[0]));
+    ADD_STACK_ROOT(ejsval, strval, ToString(args[0]));
 
     fprintf (stderr, "%s\n", EJSVAL_TO_STRING(strval));
   }
@@ -37,13 +38,13 @@ _ejs_console_warn (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 
 
 void
-_ejs_console_init(EJSValue* global)
+_ejs_console_init(ejsval global)
 {
   START_SHADOW_STACK_FRAME;
 
-  ADD_STACK_ROOT(EJSValue*, _ejs_console, _ejs_object_new (NULL));
+  ADD_STACK_ROOT(ejsval, _ejs_console, _ejs_object_new (_ejs_null));
 
-#define OBJ_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_console_##x)); _ejs_object_setprop (_ejs_console, funcname, tmpfunc); } while (0)
+#define OBJ_METHOD(x) do { ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_console_##x)); _ejs_object_setprop (_ejs_console, funcname, tmpfunc); } while (0)
 
   OBJ_METHOD(log);
   OBJ_METHOD(warn);

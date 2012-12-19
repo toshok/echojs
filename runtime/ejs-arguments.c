@@ -1,21 +1,21 @@
 #include <assert.h>
 #include <math.h>
 
+#include "ejs.h"
 #include "ejs-ops.h"
-#include "ejs-value.h"
 #include "ejs-arguments.h"
 
-static EJSValue* _ejs_arguments_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr);
-static EJSValue* _ejs_arguments_specop_get_own_property (EJSValue* obj, EJSValue* propertyName);
-static EJSValue* _ejs_arguments_specop_get_property (EJSValue* obj, EJSValue* propertyName);
-static void      _ejs_arguments_specop_put (EJSValue *obj, EJSValue* propertyName, EJSValue* val, EJSBool flag);
-static EJSBool   _ejs_arguments_specop_can_put (EJSValue *obj, EJSValue* propertyName);
-static EJSBool   _ejs_arguments_specop_has_property (EJSValue *obj, EJSValue* propertyName);
-static EJSBool   _ejs_arguments_specop_delete (EJSValue *obj, EJSValue* propertyName, EJSBool flag);
-static EJSValue* _ejs_arguments_specop_default_value (EJSValue *obj, const char *hint);
-static void      _ejs_arguments_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag);
-static void      _ejs_arguments_specop_finalize (EJSValue* obj);
-static void      _ejs_arguments_specop_scan (EJSValue* obj, EJSValueFunc scan_func);
+static ejsval  _ejs_arguments_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr);
+static ejsval  _ejs_arguments_specop_get_own_property (ejsval obj, ejsval propertyName);
+static ejsval  _ejs_arguments_specop_get_property (ejsval obj, ejsval propertyName);
+static void    _ejs_arguments_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
+static EJSBool _ejs_arguments_specop_can_put (ejsval obj, ejsval propertyName);
+static EJSBool _ejs_arguments_specop_has_property (ejsval obj, ejsval propertyName);
+static EJSBool _ejs_arguments_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
+static ejsval  _ejs_arguments_specop_default_value (ejsval obj, const char *hint);
+static void    _ejs_arguments_specop_define_own_property (ejsval obj, ejsval propertyName, ejsval propertyDescriptor, EJSBool flag);
+static void    _ejs_arguments_specop_finalize (EJSObject* obj);
+static void    _ejs_arguments_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
 
 EJSSpecOps _ejs_arguments_specops = {
   "Arguments",
@@ -40,47 +40,47 @@ EJSObject* _ejs_arguments_alloc_instance()
   return (EJSObject*)_ejs_gc_new (EJSArguments);
 }
 
-EJSValue*
-_ejs_arguments_new (int numElements, EJSValue** args)
+ejsval
+_ejs_arguments_new (int numElements, ejsval* args)
 {
   EJSArguments* rv = _ejs_gc_new (EJSArguments);
 
   _ejs_init_object ((EJSObject*)rv, _ejs_arguments_get_prototype(), &_ejs_arguments_specops);
 
   rv->argc = numElements;
-  rv->args = (EJSValue**)calloc(numElements, sizeof (EJSValue*));
-  memmove (rv->args, args, sizeof(EJSValue*) * rv->argc);
-  return (EJSValue*)rv;
+  rv->args = (ejsval*)calloc(numElements, sizeof (ejsval));
+  memmove (rv->args, args, sizeof(ejsval) * rv->argc);
+  return OBJECT_TO_EJSVAL((EJSObject*)rv);
 }
 
 
-static EJSValue* _ejs_Arguments_proto;
-EJSValue*
+static ejsval _ejs_Arguments_proto;
+ejsval
 _ejs_arguments_get_prototype()
 {
   return _ejs_Arguments_proto;
 }
 
 void
-_ejs_arguments_init(EJSValue *global)
+_ejs_arguments_init(ejsval global)
 {
-  _ejs_Arguments_proto = _ejs_object_new(NULL);
+  _ejs_Arguments_proto = _ejs_object_new(_ejs_null);
   _ejs_gc_add_named_root (_ejs_Arguments_proto);
 }
 
-static EJSValue*
-_ejs_arguments_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr)
+static ejsval
+_ejs_arguments_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr)
 {
-  EJSArguments* arguments = (EJSArguments*)&obj->o;
+  EJSArguments* arguments = (EJSArguments*)EJSVAL_TO_OBJECT(obj);
 
   // check if propertyName is an integer, or a string that we can convert to an int
-  EJSBool is_index = FALSE;
+  EJSBool is_index = EJS_FALSE;
   int idx = 0;
   if (!isCStr && EJSVAL_IS_NUMBER(propertyName)) {
     double n = EJSVAL_TO_NUMBER(propertyName);
     if (floor(n) == n) {
       idx = (int)n;
-      is_index = TRUE;
+      is_index = EJS_TRUE;
     }
   }
 
@@ -93,71 +93,71 @@ _ejs_arguments_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr)
   }
 
   // we also handle the length getter here
-  if ((isCStr && !strcmp("length", (char*)propertyName))
+  if ((isCStr && !strcmp("length", (char*)EJSVAL_TO_PRIVATE_PTR_IMPL(propertyName)))
       || (!isCStr && EJSVAL_IS_STRING(propertyName) && !strcmp ("length", EJSVAL_TO_STRING(propertyName)))) {
-    return _ejs_number_new (arguments->argc);
+    return NUMBER_TO_EJSVAL(arguments->argc);
   }
 
   // otherwise we fallback to the object implementation
   return _ejs_object_specops.get (obj, propertyName, isCStr);
 }
 
-static EJSValue*
-_ejs_arguments_specop_get_own_property (EJSValue* obj, EJSValue* propertyName)
+static ejsval
+_ejs_arguments_specop_get_own_property (ejsval obj, ejsval propertyName)
 {
   return _ejs_object_specops.get_own_property (obj, propertyName);
 }
 
-static EJSValue*
-_ejs_arguments_specop_get_property (EJSValue* obj, EJSValue* propertyName)
+static ejsval
+_ejs_arguments_specop_get_property (ejsval obj, ejsval propertyName)
 {
   return _ejs_object_specops.get_property (obj, propertyName);
 }
 
 static void
-_ejs_arguments_specop_put (EJSValue *obj, EJSValue* propertyName, EJSValue* val, EJSBool flag)
+_ejs_arguments_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag)
 {
   _ejs_object_specops.put (obj, propertyName, val, flag);
 }
 
 static EJSBool
-_ejs_arguments_specop_can_put (EJSValue *obj, EJSValue* propertyName)
+_ejs_arguments_specop_can_put (ejsval obj, ejsval propertyName)
 {
   return _ejs_object_specops.can_put (obj, propertyName);
 }
 
 static EJSBool
-_ejs_arguments_specop_has_property (EJSValue *obj, EJSValue* propertyName)
+_ejs_arguments_specop_has_property (ejsval obj, ejsval propertyName)
 {
   return _ejs_object_specops.has_property (obj, propertyName);
 }
 
 static EJSBool
-_ejs_arguments_specop_delete (EJSValue *obj, EJSValue* propertyName, EJSBool flag)
+_ejs_arguments_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
 {
   return _ejs_object_specops._delete (obj, propertyName, flag);
 }
 
-static EJSValue*
-_ejs_arguments_specop_default_value (EJSValue *obj, const char *hint)
+static ejsval
+_ejs_arguments_specop_default_value (ejsval obj, const char *hint)
 {
   return _ejs_object_specops.default_value (obj, hint);
 }
 
 static void
-_ejs_arguments_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag)
+_ejs_arguments_specop_define_own_property (ejsval obj, ejsval propertyName, ejsval propertyDescriptor, EJSBool flag)
 {
   _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
 }
 
 static void
-_ejs_arguments_specop_finalize (EJSValue *obj)
+_ejs_arguments_specop_finalize (EJSObject* obj)
 {
   _ejs_object_specops.finalize (obj);
 }
 
 static void
-_ejs_arguments_specop_scan (EJSValue* obj, EJSValueFunc scan_func)
+_ejs_arguments_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
   _ejs_object_specops.scan (obj, scan_func);
 }

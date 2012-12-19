@@ -3,35 +3,19 @@
 #define _ejs_value_h
 
 #include "ejs.h"
-#include "ejs-gc.h"
-#include "ejs-object.h"
-#include "ejs-array.h"
-#include "ejs-function.h"
 
-typedef struct {
-  GCObjectHeader header;
-  double data;
-} EJSPrimNumber;
+typedef struct { // must match GCObjectHeader in ejs-gc.h
+  uint8_t gc_data;
+  void* prev_link; // actually a GCObjectPtr
+  void* next_link; // actually a GCObjectPtr
+} heap_val_header;
 
-typedef struct {
-  GCObjectHeader header;
+typedef double EJSPrimNumber;
+
+struct _EJSPrimString {
+  heap_val_header header;
   int len;
   char data[1]; // utf8 \0 terminated
-} EJSPrimString;
-
-typedef struct {
-  GCObjectHeader header;
-  EJSBool data;
-} EJSPrimBool;
-
-union _EJSValue {
-  GCObjectHeader header;
-
-  EJSObject o;
-
-  EJSPrimNumber n;
-  EJSPrimString s;
-  EJSPrimBool b;
 };
 
 #define EJSVAL_IS_PRIMITIVE(v) (EJSVAL_IS_NUMBER(v) || EJSVAL_IS_STRING(v) || EJSVAL_IS_BOOLEAN(v) || EJSVAL_IS_UNDEFINED(v))
@@ -39,36 +23,43 @@ union _EJSValue {
 #define EJSVAL_TAG(v) (((GCObjectHeader*)v)->tag & 0xffff)
 #define EJSVAL_SET_TAG(v,t) ((GCObjectHeader*)v)->tag = (((GCObjectHeader*)v)->tag & ~0xffff) | t
 
-#define EJSVAL_IS_OBJECT(v)    (EJSVAL_TAG(v) == EJSValueTagObject)
-#define EJSVAL_IS_ARRAY(v)     (EJSVAL_IS_OBJECT(v) && ((EJSObject*)v)->proto == _ejs_array_get_prototype())
-#define EJSVAL_IS_NUMBER(v)    (EJSVAL_TAG(v) == EJSValueTagNumber)
-#define EJSVAL_IS_STRING(v)    (EJSVAL_TAG(v) == EJSValueTagString)
-#define EJSVAL_IS_BOOLEAN(v)   (EJSVAL_TAG(v) == EJSValueTagBoolean)
-#define EJSVAL_IS_FUNCTION(v)     (EJSVAL_IS_OBJECT(v) && ((EJSObject*)v)->proto == _ejs_function_get_prototype())
-#define EJSVAL_IS_UNDEFINED(v) (EJSVAL_TAG(v) == EJSValueTagUndefined)
+#define EJSVAL_IS_OBJECT(v)    EJSVAL_IS_OBJECT_IMPL(v)
+#define EJSVAL_IS_ARRAY(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->proto.asBits == _ejs_Array_proto.asBits))
+#define EJSVAL_IS_FUNCTION(v)  (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->proto.asBits == _ejs_Function_proto.asBits))
+#define EJSVAL_IS_NUMBER(v)    EJSVAL_IS_DOUBLE_IMPL(v)
+#define EJSVAL_IS_STRING(v)    EJSVAL_IS_STRING_IMPL(v)
+#define EJSVAL_IS_BOOLEAN(v)   EJSVAL_IS_BOOLEAN_IMPL(v)
+#define EJSVAL_IS_UNDEFINED(v) EJSVAL_IS_UNDEFINED_IMPL(v)
+#define EJSVAL_IS_NULL(v)      EJSVAL_IS_NULL_IMPL(v)
 
-#define EJSVAL_TO_STRING(v)       ((char*)((EJSPrimString*)v)->data)
-#define EJSVAL_TO_STRLEN(v)       (((EJSPrimString*)v)->len)
-#define EJSVAL_TO_NUMBER(v)       (((EJSPrimNumber*)v)->data)
-#define EJSVAL_TO_BOOLEAN(v)      (((EJSPrimBool*)v)->data)
-#define EJSVAL_TO_FUNC(v)         (((EJSFunction*)v)->func)
-#define EJSVAL_TO_ENV(v)          (((EJSFunction*)v)->env)
+#define EJSVAL_TO_OBJECT(v)       EJSVAL_TO_OBJECT_IMPL(v)
+#define EJSVAL_TO_STRING(v)       EJSVAL_TO_STRING_IMPL(v)->data
+#define EJSVAL_TO_STRLEN(v)       EJSVAL_TO_STRING_IMPL(v)->len
+#define EJSVAL_TO_NUMBER(v)       v.asDouble
+#define EJSVAL_TO_BOOLEAN(v)      EJSVAL_TO_BOOLEAN_IMPL(v)
+#define EJSVAL_TO_FUNC(v)         ((EJSFunction*)EJSVAL_TO_OBJECT_IMPL(v))->func
+#define EJSVAL_TO_ENV(v)          ((EJSFunction*)EJSVAL_TO_OBJECT_IMPL(v))->env
+
+#define OBJECT_TO_EJSVAL(v)       OBJECT_TO_EJSVAL_IMPL(v)
+#define BOOLEAN_TO_EJSVAL(v)      BOOLEAN_TO_EJSVAL_IMPL(v)
+#define NUMBER_TO_EJSVAL(v)       DOUBLE_TO_EJSVAL_IMPL(v)
+#define STRING_TO_EJSVAL(v)       STRING_TO_EJSVAL_IMPL(v)
+
+#define EJSVAL_EQ(v1,v2)          ((v1).asBits == (v2).asBits)
 
 #define EJS_NUMBER_FORMAT "%g"
 
 EJS_BEGIN_DECLS
 
-void _ejs_dump_value (EJSValue* val);
+void _ejs_dump_value (ejsval val);
 
-EJSValue* _ejs_string_new_utf8 (const char* str);
-EJSValue* _ejs_string_new_utf8_len (const char* str, int len);
+ejsval _ejs_number_new (double value);
+ejsval _ejs_string_new_utf8 (const char* str);
+ejsval _ejs_string_new_utf8_len (const char* str, int len);
 
-EJSValue* _ejs_number_new (double value);
-EJSValue* _ejs_boolean_new (EJSBool value);
+void _ejs_value_finalize(ejsval val);
 
-EJSValue* _ejs_undefined_new ();
-
-void _ejs_value_finalize(EJSValue *val);
+typedef void (*EJSValueFunc)(ejsval value);
 
 EJS_END_DECLS
 

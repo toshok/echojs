@@ -11,15 +11,15 @@ extern const char *entry_filename;
 int
 main(int argc, char** argv)
 {
-  _ejs_init(argc, argv);
+  EJS_GC_MARK_THREAD_STACK_BOTTOM;
 
-  llvm_gc_root_chain = NULL;
+  _ejs_init(argc, argv);
 
   START_SHADOW_STACK_FRAME;
 
-  EJSValue *entry_name = _ejs_string_new_utf8(entry_filename);
+  ejsval entry_name = _ejs_string_new_utf8(entry_filename);
 
-  _ejs_invoke_closure_1 (_ejs_require, NULL, 1, entry_name);
+  _ejs_invoke_closure_1 (_ejs_require, _ejs_null, 1, entry_name);
 
   END_SHADOW_STACK_FRAME;
 

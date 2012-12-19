@@ -8,6 +8,9 @@
 #include "ejs-gc.h"
 #include "ejs-value.h"
 #include "ejs-string.h"
+#include "ejsval.h"
+
+#define spew 0
 
 static int page_size;
 
@@ -15,6 +18,8 @@ static int page_size;
 #define INITIAL_HEAP_SIZE 4 * 1024 * 1024
 
 #define OBJ_TO_PAGE(o) ((o) & ~page_size)
+#define ALLOC_ALIGN 16
+
 
 // #if osx
 #include <mach/vm_statistics.h>
@@ -22,8 +27,6 @@ static int page_size;
 // #else
 // #define MAP_FD -1
 // #endif
-
-StackEntry *llvm_gc_root_chain;
 
 static GCObjectPtr heap;
 static GCObjectPtr work_list;
@@ -103,40 +106,40 @@ detach(GCObjectPtr list, GCObjectPtr obj)
 static unsigned int black_mask = BLACK_MASK_START;
 static unsigned int white_mask = WHITE_MASK_START;
 
-static void
+static EJS_ALWAYS_INLINE void
 set_gray (GCObjectPtr obj)
 {
-  obj->tag = (obj->tag & ~COLOR_MASK) | GRAY_MASK;
+  obj->gc_data = (obj->gc_data & ~COLOR_MASK) | GRAY_MASK;
 }
 
-static void
+static EJS_ALWAYS_INLINE void
 set_white (GCObjectPtr obj)
 {
-  obj->tag = (obj->tag & ~COLOR_MASK) | white_mask;
+  obj->gc_data = (obj->gc_data & ~COLOR_MASK) | white_mask;
 }
 
-static void
+static EJS_ALWAYS_INLINE void
 set_black (GCObjectPtr obj)
 {
-  obj->tag = (obj->tag & ~COLOR_MASK) | black_mask;
+  obj->gc_data = (obj->gc_data & ~COLOR_MASK) | black_mask;
 }
 
-static EJSBool
+static EJS_ALWAYS_INLINE EJSBool
 is_white (GCObjectPtr obj)
 {
-  return (obj->tag & COLOR_MASK) == white_mask;
+  return (obj->gc_data & COLOR_MASK) == white_mask;
 }
 
-static EJSBool
+static EJS_ALWAYS_INLINE EJSBool
 is_black (GCObjectPtr obj)
 {
-  return (obj->tag & COLOR_MASK) == black_mask;
+  return (obj->gc_data & COLOR_MASK) == black_mask;
 }
 
-static EJSBool
+static EJS_ALWAYS_INLINE EJSBool
 is_gray (GCObjectPtr obj)
 {
-  return (obj->tag & COLOR_MASK) == GRAY_MASK;
+  return (obj->gc_data & COLOR_MASK) == GRAY_MASK;
 }
 
 void
@@ -158,14 +161,20 @@ from_worklist_to_heap(GCObjectPtr obj)
 static void _scan_from_ejsobject(GCObjectPtr obj);
 
 static void
-_scan_ejsvalue (EJSValue *obj)
+_scan_ejsvalue (ejsval val)
 {
-  if (obj == NULL)
+  if (!EJSVAL_IS_GCTHING_IMPL(val))
     return;
 
-  GCObjectPtr gcptr = (GCObjectPtr)obj;
+  if (EJSVAL_IS_NULL(val))
+    return;
 
-  if (EJSVAL_IS_OBJECT(obj)) {
+  GCObjectPtr gcptr = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(val);
+
+  if (gcptr == NULL)
+    return;
+
+  if (EJSVAL_IS_OBJECT(val)) {
     // grey objects are in the mark stack, black objects we know are not garbage
     if (!is_white(gcptr))
       return;
@@ -173,18 +182,56 @@ _scan_ejsvalue (EJSValue *obj)
     from_heap_to_worklist (gcptr);
   }
   else {
-    set_black (gcptr);
+    set_black(gcptr);
   }
 }
 
 static void
 _scan_from_ejsobject(GCObjectPtr obj)
 {
-  if (EJSVAL_IS_OBJECT(obj)) {
-    EJSValue* val = (EJSValue*)obj;
-    OP(val,scan)(val, _scan_ejsvalue);
-  }
+  OP(obj,scan)((EJSObject*)obj, _scan_ejsvalue);
 }
+
+#if CONSERVATIVE_STACKWALK
+static GCObjectPtr *stack_bottom;
+
+void
+_ejs_gc_mark_thread_stack_bottom(GCObjectPtr* btm)
+{
+  stack_bottom = btm;
+}
+
+int
+llen(GCObjectPtr p)
+{
+  int l = 0;
+  while (p) {
+    l ++;
+    p = p->next_link;
+  }
+  return l;
+}
+
+int
+lindex(GCObjectPtr p, GCObjectPtr list)
+{
+  if (!p)
+    return -1;
+
+  int l = 0;
+  while (list) {
+    if (p == list)
+      return l;
+    l ++;
+    list = list->next_link;
+  }
+
+  return -1;
+}
+
+#else
+
+StackEntry *llvm_gc_root_chain;
 
 /// @brief Calls Visitor(root, meta) for each GC root on the stack.
 ///        root and meta are exactly the values passed to
@@ -201,7 +248,12 @@ void visitLLVMGCRoots()
 
     // For roots [NumMeta, NumRoots), the metadata pointer is null.
     for (unsigned e = R->Map->NumRoots; i != e; ++i) {
-      GCObjectPtr candidate = (GCObjectPtr)R->Roots[i];
+      ejsval candidate_val = *(ejsval*)&R->Roots[i];
+      if (!EJSVAL_IS_OBJECT(candidate_val)) {
+	// FIXME we mark all ejsval's as roots, even those that aren't objects.
+	continue;
+      }
+      GCObjectPtr candidate = (GCObjectPtr)EJSVAL_TO_OBJECT(candidate_val);
       if (candidate == NULL) continue;
       if (is_white (candidate)) {
 #if spew
@@ -212,10 +264,15 @@ void visitLLVMGCRoots()
     }
   }
 }
+#endif
 
 static void
 _ejs_gc_collect_inner(EJSBool shutting_down)
 {
+#if CONSERVATIVE_STACKWALK
+  GCObjectPtr stack_top;
+#endif
+
   // very simple stop the world collector
 
   int num_roots = 0;
@@ -227,14 +284,46 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
     for (RootSetEntry *entry = root_set; entry; entry = entry->next) {
       num_roots++;
       if (*entry->root) {
-	set_black (*entry->root);
-	if (EJSVAL_IS_OBJECT(*entry->root)) {
-	  _scan_from_ejsobject(*entry->root);
+	ejsval rootval = *((ejsval*)entry->root);
+	if (!EJSVAL_IS_GCTHING_IMPL(rootval))
+	  continue;
+	GCObjectPtr root_ptr = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(rootval);
+	if (root_ptr == NULL)
+	  continue;
+	set_black (root_ptr);
+	if (EJSVAL_IS_OBJECT(rootval)) {
+	  _scan_from_ejsobject(root_ptr);
 	}
       }
     }
 
+#if CONSERVATIVE_STACKWALK
+    char* stackp;
+    for (stackp = (char*)&stack_top; stackp < ((char*)stack_bottom)-sizeof(ejsval); stackp++) {
+      ejsval candidate_val = *((ejsval*)stackp);
+      if (EJSVAL_IS_GCTHING_IMPL(candidate_val)) {
+	GCObjectPtr gcptr = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(candidate_val);
+	if (lindex (gcptr, heap) == -1)
+	  continue;
+	if (is_white(gcptr)) {
+	  if (EJSVAL_IS_STRING(candidate_val)) {
+#if spew
+	    printf ("found ptr to %p(PrimString) on stack\n", EJSVAL_TO_STRING(candidate_val));
+#endif
+	    set_black(gcptr);
+	  }
+	  else {
+#if spew
+	    printf ("found ptr to %p(%s) on stack\n", EJSVAL_TO_OBJECT(candidate_val), CLASSNAME(EJSVAL_TO_OBJECT(candidate_val)));
+#endif
+	    from_heap_to_worklist(gcptr);
+	  }
+	}
+      }
+    }
+#else
     visitLLVMGCRoots();
+#endif
 
     GCObjectPtr p;
     while ((p = work_list)) {
@@ -254,9 +343,16 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
       white_objs++;
       heap = detach (heap, p);
 
-      if (EJSVAL_TAG(p) == EJSValueTagObject) {
-	EJSValue *ejsval = (EJSValue*)p;
-	OP(ejsval,finalize)(ejsval);
+      if ((p->gc_data & 0x01) != 0) {
+#if spew
+	printf ("finalizing object %p(%s)\n", p, CLASSNAME(p));
+#endif
+	OP(p,finalize)((EJSObject*)p);
+      }
+      else {
+#if spew
+	printf ("finalizing object without finalize flag\n");
+#endif
       }
 
       free(p);
@@ -268,7 +364,6 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
   black_mask = white_mask;
   white_mask = tmp;
 
-  if (shutting_down) {
 #if spew
     printf ("_ejs_gc_collect stats:\n");
     printf ("   num_roots: %d\n", num_roots);
@@ -276,6 +371,7 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
     printf ("   garbage objects: %d\n", white_objs);
 #endif
 
+  if (shutting_down) {
     // NULL out all of our roots
 
     RootSetEntry *entry = root_set;
@@ -306,13 +402,13 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
 void
 _ejs_gc_collect()
 {
-  _ejs_gc_collect_inner(FALSE);
+  _ejs_gc_collect_inner(EJS_FALSE);
 }
 
 void
 _ejs_gc_shutdown()
 {
-  _ejs_gc_collect_inner(TRUE);
+  _ejs_gc_collect_inner(EJS_TRUE);
 }
 
 size_t alloced_size;
@@ -326,13 +422,13 @@ _ejs_gc_alloc(size_t size)
     alloced_size = 0;
   }
   GCObjectPtr ptr = (GCObjectPtr)calloc (1, size);
-  ptr->tag = white_mask;
+  ptr->gc_data = white_mask;
   heap = attach (heap, ptr);
   return ptr;
 }
 
 void
-__ejs_gc_add_named_root(EJSValue** root, const char *name)
+__ejs_gc_add_named_root(ejsval* root, const char *name)
 {
   RootSetEntry* entry = malloc(sizeof(RootSetEntry));
   entry->root = (GCObjectPtr*)root;
@@ -342,7 +438,7 @@ __ejs_gc_add_named_root(EJSValue** root, const char *name)
 }
 
 void
-_ejs_gc_remove_root(EJSValue** root)
+_ejs_gc_remove_root(ejsval* root)
 {
   abort();
 }

@@ -8,18 +8,18 @@ typedef struct {
   EJSObject obj;
 
   /* string specific data */
-  EJSValue *primStr;
+  ejsval primStr;
 } EJSString;
 
 EJS_BEGIN_DECLS
 
-extern EJSValue* _ejs_String;
+extern ejsval _ejs_String;
+extern ejsval _ejs_String_proto;
 extern EJSSpecOps _ejs_string_specops;
 
-EJSValue* _ejs_string_get_prototype();
 EJSObject* _ejs_string_alloc_instance();
 
-void _ejs_string_init(EJSValue* global);
+void _ejs_string_init(ejsval global);
 
 EJS_END_DECLS
 

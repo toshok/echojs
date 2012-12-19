@@ -2,21 +2,22 @@
 #include <string.h>
 #include <math.h>
 
+#include "ejs.h"
 #include "ejs-ops.h"
-#include "ejs-value.h"
 #include "ejs-array.h"
+#include "ejs-function.h"
 
-static EJSValue* _ejs_array_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr);
-static EJSValue* _ejs_array_specop_get_own_property (EJSValue* obj, EJSValue* propertyName);
-static EJSValue* _ejs_array_specop_get_property (EJSValue* obj, EJSValue* propertyName);
-static void      _ejs_array_specop_put (EJSValue *obj, EJSValue* propertyName, EJSValue* val, EJSBool flag);
-static EJSBool   _ejs_array_specop_can_put (EJSValue *obj, EJSValue* propertyName);
-static EJSBool   _ejs_array_specop_has_property (EJSValue *obj, EJSValue* propertyName);
-static EJSBool   _ejs_array_specop_delete (EJSValue *obj, EJSValue* propertyName, EJSBool flag);
-static EJSValue* _ejs_array_specop_default_value (EJSValue *obj, const char *hint);
-static void      _ejs_array_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag);
-static void      _ejs_array_specop_finalize (EJSValue *obj);
-static void      _ejs_array_specop_scan (EJSValue* obj, EJSValueFunc scan_func);
+static ejsval  _ejs_array_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr);
+static ejsval  _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName);
+static ejsval  _ejs_array_specop_get_property (ejsval obj, ejsval propertyName);
+static void    _ejs_array_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
+static EJSBool _ejs_array_specop_can_put (ejsval obj, ejsval propertyName);
+static EJSBool _ejs_array_specop_has_property (ejsval obj, ejsval propertyName);
+static EJSBool _ejs_array_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
+static ejsval  _ejs_array_specop_default_value (ejsval obj, const char *hint);
+static void    _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, ejsval propertyDescriptor, EJSBool flag);
+static void    _ejs_array_specop_finalize (EJSObject* obj);
+static void    _ejs_array_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
 
 EJSSpecOps _ejs_array_specops = {
   "Array",
@@ -33,44 +34,39 @@ EJSSpecOps _ejs_array_specops = {
   _ejs_array_specop_scan
 };
 
-
-#define EJSOBJ_IS_ARRAY(obj) (((EJSObject*)obj)->proto == _ejs_Array_proto)
+#define _EJS_ARRAY_LEN(arrobj)      (((EJSArray*)arrobj)->array_length)
+#define _EJS_ARRAY_ELEMENTS(arrobj) (((EJSArray*)arrobj)->elements)
 
 EJSObject* _ejs_array_alloc_instance()
 {
   return (EJSObject*)_ejs_gc_new (EJSArray);
 }
 
-EJSValue*
+ejsval
 _ejs_array_new (int numElements)
 {
   EJSArray* rv = _ejs_gc_new (EJSArray);
 
-  _ejs_init_object ((EJSObject*)rv, _ejs_array_get_prototype(), &_ejs_array_specops);
+  _ejs_init_object ((EJSObject*)rv, _ejs_Array_proto, &_ejs_array_specops);
 
   rv->array_length = 0;
-  rv->array_alloc = numElements + 40;
-  rv->elements = (EJSValue**)calloc(rv->array_alloc, sizeof (EJSValue*));
-  return (EJSValue*)rv;
+  rv->array_alloc = numElements + 5;
+  rv->elements = (ejsval*)calloc(rv->array_alloc, sizeof (ejsval));
+  return OBJECT_TO_EJSVAL((EJSObject*)rv);
 }
 
 void
 _ejs_array_foreach_element (EJSArray* arr, EJSValueFunc foreach_func)
 {
-  for (int i = 0; i < EJS_ARRAY_LEN(arr); i ++)
-    foreach_func (EJS_ARRAY_ELEMENTS(arr)[i]);
+  for (int i = 0; i < arr->array_length; i ++)
+    foreach_func (arr->elements[i]);
 }
 
-static EJSValue* _ejs_Array_proto;
-EJSValue*
-_ejs_array_get_prototype()
-{
-  return _ejs_Array_proto;
-}
+ejsval _ejs_Array_proto;
+ejsval _ejs_Array;
 
-EJSValue* _ejs_Array;
-static EJSValue*
-_ejs_Array_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_Array_impl (ejsval env, ejsval _this, int argc, ejsval*args)
 {
   if (EJSVAL_IS_UNDEFINED(_this)) {
     // called as a function
@@ -82,11 +78,11 @@ _ejs_Array_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
       return _ejs_array_new((int)EJSVAL_TO_NUMBER(args[0]));
     }
     else {
-      EJSValue* rv = _ejs_array_new(argc);
+      ejsval rv = _ejs_array_new(argc);
       int i;
 
       for (i = 0; i < argc; i ++) {
-	_ejs_object_setprop (rv, _ejs_number_new (i), args[i]);
+	_ejs_object_setprop (rv, NUMBER_TO_EJSVAL(i), args[i]);
       }
 
       return rv;
@@ -98,20 +94,20 @@ _ejs_Array_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
   }
 }
 
-static EJSValue*
-_ejs_Array_prototype_shift (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_Array_prototype_shift (ejsval env, ejsval _this, int argc, ejsval*args)
 {
   // 1. Let O be the result of calling ToObject passing the this value as the argument.
-  EJSValue* O = ToObject(_this);
+  ejsval O = ToObject(_this);
 
   // EJS fast path for arrays
-  if (!strcmp (CLASSNAME(O), "Array")) {
+  if (!strcmp (CLASSNAME(EJSVAL_TO_OBJECT(O)), "Array")) {
     int len = EJS_ARRAY_LEN(O);
     if (len == 0) {
       return _ejs_undefined;
     }
-    EJSValue* first = EJS_ARRAY_ELEMENTS(O)[0];
-    memmove (EJS_ARRAY_ELEMENTS(O), EJS_ARRAY_ELEMENTS(O) + 1, sizeof(EJSValue*) * len-1);
+    ejsval first = EJS_ARRAY_ELEMENTS(O)[0];
+    memmove (EJS_ARRAY_ELEMENTS(O), EJS_ARRAY_ELEMENTS(O) + 1, sizeof(ejsval) * len-1);
     EJS_ARRAY_LEN(O) --;
     return first;
   }
@@ -119,7 +115,7 @@ _ejs_Array_prototype_shift (EJSValue* env, EJSValue* _this, int argc, EJSValue *
   NOT_IMPLEMENTED();
 #if notyet
   // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
-  EJSValue* lenVal = OP(O,get) (O, _ejs_string_new_utf8 ("length"));
+  ejsval lenVal = OP(O,get) (O, _ejs_string_new_utf8 ("length"));
 
   // 3. Let len be ToUint32(lenVal).
   int len = ToUint32(lenVal);
@@ -127,13 +123,13 @@ _ejs_Array_prototype_shift (EJSValue* env, EJSValue* _this, int argc, EJSValue *
   // 4. If len is zero, then
   if (len == 0) {
     //   a. Call the [[Put]] internal method of O with arguments "length", 0, and true.
-    OP(O,put) (O, _ejs_string_new_utf8 ("length"), 0, TRUE);
+    OP(O,put) (O, _ejs_string_new_utf8 ("length"), 0, EJS_TRUE);
     //   b. Return undefined.
     return _ejs_undefined;
   }
 
   // 5. Let first be the result of calling the [[Get]] internal method of O with argument "0".
-  EJSValue* first = OP(O,get) (O, _ejs_string_new_utf8 ("0"));
+  ejsval first = OP(O,get) (O, _ejs_string_new_utf8 ("0"));
 
   // 6. Let k be 1.
   int k = 1;
@@ -156,19 +152,19 @@ _ejs_Array_prototype_shift (EJSValue* env, EJSValue* _this, int argc, EJSValue *
 #endif
 }
 
-static EJSValue*
-_ejs_Array_prototype_unshift (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_Array_prototype_unshift (ejsval env, ejsval _this, int argc, ejsval*args)
 {
   // 1. Let O be the result of calling ToObject passing the this value as the argument.
-  EJSValue* O = ToObject(_this);
+  ejsval O = ToObject(_this);
 
   // EJS fast path for arrays
-  if (!strcmp (CLASSNAME(O), "Array")) {
+  if (!strcmp (CLASSNAME(EJSVAL_TO_OBJECT(O)), "Array")) {
     int len = EJS_ARRAY_LEN(O);
-    memmove (EJS_ARRAY_ELEMENTS(O) + argc, EJS_ARRAY_ELEMENTS(O), sizeof(EJSValue*) * len);
-    memmove (EJS_ARRAY_ELEMENTS(O), args, sizeof(EJSValue*) * argc);
+    memmove (EJS_ARRAY_ELEMENTS(O) + argc, EJS_ARRAY_ELEMENTS(O), sizeof(ejsval) * len);
+    memmove (EJS_ARRAY_ELEMENTS(O), args, sizeof(ejsval) * argc);
     EJS_ARRAY_LEN(O) += argc;
-    return _ejs_number_new (len + argc);
+    return NUMBER_TO_EJSVAL(len + argc);
   }
 
   NOT_IMPLEMENTED();
@@ -197,27 +193,27 @@ _ejs_Array_prototype_unshift (EJSValue* env, EJSValue* _this, int argc, EJSValue
   // 11. Return len+argCount.
 }
 
-static EJSValue*
-_ejs_Array_prototype_push (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_Array_prototype_push (ejsval env, ejsval _this, int argc, ejsval*args)
 {
   int i;
-  assert (EJSOBJ_IS_ARRAY(_this));
+  // XXX nanboxing change breaks this assert (EJSVAL_IS_ARRAY(_this));
   for (i = 0; i < argc; i ++)
     EJS_ARRAY_ELEMENTS(_this)[EJS_ARRAY_LEN(_this)++] = args[i];
-  return _ejs_number_new (EJS_ARRAY_LEN(_this));
+  return NUMBER_TO_EJSVAL (EJS_ARRAY_LEN(_this));
 }
 
-static EJSValue*
-_ejs_Array_prototype_pop (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_Array_prototype_pop (ejsval env, ejsval _this, int argc, ejsval*args)
 {
-  assert (EJSOBJ_IS_ARRAY(_this));
+  // XXX nanboxing change breaks this assert (EJSVAL_IS_ARRAY(_this));
   if (EJS_ARRAY_LEN(_this) == 0)
     return _ejs_undefined;
   return EJS_ARRAY_ELEMENTS(_this)[--EJS_ARRAY_LEN(_this)];
 }
 
-static EJSValue*
-_ejs_Array_prototype_concat (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_Array_prototype_concat (ejsval env, ejsval _this, int argc, ejsval*args)
 {
   int numElements;
 
@@ -228,12 +224,12 @@ _ejs_Array_prototype_concat (EJSValue* env, EJSValue* _this, int argc, EJSValue 
     numElements += EJS_ARRAY_LEN(args[i]);
   }
 
-  EJSValue* rv = _ejs_array_new(numElements);
+  ejsval rv = _ejs_array_new(numElements);
   numElements = 0;
-  memmove (EJS_ARRAY_ELEMENTS(rv) + numElements, EJS_ARRAY_ELEMENTS(_this), sizeof(EJSValue*) * EJS_ARRAY_LEN(_this));
+  memmove (EJS_ARRAY_ELEMENTS(rv) + numElements, EJS_ARRAY_ELEMENTS(_this), sizeof(ejsval) * EJS_ARRAY_LEN(_this));
   numElements += EJS_ARRAY_LEN(_this);
   for (i = 0; i < argc; i ++) {
-    memmove (EJS_ARRAY_ELEMENTS(rv) + numElements, EJS_ARRAY_ELEMENTS(args[i]), sizeof(EJSValue*) * EJS_ARRAY_LEN(args[i]));
+    memmove (EJS_ARRAY_ELEMENTS(rv) + numElements, EJS_ARRAY_ELEMENTS(args[i]), sizeof(ejsval) * EJS_ARRAY_LEN(args[i]));
     numElements += EJS_ARRAY_LEN(args[i]);
   }
   EJS_ARRAY_LEN(rv) = numElements;
@@ -241,8 +237,8 @@ _ejs_Array_prototype_concat (EJSValue* env, EJSValue* _this, int argc, EJSValue 
   return rv;
 }
 
-static EJSValue*
-_ejs_Array_prototype_slice (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_Array_prototype_slice (ejsval env, ejsval _this, int argc, ejsval*args)
 {
   int len = EJS_ARRAY_LEN(_this);
   int begin = argc > 0 ? (int)EJSVAL_TO_NUMBER(args[0]) : 0;
@@ -251,19 +247,19 @@ _ejs_Array_prototype_slice (EJSValue* env, EJSValue* _this, int argc, EJSValue *
   begin = MIN(begin, len);
   end = MIN(end, len);
 
-  EJSValue* rv = _ejs_array_new(end-begin);
+  ejsval rv = _ejs_array_new(end-begin);
   int i, rv_i;
 
   rv_i = 0;
   for (i = begin; i < end; i ++, rv_i++) {
-    _ejs_object_setprop (rv, _ejs_number_new (rv_i), EJS_ARRAY_ELEMENTS(_this)[i]);
+    _ejs_object_setprop (rv, NUMBER_TO_EJSVAL (rv_i), EJS_ARRAY_ELEMENTS(_this)[i]);
   }
 
   return rv;
 }
 
-static EJSValue*
-_ejs_Array_prototype_join (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_Array_prototype_join (ejsval env, ejsval _this, int argc, ejsval*args)
 {
   if (EJS_ARRAY_LEN(_this) == 0)
     return _ejs_string_new_utf8 ("");
@@ -272,7 +268,7 @@ _ejs_Array_prototype_join (EJSValue* env, EJSValue* _this, int argc, EJSValue **
   int separator_len;
 
   if (argc > 0) {
-    EJSValue* sepToString = ToString(args[0]);
+    ejsval sepToString = ToString(args[0]);
     separator_len = EJSVAL_TO_STRLEN(sepToString);
     separator = EJSVAL_TO_STRING(sepToString);
   }
@@ -284,7 +280,7 @@ _ejs_Array_prototype_join (EJSValue* env, EJSValue* _this, int argc, EJSValue **
   char* result;
   int result_len = 0;
 
-  EJSValue** strings = (EJSValue**)malloc (sizeof (EJSValue*) * EJS_ARRAY_LEN(_this));
+  ejsval* strings = (ejsval*)malloc (sizeof (ejsval) * EJS_ARRAY_LEN(_this));
   int i;
 
   for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
@@ -307,7 +303,7 @@ _ejs_Array_prototype_join (EJSValue* env, EJSValue* _this, int argc, EJSValue **
   }
   result[result_len-1] = 0;
 
-  EJSValue* rv = _ejs_string_new_utf8(result);
+  ejsval rv = _ejs_string_new_utf8(result);
 
   free (result);
   free (strings);
@@ -315,39 +311,39 @@ _ejs_Array_prototype_join (EJSValue* env, EJSValue* _this, int argc, EJSValue **
   return rv;
 }
 
-static EJSValue*
-_ejs_Array_prototype_forEach (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_Array_prototype_forEach (ejsval env, ejsval _this, int argc, ejsval*args)
 {
   if (argc < 1)
     NOT_IMPLEMENTED();
 
-  EJSValue *fun = args[0];
+  ejsval fun = args[0];
 
   int i;
   for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
-    _ejs_invoke_closure_1 (fun, NULL, 1, EJS_ARRAY_ELEMENTS(_this)[i]);
+    _ejs_invoke_closure_1 (fun, _ejs_null, 1, EJS_ARRAY_ELEMENTS(_this)[i]);
   }
   return _ejs_undefined;
 }
 
-static EJSValue*
-_ejs_Array_prototype_splice (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_Array_prototype_splice (ejsval env, ejsval _this, int argc, ejsval*args)
 {
   NOT_IMPLEMENTED();
 }
 
-static EJSValue*
-_ejs_Array_prototype_indexOf (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_Array_prototype_indexOf (ejsval env, ejsval _this, int argc, ejsval*args)
 {
   if (argc != 1)
-    return _ejs_number_new (-1);
+    return NUMBER_TO_EJSVAL (-1);
 
   int i;
   int rv = -1;
-  EJSValue *needle = args[0];
-  if (needle == NULL) {
+  ejsval needle = args[0];
+  if (EJSVAL_IS_NULL(needle)) {
     for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
-      if (EJS_ARRAY_ELEMENTS(_this)[i] == NULL) {
+      if (EJSVAL_IS_NULL (EJS_ARRAY_ELEMENTS(_this)[i])) {
 	rv = i;
 	break;
       }
@@ -362,33 +358,33 @@ _ejs_Array_prototype_indexOf (EJSValue* env, EJSValue* _this, int argc, EJSValue
     }
   }
 
-  return _ejs_number_new (rv);
+  return NUMBER_TO_EJSVAL (rv);
 }
 
-static EJSValue*
-_ejs_Array_isArray (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_Array_isArray (ejsval env, ejsval _this, int argc, ejsval*args)
 {
-  if (argc == 0 || args[0] == NULL || EJSVAL_TAG(args[0]) != EJSValueTagObject)
+  if (argc == 0 || EJSVAL_IS_NULL(args[0]) || !EJSVAL_IS_OBJECT(args[0]))
     return _ejs_false;
 
-  return _ejs_boolean_new (!strcmp (CLASSNAME(((EJSObject*)args[0])), "Array"));
+  return BOOLEAN_TO_EJSVAL (!strcmp (CLASSNAME(EJSVAL_TO_OBJECT(args[0])), "Array"));
 }
 
 void
-_ejs_array_init(EJSValue *global)
+_ejs_array_init(ejsval global)
 {
   START_SHADOW_STACK_FRAME;
 
   _ejs_gc_add_named_root (_ejs_Array_proto);
-  _ejs_Array_proto = _ejs_object_new(NULL);
+  _ejs_Array_proto = _ejs_object_new(_ejs_null);
 
-  ADD_STACK_ROOT(EJSValue*, tmpobj, _ejs_function_new_utf8 (NULL, "Array", (EJSClosureFunc)_ejs_Array_impl));
+  ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "Array", (EJSClosureFunc)_ejs_Array_impl));
   _ejs_Array = tmpobj;
 
   _ejs_object_setprop_utf8 (_ejs_Array,       "prototype",  _ejs_Array_proto);
 
-#define OBJ_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_Array_##x)); _ejs_object_setprop (_ejs_Array, funcname, tmpfunc); } while (0)
-#define PROTO_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_Array_prototype_##x)); _ejs_object_setprop (_ejs_Array_proto, funcname, tmpfunc); } while (0)
+#define OBJ_METHOD(x) do { ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Array_##x)); _ejs_object_setprop (_ejs_Array, funcname, tmpfunc); } while (0)
+#define PROTO_METHOD(x) do { ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Array_prototype_##x)); _ejs_object_setprop (_ejs_Array_proto, funcname, tmpfunc); } while (0)
 
   OBJ_METHOD(isArray);
 
@@ -408,97 +404,95 @@ _ejs_array_init(EJSValue *global)
   END_SHADOW_STACK_FRAME;
 }
 
-static EJSValue*
-_ejs_array_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr)
+static ejsval
+_ejs_array_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr)
 {
-  EJSArray* arr = (EJSArray*)&obj->o;
-
   // check if propertyName is an integer, or a string that we can convert to an int
-  EJSBool is_index = FALSE;
+  EJSBool is_index = EJS_FALSE;
   int idx = 0;
   if (!isCStr && EJSVAL_IS_NUMBER(propertyName)) {
     double n = EJSVAL_TO_NUMBER(propertyName);
     if (floor(n) == n) {
       idx = (int)n;
-      is_index = TRUE;
+      is_index = EJS_TRUE;
     }
   }
 
   if (is_index) {
-    if (idx < 0 || idx > EJS_ARRAY_LEN(arr)) {
+    if (idx < 0 || idx > EJS_ARRAY_LEN(obj)) {
       printf ("getprop(%d) on an array, returning undefined\n", idx);
       return _ejs_undefined;
     }
-    return EJS_ARRAY_ELEMENTS(arr)[idx];
+    return EJS_ARRAY_ELEMENTS(obj)[idx];
   }
 
   // we also handle the length getter here
-  if ((isCStr && !strcmp("length", (char*)propertyName))
+  if ((isCStr && !strcmp("length", (char*)EJSVAL_TO_PRIVATE_PTR_IMPL(propertyName)))
       || (!isCStr && EJSVAL_IS_STRING(propertyName) && !strcmp ("length", EJSVAL_TO_STRING(propertyName)))) {
-    return _ejs_number_new (EJS_ARRAY_LEN(arr));
+    return NUMBER_TO_EJSVAL (EJS_ARRAY_LEN(obj));
   }
 
   // otherwise we fallback to the object implementation
   return _ejs_object_specops.get (obj, propertyName, isCStr);
 }
 
-static EJSValue*
-_ejs_array_specop_get_own_property (EJSValue* obj, EJSValue* propertyName)
+static ejsval
+_ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName)
 {
   return _ejs_object_specops.get_own_property (obj, propertyName);
 }
 
-static EJSValue*
-_ejs_array_specop_get_property (EJSValue* obj, EJSValue* propertyName)
+static ejsval
+_ejs_array_specop_get_property (ejsval obj, ejsval propertyName)
 {
   return _ejs_object_specops.get_property (obj, propertyName);
 }
 
 static void
-_ejs_array_specop_put (EJSValue *obj, EJSValue* propertyName, EJSValue* val, EJSBool flag)
+_ejs_array_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag)
 {
   _ejs_object_specops.put (obj, propertyName, val, flag);
 }
 
 static EJSBool
-_ejs_array_specop_can_put (EJSValue *obj, EJSValue* propertyName)
+_ejs_array_specop_can_put (ejsval obj, ejsval propertyName)
 {
   return _ejs_object_specops.can_put (obj, propertyName);
 }
 
 static EJSBool
-_ejs_array_specop_has_property (EJSValue *obj, EJSValue* propertyName)
+_ejs_array_specop_has_property (ejsval obj, ejsval propertyName)
 {
   return _ejs_object_specops.has_property (obj, propertyName);
 }
 
 static EJSBool
-_ejs_array_specop_delete (EJSValue *obj, EJSValue* propertyName, EJSBool flag)
+_ejs_array_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
 {
   return _ejs_object_specops._delete (obj, propertyName, flag);
 }
 
-static EJSValue*
-_ejs_array_specop_default_value (EJSValue *obj, const char *hint)
+static ejsval
+_ejs_array_specop_default_value (ejsval obj, const char *hint)
 {
   return _ejs_object_specops.default_value (obj, hint);
 }
 
 static void
-_ejs_array_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag)
+_ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, ejsval propertyDescriptor, EJSBool flag)
 {
   _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
 }
 
 static void
-_ejs_array_specop_finalize (EJSValue *obj)
+_ejs_array_specop_finalize (EJSObject* obj)
 {
   free (((EJSArray*)obj)->elements);
   _ejs_object_specops.finalize (obj);
 }
 
 static void
-_ejs_array_specop_scan (EJSValue* obj, EJSValueFunc scan_func)
+_ejs_array_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
   _ejs_array_foreach_element ((EJSArray*)obj, scan_func);
   _ejs_object_specops.scan (obj, scan_func);

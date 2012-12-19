@@ -21,13 +21,12 @@ SOURCES= \
 
 OBJECTS=$(SOURCES:%.c=%.o)
 
-CFLAGS=-I. -Wall -g -O0
+CFLAGS=-I. -Wall -g -O0 -Wno-unused-function
 
 libecho.a: $(OBJECTS)
 	$(AR) cru $@ $(OBJECTS)
 
 CC=clang
-
 
 $(OBJECTS): %.o: %.c
 	@mkdir -p .deps

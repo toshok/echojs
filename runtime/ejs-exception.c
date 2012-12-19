@@ -89,11 +89,11 @@ struct ejs_typeinfo {
   const void **vtable;  // always ejs_ehtype_vtable+2
   const char *name;     // c++ typeinfo string
 
-  EJSValue* cls;
+  ejsval cls;
 };
 
 struct ejs_exception {
-  EJSValue* val;
+  ejsval val;
   struct ejs_typeinfo tinfo;
 };
 
@@ -120,7 +120,7 @@ const void *ejs_ehtype_vtable[] = {
 struct ejs_typeinfo EJS_EHTYPE_ejsvalue = {
     ejs_ehtype_vtable+2, 
     "ejsvalue", 
-    NULL
+    // XXX nanboxing breaks this NULL
 };
 
 
@@ -199,7 +199,7 @@ static void _ejs_exception_destructor(void *exc_gen) {
 }
 
 
-void _ejs_exception_throw(EJSValue* val)
+void _ejs_exception_throw(ejsval val)
 {
     struct ejs_exception *exc = 
         __cxa_allocate_exception(sizeof(struct ejs_exception));
@@ -219,7 +219,7 @@ void _ejs_exception_throw(EJSValue* val)
 #endif
 
     printf ("EXCEPTIONS: throwing %p (object %p, a #s)\n",
-	    exc, val/*, object_getClassName(obj)*/);
+	    exc, EJSVAL_TO_PRIVATE_PTR_IMPL(val)/*, object_getClassName(obj)*/);
     
     //    EJS_RUNTIME_EJS_EXCEPTION_THROW(obj);  // dtrace probe to log throw activity
     __cxa_throw(exc, &exc->tinfo, &_ejs_exception_destructor);
@@ -558,7 +558,7 @@ static EJSBool isEjsExceptionCatcher(uintptr_t lsda, uintptr_t ip,
             // destructor - ignore
         } else /* filter >= 0 */ {
             // catch handler - use this frame
-            has_handler = TRUE;
+            has_handler = EJS_TRUE;
             break;
         }
     } while (offset);

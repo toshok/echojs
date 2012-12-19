@@ -7,7 +7,7 @@
 
 EJS_BEGIN_DECLS
 
-void _ejs_console_init(EJSValue* global);
+void _ejs_console_init(ejsval global);
 
 EJS_END_DECLS
 

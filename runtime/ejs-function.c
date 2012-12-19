@@ -5,18 +5,19 @@
 #include "ejs-value.h"
 #include "ejs-object.h"
 #include "ejs-function.h"
+#include "ejs-array.h"
 
-static EJSValue* _ejs_function_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr);
-static EJSValue* _ejs_function_specop_get_own_property (EJSValue* obj, EJSValue* propertyName);
-static EJSValue* _ejs_function_specop_get_property (EJSValue* obj, EJSValue* propertyName);
-static void      _ejs_function_specop_put (EJSValue *obj, EJSValue* propertyName, EJSValue* val, EJSBool flag);
-static EJSBool   _ejs_function_specop_can_put (EJSValue *obj, EJSValue* propertyName);
-static EJSBool   _ejs_function_specop_has_property (EJSValue *obj, EJSValue* propertyName);
-static EJSBool   _ejs_function_specop_delete (EJSValue *obj, EJSValue* propertyName, EJSBool flag);
-static EJSValue* _ejs_function_specop_default_value (EJSValue *obj, const char *hint);
-static void      _ejs_function_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag);
-static void      _ejs_function_specop_finalize (EJSValue *obj);
-static void      _ejs_function_specop_scan (EJSValue* obj, EJSValueFunc scan_func);
+static ejsval _ejs_function_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr);
+static ejsval _ejs_function_specop_get_own_property (ejsval obj, ejsval propertyName);
+static ejsval _ejs_function_specop_get_property (ejsval obj, ejsval propertyName);
+static void      _ejs_function_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
+static EJSBool   _ejs_function_specop_can_put (ejsval obj, ejsval propertyName);
+static EJSBool   _ejs_function_specop_has_property (ejsval obj, ejsval propertyName);
+static EJSBool   _ejs_function_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
+static ejsval _ejs_function_specop_default_value (ejsval obj, const char *hint);
+static void      _ejs_function_specop_define_own_property (ejsval obj, ejsval propertyName, ejsval propertyDescriptor, EJSBool flag);
+static void      _ejs_function_specop_finalize (EJSObject* obj);
+static void      _ejs_function_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
 
 EJSSpecOps _ejs_function_specops = {
   "Function",
@@ -46,74 +47,70 @@ static void indent(char ch)
 
 #endif
 
-EJSValue*
-_ejs_function_new (EJSClosureEnv* env, EJSValue *name, EJSClosureFunc func)
+ejsval
+_ejs_function_new (EJSClosureEnv env, ejsval name, EJSClosureFunc func)
 {
   EJSFunction *rv = _ejs_gc_new(EJSFunction);
 
-  _ejs_init_object ((EJSObject*)rv, _ejs_function_get_prototype(), &_ejs_function_specops);
+  _ejs_init_object ((EJSObject*)rv, _ejs_Function_proto, &_ejs_function_specops);
 
   rv->name = name;
   rv->func = func;
   rv->env = env;
 
-  return (EJSValue*)rv;
+  return OBJECT_TO_EJSVAL((EJSObject*)rv);
 }
 
-EJSValue*
-_ejs_function_new_utf8 (EJSClosureEnv* env, const char *name, EJSClosureFunc func)
+ejsval
+_ejs_function_new_utf8 (EJSClosureEnv env, const char *name, EJSClosureFunc func)
 {
   START_SHADOW_STACK_FRAME;
 
-  ADD_STACK_ROOT(EJSValue*, function_name, _ejs_string_new_utf8 (name));
+  ADD_STACK_ROOT(ejsval, function_name, _ejs_string_new_utf8 (name));
 
-  ADD_STACK_ROOT(EJSValue*, rv, _ejs_function_new (env, function_name, func));
+  ADD_STACK_ROOT(ejsval, rv, _ejs_function_new (env, function_name, func));
 
   END_SHADOW_STACK_FRAME;
   return rv;
 }
 
 
-EJSValue* _ejs_Function;
-static EJSValue*
-_ejs_Function_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+ejsval _ejs_Function_proto;
+ejsval _ejs_Function;
+
+static ejsval
+_ejs_Function_impl (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   printf ("Function() called either as a function or a constructor is not supported in ejs\n");
   abort();
 }
 
-static EJSValue* _ejs_Function_proto;
-EJSValue*
-_ejs_function_get_prototype()
-{
-  return _ejs_Function_proto;
-}
 
 // ECMA262 15.3.4.2
-static EJSValue*
-_ejs_Function_prototype_toString (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_Function_prototype_toString (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   char terrible_fixed_buffer[256];
 
-  assert (EJSVAL_IS_FUNCTION(_this));
-  EJSFunction* func = (EJSFunction*)_this;
+  // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(_this));
+  EJSFunction* func = (EJSFunction*)EJSVAL_TO_OBJECT(_this);
 
   snprintf (terrible_fixed_buffer, sizeof (terrible_fixed_buffer), "[Function: %s]", EJSVAL_TO_STRING(func->name));
   return _ejs_string_new_utf8(terrible_fixed_buffer);
 }
 
 // ECMA262 15.3.4.3
-static EJSValue*
-_ejs_Function_prototype_apply (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_Function_prototype_apply (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-  assert (EJSVAL_IS_FUNCTION(_this));
-  EJSValue* thisArg = args[0];
-  EJSArray* argArray = (EJSArray*)args[1];
+  // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(_this));
+  ejsval thisArg = args[0];
+  ejsval argArray = args[1];
 
   int apply_argc = EJS_ARRAY_LEN(argArray);
-  EJSValue** apply_args = NULL;
+  ejsval* apply_args = NULL;
   if (argc) {
-    apply_args = malloc(sizeof(EJSValue*) * argc);
+    apply_args = malloc(sizeof(ejsval) * argc);
     int i;
     for (i = 0; i < argc; i ++) {
       apply_args[i] = EJS_ARRAY_ELEMENTS(argArray)[i];
@@ -124,14 +121,14 @@ _ejs_Function_prototype_apply (EJSValue* env, EJSValue* _this, int argc, EJSValu
 }
 
 // ECMA262 15.3.4.4
-static EJSValue*
-_ejs_Function_prototype_call (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_Function_prototype_call (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-  assert (EJSVAL_IS_FUNCTION(_this));
+  // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(_this));
 
   START_SHADOW_STACK_FRAME;
 
-  ADD_STACK_ROOT(EJSValue*, thisArg, _ejs_undefined);
+  ADD_STACK_ROOT(ejsval, thisArg, _ejs_undefined);
   
   if (argc > 0) {
     thisArg = args[0];
@@ -139,37 +136,37 @@ _ejs_Function_prototype_call (EJSValue* env, EJSValue* _this, int argc, EJSValue
     argc --;
   }
 
-  ADD_STACK_ROOT(EJSValue*, rv, EJSVAL_TO_FUNC(_this) (EJSVAL_TO_ENV(_this), thisArg, argc, argc == 0 ? NULL : args));
+  ADD_STACK_ROOT(ejsval, rv, EJSVAL_TO_FUNC(_this) (EJSVAL_TO_ENV(_this), thisArg, argc, argc == 0 ? NULL : args));
 
   END_SHADOW_STACK_FRAME;
   return rv;
 }
 
 // ECMA262 15.3.4.5
-static EJSValue*
-_ejs_Function_prototype_bind (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_Function_prototype_bind (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   NOT_IMPLEMENTED();
 }
 
 void
-_ejs_function_init(EJSValue *global)
+_ejs_function_init(ejsval global)
 {
   START_SHADOW_STACK_FRAME;
 
   _ejs_gc_add_named_root (_ejs_Function_proto);
-  _ejs_Function_proto = _ejs_object_new(_ejs_object_get_prototype());
+  _ejs_Function_proto = _ejs_object_new(_ejs_Object_proto);
 
-  ADD_STACK_ROOT(EJSValue*, tmpobj, _ejs_function_new_utf8 (NULL, "Function", (EJSClosureFunc)_ejs_Function_impl));
+  ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "Function", (EJSClosureFunc)_ejs_Function_impl));
   _ejs_Function = tmpobj;
 
   // ECMA262 15.3.3.1
   _ejs_object_setprop_utf8 (_ejs_Function,       "prototype",  _ejs_Function_proto); // FIXME:  { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }.
   // ECMA262 15.3.3.2
-  _ejs_object_setprop_utf8 (_ejs_Function,       "length",     _ejs_number_new(1)); // FIXME:  { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }.
+  _ejs_object_setprop_utf8 (_ejs_Function,       "length",     NUMBER_TO_EJSVAL(1)); // FIXME:  { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }.
 
-#define OBJ_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_Function_##x)); _ejs_object_setprop (_ejs_Function, funcname, tmpfunc); } while (0)
-#define PROTO_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_Function_prototype_##x)); _ejs_object_setprop (_ejs_Function_proto, funcname, tmpfunc); } while (0)
+#define OBJ_METHOD(x) do { ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Function_##x)); _ejs_object_setprop (_ejs_Function, funcname, tmpfunc); } while (0)
+#define PROTO_METHOD(x) do { ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Function_prototype_##x)); _ejs_object_setprop (_ejs_Function_proto, funcname, tmpfunc); } while (0)
 
   PROTO_METHOD(toString);
   PROTO_METHOD(apply);
@@ -185,17 +182,17 @@ _ejs_function_init(EJSValue *global)
 }
 
 
-EJSValue*
-_ejs_invoke_closure_0 (EJSValue* closure, EJSValue* _this, int argc)
+ejsval
+_ejs_invoke_closure_0 (ejsval closure, ejsval _this, int argc)
 {
-  assert (EJSVAL_IS_FUNCTION(closure));
+  // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
 #if DEBUG_FUNCTIONS
-  EJSValue* closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
   indent('*');
   printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
   indent_level += INDENT_AMOUNT;
 #endif
-  EJSValue* rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, NULL);
+  ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, NULL);
 #if DEBUG_FUNCTIONS
   indent_level -= INDENT_AMOUNT;
   indent(' ');
@@ -204,18 +201,18 @@ _ejs_invoke_closure_0 (EJSValue* closure, EJSValue* _this, int argc)
   return rv;
 }
 
-EJSValue*
-_ejs_invoke_closure_1 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* arg1)
+ejsval
+_ejs_invoke_closure_1 (ejsval closure, ejsval _this, int argc, ejsval arg1)
 {
-  assert (EJSVAL_IS_FUNCTION(closure));
-  EJSValue *args[] = { arg1 };
+  // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
+  ejsval args[] = { arg1 };
 #if DEBUG_FUNCTIONS
-  EJSValue* closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
   indent('*');
   printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
   indent_level += INDENT_AMOUNT;
 #endif
-  EJSValue* rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+  ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
 #if DEBUG_FUNCTIONS
   indent_level -= INDENT_AMOUNT;
   indent(' ');
@@ -224,18 +221,18 @@ _ejs_invoke_closure_1 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* a
   return rv;
 }
 
-EJSValue*
-_ejs_invoke_closure_2 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* arg1, EJSValue* arg2)
+ejsval
+_ejs_invoke_closure_2 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2)
 {
-  assert (EJSVAL_IS_FUNCTION(closure));
-  EJSValue *args[] = { arg1, arg2 };
+  // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
+  ejsval args[] = { arg1, arg2 };
 #if DEBUG_FUNCTIONS
-  EJSValue* closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
   indent('*');
   printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
   indent_level += INDENT_AMOUNT;
 #endif
-  EJSValue* rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+  ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
 #if DEBUG_FUNCTIONS
   indent_level -= INDENT_AMOUNT;
   indent(' ');
@@ -244,18 +241,18 @@ _ejs_invoke_closure_2 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* a
   return rv;
 }
 
-EJSValue*
-_ejs_invoke_closure_3 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* arg1, EJSValue* arg2, EJSValue* arg3)
+ejsval
+_ejs_invoke_closure_3 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3)
 {
-  assert (EJSVAL_IS_FUNCTION(closure));
-  EJSValue *args[] = { arg1, arg2, arg3 };
+  // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
+  ejsval args[] = { arg1, arg2, arg3 };
 #if DEBUG_FUNCTIONS
-  EJSValue* closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
   indent('*');
   printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
   indent_level += INDENT_AMOUNT;
 #endif
-  EJSValue* rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+  ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
 #if DEBUG_FUNCTIONS
   indent_level -= INDENT_AMOUNT;
   indent(' ');
@@ -264,18 +261,18 @@ _ejs_invoke_closure_3 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* a
   return rv;
 }
 
-EJSValue*
-_ejs_invoke_closure_4 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* arg1, EJSValue* arg2, EJSValue* arg3, EJSValue* arg4)
+ejsval
+_ejs_invoke_closure_4 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4)
 {
-  assert (EJSVAL_IS_FUNCTION(closure));
-  EJSValue *args[] = { arg1, arg2, arg3, arg4 };
+  // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
+  ejsval args[] = { arg1, arg2, arg3, arg4 };
 #if DEBUG_FUNCTIONS
-  EJSValue* closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
   indent('*');
   printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
   indent_level += INDENT_AMOUNT;
 #endif
-  EJSValue* rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+  ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
 #if DEBUG_FUNCTIONS
   indent_level -= INDENT_AMOUNT;
   indent(' ');
@@ -284,18 +281,18 @@ _ejs_invoke_closure_4 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* a
   return rv;
 }
 
-EJSValue*
-_ejs_invoke_closure_5 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* arg1, EJSValue* arg2, EJSValue* arg3, EJSValue* arg4, EJSValue* arg5)
+ejsval
+_ejs_invoke_closure_5 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5)
 {
-  assert (EJSVAL_IS_FUNCTION(closure));
-  EJSValue *args[] = { arg1, arg2, arg3, arg4, arg5 };
+  // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
+  ejsval args[] = { arg1, arg2, arg3, arg4, arg5 };
 #if DEBUG_FUNCTIONS
-  EJSValue* closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
   indent('*');
   printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
   indent_level += INDENT_AMOUNT;
 #endif
-  EJSValue* rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+  ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
 #if DEBUG_FUNCTIONS
   indent_level -= INDENT_AMOUNT;
   indent(' ');
@@ -304,18 +301,18 @@ _ejs_invoke_closure_5 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* a
   return rv;
 }
 
-EJSValue*
-_ejs_invoke_closure_6 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* arg1, EJSValue* arg2, EJSValue* arg3, EJSValue* arg4, EJSValue* arg5, EJSValue* arg6)
+ejsval
+_ejs_invoke_closure_6 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6)
 {
-  assert (EJSVAL_IS_FUNCTION(closure));
-  EJSValue *args[] = { arg1, arg2, arg3, arg4, arg5, arg6 };
+  // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
+  ejsval args[] = { arg1, arg2, arg3, arg4, arg5, arg6 };
 #if DEBUG_FUNCTIONS
-  EJSValue* closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
   indent('*');
   printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
   indent_level += INDENT_AMOUNT;
 #endif
-  EJSValue* rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+  ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
 #if DEBUG_FUNCTIONS
   indent_level -= INDENT_AMOUNT;
   indent(' ');
@@ -324,18 +321,18 @@ _ejs_invoke_closure_6 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* a
   return rv;
 }
 
-EJSValue*
-_ejs_invoke_closure_7 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* arg1, EJSValue* arg2, EJSValue* arg3, EJSValue* arg4, EJSValue* arg5, EJSValue* arg6, EJSValue* arg7)
+ejsval
+_ejs_invoke_closure_7 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7)
 {
-  assert (EJSVAL_IS_FUNCTION(closure));
-  EJSValue *args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7 };
+  // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
+  ejsval args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7 };
 #if DEBUG_FUNCTIONS
-  EJSValue* closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
   indent('*');
   printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
   indent_level += INDENT_AMOUNT;
 #endif
-  EJSValue* rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+  ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
 #if DEBUG_FUNCTIONS
   indent_level -= INDENT_AMOUNT;
   indent(' ');
@@ -344,18 +341,18 @@ _ejs_invoke_closure_7 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* a
   return rv;
 }
 
-EJSValue*
-_ejs_invoke_closure_8 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* arg1, EJSValue* arg2, EJSValue* arg3, EJSValue* arg4, EJSValue* arg5, EJSValue* arg6, EJSValue* arg7, EJSValue* arg8)
+ejsval
+_ejs_invoke_closure_8 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7, ejsval arg8)
 {
-  assert (EJSVAL_IS_FUNCTION(closure));
-  EJSValue *args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8 };
+  // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
+  ejsval args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8 };
 #if DEBUG_FUNCTIONS
-  EJSValue* closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
   indent('*');
   printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
   indent_level += INDENT_AMOUNT;
 #endif
-  EJSValue* rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+  ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
 #if DEBUG_FUNCTIONS
   indent_level -= INDENT_AMOUNT;
   indent(' ');
@@ -364,18 +361,18 @@ _ejs_invoke_closure_8 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* a
   return rv;
 }
 
-EJSValue*
-_ejs_invoke_closure_9 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* arg1, EJSValue* arg2, EJSValue* arg3, EJSValue* arg4, EJSValue* arg5, EJSValue* arg6, EJSValue* arg7, EJSValue* arg8, EJSValue* arg9)
+ejsval
+_ejs_invoke_closure_9 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7, ejsval arg8, ejsval arg9)
 {
-  assert (EJSVAL_IS_FUNCTION(closure));
-  EJSValue *args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9 };
+  // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
+  ejsval args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9 };
 #if DEBUG_FUNCTIONS
-  EJSValue* closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
   indent('*');
   printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
   indent_level += INDENT_AMOUNT;
 #endif
-  EJSValue* rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+  ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
 #if DEBUG_FUNCTIONS
   indent_level -= INDENT_AMOUNT;
   indent(' ');
@@ -384,18 +381,18 @@ _ejs_invoke_closure_9 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* a
   return rv;
 }
 
-EJSValue*
-_ejs_invoke_closure_10 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* arg1, EJSValue* arg2, EJSValue* arg3, EJSValue* arg4, EJSValue* arg5, EJSValue* arg6, EJSValue* arg7, EJSValue* arg8, EJSValue* arg9, EJSValue* arg10)
+ejsval
+_ejs_invoke_closure_10 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7, ejsval arg8, ejsval arg9, ejsval arg10)
 {
-  assert (EJSVAL_IS_FUNCTION(closure));
-  EJSValue *args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10 };
+  // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
+  ejsval args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10 };
 #if DEBUG_FUNCTIONS
-  EJSValue* closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
   indent('*');
   printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
   indent_level += INDENT_AMOUNT;
 #endif
-  EJSValue* rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
+  ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
 #if DEBUG_FUNCTIONS
   indent_level -= INDENT_AMOUNT;
   indent(' ');
@@ -404,70 +401,68 @@ _ejs_invoke_closure_10 (EJSValue* closure, EJSValue* _this, int argc, EJSValue* 
   return rv;
 }
 
-
-
-static EJSValue*
-_ejs_function_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr)
+static ejsval
+_ejs_function_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr)
 {
   return _ejs_object_specops.get (obj, propertyName, isCStr);
 }
 
-static EJSValue*
-_ejs_function_specop_get_own_property (EJSValue* obj, EJSValue* propertyName)
+static ejsval
+_ejs_function_specop_get_own_property (ejsval obj, ejsval propertyName)
 {
   return _ejs_object_specops.get_own_property (obj, propertyName);
 }
 
-static EJSValue*
-_ejs_function_specop_get_property (EJSValue* obj, EJSValue* propertyName)
+static ejsval
+_ejs_function_specop_get_property (ejsval obj, ejsval propertyName)
 {
   return _ejs_object_specops.get_property (obj, propertyName);
 }
 
 static void
-_ejs_function_specop_put (EJSValue *obj, EJSValue* propertyName, EJSValue* val, EJSBool flag)
+_ejs_function_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag)
 {
   _ejs_object_specops.put (obj, propertyName, val, flag);
 }
 
 static EJSBool
-_ejs_function_specop_can_put (EJSValue *obj, EJSValue* propertyName)
+_ejs_function_specop_can_put (ejsval obj, ejsval propertyName)
 {
   return _ejs_object_specops.can_put (obj, propertyName);
 }
 
 static EJSBool
-_ejs_function_specop_has_property (EJSValue *obj, EJSValue* propertyName)
+_ejs_function_specop_has_property (ejsval obj, ejsval propertyName)
 {
   return _ejs_object_specops.has_property (obj, propertyName);
 }
 
 static EJSBool
-_ejs_function_specop_delete (EJSValue *obj, EJSValue* propertyName, EJSBool flag)
+_ejs_function_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
 {
   return _ejs_object_specops._delete (obj, propertyName, flag);
 }
 
-static EJSValue*
-_ejs_function_specop_default_value (EJSValue *obj, const char *hint)
+static ejsval
+_ejs_function_specop_default_value (ejsval obj, const char *hint)
 {
   return _ejs_object_specops.default_value (obj, hint);
 }
 
 static void
-_ejs_function_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag)
+_ejs_function_specop_define_own_property (ejsval obj, ejsval propertyName, ejsval propertyDescriptor, EJSBool flag)
 {
   _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
 }
 
 static void
-_ejs_function_specop_finalize (EJSValue *obj)
+_ejs_function_specop_finalize (EJSObject* obj)
 {
   _ejs_object_specops.finalize (obj);
 }
 
 static void
-_ejs_function_specop_scan (EJSValue* obj, EJSValueFunc scan_func)
+_ejs_function_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
   EJSFunction* f = (EJSFunction*)obj;
   scan_func (f->name);

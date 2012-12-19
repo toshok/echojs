@@ -4,180 +4,178 @@
 #include "ejs.h"
 #include "ejs-exception.h"
 #include "ejs-value.h"
-#include "ejs-object.h"
+#include "ejs-function.h"
 #include "ejs-number.h"
+#include "ejs-object.h"
 #include "ejs-string.h"
 #include "ejs-ops.h"
 
-EJSValue* NumberToString(double d)
+ejsval NumberToString(double d)
 {
   char num_buf[256];
   snprintf (num_buf, sizeof(num_buf), EJS_NUMBER_FORMAT, d);
   return _ejs_string_new_utf8 (num_buf);
 }
 
+static void NumberToStringBuf(char* buf, size_t buf_size, double d)
+{
+  snprintf (buf, buf_size, EJS_NUMBER_FORMAT, d);
+}
+
 // returns an EJSPrimString*.
 // maybe we could change it to return a char* to match ToDouble?  that way string concat wouldn't create
 // temporary strings for non-PrimString objects only to throw them away after concatenation?
-EJSValue* ToString(EJSValue *exp)
+ejsval ToString(ejsval exp)
 {
-  if (exp == NULL)
+  if (EJSVAL_IS_NULL(exp))
     return _ejs_string_new_utf8 ("null");
-
-  switch (EJSVAL_TAG(exp)) {
-  case EJSValueTagBoolean:
+  else if (EJSVAL_IS_BOOLEAN(exp)) 
     return _ejs_string_new_utf8 (EJSVAL_TO_BOOLEAN(exp) ? "true" : "false");
-  case EJSValueTagNumber: {
+  else if (EJSVAL_IS_NUMBER(exp))
     return NumberToString(EJSVAL_TO_NUMBER(exp));
-  }
-  case EJSValueTagString:
+  else if (EJSVAL_IS_STRING(exp))
     return exp;
-  case EJSValueTagUndefined:
+  else if (EJSVAL_IS_UNDEFINED(exp))
     return _ejs_string_new_utf8 ("undefined");
-  case EJSValueTagObject: {
-    EJSValue* toString = _ejs_object_getprop_utf8 (exp, "toString");
-    if (!EJSVAL_IS_FUNCTION(toString))
-      NOT_IMPLEMENTED();
+  else if (EJSVAL_IS_OBJECT(exp)) {
+    ejsval toString = _ejs_object_getprop_utf8 (exp, "toString");
+    // XXX nanboxing breaks this if (!EJSVAL_IS_FUNCTION(toString))
+    // NOT_IMPLEMENTED();
 
     // should we be checking if this is a string?  i'd assume so...
     return _ejs_invoke_closure_0 (toString, exp, 0);
   }
-  default:
+  else
     NOT_IMPLEMENTED();
-  }
 }
 
-double ToDouble(EJSValue *exp)
+double ToDouble(ejsval exp)
 {
-  switch (EJSVAL_TAG(exp)) {
-  case EJSValueTagBoolean:
-    return EJSVAL_TO_BOOLEAN(exp) ? 1 : 0;
-  case EJSValueTagNumber:
+  if (EJSVAL_IS_NUMBER(exp))
     return EJSVAL_TO_NUMBER(exp);
-  case EJSValueTagString:
+  else if (EJSVAL_IS_BOOLEAN(exp))
+    return EJSVAL_TO_BOOLEAN(exp) ? 1 : 0;
+  else if (EJSVAL_IS_STRING(exp))
     return atof(EJSVAL_TO_STRING(exp)); // XXX NaN
-  case EJSValueTagUndefined:
+  else if (EJSVAL_IS_UNDEFINED(exp))
     return 0; // XXX NaN
-  case EJSValueTagObject:
-    return 0; // XXX .length if exp is an array and .length > 0, otherwise NaN
-  default:
+  else if (EJSVAL_IS_OBJECT(exp))
+    // XXX if it's an array
+    //       and .length == 0, return 0.
+    //       and .length == 1, return ToDouble(array->elements[0]) - yes, it's recursive
+    //       else return NaN
+    // for anything else, NaN
+    return 0;
+  else
     NOT_IMPLEMENTED();
-  }
 }
 
-int ToInteger(EJSValue *exp)
+int ToInteger(ejsval exp)
 {
   return (int)ToDouble(exp);
 }
 
-EJSValue* ToObject(EJSValue *exp)
+ejsval ToObject(ejsval exp)
 {
-  switch (EJSVAL_TAG(exp)) {
-  case EJSValueTagBoolean:
+  if (EJSVAL_IS_BOOLEAN(exp))
     NOT_IMPLEMENTED();
-  case EJSValueTagNumber: {
+  else if (EJSVAL_IS_NUMBER(exp)) {
     EJSObject* new_number = _ejs_number_alloc_instance();
-    _ejs_init_object (new_number, _ejs_number_get_prototype(), &_ejs_number_specops);
-    return _ejs_invoke_closure_1 (_ejs_Number, (EJSValue*)new_number, 1, exp);
+    _ejs_init_object (new_number, _ejs_Number_proto, &_ejs_number_specops);
+    return _ejs_invoke_closure_1 (_ejs_Number, OBJECT_TO_EJSVAL(new_number), 1, exp);
   }
-  case EJSValueTagString: {
+  else if (EJSVAL_IS_STRING(exp)) {
     EJSObject* new_str = _ejs_string_alloc_instance();
-    _ejs_init_object (new_str, _ejs_string_get_prototype(), &_ejs_string_specops);
-    return _ejs_invoke_closure_1 (_ejs_String, (EJSValue*)new_str, 1, exp);
+    _ejs_init_object (new_str, _ejs_String_proto, &_ejs_string_specops);
+    return _ejs_invoke_closure_1 (_ejs_String, OBJECT_TO_EJSVAL(new_str), 1, exp);
   }
-  case EJSValueTagUndefined:
+  else if (EJSVAL_IS_UNDEFINED(exp))
     return exp; // XXX
-  case EJSValueTagObject:
+  else if (EJSVAL_IS_OBJECT(exp))
     return exp;
-  default:
+  else
     NOT_IMPLEMENTED();
-  }
 }
 
-EJSValue* ToBoolean(EJSValue *exp)
+ejsval ToBoolean(ejsval exp)
 {
-  if (exp == NULL)
+  if (EJSVAL_IS_NULL(exp) || EJSVAL_IS_UNDEFINED(exp))
     return _ejs_false;
-
-  switch (EJSVAL_TAG(exp)) {
-  case EJSValueTagBoolean:
+  else if (EJSVAL_IS_BOOLEAN(exp))
     return exp;
-  case EJSValueTagNumber:
+  else if (EJSVAL_IS_NUMBER(exp))
     return EJSVAL_TO_NUMBER(exp) == 0 ? _ejs_false : _ejs_true;
-  case EJSValueTagString:
+  else if (EJSVAL_IS_STRING(exp))
     return EJSVAL_TO_STRLEN(exp) == 0 ? _ejs_false : _ejs_true;
-  case EJSValueTagUndefined:
-    return _ejs_false;
-  case EJSValueTagObject:
+  else if (EJSVAL_IS_OBJECT(exp))
     return _ejs_false; // XXX this breaks for any of the builtin objects that wrap primitive types.
-  default:
+  else
     NOT_IMPLEMENTED();
-  }
 }
 
-EJSValue*
-_ejs_op_neg (EJSValue* exp)
+ejsval
+_ejs_op_neg (ejsval exp)
 {
-  return _ejs_number_new (-ToDouble(exp));
+  return NUMBER_TO_EJSVAL (-ToDouble(exp));
 }
 
-EJSValue*
-_ejs_op_plus (EJSValue* exp)
+ejsval
+_ejs_op_plus (ejsval exp)
 {
-  return _ejs_number_new (ToDouble(exp));
+  return NUMBER_TO_EJSVAL (ToDouble(exp));
 }
 
-EJSValue*
-_ejs_op_not (EJSValue* exp)
+ejsval
+_ejs_op_not (ejsval exp)
 {
   EJSBool truthy= _ejs_truthy (exp);
-  return _ejs_boolean_new (!truthy);
+  return BOOLEAN_TO_EJSVAL (!truthy);
 }
 
-EJSValue*
-_ejs_op_void (EJSValue* exp)
+ejsval
+_ejs_op_void (ejsval exp)
 {
   return _ejs_undefined;
 }
 
-EJSValue*
-_ejs_op_typeof (EJSValue* exp)
+ejsval
+_ejs_op_typeof (ejsval exp)
 {
   char *rv;
-  if (exp == NULL) {
+  if (EJSVAL_IS_NULL(exp))
     rv = "object";
+  else if (EJSVAL_IS_BOOLEAN(exp))
+    rv = "boolean";
+  else if (EJSVAL_IS_STRING(exp))
+    rv = "string";
+  else if (EJSVAL_IS_NUMBER(exp))
+    rv = "number";
+  else if (EJSVAL_IS_UNDEFINED(exp))
+    rv = "undefined";
+  else if (EJSVAL_IS_OBJECT(exp)) {
+    if (EJSVAL_IS_FUNCTION(exp))
+      rv = "function";
+    else
+      rv = "object";
   }
-  else 
-    switch (EJSVAL_TAG(exp)) {
-    case EJSValueTagBoolean:   rv = "boolean"; break;
-    case EJSValueTagNumber:    rv = "number"; break;
-    case EJSValueTagString:    rv = "string"; break;
-    case EJSValueTagUndefined: rv = "undefined"; break;
-    case EJSValueTagObject:
-      if (EJSVAL_IS_FUNCTION(exp))
-	rv = "function";
-      else
-	rv = "object";
-      break;
-    default:
-      NOT_IMPLEMENTED();
-  }
+  else
+    NOT_IMPLEMENTED();
 
   return _ejs_string_new_utf8 (rv);
 }
 
-EJSValue*
-_ejs_op_delete (EJSValue* obj, EJSValue* prop)
+ejsval
+_ejs_op_delete (ejsval obj, ejsval prop)
 {
   return _ejs_true;
 }
 
-EJSValue*
-_ejs_op_mod (EJSValue* lhs, EJSValue* rhs)
+ejsval
+_ejs_op_mod (ejsval lhs, ejsval rhs)
 {
   if (EJSVAL_IS_NUMBER(lhs)) {
     if (EJSVAL_IS_NUMBER(rhs)) {
-      return _ejs_number_new (fmod(EJSVAL_TO_NUMBER(lhs), EJSVAL_TO_NUMBER(rhs)));
+      return NUMBER_TO_EJSVAL (fmod(EJSVAL_TO_NUMBER(lhs), EJSVAL_TO_NUMBER(rhs)));
     }
     else {
       // need to call valueOf() on the object, or convert the string to a number
@@ -193,31 +191,31 @@ _ejs_op_mod (EJSValue* lhs, EJSValue* rhs)
     NOT_IMPLEMENTED();
   }
 
-  return NULL;
+  return _ejs_nan;
 }
 
-EJSValue*
-_ejs_op_bitwise_and (EJSValue* lhs, EJSValue* rhs)
+ejsval
+_ejs_op_bitwise_and (ejsval lhs, ejsval rhs)
 {
   int lhs_int = ToInteger(lhs);
   int rhs_int = ToInteger(rhs);
-  return _ejs_number_new (lhs_int & rhs_int);
+  return NUMBER_TO_EJSVAL (lhs_int & rhs_int);
 }
 
-EJSValue*
-_ejs_op_bitwise_or (EJSValue* lhs, EJSValue* rhs)
+ejsval
+_ejs_op_bitwise_or (ejsval lhs, ejsval rhs)
 {
   int lhs_int = ToInteger(lhs);
   int rhs_int = ToInteger(rhs);
-  return _ejs_number_new (lhs_int | rhs_int);
+  return NUMBER_TO_EJSVAL (lhs_int | rhs_int);
 }
 
-EJSValue*
-_ejs_op_rsh (EJSValue* lhs, EJSValue* rhs)
+ejsval
+_ejs_op_rsh (ejsval lhs, ejsval rhs)
 {
   if (EJSVAL_IS_NUMBER(lhs)) {
     if (EJSVAL_IS_NUMBER(rhs)) {
-      return _ejs_number_new ((int)((int)EJSVAL_TO_NUMBER(lhs) >> (((unsigned int)EJSVAL_TO_NUMBER(rhs)) & 0x1f)));
+      return NUMBER_TO_EJSVAL ((int)((int)EJSVAL_TO_NUMBER(lhs) >> (((unsigned int)EJSVAL_TO_NUMBER(rhs)) & 0x1f)));
     }
     else {
       // need to call valueOf() on the object, or convert the string to a number
@@ -233,15 +231,15 @@ _ejs_op_rsh (EJSValue* lhs, EJSValue* rhs)
     NOT_IMPLEMENTED();
   }
 
-  return NULL;
+  return _ejs_nan;
 }
 
-EJSValue*
-_ejs_op_ursh (EJSValue* lhs, EJSValue* rhs)
+ejsval
+_ejs_op_ursh (ejsval lhs, ejsval rhs)
 {
   if (EJSVAL_IS_NUMBER(lhs)) {
     if (EJSVAL_IS_NUMBER(rhs)) {
-      return _ejs_number_new ((unsigned int)((unsigned int)EJSVAL_TO_NUMBER(lhs) >> (((unsigned int)EJSVAL_TO_NUMBER(rhs)) & 0x1f)));
+      return NUMBER_TO_EJSVAL ((unsigned int)((unsigned int)EJSVAL_TO_NUMBER(lhs) >> (((unsigned int)EJSVAL_TO_NUMBER(rhs)) & 0x1f)));
     }
     else {
       // need to call valueOf() on the object, or convert the string to a number
@@ -257,28 +255,51 @@ _ejs_op_ursh (EJSValue* lhs, EJSValue* rhs)
     NOT_IMPLEMENTED();
   }
 
-  return NULL;
+  return _ejs_nan;
 }
 
-EJSValue*
-_ejs_op_add (EJSValue* lhs, EJSValue* rhs)
+ejsval
+_ejs_op_add (ejsval lhs, ejsval rhs)
 {
   START_SHADOW_STACK_FRAME;
 
-  EJSValue* rv = NULL;
+  ejsval rv = _ejs_nan;
 
   if (EJSVAL_IS_NUMBER(lhs)) {
-    rv = _ejs_number_new (EJSVAL_TO_NUMBER(lhs) + ToDouble (rhs));
+    rv = NUMBER_TO_EJSVAL (EJSVAL_TO_NUMBER(lhs) + ToDouble (rhs));
   }
   else if (EJSVAL_IS_STRING(lhs)) {
-    ADD_STACK_ROOT(EJSValue*, rhstring, ToString(rhs));
+    if (EJSVAL_IS_NUMBER(rhs)) {
+      char buf[256];
+      NumberToStringBuf(buf, sizeof(buf), EJSVAL_TO_NUMBER(rhs));
+      int rhs_len = strlen(buf);
+      int lhs_len = EJSVAL_TO_STRLEN(lhs);
 
-    char *combined = malloc (EJSVAL_TO_STRLEN(lhs) + EJSVAL_TO_STRLEN(rhstring) + 1);
-    strcpy (combined, EJSVAL_TO_STRING(lhs));
-    strcpy (combined + EJSVAL_TO_STRLEN(lhs), EJSVAL_TO_STRING(rhstring));
-    EJSValue* result = _ejs_string_new_utf8(combined);
-    free(combined);
-    rv = result;
+      if (lhs_len + rhs_len >= (sizeof(buf) - 1)) {
+	char *combined = malloc (lhs_len + rhs_len + 1);
+	strcpy (combined, EJSVAL_TO_STRING(lhs));
+	strcpy (combined + lhs_len, buf);
+	ejsval result = _ejs_string_new_utf8(combined);
+	free(combined);
+	rv = result;
+      }
+      else {
+	memmove (buf + lhs_len, buf, rhs_len);
+	memmove (buf, EJSVAL_TO_STRING(lhs), lhs_len);
+	buf[lhs_len + rhs_len] = 0;
+	rv = _ejs_string_new_utf8(buf);
+      }
+    }
+    else {
+      ADD_STACK_ROOT(ejsval, rhstring, ToString(rhs));
+
+      char *combined = malloc (EJSVAL_TO_STRLEN(lhs) + EJSVAL_TO_STRLEN(rhstring) + 1);
+      strcpy (combined, EJSVAL_TO_STRING(lhs));
+      strcpy (combined + EJSVAL_TO_STRLEN(lhs), EJSVAL_TO_STRING(rhstring));
+      ejsval result = _ejs_string_new_utf8(combined);
+      free(combined);
+      rv = result;
+    }
   }
   else {
     // object+... how does js implement this anyway?
@@ -289,11 +310,11 @@ _ejs_op_add (EJSValue* lhs, EJSValue* rhs)
   return rv;
 }
 
-EJSValue*
-_ejs_op_mult (EJSValue* lhs, EJSValue* rhs)
+ejsval
+_ejs_op_mult (ejsval lhs, ejsval rhs)
 {
   if (EJSVAL_IS_NUMBER(lhs)) {
-    return _ejs_number_new (EJSVAL_TO_NUMBER(lhs) * ToDouble (rhs));
+    return NUMBER_TO_EJSVAL (EJSVAL_TO_NUMBER(lhs) * ToDouble (rhs));
   }
   else if (EJSVAL_IS_STRING(lhs)) {
     // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
@@ -304,14 +325,14 @@ _ejs_op_mult (EJSValue* lhs, EJSValue* rhs)
     NOT_IMPLEMENTED();
   }
 
-  return NULL;
+  return _ejs_nan;
 }
 
-EJSValue*
-_ejs_op_div (EJSValue* lhs, EJSValue* rhs)
+ejsval
+_ejs_op_div (ejsval lhs, ejsval rhs)
 {
   if (EJSVAL_IS_NUMBER(lhs)) {
-    return _ejs_number_new (EJSVAL_TO_NUMBER(lhs) / ToDouble (rhs));
+    return NUMBER_TO_EJSVAL (EJSVAL_TO_NUMBER(lhs) / ToDouble (rhs));
   }
   else if (EJSVAL_IS_STRING(lhs)) {
     // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
@@ -322,114 +343,114 @@ _ejs_op_div (EJSValue* lhs, EJSValue* rhs)
     NOT_IMPLEMENTED();
   }
 
-  return NULL;
+  return _ejs_nan;
 }
 
-EJSValue*
-_ejs_op_lt (EJSValue* lhs, EJSValue* rhs)
+ejsval
+_ejs_op_lt (ejsval lhs, ejsval rhs)
 {
   if (EJSVAL_IS_NUMBER(lhs)) {
-    return _ejs_boolean_new (EJSVAL_TO_NUMBER(lhs) < ToDouble (rhs));
+    return BOOLEAN_TO_EJSVAL (EJSVAL_TO_NUMBER(lhs) < ToDouble (rhs));
   }
   else if (EJSVAL_IS_STRING(lhs)) {
-    EJSValue* rhs_string = ToString(rhs);
-    EJSValue* rhs_primStr;
+    ejsval rhs_string = ToString(rhs);
+    ejsval rhs_primStr;
 
     if (EJSVAL_IS_STRING(rhs_string))
       rhs_primStr = rhs_string;
     else
-      rhs_primStr = ((EJSString*)rhs_string)->primStr;
+      rhs_primStr = ((EJSString*)EJSVAL_TO_STRING(rhs_string))->primStr;
 
-    return _ejs_boolean_new (strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs_primStr)) < 0);
+    return BOOLEAN_TO_EJSVAL (strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs_primStr)) < 0);
   }
   else {
     // object+... how does js implement this anyway?
     NOT_IMPLEMENTED();
   }
 
-  return NULL;
+  return _ejs_nan;
 }
 
-EJSValue*
-_ejs_op_le (EJSValue* lhs, EJSValue* rhs)
+ejsval
+_ejs_op_le (ejsval lhs, ejsval rhs)
 {
   if (EJSVAL_IS_NUMBER(lhs)) {
-    return _ejs_boolean_new (EJSVAL_TO_NUMBER(lhs) <= ToDouble (rhs));
+    return BOOLEAN_TO_EJSVAL (EJSVAL_TO_NUMBER(lhs) <= ToDouble (rhs));
   }
   else if (EJSVAL_IS_STRING(lhs)) {
-    EJSValue* rhs_string = ToString(rhs);
-    EJSValue* rhs_primStr;
+    ejsval rhs_string = ToString(rhs);
+    ejsval rhs_primStr;
 
     if (EJSVAL_IS_STRING(rhs_string))
       rhs_primStr = rhs_string;
     else
-      rhs_primStr = ((EJSString*)rhs_string)->primStr;
+      rhs_primStr = ((EJSString*)EJSVAL_TO_OBJECT(rhs_string))->primStr;
 
-    return _ejs_boolean_new (strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs_primStr)) <= 0);
+    return BOOLEAN_TO_EJSVAL (strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs_primStr)) <= 0);
   }
   else {
     // object+... how does js implement this anyway?
     NOT_IMPLEMENTED();
   }
 
-  return NULL;
+  return _ejs_nan;
 }
 
-EJSValue*
-_ejs_op_gt (EJSValue* lhs, EJSValue* rhs)
+ejsval
+_ejs_op_gt (ejsval lhs, ejsval rhs)
 {
   if (EJSVAL_IS_NUMBER(lhs)) {
-    return _ejs_boolean_new (EJSVAL_TO_NUMBER(lhs) > ToDouble (rhs));
+    return BOOLEAN_TO_EJSVAL (EJSVAL_TO_NUMBER(lhs) > ToDouble (rhs));
   }
   else if (EJSVAL_IS_STRING(lhs)) {
-    EJSValue* rhs_string = ToString(rhs);
-    EJSValue* rhs_primStr;
+    ejsval rhs_string = ToString(rhs);
+    ejsval rhs_primStr;
 
     if (EJSVAL_IS_STRING(rhs_string))
       rhs_primStr = rhs_string;
     else
-      rhs_primStr = ((EJSString*)rhs_string)->primStr;
+      rhs_primStr = ((EJSString*)EJSVAL_TO_OBJECT(rhs_string))->primStr;
 
-    return _ejs_boolean_new (strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs_primStr)) > 0);
+    return BOOLEAN_TO_EJSVAL (strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs_primStr)) > 0);
   }
   else {
     // object+... how does js implement this anyway?
     NOT_IMPLEMENTED();
   }
 
-  return NULL;
+  return _ejs_nan;
 }
 
-EJSValue*
-_ejs_op_ge (EJSValue* lhs, EJSValue* rhs)
+ejsval
+_ejs_op_ge (ejsval lhs, ejsval rhs)
 {
   if (EJSVAL_IS_NUMBER(lhs)) {
-    return _ejs_boolean_new (EJSVAL_TO_NUMBER(lhs) >= ToDouble (rhs));
+    return BOOLEAN_TO_EJSVAL (EJSVAL_TO_NUMBER(lhs) >= ToDouble (rhs));
   }
   else if (EJSVAL_IS_STRING(lhs)) {
-    EJSValue* rhs_string = ToString(rhs);
-    EJSValue* rhs_primStr;
+    ejsval rhs_string = ToString(rhs);
+    ejsval rhs_primStr;
 
     if (EJSVAL_IS_STRING(rhs_string))
       rhs_primStr = rhs_string;
     else
-      rhs_primStr = ((EJSString*)rhs_string)->primStr;
+      rhs_primStr = ((EJSString*)EJSVAL_TO_OBJECT(rhs_string))->primStr;
 
-    return _ejs_boolean_new (strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs_primStr)) >= 0);
+    return BOOLEAN_TO_EJSVAL (strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs_primStr)) >= 0);
   }
   else {
     // object+... how does js implement this anyway?
     NOT_IMPLEMENTED();
   }
 
-  return NULL;
+  return _ejs_nan;
 }
 
-EJSValue*
-_ejs_op_sub (EJSValue* lhs, EJSValue* rhs)
+ejsval
+_ejs_op_sub (ejsval lhs, ejsval rhs)
 {
   if (EJSVAL_IS_NUMBER(lhs)) {
-    return _ejs_number_new (EJSVAL_TO_NUMBER(lhs) - ToDouble (rhs));
+    return NUMBER_TO_EJSVAL (EJSVAL_TO_NUMBER(lhs) - ToDouble (rhs));
   }
   else if (EJSVAL_IS_STRING(lhs)) {
     // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
@@ -440,136 +461,133 @@ _ejs_op_sub (EJSValue* lhs, EJSValue* rhs)
     NOT_IMPLEMENTED();
   }
 
-  return NULL;
+  return _ejs_nan;
 }
 
-EJSValue*
-_ejs_op_strict_eq (EJSValue* lhs, EJSValue* rhs)
+ejsval
+_ejs_op_strict_eq (ejsval lhs, ejsval rhs)
 {
-  if (!lhs)
-    return _ejs_boolean_new (rhs == NULL);
+  if (EJSVAL_IS_NULL(lhs))
+    return BOOLEAN_TO_EJSVAL (EJSVAL_IS_NULL(rhs));
   else if (EJSVAL_IS_NUMBER(lhs)) {
-    return _ejs_boolean_new (rhs && EJSVAL_IS_NUMBER(rhs) && EJSVAL_TO_NUMBER(lhs) == EJSVAL_TO_NUMBER(rhs));
+    return BOOLEAN_TO_EJSVAL (EJSVAL_IS_NUMBER(rhs) && EJSVAL_TO_NUMBER(lhs) == EJSVAL_TO_NUMBER(rhs));
   }
   else if (EJSVAL_IS_STRING(lhs)) {
-    return _ejs_boolean_new (rhs && EJSVAL_IS_STRING(rhs) && !strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs)));
+    return BOOLEAN_TO_EJSVAL (EJSVAL_IS_STRING(rhs) && !strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs)));
   }
   else if (EJSVAL_IS_BOOLEAN(lhs)) {
-    return _ejs_boolean_new (rhs && EJSVAL_IS_BOOLEAN(rhs) && EJSVAL_TO_BOOLEAN(lhs) == EJSVAL_TO_BOOLEAN(rhs));
+    return BOOLEAN_TO_EJSVAL (EJSVAL_IS_BOOLEAN(rhs) && EJSVAL_TO_BOOLEAN(lhs) == EJSVAL_TO_BOOLEAN(rhs));
   }
   else {
-    return _ejs_boolean_new (lhs == rhs);
+    return BOOLEAN_TO_EJSVAL (EJSVAL_EQ(lhs, rhs));
   }
 }
 
-EJSValue*
-_ejs_op_strict_neq (EJSValue* lhs, EJSValue* rhs)
+ejsval
+_ejs_op_strict_neq (ejsval lhs, ejsval rhs)
 {
-  if (!lhs)
-    return _ejs_boolean_new (rhs != NULL);
+  if (EJSVAL_IS_NULL(lhs))
+    return BOOLEAN_TO_EJSVAL (!EJSVAL_IS_NULL(rhs));
   else if (EJSVAL_IS_NUMBER(lhs)) {
-    return _ejs_boolean_new (!rhs || !EJSVAL_IS_NUMBER(rhs) || EJSVAL_TO_NUMBER(lhs) != EJSVAL_TO_NUMBER(rhs));
+    return BOOLEAN_TO_EJSVAL (!EJSVAL_IS_NUMBER(rhs) || EJSVAL_TO_NUMBER(lhs) != EJSVAL_TO_NUMBER(rhs));
   }
   else if (EJSVAL_IS_STRING(lhs)) {
-    return _ejs_boolean_new (!rhs || !EJSVAL_IS_STRING(rhs) || strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs)));
+    return BOOLEAN_TO_EJSVAL (!EJSVAL_IS_STRING(rhs) || strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs)));
   }
   else if (EJSVAL_IS_BOOLEAN(lhs)) {
-    return _ejs_boolean_new (!rhs || !EJSVAL_IS_BOOLEAN(rhs) || EJSVAL_TO_BOOLEAN(lhs) != EJSVAL_TO_BOOLEAN(rhs));
+    return BOOLEAN_TO_EJSVAL (!EJSVAL_IS_BOOLEAN(rhs) || EJSVAL_TO_BOOLEAN(lhs) != EJSVAL_TO_BOOLEAN(rhs));
   }
   else {
-    return _ejs_boolean_new (lhs != rhs);
+    return BOOLEAN_TO_EJSVAL (!EJSVAL_EQ(lhs, rhs));
   }
 }
 
-EJSValue*
-_ejs_op_eq (EJSValue* lhs, EJSValue* rhs)
+ejsval
+_ejs_op_eq (ejsval lhs, ejsval rhs)
 {
-  if (lhs == NULL) {
-    return _ejs_boolean_new (rhs == NULL || EJSVAL_IS_UNDEFINED(rhs));
+  if (EJSVAL_IS_NULL(lhs)) {
+    return BOOLEAN_TO_EJSVAL (EJSVAL_IS_NULL(rhs) || EJSVAL_IS_UNDEFINED(rhs));
   }
   else if (EJSVAL_IS_UNDEFINED(lhs)) {
-    return _ejs_boolean_new (rhs == NULL || EJSVAL_IS_UNDEFINED(rhs));
+    return BOOLEAN_TO_EJSVAL (EJSVAL_IS_NULL(rhs) || EJSVAL_IS_UNDEFINED(rhs));
   }
   else if (EJSVAL_IS_NUMBER(lhs)) {
-    return _ejs_boolean_new (rhs && EJSVAL_TO_NUMBER(lhs) == ToDouble(rhs));
+    return BOOLEAN_TO_EJSVAL (!EJSVAL_IS_NULL(rhs) && EJSVAL_TO_NUMBER(lhs) == ToDouble(rhs));
   }
   else if (EJSVAL_IS_STRING(lhs)) {
     EJSBool eq;
-    if (!rhs)
-      eq = FALSE;
+    if (EJSVAL_IS_NULL(rhs))
+      eq = EJS_FALSE;
     else {
-      EJSValue* rhstring = ToString(rhs);
+      ejsval rhstring = ToString(rhs);
       eq = (!strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhstring)));
     }
-    return _ejs_boolean_new(eq);
-  }
-  else if (EJSVAL_IS_UNDEFINED(lhs)) {
-    return _ejs_boolean_new (!rhs || EJSVAL_IS_UNDEFINED(rhs));
+    return BOOLEAN_TO_EJSVAL(eq);
   }
   else if (EJSVAL_IS_OBJECT(lhs)) {
-    return _ejs_boolean_new (rhs && lhs == rhs);
+    return BOOLEAN_TO_EJSVAL (EJSVAL_TO_OBJECT(lhs) == EJSVAL_TO_OBJECT(ToObject(rhs)));
   }
 
   NOT_IMPLEMENTED();
 }
 
-EJSValue*
-_ejs_op_neq (EJSValue* lhs, EJSValue* rhs)
+ejsval
+_ejs_op_neq (ejsval lhs, ejsval rhs)
 {
-  if (lhs == NULL) {
-    return _ejs_boolean_new (rhs != NULL && !EJSVAL_IS_UNDEFINED(rhs));
+  if (EJSVAL_IS_NULL(lhs)) {
+    return BOOLEAN_TO_EJSVAL (!EJSVAL_IS_NULL(rhs) && !EJSVAL_IS_UNDEFINED(rhs));
   }
   else if (EJSVAL_IS_UNDEFINED(lhs)) {
-    return _ejs_boolean_new (rhs != NULL && !EJSVAL_IS_UNDEFINED(rhs));
+    return BOOLEAN_TO_EJSVAL (!EJSVAL_IS_NULL(rhs) && !EJSVAL_IS_UNDEFINED(rhs));
   }
   else if (EJSVAL_IS_NUMBER(lhs)) {
-    return _ejs_boolean_new (!rhs || (EJSVAL_TO_NUMBER(lhs) != ToDouble(rhs)));
+    return BOOLEAN_TO_EJSVAL (EJSVAL_IS_NULL(rhs) || (EJSVAL_TO_NUMBER(lhs) != ToDouble(rhs)));
   }
   else if (EJSVAL_IS_STRING(lhs)) {
     EJSBool neq;
-    if (!rhs)
-      neq = TRUE;
+    if (EJSVAL_IS_NULL(rhs))
+      neq = EJS_TRUE;
     else {
-      EJSValue* rhstring = ToString(rhs);
+      ejsval rhstring = ToString(rhs);
       neq = (strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhstring)));
     }
-    return _ejs_boolean_new (neq);
+    return BOOLEAN_TO_EJSVAL (neq);
   }
   else if (EJSVAL_IS_UNDEFINED(lhs)) {
-    return _ejs_boolean_new (!rhs || !EJSVAL_IS_UNDEFINED(rhs));
+    return BOOLEAN_TO_EJSVAL (EJSVAL_IS_NULL(rhs) || !EJSVAL_IS_UNDEFINED(rhs));
   }
   else if (EJSVAL_IS_OBJECT(lhs)) {
-    return _ejs_boolean_new (!rhs || lhs != rhs);
+    return BOOLEAN_TO_EJSVAL (EJSVAL_IS_NULL(rhs) || EJSVAL_TO_OBJECT(lhs) != EJSVAL_TO_OBJECT(ToObject(rhs)));
   }
 
   NOT_IMPLEMENTED();
 }
 
-EJSValue*
-_ejs_op_instanceof (EJSValue* lhs, EJSValue* rhs)
+ejsval
+_ejs_op_instanceof (ejsval lhs, ejsval rhs)
 {
   if (EJSVAL_IS_PRIMITIVE(lhs))
     return _ejs_false;
   NOT_IMPLEMENTED();
 }
 
-EJSValue*
-_ejs_op_in (EJSValue* lhs, EJSValue* rhs)
+ejsval
+_ejs_op_in (ejsval lhs, ejsval rhs)
 {
   NOT_IMPLEMENTED();
 }
 
 EJSBool
-_ejs_truthy (EJSValue* val)
+_ejs_truthy (ejsval val)
 {
-  return _ejs_true == ToBoolean(val);
+  return EJSVAL_EQ(_ejs_true, ToBoolean(val));
 }
 
 
 void
-_ejs_throw (EJSValue* exp)
+_ejs_throw (ejsval exp)
 {
-  _ejs_exception_throw ((EJSObject*)ToObject(exp));
+  _ejs_exception_throw (ToObject(exp));
 }
 
 void
@@ -578,31 +596,31 @@ _ejs_rethrow ()
   _ejs_exception_rethrow ();
 }
 
-EJSValue*
-_ejs_isNaN (EJSValue *env, EJSValue* _this, int argc, EJSValue** args)
+ejsval
+_ejs_isNaN (ejsval env, ejsval _this, int argc, ejsval* args)
 {
   NOT_IMPLEMENTED();
 }
 
-EJSValue*
-_ejs_isFinite (EJSValue *env, EJSValue* _this, int argc, EJSValue** args)
+ejsval
+_ejs_isFinite (ejsval env, ejsval _this, int argc, ejsval* args)
 {
   NOT_IMPLEMENTED();
 }
 
-EJSValue*
-_ejs_parseInt (EJSValue *env, EJSValue* _this, int argc, EJSValue** args)
+ejsval
+_ejs_parseInt (ejsval env, ejsval _this, int argc, ejsval* args)
 {
   NOT_IMPLEMENTED();
 }
 
-EJSValue*
-_ejs_parseFloat (EJSValue *env, EJSValue* _this, int argc, EJSValue** args)
+ejsval
+_ejs_parseFloat (ejsval env, ejsval _this, int argc, ejsval* args)
 {
   if (argc == 0)
     return _ejs_nan;
 
-  EJSValue* arg0 = ToString(args[0]);
+  ejsval arg0 = ToString(args[0]);
 
-  return _ejs_number_new (strtod (EJSVAL_TO_STRING(arg0), NULL));
+  return NUMBER_TO_EJSVAL (strtod (EJSVAL_TO_STRING(arg0), NULL));
 }

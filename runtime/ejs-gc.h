@@ -4,10 +4,12 @@
 
 #include "ejs.h"
 
+#define CONSERVATIVE_STACKWALK 1
+
 typedef struct GCObjectHeader* GCObjectPtr;
 
 typedef struct GCObjectHeader {
-  EJSValueTag tag;
+  uint32_t gc_data;
 
   GCObjectPtr prev_link;
   GCObjectPtr next_link;
@@ -22,10 +24,11 @@ extern GCObjectPtr _ejs_gc_alloc(size_t size);
 
 #define _ejs_gc_add_named_root(v) __ejs_gc_add_named_root(&v, #v)
 
-extern void __ejs_gc_add_named_root(EJSValue** val, const char *name);
+extern void __ejs_gc_add_named_root(ejsval* val, const char *name);
 
-extern void _ejs_gc_remove_root(EJSValue** root);
+extern void _ejs_gc_remove_root(ejsval* root);
 
+#if !CONSERVATIVE_STACKWALK
 typedef struct FrameMap {
   int32_t NumRoots;    //< Number of roots in stack frame.
   int32_t NumMeta;     //< Number of metadata entries.  May be < NumRoots.
@@ -45,7 +48,7 @@ extern StackEntry *llvm_gc_root_chain;
 typedef struct {
   struct StackEntry *Next;       //< Link to next stack entry (the caller's).
   struct FrameMap *Map;    //< Pointer to constant FrameMap.
-  void *Roots[NUM_NATIVE_ROOTS]; //< Stack roots (in-place array).
+  ejsval Roots[NUM_NATIVE_ROOTS]; //< Stack roots (in-place array).
 } NativeStackEntry;
 
 
@@ -72,4 +75,21 @@ typedef struct {
 #define END_SHADOW_STACK_FRAME			\
   llvm_gc_root_chain = llvm_gc_root_chain->Next
 
+#define EJS_GC_MARK_THREAD_STACK_BOTTOM llvm_gc_root_chain = NULL
+
+
+#else
+
+#define ADD_STACK_ROOT(t, name, init) t name = init;
+#define START_SHADOW_STACK_FRAME
+#define END_SHADOW_STACK_FRAME
+
+#define EJS_GC_MARK_THREAD_STACK_BOTTOM do { \
+  GCObjectPtr btm;			     \
+  _ejs_gc_mark_thread_stack_bottom (&btm);   \
+} while(0)
+
+extern void _ejs_gc_mark_thread_stack_bottom(GCObjectPtr* btm);
+
+#endif
 #endif /* _ejs_gc_h */

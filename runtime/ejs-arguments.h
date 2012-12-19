@@ -9,17 +9,17 @@ typedef struct {
 
   /* arguments specific data */
   int argc;
-  EJSValue** args;
+  ejsval* args;
 } EJSArguments;
 
 EJS_BEGIN_DECLS
 
-extern EJSValue* _ejs_Arguments;
+extern ejsval _ejs_Arguments;
 
-EJSValue* _ejs_arguments_get_prototype();
+ejsval _ejs_arguments_get_prototype();
 EJSObject* _ejs_arguments_alloc_instance();
 
-void _ejs_arguments_init(EJSValue* global);
+void _ejs_arguments_init(ejsval global);
 
 EJS_END_DECLS
 

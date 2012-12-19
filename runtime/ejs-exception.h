@@ -6,7 +6,7 @@
 EJS_BEGIN_DECLS
 
 void _ejs_exception_init (void);
-extern void ejs_exception_throw (EJSValue* val);
+extern void ejs_exception_throw (ejsval val);
 
 EJS_END_DECLS
 

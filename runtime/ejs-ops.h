@@ -8,47 +8,47 @@
 EJS_BEGIN_DECLS
 
 /* returns an EJSPrimString* */
-EJSValue* NumberToString(double d);
-EJSValue* ToString(EJSValue *exp);
-double ToDouble(EJSValue *exp);
-int ToInteger(EJSValue *exp);
-EJSValue* ToObject(EJSValue *exp);
-EJSValue* ToBoolean(EJSValue *exp);
+ejsval NumberToString(double d);
+ejsval ToString(ejsval exp);
+double ToDouble(ejsval exp);
+int ToInteger(ejsval exp);
+ejsval ToObject(ejsval exp);
+ejsval ToBoolean(ejsval exp);
 
-EJSValue* _ejs_op_neg (EJSValue* exp);
-EJSValue* _ejs_op_not (EJSValue* exp);
-EJSValue* _ejs_op_void (EJSValue* exp);
-EJSValue* _ejs_op_typeof (EJSValue* exp);
-EJSValue* _ejs_op_delete (EJSValue* obj, EJSValue* prop);
-EJSValue* _ejs_op_bitwise_and (EJSValue* lhs, EJSValue* rhs);
-EJSValue* _ejs_op_bitwise_or (EJSValue* lhs, EJSValue* rhs);
-EJSValue* _ejs_op_rsh (EJSValue* lhs, EJSValue* rhs);
-EJSValue* _ejs_op_ursh (EJSValue* lhs, EJSValue* rhs);
-EJSValue* _ejs_op_mod (EJSValue* lhs, EJSValue* rhs);
-EJSValue* _ejs_op_add (EJSValue* lhs, EJSValue* rhs);
-EJSValue* _ejs_op_mult (EJSValue* lhs, EJSValue* rhs);
-EJSValue* _ejs_op_lt (EJSValue* lhs, EJSValue* rhs);
-EJSValue* _ejs_op_le (EJSValue* lhs, EJSValue* rhs);
-EJSValue* _ejs_op_gt (EJSValue* lhs, EJSValue* rhs);
-EJSValue* _ejs_op_ge (EJSValue* lhs, EJSValue* rhs);
-EJSValue* _ejs_op_sub (EJSValue* lhs, EJSValue* rhs);
-EJSValue* _ejs_op_strict_eq (EJSValue* lhs, EJSValue* rhs);
-EJSValue* _ejs_op_strict_neq (EJSValue* lhs, EJSValue* rhs);
+ejsval _ejs_op_neg (ejsval exp);
+ejsval _ejs_op_not (ejsval exp);
+ejsval _ejs_op_void (ejsval exp);
+ejsval _ejs_op_typeof (ejsval exp);
+ejsval _ejs_op_delete (ejsval obj, ejsval prop);
+ejsval _ejs_op_bitwise_and (ejsval lhs, ejsval rhs);
+ejsval _ejs_op_bitwise_or (ejsval lhs, ejsval rhs);
+ejsval _ejs_op_rsh (ejsval lhs, ejsval rhs);
+ejsval _ejs_op_ursh (ejsval lhs, ejsval rhs);
+ejsval _ejs_op_mod (ejsval lhs, ejsval rhs);
+ejsval _ejs_op_add (ejsval lhs, ejsval rhs);
+ejsval _ejs_op_mult (ejsval lhs, ejsval rhs);
+ejsval _ejs_op_lt (ejsval lhs, ejsval rhs);
+ejsval _ejs_op_le (ejsval lhs, ejsval rhs);
+ejsval _ejs_op_gt (ejsval lhs, ejsval rhs);
+ejsval _ejs_op_ge (ejsval lhs, ejsval rhs);
+ejsval _ejs_op_sub (ejsval lhs, ejsval rhs);
+ejsval _ejs_op_strict_eq (ejsval lhs, ejsval rhs);
+ejsval _ejs_op_strict_neq (ejsval lhs, ejsval rhs);
 
-EJSValue* _ejs_op_eq (EJSValue* lhs, EJSValue* rhs);
-EJSValue* _ejs_op_neq (EJSValue* lhs, EJSValue* rhs);
+ejsval _ejs_op_eq (ejsval lhs, ejsval rhs);
+ejsval _ejs_op_neq (ejsval lhs, ejsval rhs);
 
-EJSValue* _ejs_op_instanceof (EJSValue* lhs, EJSValue* rhs);
-EJSValue* _ejs_op_in (EJSValue* lhs, EJSValue* rhs);
+ejsval _ejs_op_instanceof (ejsval lhs, ejsval rhs);
+ejsval _ejs_op_in (ejsval lhs, ejsval rhs);
 
-EJSBool _ejs_truthy (EJSValue* val);
+EJSBool _ejs_truthy (ejsval val);
 
-void _ejs_throw (EJSValue* exp);
+void _ejs_throw (ejsval exp);
 
-EJSValue* _ejs_isNaN (EJSValue *env, EJSValue* _this, int argc, EJSValue** args);
-EJSValue* _ejs_isFinite (EJSValue *env, EJSValue* _this, int argc, EJSValue** args);
-EJSValue* _ejs_parseInt (EJSValue *env, EJSValue* _this, int argc, EJSValue** args);
-EJSValue* _ejs_parseFloat (EJSValue *env, EJSValue* _this, int argc, EJSValue** args);
+ejsval _ejs_isNaN (ejsval env, ejsval _this, int argc, ejsval* args);
+ejsval _ejs_isFinite (ejsval env, ejsval _this, int argc, ejsval* args);
+ejsval _ejs_parseInt (ejsval env, ejsval _this, int argc, ejsval* args);
+ejsval _ejs_parseFloat (ejsval env, ejsval _this, int argc, ejsval* args);
 
 EJS_END_DECLS
 

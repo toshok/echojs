@@ -6,9 +6,9 @@
 #include "ejs-object.h"
 
 // for now we just build environments out of EJS objects
-typedef union _EJSValue EJSClosureEnv;
+typedef ejsval EJSClosureEnv;
 
-typedef EJSValue* (*EJSClosureFunc) (EJSValue* env, EJSValue* _this, int argc, EJSValue** args);
+typedef ejsval (*EJSClosureFunc) (ejsval env, ejsval _this, int argc, ejsval* args);
 
 
 
@@ -16,34 +16,34 @@ typedef struct {
   /* object header */
   EJSObject obj;
 
-  EJSValue* name;
+  ejsval name;
   EJSClosureFunc func;
-  EJSClosureEnv* env;
+  EJSClosureEnv env;
   EJSBool bound_this;
-  EJSValue *_this;
+  ejsval _this;
 } EJSFunction;
 
 
 EJS_BEGIN_DECLS
 
-EJSValue* _ejs_invoke_closure_0 (EJSValue* closure, EJSValue* _this, int argc);
-EJSValue* _ejs_invoke_closure_1 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1);
-EJSValue* _ejs_invoke_closure_2 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1, EJSValue *arg2);
-EJSValue* _ejs_invoke_closure_3 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1, EJSValue *arg2, EJSValue *arg3);
-EJSValue* _ejs_invoke_closure_4 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1, EJSValue *arg2, EJSValue *arg3, EJSValue *arg4);
-EJSValue* _ejs_invoke_closure_5 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1, EJSValue *arg2, EJSValue *arg3, EJSValue *arg4, EJSValue *arg5);
-EJSValue* _ejs_invoke_closure_6 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1, EJSValue *arg2, EJSValue *arg3, EJSValue *arg4, EJSValue *arg5, EJSValue *arg6);
-EJSValue* _ejs_invoke_closure_7 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1, EJSValue *arg2, EJSValue *arg3, EJSValue *arg4, EJSValue *arg5, EJSValue *arg6, EJSValue *arg7);
-EJSValue* _ejs_invoke_closure_8 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1, EJSValue *arg2, EJSValue *arg3, EJSValue *arg4, EJSValue *arg5, EJSValue *arg6, EJSValue *arg7, EJSValue *arg8);
-EJSValue* _ejs_invoke_closure_9 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1, EJSValue *arg2, EJSValue *arg3, EJSValue *arg4, EJSValue *arg5, EJSValue *arg6, EJSValue *arg7, EJSValue *arg8, EJSValue *arg9);
-EJSValue* _ejs_invoke_closure_10 (EJSValue* closure, EJSValue* _this, int argc, EJSValue *arg1, EJSValue *arg2, EJSValue *arg3, EJSValue *arg4, EJSValue *arg5, EJSValue *arg6, EJSValue *arg7, EJSValue *arg8, EJSValue *arg9, EJSValue *arg10);
+ejsval _ejs_invoke_closure_0 (ejsval closure, ejsval _this, int argc);
+ejsval _ejs_invoke_closure_1 (ejsval closure, ejsval _this, int argc, ejsval arg1);
+ejsval _ejs_invoke_closure_2 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2);
+ejsval _ejs_invoke_closure_3 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3);
+ejsval _ejs_invoke_closure_4 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4);
+ejsval _ejs_invoke_closure_5 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5);
+ejsval _ejs_invoke_closure_6 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6);
+ejsval _ejs_invoke_closure_7 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7);
+ejsval _ejs_invoke_closure_8 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7, ejsval arg8);
+ejsval _ejs_invoke_closure_9 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7, ejsval arg8, ejsval arg9);
+ejsval _ejs_invoke_closure_10 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7, ejsval arg8, ejsval arg9, ejsval arg10);
 
-extern EJSValue* _ejs_function_new (EJSClosureEnv* env, EJSValue* name, EJSClosureFunc func);
-extern EJSValue* _ejs_function_new_utf8 (EJSClosureEnv* env, const char* name, EJSClosureFunc func);
+extern ejsval _ejs_function_new (EJSClosureEnv env, ejsval name, EJSClosureFunc func);
+extern ejsval _ejs_function_new_utf8 (EJSClosureEnv env, const char* name, EJSClosureFunc func);
 
-extern EJSValue* _ejs_Function;
-extern EJSValue* _ejs_function_get_prototype();
-extern void _ejs_function_init(EJSValue *global);
+extern ejsval _ejs_Function;
+extern ejsval _ejs_Function_proto;
+extern void _ejs_function_init(ejsval global);
 
 EJS_END_DECLS
 

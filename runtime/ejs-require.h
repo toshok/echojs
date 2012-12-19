@@ -8,22 +8,22 @@
 typedef struct {
   const char* name;
   EJSClosureFunc func;
-  EJSValue *cached_exports;
+  ejsval cached_exports;
 } EJSRequire;
 
-typedef EJSValue* (*ExternalModuleEntry) (EJSValue *exports);
+typedef ejsval (*ExternalModuleEntry) (ejsval exports);
 
 typedef struct {
   const char* name;
   ExternalModuleEntry func;
-  EJSValue *cached_exports;
+  ejsval cached_exports;
 } EJSExternalModuleRequire;
 
 EJS_BEGIN_DECLS
 
-extern EJSValue* _ejs_require;
+extern ejsval _ejs_require;
 
-extern void _ejs_require_init(EJSValue* global);
+extern void _ejs_require_init(ejsval global);
 
 EJS_END_DECLS
 

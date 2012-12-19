@@ -7,11 +7,11 @@
 
 EJS_BEGIN_DECLS
 
-EJSValue* _ejs_decodeURI (EJSValue *env, EJSValue* _this, int argc, EJSValue** args);
-EJSValue* _ejs_decodeURIComponent (EJSValue *env, EJSValue* _this, int argc, EJSValue** args);
+ejsval _ejs_decodeURI (ejsval env, ejsval _this, int argc, ejsval* args);
+ejsval _ejs_decodeURIComponent (ejsval env, ejsval _this, int argc, ejsval* args);
 
-EJSValue* _ejs_encodeURI (EJSValue *env, EJSValue* _this, int argc, EJSValue** args);
-EJSValue* _ejs_encodeURIComponent (EJSValue *env, EJSValue* _this, int argc, EJSValue** args);
+ejsval _ejs_encodeURI (ejsval env, ejsval _this, int argc, ejsval* args);
+ejsval _ejs_encodeURIComponent (ejsval env, ejsval _this, int argc, ejsval* args);
 
 EJS_END_DECLS
 

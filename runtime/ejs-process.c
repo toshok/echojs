@@ -1,9 +1,11 @@
 #include "ejs.h"
 #include "ejs-ops.h"
 #include "ejs-value.h"
+#include "ejs-array.h"
+#include "ejs-function.h"
 
-static EJSValue*
-_ejs_process_exit (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_process_exit (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   int exit_status = 0;
 
@@ -13,25 +15,25 @@ _ejs_process_exit (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
 }
 
 void
-_ejs_process_init(EJSValue* global, int argc, char **argv)
+_ejs_process_init(ejsval global, int argc, char **argv)
 {
   START_SHADOW_STACK_FRAME;
 
-  ADD_STACK_ROOT(EJSValue*, _ejs_process, _ejs_object_new (NULL));
-  ADD_STACK_ROOT(EJSValue*, _argv, _ejs_array_new (argc));
+  ADD_STACK_ROOT(ejsval, _ejs_process, _ejs_object_new (_ejs_null));
+  ADD_STACK_ROOT(ejsval, _argv, _ejs_array_new (argc));
   int i;
 
   for (i = 0; i < argc; i ++) {
     START_SHADOW_STACK_FRAME;
-    ADD_STACK_ROOT(EJSValue*, _i, _ejs_number_new(i));
-    ADD_STACK_ROOT(EJSValue*, _argv_i, _ejs_string_new_utf8(argv[i]));
+    ejsval _i = NUMBER_TO_EJSVAL(i);
+    ADD_STACK_ROOT(ejsval, _argv_i, _ejs_string_new_utf8(argv[i]));
     _ejs_object_setprop (_argv, _i, _argv_i);
     END_SHADOW_STACK_FRAME;
   }
 
   _ejs_object_setprop_utf8 (_ejs_process, "argv", _argv);
 
-#define OBJ_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_process_##x)); _ejs_object_setprop (_ejs_process, funcname, tmpfunc); } while (0)
+#define OBJ_METHOD(x) do { ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_process_##x)); _ejs_object_setprop (_ejs_process, funcname, tmpfunc); } while (0)
 
   OBJ_METHOD(exit);
 

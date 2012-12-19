@@ -6,16 +6,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if __cplusplus
+#define EJS_BEGIN_DECLS extern "C" {
+#define EJS_END_DECLS };
+#else
+#define EJS_BEGIN_DECLS
+#define EJS_END_DECLS
+#endif
+
 typedef char EJSBool;
 typedef struct _EJSContext* EJSContext;
-typedef union _EJSValue EJSValue;
 
-typedef void (*EJSValueFunc)(EJSValue *value);
-
-#ifndef TRUE
-#define TRUE 1
-#define FALSE 0
-#endif
+#define EJS_TRUE 1
+#define EJS_FALSE 0
 
 #ifndef MIN
 #define MIN(a,b) (a) > (b) ? (b) : (a)
@@ -25,35 +28,26 @@ typedef void (*EJSValueFunc)(EJSValue *value);
 #define MAX(a,b) (a) > (b) ? (a) : (b)
 #endif
 
-#if __cplusplus
-#define EJS_BEGIN_DECLS extern "C" {
-#define EJS_END_DECLS };
-#else
-#define EJS_BEGIN_DECLS
-#define EJS_END_DECLS
-#endif
-
 #define NOT_IMPLEMENTED() do { \
     printf ("%s not implemented.\n", __PRETTY_FUNCTION__);	\
     abort();							\
   } while (0)
 
+#include "ejs-types.h"
+
+typedef struct _EJSPrimString EJSPrimString;
+typedef struct _EJSObject EJSObject;
+
+#include "ejsval.h"
+#include "ejs-value.h"
+
 void _ejs_init(int argc, char** argv);
 
-extern EJSValue* _ejs_undefined;
-extern EJSValue* _ejs_nan;
-extern EJSValue* _ejs_true;
-extern EJSValue* _ejs_false;
-extern EJSValue* _ejs_global;
-
-typedef enum {
-  // the primitives
-  EJSValueTagBoolean,
-  EJSValueTagNumber,
-  EJSValueTagString,
-  EJSValueTagUndefined,
-  EJSValueTagObject,
-} EJSValueTag;
-
+extern ejsval _ejs_undefined;
+extern ejsval _ejs_null;
+extern ejsval _ejs_nan;
+extern ejsval _ejs_true;
+extern ejsval _ejs_false;
+extern ejsval _ejs_global;
 
 #endif // _ejs_h_

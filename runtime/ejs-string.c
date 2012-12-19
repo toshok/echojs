@@ -3,20 +3,22 @@
 #include <math.h>
 
 #include "ejs-value.h"
+#include "ejs-array.h"
 #include "ejs-string.h"
+#include "ejs-function.h"
 #include "ejs-ops.h"
 
-static EJSValue* _ejs_string_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr);
-static EJSValue* _ejs_string_specop_get_own_property (EJSValue* obj, EJSValue* propertyName);
-static EJSValue* _ejs_string_specop_get_property (EJSValue* obj, EJSValue* propertyName);
-static void      _ejs_string_specop_put (EJSValue *obj, EJSValue* propertyName, EJSValue* val, EJSBool flag);
-static EJSBool   _ejs_string_specop_can_put (EJSValue *obj, EJSValue* propertyName);
-static EJSBool   _ejs_string_specop_has_property (EJSValue *obj, EJSValue* propertyName);
-static EJSBool   _ejs_string_specop_delete (EJSValue *obj, EJSValue* propertyName, EJSBool flag);
-static EJSValue* _ejs_string_specop_default_value (EJSValue *obj, const char *hint);
-static void      _ejs_string_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag);
-static void      _ejs_string_specop_finalize (EJSValue *obj);
-static void      _ejs_string_specop_scan (EJSValue* obj, EJSValueFunc scan_func);
+static ejsval _ejs_string_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr);
+static ejsval _ejs_string_specop_get_own_property (ejsval obj, ejsval propertyName);
+static ejsval _ejs_string_specop_get_property (ejsval obj, ejsval propertyName);
+static void      _ejs_string_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
+static EJSBool   _ejs_string_specop_can_put (ejsval obj, ejsval propertyName);
+static EJSBool   _ejs_string_specop_has_property (ejsval obj, ejsval propertyName);
+static EJSBool   _ejs_string_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
+static ejsval _ejs_string_specop_default_value (ejsval obj, const char *hint);
+static void      _ejs_string_specop_define_own_property (ejsval obj, ejsval propertyName, ejsval propertyDescriptor, EJSBool flag);
+static void      _ejs_string_specop_finalize (EJSObject* obj);
+static void      _ejs_string_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
 
 EJSSpecOps _ejs_string_specops = {
   "String",
@@ -38,11 +40,13 @@ EJSObject* _ejs_string_alloc_instance()
   return (EJSObject*)_ejs_gc_new (EJSString);
 }
 
-EJSValue* _ejs_String;
-static EJSValue*
-_ejs_String_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+ejsval _ejs_String;
+ejsval _ejs_String_proto;
+
+static ejsval
+_ejs_String_impl (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-  if (!_this || EJSVAL_IS_UNDEFINED(_this)) {
+  if (EJSVAL_IS_NULL(_this) || EJSVAL_IS_UNDEFINED(_this)) {
     if (argc > 0)
       return ToString(args[0]);
     else
@@ -50,9 +54,9 @@ _ejs_String_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
   }
   else {
     // called as a constructor
-    _this->o.ops = &_ejs_string_specops;
+    EJSString* str = (EJSString*)EJSVAL_TO_OBJECT(_this);
+    ((EJSObject*)str)->ops = &_ejs_string_specops;
 
-    EJSString* str = (EJSString*)&_this->o;
     if (argc > 0) {
       str->primStr = ToString(args[0]);
     }
@@ -63,37 +67,30 @@ _ejs_String_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
   }
 }
 
-static EJSValue* _ejs_String_proto;
-EJSValue*
-_ejs_string_get_prototype()
+static ejsval
+_ejs_String_prototype_toString (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-  return _ejs_String_proto;
-}
-
-static EJSValue*
-_ejs_String_prototype_toString (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
-{
-  EJSString *str = (EJSString*)_this;
+  EJSString *str = (EJSString*)EJSVAL_TO_OBJECT(_this);
 
   return _ejs_string_new_utf8 (EJSVAL_TO_STRING(str->primStr));
 }
 
-static EJSValue*
-_ejs_String_prototype_replace (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_String_prototype_replace (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   if (argc == 0)
     return _this;
 
-  EJSValue *thisStr = ToString(_this);
-  EJSValue *searchValue = args[0];
-  EJSValue *replaceValue = argc > 1 ? args[1] : _ejs_undefined;
+  ejsval thisStr = ToString(_this);
+  ejsval searchValue = args[0];
+  ejsval replaceValue = argc > 1 ? args[1] : _ejs_undefined;
 
-  if (EJSVAL_IS_OBJECT(searchValue) && !strcmp (CLASSNAME(searchValue), "RegExp")){
+  if (EJSVAL_IS_OBJECT(searchValue) && !strcmp (CLASSNAME(EJSVAL_TO_OBJECT(searchValue)), "RegExp")){
     NOT_IMPLEMENTED();
   }
   else {
-    EJSValue* searchValueStr = ToString(searchValue);
-    EJSValue* replaceValueStr = ToString(replaceValue);
+    ejsval searchValueStr = ToString(searchValue);
+    ejsval replaceValueStr = ToString(replaceValue);
     char *p = strstr (EJSVAL_TO_STRING(thisStr), EJSVAL_TO_STRING(searchValueStr));
     if (p == NULL)
       return _this;
@@ -113,23 +110,23 @@ _ejs_String_prototype_replace (EJSValue* env, EJSValue* _this, int argc, EJSValu
       strcpy (p, EJSVAL_TO_STRING(replaceValueStr)); p += len2;
       strcpy (p, p + EJSVAL_TO_STRLEN(searchValueStr));
 
-      EJSValue *rv = _ejs_string_new_utf8 (result);
+      ejsval rv = _ejs_string_new_utf8 (result);
       free (result);
       return rv;
     }
   }
 }
 
-static EJSValue*
-_ejs_String_prototype_charAt (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_String_prototype_charAt (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-  EJSValue* primStr;
+  ejsval primStr;
 
   if (EJSVAL_IS_STRING(_this)) {
     primStr = _this;
   }
   else {
-    EJSString *str = (EJSString*)_this;
+    EJSString *str = (EJSString*)EJSVAL_TO_OBJECT(_this);
     primStr = str->primStr;
   }
 
@@ -147,16 +144,16 @@ _ejs_String_prototype_charAt (EJSValue* env, EJSValue* _this, int argc, EJSValue
   return _ejs_string_new_utf8 (c);
 }
 
-static EJSValue*
-_ejs_String_prototype_charCodeAt (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_String_prototype_charCodeAt (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-  EJSValue* primStr;
+  ejsval primStr;
 
   if (EJSVAL_IS_STRING(_this)) {
     primStr = _this;
   }
   else {
-    EJSString *str = (EJSString*)_this;
+    EJSString *str = (EJSString*)EJSVAL_TO_OBJECT(_this);
     primStr = str->primStr;
   }
 
@@ -168,141 +165,141 @@ _ejs_String_prototype_charCodeAt (EJSValue* env, EJSValue* _this, int argc, EJSV
   if (idx < 0 || idx >= EJSVAL_TO_STRLEN(primStr))
     return _ejs_nan;
 
-  return _ejs_number_new (EJSVAL_TO_STRING(primStr)[idx]);
+  return NUMBER_TO_EJSVAL (EJSVAL_TO_STRING(primStr)[idx]);
 }
 
-static EJSValue*
-_ejs_String_prototype_concat (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_String_prototype_concat (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   NOT_IMPLEMENTED();
 }
 
-static EJSValue*
-_ejs_String_prototype_indexOf (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_String_prototype_indexOf (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   int idx = -1;
   if (argc == 0)
-    return _ejs_number_new(idx);
+    return NUMBER_TO_EJSVAL(idx);
 
-  EJSValue* haystack = ToString(_this);
+  ejsval haystack = ToString(_this);
   char* haystack_cstr;
   if (EJSVAL_IS_STRING(haystack)) {
     haystack_cstr = EJSVAL_TO_STRING(haystack);
   }
   else {
-    haystack_cstr = EJSVAL_TO_STRING(((EJSString*)haystack)->primStr);
+    haystack_cstr = EJSVAL_TO_STRING(((EJSString*)EJSVAL_TO_OBJECT(haystack))->primStr);
   }
 
-  EJSValue* needle = ToString(args[0]);
+  ejsval needle = ToString(args[0]);
   char *needle_cstr;
   if (EJSVAL_IS_STRING(needle)) {
     needle_cstr = EJSVAL_TO_STRING(needle);
   }
   else {
-    needle_cstr = EJSVAL_TO_STRING(((EJSString*)needle)->primStr);
+    needle_cstr = EJSVAL_TO_STRING(((EJSString*)EJSVAL_TO_OBJECT(needle))->primStr);
   }
   
   char* p = strstr(haystack_cstr, needle_cstr);
   if (p == NULL)
-    return _ejs_number_new(idx);
+    return NUMBER_TO_EJSVAL(idx);
 
-  return _ejs_number_new (p - haystack_cstr);
+  return NUMBER_TO_EJSVAL (p - haystack_cstr);
 }
 
-static EJSValue*
-_ejs_String_prototype_lastIndexOf (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_String_prototype_lastIndexOf (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   NOT_IMPLEMENTED();
 }
 
-static EJSValue*
-_ejs_String_prototype_localeCompare (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_String_prototype_localeCompare (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   NOT_IMPLEMENTED();
 }
 
-static EJSValue*
-_ejs_String_prototype_match (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_String_prototype_match (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   NOT_IMPLEMENTED();
 }
 
-static EJSValue*
-_ejs_String_prototype_search (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_String_prototype_search (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   NOT_IMPLEMENTED();
 }
 
-static EJSValue*
-_ejs_String_prototype_substring (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_String_prototype_substring (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   NOT_IMPLEMENTED();
 }
 
-static EJSValue*
-_ejs_String_prototype_toLowerCase (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_String_prototype_toLowerCase (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   NOT_IMPLEMENTED();
 }
 
-static EJSValue*
-_ejs_String_prototype_toLocaleLowerCase (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_String_prototype_toLocaleLowerCase (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   NOT_IMPLEMENTED();
 }
 
-static EJSValue*
-_ejs_String_prototype_toUpperCase (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_String_prototype_toUpperCase (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   NOT_IMPLEMENTED();
 }
 
-static EJSValue*
-_ejs_String_prototype_toLocaleUpperCase (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_String_prototype_toLocaleUpperCase (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   NOT_IMPLEMENTED();
 }
 
-static EJSValue*
-_ejs_String_prototype_trim (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_String_prototype_trim (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   NOT_IMPLEMENTED();
 }
 
-static EJSValue*
-_ejs_String_prototype_valueOf (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_String_prototype_valueOf (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   NOT_IMPLEMENTED();
 }
 
-static EJSValue*
-_ejs_String_prototype_split (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_String_prototype_split (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   // for now let's just not split anything at all, return the original string as element0 of the array.
 
-  EJSValue* rv = _ejs_array_new (1);
-  _ejs_object_setprop (rv, _ejs_number_new (0), _this);
+  ejsval rv = _ejs_array_new (1);
+  _ejs_object_setprop (rv, NUMBER_TO_EJSVAL (0), _this);
   return rv;
 }
 
-static EJSValue*
-_ejs_String_prototype_slice (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+static ejsval
+_ejs_String_prototype_slice (ejsval env, ejsval _this, int argc, ejsval *args)
 {
   // assert argc >= 1
 
-  EJSValue* start = args[0];
-  EJSValue* end = argc > 1 ? args[1] : _ejs_undefined;
+  ejsval start = args[0];
+  ejsval end = argc > 1 ? args[1] : _ejs_undefined;
 
   // Call CheckObjectCoercible passing the this value as its argument.
   // Let S be the result of calling ToString, giving it the this value as its argument.
-  EJSValue* S = ToString(_this);
+  ejsval S = ToString(_this);
   // Let len be the number of characters in S.
   int len = EJSVAL_TO_STRLEN(S);
   // Let intStart be ToInteger(start).
   int intStart = ToInteger(start);
 
   // If end is undefined, let intEnd be len; else let intEnd be ToInteger(end).
-  int intEnd = end == _ejs_undefined ? len : ToInteger(end);
+  int intEnd = EJSVAL_IS_UNDEFINED(end) ? len : ToInteger(end);
 
   // If intStart is negative, let from be max(len + intStart,0); else let from be min(intStart, len).
   int from = intStart < 0 ? MAX(len + intStart, 0) : MIN(intStart, len);
@@ -318,20 +315,20 @@ _ejs_String_prototype_slice (EJSValue* env, EJSValue* _this, int argc, EJSValue 
 }
 
 void
-_ejs_string_init(EJSValue *global)
+_ejs_string_init(ejsval global)
 {
   START_SHADOW_STACK_FRAME;
 
   _ejs_gc_add_named_root (_ejs_String_proto);
-  _ejs_String_proto = _ejs_object_new(NULL);
+  _ejs_String_proto = _ejs_object_new(_ejs_null);
   
-  ADD_STACK_ROOT(EJSValue*, tmpobj, _ejs_function_new_utf8 (NULL, "String", (EJSClosureFunc)_ejs_String_impl));
+  ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "String", (EJSClosureFunc)_ejs_String_impl));
   _ejs_String = tmpobj;
 
   _ejs_object_setprop_utf8 (_ejs_String,       "prototype",  _ejs_String_proto);
 
-#define OBJ_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_String_##x)); _ejs_object_setprop (_ejs_String, funcname, tmpfunc); } while (0)
-#define PROTO_METHOD(x) do { ADD_STACK_ROOT(EJSValue*, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(EJSValue*, tmpfunc, _ejs_function_new (NULL, funcname, (EJSClosureFunc)_ejs_String_prototype_##x)); _ejs_object_setprop (_ejs_String_proto, funcname, tmpfunc); } while (0)
+#define OBJ_METHOD(x) do { ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_String_##x)); _ejs_object_setprop (_ejs_String, funcname, tmpfunc); } while (0)
+#define PROTO_METHOD(x) do { ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_String_prototype_##x)); _ejs_object_setprop (_ejs_String_proto, funcname, tmpfunc); } while (0)
 
   PROTO_METHOD(charAt);
   PROTO_METHOD(charCodeAt);
@@ -361,22 +358,21 @@ _ejs_string_init(EJSValue *global)
   END_SHADOW_STACK_FRAME;
 }
 
-static EJSValue*
-_ejs_string_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr)
+static ejsval
+_ejs_string_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr)
 {
-  EJSString* estr = (EJSString*)obj;
-
   // check if propertyName is an integer, or a string that we can convert to an int
-  EJSBool is_index = FALSE;
+  EJSBool is_index = EJS_FALSE;
   int idx = 0;
   if (!isCStr && EJSVAL_IS_NUMBER(propertyName)) {
     double n = EJSVAL_TO_NUMBER(propertyName);
     if (floor(n) == n) {
       idx = (int)n;
-      is_index = TRUE;
+      is_index = EJS_TRUE;
     }
   }
 
+  EJSString* estr = (EJSString*)EJSVAL_TO_OBJECT(obj);
   if (is_index) {
     if (idx < 0 || idx > EJSVAL_TO_STRLEN(estr->primStr))
       return _ejs_undefined;
@@ -387,71 +383,71 @@ _ejs_string_specop_get (EJSValue* obj, void* propertyName, EJSBool isCStr)
   }
 
   // we also handle the length getter here
-  if ((isCStr && !strcmp("length", (char*)propertyName))
+  if ((isCStr && !strcmp("length", (char*)EJSVAL_TO_PRIVATE_PTR_IMPL(propertyName)))
       || (!isCStr && EJSVAL_IS_STRING(propertyName) && !strcmp ("length", EJSVAL_TO_STRING(propertyName)))) {
-    return _ejs_number_new (EJSVAL_TO_STRLEN(estr->primStr));
+    return NUMBER_TO_EJSVAL (EJSVAL_TO_STRLEN(estr->primStr));
   }
 
   // otherwise we fallback to the object implementation
   return _ejs_object_specops.get (obj, propertyName, isCStr);
 }
 
-static EJSValue*
-_ejs_string_specop_get_own_property (EJSValue* obj, EJSValue* propertyName)
+static ejsval
+_ejs_string_specop_get_own_property (ejsval obj, ejsval propertyName)
 {
   return _ejs_object_specops.get_own_property (obj, propertyName);
 }
 
-static EJSValue*
-_ejs_string_specop_get_property (EJSValue* obj, EJSValue* propertyName)
+static ejsval
+_ejs_string_specop_get_property (ejsval obj, ejsval propertyName)
 {
   return _ejs_object_specops.get_property (obj, propertyName);
 }
 
 static void
-_ejs_string_specop_put (EJSValue *obj, EJSValue* propertyName, EJSValue* val, EJSBool flag)
+_ejs_string_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag)
 {
   _ejs_object_specops.put (obj, propertyName, val, flag);
 }
 
 static EJSBool
-_ejs_string_specop_can_put (EJSValue *obj, EJSValue* propertyName)
+_ejs_string_specop_can_put (ejsval obj, ejsval propertyName)
 {
   return _ejs_object_specops.can_put (obj, propertyName);
 }
 
 static EJSBool
-_ejs_string_specop_has_property (EJSValue *obj, EJSValue* propertyName)
+_ejs_string_specop_has_property (ejsval obj, ejsval propertyName)
 {
   return _ejs_object_specops.has_property (obj, propertyName);
 }
 
 static EJSBool
-_ejs_string_specop_delete (EJSValue *obj, EJSValue* propertyName, EJSBool flag)
+_ejs_string_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
 {
   return _ejs_object_specops._delete (obj, propertyName, flag);
 }
 
-static EJSValue*
-_ejs_string_specop_default_value (EJSValue *obj, const char *hint)
+static ejsval
+_ejs_string_specop_default_value (ejsval obj, const char *hint)
 {
   return _ejs_object_specops.default_value (obj, hint);
 }
 
 static void
-_ejs_string_specop_define_own_property (EJSValue *obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag)
+_ejs_string_specop_define_own_property (ejsval obj, ejsval propertyName, ejsval propertyDescriptor, EJSBool flag)
 {
   _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
 }
 
 static void
-_ejs_string_specop_finalize (EJSValue *obj)
+_ejs_string_specop_finalize (EJSObject* obj)
 {
   _ejs_object_specops.finalize (obj);
 }
 
 static void
-_ejs_string_specop_scan (EJSValue* obj, EJSValueFunc scan_func)
+_ejs_string_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
   EJSString* ejss = (EJSString*)obj;
   scan_func (ejss->primStr);

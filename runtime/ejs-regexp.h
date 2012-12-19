@@ -14,15 +14,15 @@ typedef struct {
 
 EJS_BEGIN_DECLS
 
-extern EJSValue* _ejs_Regexp;
+extern ejsval _ejs_Regexp;
+extern ejsval _ejs_Regexp_proto;
 extern EJSSpecOps _ejs_regexp_specops;
 
-EJSValue* _ejs_regexp_get_prototype();
 
 EJSObject* _ejs_regexp_alloc_instance();
-void _ejs_regexp_init(EJSValue* global);
+void _ejs_regexp_init(ejsval global);
 
-EJSValue* _ejs_regexp_new_utf8 (const char* str);
+ejsval _ejs_regexp_new_utf8 (const char* str);
 
 EJS_END_DECLS
 

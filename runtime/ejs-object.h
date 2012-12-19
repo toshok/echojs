@@ -4,11 +4,12 @@
 
 #include "ejs.h"
 #include "ejs-gc.h"
+#include "ejs-value.h"
 
 // really terribly performing property maps
 struct _EJSPropertyMap {
   char **names;
-  EJSValue **fields;
+  ejsval *fields;
   int allocated;
   int num;
 };
@@ -22,17 +23,17 @@ typedef struct {
   EJSBool enumerable;
 } EJSPropertyDesc;
 
-typedef EJSValue* (*SpecOpGet) (EJSValue* obj, void* propertyName, EJSBool isCStr);
-typedef EJSValue* (*SpecOpGetOwnProperty) (EJSValue* obj, EJSValue* propertyName);
-typedef EJSValue* (*SpecOpGetProperty) (EJSValue* obj, EJSValue* propertyName);
-typedef void      (*SpecOpPut) (EJSValue* obj, EJSValue* propertyName, EJSValue* val, EJSBool flag);
-typedef EJSBool   (*SpecOpCanPut) (EJSValue* obj, EJSValue* propertyName);
-typedef EJSBool   (*SpecOpHasProperty) (EJSValue* obj, EJSValue* propertyName);
-typedef EJSBool   (*SpecOpDelete) (EJSValue* obj, EJSValue* propertyName, EJSBool flag);
-typedef EJSValue* (*SpecOpDefaultValue) (EJSValue* obj, const char *hint);
-typedef void      (*SpecOpDefineOwnProperty) (EJSValue* obj, EJSValue* propertyName, EJSValue* propertyDescriptor, EJSBool flag);
-typedef void      (*SpecOpFinalize) (EJSValue* obj);
-typedef void      (*SpecOpScan) (EJSValue* obj, EJSValueFunc scan_func);
+typedef ejsval  (*SpecOpGet) (ejsval obj, ejsval propertyName, EJSBool isCStr);
+typedef ejsval  (*SpecOpGetOwnProperty) (ejsval obj, ejsval propertyName);
+typedef ejsval  (*SpecOpGetProperty) (ejsval obj, ejsval propertyName);
+typedef void    (*SpecOpPut) (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
+typedef EJSBool (*SpecOpCanPut) (ejsval obj, ejsval propertyName);
+typedef EJSBool (*SpecOpHasProperty) (ejsval obj, ejsval propertyName);
+typedef EJSBool (*SpecOpDelete) (ejsval obj, ejsval propertyName, EJSBool flag);
+typedef ejsval  (*SpecOpDefaultValue) (ejsval obj, const char *hint);
+typedef void    (*SpecOpDefineOwnProperty) (ejsval obj, ejsval propertyName, ejsval propertyDescriptor, EJSBool flag);
+typedef void    (*SpecOpFinalize) (EJSObject* obj);
+typedef void    (*SpecOpScan) (EJSObject* obj, EJSValueFunc scan_func);
 
 typedef struct {
   const char* class_name;
@@ -50,17 +51,18 @@ typedef struct {
   SpecOpScan scan;
 } EJSSpecOps;
 
+struct _EJSObject {
+  heap_val_header header;
+
+  ejsval proto;
+  EJSSpecOps *ops;
+  EJSPropertyMap* map;
+};
+
+
 #define OP(o,op) (((EJSObject*)o)->ops->op)
 
 #define CLASSNAME(o) OP(o,class_name)
-
-typedef struct {
-  GCObjectHeader header;
-
-  EJSValue *proto;
-  EJSSpecOps *ops;
-  EJSPropertyMap* map;
-} EJSObject;
 
 EJS_BEGIN_DECLS
 
@@ -68,29 +70,28 @@ EJSPropertyMap* _ejs_propertymap_new (int initial_allocation);
 int _ejs_propertymap_lookup (EJSPropertyMap *map, const char *name, EJSBool add_if_not_found);
 void _ejs_propertymap_foreach_value (EJSPropertyMap *map, EJSValueFunc foreach_func);
 
-EJSValue* _ejs_object_setprop (EJSValue* obj, EJSValue* key, EJSValue* value);
-EJSValue* _ejs_object_getprop (EJSValue* obj, EJSValue* key);
+ejsval _ejs_object_setprop (ejsval obj, ejsval key, ejsval value);
+ejsval _ejs_object_getprop (ejsval obj, ejsval key);
 
-EJSValue* _ejs_object_setprop_utf8 (EJSValue* obj, const char *key, EJSValue* value);
-EJSValue* _ejs_object_getprop_utf8 (EJSValue* obj, const char *key);
+ejsval _ejs_object_setprop_utf8 (ejsval obj, const char *key, ejsval value);
+ejsval _ejs_object_getprop_utf8 (ejsval obj, const char *key);
 
-EJSPropertyIterator* _ejs_property_iterator_new (EJSValue *forObj);
+EJSPropertyIterator* _ejs_property_iterator_new (ejsval forObj);
 char *_ejs_property_iterator_current (EJSPropertyIterator* iterator);
 void _ejs_property_iterator_next (EJSPropertyIterator* iterator);
 void _ejs_property_iterator_free (EJSPropertyIterator *iterator);
 
-extern EJSValue* _ejs_Object;
+extern ejsval _ejs_Object;
+extern ejsval _ejs_Object_proto;
 extern EJSSpecOps _ejs_object_specops;
 
-EJSValue* _ejs_object_new (EJSValue *proto);
+ejsval _ejs_object_new (ejsval proto);
 EJSObject* _ejs_object_alloc_instance();
-void      _ejs_init_object (EJSObject *obj, EJSValue *proto, EJSSpecOps *ops);
+void      _ejs_init_object (EJSObject *obj, ejsval proto, EJSSpecOps *ops);
 
 void _ejs_object_finalize(EJSObject *obj);
 
-EJSValue* _ejs_object_get_prototype();
-
-void _ejs_object_init(EJSValue *global);
+void _ejs_object_init(ejsval global);
 
 EJS_END_DECLS
 

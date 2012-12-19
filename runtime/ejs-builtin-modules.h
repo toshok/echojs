@@ -5,9 +5,9 @@
 
 EJS_BEGIN_DECLS
 
-extern EJSValue* _ejs_path_module_func (EJSValue* env, EJSValue* _this, int argc, EJSValue** args);
-extern EJSValue* _ejs_fs_module_func (EJSValue* env, EJSValue* _this, int argc, EJSValue** args);
-extern EJSValue* _ejs_child_process_module_func (EJSValue* env, EJSValue* _this, int argc, EJSValue** args);
+extern ejsval _ejs_path_module_func (ejsval env, ejsval _this, int argc, ejsval* args);
+extern ejsval _ejs_fs_module_func (ejsval env, ejsval _this, int argc, ejsval* args);
+extern ejsval _ejs_child_process_module_func (ejsval env, ejsval _this, int argc, ejsval* args);
 
 EJS_END_DECLS
 
