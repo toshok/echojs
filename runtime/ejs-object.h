@@ -1,3 +1,6 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=cpp:
+ */
 
 #ifndef _ejs_object_h_
 #define _ejs_object_h_
@@ -8,19 +11,19 @@
 
 // really terribly performing property maps
 struct _EJSPropertyMap {
-  char **names;
-  ejsval *fields;
-  int allocated;
-  int num;
+    char **names;
+    ejsval *fields;
+    int allocated;
+    int num;
 };
 
 typedef struct _EJSPropertyMap EJSPropertyMap;
 typedef struct _EJSPropertyIterator EJSPropertyIterator;
 
 typedef struct {
-  EJSBool configurable;
-  EJSBool writable;
-  EJSBool enumerable;
+    EJSBool configurable;
+    EJSBool writable;
+    EJSBool enumerable;
 } EJSPropertyDesc;
 
 typedef ejsval  (*SpecOpGet) (ejsval obj, ejsval propertyName, EJSBool isCStr);
@@ -36,25 +39,25 @@ typedef void    (*SpecOpFinalize) (EJSObject* obj);
 typedef void    (*SpecOpScan) (EJSObject* obj, EJSValueFunc scan_func);
 
 typedef struct {
-  const char* class_name;
-  SpecOpGet get;
-  SpecOpGetOwnProperty get_own_property;
-  SpecOpGetProperty get_property;
-  SpecOpPut put;
-  SpecOpCanPut can_put;
-  SpecOpHasProperty has_property;
-  SpecOpDelete _delete;
-  SpecOpDefaultValue default_value;
-  SpecOpDefineOwnProperty define_own_property;
+    const char* class_name;
+    SpecOpGet get;
+    SpecOpGetOwnProperty get_own_property;
+    SpecOpGetProperty get_property;
+    SpecOpPut put;
+    SpecOpCanPut can_put;
+    SpecOpHasProperty has_property;
+    SpecOpDelete _delete;
+    SpecOpDefaultValue default_value;
+    SpecOpDefineOwnProperty define_own_property;
 
-  SpecOpFinalize finalize;
-  SpecOpScan scan;
+    SpecOpFinalize finalize;
+    SpecOpScan scan;
 } EJSSpecOps;
 
 struct _EJSObject {
-  ejsval proto;
-  EJSSpecOps *ops;
-  EJSPropertyMap* map;
+    ejsval proto;
+    EJSSpecOps *ops;
+    EJSPropertyMap* map;
 };
 
 

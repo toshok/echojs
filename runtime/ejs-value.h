@@ -1,3 +1,6 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=cpp:
+ */
 
 #ifndef _ejs_value_h
 #define _ejs_value_h
@@ -7,8 +10,8 @@
 typedef double EJSPrimNumber;
 
 struct _EJSPrimString {
-  int len;
-  char data[1]; // utf8 \0 terminated
+    int len;
+    char data[1]; // utf8 \0 terminated
 };
 
 #define EJSVAL_IS_PRIMITIVE(v) (EJSVAL_IS_NUMBER(v) || EJSVAL_IS_STRING(v) || EJSVAL_IS_BOOLEAN(v) || EJSVAL_IS_UNDEFINED(v))

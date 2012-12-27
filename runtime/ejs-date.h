@@ -1,3 +1,7 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=cpp:
+ */
+
 #ifndef _ejs_date_h_
 #define _ejs_date_h_
 
@@ -5,11 +9,11 @@
 #include "ejs-object.h"
 
 typedef struct {
-  /* object header */
-  EJSObject obj;
+    /* object header */
+    EJSObject obj;
 
-  /* date specific data */
-  struct tm tm;
+    /* date specific data */
+    struct tm tm;
 } EJSDate;
 
 

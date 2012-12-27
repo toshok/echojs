@@ -1,3 +1,6 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=cpp:
+ */
 
 #ifndef _ejs_h_
 #define _ejs_h_
@@ -31,10 +34,10 @@ typedef struct _EJSContext* EJSContext;
 #define MAX(a,b) (a) > (b) ? (a) : (b)
 #endif
 
-#define NOT_IMPLEMENTED() EJS_MACRO_START \
-  printf ("%s not implemented.\n", __PRETTY_FUNCTION__);	\
-  abort();							\
-  EJS_MACRO_END
+#define NOT_IMPLEMENTED() EJS_MACRO_START                   \
+    printf ("%s not implemented.\n", __PRETTY_FUNCTION__);	\
+    abort();                                                \
+    EJS_MACRO_END
 
 #include "ejs-types.h"
 

@@ -1,3 +1,7 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=cpp:
+ */
+
 #include <math.h>
 
 #include "ejs.h"
@@ -32,53 +36,53 @@ ejsval _ejs_length;
 void
 _ejs_init(int argc, char** argv)
 {
-  // initialize our constants before anything else
-  _ejs_null = BUILD_EJSVAL(EJSVAL_TAG_NULL, 0);
-  _ejs_undefined = BUILD_EJSVAL(EJSVAL_TAG_UNDEFINED, 0);
-  _ejs_nan = NUMBER_TO_EJSVAL(nan("7734"));
-  _ejs_true = BOOLEAN_TO_EJSVAL(EJS_TRUE);
-  _ejs_false = BOOLEAN_TO_EJSVAL(EJS_FALSE);
+    // initialize our constants before anything else
+    _ejs_null = BUILD_EJSVAL(EJSVAL_TAG_NULL, 0);
+    _ejs_undefined = BUILD_EJSVAL(EJSVAL_TAG_UNDEFINED, 0);
+    _ejs_nan = NUMBER_TO_EJSVAL(nan("7734"));
+    _ejs_true = BOOLEAN_TO_EJSVAL(EJS_TRUE);
+    _ejs_false = BOOLEAN_TO_EJSVAL(EJS_FALSE);
 
-  START_SHADOW_STACK_FRAME;
+    START_SHADOW_STACK_FRAME;
 
-  _ejs_gc_init();
+    _ejs_gc_init();
 
-  _ejs_gc_add_named_root (_ejs_length);
-  _ejs_length = _ejs_string_new_utf8 ("length");
+    _ejs_gc_add_named_root (_ejs_length);
+    _ejs_length = _ejs_string_new_utf8 ("length");
 
-  _ejs_gc_add_named_root (_ejs_global);
+    _ejs_gc_add_named_root (_ejs_global);
 
-  _ejs_global = OBJECT_TO_EJSVAL(_ejs_object_alloc_instance());
-  EJSObject *global = EJSVAL_TO_OBJECT(_ejs_global);
-  _ejs_init_object (global, _ejs_null, &_ejs_object_specops);
+    _ejs_global = OBJECT_TO_EJSVAL(_ejs_object_alloc_instance());
+    EJSObject *global = EJSVAL_TO_OBJECT(_ejs_global);
+    _ejs_init_object (global, _ejs_null, &_ejs_object_specops);
 
-  _ejs_object_setprop_utf8 (_ejs_global, "undefined", _ejs_undefined);
-  _ejs_object_setprop_utf8 (_ejs_global, "NaN", _ejs_nan);
-  _ejs_object_setprop_utf8 (_ejs_global, "__ejs", _ejs_true);
+    _ejs_object_setprop_utf8 (_ejs_global, "undefined", _ejs_undefined);
+    _ejs_object_setprop_utf8 (_ejs_global, "NaN", _ejs_nan);
+    _ejs_object_setprop_utf8 (_ejs_global, "__ejs", _ejs_true);
 
-  _ejs_function_init(_ejs_global);
-  _ejs_object_init(_ejs_global);
-  _ejs_arguments_init(_ejs_global);
-  _ejs_array_init(_ejs_global);
-  _ejs_string_init(_ejs_global);
-  _ejs_number_init(_ejs_global);
-  _ejs_regexp_init(_ejs_global);
-  _ejs_date_init(_ejs_global);
-  _ejs_require_init(_ejs_global);
-  _ejs_console_init(_ejs_global);
-  _ejs_process_init(_ejs_global, argc, argv);
+    _ejs_function_init(_ejs_global);
+    _ejs_object_init(_ejs_global);
+    _ejs_arguments_init(_ejs_global);
+    _ejs_array_init(_ejs_global);
+    _ejs_string_init(_ejs_global);
+    _ejs_number_init(_ejs_global);
+    _ejs_regexp_init(_ejs_global);
+    _ejs_date_init(_ejs_global);
+    _ejs_require_init(_ejs_global);
+    _ejs_console_init(_ejs_global);
+    _ejs_process_init(_ejs_global, argc, argv);
 
 #define GLOBAL_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, name, _ejs_string_new_utf8 (#x)); _ejs_object_setprop (_ejs_global, name, _ejs_function_new (_ejs_null, name, (EJSClosureFunc)_ejs_##x)); EJS_MACRO_END
 
-  GLOBAL_METHOD(isNaN);
-  GLOBAL_METHOD(isFinite);
-  GLOBAL_METHOD(parseInt);
-  GLOBAL_METHOD(parseFloat);
+    GLOBAL_METHOD(isNaN);
+    GLOBAL_METHOD(isFinite);
+    GLOBAL_METHOD(parseInt);
+    GLOBAL_METHOD(parseFloat);
 
-  GLOBAL_METHOD(decodeURI);
-  GLOBAL_METHOD(decodeURIComponent);
-  GLOBAL_METHOD(encodeURI);
-  GLOBAL_METHOD(encodeURIComponent);
+    GLOBAL_METHOD(decodeURI);
+    GLOBAL_METHOD(decodeURIComponent);
+    GLOBAL_METHOD(encodeURI);
+    GLOBAL_METHOD(encodeURIComponent);
 
 #undef GLOBAL_METHOD
 }

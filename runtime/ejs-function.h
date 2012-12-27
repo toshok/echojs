@@ -1,3 +1,6 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=cpp:
+ */
 
 #ifndef _ejs_function_h_
 #define _ejs_function_h_
@@ -13,14 +16,14 @@ typedef ejsval (*EJSClosureFunc) (ejsval env, ejsval _this, int argc, ejsval* ar
 
 
 typedef struct {
-  /* object header */
-  EJSObject obj;
+    /* object header */
+    EJSObject obj;
 
-  ejsval name;
-  EJSClosureFunc func;
-  EJSClosureEnv env;
-  EJSBool bound_this;
-  ejsval _this;
+    ejsval name;
+    EJSClosureFunc func;
+    EJSClosureEnv env;
+    EJSBool bound_this;
+    ejsval _this;
 } EJSFunction;
 
 

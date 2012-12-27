@@ -1,3 +1,7 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=cpp:
+ */
+
 //#define NO_ZEROCOST_EXCEPTIONS 1
 
 #include "ejs.h"
@@ -6,8 +10,8 @@
 #include <sys/types.h>
 
 /***********************************************************************
-* 64-bit implementation.
-**********************************************************************/
+ * 64-bit implementation.
+ **********************************************************************/
 
 // unwind library types and functions
 // Mostly adapted from Itanium C++ ABI: Exception Handling
@@ -85,16 +89,16 @@ CXX_PERSONALITY(int version,
 extern const void *ejs_ehtype_vtable[];
 
 struct ejs_typeinfo {
-  // Position of vtable and name fields must match C++ typeinfo object
-  const void **vtable;  // always ejs_ehtype_vtable+2
-  const char *name;     // c++ typeinfo string
+    // Position of vtable and name fields must match C++ typeinfo object
+    const void **vtable;  // always ejs_ehtype_vtable+2
+    const char *name;     // c++ typeinfo string
 
-  ejsval cls;
+    ejsval cls;
 };
 
 struct ejs_exception {
-  ejsval val;
-  struct ejs_typeinfo tinfo;
+    ejsval val;
+    struct ejs_typeinfo tinfo;
 };
 
 
@@ -102,9 +106,9 @@ static void _ejs_exception_noop(void) { }
 static char _ejs_exception_false(void) { return 0; } 
 static char _ejs_exception_true(void) { return 1; } 
 static char _ejs_exception_do_catch(struct ejs_typeinfo *catch_tinfo, 
-				    struct ejs_typeinfo *throw_tinfo, 
-				    void **throw_obj_p, 
-				    unsigned outer);
+                                    struct ejs_typeinfo *throw_tinfo, 
+                                    void **throw_obj_p, 
+                                    unsigned outer);
 
 const void *ejs_ehtype_vtable[] = {
     NULL,  // typeinfo's vtable? - fixme 
@@ -127,9 +131,9 @@ struct ejs_typeinfo EJS_EHTYPE_ejsvalue = {
 
 #if false
 /***********************************************************************
-* _ejs_default_uncaught_exception_handler
-* Default uncaught exception handler. Expected to be overridden by Foundation.
-**********************************************************************/
+ * _ejs_default_uncaught_exception_handler
+ * Default uncaught exception handler. Expected to be overridden by Foundation.
+ **********************************************************************/
 static void _ejs_default_uncaught_exception_handler(EJSObject* exception)
 {
 }
@@ -137,10 +141,10 @@ static ejs_uncaught_exception_handler uncaught_handler = _ejs_default_uncaught_e
 
 
 /***********************************************************************
-* ejs_setUncaughtExceptionHandler
-* Set a handler for uncaught Objective-C exceptions. 
-* Returns the previous handler. 
-**********************************************************************/
+ * ejs_setUncaughtExceptionHandler
+ * Set a handler for uncaught Objective-C exceptions. 
+ * Returns the previous handler. 
+ **********************************************************************/
 ejs_uncaught_exception_handler 
 ejs_setUncaughtExceptionHandler(ejs_uncaught_exception_handler fn)
 {
@@ -151,31 +155,31 @@ ejs_setUncaughtExceptionHandler(ejs_uncaught_exception_handler fn)
 #endif
 
 /***********************************************************************
-* Exception personality
-**********************************************************************/
+ * Exception personality
+ **********************************************************************/
 
 static void call_alt_handlers(struct _Unwind_Context *ctx);
 
 _Unwind_Reason_Code 
 EJS_PERSONALITY(int version,
-                 _Unwind_Action actions,
-                 uint64_t exceptionClass,
-                 struct _Unwind_Exception *exceptionObject,
-                 struct _Unwind_Context *context)
+                _Unwind_Action actions,
+                uint64_t exceptionClass,
+                struct _Unwind_Exception *exceptionObject,
+                struct _Unwind_Context *context)
 {
     EJSBool unwinding = ((actions & _UA_CLEANUP_PHASE)  ||  
-			 (actions & _UA_FORCE_UNWIND));
+                         (actions & _UA_FORCE_UNWIND));
 
     printf ("EXCEPTIONS: %s through frame [ip=%p sp=%p] "
-	    "for exception %p\n", 
-	    unwinding ? "unwinding" : "searching", 
-	    (void*)(_Unwind_GetIP(context)-1),
-	    (void*)_Unwind_GetCFA(context), exceptionObject);
+            "for exception %p\n", 
+            unwinding ? "unwinding" : "searching", 
+            (void*)(_Unwind_GetIP(context)-1),
+            (void*)_Unwind_GetCFA(context), exceptionObject);
 
     // If we're executing the unwind, call this frame's alt handlers, if any.
     if (unwinding) {
-      printf ("call_alt_handlers!\n");
-      //call_alt_handlers(context);
+        printf ("call_alt_handlers!\n");
+        //call_alt_handlers(context);
     }
 
     // Let C++ handle the unwind itself.
@@ -185,8 +189,8 @@ EJS_PERSONALITY(int version,
 
 
 /***********************************************************************
-* Compiler ABI
-**********************************************************************/
+ * Compiler ABI
+ **********************************************************************/
 
 static void _ejs_exception_destructor(void *exc_gen) {
     struct ejs_exception *exc = (struct ejs_exception *)exc_gen;
@@ -219,7 +223,7 @@ void _ejs_exception_throw(ejsval val)
 #endif
 
     printf ("EXCEPTIONS: throwing %p (object %p, a #s)\n",
-	    exc, EJSVAL_TO_PRIVATE_PTR_IMPL(val)/*, object_getClassName(obj)*/);
+            exc, EJSVAL_TO_PRIVATE_PTR_IMPL(val)/*, object_getClassName(obj)*/);
     
     //    EJS_RUNTIME_EJS_EXCEPTION_THROW(obj);  // dtrace probe to log throw activity
     __cxa_throw(exc, &exc->tinfo, &_ejs_exception_destructor);
@@ -229,9 +233,9 @@ void _ejs_exception_throw(ejsval val)
 
 void _ejs_exception_rethrow(void)
 {
-  printf ("EXCEPTIONS: rethrowing current exception\n");
+    printf ("EXCEPTIONS: rethrowing current exception\n");
     
-  //    EJS_RUNTIME_EJS_EXCEPTION_RETHROW(); // dtrace probe to log throw activity.
+    //    EJS_RUNTIME_EJS_EXCEPTION_RETHROW(); // dtrace probe to log throw activity.
     __cxa_rethrow();
     __builtin_trap();
 }
@@ -239,24 +243,24 @@ void _ejs_exception_rethrow(void)
 
 EJSObject* _ejs_begin_catch(void *exc_gen)
 {
-  printf ("EXCEPTIONS: handling exception %p at %p\n", 
-	  exc_gen, __builtin_return_address(0));
-  // NOT actually an EJSObject* in the catch(...) case!
-  return (EJSObject*)__cxa_begin_catch(exc_gen);
+    printf ("EXCEPTIONS: handling exception %p at %p\n", 
+            exc_gen, __builtin_return_address(0));
+    // NOT actually an EJSObject* in the catch(...) case!
+    return (EJSObject*)__cxa_begin_catch(exc_gen);
 }
 
 
 void _ejs_end_catch(void)
 {
-  printf ("EXCEPTIONS: finishing handler\n");
-  __cxa_end_catch();
+    printf ("EXCEPTIONS: finishing handler\n");
+    __cxa_end_catch();
 }
 
 
 static char _ejs_exception_do_catch(struct ejs_typeinfo *catch_tinfo, 
-                                     struct ejs_typeinfo *throw_tinfo, 
-                                     void **throw_obj_p, 
-                                     unsigned outer)
+                                    struct ejs_typeinfo *throw_tinfo, 
+                                    void **throw_obj_p, 
+                                    unsigned outer)
 {
     EJSObject* exception;
 
@@ -279,19 +283,19 @@ static char _ejs_exception_do_catch(struct ejs_typeinfo *catch_tinfo,
 
 
 /***********************************************************************
-* _ejs_terminate
-* Custom std::terminate handler.
-*
-* The uncaught exception callback is implemented as a std::terminate handler. 
-* 1. Check if there's an active exception
-* 2. If so, check if it's an Objective-C exception
-* 3. If so, call our registered callback with the object.
-* 4. Finally, call the previous terminate handler.
-**********************************************************************/
+ * _ejs_terminate
+ * Custom std::terminate handler.
+ *
+ * The uncaught exception callback is implemented as a std::terminate handler. 
+ * 1. Check if there's an active exception
+ * 2. If so, check if it's an Objective-C exception
+ * 3. If so, call our registered callback with the object.
+ * 4. Finally, call the previous terminate handler.
+ **********************************************************************/
 static terminate_handler old_terminate = NULL;
 static void _ejs_terminate(void)
 {
-  printf ("EXCEPTIONS: terminating\n");
+    printf ("EXCEPTIONS: terminating\n");
 
     if (! __cxa_current_exception_type()) {
         // No current exception.
@@ -316,8 +320,8 @@ static void _ejs_terminate(void)
 
 
 /***********************************************************************
-* alt handler support - zerocost implementation only
-**********************************************************************/
+ * alt handler support - zerocost implementation only
+ **********************************************************************/
 
 #ifdef NO_ZEROCOST_EXCEPTIONS
 
@@ -357,11 +361,11 @@ static void call_alt_handlers(struct _Unwind_Context *ctx)
 
 
 /***********************************************************************
-* read_uleb
-* Read a LEB-encoded unsigned integer from the address stored in *pp.
-* Increments *pp past the bytes read.
-* Adapted from DWARF Debugging Information Format 1.1, appendix 4
-**********************************************************************/
+ * read_uleb
+ * Read a LEB-encoded unsigned integer from the address stored in *pp.
+ * Increments *pp past the bytes read.
+ * Adapted from DWARF Debugging Information Format 1.1, appendix 4
+ **********************************************************************/
 static uintptr_t read_uleb(uintptr_t *pp)
 {
     uintptr_t result = 0;
@@ -377,11 +381,11 @@ static uintptr_t read_uleb(uintptr_t *pp)
 
 
 /***********************************************************************
-* read_sleb
-* Read a LEB-encoded signed integer from the address stored in *pp.
-* Increments *pp past the bytes read.
-* Adapted from DWARF Debugging Information Format 1.1, appendix 4
-**********************************************************************/
+ * read_sleb
+ * Read a LEB-encoded signed integer from the address stored in *pp.
+ * Increments *pp past the bytes read.
+ * Adapted from DWARF Debugging Information Format 1.1, appendix 4
+ **********************************************************************/
 static intptr_t read_sleb(uintptr_t *pp)
 {
     uintptr_t result = 0;
@@ -400,12 +404,12 @@ static intptr_t read_sleb(uintptr_t *pp)
 
 
 /***********************************************************************
-* read_address
-* Reads an encoded address from the address stored in *pp.
-* Increments *pp past the bytes read.
-* The data is interpreted according to the given dwarf encoding 
-* and base addresses.
-**********************************************************************/
+ * read_address
+ * Reads an encoded address from the address stored in *pp.
+ * Increments *pp past the bytes read.
+ * The data is interpreted according to the given dwarf encoding 
+ * and base addresses.
+ **********************************************************************/
 static uintptr_t read_address(uintptr_t *pp, 
                               const struct dwarf_eh_bases *bases, 
                               unsigned char encoding)
@@ -415,8 +419,8 @@ static uintptr_t read_address(uintptr_t *pp,
 
     // fixme need DW_EH_PE_aligned?
 
-#define READ(type) \
-    result = *(type *)(*pp); \
+#define READ(type)                              \
+    result = *(type *)(*pp);                    \
     *pp += sizeof(type);
 
     if (encoding == DW_EH_PE_omit) return 0;
@@ -455,7 +459,7 @@ static uintptr_t read_address(uintptr_t *pp,
 #endif
     default:
         printf("unknown DWARF EH encoding 0x%x at %p\n", 
-	       encoding, (void *)*pp);
+               encoding, (void *)*pp);
         break;
     }
 
@@ -478,7 +482,7 @@ static uintptr_t read_address(uintptr_t *pp,
             break;
         case DW_EH_PE_aligned:
             printf ("unknown DWARF EH encoding 0x%x at %p\n", 
-		    encoding, (void *)*pp);
+                    encoding, (void *)*pp);
             break;
         default:
             // no adjustment
@@ -495,8 +499,8 @@ static uintptr_t read_address(uintptr_t *pp,
 
 
 static EJSBool isEjsExceptionCatcher(uintptr_t lsda, uintptr_t ip, 
-                                   const struct dwarf_eh_bases* bases,
-                                   uintptr_t* try_start, uintptr_t* try_end)
+                                     const struct dwarf_eh_bases* bases,
+                                     uintptr_t* try_start, uintptr_t* try_end)
 {
     unsigned char LPStart_enc = *(const unsigned char *)lsda++;    
 
@@ -677,9 +681,9 @@ uintptr_t _ejs_addExceptionHandler(ejs_exception_handler fn, void *context)
             if (list->handlers[i].ip_start == 0  &&  
                 list->handlers[i].ip_end == 0  &&  
                 list->handlers[i].cfa == 0) 
-            {
-                break;
-            }
+                {
+                    break;
+                }
         }
         if (i == list->allocated) {
             _ejs_fatal("alt handlers in ejs runtime are buggy!");
@@ -697,16 +701,16 @@ uintptr_t _ejs_addExceptionHandler(ejs_exception_handler fn, void *context)
 
     if (PrintAltHandlers) {
         printf("ALT HANDLERS: installing alt handler %d %p(%p) on "
-                     "frame [ip=%p..%p sp=%p]\n", i+1, data->fn, data->context, 
-                     (void *)data->ip_start, (void *)data->ip_end, 
-                     (void *)data->cfa);
+               "frame [ip=%p..%p sp=%p]\n", i+1, data->fn, data->context, 
+               (void *)data->ip_start, (void *)data->ip_end, 
+               (void *)data->cfa);
     }
 
     if (list->used > 1000) {
         static int warned = 0;
         if (!warned) {
             printf("ALT HANDLERS: *** over 1000 alt handlers installed; "
-                         "this is probably a bug\n");
+                   "this is probably a bug\n");
             warned = 1;
         }
     }
@@ -726,22 +730,22 @@ void _ejs_removeExceptionHandler(uintptr_t token)
     struct alt_handler_list *list = fetch_handler_list(NO);
     if (!list  ||  list->used == 0) {
         // no handlers present
-      printf("ALT HANDLERS: *** can't remove alt handler %lu "
-	     "(no alt handlers present)\n", token);
+        printf("ALT HANDLERS: *** can't remove alt handler %lu "
+               "(no alt handlers present)\n", token);
         return;
     }
     if (i >= list->allocated) {
         // bogus token
-      printf("ALT HANDLERS: *** can't remove alt handler %lu "
-	     "(current max is %u)\n", token, list->allocated);
+        printf("ALT HANDLERS: *** can't remove alt handler %lu "
+               "(current max is %u)\n", token, list->allocated);
         return;
     }
 
     struct alt_handler_data *data = &list->handlers[i];
     printf("ALT HANDLERS: removing   alt handler %d %p(%p) on "
-	   "frame [ip=%p..%p sp=%p]\n", i+1, data->fn, data->context, 
-	   (void *)data->ip_start, (void *)data->ip_end, 
-	   (void *)data->cfa);
+           "frame [ip=%p..%p sp=%p]\n", i+1, data->fn, data->context, 
+           (void *)data->ip_start, (void *)data->ip_end, 
+           (void *)data->cfa);
     bzero(data, sizeof(*data));
     list->used--;
 }
@@ -760,18 +764,18 @@ static void call_alt_handlers(struct _Unwind_Context *ctx)
     for (i = 0; i < list->allocated; i++) {
         struct alt_handler_data *data = &list->handlers[i];
         if (ip >= data->ip_start  &&  ip < data->ip_end  &&  data->cfa == cfa) 
-        {
-            // Copy and clear before the callback, in case the 
-            // callback manipulates the alt handler list.
-            struct alt_handler_data copy = *data;
-            bzero(data, sizeof(*data));
-            list->used--;
-	    printf("EXCEPTIONS: calling alt handler %p(%p) from "
-		   "frame [ip=%p..%p sp=%p]\n", copy.fn, copy.context, 
-		   (void *)copy.ip_start, (void *)copy.ip_end, 
-		   (void *)copy.cfa);
-            if (copy.fn) (*copy.fn)(nil, copy.context);
-        }
+            {
+                // Copy and clear before the callback, in case the 
+                // callback manipulates the alt handler list.
+                struct alt_handler_data copy = *data;
+                bzero(data, sizeof(*data));
+                list->used--;
+                printf("EXCEPTIONS: calling alt handler %p(%p) from "
+                       "frame [ip=%p..%p sp=%p]\n", copy.fn, copy.context, 
+                       (void *)copy.ip_start, (void *)copy.ip_end, 
+                       (void *)copy.cfa);
+                if (copy.fn) (*copy.fn)(nil, copy.context);
+            }
     }
 }
 #endif
