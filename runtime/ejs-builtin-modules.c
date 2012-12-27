@@ -28,7 +28,9 @@ _ejs_path_module_func (ejsval env, ejsval _this, int argc, ejsval* args)
 {
   ejsval exports = args[0];
 
-  _ejs_object_setprop_utf8 (exports, "basename", _ejs_function_new_utf8 (_ejs_null, "basename", _ejs_path_basename));
+  ejsval name = _ejs_string_new_utf8("basename");
+
+  _ejs_object_setprop (exports, name, _ejs_function_new (_ejs_null, name, _ejs_path_basename));
 
   return _ejs_undefined;
 }
