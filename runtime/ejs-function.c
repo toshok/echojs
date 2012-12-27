@@ -163,10 +163,10 @@ _ejs_function_init(ejsval global)
   // ECMA262 15.3.3.1
   _ejs_object_setprop_utf8 (_ejs_Function,       "prototype",  _ejs_Function_proto); // FIXME:  { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }.
   // ECMA262 15.3.3.2
-  _ejs_object_setprop_utf8 (_ejs_Function,       "length",     NUMBER_TO_EJSVAL(1)); // FIXME:  { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }.
+  _ejs_object_setprop (_ejs_Function,       _ejs_length,     NUMBER_TO_EJSVAL(1)); // FIXME:  { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }.
 
-#define OBJ_METHOD(x) do { ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Function_##x)); _ejs_object_setprop (_ejs_Function, funcname, tmpfunc); } while (0)
-#define PROTO_METHOD(x) do { ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Function_prototype_##x)); _ejs_object_setprop (_ejs_Function_proto, funcname, tmpfunc); } while (0)
+#define OBJ_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Function_##x)); _ejs_object_setprop (_ejs_Function, funcname, tmpfunc); EJS_MACRO_END
+#define PROTO_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Function_prototype_##x)); _ejs_object_setprop (_ejs_Function_proto, funcname, tmpfunc); EJS_MACRO_END
 
   PROTO_METHOD(toString);
   PROTO_METHOD(apply);
@@ -187,7 +187,7 @@ _ejs_invoke_closure_0 (ejsval closure, ejsval _this, int argc)
 {
   // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
 #if DEBUG_FUNCTIONS
-  ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
   indent('*');
   printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
   indent_level += INDENT_AMOUNT;
@@ -207,7 +207,7 @@ _ejs_invoke_closure_1 (ejsval closure, ejsval _this, int argc, ejsval arg1)
   // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
   ejsval args[] = { arg1 };
 #if DEBUG_FUNCTIONS
-  ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
   indent('*');
   printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
   indent_level += INDENT_AMOUNT;
@@ -227,7 +227,7 @@ _ejs_invoke_closure_2 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsv
   // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
   ejsval args[] = { arg1, arg2 };
 #if DEBUG_FUNCTIONS
-  ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
   indent('*');
   printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
   indent_level += INDENT_AMOUNT;
@@ -247,7 +247,7 @@ _ejs_invoke_closure_3 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsv
   // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
   ejsval args[] = { arg1, arg2, arg3 };
 #if DEBUG_FUNCTIONS
-  ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
   indent('*');
   printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
   indent_level += INDENT_AMOUNT;
@@ -267,7 +267,7 @@ _ejs_invoke_closure_4 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsv
   // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
   ejsval args[] = { arg1, arg2, arg3, arg4 };
 #if DEBUG_FUNCTIONS
-  ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
   indent('*');
   printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
   indent_level += INDENT_AMOUNT;
@@ -287,7 +287,7 @@ _ejs_invoke_closure_5 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsv
   // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
   ejsval args[] = { arg1, arg2, arg3, arg4, arg5 };
 #if DEBUG_FUNCTIONS
-  ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
   indent('*');
   printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
   indent_level += INDENT_AMOUNT;
@@ -307,7 +307,7 @@ _ejs_invoke_closure_6 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsv
   // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
   ejsval args[] = { arg1, arg2, arg3, arg4, arg5, arg6 };
 #if DEBUG_FUNCTIONS
-  ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
   indent('*');
   printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
   indent_level += INDENT_AMOUNT;
@@ -327,7 +327,7 @@ _ejs_invoke_closure_7 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsv
   // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
   ejsval args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7 };
 #if DEBUG_FUNCTIONS
-  ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
   indent('*');
   printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
   indent_level += INDENT_AMOUNT;
@@ -347,7 +347,7 @@ _ejs_invoke_closure_8 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsv
   // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
   ejsval args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8 };
 #if DEBUG_FUNCTIONS
-  ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
   indent('*');
   printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
   indent_level += INDENT_AMOUNT;
@@ -367,7 +367,7 @@ _ejs_invoke_closure_9 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsv
   // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
   ejsval args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9 };
 #if DEBUG_FUNCTIONS
-  ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
+  ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
   indent('*');
   printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
   indent_level += INDENT_AMOUNT;
