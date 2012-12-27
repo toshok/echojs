@@ -25,6 +25,10 @@ ejsval _ejs_false;
 
 ejsval _ejs_global;
 
+
+/* useful strings literals */
+ejsval _ejs_length;
+
 void
 _ejs_init(int argc, char** argv)
 {
@@ -38,6 +42,9 @@ _ejs_init(int argc, char** argv)
   START_SHADOW_STACK_FRAME;
 
   _ejs_gc_init();
+
+  _ejs_gc_add_named_root (_ejs_length);
+  _ejs_length = _ejs_string_new_utf8 ("length");
 
   _ejs_gc_add_named_root (_ejs_global);
 
@@ -61,7 +68,7 @@ _ejs_init(int argc, char** argv)
   _ejs_console_init(_ejs_global);
   _ejs_process_init(_ejs_global, argc, argv);
 
-#define GLOBAL_METHOD(x) do { ADD_STACK_ROOT(ejsval, name, _ejs_string_new_utf8 (#x)); _ejs_object_setprop (_ejs_global, name, _ejs_function_new (_ejs_null, name, (EJSClosureFunc)_ejs_##x)); } while (0)
+#define GLOBAL_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, name, _ejs_string_new_utf8 (#x)); _ejs_object_setprop (_ejs_global, name, _ejs_function_new (_ejs_null, name, (EJSClosureFunc)_ejs_##x)); EJS_MACRO_END
 
   GLOBAL_METHOD(isNaN);
   GLOBAL_METHOD(isFinite);

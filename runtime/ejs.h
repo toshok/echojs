@@ -14,6 +14,9 @@
 #define EJS_END_DECLS
 #endif
 
+#define EJS_MACRO_START do {
+#define EJS_MACRO_END } while (0)
+
 typedef char EJSBool;
 typedef struct _EJSContext* EJSContext;
 
@@ -28,10 +31,10 @@ typedef struct _EJSContext* EJSContext;
 #define MAX(a,b) (a) > (b) ? (a) : (b)
 #endif
 
-#define NOT_IMPLEMENTED() do { \
-    printf ("%s not implemented.\n", __PRETTY_FUNCTION__);	\
-    abort();							\
-  } while (0)
+#define NOT_IMPLEMENTED() EJS_MACRO_START \
+  printf ("%s not implemented.\n", __PRETTY_FUNCTION__);	\
+  abort();							\
+  EJS_MACRO_END
 
 #include "ejs-types.h"
 
@@ -49,5 +52,6 @@ extern ejsval _ejs_nan;
 extern ejsval _ejs_true;
 extern ejsval _ejs_false;
 extern ejsval _ejs_global;
+extern ejsval _ejs_length;
 
 #endif // _ejs_h_
