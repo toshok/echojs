@@ -51,13 +51,7 @@ _ejs_Number_impl (ejsval env, ejsval _this, int argc, ejsval *args)
       num = ToDouble(args[0]);
     }
 
-    EJSNumber* rv = _ejs_gc_new (EJSNumber);
-
-    _ejs_init_object ((EJSObject*)rv, _ejs_Number_proto, &_ejs_number_specops);
-
-    rv->number = num;
-
-    return OBJECT_TO_EJSVAL((EJSObject*)rv);
+    return NUMBER_TO_EJSVAL(num);
   }
   else {
     EJSNumber* num = (EJSNumber*)EJSVAL_TO_OBJECT(_this);
@@ -83,6 +77,13 @@ _ejs_Number_prototype_toString (ejsval env, ejsval _this, int argc, ejsval *args
   return NumberToString(num->number);
 }
 
+static ejsval
+_ejs_Number_prototype_valueOf (ejsval env, ejsval _this, int argc, ejsval *args)
+{
+  EJSNumber *num = (EJSNumber*)EJSVAL_TO_OBJECT(_this);
+  return NUMBER_TO_EJSVAL(num->number);
+}
+
 void
 _ejs_number_init(ejsval global)
 {
@@ -96,9 +97,10 @@ _ejs_number_init(ejsval global)
 
   _ejs_object_setprop_utf8 (_ejs_Number,       "prototype",  _ejs_Number_proto);
 
-#define OBJ_METHOD(x) do { ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Number_##x)); _ejs_object_setprop (_ejs_Number, funcname, tmpfunc); } while (0)
-#define PROTO_METHOD(x) do { ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Number_prototype_##x)); _ejs_object_setprop (_ejs_Number_proto, funcname, tmpfunc); } while (0)
+#define OBJ_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Number_##x)); _ejs_object_setprop (_ejs_Number, funcname, tmpfunc); EJS_MACRO_END
+#define PROTO_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Number_prototype_##x)); _ejs_object_setprop (_ejs_Number_proto, funcname, tmpfunc); EJS_MACRO_END
 
+  PROTO_METHOD(valueOf);
   PROTO_METHOD(toString);
 
 #undef OBJ_METHOD
@@ -155,7 +157,15 @@ _ejs_number_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
 static ejsval
 _ejs_number_specop_default_value (ejsval obj, const char *hint)
 {
-  return _ejs_object_specops.default_value (obj, hint);
+  if (!strcmp (hint, "PreferredType") || !strcmp(hint, "Number")) {
+    EJSNumber *num = (EJSNumber*)EJSVAL_TO_OBJECT(obj);
+    return NUMBER_TO_EJSVAL(num->number);
+  }
+  else if (!strcmp (hint, "String")) {
+    NOT_IMPLEMENTED();
+  }
+  else
+    return _ejs_object_specops.default_value (obj, hint);
 }
 
 static void
