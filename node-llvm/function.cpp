@@ -32,7 +32,7 @@ namespace jsllvm {
     NODE_SET_PROTOTYPE_METHOD(s_ct, "setGC", Function::SetGC);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", Function::ToString);
 
-    s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
+    s_func = Persistent<v8::Function>::New(s_ct->GetFunction());
     target->Set(String::NewSymbol("LLVMFunction"),
 		s_func);
   }
@@ -166,6 +166,6 @@ namespace jsllvm {
   }
 
   Persistent<FunctionTemplate> Function::s_ct;
-  Persistent< ::v8::Function> Function::s_func;
+  Persistent<v8::Function> Function::s_func;
 
 };
