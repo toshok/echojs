@@ -433,9 +433,9 @@ class LLVMIRVisitor extends NodeVisitor
                 for casenum in [0...case_checks.length-1]
                         test = @visit case_checks[casenum].test
                         discTest = @createCall @ejs["binop==="], [discr, test], "test"
-                        discTest.setReadOnlyMemory()
+                        discTest.setOnlyReadsMemory()
                         disc_truthy = @createCall @ejs.truthy, [discTest], "disc_truthy"
-                        disc_truthy.setReadOnlyMemory()
+                        disc_truthy.setOnlyReadsMemory()
                         disc_cmp = irbuilder.createICmpEq disc_truthy, (llvm.Constant.getIntegerValue boolType, 0), "disccmpresult"
                         irbuilder.createCondBr disc_cmp, case_checks[casenum+1].dest_check, case_checks[casenum].body
                         irbuilder.setInsertPoint case_checks[casenum+1].dest_check
@@ -808,6 +808,7 @@ class LLVMIRVisitor extends NodeVisitor
                 ir_func.topScope = new_scope
                 ir_func.entry_bb = entry_bb
 
+                ir_func.stringLiteralAllocas = {}
 
                 allocas = []
 
@@ -1150,15 +1151,28 @@ class LLVMIRVisitor extends NodeVisitor
                         return @loadNullEjsValue() # this isn't properly typed...  dunno what to do about this here
                 else if typeof n.raw is "string" and (n.raw[0] is '"' or n.raw[0] is "'")
                         debug.log "literal string: #{n.value}"
-                        c = irbuilder.createGlobalStringPtr n.value, "strconst"
-                        strcall = @createCall @ejs.string_new_utf8, [c], "strtmp"
-                        debug.log "strcall = #{strcall}"
-                        return strcall
+                        if @currentFunction.stringLiteralAllocas[n.value]?
+                                str_alloca = @currentFunction.stringLiteralAllocas[n.value]
+                        else
+                                # only create 1 instance of string literals used in a function, and allocate them in the entry block
+                                insertBlock = irbuilder.getInsertBlock()
+
+                                irbuilder.setInsertPoint @currentFunction.entry_bb
+                                str_alloca = irbuilder.createAlloca EjsValueType, "str-alloca-#{n.value}"
+                                c = irbuilder.createGlobalStringPtr n.value, "strconst"
+                                irbuilder.createStore (@createCall @ejs.string_new_utf8, [c], "strtmp"), str_alloca
+                                @currentFunction.stringLiteralAllocas[n.value] = str_alloca
+                                
+                                irbuilder.setInsertPoint insertBlock
+                                
+                        strload = irbuilder.createLoad str_alloca, "%prop_alloca"
+                        debug.log "strload = #{strload}"
+                        return strload
                 else if typeof n.raw is "string" and n.raw[0] is '/'
                         debug.log "literal regexp: #{n.raw}"
                         c = irbuilder.createGlobalStringPtr n.raw, "strconst"
                         regexpcall = @createCall @ejs.regexp_new_utf8, [c], "regexptmp"
-                        debug.log "regexpcall = #{strcall}"
+                        debug.log "regexpcall = #{regexpcall}"
                         return regexpcall
                 else if typeof n.value is "number"
                         debug.log "literal number: #{n.value}"
