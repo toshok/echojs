@@ -52,8 +52,6 @@ typedef struct {
 } EJSSpecOps;
 
 struct _EJSObject {
-  heap_val_header header;
-
   ejsval proto;
   EJSSpecOps *ops;
   EJSPropertyMap* map;

@@ -4,26 +4,20 @@
 
 #include "ejs.h"
 
+EJS_BEGIN_DECLS
+
 #define CONSERVATIVE_STACKWALK 1
 
-typedef struct GCObjectHeader* GCObjectPtr;
-
-typedef struct GCObjectHeader {
-  uint32_t gc_data;
-
-  GCObjectPtr prev_link;
-  GCObjectPtr next_link;
-} GCObjectHeader;
+typedef void* GCObjectPtr;
 
 extern void _ejs_gc_init();
 extern void _ejs_gc_shutdown();
 extern void _ejs_gc_collect();
-extern GCObjectPtr _ejs_gc_alloc(size_t size);
+extern GCObjectPtr _ejs_gc_alloc(size_t size, EJSBool has_finalizer);
 
-#define _ejs_gc_new(T) (T*)_ejs_gc_alloc(sizeof(T))
+#define _ejs_gc_new(T) (T*)_ejs_gc_alloc(sizeof(T), EJS_TRUE)
 
 #define _ejs_gc_add_named_root(v) __ejs_gc_add_named_root(&v, #v)
-
 extern void __ejs_gc_add_named_root(ejsval* val, const char *name);
 
 extern void _ejs_gc_remove_root(ejsval* root);
@@ -90,6 +84,8 @@ typedef struct {
 } while(0)
 
 extern void _ejs_gc_mark_thread_stack_bottom(GCObjectPtr* btm);
+
+EJS_END_DECLS
 
 #endif
 #endif /* _ejs_gc_h */

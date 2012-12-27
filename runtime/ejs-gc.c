@@ -68,29 +68,25 @@ typedef char BitmapCell;
 static unsigned int black_mask = CELL_BLACK_MASK_START;
 static unsigned int white_mask = CELL_WHITE_MASK_START;
 
-#define SET_FREE(cell) do {				\
-    (cell) = ((cell) | CELL_FREE);			\
-  } while (0)
+#define SET_GRAY(cell) EJS_MACRO_START				\
+  (cell) = ((cell) & ~CELL_COLOR_MASK) | CELL_GRAY_MASK;	\
+  EJS_MACRO_END
 
-#define SET_GRAY(cell) do {					\
-    (cell) = ((cell) & ~CELL_COLOR_MASK) | CELL_GRAY_MASK;	\
-  } while (0)
+#define SET_WHITE(cell) EJS_MACRO_START			\
+  (cell) = ((cell) & ~CELL_COLOR_MASK) | white_mask;	\
+  EJS_MACRO_END
 
-#define SET_WHITE(cell) do {				\
-    (cell) = ((cell) & ~CELL_COLOR_MASK) | white_mask;	\
-  } while (0)
+#define SET_BLACK(cell) EJS_MACRO_START			\
+  (cell) = ((cell) & ~CELL_COLOR_MASK) | black_mask;	\
+  EJS_MACRO_END
 
-#define SET_BLACK(cell) do {				\
-    (cell) = ((cell) & ~CELL_COLOR_MASK) | black_mask;	\
-  } while (0)
+#define SET_FREE(cell) EJS_MACRO_START			\
+  (cell) = CELL_FREE;					\
+  EJS_MACRO_END
 
-#define SET_FREE(cell) do {				\
-    (cell) = ((cell) | CELL_FREE);			\
-  } while (0)
-
-#define SET_ALLOCATED(cell) do {				\
-    (cell) = ((cell) & ~CELL_FREE);				\
-  } while (0)
+#define SET_ALLOCATED(cell) EJS_MACRO_START			\
+  (cell) = ((cell) & ~CELL_FREE);				\
+  EJS_MACRO_END
 
 #define HAS_FINALIZER(cell) (((cell) & CELL_OBJ_FINALIZER) == CELL_OBJ_FINALIZER)
 #define IS_FREE(cell) (((cell) & CELL_FREE) == CELL_FREE)
@@ -101,7 +97,7 @@ static unsigned int white_mask = CELL_WHITE_MASK_START;
 
 typedef struct _PageInfo {
   EJS_LIST_HEADER(struct _PageInfo);
-  int cell_size;
+  size_t cell_size;
   void* page_data;
   BitmapCell* page_bitmap;
   FreeListEntry* freelist;
@@ -109,7 +105,8 @@ typedef struct _PageInfo {
 
 typedef struct _LargeObjectInfo {
   EJS_LIST_HEADER(struct _LargeObjectInfo);
-
+  void *los_data;
+  size_t size;
 } LargeObjectInfo;
 
 #define OBJECT_SIZE_LOW_LIMIT_BITS 3   // number of bits required to represent a pointer (3 == 8 bytes for 64 bit)
@@ -117,7 +114,7 @@ typedef struct _LargeObjectInfo {
 
 #define HEAP_PAGELISTS_COUNT (OBJECT_SIZE_HIGH_LIMIT_BITS - OBJECT_SIZE_LOW_LIMIT_BITS)
 static PageInfo* heap_pages[HEAP_PAGELISTS_COUNT];
-static LargObjectInfo* los_store;
+static LargeObjectInfo* los_store;
 
 static PageInfo*
 find_page(GCObjectPtr ptr)
@@ -182,12 +179,24 @@ add_cell_to_freelist (PageInfo *info, int bitmap_cell_index)
     EJS_SLIST_ATTACH(((FreeListEntry*)((char*)info->page_data + bitmap_cell_index * info->cell_size)), info->freelist);
 }
 
+static void*
+alloc_from_os (size_t size)
+{
+  return mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, MAP_FD, 0);
+}
+
+static void
+dealloc_from_os(void* ptr, size_t size)
+{
+  munmap(ptr, size);
+}
+
 static PageInfo*
-alloc_page(int cell_size)
+alloc_page(size_t cell_size)
 {
   PageInfo* rv = (PageInfo*)calloc(1, sizeof(PageInfo));
   rv->cell_size = cell_size;
-  rv->page_data = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, MAP_FD, 0);
+  rv->page_data = alloc_from_os(PAGE_SIZE);
   rv->page_bitmap = (BitmapCell*)malloc (PAGE_SIZE / cell_size);
   memset (rv->page_bitmap, CELL_FREE, PAGE_SIZE / cell_size);
   populate_initial_freelist(rv, cell_size);
@@ -197,7 +206,7 @@ alloc_page(int cell_size)
 static void
 dealloc_page(void* page_addr)
 {
-  //  munmap(page_addr, page_size);
+  dealloc_from_os(page_addr, PAGE_SIZE);
 }
 
 void
@@ -420,7 +429,7 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
 	    OP(p, finalize)((EJSObject*)p);
 	  }
 	  else {
-	    SPEW(printf ("finalizing object %p(%s) without finalize flag\n", p, ((EJSPrimString*)p)->data);)
+	    SPEW(printf ("finalizing primitive string %p(%s)\n", p, ((EJSPrimString*)p)->data);)
 	  }
 	  add_cell_to_freelist (info, c);
 	}
@@ -510,16 +519,30 @@ alloc_from_freelist(PageInfo *info)
   return rv;
 }
 
+static GCObjectPtr
+alloc_from_los(size_t size, EJSBool has_finalizer)
+{
+  LargeObjectInfo *rv = (LargeObjectInfo*)calloc(1, sizeof(LargeObjectInfo));
+
+  // we need to bump size up to a mulitple of the OS page size
+  rv->los_data = alloc_from_os (size);
+  rv->size = size;
+  EJS_LIST_ATTACH (rv, los_store);
+  return rv->los_data;
+}
+
 int num_allocs = 0;
 
 GCObjectPtr
 _ejs_gc_alloc(size_t size, EJSBool has_finalizer)
 {
+#if false
   num_allocs ++;
-  if (num_allocs == 50) {
+  if (num_allocs == 100) {
     _ejs_gc_collect();
     num_allocs = 0;
   }
+#endif
 
   int bucket;
   size = next_power_of_two(size, &bucket);

@@ -182,9 +182,11 @@ void
 _ejs_init_object (EJSObject* obj, ejsval proto, EJSSpecOps *ops)
 {
   obj->proto = proto;
-  obj->map = _ejs_propertymap_new (ops == &_ejs_object_specops ? 5 : 0);
-  obj->ops = ops;
+  obj->ops = ops ? ops : &_ejs_object_specops;
+  obj->map = _ejs_propertymap_new (obj->ops == &_ejs_object_specops ? 5 : 0);
+#if notyet
   ((GCObjectPtr)obj)->gc_data = 0x01; // HAS_FINALIZE
+#endif
 }
 
 ejsval
@@ -248,7 +250,7 @@ _ejs_string_new_utf8 (const char* str)
   int str_len = strlen(str);
   size_t value_size = sizeof(EJSPrimString) + str_len; /* no +1 here since PrimString already includes 1 byte */
 
-  EJSPrimString* rv = (EJSPrimString*)_ejs_gc_alloc(value_size);
+  EJSPrimString* rv = (EJSPrimString*)_ejs_gc_alloc(value_size, EJS_FALSE);
   rv->len = str_len;
   strcpy (rv->data, str);
   return STRING_TO_EJSVAL(rv);
@@ -259,7 +261,7 @@ _ejs_string_new_utf8_len (const char* str, int len)
 {
   size_t value_size = sizeof(EJSPrimString) + len + 1; /* +1 here for the \0 byte */
 
-  EJSPrimString* rv = (EJSPrimString*)_ejs_gc_alloc(value_size);
+  EJSPrimString* rv = (EJSPrimString*)_ejs_gc_alloc(value_size, EJS_FALSE);
   rv->len = len;
   strncpy (rv->data, str, len);
   return STRING_TO_EJSVAL(rv);
@@ -602,8 +604,8 @@ _ejs_object_init (ejsval global)
   // ECMA262: 15.2.4.1
   _ejs_object_setprop_utf8 (_ejs_Object_proto, "constructor",  _ejs_Object);
 
-#define OBJ_METHOD(x) do { ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Object_##x)); _ejs_object_setprop (_ejs_Object, funcname, tmpfunc); } while (0)
-#define PROTO_METHOD(x) do { ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Object_prototype_##x)); _ejs_object_setprop (_ejs_Object_proto, funcname, tmpfunc); } while (0)
+#define OBJ_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Object_##x)); _ejs_object_setprop (_ejs_Object, funcname, tmpfunc); EJS_MACRO_END
+#define PROTO_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Object_prototype_##x)); _ejs_object_setprop (_ejs_Object_proto, funcname, tmpfunc); EJS_MACRO_END
 
   OBJ_METHOD(getPrototypeOf);
   OBJ_METHOD(getOwnPropertyDescriptor);
