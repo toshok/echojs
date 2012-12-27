@@ -906,11 +906,6 @@ EJS_CANONICALIZE_NAN(double d)
 
 EJS_END_DECLS
 
-#ifdef __cplusplus
-static ejsval_layout EJSVAL_TO_IMPL(EJS::Value);
-static EJS::Value IMPL_TO_EJSVAL(ejsval_layout);
-#endif
-
 typedef ejsval_layout ejsval;
 
 #endif /* ejsvalimpl_h__ */
