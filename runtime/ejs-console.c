@@ -5,14 +5,19 @@
 #include "ejs-function.h"
 
 static ejsval
-_ejs_console_log (ejsval env, ejsval _this, int argc, ejsval *args)
+output (FILE *outfile, int argc, ejsval *args)
 {
   START_SHADOW_STACK_FRAME;
 
   if (argc > 0) {
-    ADD_STACK_ROOT(ejsval, strval, ToString(args[0]));
+    if (EJSVAL_IS_NUMBER(args[0])) {
+      fprintf (outfile, EJS_NUMBER_FORMAT, EJSVAL_TO_NUMBER(args[0]));
+    }
+    else {
+      ADD_STACK_ROOT(ejsval, strval, ToString(args[0]));
 
-    fprintf (stdout, "%s\n", EJSVAL_TO_STRING(strval));
+      fprintf (outfile, "%s\n", EJSVAL_TO_STRING(strval));
+    }
   }
 
   END_SHADOW_STACK_FRAME;
@@ -21,19 +26,15 @@ _ejs_console_log (ejsval env, ejsval _this, int argc, ejsval *args)
 }
 
 static ejsval
+_ejs_console_log (ejsval env, ejsval _this, int argc, ejsval *args)
+{
+  return output (stdout, argc, args);
+}
+
+static ejsval
 _ejs_console_warn (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-  START_SHADOW_STACK_FRAME;
-
-  if (argc > 0) {
-    ADD_STACK_ROOT(ejsval, strval, ToString(args[0]));
-
-    fprintf (stderr, "%s\n", EJSVAL_TO_STRING(strval));
-  }
-
-  END_SHADOW_STACK_FRAME;
-
-  return _ejs_undefined;
+  return output (stderr, argc, args);
 }
 
 
@@ -44,7 +45,7 @@ _ejs_console_init(ejsval global)
 
   ADD_STACK_ROOT(ejsval, _ejs_console, _ejs_object_new (_ejs_null));
 
-#define OBJ_METHOD(x) do { ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_console_##x)); _ejs_object_setprop (_ejs_console, funcname, tmpfunc); } while (0)
+#define OBJ_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_console_##x)); _ejs_object_setprop (_ejs_console, funcname, tmpfunc); EJS_MACRO_END
 
   OBJ_METHOD(log);
   OBJ_METHOD(warn);
