@@ -33,7 +33,7 @@ _ejs_process_init(ejsval global, int argc, char **argv)
 
   _ejs_object_setprop_utf8 (_ejs_process, "argv", _argv);
 
-#define OBJ_METHOD(x) do { ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_process_##x)); _ejs_object_setprop (_ejs_process, funcname, tmpfunc); } while (0)
+#define OBJ_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_process_##x)); _ejs_object_setprop (_ejs_process, funcname, tmpfunc); EJS_MACRO_END
 
   OBJ_METHOD(exit);
 
