@@ -4,16 +4,9 @@
 
 #include "ejs.h"
 
-typedef struct { // must match GCObjectHeader in ejs-gc.h
-  uint8_t gc_data;
-  void* prev_link; // actually a GCObjectPtr
-  void* next_link; // actually a GCObjectPtr
-} heap_val_header;
-
 typedef double EJSPrimNumber;
 
 struct _EJSPrimString {
-  heap_val_header header;
   int len;
   char data[1]; // utf8 \0 terminated
 };
