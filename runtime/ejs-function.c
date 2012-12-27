@@ -114,7 +114,7 @@ _ejs_Function_prototype_apply (ejsval env, ejsval _this, int argc, ejsval *args)
     int apply_argc = EJS_ARRAY_LEN(argArray);
     ejsval* apply_args = NULL;
     if (argc) {
-        apply_args = malloc(sizeof(ejsval) * argc);
+        apply_args = (ejsval*)malloc(sizeof(ejsval) * argc);
         int i;
         for (i = 0; i < argc; i ++) {
             apply_args[i] = EJS_ARRAY_ELEMENTS(argArray)[i];

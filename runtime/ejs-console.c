@@ -2,10 +2,9 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
-#include "ejs.h"
+#include "ejs-console.h"
 #include "ejs-gc.h"
 #include "ejs-ops.h"
-#include "ejs-value.h"
 #include "ejs-function.h"
 
 static ejsval
@@ -15,7 +14,7 @@ output (FILE *outfile, int argc, ejsval *args)
 
     if (argc > 0) {
         if (EJSVAL_IS_NUMBER(args[0])) {
-            fprintf (outfile, EJS_NUMBER_FORMAT, EJSVAL_TO_NUMBER(args[0]));
+            fprintf (outfile, EJS_NUMBER_FORMAT "\n", EJSVAL_TO_NUMBER(args[0]));
         }
         else {
             ADD_STACK_ROOT(ejsval, strval, ToString(args[0]));

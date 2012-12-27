@@ -11,7 +11,7 @@ EJS_BEGIN_DECLS
 
 #define CONSERVATIVE_STACKWALK 1
 
-typedef void* GCObjectPtr;
+typedef char* GCObjectPtr;
 
 extern void _ejs_gc_init();
 extern void _ejs_gc_shutdown();

@@ -4,8 +4,7 @@
 
 //#define NO_ZEROCOST_EXCEPTIONS 1
 
-#include "ejs.h"
-#include "ejs-object.h"
+#include "ejs-exception.h"
 #include <stdint.h>
 #include <sys/types.h>
 
@@ -47,6 +46,7 @@ struct dwarf_eh_bases
     uintptr_t func;
 };
 
+EJS_BEGIN_DECLS
 extern uintptr_t _Unwind_GetIP (struct _Unwind_Context *);
 extern uintptr_t _Unwind_GetCFA (struct _Unwind_Context *);
 extern uintptr_t _Unwind_GetLanguageSpecificData(struct _Unwind_Context *);
@@ -83,6 +83,7 @@ CXX_PERSONALITY(int version,
                 struct _Unwind_Exception *exceptionObject,
                 struct _Unwind_Context *context);
 
+EJS_END_DECLS
 
 // ejs's internal exception types and data
 
@@ -113,12 +114,12 @@ static char _ejs_exception_do_catch(struct ejs_typeinfo *catch_tinfo,
 const void *ejs_ehtype_vtable[] = {
     NULL,  // typeinfo's vtable? - fixme 
     NULL,  // typeinfo's typeinfo - fixme
-    _ejs_exception_noop,      // in-place destructor?
-    _ejs_exception_noop,      // destructor?
-    _ejs_exception_true,      // __is_pointer_p
-    _ejs_exception_false,     // __is_function_p
-    _ejs_exception_do_catch,  // __do_catch
-    _ejs_exception_false,     // __do_upcast
+    (void*)_ejs_exception_noop,      // in-place destructor?
+    (void*)_ejs_exception_noop,      // destructor?
+    (void*)_ejs_exception_true,      // __is_pointer_p
+    (void*)_ejs_exception_false,     // __is_function_p
+    (void*)_ejs_exception_do_catch,  // __do_catch
+    (void*)_ejs_exception_false,     // __do_upcast
 };
 
 struct ejs_typeinfo EJS_EHTYPE_ejsvalue = {
@@ -206,7 +207,7 @@ static void _ejs_exception_destructor(void *exc_gen) {
 void _ejs_exception_throw(ejsval val)
 {
     struct ejs_exception *exc = 
-        __cxa_allocate_exception(sizeof(struct ejs_exception));
+        (struct ejs_exception*)__cxa_allocate_exception(sizeof(struct ejs_exception));
 
     exc->val = val;
 #if false

@@ -14,7 +14,7 @@
 #include "ejs-string.h"
 #include "ejsval.h"
 
-#define spew 1
+#define spew 0
 #if spew
 #define SPEW(x) x
 #else
@@ -102,14 +102,14 @@ static unsigned int white_mask = CELL_WHITE_MASK_START;
 typedef struct _PageInfo {
     EJS_LIST_HEADER(struct _PageInfo);
     size_t cell_size;
-    void* page_data;
+    char* page_data;
     BitmapCell* page_bitmap;
     FreeListEntry* freelist;
 } PageInfo;
 
 typedef struct _LargeObjectInfo {
     EJS_LIST_HEADER(struct _LargeObjectInfo);
-    void *los_data;
+    char *los_data;
     size_t size;
 } LargeObjectInfo;
 
@@ -139,7 +139,7 @@ set_gray (GCObjectPtr ptr)
     if (!page) {
         abort();
     }
-    SET_GRAY(page->page_bitmap[(ptr-page->page_data) / page->cell_size]);
+    SET_GRAY(page->page_bitmap[(ptr - page->page_data)/ page->cell_size]);
 }
 
 static void
@@ -149,7 +149,7 @@ set_black (GCObjectPtr ptr)
     if (!page) {
         abort();
     }
-    SET_BLACK(page->page_bitmap[(ptr-page->page_data) / page->cell_size]);
+    SET_BLACK(page->page_bitmap[(ptr - page->page_data)/ page->cell_size]);
 }
 
 static EJSBool
@@ -159,7 +159,7 @@ is_white (GCObjectPtr ptr)
     if (!page) {
         abort();
     }
-    return IS_WHITE(page->page_bitmap[(ptr-page->page_data) / page->cell_size]);
+    return IS_WHITE(page->page_bitmap[(ptr - page->page_data)/ page->cell_size]);
 }
 
 static void
@@ -167,12 +167,12 @@ populate_initial_freelist(PageInfo *info, int cell_size)
 {
     info->freelist = NULL;
 
-    char* ptr = info->page_data;
+    void* ptr = info->page_data;
 
     for (int i = 0; i < PAGE_SIZE / cell_size; i ++) {
         SET_FREE(info->page_bitmap[i]);
         EJS_SLIST_ATTACH(((FreeListEntry*)ptr), info->freelist);
-        ptr += cell_size;
+        ptr = (void*)((uintptr_t)ptr + cell_size);
     }
 }
 
@@ -183,14 +183,14 @@ add_cell_to_freelist (PageInfo *info, int bitmap_cell_index)
     EJS_SLIST_ATTACH(((FreeListEntry*)((char*)info->page_data + bitmap_cell_index * info->cell_size)), info->freelist);
 }
 
-static void*
+static char*
 alloc_from_os (size_t size)
 {
-    return mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, MAP_FD, 0);
+    return (char*)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, MAP_FD, 0);
 }
 
 static void
-dealloc_from_os(void* ptr, size_t size)
+dealloc_from_os(char* ptr, size_t size)
 {
     munmap(ptr, size);
 }
@@ -208,7 +208,7 @@ alloc_page(size_t cell_size)
 }
 
 static void
-dealloc_page(void* page_addr)
+dealloc_page(char* page_addr)
 {
     dealloc_from_os(page_addr, PAGE_SIZE);
 }
@@ -344,9 +344,9 @@ mark_from_shadow_stack()
 #endif
 
 static void
-mark_in_range(void* low, void* high)
+mark_in_range(char* low, char* high)
 {
-    void* p;
+    char* p;
     for (p = low; p < high; p++) {
         ejsval candidate_val = *((ejsval*)p);
         if (EJSVAL_IS_GCTHING_IMPL(candidate_val)) {
@@ -403,7 +403,7 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
         }
 
 #if CONSERVATIVE_STACKWALK
-        mark_in_range(((void*)&stack_top) + sizeof(GCObjectPtr), (void*)stack_bottom);
+        mark_in_range(((char*)&stack_top) + sizeof(GCObjectPtr), (char*)stack_bottom);
 #else
         mark_from_shadow_stack();
 #endif
@@ -540,13 +540,11 @@ int num_allocs = 0;
 GCObjectPtr
 _ejs_gc_alloc(size_t size, EJSBool has_finalizer)
 {
-#if false
     num_allocs ++;
-    if (num_allocs == 100) {
+    if (num_allocs == 50) {
         _ejs_gc_collect();
         num_allocs = 0;
     }
-#endif
 
     int bucket;
     size = next_power_of_two(size, &bucket);
@@ -572,7 +570,7 @@ _ejs_gc_alloc(size_t size, EJSBool has_finalizer)
 void
 __ejs_gc_add_named_root(ejsval* root, const char *name)
 {
-    RootSetEntry* entry = malloc(sizeof(RootSetEntry));
+    RootSetEntry* entry = (RootSetEntry*)malloc(sizeof(RootSetEntry));
     entry->root = (GCObjectPtr*)root;
     entry->name = name ? strdup(name) : NULL;
     entry->next = root_set;

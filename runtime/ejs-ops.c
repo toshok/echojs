@@ -154,7 +154,7 @@ _ejs_op_void (ejsval exp)
 ejsval
 _ejs_op_typeof (ejsval exp)
 {
-    char *rv;
+    const char *rv;
     if (EJSVAL_IS_NULL(exp))
         rv = "object";
     else if (EJSVAL_IS_BOOLEAN(exp))
@@ -291,7 +291,7 @@ _ejs_op_add (ejsval lhs, ejsval rhs)
             int lhs_len = EJSVAL_TO_STRLEN(lhs);
 
             if (lhs_len + rhs_len >= (sizeof(buf) - 1)) {
-                char *combined = malloc (lhs_len + rhs_len + 1);
+                char *combined = (char*)malloc (lhs_len + rhs_len + 1);
                 strcpy (combined, EJSVAL_TO_STRING(lhs));
                 strcpy (combined + lhs_len, buf);
                 ejsval result = _ejs_string_new_utf8(combined);
@@ -308,7 +308,7 @@ _ejs_op_add (ejsval lhs, ejsval rhs)
         else {
             ADD_STACK_ROOT(ejsval, rhstring, ToString(rhs));
 
-            char *combined = malloc (EJSVAL_TO_STRLEN(lhs) + EJSVAL_TO_STRLEN(rhstring) + 1);
+            char *combined = (char*)malloc (EJSVAL_TO_STRLEN(lhs) + EJSVAL_TO_STRLEN(rhstring) + 1);
             strcpy (combined, EJSVAL_TO_STRING(lhs));
             strcpy (combined + EJSVAL_TO_STRLEN(lhs), EJSVAL_TO_STRING(rhstring));
             ejsval result = _ejs_string_new_utf8(combined);

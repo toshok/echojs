@@ -2,10 +2,9 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
-#include "ejs.h"
-#include "ejs-ops.h"
-#include "ejs-value.h"
+#include "ejs-process.h"
 #include "ejs-array.h"
+#include "ejs-gc.h"
 #include "ejs-function.h"
 
 static ejsval

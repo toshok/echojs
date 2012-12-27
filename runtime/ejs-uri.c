@@ -4,7 +4,7 @@
 
 #include <stdlib.h>
 
-#include "ejs.h"
+#include "ejs-uri.h"
 
 ejsval
 _ejs_decodeURI (ejsval env, ejsval _this, int argc, ejsval* args)

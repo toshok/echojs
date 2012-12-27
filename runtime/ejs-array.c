@@ -268,7 +268,7 @@ _ejs_Array_prototype_join (ejsval env, ejsval _this, int argc, ejsval*args)
     if (EJS_ARRAY_LEN(_this) == 0)
         return _ejs_string_new_utf8 ("");
 
-    char* separator;
+    const char* separator;
     int separator_len;
 
     if (argc > 0) {

@@ -5,12 +5,14 @@
 #ifndef _ejs_exception_h
 #define _ejs_exception_h
 
+#include "ejs.h"
 #include "ejs-object.h"
 
 EJS_BEGIN_DECLS
 
 void _ejs_exception_init (void);
-extern void ejs_exception_throw (ejsval val);
+extern void _ejs_exception_throw (ejsval val);
+extern void _ejs_exception_rethrow ();
 
 EJS_END_DECLS
 

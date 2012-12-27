@@ -292,7 +292,7 @@ _ejs_object_setprop (ejsval val, ejsval key, ejsval value)
         if (idx != -1) {
             if (idx >= EJS_ARRAY_ALLOC(val)) {
                 int new_alloc = idx + 10;
-                ejsval* new_elements = malloc (sizeof(ejsval*) * new_alloc);
+                ejsval* new_elements = (ejsval*)malloc (sizeof(ejsval*) * new_alloc);
                 memmove (new_elements, EJS_ARRAY_ELEMENTS(val), EJS_ARRAY_ALLOC(val) * sizeof(ejsval));
                 free (EJS_ARRAY_ELEMENTS(val));
                 EJS_ARRAY_ELEMENTS(val) = new_elements;
