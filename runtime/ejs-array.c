@@ -115,7 +115,7 @@ _ejs_Array_prototype_shift (ejsval env, ejsval _this, int argc, ejsval*args)
   NOT_IMPLEMENTED();
 #if notyet
   // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
-  ejsval lenVal = OP(O,get) (O, _ejs_string_new_utf8 ("length"));
+  ejsval lenVal = OP(O,get) (O, _ejs_length);
 
   // 3. Let len be ToUint32(lenVal).
   int len = ToUint32(lenVal);
@@ -123,7 +123,7 @@ _ejs_Array_prototype_shift (ejsval env, ejsval _this, int argc, ejsval*args)
   // 4. If len is zero, then
   if (len == 0) {
     //   a. Call the [[Put]] internal method of O with arguments "length", 0, and true.
-    OP(O,put) (O, _ejs_string_new_utf8 ("length"), 0, EJS_TRUE);
+    OP(O,put) (O, _ejs_length, 0, EJS_TRUE);
     //   b. Return undefined.
     return _ejs_undefined;
   }
@@ -383,8 +383,8 @@ _ejs_array_init(ejsval global)
 
   _ejs_object_setprop_utf8 (_ejs_Array,       "prototype",  _ejs_Array_proto);
 
-#define OBJ_METHOD(x) do { ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Array_##x)); _ejs_object_setprop (_ejs_Array, funcname, tmpfunc); } while (0)
-#define PROTO_METHOD(x) do { ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Array_prototype_##x)); _ejs_object_setprop (_ejs_Array_proto, funcname, tmpfunc); } while (0)
+#define OBJ_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Array_##x)); _ejs_object_setprop (_ejs_Array, funcname, tmpfunc); EJS_MACRO_END
+#define PROTO_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Array_prototype_##x)); _ejs_object_setprop (_ejs_Array_proto, funcname, tmpfunc); EJS_MACRO_END
 
   OBJ_METHOD(isArray);
 

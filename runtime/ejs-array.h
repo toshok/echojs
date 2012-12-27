@@ -17,6 +17,10 @@ typedef struct {
 #define EJS_ARRAY_LEN(obj) (((EJSArray*)EJSVAL_TO_OBJECT(obj))->array_length)
 #define EJS_ARRAY_ELEMENTS(obj) (((EJSArray*)EJSVAL_TO_OBJECT(obj))->elements)
 
+#define EJSARRAY_ALLOC(obj) (((EJSArray*)(obj))->array_alloc)
+#define EJSARRAY_LEN(obj) (((EJSArray*)(obj))->array_length)
+#define EJSARRAY_ELEMENTS(obj) (((EJSArray*)(obj))->elements)
+
 EJS_BEGIN_DECLS
 
 extern ejsval _ejs_Array;
