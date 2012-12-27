@@ -113,6 +113,15 @@ ejsval ToBoolean(ejsval exp)
     NOT_IMPLEMENTED();
 }
 
+ejsval ToPrimitive(ejsval exp)
+{
+  if (EJSVAL_IS_OBJECT(exp)) {
+    return OP(EJSVAL_TO_OBJECT(exp),default_value) (exp, "PreferredType");
+  }
+  else
+    return exp;
+}
+
 ejsval
 _ejs_op_neg (ejsval exp)
 {
@@ -265,10 +274,12 @@ _ejs_op_add (ejsval lhs, ejsval rhs)
 
   ejsval rv = _ejs_nan;
 
-  if (EJSVAL_IS_NUMBER(lhs)) {
-    rv = NUMBER_TO_EJSVAL (EJSVAL_TO_NUMBER(lhs) + ToDouble (rhs));
-  }
-  else if (EJSVAL_IS_STRING(lhs)) {
+  ejsval lprim, rprim;
+
+  lprim = ToPrimitive(lhs);
+  rprim = ToPrimitive(rhs);
+
+  if (EJSVAL_IS_STRING(lhs) || EJSVAL_IS_STRING(rhs)) {
     if (EJSVAL_IS_NUMBER(rhs)) {
       char buf[256];
       NumberToStringBuf(buf, sizeof(buf), EJSVAL_TO_NUMBER(rhs));
@@ -302,8 +313,7 @@ _ejs_op_add (ejsval lhs, ejsval rhs)
     }
   }
   else {
-    // object+... how does js implement this anyway?
-    NOT_IMPLEMENTED();
+    rv = NUMBER_TO_EJSVAL (ToDouble(lprim) + ToDouble(rprim));
   }
 
   END_SHADOW_STACK_FRAME;
