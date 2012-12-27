@@ -137,13 +137,13 @@ LocateEnvVisitor = class LocateEnvVisitor extends NodeVisitor
                 env = current_env
                 while env?
                         if env.decls.member n.name
-                                if env.closed.member n.name
-                                        n.ejs_substitute = true
-                                else if env isnt current_env
-                                        env.closed.add n.name
-                                        n.ejs_substitute = true
-#                                env.closed.add n.name
-#                                n.ejs_substitute = true
+#                                if env.closed.member n.name
+#                                        n.ejs_substitute = true
+#                                else if env isnt current_env
+#                                        env.closed.add n.name
+#                                        n.ejs_substitute = true
+                                env.closed.add n.name
+                                n.ejs_substitute = true
                                 return n
                         else
                                 env = env.parent
