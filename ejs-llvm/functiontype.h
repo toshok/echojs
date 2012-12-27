@@ -3,8 +3,8 @@
 
 #include "ejs-llvm.h"
 
-void _ejs_llvm_FunctionType_init (EJSValue* exports);
+extern void _ejs_llvm_FunctionType_init (ejsval exports);
 
-llvm::FunctionType* _ejs_llvm_FunctionType_GetLLVMObj(EJSValue* val);
+extern llvm::FunctionType* _ejs_llvm_FunctionType_GetLLVMObj(ejsval val);
 
 #endif /* EJS_LLVM_FUNCTIONTYPE_H */

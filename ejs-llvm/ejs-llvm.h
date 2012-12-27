@@ -10,7 +10,7 @@
 #include "llvm/LLVMContext.h"
 #include "llvm/Module.h"
 #include "llvm/Analysis/Verifier.h"
-#include "llvm/Support/IRBuilder.h"
+#include "llvm/IRBuilder.h"
 #include "llvm/Support/raw_os_ostream.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -19,12 +19,12 @@
     printf ("in function %s\n", __PRETTY_FUNCTION__);			\
     abort();								\
   }									\
-  EJSFunction* VAR = (EJSFunction*)args[I];
+  EJSFunction* VAR = (EJSFunction*)EJSVAL_TO_OBJECT(args[I]);
 
 #define REQ_ARRAY_ARG(I, VAR)                                           \
   if (argc <= (I) /*|| !args[I]->IsArray()*/)				\
     abort();								\
-  EJSArray* VAR = (EJSArray*)args[I];
+  EJSArray* VAR = (EJSArray*)EJSVAL_TO_OBJECT(args[I]);
 
 #define REQ_INT_ARG(I, VAR)						\
   if (argc <= (I) /*|| !args[I]->IsInt32()*/)				\
@@ -61,12 +61,12 @@
 #define REQ_LLVM_BB_ARG(I, VAR)						\
   if (argc <= (I) /* || (!args[I]->IsNull() && !args[I]->IsObject() && !jsllvm::BasicBlock::HasInstance(args[I]) */)) \
     abort();								\
-  ::llvm::BasicBlock* VAR = jsllvm::BasicBlock::GetLLVMObj(args[I]);
+  ::llvm::BasicBlock* VAR = jsllvm::BasicBlock::GetLLVMObj(EJSVAL_TO_OBJECT(args[I]));
 
 #define REQ_LLVM_FUN_ARG(I, VAR)					\
   if (argc <= (I) /* || !args[I]->IsObject() || !jsllvm::Function::HasInstance(args[I]) */) \
     abort();								\
-  ::llvm::Function* VAR = jsllvm::Function::GetLLVMObj(args[I]);
+  ::llvm::Function* VAR = jsllvm::Function::GetLLVMObj(EJSVAL_TO_OBJECT(args[I]));
 
 extern std::string& trim(std::string& str);
 

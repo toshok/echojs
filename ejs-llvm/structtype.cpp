@@ -1,6 +1,7 @@
 #include "ejs-llvm.h"
+#include "ejs-function.h"
 #include "ejs-object.h"
-#include "ejs-value.h"
+#include "ejs-array.h"
 #include "type.h"
 
 typedef struct {
@@ -14,63 +15,64 @@ typedef struct {
 
 EJSObject* _ejs_llvm_StructType_alloc_instance()
 {
-  return (EJSObject*)calloc(1, sizeof (EJSLLVMStructType));
+  return (EJSObject*)_ejs_gc_new(EJSLLVMStructType);
 }
 
-EJSValue* _ejs_llvm_StructType_proto;
-EJSValue* _ejs_llvm_StructType;
-static EJSValue*
-_ejs_llvm_StructType_impl (EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+ejsval _ejs_llvm_StructType_proto;
+ejsval _ejs_llvm_StructType;
+static ejsval
+_ejs_llvm_StructType_impl (ejsval env, ejsval _this, int argc, ejsval *args)
 {
+  NOT_IMPLEMENTED();
 }
 
-EJSValue*
-_ejs_llvm_StructType_create(EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+ejsval
+_ejs_llvm_StructType_create(ejsval env, ejsval _this, int argc, ejsval *args)
 {
     REQ_UTF8_ARG (0, name);
     REQ_ARRAY_ARG (1, elementTypes)
 
     std::vector<llvm::Type*> element_types;
-    for (int i = 0; i < EJS_ARRAY_LEN(elementTypes); i ++) {
-      element_types.push_back (_ejs_llvm_Type_getLLVMObj(EJS_ARRAY_ELEMENTS(elementTypes)[i]));
+    for (int i = 0; i < EJSARRAY_LEN(elementTypes); i ++) {
+      element_types.push_back (_ejs_llvm_Type_getLLVMObj(EJSARRAY_ELEMENTS(elementTypes)[i]));
     }
 
     EJSObject* result = _ejs_llvm_StructType_alloc_instance();
-    _ejs_init_object (result, _ejs_llvm_StructType_proto);
+    _ejs_init_object (result, _ejs_llvm_StructType_proto, NULL);
     ((EJSLLVMStructType*)result)->type = llvm::StructType::create(llvm::getGlobalContext(), element_types, name);
-    return (EJSValue*)result;
+    return OBJECT_TO_EJSVAL(result);
 }
 
-EJSValue*
-_ejs_llvm_StructType_prototype_toString(EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+ejsval
+_ejs_llvm_StructType_prototype_toString(ejsval env, ejsval _this, int argc, ejsval *args)
 {
   std::string str;
   llvm::raw_string_ostream str_ostream(str);
-  ((EJSLLVMStructType*)_this)->type->print(str_ostream);
+  ((EJSLLVMStructType*)EJSVAL_TO_OBJECT(_this))->type->print(str_ostream);
 
   return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
 }
 
-EJSValue*
-_ejs_llvm_StructType_prototype_dump(EJSValue* env, EJSValue* _this, int argc, EJSValue **args)
+ejsval
+_ejs_llvm_StructType_prototype_dump(ejsval env, ejsval _this, int argc, ejsval *args)
 {
-  ((EJSLLVMStructType*)_this)->type->dump();
+  ((EJSLLVMStructType*)EJSVAL_TO_OBJECT(_this))->type->dump();
   return _ejs_undefined;
 }
 
 
 void
-_ejs_llvm_StructType_init (EJSValue* exports)
+_ejs_llvm_StructType_init (ejsval exports)
 {
-  _ejs_llvm_StructType = _ejs_function_new_utf8 (NULL, "LLVMStructType", (EJSClosureFunc)_ejs_llvm_StructType_impl);
+  _ejs_llvm_StructType = _ejs_function_new_utf8 (_ejs_null, "LLVMStructType", (EJSClosureFunc)_ejs_llvm_StructType_impl);
   _ejs_llvm_StructType_proto = _ejs_object_new(_ejs_llvm_Type_get_prototype());
 
   _ejs_object_setprop_utf8 (_ejs_llvm_StructType,       "prototype",  _ejs_llvm_StructType_proto);
 
-  _ejs_object_setprop_utf8 (_ejs_llvm_StructType,       "create",  _ejs_function_new_utf8 (NULL, "create", (EJSClosureFunc)_ejs_llvm_StructType_create));
+  _ejs_object_setprop_utf8 (_ejs_llvm_StructType,       "create",  _ejs_function_new_utf8 (_ejs_null, "create", (EJSClosureFunc)_ejs_llvm_StructType_create));
 
-  _ejs_object_setprop_utf8 (_ejs_llvm_StructType_proto, "dump",   _ejs_function_new_utf8 (NULL, "dump", (EJSClosureFunc)_ejs_llvm_StructType_prototype_dump));
-  _ejs_object_setprop_utf8 (_ejs_llvm_StructType_proto, "toString",   _ejs_function_new_utf8 (NULL, "toString", (EJSClosureFunc)_ejs_llvm_StructType_prototype_toString));
+  _ejs_object_setprop_utf8 (_ejs_llvm_StructType_proto, "dump",   _ejs_function_new_utf8 (_ejs_null, "dump", (EJSClosureFunc)_ejs_llvm_StructType_prototype_dump));
+  _ejs_object_setprop_utf8 (_ejs_llvm_StructType_proto, "toString",   _ejs_function_new_utf8 (_ejs_null, "toString", (EJSClosureFunc)_ejs_llvm_StructType_prototype_toString));
 
   _ejs_object_setprop_utf8 (exports,              "StructType", _ejs_llvm_StructType);
 }
