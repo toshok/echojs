@@ -1,7 +1,10 @@
 // allocation heavy code
 
-for (var i = 0; i < 1000000; i ++) {
+for (var i = 0; i < 10000000; i ++) {
   var s = "hi" + i;
 }
 
-console.log (s);
+if (typeof(console) === "object")
+  console.log(s);
+else
+  print (s);
