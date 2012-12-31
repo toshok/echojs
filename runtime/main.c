@@ -8,7 +8,7 @@
 #include "ejs-require.h"
 #include "ejs-function.h"
 
-#define GC_ON_SHUTDOWN 1
+#define GC_ON_SHUTDOWN 0
 
 extern const char *entry_filename;
 

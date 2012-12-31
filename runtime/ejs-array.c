@@ -119,7 +119,7 @@ _ejs_Array_prototype_shift (ejsval env, ejsval _this, int argc, ejsval*args)
     NOT_IMPLEMENTED();
 #if notyet
     // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
-    ejsval lenVal = OP(O,get) (O, _ejs_length);
+    ejsval lenVal = OP(O,get) (O, _ejs_atom_length);
 
     // 3. Let len be ToUint32(lenVal).
     int len = ToUint32(lenVal);
@@ -127,7 +127,7 @@ _ejs_Array_prototype_shift (ejsval env, ejsval _this, int argc, ejsval*args)
     // 4. If len is zero, then
     if (len == 0) {
         //   a. Call the [[Put]] internal method of O with arguments "length", 0, and true.
-        OP(O,put) (O, _ejs_length, 0, EJS_TRUE);
+        OP(O,put) (O, _ejs_atom_length, 0, EJS_TRUE);
         //   b. Return undefined.
         return _ejs_undefined;
     }
@@ -274,7 +274,7 @@ _ejs_Array_prototype_join (ejsval env, ejsval _this, int argc, ejsval*args)
     if (argc > 0) {
         ejsval sepToString = ToString(args[0]);
         separator_len = EJSVAL_TO_STRLEN(sepToString);
-        separator = EJSVAL_TO_STRING(sepToString);
+        separator = EJSVAL_TO_FLAT_STRING(sepToString);
     }
     else {
         separator = ",";
@@ -298,7 +298,7 @@ _ejs_Array_prototype_join (ejsval env, ejsval _this, int argc, ejsval*args)
     int offset = 0;
     for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
         int slen = EJSVAL_TO_STRLEN(strings[i]);
-        memmove (result + offset, EJSVAL_TO_STRING(strings[i]), slen);
+        memmove (result + offset, EJSVAL_TO_FLAT_STRING(strings[i]), slen);
         offset += slen;
         if (i < EJS_ARRAY_LEN(_this)-1) {
             memmove (result + offset, separator, separator_len);
@@ -385,7 +385,7 @@ _ejs_array_init(ejsval global)
     ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "Array", (EJSClosureFunc)_ejs_Array_impl));
     _ejs_Array = tmpobj;
 
-    _ejs_object_setprop_utf8 (_ejs_Array,       "prototype",  _ejs_Array_proto);
+    _ejs_object_setprop (_ejs_Array,       _ejs_atom_prototype,  _ejs_Array_proto);
 
 #define OBJ_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Array_##x)); _ejs_object_setprop (_ejs_Array, funcname, tmpfunc); EJS_MACRO_END
 #define PROTO_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Array_prototype_##x)); _ejs_object_setprop (_ejs_Array_proto, funcname, tmpfunc); EJS_MACRO_END
@@ -432,7 +432,7 @@ _ejs_array_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr)
 
     // we also handle the length getter here
     if ((isCStr && !strcmp("length", (char*)EJSVAL_TO_PRIVATE_PTR_IMPL(propertyName)))
-        || (!isCStr && EJSVAL_IS_STRING(propertyName) && !strcmp ("length", EJSVAL_TO_STRING(propertyName)))) {
+        || (!isCStr && EJSVAL_IS_STRING(propertyName) && !strcmp ("length", EJSVAL_TO_FLAT_STRING(propertyName)))) {
         return NUMBER_TO_EJSVAL (EJS_ARRAY_LEN(obj));
     }
 

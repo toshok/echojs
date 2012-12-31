@@ -50,10 +50,10 @@ EJSSpecOps _ejs_object_specops = {
 EJSPropertyMap*
 _ejs_propertymap_new (int initial_allocation)
 {
-    EJSPropertyMap* rv = (EJSPropertyMap*)calloc(1, sizeof (EJSPropertyMap));
+    EJSPropertyMap* rv = (EJSPropertyMap*)malloc(sizeof (EJSPropertyMap));
     if (initial_allocation) {
         rv->names = (char**)malloc(sizeof(char*) * initial_allocation);
-        rv->fields = (ejsval*)calloc(initial_allocation, sizeof (ejsval));
+        rv->fields = (ejsval*)malloc(sizeof (ejsval) * initial_allocation);
     }
     else {
         rv->names = NULL;
@@ -141,11 +141,11 @@ _ejs_property_iterator_new (ejsval forVal)
         NOT_IMPLEMENTED();
 
     // totally broken, only iterator over forObj's property map, not prototype properties
-    EJSPropertyIterator* iterator = (EJSPropertyIterator*)calloc(1, sizeof (EJSPropertyIterator));
-
     EJSPropertyMap *map = EJSVAL_TO_OBJECT(forVal)->map;
 
     if (map) {
+        EJSPropertyIterator* iterator = (EJSPropertyIterator*)malloc(sizeof (EJSPropertyIterator));
+
         int i;
 
         iterator->forObj = forVal;
@@ -153,8 +153,11 @@ _ejs_property_iterator_new (ejsval forVal)
         iterator->names = (char**)malloc(sizeof(char*) * iterator->num);
         for (i = 0; i < iterator->num; i ++)
             iterator->names[i] = strdup(map->names[i]);
+        return iterator;
     }
-    return iterator;
+    else {
+        return NULL;
+    }
 }
 
 char *
@@ -252,23 +255,81 @@ ejsval
 _ejs_string_new_utf8 (const char* str)
 {
     int str_len = strlen(str);
-    size_t value_size = sizeof(EJSPrimString) + str_len; /* no +1 here since PrimString already includes 1 byte */
+    size_t value_size = sizeof(EJSPrimString) + str_len + 1;
 
     EJSPrimString* rv = (EJSPrimString*)_ejs_gc_alloc(value_size, EJS_FALSE);
-    rv->len = str_len;
-    strcpy (rv->data, str);
+    rv->type = EJS_STRING_FLAT;
+    rv->length = str_len;
+    rv->data.flat = (char*)rv + sizeof(EJSPrimString);
+    strcpy (rv->data.flat, str);
     return STRING_TO_EJSVAL(rv);
 }
 
 ejsval
 _ejs_string_new_utf8_len (const char* str, int len)
 {
-    size_t value_size = sizeof(EJSPrimString) + len + 1; /* +1 here for the \0 byte */
+    size_t value_size = sizeof(EJSPrimString) + len + 1;
 
     EJSPrimString* rv = (EJSPrimString*)_ejs_gc_alloc(value_size, EJS_FALSE);
-    rv->len = len;
-    strncpy (rv->data, str, len);
+    rv->type = EJS_STRING_FLAT;
+    rv->length = len;
+    rv->data.flat = (char*)rv + sizeof(EJSPrimString);
+    strncpy (rv->data.flat, str, len);
     return STRING_TO_EJSVAL(rv);
+}
+
+ejsval
+_ejs_string_concat (ejsval left, ejsval right)
+{
+    EJSPrimString* lhs = EJSVAL_TO_STRING(left);
+    EJSPrimString* rhs = EJSVAL_TO_STRING(right);
+    
+    EJSPrimString* rv = (EJSPrimString*)_ejs_gc_alloc(sizeof(EJSPrimString), EJS_FALSE/*XXX*/);
+    rv->type = EJS_STRING_ROPE;
+    rv->length = lhs->length + rhs->length;
+    rv->data.rope.left = lhs;
+    rv->data.rope.right = rhs;
+
+    return STRING_TO_EJSVAL(rv);
+}
+
+static void
+flatten_rope (char **p, EJSPrimString *n)
+{
+    switch (n->type) {
+    case EJS_STRING_FLAT:
+        strncpy(*p, n->data.flat, n->length);
+        *p += n->length;
+        break;
+    case EJS_STRING_ROPE:
+        flatten_rope(p, n->data.rope.left);
+        flatten_rope(p, n->data.rope.right);
+        break;
+    default:
+        NOT_IMPLEMENTED();
+    }
+}
+
+EJSPrimString*
+_ejs_string_flatten (ejsval str)
+{
+    EJSPrimString* primstr = EJSVAL_TO_STRING_IMPL(str);
+    switch (primstr->type) {
+    case EJS_STRING_FLAT:
+        return primstr;
+    case EJS_STRING_ROPE: {
+        char *buffer = (char*)malloc(primstr->length + 1);
+        char *p = buffer;
+        flatten_rope (&p, primstr);
+        buffer[primstr->length] = 0;
+        // switch the type of the string to flat
+        primstr->type = EJS_STRING_FLAT;
+        primstr->data.flat = buffer;
+        return primstr;
+    }
+    default:
+        NOT_IMPLEMENTED();
+    }
 }
 
 ejsval
@@ -320,7 +381,7 @@ _ejs_object_setprop (ejsval val, ejsval key, ejsval value)
     }
 
     EJSObject *obj = EJSVAL_TO_OBJECT(val);
-    int prop_index = _ejs_propertymap_lookup (obj->map, EJSVAL_TO_STRING(key), EJS_TRUE);
+    int prop_index = _ejs_propertymap_lookup (obj->map, EJSVAL_TO_FLAT_STRING(key), EJS_TRUE);
     obj->map->fields[prop_index] = value;
 
     return value;
@@ -330,7 +391,7 @@ ejsval
 _ejs_object_getprop (ejsval obj, ejsval key)
 {
     if (EJSVAL_IS_NULL(obj) || EJSVAL_IS_UNDEFINED(obj)) {
-        printf ("throw TypeError, key is %s\n", EJSVAL_TO_STRING(ToString(key)));
+        printf ("throw TypeError, key is %s\n", EJSVAL_TO_FLAT_STRING(ToString(key)));
         NOT_IMPLEMENTED();
     }
 
@@ -406,7 +467,7 @@ _ejs_dump_value (ejsval val)
         printf ("boolean: %s\n", EJSVAL_TO_BOOLEAN(val) ? "true" : "false");
     }
     else if (EJSVAL_IS_STRING(val)) {
-        printf ("string: '%s'\n", EJSVAL_TO_STRING(val));
+        printf ("string: '%s'\n", EJSVAL_TO_FLAT_STRING(val));
     }
     else if (EJSVAL_IS_OBJECT(val)) {
         printf ("<object %s>\n", CLASSNAME(EJSVAL_TO_OBJECT(val)));
@@ -572,7 +633,7 @@ _ejs_Object_prototype_hasOwnProperty (ejsval env, ejsval _this, int argc, ejsval
 
     ejsval needle_str = ToString(needle);
 
-    int idx = _ejs_propertymap_lookup (EJSVAL_TO_OBJECT(_this)->map, EJSVAL_TO_STRING(needle_str), EJS_FALSE);
+    int idx = _ejs_propertymap_lookup (EJSVAL_TO_OBJECT(_this)->map, EJSVAL_TO_FLAT_STRING(needle_str), EJS_FALSE);
     return BOOLEAN_TO_EJSVAL (idx != -1);
 }
 
@@ -604,7 +665,7 @@ _ejs_object_init (ejsval global)
     _ejs_Object = tmpobj;
 
     // ECMA262 15.2.3.1
-    _ejs_object_setprop_utf8 (_ejs_Object,       "prototype",    _ejs_Object_proto); // FIXME: {[[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }
+    _ejs_object_setprop (_ejs_Object,       _ejs_atom_prototype,    _ejs_Object_proto); // FIXME: {[[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }
     // ECMA262: 15.2.4.1
     _ejs_object_setprop_utf8 (_ejs_Object_proto, "constructor",  _ejs_Object);
 
@@ -653,7 +714,7 @@ _ejs_object_specop_get (ejsval obj_, ejsval propertyName, EJSBool isCStr)
         pname = (char*)EJSVAL_TO_PRIVATE_PTR_IMPL(propertyName);
     else {
         propertyName = ToString(propertyName);
-        pname = EJSVAL_TO_STRING(propertyName);
+        pname = EJSVAL_TO_FLAT_STRING(propertyName);
     }
 
     int prop_index = _ejs_propertymap_lookup (obj->map, pname, EJS_FALSE);

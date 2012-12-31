@@ -24,7 +24,7 @@ _ejs_path_basename (ejsval env, ejsval _this, int argc, ejsval* args)
 {
     ejsval path = args[0];
     // FIXME node's implementation allows a second arg to strip the extension, but the compiler doesn't use it.
-    return _ejs_string_new_utf8(basename (EJSVAL_TO_STRING(path)));
+    return _ejs_string_new_utf8(basename (EJSVAL_TO_FLAT_STRING(path)));
 }
 
 ejsval
@@ -47,7 +47,7 @@ static ejsval
 _ejs_fs_readFileSync (ejsval env, ejsval _this, int argc, ejsval* args)
 {
     // FIXME we currently ignore the encoding and just slam the entire thing into a buffer and return a utf8 string...
-    char* path = EJSVAL_TO_STRING(args[0]);
+    char* path = EJSVAL_TO_FLAT_STRING(args[0]);
 
     int fd = open (path, O_RDONLY);
     struct stat fd_stat;

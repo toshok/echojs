@@ -14,8 +14,61 @@
 #include "ejs-string.h"
 #include "ejs-ops.h"
 
+static const size_t UINT32_CHAR_BUFFER_LENGTH = sizeof("4294967295") - 1;
+
+static char *
+IntToCString(char *cbuf, jsint i, jsint base)
+{
+    jsuint u = (i < 0) ? -i : i;
+    char *cp = cbuf + UINT32_CHAR_BUFFER_LENGTH;
+
+    *cp = '\0';
+
+    /* Build the string from behind. */
+    switch (base) {
+    case 10: {
+        // cp = BackfillIndexInCharBuffer(u, cp);
+        uint32_t index = u;
+        char *end = cp;
+        do {
+            uint32_t next = index / 10, digit = index % 10;
+            *--end = '0' + digit;
+            index = next;
+        } while (index > 0);
+        return end;
+      break;
+    }
+    case 16:
+      do {
+          jsuint newu = u / 16;
+          *--cp = "0123456789abcdef"[u - newu * 16];
+          u = newu;
+      } while (u != 0);
+      break;
+    default:
+      EJS_ASSERT(base >= 2 && base <= 36);
+      do {
+          jsuint newu = u / base;
+          *--cp = "0123456789abcdefghijklmnopqrstuvwxyz"[u - newu * base];
+          u = newu;
+      } while (u != 0);
+      break;
+    }
+    if (i < 0)
+        *--cp = '-';
+
+    return cp;
+}
+
 ejsval NumberToString(double d)
 {
+    int32_t i;
+    if (EJSDOUBLE_IS_INT32(d, &i)) {
+        char int_buf[UINT32_CHAR_BUFFER_LENGTH+1];
+        char *cp = IntToCString(int_buf, i, 10);
+        return _ejs_string_new_utf8 (cp);
+    }
+
     char num_buf[256];
     snprintf (num_buf, sizeof(num_buf), EJS_NUMBER_FORMAT, d);
     return _ejs_string_new_utf8 (num_buf);
@@ -60,7 +113,7 @@ double ToDouble(ejsval exp)
     else if (EJSVAL_IS_BOOLEAN(exp))
         return EJSVAL_TO_BOOLEAN(exp) ? 1 : 0;
     else if (EJSVAL_IS_STRING(exp))
-        return atof(EJSVAL_TO_STRING(exp)); // XXX NaN
+        return atof(EJSVAL_TO_FLAT_STRING(exp)); // XXX NaN
     else if (EJSVAL_IS_UNDEFINED(exp))
         return 0; // XXX NaN
     else if (EJSVAL_IS_OBJECT(exp))
@@ -284,37 +337,11 @@ _ejs_op_add (ejsval lhs, ejsval rhs)
     rprim = ToPrimitive(rhs);
 
     if (EJSVAL_IS_STRING(lhs) || EJSVAL_IS_STRING(rhs)) {
-        if (EJSVAL_IS_NUMBER(rhs)) {
-            char buf[256];
-            NumberToStringBuf(buf, sizeof(buf), EJSVAL_TO_NUMBER(rhs));
-            int rhs_len = strlen(buf);
-            int lhs_len = EJSVAL_TO_STRLEN(lhs);
+        ADD_STACK_ROOT(ejsval, lhstring, ToString(lhs));
+        ADD_STACK_ROOT(ejsval, rhstring, ToString(rhs));
 
-            if (lhs_len + rhs_len >= (sizeof(buf) - 1)) {
-                char *combined = (char*)malloc (lhs_len + rhs_len + 1);
-                strcpy (combined, EJSVAL_TO_STRING(lhs));
-                strcpy (combined + lhs_len, buf);
-                ejsval result = _ejs_string_new_utf8(combined);
-                free(combined);
-                rv = result;
-            }
-            else {
-                memmove (buf + lhs_len, buf, rhs_len);
-                memmove (buf, EJSVAL_TO_STRING(lhs), lhs_len);
-                buf[lhs_len + rhs_len] = 0;
-                rv = _ejs_string_new_utf8(buf);
-            }
-        }
-        else {
-            ADD_STACK_ROOT(ejsval, rhstring, ToString(rhs));
-
-            char *combined = (char*)malloc (EJSVAL_TO_STRLEN(lhs) + EJSVAL_TO_STRLEN(rhstring) + 1);
-            strcpy (combined, EJSVAL_TO_STRING(lhs));
-            strcpy (combined + EJSVAL_TO_STRLEN(lhs), EJSVAL_TO_STRING(rhstring));
-            ejsval result = _ejs_string_new_utf8(combined);
-            free(combined);
-            rv = result;
-        }
+        ADD_STACK_ROOT(ejsval, result, _ejs_string_concat (lhstring, rhstring));
+        rv = result;
     }
     else {
         rv = NUMBER_TO_EJSVAL (ToDouble(lprim) + ToDouble(rprim));
@@ -375,7 +402,7 @@ _ejs_op_lt (ejsval lhs, ejsval rhs)
         else
             rhs_primStr = ((EJSString*)EJSVAL_TO_STRING(rhs_string))->primStr;
 
-        return BOOLEAN_TO_EJSVAL (strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs_primStr)) < 0);
+        return BOOLEAN_TO_EJSVAL (strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs_primStr)) < 0);
     }
     else {
         // object+... how does js implement this anyway?
@@ -383,6 +410,31 @@ _ejs_op_lt (ejsval lhs, ejsval rhs)
     }
 
     return _ejs_nan;
+}
+
+EJSBool
+_ejs_op_lt_ejsbool (ejsval lhs, ejsval rhs)
+{
+    if (EJSVAL_IS_NUMBER(lhs)) {
+        return EJSVAL_TO_NUMBER(lhs) < ToDouble (rhs);
+    }
+    else if (EJSVAL_IS_STRING(lhs)) {
+        ejsval rhs_string = ToString(rhs);
+        ejsval rhs_primStr;
+
+        if (EJSVAL_IS_STRING(rhs_string))
+            rhs_primStr = rhs_string;
+        else
+            rhs_primStr = ((EJSString*)EJSVAL_TO_STRING(rhs_string))->primStr;
+
+        return strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs_primStr)) < 0;
+    }
+    else {
+        // object+... how does js implement this anyway?
+        NOT_IMPLEMENTED();
+    }
+
+    return EJS_FALSE;
 }
 
 ejsval
@@ -400,7 +452,7 @@ _ejs_op_le (ejsval lhs, ejsval rhs)
         else
             rhs_primStr = ((EJSString*)EJSVAL_TO_OBJECT(rhs_string))->primStr;
 
-        return BOOLEAN_TO_EJSVAL (strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs_primStr)) <= 0);
+        return BOOLEAN_TO_EJSVAL (strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs_primStr)) <= 0);
     }
     else {
         // object+... how does js implement this anyway?
@@ -425,7 +477,7 @@ _ejs_op_gt (ejsval lhs, ejsval rhs)
         else
             rhs_primStr = ((EJSString*)EJSVAL_TO_OBJECT(rhs_string))->primStr;
 
-        return BOOLEAN_TO_EJSVAL (strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs_primStr)) > 0);
+        return BOOLEAN_TO_EJSVAL (strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs_primStr)) > 0);
     }
     else {
         // object+... how does js implement this anyway?
@@ -450,7 +502,7 @@ _ejs_op_ge (ejsval lhs, ejsval rhs)
         else
             rhs_primStr = ((EJSString*)EJSVAL_TO_OBJECT(rhs_string))->primStr;
 
-        return BOOLEAN_TO_EJSVAL (strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs_primStr)) >= 0);
+        return BOOLEAN_TO_EJSVAL (strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs_primStr)) >= 0);
     }
     else {
         // object+... how does js implement this anyway?
@@ -487,7 +539,7 @@ _ejs_op_strict_eq (ejsval lhs, ejsval rhs)
         return BOOLEAN_TO_EJSVAL (EJSVAL_IS_NUMBER(rhs) && EJSVAL_TO_NUMBER(lhs) == EJSVAL_TO_NUMBER(rhs));
     }
     else if (EJSVAL_IS_STRING(lhs)) {
-        return BOOLEAN_TO_EJSVAL (EJSVAL_IS_STRING(rhs) && !strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs)));
+        return BOOLEAN_TO_EJSVAL (EJSVAL_IS_STRING(rhs) && !strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs)));
     }
     else if (EJSVAL_IS_BOOLEAN(lhs)) {
         return BOOLEAN_TO_EJSVAL (EJSVAL_IS_BOOLEAN(rhs) && EJSVAL_TO_BOOLEAN(lhs) == EJSVAL_TO_BOOLEAN(rhs));
@@ -506,7 +558,7 @@ _ejs_op_strict_neq (ejsval lhs, ejsval rhs)
         return BOOLEAN_TO_EJSVAL (!EJSVAL_IS_NUMBER(rhs) || EJSVAL_TO_NUMBER(lhs) != EJSVAL_TO_NUMBER(rhs));
     }
     else if (EJSVAL_IS_STRING(lhs)) {
-        return BOOLEAN_TO_EJSVAL (!EJSVAL_IS_STRING(rhs) || strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhs)));
+        return BOOLEAN_TO_EJSVAL (!EJSVAL_IS_STRING(rhs) || strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs)));
     }
     else if (EJSVAL_IS_BOOLEAN(lhs)) {
         return BOOLEAN_TO_EJSVAL (!EJSVAL_IS_BOOLEAN(rhs) || EJSVAL_TO_BOOLEAN(lhs) != EJSVAL_TO_BOOLEAN(rhs));
@@ -534,7 +586,7 @@ _ejs_op_eq (ejsval lhs, ejsval rhs)
             eq = EJS_FALSE;
         else {
             ejsval rhstring = ToString(rhs);
-            eq = (!strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhstring)));
+            eq = (!strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhstring)));
         }
         return BOOLEAN_TO_EJSVAL(eq);
     }
@@ -563,7 +615,7 @@ _ejs_op_neq (ejsval lhs, ejsval rhs)
             neq = EJS_TRUE;
         else {
             ejsval rhstring = ToString(rhs);
-            neq = (strcmp (EJSVAL_TO_STRING(lhs), EJSVAL_TO_STRING(rhstring)));
+            neq = (strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhstring)));
         }
         return BOOLEAN_TO_EJSVAL (neq);
     }
@@ -636,5 +688,5 @@ _ejs_parseFloat (ejsval env, ejsval _this, int argc, ejsval* args)
 
     ejsval arg0 = ToString(args[0]);
 
-    return NUMBER_TO_EJSVAL (strtod (EJSVAL_TO_STRING(arg0), NULL));
+    return NUMBER_TO_EJSVAL (strtod (EJSVAL_TO_FLAT_STRING(arg0), NULL));
 }

@@ -9,9 +9,37 @@
 
 typedef double EJSPrimNumber;
 
+/* primitive strings can exist in a few different forms
+
+   1: a statically allocated C string that isn't freed when the primitive string is destroyed.
+      we use these for atoms - known strings in both the runtime and compiler.
+
+   2: strings that appear in JS source as string literals.  these are gc allocated, and the character
+      data is freed when the strnig is destroyed.
+
+   3: ropes built up by concatenating strings together.
+
+   4: dependent strings made by taking substrings/slices of other strings when the resulting string is "large"
+*/
+
+typedef enum {
+    EJS_STRING_FLAT,
+    EJS_STRING_ROPE
+} EJSPrimStringType;
+
 struct _EJSPrimString {
-    int len;
-    char data[1]; // utf8 \0 terminated
+    int type; // flat, rope, dependent
+    int length;
+    union {
+        // utf8 \0 terminated
+        //    for normal strings, this points to the memory location just beyond this struct - i.e. (char*)primStringPointer + sizeof(_EJSPrimString)
+        //    for atoms, this points to the statically compiled C string constant.
+        char *flat;
+        struct {
+            struct _EJSPrimString *left;
+            struct _EJSPrimString *right;
+        } rope;
+    } data;
 };
 
 #define EJSVAL_IS_PRIMITIVE(v) (EJSVAL_IS_NUMBER(v) || EJSVAL_IS_STRING(v) || EJSVAL_IS_BOOLEAN(v) || EJSVAL_IS_UNDEFINED(v))
@@ -29,8 +57,9 @@ struct _EJSPrimString {
 #define EJSVAL_IS_NULL(v)      EJSVAL_IS_NULL_IMPL(v)
 
 #define EJSVAL_TO_OBJECT(v)       EJSVAL_TO_OBJECT_IMPL(v)
-#define EJSVAL_TO_STRING(v)       EJSVAL_TO_STRING_IMPL(v)->data
-#define EJSVAL_TO_STRLEN(v)       EJSVAL_TO_STRING_IMPL(v)->len
+#define EJSVAL_TO_FLAT_STRING(v)  _ejs_string_flatten(v)->data.flat
+#define EJSVAL_TO_STRING(v)       EJSVAL_TO_STRING_IMPL(v)
+#define EJSVAL_TO_STRLEN(v)       EJSVAL_TO_STRING_IMPL(v)->length
 #define EJSVAL_TO_NUMBER(v)       v.asDouble
 #define EJSVAL_TO_BOOLEAN(v)      EJSVAL_TO_BOOLEAN_IMPL(v)
 #define EJSVAL_TO_FUNC(v)         ((EJSFunction*)EJSVAL_TO_OBJECT_IMPL(v))->func
@@ -52,6 +81,8 @@ void _ejs_dump_value (ejsval val);
 ejsval _ejs_number_new (double value);
 ejsval _ejs_string_new_utf8 (const char* str);
 ejsval _ejs_string_new_utf8_len (const char* str, int len);
+ejsval _ejs_string_concat (ejsval left, ejsval right);
+EJSPrimString* _ejs_string_flatten (ejsval str);
 
 void _ejs_value_finalize(ejsval val);
 

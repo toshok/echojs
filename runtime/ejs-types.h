@@ -7,8 +7,13 @@
 
 typedef unsigned char uint8_t;
 
+typedef int int32_t;
 typedef unsigned int uint32_t;
 typedef unsigned long long uint64_t;
+
+typedef int32_t jsint;
+typedef uint32_t jsuint;
+typedef double jsdouble;
 
 #if defined(__GNUC__) && (__GNUC__ > 2)
 # define EJS_LIKELY(x)   (__builtin_expect((x), 1))

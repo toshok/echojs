@@ -98,7 +98,7 @@ _ejs_arguments_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr)
 
     // we also handle the length getter here
     if ((isCStr && !strcmp("length", (char*)EJSVAL_TO_PRIVATE_PTR_IMPL(propertyName)))
-        || (!isCStr && EJSVAL_IS_STRING(propertyName) && !strcmp ("length", EJSVAL_TO_STRING(propertyName)))) {
+        || (!isCStr && EJSVAL_IS_STRING(propertyName) && !strcmp ("length", EJSVAL_TO_FLAT_STRING(propertyName)))) {
         return NUMBER_TO_EJSVAL(arguments->argc);
     }
 

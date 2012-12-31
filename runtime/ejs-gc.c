@@ -23,9 +23,6 @@
 
 #define PAGE_SIZE 4096
 
-// a 4 meg heap
-#define INITIAL_HEAP_SIZE 4 * 1024 * 1024
-
 #define OBJ_TO_PAGE(o) ((o) & ~PAGE_SIZE)
 
 #define ALLOC_ALIGN 16
@@ -216,18 +213,8 @@ dealloc_page(char* page_addr)
 void
 _ejs_gc_init()
 {
-    // XXX todo preallocate a number of pages of proper sizes
-
+    // XXX todo preallocate a number of pages
     memset (heap_pages, 0, sizeof(heap_pages));
-#if notyet
-    // allocate our initial heap
-    for (int i = 0; i < INITIAL_HEAP_SIZE / PAGE_SIZE; i ++) {
-        PageInfo *info = alloc_page();
-        EJS_LIST_ATTACH(info, heap_pages);
-    }
-#else
-#endif
-
     work_list = NULL;
     root_set = NULL;
 }
@@ -371,51 +358,13 @@ mark_in_range(char* low, char* high)
     }
 }
 
+static int num_roots = 0;
+static int white_objs = 0;
+static int total_objs = 0;
+
 static void
-_ejs_gc_collect_inner(EJSBool shutting_down)
+sweep_heap()
 {
-#if CONSERVATIVE_STACKWALK
-    GCObjectPtr stack_top = NULL;
-#endif
-
-    // very simple stop the world collector
-
-    int num_roots = 0;
-    int white_objs = 0;
-    int total_objs = 0;
-
-    if (!shutting_down) {
-        // mark from our roots
-        for (RootSetEntry *entry = root_set; entry; entry = entry->next) {
-            num_roots++;
-            if (*entry->root) {
-                ejsval rootval = *((ejsval*)entry->root);
-                if (!EJSVAL_IS_GCTHING_IMPL(rootval))
-                    continue;
-                GCObjectPtr root_ptr = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(rootval);
-                if (root_ptr == NULL)
-                    continue;
-                set_black (root_ptr);
-                if (EJSVAL_IS_OBJECT(rootval)) {
-                    _scan_from_ejsobject(root_ptr);
-                }
-            }
-        }
-
-#if CONSERVATIVE_STACKWALK
-        mark_in_range(((char*)&stack_top) + sizeof(GCObjectPtr), (char*)stack_bottom);
-#else
-        mark_from_shadow_stack();
-#endif
-
-        GCObjectPtr p;
-        while ((p = pop_from_worklist())) {
-            _scan_from_ejsobject(p);
-        }
-
-        total_objs = num_roots;
-    }
-
     // sweep the entire heap, freeing white nodes
     for (int hp = 0; hp < HEAP_PAGELISTS_COUNT; hp++) {
         for (PageInfo *info = heap_pages[hp]; info; info = info->next) {
@@ -440,13 +389,75 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
             }
         }
     }
+}
+
+static void
+mark_from_roots()
+{
+    // mark from our roots
+    for (RootSetEntry *entry = root_set; entry; entry = entry->next) {
+        num_roots++;
+        if (*entry->root) {
+            ejsval rootval = *((ejsval*)entry->root);
+            if (!EJSVAL_IS_GCTHING_IMPL(rootval))
+                continue;
+            GCObjectPtr root_ptr = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(rootval);
+            if (root_ptr == NULL)
+                continue;
+            set_black (root_ptr);
+            if (EJSVAL_IS_OBJECT(rootval)) {
+                _scan_from_ejsobject(root_ptr);
+            }
+        }
+    }
+}
+
+static void
+mark_thread_stack()
+{
+#if CONSERVATIVE_STACKWALK
+    GCObjectPtr stack_top = NULL;
+#endif
+
+#if CONSERVATIVE_STACKWALK
+        mark_in_range(((char*)&stack_top) + sizeof(GCObjectPtr), (char*)stack_bottom);
+#else
+        mark_from_shadow_stack();
+#endif
+}
+
+static void
+process_worklist()
+{
+    GCObjectPtr p;
+    while ((p = pop_from_worklist())) {
+        _scan_from_ejsobject(p);
+    }
+}
+
+static void
+_ejs_gc_collect_inner(EJSBool shutting_down)
+{
+    // very simple stop the world collector
+
+    if (!shutting_down) {
+        mark_from_roots();
+
+        total_objs = num_roots;
+
+        mark_thread_stack();
+
+        process_worklist();
+    }
+
+    sweep_heap();
 
     SPEW(printf ("_ejs_gc_collect stats:\n");
          printf ("   num_roots: %d\n", num_roots);
          printf ("   total objects: %d\n", total_objs);
          printf ("   garbage objects: %d\n", white_objs);)
 
-        unsigned int tmp = black_mask;
+    unsigned int tmp = black_mask;
     black_mask = white_mask;
     white_mask = tmp;
 
@@ -490,15 +501,16 @@ _ejs_gc_collect()
     _ejs_gc_collect_inner(EJS_FALSE);
 }
 
+int total_allocs = 0;
+
 void
 _ejs_gc_shutdown()
 {
     _ejs_gc_collect_inner(EJS_TRUE);
+    printf ("total allocs = %d\n", total_allocs);
 }
 
-size_t alloced_size;
-
-int next_power_of_two(int x, int *bits)
+static inline int next_power_of_two(int x, int *bits)
 {
     int n = 1 << (OBJECT_SIZE_LOW_LIMIT_BITS-1);
     *bits = OBJECT_SIZE_LOW_LIMIT_BITS;
@@ -541,7 +553,9 @@ GCObjectPtr
 _ejs_gc_alloc(size_t size, EJSBool has_finalizer)
 {
     num_allocs ++;
-    if (num_allocs == 50) {
+    total_allocs ++;
+
+    if (num_allocs == 10000) {
         _ejs_gc_collect();
         num_allocs = 0;
     }

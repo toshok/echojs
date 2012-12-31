@@ -21,34 +21,44 @@
 #include "ejs-function.h"
 #include "ejs-uri.h"
 
-ejsval _ejs_undefined;
-ejsval _ejs_nan;
-ejsval _ejs_null;
-ejsval _ejs_true;
-ejsval _ejs_false;
+const ejsval _ejs_undefined = STATIC_BUILD_EJSVAL(EJSVAL_TAG_UNDEFINED, 0);
+const ejsval _ejs_nan = STATIC_BUILD_EJSVAL(0, 0x40be360000000000);
+const ejsval _ejs_null = STATIC_BUILD_EJSVAL(EJSVAL_TAG_NULL, 0);
+const ejsval _ejs_true = STATIC_BUILD_BOOLEAN_EJSVAL(EJS_TRUE);
+const ejsval _ejs_false = STATIC_BUILD_BOOLEAN_EJSVAL(EJS_FALSE);
+const ejsval _ejs_zero = STATIC_BUILD_DOUBLE_EJSVAL(0);
+const ejsval _ejs_one = STATIC_BUILD_DOUBLE_EJSVAL(1);
 
 ejsval _ejs_global;
 
 
 /* useful strings literals */
-ejsval _ejs_length;
+#define EJS_ATOM(atom) static const EJSPrimString _ejs_string_##atom = { .type = EJS_STRING_FLAT, .length = sizeof(EJS_STRINGIFY(atom))-1, .data = { .flat = EJS_STRINGIFY(atom) }}; ejsval _ejs_atom_##atom;
+#include "ejs-atoms.h"
+#undef EJS_ATOM
+static const EJSPrimString _ejs_string_empty = { .type = EJS_STRING_FLAT, .length = 0, .data = { .flat = "" }};
+ejsval _ejs_atom_empty;
+
+static void
+_ejs_init_static_strings()
+{
+#define EJS_ATOM(atom) _ejs_atom_##atom = STRING_TO_EJSVAL((EJSPrimString*)&_ejs_string_##atom); _ejs_gc_add_named_root (_ejs_atom_##atom); //STATIC_BUILD_EJSVAL(EJSVAL_TAG_STRING, (uintptr_t)&_ejs_string_##atom);
+#include "ejs-atoms.h"
+#undef EJS_ATOM
+    _ejs_atom_empty = STRING_TO_EJSVAL((EJSPrimString*)&_ejs_string_empty); _ejs_gc_add_named_root (_ejs_atom_empty); //STATIC_BUILD_EJSVAL(EJSVAL_TAG_STRING, (uintptr_t)&_ejs_string_empty);
+}
 
 void
 _ejs_init(int argc, char** argv)
 {
     // initialize our constants before anything else
-    _ejs_null = BUILD_EJSVAL(EJSVAL_TAG_NULL, 0);
-    _ejs_undefined = BUILD_EJSVAL(EJSVAL_TAG_UNDEFINED, 0);
-    _ejs_nan = NUMBER_TO_EJSVAL(nan("7734"));
-    _ejs_true = BOOLEAN_TO_EJSVAL(EJS_TRUE);
-    _ejs_false = BOOLEAN_TO_EJSVAL(EJS_FALSE);
-
     START_SHADOW_STACK_FRAME;
+
+    _ejs_init_static_strings();
 
     _ejs_gc_init();
 
-    _ejs_gc_add_named_root (_ejs_length);
-    _ejs_length = _ejs_string_new_utf8 ("length");
+
 
     _ejs_gc_add_named_root (_ejs_global);
 

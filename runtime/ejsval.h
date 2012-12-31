@@ -394,6 +394,8 @@ EJS_STATIC_ASSERT(sizeof(ejsval_layout) == 8);
 
 #if EJS_BITS_PER_WORD == 32
 
+#define STATIC_BUILD_EJSVAL(tag, payload) { .asBits = (((uint64_t)(uint32_t)tag) << 32) | payload }
+
 /*
  * N.B. GCC, in some but not all cases, chooses to emit signed comparison of
  * EJSValueTag even though its underlying type has been forced to be uint32_t.
@@ -644,6 +646,10 @@ EJSVAL_EXTRACT_NON_DOUBLE_TYPE_IMPL(ejsval_layout l)
 }
 
 #elif EJS_BITS_PER_WORD == 64
+
+#define STATIC_BUILD_EJSVAL(tag, v) { .asBits = (((uint64_t)(uint32_t)tag) << EJSVAL_TAG_SHIFT) | v }
+#define STATIC_BUILD_DOUBLE_EJSVAL(v) { .asDouble = v }
+#define STATIC_BUILD_BOOLEAN_EJSVAL(b) { .asBits = ((uint64_t)(uint32_t)b) | EJSVAL_SHIFTED_TAG_BOOLEAN }
 
 static EJS_ALWAYS_INLINE ejsval_layout
 BUILD_EJSVAL(EJSValueTag tag, uint64_t payload)

@@ -75,7 +75,7 @@ _ejs_String_prototype_toString (ejsval env, ejsval _this, int argc, ejsval *args
 {
     EJSString *str = (EJSString*)EJSVAL_TO_OBJECT(_this);
 
-    return _ejs_string_new_utf8 (EJSVAL_TO_STRING(str->primStr));
+    return _ejs_string_new_utf8 (EJSVAL_TO_FLAT_STRING(str->primStr));
 }
 
 static ejsval
@@ -94,11 +94,11 @@ _ejs_String_prototype_replace (ejsval env, ejsval _this, int argc, ejsval *args)
     else {
         ejsval searchValueStr = ToString(searchValue);
         ejsval replaceValueStr = ToString(replaceValue);
-        char *p = strstr (EJSVAL_TO_STRING(thisStr), EJSVAL_TO_STRING(searchValueStr));
+        char *p = strstr (EJSVAL_TO_FLAT_STRING(thisStr), EJSVAL_TO_FLAT_STRING(searchValueStr));
         if (p == NULL)
             return _this;
         else {
-            int len1 = p - EJSVAL_TO_STRING(thisStr);
+            int len1 = p - EJSVAL_TO_FLAT_STRING(thisStr);
             int len2 = EJSVAL_TO_STRLEN(replaceValueStr);
             int len3 = strlen(p + EJSVAL_TO_STRLEN(searchValueStr));
 
@@ -109,8 +109,8 @@ _ejs_String_prototype_replace (ejsval env, ejsval _this, int argc, ejsval *args)
 
             char* result = (char*)calloc(new_len, 1);
             char*p = result;
-            strncpy (p, EJSVAL_TO_STRING(thisStr), len1); p += len1;
-            strcpy (p, EJSVAL_TO_STRING(replaceValueStr)); p += len2;
+            strncpy (p, EJSVAL_TO_FLAT_STRING(thisStr), len1); p += len1;
+            strcpy (p, EJSVAL_TO_FLAT_STRING(replaceValueStr)); p += len2;
             strcpy (p, p + EJSVAL_TO_STRLEN(searchValueStr));
 
             ejsval rv = _ejs_string_new_utf8 (result);
@@ -142,7 +142,7 @@ _ejs_String_prototype_charAt (ejsval env, ejsval _this, int argc, ejsval *args)
         return _ejs_string_new_utf8 ("");
 
     char c[2];
-    c[0] = EJSVAL_TO_STRING(primStr)[idx];
+    c[0] = EJSVAL_TO_FLAT_STRING(primStr)[idx];
     c[1] = '\0';
     return _ejs_string_new_utf8 (c);
 }
@@ -168,7 +168,7 @@ _ejs_String_prototype_charCodeAt (ejsval env, ejsval _this, int argc, ejsval *ar
     if (idx < 0 || idx >= EJSVAL_TO_STRLEN(primStr))
         return _ejs_nan;
 
-    return NUMBER_TO_EJSVAL (EJSVAL_TO_STRING(primStr)[idx]);
+    return NUMBER_TO_EJSVAL (EJSVAL_TO_FLAT_STRING(primStr)[idx]);
 }
 
 static ejsval
@@ -187,19 +187,19 @@ _ejs_String_prototype_indexOf (ejsval env, ejsval _this, int argc, ejsval *args)
     ejsval haystack = ToString(_this);
     char* haystack_cstr;
     if (EJSVAL_IS_STRING(haystack)) {
-        haystack_cstr = EJSVAL_TO_STRING(haystack);
+        haystack_cstr = EJSVAL_TO_FLAT_STRING(haystack);
     }
     else {
-        haystack_cstr = EJSVAL_TO_STRING(((EJSString*)EJSVAL_TO_OBJECT(haystack))->primStr);
+        haystack_cstr = EJSVAL_TO_FLAT_STRING(((EJSString*)EJSVAL_TO_OBJECT(haystack))->primStr);
     }
 
     ejsval needle = ToString(args[0]);
     char *needle_cstr;
     if (EJSVAL_IS_STRING(needle)) {
-        needle_cstr = EJSVAL_TO_STRING(needle);
+        needle_cstr = EJSVAL_TO_FLAT_STRING(needle);
     }
     else {
-        needle_cstr = EJSVAL_TO_STRING(((EJSString*)EJSVAL_TO_OBJECT(needle))->primStr);
+        needle_cstr = EJSVAL_TO_FLAT_STRING(((EJSString*)EJSVAL_TO_OBJECT(needle))->primStr);
     }
   
     char* p = strstr(haystack_cstr, needle_cstr);
@@ -314,7 +314,7 @@ _ejs_String_prototype_slice (ejsval env, ejsval _this, int argc, ejsval *args)
     int span = MAX(to - from, 0);
 
     // Return a String containing span consecutive characters from S beginning with the character at position from.
-    return _ejs_string_new_utf8_len (EJSVAL_TO_STRING(S), span);
+    return _ejs_string_new_utf8_len (EJSVAL_TO_FLAT_STRING(S), span);
 }
 
 void
@@ -328,7 +328,7 @@ _ejs_string_init(ejsval global)
     ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "String", (EJSClosureFunc)_ejs_String_impl));
     _ejs_String = tmpobj;
 
-    _ejs_object_setprop_utf8 (_ejs_String,       "prototype",  _ejs_String_proto);
+    _ejs_object_setprop (_ejs_String,       _ejs_atom_prototype,  _ejs_String_proto);
 
 #define OBJ_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_String_##x)); _ejs_object_setprop (_ejs_String, funcname, tmpfunc); EJS_MACRO_END
 #define PROTO_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_String_prototype_##x)); _ejs_object_setprop (_ejs_String_proto, funcname, tmpfunc); EJS_MACRO_END
@@ -380,14 +380,14 @@ _ejs_string_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr)
         if (idx < 0 || idx > EJSVAL_TO_STRLEN(estr->primStr))
             return _ejs_undefined;
         char c[2];
-        c[0] = EJSVAL_TO_STRING(estr->primStr)[idx];
+        c[0] = EJSVAL_TO_FLAT_STRING(estr->primStr)[idx];
         c[1] = '\0';
         return _ejs_string_new_utf8 (c);
     }
 
     // we also handle the length getter here
     if ((isCStr && !strcmp("length", (char*)EJSVAL_TO_PRIVATE_PTR_IMPL(propertyName)))
-        || (!isCStr && EJSVAL_IS_STRING(propertyName) && !strcmp ("length", EJSVAL_TO_STRING(propertyName)))) {
+        || (!isCStr && EJSVAL_IS_STRING(propertyName) && !strcmp ("length", EJSVAL_TO_FLAT_STRING(propertyName)))) {
         return NUMBER_TO_EJSVAL (EJSVAL_TO_STRLEN(estr->primStr));
     }
 

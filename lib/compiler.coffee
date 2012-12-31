@@ -206,6 +206,11 @@ class LLVMIRVisitor extends NodeVisitor
                         "true":                module.getOrInsertGlobal           "_ejs_true",                      EjsValueType
                         "false":               module.getOrInsertGlobal           "_ejs_false",                     EjsValueType
                         "null":                module.getOrInsertGlobal           "_ejs_null",                      EjsValueType
+                        "one":                 module.getOrInsertGlobal           "_ejs_one",                       EjsValueType
+                        "zero":                module.getOrInsertGlobal           "_ejs_zero",                      EjsValueType
+                        "atom-length":         module.getOrInsertGlobal           "_ejs_atom_length",               EjsValueType
+                        "atom-object":         module.getOrInsertGlobal           "_ejs_atom_object",               EjsValueType
+                        "atom-function":       module.getOrInsertGlobal           "_ejs_atom_function",             EjsValueType
                         global:                module.getOrInsertGlobal           "_ejs_global",                    EjsValueType
                         exception_typeinfo:    module.getOrInsertGlobal           "EJS_EHTYPE_ejsvalue",            EjsExceptionTypeInfoType
                         
@@ -220,7 +225,7 @@ class LLVMIRVisitor extends NodeVisitor
                         "binop>>":         module.getOrInsertExternalFunction "_ejs_op_rsh",         EjsValueType, [EjsValueType, EjsValueType]
                         "binop>>>":        module.getOrInsertExternalFunction "_ejs_op_ursh",        EjsValueType, [EjsValueType, EjsValueType]
                         "binop%":          module.getOrInsertExternalFunction "_ejs_op_mod",         EjsValueType, [EjsValueType, EjsValueType]
-                        "binop+":          module.getOrInsertExternalFunction "_ejs_op_add",         EjsValueType, [EjsValueType, EjsValueType]
+                        "binop+":          only_reads_memory module.getOrInsertExternalFunction "_ejs_op_add",         EjsValueType, [EjsValueType, EjsValueType]
                         "binop*":          module.getOrInsertExternalFunction "_ejs_op_mult",        EjsValueType, [EjsValueType, EjsValueType]
                         "binop/":          module.getOrInsertExternalFunction "_ejs_op_div",         EjsValueType, [EjsValueType, EjsValueType]
                         "binop<":          only_reads_memory module.getOrInsertExternalFunction "_ejs_op_lt",          EjsValueType, [EjsValueType, EjsValueType]
@@ -598,17 +603,15 @@ class LLVMIRVisitor extends NodeVisitor
         visitUpdateExpression: (n) ->
                 result = @createAlloca @currentFunction, EjsValueType, "%update_result"
                 argument = @visit n.argument
-                one = @createAlloca @currentFunction, EjsValueType, "one"
-                call = @createCall @ejs.number_new, [llvm.ConstantFP.getDouble 1], "numtmp"
-                call.setOnlyReadsMemory()
-                irbuilder.createStore call, one
+                
+                one = irbuilder.createLoad @ejs['one'], "load_one"
                 
                 if not n.prefix
                         # postfix updates store the argument before the op
                         irbuilder.createStore argument, result
 
                 # argument = argument $op 1
-                temp = @createCall @ejs["binop#{if n.operator is '++' then '+' else '-'}"], [argument, (irbuilder.createLoad one, "load_one")], "update_temp"
+                temp = @createCall @ejs["binop#{if n.operator is '++' then '+' else '-'}"], [argument, one], "update_temp"
                 
                 @storeValueInDest temp, n.argument
                 
@@ -808,7 +811,7 @@ class LLVMIRVisitor extends NodeVisitor
                 ir_func.topScope = new_scope
                 ir_func.entry_bb = entry_bb
 
-                ir_func.stringLiteralAllocas = {}
+                ir_func.literalAllocas = {}
 
                 allocas = []
 
@@ -927,14 +930,21 @@ class LLVMIRVisitor extends NodeVisitor
                 if not callee
                         throw "Internal error: unhandled binary operator '#{n.operator}'"
 
-                left_visited = @createAlloca @currentFunction, EjsValueType, "binop_left"
-                irbuilder.createStore (@visit n.left), left_visited
+                left_alloca = @createAlloca @currentFunction, EjsValueType, "binop_left"
+                left_visited = @visit n.left
+                irbuilder.createStore left_visited, left_alloca
                 
-                right_visited = @createAlloca @currentFunction, EjsValueType, "binop_right"
-                irbuilder.createStore (@visit n.right), right_visited
-                
+                right_alloca = @createAlloca @currentFunction, EjsValueType, "binop_right"
+                right_visited = @visit n.right
+                irbuilder.createStore right_visited, right_alloca
+
+                if left_visited.literal? and right_visited.literal?
+                        if typeof left_visited.literal.value is "number" and typeof right_visited.literal.value is "number"
+                                if n.operator is "<"
+                                        return @loadBoolEjsValue left_visited.literal.value < right_visited.literal.value
+                                        
                 # call the add method
-                @createCall callee, [(irbuilder.createLoad left_visited, "binop_left_load"), (irbuilder.createLoad right_visited, "binop_right_load")], "result_#{builtin}"
+                @createCall callee, [(irbuilder.createLoad left_alloca, "binop_left_load"), (irbuilder.createLoad right_alloca, "binop_right_load")], "result_#{builtin}"
 
         visitLogicalExpression: (n) ->
                 debug.log "operator = '#{n.operator}'"
@@ -1151,21 +1161,30 @@ class LLVMIRVisitor extends NodeVisitor
                         return @loadNullEjsValue() # this isn't properly typed...  dunno what to do about this here
                 else if typeof n.raw is "string" and (n.raw[0] is '"' or n.raw[0] is "'")
                         debug.log "literal string: #{n.value}"
-                        if @currentFunction.stringLiteralAllocas[n.value]?
-                                str_alloca = @currentFunction.stringLiteralAllocas[n.value]
-                        else
-                                # only create 1 instance of string literals used in a function, and allocate them in the entry block
-                                insertBlock = irbuilder.getInsertBlock()
 
-                                irbuilder.setInsertPoint @currentFunction.entry_bb
-                                str_alloca = irbuilder.createAlloca EjsValueType, "str-alloca-#{n.value}"
-                                c = irbuilder.createGlobalStringPtr n.value, "strconst"
-                                irbuilder.createStore (@createCall @ejs.string_new_utf8, [c], "strtmp"), str_alloca
-                                @currentFunction.stringLiteralAllocas[n.value] = str_alloca
+                        # check if it's an atom first of all
+                        atom_name = "atom-#{n.value}"
+                        if @ejs[atom_name]?
+                                strload = irbuilder.createLoad @ejs[atom_name], "%str_atom_load"
+                        else
+                                # if it isn't an atom, make sure we only allocate it once per function entry
+                                literal_key = "string-" + n.value
+                                if @currentFunction.literalAllocas[literal_key]
+                                        str_alloca = @currentFunction.literalAllocas[literal_key]
+                                else
+                                        # only create 1 instance of string literals used in a function, and allocate them in the entry block
+                                        insertBlock = irbuilder.getInsertBlock()
+
+                                        irbuilder.setInsertPoint @currentFunction.entry_bb
+                                        str_alloca = irbuilder.createAlloca EjsValueType, "str-alloca-#{n.value}"
+                                        c = irbuilder.createGlobalStringPtr n.value, "strconst"
+                                        irbuilder.createStore (@createCall @ejs.string_new_utf8, [c], "strtmp"), str_alloca
+                                        @currentFunction.literalAllocas[literal_key] = str_alloca
                                 
-                                irbuilder.setInsertPoint insertBlock
+                                        irbuilder.setInsertPoint insertBlock
                                 
-                        strload = irbuilder.createLoad str_alloca, "%prop_alloca"
+                                strload = irbuilder.createLoad str_alloca, "%str_alloca"
+                        strload.literal = n
                         debug.log "strload = #{strload}"
                         return strload
                 else if typeof n.raw is "string" and n.raw[0] is '/'
@@ -1176,10 +1195,32 @@ class LLVMIRVisitor extends NodeVisitor
                         return regexpcall
                 else if typeof n.value is "number"
                         debug.log "literal number: #{n.value}"
-                        c = llvm.ConstantFP.getDouble n.value
-                        call = @createCall @ejs.number_new, [c], "numtmp"
-                        call.setOnlyReadsMemory()
-                        return call
+                        if n.value is 0
+                                numload = irbuilder.createLoad @ejs['zero'], "load_zero"
+                        else if n.value is 1
+                                numload = irbuilder.createLoad @ejs['one'], "load_one"
+                        else
+                                literal_key = "num-" + n.value
+                                if @currentFunction.literalAllocas[literal_key]
+                                        num_alloca = @currentFunction.literalAllocas[literal_key]
+                                else
+                                        # only create 1 instance of num literals used in a function, and allocate them in the entry block
+                                        insertBlock = irbuilder.getInsertBlock()
+
+                                        irbuilder.setInsertPoint @currentFunction.entry_bb
+                                        num_alloca = irbuilder.createAlloca EjsValueType, "num-alloca-#{n.value}"
+                                        c = llvm.ConstantFP.getDouble n.value
+                                        call = @createCall @ejs.number_new, [c], "numconst-#{n.value}"
+                                        call.setOnlyReadsMemory()
+                                        irbuilder.createStore call, num_alloca
+                                        @currentFunction.literalAllocas[literal_key] = num_alloca
+                                        
+                                        irbuilder.setInsertPoint insertBlock
+                                
+                                numload = irbuilder.createLoad num_alloca, "%num_alloca"
+                        numload.literal = n
+                        debug.log "numload = #{numload}"
+                        return numload
                 else if typeof n.value is "boolean"
                         debug.log "literal boolean: #{n.value}"
                         return @loadBoolEjsValue n.value

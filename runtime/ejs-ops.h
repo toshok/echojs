@@ -28,6 +28,7 @@ ejsval _ejs_op_mod (ejsval lhs, ejsval rhs);
 ejsval _ejs_op_add (ejsval lhs, ejsval rhs);
 ejsval _ejs_op_mult (ejsval lhs, ejsval rhs);
 ejsval _ejs_op_lt (ejsval lhs, ejsval rhs);
+EJSBool _ejs_op_lt_ejsbool (ejsval lhs, ejsval rhs);
 ejsval _ejs_op_le (ejsval lhs, ejsval rhs);
 ejsval _ejs_op_gt (ejsval lhs, ejsval rhs);
 ejsval _ejs_op_ge (ejsval lhs, ejsval rhs);

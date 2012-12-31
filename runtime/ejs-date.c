@@ -134,7 +134,7 @@ _ejs_date_init(ejsval global)
     ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "Date", (EJSClosureFunc)_ejs_Date_impl));
     _ejs_Date = tmpobj;
 
-    _ejs_object_setprop_utf8 (_ejs_Date,       "prototype",  _ejs_Date_proto);
+    _ejs_object_setprop (_ejs_Date,       _ejs_atom_prototype,  _ejs_Date_proto);
 
 #define OBJ_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Date_##x)); _ejs_object_setprop (_ejs_Date, funcname, tmpfunc); EJS_MACRO_END
 #define PROTO_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Date_prototype_##x)); _ejs_object_setprop (_ejs_Date_proto, funcname, tmpfunc); EJS_MACRO_END

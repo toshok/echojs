@@ -99,7 +99,7 @@ _ejs_Function_prototype_toString (ejsval env, ejsval _this, int argc, ejsval *ar
     // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(_this));
     EJSFunction* func = (EJSFunction*)EJSVAL_TO_OBJECT(_this);
 
-    snprintf (terrible_fixed_buffer, sizeof (terrible_fixed_buffer), "[Function: %s]", EJSVAL_TO_STRING(func->name));
+    snprintf (terrible_fixed_buffer, sizeof (terrible_fixed_buffer), "[Function: %s]", EJSVAL_TO_FLAT_STRING(func->name));
     return _ejs_string_new_utf8(terrible_fixed_buffer);
 }
 
@@ -165,9 +165,9 @@ _ejs_function_init(ejsval global)
     _ejs_Function = tmpobj;
 
     // ECMA262 15.3.3.1
-    _ejs_object_setprop_utf8 (_ejs_Function,       "prototype",  _ejs_Function_proto); // FIXME:  { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }.
+    _ejs_object_setprop (_ejs_Function,       _ejs_atom_prototype,  _ejs_Function_proto); // FIXME:  { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }.
     // ECMA262 15.3.3.2
-    _ejs_object_setprop (_ejs_Function,       _ejs_length,     NUMBER_TO_EJSVAL(1)); // FIXME:  { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }.
+    _ejs_object_setprop (_ejs_Function,       _ejs_atom_length,     NUMBER_TO_EJSVAL(1)); // FIXME:  { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }.
 
 #define OBJ_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Function_##x)); _ejs_object_setprop (_ejs_Function, funcname, tmpfunc); EJS_MACRO_END
 #define PROTO_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Function_prototype_##x)); _ejs_object_setprop (_ejs_Function_proto, funcname, tmpfunc); EJS_MACRO_END

@@ -19,7 +19,7 @@ output (FILE *outfile, int argc, ejsval *args)
         else {
             ADD_STACK_ROOT(ejsval, strval, ToString(args[0]));
 
-            fprintf (outfile, "%s\n", EJSVAL_TO_STRING(strval));
+            fprintf (outfile, "%s\n", EJSVAL_TO_FLAT_STRING(strval));
         }
     }
 

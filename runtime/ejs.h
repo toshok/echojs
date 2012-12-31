@@ -20,7 +20,11 @@
 #define EJS_MACRO_START do {
 #define EJS_MACRO_END } while (0)
 
-typedef char EJSBool;
+#define EJS_STRINGIFY(x) #x
+
+#include "ejs-types.h"
+
+typedef int32_t EJSBool;
 typedef struct _EJSContext* EJSContext;
 
 #define EJS_TRUE 1
@@ -39,8 +43,6 @@ typedef struct _EJSContext* EJSContext;
     abort();                                                \
     EJS_MACRO_END
 
-#include "ejs-types.h"
-
 typedef struct _EJSPrimString EJSPrimString;
 typedef struct _EJSObject EJSObject;
 
@@ -49,12 +51,19 @@ typedef struct _EJSObject EJSObject;
 
 void _ejs_init(int argc, char** argv);
 
-extern ejsval _ejs_undefined;
-extern ejsval _ejs_null;
-extern ejsval _ejs_nan;
-extern ejsval _ejs_true;
-extern ejsval _ejs_false;
+extern const ejsval _ejs_undefined;
+extern const ejsval _ejs_null;
+extern const ejsval _ejs_nan;
+extern const ejsval _ejs_true;
+extern const ejsval _ejs_false;
+extern const ejsval _ejs_zero;
+extern const ejsval _ejs_one;
+extern const ejsval _ejs_false;
 extern ejsval _ejs_global;
-extern ejsval _ejs_length;
+
+#define EJS_ATOM(atom) extern ejsval _ejs_atom_##atom;
+#include "ejs-atoms.h"
+#undef EJS_ATOM
+extern ejsval _ejs_atom_empty;
 
 #endif // _ejs_h_
