@@ -18,9 +18,9 @@ typedef struct {
 
 EJS_BEGIN_DECLS
 
-extern ejsval _ejs_Arguments;
+extern ejsval _ejs_Arguments_proto;
+extern EJSSpecOps _ejs_arguments_specops;
 
-ejsval _ejs_arguments_get_prototype();
 EJSObject* _ejs_arguments_alloc_instance();
 
 void _ejs_arguments_init(ejsval global);
