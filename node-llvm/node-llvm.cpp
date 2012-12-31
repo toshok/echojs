@@ -2,6 +2,7 @@
 #include "type.h"
 #include "functiontype.h"
 #include "structtype.h"
+#include "arraytype.h"
 #include "value.h"
 #include "function.h"
 #include "basicblock.h"
@@ -28,6 +29,7 @@ extern "C" {
     jsllvm::Type::Init(target);
     jsllvm::FunctionType::Init(target);
     jsllvm::StructType::Init(target);
+    jsllvm::ArrayType::Init(target);
     jsllvm::Value::Init(target);
     jsllvm::Function::Init(target);
     jsllvm::BasicBlock::Init(target);

@@ -46,6 +46,7 @@ namespace jsllvm {
 
     friend class FunctionType;
     friend class StructType;
+    friend class ArrayType;
   };
 
 };
