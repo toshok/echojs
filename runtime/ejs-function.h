@@ -11,7 +11,7 @@
 // for now we just build environments out of EJS objects
 typedef ejsval EJSClosureEnv;
 
-typedef ejsval (*EJSClosureFunc) (ejsval env, ejsval _this, int argc, ejsval* args);
+typedef ejsval (*EJSClosureFunc) (EJSClosureEnv env, ejsval _this, int argc, ejsval* args);
 
 
 
