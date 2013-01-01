@@ -12,6 +12,7 @@
 #include "ejs-console.h"
 #include "ejs-date.h"
 #include "ejs-function.h"
+#include "ejs-json.h"
 #include "ejs-math.h"
 #include "ejs-number.h"
 #include "ejs-object.h"
@@ -83,6 +84,7 @@ _ejs_init(int argc, char** argv)
     _ejs_console_init(_ejs_global);
     _ejs_process_init(_ejs_global, argc, argv);
 
+    _ejs_json_init(_ejs_global);
     _ejs_math_init(_ejs_global);
 
 #define GLOBAL_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, name, _ejs_string_new_utf8 (#x)); _ejs_object_setprop (_ejs_global, name, _ejs_function_new (_ejs_null, name, (EJSClosureFunc)_ejs_##x)); EJS_MACRO_END

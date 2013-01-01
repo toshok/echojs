@@ -9,6 +9,7 @@ SOURCES= \
 	ejs-function.c \
 	ejs-gc.c \
 	ejs-init.c \
+	ejs-json.c \
 	ejs-math.c \
 	ejs-number.c \
 	ejs-object.c \
