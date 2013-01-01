@@ -199,6 +199,13 @@ _ejs_op_not (ejsval exp)
 }
 
 ejsval
+_ejs_op_bitwise_not (ejsval val)
+{
+    int val_int = ToInteger(val);
+    return NUMBER_TO_EJSVAL (~val_int);
+}
+
+ejsval
 _ejs_op_void (ejsval exp)
 {
     return _ejs_undefined;
@@ -261,6 +268,14 @@ _ejs_op_mod (ejsval lhs, ejsval rhs)
 }
 
 ejsval
+_ejs_op_bitwise_xor (ejsval lhs, ejsval rhs)
+{
+    int lhs_int = ToInteger(lhs);
+    int rhs_int = ToInteger(rhs);
+    return NUMBER_TO_EJSVAL (lhs_int ^ rhs_int);
+}
+
+ejsval
 _ejs_op_bitwise_and (ejsval lhs, ejsval rhs)
 {
     int lhs_int = ToInteger(lhs);
@@ -306,6 +321,54 @@ _ejs_op_ursh (ejsval lhs, ejsval rhs)
     if (EJSVAL_IS_NUMBER(lhs)) {
         if (EJSVAL_IS_NUMBER(rhs)) {
             return NUMBER_TO_EJSVAL ((unsigned int)((unsigned int)EJSVAL_TO_NUMBER(lhs) >> (((unsigned int)EJSVAL_TO_NUMBER(rhs)) & 0x1f)));
+        }
+        else {
+            // need to call valueOf() on the object, or convert the string to a number
+            NOT_IMPLEMENTED();
+        }
+    }
+    else if (EJSVAL_IS_STRING(lhs)) {
+        // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
+        NOT_IMPLEMENTED();
+    }
+    else {
+        // object+... how does js implement this anyway?
+        NOT_IMPLEMENTED();
+    }
+
+    return _ejs_nan;
+}
+
+ejsval
+_ejs_op_lsh (ejsval lhs, ejsval rhs)
+{
+    if (EJSVAL_IS_NUMBER(lhs)) {
+        if (EJSVAL_IS_NUMBER(rhs)) {
+            return NUMBER_TO_EJSVAL ((int)((int)EJSVAL_TO_NUMBER(lhs) << (((unsigned int)EJSVAL_TO_NUMBER(rhs)) & 0x1f)));
+        }
+        else {
+            // need to call valueOf() on the object, or convert the string to a number
+            NOT_IMPLEMENTED();
+        }
+    }
+    else if (EJSVAL_IS_STRING(lhs)) {
+        // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
+        NOT_IMPLEMENTED();
+    }
+    else {
+        // object+... how does js implement this anyway?
+        NOT_IMPLEMENTED();
+    }
+
+    return _ejs_nan;
+}
+
+ejsval
+_ejs_op_ulsh (ejsval lhs, ejsval rhs)
+{
+    if (EJSVAL_IS_NUMBER(lhs)) {
+        if (EJSVAL_IS_NUMBER(rhs)) {
+            return NUMBER_TO_EJSVAL ((unsigned int)((unsigned int)EJSVAL_TO_NUMBER(lhs) << (((unsigned int)EJSVAL_TO_NUMBER(rhs)) & 0x1f)));
         }
         else {
             // need to call valueOf() on the object, or convert the string to a number
