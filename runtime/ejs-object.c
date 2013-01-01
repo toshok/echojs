@@ -143,9 +143,11 @@ _ejs_property_iterator_new (ejsval forVal)
     // totally broken, only iterator over forObj's property map, not prototype properties
     EJSPropertyMap *map = EJSVAL_TO_OBJECT(forVal)->map;
 
-    if (map) {
-        EJSPropertyIterator* iterator = (EJSPropertyIterator*)malloc(sizeof (EJSPropertyIterator));
+    // the iterator-using code for for..in should handle a null iterator return value,
+    // which would save us this allocation.
+    EJSPropertyIterator* iterator = (EJSPropertyIterator*)calloc(1, sizeof (EJSPropertyIterator));
 
+    if (map) {
         int i;
 
         iterator->forObj = forVal;
