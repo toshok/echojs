@@ -26,7 +26,7 @@ _ejs_JSON_stringify (ejsval env, ejsval _this, int argc, ejsval *args)
 }
 
 void
-_ejs_JSON_init(ejsval global)
+_ejs_json_init(ejsval global)
 {
     START_SHADOW_STACK_FRAME;
 
