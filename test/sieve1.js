@@ -4,9 +4,11 @@ function primes (n) {
       return;
     else {
       if (!filter(cur)) {
-	//print (cur);
-	console.log (cur);
-	primes_internal (cur+1, remaining-1, function(test) {
+	if (typeof (console) === "object")
+	  console.log (cur);
+	else
+	  print (cur);
+	primes_internal (cur+1, remaining-1, function prime_filter (test) {
 			   return test%cur === 0 || filter (test);
 			 });
       }
@@ -16,7 +18,7 @@ function primes (n) {
     }
   }
 
-  primes_internal (2, n, function (test) { return false; });
+  primes_internal (2, n, function base_filter (test) { return false; });
 }
 
-primes (100);
+primes (500);
