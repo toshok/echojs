@@ -2,20 +2,21 @@
 SOURCES= \
 	ejs-arguments.c \
 	ejs-array.c \
-	ejs-init.c \
+	ejs-builtin-modules.c \
 	ejs-console.c \
+	ejs-date.c \
 	ejs-exception.c \
-	ejs-gc.c \
-	ejs-process.c \
 	ejs-function.c \
+	ejs-gc.c \
+	ejs-init.c \
+	ejs-math.c \
+	ejs-number.c \
 	ejs-object.c \
 	ejs-ops.c \
+	ejs-process.c \
 	ejs-regexp.c \
 	ejs-require.c \
 	ejs-string.c \
-	ejs-date.c \
-	ejs-number.c \
-	ejs-builtin-modules.c \
 	ejs-uri.c \
 	main.c
 

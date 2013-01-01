@@ -8,18 +8,19 @@
 #include "ejs-gc.h"
 #include "ejs-ops.h"
 #include "ejs-arguments.h"
-#include "ejs-require.h"
 #include "ejs-array.h"
-#include "ejs-object.h"
-#include "ejs-value.h"
-#include "ejs-string.h"
-#include "ejs-number.h"
-#include "ejs-regexp.h"
-#include "ejs-date.h"
 #include "ejs-console.h"
-#include "ejs-process.h"
+#include "ejs-date.h"
 #include "ejs-function.h"
+#include "ejs-math.h"
+#include "ejs-number.h"
+#include "ejs-object.h"
+#include "ejs-process.h"
+#include "ejs-regexp.h"
+#include "ejs-require.h"
+#include "ejs-string.h"
 #include "ejs-uri.h"
+#include "ejs-value.h"
 
 const ejsval _ejs_undefined = STATIC_BUILD_EJSVAL(EJSVAL_TAG_UNDEFINED, 0);
 const ejsval _ejs_nan = STATIC_BUILD_EJSVAL(0, 0x40be360000000000);
@@ -81,6 +82,8 @@ _ejs_init(int argc, char** argv)
     _ejs_require_init(_ejs_global);
     _ejs_console_init(_ejs_global);
     _ejs_process_init(_ejs_global, argc, argv);
+
+    _ejs_math_init(_ejs_global);
 
 #define GLOBAL_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, name, _ejs_string_new_utf8 (#x)); _ejs_object_setprop (_ejs_global, name, _ejs_function_new (_ejs_null, name, (EJSClosureFunc)_ejs_##x)); EJS_MACRO_END
 
