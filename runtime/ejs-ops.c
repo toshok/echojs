@@ -74,11 +74,6 @@ ejsval NumberToString(double d)
     return _ejs_string_new_utf8 (num_buf);
 }
 
-static void NumberToStringBuf(char* buf, size_t buf_size, double d)
-{
-    snprintf (buf, buf_size, EJS_NUMBER_FORMAT, d);
-}
-
 // returns an EJSPrimString*.
 // maybe we could change it to return a char* to match ToDouble?  that way string concat wouldn't create
 // temporary strings for non-PrimString objects only to throw them away after concatenation?
