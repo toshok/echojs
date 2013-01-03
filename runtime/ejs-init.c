@@ -60,8 +60,6 @@ _ejs_init(int argc, char** argv)
 
     _ejs_gc_init();
 
-
-
     _ejs_gc_add_named_root (_ejs_global);
 
     _ejs_global = OBJECT_TO_EJSVAL(_ejs_object_alloc_instance());
