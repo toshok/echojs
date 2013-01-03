@@ -96,21 +96,19 @@ _ejs_number_init(ejsval global)
     _ejs_gc_add_named_root (_ejs_Number_proto);
     _ejs_Number_proto = _ejs_object_new(_ejs_null);
 
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "Number", (EJSClosureFunc)_ejs_Number_impl));
+    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_Number, (EJSClosureFunc)_ejs_Number_impl));
     _ejs_Number = tmpobj;
 
     _ejs_object_setprop (_ejs_Number,       _ejs_atom_prototype,  _ejs_Number_proto);
 
-#define OBJ_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Number_##x)); _ejs_object_setprop (_ejs_Number, funcname, tmpfunc); EJS_MACRO_END
-#define PROTO_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Number_prototype_##x)); _ejs_object_setprop (_ejs_Number_proto, funcname, tmpfunc); EJS_MACRO_END
+#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Number_proto, EJS_STRINGIFY(x), _ejs_Number_prototype_##x)
 
     PROTO_METHOD(valueOf);
     PROTO_METHOD(toString);
 
-#undef OBJ_METHOD
 #undef PROTO_METHOD
 
-    _ejs_object_setprop_utf8 (global, "Number", _ejs_Number);
+    _ejs_object_setprop (global, _ejs_atom_Number, _ejs_Number);
 
     END_SHADOW_STACK_FRAME;
 }

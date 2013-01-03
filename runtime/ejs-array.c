@@ -382,13 +382,13 @@ _ejs_array_init(ejsval global)
     _ejs_gc_add_named_root (_ejs_Array_proto);
     _ejs_Array_proto = _ejs_object_new(_ejs_null);
 
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "Array", (EJSClosureFunc)_ejs_Array_impl));
+    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_Array, (EJSClosureFunc)_ejs_Array_impl));
     _ejs_Array = tmpobj;
 
     _ejs_object_setprop (_ejs_Array,       _ejs_atom_prototype,  _ejs_Array_proto);
 
-#define OBJ_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Array_##x)); _ejs_object_setprop (_ejs_Array, funcname, tmpfunc); EJS_MACRO_END
-#define PROTO_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Array_prototype_##x)); _ejs_object_setprop (_ejs_Array_proto, funcname, tmpfunc); EJS_MACRO_END
+#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Array, EJS_STRINGIFY(x), _ejs_Array_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Array_proto, EJS_STRINGIFY(x), _ejs_Array_prototype_##x)
 
     OBJ_METHOD(isArray);
 
@@ -403,7 +403,10 @@ _ejs_array_init(ejsval global)
     PROTO_METHOD(join);
     PROTO_METHOD(forEach);
 
-    _ejs_object_setprop_utf8 (global,           "Array",      _ejs_Array);
+#undef OBJ_METHOD
+#undef PROTO_METHOD
+
+    _ejs_object_setprop (global,           _ejs_atom_Array,      _ejs_Array);
 
     END_SHADOW_STACK_FRAME;
 }

@@ -101,13 +101,13 @@ _ejs_regexp_init(ejsval global)
     _ejs_gc_add_named_root (_ejs_Regexp_proto);
     _ejs_Regexp_proto = _ejs_object_new(_ejs_null);
 
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "RegExp", (EJSClosureFunc)_ejs_Regexp_impl));
+    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_Regexp, (EJSClosureFunc)_ejs_Regexp_impl));
     _ejs_Regexp = tmpobj;
 
     _ejs_object_setprop (_ejs_Regexp,       _ejs_atom_prototype,  _ejs_Regexp_proto);
 
-#define OBJ_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Regexp_##x)); _ejs_object_setprop (_ejs_Regexp, funcname, tmpfunc); EJS_MACRO_END
-#define PROTO_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Regexp_prototype_##x)); _ejs_object_setprop (_ejs_Regexp_proto, funcname, tmpfunc); EJS_MACRO_END
+#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Regexp, EJS_STRINGIFY(x), _ejs_Regexp_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Regexp_proto, EJS_STRINGIFY(x), _ejs_Regexp_prototype_##x)
 
     PROTO_METHOD(exec);
     PROTO_METHOD(match);
@@ -116,7 +116,7 @@ _ejs_regexp_init(ejsval global)
 #undef OBJ_METHOD
 #undef PROTO_METHOD
 
-    _ejs_object_setprop_utf8 (global, "RegExp", _ejs_Regexp);
+    _ejs_object_setprop (global, _ejs_atom_Regexp, _ejs_Regexp);
 
     END_SHADOW_STACK_FRAME;
 }

@@ -48,7 +48,7 @@ _ejs_console_init(ejsval global)
 
     ADD_STACK_ROOT(ejsval, _ejs_console, _ejs_object_new (_ejs_null));
 
-#define OBJ_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_console_##x)); _ejs_object_setprop (_ejs_console, funcname, tmpfunc); EJS_MACRO_END
+#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_console, EJS_STRINGIFY(x), _ejs_console_##x)
 
     OBJ_METHOD(log);
     OBJ_METHOD(warn);

@@ -33,14 +33,14 @@ _ejs_json_init(ejsval global)
     ADD_STACK_ROOT(ejsval, tmpobj, _ejs_object_new (_ejs_Object_proto));
     _ejs_JSON = tmpobj;
 
-#define OBJ_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_JSON_##x)); _ejs_object_setprop (_ejs_JSON, funcname, tmpfunc); EJS_MACRO_END
+#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_JSON, EJS_STRINGIFY(x), _ejs_JSON_##x)
 
     OBJ_METHOD(parse);
     OBJ_METHOD(stringify);
 
 #undef OBJ_METHOD
 
-    _ejs_object_setprop_utf8 (global, "JSON", _ejs_JSON);
+    _ejs_object_setprop (global, _ejs_atom_JSON, _ejs_JSON);
 
     END_SHADOW_STACK_FRAME;
 }

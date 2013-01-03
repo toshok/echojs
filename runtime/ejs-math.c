@@ -278,7 +278,7 @@ _ejs_math_init(ejsval global)
     ADD_STACK_ROOT(ejsval, tmpobj, _ejs_object_new (_ejs_Object_proto));
     _ejs_Math = tmpobj;
 
-#define OBJ_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Math_##x)); _ejs_object_setprop (_ejs_Math, funcname, tmpfunc); EJS_MACRO_END
+#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Math, EJS_STRINGIFY(x), _ejs_Math_##x)
 
     OBJ_METHOD(abs);
     OBJ_METHOD(acos);
@@ -301,7 +301,7 @@ _ejs_math_init(ejsval global)
 
 #undef OBJ_METHOD
 
-    _ejs_object_setprop_utf8 (global, "Math", _ejs_Math);
+    _ejs_object_setprop (global, _ejs_atom_Math, _ejs_Math);
 
     END_SHADOW_STACK_FRAME;
 }

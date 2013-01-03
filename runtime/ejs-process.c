@@ -8,7 +8,7 @@
 #include "ejs-function.h"
 
 static ejsval
-_ejs_process_exit (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Process_exit (ejsval env, ejsval _this, int argc, ejsval *args)
 {
     int exit_status = 0;
 
@@ -22,7 +22,7 @@ _ejs_process_init(ejsval global, int argc, char **argv)
 {
     START_SHADOW_STACK_FRAME;
 
-    ADD_STACK_ROOT(ejsval, _ejs_process, _ejs_object_new (_ejs_null));
+    ADD_STACK_ROOT(ejsval, _ejs_Process, _ejs_object_new (_ejs_null));
     ADD_STACK_ROOT(ejsval, _argv, _ejs_array_new (argc));
     int i;
 
@@ -34,15 +34,15 @@ _ejs_process_init(ejsval global, int argc, char **argv)
         END_SHADOW_STACK_FRAME;
     }
 
-    _ejs_object_setprop_utf8 (_ejs_process, "argv", _argv);
+    _ejs_object_setprop_utf8 (_ejs_Process, "argv", _argv);
 
-#define OBJ_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_process_##x)); _ejs_object_setprop (_ejs_process, funcname, tmpfunc); EJS_MACRO_END
+#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Process, EJS_STRINGIFY(x), _ejs_Process_##x)
 
     OBJ_METHOD(exit);
 
 #undef OBJ_METHOD
 
-    _ejs_object_setprop_utf8 (global, "process", _ejs_process);
+    _ejs_object_setprop_utf8 (global, "process", _ejs_Process);
 
     END_SHADOW_STACK_FRAME;
 }

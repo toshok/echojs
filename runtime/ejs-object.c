@@ -1142,16 +1142,16 @@ _ejs_object_init (ejsval global)
     _ejs_Object_proto = _ejs_null;
     _ejs_Object_proto = _ejs_object_new(_ejs_null); // XXX circular initialization going on here..
 
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "Object", (EJSClosureFunc)_ejs_Object_impl));
+    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_Object, (EJSClosureFunc)_ejs_Object_impl));
     _ejs_Object = tmpobj;
 
     // ECMA262 15.2.3.1
     _ejs_object_setprop (_ejs_Object,       _ejs_atom_prototype,    _ejs_Object_proto); // FIXME: {[[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }
     // ECMA262: 15.2.4.1
-    _ejs_object_setprop_utf8 (_ejs_Object_proto, "constructor",  _ejs_Object);
+    _ejs_object_setprop (_ejs_Object_proto, _ejs_atom_constructor,  _ejs_Object);
 
-#define OBJ_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Object_##x)); _ejs_object_setprop (_ejs_Object, funcname, tmpfunc); EJS_MACRO_END
-#define PROTO_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(#x)); ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)_ejs_Object_prototype_##x)); _ejs_object_setprop (_ejs_Object_proto, funcname, tmpfunc); EJS_MACRO_END
+#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Object, EJS_STRINGIFY(x), _ejs_Object_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Object_proto, EJS_STRINGIFY(x), _ejs_Object_prototype_##x)
 
     OBJ_METHOD(getPrototypeOf);
     OBJ_METHOD(getOwnPropertyDescriptor);
@@ -1174,10 +1174,10 @@ _ejs_object_init (ejsval global)
     PROTO_METHOD(isPrototypeOf);
     PROTO_METHOD(propertyIsEnumerable);
 
-#undef PROTOTYPE_METHOD
+#undef PROTO_METHOD
 #undef OBJ_METHOD
 
-    _ejs_object_setprop_utf8 (global, "Object", _ejs_Object);
+    _ejs_object_setprop (global, _ejs_atom_Object, _ejs_Object);
 
     END_SHADOW_STACK_FRAME;
 }
