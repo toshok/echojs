@@ -72,8 +72,6 @@ _ejs_Date_impl (ejsval env, ejsval _this, int argc, ejsval *args)
         }
     }
     else {
-        printf ("called Date() as a constructor!\n");
-
         EJSDate* date = (EJSDate*) EJSVAL_TO_OBJECT(_this);
 
         // new Date (year, month [, date [, hours [, minutes [, seconds [, ms ] ] ] ] ] )
