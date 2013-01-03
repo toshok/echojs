@@ -3,6 +3,7 @@
  */
 
 #include <assert.h>
+#include <math.h>
 
 #include "ejs-ops.h"
 #include "ejs-value.h"
@@ -11,130 +12,262 @@
 
 ejsval _ejs_Math;
 
-/* 15.8.2.1 */
+// ECMA262: 15.8.2.1
 static ejsval
 _ejs_Math_abs (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+
+    double x_ = ToDouble(x);
+    if (isnan(x_))
+        return _ejs_nan;
+    
+    return NUMBER_TO_EJSVAL(x_ < 0 ? -x_ : x_);
 }
 
-/* 15.8.2.2 */
+// ECMA262: 15.8.2.2
 static ejsval
 _ejs_Math_acos (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+
+    double x_ = ToDouble(x);
+    if (isnan(x_))
+        return _ejs_nan;
+
+    return NUMBER_TO_EJSVAL(acos(x_));
 }
 
-/* 15.8.2.3 */
+// ECMA262: 15.8.2.3
 static ejsval
 _ejs_Math_asin (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+
+    double x_ = ToDouble(x);
+    if (isnan(x_))
+        return _ejs_nan;
+
+    return NUMBER_TO_EJSVAL(asin(x_));
 }
 
-/* 15.8.2.4 */
+// ECMA262: 15.8.2.4
 static ejsval
 _ejs_Math_atan (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+
+    double x_ = ToDouble(x);
+    if (isnan(x_))
+        return _ejs_nan;
+
+    return NUMBER_TO_EJSVAL(atan(x_));
 }
 
-/* 15.8.2.5 */
+// ECMA262: 15.8.2.5
 static ejsval
 _ejs_Math_atan2 (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    ejsval y = _ejs_undefined;
+    ejsval x = _ejs_undefined;
+    if (argc > 0) y = args[0];
+    if (argc > 1) x = args[1];
+
+    double x_ = ToDouble(x);
+    double y_ = ToDouble(y);
+
+    if (isnan(x_) || isnan(y_))
+        return _ejs_nan;
+
+    return NUMBER_TO_EJSVAL(atan2(y_,x_));
 }
 
-/* 15.8.2.6 */
+// ECMA262: 15.8.2.6
 static ejsval
 _ejs_Math_ceil (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+
+    double x_ = ToDouble(x);
+    if (isnan(x_))
+        return _ejs_nan;
+
+    return NUMBER_TO_EJSVAL(ceil(x_));
 }
 
-/* 15.8.2.7 */
+// ECMA262: 15.8.2.7
 static ejsval
 _ejs_Math_cos (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+
+    double x_ = ToDouble(x);
+    if (isnan(x_))
+        return _ejs_nan;
+
+    return NUMBER_TO_EJSVAL(cos(x_));
 }
 
-/* 15.8.2.8 */
+// ECMA262: 15.8.2.8
 static ejsval
 _ejs_Math_exp (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+
+    double x_ = ToDouble(x);
+    if (isnan(x_))
+        return _ejs_nan;
+
+    return NUMBER_TO_EJSVAL(exp(x_));
 }
 
-/* 15.8.2.9 */
+// ECMA262: 15.8.2.9
 static ejsval
 _ejs_Math_floor (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+
+    double x_ = ToDouble(x);
+    if (isnan(x_))
+        return _ejs_nan;
+
+    return NUMBER_TO_EJSVAL(floor(x_));
 }
 
-/* 15.8.2.10 */
+// ECMA262: 15.8.2.10
 static ejsval
 _ejs_Math_log (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+
+    double x_ = ToDouble(x);
+    if (isnan(x_))
+        return _ejs_nan;
+
+    return NUMBER_TO_EJSVAL(log(x_));
 }
 
-/* 15.8.2.11 */
+// ECMA262: 15.8.2.11
 static ejsval
 _ejs_Math_max (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    double current_max = -INFINITY;
+    for (int i = 0; i < argc; i ++) {
+        double d = ToDouble(args[i]);
+        if (isnan (d))
+            return _ejs_nan;
+
+        if (d > current_max)
+            current_max = d;
+    }
+
+    return NUMBER_TO_EJSVAL(current_max);
 }
 
-/* 15.8.2.12 */
+// ECMA262: 15.8.2.12
 static ejsval
 _ejs_Math_min (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    double current_min = INFINITY;
+    for (int i = 0; i < argc; i ++) {
+        double d = ToDouble(args[i]);
+        if (isnan (d))
+            return _ejs_nan;
+
+        if (d < current_min)
+            current_min = d;
+    }
+
+    return NUMBER_TO_EJSVAL(current_min);
 }
 
-/* 15.8.2.13 */
+// ECMA262: 15.8.2.13
 static ejsval
 _ejs_Math_pow (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    ejsval x = _ejs_undefined;
+    ejsval y = _ejs_undefined;
+    if (argc > 0) x = args[0];
+    if (argc > 1) y = args[1];
+
+    double x_ = ToDouble(x);
+    double y_ = ToDouble(y);
+    if (isnan(x_) || isnan(y_))
+        return _ejs_nan;
+
+    return NUMBER_TO_EJSVAL(pow(x_, y_));
 }
 
-/* 15.8.2.14 */
+// ECMA262: 15.8.2.14
 static ejsval
 _ejs_Math_random (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    return NUMBER_TO_EJSVAL((double)rand() / RAND_MAX);
 }
 
-/* 15.8.2.15 */
+// ECMA262: 15.8.2.15
 static ejsval
 _ejs_Math_round (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+
+    double x_ = ToDouble(x);
+    if (isnan(x_))
+        return _ejs_nan;
+
+    return NUMBER_TO_EJSVAL(round (x_));
 }
 
-/* 15.8.2.16 */
+// ECMA262: 15.8.2.16
 static ejsval
 _ejs_Math_sin (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+
+    double x_ = ToDouble(x);
+    if (isnan(x_))
+        return _ejs_nan;
+
+    return NUMBER_TO_EJSVAL(sin (x_));
 }
 
-/* 15.8.2.17 */
+// ECMA262: 15.8.2.17
 static ejsval
 _ejs_Math_sqrt (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+
+    double x_ = ToDouble(x);
+    if (isnan(x_))
+        return _ejs_nan;
+
+    return NUMBER_TO_EJSVAL(sqrt (x_));
 }
 
-/* 15.8.2.18 */
+// ECMA262: 15.8.2.18
 static ejsval
 _ejs_Math_tan (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+
+    double x_ = ToDouble(x);
+    if (isnan(x_))
+        return _ejs_nan;
+
+    return NUMBER_TO_EJSVAL(tan (x_));
 }
 
 void

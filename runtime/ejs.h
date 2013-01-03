@@ -38,7 +38,7 @@ typedef struct _EJSContext* EJSContext;
 #define MAX(a,b) (a) > (b) ? (a) : (b)
 #endif
 
-#define NOT_IMPLEMENTED() EJS_MACRO_START                   \
+#define EJS_NOT_IMPLEMENTED() EJS_MACRO_START               \
     printf ("%s not implemented.\n", __PRETTY_FUNCTION__);	\
     abort();                                                \
     EJS_MACRO_END
@@ -61,7 +61,7 @@ extern const ejsval _ejs_one;
 extern const ejsval _ejs_false;
 extern ejsval _ejs_global;
 
-#define EJS_ATOM(atom) extern ejsval _ejs_atom_##atom;
+#define EJS_ATOM(atom) extern ejsval _ejs_atom_##atom; extern const char* _ejs_cstring_##atom;
 #include "ejs-atoms.h"
 #undef EJS_ATOM
 extern ejsval _ejs_atom_empty;

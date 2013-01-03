@@ -35,7 +35,7 @@ ejsval _ejs_global;
 
 
 /* useful strings literals */
-#define EJS_ATOM(atom) static const EJSPrimString _ejs_string_##atom = { .type = EJS_STRING_FLAT, .length = sizeof(EJS_STRINGIFY(atom))-1, .data = { .flat = EJS_STRINGIFY(atom) }}; ejsval _ejs_atom_##atom;
+#define EJS_ATOM(atom) static const EJSPrimString _ejs_string_##atom = { .type = EJS_STRING_FLAT, .length = sizeof(EJS_STRINGIFY(atom))-1, .data = { .flat = EJS_STRINGIFY(atom) }}; ejsval _ejs_atom_##atom; const char* _ejs_cstring_##atom = EJS_STRINGIFY(atom);
 #include "ejs-atoms.h"
 #undef EJS_ATOM
 static const EJSPrimString _ejs_string_empty = { .type = EJS_STRING_FLAT, .length = 0, .data = { .flat = "" }};

@@ -92,13 +92,13 @@ ejsval ToString(ejsval exp)
     else if (EJSVAL_IS_OBJECT(exp)) {
         ejsval toString = _ejs_object_getprop_utf8 (exp, "toString");
         // XXX nanboxing breaks this if (!EJSVAL_IS_FUNCTION(toString))
-        // NOT_IMPLEMENTED();
+        // EJS_NOT_IMPLEMENTED();
 
         // should we be checking if this is a string?  i'd assume so...
         return _ejs_invoke_closure_0 (toString, exp, 0);
     }
     else
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
 }
 
 double ToDouble(ejsval exp)
@@ -119,7 +119,7 @@ double ToDouble(ejsval exp)
         // for anything else, NaN
         return 0;
     else
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
 }
 
 int ToInteger(ejsval exp)
@@ -130,7 +130,7 @@ int ToInteger(ejsval exp)
 ejsval ToObject(ejsval exp)
 {
     if (EJSVAL_IS_BOOLEAN(exp))
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     else if (EJSVAL_IS_NUMBER(exp)) {
         EJSObject* new_number = _ejs_number_alloc_instance();
         _ejs_init_object (new_number, _ejs_Number_proto, &_ejs_number_specops);
@@ -146,7 +146,7 @@ ejsval ToObject(ejsval exp)
     else if (EJSVAL_IS_OBJECT(exp))
         return exp;
     else
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
 }
 
 ejsval ToBoolean(ejsval exp)
@@ -162,7 +162,7 @@ ejsval ToBoolean(ejsval exp)
     else if (EJSVAL_IS_OBJECT(exp))
         return _ejs_false; // XXX this breaks for any of the builtin objects that wrap primitive types.
     else
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
 }
 
 ejsval ToPrimitive(ejsval exp)
@@ -227,7 +227,7 @@ _ejs_op_typeof (ejsval exp)
             rv = "object";
     }
     else
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
 
     return _ejs_string_new_utf8 (rv);
 }
@@ -247,16 +247,16 @@ _ejs_op_mod (ejsval lhs, ejsval rhs)
         }
         else {
             // need to call valueOf() on the object, or convert the string to a number
-            NOT_IMPLEMENTED();
+            EJS_NOT_IMPLEMENTED();
         }
     }
     else if (EJSVAL_IS_STRING(lhs)) {
         // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     }
     else {
         // object+... how does js implement this anyway?
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     }
 
     return _ejs_nan;
@@ -295,16 +295,16 @@ _ejs_op_rsh (ejsval lhs, ejsval rhs)
         }
         else {
             // need to call valueOf() on the object, or convert the string to a number
-            NOT_IMPLEMENTED();
+            EJS_NOT_IMPLEMENTED();
         }
     }
     else if (EJSVAL_IS_STRING(lhs)) {
         // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     }
     else {
         // object+... how does js implement this anyway?
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     }
 
     return _ejs_nan;
@@ -319,16 +319,16 @@ _ejs_op_ursh (ejsval lhs, ejsval rhs)
         }
         else {
             // need to call valueOf() on the object, or convert the string to a number
-            NOT_IMPLEMENTED();
+            EJS_NOT_IMPLEMENTED();
         }
     }
     else if (EJSVAL_IS_STRING(lhs)) {
         // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     }
     else {
         // object+... how does js implement this anyway?
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     }
 
     return _ejs_nan;
@@ -343,16 +343,16 @@ _ejs_op_lsh (ejsval lhs, ejsval rhs)
         }
         else {
             // need to call valueOf() on the object, or convert the string to a number
-            NOT_IMPLEMENTED();
+            EJS_NOT_IMPLEMENTED();
         }
     }
     else if (EJSVAL_IS_STRING(lhs)) {
         // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     }
     else {
         // object+... how does js implement this anyway?
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     }
 
     return _ejs_nan;
@@ -367,16 +367,16 @@ _ejs_op_ulsh (ejsval lhs, ejsval rhs)
         }
         else {
             // need to call valueOf() on the object, or convert the string to a number
-            NOT_IMPLEMENTED();
+            EJS_NOT_IMPLEMENTED();
         }
     }
     else if (EJSVAL_IS_STRING(lhs)) {
         // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     }
     else {
         // object+... how does js implement this anyway?
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     }
 
     return _ejs_nan;
@@ -417,11 +417,11 @@ _ejs_op_mult (ejsval lhs, ejsval rhs)
     }
     else if (EJSVAL_IS_STRING(lhs)) {
         // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     }
     else {
         // object+... how does js implement this anyway?
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     }
 
     return _ejs_nan;
@@ -435,11 +435,11 @@ _ejs_op_div (ejsval lhs, ejsval rhs)
     }
     else if (EJSVAL_IS_STRING(lhs)) {
         // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     }
     else {
         // object+... how does js implement this anyway?
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     }
 
     return _ejs_nan;
@@ -464,7 +464,7 @@ _ejs_op_lt (ejsval lhs, ejsval rhs)
     }
     else {
         // object+... how does js implement this anyway?
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     }
 
     return _ejs_nan;
@@ -489,7 +489,7 @@ _ejs_op_lt_ejsbool (ejsval lhs, ejsval rhs)
     }
     else {
         // object+... how does js implement this anyway?
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     }
 
     return EJS_FALSE;
@@ -514,7 +514,7 @@ _ejs_op_le (ejsval lhs, ejsval rhs)
     }
     else {
         // object+... how does js implement this anyway?
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     }
 
     return _ejs_nan;
@@ -539,7 +539,7 @@ _ejs_op_gt (ejsval lhs, ejsval rhs)
     }
     else {
         // object+... how does js implement this anyway?
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     }
 
     return _ejs_nan;
@@ -564,7 +564,7 @@ _ejs_op_ge (ejsval lhs, ejsval rhs)
     }
     else {
         // object+... how does js implement this anyway?
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     }
 
     return _ejs_nan;
@@ -578,11 +578,11 @@ _ejs_op_sub (ejsval lhs, ejsval rhs)
     }
     else if (EJSVAL_IS_STRING(lhs)) {
         // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     }
     else {
         // object+... how does js implement this anyway?
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     }
 
     return _ejs_nan;
@@ -652,7 +652,7 @@ _ejs_op_eq (ejsval lhs, ejsval rhs)
         return BOOLEAN_TO_EJSVAL (EJSVAL_TO_OBJECT(lhs) == EJSVAL_TO_OBJECT(ToObject(rhs)));
     }
 
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 ejsval
@@ -684,7 +684,7 @@ _ejs_op_neq (ejsval lhs, ejsval rhs)
         return BOOLEAN_TO_EJSVAL (EJSVAL_IS_NULL(rhs) || EJSVAL_TO_OBJECT(lhs) != EJSVAL_TO_OBJECT(ToObject(rhs)));
     }
 
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 ejsval
@@ -692,13 +692,13 @@ _ejs_op_instanceof (ejsval lhs, ejsval rhs)
 {
     if (EJSVAL_IS_PRIMITIVE(lhs))
         return _ejs_false;
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 ejsval
 _ejs_op_in (ejsval lhs, ejsval rhs)
 {
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 EJSBool
@@ -723,19 +723,19 @@ _ejs_rethrow ()
 ejsval
 _ejs_isNaN (ejsval env, ejsval _this, int argc, ejsval* args)
 {
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 ejsval
 _ejs_isFinite (ejsval env, ejsval _this, int argc, ejsval* args)
 {
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 ejsval
 _ejs_parseInt (ejsval env, ejsval _this, int argc, ejsval* args)
 {
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 ejsval

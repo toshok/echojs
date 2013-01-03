@@ -552,7 +552,7 @@ EJSVAL_IS_NULL_IMPL(ejsval_layout l)
 }
 
 static EJS_ALWAYS_INLINE ejsval_layout
-PRIVATE_PTR_TO_EJSVAL_IMPL(void *ptr)
+PRIVATE_PTR_TO_EJSVAL_IMPL(const void *ptr)
 {
     ejsval_layout l;
     EJS_ASSERT(((uint32_t)ptr & 1) == 0);
@@ -828,7 +828,7 @@ EJSVAL_TRACE_KIND_IMPL(ejsval_layout l)
 }
 
 static EJS_ALWAYS_INLINE ejsval_layout
-PRIVATE_PTR_TO_EJSVAL_IMPL(void *ptr)
+PRIVATE_PTR_TO_EJSVAL_IMPL(const void *ptr)
 {
     ejsval_layout l;
     uint64_t ptrBits = (uint64_t)ptr;

@@ -12,14 +12,14 @@
 #include "ejs-function.h"
 
 static ejsval  _ejs_array_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr);
-static ejsval  _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName);
-static ejsval  _ejs_array_specop_get_property (ejsval obj, ejsval propertyName);
+static EJSPropertyDesc* _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName);
+static EJSPropertyDesc* _ejs_array_specop_get_property (ejsval obj, ejsval propertyName);
 static void    _ejs_array_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
 static EJSBool _ejs_array_specop_can_put (ejsval obj, ejsval propertyName);
 static EJSBool _ejs_array_specop_has_property (ejsval obj, ejsval propertyName);
 static EJSBool _ejs_array_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
 static ejsval  _ejs_array_specop_default_value (ejsval obj, const char *hint);
-static void    _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, ejsval propertyDescriptor, EJSBool flag);
+static EJSBool _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
 static void    _ejs_array_specop_finalize (EJSObject* obj);
 static void    _ejs_array_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
 
@@ -53,7 +53,7 @@ _ejs_array_new (int numElements)
 
     _ejs_init_object ((EJSObject*)rv, _ejs_Array_proto, &_ejs_array_specops);
 
-    rv->array_length = 0;
+    rv->array_length = numElements;
     rv->array_alloc = numElements + 5;
     rv->elements = (ejsval*)calloc(rv->array_alloc, sizeof (ejsval));
     return OBJECT_TO_EJSVAL((EJSObject*)rv);
@@ -116,7 +116,7 @@ _ejs_Array_prototype_shift (ejsval env, ejsval _this, int argc, ejsval*args)
         return first;
     }
 
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 #if notyet
     // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
     ejsval lenVal = OP(O,get) (O, _ejs_atom_length);
@@ -171,7 +171,7 @@ _ejs_Array_prototype_unshift (ejsval env, ejsval _this, int argc, ejsval*args)
         return NUMBER_TO_EJSVAL(len + argc);
     }
 
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 
     // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
     // 3. Let len be ToUint32(lenVal).
@@ -319,7 +319,7 @@ static ejsval
 _ejs_Array_prototype_forEach (ejsval env, ejsval _this, int argc, ejsval*args)
 {
     if (argc < 1)
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
 
     ejsval fun = args[0];
 
@@ -333,7 +333,7 @@ _ejs_Array_prototype_forEach (ejsval env, ejsval _this, int argc, ejsval*args)
 static ejsval
 _ejs_Array_prototype_splice (ejsval env, ejsval _this, int argc, ejsval*args)
 {
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
@@ -440,13 +440,22 @@ _ejs_array_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr)
     return _ejs_object_specops.get (obj, propertyName, isCStr);
 }
 
-static ejsval
+static EJSPropertyDesc*
 _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName)
 {
+    if (EJSVAL_IS_NUMBER(propertyName)) {
+        double needle = EJSVAL_TO_NUMBER(propertyName);
+        int needle_int;
+        if (EJSDOUBLE_IS_INT32(needle, &needle_int)) {
+            if (needle_int >= 0 && needle_int < EJS_ARRAY_LEN(obj))
+                return NULL; // XXX
+        }
+            
+    }
     return _ejs_object_specops.get_own_property (obj, propertyName);
 }
 
-static ejsval
+static EJSPropertyDesc*
 _ejs_array_specop_get_property (ejsval obj, ejsval propertyName)
 {
     return _ejs_object_specops.get_property (obj, propertyName);
@@ -482,10 +491,10 @@ _ejs_array_specop_default_value (ejsval obj, const char *hint)
     return _ejs_object_specops.default_value (obj, hint);
 }
 
-static void
-_ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, ejsval propertyDescriptor, EJSBool flag)
+static EJSBool
+_ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag)
 {
-    _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
+    return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
 }
 
 static void

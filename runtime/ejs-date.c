@@ -9,17 +9,17 @@
 #include "ejs-function.h"
 #include "ejs-date.h"
 
-static ejsval _ejs_date_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr);
-static ejsval _ejs_date_specop_get_own_property (ejsval obj, ejsval propertyName);
-static ejsval _ejs_date_specop_get_property (ejsval obj, ejsval propertyName);
-static void      _ejs_date_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
-static EJSBool   _ejs_date_specop_can_put (ejsval obj, ejsval propertyName);
-static EJSBool   _ejs_date_specop_has_property (ejsval obj, ejsval propertyName);
-static EJSBool   _ejs_date_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
-static ejsval _ejs_date_specop_default_value (ejsval obj, const char *hint);
-static void      _ejs_date_specop_define_own_property (ejsval obj, ejsval propertyName, ejsval propertyDescriptor, EJSBool flag);
-static void      _ejs_date_specop_finalize (EJSObject* obj);
-static void      _ejs_date_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
+static ejsval  _ejs_date_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr);
+static EJSPropertyDesc* _ejs_date_specop_get_own_property (ejsval obj, ejsval propertyName);
+static EJSPropertyDesc* _ejs_date_specop_get_property (ejsval obj, ejsval propertyName);
+static void    _ejs_date_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
+static EJSBool _ejs_date_specop_can_put (ejsval obj, ejsval propertyName);
+static EJSBool _ejs_date_specop_has_property (ejsval obj, ejsval propertyName);
+static EJSBool _ejs_date_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
+static ejsval  _ejs_date_specop_default_value (ejsval obj, const char *hint);
+static EJSBool _ejs_date_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
+static void    _ejs_date_specop_finalize (EJSObject* obj);
+static void    _ejs_date_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
 
 EJSSpecOps _ejs_date_specops = {
     "Date",
@@ -51,7 +51,7 @@ _ejs_date_new_unix (int timestamp)
     time_t t = (time_t)timestamp;
 
     if (!localtime_r(&t, &rv->tm))
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
 
     return OBJECT_TO_EJSVAL((EJSObject*)rv);
 }
@@ -68,7 +68,7 @@ _ejs_Date_impl (ejsval env, ejsval _this, int argc, ejsval *args)
             return _ejs_date_new_unix(time(NULL));
         }
         else {
-            NOT_IMPLEMENTED();
+            EJS_NOT_IMPLEMENTED();
         }
     }
     else {
@@ -82,7 +82,7 @@ _ejs_Date_impl (ejsval env, ejsval _this, int argc, ejsval *args)
             time_t t = (time_t)time(NULL);
 
             if (!gmtime_r(&t, &date->tm))
-                NOT_IMPLEMENTED();
+                EJS_NOT_IMPLEMENTED();
         }
         else {
             // there are all sorts of validation steps here that are missing from ejs
@@ -156,13 +156,13 @@ _ejs_date_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr)
     return _ejs_object_specops.get (obj, propertyName, isCStr);
 }
 
-static ejsval
+static EJSPropertyDesc*
 _ejs_date_specop_get_own_property (ejsval obj, ejsval propertyName)
 {
     return _ejs_object_specops.get_own_property (obj, propertyName);
 }
 
-static ejsval
+static EJSPropertyDesc*
 _ejs_date_specop_get_property (ejsval obj, ejsval propertyName)
 {
     return _ejs_object_specops.get_property (obj, propertyName);
@@ -198,10 +198,10 @@ _ejs_date_specop_default_value (ejsval obj, const char *hint)
     return _ejs_object_specops.default_value (obj, hint);
 }
 
-static void
-_ejs_date_specop_define_own_property (ejsval obj, ejsval propertyName, ejsval propertyDescriptor, EJSBool flag)
+static EJSBool
+_ejs_date_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag)
 {
-    _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
+    return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
 }
 
 static void

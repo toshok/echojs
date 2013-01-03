@@ -12,14 +12,14 @@
 #include "ejs-ops.h"
 
 static ejsval _ejs_string_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr);
-static ejsval _ejs_string_specop_get_own_property (ejsval obj, ejsval propertyName);
-static ejsval _ejs_string_specop_get_property (ejsval obj, ejsval propertyName);
+static EJSPropertyDesc* _ejs_string_specop_get_own_property (ejsval obj, ejsval propertyName);
+static EJSPropertyDesc* _ejs_string_specop_get_property (ejsval obj, ejsval propertyName);
 static void      _ejs_string_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
 static EJSBool   _ejs_string_specop_can_put (ejsval obj, ejsval propertyName);
 static EJSBool   _ejs_string_specop_has_property (ejsval obj, ejsval propertyName);
 static EJSBool   _ejs_string_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
 static ejsval _ejs_string_specop_default_value (ejsval obj, const char *hint);
-static void      _ejs_string_specop_define_own_property (ejsval obj, ejsval propertyName, ejsval propertyDescriptor, EJSBool flag);
+static EJSBool  _ejs_string_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
 static void      _ejs_string_specop_finalize (EJSObject* obj);
 static void      _ejs_string_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
 
@@ -89,7 +89,7 @@ _ejs_String_prototype_replace (ejsval env, ejsval _this, int argc, ejsval *args)
     ejsval replaceValue = argc > 1 ? args[1] : _ejs_undefined;
 
     if (EJSVAL_IS_OBJECT(searchValue) && !strcmp (CLASSNAME(EJSVAL_TO_OBJECT(searchValue)), "RegExp")){
-        NOT_IMPLEMENTED();
+        EJS_NOT_IMPLEMENTED();
     }
     else {
         ejsval searchValueStr = ToString(searchValue);
@@ -174,7 +174,7 @@ _ejs_String_prototype_charCodeAt (ejsval env, ejsval _this, int argc, ejsval *ar
 static ejsval
 _ejs_String_prototype_concat (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
@@ -212,67 +212,67 @@ _ejs_String_prototype_indexOf (ejsval env, ejsval _this, int argc, ejsval *args)
 static ejsval
 _ejs_String_prototype_lastIndexOf (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
 _ejs_String_prototype_localeCompare (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
 _ejs_String_prototype_match (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
 _ejs_String_prototype_search (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
 _ejs_String_prototype_substring (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
 _ejs_String_prototype_toLowerCase (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
 _ejs_String_prototype_toLocaleLowerCase (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
 _ejs_String_prototype_toUpperCase (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
 _ejs_String_prototype_toLocaleUpperCase (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
 _ejs_String_prototype_trim (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
 _ejs_String_prototype_valueOf (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
@@ -395,13 +395,13 @@ _ejs_string_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr)
     return _ejs_object_specops.get (obj, propertyName, isCStr);
 }
 
-static ejsval
+static EJSPropertyDesc*
 _ejs_string_specop_get_own_property (ejsval obj, ejsval propertyName)
 {
     return _ejs_object_specops.get_own_property (obj, propertyName);
 }
 
-static ejsval
+static EJSPropertyDesc*
 _ejs_string_specop_get_property (ejsval obj, ejsval propertyName)
 {
     return _ejs_object_specops.get_property (obj, propertyName);
@@ -437,10 +437,10 @@ _ejs_string_specop_default_value (ejsval obj, const char *hint)
     return _ejs_object_specops.default_value (obj, hint);
 }
 
-static void
-_ejs_string_specop_define_own_property (ejsval obj, ejsval propertyName, ejsval propertyDescriptor, EJSBool flag)
+static EJSBool
+_ejs_string_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag)
 {
-    _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
+    return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
 }
 
 static void

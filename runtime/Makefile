@@ -23,7 +23,7 @@ SOURCES= \
 
 OBJECTS=$(SOURCES:%.c=%.o)
 
-CFLAGS=-I. -Wall -g -O2 -Wno-unused-function
+CFLAGS=-I. -Wall -g -O0 -Wno-unused-function
 
 libecho.a: $(OBJECTS)
 	$(AR) cru $@ $(OBJECTS)

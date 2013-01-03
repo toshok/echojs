@@ -9,14 +9,14 @@
 #include "ejs-function.h"
 
 static ejsval _ejs_regexp_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr);
-static ejsval _ejs_regexp_specop_get_own_property (ejsval obj, ejsval propertyName);
-static ejsval _ejs_regexp_specop_get_property (ejsval obj, ejsval propertyName);
+static EJSPropertyDesc* _ejs_regexp_specop_get_own_property (ejsval obj, ejsval propertyName);
+static EJSPropertyDesc* _ejs_regexp_specop_get_property (ejsval obj, ejsval propertyName);
 static void      _ejs_regexp_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
 static EJSBool   _ejs_regexp_specop_can_put (ejsval obj, ejsval propertyName);
 static EJSBool   _ejs_regexp_specop_has_property (ejsval obj, ejsval propertyName);
 static EJSBool   _ejs_regexp_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
 static ejsval _ejs_regexp_specop_default_value (ejsval obj, const char *hint);
-static void      _ejs_regexp_specop_define_own_property (ejsval obj, ejsval propertyName, ejsval propertyDescriptor, EJSBool flag);
+static EJSBool   _ejs_regexp_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
 static void      _ejs_regexp_specop_finalize (EJSObject* obj);
 static void      _ejs_regexp_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
 
@@ -78,19 +78,19 @@ _ejs_Regexp_impl (ejsval env, ejsval _this, int argc, ejsval *args)
 static ejsval
 _ejs_Regexp_prototype_exec (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
 _ejs_Regexp_prototype_match (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
 _ejs_Regexp_prototype_test (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    NOT_IMPLEMENTED();
+    EJS_NOT_IMPLEMENTED();
 }
 
 void
@@ -128,13 +128,13 @@ _ejs_regexp_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr)
     return _ejs_object_specops.get (obj, propertyName, isCStr);
 }
 
-static ejsval
+static EJSPropertyDesc*
 _ejs_regexp_specop_get_own_property (ejsval obj, ejsval propertyName)
 {
     return _ejs_object_specops.get_own_property (obj, propertyName);
 }
 
-static ejsval
+static EJSPropertyDesc*
 _ejs_regexp_specop_get_property (ejsval obj, ejsval propertyName)
 {
     return _ejs_object_specops.get_property (obj, propertyName);
@@ -170,13 +170,14 @@ _ejs_regexp_specop_default_value (ejsval obj, const char *hint)
     return _ejs_object_specops.default_value (obj, hint);
 }
 
-static void
-_ejs_regexp_specop_define_own_property (ejsval obj, ejsval propertyName, ejsval propertyDescriptor, EJSBool flag)
+static EJSBool
+_ejs_regexp_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag)
 {
-    _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
+    return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
 }
 
 static void
+
 _ejs_regexp_specop_finalize (EJSObject* obj)
 {
     _ejs_object_specops.finalize (obj);

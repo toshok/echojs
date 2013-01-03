@@ -10,9 +10,18 @@
 #include "ejs-value.h"
 
 // really terribly performing property maps
+typedef struct {
+    ejsval value;
+    EJSBool configurable;
+    EJSBool writable;
+    EJSBool enumerable;
+    ejsval get;
+    ejsval set;
+} EJSPropertyDesc;
+
 struct _EJSPropertyMap {
     char **names;
-    ejsval *fields;
+    EJSPropertyDesc *properties;
     int allocated;
     int num;
 };
@@ -20,21 +29,15 @@ struct _EJSPropertyMap {
 typedef struct _EJSPropertyMap EJSPropertyMap;
 typedef struct _EJSPropertyIterator EJSPropertyIterator;
 
-typedef struct {
-    EJSBool configurable;
-    EJSBool writable;
-    EJSBool enumerable;
-} EJSPropertyDesc;
-
 typedef ejsval  (*SpecOpGet) (ejsval obj, ejsval propertyName, EJSBool isCStr);
-typedef ejsval  (*SpecOpGetOwnProperty) (ejsval obj, ejsval propertyName);
-typedef ejsval  (*SpecOpGetProperty) (ejsval obj, ejsval propertyName);
+typedef EJSPropertyDesc* (*SpecOpGetOwnProperty) (ejsval obj, ejsval propertyName);
+typedef EJSPropertyDesc* (*SpecOpGetProperty) (ejsval obj, ejsval propertyName);
 typedef void    (*SpecOpPut) (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
 typedef EJSBool (*SpecOpCanPut) (ejsval obj, ejsval propertyName);
 typedef EJSBool (*SpecOpHasProperty) (ejsval obj, ejsval propertyName);
 typedef EJSBool (*SpecOpDelete) (ejsval obj, ejsval propertyName, EJSBool flag);
 typedef ejsval  (*SpecOpDefaultValue) (ejsval obj, const char *hint);
-typedef void    (*SpecOpDefineOwnProperty) (ejsval obj, ejsval propertyName, ejsval propertyDescriptor, EJSBool flag);
+typedef EJSBool (*SpecOpDefineOwnProperty) (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool _throw);
 typedef void    (*SpecOpFinalize) (EJSObject* obj);
 typedef void    (*SpecOpScan) (EJSObject* obj, EJSValueFunc scan_func);
 
@@ -58,6 +61,7 @@ struct _EJSObject {
     ejsval proto;
     EJSSpecOps *ops;
     EJSPropertyMap* map;
+    EJSBool extensible;
 };
 
 
