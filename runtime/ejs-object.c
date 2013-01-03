@@ -1075,7 +1075,18 @@ _ejs_Object_prototype_toString (ejsval env, ejsval _this, int argc, ejsval *args
 static ejsval
 _ejs_Object_prototype_toLocaleString (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    EJS_NOT_IMPLEMENTED();
+    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
+    EJSObject* O_ = EJSVAL_TO_OBJECT(O);
+
+    /* 2. Let toString be the result of calling the [[Get]] internal method of O passing "toString" as the argument. */
+    ejsval toString = OP(O_, get)(O, _ejs_atom_toString, EJS_FALSE);
+
+    /* 3. If IsCallable(toString) is false, throw a TypeError exception. */
+    // XXX
+
+    /* 4. Return the result of calling the [[Call]] internal method of toString passing O as the this value and no arguments. */
+    return _ejs_invoke_closure_0 (toString, O, 0);
 }
 
 // ECMA262: 15.2.4.4
@@ -1129,7 +1140,24 @@ _ejs_Object_prototype_isPrototypeOf (ejsval env, ejsval _this, int argc, ejsval 
 static ejsval
 _ejs_Object_prototype_propertyIsEnumerable (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    EJS_NOT_IMPLEMENTED();
+    ejsval V = _ejs_undefined;
+    if (argc > 0) V = args[0];
+
+    /* 1. Let P be ToString(V). */
+    ejsval P = ToString(V);
+
+    /* 2. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
+    EJSObject* O_ = EJSVAL_TO_OBJECT(O);
+
+    /* 3. Let desc be the result of calling the [[GetOwnProperty]] internal method of O passing P as the argument. */
+    EJSPropertyDesc* desc = OP(O_, get_own_property)(O, P);
+    /* 4. If desc is undefined, return false. */
+    if (!desc)
+        return _ejs_false;
+
+    /* 5. Return the value of desc.[[Enumerable]]. */
+    return BOOLEAN_TO_EJSVAL(desc->enumerable);
 }
 
 void
