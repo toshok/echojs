@@ -134,7 +134,7 @@ set_gray (GCObjectPtr ptr)
 {
     PageInfo *page = find_page(ptr);
     if (!page) {
-        abort();
+        return;
     }
     SET_GRAY(page->page_bitmap[(ptr - page->page_data)/ page->cell_size]);
 }
@@ -144,7 +144,7 @@ set_black (GCObjectPtr ptr)
 {
     PageInfo *page = find_page(ptr);
     if (!page) {
-        abort();
+        return;
     }
     SET_BLACK(page->page_bitmap[(ptr - page->page_data)/ page->cell_size]);
 }
@@ -154,22 +154,22 @@ is_white (GCObjectPtr ptr)
 {
     PageInfo *page = find_page(ptr);
     if (!page) {
-        abort();
+        return EJS_FALSE;
     }
     return IS_WHITE(page->page_bitmap[(ptr - page->page_data)/ page->cell_size]);
 }
 
 static void
-populate_initial_freelist(PageInfo *info, int cell_size)
+populate_initial_freelist(PageInfo *info)
 {
     info->freelist = NULL;
 
     void* ptr = info->page_data;
 
-    for (int i = 0; i < PAGE_SIZE / cell_size; i ++) {
+    for (int i = 0; i < PAGE_SIZE / info->cell_size; i ++) {
         SET_FREE(info->page_bitmap[i]);
         EJS_SLIST_ATTACH(((FreeListEntry*)ptr), info->freelist);
-        ptr = (void*)((uintptr_t)ptr + cell_size);
+        ptr = (void*)((uintptr_t)ptr + info->cell_size);
     }
 }
 
@@ -193,15 +193,23 @@ dealloc_from_os(char* ptr, size_t size)
 }
 
 static PageInfo*
-alloc_page(size_t cell_size)
+init_page_info(char *page_data, size_t cell_size)
 {
-    PageInfo* rv = (PageInfo*)calloc(1, sizeof(PageInfo));
-    rv->cell_size = cell_size;
-    rv->page_data = alloc_from_os(PAGE_SIZE);
-    rv->page_bitmap = (BitmapCell*)malloc (PAGE_SIZE / cell_size);
-    memset (rv->page_bitmap, CELL_FREE, PAGE_SIZE / cell_size);
-    populate_initial_freelist(rv, cell_size);
-    return rv;
+    PageInfo* info = (PageInfo*)malloc(sizeof(PageInfo));
+    EJS_LIST_INIT(info);
+    info->cell_size = cell_size;
+    info->page_data = page_data;
+    info->page_bitmap = (BitmapCell*)malloc (PAGE_SIZE / cell_size);
+    info->freelist = NULL;
+    memset (info->page_bitmap, CELL_FREE, PAGE_SIZE / cell_size);
+    populate_initial_freelist(info);
+    return info;
+}
+
+static PageInfo*
+alloc_new_page(size_t cell_size)
+{
+    return init_page_info (alloc_from_os(PAGE_SIZE), cell_size);
 }
 
 static void
@@ -213,8 +221,26 @@ dealloc_page(char* page_addr)
 void
 _ejs_gc_init()
 {
-    // XXX todo preallocate a number of pages
     memset (heap_pages, 0, sizeof(heap_pages));
+
+#if POPULATE_INITIAL_HEAP
+#define INITIAL_HEAP_SIZE 2 * 1024 * 1024
+    // preallocate 2 megs worth of pages
+    char* initial_heap = alloc_from_os(INITIAL_HEAP_SIZE);
+    
+    char* p = initial_heap;
+    PageInfo *info;
+    // and split them across the most commonly used areas (64 and 128 byte cells)
+    for (int i = 0; i < INITIAL_HEAP_SIZE / (PAGE_SIZE * 2); i ++) {
+        info = init_page_info(p, 2<<6);
+        EJS_LIST_ATTACH(info, heap_pages[6-OBJECT_SIZE_LOW_LIMIT_BITS]);
+        p += PAGE_SIZE;
+
+        info = init_page_info(p, 2<<7);
+        EJS_LIST_ATTACH(info, heap_pages[7-OBJECT_SIZE_LOW_LIMIT_BITS]);
+        p += PAGE_SIZE;
+    }
+#endif
     work_list = NULL;
     root_set = NULL;
 }
@@ -507,7 +533,7 @@ void
 _ejs_gc_shutdown()
 {
     _ejs_gc_collect_inner(EJS_TRUE);
-    printf ("total allocs = %d\n", total_allocs);
+    SPEW(printf ("total allocs = %d\n", total_allocs);)
 }
 
 static inline int next_power_of_two(int x, int *bits)
@@ -555,7 +581,7 @@ _ejs_gc_alloc(size_t size, EJSBool has_finalizer)
     num_allocs ++;
     total_allocs ++;
 
-    if (num_allocs == 10000) {
+    if (num_allocs == 1000) {
         _ejs_gc_collect();
         num_allocs = 0;
     }
@@ -576,7 +602,7 @@ _ejs_gc_alloc(size_t size, EJSBool has_finalizer)
     }
 
     // we need a new page
-    PageInfo *info = alloc_page(size);
+    PageInfo *info = alloc_new_page(size);
     EJS_LIST_ATTACH(info, heap_pages[bucket]);
     return alloc_from_freelist(info);
 }
