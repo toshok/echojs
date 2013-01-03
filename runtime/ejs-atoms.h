@@ -1,8 +1,9 @@
 
-// common properties
+// common properties/methods
 EJS_ATOM(constructor)
 EJS_ATOM(length)
 EJS_ATOM(prototype)
+EJS_ATOM(toString)
 
 EJS_ATOM(object)
 EJS_ATOM(function)
