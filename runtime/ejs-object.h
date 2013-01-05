@@ -57,11 +57,20 @@ typedef struct {
     SpecOpScan scan;
 } EJSSpecOps;
 
+#define EJS_OBJECT_EXTENSIBLE_FLAG 0x01
+
+#define EJS_OBJECT_EXTENSIBLE_FLAG_SHIFTED (EJS_OBJECT_EXTENSIBLE_FLAG << EJS_GC_USER_FLAGS_SHIFT)
+
+#define EJS_OBJECT_SET_EXTENSIBLE(o) (((EJSObject*)(o))->gc_header |= EJS_OBJECT_EXTENSIBLE_FLAG_SHIFTED)
+#define EJS_OBJECT_CLEAR_EXTENSIBLE(o) (((EJSObject*)(o))->gc_header &= ~EJS_OBJECT_EXTENSIBLE_FLAG_SHIFTED)
+
+#define EJS_OBJECT_IS_EXTENSIBLE(o) ((((EJSObject*)(o))->gc_header & EJS_OBJECT_EXTENSIBLE_FLAG_SHIFTED) != 0)
+
 struct _EJSObject {
+    GCObjectHeader gc_header;
     ejsval proto;
     EJSSpecOps *ops;
     EJSPropertyMap* map;
-    EJSBool extensible;
 };
 
 

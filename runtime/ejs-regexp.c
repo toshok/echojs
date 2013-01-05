@@ -46,7 +46,7 @@ _ejs_regexp_new_utf8 (const char* str)
     int str_len = strlen(str);
     size_t value_size = sizeof (EJSRegexp) + str_len;
 
-    EJSRegexp* rv = (EJSRegexp*)_ejs_gc_alloc (value_size, EJS_TRUE);
+    EJSRegexp* rv = (EJSRegexp*)_ejs_gc_alloc (value_size, EJS_SCAN_TYPE_OBJECT);
 
     _ejs_init_object ((EJSObject*)rv, _ejs_Regexp_proto, &_ejs_regexp_specops);
     ((EJSObject*)rv)->ops = &_ejs_regexp_specops;

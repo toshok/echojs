@@ -6,6 +6,7 @@
 #define _ejs_value_h
 
 #include "ejs.h"
+#include "ejs-gc.h"
 
 typedef double EJSPrimNumber;
 
@@ -23,13 +24,22 @@ typedef double EJSPrimNumber;
 */
 
 typedef enum {
-    EJS_STRING_FLAT,
-    EJS_STRING_ROPE
+    EJS_STRING_FLAT      = 1,
+    EJS_STRING_ROPE      = 2,
+    EJS_STRING_DEPENDENT = 3
 } EJSPrimStringType;
 
+#define EJS_PRIMSTR_TYPE_MASK 0x03
+
+#define EJS_PRIMSTR_TYPE_MASK_SHIFTED (EJS_PRIMSTR_TYPE_MASK << EJS_GC_USER_FLAGS_SHIFT)
+
+#define EJS_PRIMSTR_SET_TYPE(s,t) (((EJSObject*)(s))->gc_header |= (t) << EJS_GC_USER_FLAGS_SHIFT)
+
+#define EJS_PRIMSTR_GET_TYPE(s)   ((EJSPrimStringType)((((EJSPrimString*)(s))->gc_header & EJS_PRIMSTR_TYPE_MASK_SHIFTED) >> EJS_GC_USER_FLAGS_SHIFT))
+
 struct _EJSPrimString {
-    int type; // flat, rope, dependent
-    int length;
+    GCObjectHeader gc_header;
+    uint32_t length;
     union {
         // utf8 \0 terminated
         //    for normal strings, this points to the memory location just beyond this struct - i.e. (char*)primStringPointer + sizeof(_EJSPrimString)
@@ -43,9 +53,6 @@ struct _EJSPrimString {
 };
 
 #define EJSVAL_IS_PRIMITIVE(v) (EJSVAL_IS_NUMBER(v) || EJSVAL_IS_STRING(v) || EJSVAL_IS_BOOLEAN(v) || EJSVAL_IS_UNDEFINED(v))
-
-#define EJSVAL_TAG(v) (((GCObjectHeader*)v)->tag & 0xffff)
-#define EJSVAL_SET_TAG(v,t) ((GCObjectHeader*)v)->tag = (((GCObjectHeader*)v)->tag & ~0xffff) | t
 
 #define EJSVAL_IS_OBJECT(v)    EJSVAL_IS_OBJECT_IMPL(v)
 #define EJSVAL_IS_ARRAY(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->proto.asBits == _ejs_Array_proto.asBits))
@@ -84,6 +91,7 @@ ejsval _ejs_string_new_utf8 (const char* str);
 ejsval _ejs_string_new_utf8_len (const char* str, int len);
 ejsval _ejs_string_concat (ejsval left, ejsval right);
 EJSPrimString* _ejs_string_flatten (ejsval str);
+EJSPrimString* _ejs_primstring_flatten (EJSPrimString* primstr);
 
 void _ejs_value_finalize(ejsval val);
 

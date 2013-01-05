@@ -9,16 +9,25 @@
 
 EJS_BEGIN_DECLS
 
-#define CONSERVATIVE_STACKWALK 1
+#define CONSERVATIVE_STACKWALK 0
+
+typedef enum {
+    EJS_SCAN_TYPE_PRIMSTR = 1 << 0,
+    EJS_SCAN_TYPE_OBJECT  = 1 << 1
+} EJSScanType;
+
+#define EJS_GC_INTERNAL_FLAGS_MASK 0x0000ffff
+#define EJS_GC_USER_FLAGS_SHIFT 24
+#define EJS_GC_USER_FLAGS_MASK 0xffff0000
 
 typedef char* GCObjectPtr;
 
 extern void _ejs_gc_init();
 extern void _ejs_gc_shutdown();
 extern void _ejs_gc_collect();
-extern GCObjectPtr _ejs_gc_alloc(size_t size, EJSBool has_finalizer);
+extern GCObjectPtr _ejs_gc_alloc(size_t size, EJSScanType scan_type);
 
-#define _ejs_gc_new(T) (T*)_ejs_gc_alloc(sizeof(T), EJS_TRUE)
+#define _ejs_gc_new(T) (T*)_ejs_gc_alloc(sizeof(T), EJS_SCAN_TYPE_OBJECT)
 
 #define _ejs_gc_add_named_root(v) __ejs_gc_add_named_root(&v, #v)
 extern void __ejs_gc_add_named_root(ejsval* val, const char *name);
@@ -53,7 +62,6 @@ typedef struct {
     FrameMap fmap;                                              \
     fmap.NumRoots = fmap.NumMeta = 0;                           \
     NativeStackEntry stack;                                     \
-    memset (stack.Roots, 0, sizeof(void*) * NUM_NATIVE_ROOTS);  \
     stack.Map = &fmap;                                          \
     stack.Next = llvm_gc_root_chain;                            \
     llvm_gc_root_chain = (StackEntry*)&stack;

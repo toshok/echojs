@@ -36,14 +36,77 @@
 // #define MAP_FD -1
 // #endif
 
-#define MAX_WORKLIST_PART_SIZE 128
+#define MAX_WORKLIST_SEGMENT_SIZE 128
 typedef struct _WorkListSegmnt {
     EJS_SLIST_HEADER(struct _WorkListSegmnt);
     int size;
-    GCObjectPtr work_list[MAX_WORKLIST_PART_SIZE];
+    GCObjectPtr work_list[MAX_WORKLIST_SEGMENT_SIZE];
 } WorkListSegment;
 
-static WorkListSegment* work_list;
+typedef struct {
+    WorkListSegment *list;
+    WorkListSegment *free_list;
+} WorkList;
+
+static WorkList work_list;
+
+static void
+_ejs_gc_worklist_init()
+{
+    work_list.list = NULL;
+    work_list.free_list = NULL;
+}
+
+static void
+_ejs_gc_worklist_push(GCObjectPtr obj)
+{
+    if (obj == NULL)
+        return;
+
+    WorkListSegment *segment;
+
+    if (EJS_UNLIKELY(!work_list.list || work_list.list->size == MAX_WORKLIST_SEGMENT_SIZE)) {
+        // we need a new segment
+        if (work_list.free_list) {
+            // take one from the free list
+            segment = work_list.free_list;
+            EJS_SLIST_DETACH_HEAD(segment, work_list.free_list);
+        }
+        else {
+            segment = (WorkListSegment*)malloc (sizeof(WorkListSegment));
+            segment->size = 0;
+        }
+        EJS_SLIST_ATTACH(segment, work_list.list);
+    }
+    else {
+        segment = work_list.list;
+    }
+
+    segment->work_list[segment->size++] = obj;
+}
+
+static GCObjectPtr
+_ejs_gc_worklist_pop()
+{
+    if (work_list.list == NULL || work_list.list->size == 0/* shouldn't happen, since we push the page to the free list if we hit 0 */)
+        return NULL;
+
+    WorkListSegment *segment = work_list.list;
+
+    GCObjectPtr rv = segment->work_list[--segment->size];
+    if (segment->size == 0) {
+        EJS_SLIST_DETACH_HEAD(segment, work_list.list);
+        EJS_SLIST_ATTACH(segment, work_list.free_list);
+    }
+    return rv;
+}
+
+#define WORKLIST_PUSH_AND_GRAY(x) EJS_MACRO_START        \
+    if (is_white((GCObjectPtr)x)) {                      \
+        _ejs_gc_worklist_push((GCObjectPtr)(x));         \
+        set_gray ((GCObjectPtr)(x));                     \
+    }                                                    \
+    EJS_MACRO_END
 
 typedef struct _RootSetEntry {
     EJS_SLIST_HEADER(struct _RootSetEntry);
@@ -59,12 +122,11 @@ typedef struct _FreeListEntry {
 
 typedef char BitmapCell;
 
-#define CELL_OBJ_FINALIZER    0x08 // object in this cell has a finalizer, invoke it before moving to CELL_FREE state
-#define CELL_FREE             0x04 // cell is in the free list for this page
 #define CELL_COLOR_MASK       0x03
 #define CELL_GRAY_MASK        0x02
 #define CELL_WHITE_MASK_START 0x00
 #define CELL_BLACK_MASK_START 0x01
+#define CELL_FREE             0x04 // cell is in the free list for this page
 
 static unsigned int black_mask = CELL_BLACK_MASK_START;
 static unsigned int white_mask = CELL_WHITE_MASK_START;
@@ -89,7 +151,6 @@ static unsigned int white_mask = CELL_WHITE_MASK_START;
     (cell) = ((cell) & ~CELL_FREE);				\
     EJS_MACRO_END
 
-#define HAS_FINALIZER(cell) (((cell) & CELL_OBJ_FINALIZER) == CELL_OBJ_FINALIZER)
 #define IS_FREE(cell) (((cell) & CELL_FREE) == CELL_FREE)
 #define IS_GRAY(cell) (((cell) & CELL_COLOR_MASK) == CELL_GRAY_MASK)
 #define IS_WHITE(cell) (((cell) & CELL_COLOR_MASK) == white_mask)
@@ -136,6 +197,8 @@ set_gray (GCObjectPtr ptr)
     if (!page) {
         return;
     }
+    assert((ptr - page->page_data) / page->cell_size >= 0 &&
+           (ptr - page->page_data) / page->cell_size < PAGE_SIZE / page->cell_size); 
     SET_GRAY(page->page_bitmap[(ptr - page->page_data)/ page->cell_size]);
 }
 
@@ -146,6 +209,8 @@ set_black (GCObjectPtr ptr)
     if (!page) {
         return;
     }
+    assert((ptr - page->page_data) / page->cell_size >= 0 &&
+           (ptr - page->page_data) / page->cell_size < PAGE_SIZE / page->cell_size); 
     SET_BLACK(page->page_bitmap[(ptr - page->page_data)/ page->cell_size]);
 }
 
@@ -156,6 +221,8 @@ is_white (GCObjectPtr ptr)
     if (!page) {
         return EJS_FALSE;
     }
+    assert((ptr - page->page_data) / page->cell_size >= 0 &&
+           (ptr - page->page_data) / page->cell_size < PAGE_SIZE / page->cell_size); 
     return IS_WHITE(page->page_bitmap[(ptr - page->page_data)/ page->cell_size]);
 }
 
@@ -241,82 +308,42 @@ _ejs_gc_init()
         p += PAGE_SIZE;
     }
 #endif
-    work_list = NULL;
+
+    _ejs_gc_worklist_init();
+
     root_set = NULL;
 }
-
-void
-push_to_worklist(GCObjectPtr obj)
-{
-    if (obj == NULL)
-        return;
-
-    WorkListSegment *segment = work_list;
-
-    if (!segment || segment->size == MAX_WORKLIST_PART_SIZE) {
-        segment = (WorkListSegment*)malloc (sizeof(WorkListSegment));
-        EJS_SLIST_INIT(segment);
-        segment->size = 0;
-        EJS_SLIST_ATTACH(segment, work_list);
-    }
-
-    if (segment && segment->size < MAX_WORKLIST_PART_SIZE)
-        segment->work_list[segment->size++] = obj;
-    else
-        set_gray (obj);
-}
-
-GCObjectPtr
-pop_from_worklist()
-{
-    WorkListSegment *segment = work_list;
-
-    if (segment == NULL)
-        return NULL;
-    if (segment->size == 0) // shouldn't happen
-        return NULL;
-
-    GCObjectPtr rv = segment->work_list[--segment->size];
-    if (segment->size == 0) {
-        work_list = segment->next;
-        free (segment);
-    }
-    set_black (rv);
-    return rv;
-}
-
-static void _scan_from_ejsobject(GCObjectPtr obj);
 
 static void
 _scan_ejsvalue (ejsval val)
 {
-    if (!EJSVAL_IS_GCTHING_IMPL(val))
-        return;
+    if (!EJSVAL_IS_GCTHING_IMPL(val)) return;
 
-    if (EJSVAL_IS_NULL(val))
-        return;
+    if (EJSVAL_IS_NULL(val)) return;
 
     GCObjectPtr gcptr = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(val);
 
-    if (gcptr == NULL)
-        return;
+    if (gcptr == NULL) return;
 
-    if (EJSVAL_IS_OBJECT(val)) {
-        // grey objects are in the mark stack, black objects we know are not garbage
-        if (!is_white(gcptr))
-            return;
-
-        push_to_worklist(gcptr);
-    }
-    else {
-        set_black(gcptr);
-    }
+    WORKLIST_PUSH_AND_GRAY(gcptr);
 }
 
 static void
-_scan_from_ejsobject(GCObjectPtr obj)
+_scan_from_ejsobject(EJSObject* obj)
 {
-    OP(obj,scan)((EJSObject*)obj, _scan_ejsvalue);
+    OP(obj,scan)(obj, _scan_ejsvalue);
+}
+
+static void
+_scan_from_ejsprimstr(EJSPrimString *primStr)
+{
+    if (EJS_PRIMSTR_GET_TYPE(primStr) == EJS_STRING_ROPE) {
+        // inline _scan_ejsvalue's push logic here to save creating an ejsval from the primStr only to destruct
+        // it in _scan_ejsvalue
+
+        WORKLIST_PUSH_AND_GRAY(primStr->data.rope.left);
+        WORKLIST_PUSH_AND_GRAY(primStr->data.rope.right);
+    }
 }
 
 #if CONSERVATIVE_STACKWALK
@@ -338,19 +365,24 @@ mark_from_shadow_stack()
     for (StackEntry *R = llvm_gc_root_chain; R; R = R->Next) {
         unsigned i = 0;
 
+        if (R->Map == NULL) {
+            continue;
+        }
+
         // For roots [NumMeta, NumRoots), the metadata pointer is null.
         for (unsigned e = R->Map->NumRoots; i != e; ++i) {
             ejsval candidate_val = *(ejsval*)&R->Roots[i];
-            if (!EJSVAL_IS_OBJECT(candidate_val)) {
+            if (!EJSVAL_IS_GCTHING_IMPL(candidate_val)) {
                 // FIXME we mark all ejsval's as roots, even those that aren't objects.
                 continue;
             }
-            GCObjectPtr candidate = (GCObjectPtr)EJSVAL_TO_OBJECT(candidate_val);
-            if (candidate == NULL) continue;
-            if (is_white (candidate)) {
-                SPEW(printf ("Found reference to %p on stack\n", candidate);)
-                    push_to_worklist (candidate);
-            }
+            GCObjectPtr gcptr = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(candidate_val);
+
+            if (!is_white(gcptr))         continue; // skip pointers to gray/black cells
+
+            SPEW(printf ("found ptr to %p on stack\n", EJSVAL_TO_OBJECT(candidate_val)));
+            _ejs_gc_worklist_push(gcptr);
+            set_gray(gcptr);
         }
     }
 }
@@ -373,12 +405,14 @@ mark_in_range(char* low, char* high)
             if (!is_white(gcptr))         continue; // skip pointers to gray/black cells
 
             if (EJSVAL_IS_STRING(candidate_val)) {
-                SPEW(printf ("found ptr to %p(PrimString) on stack\n", EJSVAL_TO_STRING(candidate_val));)
-                    set_black(gcptr);
+                SPEW(printf ("found ptr to %p(PrimString:%s) on stack\n", EJSVAL_TO_STRING(candidate_val), EJSVAL_TO_FLAT_STRING(candidate_val)));
+                _ejs_gc_worklist_push(gcptr);
+                set_gray(gcptr);
             }
             else {
-                SPEW(printf ("found ptr to %p(%s) on stack\n", EJSVAL_TO_OBJECT(candidate_val), CLASSNAME(EJSVAL_TO_OBJECT(candidate_val)));)
-                    push_to_worklist(gcptr);
+                SPEW(printf ("found ptr to %p(%s) on stack\n", EJSVAL_TO_OBJECT(candidate_val), CLASSNAME(EJSVAL_TO_OBJECT(candidate_val))));
+                _ejs_gc_worklist_push(gcptr);
+                set_gray(gcptr);
             }
         }
     }
@@ -403,13 +437,14 @@ sweep_heap()
                 if (IS_WHITE(info->page_bitmap[c])) {
                     white_objs++;
                     GCObjectPtr p = info->page_data + c * info->cell_size;
-                    if (HAS_FINALIZER(info->page_bitmap[c])) {
-                        SPEW(printf ("finalizing object %p(%s)\n", p, CLASSNAME(p));)
-                            OP(p, finalize)((EJSObject*)p);
+                    GCObjectHeader* headerp = (GCObjectHeader*)p;
+                    if ((*headerp & EJS_SCAN_TYPE_OBJECT) != 0) {
+                        SPEW(printf ("finalizing object %p(%s)\n", p, CLASSNAME(p)));
+                        OP(p, finalize)((EJSObject*)p);
                     }
                     else {
-                        SPEW(printf ("finalizing primitive string %p(%s)\n", p, ((EJSPrimString*)p)->data);)
-                            }
+                        SPEW(printf ("finalizing primitive string %p(%s)\n", p, _ejs_primstring_flatten((EJSPrimString*)p)->data.flat));
+                    }
                     add_cell_to_freelist (info, c);
                 }
             }
@@ -432,7 +467,10 @@ mark_from_roots()
                 continue;
             set_black (root_ptr);
             if (EJSVAL_IS_OBJECT(rootval)) {
-                _scan_from_ejsobject(root_ptr);
+                _scan_from_ejsobject((EJSObject*)root_ptr);
+            }
+            else {
+                _scan_from_ejsprimstr((EJSPrimString*)root_ptr);
             }
         }
     }
@@ -456,8 +494,13 @@ static void
 process_worklist()
 {
     GCObjectPtr p;
-    while ((p = pop_from_worklist())) {
-        _scan_from_ejsobject(p);
+    while ((p = _ejs_gc_worklist_pop())) {
+        set_black (p);
+        GCObjectHeader* headerp = (GCObjectHeader*)p;
+        if ((*headerp & EJS_SCAN_TYPE_OBJECT) != 0)
+            _scan_from_ejsobject((EJSObject*)p);
+        else
+            _scan_from_ejsprimstr((EJSPrimString*)p);
     }
 }
 
@@ -481,7 +524,7 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
     SPEW(printf ("_ejs_gc_collect stats:\n");
          printf ("   num_roots: %d\n", num_roots);
          printf ("   total objects: %d\n", total_objs);
-         printf ("   garbage objects: %d\n", white_objs);)
+         printf ("   garbage objects: %d\n", white_objs));
 
     unsigned int tmp = black_mask;
     black_mask = white_mask;
@@ -501,6 +544,8 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
 
         root_set = NULL;
 
+#undef SPEW
+#define SPEW(x) x
         SPEW(printf ("final gc page statistics:\n");
              for (int hp = 0; hp < HEAP_PAGELISTS_COUNT; hp++) {
                  int len = 0;
@@ -508,7 +553,9 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
                      len++;
                  printf ("  size: %d     pages: %d\n", 1<<(hp + 3), len);
              })
-            }
+#undef SPEW
+#define SPEW(x)
+    }
     else {
         for (int hp = 0; hp < HEAP_PAGELISTS_COUNT; hp++) {
             for (PageInfo *info = heap_pages[hp]; info; info = info->next) {
@@ -533,7 +580,7 @@ void
 _ejs_gc_shutdown()
 {
     _ejs_gc_collect_inner(EJS_TRUE);
-    SPEW(printf ("total allocs = %d\n", total_allocs);)
+    SPEW(printf ("total allocs = %d\n", total_allocs));
 }
 
 static inline int next_power_of_two(int x, int *bits)
@@ -558,6 +605,9 @@ alloc_from_freelist(PageInfo *info)
     // initialize the cell
     SET_WHITE(info->page_bitmap[(rv-info->page_data) / info->cell_size]);
     SET_ALLOCATED(info->page_bitmap[(rv-info->page_data) / info->cell_size]);
+
+    *((GCObjectHeader*)rv) = 0;
+
     return rv;
 }
 
@@ -576,7 +626,7 @@ alloc_from_los(size_t size, EJSBool has_finalizer)
 int num_allocs = 0;
 
 GCObjectPtr
-_ejs_gc_alloc(size_t size, EJSBool has_finalizer)
+_ejs_gc_alloc(size_t size, EJSScanType scan_type)
 {
     num_allocs ++;
     total_allocs ++;
@@ -592,19 +642,23 @@ _ejs_gc_alloc(size_t size, EJSBool has_finalizer)
     bucket -= OBJECT_SIZE_LOW_LIMIT_BITS; // we allocate nothing smaller than this
 
     if (bucket >= HEAP_PAGELISTS_COUNT)
-        return alloc_from_los(size, has_finalizer);
+        return alloc_from_los(size, scan_type);
 
     GCObjectPtr rv = NULL;
     for (PageInfo* info = heap_pages[bucket]; info; info = info->next) {
         rv = alloc_from_freelist(info);
-        if (rv)
+        if (rv) {
+            *((GCObjectHeader*)rv) = scan_type;
             return rv;
+        }
     }
 
     // we need a new page
     PageInfo *info = alloc_new_page(size);
     EJS_LIST_ATTACH(info, heap_pages[bucket]);
-    return alloc_from_freelist(info);
+    rv = alloc_from_freelist(info);
+    *((GCObjectHeader*)rv) = scan_type;
+    return rv;
 }
 
 void

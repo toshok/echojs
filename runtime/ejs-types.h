@@ -15,6 +15,8 @@ typedef int32_t jsint;
 typedef uint32_t jsuint;
 typedef double jsdouble;
 
+typedef uint32_t GCObjectHeader;
+
 #if defined(__GNUC__) && (__GNUC__ > 2)
 # define EJS_LIKELY(x)   (__builtin_expect((x), 1))
 # define EJS_UNLIKELY(x) (__builtin_expect((x), 0))
@@ -53,6 +55,10 @@ typedef double jsdouble;
 #define EJS_SLIST_ATTACH(v,l) EJS_MACRO_START	\
     v->next = l;                                \
     l = v;                                      \
+    EJS_MACRO_END
+
+#define EJS_SLIST_DETACH_HEAD(v,l) EJS_MACRO_START	\
+    l = l->next;                                    \
     EJS_MACRO_END
 
 #endif /* _ejs_types_h */

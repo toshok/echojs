@@ -373,7 +373,7 @@ _ejs_init_object (EJSObject* obj, ejsval proto, EJSSpecOps *ops)
     obj->proto = proto;
     obj->ops = ops ? ops : &_ejs_object_specops;
     obj->map = _ejs_propertymap_new (obj->ops == &_ejs_object_specops ? 5 : 0);
-    obj->extensible = EJS_TRUE;
+    EJS_OBJECT_SET_EXTENSIBLE(obj);
 #if notyet
     ((GCObjectPtr)obj)->gc_data = 0x01; // HAS_FINALIZE
 #endif
@@ -440,8 +440,8 @@ _ejs_string_new_utf8 (const char* str)
     int str_len = strlen(str);
     size_t value_size = sizeof(EJSPrimString) + str_len + 1;
 
-    EJSPrimString* rv = (EJSPrimString*)_ejs_gc_alloc(value_size, EJS_FALSE);
-    rv->type = EJS_STRING_FLAT;
+    EJSPrimString* rv = (EJSPrimString*)_ejs_gc_alloc(value_size, EJS_SCAN_TYPE_PRIMSTR);
+    EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_FLAT);
     rv->length = str_len;
     rv->data.flat = (char*)rv + sizeof(EJSPrimString);
     strcpy (rv->data.flat, str);
@@ -453,8 +453,8 @@ _ejs_string_new_utf8_len (const char* str, int len)
 {
     size_t value_size = sizeof(EJSPrimString) + len + 1;
 
-    EJSPrimString* rv = (EJSPrimString*)_ejs_gc_alloc(value_size, EJS_FALSE);
-    rv->type = EJS_STRING_FLAT;
+    EJSPrimString* rv = (EJSPrimString*)_ejs_gc_alloc(value_size, EJS_SCAN_TYPE_PRIMSTR);
+    EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_FLAT);
     rv->length = len;
     rv->data.flat = (char*)rv + sizeof(EJSPrimString);
     strncpy (rv->data.flat, str, len);
@@ -467,8 +467,8 @@ _ejs_string_concat (ejsval left, ejsval right)
     EJSPrimString* lhs = EJSVAL_TO_STRING(left);
     EJSPrimString* rhs = EJSVAL_TO_STRING(right);
     
-    EJSPrimString* rv = (EJSPrimString*)_ejs_gc_alloc(sizeof(EJSPrimString), EJS_FALSE/*XXX*/);
-    rv->type = EJS_STRING_ROPE;
+    EJSPrimString* rv = (EJSPrimString*)_ejs_gc_alloc(sizeof(EJSPrimString), EJS_SCAN_TYPE_PRIMSTR);
+    EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_ROPE);
     rv->length = lhs->length + rhs->length;
     rv->data.rope.left = lhs;
     rv->data.rope.right = rhs;
@@ -479,7 +479,7 @@ _ejs_string_concat (ejsval left, ejsval right)
 static void
 flatten_rope (char **p, EJSPrimString *n)
 {
-    switch (n->type) {
+    switch (EJS_PRIMSTR_GET_TYPE(n)) {
     case EJS_STRING_FLAT:
         strncpy(*p, n->data.flat, n->length);
         *p += n->length;
@@ -494,25 +494,30 @@ flatten_rope (char **p, EJSPrimString *n)
 }
 
 EJSPrimString*
-_ejs_string_flatten (ejsval str)
+_ejs_primstring_flatten (EJSPrimString* primstr)
 {
-    EJSPrimString* primstr = EJSVAL_TO_STRING_IMPL(str);
-    switch (primstr->type) {
+    switch (EJS_PRIMSTR_GET_TYPE(primstr)) {
     case EJS_STRING_FLAT:
         return primstr;
     case EJS_STRING_ROPE: {
+        // modify the string in-place, switching from a rope to a flat string
         char *buffer = (char*)malloc(primstr->length + 1);
         char *p = buffer;
         flatten_rope (&p, primstr);
         buffer[primstr->length] = 0;
-        // switch the type of the string to flat
-        primstr->type = EJS_STRING_FLAT;
+        EJS_PRIMSTR_SET_TYPE(primstr, EJS_STRING_FLAT);
         primstr->data.flat = buffer;
         return primstr;
     }
     default:
         EJS_NOT_IMPLEMENTED();
     }
+}
+
+EJSPrimString*
+_ejs_string_flatten (ejsval str)
+{
+    return _ejs_primstring_flatten (EJSVAL_TO_STRING_IMPL(str));
 }
 
 ejsval
@@ -892,7 +897,7 @@ _ejs_Object_seal (ejsval env, ejsval _this, int argc, ejsval *args)
     }
 
     /* 3. Set the [[Extensible]] internal property of O to false. */
-    obj->extensible = EJS_FALSE;
+    EJS_OBJECT_CLEAR_EXTENSIBLE(obj);
 
     /* 4. Return O. */
     return O;
@@ -934,7 +939,7 @@ _ejs_Object_freeze (ejsval env, ejsval _this, int argc, ejsval *args)
     }
 
     /* 3. Set the [[Extensible]] internal property of O to false. */
-    obj->extensible = EJS_FALSE;
+    EJS_OBJECT_CLEAR_EXTENSIBLE(obj);
 
     /* 4. Return O. */
     return O;
@@ -955,7 +960,7 @@ _ejs_Object_preventExtensions (ejsval env, ejsval _this, int argc, ejsval *args)
     EJSObject* obj = EJSVAL_TO_OBJECT(O);
 
     /* 2. Set the [[Extensible]] internal property of O to false. */
-    obj->extensible = EJS_FALSE;
+    EJS_OBJECT_CLEAR_EXTENSIBLE(obj);
 
     /* 3. Return O. */
     return O;
@@ -989,7 +994,7 @@ _ejs_Object_isSealed (ejsval env, ejsval _this, int argc, ejsval *args)
     }
 
     /* 3. If the [[Extensible]] internal property of O is false, then return true. */
-    if (!obj->extensible)
+    if (!EJS_OBJECT_IS_EXTENSIBLE(obj))
         return _ejs_true;
 
     /* 4. Otherwise, return false. */
@@ -1029,7 +1034,7 @@ _ejs_Object_isFrozen (ejsval env, ejsval _this, int argc, ejsval *args)
     }
 
     /* 3. If the [[Extensible]] internal property of O is false, then return true. */
-    if (!obj->extensible)
+    if (!EJS_OBJECT_IS_EXTENSIBLE(obj))
         return _ejs_true;
     
     /* 4. Otherwise, return false. */
@@ -1051,7 +1056,7 @@ _ejs_Object_isExtensible (ejsval env, ejsval _this, int argc, ejsval *args)
     EJSObject* obj = EJSVAL_TO_OBJECT(O);
 
     /* 2. Return the Boolean value of the [[Extensible]] internal property of O */
-    return BOOLEAN_TO_EJSVAL(obj->extensible);
+    return BOOLEAN_TO_EJSVAL(EJS_OBJECT_IS_EXTENSIBLE(obj));
 }
 
 // ECMA262: 15.2.3.14
@@ -1385,7 +1390,7 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
     EJSPropertyDesc* current = OP(obj, get_own_property)(O, P);
 
     /* 2. Let extensible be the value of the [[Extensible]] internal property of O. */
-    EJSBool extensible = obj->extensible;
+    EJSBool extensible = EJS_OBJECT_IS_EXTENSIBLE(obj);
 
     /* 3. If current is undefined and extensible is false, then Reject. */
     if (!current && !extensible)

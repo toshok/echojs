@@ -35,10 +35,10 @@ ejsval _ejs_global;
 
 
 /* useful strings literals */
-#define EJS_ATOM(atom) static const EJSPrimString _ejs_string_##atom = { .type = EJS_STRING_FLAT, .length = sizeof(EJS_STRINGIFY(atom))-1, .data = { .flat = EJS_STRINGIFY(atom) }}; ejsval _ejs_atom_##atom; const char* _ejs_cstring_##atom = EJS_STRINGIFY(atom);
+#define EJS_ATOM(atom) static const EJSPrimString _ejs_string_##atom = { .gc_header = (EJS_STRING_FLAT<<EJS_GC_USER_FLAGS_SHIFT), .length = sizeof(EJS_STRINGIFY(atom))-1, .data = { .flat = EJS_STRINGIFY(atom) }}; ejsval _ejs_atom_##atom; const char* _ejs_cstring_##atom = EJS_STRINGIFY(atom);
 #include "ejs-atoms.h"
 #undef EJS_ATOM
-static const EJSPrimString _ejs_string_empty = { .type = EJS_STRING_FLAT, .length = 0, .data = { .flat = "" }};
+static const EJSPrimString _ejs_string_empty = { .gc_header = (EJS_STRING_FLAT<<EJS_GC_USER_FLAGS_SHIFT), .length = 0, .data = { .flat = "" }};
 ejsval _ejs_atom_empty;
 
 static void
@@ -85,7 +85,7 @@ _ejs_init(int argc, char** argv)
     _ejs_json_init(_ejs_global);
     _ejs_math_init(_ejs_global);
 
-#define GLOBAL_METHOD(x) EJS_MACRO_START ADD_STACK_ROOT(ejsval, name, _ejs_string_new_utf8 (#x)); _ejs_object_setprop (_ejs_global, name, _ejs_function_new (_ejs_null, name, (EJSClosureFunc)_ejs_##x)); EJS_MACRO_END
+#define GLOBAL_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_global, EJS_STRINGIFY(x), _ejs_##x)
 
     GLOBAL_METHOD(isNaN);
     GLOBAL_METHOD(isFinite);
@@ -98,4 +98,5 @@ _ejs_init(int argc, char** argv)
     GLOBAL_METHOD(encodeURIComponent);
 
 #undef GLOBAL_METHOD
+    END_SHADOW_STACK_FRAME;
 }
