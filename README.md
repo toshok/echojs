@@ -16,48 +16,51 @@ give you) implementation, which then records type information at
 runtime.  You feed this back into the compiler and get a more heavily
 specialized version.
 
+4. Right now there's no way to run a JIT on IOS devices.  So at the
+moment the only JS competition for Echo in the use cases I'm
+envisioning are the JS engines in interpreter mode.  When I did my
+initial testing, spidermonkey was faster than JavaScriptCore, so I've
+been using SM as the performance goal.  It should be possible to beat
+the interpreter pretty easily, and the PGO/type inference gains should
+get us up near (but likely not reaching in the general case) the JITs.
+
 Why "Echo?"
 -----------
 
-Originally (check git history, before [ed3020dde](https://github.com/toshok/echo-js/commit/ed3020dde7d33018720b26484e98390ab6c69718)) echo was based directly on narcissus.  See http://en.wikipedia.org/wiki/Echo_and_Narcissus
+Originally (check git history, before
+[ed3020dde](https://github.com/toshok/echo-js/commit/ed3020dde7d33018720b26484e98390ab6c69718))
+Echo was based directly on mozilla's Narcissus.  See
+http://en.wikipedia.org/wiki/Echo_and_Narcissus
 
 What works?
 -----------
 
-Not much at present.  There are no constructors, no prototypes, no
-"this", no builtin objects at all.
+Quite a bit, although nearly everything has that
+first-pass-is-a-throwaway-implementation feel to it.
 
-What does work is very simple code.  closures do work ([test/sieve.js](https://github.com/toshok/echo-js/blob/master/test/sieve.js)
-uses them.  a whole lot of them.), so you can do pretty interesting
-things, even with the limitted feature set at present.
+Object, Function, String, Number, Array, Date, Regexp, Math builtins
+are there and mostly implemented against ECMA262.  Prototypes are
+there, although property lookups are still a linear search.
 
-At the moment I'm more concerned with getting everything working in
-this terribly slow universe of "everything-is-boxed,
-closure-environments-are-js-objects, field-access-is-a-linear-lookup"
-before worrying too much about performance, or even really about
-semantic parity with ECMAScript.  Also I'm not sure I'll ever be
-interested in supporting non-strict code, so ECMA parity is kinda out
-the window already.
+The gc is a very simple mark and sweep, but seems to keep everything
+under control.
 
+Echo now uses mozilla's NaN-boxing jsval (called ejsval here) so
+primitive ints and doubles are stored unboxed.
+
+Closure environments are still represented as JS objects, with the
+aforementioned lineary property lookups for closed-over variables, but
+this will be changing something very soon.
 
 What's next?
 ------------
 
-I'm currently trying to build up enough functionality in the compiler
-to bootstrap itself.  There are a few areas that need to be fleshed
-out:
+Right now it's mostly tracking down compiler/runtime bugs that are
+keeping the self-hosted compiler from running.
 
-1. Object and Array builtin types and some of the methods on them
-
-2. Constructors and prototypes (and this, of course)
-
-3. An ffi interface to call C code
-
-4. A replacement set of llvm bindings for Echo.  I don't think I'll be
-keeping the v8 interfaces.
-
-5. enough of the node.js IO/process interfaces to build the ejs driver
-
+Typed arrays are another area that I'd like to see fleshed out sooner
+rather than later.  They're pretty simple from an implementation
+perspective.
 
 Pass the crackpipe?
 -------------------
