@@ -163,7 +163,7 @@ FromPropertyDescriptor(EJSPropertyDesc* Desc)
 
     /* 2. Let obj be the result of creating  a new object as if by the expression new Object() where Object  is the standard  */
     /*    built-in constructor with that name. */
-    ejsval obj = _ejs_object_new(_ejs_Object_proto);
+    ejsval obj = _ejs_object_new(_ejs_Object_prototype);
     EJSObject* obj_ = EJSVAL_TO_OBJECT(obj);
 
     /* 3. If IsDataDescriptor(Desc) is true, then */
@@ -382,12 +382,12 @@ _ejs_init_object (EJSObject* obj, ejsval proto, EJSSpecOps *ops)
 ejsval
 _ejs_object_new (ejsval proto)
 {
-    if (EJSVAL_IS_NULL(proto)) proto = _ejs_Object_proto;
+    if (EJSVAL_IS_NULL(proto)) proto = _ejs_Object_prototype;
 
     EJSObject *obj;
     EJSSpecOps *ops;
 
-    if (EJSVAL_EQ(proto, _ejs_Object_proto)) {
+    if (EJSVAL_EQ(proto, _ejs_Object_prototype)) {
         obj = _ejs_object_alloc_instance();
         ops = &_ejs_object_specops;
     }
@@ -395,7 +395,7 @@ _ejs_object_new (ejsval proto)
         obj = _ejs_array_alloc_instance();
         ops = &_ejs_array_specops;
     }
-    else if (EJSVAL_EQ(proto, _ejs_String_proto)) {
+    else if (EJSVAL_EQ(proto, _ejs_String_prototype)) {
         obj = _ejs_string_alloc_instance();
         ops = &_ejs_string_specops;
     }
@@ -403,7 +403,7 @@ _ejs_object_new (ejsval proto)
         obj = _ejs_number_alloc_instance();
         ops = &_ejs_number_specops;
     }
-    else if (EJSVAL_EQ(proto, _ejs_Regexp_proto)) {
+    else if (EJSVAL_EQ(proto, _ejs_RegExp_proto)) {
         obj = _ejs_regexp_alloc_instance();
         ops = &_ejs_regexp_specops;
     }
@@ -590,6 +590,14 @@ _ejs_object_getprop (ejsval obj, ejsval key)
     return OP(EJSVAL_TO_OBJECT(obj),get)(obj, key, EJS_FALSE);
 }
 
+EJSBool
+_ejs_object_define_value_property (ejsval obj, ejsval key, ejsval value, EJSBool writable, EJSBool configurable, EJSBool enumerable)
+{
+    EJSObject *_obj = EJSVAL_TO_OBJECT(obj);
+    EJSPropertyDesc desc = { .value = value, .writable = writable, .configurable = configurable, .enumerable = enumerable, .get = _ejs_undefined, .set = _ejs_undefined };
+    return OP(_obj,define_own_property)(obj, key, &desc, EJS_FALSE);
+}
+
 ejsval
 _ejs_object_setprop_utf8 (ejsval val, const char *key, ejsval value)
 {
@@ -663,7 +671,8 @@ _ejs_dump_value (ejsval val)
 }
 
 ejsval _ejs_Object;
-ejsval _ejs_Object_proto = {0};
+ejsval _ejs_Object__proto__;
+ejsval _ejs_Object_prototype;
 
 static ejsval
 _ejs_Object_impl (ejsval env, ejsval _this, int argc, ejsval *args)
@@ -1072,7 +1081,14 @@ _ejs_Object_prototype_toString (ejsval env, ejsval _this, int argc, ejsval *args
 {
     char buf[1024];
     ejsval thisObj = ToObject(_this);
-    snprintf (buf, sizeof(buf), "[object %s]", CLASSNAME(EJSVAL_TO_OBJECT(thisObj)));
+    const char *classname;
+    if (EJSVAL_IS_NULL(thisObj))
+        classname = "Null";
+    else if (EJSVAL_IS_UNDEFINED(thisObj))
+        classname = "Undefined";
+    else
+        classname = CLASSNAME(EJSVAL_TO_OBJECT(thisObj));
+    snprintf (buf, sizeof(buf), "[object %s]", classname);
     return _ejs_string_new_utf8 (buf);
 }
 
@@ -1166,25 +1182,39 @@ _ejs_Object_prototype_propertyIsEnumerable (ejsval env, ejsval _this, int argc, 
 }
 
 void
+_ejs_object_init_proto()
+{
+    _ejs_gc_add_named_root (_ejs_Object__proto__);
+
+    EJSFunction* __proto__ = _ejs_gc_new(EJSFunction);
+    __proto__->name = _ejs_atom_Empty;
+    __proto__->func = _ejs_Function_empty;
+    __proto__->env = _ejs_null;
+
+    EJSObject* prototype = _ejs_gc_new(EJSObject);
+
+    _ejs_Object__proto__ = OBJECT_TO_EJSVAL((EJSObject*)__proto__);
+    _ejs_Object_prototype = OBJECT_TO_EJSVAL(prototype);
+
+    _ejs_init_object (prototype, _ejs_null, &_ejs_object_specops);
+    _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_function_specops);
+}
+
+void
 _ejs_object_init (ejsval global)
 {
     START_SHADOW_STACK_FRAME;
-
-    // FIXME ECMA262 15.2.4
-    _ejs_gc_add_named_root (_ejs_Object_proto);
-    _ejs_Object_proto = _ejs_null;
-    _ejs_Object_proto = _ejs_object_new(_ejs_null); // XXX circular initialization going on here..
 
     ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_Object, (EJSClosureFunc)_ejs_Object_impl));
     _ejs_Object = tmpobj;
 
     // ECMA262 15.2.3.1
-    _ejs_object_setprop (_ejs_Object,       _ejs_atom_prototype,    _ejs_Object_proto); // FIXME: {[[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }
+    _ejs_object_setprop (_ejs_Object,       _ejs_atom_prototype,    _ejs_Object_prototype); // FIXME: {[[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }
     // ECMA262: 15.2.4.1
-    _ejs_object_setprop (_ejs_Object_proto, _ejs_atom_constructor,  _ejs_Object);
+    _ejs_object_setprop (_ejs_Object_prototype, _ejs_atom_constructor,  _ejs_Object);
 
 #define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Object, EJS_STRINGIFY(x), _ejs_Object_##x)
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Object_proto, EJS_STRINGIFY(x), _ejs_Object_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Object_prototype, EJS_STRINGIFY(x), _ejs_Object_prototype_##x)
 
     OBJ_METHOD(getPrototypeOf);
     OBJ_METHOD(getOwnPropertyDescriptor);
@@ -1235,7 +1265,7 @@ _ejs_object_specop_get (ejsval obj_, ejsval propertyName, EJSBool isCStr)
     int prop_index = _ejs_propertymap_lookup (obj->map, pname, EJS_FALSE);
 
     if (prop_index == -1) {
-        if (!strcmp("prototype", pname))
+        if (!strcmp("__proto__", pname))
             return obj->proto;
 
         if (EJSVAL_IS_NULL(obj->proto)) {

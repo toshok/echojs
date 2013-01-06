@@ -37,18 +37,18 @@ EJSSpecOps _ejs_regexp_specops = {
 
 EJSObject* _ejs_regexp_alloc_instance()
 {
-    return (EJSObject*)_ejs_gc_new(EJSRegexp);
+    return (EJSObject*)_ejs_gc_new(EJSRegExp);
 }
 
 ejsval
 _ejs_regexp_new_utf8 (const char* str)
 {
     int str_len = strlen(str);
-    size_t value_size = sizeof (EJSRegexp) + str_len;
+    size_t value_size = sizeof (EJSRegExp) + str_len;
 
-    EJSRegexp* rv = (EJSRegexp*)_ejs_gc_alloc (value_size, EJS_SCAN_TYPE_OBJECT);
+    EJSRegExp* rv = (EJSRegExp*)_ejs_gc_alloc (value_size, EJS_SCAN_TYPE_OBJECT);
 
-    _ejs_init_object ((EJSObject*)rv, _ejs_Regexp_proto, &_ejs_regexp_specops);
+    _ejs_init_object ((EJSObject*)rv, _ejs_RegExp_proto, &_ejs_regexp_specops);
     ((EJSObject*)rv)->ops = &_ejs_regexp_specops;
 
     rv->pattern_len = str_len;
@@ -57,38 +57,38 @@ _ejs_regexp_new_utf8 (const char* str)
     return OBJECT_TO_EJSVAL((EJSObject*)rv);
 }
 
-ejsval _ejs_Regexp;
-ejsval _ejs_Regexp_proto;
+ejsval _ejs_RegExp;
+ejsval _ejs_RegExp_proto;
 
 static ejsval
-_ejs_Regexp_impl (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_RegExp_impl (ejsval env, ejsval _this, int argc, ejsval *args)
 {
     if (EJSVAL_IS_UNDEFINED(_this)) {
         // called as a function
-        printf ("called Regexp() as a function!\n");
-        return _ejs_object_new(_ejs_Regexp_proto);
+        printf ("called RegExp() as a function!\n");
+        return _ejs_object_new(_ejs_RegExp_proto);
     }
     else {
         // called as a constructor
-        printf ("called Regexp() as a constructor!\n");
+        printf ("called RegExp() as a constructor!\n");
         return _this;
     }
 }
 
 static ejsval
-_ejs_Regexp_prototype_exec (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_RegExp_prototype_exec (ejsval env, ejsval _this, int argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
-_ejs_Regexp_prototype_match (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_RegExp_prototype_match (ejsval env, ejsval _this, int argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
-_ejs_Regexp_prototype_test (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_RegExp_prototype_test (ejsval env, ejsval _this, int argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }
@@ -98,16 +98,16 @@ _ejs_regexp_init(ejsval global)
 {
     START_SHADOW_STACK_FRAME;
 
-    _ejs_gc_add_named_root (_ejs_Regexp_proto);
-    _ejs_Regexp_proto = _ejs_object_new(_ejs_null);
+    _ejs_gc_add_named_root (_ejs_RegExp_proto);
+    _ejs_RegExp_proto = _ejs_object_new(_ejs_null);
 
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_Regexp, (EJSClosureFunc)_ejs_Regexp_impl));
-    _ejs_Regexp = tmpobj;
+    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_RegExp, (EJSClosureFunc)_ejs_RegExp_impl));
+    _ejs_RegExp = tmpobj;
 
-    _ejs_object_setprop (_ejs_Regexp,       _ejs_atom_prototype,  _ejs_Regexp_proto);
+    _ejs_object_setprop (_ejs_RegExp,       _ejs_atom_prototype,  _ejs_RegExp_proto);
 
-#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Regexp, EJS_STRINGIFY(x), _ejs_Regexp_##x)
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Regexp_proto, EJS_STRINGIFY(x), _ejs_Regexp_prototype_##x)
+#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_RegExp, EJS_STRINGIFY(x), _ejs_RegExp_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_RegExp_proto, EJS_STRINGIFY(x), _ejs_RegExp_prototype_##x)
 
     PROTO_METHOD(exec);
     PROTO_METHOD(match);
@@ -116,7 +116,7 @@ _ejs_regexp_init(ejsval global)
 #undef OBJ_METHOD
 #undef PROTO_METHOD
 
-    _ejs_object_setprop (global, _ejs_atom_Regexp, _ejs_Regexp);
+    _ejs_object_setprop (global, _ejs_atom_RegExp, _ejs_RegExp);
 
     END_SHADOW_STACK_FRAME;
 }

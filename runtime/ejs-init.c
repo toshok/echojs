@@ -70,6 +70,8 @@ _ejs_init(int argc, char** argv)
     _ejs_object_setprop_utf8 (_ejs_global, "NaN", _ejs_nan);
     _ejs_object_setprop_utf8 (_ejs_global, "__ejs", _ejs_true);
 
+    _ejs_object_init_proto();
+
     _ejs_function_init(_ejs_global);
     _ejs_object_init(_ejs_global);
     _ejs_arguments_init(_ejs_global);

@@ -44,7 +44,8 @@ EJSObject* _ejs_string_alloc_instance()
 }
 
 ejsval _ejs_String;
-ejsval _ejs_String_proto;
+ejsval _ejs_String__proto__;
+ejsval _ejs_String_prototype;
 
 static ejsval
 _ejs_String_impl (ejsval env, ejsval _this, int argc, ejsval *args)
@@ -317,21 +318,39 @@ _ejs_String_prototype_slice (ejsval env, ejsval _this, int argc, ejsval *args)
     return _ejs_string_new_utf8_len (EJSVAL_TO_FLAT_STRING(S), span);
 }
 
+static void
+_ejs_string_init_proto()
+{
+    _ejs_gc_add_named_root (_ejs_Object__proto__);
+
+    EJSFunction* __proto__ = _ejs_gc_new(EJSFunction);
+    __proto__->name = _ejs_atom_Empty;
+    __proto__->func = _ejs_Function_empty;
+    __proto__->env = _ejs_null;
+
+    EJSObject* prototype = _ejs_gc_new(EJSObject);
+
+    _ejs_String__proto__ = OBJECT_TO_EJSVAL((EJSObject*)__proto__);
+    _ejs_String_prototype = OBJECT_TO_EJSVAL(prototype);
+
+    _ejs_init_object (prototype, _ejs_null, &_ejs_string_specops);
+    _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_function_specops);
+}
+
 void
 _ejs_string_init(ejsval global)
 {
     START_SHADOW_STACK_FRAME;
 
-    _ejs_gc_add_named_root (_ejs_String_proto);
-    _ejs_String_proto = _ejs_object_new(_ejs_null);
+    _ejs_string_init_proto();
   
     ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_String, (EJSClosureFunc)_ejs_String_impl));
     _ejs_String = tmpobj;
 
-    _ejs_object_setprop (_ejs_String,       _ejs_atom_prototype,  _ejs_String_proto);
+    _ejs_object_setprop (_ejs_String,       _ejs_atom_prototype,  _ejs_String_prototype);
 
 #define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_String, EJS_STRINGIFY(x), _ejs_String_##x)
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_String_proto, EJS_STRINGIFY(x), _ejs_String_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_String_prototype, EJS_STRINGIFY(x), _ejs_String_prototype_##x)
 
     PROTO_METHOD(charAt);
     PROTO_METHOD(charCodeAt);

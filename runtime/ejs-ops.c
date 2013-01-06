@@ -138,7 +138,7 @@ ejsval ToObject(ejsval exp)
     }
     else if (EJSVAL_IS_STRING(exp)) {
         EJSObject* new_str = _ejs_string_alloc_instance();
-        _ejs_init_object (new_str, _ejs_String_proto, &_ejs_string_specops);
+        _ejs_init_object (new_str, _ejs_String_prototype, &_ejs_string_specops);
         return _ejs_invoke_closure_1 (_ejs_String, OBJECT_TO_EJSVAL(new_str), 1, exp);
     }
     else if (EJSVAL_IS_UNDEFINED(exp))

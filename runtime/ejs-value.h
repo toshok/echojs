@@ -56,7 +56,7 @@ struct _EJSPrimString {
 
 #define EJSVAL_IS_OBJECT(v)    EJSVAL_IS_OBJECT_IMPL(v)
 #define EJSVAL_IS_ARRAY(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->proto.asBits == _ejs_Array_proto.asBits))
-#define EJSVAL_IS_FUNCTION(v)  (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->proto.asBits == _ejs_Function_proto.asBits))
+#define EJSVAL_IS_FUNCTION(v)  (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->proto.asBits == _ejs_Function__proto__.asBits))
 #define EJSVAL_IS_NUMBER(v)    EJSVAL_IS_DOUBLE_IMPL(v)
 #define EJSVAL_IS_STRING(v)    EJSVAL_IS_STRING_IMPL(v)
 #define EJSVAL_IS_BOOLEAN(v)   EJSVAL_IS_BOOLEAN_IMPL(v)

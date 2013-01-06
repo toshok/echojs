@@ -17,7 +17,8 @@ typedef struct {
 EJS_BEGIN_DECLS
 
 extern ejsval _ejs_String;
-extern ejsval _ejs_String_proto;
+extern ejsval _ejs_String__proto__;
+extern ejsval _ejs_String_prototype;
 extern EJSSpecOps _ejs_string_specops;
 
 EJSObject* _ejs_string_alloc_instance();

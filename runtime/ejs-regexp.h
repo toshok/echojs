@@ -14,12 +14,12 @@ typedef struct {
     /* regexp specific data */
     int pattern_len;
     char *pattern;
-} EJSRegexp;
+} EJSRegExp;
 
 EJS_BEGIN_DECLS
 
-extern ejsval _ejs_Regexp;
-extern ejsval _ejs_Regexp_proto;
+extern ejsval _ejs_RegExp;
+extern ejsval _ejs_RegExp_proto;
 extern EJSSpecOps _ejs_regexp_specops;
 
 

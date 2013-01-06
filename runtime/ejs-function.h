@@ -51,8 +51,13 @@ extern ejsval _ejs_function_new (EJSClosureEnv env, ejsval name, EJSClosureFunc 
 extern ejsval _ejs_function_new_utf8 (EJSClosureEnv env, const char* name, EJSClosureFunc func);
 
 extern ejsval _ejs_Function;
-extern ejsval _ejs_Function_proto;
+extern ejsval _ejs_Function__proto__;
+extern EJSSpecOps _ejs_function_specops;
+
 extern void _ejs_function_init(ejsval global);
+
+// used as the __proto__ for a number of builtin objects
+ejsval _ejs_Function_empty (ejsval env, ejsval _this, int argc, ejsval *args);
 
 EJS_END_DECLS
 

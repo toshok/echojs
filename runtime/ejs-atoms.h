@@ -9,6 +9,8 @@ EJS_ATOM(object)
 EJS_ATOM(function)
 EJS_ATOM(string)
 
+EJS_ATOM(Empty)
+
 // property descriptors
 EJS_ATOM(value)
 EJS_ATOM(writable)
@@ -25,5 +27,5 @@ EJS_ATOM(JSON)
 EJS_ATOM(Math)
 EJS_ATOM(Number)
 EJS_ATOM(Object)
-EJS_ATOM(Regexp)
+EJS_ATOM(RegExp)
 EJS_ATOM(String)

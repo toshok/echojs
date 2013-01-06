@@ -68,7 +68,7 @@ typedef struct {
 
 struct _EJSObject {
     GCObjectHeader gc_header;
-    ejsval proto;
+    ejsval proto; // the __proto__ property
     EJSSpecOps *ops;
     EJSPropertyMap* map;
 };
@@ -84,6 +84,8 @@ EJSPropertyMap* _ejs_propertymap_new (int initial_allocation);
 int _ejs_propertymap_lookup (EJSPropertyMap *map, const char *name, EJSBool add_if_not_found);
 void _ejs_propertymap_foreach_value (EJSPropertyMap *map, EJSValueFunc foreach_func);
 
+EJSBool _ejs_object_define_value_property (ejsval obj, ejsval key, ejsval value, EJSBool writable, EJSBool configurable, EJSBool enumerable);
+
 ejsval _ejs_object_setprop (ejsval obj, ejsval key, ejsval value);
 ejsval _ejs_object_getprop (ejsval obj, ejsval key);
 
@@ -96,8 +98,11 @@ void _ejs_property_iterator_next (EJSPropertyIterator* iterator);
 void _ejs_property_iterator_free (EJSPropertyIterator *iterator);
 
 extern ejsval _ejs_Object;
-extern ejsval _ejs_Object_proto;
+extern ejsval _ejs_Object__proto__;
+extern ejsval _ejs_Object_prototype;
 extern EJSSpecOps _ejs_object_specops;
+
+void _ejs_object_init_proto();
 
 ejsval _ejs_object_new (ejsval proto);
 EJSObject* _ejs_object_alloc_instance();
