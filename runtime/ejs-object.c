@@ -841,6 +841,12 @@ _ejs_Object_defineProperty (ejsval env, ejsval _this, int argc, ejsval *args)
 }
 
 // ECMA262: 15.2.3.7
+
+typedef struct {
+    ejsval P;
+    EJSPropertyDesc desc;
+} DefinePropertiesPair;
+
 /* Object.defineProperties ( O, Properties ) */
 static ejsval
 _ejs_Object_defineProperties (ejsval env, ejsval _this, int argc, ejsval *args)
@@ -859,18 +865,59 @@ _ejs_Object_defineProperties (ejsval env, ejsval _this, int argc, ejsval *args)
 
     /* 2. Let props be ToObject(Properties). */
     ejsval props = ToObject(Properties);
+    EJSObject* props_obj = EJSVAL_TO_OBJECT(props);
 
     /* 3. Let names be an internal list containing the names of each enumerable own property of props. */
-    EJS_NOT_IMPLEMENTED();
+    int names_len = 0;
+    for (int p = 0; p < props_obj->map->num; p ++) {
+        if (props_obj->map->properties[p].enumerable)
+            names_len ++;
+    }
+
+    if (names_len == 0) {
+        /* no enumerable properties, bail early */
+        return O;
+    }
+
+    ejsval* names = malloc(names_len * sizeof(ejsval));
+    int n = 0;
+    for (int p = 0; p < props_obj->map->num; p ++) {
+        if (props_obj->map->properties[p].enumerable)
+            names[n++] = _ejs_string_new_utf8(props_obj->map->names[p]);
+    }
+
     /* 4. Let descriptors be an empty internal List. */
+    DefinePropertiesPair *descriptors = malloc(sizeof(DefinePropertiesPair) * names_len);
+
     /* 5. For each element P of names in list order, */
-    /* a. Let descObj be the result of calling the [[Get]] internal method of props with P as the argument. */
-    /* b. Let desc be the result of calling ToPropertyDescriptor with descObj as the argument. */
-    /* c. Append the pair (a two element List) consisting of P and desc to the end of descriptors. */
+    for (int n = 0; n < names_len; n ++) {
+        ejsval P = names[n];
+
+        /* a. Let descObj be the result of calling the [[Get]] internal method of props with P as the argument. */
+        ejsval descObj = OP(props_obj,get)(props, P, EJS_FALSE);
+
+        DefinePropertiesPair *pair = &descriptors[n];
+        /* b. Let desc be the result of calling ToPropertyDescriptor with descObj as the argument. */
+        ToPropertyDescriptor (descObj, &pair->desc);
+        /* c. Append the pair (a two element List) consisting of P and desc to the end of descriptors. */
+        pair->P = P;
+    }
+
     /* 6. For  each pair from descriptors in list order, */
-    /*    a. Let P be the first element of pair. */
-    /*    b. Let desc be the second element of pair. */
-    /*    c. Call the [[DefineOwnProperty]] internal method of O with arguments P, desc, and true. */
+    for (int d = 0; d < names_len; d++) {
+        /*    a. Let P be the first element of pair. */
+        ejsval P = descriptors[d].P;
+
+        /*    b. Let desc be the second element of pair. */
+        EJSPropertyDesc* desc = &descriptors[d].desc;
+
+        /*    c. Call the [[DefineOwnProperty]] internal method of O with arguments P, desc, and true. */
+        OP(obj,define_own_property)(O, P, desc, EJS_TRUE);
+    }
+
+    free (names);
+    free (descriptors);
+    
     /* 7. Return O. */
     return O;
 }
