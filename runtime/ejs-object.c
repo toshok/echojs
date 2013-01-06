@@ -253,6 +253,29 @@ _ejs_propertymap_foreach_value (EJSPropertyMap* map, EJSValueFunc foreach_func)
     }
 }
 
+void
+_ejs_propertymap_delete_named (EJSPropertyMap *map, const char *name)
+{
+    EJS_NOT_IMPLEMENTED();
+}
+
+void
+_ejs_propertymap_delete_desc (EJSPropertyMap *map, EJSPropertyDesc *desc)
+{
+    int i;
+    for (i = 0; i < map->num; i ++) {
+        if (desc == &map->properties[i]) {
+            if (i < map->num - 1) {
+                memmove (&map->names[i], &map->names[i+1], (map->num - (i+1)) * sizeof(char*));
+                memmove (&map->properties[i], &map->properties[i+1], (map->num - (i + 1)) * sizeof(EJSPropertyDesc*));
+            }
+            map->num--;
+            return;
+        }
+    }
+    EJS_NOT_IMPLEMENTED();
+}
+
 int
 _ejs_propertymap_lookup (EJSPropertyMap *map, const char *name, EJSBool add_if_not_found)
 {
@@ -1435,10 +1458,17 @@ _ejs_object_specop_delete (ejsval O, ejsval P, EJSBool Throw)
     if (!desc)
         return EJS_TRUE;
     /* 3. If desc.[[Configurable]] is true, then */
-    EJS_NOT_IMPLEMENTED();
-    /*    a. Remove the own property with name P from O. */
-    /*    b. Return true. */
+    if (desc->configurable) {
+        /*    a. Remove the own property with name P from O. */
+        _ejs_propertymap_delete_desc (obj->map, desc);
+        /*    b. Return true. */
+        return EJS_TRUE;
+    }
     /* 4. Else if Throw, then throw a TypeError exception.*/
+    else if (Throw) {
+        printf ("throw TypeError from specop_delete\n");
+        EJS_NOT_IMPLEMENTED();
+    }
     /* 5. Return false. */
     return EJS_FALSE;
 }

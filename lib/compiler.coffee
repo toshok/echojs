@@ -914,7 +914,14 @@ class LLVMIRVisitor extends NodeVisitor
         
                 if n.operator is "delete"
                         if n.argument.type is syntax.MemberExpression
-                                return @createCall callee, [(@visitOrNull n.argument.object), (@visitOrNull n.argument.property)], "result"
+                                fake_literal = {
+                                        type: syntax.Literal
+                                        value: n.argument.property.name
+                                        raw: "\"#{n.argument.property.name}\""
+                                }
+                                return @createCall callee, [(@visitOrNull n.argument.object), (@visit fake_literal)], "result"
+                        else
+                                throw "unhandled delete syntax"
                 else
                         if not callee
                                 throw "Internal error: unary operator '#{n.operator}' not implemented"

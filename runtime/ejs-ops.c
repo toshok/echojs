@@ -235,6 +235,10 @@ _ejs_op_typeof (ejsval exp)
 ejsval
 _ejs_op_delete (ejsval obj, ejsval prop)
 {
+    EJSObject *obj_ = EJSVAL_TO_OBJECT(obj);
+
+    OP(obj_,_delete)(obj, prop, EJS_TRUE);
+
     return _ejs_true;
 }
 
