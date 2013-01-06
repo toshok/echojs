@@ -32,10 +32,23 @@ typedef uint32_t GCObjectHeader;
     v->prev = v->next = NULL;                   \
     EJS_MACRO_END
 
-#define EJS_LIST_ATTACH(v,l) EJS_MACRO_START	\
+#define EJS_LIST_PREPEND(v,l) EJS_MACRO_START	\
     v->next = l;                                \
     if (l) l->prev = v;                         \
     l = v;                                      \
+    EJS_MACRO_END
+
+#define EJS_LIST_APPEND(t,v,l) EJS_MACRO_START      \
+    if ((l) == NULL) {                              \
+        EJS_LIST_PREPEND(v,l);                      \
+    }                                               \
+    else {                                          \
+        t* end = l;                                 \
+        while (end->next != NULL) end = end->next;  \
+        end->next = v;                              \
+        v->prev = end;                              \
+        v->next = NULL;                             \
+    }                                               \
     EJS_MACRO_END
 
 #define EJS_LIST_DEATTACH(v,l) EJS_MACRO_START	\

@@ -619,7 +619,7 @@ alloc_from_los(size_t size, EJSBool has_finalizer)
     // we need to bump size up to a mulitple of the OS page size
     rv->los_data = alloc_from_os (size);
     rv->size = size;
-    EJS_LIST_ATTACH (rv, los_store);
+    EJS_LIST_PREPEND (rv, los_store);
     return rv->los_data;
 }
 
@@ -655,7 +655,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
 
     // we need a new page
     PageInfo *info = alloc_new_page(size);
-    EJS_LIST_ATTACH(info, heap_pages[bucket]);
+    EJS_LIST_PREPEND(info, heap_pages[bucket]);
     rv = alloc_from_freelist(info);
     *((GCObjectHeader*)rv) = scan_type;
     return rv;
