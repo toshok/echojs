@@ -5,11 +5,6 @@ NODE_PATH=$(TOPDIR)/node-llvm/build/Release:$(TOPDIR)/lib/coffee:$(TOPDIR)/lib:$
 
 TESTS:=$(wildcard *[0-9].js)
 
-# filter out tests that we can't even run at the moment
-TESTS:=$(filter-out sieve1.js,$(TESTS))
-TESTS:=$(filter-out esprima-roundtrip1.js,$(TESTS))
-
-
 EXPECTED_FAILURES= \
 	date1.js \
 	forin2.js \
@@ -23,7 +18,8 @@ EXPECTED_FAILURES= \
 	exc1 \
 	exc2 \
 	exc3 \
-	exc10
+	exc10 \
+	esprima-roundtrip1
 
 # date1 fails because we test the Date() function, which returns the current time.  this differs from the current time when the node test runs.  bleah.
 # forin2 fails because we don't properly handle deleting properties while iterating
@@ -35,6 +31,7 @@ EXPECTED_FAILURES= \
 # toLocaleString3 fails because we don't have a special toString (or toLocaleString) implementation for arrays.
 # prototype9 fails because of one actual prototype failure and difference in our Function.toString() method.
 # the exc* tests fail because things are very screwed up with exception handling at the moment.
+# esprima-roundtrip1 fails due to a gc bug.  with EJS_GC_DISABLE=1, the test runs fine
 
 check: check-unit-tests run-tests
 
@@ -115,8 +112,8 @@ echo-%:
 .%.node-out: %.js
 	@NODE_PATH=$(NODE_PATH) node $< > $@
 
-esprima-roundtrip%.js.exe: esprima-roundtrip%.js $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js
-	-NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $< $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js
+esprima-roundtrip%.js.exe: esprima-roundtrip%.js $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js $(TOPDIR)/runtime/libecho.a
+	-NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --cxx $< $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js
 
 %.js.exe: %.js $(TOPDIR)/runtime/libecho.a
 	-NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --cxx $<
