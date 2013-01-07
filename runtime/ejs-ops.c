@@ -142,7 +142,7 @@ ejsval ToObject(ejsval exp)
         return _ejs_invoke_closure_1 (_ejs_Number, new_number, 1, exp);
     }
     else if (EJSVAL_IS_STRING(exp)) {
-        ejsval new_str = _ejs_object_new (_ejs_String__proto__, &_ejs_string_specops);
+        ejsval new_str = _ejs_object_new (_ejs_String_prototype, &_ejs_string_specops);
         return _ejs_invoke_closure_1 (_ejs_String, new_str, 1, exp);
     }
     else if (EJSVAL_IS_UNDEFINED(exp))
