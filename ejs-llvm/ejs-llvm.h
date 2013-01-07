@@ -15,14 +15,14 @@
 #include "llvm/Support/raw_ostream.h"
 
 #define REQ_FUN_ARG(I, VAR)                                             \
-  if (argc <= (I) /*|| !args[I]->IsFunction()*/) {			\
+  if (argc <= (I) || !EJSVAL_IS_FUNCTION(args[I]))			\
     printf ("in function %s\n", __PRETTY_FUNCTION__);			\
     abort();								\
   }									\
   EJSFunction* VAR = (EJSFunction*)EJSVAL_TO_OBJECT(args[I]);
 
 #define REQ_ARRAY_ARG(I, VAR)                                           \
-  if (argc <= (I) /*|| !args[I]->IsArray()*/)				\
+  if (argc <= (I) || !EJSVAL_IS_ARRAY(args[I]))				\
     abort();								\
   EJSArray* VAR = (EJSArray*)EJSVAL_TO_OBJECT(args[I]);
 
@@ -44,7 +44,7 @@
 #define REQ_UTF8_ARG(I, VAR)						\
   if (argc <= (I) /*|| !args[I]->IsString()*/)				\
     abort();								\
-  char* VAR = EJSVAL_TO_STRING(args[I]);
+  char* VAR = EJSVAL_TO_FLAT_STRING(args[I]);
 
 #define REQ_LLVM_VAL_ARG(I, VAR)					\
   if (argc <= (I) /*|| !args[I]->IsObject() || !jsllvm::Value::HasInstance(args[I]) */) {	\

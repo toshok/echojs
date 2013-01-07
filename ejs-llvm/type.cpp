@@ -28,7 +28,7 @@ ejsval _ejs_llvm_Type;
 static ejsval
 _ejs_llvm_Type_impl (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-  NOT_IMPLEMENTED();
+  EJS_NOT_IMPLEMENTED();
 }
 
 #define LLVM_TYPE_METHOD_PROXY(name) LLVM_TYPE_METHOD(name,name)

@@ -23,7 +23,7 @@ ejsval _ejs_llvm_StructType;
 static ejsval
 _ejs_llvm_StructType_impl (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-  NOT_IMPLEMENTED();
+  EJS_NOT_IMPLEMENTED();
 }
 
 ejsval

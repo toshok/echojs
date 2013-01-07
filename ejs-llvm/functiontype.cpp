@@ -25,7 +25,7 @@ ejsval _ejs_llvm_FunctionType;
 static ejsval
 _ejs_llvm_FunctionType_impl (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-  NOT_IMPLEMENTED();
+  EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
