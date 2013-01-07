@@ -3,6 +3,7 @@
  */
 
 #include <assert.h>
+#include <string.h>
 
 #include "ejs-ops.h"
 #include "ejs-value.h"
@@ -18,6 +19,7 @@ static EJSBool _ejs_number_specop_has_property (ejsval obj, ejsval propertyName)
 static EJSBool _ejs_number_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
 static ejsval  _ejs_number_specop_default_value (ejsval obj, const char *hint);
 static EJSBool _ejs_number_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
+static EJSObject* _ejs_number_specop_allocate ();
 static void    _ejs_number_specop_finalize (EJSObject* obj);
 static void    _ejs_number_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
 
@@ -32,14 +34,11 @@ EJSSpecOps _ejs_number_specops = {
     _ejs_number_specop_delete,
     _ejs_number_specop_default_value,
     _ejs_number_specop_define_own_property,
+
+    _ejs_number_specop_allocate,
     _ejs_number_specop_finalize,
     _ejs_number_specop_scan
 };
-
-EJSObject* _ejs_number_alloc_instance()
-{
-    return (EJSObject*)_ejs_gc_new (EJSNumber);
-}
 
 ejsval _ejs_Number;
 ejsval _ejs_Number_proto;
@@ -59,9 +58,6 @@ _ejs_Number_impl (ejsval env, ejsval _this, int argc, ejsval *args)
     }
     else {
         EJSNumber* num = (EJSNumber*)EJSVAL_TO_OBJECT(_this);
-
-        // called as a constructor
-        ((EJSObject*)num)->ops = &_ejs_number_specops;
 
         if (argc > 0) {
             num->number = ToDouble(args[0]);
@@ -94,7 +90,7 @@ _ejs_number_init(ejsval global)
     START_SHADOW_STACK_FRAME;
 
     _ejs_gc_add_named_root (_ejs_Number_proto);
-    _ejs_Number_proto = _ejs_object_new(_ejs_null);
+    _ejs_Number_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_object_specops);
 
     ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_Number, (EJSClosureFunc)_ejs_Number_impl));
     _ejs_Number = tmpobj;
@@ -174,6 +170,12 @@ static EJSBool
 _ejs_number_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag)
 {
     return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
+}
+
+EJSObject*
+_ejs_number_specop_allocate()
+{
+    return (EJSObject*)_ejs_gc_new (EJSNumber);
 }
 
 static void

@@ -22,7 +22,7 @@ _ejs_process_init(ejsval global, int argc, char **argv)
 {
     START_SHADOW_STACK_FRAME;
 
-    ADD_STACK_ROOT(ejsval, _ejs_Process, _ejs_object_new (_ejs_null));
+    ADD_STACK_ROOT(ejsval, _ejs_Process, _ejs_object_new (_ejs_null, &_ejs_object_specops));
     ADD_STACK_ROOT(ejsval, _argv, _ejs_array_new (argc));
     int i;
 

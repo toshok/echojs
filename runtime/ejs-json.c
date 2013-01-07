@@ -30,7 +30,7 @@ _ejs_json_init(ejsval global)
 {
     START_SHADOW_STACK_FRAME;
 
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_object_new (_ejs_Object_prototype));
+    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_object_new (_ejs_Object_prototype, &_ejs_object_specops));
     _ejs_JSON = tmpobj;
 
 #define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_JSON, EJS_STRINGIFY(x), _ejs_JSON_##x)

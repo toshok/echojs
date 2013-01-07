@@ -62,9 +62,7 @@ _ejs_init(int argc, char** argv)
 
     _ejs_gc_add_named_root (_ejs_global);
 
-    _ejs_global = OBJECT_TO_EJSVAL(_ejs_object_alloc_instance());
-    EJSObject *global = EJSVAL_TO_OBJECT(_ejs_global);
-    _ejs_init_object (global, _ejs_null, &_ejs_object_specops);
+    _ejs_global = _ejs_object_new (_ejs_null, &_ejs_object_specops);
 
     _ejs_object_setprop_utf8 (_ejs_global, "undefined", _ejs_undefined);
     _ejs_object_setprop_utf8 (_ejs_global, "NaN", _ejs_nan);

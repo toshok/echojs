@@ -275,7 +275,7 @@ _ejs_math_init(ejsval global)
 {
     START_SHADOW_STACK_FRAME;
 
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_object_new (_ejs_Object_prototype));
+    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_object_new (_ejs_Object_prototype, &_ejs_object_specops));
     _ejs_Math = tmpobj;
 
 #define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Math, EJS_STRINGIFY(x), _ejs_Math_##x)

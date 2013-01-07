@@ -28,6 +28,7 @@ static EJSBool _ejs_object_specop_has_property (ejsval obj, ejsval propertyName)
 static EJSBool _ejs_object_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
 static ejsval  _ejs_object_specop_default_value (ejsval obj, const char *hint);
 static EJSBool _ejs_object_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
+static EJSObject* _ejs_object_specop_allocate ();
 static void    _ejs_object_specop_finalize (EJSObject* obj);
 static void    _ejs_object_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
 
@@ -42,6 +43,8 @@ EJSSpecOps _ejs_object_specops = {
     _ejs_object_specop_delete,
     _ejs_object_specop_default_value,
     _ejs_object_specop_define_own_property,
+
+    _ejs_object_specop_allocate,
     _ejs_object_specop_finalize,
     _ejs_object_specop_scan
 };
@@ -163,7 +166,7 @@ FromPropertyDescriptor(EJSPropertyDesc* Desc)
 
     /* 2. Let obj be the result of creating  a new object as if by the expression new Object() where Object  is the standard  */
     /*    built-in constructor with that name. */
-    ejsval obj = _ejs_object_new(_ejs_Object_prototype);
+    ejsval obj = _ejs_object_new(_ejs_Object_prototype, &_ejs_object_specops);
     EJSObject* obj_ = EJSVAL_TO_OBJECT(obj);
 
     /* 3. If IsDataDescriptor(Desc) is true, then */
@@ -403,53 +406,30 @@ _ejs_init_object (EJSObject* obj, ejsval proto, EJSSpecOps *ops)
 }
 
 ejsval
-_ejs_object_new (ejsval proto)
+_ejs_object_new (ejsval proto, EJSSpecOps *ops)
 {
-    if (EJSVAL_IS_NULL(proto)) proto = _ejs_Object_prototype;
-
-    EJSObject *obj;
-    EJSSpecOps *ops;
-
-    if (EJSVAL_EQ(proto, _ejs_Object_prototype)) {
-        obj = _ejs_object_alloc_instance();
-        ops = &_ejs_object_specops;
-    }
-    else if (EJSVAL_EQ(proto, _ejs_Array_proto)) {
-        obj = _ejs_array_alloc_instance();
-        ops = &_ejs_array_specops;
-    }
-    else if (EJSVAL_EQ(proto, _ejs_String_prototype)) {
-        obj = _ejs_string_alloc_instance();
-        ops = &_ejs_string_specops;
-    }
-    else if (EJSVAL_EQ(proto, _ejs_Number_proto)) {
-        obj = _ejs_number_alloc_instance();
-        ops = &_ejs_number_specops;
-    }
-    else if (EJSVAL_EQ(proto, _ejs_RegExp_proto)) {
-        obj = _ejs_regexp_alloc_instance();
-        ops = &_ejs_regexp_specops;
-    }
-    else if (EJSVAL_EQ(proto, _ejs_Date_proto)) {
-        obj = _ejs_date_alloc_instance();
-        ops = &_ejs_date_specops;
-    }
-    else {
-        obj = _ejs_object_alloc_instance();
-        ops = &_ejs_object_specops;
-    }
-
+    EJSObject *obj = ops->allocate();
     _ejs_init_object (obj, proto, ops);
     return OBJECT_TO_EJSVAL(obj);
 }
 
-EJSObject* _ejs_object_alloc_instance()
+ejsval
+_ejs_object_create (ejsval proto)
 {
-    EJSObject* rv = _ejs_gc_new(EJSObject);
-    return rv;
-}
+    if (EJSVAL_IS_NULL(proto)) proto = _ejs_Object_prototype;
 
-#define offsetof(t,f) (int)(long)(&((t*)NULL)->f)
+    EJSSpecOps *ops;
+
+    if      (EJSVAL_EQ(proto, _ejs_Object_prototype)) ops = &_ejs_object_specops;
+    else if (EJSVAL_EQ(proto, _ejs_Array_proto))      ops = &_ejs_array_specops;
+    else if (EJSVAL_EQ(proto, _ejs_String_prototype)) ops = &_ejs_string_specops;
+    else if (EJSVAL_EQ(proto, _ejs_Number_proto))     ops = &_ejs_number_specops;
+    else if (EJSVAL_EQ(proto, _ejs_RegExp_proto))     ops = &_ejs_regexp_specops;
+    else if (EJSVAL_EQ(proto, _ejs_Date_proto))       ops = &_ejs_date_specops;
+    else                                              ops = &_ejs_object_specops;
+
+    return _ejs_object_new (proto, ops);
+}
 
 ejsval
 _ejs_number_new (double value)
@@ -528,6 +508,7 @@ _ejs_primstring_flatten (EJSPrimString* primstr)
         char *p = buffer;
         flatten_rope (&p, primstr);
         buffer[primstr->length] = 0;
+        EJS_PRIMSTR_CLEAR_TYPE(primstr);
         EJS_PRIMSTR_SET_TYPE(primstr, EJS_STRING_FLAT);
         primstr->data.flat = buffer;
         return primstr;
@@ -816,7 +797,7 @@ _ejs_Object_create (ejsval env, ejsval _this, int argc, ejsval *args)
 
     /* 2. Let obj be the result of creating a new object as if by the expression new Object() where Object is the  */
     /*    standard built-in constructor with that name */
-    ejsval obj = _ejs_object_new(_ejs_null);
+    ejsval obj = _ejs_object_new(_ejs_null, &_ejs_object_specops);
 
     /* 3. Set the [[Prototype]] internal property of obj to O. */
     EJSVAL_TO_OBJECT(obj)->proto = O;
@@ -885,6 +866,9 @@ _ejs_Object_defineProperties (ejsval env, ejsval _this, int argc, ejsval *args)
         EJS_NOT_IMPLEMENTED();
     }
     EJSObject *obj = EJSVAL_TO_OBJECT(O);
+
+    if (EJSVAL_IS_UNDEFINED(Properties) || EJSVAL_IS_NULL(Properties))
+        return O;
 
     /* 2. Let props be ToObject(Properties). */
     ejsval props = ToObject(Properties);
@@ -1616,6 +1600,12 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
 
     /* 13. Return true. */
     return EJS_TRUE;
+}
+
+EJSObject*
+_ejs_object_specop_allocate ()
+{
+    return _ejs_gc_new(EJSObject);
 }
 
 void 

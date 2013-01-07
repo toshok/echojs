@@ -29,19 +29,22 @@ struct _EJSPropertyMap {
 typedef struct _EJSPropertyMap EJSPropertyMap;
 typedef struct _EJSPropertyIterator EJSPropertyIterator;
 
-typedef ejsval  (*SpecOpGet) (ejsval obj, ejsval propertyName, EJSBool isCStr);
+typedef ejsval           (*SpecOpGet) (ejsval obj, ejsval propertyName, EJSBool isCStr);
 typedef EJSPropertyDesc* (*SpecOpGetOwnProperty) (ejsval obj, ejsval propertyName);
 typedef EJSPropertyDesc* (*SpecOpGetProperty) (ejsval obj, ejsval propertyName);
-typedef void    (*SpecOpPut) (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
-typedef EJSBool (*SpecOpCanPut) (ejsval obj, ejsval propertyName);
-typedef EJSBool (*SpecOpHasProperty) (ejsval obj, ejsval propertyName);
-typedef EJSBool (*SpecOpDelete) (ejsval obj, ejsval propertyName, EJSBool flag);
-typedef ejsval  (*SpecOpDefaultValue) (ejsval obj, const char *hint);
-typedef EJSBool (*SpecOpDefineOwnProperty) (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool _throw);
-typedef void    (*SpecOpFinalize) (EJSObject* obj);
-typedef void    (*SpecOpScan) (EJSObject* obj, EJSValueFunc scan_func);
+typedef void             (*SpecOpPut) (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
+typedef EJSBool          (*SpecOpCanPut) (ejsval obj, ejsval propertyName);
+typedef EJSBool          (*SpecOpHasProperty) (ejsval obj, ejsval propertyName);
+typedef EJSBool          (*SpecOpDelete) (ejsval obj, ejsval propertyName, EJSBool flag);
+typedef ejsval           (*SpecOpDefaultValue) (ejsval obj, const char *hint);
+typedef EJSBool          (*SpecOpDefineOwnProperty) (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool _throw);
+
+typedef EJSObject*       (*SpecOpAllocate) ();
+typedef void             (*SpecOpFinalize) (EJSObject* obj);
+typedef void             (*SpecOpScan) (EJSObject* obj, EJSValueFunc scan_func);
 
 typedef struct {
+    // special ops defined in the standard
     const char* class_name;
     SpecOpGet get;
     SpecOpGetOwnProperty get_own_property;
@@ -53,8 +56,10 @@ typedef struct {
     SpecOpDefaultValue default_value;
     SpecOpDefineOwnProperty define_own_property;
 
-    SpecOpFinalize finalize;
-    SpecOpScan scan;
+    // ejs-defined ops
+    SpecOpAllocate allocate; // allocates space for the new instance (but doesn't initialize it)
+    SpecOpFinalize finalize; // called when there are no remaining references to this object
+    SpecOpScan     scan;     // used to enumerate object references
 } EJSSpecOps;
 
 #define EJS_OBJECT_EXTENSIBLE_FLAG 0x01
@@ -104,9 +109,9 @@ extern EJSSpecOps _ejs_object_specops;
 
 void _ejs_object_init_proto();
 
-ejsval _ejs_object_new (ejsval proto);
-EJSObject* _ejs_object_alloc_instance();
-void      _ejs_init_object (EJSObject *obj, ejsval proto, EJSSpecOps *ops);
+ejsval _ejs_object_new (ejsval proto, EJSSpecOps* ops);
+ejsval _ejs_object_create (ejsval proto);
+void   _ejs_init_object (EJSObject *obj, ejsval proto, EJSSpecOps *ops);
 
 void _ejs_object_finalize(EJSObject *obj);
 

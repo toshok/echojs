@@ -3,6 +3,7 @@
  */
 
 #include <assert.h>
+#include <string.h>
 
 #include "ejs-value.h"
 #include "ejs-regexp.h"
@@ -17,6 +18,7 @@ static EJSBool   _ejs_regexp_specop_has_property (ejsval obj, ejsval propertyNam
 static EJSBool   _ejs_regexp_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
 static ejsval _ejs_regexp_specop_default_value (ejsval obj, const char *hint);
 static EJSBool   _ejs_regexp_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
+static EJSObject* _ejs_regexp_specop_allocate ();
 static void      _ejs_regexp_specop_finalize (EJSObject* obj);
 static void      _ejs_regexp_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
 
@@ -31,14 +33,11 @@ EJSSpecOps _ejs_regexp_specops = {
     _ejs_regexp_specop_delete,
     _ejs_regexp_specop_default_value,
     _ejs_regexp_specop_define_own_property,
+
+    _ejs_regexp_specop_allocate,
     _ejs_regexp_specop_finalize,
     _ejs_regexp_specop_scan
 };
-
-EJSObject* _ejs_regexp_alloc_instance()
-{
-    return (EJSObject*)_ejs_gc_new(EJSRegExp);
-}
 
 ejsval
 _ejs_regexp_new_utf8 (const char* str)
@@ -66,7 +65,7 @@ _ejs_RegExp_impl (ejsval env, ejsval _this, int argc, ejsval *args)
     if (EJSVAL_IS_UNDEFINED(_this)) {
         // called as a function
         printf ("called RegExp() as a function!\n");
-        return _ejs_object_new(_ejs_RegExp_proto);
+        return _ejs_object_new(_ejs_RegExp_proto, &_ejs_regexp_specops);
     }
     else {
         // called as a constructor
@@ -99,7 +98,7 @@ _ejs_regexp_init(ejsval global)
     START_SHADOW_STACK_FRAME;
 
     _ejs_gc_add_named_root (_ejs_RegExp_proto);
-    _ejs_RegExp_proto = _ejs_object_new(_ejs_null);
+    _ejs_RegExp_proto = _ejs_object_new(_ejs_null, &_ejs_object_specops);
 
     ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_RegExp, (EJSClosureFunc)_ejs_RegExp_impl));
     _ejs_RegExp = tmpobj;
@@ -176,8 +175,14 @@ _ejs_regexp_specop_define_own_property (ejsval obj, ejsval propertyName, EJSProp
     return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
 }
 
-static void
+static EJSObject*
+_ejs_regexp_specop_allocate()
+{
+    return (EJSObject*)_ejs_gc_new(EJSRegExp);
+}
 
+
+static void
 _ejs_regexp_specop_finalize (EJSObject* obj)
 {
     _ejs_object_specops.finalize (obj);

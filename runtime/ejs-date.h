@@ -25,7 +25,6 @@ extern EJSSpecOps _ejs_date_specops;
 
 ejsval _ejs_date_new_unix (int timestamp);
 
-EJSObject* _ejs_date_alloc_instance();
 void _ejs_date_init(ejsval global);
 
 EJS_END_DECLS

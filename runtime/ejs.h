@@ -7,7 +7,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #if __cplusplus
 #define EJS_BEGIN_DECLS extern "C" {

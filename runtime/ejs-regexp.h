@@ -23,7 +23,6 @@ extern ejsval _ejs_RegExp_proto;
 extern EJSSpecOps _ejs_regexp_specops;
 
 
-EJSObject* _ejs_regexp_alloc_instance();
 void _ejs_regexp_init(ejsval global);
 
 ejsval _ejs_regexp_new_utf8 (const char* str);

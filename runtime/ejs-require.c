@@ -2,6 +2,8 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
+#include <string.h>
+
 #include "ejs.h"
 #include "ejs-object.h"
 #include "ejs-require.h"
@@ -39,7 +41,7 @@ _ejs_require_impl (ejsval env, ejsval _this, int argc, ejsval *args)
             if (EJSVAL_IS_NULL(builtin_module_map[i].cached_exports)) {
                 //	printf ("require'ing %s.\n", EJSVAL_TO_FLAT_STRING(arg));
                 __ejs_gc_add_named_root (&builtin_module_map[i].cached_exports, "builtin-module-export");
-                builtin_module_map[i].cached_exports = _ejs_object_new(_ejs_null);
+                builtin_module_map[i].cached_exports = _ejs_object_new(_ejs_null, &_ejs_object_specops);
                 builtin_module_map[i].func(_ejs_null, _ejs_undefined, 1, &builtin_module_map[i].cached_exports);
             }
             return builtin_module_map[i].cached_exports;
@@ -55,7 +57,7 @@ _ejs_require_impl (ejsval env, ejsval _this, int argc, ejsval *args)
         if (!strcmp (_ejs_external_module_require_map[i].name, EJSVAL_TO_FLAT_STRING(arg))) {
             if (EJSVAL_IS_NULL(_ejs_external_module_require_map[i].cached_exports)) {
                 __ejs_gc_add_named_root (&_ejs_external_module_require_map[i].cached_exports, "external-module-exports");
-                _ejs_external_module_require_map[i].cached_exports = _ejs_object_new(_ejs_null);
+                _ejs_external_module_require_map[i].cached_exports = _ejs_object_new(_ejs_null, &_ejs_object_specops);
                 _ejs_external_module_require_map[i].func(_ejs_external_module_require_map[i].cached_exports);
             }
             return _ejs_external_module_require_map[i].cached_exports;
@@ -74,7 +76,7 @@ _ejs_require_impl (ejsval env, ejsval _this, int argc, ejsval *args)
                 START_SHADOW_STACK_FRAME;
                 //	printf ("require'ing %s.\n", EJSVAL_TO_FLAT_STRING(arg));
                 __ejs_gc_add_named_root (&_ejs_require_map[i].cached_exports, "require-module-exports");
-                _ejs_require_map[i].cached_exports = _ejs_object_new(_ejs_null);
+                _ejs_require_map[i].cached_exports = _ejs_object_new(_ejs_null, &_ejs_object_specops);
                 ADD_STACK_ROOT(ejsval, exports_name, _ejs_string_new_utf8("exports"));
                 ADD_STACK_ROOT(ejsval, prev_exports, _ejs_object_getprop_utf8 (_ejs_global, "exports"));
                 _ejs_object_setprop(_ejs_global, exports_name, _ejs_require_map[i].cached_exports);

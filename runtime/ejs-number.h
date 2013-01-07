@@ -21,8 +21,6 @@ extern ejsval _ejs_Number;
 extern ejsval _ejs_Number_proto;
 extern EJSSpecOps _ejs_number_specops;
 
-EJSObject* _ejs_number_alloc_instance();
-
 void _ejs_number_init(ejsval global);
 
 EJS_END_DECLS

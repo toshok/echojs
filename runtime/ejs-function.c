@@ -20,6 +20,7 @@ static EJSBool _ejs_function_specop_has_property (ejsval obj, ejsval propertyNam
 static EJSBool _ejs_function_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
 static ejsval  _ejs_function_specop_default_value (ejsval obj, const char *hint);
 static EJSBool _ejs_function_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
+static EJSObject* _ejs_function_specop_allocate ();
 static void    _ejs_function_specop_finalize (EJSObject* obj);
 static void    _ejs_function_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
 
@@ -34,6 +35,8 @@ EJSSpecOps _ejs_function_specops = {
     _ejs_function_specop_delete,
     _ejs_function_specop_default_value,
     _ejs_function_specop_define_own_property,
+
+    _ejs_function_specop_allocate,
     _ejs_function_specop_finalize,
     _ejs_function_specop_scan
 };
@@ -65,7 +68,7 @@ _ejs_function_new (EJSClosureEnv env, ejsval name, EJSClosureFunc func)
     ejsval fun = OBJECT_TO_EJSVAL((EJSObject*)rv);
 
     // ECMA262: 15.3.2.1
-    ejsval fun_proto = _ejs_object_new (_ejs_Object_prototype);
+    ejsval fun_proto = _ejs_object_new (_ejs_Object_prototype, &_ejs_object_specops);
 
     _ejs_object_setprop (fun_proto, _ejs_atom_constructor,  fun);
     _ejs_object_define_value_property (fun, _ejs_atom_prototype, fun_proto, EJS_FALSE, EJS_FALSE, EJS_FALSE);
@@ -115,21 +118,63 @@ _ejs_Function_prototype_toString (ejsval env, ejsval _this, int argc, ejsval *ar
 static ejsval
 _ejs_Function_prototype_apply (ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(_this));
-    ejsval thisArg = args[0];
-    ejsval argArray = args[1];
+    ejsval func = _this;
 
-    int apply_argc = EJS_ARRAY_LEN(argArray);
-    ejsval* apply_args = NULL;
-    if (argc) {
-        apply_args = (ejsval*)malloc(sizeof(ejsval) * argc);
-        int i;
-        for (i = 0; i < argc; i ++) {
-            apply_args[i] = EJS_ARRAY_ELEMENTS(argArray)[i];
-        }
+    /* 1. If IsCallable(func) is false, then throw a TypeError exception. */
+    if (!EJSVAL_IS_FUNCTION(_this)) {
+        printf ("throw TypeError, func is not callable\n");
+        EJS_NOT_IMPLEMENTED();
     }
 
-    return EJSVAL_TO_FUNC(_this) (EJSVAL_TO_ENV(_this), thisArg, apply_argc, apply_args);
+    ejsval thisArg = _ejs_undefined;
+    ejsval argArray = _ejs_undefined;
+    if (argc > 0) thisArg = args[0];
+    if (argc > 1) argArray = args[1];
+
+    /* 2. If argArray is null or undefined, then */
+    if (EJSVAL_IS_UNDEFINED(argArray) || EJSVAL_IS_NULL(argArray)) {
+        /*    a. Return the result of calling the [[Call]] internal method of func, providing thisArg as the this value */
+        /*       and an empty list of arguments. */
+        return _ejs_invoke_closure_0 (func, thisArg, 0);
+    }
+    /* 3. If Type(argArray) is not Object, then throw a TypeError exception. */
+    if (!EJSVAL_IS_OBJECT(argArray)) {
+        printf ("throw TypeError, argArray is not an object\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+    EJSObject* argArray_ = EJSVAL_TO_OBJECT(argArray);
+
+    /* 4. Let len be the result of calling the [[Get]] internal method of argArray with argument "length". */
+    ejsval len = OP(argArray_,get) (argArray, _ejs_atom_length, EJS_FALSE);
+
+    /* 5. Let n be ToUint32(len). */
+    uint32_t n = (uint32_t)EJSVAL_TO_NUMBER(len);
+
+    /* 6. Let argList be an empty List. */
+    ejsval* argList = (ejsval*)malloc(sizeof(ejsval) * n);
+
+    /* 7. Let index be 0. */
+    int index = 0;
+
+    /* 8. Repeat while index < n */
+    while (index < n) {
+        /*    a. Let indexName be ToString(index). */
+        ejsval indexName = NUMBER_TO_EJSVAL(index);
+        /*    b. Let nextArg be the result of calling the [[Get]] internal method of argArray with indexName as the  */
+        /*       argument. */
+        ejsval nextArg = OP(argArray_,get)(argArray, indexName, EJS_FALSE);
+        /*    c. Append nextArg as the last element of argList. */
+        argList[index] = nextArg;
+        /*    d. Set index to index + 1. */
+        ++index;
+    }
+
+    /* 9. Return the result of calling the [[Call]] internal method of func, providing thisArg as the this value and */
+    /*    argList as the list of arguments. */
+    ejsval rv = EJSVAL_TO_FUNC(func) (EJSVAL_TO_ENV(func), thisArg, n, argList);
+
+    free (argList);
+    return rv;
 }
 
 // ECMA262 15.3.4.4
@@ -217,7 +262,11 @@ _ejs_function_init(ejsval global)
 ejsval
 _ejs_invoke_closure_0 (ejsval closure, ejsval _this, int argc)
 {
-    // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
+    if (!EJSVAL_IS_FUNCTION(closure)) {
+        printf ("TypeError, object not a function\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+
 #if DEBUG_FUNCTIONS
     ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
     indent('*');
@@ -236,7 +285,11 @@ _ejs_invoke_closure_0 (ejsval closure, ejsval _this, int argc)
 ejsval
 _ejs_invoke_closure_1 (ejsval closure, ejsval _this, int argc, ejsval arg1)
 {
-    // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
+    if (!EJSVAL_IS_FUNCTION(closure)) {
+        printf ("TypeError, object not a function\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+
     ejsval args[] = { arg1 };
 #if DEBUG_FUNCTIONS
     ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
@@ -256,7 +309,11 @@ _ejs_invoke_closure_1 (ejsval closure, ejsval _this, int argc, ejsval arg1)
 ejsval
 _ejs_invoke_closure_2 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2)
 {
-    // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
+    if (!EJSVAL_IS_FUNCTION(closure)) {
+        printf ("TypeError, object not a function\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+
     ejsval args[] = { arg1, arg2 };
 #if DEBUG_FUNCTIONS
     ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
@@ -276,7 +333,11 @@ _ejs_invoke_closure_2 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsv
 ejsval
 _ejs_invoke_closure_3 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3)
 {
-    // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
+    if (!EJSVAL_IS_FUNCTION(closure)) {
+        printf ("TypeError, object not a function\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+
     ejsval args[] = { arg1, arg2, arg3 };
 #if DEBUG_FUNCTIONS
     ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
@@ -296,7 +357,11 @@ _ejs_invoke_closure_3 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsv
 ejsval
 _ejs_invoke_closure_4 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4)
 {
-    // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
+    if (!EJSVAL_IS_FUNCTION(closure)) {
+        printf ("TypeError, object not a function\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+
     ejsval args[] = { arg1, arg2, arg3, arg4 };
 #if DEBUG_FUNCTIONS
     ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
@@ -316,7 +381,11 @@ _ejs_invoke_closure_4 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsv
 ejsval
 _ejs_invoke_closure_5 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5)
 {
-    // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
+    if (!EJSVAL_IS_FUNCTION(closure)) {
+        printf ("TypeError, object not a function\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+
     ejsval args[] = { arg1, arg2, arg3, arg4, arg5 };
 #if DEBUG_FUNCTIONS
     ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
@@ -336,7 +405,11 @@ _ejs_invoke_closure_5 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsv
 ejsval
 _ejs_invoke_closure_6 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6)
 {
-    // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
+    if (!EJSVAL_IS_FUNCTION(closure)) {
+        printf ("TypeError, object not a function\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+
     ejsval args[] = { arg1, arg2, arg3, arg4, arg5, arg6 };
 #if DEBUG_FUNCTIONS
     ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
@@ -356,7 +429,11 @@ _ejs_invoke_closure_6 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsv
 ejsval
 _ejs_invoke_closure_7 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7)
 {
-    // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
+    if (!EJSVAL_IS_FUNCTION(closure)) {
+        printf ("TypeError, object not a function\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+
     ejsval args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7 };
 #if DEBUG_FUNCTIONS
     ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
@@ -376,7 +453,11 @@ _ejs_invoke_closure_7 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsv
 ejsval
 _ejs_invoke_closure_8 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7, ejsval arg8)
 {
-    // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
+    if (!EJSVAL_IS_FUNCTION(closure)) {
+        printf ("TypeError, object not a function\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+
     ejsval args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8 };
 #if DEBUG_FUNCTIONS
     ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
@@ -396,7 +477,11 @@ _ejs_invoke_closure_8 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsv
 ejsval
 _ejs_invoke_closure_9 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7, ejsval arg8, ejsval arg9)
 {
-    // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
+    if (!EJSVAL_IS_FUNCTION(closure)) {
+        printf ("TypeError, object not a function\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+
     ejsval args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9 };
 #if DEBUG_FUNCTIONS
     ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
@@ -416,7 +501,11 @@ _ejs_invoke_closure_9 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsv
 ejsval
 _ejs_invoke_closure_10 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7, ejsval arg8, ejsval arg9, ejsval arg10)
 {
-    // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(closre));
+    if (!EJSVAL_IS_FUNCTION(closure)) {
+        printf ("TypeError, object not a function\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+
     ejsval args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10 };
 #if DEBUG_FUNCTIONS
     ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
@@ -485,6 +574,12 @@ static EJSBool
 _ejs_function_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag)
 {
     return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
+}
+
+static EJSObject*
+_ejs_function_specop_allocate ()
+{
+    EJS_NOT_IMPLEMENTED();
 }
 
 static void

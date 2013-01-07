@@ -21,8 +21,6 @@ EJS_BEGIN_DECLS
 extern ejsval _ejs_Arguments_proto;
 extern EJSSpecOps _ejs_arguments_specops;
 
-EJSObject* _ejs_arguments_alloc_instance();
-
 void _ejs_arguments_init(ejsval global);
 
 EJS_END_DECLS

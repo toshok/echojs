@@ -18,6 +18,7 @@ static EJSBool _ejs_date_specop_has_property (ejsval obj, ejsval propertyName);
 static EJSBool _ejs_date_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
 static ejsval  _ejs_date_specop_default_value (ejsval obj, const char *hint);
 static EJSBool _ejs_date_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
+static EJSObject* _ejs_date_specop_allocate ();
 static void    _ejs_date_specop_finalize (EJSObject* obj);
 static void    _ejs_date_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
 
@@ -32,14 +33,11 @@ EJSSpecOps _ejs_date_specops = {
     _ejs_date_specop_delete,
     _ejs_date_specop_default_value,
     _ejs_date_specop_define_own_property,
+
+    _ejs_date_specop_allocate,
     _ejs_date_specop_finalize,
     _ejs_date_specop_scan,
 };
-
-EJSObject* _ejs_date_alloc_instance()
-{
-    return (EJSObject*)_ejs_gc_new (EJSDate);
-}
 
 ejsval
 _ejs_date_new_unix (int timestamp)
@@ -127,7 +125,7 @@ _ejs_date_init(ejsval global)
     START_SHADOW_STACK_FRAME;
 
     _ejs_gc_add_named_root (_ejs_Date_proto);
-    _ejs_Date_proto = _ejs_object_new(_ejs_null);
+    _ejs_Date_proto = _ejs_object_new(_ejs_null, &_ejs_object_specops);
 
     ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_Date, (EJSClosureFunc)_ejs_Date_impl));
     _ejs_Date = tmpobj;
@@ -198,6 +196,12 @@ static EJSBool
 _ejs_date_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag)
 {
     return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
+}
+
+static EJSObject*
+_ejs_date_specop_allocate()
+{
+    return (EJSObject*)_ejs_gc_new (EJSDate);
 }
 
 static void

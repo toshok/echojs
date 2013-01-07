@@ -4,10 +4,12 @@
 
 #include <math.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "ejs.h"
 #include "ejs-exception.h"
 #include "ejs-value.h"
+#include "ejs-date.h"
 #include "ejs-function.h"
 #include "ejs-number.h"
 #include "ejs-object.h"
@@ -111,13 +113,17 @@ double ToDouble(ejsval exp)
         return atof(EJSVAL_TO_FLAT_STRING(exp)); // XXX NaN
     else if (EJSVAL_IS_UNDEFINED(exp))
         return 0; // XXX NaN
-    else if (EJSVAL_IS_OBJECT(exp))
+    else if (EJSVAL_IS_OBJECT(exp)) {
+        if (EJSVAL_IS_DATE(exp)) {
+            return mktime(&((EJSDate*)EJSVAL_TO_OBJECT(exp))->tm);
+        }
         // XXX if it's an array
         //       and .length == 0, return 0.
         //       and .length == 1, return ToDouble(array->elements[0]) - yes, it's recursive
         //       else return NaN
         // for anything else, NaN
         return 0;
+    }
     else
         EJS_NOT_IMPLEMENTED();
 }
@@ -132,14 +138,12 @@ ejsval ToObject(ejsval exp)
     if (EJSVAL_IS_BOOLEAN(exp))
         EJS_NOT_IMPLEMENTED();
     else if (EJSVAL_IS_NUMBER(exp)) {
-        EJSObject* new_number = _ejs_number_alloc_instance();
-        _ejs_init_object (new_number, _ejs_Number_proto, &_ejs_number_specops);
-        return _ejs_invoke_closure_1 (_ejs_Number, OBJECT_TO_EJSVAL(new_number), 1, exp);
+        ejsval new_number = _ejs_object_new (_ejs_Number_proto, &_ejs_number_specops);
+        return _ejs_invoke_closure_1 (_ejs_Number, new_number, 1, exp);
     }
     else if (EJSVAL_IS_STRING(exp)) {
-        EJSObject* new_str = _ejs_string_alloc_instance();
-        _ejs_init_object (new_str, _ejs_String_prototype, &_ejs_string_specops);
-        return _ejs_invoke_closure_1 (_ejs_String, OBJECT_TO_EJSVAL(new_str), 1, exp);
+        ejsval new_str = _ejs_object_new (_ejs_String__proto__, &_ejs_string_specops);
+        return _ejs_invoke_closure_1 (_ejs_String, new_str, 1, exp);
     }
     else if (EJSVAL_IS_UNDEFINED(exp))
         return exp; // XXX
@@ -160,7 +164,7 @@ ejsval ToBoolean(ejsval exp)
     else if (EJSVAL_IS_STRING(exp))
         return EJSVAL_TO_STRLEN(exp) == 0 ? _ejs_false : _ejs_true;
     else if (EJSVAL_IS_OBJECT(exp))
-        return _ejs_false; // XXX this breaks for any of the builtin objects that wrap primitive types.
+        return _ejs_true;
     else
         EJS_NOT_IMPLEMENTED();
 }
@@ -577,19 +581,7 @@ _ejs_op_ge (ejsval lhs, ejsval rhs)
 ejsval
 _ejs_op_sub (ejsval lhs, ejsval rhs)
 {
-    if (EJSVAL_IS_NUMBER(lhs)) {
-        return NUMBER_TO_EJSVAL (EJSVAL_TO_NUMBER(lhs) - ToDouble (rhs));
-    }
-    else if (EJSVAL_IS_STRING(lhs)) {
-        // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-        EJS_NOT_IMPLEMENTED();
-    }
-    else {
-        // object+... how does js implement this anyway?
-        EJS_NOT_IMPLEMENTED();
-    }
-
-    return _ejs_nan;
+    return NUMBER_TO_EJSVAL(ToDouble(lhs) - ToDouble(rhs));
 }
 
 ejsval
@@ -653,7 +645,7 @@ _ejs_op_eq (ejsval lhs, ejsval rhs)
         return BOOLEAN_TO_EJSVAL(eq);
     }
     else if (EJSVAL_IS_OBJECT(lhs)) {
-        return BOOLEAN_TO_EJSVAL (EJSVAL_TO_OBJECT(lhs) == EJSVAL_TO_OBJECT(ToObject(rhs)));
+        return BOOLEAN_TO_EJSVAL (!EJSVAL_IS_NULL(rhs) && !EJSVAL_IS_UNDEFINED(rhs) && EJSVAL_TO_OBJECT(lhs) == EJSVAL_TO_OBJECT(ToObject(rhs)));
     }
 
     EJS_NOT_IMPLEMENTED();

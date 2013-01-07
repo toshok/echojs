@@ -4,6 +4,7 @@
 
 #include <assert.h>
 #include <math.h>
+#include <string.h>
 
 #include "ejs.h"
 #include "ejs-ops.h"
@@ -18,6 +19,7 @@ static EJSBool _ejs_arguments_specop_has_property (ejsval obj, ejsval propertyNa
 static EJSBool _ejs_arguments_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
 static ejsval  _ejs_arguments_specop_default_value (ejsval obj, const char *hint);
 static EJSBool _ejs_arguments_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
+static EJSObject* _ejs_arguments_specop_allocate ();
 static void    _ejs_arguments_specop_finalize (EJSObject* obj);
 static void    _ejs_arguments_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
 
@@ -32,6 +34,8 @@ EJSSpecOps _ejs_arguments_specops = {
     _ejs_arguments_specop_delete,
     _ejs_arguments_specop_default_value,
     _ejs_arguments_specop_define_own_property,
+
+    _ejs_arguments_specop_allocate,
     _ejs_arguments_specop_finalize,
     _ejs_arguments_specop_scan
 };
@@ -40,11 +44,6 @@ EJSSpecOps _ejs_arguments_specops = {
 #define EJSOBJ_IS_ARGUMENTS(obj) (((EJSObject*)obj)->proto == _ejs_Arguments_proto)
 
 ejsval _ejs_Arguments_proto;
-
-EJSObject* _ejs_arguments_alloc_instance()
-{
-    return (EJSObject*)_ejs_gc_new (EJSArguments);
-}
 
 ejsval
 _ejs_arguments_new (int numElements, ejsval* args)
@@ -66,7 +65,7 @@ _ejs_arguments_init(ejsval global)
     START_SHADOW_STACK_FRAME;
 
     _ejs_gc_add_named_root (_ejs_Arguments_proto);
-    _ejs_Arguments_proto = _ejs_object_new(_ejs_null);
+    _ejs_Arguments_proto = _ejs_object_new(_ejs_null, &_ejs_object_specops);
 
     END_SHADOW_STACK_FRAME;
 }
@@ -152,6 +151,13 @@ _ejs_arguments_specop_define_own_property (ejsval obj, ejsval propertyName, EJSP
 {
     return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
 }
+
+static EJSObject*
+_ejs_arguments_specop_allocate()
+{
+    return (EJSObject*)_ejs_gc_new (EJSArguments);
+}
+
 
 static void
 _ejs_arguments_specop_finalize (EJSObject* obj)

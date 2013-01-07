@@ -20,6 +20,7 @@ static EJSBool _ejs_array_specop_has_property (ejsval obj, ejsval propertyName);
 static EJSBool _ejs_array_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
 static ejsval  _ejs_array_specop_default_value (ejsval obj, const char *hint);
 static EJSBool _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
+static EJSObject* _ejs_array_specop_allocate ();
 static void    _ejs_array_specop_finalize (EJSObject* obj);
 static void    _ejs_array_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
 
@@ -34,17 +35,14 @@ EJSSpecOps _ejs_array_specops = {
     _ejs_array_specop_delete,
     _ejs_array_specop_default_value,
     _ejs_array_specop_define_own_property,
+
+    _ejs_array_specop_allocate,
     _ejs_array_specop_finalize,
     _ejs_array_specop_scan
 };
 
 #define _EJS_ARRAY_LEN(arrobj)      (((EJSArray*)arrobj)->array_length)
 #define _EJS_ARRAY_ELEMENTS(arrobj) (((EJSArray*)arrobj)->elements)
-
-EJSObject* _ejs_array_alloc_instance()
-{
-    return (EJSObject*)_ejs_gc_new (EJSArray);
-}
 
 ejsval
 _ejs_array_new (int numElements)
@@ -93,6 +91,17 @@ _ejs_Array_impl (ejsval env, ejsval _this, int argc, ejsval*args)
         }
     }
     else {
+        int alloc = 25;
+
+        if (argc == 1 && EJSVAL_IS_NUMBER(args[0])) {
+            alloc = (int)EJSVAL_TO_NUMBER(args[0]);
+        }
+
+        EJSArray* arr = (EJSArray*)EJSVAL_TO_OBJECT(_this);
+        arr->array_length = 0;
+        arr->array_alloc = alloc + 5;
+        arr->elements = (ejsval*)calloc(arr->array_alloc, sizeof (ejsval));
+
         // called as a constructor
         return _this;
     }
@@ -119,7 +128,7 @@ _ejs_Array_prototype_shift (ejsval env, ejsval _this, int argc, ejsval*args)
     EJS_NOT_IMPLEMENTED();
 #if notyet
     // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
-    ejsval lenVal = OP(O,get) (O, _ejs_atom_length);
+    ejsval lenVal = OP(O,get) (O, _ejs_atom_length, EJS_FALSE);
 
     // 3. Let len be ToUint32(lenVal).
     int len = ToUint32(lenVal);
@@ -202,6 +211,7 @@ _ejs_Array_prototype_push (ejsval env, ejsval _this, int argc, ejsval*args)
 {
     int i;
     // XXX nanboxing change breaks this assert (EJSVAL_IS_ARRAY(_this));
+    EJSArray *arr = (EJSArray*)EJSVAL_TO_OBJECT(_this);
     for (i = 0; i < argc; i ++)
         EJS_ARRAY_ELEMENTS(_this)[EJS_ARRAY_LEN(_this)++] = args[i];
     return NUMBER_TO_EJSVAL (EJS_ARRAY_LEN(_this));
@@ -380,7 +390,7 @@ _ejs_array_init(ejsval global)
     START_SHADOW_STACK_FRAME;
 
     _ejs_gc_add_named_root (_ejs_Array_proto);
-    _ejs_Array_proto = _ejs_object_new(_ejs_null);
+    _ejs_Array_proto = _ejs_object_new(_ejs_null, &_ejs_object_specops);
 
     ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_Array, (EJSClosureFunc)_ejs_Array_impl));
     _ejs_Array = tmpobj;
@@ -499,6 +509,13 @@ _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPrope
 {
     return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
 }
+
+static EJSObject*
+_ejs_array_specop_allocate()
+{
+    return (EJSObject*)_ejs_gc_new (EJSArray);
+}
+
 
 static void
 _ejs_array_specop_finalize (EJSObject* obj)

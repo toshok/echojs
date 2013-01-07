@@ -34,6 +34,7 @@ typedef enum {
 #define EJS_PRIMSTR_TYPE_MASK_SHIFTED (EJS_PRIMSTR_TYPE_MASK << EJS_GC_USER_FLAGS_SHIFT)
 
 #define EJS_PRIMSTR_SET_TYPE(s,t) (((EJSObject*)(s))->gc_header |= (t) << EJS_GC_USER_FLAGS_SHIFT)
+#define EJS_PRIMSTR_CLEAR_TYPE(s) (((EJSObject*)(s))->gc_header &= ~EJS_PRIMSTR_TYPE_MASK_SHIFTED)
 
 #define EJS_PRIMSTR_GET_TYPE(s)   ((EJSPrimStringType)((((EJSPrimString*)(s))->gc_header & EJS_PRIMSTR_TYPE_MASK_SHIFTED) >> EJS_GC_USER_FLAGS_SHIFT))
 
@@ -55,8 +56,9 @@ struct _EJSPrimString {
 #define EJSVAL_IS_PRIMITIVE(v) (EJSVAL_IS_NUMBER(v) || EJSVAL_IS_STRING(v) || EJSVAL_IS_BOOLEAN(v) || EJSVAL_IS_UNDEFINED(v))
 
 #define EJSVAL_IS_OBJECT(v)    EJSVAL_IS_OBJECT_IMPL(v)
-#define EJSVAL_IS_ARRAY(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->proto.asBits == _ejs_Array_proto.asBits))
-#define EJSVAL_IS_FUNCTION(v)  (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->proto.asBits == _ejs_Function__proto__.asBits))
+#define EJSVAL_IS_ARRAY(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_array_specops))
+#define EJSVAL_IS_FUNCTION(v)  (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_function_specops))
+#define EJSVAL_IS_DATE(v)      (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_date_specops))
 #define EJSVAL_IS_NUMBER(v)    EJSVAL_IS_DOUBLE_IMPL(v)
 #define EJSVAL_IS_STRING(v)    EJSVAL_IS_STRING_IMPL(v)
 #define EJSVAL_IS_BOOLEAN(v)   EJSVAL_IS_BOOLEAN_IMPL(v)

@@ -21,8 +21,6 @@ extern ejsval _ejs_String__proto__;
 extern ejsval _ejs_String_prototype;
 extern EJSSpecOps _ejs_string_specops;
 
-EJSObject* _ejs_string_alloc_instance();
-
 void _ejs_string_init(ejsval global);
 
 EJS_END_DECLS

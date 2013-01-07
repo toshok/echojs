@@ -46,7 +46,7 @@ _ejs_console_init(ejsval global)
 {
     START_SHADOW_STACK_FRAME;
 
-    ADD_STACK_ROOT(ejsval, _ejs_console, _ejs_object_new (_ejs_null));
+    ADD_STACK_ROOT(ejsval, _ejs_console, _ejs_object_new (_ejs_null, &_ejs_object_specops));
 
 #define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_console, EJS_STRINGIFY(x), _ejs_console_##x)
 

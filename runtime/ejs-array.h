@@ -31,7 +31,6 @@ extern ejsval _ejs_Array;
 extern ejsval _ejs_Array_proto;
 extern EJSSpecOps _ejs_array_specops;
 
-EJSObject* _ejs_array_alloc_instance();
 ejsval _ejs_array_new (int numElements);
 
 void _ejs_array_foreach_element (EJSArray* arr, EJSValueFunc foreach_func);

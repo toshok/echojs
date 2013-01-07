@@ -20,6 +20,7 @@ static EJSBool   _ejs_string_specop_has_property (ejsval obj, ejsval propertyNam
 static EJSBool   _ejs_string_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
 static ejsval _ejs_string_specop_default_value (ejsval obj, const char *hint);
 static EJSBool  _ejs_string_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
+static EJSObject* _ejs_string_specop_allocate ();
 static void      _ejs_string_specop_finalize (EJSObject* obj);
 static void      _ejs_string_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
 
@@ -34,14 +35,11 @@ EJSSpecOps _ejs_string_specops = {
     _ejs_string_specop_delete,
     _ejs_string_specop_default_value,
     _ejs_string_specop_define_own_property,
+
+    _ejs_string_specop_allocate,
     _ejs_string_specop_finalize,
     _ejs_string_specop_scan
 };
-
-EJSObject* _ejs_string_alloc_instance()
-{
-    return (EJSObject*)_ejs_gc_new (EJSString);
-}
 
 ejsval _ejs_String;
 ejsval _ejs_String__proto__;
@@ -460,6 +458,12 @@ static EJSBool
 _ejs_string_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag)
 {
     return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
+}
+
+static EJSObject*
+_ejs_string_specop_allocate()
+{
+    return (EJSObject*)_ejs_gc_new (EJSString);
 }
 
 static void

@@ -96,7 +96,8 @@ typedef struct {
 
 extern void _ejs_gc_mark_thread_stack_bottom(GCObjectPtr* btm);
 
+#endif
+
 EJS_END_DECLS
 
-#endif
 #endif /* _ejs_gc_h */
