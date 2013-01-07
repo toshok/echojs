@@ -185,7 +185,7 @@ class LLVMIRVisitor extends NodeVisitor
                 @ejs = {
                         personality:           module.getOrInsertExternalFunction "__ejs_personality_v0",           int32Type, [int32Type, int32Type, int64Type, int8PointerType, int8PointerType]
                         
-                        object_new:            module.getOrInsertExternalFunction "_ejs_object_new",                EjsValueType, [EjsValueType]
+                        object_create:         module.getOrInsertExternalFunction "_ejs_object_create",             EjsValueType, [EjsValueType]
                         arguments_new:         module.getOrInsertExternalFunction "_ejs_arguments_new",             EjsValueType, [int32Type, EjsValueType.pointerTo()]
                         array_new:             module.getOrInsertExternalFunction "_ejs_array_new",                 EjsValueType, [int32Type]
                         number_new:            only_reads_memory module.getOrInsertExternalFunction "_ejs_number_new",                EjsValueType, [llvm.Type.getDoubleTy()]
@@ -339,7 +339,7 @@ class LLVMIRVisitor extends NodeVisitor
                                 pname = prop.value
 
                         debug.log "createPropertyStore #{obj}[#{pname}]"
-
+                        
                         c = irbuilder.createGlobalStringPtr pname, "strconst"
                         @createCall @ejs.object_setprop_utf8, [obj, c, rhs], "propstore_#{pname}"
                 
@@ -917,7 +917,7 @@ class LLVMIRVisitor extends NodeVisitor
                                 fake_literal = {
                                         type: syntax.Literal
                                         value: n.argument.property.name
-                                        raw: "\"#{n.argument.property.name}\""
+                                        raw: "'#{n.argument.property.name}'"
                                 }
                                 return @createCall callee, [(@visitOrNull n.argument.object), (@visit fake_literal)], "result"
                         else
@@ -1036,7 +1036,7 @@ class LLVMIRVisitor extends NodeVisitor
 
                 proto = @createPropertyLoad ctor, { name: "prototype" }, false
                 
-                thisArg = @createCall @ejs.object_new, [proto], "objtmp"
+                thisArg = @createCall @ejs.object_create, [proto], "objtmp"
                                                 
                 argv.push ctor                                                      # %closure
                 argv.push thisArg                                                   # %this
@@ -1145,7 +1145,7 @@ class LLVMIRVisitor extends NodeVisitor
                 rv
 
         visitObjectExpression: (n) ->
-                obj = @createCall @ejs.object_new, [@loadNullEjsValue()], "objtmp"
+                obj = @createCall @ejs.object_create, [@loadNullEjsValue()], "objtmp"
                 for property in n.properties
                         val = @visit property.value
                         key = property.key
@@ -1170,6 +1170,9 @@ class LLVMIRVisitor extends NodeVisitor
                 if n.value is null
                         debug.log "literal: null"
                         return @loadNullEjsValue() # this isn't properly typed...  dunno what to do about this here
+                else if n.value is undefined
+                        debug.log "literal: undefined"
+                        return @loadUndefinedEjsValue() # this isn't properly typed...  dunno what to do about this here
                 else if typeof n.raw is "string" and (n.raw[0] is '"' or n.raw[0] is "'")
                         debug.log "literal string: #{n.value}"
 
