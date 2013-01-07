@@ -258,6 +258,36 @@ _ejs_function_init(ejsval global)
     END_SHADOW_STACK_FRAME;
 }
 
+#if DEBUG_FUNCTIONS
+#define DEBUG_FUNCTION_ENTER(x) EJS_MACRO_START                         \
+    ejsval closure_name = _ejs_Function_prototype_toString (NULL, x, 0, NULL); \
+    indent('*');                                                        \
+    printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));           \
+    indent_level += INDENT_AMOUNT;                                      \
+    EJS_MACRO_END
+#define DEBUG_FUNCTION_EXIT(x) EJS_MACRO_START                          \
+    ejsval closure_name = _ejs_Function_prototype_toString (NULL, x, 0, NULL); \
+    indent_level -= INDENT_AMOUNT;                                      \
+    indent(' ');                                                        \
+    printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));     \
+    EJS_MACRO_END
+#else
+#define DEBUG_FUNCTION_ENTER(x)
+#define DEBUG_FUNCTION_EXIT(x)
+#endif
+
+#define BUILD_INVOKE_CLOSURE(_closure, _thisArg, _argc, ...) EJS_MACRO_START \
+    if (!EJSVAL_IS_FUNCTION(_closure)) {                                \
+        printf ("TypeError, object not a function\n");                  \
+        EJS_NOT_IMPLEMENTED();                                          \
+    }                                                                   \
+                                                                        \
+    ejsval args[] = { __VA_ARGS__ };                                    \
+    DEBUG_FUNCTION_ENTER (_closure);                                    \
+    ejsval rv = EJSVAL_TO_FUNC(_closure) (EJSVAL_TO_ENV(_closure), _thisArg, _argc, args); \
+    DEBUG_FUNCTION_EXIT (_closure);                                     \
+    return rv;                                                          \
+    EJS_MACRO_END
 
 ejsval
 _ejs_invoke_closure_0 (ejsval closure, ejsval _this, int argc)
@@ -266,260 +296,70 @@ _ejs_invoke_closure_0 (ejsval closure, ejsval _this, int argc)
         printf ("TypeError, object not a function\n");
         EJS_NOT_IMPLEMENTED();
     }
-
-#if DEBUG_FUNCTIONS
-    ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
-    indent('*');
-    printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
-    indent_level += INDENT_AMOUNT;
-#endif
+    DEBUG_FUNCTION_ENTER (closure);
     ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, NULL);
-#if DEBUG_FUNCTIONS
-    indent_level -= INDENT_AMOUNT;
-    indent(' ');
-    printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));
-#endif
+    DEBUG_FUNCTION_EXIT (closure);
     return rv;
 }
 
 ejsval
 _ejs_invoke_closure_1 (ejsval closure, ejsval _this, int argc, ejsval arg1)
 {
-    if (!EJSVAL_IS_FUNCTION(closure)) {
-        printf ("TypeError, object not a function\n");
-        EJS_NOT_IMPLEMENTED();
-    }
-
-    ejsval args[] = { arg1 };
-#if DEBUG_FUNCTIONS
-    ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
-    indent('*');
-    printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
-    indent_level += INDENT_AMOUNT;
-#endif
-    ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
-#if DEBUG_FUNCTIONS
-    indent_level -= INDENT_AMOUNT;
-    indent(' ');
-    printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));
-#endif
-    return rv;
+    BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1);
 }
 
 ejsval
 _ejs_invoke_closure_2 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2)
 {
-    if (!EJSVAL_IS_FUNCTION(closure)) {
-        printf ("TypeError, object not a function\n");
-        EJS_NOT_IMPLEMENTED();
-    }
-
-    ejsval args[] = { arg1, arg2 };
-#if DEBUG_FUNCTIONS
-    ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
-    indent('*');
-    printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
-    indent_level += INDENT_AMOUNT;
-#endif
-    ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
-#if DEBUG_FUNCTIONS
-    indent_level -= INDENT_AMOUNT;
-    indent(' ');
-    printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));
-#endif
-    return rv;
+    BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1, arg2);
 }
 
 ejsval
 _ejs_invoke_closure_3 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3)
 {
-    if (!EJSVAL_IS_FUNCTION(closure)) {
-        printf ("TypeError, object not a function\n");
-        EJS_NOT_IMPLEMENTED();
-    }
-
-    ejsval args[] = { arg1, arg2, arg3 };
-#if DEBUG_FUNCTIONS
-    ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
-    indent('*');
-    printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
-    indent_level += INDENT_AMOUNT;
-#endif
-    ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
-#if DEBUG_FUNCTIONS
-    indent_level -= INDENT_AMOUNT;
-    indent(' ');
-    printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));
-#endif
-    return rv;
+    BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1, arg2, arg3);
 }
 
 ejsval
 _ejs_invoke_closure_4 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4)
 {
-    if (!EJSVAL_IS_FUNCTION(closure)) {
-        printf ("TypeError, object not a function\n");
-        EJS_NOT_IMPLEMENTED();
-    }
-
-    ejsval args[] = { arg1, arg2, arg3, arg4 };
-#if DEBUG_FUNCTIONS
-    ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
-    indent('*');
-    printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
-    indent_level += INDENT_AMOUNT;
-#endif
-    ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
-#if DEBUG_FUNCTIONS
-    indent_level -= INDENT_AMOUNT;
-    indent(' ');
-    printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));
-#endif
-    return rv;
+    BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1, arg2, arg3, arg4);
 }
 
 ejsval
 _ejs_invoke_closure_5 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5)
 {
-    if (!EJSVAL_IS_FUNCTION(closure)) {
-        printf ("TypeError, object not a function\n");
-        EJS_NOT_IMPLEMENTED();
-    }
-
-    ejsval args[] = { arg1, arg2, arg3, arg4, arg5 };
-#if DEBUG_FUNCTIONS
-    ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
-    indent('*');
-    printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
-    indent_level += INDENT_AMOUNT;
-#endif
-    ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
-#if DEBUG_FUNCTIONS
-    indent_level -= INDENT_AMOUNT;
-    indent(' ');
-    printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));
-#endif
-    return rv;
+    BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1, arg2, arg3, arg4, arg5);
 }
 
 ejsval
 _ejs_invoke_closure_6 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6)
 {
-    if (!EJSVAL_IS_FUNCTION(closure)) {
-        printf ("TypeError, object not a function\n");
-        EJS_NOT_IMPLEMENTED();
-    }
-
-    ejsval args[] = { arg1, arg2, arg3, arg4, arg5, arg6 };
-#if DEBUG_FUNCTIONS
-    ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
-    indent('*');
-    printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
-    indent_level += INDENT_AMOUNT;
-#endif
-    ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
-#if DEBUG_FUNCTIONS
-    indent_level -= INDENT_AMOUNT;
-    indent(' ');
-    printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));
-#endif
-    return rv;
+    BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 ejsval
 _ejs_invoke_closure_7 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7)
 {
-    if (!EJSVAL_IS_FUNCTION(closure)) {
-        printf ("TypeError, object not a function\n");
-        EJS_NOT_IMPLEMENTED();
-    }
-
-    ejsval args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7 };
-#if DEBUG_FUNCTIONS
-    ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
-    indent('*');
-    printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
-    indent_level += INDENT_AMOUNT;
-#endif
-    ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
-#if DEBUG_FUNCTIONS
-    indent_level -= INDENT_AMOUNT;
-    indent(' ');
-    printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));
-#endif
-    return rv;
+    BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
 
 ejsval
 _ejs_invoke_closure_8 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7, ejsval arg8)
 {
-    if (!EJSVAL_IS_FUNCTION(closure)) {
-        printf ("TypeError, object not a function\n");
-        EJS_NOT_IMPLEMENTED();
-    }
-
-    ejsval args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8 };
-#if DEBUG_FUNCTIONS
-    ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
-    indent('*');
-    printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
-    indent_level += INDENT_AMOUNT;
-#endif
-    ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
-#if DEBUG_FUNCTIONS
-    indent_level -= INDENT_AMOUNT;
-    indent(' ');
-    printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));
-#endif
-    return rv;
+    BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
 }
 
 ejsval
 _ejs_invoke_closure_9 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7, ejsval arg8, ejsval arg9)
 {
-    if (!EJSVAL_IS_FUNCTION(closure)) {
-        printf ("TypeError, object not a function\n");
-        EJS_NOT_IMPLEMENTED();
-    }
-
-    ejsval args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9 };
-#if DEBUG_FUNCTIONS
-    ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, closure, 0, NULL);
-    indent('*');
-    printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
-    indent_level += INDENT_AMOUNT;
-#endif
-    ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
-#if DEBUG_FUNCTIONS
-    indent_level -= INDENT_AMOUNT;
-    indent(' ');
-    printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));
-#endif
-    return rv;
+    BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
 }
 
 ejsval
 _ejs_invoke_closure_10 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7, ejsval arg8, ejsval arg9, ejsval arg10)
 {
-    if (!EJSVAL_IS_FUNCTION(closure)) {
-        printf ("TypeError, object not a function\n");
-        EJS_NOT_IMPLEMENTED();
-    }
-
-    ejsval args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10 };
-#if DEBUG_FUNCTIONS
-    ejsval closure_name = _ejs_Function_prototype_toString (NULL, closure, 0, NULL);
-    indent('*');
-    printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));
-    indent_level += INDENT_AMOUNT;
-#endif
-    ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, args);
-#if DEBUG_FUNCTIONS
-    indent_level -= INDENT_AMOUNT;
-    indent(' ');
-    printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));
-#endif
-    return rv;
+    BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10);
 }
 
 static ejsval
