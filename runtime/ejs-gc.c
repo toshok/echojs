@@ -286,9 +286,13 @@ dealloc_page(char* page_addr)
     dealloc_from_os(page_addr, PAGE_SIZE);
 }
 
+EJSBool gc_disabled;
+
 void
 _ejs_gc_init()
 {
+    gc_disabled = getenv("EJS_GC_DISABLE") != NULL;
+
     memset (heap_pages, 0, sizeof(heap_pages));
 
 #if POPULATE_INITIAL_HEAP
@@ -632,7 +636,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     num_allocs ++;
     total_allocs ++;
 
-    if (num_allocs == 1000) {
+    if (!gc_disabled && num_allocs == 1000) {
         _ejs_gc_collect();
         num_allocs = 0;
     }
