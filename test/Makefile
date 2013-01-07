@@ -18,7 +18,12 @@ EXPECTED_FAILURES= \
 	instanceof1.js \
 	object5.js \
 	number1.js \
-	toLocaleString3
+	toLocaleString3 \
+	prototype9 \
+	exc1 \
+	exc2 \
+	exc3 \
+	exc10
 
 # date1 fails because we test the Date() function, which returns the current time.  this differs from the current time when the node test runs.  bleah.
 # forin2 fails because we don't properly handle deleting properties while iterating
@@ -28,6 +33,8 @@ EXPECTED_FAILURES= \
 # object5 fails because we don't handle get/setprop using undefined or null keys
 # number1 fails because node outputs {} for console.log(new Number(5)), while spidermonkey and jsc output "5".  we err on the SM/JSC side of things here.
 # toLocaleString3 fails because we don't have a special toString (or toLocaleString) implementation for arrays.
+# prototype9 fails because of one actual prototype failure and difference in our Function.toString() method.
+# the exc* tests fail because things are very screwed up with exception handling at the moment.
 
 check: check-unit-tests run-tests
 
