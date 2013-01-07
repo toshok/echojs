@@ -3,6 +3,8 @@
 echo-assert.js
 terminal.js
 llvm-test.js
+free-test.js
+set-test.js
 set.js
 *.diff
 *.ejs-out
