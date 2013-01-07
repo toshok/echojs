@@ -1062,7 +1062,7 @@ class LLVMIRVisitor extends NodeVisitor
                 if Array.isArray callee
                         callee = callee[n.arguments.length]
                 if not callee
-                        throw "Internal error: callee should not be null in visitCallExpression"
+                        throw "Internal error: callee should not be null in visitCallExpression (callee = #{n.callee.name}, arguments = #{n.arguments.length})"
 
                 pullThisFromArg0 = n.callee.name is "%invokeClosure"
 
