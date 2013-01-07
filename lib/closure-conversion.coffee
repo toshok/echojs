@@ -149,69 +149,20 @@ LocateEnvVisitor = class LocateEnvVisitor extends NodeVisitor
                                 env = env.parent
                 n
 
-
-#
-#   This pass walks the tree and moves all function expressions to the toplevel.
-#
-#   at the point where this pass runs there are a couple of assumptions:
-# 
-#   1. there are no function declarations anywhere in the program.  They have all
-#      been converted to 'var X = %makeClosure(%env_Y, function (%env) { ... })'
-# 
-#   2. There are no free variables in the function expressions.
-#
-class LambdaLift extends NodeVisitor
-        constructor: (module) ->
-                super
-                @functions = []
-                @mappings = []
-
-        currentMapping: -> if @mappings.length > 0 then @mappings[0] else {}
-
-        visitProgram: (program) ->
-                super
-                program.body = @functions.concat program.body
-                program
-
-        visitFunctionDeclaration: (n) ->
-                n.body = @visit n.body
-                n
-
-        visitFunctionExpression: (n) ->
-                if n.id?.name?
-                        global_name = genGlobalFunctionName n.id.name
-                        @currentMapping()[n.id.name] = global_name
-                else
-                        global_name = genAnonymousFunctionName()
-
-                n.type = syntax.FunctionDeclaration
-                n.id =
-                        type: syntax.Identifier
-                        name: global_name
-
-                @functions.push n
-
-                new_mapping = deep_copy_object @currentMapping()
-
-                @mappings.unshift new_mapping
-                n.body = @visit n.body
-                @mappings = @mappings.slice(1)
-
-                n.params.unshift create_identifier "%env_#{n.ejs_env.parent.id}"
-                
-                return {
-                        type: syntax.Identifier,
-                        name: global_name
-                }
-
 create_identifier = (x) -> type: syntax.Identifier, name: x
 create_string_literal = (x) -> type: syntax.Literal, value: x, raw: "\"#{x}\""
 
 # this should move to echo-desugar.coffee
-FuncsToVars = class FuncsToVars extends NodeVisitor
-        constructor: (module) ->
-                super
 
+# convert all function declarations to variable assignments
+# with named function expressions.
+# 
+# i.e. from:
+#   function foo() { }
+# to:
+#   var foo = function foo() { }
+# 
+FuncsToVars = class FuncsToVars extends NodeVisitor
         visitFunctionDeclaration: (n) ->
                 if n.toplevel
                         super
@@ -229,6 +180,97 @@ FuncsToVars = class FuncsToVars extends NodeVisitor
                                 kind: "var"
                         }
 
+
+# hoists all vars to the start of the enclosing function,
+# replacing any initializer with an assignment expression.
+#
+# i.e. from
+#    {
+#       ....
+#       var x = 5;
+#       ....
+#    }
+# to
+#    {
+#       var x;
+#       ....
+#       x = 5;
+#       ....
+#    }
+# 
+class HoistVars extends NodeVisitor
+        constructor: () ->
+                super
+                @function_stack = []
+
+        visitFunction: (n) ->
+                @function_stack.unshift { func: n, vars: [] }
+                n = super
+                n.body.body = @function_stack[0].vars.concat n.body.body
+                @function_stack.shift()
+                n
+
+        visitForIn: (n) ->
+                if n.left.type is syntax.VariableDeclaration
+                        @function_stack[0].vars.push
+                                type: syntax.VariableDeclaration
+                                declarations: [{
+                                        type: syntax.VariableDeclarator
+                                        id: create_identifier n.left.declarations[0].id.name
+                                        init: null
+                                }],
+                                kind: "var"
+                        n.left.type = syntax.Identifier
+                        n.left.name = n.left.declarations[0].id.name
+                        delete n.left.declarations
+                        delete n.left.kind
+
+                n.right = @visit n.right
+                n.body = @visit n.body
+                n
+                        
+        visitVariableDeclaration: (n) ->
+                if n.kind is "var"
+                        # vars are hoisted to the containing function's toplevel scope
+                        for i in [0...n.declarations.length]
+                                @function_stack[0].vars.push
+                                        type: syntax.VariableDeclaration
+                                        declarations: [{
+                                                type: syntax.VariableDeclarator
+                                                id: create_identifier n.declarations[i].id.name
+                                                init: null
+                                                }],
+                                        kind: "var"
+
+                        # now we need convert the initializers to assignment expressions
+                        assignments = []
+                        for i in [0...n.declarations.length]
+                                if n.declarations[i].init?
+                                        assignments.push
+                                                type: syntax.ExpressionStatement
+                                                expression:
+                                                        type: syntax.AssignmentExpression
+                                                        left: create_identifier n.declarations[i].id.name
+                                                        right: n.declarations[i].init
+                                                        operator: "="
+
+                        # now return the new assignments, which will replace the original variable
+                        # declaration node.
+                        if assignments.length == 1
+                                return assignments[0]
+
+                        return {
+                                type: syntax.BlockStatement
+                                body: assignments
+                        }
+                n
+
+# this class really doesn't behave like a normal NodeVisitor, as it modifies the tree in-place
+# check the free() function near the top of the file for the actual implementation.
+class ComputeFree extends NodeVisitor
+        visit: (n) ->
+                free n
+                n
                 
 # 1) allocates the environment at the start of the n
 # 2) adds mappings for all .closed variables
@@ -238,13 +280,9 @@ class SubstituteVariables extends NodeVisitor
                 @mappings = []
 
         currentMapping: -> if @mappings.length > 0 then @mappings[0] else {}
-        
-        visitIdentifier: (n) ->
-                if n.ejs_substitute?
-                        if not @currentMapping().hasOwnProperty n.name
-                                debug.log "missing mapping for #{n.name}"
-                                throw "InternalError 2"
 
+        visitIdentifier: (n) ->
+                if @currentMapping().hasOwnProperty n.name
                         return @currentMapping()[n.name]
                 n
 
@@ -308,6 +346,17 @@ class SubstituteVariables extends NodeVisitor
                                         kind: n.kind
                                 }
                 rv                        
+
+        visitProperty: (n) ->
+                # we don't visit property keys here
+                n.value = @visit n.value
+                n
+
+        visitFunctionBody: (n) ->
+                # we use this instead of calling super in visitFunction because we don't want to visit parameters
+                # during this pass, or they'll be substituted with an %env.
+                n.body = @visit n.body
+                n
                 
         visitFunction: (n) ->
                 if n.ejs_env.closed.empty()
@@ -321,14 +370,15 @@ class SubstituteVariables extends NodeVisitor
                                                 value: null
                                 }],
                                 kind: "var"
-                        super
+                        @visitFunctionBody n
                 else
                         # okay, we know we need a fresh environment in this function
                         
                         env_name = "%env_#{n.ejs_env.id}"
 
+                        prepends = []
                         # insert environment creation (at the start of the function body)
-                        n.body.body.unshift
+                        prepends.push {
                                 type: syntax.VariableDeclaration,
                                 declarations: [{
                                         type: syntax.VariableDeclarator
@@ -338,9 +388,10 @@ class SubstituteVariables extends NodeVisitor
                                                 properties: []
                                 }],
                                 kind: "var"
+                        }
 
                         if n.ejs_env.parent?
-                                n.body.body.splice 1, 0, {
+                                prepends.push {
                                         type: syntax.ExpressionStatement
                                         expression:
                                                 type: syntax.AssignmentExpression,
@@ -357,7 +408,7 @@ class SubstituteVariables extends NodeVisitor
                         # we need to push assignments of any closed over parameters into the environment at this point
                         for param in n.params
                                 if n.ejs_env.closed.member param.name
-                                        n.body.body.splice 1, 0, {
+                                        prepends.push {
                                                 type: syntax.ExpressionStatement
                                                 expression:
                                                         type: syntax.AssignmentExpression,
@@ -405,7 +456,8 @@ class SubstituteVariables extends NodeVisitor
                                         property: create_identifier sym
 
                         @mappings.unshift new_mapping
-                        super
+                        @visitFunctionBody n
+                        n.body.body = prepends.concat n.body.body
                         @mappings = @mappings.slice(1)
 
                 # we need to replace function declarations of the form:
@@ -464,38 +516,75 @@ class SubstituteVariables extends NodeVisitor
                 n.callee = create_identifier "%invokeClosure"
                 n
 
+#
+#   This pass walks the tree and moves all function expressions to the toplevel.
+#
+#   at the point where this pass runs there are a couple of assumptions:
+# 
+#   1. there are no function declarations anywhere in the program.  They have all
+#      been converted to 'var X = %makeClosure(%env_Y, function (%env) { ... })'
+# 
+#   2. There are no free variables in the function expressions.
+#
+class LambdaLift extends NodeVisitor
+        constructor: (module) ->
+                super
+                @functions = []
+                @mappings = []
 
+        currentMapping: -> if @mappings.length > 0 then @mappings[0] else {}
+
+        visitProgram: (program) ->
+                super
+                program.body = @functions.concat program.body
+                program
+
+        visitFunctionDeclaration: (n) ->
+                n.body = @visit n.body
+                n
+
+        visitFunctionExpression: (n) ->
+                if n.id?.name?
+                        global_name = genGlobalFunctionName n.id.name
+                        @currentMapping()[n.id.name] = global_name
+                else
+                        global_name = genAnonymousFunctionName()
+
+                n.type = syntax.FunctionDeclaration
+                n.id =
+                        type: syntax.Identifier
+                        name: global_name
+
+                @functions.push n
+
+                new_mapping = deep_copy_object @currentMapping()
+
+                @mappings.unshift new_mapping
+                n.body = @visit n.body
+                @mappings = @mappings.slice(1)
+
+                n.params.unshift create_identifier "%env_#{n.ejs_env.parent.id}"
+                
+                return {
+                        type: syntax.Identifier,
+                        name: global_name
+                }
+
+passes = [
+        FuncsToVars,
+        HoistVars,
+        ComputeFree,
+        LocateEnvVisitor,
+        SubstituteVariables,
+        LambdaLift
+        ]
 
 exports.convert = (tree) ->
         debug.log "before:"
         debug.log -> escodegen.generate tree
 
-        funcs_to_vars = new FuncsToVars tree
-        tree2 = funcs_to_vars.visit tree
+        passes.forEach (passType) ->
+                pass = new passType()
+                tree = pass.visit tree
 
-        debug.log "after FuncsToVars:"
-        debug.log -> escodegen.generate tree2
-        
-        # first we decorate the tree with free variable usage
-        free tree2
-
-        # traverse the tree accumulating info about which function level defined a given variable.
-        locate_envs = new LocateEnvVisitor
-        tree3 = locate_envs.visit tree2
-
-        debug.log "after LocateEnvVisitor:"
-        debug.log -> escodegen.generate tree3
-        substitute_vars = new SubstituteVariables tree3
-        tree4 = substitute_vars.visit tree3
-
-        debug.log "after SubstituteVariables:"
-        debug.log -> escodegen.generate tree4
-        
-        lambda_lift = new LambdaLift tree4
-        tree5 = lambda_lift.visit tree4
-
-        debug.log "after LambdaLift:"
-        debug.log -> escodegen.generate tree5
-
-        tree5
-        
+        tree
