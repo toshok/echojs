@@ -12,6 +12,7 @@ argv = process.argv.slice slice_count
 
 external_modules = []
 files = []
+temp_files = []
 
 add_external_module = (modinfo) ->
         [library,module_name,module_entrypoint,link_flags] = modinfo.split ','
@@ -22,14 +23,24 @@ options =
         output_filename: null
         combine_scripts: false
         show_help: false
-        link_with_cxx: false
+        leave_temp_files: false
 
 args =
-        "-s":       { flag:    "combine_scripts",   help: "treat all toplevels as being 1 context, evaluating them in the order present on the command line" }
-        "-o":       { option:  "output_filename",   help: "name of the output file." }
-        "--cxx":    { flag:    "link_with_cxx",     help: "use clang++ to do the final link (default = no)" }
-        "--module": { handler: add_external_module, help: "--module library.a,module-name,module_init,link_flags" }
-        "--help":   { flag:    "show_help",         help: "output this help info." }
+        "-s":
+                flag:    "combine_scripts"
+                help:    "treat all toplevels as being 1 context, evaluating them in the order present on the command line"
+        "-o":
+                option:  "output_filename"
+                help:    "name of the output file."
+        "--leave-temp":
+                flag:    "leave_temp_files"
+                help:    "leave temporary files in /tmp from compilation"
+        "--module":
+                handler: add_external_module
+                help:    "--module library.a,module-name,module_init,link_flags"
+        "--help":
+                flag:    "show_help",
+                help:    "output this help info."
 
 output_usage = ->
         console.warn 'Usage:';
@@ -100,6 +111,8 @@ compileFile = (filename, content, compileCallback) ->
         s_filename = "/tmp/#{base_filename}.s"
         o_filename = "/tmp/#{base_filename}.o"
 
+        temp_files.push ll_filename, bc_filename, bc_opt_filename, ll_opt_filename, s_filename, o_filename
+        
         llvm_as_args = ["-o=#{bc_filename}", ll_filename]
         opt_args = ["-O3", "-early-cse", "-mem2reg", "-o=#{bc_opt_filename}", bc_filename]
         llvm_dis_args = ["-o=#{ll_opt_filename}", bc_opt_filename]
@@ -144,10 +157,9 @@ generate_require_map = ->
                         if c_callable
                                 filename = filename.replace /[.,-\/\\]/g, "_" # this is insanely inadequate
                         filename
-        map_path = "/tmp/#{util.genFreshFileName path.basename files[0]}-require-map.#{if options.link_with_cxx then 'cpp' else 'c'}"
+        map_path = "/tmp/#{util.genFreshFileName path.basename files[0]}-require-map.cpp"
         map = fs.createWriteStream map_path
-        if options.link_with_cxx
-                map.write "extern \"C\" {"
+        map.write "extern \"C\" {"
         map.write "typedef struct _EJSValue EJSValue;\n"
         map.write "typedef int EJSBool;\n"
         map.write "typedef EJSValue* (*ExternalModuleEntry) (EJSValue *exports);\n"
@@ -175,28 +187,37 @@ generate_require_map = ->
         
         map.write "const char *entry_filename = \"#{sanitize base_filenames[0], false}\";\n";
 
-        if options.link_with_cxx
-                map.write "};"
+        map.write "};"
         map.end()
+
+        temp_files.push map_path
+        
         map_path
 
 
+do_final_link = ->
+        map_filename = generate_require_map compiled_modules
+
+        clang_args = ["-o", options.output_filename || "#{files[0]}.exe"].concat o_filenames
+        clang_args.push map_filename
+        clang_args.push path.resolve (path.dirname process.argv[1]), "runtime/libecho.a"
+        external_modules.forEach (extern_module) ->
+                clang_args.push extern_module.library
+                clang_args = clang_args.concat extern_module.link_flags.split " "
+
+        clang = spawn "clang++", clang_args
+        clang.stderr.on "data", (data) -> console.warn "#{data}"
+        clang.on "exit", (code) ->
+                cleanup() unless options.leave_temp_files
+                console.warn "done."
+
+cleanup = ->
+        temp_files.forEach (filename) ->
+                fs.unlinkSync filename
+                
 file_compiled = ->
         files_remaining = files_remaining - 1
-        if files_remaining is 0
-                map_filename = generate_require_map compiled_modules
-
-                clang_args = ["-o", options.output_filename || "#{files[0]}.exe"].concat o_filenames
-                clang_args.push map_filename
-                clang_args.push path.resolve (path.dirname process.argv[1]), "runtime/libecho.a"
-                for extern_module in external_modules
-                        clang_args.push extern_module.library
-                        clang_args = clang_args.concat extern_module.link_flags.split " "
-
-                clang = spawn (if options.link_with_cxx then "clang++" else "clang"), clang_args
-                clang.stderr.on "data", (data) -> console.warn "#{data}"
-                clang.on "exit", (code) ->
-                        console.warn "done."
+        do_final_link() if files_remaining is 0
 
 if options.combine_scripts
         script_content = ""

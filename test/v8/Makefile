@@ -18,6 +18,6 @@ clean:
 
 $(TEST_EXES):%.js.exe: %.js base.js run.js $(TOPDIR)/runtime/libecho.a
 	@rm -f base.js.exe
-	NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --cxx -s base.js $< run.js
+	NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs -s base.js $< run.js
 	@mv base.js.exe $@
 
