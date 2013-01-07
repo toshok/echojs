@@ -41,7 +41,8 @@ EJSSpecOps _ejs_function_specops = {
     _ejs_function_specop_scan
 };
 
-#if DEBUG_FUNCTIONS
+EJSBool trace = EJS_FALSE;
+
 static int indent_level = 0;
 #define INDENT_AMOUNT 1
 
@@ -51,8 +52,6 @@ static void indent(char ch)
     for (i = 0; i < indent_level; i ++)
         putchar (ch);
 }
-
-#endif
 
 ejsval
 _ejs_function_new (EJSClosureEnv env, ejsval name, EJSClosureFunc func)
@@ -215,6 +214,8 @@ _ejs_Function_empty (ejsval env, ejsval _this, int argc, ejsval *args)
 static void
 _ejs_function_init_proto()
 {
+    trace = getenv("EJS_TRACE") != NULL;
+
     _ejs_gc_add_named_root (_ejs_Function__proto__);
 
     // Function.__proto__ = function () { return undefined; }
@@ -258,23 +259,22 @@ _ejs_function_init(ejsval global)
     END_SHADOW_STACK_FRAME;
 }
 
-#if DEBUG_FUNCTIONS
 #define DEBUG_FUNCTION_ENTER(x) EJS_MACRO_START                         \
-    ejsval closure_name = _ejs_Function_prototype_toString (NULL, x, 0, NULL); \
-    indent('*');                                                        \
-    printf ("invoking %s\n", EJSVAL_TO_STRING(closure_name));           \
-    indent_level += INDENT_AMOUNT;                                      \
+    if (trace) {                                                        \
+        ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, x, 0, NULL); \
+        indent('*');                                                    \
+        printf ("invoking %s\n", EJSVAL_TO_FLAT_STRING(closure_name));  \
+        indent_level += INDENT_AMOUNT;                                  \
+    }                                                                   \
     EJS_MACRO_END
 #define DEBUG_FUNCTION_EXIT(x) EJS_MACRO_START                          \
-    ejsval closure_name = _ejs_Function_prototype_toString (NULL, x, 0, NULL); \
-    indent_level -= INDENT_AMOUNT;                                      \
-    indent(' ');                                                        \
-    printf ("returning from %s\n", EJSVAL_TO_STRING(closure_name));     \
+    if (trace) {                                                        \
+        ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, x, 0, NULL); \
+        indent_level -= INDENT_AMOUNT;                                  \
+        indent(' ');                                                    \
+        printf ("returning from %s\n", EJSVAL_TO_FLAT_STRING(closure_name)); \
+    }                                                                   \
     EJS_MACRO_END
-#else
-#define DEBUG_FUNCTION_ENTER(x)
-#define DEBUG_FUNCTION_EXIT(x)
-#endif
 
 #define BUILD_INVOKE_CLOSURE(_closure, _thisArg, _argc, ...) EJS_MACRO_START \
     if (!EJSVAL_IS_FUNCTION(_closure)) {                                \
