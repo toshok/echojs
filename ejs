@@ -2,8 +2,6 @@
 
 path = require 'path'
 fs = require 'fs'
-esprima = require 'esprima'
-compiler = require 'compiler'
 util = require 'echo-util'
 { spawn } = require 'child_process'
 
@@ -81,6 +79,9 @@ o_filenames = []
 base_filenames = (path.basename file for file in files)
 
 compiled_modules = []
+
+esprima = require 'esprima'
+compiler = require 'compiler'
 
 compileFile = (filename, content, compileCallback) ->
         try
