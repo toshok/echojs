@@ -24,6 +24,14 @@ SOURCES= \
 OBJECTS=$(SOURCES:%.c=%.o)
 
 CFLAGS=-I. -Wall -g -O0 -Wno-unused-function
+DEV_CFLAGS=	-arch armv6 \
+		-isysroot /Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS5.0.sdk \
+		-miphoneos-version-min=4.3
+
+SIM_CFLAGS=	-arch i386 \
+		-isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator5.0.sdk \
+		-miphoneos-version-min=4.3
+
 
 libecho.a: $(OBJECTS)
 	$(AR) cru $@ $(OBJECTS)
