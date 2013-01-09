@@ -1,9 +1,10 @@
+if (typeof console !== "undefined") print = console.log
 
 function tryInvoke(f) {
   try {
     f();
   }
-  catch (e) { console.log ("f = null"); }
+  catch (e) { print ("f = null"); }
 }
 
 function foo(x) {
@@ -11,12 +12,12 @@ function foo(x) {
 
   if (x < 5) {
     function f() {
-      console.log ("hello world");
+      print ("hello world");
     }
   }
   else {
     function f() {
-      console.log ("hello world2");
+      print ("hello world2");
     }
   }
 
