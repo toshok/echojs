@@ -41,31 +41,29 @@ EJSSpecOps _ejs_arguments_specops = {
 };
 
 
-#define EJSOBJ_IS_ARGUMENTS(obj) (((EJSObject*)obj)->proto == _ejs_Arguments_proto)
+#define EJSOBJ_IS_ARGUMENTS(obj) (((EJSObject*)obj)->proto == _ejs_Arguments__proto__)
 
-ejsval _ejs_Arguments_proto;
+ejsval _ejs_Arguments__proto__;
 
 ejsval
 _ejs_arguments_new (int numElements, ejsval* args)
 {
-    EJSArguments* rv = _ejs_gc_new (EJSArguments);
+    ejsval rv = _ejs_object_new (_ejs_Arguments__proto__, &_ejs_arguments_specops);
 
-    _ejs_init_object ((EJSObject*)rv, _ejs_Arguments_proto, &_ejs_arguments_specops);
-
-    rv->argc = numElements;
-    rv->args = (ejsval*)calloc(numElements, sizeof (ejsval));
-    memmove (rv->args, args, sizeof(ejsval) * rv->argc);
-    return OBJECT_TO_EJSVAL((EJSObject*)rv);
+    EJSArguments* arguments = (EJSArguments*)EJSVAL_TO_OBJECT(rv);
+    arguments->argc = numElements;
+    arguments->args = (ejsval*)calloc(numElements, sizeof (ejsval));
+    memmove (arguments->args, args, sizeof(ejsval) * numElements);
+    return rv;
 }
-
 
 void
 _ejs_arguments_init(ejsval global)
 {
     START_SHADOW_STACK_FRAME;
 
-    _ejs_gc_add_named_root (_ejs_Arguments_proto);
-    _ejs_Arguments_proto = _ejs_object_new(_ejs_null, &_ejs_object_specops);
+    _ejs_gc_add_named_root (_ejs_Arguments__proto__);
+    _ejs_Arguments__proto__ = _ejs_object_new(_ejs_Object_prototype, &_ejs_object_specops);
 
     END_SHADOW_STACK_FRAME;
 }

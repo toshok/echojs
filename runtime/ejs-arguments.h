@@ -12,13 +12,13 @@ typedef struct {
     EJSObject obj;
 
     /* arguments specific data */
-    int argc;
+    uint32_t argc;
     ejsval* args;
 } EJSArguments;
 
 EJS_BEGIN_DECLS
 
-extern ejsval _ejs_Arguments_proto;
+extern ejsval _ejs_Arguments__proto__;
 extern EJSSpecOps _ejs_arguments_specops;
 
 void _ejs_arguments_init(ejsval global);

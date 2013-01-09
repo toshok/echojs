@@ -10,7 +10,7 @@
 
 EJS_BEGIN_DECLS
 
-void _ejs_process_init(ejsval global, int argc, char** argv);
+void _ejs_process_init(ejsval global, uint32_t argc, char** argv);
 
 EJS_END_DECLS
 

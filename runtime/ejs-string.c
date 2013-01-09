@@ -46,7 +46,7 @@ ejsval _ejs_String__proto__;
 ejsval _ejs_String_prototype;
 
 static ejsval
-_ejs_String_impl (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_String_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     if (EJSVAL_IS_NULL(_this) || EJSVAL_IS_UNDEFINED(_this)) {
         if (argc > 0)
@@ -70,7 +70,7 @@ _ejs_String_impl (ejsval env, ejsval _this, int argc, ejsval *args)
 }
 
 static ejsval
-_ejs_String_prototype_toString (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_String_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJSString *str = (EJSString*)EJSVAL_TO_OBJECT(_this);
 
@@ -78,7 +78,7 @@ _ejs_String_prototype_toString (ejsval env, ejsval _this, int argc, ejsval *args
 }
 
 static ejsval
-_ejs_String_prototype_replace (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_String_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     if (argc == 0)
         return _this;
@@ -120,7 +120,7 @@ _ejs_String_prototype_replace (ejsval env, ejsval _this, int argc, ejsval *args)
 }
 
 static ejsval
-_ejs_String_prototype_charAt (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_String_prototype_charAt (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval primStr;
 
@@ -147,7 +147,7 @@ _ejs_String_prototype_charAt (ejsval env, ejsval _this, int argc, ejsval *args)
 }
 
 static ejsval
-_ejs_String_prototype_charCodeAt (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_String_prototype_charCodeAt (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval primStr;
 
@@ -171,13 +171,13 @@ _ejs_String_prototype_charCodeAt (ejsval env, ejsval _this, int argc, ejsval *ar
 }
 
 static ejsval
-_ejs_String_prototype_concat (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_String_prototype_concat (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
-_ejs_String_prototype_indexOf (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_String_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     int idx = -1;
     if (argc == 0)
@@ -209,73 +209,73 @@ _ejs_String_prototype_indexOf (ejsval env, ejsval _this, int argc, ejsval *args)
 }
 
 static ejsval
-_ejs_String_prototype_lastIndexOf (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_String_prototype_lastIndexOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
-_ejs_String_prototype_localeCompare (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_String_prototype_localeCompare (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
-_ejs_String_prototype_match (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_String_prototype_match (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
-_ejs_String_prototype_search (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_String_prototype_search (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
-_ejs_String_prototype_substring (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_String_prototype_substring (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
-_ejs_String_prototype_toLowerCase (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_String_prototype_toLowerCase (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
-_ejs_String_prototype_toLocaleLowerCase (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_String_prototype_toLocaleLowerCase (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
-_ejs_String_prototype_toUpperCase (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_String_prototype_toUpperCase (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
-_ejs_String_prototype_toLocaleUpperCase (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_String_prototype_toLocaleUpperCase (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
-_ejs_String_prototype_trim (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_String_prototype_trim (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
-_ejs_String_prototype_valueOf (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_String_prototype_valueOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
-_ejs_String_prototype_split (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_String_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     // for now let's just not split anything at all, return the original string as element0 of the array.
 
@@ -285,7 +285,7 @@ _ejs_String_prototype_split (ejsval env, ejsval _this, int argc, ejsval *args)
 }
 
 static ejsval
-_ejs_String_prototype_slice (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_String_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     // assert argc >= 1
 

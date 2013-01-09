@@ -44,7 +44,7 @@ ejsval _ejs_Number;
 ejsval _ejs_Number_proto;
 
 static ejsval
-_ejs_Number_impl (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Number_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     if (EJSVAL_IS_UNDEFINED(_this)) {
         // called as a function
@@ -70,7 +70,7 @@ _ejs_Number_impl (ejsval env, ejsval _this, int argc, ejsval *args)
 }
 
 static ejsval
-_ejs_Number_prototype_toString (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Number_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJSNumber *num = (EJSNumber*)EJSVAL_TO_OBJECT(_this);
 
@@ -78,7 +78,7 @@ _ejs_Number_prototype_toString (ejsval env, ejsval _this, int argc, ejsval *args
 }
 
 static ejsval
-_ejs_Number_prototype_valueOf (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Number_prototype_valueOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJSNumber *num = (EJSNumber*)EJSVAL_TO_OBJECT(_this);
     return NUMBER_TO_EJSVAL(num->number);

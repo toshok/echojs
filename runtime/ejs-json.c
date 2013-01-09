@@ -13,14 +13,14 @@ ejsval _ejs_JSON;
 
 /* 15.12.2 */
 static ejsval
-_ejs_JSON_parse (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_JSON_parse (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 /* 15.12.3 */
 static ejsval
-_ejs_JSON_stringify (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_JSON_stringify (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }

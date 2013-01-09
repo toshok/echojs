@@ -68,7 +68,7 @@ ejsval _ejs_Array_proto;
 ejsval _ejs_Array;
 
 static ejsval
-_ejs_Array_impl (ejsval env, ejsval _this, int argc, ejsval*args)
+_ejs_Array_impl (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
     if (EJSVAL_IS_UNDEFINED(_this)) {
         // called as a function
@@ -108,7 +108,7 @@ _ejs_Array_impl (ejsval env, ejsval _this, int argc, ejsval*args)
 }
 
 static ejsval
-_ejs_Array_prototype_shift (ejsval env, ejsval _this, int argc, ejsval*args)
+_ejs_Array_prototype_shift (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
     // 1. Let O be the result of calling ToObject passing the this value as the argument.
     ejsval O = ToObject(_this);
@@ -166,7 +166,7 @@ _ejs_Array_prototype_shift (ejsval env, ejsval _this, int argc, ejsval*args)
 }
 
 static ejsval
-_ejs_Array_prototype_unshift (ejsval env, ejsval _this, int argc, ejsval*args)
+_ejs_Array_prototype_unshift (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
     // 1. Let O be the result of calling ToObject passing the this value as the argument.
     ejsval O = ToObject(_this);
@@ -207,7 +207,7 @@ _ejs_Array_prototype_unshift (ejsval env, ejsval _this, int argc, ejsval*args)
 }
 
 static ejsval
-_ejs_Array_prototype_push (ejsval env, ejsval _this, int argc, ejsval*args)
+_ejs_Array_prototype_push (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
     int i;
     // XXX nanboxing change breaks this assert (EJSVAL_IS_ARRAY(_this));
@@ -218,7 +218,7 @@ _ejs_Array_prototype_push (ejsval env, ejsval _this, int argc, ejsval*args)
 }
 
 static ejsval
-_ejs_Array_prototype_pop (ejsval env, ejsval _this, int argc, ejsval*args)
+_ejs_Array_prototype_pop (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
     // XXX nanboxing change breaks this assert (EJSVAL_IS_ARRAY(_this));
     if (EJS_ARRAY_LEN(_this) == 0)
@@ -227,7 +227,7 @@ _ejs_Array_prototype_pop (ejsval env, ejsval _this, int argc, ejsval*args)
 }
 
 static ejsval
-_ejs_Array_prototype_concat (ejsval env, ejsval _this, int argc, ejsval*args)
+_ejs_Array_prototype_concat (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
     int numElements;
 
@@ -252,7 +252,7 @@ _ejs_Array_prototype_concat (ejsval env, ejsval _this, int argc, ejsval*args)
 }
 
 static ejsval
-_ejs_Array_prototype_slice (ejsval env, ejsval _this, int argc, ejsval*args)
+_ejs_Array_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
     int len = EJS_ARRAY_LEN(_this);
     int begin = argc > 0 ? (int)EJSVAL_TO_NUMBER(args[0]) : 0;
@@ -273,7 +273,7 @@ _ejs_Array_prototype_slice (ejsval env, ejsval _this, int argc, ejsval*args)
 }
 
 static ejsval
-_ejs_Array_prototype_join (ejsval env, ejsval _this, int argc, ejsval*args)
+_ejs_Array_prototype_join (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
     if (EJS_ARRAY_LEN(_this) == 0)
         return _ejs_string_new_utf8 ("");
@@ -326,7 +326,7 @@ _ejs_Array_prototype_join (ejsval env, ejsval _this, int argc, ejsval*args)
 }
 
 static ejsval
-_ejs_Array_prototype_forEach (ejsval env, ejsval _this, int argc, ejsval*args)
+_ejs_Array_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
     if (argc < 1)
         EJS_NOT_IMPLEMENTED();
@@ -341,13 +341,13 @@ _ejs_Array_prototype_forEach (ejsval env, ejsval _this, int argc, ejsval*args)
 }
 
 static ejsval
-_ejs_Array_prototype_splice (ejsval env, ejsval _this, int argc, ejsval*args)
+_ejs_Array_prototype_splice (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
-_ejs_Array_prototype_indexOf (ejsval env, ejsval _this, int argc, ejsval*args)
+_ejs_Array_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
     if (argc != 1)
         return NUMBER_TO_EJSVAL (-1);
@@ -376,7 +376,7 @@ _ejs_Array_prototype_indexOf (ejsval env, ejsval _this, int argc, ejsval*args)
 }
 
 static ejsval
-_ejs_Array_isArray (ejsval env, ejsval _this, int argc, ejsval*args)
+_ejs_Array_isArray (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
     if (argc == 0 || EJSVAL_IS_NULL(args[0]) || !EJSVAL_IS_OBJECT(args[0]))
         return _ejs_false;

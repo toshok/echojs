@@ -60,7 +60,7 @@ ejsval _ejs_RegExp;
 ejsval _ejs_RegExp_proto;
 
 static ejsval
-_ejs_RegExp_impl (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_RegExp_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     if (EJSVAL_IS_UNDEFINED(_this)) {
         // called as a function
@@ -75,19 +75,19 @@ _ejs_RegExp_impl (ejsval env, ejsval _this, int argc, ejsval *args)
 }
 
 static ejsval
-_ejs_RegExp_prototype_exec (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_RegExp_prototype_exec (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
-_ejs_RegExp_prototype_match (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_RegExp_prototype_match (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 static ejsval
-_ejs_RegExp_prototype_test (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_RegExp_prototype_test (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }

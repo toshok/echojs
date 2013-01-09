@@ -58,7 +58,7 @@ ejsval _ejs_Date;
 ejsval _ejs_Date_proto;
 
 static ejsval
-_ejs_Date_impl (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Date_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     if (EJSVAL_IS_UNDEFINED(_this)) {
         // called as a function
@@ -96,7 +96,7 @@ _ejs_Date_impl (ejsval env, ejsval _this, int argc, ejsval *args)
 }
 
 static ejsval
-_ejs_Date_prototype_toString (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Date_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJSDate *date = (EJSDate*)EJSVAL_TO_OBJECT(_this);
 
@@ -112,7 +112,7 @@ _ejs_Date_prototype_toString (ejsval env, ejsval _this, int argc, ejsval *args)
 }
 
 static ejsval
-_ejs_Date_prototype_getTimezoneOffset (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Date_prototype_getTimezoneOffset (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJSDate *date = (EJSDate*)EJSVAL_TO_OBJECT(_this);
 

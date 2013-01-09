@@ -8,34 +8,38 @@
 #include "ejs-function.h"
 
 static ejsval
-output (FILE *outfile, int argc, ejsval *args)
+output (FILE *outfile, uint32_t argc, ejsval *args)
 {
-    START_SHADOW_STACK_FRAME;
-
-    if (argc > 0) {
-        if (EJSVAL_IS_NUMBER(args[0])) {
-            fprintf (outfile, EJS_NUMBER_FORMAT "\n", EJSVAL_TO_NUMBER(args[0]));
+    for (int i = 0; i < argc; i ++) {
+        if (EJSVAL_IS_NUMBER(args[i])) {
+            fprintf (outfile, EJS_NUMBER_FORMAT, EJSVAL_TO_NUMBER(args[i]));
         }
         else {
-            ADD_STACK_ROOT(ejsval, strval, ToString(args[0]));
+            START_SHADOW_STACK_FRAME;
+            
+            ADD_STACK_ROOT(ejsval, strval, ToString(args[i]));
 
-            fprintf (outfile, "%s\n", EJSVAL_TO_FLAT_STRING(strval));
+            fprintf (outfile, "%s", EJSVAL_TO_FLAT_STRING(strval));
+
+            END_SHADOW_STACK_FRAME;
         }
+        if (i < argc - 1)
+            fputc (' ', outfile);
     }
 
-    END_SHADOW_STACK_FRAME;
+    fputc ('\n', outfile);
 
     return _ejs_undefined;
 }
 
 static ejsval
-_ejs_console_log (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_console_log (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     return output (stdout, argc, args);
 }
 
 static ejsval
-_ejs_console_warn (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_console_warn (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     return output (stderr, argc, args);
 }

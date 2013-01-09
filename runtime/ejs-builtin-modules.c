@@ -20,7 +20,7 @@
 ///
 
 static ejsval
-_ejs_path_basename (ejsval env, ejsval _this, int argc, ejsval* args)
+_ejs_path_basename (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     ejsval path = args[0];
     // FIXME node's implementation allows a second arg to strip the extension, but the compiler doesn't use it.
@@ -28,7 +28,7 @@ _ejs_path_basename (ejsval env, ejsval _this, int argc, ejsval* args)
 }
 
 ejsval
-_ejs_path_module_func (ejsval env, ejsval _this, int argc, ejsval* args)
+_ejs_path_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     ejsval exports = args[0];
 
@@ -44,7 +44,7 @@ _ejs_path_module_func (ejsval env, ejsval _this, int argc, ejsval* args)
 ///
 
 static ejsval
-_ejs_fs_readFileSync (ejsval env, ejsval _this, int argc, ejsval* args)
+_ejs_fs_readFileSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     // FIXME we currently ignore the encoding and just slam the entire thing into a buffer and return a utf8 string...
     char* path = EJSVAL_TO_FLAT_STRING(args[0]);
@@ -62,7 +62,7 @@ _ejs_fs_readFileSync (ejsval env, ejsval _this, int argc, ejsval* args)
 }
 
 ejsval
-_ejs_fs_module_func (ejsval env, ejsval _this, int argc, ejsval* args)
+_ejs_fs_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     ejsval exports = args[0];
 
@@ -72,7 +72,7 @@ _ejs_fs_module_func (ejsval env, ejsval _this, int argc, ejsval* args)
 }
 
 ejsval
-_ejs_child_process_module_func (ejsval env, ejsval _this, int argc, ejsval* args)
+_ejs_child_process_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     return _ejs_undefined;
 }

@@ -233,10 +233,17 @@ namespace jsllvm {
     HandleScope scope;
 
     REQ_LLVM_VAL_ARG(0, val);
-    REQ_LLVM_VAL_ARG(1, idx);
+    REQ_ARRAY_ARG(1, idxv);
     REQ_UTF8_ARG(2, name);
 
-    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateGEP(val,idx, *name));
+    std::vector<llvm::Value*> IdxV;
+    for (unsigned i = 0, e = idxv->Length(); i != e; ++i) {
+      llvm::Value* idx = Value::GetLLVMObj(idxv->Get(i));
+      IdxV.push_back(idx);
+      if (IdxV.back() == 0) abort(); // XXX throw an exception here
+    }
+
+    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateGEP(val, IdxV, *name));
     return scope.Close(result);
   }
 

@@ -8,7 +8,7 @@
 #include "ejs-function.h"
 
 static ejsval
-_ejs_Process_exit (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Process_exit (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     int exit_status = 0;
 
@@ -18,7 +18,7 @@ _ejs_Process_exit (ejsval env, ejsval _this, int argc, ejsval *args)
 }
 
 void
-_ejs_process_init(ejsval global, int argc, char **argv)
+_ejs_process_init(ejsval global, uint32_t argc, char **argv)
 {
     START_SHADOW_STACK_FRAME;
 

@@ -5,6 +5,7 @@
 //#define DEBUG_FUNCTIONS 1
 
 #include <assert.h>
+#include <string.h>
 
 #include "ejs-value.h"
 #include "ejs-object.h"
@@ -93,7 +94,7 @@ ejsval _ejs_Function__proto__;
 ejsval _ejs_Function;
 
 static ejsval
-_ejs_Function_impl (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Function_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     printf ("Function() called either as a function or a constructor is not supported in ejs\n");
     abort();
@@ -102,7 +103,7 @@ _ejs_Function_impl (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262 15.3.4.2
 static ejsval
-_ejs_Function_prototype_toString (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Function_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     char terrible_fixed_buffer[256];
 
@@ -115,7 +116,7 @@ _ejs_Function_prototype_toString (ejsval env, ejsval _this, int argc, ejsval *ar
 
 // ECMA262 15.3.4.3
 static ejsval
-_ejs_Function_prototype_apply (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Function_prototype_apply (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval func = _this;
 
@@ -178,7 +179,7 @@ _ejs_Function_prototype_apply (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262 15.3.4.4
 static ejsval
-_ejs_Function_prototype_call (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Function_prototype_call (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(_this));
 
@@ -200,13 +201,13 @@ _ejs_Function_prototype_call (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262 15.3.4.5
 static ejsval
-_ejs_Function_prototype_bind (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Function_prototype_bind (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 ejsval
-_ejs_Function_empty (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Function_empty (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     return _ejs_undefined;
 }
@@ -214,8 +215,6 @@ _ejs_Function_empty (ejsval env, ejsval _this, int argc, ejsval *args)
 static void
 _ejs_function_init_proto()
 {
-    trace = getenv("EJS_TRACE") != NULL;
-
     _ejs_gc_add_named_root (_ejs_Function__proto__);
 
     // Function.__proto__ = function () { return undefined; }
@@ -233,6 +232,8 @@ _ejs_function_init_proto()
 void
 _ejs_function_init(ejsval global)
 {
+    trace = getenv("EJS_TRACE") != NULL;
+
     START_SHADOW_STACK_FRAME;
 
     _ejs_function_init_proto();
@@ -277,90 +278,53 @@ _ejs_function_init(ejsval global)
     EJS_MACRO_END
 
 #define BUILD_INVOKE_CLOSURE(_closure, _thisArg, _argc, ...) EJS_MACRO_START \
-    if (!EJSVAL_IS_FUNCTION(_closure)) {                                \
-        printf ("TypeError, object not a function\n");                  \
-        EJS_NOT_IMPLEMENTED();                                          \
-    }                                                                   \
-                                                                        \
     ejsval args[] = { __VA_ARGS__ };                                    \
-    DEBUG_FUNCTION_ENTER (_closure);                                    \
-    ejsval rv = EJSVAL_TO_FUNC(_closure) (EJSVAL_TO_ENV(_closure), _thisArg, _argc, args); \
-    DEBUG_FUNCTION_EXIT (_closure);                                     \
-    return rv;                                                          \
+    return _ejs_invoke_closure (_closure, _thisArg, argc, args);        \
     EJS_MACRO_END
 
 ejsval
-_ejs_invoke_closure_0 (ejsval closure, ejsval _this, int argc)
+_ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args)
 {
     if (!EJSVAL_IS_FUNCTION(closure)) {
         printf ("TypeError, object not a function\n");
         EJS_NOT_IMPLEMENTED();
     }
+
+    EJSFunction *fun = (EJSFunction*)EJSVAL_TO_OBJECT(closure);
+    if (!fun->bound)
+        return fun->func (fun->env, _this, argc, args);
+
+
+    if (fun->bound_argc > 0) {
+        ejsval* new_args = malloc(sizeof(ejsval) * fun->bound_argc + argc);
+        memmove (new_args, fun->bound_args, sizeof(ejsval) * fun->bound_argc);
+        memmove (&new_args[fun->bound_argc], args, argc);
+        args = new_args;
+        argc += fun->bound_argc;
+    }
+
     DEBUG_FUNCTION_ENTER (closure);
-    ejsval rv = EJSVAL_TO_FUNC(closure) (EJSVAL_TO_ENV(closure), _this, argc, NULL);
+    ejsval rv = fun->func (fun->env, fun->bound_this, argc, args);
     DEBUG_FUNCTION_EXIT (closure);
+
+    if (fun->bound_argc > 0)
+        free (args);
+
     return rv;
 }
 
 ejsval
-_ejs_invoke_closure_1 (ejsval closure, ejsval _this, int argc, ejsval arg1)
+_ejs_invoke_closure_0 (ejsval closure, ejsval _this, uint32_t argc)
+{
+    return _ejs_invoke_closure (closure, _this, argc, NULL);
+}
+
+ejsval
+_ejs_invoke_closure_1 (ejsval closure, ejsval _this, uint32_t argc, ejsval arg1)
 {
     BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1);
 }
 
-ejsval
-_ejs_invoke_closure_2 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2)
-{
-    BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1, arg2);
-}
-
-ejsval
-_ejs_invoke_closure_3 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3)
-{
-    BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1, arg2, arg3);
-}
-
-ejsval
-_ejs_invoke_closure_4 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4)
-{
-    BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1, arg2, arg3, arg4);
-}
-
-ejsval
-_ejs_invoke_closure_5 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5)
-{
-    BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1, arg2, arg3, arg4, arg5);
-}
-
-ejsval
-_ejs_invoke_closure_6 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6)
-{
-    BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1, arg2, arg3, arg4, arg5, arg6);
-}
-
-ejsval
-_ejs_invoke_closure_7 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7)
-{
-    BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1, arg2, arg3, arg4, arg5, arg6, arg7);
-}
-
-ejsval
-_ejs_invoke_closure_8 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7, ejsval arg8)
-{
-    BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
-}
-
-ejsval
-_ejs_invoke_closure_9 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7, ejsval arg8, ejsval arg9)
-{
-    BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
-}
-
-ejsval
-_ejs_invoke_closure_10 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7, ejsval arg8, ejsval arg9, ejsval arg10)
-{
-    BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10);
-}
 
 static ejsval
 _ejs_function_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr)
@@ -434,7 +398,11 @@ _ejs_function_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     EJSFunction* f = (EJSFunction*)obj;
     scan_func (f->name);
     scan_func (f->env);
-    if (f->bound_this)
-        scan_func (f->_this);
+    if (f->bound) {
+        scan_func (f->bound_this);
+        for (int i = 0; i < f->bound_argc; i ++)
+            scan_func (f->bound_args[i]);
+    }
+
     _ejs_object_specops.scan (obj, scan_func);
 }

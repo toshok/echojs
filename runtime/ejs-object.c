@@ -679,7 +679,7 @@ ejsval _ejs_Object__proto__;
 ejsval _ejs_Object_prototype;
 
 static ejsval
-_ejs_Object_impl (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Object_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     if (EJSVAL_IS_UNDEFINED(_this)) {
         // ECMA262: 15.2.1.1
@@ -697,7 +697,7 @@ _ejs_Object_impl (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.2.3.2
 static ejsval
-_ejs_Object_getPrototypeOf (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Object_getPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval obj = _ejs_undefined;
     if (argc > 0)
@@ -715,7 +715,7 @@ _ejs_Object_getPrototypeOf (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.2.3.3
 static ejsval
-_ejs_Object_getOwnPropertyDescriptor (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Object_getOwnPropertyDescriptor (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval O = _ejs_undefined;
     ejsval P = _ejs_undefined;
@@ -742,7 +742,7 @@ _ejs_Object_getOwnPropertyDescriptor (ejsval env, ejsval _this, int argc, ejsval
 
 // ECMA262: 15.2.3.4
 static ejsval
-_ejs_Object_getOwnPropertyNames (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Object_getOwnPropertyNames (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval obj = _ejs_undefined;
     if (argc > 0)
@@ -777,12 +777,12 @@ _ejs_Object_getOwnPropertyNames (ejsval env, ejsval _this, int argc, ejsval *arg
     return arr;
 }
 
-static ejsval _ejs_Object_defineProperties (ejsval env, ejsval _this, int argc, ejsval *args);
+static ejsval _ejs_Object_defineProperties (ejsval env, ejsval _this, uint32_t argc, ejsval *args);
 
 // ECMA262: 15.2.3.5
 /* Object.create ( O [, Properties] ) */
 static ejsval
-_ejs_Object_create (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Object_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval O = _ejs_undefined;
     ejsval Properties = _ejs_undefined;
@@ -813,7 +813,7 @@ _ejs_Object_create (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.2.3.6
 static ejsval
-_ejs_Object_defineProperty (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Object_defineProperty (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval O = _ejs_undefined;
     ejsval P = _ejs_undefined;
@@ -853,7 +853,7 @@ typedef struct {
 
 /* Object.defineProperties ( O, Properties ) */
 static ejsval
-_ejs_Object_defineProperties (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Object_defineProperties (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval O = _ejs_undefined;
     ejsval Properties = _ejs_undefined;
@@ -931,7 +931,7 @@ _ejs_Object_defineProperties (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.2.3.8
 static ejsval
-_ejs_Object_seal (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Object_seal (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
@@ -968,7 +968,7 @@ _ejs_Object_seal (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // FIXME ECMA262: 15.2.3.9
 static ejsval
-_ejs_Object_freeze (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Object_freeze (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
@@ -1010,7 +1010,7 @@ _ejs_Object_freeze (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.2.3.10
 static ejsval
-_ejs_Object_preventExtensions (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Object_preventExtensions (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
@@ -1031,7 +1031,7 @@ _ejs_Object_preventExtensions (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.2.3.11
 static ejsval
-_ejs_Object_isSealed (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Object_isSealed (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
@@ -1066,7 +1066,7 @@ _ejs_Object_isSealed (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.2.3.12
 static ejsval
-_ejs_Object_isFrozen (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Object_isFrozen (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
@@ -1106,7 +1106,7 @@ _ejs_Object_isFrozen (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.2.3.13
 static ejsval
-_ejs_Object_isExtensible (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Object_isExtensible (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
@@ -1124,14 +1124,14 @@ _ejs_Object_isExtensible (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.2.3.14
 static ejsval
-_ejs_Object_keys (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Object_keys (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 // ECMA262: 15.2.4.2
 static ejsval
-_ejs_Object_prototype_toString (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Object_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     char buf[1024];
     ejsval thisObj = ToObject(_this);
@@ -1148,7 +1148,7 @@ _ejs_Object_prototype_toString (ejsval env, ejsval _this, int argc, ejsval *args
 
 // ECMA262: 15.2.4.3
 static ejsval
-_ejs_Object_prototype_toLocaleString (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Object_prototype_toLocaleString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
     ejsval O = ToObject(_this);
@@ -1166,14 +1166,14 @@ _ejs_Object_prototype_toLocaleString (ejsval env, ejsval _this, int argc, ejsval
 
 // ECMA262: 15.2.4.4
 static ejsval
-_ejs_Object_prototype_valueOf (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Object_prototype_valueOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 // ECMA262: 15.2.4.5
 static ejsval
-_ejs_Object_prototype_hasOwnProperty (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Object_prototype_hasOwnProperty (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval needle = _ejs_undefined;
     if (EJS_UNLIKELY(argc > 0))
@@ -1184,7 +1184,7 @@ _ejs_Object_prototype_hasOwnProperty (ejsval env, ejsval _this, int argc, ejsval
 
 // ECMA262: 15.2.4.6
 static ejsval
-_ejs_Object_prototype_isPrototypeOf (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Object_prototype_isPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval V = _ejs_undefined;
     if (argc > 0) V = args[0];
@@ -1213,7 +1213,7 @@ _ejs_Object_prototype_isPrototypeOf (ejsval env, ejsval _this, int argc, ejsval 
 
 // ECMA262: 15.2.4.7
 static ejsval
-_ejs_Object_prototype_propertyIsEnumerable (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Object_prototype_propertyIsEnumerable (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval V = _ejs_undefined;
     if (argc > 0) V = args[0];

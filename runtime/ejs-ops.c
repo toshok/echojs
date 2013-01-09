@@ -717,25 +717,25 @@ _ejs_rethrow ()
 }
 
 ejsval
-_ejs_isNaN (ejsval env, ejsval _this, int argc, ejsval* args)
+_ejs_isNaN (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 ejsval
-_ejs_isFinite (ejsval env, ejsval _this, int argc, ejsval* args)
+_ejs_isFinite (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 ejsval
-_ejs_parseInt (ejsval env, ejsval _this, int argc, ejsval* args)
+_ejs_parseInt (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 ejsval
-_ejs_parseFloat (ejsval env, ejsval _this, int argc, ejsval* args)
+_ejs_parseFloat (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     if (argc == 0)
         return _ejs_nan;

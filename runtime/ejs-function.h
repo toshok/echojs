@@ -11,7 +11,7 @@
 // for now we just build environments out of EJS objects
 typedef ejsval EJSClosureEnv;
 
-typedef ejsval (*EJSClosureFunc) (EJSClosureEnv env, ejsval _this, int argc, ejsval* args);
+typedef ejsval (*EJSClosureFunc) (EJSClosureEnv env, ejsval _this, uint32_t argc, ejsval* args);
 
 
 
@@ -22,8 +22,11 @@ typedef struct {
     ejsval name;
     EJSClosureFunc func;
     EJSClosureEnv env;
-    EJSBool bound_this;
-    ejsval _this;
+
+    EJSBool bound;
+    ejsval bound_this;
+    uint32_t bound_argc;
+    ejsval *bound_args;
 } EJSFunction;
 
 
@@ -35,17 +38,10 @@ EJS_BEGIN_DECLS
     _ejs_object_setprop (o, funcname, tmpfunc);                         \
     EJS_MACRO_END
 
-ejsval _ejs_invoke_closure_0 (ejsval closure, ejsval _this, int argc);
-ejsval _ejs_invoke_closure_1 (ejsval closure, ejsval _this, int argc, ejsval arg1);
-ejsval _ejs_invoke_closure_2 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2);
-ejsval _ejs_invoke_closure_3 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3);
-ejsval _ejs_invoke_closure_4 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4);
-ejsval _ejs_invoke_closure_5 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5);
-ejsval _ejs_invoke_closure_6 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6);
-ejsval _ejs_invoke_closure_7 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7);
-ejsval _ejs_invoke_closure_8 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7, ejsval arg8);
-ejsval _ejs_invoke_closure_9 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7, ejsval arg8, ejsval arg9);
-ejsval _ejs_invoke_closure_10 (ejsval closure, ejsval _this, int argc, ejsval arg1, ejsval arg2, ejsval arg3, ejsval arg4, ejsval arg5, ejsval arg6, ejsval arg7, ejsval arg8, ejsval arg9, ejsval arg10);
+ejsval _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args);
+
+ejsval _ejs_invoke_closure_0 (ejsval closure, ejsval _this, uint32_t argc);
+ejsval _ejs_invoke_closure_1 (ejsval closure, ejsval _this, uint32_t argc, ejsval arg1);
 
 extern ejsval _ejs_function_new (EJSClosureEnv env, ejsval name, EJSClosureFunc func);
 extern ejsval _ejs_function_new_utf8 (EJSClosureEnv env, const char* name, EJSClosureFunc func);
@@ -57,7 +53,7 @@ extern EJSSpecOps _ejs_function_specops;
 extern void _ejs_function_init(ejsval global);
 
 // used as the __proto__ for a number of builtin objects
-ejsval _ejs_Function_empty (ejsval env, ejsval _this, int argc, ejsval *args);
+ejsval _ejs_Function_empty (ejsval env, ejsval _this, uint32_t argc, ejsval *args);
 
 EJS_END_DECLS
 

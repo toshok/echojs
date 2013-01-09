@@ -23,7 +23,7 @@ static int num_builtin_modules = sizeof(builtin_module_map) / sizeof(builtin_mod
 
 ejsval _ejs_require;
 static ejsval
-_ejs_require_impl (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_require_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     if (argc < 1)
         return _ejs_undefined;

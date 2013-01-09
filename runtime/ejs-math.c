@@ -14,7 +14,7 @@ ejsval _ejs_Math;
 
 // ECMA262: 15.8.2.1
 static ejsval
-_ejs_Math_abs (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Math_abs (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
@@ -28,7 +28,7 @@ _ejs_Math_abs (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.8.2.2
 static ejsval
-_ejs_Math_acos (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Math_acos (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
@@ -42,7 +42,7 @@ _ejs_Math_acos (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.8.2.3
 static ejsval
-_ejs_Math_asin (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Math_asin (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
@@ -56,7 +56,7 @@ _ejs_Math_asin (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.8.2.4
 static ejsval
-_ejs_Math_atan (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Math_atan (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
@@ -70,7 +70,7 @@ _ejs_Math_atan (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.8.2.5
 static ejsval
-_ejs_Math_atan2 (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Math_atan2 (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval y = _ejs_undefined;
     ejsval x = _ejs_undefined;
@@ -88,7 +88,7 @@ _ejs_Math_atan2 (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.8.2.6
 static ejsval
-_ejs_Math_ceil (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Math_ceil (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
@@ -102,7 +102,7 @@ _ejs_Math_ceil (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.8.2.7
 static ejsval
-_ejs_Math_cos (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Math_cos (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
@@ -116,7 +116,7 @@ _ejs_Math_cos (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.8.2.8
 static ejsval
-_ejs_Math_exp (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Math_exp (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
@@ -130,7 +130,7 @@ _ejs_Math_exp (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.8.2.9
 static ejsval
-_ejs_Math_floor (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Math_floor (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
@@ -144,7 +144,7 @@ _ejs_Math_floor (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.8.2.10
 static ejsval
-_ejs_Math_log (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Math_log (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
@@ -158,7 +158,7 @@ _ejs_Math_log (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.8.2.11
 static ejsval
-_ejs_Math_max (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Math_max (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     double current_max = -INFINITY;
     for (int i = 0; i < argc; i ++) {
@@ -175,7 +175,7 @@ _ejs_Math_max (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.8.2.12
 static ejsval
-_ejs_Math_min (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Math_min (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     double current_min = INFINITY;
     for (int i = 0; i < argc; i ++) {
@@ -192,7 +192,7 @@ _ejs_Math_min (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.8.2.13
 static ejsval
-_ejs_Math_pow (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Math_pow (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval x = _ejs_undefined;
     ejsval y = _ejs_undefined;
@@ -209,14 +209,14 @@ _ejs_Math_pow (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.8.2.14
 static ejsval
-_ejs_Math_random (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Math_random (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     return NUMBER_TO_EJSVAL((double)rand() / RAND_MAX);
 }
 
 // ECMA262: 15.8.2.15
 static ejsval
-_ejs_Math_round (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Math_round (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
@@ -230,7 +230,7 @@ _ejs_Math_round (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.8.2.16
 static ejsval
-_ejs_Math_sin (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Math_sin (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
@@ -244,7 +244,7 @@ _ejs_Math_sin (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.8.2.17
 static ejsval
-_ejs_Math_sqrt (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Math_sqrt (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
@@ -258,7 +258,7 @@ _ejs_Math_sqrt (ejsval env, ejsval _this, int argc, ejsval *args)
 
 // ECMA262: 15.8.2.18
 static ejsval
-_ejs_Math_tan (ejsval env, ejsval _this, int argc, ejsval *args)
+_ejs_Math_tan (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
