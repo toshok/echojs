@@ -624,12 +624,5 @@ exports.convert = (tree) ->
 
         passes.forEach (passType) ->
                 pass = new passType()
-
                 tree = pass.visit tree
-                console.log "after #{passType.name}"
-                console.log escodegen.generate tree
-                console.log()
-                console.log()
-                console.log()
-
         tree
