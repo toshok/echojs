@@ -181,8 +181,10 @@ FuncsToVars = class FuncsToVars extends NodeVisitor
                         }
 
 
-# hoists all vars to the start of the enclosing function,
-# replacing any initializer with an assignment expression.
+# hoists all vars to the start of the enclosing function, replacing
+# any initializer with an assignment expression.  We also take the
+# opportunity to convert the vars to lets at this point so by the time
+# the LLVMIRVisitory gets to the tree there are only consts and lets
 #
 # i.e. from
 #    {
@@ -219,7 +221,7 @@ class HoistVars extends NodeVisitor
                                         id: create_identifier n.left.declarations[0].id.name
                                         init: null
                                 }],
-                                kind: "var"
+                                kind: "let"
                         n.left.type = syntax.Identifier
                         n.left.name = n.left.declarations[0].id.name
                         delete n.left.declarations
@@ -240,7 +242,7 @@ class HoistVars extends NodeVisitor
                                                 id: create_identifier n.declarations[i].id.name
                                                 init: null
                                                 }],
-                                        kind: "var"
+                                        kind: "let"
 
                         # now we need convert the initializers to assignment expressions
                         assignments = []
@@ -277,6 +279,7 @@ class ComputeFree extends NodeVisitor
 class SubstituteVariables extends NodeVisitor
         constructor: (module) ->
                 super
+                @function_stack = []
                 @mappings = []
 
         currentMapping: -> if @mappings.length > 0 then @mappings[0] else {}
@@ -353,9 +356,15 @@ class SubstituteVariables extends NodeVisitor
                 n
 
         visitFunctionBody: (n) ->
+                n.scratch_size = 0
+                
                 # we use this instead of calling super in visitFunction because we don't want to visit parameters
                 # during this pass, or they'll be substituted with an %env.
+
+                @function_stack.unshift n
                 n.body = @visit n.body
+                @function_stack.shift()
+                
                 n
                 
         visitFunction: (n) ->
@@ -369,7 +378,7 @@ class SubstituteVariables extends NodeVisitor
                                                 type: syntax.Literal
                                                 value: null
                                 }],
-                                kind: "var"
+                                kind: "let"
                         @visitFunctionBody n
                 else
                         # okay, we know we need a fresh environment in this function
@@ -387,7 +396,7 @@ class SubstituteVariables extends NodeVisitor
                                                 type: syntax.ObjectExpression
                                                 properties: []
                                 }],
-                                kind: "var"
+                                kind: "let"
                         }
 
                         if n.ejs_env.parent?
@@ -460,20 +469,13 @@ class SubstituteVariables extends NodeVisitor
                         n.body.body = prepends.concat n.body.body
                         @mappings = @mappings.slice(1)
 
-                # we need to replace function declarations of the form:
-                #   function X () { ...body... }
-                # 
-                # with:
-                #   var X = makeClosure(%current_env, "X", function () { ...body... });
-                #
-                #
-                # function expressions are easier:
+                # convert function expressions to an explicit closure creation, so:
                 # 
                 #    function X () { ...body... }
                 #
                 # replace inline with:
                 #
-                #    makeClosure(%current_env, "X", function () { ...body... })
+                #    makeClosure(%current_env, "X", function X () { ...body... })
 
                 if not n.toplevel
                         if n.type is syntax.FunctionDeclaration
@@ -489,13 +491,13 @@ class SubstituteVariables extends NodeVisitor
         visitCallExpression: (n) ->
                 super
 
-                # we need to replace calls of the form:
+                # replace calls of the form:
                 #   X (arg1, arg2, ...)
                 # 
                 # with
                 #   invokeClosure(X, %this, %argCount, arg1, arg2, ...);
 
-                arg_count = n.arguments.length
+                @function_stack[0].scratch_size = Math.max @function_stack[0].scratch_size, n.arguments.length
 
                 n.arguments.unshift n.callee
                 n.callee = create_identifier "%invokeClosure"
@@ -504,13 +506,13 @@ class SubstituteVariables extends NodeVisitor
         visitNewExpression: (n) ->
                 super
 
-                # we need to replace calls of the form:
+                # replace calls of the form:
                 #   new X (arg1, arg2, ...)
                 # 
                 # with
                 #   invokeClosure(X, %this, %argCount, arg1, arg2, ...);
 
-                arg_count = n.arguments.length
+                @function_stack[0].scratch_size = Math.max @function_stack[0].scratch_size, n.arguments.length
 
                 n.arguments.unshift n.callee
                 n.callee = create_identifier "%invokeClosure"
@@ -539,10 +541,21 @@ class LambdaLift extends NodeVisitor
                 program.body = @functions.concat program.body
                 program
 
+        maybePrependScratchArea: (n) ->
+                if n.scratch_size > 0
+                        alloc_scratch =
+                                type: syntax.ExpressionStatement
+                                expression:
+                                        type: syntax.CallExpression
+                                        callee: create_identifier "%createArgScratchArea"
+                                        arguments: [ { type: syntax.Literal, value: n.scratch_size } ]
+                        n.body.body = [alloc_scratch].concat n.body.body
+                
         visitFunctionDeclaration: (n) ->
                 n.body = @visit n.body
+                @maybePrependScratchArea n
                 n
-
+        
         visitFunctionExpression: (n) ->
                 if n.id?.name?
                         global_name = genGlobalFunctionName n.id.name
@@ -562,6 +575,8 @@ class LambdaLift extends NodeVisitor
                 @mappings.unshift new_mapping
                 n.body = @visit n.body
                 @mappings = @mappings.slice(1)
+
+                @maybePrependScratchArea n
 
                 n.params.unshift create_identifier "%env_#{n.ejs_env.parent.id}"
                 
