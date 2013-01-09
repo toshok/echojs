@@ -9,7 +9,6 @@ EXPECTED_FAILURES= \
 	date1.js \
 	forin2.js \
 	function-overriding1.js \
-	iife2.js \
 	instanceof1.js \
 	object5.js \
 	number1.js \
@@ -23,7 +22,6 @@ EXPECTED_FAILURES= \
 
 # date1 fails because we test the Date() function, which returns the current time.  this differs from the current time when the node test runs.  bleah.
 # forin2 fails because we don't properly handle deleting properties while iterating
-# iife2 fails because of a closure conversion bug
 # instanceof1 fails because _ejs_op_instanceof isn't implemented and just aborts
 # function-overriding1.js fail because we don't throw an exception on a null function, we just crash.
 # object5 fails because we don't handle get/setprop using undefined or null keys

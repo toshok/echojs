@@ -12,7 +12,12 @@ output (FILE *outfile, uint32_t argc, ejsval *args)
 {
     for (int i = 0; i < argc; i ++) {
         if (EJSVAL_IS_NUMBER(args[i])) {
-            fprintf (outfile, EJS_NUMBER_FORMAT, EJSVAL_TO_NUMBER(args[i]));
+            double d = EJSVAL_TO_NUMBER(args[i]);
+            int di;
+            if (EJSDOUBLE_IS_INT32(d, &di))
+                fprintf (outfile, "%d", di);
+            else
+                fprintf (outfile, EJS_NUMBER_FORMAT, d);
         }
         else {
             START_SHADOW_STACK_FRAME;
