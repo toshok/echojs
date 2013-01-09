@@ -68,7 +68,6 @@ if argv.length > 0
                                         o.handler argv[++ai]
                                         skipNext = true
                         else
-                                console.warn "files start at #{ai}"
                                 # end of options signals the rest of the array is files
                                 files = argv.slice ai
                                 break
