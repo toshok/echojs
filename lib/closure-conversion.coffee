@@ -154,6 +154,29 @@ create_string_literal = (x) -> type: syntax.Literal, value: x, raw: "\"#{x}\""
 
 # this should move to echo-desugar.coffee
 
+class HoistFuncDecls extends NodeVisitor
+        constructor: ->
+                @prepends = []
+                
+        visitFunction: (n) ->
+                @prepends.unshift []
+                super
+                # we're assuming n.body is a BlockStatement here...
+                n.body.body = @prepends.shift().concat n.body.body
+                n
+        
+        visitBlock: (n) ->
+                super
+
+                new_body = []
+                for child in n.body
+                        if child.type is syntax.FunctionDeclaration
+                                @prepends[0].push child
+                        else
+                                new_body.push child
+                n.body = new_body
+                n
+
 # convert all function declarations to variable assignments
 # with named function expressions.
 # 
@@ -162,7 +185,7 @@ create_string_literal = (x) -> type: syntax.Literal, value: x, raw: "\"#{x}\""
 # to:
 #   var foo = function foo() { }
 # 
-FuncsToVars = class FuncsToVars extends NodeVisitor
+class FuncDeclsToVars extends NodeVisitor
         visitFunctionDeclaration: (n) ->
                 if n.toplevel
                         super
@@ -586,7 +609,8 @@ class LambdaLift extends NodeVisitor
                 }
 
 passes = [
-        FuncsToVars,
+        HoistFuncDecls,
+        FuncDeclsToVars,
         HoistVars,
         ComputeFree,
         LocateEnvVisitor,
@@ -600,6 +624,12 @@ exports.convert = (tree) ->
 
         passes.forEach (passType) ->
                 pass = new passType()
+
                 tree = pass.visit tree
+                console.log "after #{passType.name}"
+                console.log escodegen.generate tree
+                console.log()
+                console.log()
+                console.log()
 
         tree
