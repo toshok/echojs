@@ -65,7 +65,7 @@ void
 _ejs_llvm_StructType_init (ejsval exports)
 {
   _ejs_llvm_StructType = _ejs_function_new_utf8 (_ejs_null, "LLVMStructType", (EJSClosureFunc)_ejs_llvm_StructType_impl);
-  _ejs_llvm_StructType_proto = _ejs_object_new(_ejs_llvm_Type_get_prototype());
+  _ejs_llvm_StructType_proto = _ejs_object_create (_ejs_llvm_Type_get_prototype());
 
   _ejs_object_setprop_utf8 (_ejs_llvm_StructType,       "prototype",  _ejs_llvm_StructType_proto);
 

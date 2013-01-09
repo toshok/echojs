@@ -96,7 +96,7 @@ void
 _ejs_llvm_Type_init (ejsval exports)
 {
   _ejs_llvm_Type = _ejs_function_new_utf8 (_ejs_null, "LLVMType", (EJSClosureFunc)_ejs_llvm_Type_impl);
-  _ejs_llvm_Type_proto = _ejs_object_new(_ejs_null); // XXX should we use object's proto here instead of _ejs_null?
+  _ejs_llvm_Type_proto = _ejs_object_create(_ejs_Object_prototype);
 
   _ejs_object_setprop_utf8 (_ejs_llvm_Type,       "prototype",    _ejs_llvm_Type_proto);
   _ejs_object_setprop_utf8 (_ejs_llvm_Type,       "getDoubleTy",  _ejs_function_new_utf8 (_ejs_null, "getDoubleTy", (EJSClosureFunc)_ejs_llvm_Type_getDoubleTy));

@@ -83,7 +83,7 @@ void
 _ejs_llvm_FunctionType_init (ejsval exports)
 {
   _ejs_llvm_FunctionType = _ejs_function_new_utf8 (_ejs_null, "LLVMFunction", (EJSClosureFunc)_ejs_llvm_FunctionType_impl);
-  _ejs_llvm_FunctionType_proto = _ejs_object_new(_ejs_llvm_Type_get_prototype());
+  _ejs_llvm_FunctionType_proto = _ejs_object_create (_ejs_llvm_Type_get_prototype());
 
   _ejs_object_setprop_utf8 (_ejs_llvm_FunctionType,       "prototype",  _ejs_llvm_FunctionType_proto);
   _ejs_object_setprop_utf8 (_ejs_llvm_FunctionType,       "get",        _ejs_function_new_utf8 (_ejs_null, "get", (EJSClosureFunc)_ejs_llvm_FunctionType_get));
