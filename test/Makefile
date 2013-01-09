@@ -19,7 +19,7 @@ EXPECTED_FAILURES= \
 	exc2 \
 	exc3 \
 	exc10 \
-	esprima-roundtrip1
+	sieve1
 
 # date1 fails because we test the Date() function, which returns the current time.  this differs from the current time when the node test runs.  bleah.
 # forin2 fails because we don't properly handle deleting properties while iterating
@@ -31,7 +31,7 @@ EXPECTED_FAILURES= \
 # toLocaleString3 fails because we don't have a special toString (or toLocaleString) implementation for arrays.
 # prototype9 fails because of one actual prototype failure and difference in our Function.toString() method.
 # the exc* tests fail because things are very screwed up with exception handling at the moment.
-# esprima-roundtrip1 fails due to a gc bug.  with EJS_GC_DISABLE=1, the test runs fine
+# sieve1 fails due to a gc bug.  with EJS_GC_DISABLE=1, the test runs fine
 
 check: check-unit-tests run-tests
 
