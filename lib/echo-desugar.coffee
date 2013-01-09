@@ -1,35 +1,17 @@
 ###
-
-  This pass performs two operations:
-
-    1. hoists all vars to the toplevel of their enclosing function and replaces them with lets,
-       leaving the assignment to the initializer in the place where the var was.
-
-	 function() {
-	   if (test) {
-	     var x = 5;
-	   }
-	 }
-
-	 becomes:
-
-	 function() {
-	   let x;
-	   if (test) {
-	     x = 5;
-	   }
-	 }
-
-    2. now that there are no vars (and therefor the scope of all variables is determined) we can get rid of IIFE's with the following beta-esque transformation
-
-      (function(x1,x2,...) { body })(y1,y2,...)
-
-      becomes
-
-      { let x1 = y1, x2 = y2,...;  body }
-
-      one thing to note, though, the initializer expressions y1, y2, ... must remain even if x1, x1... aren't referenced in the block.
-
+#
+# Now that there are no vars (and therefore all identifiers are
+# block-scoped) we can get rid of IIFE's with the following beta-esque
+# transformation
+#
+#      rv = (function(x1,x2,...) { body })(y1,y2,...)
+#
+# becomes
+#
+#      { let x1 = y1, x2 = y2,...;  body; rv = %iife_rv }
+#
+# One thing to note, though, the initializer expressions y1, y2, ... must remain even if x1, x1... aren't referenced in the block.
+#
 ###
 
 esprima = require 'esprima'
