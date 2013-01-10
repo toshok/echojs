@@ -169,6 +169,22 @@ ejsval ToBoolean(ejsval exp)
         EJS_NOT_IMPLEMENTED();
 }
 
+EJSBool ToEJSBool(ejsval exp)
+{
+    if (EJSVAL_IS_NULL(exp) || EJSVAL_IS_UNDEFINED(exp))
+        return EJS_FALSE;
+    else if (EJSVAL_IS_BOOLEAN(exp))
+        return EJSVAL_TO_BOOLEAN(exp);
+    else if (EJSVAL_IS_NUMBER(exp))
+        return EJSVAL_TO_NUMBER(exp) != 0;
+    else if (EJSVAL_IS_STRING(exp))
+        return EJSVAL_TO_STRLEN(exp) != 0;
+    else if (EJSVAL_IS_OBJECT(exp))
+        return EJS_TRUE;
+    else
+        EJS_NOT_IMPLEMENTED();
+}
+
 ejsval ToPrimitive(ejsval exp)
 {
     if (EJSVAL_IS_OBJECT(exp)) {

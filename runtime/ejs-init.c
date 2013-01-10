@@ -15,6 +15,7 @@
 #include "ejs-json.h"
 #include "ejs-math.h"
 #include "ejs-number.h"
+#include "ejs-boolean.h"
 #include "ejs-object.h"
 #include "ejs-process.h"
 #include "ejs-regexp.h"
@@ -74,6 +75,7 @@ _ejs_init(int argc, char** argv)
     _ejs_object_init(_ejs_global);
     _ejs_arguments_init(_ejs_global);
     _ejs_array_init(_ejs_global);
+    _ejs_boolean_init (_ejs_global);
     _ejs_string_init(_ejs_global);
     _ejs_number_init(_ejs_global);
     _ejs_regexp_init(_ejs_global);

@@ -11,6 +11,9 @@ EJS_ATOM(string)
 
 EJS_ATOM(Empty)
 
+EJS_ATOM(true)
+EJS_ATOM(false)
+
 // property descriptors
 EJS_ATOM(value)
 EJS_ATOM(writable)
@@ -21,6 +24,7 @@ EJS_ATOM(set)
 
 // class names
 EJS_ATOM(Array)
+EJS_ATOM(Boolean)
 EJS_ATOM(Date)
 EJS_ATOM(Function)
 EJS_ATOM(JSON)

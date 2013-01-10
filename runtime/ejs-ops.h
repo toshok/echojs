@@ -14,6 +14,7 @@ double ToDouble(ejsval exp);
 int ToInteger(ejsval exp);
 ejsval ToObject(ejsval exp);
 ejsval ToBoolean(ejsval exp);
+EJSBool ToEJSBool(ejsval exp);
 
 ejsval _ejs_op_neg (ejsval exp);
 ejsval _ejs_op_not (ejsval exp);

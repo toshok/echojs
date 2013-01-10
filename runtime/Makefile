@@ -2,6 +2,7 @@
 SOURCES= \
 	ejs-arguments.c \
 	ejs-array.c \
+	ejs-boolean.c \
 	ejs-builtin-modules.c \
 	ejs-console.c \
 	ejs-date.c \
