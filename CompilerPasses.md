@@ -21,32 +21,33 @@ Closure Conversion
 3. FuncDeclsToVars
 
    Converts function declarations to variable assignment.  i.e. from this:
-
+```javascript
 	function foo () { }
-
+```
    to this:
-
+```javascript
 	var foo = function foo () { };
-
+```
 
 4. HoistVars
 
    Hoists vars to the top of the containing functions, leaving initializers where they were.  That is, from:
+```javascript
 	{
 	....
 	var x = 5;
 	....
 	}
-
+```
    to:
-
+```javascript
 	{
 	   let x;
 	   ....
 	   x = 5;
 	   ....
 	}
-
+```
    note the switch from var to let above.  After this phase there should be no var declarations.
 
 
@@ -69,14 +70,18 @@ Closure Conversion
    %invokeClosure, and %invokeClosure intrinsics, respectively.
 
    so from:
+```javascript
 	var f = function f () { }
 	g = f()
 	h = new f();
+```
    to
+```javascript
 	var f;
 	f = %makeClosure(%current_env, "f", function f () { })
 	g = %invokeClosure(f, undefined, 0, [])
 	h = new %invokeClosure(f, undefined, 0, [])
+```
 
    This phase might be nicer if the new expression could be further decomposed into 2 intrinsics, %createObject and %invokeClosure.  Then
    the llvm ir generator wouldn't need to support new expressions at all.
