@@ -97,7 +97,7 @@ exports.free = free = (exp) ->
 #     parent: ...  // the parent environment object
 #   }
 # 
-LocateEnvVisitor = class LocateEnvVisitor extends NodeVisitor
+LocateEnv = class LocateEnv extends NodeVisitor
         constructor: ->
                 super
                 @envs = []
@@ -246,7 +246,7 @@ class FuncDeclsToVars extends NodeVisitor
 #    }
 # to
 #    {
-#       var x;
+#       let x;
 #       ....
 #       x = 5;
 #       ....
@@ -691,7 +691,7 @@ passes = [
         FuncDeclsToVars,
         HoistVars,
         ComputeFree,
-        LocateEnvVisitor,
+        LocateEnv,
         NameAnonymousFunctions,
         SubstituteVariables,
         LambdaLift
@@ -704,12 +704,4 @@ exports.convert = (tree, filename) ->
         passes.forEach (passType) ->
                 pass = new passType(filename)
                 tree = pass.visit tree
-                ###
-                if passType is LocateEnvVisitor
-                        console.log "After #{passType.name}"
-                        transform_dump_tree tree
-                ###
-                if filename is "nodevisitor.js" and passType is LambdaLift
-                        console.log "After #{passType.name}"
-                        console.log escodegen.generate tree
         tree

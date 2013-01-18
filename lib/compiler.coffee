@@ -1472,29 +1472,22 @@ class AddFunctionsVisitor extends NodeVisitor
                 # script source.  we insert %this and %argc between these.  the LLVMIR phase later removes the actual formal parameters and
                 # adds the "EJSValue** args" array, loading the formal parameter values from that.
 
-                console.log 1
                 n.params[0].llvm_type = BUILTIN_PARAMS[0].llvm_type
                 n.params.splice 1, 0, BUILTIN_PARAMS[1]
                 n.params.splice 2, 0, BUILTIN_PARAMS[2]
 
-                console.log 2
                 # set the types of all later arguments to be EjsValueType
                 param.llvm_type = EjsValueType for param in n.params[BUILTIN_PARAMS.length..]
 
-                console.log 3
                 # the LLVMIR func we allocate takes the proper EJSValue** parameter in the 4th spot instead of all the parameters
                 n.ir_func = takes_builtins @module.getOrInsertFunction n.ir_name, EjsValueType, (param.llvm_type for param in BUILTIN_PARAMS).concat [EjsValueType.pointerTo()]
 
                 # enable shadow stack map for gc roots
                 #n.ir_func.setGC "shadow-stack"
                 
-                console.log 4
                 ir_args = n.ir_func.args
-                console.log 5
                 (ir_args[i].setName n.params[i].name) for i in [0...BUILTIN_PARAMS.length]
-                console.log 6
                 ir_args[BUILTIN_PARAMS.length].setName "%args"
-                console.log 7
 
                 # we don't need to recurse here since we won't have nested functions at this point
                 n
