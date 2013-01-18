@@ -4,7 +4,7 @@ hasOwn = Object.prototype.hasOwnProperty
 
 exports.Set = class Set
         constructor: (arr = []) ->
-                @set = {}
+                @set = Object.create null
                 @set[a] = a for a in arr
 
         member: (el) -> hasOwn.call @set, el
