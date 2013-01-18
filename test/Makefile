@@ -8,6 +8,7 @@ TESTS:=$(wildcard *[0-9].js)
 EXPECTED_FAILURES= \
 	date1.js \
 	forin2.js \
+	forin5.js \
 	function-overriding1.js \
 	instanceof1.js \
 	object5.js \
@@ -22,6 +23,7 @@ EXPECTED_FAILURES= \
 
 # date1 fails because we test the Date() function, which returns the current time.  this differs from the current time when the node test runs.  bleah.
 # forin2 fails because we don't properly handle deleting properties while iterating
+# forin5 fails because we enumerate the entire range 0..length of an array, including the holes.
 # instanceof1 fails because _ejs_op_instanceof isn't implemented and just aborts
 # function-overriding1.js fail because we don't throw an exception on a null function, we just crash.
 # object5 fails because we don't handle get/setprop using undefined or null keys
@@ -114,7 +116,7 @@ esprima-roundtrip%.js.exe: esprima-roundtrip%.js $(TOPDIR)/esprima/esprima.js $(
 	-NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $< $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js
 
 %.js.exe: %.js $(TOPDIR)/runtime/libecho.a
-	-NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $<
+	@echo [ejs] $< && NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $<
 
 v8-%.js.exe: v8/%.js $(TOPDIR)/runtime/libecho.a
 	NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $<
