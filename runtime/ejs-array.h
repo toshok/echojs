@@ -30,12 +30,16 @@ EJS_BEGIN_DECLS
 extern ejsval _ejs_Array;
 extern ejsval _ejs_Array_proto;
 extern EJSSpecOps _ejs_array_specops;
+extern EJSSpecOps _ejs_sparsearray_specops;
 
 ejsval _ejs_array_new (int numElements);
 
 void _ejs_array_foreach_element (EJSArray* arr, EJSValueFunc foreach_func);
 
 void _ejs_array_init(ejsval global);
+
+uint32_t _ejs_array_push_dense (ejsval array, int argc, ejsval* args);
+ejsval _ejs_array_pop_dense (ejsval array);
 
 EJS_END_DECLS
 

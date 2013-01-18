@@ -41,6 +41,12 @@ EJSSpecOps _ejs_array_specops = {
     _ejs_array_specop_scan
 };
 
+EJSSpecOps _ejs_sparsearray_specops;
+
+#define EJSVAL_IS_DENSE_ARRAY(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_array_specops))
+#define EJSVAL_IS_SPARSE_ARRAY(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_sparsearray_specops))
+#define EJS_ARRAY_IS_SPARSE(arrobj) ((arrobj)->ops == &_ejs_sparsearray_specops))
+
 #define _EJS_ARRAY_LEN(arrobj)      (((EJSArray*)arrobj)->array_length)
 #define _EJS_ARRAY_ELEMENTS(arrobj) (((EJSArray*)arrobj)->elements)
 
@@ -52,7 +58,7 @@ _ejs_array_new (int numElements)
     _ejs_init_object ((EJSObject*)rv, _ejs_Array_proto, &_ejs_array_specops);
 
     rv->array_length = numElements;
-    rv->array_alloc = numElements + 5;
+    rv->array_alloc = numElements + 500;
     rv->elements = (ejsval*)calloc(rv->array_alloc, sizeof (ejsval));
     return OBJECT_TO_EJSVAL((EJSObject*)rv);
 }
@@ -62,6 +68,23 @@ _ejs_array_foreach_element (EJSArray* arr, EJSValueFunc foreach_func)
 {
     for (int i = 0; i < arr->array_length; i ++)
         foreach_func (arr->elements[i]);
+}
+
+uint32_t
+_ejs_array_push_dense(ejsval array, int argc, ejsval *args)
+{
+    EJSArray *arr = (EJSArray*)EJSVAL_TO_OBJECT(array);
+    for (int i = 0; i < argc; i ++)
+        EJSARRAY_ELEMENTS(arr)[EJSARRAY_LEN(arr)++] = args[i];
+    return EJSARRAY_LEN(arr);
+}
+
+ejsval
+_ejs_array_pop_dense(ejsval array)
+{
+    if (EJS_ARRAY_LEN(array) == 0)
+        return _ejs_undefined;
+    return EJS_ARRAY_ELEMENTS(array)[--EJS_ARRAY_LEN(array)];
 }
 
 ejsval _ejs_Array_proto;
@@ -99,7 +122,7 @@ _ejs_Array_impl (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 
         EJSArray* arr = (EJSArray*)EJSVAL_TO_OBJECT(_this);
         arr->array_length = 0;
-        arr->array_alloc = alloc + 5;
+        arr->array_alloc = alloc + 500;
         arr->elements = (ejsval*)calloc(arr->array_alloc, sizeof (ejsval));
 
         // called as a constructor
@@ -110,20 +133,21 @@ _ejs_Array_impl (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 static ejsval
 _ejs_Array_prototype_shift (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
-    // 1. Let O be the result of calling ToObject passing the this value as the argument.
-    ejsval O = ToObject(_this);
-
-    // EJS fast path for arrays
-    if (!strcmp (CLASSNAME(EJSVAL_TO_OBJECT(O)), "Array")) {
-        int len = EJS_ARRAY_LEN(O);
+    // EJS fast path for dense arrays
+    if (EJSVAL_IS_DENSE_ARRAY(_this)) {
+        int len = EJS_ARRAY_LEN(_this);
         if (len == 0) {
             return _ejs_undefined;
         }
-        ejsval first = EJS_ARRAY_ELEMENTS(O)[0];
-        memmove (EJS_ARRAY_ELEMENTS(O), EJS_ARRAY_ELEMENTS(O) + 1, sizeof(ejsval) * len-1);
-        EJS_ARRAY_LEN(O) --;
+        ejsval first = EJS_ARRAY_ELEMENTS(_this)[0];
+        memmove (EJS_ARRAY_ELEMENTS(_this), EJS_ARRAY_ELEMENTS(_this) + 1, sizeof(ejsval) * len-1);
+        EJS_ARRAY_LEN(_this) --;
         return first;
     }
+
+    // 1. Let O be the result of calling ToObject passing the this value as the argument.
+    ejsval O = ToObject(_this);
+
 
     EJS_NOT_IMPLEMENTED();
 #if notyet
@@ -168,17 +192,17 @@ _ejs_Array_prototype_shift (ejsval env, ejsval _this, uint32_t argc, ejsval*args
 static ejsval
 _ejs_Array_prototype_unshift (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
-    // 1. Let O be the result of calling ToObject passing the this value as the argument.
-    ejsval O = ToObject(_this);
-
     // EJS fast path for arrays
-    if (!strcmp (CLASSNAME(EJSVAL_TO_OBJECT(O)), "Array")) {
-        int len = EJS_ARRAY_LEN(O);
-        memmove (EJS_ARRAY_ELEMENTS(O) + argc, EJS_ARRAY_ELEMENTS(O), sizeof(ejsval) * len);
-        memmove (EJS_ARRAY_ELEMENTS(O), args, sizeof(ejsval) * argc);
-        EJS_ARRAY_LEN(O) += argc;
+    if (EJSVAL_IS_DENSE_ARRAY(_this)) {
+        int len = EJS_ARRAY_LEN(_this);
+        memmove (EJS_ARRAY_ELEMENTS(_this) + argc, EJS_ARRAY_ELEMENTS(_this), sizeof(ejsval) * len);
+        memmove (EJS_ARRAY_ELEMENTS(_this), args, sizeof(ejsval) * argc);
+        EJS_ARRAY_LEN(_this) += argc;
         return NUMBER_TO_EJSVAL(len + argc);
     }
+
+    // 1. Let O be the result of calling ToObject passing the this value as the argument.
+    ejsval O = ToObject(_this);
 
     EJS_NOT_IMPLEMENTED();
 
@@ -206,24 +230,69 @@ _ejs_Array_prototype_unshift (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
     // 11. Return len+argCount.
 }
 
+// ECMA262: 15.4.4.7
 static ejsval
 _ejs_Array_prototype_push (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
-    int i;
-    // XXX nanboxing change breaks this assert (EJSVAL_IS_ARRAY(_this));
-    EJSArray *arr = (EJSArray*)EJSVAL_TO_OBJECT(_this);
-    for (i = 0; i < argc; i ++)
-        EJS_ARRAY_ELEMENTS(_this)[EJS_ARRAY_LEN(_this)++] = args[i];
-    return NUMBER_TO_EJSVAL (EJS_ARRAY_LEN(_this));
+    if (EJSVAL_IS_DENSE_ARRAY(_this)) {
+        return NUMBER_TO_EJSVAL (_ejs_array_push_dense (_this, argc, args));
+    }
+
+    // 1. Let O be the result of calling ToObject passing the this value as the argument.
+    ejsval O = ToObject(_this);
+
+    EJS_NOT_IMPLEMENTED();
+
+    // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
+    ejsval lenVal = OP(EJSVAL_TO_OBJECT(O),get)(O, _ejs_atom_length, EJS_FALSE);
+    // 3. Let n be ToUint32(lenVal).
+    uint32_t n = ToUint32(lenVal);
+
+    // 4. Let items be an internal List whose elements are, in left to right order, the arguments that were passed to this 
+    //    function invocation.
+    // 5. Repeat, while items is not empty
+    //    a. Remove the first element from items and let E be the value of the element.
+    //    b. Call the [[Put]] internal method of O with arguments ToString(n), E, and true.
+    //    c. Increase n by 1.
+    // 6. Call the [[Put]] internal method of O with arguments "length", n, and true.
+    // 7. Return n.
 }
 
+// ECMA262: 15.4.4.6
 static ejsval
 _ejs_Array_prototype_pop (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
-    // XXX nanboxing change breaks this assert (EJSVAL_IS_ARRAY(_this));
-    if (EJS_ARRAY_LEN(_this) == 0)
+    if (EJSVAL_IS_DENSE_ARRAY(_this)) {
+        return _ejs_array_pop_dense (_this);
+    }
+
+    // 1. Let O be the result of calling ToObject passing the this value as the argument.
+    ejsval O = ToObject(_this);
+
+    // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
+    ejsval lenVal = OP(EJSVAL_TO_OBJECT(O),get)(O, _ejs_atom_length, EJS_FALSE);
+
+    // 3. Let len be ToUint32(lenVal).
+    uint32_t len = ToUint32(lenVal);
+
+    // 4. If len is zero, 
+    if (len == 0) {
+        //    a. Call the [[Put]] internal method of O with arguments "length", 0, and true.
+
+        // EJS: why is a done above? to overwrite a accessor property?
+
+        //    b. Return undefined.
         return _ejs_undefined;
-    return EJS_ARRAY_ELEMENTS(_this)[--EJS_ARRAY_LEN(_this)];
+    }
+    // 5. Else, len > 0
+    else {
+        EJS_NOT_IMPLEMENTED();
+        //    a. Let indx be ToString(len–1).
+        //    b. Let element be the result of calling the [[Get]] internal method of O with argument indx.
+        //    c. Call the [[Delete]] internal method of O with arguments indx and true.
+        //    d. Call the [[Put]] internal method of O with arguments "length", indx, and true.
+        //    e. Return element.
+    }
 }
 
 static ejsval
@@ -340,10 +409,166 @@ _ejs_Array_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
     return _ejs_undefined;
 }
 
-static ejsval
-_ejs_Array_prototype_splice (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
+static inline int
+max(int a, int b)
 {
-    EJS_NOT_IMPLEMENTED();
+    if (a > b) return a; else return b;
+}
+
+static inline int
+min(int a, int b)
+{
+    if (a > b) return b; else return a;
+}
+
+// ECMA262: 15.4.4.12
+static ejsval
+_ejs_Array_prototype_splice (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    // start, deleteCount [ , item1 [ , item2 [ , … ] ] ]
+
+    ejsval start = _ejs_undefined;
+    ejsval deleteCount = _ejs_undefined;
+
+    if (argc > 0) start = args[0];
+    if (argc > 1) deleteCount = args[1];
+
+    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
+    /* 2. Let A be a new array created as if by the expression new Array() where Array is the standard built-in 
+          constructor with that name. */
+    ejsval A = _ejs_array_new(0);
+    /* 3. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length". */
+    ejsval lenVal = _ejs_object_getprop (O, _ejs_atom_length);
+    /* 4. Let len be ToUint32(lenVal). */
+    uint32_t len = ToUint32(lenVal);
+    /* 5. Let relativeStart be ToInteger(start). */
+    int32_t relativeStart = ToInteger(start);
+    /* 6. If relativeStart is negative, let actualStart be max((len + relativeStart),0); else let actualStart be 
+          min(relativeStart, len). */
+    int32_t actualStart = relativeStart < 0 ? max((len + relativeStart),0) : min(relativeStart, len);
+
+    if (EJSVAL_IS_UNDEFINED(deleteCount))
+        deleteCount = NUMBER_TO_EJSVAL (len - actualStart);
+    /* 7. Let actualDeleteCount be min(max(ToInteger(deleteCount),0), len - actualStart). */
+    int32_t actualDeleteCount = min(max(ToInteger(deleteCount),0), len - actualStart);
+    /* 8. Let k be 0. */
+    int k = 0;
+    /* 9. Repeat, while k < actualDeleteCount */
+    while (k < actualDeleteCount) {
+        /*    a. Let from be ToString(actualStart+k). */
+        ejsval from = NUMBER_TO_EJSVAL(actualStart+k);
+        /*    b. Let fromPresent be the result of calling the [[HasProperty]] internal method of O with argument 
+              from. */
+        EJSBool fromPresent = OP(EJSVAL_TO_OBJECT(O), has_property)(O, from);
+        /*    c. If fromPresent is true, then */
+        if (fromPresent) {
+            /*       i. Let fromValue be the result of calling the [[Get]] internal method of O with argument from. */
+            ejsval fromValue = _ejs_object_getprop (O, from);
+            /*       ii. Call the [[DefineOwnProperty]] internal method of A with arguments ToString(k), Property
+                         Descriptor {[[Value]]: fromValue, [[Writable]]: true, [[Enumerable]]: true, 
+                         [[Configurable]]: true}, and false. */
+#if false
+            EJSPropertyDesc desc = { .value = fromValue, .writable = EJS_TRUE, .enumerable = EJS_TRUE, .configurable = EJS_TRUE };
+            OP(EJSVAL_TO_OBJECT(A), define_own_property)(A, NumberToString(k), &desc, EJS_FALSE);
+#else
+            _ejs_object_setprop (A, NUMBER_TO_EJSVAL(k), fromValue);
+#endif
+        }
+        /*    d. Increment k by 1. */
+        ++k;
+    }
+    /* 10. Let items be an internal List whose elements are, in left to right order, the portion of the actual argument list
+           starting with item1. The list will be empty if no such items are present. */
+    ejsval *items = &args[2];
+    /* 11. Let itemCount be the number of elements in items. */
+    int itemCount = argc > 2 ? argc - 2 : 0;
+    /* 12. If itemCount < actualDeleteCount, then */
+    if (itemCount < actualDeleteCount) {
+        /*     a. Let k be actualStart. */
+        k = actualStart;
+        /*     b. Repeat, while k < (len – actualDeleteCount) */
+        while (k < (len - actualDeleteCount)) {
+            /*        i. Let from be ToString(k+actualDeleteCount). */
+            ejsval from = NUMBER_TO_EJSVAL(k+actualDeleteCount);
+            /*        ii. Let to be ToString(k+itemCount). */
+            ejsval to = NUMBER_TO_EJSVAL(k+itemCount);
+            /*        iii. Let fromPresent be the result of calling the [[HasProperty]] internal method of O with 
+                           argument from. */
+            EJSBool fromPresent = OP(EJSVAL_TO_OBJECT(O), has_property)(O, from);
+            /*        iv. If fromPresent is true, then */
+            if (fromPresent) {
+                /*            1. Let fromValue be the result of calling the [[Get]] internal method of O with 
+                                 argument from. */
+                ejsval fromValue = _ejs_object_getprop (O, from);
+                /*            2. Call the [[Put]] internal method of O with arguments to, fromValue, and true. */
+                _ejs_object_setprop (O, to, fromValue);
+            }
+            /*        v. Else, fromPresent is false */
+            else {
+                /*            1. Call the [[Delete]] internal method of O with arguments to and true. */
+                OP(EJSVAL_TO_OBJECT(O), _delete)(O, to, EJS_TRUE);
+            }
+            /*        vi. Increase k by 1. */
+            ++k;
+        }
+        /*     c. Let k be len. */
+        k = len;
+        /*     d. Repeat, while k > (len - actualDeleteCount + itemCount)  */
+        while (k > (len - actualDeleteCount + itemCount)) {
+            /*        i. Call the [[Delete]] internal method of O with arguments ToString(k–1) and true. */
+            OP(EJSVAL_TO_OBJECT(O), _delete)(O, NUMBER_TO_EJSVAL(k-1), EJS_TRUE);
+            /*        ii. Decrease k by 1. */
+            --k;
+        }
+    }
+    /* 13. Else if itemCount > actualDeleteCount, then */
+    else if (itemCount > actualDeleteCount) {
+        /*     a. Let k be (len – actualDeleteCount). */
+        k = (len - actualDeleteCount);
+        /*     b. Repeat, while k > actualStart */
+        while (k > actualStart) {
+            /*        i. Let from be ToString(k + actualDeleteCount - 1). */
+            ejsval from = NumberToString (k + actualDeleteCount - 1);
+            /*        ii. Let to be ToString(k + itemCount - 1) */
+            ejsval to = NumberToString(k + itemCount - 1);
+            /*        iii. Let fromPresent be the result of calling the [[HasProperty]] internal method of O with 
+                           argument from. */
+            EJSBool fromPresent = OP(EJSVAL_TO_OBJECT(O), has_property)(O, from);
+            /*        iv. If fromPresent is true, then */
+            if (fromPresent) {
+                /*            1. Let fromValue be the result of calling the [[Get]] internal method of O with 
+                                 argument from. */
+                ejsval fromValue = _ejs_object_getprop (O, from);
+                /*            2. Call the [[Put]] internal method of O with arguments to, fromValue, and true. */
+                _ejs_object_setprop (O, to, fromValue);
+            }
+            /*        v. Else, fromPresent is false */
+            else {
+                /*           1. Call the [[Delete]] internal method of O with argument to and true */
+                OP(EJSVAL_TO_OBJECT(O), _delete)(O, to, EJS_TRUE);
+            }
+            /*        vi. Decrease k by 1. */
+            --k;
+        }
+    }
+    /* 14. Let k be actualStart. */
+    k = actualStart;
+    int item_i = 0;
+    /* 15. Repeat, while items is not empty */
+    while (item_i < itemCount) {
+        /*     a. Remove the first element from items and let E be the value of that element. */
+        ejsval E = items[item_i++];
+        /*     b. Call the [[Put]] internal method of O with arguments ToString(k), E, and true. */
+        _ejs_object_setprop (O, NUMBER_TO_EJSVAL(k), E);
+        /*     c. Increase k by 1. */
+        ++k;
+    }
+    /* 16. Call the [[Put]] internal method of O with arguments "length", (len - actualDeleteCount + itemCount),  
+           and true. */
+    _ejs_object_setprop (O, _ejs_atom_length, NUMBER_TO_EJSVAL(len - actualDeleteCount + itemCount));
+    /* 17. Return A. */
+    return A;
 }
 
 static ejsval
@@ -388,6 +613,9 @@ void
 _ejs_array_init(ejsval global)
 {
     START_SHADOW_STACK_FRAME;
+
+    _ejs_sparsearray_specops =  _ejs_object_specops;
+    _ejs_sparsearray_specops.class_name = "Array";
 
     _ejs_gc_add_named_root (_ejs_Array_proto);
     _ejs_Array_proto = _ejs_object_new(_ejs_null, &_ejs_object_specops);
@@ -477,6 +705,32 @@ _ejs_array_specop_get_property (ejsval obj, ejsval propertyName)
 static void
 _ejs_array_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag)
 {
+    // check if propertyName is a uint32, or a string that we can convert to an uint32
+    int idx = -1;
+    if (EJSVAL_IS_NUMBER(propertyName)) {
+        double n = EJSVAL_TO_NUMBER(propertyName);
+        if (floor(n) == n) {
+            idx = (int)n;
+        }
+    }
+
+    if (idx != -1) {
+        if (idx >= EJS_ARRAY_ALLOC(obj)) {
+            int new_alloc = idx + 10;
+            ejsval* new_elements = (ejsval*)malloc (sizeof(ejsval*) * new_alloc);
+            memmove (new_elements, EJS_ARRAY_ELEMENTS(obj), EJS_ARRAY_ALLOC(obj) * sizeof(ejsval));
+            free (EJS_ARRAY_ELEMENTS(obj));
+            EJS_ARRAY_ELEMENTS(obj) = new_elements;
+            EJS_ARRAY_ALLOC(obj) = new_alloc;
+        }
+        EJS_ARRAY_ELEMENTS(obj)[idx] = val;
+        EJS_ARRAY_LEN(obj) = idx + 1;
+        if (EJS_ARRAY_LEN(obj) >= EJS_ARRAY_ALLOC(obj))
+            abort();
+        return;
+    }
+    // if we fail there, we fall back to the object impl below
+
     _ejs_object_specops.put (obj, propertyName, val, flag);
 }
 
@@ -489,6 +743,19 @@ _ejs_array_specop_can_put (ejsval obj, ejsval propertyName)
 static EJSBool
 _ejs_array_specop_has_property (ejsval obj, ejsval propertyName)
 {
+    // check if propertyName is a uint32, or a string that we can convert to an uint32
+    int idx = -1;
+    if (EJSVAL_IS_NUMBER(propertyName)) {
+        double n = EJSVAL_TO_NUMBER(propertyName);
+        if (floor(n) == n) {
+            idx = (int)n;
+
+            return idx > 0 && idx < EJS_ARRAY_LEN(obj);
+        }
+    }
+
+    // if we fail there, we fall back to the object impl below
+
     return _ejs_object_specops.has_property (obj, propertyName);
 }
 
@@ -530,3 +797,4 @@ _ejs_array_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     _ejs_array_foreach_element ((EJSArray*)obj, scan_func);
     _ejs_object_specops.scan (obj, scan_func);
 }
+

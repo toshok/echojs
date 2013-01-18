@@ -56,9 +56,12 @@ struct _EJSPrimString {
 #define EJSVAL_IS_PRIMITIVE(v) (EJSVAL_IS_NUMBER(v) || EJSVAL_IS_STRING(v) || EJSVAL_IS_BOOLEAN(v) || EJSVAL_IS_UNDEFINED(v))
 
 #define EJSVAL_IS_OBJECT(v)    EJSVAL_IS_OBJECT_IMPL(v)
-#define EJSVAL_IS_ARRAY(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_array_specops))
+#define EJSVAL_IS_ARRAY(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_array_specops || EJSVAL_TO_OBJECT(v)->ops == &_ejs_sparsearray_specops))
 #define EJSVAL_IS_FUNCTION(v)  (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_function_specops))
 #define EJSVAL_IS_DATE(v)      (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_date_specops))
+#define EJSVAL_IS_NUMBER_OBJECT(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_number_specops))
+#define EJSVAL_IS_STRING_OBJECT(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_string_specops))
+#define EJSVAL_IS_BOOLEAN_OBJECT(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_boolean_specops))
 #define EJSVAL_IS_NUMBER(v)    EJSVAL_IS_DOUBLE_IMPL(v)
 #define EJSVAL_IS_STRING(v)    EJSVAL_IS_STRING_IMPL(v)
 #define EJSVAL_IS_BOOLEAN(v)   EJSVAL_IS_BOOLEAN_IMPL(v)
@@ -92,6 +95,7 @@ ejsval _ejs_number_new (double value);
 ejsval _ejs_string_new_utf8 (const char* str);
 ejsval _ejs_string_new_utf8_len (const char* str, int len);
 ejsval _ejs_string_concat (ejsval left, ejsval right);
+ejsval _ejs_string_concatv (ejsval first, ...);
 EJSPrimString* _ejs_string_flatten (ejsval str);
 EJSPrimString* _ejs_primstring_flatten (EJSPrimString* primstr);
 

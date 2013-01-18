@@ -11,7 +11,8 @@ EJS_BEGIN_DECLS
 ejsval NumberToString(double d);
 ejsval ToString(ejsval exp);
 double ToDouble(ejsval exp);
-int ToInteger(ejsval exp);
+int32_t ToInteger(ejsval exp);
+uint32_t ToUint32(ejsval exp);
 ejsval ToObject(ejsval exp);
 ejsval ToBoolean(ejsval exp);
 EJSBool ToEJSBool(ejsval exp);

@@ -73,8 +73,8 @@ typedef struct {
 
 struct _EJSObject {
     GCObjectHeader gc_header;
-    ejsval proto; // the __proto__ property
     EJSSpecOps *ops;
+    ejsval proto; // the __proto__ property
     EJSPropertyMap* map;
 };
 
@@ -90,6 +90,7 @@ int _ejs_propertymap_lookup (EJSPropertyMap *map, const char *name, EJSBool add_
 void _ejs_propertymap_foreach_value (EJSPropertyMap *map, EJSValueFunc foreach_func);
 
 EJSBool _ejs_object_define_value_property (ejsval obj, ejsval key, ejsval value, EJSBool writable, EJSBool configurable, EJSBool enumerable);
+EJSBool _ejs_object_define_accessor_property (ejsval obj, ejsval key, ejsval get, ejsval set, EJSBool writable, EJSBool configurable, EJSBool enumerable);
 
 ejsval _ejs_object_setprop (ejsval obj, ejsval key, ejsval value);
 ejsval _ejs_object_getprop (ejsval obj, ejsval key);
@@ -98,9 +99,9 @@ ejsval _ejs_object_setprop_utf8 (ejsval obj, const char *key, ejsval value);
 ejsval _ejs_object_getprop_utf8 (ejsval obj, const char *key);
 
 EJSPropertyIterator* _ejs_property_iterator_new (ejsval forObj);
-char *_ejs_property_iterator_current (EJSPropertyIterator* iterator);
-void _ejs_property_iterator_next (EJSPropertyIterator* iterator);
-void _ejs_property_iterator_free (EJSPropertyIterator *iterator);
+ejsval               _ejs_property_iterator_current (EJSPropertyIterator* iterator);
+EJSBool              _ejs_property_iterator_next (EJSPropertyIterator* iterator, EJSBool free_on_end);
+void                 _ejs_property_iterator_free (EJSPropertyIterator *iterator);
 
 extern ejsval _ejs_Object;
 extern ejsval _ejs_Object__proto__;

@@ -77,6 +77,12 @@ _ejs_function_new (EJSClosureEnv env, ejsval name, EJSClosureFunc func)
 }
 
 ejsval
+_ejs_function_new_anon (EJSClosureEnv env, EJSClosureFunc func)
+{
+    return _ejs_function_new (env, _ejs_atom_empty, func);
+}
+
+ejsval
 _ejs_function_new_utf8 (EJSClosureEnv env, const char *name, EJSClosureFunc func)
 {
     START_SHADOW_STACK_FRAME;
@@ -311,6 +317,29 @@ _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args)
         free (args);
 
     return rv;
+}
+
+EJSBool
+_ejs_decompose_closure (ejsval closure, EJSClosureFunc* func, EJSClosureEnv* env,
+                        ejsval *_this)
+{
+    if (!EJSVAL_IS_FUNCTION(closure)) {
+        printf ("TypeError, object not a function\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+
+    EJSFunction *fun = (EJSFunction*)EJSVAL_TO_OBJECT(closure);
+
+    if (fun->bound_argc > 0)
+        return EJS_FALSE;
+
+    *func = fun->func;
+    *env = fun->env;
+
+    if (fun->bound)
+        *_this = fun->bound_this;
+
+    return EJS_TRUE;
 }
 
 ejsval

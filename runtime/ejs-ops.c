@@ -128,9 +128,14 @@ double ToDouble(ejsval exp)
         EJS_NOT_IMPLEMENTED();
 }
 
-int ToInteger(ejsval exp)
+int32_t ToInteger(ejsval exp)
 {
     return (int)ToDouble(exp);
+}
+
+uint32_t ToUint32(ejsval exp)
+{
+    return (uint32_t)ToDouble(exp);
 }
 
 ejsval ToObject(ejsval exp)

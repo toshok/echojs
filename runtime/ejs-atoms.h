@@ -11,8 +11,12 @@ EJS_ATOM(string)
 
 EJS_ATOM(Empty)
 
+EJS_ATOM(null)
+
 EJS_ATOM(true)
 EJS_ATOM(false)
+
+EJS_ATOM(toJSON)
 
 // property descriptors
 EJS_ATOM(value)

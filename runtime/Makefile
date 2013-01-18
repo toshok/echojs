@@ -20,7 +20,10 @@ SOURCES= \
 	ejs-require.c \
 	ejs-string.c \
 	ejs-uri.c \
+	parson.c \
 	main.c
+
+VPATH=.:../parson
 
 OBJECTS=$(SOURCES:%.c=%.o)
 

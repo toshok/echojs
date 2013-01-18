@@ -30,11 +30,11 @@ typedef struct _EJSContext* EJSContext;
 #define EJS_FALSE 0
 
 #ifndef MIN
-#define MIN(a,b) (a) > (b) ? (b) : (a)
+#define MIN(a,b) ((a) > (b) ? (b) : (a))
 #endif
 
 #ifndef MAX
-#define MAX(a,b) (a) > (b) ? (a) : (b)
+#define MAX(a,b) ((a) > (b) ? (a) : (b))
 #endif
 
 #define EJS_NOT_IMPLEMENTED() EJS_MACRO_START               \
@@ -64,5 +64,7 @@ extern ejsval _ejs_global;
 #include "ejs-atoms.h"
 #undef EJS_ATOM
 extern ejsval _ejs_atom_empty;
+extern ejsval _ejs_atom_empty_object;
+extern ejsval _ejs_atom_empty_array;
 
 #endif // _ejs_h_
