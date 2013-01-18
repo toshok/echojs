@@ -47,45 +47,43 @@ exports.free = free = (exp) ->
                         exp.ejs_free_vars = (free exp.body).subtract (param_names exp.params)
                         exp.ejs_decls = exp.body.ejs_decls.union (param_names exp.params)
                         exp.ejs_free_vars
-                when syntax.LabeledStatement      then free exp.body
-                when syntax.BlockStatement        then free_blocklike exp, exp.body
-                when syntax.TryStatement          then Set.union.apply null, [(free exp.block)].concat (map free, exp.handlers)
-                when syntax.CatchClause           then (free exp.body).subtract (new Set [exp.param.name])
-                when syntax.VariableDeclaration   then Set.union.apply null, (map free, exp.declarations)
-                when syntax.VariableDeclarator    then free exp.init
-                when syntax.ExpressionStatement   then free exp.expression
-                when syntax.Identifier            then new Set [exp.name]
-                when syntax.ThrowStatement        then free exp.argument
-                when syntax.ForStatement          then Set.union.apply null, (map free, [exp.init, exp.test, exp.update, exp.body])
-                when syntax.ForInStatement        then Set.union.apply null, (map free, [exp.left, exp.right, exp.body])
-                when syntax.WhileStatement        then Set.union.apply null, (map free, [exp.test, exp.body])
-                when syntax.DoWhileStatement      then Set.union.apply null, (map free, [exp.test, exp.body])
-                when syntax.SwitchStatement       then Set.union.apply null, [free exp.discriminant].concat (map free, exp.cases)
-                when syntax.SwitchCase            then free_blocklike exp, exp.consequent
-                when syntax.EmptyStatement        then new Set
-                when syntax.BreakStatement        then new Set
-                when syntax.ContinueStatement     then new Set
-                when syntax.UpdateExpression      then free exp.argument
-                when syntax.ReturnStatement       then free exp.argument
-                when syntax.UnaryExpression       then free exp.argument
-                when syntax.BinaryExpression      then (free exp.left).union free exp.right
-                when syntax.LogicalExpression     then (free exp.left).union free exp.right
-                when syntax.MemberExpression      then free exp.object # we don't traverse into the property
-                when syntax.CallExpression        then Set.union.apply null, [(free exp.callee)].concat (map free, exp.arguments)
-                when syntax.NewExpression         then Set.union.apply null, [(free exp.callee)].concat (map free, exp.arguments)
-                when syntax.SequenceExpression    then Set.union.apply null, map free, exp.expressions
-                when syntax.ConditionalExpression then Set.union.apply null, [(free exp.test), (free exp.cconsequent), free (exp.alternate)]
-                when syntax.Literal               then new Set
-                when syntax.ThisExpression        then new Set
-                when syntax.Property              then free exp.value # we skip the key
+                when syntax.LabeledStatement      then exp.ejs_free_vars = free exp.body
+                when syntax.BlockStatement        then exp.ejs_free_vars = free_blocklike exp, exp.body
+                when syntax.TryStatement          then exp.ejs_free_vars = Set.union.apply null, [(free exp.block)].concat (map free, exp.handlers)
+                when syntax.CatchClause           then exp.ejs_free_vars = (free exp.body).subtract (new Set [exp.param.name])
+                when syntax.VariableDeclaration   then exp.ejs_free_vars = Set.union.apply null, (map free, exp.declarations)
+                when syntax.VariableDeclarator    then exp.ejs_free_vars = free exp.init
+                when syntax.ExpressionStatement   then exp.ejs_free_vars = free exp.expression
+                when syntax.Identifier            then exp.ejs_free_vars = new Set [exp.name]
+                when syntax.ThrowStatement        then exp.ejs_free_vars = free exp.argument
+                when syntax.ForStatement          then exp.ejs_free_vars = Set.union.apply null, (map free, [exp.init, exp.test, exp.update, exp.body])
+                when syntax.ForInStatement        then exp.ejs_free_vars = Set.union.apply null, (map free, [exp.left, exp.right, exp.body])
+                when syntax.WhileStatement        then exp.ejs_free_vars = Set.union.apply null, (map free, [exp.test, exp.body])
+                when syntax.DoWhileStatement      then exp.ejs_free_vars = Set.union.apply null, (map free, [exp.test, exp.body])
+                when syntax.SwitchStatement       then exp.ejs_free_vars = Set.union.apply null, [free exp.discriminant].concat (map free, exp.cases)
+                when syntax.SwitchCase            then exp.ejs_free_vars = free_blocklike exp, exp.consequent
+                when syntax.EmptyStatement        then exp.ejs_free_vars = new Set
+                when syntax.BreakStatement        then exp.ejs_free_vars = new Set
+                when syntax.ContinueStatement     then exp.ejs_free_vars = new Set
+                when syntax.UpdateExpression      then exp.ejs_free_vars = free exp.argument
+                when syntax.ReturnStatement       then exp.ejs_free_vars = free exp.argument
+                when syntax.UnaryExpression       then exp.ejs_free_vars = free exp.argument
+                when syntax.BinaryExpression      then exp.ejs_free_vars = (free exp.left).union free exp.right
+                when syntax.LogicalExpression     then exp.ejs_free_vars = (free exp.left).union free exp.right
+                when syntax.MemberExpression      then exp.ejs_free_vars = free exp.object # we don't traverse into the property
+                when syntax.CallExpression        then exp.ejs_free_vars = Set.union.apply null, [(free exp.callee)].concat (map free, exp.arguments)
+                when syntax.NewExpression         then exp.ejs_free_vars = Set.union.apply null, [(free exp.callee)].concat (map free, exp.arguments)
+                when syntax.SequenceExpression    then exp.ejs_free_vars = Set.union.apply null, map free, exp.expressions
+                when syntax.ConditionalExpression then exp.ejs_free_vars = Set.union.apply null, [(free exp.test), (free exp.cconsequent), free (exp.alternate)]
+                when syntax.Literal               then exp.ejs_free_vars = new Set
+                when syntax.ThisExpression        then exp.ejs_free_vars = new Set
+                when syntax.Property              then exp.ejs_free_vars = free exp.value # we skip the key
                 when syntax.ObjectExpression
-                        return new Set if exp.properties.length is 0
-                        Set.union.apply null, map free, (p.value for p in exp.properties)
+                        exp.ejs_free_vars = if exp.properties.length is 0 then (new Set) else Set.union.apply null, map free, (p.value for p in exp.properties)
                 when syntax.ArrayExpression
-                        return new Set if exp.elements.length is 0
-                        Set.union.apply null, map free, exp.elements
-                when syntax.IfStatement         then Set.union.apply null, [(free exp.test), (free exp.cconsequent), free (exp.alternate)]
-                when syntax.AssignmentExpression then (free exp.left).union free exp.right
+                        exp.ejs_free_vars = if exp.elements.length is 0 then (new Set) else Set.union.apply null, map free, exp.elements
+                when syntax.IfStatement           then exp.ejs_free_vars = Set.union.apply null, [(free exp.test), (free exp.consequent), free (exp.alternate)]
+                when syntax.AssignmentExpression  then exp.ejs_free_vars = (free exp.left).union free exp.right
                 
                 else throw "Internal error: unhandled node type '#{exp.type}' in free()"
                 #else new Set
@@ -135,6 +133,36 @@ LocateEnvVisitor = class LocateEnvVisitor extends NodeVisitor
                 # find the environment in the env-stack that includes this variable's decl.  add it to the env's .closed set.
                 current_env = @envs[0]
                 env = current_env
+
+                # if the current environment declares that identifier, nothing to do.
+                return n if env.decls.member n.name
+
+                closed_over = false
+                # look up our environment stack for the decl for it.
+                env = env.parent
+                while env?
+                        if env.decls?.member n.name
+                                closed_over = true
+                                env = null
+                        else
+                                env = env.parent
+
+                # if we found it higher on the function stack, we need to walk back up the stack forcing environments along the way, and make
+                # sure the frame that declares it knows that something down the stack closes over it.
+                if closed_over
+                        env = current_env.parent
+                        while env?
+                                if env.decls?.member n.name
+                                        env.closed.add n.name
+                                        env = null
+                                else
+                                        env.nested_requires_env = true
+                                        env = env.parent
+                
+                n.ejs_substitute = true
+                n
+
+                ###                
                 while env?
                         if env.decls.member n.name
                                 if env.closed.member n.name
@@ -147,6 +175,7 @@ LocateEnvVisitor = class LocateEnvVisitor extends NodeVisitor
                                 return n
                         else
                                 env = env.parent
+                ###
                 n
 
 create_identifier = (x) -> type: syntax.Identifier, name: x
@@ -391,7 +420,7 @@ class SubstituteVariables extends NodeVisitor
                 n
                 
         visitFunction: (n) ->
-                if n.ejs_env.closed.empty()
+                if n.ejs_env.closed.empty() and not n.ejs_env.nested_requires_env
                         n.body.body.unshift
                                 type: syntax.VariableDeclaration,
                                 declarations: [{
@@ -504,10 +533,17 @@ class SubstituteVariables extends NodeVisitor
                         if n.type is syntax.FunctionDeclaration
                                 throw "there should be no FunctionDeclarations at this point"
                         else # n.type is syntax.FunctionExpression
-                                call_exp =
-                                        type: syntax.CallExpression,
-                                        callee: create_identifier "%makeClosure"
-                                        arguments: [ (if n.ejs_env.parent? then (create_identifier "%env_#{n.ejs_env.parent.id}") else { type: syntax.Literal, value: null}), (create_string_literal if n.id then n.id.name else ""), n ]
+                                if n.id?
+                                        call_exp =
+                                                type: syntax.CallExpression,
+                                                callee: create_identifier "%makeClosure"
+                                                arguments: [ (if n.ejs_env.parent? then (create_identifier "%env_#{n.ejs_env.parent.id}") else { type: syntax.Literal, value: null}), (create_string_literal n.id.name), n ]
+                                else
+                                        call_exp =
+                                                type: syntax.CallExpression,
+                                                callee: create_identifier "%makeAnonClosure"
+                                                arguments: [ (if n.ejs_env.parent? then (create_identifier "%env_#{n.ejs_env.parent.id}") else { type: syntax.Literal, value: null}), n ]
+                                
                                 return call_exp
                 n        
                 
@@ -552,7 +588,7 @@ class SubstituteVariables extends NodeVisitor
 #   2. There are no free variables in the function expressions.
 #
 class LambdaLift extends NodeVisitor
-        constructor: (module) ->
+        constructor: (@filename) ->
                 super
                 @functions = []
                 @mappings = []
@@ -580,11 +616,15 @@ class LambdaLift extends NodeVisitor
                 n
         
         visitFunctionExpression: (n) ->
-                if n.id?.name?
-                        global_name = genGlobalFunctionName n.id.name
-                        @currentMapping()[n.id.name] = global_name
+                if n.displayName?
+                        global_name = genGlobalFunctionName n.displayName, @filename
+                else if n.id?.name?
+                        global_name = genGlobalFunctionName n.id.name, @filename
                 else
-                        global_name = genAnonymousFunctionName()
+                        global_name = genAnonymousFunctionName(@filename)
+                
+                if n.id?.name?
+                        @currentMapping()[n.id.name] = global_name
 
                 n.type = syntax.FunctionDeclaration
                 n.id =
@@ -608,21 +648,68 @@ class LambdaLift extends NodeVisitor
                         name: global_name
                 }
 
+class NameAnonymousFunctions extends NodeVisitor
+        visitAssignmentExpression: (n) ->
+                n = super n
+                lhs = n.left
+                rhs = n.right
+
+                # if we have the form
+                #   <identifier> = function () { }
+                # convert to:
+                #   <identifier> = function <identifier> () { }
+                #if lhs.type is syntax.Identifier and rhs.type is syntax.FunctionExpression and not rhs.id?.name
+                #        rhs.display = <something pretty about the lhs>
+                #n
+                if rhs.type is syntax.FunctionExpression and not rhs.id?.name
+                        rhs.displayName = escodegen.generate lhs
+                n
+
+transform_dump_tree = (n, indent=0) ->
+        stringified_indent = ('' for i in [0..(indent*2)]).join('| ')
+        console.log "#{stringified_indent}.type = syntax.#{n.type}"
+        console.log "#{stringified_indent}.js = #{escodegen.generate n, { format: { compact: true } } }"
+        console.log "#{stringified_indent}.free = #{n.ejs_free_vars}" if n.ejs_free_vars?
+        console.log "#{stringified_indent}.env.decls = #{n.ejs_env.decls}" if n.ejs_env?
+        console.log "#{stringified_indent}.env.closed = #{n.ejs_env.closed}" if n.ejs_env?
+        props_to_skip = ["type", "id", "loc", "ejs_free_vars", "ejs_decls", "ejs_env"]
+        for propname in Object.getOwnPropertyNames n
+                if (props_to_skip.indexOf propname) is -1
+                        if n[propname]?.type?
+                                console.log "#{stringified_indent}.#{propname}:"
+                                transform_dump_tree n[propname], indent+1
+                        else if Array.isArray n[propname]
+                                console.log "#{stringified_indent}.#{propname}: ["
+                                (transform_dump_tree element, indent+1) for element in n[propname]
+                                console.log "#{stringified_indent}]"
+                        else
+                                console.log "#{stringified_indent}.#{propname} = #{JSON.stringify n[propname]}"
+        undefined
+
 passes = [
         HoistFuncDecls,
         FuncDeclsToVars,
         HoistVars,
         ComputeFree,
         LocateEnvVisitor,
+        NameAnonymousFunctions,
         SubstituteVariables,
         LambdaLift
         ]
 
-exports.convert = (tree) ->
+exports.convert = (tree, filename) ->
         debug.log "before:"
         debug.log -> escodegen.generate tree
 
         passes.forEach (passType) ->
-                pass = new passType()
+                pass = new passType(filename)
                 tree = pass.visit tree
+                ###
+                if passType is LocateEnvVisitor
+                        console.log "After #{passType.name}"
+                        transform_dump_tree tree
+                ###
+                if filename is "nodevisitor.js" and passType is LambdaLift
+                        console.log "After #{passType.name}"
+                        console.log escodegen.generate tree
         tree

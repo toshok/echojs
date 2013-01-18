@@ -2,8 +2,9 @@ esprima = require 'esprima'
 escodegen = require 'escodegen'
 syntax = esprima.Syntax
 debug = require 'debug'
+path = require 'path'
 
-debug.setLevel if __ejs? then 1 else 0
+#debug.setLevel if __ejs? then 1 else 0
 
 { Set } = require 'set'
 { NodeVisitor } = require 'nodevisitor'
@@ -12,6 +13,10 @@ closure_conversion = require 'closure-conversion'
 
 llvm = require 'llvm'
 irbuilder = llvm.IRBuilder
+
+# set to true to inline more of the call sequence at call sites (we still have to call into the runtime to decompose the closure itself for now)
+# disable this for now because it breaks more of the exception tests
+decompose_closure_on_invoke = false
 
 # special key for parent scope when performing lookups
 PARENT_SCOPE_KEY = ":parent:"
@@ -23,9 +28,23 @@ voidType   = llvm.Type.getVoidTy()
 int32Type  = llvm.Type.getInt32Ty()
 int64Type  = llvm.Type.getInt64Ty()
 
-int32Constant = llvm.Constant.getIntegerValue.bind null, int32Type
-int64Constant = llvm.Constant.getIntegerValue.bind null, int64Type
-boolConstant  = llvm.Constant.getIntegerValue.bind null, boolType
+int32Constant = (c) ->
+        constant = llvm.Constant.getIntegerValue int32Type, c
+        constant.is_constant = true
+        constant.constant_val = c
+        constant
+        
+int64Constant = (c) ->
+        constant = llvm.Constant.getIntegerValue int64Type, c
+        constant.is_constant = true
+        constant.constant_val = c
+        constant
+        
+boolConstant  = (c) ->
+        constant = llvm.Constant.getIntegerValue boolType, if c is false then 0 else 1
+        constant.is_constant = true
+        constant.constant_val = c
+        constant
         
 
 EjsValueType = int64Type
@@ -50,6 +69,10 @@ takes_builtins = (n) ->
 
 only_reads_memory = (n) ->
         n.setOnlyReadsMemory()
+        n
+
+does_not_access_memory = (n) ->
+        n.setDoesNotAccessMemory()
         n
 
 does_not_throw = (n) ->
@@ -170,12 +193,13 @@ class LoopExitableScope extends ExitableScope
                 return LoopExitableScope.findFirst stack.parent
 
 class LLVMIRVisitor extends NodeVisitor
-        constructor: (@module) ->
+        constructor: (@module, @filename) ->
 
                 # build up our runtime method table
                 @ejs_intrinsics = {
                         invokeClosure: @handleInvokeClosureIntrinsic
                         makeClosure: @handleMakeClosureIntrinsic
+                        makeAnonClosure: @handleMakeAnonClosureIntrinsic
                         createArgScratchArea: @handleCreateArgScratchAreaIntrinsic
                 }
 
@@ -186,26 +210,29 @@ class LLVMIRVisitor extends NodeVisitor
                 @ejs_runtime = {
                         personality:           module.getOrInsertExternalFunction "__ejs_personality_v0",           int32Type, [int32Type, int32Type, int64Type, int8PointerType, int8PointerType]
 
-                        invoke_closure: takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure", EjsValueType, [EjsValueType, EjsValueType, int32Type, EjsValueType.pointerTo()]
-                        make_closure: module.getOrInsertExternalFunction "_ejs_function_new", EjsValueType, [EjsClosureEnvType, EjsValueType, EjsClosureFuncType]
+                        invoke_closure:        takes_builtins module.getOrInsertExternalFunction "_ejs_invoke_closure", EjsValueType, [EjsValueType, EjsValueType, int32Type, EjsValueType.pointerTo()]
+                        make_closure:          module.getOrInsertExternalFunction "_ejs_function_new", EjsValueType, [EjsClosureEnvType, EjsValueType, EjsClosureFuncType]
+                        make_anon_closure:     module.getOrInsertExternalFunction "_ejs_function_new_anon", EjsValueType, [EjsClosureEnvType, EjsClosureFuncType]
+                        decompose_closure:     module.getOrInsertExternalFunction "_ejs_decompose_closure", boolType, [EjsValueType, EjsClosureFuncType.pointerTo(), EjsClosureEnvType.pointerTo(), EjsValueType.pointerTo()]
                                                 
                         object_create:         module.getOrInsertExternalFunction "_ejs_object_create",             EjsValueType, [EjsValueType]
                         arguments_new:         module.getOrInsertExternalFunction "_ejs_arguments_new",             EjsValueType, [int32Type, EjsValueType.pointerTo()]
                         array_new:             module.getOrInsertExternalFunction "_ejs_array_new",                 EjsValueType, [int32Type]
-                        number_new:            only_reads_memory module.getOrInsertExternalFunction "_ejs_number_new",                EjsValueType, [llvm.Type.getDoubleTy()]
+                        number_new:            does_not_throw does_not_access_memory module.getOrInsertExternalFunction "_ejs_number_new",                EjsValueType, [llvm.Type.getDoubleTy()]
                         string_new_utf8:       only_reads_memory does_not_throw module.getOrInsertExternalFunction "_ejs_string_new_utf8",           EjsValueType, [stringType]
                         regexp_new_utf8:       module.getOrInsertExternalFunction "_ejs_regexp_new_utf8",           EjsValueType, [stringType]
-                        truthy:                only_reads_memory module.getOrInsertExternalFunction "_ejs_truthy",                    boolType, [EjsValueType]
+                        truthy:                does_not_throw does_not_access_memory module.getOrInsertExternalFunction "_ejs_truthy",                    boolType, [EjsValueType]
                         object_setprop:        module.getOrInsertExternalFunction "_ejs_object_setprop",            EjsValueType, [EjsValueType, EjsValueType, EjsValueType]
                         object_getprop:        only_reads_memory module.getOrInsertExternalFunction "_ejs_object_getprop",           EjsValueType, [EjsValueType, EjsValueType]
                         object_getprop_utf8:   only_reads_memory module.getOrInsertExternalFunction "_ejs_object_getprop_utf8",      EjsValueType, [EjsValueType, stringType]
                         object_setprop_utf8:   module.getOrInsertExternalFunction "_ejs_object_setprop_utf8",       EjsValueType, [EjsValueType, stringType, EjsValueType]
                         prop_iterator_new:     module.getOrInsertExternalFunction "_ejs_property_iterator_new",     EjsPropIteratorType, [EjsValueType]
-                        prop_iterator_current: module.getOrInsertExternalFunction "_ejs_property_iterator_current", stringType, [EjsPropIteratorType]
-                        prop_iterator_next:    module.getOrInsertExternalFunction "_ejs_property_iterator_next",    voidType, [EjsPropIteratorType]
+                        prop_iterator_current: module.getOrInsertExternalFunction "_ejs_property_iterator_current", EjsValueType, [EjsPropIteratorType]
+                        prop_iterator_next:    module.getOrInsertExternalFunction "_ejs_property_iterator_next",    boolType, [EjsPropIteratorType, boolType]
                         prop_iterator_free:    module.getOrInsertExternalFunction "_ejs_property_iterator_free",    voidType, [EjsPropIteratorType]
                         throw:                 module.getOrInsertExternalFunction "_ejs_throw",                     voidType, [EjsValueType]
                         rethrow:               module.getOrInsertExternalFunction "_ejs_rethrow",                   voidType, [EjsValueType]
+                        
                         undefined:             module.getOrInsertGlobal           "_ejs_undefined",                 EjsValueType
                         "true":                module.getOrInsertGlobal           "_ejs_true",                      EjsValueType
                         "false":               module.getOrInsertGlobal           "_ejs_false",                     EjsValueType
@@ -222,7 +249,7 @@ class LLVMIRVisitor extends NodeVisitor
                         "unop+":           module.getOrInsertExternalFunction "_ejs_op_plus",        EjsValueType, [EjsValueType]
                         "unop!":           module.getOrInsertExternalFunction "_ejs_op_not",         EjsValueType, [EjsValueType]
                         "unop~":           module.getOrInsertExternalFunction "_ejs_op_bitwise_not", EjsValueType, [EjsValueType]
-                        "unoptypeof":      module.getOrInsertExternalFunction "_ejs_op_typeof",      EjsValueType, [EjsValueType]
+                        "unoptypeof":      does_not_throw module.getOrInsertExternalFunction "_ejs_op_typeof",      EjsValueType, [EjsValueType]
                         "unopdelete":      module.getOrInsertExternalFunction "_ejs_op_delete",      EjsValueType, [EjsValueType, EjsValueType] # this is a unop, but ours only works for memberexpressions
                         "unopvoid":        module.getOrInsertExternalFunction "_ejs_op_void",        EjsValueType, [EjsValueType]
                         "binop^":          module.getOrInsertExternalFunction "_ejs_op_bitwise_xor", EjsValueType, [EjsValueType, EjsValueType]
@@ -233,18 +260,18 @@ class LLVMIRVisitor extends NodeVisitor
                         "binop>>>":        module.getOrInsertExternalFunction "_ejs_op_ursh",        EjsValueType, [EjsValueType, EjsValueType]
                         "binop<<<":        module.getOrInsertExternalFunction "_ejs_op_ulsh",        EjsValueType, [EjsValueType, EjsValueType]
                         "binop%":          module.getOrInsertExternalFunction "_ejs_op_mod",         EjsValueType, [EjsValueType, EjsValueType]
-                        "binop+":          only_reads_memory module.getOrInsertExternalFunction "_ejs_op_add",         EjsValueType, [EjsValueType, EjsValueType]
+                        "binop+":          module.getOrInsertExternalFunction "_ejs_op_add",         EjsValueType, [EjsValueType, EjsValueType]
                         "binop*":          module.getOrInsertExternalFunction "_ejs_op_mult",        EjsValueType, [EjsValueType, EjsValueType]
                         "binop/":          module.getOrInsertExternalFunction "_ejs_op_div",         EjsValueType, [EjsValueType, EjsValueType]
-                        "binop<":          only_reads_memory module.getOrInsertExternalFunction "_ejs_op_lt",          EjsValueType, [EjsValueType, EjsValueType]
-                        "binop<=":         only_reads_memory module.getOrInsertExternalFunction "_ejs_op_le",          EjsValueType, [EjsValueType, EjsValueType]
-                        "binop>":          only_reads_memory module.getOrInsertExternalFunction "_ejs_op_gt",          EjsValueType, [EjsValueType, EjsValueType]
-                        "binop>=":         only_reads_memory module.getOrInsertExternalFunction "_ejs_op_ge",          EjsValueType, [EjsValueType, EjsValueType]
+                        "binop<":          module.getOrInsertExternalFunction "_ejs_op_lt",          EjsValueType, [EjsValueType, EjsValueType]
+                        "binop<=":         module.getOrInsertExternalFunction "_ejs_op_le",          EjsValueType, [EjsValueType, EjsValueType]
+                        "binop>":          module.getOrInsertExternalFunction "_ejs_op_gt",          EjsValueType, [EjsValueType, EjsValueType]
+                        "binop>=":         module.getOrInsertExternalFunction "_ejs_op_ge",          EjsValueType, [EjsValueType, EjsValueType]
                         "binop-":          module.getOrInsertExternalFunction "_ejs_op_sub",         EjsValueType, [EjsValueType, EjsValueType]
-                        "binop===":        only_reads_memory module.getOrInsertExternalFunction "_ejs_op_strict_eq",   EjsValueType, [EjsValueType, EjsValueType]
-                        "binop==":         only_reads_memory module.getOrInsertExternalFunction "_ejs_op_eq",          EjsValueType, [EjsValueType, EjsValueType]
-                        "binop!==":        only_reads_memory module.getOrInsertExternalFunction "_ejs_op_strict_neq",  EjsValueType, [EjsValueType, EjsValueType]
-                        "binop!=":         only_reads_memory module.getOrInsertExternalFunction "_ejs_op_neq",         EjsValueType, [EjsValueType, EjsValueType]
+                        "binop===":        does_not_throw does_not_access_memory module.getOrInsertExternalFunction "_ejs_op_strict_eq",   EjsValueType, [EjsValueType, EjsValueType]
+                        "binop==":         module.getOrInsertExternalFunction "_ejs_op_eq",          EjsValueType, [EjsValueType, EjsValueType]
+                        "binop!==":        does_not_throw does_not_access_memory module.getOrInsertExternalFunction "_ejs_op_strict_neq",  EjsValueType, [EjsValueType, EjsValueType]
+                        "binop!=":         module.getOrInsertExternalFunction "_ejs_op_neq",         EjsValueType, [EjsValueType, EjsValueType]
                         "binopinstanceof": module.getOrInsertExternalFunction "_ejs_op_instanceof",  EjsValueType, [EjsValueType, EjsValueType]
                         "binopin":         module.getOrInsertExternalFunction "_ejs_op_in",          EjsValueType, [EjsValueType, EjsValueType]
                 }
@@ -254,14 +281,20 @@ class LLVMIRVisitor extends NodeVisitor
         # lots of helper methods
 
         loadBoolEjsValue: (n) ->
-                irbuilder.createLoad (if n then @ejs_runtime['true'] else @ejs_runtime['false']), "load_bool"
+                boolval = irbuilder.createLoad (if n then @ejs_runtime['true'] else @ejs_runtime['false']), "load_bool"
+                boolval.is_constant = true
+                boolval.constant_val = n
+                boolval
+                
         loadNullEjsValue: ->
                 nullval = irbuilder.createLoad @ejs_runtime['null'], "load_null"
-                nullval.isundefined = true
+                nullval.is_constant = true
+                nullval.constant_val = null
                 nullval
         loadUndefinedEjsValue: ->
                 undef = irbuilder.createLoad @ejs_runtime.undefined, "load_undefined"
-                undef.isundefined = true
+                undef.is_constant = true
+                undef.constant_val = undefined
                 undef
         loadGlobal: -> irbuilder.createLoad @ejs_runtime.global, "load_global"
 
@@ -434,10 +467,7 @@ class LLVMIRVisitor extends NodeVisitor
                         if defaultCase isnt _case
                                 case_checks.push test: _case.test, dest_check: _case.dest_check, body: _case.bb
 
-                if defaultCase?
-                        case_checks.push dest_check: defaultCase.bb
-                else
-                        case_checks.push dest_check: merge_bb
+                case_checks.push dest_check: if defaultCase? then defaultCase.bb else merge_bb
 
                 scope = new SwitchExitableScope merge_bb
                 scope.enter()
@@ -448,10 +478,8 @@ class LLVMIRVisitor extends NodeVisitor
                 for casenum in [0...case_checks.length-1]
                         test = @visit case_checks[casenum].test
                         discTest = @createCall @ejs_runtime["binop==="], [discr, test], "test"
-                        discTest.setOnlyReadsMemory()
                         disc_truthy = @createCall @ejs_runtime.truthy, [discTest], "disc_truthy"
-                        disc_truthy.setOnlyReadsMemory()
-                        disc_cmp = irbuilder.createICmpEq disc_truthy, (boolConstant 0), "disccmpresult"
+                        disc_cmp = irbuilder.createICmpEq disc_truthy, (boolConstant false), "disccmpresult"
                         irbuilder.createCondBr disc_cmp, case_checks[casenum+1].dest_check, case_checks[casenum].body
                         irbuilder.setInsertPoint case_checks[casenum+1].dest_check
 
@@ -521,8 +549,7 @@ class LLVMIRVisitor extends NodeVisitor
                 irbuilder.setInsertPoint test_bb
                 if n.test
                         cond_truthy = @createCall @ejs_runtime.truthy, [@visit(n.test)], "cond_truthy"
-                        cond_truthy.setOnlyReadsMemory()
-                        cmp = irbuilder.createICmpEq cond_truthy, (boolConstant 0), "cmpresult"
+                        cmp = irbuilder.createICmpEq cond_truthy, (boolConstant false), "cmpresult"
                         irbuilder.createCondBr cmp, merge_bb, body_bb
                 else
                         irbuilder.createBr body_bb
@@ -555,8 +582,7 @@ class LLVMIRVisitor extends NodeVisitor
                 irbuilder.setInsertPoint while_bb
                 
                 cond_truthy = @createCall @ejs_runtime.truthy, [@visit(n.test)], "cond_truthy"
-                cond_truthy.setOnlyReadsMemory()
-                cmp = irbuilder.createICmpEq cond_truthy, (boolConstant 0), "cmpresult"
+                cmp = irbuilder.createICmpEq cond_truthy, (boolConstant false), "cmpresult"
                 
                 irbuilder.createCondBr cmp, merge_bb, body_bb
 
@@ -575,7 +601,7 @@ class LLVMIRVisitor extends NodeVisitor
         visitForIn: (n) ->
                 insertBlock = irbuilder.getInsertBlock()
                 insertFunc = insertBlock.parent
-                
+
                 iterator = @createCall @ejs_runtime.prop_iterator_new, [@visit n.right], "iterator"
 
                 # make sure we get an alloca if there's a "var"
@@ -592,21 +618,17 @@ class LLVMIRVisitor extends NodeVisitor
                 irbuilder.createBr forin_bb
                 irbuilder.setInsertPoint forin_bb
 
-                current = @createCall @ejs_runtime.prop_iterator_current, [iterator], "iterator_current"
-
-                cmp = irbuilder.createICmpEq current, (llvm.Constant.getNull stringType), "cmpresult"
-                
+                moreleft = @createCall @ejs_runtime.prop_iterator_next, [iterator, (boolConstant true)], "moreleft"
+                cmp = irbuilder.createICmpEq moreleft, (boolConstant false), "cmpmoreleft"
                 irbuilder.createCondBr cmp, merge_bb, body_bb
-
+                
                 irbuilder.setInsertPoint body_bb
-                strcall = @createCall @ejs_runtime.string_new_utf8, [current], "strtmp"
-                @storeValueInDest strcall, lhs
+                current = @createCall @ejs_runtime.prop_iterator_current, [iterator], "iterator_current"
+                @storeValueInDest current, lhs
                 @visit n.body
-                @createCall @ejs_runtime.prop_iterator_next, [iterator], ""
                 irbuilder.createBr forin_bb
 
                 irbuilder.setInsertPoint merge_bb
-                @createCall @ejs_runtime.prop_iterator_free, [iterator], ""
                 merge_bb
                 
                 
@@ -645,7 +667,6 @@ class LLVMIRVisitor extends NodeVisitor
                 
                 # first we convert our conditional EJSValue to a boolean
                 cond_truthy = @createCall @ejs_runtime.truthy, [@visit(n.test)], "cond_truthy"
-                cond_truthy.setOnlyReadsMemory()
 
                 insertBlock = irbuilder.getInsertBlock()
                 insertFunc = insertBlock.parent
@@ -655,7 +676,7 @@ class LLVMIRVisitor extends NodeVisitor
                 merge_bb = new llvm.BasicBlock "merge", insertFunc
 
                 # we invert the test here - check if the condition is false/0
-                cmp = irbuilder.createICmpEq cond_truthy, (boolConstant 0), "cmpresult"
+                cmp = irbuilder.createICmpEq cond_truthy, (boolConstant false), "cmpresult"
                 irbuilder.createCondBr cmp, else_bb, then_bb
 
                 irbuilder.setInsertPoint then_bb
@@ -783,7 +804,8 @@ class LLVMIRVisitor extends NodeVisitor
                         @visit lhs
 
         visitFunction: (n) ->
-                console.warn "        function #{n.ir_name} at line #{n.loc?.start.line}"
+                if not n.toplevel?
+                        console.warn "        function #{n.ir_name} at #{@filename}:#{if n.loc? then n.loc.start.line else '<unknown>'}"
                 
                 # save off the insert point so we can get back to it after generating this function
                 insertBlock = irbuilder.getInsertBlock()
@@ -955,13 +977,18 @@ class LLVMIRVisitor extends NodeVisitor
                 right_visited = @visit n.right
                 irbuilder.createStore right_visited, right_alloca
 
+                if n.left.is_constant? and n.right.is_constant?
+                        console.warn "we could totally evaluate this at compile time, yo"
+                        
+
                 if left_visited.literal? and right_visited.literal?
                         if typeof left_visited.literal.value is "number" and typeof right_visited.literal.value is "number"
                                 if n.operator is "<"
                                         return @loadBoolEjsValue left_visited.literal.value < right_visited.literal.value
                                         
-                # call the add method
-                @createCall callee, [(irbuilder.createLoad left_alloca, "binop_left_load"), (irbuilder.createLoad right_alloca, "binop_right_load")], "result_#{builtin}"
+                # call the actual runtime binaryop method
+                call = @createCall callee, [(irbuilder.createLoad left_alloca, "binop_left_load"), (irbuilder.createLoad right_alloca, "binop_right_load")], "result_#{builtin}"
+                call
 
         visitLogicalExpression: (n) ->
                 debug.log "operator = '#{n.operator}'"
@@ -969,7 +996,6 @@ class LLVMIRVisitor extends NodeVisitor
 
                 left_visited = @visit n.left
                 cond_truthy = @createCall @ejs_runtime.truthy, [left_visited], "cond_truthy"
-                cond_truthy.setOnlyReadsMemory()
 
                 insertBlock = irbuilder.getInsertBlock()
                 insertFunc = insertBlock.parent
@@ -979,7 +1005,7 @@ class LLVMIRVisitor extends NodeVisitor
                 merge_bb = new llvm.BasicBlock "cond_merge", insertFunc
 
                 # we invert the test here - check if the condition is false/0
-                cmp = irbuilder.createICmpEq cond_truthy, (boolConstant 0), "cmpresult"
+                cmp = irbuilder.createICmpEq cond_truthy, (boolConstant false), "cmpresult"
                 irbuilder.createCondBr cmp, right_bb, left_bb
 
                 irbuilder.setInsertPoint left_bb
@@ -1204,7 +1230,6 @@ class LLVMIRVisitor extends NodeVisitor
                                         num_alloca = irbuilder.createAlloca EjsValueType, "num-alloca-#{n.value}"
                                         c = llvm.ConstantFP.getDouble n.value
                                         call = @createCall @ejs_runtime.number_new, [c], "numconst-#{n.value}"
-                                        call.setOnlyReadsMemory()
                                         irbuilder.createStore call, num_alloca
                                         @currentFunction.literalAllocas[literal_key] = num_alloca
                                         
@@ -1227,15 +1252,17 @@ class LLVMIRVisitor extends NodeVisitor
                 # for some builtins we know they won't throw, so we can skip this step and still use createCall.
                 if TryExitableScope.unwindStack.length is 0 or callee.doesNotThrow or not canThrow
                         calltmp = irbuilder.createCall callee, argv, callname
-                        if callee.onlyReadsMemory
-                                calltmp.setOnlyReadsMemory
+                        calltmp.setDoesNotThrow() if callee.doesNotThrow
+                        calltmp.setDoesNotAccessMemory() if callee.doesNotAccessMemory
+                        calltmp.setOnlyReadsMemory() if not callee.doesNotAccessMemory and callee.onlyReadsMemory
                 else
                         insertBlock = irbuilder.getInsertBlock()
                         insertFunc = insertBlock.parent
                         normal_block  = new llvm.BasicBlock "normal", insertFunc
                         calltmp = irbuilder.createInvoke callee, argv, normal_block, TryExitableScope.unwindStack[0].getUnwindBlock(), callname
-                        if callee.onlyReadsMemory
-                                calltmp.setOnlyReadsMemory
+                        calltmp.setDoesNotThrow() if callee.doesNotThrow
+                        calltmp.setDoesNotAccessMemory() if callee.doesNotAccessMemory
+                        calltmp.setOnlyReadsMemory() if not callee.doesNotAccessMemory and callee.onlyReadsMemory
                         # after we've made our call we need to change the insertion point to our continuation
                         irbuilder.setInsertPoint normal_block
                 calltmp
@@ -1361,12 +1388,56 @@ class LLVMIRVisitor extends NodeVisitor
                 argv = modified_argv
                 call_result = @createAlloca @currentFunction, EjsValueType, "call_result"
 
-                calltmp = @createCall @ejs_runtime.invoke_closure, argv, "calltmp"
-                store = irbuilder.createStore calltmp, call_result
+                if decompose_closure_on_invoke
+                        insertBlock = irbuilder.getInsertBlock()
+                        insertFunc = insertBlock.parent
+
+                        # inline decomposition of the closure (with a fallback to the runtime invoke if there are bound args)
+                        # and direct call
+                        runtime_invoke_bb = new llvm.BasicBlock "runtime_invoke_bb", insertFunc
+                        direct_invoke_bb = new llvm.BasicBlock "direct_invoke_bb", insertFunc
+                        invoke_merge_bb = new llvm.BasicBlock "invoke_merge_bb", insertFunc
+
+                        func_alloca = @createAlloca @currentFunction, EjsClosureFuncType, "direct_invoke_func"
+                        env_alloca = @createAlloca @currentFunction, EjsClosureEnvType, "direct_invoke_env"
+                        this_alloca = @createAlloca @currentFunction, EjsValueType, "direct_invoke_this"
+
+                        # provide the default "this" for decompose_closure.  if one was bound it'll get overwritten
+                        irbuilder.createStore argv[1], this_alloca
+                        
+                        decompose_args = [ argv[0], func_alloca, env_alloca, this_alloca ]
+                        decompose_rv = @createCall @ejs_runtime.decompose_closure, decompose_args, "decompose_rv", false
+                        cmp = irbuilder.createICmpEq decompose_rv, (boolConstant false), "cmpresult"
+                        irbuilder.createCondBr cmp, runtime_invoke_bb, direct_invoke_bb
+
+                        # if there were bound args we have to fall back to the runtime invoke method (since we can't
+                        # guarantee enough room in our scratch area -- should we inline a check here or pass the length
+                        # of the scratch area to decompose?  perhaps...FIXME)
+                        # 
+                        irbuilder.setInsertPoint runtime_invoke_bb
+                        calltmp = @createCall @ejs_runtime.invoke_closure, argv, "calltmp"
+                        store = irbuilder.createStore calltmp, call_result
+                        irbuilder.createBr invoke_merge_bb
+
+                        # in the successful case we modify our argv with the responses and directly invoke the closure func
+                        irbuilder.setInsertPoint direct_invoke_bb
+                        direct_args = [ (irbuilder.createLoad env_alloca, "env"), (irbuilder.createLoad this_alloca, "this"), argv[2], argv[3] ]
+                        calltmp = @createCall (irbuilder.createLoad func_alloca, "func"), direct_args, "calltmp"
+                        store = irbuilder.createStore calltmp, call_result
+                        irbuilder.createBr invoke_merge_bb
+
+                        irbuilder.setInsertPoint invoke_merge_bb
+                else
+                        calltmp = @createCall @ejs_runtime.invoke_closure, argv, "calltmp"
+                        store = irbuilder.createStore calltmp, call_result
+        
                 if ctor_context
                         argv[1]
                 else
                         irbuilder.createLoad call_result, "call_result_load"
+                        
+                        
+                        
                 
         handleMakeClosureIntrinsic: (exp, ctor_context= false) ->
                 argv = @visitArgsForCall @ejs_runtime.make_closure, false, exp.arguments
@@ -1374,7 +1445,14 @@ class LLVMIRVisitor extends NodeVisitor
                 calltmp = @createCall @ejs_runtime.make_closure, argv, "closure_tmp"
                 store = irbuilder.createStore calltmp, closure_result
                 irbuilder.createLoad closure_result, "closure_result_load"
-                
+
+        handleMakeAnonClosureIntrinsic: (exp, ctor_context= false) ->
+                argv = @visitArgsForCall @ejs_runtime.make_anon_closure, false, exp.arguments
+                closure_result = @createAlloca @currentFunction, EjsValueType, "closure_result"
+                calltmp = @createCall @ejs_runtime.make_anon_closure, argv, "closure_tmp"
+                store = irbuilder.createStore calltmp, closure_result
+                irbuilder.createLoad closure_result, "closure_result_load"
+                                
                 
         handleCreateArgScratchAreaIntrinsic: (exp, ctor_context= false) ->
                 argsArrayType = llvm.ArrayType.get EjsValueType, exp.arguments[0].value
@@ -1394,22 +1472,29 @@ class AddFunctionsVisitor extends NodeVisitor
                 # script source.  we insert %this and %argc between these.  the LLVMIR phase later removes the actual formal parameters and
                 # adds the "EJSValue** args" array, loading the formal parameter values from that.
 
+                console.log 1
                 n.params[0].llvm_type = BUILTIN_PARAMS[0].llvm_type
                 n.params.splice 1, 0, BUILTIN_PARAMS[1]
                 n.params.splice 2, 0, BUILTIN_PARAMS[2]
 
+                console.log 2
                 # set the types of all later arguments to be EjsValueType
                 param.llvm_type = EjsValueType for param in n.params[BUILTIN_PARAMS.length..]
 
+                console.log 3
                 # the LLVMIR func we allocate takes the proper EJSValue** parameter in the 4th spot instead of all the parameters
                 n.ir_func = takes_builtins @module.getOrInsertFunction n.ir_name, EjsValueType, (param.llvm_type for param in BUILTIN_PARAMS).concat [EjsValueType.pointerTo()]
 
                 # enable shadow stack map for gc roots
                 #n.ir_func.setGC "shadow-stack"
                 
+                console.log 4
                 ir_args = n.ir_func.args
+                console.log 5
                 (ir_args[i].setName n.params[i].name) for i in [0...BUILTIN_PARAMS.length]
+                console.log 6
                 ir_args[BUILTIN_PARAMS.length].setName "%args"
+                console.log 7
 
                 # we don't need to recurse here since we won't have nested functions at this point
                 n
@@ -1418,13 +1503,11 @@ insert_toplevel_func = (tree, filename) ->
         sanitize = (filename) ->
                 if __ejs?
                         filename = filename.replace ".js", ""
-                        if c_callable
-                                filename = filename.replace ".", "_"
-                                filename = filename.replace ",", "_"
-                                filename = filename.replace "-", "_"
-                                filename = filename.replace "/", "_"
-                                filename = filename.replace "\\", "_"
-                                filename
+                        filename = filename.replace ".", "_"
+                        filename = filename.replace ",", "_"
+                        filename = filename.replace "-", "_"
+                        filename = filename.replace "/", "_"
+                        filename = filename.replace "\\", "_"
                         filename
                 else
                         filename = filename.replace /\.js$/, ""
@@ -1446,11 +1529,11 @@ insert_toplevel_func = (tree, filename) ->
         tree.body = [toplevel]
         tree
 
-exports.compile = (tree, filename) ->
+exports.compile = (tree, base_output_filename, source_filename) ->
 
-        console.warn "compiling #{filename}"
+        #console.warn "compiling #{source_filename}"
         
-        tree = insert_toplevel_func tree, filename
+        tree = insert_toplevel_func tree, base_output_filename
 
         debug.log -> escodegen.generate tree
 
@@ -1462,12 +1545,12 @@ exports.compile = (tree, filename) ->
         debug.log "before closure conversion"
         debug.log -> escodegen.generate tree
         
-        tree = closure_conversion.convert tree
+        tree = closure_conversion.convert tree, path.basename source_filename
 
         debug.log "after closure conversion"
         debug.log -> escodegen.generate tree
 
-        module = new llvm.Module "compiled-#{filename}"
+        module = new llvm.Module "compiled-#{base_output_filename}"
 
         module.toplevel_name = toplevel_name
 
@@ -1476,7 +1559,7 @@ exports.compile = (tree, filename) ->
 
         debug.log -> escodegen.generate tree
 
-        visitor = new LLVMIRVisitor module
+        visitor = new LLVMIRVisitor module, source_filename
         visitor.visit tree
 
         module
