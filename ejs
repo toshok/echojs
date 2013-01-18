@@ -101,20 +101,18 @@ compileFile = (filename, content, compileCallback) ->
                 process.exit -1
 
         base_filename = util.genFreshFileName path.basename filename
-        compiled_module = compiler.compile parse_tree, base_filename
+        compiled_module = compiler.compile parse_tree, base_filename, filename
 
         ll_filename = "/tmp/#{base_filename}.ll"
         bc_filename = "/tmp/#{base_filename}.bc"
-        bc_opt_filename = "/tmp/#{base_filename}.bc.opt"
         ll_opt_filename = "/tmp/#{base_filename}.ll.opt"
         s_filename = "/tmp/#{base_filename}.s"
         o_filename = "/tmp/#{base_filename}.o"
 
-        temp_files.push ll_filename, bc_filename, bc_opt_filename, ll_opt_filename, s_filename, o_filename
+        temp_files.push ll_filename, bc_filename, ll_opt_filename, s_filename, o_filename
         
         llvm_as_args = ["-o=#{bc_filename}", ll_filename]
-        opt_args = ["-O3", "-early-cse", "-mem2reg", "-o=#{bc_opt_filename}", bc_filename]
-        llvm_dis_args = ["-o=#{ll_opt_filename}", bc_opt_filename]
+        opt_args = ["-O3", "-early-cse", "-mem2reg", "-adce", "-strip-dead-prototypes", "-instsimplify", "-S", "-o=#{ll_opt_filename}", bc_filename]
         llc_args = ["-march=x86-64", "-O2", "-o=#{s_filename}", ll_opt_filename]
         clang_args = ["-march=x86-64", "-O2", "-c", "-o", o_filename, s_filename]
 
@@ -128,17 +126,14 @@ compileFile = (filename, content, compileCallback) ->
                 opt = spawn "opt", opt_args
                 opt.stderr.on "data", (data) -> console.warn "#{data}"
                 opt.on "exit", (code) ->
-                        llvm_dis = spawn "llvm-dis", llvm_dis_args
-                        llvm_dis.stderr.on "data", (data) -> console.warn "#{data}"
-                        llvm_dis.on "exit", (code) ->
-                                llc = spawn "llc", llc_args
-                                llc.stderr.on "data", (data) -> console.warn "#{data}"
-                                llc.on "exit", (code) ->
-                                        clang = spawn "clang", clang_args
-                                        clang.stderr.on "data", (data) -> console.warn "#{data}"
-                                        clang.on "exit", (code) ->
-                                                o_filenames.push o_filename
-                                                compileCallback()
+                        llc = spawn "llc", llc_args
+                        llc.stderr.on "data", (data) -> console.warn "#{data}"
+                        llc.on "exit", (code) ->
+                                clang = spawn "clang", clang_args
+                                clang.stderr.on "data", (data) -> console.warn "#{data}"
+                                clang.on "exit", (code) ->
+                                        o_filenames.push o_filename
+                                        compileCallback()
 
 generate_require_map = ->
         sanitize = (filename, c_callable) ->
@@ -207,12 +202,16 @@ do_final_link = ->
         clang = spawn "clang++", clang_args
         clang.stderr.on "data", (data) -> console.warn "#{data}"
         clang.on "exit", (code) ->
-                cleanup() unless options.leave_temp_files
-                console.warn "done."
+                if not options.leave_temp_files
+                        cleanup ->
+                                #console.warn "done."
 
-cleanup = ->
+cleanup = (done) ->
+        files_to_delete = temp_files.length
         temp_files.forEach (filename) ->
-                fs.unlinkSync filename
+                fs.unlink filename, (err) ->
+                        files_to_delete = files_to_delete - 1
+                        done() if files_to_delete is 0
                 
 file_compiled = ->
         files_remaining = files_remaining - 1
