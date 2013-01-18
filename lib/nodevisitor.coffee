@@ -40,7 +40,7 @@ exports.NodeVisitor = class NodeVisitor
                 n
 
         visitLabeledStatement: (n) ->
-                @visit n.body
+                n.body = @visit n.body
                 n
 
         visitEmptyStatement: (n) ->
