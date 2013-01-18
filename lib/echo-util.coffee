@@ -14,13 +14,15 @@ exports.genFreshFileName = (x) ->
         gen += 1
         name
 
-exports.genGlobalFunctionName = (x) ->
-        name =  "__ejs_function_#{x}_#{gen}"
+exports.genGlobalFunctionName = (x, filename) ->
+        prefix = if filename? then "__ejs[#{filename}]" else "__ejs_fn"
+        name =  "#{prefix}_#{x}_#{gen}"
         gen += 1
         name
 
-exports.genAnonymousFunctionName = ->
-        name =  "__ejs_anonymous_#{gen}"
+exports.genAnonymousFunctionName = (filename) ->
+        prefix = if filename? then "__ejs[#{filename}]_%anon" else "__ejs_%anon"
+        name =  "#{prefix}_#{gen}"
         gen += 1
         name
         
