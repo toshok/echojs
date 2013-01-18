@@ -1,6 +1,9 @@
 SOURCES=type.cpp \
 	functiontype.cpp \
 	structtype.cpp \
+	module.cpp \
+	value.cpp \
+	function.cpp \
 	ejs-llvm.cpp
 
 CXX=clang++

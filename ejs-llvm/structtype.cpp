@@ -27,6 +27,15 @@ _ejs_llvm_StructType_impl (ejsval env, ejsval _this, int argc, ejsval *args)
 }
 
 ejsval
+_ejs_llvm_StructType_new(llvm::StructType* llvm_ty)
+{
+  EJSObject* result = _ejs_llvm_StructType_alloc_instance();
+  _ejs_init_object (result, _ejs_llvm_StructType_proto, NULL);
+  ((EJSLLVMStructType*)result)->type = llvm_ty;
+  return OBJECT_TO_EJSVAL(result);
+}
+
+ejsval
 _ejs_llvm_StructType_create(ejsval env, ejsval _this, int argc, ejsval *args)
 {
     REQ_UTF8_ARG (0, name);
@@ -37,10 +46,7 @@ _ejs_llvm_StructType_create(ejsval env, ejsval _this, int argc, ejsval *args)
       element_types.push_back (_ejs_llvm_Type_getLLVMObj(EJSARRAY_ELEMENTS(elementTypes)[i]));
     }
 
-    EJSObject* result = _ejs_llvm_StructType_alloc_instance();
-    _ejs_init_object (result, _ejs_llvm_StructType_proto, NULL);
-    ((EJSLLVMStructType*)result)->type = llvm::StructType::create(llvm::getGlobalContext(), element_types, name);
-    return OBJECT_TO_EJSVAL(result);
+    return _ejs_llvm_StructType_new(llvm::StructType::create(llvm::getGlobalContext(), element_types, name));
 }
 
 ejsval

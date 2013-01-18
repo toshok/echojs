@@ -2,6 +2,9 @@
 #include "type.h"
 #include "functiontype.h"
 #include "structtype.h"
+#include "module.h"
+#include "function.h"
+#include "value.h"
 
 std::string& trim(std::string& str)
 {
@@ -18,13 +21,15 @@ _ejs_llvm_init (ejsval global)
   _ejs_llvm_Type_init (global);
   _ejs_llvm_FunctionType_init (global);
   _ejs_llvm_StructType_init (global);
-#if notyet
-  _ejs_llvm_Value_init (global);
+
+
   _ejs_llvm_Function_init (global);
+  _ejs_llvm_Module_init (global);
+  _ejs_llvm_Value_init (global);
+#if notyet
   _ejs_llvm_BasicBlock_init (global);
   _ejs_llvm_PHINode_init (global);
   _ejs_llvm_IRBuilder_init (global);
-  _ejs_llvm_Module_init (global);
   _ejs_llvm_Constant_init (global);
   _ejs_llvm_ConstantFP_init (global);
 #endif

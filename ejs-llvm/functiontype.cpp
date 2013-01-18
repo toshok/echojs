@@ -28,6 +28,15 @@ _ejs_llvm_FunctionType_impl (ejsval env, ejsval _this, int argc, ejsval *args)
   EJS_NOT_IMPLEMENTED();
 }
 
+ejsval
+_ejs_llvm_FunctionType_new(llvm::FunctionType* llvm_ty)
+{
+  EJSObject* result = _ejs_llvm_FunctionType_alloc_instance();
+  _ejs_init_object (result, _ejs_llvm_FunctionType_proto, NULL);
+  ((EJSLLVMFunctionType*)result)->type = llvm_ty;
+  return OBJECT_TO_EJSVAL(result);
+}
+
 static ejsval
 _ejs_llvm_FunctionType_get (ejsval env, ejsval _this, int argc, ejsval *args)
 {
