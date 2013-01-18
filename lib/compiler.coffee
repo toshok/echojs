@@ -1103,10 +1103,6 @@ class LLVMIRVisitor extends NodeVisitor
 
                 intrinsicHandler.call @, n, true
 
-        visitPropertyAccess: (n) ->
-                debug.log "property access: #{nc[1].value}" #NC-USAGE
-                throw "whu"
-
         visitThisExpression: (n) ->
                 debug.log "visitThisExpression"
                 @createLoadThis()
@@ -1172,47 +1168,63 @@ class LLVMIRVisitor extends NodeVisitor
                 @visit n.expression
 
         visitLiteral: (n) ->
+                # null literals, load _ejs_null
                 if n.value is null
                         debug.log "literal: null"
-                        return @loadNullEjsValue() # this isn't properly typed...  dunno what to do about this here
-                else if n.value is undefined
+                        return @loadNullEjsValue()
+
+                        
+                # undefined literals, load _ejs_undefined
+                if n.value is undefined
                         debug.log "literal: undefined"
-                        return @loadUndefinedEjsValue() # this isn't properly typed...  dunno what to do about this here
-                else if typeof n.raw is "string" and (n.raw[0] is '"' or n.raw[0] is "'")
+                        return @loadUndefinedEjsValue()
+
+                # string literals
+                if typeof n.raw is "string" and (n.raw[0] is '"' or n.raw[0] is "'")
                         debug.log "literal string: #{n.value}"
 
                         # check if it's an atom first of all
                         atom_name = "atom-#{n.value}"
                         if @ejs_runtime[atom_name]?
                                 strload = irbuilder.createLoad @ejs_runtime[atom_name], "%str_atom_load"
-                        else
-                                # if it isn't an atom, make sure we only allocate it once per function entry
-                                literal_key = "string-" + n.value
-                                if @currentFunction.literalAllocas[literal_key]
-                                        str_alloca = @currentFunction.literalAllocas[literal_key]
-                                else
-                                        # only create 1 instance of string literals used in a function, and allocate them in the entry block
-                                        insertBlock = irbuilder.getInsertBlock()
+                                strload.literal = n
+                                return strload
 
-                                        irbuilder.setInsertPoint @currentFunction.entry_bb
-                                        str_alloca = irbuilder.createAlloca EjsValueType, "str-alloca-#{n.value}"
-                                        c = irbuilder.createGlobalStringPtr n.value, "strconst"
-                                        irbuilder.createStore (@createCall @ejs_runtime.string_new_utf8, [c], "strtmp"), str_alloca
-                                        @currentFunction.literalAllocas[literal_key] = str_alloca
+                        # if it isn't an atom, make sure we only
+                        # allocate it once per function entry
+                        literal_key = "string-" + n.value
+                        if not @currentFunction.literalAllocas[literal_key]?
+                                # only create 1 instance of string
+                                # literals used in a function, and
+                                # allocate them in the entry block
+                                insertBlock = irbuilder.getInsertBlock()
+
+                                irbuilder.setInsertPoint @currentFunction.entry_bb
+                                str_alloca = irbuilder.createAlloca EjsValueType, "str-alloca-#{n.value}"
+                                c = irbuilder.createGlobalStringPtr n.value, "strconst"
+                                irbuilder.createStore (@createCall @ejs_runtime.string_new_utf8, [c], "strtmp"), str_alloca
+                                @currentFunction.literalAllocas[literal_key] = str_alloca
                                 
-                                        irbuilder.setInsertPoint insertBlock
+                                irbuilder.setInsertPoint insertBlock
                                 
-                                strload = irbuilder.createLoad str_alloca, "%str_alloca"
+                        str_alloca = @currentFunction.literalAllocas[literal_key]
+                        strload = irbuilder.createLoad str_alloca, "%str_alloca"
+
                         strload.literal = n
                         debug.log "strload = #{strload}"
                         return strload
-                else if typeof n.raw is "string" and n.raw[0] is '/'
+
+
+                # regular expression literals
+                if typeof n.raw is "string" and n.raw[0] is '/'
                         debug.log "literal regexp: #{n.raw}"
                         c = irbuilder.createGlobalStringPtr n.raw, "strconst"
                         regexpcall = @createCall @ejs_runtime.regexp_new_utf8, [c], "regexptmp"
                         debug.log "regexpcall = #{regexpcall}"
                         return regexpcall
-                else if typeof n.value is "number"
+
+                # number literals
+                if typeof n.value is "number"
                         debug.log "literal number: #{n.value}"
                         if n.value is 0
                                 numload = irbuilder.createLoad @ejs_runtime['zero'], "load_zero"
@@ -1239,9 +1251,12 @@ class LLVMIRVisitor extends NodeVisitor
                         numload.literal = n
                         debug.log "numload = #{numload}"
                         return numload
-                else if typeof n.value is "boolean"
+
+                # boolean literals
+                if typeof n.value is "boolean"
                         debug.log "literal boolean: #{n.value}"
                         return @loadBoolEjsValue n.value
+
                 throw "Internal error: unrecognized literal of type #{typeof n.value}"
 
         createCall: (callee, argv, callname, canThrow) ->
