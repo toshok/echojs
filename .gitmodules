@@ -7,3 +7,6 @@
 [submodule "escodegen"]
 	path = escodegen
 	url = https://github.com/Constellation/escodegen.git
+[submodule "parson"]
+	path = parson
+	url = https://github.com/toshok/parson.git
