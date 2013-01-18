@@ -25,9 +25,11 @@ namespace jsllvm {
     s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("type"), Function::GetType);
     s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("doesNotThrow"), Function::GetDoesNotThrow);
     s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("onlyReadsMemory"), Function::GetOnlyReadsMemory);
+    s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("doesNotAccessMemory"), Function::GetDoesNotAccessMemory);
 
     NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", Function::Dump);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "setOnlyReadsMemory", Function::SetOnlyReadsMemory);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "setDoesNotAccessMemory", Function::SetDoesNotAccessMemory);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "setDoesNotThrow", Function::SetDoesNotThrow);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "setGC", Function::SetGC);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", Function::ToString);
@@ -69,6 +71,14 @@ namespace jsllvm {
     HandleScope scope;
     Function* fun = ObjectWrap::Unwrap<Function>(args.This());
     fun->llvm_fun->dump();
+    return scope.Close(Undefined());
+  }
+
+  Handle<v8::Value> Function::SetDoesNotAccessMemory (const Arguments& args)
+  {
+    HandleScope scope;
+    Function* fun = ObjectWrap::Unwrap<Function>(args.This());
+    fun->llvm_fun->setDoesNotAccessMemory();
     return scope.Close(Undefined());
   }
 
@@ -154,6 +164,14 @@ namespace jsllvm {
     HandleScope scope;
     Function* fun = ObjectWrap::Unwrap<Function>(info.This());
     Handle<v8::Value> result = Boolean::New(fun->llvm_fun->doesNotThrow());
+    return scope.Close(result);
+  }
+
+  Handle<v8::Value> Function::GetDoesNotAccessMemory (Local<String> property, const AccessorInfo& info)
+  {
+    HandleScope scope;
+    Function* fun = ObjectWrap::Unwrap<Function>(info.This());
+    Handle<v8::Value> result = Boolean::New(fun->llvm_fun->doesNotAccessMemory());
     return scope.Close(result);
   }
 

@@ -29,6 +29,7 @@ namespace jsllvm {
 
     static v8::Handle<v8::Value> New(const v8::Arguments& args);
     static v8::Handle<v8::Value> Dump (const v8::Arguments& args);
+    static v8::Handle<v8::Value> SetDoesNotAccessMemory (const v8::Arguments& args);
     static v8::Handle<v8::Value> SetOnlyReadsMemory (const v8::Arguments& args);
     static v8::Handle<v8::Value> SetDoesNotThrow (const v8::Arguments& args);
     static v8::Handle<v8::Value> SetGC (const v8::Arguments& args);
@@ -39,6 +40,7 @@ namespace jsllvm {
     static v8::Handle<v8::Value> GetArgSize(v8::Local<v8::String> property, const v8::AccessorInfo& info);
     static v8::Handle<v8::Value> GetType(v8::Local<v8::String> property, const v8::AccessorInfo& info);
     static v8::Handle<v8::Value> GetDoesNotThrow(v8::Local<v8::String> property, const v8::AccessorInfo& info);
+    static v8::Handle<v8::Value> GetDoesNotAccessMemory(v8::Local<v8::String> property, const v8::AccessorInfo& info);
     static v8::Handle<v8::Value> GetOnlyReadsMemory(v8::Local<v8::String> property, const v8::AccessorInfo& info);
 
     static v8::Persistent<v8::FunctionTemplate> s_ct;

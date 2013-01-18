@@ -22,6 +22,8 @@ namespace jsllvm {
     NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", Call::Dump);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", Call::ToString);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "setOnlyReadsMemory", Call::SetOnlyReadsMemory);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "setDoesNotAccessMemory", Call::SetDoesNotAccessMemory);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "setDoesNotThrow", Call::SetDoesNotThrow);
 
     s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
     target->Set(String::NewSymbol("CallInst"),
@@ -83,6 +85,22 @@ namespace jsllvm {
     return scope.Close(Undefined());
   }
 
+  Handle<v8::Value> Call::SetDoesNotAccessMemory(const v8::Arguments& args)
+  {
+    HandleScope scope;
+    Call* _call = ObjectWrap::Unwrap<Call>(args.This());
+    _call->llvm_call->setDoesNotAccessMemory();
+    return scope.Close(Undefined());
+  }
+
+  Handle<v8::Value> Call::SetDoesNotThrow(const v8::Arguments& args)
+  {
+    HandleScope scope;
+    Call* _call = ObjectWrap::Unwrap<Call>(args.This());
+    _call->llvm_call->setDoesNotThrow();
+    return scope.Close(Undefined());
+  }
+
   Persistent<FunctionTemplate> Call::s_ct;
   Persistent<Function> Call::s_func;
 
@@ -101,6 +119,8 @@ namespace jsllvm {
     NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", Invoke::Dump);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", Invoke::ToString);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "setOnlyReadsMemory", Invoke::SetOnlyReadsMemory);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "setDoesNotAccessMemory", Invoke::SetDoesNotAccessMemory);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "setDoesNotThrow", Invoke::SetDoesNotThrow);
 
     s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
     target->Set(String::NewSymbol("InvokeInst"),
@@ -159,6 +179,22 @@ namespace jsllvm {
     HandleScope scope;
     Invoke* _invoke = ObjectWrap::Unwrap<Invoke>(args.This());
     _invoke->llvm_invoke->setOnlyReadsMemory();
+    return scope.Close(Undefined());
+  }
+
+  Handle<v8::Value> Invoke::SetDoesNotAccessMemory(const v8::Arguments& args)
+  {
+    HandleScope scope;
+    Invoke* _invoke = ObjectWrap::Unwrap<Invoke>(args.This());
+    _invoke->llvm_invoke->setDoesNotAccessMemory();
+    return scope.Close(Undefined());
+  }
+
+  Handle<v8::Value> Invoke::SetDoesNotThrow(const v8::Arguments& args)
+  {
+    HandleScope scope;
+    Invoke* _invoke = ObjectWrap::Unwrap<Invoke>(args.This());
+    _invoke->llvm_invoke->setDoesNotThrow();
     return scope.Close(Undefined());
   }
 
