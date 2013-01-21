@@ -587,8 +587,6 @@ _ejs_string_flatten (ejsval str)
 ejsval
 _ejs_object_setprop (ejsval val, ejsval key, ejsval value)
 {
-    _ejs_gc_collect();
-
     if (EJSVAL_IS_PRIMITIVE(val)) {
         printf ("setprop on primitive.  ignoring\n" );
         EJS_NOT_IMPLEMENTED();
@@ -634,7 +632,10 @@ _ejs_object_setprop (ejsval val, ejsval key, ejsval value)
         }
     }
 
+    // this should be:
+    // OP(EJSVAL_TO_OBJECT(val), put)(val, key, value, EJS_FALSE);
     _ejs_object_define_value_property (val, key, value, EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
+
 
     return value;
 }
@@ -1412,8 +1413,6 @@ _ejs_object_specop_get (ejsval obj_, ejsval propertyName, EJSBool isCStr)
         return obj->map->properties[prop_index].value;
     }
 #else
-    _ejs_gc_collect();
-
     ejsval pname;
 
     if (isCStr)
@@ -1775,10 +1774,18 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
     /* 10. Else, if IsDataDescriptor(current) and IsDataDescriptor(Desc) are both true, then */
     else if (IsDataDescriptor(current) && IsDataDescriptor(Desc)) {
         /*     a. If the [[Configurable]] field of current is false, then */
-        /*        i. Reject, if the [[Writable]] field of current is false and the [[Writable]] field of Desc is true. */
-        /*        ii. If the [[Writable]] field of current is false, then */
-        /*            1. Reject, if the [[Value]] field of Desc is present and SameValue(Desc.[[Value]],  */
-        /*               current.[[Value]]) is false.  */
+        if (!_ejs_property_desc_is_configurable (current)) {
+            /*        i. Reject, if the [[Writable]] field of current is false and the [[Writable]] field of Desc is true. */
+            if (!_ejs_property_desc_is_writable(current) && _ejs_property_desc_is_writable(Desc)) REJECT();
+            /*        ii. If the [[Writable]] field of current is false, then */
+            if (!_ejs_property_desc_is_writable(current)) {
+                /*            1. Reject, if the [[Value]] field of Desc is present and SameValue(Desc.[[Value]],  */
+                /*               current.[[Value]]) is false.  */
+                if (_ejs_property_desc_has_value(Desc) && !EJSVAL_EQ(_ejs_property_desc_get_value(Desc),
+                                                                     _ejs_property_desc_get_value(current)))
+                    REJECT();
+            }
+        }
         /*     b. else, the [[Configurable]] field of current is true, so any change is acceptable. */
     }
     /* 11. Else, IsAccessorDescriptor(current) and IsAccessorDescriptor(Desc) are both true so, */
