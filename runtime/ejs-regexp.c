@@ -45,7 +45,7 @@ _ejs_regexp_new_utf8 (const char* str)
     int str_len = strlen(str);
     size_t value_size = sizeof (EJSRegExp) + str_len;
 
-    EJSRegExp* rv = (EJSRegExp*)_ejs_gc_alloc (value_size, EJS_SCAN_TYPE_OBJECT);
+    EJSRegExp* rv = _ejs_gc_new_obj(EJSRegExp, value_size);
 
     _ejs_init_object ((EJSObject*)rv, _ejs_RegExp_proto, &_ejs_regexp_specops);
     ((EJSObject*)rv)->ops = &_ejs_regexp_specops;
@@ -92,6 +92,12 @@ _ejs_RegExp_prototype_test (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
     EJS_NOT_IMPLEMENTED();
 }
 
+static ejsval
+_ejs_RegExp_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    return _ejs_atom_empty;
+}
+
 void
 _ejs_regexp_init(ejsval global)
 {
@@ -111,6 +117,7 @@ _ejs_regexp_init(ejsval global)
     PROTO_METHOD(exec);
     PROTO_METHOD(match);
     PROTO_METHOD(test);
+    PROTO_METHOD(toString);
 
 #undef OBJ_METHOD
 #undef PROTO_METHOD
