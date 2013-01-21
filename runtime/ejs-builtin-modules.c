@@ -172,10 +172,6 @@ _ejs_child_process_spawn (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     for (int i = 0; i < EJSARRAY_LEN(argv_rest); i ++)
         argv[1+i] = EJSVAL_TO_FLAT_STRING(ToString(EJSARRAY_ELEMENTS(argv_rest)[i]));
 
-    printf ("in _ejs_child_process_spawn:\n");
-    for (int i = 0; i < EJSARRAY_LEN(argv_rest) + 1; i++)
-        printf ("  argv[%d] = %s\n", i, argv[i]);
-
     pid_t pid;
     switch (pid = fork()) {
     case -1: /* error */
