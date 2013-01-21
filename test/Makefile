@@ -5,6 +5,10 @@ NODE_PATH=$(TOPDIR)/node-llvm/build/Release:$(TOPDIR)/lib/coffee:$(TOPDIR)/lib:$
 
 TESTS:=$(wildcard *[0-9].js)
 
+ifeq ($(EJS_STAGE),1)
+TESTS:=$(filter-out esprima-roundtrip1.js,$(TESTS))
+endif
+
 EXPECTED_FAILURES= \
 	date1.js \
 	forin2.js \
@@ -37,6 +41,8 @@ EXPECTED_FAILURES= \
 
 check: check-unit-tests run-tests
 
+check-stage1: check-unit-tests run-tests-stage1
+
 check-unit-tests: check-llvm check-set check-free
 
 check-llvm: terminal.js echo-assert.js
@@ -49,6 +55,9 @@ check-free: terminal.js echo-assert.js
 	@NODE_PATH=$(NODE_PATH):. coffee free-test.coffee
 
 run-tests: clean-results prepare-xfail $(patsubst %.js,test-%,$(TESTS)) format-results
+
+run-tests-stage1:
+	@$(MAKE) EJS_DRIVER="EJS_GC_DISABLE=1 $(TOPDIR)/ejs.js.exe" EJS_STAGE=1 run-tests
 
 clean-results:
 	@rm -f .successes .failures .xfail .xsuccess .expected-failures
@@ -115,10 +124,13 @@ echo-%:
 	@NODE_PATH=$(NODE_PATH) node $< > $@
 
 esprima-roundtrip%.js.exe: esprima-roundtrip%.js $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js $(TOPDIR)/runtime/libecho.a
-	-NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $< $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js
+	@echo [ejs stage$(EJS_STAGE)] $< && $(EJS_DRIVER) --leave-temp $< $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js
+
+EJS_DRIVER ?= NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --leave-temp
+EJS_STAGE ?= 0
 
 %.js.exe: %.js $(TOPDIR)/runtime/libecho.a
-	@echo [ejs] $< && NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --leave-temp $<
+	@echo [ejs stage$(EJS_STAGE)] $< && $(EJS_DRIVER) --leave-temp $<
 
 v8-%.js.exe: v8/%.js $(TOPDIR)/runtime/libecho.a
 	NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $<
