@@ -8,6 +8,13 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+#define spew 0
+#if spew
+#define SPEW(x) x
+#else
+#define SPEW(x)
+#endif
+
 /***********************************************************************
  * 64-bit implementation.
  **********************************************************************/
@@ -171,15 +178,15 @@ EJS_PERSONALITY(int version,
     EJSBool unwinding = ((actions & _UA_CLEANUP_PHASE)  ||  
                          (actions & _UA_FORCE_UNWIND));
 
-    printf ("EXCEPTIONS: %s through frame [ip=%p sp=%p] "
-            "for exception %p\n", 
-            unwinding ? "unwinding" : "searching", 
-            (void*)(_Unwind_GetIP(context)-1),
-            (void*)_Unwind_GetCFA(context), exceptionObject);
+    SPEW(printf ("EXCEPTIONS: %s through frame [ip=%p sp=%p] "
+                 "for exception %p\n", 
+                 unwinding ? "unwinding" : "searching", 
+                 (void*)(_Unwind_GetIP(context)-1),
+                 (void*)_Unwind_GetCFA(context), exceptionObject));
 
     // If we're executing the unwind, call this frame's alt handlers, if any.
     if (unwinding) {
-        printf ("call_alt_handlers!\n");
+        SPEW(printf ("call_alt_handlers!\n"););
         //call_alt_handlers(context);
     }
 
@@ -223,8 +230,10 @@ void _ejs_exception_throw(ejsval val)
     exc->tinfo.cls = obj ? obj->isa : Nil;
 #endif
 
-    printf ("EXCEPTIONS: throwing %p (object %p, a #s)\n",
-            exc, EJSVAL_TO_PRIVATE_PTR_IMPL(val)/*, object_getClassName(obj)*/);
+#if false
+    SPEW(printf ("EXCEPTIONS: throwing %p (object %p, a #s)\n",
+                 exc, EJSVAL_TO_PRIVATE_PTR_IMPL(val)/*, object_getClassName(obj)*/));
+#endif
     
     //    EJS_RUNTIME_EJS_EXCEPTION_THROW(obj);  // dtrace probe to log throw activity
     __cxa_throw(exc, &exc->tinfo, &_ejs_exception_destructor);
@@ -234,7 +243,7 @@ void _ejs_exception_throw(ejsval val)
 
 void _ejs_exception_rethrow(void)
 {
-    printf ("EXCEPTIONS: rethrowing current exception\n");
+    SPEW(printf ("EXCEPTIONS: rethrowing current exception\n"));
     
     //    EJS_RUNTIME_EJS_EXCEPTION_RETHROW(); // dtrace probe to log throw activity.
     __cxa_rethrow();
@@ -244,8 +253,8 @@ void _ejs_exception_rethrow(void)
 
 EJSObject* _ejs_begin_catch(void *exc_gen)
 {
-    printf ("EXCEPTIONS: handling exception %p at %p\n", 
-            exc_gen, __builtin_return_address(0));
+    SPEW(printf ("EXCEPTIONS: handling exception %p at %p\n", 
+                 exc_gen, __builtin_return_address(0)));
     // NOT actually an EJSObject* in the catch(...) case!
     return (EJSObject*)__cxa_begin_catch(exc_gen);
 }
@@ -253,7 +262,7 @@ EJSObject* _ejs_begin_catch(void *exc_gen)
 
 void _ejs_end_catch(void)
 {
-    printf ("EXCEPTIONS: finishing handler\n");
+    SPEW(printf ("EXCEPTIONS: finishing handler\n"));
     __cxa_end_catch();
 }
 
@@ -267,18 +276,18 @@ static char _ejs_exception_do_catch(struct ejs_typeinfo *catch_tinfo,
 
     if (throw_tinfo->vtable != ejs_ehtype_vtable+2) {
         // Only ejs types can be caught here.
-        printf ("EXCEPTIONS: skipping catch(?)\n");
+        SPEW(printf ("EXCEPTIONS: skipping catch(?)\n"));
         return 0;
     }
 
     // `catch (EJSObject*)` always catches ejs types.
     if (catch_tinfo == &EJS_EHTYPE_ejsvalue) {
-        printf ("EXCEPTIONS: catch(EJSValue*)\n");
+        SPEW(printf ("EXCEPTIONS: catch(EJSValue*)\n"));
         return 1;
     }
 
     exception = *(EJSObject* *)throw_obj_p;
-    printf ("EXCEPTIONS: catch()\n");
+    SPEW(printf ("EXCEPTIONS: catch()\n"));
     return 1;
 }
 
@@ -296,7 +305,7 @@ static char _ejs_exception_do_catch(struct ejs_typeinfo *catch_tinfo,
 static terminate_handler old_terminate = NULL;
 static void _ejs_terminate(void)
 {
-    printf ("EXCEPTIONS: terminating\n");
+    SPEW(printf ("EXCEPTIONS: terminating\n"));
 
     if (! __cxa_current_exception_type()) {
         // No current exception.
@@ -459,8 +468,8 @@ static uintptr_t read_address(uintptr_t *pp,
         break;
 #endif
     default:
-        printf("unknown DWARF EH encoding 0x%x at %p\n", 
-               encoding, (void *)*pp);
+        SPEW(printf("unknown DWARF EH encoding 0x%x at %p\n", 
+                    encoding, (void *)*pp));
         break;
     }
 
@@ -482,8 +491,8 @@ static uintptr_t read_address(uintptr_t *pp,
             result += bases->func;
             break;
         case DW_EH_PE_aligned:
-            printf ("unknown DWARF EH encoding 0x%x at %p\n", 
-                    encoding, (void *)*pp);
+            SPEW(printf ("unknown DWARF EH encoding 0x%x at %p\n", 
+                         encoding, (void *)*pp));
             break;
         default:
             // no adjustment
@@ -701,17 +710,17 @@ uintptr_t _ejs_addExceptionHandler(ejs_exception_handler fn, void *context)
     list->used++;
 
     if (PrintAltHandlers) {
-        printf("ALT HANDLERS: installing alt handler %d %p(%p) on "
-               "frame [ip=%p..%p sp=%p]\n", i+1, data->fn, data->context, 
-               (void *)data->ip_start, (void *)data->ip_end, 
-               (void *)data->cfa);
+        SPEW(printf("ALT HANDLERS: installing alt handler %d %p(%p) on "
+                    "frame [ip=%p..%p sp=%p]\n", i+1, data->fn, data->context, 
+                    (void *)data->ip_start, (void *)data->ip_end, 
+                    (void *)data->cfa));
     }
 
     if (list->used > 1000) {
         static int warned = 0;
         if (!warned) {
-            printf("ALT HANDLERS: *** over 1000 alt handlers installed; "
-                   "this is probably a bug\n");
+            SPEW(printf("ALT HANDLERS: *** over 1000 alt handlers installed; "
+                        "this is probably a bug\n"));
             warned = 1;
         }
     }
@@ -731,22 +740,22 @@ void _ejs_removeExceptionHandler(uintptr_t token)
     struct alt_handler_list *list = fetch_handler_list(NO);
     if (!list  ||  list->used == 0) {
         // no handlers present
-        printf("ALT HANDLERS: *** can't remove alt handler %lu "
-               "(no alt handlers present)\n", token);
+        SPEW(printf("ALT HANDLERS: *** can't remove alt handler %lu "
+                    "(no alt handlers present)\n", token));
         return;
     }
     if (i >= list->allocated) {
         // bogus token
-        printf("ALT HANDLERS: *** can't remove alt handler %lu "
-               "(current max is %u)\n", token, list->allocated);
+        SPEW(printf("ALT HANDLERS: *** can't remove alt handler %lu "
+                    "(current max is %u)\n", token, list->allocated));
         return;
     }
 
     struct alt_handler_data *data = &list->handlers[i];
-    printf("ALT HANDLERS: removing   alt handler %d %p(%p) on "
-           "frame [ip=%p..%p sp=%p]\n", i+1, data->fn, data->context, 
-           (void *)data->ip_start, (void *)data->ip_end, 
-           (void *)data->cfa);
+    SPEW(printf("ALT HANDLERS: removing   alt handler %d %p(%p) on "
+                "frame [ip=%p..%p sp=%p]\n", i+1, data->fn, data->context, 
+                (void *)data->ip_start, (void *)data->ip_end, 
+                (void *)data->cfa));
     bzero(data, sizeof(*data));
     list->used--;
 }
@@ -771,10 +780,10 @@ static void call_alt_handlers(struct _Unwind_Context *ctx)
                 struct alt_handler_data copy = *data;
                 bzero(data, sizeof(*data));
                 list->used--;
-                printf("EXCEPTIONS: calling alt handler %p(%p) from "
-                       "frame [ip=%p..%p sp=%p]\n", copy.fn, copy.context, 
-                       (void *)copy.ip_start, (void *)copy.ip_end, 
-                       (void *)copy.cfa);
+                SPEW(printf("EXCEPTIONS: calling alt handler %p(%p) from "
+                            "frame [ip=%p..%p sp=%p]\n", copy.fn, copy.context, 
+                            (void *)copy.ip_start, (void *)copy.ip_end, 
+                            (void *)copy.cfa));
                 if (copy.fn) (*copy.fn)(nil, copy.context);
             }
     }
