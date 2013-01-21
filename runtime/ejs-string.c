@@ -5,6 +5,7 @@
 #include <string.h>
 #include <math.h>
 #include <stdint.h>
+#include <ctype.h>
 
 #include "ejs-value.h"
 #include "ejs-array.h"
@@ -286,7 +287,24 @@ _ejs_String_prototype_substr (ejsval env, ejsval _this, uint32_t argc, ejsval *a
 static ejsval
 _ejs_String_prototype_toLowerCase (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    EJS_NOT_IMPLEMENTED();
+    /* 1. Call CheckObjectCoercible passing the this value as its argument. */
+    /* 2. Let S be the result of calling ToString, giving it the this value as its argument. */
+    ejsval S = ToString(_this);
+    char* sstr = strdup(EJSVAL_TO_FLAT_STRING(S));
+
+    /* 3. Let L be a String where each character of L is either the Unicode lowercase equivalent of the corresponding  */
+    /*    character of S or the actual corresponding character of S if no Unicode lowercase equivalent exists. */
+    char* p = sstr;
+    while (*p) {
+        *p = tolower(*p);
+        p++;
+    }
+
+    free(sstr);
+    ejsval L = _ejs_string_new_utf8(sstr);
+
+    /* 4. Return L. */
+    return L;
 }
 
 static ejsval
@@ -535,6 +553,22 @@ _ejs_String_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     return _ejs_string_new_utf8_len (EJSVAL_TO_FLAT_STRING(S) + from, span);
 }
 
+static ejsval
+_ejs_String_fromCharCode (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    int length = argc;
+    char* buf = (char*)malloc(length+1);
+    for (int i = 0; i < argc; i ++) {
+        uint16_t code_unit = ToUint16(args[i]);
+        assert (code_unit < 256); // XXX we suck
+        buf[i] = (char)code_unit;
+    }
+    buf[length] = 0;
+    ejsval rv = _ejs_string_new_utf8(buf);
+    free (buf);
+    return rv;
+}
+
 static void
 _ejs_string_init_proto()
 {
@@ -590,6 +624,8 @@ _ejs_string_init(ejsval global)
     PROTO_METHOD(toUpperCase);
     PROTO_METHOD(trim);
     PROTO_METHOD(valueOf);
+
+    OBJ_METHOD(fromCharCode);
 
 #undef OBJ_METHOD
 #undef PROTO_METHOD
