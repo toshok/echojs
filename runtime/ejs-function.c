@@ -71,7 +71,7 @@ _ejs_function_new (EJSClosureEnv env, ejsval name, EJSClosureFunc func)
     ejsval fun_proto = _ejs_object_new (_ejs_Object_prototype, &_ejs_object_specops);
 
     _ejs_object_setprop (fun_proto, _ejs_atom_constructor,  fun);
-    _ejs_object_define_value_property (fun, _ejs_atom_prototype, fun_proto, EJS_FALSE, EJS_FALSE, EJS_FALSE);
+    _ejs_object_define_value_property (fun, _ejs_atom_prototype, fun_proto, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
     return fun;
 }
@@ -248,9 +248,9 @@ _ejs_function_init(ejsval global)
     _ejs_Function = tmpobj;
 
     // ECMA262 15.3.3.1
-    _ejs_object_define_value_property (_ejs_Function, _ejs_atom_prototype, _ejs_Function__proto__, EJS_FALSE, EJS_FALSE, EJS_FALSE);
+    //_ejs_object_define_value_property (_ejs_Function, _ejs_atom_prototype, _ejs_Function__proto__, EJS_FALSE, EJS_FALSE, EJS_FALSE);
     // ECMA262 15.3.3.2
-    _ejs_object_define_value_property (_ejs_Function, _ejs_atom_length, NUMBER_TO_EJSVAL(1), EJS_FALSE, EJS_FALSE, EJS_FALSE);
+    _ejs_object_define_value_property (_ejs_Function, _ejs_atom_length, NUMBER_TO_EJSVAL(1), EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
 #define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Function__proto__, EJS_STRINGIFY(x), _ejs_Function_prototype_##x)
 
@@ -302,7 +302,7 @@ _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args)
 
 
     if (fun->bound_argc > 0) {
-        ejsval* new_args = malloc(sizeof(ejsval) * fun->bound_argc + argc);
+        ejsval* new_args = (ejsval*)malloc(sizeof(ejsval) * fun->bound_argc + argc);
         memmove (new_args, fun->bound_args, sizeof(ejsval) * fun->bound_argc);
         memmove (&new_args[fun->bound_argc], args, argc);
         args = new_args;
@@ -354,6 +354,11 @@ _ejs_invoke_closure_1 (ejsval closure, ejsval _this, uint32_t argc, ejsval arg1)
     BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1);
 }
 
+ejsval
+_ejs_invoke_closure_2 (ejsval closure, ejsval _this, uint32_t argc, ejsval arg1, ejsval arg2)
+{
+    BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1, arg2);
+}
 
 static ejsval
 _ejs_function_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr)

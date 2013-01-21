@@ -41,7 +41,7 @@ EJS_BEGIN_DECLS
 #define EJS_INSTALL_GETTER(o,n,f) EJS_MACRO_START                     \
     ADD_STACK_ROOT(ejsval, key, _ejs_string_new_utf8(n));          \
     ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, key, (EJSClosureFunc)f)); \
-    _ejs_object_define_accessor_property (o, key, tmpfunc, _ejs_undefined, EJS_FALSE, EJS_FALSE, EJS_TRUE); \
+    _ejs_object_define_accessor_property (o, key, tmpfunc, _ejs_undefined, EJS_PROP_FLAGS_GETTER_SET); \
     EJS_MACRO_END
 
 ejsval  _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args);
@@ -49,6 +49,7 @@ EJSBool _ejs_decompose_closure (ejsval closure, EJSClosureFunc* func, EJSClosure
 
 ejsval _ejs_invoke_closure_0 (ejsval closure, ejsval _this, uint32_t argc);
 ejsval _ejs_invoke_closure_1 (ejsval closure, ejsval _this, uint32_t argc, ejsval arg1);
+ejsval _ejs_invoke_closure_2 (ejsval closure, ejsval _this, uint32_t argc, ejsval arg1, ejsval arg2);
 
 extern ejsval _ejs_function_new (EJSClosureEnv env, ejsval name, EJSClosureFunc func);
 extern ejsval _ejs_function_new_anon (EJSClosureEnv env, EJSClosureFunc func);

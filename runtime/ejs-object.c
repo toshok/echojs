@@ -61,7 +61,7 @@ IsAccessorDescriptor(EJSPropertyDesc* Desc)
         return EJS_FALSE;
 
     /* 2. If both Desc.[[Get]] and Desc.[[Set]] are absent, then return false. */
-    if (EJSVAL_IS_UNDEFINED(Desc->get) && EJSVAL_IS_UNDEFINED(Desc->set))
+    if (!_ejs_property_desc_has_getter(Desc) && !_ejs_property_desc_has_setter(Desc))
         return EJS_FALSE;
 
     /* 3. Return true. */
@@ -77,8 +77,7 @@ IsDataDescriptor(EJSPropertyDesc* Desc)
         return EJS_FALSE;
 
     /* 2. If both Desc.[[Value]] and Desc.[[Writable]] are absent, then return false. */
-    if (EJSVAL_IS_UNDEFINED(Desc->value) // XXX this is wrong, no?  you can assign props = undefined
-        && !Desc->writable) 
+    if (!_ejs_property_desc_has_value(Desc) && !_ejs_property_desc_has_writable(Desc))
         return EJS_FALSE;
 
     /* 3. Return true. */
@@ -118,43 +117,63 @@ ToPropertyDescriptor(ejsval O, EJSPropertyDesc *desc)
     if (OP(obj,has_property)(O, _ejs_atom_enumerable)) {
         /*    a. Let enum be the result of calling the [[Get]] internal method of Obj with "enumerable". */
         /*    b. Set the [[Enumerable]] field of desc to ToBoolean(enum). */
-        desc->enumerable = EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,get)(O, _ejs_atom_enumerable, EJS_FALSE)));
+        _ejs_property_desc_set_enumerable (desc, EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,get)(O, _ejs_atom_enumerable, EJS_FALSE))));
     }
     /* 4. If the result of calling the [[HasProperty]] internal method of Obj with argument "configurable" is true, then */
     if (OP(obj,has_property)(O, _ejs_atom_configurable)) {
         /*    a. Let conf  be the result of calling the [[Get]] internal method of Obj with argument "configurable". */
         /*    b. Set the [[Configurable]] field of desc to ToBoolean(conf). */
-        desc->configurable = EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,get)(O, _ejs_atom_configurable, EJS_FALSE)));
+        _ejs_property_desc_set_configurable (desc, EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,get)(O, _ejs_atom_configurable, EJS_FALSE))));
     }
     /* 5. If the result of calling the [[HasProperty]] internal method of Obj with argument "value" is true, then */
     if (OP(obj,has_property)(O, _ejs_atom_value)) {
         /*    a. Let value be the result of calling the [[Get]] internal method of Obj with argument "value". */
         /*    b. Set the [[Value]] field of desc to value. */
-        desc->value = OP(obj,get)(O, _ejs_atom_value, EJS_FALSE);
+        _ejs_property_desc_set_value (desc, OP(obj,get)(O, _ejs_atom_value, EJS_FALSE));
     }
     /* 6. If the result of calling the [[HasProperty]] internal method of Obj with argument "writable" is true, then */
     if (OP(obj,has_property)(O, _ejs_atom_writable)) {
         /*    a. Let writable be the result of calling the [[Get]] internal method of Obj with argument "writable". */
         /*    b. Set the [[Writable]] field of desc to ToBoolean(writable). */
-        desc->writable = EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,get)(O, _ejs_atom_writable, EJS_FALSE)));
+        _ejs_property_desc_set_writable (desc, EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,get)(O, _ejs_atom_writable, EJS_FALSE))));
     }
     /* 7. If the result of calling the [[HasProperty]] internal method of Obj with argument "get" is true, then */
     if (OP(obj,has_property)(O, _ejs_atom_get)) {
         /*    a. Let getter be the result of calling the [[Get]] internal method of Obj with argument "get". */
+        ejsval getter = OP(obj,get)(O, _ejs_atom_get, EJS_FALSE);
+
         /*    b. If IsCallable(getter) is false and getter is not undefined, then throw a TypeError exception. */
+        if (!EJSVAL_IS_FUNCTION(getter) && !EJSVAL_IS_UNDEFINED(getter)) {
+            printf ("throw TypeError\n");
+            EJS_NOT_IMPLEMENTED();
+        }
+
         /*    c. Set the [[Get]] field of desc to getter. */
-        desc->get = OP(obj,get)(O, _ejs_atom_get, EJS_FALSE);
-        // XXX missing IsCallableCheck
+        _ejs_property_desc_set_getter (desc, getter);
     }
     /* 8. If the result of calling the [[HasProperty]] internal method of Obj with argument "set" is true, then */
     if (OP(obj,has_property)(O, _ejs_atom_set)) {
         /*    a. Let setter be the result of calling the [[Get]] internal method of Obj with argument "set". */
+        ejsval setter = OP(obj,get)(O, _ejs_atom_set, EJS_FALSE);
+
         /*    b. If IsCallable(setter) is false and setter is not undefined, then throw a TypeError exception. */
+        if (!EJSVAL_IS_FUNCTION(setter) && !EJSVAL_IS_UNDEFINED(setter)) {
+            printf ("throw TypeError\n");
+            EJS_NOT_IMPLEMENTED();
+        }
+
         /*    c. Set the [[Set]] field of desc to setter. */
-        desc->set = OP(obj,get)(O, _ejs_atom_set, EJS_FALSE);
+        _ejs_property_desc_set_setter (desc, setter);
     }
     /* 9. If either desc.[[Get]] or desc.[[Set]] are present, then */
-    /*    a. If either desc.[[Value]] or desc.[[Writable]] are present, then throw a TypeError exception. */
+    if (_ejs_property_desc_has_getter(desc) || _ejs_property_desc_has_setter(desc)) {
+        /*    a. If either desc.[[Value]] or desc.[[Writable]] are present, then throw a TypeError exception. */
+        if (_ejs_property_desc_has_value(desc) || _ejs_property_desc_has_writable(desc)) {
+            printf ("throw TypeError\n");
+            EJS_NOT_IMPLEMENTED();
+        }
+    }
+
     /* 10. Return desc. */
 }
 
@@ -175,13 +194,13 @@ FromPropertyDescriptor(EJSPropertyDesc* Desc)
     if (IsDataDescriptor(Desc)) {
         /*    a. Call the [[DefineOwnProperty]] internal method of obj with arguments "value", Property Descriptor  */
         /*       {[[Value]]: Desc.[[Value]], [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
-        EJSPropertyDesc value_desc = { .value= Desc->value, .writable= EJS_TRUE, .enumerable= EJS_TRUE, .configurable= EJS_TRUE, .get = _ejs_undefined, .set = _ejs_undefined };
+        EJSPropertyDesc value_desc = { .value= Desc->value, .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE };
 
         OP(obj_, define_own_property)(obj, _ejs_atom_value, &value_desc, EJS_FALSE);
 
         /*    b. Call the [[DefineOwnProperty]] internal method of obj with arguments "writable", Property Descriptor  */
         /*       {[[Value]]: Desc.[[Writable]], [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
-        EJSPropertyDesc writable_desc = { .value= BOOLEAN_TO_EJSVAL(Desc->writable), .writable= EJS_TRUE, .enumerable= EJS_TRUE, .configurable= EJS_TRUE, .get = _ejs_undefined, .set = _ejs_undefined };
+        EJSPropertyDesc writable_desc = { .value= BOOLEAN_TO_EJSVAL(_ejs_property_desc_is_writable(Desc)), .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE };
 
         OP(obj_, define_own_property)(obj, _ejs_atom_writable, &writable_desc, EJS_FALSE);
     }
@@ -189,24 +208,24 @@ FromPropertyDescriptor(EJSPropertyDesc* Desc)
         /* 4. Else, IsAccessorDescriptor(Desc) must be true, so */
         /*    a. Call the [[DefineOwnProperty]] internal method of obj with arguments "get", Property Descriptor */
         /*       {[[Value]]: Desc.[[Get]], [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
-        EJSPropertyDesc get_desc = { .value= Desc->get, .writable= EJS_TRUE, .enumerable= EJS_TRUE, .configurable= EJS_TRUE, .get = _ejs_undefined, .set = _ejs_undefined };
+        EJSPropertyDesc get_desc = { .value= _ejs_property_desc_get_getter(Desc), .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE };
 
         OP(obj_, define_own_property)(obj, _ejs_atom_get, &get_desc, EJS_FALSE);
 
         /*    b. Call the [[DefineOwnProperty]] internal method of obj with arguments "set", Property Descriptor */
         /*       {[[Value]]: Desc.[[Set]], [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
-        EJSPropertyDesc set_desc = { .value= Desc->set, .writable= EJS_TRUE, .enumerable= EJS_TRUE, .configurable= EJS_TRUE, .get = _ejs_undefined, .set = _ejs_undefined };
+        EJSPropertyDesc set_desc = { .value= _ejs_property_desc_get_setter(Desc), .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE };
 
         OP(obj_, define_own_property)(obj, _ejs_atom_set, &set_desc, EJS_FALSE);
     }
     /* 5. Call the [[DefineOwnProperty]] internal method of obj with arguments "enumerable", Property Descriptor */
     /*    {[[Value]]: Desc.[[Enumerable]], [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
-    EJSPropertyDesc enumerable_desc = { .value= BOOLEAN_TO_EJSVAL(Desc->enumerable), .writable= EJS_TRUE, .enumerable= EJS_TRUE, .configurable= EJS_TRUE, .get = _ejs_undefined, .set = _ejs_undefined };
+    EJSPropertyDesc enumerable_desc = { .value= BOOLEAN_TO_EJSVAL(_ejs_property_desc_is_enumerable(Desc)), .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE };
     OP(obj_, define_own_property)(obj, _ejs_atom_enumerable, &enumerable_desc, EJS_FALSE);
 
     /* 6. Call the [[DefineOwnProperty]] internal method of obj with arguments "configurable", Property Descriptor */
     /*    {[[Value]]: Desc.[[Configurable]], [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
-    EJSPropertyDesc configurable_desc = { .value= BOOLEAN_TO_EJSVAL(Desc->configurable), .writable= EJS_TRUE, .enumerable= EJS_TRUE, .configurable= EJS_TRUE, .get = _ejs_undefined, .set = _ejs_undefined };
+    EJSPropertyDesc configurable_desc = { .value= BOOLEAN_TO_EJSVAL(_ejs_property_desc_is_configurable(Desc)), .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE };
     OP(obj_, define_own_property)(obj, _ejs_atom_configurable, &configurable_desc, EJS_FALSE);
 
     /* 7. Return obj. */
@@ -220,15 +239,6 @@ _ejs_propertymap_new (int initial_allocation)
     if (initial_allocation) {
         rv->names = (char**)malloc(sizeof(char*) * initial_allocation);
         rv->properties = (EJSPropertyDesc*)malloc(sizeof (EJSPropertyDesc) * initial_allocation);
-
-        for (int i = 0; i < initial_allocation; i ++) {
-            rv->properties[i].configurable =
-                rv->properties[i].writable =
-                rv->properties[i].enumerable = EJS_TRUE;
-            rv->properties[i].value = 
-                rv->properties[i].get =
-                rv->properties[i].set = _ejs_undefined;
-        }
     }
     else {
         rv->names = NULL;
@@ -254,7 +264,19 @@ void
 _ejs_propertymap_foreach_value (EJSPropertyMap* map, EJSValueFunc foreach_func)
 {
     for (int i = 0; i < map->num; i ++) {
-        foreach_func (map->properties[i].value);
+        EJSPropertyDesc *desc = &map->properties[i];
+        if (!_ejs_property_desc_has_value (desc))
+            continue;
+        foreach_func (desc->value);
+    }
+}
+
+void
+_ejs_propertymap_foreach_property (EJSPropertyMap* map, EJSPropertyDescFunc foreach_func, void* data)
+{
+    for (int i = 0; i < map->num; i ++) {
+        EJSPropertyDesc *desc = &map->properties[i];
+        foreach_func (desc, data);
     }
 }
 
@@ -301,15 +323,6 @@ _ejs_propertymap_lookup (EJSPropertyMap *map, const char *name, EJSBool add_if_n
 
             memmove (new_names, map->names, map->allocated * sizeof(char*));
             memmove (new_properties, map->properties, map->allocated * sizeof(EJSPropertyDesc));
-
-            for (i = map->allocated; i < new_allocated; i ++) {
-                new_properties[i].configurable =
-                    new_properties[i].writable =
-                    new_properties[i].enumerable = EJS_TRUE;
-                new_properties[i].value =
-                    new_properties[i].get =
-                    new_properties[i].set = _ejs_undefined;
-            }
 
             if (map->names)
                 free (map->names);
@@ -456,7 +469,7 @@ _ejs_object_create (ejsval proto)
     else if (EJSVAL_EQ(proto, _ejs_Number_proto))     ops = &_ejs_number_specops;
     else if (EJSVAL_EQ(proto, _ejs_RegExp_proto))     ops = &_ejs_regexp_specops;
     else if (EJSVAL_EQ(proto, _ejs_Date_proto))       ops = &_ejs_date_specops;
-    else                                              ops = &_ejs_object_specops;
+    else                                              ops = EJSVAL_TO_OBJECT(proto)->ops;
 
     return _ejs_object_new (proto, ops);
 }
@@ -473,7 +486,7 @@ _ejs_string_new_utf8 (const char* str)
     int str_len = strlen(str);
     size_t value_size = sizeof(EJSPrimString) + str_len + 1;
 
-    EJSPrimString* rv = (EJSPrimString*)_ejs_gc_alloc(value_size, EJS_SCAN_TYPE_PRIMSTR);
+    EJSPrimString* rv = _ejs_gc_new_primstr(value_size);
     EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_FLAT);
     rv->length = str_len;
     rv->data.flat = (char*)rv + sizeof(EJSPrimString);
@@ -486,7 +499,7 @@ _ejs_string_new_utf8_len (const char* str, int len)
 {
     size_t value_size = sizeof(EJSPrimString) + len + 1;
 
-    EJSPrimString* rv = (EJSPrimString*)_ejs_gc_alloc(value_size, EJS_SCAN_TYPE_PRIMSTR);
+    EJSPrimString* rv = _ejs_gc_new_primstr(value_size);
     EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_FLAT);
     rv->length = len;
     rv->data.flat = (char*)rv + sizeof(EJSPrimString);
@@ -500,7 +513,7 @@ _ejs_string_concat (ejsval left, ejsval right)
     EJSPrimString* lhs = EJSVAL_TO_STRING(left);
     EJSPrimString* rhs = EJSVAL_TO_STRING(right);
     
-    EJSPrimString* rv = (EJSPrimString*)_ejs_gc_alloc(sizeof(EJSPrimString), EJS_SCAN_TYPE_PRIMSTR);
+    EJSPrimString* rv = _ejs_gc_new_primstr (sizeof(EJSPrimString));
     EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_ROPE);
     rv->length = lhs->length + rhs->length;
     rv->data.rope.left = lhs;
@@ -574,6 +587,8 @@ _ejs_string_flatten (ejsval str)
 ejsval
 _ejs_object_setprop (ejsval val, ejsval key, ejsval value)
 {
+    _ejs_gc_collect();
+
     if (EJSVAL_IS_PRIMITIVE(val)) {
         printf ("setprop on primitive.  ignoring\n" );
         EJS_NOT_IMPLEMENTED();
@@ -619,9 +634,7 @@ _ejs_object_setprop (ejsval val, ejsval key, ejsval value)
         }
     }
 
-    EJSObject *obj = EJSVAL_TO_OBJECT(val);
-    int prop_index = _ejs_propertymap_lookup (obj->map, EJSVAL_TO_FLAT_STRING(key), EJS_TRUE);
-    obj->map->properties[prop_index].value = value;
+    _ejs_object_define_value_property (val, key, value, EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
 
     return value;
 }
@@ -642,18 +655,18 @@ _ejs_object_getprop (ejsval obj, ejsval key)
 }
 
 EJSBool
-_ejs_object_define_value_property (ejsval obj, ejsval key, ejsval value, EJSBool writable, EJSBool configurable, EJSBool enumerable)
+_ejs_object_define_value_property (ejsval obj, ejsval key, ejsval value, uint32_t flags)
 {
     EJSObject *_obj = EJSVAL_TO_OBJECT(obj);
-    EJSPropertyDesc desc = { .value = value, .writable = writable, .configurable = configurable, .enumerable = enumerable, .get = _ejs_undefined, .set = _ejs_undefined };
+    EJSPropertyDesc desc = { .value = value, .flags = flags | EJS_PROP_FLAGS_VALUE_SET };
     return OP(_obj,define_own_property)(obj, key, &desc, EJS_FALSE);
 }
 
 EJSBool
-_ejs_object_define_accessor_property (ejsval obj, ejsval key, ejsval get, ejsval set, EJSBool writable, EJSBool configurable, EJSBool enumerable)
+_ejs_object_define_accessor_property (ejsval obj, ejsval key, ejsval get, ejsval set, uint32_t flags)
 {
     EJSObject *_obj = EJSVAL_TO_OBJECT(obj);
-    EJSPropertyDesc desc = { .value = _ejs_undefined, .get = get, .set = set, .writable = writable, .configurable = configurable, .enumerable = enumerable };
+    EJSPropertyDesc desc = { .value = _ejs_undefined, .getter = get, .setter = set, .flags = flags | EJS_PROP_FLAGS_SETTER_SET | EJS_PROP_FLAGS_GETTER_SET };
     return OP(_obj,define_own_property)(obj, key, &desc, EJS_FALSE);
 }
 
@@ -671,11 +684,7 @@ _ejs_object_setprop_utf8 (ejsval val, const char *key, ejsval value)
         return value;
     }
 
-    EJSObject *obj = EJSVAL_TO_OBJECT(val);
-    int prop_index = _ejs_propertymap_lookup (obj->map, key, EJS_TRUE);
-    obj->map->properties[prop_index].value = value;
-
-    return value;
+    return _ejs_object_setprop (val, _ejs_string_new_utf8(key), value);
 }
 
 ejsval
@@ -889,8 +898,7 @@ _ejs_Object_defineProperty (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
     ejsval name = ToString(P);
 
     /* 3. Let desc be the result of calling ToPropertyDescriptor with Attributes as the argument. */
-    EJSPropertyDesc desc = { .value= _ejs_undefined, .writable= EJS_FALSE, .enumerable= EJS_FALSE, .configurable= EJS_FALSE, .get= _ejs_undefined, .set =_ejs_undefined };
-
+    EJSPropertyDesc desc;
     ToPropertyDescriptor(Attributes, &desc);
 
     /* 4. Call the [[DefineOwnProperty]] internal method of O with arguments name, desc, and true. */
@@ -933,7 +941,7 @@ _ejs_Object_defineProperties (ejsval env, ejsval _this, uint32_t argc, ejsval *a
     /* 3. Let names be an internal list containing the names of each enumerable own property of props. */
     int names_len = 0;
     for (int p = 0; p < props_obj->map->num; p ++) {
-        if (props_obj->map->properties[p].enumerable)
+        if (_ejs_property_desc_is_enumerable (&props_obj->map->properties[p]))
             names_len ++;
     }
 
@@ -945,7 +953,7 @@ _ejs_Object_defineProperties (ejsval env, ejsval _this, uint32_t argc, ejsval *a
     ejsval* names = malloc(names_len * sizeof(ejsval));
     int n = 0;
     for (int p = 0; p < props_obj->map->num; p ++) {
-        if (props_obj->map->properties[p].enumerable)
+        if (_ejs_property_desc_is_enumerable(&props_obj->map->properties[p]))
             names[n++] = _ejs_string_new_utf8(props_obj->map->names[p]);
     }
 
@@ -1048,9 +1056,11 @@ _ejs_Object_freeze (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         /*    b. If IsDataDescriptor(desc) is true, then */
         if (IsDataDescriptor(desc)) {
             /*       i. If desc.[[Writable]] is true, set desc.[[Writable]] to false. */
-            desc->writable = EJS_FALSE;
+            if (_ejs_property_desc_is_writable(desc))
+                _ejs_property_desc_set_writable(desc, EJS_FALSE);
             /*    c. If desc.[[Configurable]] is true, set desc.[[Configurable]] to false. */
-            desc->configurable = EJS_FALSE;
+            if (_ejs_property_desc_is_configurable(desc))
+                _ejs_property_desc_set_configurable(desc, EJS_FALSE);
         }
 
         /*    d. Call the [[DefineOwnProperty]] internal method of O with P, desc, and true as arguments. */
@@ -1109,7 +1119,8 @@ _ejs_Object_isSealed (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         EJSPropertyDesc* desc = OP(obj,get_own_property)(O, P);
 
         /*    b. If desc.[[Configurable]] is true, then return false. */
-        desc->configurable = EJS_FALSE;
+        if (_ejs_property_desc_is_configurable(desc))
+            return _ejs_false;
     }
 
     /* 3. If the [[Extensible]] internal property of O is false, then return true. */
@@ -1146,9 +1157,11 @@ _ejs_Object_isFrozen (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         /*    b. If IsDataDescriptor(desc) is true then */
         if (IsDataDescriptor(desc)) {
             /*       i. If desc.[[Writable]] is true, return false. */
-            desc->writable = EJS_FALSE;
+            if (_ejs_property_desc_is_writable(desc))
+                return _ejs_false;
             /*    c. If desc.[[Configurable]] is true, then return false. */
-            desc->configurable = EJS_FALSE;
+            if (_ejs_property_desc_is_configurable(desc))
+                return _ejs_false;
         }
     }
 
@@ -1288,13 +1301,14 @@ _ejs_Object_prototype_propertyIsEnumerable (ejsval env, ejsval _this, uint32_t a
         return _ejs_false;
 
     /* 5. Return the value of desc.[[Enumerable]]. */
-    return BOOLEAN_TO_EJSVAL(desc->enumerable);
+    return BOOLEAN_TO_EJSVAL(_ejs_property_desc_is_enumerable(desc));
 }
 
 void
 _ejs_object_init_proto()
 {
     _ejs_gc_add_named_root (_ejs_Object__proto__);
+    _ejs_gc_add_named_root (_ejs_Object_prototype);
 
     EJSFunction* __proto__ = _ejs_gc_new(EJSFunction);
     __proto__->name = _ejs_atom_Empty;
@@ -1398,6 +1412,8 @@ _ejs_object_specop_get (ejsval obj_, ejsval propertyName, EJSBool isCStr)
         return obj->map->properties[prop_index].value;
     }
 #else
+    _ejs_gc_collect();
+
     ejsval pname;
 
     if (isCStr)
@@ -1405,22 +1421,32 @@ _ejs_object_specop_get (ejsval obj_, ejsval propertyName, EJSBool isCStr)
     else
         pname = ToString(propertyName);
 
+    if (!strcmp("__proto__", EJSVAL_TO_FLAT_STRING(pname)))
+        return EJSVAL_TO_OBJECT(obj_)->proto;
+
     /* 1. Let desc be the result of calling the [[GetProperty]] internal method of O with property name P. */
-    EJSPropertyDesc* desc = OP(EJSVAL_TO_OBJECT(obj_),get_property) (obj_, propertyName);
+    EJSPropertyDesc* desc = OP(EJSVAL_TO_OBJECT(obj_),get_property) (obj_, pname);
     /* 2. If desc is undefined, return undefined. */
-    if (desc == NULL)
+    if (desc == NULL) {
+        //        printf ("property lookup on a %s object, propname %s => undefined\n", CLASSNAME(EJSVAL_TO_OBJECT(obj_)), EJSVAL_TO_FLAT_STRING(pname));
         return _ejs_undefined;
+    }
 
     /* 3. If IsDataDescriptor(desc) is true, return desc.[[Value]]. */
-    if (IsDataDescriptor(desc))
+    if (IsDataDescriptor(desc)) {
+        //        if (EJSVAL_IS_UNDEFINED(desc->value))
+        //            printf ("property lookup on a %s object, propname %s => undefined\n", CLASSNAME(EJSVAL_TO_OBJECT(obj_)), EJSVAL_TO_FLAT_STRING(pname));
         return desc->value;
+    }
 
     /* 4. Otherwise, IsAccessorDescriptor(desc) must be true so, let getter be desc.[[Get]]. */
-    ejsval getter = desc->get;
+    ejsval getter = _ejs_property_desc_get_getter(desc);
 
     /* 5. If getter is undefined, return undefined. */
-    if (EJSVAL_IS_UNDEFINED(getter))
+    if (EJSVAL_IS_UNDEFINED(getter)) {
+        //        printf ("property lookup on a %s object, propname %s => undefined getter\n", CLASSNAME(EJSVAL_TO_OBJECT(obj_)), EJSVAL_TO_FLAT_STRING(pname));
         return _ejs_undefined;
+    }
 
     /* 6. Return the result calling the [[Call]] internal method of getter providing O as the this value and providing no arguments */
     return _ejs_invoke_closure_0 (getter, obj_, 0);
@@ -1467,32 +1493,110 @@ _ejs_object_specop_get_property (ejsval O, ejsval P)
 
 // ECMA262: 8.12.5
 static void
-_ejs_object_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag)
+_ejs_object_specop_put (ejsval O, ejsval P, ejsval V, EJSBool Throw)
 {
+    EJSObject* obj = EJSVAL_TO_OBJECT(O);
     /* 1. If the result of calling the [[CanPut]] internal method of O with argument P is false, then */
-    /*    a. If Throw is true, then throw a TypeError exception. */
-    /*    b. Else return. */
+    if (OP(obj,can_put)(O, P)) {
+        /*    a. If Throw is true, then throw a TypeError exception. */
+        if (Throw) {
+            printf ("throw TypeError\n");
+            EJS_NOT_IMPLEMENTED();
+        }
+        else {
+            return;
+        }
+    }
     /* 2. Let ownDesc be the result of calling the [[GetOwnProperty]] internal method of O with argument P. */
+    EJSPropertyDesc* ownDesc = OP(obj,get_own_property)(O, P);
+    
     /* 3. If IsDataDescriptor(ownDesc) is true, then */
-    /*    a. Let valueDesc be the Property Descriptor {[[Value]]: V}. */
-    /*    b. Call the [[DefineOwnProperty]] internal method of O passing P, valueDesc, and Throw as arguments. */
-    /*    c. Return. */
+    if (IsDataDescriptor(ownDesc)) {
+        /*    a. Let valueDesc be the Property Descriptor {[[Value]]: V}. */
+        EJSPropertyDesc valueDesc = { .value = V, .flags = EJS_PROP_FLAGS_VALUE_SET };
+        /*    b. Call the [[DefineOwnProperty]] internal method of O passing P, valueDesc, and Throw as arguments. */
+        OP(obj,define_own_property)(O, P, &valueDesc, Throw);
+        /*    c. Return. */
+        return;
+    }
     /* 4. Let desc be the result of calling the [[GetProperty]] internal method of O with argument P. This may be */
     /*    either an own or inherited accessor property descriptor or an inherited data property descriptor. */
+    EJSPropertyDesc* desc = OP(obj,get_property)(O, P);
+
     /* 5. If IsAccessorDescriptor(desc) is true, then */
-    /*    a. Let setter be desc.[[Set]] which cannot be undefined. */
-    /*    b. Call the [[Call]] internal method of setter providing O as the this value and providing V as the sole argument. */
-    /* 6. Else, create a named data property named P on object O as follows */
-    /*    a. Let newDesc be the Property Descriptor */
-    /*       {[[Value]]: V, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}. */
-    /*    b. Call the [[DefineOwnProperty]] internal method of O passing P, newDesc, and Throw as arguments. */
+    if (IsAccessorDescriptor(desc)) {
+        /*    a. Let setter be desc.[[Set]] which cannot be undefined. */
+        ejsval setter = _ejs_property_desc_get_setter(desc);
+        assert (EJSVAL_IS_FUNCTION(setter));
+        /*    b. Call the [[Call]] internal method of setter providing O as the this value and providing V as the sole argument. */
+        _ejs_invoke_closure_1 (setter, O, 1, V);
+    }
+    else {
+        /* 6. Else, create a named data property named P on object O as follows */
+        /*    a. Let newDesc be the Property Descriptor */
+        /*       {[[Value]]: V, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}. */
+        EJSPropertyDesc newDesc = { .value = V, .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE };
+
+        /*    b. Call the [[DefineOwnProperty]] internal method of O passing P, newDesc, and Throw as arguments. */
+        OP(obj,define_own_property)(O, P, &newDesc, Throw);
+    }
     /* 7. Return. */
 }
 
+// ECMA262: 8.12.4
 static EJSBool
-_ejs_object_specop_can_put (ejsval obj, ejsval propertyName)
+_ejs_object_specop_can_put (ejsval O, ejsval P)
 {
-    EJS_NOT_IMPLEMENTED();
+    EJSObject* obj = EJSVAL_TO_OBJECT(O);
+
+    /* 1. Let desc be the result of calling the [[GetProperty]] internal method of O with property name P. */
+    EJSPropertyDesc* desc = OP(obj,get_own_property)(O, P);
+
+    /* 2. If desc is not undefined, then */
+    if (desc) {
+        /* a. If IsAccessorDescriptor(desc) is true, then */
+        if (IsAccessorDescriptor(desc)) {
+            /*    i. If desc.[[Set]] is undefined, then return false. */
+            if (EJSVAL_IS_UNDEFINED(_ejs_property_desc_get_setter(desc)))
+                return EJS_FALSE;
+
+            /*    ii. Else return true. */
+            return EJS_TRUE;
+        }
+        /* b. Else, desc must be a DataDescriptor so return the value of desc.[[Writable]]. */
+        return _ejs_property_desc_is_writable(desc);
+    }
+    /* 3. Let proto be the [[Prototype]] internal property of O. */
+    ejsval proto = obj->proto;
+
+    /* 4. If proto is null, then return the value of the [[Extensible]] internal property of O. */
+    if (EJSVAL_IS_NULL(proto))
+        return EJS_OBJECT_IS_EXTENSIBLE(obj);
+
+    /* 5. Let inherited be the result of calling the [[GetProperty]] internal method of proto with property name P. */
+    EJSPropertyDesc* inherited = OP(obj,get_property)(proto, P);
+
+    /* 6. If inherited is undefined, return the value of the [[Extensible]] internal property of O. */
+    if (!inherited)
+        return EJS_OBJECT_IS_EXTENSIBLE(obj);
+
+    /* 7. If IsAccessorDescriptor(inherited) is true, then */
+    if (IsAccessorDescriptor(inherited)) {
+        /* a. If inherited.[[Set]] is undefined, then return false.*/
+        if (EJSVAL_IS_UNDEFINED(_ejs_property_desc_get_setter(inherited)))
+            return EJS_FALSE;
+        /* b. Else return true. */
+        return EJS_TRUE;
+    }
+    /* 8. Else, inherited must be a DataDescriptor*/
+    else {
+        /* a. If the [[Extensible]] internal property of O is false, return false. */
+        if (!EJS_OBJECT_IS_EXTENSIBLE(obj))
+            return EJS_FALSE;
+
+        /* b. Else return the value of inherited.[[Writable]]. */
+        return _ejs_property_desc_is_writable (inherited);
+    }
 }
 
 static EJSBool
@@ -1521,7 +1625,7 @@ _ejs_object_specop_delete (ejsval O, ejsval P, EJSBool Throw)
     if (!desc)
         return EJS_TRUE;
     /* 3. If desc.[[Configurable]] is true, then */
-    if (desc->configurable) {
+    if (_ejs_property_desc_is_configurable(desc)) {
         /*    a. Remove the own property with name P from O. */
         _ejs_propertymap_delete_desc (obj->map, desc);
         /*    b. Return true. */
@@ -1539,6 +1643,14 @@ _ejs_object_specop_delete (ejsval O, ejsval P, EJSBool Throw)
 static ejsval
 _ejs_object_specop_default_value (ejsval obj, const char *hint)
 {
+    if (!strcmp (hint, "PreferredType") || !strcmp(hint, "String")) {
+        // this should look up ToString and call it
+        return ToString(obj);
+    }
+    else if (!strcmp (hint, "String")) {
+        EJS_NOT_IMPLEMENTED();
+    }
+
     EJS_NOT_IMPLEMENTED();
 }
 
@@ -1575,12 +1687,16 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
             /*          an attribute field of Desc is absent, the attribute of the newly created property is set to its  */
             /*          default value. */
             int idx = _ejs_propertymap_lookup (obj->map, EJSVAL_TO_FLAT_STRING(P), EJS_TRUE);
-            obj->map->properties[idx].get = Desc->get;
-            obj->map->properties[idx].set = Desc->set;
-            obj->map->properties[idx].configurable = Desc->configurable;
-            obj->map->properties[idx].enumerable = Desc->enumerable;
-            obj->map->properties[idx].writable = Desc->writable;
-            obj->map->properties[idx].value = Desc->value;
+            EJSPropertyDesc *dest = &obj->map->properties[idx];
+
+            if (_ejs_property_desc_has_value (Desc))
+                _ejs_property_desc_set_value (dest, _ejs_property_desc_get_value (Desc));
+            if (_ejs_property_desc_has_configurable (Desc))
+                _ejs_property_desc_set_configurable (dest, _ejs_property_desc_is_configurable (Desc));
+            if (_ejs_property_desc_has_enumerable (Desc))
+                _ejs_property_desc_set_enumerable (dest, _ejs_property_desc_is_enumerable (Desc));
+            if (_ejs_property_desc_has_writable (Desc))
+                _ejs_property_desc_set_writable (dest, _ejs_property_desc_is_writable (Desc));
         }
         /*    b. Else, Desc must be an accessor Property Descriptor so, */
         else {
@@ -1589,44 +1705,51 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
             /*          an attribute field of Desc is absent, the attribute of the newly created property is set to its  */
             /*          default value. */
             int idx = _ejs_propertymap_lookup (obj->map, EJSVAL_TO_FLAT_STRING(P), EJS_TRUE);
-            obj->map->properties[idx].get = Desc->get;
-            obj->map->properties[idx].set = Desc->set;
-            obj->map->properties[idx].configurable = Desc->configurable;
-            obj->map->properties[idx].enumerable = Desc->enumerable;
-            obj->map->properties[idx].writable = Desc->writable;
-            obj->map->properties[idx].value = Desc->value;
+            EJSPropertyDesc *dest = &obj->map->properties[idx];
+
+            if (_ejs_property_desc_has_getter (Desc))
+                _ejs_property_desc_set_getter (dest, _ejs_property_desc_get_getter (Desc));
+            if (_ejs_property_desc_has_setter (Desc))
+                _ejs_property_desc_set_setter (dest, _ejs_property_desc_get_setter (Desc));
+            if (_ejs_property_desc_has_configurable (Desc))
+                _ejs_property_desc_set_configurable (dest, _ejs_property_desc_is_configurable (Desc));
+            if (_ejs_property_desc_has_enumerable (Desc))
+                _ejs_property_desc_set_enumerable (dest, _ejs_property_desc_is_enumerable (Desc));
         }
         /*    c. Return true. */
         return EJS_TRUE;
     }
     /* 5. Return true, if every field in Desc is absent. */
-    if (EJSVAL_IS_UNDEFINED(Desc->value) &&
-        EJSVAL_IS_UNDEFINED(Desc->get) &&
-        EJSVAL_IS_UNDEFINED(Desc->set)
-        // XXX the EJSBool fields can be absent too
-        ) {
+    if ((Desc->flags & EJS_PROP_FLAGS_SET_MASK) == 0) {
         return EJS_TRUE;
     }
 
     /* 6. Return true, if every field in Desc also occurs in current and the value of every field in Desc is the same  */
     /*    value as the corresponding field in current when compared using the SameValue algorithm (9.12). */
-    if (EJSVAL_EQ(Desc->value, current->value) &&
-        EJSVAL_EQ(Desc->get, current->get) &&
-        EJSVAL_EQ(Desc->set, current->set) &&
-        Desc->writable == current->writable &&
-        Desc->configurable == current->configurable &&
-        Desc->enumerable == current->enumerable) {
-        return EJS_TRUE;
+    if ((Desc->flags & EJS_PROP_FLAGS_SET_MASK) == (current->flags & EJS_PROP_FLAGS_SET_MASK)) {
+        EJSBool match = EJS_TRUE;
+
+        if (match) match = !_ejs_property_desc_has_enumerable(Desc) || (_ejs_property_desc_is_enumerable(Desc) == _ejs_property_desc_is_enumerable(current));
+        if (match) match = !_ejs_property_desc_has_configurable(Desc) || (_ejs_property_desc_is_configurable(Desc) == _ejs_property_desc_is_configurable(current));
+        if (match) match = !_ejs_property_desc_has_writable(Desc) || (_ejs_property_desc_is_writable(Desc) == _ejs_property_desc_is_writable(current));
+        if (match) match = !_ejs_property_desc_has_value(Desc) || (EJSVAL_EQ(_ejs_property_desc_get_value(Desc), _ejs_property_desc_get_value(current)));
+        if (match) match = !_ejs_property_desc_has_getter(Desc) || (EJSVAL_EQ(_ejs_property_desc_get_getter(Desc), _ejs_property_desc_get_getter(current)));
+        if (match) match = !_ejs_property_desc_has_setter(Desc) || (EJSVAL_EQ(_ejs_property_desc_get_setter(Desc), _ejs_property_desc_get_setter(current)));
+
+        if (match)
+            return EJS_TRUE;
     }
 
     /* 7. If the [[Configurable]] field of current is false then */
-    if (!current->configurable) {
+    if (!_ejs_property_desc_is_configurable(current)) {
         /*    a. Reject, if the [[Configurable]] field of Desc is true. */
-        if (Desc->configurable) REJECT();
+        if (_ejs_property_desc_is_configurable(Desc)) REJECT();
 
         /*    b. Reject, if the [[Enumerable]] field of Desc is present and the [[Enumerable]] fields of current and  */
         /*       Desc are the Boolean negation of each other. */
-        if (Desc->enumerable != current->enumerable) REJECT();
+        if (_ejs_property_desc_has_enumerable (Desc) &&
+            _ejs_property_desc_is_enumerable(Desc) != _ejs_property_desc_is_enumerable(current))
+            REJECT();
     }
 
     /* 8. If IsGenericDescriptor(Desc) is true, then no further validation is required. */
@@ -1635,7 +1758,7 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
     /* 9. Else, if IsDataDescriptor(current) and IsDataDescriptor(Desc) have different results, then */
     else if (IsDataDescriptor(current) != IsDataDescriptor(Desc)) {
         /*    a. Reject, if the [[Configurable]] field of current is false.  */
-        if (!current->configurable) REJECT();
+        if (!_ejs_property_desc_is_configurable(current)) REJECT();
         /*    b. If IsDataDescriptor(current) is true, then */
         if (IsDataDescriptor(current)) {
             /*       i. Convert the property named P of object O from a data property to an accessor property.  */
@@ -1661,27 +1784,40 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
     /* 11. Else, IsAccessorDescriptor(current) and IsAccessorDescriptor(Desc) are both true so, */
     else /* IsAccessorDescriptor(current) && IsAccessorDescriptor(Desc) */ {
         /*     a. If the [[Configurable]] field of current is false, then */
-        if (!current->configurable) {
+        if (!_ejs_property_desc_is_configurable(current)) {
             /*        i. Reject, if the [[Set]] field of Desc is present and SameValue(Desc.[[Set]], current.[[Set]]) is  */
             /*           false. */
-            if (!EJSVAL_IS_UNDEFINED(Desc->set) && !EJSVAL_EQ(Desc->set, current->set)) REJECT();
+            if (_ejs_property_desc_has_setter (Desc)
+                && !EJSVAL_EQ(_ejs_property_desc_get_setter(Desc),
+                              _ejs_property_desc_get_setter(current)))
+                REJECT();
+
             /*        ii. Reject, if the [[Get]] field of Desc is present and SameValue(Desc.[[Get]], current.[[Get]]) */
             /*            is false. */
-            if (!EJSVAL_IS_UNDEFINED(Desc->get) && !EJSVAL_EQ(Desc->get, current->get)) REJECT();
+            if (_ejs_property_desc_has_getter (Desc)
+                && !EJSVAL_EQ(_ejs_property_desc_get_getter(Desc),
+                              _ejs_property_desc_get_getter(current)))
+                REJECT();
         }
     }
 
     /* 12. For each attribute field of Desc that is present, set the correspondingly named attribute of the property  */
     /*     named P of object O to the value of the field. */
     int idx = _ejs_propertymap_lookup (obj->map, EJSVAL_TO_FLAT_STRING(P), EJS_TRUE);
-    // XXX this is wrong - we need to only set the values that are specified in desc.
-    obj->map->properties[idx].get = Desc->get;
-    obj->map->properties[idx].set = Desc->set;
-    obj->map->properties[idx].configurable = Desc->configurable;
-    obj->map->properties[idx].enumerable = Desc->enumerable;
-    obj->map->properties[idx].writable = Desc->writable;
-    obj->map->properties[idx].value = Desc->value;
-    
+    EJSPropertyDesc *dest = &obj->map->properties[idx];
+
+    if (_ejs_property_desc_has_getter (Desc))
+        _ejs_property_desc_set_getter (dest, _ejs_property_desc_get_getter (Desc));
+    if (_ejs_property_desc_has_setter (Desc))
+        _ejs_property_desc_set_setter (dest, _ejs_property_desc_get_setter (Desc));
+    if (_ejs_property_desc_has_value (Desc))
+        _ejs_property_desc_set_value (dest, _ejs_property_desc_get_value (Desc));
+    if (_ejs_property_desc_has_configurable (Desc))
+        _ejs_property_desc_set_configurable (dest, _ejs_property_desc_is_configurable (Desc));
+    if (_ejs_property_desc_has_enumerable (Desc))
+        _ejs_property_desc_set_enumerable (dest, _ejs_property_desc_is_enumerable (Desc));
+    if (_ejs_property_desc_has_writable (Desc))
+        _ejs_property_desc_set_writable (dest, _ejs_property_desc_is_writable (Desc));
 
     /* 13. Return true. */
     return EJS_TRUE;
@@ -1703,8 +1839,16 @@ _ejs_object_specop_finalize(EJSObject* obj)
 }
 
 static void
+scan_property (EJSPropertyDesc *desc, EJSValueFunc scan_func)
+{
+    if (_ejs_property_desc_has_value (desc)) scan_func (desc->value);
+    if (_ejs_property_desc_has_getter (desc)) scan_func (desc->getter);
+    if (_ejs_property_desc_has_setter (desc)) scan_func (desc->setter);
+}
+
+static void
 _ejs_object_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
-    _ejs_propertymap_foreach_value (obj->map, scan_func);
+    _ejs_propertymap_foreach_property (obj->map, (EJSPropertyDescFunc)scan_property, scan_func);
     scan_func (obj->proto);
 }

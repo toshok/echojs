@@ -270,7 +270,7 @@ JO(StringifyState *state, ejsval value)
         EJSObject* value_obj = EJSVAL_TO_OBJECT(value);
         K = _ejs_array_new (0);
         for (int i = 0; i < value_obj->map->num; i ++) {
-            if (!value_obj->map->properties[i].enumerable)
+            if (!_ejs_property_desc_is_enumerable(&value_obj->map->properties[i]))
                 continue;
             ejsval propname = _ejs_string_new_utf8(value_obj->map->names[i]);
             _ejs_array_push_dense(K, 1, &propname);
@@ -595,10 +595,10 @@ _ejs_JSON_stringify (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     /* 9. Let wrapper be a new object created as if by the expression new Object(), where Object is the 
        standard built-in constructor with that name. */
-    ejsval wrapper = _ejs_object_create(_ejs_Object__proto__);
+    ejsval wrapper = _ejs_object_create(_ejs_Object_prototype);
     /* 10. Call the [[DefineOwnProperty]]  internal method of wrapper with arguments the empty String, the Property 
        Descriptor {[[Value]]: value, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
-    EJSPropertyDesc desc = { .value = value, .writable = EJS_TRUE, .enumerable = EJS_TRUE, .configurable = EJS_TRUE, .get = _ejs_undefined, .set = _ejs_undefined };
+    EJSPropertyDesc desc = { .value = value, .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE };
     OP(EJSVAL_TO_OBJECT(wrapper), define_own_property)(wrapper, _ejs_atom_empty, &desc, EJS_FALSE);
     /* 11. Return the result of calling the abstract operation Str with the empty String and wrapper. */
     return Str(&state, _ejs_atom_empty, wrapper);
