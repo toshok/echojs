@@ -28,5 +28,8 @@ build-lib:
 test:
 	$(MAKE) -C test check
 
+bootstrap:
+	$(MAKE) -C lib/coffee bootstrap
+
 # because we have a test directory..
 .PHONY: test
