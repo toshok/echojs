@@ -4,7 +4,7 @@ path = require 'path'
 fs = require 'fs'
 util = require 'echo-util'
 { spawn } = require 'child_process'
-
+        
 # if we're running under coffee/node, argv will be ["coffee", ".../ejs", ...]
 # if we're running the compiled ejs.exe, argv will be [".../ejs.js.exe", ...]
 slice_count = if __ejs? then 1 else 2
@@ -120,20 +120,29 @@ compileFile = (filename, content, compileCallback) ->
 
         compiled_modules.push filename: filename, module_toplevel: compiled_module.toplevel_name
 
-        llvm_as = spawn "llvm-as", llvm_as_args
-        llvm_as.stderr.on "data", (data) -> console.warn "#{data}"
-        llvm_as.on "exit", (code) ->
-                opt = spawn "opt", opt_args
-                opt.stderr.on "data", (data) -> console.warn "#{data}"
-                opt.on "exit", (code) ->
-                        llc = spawn "llc", llc_args
-                        llc.stderr.on "data", (data) -> console.warn "#{data}"
-                        llc.on "exit", (code) ->
-                                clang = spawn "clang", clang_args
-                                clang.stderr.on "data", (data) -> console.warn "#{data}"
-                                clang.on "exit", (code) ->
-                                        o_filenames.push o_filename
-                                        compileCallback()
+        if __ejs?
+                # in ejs spawn is synchronous.
+                spawn "llvm-as", llvm_as_args
+                spawn "opt", opt_args
+                spawn "llc", llc_args
+                spawn "clang", clang_args
+                o_filenames.push o_filename
+                compileCallback()
+        else
+                llvm_as = spawn "llvm-as", llvm_as_args
+                llvm_as.stderr.on "data", (data) -> console.warn "#{data}"
+                llvm_as.on "exit", (code) ->
+                        opt = spawn "opt", opt_args
+                        opt.stderr.on "data", (data) -> console.warn "#{data}"
+                        opt.on "exit", (code) ->
+                                llc = spawn "llc", llc_args
+                                llc.stderr.on "data", (data) -> console.warn "#{data}"
+                                llc.on "exit", (code) ->
+                                        clang = spawn "clang", clang_args
+                                        clang.stderr.on "data", (data) -> console.warn "#{data}"
+                                        clang.on "exit", (code) ->
+                                                o_filenames.push o_filename
+                                                compileCallback()
 
 generate_require_map = ->
         sanitize = (filename, c_callable) ->
@@ -194,17 +203,22 @@ do_final_link = ->
 
         clang_args = ["-o", options.output_filename || "#{files[0]}.exe"].concat o_filenames
         clang_args.push map_filename
-        clang_args.push path.resolve (path.dirname process.argv[1]), "runtime/libecho.a"
+        clang_args.push path.resolve (path.dirname process.argv[if __ejs? then 0 else 1]), "runtime/libecho.a"
         external_modules.forEach (extern_module) ->
                 clang_args.push extern_module.library
                 clang_args = clang_args.concat extern_module.link_flags.split " "
 
-        clang = spawn "clang++", clang_args
-        clang.stderr.on "data", (data) -> console.warn "#{data}"
-        clang.on "exit", (code) ->
-                if not options.leave_temp_files
-                        cleanup ->
-                                #console.warn "done."
+        if __ejs?
+                spawn "clang++", clang_args
+                # we ignore leave_tmp_files here
+                console.warn "done."
+        else
+                clang = spawn "clang++", clang_args
+                clang.stderr.on "data", (data) -> console.warn "#{data}"
+                clang.on "exit", (code) ->
+                        if not options.leave_temp_files
+                                cleanup ->
+                                        console.warn "done."
 
 cleanup = (done) ->
         files_to_delete = temp_files.length
