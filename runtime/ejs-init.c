@@ -108,6 +108,4 @@ _ejs_init(int argc, char** argv)
 
 #undef GLOBAL_METHOD
     END_SHADOW_STACK_FRAME;
-
-    _ejs_gc_collect();
 }
