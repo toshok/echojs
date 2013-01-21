@@ -13,6 +13,7 @@ ejsval ToString(ejsval exp);
 ejsval ToNumber(ejsval exp);
 double ToDouble(ejsval exp);
 int32_t ToInteger(ejsval exp);
+uint16_t ToUint16(ejsval exp);
 uint32_t ToUint32(ejsval exp);
 ejsval ToObject(ejsval exp);
 ejsval ToBoolean(ejsval exp);

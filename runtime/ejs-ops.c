@@ -136,12 +136,20 @@ double ToDouble(ejsval exp)
 
 int32_t ToInteger(ejsval exp)
 {
+    // XXX sorely lacking
     return (int)ToDouble(exp);
 }
 
 uint32_t ToUint32(ejsval exp)
 {
+    // XXX sorely lacking
     return (uint32_t)ToDouble(exp);
+}
+
+uint16_t ToUint16(ejsval exp)
+{
+    // XXX sorely lacking
+    return (uint16_t)ToDouble(exp);
 }
 
 ejsval ToObject(ejsval exp)
