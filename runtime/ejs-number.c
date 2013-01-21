@@ -90,7 +90,7 @@ _ejs_number_init(ejsval global)
     START_SHADOW_STACK_FRAME;
 
     _ejs_gc_add_named_root (_ejs_Number_proto);
-    _ejs_Number_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_object_specops);
+    _ejs_Number_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_number_specops);
 
     ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_Number, (EJSClosureFunc)_ejs_Number_impl));
     _ejs_Number = tmpobj;
