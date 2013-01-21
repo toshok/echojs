@@ -651,6 +651,12 @@ EJSVAL_EXTRACT_NON_DOUBLE_TYPE_IMPL(ejsval_layout l)
 #define STATIC_BUILD_DOUBLE_EJSVAL(v) { .asDouble = v }
 #define STATIC_BUILD_BOOLEAN_EJSVAL(b) { .asBits = ((uint64_t)(uint32_t)b) | EJSVAL_SHIFTED_TAG_BOOLEAN }
 
+static EJS_ALWAYS_INLINE EJSValueTag
+EJSVAL_TO_TAG(ejsval_layout l)
+{
+    return (EJSValueTag)((uint64_t)l.asBits >> EJSVAL_TAG_SHIFT);
+}
+
 static EJS_ALWAYS_INLINE ejsval_layout
 BUILD_EJSVAL(EJSValueTag tag, uint64_t payload)
 {
