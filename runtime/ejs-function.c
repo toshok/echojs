@@ -71,7 +71,7 @@ _ejs_function_new (EJSClosureEnv env, ejsval name, EJSClosureFunc func)
     ejsval fun_proto = _ejs_object_new (_ejs_Object_prototype, &_ejs_object_specops);
 
     _ejs_object_setprop (fun_proto, _ejs_atom_constructor,  fun);
-    _ejs_object_define_value_property (fun, _ejs_atom_prototype, fun_proto, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (fun, _ejs_atom_prototype, fun_proto, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
 
     return fun;
 }
@@ -248,7 +248,7 @@ _ejs_function_init(ejsval global)
     _ejs_Function = tmpobj;
 
     // ECMA262 15.3.3.1
-    //_ejs_object_define_value_property (_ejs_Function, _ejs_atom_prototype, _ejs_Function__proto__, EJS_FALSE, EJS_FALSE, EJS_FALSE);
+    _ejs_object_define_value_property (_ejs_Function, _ejs_atom_prototype, _ejs_Function__proto__, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     // ECMA262 15.3.3.2
     _ejs_object_define_value_property (_ejs_Function, _ejs_atom_length, NUMBER_TO_EJSVAL(1), EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
