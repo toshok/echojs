@@ -377,7 +377,7 @@ class LLVMIRVisitor extends NodeVisitor
                         else # prop.type is syntax.Literal
                                 pname = prop.value
 
-                        debug.log "createPropertyStore #{obj}[#{pname}]"
+                        debug.log -> "createPropertyStore #{obj}[#{pname}]"
                         
                         c = irbuilder.createGlobalStringPtr pname, "strconst"
                         @createCall @ejs_runtime.object_setprop_utf8, [obj, c, rhs], "propstore_#{pname}"
@@ -827,14 +827,15 @@ class LLVMIRVisitor extends NodeVisitor
                 ir_func = n.ir_func
                 ir_args = n.ir_func.args
                 debug.log ""
-                debug.log "ir_func = #{ir_func}"
+                #debug.log -> "ir_func = #{ir_func}"
 
-                debug.log "param #{param.llvm_type} #{param.name}" for param in n.params
+                #debug.log -> "param #{param.llvm_type} #{param.name}" for param in n.params
 
                 @currentFunction = ir_func
 
                 # Create a new basic block to start insertion into.
                 entry_bb = new llvm.BasicBlock "entry", ir_func
+
                 irbuilder.setInsertPoint entry_bb
 
                 new_scope = {}
@@ -869,12 +870,12 @@ class LLVMIRVisitor extends NodeVisitor
                                 console.warn JSON.stringify param
                                 throw "we don't handle destructured args at the moment."
 
-                debug.log "alloca #{alloca}" for alloca in allocas
+                debug.log -> "alloca #{alloca}" for alloca in allocas
         
                 # now store the arguments (use .. to include our args array) onto the stack
                 for i in [0..BUILTIN_PARAMS.length]
                         store = irbuilder.createStore ir_args[i], allocas[i]
-                        debug.log "store #{store} *builtin"
+                        debug.log -> "store #{store} *builtin"
 
                 # initialize all our named parameters to undefined
                 args_load = irbuilder.createLoad args_alloca, "args_load"
@@ -902,17 +903,17 @@ class LLVMIRVisitor extends NodeVisitor
                         
                                 irbuilder.setInsertPoint then_bb
                                 arg_ptr = irbuilder.createGetElementPointer args_load, [(int32Constant i-BUILTIN_PARAMS.length)], "arg#{i-BUILTIN_PARAMS.length}_ptr"
-                                debug.log "arg_ptr = #{arg_ptr}"
+                                debug.log -> "arg_ptr = #{arg_ptr}"
                                 arg = irbuilder.createLoad arg_ptr, "arg#{i-BUILTIN_PARAMS.length-1}_load"
                                 store = irbuilder.createStore arg, allocas[i+1]
-                                debug.log "store #{store}"
+                                debug.log -> "store #{store}"
                                 irbuilder.createBr merge_bb
 
                                 irbuilder.setInsertPoint else_bb
                                 irbuilder.createBr merge_bb
 
                                 irbuilder.setInsertPoint merge_bb
-                        
+
                 @iifeStack = []
 
                 @finallyStack = []
@@ -935,7 +936,7 @@ class LLVMIRVisitor extends NodeVisitor
                 return ir_func
 
         visitUnaryExpression: (n) ->
-                debug.log "operator = '#{n.operator}'"
+                debug.log -> "operator = '#{n.operator}'"
 
                 builtin = "unop#{n.operator}"
                 callee = @ejs_runtime[builtin]
@@ -963,7 +964,7 @@ class LLVMIRVisitor extends NodeVisitor
                 rv
                 
         visitBinaryExpression: (n) ->
-                debug.log "operator = '#{n.operator}'"
+                debug.log -> "operator = '#{n.operator}'"
                 builtin = "binop#{n.operator}"
                 callee = @ejs_runtime[builtin]
                 if not callee
@@ -991,7 +992,7 @@ class LLVMIRVisitor extends NodeVisitor
                 call
 
         visitLogicalExpression: (n) ->
-                debug.log "operator = '#{n.operator}'"
+                debug.log -> "operator = '#{n.operator}'"
                 result = @createAlloca @currentFunction, EjsValueType, "result_#{n.operator}"
 
                 left_visited = @visit n.left
@@ -1080,9 +1081,9 @@ class LLVMIRVisitor extends NodeVisitor
                 argv
                                                                 
         visitCallExpression: (n) ->
-                debug.log "visitCall #{JSON.stringify n}"
-                debug.log "          arguments length = #{n.arguments.length}"
-                debug.log "          arguments[#{i}] =  #{JSON.stringify n.arguments[i]}" for i in [0...n.arguments.length]
+                debug.log -> "visitCall #{JSON.stringify n}"
+                debug.log -> "          arguments length = #{n.arguments.length}"
+                debug.log -> "          arguments[#{i}] =  #{JSON.stringify n.arguments[i]}" for i in [0...n.arguments.length]
 
                 intrinsicHandler = @ejs_intrinsics[n.callee.name.slice(1)]
                 if not intrinsicHandler
@@ -1108,10 +1109,11 @@ class LLVMIRVisitor extends NodeVisitor
                 @createLoadThis()
 
         visitIdentifier: (n) ->
-                debug.log "identifier #{n.name}"
+                debug.log -> "identifier #{n.name}"
                 val = n.name
                 source = @findIdentifierInScope val, @current_scope
                 if source?
+                        debug.log -> "found identifier in scope, at #{source}"
                         rv = irbuilder.createLoad source, "load_#{val}"
                         return rv
 
@@ -1135,14 +1137,14 @@ class LLVMIRVisitor extends NodeVisitor
                         return rv
 
                 rv = null
-                debug.log "calling getFunction for #{val}"
+                debug.log -> "calling getFunction for #{val}"
                 rv = @module.getFunction val
 
                 if not rv
-                        debug.log "Symbol '#{val}' not found in current scope"
+                        debug.log -> "Symbol '#{val}' not found in current scope"
                         rv = @createPropertyLoad @loadGlobal(), n, false, false
 
-                debug.log "returning #{rv}"
+                debug.log -> "returning #{rv}"
                 rv
 
         visitObjectExpression: (n) ->
@@ -1181,7 +1183,7 @@ class LLVMIRVisitor extends NodeVisitor
 
                 # string literals
                 if typeof n.raw is "string" and (n.raw[0] is '"' or n.raw[0] is "'")
-                        debug.log "literal string: #{n.value}"
+                        debug.log -> "literal string: #{n.value}"
 
                         # check if it's an atom first of all
                         atom_name = "atom-#{n.value}"
@@ -1211,21 +1213,21 @@ class LLVMIRVisitor extends NodeVisitor
                         strload = irbuilder.createLoad str_alloca, "%str_alloca"
 
                         strload.literal = n
-                        debug.log "strload = #{strload}"
+                        debug.log -> "strload = #{strload}"
                         return strload
 
 
                 # regular expression literals
                 if typeof n.raw is "string" and n.raw[0] is '/'
-                        debug.log "literal regexp: #{n.raw}"
+                        debug.log -> "literal regexp: #{n.raw}"
                         c = irbuilder.createGlobalStringPtr n.raw, "strconst"
                         regexpcall = @createCall @ejs_runtime.regexp_new_utf8, [c], "regexptmp"
-                        debug.log "regexpcall = #{regexpcall}"
+                        debug.log -> "regexpcall = #{regexpcall}"
                         return regexpcall
 
                 # number literals
                 if typeof n.value is "number"
-                        debug.log "literal number: #{n.value}"
+                        debug.log -> "literal number: #{n.value}"
                         if n.value is 0
                                 numload = irbuilder.createLoad @ejs_runtime['zero'], "load_zero"
                         else if n.value is 1
@@ -1249,12 +1251,12 @@ class LLVMIRVisitor extends NodeVisitor
                                 
                                 numload = irbuilder.createLoad num_alloca, "%num_alloca"
                         numload.literal = n
-                        debug.log "numload = #{numload}"
+                        debug.log -> "numload = #{numload}"
                         return numload
 
                 # boolean literals
                 if typeof n.value is "boolean"
-                        debug.log "literal boolean: #{n.value}"
+                        debug.log -> "literal boolean: #{n.value}"
                         return @loadBoolEjsValue n.value
 
                 throw "Internal error: unrecognized literal of type #{typeof n.value}"
