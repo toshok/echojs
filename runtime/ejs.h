@@ -37,9 +37,14 @@ typedef struct _EJSContext* EJSContext;
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 #endif
 
-#define EJS_NOT_IMPLEMENTED() EJS_MACRO_START               \
-    printf ("%s not implemented.\n", __PRETTY_FUNCTION__);	\
-    abort();                                                \
+#define EJS_NOT_IMPLEMENTED() EJS_MACRO_START                           \
+    printf ("%s:%s:%d not implemented.\n", __PRETTY_FUNCTION__, __FILE__, __LINE__); \
+    abort();                                                            \
+    EJS_MACRO_END
+
+#define EJS_NOT_REACHED() EJS_MACRO_START                               \
+    printf ("%s:%s:%d should not be reached.\n", __PRETTY_FUNCTION__, __FILE__, __LINE__); \
+    abort();                                                            \
     EJS_MACRO_END
 
 typedef struct _EJSPrimString EJSPrimString;
