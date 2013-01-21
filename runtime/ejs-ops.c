@@ -14,6 +14,7 @@
 #include "ejs-number.h"
 #include "ejs-object.h"
 #include "ejs-string.h"
+#include "ejs-boolean.h"
 #include "ejs-ops.h"
 
 static const size_t UINT32_CHAR_BUFFER_LENGTH = sizeof("4294967295") - 1;
@@ -82,15 +83,15 @@ ejsval NumberToString(double d)
 ejsval ToString(ejsval exp)
 {
     if (EJSVAL_IS_NULL(exp))
-        return _ejs_string_new_utf8 ("null");
+        return _ejs_atom_null;
     else if (EJSVAL_IS_BOOLEAN(exp)) 
-        return _ejs_string_new_utf8 (EJSVAL_TO_BOOLEAN(exp) ? "true" : "false");
+        return EJSVAL_TO_BOOLEAN(exp) ? _ejs_atom_true : _ejs_atom_false;
     else if (EJSVAL_IS_NUMBER(exp))
         return NumberToString(EJSVAL_TO_NUMBER(exp));
     else if (EJSVAL_IS_STRING(exp))
         return exp;
     else if (EJSVAL_IS_UNDEFINED(exp))
-        return _ejs_string_new_utf8 ("undefined");
+        return _ejs_atom_undefined;
     else if (EJSVAL_IS_OBJECT(exp)) {
         ejsval toString = _ejs_object_getprop_utf8 (exp, "toString");
         // XXX nanboxing breaks this if (!EJSVAL_IS_FUNCTION(toString))
@@ -103,29 +104,34 @@ ejsval ToString(ejsval exp)
         EJS_NOT_IMPLEMENTED();
 }
 
-double ToDouble(ejsval exp)
+ejsval ToNumber(ejsval exp)
 {
     if (EJSVAL_IS_NUMBER(exp))
-        return EJSVAL_TO_NUMBER(exp);
+        return exp;
     else if (EJSVAL_IS_BOOLEAN(exp))
-        return EJSVAL_TO_BOOLEAN(exp) ? 1 : 0;
+        return EJSVAL_TO_BOOLEAN(exp) ? _ejs_one : _ejs_zero;
     else if (EJSVAL_IS_STRING(exp))
-        return atof(EJSVAL_TO_FLAT_STRING(exp)); // XXX NaN
+        return NUMBER_TO_EJSVAL(atof(EJSVAL_TO_FLAT_STRING(exp))); // XXX NaN
     else if (EJSVAL_IS_UNDEFINED(exp))
-        return 0; // XXX NaN
+        return _ejs_zero; // XXX NaN
     else if (EJSVAL_IS_OBJECT(exp)) {
         if (EJSVAL_IS_DATE(exp)) {
-            return mktime(&((EJSDate*)EJSVAL_TO_OBJECT(exp))->tm);
+            return NUMBER_TO_EJSVAL(mktime(&((EJSDate*)EJSVAL_TO_OBJECT(exp))->tm));
         }
         // XXX if it's an array
         //       and .length == 0, return 0.
         //       and .length == 1, return ToDouble(array->elements[0]) - yes, it's recursive
         //       else return NaN
         // for anything else, NaN
-        return 0;
+        return _ejs_zero;
     }
     else
         EJS_NOT_IMPLEMENTED();
+}
+
+double ToDouble(ejsval exp)
+{
+    return EJSVAL_TO_NUMBER(ToNumber(exp));
 }
 
 int32_t ToInteger(ejsval exp)
@@ -140,15 +146,20 @@ uint32_t ToUint32(ejsval exp)
 
 ejsval ToObject(ejsval exp)
 {
-    if (EJSVAL_IS_BOOLEAN(exp))
-        EJS_NOT_IMPLEMENTED();
+    if (EJSVAL_IS_BOOLEAN(exp)) {
+        ejsval new_boolean = _ejs_object_new (_ejs_Boolean_proto, &_ejs_boolean_specops);
+        _ejs_invoke_closure_1 (_ejs_Boolean, new_boolean, 1, exp);
+        return new_boolean;
+    }
     else if (EJSVAL_IS_NUMBER(exp)) {
         ejsval new_number = _ejs_object_new (_ejs_Number_proto, &_ejs_number_specops);
-        return _ejs_invoke_closure_1 (_ejs_Number, new_number, 1, exp);
+        _ejs_invoke_closure_1 (_ejs_Number, new_number, 1, exp);
+        return new_number;
     }
     else if (EJSVAL_IS_STRING(exp)) {
         ejsval new_str = _ejs_object_new (_ejs_String_prototype, &_ejs_string_specops);
-        return _ejs_invoke_closure_1 (_ejs_String, new_str, 1, exp);
+        _ejs_invoke_closure_1 (_ejs_String, new_str, 1, exp);
+        return new_str;
     }
     else if (EJSVAL_IS_UNDEFINED(exp))
         return exp; // XXX
@@ -234,27 +245,24 @@ _ejs_op_void (ejsval exp)
 ejsval
 _ejs_op_typeof (ejsval exp)
 {
-    const char *rv;
     if (EJSVAL_IS_NULL(exp))
-        rv = "object";
+        return _ejs_atom_object;
     else if (EJSVAL_IS_BOOLEAN(exp))
-        rv = "boolean";
+        return _ejs_atom_boolean;
     else if (EJSVAL_IS_STRING(exp))
-        rv = "string";
+        return _ejs_atom_string;
     else if (EJSVAL_IS_NUMBER(exp))
-        rv = "number";
+        return _ejs_atom_number;
     else if (EJSVAL_IS_UNDEFINED(exp))
-        rv = "undefined";
+        return _ejs_atom_undefined;
     else if (EJSVAL_IS_OBJECT(exp)) {
         if (EJSVAL_IS_FUNCTION(exp))
-            rv = "function";
+            return _ejs_atom_function;
         else
-            rv = "object";
+            return _ejs_atom_object;
     }
     else
         EJS_NOT_IMPLEMENTED();
-
-    return _ejs_string_new_utf8 (rv);
 }
 
 ejsval
@@ -627,81 +635,88 @@ _ejs_op_strict_eq (ejsval lhs, ejsval rhs)
 ejsval
 _ejs_op_strict_neq (ejsval lhs, ejsval rhs)
 {
-    if (EJSVAL_IS_NULL(lhs))
-        return BOOLEAN_TO_EJSVAL (!EJSVAL_IS_NULL(rhs));
-    else if (EJSVAL_IS_NUMBER(lhs)) {
-        return BOOLEAN_TO_EJSVAL (!EJSVAL_IS_NUMBER(rhs) || EJSVAL_TO_NUMBER(lhs) != EJSVAL_TO_NUMBER(rhs));
-    }
-    else if (EJSVAL_IS_STRING(lhs)) {
-        return BOOLEAN_TO_EJSVAL (!EJSVAL_IS_STRING(rhs) || strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs)));
-    }
-    else if (EJSVAL_IS_BOOLEAN(lhs)) {
-        return BOOLEAN_TO_EJSVAL (!EJSVAL_IS_BOOLEAN(rhs) || EJSVAL_TO_BOOLEAN(lhs) != EJSVAL_TO_BOOLEAN(rhs));
-    }
-    else {
-        return BOOLEAN_TO_EJSVAL (!EJSVAL_EQ(lhs, rhs));
-    }
+    return BOOLEAN_TO_EJSVAL (!EJSVAL_TO_BOOLEAN (_ejs_op_strict_eq (lhs, rhs)));
 }
 
+// ECMA262: 11.9.1 + 11.9.3
 ejsval
-_ejs_op_eq (ejsval lhs, ejsval rhs)
+_ejs_op_eq (ejsval x, ejsval y)
 {
-    if (EJSVAL_IS_NULL(lhs)) {
-        return BOOLEAN_TO_EJSVAL (EJSVAL_IS_NULL(rhs) || EJSVAL_IS_UNDEFINED(rhs));
-    }
-    else if (EJSVAL_IS_UNDEFINED(lhs)) {
-        return BOOLEAN_TO_EJSVAL (EJSVAL_IS_NULL(rhs) || EJSVAL_IS_UNDEFINED(rhs));
-    }
-    else if (EJSVAL_IS_NUMBER(lhs)) {
-        return BOOLEAN_TO_EJSVAL (!EJSVAL_IS_NULL(rhs) && EJSVAL_TO_NUMBER(lhs) == ToDouble(rhs));
-    }
-    else if (EJSVAL_IS_STRING(lhs)) {
-        EJSBool eq;
-        if (EJSVAL_IS_NULL(rhs))
-            eq = EJS_FALSE;
-        else {
-            ejsval rhstring = ToString(rhs);
-            eq = (!strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhstring)));
+    /* 1. If Type(x) is the same as Type(y), then */
+    if (EJSVAL_TO_TAG(x) == EJSVAL_TO_TAG(y)) {
+        /*    a. If Type(x) is Undefined, return true. */
+        if (EJSVAL_IS_UNDEFINED(x)) return _ejs_true;
+        /*    b. If Type(x) is Null, return true. */
+        if (EJSVAL_IS_NULL(x)) return _ejs_true;
+        /*    c. If Type(x) is Number, then */
+        if (EJSVAL_IS_NUMBER(x)) {
+            /*       i. If x is NaN, return false.© Ecma International 2011 81 */
+            if (isnan(EJSVAL_TO_NUMBER(x))) return _ejs_false;
+            /*       ii. If y is NaN, return false. */
+            if (isnan(EJSVAL_TO_NUMBER(y))) return _ejs_false;
+            /*       iii. If x is the same Number value as y, return true. */
+            if (EJSVAL_TO_NUMBER(x) == EJSVAL_TO_NUMBER(y)) return _ejs_true;
+            /*       iv. If x is +0 and y is 0, return true.*/
+            /*       v. If x is 0 and y is +0, return true. */
+            /*       vi. Return false. */
+            return _ejs_false;
         }
-        return BOOLEAN_TO_EJSVAL(eq);
-    }
-    else if (EJSVAL_IS_OBJECT(lhs)) {
-        return BOOLEAN_TO_EJSVAL (!EJSVAL_IS_NULL(rhs) && !EJSVAL_IS_UNDEFINED(rhs) && EJSVAL_TO_OBJECT(lhs) == EJSVAL_TO_OBJECT(ToObject(rhs)));
-    }
+        /*    d. If Type(x) is String, then return true if x and y are exactly the same sequence of characters (same  */
+        /*       length and same characters in corresponding positions). Otherwise, return false. */
+        if (EJSVAL_IS_STRING(x)) {
+            if (EJSVAL_TO_STRLEN(x) != EJSVAL_TO_STRLEN(y)) return _ejs_false;
 
-    EJS_NOT_IMPLEMENTED();
+            // XXX there is doubtless a more efficient way to compare two ropes, but we convert but to flat strings for now.
+            return strcmp (EJSVAL_TO_FLAT_STRING(x), EJSVAL_TO_FLAT_STRING(y)) ? _ejs_false : _ejs_true;
+        }
+        /*    e. If Type(x) is Boolean, return true if x and y are both true or both false. Otherwise, return false. */
+        if (EJSVAL_IS_BOOLEAN(x))
+            return EJSVAL_TO_BOOLEAN(x) == EJSVAL_TO_BOOLEAN(y) ? _ejs_true : _ejs_false;
+
+        /*       if. Return true if x and y refer to the same object. Otherwise, return false. */
+        return (EJSVAL_TO_OBJECT(x) == EJSVAL_TO_OBJECT(y)) ? _ejs_true : _ejs_false;
+    }
+    
+    /* 2. If x is null and y is undefined, return true. */
+    if (EJSVAL_IS_NULL(x) && EJSVAL_IS_UNDEFINED(y)) return _ejs_true;
+    /* 3. If x is undefined and y is null, return true. */
+    if (EJSVAL_IS_UNDEFINED(x) && EJSVAL_IS_NULL(y)) return _ejs_true;
+    /* 4. If Type(x) is Number and Type(y) is String, */
+    if (EJSVAL_IS_NUMBER(x) && EJSVAL_IS_STRING(y)) {
+        /*    return the result of the comparison x == ToNumber(y). */
+        return _ejs_op_eq(x, ToNumber(y));
+    }
+    /* 5. If Type(x) is String and Type(y) is Number, */
+    if (EJSVAL_IS_STRING(x) && EJSVAL_IS_NUMBER(y)) {
+        /*    return the result of the comparison ToNumber(x) == y.*/
+        return _ejs_op_eq(ToNumber(x), y);
+    }
+    /* 6. If Type(x) is Boolean, return the result of the comparison ToNumber(x) == y. */
+    if (EJSVAL_IS_BOOLEAN(x)) {
+        return _ejs_op_eq(ToNumber(x), y);
+    }
+    /* 7. If Type(y) is Boolean, return the result of the comparison x == ToNumber(y). */
+    if (EJSVAL_IS_BOOLEAN(y)) {
+        return _ejs_op_eq(x, ToNumber(y));
+    }
+    /* 8. If Type(x) is either String or Number and Type(y) is Object, */
+    if (EJSVAL_IS_OBJECT(y) && (EJSVAL_IS_STRING(x) || EJSVAL_IS_STRING(x))) {
+        /*    return the result of the comparison x == ToPrimitive(y). */
+        return _ejs_op_eq(x, ToPrimitive(y));
+    }
+    /* 9. If Type(x) is Object and Type(y) is either String or Number, */
+    if (EJSVAL_IS_OBJECT(x) && (EJSVAL_IS_STRING(y) || EJSVAL_IS_STRING(y))) {
+        /*    return the result of the comparison ToPrimitive(x) == y. */
+        return _ejs_op_eq(ToPrimitive(x), y);
+    }
+    /* 10. Return false. */
+    return _ejs_false;
 }
 
 ejsval
 _ejs_op_neq (ejsval lhs, ejsval rhs)
 {
-    if (EJSVAL_IS_NULL(lhs)) {
-        return BOOLEAN_TO_EJSVAL (!EJSVAL_IS_NULL(rhs) && !EJSVAL_IS_UNDEFINED(rhs));
-    }
-    else if (EJSVAL_IS_UNDEFINED(lhs)) {
-        return BOOLEAN_TO_EJSVAL (!EJSVAL_IS_NULL(rhs) && !EJSVAL_IS_UNDEFINED(rhs));
-    }
-    else if (EJSVAL_IS_NUMBER(lhs)) {
-        return BOOLEAN_TO_EJSVAL (EJSVAL_IS_NULL(rhs) || (EJSVAL_TO_NUMBER(lhs) != ToDouble(rhs)));
-    }
-    else if (EJSVAL_IS_STRING(lhs)) {
-        EJSBool neq;
-        if (EJSVAL_IS_NULL(rhs))
-            neq = EJS_TRUE;
-        else {
-            ejsval rhstring = ToString(rhs);
-            neq = (strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhstring)));
-        }
-        return BOOLEAN_TO_EJSVAL (neq);
-    }
-    else if (EJSVAL_IS_UNDEFINED(lhs)) {
-        return BOOLEAN_TO_EJSVAL (EJSVAL_IS_NULL(rhs) || !EJSVAL_IS_UNDEFINED(rhs));
-    }
-    else if (EJSVAL_IS_OBJECT(lhs)) {
-        return BOOLEAN_TO_EJSVAL (EJSVAL_IS_NULL(rhs) || EJSVAL_TO_OBJECT(lhs) != EJSVAL_TO_OBJECT(ToObject(rhs)));
-    }
-
-    EJS_NOT_IMPLEMENTED();
+    return BOOLEAN_TO_EJSVAL (!EJSVAL_TO_BOOLEAN (_ejs_op_eq (lhs, rhs)));
 }
 
 ejsval

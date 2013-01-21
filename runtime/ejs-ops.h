@@ -10,6 +10,7 @@ EJS_BEGIN_DECLS
 /* returns an EJSPrimString* */
 ejsval NumberToString(double d);
 ejsval ToString(ejsval exp);
+ejsval ToNumber(ejsval exp);
 double ToDouble(ejsval exp);
 int32_t ToInteger(ejsval exp);
 uint32_t ToUint32(ejsval exp);
