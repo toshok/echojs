@@ -1,4 +1,3 @@
-
 SOURCES= \
 	ejs-arguments.c \
 	ejs-array.c \
@@ -23,11 +22,20 @@ SOURCES= \
 	parson.c \
 	main.c
 
+libecho_OBJECTS=$(SOURCES:%.c=%.o)
+
+LIBRARIES= libecho.a
+
+all: $(LIBRARIES)
+
+clean:
+	rm -f test $(libecho_OBJECTS) $(LIBRARIES)
+
 VPATH=.:../parson
 
-OBJECTS=$(SOURCES:%.c=%.o)
-
 CFLAGS=-I. -Wall -g -O0 -Wno-unused-function
+SHARED_CFLAGS=-fPIC $(CFLAGS)
+
 DEV_CFLAGS=	-arch armv6 \
 		-isysroot /Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS5.0.sdk \
 		-miphoneos-version-min=4.3
@@ -36,18 +44,15 @@ SIM_CFLAGS=	-arch i386 \
 		-isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator5.0.sdk \
 		-miphoneos-version-min=4.3
 
+libecho.a: $(libecho_OBJECTS)
+	@echo [$(AR)] $@ && $(AR) cru $@ $(libecho_OBJECTS)
 
-libecho.a: $(OBJECTS)
-	$(AR) cru $@ $(OBJECTS)
-
+CCLD=clang++
 CC=clang
 
-$(OBJECTS): %.o: %.c
+$(libecho_OBJECTS): %.o: %.c
 	@mkdir -p .deps
 	@$(CC) -MM $(CFLAGS) $< > .deps/$@-deps
-	$(CC) $(CFLAGS) -c $< -o $@
+	@echo [$(CC)] $< && $(CC) $(CFLAGS) -c $< -o $@
 
-clean:
-	rm -f test $(OBJECTS) libecho.a
-
--include $(patsubst %.o,.deps/%.o-deps,$(OBJECTS))
+-include $(patsubst %.o,.deps/%.o-deps,$(libecho_OBJECTS))
