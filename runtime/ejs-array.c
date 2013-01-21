@@ -404,7 +404,7 @@ _ejs_Array_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
 
     int i;
     for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
-        _ejs_invoke_closure_1 (fun, _ejs_null, 1, EJS_ARRAY_ELEMENTS(_this)[i]);
+        _ejs_invoke_closure_2 (fun, _ejs_null, 2, EJS_ARRAY_ELEMENTS(_this)[i], NUMBER_TO_EJSVAL(i));
     }
     return _ejs_undefined;
 }
