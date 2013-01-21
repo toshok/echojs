@@ -72,9 +72,16 @@ _ejs_Boolean_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 static ejsval
 _ejs_Boolean_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    EJSBoolean *b = (EJSBoolean*)EJSVAL_TO_OBJECT(_this);
+    EJSBool b;
 
-    return b->boolean ? _ejs_atom_true : _ejs_atom_false;
+    if (EJSVAL_IS_BOOLEAN(_this)) {
+        b = EJSVAL_TO_BOOLEAN(_this);
+    }
+    else {
+        b = ((EJSBoolean*)EJSVAL_TO_OBJECT(_this))->boolean;
+    }
+
+    return b ? _ejs_atom_true : _ejs_atom_false;
 }
 
 static ejsval
