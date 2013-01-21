@@ -19,7 +19,8 @@ EXPECTED_FAILURES= \
 	exc2 \
 	exc3 \
 	exc10 \
-	sieve1
+	sieve1 \
+	json4
 
 # date1 fails because we test the Date() function, which returns the current time.  this differs from the current time when the node test runs.  bleah.
 # forin2 fails because we don't properly handle deleting properties while iterating
@@ -32,6 +33,7 @@ EXPECTED_FAILURES= \
 # prototype9 fails because of one actual prototype failure and difference in our Function.toString() method.
 # the exc* tests fail because things are very screwed up with exception handling at the moment.
 # sieve1 fails due to a gc bug.  with EJS_GC_DISABLE=1, the test runs fine
+# json4 fails due to properties being serialized in a different order.
 
 check: check-unit-tests run-tests
 
@@ -116,7 +118,7 @@ esprima-roundtrip%.js.exe: esprima-roundtrip%.js $(TOPDIR)/esprima/esprima.js $(
 	-NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $< $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js
 
 %.js.exe: %.js $(TOPDIR)/runtime/libecho.a
-	@echo [ejs] $< && NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $<
+	@echo [ejs] $< && NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --leave-temp $<
 
 v8-%.js.exe: v8/%.js $(TOPDIR)/runtime/libecho.a
 	NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $<
