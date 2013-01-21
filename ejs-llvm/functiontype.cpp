@@ -45,7 +45,7 @@ _ejs_llvm_FunctionType_get (ejsval env, ejsval _this, int argc, ejsval *args)
 
     std::vector<llvm::Type*> arg_types;
     for (int i = 0; i < EJSARRAY_LEN(argTypes); i ++) {
-      arg_types.push_back (_ejs_llvm_Type_getLLVMObj(EJSARRAY_ELEMENTS(argTypes)[i]));
+      arg_types.push_back (_ejs_llvm_Type_GetLLVMObj(EJSARRAY_ELEMENTS(argTypes)[i]));
     }
 
     llvm::FunctionType *FT = llvm::FunctionType::get(returnType,

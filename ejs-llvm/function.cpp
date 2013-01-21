@@ -20,7 +20,9 @@ typedef struct {
   llvm::Function *llvm_fun;
 } EJSLLVMFunction;
 
-EJSObject* _ejs_llvm_Function_alloc_instance()
+static EJSSpecOps _ejs_llvm_function_specops;
+
+static EJSObject* _ejs_llvm_Function_allocate()
 {
     return (EJSObject*)_ejs_gc_new(EJSLLVMFunction);
 }
@@ -38,10 +40,9 @@ _ejs_llvm_Function_impl (ejsval env, ejsval _this, int argc, ejsval *args)
 ejsval
 _ejs_llvm_Function_new(llvm::Function* llvm_fun)
 {
-  EJSObject* result = _ejs_llvm_Function_alloc_instance();
-  _ejs_init_object (result, _ejs_llvm_Function_proto, NULL);
-  ((EJSLLVMFunction*)result)->llvm_fun = llvm_fun;
-  return OBJECT_TO_EJSVAL(result);
+    ejsval result = _ejs_object_new (_ejs_llvm_Function_proto, &_ejs_llvm_function_specops);
+    ((EJSLLVMFunction*)EJSVAL_TO_OBJECT(result))->llvm_fun = llvm_fun;
+    return result;
 }
 
 ejsval
@@ -152,13 +153,24 @@ _ejs_llvm_Function_prototype_getOnlyReadsMemory(ejsval env, ejsval _this, int ar
     return BOOLEAN_TO_EJSVAL(fun->llvm_fun->onlyReadsMemory());
 }
 
+llvm::Function*
+_ejs_llvm_Function_GetLLVMObj(ejsval val)
+{
+    if (EJSVAL_IS_NULL(val)) return NULL;
+    return ((EJSLLVMFunction*)EJSVAL_TO_OBJECT(val))->llvm_fun;
+}
+
 void
 _ejs_llvm_Function_init (ejsval exports)
 {
+    _ejs_llvm_function_specops = _ejs_object_specops;
+    _ejs_llvm_function_specops.class_name = "LLVMFunction";
+    _ejs_llvm_function_specops.allocate = _ejs_llvm_Function_allocate;
+
     START_SHADOW_STACK_FRAME;
 
     _ejs_gc_add_named_root (_ejs_llvm_Function_proto);
-    _ejs_llvm_Function_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_object_specops);
+    _ejs_llvm_Function_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_llvm_function_specops);
 
     ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMFunction", (EJSClosureFunc)_ejs_llvm_Function_impl));
     _ejs_llvm_Function = tmpobj;
@@ -185,6 +197,7 @@ _ejs_llvm_Function_init (ejsval exports)
     PROTO_METHOD(toString);
 
 #undef PROTO_METHOD
+#undef PROTO_ACCESSOR
 
     _ejs_object_setprop_utf8 (exports,              "Function", _ejs_llvm_Function);
 

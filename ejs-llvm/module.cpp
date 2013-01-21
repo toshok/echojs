@@ -23,7 +23,7 @@ typedef struct {
     llvm::Module *llvm_module;
 } EJSLLVMModule;
 
-static EJSSpecOps _ejs_module_specops;
+static EJSSpecOps _ejs_llvm_module_specops;
 
 static EJSObject* _ejs_llvm_Module_allocate()
 {
@@ -91,7 +91,7 @@ _ejs_llvm_Module_prototype_getOrInsertFunction(ejsval env, ejsval _this, int arg
 
     std::vector< llvm::Type*> param_types;
     for (int i = 0; i < EJSARRAY_LEN(paramTypes); i ++) {
-        param_types.push_back (_ejs_llvm_Type_getLLVMObj(EJSARRAY_ELEMENTS(paramTypes)[i]));
+        param_types.push_back (_ejs_llvm_Type_GetLLVMObj(EJSARRAY_ELEMENTS(paramTypes)[i]));
     }
 
     llvm::FunctionType *FT = llvm::FunctionType::get(returnType, param_types, false);
@@ -130,9 +130,20 @@ _ejs_llvm_Module_prototype_getOrInsertExternalFunction(ejsval env, ejsval _this,
     EJSLLVMModule *module = ((EJSLLVMModule*)EJSVAL_TO_OBJECT(_this));
 
     REQ_UTF8_ARG(0, name);
-    REQ_LLVM_TYPE_ARG(1, type);
+    REQ_LLVM_TYPE_ARG(1, returnType);
+    REQ_ARRAY_ARG(2, paramTypes);
 
-    return _ejs_llvm_Value_new (module->llvm_module->getOrInsertGlobal(name, type));
+    std::vector< llvm::Type*> param_types;
+    for (int i = 0; i < EJSARRAY_LEN(paramTypes); i ++) {
+        param_types.push_back (_ejs_llvm_Type_GetLLVMObj(EJSARRAY_ELEMENTS(paramTypes)[i]));
+    }
+
+    llvm::FunctionType *FT = llvm::FunctionType::get(returnType, param_types, false);
+
+    llvm::Function* f = static_cast< llvm::Function*>(module->llvm_module->getOrInsertFunction(name, FT));
+    f->setLinkage (llvm::Function::ExternalLinkage);
+
+    return _ejs_llvm_Function_new (f);
 }
 
 ejsval
@@ -184,13 +195,14 @@ _ejs_llvm_Module_prototype_writeToFile(ejsval env, ejsval _this, int argc, ejsva
 void
 _ejs_llvm_Module_init (ejsval exports)
 {
-    _ejs_module_specops = _ejs_object_specops;
-    _ejs_module_specops.allocate = _ejs_llvm_Module_allocate;
+    _ejs_llvm_module_specops = _ejs_object_specops;
+    _ejs_llvm_module_specops.class_name = "LLVMModule";
+    _ejs_llvm_module_specops.allocate = _ejs_llvm_Module_allocate;
 
     START_SHADOW_STACK_FRAME;
 
     _ejs_gc_add_named_root (_ejs_llvm_Module_proto);
-    _ejs_llvm_Module_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_module_specops);
+    _ejs_llvm_Module_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_llvm_module_specops);
 
     ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMModule", (EJSClosureFunc)_ejs_llvm_Module_impl));
     _ejs_llvm_Module = tmpobj;

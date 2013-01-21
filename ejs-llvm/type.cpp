@@ -88,8 +88,9 @@ _ejs_llvm_Type_new(llvm::Type* llvm_ty)
 }
 
 llvm::Type*
-_ejs_llvm_Type_getLLVMObj(ejsval val)
+_ejs_llvm_Type_GetLLVMObj(ejsval val)
 {
+  if (EJSVAL_IS_NULL(val)) return NULL;
   return ((EJSLLVMType*)EJSVAL_TO_OBJECT(val))->type;
 }
 

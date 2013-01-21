@@ -38,15 +38,15 @@ _ejs_llvm_StructType_new(llvm::StructType* llvm_ty)
 ejsval
 _ejs_llvm_StructType_create(ejsval env, ejsval _this, int argc, ejsval *args)
 {
-    REQ_UTF8_ARG (0, name);
-    REQ_ARRAY_ARG (1, elementTypes)
+  REQ_UTF8_ARG (0, name);
+  REQ_ARRAY_ARG (1, elementTypes)
 
     std::vector<llvm::Type*> element_types;
-    for (int i = 0; i < EJSARRAY_LEN(elementTypes); i ++) {
-      element_types.push_back (_ejs_llvm_Type_getLLVMObj(EJSARRAY_ELEMENTS(elementTypes)[i]));
-    }
+  for (int i = 0; i < EJSARRAY_LEN(elementTypes); i ++) {
+    element_types.push_back (_ejs_llvm_Type_GetLLVMObj(EJSARRAY_ELEMENTS(elementTypes)[i]));
+  }
 
-    return _ejs_llvm_StructType_new(llvm::StructType::create(llvm::getGlobalContext(), element_types, name));
+  return _ejs_llvm_StructType_new(llvm::StructType::create(llvm::getGlobalContext(), element_types, name));
 }
 
 ejsval
@@ -66,6 +66,13 @@ _ejs_llvm_StructType_prototype_dump(ejsval env, ejsval _this, int argc, ejsval *
   return _ejs_undefined;
 }
 
+
+llvm::StructType*
+_ejs_llvm_StructType_GetLLVMObj(ejsval val)
+{
+  if (EJSVAL_IS_NULL(val)) return NULL;
+  return ((EJSLLVMStructType*)EJSVAL_TO_OBJECT(val))->type;
+}
 
 void
 _ejs_llvm_StructType_init (ejsval exports)

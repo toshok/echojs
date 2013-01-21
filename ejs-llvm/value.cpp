@@ -71,6 +71,13 @@ _ejs_llvm_Value_prototype_setName(ejsval env, ejsval _this, int argc, ejsval *ar
     return _ejs_undefined;
 }
 
+llvm::Value*
+_ejs_llvm_Value_GetLLVMObj(ejsval val)
+{
+    if (EJSVAL_IS_NULL(val)) return NULL;
+    return ((EJSLLVMValue*)EJSVAL_TO_OBJECT(val))->llvm_val;
+}
+
 void
 _ejs_llvm_Value_init (ejsval exports)
 {
