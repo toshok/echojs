@@ -1376,43 +1376,6 @@ _ejs_object_init (ejsval global)
 static ejsval
 _ejs_object_specop_get (ejsval obj_, ejsval propertyName, EJSBool isCStr)
 {
-#if 0
-    EJSObject* obj = EJSVAL_TO_OBJECT(obj_);
-
-    char *pname;
-    if (isCStr)
-        pname = (char*)EJSVAL_TO_PRIVATE_PTR_IMPL(propertyName);
-    else {
-        propertyName = ToString(propertyName);
-        pname = EJSVAL_TO_FLAT_STRING(propertyName);
-    }
-
-    int prop_index = _ejs_propertymap_lookup (obj->map, pname, EJS_FALSE);
-
-    if (prop_index == -1) {
-        if (!strcmp("__proto__", pname))
-            return obj->proto;
-
-        if (EJSVAL_IS_NULL(obj->proto)) {
-#if DEBUG_PROPERTIES
-            printf ("failed to find property %s, returning undefined\n", pname);
-#endif
-            return _ejs_undefined;
-        }
-        else {
-#if DEBUG_PROPERTIES
-            printf ("walking up prototype chain for property %s\n", pname);
-#endif
-            return OP(EJSVAL_TO_OBJECT(obj->proto),get) (obj->proto, propertyName, isCStr);
-        }
-    }
-    else {
-        EJSPropertyDesc* desc = &obj->map->properties[prop_index];
-        if (!EJSVAL_IS_UNDEFINED(desc->get))
-            return _ejs_invoke_closure_0 (desc->get, obj_, 0);
-        return obj->map->properties[prop_index].value;
-    }
-#else
     ejsval pname;
 
     if (isCStr)
@@ -1427,14 +1390,14 @@ _ejs_object_specop_get (ejsval obj_, ejsval propertyName, EJSBool isCStr)
     EJSPropertyDesc* desc = OP(EJSVAL_TO_OBJECT(obj_),get_property) (obj_, pname);
     /* 2. If desc is undefined, return undefined. */
     if (desc == NULL) {
-        //        printf ("property lookup on a %s object, propname %s => undefined\n", CLASSNAME(EJSVAL_TO_OBJECT(obj_)), EJSVAL_TO_FLAT_STRING(pname));
+        // printf ("property lookup on a %s object, propname %s => undefined\n", CLASSNAME(EJSVAL_TO_OBJECT(obj_)), EJSVAL_TO_FLAT_STRING(pname));
         return _ejs_undefined;
     }
 
     /* 3. If IsDataDescriptor(desc) is true, return desc.[[Value]]. */
     if (IsDataDescriptor(desc)) {
-        //        if (EJSVAL_IS_UNDEFINED(desc->value))
-        //            printf ("property lookup on a %s object, propname %s => undefined\n", CLASSNAME(EJSVAL_TO_OBJECT(obj_)), EJSVAL_TO_FLAT_STRING(pname));
+        // if (EJSVAL_IS_UNDEFINED(desc->value))
+        //     printf ("property lookup on a %s object, propname %s => undefined\n", CLASSNAME(EJSVAL_TO_OBJECT(obj_)), EJSVAL_TO_FLAT_STRING(pname));
         return desc->value;
     }
 
@@ -1443,13 +1406,12 @@ _ejs_object_specop_get (ejsval obj_, ejsval propertyName, EJSBool isCStr)
 
     /* 5. If getter is undefined, return undefined. */
     if (EJSVAL_IS_UNDEFINED(getter)) {
-        //        printf ("property lookup on a %s object, propname %s => undefined getter\n", CLASSNAME(EJSVAL_TO_OBJECT(obj_)), EJSVAL_TO_FLAT_STRING(pname));
+        // printf ("property lookup on a %s object, propname %s => undefined getter\n", CLASSNAME(EJSVAL_TO_OBJECT(obj_)), EJSVAL_TO_FLAT_STRING(pname));
         return _ejs_undefined;
     }
 
     /* 6. Return the result calling the [[Call]] internal method of getter providing O as the this value and providing no arguments */
     return _ejs_invoke_closure_0 (getter, obj_, 0);
-#endif
 }
 
 // ECMA262: 8.12.1
