@@ -4,11 +4,13 @@
 #include <assert.h>
 #include <string.h>
 #include <math.h>
+#include <stdint.h>
 
 #include "ejs-value.h"
 #include "ejs-array.h"
 #include "ejs-string.h"
 #include "ejs-function.h"
+#include "ejs-regexp.h"
 #include "ejs-ops.h"
 
 static ejsval _ejs_string_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr);
@@ -238,6 +240,49 @@ _ejs_String_prototype_substring (ejsval env, ejsval _this, uint32_t argc, ejsval
     EJS_NOT_IMPLEMENTED();
 }
 
+// ECMA262: B.2.3
+static ejsval
+_ejs_String_prototype_substr (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval start = _ejs_undefined;
+    ejsval length = _ejs_undefined;
+
+    if (argc > 0) start = args[0];
+    if (argc > 1) length = args[1];
+
+    /* 1. Call ToString, giving it the this value as its argument. */
+    ejsval Result1 = ToString(_this);
+
+    /* 2. Call ToInteger(start). */
+    int32_t Result2 = ToInteger(start);
+
+    /* 3. If length is undefined, use +inf; otherwise call ToInteger(length). */
+    int32_t Result3;
+    if (EJSVAL_IS_UNDEFINED(length)) {
+        EJS_NOT_IMPLEMENTED();
+    }
+    else {
+        Result3 = ToInteger(length);
+    }
+
+    /* 4. Compute the number of characters in Result(1). */
+    int32_t Result4 = EJSVAL_TO_STRLEN(Result1);
+
+    /* 5. If Result(2) is positive or zero, use Result(2); else use max(Result(4)+Result(2),0). */
+    int32_t Result5 = Result2 >= 0 ? Result2 : MAX(Result4+Result2, 0);
+        
+    /* 6. Compute min(max(Result(3),0), Result(4)–Result(5)). */
+    int32_t Result6 = MIN(MAX(Result3, 0), Result4 - Result5);
+    
+    /* 7. If Result(6) <= 0, return the empty String "". */
+    if (Result6 <= 0) return _ejs_atom_empty;
+
+    /* 8. Return a String containing Result(6) consecutive characters from Result(1) beginning with the character at  */
+    /*    position Result(5). */
+    char* result1_str = EJSVAL_TO_FLAT_STRING(Result1);
+    return _ejs_string_new_utf8_len(result1_str + Result5, Result6);
+}
+
 static ejsval
 _ejs_String_prototype_toLowerCase (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
@@ -274,14 +319,185 @@ _ejs_String_prototype_valueOf (ejsval env, ejsval _this, uint32_t argc, ejsval *
     EJS_NOT_IMPLEMENTED();
 }
 
+// ECMA262: 15.5.4.14
+typedef enum {
+    MATCH_RESULT_FAILURE,
+    MATCH_RESULT_SUCCESS
+} MatchResultType;
+
+typedef struct {
+    MatchResultType type;
+    int endIndex;
+    ejsval captures;
+} MatchResultState;
+
+static MatchResultState
+SplitMatch(ejsval S, int q, ejsval R)
+{
+    /* 1. If R is a RegExp object (its [[Class]] is "RegExp"), then */
+    if (EJSVAL_IS_REGEXP(R)) {
+        /*    a. Call the [[Match]] internal method of R giving it the arguments S and q, and return the MatchResult  */
+        /*       result. */
+        EJS_NOT_IMPLEMENTED();
+    }
+        
+    /* 2. Type(R) must be String. Let r be the number of characters in R. */
+    int r = EJSVAL_TO_STRLEN(R);
+
+    /* 3. Let s be the number of characters in S. */
+    int s = EJSVAL_TO_STRLEN(S);
+
+    /* 4. If q+r > s then return the MatchResult failure. */
+    if (q + r > s) {
+        MatchResultState rv = { MATCH_RESULT_FAILURE };
+        return rv;
+    }
+
+    /* 5. If there exists an integer i between 0 (inclusive) and r (exclusive) such that the character at position q+i of S */
+    /*    is different from the character at position i of R, then return failure. */
+    char* sstr = EJSVAL_TO_FLAT_STRING(S);
+    char* rstr = EJSVAL_TO_FLAT_STRING(R);
+    for (int i = 0; i < r; i ++) {
+        if (sstr[q+i] != rstr[i]) {
+            MatchResultState rv = { MATCH_RESULT_FAILURE };
+            return rv;
+        }
+    }
+
+    /* 6. Let cap be an empty array of captures (see 15.10.2.1). */
+    ejsval cap = _ejs_array_new(0);
+    /* 7. Return the State (q+r, cap). (see 15.10.2.1) */
+    MatchResultState rv = { MATCH_RESULT_SUCCESS, q+r, cap };
+    return rv;
+}
+
 static ejsval
 _ejs_String_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    // for now let's just not split anything at all, return the original string as element0 of the array.
+    ejsval separator = _ejs_undefined;
+    ejsval limit = _ejs_undefined;
 
-    ejsval rv = _ejs_array_new (1);
-    _ejs_object_setprop (rv, NUMBER_TO_EJSVAL (0), _this);
-    return rv;
+    if (argc > 0) separator = args[0];
+    if (argc > 1) limit = args[1];
+
+    /* 1. Call CheckObjectCoercible passing the this value as its argument. */
+    /* 2. Let S be the result of calling ToString, giving it the this value as its argument. */
+    ejsval S = ToString(_this);
+    char *Sstr = EJSVAL_TO_FLAT_STRING(S);
+
+    /* 3. Let A be a new array created as if by the expression new Array() where Array is the standard built-in  */
+    /*    constructor with that name. */
+    ejsval A = _ejs_array_new(0);
+
+    /* 4. Let lengthA be 0. */
+    int lengthA = 0;
+
+    /* 5. If limit is undefined, let lim = 2^32–1; else let lim = ToUint32(limit). */
+    uint32_t lim = (EJSVAL_IS_UNDEFINED(limit)) ? UINT32_MAX : ToUint32(limit);
+
+    /* 6. Let s be the number of characters in S. */
+    int s = EJSVAL_TO_STRLEN(S);
+
+    /* 7. Let p = 0. */
+    int p = 0;
+
+    /* 8. If separator is a RegExp object (its [[Class]] is "RegExp"), let R = separator; otherwise let R =  */
+    /*    ToString(separator). */
+    ejsval R = (EJSVAL_IS_REGEXP(separator)) ? separator : ToString(separator);
+
+    /* 9. If lim = 0, return A. */
+    if (lim == 0)
+        return A;
+
+    /* 10. If separator is undefined, then */
+    if (EJSVAL_IS_UNDEFINED(separator)) {
+        /*     a. Call the [[DefineOwnProperty]] internal method of A with arguments "0", Property Descriptor  */
+        /*        {[[Value]]: S, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
+        _ejs_array_push_dense (A, 1, &S);
+
+        /*     b. Return A. */
+        return A;
+    }
+    /* 11. If s = 0, then */
+    if (s == 0) {
+        EJS_NOT_IMPLEMENTED();
+        /*     a. Call SplitMatch(S, 0, R) and let z be its MatchResult result. */
+        /*     b. If z is not failure, return A. */
+        /*     c. Call the [[DefineOwnProperty]] internal method of A with arguments "0", Property Descriptor  */
+        /*        {[[Value]]: S, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
+        /*     d. Return A. */
+        return A;
+    }
+    /* 12. Let q = p. */
+    int q = p;
+
+    /* 13. Repeat, while q != s */
+    while (q != s) {
+        /* a. Call SplitMatch(S, q, R) and let z be its MatchResult result. */
+        MatchResultState z = SplitMatch(S, q, R);
+        
+        /* b. If z is failure, then let q = q+1. */
+        if (z.type == MATCH_RESULT_FAILURE) {
+            q++;
+        }
+        /* c. Else,  z is not failure */
+        else {
+            /*    i. z must be a State. Let e be z's endIndex and let cap be z's captures array. */
+            int e = z.endIndex;
+            ejsval cap = z.captures;
+
+            /*    ii. If e = p, then let q = q+1. */
+            if (e == p) {
+                q++;
+            }
+            /*    iii. Else, e != p */
+            else {
+                /*         1. Let T be a String value equal to the substring of S consisting of the characters at  */
+                /*            positions p (inclusive) through q (exclusive). */
+                ejsval T = _ejs_string_new_utf8_len (Sstr + p, q-p);
+                /*         2. Call the [[DefineOwnProperty]] internal method of A with arguments  */
+                /*            ToString(lengthA), Property Descriptor {[[Value]]: T, [[Writable]]: true, */
+                /*            [[Enumerable]]: true, [[Configurable]]: true}, and false. */
+                _ejs_array_push_dense (A, 1, &T);
+
+                /*         3. Increment lengthA by 1. */
+                lengthA ++;
+                /*         4. If lengthA = lim, return A. */
+                if (lengthA == lim)
+                    return A;
+                /*         5. Let p = e. */
+                p = e;
+                /*         6. Let i = 0. */
+                int i = 0;
+                /*         7. Repeat, while i is not equal to the number of elements in cap. */
+                while (i != EJS_ARRAY_LEN(cap)) {
+                    /*            a Let i = i+1. */
+                    i++;
+                    /*            b Call the [[DefineOwnProperty]] internal method of A with arguments  */
+                    /*              ToString(lengthA), Property Descriptor {[[Value]]: cap[i], [[Writable]]:  */
+                    /*              true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
+                    ejsval pushcap = EJS_ARRAY_ELEMENTS(cap)[i];
+                    _ejs_array_push_dense (A, 1, &pushcap);
+                    /*            c Increment lengthA by 1. */
+                    lengthA ++;
+                    /*            d If lengthA = lim, return A. */
+                    if (lengthA == lim)
+                        return A;
+                }
+                /*         8. Let q = p. */
+                q = p;
+            }
+        }
+    }
+    /* 14. Let T be a String value equal to the substring of S consisting of the characters at positions p (inclusive)  */
+    /*     through s (exclusive). */
+    ejsval T = _ejs_string_new_utf8_len (Sstr + p, s-p);
+    /* 15. Call the [[DefineOwnProperty]] internal method of A with arguments ToString(lengthA), Property Descriptor  */
+    /*     {[[Value]]: T, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
+    _ejs_array_push_dense (A, 1, &T);
+
+    /* 16. Return A. */
+    return A;
 }
 
 static ejsval
@@ -289,8 +505,11 @@ _ejs_String_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
 {
     // assert argc >= 1
 
-    ejsval start = args[0];
-    ejsval end = argc > 1 ? args[1] : _ejs_undefined;
+    ejsval start = _ejs_undefined;
+    ejsval end = _ejs_undefined;
+
+    if (argc > 0) start = args[0];
+    if (argc > 1) end = args[1];
 
     // Call CheckObjectCoercible passing the this value as its argument.
     // Let S be the result of calling ToString, giving it the this value as its argument.
@@ -298,7 +517,7 @@ _ejs_String_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     // Let len be the number of characters in S.
     int len = EJSVAL_TO_STRLEN(S);
     // Let intStart be ToInteger(start).
-    int intStart = ToInteger(start);
+    int intStart = EJSVAL_IS_UNDEFINED(start) ? 0 : ToInteger(start);
 
     // If end is undefined, let intEnd be len; else let intEnd be ToInteger(end).
     int intEnd = EJSVAL_IS_UNDEFINED(end) ? len : ToInteger(end);
@@ -313,13 +532,14 @@ _ejs_String_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     int span = MAX(to - from, 0);
 
     // Return a String containing span consecutive characters from S beginning with the character at position from.
-    return _ejs_string_new_utf8_len (EJSVAL_TO_FLAT_STRING(S), span);
+    return _ejs_string_new_utf8_len (EJSVAL_TO_FLAT_STRING(S) + from, span);
 }
 
 static void
 _ejs_string_init_proto()
 {
-    _ejs_gc_add_named_root (_ejs_Object__proto__);
+    _ejs_gc_add_named_root (_ejs_String__proto__);
+    _ejs_gc_add_named_root (_ejs_String_prototype);
 
     EJSFunction* __proto__ = _ejs_gc_new(EJSFunction);
     __proto__->name = _ejs_atom_Empty;
@@ -361,6 +581,7 @@ _ejs_string_init(ejsval global)
     PROTO_METHOD(search);
     PROTO_METHOD(slice);
     PROTO_METHOD(split);
+    PROTO_METHOD(substr);
     PROTO_METHOD(substring);
     PROTO_METHOD(toLocaleLowerCase);
     PROTO_METHOD(toLocaleUpperCase);
