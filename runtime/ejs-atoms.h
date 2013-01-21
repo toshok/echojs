@@ -8,10 +8,15 @@ EJS_ATOM(toString)
 EJS_ATOM(object)
 EJS_ATOM(function)
 EJS_ATOM(string)
+EJS_ATOM(boolean)
+EJS_ATOM(number)
+
 
 EJS_ATOM(Empty)
 
 EJS_ATOM(null)
+EJS_ATOM(undefined)
+EJS_ATOM(NaN)
 
 EJS_ATOM(true)
 EJS_ATOM(false)
@@ -37,3 +42,4 @@ EJS_ATOM(Number)
 EJS_ATOM(Object)
 EJS_ATOM(RegExp)
 EJS_ATOM(String)
+EJS_ATOM(GC)
