@@ -11,11 +11,12 @@
 #include <setjmp.h>
 
 #include "ejs-gc.h"
+#include "ejs-function.h"
 #include "ejs-value.h"
 #include "ejs-string.h"
 #include "ejsval.h"
 
-#define spew 0
+#define spew 1
 #if spew
 #define SPEW(x) x
 #else
@@ -263,7 +264,7 @@ dealloc_from_os(char* ptr, size_t size)
 static PageInfo*
 init_page_info(char *page_data, size_t cell_size)
 {
-    PageInfo* info = (PageInfo*)malloc(sizeof(PageInfo));
+    PageInfo* info = (PageInfo*)calloc(1, sizeof(PageInfo));
     EJS_LIST_INIT(info);
     info->cell_size = cell_size;
     info->page_data = page_data;
@@ -322,9 +323,7 @@ _ejs_gc_init()
 static void
 _scan_ejsvalue (ejsval val)
 {
-    if (!EJSVAL_IS_GCTHING_IMPL(val)) return;
-
-    if (EJSVAL_IS_NULL(val)) return;
+    if (!EJSVAL_IS_TRACEABLE_IMPL(val)) return;
 
     GCObjectPtr gcptr = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(val);
 
@@ -448,7 +447,7 @@ sweep_heap()
                         OP(p, finalize)((EJSObject*)p);
                     }
                     else {
-                        SPEW(printf ("finalizing primitive string %p(%s)\n", p, _ejs_primstring_flatten((EJSPrimString*)p)->data.flat));
+                        SPEW(printf ("finalizing primitive string %p\n", p));
                     }
                     add_cell_to_freelist (info, c);
                 }
@@ -485,13 +484,15 @@ static void
 mark_thread_stack()
 {
 #if CONSERVATIVE_STACKWALK
+    jmp_buf env;
     GCObjectPtr stack_top = NULL;
 #endif
 
 #if CONSERVATIVE_STACKWALK
-        mark_in_range(((char*)&stack_top) + sizeof(GCObjectPtr), (char*)stack_bottom);
+    setjmp (env);
+    mark_in_range(((char*)&stack_top) + sizeof(GCObjectPtr), (char*)stack_bottom);
 #else
-        mark_from_shadow_stack();
+    mark_from_shadow_stack();
 #endif
 }
 
@@ -514,6 +515,10 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
 {
     // very simple stop the world collector
 
+    num_roots = 0;
+    white_objs = 0;
+    total_objs = 0;
+
     if (!shutting_down) {
         mark_from_roots();
 
@@ -529,7 +534,7 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
     SPEW(printf ("_ejs_gc_collect stats:\n");
          printf ("   num_roots: %d\n", num_roots);
          printf ("   total objects: %d\n", total_objs);
-         printf ("   garbage objects: %d\n", white_objs));
+         printf ("   garbage objects: %d\n", white_objs);)
 
     unsigned int tmp = black_mask;
     black_mask = white_mask;
@@ -549,8 +554,6 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
 
         root_set = NULL;
 
-#undef SPEW
-#define SPEW(x) x
         SPEW(printf ("final gc page statistics:\n");
              for (int hp = 0; hp < HEAP_PAGELISTS_COUNT; hp++) {
                  int len = 0;
@@ -558,8 +561,6 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
                      len++;
                  printf ("  size: %d     pages: %d\n", 1<<(hp + 3), len);
              })
-#undef SPEW
-#define SPEW(x)
     }
     else {
         for (int hp = 0; hp < HEAP_PAGELISTS_COUNT; hp++) {
@@ -611,7 +612,7 @@ alloc_from_freelist(PageInfo *info)
     SET_WHITE(info->page_bitmap[(rv-info->page_data) / info->cell_size]);
     SET_ALLOCATED(info->page_bitmap[(rv-info->page_data) / info->cell_size]);
 
-    *((GCObjectHeader*)rv) = 0;
+    memset(rv, 0, info->cell_size);
 
     return rv;
 }
@@ -681,3 +682,33 @@ _ejs_gc_remove_root(ejsval* root)
 {
     abort();
 }
+
+/////////
+ejsval _ejs_GC;
+
+static ejsval
+_ejs_GC_collect (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    _ejs_gc_collect();
+    return _ejs_undefined;
+}
+
+void
+_ejs_GC_init(ejsval global)
+{
+    START_SHADOW_STACK_FRAME;
+
+    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_object_new (_ejs_Object_prototype, &_ejs_object_specops));
+    _ejs_GC = tmpobj;
+
+#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_GC, EJS_STRINGIFY(x), _ejs_GC_##x)
+
+    OBJ_METHOD(collect);
+
+#undef OBJ_METHOD
+
+    _ejs_object_setprop (global, _ejs_atom_GC, _ejs_GC);
+
+    END_SHADOW_STACK_FRAME;
+}
+

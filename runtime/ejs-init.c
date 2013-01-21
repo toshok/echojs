@@ -71,8 +71,8 @@ _ejs_init(int argc, char** argv)
 
     _ejs_global = _ejs_object_new (_ejs_null, &_ejs_object_specops);
 
-    _ejs_object_setprop_utf8 (_ejs_global, "undefined", _ejs_undefined);
-    _ejs_object_setprop_utf8 (_ejs_global, "NaN", _ejs_nan);
+    _ejs_object_setprop (_ejs_global, _ejs_atom_undefined, _ejs_undefined);
+    _ejs_object_setprop (_ejs_global, _ejs_atom_NaN, _ejs_nan);
     _ejs_object_setprop_utf8 (_ejs_global, "__ejs", _ejs_true);
 
     _ejs_object_init_proto();
@@ -92,6 +92,7 @@ _ejs_init(int argc, char** argv)
 
     _ejs_json_init(_ejs_global);
     _ejs_math_init(_ejs_global);
+    _ejs_GC_init(_ejs_global);
 
 #define GLOBAL_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_global, EJS_STRINGIFY(x), _ejs_##x)
 
@@ -107,4 +108,6 @@ _ejs_init(int argc, char** argv)
 
 #undef GLOBAL_METHOD
     END_SHADOW_STACK_FRAME;
+
+    _ejs_gc_collect();
 }

@@ -22,12 +22,14 @@ typedef enum {
 
 typedef char* GCObjectPtr;
 
+extern void _ejs_GC_init(ejsval global);
 extern void _ejs_gc_init();
 extern void _ejs_gc_shutdown();
 extern void _ejs_gc_collect();
 extern GCObjectPtr _ejs_gc_alloc(size_t size, EJSScanType scan_type);
-
 #define _ejs_gc_new(T) (T*)_ejs_gc_alloc(sizeof(T), EJS_SCAN_TYPE_OBJECT)
+#define _ejs_gc_new_obj(T,sz) (T*)_ejs_gc_alloc(sz, EJS_SCAN_TYPE_OBJECT)
+#define _ejs_gc_new_primstr(sz) (EJSPrimString*)_ejs_gc_alloc(sz, EJS_SCAN_TYPE_PRIMSTR)
 
 #define _ejs_gc_add_named_root(v) __ejs_gc_add_named_root(&v, #v)
 extern void __ejs_gc_add_named_root(ejsval* val, const char *name);
@@ -49,7 +51,7 @@ typedef struct StackEntry {
 
 extern StackEntry *llvm_gc_root_chain;
 
-#define NUM_NATIVE_ROOTS 50
+#define NUM_NATIVE_ROOTS 80
 
 typedef struct {
     struct StackEntry *Next;       //< Link to next stack entry (the caller's).
