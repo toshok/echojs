@@ -278,6 +278,7 @@ init_page_info(char *page_data, size_t cell_size)
 static PageInfo*
 alloc_new_page(size_t cell_size)
 {
+    SPEW(printf ("allocating new page for cell size %zd\n", cell_size));
     return init_page_info (alloc_from_os(PAGE_SIZE), cell_size);
 }
 
@@ -447,7 +448,13 @@ sweep_heap()
                         OP(p, finalize)((EJSObject*)p);
                     }
                     else {
-                        SPEW(printf ("finalizing primitive string %p\n", p));
+                        EJSPrimString* primstr = (EJSPrimString*)p;
+                        if (EJS_PRIMSTR_GET_TYPE(primstr) == EJS_STRING_FLAT) {
+                            SPEW(printf ("finalizing primitive string %p(%s)\n", primstr, primstr->data.flat));
+                        }
+                        else {
+                            SPEW(printf ("finalizing primitive string %p\n", primstr));
+                        }
                     }
                     add_cell_to_freelist (info, c);
                 }
@@ -683,6 +690,27 @@ _ejs_gc_remove_root(ejsval* root)
     abort();
 }
 
+static int
+page_list_count (PageInfo* page)
+{
+    int count = 0;
+    while (page) {
+        count ++;
+        page = page->next;
+    }
+    return count;
+}
+
+void
+_ejs_gc_dump_heap_stats()
+{
+    printf ("_ejs_gc_dump_heap_stats:\n");
+    for (int i = 0; i < HEAP_PAGELISTS_COUNT; i ++) {
+        printf ("heap_pages[%d, size %d] : %d pages\n", i, 1 << (i + OBJECT_SIZE_LOW_LIMIT_BITS), page_list_count(heap_pages[i]));
+    }
+    printf ("\n");
+}
+
 /////////
 ejsval _ejs_GC;
 
@@ -707,7 +735,9 @@ _ejs_GC_init(ejsval global)
 
 #undef OBJ_METHOD
 
-    _ejs_object_setprop (global, _ejs_atom_GC, _ejs_GC);
+    ejsval __ejs = _ejs_object_getprop (global, _ejs_atom___ejs);
+
+    _ejs_object_setprop_utf8 (__ejs, "GC", _ejs_GC);
 
     END_SHADOW_STACK_FRAME;
 }
