@@ -239,9 +239,15 @@ class LLVMIRVisitor extends NodeVisitor
                         "null":                module.getOrInsertGlobal           "_ejs_null",                      EjsValueType
                         "one":                 module.getOrInsertGlobal           "_ejs_one",                       EjsValueType
                         "zero":                module.getOrInsertGlobal           "_ejs_zero",                      EjsValueType
+                        "atom-null":           module.getOrInsertGlobal           "_ejs_atom_null",                 EjsValueType
+                        "atom-undefined":      module.getOrInsertGlobal           "_ejs_atom_undefined",            EjsValueType
                         "atom-length":         module.getOrInsertGlobal           "_ejs_atom_length",               EjsValueType
+                        "atom-__ejs":          module.getOrInsertGlobal           "_ejs_atom___ejs",                EjsValueType
                         "atom-object":         module.getOrInsertGlobal           "_ejs_atom_object",               EjsValueType
                         "atom-function":       module.getOrInsertGlobal           "_ejs_atom_function",             EjsValueType
+                        "atom-prototype":      module.getOrInsertGlobal           "_ejs_atom_prototype",            EjsValueType
+                        "atom-Object":         module.getOrInsertGlobal           "_ejs_atom_Object",               EjsValueType
+                        "atom-Array":          module.getOrInsertGlobal           "_ejs_atom_Array",                EjsValueType
                         global:                module.getOrInsertGlobal           "_ejs_global",                    EjsValueType
                         exception_typeinfo:    module.getOrInsertGlobal           "EJS_EHTYPE_ejsvalue",            EjsExceptionTypeInfoType
                         
@@ -391,8 +397,14 @@ class LLVMIRVisitor extends NodeVisitor
                 else
                         # we load obj.prop, prop is an id
                         pname = prop.name
-                        c = irbuilder.createGlobalStringPtr pname, "propname_#{pname}"
-                        @createCall @ejs_runtime.object_getprop_utf8, [obj, c], "getprop_#{pname}", canThrow
+                        # check if it's an atom first of all
+                        atom_name = "atom-#{pname}"
+                        if @ejs_runtime[atom_name]?
+                                c = irbuilder.createLoad @ejs_runtime[atom_name], "%propname_atom_load"
+                                @createCall @ejs_runtime.object_getprop, [obj, c], "getprop_#{pname}", canThrow
+                        else
+                                c = irbuilder.createGlobalStringPtr pname, "propname_#{pname}"
+                                @createCall @ejs_runtime.object_getprop_utf8, [obj, c], "getprop_#{pname}", canThrow
                 
 
         createLoadThis: () ->
