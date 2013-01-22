@@ -3,6 +3,7 @@
 #include "type.h"
 #include "ejs-object.h"
 #include "ejs-function.h"
+#include "ejs-string.h"
 
 typedef struct {
   /* object header */

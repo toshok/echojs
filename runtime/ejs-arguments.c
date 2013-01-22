@@ -9,6 +9,7 @@
 #include "ejs.h"
 #include "ejs-ops.h"
 #include "ejs-arguments.h"
+#include "ejs-string.h"
 
 static ejsval  _ejs_arguments_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr);
 static EJSPropertyDesc* _ejs_arguments_specop_get_own_property (ejsval obj, ejsval propertyName);

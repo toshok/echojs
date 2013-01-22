@@ -10,6 +10,7 @@
 #include "ejs-function.h"
 #include "ejs-value.h"
 #include "ejs-builtin-modules.h"
+#include "ejs-string.h"
 
 extern EJSRequire _ejs_require_map[];
 extern EJSExternalModuleRequire _ejs_external_module_require_map[];

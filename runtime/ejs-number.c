@@ -9,6 +9,7 @@
 #include "ejs-value.h"
 #include "ejs-number.h"
 #include "ejs-function.h"
+#include "ejs-string.h"
 
 static ejsval  _ejs_number_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr);
 static EJSPropertyDesc* _ejs_number_specop_get_own_property (ejsval obj, ejsval propertyName);

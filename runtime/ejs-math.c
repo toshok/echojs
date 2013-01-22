@@ -9,6 +9,7 @@
 #include "ejs-value.h"
 #include "ejs-function.h"
 #include "ejs-math.h"
+#include "ejs-string.h"
 
 ejsval _ejs_Math;
 

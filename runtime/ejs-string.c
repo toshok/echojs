@@ -6,6 +6,7 @@
 #include <math.h>
 #include <stdint.h>
 #include <ctype.h>
+#include <stdarg.h>
 
 #include "ejs-value.h"
 #include "ejs-array.h"
@@ -13,6 +14,7 @@
 #include "ejs-function.h"
 #include "ejs-regexp.h"
 #include "ejs-ops.h"
+#include "ejs-string.h"
 
 static ejsval _ejs_string_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr);
 static EJSPropertyDesc* _ejs_string_specop_get_own_property (ejsval obj, ejsval propertyName);
@@ -735,4 +737,111 @@ _ejs_string_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     EJSString* ejss = (EJSString*)obj;
     scan_func (ejss->primStr);
     _ejs_object_specops.scan (obj, scan_func);
+}
+
+
+/// EJSPrimString's
+
+ejsval
+_ejs_string_new_utf8 (const char* str)
+{
+    int str_len = strlen(str);
+    size_t value_size = sizeof(EJSPrimString) + str_len + 1;
+
+    EJSPrimString* rv = _ejs_gc_new_primstr(value_size);
+    EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_FLAT);
+    rv->length = str_len;
+    rv->data.flat = (char*)rv + sizeof(EJSPrimString);
+    strcpy (rv->data.flat, str);
+    return STRING_TO_EJSVAL(rv);
+}
+
+ejsval
+_ejs_string_new_utf8_len (const char* str, int len)
+{
+    size_t value_size = sizeof(EJSPrimString) + len + 1;
+
+    EJSPrimString* rv = _ejs_gc_new_primstr(value_size);
+    EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_FLAT);
+    rv->length = len;
+    rv->data.flat = (char*)rv + sizeof(EJSPrimString);
+    strncpy (rv->data.flat, str, len);
+    return STRING_TO_EJSVAL(rv);
+}
+
+ejsval
+_ejs_string_concat (ejsval left, ejsval right)
+{
+    EJSPrimString* lhs = EJSVAL_TO_STRING(left);
+    EJSPrimString* rhs = EJSVAL_TO_STRING(right);
+    
+    EJSPrimString* rv = _ejs_gc_new_primstr (sizeof(EJSPrimString));
+    EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_ROPE);
+    rv->length = lhs->length + rhs->length;
+    rv->data.rope.left = lhs;
+    rv->data.rope.right = rhs;
+
+    return STRING_TO_EJSVAL(rv);
+}
+
+ejsval
+_ejs_string_concatv (ejsval first, ...)
+{
+    ejsval result = first;
+    ejsval arg;
+
+    va_list ap;
+
+    va_start(ap, first);
+    while (!EJSVAL_IS_NULL(arg = va_arg(ap, ejsval))) {
+        result = _ejs_string_concat (result, arg);
+    }
+    va_end(ap);
+
+    return result;
+}
+
+static void
+flatten_rope (char **p, EJSPrimString *n)
+{
+    switch (EJS_PRIMSTR_GET_TYPE(n)) {
+    case EJS_STRING_FLAT:
+        strncpy(*p, n->data.flat, n->length);
+        *p += n->length;
+        break;
+    case EJS_STRING_ROPE:
+        flatten_rope(p, n->data.rope.left);
+        flatten_rope(p, n->data.rope.right);
+        break;
+    default:
+        EJS_NOT_IMPLEMENTED();
+    }
+}
+
+EJSPrimString*
+_ejs_primstring_flatten (EJSPrimString* primstr)
+{
+    switch (EJS_PRIMSTR_GET_TYPE(primstr)) {
+    case EJS_STRING_FLAT:
+        return primstr;
+    case EJS_STRING_ROPE: {
+        // modify the string in-place, switching from a rope to a flat string
+        char *buffer = (char*)malloc(primstr->length + 1);
+        char *p = buffer;
+        flatten_rope (&p, primstr);
+        buffer[primstr->length] = 0;
+        EJS_PRIMSTR_CLEAR_TYPE(primstr);
+        EJS_PRIMSTR_SET_TYPE(primstr, EJS_STRING_FLAT);
+        primstr->data.flat = buffer;
+        return primstr;
+    }
+    default:
+        EJS_NOT_IMPLEMENTED();
+    }
+}
+
+EJSPrimString*
+_ejs_string_flatten (ejsval str)
+{
+    return _ejs_primstring_flatten (EJSVAL_TO_STRING_IMPL(str));
 }

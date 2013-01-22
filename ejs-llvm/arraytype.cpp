@@ -7,6 +7,7 @@
 #include "ejs-value.h"
 #include "ejs-function.h"
 #include "ejs-array.h"
+#include "ejs-string.h"
 #include "arraytype.h"
 #include "type.h"
 

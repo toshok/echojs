@@ -2,6 +2,8 @@
 #include "ejs-function.h"
 #include "ejs-object.h"
 #include "ejs-array.h"
+#include "ejs-string.h"
+
 #include "type.h"
 
 typedef struct {

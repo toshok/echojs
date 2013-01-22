@@ -6,6 +6,7 @@
 #include "ejs-array.h"
 #include "ejs-gc.h"
 #include "ejs-function.h"
+#include "ejs-string.h"
 
 static ejsval
 _ejs_Process_exit (ejsval env, ejsval _this, uint32_t argc, ejsval *args)

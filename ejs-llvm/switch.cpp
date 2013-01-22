@@ -9,6 +9,7 @@
 #include "ejs-object.h"
 #include "ejs-array.h"
 #include "ejs-function.h"
+#include "ejs-string.h"
 
 #include "basicblock.h"
 #include "function.h"

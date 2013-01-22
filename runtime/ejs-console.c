@@ -6,6 +6,7 @@
 #include "ejs-gc.h"
 #include "ejs-ops.h"
 #include "ejs-function.h"
+#include "ejs-string.h"
 
 static ejsval
 output (FILE *outfile, uint32_t argc, ejsval *args)

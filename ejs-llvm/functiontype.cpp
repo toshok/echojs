@@ -3,6 +3,7 @@
 #include "ejs-value.h"
 #include "ejs-array.h"
 #include "ejs-function.h"
+#include "ejs-string.h"
 #include "functiontype.h"
 #include "type.h"
 

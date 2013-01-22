@@ -42,4 +42,6 @@ EJS_ATOM(Number)
 EJS_ATOM(Object)
 EJS_ATOM(RegExp)
 EJS_ATOM(String)
-EJS_ATOM(GC)
+
+// our funky global
+EJS_ATOM(__ejs)

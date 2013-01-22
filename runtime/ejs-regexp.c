@@ -8,6 +8,7 @@
 #include "ejs-value.h"
 #include "ejs-regexp.h"
 #include "ejs-function.h"
+#include "ejs-string.h"
 
 static ejsval _ejs_regexp_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr);
 static EJSPropertyDesc* _ejs_regexp_specop_get_own_property (ejsval obj, ejsval propertyName);
