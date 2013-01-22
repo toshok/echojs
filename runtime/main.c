@@ -7,6 +7,7 @@
 #include "ejs-value.h"
 #include "ejs-require.h"
 #include "ejs-function.h"
+#include "ejs-string.h"
 
 #define GC_ON_SHUTDOWN 0
 
@@ -21,7 +22,7 @@ main(int argc, char** argv)
 
     START_SHADOW_STACK_FRAME;
 
-    ejsval entry_name = _ejs_string_new_utf8(entry_filename);
+    ADD_STACK_ROOT(ejsval, entry_name, _ejs_string_new_utf8(entry_filename));
 
     _ejs_invoke_closure_1 (_ejs_require, _ejs_null, 1, entry_name);
 
