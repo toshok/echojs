@@ -30,21 +30,24 @@ _ejs_require_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         return _ejs_undefined;
 
     ejsval arg = args[0];
+    char* arg_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(arg));
 
     if (!EJSVAL_IS_STRING(arg)) {
         printf ("required called with non-string\n");
+        free (arg_utf8);
         return _ejs_null;
     }
 
     int i;
     for (i = 0; i < num_builtin_modules; i ++) {
-        if (!strcmp (builtin_module_map[i].name, EJSVAL_TO_FLAT_STRING(arg))) {
+        if (!strcmp (builtin_module_map[i].name, arg_utf8)) {
             if (EJSVAL_IS_NULL(builtin_module_map[i].cached_exports)) {
                 //	printf ("require'ing %s.\n", EJSVAL_TO_FLAT_STRING(arg));
                 __ejs_gc_add_named_root (&builtin_module_map[i].cached_exports, "builtin-module-export");
                 builtin_module_map[i].cached_exports = _ejs_object_new(_ejs_null, &_ejs_object_specops);
                 builtin_module_map[i].func(_ejs_null, _ejs_undefined, 1, &builtin_module_map[i].cached_exports);
             }
+            free (arg_utf8);
             return builtin_module_map[i].cached_exports;
         }
     }
@@ -55,12 +58,13 @@ _ejs_require_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
             break;
         }
 
-        if (!strcmp (_ejs_external_module_require_map[i].name, EJSVAL_TO_FLAT_STRING(arg))) {
+        if (!strcmp (_ejs_external_module_require_map[i].name, arg_utf8)) {
             if (EJSVAL_IS_NULL(_ejs_external_module_require_map[i].cached_exports)) {
                 __ejs_gc_add_named_root (&_ejs_external_module_require_map[i].cached_exports, "external-module-exports");
                 _ejs_external_module_require_map[i].cached_exports = _ejs_object_new(_ejs_null, &_ejs_object_specops);
                 _ejs_external_module_require_map[i].func(_ejs_external_module_require_map[i].cached_exports);
             }
+            free (arg_utf8);
             return _ejs_external_module_require_map[i].cached_exports;
         }
         i++;
@@ -69,10 +73,10 @@ _ejs_require_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     i = 0;
     while (1) {
         if (!_ejs_require_map[i].name) {
-            printf ("require('%s') failed: module not included in build.\n", EJSVAL_TO_FLAT_STRING(arg));
+            printf ("require('%s') failed: module not included in build.\n", arg_utf8);
             break;
         }
-        if (!strcmp (_ejs_require_map[i].name, EJSVAL_TO_FLAT_STRING(arg))) {
+        if (!strcmp (_ejs_require_map[i].name, arg_utf8)) {
             if (EJSVAL_IS_NULL(_ejs_require_map[i].cached_exports)) {
                 START_SHADOW_STACK_FRAME;
                 //	printf ("require'ing %s.\n", EJSVAL_TO_FLAT_STRING(arg));
@@ -86,11 +90,13 @@ _ejs_require_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
                 //	printf ("done require'ing %s.\n", EJSVAL_TO_FLAT_STRING(arg));
                 END_SHADOW_STACK_FRAME;
             }
+            free (arg_utf8);
             return _ejs_require_map[i].cached_exports;
         }
         i++;
     }
 
+    free (arg_utf8);
     return _ejs_null;
 }
 

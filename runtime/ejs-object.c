@@ -109,6 +109,7 @@ ToPropertyDescriptor(ejsval O, EJSPropertyDesc *desc)
         EJS_NOT_IMPLEMENTED();
     }
     EJSObject* obj = EJSVAL_TO_OBJECT(O);
+    memset (desc, 0, sizeof(EJSPropertyDesc));
 
     /* 2. Let desc be the result of creating a new Property Descriptor that initially has no fields. */
 
@@ -236,7 +237,7 @@ _ejs_propertymap_new (int initial_allocation)
 {
     EJSPropertyMap* rv = (EJSPropertyMap*)malloc(sizeof (EJSPropertyMap));
     if (initial_allocation) {
-        rv->names = (char**)malloc(sizeof(char*) * initial_allocation);
+        rv->names = (jschar**)malloc(sizeof(jschar*) * initial_allocation);
         rv->properties = (EJSPropertyDesc*)malloc(sizeof (EJSPropertyDesc) * initial_allocation);
     }
     else {
@@ -303,11 +304,11 @@ _ejs_propertymap_delete_desc (EJSPropertyMap *map, EJSPropertyDesc *desc)
 }
 
 int
-_ejs_propertymap_lookup (EJSPropertyMap *map, const char *name, EJSBool add_if_not_found)
+_ejs_propertymap_lookup (EJSPropertyMap *map, const jschar *name, EJSBool add_if_not_found)
 {
     int i;
     for (i = 0; i < map->num; i ++) {
-        if (!strcmp (map->names[i], name))
+        if (!ucs2_strcmp (map->names[i], name))
             return i;
     }
   
@@ -317,10 +318,10 @@ _ejs_propertymap_lookup (EJSPropertyMap *map, const char *name, EJSBool add_if_n
         if (map->allocated == 0 || idx == map->allocated - 1) {
             int new_allocated = map->allocated + 10;
 
-            char **new_names = (char**)malloc(sizeof(char*) * new_allocated);
+            jschar **new_names = (jschar**)malloc(sizeof(jschar*) * new_allocated);
             EJSPropertyDesc* new_properties = (EJSPropertyDesc*)malloc (sizeof(EJSPropertyDesc) * new_allocated);
 
-            memmove (new_names, map->names, map->allocated * sizeof(char*));
+            memmove (new_names, map->names, map->allocated * sizeof(jschar*));
             memmove (new_properties, map->properties, map->allocated * sizeof(EJSPropertyDesc));
 
             if (map->names)
@@ -333,7 +334,7 @@ _ejs_propertymap_lookup (EJSPropertyMap *map, const char *name, EJSBool add_if_n
 
             map->allocated = new_allocated;
         }
-        map->names[idx] = strdup (name);
+        map->names[idx] = ucs2_strdup (name);
 
 #if DEBUG_PROPMAP
         printf ("after inserting item, map %p is %d long:\n", map, map->num);
@@ -386,7 +387,7 @@ _ejs_property_iterator_new (ejsval forVal)
             iterator->num = map->num;
             iterator->keys = (ejsval*)malloc(sizeof(ejsval) * iterator->num);
             for (int i = 0; i < iterator->num; i ++)
-                iterator->keys[i] = _ejs_string_new_utf8(map->names[i]);
+                iterator->keys[i] = _ejs_string_new_ucs2(map->names[i]);
             return iterator;
         }
         else {
@@ -539,7 +540,9 @@ ejsval
 _ejs_object_getprop (ejsval obj, ejsval key)
 {
     if (EJSVAL_IS_NULL(obj) || EJSVAL_IS_UNDEFINED(obj)) {
-        printf ("throw TypeError, key is %s\n", EJSVAL_TO_FLAT_STRING(ToString(key)));
+        char* key_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(ToString(key)));
+        printf ("throw TypeError, key is %s\n", key_utf8);
+        free (key_utf8);
         EJS_NOT_IMPLEMENTED();
     }
 
@@ -628,7 +631,9 @@ _ejs_dump_value (ejsval val)
         printf ("boolean: %s\n", EJSVAL_TO_BOOLEAN(val) ? "true" : "false");
     }
     else if (EJSVAL_IS_STRING(val)) {
-        printf ("string: '%s'\n", EJSVAL_TO_FLAT_STRING(val));
+        char* val_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(val));
+        printf ("string: '%s'\n", val_utf8);
+        free (val_utf8);
     }
     else if (EJSVAL_IS_OBJECT(val)) {
         printf ("<object %s>\n", CLASSNAME(EJSVAL_TO_OBJECT(val)));
@@ -724,8 +729,8 @@ _ejs_Object_getOwnPropertyNames (ejsval env, ejsval _this, uint32_t argc, ejsval
     /* 4. For each named own property P of O */
     while (n < O->map->num) {
         /*    a. Let name be the String value that is the name of P. */
-        char* name = O->map->names[n];
-        ejsval propName = _ejs_string_new_utf8(name);
+        jschar* name = O->map->names[n];
+        ejsval propName = _ejs_string_new_ucs2(name);
         /*    b. Call the [[DefineOwnProperty]] internal method of array with arguments ToString(n), the
                  PropertyDescriptor {[[Value]]: name, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: 
                  true}, and false. */
@@ -850,7 +855,7 @@ _ejs_Object_defineProperties (ejsval env, ejsval _this, uint32_t argc, ejsval *a
     int n = 0;
     for (int p = 0; p < props_obj->map->num; p ++) {
         if (_ejs_property_desc_is_enumerable(&props_obj->map->properties[p]))
-            names[n++] = _ejs_string_new_utf8(props_obj->map->names[p]);
+            names[n++] = _ejs_string_new_ucs2(props_obj->map->names[p]);
     }
 
     /* 4. Let descriptors be an empty internal List. */
@@ -907,7 +912,7 @@ _ejs_Object_seal (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     /* 2. For each named own property name P of O, */
     for (int n = 0; n < obj->map->num; n++) {
-        ejsval P = _ejs_string_new_utf8(obj->map->names[n]);
+        ejsval P = _ejs_string_new_ucs2(obj->map->names[n]);
 
         /*    a. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with P. */
         EJSPropertyDesc* desc = OP(obj,get_own_property)(O, P);
@@ -944,7 +949,7 @@ _ejs_Object_freeze (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     /* 2. For each named own property name P of O, */
     for (int n = 0; n < obj->map->num; n++) {
-        ejsval P = _ejs_string_new_utf8(obj->map->names[n]);
+        ejsval P = _ejs_string_new_ucs2(obj->map->names[n]);
 
         /*    a. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with P. */
         EJSPropertyDesc* desc = OP(obj,get_own_property)(O, P);
@@ -1009,7 +1014,7 @@ _ejs_Object_isSealed (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     /* 2. For each named own property name P of O, */
     for (int n = 0; n < obj->map->num; n++) {
-        ejsval P = _ejs_string_new_utf8(obj->map->names[n]);
+        ejsval P = _ejs_string_new_ucs2(obj->map->names[n]);
 
         /*    a. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with P. */
         EJSPropertyDesc* desc = OP(obj,get_own_property)(O, P);
@@ -1045,7 +1050,7 @@ _ejs_Object_isFrozen (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     /* 2. For each named own property name P of O, */
     for (int n = 0; n < obj->map->num; n++) {
-        ejsval P = _ejs_string_new_utf8(obj->map->names[n]);
+        ejsval P = _ejs_string_new_ucs2(obj->map->names[n]);
 
         /*    a. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with P. */
         EJSPropertyDesc* desc = OP(obj,get_own_property)(O, P);
@@ -1278,7 +1283,7 @@ _ejs_object_specop_get (ejsval obj_, ejsval propertyName, EJSBool isCStr)
     else
         pname = ToString(propertyName);
 
-    if (!strcmp("__proto__", EJSVAL_TO_FLAT_STRING(pname)))
+    if (!ucs2_strcmp(_ejs_ucs2___proto__, EJSVAL_TO_FLAT_STRING(pname)))
         return EJSVAL_TO_OBJECT(obj_)->proto;
 
     /* 1. Let desc be the result of calling the [[GetProperty]] internal method of O with property name P. */

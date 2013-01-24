@@ -322,7 +322,7 @@ _ejs_Array_prototype_concat (ejsval env, ejsval _this, uint32_t argc, ejsval*arg
 }
 
 static ejsval
-_ejs_Array_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
+_ejs_array_slice_dense (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     int len = EJS_ARRAY_LEN(_this);
     int begin = argc > 0 ? (int)EJSVAL_TO_NUMBER(args[0]) : 0;
@@ -343,12 +343,83 @@ _ejs_Array_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval*args
 }
 
 static ejsval
+_ejs_Array_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    if (EJSVAL_IS_DENSE_ARRAY(_this)) {
+        return _ejs_array_slice_dense(env, _this, argc, args);
+    }
+
+    ejsval start = _ejs_undefined;
+    ejsval end = _ejs_undefined;
+
+    if (argc > 0) start = args[0];
+    if (argc > 1) end = args[1];
+
+    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
+
+    /* 2. Let A be a new array created as if by the expression new Array() where Array is the standard built-in  */
+    /*    constructor with that name. */
+    ejsval A = _ejs_array_new(0);
+
+    /* 3. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length". */
+    ejsval lenVal = _ejs_object_getprop (O, _ejs_atom_length);
+
+    /* 4. Let len be ToUint32(lenVal). */
+    uint32_t len = ToUint32(lenVal);
+
+    /* 5. Let relativeStart be ToInteger(start). */
+    int32_t relativeStart = ToInteger(start);
+
+    /* 6. If relativeStart is negative, let k be max((len + relativeStart),0); else let k be min(relativeStart, len). */
+    int32_t k = (relativeStart < 0) ? MAX(len + relativeStart, 0) : MIN(relativeStart, len);
+
+    /* 7. If end is undefined, let relativeEnd be len; else let relativeEnd be ToInteger(end). */
+    int32_t relativeEnd = (EJSVAL_IS_UNDEFINED(end)) ? len : ToInteger(end);
+        
+    /* 8. If relativeEnd is negative, let final be max((len + relativeEnd),0); else let final be min(relativeEnd, len). */
+    int32_t final = relativeEnd < 0 ? MAX(len + relativeEnd, 0) : MIN(relativeEnd, len);
+
+    /* 9. Let n be 0. */
+    int n = 0;
+
+    /* 10. Repeat, while k < final */
+    while (k < final) {
+        /* a. Let Pk be ToString(k). */
+        ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
+        ejsval nk = NUMBER_TO_EJSVAL(k);
+
+        /* b. Let kPresent be the result of calling the [[HasProperty]] internal method of O with argument Pk. */
+        EJSBool kPresent = OP(EJSVAL_TO_OBJECT(O),has_property)(O, Pk);
+
+        /* c. If kPresent is true, then */
+        if (kPresent) {
+            /*    i. Let kValue be the result of calling the [[Get]] internal method of O with argument Pk. */
+            ejsval kValue = OP(EJSVAL_TO_OBJECT(O),get)(O, Pk, EJS_FALSE);
+
+            /*    ii. Call the [[DefineOwnProperty]] internal method of A with arguments ToString(n), Property  */
+            /*        Descriptor {[[Value]]: kValue, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]:  */
+            /*        true}, and false. */
+            _ejs_object_setprop (A, nk, kValue);
+        }
+
+        /* d. Increase k by 1. */
+        k++;
+        /* e. Increase n by 1. */
+        n++;
+    }
+
+    /* 11. Return A. */
+    return A;
+}
+
+static ejsval
 _ejs_Array_prototype_join (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
     if (EJS_ARRAY_LEN(_this) == 0)
         return _ejs_string_new_utf8 ("");
 
-    const char* separator;
+    const jschar* separator;
     int separator_len;
 
     if (argc > 0) {
@@ -357,11 +428,12 @@ _ejs_Array_prototype_join (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
         separator = EJSVAL_TO_FLAT_STRING(sepToString);
     }
     else {
-        separator = ",";
+        static jschar comma[] = { (jschar)',' };
+        separator = comma;
         separator_len = 1;
     }
   
-    char* result;
+    jschar* result;
     int result_len = 0;
 
     ejsval* strings = (ejsval*)malloc (sizeof (ejsval) * EJS_ARRAY_LEN(_this));
@@ -374,20 +446,22 @@ _ejs_Array_prototype_join (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 
     result_len += separator_len * (EJS_ARRAY_LEN(_this)-1) + 1/* \0 terminator */;
 
-    result = (char*)malloc (result_len);
-    int offset = 0;
+    result = (jschar*)malloc (sizeof(jschar) * result_len);
+    jschar *p = result;
+
     for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
+        EJSPrimString *debug_str = EJSVAL_TO_STRING(strings[i]);
         int slen = EJSVAL_TO_STRLEN(strings[i]);
-        memmove (result + offset, EJSVAL_TO_FLAT_STRING(strings[i]), slen);
-        offset += slen;
+        memmove (p, EJSVAL_TO_FLAT_STRING(strings[i]), slen * sizeof(jschar));
+        p += slen;
         if (i < EJS_ARRAY_LEN(_this)-1) {
-            memmove (result + offset, separator, separator_len);
-            offset += separator_len;
+            memmove (p, separator, separator_len * sizeof(jschar));
+            p += separator_len;
         }
     }
-    result[result_len-1] = 0;
+    *p = 0;
 
-    ejsval rv = _ejs_string_new_utf8(result);
+    ejsval rv = _ejs_string_new_ucs2(result);
 
     free (result);
     free (strings);
@@ -674,7 +748,7 @@ _ejs_array_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr)
 
     // we also handle the length getter here
     if ((isCStr && !strcmp("length", (char*)EJSVAL_TO_PRIVATE_PTR_IMPL(propertyName)))
-        || (!isCStr && EJSVAL_IS_STRING(propertyName) && !strcmp ("length", EJSVAL_TO_FLAT_STRING(propertyName)))) {
+        || (!isCStr && EJSVAL_IS_STRING(propertyName) && !ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName)))) {
         return NUMBER_TO_EJSVAL (EJS_ARRAY_LEN(obj));
     }
 

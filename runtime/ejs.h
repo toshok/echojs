@@ -65,11 +65,9 @@ extern const ejsval _ejs_one;
 extern const ejsval _ejs_false;
 extern ejsval _ejs_global;
 
-#define EJS_ATOM(atom) extern ejsval _ejs_atom_##atom; extern const char* _ejs_cstring_##atom;
+#define EJS_ATOM(atom) extern ejsval _ejs_atom_##atom; extern const jschar _ejs_ucs2_##atom[];
+#define EJS_ATOM2(atom,atom_name) extern ejsval _ejs_atom_##atom_name; extern const jschar _ejs_ucs2_##atom_name[];
 #include "ejs-atoms.h"
 #undef EJS_ATOM
-extern ejsval _ejs_atom_empty;
-extern ejsval _ejs_atom_empty_object;
-extern ejsval _ejs_atom_empty_array;
 
 #endif // _ejs_h_

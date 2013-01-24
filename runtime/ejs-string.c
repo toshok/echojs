@@ -16,6 +16,160 @@
 #include "ejs-ops.h"
 #include "ejs-string.h"
 
+int32_t
+ucs2_strcmp (const jschar *s1, const jschar *s2)
+{
+    const jschar *s1p = s1;
+    const jschar *s2p = s2;
+
+    while (*s1p && *s2p && *s1p == *s2p) {
+        s1p++;
+        s2p++;
+    }
+
+    return ((int32_t)*s1p) - ((int32_t)*s2p);
+}
+
+jschar*
+ucs2_strdup (const jschar *str)
+{
+    int32_t len = ucs2_strlen(str);
+    jschar* result = (jschar*)calloc(sizeof(jschar), len + 1);
+    memmove (result, str, len * sizeof(jschar));
+    return result;
+}
+
+int32_t
+ucs2_strlen (const jschar *str)
+{
+    int32_t rv = 0;
+    while (*str++) rv++;
+    return rv;
+}
+
+jschar*
+ucs2_strstr (const jschar *haystack,
+             const jschar *needle)
+{
+    const jschar *p = haystack;
+
+    while (*p) {
+        const jschar *next_candidate = NULL;
+
+        if (*p == *needle) {
+            const jschar *p2 = p+1;
+            const jschar *n = needle+1;
+
+            if (!next_candidate && *p2 == *needle)
+                next_candidate = p2;
+
+            while (*n) {
+                if (*n != *p2)
+                    break;
+                n++;
+                p2++;
+                if (!next_candidate && *p2 == *needle)
+                    next_candidate = p2;
+            }
+            if (*n == 0)
+                return (jschar*)p;
+
+            if (next_candidate)
+                p = next_candidate;
+            else
+                p++;
+            continue;
+        }
+        else {
+            if (next_candidate)
+                p = next_candidate;
+            else
+                p++;
+        }
+    }
+
+    return NULL;
+}
+
+static jschar
+utf8_to_ucs2 (const unsigned char * input, const unsigned char ** end_ptr)
+{
+    *end_ptr = input;
+    if (input[0] == 0)
+        return -1;
+    if (input[0] < 0x80) {
+        * end_ptr = input + 1;
+        return input[0];
+    }
+    if ((input[0] & 0xE0) == 0xE0) {
+        if (input[1] == 0 || input[2] == 0)
+            return -1;
+        * end_ptr = input + 3;
+        return
+            (input[0] & 0x0F)<<12 |
+            (input[1] & 0x3F)<<6  |
+            (input[2] & 0x3F);
+    }
+    if ((input[0] & 0xC0) == 0xC0) {
+        if (input[1] == 0)
+            return -1;
+        * end_ptr = input + 2;
+        return
+            (input[0] & 0x1F)<<6  |
+            (input[1] & 0x3F);
+    }
+    return -1;
+}
+
+static int
+ucs2_to_utf8_char (jschar ucs2, char *utf8)
+{
+    if (ucs2 < 0x80) {
+        utf8[0] = (char)ucs2;
+        return 1;
+    }
+    if (ucs2 >= 0x80  && ucs2 < 0x800) {
+        utf8[0] = (ucs2 >> 6)   | 0xC0;
+        utf8[1] = (ucs2 & 0x3F) | 0x80;
+        return 2;
+    }
+    if (ucs2 >= 0x800 && ucs2 < 0xFFFF) {
+        utf8[0] = ((ucs2 >> 12)       ) | 0xE0;
+        utf8[1] = ((ucs2 >> 6 ) & 0x3F) | 0x80;
+        utf8[2] = ((ucs2      ) & 0x3F) | 0x80;
+        return 3;
+    }
+    return -1;
+}
+
+char*
+ucs2_to_utf8 (const jschar *str)
+{
+    int len = ucs2_strlen(str);
+    char *conservative = (char*)calloc (sizeof(char), len * 3 + 1);
+
+    const jschar *p = str;
+    char *c = conservative;
+
+    while (*p) {
+        int adv = ucs2_to_utf8_char (*p, c);
+        if (adv < 1) {
+            // more here XXX
+            break;
+        }
+        c += adv;
+
+        p++;
+        len --;
+        if (len == 0)
+            break;
+    }
+
+    *c = 0;
+    return conservative;
+}
+
+
 static ejsval _ejs_string_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr);
 static EJSPropertyDesc* _ejs_string_specop_get_own_property (ejsval obj, ejsval propertyName);
 static EJSPropertyDesc* _ejs_string_specop_get_property (ejsval obj, ejsval propertyName);
@@ -57,7 +211,7 @@ _ejs_String_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         if (argc > 0)
             return ToString(args[0]);
         else
-            return _ejs_string_new_utf8("");
+            return _ejs_atom_empty;
     }
     else {
         // called as a constructor
@@ -68,7 +222,7 @@ _ejs_String_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
             str->primStr = ToString(args[0]);
         }
         else {
-            str->primStr = _ejs_string_new_utf8("");
+            str->primStr = _ejs_atom_empty;
         }
         return _this;
     }
@@ -79,7 +233,7 @@ _ejs_String_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval 
 {
     EJSString *str = (EJSString*)EJSVAL_TO_OBJECT(_this);
 
-    return _ejs_string_new_utf8 (EJSVAL_TO_FLAT_STRING(str->primStr));
+    return str->primStr;
 }
 
 static ejsval
@@ -92,32 +246,35 @@ _ejs_String_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *
     ejsval searchValue = args[0];
     ejsval replaceValue = argc > 1 ? args[1] : _ejs_undefined;
 
-    if (EJSVAL_IS_OBJECT(searchValue) && !strcmp (CLASSNAME(EJSVAL_TO_OBJECT(searchValue)), "RegExp")){
+    if (EJSVAL_IS_OBJECT(searchValue) &&
+        !strcmp (CLASSNAME(EJSVAL_TO_OBJECT(searchValue)), "RegExp")) {
         EJS_NOT_IMPLEMENTED();
     }
     else {
         ejsval searchValueStr = ToString(searchValue);
         ejsval replaceValueStr = ToString(replaceValue);
-        char *p = strstr (EJSVAL_TO_FLAT_STRING(thisStr), EJSVAL_TO_FLAT_STRING(searchValueStr));
-        if (p == NULL)
+        jschar *p = ucs2_strstr (EJSVAL_TO_FLAT_STRING(thisStr), EJSVAL_TO_FLAT_STRING(searchValueStr));
+        if (p == NULL) {
             return _this;
+        }
         else {
             int len1 = p - EJSVAL_TO_FLAT_STRING(thisStr);
             int len2 = EJSVAL_TO_STRLEN(replaceValueStr);
-            int len3 = strlen(p + EJSVAL_TO_STRLEN(searchValueStr));
+            int len3 = ucs2_strlen(p + EJSVAL_TO_STRLEN(searchValueStr));
 
             int new_len = len1;
             new_len += len2;
             new_len += len3;
             new_len += 1; // for the \0
 
-            char* result = (char*)calloc(new_len, 1);
-            char*p = result;
-            strncpy (p, EJSVAL_TO_FLAT_STRING(thisStr), len1); p += len1;
-            strcpy (p, EJSVAL_TO_FLAT_STRING(replaceValueStr)); p += len2;
-            strcpy (p, p + EJSVAL_TO_STRLEN(searchValueStr));
+            jschar* result = (jschar*)calloc(sizeof(jschar), new_len);
+            jschar* r = result;
+            // XXX this should really use concat nodes instead
+            memmove (r, EJSVAL_TO_FLAT_STRING(thisStr), len1 * sizeof(jschar)); r += len1;
+            memmove (r, EJSVAL_TO_FLAT_STRING(replaceValueStr), EJSVAL_TO_STRLEN(replaceValueStr) * sizeof(jschar)); r += len2;
+            memmove (r, p + EJSVAL_TO_STRLEN(searchValueStr), len3);
 
-            ejsval rv = _ejs_string_new_utf8 (result);
+            ejsval rv = _ejs_string_new_ucs2 (result);
             free (result);
             return rv;
         }
@@ -189,7 +346,7 @@ _ejs_String_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsval *
         return NUMBER_TO_EJSVAL(idx);
 
     ejsval haystack = ToString(_this);
-    char* haystack_cstr;
+    jschar* haystack_cstr;
     if (EJSVAL_IS_STRING(haystack)) {
         haystack_cstr = EJSVAL_TO_FLAT_STRING(haystack);
     }
@@ -198,7 +355,7 @@ _ejs_String_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsval *
     }
 
     ejsval needle = ToString(args[0]);
-    char *needle_cstr;
+    jschar *needle_cstr;
     if (EJSVAL_IS_STRING(needle)) {
         needle_cstr = EJSVAL_TO_FLAT_STRING(needle);
     }
@@ -206,7 +363,7 @@ _ejs_String_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsval *
         needle_cstr = EJSVAL_TO_FLAT_STRING(((EJSString*)EJSVAL_TO_OBJECT(needle))->primStr);
     }
   
-    char* p = strstr(haystack_cstr, needle_cstr);
+    jschar* p = ucs2_strstr(haystack_cstr, needle_cstr);
     if (p == NULL)
         return NUMBER_TO_EJSVAL(idx);
 
@@ -282,8 +439,8 @@ _ejs_String_prototype_substr (ejsval env, ejsval _this, uint32_t argc, ejsval *a
 
     /* 8. Return a String containing Result(6) consecutive characters from Result(1) beginning with the character at  */
     /*    position Result(5). */
-    char* result1_str = EJSVAL_TO_FLAT_STRING(Result1);
-    return _ejs_string_new_utf8_len(result1_str + Result5, Result6);
+    jschar* result1_str = EJSVAL_TO_FLAT_STRING(Result1);
+    return _ejs_string_new_ucs2_len(result1_str + Result5, Result6);
 }
 
 static ejsval
@@ -292,7 +449,7 @@ _ejs_String_prototype_toLowerCase (ejsval env, ejsval _this, uint32_t argc, ejsv
     /* 1. Call CheckObjectCoercible passing the this value as its argument. */
     /* 2. Let S be the result of calling ToString, giving it the this value as its argument. */
     ejsval S = ToString(_this);
-    char* sstr = strdup(EJSVAL_TO_FLAT_STRING(S));
+    char* sstr = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(S));
 
     /* 3. Let L be a String where each character of L is either the Unicode lowercase equivalent of the corresponding  */
     /*    character of S or the actual corresponding character of S if no Unicode lowercase equivalent exists. */
@@ -302,8 +459,8 @@ _ejs_String_prototype_toLowerCase (ejsval env, ejsval _this, uint32_t argc, ejsv
         p++;
     }
 
-    free(sstr);
     ejsval L = _ejs_string_new_utf8(sstr);
+    free(sstr);
 
     /* 4. Return L. */
     return L;
@@ -375,8 +532,8 @@ SplitMatch(ejsval S, int q, ejsval R)
 
     /* 5. If there exists an integer i between 0 (inclusive) and r (exclusive) such that the character at position q+i of S */
     /*    is different from the character at position i of R, then return failure. */
-    char* sstr = EJSVAL_TO_FLAT_STRING(S);
-    char* rstr = EJSVAL_TO_FLAT_STRING(R);
+    jschar* sstr = EJSVAL_TO_FLAT_STRING(S);
+    jschar* rstr = EJSVAL_TO_FLAT_STRING(R);
     for (int i = 0; i < r; i ++) {
         if (sstr[q+i] != rstr[i]) {
             MatchResultState rv = { MATCH_RESULT_FAILURE };
@@ -403,7 +560,7 @@ _ejs_String_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     /* 1. Call CheckObjectCoercible passing the this value as its argument. */
     /* 2. Let S be the result of calling ToString, giving it the this value as its argument. */
     ejsval S = ToString(_this);
-    char *Sstr = EJSVAL_TO_FLAT_STRING(S);
+    jschar *Sstr = EJSVAL_TO_FLAT_STRING(S);
 
     /* 3. Let A be a new array created as if by the expression new Array() where Array is the standard built-in  */
     /*    constructor with that name. */
@@ -474,7 +631,7 @@ _ejs_String_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
             else {
                 /*         1. Let T be a String value equal to the substring of S consisting of the characters at  */
                 /*            positions p (inclusive) through q (exclusive). */
-                ejsval T = _ejs_string_new_utf8_len (Sstr + p, q-p);
+                ejsval T = _ejs_string_new_ucs2_len (Sstr + p, q-p);
                 /*         2. Call the [[DefineOwnProperty]] internal method of A with arguments  */
                 /*            ToString(lengthA), Property Descriptor {[[Value]]: T, [[Writable]]: true, */
                 /*            [[Enumerable]]: true, [[Configurable]]: true}, and false. */
@@ -511,7 +668,7 @@ _ejs_String_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     }
     /* 14. Let T be a String value equal to the substring of S consisting of the characters at positions p (inclusive)  */
     /*     through s (exclusive). */
-    ejsval T = _ejs_string_new_utf8_len (Sstr + p, s-p);
+    ejsval T = _ejs_string_new_ucs2_len (Sstr + p, s-p);
     /* 15. Call the [[DefineOwnProperty]] internal method of A with arguments ToString(lengthA), Property Descriptor  */
     /*     {[[Value]]: T, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
     _ejs_array_push_dense (A, 1, &T);
@@ -552,7 +709,7 @@ _ejs_String_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     int span = MAX(to - from, 0);
 
     // Return a String containing span consecutive characters from S beginning with the character at position from.
-    return _ejs_string_new_utf8_len (EJSVAL_TO_FLAT_STRING(S) + from, span);
+    return _ejs_string_new_ucs2_len (EJSVAL_TO_FLAT_STRING(S) + from, span);
 }
 
 static ejsval
@@ -663,7 +820,7 @@ _ejs_string_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr)
 
     // we also handle the length getter here
     if ((isCStr && !strcmp("length", (char*)EJSVAL_TO_PRIVATE_PTR_IMPL(propertyName)))
-        || (!isCStr && EJSVAL_IS_STRING(propertyName) && !strcmp ("length", EJSVAL_TO_FLAT_STRING(propertyName)))) {
+        || (!isCStr && EJSVAL_IS_STRING(propertyName) && !ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName)))) {
         return NUMBER_TO_EJSVAL (EJSVAL_TO_STRLEN(estr->primStr));
     }
 
@@ -745,27 +902,66 @@ _ejs_string_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 ejsval
 _ejs_string_new_utf8 (const char* str)
 {
+    // XXX assume str is ascii for now
     int str_len = strlen(str);
-    size_t value_size = sizeof(EJSPrimString) + str_len + 1;
+    size_t value_size = sizeof(EJSPrimString) + sizeof(jschar) * (str_len + 1);
 
     EJSPrimString* rv = _ejs_gc_new_primstr(value_size);
     EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_FLAT);
     rv->length = str_len;
-    rv->data.flat = (char*)rv + sizeof(EJSPrimString);
-    strcpy (rv->data.flat, str);
+    rv->data.flat = (jschar*)((char*)rv + sizeof(EJSPrimString));
+    jschar *p = rv->data.flat;
+    const unsigned char *stru = (const unsigned char*)str;
+    while (*stru) {
+        *p++ = utf8_to_ucs2 (stru, &stru);
+    }
     return STRING_TO_EJSVAL(rv);
 }
 
 ejsval
 _ejs_string_new_utf8_len (const char* str, int len)
 {
-    size_t value_size = sizeof(EJSPrimString) + len + 1;
+    size_t value_size = sizeof(EJSPrimString) + sizeof(jschar) * (len + 1);
 
     EJSPrimString* rv = _ejs_gc_new_primstr(value_size);
     EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_FLAT);
     rv->length = len;
-    rv->data.flat = (char*)rv + sizeof(EJSPrimString);
-    strncpy (rv->data.flat, str, len);
+    rv->data.flat = (jschar*)((char*)rv + sizeof(EJSPrimString));
+    jschar *p = rv->data.flat;
+    const unsigned char *stru = (const unsigned char*)str;
+    while (*stru) {
+        *p++ = utf8_to_ucs2 (stru, &stru);
+        len--;
+        if (len == 0)
+            break;
+    }
+    return STRING_TO_EJSVAL(rv);
+}
+
+ejsval
+_ejs_string_new_ucs2 (const jschar* str)
+{
+    int str_len = ucs2_strlen(str);
+    size_t value_size = sizeof(EJSPrimString) + sizeof(jschar) * (str_len + 1);
+
+    EJSPrimString* rv = _ejs_gc_new_primstr(value_size);
+    EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_FLAT);
+    rv->length = str_len;
+    rv->data.flat = (jschar*)((char*)rv + sizeof(EJSPrimString));
+    memmove (rv->data.flat, str, str_len * sizeof(jschar));
+    return STRING_TO_EJSVAL(rv);
+}
+
+ejsval
+_ejs_string_new_ucs2_len (const jschar* str, int len)
+{
+    size_t value_size = sizeof(EJSPrimString) + sizeof(jschar) * (len + 1);
+
+    EJSPrimString* rv = _ejs_gc_new_primstr(value_size);
+    EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_FLAT);
+    rv->length = len;
+    rv->data.flat = (jschar*)((char*)rv + sizeof(EJSPrimString));
+    memmove (rv->data.flat, str, len * sizeof(jschar));
     return STRING_TO_EJSVAL(rv);
 }
 
@@ -802,11 +998,11 @@ _ejs_string_concatv (ejsval first, ...)
 }
 
 static void
-flatten_rope (char **p, EJSPrimString *n)
+flatten_rope (jschar **p, EJSPrimString *n)
 {
     switch (EJS_PRIMSTR_GET_TYPE(n)) {
     case EJS_STRING_FLAT:
-        strncpy(*p, n->data.flat, n->length);
+        memmove (*p, n->data.flat, n->length * sizeof(jschar));
         *p += n->length;
         break;
     case EJS_STRING_ROPE:
@@ -826,10 +1022,9 @@ _ejs_primstring_flatten (EJSPrimString* primstr)
         return primstr;
     case EJS_STRING_ROPE: {
         // modify the string in-place, switching from a rope to a flat string
-        char *buffer = (char*)malloc(primstr->length + 1);
-        char *p = buffer;
+        jschar *buffer = (jschar*)calloc(sizeof(jschar), primstr->length + 1);
+        jschar *p = buffer;
         flatten_rope (&p, primstr);
-        buffer[primstr->length] = 0;
         EJS_PRIMSTR_CLEAR_TYPE(primstr);
         EJS_PRIMSTR_SET_TYPE(primstr, EJS_STRING_FLAT);
         primstr->data.flat = buffer;
@@ -844,4 +1039,51 @@ EJSPrimString*
 _ejs_string_flatten (ejsval str)
 {
     return _ejs_primstring_flatten (EJSVAL_TO_STRING_IMPL(str));
+}
+
+
+jschar
+_ejs_string_char_code_at(EJSPrimString* primstr, int i)
+{
+    if (i >= primstr->length) {
+        printf ("char_code_at error\n");
+        return (jschar)-1;
+    }
+
+    switch (EJS_PRIMSTR_GET_TYPE(primstr)) {
+    case EJS_STRING_FLAT:
+        return primstr->data.flat[i];
+    case EJS_STRING_ROPE: {
+        if (i >= primstr->data.rope.left->length) {
+            return _ejs_string_char_code_at (primstr->data.rope.left, i);
+        }
+        else {
+            return _ejs_string_char_code_at (primstr->data.rope.right, i - primstr->data.rope.left->length);
+        }
+    }
+    default:
+        EJS_NOT_IMPLEMENTED();
+    }
+}
+
+char*
+_ejs_string_to_utf8(EJSPrimString* primstr)
+{
+    int length = primstr->length * 4+1;
+    char* buf = (char*)malloc(length);
+    char *p;
+
+    for (int i = 0; i < length; i ++) {
+        jschar ucs2 = _ejs_string_char_code_at(primstr, i);
+        int adv = ucs2_to_utf8_char (ucs2, p);
+        if (adv < 1) {
+            printf ("error converting ucs2 to utf8, index %d\n", i);
+            return NULL;
+        }
+        p += adv;
+    }
+
+    *p = 0;
+
+    return buf;
 }

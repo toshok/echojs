@@ -63,7 +63,7 @@ struct _EJSPrimString {
         // utf8 \0 terminated
         //    for normal strings, this points to the memory location just beyond this struct - i.e. (char*)primStringPointer + sizeof(_EJSPrimString)
         //    for atoms, this points to the statically compiled C string constant.
-        char *flat;
+        jschar *flat;
         struct {
             struct _EJSPrimString *left;
             struct _EJSPrimString *right;
@@ -74,10 +74,15 @@ struct _EJSPrimString {
 
 ejsval _ejs_string_new_utf8 (const char* str);
 ejsval _ejs_string_new_utf8_len (const char* str, int len);
+ejsval _ejs_string_new_ucs2 (const jschar* str);
+ejsval _ejs_string_new_ucs2_len (const jschar* str, int len);
+
 ejsval _ejs_string_concat (ejsval left, ejsval right);
 ejsval _ejs_string_concatv (ejsval first, ...);
 EJSPrimString* _ejs_string_flatten (ejsval str);
 EJSPrimString* _ejs_primstring_flatten (EJSPrimString* primstr);
+
+char* _ejs_string_to_utf8(EJSPrimString* primstr);
 
 EJS_END_DECLS
 

@@ -16,7 +16,7 @@
 #include "ejs-string.h"
 #include "ejsval.h"
 
-#define spew 1
+#define spew 0
 #if spew
 #define SPEW(x) x
 #else

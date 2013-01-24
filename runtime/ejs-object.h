@@ -81,7 +81,7 @@ typedef struct {
 #define _ejs_property_desc_get_setter(p) _ejs_property_desc_get_value_flag_default(p, setter, EJS_PROP_FLAGS_SETTER_SET, _ejs_undefined)
     
 struct _EJSPropertyMap {
-    char **names;
+    jschar **names;
     EJSPropertyDesc *properties;
     int allocated;
     int num;
@@ -149,7 +149,7 @@ struct _EJSObject {
 EJS_BEGIN_DECLS
 
 EJSPropertyMap* _ejs_propertymap_new (int initial_allocation);
-int _ejs_propertymap_lookup (EJSPropertyMap *map, const char *name, EJSBool add_if_not_found);
+int _ejs_propertymap_lookup (EJSPropertyMap *map, const jschar *name, EJSBool add_if_not_found);
 void _ejs_propertymap_foreach_value (EJSPropertyMap *map, EJSValueFunc foreach_func);
 void _ejs_propertymap_foreach_property (EJSPropertyMap *map, EJSPropertyDescFunc foreach_func, void* data);
 

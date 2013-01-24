@@ -65,12 +65,12 @@ _ejs_RegExp_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     if (EJSVAL_IS_UNDEFINED(_this)) {
         // called as a function
-        printf ("called RegExp() as a function!\n");
+        fprintf (stderr, "called RegExp() as a function!\n");
         return _ejs_object_new(_ejs_RegExp_proto, &_ejs_regexp_specops);
     }
     else {
         // called as a constructor
-        printf ("called RegExp() as a constructor!\n");
+        fprintf (stderr, "called RegExp() as a constructor!\n");
         return _this;
     }
 }

@@ -93,13 +93,15 @@ _ejs_JSON_parse (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     /* 2. Parse JText using the grammars in 15.12.1. Throw a SyntaxError exception if JText did not conform to the 
        JSON grammar for the goal symbol JSONText.  */
-    char *flattened_jtext =  EJSVAL_TO_FLAT_STRING(jtext);
+    char *flattened_jtext =  ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(jtext));
 
     /* 3. Let unfiltered be the result of parsing and evaluating JText as if it was the source text of an ECMAScript 
        Program but using JSONString in place of StringLiteral. Note that since JText conforms to the JSON 
        grammar this result will be either a primitive value or an object that is defined by either an ArrayLiteral or 
        an ObjectLiteral. */
     JSON_Value* root_val = json_parse_string(flattened_jtext);
+
+    free(flattened_jtext);
 
     if (root_val == NULL) {
         printf ("SyntaxError\n");
@@ -272,7 +274,7 @@ JO(StringifyState *state, ejsval value)
         for (int i = 0; i < value_obj->map->num; i ++) {
             if (!_ejs_property_desc_is_enumerable(&value_obj->map->properties[i]))
                 continue;
-            ejsval propname = _ejs_string_new_utf8(value_obj->map->names[i]);
+            ejsval propname = _ejs_string_new_ucs2(value_obj->map->names[i]);
             _ejs_array_push_dense(K, 1, &propname);
         }
     }
@@ -579,13 +581,8 @@ _ejs_JSON_stringify (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     else if (EJSVAL_IS_STRING(space)) {
         /*    a. If the number of characters in space is 10 or less, set gap to space otherwise set gap to a String
               consisting of the first 10 characters of space. */
-        char *flattened = EJSVAL_TO_FLAT_STRING(space);
-
-        if (strlen (flattened) > 10) {
-            flattened[10] = 0;
-        }
-        state.gap = _ejs_string_new_utf8 (flattened);
-        free (flattened);
+        jschar *flattened = EJSVAL_TO_FLAT_STRING(space);
+        state.gap = _ejs_string_new_ucs2_len (flattened, 10);
     }
     /* 8. Else */
     else {

@@ -110,8 +110,12 @@ ejsval ToNumber(ejsval exp)
         return exp;
     else if (EJSVAL_IS_BOOLEAN(exp))
         return EJSVAL_TO_BOOLEAN(exp) ? _ejs_one : _ejs_zero;
-    else if (EJSVAL_IS_STRING(exp))
-        return NUMBER_TO_EJSVAL(atof(EJSVAL_TO_FLAT_STRING(exp))); // XXX NaN
+    else if (EJSVAL_IS_STRING(exp)) {
+        char* num_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(exp));
+        ejsval rv = NUMBER_TO_EJSVAL(atof(num_utf8)); // XXX NaN
+        free (num_utf8);
+        return rv;
+    }
     else if (EJSVAL_IS_UNDEFINED(exp))
         return _ejs_zero; // XXX NaN
     else if (EJSVAL_IS_OBJECT(exp)) {
@@ -505,7 +509,7 @@ _ejs_op_lt (ejsval lhs, ejsval rhs)
         else
             rhs_primStr = ((EJSString*)EJSVAL_TO_STRING(rhs_string))->primStr;
 
-        return BOOLEAN_TO_EJSVAL (strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs_primStr)) < 0);
+        return BOOLEAN_TO_EJSVAL (ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs_primStr)) < 0);
     }
     else {
         // object+... how does js implement this anyway?
@@ -530,7 +534,7 @@ _ejs_op_lt_ejsbool (ejsval lhs, ejsval rhs)
         else
             rhs_primStr = ((EJSString*)EJSVAL_TO_STRING(rhs_string))->primStr;
 
-        return strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs_primStr)) < 0;
+        return ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs_primStr)) < 0;
     }
     else {
         // object+... how does js implement this anyway?
@@ -555,7 +559,7 @@ _ejs_op_le (ejsval lhs, ejsval rhs)
         else
             rhs_primStr = ((EJSString*)EJSVAL_TO_OBJECT(rhs_string))->primStr;
 
-        return BOOLEAN_TO_EJSVAL (strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs_primStr)) <= 0);
+        return BOOLEAN_TO_EJSVAL (ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs_primStr)) <= 0);
     }
     else {
         // object+... how does js implement this anyway?
@@ -580,7 +584,7 @@ _ejs_op_gt (ejsval lhs, ejsval rhs)
         else
             rhs_primStr = ((EJSString*)EJSVAL_TO_OBJECT(rhs_string))->primStr;
 
-        return BOOLEAN_TO_EJSVAL (strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs_primStr)) > 0);
+        return BOOLEAN_TO_EJSVAL (ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs_primStr)) > 0);
     }
     else {
         // object+... how does js implement this anyway?
@@ -605,7 +609,7 @@ _ejs_op_ge (ejsval lhs, ejsval rhs)
         else
             rhs_primStr = ((EJSString*)EJSVAL_TO_OBJECT(rhs_string))->primStr;
 
-        return BOOLEAN_TO_EJSVAL (strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs_primStr)) >= 0);
+        return BOOLEAN_TO_EJSVAL (ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs_primStr)) >= 0);
     }
     else {
         // object+... how does js implement this anyway?
@@ -630,7 +634,7 @@ _ejs_op_strict_eq (ejsval lhs, ejsval rhs)
         return BOOLEAN_TO_EJSVAL (EJSVAL_IS_NUMBER(rhs) && EJSVAL_TO_NUMBER(lhs) == EJSVAL_TO_NUMBER(rhs));
     }
     else if (EJSVAL_IS_STRING(lhs)) {
-        return BOOLEAN_TO_EJSVAL (EJSVAL_IS_STRING(rhs) && !strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs)));
+        return BOOLEAN_TO_EJSVAL (EJSVAL_IS_STRING(rhs) && !ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs)));
     }
     else if (EJSVAL_IS_BOOLEAN(lhs)) {
         return BOOLEAN_TO_EJSVAL (EJSVAL_IS_BOOLEAN(rhs) && EJSVAL_TO_BOOLEAN(lhs) == EJSVAL_TO_BOOLEAN(rhs));
@@ -675,7 +679,7 @@ _ejs_op_eq (ejsval x, ejsval y)
             if (EJSVAL_TO_STRLEN(x) != EJSVAL_TO_STRLEN(y)) return _ejs_false;
 
             // XXX there is doubtless a more efficient way to compare two ropes, but we convert but to flat strings for now.
-            return strcmp (EJSVAL_TO_FLAT_STRING(x), EJSVAL_TO_FLAT_STRING(y)) ? _ejs_false : _ejs_true;
+            return ucs2_strcmp (EJSVAL_TO_FLAT_STRING(x), EJSVAL_TO_FLAT_STRING(y)) ? _ejs_false : _ejs_true;
         }
         /*    e. If Type(x) is Boolean, return true if x and y are both true or both false. Otherwise, return false. */
         if (EJSVAL_IS_BOOLEAN(x))
@@ -784,7 +788,11 @@ _ejs_parseFloat (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     if (argc == 0)
         return _ejs_nan;
 
-    ejsval arg0 = ToString(args[0]);
+    char *float_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(ToString(args[0])));
 
-    return NUMBER_TO_EJSVAL (strtod (EJSVAL_TO_FLAT_STRING(arg0), NULL));
+    ejsval rv = NUMBER_TO_EJSVAL (strtod (float_utf8, NULL));
+
+    free (float_utf8);
+
+    return rv;
 }

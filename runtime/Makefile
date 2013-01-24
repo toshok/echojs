@@ -29,7 +29,7 @@ LIBRARIES= libecho.a
 all: $(LIBRARIES)
 
 clean:
-	rm -f test $(libecho_OBJECTS) $(LIBRARIES)
+	rm -f test $(libecho_OBJECTS) $(LIBRARIES) ejs-atoms-gen.c
 
 VPATH=.:../parson
 
@@ -49,6 +49,9 @@ libecho.a: $(libecho_OBJECTS)
 
 CCLD=clang++
 CC=clang
+
+ejs-atoms-gen.c: ejs-atoms.h gen-atoms.js
+	@echo [GEN] $@ && ./gen-atoms.js > $@
 
 $(libecho_OBJECTS): %.o: %.c
 	@mkdir -p .deps

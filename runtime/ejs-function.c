@@ -117,7 +117,12 @@ _ejs_Function_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsva
     // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(_this));
     EJSFunction* func = (EJSFunction*)EJSVAL_TO_OBJECT(_this);
 
-    snprintf (terrible_fixed_buffer, sizeof (terrible_fixed_buffer), "[Function: %s]", EJSVAL_TO_FLAT_STRING(func->name));
+    char *utf8_funcname = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(func->name));
+
+    snprintf (terrible_fixed_buffer, sizeof (terrible_fixed_buffer), "[Function: %s]", utf8_funcname);
+
+    free (utf8_funcname);
+
     return _ejs_string_new_utf8(terrible_fixed_buffer);
 }
 
@@ -270,17 +275,21 @@ _ejs_function_init(ejsval global)
 #define DEBUG_FUNCTION_ENTER(x) EJS_MACRO_START                         \
     if (trace) {                                                        \
         ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, x, 0, NULL); \
+        char *closure_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(closure_name)); \
         indent('*');                                                    \
-        printf ("invoking %s\n", EJSVAL_TO_FLAT_STRING(closure_name));  \
+        printf ("invoking %s\n", closure_utf8);                         \
+        free (closure_utf8);                                            \
         indent_level += INDENT_AMOUNT;                                  \
     }                                                                   \
     EJS_MACRO_END
 #define DEBUG_FUNCTION_EXIT(x) EJS_MACRO_START                          \
     if (trace) {                                                        \
         ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, x, 0, NULL); \
+        char *closure_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(closure_name)); \
         indent_level -= INDENT_AMOUNT;                                  \
         indent(' ');                                                    \
-        printf ("returning from %s\n", EJSVAL_TO_FLAT_STRING(closure_name)); \
+        printf ("returning from %s\n", closure_utf8);                   \
+        free (closure_utf8);                                            \
     }                                                                   \
     EJS_MACRO_END
 

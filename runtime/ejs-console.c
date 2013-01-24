@@ -25,7 +25,9 @@ output (FILE *outfile, uint32_t argc, ejsval *args)
             
             ADD_STACK_ROOT(ejsval, strval, ToString(args[i]));
 
-            fprintf (outfile, "%s", EJSVAL_TO_FLAT_STRING(strval));
+            char* strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(strval));
+            fprintf (outfile, "%s", strval_utf8);
+            free (strval_utf8);
 
             END_SHADOW_STACK_FRAME;
         }

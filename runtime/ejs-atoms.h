@@ -1,5 +1,10 @@
+// empty things
+EJS_ATOM2(,empty)
+EJS_ATOM2([],empty_array)
+EJS_ATOM2({},empty_object)
 
 // common properties/methods
+EJS_ATOM(__proto__)
 EJS_ATOM(constructor)
 EJS_ATOM(length)
 EJS_ATOM(prototype)

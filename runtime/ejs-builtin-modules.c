@@ -29,7 +29,10 @@ _ejs_path_dirname (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     ejsval path = args[0];
     // FIXME node's implementation allows a second arg to strip the extension, but the compiler doesn't use it.
-    return _ejs_string_new_utf8(dirname (EJSVAL_TO_FLAT_STRING(path)));
+    char *utf8_path = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(path));
+    ejsval rv = _ejs_string_new_utf8(dirname (utf8_path));
+    free(utf8_path);
+    return rv;
 }
 
 static ejsval
@@ -37,7 +40,10 @@ _ejs_path_basename (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     ejsval path = args[0];
     // FIXME node's implementation allows a second arg to strip the extension, but the compiler doesn't use it.
-    return _ejs_string_new_utf8(basename (EJSVAL_TO_FLAT_STRING(path)));
+    char *utf8_path = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(path));
+    ejsval rv = _ejs_string_new_utf8(basename (utf8_path));
+    free (utf8_path);
+    return rv;
 }
 
 static ejsval
@@ -73,9 +79,11 @@ static ejsval
 _ejs_fs_readFileSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     // FIXME we currently ignore the encoding and just slam the entire thing into a buffer and return a utf8 string...
-    char* path = EJSVAL_TO_FLAT_STRING(args[0]);
+    char* utf8_path = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[0]));
 
-    int fd = open (path, O_RDONLY);
+    int fd = open (utf8_path, O_RDONLY);
+    free(utf8_path);
+
     struct stat fd_stat;
 
     fstat (fd, &fd_stat);
@@ -96,7 +104,7 @@ _ejs_stream_write (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 
     int remaining = EJSVAL_TO_STRLEN(to_write);
     int offset = 0;
-    char *buf = EJSVAL_TO_FLAT_STRING(to_write);
+    char *buf = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(to_write));
     
     do {
         int num_written = write (fd, buf + offset, remaining);
@@ -104,12 +112,14 @@ _ejs_stream_write (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
             if (errno == EINTR)
                 continue;
             perror ("write");
+            free (buf);
             return _ejs_undefined;
         }
         remaining -= num_written;
         offset += num_written;
     } while (remaining > 0);
 
+    free (buf);
     return _ejs_undefined;
 }
 
@@ -131,9 +141,10 @@ _ejs_fs_createWriteStream (ejsval env, ejsval _this, uint32_t argc, ejsval* args
     EJS_INSTALL_FUNCTION (stream, "write", _ejs_stream_write);
     EJS_INSTALL_FUNCTION (stream, "end", _ejs_stream_end);
 
-    ejsval path = args[0];
+    char *utf8_path = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[0]));
 
-    int fd = open (EJSVAL_TO_FLAT_STRING(path), O_CREAT | O_TRUNC | O_WRONLY, 0777);
+    int fd = open (utf8_path, O_CREAT | O_TRUNC | O_WRONLY, 0777);
+    free (utf8_path);
     if (fd == -1) {
         perror ("open");
         printf ("we should totally throw an exception here\n");
@@ -165,13 +176,13 @@ _ejs_fs_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 static ejsval
 _ejs_child_process_spawn (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
-    char* argv0 = EJSVAL_TO_FLAT_STRING(args[0]);
+    char* argv0 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[0]));
     EJSArray* argv_rest = (EJSArray*)EJSVAL_TO_OBJECT(args[1]);
 
     char **argv = (char**)calloc(sizeof(char*), EJSARRAY_LEN(argv_rest) + 2);
     argv[0] = argv0;
     for (int i = 0; i < EJSARRAY_LEN(argv_rest); i ++)
-        argv[1+i] = EJSVAL_TO_FLAT_STRING(ToString(EJSARRAY_ELEMENTS(argv_rest)[i]));
+        argv[1+i] = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(ToString(EJSARRAY_ELEMENTS(argv_rest)[i])));
 
     pid_t pid;
     switch (pid = fork()) {
@@ -198,6 +209,8 @@ _ejs_child_process_spawn (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
         break;
     }
     }
+    for (int i = 0; i < EJSARRAY_LEN(argv_rest)+1; i ++)
+        free (argv[i]);
     return _ejs_undefined;
 }
 

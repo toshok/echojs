@@ -36,26 +36,7 @@ ejsval _ejs_global;
 
 
 /* useful strings literals */
-#define EJS_ATOM(atom) static const EJSPrimString _ejs_string_##atom = { .gc_header = (EJS_STRING_FLAT<<EJS_GC_USER_FLAGS_SHIFT), .length = sizeof(EJS_STRINGIFY(atom))-1, .data = { .flat = EJS_STRINGIFY(atom) }}; ejsval _ejs_atom_##atom; const char* _ejs_cstring_##atom = EJS_STRINGIFY(atom);
-#include "ejs-atoms.h"
-#undef EJS_ATOM
-static const EJSPrimString _ejs_string_empty = { .gc_header = (EJS_STRING_FLAT<<EJS_GC_USER_FLAGS_SHIFT), .length = 0, .data = { .flat = "" }};
-static const EJSPrimString _ejs_string_empty_array = { .gc_header = (EJS_STRING_FLAT<<EJS_GC_USER_FLAGS_SHIFT), .length = 0, .data = { .flat = "[]" }};
-static const EJSPrimString _ejs_string_empty_object = { .gc_header = (EJS_STRING_FLAT<<EJS_GC_USER_FLAGS_SHIFT), .length = 0, .data = { .flat = "{}" }};
-ejsval _ejs_atom_empty;
-ejsval _ejs_atom_empty_array;
-ejsval _ejs_atom_empty_object;
-
-static void
-_ejs_init_static_strings()
-{
-#define EJS_ATOM(atom) _ejs_atom_##atom = STRING_TO_EJSVAL((EJSPrimString*)&_ejs_string_##atom); _ejs_gc_add_named_root (_ejs_atom_##atom); //STATIC_BUILD_EJSVAL(EJSVAL_TAG_STRING, (uintptr_t)&_ejs_string_##atom);
-#include "ejs-atoms.h"
-#undef EJS_ATOM
-    _ejs_atom_empty = STRING_TO_EJSVAL((EJSPrimString*)&_ejs_string_empty); _ejs_gc_add_named_root (_ejs_atom_empty); //STATIC_BUILD_EJSVAL(EJSVAL_TAG_STRING, (uintptr_t)&_ejs_string_empty);
-    _ejs_atom_empty_array = STRING_TO_EJSVAL((EJSPrimString*)&_ejs_string_empty_array); _ejs_gc_add_named_root (_ejs_atom_empty_array); //STATIC_BUILD_EJSVAL(EJSVAL_TAG_STRING, (uintptr_t)&_ejs_string_empty_array);
-    _ejs_atom_empty_object = STRING_TO_EJSVAL((EJSPrimString*)&_ejs_string_empty_object); _ejs_gc_add_named_root (_ejs_atom_empty_object); //STATIC_BUILD_EJSVAL(EJSVAL_TAG_STRING, (uintptr_t)&_ejs_string_empty_array);
-}
+#include "ejs-atoms-gen.c"
 
 void
 _ejs_init(int argc, char** argv)
