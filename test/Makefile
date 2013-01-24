@@ -10,6 +10,7 @@ TESTS:=$(filter-out esprima-roundtrip1.js,$(TESTS))
 endif
 
 EXPECTED_FAILURES= \
+	array12.js \
 	date1.js \
 	forin2.js \
 	forin5.js \
@@ -17,15 +18,15 @@ EXPECTED_FAILURES= \
 	instanceof1.js \
 	object5.js \
 	number1.js \
-	toLocaleString3 \
-	prototype9 \
-	exc1 \
-	exc2 \
-	exc3 \
-	exc10 \
-	sieve1 \
-	json4
+	toLocaleString3.js \
+	prototype9.js \
+	exc1.js \
+	exc2.js \
+	exc3.js \
+	exc10.js \
+	json4.js
 
+# array12 fails because Array.prototype.splice is broken
 # date1 fails because we test the Date() function, which returns the current time.  this differs from the current time when the node test runs.  bleah.
 # forin2 fails because we don't properly handle deleting properties while iterating
 # forin5 fails because we enumerate the entire range 0..length of an array, including the holes.
@@ -36,7 +37,6 @@ EXPECTED_FAILURES= \
 # toLocaleString3 fails because we don't have a special toString (or toLocaleString) implementation for arrays.
 # prototype9 fails because of one actual prototype failure and difference in our Function.toString() method.
 # the exc* tests fail because things are very screwed up with exception handling at the moment.
-# sieve1 fails due to a gc bug.  with EJS_GC_DISABLE=1, the test runs fine
 # json4 fails due to properties being serialized in a different order.
 
 check: check-unit-tests run-tests
@@ -89,8 +89,8 @@ format-results:
 
 compile-tests: $(patsubst %.js,%.js.exe,$(TESTS))
 
-test-%: echo-% .%.ejs-out .%.node-out
-	-@test_js=`echo $@|sed -e s,test-,,`; \
+test-%: echo-% .%.js.ejs-out .%.js.node-out
+	-@test_js=`echo $@|sed -e s,test-,,`.js; \
 	if cmp -s .$$test_js.ejs-out .$$test_js.node-out ; then \
 		if grep -e ^$$test_js .expected-failures /dev/null 2>&1; then \
 			echo "\033[33mXSUCCESS\033[0m"; \
@@ -117,10 +117,10 @@ echo-%:
 	-@test_js=`echo $@|sed -e s,echo-,,`; \
 	/bin/echo -n "$$test_js:   "
 
-.%.ejs-out: %.js.exe
+.%.js.ejs-out: %.js.exe
 	-@EXE=`echo $<`; ./$$EXE > $@
 
-.%.node-out: %.js
+.%.js.node-out: %.js
 	@NODE_PATH=$(NODE_PATH) node $< > $@
 
 esprima-roundtrip%.js.exe: esprima-roundtrip%.js $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js $(TOPDIR)/runtime/libecho.a
