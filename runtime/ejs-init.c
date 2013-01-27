@@ -55,7 +55,7 @@ _ejs_init(int argc, char** argv)
 
     _ejs_object_setprop (_ejs_global, _ejs_atom_undefined, _ejs_undefined);
     _ejs_object_setprop (_ejs_global, _ejs_atom_NaN, _ejs_nan);
-    _ejs_object_setprop_utf8 (_ejs_global, "__ejs", _ejs_ejs_global);
+    _ejs_object_setprop (_ejs_global, _ejs_atom___ejs, _ejs_ejs_global);
 
     _ejs_object_init_proto();
 
