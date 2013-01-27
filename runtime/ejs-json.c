@@ -271,10 +271,10 @@ JO(StringifyState *state, ejsval value)
               Object.keys standard built-in function. */
         EJSObject* value_obj = EJSVAL_TO_OBJECT(value);
         K = _ejs_array_new (0);
-        for (int i = 0; i < value_obj->map->num; i ++) {
-            if (!_ejs_property_desc_is_enumerable(&value_obj->map->properties[i]))
+        for (int i = 0; i < value_obj->map.num; i ++) {
+            if (!_ejs_property_desc_is_enumerable(&value_obj->map.properties[i]))
                 continue;
-            ejsval propname = _ejs_string_new_ucs2(value_obj->map->names[i]);
+            ejsval propname = _ejs_string_new_ucs2(value_obj->map.names[i]);
             _ejs_array_push_dense(K, 1, &propname);
         }
     }

@@ -138,7 +138,7 @@ struct _EJSObject {
     GCObjectHeader gc_header;
     EJSSpecOps *ops;
     ejsval proto; // the __proto__ property
-    EJSPropertyMap* map;
+    EJSPropertyMap map;
 };
 
 
@@ -148,7 +148,7 @@ struct _EJSObject {
 
 EJS_BEGIN_DECLS
 
-EJSPropertyMap* _ejs_propertymap_new (int initial_allocation);
+void _ejs_propertymap_init (EJSPropertyMap* map, int initial_allocation);
 int _ejs_propertymap_lookup (EJSPropertyMap *map, const jschar *name, EJSBool add_if_not_found);
 void _ejs_propertymap_foreach_value (EJSPropertyMap *map, EJSValueFunc foreach_func);
 void _ejs_propertymap_foreach_property (EJSPropertyMap *map, EJSPropertyDescFunc foreach_func, void* data);

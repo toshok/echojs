@@ -232,21 +232,19 @@ FromPropertyDescriptor(EJSPropertyDesc* Desc)
     return obj;
 }
 
-EJSPropertyMap*
-_ejs_propertymap_new (int initial_allocation)
+void
+_ejs_propertymap_init (EJSPropertyMap *map, int initial_allocation)
 {
-    EJSPropertyMap* rv = (EJSPropertyMap*)malloc(sizeof (EJSPropertyMap));
     if (initial_allocation) {
-        rv->names = (jschar**)malloc(sizeof(jschar*) * initial_allocation);
-        rv->properties = (EJSPropertyDesc*)malloc(sizeof (EJSPropertyDesc) * initial_allocation);
+        map->names = (jschar**)malloc(sizeof(jschar*) * initial_allocation);
+        map->properties = (EJSPropertyDesc*)malloc(sizeof (EJSPropertyDesc) * initial_allocation);
     }
     else {
-        rv->names = NULL;
-        rv->properties = NULL;
+        map->names = NULL;
+        map->properties = NULL;
     }
-    rv->num = 0;
-    rv->allocated = initial_allocation;
-    return rv;
+    map->num = 0;
+    map->allocated = initial_allocation;
 }
 
 void
@@ -257,7 +255,6 @@ _ejs_propertymap_free (EJSPropertyMap *map)
     }
     free (map->names);
     free (map->properties);
-    free(map);
 }
 
 void
@@ -380,7 +377,7 @@ _ejs_property_iterator_new (ejsval forVal)
     }
     else if (EJSVAL_IS_OBJECT(forVal)) {
         // totally broken, only iterate over forObj's property map, not prototype properties
-        EJSPropertyMap *map = EJSVAL_TO_OBJECT(forVal)->map;
+        EJSPropertyMap *map = &EJSVAL_TO_OBJECT(forVal)->map;
 
         if (map) {
             iterator->forObj = forVal;
@@ -441,7 +438,7 @@ _ejs_init_object (EJSObject* obj, ejsval proto, EJSSpecOps *ops)
 {
     obj->proto = proto;
     obj->ops = ops ? ops : &_ejs_object_specops;
-    obj->map = _ejs_propertymap_new (obj->ops == &_ejs_object_specops ? 5 : 0);
+    _ejs_propertymap_init (&obj->map, obj->ops == &_ejs_object_specops ? 5 : 0);
     EJS_OBJECT_SET_EXTENSIBLE(obj);
 #if notyet
     ((GCObjectPtr)obj)->gc_data = 0x01; // HAS_FINALIZE
@@ -722,14 +719,14 @@ _ejs_Object_getOwnPropertyNames (ejsval env, ejsval _this, uint32_t argc, ejsval
     EJSObject* O = EJSVAL_TO_OBJECT(obj);
     /* 2. Let array be the result of creating a new object as if by the expression new Array () where Array is the 
           standard built-in constructor with that name. */
-    ejsval arr = _ejs_array_new(O->map->num);
+    ejsval arr = _ejs_array_new(O->map.num);
     EJSArray* array = (EJSArray*)EJSVAL_TO_OBJECT(arr);
     /* 3. Let n be 0. */
     int n = 0;
     /* 4. For each named own property P of O */
-    while (n < O->map->num) {
+    while (n < O->map.num) {
         /*    a. Let name be the String value that is the name of P. */
-        jschar* name = O->map->names[n];
+        jschar* name = O->map.names[n];
         ejsval propName = _ejs_string_new_ucs2(name);
         /*    b. Call the [[DefineOwnProperty]] internal method of array with arguments ToString(n), the
                  PropertyDescriptor {[[Value]]: name, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: 
@@ -841,8 +838,8 @@ _ejs_Object_defineProperties (ejsval env, ejsval _this, uint32_t argc, ejsval *a
 
     /* 3. Let names be an internal list containing the names of each enumerable own property of props. */
     int names_len = 0;
-    for (int p = 0; p < props_obj->map->num; p ++) {
-        if (_ejs_property_desc_is_enumerable (&props_obj->map->properties[p]))
+    for (int p = 0; p < props_obj->map.num; p ++) {
+        if (_ejs_property_desc_is_enumerable (&props_obj->map.properties[p]))
             names_len ++;
     }
 
@@ -853,9 +850,9 @@ _ejs_Object_defineProperties (ejsval env, ejsval _this, uint32_t argc, ejsval *a
 
     ejsval* names = malloc(names_len * sizeof(ejsval));
     int n = 0;
-    for (int p = 0; p < props_obj->map->num; p ++) {
-        if (_ejs_property_desc_is_enumerable(&props_obj->map->properties[p]))
-            names[n++] = _ejs_string_new_ucs2(props_obj->map->names[p]);
+    for (int p = 0; p < props_obj->map.num; p ++) {
+        if (_ejs_property_desc_is_enumerable(&props_obj->map.properties[p]))
+            names[n++] = _ejs_string_new_ucs2(props_obj->map.names[p]);
     }
 
     /* 4. Let descriptors be an empty internal List. */
@@ -911,8 +908,8 @@ _ejs_Object_seal (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     // XXX this needs special handling for arrays (and other objects?)
 
     /* 2. For each named own property name P of O, */
-    for (int n = 0; n < obj->map->num; n++) {
-        ejsval P = _ejs_string_new_ucs2(obj->map->names[n]);
+    for (int n = 0; n < obj->map.num; n++) {
+        ejsval P = _ejs_string_new_ucs2(obj->map.names[n]);
 
         /*    a. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with P. */
         EJSPropertyDesc* desc = OP(obj,get_own_property)(O, P);
@@ -948,8 +945,8 @@ _ejs_Object_freeze (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     // XXX this needs special handling for arrays (and other objects?)
 
     /* 2. For each named own property name P of O, */
-    for (int n = 0; n < obj->map->num; n++) {
-        ejsval P = _ejs_string_new_ucs2(obj->map->names[n]);
+    for (int n = 0; n < obj->map.num; n++) {
+        ejsval P = _ejs_string_new_ucs2(obj->map.names[n]);
 
         /*    a. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with P. */
         EJSPropertyDesc* desc = OP(obj,get_own_property)(O, P);
@@ -1013,8 +1010,8 @@ _ejs_Object_isSealed (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     // XXX this needs special handling for arrays (and other objects?)
 
     /* 2. For each named own property name P of O, */
-    for (int n = 0; n < obj->map->num; n++) {
-        ejsval P = _ejs_string_new_ucs2(obj->map->names[n]);
+    for (int n = 0; n < obj->map.num; n++) {
+        ejsval P = _ejs_string_new_ucs2(obj->map.names[n]);
 
         /*    a. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with P. */
         EJSPropertyDesc* desc = OP(obj,get_own_property)(O, P);
@@ -1049,8 +1046,8 @@ _ejs_Object_isFrozen (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     // XXX this needs special handling for arrays (and other objects?)
 
     /* 2. For each named own property name P of O, */
-    for (int n = 0; n < obj->map->num; n++) {
-        ejsval P = _ejs_string_new_ucs2(obj->map->names[n]);
+    for (int n = 0; n < obj->map.num; n++) {
+        ejsval P = _ejs_string_new_ucs2(obj->map.names[n]);
 
         /*    a. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with P. */
         EJSPropertyDesc* desc = OP(obj,get_own_property)(O, P);
@@ -1321,10 +1318,10 @@ _ejs_object_specop_get_own_property (ejsval obj, ejsval propertyName)
     ejsval property_str = ToString(propertyName);
     EJSObject* obj_ = EJSVAL_TO_OBJECT(obj);
 
-    int idx = _ejs_propertymap_lookup (obj_->map, EJSVAL_TO_FLAT_STRING(property_str), EJS_FALSE);
+    int idx = _ejs_propertymap_lookup (&obj_->map, EJSVAL_TO_FLAT_STRING(property_str), EJS_FALSE);
     if (idx == -1)
         return NULL;
-    return &obj_->map->properties[idx];
+    return &obj_->map.properties[idx];
 }
 
 // ECMA262: 8.12.2
@@ -1488,7 +1485,7 @@ _ejs_object_specop_delete (ejsval O, ejsval P, EJSBool Throw)
     /* 3. If desc.[[Configurable]] is true, then */
     if (_ejs_property_desc_is_configurable(desc)) {
         /*    a. Remove the own property with name P from O. */
-        _ejs_propertymap_delete_desc (obj->map, desc);
+        _ejs_propertymap_delete_desc (&obj->map, desc);
         /*    b. Return true. */
         return EJS_TRUE;
     }
@@ -1547,8 +1544,8 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
             /*          [[Enumerable]] and [[Configurable]] attribute values are described by Desc. If the value of */
             /*          an attribute field of Desc is absent, the attribute of the newly created property is set to its  */
             /*          default value. */
-            int idx = _ejs_propertymap_lookup (obj->map, EJSVAL_TO_FLAT_STRING(P), EJS_TRUE);
-            EJSPropertyDesc *dest = &obj->map->properties[idx];
+            int idx = _ejs_propertymap_lookup (&obj->map, EJSVAL_TO_FLAT_STRING(P), EJS_TRUE);
+            EJSPropertyDesc *dest = &obj->map.properties[idx];
 
             if (_ejs_property_desc_has_value (Desc))
                 _ejs_property_desc_set_value (dest, _ejs_property_desc_get_value (Desc));
@@ -1565,8 +1562,8 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
             /*          [[Enumerable]] and [[Configurable]] attribute values are described by Desc. If the value of  */
             /*          an attribute field of Desc is absent, the attribute of the newly created property is set to its  */
             /*          default value. */
-            int idx = _ejs_propertymap_lookup (obj->map, EJSVAL_TO_FLAT_STRING(P), EJS_TRUE);
-            EJSPropertyDesc *dest = &obj->map->properties[idx];
+            int idx = _ejs_propertymap_lookup (&obj->map, EJSVAL_TO_FLAT_STRING(P), EJS_TRUE);
+            EJSPropertyDesc *dest = &obj->map.properties[idx];
 
             if (_ejs_property_desc_has_getter (Desc))
                 _ejs_property_desc_set_getter (dest, _ejs_property_desc_get_getter (Desc));
@@ -1672,8 +1669,8 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
 
     /* 12. For each attribute field of Desc that is present, set the correspondingly named attribute of the property  */
     /*     named P of object O to the value of the field. */
-    int idx = _ejs_propertymap_lookup (obj->map, EJSVAL_TO_FLAT_STRING(P), EJS_TRUE);
-    EJSPropertyDesc *dest = &obj->map->properties[idx];
+    int idx = _ejs_propertymap_lookup (&obj->map, EJSVAL_TO_FLAT_STRING(P), EJS_TRUE);
+    EJSPropertyDesc *dest = &obj->map.properties[idx];
 
     if (_ejs_property_desc_has_getter (Desc))
         _ejs_property_desc_set_getter (dest, _ejs_property_desc_get_getter (Desc));
@@ -1701,9 +1698,8 @@ _ejs_object_specop_allocate ()
 void 
 _ejs_object_specop_finalize(EJSObject* obj)
 {
-    _ejs_propertymap_free (obj->map);
+    _ejs_propertymap_free (&obj->map);
     obj->proto = _ejs_null;
-    obj->map = NULL;
     obj->ops = NULL;
 }
 
@@ -1718,6 +1714,6 @@ scan_property (EJSPropertyDesc *desc, EJSValueFunc scan_func)
 static void
 _ejs_object_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
-    _ejs_propertymap_foreach_property (obj->map, (EJSPropertyDescFunc)scan_property, scan_func);
+    _ejs_propertymap_foreach_property (&obj->map, (EJSPropertyDescFunc)scan_property, scan_func);
     scan_func (obj->proto);
 }
