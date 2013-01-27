@@ -84,6 +84,8 @@ EJSPrimString* _ejs_primstring_flatten (EJSPrimString* primstr);
 
 char* _ejs_string_to_utf8(EJSPrimString* primstr);
 
+void _ejs_string_init_literal (const char *name, ejsval *val, EJSPrimString* str, jschar* ucs2_data, int32_t length);
+
 EJS_END_DECLS
 
 #endif /* _ejs_string_h */

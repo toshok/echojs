@@ -1087,3 +1087,12 @@ _ejs_string_to_utf8(EJSPrimString* primstr)
 
     return buf;
 }
+
+void
+_ejs_string_init_literal (const char *name, ejsval *val, EJSPrimString* str, jschar* ucs2_data, int32_t length)
+{
+    str->length = length;
+    str->gc_header = (EJS_STRING_FLAT<<EJS_GC_USER_FLAGS_SHIFT);
+    str->data.flat = ucs2_data;
+    *val = STRING_TO_EJSVAL(str);
+}
