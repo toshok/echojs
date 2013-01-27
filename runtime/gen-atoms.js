@@ -64,6 +64,6 @@ console.log ("static void _ejs_init_static_strings() {");
 for (var an = 0, ae = atom_names.length; an < ae; an ++) {
   var atom = atom_names[an];
   console.log ("    _ejs_string_" + atom + ".data.flat = (jschar*)_ejs_ucs2_" + atom + ";");
-  console.log ("    _ejs_atom_" + atom + " = STRING_TO_EJSVAL((EJSPrimString*)&_ejs_string_" + atom + "); _ejs_gc_add_named_root (_ejs_atom_" + atom + ");");
+  console.log ("    _ejs_atom_" + atom + " = STRING_TO_EJSVAL((EJSPrimString*)&_ejs_string_" + atom + ");");
 }
 console.log ("}");
