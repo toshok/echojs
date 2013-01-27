@@ -410,7 +410,7 @@ mark_in_range(char* low, char* high)
             if (!is_white(gcptr))         continue; // skip pointers to gray/black cells
 
             if (EJSVAL_IS_STRING(candidate_val)) {
-                SPEW(printf ("found ptr to %p(PrimString:%s) on stack\n", EJSVAL_TO_STRING(candidate_val), EJSVAL_TO_FLAT_STRING(candidate_val)));
+                SPEW(printf ("found ptr to %p(PrimString) on stack\n", EJSVAL_TO_STRING(candidate_val)));
                 _ejs_gc_worklist_push(gcptr);
                 set_gray(gcptr);
             }
@@ -450,10 +450,12 @@ sweep_heap()
                     else {
                         EJSPrimString* primstr = (EJSPrimString*)p;
                         if (EJS_PRIMSTR_GET_TYPE(primstr) == EJS_STRING_FLAT) {
-                            SPEW(printf ("finalizing primitive string %p(%s)\n", primstr, primstr->data.flat));
+                            char* utf8 = ucs2_to_utf8(primstr->data.flat);
+                            SPEW(printf ("finalizing flat primitive string %p(%s)\n", p, utf8));
+                            free (utf8);
                         }
                         else {
-                            SPEW(printf ("finalizing primitive string %p\n", primstr));
+                            SPEW(printf ("finalizing primitive string %p\n", p));
                         }
                     }
                     add_cell_to_freelist (info, c);
