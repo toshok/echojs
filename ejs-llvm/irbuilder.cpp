@@ -68,13 +68,22 @@ _ejs_llvm_IRBuilder_createRet(ejsval env, ejsval _this, int argc, ejsval *args)
 }
 
 ejsval
+_ejs_llvm_IRBuilder_createRetVoid(ejsval env, ejsval _this, int argc, ejsval *args)
+{
+    REQ_LLVM_VAL_ARG(0,val);
+    return _ejs_llvm_Value_new(_llvm_builder.CreateRetVoid());
+}
+
+ejsval
 _ejs_llvm_IRBuilder_createPointerCast(ejsval env, ejsval _this, int argc, ejsval *args)
 {
     REQ_LLVM_VAL_ARG(0,val);
     REQ_LLVM_TYPE_ARG(1,ty);
     REQ_UTF8_ARG(2,name);
 
-    return _ejs_llvm_Value_new(_llvm_builder.CreatePointerCast(val, ty, name));
+    ejsval rv = _ejs_llvm_Value_new(_llvm_builder.CreatePointerCast(val, ty, name));
+    free (name);
+    return rv;
 }
 
 ejsval
@@ -84,7 +93,9 @@ _ejs_llvm_IRBuilder_createFPCast(ejsval env, ejsval _this, int argc, ejsval *arg
     REQ_LLVM_TYPE_ARG(1,ty);
     REQ_UTF8_ARG(2,name);
 
-    return _ejs_llvm_Value_new (_llvm_builder.CreateFPCast(val, ty, name));
+    ejsval rv = _ejs_llvm_Value_new (_llvm_builder.CreateFPCast(val, ty, name));
+    free (name);
+    return rv;
 }
 
 ejsval
@@ -100,7 +111,9 @@ _ejs_llvm_IRBuilder_createCall(ejsval env, ejsval _this, int argc, ejsval *args)
         if (ArgsV.back() == 0) abort(); // XXX throw an exception here
     }
 
-    return _ejs_llvm_Call_new (_llvm_builder.CreateCall(callee, ArgsV, name));
+    ejsval rv = _ejs_llvm_Call_new (_llvm_builder.CreateCall(callee, ArgsV, name));
+    free (name);
+    return rv;
 }
 
 ejsval
@@ -118,7 +131,9 @@ _ejs_llvm_IRBuilder_createInvoke(ejsval env, ejsval _this, int argc, ejsval *arg
         if (ArgsV.back() == 0) abort(); // XXX throw an exception here
     }
 
-    return _ejs_llvm_Invoke_new (_llvm_builder.CreateInvoke(callee, normal_dest, unwind_dest, ArgsV, name));
+    ejsval rv = _ejs_llvm_Invoke_new (_llvm_builder.CreateInvoke(callee, normal_dest, unwind_dest, ArgsV, name));
+    free (name);
+    return rv;
 }
 
 ejsval
@@ -128,7 +143,9 @@ _ejs_llvm_IRBuilder_createFAdd(ejsval env, ejsval _this, int argc, ejsval *args)
     REQ_LLVM_VAL_ARG(1, right);
     REQ_UTF8_ARG(2, name);
 
-    return _ejs_llvm_Value_new (_llvm_builder.CreateFAdd(left, right, name));
+    ejsval rv = _ejs_llvm_Value_new (_llvm_builder.CreateFAdd(left, right, name));
+    free (name);
+    return rv;
 }
 
 ejsval
@@ -137,7 +154,9 @@ _ejs_llvm_IRBuilder_createAlloca(ejsval env, ejsval _this, int argc, ejsval *arg
     REQ_LLVM_TYPE_ARG(0, ty);
     REQ_UTF8_ARG(1, name);
 
-    return _ejs_llvm_Value_new (_llvm_builder.CreateAlloca(ty, 0, name));
+    ejsval rv = _ejs_llvm_Value_new (_llvm_builder.CreateAlloca(ty, 0, name));
+    free (name);
+    return rv;
 }
 
 ejsval
@@ -146,7 +165,9 @@ _ejs_llvm_IRBuilder_createLoad(ejsval env, ejsval _this, int argc, ejsval *args)
     REQ_LLVM_VAL_ARG(0, val);
     REQ_UTF8_ARG(1, name);
 
-    return _ejs_llvm_Value_new (_llvm_builder.CreateLoad(val, name));
+    ejsval rv = _ejs_llvm_Value_new (_llvm_builder.CreateLoad(val, name));
+    free (name);
+    return rv;
 }
 
 ejsval
@@ -165,7 +186,10 @@ _ejs_llvm_IRBuilder_createExtractElement(ejsval env, ejsval _this, int argc, ejs
     REQ_LLVM_VAL_ARG(1, idx);
     REQ_UTF8_ARG(2, name);
 
-    return _ejs_llvm_Value_new (_llvm_builder.CreateExtractElement(val, idx, name));
+    ejsval rv = _ejs_llvm_Value_new (_llvm_builder.CreateExtractElement(val, idx, name));
+    free (name);
+
+    return rv;
 }
 
 ejsval
@@ -181,17 +205,27 @@ _ejs_llvm_IRBuilder_createGetElementPointer(ejsval env, ejsval _this, int argc, 
         if (IdxV.back() == 0) abort(); // XXX throw an exception here
     }
 
-    return _ejs_llvm_Value_new (_llvm_builder.CreateGEP(val, IdxV, name));
+    ejsval rv = _ejs_llvm_Value_new (_llvm_builder.CreateGEP(val, IdxV, name));
+    free (name);
+    return rv;
 }
 
 ejsval
 _ejs_llvm_IRBuilder_createInBoundsGetElementPointer(ejsval env, ejsval _this, int argc, ejsval *args)
 {
     REQ_LLVM_VAL_ARG(0, val);
-    REQ_LLVM_VAL_ARG(1, idx);
+    REQ_LLVM_VAL_ARG(1, idxv);
     REQ_UTF8_ARG(2, name);
 
-    return _ejs_llvm_Value_new (_llvm_builder.CreateInBoundsGEP(val, idx, name));
+    std::vector<llvm::Value*> IdxV;
+    for (unsigned i = 0, e = EJSARRAY_LEN(idxv); i != e; ++i) {
+        IdxV.push_back (_ejs_llvm_Value_GetLLVMObj(EJSARRAY_ELEMENTS(idxv)[i]));
+        if (IdxV.back() == 0) abort(); // XXX throw an exception here
+    }
+
+    ejsval rv = _ejs_llvm_Value_new (_llvm_builder.CreateInBoundsGEP(val, IdxV, name));
+    free (name);
+    return rv;
 }
 
 ejsval
@@ -201,7 +235,9 @@ _ejs_llvm_IRBuilder_createStructGetElementPointer(ejsval env, ejsval _this, int 
     REQ_INT_ARG(1, idx);
     REQ_UTF8_ARG(2, name);
 
-    return _ejs_llvm_Value_new (_llvm_builder.CreateStructGEP(val, idx, name));
+    ejsval rv = _ejs_llvm_Value_new (_llvm_builder.CreateStructGEP(val, idx, name));
+    free (name);
+    return rv;
 }
 
 ejsval
@@ -211,7 +247,9 @@ _ejs_llvm_IRBuilder_createICmpEq(ejsval env, ejsval _this, int argc, ejsval *arg
     REQ_LLVM_VAL_ARG(1, right);
     REQ_UTF8_ARG(2, name);
 
-    return _ejs_llvm_Value_new (_llvm_builder.CreateICmpEQ(left, right, name));
+    ejsval rv = _ejs_llvm_Value_new (_llvm_builder.CreateICmpEQ(left, right, name));
+    free (name);
+    return rv;
 }
 
 ejsval
@@ -221,7 +259,9 @@ _ejs_llvm_IRBuilder_createICmpSGt(ejsval env, ejsval _this, int argc, ejsval *ar
     REQ_LLVM_VAL_ARG(1, right);
     REQ_UTF8_ARG(2, name);
 
-    return _ejs_llvm_Value_new (_llvm_builder.CreateICmpSGT(left, right, name));
+    ejsval rv = _ejs_llvm_Value_new (_llvm_builder.CreateICmpSGT(left, right, name));
+    free (name);
+    return rv;
 }
 
 ejsval
@@ -251,7 +291,9 @@ _ejs_llvm_IRBuilder_createPhi(ejsval env, ejsval _this, int argc, ejsval *args)
     REQ_INT_ARG(1, incoming_values);
     REQ_UTF8_ARG(2, name);
 
-    return _ejs_llvm_Value_new (_llvm_builder.CreatePHI(ty, incoming_values, name));
+    ejsval rv = _ejs_llvm_Value_new (_llvm_builder.CreatePHI(ty, incoming_values, name));
+    free (name);
+    return rv;
 #endif
 }
 
@@ -261,7 +303,10 @@ _ejs_llvm_IRBuilder_createGlobalStringPtr(ejsval env, ejsval _this, int argc, ej
     REQ_UTF8_ARG(0, val);
     REQ_UTF8_ARG(1, name);
 
-    return _ejs_llvm_Value_new (_llvm_builder.CreateGlobalStringPtr(val, name));
+    ejsval rv = _ejs_llvm_Value_new (_llvm_builder.CreateGlobalStringPtr(val, name));
+    free (val);
+    free (name);
+    return rv;
 }
 
 ejsval
@@ -288,7 +333,9 @@ _ejs_llvm_IRBuilder_createLandingPad(ejsval env, ejsval _this, int argc, ejsval 
     REQ_INT_ARG(2, num_clauses);
     REQ_UTF8_ARG(3, name);
 
-    return _ejs_llvm_LandingPad_new (_llvm_builder.CreateLandingPad(ty, persFn, num_clauses, name));
+    ejsval rv = _ejs_llvm_LandingPad_new (_llvm_builder.CreateLandingPad(ty, persFn, num_clauses, name));
+    free (name);
+    return rv;
 }
 
 ejsval
@@ -319,6 +366,7 @@ _ejs_llvm_IRBuilder_init (ejsval exports)
     OBJ_METHOD(setInsertPointStartBB);
     OBJ_METHOD(getInsertBlock);
     OBJ_METHOD(createRet);
+    OBJ_METHOD(createRetVoid);
     OBJ_METHOD(createPointerCast);
     OBJ_METHOD(createFPCast);
     OBJ_METHOD(createCall);

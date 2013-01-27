@@ -29,6 +29,7 @@ namespace jsllvm {
     LLVM_TYPE_METHOD(getDoubleTy);
     LLVM_TYPE_METHOD(getInt64Ty);
     LLVM_TYPE_METHOD(getInt32Ty);
+    LLVM_TYPE_METHOD(getInt16Ty);
     LLVM_TYPE_METHOD(getInt8Ty);
     LLVM_TYPE_METHOD(getVoidTy);
 

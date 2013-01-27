@@ -11,6 +11,13 @@ namespace jsllvm {
     static void Init(v8::Handle<v8::Object> target);
 
     static v8::Handle<v8::Value> New(::llvm::Module *llvm_module);
+
+    static llvm::Module* GetLLVMObj (v8::Local<v8::Value> value) {
+      if (value->IsNull())
+	return NULL;
+      return node::ObjectWrap::Unwrap<Module>(value->ToObject())->llvm_module;
+    }
+
   private:
     ::llvm::Module *llvm_module;
 
@@ -19,6 +26,7 @@ namespace jsllvm {
     virtual ~Module();
 
     static v8::Handle<v8::Value> New(const v8::Arguments& args);
+    static v8::Handle<v8::Value> GetGlobalVariable (const v8::Arguments& args);
     static v8::Handle<v8::Value> GetOrInsertIntrinsic (const v8::Arguments& args);
     static v8::Handle<v8::Value> GetOrInsertFunction (const v8::Arguments& args);
     static v8::Handle<v8::Value> GetOrInsertGlobal (const v8::Arguments& args);

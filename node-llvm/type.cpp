@@ -22,6 +22,7 @@ namespace jsllvm {
     LLVM_SET_METHOD(s_ct, getDoubleTy);
     LLVM_SET_METHOD(s_ct, getInt64Ty);
     LLVM_SET_METHOD(s_ct, getInt32Ty);
+    LLVM_SET_METHOD(s_ct, getInt16Ty);
     LLVM_SET_METHOD(s_ct, getInt8Ty);
     LLVM_SET_METHOD(s_ct, getVoidTy);
 
@@ -52,6 +53,7 @@ namespace jsllvm {
   LLVM_TYPE_METHOD_PROXY(getDoubleTy)
   LLVM_TYPE_METHOD_PROXY(getInt64Ty)
   LLVM_TYPE_METHOD_PROXY(getInt32Ty)
+  LLVM_TYPE_METHOD_PROXY(getInt16Ty)
   LLVM_TYPE_METHOD_PROXY(getInt8Ty)
   LLVM_TYPE_METHOD_PROXY(getVoidTy)
 

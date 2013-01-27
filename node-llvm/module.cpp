@@ -4,6 +4,7 @@
 #include "module.h"
 #include "function.h"
 #include "value.h"
+#include "globalvariable.h"
 
 using namespace node;
 using namespace v8;
@@ -20,6 +21,7 @@ namespace jsllvm {
     s_ct->InstanceTemplate()->SetInternalFieldCount(1);
     s_ct->SetClassName(String::NewSymbol("Module"));
 
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "getGlobalVariable", Module::GetGlobalVariable);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "getOrInsertIntrinsic", Module::GetOrInsertIntrinsic);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "getOrInsertFunction", Module::GetOrInsertFunction);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "getOrInsertGlobal", Module::GetOrInsertGlobal);
@@ -135,6 +137,17 @@ namespace jsllvm {
     return scope.Close(result);
   }
 
+  Handle<v8::Value> Module::GetGlobalVariable (const Arguments& args)
+  {
+    HandleScope scope;
+    Module* module = ObjectWrap::Unwrap<Module>(args.This());
+
+    REQ_UTF8_ARG(0, name);
+    REQ_BOOL_ARG(1, allowInternal);
+
+    return scope.Close(GlobalVariable::New(module->llvm_module->getGlobalVariable(*name, allowInternal)));
+  }
+
   Handle<v8::Value> Module::GetOrInsertGlobal (const Arguments& args)
   {
     HandleScope scope;
@@ -143,7 +156,7 @@ namespace jsllvm {
     REQ_UTF8_ARG(0, name);
     REQ_LLVM_TYPE_ARG(1, type);
 
-    return scope.Close(Value::New(module->llvm_module->getOrInsertGlobal(*name, type)));
+    return scope.Close(GlobalVariable::New(static_cast<llvm::GlobalVariable*>(module->llvm_module->getOrInsertGlobal(*name, type))));
   }
 
   Handle<v8::Value> Module::GetOrInsertExternalFunction (const Arguments& args)

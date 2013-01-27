@@ -1,3 +1,8 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=cpp:
+ */
+
+
 #include <stdio.h>
 
 #include "type.h"
@@ -44,6 +49,7 @@ _ejs_llvm_Type_impl (ejsval env, ejsval _this, int argc, ejsval *args)
 LLVM_TYPE_METHOD_PROXY(getDoubleTy)
 LLVM_TYPE_METHOD_PROXY(getInt64Ty)
 LLVM_TYPE_METHOD_PROXY(getInt32Ty)
+LLVM_TYPE_METHOD_PROXY(getInt16Ty)
 LLVM_TYPE_METHOD_PROXY(getInt8Ty)
 LLVM_TYPE_METHOD_PROXY(getVoidTy)
 
@@ -98,20 +104,31 @@ _ejs_llvm_Type_GetLLVMObj(ejsval val)
 void
 _ejs_llvm_Type_init (ejsval exports)
 {
-  _ejs_llvm_Type = _ejs_function_new_utf8 (_ejs_null, "LLVMType", (EJSClosureFunc)_ejs_llvm_Type_impl);
-  _ejs_llvm_Type_proto = _ejs_object_create(_ejs_Object_prototype);
+    START_SHADOW_STACK_FRAME;
 
-  _ejs_object_setprop_utf8 (_ejs_llvm_Type,       "prototype",    _ejs_llvm_Type_proto);
-  _ejs_object_setprop_utf8 (_ejs_llvm_Type,       "getDoubleTy",  _ejs_function_new_utf8 (_ejs_null, "getDoubleTy", (EJSClosureFunc)_ejs_llvm_Type_getDoubleTy));
-  _ejs_object_setprop_utf8 (_ejs_llvm_Type,       "getInt64Ty",   _ejs_function_new_utf8 (_ejs_null, "getInt64Ty", (EJSClosureFunc)_ejs_llvm_Type_getInt64Ty));
-  _ejs_object_setprop_utf8 (_ejs_llvm_Type,       "getInt32Ty",   _ejs_function_new_utf8 (_ejs_null, "getInt32Ty", (EJSClosureFunc)_ejs_llvm_Type_getInt32Ty));
-  _ejs_object_setprop_utf8 (_ejs_llvm_Type,       "getInt8Ty",    _ejs_function_new_utf8 (_ejs_null, "getInt8Ty", (EJSClosureFunc)_ejs_llvm_Type_getInt8Ty));
-  _ejs_object_setprop_utf8 (_ejs_llvm_Type,       "getVoidTy",    _ejs_function_new_utf8 (_ejs_null, "getVoidTy", (EJSClosureFunc)_ejs_llvm_Type_getVoidTy));
+    _ejs_gc_add_named_root (_ejs_llvm_Type_proto);
+    _ejs_llvm_Type_proto = _ejs_object_create(_ejs_Object_prototype);
 
-  _ejs_object_setprop_utf8 (_ejs_llvm_Type_proto, "pointerTo",    _ejs_function_new_utf8 (_ejs_null, "pointerTo", (EJSClosureFunc)_ejs_llvm_Type_prototype_pointerTo));
-  _ejs_object_setprop_utf8 (_ejs_llvm_Type_proto, "isVoid",       _ejs_function_new_utf8 (_ejs_null, "isVoid", (EJSClosureFunc)_ejs_llvm_Type_prototype_isVoid));
-  _ejs_object_setprop_utf8 (_ejs_llvm_Type_proto, "dump",         _ejs_function_new_utf8 (_ejs_null, "dump", (EJSClosureFunc)_ejs_llvm_Type_prototype_dump));
-  _ejs_object_setprop_utf8 (_ejs_llvm_Type_proto, "toString",     _ejs_function_new_utf8 (_ejs_null, "toString", (EJSClosureFunc)_ejs_llvm_Type_prototype_toString));
+    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMType", (EJSClosureFunc)_ejs_llvm_Type_impl));
+    _ejs_llvm_Type = tmpobj;
 
-  _ejs_object_setprop_utf8 (exports,              "Type", _ejs_llvm_Type);
+    _ejs_object_setprop (_ejs_llvm_Type,       _ejs_atom_prototype,  _ejs_llvm_Type_proto);
+
+#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_llvm_Type, EJS_STRINGIFY(x), _ejs_llvm_Type_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_llvm_Type_proto, EJS_STRINGIFY(x), _ejs_llvm_Type_prototype_##x)
+
+    OBJ_METHOD(getDoubleTy);
+    OBJ_METHOD(getInt64Ty);
+    OBJ_METHOD(getInt32Ty);
+    OBJ_METHOD(getInt8Ty);
+    OBJ_METHOD(getVoidTy);
+
+    PROTO_METHOD(pointerTo);
+    PROTO_METHOD(isVoid);
+    PROTO_METHOD(dump);
+    PROTO_METHOD(toString);
+
+    _ejs_object_setprop_utf8 (exports,              "Type", _ejs_llvm_Type);
+
+    END_SHADOW_STACK_FRAME;
 }

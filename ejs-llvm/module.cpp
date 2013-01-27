@@ -13,6 +13,7 @@
 
 #include "function.h"
 #include "type.h"
+#include "globalvariable.h"
 #include "module.h"
 #include "value.h"
 
@@ -45,6 +46,7 @@ _ejs_llvm_Module_impl (ejsval env, ejsval _this, int argc, ejsval *args)
         EJSLLVMModule* module = ((EJSLLVMModule*)EJSVAL_TO_OBJECT(_this));
         REQ_UTF8_ARG(0, name);
         module->llvm_module = new llvm::Module(name, llvm::getGlobalContext());
+        free (name);
         return _this;
     }
 }
@@ -77,6 +79,8 @@ _ejs_llvm_Module_prototype_getOrInsertIntrinsic(ejsval env, ejsval _this, int ar
 #else
     llvm::Function* f = llvm::Intrinsic::getDeclaration (module->llvm_module, intrinsic_id);
 #endif
+
+    free (id);
 
     return _ejs_llvm_Function_new (f);
 }
@@ -112,6 +116,8 @@ _ejs_llvm_Module_prototype_getOrInsertFunction(ejsval env, ejsval _this, int arg
       AI->setName(Args[Idx]);
 #endif
 
+    free (name);
+
     return _ejs_llvm_Function_new (f);
 }
 
@@ -122,7 +128,9 @@ _ejs_llvm_Module_prototype_getOrInsertGlobal(ejsval env, ejsval _this, int argc,
     REQ_UTF8_ARG(0, name);
     REQ_LLVM_TYPE_ARG(1, type);
 
-    return _ejs_llvm_Value_new (module->llvm_module->getOrInsertGlobal(name, type));
+    ejsval rv = _ejs_llvm_GlobalVariable_new (static_cast<llvm::GlobalVariable*>(module->llvm_module->getOrInsertGlobal(name, type)));
+    free (name);
+    return rv;
 }
 
 ejsval
@@ -144,6 +152,8 @@ _ejs_llvm_Module_prototype_getOrInsertExternalFunction(ejsval env, ejsval _this,
     llvm::Function* f = static_cast< llvm::Function*>(module->llvm_module->getOrInsertFunction(name, FT));
     f->setLinkage (llvm::Function::ExternalLinkage);
 
+    free (name);
+
     return _ejs_llvm_Function_new (f);
 }
 
@@ -156,9 +166,26 @@ _ejs_llvm_Module_prototype_getFunction(ejsval env, ejsval _this, int argc, ejsva
 	
     llvm::Function* f = static_cast< llvm::Function*>(module->llvm_module->getFunction(name));
 
+    free (name);
+
     if (f)
         return _ejs_llvm_Function_new (f);
     return _ejs_null;
+}
+
+ejsval
+_ejs_llvm_Module_prototype_getGlobalVariable(ejsval env, ejsval _this, int argc, ejsval *args)
+{
+    EJSLLVMModule *module = ((EJSLLVMModule*)EJSVAL_TO_OBJECT(_this));
+
+    REQ_UTF8_ARG(0, name);
+    REQ_BOOL_ARG(1, allowInternal);
+
+    ejsval rv = _ejs_llvm_GlobalVariable_new (module->llvm_module->getGlobalVariable(name, allowInternal));
+
+    free (name);
+
+    return rv;
 }
 
 ejsval
@@ -190,6 +217,8 @@ _ejs_llvm_Module_prototype_writeToFile(ejsval env, ejsval _this, int argc, ejsva
     module->llvm_module->print(raw_stream, NULL);
     output_file.close();
 
+    free (path);
+
     return _ejs_undefined;
 }
 
@@ -213,6 +242,7 @@ _ejs_llvm_Module_init (ejsval exports)
 
     _ejs_object_setprop (_ejs_llvm_Module,       _ejs_atom_prototype,  _ejs_llvm_Module_proto);
 
+    PROTO_METHOD(getGlobalVariable);
     PROTO_METHOD(getOrInsertIntrinsic);
     PROTO_METHOD(getOrInsertFunction);
     PROTO_METHOD(getOrInsertGlobal);

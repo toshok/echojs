@@ -3,10 +3,12 @@ SOURCES= \
 	basicblock.cpp \
 	callinvoke.cpp \
 	constant.cpp \
+	constantarray.cpp \
 	constantfp.cpp \
 	ejs-llvm.cpp \
 	function.cpp \
 	functiontype.cpp \
+	globalvariable.cpp \
 	irbuilder.cpp \
 	landingpad.cpp \
 	module.cpp \

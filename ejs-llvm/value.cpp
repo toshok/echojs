@@ -69,6 +69,7 @@ _ejs_llvm_Value_prototype_setName(ejsval env, ejsval _this, int argc, ejsval *ar
     REQ_UTF8_ARG (0, name);
 
     val->llvm_val->setName(name);
+    free(name);
     return _ejs_undefined;
 }
 

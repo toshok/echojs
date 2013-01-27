@@ -10,6 +10,7 @@ path = require 'path'
 { NodeVisitor } = require 'nodevisitor'
 closure_conversion = require 'closure-conversion'
 { desugar } = require 'echo-desugar'
+{ genId } = require 'echo-util'
 
 llvm = require 'llvm'
 irbuilder = llvm.IRBuilder
@@ -25,15 +26,22 @@ stringType = llvm.Type.getInt8Ty().pointerTo()
 int8PointerType = stringType
 boolType   = llvm.Type.getInt8Ty()
 voidType   = llvm.Type.getVoidTy()
+jscharType = llvm.Type.getInt16Ty()
 int32Type  = llvm.Type.getInt32Ty()
 int64Type  = llvm.Type.getInt64Ty()
+
+jscharConstant = (c) ->
+        constant = llvm.Constant.getIntegerValue jscharType, c
+        constant.is_constant = true
+        constant.constant_val = c
+        constant
 
 int32Constant = (c) ->
         constant = llvm.Constant.getIntegerValue int32Type, c
         constant.is_constant = true
         constant.constant_val = c
         constant
-        
+                
 int64Constant = (c) ->
         constant = llvm.Constant.getIntegerValue int64Type, c
         constant.is_constant = true
@@ -46,11 +54,12 @@ boolConstant  = (c) ->
         constant.constant_val = c
         constant
         
+EjsValueType = llvm.StructType.create "EjsValueType", [int64Type]
 
-EjsValueType = int64Type
 EjsClosureEnvType = EjsValueType
 EjsPropIteratorType = EjsValueType
 EjsClosureFuncType = (llvm.FunctionType.get EjsValueType, [EjsClosureEnvType, EjsValueType, llvm.Type.getInt32Ty(), EjsValueType.pointerTo()]).pointerTo()
+EjsPrimStringType = llvm.StructType.create "EjsPrimString", [int32Type, int32Type, int64Type, int64Type ] # XXX not the real structure but it should be good
 
 # exception types
 
@@ -78,6 +87,8 @@ does_not_access_memory = (n) ->
 does_not_throw = (n) ->
         n.setDoesNotThrow()
         n
+
+hasOwn = Object::hasOwnProperty
 
 class ExitableScope
         @REASON_RETURN: -10
@@ -232,6 +243,8 @@ class LLVMIRVisitor extends NodeVisitor
                         prop_iterator_free:    module.getOrInsertExternalFunction "_ejs_property_iterator_free",    voidType, [EjsPropIteratorType]
                         throw:                 module.getOrInsertExternalFunction "_ejs_throw",                     voidType, [EjsValueType]
                         rethrow:               module.getOrInsertExternalFunction "_ejs_rethrow",                   voidType, [EjsValueType]
+
+                        init_string_literal:   module.getOrInsertExternalFunction "_ejs_string_init_literal",       voidType, [stringType, EjsValueType.pointerTo(), EjsPrimStringType.pointerTo(), jscharType.pointerTo(), int32Type]
                         
                         undefined:             module.getOrInsertGlobal           "_ejs_undefined",                 EjsValueType
                         "true":                module.getOrInsertGlobal           "_ejs_true",                      EjsValueType
@@ -282,7 +295,20 @@ class LLVMIRVisitor extends NodeVisitor
                         "binopin":         module.getOrInsertExternalFunction "_ejs_op_in",          EjsValueType, [EjsValueType, EjsValueType]
                 }
 
-                @initGlobalScope();
+                @module_atoms = Object.create null
+                @initGlobalScope()
+                
+                @literalInitializationFunction = @module.getOrInsertFunction "_ejs_module_init_string_literals_#{@filename}", voidType, []
+                entry_bb = new llvm.BasicBlock "entry", @literalInitializationFunction
+                return_bb = new llvm.BasicBlock "return", @literalInitializationFunction
+
+                irbuilder.setInsertPoint entry_bb
+                irbuilder.createBr return_bb
+                        
+                irbuilder.setInsertPoint return_bb
+                irbuilder.createRetVoid()
+
+                @literalInitializationBB = entry_bb
 
         # lots of helper methods
 
@@ -311,7 +337,7 @@ class LLVMIRVisitor extends NodeVisitor
                 @iifeStack.shift()
 
         initGlobalScope: ->
-                @current_scope = {}
+                @current_scope = Object.create null
 
         pushScope: (new_scope) ->
                 new_scope[PARENT_SCOPE_KEY] = @current_scope
@@ -327,7 +353,7 @@ class LLVMIRVisitor extends NodeVisitor
 
         findIdentifierInScope: (ident, scope) ->
                 while scope?
-                        if scope.hasOwnProperty ident
+                        if hasOwn.call scope, ident
                                 return scope[ident]
                         scope = scope[PARENT_SCOPE_KEY]
                 null
@@ -355,7 +381,7 @@ class LLVMIRVisitor extends NodeVisitor
                 j = 0
                 for i in [0...ids.length]
                         name = ids[i].id.name
-                        if !scope.hasOwnProperty name
+                        if !hasOwn.call scope, name
                                 allocas[j] = irbuilder.createAlloca EjsValueType, "local_#{name}"
                                 scope[name] = allocas[j]
                                 new_allocas[j] = true
@@ -383,10 +409,11 @@ class LLVMIRVisitor extends NodeVisitor
                         else # prop.type is syntax.Literal
                                 pname = prop.value
 
+                        c = @getAtom pname
+
                         debug.log -> "createPropertyStore #{obj}[#{pname}]"
                         
-                        c = irbuilder.createGlobalStringPtr pname, "strconst"
-                        @createCall @ejs_runtime.object_setprop_utf8, [obj, c, rhs], "propstore_#{pname}"
+                        @createCall @ejs_runtime.object_setprop, [obj, c, rhs], "propstore_#{pname}"
                 
         createPropertyLoad: (obj,prop,computed,canThrow = true) ->
                 if computed
@@ -396,15 +423,8 @@ class LLVMIRVisitor extends NodeVisitor
                         @createCall @ejs_runtime.object_getprop, [obj, loadprop], "getprop_#{pname}"
                 else
                         # we load obj.prop, prop is an id
-                        pname = prop.name
-                        # check if it's an atom first of all
-                        atom_name = "atom-#{pname}"
-                        if @ejs_runtime[atom_name]?
-                                c = irbuilder.createLoad @ejs_runtime[atom_name], "%propname_atom_load"
-                                @createCall @ejs_runtime.object_getprop, [obj, c], "getprop_#{pname}", canThrow
-                        else
-                                c = irbuilder.createGlobalStringPtr pname, "propname_#{pname}"
-                                @createCall @ejs_runtime.object_getprop_utf8, [obj, c], "getprop_#{pname}", canThrow
+                        pname = @getAtom prop.name
+                        @createCall @ejs_runtime.object_getprop, [obj, pname], "getprop_#{prop.name}", canThrow
                 
 
         createLoadThis: () ->
@@ -424,7 +444,7 @@ class LLVMIRVisitor extends NodeVisitor
                 @visit func for func in n.body
 
         visitBlock: (n) ->
-                new_scope = {}
+                new_scope = Object.create null
 
                 iife_rv = null
                 iife_bb = null
@@ -850,13 +870,13 @@ class LLVMIRVisitor extends NodeVisitor
 
                 irbuilder.setInsertPoint entry_bb
 
-                new_scope = {}
+                new_scope = Object.create null
 
                 # we save off the top scope and entry_bb of the function so that we can hoist vars there
                 ir_func.topScope = new_scope
                 ir_func.entry_bb = entry_bb
 
-                ir_func.literalAllocas = {}
+                ir_func.literalAllocas = Object.create null
 
                 allocas = []
 
@@ -897,6 +917,9 @@ class LLVMIRVisitor extends NodeVisitor
                         
                 body_bb = new llvm.BasicBlock "body", ir_func
                 irbuilder.setInsertPoint body_bb
+
+                if n.toplevel?
+                        irbuilder.createCall @literalInitializationFunction, [], ""
 
                 insertFunc = body_bb.parent
         
@@ -940,7 +963,7 @@ class LLVMIRVisitor extends NodeVisitor
                 # sure we're not going to be inserting allocas into the entry_bb anymore.
                 irbuilder.setInsertPoint entry_bb
                 irbuilder.createBr body_bb
-
+                        
                 @currentFunction = null
 
                 irbuilder.setInsertPoint insertBlock
@@ -1097,8 +1120,8 @@ class LLVMIRVisitor extends NodeVisitor
                 debug.log -> "          arguments length = #{n.arguments.length}"
                 debug.log -> "          arguments[#{i}] =  #{JSON.stringify n.arguments[i]}" for i in [0...n.arguments.length]
 
-                intrinsicHandler = @ejs_intrinsics[n.callee.name.slice(1)]
-                if not intrinsicHandler
+                intrinsicHandler = @ejs_intrinsics[n.callee.name.slice 1]
+                if not intrinsicHandler?
                         throw "Internal error: callee should not be null in visitCallExpression (callee = #{n.callee.name}, arguments = #{n.arguments.length})"
 
                 intrinsicHandler.call @, n
@@ -1110,7 +1133,7 @@ class LLVMIRVisitor extends NodeVisitor
                 if n.callee.name isnt "%invokeClosure"
                         throw "new expressions may only have a callee of %invokeClosure, callee = #{n.callee.name}"
                         
-                intrinsicHandler = @ejs_intrinsics[n.callee.name.slice(1)]
+                intrinsicHandler = @ejs_intrinsics[n.callee.name.slice 1]
                 if not intrinsicHandler
                         throw "Internal error: ctor should not be null"
 
@@ -1181,6 +1204,57 @@ class LLVMIRVisitor extends NodeVisitor
                 n.expression.result_not_used = true
                 @visit n.expression
 
+        generateUCS2: (id, jsstr) ->
+                ucsArrayType = llvm.ArrayType.get jscharType, jsstr.length+1
+                array_data = []
+                (array_data.push jscharConstant jsstr.charCodeAt i) for i in [0...jsstr.length]
+                array_data.push jscharConstant 0
+                array = llvm.ConstantArray.get ucsArrayType, array_data
+                arrayglobal = new llvm.GlobalVariable @module, ucsArrayType, "ucs2-#{id}", array
+                arrayglobal
+
+        generateEJSPrimString: (id, len) ->
+                strglobal = new llvm.GlobalVariable @module, EjsPrimStringType, "primstring-#{id}", llvm.ConstantAggregateZero.get EjsPrimStringType
+                strglobal
+
+        generateEJSValueForString: (id) ->
+                name = "ejsval-string-#{id}"
+                strglobal = new llvm.GlobalVariable @module, EjsValueType, name, llvm.ConstantAggregateZero.get EjsValueType
+                @module.getOrInsertGlobal name, EjsValueType
+                
+        addStringLiteralInitialization: (name, ucs2, primstr, val, len) ->
+                saved_insert_point = irbuilder.getInsertBlock()
+
+                irbuilder.setInsertPointStartBB @literalInitializationBB
+                strname = irbuilder.createGlobalStringPtr name, "strname"
+
+                arg0 = strname
+                arg1 = val
+                arg2 = primstr
+                arg3 = irbuilder.createInBoundsGetElementPointer ucs2, [(int32Constant 0), (int32Constant 0)], "ucs2"
+
+                irbuilder.createCall @ejs_runtime.init_string_literal, [arg0, arg1, arg2, arg3, int32Constant len], ""
+
+                irbuilder.setInsertPoint saved_insert_point
+
+        getAtom: (str) ->
+                # check if it's an atom (a runtime library constant) first of all
+                atom_name = "atom-#{str}"
+                if @ejs_runtime[atom_name]?
+                        return irbuilder.createLoad @ejs_runtime[atom_name], "%str_atom_load"
+
+                # if it's not, we create a constant and embed it in this module
+        
+                literal_key = "string-" + str
+                if not @module_atoms[literal_key]?
+                        literalId = genId()
+                        ucs2_data = @generateUCS2 literalId, str
+                        primstring = @generateEJSPrimString literalId, str.length
+                        @module_atoms[literal_key] = @generateEJSValueForString literalId
+                        @addStringLiteralInitialization str, ucs2_data, primstring, @module_atoms[literal_key], str.length
+
+                strload = irbuilder.createLoad @module_atoms[literal_key], "%literal_load"
+                        
         visitLiteral: (n) ->
                 # null literals, load _ejs_null
                 if n.value is null
@@ -1197,37 +1271,11 @@ class LLVMIRVisitor extends NodeVisitor
                 if typeof n.raw is "string" and (n.raw[0] is '"' or n.raw[0] is "'")
                         debug.log -> "literal string: #{n.value}"
 
-                        # check if it's an atom first of all
-                        atom_name = "atom-#{n.value}"
-                        if @ejs_runtime[atom_name]?
-                                strload = irbuilder.createLoad @ejs_runtime[atom_name], "%str_atom_load"
-                                strload.literal = n
-                                return strload
-
-                        # if it isn't an atom, make sure we only
-                        # allocate it once per function entry
-                        literal_key = "string-" + n.value
-                        if not @currentFunction.literalAllocas[literal_key]?
-                                # only create 1 instance of string
-                                # literals used in a function, and
-                                # allocate them in the entry block
-                                insertBlock = irbuilder.getInsertBlock()
-
-                                irbuilder.setInsertPoint @currentFunction.entry_bb
-                                str_alloca = irbuilder.createAlloca EjsValueType, "str-alloca-#{n.value}"
-                                c = irbuilder.createGlobalStringPtr n.value, "strconst"
-                                irbuilder.createStore (@createCall @ejs_runtime.string_new_utf8, [c], "strtmp"), str_alloca
-                                @currentFunction.literalAllocas[literal_key] = str_alloca
-                                
-                                irbuilder.setInsertPoint insertBlock
-                                
-                        str_alloca = @currentFunction.literalAllocas[literal_key]
-                        strload = irbuilder.createLoad str_alloca, "%str_alloca"
-
+                        strload = @getAtom n.value
+                        
                         strload.literal = n
                         debug.log -> "strload = #{strload}"
                         return strload
-
 
                 # regular expression literals
                 if typeof n.raw is "string" and n.raw[0] is '/'

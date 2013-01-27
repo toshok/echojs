@@ -3,6 +3,7 @@
 #include "irbuilder.h"
 #include "type.h"
 #include "constant.h"
+#include "constantarray.h"
 #include "constantfp.h"
 #include "callinvoke.h"
 #include "functiontype.h"
@@ -39,6 +40,7 @@ _ejs_llvm_init (ejsval global)
   _ejs_llvm_Call_init (global);
   _ejs_llvm_Invoke_init (global);
   _ejs_llvm_Constant_init (global);
+  _ejs_llvm_ConstantArray_init (global);
   _ejs_llvm_ConstantFP_init (global);
   _ejs_llvm_Switch_init (global);
   _ejs_llvm_LandingPad_init (global);

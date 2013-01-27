@@ -70,6 +70,22 @@
   }									\
   ::llvm::Value* VAR = jsllvm::Value::GetLLVMObj(args[I]);
 
+#define REQ_LLVM_CONST_ARG(I, VAR)					\
+  if (args.Length() <= (I) || !args[I]->IsObject() /* XXX || !jsllvm::Constant::HasInstance(args[I]) */) {	\
+    printf ("in function %s\n", __PRETTY_FUNCTION__);			\
+    return ThrowException(Exception::TypeError(				\
+					       String::New("Argument " #I " must be an llvm Constant"))); \
+  }									\
+  ::llvm::Constant* VAR = static_cast< ::llvm::Constant*>(jsllvm::Value::GetLLVMObj(args[I]));
+
+#define REQ_LLVM_MODULE_ARG(I, VAR)					\
+  if (args.Length() <= (I) || !args[I]->IsObject() /* XXX || !jsllvm::Constant::HasInstance(args[I]) */) {	\
+    printf ("in function %s\n", __PRETTY_FUNCTION__);			\
+    return ThrowException(Exception::TypeError(				\
+					       String::New("Argument " #I " must be an llvm Module"))); \
+  }									\
+  ::llvm::Module* VAR = jsllvm::Module::GetLLVMObj(args[I]);
+
 #define REQ_LLVM_TYPE_ARG(I, VAR)					\
   if (args.Length() <= (I) || !args[I]->IsObject() /* XXX || !jsllvm::Type::HasInstance(args[I]) */) \
     return ThrowException(Exception::TypeError(				\

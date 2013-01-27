@@ -5,11 +5,14 @@
 #include "arraytype.h"
 #include "value.h"
 #include "function.h"
+#include "globalvariable.h"
 #include "basicblock.h"
 #include "phinode.h"
 #include "irbuilder.h"
 #include "module.h"
 #include "constant.h"
+#include "constantagg.h"
+#include "constantarray.h"
 #include "constantfp.h"
 #include "landingpad.h"
 #include "switch.h"
@@ -32,11 +35,14 @@ extern "C" {
     jsllvm::ArrayType::Init(target);
     jsllvm::Value::Init(target);
     jsllvm::Function::Init(target);
+    jsllvm::GlobalVariable::Init(target);
     jsllvm::BasicBlock::Init(target);
     jsllvm::PHINode::Init(target);
     jsllvm::IRBuilder::Init(target);
     jsllvm::Module::Init(target);
     jsllvm::Constant::Init(target);
+    jsllvm::ConstantAggregateZero::Init(target);
+    jsllvm::ConstantArray::Init(target);
     jsllvm::ConstantFP::Init(target);
     jsllvm::LandingPad::Init(target);
     jsllvm::Switch::Init(target);

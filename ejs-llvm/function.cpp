@@ -93,6 +93,7 @@ _ejs_llvm_Function_prototype_setGC(ejsval env, ejsval _this, int argc, ejsval *a
     EJSLLVMFunction* fun = ((EJSLLVMFunction*)EJSVAL_TO_OBJECT(_this));
     REQ_UTF8_ARG(0, name);
     fun->llvm_fun->setGC(name);
+    free(name);
     return _ejs_undefined;
 }
 

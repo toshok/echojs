@@ -44,6 +44,7 @@ _ejs_llvm_BasicBlock_impl (ejsval env, ejsval _this, int argc, ejsval *args)
         REQ_UTF8_ARG(0, name);
         REQ_LLVM_FUN_ARG(1, fun);
         bb->llvm_bb = llvm::BasicBlock::Create(llvm::getGlobalContext(), name, fun);
+        free (name);
         return _this;
     }
 }

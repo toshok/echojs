@@ -46,7 +46,7 @@
 #define REQ_UTF8_ARG(I, VAR)						\
   if (argc <= (I) /*|| !args[I]->IsString()*/)				\
     abort();								\
-  char* VAR = EJSVAL_TO_FLAT_STRING(args[I]);
+  char* VAR = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[I]));
 
 #define REQ_LLVM_VAL_ARG(I, VAR)					\
   if (argc <= (I) /*|| !args[I]->IsObject() || !jsllvm::Value::HasInstance(args[I]) */) {	\
@@ -54,6 +54,11 @@
     abort();								\
   }									\
   ::llvm::Value* VAR = _ejs_llvm_Value_GetLLVMObj(args[I]);
+
+#define REQ_LLVM_CONST_ARG(I, VAR)					\
+  if (argc <= (I) /*|| !args[I]->IsObject() || !jsllvm::Constant::HasInstance(args[I]) */) \
+    abort();								\
+  ::llvm::Constant* VAR = static_cast< ::llvm::Constant*>(_ejs_llvm_Value_GetLLVMObj(args[I]));
 
 #define REQ_LLVM_TYPE_ARG(I, VAR)					\
   if (argc <= (I) /*|| !args[I]->IsObject() || !jsllvm::Type::HasInstance(args[I]) */) \
