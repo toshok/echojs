@@ -9,7 +9,6 @@ path = require 'path'
 { Set } = require 'set'
 { NodeVisitor } = require 'nodevisitor'
 closure_conversion = require 'closure-conversion'
-{ desugar } = require 'echo-desugar'
 { genId } = require 'echo-util'
 
 llvm = require 'llvm'
@@ -1214,12 +1213,12 @@ class LLVMIRVisitor extends NodeVisitor
                 arrayglobal
 
         generateEJSPrimString: (id, len) ->
-                strglobal = new llvm.GlobalVariable @module, EjsPrimStringType, "primstring-#{id}", llvm.ConstantAggregateZero.get EjsPrimStringType
+                strglobal = new llvm.GlobalVariable @module, EjsPrimStringType, "primstring-#{id}", llvm.Constant.getAggregateZero EjsPrimStringType
                 strglobal
 
         generateEJSValueForString: (id) ->
                 name = "ejsval-string-#{id}"
-                strglobal = new llvm.GlobalVariable @module, EjsValueType, name, llvm.ConstantAggregateZero.get EjsValueType
+                strglobal = new llvm.GlobalVariable @module, EjsValueType, name, llvm.Constant.getAggregateZero EjsValueType
                 @module.getOrInsertGlobal name, EjsValueType
                 
         addStringLiteralInitialization: (name, ucs2, primstr, val, len) ->
@@ -1601,7 +1600,7 @@ insert_toplevel_func = (tree, filename) ->
 
 exports.compile = (tree, base_output_filename, source_filename) ->
 
-        #console.warn "compiling #{source_filename}"
+        console.warn "compiling #{source_filename}"
         
         tree = insert_toplevel_func tree, base_output_filename
 
@@ -1609,9 +1608,6 @@ exports.compile = (tree, base_output_filename, source_filename) ->
 
         toplevel_name = tree.body[0].id.name
         
-        #tree = desugar tree
-        #debug.log -> escodegen.generate tree
-
         debug.log "before closure conversion"
         debug.log -> escodegen.generate tree
         
