@@ -533,12 +533,19 @@ _ejs_object_setprop (ejsval val, ejsval key, ejsval value)
     return value;
 }
 
+jschar* last_lookup = NULL;
+
 ejsval
 _ejs_object_getprop (ejsval obj, ejsval key)
 {
     if (EJSVAL_IS_NULL(obj) || EJSVAL_IS_UNDEFINED(obj)) {
         char* key_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(ToString(key)));
         printf ("throw TypeError, key is %s\n", key_utf8);
+        if (last_lookup) {
+            char *last_utf8 = ucs2_to_utf8(last_lookup);
+            printf ("last property lookup was for: %s\n", last_utf8);
+            free (last_utf8);
+        }
         free (key_utf8);
         EJS_NOT_IMPLEMENTED();
     }
@@ -546,6 +553,9 @@ _ejs_object_getprop (ejsval obj, ejsval key)
     if (EJSVAL_IS_PRIMITIVE(obj)) {
         obj = ToObject(obj);
     }
+
+    if (last_lookup) free (last_lookup);
+    last_lookup = ucs2_strdup (EJSVAL_TO_FLAT_STRING(ToString(key)));
 
     return OP(EJSVAL_TO_OBJECT(obj),get)(obj, key, EJS_FALSE);
 }

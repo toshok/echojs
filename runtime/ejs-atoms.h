@@ -9,6 +9,7 @@ EJS_ATOM(constructor)
 EJS_ATOM(length)
 EJS_ATOM(prototype)
 EJS_ATOM(toString)
+EJS_ATOM(message)
 
 EJS_ATOM(object)
 EJS_ATOM(function)
@@ -47,6 +48,7 @@ EJS_ATOM(Number)
 EJS_ATOM(Object)
 EJS_ATOM(RegExp)
 EJS_ATOM(String)
+EJS_ATOM(Error)
 
 // our funky global
 EJS_ATOM(__ejs)

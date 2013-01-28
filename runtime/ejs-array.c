@@ -59,7 +59,7 @@ _ejs_array_new (int numElements)
     _ejs_init_object ((EJSObject*)rv, _ejs_Array_proto, &_ejs_array_specops);
 
     rv->array_length = numElements;
-    rv->array_alloc = numElements + 500;
+    rv->array_alloc = numElements + 5;
     rv->elements = (ejsval*)calloc(rv->array_alloc, sizeof (ejsval));
     return OBJECT_TO_EJSVAL((EJSObject*)rv);
 }
@@ -71,12 +71,27 @@ _ejs_array_foreach_element (EJSArray* arr, EJSValueFunc foreach_func)
         foreach_func (arr->elements[i]);
 }
 
+static void
+maybe_realloc_dense (EJSArray *arr, int amount_to_add)
+{
+    if (arr->array_length + amount_to_add > arr->array_alloc) {
+        int new_alloc = arr->array_length + amount_to_add + 32;
+        ejsval* new_elements = (ejsval*)malloc(new_alloc * sizeof(ejsval));
+        memmove (new_elements, arr->elements, arr->array_length * sizeof(ejsval));
+        free (arr->elements);
+        arr->elements = new_elements;
+        arr->array_alloc = new_alloc;
+    }
+}
+
 uint32_t
 _ejs_array_push_dense(ejsval array, int argc, ejsval *args)
 {
     EJSArray *arr = (EJSArray*)EJSVAL_TO_OBJECT(array);
-    for (int i = 0; i < argc; i ++)
+    maybe_realloc_dense (arr, argc);
+    for (int i = 0; i < argc; i ++) {
         EJSARRAY_ELEMENTS(arr)[EJSARRAY_LEN(arr)++] = args[i];
+    }
     return EJSARRAY_LEN(arr);
 }
 
@@ -115,7 +130,7 @@ _ejs_Array_impl (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
         }
     }
     else {
-        int alloc = 25;
+        int alloc = 5;
 
         if (argc == 1 && EJSVAL_IS_NUMBER(args[0])) {
             alloc = (int)EJSVAL_TO_NUMBER(args[0]);
@@ -123,7 +138,7 @@ _ejs_Array_impl (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 
         EJSArray* arr = (EJSArray*)EJSVAL_TO_OBJECT(_this);
         arr->array_length = 0;
-        arr->array_alloc = alloc + 500;
+        arr->array_alloc = alloc;
         arr->elements = (ejsval*)calloc(arr->array_alloc, sizeof (ejsval));
 
         // called as a constructor
@@ -195,6 +210,8 @@ _ejs_Array_prototype_unshift (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
 {
     // EJS fast path for arrays
     if (EJSVAL_IS_DENSE_ARRAY(_this)) {
+        EJSArray *arr = (EJSArray*)EJSVAL_TO_OBJECT(_this);
+        maybe_realloc_dense (arr, argc);
         int len = EJS_ARRAY_LEN(_this);
         memmove (EJS_ARRAY_ELEMENTS(_this) + argc, EJS_ARRAY_ELEMENTS(_this), sizeof(ejsval) * len);
         memmove (EJS_ARRAY_ELEMENTS(_this), args, sizeof(ejsval) * argc);

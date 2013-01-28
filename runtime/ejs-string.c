@@ -248,7 +248,8 @@ _ejs_String_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *
 
     if (EJSVAL_IS_OBJECT(searchValue) &&
         !strcmp (CLASSNAME(EJSVAL_TO_OBJECT(searchValue)), "RegExp")) {
-        EJS_NOT_IMPLEMENTED();
+        printf ("String.prototype.replace called with a RegExp.  returning original string because we suck\n");
+        return thisStr;
     }
     else {
         ejsval searchValueStr = ToString(searchValue);
@@ -716,14 +717,12 @@ static ejsval
 _ejs_String_fromCharCode (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     int length = argc;
-    char* buf = (char*)malloc(length+1);
+    jschar* buf = (jschar*)malloc(sizeof(jschar) * (length+1));
     for (int i = 0; i < argc; i ++) {
-        uint16_t code_unit = ToUint16(args[i]);
-        assert (code_unit < 256); // XXX we suck
-        buf[i] = (char)code_unit;
+        buf[i] = ToUint16(args[i]);
     }
     buf[length] = 0;
-    ejsval rv = _ejs_string_new_utf8(buf);
+    ejsval rv = _ejs_string_new_ucs2(buf);
     free (buf);
     return rv;
 }

@@ -82,10 +82,14 @@ typedef uint32_t GCObjectHeader;
     l = l->next;                                    \
     EJS_MACRO_END
 
+EJS_BEGIN_DECLS
+
 extern jschar* ucs2_strdup (const jschar *str);
 extern int32_t ucs2_strcmp (const jschar *s1, const jschar *s2);
 extern int32_t ucs2_strlen (const jschar *str);
 extern jschar* ucs2_strstr (const jschar *haystack, const jschar *needle);
 extern char* ucs2_to_utf8 (const jschar *str);
+
+EJS_END_DECLS
 
 #endif /* _ejs_types_h */

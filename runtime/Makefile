@@ -5,6 +5,7 @@ SOURCES= \
 	ejs-builtin-modules.c \
 	ejs-console.c \
 	ejs-date.c \
+	ejs-error.c \
 	ejs-exception.c \
 	ejs-function.c \
 	ejs-gc.c \

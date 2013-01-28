@@ -117,7 +117,7 @@ ejsval ToNumber(ejsval exp)
         return rv;
     }
     else if (EJSVAL_IS_UNDEFINED(exp))
-        return _ejs_zero; // XXX NaN
+        return _ejs_nan;
     else if (EJSVAL_IS_OBJECT(exp)) {
         if (EJSVAL_IS_DATE(exp)) {
             return NUMBER_TO_EJSVAL(mktime(&((EJSDate*)EJSVAL_TO_OBJECT(exp))->tm));
@@ -776,10 +776,127 @@ _ejs_isFinite (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     EJS_NOT_IMPLEMENTED();
 }
 
+// ECMA262 15.1.2.2
+// parseInt (string , radix)
 ejsval
 _ejs_parseInt (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
-    EJS_NOT_IMPLEMENTED();
+    ejsval string = _ejs_undefined;
+    ejsval radix = _ejs_undefined;
+
+    if (argc > 0) string = args[0];
+    if (argc > 1) radix = args[1];
+
+    /* 1. Let inputString be ToString(string). */
+    ejsval inputString = ToString(string);
+
+    /* 2. Let  S be a newly created substring of  inputString consisting of the first character that is not a  */
+    /*    StrWhiteSpaceChar and all characters following that character. (In other words, remove leading white  */
+    /*    space.) If inputString does not contain any such characters, let S be the empty string. */
+    jschar* S = EJSVAL_TO_FLAT_STRING(inputString);
+
+    /* 3. Let sign be 1. */
+    int32_t sign = 1;
+    int Sidx = 0;
+    int Slength = EJSVAL_TO_STRLEN(inputString);
+
+    /* 4. If S is not empty and the first character of S is a minus sign -, let sign be -1. */
+    if (Slength != 0 && S[Sidx] == '-')
+        sign = -1;
+
+    /* 5. If S is not empty and the first character of S is a plus sign + or a minus sign -, then remove the first character */
+    /*    from S. */
+    if (Slength != 0 && (S[Sidx] == '-' || S[Sidx] == '+')) {
+        Sidx ++;
+        Slength --;
+    }
+
+    /* 6. Let R = ToInt32(radix). */
+    int32_t R = ToInteger(radix);
+
+    /* 7. Let stripPrefix be true. */
+    EJSBool stripPrefix = EJS_TRUE;
+
+    /* 8. If R != 0, then */
+    if (!EJSVAL_IS_UNDEFINED(radix) &&  R != 0) {
+        /* a. If R < 2 or R > 36, then return NaN. */
+        if (R < 2 || R > 36) return _ejs_nan;
+
+        /* b. If R != 16, let stripPrefix be false. */
+        if (R != 16) stripPrefix = EJS_FALSE;
+    }
+    /* 9. Else, R = 0 */
+    else {
+        /* a. Let R = 10. */
+        R = 10;
+    }
+
+    /* 10. If stripPrefix is true, then */
+    if (stripPrefix) {
+        /* a. If the length of S is at least 2 and the first two characters of S are either "0x" or "0X", then remove */
+        /*    the first two characters from S and let R = 16.*/
+        if (Slength > 2 && S[Sidx] == '0' && (S[Sidx+1] == 'x' || S[Sidx+1] == 'X')) {
+            Sidx += 2;
+            Slength -= 2;
+            R = 16;
+        }
+    }
+    static jschar radix_8_chars[] = { '0', '1', '2', '3', '4', '5', '6', '7', 0 };
+    static jschar radix_10_chars[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 0 };
+    static jschar radix_16_chars[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 0 };
+
+    jschar* radix_chars;
+    switch (R) {
+    case 8:
+        radix_chars = radix_8_chars;
+        break;
+    case 10:
+        radix_chars = radix_10_chars;
+        break;
+    case 16:
+        radix_chars = radix_16_chars;
+        break;
+    default:
+        EJS_NOT_IMPLEMENTED();
+    }
+
+    /* 11. If S contains any character that is not a radix-R digit, then let Z be the substring of S consisting of all  */
+    /*     characters before the first such character; otherwise, let Z be S. */
+    int i;
+    for (i = 0; i < Slength; i ++) {
+        jschar needle[2];
+        needle[0] = S[Sidx+i];
+        needle[1] = 0;
+        if (ucs2_strstr(radix_chars, needle)== NULL)
+            break;
+    }
+    /* 12. If Z is empty, return NaN. */
+    if (i == 0) {
+        return _ejs_nan;
+    }
+    
+    /* 13. Let mathInt be the mathematical integer value that is represented by  Z in radix-R notation, using the letters  */
+    /*     A-Z and  a-z for digits with values 10 through 35. (However, if  R is 10 and  Z contains more than 20  */
+    /*     significant digits, every significant digit after the 20th may be replaced by a  0  digit, at the option of the */
+    /*     implementation; and if  R is not 2, 4, 8, 10, 16, or 32, then  mathInt may be an implementation-dependent */
+    /*     approximation to the mathematical integer value that is represented by Z in radix-R notation.) */
+
+    int mathInt = 0;
+    int32_t Zlen = i;
+    for (i = 0; i < Zlen; i ++) {
+        jschar needle[2];
+        needle[0] = S[Sidx+i];
+        needle[1] = 0;
+
+        int digitval = (ucs2_strstr(radix_chars, needle) - radix_chars);
+        mathInt = mathInt*R + digitval;
+    }
+
+    /* 14. Let number be the Number value for mathInt. */
+    int32_t number = mathInt * sign;
+
+    /* 15. Return sign * number */
+    return NUMBER_TO_EJSVAL(number);
 }
 
 ejsval

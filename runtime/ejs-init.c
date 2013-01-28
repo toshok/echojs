@@ -11,6 +11,7 @@
 #include "ejs-array.h"
 #include "ejs-console.h"
 #include "ejs-date.h"
+#include "ejs-error.h"
 #include "ejs-function.h"
 #include "ejs-json.h"
 #include "ejs-math.h"
@@ -25,7 +26,7 @@
 #include "ejs-value.h"
 
 const ejsval _ejs_undefined = STATIC_BUILD_EJSVAL(EJSVAL_TAG_UNDEFINED, 0);
-const ejsval _ejs_nan = STATIC_BUILD_EJSVAL(0, 0x40be360000000000);
+ejsval _ejs_nan;
 const ejsval _ejs_null = STATIC_BUILD_EJSVAL(EJSVAL_TAG_NULL, 0);
 const ejsval _ejs_true = STATIC_BUILD_BOOLEAN_EJSVAL(EJS_TRUE);
 const ejsval _ejs_false = STATIC_BUILD_BOOLEAN_EJSVAL(EJS_FALSE);
@@ -50,6 +51,8 @@ _ejs_init(int argc, char** argv)
 
     _ejs_gc_add_named_root (_ejs_global);
 
+    _ejs_nan = NUMBER_TO_EJSVAL(nan("7734"));
+
     _ejs_global = _ejs_object_new (_ejs_null, &_ejs_object_specops);
     ADD_STACK_ROOT(ejsval, _ejs_ejs_global, _ejs_object_new (_ejs_null, &_ejs_object_specops));
 
@@ -61,6 +64,8 @@ _ejs_init(int argc, char** argv)
 
     _ejs_function_init(_ejs_global);
     _ejs_object_init(_ejs_global);
+
+    _ejs_error_init(_ejs_global);
     _ejs_arguments_init(_ejs_global);
     _ejs_array_init(_ejs_global);
     _ejs_boolean_init (_ejs_global);

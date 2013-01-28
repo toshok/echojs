@@ -302,7 +302,13 @@ ejsval
 _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args)
 {
     if (!EJSVAL_IS_FUNCTION(closure)) {
+        extern jschar* last_lookup;
         printf ("TypeError, object not a function\n");
+        if (last_lookup) {
+            char *last_utf8 = ucs2_to_utf8(last_lookup);
+            printf ("last property lookup was for: %s\n", last_utf8);
+            free (last_utf8);
+        }
         EJS_NOT_IMPLEMENTED();
     }
 
