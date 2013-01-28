@@ -3,10 +3,12 @@
 
 #include "ejs-llvm.h"
 
-extern void _ejs_llvm_Switch_init (ejsval exports);
+namespace ejsllvm {
+  extern void Switch_init (ejsval exports);
 
-ejsval _ejs_llvm_Switch_new(llvm::SwitchInst* llvm_switch);
+  ejsval Switch_new(llvm::SwitchInst* llvm_switch);
 
-extern llvm::SwitchInst* _ejs_llvm_Switch_GetLLVMObj(ejsval val);
+  extern llvm::SwitchInst* Switch_GetLLVMObj(ejsval val);
+};
 
 #endif /* EJS_LLVM_SWITCH_H */

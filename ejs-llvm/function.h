@@ -3,10 +3,12 @@
 
 #include "ejs-llvm.h"
 
-void _ejs_llvm_Function_init (ejsval exports);
+namespace ejsllvm {
+  void Function_init (ejsval exports);
 
-ejsval _ejs_llvm_Function_new(llvm::Function* llvm_fun);
+  ejsval Function_new(llvm::Function* llvm_fun);
 
-llvm::Function* _ejs_llvm_Function_GetLLVMObj(ejsval val);
+  llvm::Function* Function_GetLLVMObj(ejsval val);
+};
 
 #endif /* EJS_LLVM_FUNCTION_H */

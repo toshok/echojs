@@ -3,10 +3,12 @@
 
 #include "ejs-llvm.h"
 
-extern void _ejs_llvm_LandingPad_init (ejsval exports);
+namespace ejsllvm {
+  extern void LandingPad_init (ejsval exports);
 
-ejsval _ejs_llvm_LandingPad_new(llvm::LandingPadInst* llvm_switch);
+  ejsval LandingPad_new(llvm::LandingPadInst* llvm_switch);
 
-extern llvm::LandingPadInst* _ejs_llvm_LandingPad_GetLLVMObj(ejsval val);
+  extern llvm::LandingPadInst* LandingPad_GetLLVMObj(ejsval val);
+};
 
 #endif /* EJS_LLVM_LANDINGPAD_H */

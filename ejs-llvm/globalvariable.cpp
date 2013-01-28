@@ -16,97 +16,116 @@
 #include "type.h"
 #include "globalvariable.h"
 
-typedef struct {
-    /* object header */
-    EJSObject obj;
+namespace ejsllvm {
 
-    /* value specific data */
-    llvm::GlobalVariable *llvm_global;
-} EJSLLVMGlobalVariable;
+    typedef struct {
+        /* object header */
+        EJSObject obj;
 
-EJSObject* _ejs_llvm_GlobalVariable_alloc_instance()
-{
-    return (EJSObject*)_ejs_gc_new(EJSLLVMGlobalVariable);
-}
+        /* value specific data */
+        llvm::GlobalVariable *llvm_global;
+    } GlobalVariable;
 
-
-
-ejsval _ejs_llvm_GlobalVariable_proto;
-ejsval _ejs_llvm_GlobalVariable;
-static ejsval
-_ejs_llvm_GlobalVariable_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-{
-    EJS_NOT_IMPLEMENTED();
-}
-
-ejsval
-_ejs_llvm_GlobalVariable_new(llvm::GlobalVariable* llvm_global)
-{
-  EJSObject* result = _ejs_llvm_GlobalVariable_alloc_instance();
-  _ejs_init_object (result, _ejs_llvm_GlobalVariable_proto, NULL);
-  ((EJSLLVMGlobalVariable*)result)->llvm_global = llvm_global;
-  return OBJECT_TO_EJSVAL(result);
-}
-
-ejsval
-_ejs_llvm_GlobalVariable_prototype_toString(ejsval env, ejsval _this, int argc, ejsval *args)
-{
-    std::string str;
-    llvm::raw_string_ostream str_ostream(str);
-    ((EJSLLVMGlobalVariable*)EJSVAL_TO_OBJECT(_this))->llvm_global->print(str_ostream);
-
-    return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
-}
-
-ejsval
-_ejs_llvm_GlobalVariable_prototype_dump(ejsval env, ejsval _this, int argc, ejsval *args)
-{
-    ((EJSLLVMGlobalVariable*)EJSVAL_TO_OBJECT(_this))->llvm_global->dump();
-    return _ejs_undefined;
-}
-
-ejsval
-_ejs_llvm_GlobalVariable_prototype_setInitializer(ejsval env, ejsval _this, int argc, ejsval *args)
-{
-    EJSLLVMGlobalVariable* global = (EJSLLVMGlobalVariable*)EJSVAL_TO_OBJECT(_this);
-
-    REQ_LLVM_CONST_ARG (0, init);
-
-    global->llvm_global->setInitializer (init);
-
-    return _ejs_undefined;
-}
-
-llvm::GlobalVariable*
-_ejs_llvm_GlobalVariable_GetLLVMObj(ejsval val)
-{
-    if (EJSVAL_IS_NULL(val)) return NULL;
-    return ((EJSLLVMGlobalVariable*)EJSVAL_TO_OBJECT(val))->llvm_global;
-}
-
-void
-_ejs_llvm_GlobalVariable_init (ejsval exports)
-{
-    START_SHADOW_STACK_FRAME;
-
-    _ejs_gc_add_named_root (_ejs_llvm_GlobalVariable_proto);
-    _ejs_llvm_GlobalVariable_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_object_specops);
-
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMGlobalVariable", (EJSClosureFunc)_ejs_llvm_GlobalVariable_impl));
-    _ejs_llvm_GlobalVariable = tmpobj;
+    EJSObject* GlobalVariable_alloc_instance()
+    {
+        return (EJSObject*)_ejs_gc_new(GlobalVariable);
+    }
 
 
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_llvm_GlobalVariable_proto, EJS_STRINGIFY(x), _ejs_llvm_GlobalVariable_prototype_##x)
 
-    _ejs_object_setprop (_ejs_llvm_GlobalVariable,       _ejs_atom_prototype,  _ejs_llvm_GlobalVariable_proto);
+    static ejsval _ejs_GlobalVariable_proto;
+    static ejsval _ejs_GlobalVariable;
 
-    PROTO_METHOD(setInitializer);
-    PROTO_METHOD(dump);
-    PROTO_METHOD(toString);
+    static ejsval
+    GlobalVariable_impl (ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        if (EJSVAL_IS_UNDEFINED(_this)) {
+            // called as a function
+            EJS_NOT_IMPLEMENTED();
+        }
+        else {
+            GlobalVariable* gv = (GlobalVariable*)EJSVAL_TO_OBJECT(_this);
+
+            REQ_LLVM_MODULE_ARG(0, module);
+            REQ_LLVM_TYPE_ARG(1, type);
+            REQ_UTF8_ARG(2, name);
+            REQ_LLVM_CONST_ARG(3, init);
+
+            gv->llvm_global = new ::llvm::GlobalVariable(*module, type, false, llvm::GlobalValue::InternalLinkage, init, name);
+            free(name); 
+            return _this;
+        }
+    }
+
+    ejsval
+    GlobalVariable_new(llvm::GlobalVariable* llvm_global)
+    {
+        EJSObject* result = GlobalVariable_alloc_instance();
+        _ejs_init_object (result, _ejs_GlobalVariable_proto, NULL);
+        ((GlobalVariable*)result)->llvm_global = llvm_global;
+        return OBJECT_TO_EJSVAL(result);
+    }
+
+    ejsval
+    GlobalVariable_prototype_toString(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        std::string str;
+        llvm::raw_string_ostream str_ostream(str);
+        ((GlobalVariable*)EJSVAL_TO_OBJECT(_this))->llvm_global->print(str_ostream);
+
+        return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
+    }
+
+    ejsval
+    GlobalVariable_prototype_dump(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        ((GlobalVariable*)EJSVAL_TO_OBJECT(_this))->llvm_global->dump();
+        return _ejs_undefined;
+    }
+
+    ejsval
+    GlobalVariable_prototype_setInitializer(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        GlobalVariable* global = (GlobalVariable*)EJSVAL_TO_OBJECT(_this);
+
+        REQ_LLVM_CONST_ARG (0, init);
+
+        global->llvm_global->setInitializer (init);
+
+        return _ejs_undefined;
+    }
+
+    llvm::GlobalVariable*
+    GlobalVariable_GetLLVMObj(ejsval val)
+    {
+        if (EJSVAL_IS_NULL(val)) return NULL;
+        return ((GlobalVariable*)EJSVAL_TO_OBJECT(val))->llvm_global;
+    }
+
+    void
+    GlobalVariable_init (ejsval exports)
+    {
+        START_SHADOW_STACK_FRAME;
+
+        _ejs_gc_add_named_root (_ejs_GlobalVariable_proto);
+        _ejs_GlobalVariable_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_object_specops);
+
+        ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMGlobalVariable", (EJSClosureFunc)GlobalVariable_impl));
+        _ejs_GlobalVariable = tmpobj;
+
+
+#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_GlobalVariable_proto, EJS_STRINGIFY(x), GlobalVariable_prototype_##x)
+
+        _ejs_object_setprop (_ejs_GlobalVariable,       _ejs_atom_prototype,  _ejs_GlobalVariable_proto);
+
+        PROTO_METHOD(setInitializer);
+        PROTO_METHOD(dump);
+        PROTO_METHOD(toString);
 
 #undef PROTO_METHOD
 
-    _ejs_object_setprop_utf8 (exports,              "GlobalVariable", _ejs_llvm_GlobalVariable);
+        _ejs_object_setprop_utf8 (exports,              "GlobalVariable", _ejs_GlobalVariable);
 
-    END_SHADOW_STACK_FRAME;
-}
+        END_SHADOW_STACK_FRAME;
+    }
+};

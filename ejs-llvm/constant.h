@@ -3,6 +3,10 @@
 
 #include "ejs-llvm.h"
 
-extern void _ejs_llvm_Constant_init (ejsval exports);
+namespace ejsllvm {
+
+  extern void Constant_init (ejsval exports);
+
+};
 
 #endif /* EJS_LLVM_CONSTANT_H */

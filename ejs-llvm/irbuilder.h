@@ -3,10 +3,12 @@
 
 #include "ejs-llvm.h"
 
-void _ejs_llvm_IRBuilder_init (ejsval exports);
+namespace ejsllvm {
+  void IRBuilder_init (ejsval exports);
 
-ejsval _ejs_llvm_IRBuilder_new(llvm::IRBuilder<>* llvm_fun);
+  ejsval IRBuilder_new(llvm::IRBuilder<>* llvm_fun);
 
-llvm::IRBuilder<>* _ejs_llvm_IRBuilder_GetLLVMObj(ejsval val);
+  llvm::IRBuilder<>* IRBuilder_GetLLVMObj(ejsval val);
+};
 
 #endif /* EJS_LLVM_IRBUILDER_H */

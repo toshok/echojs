@@ -53,27 +53,32 @@
     printf ("in function %s\n", __PRETTY_FUNCTION__);			\
     abort();								\
   }									\
-  ::llvm::Value* VAR = _ejs_llvm_Value_GetLLVMObj(args[I]);
+  ::llvm::Value* VAR = Value_GetLLVMObj(args[I]);
 
 #define REQ_LLVM_CONST_ARG(I, VAR)					\
   if (argc <= (I) /*|| !args[I]->IsObject() || !jsllvm::Constant::HasInstance(args[I]) */) \
     abort();								\
-  ::llvm::Constant* VAR = static_cast< ::llvm::Constant*>(_ejs_llvm_Value_GetLLVMObj(args[I]));
+  ::llvm::Constant* VAR = static_cast< ::llvm::Constant*>(Value_GetLLVMObj(args[I]));
+
+#define REQ_LLVM_MODULE_ARG(I, VAR)					\
+  if (argc <= (I) /*|| !args[I]->IsObject() || !jsllvm::Constant::HasInstance(args[I]) */) \
+    abort();								\
+  ::llvm::Module* VAR = Module_GetLLVMObj(args[I]);
 
 #define REQ_LLVM_TYPE_ARG(I, VAR)					\
   if (argc <= (I) /*|| !args[I]->IsObject() || !jsllvm::Type::HasInstance(args[I]) */) \
     abort();								\
-  ::llvm::Type* VAR = _ejs_llvm_Type_GetLLVMObj(args[I]);
+  ::llvm::Type* VAR = Type_GetLLVMObj(args[I]);
 
 #define REQ_LLVM_BB_ARG(I, VAR)						\
   if (argc <= (I) /* || (!args[I]->IsNull() && !args[I]->IsObject() && !jsllvm::BasicBlock::HasInstance(args[I]) */) \
     abort();								\
-  ::llvm::BasicBlock* VAR = _ejs_llvm_BasicBlock_GetLLVMObj(args[I]);
+  ::llvm::BasicBlock* VAR = BasicBlock_GetLLVMObj(args[I]);
 
 #define REQ_LLVM_FUN_ARG(I, VAR)					\
   if (argc <= (I) /* || !args[I]->IsObject() || !jsllvm::Function::HasInstance(args[I]) */) \
     abort();								\
-  ::llvm::Function* VAR = _ejs_llvm_Function_GetLLVMObj(args[I]);
+  ::llvm::Function* VAR = Function_GetLLVMObj(args[I]);
 
 extern std::string& trim(std::string& str);
 

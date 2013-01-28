@@ -7,6 +7,7 @@
 #include "constantfp.h"
 #include "callinvoke.h"
 #include "functiontype.h"
+#include "globalvariable.h"
 #include "structtype.h"
 #include "arraytype.h"
 #include "module.h"
@@ -23,29 +24,32 @@ std::string& trim(std::string& str)
 }
 
 
+using namespace ejsllvm;
+
 extern "C" {
 void
 _ejs_llvm_init (ejsval global)
 {
-  _ejs_llvm_Type_init (global);
-  _ejs_llvm_FunctionType_init (global);
-  _ejs_llvm_StructType_init (global);
-  _ejs_llvm_ArrayType_init (global);
+  Type_init (global);
+  FunctionType_init (global);
+  StructType_init (global);
+  ArrayType_init (global);
 
-  _ejs_llvm_Function_init (global);
-  _ejs_llvm_Module_init (global);
-  _ejs_llvm_Value_init (global);
-  _ejs_llvm_BasicBlock_init (global);
-  _ejs_llvm_IRBuilder_init (global);
-  _ejs_llvm_Call_init (global);
-  _ejs_llvm_Invoke_init (global);
-  _ejs_llvm_Constant_init (global);
-  _ejs_llvm_ConstantArray_init (global);
-  _ejs_llvm_ConstantFP_init (global);
-  _ejs_llvm_Switch_init (global);
-  _ejs_llvm_LandingPad_init (global);
+  Function_init (global);
+  GlobalVariable_init (global);
+  Module_init (global);
+  Value_init (global);
+  BasicBlock_init (global);
+  IRBuilder_init (global);
+  Call_init (global);
+  Invoke_init (global);
+  Constant_init (global);
+  ConstantArray_init (global);
+  ConstantFP_init (global);
+  Switch_init (global);
+  LandingPad_init (global);
 #if notyet
-  _ejs_llvm_PHINode_init (global);
+  PHINode_init (global);
 #endif
 }
 

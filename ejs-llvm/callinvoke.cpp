@@ -16,233 +16,235 @@
 #include "module.h"
 #include "value.h"
 
+namespace ejsllvm {
+    /// call instructions
 
-/// call instructions
+    typedef struct {
+        /* object header */
+        EJSObject obj;
 
-typedef struct {
-    /* object header */
-    EJSObject obj;
+        /* call specific data */
+        llvm::CallInst *llvm_call;
+    } Call;
 
-    /* call specific data */
-    llvm::CallInst *llvm_call;
-} EJSLLVMCall;
+    static EJSSpecOps call_specops;
 
-static EJSSpecOps _ejs_llvm_call_specops;
-
-static EJSObject* _ejs_llvm_Call_allocate()
-{
-    return (EJSObject*)_ejs_gc_new(EJSLLVMCall);
-}
-
-
-ejsval _ejs_llvm_Call_proto;
-ejsval _ejs_llvm_Call;
-static ejsval
-_ejs_llvm_Call_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-{
-  EJS_NOT_IMPLEMENTED();
-}
-
-ejsval
-_ejs_llvm_Call_new(llvm::CallInst* llvm_call)
-{
-    ejsval result = _ejs_object_new (_ejs_llvm_Call_proto, &_ejs_llvm_call_specops);
-    ((EJSLLVMCall*)EJSVAL_TO_OBJECT(result))->llvm_call = llvm_call;
-    return result;
-}
-
-ejsval
-_ejs_llvm_Call_prototype_toString(ejsval env, ejsval _this, int argc, ejsval *args)
-{
-    std::string str;
-    llvm::raw_string_ostream str_ostream(str);
-    ((EJSLLVMCall*)EJSVAL_TO_OBJECT(_this))->llvm_call->print(str_ostream, NULL);
-
-    return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
-}
-
-ejsval
-_ejs_llvm_Call_prototype_dump(ejsval env, ejsval _this, int argc, ejsval *args)
-{
-    ((EJSLLVMCall*)EJSVAL_TO_OBJECT(_this))->llvm_call->dump();
-    return _ejs_undefined;
-}
-
-ejsval
-_ejs_llvm_Call_prototype_setOnlyReadsMemory(ejsval env, ejsval _this, int argc, ejsval *args)
-{
-    EJSLLVMCall* call = ((EJSLLVMCall*)EJSVAL_TO_OBJECT(_this));
-    call->llvm_call->setOnlyReadsMemory();
-    return _ejs_undefined;
-}
-
-ejsval
-_ejs_llvm_Call_prototype_setDoesNotAccessMemory(ejsval env, ejsval _this, int argc, ejsval *args)
-{
-    EJSLLVMCall* call = ((EJSLLVMCall*)EJSVAL_TO_OBJECT(_this));
-    call->llvm_call->setDoesNotAccessMemory();
-    return _ejs_undefined;
-}
-
-ejsval
-_ejs_llvm_Call_prototype_setDoesNotThrow(ejsval env, ejsval _this, int argc, ejsval *args)
-{
-    EJSLLVMCall* call = ((EJSLLVMCall*)EJSVAL_TO_OBJECT(_this));
-    call->llvm_call->setDoesNotThrow();
-    return _ejs_undefined;
-}
-
-llvm::CallInst*
-_ejs_llvm_Call_GetLLVMObj(ejsval val)
-{
-    if (EJSVAL_IS_NULL(val)) return NULL;
-    return ((EJSLLVMCall*)EJSVAL_TO_OBJECT(val))->llvm_call;
-}
-
-void
-_ejs_llvm_Call_init (ejsval exports)
-{
-    _ejs_llvm_call_specops = _ejs_object_specops;
-    _ejs_llvm_call_specops.class_name = "LLVMCall";
-    _ejs_llvm_call_specops.allocate = _ejs_llvm_Call_allocate;
-
-    START_SHADOW_STACK_FRAME;
-
-    _ejs_gc_add_named_root (_ejs_llvm_Call_proto);
-    _ejs_llvm_Call_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_llvm_call_specops);
-
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMCall", (EJSClosureFunc)_ejs_llvm_Call_impl));
-    _ejs_llvm_Call = tmpobj;
+    static EJSObject* Call_allocate()
+    {
+        return (EJSObject*)_ejs_gc_new(Call);
+    }
 
 
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_llvm_Call_proto, EJS_STRINGIFY(x), _ejs_llvm_Call_prototype_##x)
+    static ejsval _ejs_Call_proto;
+    static ejsval _ejs_Call;
+    static ejsval
+    Call_impl (ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        EJS_NOT_IMPLEMENTED();
+    }
 
-    _ejs_object_setprop (_ejs_llvm_Call,       _ejs_atom_prototype,  _ejs_llvm_Call_proto);
+    ejsval
+    Call_new(llvm::CallInst* llvm_call)
+    {
+        ejsval result = _ejs_object_new (_ejs_Call_proto, &call_specops);
+        ((Call*)EJSVAL_TO_OBJECT(result))->llvm_call = llvm_call;
+        return result;
+    }
 
-    PROTO_METHOD(setOnlyReadsMemory);
-    PROTO_METHOD(setDoesNotAccessMemory);
-    PROTO_METHOD(setDoesNotThrow);
-    PROTO_METHOD(dump);
-    PROTO_METHOD(toString);
+    ejsval
+    Call_prototype_toString(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        std::string str;
+        llvm::raw_string_ostream str_ostream(str);
+        ((Call*)EJSVAL_TO_OBJECT(_this))->llvm_call->print(str_ostream, NULL);
 
-#undef PROTO_METHOD
+        return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
+    }
 
-    _ejs_object_setprop_utf8 (exports,              "Call", _ejs_llvm_Call);
+    ejsval
+    Call_prototype_dump(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        ((Call*)EJSVAL_TO_OBJECT(_this))->llvm_call->dump();
+        return _ejs_undefined;
+    }
 
-    END_SHADOW_STACK_FRAME;
-}
+    ejsval
+    Call_prototype_setOnlyReadsMemory(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        Call* call = ((Call*)EJSVAL_TO_OBJECT(_this));
+        call->llvm_call->setOnlyReadsMemory();
+        return _ejs_undefined;
+    }
 
-/// invoke instructions
+    ejsval
+    Call_prototype_setDoesNotAccessMemory(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        Call* call = ((Call*)EJSVAL_TO_OBJECT(_this));
+        call->llvm_call->setDoesNotAccessMemory();
+        return _ejs_undefined;
+    }
 
-typedef struct {
-    /* object header */
-    EJSObject obj;
+    ejsval
+    Call_prototype_setDoesNotThrow(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        Call* call = ((Call*)EJSVAL_TO_OBJECT(_this));
+        call->llvm_call->setDoesNotThrow();
+        return _ejs_undefined;
+    }
 
-    /* invoke specific data */
-    llvm::InvokeInst *llvm_invoke;
-} EJSLLVMInvoke;
+    llvm::CallInst*
+    Call_GetLLVMObj(ejsval val)
+    {
+        if (EJSVAL_IS_NULL(val)) return NULL;
+        return ((Call*)EJSVAL_TO_OBJECT(val))->llvm_call;
+    }
 
-static EJSSpecOps _ejs_llvm_invoke_specops;
+    void
+    Call_init (ejsval exports)
+    {
+        call_specops = _ejs_object_specops;
+        call_specops.class_name = "LLVMCall";
+        call_specops.allocate = Call_allocate;
 
-static EJSObject* _ejs_llvm_Invoke_allocate()
-{
-    return (EJSObject*)_ejs_gc_new(EJSLLVMInvoke);
-}
+        START_SHADOW_STACK_FRAME;
 
+        _ejs_gc_add_named_root (_ejs_Call_proto);
+        _ejs_Call_proto = _ejs_object_new(_ejs_Object_prototype, &call_specops);
 
-ejsval _ejs_llvm_Invoke_proto;
-ejsval _ejs_llvm_Invoke;
-static ejsval
-_ejs_llvm_Invoke_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-{
-  EJS_NOT_IMPLEMENTED();
-}
-
-ejsval
-_ejs_llvm_Invoke_new(llvm::InvokeInst* llvm_invoke)
-{
-    ejsval result = _ejs_object_new (_ejs_llvm_Invoke_proto, &_ejs_llvm_invoke_specops);
-    ((EJSLLVMInvoke*)EJSVAL_TO_OBJECT(result))->llvm_invoke = llvm_invoke;
-    return result;
-}
-
-ejsval
-_ejs_llvm_Invoke_prototype_toString(ejsval env, ejsval _this, int argc, ejsval *args)
-{
-    std::string str;
-    llvm::raw_string_ostream str_ostream(str);
-    ((EJSLLVMInvoke*)EJSVAL_TO_OBJECT(_this))->llvm_invoke->print(str_ostream, NULL);
-
-    return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
-}
-
-ejsval
-_ejs_llvm_Invoke_prototype_dump(ejsval env, ejsval _this, int argc, ejsval *args)
-{
-    ((EJSLLVMInvoke*)EJSVAL_TO_OBJECT(_this))->llvm_invoke->dump();
-    return _ejs_undefined;
-}
-
-ejsval
-_ejs_llvm_Invoke_prototype_setOnlyReadsMemory(ejsval env, ejsval _this, int argc, ejsval *args)
-{
-    EJSLLVMInvoke* invoke = ((EJSLLVMInvoke*)EJSVAL_TO_OBJECT(_this));
-    invoke->llvm_invoke->setOnlyReadsMemory();
-    return _ejs_undefined;
-}
-
-ejsval
-_ejs_llvm_Invoke_prototype_setDoesNotAccessMemory(ejsval env, ejsval _this, int argc, ejsval *args)
-{
-    EJSLLVMInvoke* invoke = ((EJSLLVMInvoke*)EJSVAL_TO_OBJECT(_this));
-    invoke->llvm_invoke->setDoesNotAccessMemory();
-    return _ejs_undefined;
-}
-
-ejsval
-_ejs_llvm_Invoke_prototype_setDoesNotThrow(ejsval env, ejsval _this, int argc, ejsval *args)
-{
-    EJSLLVMInvoke* invoke = ((EJSLLVMInvoke*)EJSVAL_TO_OBJECT(_this));
-    invoke->llvm_invoke->setDoesNotThrow();
-    return _ejs_undefined;
-}
-
-llvm::InvokeInst*
-_ejs_llvm_Invoke_GetLLVMObj(ejsval val)
-{
-    if (EJSVAL_IS_NULL(val)) return NULL;
-    return ((EJSLLVMInvoke*)EJSVAL_TO_OBJECT(val))->llvm_invoke;
-}
-
-void
-_ejs_llvm_Invoke_init (ejsval exports)
-{
-    _ejs_llvm_invoke_specops = _ejs_object_specops;
-    _ejs_llvm_invoke_specops.class_name = "LLVMInvoke";
-    _ejs_llvm_invoke_specops.allocate = _ejs_llvm_Invoke_allocate;
-
-    START_SHADOW_STACK_FRAME;
-
-    _ejs_gc_add_named_root (_ejs_llvm_Invoke_proto);
-    _ejs_llvm_Invoke_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_llvm_invoke_specops);
-
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMInvoke", (EJSClosureFunc)_ejs_llvm_Invoke_impl));
-    _ejs_llvm_Invoke = tmpobj;
+        ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMCall", (EJSClosureFunc)Call_impl));
+        _ejs_Call = tmpobj;
 
 
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_llvm_Invoke_proto, EJS_STRINGIFY(x), _ejs_llvm_Invoke_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Call_proto, EJS_STRINGIFY(x), Call_prototype_##x)
 
-    _ejs_object_setprop (_ejs_llvm_Invoke,       _ejs_atom_prototype,  _ejs_llvm_Invoke_proto);
+        _ejs_object_setprop (_ejs_Call,       _ejs_atom_prototype,  _ejs_Call_proto);
 
-    PROTO_METHOD(setOnlyReadsMemory);
-    PROTO_METHOD(setDoesNotAccessMemory);
-    PROTO_METHOD(setDoesNotThrow);
-    PROTO_METHOD(dump);
-    PROTO_METHOD(toString);
+        PROTO_METHOD(setOnlyReadsMemory);
+        PROTO_METHOD(setDoesNotAccessMemory);
+        PROTO_METHOD(setDoesNotThrow);
+        PROTO_METHOD(dump);
+        PROTO_METHOD(toString);
 
 #undef PROTO_METHOD
 
-    _ejs_object_setprop_utf8 (exports,              "Invoke", _ejs_llvm_Invoke);
+        _ejs_object_setprop_utf8 (exports,              "Call", _ejs_Call);
 
-    END_SHADOW_STACK_FRAME;
-}
+        END_SHADOW_STACK_FRAME;
+    }
+
+    /// invoke instructions
+
+    typedef struct {
+        /* object header */
+        EJSObject obj;
+
+        /* invoke specific data */
+        llvm::InvokeInst *llvm_invoke;
+    } Invoke;
+
+    static EJSSpecOps invoke_specops;
+
+    static EJSObject* Invoke_allocate()
+    {
+        return (EJSObject*)_ejs_gc_new(Invoke);
+    }
+
+
+    static ejsval _ejs_Invoke_proto;
+    static ejsval _ejs_Invoke;
+    static ejsval
+    Invoke_impl (ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        EJS_NOT_IMPLEMENTED();
+    }
+
+    ejsval
+    Invoke_new(llvm::InvokeInst* llvm_invoke)
+    {
+        ejsval result = _ejs_object_new (_ejs_Invoke_proto, &invoke_specops);
+        ((Invoke*)EJSVAL_TO_OBJECT(result))->llvm_invoke = llvm_invoke;
+        return result;
+    }
+
+    ejsval
+    Invoke_prototype_toString(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        std::string str;
+        llvm::raw_string_ostream str_ostream(str);
+        ((Invoke*)EJSVAL_TO_OBJECT(_this))->llvm_invoke->print(str_ostream, NULL);
+
+        return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
+    }
+
+    ejsval
+    Invoke_prototype_dump(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        ((Invoke*)EJSVAL_TO_OBJECT(_this))->llvm_invoke->dump();
+        return _ejs_undefined;
+    }
+
+    ejsval
+    Invoke_prototype_setOnlyReadsMemory(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        Invoke* invoke = ((Invoke*)EJSVAL_TO_OBJECT(_this));
+        invoke->llvm_invoke->setOnlyReadsMemory();
+        return _ejs_undefined;
+    }
+
+    ejsval
+    Invoke_prototype_setDoesNotAccessMemory(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        Invoke* invoke = ((Invoke*)EJSVAL_TO_OBJECT(_this));
+        invoke->llvm_invoke->setDoesNotAccessMemory();
+        return _ejs_undefined;
+    }
+
+    ejsval
+    Invoke_prototype_setDoesNotThrow(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        Invoke* invoke = ((Invoke*)EJSVAL_TO_OBJECT(_this));
+        invoke->llvm_invoke->setDoesNotThrow();
+        return _ejs_undefined;
+    }
+
+    llvm::InvokeInst*
+    Invoke_GetLLVMObj(ejsval val)
+    {
+        if (EJSVAL_IS_NULL(val)) return NULL;
+        return ((Invoke*)EJSVAL_TO_OBJECT(val))->llvm_invoke;
+    }
+
+    void
+    Invoke_init (ejsval exports)
+    {
+        invoke_specops = _ejs_object_specops;
+        invoke_specops.class_name = "LLVMInvoke";
+        invoke_specops.allocate = Invoke_allocate;
+
+        START_SHADOW_STACK_FRAME;
+
+        _ejs_gc_add_named_root (_ejs_Invoke_proto);
+        _ejs_Invoke_proto = _ejs_object_new(_ejs_Object_prototype, &invoke_specops);
+
+        ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMInvoke", (EJSClosureFunc)Invoke_impl));
+        _ejs_Invoke = tmpobj;
+
+
+#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Invoke_proto, EJS_STRINGIFY(x), Invoke_prototype_##x)
+
+        _ejs_object_setprop (_ejs_Invoke,       _ejs_atom_prototype,  _ejs_Invoke_proto);
+
+        PROTO_METHOD(setOnlyReadsMemory);
+        PROTO_METHOD(setDoesNotAccessMemory);
+        PROTO_METHOD(setDoesNotThrow);
+        PROTO_METHOD(dump);
+        PROTO_METHOD(toString);
+
+#undef PROTO_METHOD
+
+        _ejs_object_setprop_utf8 (exports,              "Invoke", _ejs_Invoke);
+
+        END_SHADOW_STACK_FRAME;
+    }
+
+};

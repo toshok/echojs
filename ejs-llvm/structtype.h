@@ -3,9 +3,13 @@
 
 #include "ejs-llvm.h"
 
-extern void _ejs_llvm_StructType_init (ejsval global);
+namespace ejsllvm {
 
-extern ejsval _ejs_llvm_StructType_new(llvm::StructType* llvm_ty);
-extern llvm::StructType* _ejs_llvm_StructType_GetLLVMObj(ejsval val);
+  extern void StructType_init (ejsval global);
+
+  extern ejsval StructType_new(llvm::StructType* llvm_ty);
+  extern llvm::StructType* StructType_GetLLVMObj(ejsval val);
+
+};
 
 #endif /* EJS_LLVM_STRUCTTYPE_H */
