@@ -4,6 +4,7 @@ path = require 'path'
 fs = require 'fs'
 util = require 'echo-util'
 { spawn } = require 'child_process'
+debug = require 'debug'
         
 # if we're running under coffee/node, argv will be ["coffee", ".../ejs", ...]
 # if we're running the compiled ejs.exe, argv will be [".../ejs.js.exe", ...]
@@ -13,11 +14,15 @@ argv = process.argv.slice slice_count
 external_modules = []
 files = []
 temp_files = []
+debug_level = 0
 
 add_external_module = (modinfo) ->
         [library,module_name,module_entrypoint,link_flags] = modinfo.split ','
         external_modules.push { library, module_name, module_entrypoint, link_flags }
 
+increase_debug_level = ->
+        debug_level += 1
+        
 options =
         # our defaults:
         output_filename: null
@@ -26,6 +31,10 @@ options =
         leave_temp_files: false
 
 args =
+        "-d":
+                handler: increase_debug_level
+                handlerArgc: 0
+                help:    "debug output.  more instances of this flag increase the amount of spew."
         "-s":
                 flag:    "combine_scripts"
                 help:    "treat all toplevels as being 1 context, evaluating them in the order present on the command line"
@@ -37,6 +46,7 @@ args =
                 help:    "leave temporary files in /tmp from compilation"
         "--module":
                 handler: add_external_module
+                handlerArgc: 1
                 help:    "--module library.a,module-name,module_init,link_flags"
         "--help":
                 flag:    "show_help",
@@ -52,10 +62,10 @@ output_options = ->
                 console.warn "   #{a}:  #{args[a].help}"
 
 if argv.length > 0
-        skipNext = false
+        skipNext = 0
         for ai in [0..argv.length-1]
-                if skipNext
-                        skipNext = false
+                if skipNext > 0
+                        skipNext -= 1
                 else
                         if args[argv[ai]]?
                                 o = args[argv[ai]]
@@ -63,10 +73,12 @@ if argv.length > 0
                                         options[o.flag] = true
                                 else if o.option?
                                         options[o.option] = argv[++ai]
-                                        skipNext = true
+                                        skipNext = 1
                                 else if o.handler?
-                                        o.handler argv[++ai]
-                                        skipNext = true
+                                        handler_args = []
+                                        handler_args.push argv[++ai] for i in [0...o.handlerArgc]
+                                        o.handler.apply null, handler_args
+                                        skipNext = o.handlerArgc
                         else
                                 # end of options signals the rest of the array is files
                                 files = argv.slice ai
@@ -81,6 +93,8 @@ if options.show_help
 if files.length is 0
         output_usage()
         process.exit 0
+
+debug.setLevel debug_level
 
 files_remaining = 0
 
