@@ -268,12 +268,12 @@ _ejs_String_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *
             new_len += len3;
             new_len += 1; // for the \0
 
-            jschar* result = (jschar*)calloc(sizeof(jschar), new_len);
+            jschar* result = (jschar*)calloc(sizeof(jschar), new_len + 1);
             jschar* r = result;
             // XXX this should really use concat nodes instead
             memmove (r, EJSVAL_TO_FLAT_STRING(thisStr), len1 * sizeof(jschar)); r += len1;
-            memmove (r, EJSVAL_TO_FLAT_STRING(replaceValueStr), EJSVAL_TO_STRLEN(replaceValueStr) * sizeof(jschar)); r += len2;
-            memmove (r, p + EJSVAL_TO_STRLEN(searchValueStr), len3);
+            memmove (r, EJSVAL_TO_FLAT_STRING(replaceValueStr), len2 * sizeof(jschar)); r += len2;
+            memmove (r, p + EJSVAL_TO_STRLEN(searchValueStr), len3 * sizeof(jschar));
 
             ejsval rv = _ejs_string_new_ucs2 (result);
             free (result);
