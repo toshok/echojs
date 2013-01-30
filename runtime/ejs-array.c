@@ -433,8 +433,11 @@ _ejs_Array_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval* arg
 static ejsval
 _ejs_Array_prototype_join (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
+    // XXX this method should be optimized to create a rope
+    // instead of a flat string.
+
     if (EJS_ARRAY_LEN(_this) == 0)
-        return _ejs_string_new_utf8 ("");
+        return _ejs_atom_empty;
 
     const jschar* separator;
     int separator_len;
@@ -467,9 +470,9 @@ _ejs_Array_prototype_join (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
     jschar *p = result;
 
     for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
-        EJSPrimString *debug_str = EJSVAL_TO_STRING(strings[i]);
+        jschar *debug_str = EJSVAL_TO_FLAT_STRING(strings[i]);
         int slen = EJSVAL_TO_STRLEN(strings[i]);
-        memmove (p, EJSVAL_TO_FLAT_STRING(strings[i]), slen * sizeof(jschar));
+        memmove (p, debug_str, slen * sizeof(jschar));
         p += slen;
         if (i < EJS_ARRAY_LEN(_this)-1) {
             memmove (p, separator, separator_len * sizeof(jschar));
