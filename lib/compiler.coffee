@@ -4,8 +4,6 @@ syntax = esprima.Syntax
 debug = require 'debug'
 path = require 'path'
 
-#debug.setLevel if __ejs? then 1 else 0
-
 { Set } = require 'set'
 { NodeVisitor } = require 'nodevisitor'
 closure_conversion = require 'closure-conversion'
@@ -1567,22 +1565,24 @@ class AddFunctionsVisitor extends NodeVisitor
 
                 # we don't need to recurse here since we won't have nested functions at this point
                 n
-                        
-insert_toplevel_func = (tree, filename) ->
-        sanitize = (filename) ->
-                if __ejs?
-                        filename = filename.replace ".js", ""
-                        filename = filename.replace ".", "_"
-                        filename = filename.replace ",", "_"
-                        filename = filename.replace "-", "_"
-                        filename = filename.replace "/", "_"
-                        filename = filename.replace "\\", "_"
-                        filename
-                else
-                        filename = filename.replace /\.js$/, ""
-                        filename = filename.replace /[.,-\/\\]/g, "_" # this is insanely inadequate
-                        filename
+
+sanitize_with_regexp = (filename) ->
+        filename.replace /[.,-\/\\]/g, "_" # this is insanely inadequate
+
+sanitize_with_replace = (filename) ->
+        replace_all = (str, from, to) ->
+                while (str.indexOf from) > -1
+                        str = str.replace from, to
+                str
+
+        filename = replace_all filename, ".", "_"
+        filename = replace_all filename, ",", "_"
+        filename = replace_all filename, "-", "_"
+        filename = replace_all filename, "/", "_"
+        filename = replace_all filename, "\\", "_"
         
+insert_toplevel_func = (tree, filename) ->
+        sanitize = if __ejs? then sanitize_with_replace else sanitize_with_regexp
         toplevel =
                 type: syntax.FunctionDeclaration,
                 id:
@@ -1600,7 +1600,7 @@ insert_toplevel_func = (tree, filename) ->
 
 exports.compile = (tree, base_output_filename, source_filename) ->
 
-        console.warn "compiling #{source_filename}"
+        console.warn "compiling #{source_filename} -> #{base_output_filename}"
         
         tree = insert_toplevel_func tree, base_output_filename
 
@@ -1608,14 +1608,14 @@ exports.compile = (tree, base_output_filename, source_filename) ->
 
         toplevel_name = tree.body[0].id.name
         
-        debug.log "before closure conversion"
-        debug.log -> escodegen.generate tree
+        debug.log 1, "before closure conversion"
+        debug.log 1, -> escodegen.generate tree
         
         tree = closure_conversion.convert tree, path.basename source_filename
 
-        debug.log "after closure conversion"
-        debug.log -> escodegen.generate tree
-
+        debug.log 1, "after closure conversion"
+        debug.log 1, -> escodegen.generate tree
+        
         module = new llvm.Module "compiled-#{base_output_filename}"
 
         module.toplevel_name = toplevel_name
