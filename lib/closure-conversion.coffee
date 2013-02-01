@@ -274,10 +274,7 @@ class HoistVars extends NodeVisitor
                                         init: null
                                 }],
                                 kind: "let"
-                        n.left.type = syntax.Identifier
-                        n.left.name = n.left.declarations[0].id.name
-                        delete n.left.declarations
-                        delete n.left.kind
+                        n.left = create_identifier n.left.declarations[0].id.name
 
                 n.right = @visit n.right
                 n.body = @visit n.body
