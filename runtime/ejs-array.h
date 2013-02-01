@@ -12,6 +12,7 @@ typedef struct {
     EJSObject obj;
 
     /* array data */
+    EJSPropertyDesc array_length_desc;
     int array_length;
     int array_alloc;
     ejsval *elements;

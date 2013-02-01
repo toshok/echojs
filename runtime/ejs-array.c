@@ -61,6 +61,9 @@ _ejs_array_new (int numElements)
     rv->array_length = numElements;
     rv->array_alloc = numElements + 5;
     rv->elements = (ejsval*)calloc(rv->array_alloc, sizeof (ejsval));
+    _ejs_property_desc_set_writable (&rv->array_length_desc, EJS_TRUE);
+    _ejs_property_desc_set_value (&rv->array_length_desc, NUMBER_TO_EJSVAL(numElements));
+
     return OBJECT_TO_EJSVAL((EJSObject*)rv);
 }
 
@@ -348,7 +351,7 @@ _ejs_array_slice_dense (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     begin = MIN(begin, len);
     end = MIN(end, len);
 
-    ejsval rv = _ejs_array_new(end-begin);
+    ejsval rv = _ejs_array_new(0/*end-begin*/);
     int i, rv_i;
 
     rv_i = 0;
@@ -522,11 +525,15 @@ _ejs_Array_prototype_splice (ejsval env, ejsval _this, uint32_t argc, ejsval* ar
 {
     // start, deleteCount [ , item1 [ , item2 [ , … ] ] ]
 
-    ejsval start = _ejs_undefined;
+    ejsval start;
     ejsval deleteCount = _ejs_undefined;
 
-    if (argc > 0) start = args[0];
-    if (argc > 1) deleteCount = args[1];
+    if (argc == 0)
+        return _ejs_array_new(0);
+
+    start = args[0];
+    if (argc > 1)
+        deleteCount = args[1];
 
     /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
     ejsval O = ToObject(_this);
@@ -543,8 +550,10 @@ _ejs_Array_prototype_splice (ejsval env, ejsval _this, uint32_t argc, ejsval* ar
           min(relativeStart, len). */
     int32_t actualStart = relativeStart < 0 ? max((len + relativeStart),0) : min(relativeStart, len);
 
-    if (EJSVAL_IS_UNDEFINED(deleteCount))
+    if (EJSVAL_IS_UNDEFINED(deleteCount)) {
         deleteCount = NUMBER_TO_EJSVAL (len - actualStart);
+    }
+
     /* 7. Let actualDeleteCount be min(max(ToInteger(deleteCount),0), len - actualStart). */
     int32_t actualDeleteCount = min(max(ToInteger(deleteCount),0), len - actualStart);
     /* 8. Let k be 0. */
@@ -624,9 +633,9 @@ _ejs_Array_prototype_splice (ejsval env, ejsval _this, uint32_t argc, ejsval* ar
         /*     b. Repeat, while k > actualStart */
         while (k > actualStart) {
             /*        i. Let from be ToString(k + actualDeleteCount - 1). */
-            ejsval from = NumberToString (k + actualDeleteCount - 1);
+            ejsval from = NUMBER_TO_EJSVAL(k + actualDeleteCount - 1);
             /*        ii. Let to be ToString(k + itemCount - 1) */
-            ejsval to = NumberToString(k + itemCount - 1);
+            ejsval to = NUMBER_TO_EJSVAL(k + itemCount - 1);
             /*        iii. Let fromPresent be the result of calling the [[HasProperty]] internal method of O with 
                            argument from. */
             EJSBool fromPresent = OP(EJSVAL_TO_OBJECT(O), has_property)(O, from);
@@ -786,8 +795,14 @@ _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName)
             if (needle_int >= 0 && needle_int < EJS_ARRAY_LEN(obj))
                 return NULL; // XXX
         }
-            
     }
+
+    if (!ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName))) {
+        EJSArray* arr = (EJSArray*)EJSVAL_TO_OBJECT(obj);
+        _ejs_property_desc_set_value (&arr->array_length_desc, NUMBER_TO_EJSVAL(EJSARRAY_LEN(arr)));
+        return &arr->array_length_desc;
+    }
+
     return _ejs_object_specops.get_own_property (obj, propertyName);
 }
 
@@ -857,7 +872,22 @@ _ejs_array_specop_has_property (ejsval obj, ejsval propertyName)
 static EJSBool
 _ejs_array_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
 {
-    return _ejs_object_specops._delete (obj, propertyName, flag);
+    // check if propertyName is a uint32, or a string that we can convert to an uint32
+    int idx = -1;
+    if (EJSVAL_IS_NUMBER(propertyName)) {
+        double n = EJSVAL_TO_NUMBER(propertyName);
+        if (floor(n) == n) {
+            idx = (int)n;
+        }
+    }
+
+    if (idx == -1)
+        return _ejs_object_specops._delete (obj, propertyName, flag);
+
+    // if it's outside the array bounds, do nothing
+    if (idx < EJS_ARRAY_LEN(obj))
+        EJS_ARRAY_ELEMENTS(obj)[idx] = _ejs_undefined;
+    return EJS_TRUE;
 }
 
 static ejsval
@@ -869,6 +899,11 @@ _ejs_array_specop_default_value (ejsval obj, const char *hint)
 static EJSBool
 _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag)
 {
+    if (!ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName))) {
+        EJSArray* arr = (EJSArray*)EJSVAL_TO_OBJECT(obj);
+        EJS_ARRAY_LEN(obj) = ToUint32(_ejs_property_desc_get_value(propertyDescriptor));
+        return EJS_TRUE;
+    }
     return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
 }
 
