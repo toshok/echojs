@@ -162,10 +162,10 @@ ejsval _ejs_object_getprop (ejsval obj, ejsval key);
 ejsval _ejs_object_setprop_utf8 (ejsval obj, const char *key, ejsval value);
 ejsval _ejs_object_getprop_utf8 (ejsval obj, const char *key);
 
-EJSPropertyIterator* _ejs_property_iterator_new (ejsval forObj);
-ejsval               _ejs_property_iterator_current (EJSPropertyIterator* iterator);
-EJSBool              _ejs_property_iterator_next (EJSPropertyIterator* iterator, EJSBool free_on_end);
-void                 _ejs_property_iterator_free (EJSPropertyIterator *iterator);
+ejsval  _ejs_property_iterator_new (ejsval forObj);
+ejsval  _ejs_property_iterator_current (ejsval iterator);
+EJSBool _ejs_property_iterator_next (ejsval iterator, EJSBool free_on_end);
+void    _ejs_property_iterator_free (ejsval iterator);
 
 extern ejsval _ejs_Object;
 extern ejsval _ejs_Object__proto__;
@@ -181,6 +181,9 @@ void   _ejs_init_object (EJSObject *obj, ejsval proto, EJSSpecOps *ops);
 void _ejs_object_finalize(EJSObject *obj);
 
 void _ejs_object_init(ejsval global);
+
+// we shouldn't expose this method, we should expose a helper method that calls this.
+ejsval _ejs_Object_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args);
 
 EJS_END_DECLS
 

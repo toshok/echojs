@@ -346,46 +346,87 @@ _ejs_propertymap_lookup (EJSPropertyMap *map, const jschar *name, EJSBool add_if
 
 /* property iterators */
 struct _EJSPropertyIterator {
+    EJSObject obj;
+
     ejsval forObj;
     ejsval *keys;
     int num;
     int current;
 };
 
-EJSPropertyIterator*
+static EJSObject*
+_ejs_property_iterator_specop_allocate ()
+{
+    return (EJSObject*)_ejs_gc_new(EJSPropertyIterator);
+}
+
+static void
+_ejs_property_iterator_specop_finalize (EJSObject* obj)
+{
+    // nothing to do here, we've already been destroyed inline by the generated code.
+}
+
+static void
+_ejs_property_iterator_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
+{
+    EJSPropertyIterator *iter = (EJSPropertyIterator*)obj;
+
+    for (int i = 0; i < iter->num; i ++) {
+        scan_func (iter->keys[i]);
+    }
+}
+
+static EJSSpecOps _ejs_property_iterator_specops = {
+    "<EJSPropertyIterator>",
+    NULL, NULL, NULL,
+    NULL, NULL, NULL,
+    NULL, NULL, NULL,
+
+    _ejs_property_iterator_specop_allocate,
+    _ejs_property_iterator_specop_finalize,
+    _ejs_property_iterator_specop_scan
+};
+
+ejsval
 _ejs_property_iterator_new (ejsval forVal)
 {
     // the iterator-using code for for..in should handle a null iterator return value,
     // which would save us this allocation.
-    EJSPropertyIterator* iterator = (EJSPropertyIterator*)calloc(1, sizeof (EJSPropertyIterator));
+    ejsval iter = _ejs_object_new (_ejs_null, &_ejs_property_iterator_specops);
+    EJSPropertyIterator* iterator = (EJSPropertyIterator*)EJSVAL_TO_OBJECT(iter);
 
     iterator->current = -1;
 
     if (EJSVAL_IS_PRIMITIVE(forVal) || EJSVAL_IS_NULL(forVal) || EJSVAL_IS_UNDEFINED(forVal)) {
         iterator->num = 0;
-        return iterator;
+        return OBJECT_TO_EJSVAL((EJSObject*)iterator);
     }
 
     if (EJSVAL_IS_ARRAY(forVal)) {
+        int num_keys = EJS_ARRAY_LEN(forVal);
+
         // iterate over array keys first then additional properties
         iterator->forObj = forVal;
-        iterator->num = EJS_ARRAY_LEN(forVal);
-        iterator->keys = (ejsval*)malloc(sizeof(ejsval) * iterator->num);
-        for (int i = 0; i < iterator->num; i ++)
-            iterator->keys[i] = _ejs_number_new(i);
-        return iterator;
+        iterator->num = 0;
+        iterator->keys = (ejsval*)malloc(sizeof(ejsval) * num_keys);
+        for (int i = 0; i < num_keys; i ++) {
+            iterator->keys[iterator->num++] = _ejs_number_new(i);
+        }
+        return iter;
     }
     else if (EJSVAL_IS_OBJECT(forVal)) {
         // totally broken, only iterate over forObj's property map, not prototype properties
         EJSPropertyMap *map = &EJSVAL_TO_OBJECT(forVal)->map;
 
         if (map) {
+            int num_keys = map->num;
+
             iterator->forObj = forVal;
-            iterator->num = map->num;
-            iterator->keys = (ejsval*)malloc(sizeof(ejsval) * iterator->num);
-            for (int i = 0; i < iterator->num; i ++)
-                iterator->keys[i] = _ejs_string_new_ucs2(map->names[i]);
-            return iterator;
+            iterator->num = 0;
+            iterator->keys = (ejsval*)malloc(sizeof(ejsval) * num_keys);
+            for (int i = 0; i < num_keys; i ++)
+                iterator->keys[iterator->num++] = _ejs_string_new_ucs2(map->names[i]);
+            return iter;
         }
         else {
             EJS_NOT_IMPLEMENTED();
@@ -397,8 +438,9 @@ _ejs_property_iterator_new (ejsval forVal)
 }
 
 ejsval
-_ejs_property_iterator_current (EJSPropertyIterator* iterator)
+_ejs_property_iterator_current (ejsval iter)
 {
+    EJSPropertyIterator* iterator = (EJSPropertyIterator*)EJSVAL_TO_OBJECT(iter);
     if (iterator->current == -1) {
         printf ("_ejs_property_iterator_current called before _ejs_property_iterator_next\n");
         abort();
@@ -412,22 +454,23 @@ _ejs_property_iterator_current (EJSPropertyIterator* iterator)
 }
 
 EJSBool
-_ejs_property_iterator_next (EJSPropertyIterator* iterator, EJSBool free_on_end)
+_ejs_property_iterator_next (ejsval iter, EJSBool free_on_end)
 {
+    EJSPropertyIterator* iterator = (EJSPropertyIterator*)EJSVAL_TO_OBJECT(iter);
     iterator->current ++;
     if (iterator->current == iterator->num) {
         if (free_on_end)
-            _ejs_property_iterator_free (iterator);
+            _ejs_property_iterator_free (iter);
         return EJS_FALSE;
     }
     return EJS_TRUE;
 }
 
 void
-_ejs_property_iterator_free (EJSPropertyIterator *iterator)
+_ejs_property_iterator_free (ejsval iter)
 {
+    EJSPropertyIterator* iterator = (EJSPropertyIterator*)EJSVAL_TO_OBJECT(iter);
     free (iterator->keys);
-    free (iterator);
 }
 
 
@@ -506,8 +549,6 @@ _ejs_object_setprop (ejsval val, ejsval key, ejsval value)
             }
             EJS_ARRAY_ELEMENTS(val)[idx] = value;
             EJS_ARRAY_LEN(val) = idx + 1;
-            if (EJS_ARRAY_LEN(val) >= EJS_ARRAY_ALLOC(val))
-                abort();
             return value;
         }
         // if we fail there, we fall back to the object impl below
@@ -1107,7 +1148,7 @@ _ejs_Object_keys (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 15.2.4.2
-static ejsval
+ejsval
 _ejs_Object_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     char buf[1024];
