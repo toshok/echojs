@@ -84,20 +84,21 @@ ejsval ToString(ejsval exp)
 {
     if (EJSVAL_IS_NULL(exp))
         return _ejs_atom_null;
+    else if (EJSVAL_IS_UNDEFINED(exp))
+        return _ejs_atom_undefined;
     else if (EJSVAL_IS_BOOLEAN(exp)) 
         return EJSVAL_TO_BOOLEAN(exp) ? _ejs_atom_true : _ejs_atom_false;
     else if (EJSVAL_IS_NUMBER(exp))
         return NumberToString(EJSVAL_TO_NUMBER(exp));
     else if (EJSVAL_IS_STRING(exp))
         return exp;
-    else if (EJSVAL_IS_UNDEFINED(exp))
-        return _ejs_atom_undefined;
     else if (EJSVAL_IS_OBJECT(exp)) {
         ejsval toString = _ejs_object_getprop_utf8 (exp, "toString");
-        // XXX nanboxing breaks this if (!EJSVAL_IS_FUNCTION(toString))
-        // EJS_NOT_IMPLEMENTED();
+        if (!EJSVAL_IS_FUNCTION(toString)) {
+            return _ejs_Object_prototype_toString(_ejs_null, exp, 0, NULL);
+        }
 
-        // should we be checking if this is a string?  i'd assume so...
+        // should we be checking if this returns a string?  i'd assume so...
         return _ejs_invoke_closure_0 (toString, exp, 0);
     }
     else
