@@ -7,3 +7,4 @@ function foo(a, b)
 }
 
 foo("hello world");
+foo("hello world", "goodbye world");
