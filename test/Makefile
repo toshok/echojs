@@ -10,7 +10,6 @@ TESTS:=$(filter-out esprima-roundtrip1.js,$(TESTS))
 endif
 
 EXPECTED_FAILURES= \
-	array12.js \
 	date1.js \
 	forin2.js \
 	forin5.js \
@@ -26,7 +25,6 @@ EXPECTED_FAILURES= \
 	exc10.js \
 	json4.js
 
-# array12 fails because Array.prototype.splice is broken
 # date1 fails because we test the Date() function, which returns the current time.  this differs from the current time when the node test runs.  bleah.
 # forin2 fails because we don't properly handle deleting properties while iterating
 # forin5 fails because we enumerate the entire range 0..length of an array, including the holes.
@@ -57,7 +55,7 @@ check-free: terminal.js echo-assert.js
 run-tests: clean-results prepare-xfail $(patsubst %.js,test-%,$(TESTS)) format-results
 
 run-tests-stage1:
-	@$(MAKE) EJS_DRIVER="EJS_GC_DISABLE=1 $(TOPDIR)/ejs.js.exe" EJS_STAGE=1 run-tests
+	@$(MAKE) EJS_DRIVER="$(TOPDIR)/ejs.js.exe" EJS_STAGE=1 run-tests
 
 clean-results:
 	@rm -f .successes .failures .xfail .xsuccess .expected-failures
@@ -126,7 +124,7 @@ echo-%:
 esprima-roundtrip%.js.exe: esprima-roundtrip%.js $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js $(TOPDIR)/runtime/libecho.a
 	@echo [ejs stage$(EJS_STAGE)] $< && $(EJS_DRIVER) --leave-temp $< $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js
 
-EJS_DRIVER ?= NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --leave-temp
+EJS_DRIVER ?= NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --leave-temp -d
 EJS_STAGE ?= 0
 
 %.js.exe: %.js $(TOPDIR)/runtime/libecho.a
@@ -142,3 +140,12 @@ clean: clean-results
 	rm -f *.o *.js.exe terminal.js echo-assert.js .*.diff .*-out .failures .successes .xfail .xsuccess
 
 .INTERMEDIATE: terminal.js echo-assert.js
+
+compare-%:
+	-@test_js=`echo $@|sed -e s,compare-,,`.js; \
+	$(TOPDIR)/ejs.js.exe.stage0 --leave-temp $$test_js; \
+	mv /tmp/$$test_js.1.ll $$test_js.ll.stage0; \
+	$(TOPDIR)/ejs.js.exe.stage1 --leave-temp $$test_js; \
+	mv /tmp/$$test_js.1.ll $$test_js.ll.stage1; \
+	diff -us $$test_js.ll.stage0 $$test_js.ll.stage1; \
+	rm $$test_js.ll.stage0 $$test_js.ll.stage1
