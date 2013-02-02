@@ -49,7 +49,7 @@ Echo now uses mozilla's NaN-boxing jsval (called ejsval here) so
 primitive ints and doubles are stored unboxed.
 
 Closure environments are still represented as JS objects, with the
-aforementioned lineary property lookups for closed-over variables, but
+aforementioned linearly property lookups for closed-over variables, but
 this will be changing something very soon.
 
 What's next?
