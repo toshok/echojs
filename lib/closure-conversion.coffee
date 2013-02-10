@@ -50,7 +50,11 @@ exports.free = free = (exp) ->
                 when syntax.LabeledStatement      then exp.ejs_free_vars = free exp.body
                 when syntax.BlockStatement        then exp.ejs_free_vars = free_blocklike exp, exp.body
                 when syntax.TryStatement          then exp.ejs_free_vars = Set.union.apply null, [(free exp.block)].concat (map free, exp.handlers)
-                when syntax.CatchClause           then exp.ejs_free_vars = (free exp.body).subtract (new Set [exp.param.name])
+                when syntax.CatchClause
+                        param_set = if exp.param.name? then new Set [exp.param.name] else new Set
+                        exp.ejs_free_vars = (free exp.body).subtract param_set
+                        exp.ejs_decls = exp.body.ejs_decls.union param_set
+                        exp.ejs_free_vars
                 when syntax.VariableDeclaration   then exp.ejs_free_vars = Set.union.apply null, (map free, exp.declarations)
                 when syntax.VariableDeclarator    then exp.ejs_free_vars = free exp.init
                 when syntax.ExpressionStatement   then exp.ejs_free_vars = free exp.expression
