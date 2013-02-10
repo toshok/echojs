@@ -63,13 +63,57 @@ IntToCString(char *cbuf, jsint i, jsint base)
     return cp;
 }
 
+static jschar *
+IntToUCS2(jschar *cbuf, jsint i, jsint base)
+{
+    jsuint u = (i < 0) ? -i : i;
+    jschar *cp = cbuf + UINT32_CHAR_BUFFER_LENGTH;
+
+    *cp = '\0';
+
+    /* Build the string from behind. */
+    switch (base) {
+    case 10: {
+        // cp = BackfillIndexInCharBuffer(u, cp);
+        uint32_t index = u;
+        jschar *end = cp;
+        do {
+            uint32_t next = index / 10, digit = index % 10;
+            *--end = '0' + digit;
+            index = next;
+        } while (index > 0);
+        return end;
+      break;
+    }
+    case 16:
+      do {
+          jsuint newu = u / 16;
+          *--cp = "0123456789abcdef"[u - newu * 16];
+          u = newu;
+      } while (u != 0);
+      break;
+    default:
+      EJS_ASSERT(base >= 2 && base <= 36);
+      do {
+          jsuint newu = u / base;
+          *--cp = "0123456789abcdefghijklmnopqrstuvwxyz"[u - newu * base];
+          u = newu;
+      } while (u != 0);
+      break;
+    }
+    if (i < 0)
+        *--cp = '-';
+
+    return cp;
+}
+
 ejsval NumberToString(double d)
 {
     int32_t i;
     if (EJSDOUBLE_IS_INT32(d, &i)) {
-        char int_buf[UINT32_CHAR_BUFFER_LENGTH+1];
-        char *cp = IntToCString(int_buf, i, 10);
-        return _ejs_string_new_utf8 (cp);
+        jschar int_buf[UINT32_CHAR_BUFFER_LENGTH+1];
+        jschar *cp = IntToUCS2(int_buf, i, 10);
+        return _ejs_string_new_ucs2 (cp);
     }
 
     char num_buf[256];
