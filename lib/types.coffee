@@ -20,3 +20,20 @@ exports.EjsPrimString   = EjsPrimStringTy = llvm.StructType.create "EjsPrimStrin
 
 # the c++ typeinfo for our exceptions
 exports.EjsExceptionTypeInfo = EjsExceptionTypeInfoTy = (llvm.StructType.create "EjsExceptionTypeInfoType", [int8PointerTy, int8PointerTy, int8PointerTy]).pointerTo()
+
+exports.takes_builtins = (n) ->
+        n.takes_builtins = true
+        n
+
+exports.only_reads_memory = (n) ->
+        n.setOnlyReadsMemory()
+        n
+
+exports.does_not_access_memory = (n) ->
+        n.setDoesNotAccessMemory()
+        n
+
+exports.does_not_throw = (n) ->
+        n.setDoesNotThrow()
+        n
+

@@ -7,7 +7,8 @@ COFFEE_FILES=				\
 	set.coffee			\
 	types.coffee			\
 	consts.coffee			\
-	exitable-scope.coffee
+	exitable-scope.coffee		\
+	runtime.coffee
 
 DESTDIR = coffee
 
