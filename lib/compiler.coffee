@@ -425,6 +425,13 @@ class LLVMIRVisitor extends NodeVisitor
                 scope = LoopExitableScope.findLabeled n.label.name
                 # XXX check if scope is null, throw if so
                 scope.exitFore()
+
+        generateCondBr: (exp, then_bb, else_bb) ->
+                exp_value = @visit exp
+                cond_truthy = @createCall @ejs_runtime.truthy, [exp_value], "cond_truthy"
+                cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
+                ir.createCondBr cmp, else_bb, then_bb
+                exp_value
                 
         visitFor: (n) ->
                 insertBlock = ir.getInsertBlock()
@@ -444,9 +451,7 @@ class LLVMIRVisitor extends NodeVisitor
 
                 @doInsideBlock test_bb, =>
                         if n.test
-                                cond_truthy = @createCall @ejs_runtime.truthy, [@visit(n.test)], "cond_truthy"
-                                cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
-                                ir.createCondBr cmp, merge_bb, body_bb
+                                @generateCondBr n.test, body_bb, merge_bb
                         else
                                 ir.createBr body_bb
 
@@ -477,10 +482,7 @@ class LLVMIRVisitor extends NodeVisitor
                 ir.createBr while_bb
 
                 @doInsideBlock while_bb, =>
-                        cond_truthy = @createCall @ejs_runtime.truthy, [@visit(n.test)], "cond_truthy"
-                        cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
-                
-                        ir.createCondBr cmp, merge_bb, body_bb
+                        @generateCondBr n.test, body_bb, merge_bb
 
                 scope = new LoopExitableScope n.label, while_bb, merge_bb
                 scope.enter()
@@ -561,9 +563,6 @@ class LLVMIRVisitor extends NodeVisitor
                 if load_result
                         cond_val = @createAlloca @currentFunction, types.EjsValue, "%cond_val"
                 
-                # first we convert our conditional EJSValue to a boolean
-                cond_truthy = @createCall @ejs_runtime.truthy, [@visit(n.test)], "cond_truthy"
-
                 insertBlock = ir.getInsertBlock()
                 insertFunc = insertBlock.parent
 
@@ -571,9 +570,7 @@ class LLVMIRVisitor extends NodeVisitor
                 else_bb  = new llvm.BasicBlock "else", insertFunc if n.alternate?
                 merge_bb = new llvm.BasicBlock "merge", insertFunc
 
-                # we invert the test here - check if the condition is false/0
-                cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
-                ir.createCondBr cmp, (if else_bb? then else_bb else merge_bb), then_bb
+                @generateCondBr n.test, then_bb, (if else_bb? then else_bb else merge_bb)
 
                 @doInsideBlock then_bb, =>
                         then_val = @visit n.consequent
@@ -586,11 +583,11 @@ class LLVMIRVisitor extends NodeVisitor
                                 ir.createStore else_val, cond_val if load_result
                                 ir.createBr merge_bb
 
-                @doInsideBlock merge_bb, =>
-                        if load_result
-                                @createLoad cond_val, "cond_val_load"
-                        else
-                                merge_bb
+                ir.setInsertPoint merge_bb
+                if load_result
+                        @createLoad cond_val, "cond_val_load"
+                else
+                        merge_bb
                 
         visitReturn: (n) ->
                 debug.log "visitReturn"
@@ -892,9 +889,6 @@ class LLVMIRVisitor extends NodeVisitor
                 debug.log -> "operator = '#{n.operator}'"
                 result = @createAlloca @currentFunction, types.EjsValue, "result_#{n.operator}"
 
-                left_visited = @visit n.left
-                cond_truthy = @createCall @ejs_runtime.truthy, [left_visited], "cond_truthy"
-
                 insertBlock = ir.getInsertBlock()
                 insertFunc = insertBlock.parent
         
@@ -903,8 +897,7 @@ class LLVMIRVisitor extends NodeVisitor
                 merge_bb = new llvm.BasicBlock "cond_merge", insertFunc
 
                 # we invert the test here - check if the condition is false/0
-                cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
-                ir.createCondBr cmp, right_bb, left_bb
+                left_visited = @generateCondBr n.left, left_bb, right_bb
 
                 @doInsideBlock left_bb, =>
                         # inside the else branch, left was truthy
