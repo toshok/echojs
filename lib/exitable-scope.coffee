@@ -1,6 +1,13 @@
 llvm = require 'llvm'
 irbuilder = llvm.IRBuilder
 
+#
+# ExitableScopes are basically the means by which ejs deals with 'break' and 'continue'.
+# 
+# Each ExitableScope has two exit functions, exitFore and exitAft.
+# exitFore corresponds to 'continue', and exitAft corresponds to
+# 'break' (or falling off the end of the scope if the fromBreak arg is false.)
+#
 exports.ExitableScope = class ExitableScope
         @REASON_RETURN: -10
         
