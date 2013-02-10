@@ -51,7 +51,7 @@ exports.free = free = (exp) ->
                 when syntax.BlockStatement        then exp.ejs_free_vars = free_blocklike exp, exp.body
                 when syntax.TryStatement          then exp.ejs_free_vars = Set.union.apply null, [(free exp.block)].concat (map free, exp.handlers)
                 when syntax.CatchClause
-                        param_set = if exp.param.name? then new Set [exp.param.name] else new Set
+                        param_set = if exp.param?.name? then new Set [exp.param.name] else new Set
                         exp.ejs_free_vars = (free exp.body).subtract param_set
                         exp.ejs_decls = exp.body.ejs_decls.union param_set
                         exp.ejs_free_vars
