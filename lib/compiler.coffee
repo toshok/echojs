@@ -149,16 +149,26 @@ class LLVMIRVisitor extends NodeVisitor
                 entry_bb = new llvm.BasicBlock "entry", @literalInitializationFunction
                 return_bb = new llvm.BasicBlock "return", @literalInitializationFunction
 
-                ir.setInsertPoint entry_bb
-                ir.createBr return_bb
-                        
-                ir.setInsertPoint return_bb
-                ir.createRetVoid()
+                @doInsideBlock entry_bb, =>
+                        ir.createBr return_bb
+
+                @doInsideBlock return_bb, =>
+                        ir.createRetVoid()
 
                 @literalInitializationBB = entry_bb
 
         # lots of helper methods
 
+        # result should be the landingpad's value
+        beginCatch: (result) -> ir.createCall @ejs_runtime.begin_catch, [(ir.createPointerCast result, types.int8Pointer, "")], "catchval"
+        endCatch:            -> ir.createCall @ejs_runtime.end_catch, [], ""
+
+        doInsideBlock: (b, f) ->
+                saved = ir.getInsertBlock()
+                ir.setInsertPoint b
+                f()
+                ir.setInsertPoint saved
+        
         createLoad: (value, name) ->
                 rv = ir.createLoad value, name
                 rv
@@ -427,29 +437,29 @@ class LLVMIRVisitor extends NodeVisitor
                 merge_bb = new llvm.BasicBlock "for_merge", insertFunc
 
                 ir.createBr init_bb
-                
-                ir.setInsertPoint init_bb
-                @visit n.init
-                ir.createBr test_bb
 
-                ir.setInsertPoint test_bb
-                if n.test
-                        cond_truthy = @createCall @ejs_runtime.truthy, [@visit(n.test)], "cond_truthy"
-                        cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
-                        ir.createCondBr cmp, merge_bb, body_bb
-                else
-                        ir.createBr body_bb
+                @doInsideBlock init_bb, =>
+                        @visit n.init
+                        ir.createBr test_bb
+
+                @doInsideBlock test_bb, =>
+                        if n.test
+                                cond_truthy = @createCall @ejs_runtime.truthy, [@visit(n.test)], "cond_truthy"
+                                cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
+                                ir.createCondBr cmp, merge_bb, body_bb
+                        else
+                                ir.createBr body_bb
 
                 scope = new LoopExitableScope n.label, update_bb, merge_bb
                 scope.enter()
 
-                ir.setInsertPoint body_bb
-                @visit n.body
-                ir.createBr update_bb
+                @doInsideBlock body_bb, =>
+                        @visit n.body
+                        ir.createBr update_bb
 
-                ir.setInsertPoint update_bb
-                @visit n.update
-                ir.createBr test_bb
+                @doInsideBlock update_bb, =>
+                        @visit n.update
+                        ir.createBr test_bb
 
                 scope.leave()
 
@@ -465,19 +475,19 @@ class LLVMIRVisitor extends NodeVisitor
                 merge_bb = new llvm.BasicBlock "while_merge", insertFunc
 
                 ir.createBr while_bb
-                ir.setInsertPoint while_bb
+
+                @doInsideBlock while_bb, =>
+                        cond_truthy = @createCall @ejs_runtime.truthy, [@visit(n.test)], "cond_truthy"
+                        cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
                 
-                cond_truthy = @createCall @ejs_runtime.truthy, [@visit(n.test)], "cond_truthy"
-                cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
-                
-                ir.createCondBr cmp, merge_bb, body_bb
+                        ir.createCondBr cmp, merge_bb, body_bb
 
                 scope = new LoopExitableScope n.label, while_bb, merge_bb
                 scope.enter()
                 
-                ir.setInsertPoint body_bb
-                @visit n.body
-                ir.createBr while_bb
+                @doInsideBlock body_bb, =>
+                        @visit n.body
+                        ir.createBr while_bb
 
                 scope.leave()
                                 
@@ -502,17 +512,17 @@ class LLVMIRVisitor extends NodeVisitor
                 merge_bb  = new llvm.BasicBlock "forin_merge", insertFunc
                                 
                 ir.createBr forin_bb
-                ir.setInsertPoint forin_bb
 
-                moreleft = @createCall @ejs_runtime.prop_iterator_next, [iterator, consts.true()], "moreleft"
-                cmp = ir.createICmpEq moreleft, consts.false(), "cmpmoreleft"
-                ir.createCondBr cmp, merge_bb, body_bb
-                
-                ir.setInsertPoint body_bb
-                current = @createCall @ejs_runtime.prop_iterator_current, [iterator], "iterator_current"
-                @storeValueInDest current, lhs
-                @visit n.body
-                ir.createBr forin_bb
+                @doInsideBlock forin_bb, =>
+                        moreleft = @createCall @ejs_runtime.prop_iterator_next, [iterator, consts.true()], "moreleft"
+                        cmp = ir.createICmpEq moreleft, consts.false(), "cmpmoreleft"
+                        ir.createCondBr cmp, merge_bb, body_bb
+
+                @doInsideBlock body_bb, =>
+                        current = @createCall @ejs_runtime.prop_iterator_current, [iterator], "iterator_current"
+                        @storeValueInDest current, lhs
+                        @visit n.body
+                        ir.createBr forin_bb
 
                 ir.setInsertPoint merge_bb
                 merge_bb
@@ -558,30 +568,29 @@ class LLVMIRVisitor extends NodeVisitor
                 insertFunc = insertBlock.parent
 
                 then_bb  = new llvm.BasicBlock "then", insertFunc
-                else_bb  = new llvm.BasicBlock "else", insertFunc
+                else_bb  = new llvm.BasicBlock "else", insertFunc if n.alternate?
                 merge_bb = new llvm.BasicBlock "merge", insertFunc
 
                 # we invert the test here - check if the condition is false/0
                 cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
-                ir.createCondBr cmp, else_bb, then_bb
+                ir.createCondBr cmp, (if else_bb? then else_bb else merge_bb), then_bb
 
-                ir.setInsertPoint then_bb
-                then_val = @visit n.consequent
-                if load_result
-                        ir.createStore then_val, cond_val
-                ir.createBr merge_bb
+                @doInsideBlock then_bb, =>
+                        then_val = @visit n.consequent
+                        ir.createStore then_val, cond_val if load_result
+                        ir.createBr merge_bb
 
-                ir.setInsertPoint else_bb
-                else_val = @visit n.alternate
-                if load_result
-                        ir.createStore else_val, cond_val
-                ir.createBr merge_bb
+                if n.alternate?
+                        @doInsideBlock else_bb, =>
+                                else_val = @visit n.alternate
+                                ir.createStore else_val, cond_val if load_result
+                                ir.createBr merge_bb
 
-                ir.setInsertPoint merge_bb
-                if load_result
-                        @createLoad cond_val, "cond_val_load"
-                else
-                        merge_bb
+                @doInsideBlock merge_bb, =>
+                        if load_result
+                                @createLoad cond_val, "cond_val_load"
+                        else
+                                merge_bb
                 
         visitReturn: (n) ->
                 debug.log "visitReturn"
@@ -897,36 +906,32 @@ class LLVMIRVisitor extends NodeVisitor
                 cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
                 ir.createCondBr cmp, right_bb, left_bb
 
-                ir.setInsertPoint left_bb
-                # inside the else branch, left was truthy
-                if n.operator is "||"
-                        # for || we short circuit out here
-                        ir.createStore left_visited, result
-                else if n.operator is "&&"
-                        # for && we evaluate the second and store it
-                        ir.createStore (@visit n.right), result
-                else
-                        throw "Internal error 99.1"
-                ir.createBr merge_bb
+                @doInsideBlock left_bb, =>
+                        # inside the else branch, left was truthy
+                        if n.operator is "||"
+                                # for || we short circuit out here
+                                ir.createStore left_visited, result
+                        else if n.operator is "&&"
+                                # for && we evaluate the second and store it
+                                ir.createStore (@visit n.right), result
+                        else
+                                throw "Internal error 99.1"
+                        ir.createBr merge_bb
 
-                ir.setInsertPoint right_bb
-                # inside the then branch, left was falsy
-                if n.operator is "||"
-                        # for || we evaluate the second and store it
-                        ir.createStore (@visit n.right), result
-                else if n.operator is "&&"
-                        # for && we short circuit out here
-                        ir.createStore left_visited, result
-                else
-                        throw "Internal error 99.1"
-                ir.createBr merge_bb
-
-                ir.setInsertPoint merge_bb
-                rv = @createLoad result, "result_#{n.operator}_load"
+                @doInsideBlock right_bb, =>
+                        # inside the then branch, left was falsy
+                        if n.operator is "||"
+                                # for || we evaluate the second and store it
+                                ir.createStore (@visit n.right), result
+                        else if n.operator is "&&"
+                                # for && we short circuit out here
+                                ir.createStore left_visited, result
+                        else
+                                throw "Internal error 99.1"
+                        ir.createBr merge_bb
 
                 ir.setInsertPoint merge_bb
-
-                rv
+                @createLoad result, "result_#{n.operator}_load"
 
         visitArgsForCall: (callee, pullThisFromArg0, args) ->
                 argv = []
@@ -1151,17 +1156,13 @@ class LLVMIRVisitor extends NodeVisitor
                                         num_alloca = @currentFunction.literalAllocas[literal_key]
                                 else
                                         # only create 1 instance of num literals used in a function, and allocate them in the entry block
-                                        insertBlock = ir.getInsertBlock()
-
-                                        ir.setInsertPoint @currentFunction.entry_bb
-                                        num_alloca = ir.createAlloca types.EjsValue, "num-alloca-#{n.value}"
-                                        c = llvm.ConstantFP.getDouble n.value
-                                        call = @createCall @ejs_runtime.number_new, [c], "numconst-#{n.value}"
-                                        ir.createStore call, num_alloca
-                                        @currentFunction.literalAllocas[literal_key] = num_alloca
+                                        @doInsideBlock @currentFunction.entry_bb, =>
+                                                num_alloca = ir.createAlloca types.EjsValue, "num-alloca-#{n.value}"
+                                                c = llvm.ConstantFP.getDouble n.value
+                                                call = @createCall @ejs_runtime.number_new, [c], "numconst-#{n.value}"
+                                                ir.createStore call, num_alloca
+                                                @currentFunction.literalAllocas[literal_key] = num_alloca
                                         
-                                        ir.setInsertPoint insertBlock
-                                
                                 numload = @createLoad num_alloca, "%num_alloca"
                         numload.literal = n
                         debug.log -> "numload = #{numload}"
@@ -1232,83 +1233,82 @@ class LLVMIRVisitor extends NodeVisitor
                 # at the end of the try block branch to our branch_target (either the finally block or the merge block after the try{}) with REASON_FALLOFF
                 scope.exitAft false
 
+                scope.leave()
+
                 if scope.landing_pad_block?
                         # the scope's landingpad block is created if needed by @createCall (using that function we pass in as the last argument to TryExitableScope's ctor.)
                         # if a try block includes no calls, there's no need for an landing pad block as nothing can throw, and we don't bother generating any code for the
                         # catch clause.
                         console.log "have a landing pad block"
-                        ir.setInsertPoint scope.landing_pad_block
+                        @doInsideBlock scope.landing_pad_block, =>
 
-                        # XXX is it an error to have multiple catch handlers, as JS doesn't allow you to filter by type?
-                        clause_count = if n.handlers.length > 0 then 1 else 0
+                                # XXX is it an error to have multiple catch handlers, as JS doesn't allow you to filter by type?
+                                clause_count = if n.handlers.length > 0 then 1 else 0
                         
-                        casted_personality = ir.createPointerCast @ejs_runtime.personality, types.int8Pointer, "personality"
-                        caught_result = ir.createLandingPad types.EjsValue.pointerTo(), casted_personality, clause_count, "caught_result"
-                        caught_result.addClause types.EjsValue.pointerTo() # this used to be '@ejs_runtime.exception_typeinfo'
-                        caught_result.setCleanup true
-                
-                        # if we have a catch clause, create catch_bb
-                        if n.handlers.length > 0
-                                catch_block = new llvm.BasicBlock "catch_bb", insertFunc
-                                ir.setInsertPoint catch_block
+                                casted_personality = ir.createPointerCast @ejs_runtime.personality, types.int8Pointer, "personality"
+                                caught_result = ir.createLandingPad types.EjsValue.pointerTo(), casted_personality, clause_count, "caught_result"
+                                caught_result.addClause @ejs_runtime.exception_typeinfo
+                                caught_result.setCleanup true
 
-                                # call _ejs_begin_catch
-                                catchval = ir.createCall @ejs_runtime.begin_catch, [(ir.createPointerCast caught_result, types.int8Pointer, "")], "catchval"
+                                # if we have a catch clause, create catch_bb
+                                if n.handlers.length > 0
+                                        catch_block = new llvm.BasicBlock "catch_bb", insertFunc
+                                        @doInsideBlock catch_block, =>
+                                                # call _ejs_begin_catch to return the actual exception
+                                                catchval = @beginCatch caught_result
+                                
+                                                # create a new scope which maps the catch parameter name (the "e" in "try { } catch (e) { }") to catchval
+                                                catch_scope = Object.create null
+                                                if n.handlers[0].param?.name?
+                                                        catch_name = n.handlers[0].param.name
+                                                        alloca = @createAlloca @currentFunction, types.EjsValue, "local_catch_#{catch_name}"
+                                                        catch_scope[catch_name] = alloca
+                                                        ir.createStore catchval, alloca
 
-                                # create a new scope which maps the catch parameter name (the "e" in try { } catch (e) { }) to catchval
-                                catch_scope = Object.create null
-                                if n.handlers[0].param?.name?
-                                        catch_name = n.handlers[0].param.name
-                                        alloca = @createAlloca @currentFunction, types.EjsValue, "local_catch_#{catch_name}"
-                                        catch_scope[catch_name] = alloca
-                                        ir.createStore catchval, alloca
+                                                @visitWithScope catch_scope, [n.handlers[0]]
 
-                                # and visit the handler with this scope active
-                                @visitWithScope catch_scope, [n.handlers[0]]
+                                                # unsure about this one - we should likely call end_catch if another exception is thrown from the catch block?
+                                                @endCatch()
 
-                                # unsure about this one - we should likely call end_catch if another exception is thrown from the catch block?
-                                ir.createCall @ejs_runtime.end_catch, [], ""
+                                                # if we make it to the end of the catch block, branch unconditionally to the branch target (either this try's
+                                                # finally block or the merge pointer after the try)
+                                                ir.createBr branch_target
 
-                                # if we make it to the end of the catch block, branch unconditionally to the branch target (either this try's
-                                # finally block or the merge pointer after the try)
-                                ir.createBr branch_target
+                                ###
+                                # Unwind Resume Block (calls _Unwind_Resume)
+                                unwind_resume_block = new llvm.BasicBlock "unwind_resume", insertFunc
+                                @doInsideBlock unwind_resume_block, =>
+                                        ir.createResume caught_result
+                                ###
 
-                        # Unwind Resume Block (calls _Unwind_Resume)
-                        unwind_resume_block = new llvm.BasicBlock "unwind_resume", insertFunc
-                        ir.setInsertPoint unwind_resume_block
-                        ir.createResume caught_result
-
-                        if catch_block?
-                                ir.createBr catch_block
-                        else if finally_block?
-                                ir.createBr finally_block
-                        else
-                                throw "this shouldn't happen.  a try{} without either a catch{} or finally{}"
-
-                scope.leave()
+                                if catch_block?
+                                        ir.createBr catch_block
+                                else if finally_block?
+                                        ir.createBr finally_block
+                                else
+                                        throw "this shouldn't happen.  a try{} without either a catch{} or finally{}"
 
                 # Finally Block
                 if n.finalizer?
-                        ir.setInsertPoint finally_block
-                        @visit n.finalizer
+                        @doInsideBlock finally_block, =>
+                                @visit n.finalizer
 
-                        cleanup_reason = @createLoad @currentFunction.cleanup_reason, "cleanup_reason_load"
+                                cleanup_reason = @createLoad @currentFunction.cleanup_reason, "cleanup_reason_load"
 
-                        if @returnValueAlloca?
-                                return_tramp = new llvm.BasicBlock "return_tramp", insertFunc
-                                ir.setInsertPoint return_tramp
+                                if @returnValueAlloca?
+                                        return_tramp = new llvm.BasicBlock "return_tramp", insertFunc
+                                        @doInsideBlock return_tramp, =>
                                 
-                                if @finallyStack.length > 0
-                                        ir.createStore (consts.int32 ExitableScope.REASON_RETURN), @currentFunction.cleanup_reason
-                                        ir.createBr @finallyStack[0]
-                                else
-                                        rv = @createLoad @returnValueAlloca, "rv"
-                                        ir.createRet rv
+                                        if @finallyStack.length > 0
+                                                ir.createStore (consts.int32 ExitableScope.REASON_RETURN), @currentFunction.cleanup_reason
+                                                ir.createBr @finallyStack[0]
+                                        else
+                                                rv = @createLoad @returnValueAlloca, "rv"
+                                                ir.createRet rv
                         
-                        ir.setInsertPoint finally_block
-                        switch_stmt = ir.createSwitch cleanup_reason, merge_block, scope.destinations.length + 1
-                        if @returnValueAlloca?
-                                switch_stmt.addCase (consts.int32 ExitableScope.REASON_RETURN), return_tramp
+                                switch_stmt = ir.createSwitch cleanup_reason, merge_block, scope.destinations.length + 1
+                                if @returnValueAlloca?
+                                        switch_stmt.addCase (consts.int32 ExitableScope.REASON_RETURN), return_tramp
                         
                 console.log "done with try block"
                 ir.setInsertPoint merge_block
@@ -1362,18 +1362,18 @@ class LLVMIRVisitor extends NodeVisitor
                         # if there were bound args we have to fall back to the runtime invoke method (since we can't
                         # guarantee enough room in our scratch area -- should we inline a check here or pass the length
                         # of the scratch area to decompose?  perhaps...FIXME)
-                        # 
-                        ir.setInsertPoint runtime_invoke_bb
-                        calltmp = @createCall @ejs_runtime.invoke_closure, argv, "calltmp"
-                        store = ir.createStore calltmp, call_result
-                        ir.createBr invoke_merge_bb
+                        #
+                        @doInsideBlock runtime_invoke_bb, =>
+                                calltmp = @createCall @ejs_runtime.invoke_closure, argv, "calltmp"
+                                store = ir.createStore calltmp, call_result
+                                ir.createBr invoke_merge_bb
 
                         # in the successful case we modify our argv with the responses and directly invoke the closure func
-                        ir.setInsertPoint direct_invoke_bb
-                        direct_args = [ (@createLoad env_alloca, "env"), (@createLoad this_alloca, "this"), argv[2], argv[3] ]
-                        calltmp = @createCall (@createLoad func_alloca, "func"), direct_args, "calltmp"
-                        store = ir.createStore calltmp, call_result
-                        ir.createBr invoke_merge_bb
+                        @doInsideBlock direct_invoke_bb, =>
+                                direct_args = [ (@createLoad env_alloca, "env"), (@createLoad this_alloca, "this"), argv[2], argv[3] ]
+                                calltmp = @createCall (@createLoad func_alloca, "func"), direct_args, "calltmp"
+                                store = ir.createStore calltmp, call_result
+                                ir.createBr invoke_merge_bb
 
                         ir.setInsertPoint invoke_merge_bb
                 else
