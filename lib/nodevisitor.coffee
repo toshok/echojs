@@ -211,8 +211,9 @@ exports.NodeVisitor = class NodeVisitor
                 n
                 
         visit: (n) ->
-                debug.log "child is null!>" if not n?
-                return null if not n?
+                if not n?
+                        debug.log "child is null!>"
+                        return null
 
                 debug.indent()
                 debug.log "#{n.type}>"
