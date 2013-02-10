@@ -12,6 +12,7 @@ closure_conversion = require 'closure-conversion'
 { ExitableScope, TryExitableScope, SwitchExitableScope, LoopExitableScope } = require 'exitable-scope'
 
 types = require 'types'
+consts = require 'consts'
 
 llvm = require 'llvm'
 ir = llvm.IRBuilder
@@ -28,35 +29,6 @@ BUILTIN_PARAMS = [
   { type: syntax.Identifier, name: "%this",    llvm_type: types.EjsValue }
   { type: syntax.Identifier, name: "%argc",    llvm_type: types.int32 }
 ]
-
-jscharConst = (c) ->
-        constant = llvm.Constant.getIntegerValue types.jschar, c
-        constant.is_constant = true
-        constant.constant_val = c
-        constant
-
-int32Const = (c) ->
-        constant = llvm.Constant.getIntegerValue types.int32, c
-        constant.is_constant = true
-        constant.constant_val = c
-        constant
-                
-int64Const = (c) ->
-        constant = llvm.Constant.getIntegerValue types.int64, c
-        constant.is_constant = true
-        constant.constant_val = c
-        constant
-
-nullConst = (t) -> llvm.Constant.getNull t
-
-trueConst = -> llvm.Constant.getIntegerValue types.bool, 1
-falseConst = -> llvm.Constant.getIntegerValue types.bool, 0
-
-boolConst = (c) ->
-        constant = llvm.Constant.getIntegerValue types.bool, if c is false then 0 else 1
-        constant.is_constant = true
-        constant.constant_val = c
-        constant
 
 takes_builtins = (n) ->
         n.takes_builtins = true
@@ -249,7 +221,7 @@ class LLVMIRVisitor extends NodeVisitor
                 # we kinda lose out as the llvm IR code doesn't permit non-reference types to be gc roots.
                 # if type is types.EjsValue
                 #        # EjsValues are rooted
-                #        @createCall @llvm_intrinsics.gcroot, [(ir.createPointerCast alloca, types.int8Pointer.pointerTo(), "rooted_alloca"), nullConst types.int8Pointer], ""
+                #        @createCall @llvm_intrinsics.gcroot, [(ir.createPointerCast alloca, types.int8Pointer.pointerTo(), "rooted_alloca"), consts.null types.int8Pointer], ""
 
                 ir.setInsertPoint saved_insert_point
                 alloca
@@ -393,7 +365,7 @@ class LLVMIRVisitor extends NodeVisitor
                         test = @visit case_checks[casenum].test
                         discTest = @createCall @ejs_runtime["binop==="], [discr, test], "test"
                         disc_truthy = @createCall @ejs_runtime.truthy, [discTest], "disc_truthy"
-                        disc_cmp = ir.createICmpEq disc_truthy, falseConst(), "disccmpresult"
+                        disc_cmp = ir.createICmpEq disc_truthy, consts.false(), "disccmpresult"
                         ir.createCondBr disc_cmp, case_checks[casenum+1].dest_check, case_checks[casenum].body
                         ir.setInsertPoint case_checks[casenum+1].dest_check
 
@@ -463,7 +435,7 @@ class LLVMIRVisitor extends NodeVisitor
                 ir.setInsertPoint test_bb
                 if n.test
                         cond_truthy = @createCall @ejs_runtime.truthy, [@visit(n.test)], "cond_truthy"
-                        cmp = ir.createICmpEq cond_truthy, falseConst(), "cmpresult"
+                        cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
                         ir.createCondBr cmp, merge_bb, body_bb
                 else
                         ir.createBr body_bb
@@ -496,7 +468,7 @@ class LLVMIRVisitor extends NodeVisitor
                 ir.setInsertPoint while_bb
                 
                 cond_truthy = @createCall @ejs_runtime.truthy, [@visit(n.test)], "cond_truthy"
-                cmp = ir.createICmpEq cond_truthy, falseConst(), "cmpresult"
+                cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
                 
                 ir.createCondBr cmp, merge_bb, body_bb
 
@@ -532,8 +504,8 @@ class LLVMIRVisitor extends NodeVisitor
                 ir.createBr forin_bb
                 ir.setInsertPoint forin_bb
 
-                moreleft = @createCall @ejs_runtime.prop_iterator_next, [iterator, trueConst()], "moreleft"
-                cmp = ir.createICmpEq moreleft, falseConst(), "cmpmoreleft"
+                moreleft = @createCall @ejs_runtime.prop_iterator_next, [iterator, consts.true()], "moreleft"
+                cmp = ir.createICmpEq moreleft, consts.false(), "cmpmoreleft"
                 ir.createCondBr cmp, merge_bb, body_bb
                 
                 ir.setInsertPoint body_bb
@@ -590,7 +562,7 @@ class LLVMIRVisitor extends NodeVisitor
                 merge_bb = new llvm.BasicBlock "merge", insertFunc
 
                 # we invert the test here - check if the condition is false/0
-                cmp = ir.createICmpEq cond_truthy, falseConst(), "cmpresult"
+                cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
                 ir.createCondBr cmp, else_bb, then_bb
 
                 ir.setInsertPoint then_bb
@@ -625,7 +597,7 @@ class LLVMIRVisitor extends NodeVisitor
                         if @finallyStack.length > 0
                                 @returnValueAlloca = @createAlloca @currentFunction, types.EjsValue, "returnValue" unless @returnValueAlloca?
                                 ir.createStore rv, @returnValueAlloca
-                                ir.createStore (int32Const ExitableScope.REASON_RETURN), @currentFunction.cleanup_reason
+                                ir.createStore (consts.int32 ExitableScope.REASON_RETURN), @currentFunction.cleanup_reason
                                 ir.createBr @finallyStack[0]
                         else
                                 return_alloca = @createAlloca @currentFunction, types.EjsValue, "return_alloca"
@@ -814,11 +786,11 @@ class LLVMIRVisitor extends NodeVisitor
                                 else_bb  = new llvm.BasicBlock "arg_else", insertFunc
                                 merge_bb = new llvm.BasicBlock "arg_merge", insertFunc
 
-                                cmp = ir.createICmpSGt load_argc, (int32Const i-BUILTIN_PARAMS.length), "argcmpresult"
+                                cmp = ir.createICmpSGt load_argc, (consts.int32 i-BUILTIN_PARAMS.length), "argcmpresult"
                                 ir.createCondBr cmp, then_bb, else_bb
                         
                                 ir.setInsertPoint then_bb
-                                arg_ptr = ir.createGetElementPointer args_load, [(int32Const i-BUILTIN_PARAMS.length)], "arg#{i-BUILTIN_PARAMS.length}_ptr"
+                                arg_ptr = ir.createGetElementPointer args_load, [(consts.int32 i-BUILTIN_PARAMS.length)], "arg#{i-BUILTIN_PARAMS.length}_ptr"
                                 debug.log -> "arg_ptr = #{arg_ptr}"
                                 arg = @createLoad arg_ptr, "arg#{i-BUILTIN_PARAMS.length-1}_load"
                                 store = ir.createStore arg, allocas[i+1]
@@ -922,7 +894,7 @@ class LLVMIRVisitor extends NodeVisitor
                 merge_bb = new llvm.BasicBlock "cond_merge", insertFunc
 
                 # we invert the test here - check if the condition is false/0
-                cmp = ir.createICmpEq cond_truthy, falseConst(), "cmpresult"
+                cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
                 ir.createCondBr cmp, right_bb, left_bb
 
                 ir.setInsertPoint left_bb
@@ -971,7 +943,7 @@ class LLVMIRVisitor extends NodeVisitor
                         
                         argv.push closure                                                   # %closure
                         argv.push thisArg                                                   # %this
-                        argv.push int32Const args.length-1    # %argc. -1 because we pulled out the first arg to send as the closure
+                        argv.push consts.int32 args.length-1    # %argc. -1 because we pulled out the first arg to send as the closure
 
                 if args.length > args_offset
                         argv.push @visitOrNull args[i] for i in [args_offset...args.length]
@@ -989,7 +961,7 @@ class LLVMIRVisitor extends NodeVisitor
                                                 
                 argv.push ctor                                                      # %closure
                 argv.push thisArg                                                   # %this
-                argv.push int32Const args.length-1    # %argc. -1 because we pulled out the first arg to send as the closure
+                argv.push consts.int32 args.length-1    # %argc. -1 because we pulled out the first arg to send as the closure
 
                 if args.length > 1
                         argv.push @visitOrNull args[i] for i in [1...args.length]
@@ -1072,7 +1044,7 @@ class LLVMIRVisitor extends NodeVisitor
                 obj
 
         visitArrayExpression: (n) ->
-                obj = @createCall @ejs_runtime.array_new, [int32Const n.elements.length], "arrtmp"
+                obj = @createCall @ejs_runtime.array_new, [consts.int32 n.elements.length], "arrtmp"
                 i = 0;
                 for el in n.elements
                         val = @visit el
@@ -1088,8 +1060,8 @@ class LLVMIRVisitor extends NodeVisitor
         generateUCS2: (id, jsstr) ->
                 ucsArrayType = llvm.ArrayType.get types.jschar, jsstr.length+1
                 array_data = []
-                (array_data.push jscharConst jsstr.charCodeAt i) for i in [0...jsstr.length]
-                array_data.push jscharConst 0
+                (array_data.push consts.jschar jsstr.charCodeAt i) for i in [0...jsstr.length]
+                array_data.push consts.jschar 0
                 array = llvm.ConstantArray.get ucsArrayType, array_data
                 arrayglobal = new llvm.GlobalVariable @module, ucsArrayType, "ucs2-#{id}", array
                 arrayglobal
@@ -1112,9 +1084,9 @@ class LLVMIRVisitor extends NodeVisitor
                 arg0 = strname
                 arg1 = val
                 arg2 = primstr
-                arg3 = ir.createInBoundsGetElementPointer ucs2, [(int32Const 0), (int32Const 0)], "ucs2"
+                arg3 = ir.createInBoundsGetElementPointer ucs2, [(consts.int32 0), (consts.int32 0)], "ucs2"
 
-                ir.createCall @ejs_runtime.init_string_literal, [arg0, arg1, arg2, arg3, int32Const len], ""
+                ir.createCall @ejs_runtime.init_string_literal, [arg0, arg1, arg2, arg3, consts.int32 len], ""
 
                 ir.setInsertPoint saved_insert_point
 
@@ -1217,7 +1189,7 @@ class LLVMIRVisitor extends NodeVisitor
                         insertBlock = ir.getInsertBlock()
                         insertFunc = insertBlock.parent
                         normal_block  = new llvm.BasicBlock "normal", insertFunc
-                        calltmp = ir.createInvoke callee, argv, normal_block, TryExitableScope.unwindStack[0].getLandingBlock(), callname
+                        calltmp = ir.createInvoke callee, argv, normal_block, TryExitableScope.unwindStack[0].getLandingPadBlock(), callname
                         calltmp.setDoesNotThrow() if callee.doesNotThrow
                         calltmp.setDoesNotAccessMemory() if callee.doesNotAccessMemory
                         calltmp.setOnlyReadsMemory() if not callee.doesNotAccessMemory and callee.onlyReadsMemory
@@ -1264,8 +1236,8 @@ class LLVMIRVisitor extends NodeVisitor
                         # the scope's landingpad block is created if needed by @createCall (using that function we pass in as the last argument to TryExitableScope's ctor.)
                         # if a try block includes no calls, there's no need for an landing pad block as nothing can throw, and we don't bother generating any code for the
                         # catch clause.
-                        console.log "have an unwind block"
-                        ir.setInsertPoint scope.unwind_block
+                        console.log "have a landing pad block"
+                        ir.setInsertPoint scope.landing_pad_block
 
                         # XXX is it an error to have multiple catch handlers, as JS doesn't allow you to filter by type?
                         clause_count = if n.handlers.length > 0 then 1 else 0
@@ -1327,7 +1299,7 @@ class LLVMIRVisitor extends NodeVisitor
                                 ir.setInsertPoint return_tramp
                                 
                                 if @finallyStack.length > 0
-                                        ir.createStore (int32Const ExitableScope.REASON_RETURN), @currentFunction.cleanup_reason
+                                        ir.createStore (consts.int32 ExitableScope.REASON_RETURN), @currentFunction.cleanup_reason
                                         ir.createBr @finallyStack[0]
                                 else
                                         rv = @createLoad @returnValueAlloca, "rv"
@@ -1336,7 +1308,7 @@ class LLVMIRVisitor extends NodeVisitor
                         ir.setInsertPoint finally_block
                         switch_stmt = ir.createSwitch cleanup_reason, merge_block, scope.destinations.length + 1
                         if @returnValueAlloca?
-                                switch_stmt.addCase (int32Const ExitableScope.REASON_RETURN), return_tramp
+                                switch_stmt.addCase (consts.int32 ExitableScope.REASON_RETURN), return_tramp
                         
                 console.log "done with try block"
                 ir.setInsertPoint merge_block
@@ -1352,15 +1324,15 @@ class LLVMIRVisitor extends NodeVisitor
                 if argv.length > BUILTIN_PARAMS.length
                         argv = argv.slice BUILTIN_PARAMS.length
                         argv.forEach (a,i) =>
-                                gep = ir.createGetElementPointer @currentFunction.scratch_area, [(int32Const 0), (int64Const i)], "arg_gep_#{i}"
+                                gep = ir.createGetElementPointer @currentFunction.scratch_area, [(consts.int32 0), (consts.int64 i)], "arg_gep_#{i}"
                                 store = ir.createStore argv[i], gep, "argv[#{i}]-store"
 
-                        argsCast = ir.createGetElementPointer @currentFunction.scratch_area, [(int32Const 0), (int64Const 0)], "call_args_load"
+                        argsCast = ir.createGetElementPointer @currentFunction.scratch_area, [(consts.int32 0), (consts.int64 0)], "call_args_load"
                                                 
                         modified_argv[BUILTIN_PARAMS.length] = argsCast
 
                 else
-                        modified_argv[BUILTIN_PARAMS.length] = nullConst types.EjsValue.pointerTo()
+                        modified_argv[BUILTIN_PARAMS.length] = consts.null types.EjsValue.pointerTo()
                                 
                 argv = modified_argv
                 call_result = @createAlloca @currentFunction, types.EjsValue, "call_result"
@@ -1384,7 +1356,7 @@ class LLVMIRVisitor extends NodeVisitor
                         
                         decompose_args = [ argv[0], func_alloca, env_alloca, this_alloca ]
                         decompose_rv = @createCall @ejs_runtime.decompose_closure, decompose_args, "decompose_rv", false
-                        cmp = ir.createICmpEq decompose_rv, falseConst(), "cmpresult"
+                        cmp = ir.createICmpEq decompose_rv, consts.false(), "cmpresult"
                         ir.createCondBr cmp, runtime_invoke_bb, direct_invoke_bb
 
                         # if there were bound args we have to fall back to the runtime invoke method (since we can't

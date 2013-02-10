@@ -1,3 +1,5 @@
+consts = require 'consts'
+
 llvm = require 'llvm'
 irbuilder = llvm.IRBuilder
 
@@ -62,7 +64,7 @@ exports.TryExitableScope = class TryExitableScope extends ExitableScope
                         if @destinations[i].scope is scope and @destinations[i].reason is reason
                                 return @destinations[i].id
 
-                id = int32Constant @destinations.length
+                id = consts.int32 @destinations.length
                 @destinations.unshift scope: scope, reason: reason, id: id
                 id
                 
@@ -86,7 +88,7 @@ exports.TryExitableScope = class TryExitableScope extends ExitableScope
                         
                         reason = @lookupDestinationIdForScope scope, @REASON_BREAK
                 else
-                        reason = int32Constant @REASON_FALLOFF_TRY
+                        reason = consts.int32 @REASON_FALLOFF_TRY
 
                 irbuilder.createStore reason, @cleanup_reason
                 irbuilder.createBr @cleanup_bb

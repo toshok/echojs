@@ -6,6 +6,7 @@ COFFEE_FILES=				\
 	closure-conversion.coffee	\
 	set.coffee			\
 	types.coffee			\
+	consts.coffee			\
 	exitable-scope.coffee
 
 DESTDIR = coffee
