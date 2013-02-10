@@ -1,4 +1,4 @@
-COFFEE_FILES=\
+COFFEE_FILES=				\
 	nodevisitor.coffee		\
 	compiler.coffee			\
 	debug.coffee			\
@@ -8,5 +8,13 @@ COFFEE_FILES=\
 	types.coffee			\
 	exitable-scope.coffee
 
-all:
-	coffee -o coffee -c $(COFFEE_FILES)
+DESTDIR = coffee
+
+JS_FILES=$(COFFEE_FILES:%.coffee=$(DESTDIR)/%.js)
+
+all: $(JS_FILES)
+
+
+$(DESTDIR)/%.js: %.coffee
+	coffee -o $(DESTDIR) -c $<
+
