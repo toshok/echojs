@@ -59,11 +59,26 @@ typedef uint32_t GCObjectHeader;
     }                                               \
     EJS_MACRO_END
 
-#define EJS_LIST_DEATTACH(v,l) EJS_MACRO_START	\
+#define EJS_LIST_INSERT_BEFORE(v, l, bef) EJS_MACRO_START   \
+    assert (l);                                             \
+    if ((bef) == NULL) {                                    \
+        EJS_LIST_PREPEND(v, l);                             \
+    }                                                       \
+    else {                                                  \
+        if ((bef)->prev) {                                  \
+            (v)->prev = (bef)->prev;                        \
+            (bef)->prev->next = (v);                        \
+        }                                                   \
+        (v)->next = (bef);                                  \
+        (bef)->prev = (v);                                  \
+    }                                                       \
+    EJS_MACRO_END
+
+#define EJS_LIST_DETACH(v,l) EJS_MACRO_START	\
     if (v->next) v->next->prev = v->prev;		\
     if (v->prev) v->prev->next = v->next;		\
-    if (l == v) l == v->next;                   \
-    EJS_LIST-INIT(v);                           \
+    if (l == v) l = v->next;                    \
+    EJS_LIST_INIT(v);                           \
     EJS_MACRO_END
 
 
@@ -89,6 +104,27 @@ extern int32_t ucs2_strcmp (const jschar *s1, const jschar *s2);
 extern int32_t ucs2_strlen (const jschar *str);
 extern jschar* ucs2_strstr (const jschar *haystack, const jschar *needle);
 extern char* ucs2_to_utf8 (const jschar *str);
+
+typedef int EJSCompareFunc (void* p1, void* p2);
+
+typedef struct _EJSListNode {
+    struct _EJSListNode *prev;
+    struct _EJSListNode *next;
+} EJSListNode;
+
+typedef struct EJSList {
+    EJSListNode* head; // node at the start of the list (head->prev == NULL)
+    EJSListNode* tail; // node at the end of the list (tail->next == NULL)
+} EJSList;
+
+void _ejs_list_append_node (EJSList *list, EJSListNode* node);
+void _ejs_list_prepend_node (EJSList *list, EJSListNode* node);
+void _ejs_list_insert_node_sorted (EJSList *list, EJSListNode* node, EJSCompareFunc compare);
+void _ejs_list_pop_head (EJSList *list);
+
+int _ejs_list_length (EJSList *list);
+
+#define EJS_LIST_FOREACH(l,t,v,b) for (t* (v) = (t*)(l)->head; (v); (v) = (t*)(v)->next) b
 
 EJS_END_DECLS
 

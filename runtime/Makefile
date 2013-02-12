@@ -19,6 +19,7 @@ SOURCES= \
 	ejs-regexp.c \
 	ejs-require.c \
 	ejs-string.c \
+	ejs-types.c \
 	ejs-uri.c \
 	parson.c \
 	main.c
@@ -52,7 +53,7 @@ CCLD=clang++
 CC=clang
 
 ejs-atoms-gen.c: ejs-atoms.h gen-atoms.js
-	@echo [GEN] $@ && ./gen-atoms.js > $@
+	@echo [GEN] $@ && ./gen-atoms.js > .tmp-$@ && mv .tmp-$@ $@
 
 $(libecho_OBJECTS): %.o: %.c
 	@mkdir -p .deps
