@@ -19,9 +19,6 @@ EXPECTED_FAILURES= \
 	number1.js \
 	toLocaleString3.js \
 	prototype9.js \
-	exc1.js \
-	exc2.js \
-	exc3.js \
 	exc10.js \
 	json4.js
 
@@ -124,11 +121,12 @@ echo-%:
 esprima-roundtrip%.js.exe: esprima-roundtrip%.js $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js $(TOPDIR)/runtime/libecho.a
 	@echo [ejs stage$(EJS_STAGE)] $< && $(EJS_DRIVER) --leave-temp $< $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js
 
-EJS_DRIVER ?= NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --leave-temp -d
+EJS_DRIVER ?= NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --leave-temp
 EJS_STAGE ?= 0
 
 %.js.exe: %.js $(TOPDIR)/runtime/libecho.a
-	@echo [ejs stage$(EJS_STAGE)] $< && $(EJS_DRIVER) --leave-temp $<
+	@if [ -z "$V" ]; then echo [ejs stage$(EJS_STAGE)] $<; else echo $(EJS_DRIVER) $<; fi
+	@$(EJS_DRIVER) $<
 
 v8-%.js.exe: v8/%.js $(TOPDIR)/runtime/libecho.a
 	NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $<
