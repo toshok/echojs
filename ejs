@@ -111,7 +111,7 @@ compileFile = (filename, content, compileCallback) ->
         try
                 parse_tree = esprima.parse content, loc: true, raw: true
         catch e
-                console.warn "parse error at #{filename}:"
+                console.warn "parse error at #{e}:"
                 process.exit -1
 
         base_filename = util.genFreshFileName path.basename filename
