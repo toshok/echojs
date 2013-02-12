@@ -5,6 +5,7 @@ COFFEE_FILES=				\
 	echo-util.coffee		\
 	closure-conversion.coffee	\
 	set.coffee			\
+	stack.coffee			\
 	types.coffee			\
 	consts.coffee			\
 	exitable-scope.coffee		\
