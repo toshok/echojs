@@ -194,6 +194,19 @@ namespace ejsllvm {
     }
 
     ejsval
+    IRBuilder_createExtractValue(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        REQ_LLVM_VAL_ARG(0, val);
+        REQ_INT_ARG(1, idx);
+        REQ_UTF8_ARG(2, name);
+
+        ejsval rv = Value_new (_llvm_builder.CreateExtractValue(val, idx, name));
+        free (name);
+
+        return rv;
+    }
+
+    ejsval
     IRBuilder_createGetElementPointer(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         REQ_LLVM_VAL_ARG(0, val);
@@ -377,6 +390,7 @@ namespace ejsllvm {
         OBJ_METHOD(createLoad);
         OBJ_METHOD(createStore);
         OBJ_METHOD(createExtractElement);
+        OBJ_METHOD(createExtractValue);
         OBJ_METHOD(createGetElementPointer);
         OBJ_METHOD(createInBoundsGetElementPointer);
         OBJ_METHOD(createStructGetElementPointer);

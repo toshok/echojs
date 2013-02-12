@@ -37,6 +37,7 @@ namespace jsllvm {
     NODE_SET_METHOD(s_func, "createLoad", IRBuilder::CreateLoad);
     NODE_SET_METHOD(s_func, "createStore", IRBuilder::CreateStore);
     NODE_SET_METHOD(s_func, "createExtractElement", IRBuilder::CreateExtractElement);
+    NODE_SET_METHOD(s_func, "createExtractValue", IRBuilder::CreateExtractValue);
     NODE_SET_METHOD(s_func, "createGetElementPointer", IRBuilder::CreateGetElementPointer);
     NODE_SET_METHOD(s_func, "createInBoundsGetElementPointer", IRBuilder::CreateInBoundsGetElementPointer);
     NODE_SET_METHOD(s_func, "createStructGetElementPointer", IRBuilder::CreateStructGetElementPointer);
@@ -232,6 +233,18 @@ namespace jsllvm {
     REQ_UTF8_ARG(2, name);
 
     Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateExtractElement(val,idx, *name));
+    return scope.Close(result);
+  }
+
+  v8::Handle<v8::Value> IRBuilder::CreateExtractValue(const v8::Arguments& args)
+  {
+    HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(0, val);
+    REQ_INT_ARG(1, idx);
+    REQ_UTF8_ARG(2, name);
+
+    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateExtractValue(val,idx, *name));
     return scope.Close(result);
   }
 
