@@ -5,6 +5,8 @@
 //#define NO_ZEROCOST_EXCEPTIONS 1
 
 #include "ejs-exception.h"
+#include "ejs-string.h"
+#include "ejs-ops.h"
 #include <stdint.h>
 #include <sys/types.h>
 
@@ -100,8 +102,6 @@ struct ejs_typeinfo {
     // Position of vtable and name fields must match C++ typeinfo object
     const void **vtable;  // always ejs_ehtype_vtable+2
     const char *name;     // c++ typeinfo string
-
-    ejsval cls;
 };
 
 struct ejs_exception {
@@ -202,12 +202,8 @@ EJS_PERSONALITY(int version,
 
 static void _ejs_exception_destructor(void *exc_gen) {
     struct ejs_exception *exc = (struct ejs_exception *)exc_gen;
-#if false
-    if (UseGC  &&  auto_zone_is_valid_pointer(gc_zone, exc->obj)) {
-        // retained by ejs_exception_throw
-        auto_zone_release(gc_zone, exc->obj);
-    }
-#endif
+    // remove the gc root for the throw exception
+    _ejs_gc_remove_root (&exc->val);
 }
 
 
@@ -217,23 +213,16 @@ void _ejs_exception_throw(ejsval val)
         (struct ejs_exception*)__cxa_allocate_exception(sizeof(struct ejs_exception));
 
     exc->val = val;
-#if false
-    if (UseGC  &&  auto_zone_is_valid_pointer(gc_zone, obj)) {
-        // exc is non-scanned memory. Retain the object for the duration.
-        auto_zone_retain(gc_zone, obj);
-    }
-#endif
+    // need to root the exception until it's caught
+    __ejs_gc_add_named_root(&exc->val, "exception in flight");
 
     exc->tinfo.vtable = ejs_ehtype_vtable+2;
-#if notyet
-    exc->tinfo.name = object_getClassName(obj);
-    exc->tinfo.cls = obj ? obj->isa : Nil;
-#endif
 
-#if false
-    SPEW(printf ("EXCEPTIONS: throwing %p (object %p, a #s)\n",
-                 exc, EJSVAL_TO_PRIVATE_PTR_IMPL(val)/*, object_getClassName(obj)*/));
-#endif
+    SPEW({
+            char* utf8_exc = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(ToString(val)));
+            printf ("EXCEPTIONS: throwing %p (object %s)\n", exc, utf8_exc);
+            free (utf8_exc);
+        });
     
     //    EJS_RUNTIME_EJS_EXCEPTION_THROW(obj);  // dtrace probe to log throw activity
     __cxa_throw(exc, &exc->tinfo, &_ejs_exception_destructor);
@@ -251,12 +240,10 @@ void _ejs_exception_rethrow(void)
 }
 
 
-EJSObject* _ejs_begin_catch(void *exc_gen)
+ejsval _ejs_begin_catch(void *exc_gen)
 {
-    SPEW(printf ("EXCEPTIONS: handling exception %p at %p\n", 
-                 exc_gen, __builtin_return_address(0)));
-    // NOT actually an EJSObject* in the catch(...) case!
-    return (EJSObject*)__cxa_begin_catch(exc_gen);
+    SPEW(printf ("EXCEPTIONS: handling exception %p at %p\n", exc_gen, __builtin_return_address(0)));
+    return (ejsval)__cxa_begin_catch(exc_gen);
 }
 
 
@@ -272,7 +259,7 @@ static char _ejs_exception_do_catch(struct ejs_typeinfo *catch_tinfo,
                                     void **throw_obj_p, 
                                     unsigned outer)
 {
-    EJSObject* exception;
+    ejsval exception;
 
     if (throw_tinfo->vtable != ejs_ehtype_vtable+2) {
         // Only ejs types can be caught here.
@@ -286,7 +273,7 @@ static char _ejs_exception_do_catch(struct ejs_typeinfo *catch_tinfo,
         return 1;
     }
 
-    exception = *(EJSObject* *)throw_obj_p;
+    exception = *(ejsval*)throw_obj_p;
     SPEW(printf ("EXCEPTIONS: catch()\n"));
     return 1;
 }
