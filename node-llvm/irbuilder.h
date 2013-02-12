@@ -29,6 +29,7 @@ namespace jsllvm {
     static v8::Handle<v8::Value> CreateLoad(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateStore(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateExtractElement(const v8::Arguments& args);
+    static v8::Handle<v8::Value> CreateExtractValue(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateGetElementPointer(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateInBoundsGetElementPointer(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateStructGetElementPointer(const v8::Arguments& args);
