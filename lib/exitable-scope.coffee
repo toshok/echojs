@@ -1,5 +1,7 @@
 consts = require 'consts'
 
+{ Stack } = require 'stack'
+
 llvm = require 'llvm'
 irbuilder = llvm.IRBuilder
 
@@ -39,7 +41,7 @@ exports.TryExitableScope = class TryExitableScope extends ExitableScope
         REASON_BREAK: "break"
         REASON_CONTINUE: "continue"
         
-        @unwindStack: []
+        @unwindStack: new Stack
                 
         constructor: (@cleanup_reason, @cleanup_bb, @create_landing_pad_bb) ->
                 @isTry = true
@@ -47,11 +49,11 @@ exports.TryExitableScope = class TryExitableScope extends ExitableScope
                 super()
 
         enter: ->
-                TryExitableScope.unwindStack.unshift @
+                TryExitableScope.unwindStack.push @
                 super
                 
         leave: ->
-                TryExitableScope.unwindStack.shift()
+                TryExitableScope.unwindStack.pop()
                 super
 
         getLandingPadBlock: ->

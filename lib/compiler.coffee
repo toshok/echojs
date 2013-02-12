@@ -4,6 +4,7 @@ syntax = esprima.Syntax
 debug = require 'debug'
 path = require 'path'
 
+{ Stack } = require 'stack'
 { Set } = require 'set'
 { NodeVisitor } = require 'nodevisitor'
 closure_conversion = require 'closure-conversion'
@@ -22,9 +23,6 @@ ir = llvm.IRBuilder
 # disable this for now because it breaks more of the exception tests
 decompose_closure_on_invoke = false
 
-# special key for parent scope when performing lookups
-PARENT_SCOPE_KEY = ":parent:"
-
 BUILTIN_PARAMS = [
   { type: syntax.Identifier, name: "%closure", llvm_type: types.EjsClosureEnv }
   { type: syntax.Identifier, name: "%this",    llvm_type: types.EjsValue }
@@ -37,23 +35,24 @@ class LLVMIRVisitor extends NodeVisitor
         constructor: (@module, @filename) ->
 
                 # build up our runtime method table
-                @ejs_intrinsics = {
+                @ejs_intrinsics =
                         invokeClosure: @handleInvokeClosureIntrinsic
                         makeClosure: @handleMakeClosureIntrinsic
                         makeAnonClosure: @handleMakeAnonClosureIntrinsic
                         createArgScratchArea: @handleCreateArgScratchAreaIntrinsic
-                }
 
-                @llvm_intrinsics = {
-                        gcroot: module.getOrInsertIntrinsic "@llvm.gcroot"
-                }
+                @llvm_intrinsics =
+                        gcroot: -> module.getOrInsertIntrinsic "@llvm.gcroot"
                 
                 @ejs_runtime = runtime.createInterface module
 
                 @module_atoms = Object.create null
-                @initGlobalScope()
-                
                 @literalInitializationFunction = @module.getOrInsertFunction "_ejs_module_init_string_literals_#{@filename}", types.void, []
+
+                # initialize the scope stack with the global (empty) scope
+                @scope_stack = new Stack
+                @scope_stack.push Object.create null
+
                 entry_bb = new llvm.BasicBlock "entry", @literalInitializationFunction
                 return_bb = new llvm.BasicBlock "return", @literalInitializationFunction
 
@@ -69,7 +68,7 @@ class LLVMIRVisitor extends NodeVisitor
 
         # result should be the landingpad's value
         beginCatch: (result) -> ir.createCall @ejs_runtime.begin_catch, [(ir.createPointerCast result, types.int8Pointer, "")], "catchval"
-        endCatch:            -> ir.createCall @ejs_runtime.end_catch, [], ""
+        endCatch:            -> ir.createCall @ejs_runtime.end_catch, [], "endcatch"
 
         doInsideBlock: (b, f) ->
                 saved = ir.getInsertBlock()
@@ -101,32 +100,15 @@ class LLVMIRVisitor extends NodeVisitor
                 
         loadGlobal: -> @createLoad @ejs_runtime.global, "load_global"
 
-        pushIIFEInfo: (info) ->
-                @iifeStack.unshift info
-                
-        popIIFEInfo: ->
-                @iifeStack.shift()
-
-        initGlobalScope: ->
-                @current_scope = Object.create null
-
-        pushScope: (new_scope) ->
-                new_scope[PARENT_SCOPE_KEY] = @current_scope
-                @current_scope = new_scope
-
-        popScope: ->
-                @current_scope = @current_scope[PARENT_SCOPE_KEY]
-
         visitWithScope: (scope, children) ->
-                @pushScope scope
+                @scope_stack.push scope
                 @visit child for child in children
-                @popScope()
+                @scope_stack.pop()
 
-        findIdentifierInScope: (ident, scope) ->
-                while scope?
+        findIdentifierInScope: (ident) ->
+                for scope in @scope_stack.stack
                         if hasOwn.call scope, ident
                                 return scope[ident]
-                        scope = scope[PARENT_SCOPE_KEY]
                 null
 
                                 
@@ -139,7 +121,7 @@ class LLVMIRVisitor extends NodeVisitor
                 # we kinda lose out as the llvm IR code doesn't permit non-reference types to be gc roots.
                 # if type is types.EjsValue
                 #        # EjsValues are rooted
-                #        @createCall @llvm_intrinsics.gcroot, [(ir.createPointerCast alloca, types.int8Pointer.pointerTo(), "rooted_alloca"), consts.null types.int8Pointer], ""
+                #        @createCall @llvm_intrinsics.gcroot(), [(ir.createPointerCast alloca, types.int8Pointer.pointerTo(), "rooted_alloca"), consts.null types.int8Pointer], ""
 
                 ir.setInsertPoint saved_insert_point
                 alloca
@@ -202,7 +184,7 @@ class LLVMIRVisitor extends NodeVisitor
                 
 
         createLoadThis: () ->
-                _this = @findIdentifierInScope "%this", @current_scope
+                _this = @findIdentifierInScope "%this"
                 return @createLoad _this, "load_this"
 
 
@@ -228,11 +210,11 @@ class LLVMIRVisitor extends NodeVisitor
                         iife_rv = @createAlloca @currentFunction, types.EjsValue, "%iife_rv"
                         iife_bb = new llvm.BasicBlock "iife_dest", insertFunc
 
-                @pushIIFEInfo iife_rv: iife_rv, iife_dest_bb: iife_bb
+                @iifeStack.push iife_rv: iife_rv, iife_dest_bb: iife_bb
 
                 @visitWithScope new_scope, n.body
 
-                @popIIFEInfo()
+                @iifeStack.pop()
                 if iife_bb
                         ir.createBr iife_bb
                         ir.setInsertPoint iife_bb
@@ -499,12 +481,12 @@ class LLVMIRVisitor extends NodeVisitor
                 
         visitReturn: (n) ->
                 debug.log "visitReturn"
-                if @iifeStack[0].iife_rv?
+                if @iifeStack.top.iife_rv?
                         if n.argument?
-                                ir.createStore (@visit n.argument), @iifeStack[0].iife_rv
+                                ir.createStore (@visit n.argument), @iifeStack.top.iife_rv
                         else
-                                ir.createStore @loadUndefinedEjsValue(), @iifeStack[0].iife_rv
-                        ir.createBr @iifeStack[0].iife_dest_bb
+                                ir.createStore @loadUndefinedEjsValue(), @iifeStack.top.iife_rv
+                        ir.createBr @iifeStack.top.iife_dest_bb
                 else
                         rv = if n.argument? then (@visit n.argument) else @loadUndefinedEjsValue()
                         
@@ -538,7 +520,7 @@ class LLVMIRVisitor extends NodeVisitor
                                         ir.createStore initializer, allocas[i]
                 else if n.kind is "let"
                         # lets are not hoisted to the containing function's toplevel, but instead are bound in the lexical block they inhabit
-                        scope = @current_scope;
+                        scope = @scope_stack.top
 
                         {allocas,new_allocas} = @createAllocas @currentFunction, n.declarations, scope
                         for i in [0...n.declarations.length]
@@ -570,7 +552,7 @@ class LLVMIRVisitor extends NodeVisitor
 
         storeValueInDest: (rhvalue, lhs) ->
                 if lhs.type is syntax.Identifier
-                        dest = @findIdentifierInScope lhs.name, @current_scope
+                        dest = @findIdentifierInScope lhs.name
                         if dest?
                                 result = ir.createStore rhvalue, dest
                         else
@@ -716,7 +698,7 @@ class LLVMIRVisitor extends NodeVisitor
 
                                 ir.setInsertPoint merge_bb
 
-                @iifeStack = []
+                @iifeStack = new Stack
 
                 @finallyStack = []
                 
@@ -745,11 +727,10 @@ class LLVMIRVisitor extends NodeVisitor
         
                 if n.operator is "delete"
                         if n.argument.type is syntax.MemberExpression
-                                fake_literal = {
+                                fake_literal =
                                         type: syntax.Literal
                                         value: n.argument.property.name
                                         raw: "'#{n.argument.property.name}'"
-                                }
                                 return @createCall callee, [(@visitOrNull n.argument.object), (@visit fake_literal)], "result"
                         else
                                 throw "unhandled delete syntax"
@@ -905,7 +886,7 @@ class LLVMIRVisitor extends NodeVisitor
         visitIdentifier: (n) ->
                 debug.log -> "identifier #{n.name}"
                 val = n.name
-                source = @findIdentifierInScope val, @current_scope
+                source = @findIdentifierInScope val
                 if source?
                         debug.log -> "found identifier in scope, at #{source}"
                         rv = @createLoad source, "load_#{val}"
@@ -1081,8 +1062,8 @@ class LLVMIRVisitor extends NodeVisitor
                 #   the normal block, which is basically this IR instruction's continuation
                 #   the unwind block, where we land if the call throws an exception.
                 #
-                # for some builtins we know they won't throw, so we can skip this step and still use createCall.
-                if TryExitableScope.unwindStack.length is 0 or callee.doesNotThrow or not canThrow
+                # Although for builtins we know won't throw, we can still use createCall.
+                if TryExitableScope.unwindStack.depth is 0 or callee.doesNotThrow or not canThrow
                         calltmp = ir.createCall callee, argv, callname
                         calltmp.setDoesNotThrow() if callee.doesNotThrow
                         calltmp.setDoesNotAccessMemory() if callee.doesNotAccessMemory
@@ -1091,7 +1072,7 @@ class LLVMIRVisitor extends NodeVisitor
                         insertBlock = ir.getInsertBlock()
                         insertFunc = insertBlock.parent
                         normal_block  = new llvm.BasicBlock "normal", insertFunc
-                        calltmp = ir.createInvoke callee, argv, normal_block, TryExitableScope.unwindStack[0].getLandingPadBlock(), callname
+                        calltmp = ir.createInvoke callee, argv, normal_block, TryExitableScope.unwindStack.top.getLandingPadBlock(), callname
                         calltmp.setDoesNotThrow() if callee.doesNotThrow
                         calltmp.setDoesNotAccessMemory() if callee.doesNotAccessMemory
                         calltmp.setOnlyReadsMemory() if not callee.doesNotAccessMemory and callee.onlyReadsMemory
@@ -1110,14 +1091,16 @@ class LLVMIRVisitor extends NodeVisitor
                 # the alloca that stores the reason we ended up in the finally block
                 @currentFunction.cleanup_reason = @createAlloca @currentFunction, types.int32, "cleanup_reason" unless @currentFunction.cleanup_reason?
 
+                if n.finalizer?
+                        finally_block = new llvm.BasicBlock "finally_bb", insertFunc
+                        @finallyStack.unshift finally_block
+
                 # the merge bb where everything branches to after falling off the end of a catch/finally block
                 merge_block = new llvm.BasicBlock "try_merge", insertFunc
 
                 # if we have a finally clause, create finally_block
-                if n.finalizer?
-                        finally_block = new llvm.BasicBlock "finally_bb", insertFunc
+                if finally_block?
                         branch_target = finally_block
-                        @finallyStack.unshift finally_block
                 else
                         branch_target = merge_block
 
@@ -1136,6 +1119,10 @@ class LLVMIRVisitor extends NodeVisitor
 
                 scope.leave()
 
+                if scope.landing_pad_block? and n.handlers.length > 0
+                        catch_block = new llvm.BasicBlock "catch_bb", insertFunc
+
+
                 if scope.landing_pad_block?
                         # the scope's landingpad block is created if needed by @createCall (using that function we pass in as the last argument to TryExitableScope's ctor.)
                         # if a try block includes no calls, there's no need for an landing pad block as nothing can throw, and we don't bother generating any code for the
@@ -1143,20 +1130,29 @@ class LLVMIRVisitor extends NodeVisitor
                         console.log "have a landing pad block"
                         @doInsideBlock scope.landing_pad_block, =>
 
+                                landing_pad_type = llvm.StructType.create "", [types.int8Pointer, types.int32]
                                 # XXX is it an error to have multiple catch handlers, as JS doesn't allow you to filter by type?
                                 clause_count = if n.handlers.length > 0 then 1 else 0
                         
                                 casted_personality = ir.createPointerCast @ejs_runtime.personality, types.int8Pointer, "personality"
-                                caught_result = ir.createLandingPad types.EjsValue.pointerTo(), casted_personality, clause_count, "caught_result"
-                                caught_result.addClause @ejs_runtime.exception_typeinfo
+                                caught_result = ir.createLandingPad landing_pad_type, casted_personality, clause_count, "caught_result"
+                                caught_result.addClause ir.createPointerCast @ejs_runtime.exception_typeinfo, types.int8Pointer, ""
                                 caught_result.setCleanup true
+
+                                exception = ir.createExtractValue caught_result, 0, "exception"
+                                
+                                if catch_block?
+                                        ir.createBr catch_block
+                                else if finally_block?
+                                        ir.createBr finally_block
+                                else
+                                        throw "this shouldn't happen.  a try{} without either a catch{} or finally{}"
 
                                 # if we have a catch clause, create catch_bb
                                 if n.handlers.length > 0
-                                        catch_block = new llvm.BasicBlock "catch_bb", insertFunc
                                         @doInsideBlock catch_block, =>
                                                 # call _ejs_begin_catch to return the actual exception
-                                                catchval = @beginCatch caught_result
+                                                catchval = @beginCatch exception
                                 
                                                 # create a new scope which maps the catch parameter name (the "e" in "try { } catch (e) { }") to catchval
                                                 catch_scope = Object.create null
@@ -1182,13 +1178,6 @@ class LLVMIRVisitor extends NodeVisitor
                                         ir.createResume caught_result
                                 ###
 
-                                if catch_block?
-                                        ir.createBr catch_block
-                                else if finally_block?
-                                        ir.createBr finally_block
-                                else
-                                        throw "this shouldn't happen.  a try{} without either a catch{} or finally{}"
-
                 # Finally Block
                 if n.finalizer?
                         @doInsideBlock finally_block, =>
@@ -1200,12 +1189,12 @@ class LLVMIRVisitor extends NodeVisitor
                                         return_tramp = new llvm.BasicBlock "return_tramp", insertFunc
                                         @doInsideBlock return_tramp, =>
                                 
-                                        if @finallyStack.length > 0
-                                                ir.createStore (consts.int32 ExitableScope.REASON_RETURN), @currentFunction.cleanup_reason
-                                                ir.createBr @finallyStack[0]
-                                        else
-                                                rv = @createLoad @returnValueAlloca, "rv"
-                                                ir.createRet rv
+                                                if @finallyStack.length > 0
+                                                        ir.createStore (consts.int32 ExitableScope.REASON_RETURN), @currentFunction.cleanup_reason
+                                                        ir.createBr @finallyStack[0]
+                                                else
+                                                        rv = @createLoad @returnValueAlloca, "rv"
+                                                        ir.createRet rv
                         
                                 switch_stmt = ir.createSwitch cleanup_reason, merge_block, scope.destinations.length + 1
                                 if @returnValueAlloca?
