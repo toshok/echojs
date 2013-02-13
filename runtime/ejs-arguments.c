@@ -35,6 +35,7 @@ EJSSpecOps _ejs_arguments_specops = {
     _ejs_arguments_specop_delete,
     _ejs_arguments_specop_default_value,
     _ejs_arguments_specop_define_own_property,
+    NULL, /* [[HasInstance]] */
 
     _ejs_arguments_specop_allocate,
     _ejs_arguments_specop_finalize,

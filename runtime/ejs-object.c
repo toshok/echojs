@@ -44,6 +44,7 @@ EJSSpecOps _ejs_object_specops = {
     _ejs_object_specop_delete,
     _ejs_object_specop_default_value,
     _ejs_object_specop_define_own_property,
+    NULL, /* [[HasInstance]] */
 
     _ejs_object_specop_allocate,
     _ejs_object_specop_finalize,
@@ -381,6 +382,7 @@ static EJSSpecOps _ejs_property_iterator_specops = {
     NULL, NULL, NULL,
     NULL, NULL, NULL,
     NULL, NULL, NULL,
+    NULL,
 
     _ejs_property_iterator_specop_allocate,
     _ejs_property_iterator_specop_finalize,

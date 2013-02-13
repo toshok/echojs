@@ -101,6 +101,7 @@ typedef EJSBool          (*SpecOpHasProperty) (ejsval obj, ejsval propertyName);
 typedef EJSBool          (*SpecOpDelete) (ejsval obj, ejsval propertyName, EJSBool flag);
 typedef ejsval           (*SpecOpDefaultValue) (ejsval obj, const char *hint);
 typedef EJSBool          (*SpecOpDefineOwnProperty) (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool _throw);
+typedef EJSBool          (*SpecOpHasInstance) (ejsval obj, ejsval lval);
 
 typedef EJSObject*       (*SpecOpAllocate) ();
 typedef void             (*SpecOpFinalize) (EJSObject* obj);
@@ -118,6 +119,8 @@ typedef struct {
     SpecOpDelete _delete;
     SpecOpDefaultValue default_value;
     SpecOpDefineOwnProperty define_own_property;
+
+    SpecOpHasInstance has_instance;
 
     // ejs-defined ops
     SpecOpAllocate allocate; // allocates space for the new instance (but doesn't initialize it)

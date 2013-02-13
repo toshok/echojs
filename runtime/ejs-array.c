@@ -36,6 +36,7 @@ EJSSpecOps _ejs_array_specops = {
     _ejs_array_specop_delete,
     _ejs_array_specop_default_value,
     _ejs_array_specop_define_own_property,
+    NULL, /* [[HasInstance]] */
 
     _ejs_array_specop_allocate,
     _ejs_array_specop_finalize,

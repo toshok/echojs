@@ -776,12 +776,31 @@ _ejs_op_neq (ejsval lhs, ejsval rhs)
     return BOOLEAN_TO_EJSVAL (!EJSVAL_TO_BOOLEAN (_ejs_op_eq (lhs, rhs)));
 }
 
+// ECMA262: 11.8.6
 ejsval
 _ejs_op_instanceof (ejsval lhs, ejsval rhs)
 {
-    if (EJSVAL_IS_PRIMITIVE(lhs))
-        return _ejs_false;
-    EJS_NOT_IMPLEMENTED();
+    /* 1. Let lref be the result of evaluating RelationalExpression. */
+    /* 2. Let lval be GetValue(lref). */
+    /* 3. Let rref be the result of evaluating ShiftExpression. */
+    /* 4. Let rval be GetValue(rref). */
+
+    /* 5. If Type(rval) is not Object, throw a TypeError exception. */
+    if (!EJSVAL_IS_OBJECT(rhs)) {
+        printf ("throw TypeError, rhs isn't an Object\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+    
+    EJSObject *obj = EJSVAL_TO_OBJECT(rhs);
+
+    /* 6. If rval does not have a [[HasInstance]] internal method, throw a TypeError exception. */
+    if (!OP(obj,has_instance)) {
+        printf ("throw TypeError, rhs doesn't have [[HasInstance]]\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+
+    /* 7. Return the result of calling the [[HasInstance]] internal method of rval with argument lval. */
+    return OP(obj,has_instance) (rhs, lhs) ? _ejs_true : _ejs_false;
 }
 
 ejsval

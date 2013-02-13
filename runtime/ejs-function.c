@@ -22,6 +22,7 @@ static EJSBool _ejs_function_specop_has_property (ejsval obj, ejsval propertyNam
 static EJSBool _ejs_function_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
 static ejsval  _ejs_function_specop_default_value (ejsval obj, const char *hint);
 static EJSBool _ejs_function_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
+static EJSBool _ejs_function_specop_has_instance (ejsval obj, ejsval lval);
 static EJSObject* _ejs_function_specop_allocate ();
 static void    _ejs_function_specop_finalize (EJSObject* obj);
 static void    _ejs_function_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
@@ -37,6 +38,7 @@ EJSSpecOps _ejs_function_specops = {
     _ejs_function_specop_delete,
     _ejs_function_specop_default_value,
     _ejs_function_specop_define_own_property,
+    _ejs_function_specop_has_instance,
 
     _ejs_function_specop_allocate,
     _ejs_function_specop_finalize,
@@ -428,6 +430,34 @@ static EJSBool
 _ejs_function_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag)
 {
     return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
+}
+
+// ECMA262: 15.3.5.3
+static EJSBool
+_ejs_function_specop_has_instance (ejsval F, ejsval V)
+{
+    /* 1. If V is not an object, return false. */
+    if (!EJSVAL_IS_OBJECT(V))
+        return EJS_FALSE;
+
+    /* 2. Let O be the result of calling the [[Get]] internal method of F with property name "prototype". */
+    ejsval O = OP(EJSVAL_TO_OBJECT(F),get)(F, _ejs_atom_prototype, EJS_FALSE);
+
+    /* 3. If Type(O) is not Object, throw a TypeError exception. */
+    if (!EJSVAL_IS_OBJECT(O)) {
+        printf ("throw TypeError, O is not an object\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+
+    /* 4. Repeat */
+    while (1) {
+        /*    a. Let V be the value of the [[Prototype]] internal property of V. */
+        V = EJSVAL_TO_OBJECT(V)->proto;
+        /*    b. If V is null, return false. */
+        if (EJSVAL_IS_NULL(V)) return EJS_FALSE;
+        /*    c. If O and V refer to the same object, return true. */
+        if (EJSVAL_EQ(O, V)) return EJS_TRUE;
+    }
 }
 
 static EJSObject*

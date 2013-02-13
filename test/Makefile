@@ -14,7 +14,6 @@ EXPECTED_FAILURES= \
 	forin2.js \
 	forin5.js \
 	function-overriding1.js \
-	instanceof1.js \
 	object5.js \
 	number1.js \
 	toLocaleString3.js \
@@ -25,7 +24,6 @@ EXPECTED_FAILURES= \
 # date1 fails because we test the Date() function, which returns the current time.  this differs from the current time when the node test runs.  bleah.
 # forin2 fails because we don't properly handle deleting properties while iterating
 # forin5 fails because we enumerate the entire range 0..length of an array, including the holes.
-# instanceof1 fails because _ejs_op_instanceof isn't implemented and just aborts
 # function-overriding1.js fail because we don't throw an exception on a null function, we just crash.
 # object5 fails because we don't handle get/setprop using undefined or null keys
 # number1 fails because node outputs {} for console.log(new Number(5)), while spidermonkey and jsc output "5".  we err on the SM/JSC side of things here.

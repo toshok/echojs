@@ -34,6 +34,7 @@ EJSSpecOps _ejs_regexp_specops = {
     _ejs_regexp_specop_delete,
     _ejs_regexp_specop_default_value,
     _ejs_regexp_specop_define_own_property,
+    NULL, /* [[HasInstance]] */
 
     _ejs_regexp_specop_allocate,
     _ejs_regexp_specop_finalize,

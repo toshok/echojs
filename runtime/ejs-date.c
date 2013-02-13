@@ -34,6 +34,7 @@ EJSSpecOps _ejs_date_specops = {
     _ejs_date_specop_delete,
     _ejs_date_specop_default_value,
     _ejs_date_specop_define_own_property,
+    NULL, /* [[HasInstance]] */
 
     _ejs_date_specop_allocate,
     _ejs_date_specop_finalize,

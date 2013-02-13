@@ -35,6 +35,7 @@ EJSSpecOps _ejs_boolean_specops = {
     _ejs_boolean_specop_delete,
     _ejs_boolean_specop_default_value,
     _ejs_boolean_specop_define_own_property,
+    NULL, /* [[HasInstance]] */
 
     _ejs_boolean_specop_allocate,
     _ejs_boolean_specop_finalize,

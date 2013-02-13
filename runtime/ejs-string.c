@@ -194,6 +194,7 @@ EJSSpecOps _ejs_string_specops = {
     _ejs_string_specop_delete,
     _ejs_string_specop_default_value,
     _ejs_string_specop_define_own_property,
+    NULL, /* [[HasInstance]] */
 
     _ejs_string_specop_allocate,
     _ejs_string_specop_finalize,
