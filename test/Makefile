@@ -29,7 +29,7 @@ EXPECTED_FAILURES= \
 # number1 fails because node outputs {} for console.log(new Number(5)), while spidermonkey and jsc output "5".  we err on the SM/JSC side of things here.
 # toLocaleString3 fails because we don't have a special toString (or toLocaleString) implementation for arrays.
 # prototype9 fails because of one actual prototype failure and difference in our Function.toString() method.
-# the exc* tests fail because things are very screwed up with exception handling at the moment.
+# exc10 fail because we don't hit the finally block from the break statement.
 # json4 fails due to properties being serialized in a different order.
 
 check: check-unit-tests run-tests
