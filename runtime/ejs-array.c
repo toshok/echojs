@@ -134,6 +134,7 @@ _ejs_Array_impl (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
         }
     }
     else {
+        // called as a constructor
         int alloc = 5;
 
         if (argc == 1 && EJSVAL_IS_NUMBER(args[0])) {
@@ -145,7 +146,6 @@ _ejs_Array_impl (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
         arr->array_alloc = alloc;
         arr->elements = (ejsval*)calloc(arr->array_alloc, sizeof (ejsval));
 
-        // called as a constructor
         return _this;
     }
 }
