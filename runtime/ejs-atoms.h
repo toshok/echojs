@@ -48,7 +48,15 @@ EJS_ATOM(Number)
 EJS_ATOM(Object)
 EJS_ATOM(RegExp)
 EJS_ATOM(String)
+
+// error types
 EJS_ATOM(Error)
+EJS_ATOM(EvalError)
+EJS_ATOM(RangeError)
+EJS_ATOM(ReferenceError)
+EJS_ATOM(SyntaxError)
+EJS_ATOM(TypeError)
+EJS_ATOM(UriError)
 
 // our funky global
 EJS_ATOM(__ejs)

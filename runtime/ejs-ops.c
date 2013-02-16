@@ -16,6 +16,7 @@
 #include "ejs-string.h"
 #include "ejs-boolean.h"
 #include "ejs-ops.h"
+#include "ejs-error.h"
 
 static const size_t UINT32_CHAR_BUFFER_LENGTH = sizeof("4294967295") - 1;
 
@@ -787,7 +788,7 @@ _ejs_op_instanceof (ejsval lhs, ejsval rhs)
 
     /* 5. If Type(rval) is not Object, throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(rhs)) {
-        printf ("throw TypeError, rhs isn't an Object\n");
+        _ejs_throw_typeerror ("rhs of instanceof check must be a function");
         EJS_NOT_IMPLEMENTED();
     }
     
@@ -795,7 +796,7 @@ _ejs_op_instanceof (ejsval lhs, ejsval rhs)
 
     /* 6. If rval does not have a [[HasInstance]] internal method, throw a TypeError exception. */
     if (!OP(obj,has_instance)) {
-        printf ("throw TypeError, rhs doesn't have [[HasInstance]]\n");
+        _ejs_throw_typeerror ("rhs of instanceof check must be a function");
         EJS_NOT_IMPLEMENTED();
     }
 

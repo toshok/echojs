@@ -13,6 +13,8 @@ EJS_BEGIN_DECLS
 extern ejsval _ejs_Error;
 extern ejsval _ejs_error_get_prototype();
 
+extern ejsval _ejs_typeerror_new_utf8 (const char *message);
+
 extern void _ejs_throw_typeerror(const char *message);
 
 extern void _ejs_error_init(ejsval global);
