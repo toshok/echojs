@@ -1,4 +1,4 @@
-#.SILENT:    # this makes everything quiet, so we don't really need @'s
+.IGNORE: # ignore all errors during test compilation/run so we always get a full run.
 
 TOPDIR=$(shell pwd)/..
 NODE_PATH=$(TOPDIR)/node-llvm/build/Release:$(TOPDIR)/lib/coffee:$(TOPDIR)/lib:$(TOPDIR)/esprima:$(TOPDIR)/escodegen
@@ -9,28 +9,27 @@ ifeq ($(EJS_STAGE),1)
 TESTS:=$(filter-out esprima-roundtrip1.js,$(TESTS))
 endif
 
-EXPECTED_FAILURES= \
-	date1.js \
-	forin2.js \
-	forin5.js \
-	function-overriding1.js \
-	object5.js \
-	number1.js \
-	toLocaleString3.js \
-	prototype9.js \
-	exc10.js \
-	json4.js
 
-# date1 fails because we test the Date() function, which returns the current time.  this differs from the current time when the node test runs.  bleah.
-# forin2 fails because we don't properly handle deleting properties while iterating
-# forin5 fails because we enumerate the entire range 0..length of an array, including the holes.
-# function-overriding1.js fail because we don't throw an exception on a null function, we just crash.
-# object5 fails because we don't handle get/setprop using undefined or null keys
-# number1 fails because node outputs {} for console.log(new Number(5)), while spidermonkey and jsc output "5".  we err on the SM/JSC side of things here.
-# toLocaleString3 fails because we don't have a special toString (or toLocaleString) implementation for arrays.
-# prototype9 fails because of one actual prototype failure and difference in our Function.toString() method.
-# exc10 fail because we don't hit the finally block from the break statement.
-# json4 fails due to properties being serialized in a different order.
+addExpectedFailureInner=EXPECTED_FAILURES += $(1)
+
+define addExpectedFailure
+  $(eval $(call addExpectedFailureInner, $(1)))
+endef
+
+
+EXPECTED_FAILURES=
+$(call addExpectedFailure, date1.js,                "fails because we test the Date() function, which returns the current time.  this differs from the current time when the node test runs.  bleah.")
+$(call addExpectedFailure, forin2.js,               "fails because we don't properly handle deleting properties while iterating")
+$(call addExpectedFailure, forin5.js,               "fails because we enumerate the entire range 0..length of an array, including the holes.")
+$(call addExpectedFailure, function-overriding1.js, "fails because we don't throw an exception on a null function, we just crash.")
+$(call addExpectedFailure, instanceof2.js,          "fails because the exception goes uncaught (presumably because it's thrown from a C function?)")
+$(call addExpectedFailure, object5.js,              "fails because we don't handle get/setprop using undefined or null keys")
+$(call addExpectedFailure, number1.js,              "fails because node outputs {} for console.log(new Number(5)), while spidermonkey and jsc output "5".  we err on the SM/JSC side of things here.")
+$(call addExpectedFailure, toLocaleString3.js,      "fails because we don't have a special toString (or toLocaleString) implementation for arrays.")
+$(call addExpectedFailure, prototype9.js,           "fails because of one actual prototype failure and difference in our Function.toString() method.")
+$(call addExpectedFailure, exc10.js,                "fails because we don't hit the finally block from the break statement.")
+$(call addExpectedFailure, json4.js,                "fails due to properties being serialized in a different order.")
+
 
 check: check-unit-tests run-tests
 
