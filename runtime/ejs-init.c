@@ -12,6 +12,7 @@
 #include "ejs-console.h"
 #include "ejs-date.h"
 #include "ejs-error.h"
+#include "ejs-exception.h"
 #include "ejs-function.h"
 #include "ejs-json.h"
 #include "ejs-math.h"
@@ -42,23 +43,22 @@ ejsval _ejs_global;
 void
 _ejs_init(int argc, char** argv)
 {
-    // initialize our constants before anything else
     START_SHADOW_STACK_FRAME;
 
+    // initialize our atoms before anything else
     _ejs_init_static_strings();
 
     _ejs_gc_init();
+    _ejs_exception_init();
 
+    // initialization or ECMA262 builtins
     _ejs_gc_add_named_root (_ejs_global);
+    _ejs_global = _ejs_object_new (_ejs_null, &_ejs_object_specops);
 
     _ejs_nan = NUMBER_TO_EJSVAL(nan("7734"));
 
-    _ejs_global = _ejs_object_new (_ejs_null, &_ejs_object_specops);
-    ADD_STACK_ROOT(ejsval, _ejs_ejs_global, _ejs_object_new (_ejs_null, &_ejs_object_specops));
-
     _ejs_object_setprop (_ejs_global, _ejs_atom_undefined, _ejs_undefined);
     _ejs_object_setprop (_ejs_global, _ejs_atom_NaN, _ejs_nan);
-    _ejs_object_setprop (_ejs_global, _ejs_atom___ejs, _ejs_ejs_global);
 
     _ejs_object_init_proto();
 
@@ -73,13 +73,8 @@ _ejs_init(int argc, char** argv)
     _ejs_number_init(_ejs_global);
     _ejs_regexp_init(_ejs_global);
     _ejs_date_init(_ejs_global);
-    _ejs_require_init(_ejs_global);
-    _ejs_console_init(_ejs_global);
-    _ejs_process_init(_ejs_global, argc, argv);
-
     _ejs_json_init(_ejs_global);
     _ejs_math_init(_ejs_global);
-    _ejs_GC_init(_ejs_global);
 
 #define GLOBAL_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_global, EJS_STRINGIFY(x), _ejs_##x)
 
@@ -94,5 +89,21 @@ _ejs_init(int argc, char** argv)
     GLOBAL_METHOD(encodeURIComponent);
 
 #undef GLOBAL_METHOD
+
+    // the node-like api we support in order for our driver to
+    // function.  this should really be a separate opt-in .a/.so.
+    _ejs_require_init(_ejs_global);
+    _ejs_console_init(_ejs_global);
+    _ejs_process_init(_ejs_global, argc, argv);
+
+    // a special global (__ejs) under which we can stuff other
+    // semi-useful runtime features, like a call to force a GC.  the
+    // compiler also uses the presence of __ejs to disable
+    // buggy/nonfunctional code (like those that use regexps)
+    ADD_STACK_ROOT(ejsval, _ejs_ejs_global, _ejs_object_new (_ejs_null, &_ejs_object_specops));
+    _ejs_object_setprop (_ejs_global, _ejs_atom___ejs, _ejs_ejs_global);
+
+    _ejs_GC_init(_ejs_global);
+
     END_SHADOW_STACK_FRAME;
 }
