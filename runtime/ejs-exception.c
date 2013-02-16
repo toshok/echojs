@@ -286,8 +286,8 @@ static char _ejs_exception_do_catch(struct ejs_typeinfo *catch_tinfo,
  * The uncaught exception callback is implemented as a std::terminate handler. 
  * 1. Check if there's an active exception
  * 2. If so, check if it's an Objective-C exception
- * 3. If so, call our registered callback with the object.
- * 4. Finally, call the previous terminate handler.
+ * 3. If so, call the previous terminate handler.
+ * 4. If not, dump the ejs exception
  **********************************************************************/
 static terminate_handler old_terminate = NULL;
 static void _ejs_terminate(void)
@@ -299,13 +299,20 @@ static void _ejs_terminate(void)
         (*old_terminate)();
     }
     else {
+        // for right now assume that we got here from an ejs exception.
+        printf ("unhandled exception: \n");
+        exit(-1);
+
 #if false
-        // There is a current exception. Check if it's an ejs exception.
+        // XXX toshok: we're going to need to make this bit of code
+        // either objc or c++ to get that language impl of try/catch.
+
+        // There is a current exception. Check if it's an objc/c++ exception.
         @try {
             __cxa_rethrow();
         } @catch (id e) {
-            // It's an ejs object. Call Foundation's handler, if any.
-            (*uncaught_handler)(e);
+            // It's an objc object. Call Foundation's handler, if any.
+            //(*uncaught_handler)(e);
             (*old_terminate)();
         } @catch (...) {
             // It's not an ejs object. Continue to C++ terminate.
