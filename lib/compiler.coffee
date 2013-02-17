@@ -176,7 +176,7 @@ class LLVMIRVisitor extends NodeVisitor
                         # we load obj[prop], prop can be any value
                         loadprop = @visit prop
                         pname = "computed"
-                        @createCall @ejs_runtime.object_getprop, [obj, loadprop], "getprop_#{pname}"
+                        @createCall @ejs_runtime.object_getprop, [obj, loadprop], "getprop_#{pname}", canThrow
                 else
                         # we load obj.prop, prop is an id
                         pname = @getAtom prop.name
@@ -263,7 +263,8 @@ class LLVMIRVisitor extends NodeVisitor
                 ir.setInsertPoint case_checks[0].dest_check
                 for casenum in [0...case_checks.length-1]
                         test = @visit case_checks[casenum].test
-                        discTest = @createCall @ejs_runtime["binop==="], [discr, test], "test"
+                        eqop = @ejs_runtime["binop==="]
+                        discTest = @createCall eqop, [discr, test], "test", !eqop.doesNotThrow
                         disc_truthy = @createCall @ejs_runtime.truthy, [discTest], "disc_truthy"
                         disc_cmp = ir.createICmpEq disc_truthy, consts.false(), "disccmpresult"
                         ir.createCondBr disc_cmp, case_checks[casenum+1].dest_check, case_checks[casenum].body
@@ -431,7 +432,8 @@ class LLVMIRVisitor extends NodeVisitor
                         ir.createStore argument, result
 
                 # argument = argument $op 1
-                temp = @createCall @ejs_runtime["binop#{if n.operator is '++' then '+' else '-'}"], [argument, one], "update_temp"
+                update_op = @ejs_runtime["binop#{if n.operator is '++' then '+' else '-'}"]
+                temp = @createCall update_op, [argument, one], "update_temp", !update_op.doesNotThrow
                 
                 @storeValueInDest temp, n.argument
                 
@@ -576,7 +578,7 @@ class LLVMIRVisitor extends NodeVisitor
                         callee = @ejs_runtime[builtin]
                         if not callee
                                 throw "Internal error: unhandled binary operator '#{n.operator}'"
-                        rhvalue = @createCall callee, [(@visit lhs), rhvalue], "result_#{builtin}"
+                        rhvalue = @createCall callee, [(@visit lhs), rhvalue], "result_#{builtin}", !callee.doesNotThrow
                 
                 @storeValueInDest rhvalue, lhs
 
@@ -771,8 +773,7 @@ class LLVMIRVisitor extends NodeVisitor
                                         return @loadBoolEjsValue left_visited.literal.value < right_visited.literal.value
                                         
                 # call the actual runtime binaryop method
-                call = @createCall callee, [(@createLoad left_alloca, "binop_left_load"), (@createLoad right_alloca, "binop_right_load")], "result_#{builtin}"
-                call
+                @createCall callee, [(@createLoad left_alloca, "binop_left_load"), (@createLoad right_alloca, "binop_right_load")], "result_#{builtin}", !callee.doesNotThrow
 
         visitLogicalExpression: (n) ->
                 debug.log -> "operator = '#{n.operator}'"
@@ -843,8 +844,9 @@ class LLVMIRVisitor extends NodeVisitor
                 ctor = @visit args[0]
 
                 proto = @createPropertyLoad ctor, { name: "prototype" }, false
-                
-                thisArg = @createCall @ejs_runtime.object_create, [proto], "objtmp"
+
+                create = @ejs_runtime.object_create
+                thisArg = @createCall create, [proto], "objtmp", !create.doesNotThrow
                                                 
                 argv.push ctor                                                      # %closure
                 argv.push thisArg                                                   # %this
@@ -903,7 +905,8 @@ class LLVMIRVisitor extends NodeVisitor
                         load_argc = @createLoad @currentFunction.topScope["%argc"], "argc_load"
                         load_args = @createLoad @currentFunction.topScope["%args"], "args_load"
 
-                        arguments_object = @createCall @ejs_runtime.arguments_new, [load_argc, load_args], "argstmp"
+                        args_new = @ejs_runtime.arguments_new
+                        arguments_object = @createCall args_new, [load_argc, load_args], "argstmp", !args_new.doesNotThrow
                         ir.createStore arguments_object, arguments_alloca
                         @currentFunction.topScope["arguments"] = arguments_alloca
 
@@ -923,7 +926,8 @@ class LLVMIRVisitor extends NodeVisitor
                 rv
 
         visitObjectExpression: (n) ->
-                obj = @createCall @ejs_runtime.object_create, [@loadNullEjsValue()], "objtmp"
+                object_create = @ejs_runtime.object_create
+                obj = @createCall object_create, [@loadNullEjsValue()], "objtmp", !object_create.doesNotThrow
                 for property in n.properties
                         val = @visit property.value
                         key = property.key
@@ -931,7 +935,8 @@ class LLVMIRVisitor extends NodeVisitor
                 obj
 
         visitArrayExpression: (n) ->
-                obj = @createCall @ejs_runtime.array_new, [consts.int32 n.elements.length], "arrtmp"
+                array_new = @ejs_runtime.array_new
+                obj = @createCall array_new, [consts.int32 n.elements.length], "arrtmp", !array_new.doesNotThrow
                 i = 0;
                 for el in n.elements
                         val = @visit el
@@ -1021,7 +1026,8 @@ class LLVMIRVisitor extends NodeVisitor
                 if typeof n.raw is "string" and n.raw[0] is '/'
                         debug.log -> "literal regexp: #{n.raw}"
                         c = ir.createGlobalStringPtr n.raw, "strconst"
-                        regexpcall = @createCall @ejs_runtime.regexp_new_utf8, [c], "regexptmp"
+                        regexp_new_utf8 = @ejs_runtime.regexp_new_utf8
+                        regexpcall = @createCall regexp_new_utf8, [c], "regexptmp", !regexp_new_utf8.doesNotThrow
                         debug.log -> "regexpcall = #{regexpcall}"
                         return regexpcall
 
@@ -1041,7 +1047,8 @@ class LLVMIRVisitor extends NodeVisitor
                                         @doInsideBlock @currentFunction.entry_bb, =>
                                                 num_alloca = ir.createAlloca types.EjsValue, "num-alloca-#{n.value}"
                                                 c = llvm.ConstantFP.getDouble n.value
-                                                call = @createCall @ejs_runtime.number_new, [c], "numconst-#{n.value}"
+                                                number_new = @ejs_runtime.number_new
+                                                call = @createCall number_new, [c], "numconst-#{n.value}", !number_new.doesNotThrow
                                                 ir.createStore call, num_alloca
                                                 @currentFunction.literalAllocas[literal_key] = num_alloca
                                         
@@ -1057,7 +1064,7 @@ class LLVMIRVisitor extends NodeVisitor
 
                 throw "Internal error: unrecognized literal of type #{typeof n.value}"
 
-        createCall: (callee, argv, callname, canThrow) ->
+        createCall: (callee, argv, callname, canThrow=true) ->
                 # if we're inside a try block we have to use createInvoke, and pass two basic blocks:
                 #   the normal block, which is basically this IR instruction's continuation
                 #   the unwind block, where we land if the call throws an exception.
@@ -1245,7 +1252,7 @@ class LLVMIRVisitor extends NodeVisitor
                         ir.createStore argv[1], this_alloca
                         
                         decompose_args = [ argv[0], func_alloca, env_alloca, this_alloca ]
-                        decompose_rv = @createCall @ejs_runtime.decompose_closure, decompose_args, "decompose_rv", false
+                        decompose_rv = @createCall @ejs_runtime.decompose_closure, decompose_args, "decompose_rv", true
                         cmp = ir.createICmpEq decompose_rv, consts.false(), "cmpresult"
                         ir.createCondBr cmp, runtime_invoke_bb, direct_invoke_bb
 
@@ -1254,7 +1261,7 @@ class LLVMIRVisitor extends NodeVisitor
                         # of the scratch area to decompose?  perhaps...FIXME)
                         #
                         @doInsideBlock runtime_invoke_bb, =>
-                                calltmp = @createCall @ejs_runtime.invoke_closure, argv, "calltmp"
+                                calltmp = @createCall @ejs_runtime.invoke_closure, argv, "calltmp", true
                                 store = ir.createStore calltmp, call_result
                                 ir.createBr invoke_merge_bb
 
