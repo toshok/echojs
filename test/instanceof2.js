@@ -6,6 +6,6 @@ try {
 }
 catch (e) {
   console.log (3);
-  console.log (e.message);
+  console.log (e.name);
   console.log (4);
 }
