@@ -1,4 +1,5 @@
 .IGNORE: # ignore all errors during test compilation/run so we always get a full run.
+.SILENT:
 
 TOPDIR=$(shell pwd)/..
 NODE_PATH=$(TOPDIR)/node-llvm/build/Release:$(TOPDIR)/lib/coffee:$(TOPDIR)/lib:$(TOPDIR)/esprima:$(TOPDIR)/escodegen
