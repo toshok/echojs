@@ -322,7 +322,7 @@ _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args)
         extern jschar* last_lookup;
         if (last_lookup) {
             char *last_utf8 = ucs2_to_utf8(last_lookup);
-            printf ("last property lookup was for: %s\n", last_utf8);
+            fprintf (stderr, "last property lookup was for: %s\n", last_utf8);
             free (last_utf8);
         }
         

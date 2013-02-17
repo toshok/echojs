@@ -576,7 +576,7 @@ _ejs_object_getprop (ejsval obj, ejsval key)
         printf ("throw TypeError, key is %s\n", key_utf8);
         if (last_lookup) {
             char *last_utf8 = ucs2_to_utf8(last_lookup);
-            printf ("last property lookup was for: %s\n", last_utf8);
+            fprintf (stderr, "last property lookup was for: %s\n", last_utf8);
             free (last_utf8);
         }
         free (key_utf8);
