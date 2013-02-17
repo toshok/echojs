@@ -8,5 +8,6 @@ obj[key] = "hello world";
 
 console.log (obj[key]);
 
-obj[null] = "hello world";
+obj[null] = "goodbye, world";
 console.log (obj[null]);
+console.log (obj[undefined]);

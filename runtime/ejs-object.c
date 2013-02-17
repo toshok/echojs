@@ -556,21 +556,11 @@ _ejs_object_setprop (ejsval val, ejsval key, ejsval value)
         // if we fail there, we fall back to the object impl below
     }
 
-    if (!EJSVAL_IS_STRING(key)) {
-        if (EJSVAL_IS_NUMBER(key)) {
-            char buf[128];
-            snprintf(buf, sizeof(buf), EJS_NUMBER_FORMAT, EJSVAL_TO_NUMBER(key));
-            key = _ejs_string_new_utf8(buf);
-        }
-        else {
-            printf ("key isn't a string\n");
-            return _ejs_null;
-        }
-    }
+    ejsval real_key = ToString(key);
 
     // this should be:
-    // OP(EJSVAL_TO_OBJECT(val), put)(val, key, value, EJS_FALSE);
-    _ejs_object_define_value_property (val, key, value, EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
+    // OP(EJSVAL_TO_OBJECT(val), put)(val, real_key, value, EJS_FALSE);
+    _ejs_object_define_value_property (val, real_key, value, EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
 
 
     return value;
