@@ -26,7 +26,6 @@ $(call addExpectedFailure, instanceof2.js,          "fails because the exception
 $(call addExpectedFailure, object5.js,              "fails because we don't handle get/setprop using undefined or null keys")
 $(call addExpectedFailure, number1.js,              "fails because node outputs {} for console.log(new Number(5)), while spidermonkey and jsc output "5".  we err on the SM/JSC side of things here.")
 $(call addExpectedFailure, toLocaleString3.js,      "fails because we don't have a special toString (or toLocaleString) implementation for arrays.")
-$(call addExpectedFailure, prototype9.js,           "fails because of one actual prototype failure and difference in our Function.toString() method.")
 $(call addExpectedFailure, exc10.js,                "fails because we don't hit the finally block from the break statement.")
 $(call addExpectedFailure, json4.js,                "fails due to properties being serialized in a different order.")
 
