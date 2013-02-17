@@ -34,7 +34,7 @@ EJS_BEGIN_DECLS
 
 #define EJS_INSTALL_FUNCTION(o,n,f) EJS_MACRO_START                     \
     ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(n));          \
-    ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, funcname, (EJSClosureFunc)f)); \
+    ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new_native (_ejs_null, funcname, (EJSClosureFunc)f)); \
     _ejs_object_setprop (o, funcname, tmpfunc);                         \
     EJS_MACRO_END
 
@@ -52,6 +52,7 @@ ejsval _ejs_invoke_closure_1 (ejsval closure, ejsval _this, uint32_t argc, ejsva
 ejsval _ejs_invoke_closure_2 (ejsval closure, ejsval _this, uint32_t argc, ejsval arg1, ejsval arg2);
 
 extern ejsval _ejs_function_new (EJSClosureEnv env, ejsval name, EJSClosureFunc func);
+extern ejsval _ejs_function_new_native (EJSClosureEnv env, ejsval name, EJSClosureFunc func);
 extern ejsval _ejs_function_new_anon (EJSClosureEnv env, EJSClosureFunc func);
 extern ejsval _ejs_function_new_utf8 (EJSClosureEnv env, const char* name, EJSClosureFunc func);
 

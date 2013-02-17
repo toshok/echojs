@@ -80,6 +80,20 @@ _ejs_function_new (EJSClosureEnv env, ejsval name, EJSClosureFunc func)
 }
 
 ejsval
+_ejs_function_new_native (EJSClosureEnv env, ejsval name, EJSClosureFunc func)
+{
+    EJSFunction *rv = _ejs_gc_new(EJSFunction);
+    
+    _ejs_init_object ((EJSObject*)rv, _ejs_Function__proto__, &_ejs_function_specops);
+
+    rv->name = name;
+    rv->func = func;
+    rv->env = env;
+
+    return OBJECT_TO_EJSVAL((EJSObject*)rv);
+}
+
+ejsval
 _ejs_function_new_anon (EJSClosureEnv env, EJSClosureFunc func)
 {
     return _ejs_function_new (env, _ejs_atom_empty, func);
@@ -121,7 +135,7 @@ _ejs_Function_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsva
 
     char *utf8_funcname = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(func->name));
 
-    snprintf (terrible_fixed_buffer, sizeof (terrible_fixed_buffer), "[Function: %s]", utf8_funcname);
+    snprintf (terrible_fixed_buffer, sizeof (terrible_fixed_buffer), "function %s() {}", utf8_funcname);
 
     free (utf8_funcname);
 

@@ -5,7 +5,7 @@ if (typeof console !== "undefined") print = console.log
 print (typeof f); // "function"
 print (typeof f.prototype); // "object""
 print (typeof Function.prototype); // "function"
-print (f); // node prints "[Function: f]", spidermonkey prints "function f() { }"
+print (f); // "[Function: f]"
 print (f.toString()); // "function f() { }""
 print (Function.prototype.toString.call(f)); // "function f() { }""
 print (Object.prototype.toString.call(f)); // "[object Function]"
@@ -26,3 +26,6 @@ print (Object.prototype.toString === Function.prototype.toString); // false
 print (f.toString === Function.prototype.toString); // true
 print (f.toString.prototype === Function.prototype); // false
 print (f.toString.prototype === undefined); // true
+print (Object.prototype.hasOwnProperty.call(f, "toString")); // false
+print (Object.prototype.hasOwnProperty.call(Function.prototype, "toString")); // true
+print (Object.prototype.hasOwnProperty.call(Object.prototype, "toString")); // true

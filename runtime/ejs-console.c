@@ -11,6 +11,7 @@
 static ejsval
 output (FILE *outfile, uint32_t argc, ejsval *args)
 {
+    START_SHADOW_STACK_FRAME;
     for (int i = 0; i < argc; i ++) {
         if (EJSVAL_IS_NUMBER(args[i])) {
             double d = EJSVAL_TO_NUMBER(args[i]);
@@ -20,16 +21,18 @@ output (FILE *outfile, uint32_t argc, ejsval *args)
             else
                 fprintf (outfile, EJS_NUMBER_FORMAT, d);
         }
+        else if (EJSVAL_IS_FUNCTION(args[i])) {
+            ADD_STACK_ROOT(ejsval, strval, ((EJSFunction*)EJSVAL_TO_OBJECT(args[i]))->name);
+            char* strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(strval));
+            fprintf (outfile, "[Function: %s]", strval_utf8);
+            free (strval_utf8);
+        }
         else {
-            START_SHADOW_STACK_FRAME;
-            
             ADD_STACK_ROOT(ejsval, strval, ToString(args[i]));
 
             char* strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(strval));
             fprintf (outfile, "%s", strval_utf8);
             free (strval_utf8);
-
-            END_SHADOW_STACK_FRAME;
         }
         if (i < argc - 1)
             fputc (' ', outfile);
@@ -37,6 +40,7 @@ output (FILE *outfile, uint32_t argc, ejsval *args)
 
     fputc ('\n', outfile);
 
+    END_SHADOW_STACK_FRAME;
     return _ejs_undefined;
 }
 
