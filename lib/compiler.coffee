@@ -1267,7 +1267,7 @@ class LLVMIRVisitor extends NodeVisitor
 
                         ir.setInsertPoint invoke_merge_bb
                 else
-                        calltmp = @createCall @ejs_runtime.invoke_closure, argv, "calltmp"
+                        calltmp = @createCall @ejs_runtime.invoke_closure, argv, "calltmp", true
                         store = ir.createStore calltmp, call_result
         
                 if ctor_context
