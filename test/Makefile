@@ -22,7 +22,6 @@ EXPECTED_FAILURES=
 $(call addExpectedFailure, date1.js,                "fails because we test the Date() function, which returns the current time.  this differs from the current time when the node test runs.  bleah.")
 $(call addExpectedFailure, forin2.js,               "fails because we don't properly handle deleting properties while iterating")
 $(call addExpectedFailure, forin5.js,               "fails because we enumerate the entire range 0..length of an array, including the holes.")
-$(call addExpectedFailure, instanceof2.js,          "fails because the exception goes uncaught (presumably because it's thrown from a C function?)")
 $(call addExpectedFailure, number1.js,              "fails because node outputs {} for console.log(new Number(5)), while spidermonkey and jsc output "5".  we err on the SM/JSC side of things here.")
 $(call addExpectedFailure, toLocaleString3.js,      "fails because we don't have a special toString (or toLocaleString) implementation for arrays.")
 $(call addExpectedFailure, exc10.js,                "fails because we don't hit the finally block from the break statement.")
