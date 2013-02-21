@@ -239,6 +239,10 @@ _ejs_ArrayBuffer_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsva
              if (byteOffset > buffer->size)              byteOffset = buffer->size; \
              if (byteOffset + byteLength > buffer->size) byteLength = buffer->size - byteOffset; \
                                                                         \
+             if ((byteOffset % sizeof (elementtype)) != 0)              \
+                 _ejs_throw_nativeerror (EJS_RANGE_ERROR, "Byte offset / length is not aligned."); \
+             if ((byteLength % sizeof (elementtype)) != 0)              \
+                 _ejs_throw_nativeerror (EJS_RANGE_ERROR, "Byte offset / length is not aligned."); \
              arr->length = byteLength / sizeof (elementtype);           \
              arr->byteOffset = byteOffset;                              \
              arr->byteLength = arr->length * (elementSizeInBytes);      \
