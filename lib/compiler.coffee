@@ -302,20 +302,10 @@ class LLVMIRVisitor extends NodeVisitor
         visitBreak: (n) ->
                 # unlabeled breaks just exit our enclosing exitable scope.  breaks are valid in
                 # switch statements, though, so we can't just use LoopExitableScope.findFirst()
-                return TryExitableScope.findFirstNonTry().exitAft true if not n.label
-                # for the labeled case, we search up the stack for the right scope and exitAft that one
-                scope = LoopExitableScope.findLabeled n.label.name
-                # XXX check if scope is null, throw if so
-                scope.exitAft true
+                return ExitableScope.scopeStack.exitAft true, n.label?.name
 
         visitContinue: (n) ->
-                # unlabeled continue just exit our enclosing exitable scope
-                return LoopExitableScope.findFirst().exitFore() if not n.label
-
-                # for the labeled case, we search up the stack for the right scope and exitFore that one
-                scope = LoopExitableScope.findLabeled n.label.name
-                # XXX check if scope is null, throw if so
-                scope.exitFore()
+                return ExitableScope.scopeStack.exitFore n.label?.name
 
         generateCondBr: (exp, then_bb, else_bb) ->
                 exp_value = @visit exp
@@ -1206,6 +1196,25 @@ class LLVMIRVisitor extends NodeVisitor
                                 switch_stmt = ir.createSwitch cleanup_reason, merge_block, scope.destinations.length + 1
                                 if @returnValueAlloca?
                                         switch_stmt.addCase (consts.int32 ExitableScope.REASON_RETURN), return_tramp
+
+                                falloff_tramp = new llvm.BasicBlock "falloff_tramp", insertFunc
+                                @doInsideBlock falloff_tramp, =>
+                                        ir.createBr merge_block
+                                console.log TryExitableScope.REASON_FALLOFF_TRY
+                                switch_stmt.addCase (consts.int32 TryExitableScope.REASON_FALLOFF_TRY), falloff_tramp
+
+                                for s in [0...scope.destinations.length]
+                                        dest_tramp = new llvm.BasicBlock "dest_tramp", insertFunc
+                                        dest = scope.destinations[s]
+                                        @doInsideBlock dest_tramp, =>
+                                                if dest.reason == TryExitableScope.REASON_BREAK
+                                                        dest.scope.exitAft true
+                                                else if dest.reason == TryExitableScope.REASON_CONTINUE
+                                                        dest.scope.exitFore()
+                                        switch_stmt.addCase dest.id, dest_tramp
+                                        
+                                        
+                                switch_stmt
                         
                 console.log "done with try block"
                 ir.setInsertPoint merge_block

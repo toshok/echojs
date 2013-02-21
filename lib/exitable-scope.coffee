@@ -35,11 +35,11 @@ exports.ExitableScope = class ExitableScope
                 @parent = null
                 
 exports.TryExitableScope = class TryExitableScope extends ExitableScope
-        REASON_FALLOFF_TRY:    -2  # we fell off the end of the try block
-        REASON_ERROR:          -1  # error condition
+        @REASON_FALLOFF_TRY:    -2  # we fell off the end of the try block
+        @REASON_ERROR:          -1  # error condition
 
-        REASON_BREAK: "break"
-        REASON_CONTINUE: "continue"
+        @REASON_BREAK: "break"
+        @REASON_CONTINUE: "continue"
         
         @unwindStack: new Stack
                 
@@ -77,7 +77,7 @@ exports.TryExitableScope = class TryExitableScope extends ExitableScope
                 else
                         scope = LoopExitableScope.findFirst()
                         
-                reason = @lookupDestinationIdForScope scope, @REASON_CONTINUE 
+                reason = @lookupDestinationIdForScope scope, TryExitableScope.REASON_CONTINUE 
                 irbuilder.createStore reason, @cleanup_reason
                 irbuilder.createBr @cleanup_bb
 
@@ -88,9 +88,9 @@ exports.TryExitableScope = class TryExitableScope extends ExitableScope
                         else
                                 scope = TryExitableScope.findFirstNonTry()
                         
-                        reason = @lookupDestinationIdForScope scope, @REASON_BREAK
+                        reason = @lookupDestinationIdForScope scope, TryExitableScope.REASON_BREAK
                 else
-                        reason = consts.int32 @REASON_FALLOFF_TRY
+                        reason = consts.int32 TryExitableScope.REASON_FALLOFF_TRY
 
                 irbuilder.createStore reason, @cleanup_reason
                 irbuilder.createBr @cleanup_bb
