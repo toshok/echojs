@@ -112,10 +112,16 @@ exports.LoopExitableScope = class LoopExitableScope extends ExitableScope
                 super label
 
         exitFore: (label = null) ->
-                irbuilder.createBr @fore_bb
+                if label?
+                        (LoopExitableScope.findLabeled label).exitFore()
+                else
+                        irbuilder.createBr @fore_bb
                 
         exitAft: (fromBreak, label = null) ->
-                irbuilder.createBr @aft_bb
+                if label?
+                        (LoopExitableScope.findLabeled label).exitAft()
+                else
+                        irbuilder.createBr @aft_bb
 
         @findLabeled: (l, stack = ExitableScope.scopeStack) ->
                 return stack if l is stack.label
