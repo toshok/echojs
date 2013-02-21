@@ -300,8 +300,6 @@ class LLVMIRVisitor extends NodeVisitor
                 @visit n.body
 
         visitBreak: (n) ->
-                # unlabeled breaks just exit our enclosing exitable scope.  breaks are valid in
-                # switch statements, though, so we can't just use LoopExitableScope.findFirst()
                 return ExitableScope.scopeStack.exitAft true, n.label?.name
 
         visitContinue: (n) ->
@@ -1101,12 +1099,10 @@ class LLVMIRVisitor extends NodeVisitor
                 else
                         branch_target = merge_block
 
-                scope = new TryExitableScope @currentFunction.cleanup_reason, branch_target, (-> new llvm.BasicBlock "exception", insertFunc)
+                scope = new TryExitableScope @currentFunction.cleanup_reason, branch_target, (-> new llvm.BasicBlock "exception", insertFunc), finally_block?
                 scope.enter()
 
-                console.log "visiting try {}"
                 @visit n.block
-                console.log "done visiting try {}"
 
                 if n.finalizer?
                         @finallyStack.shift()
@@ -1124,7 +1120,6 @@ class LLVMIRVisitor extends NodeVisitor
                         # the scope's landingpad block is created if needed by @createCall (using that function we pass in as the last argument to TryExitableScope's ctor.)
                         # if a try block includes no calls, there's no need for an landing pad block as nothing can throw, and we don't bother generating any code for the
                         # catch clause.
-                        console.log "have a landing pad block"
                         @doInsideBlock scope.landing_pad_block, =>
 
                                 landing_pad_type = llvm.StructType.create "", [types.int8Pointer, types.int32]
@@ -1200,7 +1195,6 @@ class LLVMIRVisitor extends NodeVisitor
                                 falloff_tramp = new llvm.BasicBlock "falloff_tramp", insertFunc
                                 @doInsideBlock falloff_tramp, =>
                                         ir.createBr merge_block
-                                console.log TryExitableScope.REASON_FALLOFF_TRY
                                 switch_stmt.addCase (consts.int32 TryExitableScope.REASON_FALLOFF_TRY), falloff_tramp
 
                                 for s in [0...scope.destinations.length]
@@ -1216,7 +1210,6 @@ class LLVMIRVisitor extends NodeVisitor
                                         
                                 switch_stmt
                         
-                console.log "done with try block"
                 ir.setInsertPoint merge_block
 
         handleInvokeClosureIntrinsic: (exp, ctor_context= false) ->

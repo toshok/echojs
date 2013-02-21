@@ -43,7 +43,7 @@ exports.TryExitableScope = class TryExitableScope extends ExitableScope
         
         @unwindStack: new Stack
                 
-        constructor: (@cleanup_reason, @cleanup_bb, @create_landing_pad_bb) ->
+        constructor: (@cleanup_reason, @cleanup_bb, @create_landing_pad_bb, @hasFinally) ->
                 @isTry = true
                 @destinations = []
                 super()
@@ -73,31 +73,42 @@ exports.TryExitableScope = class TryExitableScope extends ExitableScope
         
         exitFore: (label = null) ->
                 if label?
-                        scope = LoopExitableScope.findLabeled label
+                        scope = LoopExitableScope.findLabeledOrFinally label, @parent
                 else
-                        scope = LoopExitableScope.findFirst()
-                        
-                reason = @lookupDestinationIdForScope scope, TryExitableScope.REASON_CONTINUE 
-                irbuilder.createStore reason, @cleanup_reason
-                irbuilder.createBr @cleanup_bb
+                        scope = LoopExitableScope.findLoopOrFinally @parent
+
+                if @hasFinally
+                        reason = @lookupDestinationIdForScope scope, TryExitableScope.REASON_CONTINUE 
+                        irbuilder.createStore reason, @cleanup_reason
+                        irbuilder.createBr @cleanup_bb
+                else
+                        scope.exitFore()
 
         exitAft: (fromBreak, label = null) ->
+                # first we find our destination scope
                 if fromBreak
                         if label?
-                                scope = LoopExitableScope.findLabeled label
+                                scope = LoopExitableScope.findLabeledOrFinally label, @parent
                         else
-                                scope = TryExitableScope.findFirstNonTry()
-                        
-                        reason = @lookupDestinationIdForScope scope, TryExitableScope.REASON_BREAK
+                                scope = @parent
+
+                # then we either create a branch to our cleanup_bb
+                # with the right reason (we'll encode the exitAft from
+                # the dest scope in the cleanup_bb), or we exit from
+                # the dest scope directly if we're lacking a cleanup_bb
+                if @hasFinally
+                        if fromBreak
+                                reason = @lookupDestinationIdForScope scope, TryExitableScope.REASON_BREAK
+                        else
+                                reason = consts.int32 TryExitableScope.REASON_FALLOFF_TRY
+
+                        irbuilder.createStore reason, @cleanup_reason
+                        irbuilder.createBr @cleanup_bb
                 else
-                        reason = consts.int32 TryExitableScope.REASON_FALLOFF_TRY
-
-                irbuilder.createStore reason, @cleanup_reason
-                irbuilder.createBr @cleanup_bb
-
-        @findFirstNonTry: (stack = ExitableScope.scopeStack) ->
-                return stack if not stack.isTry
-                return @findFirstNonTry stack.parent
+                        if fromBreak
+                                scope.exitAft fromBreak
+                        else
+                                irbuilder.createBr @cleanup_bb
 
 exports.SwitchExitableScope = class SwitchExitableScope extends ExitableScope
         constructor: (@merge_bb) ->
@@ -112,21 +123,23 @@ exports.LoopExitableScope = class LoopExitableScope extends ExitableScope
                 super label
 
         exitFore: (label = null) ->
-                if label?
-                        (LoopExitableScope.findLabeled label).exitFore()
+                if label? and label isnt @label
+                        (LoopExitableScope.findLabeledOrFinally label).exitFore label
                 else
                         irbuilder.createBr @fore_bb
                 
         exitAft: (fromBreak, label = null) ->
-                if label?
-                        (LoopExitableScope.findLabeled label).exitAft()
+                if label? and label isnt @label
+                        (LoopExitableScope.findLabeledOrFinally label).exitAft label
                 else
                         irbuilder.createBr @aft_bb
 
-        @findLabeled: (l, stack = ExitableScope.scopeStack) ->
+        @findLabeledOrFinally: (l, stack = ExitableScope.scopeStack) ->
                 return stack if l is stack.label
-                return LoopExitableScope.findLabeled l, stack.parent
+                return stack if stack.hasFinally
+                return LoopExitableScope.findLabeledOrFinally l, stack.parent
 
-        @findFirst: (stack = ExitableScope.scopeStack) ->
+        @findLoopOrFinally: (stack = ExitableScope.scopeStack) ->
                 return stack if stack.isLoop
-                return LoopExitableScope.findFirst stack.parent
+                return stack if stack.hasFinally
+                return LoopExitableScope.findLoopOrFinally stack.parent
