@@ -326,7 +326,7 @@ _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args)
             free (last_utf8);
         }
         
-        _ejs_throw_typeerror ("TypeError, object not a function\n");
+        _ejs_throw_nativeerror (EJS_TYPE_ERROR, "object not a function");
     }
 
     EJSFunction *fun = (EJSFunction*)EJSVAL_TO_OBJECT(closure);

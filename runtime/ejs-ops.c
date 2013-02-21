@@ -788,7 +788,7 @@ _ejs_op_instanceof (ejsval lhs, ejsval rhs)
 
     /* 5. If Type(rval) is not Object, throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(rhs)) {
-        _ejs_throw_typeerror ("rhs of instanceof check must be a function");
+        _ejs_throw_nativeerror (EJS_TYPE_ERROR, "rhs of instanceof check must be a function");
         EJS_NOT_IMPLEMENTED();
     }
     
@@ -796,7 +796,7 @@ _ejs_op_instanceof (ejsval lhs, ejsval rhs)
 
     /* 6. If rval does not have a [[HasInstance]] internal method, throw a TypeError exception. */
     if (!OP(obj,has_instance)) {
-        _ejs_throw_typeerror ("rhs of instanceof check must be a function");
+        _ejs_throw_nativeerror (EJS_TYPE_ERROR, "rhs of instanceof check must be a function");
         EJS_NOT_IMPLEMENTED();
     }
 

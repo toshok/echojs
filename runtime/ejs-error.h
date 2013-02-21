@@ -10,12 +10,21 @@
 
 EJS_BEGIN_DECLS
 
+typedef enum {
+    EJS_EVAL_ERROR,
+    EJS_RANGE_ERROR,
+    EJS_REFERENCE_ERROR,
+    EJS_SYNTAX_ERROR,
+    EJS_TYPE_ERROR,
+    EJS_URI_ERROR
+} EJSNativeErrorType;
+
 extern ejsval _ejs_Error;
 extern ejsval _ejs_error_get_prototype();
 
-extern ejsval _ejs_typeerror_new_utf8 (const char *message);
+extern ejsval _ejs_nativeerror_new_utf8 (EJSNativeErrorType error_type, const char* message);
 
-extern void _ejs_throw_typeerror(const char *message);
+extern void _ejs_throw_nativeerror(EJSNativeErrorType error_type, const char *message);
 
 extern void _ejs_error_init(ejsval global);
 

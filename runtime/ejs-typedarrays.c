@@ -186,7 +186,7 @@ _ejs_ArrayBuffer_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsva
     _ejs_##ArrayType##Array_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
     {                                                                   \
      if (EJSVAL_IS_UNDEFINED(_this))                                    \
-         _ejs_throw_typeerror ("Constructor cannot be called as a function"); \
+         _ejs_throw_nativeerror (EJS_TYPE_ERROR, "Constructor cannot be called as a function"); \
                                                                         \
      EJSTypedArray* arr = (EJSTypedArray*)EJSVAL_TO_OBJECT(_this);      \
                                                                         \

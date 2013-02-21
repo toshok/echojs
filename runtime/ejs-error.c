@@ -54,16 +54,33 @@ NATIVE_ERROR_CTOR(TypeError);
 NATIVE_ERROR_CTOR(UriError);
 
 ejsval
-_ejs_typeerror_new_utf8 (const char *message)
+_ejs_nativeerror_new_utf8 (EJSNativeErrorType err_type, const char *message)
 {
     EJSObject* exc_obj = _ejs_gc_new (EJSObject);
 
-    _ejs_init_object (exc_obj, _ejs_TypeError_proto, &_ejs_nativeerror_specops);
+    ejsval proto;
+    switch (err_type) {
+    case EJS_EVAL_ERROR:      proto = _ejs_EvalError_proto; break;
+    case EJS_RANGE_ERROR:     proto = _ejs_RangeError_proto; break;
+    case EJS_REFERENCE_ERROR: proto = _ejs_ReferenceError_proto; break;
+    case EJS_SYNTAX_ERROR:    proto = _ejs_SyntaxError_proto; break;
+    case EJS_TYPE_ERROR:      proto = _ejs_TypeError_proto; break;
+    case EJS_URI_ERROR:       proto = _ejs_UriError_proto; break;
+    }
+
+    _ejs_init_object (exc_obj, proto, &_ejs_nativeerror_specops);
 
     ejsval msg = _ejs_string_new_utf8 (message);
     ejsval exc = OBJECT_TO_EJSVAL(exc_obj);
 
-    _ejs_TypeError_impl (_ejs_null, exc, 1, &msg);
+    switch (err_type) {
+    case EJS_EVAL_ERROR:      _ejs_EvalError_impl (_ejs_null, exc, 1, &msg); break;
+    case EJS_RANGE_ERROR:     _ejs_RangeError_impl (_ejs_null, exc, 1, &msg); break;
+    case EJS_REFERENCE_ERROR: _ejs_ReferenceError_impl (_ejs_null, exc, 1, &msg); break;
+    case EJS_SYNTAX_ERROR:    _ejs_SyntaxError_impl (_ejs_null, exc, 1, &msg); break;
+    case EJS_TYPE_ERROR:      _ejs_TypeError_impl (_ejs_null, exc, 1, &msg); break;
+    case EJS_URI_ERROR:       _ejs_UriError_impl (_ejs_null, exc, 1, &msg); break;
+    }
 
     return exc;
 }
@@ -162,9 +179,9 @@ _ejs_error_init(ejsval global)
 }
 
 void
-_ejs_throw_typeerror (const char *message)
+_ejs_throw_nativeerror (EJSNativeErrorType error_type, const char *message)
 {
-    ejsval exc = _ejs_typeerror_new_utf8 (message);
+    ejsval exc = _ejs_nativeerror_new_utf8 (error_type, message);
     _ejs_throw (exc);
 }
 
