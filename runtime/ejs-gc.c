@@ -585,7 +585,7 @@ _ejs_gc_collect()
     uint64_t usec_before = tvbefore.tv_sec * 1000000 + tvbefore.tv_usec;
     uint64_t usec_after = tvafter.tv_sec * 1000000 + tvafter.tv_usec;
 
-    printf ("gc collect took %gms\n", (usec_after - usec_before) / 1000.0);
+    fprintf (stderr, "gc collect took %gms\n", (usec_after - usec_before) / 1000.0);
 }
 
 int total_allocs = 0;
