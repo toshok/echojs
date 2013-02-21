@@ -23,6 +23,7 @@
 #include "ejs-regexp.h"
 #include "ejs-require.h"
 #include "ejs-string.h"
+#include "ejs-typedarrays.h"
 #include "ejs-uri.h"
 #include "ejs-value.h"
 
@@ -75,6 +76,8 @@ _ejs_init(int argc, char** argv)
     _ejs_date_init(_ejs_global);
     _ejs_json_init(_ejs_global);
     _ejs_math_init(_ejs_global);
+
+    _ejs_typedarrays_init(_ejs_global);
 
 #define GLOBAL_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_global, EJS_STRINGIFY(x), _ejs_##x)
 

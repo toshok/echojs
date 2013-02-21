@@ -30,6 +30,10 @@ EJS_ATOM(false)
 
 EJS_ATOM(toJSON)
 
+EJS_ATOM(byteOffset)
+EJS_ATOM(byteLength)
+EJS_ATOM(buffer)
+
 // property descriptors
 EJS_ATOM(value)
 EJS_ATOM(writable)
@@ -49,6 +53,18 @@ EJS_ATOM(Number)
 EJS_ATOM(Object)
 EJS_ATOM(RegExp)
 EJS_ATOM(String)
+
+EJS_ATOM(ArrayBuffer)
+EJS_ATOM(Int8Array)
+EJS_ATOM(Uint8Array)
+EJS_ATOM(Uint8ClampedArray)
+EJS_ATOM(Int16Array)
+EJS_ATOM(Uint16Array)
+EJS_ATOM(Int32Array)
+EJS_ATOM(Uint32Array)
+EJS_ATOM(Float32Array)
+EJS_ATOM(Float64Array)
+EJS_ATOM(BYTES_PER_ELEMENT)
 
 // error types
 EJS_ATOM(Error)

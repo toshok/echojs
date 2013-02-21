@@ -17,6 +17,7 @@
 #include "ejs-regexp.h"
 #include "ejs-date.h"
 #include "ejs-array.h"
+#include "ejs-typedarrays.h"
 #include "ejs-function.h"
 
 static ejsval           _ejs_object_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr);
@@ -511,6 +512,7 @@ _ejs_object_create (ejsval proto)
     else if (EJSVAL_EQ(proto, _ejs_Number_proto))     ops = &_ejs_number_specops;
     else if (EJSVAL_EQ(proto, _ejs_RegExp_proto))     ops = &_ejs_regexp_specops;
     else if (EJSVAL_EQ(proto, _ejs_Date_proto))       ops = &_ejs_date_specops;
+    else if (EJSVAL_EQ(proto, _ejs_ArrayBuffer_proto)) ops = &_ejs_arraybuffer_specops;
     else                                              ops = EJSVAL_TO_OBJECT(proto)->ops;
 
     return _ejs_object_new (proto, ops);

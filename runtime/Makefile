@@ -19,6 +19,7 @@ SOURCES= \
 	ejs-regexp.c \
 	ejs-require.c \
 	ejs-string.c \
+	ejs-typedarrays.c \
 	ejs-types.c \
 	ejs-uri.c \
 	parson.c \
