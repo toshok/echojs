@@ -349,6 +349,28 @@ class LLVMIRVisitor extends NodeVisitor
 
                 ir.setInsertPoint merge_bb
                 merge_bb
+
+        visitDo: (n) ->
+                insertBlock = ir.getInsertBlock()
+                insertFunc = insertBlock.parent
+                
+                body_bb = new llvm.BasicBlock "do_body", insertFunc
+                merge_bb = new llvm.BasicBlock "do_merge", insertFunc
+
+                ir.createBr body_bb
+
+                scope = new LoopExitableScope n.label, body_bb, merge_bb
+                scope.enter()
+                
+                @doInsideBlock body_bb, =>
+                        @visit n.body
+                        @generateCondBr n.test, body_bb, merge_bb
+
+                scope.leave()
+                                
+                ir.setInsertPoint merge_bb
+                merge_bb
+
                                 
         visitWhile: (n) ->
                 insertBlock = ir.getInsertBlock()

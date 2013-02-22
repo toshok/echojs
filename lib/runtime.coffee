@@ -10,7 +10,7 @@ runtime_interface =
         decompose_closure:     -> @module.getOrInsertExternalFunction "_ejs_decompose_closure", types.bool, [types.EjsValue, types.EjsClosureFunc.pointerTo(), types.EjsClosureEnv.pointerTo(), types.EjsValue.pointerTo()]
                                                 
         object_create:         -> @module.getOrInsertExternalFunction "_ejs_object_create",             types.EjsValue, [types.EjsValue]
-        arguments_new:         -> @module.getOrInsertExternalFunction "_ejs_arguments_new",             types.EjsValue, [types.int32, types.EjsValue.pointerTo()]
+        arguments_new:         -> types.does_not_throw @module.getOrInsertExternalFunction "_ejs_arguments_new",             types.EjsValue, [types.int32, types.EjsValue.pointerTo()]
         array_new:             -> @module.getOrInsertExternalFunction "_ejs_array_new",                 types.EjsValue, [types.int32]
         number_new:            -> types.does_not_throw types.does_not_access_memory @module.getOrInsertExternalFunction "_ejs_number_new",                types.EjsValue, [types.double]
         string_new_utf8:       -> types.only_reads_memory types.does_not_throw @module.getOrInsertExternalFunction "_ejs_string_new_utf8",           types.EjsValue, [types.string]
