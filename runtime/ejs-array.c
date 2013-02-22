@@ -352,13 +352,12 @@ _ejs_array_slice_dense (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     begin = MIN(begin, len);
     end = MIN(end, len);
 
-    ejsval rv = _ejs_array_new(0/*end-begin*/);
+    ejsval rv = _ejs_array_new(end-begin);
     int i, rv_i;
 
-    rv_i = 0;
-    for (i = begin; i < end; i ++, rv_i++) {
-        _ejs_object_setprop (rv, NUMBER_TO_EJSVAL (rv_i), EJS_ARRAY_ELEMENTS(_this)[i]);
-    }
+    memmove (&EJS_ARRAY_ELEMENTS(rv)[0],
+             &EJS_ARRAY_ELEMENTS(_this)[begin],
+             (end-begin) * sizeof(ejsval));
 
     return rv;
 }
