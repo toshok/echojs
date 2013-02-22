@@ -59,7 +59,7 @@ static void indent(char ch)
 }
 
 ejsval
-_ejs_function_new (EJSClosureEnv env, ejsval name, EJSClosureFunc func)
+_ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func)
 {
     EJSFunction *rv = _ejs_gc_new(EJSFunction);
     
@@ -81,7 +81,7 @@ _ejs_function_new (EJSClosureEnv env, ejsval name, EJSClosureFunc func)
 }
 
 ejsval
-_ejs_function_new_native (EJSClosureEnv env, ejsval name, EJSClosureFunc func)
+_ejs_function_new_native (ejsval env, ejsval name, EJSClosureFunc func)
 {
     EJSFunction *rv = _ejs_gc_new(EJSFunction);
     
@@ -95,13 +95,13 @@ _ejs_function_new_native (EJSClosureEnv env, ejsval name, EJSClosureFunc func)
 }
 
 ejsval
-_ejs_function_new_anon (EJSClosureEnv env, EJSClosureFunc func)
+_ejs_function_new_anon (ejsval env, EJSClosureFunc func)
 {
     return _ejs_function_new (env, _ejs_atom_empty, func);
 }
 
 ejsval
-_ejs_function_new_utf8 (EJSClosureEnv env, const char *name, EJSClosureFunc func)
+_ejs_function_new_utf8 (ejsval env, const char *name, EJSClosureFunc func)
 {
     START_SHADOW_STACK_FRAME;
 
@@ -353,7 +353,7 @@ _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args)
 }
 
 EJSBool
-_ejs_decompose_closure (ejsval closure, EJSClosureFunc* func, EJSClosureEnv* env,
+_ejs_decompose_closure (ejsval closure, EJSClosureFunc* func, ejsval* env,
                         ejsval *_this)
 {
     if (!EJSVAL_IS_FUNCTION(closure)) {

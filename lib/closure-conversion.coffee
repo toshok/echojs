@@ -184,6 +184,7 @@ LocateEnv = class LocateEnv extends NodeVisitor
 
 create_identifier = (x) -> type: syntax.Identifier, name: x
 create_string_literal = (x) -> type: syntax.Literal, value: x, raw: "\"#{x}\""
+create_number_literal = (x) -> type: syntax.Literal, value: x, raw: "#{x}"
 
 # this should move to echo-desugar.coffee
 
@@ -384,16 +385,16 @@ class SubstituteVariables extends NodeVisitor
                         decl.init = @visit decl.init
                         if @currentMapping().hasOwnProperty decl.id.name
                                 rv.push {
-                                        type: syntax.ExpressionStatement,
+                                        type: syntax.ExpressionStatement
                                         expression:
                                                 type: syntax.AssignmentExpression,
                                                 operator: "="
                                                 left:
-                                                        type: syntax.MemberExpression,
-                                                        computed: false,
-                                                        object: @currentMapping()["%env"]
-                                                        property: create_identifier decl.id.name
+                                                        type: syntax.CallExpression
+                                                        callee: create_identifier "%slot"
+                                                        arguments: [ @currentMapping()["%env"], (create_number_literal @currentMapping()["%slot_mapping"][decl.id.name]) ]
                                                 right: decl.init || { type: syntax.Identifier, name: "undefined" }
+                                        
                                 }
                         else
                                 rv.push {
@@ -438,6 +439,19 @@ class SubstituteVariables extends NodeVisitor
                         
                         env_name = "%env_#{n.ejs_env.id}"
 
+                        collect_make_closure_args = (closed, parent) ->
+                                i = 0
+                                args = []
+                                if parent?
+                                        args.push create_string_literal "%env_#{parent.id}"
+                                        args.push create_number_literal i
+                                        i += 1
+                                closed.map (el) ->
+                                        args.push create_string_literal el
+                                        args.push create_number_literal i
+                                        i += 1
+                                args
+                        
                         prepends = []
                         # insert environment creation (at the start of the function body)
                         prepends.push {
@@ -446,12 +460,23 @@ class SubstituteVariables extends NodeVisitor
                                         type: syntax.VariableDeclarator
                                         id:  create_identifier env_name
                                         init:
-                                                type: syntax.ObjectExpression
-                                                properties: []
+                                                type: syntax.CallExpression
+                                                callee: create_identifier "%makeClosureEnv"
+                                                arguments: [create_number_literal n.ejs_env.closed.size() + if n.ejs_env.parent? then 1 else 0]
                                 }],
                                 kind: "let"
                         }
 
+                        n.ejs_env.slot_mapping = {}
+                        i = 0
+                        if n.ejs_env.parent?
+                                n.ejs_env.slot_mapping["%env_#{n.ejs_env.parent.id}"] = i
+                                i += 1
+                        n.ejs_env.closed.map (el) ->
+                                n.ejs_env.slot_mapping[el] = i
+                                i += 1
+                                
+                        
                         if n.ejs_env.parent?
                                 prepends.push {
                                         type: syntax.ExpressionStatement
@@ -459,11 +484,11 @@ class SubstituteVariables extends NodeVisitor
                                                 type: syntax.AssignmentExpression,
                                                 operator: "="
                                                 left:
-                                                        type: syntax.MemberExpression,
-                                                        computed: false,
-                                                        object: create_identifier env_name
-                                                        property: create_identifier "%env_#{n.ejs_env.parent.id}"
+                                                        type: syntax.CallExpression
+                                                        callee: create_identifier "%slot"
+                                                        arguments: [ (create_identifier env_name), (create_number_literal n.ejs_env.slot_mapping["%env_#{n.ejs_env.parent.id}"]) ]
                                                 right: create_identifier "%env_#{n.ejs_env.parent.id}"
+                                        
                                 }
                                 
 
@@ -476,46 +501,45 @@ class SubstituteVariables extends NodeVisitor
                                                         type: syntax.AssignmentExpression,
                                                         operator: "="
                                                         left:
-                                                                type: syntax.MemberExpression,
-                                                                computed: false,
-                                                                object: create_identifier env_name
-                                                                property: create_identifier param.name
+                                                                type: syntax.CallExpression
+                                                                callee: create_identifier "%slot"
+                                                                arguments: [ (create_identifier env_name), (create_number_literal n.ejs_env.slot_mapping[param.name]) ]
                                                         right: create_identifier param.name
                                         }
 
                         new_mapping = deep_copy_object @currentMapping()
+                        new_mapping["%slot_mapping"] = n.ejs_env.slot_mapping
 
-                        flatten_memberexp = (exp) ->
-                                if exp.type isnt syntax.MemberExpression
-                                        [exp]
+                        flatten_memberexp = (exp, mapping) ->
+                                if exp.type isnt syntax.CallExpression
+                                        [create_number_literal mapping[exp.name]]
                                 else
-                                        (flatten_memberexp exp.object).concat [exp.property]
+                                        (flatten_memberexp exp.arguments[0], mapping).concat [exp.arguments[1]]
 
                         prepend_environment = (exps) ->
                                 obj = create_identifier env_name
                                 for prop in exps
                                         obj = {
-                                                type: syntax.MemberExpression,
-                                                computed: false,
-                                                object: obj
-                                                property: prop
+                                                type: syntax.CallExpression,
+                                                callee: create_identifier "%slot"
+                                                arguments: [ obj, prop ]
                                         }
                                 obj
 
                         # if there are existing mappings prepend "%env." (a MemberExpression) to them
                         for mapped of new_mapping
                                 val = new_mapping[mapped]
-                                new_mapping[mapped] = prepend_environment flatten_memberexp val
+                                if mapped isnt "%slot_mapping"
+                                        new_mapping[mapped] = prepend_environment (flatten_memberexp val, n.ejs_env.slot_mapping)
                         
                         # add mappings for all variables in .closed from "x" to "%env.x"
 
                         new_mapping["%env"] = create_identifier env_name
                         n.ejs_env.closed.map (sym) ->
                                 new_mapping[sym] =
-                                        type: syntax.MemberExpression,
-                                        computed: false,
-                                        object: create_identifier env_name
-                                        property: create_identifier sym
+                                        type: syntax.CallExpression
+                                        callee: create_identifier "%slot"
+                                        arguments: [ (create_identifier env_name), (create_number_literal n.ejs_env.slot_mapping[sym]) ]
 
                         @mappings.unshift new_mapping
                         @visitFunctionBody n

@@ -4,6 +4,7 @@ SOURCES= \
 	ejs-boolean.c \
 	ejs-builtin-modules.c \
 	ejs-console.c \
+	ejs-closureenv.c \
 	ejs-date.c \
 	ejs-error.c \
 	ejs-exception.c \

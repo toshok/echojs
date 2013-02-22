@@ -40,6 +40,8 @@ class LLVMIRVisitor extends NodeVisitor
                         makeClosure: @handleMakeClosureIntrinsic
                         makeAnonClosure: @handleMakeAnonClosureIntrinsic
                         createArgScratchArea: @handleCreateArgScratchAreaIntrinsic
+                        makeClosureEnv: @handleMakeClosureEnvIntrinsic
+                        slot: @handleSlotIntrinsic
 
                 @llvm_intrinsics =
                         gcroot: -> module.getOrInsertIntrinsic "@llvm.gcroot"
@@ -574,8 +576,10 @@ class LLVMIRVisitor extends NodeVisitor
                         object_alloca = @createAlloca @currentFunction, types.EjsValue, "object_alloca"
                         ir.createStore (@visit lhs.object), object_alloca
                         result = @createPropertyStore (@createLoad object_alloca, "load_object"), lhs.property, rhvalue, lhs.computed
+                else if lhs.type is syntax.CallExpression and lhs.callee.name is "%slot"
+                        ir.createStore rhvalue, (@handleSlotRefIntrinsic lhs)
                 else
-                        throw "unhandled lhs type #{lhs.type}"
+                        throw "unhandled lhs #{escodegen.generate lhs}"
 
         visitAssignmentExpression: (n) ->
                 lhs = n.left
@@ -1306,28 +1310,35 @@ class LLVMIRVisitor extends NodeVisitor
                 else
                         @createLoad call_result, "call_result_load"
                         
-                        
-                        
-                
         handleMakeClosureIntrinsic: (exp, ctor_context= false) ->
                 argv = @visitArgsForCall @ejs_runtime.make_closure, false, exp.arguments
                 closure_result = @createAlloca @currentFunction, types.EjsValue, "closure_result"
-                calltmp = @createCall @ejs_runtime.make_closure, argv, "closure_tmp"
+                calltmp = ir.createCall @ejs_runtime.make_closure, argv, "closure_tmp"
                 store = ir.createStore calltmp, closure_result
                 @createLoad closure_result, "closure_result_load"
 
         handleMakeAnonClosureIntrinsic: (exp, ctor_context= false) ->
                 argv = @visitArgsForCall @ejs_runtime.make_anon_closure, false, exp.arguments
                 closure_result = @createAlloca @currentFunction, types.EjsValue, "closure_result"
-                calltmp = @createCall @ejs_runtime.make_anon_closure, argv, "closure_tmp"
+                calltmp = ir.createCall @ejs_runtime.make_anon_closure, argv, "closure_tmp"
                 store = ir.createStore calltmp, closure_result
                 @createLoad closure_result, "closure_result_load"
-                                
                 
         handleCreateArgScratchAreaIntrinsic: (exp, ctor_context= false) ->
                 argsArrayType = llvm.ArrayType.get types.EjsValue, exp.arguments[0].value
                 @currentFunction.scratch_area = @createAlloca @currentFunction, argsArrayType, "args_scratch_area"
-                
+
+        handleMakeClosureEnvIntrinsic: (exp, ctor_context= false) ->
+                argv = @visitArgsForCall @ejs_runtime.make_closure_env, false, exp.arguments
+                ir.createCall @ejs_runtime.make_closure_env, argv, "env_tmp"
+
+        handleSlotIntrinsic: (exp) ->
+                argv = @visitArgsForCall @ejs_runtime.get_env_slot_val, false, exp.arguments
+                ir.createCall @ejs_runtime.get_env_slot_val, argv, "slot_val_tmp"
+
+        handleSlotRefIntrinsic: (exp) ->
+                argv = @visitArgsForCall @ejs_runtime.get_env_slot_ref, false, exp.arguments
+                ir.createCall @ejs_runtime.get_env_slot_ref, argv, "slot_ref_tmp"
 
 class AddFunctionsVisitor extends NodeVisitor
         constructor: (@module) ->

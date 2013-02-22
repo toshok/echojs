@@ -12,8 +12,9 @@ EJS_BEGIN_DECLS
 #define CONSERVATIVE_STACKWALK 1
 
 typedef enum {
-    EJS_SCAN_TYPE_PRIMSTR = 1 << 0,
-    EJS_SCAN_TYPE_OBJECT  = 1 << 1
+    EJS_SCAN_TYPE_PRIMSTR    = 1 << 0,
+    EJS_SCAN_TYPE_OBJECT     = 1 << 1,
+    EJS_SCAN_TYPE_CLOSUREENV = 1 << 2
 } EJSScanType;
 
 #define EJS_GC_INTERNAL_FLAGS_MASK 0x0000ffff
@@ -30,6 +31,7 @@ extern GCObjectPtr _ejs_gc_alloc(size_t size, EJSScanType scan_type);
 #define _ejs_gc_new(T) (T*)_ejs_gc_alloc(sizeof(T), EJS_SCAN_TYPE_OBJECT)
 #define _ejs_gc_new_obj(T,sz) (T*)_ejs_gc_alloc(sz, EJS_SCAN_TYPE_OBJECT)
 #define _ejs_gc_new_primstr(sz) (EJSPrimString*)_ejs_gc_alloc(sz, EJS_SCAN_TYPE_PRIMSTR)
+#define _ejs_gc_new_closureenv(sz) (EJSClosureEnv*)_ejs_gc_alloc(sz, EJS_SCAN_TYPE_CLOSUREENV)
 
 #define _ejs_gc_add_named_root(v) __ejs_gc_add_named_root(&v, #v)
 extern void __ejs_gc_add_named_root(ejsval* val, const char *name);

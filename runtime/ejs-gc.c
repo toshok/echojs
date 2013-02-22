@@ -316,6 +316,14 @@ _scan_from_ejsprimstr(EJSPrimString *primStr)
     }
 }
 
+static void
+_scan_from_ejsclosureenv(EJSClosureEnv *env)
+{
+    for (int i = 0; i < env->length; i ++) {
+        _scan_ejsvalue (env->slots[i]);
+    }
+}
+
 #if CONSERVATIVE_STACKWALK
 static GCObjectPtr *stack_bottom;
 
@@ -472,9 +480,14 @@ mark_from_roots()
             if (EJSVAL_IS_OBJECT(rootval)) {
                 _scan_from_ejsobject((EJSObject*)root_ptr);
             }
-            else {
+            else if (EJSVAL_IS_STRING(rootval)) {
                 _scan_from_ejsprimstr((EJSPrimString*)root_ptr);
             }
+            else if (EJSVAL_IS_CLOSUREENV(rootval)) {
+                _scan_from_ejsclosureenv((EJSClosureEnv*)root_ptr);
+            }
+            else
+                abort();
         }
     }
 }
@@ -504,8 +517,10 @@ process_worklist()
         GCObjectHeader* headerp = (GCObjectHeader*)p;
         if ((*headerp & EJS_SCAN_TYPE_OBJECT) != 0)
             _scan_from_ejsobject((EJSObject*)p);
-        else
+        else if ((*headerp & EJS_SCAN_TYPE_PRIMSTR) != 0)
             _scan_from_ejsprimstr((EJSPrimString*)p);
+        else if ((*headerp & EJS_SCAN_TYPE_CLOSUREENV) != 0)
+            _scan_from_ejsclosureenv((EJSClosureEnv*)p);
     }
 }
 

@@ -7,13 +7,9 @@
 
 #include "ejs.h"
 #include "ejs-object.h"
+#include "ejs-closureenv.h"
 
-// for now we just build environments out of EJS objects
-typedef ejsval EJSClosureEnv;
-
-typedef ejsval (*EJSClosureFunc) (EJSClosureEnv env, ejsval _this, uint32_t argc, ejsval* args);
-
-
+typedef ejsval (*EJSClosureFunc) (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
 
 typedef struct {
     /* object header */
@@ -21,7 +17,7 @@ typedef struct {
 
     ejsval name;
     EJSClosureFunc func;
-    EJSClosureEnv env;
+    ejsval env;
 
     EJSBool bound;
     ejsval bound_this;
@@ -45,16 +41,16 @@ EJS_BEGIN_DECLS
     EJS_MACRO_END
 
 ejsval  _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args);
-EJSBool _ejs_decompose_closure (ejsval closure, EJSClosureFunc* func, EJSClosureEnv* env, ejsval *_this);
+EJSBool _ejs_decompose_closure (ejsval closure, EJSClosureFunc* func, ejsval* env, ejsval *_this);
 
 ejsval _ejs_invoke_closure_0 (ejsval closure, ejsval _this, uint32_t argc);
 ejsval _ejs_invoke_closure_1 (ejsval closure, ejsval _this, uint32_t argc, ejsval arg1);
 ejsval _ejs_invoke_closure_2 (ejsval closure, ejsval _this, uint32_t argc, ejsval arg1, ejsval arg2);
 
-extern ejsval _ejs_function_new (EJSClosureEnv env, ejsval name, EJSClosureFunc func);
-extern ejsval _ejs_function_new_native (EJSClosureEnv env, ejsval name, EJSClosureFunc func);
-extern ejsval _ejs_function_new_anon (EJSClosureEnv env, EJSClosureFunc func);
-extern ejsval _ejs_function_new_utf8 (EJSClosureEnv env, const char* name, EJSClosureFunc func);
+extern ejsval _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func);
+extern ejsval _ejs_function_new_native (ejsval env, ejsval name, EJSClosureFunc func);
+extern ejsval _ejs_function_new_anon (ejsval env, EJSClosureFunc func);
+extern ejsval _ejs_function_new_utf8 (ejsval env, const char* name, EJSClosureFunc func);
 
 extern ejsval _ejs_Function;
 extern ejsval _ejs_Function__proto__;

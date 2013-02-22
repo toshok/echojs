@@ -36,6 +36,11 @@ exports.Set = class Set
                 str += " }"
                 str
 
+        size: ->
+                count = 0
+                @map (el) -> count += 1
+                count
+                
         empty: ->
                 els = (el for el of @set when hasOwn.call @set, el)
                 els.length is 0

@@ -48,6 +48,7 @@ typedef struct _EJSContext* EJSContext;
     EJS_MACRO_END
 
 typedef struct _EJSPrimString EJSPrimString;
+typedef struct _EJSClosureEnv EJSClosureEnv;
 typedef struct _EJSObject EJSObject;
 
 #include "ejsval.h"

@@ -146,8 +146,9 @@ EJS_ENUM_HEADER(EJSValueType, uint8_t)
     EJSVAL_TYPE_BOOLEAN             = 0x03,
     EJSVAL_TYPE_MAGIC               = 0x04,
     EJSVAL_TYPE_STRING              = 0x05,
-    EJSVAL_TYPE_NULL                = 0x06,
-    EJSVAL_TYPE_OBJECT              = 0x07,
+    EJSVAL_TYPE_CLOSUREENV          = 0x06,
+    EJSVAL_TYPE_NULL                = 0x07,
+    EJSVAL_TYPE_OBJECT              = 0x08,
 
     /* These never appear in a ejsval; they are only provided as an out-of-band value. */
     EJSVAL_TYPE_UNKNOWN             = 0x20,
@@ -165,6 +166,7 @@ EJS_ENUM_HEADER(EJSValueTag, uint32_t)
     EJSVAL_TAG_INT32                = EJSVAL_TAG_CLEAR | EJSVAL_TYPE_INT32,
     EJSVAL_TAG_UNDEFINED            = EJSVAL_TAG_CLEAR | EJSVAL_TYPE_UNDEFINED,
     EJSVAL_TAG_STRING               = EJSVAL_TAG_CLEAR | EJSVAL_TYPE_STRING,
+    EJSVAL_TAG_CLOSUREENV           = EJSVAL_TAG_CLEAR | EJSVAL_TYPE_CLOSUREENV,
     EJSVAL_TAG_BOOLEAN              = EJSVAL_TAG_CLEAR | EJSVAL_TYPE_BOOLEAN,
     EJSVAL_TAG_MAGIC                = EJSVAL_TAG_CLEAR | EJSVAL_TYPE_MAGIC,
     EJSVAL_TAG_NULL                 = EJSVAL_TAG_CLEAR | EJSVAL_TYPE_NULL,
@@ -182,6 +184,7 @@ EJS_ENUM_HEADER(EJSValueTag, uint32_t)
     EJSVAL_TAG_INT32                = EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_INT32,
     EJSVAL_TAG_UNDEFINED            = EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_UNDEFINED,
     EJSVAL_TAG_STRING               = EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_STRING,
+    EJSVAL_TAG_CLOSUREENV           = EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_CLOSUREENV,
     EJSVAL_TAG_BOOLEAN              = EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_BOOLEAN,
     EJSVAL_TAG_MAGIC                = EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_MAGIC,
     EJSVAL_TAG_NULL                 = EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_NULL,
@@ -196,6 +199,7 @@ EJS_ENUM_HEADER(EJSValueShiftedTag, uint64_t)
     EJSVAL_SHIFTED_TAG_INT32        = (((uint64_t)EJSVAL_TAG_INT32)      << EJSVAL_TAG_SHIFT),
     EJSVAL_SHIFTED_TAG_UNDEFINED    = (((uint64_t)EJSVAL_TAG_UNDEFINED)  << EJSVAL_TAG_SHIFT),
     EJSVAL_SHIFTED_TAG_STRING       = (((uint64_t)EJSVAL_TAG_STRING)     << EJSVAL_TAG_SHIFT),
+    EJSVAL_SHIFTED_TAG_CLOSUREENV   = (((uint64_t)EJSVAL_TAG_CLOSUREENV) << EJSVAL_TAG_SHIFT),
     EJSVAL_SHIFTED_TAG_BOOLEAN      = (((uint64_t)EJSVAL_TAG_BOOLEAN)    << EJSVAL_TAG_SHIFT),
     EJSVAL_SHIFTED_TAG_MAGIC        = (((uint64_t)EJSVAL_TAG_MAGIC)      << EJSVAL_TAG_SHIFT),
     EJSVAL_SHIFTED_TAG_NULL         = (((uint64_t)EJSVAL_TAG_NULL)       << EJSVAL_TAG_SHIFT),
@@ -215,8 +219,9 @@ typedef uint8_t EJSValueType;
 #define EJSVAL_TYPE_BOOLEAN           ((uint8_t)0x03)
 #define EJSVAL_TYPE_MAGIC             ((uint8_t)0x04)
 #define EJSVAL_TYPE_STRING            ((uint8_t)0x05)
-#define EJSVAL_TYPE_NULL              ((uint8_t)0x06)
-#define EJSVAL_TYPE_OBJECT            ((uint8_t)0x07)
+#define EJSVAL_TYPE_CLOSUREENV        ((uint8_t)0x06)
+#define EJSVAL_TYPE_NULL              ((uint8_t)0x07)
+#define EJSVAL_TYPE_OBJECT            ((uint8_t)0x08)
 #define EJSVAL_TYPE_UNKNOWN           ((uint8_t)0x20)
 
 #if EJS_BITS_PER_WORD == 32
@@ -226,6 +231,7 @@ typedef uint32_t EJSValueTag;
 #define EJSVAL_TAG_INT32              ((uint32_t)(EJSVAL_TAG_CLEAR | EJSVAL_TYPE_INT32))
 #define EJSVAL_TAG_UNDEFINED          ((uint32_t)(EJSVAL_TAG_CLEAR | EJSVAL_TYPE_UNDEFINED))
 #define EJSVAL_TAG_STRING             ((uint32_t)(EJSVAL_TAG_CLEAR | EJSVAL_TYPE_STRING))
+#define EJSVAL_TAG_CLOSUREENV         ((uint32_t)(EJSVAL_TAG_CLEAR | EJSVAL_TYPE_CLOSUREENV))
 #define EJSVAL_TAG_BOOLEAN            ((uint32_t)(EJSVAL_TAG_CLEAR | EJSVAL_TYPE_BOOLEAN))
 #define EJSVAL_TAG_MAGIC              ((uint32_t)(EJSVAL_TAG_CLEAR | EJSVAL_TYPE_MAGIC))
 #define EJSVAL_TAG_NULL               ((uint32_t)(EJSVAL_TAG_CLEAR | EJSVAL_TYPE_NULL))
@@ -238,6 +244,7 @@ typedef uint32_t EJSValueTag;
 #define EJSVAL_TAG_INT32              (uint32_t)(EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_INT32)
 #define EJSVAL_TAG_UNDEFINED          (uint32_t)(EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_UNDEFINED)
 #define EJSVAL_TAG_STRING             (uint32_t)(EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_STRING)
+#define EJSVAL_TAG_CLOSUREENV         (uint32_t)(EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_CLOSUREENV)
 #define EJSVAL_TAG_BOOLEAN            (uint32_t)(EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_BOOLEAN)
 #define EJSVAL_TAG_MAGIC              (uint32_t)(EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_MAGIC)
 #define EJSVAL_TAG_NULL               (uint32_t)(EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_NULL)
@@ -248,6 +255,7 @@ typedef uint64_t EJSValueShiftedTag;
 #define EJSVAL_SHIFTED_TAG_INT32      (((uint64_t)EJSVAL_TAG_INT32)      << EJSVAL_TAG_SHIFT)
 #define EJSVAL_SHIFTED_TAG_UNDEFINED  (((uint64_t)EJSVAL_TAG_UNDEFINED)  << EJSVAL_TAG_SHIFT)
 #define EJSVAL_SHIFTED_TAG_STRING     (((uint64_t)EJSVAL_TAG_STRING)     << EJSVAL_TAG_SHIFT)
+#define EJSVAL_SHIFTED_TAG_CLOSUREENV (((uint64_t)EJSVAL_TAG_CLOSUREENV) << EJSVAL_TAG_SHIFT)
 #define EJSVAL_SHIFTED_TAG_BOOLEAN    (((uint64_t)EJSVAL_TAG_BOOLEAN)    << EJSVAL_TAG_SHIFT)
 #define EJSVAL_SHIFTED_TAG_MAGIC      (((uint64_t)EJSVAL_TAG_MAGIC)      << EJSVAL_TAG_SHIFT)
 #define EJSVAL_SHIFTED_TAG_NULL       (((uint64_t)EJSVAL_TAG_NULL)       << EJSVAL_TAG_SHIFT)
@@ -313,6 +321,7 @@ typedef union ejsval_layout
             uint32_t       u32;
             EJSBool         boo;
             EJSPrimString       *str;
+            EJSClosureEnv       *env;
             EJSObject       *obj;
             void           *ptr;
             EJSWhyMagic     why;
@@ -358,6 +367,7 @@ typedef union ejsval_layout
             uint32_t       u32;
             EJSBool         boo;
             EJSPrimString       *str;
+            EJSClosureEnv       *env;
             EJSObject       *obj;
             void           *ptr;
             EJSWhyMagic     why;
@@ -483,6 +493,28 @@ EJSVAL_TO_STRING_IMPL(ejsval_layout l)
 }
 
 static EJS_ALWAYS_INLINE EJSBool
+EJSVAL_IS_CLOSUREENV_IMPL(ejsval_layout l)
+{
+    return l.s.tag == EJSVAL_TAG_CLOSUREENV;
+}
+
+static EJS_ALWAYS_INLINE ejsval_layout
+CLOSUREENV_TO_EJSVAL_IMPL(EJSClosureEnv *env)
+{
+    ejsval_layout l;
+    EJS_ASSERT(env);
+    l.s.tag = EJSVAL_TAG_CLOSURENV;
+    l.s.payload.env = env;
+    return l;
+}
+
+static EJS_ALWAYS_INLINE EJSClosureEnv *
+EJSVAL_TO_CLOSUREENV_IMPL(ejsval_layout l)
+{
+    return l.s.payload.env;
+}
+
+static EJS_ALWAYS_INLINE EJSBool
 EJSVAL_IS_BOOLEAN_IMPL(ejsval_layout l)
 {
     return l.s.tag == EJSVAL_TAG_BOOLEAN;
@@ -584,7 +616,7 @@ EJSVAL_TO_GCTHING_IMPL(ejsval_layout l)
 static EJS_ALWAYS_INLINE EJSBool
 EJSVAL_IS_TRACEABLE_IMPL(ejsval_layout l)
 {
-    return l.s.tag == EJSVAL_TAG_STRING || l.s.tag == EJSVAL_TAG_OBJECT;
+    return l.s.tag == EJSVAL_TAG_STRING || l.s.tag == EJS_TAG_CLOSUREENV || l.s.tag == EJSVAL_TAG_OBJECT;
 }
 
 static EJS_ALWAYS_INLINE uint32_t
@@ -733,6 +765,29 @@ static EJS_ALWAYS_INLINE EJSPrimString *
 EJSVAL_TO_STRING_IMPL(ejsval_layout l)
 {
     return (EJSPrimString *)(l.asBits & EJSVAL_PAYLOAD_MASK);
+}
+
+static EJS_ALWAYS_INLINE EJSBool
+EJSVAL_IS_CLOSUREENV_IMPL(ejsval_layout l)
+{
+    return (uint32_t)(l.asBits >> EJSVAL_TAG_SHIFT) == EJSVAL_TAG_CLOSUREENV;
+}
+
+static EJS_ALWAYS_INLINE ejsval_layout
+CLOSUREENV_TO_EJSVAL_IMPL(EJSClosureEnv *env)
+{
+    ejsval_layout l;
+    uint64_t envBits = (uint64_t)env;
+    EJS_ASSERT(env);
+    EJS_ASSERT((envBits >> EJSVAL_TAG_SHIFT) == 0);
+    l.asBits = envBits | EJSVAL_SHIFTED_TAG_CLOSUREENV;
+    return l;
+}
+
+static EJS_ALWAYS_INLINE EJSClosureEnv *
+EJSVAL_TO_CLOSUREENV_IMPL(ejsval_layout l)
+{
+    return (EJSClosureEnv *)(l.asBits & EJSVAL_PAYLOAD_MASK);
 }
 
 static EJS_ALWAYS_INLINE EJSBool
