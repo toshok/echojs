@@ -11,3 +11,6 @@
 [submodule "parson"]
 	path = parson
 	url = https://github.com/toshok/parson.git
+[submodule "estraverse"]
+	path = estraverse
+	url = https://github.com/Constellation/estraverse.git
