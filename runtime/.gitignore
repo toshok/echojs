@@ -1,2 +1,10 @@
 .deps
 ejs-atoms-gen.c
+*.o.osx
+*.o.sim
+*.o.armv7
+*.a.osx
+*.a.sim
+*.a.armv7
+*.a.ios
+*.a

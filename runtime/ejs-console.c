@@ -8,6 +8,10 @@
 #include "ejs-function.h"
 #include "ejs-string.h"
 
+#if IOS
+#import <Foundation/Foundation.h>
+#endif
+
 static ejsval
 output (FILE *outfile, uint32_t argc, ejsval *args)
 {
@@ -17,28 +21,48 @@ output (FILE *outfile, uint32_t argc, ejsval *args)
             double d = EJSVAL_TO_NUMBER(args[i]);
             int di;
             if (EJSDOUBLE_IS_INT32(d, &di))
+#if IOS
+                NSLog(@"%d", di);
+#else
                 fprintf (outfile, "%d", di);
+#endif
             else
+#if IOS
+                NSLog(@ EJS_NUMBER_FORMAT, d);
+#else
                 fprintf (outfile, EJS_NUMBER_FORMAT, d);
+#endif
         }
         else if (EJSVAL_IS_FUNCTION(args[i])) {
             ADD_STACK_ROOT(ejsval, strval, ((EJSFunction*)EJSVAL_TO_OBJECT(args[i]))->name);
             char* strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(strval));
+#if IOS
+            NSLog(@"[Function: %s]", strval_utf8);
+#else
             fprintf (outfile, "[Function: %s]", strval_utf8);
+#endif
             free (strval_utf8);
         }
         else {
             ADD_STACK_ROOT(ejsval, strval, ToString(args[i]));
 
             char* strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(strval));
+#if IOS
+            NSLog(@"%s", strval_utf8);
+#else
             fprintf (outfile, "%s", strval_utf8);
+#endif
             free (strval_utf8);
         }
+#if !IOS
         if (i < argc - 1)
             fputc (' ', outfile);
+#endif
     }
 
+#if !IOS
     fputc ('\n', outfile);
+#endif
 
     END_SHADOW_STACK_FRAME;
     return _ejs_undefined;

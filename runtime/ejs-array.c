@@ -165,12 +165,12 @@ _ejs_Array_prototype_shift (ejsval env, ejsval _this, uint32_t argc, ejsval*args
         return first;
     }
 
+    EJS_NOT_IMPLEMENTED();
+
+#if notyet
     // 1. Let O be the result of calling ToObject passing the this value as the argument.
     ejsval O = ToObject(_this);
 
-
-    EJS_NOT_IMPLEMENTED();
-#if notyet
     // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
     ejsval lenVal = OP(O,get) (O, _ejs_atom_length, EJS_FALSE);
 
@@ -223,11 +223,9 @@ _ejs_Array_prototype_unshift (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
         return NUMBER_TO_EJSVAL(len + argc);
     }
 
-    // 1. Let O be the result of calling ToObject passing the this value as the argument.
-    ejsval O = ToObject(_this);
-
     EJS_NOT_IMPLEMENTED();
 
+    // 1. Let O be the result of calling ToObject passing the this value as the argument.
     // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
     // 3. Let len be ToUint32(lenVal).
     // 4. Let argCount be the number of actual arguments.
@@ -260,10 +258,11 @@ _ejs_Array_prototype_push (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
         return NUMBER_TO_EJSVAL (_ejs_array_push_dense (_this, argc, args));
     }
 
+    EJS_NOT_IMPLEMENTED();
+
+#if notyet
     // 1. Let O be the result of calling ToObject passing the this value as the argument.
     ejsval O = ToObject(_this);
-
-    EJS_NOT_IMPLEMENTED();
 
     // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
     ejsval lenVal = OP(EJSVAL_TO_OBJECT(O),get)(O, _ejs_atom_length, EJS_FALSE);
@@ -278,6 +277,7 @@ _ejs_Array_prototype_push (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
     //    c. Increase n by 1.
     // 6. Call the [[Put]] internal method of O with arguments "length", n, and true.
     // 7. Return n.
+#endif
 }
 
 // ECMA262: 15.4.4.6
@@ -353,7 +353,6 @@ _ejs_array_slice_dense (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     end = MIN(end, len);
 
     ejsval rv = _ejs_array_new(end-begin);
-    int i, rv_i;
 
     memmove (&EJS_ARRAY_ELEMENTS(rv)[0],
              &EJS_ARRAY_ELEMENTS(_this)[begin],
@@ -900,7 +899,6 @@ static EJSBool
 _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag)
 {
     if (!ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName))) {
-        EJSArray* arr = (EJSArray*)EJSVAL_TO_OBJECT(obj);
         EJS_ARRAY_LEN(obj) = ToUint32(_ejs_property_desc_get_value(propertyDescriptor));
         return EJS_TRUE;
     }
