@@ -269,6 +269,15 @@ class HoistVars extends NodeVisitor
                 @function_stack.shift()
                 n
 
+        visitFor: (n) ->
+                @skipExpressionStatement = true
+                init = @visit n.init
+                @skipExpressionStatement = false
+                n.test = @visit n.test
+                n.update = @visit n.update
+                n.body = @visit n.body
+                n
+                        
         visitForIn: (n) ->
                 if n.left.type is syntax.VariableDeclaration
                         @function_stack[0].vars.push
@@ -302,23 +311,34 @@ class HoistVars extends NodeVisitor
                         assignments = []
                         for i in [0...n.declarations.length]
                                 if n.declarations[i].init?
-                                        assignments.push
-                                                type: syntax.ExpressionStatement
-                                                expression:
-                                                        type: syntax.AssignmentExpression
-                                                        left: create_identifier n.declarations[i].id.name
-                                                        right: n.declarations[i].init
-                                                        operator: "="
+                                        assignment =
+                                                type: syntax.AssignmentExpression
+                                                left: create_identifier n.declarations[i].id.name
+                                                right: n.declarations[i].init
+                                                operator: "="
+
+                                        if @skipExpressionStatement
+                                                assignments.push assignment
+                                        else
+                                                assignments.push
+                                                        type: syntax.ExpressionStatement
+                                                        expression: assignment
 
                         # now return the new assignments, which will replace the original variable
                         # declaration node.
                         if assignments.length == 1
                                 return assignments[0]
 
-                        return {
-                                type: syntax.BlockStatement
-                                body: assignments
-                        }
+                        if @skipExpressionStatement
+                                return {
+                                        type: syntax.SequenceExpression
+                                        expressions: assignments
+                                }
+                        else
+                                return {
+                                        type: syntax.BlockStatement
+                                        body: assignments
+                                }
                 n
 
 # this class really doesn't behave like a normal NodeVisitor, as it modifies the tree in-place
@@ -348,7 +368,9 @@ class SubstituteVariables extends NodeVisitor
                 # if any of the variables declared in n.init are closed over
                 # we promote all of them outside of n.init.
 
+                @skipExpressionStatement = true
                 init = @visit n.init
+                @skipExpressionStatement = false
                 n.test = @visit n.test
                 n.update = @visit n.update
                 n.body = @visit n.body
@@ -384,18 +406,22 @@ class SubstituteVariables extends NodeVisitor
                 for decl in n.declarations
                         decl.init = @visit decl.init
                         if @currentMapping().hasOwnProperty decl.id.name
-                                rv.push {
-                                        type: syntax.ExpressionStatement
-                                        expression:
-                                                type: syntax.AssignmentExpression,
-                                                operator: "="
-                                                left:
-                                                        type: syntax.CallExpression
-                                                        callee: create_identifier "%slot"
-                                                        arguments: [ @currentMapping()["%env"], (create_number_literal @currentMapping()["%slot_mapping"][decl.id.name]) ]
-                                                right: decl.init || { type: syntax.Identifier, name: "undefined" }
-                                        
-                                }
+                                assignment =
+                                        type: syntax.AssignmentExpression,
+                                        operator: "="
+                                        left:
+                                                type: syntax.CallExpression
+                                                callee: create_identifier "%slot"
+                                                arguments: [ @currentMapping()["%env"], (create_number_literal @currentMapping()["%slot_mapping"][decl.id.name]) ]
+                                        right: decl.init || { type: syntax.Identifier, name: "undefined" }
+                                
+                                if @skipExpressionStatement
+                                        rv.push assignment
+                                else
+                                        rv.push {
+                                                type: syntax.ExpressionStatement
+                                                expression: assignment
+                                        }
                         else
                                 rv.push {
                                         type: syntax.VariableDeclaration
@@ -729,4 +755,7 @@ exports.convert = (tree, filename) ->
         passes.forEach (passType) ->
                 pass = new passType(filename)
                 tree = pass.visit tree
+                #debug.log 1, "after: #{passType.name}"
+                #debug.log 1, -> escodegen.generate tree
+
         tree
