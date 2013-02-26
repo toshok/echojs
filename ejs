@@ -11,25 +11,40 @@ debug = require 'debug'
 slice_count = if __ejs? then 1 else 2
 argv = process.argv.slice slice_count
 
-external_modules = []
 files = []
 temp_files = []
-debug_level = 0
 
-add_external_module = (modinfo) ->
-        [library,module_name,module_entrypoint,link_flags] = modinfo.split ','
-        external_modules.push { library, module_name, module_entrypoint, link_flags }
-
-increase_debug_level = ->
-        debug_level += 1
-        
 options =
         # our defaults:
+        debug_level: 0
         output_filename: null
         combine_scripts: false
         show_help: false
         leave_temp_files: false
+        target_arch: "osx"
+        external_modules: []
+        extra_clang_args: ""
+        ios_sdk: "5.0"
+        ios_min: "5.0"
 
+add_external_module = (modinfo) ->
+        [library,module_name,module_entrypoint,link_flags] = modinfo.split ','
+        options.external_modules.push { library, module_name, module_entrypoint, link_flags }
+
+set_target = (targetinfo) ->
+        switch targetinfo
+          when "osx" then options.target = "osx"
+          when "sim" then options.target = "sim"
+          when "dev" then options.target = "dev"
+          else
+                throw "invalid target specification `#{targetinfo}'."
+
+set_extra_clang_args = (arginfo) ->
+        options.extra_clang_args = arginfo
+
+increase_debug_level = ->
+        options.debug_level += 1
+        
 args =
         "-d":
                 handler: increase_debug_level
@@ -51,6 +66,20 @@ args =
         "--help":
                 flag:    "show_help",
                 help:    "output this help info."
+        "--target":
+                handler: set_target
+                handlerArgc: 1
+                help:    "--target osx|sim|dev"
+        "--extra-clang-args":
+                handler: set_extra_clang_args
+                handlerArgc: 1
+                help:    "extra arguments to pass to the clang command (used to compile the .s to .o)"
+        "--ios-sdk":
+                option:  "ios_sdk"
+                help:    "the version of the ios sdk to use.  useful if more than one is installed.  Default is 5.0."
+        "--ios-min":
+                option:  "ios_min"
+                help:    "the minimum version of ios to support.  Default is 5.0."
 
 output_usage = ->
         console.warn 'Usage:';
@@ -94,7 +123,7 @@ if files.length is 0
         output_usage()
         process.exit 0
 
-debug.setLevel debug_level
+debug.setLevel options.debug_level
 
 files_remaining = 0
 
@@ -106,6 +135,42 @@ compiled_modules = []
 
 esprima = require 'esprima'
 compiler = require 'compiler'
+
+sim_base="/Developer/Platforms/iPhoneSimulator.platform"
+dev_base="/Developer/Platforms/iPhoneOS.platform"
+
+sim_bin="#{sim_base}/Developer/usr/bin"
+dev_bin="#{dev_base}/Developer/usr/bin"
+
+target_llc_args =
+        osx: ["-march=x86-64"]
+        sim: ["-march=x86"]
+        dev: ["-march=arm"]
+
+target_linker =
+        osx: "clang++"
+        sim: "#{sim_bin}/clang++"
+        dev: "#{dev_bin}/clang"
+        
+target_link_args =
+        osx: [ ]
+        sim: [ "-isysroot", "#{sim_base}/Developer/SDKs/iPhoneSimulator#{options.ios_sdk}.sdk", "-arch", "i386", "-miphoneos-version-min=#{options.ios_min}" ]
+        dev: [ "-isysroot", "#{dev_base}/Developer/SDKs/iPhoneOS#{options.ios_sdk}.sdk", "-arch", "armv7", "-miphoneos-version-min=#{options.ios_min}" ]
+
+target_libraries =
+        osx: [ "-framework", "Foundation", "-framework", "AppKit" ]
+        sim: [ "-framework", "Foundation", "-framework", "UIKit" ]
+        dev: [ "-framework", "Foundation", "-framework", "UIKit" ]
+
+target_libecho =
+        osx: "runtime/libecho.a"
+        sim: "runtime/libecho.a.ios"
+        dev: "runtime/libecho.a.ios"
+
+target_path_prepend =
+        osx: ""
+        sim: "#{sim_bin}"
+        dev: "#{dev_bin}"
 
 compileFile = (filename, content, compileCallback) ->
         try
@@ -120,15 +185,13 @@ compileFile = (filename, content, compileCallback) ->
         ll_filename = "/tmp/#{base_filename}.ll"
         bc_filename = "/tmp/#{base_filename}.bc"
         ll_opt_filename = "/tmp/#{base_filename}.ll.opt"
-        s_filename = "/tmp/#{base_filename}.s"
         o_filename = "/tmp/#{base_filename}.o"
 
-        temp_files.push ll_filename, bc_filename, ll_opt_filename, s_filename, o_filename
+        temp_files.push ll_filename, bc_filename, ll_opt_filename, o_filename
         
         llvm_as_args = ["-o=#{bc_filename}", ll_filename]
         opt_args = ["-O3", "-early-cse", "-mem2reg", "-adce", "-strip-dead-prototypes", "-instsimplify", "-S", "-o=#{ll_opt_filename}", bc_filename]
-        llc_args = ["-march=x86-64", "-O2", "-o=#{s_filename}", ll_opt_filename]
-        clang_args = ["-march=x86-64", "-O2", "-c", "-o", o_filename, s_filename]
+        llc_args = target_llc_args[options.target].concat ["-O2", "-filetype=obj", "-o=#{o_filename}", ll_opt_filename]
 
         compiled_module.writeToFile ll_filename
 
@@ -139,24 +202,23 @@ compileFile = (filename, content, compileCallback) ->
                 spawn "llvm-as", llvm_as_args
                 spawn "opt", opt_args
                 spawn "llc", llc_args
-                spawn "clang", clang_args
                 o_filenames.push o_filename
                 compileCallback()
         else
+                debug.log 1, "executing `llvm-as #{llvm_as_args.join ' '}'"
                 llvm_as = spawn "llvm-as", llvm_as_args
                 llvm_as.stderr.on "data", (data) -> console.warn "#{data}"
                 llvm_as.on "exit", (code) ->
+                        debug.log 1, "executing `opt #{opt_args.join ' '}'"
                         opt = spawn "opt", opt_args
                         opt.stderr.on "data", (data) -> console.warn "#{data}"
                         opt.on "exit", (code) ->
+                                debug.log 1, "executing `llc #{llc_args.join ' '}'"
                                 llc = spawn "llc", llc_args
                                 llc.stderr.on "data", (data) -> console.warn "#{data}"
                                 llc.on "exit", (code) ->
-                                        clang = spawn "clang", clang_args
-                                        clang.stderr.on "data", (data) -> console.warn "#{data}"
-                                        clang.on "exit", (code) ->
-                                                o_filenames.push o_filename
-                                                compileCallback()
+                                        o_filenames.push o_filename
+                                        compileCallback()
 
 generate_require_map = ->
         sanitize = (filename, c_callable) ->
@@ -183,7 +245,7 @@ generate_require_map = ->
         map.write "typedef struct { const char* name;  ExternalModuleEntry func;  EJSValue *cached_exports; } EJSExternalModuleRequire;\n"
         map.write "typedef EJSValue* (*ToplevelFunc) (EJSValue *env, EJSValue *_this, int argc, EJSValue **args);\n"
         map.write "typedef struct { const char* name;  ToplevelFunc func;  EJSValue *cached_exports; } EJSRequire;\n"
-        external_modules.forEach ({ module_entrypoint }) ->
+        options.external_modules.forEach ({ module_entrypoint }) ->
                 map.write "extern EJSValue* #{module_entrypoint} (EJSValue *exports);\n"
 
         compiled_modules.forEach ({ filename, module_toplevel }) ->
@@ -197,7 +259,7 @@ generate_require_map = ->
         map.write "};\n"
 
         map.write "EJSExternalModuleRequire _ejs_external_module_require_map[] = {\n"
-        external_modules.forEach ({ module_name, module_entrypoint }) ->
+        options.external_modules.forEach ({ module_name, module_entrypoint }) ->
                 map.write "  { \"#{module_name}\", #{module_entrypoint}, 0 },\n"
         map.write "  { 0, 0, 0 }\n"
         map.write "};\n"
@@ -215,19 +277,25 @@ generate_require_map = ->
 do_final_link = ->
         map_filename = generate_require_map compiled_modules
 
-        clang_args = ["-o", options.output_filename || "#{files[0]}.exe"].concat o_filenames
+        process.env.PATH = "#{target_path_prepend[options.target]}:#{process.env.PATH}"
+        
+        clang_args = target_link_args[options.target].concat ["-o", options.output_filename || "#{files[0]}.exe"].concat o_filenames
         clang_args.push map_filename
-        clang_args.push path.resolve (path.dirname process.argv[if __ejs? then 0 else 1]), "runtime/libecho.a"
-        external_modules.forEach (extern_module) ->
+        clang_args.push path.resolve (path.dirname process.argv[if __ejs? then 0 else 1]), target_libecho[options.target]
+        options.external_modules.forEach (extern_module) ->
                 clang_args.push extern_module.library
                 clang_args = clang_args.concat extern_module.link_flags.split " "
 
+        clang_args = clang_args.concat target_libraries[options.target]
+
+        debug.log 1, "executing `#{target_linker[options.target]} #{clang_args.join ' '}'"
+        
         if __ejs?
-                spawn "clang++", clang_args
+                spawn target_linker[options.target], clang_args
                 # we ignore leave_tmp_files here
                 console.warn "done."
         else
-                clang = spawn "clang++", clang_args
+                clang = spawn target_linker[options.target], clang_args
                 clang.stderr.on "data", (data) -> console.warn "#{data}"
                 clang.on "exit", (code) ->
                         if not options.leave_temp_files
