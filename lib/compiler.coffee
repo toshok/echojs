@@ -418,6 +418,9 @@ class LLVMIRVisitor extends NodeVisitor
                                 
                 ir.createBr forin_bb
 
+                scope = new LoopExitableScope n.label, forin_bb, merge_bb
+                scope.enter()
+
                 @doInsideBlock forin_bb, =>
                         moreleft = @createCall @ejs_runtime.prop_iterator_next, [iterator, consts.true()], "moreleft"
                         cmp = ir.createICmpEq moreleft, consts.false(), "cmpmoreleft"
@@ -428,6 +431,8 @@ class LLVMIRVisitor extends NodeVisitor
                         @storeValueInDest current, lhs
                         @visit n.body
                         ir.createBr forin_bb
+
+                scope.leave()
 
                 ir.setInsertPoint merge_bb
                 merge_bb
