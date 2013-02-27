@@ -48,9 +48,11 @@ under control.
 Echo now uses mozilla's NaN-boxing jsval (called ejsval here) so
 primitive ints and doubles are stored unboxed.
 
-Closure environments are still represented as JS objects, with the
-aforementioned linearly property lookups for closed-over variables, but
-this will be changing something very soon.
+Closure environments are now using a much more compact (and more
+importantly much faster) representation.  Access to closed-over
+identifiers is now nearly as fast as to non-closed identifiers
+(a constant number of dereferences dictated by the number of
+enclosing environments.)
 
 What's next?
 ------------
@@ -60,7 +62,10 @@ keeping the self-hosted compiler from running.
 
 Typed arrays are another area that I'd like to see fleshed out sooner
 rather than later.  They're pretty simple from an implementation
-perspective.
+perspective.  Work on this has begun, check out runtime/ejs-typedarrays.c.
+
+I'm starting to bring over the objective-c binding code from coffeekit,
+originally closed-source but on its way into the open.
 
 Pass the crackpipe?
 -------------------
