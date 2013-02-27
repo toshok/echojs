@@ -111,8 +111,8 @@ echo-%:
 .%.js.node-out: %.js
 	@NODE_PATH=$(NODE_PATH) node $< > $@
 
-esprima-roundtrip%.js.exe: esprima-roundtrip%.js $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js $(TOPDIR)/runtime/libecho.a
-	@echo [ejs stage$(EJS_STAGE)] $< && $(EJS_DRIVER) --leave-temp $< $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js
+esprima-roundtrip%.js.exe: esprima-roundtrip%.js $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js $(TOPDIR)/estraverse/estraverse.js $(TOPDIR)/runtime/libecho.a
+	@echo [ejs stage$(EJS_STAGE)] $< && $(EJS_DRIVER) --leave-temp $< $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js $(TOPDIR)/estraverse/estraverse.js
 
 EJS_DRIVER ?= NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --leave-temp
 EJS_STAGE ?= 0
