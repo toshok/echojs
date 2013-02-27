@@ -271,7 +271,7 @@ class HoistVars extends NodeVisitor
 
         visitFor: (n) ->
                 @skipExpressionStatement = true
-                init = @visit n.init
+                n.init = @visit n.init
                 @skipExpressionStatement = false
                 n.test = @visit n.test
                 n.update = @visit n.update
@@ -326,10 +326,9 @@ class HoistVars extends NodeVisitor
 
                         # now return the new assignments, which will replace the original variable
                         # declaration node.
-                        if assignments.length == 1
-                                return assignments[0]
-
                         if @skipExpressionStatement
+                                return assignments[0] if assignments.length is 1
+
                                 return {
                                         type: syntax.SequenceExpression
                                         expressions: assignments
@@ -755,7 +754,7 @@ exports.convert = (tree, filename) ->
         passes.forEach (passType) ->
                 pass = new passType(filename)
                 tree = pass.visit tree
-                #debug.log 1, "after: #{passType.name}"
-                #debug.log 1, -> escodegen.generate tree
+                debug.log 2, "after: #{passType.name}"
+                debug.log 2, -> escodegen.generate tree
 
         tree
