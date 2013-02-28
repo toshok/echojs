@@ -703,6 +703,12 @@ _ejs_Array_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
     return NUMBER_TO_EJSVAL (rv);
 }
 
+ejsval
+_ejs_Array_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    return _ejs_Array_prototype_join (env, _this, 0, NULL);
+}
+
 static ejsval
 _ejs_Array_isArray (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
@@ -743,6 +749,8 @@ _ejs_array_init(ejsval global)
     PROTO_METHOD(indexOf);
     PROTO_METHOD(join);
     PROTO_METHOD(forEach);
+
+    PROTO_METHOD(toString);
 
 #undef OBJ_METHOD
 #undef PROTO_METHOD
