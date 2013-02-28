@@ -19,6 +19,7 @@
 #include "ejs-array.h"
 #include "ejs-typedarrays.h"
 #include "ejs-function.h"
+#include "ejs-error.h"
 
 static ejsval           _ejs_object_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr);
 static EJSPropertyDesc* _ejs_object_specop_get_own_property (ejsval obj, ejsval propertyName);
@@ -513,6 +514,13 @@ _ejs_object_create (ejsval proto)
     else if (EJSVAL_EQ(proto, _ejs_RegExp_proto))     ops = &_ejs_regexp_specops;
     else if (EJSVAL_EQ(proto, _ejs_Date_proto))       ops = &_ejs_date_specops;
     else if (EJSVAL_EQ(proto, _ejs_ArrayBuffer_proto)) ops = &_ejs_arraybuffer_specops;
+    else if (EJSVAL_EQ(proto, _ejs_EvalError_proto))  ops = &_ejs_error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_RangeError_proto))  ops = &_ejs_error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_ReferenceError_proto))  ops = &_ejs_error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_SyntaxError_proto))  ops = &_ejs_error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_TypeError_proto))  ops = &_ejs_error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_URIError_proto))  ops = &_ejs_error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_Error_proto))  ops = &_ejs_error_specops;
     else                                              ops = EJSVAL_TO_OBJECT(proto)->ops;
 
     return _ejs_object_new (proto, ops);

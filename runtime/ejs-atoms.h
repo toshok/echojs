@@ -73,7 +73,7 @@ EJS_ATOM(RangeError)
 EJS_ATOM(ReferenceError)
 EJS_ATOM(SyntaxError)
 EJS_ATOM(TypeError)
-EJS_ATOM(UriError)
+EJS_ATOM(URIError)
 
 // our funky global
 EJS_ATOM(__ejs)

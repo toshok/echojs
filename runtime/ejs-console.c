@@ -7,6 +7,7 @@
 #include "ejs-ops.h"
 #include "ejs-function.h"
 #include "ejs-string.h"
+#include "ejs-error.h"
 
 #if IOS
 #import <Foundation/Foundation.h>
@@ -15,43 +16,39 @@
 static ejsval
 output (FILE *outfile, uint32_t argc, ejsval *args)
 {
+#if IOS
+#define OUTPUT(format, val) NSLog(@format, val)
+#else
+#define OUTPUT(format, val) fprintf (outfile, format, val)
+#endif
+
     START_SHADOW_STACK_FRAME;
     for (int i = 0; i < argc; i ++) {
         if (EJSVAL_IS_NUMBER(args[i])) {
             double d = EJSVAL_TO_NUMBER(args[i]);
             int di;
             if (EJSDOUBLE_IS_INT32(d, &di))
-#if IOS
-                NSLog(@"%d", di);
-#else
-                fprintf (outfile, "%d", di);
-#endif
+                OUTPUT ("%d", di);
             else
-#if IOS
-                NSLog(@ EJS_NUMBER_FORMAT, d);
-#else
-                fprintf (outfile, EJS_NUMBER_FORMAT, d);
-#endif
+                OUTPUT (EJS_NUMBER_FORMAT, d);
+        }
+        else if (EJSVAL_IS_ERROR(args[i])) {
+            ADD_STACK_ROOT(ejsval, strval, _ejs_object_getprop(args[i], _ejs_atom_name));
+            char* strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(strval));
+            OUTPUT ("[%s]", strval_utf8);
+            free (strval_utf8);
         }
         else if (EJSVAL_IS_FUNCTION(args[i])) {
             ADD_STACK_ROOT(ejsval, strval, ((EJSFunction*)EJSVAL_TO_OBJECT(args[i]))->name);
             char* strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(strval));
-#if IOS
-            NSLog(@"[Function: %s]", strval_utf8);
-#else
-            fprintf (outfile, "[Function: %s]", strval_utf8);
-#endif
+            OUTPUT ("[Function: %s]", strval_utf8);
             free (strval_utf8);
         }
         else {
             ADD_STACK_ROOT(ejsval, strval, ToString(args[i]));
 
             char* strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(strval));
-#if IOS
-            NSLog(@"%s", strval_utf8);
-#else
-            fprintf (outfile, "%s", strval_utf8);
-#endif
+            OUTPUT ("%s", strval_utf8);
             free (strval_utf8);
         }
 #if !IOS

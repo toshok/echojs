@@ -11,6 +11,7 @@
 EJS_BEGIN_DECLS
 
 typedef enum {
+    EJS_ERROR,
     EJS_EVAL_ERROR,
     EJS_RANGE_ERROR,
     EJS_REFERENCE_ERROR,
@@ -19,8 +20,17 @@ typedef enum {
     EJS_URI_ERROR
 } EJSNativeErrorType;
 
-extern ejsval _ejs_Error;
-extern ejsval _ejs_error_get_prototype();
+#define EJSVAL_IS_ERROR(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_error_specops))
+
+extern EJSSpecOps _ejs_error_specops;
+
+extern ejsval _ejs_Error_proto;
+extern ejsval _ejs_EvalError_proto;
+extern ejsval _ejs_RangeError_proto;
+extern ejsval _ejs_ReferenceError_proto;
+extern ejsval _ejs_SyntaxError_proto;
+extern ejsval _ejs_TypeError_proto;
+extern ejsval _ejs_URIError_proto;
 
 extern ejsval _ejs_nativeerror_new_utf8 (EJSNativeErrorType error_type, const char* message);
 
