@@ -12,8 +12,8 @@ struct _EJSClosureEnv {
     ejsval slots[1];
 };
 
-ejsval  _ejs_closureenv_new (ejsval length);
-ejsval _ejs_closureenv_get_slot (ejsval env, ejsval slot);
-ejsval* _ejs_closureenv_get_slot_ref (ejsval env, ejsval slot);
+ejsval  _ejs_closureenv_new (uint32_t length);
+ejsval _ejs_closureenv_get_slot (ejsval env, uint32_t slot);
+ejsval* _ejs_closureenv_get_slot_ref (ejsval env, uint32_t slot);
 
 #endif /* _ejs_closureenv_h */

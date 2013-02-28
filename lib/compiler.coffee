@@ -1334,16 +1334,18 @@ class LLVMIRVisitor extends NodeVisitor
                 @currentFunction.scratch_area = @createAlloca @currentFunction, argsArrayType, "args_scratch_area"
 
         handleMakeClosureEnvIntrinsic: (exp, ctor_context= false) ->
-                argv = @visitArgsForCall @ejs_runtime.make_closure_env, false, exp.arguments
-                ir.createCall @ejs_runtime.make_closure_env, argv, "env_tmp"
+                size = exp.arguments[0].value
+                ir.createCall @ejs_runtime.make_closure_env, [consts.int32 size], "env_tmp"
 
         handleSlotIntrinsic: (exp) ->
-                argv = @visitArgsForCall @ejs_runtime.get_env_slot_val, false, exp.arguments
-                ir.createCall @ejs_runtime.get_env_slot_val, argv, "slot_val_tmp"
+                env = @visitOrNull exp.arguments[0]
+                slotnum = exp.arguments[1].value
+                ir.createCall @ejs_runtime.get_env_slot_val, [env, (consts.int32 slotnum)], "slot_val_tmp"
 
         handleSlotRefIntrinsic: (exp) ->
-                argv = @visitArgsForCall @ejs_runtime.get_env_slot_ref, false, exp.arguments
-                ir.createCall @ejs_runtime.get_env_slot_ref, argv, "slot_ref_tmp"
+                env = @visitOrNull exp.arguments[0]
+                slotnum = exp.arguments[1].value
+                ir.createCall @ejs_runtime.get_env_slot_ref, [env, (consts.int32 slotnum)], "slot_ref_tmp"
 
 class AddFunctionsVisitor extends NodeVisitor
         constructor: (@module) ->

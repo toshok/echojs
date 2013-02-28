@@ -13,26 +13,25 @@
 
 
 ejsval
-_ejs_closureenv_new (ejsval length)
+_ejs_closureenv_new (uint32_t length)
 {
-    uint32_t _length = ToUint32(length);
-    size_t value_size = sizeof(EJSClosureEnv) + sizeof(ejsval) * (_length - 1);
+    size_t value_size = sizeof(EJSClosureEnv) + sizeof(ejsval) * (length - 1);
     EJSClosureEnv* env = _ejs_gc_new_closureenv(value_size);
-    env->length = _length;
-    for (int i = 0; i < _length; i ++) {
+    env->length = length;
+    for (int i = 0; i < length; i ++) {
         env->slots[i] = _ejs_undefined;
     }
     return CLOSUREENV_TO_EJSVAL_IMPL(env);
 }
 
 ejsval
-_ejs_closureenv_get_slot (ejsval env, ejsval slot)
+_ejs_closureenv_get_slot (ejsval env, uint32_t slot)
 {
-    return (EJSVAL_TO_CLOSUREENV_IMPL(env))->slots[ToUint32(slot)];
+    return (EJSVAL_TO_CLOSUREENV_IMPL(env))->slots[slot];
 }
 
 ejsval*
-_ejs_closureenv_get_slot_ref (ejsval env, ejsval slot)
+_ejs_closureenv_get_slot_ref (ejsval env, uint32_t slot)
 {
-    return &(EJSVAL_TO_CLOSUREENV_IMPL(env))->slots[ToUint32(slot)];
+    return &(EJSVAL_TO_CLOSUREENV_IMPL(env))->slots[slot];
 }

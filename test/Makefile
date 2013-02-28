@@ -31,7 +31,7 @@ check: check-unit-tests run-tests
 
 check-stage1: check-unit-tests run-tests-stage1
 
-check-unit-tests: check-llvm check-set check-free
+check-unit-tests: check-llvm check-set #check-free
 
 check-llvm: terminal.js echo-assert.js
 	@NODE_PATH=$(NODE_PATH):. coffee llvm-test.coffee

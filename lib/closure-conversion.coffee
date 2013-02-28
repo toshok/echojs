@@ -7,91 +7,6 @@ debug = require 'debug'
 { NodeVisitor } = require 'nodevisitor'
 { genGlobalFunctionName, genAnonymousFunctionName, deep_copy_object, map, foldl } = require 'echo-util'
 
-decl_names = (arr) ->
-        result = []
-        for n in arr
-                if n.declarations?
-                        result = result.concat (decl.id.name for decl in n.declarations)
-                else if n.id?
-                        result.push n.id.name
-        new Set result
-
-param_names = (arr) ->
-        new Set map ((id) -> id.name), arr
-
-collect_decls = (body) ->
-       statement for statement in body when statement.type is syntax.VariableDeclaration or statement.type is syntax.FunctionDeclaration
-
-# TODO: convert this to a visitor
-free_blocklike = (exp,body) ->
-        decls = decl_names collect_decls body
-        uses = Set.union.apply null, map free, body
-        exp.ejs_decls = decls
-        exp.ejs_free_vars = uses.subtract decls
-        exp.ejs_free_vars
-        
-exports.free = free = (exp) ->
-        if not exp?
-                return new Set
-        switch exp.type
-                when syntax.Program
-                        decls = decl_names collect_decls exp.body
-                        uses = Set.union.apply null, (map free, exp.body)
-                        exp.ejs_decls = decls
-                        exp.ejs_free_vars = uses.subtract decls
-                when syntax.FunctionDeclaration
-                        exp.ejs_free_vars = (free exp.body).subtract (param_names exp.params)
-                        exp.ejs_decls = exp.body.ejs_decls.union (param_names exp.params)
-                        exp.ejs_free_vars
-                when syntax.FunctionExpression
-                        exp.ejs_free_vars = (free exp.body).subtract (param_names exp.params)
-                        exp.ejs_decls = exp.body.ejs_decls.union (param_names exp.params)
-                        exp.ejs_free_vars
-                when syntax.LabeledStatement      then exp.ejs_free_vars = free exp.body
-                when syntax.BlockStatement        then exp.ejs_free_vars = free_blocklike exp, exp.body
-                when syntax.TryStatement          then exp.ejs_free_vars = Set.union.apply null, [(free exp.block)].concat (map free, exp.handlers)
-                when syntax.CatchClause
-                        param_set = if exp.param?.name? then new Set [exp.param.name] else new Set
-                        exp.ejs_free_vars = (free exp.body).subtract param_set
-                        exp.ejs_decls = exp.body.ejs_decls.union param_set
-                        exp.ejs_free_vars
-                when syntax.VariableDeclaration   then exp.ejs_free_vars = Set.union.apply null, (map free, exp.declarations)
-                when syntax.VariableDeclarator    then exp.ejs_free_vars = free exp.init
-                when syntax.ExpressionStatement   then exp.ejs_free_vars = free exp.expression
-                when syntax.Identifier            then exp.ejs_free_vars = new Set [exp.name]
-                when syntax.ThrowStatement        then exp.ejs_free_vars = free exp.argument
-                when syntax.ForStatement          then exp.ejs_free_vars = Set.union.apply null, (map free, [exp.init, exp.test, exp.update, exp.body])
-                when syntax.ForInStatement        then exp.ejs_free_vars = Set.union.apply null, (map free, [exp.left, exp.right, exp.body])
-                when syntax.WhileStatement        then exp.ejs_free_vars = Set.union.apply null, (map free, [exp.test, exp.body])
-                when syntax.DoWhileStatement      then exp.ejs_free_vars = Set.union.apply null, (map free, [exp.test, exp.body])
-                when syntax.SwitchStatement       then exp.ejs_free_vars = Set.union.apply null, [free exp.discriminant].concat (map free, exp.cases)
-                when syntax.SwitchCase            then exp.ejs_free_vars = free_blocklike exp, exp.consequent
-                when syntax.EmptyStatement        then exp.ejs_free_vars = new Set
-                when syntax.BreakStatement        then exp.ejs_free_vars = new Set
-                when syntax.ContinueStatement     then exp.ejs_free_vars = new Set
-                when syntax.UpdateExpression      then exp.ejs_free_vars = free exp.argument
-                when syntax.ReturnStatement       then exp.ejs_free_vars = free exp.argument
-                when syntax.UnaryExpression       then exp.ejs_free_vars = free exp.argument
-                when syntax.BinaryExpression      then exp.ejs_free_vars = (free exp.left).union free exp.right
-                when syntax.LogicalExpression     then exp.ejs_free_vars = (free exp.left).union free exp.right
-                when syntax.MemberExpression      then exp.ejs_free_vars = free exp.object # we don't traverse into the property
-                when syntax.CallExpression        then exp.ejs_free_vars = Set.union.apply null, [(free exp.callee)].concat (map free, exp.arguments)
-                when syntax.NewExpression         then exp.ejs_free_vars = Set.union.apply null, [(free exp.callee)].concat (map free, exp.arguments)
-                when syntax.SequenceExpression    then exp.ejs_free_vars = Set.union.apply null, map free, exp.expressions
-                when syntax.ConditionalExpression then exp.ejs_free_vars = Set.union.apply null, [(free exp.test), (free exp.cconsequent), free (exp.alternate)]
-                when syntax.Literal               then exp.ejs_free_vars = new Set
-                when syntax.ThisExpression        then exp.ejs_free_vars = new Set
-                when syntax.Property              then exp.ejs_free_vars = free exp.value # we skip the key
-                when syntax.ObjectExpression
-                        exp.ejs_free_vars = if exp.properties.length is 0 then (new Set) else Set.union.apply null, map free, (p.value for p in exp.properties)
-                when syntax.ArrayExpression
-                        exp.ejs_free_vars = if exp.elements.length is 0 then (new Set) else Set.union.apply null, map free, exp.elements
-                when syntax.IfStatement           then exp.ejs_free_vars = Set.union.apply null, [(free exp.test), (free exp.consequent), free (exp.alternate)]
-                when syntax.AssignmentExpression  then exp.ejs_free_vars = (free exp.left).union free exp.right
-                
-                else throw "Internal error: unhandled node type '#{exp.type}' in free()"
-                #else new Set
-
 #
 # each element in env is an object of the form:
 #   { exp: ...     // the AST node corresponding to this environment.  will be a function or a BlockStatement. (right now just functions)
@@ -106,7 +21,7 @@ LocateEnv = class LocateEnv extends NodeVisitor
                 super
                 @envs = []
                 @env_id = 0
-                
+
         visitFunction: (n) ->
                 current_env = @envs[0]
                 new_env = { id: @env_id, decls: (if n.ejs_decls? then n.ejs_decls else new Set), closed: new Set, parent: current_env }
@@ -182,9 +97,15 @@ LocateEnv = class LocateEnv extends NodeVisitor
                 ###
                 n
 
-create_identifier = (x) -> type: syntax.Identifier, name: x
-create_string_literal = (x) -> type: syntax.Literal, value: x, raw: "\"#{x}\""
-create_number_literal = (x) -> type: syntax.Literal, value: x, raw: "#{x}"
+create_identifier = (x) ->
+        throw new Error "invalid name in create_identifier" if not x?
+        type: syntax.Identifier, name: x
+create_string_literal = (x) ->
+        throw new Error "invalid string in create_string_literal" if not x?
+        type: syntax.Literal, value: x, raw: "\"#{x}\""
+create_number_literal = (x) ->
+        throw new Error "invalid number in create_number_literal" if not x?
+        type: syntax.Literal, value: x, raw: "#{x}"
 
 # this should move to echo-desugar.coffee
 
@@ -296,18 +217,7 @@ class HoistVars extends NodeVisitor
                         
         visitVariableDeclaration: (n) ->
                 if n.kind is "var"
-                        # vars are hoisted to the containing function's toplevel scope
-                        for i in [0...n.declarations.length]
-                                @function_stack[0].vars.push
-                                        type: syntax.VariableDeclaration
-                                        declarations: [{
-                                                type: syntax.VariableDeclarator
-                                                id: create_identifier n.declarations[i].id.name
-                                                init: null
-                                                }],
-                                        kind: "let"
-
-                        # now we need convert the initializers to assignment expressions
+                        # check to see if there are any initializers, which we'll convert to assignment expressions
                         assignments = []
                         for i in [0...n.declarations.length]
                                 if n.declarations[i].init?
@@ -323,6 +233,25 @@ class HoistVars extends NodeVisitor
                                                 assignments.push
                                                         type: syntax.ExpressionStatement
                                                         expression: assignment
+
+                        if assignments.length is 0
+                                @function_stack[0].vars.push
+                                        type: syntax.VariableDeclaration
+                                        declarations: n.declarations
+                                        kind: "let"
+                                return { type: syntax.EmptyStatement }
+                                
+                        # vars are hoisted to the containing function's toplevel scope
+                        create_empty_declarator = (n) ->
+                                type: syntax.VariableDeclarator
+                                id: create_identifier n
+                                init: null
+                                
+                        for i in [0...n.declarations.length]
+                                @function_stack[0].vars.push
+                                        type: syntax.VariableDeclaration
+                                        declarations: create_empty_declarator decl.id.name for decl in n.declarations
+                                        kind: "let"
 
                         # now return the new assignments, which will replace the original variable
                         # declaration node.
@@ -343,9 +272,99 @@ class HoistVars extends NodeVisitor
 # this class really doesn't behave like a normal NodeVisitor, as it modifies the tree in-place
 # check the free() function near the top of the file for the actual implementation.
 class ComputeFree extends NodeVisitor
+        constructor: ->
+                @call_free = @free.bind @
+                super
+                
         visit: (n) ->
-                free n
+                @free n
                 n
+
+        decl_names: (arr) ->
+                result = []
+                for n in arr
+                        if n.declarations?
+                                result = result.concat (decl.id.name for decl in n.declarations)
+                        else if n.id?
+                                result.push n.id.name
+                new Set result
+
+        param_names: (arr) ->
+                new Set map ((id) -> id.name), arr
+
+        collect_decls: (body) ->
+                statement for statement in body when statement.type is syntax.VariableDeclaration or statement.type is syntax.FunctionDeclaration
+
+        free_blocklike: (exp,body) ->
+                decls = @decl_names @collect_decls body
+                uses = Set.union.apply null, map @call_free, body
+                exp.ejs_decls = decls
+                exp.ejs_free_vars = uses.subtract decls
+                exp.ejs_free_vars
+
+        # TODO: move this into the @visit method
+        free: (exp) ->
+                if not exp?
+                        return new Set
+                switch exp.type
+                        when syntax.Program
+                                decls = @decl_names @collect_decls exp.body
+                                uses = Set.union.apply null, (map @call_free, exp.body)
+                                exp.ejs_decls = decls
+                                exp.ejs_free_vars = uses.subtract decls
+                        when syntax.FunctionDeclaration
+                                exp.ejs_free_vars = (@free exp.body).subtract (@param_names exp.params)
+                                exp.ejs_decls = exp.body.ejs_decls.union (@param_names exp.params)
+                                exp.ejs_free_vars
+                        when syntax.FunctionExpression
+                                exp.ejs_free_vars = (@free exp.body).subtract (@param_names exp.params)
+                                exp.ejs_decls = exp.body.ejs_decls.union (@param_names exp.params)
+                                exp.ejs_free_vars
+                        when syntax.LabeledStatement      then exp.ejs_free_vars = @free exp.body
+                        when syntax.BlockStatement        then exp.ejs_free_vars = @free_blocklike exp, exp.body
+                        when syntax.TryStatement          then exp.ejs_free_vars = Set.union.apply null, [(@free exp.block)].concat (map @call_free, exp.handlers)
+                        when syntax.CatchClause
+                                param_set = if exp.param?.name? then new Set [exp.param.name] else new Set
+                                exp.ejs_free_vars = (@free exp.body).subtract param_set
+                                exp.ejs_decls = exp.body.ejs_decls.union param_set
+                                exp.ejs_free_vars
+                        when syntax.VariableDeclaration   then exp.ejs_free_vars = Set.union.apply null, (map @call_free, exp.declarations)
+                        when syntax.VariableDeclarator    then exp.ejs_free_vars = @free exp.init
+                        when syntax.ExpressionStatement   then exp.ejs_free_vars = @free exp.expression
+                        when syntax.Identifier            then exp.ejs_free_vars = new Set [exp.name]
+                        when syntax.ThrowStatement        then exp.ejs_free_vars = @free exp.argument
+                        when syntax.ForStatement          then exp.ejs_free_vars = Set.union.apply null, (map @call_free, [exp.init, exp.test, exp.update, exp.body])
+                        when syntax.ForInStatement        then exp.ejs_free_vars = Set.union.apply null, (map @call_free, [exp.left, exp.right, exp.body])
+                        when syntax.WhileStatement        then exp.ejs_free_vars = Set.union.apply null, (map @call_free, [exp.test, exp.body])
+                        when syntax.DoWhileStatement      then exp.ejs_free_vars = Set.union.apply null, (map @call_free, [exp.test, exp.body])
+                        when syntax.SwitchStatement       then exp.ejs_free_vars = Set.union.apply null, [@free exp.discriminant].concat (map @call_free, exp.cases)
+                        when syntax.SwitchCase            then exp.ejs_free_vars = @free_blocklike exp, exp.consequent
+                        when syntax.EmptyStatement        then exp.ejs_free_vars = new Set
+                        when syntax.BreakStatement        then exp.ejs_free_vars = new Set
+                        when syntax.ContinueStatement     then exp.ejs_free_vars = new Set
+                        when syntax.UpdateExpression      then exp.ejs_free_vars = @free exp.argument
+                        when syntax.ReturnStatement       then exp.ejs_free_vars = @free exp.argument
+                        when syntax.UnaryExpression       then exp.ejs_free_vars = @free exp.argument
+                        when syntax.BinaryExpression      then exp.ejs_free_vars = (@free exp.left).union @free exp.right
+                        when syntax.LogicalExpression     then exp.ejs_free_vars = (@free exp.left).union @free exp.right
+                        when syntax.MemberExpression      then exp.ejs_free_vars = @free exp.object # we don't traverse into the property
+                        when syntax.CallExpression        then exp.ejs_free_vars = Set.union.apply null, [(@free exp.callee)].concat (map @call_free, exp.arguments)
+                        when syntax.NewExpression         then exp.ejs_free_vars = Set.union.apply null, [(@free exp.callee)].concat (map @call_free, exp.arguments)
+                        when syntax.SequenceExpression    then exp.ejs_free_vars = Set.union.apply null, map @call_free, exp.expressions
+                        when syntax.ConditionalExpression then exp.ejs_free_vars = Set.union.apply null, [(@free exp.test), (@free exp.cconsequent), (@free exp.alternate)]
+                        when syntax.Literal               then exp.ejs_free_vars = new Set
+                        when syntax.ThisExpression        then exp.ejs_free_vars = new Set
+                        when syntax.Property              then exp.ejs_free_vars = @free exp.value # we skip the key
+                        when syntax.ObjectExpression
+                                exp.ejs_free_vars = if exp.properties.length is 0 then (new Set) else Set.union.apply null, map @call_free, (p.value for p in exp.properties)
+                        when syntax.ArrayExpression
+                                exp.ejs_free_vars = if exp.elements.length is 0 then (new Set) else Set.union.apply null, map @call_free, exp.elements
+                        when syntax.IfStatement           then exp.ejs_free_vars = Set.union.apply null, [(@free exp.test), (@free exp.consequent), (@free exp.alternate)]
+                        when syntax.AssignmentExpression  then exp.ejs_free_vars = (@free exp.left).union @free exp.right
+                
+                        else throw "Internal error: unhandled node type '#{exp.type}' in free()"
+                        #else new Set
+                
                 
 # 1) allocates the environment at the start of the n
 # 2) adds mappings for all .closed variables
@@ -405,13 +424,14 @@ class SubstituteVariables extends NodeVisitor
                 for decl in n.declarations
                         decl.init = @visit decl.init
                         if @currentMapping().hasOwnProperty decl.id.name
+                                decl_mapping = @currentMapping()["%slot_mapping"][decl.id.name]
                                 assignment =
                                         type: syntax.AssignmentExpression,
                                         operator: "="
                                         left:
                                                 type: syntax.CallExpression
                                                 callee: create_identifier "%slot"
-                                                arguments: [ @currentMapping()["%env"], (create_number_literal @currentMapping()["%slot_mapping"][decl.id.name]) ]
+                                                arguments: [ @currentMapping()["%env"], (create_number_literal decl_mapping), (create_string_literal decl.id.name) ]
                                         right: decl.init || { type: syntax.Identifier, name: "undefined" }
                                 
                                 if @skipExpressionStatement
@@ -503,6 +523,8 @@ class SubstituteVariables extends NodeVisitor
                                 
                         
                         if n.ejs_env.parent?
+                                parent_env_name = "%env_#{n.ejs_env.parent.id}"
+                                parent_env_slot = n.ejs_env.slot_mapping[parent_env_name]
                                 prepends.push {
                                         type: syntax.ExpressionStatement
                                         expression:
@@ -511,8 +533,8 @@ class SubstituteVariables extends NodeVisitor
                                                 left:
                                                         type: syntax.CallExpression
                                                         callee: create_identifier "%slot"
-                                                        arguments: [ (create_identifier env_name), (create_number_literal n.ejs_env.slot_mapping["%env_#{n.ejs_env.parent.id}"]) ]
-                                                right: create_identifier "%env_#{n.ejs_env.parent.id}"
+                                                        arguments: [ (create_identifier env_name), (create_number_literal parent_env_slot), (create_string_literal parent_env_name) ]
+                                                right: create_identifier parent_env_name
                                         
                                 }
                                 
@@ -528,12 +550,18 @@ class SubstituteVariables extends NodeVisitor
                                                         left:
                                                                 type: syntax.CallExpression
                                                                 callee: create_identifier "%slot"
-                                                                arguments: [ (create_identifier env_name), (create_number_literal n.ejs_env.slot_mapping[param.name]) ]
+                                                                arguments: [ (create_identifier env_name), (create_number_literal n.ejs_env.slot_mapping[param.name]), (create_string_literal param.name) ]
                                                         right: create_identifier param.name
                                         }
 
                         new_mapping = deep_copy_object @currentMapping()
                         new_mapping["%slot_mapping"] = n.ejs_env.slot_mapping
+
+                        # remove all mappings for variables declared in this block
+                        if n.ejs_decls?
+                                n.ejs_decls.map (sym) ->
+                                        delete new_mapping[sym]
+
 
                         flatten_memberexp = (exp, mapping) ->
                                 if exp.type isnt syntax.CallExpression
@@ -557,14 +585,14 @@ class SubstituteVariables extends NodeVisitor
                                 if mapped isnt "%slot_mapping"
                                         new_mapping[mapped] = prepend_environment (flatten_memberexp val, n.ejs_env.slot_mapping)
                         
-                        # add mappings for all variables in .closed from "x" to "%env.x"
+                        # and add mappings for all variables in .closed from "x" to "%env.x"
 
                         new_mapping["%env"] = create_identifier env_name
                         n.ejs_env.closed.map (sym) ->
                                 new_mapping[sym] =
                                         type: syntax.CallExpression
                                         callee: create_identifier "%slot"
-                                        arguments: [ (create_identifier env_name), (create_number_literal n.ejs_env.slot_mapping[sym]) ]
+                                        arguments: [ (create_identifier env_name), (create_number_literal n.ejs_env.slot_mapping[sym]), (create_string_literal sym) ]
 
                         @mappings.unshift new_mapping
                         @visitFunctionBody n
