@@ -491,6 +491,18 @@ _ejs_Array_prototype_join (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
     return rv;
 }
 
+ejsval
+_ejs_array_join (ejsval array, ejsval sep)
+{
+    return _ejs_Array_prototype_join (_ejs_null, array, 1, &sep);
+}
+
+ejsval
+_ejs_Array_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    return _ejs_Array_prototype_join (env, _this, 0, NULL);
+}
+
 static ejsval
 _ejs_Array_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
@@ -703,12 +715,6 @@ _ejs_Array_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
     return NUMBER_TO_EJSVAL (rv);
 }
 
-ejsval
-_ejs_Array_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    return _ejs_Array_prototype_join (env, _this, 0, NULL);
-}
-
 static ejsval
 _ejs_Array_isArray (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
@@ -727,7 +733,7 @@ _ejs_array_init(ejsval global)
     _ejs_sparsearray_specops.class_name = "Array";
 
     _ejs_gc_add_named_root (_ejs_Array_proto);
-    _ejs_Array_proto = _ejs_object_new(_ejs_null, &_ejs_object_specops);
+    _ejs_Array_proto = _ejs_array_new(0);
 
     ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_Array, (EJSClosureFunc)_ejs_Array_impl));
     _ejs_Array = tmpobj;

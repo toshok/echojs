@@ -8,6 +8,7 @@
 #include "ejs-function.h"
 #include "ejs-string.h"
 #include "ejs-error.h"
+#include "ejs-array.h"
 
 #if IOS
 #import <Foundation/Foundation.h>
@@ -17,8 +18,10 @@ static ejsval
 output (FILE *outfile, uint32_t argc, ejsval *args)
 {
 #if IOS
+#define OUTPUT0(str) NSLog(@str)
 #define OUTPUT(format, val) NSLog(@format, val)
 #else
+#define OUTPUT0(str) fprintf (outfile, str)
 #define OUTPUT(format, val) fprintf (outfile, format, val)
 #endif
 
@@ -31,6 +34,25 @@ output (FILE *outfile, uint32_t argc, ejsval *args)
                 OUTPUT ("%d", di);
             else
                 OUTPUT (EJS_NUMBER_FORMAT, d);
+        }
+        else if (EJSVAL_IS_ARRAY(args[i])) {
+            char* strval_utf8;
+
+            if (EJS_ARRAY_LEN(args[i]) == 0) {
+                OUTPUT0 ("[]");
+            }
+            else {
+                ejsval comma_space = _ejs_string_new_utf8(", ");
+                ejsval lbracket = _ejs_string_new_utf8("[ ");
+                ejsval rbracket = _ejs_string_new_utf8(" ]");
+
+                ejsval contents = _ejs_array_join (args[i], comma_space);
+
+                strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(_ejs_string_concatv (lbracket, contents, rbracket, _ejs_null)));
+
+                OUTPUT ("%s", strval_utf8);
+                free (strval_utf8);
+            }
         }
         else if (EJSVAL_IS_ERROR(args[i])) {
             ADD_STACK_ROOT(ejsval, strval, _ejs_object_getprop(args[i], _ejs_atom_name));
