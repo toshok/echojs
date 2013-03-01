@@ -17,6 +17,8 @@
 #include "ejs-string.h"
 #include "ejs-error.h"
 
+EJSSpecOps _ejs_error_specops;
+
 ejsval _ejs_Error;
 ejsval _ejs_Error_proto;
 ejsval _ejs_EvalError;
