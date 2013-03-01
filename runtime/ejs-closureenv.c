@@ -27,11 +27,15 @@ _ejs_closureenv_new (uint32_t length)
 ejsval
 _ejs_closureenv_get_slot (ejsval env, uint32_t slot)
 {
-    return (EJSVAL_TO_CLOSUREENV_IMPL(env))->slots[slot];
+    EJSClosureEnv* env_ = EJSVAL_TO_CLOSUREENV_IMPL(env);
+    assert(slot < env_->length);
+    return env_->slots[slot];
 }
 
 ejsval*
 _ejs_closureenv_get_slot_ref (ejsval env, uint32_t slot)
 {
-    return &(EJSVAL_TO_CLOSUREENV_IMPL(env))->slots[slot];
+    EJSClosureEnv* env_ = EJSVAL_TO_CLOSUREENV_IMPL(env);
+    assert(slot < env_->length);
+    return &env_->slots[slot];
 }
