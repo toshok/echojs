@@ -25,6 +25,7 @@ $(call addExpectedFailure, forin5.js,               "fails because we enumerate 
 $(call addExpectedFailure, number1.js,              "fails because node outputs {} for console.log(new Number(5)), while spidermonkey and jsc output '5'.  we err on the SM/JSC side of things here.")
 $(call addExpectedFailure, toLocaleString3.js,      "fails because we don't have a special toString (or toLocaleString) implementation for arrays.")
 $(call addExpectedFailure, json4.js,                "fails due to properties being serialized in a different order.")
+$(call addExpectedFailure, esprima-roundtrip2.js,   "esprima fails to return a parse tree if loc = true.")
 
 
 check: check-unit-tests run-tests
