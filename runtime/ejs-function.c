@@ -372,12 +372,14 @@ ejsval
 _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args)
 {
     if (!EJSVAL_IS_FUNCTION(closure)) {
+#if DEBUG_LAST_LOOKUP
         extern jschar* last_lookup;
         if (last_lookup) {
             char *last_utf8 = ucs2_to_utf8(last_lookup);
             fprintf (stderr, "last property lookup was for: %s\n", last_utf8);
             free (last_utf8);
         }
+#endif
         
         _ejs_throw_nativeerror (EJS_TYPE_ERROR, "object not a function");
     }
