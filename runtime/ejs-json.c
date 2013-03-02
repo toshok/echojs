@@ -399,12 +399,12 @@ static ejsval
 Str(StringifyState *state, ejsval key, ejsval holder)
 {
     /* 1. Let value be the result of calling the [[Get]] internal method of holder with argument key. */
-    ejsval value = OP(EJSVAL_TO_OBJECT(holder), get)(holder, key, EJS_FALSE);
+    ejsval value = OP(EJSVAL_TO_OBJECT(holder), get)(holder, key);
 
     /* 2. If Type(value) is Object, then */
     if (EJSVAL_IS_OBJECT(value)) {
         /*    a. Let toJSON be the result of calling the [[Get]] internal method of value with argument "toJSON". */
-        ejsval toJSON = OP(EJSVAL_TO_OBJECT(holder), get)(holder, _ejs_atom_toJSON, EJS_FALSE);
+        ejsval toJSON = OP(EJSVAL_TO_OBJECT(holder), get)(holder, _ejs_atom_toJSON);
         /*    b. If IsCallable(toJSON) is true */
         if (EJSVAL_IS_FUNCTION(toJSON)) {
             /*       i. Let value be the result of calling the [[Call]] internal method of toJSON passing value as the 

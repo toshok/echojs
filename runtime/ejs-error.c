@@ -64,11 +64,11 @@ _ejs_Error_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *
     }
 
     EJSObject *_thisobj = EJSVAL_TO_OBJECT(_this);
-    ejsval name = OP(_thisobj, get)(_this, _ejs_atom_name, EJS_FALSE);
+    ejsval name = OP(_thisobj, get)(_this, _ejs_atom_name);
     if (EJSVAL_IS_NULL_OR_UNDEFINED(name))
         name = _ejs_atom_Error;
 
-    ejsval message = OP(_thisobj, get)(_this, _ejs_atom_message, EJS_FALSE);
+    ejsval message = OP(_thisobj, get)(_this, _ejs_atom_message);
     if (EJSVAL_IS_NULL_OR_UNDEFINED(message))
         return name;
 
