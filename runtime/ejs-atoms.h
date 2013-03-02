@@ -75,5 +75,10 @@ EJS_ATOM(SyntaxError)
 EJS_ATOM(TypeError)
 EJS_ATOM(URIError)
 
-// our funky global
+EJS_ATOM(console)
+EJS_ATOM(require)
+EJS_ATOM(exports)
+
+// our ejs-specific stuff
 EJS_ATOM(__ejs)
+EJS_ATOM(GC)

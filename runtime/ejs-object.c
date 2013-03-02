@@ -21,7 +21,7 @@
 #include "ejs-function.h"
 #include "ejs-error.h"
 
-static ejsval           _ejs_object_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr);
+static ejsval           _ejs_object_specop_get (ejsval obj, ejsval propertyName);
 static EJSPropertyDesc* _ejs_object_specop_get_own_property (ejsval obj, ejsval propertyName);
 static EJSPropertyDesc* _ejs_object_specop_get_property (ejsval obj, ejsval propertyName);
 static void             _ejs_object_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
@@ -120,30 +120,30 @@ ToPropertyDescriptor(ejsval O, EJSPropertyDesc *desc)
     if (OP(obj,has_property)(O, _ejs_atom_enumerable)) {
         /*    a. Let enum be the result of calling the [[Get]] internal method of Obj with "enumerable". */
         /*    b. Set the [[Enumerable]] field of desc to ToBoolean(enum). */
-        _ejs_property_desc_set_enumerable (desc, EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,get)(O, _ejs_atom_enumerable, EJS_FALSE))));
+        _ejs_property_desc_set_enumerable (desc, EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,get)(O, _ejs_atom_enumerable))));
     }
     /* 4. If the result of calling the [[HasProperty]] internal method of Obj with argument "configurable" is true, then */
     if (OP(obj,has_property)(O, _ejs_atom_configurable)) {
         /*    a. Let conf  be the result of calling the [[Get]] internal method of Obj with argument "configurable". */
         /*    b. Set the [[Configurable]] field of desc to ToBoolean(conf). */
-        _ejs_property_desc_set_configurable (desc, EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,get)(O, _ejs_atom_configurable, EJS_FALSE))));
+        _ejs_property_desc_set_configurable (desc, EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,get)(O, _ejs_atom_configurable))));
     }
     /* 5. If the result of calling the [[HasProperty]] internal method of Obj with argument "value" is true, then */
     if (OP(obj,has_property)(O, _ejs_atom_value)) {
         /*    a. Let value be the result of calling the [[Get]] internal method of Obj with argument "value". */
         /*    b. Set the [[Value]] field of desc to value. */
-        _ejs_property_desc_set_value (desc, OP(obj,get)(O, _ejs_atom_value, EJS_FALSE));
+        _ejs_property_desc_set_value (desc, OP(obj,get)(O, _ejs_atom_value));
     }
     /* 6. If the result of calling the [[HasProperty]] internal method of Obj with argument "writable" is true, then */
     if (OP(obj,has_property)(O, _ejs_atom_writable)) {
         /*    a. Let writable be the result of calling the [[Get]] internal method of Obj with argument "writable". */
         /*    b. Set the [[Writable]] field of desc to ToBoolean(writable). */
-        _ejs_property_desc_set_writable (desc, EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,get)(O, _ejs_atom_writable, EJS_FALSE))));
+        _ejs_property_desc_set_writable (desc, EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,get)(O, _ejs_atom_writable))));
     }
     /* 7. If the result of calling the [[HasProperty]] internal method of Obj with argument "get" is true, then */
     if (OP(obj,has_property)(O, _ejs_atom_get)) {
         /*    a. Let getter be the result of calling the [[Get]] internal method of Obj with argument "get". */
-        ejsval getter = OP(obj,get)(O, _ejs_atom_get, EJS_FALSE);
+        ejsval getter = OP(obj,get)(O, _ejs_atom_get);
 
         /*    b. If IsCallable(getter) is false and getter is not undefined, then throw a TypeError exception. */
         if (!EJSVAL_IS_FUNCTION(getter) && !EJSVAL_IS_UNDEFINED(getter)) {
@@ -157,7 +157,7 @@ ToPropertyDescriptor(ejsval O, EJSPropertyDesc *desc)
     /* 8. If the result of calling the [[HasProperty]] internal method of Obj with argument "set" is true, then */
     if (OP(obj,has_property)(O, _ejs_atom_set)) {
         /*    a. Let setter be the result of calling the [[Get]] internal method of Obj with argument "set". */
-        ejsval setter = OP(obj,get)(O, _ejs_atom_set, EJS_FALSE);
+        ejsval setter = OP(obj,get)(O, _ejs_atom_set);
 
         /*    b. If IsCallable(setter) is false and setter is not undefined, then throw a TypeError exception. */
         if (!EJSVAL_IS_FUNCTION(setter) && !EJSVAL_IS_UNDEFINED(setter)) {
@@ -600,7 +600,7 @@ _ejs_object_getprop (ejsval obj, ejsval key)
     if (last_lookup) free (last_lookup);
     last_lookup = ucs2_strdup (EJSVAL_TO_FLAT_STRING(ToString(key)));
 
-    return OP(EJSVAL_TO_OBJECT(obj),get)(obj, key, EJS_FALSE);
+    return OP(EJSVAL_TO_OBJECT(obj),get)(obj, key);
 }
 
 EJSBool
@@ -665,7 +665,7 @@ _ejs_object_getprop_utf8 (ejsval obj, const char *key)
         kp = (char*)key;
     }
     
-    return OP(EJSVAL_TO_OBJECT(obj),get)(obj, PRIVATE_PTR_TO_EJSVAL_IMPL(kp), EJS_TRUE);
+    return OP(EJSVAL_TO_OBJECT(obj),get)(obj, PRIVATE_PTR_TO_EJSVAL_IMPL(kp));
 }
 
 void
@@ -916,7 +916,7 @@ _ejs_Object_defineProperties (ejsval env, ejsval _this, uint32_t argc, ejsval *a
         ejsval P = names[n];
 
         /* a. Let descObj be the result of calling the [[Get]] internal method of props with P as the argument. */
-        ejsval descObj = OP(props_obj,get)(props, P, EJS_FALSE);
+        ejsval descObj = OP(props_obj,get)(props, P);
 
         DefinePropertiesPair *pair = &descriptors[n];
         /* b. Let desc be the result of calling ToPropertyDescriptor with descObj as the argument. */
@@ -1175,7 +1175,7 @@ _ejs_Object_prototype_toLocaleString (ejsval env, ejsval _this, uint32_t argc, e
     EJSObject* O_ = EJSVAL_TO_OBJECT(O);
 
     /* 2. Let toString be the result of calling the [[Get]] internal method of O passing "toString" as the argument. */
-    ejsval toString = OP(O_, get)(O, _ejs_atom_toString, EJS_FALSE);
+    ejsval toString = OP(O_, get)(O, _ejs_atom_toString);
 
     /* 3. If IsCallable(toString) is false, throw a TypeError exception. */
     // XXX
@@ -1324,14 +1324,11 @@ _ejs_object_init (ejsval global)
 
 // ECMA262: 8.12.3
 static ejsval
-_ejs_object_specop_get (ejsval obj_, ejsval propertyName, EJSBool isCStr)
+_ejs_object_specop_get (ejsval obj_, ejsval propertyName)
 {
     ejsval pname;
 
-    if (isCStr)
-        pname = _ejs_string_new_utf8((char*)EJSVAL_TO_PRIVATE_PTR_IMPL(propertyName));
-    else
-        pname = ToString(propertyName);
+    pname = ToString(propertyName);
 
     if (!ucs2_strcmp(_ejs_ucs2___proto__, EJSVAL_TO_FLAT_STRING(pname)))
         return EJSVAL_TO_OBJECT(obj_)->proto;

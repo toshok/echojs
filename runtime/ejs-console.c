@@ -112,7 +112,7 @@ _ejs_console_init(ejsval global)
     OBJ_METHOD(log);
     OBJ_METHOD(warn);
 
-    _ejs_object_setprop_utf8 (global, "console", _ejs_console);
+    _ejs_object_setprop (global, _ejs_atom_console, _ejs_console);
 
 #undef OBJ_METHOD
 

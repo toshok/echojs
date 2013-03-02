@@ -170,7 +170,7 @@ ucs2_to_utf8 (const jschar *str)
 }
 
 
-static ejsval _ejs_string_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr);
+static ejsval _ejs_string_specop_get (ejsval obj, ejsval propertyName);
 static EJSPropertyDesc* _ejs_string_specop_get_own_property (ejsval obj, ejsval propertyName);
 static EJSPropertyDesc* _ejs_string_specop_get_property (ejsval obj, ejsval propertyName);
 static void      _ejs_string_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
@@ -795,12 +795,12 @@ _ejs_string_init(ejsval global)
 }
 
 static ejsval
-_ejs_string_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr)
+_ejs_string_specop_get (ejsval obj, ejsval propertyName)
 {
     // check if propertyName is an integer, or a string that we can convert to an int
     EJSBool is_index = EJS_FALSE;
     int idx = 0;
-    if (!isCStr && EJSVAL_IS_NUMBER(propertyName)) {
+    if (EJSVAL_IS_NUMBER(propertyName)) {
         double n = EJSVAL_TO_NUMBER(propertyName);
         if (floor(n) == n) {
             idx = (int)n;
@@ -819,13 +819,12 @@ _ejs_string_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr)
     }
 
     // we also handle the length getter here
-    if ((isCStr && !strcmp("length", (char*)EJSVAL_TO_PRIVATE_PTR_IMPL(propertyName)))
-        || (!isCStr && EJSVAL_IS_STRING(propertyName) && !ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName)))) {
+    if (EJSVAL_IS_STRING(propertyName) && !ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName))) {
         return NUMBER_TO_EJSVAL (EJSVAL_TO_STRLEN(estr->primStr));
     }
 
     // otherwise we fallback to the object implementation
-    return _ejs_object_specops.get (obj, propertyName, isCStr);
+    return _ejs_object_specops.get (obj, propertyName);
 }
 
 static EJSPropertyDesc*

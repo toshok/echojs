@@ -138,7 +138,7 @@ ejsval ToString(ejsval exp)
     else if (EJSVAL_IS_STRING(exp))
         return exp;
     else if (EJSVAL_IS_OBJECT(exp)) {
-        ejsval toString = _ejs_object_getprop_utf8 (exp, "toString");
+        ejsval toString = _ejs_object_getprop (exp, _ejs_atom_toString);
         if (!EJSVAL_IS_FUNCTION(toString)) {
             return _ejs_Object_prototype_toString(_ejs_null, exp, 0, NULL);
         }

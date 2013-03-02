@@ -12,7 +12,7 @@
 #include "ejs-function.h"
 #include "ejs-string.h"
 
-static ejsval  _ejs_array_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr);
+static ejsval  _ejs_array_specop_get (ejsval obj, ejsval propertyName);
 static EJSPropertyDesc* _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName);
 static EJSPropertyDesc* _ejs_array_specop_get_property (ejsval obj, ejsval propertyName);
 static void    _ejs_array_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
@@ -292,7 +292,7 @@ _ejs_Array_prototype_pop (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
     ejsval O = ToObject(_this);
 
     // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
-    ejsval lenVal = OP(EJSVAL_TO_OBJECT(O),get)(O, _ejs_atom_length, EJS_FALSE);
+    ejsval lenVal = OP(EJSVAL_TO_OBJECT(O),get)(O, _ejs_atom_length);
 
     // 3. Let len be ToUint32(lenVal).
     uint32_t len = ToUint32(lenVal);
@@ -414,7 +414,7 @@ _ejs_Array_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval* arg
         /* c. If kPresent is true, then */
         if (kPresent) {
             /*    i. Let kValue be the result of calling the [[Get]] internal method of O with argument Pk. */
-            ejsval kValue = OP(EJSVAL_TO_OBJECT(O),get)(O, Pk, EJS_FALSE);
+            ejsval kValue = OP(EJSVAL_TO_OBJECT(O),get)(O, Pk);
 
             /*    ii. Call the [[DefineOwnProperty]] internal method of A with arguments ToString(n), Property  */
             /*        Descriptor {[[Value]]: kValue, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]:  */
@@ -767,12 +767,12 @@ _ejs_array_init(ejsval global)
 }
 
 static ejsval
-_ejs_array_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr)
+_ejs_array_specop_get (ejsval obj, ejsval propertyName)
 {
     // check if propertyName is an integer, or a string that we can convert to an int
     EJSBool is_index = EJS_FALSE;
     int idx = 0;
-    if (!isCStr && EJSVAL_IS_NUMBER(propertyName)) {
+    if (EJSVAL_IS_NUMBER(propertyName)) {
         double n = EJSVAL_TO_NUMBER(propertyName);
         if (floor(n) == n) {
             idx = (int)n;
@@ -789,13 +789,12 @@ _ejs_array_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr)
     }
 
     // we also handle the length getter here
-    if ((isCStr && !strcmp("length", (char*)EJSVAL_TO_PRIVATE_PTR_IMPL(propertyName)))
-        || (!isCStr && EJSVAL_IS_STRING(propertyName) && !ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName)))) {
+    if (EJSVAL_IS_STRING(propertyName) && !ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName))) {
         return NUMBER_TO_EJSVAL (EJS_ARRAY_LEN(obj));
     }
 
     // otherwise we fallback to the object implementation
-    return _ejs_object_specops.get (obj, propertyName, isCStr);
+    return _ejs_object_specops.get (obj, propertyName);
 }
 
 static EJSPropertyDesc*

@@ -10,7 +10,7 @@
 #include "ejs-date.h"
 #include "ejs-string.h"
 
-static ejsval  _ejs_date_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr);
+static ejsval  _ejs_date_specop_get (ejsval obj, ejsval propertyName);
 static EJSPropertyDesc* _ejs_date_specop_get_own_property (ejsval obj, ejsval propertyName);
 static EJSPropertyDesc* _ejs_date_specop_get_property (ejsval obj, ejsval propertyName);
 static void    _ejs_date_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
@@ -147,9 +147,9 @@ _ejs_date_init(ejsval global)
 }
 
 static ejsval
-_ejs_date_specop_get (ejsval obj, ejsval propertyName, EJSBool isCStr)
+_ejs_date_specop_get (ejsval obj, ejsval propertyName)
 {
-    return _ejs_object_specops.get (obj, propertyName, isCStr);
+    return _ejs_object_specops.get (obj, propertyName);
 }
 
 static EJSPropertyDesc*

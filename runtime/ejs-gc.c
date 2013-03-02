@@ -796,7 +796,7 @@ _ejs_GC_init(ejsval global)
 
     ejsval __ejs = _ejs_object_getprop (global, _ejs_atom___ejs);
 
-    _ejs_object_setprop_utf8 (__ejs, "GC", _ejs_GC);
+    _ejs_object_setprop (__ejs, _ejs_atom_GC, _ejs_GC);
 
     END_SHADOW_STACK_FRAME;
 }

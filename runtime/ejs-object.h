@@ -92,7 +92,7 @@ typedef struct _EJSPropertyIterator EJSPropertyIterator;
 
 typedef void (*EJSPropertyDescFunc)(EJSPropertyDesc *desc, void* data);
 
-typedef ejsval           (*SpecOpGet) (ejsval obj, ejsval propertyName, EJSBool isCStr);
+typedef ejsval           (*SpecOpGet) (ejsval obj, ejsval propertyName);
 typedef EJSPropertyDesc* (*SpecOpGetOwnProperty) (ejsval obj, ejsval propertyName);
 typedef EJSPropertyDesc* (*SpecOpGetProperty) (ejsval obj, ejsval propertyName);
 typedef void             (*SpecOpPut) (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
