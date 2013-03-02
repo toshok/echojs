@@ -277,7 +277,10 @@ generate_require_map = ->
 do_final_link = ->
         map_filename = generate_require_map compiled_modules
 
-        process.env.PATH = "#{target_path_prepend[options.target]}:#{process.env.PATH}"
+        if __ejs?
+                console.warn "ejs doesn't have process.env yet."
+        else
+                process.env.PATH = "#{target_path_prepend[options.target]}:#{process.env.PATH}"
         
         clang_args = target_link_args[options.target].concat ["-o", options.output_filename || "#{files[0]}.exe"].concat o_filenames
         clang_args.push map_filename
