@@ -734,6 +734,7 @@ _ejs_array_init(ejsval global)
 
     _ejs_gc_add_named_root (_ejs_Array_proto);
     _ejs_Array_proto = _ejs_array_new(0);
+    EJSVAL_TO_OBJECT(_ejs_Array_proto)->proto = _ejs_Object__proto__;
 
     ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_Array, (EJSClosureFunc)_ejs_Array_impl));
     _ejs_Array = tmpobj;
