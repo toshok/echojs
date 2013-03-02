@@ -39,7 +39,7 @@
   double VAR = EJSVAL_TO_NUMBER(args[I]);
 
 #define REQ_BOOL_ARG(I, VAR)						\
-  if (argc <= (I) /*|| !args[I]->IsBoolean()*/)				\
+  if (argc <= (I) || !EJSVAL_IS_BOOLEAN(args[I]))			\
     abort();								\
   bool VAR = EJSVAL_TO_BOOLEAN(args[I]);
 
@@ -49,7 +49,7 @@
   char* VAR = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[I]));
 
 #define REQ_LLVM_VAL_ARG(I, VAR)					\
-  if (argc <= (I) /*|| !args[I]->IsObject() || !jsllvm::Value::HasInstance(args[I]) */) {	\
+  if (argc <= (I) || !EJSVAL_IS_OBJECT(args[I]) /*|| !jsllvm::Value::HasInstance(args[I]) */) { \
     printf ("in function %s\n", __PRETTY_FUNCTION__);			\
     abort();								\
   }									\
