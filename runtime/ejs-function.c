@@ -232,7 +232,60 @@ _ejs_Function_prototype_call (ejsval env, ejsval _this, uint32_t argc, ejsval *a
 static ejsval
 _ejs_Function_prototype_bind (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    EJS_NOT_IMPLEMENTED();
+    /* 1. Let Target be the this value. */
+    ejsval Target = _this;
+
+    /* 2. If IsCallable(Target) is false, throw a TypeError exception. */
+    if (!EJSVAL_IS_FUNCTION(Target)) {
+        _ejs_throw_nativeerror (EJS_TYPE_ERROR, "object not a function");
+    }
+
+    if (argc == 0)
+        return _this;
+
+    ejsval thisArg = _ejs_undefined;
+    if (argc >= 1)
+        thisArg = args[0];
+    if (argc >= 2)
+        EJS_NOT_IMPLEMENTED();
+
+    EJSFunction *TargetFunc = (EJSFunction*)EJSVAL_TO_OBJECT(Target);
+
+    /* 3. Let A be a new (possibly empty) internal list of all of the argument values provided after thisArg (arg1, arg2 etc), in order. */
+    // XXX
+
+    /* 4. Let F be a new native ECMAScript object . */
+
+    ejsval F = _ejs_function_new (TargetFunc->env, TargetFunc->name, TargetFunc->func);
+    EJSFunction *F_ = (EJSFunction*)EJSVAL_TO_OBJECT(F);
+
+    F_->bound = EJS_TRUE;
+
+    /* 5. Set all the internal methods, except for [[Get]], of F as specified in 8.12. */
+    /* 6. Set the [[Get]] internal property of F as specified in 15.3.5.4. */
+    /* 7. Set the [[TargetFunction]] internal property of F to Target. */
+    /* 8. Set the [[BoundThis]] internal property of F to the value of thisArg. */
+    F_->bound_this = thisArg;
+
+    /* 9. Set the [[BoundArgs]] internal property of F to A. */
+    /* 10. Set the [[Class]] internal property of F to "Function". */
+    /* 11. Set the [[Prototype]] internal property of F to the standard built-in Function prototype object as specified in 15.3.3.1. */
+    /* 12. Set the [[Call]] internal property of F as described in 15.3.4.5.1. */
+    /* 13. Set the [[Construct]] internal property of F as described in 15.3.4.5.2. */
+    /* 14. Set the [[HasInstance]] internal property of F as described in 15.3.4.5.3. */
+    /* 15. If the [[Class]] internal property of Target is "Function", then */
+    /*     a. Let L be the length property of Target minus the length of A. */
+    /*     b. Set the length own property of F to either 0 or L, whichever is larger.  */
+    /* 16. Else set the length own property of F to 0. */
+    /* 17. Set the attributes of the length own property of F to the values specified in 15.3.5.1. */
+    /* 18. Set the [[Extensible]] internal property of F to true. */
+    /* 19. Let thrower be the [[ThrowTypeError]] function Object (13.2.3). */
+    /* 20. Call the [[DefineOwnProperty]] internal method of F with arguments "caller", PropertyDescriptor  */
+    /*     {[[Get]]: thrower, [[Set]]: thrower, [[Enumerable]]: false, [[Configurable]]: false}, and false. */
+    /* 21. Call the [[DefineOwnProperty]] internal method of F with arguments "arguments", PropertyDescriptor */
+    /*     {[[Get]]: thrower, [[Set]]: thrower, [[Enumerable]]: false, [[Configurable]]: false}, and false. */
+    /* 22. Return F. */
+    return F;
 }
 
 ejsval
