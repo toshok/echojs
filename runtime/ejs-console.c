@@ -61,10 +61,16 @@ output (FILE *outfile, uint32_t argc, ejsval *args)
             free (strval_utf8);
         }
         else if (EJSVAL_IS_FUNCTION(args[i])) {
-            ADD_STACK_ROOT(ejsval, strval, ((EJSFunction*)EJSVAL_TO_OBJECT(args[i]))->name);
-            char* strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(strval));
-            OUTPUT ("[Function: %s]", strval_utf8);
-            free (strval_utf8);
+            EJSFunction* func = (EJSFunction*)EJSVAL_TO_OBJECT(args[i]);
+            if (EJSVAL_IS_NULL_OR_UNDEFINED(func->name) || EJSVAL_TO_STRLEN(func->name) == 0) {
+                OUTPUT0("[Function]");
+            }
+            else {
+                ADD_STACK_ROOT(ejsval, strval, func->name);
+                char* strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(strval));
+                OUTPUT ("[Function: %s]", strval_utf8);
+                free (strval_utf8);
+            }
         }
         else {
             ADD_STACK_ROOT(ejsval, strval, ToString(args[i]));
