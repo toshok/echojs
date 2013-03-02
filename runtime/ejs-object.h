@@ -14,8 +14,7 @@ typedef struct {
 #define EJS_PROP_FLAGS_ENUMERABLE    (1 << 0)
 #define EJS_PROP_FLAGS_CONFIGURABLE  (1 << 1)
 #define EJS_PROP_FLAGS_WRITABLE      (1 << 2)
-#define EJS_PROP_FLAGS_ACCESSORDESC  (1 << 3)
-
+// 1 << 3
 #define EJS_PROP_FLAGS_ENUMERABLE_SET   (1 << 4)
 #define EJS_PROP_FLAGS_CONFIGURABLE_SET (1 << 5)
 #define EJS_PROP_FLAGS_WRITABLE_SET     (1 << 6)
