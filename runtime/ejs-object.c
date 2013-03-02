@@ -240,7 +240,7 @@ _ejs_propertymap_init (EJSPropertyMap *map, int initial_allocation)
 {
     if (initial_allocation) {
         map->names = (jschar**)malloc(sizeof(jschar*) * initial_allocation);
-        map->properties = (EJSPropertyDesc*)malloc(sizeof (EJSPropertyDesc) * initial_allocation);
+        map->properties = (EJSPropertyDesc*)calloc(sizeof (EJSPropertyDesc), initial_allocation);
     }
     else {
         map->names = NULL;
@@ -319,7 +319,7 @@ _ejs_propertymap_lookup (EJSPropertyMap *map, const jschar *name, EJSBool add_if
             int new_allocated = map->allocated + 10;
 
             jschar **new_names = (jschar**)malloc(sizeof(jschar*) * new_allocated);
-            EJSPropertyDesc* new_properties = (EJSPropertyDesc*)malloc (sizeof(EJSPropertyDesc) * new_allocated);
+            EJSPropertyDesc* new_properties = (EJSPropertyDesc*)calloc (sizeof(EJSPropertyDesc), new_allocated);
 
             memmove (new_names, map->names, map->allocated * sizeof(jschar*));
             memmove (new_properties, map->properties, map->allocated * sizeof(EJSPropertyDesc));
@@ -648,24 +648,7 @@ _ejs_object_getprop_utf8 (ejsval obj, const char *key)
         obj = ToObject(obj);
     }
 
-    char keybuf[256+8];
-    char *kp;
-    if ((((unsigned long long)key) & 0x1) != 0) {
-        kp = (char*)(((unsigned long long)keybuf + 0x7) & ~0x7);
-
-        int keylen = strlen(key);
-        if (keylen >= 255) {
-            return _ejs_object_getprop (obj, _ejs_string_new_utf8(key));
-        }
-
-        strncpy (kp, key, keylen);
-        kp[keylen] = 0;
-    }
-    else {
-        kp = (char*)key;
-    }
-    
-    return OP(EJSVAL_TO_OBJECT(obj),get)(obj, PRIVATE_PTR_TO_EJSVAL_IMPL(kp));
+    return _ejs_object_getprop (obj, _ejs_string_new_utf8(key));
 }
 
 void
