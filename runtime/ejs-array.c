@@ -741,8 +741,8 @@ _ejs_array_init(ejsval global)
 
     _ejs_object_setprop (_ejs_Array,       _ejs_atom_prototype,  _ejs_Array_proto);
 
-#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Array, EJS_STRINGIFY(x), _ejs_Array_##x)
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Array_proto, EJS_STRINGIFY(x), _ejs_Array_prototype_##x)
+#define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Array, x, _ejs_Array_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Array_proto, x, _ejs_Array_prototype_##x)
 
     OBJ_METHOD(isArray);
 

@@ -134,7 +134,7 @@ _ejs_date_init(ejsval global)
 
     _ejs_object_setprop (_ejs_Date,       _ejs_atom_prototype,  _ejs_Date_proto);
 
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Date_proto, EJS_STRINGIFY(x), _ejs_Date_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Date_proto, x, _ejs_Date_prototype_##x)
 
     PROTO_METHOD(toString);
     PROTO_METHOD(getTimezoneOffset);

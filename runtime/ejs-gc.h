@@ -27,7 +27,9 @@ extern void _ejs_GC_init(ejsval global);
 extern void _ejs_gc_init();
 extern void _ejs_gc_shutdown();
 extern void _ejs_gc_collect();
+
 extern GCObjectPtr _ejs_gc_alloc(size_t size, EJSScanType scan_type);
+
 #define _ejs_gc_new(T) (T*)_ejs_gc_alloc(sizeof(T), EJS_SCAN_TYPE_OBJECT)
 #define _ejs_gc_new_obj(T,sz) (T*)_ejs_gc_alloc(sz, EJS_SCAN_TYPE_OBJECT)
 #define _ejs_gc_new_primstr(sz) (EJSPrimString*)_ejs_gc_alloc(sz, EJS_SCAN_TYPE_PRIMSTR)

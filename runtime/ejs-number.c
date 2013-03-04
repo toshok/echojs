@@ -99,7 +99,7 @@ _ejs_number_init(ejsval global)
 
     _ejs_object_setprop (_ejs_Number,       _ejs_atom_prototype,  _ejs_Number_proto);
 
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Number_proto, EJS_STRINGIFY(x), _ejs_Number_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Number_proto, x, _ejs_Number_prototype_##x)
 
     PROTO_METHOD(valueOf);
     PROTO_METHOD(toString);

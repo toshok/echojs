@@ -61,13 +61,13 @@ output (FILE *outfile, uint32_t argc, ejsval *args)
             free (strval_utf8);
         }
         else if (EJSVAL_IS_FUNCTION(args[i])) {
-            EJSFunction* func = (EJSFunction*)EJSVAL_TO_OBJECT(args[i]);
-            if (EJSVAL_IS_NULL_OR_UNDEFINED(func->name) || EJSVAL_TO_STRLEN(func->name) == 0) {
+            ADD_STACK_ROOT(ejsval, func_name, _ejs_object_getprop (args[i], _ejs_atom_name));
+
+            if (EJSVAL_IS_NULL_OR_UNDEFINED(func_name) || EJSVAL_TO_STRLEN(func_name) == 0) {
                 OUTPUT0("[Function]");
             }
             else {
-                ADD_STACK_ROOT(ejsval, strval, func->name);
-                char* strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(strval));
+                char* strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(func_name));
                 OUTPUT ("[Function: %s]", strval_utf8);
                 free (strval_utf8);
             }
@@ -113,7 +113,7 @@ _ejs_console_init(ejsval global)
 
     ADD_STACK_ROOT(ejsval, _ejs_console, _ejs_object_new (_ejs_null, &_ejs_object_specops));
 
-#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_console, EJS_STRINGIFY(x), _ejs_console_##x)
+#define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_console, x, _ejs_console_##x)
 
     OBJ_METHOD(log);
     OBJ_METHOD(warn);

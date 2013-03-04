@@ -65,7 +65,6 @@ _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func)
     
     _ejs_init_object ((EJSObject*)rv, _ejs_Function__proto__, &_ejs_function_specops);
 
-    rv->name = name;
     rv->func = func;
     rv->env = env;
 
@@ -76,7 +75,7 @@ _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func)
 
     _ejs_object_setprop (fun_proto, _ejs_atom_constructor,  fun);
     _ejs_object_define_value_property (fun, _ejs_atom_prototype, fun_proto, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
-
+    _ejs_object_define_value_property (fun, _ejs_atom_name, name, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     return fun;
 }
 
@@ -87,9 +86,12 @@ _ejs_function_new_native (ejsval env, ejsval name, EJSClosureFunc func)
     
     _ejs_init_object ((EJSObject*)rv, _ejs_Function__proto__, &_ejs_function_specops);
 
-    rv->name = name;
     rv->func = func;
     rv->env = env;
+
+    ejsval fun = OBJECT_TO_EJSVAL((EJSObject*)rv);
+
+    _ejs_object_define_value_property (fun, _ejs_atom_name, name, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
     return OBJECT_TO_EJSVAL((EJSObject*)rv);
 }
@@ -131,15 +133,20 @@ _ejs_Function_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsva
 {
     char terrible_fixed_buffer[256];
 
-    // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(_this));
-    EJSFunction* func = (EJSFunction*)EJSVAL_TO_OBJECT(_this);
+    if (!EJSVAL_IS_FUNCTION(_this))
+        _ejs_throw_nativeerror (EJS_TYPE_ERROR, "Function.prototype.toString is not generic.");
 
-    char *utf8_funcname = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(func->name));
+    START_SHADOW_STACK_FRAME;
 
+    ADD_STACK_ROOT(ejsval, func_name, _ejs_object_getprop (_this, _ejs_atom_name));
+
+    char *utf8_funcname = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(func_name));
+    
     snprintf (terrible_fixed_buffer, sizeof (terrible_fixed_buffer), "function %s() {}", utf8_funcname);
 
     free (utf8_funcname);
 
+    END_SHADOW_STACK_FRAME;
     return _ejs_string_new_utf8(terrible_fixed_buffer);
 }
 
@@ -256,7 +263,7 @@ _ejs_Function_prototype_bind (ejsval env, ejsval _this, uint32_t argc, ejsval *a
 
     /* 4. Let F be a new native ECMAScript object . */
 
-    ejsval F = _ejs_function_new (TargetFunc->env, TargetFunc->name, TargetFunc->func);
+    ejsval F = _ejs_function_new (TargetFunc->env, _ejs_atom_empty, TargetFunc->func);
     EJSFunction *F_ = (EJSFunction*)EJSVAL_TO_OBJECT(F);
 
     F_->bound = EJS_TRUE;
@@ -302,11 +309,13 @@ _ejs_function_init_proto()
     // Function.__proto__ = function () { return undefined; }
 
     EJSFunction* __proto__ = _ejs_gc_new(EJSFunction);
-    __proto__->name = _ejs_atom_Empty;
+
     __proto__->func = _ejs_Function_empty;
     __proto__->env = _ejs_null;
 
     _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_function_specops);
+
+    _ejs_object_define_value_property (OBJECT_TO_EJSVAL((EJSObject*)__proto__), _ejs_atom_name, _ejs_atom_empty, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
     _ejs_Function__proto__ = OBJECT_TO_EJSVAL((EJSObject*)__proto__);
 }
@@ -328,14 +337,14 @@ _ejs_function_init(ejsval global)
     // ECMA262 15.3.3.2
     _ejs_object_define_value_property (_ejs_Function, _ejs_atom_length, NUMBER_TO_EJSVAL(1), EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Function__proto__, EJS_STRINGIFY(x), _ejs_Function_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Function__proto__, x, _ejs_Function_prototype_##x)
 
     PROTO_METHOD(toString);
     PROTO_METHOD(apply);
     PROTO_METHOD(call);
     PROTO_METHOD(bind);
 
-#undef PROTOTYPE_METHOD
+#undef PROTO_METHOD
 
     _ejs_object_setprop (global, _ejs_atom_Function, _ejs_Function);
 
@@ -546,7 +555,6 @@ static void
 _ejs_function_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSFunction* f = (EJSFunction*)obj;
-    scan_func (f->name);
     scan_func (f->env);
     if (f->bound) {
         scan_func (f->bound_this);

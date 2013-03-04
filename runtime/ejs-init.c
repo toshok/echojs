@@ -64,6 +64,7 @@ _ejs_init(int argc, char** argv)
     _ejs_object_init_proto();
 
     _ejs_function_init(_ejs_global);
+
     _ejs_object_init(_ejs_global);
 
     _ejs_error_init(_ejs_global);
@@ -79,7 +80,7 @@ _ejs_init(int argc, char** argv)
 
     _ejs_typedarrays_init(_ejs_global);
 
-#define GLOBAL_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_global, EJS_STRINGIFY(x), _ejs_##x)
+#define GLOBAL_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_global, x, _ejs_##x)
 
     GLOBAL_METHOD(isNaN);
     GLOBAL_METHOD(isFinite);

@@ -735,7 +735,6 @@ _ejs_string_init_proto()
     _ejs_gc_add_named_root (_ejs_String_prototype);
 
     EJSFunction* __proto__ = _ejs_gc_new(EJSFunction);
-    __proto__->name = _ejs_atom_Empty;
     __proto__->func = _ejs_Function_empty;
     __proto__->env = _ejs_null;
 
@@ -746,6 +745,8 @@ _ejs_string_init_proto()
 
     _ejs_init_object (prototype, _ejs_null, &_ejs_string_specops);
     _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_function_specops);
+
+    _ejs_object_define_value_property (OBJECT_TO_EJSVAL((EJSObject*)__proto__), _ejs_atom_name, _ejs_atom_empty, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 }
 
 void
@@ -760,8 +761,8 @@ _ejs_string_init(ejsval global)
 
     _ejs_object_setprop (_ejs_String,       _ejs_atom_prototype,  _ejs_String_prototype);
 
-#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_String, EJS_STRINGIFY(x), _ejs_String_##x)
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_String_prototype, EJS_STRINGIFY(x), _ejs_String_prototype_##x)
+#define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_String, x, _ejs_String_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_String_prototype, x, _ejs_String_prototype_##x)
 
     PROTO_METHOD(charAt);
     PROTO_METHOD(charCodeAt);

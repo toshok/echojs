@@ -3,6 +3,7 @@
  */
 
 #define DEBUG_PROPERTIES 0
+#define DEBUG_GC 0
 
 #include <stdlib.h>
 #include <string.h>
@@ -275,8 +276,10 @@ void
 _ejs_propertymap_foreach_property (EJSPropertyMap* map, EJSPropertyDescFunc foreach_func, void* data)
 {
     for (int i = 0; i < map->num; i ++) {
+        jschar* name = map->names[i];
         EJSPropertyDesc *desc = &map->properties[i];
-        foreach_func (desc, data);
+
+        foreach_func (name, desc, data);
     }
 }
 
@@ -1251,7 +1254,7 @@ _ejs_object_init_proto()
     _ejs_gc_add_named_root (_ejs_Object_prototype);
 
     EJSFunction* __proto__ = _ejs_gc_new(EJSFunction);
-    __proto__->name = _ejs_atom_Empty;
+
     __proto__->func = _ejs_Function_empty;
     __proto__->env = _ejs_null;
 
@@ -1262,6 +1265,8 @@ _ejs_object_init_proto()
 
     _ejs_init_object (prototype, _ejs_null, &_ejs_object_specops);
     _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_function_specops);
+
+    _ejs_object_define_value_property (_ejs_Object__proto__, _ejs_atom_name, _ejs_atom_empty, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 }
 
 void
@@ -1277,8 +1282,8 @@ _ejs_object_init (ejsval global)
     // ECMA262: 15.2.4.1
     _ejs_object_setprop (_ejs_Object_prototype, _ejs_atom_constructor,  _ejs_Object);
 
-#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Object, EJS_STRINGIFY(x), _ejs_Object_##x)
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Object_prototype, EJS_STRINGIFY(x), _ejs_Object_prototype_##x)
+#define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Object, x, _ejs_Object_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Object_prototype, x, _ejs_Object_prototype_##x)
 
     OBJ_METHOD(getPrototypeOf);
     OBJ_METHOD(getOwnPropertyDescriptor);
@@ -1743,11 +1748,34 @@ _ejs_object_specop_finalize(EJSObject* obj)
 }
 
 static void
-scan_property (EJSPropertyDesc *desc, EJSValueFunc scan_func)
+scan_property (jschar* name, EJSPropertyDesc *desc, EJSValueFunc scan_func)
 {
-    if (_ejs_property_desc_has_value (desc)) scan_func (desc->value);
-    if (_ejs_property_desc_has_getter (desc)) scan_func (desc->getter);
-    if (_ejs_property_desc_has_setter (desc)) scan_func (desc->setter);
+#if DEBUG_GC
+    printf ("scan property desc = %p, name = %s\n", desc, ucs2_to_utf8(name));
+#endif
+
+    if (_ejs_property_desc_has_value (desc)) {
+#if DEBUG_GC
+        if (EJSVAL_IS_OBJECT(desc->value)) {
+        	printf ("   has_value %p\n", EJSVAL_TO_OBJECT(desc->value));
+    	}
+        else
+        	printf ("   has_value\n");
+#endif
+        scan_func (desc->value);
+    }
+    if (_ejs_property_desc_has_getter (desc)) {
+#if DEBUG_GC
+        printf ("   has_getter\n");
+#endif
+        scan_func (desc->getter); 
+    }
+    if (_ejs_property_desc_has_setter (desc)) {
+#if DEBUG_GC
+        printf ("   has_setter\n");
+#endif
+        scan_func (desc->setter);
+    }
 }
 
 static void

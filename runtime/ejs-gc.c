@@ -388,7 +388,7 @@ mark_in_range(char* low, char* high)
                 set_gray(gcptr);
             }
             else {
-                SPEW(printf ("found ptr to %p(%s) on stack\n", EJSVAL_TO_OBJECT(candidate_val), CLASSNAME(EJSVAL_TO_OBJECT(candidate_val))));
+                //SPEW(printf ("found ptr to %p(%s) on stack\n", EJSVAL_TO_OBJECT(candidate_val), CLASSNAME(EJSVAL_TO_OBJECT(candidate_val))));
                 _ejs_gc_worklist_push(gcptr);
                 set_gray(gcptr);
             }
@@ -435,7 +435,10 @@ sweep_heap()
                         SPEW(printf ("finalizing object %p(%s)\n", p, CLASSNAME(p)));
                         OP(p, finalize)((EJSObject*)p);
                     }
-                    else {
+                    else if ((*headerp & EJS_SCAN_TYPE_CLOSUREENV) != 0) {
+                        SPEW(printf ("finalizing closureenv %p\n", p));
+                    }
+                    else if ((*headerp & EJS_SCAN_TYPE_PRIMSTR) != 0) {
                         SPEW({
                                 EJSPrimString* primstr = (EJSPrimString*)p;
                                 if (EJS_PRIMSTR_GET_TYPE(primstr) == EJS_STRING_FLAT) {
@@ -476,6 +479,9 @@ mark_from_roots()
             GCObjectPtr root_ptr = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(rootval);
             if (root_ptr == NULL)
                 continue;
+            WORKLIST_PUSH_AND_GRAY(root_ptr);
+
+#if false
             set_black (root_ptr);
             if (EJSVAL_IS_OBJECT(rootval)) {
                 _scan_from_ejsobject((EJSObject*)root_ptr);
@@ -488,6 +494,7 @@ mark_from_roots()
             }
             else
                 abort();
+#endif
         }
     }
 }
@@ -571,8 +578,11 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
         SPEW(printf ("final gc page statistics:\n");
              for (int hp = 0; hp < HEAP_PAGELISTS_COUNT; hp++) {
                  int len = 0;
-                 for (PageInfo *info = heap_pages[hp]; info; info = info->next)
-                     len++;
+
+                 EJS_LIST_FOREACH (&heap_pages[hp], PageInfo, page, {
+                         len ++;
+                 });
+
                  printf ("  size: %d     pages: %d\n", 1<<(hp + 3), len);
              })
     }
@@ -788,7 +798,7 @@ _ejs_GC_init(ejsval global)
     ADD_STACK_ROOT(ejsval, tmpobj, _ejs_object_new (_ejs_Object_prototype, &_ejs_object_specops));
     _ejs_GC = tmpobj;
 
-#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_GC, EJS_STRINGIFY(x), _ejs_GC_##x)
+#define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_GC, x, _ejs_GC_##x)
 
     OBJ_METHOD(collect);
 

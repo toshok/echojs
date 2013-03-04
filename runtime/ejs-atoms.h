@@ -8,7 +8,6 @@ EJS_ATOM(__proto__)
 EJS_ATOM(constructor)
 EJS_ATOM(length)
 EJS_ATOM(prototype)
-EJS_ATOM(toString)
 EJS_ATOM(message)
 EJS_ATOM(name)
 
@@ -82,3 +81,136 @@ EJS_ATOM(exports)
 // our ejs-specific stuff
 EJS_ATOM(__ejs)
 EJS_ATOM(GC)
+
+EJS_ATOM(argv)
+EJS_ATOM(process)
+
+// Object method/property names
+EJS_ATOM(getPrototypeOf)
+EJS_ATOM(getOwnPropertyDescriptor)
+EJS_ATOM(getOwnPropertyNames)
+EJS_ATOM(create)
+EJS_ATOM(defineProperty)
+EJS_ATOM(defineProperties)
+EJS_ATOM(seal)
+EJS_ATOM(freeze)
+EJS_ATOM(preventExtensions)
+EJS_ATOM(isSealed)
+EJS_ATOM(isFrozen)
+EJS_ATOM(isExtensible)
+EJS_ATOM(keys)
+EJS_ATOM(toString)
+EJS_ATOM(toLocaleString)
+EJS_ATOM(valueOf)
+EJS_ATOM(hasOwnProperty)
+EJS_ATOM(isPrototypeOf)
+EJS_ATOM(propertyIsEnumerable)
+
+
+// Math method names
+EJS_ATOM(abs)
+EJS_ATOM(acos)
+EJS_ATOM(asin)
+EJS_ATOM(atan)
+EJS_ATOM(atan2)
+EJS_ATOM(ceil)
+EJS_ATOM(cos)
+EJS_ATOM(exp)
+EJS_ATOM(floor)
+EJS_ATOM(log)
+EJS_ATOM(max)
+EJS_ATOM(min)
+EJS_ATOM(pow)
+EJS_ATOM(random)
+EJS_ATOM(round)
+EJS_ATOM(sin)
+EJS_ATOM(sqrt)
+EJS_ATOM(tan)
+
+// Array method names
+EJS_ATOM(isArray)
+EJS_ATOM(push)
+EJS_ATOM(pop)
+EJS_ATOM(shift)
+EJS_ATOM(unshift)
+EJS_ATOM(concat)
+EJS_ATOM(slice)
+EJS_ATOM(splice)
+EJS_ATOM(indexOf)
+EJS_ATOM(join)
+EJS_ATOM(forEach)
+
+// global functions
+EJS_ATOM(isNaN)
+EJS_ATOM(isFinite)
+EJS_ATOM(parseInt)
+EJS_ATOM(parseFloat)
+EJS_ATOM(decodeURI)
+EJS_ATOM(decodeURIComponent)
+EJS_ATOM(encodeURI)
+EJS_ATOM(encodeURIComponent)
+
+// JSON functions
+EJS_ATOM(parse)
+EJS_ATOM(stringify)
+
+// String functions
+EJS_ATOM(charAt)
+EJS_ATOM(charCodeAt)
+//EJS_ATOM(concat)
+//EJS_ATOM(indexOf)
+EJS_ATOM(lastIndexOf)
+EJS_ATOM(localeCompare)
+EJS_ATOM(match)
+EJS_ATOM(replace)
+EJS_ATOM(search)
+//EJS_ATOM(slice)
+EJS_ATOM(split)
+EJS_ATOM(substr)
+EJS_ATOM(substring)
+EJS_ATOM(toLocaleLowerCase)
+EJS_ATOM(toLocaleUpperCase)
+EJS_ATOM(toLowerCase)
+//EJS_ATOM(toString)
+EJS_ATOM(toUpperCase)
+EJS_ATOM(trim)
+//EJS_ATOM(valueOf)
+EJS_ATOM(fromCharCode)
+
+// Number functions
+//EJS_ATOM(valueOf)
+//EJS_ATOM(toString)
+
+// Boolean functions
+//EJS_ATOM(valueOf)
+//EJS_ATOM(toString)
+
+// Regexp functions
+EJS_ATOM(exec)
+//EJS_ATOM(match)
+EJS_ATOM(test)
+//EJS_ATOM(toString)
+
+// Date functions
+//EJS_ATOM(toString)
+EJS_ATOM(getTimezoneOffset)
+
+// Function functions
+//EJS_ATOM(toString)
+EJS_ATOM(apply)
+EJS_ATOM(call)
+EJS_ATOM(bind)
+
+
+// ArrayBuffer functions
+//EJS_ATOM(slice)
+
+// console functions
+//EJS_ATOM(log)
+EJS_ATOM(warn)
+
+// gc functions
+EJS_ATOM(collect)
+
+// process functions
+EJS_ATOM(exit)

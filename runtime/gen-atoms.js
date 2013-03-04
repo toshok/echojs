@@ -48,7 +48,7 @@ for (var i = 0, e = atom_lines.length; i < e; i ++) {
     line += " 0x0000 };";
     new_lines.push(line);
 
-    new_lines.push("static EJSPrimString _ejs_string_" + atom_name + "= { .gc_header = (EJS_STRING_FLAT<<EJS_GC_USER_FLAGS_SHIFT), .length = " + atom.length + ", .data = { .flat = NULL }};");
+    new_lines.push("static EJSPrimString _ejs_primstring_" + atom_name + "= { .gc_header = (EJS_STRING_FLAT<<EJS_GC_USER_FLAGS_SHIFT), .length = " + atom.length + ", .data = { .flat = NULL }};");
     new_lines.push("ejsval _ejs_atom_" + atom_name + ";");
 
     atom_names.push(atom_name);
@@ -63,7 +63,7 @@ console.log (new_lines.join('\n'));
 console.log ("static void _ejs_init_static_strings() {");
 for (var an = 0, ae = atom_names.length; an < ae; an ++) {
   var atom = atom_names[an];
-  console.log ("    _ejs_string_" + atom + ".data.flat = (jschar*)_ejs_ucs2_" + atom + ";");
-  console.log ("    _ejs_atom_" + atom + " = STRING_TO_EJSVAL((EJSPrimString*)&_ejs_string_" + atom + ");");
+  console.log ("    _ejs_primstring_" + atom + ".data.flat = (jschar*)_ejs_ucs2_" + atom + ";");
+  console.log ("    _ejs_atom_" + atom + " = STRING_TO_EJSVAL((EJSPrimString*)&_ejs_primstring_" + atom + ");");
 }
 console.log ("}");

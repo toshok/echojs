@@ -328,8 +328,8 @@ _ejs_typedarrays_init(ejsval global)
 {
     START_SHADOW_STACK_FRAME;
 
-#define OBJ_METHOD(t,x) EJS_INSTALL_FUNCTION(_ejs_##t, EJS_STRINGIFY(x), _ejs_##t##_##x)
-#define PROTO_METHOD(t,x) EJS_INSTALL_FUNCTION(_ejs_##t##_proto, EJS_STRINGIFY(x), _ejs_##t##_prototype_##x)
+#define OBJ_METHOD(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t, x, _ejs_##t##_##x)
+#define PROTO_METHOD(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t##_proto, x, _ejs_##t##_prototype_##x)
 
     // ArrayBuffer
     {
