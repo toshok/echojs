@@ -588,7 +588,6 @@ _ejs_object_getprop (ejsval obj, ejsval key)
 {
     if (EJSVAL_IS_NULL(obj) || EJSVAL_IS_UNDEFINED(obj)) {
         char* key_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(ToString(key)));
-        printf ("throw TypeError, key is %s\n", key_utf8);
 #if DEBUG_LAST_LOOKUP
         if (last_lookup) {
             char *last_utf8 = ucs2_to_utf8(last_lookup);
@@ -596,8 +595,11 @@ _ejs_object_getprop (ejsval obj, ejsval key)
             free (last_utf8);
         }
 #endif
+        char msg_buf[256];
+        snprintf (msg_buf, sizeof(msg_buf)-1, "Cannot read property '%s' of %s", key_utf8, EJSVAL_IS_NULL(obj) ? "null" : "undefined");
         free (key_utf8);
-        EJS_NOT_IMPLEMENTED();
+
+        _ejs_throw_nativeerror (EJS_TYPE_ERROR, msg_buf);
     }
 
     if (EJSVAL_IS_PRIMITIVE(obj)) {
