@@ -81,21 +81,18 @@ LocateEnv = class LocateEnv extends NodeVisitor
                 n.ejs_substitute = true
                 n
 
-                ###                
-                while env?
-                        if env.decls.member n.name
-                                if env.closed.member n.name
-                                        n.ejs_substitute = true
-                                else if env isnt current_env
-                                        env.closed.add n.name
-                                        n.ejs_substitute = true
+#                while env?
+#                        if env.decls.member n.name
+#                                if env.closed.member n.name
+#                                        n.ejs_substitute = true
+#                                else if env isnt current_env
+#                                        env.closed.add n.name
+#                                        n.ejs_substitute = true
 #                                env.closed.add n.name
 #                                n.ejs_substitute = true
-                                return n
-                        else
-                                env = env.parent
-                ###
-                n
+#                                return n
+#                        else
+#                                env = env.parent
 
 create_identifier = (x) ->
         throw new Error "invalid name in create_identifier" if not x?
@@ -224,7 +221,7 @@ class HoistVars extends NodeVisitor
                                         assignment =
                                                 type: syntax.AssignmentExpression
                                                 left: create_identifier n.declarations[i].id.name
-                                                right: n.declarations[i].init
+                                                right: @visit n.declarations[i].init
                                                 operator: "="
 
                                         if @skipExpressionStatement
@@ -242,17 +239,16 @@ class HoistVars extends NodeVisitor
                                 return { type: syntax.EmptyStatement }
                                 
                         # vars are hoisted to the containing function's toplevel scope
-                        create_empty_declarator = (n) ->
+                        create_empty_declarator = (decl_name) ->
                                 type: syntax.VariableDeclarator
-                                id: create_identifier n
+                                id: create_identifier decl_name
                                 init: null
-                                
-                        for i in [0...n.declarations.length]
-                                @function_stack[0].vars.push
-                                        type: syntax.VariableDeclaration
-                                        declarations: create_empty_declarator decl.id.name for decl in n.declarations
-                                        kind: "let"
 
+                        @function_stack[0].vars.push
+                                type: syntax.VariableDeclaration
+                                declarations: create_empty_declarator decl.id.name for decl in n.declarations
+                                kind: "let"
+                                       
                         # now return the new assignments, which will replace the original variable
                         # declaration node.
                         if @skipExpressionStatement
