@@ -8,7 +8,7 @@ Initial Setup
 
    Wraps the entire script in a toplevel function.  this simplifies
    much of the closure conversion code because nothing is outside of
-   a function.
+   a function.  This function is what gets invoked at runtime when a file is required().
 
 Closure Conversion
 ------------------
