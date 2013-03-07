@@ -1,4 +1,3 @@
-
 Compiler passes
 ===============
 
@@ -88,7 +87,7 @@ Closure Conversion
    This phase might be nicer if the `new` expression could be further decomposed into 2 intrinsics, `%createObject` and `%invokeClosure`.  Then
    the LLVM IR generator wouldn't need to support new expressions at all.
 
-   This phase also keeps track of the maximum number of call args required for any invocations.
+   This phase also keeps track of the maximum number of call args required for any invocation in a given function, so we can allocate a scratch buffer once.
 
 8. LambdaLift
 
