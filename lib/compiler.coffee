@@ -954,8 +954,7 @@ class LLVMIRVisitor extends NodeVisitor
                 obj
 
         visitArrayExpression: (n) ->
-                array_new = @ejs_runtime.array_new
-                obj = @createCall array_new, [consts.int32 n.elements.length], "arrtmp", !array_new.doesNotThrow
+                obj = @createCall @ejs_runtime.array_new, [consts.int32 0], "arrtmp", !@ejs_runtime.array_new.doesNotThrow
                 i = 0;
                 for el in n.elements
                         val = @visit el
@@ -1109,6 +1108,7 @@ class LLVMIRVisitor extends NodeVisitor
         visitThrow: (n) ->
                 arg = @visit n.argument
                 @createCall @ejs_runtime.throw, [arg], "", true
+                ir.createUnreachable()
 
         visitTry: (n) ->
                 insertBlock = ir.getInsertBlock()
