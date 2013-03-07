@@ -175,7 +175,7 @@ JA(StringifyState *state, ejsval value)
     /* 8. Repeat while index < len */
     while (index < len) {
         /*    a. Let strP be the result of calling the abstract operation Str with arguments ToString(index) and value.  */
-        ejsval strP = Str (state, NumberToString(index), value);
+        ejsval strP = Str (state, NUMBER_TO_EJSVAL(index), value);
         /*    b. If strP is undefined */
         if (EJSVAL_IS_UNDEFINED(strP)) {
             /*       i. Append "null" to partial. */
