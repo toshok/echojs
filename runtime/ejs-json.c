@@ -364,34 +364,68 @@ JO(StringifyState *state, ejsval value)
 static ejsval
 Quote(StringifyState *state, ejsval value)
 {
-    // FIXME
+    int len = EJSVAL_TO_STRLEN(value);
+    jschar *product = malloc((len * 4 + 2) * sizeof(jschar));
+    EJSPrimString* prim_value = _ejs_primstring_flatten(EJSVAL_TO_STRING(value)); // this is pretty terrible.. we need a way to simply iterate over characters in a string
 
-    ejsval q = _ejs_string_new_utf8("\"");
-    return _ejs_string_concatv (q, value, q, _ejs_null);
+    int pi = 0;
     /* 1. Let product be the double quote character. */
+    product[pi++] = '"';
+
     /* 2. For each character C in value */
-    /*    a. If C is the double quote character or the backslash character */
-    /*       i. Let product be the concatenation of product and the backslash character. */
-    /*       ii. Let product be the concatenation of product and C. */
-    /*    b. Else if C is backspace, formfeed, newline, carriage return, or tab */
-    /*       i. Let product be the concatenation of product and the backslash character. */
-    /*       ii. Let abbrev be the character corresponding to the value of C as follows:
-                 backspace "b"
-                 formfeed "f"
-                 newline "n"
-                 carriage return "r"
-                 tab "t" */
-    /*       iii. Let product be the concatenation of product and abbrev. */
-    /*    c. Else if C is a control character having a code unit value less than the space character */
-    /*       i. Let product be the concatenation of product and the backslash character. */
-    /*       ii. Let product be the concatenation of product and "u". */
-    /*       iii. Let hex be the result of converting the numeric code unit value of C to a String of four 
-                  hexadecimal digits. */
-    /*       iv. Let product be the concatenation of product and hex. */
-    /*    d. Else */
-    /*       i. Let product be the concatenation of product and C. */
+    for (int vi = 0; vi < len; vi++) {
+        jschar C = prim_value->data.flat[vi];
+        /*    a. If C is the double quote character or the backslash character */
+        if (C == '\"' || C == '\\') {
+            /*       i. Let product be the concatenation of product and the backslash character. */
+            product[pi++] = '\\';
+            /*       ii. Let product be the concatenation of product and C. */
+            product[pi++] = C;
+        }
+        /*    b. Else if C is backspace, formfeed, newline, carriage return, or tab */
+        else if (C == '\b' ||
+                 C == '\f' ||
+                 C == '\n' ||
+                 C == '\r' ||
+                 C == '\t') {
+            /*       i. Let product be the concatenation of product and the backslash character. */
+            product[pi++] = '\\';
+            /*       ii. Let abbrev be the character corresponding to the value of C as follows: */
+            /*           backspace "b" */
+            jschar abbrev;
+            if (C == '\b') abbrev = 'b';
+            /*           formfeed "f" */
+            if (C == '\f') abbrev = 'f';
+            /*           newline "n" */
+            if (C == '\n') abbrev = 'n';
+            /*           carriage return "r" */
+            if (C == '\r') abbrev = 'r';
+            /*           tab "t" */
+            if (C == '\t') abbrev = 't';
+            /*       iii. Let product be the concatenation of product and abbrev. */
+            product[pi++] = abbrev;
+        }
+        /*    c. Else if C is a control character having a code unit value less than the space character */
+        else if (C < ' ') {
+            /*       i. Let product be the concatenation of product and the backslash character. */
+            /*       ii. Let product be the concatenation of product and "u". */
+            /*       iii. Let hex be the result of converting the numeric code unit value of C to a String of four 
+                     hexadecimal digits. */
+            /*       iv. Let product be the concatenation of product and hex. */
+            EJS_NOT_IMPLEMENTED();
+        }
+        /*    d. Else */
+        else {
+            /*       i. Let product be the concatenation of product and C. */
+            product[pi++] = C;
+        }
+    }
     /* 3. Let product be the concatenation of product and the double quote character. */
+    product[pi++] = '\"';
     /* 4. Return product. */
+    ejsval rv = _ejs_string_new_ucs2_len(product, pi);
+    free (product);
+    return rv;
 }
 
 /* abstract operation Str from 15.12.3 */
