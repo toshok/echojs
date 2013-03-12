@@ -560,7 +560,6 @@ _ejs_String_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     /* 1. Call CheckObjectCoercible passing the this value as its argument. */
     /* 2. Let S be the result of calling ToString, giving it the this value as its argument. */
     ejsval S = ToString(_this);
-    jschar *Sstr = EJSVAL_TO_FLAT_STRING(S);
 
     /* 3. Let A be a new array created as if by the expression new Array() where Array is the standard built-in  */
     /*    constructor with that name. */

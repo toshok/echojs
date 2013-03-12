@@ -443,7 +443,7 @@ Str(StringifyState *state, ejsval key, ejsval holder)
         if (EJSVAL_IS_FUNCTION(toJSON)) {
             /*       i. Let value be the result of calling the [[Call]] internal method of toJSON passing value as the 
                      this value and with an argument list consisting of key. */
-            _ejs_invoke_closure_1 (toJSON, value, 1, key);
+            _ejs_invoke_closure (toJSON, value, 1, &key);
         }
     }
 

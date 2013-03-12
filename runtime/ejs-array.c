@@ -512,8 +512,11 @@ _ejs_Array_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
     ejsval fun = args[0];
 
     int i;
+    ejsval foreach_args[2];
     for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
-        _ejs_invoke_closure_2 (fun, _ejs_null, 2, EJS_ARRAY_ELEMENTS(_this)[i], NUMBER_TO_EJSVAL(i));
+        foreach_args[0] = EJS_ARRAY_ELEMENTS(_this)[i];
+        foreach_args[1] = NUMBER_TO_EJSVAL(i);
+        _ejs_invoke_closure (fun, _ejs_null, 2, foreach_args);
     }
     return _ejs_undefined;
 }

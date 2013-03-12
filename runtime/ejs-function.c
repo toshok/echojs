@@ -171,7 +171,7 @@ _ejs_Function_prototype_apply (ejsval env, ejsval _this, uint32_t argc, ejsval *
     if (EJSVAL_IS_UNDEFINED(argArray) || EJSVAL_IS_NULL(argArray)) {
         /*    a. Return the result of calling the [[Call]] internal method of func, providing thisArg as the this value */
         /*       and an empty list of arguments. */
-        return _ejs_invoke_closure_0 (func, thisArg, 0);
+        return _ejs_invoke_closure (func, thisArg, 0, NULL);
     }
     /* 3. If Type(argArray) is not Object, then throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(argArray)) {
@@ -372,11 +372,6 @@ _ejs_function_init(ejsval global)
     }                                                                   \
     EJS_MACRO_END
 
-#define BUILD_INVOKE_CLOSURE(_closure, _thisArg, _argc, ...) EJS_MACRO_START \
-    ejsval args[] = { __VA_ARGS__ };                                    \
-    return _ejs_invoke_closure (_closure, _thisArg, argc, args);        \
-    EJS_MACRO_END
-
 ejsval
 _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args)
 {
@@ -437,24 +432,6 @@ _ejs_decompose_closure (ejsval closure, EJSClosureFunc* func, ejsval* env,
         *_this = fun->bound_this;
 
     return EJS_TRUE;
-}
-
-ejsval
-_ejs_invoke_closure_0 (ejsval closure, ejsval _this, uint32_t argc)
-{
-    return _ejs_invoke_closure (closure, _this, argc, NULL);
-}
-
-ejsval
-_ejs_invoke_closure_1 (ejsval closure, ejsval _this, uint32_t argc, ejsval arg1)
-{
-    BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1);
-}
-
-ejsval
-_ejs_invoke_closure_2 (ejsval closure, ejsval _this, uint32_t argc, ejsval arg1, ejsval arg2)
-{
-    BUILD_INVOKE_CLOSURE(closure, _this, argc, arg1, arg2);
 }
 
 static ejsval

@@ -144,7 +144,7 @@ ejsval ToString(ejsval exp)
         }
 
         // should we be checking if this returns a string?  i'd assume so...
-        return _ejs_invoke_closure_0 (toString, exp, 0);
+        return _ejs_invoke_closure (toString, exp, 0, NULL);
     }
     else
         EJS_NOT_IMPLEMENTED();
@@ -210,17 +210,17 @@ ejsval ToObject(ejsval exp)
 {
     if (EJSVAL_IS_BOOLEAN(exp)) {
         ejsval new_boolean = _ejs_object_new (_ejs_Boolean_proto, &_ejs_boolean_specops);
-        _ejs_invoke_closure_1 (_ejs_Boolean, new_boolean, 1, exp);
+        _ejs_invoke_closure (_ejs_Boolean, new_boolean, 1, &exp);
         return new_boolean;
     }
     else if (EJSVAL_IS_NUMBER(exp)) {
         ejsval new_number = _ejs_object_new (_ejs_Number_proto, &_ejs_number_specops);
-        _ejs_invoke_closure_1 (_ejs_Number, new_number, 1, exp);
+        _ejs_invoke_closure (_ejs_Number, new_number, 1, &exp);
         return new_number;
     }
     else if (EJSVAL_IS_STRING(exp)) {
         ejsval new_str = _ejs_object_new (_ejs_String_prototype, &_ejs_string_specops);
-        _ejs_invoke_closure_1 (_ejs_String, new_str, 1, exp);
+        _ejs_invoke_closure (_ejs_String, new_str, 1, &exp);
         return new_str;
     }
     else if (EJSVAL_IS_UNDEFINED(exp))

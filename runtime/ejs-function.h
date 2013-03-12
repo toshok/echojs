@@ -47,10 +47,6 @@ EJS_MACRO_END
 ejsval  _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args);
 EJSBool _ejs_decompose_closure (ejsval closure, EJSClosureFunc* func, ejsval* env, ejsval *_this);
 
-ejsval _ejs_invoke_closure_0 (ejsval closure, ejsval _this, uint32_t argc);
-ejsval _ejs_invoke_closure_1 (ejsval closure, ejsval _this, uint32_t argc, ejsval arg1);
-ejsval _ejs_invoke_closure_2 (ejsval closure, ejsval _this, uint32_t argc, ejsval arg1, ejsval arg2);
-
 extern ejsval _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func);
 extern ejsval _ejs_function_new_native (ejsval env, ejsval name, EJSClosureFunc func);
 extern ejsval _ejs_function_new_anon (ejsval env, EJSClosureFunc func);

@@ -1175,7 +1175,7 @@ _ejs_Object_prototype_toLocaleString (ejsval env, ejsval _this, uint32_t argc, e
     // XXX
 
     /* 4. Return the result of calling the [[Call]] internal method of toString passing O as the this value and no arguments. */
-    return _ejs_invoke_closure_0 (toString, O, 0);
+    return _ejs_invoke_closure (toString, O, 0, NULL);
 }
 
 // ECMA262: 15.2.4.4
@@ -1354,7 +1354,7 @@ _ejs_object_specop_get (ejsval obj_, ejsval propertyName)
     }
 
     /* 6. Return the result calling the [[Call]] internal method of getter providing O as the this value and providing no arguments */
-    return _ejs_invoke_closure_0 (getter, obj_, 0);
+    return _ejs_invoke_closure (getter, obj_, 0, NULL);
 }
 
 // ECMA262: 8.12.1
@@ -1433,7 +1433,7 @@ _ejs_object_specop_put (ejsval O, ejsval P, ejsval V, EJSBool Throw)
         ejsval setter = _ejs_property_desc_get_setter(desc);
         assert (EJSVAL_IS_FUNCTION(setter));
         /*    b. Call the [[Call]] internal method of setter providing O as the this value and providing V as the sole argument. */
-        _ejs_invoke_closure_1 (setter, O, 1, V);
+        _ejs_invoke_closure (setter, O, 1, &V);
     }
     else {
         /* 6. Else, create a named data property named P on object O as follows */

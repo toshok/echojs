@@ -30,7 +30,7 @@ main(int argc, char** argv)
 
         ADD_STACK_ROOT(ejsval, entry_name, _ejs_string_new_utf8(entry_filename));
 
-        _ejs_invoke_closure_1 (_ejs_require, _ejs_null, 1, entry_name);
+        _ejs_invoke_closure (_ejs_require, _ejs_null, 1, &entry_name);
 
         END_SHADOW_STACK_FRAME;
 
