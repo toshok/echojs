@@ -415,10 +415,8 @@ EJSBool
 _ejs_decompose_closure (ejsval closure, EJSClosureFunc* func, ejsval* env,
                         ejsval *_this)
 {
-    if (!EJSVAL_IS_FUNCTION(closure)) {
-        printf ("TypeError, object not a function\n");
-        EJS_NOT_IMPLEMENTED();
-    }
+    if (!EJSVAL_IS_FUNCTION(closure))
+        _ejs_throw_nativeerror (EJS_TYPE_ERROR, "object not a function");
 
     EJSFunction *fun = (EJSFunction*)EJSVAL_TO_OBJECT(closure);
 
