@@ -21,7 +21,7 @@ ir = llvm.IRBuilder
 
 # set to true to inline more of the call sequence at call sites (we still have to call into the runtime to decompose the closure itself for now)
 # disable this for now because it breaks more of the exception tests
-decompose_closure_on_invoke = false
+decompose_closure_on_invoke = true
 
 BUILTIN_PARAMS = [
   { type: syntax.Identifier, name: "%closure", llvm_type: types.EjsClosureEnv }
@@ -1281,7 +1281,7 @@ class LLVMIRVisitor extends NodeVisitor
                         invoke_merge_bb = new llvm.BasicBlock "invoke_merge_bb", insertFunc
 
                         func_alloca = @createAlloca @currentFunction, types.EjsClosureFunc, "direct_invoke_func"
-                        env_alloca = @createAlloca @currentFunction, types.EjsClosureEnv, "direct_invoke_env"
+                        env_alloca  = @createAlloca @currentFunction, types.EjsClosureEnv, "direct_invoke_env"
                         this_alloca = @createAlloca @currentFunction, types.EjsValue, "direct_invoke_this"
 
                         # provide the default "this" for decompose_closure.  if one was bound it'll get overwritten
