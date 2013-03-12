@@ -53,7 +53,7 @@ _ejs_date_new_unix (int timestamp)
     if (!localtime_r(&t, &rv->tm))
         EJS_NOT_IMPLEMENTED();
 
-    return OBJECT_TO_EJSVAL((EJSObject*)rv);
+    return OBJECT_TO_EJSVAL(rv);
 }
 
 ejsval _ejs_Date;

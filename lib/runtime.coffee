@@ -18,7 +18,7 @@ runtime_interface =
         array_new:             -> @module.getOrInsertExternalFunction "_ejs_array_new",                 types.EjsValue, [types.int32]
         number_new:            -> types.does_not_throw types.does_not_access_memory @module.getOrInsertExternalFunction "_ejs_number_new",                types.EjsValue, [types.double]
         string_new_utf8:       -> types.only_reads_memory types.does_not_throw @module.getOrInsertExternalFunction "_ejs_string_new_utf8",           types.EjsValue, [types.string]
-        regexp_new_utf8:       -> @module.getOrInsertExternalFunction "_ejs_regexp_new_utf8",           types.EjsValue, [types.string]
+        regexp_new_utf8:       -> @module.getOrInsertExternalFunction "_ejs_regexp_new_utf8",           types.EjsValue, [types.string, types.string]
         truthy:                -> types.does_not_throw types.does_not_access_memory @module.getOrInsertExternalFunction "_ejs_truthy",                    types.bool, [types.EjsValue]
         object_setprop:        -> @module.getOrInsertExternalFunction "_ejs_object_setprop",            types.EjsValue, [types.EjsValue, types.EjsValue, types.EjsValue]
         object_getprop:        -> types.only_reads_memory @module.getOrInsertExternalFunction "_ejs_object_getprop",           types.EjsValue, [types.EjsValue, types.EjsValue]

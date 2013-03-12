@@ -106,6 +106,10 @@ _ejs_stream_write (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     int offset = 0;
     char *buf = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(to_write));
     
+    if (strlen(buf) != remaining) {
+        printf ("writing a string that contains an embedded '\0'\n");
+    }
+
     do {
         int num_written = write (fd, buf + offset, remaining);
         if (num_written == -1) {

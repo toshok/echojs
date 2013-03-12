@@ -35,7 +35,7 @@ typedef double EJSPrimNumber;
 #define EJSVAL_TO_FUNC(v)         ((EJSFunction*)EJSVAL_TO_OBJECT_IMPL(v))->func
 #define EJSVAL_TO_ENV(v)          ((EJSFunction*)EJSVAL_TO_OBJECT_IMPL(v))->env
 
-#define OBJECT_TO_EJSVAL(v)       OBJECT_TO_EJSVAL_IMPL(v)
+#define OBJECT_TO_EJSVAL(v)       OBJECT_TO_EJSVAL_IMPL((EJSObject*)v)
 #define BOOLEAN_TO_EJSVAL(v)      BOOLEAN_TO_EJSVAL_IMPL(v)
 #define NUMBER_TO_EJSVAL(v)       DOUBLE_TO_EJSVAL_IMPL(v)
 #define STRING_TO_EJSVAL(v)       STRING_TO_EJSVAL_IMPL(v)

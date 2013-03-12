@@ -3,6 +3,8 @@ EJS_ATOM2(,empty)
 EJS_ATOM2([],empty_array)
 EJS_ATOM2({},empty_object)
 
+EJS_ATOM2(/,slash)
+
 // common properties/methods
 EJS_ATOM(__proto__)
 EJS_ATOM(constructor)
@@ -185,11 +187,16 @@ EJS_ATOM(fromCharCode)
 //EJS_ATOM(valueOf)
 //EJS_ATOM(toString)
 
-// Regexp functions
+// Regexp functions and properties
 EJS_ATOM(exec)
 //EJS_ATOM(match)
 EJS_ATOM(test)
 //EJS_ATOM(toString)
+EJS_ATOM(source)
+EJS_ATOM(global)
+EJS_ATOM(lastIndex)
+EJS_ATOM(multiline)
+EJS_ATOM(ignoreCase)
 
 // Date functions
 //EJS_ATOM(toString)

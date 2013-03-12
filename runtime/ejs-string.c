@@ -247,10 +247,8 @@ _ejs_String_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *
     ejsval searchValue = args[0];
     ejsval replaceValue = argc > 1 ? args[1] : _ejs_undefined;
 
-    if (EJSVAL_IS_OBJECT(searchValue) &&
-        !strcmp (CLASSNAME(EJSVAL_TO_OBJECT(searchValue)), "RegExp")) {
-        printf ("String.prototype.replace called with a RegExp.  returning original string because we suck\n");
-        return thisStr;
+    if (EJSVAL_IS_REGEXP(searchValue)) {
+        return _ejs_regexp_replace (thisStr, searchValue, replaceValue);
     }
     else {
         ejsval searchValueStr = ToString(searchValue);
@@ -633,7 +631,7 @@ _ejs_String_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
             else {
                 /*         1. Let T be a String value equal to the substring of S consisting of the characters at  */
                 /*            positions p (inclusive) through q (exclusive). */
-                ejsval T = _ejs_string_new_ucs2_len (Sstr + p, q-p);
+                ejsval T = _ejs_string_new_substring (S, p, q-p);
                 /*         2. Call the [[DefineOwnProperty]] internal method of A with arguments  */
                 /*            ToString(lengthA), Property Descriptor {[[Value]]: T, [[Writable]]: true, */
                 /*            [[Enumerable]]: true, [[Configurable]]: true}, and false. */
@@ -670,7 +668,7 @@ _ejs_String_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     }
     /* 14. Let T be a String value equal to the substring of S consisting of the characters at positions p (inclusive)  */
     /*     through s (exclusive). */
-    ejsval T = _ejs_string_new_ucs2_len (Sstr + p, s-p);
+    ejsval T = _ejs_string_new_substring (S, p, s-p);
     /* 15. Call the [[DefineOwnProperty]] internal method of A with arguments ToString(lengthA), Property Descriptor  */
     /*     {[[Value]]: T, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
     _ejs_array_push_dense (A, 1, &T);
@@ -711,7 +709,7 @@ _ejs_String_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     int span = MAX(to - from, 0);
 
     // Return a String containing span consecutive characters from S beginning with the character at position from.
-    return _ejs_string_new_ucs2_len (EJSVAL_TO_FLAT_STRING(S) + from, span);
+    return _ejs_string_new_substring (S, from, span);
 }
 
 static ejsval
@@ -740,13 +738,13 @@ _ejs_string_init_proto()
 
     EJSObject* prototype = _ejs_gc_new(EJSObject);
 
-    _ejs_String__proto__ = OBJECT_TO_EJSVAL((EJSObject*)__proto__);
+    _ejs_String__proto__ = OBJECT_TO_EJSVAL(__proto__);
     _ejs_String_prototype = OBJECT_TO_EJSVAL(prototype);
 
     _ejs_init_object (prototype, _ejs_null, &_ejs_string_specops);
     _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_function_specops);
 
-    _ejs_object_define_value_property (OBJECT_TO_EJSVAL((EJSObject*)__proto__), _ejs_atom_name, _ejs_atom_empty, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (OBJECT_TO_EJSVAL(__proto__), _ejs_atom_name, _ejs_atom_empty, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 }
 
 void
@@ -966,6 +964,20 @@ _ejs_string_new_ucs2_len (const jschar* str, int len)
 }
 
 ejsval
+_ejs_string_new_substring (ejsval str, int off, int len)
+{
+    // XXX we should probably validate off/len here..
+
+    EJSPrimString *prim_str = EJSVAL_TO_STRING(str);
+    EJSPrimString* rv = _ejs_gc_new_primstr(sizeof(EJSPrimString));
+    EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_DEPENDENT);
+    rv->length = len;
+    rv->data.dependent.dep = prim_str;
+    rv->data.dependent.off = off;
+    return STRING_TO_EJSVAL(rv);
+}
+
+ejsval
 _ejs_string_concat (ejsval left, ejsval right)
 {
     EJSPrimString* lhs = EJSVAL_TO_STRING(left);
@@ -989,13 +1001,19 @@ _ejs_string_concatv (ejsval first, ...)
     va_list ap;
 
     va_start(ap, first);
-    while (!EJSVAL_IS_NULL(arg = va_arg(ap, ejsval))) {
+
+    arg = va_arg(ap, ejsval);
+    do {
         result = _ejs_string_concat (result, arg);
-    }
+        arg = va_arg(ap, ejsval);
+    } while (!EJSVAL_IS_NULL_OR_UNDEFINED(arg));
+
     va_end(ap);
 
     return result;
 }
+
+static void flatten_dep (jschar **p, EJSPrimString *n, int* off, int* len);
 
 static void
 flatten_rope (jschar **p, EJSPrimString *n)
@@ -1009,8 +1027,77 @@ flatten_rope (jschar **p, EJSPrimString *n)
         flatten_rope(p, n->data.rope.left);
         flatten_rope(p, n->data.rope.right);
         break;
+    case EJS_STRING_DEPENDENT: {
+        int off = n->data.dependent.off;
+        int len = n->length;
+        flatten_dep (p, n->data.dependent.dep, &off, &len);
+        break;
+    }
     default:
         EJS_NOT_IMPLEMENTED();
+    }
+}
+
+static void
+flatten_dep (jschar **p, EJSPrimString *n, int* off, int* len)
+{
+    // nothing else to append
+    if (*len == 0)
+        return;
+
+    // first step is to locate the node that contains the start of our characters
+    if (*off >= 0) {
+        switch (EJS_PRIMSTR_GET_TYPE(n)) {
+        case EJS_STRING_FLAT: {
+            if (*off < n->length) {
+                // we handle the first append here
+                int length_to_append = MIN(*len, n->length - *off);
+                memmove (*p, n->data.flat + *off, length_to_append * sizeof(jschar));
+                *p += length_to_append;
+                *len -= length_to_append;
+                *off = 0;
+            }
+            else {
+                *off -= n->length;
+            }
+            break;
+        }
+        case EJS_STRING_ROPE:
+            flatten_dep(p, n->data.rope.left, off, len);
+            flatten_dep(p, n->data.rope.right, off, len);
+            break;
+        case EJS_STRING_DEPENDENT: {
+            *off += n->data.dependent.off;
+            flatten_dep(p, n->data.dependent.dep, off, len);
+            break;
+        }
+        default:
+            EJS_NOT_IMPLEMENTED();
+        }
+    }
+    else {
+        // we need to append len characters from this string into the buffer
+        switch (EJS_PRIMSTR_GET_TYPE(n)) {
+        case EJS_STRING_FLAT: {
+            int length_to_append = MIN (*len, n->length);
+            memmove (*p, n->data.flat, length_to_append * sizeof(jschar));
+            *p += length_to_append;
+            *len -= length_to_append;
+            break;
+        }
+        case EJS_STRING_ROPE:
+            flatten_dep(p, n->data.rope.left, off, len);
+            flatten_dep(p, n->data.rope.right, off, len);
+            break;
+        case EJS_STRING_DEPENDENT: {
+            int length_to_append = MIN (*len, n->length);
+            flatten_dep (p, n->data.dependent.dep, off, &length_to_append);
+            *len -= length_to_append;
+            break;
+        }
+        default:
+            EJS_NOT_IMPLEMENTED();
+        }
     }
 }
 
@@ -1020,6 +1107,20 @@ _ejs_primstring_flatten (EJSPrimString* primstr)
     switch (EJS_PRIMSTR_GET_TYPE(primstr)) {
     case EJS_STRING_FLAT:
         return primstr;
+    case EJS_STRING_DEPENDENT: {
+        // modify the string in-place, switching from a dep to a flat string
+        jschar *buffer = (jschar*)calloc(sizeof(jschar), primstr->length + 1);
+        jschar *p = buffer;
+        int off = 0;
+        int length = primstr->length;
+        flatten_dep (&p, primstr, &off, &length);
+        // assert (off == 0);
+        //assert (length == 0);
+        EJS_PRIMSTR_CLEAR_TYPE(primstr);
+        EJS_PRIMSTR_SET_TYPE(primstr, EJS_STRING_FLAT);
+        primstr->data.flat = buffer;
+        return primstr;
+    }
     case EJS_STRING_ROPE: {
         // modify the string in-place, switching from a rope to a flat string
         jschar *buffer = (jschar*)calloc(sizeof(jschar), primstr->length + 1);
@@ -1061,6 +1162,9 @@ _ejs_string_char_code_at(EJSPrimString* primstr, int i)
             return _ejs_string_char_code_at (primstr->data.rope.right, i - primstr->data.rope.left->length);
         }
     }
+    case EJS_STRING_DEPENDENT: {
+        return _ejs_string_char_code_at (primstr->data.dependent.dep, i + primstr->data.dependent.off);
+    }
     default:
         EJS_NOT_IMPLEMENTED();
     }
@@ -1095,4 +1199,16 @@ _ejs_string_init_literal (const char *name, ejsval *val, EJSPrimString* str, jsc
     str->gc_header = (EJS_STRING_FLAT<<EJS_GC_USER_FLAGS_SHIFT);
     str->data.flat = ucs2_data;
     *val = STRING_TO_EJSVAL(str);
+}
+
+char*
+_ejs_string_describe (ejsval str)
+{
+    return ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(str));
+}
+
+char*
+_ejs_string_describe_prim (EJSPrimString *str)
+{
+    return ucs2_to_utf8(_ejs_primstring_flatten(str)->data.flat);
 }

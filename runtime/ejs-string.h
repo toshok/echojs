@@ -68,6 +68,10 @@ struct _EJSPrimString {
             struct _EJSPrimString *left;
             struct _EJSPrimString *right;
         } rope;
+        struct {
+            struct _EJSPrimString *dep;
+            int off;
+        } dependent;
     } data;
 };
 
@@ -76,6 +80,7 @@ ejsval _ejs_string_new_utf8 (const char* str);
 ejsval _ejs_string_new_utf8_len (const char* str, int len);
 ejsval _ejs_string_new_ucs2 (const jschar* str);
 ejsval _ejs_string_new_ucs2_len (const jschar* str, int len);
+ejsval _ejs_string_new_substring (ejsval str, int off, int len);
 
 ejsval _ejs_string_concat (ejsval left, ejsval right);
 ejsval _ejs_string_concatv (ejsval first, ...);

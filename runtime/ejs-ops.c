@@ -158,7 +158,11 @@ ejsval ToNumber(ejsval exp)
         return EJSVAL_TO_BOOLEAN(exp) ? _ejs_one : _ejs_zero;
     else if (EJSVAL_IS_STRING(exp)) {
         char* num_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(exp));
-        ejsval rv = NUMBER_TO_EJSVAL(atof(num_utf8)); // XXX NaN
+        char *endptr;
+        double d = strtod(num_utf8, &endptr);
+        if (*endptr != '\0')
+            return _ejs_nan;
+        ejsval rv = NUMBER_TO_EJSVAL(d); // XXX NaN
         free (num_utf8);
         return rv;
     }

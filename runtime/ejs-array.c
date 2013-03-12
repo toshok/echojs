@@ -65,7 +65,7 @@ _ejs_array_new (int numElements)
     _ejs_property_desc_set_writable (&rv->array_length_desc, EJS_TRUE);
     _ejs_property_desc_set_value (&rv->array_length_desc, NUMBER_TO_EJSVAL(numElements));
 
-    return OBJECT_TO_EJSVAL((EJSObject*)rv);
+    return OBJECT_TO_EJSVAL(rv);
 }
 
 void
@@ -772,9 +772,10 @@ _ejs_array_specop_get (ejsval obj, ejsval propertyName)
 {
     // check if propertyName is an integer, or a string that we can convert to an int
     EJSBool is_index = EJS_FALSE;
-    int idx = 0;
-    if (EJSVAL_IS_NUMBER(propertyName)) {
-        double n = EJSVAL_TO_NUMBER(propertyName);
+    ejsval idx_val = ToNumber(propertyName);
+    int idx;
+    if (EJSVAL_IS_NUMBER(idx_val)) {
+        double n = EJSVAL_TO_NUMBER(idx_val);
         if (floor(n) == n) {
             idx = (int)n;
             is_index = EJS_TRUE;

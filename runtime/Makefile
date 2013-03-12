@@ -52,7 +52,7 @@ clean:
 
 VPATH=.:../parson
 
-CFLAGS=-I. -Wall -g -O0 -Wno-unused-function
+CFLAGS=-I. -I../pcre -Wall -g -O0 -Wno-unused-function
 SHARED_CFLAGS=-fPIC $(CFLAGS)
 
 DEV_CFLAGS=	-arch armv6 \

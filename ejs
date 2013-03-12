@@ -167,6 +167,11 @@ target_libecho =
         sim: "runtime/libecho.a.ios"
         dev: "runtime/libecho.a.ios"
 
+extra_libs =
+        osx: "pcre/.libs/libpcre16.a"
+        sim: ""
+        dev: ""
+
 target_path_prepend =
         osx: ""
         sim: "#{sim_bin}"
@@ -222,20 +227,10 @@ compileFile = (filename, content, compileCallback) ->
 
 generate_require_map = ->
         sanitize = (filename, c_callable) ->
-                if __ejs?
-                        filename = filename.replace ".js", ""
-                        if c_callable
-                                filename = filename.replace ".", "_"
-                                filename = filename.replace ",", "_"
-                                filename = filename.replace "-", "_"
-                                filename = filename.replace "/", "_"
-                                filename = filename.replace "\\", "_"
-                        filename
-                else                                
-                        filename = filename.replace /\.js$/, ""
-                        if c_callable
-                                filename = filename.replace /[.,-\/\\]/g, "_" # this is insanely inadequate
-                        filename
+                filename = filename.replace /\.js$/, ""
+                if c_callable
+                        filename = filename.replace /[.,-\/\\]/g, "_" # this is insanely inadequate
+                filename
         map_path = "/tmp/#{util.genFreshFileName path.basename files[0]}-require-map.cpp"
         map = fs.createWriteStream map_path
         map.write "extern \"C\" {"
@@ -281,10 +276,17 @@ do_final_link = ->
                 console.warn "ejs doesn't have process.env yet."
         else
                 process.env.PATH = "#{target_path_prepend[options.target]}:#{process.env.PATH}"
-        
+
+        relative_to_ejs_exe = (n) ->
+                path.resolve (path.dirname process.argv[if __ejs? then 0 else 1]), n
+                
         clang_args = target_link_args[options.target].concat ["-o", options.output_filename || "#{files[0]}.exe"].concat o_filenames
+        
         clang_args.push map_filename
-        clang_args.push path.resolve (path.dirname process.argv[if __ejs? then 0 else 1]), target_libecho[options.target]
+        
+        clang_args.push relative_to_ejs_exe target_libecho[options.target]
+        clang_args.push relative_to_ejs_exe extra_libs[options.target]
+        
         options.external_modules.forEach (extern_module) ->
                 clang_args.push extern_module.library
                 clang_args = clang_args.concat extern_module.link_flags.split " "

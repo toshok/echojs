@@ -12,8 +12,10 @@ typedef struct {
     EJSObject obj;
 
     /* regexp specific data */
-    int pattern_len;
-    char *pattern;
+    ejsval pattern;
+    ejsval flags;
+
+    void* compiled_pattern;
 } EJSRegExp;
 
 EJS_BEGIN_DECLS
@@ -25,7 +27,11 @@ extern EJSSpecOps _ejs_regexp_specops;
 
 void _ejs_regexp_init(ejsval global);
 
-ejsval _ejs_regexp_new_utf8 (const char* str);
+ejsval _ejs_regexp_new (ejsval pattern, ejsval flags);
+
+ejsval _ejs_regexp_new_utf8(const char *pattern, const char *flags);
+
+ejsval _ejs_regexp_replace(ejsval str, ejsval search, ejsval replace);
 
 EJS_END_DECLS
 

@@ -1043,9 +1043,12 @@ class LLVMIRVisitor extends NodeVisitor
                 # regular expression literals
                 if typeof n.raw is "string" and n.raw[0] is '/'
                         debug.log -> "literal regexp: #{n.raw}"
-                        c = ir.createGlobalStringPtr n.raw, "strconst"
+                        
+                        source = ir.createGlobalStringPtr n.value.source, "regexpsource"
+                        flags = ir.createGlobalStringPtr "#{if n.value.global then 'g' else ''}#{if n.value.multiline then 'm' else ''}#{if n.value.ignoreCase then 'i' else ''}", "regexpflags"
+                        
                         regexp_new_utf8 = @ejs_runtime.regexp_new_utf8
-                        regexpcall = @createCall regexp_new_utf8, [c], "regexptmp", !regexp_new_utf8.doesNotThrow
+                        regexpcall = @createCall regexp_new_utf8, [source, flags], "regexptmp", !regexp_new_utf8.doesNotThrow
                         debug.log -> "regexpcall = #{regexpcall}"
                         return regexpcall
 

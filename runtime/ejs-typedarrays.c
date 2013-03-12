@@ -113,7 +113,7 @@ _ejs_arraybuffer_new (int size)
     rv->size = size;
     rv->data.alloced_buf = calloc(1, size);
 
-    return OBJECT_TO_EJSVAL((EJSObject*)rv);
+    return OBJECT_TO_EJSVAL(rv);
 }
 
 ejsval
@@ -131,7 +131,7 @@ _ejs_arraybuffer_new_slice (ejsval bufferval, int offset, int size)
     if (rv->size + rv->data.dependent.offset > buffer->size)
         rv->size = buffer->size - offset;
 
-    return OBJECT_TO_EJSVAL((EJSObject*)rv);
+    return OBJECT_TO_EJSVAL(rv);
 }
 
 

@@ -406,7 +406,7 @@ _ejs_property_iterator_new (ejsval forVal)
 
     if (EJSVAL_IS_PRIMITIVE(forVal) || EJSVAL_IS_NULL(forVal) || EJSVAL_IS_UNDEFINED(forVal)) {
         iterator->num = 0;
-        return OBJECT_TO_EJSVAL((EJSObject*)iterator);
+        return OBJECT_TO_EJSVAL(iterator);
     }
 
     if (EJSVAL_IS_ARRAY(forVal)) {
@@ -1262,7 +1262,7 @@ _ejs_object_init_proto()
 
     EJSObject* prototype = _ejs_gc_new(EJSObject);
 
-    _ejs_Object__proto__ = OBJECT_TO_EJSVAL((EJSObject*)__proto__);
+    _ejs_Object__proto__ = OBJECT_TO_EJSVAL(__proto__);
     _ejs_Object_prototype = OBJECT_TO_EJSVAL(prototype);
 
     _ejs_init_object (prototype, _ejs_null, &_ejs_object_specops);

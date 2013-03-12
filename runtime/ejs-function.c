@@ -68,7 +68,7 @@ _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func)
     rv->func = func;
     rv->env = env;
 
-    ejsval fun = OBJECT_TO_EJSVAL((EJSObject*)rv);
+    ejsval fun = OBJECT_TO_EJSVAL(rv);
 
     // ECMA262: 15.3.2.1
     ejsval fun_proto = _ejs_object_new (_ejs_Object_prototype, &_ejs_object_specops);
@@ -89,11 +89,11 @@ _ejs_function_new_native (ejsval env, ejsval name, EJSClosureFunc func)
     rv->func = func;
     rv->env = env;
 
-    ejsval fun = OBJECT_TO_EJSVAL((EJSObject*)rv);
+    ejsval fun = OBJECT_TO_EJSVAL(rv);
 
     _ejs_object_define_value_property (fun, _ejs_atom_name, name, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
-    return OBJECT_TO_EJSVAL((EJSObject*)rv);
+    return OBJECT_TO_EJSVAL(rv);
 }
 
 ejsval
@@ -315,9 +315,9 @@ _ejs_function_init_proto()
 
     _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_function_specops);
 
-    _ejs_object_define_value_property (OBJECT_TO_EJSVAL((EJSObject*)__proto__), _ejs_atom_name, _ejs_atom_empty, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (OBJECT_TO_EJSVAL(__proto__), _ejs_atom_name, _ejs_atom_empty, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
-    _ejs_Function__proto__ = OBJECT_TO_EJSVAL((EJSObject*)__proto__);
+    _ejs_Function__proto__ = OBJECT_TO_EJSVAL(__proto__);
 }
 
 void

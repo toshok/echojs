@@ -14,3 +14,6 @@
 [submodule "estraverse"]
 	path = estraverse
 	url = https://github.com/Constellation/estraverse.git
+[submodule "pcre"]
+	path = pcre
+	url = https://github.com/toshok/pcre.git
