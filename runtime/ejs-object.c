@@ -1537,8 +1537,7 @@ _ejs_object_specop_delete (ejsval O, ejsval P, EJSBool Throw)
     }
     /* 4. Else if Throw, then throw a TypeError exception.*/
     else if (Throw) {
-        printf ("throw TypeError from specop_delete\n");
-        EJS_NOT_IMPLEMENTED();
+        _ejs_throw_nativeerror (EJS_TYPE_ERROR, "property is not configurable");
     }
     /* 5. Return false. */
     return EJS_FALSE;
