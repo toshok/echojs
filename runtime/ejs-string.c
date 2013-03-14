@@ -475,7 +475,24 @@ _ejs_String_prototype_toLocaleLowerCase (ejsval env, ejsval _this, uint32_t argc
 static ejsval
 _ejs_String_prototype_toUpperCase (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    EJS_NOT_IMPLEMENTED();
+    /* 1. Call CheckObjectCoercible passing the this value as its argument. */
+    /* 2. Let S be the result of calling ToString, giving it the this value as its argument. */
+    ejsval S = ToString(_this);
+    char* sstr = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(S));
+
+    /* 3. Let L be a String where each character of L is either the Unicode lowercase equivalent of the corresponding  */
+    /*    character of S or the actual corresponding character of S if no Unicode lowercase equivalent exists. */
+    char* p = sstr;
+    while (*p) {
+        *p = toupper(*p);
+        p++;
+    }
+
+    ejsval L = _ejs_string_new_utf8(sstr);
+    free(sstr);
+
+    /* 4. Return L. */
+    return L;
 }
 
 static ejsval
