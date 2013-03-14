@@ -793,7 +793,6 @@ _ejs_op_instanceof (ejsval lhs, ejsval rhs)
     /* 5. If Type(rval) is not Object, throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(rhs)) {
         _ejs_throw_nativeerror (EJS_TYPE_ERROR, "rhs of instanceof check must be a function");
-        EJS_NOT_IMPLEMENTED();
     }
     
     EJSObject *obj = EJSVAL_TO_OBJECT(rhs);
@@ -808,10 +807,23 @@ _ejs_op_instanceof (ejsval lhs, ejsval rhs)
     return OP(obj,has_instance) (rhs, lhs) ? _ejs_true : _ejs_false;
 }
 
+// ECMA262: 11.8.7
 ejsval
 _ejs_op_in (ejsval lhs, ejsval rhs)
 {
-    EJS_NOT_IMPLEMENTED();
+    /* 1. Let lref be the result of evaluating RelationalExpression. */
+    /* 2. Let lval be GetValue(lref). */
+    /* 3. Let rref be the result of evaluating ShiftExpression. */
+    /* 4. Let rval be GetValue(rref). */
+    /* 5. If Type(rval) is not Object, throw a TypeError exception. */
+    if (!EJSVAL_IS_OBJECT(rhs)) {
+        _ejs_throw_nativeerror (EJS_TYPE_ERROR, "rhs of instanceof check must be a function");
+    }
+
+    EJSObject *obj = EJSVAL_TO_OBJECT(rhs);
+
+    /* 6. Return the result of calling the [[HasProperty]] internal method of rval with argument ToString(lval). */
+    return OP(obj,has_property) (rhs, lhs) ? _ejs_true : _ejs_false;
 }
 
 EJSBool
