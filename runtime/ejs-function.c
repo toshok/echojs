@@ -253,13 +253,17 @@ _ejs_Function_prototype_bind (ejsval env, ejsval _this, uint32_t argc, ejsval *a
     ejsval thisArg = _ejs_undefined;
     if (argc >= 1)
         thisArg = args[0];
-    if (argc >= 2)
-        EJS_NOT_IMPLEMENTED();
 
     EJSFunction *TargetFunc = (EJSFunction*)EJSVAL_TO_OBJECT(Target);
 
     /* 3. Let A be a new (possibly empty) internal list of all of the argument values provided after thisArg (arg1, arg2 etc), in order. */
-    // XXX
+    int bound_argc;
+    ejsval *bound_args = NULL;
+    if (argc > 1) {
+        bound_argc = argc-1;
+        bound_args = malloc(sizeof(ejsval) * bound_argc);
+        memcpy (bound_args, args, sizeof(ejsval) * bound_argc);
+    }
 
     /* 4. Let F be a new native ECMAScript object . */
 
@@ -275,6 +279,9 @@ _ejs_Function_prototype_bind (ejsval env, ejsval _this, uint32_t argc, ejsval *a
     F_->bound_this = thisArg;
 
     /* 9. Set the [[BoundArgs]] internal property of F to A. */
+    F_->bound_argc = bound_argc;
+    F_->bound_args = bound_args;
+
     /* 10. Set the [[Class]] internal property of F to "Function". */
     /* 11. Set the [[Prototype]] internal property of F to the standard built-in Function prototype object as specified in 15.3.3.1. */
     /* 12. Set the [[Call]] internal property of F as described in 15.3.4.5.1. */
@@ -523,6 +530,9 @@ _ejs_function_specop_allocate ()
 static void
 _ejs_function_specop_finalize (EJSObject* obj)
 {
+    EJSFunction* f = (EJSFunction*)obj;
+    if (f->bound_args)
+        free (f->bound_args);
     _ejs_object_specops.finalize (obj);
 }
 
