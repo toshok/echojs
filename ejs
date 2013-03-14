@@ -168,9 +168,9 @@ target_libecho =
         dev: "runtime/libecho.a.ios"
 
 extra_libs =
-        osx: "pcre/.libs/libpcre16.a"
-        sim: ""
-        dev: ""
+        osx: "pcre-osx/.libs/libpcre16.a"
+        sim: "pcre-iossim/.libs/libpcre16.a"
+        dev: "pcre-iosdev/.libs/libpcre16.a"
 
 target_path_prepend =
         osx: ""
