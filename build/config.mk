@@ -25,9 +25,9 @@ MKDIR=mkdir -p
 INSTALL=install
 CP=cp
 
-CFLAGS=-g -O2 -Wall -I.
+CFLAGS=-g -O0 -Wall -I. -Wno-unused-function
 
-MIN_IOS_VERSION=5.0
+MIN_IOS_VERSION=4.3
 
 IOSSIM_ARCH=-arch i386
 IOSSIM_ARCH_FLAGS=

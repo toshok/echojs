@@ -3,7 +3,7 @@ TOP=..
 include $(TOP)/build/build.mk
 
 LIBRARY=libecho.a
-SOURCES= \
+C_SOURCES= \
 	ejs-arguments.c \
 	ejs-array.c \
 	ejs-boolean.c \
@@ -30,9 +30,13 @@ SOURCES= \
 	ejs-uri.c \
 	parson.c
 
-OSX_OBJECTS=$(SOURCES:%.c=%.o.osx) main.o.osx
-SIM_OBJECTS=$(SOURCES:%.c=%.o.sim) ios-main.o.sim
-DEV_OBJECTS=$(SOURCES:%.c=%.o.armv7) ios-main.o.armv7
+OBJC_SOURCES= \
+	ejs-jsobjc.m \
+	ejs-objc.m
+
+OSX_OBJECTS=$(C_SOURCES:%.c=%.o.osx) $(OBJC_SOURCES:%.m=%.o.osx) main.o.osx
+SIM_OBJECTS=$(C_SOURCES:%.c=%.o.sim) $(OBJC_SOURCES:%.m=%.o.sim) ios-main.o.sim
+DEV_OBJECTS=$(C_SOURCES:%.c=%.o.armv7) $(OBJC_SOURCES:%.m=%.o.armv7) ios-main.o.armv7
 
 OSX_LIBRARY=$(LIBRARY)
 SIM_LIBRARY=$(LIBRARY).sim
@@ -52,16 +56,10 @@ clean:
 
 VPATH=.:../parson
 
-CFLAGS=-I. -I../pcre -Wall -g -O0 -Wno-unused-function
-SHARED_CFLAGS=-fPIC $(CFLAGS)
+CFLAGS += -I../pcre-osx
+IOSSIM_CFLAGS += -I../pcre-iossim
+IOSDEV_CFLAGS += -I../pcre-iosdev
 
-DEV_CFLAGS=	-arch armv6 \
-		-isysroot /Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS5.0.sdk \
-		-miphoneos-version-min=4.3
-
-SIM_CFLAGS=	-arch i386 \
-		-isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator5.0.sdk \
-		-miphoneos-version-min=4.3
 
 $(OSX_LIBRARY): $(OSX_OBJECTS)
 	@echo [ar osx] $@ && /usr/bin/ar rc $@ $(OSX_OBJECTS)
@@ -81,22 +79,22 @@ ejs-atoms-gen.c: ejs-atoms.h gen-atoms.js
 ejs-init.o.osx ejs-init.o.sim ejs-init.o.armv7: ejs-atoms-gen.c
 
 %.o.osx: %.c
-	@echo [$(CC) osx] $< && $(CC) $(CFLAGS) -c -o $@ $<
+	@echo [$(CC) osx] $< && $(CC) -x objective-c $(CFLAGS)  -I../pcre-osx -c -o $@ $<
 
 %.o.osx: %.m
-	@echo [$(CC) osx] $< && $(CC) -x objective-c++ $(CFLAGS) -c -o $@ $<
+	@echo [$(CC) osx] $< && $(CC) -x objective-c $(CFLAGS) -DOBJC=1 -I../pcre-osx -c -o $@ $<
 
 %.o.sim: %.c
-	@echo [$(CC) sim] $< && PATH=$(IOSSIM_BIN):$$PATH $(IOSSIM_BIN)/clang $(IOSSIM_CFLAGS) -c -o $@ $<
+	@echo [$(CC) sim] $< && PATH=$(IOSSIM_BIN):$$PATH $(IOSSIM_BIN)/clang -x objective-c $(IOSSIM_CFLAGS) -I../pcre-iossim -c -o $@ $<
 
 %.o.sim: %.m
-	@echo [$(CC) sim] $< && PATH=$(IOSSIM_BIN):$$PATH $(IOSSIM_BIN)/clang $(IOSSIM_CFLAGS) -c -o $@ $<
+	@echo [$(CC) sim] $< && PATH=$(IOSSIM_BIN):$$PATH $(IOSSIM_BIN)/clang -x objective-c $(IOSSIM_CFLAGS) -DOBJC=1 -I../pcre-iossim -c -o $@ $<
 
 %.o.armv7: %.c
-	@echo [$(CC) armv7] $< && PATH=$(IOSDEV_BIN):$$PATH $(IOSDEV_BIN)/clang $(IOSDEV_CFLAGS) -c -o $@ $<
+	@echo [$(CC) armv7] $< && PATH=$(IOSDEV_BIN):$$PATH $(IOSDEV_BIN)/clang -x objective-c $(IOSDEV_CFLAGS) -I../pcre-iosdev -c -o $@ $<
 
 %.o.armv7: %.m
-	@echo [$(CC) armv7] $< && PATH=$(IOSDEV_BIN):$$PATH $(IOSDEV_BIN)/clang $(IOSDEV_CFLAGS) -c -o $@ $<
+	@echo [$(CC) armv7] $< && PATH=$(IOSDEV_BIN):$$PATH $(IOSDEV_BIN)/clang -x objective-c $(IOSDEV_CFLAGS) -DOBJC=1 -I../pcre-iosdev -c -o $@ $<
 
 #CCLD=clang++
 #CC=clang

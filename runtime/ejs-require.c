@@ -11,6 +11,7 @@
 #include "ejs-value.h"
 #include "ejs-builtin-modules.h"
 #include "ejs-string.h"
+#include "ejs-objc.h"
 
 extern EJSRequire _ejs_require_map[];
 extern EJSExternalModuleRequire _ejs_external_module_require_map[];
@@ -18,7 +19,8 @@ extern EJSExternalModuleRequire _ejs_external_module_require_map[];
 static EJSRequire builtin_module_map[] = {
     { "path", _ejs_path_module_func },
     { "fs", _ejs_fs_module_func },
-    { "child_process", _ejs_child_process_module_func }
+    { "child_process", _ejs_child_process_module_func },
+    { "objc", _ejs_objc_module_func }
 };
 static int num_builtin_modules = sizeof(builtin_module_map) / sizeof(builtin_module_map[0]);
 
