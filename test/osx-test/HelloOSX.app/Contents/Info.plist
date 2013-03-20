@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist SYSTEM "file://localhost/System/Library/DTDs/PropertyList.dtd">
+<plist version="0.9">
+<dict>
+	<key>CFBundleIconFile</key>
+	<string>moonlight.icns</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+    	<key>CFBundleGetInfoString</key>
+	<string>Created by EchoJS</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleExecutable</key>
+	<string>helloosx.js.exe</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.toshokelectric.HelloOSXx</string>
+        <key>CFBundleName</key>
+	<string>Hello OSX</string>
+	<key>NSMainNibFile</key>
+	<string>MainMenu</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+</dict>
+</plist>
