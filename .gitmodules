@@ -17,3 +17,6 @@
 [submodule "pcre"]
 	path = pcre
 	url = https://github.com/toshok/pcre.git
+[submodule "coffeekit"]
+	path = coffeekit
+	url = https://github.com/toshok/coffeekit
