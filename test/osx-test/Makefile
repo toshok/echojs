@@ -9,4 +9,4 @@ all:
 	cp helloosx.js.exe HelloOSX.app/Contents/MacOS/
 
 clean:
-	rm helloosx.js.exe *.js HelloOSX.app/Contents/MacOS/helloosx.js.exe
+	rm -f helloosx.js.exe *.js HelloOSX.app/Contents/MacOS/helloosx.js.exe
