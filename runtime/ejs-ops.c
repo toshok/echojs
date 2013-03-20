@@ -191,7 +191,19 @@ double ToDouble(ejsval exp)
 int32_t ToInteger(ejsval exp)
 {
     // XXX sorely lacking
-    return (int)ToDouble(exp);
+    /* 1. Let number be the result of calling ToNumber on the input argument. */
+    ejsval number = ToNumber(exp);
+    /* 2. If number is NaN, return +0. */
+    if (EJSVAL_EQ(number, _ejs_nan))
+        return 0;
+    /* 3. If number is +0, 0, +, or , return number. */
+    double d = ToDouble(number);
+    int classified = fpclassify(d);
+    if (classified == FP_ZERO || classified == FP_INFINITE)
+        return d;
+    /* 4. Return the result of computing sign(number)  floor(abs(number) */
+    int sign = d < 0 ? -1 : 1;
+    return (int)(sign * floor(abs(d)));
 }
 
 uint32_t ToUint32(ejsval exp)
