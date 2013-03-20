@@ -870,14 +870,14 @@ _ejs_array_specop_can_put (ejsval obj, ejsval propertyName)
 static EJSBool
 _ejs_array_specop_has_property (ejsval obj, ejsval propertyName)
 {
-    // check if propertyName is a uint32, or a string that we can convert to an uint32
-    int idx = -1;
-    if (EJSVAL_IS_NUMBER(propertyName)) {
-        double n = EJSVAL_TO_NUMBER(propertyName);
+    // check if propertyName is an integer, or a string that we can convert to an int
+    ejsval idx_val = ToNumber(propertyName);
+    int idx;
+    if (EJSVAL_IS_NUMBER(idx_val)) {
+        double n = EJSVAL_TO_NUMBER(idx_val);
         if (floor(n) == n) {
             idx = (int)n;
-
-            return idx > 0 && idx < EJS_ARRAY_LEN(obj);
+            return idx >= 0 && idx < EJS_ARRAY_LEN(obj);
         }
     }
 
