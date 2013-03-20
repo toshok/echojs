@@ -1,7 +1,8 @@
+TOP=../..
 
 all:
 	make -C $(TOP)/coffeekit/coffee
-	cp $(TOP)/coffeekit/generated/*.js .
+	cp $(TOP)/coffeekit/coffee/generated/*.js .
 	coffee -c helloosx.coffee
 	../../ejs helloosx.js appkit.js coffeekit.js foundation.js
 	mkdir -p HelloOSX.app/Contents/MacOS/
