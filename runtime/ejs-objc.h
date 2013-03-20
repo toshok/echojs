@@ -27,6 +27,7 @@ extern ejsval _ejs_ObjcHandle_proto;
 extern EJSSpecOps _ejs_objchandle_specops;
 
 extern ejsval _ejs_objc_handle_new (id handle);
+id ejs_objc_handle_get_id (ejsval handleval);
 
 
 extern ejsval _ejs_CoffeeKitObject;

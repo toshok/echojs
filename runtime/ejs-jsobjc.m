@@ -509,10 +509,11 @@
 
 -(CKObject*)prototype
 {
-    EJS_NOT_IMPLEMENTED();
-#if notyet
-	return [CKObject objectWithJSObject:JS_GetPrototype([_ctx jsContext], _obj) context:_ctx];
-#endif
+    ejsval p = _ejs_object_getprop (OBJECT_TO_EJSVAL(_obj), _ejs_atom_prototype);
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(p))
+        return nil;
+
+    return [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(p)];
 }
 
 -(void*)privateData
@@ -553,12 +554,9 @@
 
 -(NSString*)description
 {
-    EJS_NOT_IMPLEMENTED();
-#if spidermonkey
-	JSString* jsstr = JS_ValueToString ([_ctx jsContext], OBJECT_TO_JSVAL(_obj));
-	NSString *valstr = [[CKString stringWithJSString:jsstr context:_ctx] nsString];
+    EJSPrimString* jsstr = EJSVAL_TO_STRING(ToString(OBJECT_TO_EJSVAL(_obj)));
+	NSString *valstr = [[CKString stringWithJSString:jsstr] nsString];
 	return [NSString stringWithFormat:@"<CKObject \"%@\">", valstr];
-#endif
 }
 
 @end
@@ -708,35 +706,36 @@
 
 -(CKValue*)invoke
 {
-    EJS_NOT_IMPLEMENTED();
-#if spidermonkey
 	ejsval rv = _ejs_undefined;
-	jsval* jsargs = _argCount == 0 ? NULL : (jsval*)malloc(_argCount * sizeof(jsval));
+	ejsval* jsargs = _argCount == 0 ? NULL : (ejsval*)malloc(_argCount * sizeof(ejsval));
 	NSUInteger i;
 
 	for (i = 0; i < _argCount; i ++) {
 		jsargs[i] = [_args[i] jsValue];
+#if spidermonkey
 		JS_AddValueRoot([_ctx jsContext], &jsargs[i]);
+#endif
 	}
-
-	JSBool call_succeeded = JS_FALSE;
 
 	if (isFuncCtor) {
-		JSObject *o = JS_New ([_ctx jsContext], [_func jsObject], _argCount, jsargs);
-		if (o) {
-			call_succeeded = JS_TRUE;
-			rv = OBJECT_TO_JSVAL(o);
-		}
+        ejsval o = _ejs_object_create (OBJECT_TO_EJSVAL([[_func prototype] jsObject]));
+        _ejs_invoke_closure (OBJECT_TO_EJSVAL([_func jsObject]), o, _argCount, jsargs);
+        rv = o;
 	}
 	else {
-		call_succeeded = JS_CallFunctionValue ([_ctx jsContext], [_thisObj jsObject], [[CKValue objectValue:_func forContext:_ctx] jsValue], _argCount, jsargs, &rv);
+        rv = _ejs_invoke_closure ([[CKValue objectValue:_func] jsValue],
+                                  [[CKValue objectValue:_thisObj] jsValue],
+                                  _argCount, jsargs);
 	}
 
 	if (jsargs) {
+#if notyet
 		for (i = 0; i < _argCount; i ++)
 			JS_RemoveValueRoot([_ctx jsContext], &jsargs[i]);
+#endif
 		free (jsargs);
 	}
+#if spidermonkey
 	if (!call_succeeded) {
 		jsval jsexc;
 
@@ -750,9 +749,9 @@
 		_exc = [[CKValue valueWithJSValue:jsexc context:_ctx] retain];
 		return NULL;
 	}
-
-	return [CKValue valueWithJSValue:rv context:_ctx];
 #endif
+
+	return [CKValue valueWithJSValue:rv];
 }
 
 -(CKValue*)exception

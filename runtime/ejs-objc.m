@@ -8,6 +8,8 @@
 #import <CoreGraphics/CoreGraphics.h>
 #if IOS
 #import <UIKit/UIKit.h>
+#else
+#import <AppKit/AppKit.h>
 #endif
 #import <objc/runtime.h>
 #import <objc/message.h>
@@ -18,7 +20,7 @@
 #include "ejs-string.h"
 #include "ejs-error.h"
 
-#define SPEW(x)
+#define SPEW(x) x
 
 // the keys we use for our associated objects
 #define JSCTX_KEY (void*)1
@@ -29,6 +31,14 @@
 #define JSRETAINCOUNT_KEY (void*)6
 
 #define RO_DONT_ENUM_PERMANENT (EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_NOT_CONFIGURABLE)
+
+static id
+get_objc_id (CKObject* obj)
+{
+	CKObject *handle = [obj objectForPropertyNS:@"_ck_handle"];
+	return handle ? ((EJSObjcHandle*)[handle jsObject])->handle : nil;
+}
+
 
 void
 set_jspeer (id objc_obj, void*  jspeer)
@@ -87,6 +97,13 @@ create_objc_handle_object (id objc_id)
     ejsval handle = _ejs_objc_handle_new(objc_id);
 
     return [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(handle)];
+}
+
+id
+ejs_objc_handle_get_id (ejsval handleval)
+{
+    EJSObjcHandle* handleobj = (EJSObjcHandle*)EJSVAL_TO_OBJECT(handleval);
+    return handleobj->handle;
 }
 
 ejsval _ejs_CoffeeKitObject;
@@ -150,6 +167,7 @@ _ejs_objc_init(ejsval global)
     _ejs_CoffeeKitObject = tmpobj2;
 
     _ejs_object_setprop (_ejs_CoffeeKitObject, _ejs_atom_prototype,  _ejs_CoffeeKitObject_proto);
+    _ejs_object_setprop (_ejs_CoffeeKitObject_proto, _ejs_atom_constructor,  _ejs_CoffeeKitObject);
 
     EJS_INSTALL_FUNCTION(_ejs_CoffeeKitObject, "setHandle", _ejs_CoffeeKitObject_setHandle);
 
@@ -207,7 +225,34 @@ _ejs_objc_staticCall (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 static ejsval
 _ejs_objc_getInstanceVariable (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
-    EJS_NOT_IMPLEMENTED();
+	SPEW(NSLog (@"in _icall_objc_getInstanceVariable");)
+	if (argc != 2) {
+		NSLog (@"getInstanceVariable requires 2 args");
+		// XXX throw an exception here
+		abort();
+	}
+
+	id handle = get_objc_id ([CKObject objectWithJSObject:EJSVAL_TO_OBJECT(args[0])]);
+
+	if (!handle) {
+		NSLog (@"getInstanceVariable first parameter has no handle");
+		// XXX throw an exception here
+		abort();
+	}
+    char* ivar_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[1]));
+	id ivar_value = nil;
+
+	SPEW(NSLog (@"    %@:%s", handle, ivar_utf8););
+
+	object_getInstanceVariable (handle, ivar_utf8, (void**)&ivar_value);
+	free (ivar_utf8);
+    
+	SPEW(NSLog (@"    returning value = %@", ivar_value);)
+    
+	if (ivar_value)
+		return OBJECT_TO_EJSVAL([create_objc_handle_object (ivar_value) jsObject]);
+	else
+		return _ejs_null;
 }
 
 static ejsval
@@ -216,7 +261,7 @@ _ejs_objc_setInstanceVariable (ejsval env, ejsval _this, uint32_t argc, ejsval* 
     EJS_NOT_IMPLEMENTED();
 }
 
-static ejsval invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args, ejsval callee);
+static ejsval invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
 
 static ejsval
 _ejs_objc_invokeSelector (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
@@ -307,13 +352,6 @@ _ejs_objc_getTypeEncoding (ejsval env, ejsval _this, uint32_t argc, ejsval* args
     return [NSString stringWithFormat:@"<MethodInfo name=%@ sel=%s sig=%@>", _name, sel_getName(_sel), _sig];
 }
 @end
-
-id
-get_objc_id (CKObject* obj)
-{
-	CKObject *handle = [obj objectForPropertyNS:@"_ck_handle"];
-	return handle ? (id)[handle privateData] : nil;
-}
 
 static const char*
 get_selector_name_from_function (CKObject* function)
@@ -456,12 +494,15 @@ marshal_jsarray_as_nsarray (CKObject *o)
 }
 
 static ejsval
-invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args, ejsval callee)
+invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
-    CKObject *func = [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(callee)];
     CKObject *thisObj = [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(_this)];
     
+#if old
     SEL sel = get_selector_from_function (func);
+#else
+    SEL sel = sel_getUid([[CKValue valueWithJSValue:args[0]] utf8StringValue]);
+#endif
     id handle = get_objc_id (thisObj);
     Method meth;
     const char *typeEncoding = NULL;
@@ -483,10 +524,13 @@ invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args, ejs
 
     SPEW(NSLog (@"invoking %s on %@\n", sel_getName (sel), handle);)
 
+#if false
     typeEncoding = get_type_encoding_from_function (func);
+#endif
     if (!typeEncoding) {
         SPEW(NSLog (@"getting type encoding from objc");)
         typeEncoding = method_getTypeEncoding (meth);
+        SPEW(NSLog (@" it was %s", typeEncoding);)
         if (!typeEncoding) {
             NSLog (@"failed to locate selector `%s'.  this is usually due to a framework not being linked against.", sel_getName (sel));
             abort ();
@@ -508,7 +552,7 @@ invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args, ejs
     NSMethodSignature *sig = [NSMethodSignature signatureWithObjCTypes:typeEncoding];
     NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
 
-    if ((argc + 2) != [sig numberOfArguments]) {
+    if ((argc + 2 - 1 /* the -1 to get rid of the selector passed as arg0 */) != [sig numberOfArguments]) {
         NSLog (@"Incorrect number of arguments to objective-C method %s on %@ (type encoding %s).  expected = %lu, offered = %u", sel_getName(sel), handle, typeEncoding, [sig numberOfArguments], argc + 2);
         return _ejs_null;
     }
@@ -518,12 +562,13 @@ invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args, ejs
     [inv setSelector:sel];
 
     int i;
-    for (i = 1; i < argc; i ++) {
-		SPEW(NSLog(@"marshaling arg %d", i);)
+    for (i = 0; i < argc-1; i ++) {
         int objc_arg_num = i+2;
         const char* arg_type = [sig getArgumentTypeAtIndex:objc_arg_num];
-        CKValue* val = [CKValue valueWithJSValue:args[i]];
+        CKValue* val = [CKValue valueWithJSValue:args[i+1]];
         
+		SPEW(NSLog(@"marshaling arg[%d], type %s", i, arg_type);)
+
         switch (arg_type[0]) {
         case _C_ID: {
             void* arg_ptr = NULL;
@@ -611,7 +656,11 @@ invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args, ejs
         }
                 
         case _C_CHR: {
+#if !IOS
             char v = (char)[val numberValue];
+#else
+            int32_t v = (int32_t)[val numberValue];
+#endif
             [inv setArgument:&v atIndex:objc_arg_num];
             break;
         }
@@ -638,7 +687,7 @@ invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args, ejs
                 rect->size.width = [rectobj floatForPropertyNS:@"width"];
                 rect->size.height = [rectobj floatForPropertyNS:@"height"];
                     
-                //                              NSLog (@"marshaling rectangle %g %g %g %g", x, y, w, h);
+                NSLog (@"marshaling rectangle %g %g %g %g", rect->origin.x, rect->origin.y, rect->size.width, rect->size.height);
                     
                 free_ptrs[i] = rect;
                     
@@ -686,9 +735,9 @@ invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args, ejs
         }
     }
     
-    //NSLog (@" start objc invoke");
+    SPEW(NSLog (@" start objc invoke");)
     [inv invoke];
-    //NSLog (@" end objc invoke");
+    SPEW(NSLog (@" end objc invoke");)
     
     // free the marshaled structs
     for (i = 0; i < argc; i ++)
@@ -822,9 +871,13 @@ coffeekit_method_tramp (id obj, SEL sel, ...)
         SPEW(NSLog (@"it's not a function, returning");)
         return NULL;
     }
-    
+
+#if notyet    
     int func_arity = [func functionArity];
     int jsarg_count = MIN(func_arity, [sig numberOfArguments] - 2);
+#else
+    int jsarg_count = [sig numberOfArguments] - 2;
+#endif
     int jsarg_num;
     
     CKInvocation* inv = [CKInvocation invocationWithFunction:func argCount:jsarg_count thisObject:jspeer];
@@ -987,7 +1040,7 @@ register_members (Class cls, CKObject* obj, NSMutableDictionary* method_map)
 			CKObject* propobj = [obj objectForProperty:name];
             
 			if (!propobj || ![propobj isFunction]) {
-				//	NSLog (@"property %@ isn't a function, skipping for now", name_nsstr);
+                SPEW (NSLog (@"property %@ isn't a function, skipping for now", name_nsstr);)
 				continue;
 			}
             
@@ -1000,7 +1053,7 @@ register_members (Class cls, CKObject* obj, NSMutableDictionary* method_map)
 			}
 			else {
 				if (!is_function_exported (propobj)) {
-					//	  NSLog (@"function %@ isn't exported, skipping", name_nsstr);
+                    SPEW(NSLog (@"function %@ isn't exported, skipping", name_nsstr);)
 					continue;
 				}
                 
@@ -1119,11 +1172,22 @@ _ejs_objc_registerJSClass (ejsval env, ejsval _this, uint32_t argc, ejsval* args
     return _ejs_undefined;
 }
 
+#if IOS
 static ejsval
 _ejs_objc_allocateWebGLRenderingContext (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     EJS_NOT_IMPLEMENTED();
 }
+
+#else
+static ejsval
+_ejs_objc_NSApplicationMain (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    NSLog (@"About to call NSApplicationMain!");
+    NSApplicationMain(0, NULL);
+    exit(0);
+}
+#endif
 
 ejsval
 _ejs_objc_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
@@ -1142,6 +1206,8 @@ _ejs_objc_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     EJS_INSTALL_FUNCTION(exports, "registerJSClass", _ejs_objc_registerJSClass);
 #if IOS
     EJS_INSTALL_FUNCTION(exports, "allocateWebGLRenderingContext", _ejs_objc_allocateWebGLRenderingContext);
+#else
+    EJS_INSTALL_FUNCTION(exports, "NSApplicationMain", _ejs_objc_NSApplicationMain);
 #endif
 
     _ejs_objc_init (exports);
