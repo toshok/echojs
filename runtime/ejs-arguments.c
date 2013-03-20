@@ -77,9 +77,10 @@ _ejs_arguments_specop_get (ejsval obj, ejsval propertyName)
 
     // check if propertyName is an integer, or a string that we can convert to an int
     EJSBool is_index = EJS_FALSE;
-    int idx = 0;
-    if (EJSVAL_IS_NUMBER(propertyName)) {
-        double n = EJSVAL_TO_NUMBER(propertyName);
+    ejsval idx_val = ToNumber(propertyName);
+    int idx;
+    if (EJSVAL_IS_NUMBER(idx_val)) {
+        double n = EJSVAL_TO_NUMBER(idx_val);
         if (floor(n) == n) {
             idx = (int)n;
             is_index = EJS_TRUE;
@@ -130,6 +131,19 @@ _ejs_arguments_specop_can_put (ejsval obj, ejsval propertyName)
 static EJSBool
 _ejs_arguments_specop_has_property (ejsval obj, ejsval propertyName)
 {
+    EJSArguments* arguments = (EJSArguments*)EJSVAL_TO_OBJECT(obj);
+    // check if propertyName is an integer, or a string that we can convert to an int
+    ejsval idx_val = ToNumber(propertyName);
+    int idx;
+    if (EJSVAL_IS_NUMBER(idx_val)) {
+        double n = EJSVAL_TO_NUMBER(idx_val);
+        if (floor(n) == n) {
+            idx = (int)n;
+            return idx >= 0 && idx < arguments->argc;
+        }
+    }
+
+    // if we fail there, we fall back to the object impl below
     return _ejs_object_specops.has_property (obj, propertyName);
 }
 
