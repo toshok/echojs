@@ -572,8 +572,7 @@ _ejs_object_setprop (ejsval val, ejsval key, ejsval value)
     ejsval real_key = ToString(key);
 
     // this should be:
-    // OP(EJSVAL_TO_OBJECT(val), put)(val, real_key, value, EJS_FALSE);
-    _ejs_object_define_value_property (val, real_key, value, EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
+    OP(EJSVAL_TO_OBJECT(val), put)(val, real_key, value, EJS_FALSE);
 
 
     return value;
@@ -1401,7 +1400,7 @@ _ejs_object_specop_put (ejsval O, ejsval P, ejsval V, EJSBool Throw)
 {
     EJSObject* obj = EJSVAL_TO_OBJECT(O);
     /* 1. If the result of calling the [[CanPut]] internal method of O with argument P is false, then */
-    if (OP(obj,can_put)(O, P)) {
+    if (!OP(obj,can_put)(O, P)) {
         /*    a. If Throw is true, then throw a TypeError exception. */
         if (Throw) {
             printf ("throw TypeError\n");
