@@ -2,7 +2,7 @@
 .SILENT:
 
 TOPDIR=$(shell pwd)/..
-NODE_PATH=$(TOPDIR)/node-llvm/build/Release:$(TOPDIR)/lib/coffee:$(TOPDIR)/lib:$(TOPDIR)/esprima:$(TOPDIR)/escodegen:$(TOPDIR)/estraverse
+NODE_PATH=$(TOPDIR)/node-llvm/build/Release:$(TOPDIR)/lib/generated:$(TOPDIR)/lib:$(TOPDIR)/esprima:$(TOPDIR)/escodegen:$(TOPDIR)/estraverse
 
 TESTS:=$(wildcard *[0-9].js)
 
