@@ -1,3 +1,5 @@
+TOP=..
+
 SOURCES= \
 	arraytype.cpp \
 	basicblock.cpp \
@@ -24,7 +26,11 @@ CXXFLAGS=-I../runtime -I/usr/local/include -g -D_DEBUG -D_GNU_SOURCE -D__STDC_LI
 
 OBJECTS=$(SOURCES:%.cpp=%.o)
 
-libejsllvm-module.a: $(OBJECTS)
+MODULE=libejsllvm-module.a
+
+all-local:: $(MODULE)
+
+$(MODULE): $(OBJECTS)
 	ar cru $@ $(OBJECTS)
 
 $(OBJECTS): %.o: %.cpp
@@ -33,6 +39,8 @@ $(OBJECTS): %.o: %.cpp
 	@echo [$(CXX)] $< && $(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(OBJECTS) libejsllvm-module.a
+	rm -f $(OBJECTS) $(MODULE)
 
 -include $(patsubst %.o,.deps/%.o-deps,$(OBJECTS))
+
+include $(TOP)/build/build.mk

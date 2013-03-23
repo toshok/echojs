@@ -51,7 +51,7 @@ ALL_OBJECTS=$(SIM_OBJECTS) $(DEV_OBJECTS) $(OSX_OBJECTS)
 
 all-local:: $(ALL_LIBRARIES)
 
-clean:
+clean-local::
 	rm -f test $(ALL_OBJECTS) $(ALL_LIBRARIES) ejs-atoms-gen.c
 
 VPATH=.:../parson

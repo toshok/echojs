@@ -1,3 +1,5 @@
+TOP=..
+
 COFFEE_FILES=				\
 	nodevisitor.coffee		\
 	compiler.coffee			\
@@ -11,13 +13,16 @@ COFFEE_FILES=				\
 	exitable-scope.coffee		\
 	runtime.coffee
 
-DESTDIR = coffee
+DESTDIR = generated
 
 JS_FILES=$(COFFEE_FILES:%.coffee=$(DESTDIR)/%.js)
 
-all: $(JS_FILES)
+all-local:: $(JS_FILES)
 
+clean-local::
+	rm -f $(JS_FILES)
 
 $(DESTDIR)/%.js: %.coffee
 	coffee -o $(DESTDIR) -c $<
 
+include $(TOP)/build/build.mk

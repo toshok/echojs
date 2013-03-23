@@ -6,3 +6,6 @@ build: configure
 
 configure:
 	node-waf configure 
+
+clean:
+	node-waf clean
