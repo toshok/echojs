@@ -109,8 +109,7 @@ ToPropertyDescriptor(ejsval O, EJSPropertyDesc *desc)
 {
     /* 1. If Type(Obj) is not Object throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O)) {
-        printf ("throw TypeError, O isn't an Object\n");
-        EJS_NOT_IMPLEMENTED();
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Object.defineProperty called on non-object");
     }
     EJSObject* obj = EJSVAL_TO_OBJECT(O);
     memset (desc, 0, sizeof(EJSPropertyDesc));
@@ -148,8 +147,7 @@ ToPropertyDescriptor(ejsval O, EJSPropertyDesc *desc)
 
         /*    b. If IsCallable(getter) is false and getter is not undefined, then throw a TypeError exception. */
         if (!EJSVAL_IS_FUNCTION(getter) && !EJSVAL_IS_UNDEFINED(getter)) {
-            printf ("throw TypeError\n");
-            EJS_NOT_IMPLEMENTED();
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Getter must be a function");
         }
 
         /*    c. Set the [[Get]] field of desc to getter. */
@@ -162,8 +160,7 @@ ToPropertyDescriptor(ejsval O, EJSPropertyDesc *desc)
 
         /*    b. If IsCallable(setter) is false and setter is not undefined, then throw a TypeError exception. */
         if (!EJSVAL_IS_FUNCTION(setter) && !EJSVAL_IS_UNDEFINED(setter)) {
-            printf ("throw TypeError\n");
-            EJS_NOT_IMPLEMENTED();
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Setter must be a function");
         }
 
         /*    c. Set the [[Set]] field of desc to setter. */
@@ -173,8 +170,7 @@ ToPropertyDescriptor(ejsval O, EJSPropertyDesc *desc)
     if (_ejs_property_desc_has_getter(desc) || _ejs_property_desc_has_setter(desc)) {
         /*    a. If either desc.[[Value]] or desc.[[Writable]] are present, then throw a TypeError exception. */
         if (_ejs_property_desc_has_value(desc) || _ejs_property_desc_has_writable(desc)) {
-            printf ("throw TypeError\n");
-            EJS_NOT_IMPLEMENTED();
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Invalid property.  A property cannot both have accessors and be writable or have a value");
         }
     }
 
@@ -394,6 +390,41 @@ static EJSSpecOps _ejs_property_iterator_specops = {
     _ejs_property_iterator_specop_scan
 };
 
+static EJSBool
+name_in_keys (jschar* name, jschar **keys, int num)
+{
+    for (int i = 0; i < num; i ++) {
+        if (!ucs2_strcmp(name, keys[i]))
+            return EJS_TRUE;
+    }
+    return EJS_FALSE;
+}
+
+static void
+collect_keys (ejsval objval, int *num, int *alloc, jschar ***keys)
+{
+    if (!EJSVAL_IS_OBJECT(objval))
+        return;
+
+    EJSObject *obj = EJSVAL_TO_OBJECT(objval);
+    EJSPropertyMap *map = &obj->map;
+
+    if (map) {
+        for (int i = 0; i < map->num; i ++) {
+            if (_ejs_property_desc_is_enumerable (&map->properties[i]) && !name_in_keys (map->names[i], *keys, *num)) {
+                if (*num == *alloc-1) {
+                    // we need to reallocate
+                    (*alloc) += 10;
+                    *keys = (jschar**)realloc (*keys, (*alloc) * sizeof(jschar*));
+                }
+                (*keys)[(*num)++] = map->names[i]; // XXX do we need to dup here?
+            }
+        }
+    }
+
+    collect_keys (obj->proto, num, alloc, keys);
+}
+
 ejsval
 _ejs_property_iterator_new (ejsval forVal)
 {
@@ -422,22 +453,25 @@ _ejs_property_iterator_new (ejsval forVal)
         return iter;
     }
     else if (EJSVAL_IS_OBJECT(forVal)) {
-        // totally broken, only iterate over forObj's property map, not prototype properties
-        EJSPropertyMap *map = &EJSVAL_TO_OBJECT(forVal)->map;
 
-        if (map) {
-            int num_keys = map->num;
+        int num, alloc;
+        jschar** keys;
 
-            iterator->forObj = forVal;
-            iterator->num = 0;
-            iterator->keys = (ejsval*)malloc(sizeof(ejsval) * num_keys);
-            for (int i = 0; i < num_keys; i ++)
-                iterator->keys[iterator->num++] = _ejs_string_new_ucs2(map->names[i]);
-            return iter;
+        num = 0;
+        alloc = 10;
+        keys = (jschar**)malloc (alloc * sizeof(jschar*));
+
+        collect_keys (forVal, &num, &alloc, &keys);
+
+        iterator->forObj = forVal;
+        iterator->num = 0;
+        iterator->keys = (ejsval*)malloc(sizeof(ejsval) * num);
+        for (int i = 0; i < num; i ++) {
+            iterator->keys[iterator->num++] = _ejs_string_new_ucs2(keys[i]);
         }
-        else {
-            EJS_NOT_IMPLEMENTED();
-        }
+        free (keys);
+
+        return iter;
     }
     else {
         EJS_NOT_IMPLEMENTED();
@@ -598,7 +632,7 @@ _ejs_object_getprop (ejsval obj, ejsval key)
         snprintf (msg_buf, sizeof(msg_buf)-1, "Cannot read property '%s' of %s", key_utf8, EJSVAL_IS_NULL(obj) ? "null" : "undefined");
         free (key_utf8);
 
-        _ejs_throw_nativeerror (EJS_TYPE_ERROR, msg_buf);
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, msg_buf);
     }
 
     if (EJSVAL_IS_PRIMITIVE(obj)) {
@@ -1279,12 +1313,12 @@ _ejs_object_init (ejsval global)
     _ejs_Object = tmpobj;
 
     // ECMA262 15.2.3.1
-    _ejs_object_setprop (_ejs_Object,       _ejs_atom_prototype,    _ejs_Object_prototype); // FIXME: {[[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false }
+    _ejs_object_define_value_property (_ejs_Object, _ejs_atom_prototype, _ejs_Object_prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     // ECMA262: 15.2.4.1
-    _ejs_object_setprop (_ejs_Object_prototype, _ejs_atom_constructor,  _ejs_Object);
+    _ejs_object_define_value_property (_ejs_Object_prototype, _ejs_atom_constructor, _ejs_Object, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
 
-#define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Object, x, _ejs_Object_##x)
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Object_prototype, x, _ejs_Object_prototype_##x)
+#define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_Object, x, _ejs_Object_##x, EJS_PROP_NOT_ENUMERABLE)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_Object_prototype, x, _ejs_Object_prototype_##x, EJS_PROP_NOT_ENUMERABLE)
 
     OBJ_METHOD(getPrototypeOf);
     OBJ_METHOD(getOwnPropertyDescriptor);
@@ -1536,7 +1570,7 @@ _ejs_object_specop_delete (ejsval O, ejsval P, EJSBool Throw)
     }
     /* 4. Else if Throw, then throw a TypeError exception.*/
     else if (Throw) {
-        _ejs_throw_nativeerror (EJS_TYPE_ERROR, "property is not configurable");
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "property is not configurable");
     }
     /* 5. Return false. */
     return EJS_FALSE;
@@ -1560,12 +1594,10 @@ _ejs_object_specop_default_value (ejsval obj, const char *hint)
 static EJSBool
 _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Desc, EJSBool Throw)
 {
-#define REJECT()                                                        \
+#define REJECT(reason)                                                  \
     EJS_MACRO_START                                                     \
-        if (Throw) {                                                    \
-            printf ("throw a TypeError, [[DefineOwnProperty]] Reject\n"); \
-            EJS_NOT_IMPLEMENTED();                                          \
-        }                                                               \
+        if (Throw)                                                      \
+            _ejs_throw_nativeerror (EJS_TYPE_ERROR, _ejs_string_concat (P, _ejs_string_new_utf8(reason))); \
         return EJS_FALSE;                                               \
     EJS_MACRO_END
 
@@ -1578,7 +1610,7 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
 
     /* 3. If current is undefined and extensible is false, then Reject. */
     if (!current && !extensible)
-        REJECT();
+        REJECT(": property is currently unset and object is not extensible");
 
     /* 4. If current is undefined and extensible is true, then */
     if (!current && extensible) {
@@ -1645,13 +1677,13 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
     /* 7. If the [[Configurable]] field of current is false then */
     if (!_ejs_property_desc_is_configurable(current)) {
         /*    a. Reject, if the [[Configurable]] field of Desc is true. */
-        if (_ejs_property_desc_is_configurable(Desc)) REJECT();
+        if (_ejs_property_desc_is_configurable(Desc)) REJECT("_ejs_property_desc_is_configurable(Desc)");
 
         /*    b. Reject, if the [[Enumerable]] field of Desc is present and the [[Enumerable]] fields of current and  */
         /*       Desc are the Boolean negation of each other. */
         if (_ejs_property_desc_has_enumerable (Desc) &&
             _ejs_property_desc_is_enumerable(Desc) != _ejs_property_desc_is_enumerable(current))
-            REJECT();
+            REJECT("_ejs_property_desc_has_enumerable (Desc) && _ejs_property_desc_is_enumerable(Desc) != _ejs_property_desc_is_enumerable(current)");
     }
 
     /* 8. If IsGenericDescriptor(Desc) is true, then no further validation is required. */
@@ -1660,18 +1692,23 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
     /* 9. Else, if IsDataDescriptor(current) and IsDataDescriptor(Desc) have different results, then */
     else if (IsDataDescriptor(current) != IsDataDescriptor(Desc)) {
         /*    a. Reject, if the [[Configurable]] field of current is false.  */
-        if (!_ejs_property_desc_is_configurable(current)) REJECT();
+        if (!_ejs_property_desc_is_configurable(current)) REJECT("!_ejs_property_desc_is_configurable(current)");
         /*    b. If IsDataDescriptor(current) is true, then */
         if (IsDataDescriptor(current)) {
             /*       i. Convert the property named P of object O from a data property to an accessor property.  */
             /*          Preserve the existing values of the converted property‘s [[Configurable]] and  */
             /*          [[Enumerable]] attributes and set the rest of the property‘s attributes to their default values. */
+            _ejs_property_desc_clear_value (current);
+            _ejs_property_desc_clear_writable (current);
+            // XXX set the rest to default values
         }
         /*    c. Else, */
         else {
             /*       i. Convert the property named P of object O from an accessor property to a data property.  */
             /*          Preserve the existing values of the converted property‘s [[Configurable]] and */
             /*          [[Enumerable]] attributes and set the rest of the property‘s attributes to their default values. */
+            _ejs_property_desc_clear_getter (current);
+            _ejs_property_desc_clear_setter (current);
         }
     }
     /* 10. Else, if IsDataDescriptor(current) and IsDataDescriptor(Desc) are both true, then */
@@ -1679,14 +1716,14 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
         /*     a. If the [[Configurable]] field of current is false, then */
         if (!_ejs_property_desc_is_configurable (current)) {
             /*        i. Reject, if the [[Writable]] field of current is false and the [[Writable]] field of Desc is true. */
-            if (!_ejs_property_desc_is_writable(current) && _ejs_property_desc_is_writable(Desc)) REJECT();
+            if (!_ejs_property_desc_is_writable(current) && _ejs_property_desc_is_writable(Desc)) REJECT("1");
             /*        ii. If the [[Writable]] field of current is false, then */
             if (!_ejs_property_desc_is_writable(current)) {
                 /*            1. Reject, if the [[Value]] field of Desc is present and SameValue(Desc.[[Value]],  */
                 /*               current.[[Value]]) is false.  */
                 if (_ejs_property_desc_has_value(Desc) && !EJSVAL_EQ(_ejs_property_desc_get_value(Desc),
                                                                      _ejs_property_desc_get_value(current)))
-                    REJECT();
+                    REJECT(": property is not writable and also not configurable");
             }
         }
         /*     b. else, the [[Configurable]] field of current is true, so any change is acceptable. */
@@ -1700,14 +1737,14 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
             if (_ejs_property_desc_has_setter (Desc)
                 && !EJSVAL_EQ(_ejs_property_desc_get_setter(Desc),
                               _ejs_property_desc_get_setter(current)))
-                REJECT();
+                REJECT("3");
 
             /*        ii. Reject, if the [[Get]] field of Desc is present and SameValue(Desc.[[Get]], current.[[Get]]) */
             /*            is false. */
             if (_ejs_property_desc_has_getter (Desc)
                 && !EJSVAL_EQ(_ejs_property_desc_get_getter(Desc),
                               _ejs_property_desc_get_getter(current)))
-                REJECT();
+                REJECT("4");
         }
     }
 
