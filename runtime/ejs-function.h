@@ -27,12 +27,17 @@ typedef struct {
 
 EJS_BEGIN_DECLS
 
-#define EJS_INSTALL_ATOM_FUNCTION(o,n,f) EJS_MACRO_START                \
+#define EJS_INSTALL_ATOM_FUNCTION(o,n,f) EJS_MACRO_START               \
     ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new_native (_ejs_null, _ejs_atom_##n, (EJSClosureFunc)f)); \
     _ejs_object_setprop (o, _ejs_atom_##n, tmpfunc);                    \
 EJS_MACRO_END
 
-#define EJS_INSTALL_FUNCTION(o,n,f) EJS_MACRO_START                     \
+#define EJS_INSTALL_ATOM_FUNCTION_FLAGS(o,n,f,flags) EJS_MACRO_START         \
+    ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new_native (_ejs_null, _ejs_atom_##n, (EJSClosureFunc)f)); \
+    _ejs_object_define_value_property (o, _ejs_atom_##n, tmpfunc, flags); \
+EJS_MACRO_END
+
+#define EJS_INSTALL_FUNCTION(o,n,f) EJS_MACRO_START                    \
     ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(n));          \
     ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new_native (_ejs_null, funcname, (EJSClosureFunc)f)); \
     _ejs_object_setprop (o, funcname, tmpfunc);                         \
