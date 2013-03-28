@@ -52,6 +52,15 @@ typedef struct {
     (p)->flags |= (flagset);                                            \
     EJS_MACRO_END
 
+#define _ejs_property_desc_clear_flag(p, flagclear) EJS_MACRO_START     \
+    (p)->flags &= ~(flagclear);                                         \
+    EJS_MACRO_END
+
+#define _ejs_property_desc_clear_value_flag(p, v, vname, flagclear) EJS_MACRO_START \
+    (p)->vname = v;                                                     \
+    (p)->flags &= ~(flagclear);                                         \
+    EJS_MACRO_END
+
 #define FLAG_TO_BOOL(x) ((x) != 0 ? EJS_TRUE : EJS_FALSE)
 
 #define _ejs_property_desc_set_enumerable(p, v) _ejs_property_desc_set_flag(p, v, EJS_PROP_FLAGS_ENUMERABLE, EJS_PROP_FLAGS_ENUMERABLE_SET)
@@ -60,6 +69,12 @@ typedef struct {
 #define _ejs_property_desc_set_value(p, v) _ejs_property_desc_set_value_flag(p, v, value, EJS_PROP_FLAGS_VALUE_SET)
 #define _ejs_property_desc_set_getter(p, v) _ejs_property_desc_set_value_flag(p, v, getter, EJS_PROP_FLAGS_GETTER_SET)
 #define _ejs_property_desc_set_setter(p, v) _ejs_property_desc_set_value_flag(p, v, setter, EJS_PROP_FLAGS_SETTER_SET)
+
+#define _ejs_property_desc_clear_value(p) _ejs_property_desc_clear_value_flag(p, _ejs_undefined, value, EJS_PROP_FLAGS_VALUE_SET)
+#define _ejs_property_desc_clear_writable(p) _ejs_property_desc_clear_flag(p, EJS_PROP_FLAGS_WRITABLE_SET)
+
+#define _ejs_property_desc_clear_getter(p) _ejs_property_desc_clear_value_flag(p, _ejs_undefined, getter, EJS_PROP_FLAGS_GETTER_SET)
+#define _ejs_property_desc_clear_setter(p) _ejs_property_desc_clear_value_flag(p, _ejs_undefined, setter, EJS_PROP_FLAGS_SETTER_SET)
 
 #define _ejs_property_desc_has_enumerable(p) FLAG_TO_BOOL((p)->flags & EJS_PROP_FLAGS_ENUMERABLE_SET)
 #define _ejs_property_desc_has_configurable(p) FLAG_TO_BOOL((p)->flags & EJS_PROP_FLAGS_CONFIGURABLE_SET)
