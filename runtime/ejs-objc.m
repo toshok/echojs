@@ -195,7 +195,7 @@ _ejs_objc_allocInstance (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     ejsval clsname = args[0];
 
     if (!EJSVAL_IS_STRING(clsname))
-        _ejs_throw_nativeerror (EJS_TYPE_ERROR, "args0 for allocInstance must be a string");
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "args0 for allocInstance must be a string");
 
     char *clsname_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[0]));
     Class cls = objc_getClass (clsname_utf8);
@@ -271,6 +271,7 @@ _ejs_objc_invokeSelector (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     //      NSString *sel_name = jsstring_nsdup (selname_jsstr);
     //      NSLog (@"in _icall_objc_invokeSelector (%@)", sel_name);
 
+    // XXX change the name of this to "invoke_#{selector}_from_js" or something, with the actual selector in it
     CKObject* func = [CKObject makeFunctionNS:@"invokeSelectorFromJS" withCallback:(EJSClosureFunc)invokeSelectorFromJS argCount:0];
 
     [func definePropertyNS:@"_ck_sel"
@@ -452,14 +453,12 @@ marshal_id_as_jsvalue (id objc_id, BOOL protect)
 static CKValue*
 marshal_cgrect_as_jsvalue (CGRect *rect)
 {
-    EJS_NOT_IMPLEMENTED();
-#if notyet
 	CKString* x_ = [CKString stringWithUTF8CString:"x"];
 	CKString* y_ = [CKString stringWithUTF8CString:"y"];
 	CKString* width_ = [CKString stringWithUTF8CString:"width"];
 	CKString* height_ = [CKString stringWithUTF8CString:"height"];
 
-    CKObject* peer = [ctx makeObject:NULL privateData:NULL];
+    CKObject* peer = [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(_ejs_object_create (_ejs_null))];
     
     [peer defineProperty:x_ value:[CKValue numberValue:rect->origin.x]
           attributes:RO_DONT_ENUM_PERMANENT];
@@ -474,7 +473,6 @@ marshal_cgrect_as_jsvalue (CGRect *rect)
           attributes:RO_DONT_ENUM_PERMANENT];
 
     return [CKValue objectValue:peer];
-#endif
 }
 
 static NSArray*
