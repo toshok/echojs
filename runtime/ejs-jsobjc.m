@@ -446,18 +446,12 @@
 
 -(void)defineProperty:(CKString*)name value:(CKValue*)val attributes:(uint32_t)attrs
 {
-    EJS_NOT_IMPLEMENTED();
-#if notyet
-	JS_DefineProperty([_ctx jsContext], _obj, [name UTF8String], [val jsValue], JS_PropertyStub, JS_StrictPropertyStub, attrs);
-#endif
+    _ejs_object_define_value_property (OBJECT_TO_EJSVAL(_obj), STRING_TO_EJSVAL([name jsString]), [val jsValue], attrs);
 }
 
 -(void)defineProperty:(CKString*)name object:(CKObject*)obj attributes:(uint32_t)attrs
 {
-    EJS_NOT_IMPLEMENTED();
-#if notyet
-	JS_DefineProperty([_ctx jsContext], _obj, [name UTF8String], OBJECT_TO_JSVAL([obj jsObject]), JS_PropertyStub, JS_StrictPropertyStub, attrs);
-#endif
+    _ejs_object_define_value_property (OBJECT_TO_EJSVAL(_obj), STRING_TO_EJSVAL([name jsString]), OBJECT_TO_EJSVAL([obj jsObject]), attrs);
 }
 
 -(void)definePropertyNS:(NSString*)name value:(CKValue*)val attributes:(uint32_t)attrs
