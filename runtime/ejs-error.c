@@ -60,7 +60,7 @@ static ejsval
 _ejs_Error_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     if (!EJSVAL_IS_OBJECT(_this)) {
-        _ejs_throw_nativeerror (EJS_TYPE_ERROR, "Error.prototype.toString called on non-object");
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Error.prototype.toString called on non-object");
     }
 
     EJSObject *_thisobj = EJSVAL_TO_OBJECT(_this);
@@ -77,7 +77,7 @@ _ejs_Error_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *
 }
 
 ejsval
-_ejs_nativeerror_new_utf8 (EJSNativeErrorType err_type, const char *message)
+_ejs_nativeerror_new (EJSNativeErrorType err_type, ejsval msg)
 {
     EJSObject* exc_obj = _ejs_gc_new (EJSObject);
 
@@ -94,7 +94,6 @@ _ejs_nativeerror_new_utf8 (EJSNativeErrorType err_type, const char *message)
 
     _ejs_init_object (exc_obj, proto, &_ejs_error_specops);
 
-    ejsval msg = _ejs_string_new_utf8 (message);
     ejsval exc = OBJECT_TO_EJSVAL(exc_obj);
 
     switch (err_type) {
@@ -108,6 +107,13 @@ _ejs_nativeerror_new_utf8 (EJSNativeErrorType err_type, const char *message)
     }
 
     return exc;
+}
+
+ejsval
+_ejs_nativeerror_new_utf8 (EJSNativeErrorType err_type, const char *message)
+{
+    ejsval msg = _ejs_string_new_utf8 (message);
+    return _ejs_nativeerror_new (err_type, msg);
 }
 
 void
@@ -141,9 +147,16 @@ EJS_MACRO_END
 }
 
 void
-_ejs_throw_nativeerror (EJSNativeErrorType error_type, const char *message)
+_ejs_throw_nativeerror_utf8 (EJSNativeErrorType error_type, const char *message)
 {
     ejsval exc = _ejs_nativeerror_new_utf8 (error_type, message);
+    _ejs_throw (exc);
+}
+
+void
+_ejs_throw_nativeerror (EJSNativeErrorType error_type, ejsval message)
+{
+    ejsval exc = _ejs_nativeerror_new (error_type, message);
     _ejs_throw (exc);
 }
 

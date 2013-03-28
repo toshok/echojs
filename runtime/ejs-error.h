@@ -32,9 +32,11 @@ extern ejsval _ejs_SyntaxError_proto;
 extern ejsval _ejs_TypeError_proto;
 extern ejsval _ejs_URIError_proto;
 
+extern ejsval _ejs_nativeerror_new (EJSNativeErrorType error_type, ejsval message);
 extern ejsval _ejs_nativeerror_new_utf8 (EJSNativeErrorType error_type, const char* message);
 
-extern void _ejs_throw_nativeerror(EJSNativeErrorType error_type, const char *message);
+extern void _ejs_throw_nativeerror (EJSNativeErrorType error_type, ejsval message);
+extern void _ejs_throw_nativeerror_utf8 (EJSNativeErrorType error_type, const char *message);
 
 extern void _ejs_error_init(ejsval global);
 
