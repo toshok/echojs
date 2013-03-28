@@ -73,7 +73,7 @@ _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func)
     // ECMA262: 15.3.2.1
     ejsval fun_proto = _ejs_object_new (_ejs_Object_prototype, &_ejs_object_specops);
 
-    _ejs_object_setprop (fun_proto, _ejs_atom_constructor,  fun);
+    _ejs_object_define_value_property (fun_proto, _ejs_atom_constructor, fun, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
     _ejs_object_define_value_property (fun, _ejs_atom_prototype, fun_proto, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
     _ejs_object_define_value_property (fun, _ejs_atom_name, name, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     return fun;
@@ -134,7 +134,7 @@ _ejs_Function_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsva
     char terrible_fixed_buffer[256];
 
     if (!EJSVAL_IS_FUNCTION(_this))
-        _ejs_throw_nativeerror (EJS_TYPE_ERROR, "Function.prototype.toString is not generic.");
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Function.prototype.toString is not generic.");
 
     START_SHADOW_STACK_FRAME;
 
@@ -244,7 +244,7 @@ _ejs_Function_prototype_bind (ejsval env, ejsval _this, uint32_t argc, ejsval *a
 
     /* 2. If IsCallable(Target) is false, throw a TypeError exception. */
     if (!EJSVAL_IS_FUNCTION(Target)) {
-        _ejs_throw_nativeerror (EJS_TYPE_ERROR, "object not a function");
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "object not a function");
     }
 
     if (argc == 0)
@@ -257,7 +257,7 @@ _ejs_Function_prototype_bind (ejsval env, ejsval _this, uint32_t argc, ejsval *a
     EJSFunction *TargetFunc = (EJSFunction*)EJSVAL_TO_OBJECT(Target);
 
     /* 3. Let A be a new (possibly empty) internal list of all of the argument values provided after thisArg (arg1, arg2 etc), in order. */
-    int bound_argc;
+    int bound_argc = 0;
     ejsval *bound_args = NULL;
     if (argc > 1) {
         bound_argc = argc-1;
@@ -392,7 +392,7 @@ _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args)
         }
 #endif
         
-        _ejs_throw_nativeerror (EJS_TYPE_ERROR, "object not a function");
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "object not a function");
     }
 
     EJSFunction *fun = (EJSFunction*)EJSVAL_TO_OBJECT(closure);
@@ -423,7 +423,7 @@ _ejs_decompose_closure (ejsval closure, EJSClosureFunc* func, ejsval* env,
                         ejsval *_this)
 {
     if (!EJSVAL_IS_FUNCTION(closure))
-        _ejs_throw_nativeerror (EJS_TYPE_ERROR, "object not a function");
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "object not a function");
 
     EJSFunction *fun = (EJSFunction*)EJSVAL_TO_OBJECT(closure);
 
