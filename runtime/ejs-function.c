@@ -344,7 +344,7 @@ _ejs_function_init(ejsval global)
     // ECMA262 15.3.3.2
     _ejs_object_define_value_property (_ejs_Function, _ejs_atom_length, NUMBER_TO_EJSVAL(1), EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Function__proto__, x, _ejs_Function_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_Function__proto__, x, _ejs_Function_prototype_##x, EJS_PROP_NOT_ENUMERABLE)
 
     PROTO_METHOD(toString);
     PROTO_METHOD(apply);
