@@ -127,6 +127,9 @@ v8-%.js.exe: v8/%.js $(TOPDIR)/runtime/libecho.a
 run-node:
 	NODE_PATH=$(NODE_PATH) node
 
+node-path:
+	echo $(NODE_PATH)
+
 clean: clean-results
 	rm -f *.o *.js.exe terminal.js echo-assert.js .*.diff .*-out .failures .successes .xfail .xsuccess
 
