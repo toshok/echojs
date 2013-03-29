@@ -1177,12 +1177,20 @@ _ejs_objc_allocateWebGLRenderingContext (ejsval env, ejsval _this, uint32_t argc
     EJS_NOT_IMPLEMENTED();
 }
 
+static ejsval
+_ejs_objc_UIApplicationMain (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    NSLog (@"About to call UIApplicationMain!");
+    UIApplicationMain(0, NULL, nil, @"AppDelegate"); // XXX get all this from the args
+    exit(0);
+}
+
 #else
 static ejsval
 _ejs_objc_NSApplicationMain (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     NSLog (@"About to call NSApplicationMain!");
-    NSApplicationMain(0, NULL);
+    NSApplicationMain(0, NULL); // XXX populate from args
     exit(0);
 }
 #endif
@@ -1204,6 +1212,7 @@ _ejs_objc_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     EJS_INSTALL_FUNCTION(exports, "registerJSClass", _ejs_objc_registerJSClass);
 #if IOS
     EJS_INSTALL_FUNCTION(exports, "allocateWebGLRenderingContext", _ejs_objc_allocateWebGLRenderingContext);
+    EJS_INSTALL_FUNCTION(exports, "UIApplicationMain", _ejs_objc_UIApplicationMain);
 #else
     EJS_INSTALL_FUNCTION(exports, "NSApplicationMain", _ejs_objc_NSApplicationMain);
 #endif
