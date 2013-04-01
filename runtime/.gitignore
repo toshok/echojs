@@ -1,5 +1,6 @@
 .deps
 ejs-atoms-gen.c
+ejs-webgl-constants-sorted.h
 *.o.osx
 *.o.sim
 *.o.armv7
