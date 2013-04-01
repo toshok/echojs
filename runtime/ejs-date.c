@@ -121,6 +121,14 @@ _ejs_Date_prototype_getTimezoneOffset (ejsval env, ejsval _this, uint32_t argc, 
     return NUMBER_TO_EJSVAL (date->tm.tm_gmtoff);
 }
 
+static ejsval
+_ejs_Date_prototype_getTime (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    EJSDate *date = (EJSDate*)EJSVAL_TO_OBJECT(_this);
+
+    return NUMBER_TO_EJSVAL (mktime (&date->tm));
+}
+
 void
 _ejs_date_init(ejsval global)
 {
@@ -137,6 +145,7 @@ _ejs_date_init(ejsval global)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Date_proto, x, _ejs_Date_prototype_##x)
 
     PROTO_METHOD(toString);
+    PROTO_METHOD(getTime);
     PROTO_METHOD(getTimezoneOffset);
 
 #undef PROTO_METHOD

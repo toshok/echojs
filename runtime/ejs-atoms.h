@@ -200,6 +200,7 @@ EJS_ATOM(ignoreCase)
 
 // Date functions
 //EJS_ATOM(toString)
+EJS_ATOM(getTime)
 EJS_ATOM(getTimezoneOffset)
 
 // Function functions
