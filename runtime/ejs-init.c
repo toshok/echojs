@@ -26,6 +26,9 @@
 #include "ejs-typedarrays.h"
 #include "ejs-uri.h"
 #include "ejs-value.h"
+#if IOS
+#include "ejs-webgl.h"
+#endif
 
 const ejsval _ejs_undefined = STATIC_BUILD_EJSVAL(EJSVAL_TAG_UNDEFINED, 0);
 ejsval _ejs_nan;
@@ -79,6 +82,9 @@ _ejs_init(int argc, char** argv)
     _ejs_math_init(_ejs_global);
 
     _ejs_typedarrays_init(_ejs_global);
+#if IOS
+    _ejs_webgl_init(_ejs_global);
+#endif
 
 #define GLOBAL_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_global, x, _ejs_##x)
 
