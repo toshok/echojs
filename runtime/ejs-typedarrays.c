@@ -64,11 +64,6 @@ static EJSSpecOps _ejs_typedarray_specops = {
 };
 
 
-#define EJSVAL_IS_TYPEDARRAY(v) (EJSVAL_IS_OBJECT(v) &&         \
-                                 (EJSVAL_TO_OBJECT(v)->ops == &_ejs_int8array_specops))
-
-#define EJSVAL_IS_ARRAYBUFFER(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_arraybuffer_specops))
-
 #define _EJS_ARRAY_LEN(arrobj)      (((EJSArray*)arrobj)->array_length)
 #define _EJS_ARRAY_ELEMENTS(arrobj) (((EJSArray*)arrobj)->elements)
 
@@ -181,7 +176,7 @@ _ejs_ArrayBuffer_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsva
     return _ejs_arraybuffer_new_slice(_this, offset, len);
 }
 
-#define EJS_TYPED_ARRAY(ArrayType, arraytype, elementtype, elementSizeInBytes) \
+#define EJS_TYPED_ARRAY(EnumType, ArrayType, arraytype, elementtype, elementSizeInBytes) \
     static ejsval                                                       \
     _ejs_##ArrayType##Array_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
     {                                                                   \
@@ -191,6 +186,8 @@ _ejs_ArrayBuffer_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsva
      EJSTypedArray* arr = (EJSTypedArray*)EJSVAL_TO_OBJECT(_this);      \
                                                                         \
      uint32_t array_len = 0;                                            \
+                                                                        \
+     arr->element_type = EJS_TYPEDARRAY_##EnumType;                     \
                                                                         \
      if (argc == 0)                                                     \
          goto construct_from_array_len;                                 \
@@ -210,7 +207,7 @@ _ejs_ArrayBuffer_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsva
              arr->byteLength = array_len * (elementSizeInBytes);        \
              arr->buffer = _ejs_arraybuffer_new (arr->byteLength);      \
                                                                         \
-             printf ("need to copy the existing data from the typed array to this array\n"); \
+             LOG ("need to copy the existing data from the typed array to this array\n"); \
              EJS_NOT_IMPLEMENTED();                                     \
          }                                                              \
          else if (EJSVAL_IS_ARRAY(args[0])) {                           \
@@ -222,8 +219,18 @@ _ejs_ArrayBuffer_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsva
              arr->byteLength = array_len * (elementSizeInBytes);        \
              arr->buffer = _ejs_arraybuffer_new (arr->byteLength);      \
                                                                         \
-             printf ("need to copy the existing data from the array to this array\n"); \
-             EJS_NOT_IMPLEMENTED();                                     \
+             void* buf_data = ((EJSArrayBuffer*)EJSVAL_TO_OBJECT(arr->buffer))->data.alloced_buf; \
+             if (EJSVAL_IS_DENSE_ARRAY(args[0])) {                      \
+                 EJSObject* arr = EJSVAL_TO_OBJECT(args[0]);            \
+                 int i;                                                 \
+                 for (i = 0; i < EJSARRAY_LEN (arr); i ++) {            \
+                     ((elementtype*)buf_data)[i] = (elementtype)EJSVAL_TO_NUMBER(EJSARRAY_ELEMENTS(arr)[i]); \
+                 }                                                      \
+             }                                                          \
+             else {                                                     \
+                 LOG ("need to implement normal array object copying for sparse arrays.  or do we?\n"); \
+                 EJS_NOT_IMPLEMENTED();                                 \
+             }                                                          \
          }                                                              \
          else if (EJSVAL_IS_ARRAYBUFFER(args[0])) {                     \
              EJSArrayBuffer* buffer = (EJSArrayBuffer*)EJSVAL_TO_OBJECT(args[0]); \
@@ -263,6 +270,7 @@ _ejs_ArrayBuffer_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsva
          }                                                              \
      }                                                                  \
      else {                                                             \
+         LOG ("arg0 not a number or object...\n");                      \
          EJS_NOT_IMPLEMENTED();                                         \
      }                                                                  \
                                                                         \
@@ -310,18 +318,94 @@ _ejs_ArrayBuffer_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsva
      EJS_NOT_IMPLEMENTED();                                             \
  }                                                                      \
                                                                         \
- EJSSpecOps _ejs_##arraytype##array_specops
+ EJSSpecOps _ejs_##arraytype##array_specops;
 
-EJS_TYPED_ARRAY(Int8, int8, int8_t, 1);
-EJS_TYPED_ARRAY(Uint8, uint8, uint8_t, 1);
-//EJS_TYPED_ARRAY(Uint8Clamped, uint8clamped, uint8_t, 1);
-EJS_TYPED_ARRAY(Int16, int16, int16_t, 2);
-EJS_TYPED_ARRAY(Uint16, uint16, uint16_t, 2);
-EJS_TYPED_ARRAY(Int32, int32, int32_t, 4);
-EJS_TYPED_ARRAY(Uint32, uint32, uint32_t, 4);
-EJS_TYPED_ARRAY(Float32, float32, float, 4);
-EJS_TYPED_ARRAY(Float64, float64, double, 8);
+EJS_TYPED_ARRAY(INT8, Int8, int8, int8_t, 1);
+EJS_TYPED_ARRAY(UINT8, Uint8, uint8, uint8_t, 1);
+//EJS_TYPED_ARRAY(UINT8CLAMPED, Uint8Clamped, uint8clamped, uint8_t, 1);
+EJS_TYPED_ARRAY(INT16, Int16, int16, int16_t, 2);
+EJS_TYPED_ARRAY(UINT16, Uint16, uint16, uint16_t, 2);
+EJS_TYPED_ARRAY(INT32, Int32, int32, int32_t, 4);
+EJS_TYPED_ARRAY(UINT32, Uint32, uint32, uint32_t, 4);
+EJS_TYPED_ARRAY(FLOAT32, Float32, float32, float, 4);
+EJS_TYPED_ARRAY(FLOAT64, Float64, float64, double, 8);
 
+static int typed_array_elsizes[EJS_TYPEDARRAY_TYPE_COUNT];
+static ejsval typed_array_protos[EJS_TYPEDARRAY_TYPE_COUNT];
+static EJSSpecOps* typed_array_specops[EJS_TYPEDARRAY_TYPE_COUNT];
+
+ejsval
+_ejs_typedarray_new (EJSTypedArrayType element_type, uint32_t length)
+{
+    int size = length * typed_array_elsizes[element_type];
+
+    ejsval buffer = _ejs_arraybuffer_new (size);
+
+    EJSTypedArray *rv = _ejs_gc_new(EJSTypedArray);
+
+    _ejs_init_object ((EJSObject*)rv, typed_array_protos[element_type], typed_array_specops[element_type]);
+
+    rv->buffer = buffer;
+    rv->element_type = element_type;
+    rv->length = length;
+    rv->byteOffset = 0;
+    rv->byteLength = size;
+
+    return OBJECT_TO_EJSVAL(rv);
+}
+
+ejsval
+_ejs_typedarray_new_from_array (EJSTypedArrayType element_type, ejsval arrayObj)
+{
+    EJSObject *arr = EJSVAL_TO_OBJECT(arrayObj);
+    int arrlen = EJSARRAY_LEN(arr);
+    ejsval typedarr = _ejs_typedarray_new (element_type, arrlen);
+    int i;
+
+    void* data = _ejs_typedarray_get_data (EJSVAL_TO_OBJECT(typedarr));
+
+    // this is woefully underoptimized...
+
+    for (i = 0; i < arrlen; i ++) {
+        ejsval item = _ejs_object_getprop (arrayObj, NUMBER_TO_EJSVAL(i));
+        switch (element_type) {
+        case EJS_TYPEDARRAY_INT8: ((int8_t*)data)[i] = (int8_t)EJSVAL_TO_NUMBER(item); break;
+        case EJS_TYPEDARRAY_UINT8: ((uint8_t*)data)[i] = (uint8_t)EJSVAL_TO_NUMBER(item); break;
+        case EJS_TYPEDARRAY_UINT8CLAMPED: EJS_NOT_IMPLEMENTED();
+        case EJS_TYPEDARRAY_INT16: ((int16_t*)data)[i] = (int16_t)EJSVAL_TO_NUMBER(item); break;
+        case EJS_TYPEDARRAY_UINT16: ((uint16_t*)data)[i] = (uint16_t)EJSVAL_TO_NUMBER(item); break;
+        case EJS_TYPEDARRAY_INT32: ((int32_t*)data)[i] = (int32_t)EJSVAL_TO_NUMBER(item); break;
+        case EJS_TYPEDARRAY_UINT32: ((uint32_t*)data)[i] = (uint32_t)EJSVAL_TO_NUMBER(item); break;
+        case EJS_TYPEDARRAY_FLOAT32: ((float*)data)[i] = (float)EJSVAL_TO_NUMBER(item); break;
+        case EJS_TYPEDARRAY_FLOAT64: ((double*)data)[i] = (double)EJSVAL_TO_NUMBER(item); break;
+        default: EJS_NOT_REACHED();
+        }
+    }
+
+    return typedarr;
+}
+
+void*
+_ejs_arraybuffer_get_data (EJSObject* buf)
+{
+    EJSArrayBuffer *array_buffer = (EJSArrayBuffer*)buf;
+
+    if (array_buffer->dependent) {
+        return _ejs_arraybuffer_get_data (EJSVAL_TO_OBJECT(array_buffer->data.dependent.buf)) + array_buffer->data.dependent.offset;
+    }
+
+    return array_buffer->data.alloced_buf;
+}
+
+void*
+_ejs_typedarray_get_data(EJSObject* arr)
+{
+    EJSTypedArray* typed_array = (EJSTypedArray*)arr;
+    void* buffer_data = _ejs_arraybuffer_get_data (EJSVAL_TO_OBJECT(typed_array->buffer));
+
+        
+    return buffer_data + typed_array->byteOffset;
+}
 
 void
 _ejs_typedarrays_init(ejsval global)
@@ -354,7 +438,7 @@ _ejs_typedarrays_init(ejsval global)
     }
 
 
-#define ADD_TYPEDARRAY(ArrayType, elementSizeInBytes) EJS_MACRO_START   \
+#define ADD_TYPEDARRAY(EnumType, ArrayType, arraytype, elementSizeInBytes) EJS_MACRO_START \
     _ejs_gc_add_named_root (_ejs_##ArrayType##Array_proto);         \
     _ejs_##ArrayType##Array_proto = _ejs_object_new(_ejs_null, &_ejs_object_specops); \
                                                                         \
@@ -367,17 +451,21 @@ _ejs_typedarrays_init(ejsval global)
     _ejs_object_setprop (_ejs_##ArrayType##Array, _ejs_atom_prototype,  _ejs_##ArrayType##Array_proto); \
     _ejs_object_setprop (global,         _ejs_atom_##ArrayType##Array,  _ejs_##ArrayType##Array); \
                                                                         \
-    EJS_MACRO_END
+    typed_array_elsizes[EJS_TYPEDARRAY_##EnumType] = elementSizeInBytes;                 \
+    typed_array_protos[EJS_TYPEDARRAY_##EnumType] = _ejs_##ArrayType##Array_proto;       \
+    typed_array_specops[EJS_TYPEDARRAY_##EnumType] = &_ejs_##arraytype##array_specops;   \
+                                                                        \
+EJS_MACRO_END
 
-    ADD_TYPEDARRAY(Int8, 1);
-    ADD_TYPEDARRAY(Uint8, 1);
-    //ADD_TYPEDARRAY(Uint8Clamped, 1);
-    ADD_TYPEDARRAY(Int16, 2);
-    ADD_TYPEDARRAY(Uint16, 2);
-    ADD_TYPEDARRAY(Int32, 4);
-    ADD_TYPEDARRAY(Uint32, 4);
-    ADD_TYPEDARRAY(Float32, 4);
-    ADD_TYPEDARRAY(Float64, 8);
+    ADD_TYPEDARRAY(INT8, Int8, int8, 1);
+    ADD_TYPEDARRAY(UINT8, Uint8, uint8, 1);
+    //ADD_TYPEDARRAY(UINT8CLAMPED, Uint8Clamped, uint8clamped, 1);
+    ADD_TYPEDARRAY(INT16, Int16, int16, 2);
+    ADD_TYPEDARRAY(UINT16, Uint16, uint16, 2);
+    ADD_TYPEDARRAY(INT32, Int32, int32, 4);
+    ADD_TYPEDARRAY(UINT32, Uint32, uint32, 4);
+    ADD_TYPEDARRAY(FLOAT32, Float32, float32, 4);
+    ADD_TYPEDARRAY(FLOAT64, Float64, float64, 8);
 
     END_SHADOW_STACK_FRAME;
 }
@@ -580,3 +668,4 @@ _ejs_typedarray_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     scan_func(arr->buffer);
     _ejs_object_specops.scan (obj, scan_func);
 }
+

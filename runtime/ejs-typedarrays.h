@@ -25,6 +25,20 @@ typedef struct _EJSArrayBuffer {
     } data;
 } EJSArrayBuffer;
 
+typedef enum {
+    EJS_TYPEDARRAY_INT8,
+    EJS_TYPEDARRAY_UINT8,
+    EJS_TYPEDARRAY_UINT8CLAMPED,
+    EJS_TYPEDARRAY_INT16,
+    EJS_TYPEDARRAY_UINT16,
+    EJS_TYPEDARRAY_INT32,
+    EJS_TYPEDARRAY_UINT32,
+    EJS_TYPEDARRAY_FLOAT32,
+    EJS_TYPEDARRAY_FLOAT64,
+
+    EJS_TYPEDARRAY_TYPE_COUNT
+} EJSTypedArrayType;
+
 typedef struct _EJSTypedArray {
     /* object header */
     EJSObject obj;
@@ -36,15 +50,27 @@ typedef struct _EJSTypedArray {
 
     /* typed array data */
     uint32_t length;
+
+    EJSTypedArrayType element_type;
 } EJSTypedArray;
 
-#define EJS_ARRAY_ALLOC(obj) (((EJSArray*)EJSVAL_TO_OBJECT(obj))->array_alloc)
-#define EJS_ARRAY_LEN(obj) (((EJSArray*)EJSVAL_TO_OBJECT(obj))->array_length)
-#define EJS_ARRAY_ELEMENTS(obj) (((EJSArray*)EJSVAL_TO_OBJECT(obj))->elements)
+#define EJSVAL_IS_TYPEDARRAY(v) (EJSVAL_IS_OBJECT(v) &&         \
+                                 (EJSVAL_TO_OBJECT(v)->ops == &_ejs_int8array_specops))
 
-#define EJSARRAY_ALLOC(obj) (((EJSArray*)(obj))->array_alloc)
-#define EJSARRAY_LEN(obj) (((EJSArray*)(obj))->array_length)
-#define EJSARRAY_ELEMENTS(obj) (((EJSArray*)(obj))->elements)
+#define EJSVAL_IS_ARRAYBUFFER(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_arraybuffer_specops))
+
+#define EJSOBJECT_IS_TYPEDARRAY(v) (v->ops == &_ejs_int8array_specops)
+#define EJSOBJECT_IS_ARRAYBUFFER(v) (v->ops == &_ejs_arraybuffer_specops)
+
+
+#define EJS_TYPED_ARRAY_LEN(obj) (((EJSTypedArray*)EJSVAL_TO_OBJECT(obj))->length)
+#define EJS_TYPED_ARRAY_BYTE_LEN(obj) (((EJSTypedArray*)EJSVAL_TO_OBJECT(obj))->byteLength)
+#define EJS_ARRAY_BUFFER_BYTE_LEN(obj) (((EJSArrayBuffer*)EJSVAL_TO_OBJECT(obj))->size)
+
+#define EJSTYPEDARRAY_LEN(obj) (((EJSTypedArray*)(obj))->length)
+#define EJSTYPEDARRAY_BYTE_LEN(obj) (((EJSTypedArray*)(obj))->byteLength)
+#define EJSTYPEDARRAY_ELEMENT_TYPE(obj) (((EJSTypedArray*)(obj))->element_type)
+#define EJSARRAYBUFFER_BYTE_LEN(obj) (((EJSArrayBuffer*)obj)->size)
 
 EJS_BEGIN_DECLS
 
@@ -57,6 +83,12 @@ extern ejsval _ejs_Int8Array_proto;
 extern EJSSpecOps _ejs_int8array_specops;
 
 void _ejs_typedarrays_init(ejsval global);
+
+void* _ejs_arraybuffer_get_data(EJSObject* arr);
+void* _ejs_typedarray_get_data(EJSObject* arr);
+
+ejsval _ejs_typedarray_new (EJSTypedArrayType element_type, uint32_t length);
+ejsval _ejs_typedarray_new_from_array (EJSTypedArrayType element_type, ejsval arrayObj);
 
 EJS_END_DECLS
 
