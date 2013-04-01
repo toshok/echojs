@@ -11,6 +11,7 @@
 #include "ejs-array.h"
 #include "ejs-function.h"
 #include "ejs-string.h"
+#include "ejs-error.h"
 
 static ejsval  _ejs_array_specop_get (ejsval obj, ejsval propertyName);
 static EJSPropertyDesc* _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName);
@@ -44,10 +45,6 @@ EJSSpecOps _ejs_array_specops = {
 };
 
 EJSSpecOps _ejs_sparsearray_specops;
-
-#define EJSVAL_IS_DENSE_ARRAY(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_array_specops))
-#define EJSVAL_IS_SPARSE_ARRAY(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_sparsearray_specops))
-#define EJS_ARRAY_IS_SPARSE(arrobj) ((arrobj)->ops == &_ejs_sparsearray_specops))
 
 #define _EJS_ARRAY_LEN(arrobj)      (((EJSArray*)arrobj)->array_length)
 #define _EJS_ARRAY_ELEMENTS(arrobj) (((EJSArray*)arrobj)->elements)
@@ -441,6 +438,9 @@ _ejs_Array_prototype_join (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
     if (EJS_ARRAY_LEN(_this) == 0)
         return _ejs_atom_empty;
 
+    if (!EJSVAL_IS_DENSE_ARRAY(_this))
+        abort();
+
     const jschar* separator;
     int separator_len;
 
@@ -458,10 +458,12 @@ _ejs_Array_prototype_join (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
     jschar* result;
     int result_len = 0;
 
-    ejsval* strings = (ejsval*)malloc (sizeof (ejsval) * EJS_ARRAY_LEN(_this));
+    int num_strings = EJS_ARRAY_LEN(_this);
+
+    ejsval* strings = (ejsval*)malloc (sizeof (ejsval) * num_strings);
     int i;
 
-    for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
+    for (i = 0; i < num_strings; i ++) {
         strings[i] = ToString(EJS_ARRAY_ELEMENTS(_this)[i]);
         result_len += EJSVAL_TO_STRLEN(strings[i]);
     }
@@ -471,12 +473,12 @@ _ejs_Array_prototype_join (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
     result = (jschar*)malloc (sizeof(jschar) * result_len);
     jschar *p = result;
 
-    for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
-        jschar *debug_str = EJSVAL_TO_FLAT_STRING(strings[i]);
+    for (i = 0; i < num_strings; i ++) {
+        jschar *str_str = EJSVAL_TO_FLAT_STRING(strings[i]);
         int slen = EJSVAL_TO_STRLEN(strings[i]);
-        memmove (p, debug_str, slen * sizeof(jschar));
+        memmove (p, str_str, slen * sizeof(jschar));
         p += slen;
-        if (i < EJS_ARRAY_LEN(_this)-1) {
+        if (i < num_strings-1) {
             memmove (p, separator, separator_len * sizeof(jschar));
             p += separator_len;
         }
@@ -506,18 +508,71 @@ _ejs_Array_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *
 static ejsval
 _ejs_Array_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
-    if (argc < 1)
-        EJS_NOT_IMPLEMENTED();
+    ejsval callbackfn = _ejs_undefined;
+    ejsval thisArg = _ejs_undefined;
 
-    ejsval fun = args[0];
+    if (argc >= 1)
+        callbackfn = args[0];
 
-    int i;
-    ejsval foreach_args[2];
-    for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
-        foreach_args[0] = EJS_ARRAY_ELEMENTS(_this)[i];
-        foreach_args[1] = NUMBER_TO_EJSVAL(i);
-        _ejs_invoke_closure (fun, _ejs_null, 2, foreach_args);
+    if (argc >= 2)
+        thisArg = args[1];
+
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Array.prototype.forEach called on null or undefined");
+
+    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
+
+    /* 4. If IsCallable(callbackfn) is false, throw a TypeError exception. */
+    if (!EJSVAL_IS_FUNCTION(callbackfn))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
+
+    ejsval foreach_args[3];
+    if (EJSVAL_IS_DENSE_ARRAY(O)) {
+        int i;
+        foreach_args[2] = O;
+        for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
+            foreach_args[0] = EJS_ARRAY_ELEMENTS(_this)[i];
+            foreach_args[1] = NUMBER_TO_EJSVAL(i);
+            _ejs_invoke_closure (callbackfn, thisArg, 2, foreach_args);
+        }
     }
+    else {
+        /* 2. Let lenValue be the result of calling the [[Get]] internal method of O with the argument "length".*/
+        ejsval lenVal = _ejs_object_getprop (O, _ejs_atom_length);
+        
+        /* 3. Let len be ToUint32(lenValue). */
+        uint32_t len = ToUint32(lenVal);
+
+        /* 5. If thisArg was supplied, let T be thisArg; else let T be undefined. */
+        // we already set thisArg appropriately
+
+        /* 6. Let k be 0. */
+        uint32_t k = 0;
+
+        /* 7. Repeat, while k < len */
+        while (k < len) {
+            /* a. Let Pk be ToString(k). */
+            ejsval Pk = ToString (NUMBER_TO_EJSVAL(k));
+
+            /* b. Let kPresent be the result of calling the [[HasProperty]] internal method of O with argument Pk. */
+            EJSBool kPresent = OP(EJSVAL_TO_OBJECT(O), has_property)(O, Pk);
+
+            /* c. If kPresent is true, then */
+            if (kPresent) {
+                /* i. Let kValue be the result of calling the [[Get]] internal method of O with argument Pk. */
+                ejsval kValue = _ejs_object_getprop (O, Pk);
+                /* ii. Call the [[Call]] internal method of callbackfn with T as the this value and argument list containing kValue, k, and O. */
+                foreach_args[0] = kValue;
+                foreach_args[1] = NUMBER_TO_EJSVAL(k);
+                foreach_args[2] = O;
+                _ejs_invoke_closure (callbackfn, thisArg, 2, foreach_args);
+            }
+            /* d. Increase k by 1. */
+            k++;
+        }
+    }
+
     return _ejs_undefined;
 }
 

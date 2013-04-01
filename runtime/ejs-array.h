@@ -26,6 +26,10 @@ typedef struct {
 #define EJSARRAY_LEN(obj) (((EJSArray*)(obj))->array_length)
 #define EJSARRAY_ELEMENTS(obj) (((EJSArray*)(obj))->elements)
 
+#define EJSVAL_IS_DENSE_ARRAY(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_array_specops))
+#define EJSVAL_IS_SPARSE_ARRAY(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_sparsearray_specops))
+#define EJS_ARRAY_IS_SPARSE(arrobj) ((arrobj)->ops == &_ejs_sparsearray_specops))
+
 EJS_BEGIN_DECLS
 
 extern ejsval _ejs_Array;
