@@ -17,6 +17,10 @@
 #include "ejs-string.h"
 #include "ejs-error.h"
 
+#if IOS
+#import <Foundation/Foundation.h>
+#endif
+
 EJSSpecOps _ejs_error_specops;
 
 ejsval _ejs_Error;
@@ -150,6 +154,9 @@ void
 _ejs_throw_nativeerror_utf8 (EJSNativeErrorType error_type, const char *message)
 {
     ejsval exc = _ejs_nativeerror_new_utf8 (error_type, message);
+#if IOS
+    NSLog(@"throwing exception with message %s", message);
+#endif
     _ejs_throw (exc);
 }
 
