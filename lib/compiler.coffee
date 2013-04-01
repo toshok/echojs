@@ -1399,12 +1399,11 @@ sanitize_with_replace = (filename) ->
         filename = replace_all filename, "\\", "_"
         
 insert_toplevel_func = (tree, filename) ->
-        sanitize = if __ejs? then sanitize_with_replace else sanitize_with_regexp
         toplevel =
                 type: syntax.FunctionDeclaration,
                 id:
                         type: syntax.Identifier
-                        name: "_ejs_toplevel_#{sanitize filename}"
+                        name: "_ejs_toplevel_#{sanitize_with_regexp filename}"
                 params: [
                         { type: syntax.Identifier, name: "%env_unused" }
                 ]
@@ -1419,7 +1418,7 @@ exports.compile = (tree, base_output_filename, source_filename) ->
 
         console.warn "compiling #{source_filename} -> #{base_output_filename}"
         
-        tree = insert_toplevel_func tree, base_output_filename
+        tree = insert_toplevel_func tree, source_filename
 
         debug.log -> escodegen.generate tree
 
