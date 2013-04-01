@@ -29,6 +29,8 @@ typedef double EJSPrimNumber;
 #define EJSVAL_IS_OBJECT_OR_NULL(v) EJSVAL_IS_OBJECT_OR_NULL_IMPL(v)
 #define EJSVAL_IS_NULL_OR_UNDEFINED(v) (EJSVAL_IS_NULL(v) || EJSVAL_IS_UNDEFINED(v))
 
+#define EJSOBJECT_IS_ARRAY(v)     ((v)->ops == &_ejs_array_specops || (v)->ops == &_ejs_sparsearray_specops)
+
 #define EJSVAL_TO_OBJECT(v)       EJSVAL_TO_OBJECT_IMPL(v)
 #define EJSVAL_TO_NUMBER(v)       v.asDouble
 #define EJSVAL_TO_BOOLEAN(v)      EJSVAL_TO_BOOLEAN_IMPL(v)
