@@ -9,6 +9,8 @@
 #include "ejs-ops.h"
 #include <stdint.h>
 #include <sys/types.h>
+#include <execinfo.h>
+
 
 #define spew 0
 #if spew
@@ -301,6 +303,15 @@ static void _ejs_terminate(void)
     else {
         // for right now assume that we got here from an ejs exception.
         printf ("unhandled exception: \n");
+        printf ("trace:\n");
+
+        void* callstack[128];
+        int i, frames = backtrace(callstack, 128);
+        char** strs = backtrace_symbols(callstack, frames);
+        for (i = 0; i < frames; ++i) {
+            printf("%s\n", strs[i]);
+        }
+        free(strs);
         exit(-1);
 
 #if false
