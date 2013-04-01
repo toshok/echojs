@@ -20,7 +20,11 @@
 #include "ejs-string.h"
 #include "ejs-error.h"
 
-#define SPEW(x) x
+#if IOS
+#include "ejs-webgl.h"
+#endif
+
+#define SPEW(x)
 
 // the keys we use for our associated objects
 #define JSCTX_KEY (void*)1
@@ -32,7 +36,7 @@
 
 #define RO_DONT_ENUM_PERMANENT (EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_NOT_CONFIGURABLE)
 
-static id
+id
 get_objc_id (CKObject* obj)
 {
 	CKObject *handle = [obj objectForPropertyNS:@"_ck_handle"];
@@ -78,10 +82,8 @@ _ejs_ObjcHandle_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 ejsval
 _ejs_objc_handle_new (id handle)
 {
-    if (handle == nil) {
-        NSLog (@"_ejs_objc_handle_new passed a nil objc id");
-        abort();
-    }
+    if (handle == nil)
+        _ejs_throw_nativeerror_utf8(EJS_ERROR, "_ejs_objc_handle_new passed a nil objc id");
 
     EJSObjcHandle *rv = _ejs_gc_new(EJSObjcHandle);
     _ejs_init_object ((EJSObject*)rv, _ejs_ObjcHandle_proto, &_ejs_objchandle_specops);
@@ -126,8 +128,7 @@ _ejs_CoffeeKitObject_setHandle (ejsval env, ejsval _this, uint32_t argc, ejsval*
     EJSObjcHandle* handleArg = (EJSObjcHandle*)EJSVAL_TO_OBJECT (args[0]);
 
 	if (handleArg->handle == nil) {
-		NSLog (@"setHandle called with nil handle");
-		abort();
+        _ejs_throw_nativeerror_utf8(EJS_ERROR, "setHandle called with nil handle");
 	}
 
 	[thisObject definePropertyNS:@"_ck_handle"
@@ -137,6 +138,15 @@ _ejs_CoffeeKitObject_setHandle (ejsval env, ejsval _this, uint32_t argc, ejsval*
 	set_jspeer (handleArg->handle, thisObject);
 
     return _ejs_undefined;
+}
+
+
+static ejsval
+_ejs_CoffeeKitObject_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+	CKObject* thisObject = [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(_this)];
+    NSString* desc = [NSString stringWithFormat:@"%@",  get_objc_id(thisObject)];
+    return STRING_TO_EJSVAL([[CKString stringWithNSString:desc] jsString]);
 }
 
 void
@@ -154,6 +164,7 @@ _ejs_objc_init(ejsval global)
     _ejs_ObjcHandle = tmpobj;
 
     _ejs_object_setprop (_ejs_ObjcHandle, _ejs_atom_prototype,  _ejs_ObjcHandle_proto);
+    _ejs_object_setprop (_ejs_ObjcHandle_proto, _ejs_atom_constructor,  _ejs_ObjcHandle);
 
     _ejs_object_setprop_utf8 (global, "ObjcHandle", _ejs_ObjcHandle);
 
@@ -170,6 +181,7 @@ _ejs_objc_init(ejsval global)
     _ejs_object_setprop (_ejs_CoffeeKitObject_proto, _ejs_atom_constructor,  _ejs_CoffeeKitObject);
 
     EJS_INSTALL_FUNCTION(_ejs_CoffeeKitObject, "setHandle", _ejs_CoffeeKitObject_setHandle);
+    EJS_INSTALL_FUNCTION(_ejs_CoffeeKitObject_proto, "toString", _ejs_CoffeeKitObject_prototype_toString);
 
     _ejs_object_setprop_utf8 (global, "CoffeeKitObject", _ejs_CoffeeKitObject);
 
@@ -266,16 +278,20 @@ static ejsval invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejs
 static ejsval
 _ejs_objc_invokeSelector (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
-    EJSPrimString* selname_jsstr = EJSVAL_TO_STRING(args[0]);
+    if (!EJSVAL_IS_STRING(args[0])) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "non-string passed to objc.invokeSelector");
+    }
 
-    //      NSString *sel_name = jsstring_nsdup (selname_jsstr);
-    //      NSLog (@"in _icall_objc_invokeSelector (%@)", sel_name);
+    char *selname_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[0]));
 
-    // XXX change the name of this to "invoke_#{selector}_from_js" or something, with the actual selector in it
-    CKObject* func = [CKObject makeFunctionNS:@"invokeSelectorFromJS" withCallback:(EJSClosureFunc)invokeSelectorFromJS argCount:0];
+    //NSLog (@"in _ejs_objc_invokeSelector (%s)", selname_utf8);
+
+    CKObject* func = [CKObject makeFunctionNS:[NSString stringWithFormat:@"__ejs_invoke_%s_from_js", selname_utf8] withCallback:(EJSClosureFunc)invokeSelectorFromJS argCount:0];
+
+    free (selname_utf8);
 
     [func definePropertyNS:@"_ck_sel"
-          value:[CKValue jsStringValue:[CKString stringWithJSString:selname_jsstr]]
+          value:[CKValue valueWithJSValue:args[0]]
           attributes:RO_DONT_ENUM_PERMANENT];
 
     return OBJECT_TO_EJSVAL([func jsObject]);
@@ -322,8 +338,8 @@ _ejs_objc_getTypeEncoding (ejsval env, ejsval _this, uint32_t argc, ejsval* args
     Method meth = static_method ? class_getClassMethod (cls, _sel) : class_getInstanceMethod (cls, _sel);
 
     if (!meth) {
-        NSLog (@"failed to locate method `%s' on class %@", sel_getName(_sel), cls);
-        abort ();
+        NSString* str = [NSString stringWithFormat:@"failed to locate method `%s' on class %@", sel_getName(_sel), cls];
+        _ejs_throw_nativeerror_utf8(EJS_ERROR, [str UTF8String]);
     }
 
     //  NSLog (@"method type encoding = %s", method_getTypeEncoding (meth));
@@ -530,20 +546,18 @@ invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
         typeEncoding = method_getTypeEncoding (meth);
         SPEW(NSLog (@" it was %s", typeEncoding);)
         if (!typeEncoding) {
-            NSLog (@"failed to locate selector `%s'.  this is usually due to a framework not being linked against.", sel_getName (sel));
-            abort ();
+            NSString* str = [NSString stringWithFormat:@"failed to locate selector `%s'.  this is usually due to a framework not being linked against.", sel_getName (sel)];
+            _ejs_throw_nativeerror_utf8(EJS_ERROR, [str UTF8String]);
         }
     }
     SPEW(NSLog (@"  type = %s", typeEncoding);)
 
-    if (handle == NULL) {
-        NSLog (@"NULL handle in invokeSelectorFromJS");
-        abort ();
+        if (handle == NULL) {
+        _ejs_throw_nativeerror_utf8(EJS_ERROR, "NULL handle in invokeSelectorFromJS");
     }
         
     if (sel == NULL) {
-        NSLog (@"NULL selector in invokeSelectorFromJS");
-        abort ();
+        _ejs_throw_nativeerror_utf8(EJS_ERROR, "NULL selector in invokeSelectorFromJS");
     }
 
     
@@ -551,7 +565,7 @@ invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
 
     if ((argc + 2 - 1 /* the -1 to get rid of the selector passed as arg0 */) != [sig numberOfArguments]) {
-        NSLog (@"Incorrect number of arguments to objective-C method %s on %@ (type encoding %s).  expected = %lu, offered = %u", sel_getName(sel), handle, typeEncoding, [sig numberOfArguments], argc + 2);
+        NSLog (@"Incorrect number of arguments to objective-C method %s on %@ (type encoding %s).  expected = %lu, offered = %u", sel_getName(sel), handle, typeEncoding, (unsigned long)[sig numberOfArguments], argc + 2);
         return _ejs_null;
     }
 
@@ -773,8 +787,8 @@ invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
             rv = marshal_cgrect_as_jsvalue ((CGRect*)return_buffer);
         }
         else {
-            NSLog (@"unhandled struct return type `%s'", return_type);
-            abort();
+            NSString* str = [NSString stringWithFormat:@"unhandled struct return type `%s'", return_type];
+            _ejs_throw_nativeerror_utf8(EJS_ERROR, [str UTF8String]);
         }
         break;
     }
@@ -804,9 +818,10 @@ invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
         rv = [CKValue numberValue:*(unsigned long long*)return_buffer];
         break;
 
-    default:
-        NSLog (@"unhandled return type `%s'", return_type);
-        abort();
+    default: {
+        NSString* str = [NSString stringWithFormat:@"unhandled return type `%s'", return_type];
+        _ejs_throw_nativeerror_utf8(EJS_ERROR, [str UTF8String]);
+    }
     }
         
     free (return_buffer);
@@ -899,8 +914,8 @@ coffeekit_method_tramp (id obj, SEL sel, ...)
                     [inv setArgument:marshal_cgrect_as_jsvalue(&rect) atIndex:jsarg_num];
                 }
                 else {
-		    NSLog (@"unhandled tramp arg marshalling for struct type `%s'", arg_type);
-                    abort();
+                    NSString* str = [NSString stringWithFormat:@"unhandled tramp arg marshalling for struct type `%s'", arg_type];
+                    _ejs_throw_nativeerror_utf8(EJS_ERROR, [str UTF8String]);
                 }
                 break;
             }
@@ -1172,16 +1187,12 @@ _ejs_objc_registerJSClass (ejsval env, ejsval _this, uint32_t argc, ejsval* args
 
 #if IOS
 static ejsval
-_ejs_objc_allocateWebGLRenderingContext (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
-    EJS_NOT_IMPLEMENTED();
-}
-
-static ejsval
 _ejs_objc_UIApplicationMain (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
-    NSLog (@"About to call UIApplicationMain!");
-    UIApplicationMain(0, NULL, nil, @"AppDelegate"); // XXX get all this from the args
+    NSString* delegate_name = [[CKString stringWithJSString:EJSVAL_TO_STRING(args[2])] nsString];
+    
+    NSLog (@"About to call UIApplicationMain (..., %@)!", delegate_name);
+    UIApplicationMain(0, NULL, nil, delegate_name); // XXX get argv/argc/principal from @args
     exit(0);
 }
 

@@ -193,3 +193,5 @@
 -(CKValue*)exception NS_RETURNS_NOT_RETAINED;
 
 @end
+
+id get_objc_id (CKObject* obj); // XXX this needs to go away
