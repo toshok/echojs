@@ -150,7 +150,7 @@ target_llc_args =
 target_linker =
         osx: "clang++"
         sim: "#{sim_bin}/clang++"
-        dev: "#{dev_bin}/clang"
+        dev: "#{dev_bin}/clang++"
         
 target_link_args =
         osx: [ ]
@@ -159,7 +159,7 @@ target_link_args =
 
 target_libraries =
         osx: [ "-framework", "Foundation", "-framework", "AppKit" ]
-        sim: [ "-framework", "Foundation", "-framework", "UIKit" ]
+        sim: [ "-framework", "Foundation", "-framework", "UIKit", "-framework", "GLKit", "-framework", "OpenGLES", "-framework", "CoreGraphics" ]
         dev: [ "-framework", "Foundation", "-framework", "UIKit" ]
 
 target_libecho =
@@ -225,6 +225,10 @@ compileFile = (filename, content, compileCallback) ->
                                         o_filenames.push o_filename
                                         compileCallback()
 
+relative_to_ejs_exe = (n) ->
+        path.resolve (path.dirname process.argv[if __ejs? then 0 else 1]), n
+                
+
 generate_require_map = ->
         sanitize = (filename, c_callable) ->
                 filename = filename.replace /\.js$/, ""
@@ -233,23 +237,22 @@ generate_require_map = ->
                 filename
         map_path = "/tmp/#{util.genFreshFileName path.basename files[0]}-require-map.cpp"
         map = fs.createWriteStream map_path
-        map.write "extern \"C\" {"
-        map.write "typedef struct _EJSValue EJSValue;\n"
-        map.write "typedef int EJSBool;\n"
-        map.write "typedef EJSValue* (*ExternalModuleEntry) (EJSValue *exports);\n"
-        map.write "typedef struct { const char* name;  ExternalModuleEntry func;  EJSValue *cached_exports; } EJSExternalModuleRequire;\n"
-        map.write "typedef EJSValue* (*ToplevelFunc) (EJSValue *env, EJSValue *_this, int argc, EJSValue **args);\n"
-        map.write "typedef struct { const char* name;  ToplevelFunc func;  EJSValue *cached_exports; } EJSRequire;\n"
+        map.write "#include \"#{relative_to_ejs_exe 'runtime/ejs.h'}\"\n"
+        map.write "extern \"C\" {\n"
+        map.write "typedef ejsval (*ExternalModuleEntry) (ejsval exports);\n"
+        map.write "typedef struct { const char* name;  ExternalModuleEntry func;  ejsval cached_exports; } EJSExternalModuleRequire;\n"
+        map.write "typedef ejsval (*ToplevelFunc) (ejsval env, ejsval _this, int argc, ejsval *args);\n"
+        map.write "typedef struct { const char* name;  ToplevelFunc func;  ejsval cached_exports; } EJSRequire;\n"
         options.external_modules.forEach ({ module_entrypoint }) ->
-                map.write "extern EJSValue* #{module_entrypoint} (EJSValue *exports);\n"
+                map.write "extern ejsval #{module_entrypoint} (ejsval exports);\n"
 
         compiled_modules.forEach ({ filename, module_toplevel }) ->
                 sanitized = sanitize filename, true
-                map.write "extern EJSValue* #{module_toplevel} (EJSValue* env, EJSValue *_this, int argc, EJSValue **args);\n"
+                map.write "extern ejsval #{module_toplevel} (ejsval env, ejsval _this, int argc, ejsval *args);\n"
 
         map.write "EJSRequire _ejs_require_map[] = {\n"
         compiled_modules.forEach ({ filename, module_toplevel }) ->
-                map.write "  { \"#{sanitize (path.basename filename), false}\", #{module_toplevel}, 0 },\n"
+                map.write "  { \"#{sanitize filename, false}\", #{module_toplevel}, 0 },\n"
         map.write "  { 0, 0, 0 }\n"
         map.write "};\n"
 
@@ -277,9 +280,6 @@ do_final_link = ->
         else
                 process.env.PATH = "#{target_path_prepend[options.target]}:#{process.env.PATH}"
 
-        relative_to_ejs_exe = (n) ->
-                path.resolve (path.dirname process.argv[if __ejs? then 0 else 1]), n
-                
         clang_args = target_link_args[options.target].concat ["-o", options.output_filename || "#{files[0]}.exe"].concat o_filenames
         
         clang_args.push map_filename
