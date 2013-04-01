@@ -573,7 +573,7 @@ ejsval
 _ejs_object_setprop (ejsval val, ejsval key, ejsval value)
 {
     if (EJSVAL_IS_PRIMITIVE(val)) {
-        printf ("setprop on primitive.  ignoring\n" );
+        LOG ("setprop on primitive.  ignoring\n");
         EJS_NOT_IMPLEMENTED();
     }
 
