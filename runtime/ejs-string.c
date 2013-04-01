@@ -15,6 +15,7 @@
 #include "ejs-regexp.h"
 #include "ejs-ops.h"
 #include "ejs-string.h"
+#include "ejs-error.h"
 
 int32_t
 ucs2_strcmp (const jschar *s1, const jschar *s2)
@@ -90,6 +91,58 @@ ucs2_strstr (const jschar *haystack,
 
     return NULL;
 }
+
+jschar*
+ucs2_strrstr (const jschar *haystack,
+              const jschar *needle)
+{
+    int haystack_len = ucs2_strlen(haystack);
+    int needle_len = ucs2_strlen(needle);
+
+    if (needle_len > haystack_len)
+        return NULL;
+
+    const jschar* p = haystack + haystack_len - 1;
+    const jschar* needle_p = needle + needle_len - 1;
+
+    while (p >= haystack) {
+        const jschar *next_candidate = NULL;
+
+        if (*p == *needle_p) {
+            const jschar *p2 = p+1;
+            const jschar *n = needle_p-1;
+
+            if (!next_candidate && *p2 == *needle)
+                next_candidate = p2;
+
+            while (n >= needle) {
+                if (*n != *p2)
+                    break;
+                n--;
+                p2--;
+                if (!next_candidate && *p2 == *needle_p)
+                    next_candidate = p2;
+            }
+            if (needle_p < needle)
+                return (jschar*)p;
+
+            if (next_candidate)
+                p = next_candidate;
+            else
+                p--;
+            continue;
+        }
+        else {
+            if (next_candidate)
+                p = next_candidate;
+            else
+                p--;
+        }
+    }
+
+    return NULL;
+}
+
 
 static jschar
 utf8_to_ucs2 (const unsigned char * input, const unsigned char ** end_ptr)
@@ -373,7 +426,33 @@ _ejs_String_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsval *
 static ejsval
 _ejs_String_prototype_lastIndexOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    EJS_NOT_IMPLEMENTED();
+    int idx = -1;
+    if (argc == 0)
+        return NUMBER_TO_EJSVAL(idx);
+
+    ejsval haystack = ToString(_this);
+    jschar* haystack_cstr;
+    if (EJSVAL_IS_STRING(haystack)) {
+        haystack_cstr = EJSVAL_TO_FLAT_STRING(haystack);
+    }
+    else {
+        haystack_cstr = EJSVAL_TO_FLAT_STRING(((EJSString*)EJSVAL_TO_OBJECT(haystack))->primStr);
+    }
+
+    ejsval needle = ToString(args[0]);
+    jschar *needle_cstr;
+    if (EJSVAL_IS_STRING(needle)) {
+        needle_cstr = EJSVAL_TO_FLAT_STRING(needle);
+    }
+    else {
+        needle_cstr = EJSVAL_TO_FLAT_STRING(((EJSString*)EJSVAL_TO_OBJECT(needle))->primStr);
+    }
+  
+    jschar* p = ucs2_strrstr(haystack_cstr, needle_cstr);
+    if (p == NULL)
+        return NUMBER_TO_EJSVAL(idx);
+
+    return NUMBER_TO_EJSVAL (p - haystack_cstr);
 }
 
 static ejsval
@@ -397,7 +476,43 @@ _ejs_String_prototype_search (ejsval env, ejsval _this, uint32_t argc, ejsval *a
 static ejsval
 _ejs_String_prototype_substring (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    EJS_NOT_IMPLEMENTED();
+    /* 1. Call CheckObjectCoercible passing the this value as its argument. */
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "String.prototype.subString called on null or undefined");
+
+    ejsval start = _ejs_undefined;
+    ejsval end = _ejs_undefined;
+
+    if (argc > 0) start = args[0];
+    if (argc > 1) end = args[1];
+
+    /* 2. Let S be the result of calling ToString, giving it the this value as its argument. */
+    ejsval S = ToString(_this);
+
+    /* 3. Let len be the number of characters in S. */
+    int len = EJSVAL_TO_STRLEN(S);
+
+    /* 4. Let intStart be ToInteger(start). */
+    int32_t intStart = ToInteger(start);
+
+    /* 5. If end is undefined, let intEnd be len; else let intEnd be ToInteger(end). */
+    int32_t intEnd = (EJSVAL_IS_UNDEFINED(end)) ? len : ToInteger(end);
+        
+    /* 6. Let finalStart be min(max(intStart, 0), len). */
+    int32_t finalStart = MIN(MAX(intStart, 0), len);
+
+    /* 7. Let finalEnd be min(max(intEnd, 0), len). */
+    int32_t finalEnd = MIN(MAX(intEnd, 0), len);
+
+    /* 8. Let from be min(finalStart, finalEnd). */
+    int32_t from = MIN(finalStart, finalEnd);
+
+    /* 9. Let to be max(finalStart, finalEnd). */
+    int32_t to = MAX(finalStart, finalEnd);
+
+    /* 10. Return a String whose length is to - from, containing characters from S, namely the characters with indices  */
+    /*     from through to-1, in ascending order. */
+    return _ejs_string_new_substring (S, from, to-from);
 }
 
 // ECMA262: B.2.3
@@ -1191,9 +1306,9 @@ _ejs_string_to_utf8(EJSPrimString* primstr)
 {
     int length = primstr->length * 4+1;
     char* buf = (char*)malloc(length);
-    char *p;
+    char *p = buf;
 
-    for (int i = 0; i < length; i ++) {
+    for (int i = 0; i < primstr->length; i ++) {
         jschar ucs2 = _ejs_string_char_code_at(primstr, i);
         int adv = ucs2_to_utf8_char (ucs2, p);
         if (adv < 1) {
