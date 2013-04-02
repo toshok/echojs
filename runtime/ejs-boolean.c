@@ -106,7 +106,7 @@ _ejs_boolean_init(ejsval global)
 
     _ejs_object_setprop (_ejs_Boolean,       _ejs_atom_prototype,  _ejs_Boolean_proto);
 
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Boolean_proto, x, _ejs_Boolean_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Boolean_proto, x, _ejs_Boolean_prototype_##x, EJS_PROP_NOT_ENUMERABLE)
 
     PROTO_METHOD(valueOf);
     PROTO_METHOD(toString);
