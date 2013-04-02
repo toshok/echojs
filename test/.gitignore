@@ -6,6 +6,9 @@ llvm-test.js
 free-test.js
 set-test.js
 set.js
+escodegen.js
+esprima.js
+estraverse.js
 *.diff
 *.ejs-out
 *.node-out
