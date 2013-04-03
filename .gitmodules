@@ -20,3 +20,6 @@
 [submodule "coffeekit"]
 	path = coffeekit
 	url = https://github.com/toshok/coffeekit
+[submodule "coffee-script"]
+	path = coffee-script
+	url = https://github.com/toshok/coffee-script.git
