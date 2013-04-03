@@ -25,9 +25,9 @@ configure-pcre-iossim:
 	@mkdir -p pcre-iossim
 	(cd pcre-iossim && \
 	PATH=$(IOSSIM_ROOT)/usr/bin:$$PATH \
-	CC="$(IOSSIM_ROOT)/usr/bin/clang $(IOSSIM_ARCH) $(IOSSIM_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSSIM_SYSROOT)" \
-	CXX="$(IOSSIM_ROOT)/usr/bin/clang++ $(IOSSIM_ARCH) $(IOSSIM_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSSIM_SYSROOT)" \
-	LD="$(IOSSIM_ROOT)/usr/bin/clang" \
+	CC="$(IOSSIM_ROOT)/usr/bin/gcc $(IOSSIM_ARCH) $(IOSSIM_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSSIM_SYSROOT)" \
+	CXX="$(IOSSIM_ROOT)/usr/bin/g++ $(IOSSIM_ARCH) $(IOSSIM_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSSIM_SYSROOT)" \
+	LD="$(IOSSIM_ROOT)/usr/bin/gcc" \
 	AR="$(IOSSIM_ROOT)/usr/bin/ar" \
 	AS="$(IOSSIM_ROOT)/usr/bin/as" \
 	../$(TOP)/pcre/configure --host=$(IOSSIM_TRIPLE) $(PCRE_CONFIGURE_ARGS)) || rm -rf pcre-iossim
@@ -36,9 +36,9 @@ configure-pcre-iosdev:
 	@mkdir -p pcre-iosdev
 	(cd pcre-iosdev && \
 	PATH=$(IOSDEV_ROOT)/usr/bin:$$PATH \
-	CC="$(IOSDEV_ROOT)/usr/bin/clang $(IOSDEV_ARCH) $(IOSDEV_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSDEV_SYSROOT)" \
-	CXX="$(IOSDEV_ROOT)/usr/bin/clang++ $(IOSDEV_ARCH) $(IOSDEV_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSDEV_SYSROOT)" \
-	LD="$(IOSDEV_ROOT)/usr/bin/clang" \
+	CC="$(IOSDEV_ROOT)/usr/bin/gcc $(IOSDEV_ARCH) $(IOSDEV_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSDEV_SYSROOT)" \
+	CXX="$(IOSDEV_ROOT)/usr/bin/g++ $(IOSDEV_ARCH) $(IOSDEV_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSDEV_SYSROOT)" \
+	LD="$(IOSDEV_ROOT)/usr/bin/gcc" \
 	AR="$(IOSDEV_ROOT)/usr/bin/ar" \
 	AS="$(IOSDEV_ROOT)/usr/bin/as" \
 	../$(TOP)/pcre/configure --host=$(IOSDEV_TRIPLE) $(PCRE_CONFIGURE_ARGS)) || rm -rf pcre-iosdev
