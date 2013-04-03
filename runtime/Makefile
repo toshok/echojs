@@ -58,7 +58,8 @@ clean-local::
 VPATH=.:../parson
 
 OSX_CC=clang
-IOS_CC=clang
+SIM_CC=clang
+DEV_CC=clang
 
 CFLAGS += -I../external-deps/pcre-osx
 IOSSIM_CFLAGS += -I../external-deps/pcre-iossim
@@ -88,12 +89,12 @@ ejs-webgl-constants-sorted.h: ejs-webgl-constants.h
 ejs-webgl.o.osx ejs-webgl.o.sim ejs-webgl.o.armv7: ejs-webgl-constants-sorted.h
 
 
-OBJC_FLAGS= -x objective-c -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch
+OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch
 
 %.o.osx: %.c
 	@mkdir -p .deps
 	@$(OSX_CC) -MM $(CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.osx,,`/$@/ > .deps/$@-deps
-	@echo [$(OSX_CC) osx] $< && $(OSX_CC) -x objective-c $(CFLAGS)  -c -o $@ $<
+	@echo [$(OSX_CC) osx] $< && $(OSX_CC) -ObjC $(CFLAGS)  -c -o $@ $<
 
 %.o.osx: %.m
 	@mkdir -p .deps
@@ -102,23 +103,23 @@ OBJC_FLAGS= -x objective-c -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch
 
 %.o.sim: %.c
 	@mkdir -p .deps
-	@$(IOSSIM_BIN)/$(IOS_CC) -MM $(IOSSIM_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.sim,,`/$@/ > .deps/$@-deps
-	@echo [$(IOS_CC) sim] $< && PATH=$(IOSSIM_BIN):$$PATH $(IOSSIM_BIN)/$(IOS_CC) -x objective-c $(IOSSIM_CFLAGS) -c -o $@ $<
+	@$(SIM_CC) -MM $(IOSSIM_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.sim,,`/$@/ > .deps/$@-deps
+	echo [$(SIM_CC) sim] $< && PATH=$(IOSSIM_BIN):$$PATH $(SIM_CC) -ObjC $(IOSSIM_CFLAGS) -c -o $@ $<
 
 %.o.sim: %.m
 	@mkdir -p .deps
-	@$(IOSSIM_BIN)/$(IOS_CC) -MM -x objective-c $(IOSSIM_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.sim,,`/$@/ > .deps/$@-deps
-	@echo [$(IOS_CC) sim] $< && PATH=$(IOSSIM_BIN):$$PATH $(IOSSIM_BIN)/$(IOS_CC) $(IOSSIM_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
+	@$(SIM_CC) -MM -ObjC $(IOSSIM_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.sim,,`/$@/ > .deps/$@-deps
+	@echo [$(SIM_CC) sim] $< && PATH=$(IOSSIM_BIN):$$PATH $(SIM_CC) $(IOSSIM_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
 
 %.o.armv7: %.c
 	@mkdir -p .deps
-	@$(IOSDEV_BIN)/$(IOS_CC) -MM -x objective-c $(IOSDEV_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.dev,,`/$@/ > .deps/$@-deps
-	@echo [$(IOS_CC) armv7] $< && PATH=$(IOSDEV_BIN):$$PATH $(IOSDEV_BIN)/$(IOS_CC) -x objective-c $(IOSDEV_CFLAGS) -c -o $@ $<
+	@$(DEV_CC) -MM -ObjC $(IOSDEV_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.dev,,`/$@/ > .deps/$@-deps
+	@echo [$(DEV_CC) armv7] $< && PATH=$(IOSDEV_BIN):$$PATH $(DEV_CC) -ObjC $(IOSDEV_CFLAGS) -c -o $@ $<
 
 %.o.armv7: %.m
 	@mkdir -p .deps
-	@$(IOSDEV_BIN)/$(IOS_CC) -MM -x objective-c $(IOSDEV_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.dev,,`/$@/ > .deps/$@-deps
-	@echo [$(IOS_CC) armv7] $< && PATH=$(IOSDEV_BIN):$$PATH $(IOSDEV_BIN)/$(IOS_CC) $(IOSDEV_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
+	@$(DEV_CC) -MM -ObjC $(IOSDEV_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.dev,,`/$@/ > .deps/$@-deps
+	@echo [$(DEV_CC) armv7] $< && PATH=$(IOSDEV_BIN):$$PATH $(DEV_CC) $(IOSDEV_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
 
 -include $(patsubst %.o.osx,.deps/%.o.osx-deps,$(OSX_OBJECTS))
 -include $(patsubst %.o.sim,.deps/%.o.sim-deps,$(SIM_OBJECTS))
