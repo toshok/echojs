@@ -29,8 +29,8 @@ CFLAGS=-g -O0 -Wall -I. -Wno-unused-function
 
 MIN_IOS_VERSION=5.0
 
-DEVELOPER_ROOT?=/Developer
-IOS_SDK_VERSION?=5.0
+DEVELOPER_ROOT?=/Applications/Xcode.app/Contents/Developer
+IOS_SDK_VERSION?=6.1
 
 IOSSIM_ARCH=-arch i386
 IOSSIM_ARCH_FLAGS=
