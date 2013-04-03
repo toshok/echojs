@@ -158,6 +158,7 @@ _ejs_throw_nativeerror_utf8 (EJSNativeErrorType error_type, const char *message)
     NSLog(@"throwing exception with message %s", message);
 #endif
     _ejs_throw (exc);
+    EJS_NOT_REACHED();
 }
 
 void
@@ -165,5 +166,6 @@ _ejs_throw_nativeerror (EJSNativeErrorType error_type, ejsval message)
 {
     ejsval exc = _ejs_nativeerror_new (error_type, message);
     _ejs_throw (exc);
+    EJS_NOT_REACHED();
 }
 

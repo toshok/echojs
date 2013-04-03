@@ -35,8 +35,8 @@ extern ejsval _ejs_URIError_proto;
 extern ejsval _ejs_nativeerror_new (EJSNativeErrorType error_type, ejsval message);
 extern ejsval _ejs_nativeerror_new_utf8 (EJSNativeErrorType error_type, const char* message);
 
-extern void _ejs_throw_nativeerror (EJSNativeErrorType error_type, ejsval message);
-extern void _ejs_throw_nativeerror_utf8 (EJSNativeErrorType error_type, const char *message);
+extern void _ejs_throw_nativeerror (EJSNativeErrorType error_type, ejsval message) __attribute__ ((noreturn));
+extern void _ejs_throw_nativeerror_utf8 (EJSNativeErrorType error_type, const char *message) __attribute__ ((noreturn));
 
 extern void _ejs_error_init(ejsval global);
 
