@@ -277,7 +277,11 @@ EJSBool gc_disabled;
 void
 _ejs_gc_init()
 {
+#if GC_WORKS
     gc_disabled = getenv("EJS_GC_DISABLE") != NULL;
+#else
+    gc_disabled = EJS_TRUE;
+#endif
 
     memset (heap_pages, 0, sizeof(heap_pages));
 
