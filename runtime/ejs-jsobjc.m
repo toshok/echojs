@@ -257,10 +257,7 @@
 
 -(NSString*)description
 {
-    EJS_NOT_IMPLEMENTED();
-#if notyet
-	return [NSString stringWithFormat:@"<CKValue val=\"%@\">", jsvalue_to_nsstr (_val)];
-#endif
+	return [NSString stringWithFormat:@"<CKValue val=\"%@\">", [self nsStringValue]];
 }
 
 @end
