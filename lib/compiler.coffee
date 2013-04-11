@@ -21,7 +21,7 @@ ir = llvm.IRBuilder
 
 # set to true to inline more of the call sequence at call sites (we still have to call into the runtime to decompose the closure itself for now)
 # disable this for now because it breaks more of the exception tests
-decompose_closure_on_invoke = true
+decompose_closure_on_invoke = false
 
 BUILTIN_PARAMS = [
   { type: syntax.Identifier, name: "%closure", llvm_type: types.EjsClosureEnv }
@@ -949,8 +949,10 @@ class LLVMIRVisitor extends NodeVisitor
                 obj = @createCall object_create, [@loadNullEjsValue()], "objtmp", !object_create.doesNotThrow
                 for property in n.properties
                         val = @visit property.value
-                        key = property.key
-                        @createPropertyStore obj, key, val, false
+                        key = @getAtom property.key.name
+
+                        @createCall @ejs_runtime.object_define_value_prop, [obj, key, val, consts.int32 0x77], "define_value_prop_#{property.key}"
+                        #@createPropertyStore obj, key, val, false
                 obj
 
         visitArrayExpression: (n) ->

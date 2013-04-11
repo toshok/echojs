@@ -24,6 +24,9 @@ runtime_interface =
         object_getprop:        -> types.only_reads_memory @module.getOrInsertExternalFunction "_ejs_object_getprop",           types.EjsValue, [types.EjsValue, types.EjsValue]
         object_getprop_utf8:   -> types.only_reads_memory @module.getOrInsertExternalFunction "_ejs_object_getprop_utf8",      types.EjsValue, [types.EjsValue, types.string]
         object_setprop_utf8:   -> @module.getOrInsertExternalFunction "_ejs_object_setprop_utf8",       types.EjsValue, [types.EjsValue, types.string, types.EjsValue]
+
+        object_define_value_prop: -> @module.getOrInsertExternalFunction "_ejs_object_define_value_property",  types.bool, [types.EjsValue, types.EjsValue, types.EjsValue, types.int32];
+        
         prop_iterator_new:     -> @module.getOrInsertExternalFunction "_ejs_property_iterator_new",     types.EjsPropIterator, [types.EjsValue]
         prop_iterator_current: -> @module.getOrInsertExternalFunction "_ejs_property_iterator_current", types.EjsValue, [types.EjsPropIterator]
         prop_iterator_next:    -> @module.getOrInsertExternalFunction "_ejs_property_iterator_next",    types.bool, [types.EjsPropIterator, types.bool]
