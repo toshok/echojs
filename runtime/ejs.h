@@ -41,7 +41,7 @@ typedef struct _EJSContext* EJSContext;
 #import <Foundation/Foundation.h>
 #define LOG(...) NSLog (@__VA_ARGS__)
 #else
-#define LOG(...) printf (__VA_ARGS__)
+#define LOG(...) fprintf (stderr, __VA_ARGS__)
 #endif
 
 #define EJS_NOT_IMPLEMENTED() EJS_MACRO_START                           \
