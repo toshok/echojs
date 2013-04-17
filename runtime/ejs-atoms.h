@@ -222,3 +222,5 @@ EJS_ATOM(collect)
 
 // process functions
 EJS_ATOM(exit)
+EJS_ATOM(chdir)
+EJS_ATOM(cwd)
