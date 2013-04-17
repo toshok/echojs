@@ -169,12 +169,12 @@ _ejs_objc_init(ejsval global)
     _ejs_object_setprop_utf8 (global, "ObjcHandle", _ejs_ObjcHandle);
 
     _ejs_coffeekitobject_specops =  _ejs_object_specops;
-    _ejs_coffeekitobject_specops.class_name = "CoffeeKitObject";
+    _ejs_coffeekitobject_specops.class_name = "PirouetteObject";
 
     _ejs_gc_add_named_root (_ejs_CoffeeKitObject_proto);
     _ejs_CoffeeKitObject_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_coffeekitobject_specops);
 
-    ADD_STACK_ROOT(ejsval, tmpobj2, _ejs_function_new_utf8 (_ejs_null, "CoffeeKitObject", (EJSClosureFunc)_ejs_CoffeeKitObject_impl));
+    ADD_STACK_ROOT(ejsval, tmpobj2, _ejs_function_new_utf8 (_ejs_null, "PirouetteObject", (EJSClosureFunc)_ejs_CoffeeKitObject_impl));
     _ejs_CoffeeKitObject = tmpobj2;
 
     _ejs_object_setprop (_ejs_CoffeeKitObject, _ejs_atom_prototype,  _ejs_CoffeeKitObject_proto);
@@ -183,7 +183,7 @@ _ejs_objc_init(ejsval global)
     EJS_INSTALL_FUNCTION(_ejs_CoffeeKitObject, "setHandle", _ejs_CoffeeKitObject_setHandle);
     EJS_INSTALL_FUNCTION(_ejs_CoffeeKitObject_proto, "toString", _ejs_CoffeeKitObject_prototype_toString);
 
-    _ejs_object_setprop_utf8 (global, "CoffeeKitObject", _ejs_CoffeeKitObject);
+    _ejs_object_setprop_utf8 (global, "PirouetteObject", _ejs_CoffeeKitObject);
 
     END_SHADOW_STACK_FRAME;
 }
@@ -276,15 +276,15 @@ _ejs_objc_setInstanceVariable (ejsval env, ejsval _this, uint32_t argc, ejsval* 
 static ejsval invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
 
 static ejsval
-_ejs_objc_invokeSelector (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+_ejs_objc_selectorInvoker (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     if (!EJSVAL_IS_STRING(args[0])) {
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "non-string passed to objc.invokeSelector");
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "non-string passed to objc.selectorInvoker");
     }
 
     char *selname_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[0]));
 
-    //NSLog (@"in _ejs_objc_invokeSelector (%s)", selname_utf8);
+    //NSLog (@"in _ejs_objc_selectorInvoker (%s)", selname_utf8);
 
     CKObject* func = [CKObject makeFunctionNS:[NSString stringWithFormat:@"__ejs_invoke_%s_from_js", selname_utf8] withCallback:(EJSClosureFunc)invokeSelectorFromJS argCount:0];
 
@@ -773,7 +773,7 @@ invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     // marshal the rv
     switch (return_type[0]) {
     case _C_ID: {
-        SPEW(NSLog (@"@ return type, creating JS peer, return_buffer = %p", return_buffer);)
+        SPEW(NSLog (@"@ return type, creating JS peer, return_buffer = %p, value = %p", return_buffer, *(id*)return_buffer);)
         rv = marshal_id_as_jsvalue(*(id*)return_buffer, YES);
         break;
     }
@@ -1036,12 +1036,20 @@ register_members (Class cls, CKObject* obj, NSMutableDictionary* method_map)
         if (_ejs_property_desc_has_getter(&_obj->map.properties[i]) ||
             _ejs_property_desc_has_setter(&_obj->map.properties[i])) {
 			if (_ejs_property_desc_has_getter(&_obj->map.properties[i])) {
+
+                char *utf8 = ucs2_to_utf8(_obj->map.names[i]);
+                CKString* name = [CKString stringWithUTF8CString:utf8];
+
                 CKObject *getter = [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(_obj->map.properties[i].getter)];
-				// 	NSLog (@"there was a getter");
+                NSLog (@"there was a getter for %@", [name nsString]);
 				CKValue* ck_ivar = [getter valueForPropertyNS:@"_ck_ivar"];
 
-				if ([ck_ivar isString])
-					class_addIvar (cls, [[ck_ivar stringValue] UTF8String], sizeof(id), log2(sizeof(id)), "@");
+				if ([ck_ivar isString]) {
+                    NSLog (@" and there's an ivar named %s", [[ck_ivar stringValue] UTF8String]);
+					if (NO == class_addIvar (cls, [[ck_ivar stringValue] UTF8String], sizeof(id), log2(sizeof(id)), "@")) {
+                        NSLog (@"failed to add ivar");
+                    }
+                }
 			}
 		}
 		else {
@@ -1134,16 +1142,18 @@ register_js_class (CKObject* proto,
 
 	id sup = objc_lookUpClass (super_register_name);
     
-	cls = objc_allocateClassPair (sup, register_name, sizeof(EJSObject*)/*we store the JS peer here XXX we do? */);
+	cls = objc_allocateClassPair (sup, register_name, 0);
     
 	Class metaclass = object_getClass (cls);
     
 	NSMutableDictionary* method_map = [NSMutableDictionary dictionary];
     
 
+    SPEW(NSLog (@"registering instance members");)
 	// register the instance methods and properties
 	CKObject* ctor = register_members (cls, proto, method_map);
     
+    SPEW(NSLog (@"registering static members");)
 	// register the static methods and properties
 	if (ctor)
 		register_members (metaclass, ctor, method_map);
@@ -1218,7 +1228,7 @@ _ejs_objc_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     EJS_INSTALL_FUNCTION(exports, "staticCall", _ejs_objc_staticCall);
     EJS_INSTALL_FUNCTION(exports, "getInstanceVariable", _ejs_objc_getInstanceVariable);
     EJS_INSTALL_FUNCTION(exports, "setInstanceVariable", _ejs_objc_setInstanceVariable);
-    EJS_INSTALL_FUNCTION(exports, "invokeSelector", _ejs_objc_invokeSelector);
+    EJS_INSTALL_FUNCTION(exports, "selectorInvoker", _ejs_objc_selectorInvoker);
     EJS_INSTALL_FUNCTION(exports, "getTypeEncoding", _ejs_objc_getTypeEncoding);
     EJS_INSTALL_FUNCTION(exports, "registerJSClass", _ejs_objc_registerJSClass);
 #if IOS
