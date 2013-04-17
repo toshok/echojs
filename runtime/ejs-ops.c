@@ -829,7 +829,7 @@ _ejs_op_in (ejsval lhs, ejsval rhs)
     /* 4. Let rval be GetValue(rref). */
     /* 5. If Type(rval) is not Object, throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(rhs)) {
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "rhs of instanceof check must be a function");
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "rhs of 'in' must be an object");
     }
 
     EJSObject *obj = EJSVAL_TO_OBJECT(rhs);
