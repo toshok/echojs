@@ -19,7 +19,6 @@
 #include "ejs-string.h"
 #include "ejs-builtin-modules.h"
 
-
 ////
 /// path module
 ///
@@ -92,7 +91,7 @@ _ejs_fs_readFileSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     read(fd, buf, fd_stat.st_size);
     close(fd);
 
-    return _ejs_string_new_utf8(buf);
+    return _ejs_string_new_utf8_len(buf, fd_stat.st_size);
 }
 
 ejsval
@@ -213,7 +212,6 @@ _ejs_child_process_spawn (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
         free (argv[i]);
     return _ejs_undefined;
 }
-
 
 ejsval
 _ejs_child_process_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
