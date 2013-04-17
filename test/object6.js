@@ -1,6 +1,8 @@
 var a = {b:10};
+function c() {}
 
-var names = Object.getOwnPropertyNames(a);
-
-console.log (names.length);
-console.log (names[0]);
+Object.getOwnPropertyNames(a).forEach(function (key) { console.log (key); });
+console.log("---");
+Object.getOwnPropertyNames(c).forEach(function (key) { console.log (key); });
+console.log("---");
+Object.getOwnPropertyNames(c.prototype).forEach(function (key) { console.log (key); });
