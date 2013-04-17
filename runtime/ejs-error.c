@@ -165,6 +165,13 @@ void
 _ejs_throw_nativeerror (EJSNativeErrorType error_type, ejsval message)
 {
     ejsval exc = _ejs_nativeerror_new (error_type, message);
+
+#if IOS
+    char *message_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(message));
+    printf("throwing exception with message `%s'\n", message_utf8);
+    free (message_utf8);
+#endif
+
     _ejs_throw (exc);
     EJS_NOT_REACHED();
 }
