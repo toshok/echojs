@@ -747,7 +747,7 @@ transform_dump_tree = (n, indent=0) ->
         console.log "#{stringified_indent}.env.decls = #{n.ejs_env.decls}" if n.ejs_env?
         console.log "#{stringified_indent}.env.closed = #{n.ejs_env.closed}" if n.ejs_env?
         props_to_skip = ["type", "id", "loc", "ejs_free_vars", "ejs_decls", "ejs_env"]
-        for propname in Object.getOwnPropertyNames n
+        Object.getOwnPropertyNames(n).forEach (propName) ->
                 if (props_to_skip.indexOf propname) is -1
                         if n[propname]?.type?
                                 console.log "#{stringified_indent}.#{propname}:"
