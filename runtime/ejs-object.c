@@ -560,7 +560,10 @@ _ejs_object_create (ejsval proto)
     else if (EJSVAL_EQ(proto, _ejs_Error_proto))  ops = &_ejs_error_specops;
     else                                              ops = EJSVAL_TO_OBJECT(proto)->ops;
 
-    return _ejs_object_new (proto, ops);
+    ejsval objval = _ejs_object_new (proto, ops);
+    //EJSObject* obj = EJSVAL_TO_OBJECT(objval);
+    //LOG ("ejs_object_create returned %p\n", obj);
+    return objval;
 }
 
 ejsval
@@ -590,7 +593,7 @@ _ejs_object_setprop (ejsval val, ejsval key, ejsval value)
         if (idx != -1) {
             if (idx >= EJS_ARRAY_ALLOC(val)) {
                 int new_alloc = idx + 10;
-                ejsval* new_elements = (ejsval*)malloc (sizeof(ejsval*) * new_alloc);
+                ejsval* new_elements = (ejsval*)malloc (sizeof(ejsval) * new_alloc);
                 memmove (new_elements, EJS_ARRAY_ELEMENTS(val), EJS_ARRAY_ALLOC(val) * sizeof(ejsval));
                 free (EJS_ARRAY_ELEMENTS(val));
                 EJS_ARRAY_ELEMENTS(val) = new_elements;
@@ -867,8 +870,7 @@ _ejs_Object_defineProperty (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
 
     /* 1. If Type(O) is not Object throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O)) {
-        printf ("throw TypeError, _this isn't an Object\n");
-        EJS_NOT_IMPLEMENTED();
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "defineProperty called on non-object");
     }
     EJSObject *obj = EJSVAL_TO_OBJECT(O);
 
