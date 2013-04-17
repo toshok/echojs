@@ -603,7 +603,7 @@ class LLVMIRVisitor extends NodeVisitor
 
                 # we need to visit lhs after the store so that we load the value, but only if it's used
                 if not n.result_not_used
-                        @visit lhs
+                        rhvalue
 
         visitFunction: (n) ->
                 if not n.toplevel?
