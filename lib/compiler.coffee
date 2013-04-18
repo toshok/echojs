@@ -694,7 +694,7 @@ class LLVMIRVisitor extends NodeVisitor
                 insertFunc = body_bb.parent
         
                 # now pull the named parameters from our args array for the ones that were passed in.
-                # any arg that isn't specified
+                # any arg that isn't specified isn't pulled in, and is only accessible via the arguments object.
                 if n.params.length > BUILTIN_PARAMS.length
                         load_argc = @createLoad allocas[2], "argc" # FIXME, magic number alert
                 
