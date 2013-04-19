@@ -506,6 +506,70 @@ _ejs_Array_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *
 }
 
 static ejsval
+_ejs_Array_prototype_map (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    ejsval callbackfn = _ejs_undefined;
+    ejsval thisArg = _ejs_undefined;
+    if (argc > 0) callbackfn = args[0];
+    if (argc > 1) thisArg = args[1];
+
+    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
+
+    /* 2. Let lenValue be the result of calling the [[Get]] internal method of O with the argument "length".*/
+    ejsval lenVal = _ejs_object_getprop (O, _ejs_atom_length);
+        
+    /* 3. Let len be ToUint32(lenValue). */
+    uint32_t len = ToUint32(lenVal);
+
+    /* 4. If IsCallable(callbackfn) is false, throw a TypeError exception. */
+    if (!EJSVAL_IS_FUNCTION(callbackfn)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Array.prototype.map called with a non-function.");
+    }
+
+    /* 5. If thisArg was supplied, let T be thisArg; else let T be undefined. */
+    ejsval T = thisArg;
+
+    /* 6. Let A be a new array created as if by the expression new Array(len) where Array is the standard builtin constructor with that name and len is the value of len. */
+    ejsval A = _ejs_array_new(0); // XXX we need to fix the len constructor
+    
+    /* 7. Let k be 0. */
+    uint32_t k = 0;
+    /* 8. Repeat, while k < len */
+    while (k < len) {
+        /* a. Let Pk be ToString(k). */
+        ejsval Pk = ToString (NUMBER_TO_EJSVAL(k));
+
+        /* b. Let kPresent be the result of calling the [[HasProperty]] internal method of O with argument Pk. */
+        EJSBool kPresent = OP(EJSVAL_TO_OBJECT(O), has_property)(O, Pk);
+
+        /* c. If kPresent is true, then */
+        if (kPresent) {
+            /* i. Let kValue be the result of calling the [[Get]] internal method of O with argument Pk. */
+            ejsval kValue = _ejs_object_getprop (O, Pk);
+            /* ii. Let mappedValue be the result of calling the [[Call]] internal method of callbackfn with T as */
+            /*     the this value and argument list containing kValue, k, and O. */
+            ejsval map_args[3];
+            map_args[0] = kValue;
+            map_args[1] = NUMBER_TO_EJSVAL(k);
+            map_args[2] = O;
+            ejsval mappedValue = _ejs_invoke_closure (callbackfn, T, 2, map_args);
+
+            /* iii. Call the [[DefineOwnProperty]] internal method of A with arguments Pk, Property */
+            /*      Descriptor {[[Value]]: mappedValue, [[Writable]]: true, [[Enumerable]]: true, */
+            /*      [[Configurable]]: true}, and false. */
+
+            _ejs_object_setprop (A, NUMBER_TO_EJSVAL(k), mappedValue); // XXX
+
+        }
+        /* d. Increase k by 1. */
+        k++;
+    }
+    /* 9. Return A. */
+    return A;
+}
+
+static ejsval
 _ejs_Array_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
     ejsval callbackfn = _ejs_undefined;
@@ -814,6 +878,7 @@ _ejs_array_init(ejsval global)
     PROTO_METHOD(indexOf);
     PROTO_METHOD(join);
     PROTO_METHOD(forEach);
+    PROTO_METHOD(map);
 
     PROTO_METHOD(toString);
 

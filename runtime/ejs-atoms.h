@@ -141,6 +141,7 @@ EJS_ATOM(splice)
 EJS_ATOM(indexOf)
 EJS_ATOM(join)
 EJS_ATOM(forEach)
+EJS_ATOM(map)
 
 // global functions
 EJS_ATOM(isNaN)
