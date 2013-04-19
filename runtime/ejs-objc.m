@@ -270,7 +270,29 @@ _ejs_objc_getInstanceVariable (ejsval env, ejsval _this, uint32_t argc, ejsval* 
 static ejsval
 _ejs_objc_setInstanceVariable (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
-    EJS_NOT_IMPLEMENTED();
+	SPEW(NSLog (@"in _icall_objc_setInstanceVariable");)
+	if (argc != 3) {
+		NSLog (@"setInstanceVariable requires 3 args");
+		// XXX throw an exception here
+		abort();
+	}
+
+	id handle = get_objc_id ([[CKValue valueWithJSValue:args[0]] objectValue]);
+	if (!handle) {
+		NSLog (@"setInstanceVariable first parameter has no handle");
+		// XXX throw an exception here
+		abort();
+	}
+    char* ivar_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[1]));
+
+	id value_handle = get_objc_id ([[CKValue valueWithJSValue:args[2]] objectValue]);
+
+	SPEW(NSLog (@"  setting %s on %@ to %@ ", ivar_utf8, handle, value_handle);)
+
+	object_setInstanceVariable (handle, ivar_utf8, value_handle);
+	free (ivar_utf8);
+
+    return _ejs_undefined;
 }
 
 static ejsval invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
@@ -1045,8 +1067,9 @@ register_members (Class cls, CKObject* obj, NSMutableDictionary* method_map)
 				CKValue* ck_ivar = [getter valueForPropertyNS:@"_ck_ivar"];
 
 				if ([ck_ivar isString]) {
-                    NSLog (@" and there's an ivar named %s", [[ck_ivar stringValue] UTF8String]);
-					if (NO == class_addIvar (cls, [[ck_ivar stringValue] UTF8String], sizeof(id), log2(sizeof(id)), "@")) {
+                    const char *ivar_name = [[ck_ivar stringValue] UTF8String];
+                    NSLog (@" and there's an ivar named %s", ivar_name);
+                    if (NO == class_addIvar (cls, ivar_name, sizeof(id), log2(sizeof(id)), "@")) {
                         NSLog (@"failed to add ivar");
                     }
                 }
