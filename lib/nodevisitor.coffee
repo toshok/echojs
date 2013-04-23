@@ -263,7 +263,7 @@ exports.NodeVisitor = class NodeVisitor
                         when syntax.Property             then rv = @visitProperty new_n
                         when syntax.EmptyStatement       then rv = @visitEmptyStatement new_n
                         else
-                            throw "PANIC: unknown operation #{n.type}"
+                            throw "PANIC: unknown parse node type #{n.type}"
                         
                 debug.log "<#{n.type}"
                 debug.unindent()
