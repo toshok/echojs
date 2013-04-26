@@ -3,6 +3,7 @@
 #include "phinode.h"
 #include "value.h"
 #include "basicblock.h"
+#include "instruction.h"
 
 using namespace node;
 using namespace v8;
@@ -16,6 +17,7 @@ namespace jsllvm {
     Local<FunctionTemplate> t = FunctionTemplate::New(New);
 
     s_ct = Persistent<FunctionTemplate>::New(t);
+    s_ct->Inherit (Instruction::s_ct);
     s_ct->InstanceTemplate()->SetInternalFieldCount(1);
     s_ct->SetClassName(String::NewSymbol("PHINode"));
 

@@ -4,11 +4,13 @@
 #include "structtype.h"
 #include "arraytype.h"
 #include "value.h"
+#include "instruction.h"
 #include "function.h"
 #include "globalvariable.h"
 #include "basicblock.h"
 #include "phinode.h"
 #include "irbuilder.h"
+#include "dibuilder.h"
 #include "module.h"
 #include "constant.h"
 #include "constantagg.h"
@@ -34,6 +36,7 @@ extern "C" {
     jsllvm::StructType::Init(target);
     jsllvm::ArrayType::Init(target);
     jsllvm::Value::Init(target);
+    jsllvm::Instruction::Init(target);
     jsllvm::Function::Init(target);
     jsllvm::GlobalVariable::Init(target);
     jsllvm::BasicBlock::Init(target);
@@ -48,6 +51,15 @@ extern "C" {
     jsllvm::Switch::Init(target);
     jsllvm::Call::Init(target);
     jsllvm::Invoke::Init(target);
+
+    jsllvm::DIBuilder::Init(target);
+    jsllvm::DIDescriptor::Init(target);
+    jsllvm::DIType::Init(target);
+    jsllvm::DIScope::Init(target);
+    jsllvm::DISubprogram::Init(target);
+    jsllvm::DIFile::Init(target);
+    jsllvm::DILexicalBlock::Init(target);
+    jsllvm::DebugLoc::Init(target);
   }
 
   NODE_MODULE(llvm, init);

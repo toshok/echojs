@@ -2,6 +2,7 @@
 #include "irbuilder.h"
 #include "type.h"
 #include "value.h"
+#include "instruction.h"
 #include "landingpad.h"
 #include "switch.h"
 #include "callinvoke.h"
@@ -99,14 +100,14 @@ namespace jsllvm {
   {
     HandleScope scope;
     REQ_LLVM_VAL_ARG(0,val);
-    Handle<v8::Value> result = Value::New(builder.CreateRet(val));
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(builder.CreateRet(val)));
     return scope.Close(result);
   }
 
   v8::Handle<v8::Value> IRBuilder::CreateRetVoid(const v8::Arguments& args)
   {
     HandleScope scope;
-    Handle<v8::Value> result = Value::New(builder.CreateRetVoid());
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(builder.CreateRetVoid()));
     return scope.Close(result);
   }
 
@@ -117,7 +118,7 @@ namespace jsllvm {
     REQ_LLVM_TYPE_ARG(1,ty);
     REQ_UTF8_ARG(2,name);
 
-    Handle<v8::Value> result = Value::New(builder.CreatePointerCast(val, ty, *name));
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(builder.CreatePointerCast(val, ty, *name)));
     return scope.Close(result);
   }
 
@@ -128,14 +129,14 @@ namespace jsllvm {
     REQ_LLVM_TYPE_ARG(1,ty);
     REQ_UTF8_ARG(2,name);
 
-    Handle<v8::Value> result = Value::New(builder.CreateFPCast(val, ty, *name));
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(builder.CreateFPCast(val, ty, *name)));
     return scope.Close(result);
   }
 
   v8::Handle<v8::Value> IRBuilder::CreateUnreachable(const v8::Arguments& args)
   {
     HandleScope scope;
-    Handle<v8::Value> result = Value::New(builder.CreateUnreachable());
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(builder.CreateUnreachable()));
     return scope.Close(result);
   }
 
@@ -187,7 +188,7 @@ namespace jsllvm {
     REQ_LLVM_VAL_ARG(1, right);
     REQ_UTF8_ARG(2, name);
     
-    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateFAdd(left, right, *name));
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateFAdd(left, right, *name)));
     return scope.Close(result);
   }
 
@@ -198,7 +199,7 @@ namespace jsllvm {
     REQ_LLVM_TYPE_ARG(0, ty);
     REQ_UTF8_ARG(1, name);
     
-    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateAlloca(ty, 0, *name));
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateAlloca(ty, 0, *name)));
     return scope.Close(result);
   }
 
@@ -209,7 +210,7 @@ namespace jsllvm {
     REQ_LLVM_VAL_ARG(0, val);
     REQ_UTF8_ARG(1, name);
     
-    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateLoad(val, *name));
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateLoad(val, *name)));
     return scope.Close(result);
   }
 
@@ -220,7 +221,7 @@ namespace jsllvm {
     REQ_LLVM_VAL_ARG(0, val);
     REQ_LLVM_VAL_ARG(1, ptr);
 
-    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateStore(val,ptr));
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateStore(val,ptr)));
     return scope.Close(result);
   }
 
@@ -232,7 +233,7 @@ namespace jsllvm {
     REQ_LLVM_VAL_ARG(1, idx);
     REQ_UTF8_ARG(2, name);
 
-    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateExtractElement(val,idx, *name));
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateExtractElement(val,idx, *name)));
     return scope.Close(result);
   }
 
@@ -244,7 +245,7 @@ namespace jsllvm {
     REQ_INT_ARG(1, idx);
     REQ_UTF8_ARG(2, name);
 
-    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateExtractValue(val,idx, *name));
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateExtractValue(val,idx, *name)));
     return scope.Close(result);
   }
 
@@ -263,7 +264,7 @@ namespace jsllvm {
       if (IdxV.back() == 0) abort(); // XXX throw an exception here
     }
 
-    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateGEP(val, IdxV, *name));
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateGEP(val, IdxV, *name)));
     return scope.Close(result);
   }
 
@@ -282,7 +283,7 @@ namespace jsllvm {
       if (IdxV.back() == 0) abort(); // XXX throw an exception here
     }
 
-    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateInBoundsGEP(val, IdxV, *name));
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateInBoundsGEP(val, IdxV, *name)));
     return scope.Close(result);
   }
 
@@ -294,7 +295,7 @@ namespace jsllvm {
     REQ_INT_ARG(1, idx);
     REQ_UTF8_ARG(2, name);
 
-    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateStructGEP(val, idx, *name));
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateStructGEP(val, idx, *name)));
     return scope.Close(result);
   }
 
@@ -306,7 +307,7 @@ namespace jsllvm {
     REQ_LLVM_VAL_ARG(1, right);
     REQ_UTF8_ARG(2, name);
 
-    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateICmpEQ(left, right, *name));
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateICmpEQ(left, right, *name)));
     return scope.Close(result);
   }
 
@@ -318,7 +319,7 @@ namespace jsllvm {
     REQ_LLVM_VAL_ARG(1, right);
     REQ_UTF8_ARG(2, name);
 
-    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateICmpSGT(left, right, *name));
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateICmpSGT(left, right, *name)));
     return scope.Close(result);
   }
 
@@ -328,7 +329,7 @@ namespace jsllvm {
 
     REQ_LLVM_BB_ARG(0, dest);
 
-    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateBr(dest));
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateBr(dest)));
     return scope.Close(result);
   }
 
@@ -340,7 +341,7 @@ namespace jsllvm {
     REQ_LLVM_BB_ARG(1, thenPart);
     REQ_LLVM_BB_ARG(2, elsePart);
 
-    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateCondBr(cond, thenPart, elsePart));
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateCondBr(cond, thenPart, elsePart)));
     return scope.Close(result);
   }
 
@@ -352,7 +353,7 @@ namespace jsllvm {
     REQ_INT_ARG(1, incoming_values);
     REQ_UTF8_ARG(2, name);
 
-    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreatePHI(ty, incoming_values, *name));
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreatePHI(ty, incoming_values, *name)));
     return scope.Close(result);
   }
 
@@ -363,7 +364,7 @@ namespace jsllvm {
     REQ_UTF8_ARG(0, val);
     REQ_UTF8_ARG(1, name);
 
-    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateGlobalStringPtr(*val, *name));
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateGlobalStringPtr(*val, *name)));
     return scope.Close(result);
   }
 
@@ -398,7 +399,7 @@ namespace jsllvm {
 
     REQ_LLVM_VAL_ARG(0, val);
 
-    Handle<v8::Value> result = Value::New(IRBuilder::builder.CreateResume(val));
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateResume(val)));
     return scope.Close(result);
   }
 

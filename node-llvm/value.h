@@ -16,6 +16,7 @@ namespace jsllvm {
       return node::ObjectWrap::Unwrap<Value>(value->ToObject())->llvm_val;
     }
 
+    static v8::Persistent<v8::FunctionTemplate> s_ct;
   private:
     llvm::Value* llvm_val;
 
@@ -28,7 +29,6 @@ namespace jsllvm {
     static v8::Handle<v8::Value> SetName(const v8::Arguments& args);
     static v8::Handle<v8::Value> ToString(const v8::Arguments& args);
 
-    static v8::Persistent<v8::FunctionTemplate> s_ct;
     static v8::Persistent<v8::Function> s_func;
   };
 

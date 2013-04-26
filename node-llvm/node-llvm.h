@@ -14,6 +14,8 @@
 #include "llvm/Analysis/Verifier.h"
 #include "llvm/Intrinsics.h"
 #include "llvm/IRBuilder.h"
+#include "llvm/DIBuilder.h"
+#include "llvm/DebugInfo.h"
 #include "llvm/Support/raw_os_ostream.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -103,6 +105,24 @@
     return ThrowException(Exception::TypeError(				\
 					       String::New("Argument " #I " must be an llvm Function"))); \
   ::llvm::Function* VAR = jsllvm::Function::GetLLVMObj(args[I]);
+
+#define REQ_LLVM_DIFILE_ARG(I, VAR) \
+  if (args.Length() <= (I) || !args[I]->IsObject() /* XXX || !jsllvm::DIFile::HasInstance(args[I]) */) \
+    return ThrowException(Exception::TypeError(				\
+					       String::New("Argument " #I " must be an llvm DIFile"))); \
+  ::llvm::DIFile VAR = jsllvm::DIFile::GetLLVMObj(args[I]);
+
+#define REQ_LLVM_DISCOPE_ARG(I, VAR) \
+  if (args.Length() <= (I) || !args[I]->IsObject() /* XXX || !jsllvm::DIScope::HasInstance(args[I]) */) \
+    return ThrowException(Exception::TypeError(				\
+					       String::New("Argument " #I " must be an llvm DIScope"))); \
+  ::llvm::DIScope VAR = jsllvm::DIScope::GetLLVMObj(args[I]);
+
+#define REQ_LLVM_DEBUGLOC_ARG(I, VAR) \
+  if (args.Length() <= (I) || !args[I]->IsObject() /* XXX || !jsllvm::DIScope::HasInstance(args[I]) */) \
+    return ThrowException(Exception::TypeError(				\
+					       String::New("Argument " #I " must be an llvm DebugLoc"))); \
+  ::llvm::DebugLoc VAR = jsllvm::DebugLoc::GetLLVMObj(args[I]);
 
 extern std::string& trim(std::string& str);
 

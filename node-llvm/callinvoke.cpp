@@ -2,6 +2,7 @@
 #include "type.h"
 #include "callinvoke.h"
 #include "value.h"
+#include "instruction.h"
 #include "basicblock.h"
 
 using namespace node;
@@ -16,6 +17,7 @@ namespace jsllvm {
     Local<FunctionTemplate> t = FunctionTemplate::New(New);
 
     s_ct = Persistent<FunctionTemplate>::New(t);
+    s_ct->Inherit(Instruction::s_ct);
     s_ct->InstanceTemplate()->SetInternalFieldCount(1);
     s_ct->SetClassName(String::NewSymbol("CallInst"));
 
@@ -113,6 +115,7 @@ namespace jsllvm {
     Local<FunctionTemplate> t = FunctionTemplate::New(New);
 
     s_ct = Persistent<FunctionTemplate>::New(t);
+    s_ct->Inherit(Instruction::s_ct);
     s_ct->InstanceTemplate()->SetInternalFieldCount(1);
     s_ct->SetClassName(String::NewSymbol("InvokeInst"));
 
