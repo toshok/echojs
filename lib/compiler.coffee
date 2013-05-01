@@ -606,8 +606,7 @@ class LLVMIRVisitor extends NodeVisitor
                         rhvalue
 
         visitFunction: (n) ->
-                if not n.toplevel?
-                        console.warn "        function #{n.ir_name} at #{@filename}:#{if n.loc? then n.loc.start.line else '<unknown>'}"
+                debug.log "        function #{n.ir_name} at #{@filename}:#{if n.loc? then n.loc.start.line else '<unknown>'}" if not n.toplevel?
                 
                 # save off the insert point so we can get back to it after generating this function
                 insertBlock = ir.getInsertBlock()
