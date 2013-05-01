@@ -26,6 +26,7 @@ options =
         extra_clang_args: ""
         ios_sdk: "5.0"
         ios_min: "5.0"
+        basename: false
 
 add_external_module = (modinfo) ->
         [library,module_name,module_entrypoint,link_flags] = modinfo.split ','
@@ -56,6 +57,9 @@ args =
         "-o":
                 option:  "output_filename"
                 help:    "name of the output file."
+        "--basename":
+                flag:    "basename"
+                help:    "strip paths off .js files so you can require them using just the filename"
         "--leave-temp":
                 flag:    "leave_temp_files"
                 help:    "leave temporary files in /tmp from compilation"
@@ -200,7 +204,7 @@ compileFile = (filename, content, compileCallback) ->
 
         compiled_module.writeToFile ll_filename
 
-        compiled_modules.push filename: filename, module_toplevel: compiled_module.toplevel_name
+        compiled_modules.push filename: (if options.basename then path.basename(filename) else filename), module_toplevel: compiled_module.toplevel_name
 
         if __ejs?
                 # in ejs spawn is synchronous.
