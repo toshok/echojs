@@ -10,6 +10,8 @@ ifeq ($(EJS_STAGE),1)
 TESTS:=$(filter-out esprima-roundtrip1.js,$(TESTS))
 endif
 
+ESPRIMA_TESTS=$(filter esprima%,$(TESTS))
+ESPRIMA_TESTS:=$(ESPRIMA_TESTS:%.js=%.js.exe)
 
 addExpectedFailureInner=EXPECTED_FAILURES += $(1)
 
@@ -26,7 +28,6 @@ $(call addExpectedFailure, number1.js,              "fails because node outputs 
 $(call addExpectedFailure, json4.js,                "fails due to properties being serialized in a different order.")
 $(call addExpectedFailure, object6.js,              "fails because we don't define everything we should.")
 $(call addExpectedFailure, esprima-roundtrip2.js,   "esprima fails to return a parse tree if loc = true.")
-
 
 check: check-unit-tests run-tests
 
@@ -112,7 +113,7 @@ echo-%:
 .%.js.node-out: %.js
 	@NODE_PATH=$(NODE_PATH) node $< > $@
 
-esprima-roundtrip%.js.exe: esprima-roundtrip%.js $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js $(TOPDIR)/estraverse/estraverse.js $(TOPDIR)/runtime/libecho.a
+$(ESPRIMA_TESTS): %.js.exe: %.js $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js $(TOPDIR)/estraverse/estraverse.js $(TOPDIR)/runtime/libecho.a
 	@cp $(TOPDIR)/esprima/esprima.js .
 	@cp $(TOPDIR)/escodegen/escodegen.js .
 	@cp $(TOPDIR)/estraverse/estraverse.js .
