@@ -89,14 +89,11 @@ _ejs_Number_prototype_valueOf (ejsval env, ejsval _this, uint32_t argc, ejsval *
 void
 _ejs_number_init(ejsval global)
 {
-    START_SHADOW_STACK_FRAME;
+    _ejs_Number = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Number, (EJSClosureFunc)_ejs_Number_impl);
+    _ejs_object_setprop (global, _ejs_atom_Number, _ejs_Number);
 
-    _ejs_gc_add_named_root (_ejs_Number_proto);
+    _ejs_gc_add_root (&_ejs_Number_proto);
     _ejs_Number_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_number_specops);
-
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_Number, (EJSClosureFunc)_ejs_Number_impl));
-    _ejs_Number = tmpobj;
-
     _ejs_object_setprop (_ejs_Number,       _ejs_atom_prototype,  _ejs_Number_proto);
 
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Number_proto, x, _ejs_Number_prototype_##x)
@@ -105,10 +102,6 @@ _ejs_number_init(ejsval global)
     PROTO_METHOD(toString);
 
 #undef PROTO_METHOD
-
-    _ejs_object_setprop (global, _ejs_atom_Number, _ejs_Number);
-
-    END_SHADOW_STACK_FRAME;
 }
 
 

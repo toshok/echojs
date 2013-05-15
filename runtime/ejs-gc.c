@@ -2,10 +2,12 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <stddef.h>
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/mman.h>
@@ -18,19 +20,53 @@
 #include "ejsval.h"
 
 #define spew 0
+#define sanity 0
+#define gc_timings 1
+
 #if spew
 #define SPEW(x) x
 #else
 #define SPEW(x)
 #endif
+#if sanity
+#define SANITY(x) x
+#else
+#define SANITY(x)
+#endif
 
-#define PAGE_SIZE 8192
+void _ejs_gc_dump_heap_stats();
+
+// 128MB heap.  deal with it, suckers
+#define MAX_HEAP_SIZE (128 * 1024 * 1024)
+
+#ifndef PAGE_SIZE
+#define PAGE_SIZE 4096
+#endif
+
+#define USABLE_PAGE_SIZE (PAGE_SIZE-sizeof(PageInfo*))
+
+#define CELLS_OF_SIZE(size) (USABLE_PAGE_SIZE / (size))
+#define CELLS_IN_PAGE(page) CELLS_OF_SIZE((page)->cell_size)
+
+// arenas are reserved in ARENA_PAGES * PAGE_SIZE chunks.  ARENA_PAGES=2048 gives us an arena size of 8MB
+#define ARENA_PAGES 2048
+#define ARENA_SIZE PAGE_SIZE*ARENA_PAGES
+
+#define PTR_TO_ARENA_MASK (uintptr_t)(~(ARENA_SIZE-1))
+
+// turn a random pointer into an arena pointer
+#define PTR_TO_ARENA(ptr) ((void*)((uintptr_t)(ptr) & PTR_TO_ARENA_MASK))
+#define PTR_TO_ARENA_PAGE_BASE(ptr) ((void*)ALIGN(PTR_TO_ARENA(ptr) + sizeof(Arena), PAGE_SIZE))
+#define PTR_TO_ARENA_PAGE_INDEX(ptr) ((((uintptr_t)(ptr) & ~PTR_TO_ARENA_MASK) - ((uintptr_t)PTR_TO_ARENA_PAGE_BASE(ptr) & ~PTR_TO_ARENA_MASK)) / PAGE_SIZE)
+
+#define PTR_TO_CELL(ptr,info) (((ptr) - (info)->page_start) / (info)->cell_size)
 
 #define OBJ_TO_PAGE(o) ((o) & ~PAGE_SIZE)
 
-#define ALLOC_ALIGN 16
-#define ALIGN(v,a) ((v) + (a)-1) & ~((a)-1)
-#define IS_ALLOC_ALIGNED(v) (((unsigned long long)(v) & (ALLOC_ALIGN-1)) == 0)
+#define IS_ALIGNED_TO(v,a) (((uintptr_t)(v) & ((a)-1)) == 0)
+#define ALLOC_ALIGN 8
+#define ALIGN(v,a) (((uintptr_t)(v) + (a)-1) & ~((a)-1))
+#define IS_ALLOC_ALIGNED(v) IS_ALIGNED_TO(v, ALLOC_ALIGN)
 
 // #if osx
 #include <mach/vm_statistics.h>
@@ -112,16 +148,109 @@ _ejs_gc_worklist_pop()
     EJS_MACRO_END
 
 typedef struct _RootSetEntry {
-    EJS_SLIST_HEADER(struct _RootSetEntry);
-    GCObjectPtr* root;
-    char *name;
+    EJS_LIST_HEADER(struct _RootSetEntry);
+    ejsval* root;
 } RootSetEntry;
 
 static RootSetEntry *root_set;
 
-typedef struct _FreeListEntry {
-    EJS_SLIST_HEADER(struct _FreeListEntry);
-} FreeListEntry;
+static void*
+alloc_from_os(size_t size, size_t align)
+{
+    if (align == 0)
+        return mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, MAP_FD, 0);
+
+#if notyet
+    void* res = mmap(NULL, size*2, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, MAP_FD, 0);
+    printf ("mmap returned %p\n", res);
+    if (((uintptr_t)res % align) == 0) {
+        // the memory was aligned, unmap the second half of our mapping
+        printf ("already aligned\n");
+        munmap (res + size, size);
+    }
+    else {
+        printf ("not aligned\n");
+        // align res, and unmap the areas before/after the new mapping
+        void *aligned_res = (void*)ALIGN(res, align);
+        // the area before
+        munmap (res, (uintptr_t)aligned_res - (uintptr_t)res);
+        // the area after
+        munmap (aligned_res+size, size*2 - (uintptr_t)(aligned_res+size));
+        res = aligned_res;
+        printf ("aligned ptr = %p\n", res);
+    }
+    return res;
+#else
+    static void* arena_addr = (void*)0x122000000;
+    void* res = mmap (arena_addr, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE | MAP_FIXED, MAP_FD, 0);
+    arena_addr += size*2;
+    return res;
+#endif
+}
+
+typedef struct _Arena {
+    void* end;
+    void* pos;
+    int num_pages;
+    void* pages[ARENA_PAGES];
+} Arena;
+
+static Arena *arenas[MAX_HEAP_SIZE / ARENA_SIZE];
+static int num_arenas;
+
+
+static Arena*
+arena_new()
+{
+    void* arena_start = alloc_from_os(ARENA_SIZE, ARENA_SIZE);
+
+    Arena* new_arena = arena_start;
+
+    new_arena->end = arena_start + ARENA_SIZE;
+    new_arena->pos = (void*)ALIGN(arena_start + sizeof(Arena), PAGE_SIZE);
+
+    int insert_point = -1;
+    for (int i = 0; i < num_arenas; i ++) {
+        if (new_arena < arenas[i]) {
+            insert_point = i;
+            break;
+        }
+    }
+    if (insert_point == -1) insert_point = num_arenas;
+    memmove (&arenas[insert_point + 1], &arenas[insert_point], (num_arenas-insert_point)*sizeof(Arena*));
+    arenas[insert_point] = new_arena;
+    num_arenas++;
+
+    return new_arena;
+}
+
+static void*
+alloc_page_from_arena(Arena *arena)
+{
+    void *rv = (void*)ALIGN(arena->pos, PAGE_SIZE);
+    if (rv < arena->end) {
+        arena->pos = rv + PAGE_SIZE;
+        arena->pages[arena->num_pages++] = rv;
+        return rv;
+    }
+    return NULL;
+}
+
+static void*
+arena_alloc_page()
+{
+    void *rv = NULL;
+    for (int i = 0; i < num_arenas; i ++) {
+        rv = alloc_page_from_arena(arenas[i]);
+        if (rv)
+            return rv;
+    }
+
+    // need a new arena
+    Arena* arena = arena_new();
+    return alloc_page_from_arena(arena);
+}
+
 
 typedef char BitmapCell;
 
@@ -162,13 +291,13 @@ static unsigned int white_mask = CELL_WHITE_MASK_START;
 
 typedef struct _PageInfo {
     EJS_LIST_HEADER(struct _PageInfo);
-    char* bump_ptr;
+    void* bump_ptr;
     size_t cell_size;
     size_t num_cells;
     size_t num_free_cells;
-    char* page_data;
+    void* page_start;
+    void* page_end;
     BitmapCell* page_bitmap;
-    FreeListEntry* freelist;
 } PageInfo;
 
 typedef struct _LargeObjectInfo {
@@ -184,78 +313,137 @@ typedef struct _LargeObjectInfo {
 static EJSList heap_pages[HEAP_PAGELISTS_COUNT];
 static LargeObjectInfo* los_store;
 
+static int
+compare_ptrs(const void* v1, const void* v2)
+{
+    Arena **a1 = (Arena**)v1;
+    Arena **a2 = (Arena**)v2;
+    ptrdiff_t diff = (intptr_t)*a1 - (intptr_t)*a2;
+    if (diff < 0) return -1;
+    if (diff == 0) return 0;
+    return 1;
+}
+
+static Arena*
+find_arena(GCObjectPtr ptr)
+{
+    void* arena_ptr = PTR_TO_ARENA(ptr);
+    void* rv = bsearch (&arena_ptr, arenas, num_arenas, sizeof(Arena*), compare_ptrs);
+    if (!rv) return NULL;
+    return *(Arena**)rv;
+}
+
+#if sanity
+static void
+verify_arena(Arena *arena)
+{
+    for (int i = 0; i < arena->num_pages; i ++) {
+        assert (arena->pages[i] + sizeof(PageInfo*) == (*(PageInfo**)arena->pages[i])->page_start);
+    }
+}
+
+static void
+verify_free_counts(PageInfo *info)
+{
+    int num_free_cells = 0;
+    GCObjectPtr p = info->page_start;
+
+    for (int c = 0; c < CELLS_IN_PAGE(info); c ++, p = p + info->cell_size) {
+        BitmapCell cell = info->page_bitmap[c];
+        if (IS_FREE(cell))
+            num_free_cells++;
+    }
+    assert (num_free_cells == info->num_free_cells);
+}
+#endif
+
 static PageInfo*
 find_page(GCObjectPtr ptr)
 {
-    for (int hp = 0; hp < HEAP_PAGELISTS_COUNT; hp++) {
-        EJS_LIST_FOREACH (&heap_pages[hp], PageInfo, page, {
-                if (ptr >= page->page_data && (char*)ptr < ((char*)page->page_data + PAGE_SIZE))
-                    return page;
-        });
-    }
-    return NULL;
+    Arena *arena = find_arena(ptr);
+    if (!arena)
+        return NULL;
+
+    SANITY(verify_arena(arena));
+
+    int page_index = PTR_TO_ARENA_PAGE_INDEX(ptr);
+
+    if (page_index < 0 || page_index > arena->num_pages)
+        return NULL;
+
+    void* page_data = arena->pages[page_index];
+    return *(PageInfo**)page_data;
 }
 
 static void
 set_gray (GCObjectPtr ptr)
 {
     PageInfo *page = find_page(ptr);
-    if (!page) {
+    if (!page)
         return;
-    }
-    assert((ptr - page->page_data) / page->cell_size >= 0 &&
-           (ptr - page->page_data) / page->cell_size < PAGE_SIZE / page->cell_size); 
-    SET_GRAY(page->page_bitmap[(ptr - page->page_data)/ page->cell_size]);
+
+    int cell_idx = PTR_TO_CELL(ptr, page);
+    assert(cell_idx >= 0 && cell_idx < CELLS_IN_PAGE(page));
+    SET_GRAY(page->page_bitmap[cell_idx]);
 }
 
 static void
 set_black (GCObjectPtr ptr)
 {
     PageInfo *page = find_page(ptr);
-    if (!page) {
+    if (!page)
         return;
-    }
-    assert((ptr - page->page_data) / page->cell_size >= 0 &&
-           (ptr - page->page_data) / page->cell_size < PAGE_SIZE / page->cell_size); 
-    SET_BLACK(page->page_bitmap[(ptr - page->page_data)/ page->cell_size]);
+
+    int cell_idx = PTR_TO_CELL(ptr, page);
+    assert(cell_idx >= 0 && cell_idx < CELLS_IN_PAGE(page));
+    SET_BLACK(page->page_bitmap[cell_idx]);
 }
 
 static EJSBool
 is_white (GCObjectPtr ptr)
 {
     PageInfo *page = find_page(ptr);
-    if (!page) {
+    if (!page)
         return EJS_FALSE;
-    }
-    assert((ptr - page->page_data) / page->cell_size >= 0 &&
-           (ptr - page->page_data) / page->cell_size < PAGE_SIZE / page->cell_size); 
-    return IS_WHITE(page->page_bitmap[(ptr - page->page_data)/ page->cell_size]);
+
+    int cell_idx = PTR_TO_CELL(ptr, page);
+    assert(cell_idx >= 0 && cell_idx < CELLS_IN_PAGE(page));
+    return IS_WHITE(page->page_bitmap[cell_idx]);
 }
 
-static char*
-alloc_from_os (size_t size)
+static EJSBool
+is_free (GCObjectPtr ptr)
 {
-    return (char*)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, MAP_FD, 0);
+    PageInfo *page = find_page(ptr);
+    if (!page)
+        return EJS_FALSE;
+
+    int cell_idx = PTR_TO_CELL(ptr, page);
+    assert(cell_idx >= 0 && cell_idx < CELLS_IN_PAGE(page));
+    return IS_FREE(page->page_bitmap[cell_idx]);
 }
 
 static void
 dealloc_from_os(char* ptr, size_t size)
 {
-    munmap(ptr, size);
+    //    munmap(ptr, size);
 }
 
 static PageInfo*
-init_page_info(char *page_data, size_t cell_size)
+init_page_info(void *page_data, size_t cell_size)
 {
     PageInfo* info = (PageInfo*)calloc(1, sizeof(PageInfo));
     EJS_LIST_INIT(info);
     info->cell_size = cell_size;
-    info->num_cells = PAGE_SIZE / cell_size;
+    info->num_cells = CELLS_OF_SIZE(cell_size);
     info->num_free_cells = info->num_cells;
-    info->page_data = page_data;
+    info->page_start = page_data + sizeof(PageInfo*); // magic here.  this needs to be macro-ized or something..
+    info->page_end = info->page_start + PAGE_SIZE;
     info->page_bitmap = (BitmapCell*)malloc (info->num_cells);
-    info->bump_ptr = page_data;
+    info->bump_ptr = info->page_start;
     memset (info->page_bitmap, CELL_FREE, info->num_cells * sizeof(BitmapCell));
+    *((PageInfo**)page_data) = info;
+    SANITY(verify_free_counts(info));
     return info;
 }
 
@@ -263,7 +451,7 @@ static PageInfo*
 alloc_new_page(size_t cell_size)
 {
     SPEW(printf ("allocating new page for cell size %zd\n", cell_size));
-    return init_page_info (alloc_from_os(PAGE_SIZE), cell_size);
+    return init_page_info (arena_alloc_page(), cell_size);
 }
 
 static void
@@ -277,11 +465,10 @@ EJSBool gc_disabled;
 void
 _ejs_gc_init()
 {
-#if GC_WORKS
     gc_disabled = getenv("EJS_GC_DISABLE") != NULL;
-#else
-    gc_disabled = EJS_TRUE;
-#endif
+
+    // allocate an initial arena
+    arena_new();
 
     memset (heap_pages, 0, sizeof(heap_pages));
 
@@ -328,7 +515,6 @@ _scan_from_ejsclosureenv(EJSClosureEnv *env)
     }
 }
 
-#if CONSERVATIVE_STACKWALK
 static GCObjectPtr *stack_bottom;
 
 void
@@ -337,64 +523,54 @@ _ejs_gc_mark_thread_stack_bottom(GCObjectPtr* btm)
     stack_bottom = btm;
 }
 
-#else
-
-StackEntry *llvm_gc_root_chain;
-
 static void
-mark_from_shadow_stack()
+mark_pointers_in_range(GCObjectPtr* low, GCObjectPtr* high)
 {
-    for (StackEntry *R = llvm_gc_root_chain; R; R = R->Next) {
-        unsigned i = 0;
+    GCObjectPtr* p;
+    for (p = low; p < high-1; p++) {
+        GCObjectPtr gcptr = *p;
 
-        if (R->Map == NULL) {
-            continue;
-        }
+        if (gcptr == NULL)            continue; // skip nulls.
 
-        // For roots [NumMeta, NumRoots), the metadata pointer is null.
-        for (unsigned e = R->Map->NumRoots; i != e; ++i) {
-            ejsval candidate_val = *(ejsval*)&R->Roots[i];
-            if (!EJSVAL_IS_GCTHING_IMPL(candidate_val)) {
-                // FIXME we mark all ejsval's as roots, even those that aren't objects.
-                continue;
-            }
-            GCObjectPtr gcptr = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(candidate_val);
+        PageInfo *p = find_page(gcptr);
+        if (!p)                       continue; // skip values outside our heap.
+        if (!IS_ALIGNED_TO(gcptr, p->cell_size)) continue; // can't possibly point to allocated cells.
 
-            if (!is_white(gcptr))         continue; // skip pointers to gray/black cells
+        // XXX more checks before we start treating the pointer like a GCObjectPtr?
+        if (is_free(gcptr))           continue; // skip free cells
+        if (!is_white(gcptr))         continue; // skip pointers to gray/black cells
 
-            SPEW(printf ("found ptr to %p on stack\n", EJSVAL_TO_OBJECT(candidate_val)));
-            _ejs_gc_worklist_push(gcptr);
-            set_gray(gcptr);
-        }
+        WORKLIST_PUSH_AND_GRAY(gcptr);
     }
 }
-#endif
 
 static void
-mark_in_range(char* low, char* high)
+mark_ejsvals_in_range(void* low, void* high)
 {
-    char* p;
-    for (p = low; p < high; p++) {
+    void* p;
+    for (p = low; p < high - sizeof(ejsval); p++) {
         ejsval candidate_val = *((ejsval*)p);
         if (EJSVAL_IS_GCTHING_IMPL(candidate_val)) {
             GCObjectPtr gcptr = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(candidate_val);
+
             if (gcptr == NULL)            continue; // skip nulls.
-            if (!IS_ALLOC_ALIGNED(gcptr)) continue; // skip values that can't possibly point to allocated cells.
-            if (find_page(gcptr) == NULL) continue; // skip values outside our heap.
+
+            PageInfo *p = find_page(gcptr);
+            if (!p)                       continue; // skip values outside our heap.
+            if (!IS_ALIGNED_TO(gcptr, p->cell_size)) continue; // can't possibly point to allocated cells.
 
             // XXX more checks before we start treating the pointer like a GCObjectPtr?
 
+            if (is_free(gcptr))           continue; // skip free cells
             if (!is_white(gcptr))         continue; // skip pointers to gray/black cells
 
             if (EJSVAL_IS_STRING(candidate_val)) {
                 SPEW(printf ("found ptr to %p(PrimString) on stack\n", EJSVAL_TO_STRING(candidate_val)));
-                _ejs_gc_worklist_push(gcptr);
-                set_gray(gcptr);
+                WORKLIST_PUSH_AND_GRAY(gcptr);
             }
             else {
                 //SPEW(printf ("found ptr to %p(%s) on stack\n", EJSVAL_TO_OBJECT(candidate_val), CLASSNAME(EJSVAL_TO_OBJECT(candidate_val))));
-                _ejs_gc_worklist_push(gcptr);
-                set_gray(gcptr);
+                WORKLIST_PUSH_AND_GRAY(gcptr);
             }
         }
     }
@@ -404,69 +580,60 @@ static int num_roots = 0;
 static int white_objs = 0;
 static int total_objs = 0;
 
-static int
-compare_num_free_cells (void* p1, void *p2)
-{
-    PageInfo *info1 = (PageInfo*)p1;
-    PageInfo *info2 = (PageInfo*)p2;
-
-    return info1->num_free_cells - info2->num_free_cells;
-}
-
 static void
 sweep_heap()
 {
+    int pages_visited = 0;
+    int pages_skipped = 0;
+
     // sweep the entire heap, freeing white nodes
     for (int hp = 0; hp < HEAP_PAGELISTS_COUNT; hp++) {
-        EJSList *list = &heap_pages[hp];
-
-        PageInfo *info = (PageInfo*)list->head;
-
-        list->head = list->tail = NULL;
-
-        while (info) {
-            for (int c = 0; c < PAGE_SIZE / info->cell_size; c ++) {
-                if (IS_FREE(info->page_bitmap[c]))
-                    continue;
-
-                total_objs++;
-
-                if (IS_WHITE(info->page_bitmap[c])) {
-                    white_objs++;
-                    GCObjectPtr p = info->page_data + c * info->cell_size;
-                    GCObjectHeader* headerp = (GCObjectHeader*)p;
-                    if ((*headerp & EJS_SCAN_TYPE_OBJECT) != 0) {
-                        SPEW(printf ("finalizing object %p(%s)\n", p, CLASSNAME(p)));
-                        OP(p, finalize)((EJSObject*)p);
-                    }
-                    else if ((*headerp & EJS_SCAN_TYPE_CLOSUREENV) != 0) {
-                        SPEW(printf ("finalizing closureenv %p\n", p));
-                    }
-                    else if ((*headerp & EJS_SCAN_TYPE_PRIMSTR) != 0) {
-                        SPEW({
-                                EJSPrimString* primstr = (EJSPrimString*)p;
-                                if (EJS_PRIMSTR_GET_TYPE(primstr) == EJS_STRING_FLAT) {
-                                    char* utf8 = ucs2_to_utf8(primstr->data.flat);
-                                    printf ("finalizing flat primitive string %p(%s)\n", p, utf8);
-                                    free (utf8);
-                                }
-                                else {
-                                    SPEW(printf ("finalizing primitive string %p\n", p));
-                                }
-                        });
-                    }
-                    info->num_free_cells++;
-                    SET_FREE(info->page_bitmap[c]);
-                }
+        EJS_LIST_FOREACH(&heap_pages[hp], PageInfo, info, {
+            if (info->num_free_cells == info->num_cells) {
+                pages_skipped++;
             }
+            else {
+                pages_visited ++;
 
-            // detach the info from the list we're iterating
-            PageInfo* cur_page = info;
-            info = info->next;
+                for (int c = 0; c < USABLE_PAGE_SIZE / info->cell_size; c ++) {
+                    BitmapCell cell = info->page_bitmap[c];
 
-            // now insert @p back into heap_pages[hp] in num_free_cells order (descending)
-            _ejs_list_insert_node_sorted (list, (EJSListNode*)cur_page, compare_num_free_cells);
-        }
+                    if (IS_FREE(cell))
+                        continue;
+
+                    total_objs++;
+
+                    if (IS_WHITE(cell)) {
+                        white_objs++;
+                        GCObjectPtr p = info->page_start + c * info->cell_size;
+                        GCObjectHeader* headerp = (GCObjectHeader*)p;
+                        if ((*headerp & EJS_SCAN_TYPE_OBJECT) != 0) {
+                            SPEW(printf ("finalizing object %p(%s)\n", p, CLASSNAME(p)));
+                            OP(p, finalize)((EJSObject*)p);
+                        }
+                        else if ((*headerp & EJS_SCAN_TYPE_CLOSUREENV) != 0) {
+                            SPEW(printf ("finalizing closureenv %p\n", p));
+                        }
+                        else if ((*headerp & EJS_SCAN_TYPE_PRIMSTR) != 0) {
+                            SPEW({
+                                    EJSPrimString* primstr = (EJSPrimString*)p;
+                                    if (EJS_PRIMSTR_GET_TYPE(primstr) == EJS_STRING_FLAT) {
+                                        char* utf8 = ucs2_to_utf8(primstr->data.flat);
+                                        printf ("finalizing flat primitive string %p(%s)\n", p, utf8);
+                                        free (utf8);
+                                    }
+                                    else {
+                                        SPEW(printf ("finalizing primitive string %p\n", p));
+                                    }
+                                });
+                        }
+                        info->num_free_cells++;
+                        SET_FREE(info->page_bitmap[c]);
+                    }
+                }
+                SANITY(verify_free_counts(info));
+            }
+        })
     }
 }
 
@@ -476,7 +643,7 @@ mark_from_roots()
     // mark from our roots
     for (RootSetEntry *entry = root_set; entry; entry = entry->next) {
         num_roots++;
-        if (*entry->root) {
+        if (entry->root) {
             ejsval rootval = *((ejsval*)entry->root);
             if (!EJSVAL_IS_GCTHING_IMPL(rootval))
                 continue;
@@ -503,20 +670,47 @@ mark_from_roots()
     }
 }
 
+typedef struct {
+    GCObjectPtr __1;
+    GCObjectPtr __2;
+    GCObjectPtr __3;
+    GCObjectPtr __4;
+    GCObjectPtr __5;
+    GCObjectPtr __6;
+    GCObjectPtr __7;
+    GCObjectPtr __8;
+    GCObjectPtr __9;
+    GCObjectPtr __10;
+    GCObjectPtr __11;
+    GCObjectPtr __13;
+    GCObjectPtr __14;
+    GCObjectPtr __15;
+} amd64_regs;
+
+#if IOS
+#define MARK_REGISTERS
+#else
+#define MARK_REGISTERS EJS_MACRO_START \
+    GCObjectPtr __rax, __rbx, __rcx, __rdx, __rsi, __rdi, __rbp, __rsp, __r8, __r9, __r10, __r11, __r12, __r13, __r14, __r15; \
+    __asm ("movq %%rax, %0; movq %%rbx, %1; movq %%rcx, %2; movq %%rdx, %3; movq %%rsi, %4;" \
+           "movq %%rdi, %5; movq %%rbp, %6; movq %%rsp, %7; movq %%r8, %8;  movq %%r9, %9;" \
+           "movq %%r10, %10; movq %%r11, %11; movq %%r12, %12; movq %%r13, %13; movq %%r14, %14; movq %%r15, %15;" \
+          : "=m"(__rax), "=m"(__rbx), "=m"(__rcx), "=m"(__rdx), "=m"(__rsi), \
+            "=m"(__rdi), "=m"(__rbp), "=m"(__rsp), "=m"(__r8),  "=m"(__r9), \
+            "=m"(__r10), "=m"(__r11), "=m"(__r12), "=m"(__r13), "=m"(__r14), "=m"(__r15)); \
+                                                                        \
+    mark_pointers_in_range(&__r15, &__rax);                             \
+    EJS_MACRO_END
+#endif
+
 static void
 mark_thread_stack()
 {
-#if CONSERVATIVE_STACKWALK
-    jmp_buf env;
-    GCObjectPtr stack_top = NULL;
-#endif
+    MARK_REGISTERS;
 
-#if CONSERVATIVE_STACKWALK
-    setjmp (env);
-    mark_in_range(((char*)&stack_top) + sizeof(GCObjectPtr), (char*)stack_bottom);
-#else
-    mark_from_shadow_stack();
-#endif
+    GCObjectPtr stack_top = NULL;
+
+    mark_ejsvals_in_range(((void*)&stack_top) + sizeof(GCObjectPtr), stack_bottom);
 }
 
 static void
@@ -538,11 +732,19 @@ process_worklist()
 static void
 _ejs_gc_collect_inner(EJSBool shutting_down)
 {
+#if gc_timings > 1
+    struct timeval tvbefore, tvafter;
+#endif
+
     // very simple stop the world collector
 
     num_roots = 0;
     white_objs = 0;
     total_objs = 0;
+
+#if gc_timings > 1
+    gettimeofday (&tvbefore, NULL);
+#endif
 
     if (!shutting_down) {
         mark_from_roots();
@@ -554,7 +756,37 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
         process_worklist();
     }
 
+#if gc_timings > 1
+    gettimeofday (&tvafter, NULL);
+#endif
+
+#if gc_timings > 1
+    {
+    uint64_t usec_before = tvbefore.tv_sec * 1000000 + tvbefore.tv_usec;
+    uint64_t usec_after = tvafter.tv_sec * 1000000 + tvafter.tv_usec;
+
+    fprintf (stderr, "gc scan took %gms\n", (usec_after - usec_before) / 1000.0);
+    }
+#endif
+
+#if gc_timings > 1
+    gettimeofday (&tvbefore, NULL);
+#endif
+
     sweep_heap();
+
+#if gc_timings > 1
+    gettimeofday (&tvafter, NULL);
+#endif
+
+#if gc_timings > 1
+    {
+    uint64_t usec_before = tvbefore.tv_sec * 1000000 + tvbefore.tv_usec;
+    uint64_t usec_after = tvafter.tv_sec * 1000000 + tvafter.tv_usec;
+
+    fprintf (stderr, "gc sweep took %gms\n", (usec_after - usec_before) / 1000.0);
+    }
+#endif
 
     SPEW(printf ("_ejs_gc_collect stats:\n");
          printf ("   num_roots: %d\n", num_roots);
@@ -571,8 +803,7 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
         RootSetEntry *entry = root_set;
         while (entry) {
             RootSetEntry *next = entry->next;
-            *entry->root = NULL;
-            if (entry->name) free (entry->name);
+            *entry->root = _ejs_null;
             free (entry);
             entry = next;
         }
@@ -590,31 +821,51 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
                  printf ("  size: %d     pages: %d\n", 1<<(hp + 3), len);
              })
     }
+#if false
     else {
         for (int hp = 0; hp < HEAP_PAGELISTS_COUNT; hp++) {
             EJS_LIST_FOREACH (&heap_pages[hp], PageInfo, page, {
-                for (int c = 0; c < PAGE_SIZE / page->cell_size; c ++) {
+                for (int c = 0; c < CELLS_IN_PAGE (page); c ++) {
                     if (!IS_FREE(page->page_bitmap[c]) && !IS_WHITE(page->page_bitmap[c]))
                         continue;
                 }  
             })
         }
     }
+#endif
+}
+
+static size_t
+calc_heap_size()
+{
+    size_t size = 0;
+    for (int hp = 0; hp < HEAP_PAGELISTS_COUNT; hp++) {
+        size += _ejs_list_length(&heap_pages[hp]) * PAGE_SIZE;
+    }
+    return size;
 }
 
 void
 _ejs_gc_collect()
 {
+#if gc_timings
     struct timeval tvbefore, tvafter;
 
     gettimeofday (&tvbefore, NULL);
+#endif
+
     _ejs_gc_collect_inner(EJS_FALSE);
+
+#if gc_timings
     gettimeofday (&tvafter, NULL);
 
     uint64_t usec_before = tvbefore.tv_sec * 1000000 + tvbefore.tv_usec;
     uint64_t usec_after = tvafter.tv_sec * 1000000 + tvafter.tv_usec;
 
     fprintf (stderr, "gc collect took %gms\n", (usec_after - usec_before) / 1000.0);
+    fprintf (stderr, "   for a heap size of %zdMB\n", calc_heap_size()/(1024*1024));
+#endif
+    SPEW(_ejs_gc_dump_heap_stats());
 }
 
 int total_allocs = 0;
@@ -660,20 +911,24 @@ alloc_from_page(PageInfo *info)
 {
     assert (info->num_free_cells > 0);
     
+    SANITY(verify_free_counts(info));
+
     GCObjectPtr rv = NULL;
     int cell;
 
     if (info->bump_ptr) {
         rv = (GCObjectPtr)info->bump_ptr;
-        cell = (info->bump_ptr - info->page_data) / info->cell_size;
+        cell = PTR_TO_CELL(info->bump_ptr, info);
         info->bump_ptr += info->cell_size;
-        if (info->bump_ptr >= info->page_data + PAGE_SIZE)
-            info->bump_ptr = NULL; // switch to the slow free cell code below
+        // check if we can service the next alloc request from the bump_ptr.  if we can't, switch
+        // to the freelist code below.
+        if (info->bump_ptr + info->cell_size >= info->page_end)
+            info->bump_ptr = NULL;
     }
     else {
         for (cell = 0; cell < info->num_cells; cell ++) {
             if (IS_FREE(info->page_bitmap[cell])) {
-                rv = info->page_data + (cell * info->cell_size);
+                rv = info->page_start + (cell * info->cell_size);
                 break;
             }
         }
@@ -685,6 +940,8 @@ alloc_from_page(PageInfo *info)
     SET_WHITE(info->page_bitmap[cell]);
     SET_ALLOCATED(info->page_bitmap[cell]);
 
+    SANITY(verify_free_counts(info));
+
     //memset(rv, 0, info->cell_size);
     return rv;
 }
@@ -694,8 +951,8 @@ alloc_from_los(size_t size, EJSBool has_finalizer)
 {
     LargeObjectInfo *rv = (LargeObjectInfo*)calloc(1, sizeof(LargeObjectInfo));
 
-    // we need to bump size up to a mulitple of the OS page size
-    rv->los_data = alloc_from_os (size);
+    // XXX we need to bump size up to a mulitple of the OS page size
+    rv->los_data = alloc_from_os (size, 0);
     rv->size = size;
     EJS_LIST_PREPEND (rv, los_store);
     return rv->los_data;
@@ -712,7 +969,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     num_allocs ++;
     total_allocs ++;
 
-    if (!gc_disabled && (num_allocs == 10000 || alloc_size == 50000)) {
+    if (!gc_disabled && (/*num_allocs == 100000 || */alloc_size >= 4*1024*1024)) {
         _ejs_gc_collect();
         alloc_size = 0;
         num_allocs = 0;
@@ -748,19 +1005,26 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
 }
 
 void
-__ejs_gc_add_named_root(ejsval* root, const char *name)
+_ejs_gc_add_root(ejsval* root)
 {
     RootSetEntry* entry = (RootSetEntry*)malloc(sizeof(RootSetEntry));
-    entry->root = (GCObjectPtr*)root;
-    entry->name = name ? strdup(name) : NULL;
-    entry->next = root_set;
-    root_set = entry;
+    EJS_LIST_INIT(entry);
+    entry->root = root;
+    EJS_LIST_PREPEND(entry, root_set);
 }
 
 void
 _ejs_gc_remove_root(ejsval* root)
 {
-    fprintf (stderr, "%s:%s:%d not implemented.\n", __PRETTY_FUNCTION__, __FILE__, __LINE__);
+    RootSetEntry *entry = NULL;
+
+    for (entry = root_set; entry; entry = entry->next) {
+        if (entry->root == root) {
+            EJS_LIST_DETACH(entry, root_set);
+            free (entry);
+            return;
+        }
+    }
 }
 
 static int
@@ -777,10 +1041,16 @@ page_list_count (PageInfo* page)
 void
 _ejs_gc_dump_heap_stats()
 {
-    printf ("_ejs_gc_dump_heap_stats:\n");
+    printf ("arenas:\n");
+    for (int i = 0; i < num_arenas; i ++) {
+        printf ("  [%d] - %p - %p\n", i, arenas[i], arenas[i]->end);
+
+    }
+
     for (int i = 0; i < HEAP_PAGELISTS_COUNT; i ++) {
         printf ("heap_pages[%d, size %d] : %d pages\n", i, 1 << (i + OBJECT_SIZE_LOW_LIMIT_BITS), _ejs_list_length (&heap_pages[i]));
     }
+
     printf ("\n");
 }
 
@@ -797,21 +1067,15 @@ _ejs_GC_collect (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 void
 _ejs_GC_init(ejsval global)
 {
-    START_SHADOW_STACK_FRAME;
+    _ejs_GC = _ejs_object_new (_ejs_Object_prototype, &_ejs_object_specops);
 
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_object_new (_ejs_Object_prototype, &_ejs_object_specops));
-    _ejs_GC = tmpobj;
+    ejsval __ejs = _ejs_object_getprop (global, _ejs_atom___ejs);
+    _ejs_object_setprop (__ejs, _ejs_atom_GC, _ejs_GC);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_GC, x, _ejs_GC_##x)
 
     OBJ_METHOD(collect);
 
 #undef OBJ_METHOD
-
-    ejsval __ejs = _ejs_object_getprop (global, _ejs_atom___ejs);
-
-    _ejs_object_setprop (__ejs, _ejs_atom_GC, _ejs_GC);
-
-    END_SHADOW_STACK_FRAME;
 }
 

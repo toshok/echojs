@@ -132,14 +132,11 @@ _ejs_Date_prototype_getTime (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
 void
 _ejs_date_init(ejsval global)
 {
-    START_SHADOW_STACK_FRAME;
+    _ejs_Date = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Date, (EJSClosureFunc)_ejs_Date_impl);
+    _ejs_object_setprop (global, _ejs_atom_Date, _ejs_Date);
 
-    _ejs_gc_add_named_root (_ejs_Date_proto);
+    _ejs_gc_add_root (&_ejs_Date_proto);
     _ejs_Date_proto = _ejs_object_new(_ejs_null, &_ejs_object_specops);
-
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_Date, (EJSClosureFunc)_ejs_Date_impl));
-    _ejs_Date = tmpobj;
-
     _ejs_object_setprop (_ejs_Date,       _ejs_atom_prototype,  _ejs_Date_proto);
 
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Date_proto, x, _ejs_Date_prototype_##x, EJS_PROP_NOT_ENUMERABLE)
@@ -149,10 +146,6 @@ _ejs_date_init(ejsval global)
     PROTO_METHOD(getTimezoneOffset);
 
 #undef PROTO_METHOD
-
-    _ejs_object_setprop (global, _ejs_atom_Date, _ejs_Date);
-
-    END_SHADOW_STACK_FRAME;
 }
 
 static ejsval

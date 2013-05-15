@@ -52,21 +52,19 @@ _ejs_Process_cwd (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 void
 _ejs_process_init(ejsval global, uint32_t argc, char **argv)
 {
-    START_SHADOW_STACK_FRAME;
+    ejsval _ejs_Process = _ejs_object_new (_ejs_null, &_ejs_object_specops);
+    _ejs_object_setprop (global, _ejs_atom_process, _ejs_Process);
 
-    ADD_STACK_ROOT(ejsval, _ejs_Process, _ejs_object_new (_ejs_null, &_ejs_object_specops));
-    ADD_STACK_ROOT(ejsval, _argv, _ejs_array_new (argc));
+    ejsval _argv = _ejs_array_new (argc);
+    _ejs_object_setprop (_ejs_Process, _ejs_atom_argv, _argv);
+
     int i;
 
     for (i = 0; i < argc; i ++) {
-        START_SHADOW_STACK_FRAME;
         ejsval _i = NUMBER_TO_EJSVAL(i);
-        ADD_STACK_ROOT(ejsval, _argv_i, _ejs_string_new_utf8(argv[i]));
+        ejsval _argv_i = _ejs_string_new_utf8(argv[i]);
         _ejs_object_setprop (_argv, _i, _argv_i);
-        END_SHADOW_STACK_FRAME;
     }
-
-    _ejs_object_setprop (_ejs_Process, _ejs_atom_argv, _argv);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Process, x, _ejs_Process_##x)
 
@@ -76,8 +74,4 @@ _ejs_process_init(ejsval global, uint32_t argc, char **argv)
     OBJ_METHOD(cwd);
 
 #undef OBJ_METHOD
-
-    _ejs_object_setprop (global, _ejs_atom_process, _ejs_Process);
-
-    END_SHADOW_STACK_FRAME;
 }

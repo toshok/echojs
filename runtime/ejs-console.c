@@ -25,7 +25,6 @@ output (FILE *outfile, uint32_t argc, ejsval *args)
 #define OUTPUT(format, val) fprintf (outfile, format, val)
 #endif
 
-    START_SHADOW_STACK_FRAME;
     for (int i = 0; i < argc; i ++) {
         if (EJSVAL_IS_NUMBER(args[i])) {
             double d = EJSVAL_TO_NUMBER(args[i]);
@@ -55,13 +54,13 @@ output (FILE *outfile, uint32_t argc, ejsval *args)
             }
         }
         else if (EJSVAL_IS_ERROR(args[i])) {
-            ADD_STACK_ROOT(ejsval, strval, _ejs_object_getprop(args[i], _ejs_atom_name));
+            ejsval strval = _ejs_object_getprop(args[i], _ejs_atom_name);
             char* strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(strval));
             OUTPUT ("[%s]", strval_utf8);
             free (strval_utf8);
         }
         else if (EJSVAL_IS_FUNCTION(args[i])) {
-            ADD_STACK_ROOT(ejsval, func_name, _ejs_object_getprop (args[i], _ejs_atom_name));
+            ejsval func_name = _ejs_object_getprop (args[i], _ejs_atom_name);
 
             if (EJSVAL_IS_NULL_OR_UNDEFINED(func_name) || EJSVAL_TO_STRLEN(func_name) == 0) {
                 OUTPUT0("[Function]");
@@ -73,7 +72,7 @@ output (FILE *outfile, uint32_t argc, ejsval *args)
             }
         }
         else {
-            ADD_STACK_ROOT(ejsval, strval, ToString(args[i]));
+            ejsval strval = ToString(args[i]);
 
             char* strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(strval));
             OUTPUT ("%s", strval_utf8);
@@ -89,7 +88,6 @@ output (FILE *outfile, uint32_t argc, ejsval *args)
     fputc ('\n', outfile);
 #endif
 
-    END_SHADOW_STACK_FRAME;
     return _ejs_undefined;
 }
 
@@ -109,18 +107,13 @@ _ejs_console_warn (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 void
 _ejs_console_init(ejsval global)
 {
-    START_SHADOW_STACK_FRAME;
-
-    ADD_STACK_ROOT(ejsval, _ejs_console, _ejs_object_new (_ejs_null, &_ejs_object_specops));
+    ejsval _ejs_console = _ejs_object_new (_ejs_null, &_ejs_object_specops);
+    _ejs_object_setprop (global, _ejs_atom_console, _ejs_console);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_console, x, _ejs_console_##x)
 
     OBJ_METHOD(log);
     OBJ_METHOD(warn);
 
-    _ejs_object_setprop (global, _ejs_atom_console, _ejs_console);
-
 #undef OBJ_METHOD
-
-    END_SHADOW_STACK_FRAME;
 }

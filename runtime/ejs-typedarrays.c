@@ -410,46 +410,41 @@ _ejs_typedarray_get_data(EJSObject* arr)
 void
 _ejs_typedarrays_init(ejsval global)
 {
-    START_SHADOW_STACK_FRAME;
-
 #define OBJ_METHOD(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t, x, _ejs_##t##_##x)
 #define PROTO_METHOD(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t##_proto, x, _ejs_##t##_prototype_##x)
 
     // ArrayBuffer
     {
-        _ejs_gc_add_named_root (_ejs_ArrayBuffer_proto);
-        _ejs_ArrayBuffer_proto = _ejs_object_new(_ejs_null, &_ejs_object_specops);
-
-        PROTO_METHOD(ArrayBuffer, slice);
-
-        ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_ArrayBuffer, (EJSClosureFunc)_ejs_ArrayBuffer_impl));
-        _ejs_ArrayBuffer = tmpobj;
-        _ejs_object_setprop (_ejs_ArrayBuffer, _ejs_atom_prototype,   _ejs_ArrayBuffer_proto);
+        _ejs_ArrayBuffer = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_ArrayBuffer, (EJSClosureFunc)_ejs_ArrayBuffer_impl);
         _ejs_object_setprop (global,           _ejs_atom_ArrayBuffer, _ejs_ArrayBuffer);
 
-        _ejs_int8array_specops = _ejs_typedarray_specops;
-        _ejs_int8array_specops.class_name = "Int8Array";
-        _ejs_int8array_specops.get = _ejs_int8array_specop_get;
-        _ejs_int8array_specops.get_own_property = _ejs_int8array_specop_get_own_property;
-        _ejs_int8array_specops.get_property = _ejs_int8array_specop_get_property;
-        _ejs_int8array_specops.put = _ejs_int8array_specop_put;
-        _ejs_int8array_specops.can_put = _ejs_int8array_specop_can_put;
-        _ejs_int8array_specops.has_property = _ejs_int8array_specop_has_property;
+        _ejs_gc_add_root (&_ejs_ArrayBuffer_proto);
+        _ejs_ArrayBuffer_proto = _ejs_object_new(_ejs_null, &_ejs_object_specops);
+        _ejs_object_setprop (_ejs_ArrayBuffer, _ejs_atom_prototype,   _ejs_ArrayBuffer_proto);
+
+        PROTO_METHOD(ArrayBuffer, slice);
     }
+
+    _ejs_int8array_specops = _ejs_typedarray_specops;
+    _ejs_int8array_specops.class_name = "Int8Array";
+    _ejs_int8array_specops.get = _ejs_int8array_specop_get;
+    _ejs_int8array_specops.get_own_property = _ejs_int8array_specop_get_own_property;
+    _ejs_int8array_specops.get_property = _ejs_int8array_specop_get_property;
+    _ejs_int8array_specops.put = _ejs_int8array_specop_put;
+    _ejs_int8array_specops.can_put = _ejs_int8array_specop_can_put;
+    _ejs_int8array_specops.has_property = _ejs_int8array_specop_has_property;
 
 
 #define ADD_TYPEDARRAY(EnumType, ArrayType, arraytype, elementSizeInBytes) EJS_MACRO_START \
-    _ejs_gc_add_named_root (_ejs_##ArrayType##Array_proto);         \
-    _ejs_##ArrayType##Array_proto = _ejs_object_new(_ejs_null, &_ejs_object_specops); \
+    _ejs_##ArrayType##Array = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_##ArrayType##Array, (EJSClosureFunc)_ejs_##ArrayType##Array_impl); \
+    _ejs_object_setprop (global,         _ejs_atom_##ArrayType##Array,  _ejs_##ArrayType##Array); \
                                                                         \
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_##ArrayType##Array, (EJSClosureFunc)_ejs_##ArrayType##Array_impl)); \
-    _ejs_##ArrayType##Array = tmpobj;                                            \
+    _ejs_gc_add_root (&_ejs_##ArrayType##Array_proto);                  \
+    _ejs_##ArrayType##Array_proto = _ejs_object_new(_ejs_null, &_ejs_object_specops); \
+    _ejs_object_setprop (_ejs_##ArrayType##Array, _ejs_atom_prototype,  _ejs_##ArrayType##Array_proto); \
                                                                         \
     /* make sure ctor.BYTES_PER_ELEMENT is defined */                   \
     _ejs_object_define_value_property (_ejs_##ArrayType##Array, _ejs_atom_BYTES_PER_ELEMENT, NUMBER_TO_EJSVAL(elementSizeInBytes), EJS_PROP_FLAGS_ENUMERABLE); \
-                                                                        \
-    _ejs_object_setprop (_ejs_##ArrayType##Array, _ejs_atom_prototype,  _ejs_##ArrayType##Array_proto); \
-    _ejs_object_setprop (global,         _ejs_atom_##ArrayType##Array,  _ejs_##ArrayType##Array); \
                                                                         \
     typed_array_elsizes[EJS_TYPEDARRAY_##EnumType] = elementSizeInBytes;                 \
     typed_array_protos[EJS_TYPEDARRAY_##EnumType] = _ejs_##ArrayType##Array_proto;       \
@@ -466,8 +461,6 @@ EJS_MACRO_END
     ADD_TYPEDARRAY(UINT32, Uint32, uint32, 4);
     ADD_TYPEDARRAY(FLOAT32, Float32, float32, 4);
     ADD_TYPEDARRAY(FLOAT64, Float64, float64, 8);
-
-    END_SHADOW_STACK_FRAME;
 }
 
 static ejsval

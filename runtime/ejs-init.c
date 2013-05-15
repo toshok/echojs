@@ -47,8 +47,6 @@ ejsval _ejs_global;
 void
 _ejs_init(int argc, char** argv)
 {
-    START_SHADOW_STACK_FRAME;
-
     // initialize our atoms before anything else
     _ejs_init_static_strings();
 
@@ -56,7 +54,7 @@ _ejs_init(int argc, char** argv)
     _ejs_exception_init();
 
     // initialization or ECMA262 builtins
-    _ejs_gc_add_named_root (_ejs_global);
+    _ejs_gc_add_root (&_ejs_global);
     _ejs_global = _ejs_object_new (_ejs_null, &_ejs_object_specops);
 
     _ejs_nan = NUMBER_TO_EJSVAL(nan("7734"));
@@ -110,10 +108,8 @@ _ejs_init(int argc, char** argv)
     // semi-useful runtime features, like a call to force a GC.  the
     // compiler also uses the presence of __ejs to disable
     // buggy/nonfunctional code (like those that use regexps)
-    ADD_STACK_ROOT(ejsval, _ejs_ejs_global, _ejs_object_new (_ejs_null, &_ejs_object_specops));
+    ejsval _ejs_ejs_global = _ejs_object_new (_ejs_null, &_ejs_object_specops);
     _ejs_object_setprop (_ejs_global, _ejs_atom___ejs, _ejs_ejs_global);
 
     _ejs_GC_init(_ejs_global);
-
-    END_SHADOW_STACK_FRAME;
 }

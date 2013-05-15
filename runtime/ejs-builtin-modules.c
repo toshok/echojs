@@ -57,15 +57,11 @@ _ejs_path_resolve (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 ejsval
 _ejs_path_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
-    START_SHADOW_STACK_FRAME;
-
     ejsval exports = args[0];
 
     EJS_INSTALL_FUNCTION(exports, "dirname", _ejs_path_dirname);
     EJS_INSTALL_FUNCTION(exports, "basename", _ejs_path_basename);
     EJS_INSTALL_FUNCTION(exports, "resolve", _ejs_path_resolve);
-
-    END_SHADOW_STACK_FRAME;
 
     return _ejs_undefined;
 }
@@ -133,8 +129,6 @@ _ejs_stream_end (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 ejsval
 _ejs_fs_createWriteStream (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
-    START_SHADOW_STACK_FRAME;
-
     ejsval stream = _ejs_object_create(_ejs_null);
 
     EJS_INSTALL_FUNCTION (stream, "write", _ejs_stream_write);
@@ -152,21 +146,16 @@ _ejs_fs_createWriteStream (ejsval env, ejsval _this, uint32_t argc, ejsval* args
 
     _ejs_object_setprop_utf8 (stream, "%internal_fd", NUMBER_TO_EJSVAL(fd));
 
-    END_SHADOW_STACK_FRAME;
     return stream;
 }
 
 ejsval
 _ejs_fs_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
-    START_SHADOW_STACK_FRAME;
-
     ejsval exports = args[0];
 
     EJS_INSTALL_FUNCTION(exports, "readFileSync", _ejs_fs_readFileSync);
     EJS_INSTALL_FUNCTION(exports, "createWriteStream", _ejs_fs_createWriteStream);
-
-    END_SHADOW_STACK_FRAME;
 
     return _ejs_undefined;
 }
@@ -216,12 +205,9 @@ _ejs_child_process_spawn (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 ejsval
 _ejs_child_process_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
-    START_SHADOW_STACK_FRAME;
     ejsval exports = args[0];
 
     EJS_INSTALL_FUNCTION(exports, "spawn", _ejs_child_process_spawn);
-
-    END_SHADOW_STACK_FRAME;
 
     return _ejs_undefined;
 }

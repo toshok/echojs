@@ -496,8 +496,6 @@ _ejs_op_ulsh (ejsval lhs, ejsval rhs)
 ejsval
 _ejs_op_add (ejsval lhs, ejsval rhs)
 {
-    START_SHADOW_STACK_FRAME;
-
     ejsval rv = _ejs_nan;
 
     ejsval lprim, rprim;
@@ -506,17 +504,16 @@ _ejs_op_add (ejsval lhs, ejsval rhs)
     rprim = ToPrimitive(rhs);
 
     if (EJSVAL_IS_STRING(lhs) || EJSVAL_IS_STRING(rhs)) {
-        ADD_STACK_ROOT(ejsval, lhstring, ToString(lhs));
-        ADD_STACK_ROOT(ejsval, rhstring, ToString(rhs));
+        ejsval lhstring = ToString(lhs);
+        ejsval rhstring = ToString(rhs);
 
-        ADD_STACK_ROOT(ejsval, result, _ejs_string_concat (lhstring, rhstring));
+        ejsval result = _ejs_string_concat (lhstring, rhstring);
         rv = result;
     }
     else {
         rv = NUMBER_TO_EJSVAL (ToDouble(lprim) + ToDouble(rprim));
     }
 
-    END_SHADOW_STACK_FRAME;
     return rv;
 }
 

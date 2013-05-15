@@ -72,9 +72,25 @@ _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func)
 
     // ECMA262: 15.3.2.1
     ejsval fun_proto = _ejs_object_new (_ejs_Object_prototype, &_ejs_object_specops);
+    _ejs_object_define_value_property (fun, _ejs_atom_prototype, fun_proto, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
 
     _ejs_object_define_value_property (fun_proto, _ejs_atom_constructor, fun, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
-    _ejs_object_define_value_property (fun, _ejs_atom_prototype, fun_proto, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
+    _ejs_object_define_value_property (fun, _ejs_atom_name, name, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    return fun;
+}
+
+ejsval
+_ejs_function_new_without_proto (ejsval env, ejsval name, EJSClosureFunc func)
+{
+    EJSFunction *rv = _ejs_gc_new(EJSFunction);
+    
+    _ejs_init_object ((EJSObject*)rv, _ejs_Function__proto__, &_ejs_function_specops);
+
+    rv->func = func;
+    rv->env = env;
+
+    ejsval fun = OBJECT_TO_EJSVAL(rv);
+
     _ejs_object_define_value_property (fun, _ejs_atom_name, name, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     return fun;
 }
@@ -105,13 +121,9 @@ _ejs_function_new_anon (ejsval env, EJSClosureFunc func)
 ejsval
 _ejs_function_new_utf8 (ejsval env, const char *name, EJSClosureFunc func)
 {
-    START_SHADOW_STACK_FRAME;
+    ejsval function_name = _ejs_string_new_utf8 (name);
+    ejsval rv = _ejs_function_new (env, function_name, func);
 
-    ADD_STACK_ROOT(ejsval, function_name, _ejs_string_new_utf8 (name));
-
-    ADD_STACK_ROOT(ejsval, rv, _ejs_function_new (env, function_name, func));
-
-    END_SHADOW_STACK_FRAME;
     return rv;
 }
 
@@ -136,9 +148,7 @@ _ejs_Function_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsva
     if (!EJSVAL_IS_FUNCTION(_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Function.prototype.toString is not generic.");
 
-    START_SHADOW_STACK_FRAME;
-
-    ADD_STACK_ROOT(ejsval, func_name, _ejs_object_getprop (_this, _ejs_atom_name));
+    ejsval func_name = _ejs_object_getprop (_this, _ejs_atom_name);
 
     char *utf8_funcname = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(func_name));
     
@@ -146,7 +156,6 @@ _ejs_Function_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsva
 
     free (utf8_funcname);
 
-    END_SHADOW_STACK_FRAME;
     return _ejs_string_new_utf8(terrible_fixed_buffer);
 }
 
@@ -219,9 +228,7 @@ _ejs_Function_prototype_call (ejsval env, ejsval _this, uint32_t argc, ejsval *a
 {
     // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(_this));
 
-    START_SHADOW_STACK_FRAME;
-
-    ADD_STACK_ROOT(ejsval, thisArg, _ejs_undefined);
+    ejsval thisArg = _ejs_undefined;
   
     if (argc > 0) {
         thisArg = args[0];
@@ -229,9 +236,8 @@ _ejs_Function_prototype_call (ejsval env, ejsval _this, uint32_t argc, ejsval *a
         argc --;
     }
 
-    ADD_STACK_ROOT(ejsval, rv, EJSVAL_TO_FUNC(_this) (EJSVAL_TO_ENV(_this), thisArg, argc, argc == 0 ? NULL : args));
+    ejsval rv = EJSVAL_TO_FUNC(_this) (EJSVAL_TO_ENV(_this), thisArg, argc, argc == 0 ? NULL : args);
 
-    END_SHADOW_STACK_FRAME;
     return rv;
 }
 
@@ -311,20 +317,17 @@ _ejs_Function_empty (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 static void
 _ejs_function_init_proto()
 {
-    _ejs_gc_add_named_root (_ejs_Function__proto__);
+    _ejs_gc_add_root (&_ejs_Function__proto__);
 
     // Function.__proto__ = function () { return undefined; }
 
     EJSFunction* __proto__ = _ejs_gc_new(EJSFunction);
-
+    _ejs_Function__proto__ = OBJECT_TO_EJSVAL(__proto__);
+    _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_function_specops);
     __proto__->func = _ejs_Function_empty;
     __proto__->env = _ejs_null;
 
-    _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_function_specops);
-
     _ejs_object_define_value_property (OBJECT_TO_EJSVAL(__proto__), _ejs_atom_name, _ejs_atom_empty, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
-
-    _ejs_Function__proto__ = OBJECT_TO_EJSVAL(__proto__);
 }
 
 void
@@ -332,12 +335,10 @@ _ejs_function_init(ejsval global)
 {
     trace = getenv("EJS_TRACE") != NULL;
 
-    START_SHADOW_STACK_FRAME;
-
     _ejs_function_init_proto();
 
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_Function, (EJSClosureFunc)_ejs_Function_impl));
-    _ejs_Function = tmpobj;
+    _ejs_Function = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Function, (EJSClosureFunc)_ejs_Function_impl);
+    _ejs_object_setprop (global, _ejs_atom_Function, _ejs_Function);
 
     // ECMA262 15.3.3.1
     _ejs_object_define_value_property (_ejs_Function, _ejs_atom_prototype, _ejs_Function__proto__, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
@@ -353,9 +354,6 @@ _ejs_function_init(ejsval global)
 
 #undef PROTO_METHOD
 
-    _ejs_object_setprop (global, _ejs_atom_Function, _ejs_Function);
-
-    END_SHADOW_STACK_FRAME;
 }
 
 #define DEBUG_FUNCTION_ENTER(x) EJS_MACRO_START                         \

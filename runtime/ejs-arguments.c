@@ -62,12 +62,8 @@ _ejs_arguments_new (int numElements, ejsval* args)
 void
 _ejs_arguments_init(ejsval global)
 {
-    START_SHADOW_STACK_FRAME;
-
-    _ejs_gc_add_named_root (_ejs_Arguments__proto__);
+    _ejs_gc_add_root (&_ejs_Arguments__proto__);
     _ejs_Arguments__proto__ = _ejs_object_new(_ejs_Object_prototype, &_ejs_object_specops);
-
-    END_SHADOW_STACK_FRAME;
 }
 
 static ejsval

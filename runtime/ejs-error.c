@@ -126,17 +126,17 @@ _ejs_error_init(ejsval global)
     _ejs_error_specops = _ejs_object_specops;
     _ejs_error_specops.class_name = "Error";
 
-    ADD_STACK_ROOT(ejsval, toString, _ejs_function_new_native (_ejs_null, _ejs_atom_toString, (EJSClosureFunc)_ejs_Error_prototype_toString));
-
-#define EJS_ADD_NATIVE_ERROR_TYPE(err) EJS_MACRO_START              \
-    _ejs_gc_add_named_root (_ejs_##err##_proto);                    \
+    ejsval toString = _ejs_function_new_native (_ejs_null, _ejs_atom_toString, (EJSClosureFunc)_ejs_Error_prototype_toString);
+    _ejs_gc_add_root (&toString);
+    
+#define EJS_ADD_NATIVE_ERROR_TYPE(err) EJS_MACRO_START                  \
+    _ejs_##err = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_##err, (EJSClosureFunc)_ejs_##err##_impl); \
+    _ejs_object_setprop (global, _ejs_atom_##err, _ejs_##err);          \
     _ejs_##err##_proto = _ejs_object_new(_ejs_null, &_ejs_object_specops); \
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_##err, (EJSClosureFunc)_ejs_##err##_impl)); \
-    _ejs_##err = tmpobj;                                            \
     _ejs_object_setprop (_ejs_##err,       _ejs_atom_prototype,  _ejs_##err##_proto); \
+                                                                    \
     _ejs_object_setprop (_ejs_##err##_proto, _ejs_atom_name, _ejs_atom_##err); \
     _ejs_object_setprop (_ejs_##err##_proto, _ejs_atom_toString, toString); \
-    _ejs_object_setprop (global, _ejs_atom_##err, _ejs_##err); \
 EJS_MACRO_END
 
     EJS_ADD_NATIVE_ERROR_TYPE(Error);
@@ -147,7 +147,7 @@ EJS_MACRO_END
     EJS_ADD_NATIVE_ERROR_TYPE(TypeError);
     EJS_ADD_NATIVE_ERROR_TYPE(URIError);
 
-    END_SHADOW_STACK_FRAME;
+    _ejs_gc_remove_root (&toString);
 }
 
 void

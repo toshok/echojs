@@ -45,7 +45,7 @@ _ejs_require_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         if (!strcmp (builtin_module_map[i].name, arg_utf8)) {
             if (EJSVAL_IS_NULL(builtin_module_map[i].cached_exports)) {
                 //	printf ("require'ing %s.\n", EJSVAL_TO_FLAT_STRING(arg));
-                __ejs_gc_add_named_root (&builtin_module_map[i].cached_exports, "builtin-module-export");
+                _ejs_gc_add_root (&builtin_module_map[i].cached_exports);
                 builtin_module_map[i].cached_exports = _ejs_object_new(_ejs_null, &_ejs_object_specops);
                 builtin_module_map[i].func(_ejs_null, _ejs_undefined, 1, &builtin_module_map[i].cached_exports);
             }
@@ -62,7 +62,7 @@ _ejs_require_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
         if (!strcmp (_ejs_external_module_require_map[i].name, arg_utf8)) {
             if (EJSVAL_IS_NULL(_ejs_external_module_require_map[i].cached_exports)) {
-                __ejs_gc_add_named_root (&_ejs_external_module_require_map[i].cached_exports, "external-module-exports");
+                _ejs_gc_add_root (&_ejs_external_module_require_map[i].cached_exports);
                 _ejs_external_module_require_map[i].cached_exports = _ejs_object_new(_ejs_null, &_ejs_object_specops);
                 _ejs_external_module_require_map[i].func(_ejs_external_module_require_map[i].cached_exports);
             }
@@ -80,16 +80,14 @@ _ejs_require_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         }
         if (!strcmp (_ejs_require_map[i].name, arg_utf8)) {
             if (EJSVAL_IS_NULL(_ejs_require_map[i].cached_exports)) {
-                START_SHADOW_STACK_FRAME;
                 //	printf ("require'ing %s.\n", EJSVAL_TO_FLAT_STRING(arg));
-                __ejs_gc_add_named_root (&_ejs_require_map[i].cached_exports, "require-module-exports");
+                _ejs_gc_add_root (&_ejs_require_map[i].cached_exports);
                 _ejs_require_map[i].cached_exports = _ejs_object_new(_ejs_null, &_ejs_object_specops);
-                ADD_STACK_ROOT(ejsval, prev_exports, _ejs_object_getprop (_ejs_global, _ejs_atom_exports));
+                ejsval prev_exports = _ejs_object_getprop (_ejs_global, _ejs_atom_exports);
                 _ejs_object_setprop(_ejs_global, _ejs_atom_exports, _ejs_require_map[i].cached_exports);
                 _ejs_require_map[i].func (_ejs_null, _ejs_undefined, 1, &_ejs_require_map[i].cached_exports);
                 _ejs_object_setprop(_ejs_global, _ejs_atom_exports, prev_exports);
                 //	printf ("done require'ing %s.\n", EJSVAL_TO_FLAT_STRING(arg));
-                END_SHADOW_STACK_FRAME;
             }
             free (arg_utf8);
             return _ejs_require_map[i].cached_exports;
@@ -104,12 +102,8 @@ _ejs_require_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 void
 _ejs_require_init(ejsval global)
 {
-    START_SHADOW_STACK_FRAME;
-    ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, _ejs_atom_require, _ejs_require_impl));
-    _ejs_require = tmpfunc;
+    _ejs_require = _ejs_function_new_native (_ejs_null, _ejs_atom_require, _ejs_require_impl);
     _ejs_object_setprop (global, _ejs_atom_require, _ejs_require);
-    END_SHADOW_STACK_FRAME;
-
   
     int i;
     for (i = 0; i < num_builtin_modules; i ++) {

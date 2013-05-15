@@ -96,14 +96,12 @@ _ejs_Boolean_prototype_valueOf (ejsval env, ejsval _this, uint32_t argc, ejsval 
 void
 _ejs_boolean_init(ejsval global)
 {
-    START_SHADOW_STACK_FRAME;
+    _ejs_Boolean = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Boolean, (EJSClosureFunc)_ejs_Boolean_impl);
+    _ejs_object_setprop (global, _ejs_atom_Boolean, _ejs_Boolean);
 
-    _ejs_gc_add_named_root (_ejs_Boolean_proto);
+
+    _ejs_gc_add_root (&_ejs_Boolean_proto);
     _ejs_Boolean_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_object_specops);
-
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_Boolean, (EJSClosureFunc)_ejs_Boolean_impl));
-    _ejs_Boolean = tmpobj;
-
     _ejs_object_setprop (_ejs_Boolean,       _ejs_atom_prototype,  _ejs_Boolean_proto);
 
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Boolean_proto, x, _ejs_Boolean_prototype_##x, EJS_PROP_NOT_ENUMERABLE)
@@ -112,10 +110,6 @@ _ejs_boolean_init(ejsval global)
     PROTO_METHOD(toString);
 
 #undef PROTO_METHOD
-
-    _ejs_object_setprop (global, _ejs_atom_Boolean, _ejs_Boolean);
-
-    END_SHADOW_STACK_FRAME;
 }
 
 

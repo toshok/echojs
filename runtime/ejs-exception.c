@@ -216,7 +216,7 @@ void _ejs_exception_throw(ejsval val)
 
     exc->val = val;
     // need to root the exception until it's caught
-    __ejs_gc_add_named_root(&exc->val, "exception in flight");
+    _ejs_gc_add_root(&exc->val);
 
     exc->tinfo.vtable = ejs_ehtype_vtable+2;
 

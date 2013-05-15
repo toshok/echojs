@@ -638,10 +638,8 @@ _ejs_JSON_stringify (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 void
 _ejs_json_init(ejsval global)
 {
-    START_SHADOW_STACK_FRAME;
-
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_object_new (_ejs_Object_prototype, &_ejs_object_specops));
-    _ejs_JSON = tmpobj;
+    _ejs_JSON = _ejs_object_new (_ejs_Object_prototype, &_ejs_object_specops);
+    _ejs_object_setprop (global, _ejs_atom_JSON, _ejs_JSON);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_JSON, x, _ejs_JSON_##x)
 
@@ -649,8 +647,4 @@ _ejs_json_init(ejsval global)
     OBJ_METHOD(stringify);
 
 #undef OBJ_METHOD
-
-    _ejs_object_setprop (global, _ejs_atom_JSON, _ejs_JSON);
-
-    END_SHADOW_STACK_FRAME;
 }

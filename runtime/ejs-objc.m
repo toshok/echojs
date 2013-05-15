@@ -152,16 +152,13 @@ _ejs_CoffeeKitObject_prototype_toString (ejsval env, ejsval _this, uint32_t argc
 void
 _ejs_objc_init(ejsval global)
 {
-    START_SHADOW_STACK_FRAME;
-
     _ejs_objchandle_specops =  _ejs_object_specops;
     _ejs_objchandle_specops.class_name = "ObjcHandle";
 
-    _ejs_gc_add_named_root (_ejs_ObjcHandle_proto);
+    _ejs_gc_add_root (&_ejs_ObjcHandle_proto);
     _ejs_ObjcHandle_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_objchandle_specops);
 
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "ObjcHandle", (EJSClosureFunc)_ejs_ObjcHandle_impl));
-    _ejs_ObjcHandle = tmpobj;
+    _ejs_ObjcHandle = _ejs_function_new_utf8 (_ejs_null, "ObjcHandle", (EJSClosureFunc)_ejs_ObjcHandle_impl);
 
     _ejs_object_setprop (_ejs_ObjcHandle, _ejs_atom_prototype,  _ejs_ObjcHandle_proto);
     _ejs_object_setprop (_ejs_ObjcHandle_proto, _ejs_atom_constructor,  _ejs_ObjcHandle);
@@ -171,11 +168,10 @@ _ejs_objc_init(ejsval global)
     _ejs_coffeekitobject_specops =  _ejs_object_specops;
     _ejs_coffeekitobject_specops.class_name = "PirouetteObject";
 
-    _ejs_gc_add_named_root (_ejs_CoffeeKitObject_proto);
+    _ejs_gc_add_root (&_ejs_CoffeeKitObject_proto);
     _ejs_CoffeeKitObject_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_coffeekitobject_specops);
 
-    ADD_STACK_ROOT(ejsval, tmpobj2, _ejs_function_new_utf8 (_ejs_null, "PirouetteObject", (EJSClosureFunc)_ejs_CoffeeKitObject_impl));
-    _ejs_CoffeeKitObject = tmpobj2;
+    _ejs_CoffeeKitObject = _ejs_function_new_utf8 (_ejs_null, "PirouetteObject", (EJSClosureFunc)_ejs_CoffeeKitObject_impl);
 
     _ejs_object_setprop (_ejs_CoffeeKitObject, _ejs_atom_prototype,  _ejs_CoffeeKitObject_proto);
     _ejs_object_setprop (_ejs_CoffeeKitObject_proto, _ejs_atom_constructor,  _ejs_CoffeeKitObject);
@@ -184,8 +180,6 @@ _ejs_objc_init(ejsval global)
     EJS_INSTALL_FUNCTION(_ejs_CoffeeKitObject_proto, "toString", _ejs_CoffeeKitObject_prototype_toString);
 
     _ejs_object_setprop_utf8 (global, "PirouetteObject", _ejs_CoffeeKitObject);
-
-    END_SHADOW_STACK_FRAME;
 }
 
 
@@ -1242,8 +1236,6 @@ _ejs_objc_NSApplicationMain (ejsval env, ejsval _this, uint32_t argc, ejsval* ar
 ejsval
 _ejs_objc_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
-    START_SHADOW_STACK_FRAME;
-
     ejsval exports = args[0];
 
     EJS_INSTALL_FUNCTION(exports, "requireFramework", _ejs_objc_requireFramework);
@@ -1262,8 +1254,6 @@ _ejs_objc_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 #endif
 
     _ejs_objc_init (exports);
-
-    END_SHADOW_STACK_FRAME;
 
     return _ejs_undefined;
 }

@@ -27,31 +27,30 @@ typedef struct {
 
 EJS_BEGIN_DECLS
 
-#define EJS_INSTALL_ATOM_FUNCTION(o,n,f) EJS_MACRO_START               \
-    ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new_native (_ejs_null, _ejs_atom_##n, (EJSClosureFunc)f)); \
+#define EJS_INSTALL_ATOM_FUNCTION(o,n,f) EJS_MACRO_START                \
+    ejsval tmpfunc = _ejs_function_new_native (_ejs_null, _ejs_atom_##n, (EJSClosureFunc)f); \
     _ejs_object_setprop (o, _ejs_atom_##n, tmpfunc);                    \
-EJS_MACRO_END
+    EJS_MACRO_END
 
 #define EJS_INSTALL_ATOM_FUNCTION_FLAGS(o,n,f,flags) EJS_MACRO_START         \
-    ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new_native (_ejs_null, _ejs_atom_##n, (EJSClosureFunc)f)); \
-    _ejs_object_define_value_property (o, _ejs_atom_##n, tmpfunc, flags); \
-EJS_MACRO_END
+    _ejs_object_define_value_property (o, _ejs_atom_##n, _ejs_function_new_native (_ejs_null, _ejs_atom_##n, (EJSClosureFunc)f), flags); \
+    EJS_MACRO_END
 
 #define EJS_INSTALL_FUNCTION(o,n,f) EJS_MACRO_START                    \
-    ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(n));          \
-    ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new_native (_ejs_null, funcname, (EJSClosureFunc)f)); \
+    ejsval funcname = _ejs_string_new_utf8(n);                          \
+    ejsval tmpfunc = _ejs_function_new_native (_ejs_null, funcname, (EJSClosureFunc)f); \
     _ejs_object_setprop (o, funcname, tmpfunc);                         \
     EJS_MACRO_END
 
 #define EJS_INSTALL_FUNCTION_FLAGS(o,n,f,flags) EJS_MACRO_START         \
-    ADD_STACK_ROOT(ejsval, funcname, _ejs_string_new_utf8(n));          \
-    ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new_native (_ejs_null, funcname, (EJSClosureFunc)f)); \
-    _ejs_object_define_value_property (o, funcname, tmpfunc, flags); \
+    ejsval funcname = _ejs_string_new_utf8(n);                          \
+    ejsval tmpfunc = _ejs_function_new_native (_ejs_null, funcname, (EJSClosureFunc)f); \
+    _ejs_object_define_value_property (o, funcname, tmpfunc, flags);    \
 EJS_MACRO_END
 
 #define EJS_INSTALL_GETTER(o,n,f) EJS_MACRO_START                     \
-    ADD_STACK_ROOT(ejsval, key, _ejs_string_new_utf8(n));          \
-    ADD_STACK_ROOT(ejsval, tmpfunc, _ejs_function_new (_ejs_null, key, (EJSClosureFunc)f)); \
+    ejsval key = _ejs_string_new_utf8(n);                               \
+    ejsval tmpfunc = _ejs_function_new (_ejs_null, key, (EJSClosureFunc)f); \
     _ejs_object_define_accessor_property (o, key, tmpfunc, _ejs_undefined, EJS_PROP_FLAGS_GETTER_SET); \
     EJS_MACRO_END
 
@@ -62,6 +61,9 @@ extern ejsval _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func);
 extern ejsval _ejs_function_new_native (ejsval env, ejsval name, EJSClosureFunc func);
 extern ejsval _ejs_function_new_anon (ejsval env, EJSClosureFunc func);
 extern ejsval _ejs_function_new_utf8 (ejsval env, const char* name, EJSClosureFunc func);
+
+// used during initialization so we don't create a prototype only to throw it away again
+extern ejsval _ejs_function_new_without_proto (ejsval env, ejsval name, EJSClosureFunc func);
 
 extern ejsval _ejs_Function;
 extern ejsval _ejs_Function__proto__;

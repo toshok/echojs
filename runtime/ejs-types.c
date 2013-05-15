@@ -27,7 +27,7 @@ _ejs_list_prepend_node (EJSList *list, EJSListNode* node)
     node->prev = node->next = NULL;
   }
   else {
-    list->tail->prev = node;
+    list->head->prev = node;
     node->next = list->head;
     node->prev = NULL;
     list->head = node;
@@ -47,7 +47,7 @@ _ejs_list_insert_node_sorted (EJSList *list, EJSListNode* node, EJSCompareFunc c
 
     // when this loop is done, cur is either NULL or the node we need to insert @node before.
     while (cur) {
-      if (compare(node, cur))
+      if (compare(node, cur) < 0)
 	break;
       cur = cur->next;
     }
@@ -83,6 +83,8 @@ _ejs_list_pop_head (EJSList *list)
   list->head = head->next;
   if (head == list->tail)
     list->tail = NULL;
+
+  head->next = head->prev = NULL;
 }
 
 int

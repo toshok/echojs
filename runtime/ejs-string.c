@@ -860,20 +860,18 @@ _ejs_String_fromCharCode (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 static void
 _ejs_string_init_proto()
 {
-    _ejs_gc_add_named_root (_ejs_String__proto__);
-    _ejs_gc_add_named_root (_ejs_String_prototype);
+    _ejs_gc_add_root (&_ejs_String__proto__);
+    _ejs_gc_add_root (&_ejs_String_prototype);
 
     EJSFunction* __proto__ = _ejs_gc_new(EJSFunction);
+    _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_function_specops);
     __proto__->func = _ejs_Function_empty;
     __proto__->env = _ejs_null;
+    _ejs_String__proto__ = OBJECT_TO_EJSVAL(__proto__);
 
     EJSObject* prototype = _ejs_gc_new(EJSObject);
-
-    _ejs_String__proto__ = OBJECT_TO_EJSVAL(__proto__);
-    _ejs_String_prototype = OBJECT_TO_EJSVAL(prototype);
-
     _ejs_init_object (prototype, _ejs_null, &_ejs_string_specops);
-    _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_function_specops);
+    _ejs_String_prototype = OBJECT_TO_EJSVAL(prototype);
 
     _ejs_object_define_value_property (OBJECT_TO_EJSVAL(__proto__), _ejs_atom_name, _ejs_atom_empty, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 }
@@ -881,12 +879,10 @@ _ejs_string_init_proto()
 void
 _ejs_string_init(ejsval global)
 {
-    START_SHADOW_STACK_FRAME;
-
     _ejs_string_init_proto();
   
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_String, (EJSClosureFunc)_ejs_String_impl));
-    _ejs_String = tmpobj;
+    _ejs_String = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_String, (EJSClosureFunc)_ejs_String_impl);
+    _ejs_object_setprop (global, _ejs_atom_String, _ejs_String);
 
     _ejs_object_setprop (_ejs_String,       _ejs_atom_prototype,  _ejs_String_prototype);
 
@@ -918,10 +914,6 @@ _ejs_string_init(ejsval global)
 
 #undef OBJ_METHOD
 #undef PROTO_METHOD
-
-    _ejs_object_setprop (global, _ejs_atom_String, _ejs_String);
-
-    END_SHADOW_STACK_FRAME;
 }
 
 static ejsval

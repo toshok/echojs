@@ -20,13 +20,9 @@ main(int argc, char** argv)
 
     _ejs_init(argc, argv);
 
-    START_SHADOW_STACK_FRAME;
-
-    ADD_STACK_ROOT(ejsval, entry_name, _ejs_string_new_utf8(entry_filename));
+    ejsval entry_name = _ejs_string_new_utf8(entry_filename);
 
     _ejs_invoke_closure (_ejs_require, _ejs_null, 1, &entry_name);
-
-    END_SHADOW_STACK_FRAME;
 
 #if GC_ON_SHUTDOWN
     _ejs_gc_shutdown();

@@ -109,7 +109,7 @@ ToPropertyDescriptor(ejsval O, EJSPropertyDesc *desc)
 {
     /* 1. If Type(Obj) is not Object throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O)) {
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Object.defineProperty called on non-object");
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "ToPropertyDescriptor called on non-object");
     }
     EJSObject* obj = EJSVAL_TO_OBJECT(O);
     memset (desc, 0, sizeof(EJSPropertyDesc));
@@ -870,12 +870,21 @@ _ejs_Object_defineProperty (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
 
     /* 1. If Type(O) is not Object throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O)) {
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "defineProperty called on non-object");
+        char msg[200];
+        ejsval name = ToString(P);
+        char* utf8_name = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name));
+        snprintf (msg, sizeof(msg)-1, "defineProperty(%s) called on non-object", utf8_name);
+        free (utf8_name);
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, msg);
     }
     EJSObject *obj = EJSVAL_TO_OBJECT(O);
 
     /* 2. Let name be ToString(P). */
     ejsval name = ToString(P);
+
+    char* utf8_name = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name));
+    fprintf (stderr, "Object.defineProperty(%s) called\n", utf8_name);
+    free (utf8_name);
 
     /* 3. Let desc be the result of calling ToPropertyDescriptor with Attributes as the argument. */
     EJSPropertyDesc desc;
@@ -1183,14 +1192,13 @@ ejsval
 _ejs_Object_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     char buf[1024];
-    ejsval thisObj = ToObject(_this);
     const char *classname;
-    if (EJSVAL_IS_NULL(thisObj))
+    if (EJSVAL_IS_NULL(_this))
         classname = "Null";
-    else if (EJSVAL_IS_UNDEFINED(thisObj))
+    else if (EJSVAL_IS_UNDEFINED(_this))
         classname = "Undefined";
     else
-        classname = CLASSNAME(EJSVAL_TO_OBJECT(thisObj));
+        classname = CLASSNAME(EJSVAL_TO_OBJECT(ToObject(_this)));
     snprintf (buf, sizeof(buf), "[object %s]", classname);
     return _ejs_string_new_utf8 (buf);
 }
@@ -1287,21 +1295,18 @@ _ejs_Object_prototype_propertyIsEnumerable (ejsval env, ejsval _this, uint32_t a
 void
 _ejs_object_init_proto()
 {
-    _ejs_gc_add_named_root (_ejs_Object__proto__);
-    _ejs_gc_add_named_root (_ejs_Object_prototype);
+    _ejs_gc_add_root (&_ejs_Object__proto__);
+    _ejs_gc_add_root (&_ejs_Object_prototype);
 
     EJSFunction* __proto__ = _ejs_gc_new(EJSFunction);
-
+    _ejs_Object__proto__ = OBJECT_TO_EJSVAL(__proto__);
+    _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_function_specops);
     __proto__->func = _ejs_Function_empty;
     __proto__->env = _ejs_null;
 
     EJSObject* prototype = _ejs_gc_new(EJSObject);
-
-    _ejs_Object__proto__ = OBJECT_TO_EJSVAL(__proto__);
     _ejs_Object_prototype = OBJECT_TO_EJSVAL(prototype);
-
     _ejs_init_object (prototype, _ejs_null, &_ejs_object_specops);
-    _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_function_specops);
 
     _ejs_object_define_value_property (_ejs_Object__proto__, _ejs_atom_name, _ejs_atom_empty, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 }
@@ -1309,10 +1314,8 @@ _ejs_object_init_proto()
 void
 _ejs_object_init (ejsval global)
 {
-    START_SHADOW_STACK_FRAME;
-
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_Object, (EJSClosureFunc)_ejs_Object_impl));
-    _ejs_Object = tmpobj;
+    _ejs_Object = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Object, (EJSClosureFunc)_ejs_Object_impl);
+    _ejs_object_setprop (global, _ejs_atom_Object, _ejs_Object);
 
     // ECMA262 15.2.3.1
     _ejs_object_define_value_property (_ejs_Object, _ejs_atom_prototype, _ejs_Object_prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
@@ -1345,10 +1348,6 @@ _ejs_object_init (ejsval global)
 
 #undef PROTO_METHOD
 #undef OBJ_METHOD
-
-    _ejs_object_setprop (global, _ejs_atom_Object, _ejs_Object);
-
-    END_SHADOW_STACK_FRAME;
 }
 
 
@@ -1513,7 +1512,7 @@ _ejs_object_specop_can_put (ejsval O, ejsval P)
         return EJS_OBJECT_IS_EXTENSIBLE(obj);
 
     /* 5. Let inherited be the result of calling the [[GetProperty]] internal method of proto with property name P. */
-    EJSPropertyDesc* inherited = OP(obj,get_property)(proto, P);
+    EJSPropertyDesc* inherited = OP(EJSVAL_TO_OBJECT(proto),get_property)(proto, P);
 
     /* 6. If inherited is undefined, return the value of the [[Extensible]] internal property of O. */
     if (!inherited)

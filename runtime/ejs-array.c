@@ -849,18 +849,15 @@ _ejs_Array_isArray (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 void
 _ejs_array_init(ejsval global)
 {
-    START_SHADOW_STACK_FRAME;
-
     _ejs_sparsearray_specops =  _ejs_object_specops;
     _ejs_sparsearray_specops.class_name = "Array";
 
-    _ejs_gc_add_named_root (_ejs_Array_proto);
+    _ejs_Array = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Array, (EJSClosureFunc)_ejs_Array_impl);
+    _ejs_object_setprop (global,           _ejs_atom_Array,      _ejs_Array);
+
+    _ejs_gc_add_root (&_ejs_Array_proto);
     _ejs_Array_proto = _ejs_array_new(0);
-    EJSVAL_TO_OBJECT(_ejs_Array_proto)->proto = _ejs_Object__proto__;
-
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_Array, (EJSClosureFunc)_ejs_Array_impl));
-    _ejs_Array = tmpobj;
-
+    EJSVAL_TO_OBJECT(_ejs_Array_proto)->proto = _ejs_object_create(_ejs_null);
     _ejs_object_setprop (_ejs_Array,       _ejs_atom_prototype,  _ejs_Array_proto);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Array, x, _ejs_Array_##x, EJS_PROP_NOT_ENUMERABLE)
@@ -884,10 +881,6 @@ _ejs_array_init(ejsval global)
 
 #undef OBJ_METHOD
 #undef PROTO_METHOD
-
-    _ejs_object_setprop (global,           _ejs_atom_Array,      _ejs_Array);
-
-    END_SHADOW_STACK_FRAME;
 }
 
 static ejsval

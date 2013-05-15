@@ -217,14 +217,11 @@ _ejs_RegExp_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval 
 void
 _ejs_regexp_init(ejsval global)
 {
-    START_SHADOW_STACK_FRAME;
+    _ejs_RegExp = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_RegExp, (EJSClosureFunc)_ejs_RegExp_impl);
+    _ejs_object_setprop (global, _ejs_atom_RegExp, _ejs_RegExp);
 
-    _ejs_gc_add_named_root (_ejs_RegExp_proto);
+    _ejs_gc_add_root (&_ejs_RegExp_proto);
     _ejs_RegExp_proto = _ejs_object_new(_ejs_null, &_ejs_object_specops);
-
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new (_ejs_null, _ejs_atom_RegExp, (EJSClosureFunc)_ejs_RegExp_impl));
-    _ejs_RegExp = tmpobj;
-
     _ejs_object_setprop (_ejs_RegExp,       _ejs_atom_prototype,  _ejs_RegExp_proto);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_RegExp, x, _ejs_RegExp_##x)
@@ -236,10 +233,6 @@ _ejs_regexp_init(ejsval global)
 
 #undef OBJ_METHOD
 #undef PROTO_METHOD
-
-    _ejs_object_setprop (global, _ejs_atom_RegExp, _ejs_RegExp);
-
-    END_SHADOW_STACK_FRAME;
 }
 
 
