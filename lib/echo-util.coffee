@@ -1,3 +1,4 @@
+terminal = require "./terminal.js"
 
 exports.deep_copy_object = (o) -> JSON.parse JSON.stringify o
 
@@ -25,4 +26,13 @@ exports.genGlobalFunctionName = (x, filename) ->
 exports.genAnonymousFunctionName = (filename) ->
         prefix = if filename? then "__ejs[#{filename}]_%anon" else "__ejs_%anon"
         "#{prefix}_#{genId()}"
-        
+
+exports.bold = ->
+        if process?.stderr?.isTTY
+                return terminal.ANSIStyle("bold");
+        return ""
+                
+exports.reset = ->
+        if process?.stderr?.isTTY
+                return terminal.ANSIStyle("reset");
+        return ""

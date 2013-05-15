@@ -8,7 +8,7 @@ path = require 'path'
 { Set } = require 'set'
 { NodeVisitor } = require 'nodevisitor'
 closure_conversion = require 'closure-conversion'
-{ genId } = require 'echo-util'
+{ genId, bold, reset } = require 'echo-util'
 
 { ExitableScope, TryExitableScope, SwitchExitableScope, LoopExitableScope } = require 'exitable-scope'
 
@@ -1416,8 +1416,7 @@ insert_toplevel_func = (tree, filename) ->
         tree
 
 exports.compile = (tree, base_output_filename, source_filename) ->
-
-        console.warn "compiling #{source_filename} -> #{base_output_filename}"
+        console.warn "#{bold()}COMPILE#{reset()} #{source_filename} -> #{base_output_filename}"
         
         tree = insert_toplevel_func tree, source_filename
 

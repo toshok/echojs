@@ -11,7 +11,8 @@ COFFEE_FILES=				\
 	types.coffee			\
 	consts.coffee			\
 	exitable-scope.coffee		\
-	runtime.coffee
+	runtime.coffee			\
+	terminal.coffee
 
 DESTDIR = generated
 

@@ -284,7 +284,8 @@ do_final_link = ->
         else
                 process.env.PATH = "#{target_path_prepend[options.target]}:#{process.env.PATH}"
 
-        clang_args = target_link_args[options.target].concat ["-o", options.output_filename || "#{files[0]}.exe"].concat o_filenames
+        output_filename = options.output_filename || "#{files[0]}.exe"
+        clang_args = target_link_args[options.target].concat ["-o", output_filename].concat o_filenames
         
         clang_args.push map_filename
         
@@ -297,19 +298,21 @@ do_final_link = ->
 
         clang_args = clang_args.concat target_libraries[options.target]
 
+        console.warn "#{util.bold()}LINK#{util.reset()} #{output_filename}"
+        
         debug.log 1, "executing `#{target_linker[options.target]} #{clang_args.join ' '}'"
         
         if __ejs?
                 spawn target_linker[options.target], clang_args
                 # we ignore leave_tmp_files here
-                console.warn "done."
+                console.warn "#{bold()}done.#{reset()}"
         else
                 clang = spawn target_linker[options.target], clang_args
                 clang.stderr.on "data", (data) -> console.warn "#{data}"
                 clang.on "exit", (code) ->
                         if not options.leave_temp_files
                                 cleanup ->
-                                        console.warn "done."
+                                        console.warn "#{util.bold()}done.#{util.reset()}"
 
 cleanup = (done) ->
         files_to_delete = temp_files.length
