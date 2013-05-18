@@ -55,6 +55,8 @@ EJS_ATOM(Object)
 EJS_ATOM(RegExp)
 EJS_ATOM(String)
 
+EJS_ATOM(XMLHttpRequest)
+
 EJS_ATOM(ArrayBuffer)
 EJS_ATOM(Int8Array)
 EJS_ATOM(Uint8Array)
@@ -225,3 +227,19 @@ EJS_ATOM(collect)
 EJS_ATOM(exit)
 EJS_ATOM(chdir)
 EJS_ATOM(cwd)
+
+// XMLHttpRequest functions
+EJS_ATOM(open)
+EJS_ATOM(send)
+EJS_ATOM(setRequestHeader)
+EJS_ATOM(abort)
+EJS_ATOM(getResponseHeader)
+EJS_ATOM(getAllResponseHeaders)
+
+// XMLHttpRequest properties
+EJS_ATOM(readyState)
+EJS_ATOM(status)
+EJS_ATOM(statusText)
+EJS_ATOM(responseText)
+EJS_ATOM(responseXML)
+EJS_ATOM(onreadystatechange)

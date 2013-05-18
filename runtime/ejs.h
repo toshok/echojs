@@ -24,7 +24,6 @@
 #include "ejs-types.h"
 
 typedef int32_t EJSBool;
-typedef struct _EJSContext* EJSContext;
 
 #define EJS_TRUE 1
 #define EJS_FALSE 0

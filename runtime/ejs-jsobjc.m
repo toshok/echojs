@@ -224,7 +224,7 @@
 
 +(id)objectValue:(CKObject*)obj
 {
-	return [[[CKValue alloc] initWithJSValue:OBJECT_TO_EJSVAL([obj jsObject])] autorelease];    
+	return [[[CKValue alloc] initWithJSValue:(obj == NULL ? _ejs_null : OBJECT_TO_EJSVAL([obj jsObject]))] autorelease];    
 }
 
 +(id)jsStringValue:(CKString*)str

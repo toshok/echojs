@@ -54,6 +54,17 @@ EJS_MACRO_END
     _ejs_object_define_accessor_property (o, key, tmpfunc, _ejs_undefined, EJS_PROP_FLAGS_GETTER_SET); \
     EJS_MACRO_END
 
+#define EJS_INSTALL_ATOM_GETTER(o,n,f) EJS_MACRO_START                     \
+    ejsval tmpfunc = _ejs_function_new (_ejs_null, _ejs_atom_##n, (EJSClosureFunc)f); \
+    _ejs_object_define_accessor_property (o, _ejs_atom_##n, tmpfunc, _ejs_undefined, EJS_PROP_FLAGS_GETTER_SET); \
+    EJS_MACRO_END
+
+#define EJS_INSTALL_ATOM_ACCESSORS(o,n,g,s) EJS_MACRO_START                  \
+    ejsval tmpfunc1 = _ejs_function_new (_ejs_null, _ejs_atom_##n, (EJSClosureFunc)g); \
+    ejsval tmpfunc2 = _ejs_function_new (_ejs_null, _ejs_atom_##n, (EJSClosureFunc)s); \
+    _ejs_object_define_accessor_property (o, _ejs_atom_##n, tmpfunc1, tmpfunc2, EJS_PROP_FLAGS_GETTER_SET | EJS_PROP_FLAGS_SETTER_SET); \
+    EJS_MACRO_END
+
 ejsval  _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args);
 EJSBool _ejs_decompose_closure (ejsval closure, EJSClosureFunc* func, ejsval* env, ejsval *_this);
 

@@ -26,6 +26,7 @@
 #include "ejs-typedarrays.h"
 #include "ejs-uri.h"
 #include "ejs-value.h"
+#include "ejs-xhr.h"
 #if IOS
 #include "ejs-webgl.h"
 #endif
@@ -103,6 +104,8 @@ _ejs_init(int argc, char** argv)
     _ejs_require_init(_ejs_global);
     _ejs_console_init(_ejs_global);
     _ejs_process_init(_ejs_global, argc, argv);
+
+    _ejs_xmlhttprequest_init(_ejs_global);
 
     // a special global (__ejs) under which we can stuff other
     // semi-useful runtime features, like a call to force a GC.  the

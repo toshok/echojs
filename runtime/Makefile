@@ -33,7 +33,8 @@ C_SOURCES= \
 OBJC_SOURCES= \
 	ejs-jsobjc.m \
 	ejs-objc.m \
-	ejs-webgl.m
+	ejs-webgl.m \
+	ejs-xhr.m
 
 OSX_OBJECTS=$(C_SOURCES:%.c=%.o.osx) $(OBJC_SOURCES:%.m=%.o.osx) main.o.osx
 SIM_OBJECTS=$(C_SOURCES:%.c=%.o.sim) $(OBJC_SOURCES:%.m=%.o.sim) main.o.sim
