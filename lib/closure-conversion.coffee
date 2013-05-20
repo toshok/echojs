@@ -463,6 +463,7 @@ class SubstituteVariables extends NodeVisitor
                 n
                 
         visitFunction: (n) ->
+            try
                 if n.ejs_env.closed.empty() and not n.ejs_env.nested_requires_env
                         n.body.body.unshift
                                 type: syntax.VariableDeclaration,
@@ -619,7 +620,12 @@ class SubstituteVariables extends NodeVisitor
                                                 arguments: [ (if n.ejs_env.parent? then (create_identifier "%env_#{n.ejs_env.parent.id}") else { type: syntax.Literal, value: null}), n ]
                                 
                                 return call_exp
-                n        
+                n
+            catch e
+                console.warn "exception: " + e
+                console.warn "compiling the following code:"
+                console.warn escodegen.generate n
+                process.exit -1
                 
         visitCallExpression: (n) ->
                 super
