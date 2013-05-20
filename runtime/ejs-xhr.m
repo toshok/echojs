@@ -115,6 +115,9 @@ typedef enum {
 		state = UNSENT;
 		error = NO;
 		send_flag = NO;
+        url = nil;
+        method = nil;
+        readystatechange = nil;
 	}
 	return self;
 }
@@ -195,11 +198,15 @@ typedef enum {
 	abort (); // XXX
 }
 
+-(void)proxyDidFinishLoading
+{
+	[self invokeReadyStateChange];
+}
+
 -(void)connectionDidFinishLoading:(NSURLConnection *)connection
 {
-	NSLog (@"connectionDidFinishLoading!!!!");
 	state = DONE;
-	[self invokeReadyStateChange];
+    [self performSelectorOnMainThread:@selector(proxyDidFinishLoading) withObject:nil waitUntilDone:NO];
 }
 
 -(void)invokeReadyStateChange
@@ -221,6 +228,37 @@ typedef struct {
     EJSObject obj;
     id peer;
 } EJSXMLHttpRequest;
+
+static ejsval  _ejs_xmlhttprequest_specop_get (ejsval obj, ejsval propertyName);
+static EJSPropertyDesc* _ejs_xmlhttprequest_specop_get_own_property (ejsval obj, ejsval propertyName);
+static EJSPropertyDesc* _ejs_xmlhttprequest_specop_get_property (ejsval obj, ejsval propertyName);
+static void    _ejs_xmlhttprequest_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
+static EJSBool _ejs_xmlhttprequest_specop_can_put (ejsval obj, ejsval propertyName);
+static EJSBool _ejs_xmlhttprequest_specop_has_property (ejsval obj, ejsval propertyName);
+static EJSBool _ejs_xmlhttprequest_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
+static ejsval  _ejs_xmlhttprequest_specop_default_value (ejsval obj, const char *hint);
+static EJSBool _ejs_xmlhttprequest_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
+static EJSObject* _ejs_xmlhttprequest_specop_allocate ();
+static void    _ejs_xmlhttprequest_specop_finalize (EJSObject* obj);
+static void    _ejs_xmlhttprequest_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
+
+EJSSpecOps _ejs_xmlhttprequest_specops = {
+    "XMLHttpRequest",
+    _ejs_xmlhttprequest_specop_get,
+    _ejs_xmlhttprequest_specop_get_own_property,
+    _ejs_xmlhttprequest_specop_get_property,
+    _ejs_xmlhttprequest_specop_put,
+    _ejs_xmlhttprequest_specop_can_put,
+    _ejs_xmlhttprequest_specop_has_property,
+    _ejs_xmlhttprequest_specop_delete,
+    _ejs_xmlhttprequest_specop_default_value,
+    _ejs_xmlhttprequest_specop_define_own_property,
+    NULL, /* [[HasInstance]] */
+
+    _ejs_xmlhttprequest_specop_allocate,
+    _ejs_xmlhttprequest_specop_finalize,
+    _ejs_xmlhttprequest_specop_scan,
+};
 
 static id
 get_peer (ejsval obj)
@@ -627,4 +665,76 @@ _ejs_xmlhttprequest_init(ejsval global)
 #undef PROTO_METHOD
 #undef PROTO_GETTER
 #undef PROTO_ACCESSORS
+}
+
+static ejsval
+_ejs_xmlhttprequest_specop_get (ejsval obj, ejsval propertyName)
+{
+    return _ejs_object_specops.get (obj, propertyName);
+}
+
+static EJSPropertyDesc*
+_ejs_xmlhttprequest_specop_get_own_property (ejsval obj, ejsval propertyName)
+{
+    return _ejs_object_specops.get_own_property (obj, propertyName);
+}
+
+static EJSPropertyDesc*
+_ejs_xmlhttprequest_specop_get_property (ejsval obj, ejsval propertyName)
+{
+    return _ejs_object_specops.get_property (obj, propertyName);
+}
+
+static void
+_ejs_xmlhttprequest_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag)
+{
+    _ejs_object_specops.put (obj, propertyName, val, flag);
+}
+
+static EJSBool
+_ejs_xmlhttprequest_specop_can_put (ejsval obj, ejsval propertyName)
+{
+    return _ejs_object_specops.can_put (obj, propertyName);
+}
+
+static EJSBool
+_ejs_xmlhttprequest_specop_has_property (ejsval obj, ejsval propertyName)
+{
+    return _ejs_object_specops.has_property (obj, propertyName);
+}
+
+static EJSBool
+_ejs_xmlhttprequest_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
+{
+    return _ejs_object_specops._delete (obj, propertyName, flag);
+}
+
+static ejsval
+_ejs_xmlhttprequest_specop_default_value (ejsval obj, const char *hint)
+{
+    return _ejs_object_specops.default_value (obj, hint);
+}
+
+static EJSBool
+_ejs_xmlhttprequest_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag)
+{
+    return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
+}
+
+static EJSObject*
+_ejs_xmlhttprequest_specop_allocate()
+{
+    return (EJSObject*)_ejs_gc_new (EJSXMLHttpRequest);
+}
+
+static void
+_ejs_xmlhttprequest_specop_finalize (EJSObject* obj)
+{
+    _ejs_object_specops.finalize (obj);
+}
+
+static void
+_ejs_xmlhttprequest_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
+{
+    _ejs_object_specops.scan (obj, scan_func);
 }

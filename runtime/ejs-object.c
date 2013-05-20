@@ -21,6 +21,7 @@
 #include "ejs-typedarrays.h"
 #include "ejs-function.h"
 #include "ejs-error.h"
+#include "ejs-xhr.h"
 
 static ejsval           _ejs_object_specop_get (ejsval obj, ejsval propertyName);
 static EJSPropertyDesc* _ejs_object_specop_get_own_property (ejsval obj, ejsval propertyName);
@@ -558,6 +559,7 @@ _ejs_object_create (ejsval proto)
     else if (EJSVAL_EQ(proto, _ejs_TypeError_proto))  ops = &_ejs_error_specops;
     else if (EJSVAL_EQ(proto, _ejs_URIError_proto))  ops = &_ejs_error_specops;
     else if (EJSVAL_EQ(proto, _ejs_Error_proto))  ops = &_ejs_error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_XMLHttpRequest_proto))  ops = &_ejs_xmlhttprequest_specops;
     else                                              ops = EJSVAL_TO_OBJECT(proto)->ops;
 
     ejsval objval = _ejs_object_new (proto, ops);
