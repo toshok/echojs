@@ -1408,7 +1408,7 @@ JSMETHOD (texImage2D) {
 	GLint border;
 	GLenum format;
 	GLenum type;
-	GLvoid *pixels;
+	GLvoid *pixels = NULL;
 	BOOL free_pixels = NO;
 	CGContextRef bitmapContext = NULL;
     
