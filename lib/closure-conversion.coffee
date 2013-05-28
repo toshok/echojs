@@ -3,9 +3,12 @@ syntax = esprima.Syntax
 escodegen = require 'escodegen'
 debug = require 'debug'
 
+{ Stack } = require 'stack'
 { Set } = require 'set'
 { NodeVisitor } = require 'nodevisitor'
-{ genGlobalFunctionName, genAnonymousFunctionName, deep_copy_object, map, foldl } = require 'echo-util'
+{ genGlobalFunctionName, genAnonymousFunctionName, deep_copy_object, map, foldl, reject } = require 'echo-util'
+
+hasOwnProperty = Object.prototype.hasOwnProperty
 
 #
 # each element in env is an object of the form:
@@ -19,20 +22,20 @@ debug = require 'debug'
 LocateEnv = class LocateEnv extends NodeVisitor
         constructor: ->
                 super
-                @envs = []
+                @envs = new Stack
                 @env_id = 0
 
         visitFunction: (n) ->
-                current_env = @envs[0]
+                current_env = @envs.top if @envs.depth > 0
                 new_env = { id: @env_id, decls: (if n.ejs_decls? then n.ejs_decls else new Set), closed: new Set, parent: current_env }
                 @env_id += 1
                 n.ejs_env = new_env
-                @envs.unshift new_env
+                @envs.push new_env
                 # don't visit the parameters for the same reason we don't visit the id's of variable declarators below:
                 # we don't want a function to look like:  function foo (%env_1.x) { }
                 # instead of                              function foo (x) { }
                 n.body = @visit n.body
-                @envs.shift()
+                @envs.pop()
                 n
 
         visitVariableDeclarator: (n) ->
@@ -50,7 +53,7 @@ LocateEnv = class LocateEnv extends NodeVisitor
 
         visitIdentifier: (n) ->
                 # find the environment in the env-stack that includes this variable's decl.  add it to the env's .closed set.
-                current_env = @envs[0]
+                current_env = @envs.top
                 env = current_env
 
                 # if the current environment declares that identifier, nothing to do.
@@ -95,13 +98,14 @@ LocateEnv = class LocateEnv extends NodeVisitor
 #                                env = env.parent
 
 create_identifier = (x) ->
-        throw new Error "invalid name in create_identifier" if not x?
+        throw new Error "invalid name in create_identifier" if not x
         type: syntax.Identifier, name: x
 create_string_literal = (x) ->
-        throw new Error "invalid string in create_string_literal" if not x?
+        throw new Error "invalid string in create_string_literal" if not x
         type: syntax.Literal, value: x, raw: "\"#{x}\""
 create_number_literal = (x) ->
-        throw new Error "invalid number in create_number_literal" if not x?
+        console.log "create_number_literal (#{x})"
+        throw new Error "invalid number in create_number_literal" if typeof x isnt "number"
         type: syntax.Literal, value: x, raw: "#{x}"
 
 # this should move to echo-desugar.coffee
@@ -178,13 +182,13 @@ class FuncDeclsToVars extends NodeVisitor
 class HoistVars extends NodeVisitor
         constructor: () ->
                 super
-                @function_stack = []
+                @function_stack = new Stack
 
         visitFunction: (n) ->
-                @function_stack.unshift { func: n, vars: [] }
+                @function_stack.push { func: n, vars: [] }
                 n = super
-                n.body.body = @function_stack[0].vars.concat n.body.body
-                @function_stack.shift()
+                n.body.body = @function_stack.top.vars.concat n.body.body
+                @function_stack.pop()
                 n
 
         visitFor: (n) ->
@@ -198,7 +202,7 @@ class HoistVars extends NodeVisitor
                         
         visitForIn: (n) ->
                 if n.left.type is syntax.VariableDeclaration
-                        @function_stack[0].vars.push
+                        @function_stack.top.vars.push
                                 type: syntax.VariableDeclaration
                                 declarations: [{
                                         type: syntax.VariableDeclarator
@@ -224,15 +228,10 @@ class HoistVars extends NodeVisitor
                                                 right: @visit n.declarations[i].init
                                                 operator: "="
 
-                                        if @skipExpressionStatement
-                                                assignments.push assignment
-                                        else
-                                                assignments.push
-                                                        type: syntax.ExpressionStatement
-                                                        expression: assignment
+                                        assignments.push assignment
 
                         if assignments.length is 0
-                                @function_stack[0].vars.push
+                                @function_stack.top.vars.push
                                         type: syntax.VariableDeclaration
                                         declarations: n.declarations
                                         kind: "let"
@@ -244,24 +243,27 @@ class HoistVars extends NodeVisitor
                                 id: create_identifier decl_name
                                 init: null
 
-                        @function_stack[0].vars.push
+                        @function_stack.top.vars.push
                                 type: syntax.VariableDeclaration
                                 declarations: create_empty_declarator decl.id.name for decl in n.declarations
                                 kind: "let"
                                        
                         # now return the new assignments, which will replace the original variable
                         # declaration node.
-                        if @skipExpressionStatement
-                                return assignments[0] if assignments.length is 1
-
-                                return {
+                        if assignments.length > 1
+                                assign_exp =
                                         type: syntax.SequenceExpression
                                         expressions: assignments
-                                }
+                        else
+                                assign_exp = assignments[0]
+
+
+                        if @skipExpressionStatement
+                                return assign_exp
                         else
                                 return {
-                                        type: syntax.BlockStatement
-                                        body: assignments
+                                        type: syntax.ExpressionStatement
+                                        expression: assign_exp
                                 }
                 n
 
@@ -367,13 +369,13 @@ class ComputeFree extends NodeVisitor
 class SubstituteVariables extends NodeVisitor
         constructor: (module) ->
                 super
-                @function_stack = []
-                @mappings = []
+                @function_stack = new Stack
+                @mappings = new Stack
 
-        currentMapping: -> if @mappings.length > 0 then @mappings[0] else {}
+        currentMapping: -> if @mappings.depth > 0 then @mappings.top else Object.create null
 
         visitIdentifier: (n) ->
-                if @currentMapping().hasOwnProperty n.name
+                if hasOwnProperty.call @currentMapping(), n.name
                         return @currentMapping()[n.name]
                 n
 
@@ -419,8 +421,10 @@ class SubstituteVariables extends NodeVisitor
                 rv = []
                 for decl in n.declarations
                         decl.init = @visit decl.init
-                        if @currentMapping().hasOwnProperty decl.id.name
+                        if hasOwnProperty.call @currentMapping(), decl.id.name
+                                ###
                                 decl_mapping = @currentMapping()["%slot_mapping"][decl.id.name]
+                                console.log "decl_mapping for #{decl.id.name} is #{decl_mapping}"
                                 assignment =
                                         type: syntax.AssignmentExpression,
                                         operator: "="
@@ -437,12 +441,15 @@ class SubstituteVariables extends NodeVisitor
                                                 type: syntax.ExpressionStatement
                                                 expression: assignment
                                         }
+                                ###
+                                rv.push { type: syntax.EmptyStatement }
                         else
                                 rv.push {
                                         type: syntax.VariableDeclaration
                                         declarations: [decl]
                                         kind: n.kind
                                 }
+                        console.log "variable declaration is #{escodegen.generate rvv for rvv in rv}"
                 rv                        
 
         visitProperty: (n) ->
@@ -456,9 +463,9 @@ class SubstituteVariables extends NodeVisitor
                 # we use this instead of calling super in visitFunction because we don't want to visit parameters
                 # during this pass, or they'll be substituted with an %env.
 
-                @function_stack.unshift n
+                @function_stack.push n
                 n.body = @visit n.body
-                @function_stack.shift()
+                @function_stack.pop()
                 
                 n
                 
@@ -509,7 +516,7 @@ class SubstituteVariables extends NodeVisitor
                                 kind: "let"
                         }
 
-                        n.ejs_env.slot_mapping = {}
+                        n.ejs_env.slot_mapping = Object.create null
                         i = 0
                         if n.ejs_env.parent?
                                 n.ejs_env.slot_mapping["%env_#{n.ejs_env.parent.id}"] = i
@@ -553,12 +560,13 @@ class SubstituteVariables extends NodeVisitor
 
                         new_mapping = deep_copy_object @currentMapping()
                         new_mapping["%slot_mapping"] = n.ejs_env.slot_mapping
-
+                        for mapped_id of n.ejs_env.slot_mapping
+                                if new_mapping[mapped_id] is undefined
+                                        console.log "new_mapping[#{mapped_id}] == undefined"
+                        
                         # remove all mappings for variables declared in this block
                         if n.ejs_decls?
-                                n.ejs_decls.map (sym) ->
-                                        delete new_mapping[sym]
-
+                                new_mapping = reject new_mapping, (sym) -> hasOwnProperty.call n.ejs_decls, sym
 
                         flatten_memberexp = (exp, mapping) ->
                                 if exp.type isnt syntax.CallExpression
@@ -591,10 +599,10 @@ class SubstituteVariables extends NodeVisitor
                                         callee: create_identifier "%slot"
                                         arguments: [ (create_identifier env_name), (create_number_literal n.ejs_env.slot_mapping[sym]), (create_string_literal sym) ]
 
-                        @mappings.unshift new_mapping
+                        @mappings.push new_mapping
                         @visitFunctionBody n
                         n.body.body = prepends.concat n.body.body
-                        @mappings = @mappings.slice(1)
+                        @mappings.pop()
 
                 # convert function expressions to an explicit closure creation, so:
                 # 
@@ -626,6 +634,7 @@ class SubstituteVariables extends NodeVisitor
                 console.warn "compiling the following code:"
                 console.warn escodegen.generate n
                 process.exit -1
+                throw e
                 
         visitCallExpression: (n) ->
                 super
@@ -636,7 +645,7 @@ class SubstituteVariables extends NodeVisitor
                 # with
                 #   invokeClosure(X, %this, %argCount, arg1, arg2, ...);
 
-                @function_stack[0].scratch_size = Math.max @function_stack[0].scratch_size, n.arguments.length
+                @function_stack.top.scratch_size = Math.max @function_stack.top.scratch_size, n.arguments.length
 
                 n.arguments.unshift n.callee
                 n.callee = create_identifier "%invokeClosure"
@@ -651,7 +660,7 @@ class SubstituteVariables extends NodeVisitor
                 # with
                 #   invokeClosure(X, %this, %argCount, arg1, arg2, ...);
 
-                @function_stack[0].scratch_size = Math.max @function_stack[0].scratch_size, n.arguments.length
+                @function_stack.top.scratch_size = Math.max @function_stack.top.scratch_size, n.arguments.length
 
                 n.arguments.unshift n.callee
                 n.callee = create_identifier "%invokeClosure"
@@ -671,9 +680,9 @@ class LambdaLift extends NodeVisitor
         constructor: (@filename) ->
                 super
                 @functions = []
-                @mappings = []
+                @mappings = new Stack
 
-        currentMapping: -> if @mappings.length > 0 then @mappings[0] else {}
+        currentMapping: -> if @mappings.depth > 0 then @mappings.top else Object.create null
 
         visitProgram: (program) ->
                 super
@@ -715,9 +724,9 @@ class LambdaLift extends NodeVisitor
 
                 new_mapping = deep_copy_object @currentMapping()
 
-                @mappings.unshift new_mapping
+                @mappings.push new_mapping
                 n.body = @visit n.body
-                @mappings = @mappings.slice(1)
+                @mappings.pop()
 
                 @maybePrependScratchArea n
 

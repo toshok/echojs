@@ -9,6 +9,11 @@ exports.foldl = foldl = (f, z, arr) ->
         return z if arr.length is 0
         return foldl f, (f z, arr[0]), (arr.slice 1)
 
+exports.reject = (o, pred) ->
+        rv = Object.create null
+        rv[prop] = o[prop] for prop in (Object.getOwnPropertyNames o) when not pred prop
+        rv
+        
 gen = 0
 
 exports.genId = genId = ->
