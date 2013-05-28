@@ -64,8 +64,7 @@ static EJSSpecOps _ejs_typedarray_specops = {
 };
 
 
-#define _EJS_ARRAY_LEN(arrobj)      (((EJSArray*)arrobj)->array_length)
-#define _EJS_ARRAY_ELEMENTS(arrobj) (((EJSArray*)arrobj)->elements)
+#define EJS_TYPEDARRAY_LEN(arrobj)      (((EJSTypedArray*)EJSVAL_TO_OBJECT(arrobj))->length)
 
 ejsval _ejs_ArrayBuffer_proto;
 ejsval _ejs_ArrayBuffer;
@@ -283,33 +282,91 @@ _ejs_ArrayBuffer_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsva
  }                                                                      \
                                                                         \
  static ejsval                                                          \
- _ejs_##arraytype##array_specop_get (ejsval obj, ejsval propertyName) \
+ _ejs_##arraytype##array_specop_get (ejsval obj, ejsval propertyName)   \
  {                                                                      \
-     EJS_NOT_IMPLEMENTED();                                             \
+     /* check if propertyName is an integer, or a string that we can convert to an int */ \
+     EJSBool is_index = EJS_FALSE;                                      \
+     ejsval idx_val = ToNumber(propertyName);                           \
+     int idx;                                                           \
+     if (EJSVAL_IS_NUMBER(idx_val)) {                                   \
+         double n = EJSVAL_TO_NUMBER(idx_val);                          \
+         if (floor(n) == n) {                                           \
+             idx = (int)n;                                              \
+             is_index = EJS_TRUE;                                       \
+         }                                                              \
+     }                                                                  \
+                                                                        \
+     if (is_index) {                                                    \
+         if (idx < 0 || idx > EJS_TYPEDARRAY_LEN(obj)) {                \
+             return _ejs_undefined;                                     \
+         }                                                              \
+         void* data = _ejs_typedarray_get_data (EJSVAL_TO_OBJECT(obj)); \
+         return NUMBER_TO_EJSVAL ((double)((elementtype*)data)[idx]);   \
+     }                                                                  \
+                                                                        \
+     /* we also handle the length getter here */                        \
+     if (EJSVAL_IS_STRING(propertyName) && !ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName))) { \
+         return NUMBER_TO_EJSVAL (EJS_TYPEDARRAY_LEN(obj));             \
+     }                                                                  \
+                                                                        \
+     /* otherwise we fallback to the object implementation */           \
+     return _ejs_object_specops.get (obj, propertyName);                \
  }                                                                      \
                                                                         \
  static EJSPropertyDesc*                                                \
  _ejs_##arraytype##array_specop_get_own_property (ejsval obj, ejsval propertyName) \
  {                                                                      \
-     EJS_NOT_IMPLEMENTED();                                             \
+     if (EJSVAL_IS_NUMBER(propertyName)) {                              \
+         double needle = EJSVAL_TO_NUMBER(propertyName);                \
+         int needle_int;                                                \
+         if (EJSDOUBLE_IS_INT32(needle, &needle_int)) {                 \
+             if (needle_int >= 0 && needle_int < EJS_TYPEDARRAY_LEN(obj)) \
+                 return NULL; /* XXX */                                 \
+         }                                                              \
+     }                                                                  \
+     return _ejs_object_specops.get_own_property (obj, propertyName);   \
  }                                                                      \
                                                                         \
  static EJSPropertyDesc*                                                \
  _ejs_##arraytype##array_specop_get_property (ejsval obj, ejsval propertyName) \
  {                                                                      \
-     EJS_NOT_IMPLEMENTED();                                             \
+     return _ejs_object_specops.get_property (obj, propertyName);       \
  }                                                                      \
                                                                         \
  static void                                                            \
  _ejs_##arraytype##array_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag) \
  {                                                                      \
-     EJS_NOT_IMPLEMENTED();                                             \
+     /* check if propertyName is an integer, or a string that we can convert to an int */ \
+     EJSBool is_index = EJS_FALSE;                                      \
+     ejsval idx_val = ToNumber(propertyName);                           \
+     int idx;                                                           \
+     if (EJSVAL_IS_NUMBER(idx_val)) {                                   \
+         double n = EJSVAL_TO_NUMBER(idx_val);                          \
+         if (floor(n) == n) {                                           \
+             idx = (int)n;                                              \
+             is_index = EJS_TRUE;                                       \
+         }                                                              \
+     }                                                                  \
+                                                                        \
+     if (is_index) {                                                    \
+         if (idx < 0 || idx >= EJS_TYPEDARRAY_LEN(obj)) {               \
+             return;                                                    \
+         }                                                              \
+         void* data = _ejs_typedarray_get_data (EJSVAL_TO_OBJECT(obj)); \
+         ((elementtype*)data)[idx] = (elementtype)EJSVAL_TO_NUMBER(val); \
+     }                                                                  \
  }                                                                      \
                                                                         \
  static EJSBool                                                         \
  _ejs_##arraytype##array_specop_can_put (ejsval obj, ejsval propertyName) \
  {                                                                      \
-     EJS_NOT_IMPLEMENTED();                                             \
+     return _ejs_object_specops.can_put (obj, propertyName);            \
+ }                                                                      \
+                                                                        \
+ static EJSBool                                                         \
+ _ejs_##arraytype##array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag) \
+ {                                                                      \
+     return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag); \
  }                                                                      \
                                                                         \
  static EJSBool                                                         \
@@ -330,20 +387,20 @@ EJS_TYPED_ARRAY(UINT32, Uint32, uint32, uint32_t, 4);
 EJS_TYPED_ARRAY(FLOAT32, Float32, float32, float, 4);
 EJS_TYPED_ARRAY(FLOAT64, Float64, float64, double, 8);
 
-static int typed_array_elsizes[EJS_TYPEDARRAY_TYPE_COUNT];
-static ejsval typed_array_protos[EJS_TYPEDARRAY_TYPE_COUNT];
-static EJSSpecOps* typed_array_specops[EJS_TYPEDARRAY_TYPE_COUNT];
+int _ejs_typed_array_elsizes[EJS_TYPEDARRAY_TYPE_COUNT];
+ejsval _ejs_typed_array_protos[EJS_TYPEDARRAY_TYPE_COUNT];
+EJSSpecOps* _ejs_typed_array_specops[EJS_TYPEDARRAY_TYPE_COUNT];
 
 ejsval
 _ejs_typedarray_new (EJSTypedArrayType element_type, uint32_t length)
 {
-    int size = length * typed_array_elsizes[element_type];
+    int size = length * _ejs_typed_array_elsizes[element_type];
 
     ejsval buffer = _ejs_arraybuffer_new (size);
 
     EJSTypedArray *rv = _ejs_gc_new(EJSTypedArray);
 
-    _ejs_init_object ((EJSObject*)rv, typed_array_protos[element_type], typed_array_specops[element_type]);
+    _ejs_init_object ((EJSObject*)rv, _ejs_typed_array_protos[element_type], _ejs_typed_array_specops[element_type]);
 
     rv->buffer = buffer;
     rv->element_type = element_type;
@@ -425,17 +482,17 @@ _ejs_typedarrays_init(ejsval global)
         PROTO_METHOD(ArrayBuffer, slice);
     }
 
-    _ejs_int8array_specops = _ejs_typedarray_specops;
-    _ejs_int8array_specops.class_name = "Int8Array";
-    _ejs_int8array_specops.get = _ejs_int8array_specop_get;
-    _ejs_int8array_specops.get_own_property = _ejs_int8array_specop_get_own_property;
-    _ejs_int8array_specops.get_property = _ejs_int8array_specop_get_property;
-    _ejs_int8array_specops.put = _ejs_int8array_specop_put;
-    _ejs_int8array_specops.can_put = _ejs_int8array_specop_can_put;
-    _ejs_int8array_specops.has_property = _ejs_int8array_specop_has_property;
-
-
 #define ADD_TYPEDARRAY(EnumType, ArrayType, arraytype, elementSizeInBytes) EJS_MACRO_START \
+    _ejs_##arraytype##array_specops = _ejs_typedarray_specops; \
+    _ejs_##arraytype##array_specops.class_name = #ArrayType "Array"; \
+    _ejs_##arraytype##array_specops.get = _ejs_##arraytype##array_specop_get; \
+    _ejs_##arraytype##array_specops.get_own_property = _ejs_##arraytype##array_specop_get_own_property; \
+    _ejs_##arraytype##array_specops.get_property = _ejs_##arraytype##array_specop_get_property; \
+    _ejs_##arraytype##array_specops.put = _ejs_##arraytype##array_specop_put; \
+    _ejs_##arraytype##array_specops.can_put = _ejs_##arraytype##array_specop_can_put; \
+    _ejs_##arraytype##array_specops.has_property = _ejs_##arraytype##array_specop_has_property; \
+    _ejs_##arraytype##array_specops.define_own_property = _ejs_##arraytype##array_specop_define_own_property; \
+                                                                        \
     _ejs_##ArrayType##Array = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_##ArrayType##Array, (EJSClosureFunc)_ejs_##ArrayType##Array_impl); \
     _ejs_object_setprop (global,         _ejs_atom_##ArrayType##Array,  _ejs_##ArrayType##Array); \
                                                                         \
@@ -446,9 +503,9 @@ _ejs_typedarrays_init(ejsval global)
     /* make sure ctor.BYTES_PER_ELEMENT is defined */                   \
     _ejs_object_define_value_property (_ejs_##ArrayType##Array, _ejs_atom_BYTES_PER_ELEMENT, NUMBER_TO_EJSVAL(elementSizeInBytes), EJS_PROP_FLAGS_ENUMERABLE); \
                                                                         \
-    typed_array_elsizes[EJS_TYPEDARRAY_##EnumType] = elementSizeInBytes;                 \
-    typed_array_protos[EJS_TYPEDARRAY_##EnumType] = _ejs_##ArrayType##Array_proto;       \
-    typed_array_specops[EJS_TYPEDARRAY_##EnumType] = &_ejs_##arraytype##array_specops;   \
+    _ejs_typed_array_elsizes[EJS_TYPEDARRAY_##EnumType] = elementSizeInBytes; \
+    _ejs_typed_array_protos[EJS_TYPEDARRAY_##EnumType] = _ejs_##ArrayType##Array_proto; \
+    _ejs_typed_array_specops[EJS_TYPEDARRAY_##EnumType] = &_ejs_##arraytype##array_specops; \
                                                                         \
 EJS_MACRO_END
 
@@ -504,12 +561,6 @@ _ejs_arraybuffer_specop_get_own_property (ejsval obj, ejsval propertyName)
             if (needle_int >= 0 && needle_int < EJS_ARRAY_LEN(obj))
                 return NULL; // XXX
         }
-    }
-
-    if (!ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName))) {
-        EJSArray* arr = (EJSArray*)EJSVAL_TO_OBJECT(obj);
-        _ejs_property_desc_set_value (&arr->array_length_desc, NUMBER_TO_EJSVAL(EJSARRAY_LEN(arr)));
-        return &arr->array_length_desc;
     }
 
     return _ejs_object_specops.get_own_property (obj, propertyName);

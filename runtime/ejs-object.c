@@ -543,7 +543,7 @@ _ejs_object_create (ejsval proto)
 {
     if (EJSVAL_IS_NULL(proto)) proto = _ejs_Object_prototype;
 
-    EJSSpecOps *ops;
+    EJSSpecOps *ops = NULL;
 
     if      (EJSVAL_EQ(proto, _ejs_Object_prototype)) ops = &_ejs_object_specops;
     else if (EJSVAL_EQ(proto, _ejs_Array_proto))      ops = &_ejs_array_specops;
@@ -560,8 +560,16 @@ _ejs_object_create (ejsval proto)
     else if (EJSVAL_EQ(proto, _ejs_URIError_proto))  ops = &_ejs_error_specops;
     else if (EJSVAL_EQ(proto, _ejs_Error_proto))  ops = &_ejs_error_specops;
     else if (EJSVAL_EQ(proto, _ejs_XMLHttpRequest_proto))  ops = &_ejs_xmlhttprequest_specops;
-    else                                              ops = EJSVAL_TO_OBJECT(proto)->ops;
-
+    else {
+        for (int i = 0; i < EJS_TYPEDARRAY_TYPE_COUNT; i ++) {
+            if (EJSVAL_EQ(proto, _ejs_typed_array_protos[i]))
+                ops = _ejs_typed_array_specops[i];
+        }
+    }
+    
+    if (!ops)
+        ops = EJSVAL_TO_OBJECT(proto)->ops;
+    
     ejsval objval = _ejs_object_new (proto, ops);
     //EJSObject* obj = EJSVAL_TO_OBJECT(objval);
     //LOG ("ejs_object_create returned %p\n", obj);
