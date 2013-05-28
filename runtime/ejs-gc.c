@@ -632,6 +632,10 @@ sweep_heap()
                     }
                 }
                 SANITY(verify_free_counts(info));
+                if (info->num_free_cells == info->num_cells) {
+                    // reset the bump ptr
+                    info->bump_ptr = info->page_start;
+                }
             }
         })
     }
@@ -651,45 +655,13 @@ mark_from_roots()
             if (root_ptr == NULL)
                 continue;
             WORKLIST_PUSH_AND_GRAY(root_ptr);
-
-#if false
-            set_black (root_ptr);
-            if (EJSVAL_IS_OBJECT(rootval)) {
-                _scan_from_ejsobject((EJSObject*)root_ptr);
-            }
-            else if (EJSVAL_IS_STRING(rootval)) {
-                _scan_from_ejsprimstr((EJSPrimString*)root_ptr);
-            }
-            else if (EJSVAL_IS_CLOSUREENV(rootval)) {
-                _scan_from_ejsclosureenv((EJSClosureEnv*)root_ptr);
-            }
-            else
-                abort();
-#endif
         }
     }
 }
 
-typedef struct {
-    GCObjectPtr __1;
-    GCObjectPtr __2;
-    GCObjectPtr __3;
-    GCObjectPtr __4;
-    GCObjectPtr __5;
-    GCObjectPtr __6;
-    GCObjectPtr __7;
-    GCObjectPtr __8;
-    GCObjectPtr __9;
-    GCObjectPtr __10;
-    GCObjectPtr __11;
-    GCObjectPtr __13;
-    GCObjectPtr __14;
-    GCObjectPtr __15;
-} amd64_regs;
-
 #if IOS
 #define MARK_REGISTERS
-#else
+#elif OSX
 #define MARK_REGISTERS EJS_MACRO_START \
     GCObjectPtr __rax, __rbx, __rcx, __rdx, __rsi, __rdi, __rbp, __rsp, __r8, __r9, __r10, __r11, __r12, __r13, __r14, __r15; \
     __asm ("movq %%rax, %0; movq %%rbx, %1; movq %%rcx, %2; movq %%rdx, %3; movq %%rsi, %4;" \
@@ -701,6 +673,8 @@ typedef struct {
                                                                         \
     mark_pointers_in_range(&__r15, &__rax);                             \
     EJS_MACRO_END
+#else
+#error "put code here to mark registers"
 #endif
 
 static void
