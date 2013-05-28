@@ -32,6 +32,9 @@ MIN_IOS_VERSION=5.0
 DEVELOPER_ROOT?=/Applications/Xcode.app/Contents/Developer
 IOS_SDK_VERSION?=6.1
 
+OSX_ARCH=-arch x86_64
+OSX_CFLAGS=$(CFLAGS) -DOSX=1
+
 IOSSIM_ARCH=-arch i386
 IOSSIM_ARCH_FLAGS=
 IOSSIM_TRIPLE=i386-apple-darwin
