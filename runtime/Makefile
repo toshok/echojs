@@ -94,13 +94,13 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch
 
 %.o.osx: %.c
 	@mkdir -p .deps
-	@$(OSX_CC) -MM $(CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.osx,,`/$@/ > .deps/$@-deps
-	@echo [$(OSX_CC) osx] $< && $(OSX_CC) -ObjC $(CFLAGS)  -c -o $@ $<
+	@$(OSX_CC) -MM $(OSX_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.osx,,`/$@/ > .deps/$@-deps
+	@echo [$(OSX_CC) osx] $< && $(OSX_CC) -ObjC $(OSX_CFLAGS)  -c -o $@ $<
 
 %.o.osx: %.m
 	@mkdir -p .deps
-	@$(OSX_CC) -MM $(CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.osx,,`/$@/ > .deps/$@-deps
-	@echo [$(OSX_CC) osx] $< && $(OSX_CC) $(CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
+	@$(OSX_CC) -MM $(OSX_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.osx,,`/$@/ > .deps/$@-deps
+	@echo [$(OSX_CC) osx] $< && $(OSX_CC) $(OSX_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
 
 %.o.sim: %.c
 	@mkdir -p .deps
