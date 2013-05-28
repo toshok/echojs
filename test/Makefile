@@ -28,6 +28,7 @@ $(call addExpectedFailure, number1.js,              "fails because node outputs 
 $(call addExpectedFailure, json4.js,                "fails due to properties being serialized in a different order.")
 $(call addExpectedFailure, object6.js,              "fails because we don't define everything we should.")
 $(call addExpectedFailure, esprima-roundtrip2.js,   "esprima fails to return a parse tree if loc = true.")
+$(call addExpectedFailure, typedarray3.js,          "we use %g to format floats/doubles, and differ when printing numbers.")
 
 check: check-unit-tests run-tests
 
@@ -96,7 +97,7 @@ test-%: echo-% .%.js.ejs-out .%.js.node-out
 		else \
 			echo "\033[31mFAILURE\033[0m"; \
 			echo $$test_js >> .failures; \
-			diff .$$test_js.ejs-out .$$test_js.node-out > .$$test_js.diff; \
+			diff -u .$$test_js.ejs-out .$$test_js.node-out > .$$test_js.diff; \
 		fi \
 	fi
 
