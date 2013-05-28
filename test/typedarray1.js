@@ -3,9 +3,9 @@ var arrayBufferSize = 200;
 var offsetElements = 10;
 
 function dumpStuff(a) {
-  console.log (a.length);
-  console.log (a.byteOffset);
-  console.log (a.byteLength);
+  console.log ("length = " + a.length);
+  console.log ("byteOffset = " + a.byteOffset);
+  console.log ("byteLength = " + a.byteLength);
 }
 
 console.log ("Int8Array");
