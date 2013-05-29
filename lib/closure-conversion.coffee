@@ -57,13 +57,13 @@ LocateEnv = class LocateEnv extends NodeVisitor
                 env = current_env
 
                 # if the current environment declares that identifier, nothing to do.
-                return n if env.decls.member n.name
+                return n if env.decls.has n.name
 
                 closed_over = false
                 # look up our environment stack for the decl for it.
                 env = env.parent
                 while env?
-                        if env.decls?.member n.name
+                        if env.decls?.has n.name
                                 closed_over = true
                                 env = null
                         else
@@ -74,7 +74,7 @@ LocateEnv = class LocateEnv extends NodeVisitor
                 if closed_over
                         env = current_env.parent
                         while env?
-                                if env.decls?.member n.name
+                                if env.decls?.has n.name
                                         env.closed.add n.name
                                         env = null
                                 else
@@ -85,8 +85,8 @@ LocateEnv = class LocateEnv extends NodeVisitor
                 n
 
 #                while env?
-#                        if env.decls.member n.name
-#                                if env.closed.member n.name
+#                        if env.decls.has n.name
+#                                if env.closed.has n.name
 #                                        n.ejs_substitute = true
 #                                else if env isnt current_env
 #                                        env.closed.add n.name
@@ -185,9 +185,23 @@ class HoistVars extends NodeVisitor
                 @function_stack = new Stack
 
         visitFunction: (n) ->
-                @function_stack.push { func: n, vars: [] }
+                @function_stack.push { func: n, vars: new Set }
                 n = super
-                n.body.body = @function_stack.top.vars.concat n.body.body
+
+                create_empty_declarator = (decl_name) ->
+                        type: syntax.VariableDeclarator
+                        id: create_identifier decl_name
+                        init: null
+
+                debug.log 2, "@function_stack.top.vars.size = #{@function_stack.top.vars.size()}"
+                if @function_stack.top.vars.size() > 0
+                        debug.log 2, "unshifting"
+                        n.body.body.unshift {
+                                type: syntax.VariableDeclaration
+                                declarations: create_empty_declarator varname for varname in @function_stack.top.vars.keys()
+                                kind: "let"
+                        }
+
                 @function_stack.pop()
                 n
 
@@ -202,16 +216,8 @@ class HoistVars extends NodeVisitor
                         
         visitForIn: (n) ->
                 if n.left.type is syntax.VariableDeclaration
-                        @function_stack.top.vars.push
-                                type: syntax.VariableDeclaration
-                                declarations: [{
-                                        type: syntax.VariableDeclarator
-                                        id: create_identifier n.left.declarations[0].id.name
-                                        init: null
-                                }],
-                                kind: "let"
+                        @function_stack.top.vars.add n.left.declarations[0].id.name
                         n.left = create_identifier n.left.declarations[0].id.name
-
                 n.right = @visit n.right
                 n.body = @visit n.body
                 n
@@ -230,24 +236,12 @@ class HoistVars extends NodeVisitor
 
                                         assignments.push assignment
 
+                        # vars are hoisted to the containing function's toplevel scope
+                        @function_stack.top.vars.add decl.id.name for decl in n.declarations
+
                         if assignments.length is 0
-                                @function_stack.top.vars.push
-                                        type: syntax.VariableDeclaration
-                                        declarations: n.declarations
-                                        kind: "let"
                                 return { type: syntax.EmptyStatement }
                                 
-                        # vars are hoisted to the containing function's toplevel scope
-                        create_empty_declarator = (decl_name) ->
-                                type: syntax.VariableDeclarator
-                                id: create_identifier decl_name
-                                init: null
-
-                        @function_stack.top.vars.push
-                                type: syntax.VariableDeclaration
-                                declarations: create_empty_declarator decl.id.name for decl in n.declarations
-                                kind: "let"
-                                       
                         # now return the new assignments, which will replace the original variable
                         # declaration node.
                         if assignments.length > 1
@@ -418,39 +412,15 @@ class SubstituteVariables extends NodeVisitor
 
 
         visitVariableDeclaration: (n) ->
-                rv = []
-                for decl in n.declarations
+                # we remove from the declarations those variables that are allocated into environment slots
+                decls = n.declarations
+
+                n.declarations = []
+                
+                for decl in decls
                         decl.init = @visit decl.init
-                        if hasOwnProperty.call @currentMapping(), decl.id.name
-                                ###
-                                decl_mapping = @currentMapping()["%slot_mapping"][decl.id.name]
-                                console.log "decl_mapping for #{decl.id.name} is #{decl_mapping}"
-                                assignment =
-                                        type: syntax.AssignmentExpression,
-                                        operator: "="
-                                        left:
-                                                type: syntax.CallExpression
-                                                callee: create_identifier "%slot"
-                                                arguments: [ @currentMapping()["%env"], (create_number_literal decl_mapping), (create_string_literal decl.id.name) ]
-                                        right: decl.init || { type: syntax.Identifier, name: "undefined" }
-                                
-                                if @skipExpressionStatement
-                                        rv.push assignment
-                                else
-                                        rv.push {
-                                                type: syntax.ExpressionStatement
-                                                expression: assignment
-                                        }
-                                ###
-                                rv.push { type: syntax.EmptyStatement }
-                        else
-                                rv.push {
-                                        type: syntax.VariableDeclaration
-                                        declarations: [decl]
-                                        kind: n.kind
-                                }
-                        console.log "variable declaration is #{escodegen.generate rvv for rvv in rv}"
-                rv                        
+                        n.declarations.push decl if not hasOwnProperty.call @currentMapping(), decl.id.name
+                n
 
         visitProperty: (n) ->
                 # we don't visit property keys here
@@ -545,7 +515,7 @@ class SubstituteVariables extends NodeVisitor
 
                         # we need to push assignments of any closed over parameters into the environment at this point
                         for param in n.params
-                                if n.ejs_env.closed.member param.name
+                                if n.ejs_env.closed.has param.name
                                         prepends.push {
                                                 type: syntax.ExpressionStatement
                                                 expression:
@@ -566,7 +536,7 @@ class SubstituteVariables extends NodeVisitor
                         
                         # remove all mappings for variables declared in this block
                         if n.ejs_decls?
-                                new_mapping = reject new_mapping, (sym) -> hasOwnProperty.call n.ejs_decls, sym
+                                new_mapping = reject new_mapping, (sym) -> n.ejs_decls.has sym
 
                         flatten_memberexp = (exp, mapping) ->
                                 if exp.type isnt syntax.CallExpression

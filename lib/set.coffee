@@ -7,12 +7,15 @@ exports.Set = class Set
                 @set = Object.create null
                 @set[a] = a for a in arr
 
-        member: (el) -> hasOwn.call @set, el
+        has: (el) -> hasOwn.call @set, el
 
         add: (el) -> @set[el] = el
         remove: (el) -> delete @set[el]
                 
         map: (f) ->  f el for el of @set when hasOwn.call @set, el
+
+        keys: -> @values()
+        values: -> Object.getOwnPropertyNames @set
         
         union: (other_set) ->
                 result = new Set
@@ -22,12 +25,12 @@ exports.Set = class Set
 
         subtract: (other_set) ->
                 result = new Set 
-                @map (el) -> result.add el if not other_set.member el
+                @map (el) -> result.add el if not other_set.has el
                 result
 
         intersect: (other_set) ->
                 result = new Set
-                @map (el) -> result.add el if other_set.member el
+                @map (el) -> result.add el if other_set.has el
                 result
 
         toString: ->
