@@ -85,14 +85,12 @@ namespace ejsllvm {
     void
     Value_init (ejsval exports)
     {
-        START_SHADOW_STACK_FRAME;
-
-        _ejs_gc_add_named_root (_ejs_Value_proto);
+        _ejs_gc_add_root (&_ejs_Value_proto);
         _ejs_Value_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_object_specops);
 
-        ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMValue", (EJSClosureFunc)Value_impl));
-        _ejs_Value = tmpobj;
+        _ejs_Value = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMValue", (EJSClosureFunc)Value_impl, _ejs_Value_proto);
 
+        _ejs_object_setprop_utf8 (exports,              "Value", _ejs_Value);
 
 #define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Value_proto, EJS_STRINGIFY(x), Value_prototype_##x)
 
@@ -103,9 +101,5 @@ namespace ejsllvm {
         PROTO_METHOD(toString);
 
 #undef PROTO_METHOD
-
-        _ejs_object_setprop_utf8 (exports,              "Value", _ejs_Value);
-
-        END_SHADOW_STACK_FRAME;
     }
 };

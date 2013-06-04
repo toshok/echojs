@@ -238,18 +238,14 @@ namespace ejsllvm {
         module_specops.class_name = "LLVMModule";
         module_specops.allocate = Module_allocate;
 
-        START_SHADOW_STACK_FRAME;
-
-        _ejs_gc_add_named_root (_ejs_Module_proto);
+        _ejs_gc_add_root (&_ejs_Module_proto);
         _ejs_Module_proto = _ejs_object_new(_ejs_Object_prototype, &module_specops);
 
-        ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMModule", (EJSClosureFunc)Module_impl));
-        _ejs_Module = tmpobj;
+        _ejs_Module = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMModule", (EJSClosureFunc)Module_impl, _ejs_Module_proto);
 
+        _ejs_object_setprop_utf8 (exports,              "Module", _ejs_Module);
 
 #define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Module_proto, EJS_STRINGIFY(x), Module_prototype_##x)
-
-        _ejs_object_setprop (_ejs_Module,       _ejs_atom_prototype,  _ejs_Module_proto);
 
         PROTO_METHOD(getGlobalVariable);
         PROTO_METHOD(getOrInsertIntrinsic);
@@ -262,10 +258,5 @@ namespace ejsllvm {
         PROTO_METHOD(writeToFile);
 
 #undef PROTO_METHOD
-
-        _ejs_object_setprop_utf8 (exports,              "Module", _ejs_Module);
-
-        END_SHADOW_STACK_FRAME;
     }
-
 };

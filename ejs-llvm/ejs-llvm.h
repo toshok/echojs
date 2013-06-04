@@ -16,6 +16,8 @@
 #include "llvm/Support/raw_os_ostream.h"
 #include "llvm/Support/raw_ostream.h"
 
+#define ADD_STACK_ROOT(t,v,i) t v = i
+
 #define REQ_FUN_ARG(I, VAR)                                             \
   if (argc <= (I) || !EJSVAL_IS_FUNCTION(args[I]))			\
     printf ("in function %s\n", __PRETTY_FUNCTION__);			\

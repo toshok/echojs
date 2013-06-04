@@ -88,15 +88,13 @@ namespace ejsllvm {
     void
     StructType_init (ejsval exports)
     {
-        START_SHADOW_STACK_FRAME;
-
-        _ejs_StructType = _ejs_function_new_utf8 (_ejs_null, "LLVMStructType", (EJSClosureFunc)StructType_impl);
         _ejs_StructType_proto = _ejs_object_create (Type_get_prototype());
+        _ejs_StructType = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMStructType", (EJSClosureFunc)StructType_impl, _ejs_StructType_proto);
+
+        _ejs_object_setprop_utf8 (exports,              "StructType", _ejs_StructType);
 
 #define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_StructType, EJS_STRINGIFY(x), StructType_##x)
 #define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_StructType_proto, EJS_STRINGIFY(x), StructType_prototype_##x)
-
-        _ejs_object_setprop (_ejs_StructType,       _ejs_atom_prototype,  _ejs_StructType_proto);
 
         OBJ_METHOD(create);
 
@@ -105,10 +103,5 @@ namespace ejsllvm {
 
 #undef OBJ_METHOD
 #undef PROTO_METHOD
-
-        _ejs_object_setprop_utf8 (exports,              "StructType", _ejs_StructType);
-
-        END_SHADOW_STACK_FRAME;
     }
-
 };

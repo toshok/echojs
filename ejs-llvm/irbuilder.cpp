@@ -363,18 +363,14 @@ namespace ejsllvm {
     void
     IRBuilder_init (ejsval exports)
     {
-        START_SHADOW_STACK_FRAME;
-
-        _ejs_gc_add_named_root (_ejs_IRBuilder_proto);
+        _ejs_gc_add_root (&_ejs_IRBuilder_proto);
         _ejs_IRBuilder_proto = _ejs_object_create(_ejs_Object_prototype);
 
-        ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMIRBuilder", (EJSClosureFunc)IRBuilder_impl));
-        _ejs_IRBuilder = tmpobj;
+        _ejs_IRBuilder = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMIRBuilder", (EJSClosureFunc)IRBuilder_impl, _ejs_IRBuilder_proto);
 
+        _ejs_object_setprop_utf8 (exports,              "IRBuilder", _ejs_IRBuilder);
 
 #define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_IRBuilder, EJS_STRINGIFY(x), IRBuilder_##x)
-
-        _ejs_object_setprop (_ejs_IRBuilder,       _ejs_atom_prototype,  _ejs_IRBuilder_proto);
 
         OBJ_METHOD(setInsertPoint);
         OBJ_METHOD(setInsertPointStartBB);
@@ -408,9 +404,5 @@ namespace ejsllvm {
         OBJ_METHOD(createResume);
 
 #undef OBJ_METHOD
-
-        _ejs_object_setprop_utf8 (exports,              "IRBuilder", _ejs_IRBuilder);
-
-        END_SHADOW_STACK_FRAME;
     }
 };

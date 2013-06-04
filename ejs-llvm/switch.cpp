@@ -94,28 +94,18 @@ namespace ejsllvm {
         switch_specops.class_name = "LLVMSwitch";
         switch_specops.allocate = Switch_allocate;
 
-        START_SHADOW_STACK_FRAME;
-
-        _ejs_gc_add_named_root (_ejs_Switch_proto);
+        _ejs_gc_add_root (&_ejs_Switch_proto);
         _ejs_Switch_proto = _ejs_object_new(_ejs_Object_prototype, &switch_specops);
 
-        ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMSwitch", (EJSClosureFunc)Switch_impl));
-        _ejs_Switch = tmpobj;
-
+        _ejs_Switch = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMSwitch", (EJSClosureFunc)Switch_impl, _ejs_Switch_proto);
+        _ejs_object_setprop_utf8 (exports,              "Switch", _ejs_Switch);
 
 #define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Switch_proto, EJS_STRINGIFY(x), Switch_prototype_##x)
-
-        _ejs_object_setprop (_ejs_Switch,       _ejs_atom_prototype,  _ejs_Switch_proto);
 
         PROTO_METHOD(dump);
         PROTO_METHOD(toString);
         PROTO_METHOD(addCase);
 
 #undef PROTO_METHOD
-
-        _ejs_object_setprop_utf8 (exports,              "Switch", _ejs_Switch);
-
-        END_SHADOW_STACK_FRAME;
     }
-
 };

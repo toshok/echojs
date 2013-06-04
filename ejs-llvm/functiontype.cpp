@@ -98,18 +98,15 @@ namespace ejsllvm {
     void
     FunctionType_init (ejsval exports)
     {
-        START_SHADOW_STACK_FRAME;
-
-        _ejs_gc_add_named_root (_ejs_FunctionType_proto);
+        _ejs_gc_add_root (&_ejs_FunctionType_proto);
         _ejs_FunctionType_proto = _ejs_object_create (Type_get_prototype());
 
-        ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMFunctionType", (EJSClosureFunc)FunctionType_impl));
-        _ejs_FunctionType = tmpobj;
+        _ejs_FunctionType = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMFunctionType", (EJSClosureFunc)FunctionType_impl, _ejs_FunctionType_proto);
+
+        _ejs_object_setprop_utf8 (exports,              "FunctionType", _ejs_FunctionType);
 
 #define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_FunctionType, EJS_STRINGIFY(x), FunctionType_##x)
 #define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_FunctionType_proto, EJS_STRINGIFY(x), FunctionType_prototype_##x)
-
-        _ejs_object_setprop (_ejs_FunctionType,       _ejs_atom_prototype,  _ejs_FunctionType_proto);
 
         OBJ_METHOD(get);
         PROTO_METHOD(getReturnType);
@@ -119,10 +116,6 @@ namespace ejsllvm {
 
 #undef OBJ_METHOD
 #undef PROTO_METHOD
-
-        _ejs_object_setprop_utf8 (exports,              "FunctionType", _ejs_FunctionType);
-
-        END_SHADOW_STACK_FRAME;
     }
 
 };

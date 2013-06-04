@@ -101,18 +101,14 @@ namespace ejsllvm {
         landingpad_specops.class_name = "LLVMLandingPad";
         landingpad_specops.allocate = LandingPad_allocate;
 
-        START_SHADOW_STACK_FRAME;
-
-        _ejs_gc_add_named_root (_ejs_LandingPad_proto);
+        _ejs_gc_add_root (&_ejs_LandingPad_proto);
         _ejs_LandingPad_proto = _ejs_object_new(_ejs_Object_prototype, &landingpad_specops);
 
-        ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMLandingPad", (EJSClosureFunc)LandingPad_impl));
-        _ejs_LandingPad = tmpobj;
+        _ejs_LandingPad = _ejs_function_new_utf8_with_proto  (_ejs_null, "LLVMLandingPad", (EJSClosureFunc)LandingPad_impl, _ejs_LandingPad_proto);
 
+        _ejs_object_setprop_utf8 (exports,              "LandingPad", _ejs_LandingPad);
 
 #define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_LandingPad_proto, EJS_STRINGIFY(x), LandingPad_prototype_##x)
-
-        _ejs_object_setprop (_ejs_LandingPad,       _ejs_atom_prototype,  _ejs_LandingPad_proto);
 
         PROTO_METHOD(dump);
         PROTO_METHOD(toString);
@@ -120,10 +116,6 @@ namespace ejsllvm {
         PROTO_METHOD(addClause);
 
 #undef PROTO_METHOD
-
-        _ejs_object_setprop_utf8 (exports,              "LandingPad", _ejs_LandingPad);
-
-        END_SHADOW_STACK_FRAME;
     }
 
 };

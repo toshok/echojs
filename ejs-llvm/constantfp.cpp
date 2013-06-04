@@ -32,28 +32,20 @@ namespace ejsllvm {
     void
     ConstantFP_init (ejsval exports)
     {
-        START_SHADOW_STACK_FRAME;
-
-        _ejs_gc_add_named_root (_ejs_ConstantFP_proto);
+        _ejs_gc_add_root (&_ejs_ConstantFP_proto);
         _ejs_ConstantFP_proto = _ejs_object_create(_ejs_Object_prototype);
 
-        ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMConstantFP", (EJSClosureFunc)ConstantFP_impl));
-        _ejs_ConstantFP = tmpobj;
+        _ejs_ConstantFP = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMConstantFP", (EJSClosureFunc)ConstantFP_impl, _ejs_ConstantFP_proto);
 
+        _ejs_object_setprop_utf8 (exports,              "ConstantFP", _ejs_ConstantFP);
 
 #define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_ConstantFP, EJS_STRINGIFY(x), ConstantFP_##x)
 #define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_ConstantFP_proto, EJS_STRINGIFY(x), ConstantFP_prototype_##x)
-
-        _ejs_object_setprop (_ejs_ConstantFP,       _ejs_atom_prototype,  _ejs_ConstantFP_proto);
 
         OBJ_METHOD(getDouble);
 
 #undef PROTO_METHOD
 #undef OBJ_METHOD
-
-        _ejs_object_setprop_utf8 (exports,              "ConstantFP", _ejs_ConstantFP);
-
-        END_SHADOW_STACK_FRAME;
     }
 
 };

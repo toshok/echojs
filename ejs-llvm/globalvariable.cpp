@@ -105,27 +105,19 @@ namespace ejsllvm {
     void
     GlobalVariable_init (ejsval exports)
     {
-        START_SHADOW_STACK_FRAME;
-
-        _ejs_gc_add_named_root (_ejs_GlobalVariable_proto);
+        _ejs_gc_add_root (&_ejs_GlobalVariable_proto);
         _ejs_GlobalVariable_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_object_specops);
 
-        ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMGlobalVariable", (EJSClosureFunc)GlobalVariable_impl));
-        _ejs_GlobalVariable = tmpobj;
+        _ejs_GlobalVariable = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMGlobalVariable", (EJSClosureFunc)GlobalVariable_impl, _ejs_GlobalVariable_proto);
 
+        _ejs_object_setprop_utf8 (exports,              "GlobalVariable", _ejs_GlobalVariable);
 
 #define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_GlobalVariable_proto, EJS_STRINGIFY(x), GlobalVariable_prototype_##x)
-
-        _ejs_object_setprop (_ejs_GlobalVariable,       _ejs_atom_prototype,  _ejs_GlobalVariable_proto);
 
         PROTO_METHOD(setInitializer);
         PROTO_METHOD(dump);
         PROTO_METHOD(toString);
 
 #undef PROTO_METHOD
-
-        _ejs_object_setprop_utf8 (exports,              "GlobalVariable", _ejs_GlobalVariable);
-
-        END_SHADOW_STACK_FRAME;
     }
 };

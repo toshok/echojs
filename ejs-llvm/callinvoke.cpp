@@ -106,12 +106,10 @@ namespace ejsllvm {
         call_specops.class_name = "LLVMCall";
         call_specops.allocate = Call_allocate;
 
-        START_SHADOW_STACK_FRAME;
-
-        _ejs_gc_add_named_root (_ejs_Call_proto);
+        _ejs_gc_add_root (&_ejs_Call_proto);
         _ejs_Call_proto = _ejs_object_new(_ejs_Object_prototype, &call_specops);
 
-        ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMCall", (EJSClosureFunc)Call_impl));
+        ejsval tmpobj = _ejs_function_new_utf8 (_ejs_null, "LLVMCall", (EJSClosureFunc)Call_impl);
         _ejs_Call = tmpobj;
 
 
@@ -128,8 +126,6 @@ namespace ejsllvm {
 #undef PROTO_METHOD
 
         _ejs_object_setprop_utf8 (exports,              "Call", _ejs_Call);
-
-        END_SHADOW_STACK_FRAME;
     }
 
     /// invoke instructions
@@ -221,18 +217,14 @@ namespace ejsllvm {
         invoke_specops.class_name = "LLVMInvoke";
         invoke_specops.allocate = Invoke_allocate;
 
-        START_SHADOW_STACK_FRAME;
-
-        _ejs_gc_add_named_root (_ejs_Invoke_proto);
+        _ejs_gc_add_root (&_ejs_Invoke_proto);
         _ejs_Invoke_proto = _ejs_object_new(_ejs_Object_prototype, &invoke_specops);
 
-        ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMInvoke", (EJSClosureFunc)Invoke_impl));
-        _ejs_Invoke = tmpobj;
+        _ejs_Invoke = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMInvoke", (EJSClosureFunc)Invoke_impl, _ejs_Invoke_proto);
 
+        _ejs_object_setprop_utf8 (exports,              "Invoke", _ejs_Invoke);
 
 #define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Invoke_proto, EJS_STRINGIFY(x), Invoke_prototype_##x)
-
-        _ejs_object_setprop (_ejs_Invoke,       _ejs_atom_prototype,  _ejs_Invoke_proto);
 
         PROTO_METHOD(setOnlyReadsMemory);
         PROTO_METHOD(setDoesNotAccessMemory);
@@ -242,9 +234,6 @@ namespace ejsllvm {
 
 #undef PROTO_METHOD
 
-        _ejs_object_setprop_utf8 (exports,              "Invoke", _ejs_Invoke);
-
-        END_SHADOW_STACK_FRAME;
     }
 
 };

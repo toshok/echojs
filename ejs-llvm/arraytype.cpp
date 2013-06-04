@@ -83,19 +83,16 @@ namespace ejsllvm {
         arraytype_specops.class_name = "LLVMArray";
         arraytype_specops.allocate = ArrayType_allocate;
 
-        START_SHADOW_STACK_FRAME;
-
-        _ejs_gc_add_named_root (_ejs_ArrayType_proto);
+        _ejs_gc_add_root (&_ejs_ArrayType_proto);
         _ejs_ArrayType_proto = _ejs_object_new(_ejs_Object_prototype, &arraytype_specops);
 
-        ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMArrayType", (EJSClosureFunc)ArrayType_impl));
-        _ejs_ArrayType = tmpobj;
+        _ejs_ArrayType = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMArrayType", (EJSClosureFunc)ArrayType_impl, _ejs_ArrayType_proto);
+
+        _ejs_object_setprop_utf8 (exports,              "ArrayType", _ejs_ArrayType);
 
 
 #define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_ArrayType, EJS_STRINGIFY(x), ArrayType_##x)
 #define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_ArrayType_proto, EJS_STRINGIFY(x), ArrayType_prototype_##x)
-
-        _ejs_object_setprop (_ejs_ArrayType,       _ejs_atom_prototype,  _ejs_ArrayType_proto);
 
         OBJ_METHOD(get);
 
@@ -105,9 +102,6 @@ namespace ejsllvm {
 #undef PROTO_METHOD
 #undef OBJ_METHOD
 
-        _ejs_object_setprop_utf8 (exports,              "ArrayType", _ejs_ArrayType);
-
-        END_SHADOW_STACK_FRAME;
     }
 
 };

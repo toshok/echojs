@@ -103,19 +103,15 @@ namespace ejsllvm {
         basicblock_specops.class_name = "LLVMBasicBlock";
         basicblock_specops.allocate = BasicBlock_allocate;
 
-        START_SHADOW_STACK_FRAME;
-
-        _ejs_gc_add_named_root (_ejs_BasicBlock_proto);
+        _ejs_gc_add_root (&_ejs_BasicBlock_proto);
         _ejs_BasicBlock_proto = _ejs_object_new(_ejs_Object_prototype, &basicblock_specops);
 
-        ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMBasicBlock", (EJSClosureFunc)BasicBlock_impl));
-        _ejs_BasicBlock = tmpobj;
+        _ejs_BasicBlock = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMBasicBlock", (EJSClosureFunc)BasicBlock_impl, _ejs_BasicBlock_proto);
 
+        _ejs_object_setprop_utf8 (exports,              "BasicBlock", _ejs_BasicBlock);
 
 #define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_BasicBlock_proto, EJS_STRINGIFY(x), BasicBlock_prototype_##x)
 #define PROTO_ACCESSOR(x, y) EJS_INSTALL_GETTER(_ejs_BasicBlock_proto, x, BasicBlock_prototype_##y)
-
-        _ejs_object_setprop (_ejs_BasicBlock,       _ejs_atom_prototype,  _ejs_BasicBlock_proto);
 
         PROTO_ACCESSOR("name", getName);
         PROTO_ACCESSOR("parent", getParent);
@@ -126,8 +122,5 @@ namespace ejsllvm {
 #undef PROTO_METHOD
 #undef PROTO_ACCESSOR
 
-        _ejs_object_setprop_utf8 (exports,              "BasicBlock", _ejs_BasicBlock);
-
-        END_SHADOW_STACK_FRAME;
     }
 };

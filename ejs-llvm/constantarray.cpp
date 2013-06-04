@@ -39,28 +39,20 @@ namespace ejsllvm {
   void
   ConstantArray_init (ejsval exports)
   {
-    START_SHADOW_STACK_FRAME;
-
-    _ejs_gc_add_named_root (_ejs_ConstantArray_proto);
+    _ejs_gc_add_root (&_ejs_ConstantArray_proto);
     _ejs_ConstantArray_proto = _ejs_object_create(_ejs_Object_prototype);
 
-    ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMConstantArray", (EJSClosureFunc)ConstantArray_impl));
-    _ejs_ConstantArray = tmpobj;
+    _ejs_ConstantArray = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMConstantArray", (EJSClosureFunc)ConstantArray_impl, _ejs_ConstantArray_proto);
 
+    _ejs_object_setprop_utf8 (exports,              "ConstantArray", _ejs_ConstantArray);
 
 #define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_ConstantArray, EJS_STRINGIFY(x), ConstantArray_##x)
 #define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_ConstantArray_proto, EJS_STRINGIFY(x), ConstantArray_prototype_##x)
-
-    _ejs_object_setprop (_ejs_ConstantArray,       _ejs_atom_prototype,  _ejs_ConstantArray_proto);
 
     OBJ_METHOD(get);
 
 #undef PROTO_METHOD
 #undef OBJ_METHOD
-
-    _ejs_object_setprop_utf8 (exports,              "ConstantArray", _ejs_ConstantArray);
-
-    END_SHADOW_STACK_FRAME;
   }
 
 };

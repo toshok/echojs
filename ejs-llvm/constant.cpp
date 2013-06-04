@@ -58,19 +58,15 @@ namespace ejsllvm {
     void
     Constant_init (ejsval exports)
     {
-        START_SHADOW_STACK_FRAME;
-
-        _ejs_gc_add_named_root (_ejs_Constant_proto);
+        _ejs_gc_add_root (&_ejs_Constant_proto);
         _ejs_Constant_proto = _ejs_object_create(_ejs_Object_prototype);
 
-        ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMConstant", (EJSClosureFunc)Constant_impl));
-        _ejs_Constant = tmpobj;
+        _ejs_Constant = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMConstant", (EJSClosureFunc)Constant_impl, _ejs_Constant_proto);
 
+        _ejs_object_setprop_utf8 (exports,              "Constant", _ejs_Constant);
 
 #define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Constant, EJS_STRINGIFY(x), Constant_##x)
 #define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Constant_proto, EJS_STRINGIFY(x), Constant_prototype_##x)
-
-        _ejs_object_setprop (_ejs_Constant,       _ejs_atom_prototype,  _ejs_Constant_proto);
 
         OBJ_METHOD(getNull);
         OBJ_METHOD(getAggregateZero);
@@ -80,9 +76,6 @@ namespace ejsllvm {
 #undef PROTO_METHOD
 #undef OBJ_METHOD
 
-        _ejs_object_setprop_utf8 (exports,              "Constant", _ejs_Constant);
-
-        END_SHADOW_STACK_FRAME;
     }
 
 };

@@ -105,15 +105,12 @@ namespace ejsllvm {
     void
     Type_init (ejsval exports)
     {
-        START_SHADOW_STACK_FRAME;
-
-        _ejs_gc_add_named_root (_ejs_Type_proto);
+        _ejs_gc_add_root (&_ejs_Type_proto);
         _ejs_Type_proto = _ejs_object_create(_ejs_Object_prototype);
 
-        ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMType", (EJSClosureFunc)Type_impl));
-        _ejs_Type = tmpobj;
+        _ejs_Type = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMType", (EJSClosureFunc)Type_impl, _ejs_Type_proto);
 
-        _ejs_object_setprop (_ejs_Type,       _ejs_atom_prototype,  _ejs_Type_proto);
+        _ejs_object_setprop_utf8 (exports,              "Type", _ejs_Type);
 
 #define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Type, EJS_STRINGIFY(x), Type_##x)
 #define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Type_proto, EJS_STRINGIFY(x), Type_prototype_##x)
@@ -129,10 +126,5 @@ namespace ejsllvm {
         PROTO_METHOD(isVoid);
         PROTO_METHOD(dump);
         PROTO_METHOD(toString);
-
-        _ejs_object_setprop_utf8 (exports,              "Type", _ejs_Type);
-
-        END_SHADOW_STACK_FRAME;
     }
-
 };

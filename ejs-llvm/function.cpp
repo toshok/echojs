@@ -171,19 +171,15 @@ namespace ejsllvm {
         function_specops.class_name = "LLVMFunction";
         function_specops.allocate = Function_allocate;
 
-        START_SHADOW_STACK_FRAME;
-
-        _ejs_gc_add_named_root (_ejs_Function_proto);
+        _ejs_gc_add_root (&_ejs_Function_proto);
         _ejs_Function_proto = _ejs_object_new(_ejs_Object_prototype, &function_specops);
 
-        ADD_STACK_ROOT(ejsval, tmpobj, _ejs_function_new_utf8 (_ejs_null, "LLVMFunction", (EJSClosureFunc)Function_impl));
-        _ejs_Function = tmpobj;
+        _ejs_Function = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMFunction", (EJSClosureFunc)Function_impl, _ejs_Function_proto);
 
+        _ejs_object_setprop_utf8 (exports,              "Function", _ejs_Function);
 
 #define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Function_proto, EJS_STRINGIFY(x), Function_prototype_##x)
 #define PROTO_ACCESSOR(x, y) EJS_INSTALL_GETTER(_ejs_Function_proto, x, Function_prototype_##y)
-
-        _ejs_object_setprop (_ejs_Function,       _ejs_atom_prototype,  _ejs_Function_proto);
 
         PROTO_ACCESSOR("args", getArgs);
         PROTO_ACCESSOR("argSize", getArgSize);
@@ -202,10 +198,6 @@ namespace ejsllvm {
 
 #undef PROTO_METHOD
 #undef PROTO_ACCESSOR
-
-        _ejs_object_setprop_utf8 (exports,              "Function", _ejs_Function);
-
-        END_SHADOW_STACK_FRAME;
     }
 
 };
