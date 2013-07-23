@@ -29,6 +29,7 @@ $(call addExpectedFailure, json4.js,                "fails due to properties bei
 $(call addExpectedFailure, object6.js,              "fails because we don't define everything we should.")
 $(call addExpectedFailure, esprima-roundtrip2.js,   "esprima fails to return a parse tree if loc = true.")
 $(call addExpectedFailure, typedarray3.js,          "we use %g to format floats/doubles, and differ when printing numbers.")
+$(call addExpectedFailure, argv1.js,                "node passes ['node','argv1.js'], we return ['argv1.js.exe']")
 
 check: check-unit-tests run-tests
 
