@@ -153,8 +153,8 @@ typedef struct {
 
 struct _EJSObject {
     GCObjectHeader gc_header;
-    EJSSpecOps *ops;
-    ejsval proto; // the __proto__ property
+    EJSSpecOps*    ops;
+    ejsval         proto; // the __proto__ property
     EJSPropertyMap map;
 };
 
