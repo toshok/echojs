@@ -35,6 +35,30 @@ _ejs_list_prepend_node (EJSList *list, EJSListNode* node)
 }
 
 void
+_ejs_list_detach_node (EJSList *list, EJSListNode* node)
+{
+  for (EJSListNode* n = list->head; n; n = n->next) {
+    if (n == node) {
+
+      if (n == list->head)
+	list->head = list->head->next;
+      if (n == list->tail)
+	list->tail = list->tail->prev;
+
+      if (n->next)
+	n->next->prev = n->prev;
+      if (n->prev)
+	n->prev->next = n->next;
+      n->next = n->prev = NULL;
+
+      return;
+    }
+  }
+  printf ("_ejs_list_detach_node couldn't find node\n");
+  abort();
+}
+
+void
 _ejs_list_insert_node_sorted (EJSList *list, EJSListNode* node, EJSCompareFunc compare)
 {
   if (list->head == NULL) {

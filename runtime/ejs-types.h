@@ -119,6 +119,7 @@ typedef struct EJSList {
 
 void _ejs_list_append_node (EJSList *list, EJSListNode* node);
 void _ejs_list_prepend_node (EJSList *list, EJSListNode* node);
+void _ejs_list_detach_node (EJSList *list, EJSListNode* node);
 void _ejs_list_insert_node_sorted (EJSList *list, EJSListNode* node, EJSCompareFunc compare);
 void _ejs_list_pop_head (EJSList *list);
 
