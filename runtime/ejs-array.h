@@ -13,9 +13,9 @@ typedef struct {
 
     /* array data */
     EJSPropertyDesc array_length_desc;
-    int array_length;
-    int array_alloc;
-    ejsval *elements;
+    int             array_length;
+    int             array_alloc;
+    ejsval*         elements;
 } EJSArray;
 
 #define EJS_ARRAY_ALLOC(obj) (((EJSArray*)EJSVAL_TO_OBJECT(obj))->array_alloc)
@@ -44,7 +44,7 @@ void _ejs_array_foreach_element (EJSArray* arr, EJSValueFunc foreach_func);
 void _ejs_array_init(ejsval global);
 
 uint32_t _ejs_array_push_dense (ejsval array, int argc, ejsval* args);
-ejsval _ejs_array_pop_dense (ejsval array);
+ejsval   _ejs_array_pop_dense (ejsval array);
 
 ejsval _ejs_array_join (ejsval array, ejsval sep);
 
