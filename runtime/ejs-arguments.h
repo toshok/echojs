@@ -13,7 +13,7 @@ typedef struct {
 
     /* arguments specific data */
     uint32_t argc;
-    ejsval* args;
+    ejsval*  args;
 } EJSArguments;
 
 EJS_BEGIN_DECLS

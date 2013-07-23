@@ -177,5 +177,8 @@ _ejs_arguments_specop_finalize (EJSObject* obj)
 static void
 _ejs_arguments_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
+    EJSArguments* args = (EJSArguments*)obj;
+    for (int i = 0; i < args->argc; i ++)
+        scan_func (args->args[i]);
     _ejs_object_specops.scan (obj, scan_func);
 }
