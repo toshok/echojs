@@ -15,6 +15,12 @@ typedef struct {
     ejsval pattern;
     ejsval flags;
 
+    EJSBool global;
+    EJSBool ignoreCase;
+    EJSBool multiline;
+
+    int lastIndex;
+
     void* compiled_pattern;
 } EJSRegExp;
 

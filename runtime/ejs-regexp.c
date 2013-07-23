@@ -10,6 +10,7 @@
 #include "ejs-regexp.h"
 #include "ejs-function.h"
 #include "ejs-string.h"
+#include "ejs-error.h"
 
 #include "pcre.h"
 
@@ -70,9 +71,6 @@ _ejs_regexp_replace(ejsval str, ejsval search_re, ejsval replace)
 {
     EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(search_re);
 
-    EJSPrimString *flat_str = _ejs_string_flatten (str);
-    jschar *chars_str = flat_str->data.flat;
-
     pcre16_extra extra;
     memset (&extra, 0, sizeof(extra));
 
@@ -83,51 +81,61 @@ _ejs_regexp_replace(ejsval str, ejsval search_re, ejsval replace)
 
     int ovec_count = 3 * (1 + capture_count);
     int* ovec = malloc(sizeof(int) * ovec_count);
+    int cur_off = 0;
 
-    int rv = pcre16_exec(code, &extra,
-                         chars_str, flat_str->length, 0,
-                         PCRE_NO_UTF16_CHECK, ovec, ovec_count);
+    do {
+        EJSPrimString *flat_str = _ejs_string_flatten (str);
+        jschar *chars_str = flat_str->data.flat;
 
-    if (rv == PCRE_ERROR_NOMATCH)
-        return str;
+        int rv = pcre16_exec(code, &extra,
+                             chars_str, flat_str->length, cur_off,
+                             PCRE_NO_UTF16_CHECK, ovec, ovec_count);
 
-    ejsval result;
-    ejsval replaceval;
+        if (rv < 0)
+            break;
 
-    if (EJSVAL_IS_FUNCTION(replace)) {
-        ejsval substr_match = _ejs_string_new_substring (str, ovec[0], ovec[1] - ovec[0]);
-        ejsval capture = _ejs_string_new_substring (str, ovec[2], ovec[3] - ovec[2]);
+        ejsval replaceval;
 
-        fprintf (stderr, "substring match is %s\n", ucs2_to_utf8(_ejs_string_flatten(substr_match)->data.flat));
-        fprintf (stderr, "capture is %s\n", ucs2_to_utf8(_ejs_string_flatten(capture)->data.flat));
+        if (EJSVAL_IS_FUNCTION(replace)) {
+            ejsval substr_match = _ejs_string_new_substring (str, ovec[0], ovec[1] - ovec[0]);
+            ejsval capture = _ejs_string_new_substring (str, ovec[2], ovec[3] - ovec[2]);
 
-        int argc = 3;
-        ejsval args[3];
+            fprintf (stderr, "substring match is %s\n", ucs2_to_utf8(_ejs_string_flatten(substr_match)->data.flat));
+            fprintf (stderr, "capture is %s\n", ucs2_to_utf8(_ejs_string_flatten(capture)->data.flat));
 
-        args[0] = substr_match;
-        args[1] = capture;
-        args[2] = _ejs_undefined;
+            int argc = 3;
+            ejsval args[3];
 
-        replaceval = ToString(_ejs_invoke_closure (replace, _ejs_undefined, argc, args));
-    }
-    else {
-        replaceval = ToString(replace);
-    }
+            args[0] = substr_match;
+            args[1] = capture;
+            args[2] = _ejs_undefined;
 
-    if (ovec[0] == 0) {
-        // we matched from the beginning of the string, so nothing from there to prepend
-        result = _ejs_string_concat (replaceval, _ejs_string_new_substring (str, ovec[1], flat_str->length - ovec[1]));
-    }
-    else {
-        result = _ejs_string_concatv (_ejs_string_new_substring (str, 0, ovec[0]),
-                                      replaceval,
-                                      _ejs_string_new_substring (str, ovec[1], flat_str->length - ovec[1]),
-                                      _ejs_null);
-    }
+            replaceval = ToString(_ejs_invoke_closure (replace, _ejs_undefined, argc, args));
+        }
+        else {
+            replaceval = ToString(replace);
+        }
+
+        if (ovec[0] == 0) {
+            // we matched from the beginning of the string, so nothing from there to prepend
+            str = _ejs_string_concat (replaceval, _ejs_string_new_substring (str, ovec[1], flat_str->length - ovec[1]));
+        }
+        else {
+            str = _ejs_string_concatv (_ejs_string_new_substring (str, 0, ovec[0]),
+                                       replaceval,
+                                       _ejs_string_new_substring (str, ovec[1], flat_str->length - ovec[1]),
+                                       _ejs_null);
+        }
+
+        cur_off = ovec[1];
+
+        // if the RegExp object was created without a 'g' flag, only replace the first match
+        if (!re->global)
+            break;
+    } while (EJS_TRUE);
 
     free (ovec);
-
-    return result;
+    return str;
 }
 
 
@@ -168,6 +176,18 @@ _ejs_RegExp_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
                                           pcre16_tables);
 
     _ejs_object_define_value_property (_this, _ejs_atom_source, re->pattern, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+
+    if (EJSVAL_IS_STRING(re->flags)) {
+        EJSPrimString *flat_flags = _ejs_string_flatten(re->flags);
+        chars = flat_flags->data.flat;
+
+        for (int i = 0; i < flat_flags->length; i ++) {
+            if      (chars[i] == 'g' && !re->global)     { re->global     = EJS_TRUE; continue; }
+            else if (chars[i] == 'i' && !re->ignoreCase) { re->ignoreCase = EJS_TRUE; continue; }
+            else if (chars[i] == 'm' && !re->multiline)  { re->multiline  = EJS_TRUE; continue; }
+            _ejs_throw_nativeerror_utf8 (EJS_SYNTAX_ERROR, "Invalid flag supplied to RegExp constructor");
+        }
+    }
 
     return _this;
 }
@@ -214,6 +234,42 @@ _ejs_RegExp_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval 
     return _ejs_string_concatv (_ejs_atom_slash, re->pattern, _ejs_atom_slash, re->flags, _ejs_null);
 }
 
+static ejsval
+_ejs_RegExp_prototype_get_global (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+    return BOOLEAN_TO_EJSVAL(re->global);
+}
+
+static ejsval
+_ejs_RegExp_prototype_get_ignoreCase (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+    return BOOLEAN_TO_EJSVAL(re->ignoreCase);
+}
+
+static ejsval
+_ejs_RegExp_prototype_get_lastIndex (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+    return NUMBER_TO_EJSVAL(re->lastIndex);
+}
+
+static ejsval
+_ejs_RegExp_prototype_get_multiline (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+    return BOOLEAN_TO_EJSVAL(re->multiline);
+}
+
+static ejsval
+_ejs_RegExp_prototype_get_source (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+    return re->pattern;
+}
+
+
 void
 _ejs_regexp_init(ejsval global)
 {
@@ -226,10 +282,17 @@ _ejs_regexp_init(ejsval global)
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_RegExp, x, _ejs_RegExp_##x)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_RegExp_proto, x, _ejs_RegExp_prototype_##x)
+#define PROTO_GETTER(x) EJS_INSTALL_ATOM_GETTER(_ejs_RegExp_proto, x, _ejs_RegExp_prototype_get_##x)
 
     PROTO_METHOD(exec);
     PROTO_METHOD(test);
     PROTO_METHOD(toString);
+
+    PROTO_GETTER(global);
+    PROTO_GETTER(ignoreCase);
+    PROTO_GETTER(lastIndex);
+    PROTO_GETTER(multiline);
+    PROTO_GETTER(source);
 
 #undef OBJ_METHOD
 #undef PROTO_METHOD
@@ -306,5 +369,9 @@ _ejs_regexp_specop_finalize (EJSObject* obj)
 static void
 _ejs_regexp_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
+    EJSRegExp *re = (EJSRegExp*)obj;
+    scan_func (re->pattern);
+    scan_func (re->flags);
+
     _ejs_object_specops.scan (obj, scan_func);
 }
