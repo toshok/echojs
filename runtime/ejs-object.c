@@ -254,8 +254,12 @@ _ejs_propertymap_free (EJSPropertyMap *map)
     for (int i = 0; i < map->num; i ++) {
         free (map->names[i]);
     }
+    map->num = 0;
+    map->allocated = 0;
     free (map->names);
+    map->names = NULL;
     free (map->properties);
+    map->properties = NULL;
 }
 
 void
@@ -860,8 +864,10 @@ _ejs_Object_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     /* 4. If the argument Properties is present and not undefined, add own properties to obj as if by calling the  */
     /*    standard built-in function Object.defineProperties with arguments obj and Properties. */
-    ejsval definePropertyArgs[] = { obj, Properties };
-    _ejs_Object_defineProperties (env, _this, 2, definePropertyArgs);
+    if (!EJSVAL_IS_UNDEFINED(Properties)) {
+        ejsval definePropertyArgs[] = { obj, Properties };
+        _ejs_Object_defineProperties (env, _this, 2, definePropertyArgs);
+    }
 
     /* 5. Return obj. */
     return obj;
@@ -891,10 +897,6 @@ _ejs_Object_defineProperty (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
 
     /* 2. Let name be ToString(P). */
     ejsval name = ToString(P);
-
-    char* utf8_name = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name));
-    fprintf (stderr, "Object.defineProperty(%s) called\n", utf8_name);
-    free (utf8_name);
 
     /* 3. Let desc be the result of calling ToPropertyDescriptor with Attributes as the argument. */
     EJSPropertyDesc desc;
