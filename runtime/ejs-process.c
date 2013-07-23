@@ -58,13 +58,8 @@ _ejs_process_init(ejsval global, uint32_t argc, char **argv)
     ejsval _argv = _ejs_array_new (argc);
     _ejs_object_setprop (_ejs_Process, _ejs_atom_argv, _argv);
 
-    int i;
-
-    for (i = 0; i < argc; i ++) {
-        ejsval _i = NUMBER_TO_EJSVAL(i);
-        ejsval _argv_i = _ejs_string_new_utf8(argv[i]);
-        _ejs_object_setprop (_argv, _i, _argv_i);
-    }
+    for (int i = 0; i < argc; i ++)
+        _ejs_object_setprop (_argv, NUMBER_TO_EJSVAL(i), _ejs_string_new_utf8(argv[i]));
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Process, x, _ejs_Process_##x)
 
