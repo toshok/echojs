@@ -857,7 +857,7 @@ _ejs_array_init(ejsval global)
 
     _ejs_gc_add_root (&_ejs_Array_proto);
     _ejs_Array_proto = _ejs_array_new(0);
-    EJSVAL_TO_OBJECT(_ejs_Array_proto)->proto = _ejs_object_create(_ejs_null);
+    EJSVAL_TO_OBJECT(_ejs_Array_proto)->proto = _ejs_Object_prototype;
     _ejs_object_setprop (_ejs_Array,       _ejs_atom_prototype,  _ejs_Array_proto);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Array, x, _ejs_Array_##x, EJS_PROP_NOT_ENUMERABLE)
