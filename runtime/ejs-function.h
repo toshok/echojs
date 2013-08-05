@@ -16,12 +16,12 @@ typedef struct {
     EJSObject obj;
 
     EJSClosureFunc func;
-    ejsval env;
+    ejsval   env;
 
-    EJSBool bound;
-    ejsval bound_this;
+    EJSBool  bound;
+    ejsval   bound_this;
     uint32_t bound_argc;
-    ejsval *bound_args;
+    ejsval*  bound_args;
 } EJSFunction;
 
 
@@ -50,18 +50,18 @@ EJS_MACRO_END
 
 #define EJS_INSTALL_GETTER(o,n,f) EJS_MACRO_START                     \
     ejsval key = _ejs_string_new_utf8(n);                               \
-    ejsval tmpfunc = _ejs_function_new (_ejs_null, key, (EJSClosureFunc)f); \
+    ejsval tmpfunc = _ejs_function_new_native (_ejs_null, key, (EJSClosureFunc)f); \
     _ejs_object_define_accessor_property (o, key, tmpfunc, _ejs_undefined, EJS_PROP_FLAGS_GETTER_SET); \
     EJS_MACRO_END
 
 #define EJS_INSTALL_ATOM_GETTER(o,n,f) EJS_MACRO_START                     \
-    ejsval tmpfunc = _ejs_function_new (_ejs_null, _ejs_atom_##n, (EJSClosureFunc)f); \
+    ejsval tmpfunc = _ejs_function_new_native (_ejs_null, _ejs_atom_##n, (EJSClosureFunc)f); \
     _ejs_object_define_accessor_property (o, _ejs_atom_##n, tmpfunc, _ejs_undefined, EJS_PROP_FLAGS_GETTER_SET); \
     EJS_MACRO_END
 
 #define EJS_INSTALL_ATOM_ACCESSORS(o,n,g,s) EJS_MACRO_START                  \
-    ejsval tmpfunc1 = _ejs_function_new (_ejs_null, _ejs_atom_##n, (EJSClosureFunc)g); \
-    ejsval tmpfunc2 = _ejs_function_new (_ejs_null, _ejs_atom_##n, (EJSClosureFunc)s); \
+    ejsval tmpfunc1 = _ejs_function_new_native (_ejs_null, _ejs_atom_##n, (EJSClosureFunc)g); \
+    ejsval tmpfunc2 = _ejs_function_new_native (_ejs_null, _ejs_atom_##n, (EJSClosureFunc)s); \
     _ejs_object_define_accessor_property (o, _ejs_atom_##n, tmpfunc1, tmpfunc2, EJS_PROP_FLAGS_GETTER_SET | EJS_PROP_FLAGS_SETTER_SET); \
     EJS_MACRO_END
 
@@ -72,6 +72,8 @@ extern ejsval _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func);
 extern ejsval _ejs_function_new_native (ejsval env, ejsval name, EJSClosureFunc func);
 extern ejsval _ejs_function_new_anon (ejsval env, EJSClosureFunc func);
 extern ejsval _ejs_function_new_utf8 (ejsval env, const char* name, EJSClosureFunc func);
+
+extern ejsval _ejs_function_new_utf8_with_proto (ejsval env, const char* name, EJSClosureFunc func, ejsval prototype);
 
 // used during initialization so we don't create a prototype only to throw it away again
 extern ejsval _ejs_function_new_without_proto (ejsval env, ejsval name, EJSClosureFunc func);

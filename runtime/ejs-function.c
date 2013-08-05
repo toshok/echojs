@@ -96,6 +96,26 @@ _ejs_function_new_without_proto (ejsval env, ejsval name, EJSClosureFunc func)
 }
 
 ejsval
+_ejs_function_new_utf8_with_proto (ejsval env, const char* name, EJSClosureFunc func, ejsval prototype)
+{
+    ejsval function_name = _ejs_string_new_utf8 (name);
+    EJSFunction *rv = _ejs_gc_new(EJSFunction);
+    
+    _ejs_init_object ((EJSObject*)rv, _ejs_Function__proto__, &_ejs_function_specops);
+
+    rv->func = func;
+    rv->env = env;
+
+    ejsval fun = OBJECT_TO_EJSVAL(rv);
+
+    _ejs_object_define_value_property (fun, _ejs_atom_name, function_name, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (fun, _ejs_atom_prototype, prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
+
+    return fun;
+}
+
+
+ejsval
 _ejs_function_new_native (ejsval env, ejsval name, EJSClosureFunc func)
 {
     EJSFunction *rv = _ejs_gc_new(EJSFunction);
