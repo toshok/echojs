@@ -1330,9 +1330,11 @@ _ejs_object_init (ejsval global)
     _ejs_object_setprop (global, _ejs_atom_Object, _ejs_Object);
 
     // ECMA262 15.2.3.1
-    _ejs_object_define_value_property (_ejs_Object, _ejs_atom_prototype, _ejs_Object_prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (_ejs_Object, _ejs_atom_prototype, _ejs_Object_prototype,
+                                       EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     // ECMA262: 15.2.4.1
-    _ejs_object_define_value_property (_ejs_Object_prototype, _ejs_atom_constructor, _ejs_Object, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
+    _ejs_object_define_value_property (_ejs_Object_prototype, _ejs_atom_constructor, _ejs_Object,
+                                       EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_Object, x, _ejs_Object_##x, EJS_PROP_NOT_ENUMERABLE)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_Object_prototype, x, _ejs_Object_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
