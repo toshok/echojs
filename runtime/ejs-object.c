@@ -453,7 +453,7 @@ _ejs_property_iterator_new (ejsval forVal)
         iterator->num = 0;
         iterator->keys = (ejsval*)malloc(sizeof(ejsval) * num_keys);
         for (int i = 0; i < num_keys; i ++) {
-            iterator->keys[iterator->num++] = _ejs_number_new(i);
+            iterator->keys[iterator->num++] = ToString(NUMBER_TO_EJSVAL(i));
         }
         return iter;
     }
