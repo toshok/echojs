@@ -80,11 +80,14 @@ LLVM_LINK_FLAGS = \
   -lLLVMSystem
 
 JS_SOURCES=$(filter-out ejs.js,$(wildcard *.js))
+EXTRA_JS_SOURCES= ../../esprima/esprima.js ../../escodegen/escodegen.js ../../estraverse/estraverse.js
 
 bootstrap:
 	@$(MAKE) make-stage1 || exit 1
 	@mv ejs.js.exe ../..
 	@$(MAKE) make-stage2 || exit 1
+	@mv ejs.js.exe ../..
+	@$(MAKE) make-stage3 || exit 1
 	@echo "done, woohoo"
 
 make-stage1: $(wildcard *.js) ejs.js
@@ -94,17 +97,27 @@ make-stage1: $(wildcard *.js) ejs.js
 	@echo "****************************************************"
 	@echo "****************************************************"
 	@$(MAKE) -C ..
-	NODE_PATH=$(TOP)/test/../node-llvm/build/Release:$(TOP)/test/../lib/coffee:$(TOP)/test/../lib:$(TOP)/test/../esprima:$(TOP)/test/../escodegen:$(TOP)/test/../estraverse ../../ejs --leave-temp --module "../../ejs-llvm/libejsllvm-module.a,llvm,_ejs_llvm_init,$(LLVM_LINK_FLAGS)" ejs.js $(JS_SOURCES) ../../esprima/esprima.js ../../escodegen/escodegen.js ../../estraverse/estraverse.js
+	time NODE_PATH=$(TOP)/node-llvm/build/Release:$(TOP)/lib/generated:$(TOP)/esprima:$(TOP)/escodegen:$(TOP)/estraverse ../../ejs --leave-temp --module "../../ejs-llvm/libejsllvm-module.a,llvm,_ejs_llvm_init,$(LLVM_LINK_FLAGS)" ejs.js $(JS_SOURCES) $(EXTRA_JS_SOURCES)
 
-make-stage2:
+make-stage2: ejs.js
 	@echo "****************************************************"
 	@echo "****************************************************"
 	@echo "Building stage 2 (compiling ejs-ejs with ejs-ejs)"
 	@echo "****************************************************"
 	@echo "****************************************************"
+	@$(MAKE) -C ..
+	time `pwd`/../../ejs.js.exe --leave-temp --module "../../ejs-llvm/libejsllvm-module.a,llvm,_ejs_llvm_init,$(LLVM_LINK_FLAGS)" ejs.js $(JS_SOURCES) $(EXTRA_JS_SOURCES)
+
+make-stage3: ejs.js
+	@echo "****************************************************"
+	@echo "****************************************************"
+	@echo "Building stage 3 (compiling ejs-ejs with ejs-ejs)"
+	@echo "****************************************************"
+	@echo "****************************************************"
+	@$(MAKE) -C ..
 	@cp ../../ejs .
 	@coffee -c ejs
-	../../ejs.js.exe --leave-temp --module "../../ejs-llvm/libejsllvm-module.a,llvm,_ejs_llvm_init,$(LLVM_LINK_FLAGS)" ejs.js $(JS_SOURCES) ../../esprima/esprima.js ../../escodegen/escodegen.js ../../estraverse/estraverse.js
+	time `pwd`/../../ejs.js.exe --leave-temp --module "../../ejs-llvm/libejsllvm-module.a,llvm,_ejs_llvm_init,$(LLVM_LINK_FLAGS)" ejs.js $(JS_SOURCES) $(EXTRA_JS_SOURCES)
 
 ejs.coffee: ../../ejs
 	@cp ../../ejs ejs.coffee
