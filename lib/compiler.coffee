@@ -606,7 +606,7 @@ class LLVMIRVisitor extends NodeVisitor
                         rhvalue
 
         visitFunction: (n) ->
-                debug.log "        function #{n.ir_name} at #{@filename}:#{if n.loc? then n.loc.start.line else '<unknown>'}" if not n.toplevel?
+                debug.log -> "        function #{n.ir_name} at #{@filename}:#{if n.loc? then n.loc.start.line else '<unknown>'}" if not n.toplevel?
                 
                 # save off the insert point so we can get back to it after generating this function
                 insertBlock = ir.getInsertBlock()
@@ -948,7 +948,7 @@ class LLVMIRVisitor extends NodeVisitor
                 obj = @createCall object_create, [@loadNullEjsValue()], "objtmp", !object_create.doesNotThrow
                 for property in n.properties
                         val = @visit property.value
-                        key = @getAtom property.key.name
+                        key = if property.key.type is syntax.Identifier then @getAtom property.key.name else @visit property.key
 
                         @createCall @ejs_runtime.object_define_value_prop, [obj, key, val, consts.int32 0x77], "define_value_prop_#{property.key}"
                         #@createPropertyStore obj, key, val, false
@@ -1044,7 +1044,7 @@ class LLVMIRVisitor extends NodeVisitor
                 # regular expression literals
                 if typeof n.raw is "string" and n.raw[0] is '/'
                         debug.log -> "literal regexp: #{n.raw}"
-                        
+
                         source = ir.createGlobalStringPtr n.value.source, "regexpsource"
                         flags = ir.createGlobalStringPtr "#{if n.value.global then 'g' else ''}#{if n.value.multiline then 'm' else ''}#{if n.value.ignoreCase then 'i' else ''}", "regexpflags"
                         
