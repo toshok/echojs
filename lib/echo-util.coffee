@@ -1,4 +1,4 @@
-terminal = require "./terminal.js"
+terminal = require "terminal"
 
 exports.deep_copy_object = (o) -> JSON.parse JSON.stringify o
 
