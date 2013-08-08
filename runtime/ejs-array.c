@@ -918,14 +918,28 @@ _ejs_array_specop_get (ejsval obj, ejsval propertyName)
 static EJSPropertyDesc*
 _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName)
 {
-    if (EJSVAL_IS_NUMBER(propertyName)) {
-        double needle = EJSVAL_TO_NUMBER(propertyName);
-        int needle_int;
-        if (EJSDOUBLE_IS_INT32(needle, &needle_int)) {
-            if (needle_int >= 0 && needle_int < EJS_ARRAY_LEN(obj))
-                return NULL; // XXX
+    // check if propertyName is an integer, or a string that we can convert to an int
+    EJSBool is_index = EJS_FALSE;
+    ejsval idx_val = ToNumber(propertyName);
+    int idx;
+    if (EJSVAL_IS_NUMBER(idx_val)) {
+        double n = EJSVAL_TO_NUMBER(idx_val);
+        if (floor(n) == n) {
+            idx = (int)n;
+            is_index = EJS_TRUE;
         }
     }
+
+    if (is_index) {
+        if (idx >= 0 || idx < EJS_ARRAY_LEN(obj)) {
+            // XXX we leak this.  need to change get_own_property to use an out param instead of a return value
+            EJSPropertyDesc* desc = (EJSPropertyDesc*)malloc(sizeof(EJSPropertyDesc));
+            _ejs_property_desc_set_writable (desc, EJS_TRUE);
+            _ejs_property_desc_set_value (desc, EJS_ARRAY_ELEMENTS(obj)[idx]);
+            return desc;
+        }
+    }
+
 
     if (!ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName))) {
         EJSArray* arr = (EJSArray*)EJSVAL_TO_OBJECT(obj);
@@ -946,27 +960,36 @@ static void
 _ejs_array_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag)
 {
     // check if propertyName is a uint32, or a string that we can convert to an uint32
-    int idx = -1;
-    if (EJSVAL_IS_NUMBER(propertyName)) {
-        double n = EJSVAL_TO_NUMBER(propertyName);
+    EJSBool is_index = EJS_FALSE;
+    ejsval idx_val = ToNumber(propertyName);
+    int idx;
+    if (EJSVAL_IS_NUMBER(idx_val)) {
+        double n = EJSVAL_TO_NUMBER(idx_val);
         if (floor(n) == n) {
             idx = (int)n;
+            is_index = EJS_TRUE;
         }
     }
 
-    if (idx != -1) {
+    if (is_index) {
         if (idx >= EJS_ARRAY_ALLOC(obj)) {
-            int new_alloc = idx + 10;
-            ejsval* new_elements = (ejsval*)malloc (sizeof(ejsval*) * new_alloc);
-            memmove (new_elements, EJS_ARRAY_ELEMENTS(obj), EJS_ARRAY_ALLOC(obj) * sizeof(ejsval));
-            free (EJS_ARRAY_ELEMENTS(obj));
-            EJS_ARRAY_ELEMENTS(obj) = new_elements;
-            EJS_ARRAY_ALLOC(obj) = new_alloc;
+            // we're doing a store to an index larger than our allocated space
+            if (EJSVAL_IS_DENSE_ARRAY(obj)) {
+                // we're a dense array, realloc to include up to idx+1
+
+                // XXX this is of course totally insane, as it causes:
+                //     a=[]; a[10000000]=1;
+                //     to allocate 10000000+1 ejsvals.
+                //     need some logic to switch to a sparse array if need be.
+                maybe_realloc_dense ((EJSArray*)EJSVAL_TO_OBJECT(obj), idx - EJS_ARRAY_ALLOC(obj) + 1);
+            }
+            else {
+                // we're already sparse, just give up as none of this is implemented yet.
+                abort();
+            }
         }
         EJS_ARRAY_ELEMENTS(obj)[idx] = val;
         EJS_ARRAY_LEN(obj) = idx + 1;
-        if (EJS_ARRAY_LEN(obj) >= EJS_ARRAY_ALLOC(obj))
-            abort();
         return;
     }
     // if we fail there, we fall back to the object impl below
