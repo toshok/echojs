@@ -84,19 +84,6 @@ LocateEnv = class LocateEnv extends NodeVisitor
                 n.ejs_substitute = true
                 n
 
-#                while env?
-#                        if env.decls.has n.name
-#                                if env.closed.has n.name
-#                                        n.ejs_substitute = true
-#                                else if env isnt current_env
-#                                        env.closed.add n.name
-#                                        n.ejs_substitute = true
-#                                env.closed.add n.name
-#                                n.ejs_substitute = true
-#                                return n
-#                        else
-#                                env = env.parent
-
 create_identifier = (x) ->
         throw new Error "invalid name in create_identifier" if not x
         type: syntax.Identifier, name: x
@@ -104,7 +91,6 @@ create_string_literal = (x) ->
         throw new Error "invalid string in create_string_literal" if not x
         type: syntax.Literal, value: x, raw: "\"#{x}\""
 create_number_literal = (x) ->
-        console.log "create_number_literal (#{x})"
         throw new Error "invalid number in create_number_literal" if typeof x isnt "number"
         type: syntax.Literal, value: x, raw: "#{x}"
 
@@ -193,9 +179,7 @@ class HoistVars extends NodeVisitor
                         id: create_identifier decl_name
                         init: null
 
-                debug.log 2, "@function_stack.top.vars.size = #{@function_stack.top.vars.size()}"
                 if @function_stack.top.vars.size() > 0
-                        debug.log 2, "unshifting"
                         n.body.body.unshift {
                                 type: syntax.VariableDeclaration
                                 declarations: create_empty_declarator varname for varname in @function_stack.top.vars.keys()
@@ -355,7 +339,8 @@ class ComputeFree extends NodeVisitor
                         when syntax.AssignmentExpression  then exp.ejs_free_vars = (@free exp.left).union @free exp.right
                 
                         else throw "Internal error: unhandled node type '#{exp.type}' in free()"
-                        #else new Set
+                exp.ejs_free_vars
+
                 
                 
 # 1) allocates the environment at the start of the n
@@ -412,15 +397,81 @@ class SubstituteVariables extends NodeVisitor
 
 
         visitVariableDeclaration: (n) ->
-                # we remove from the declarations those variables that are allocated into environment slots
+                # here we do some magic depending on whether or not
+                # variables are closed over (i.e. pushed into the
+                # environment).
+                # 
+                # 1. for variables that are closed over that aren't
+                #    initialized (that is, they're implicitly
+                #    'undefined'), we just remove their declaration
+                #    entirely.  it's already been converted to a slot
+                #    everywhere else, and env slots are explicitly
+                #    initialized to undefined by the runtime.
+                #
+                # 2. for variables that are closed over that *are*
+                #    initialized, we splice them into the list and
+                #    split the VariableDeclaration node into two, so
+                #    if 'y' is closed over in the following input:
+                #
+                #    let x = 2, y = x * 2, z = 10;
+                #
+                #    we'll end up with this in the output:
+                #
+                #    let x = 2;
+                #    %slot(%env, 1, 'y') = x * 2;
+                #    let z = 10;
+                #
                 decls = n.declarations
 
-                n.declarations = []
+                rv = []
                 
+                new_declarations = []
+                
+                # we loop until we find a variable that's closed over *and* has an initializer.
                 for decl in decls
                         decl.init = @visit decl.init
-                        n.declarations.push decl if not hasOwnProperty.call @currentMapping(), decl.id.name
-                n
+
+                        closed_over = hasOwnProperty.call @currentMapping(), decl.id.name
+                        if closed_over
+                                # for variables that are closed over but undefined, we skip them (thereby removing them from the list of decls)
+
+                                if decl.init? # FIXME: do we also need to check for an explicit 'undefined' here?
+
+                                        # push the current set of new_declarations if there are any
+                                        if new_declarations.length > 0
+                                                rv.push {
+                                                        type: syntax.VariableDeclaration
+                                                        declarations: new_declarations
+                                                        kind: n.kind
+                                                }
+
+                                        # splice in this assignment
+                                        rv.push {
+                                                type: syntax.ExpressionStatement
+                                                expression: 
+                                                        type: syntax.AssignmentExpression
+                                                        left: @currentMapping()[decl.id.name]
+                                                        right: decl.init
+                                                        operator: "="
+                                        }
+
+                                        # then re-init the new_declarations array
+                                        new_declarations = []
+                        
+                        else
+                                # for variables that aren't closed over, we just add them to the currect decl list.
+                                new_declarations.push decl
+                        
+
+                if new_declarations.length > 0
+                        # push the last set of new_declarations if there were any
+                        rv.push {
+                                type: syntax.VariableDeclaration
+                                declarations: new_declarations
+                                kind: n.kind
+                        }
+
+                rv
 
         visitProperty: (n) ->
                 # we don't visit property keys here
@@ -530,10 +581,12 @@ class SubstituteVariables extends NodeVisitor
 
                         new_mapping = deep_copy_object @currentMapping()
                         new_mapping["%slot_mapping"] = n.ejs_env.slot_mapping
+                        ###
                         for mapped_id of n.ejs_env.slot_mapping
                                 if new_mapping[mapped_id] is undefined
                                         console.log "new_mapping[#{mapped_id}] == undefined"
-                        
+                        ###
+
                         # remove all mappings for variables declared in this block
                         if n.ejs_decls?
                                 new_mapping = reject new_mapping, (sym) -> n.ejs_decls.has sym
@@ -603,7 +656,6 @@ class SubstituteVariables extends NodeVisitor
                 console.warn "exception: " + e
                 console.warn "compiling the following code:"
                 console.warn escodegen.generate n
-                process.exit -1
                 throw e
                 
         visitCallExpression: (n) ->
