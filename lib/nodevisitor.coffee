@@ -16,7 +16,7 @@ exports.NodeVisitor = class NodeVisitor
         constructor: ->
 
         shallowCopy: (o) ->
-                new_o = {}
+                new_o = Object.create Object.getPrototypeOf o
                 new_o[x] = o[x] for x of o when hasOwn.apply o, [x]
                 new_o
                 
