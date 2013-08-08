@@ -10,7 +10,39 @@
 #include "ejs-error.h"
 
 #include <unistd.h>
+#include <string.h>
 #include <sys/param.h>
+
+extern char** environ;
+
+static ejsval
+_ejs_Process_get_env (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval env_obj = _ejs_object_create(_ejs_null);
+
+    char** p = environ;
+
+    while (*p) {
+        char *env_entry = strdup(*p);
+        char *eq = strchr(env_entry, '=');
+        if (!eq) {
+            free (env_entry);
+            p++;
+            continue;
+        }
+
+        *eq = '\0';
+
+        ejsval k = _ejs_string_new_utf8(env_entry);
+        ejsval v = _ejs_string_new_utf8(eq+1);
+
+        _ejs_object_define_value_property (env_obj, k, v, EJS_PROP_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+        free (env_entry);
+        p++;
+    }
+
+    return env_obj;
+}
 
 static ejsval
 _ejs_Process_exit (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -61,12 +93,16 @@ _ejs_process_init(ejsval global, uint32_t argc, char **argv)
     for (int i = 0; i < argc; i ++)
         _ejs_object_setprop (_argv, NUMBER_TO_EJSVAL(i), _ejs_string_new_utf8(argv[i]));
 
+#define OBJ_PROP(x) EJS_INSTALL_ATOM_GETTER(_ejs_Process, x, _ejs_Process_get_##x)
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Process, x, _ejs_Process_##x)
+
+    OBJ_PROP(env);
 
     OBJ_METHOD(exit);
 
     OBJ_METHOD(chdir);
     OBJ_METHOD(cwd);
 
+#undef OBJ_PROP
 #undef OBJ_METHOD
 }

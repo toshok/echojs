@@ -223,10 +223,11 @@ EJS_ATOM(warn)
 // gc functions
 EJS_ATOM(collect)
 
-// process functions
+// process functions/properties
 EJS_ATOM(exit)
 EJS_ATOM(chdir)
 EJS_ATOM(cwd)
+EJS_ATOM(env)
 
 // XMLHttpRequest functions
 EJS_ATOM(open)
