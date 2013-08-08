@@ -231,7 +231,7 @@ compileFile = (filename, content, compileCallback) ->
 
 relative_to_ejs_exe = (n) ->
         path.resolve (path.dirname process.argv[if __ejs? then 0 else 1]), n
-                
+
 
 generate_require_map = ->
         sanitize = (filename, c_callable) ->
@@ -251,12 +251,11 @@ generate_require_map = ->
                 map.write "extern ejsval #{module_entrypoint} (ejsval exports);\n"
 
         compiled_modules.forEach ({ filename, module_toplevel }) ->
-                sanitized = sanitize filename, true
                 map.write "extern ejsval #{module_toplevel} (ejsval env, ejsval _this, int argc, ejsval *args);\n"
 
         map.write "EJSRequire _ejs_require_map[] = {\n"
         compiled_modules.forEach ({ filename, module_toplevel }) ->
-                map.write "  { \"#{sanitize filename, false}\", #{module_toplevel}, 0 },\n"
+                map.write "  { \"#{sanitize path.basename(filename), false}\", #{module_toplevel}, 0 },\n"
         map.write "  { 0, 0, 0 }\n"
         map.write "};\n"
 
@@ -279,13 +278,13 @@ generate_require_map = ->
 do_final_link = ->
         map_filename = generate_require_map compiled_modules
 
-        if __ejs?
-                console.warn "ejs doesn't have process.env yet."
-        else
-                process.env.PATH = "#{target_path_prepend[options.target]}:#{process.env.PATH}"
+        process.env.PATH = "#{target_path_prepend[options.target]}:#{process.env.PATH}"
 
         output_filename = options.output_filename || "#{files[0]}.exe"
         clang_args = target_link_args[options.target].concat ["-o", output_filename].concat o_filenames
+
+        # XXX we shouldn't need this, but build is failing while compiling the require map
+        clang_args.push "-I."
         
         clang_args.push map_filename
         
@@ -305,7 +304,7 @@ do_final_link = ->
         if __ejs?
                 spawn target_linker[options.target], clang_args
                 # we ignore leave_tmp_files here
-                console.warn "#{bold()}done.#{reset()}"
+                console.warn "#{util.bold()}done.#{util.reset()}"
         else
                 clang = spawn target_linker[options.target], clang_args
                 clang.stderr.on "data", (data) -> console.warn "#{data}"
@@ -329,12 +328,15 @@ if options.combine_scripts
         script_content = ""
         files.forEach (filename) ->
                 script_content = script_content + fs.readFileSync filename, 'utf-8'
-        files_remaining = 1
-        compileFile files[0], script_content, file_compiled
+        compileFile files[0], script_content, do_final_link
 else
-        files_remaining = files.length
-        files.forEach (filename) ->
-                compileFile filename, (fs.readFileSync filename, 'utf-8'), file_compiled
+        file_num = 0
+        compileNextFile = ->
+                return do_final_link() if file_num == files.length
+                filename = files[file_num]
+                file_num += 1
+                compileFile filename, (fs.readFileSync filename, 'utf-8'), compileNextFile
+        compileNextFile()
 
 # Local Variables:
 # mode: coffee
