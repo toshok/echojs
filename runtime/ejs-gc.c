@@ -20,9 +20,9 @@
 
 #include <pthread.h>
 
-#define spew 1
+#define spew 0
 #define sanity 0
-#define gc_timings 2
+#define gc_timings 0
 
 #if spew
 static int _ejs_spew_level = (spew);
@@ -1216,19 +1216,19 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     num_allocs ++;
     total_allocs ++;
 
-    if (!gc_disabled && ((num_allocs == 1000000 /*|| alloc_size >= 20*1024*1024*/) || (collect_every_alloc && collect_every_alloc == num_allocs))) {
+    if (!gc_disabled && ((num_allocs == 100000 || alloc_size >= 20*1024*1024) || (collect_every_alloc && collect_every_alloc == num_allocs))) {
         _ejs_gc_collect();
         alloc_size = 0;
         num_allocs = 0;
     }
 
     int bucket;
-    size = pow2_ceil(size);
+    int bucket_size = pow2_ceil(size);
 
-    bucket = ffs(size) - OBJECT_SIZE_LOW_LIMIT_BITS;
+    bucket = ffs(bucket_size) - OBJECT_SIZE_LOW_LIMIT_BITS;
 
     if (bucket > HEAP_PAGELISTS_COUNT) {
-        fprintf (stderr, "need to alloc from los!!!\n");
+        SPEW(2, fprintf (stderr, "need to alloc from los!!!\n"));
         return alloc_from_los(size, scan_type);
     }
 
@@ -1237,7 +1237,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     GCObjectPtr rv = NULL;
     PageInfo* info = (PageInfo*)heap_pages[bucket].head;
     if (!info || !info->num_free_cells) {
-        info = alloc_new_page(size);
+        info = alloc_new_page(bucket_size);
         _ejs_list_prepend_node (&heap_pages[bucket], (EJSListNode*)info);
     }
 
