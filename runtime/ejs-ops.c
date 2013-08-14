@@ -344,9 +344,9 @@ _ejs_op_delete (ejsval obj, ejsval prop)
 {
     EJSObject *obj_ = EJSVAL_TO_OBJECT(obj);
 
-    OP(obj_,_delete)(obj, prop, EJS_TRUE);
+    EJSBool delete_rv = OP(obj_,_delete)(obj, prop, EJS_FALSE); // we need this for the mozilla tests... strict mode problem?
 
-    return _ejs_true;
+    return BOOLEAN_TO_EJSVAL(delete_rv);
 }
 
 ejsval
