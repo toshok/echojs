@@ -13,6 +13,9 @@
 #include "ejs-string.h"
 #include "ejs-error.h"
 
+// num > SPARSE_ARRAY_CUTOFF in "Array($num)" or "new Array($num)" triggers a sparse array
+#define SPARSE_ARRAY_CUTOFF 250
+
 static ejsval  _ejs_array_specop_get (ejsval obj, ejsval propertyName);
 static EJSPropertyDesc* _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName);
 static EJSPropertyDesc* _ejs_array_specop_get_property (ejsval obj, ejsval propertyName);
@@ -65,6 +68,12 @@ _ejs_array_new (int numElements)
     return OBJECT_TO_EJSVAL(rv);
 }
 
+ejsval
+_ejs_sparse_array_new (int numElements)
+{
+    EJS_NOT_IMPLEMENTED();
+}
+
 void
 _ejs_array_foreach_element (EJSArray* arr, EJSValueFunc foreach_func)
 {
@@ -114,10 +123,14 @@ _ejs_Array_impl (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
         // called as a function
 
         if (argc == 0) {
-            return _ejs_array_new(10);
+            return _ejs_array_new(0);
         }
         else if (argc == 1 && EJSVAL_IS_NUMBER(args[0])) {
-            return _ejs_array_new((int)EJSVAL_TO_NUMBER(args[0]));
+            uint32_t alloc = ToUint32(args[0]);
+            if (alloc > SPARSE_ARRAY_CUTOFF)
+                return _ejs_sparse_array_new(alloc);
+            else
+                return _ejs_array_new(alloc);
         }
         else {
             ejsval rv = _ejs_array_new(argc);
@@ -132,16 +145,34 @@ _ejs_Array_impl (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
     }
     else {
         // called as a constructor
-        int alloc = 5;
+        EJSArray* arr = (EJSArray*)EJSVAL_TO_OBJECT(_this);
 
-        if (argc == 1 && EJSVAL_IS_NUMBER(args[0])) {
-            alloc = (int)EJSVAL_TO_NUMBER(args[0]);
+        if (argc == 0) {
+            int alloc = 5;
+
+            arr->array_length = 0;
+            arr->array_alloc = alloc;
+            arr->elements = (ejsval*)calloc(arr->array_alloc, sizeof (ejsval));
+        }
+        else if (argc == 1 && EJSVAL_IS_NUMBER(args[0])) {
+            int alloc = ToUint32(args[0]);
+            if (alloc > SPARSE_ARRAY_CUTOFF) {
+            }
+            else {
+                arr->array_length = alloc;
+                arr->array_alloc = alloc;
+                arr->elements = (ejsval*)calloc(arr->array_alloc, sizeof (ejsval));
+            }
+        }
+        else {
+            arr->array_length = argc;
+            arr->array_alloc = argc;
+            arr->elements = (ejsval*)calloc(arr->array_alloc, sizeof (ejsval));
+
+            for (int i = 0; i < argc; i ++)
+                arr->elements[i] = args[i];
         }
 
-        EJSArray* arr = (EJSArray*)EJSVAL_TO_OBJECT(_this);
-        arr->array_length = 0;
-        arr->array_alloc = alloc;
-        arr->elements = (ejsval*)calloc(arr->array_alloc, sizeof (ejsval));
 
         return _this;
     }
@@ -853,15 +884,19 @@ _ejs_array_init(ejsval global)
     _ejs_sparsearray_specops.class_name = "Array";
 
     _ejs_Array = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Array, (EJSClosureFunc)_ejs_Array_impl);
+
     _ejs_object_setprop (global,           _ejs_atom_Array,      _ejs_Array);
 
     _ejs_gc_add_root (&_ejs_Array_proto);
     _ejs_Array_proto = _ejs_array_new(0);
     EJSVAL_TO_OBJECT(_ejs_Array_proto)->proto = _ejs_Object_prototype;
-    _ejs_object_setprop (_ejs_Array,       _ejs_atom_prototype,  _ejs_Array_proto);
+    _ejs_object_define_value_property (_ejs_Array, _ejs_atom_prototype, _ejs_Array_proto, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (_ejs_Array_proto, _ejs_atom_constructor, _ejs_Array,
+                                       EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
 
-#define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Array, x, _ejs_Array_##x, EJS_PROP_NOT_ENUMERABLE)
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Array_proto, x, _ejs_Array_prototype_##x, EJS_PROP_NOT_ENUMERABLE)
+
+#define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Array, x, _ejs_Array_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Array_proto, x, _ejs_Array_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
 
     OBJ_METHOD(isArray);
 
@@ -900,7 +935,7 @@ _ejs_array_specop_get (ejsval obj, ejsval propertyName)
 
     if (is_index) {
         if (idx < 0 || idx > EJS_ARRAY_LEN(obj)) {
-            printf ("getprop(%d) on an array, returning undefined\n", idx);
+            //printf ("getprop(%d) on an array, returning undefined\n", idx);
             return _ejs_undefined;
         }
         return EJS_ARRAY_ELEMENTS(obj)[idx];
