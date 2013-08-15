@@ -170,7 +170,7 @@ _ejs_child_process_spawn (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     char **argv = (char**)calloc(sizeof(char*), EJSARRAY_LEN(argv_rest) + 2);
     argv[0] = argv0;
     for (int i = 0; i < EJSARRAY_LEN(argv_rest); i ++)
-        argv[1+i] = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(ToString(EJSARRAY_ELEMENTS(argv_rest)[i])));
+        argv[1+i] = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(ToString(EJSDENSEARRAY_ELEMENTS(argv_rest)[i])));
 
     pid_t pid;
     switch (pid = fork()) {

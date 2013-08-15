@@ -87,7 +87,7 @@ _ejs_process_init(ejsval global, uint32_t argc, char **argv)
     ejsval _ejs_Process = _ejs_object_new (_ejs_null, &_ejs_object_specops);
     _ejs_object_setprop (global, _ejs_atom_process, _ejs_Process);
 
-    ejsval _argv = _ejs_array_new (argc);
+    ejsval _argv = _ejs_array_new (argc, EJS_FALSE);
     _ejs_object_setprop (_ejs_Process, _ejs_atom_argv, _argv);
 
     for (int i = 0; i < argc; i ++)

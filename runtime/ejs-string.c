@@ -674,7 +674,7 @@ SplitMatch(ejsval S, int q, ejsval R)
     }
 
     /* 6. Let cap be an empty array of captures (see 15.10.2.1). */
-    ejsval cap = _ejs_array_new(0);
+    ejsval cap = _ejs_array_new(0, EJS_FALSE);
     /* 7. Return the State (q+r, cap). (see 15.10.2.1) */
     MatchResultState rv = { MATCH_RESULT_SUCCESS, q+r, cap };
     return rv;
@@ -695,7 +695,7 @@ _ejs_String_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
 
     /* 3. Let A be a new array created as if by the expression new Array() where Array is the standard built-in  */
     /*    constructor with that name. */
-    ejsval A = _ejs_array_new(0);
+    ejsval A = _ejs_array_new(0, EJS_FALSE);
 
     /* 4. Let lengthA be 0. */
     int lengthA = 0;
@@ -784,7 +784,7 @@ _ejs_String_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
                     /*            b Call the [[DefineOwnProperty]] internal method of A with arguments  */
                     /*              ToString(lengthA), Property Descriptor {[[Value]]: cap[i], [[Writable]]:  */
                     /*              true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
-                    ejsval pushcap = EJS_ARRAY_ELEMENTS(cap)[i];
+                    ejsval pushcap = EJS_DENSE_ARRAY_ELEMENTS(cap)[i];
                     _ejs_array_push_dense (A, 1, &pushcap);
                     /*            c Increment lengthA by 1. */
                     lengthA ++;

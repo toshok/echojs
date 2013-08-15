@@ -127,7 +127,11 @@ ejsval NumberToString(double d)
 // temporary strings for non-PrimString objects only to throw them away after concatenation?
 ejsval ToString(ejsval exp)
 {
-    if (EJSVAL_IS_NULL(exp))
+    if (EJSVAL_IS_MAGIC_IMPL(exp)) {
+        // holes in dense arrays end up here
+        return _ejs_atom_empty;
+    }
+    else if (EJSVAL_IS_NULL(exp))
         return _ejs_atom_null;
     else if (EJSVAL_IS_UNDEFINED(exp))
         return _ejs_atom_undefined;

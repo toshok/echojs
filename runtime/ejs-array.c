@@ -53,44 +53,43 @@ EJSSpecOps _ejs_sparsearray_specops;
 #define _EJS_ARRAY_ELEMENTS(arrobj) (((EJSArray*)arrobj)->elements)
 
 ejsval
-_ejs_array_new (int numElements)
+_ejs_array_new (int numElements, EJSBool fill)
 {
     EJSArray* rv = _ejs_gc_new (EJSArray);
 
-    _ejs_init_object ((EJSObject*)rv, _ejs_Array_proto, &_ejs_array_specops);
+    if (numElements > SPARSE_ARRAY_CUTOFF) {
+        _ejs_init_object ((EJSObject*)rv, _ejs_Array_proto, &_ejs_sparsearray_specops);
+
+        rv->sparse.arraylet_alloc = 5;
+        rv->sparse.arraylet_num = 0;
+        rv->sparse.arraylets = (Arraylet*)calloc(rv->sparse.arraylet_alloc, sizeof(Arraylet));
+    }
+    else {
+        _ejs_init_object ((EJSObject*)rv, _ejs_Array_proto, &_ejs_array_specops);
+
+        rv->dense.array_alloc = numElements + 5;
+        rv->dense.elements = (ejsval*)malloc(rv->dense.array_alloc * sizeof (ejsval));
+        for (int i = 0; i < numElements; i ++)
+            rv->dense.elements[i] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);            
+    }
 
     rv->array_length = numElements;
-    rv->array_alloc = numElements + 5;
-    rv->elements = (ejsval*)calloc(rv->array_alloc, sizeof (ejsval));
     _ejs_property_desc_set_writable (&rv->array_length_desc, EJS_TRUE);
     _ejs_property_desc_set_value (&rv->array_length_desc, NUMBER_TO_EJSVAL(numElements));
 
     return OBJECT_TO_EJSVAL(rv);
 }
 
-ejsval
-_ejs_sparse_array_new (int numElements)
-{
-    EJS_NOT_IMPLEMENTED();
-}
-
-void
-_ejs_array_foreach_element (EJSArray* arr, EJSValueFunc foreach_func)
-{
-    for (int i = 0; i < arr->array_length; i ++)
-        foreach_func (arr->elements[i]);
-}
-
 static void
 maybe_realloc_dense (EJSArray *arr, int amount_to_add)
 {
-    if (arr->array_length + amount_to_add > arr->array_alloc) {
+    if (arr->array_length + amount_to_add > arr->dense.array_alloc) {
         int new_alloc = arr->array_length + amount_to_add + 32;
         ejsval* new_elements = (ejsval*)malloc(new_alloc * sizeof(ejsval));
-        memmove (new_elements, arr->elements, arr->array_length * sizeof(ejsval));
-        free (arr->elements);
-        arr->elements = new_elements;
-        arr->array_alloc = new_alloc;
+        memmove (new_elements, arr->dense.elements, arr->array_length * sizeof(ejsval));
+        free (arr->dense.elements);
+        arr->dense.elements = new_elements;
+        arr->dense.array_alloc = new_alloc;
     }
 }
 
@@ -100,7 +99,7 @@ _ejs_array_push_dense(ejsval array, int argc, ejsval *args)
     EJSArray *arr = (EJSArray*)EJSVAL_TO_OBJECT(array);
     maybe_realloc_dense (arr, argc);
     for (int i = 0; i < argc; i ++) {
-        EJSARRAY_ELEMENTS(arr)[EJSARRAY_LEN(arr)++] = args[i];
+        EJSDENSEARRAY_ELEMENTS(arr)[EJSARRAY_LEN(arr)++] = args[i];
     }
     return EJSARRAY_LEN(arr);
 }
@@ -108,9 +107,10 @@ _ejs_array_push_dense(ejsval array, int argc, ejsval *args)
 ejsval
 _ejs_array_pop_dense(ejsval array)
 {
-    if (EJS_ARRAY_LEN(array) == 0)
+    EJSArray *arr = (EJSArray*)EJSVAL_TO_OBJECT(array);
+    if (EJSARRAY_LEN(arr) == 0)
         return _ejs_undefined;
-    return EJS_ARRAY_ELEMENTS(array)[--EJS_ARRAY_LEN(array)];
+    return EJSDENSEARRAY_ELEMENTS(arr)[--EJSARRAY_LEN(arr)];
 }
 
 ejsval _ejs_Array_proto;
@@ -123,17 +123,14 @@ _ejs_Array_impl (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
         // called as a function
 
         if (argc == 0) {
-            return _ejs_array_new(0);
+            return _ejs_array_new(0, EJS_FALSE);
         }
         else if (argc == 1 && EJSVAL_IS_NUMBER(args[0])) {
             uint32_t alloc = ToUint32(args[0]);
-            if (alloc > SPARSE_ARRAY_CUTOFF)
-                return _ejs_sparse_array_new(alloc);
-            else
-                return _ejs_array_new(alloc);
+            return _ejs_array_new(alloc, EJS_TRUE);
         }
         else {
-            ejsval rv = _ejs_array_new(argc);
+            ejsval rv = _ejs_array_new(argc, EJS_FALSE);
             int i;
 
             for (i = 0; i < argc; i ++) {
@@ -151,26 +148,31 @@ _ejs_Array_impl (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
             int alloc = 5;
 
             arr->array_length = 0;
-            arr->array_alloc = alloc;
-            arr->elements = (ejsval*)calloc(arr->array_alloc, sizeof (ejsval));
+            arr->dense.array_alloc = alloc;
+            arr->dense.elements = (ejsval*)calloc(arr->dense.array_alloc, sizeof (ejsval));
         }
         else if (argc == 1 && EJSVAL_IS_NUMBER(args[0])) {
             int alloc = ToUint32(args[0]);
             if (alloc > SPARSE_ARRAY_CUTOFF) {
+                arr->obj.ops = &_ejs_array_specops;
+
+                arr->sparse.arraylet_alloc = 5;
+                arr->sparse.arraylet_num = 0;
+                arr->sparse.arraylets = (Arraylet*)calloc(arr->sparse.arraylet_alloc, sizeof(Arraylet));
             }
             else {
-                arr->array_length = alloc;
-                arr->array_alloc = alloc;
-                arr->elements = (ejsval*)calloc(arr->array_alloc, sizeof (ejsval));
+                arr->dense.array_alloc = alloc;
+                arr->dense.elements = (ejsval*)calloc(arr->dense.array_alloc, sizeof (ejsval));
             }
+            arr->array_length = alloc;
         }
         else {
             arr->array_length = argc;
-            arr->array_alloc = argc;
-            arr->elements = (ejsval*)calloc(arr->array_alloc, sizeof (ejsval));
+            arr->dense.array_alloc = argc;
+            arr->dense.elements = (ejsval*)calloc(arr->dense.array_alloc, sizeof (ejsval));
 
             for (int i = 0; i < argc; i ++)
-                arr->elements[i] = args[i];
+                arr->dense.elements[i] = args[i];
         }
 
 
@@ -187,8 +189,8 @@ _ejs_Array_prototype_shift (ejsval env, ejsval _this, uint32_t argc, ejsval*args
         if (len == 0) {
             return _ejs_undefined;
         }
-        ejsval first = EJS_ARRAY_ELEMENTS(_this)[0];
-        memmove (EJS_ARRAY_ELEMENTS(_this), EJS_ARRAY_ELEMENTS(_this) + 1, sizeof(ejsval) * len-1);
+        ejsval first = EJS_DENSE_ARRAY_ELEMENTS(_this)[0];
+        memmove (EJS_DENSE_ARRAY_ELEMENTS(_this), EJS_DENSE_ARRAY_ELEMENTS(_this) + 1, sizeof(ejsval) * len-1);
         EJS_ARRAY_LEN(_this) --;
         return first;
     }
@@ -245,8 +247,8 @@ _ejs_Array_prototype_unshift (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
         EJSArray *arr = (EJSArray*)EJSVAL_TO_OBJECT(_this);
         maybe_realloc_dense (arr, argc);
         int len = EJS_ARRAY_LEN(_this);
-        memmove (EJS_ARRAY_ELEMENTS(_this) + argc, EJS_ARRAY_ELEMENTS(_this), sizeof(ejsval) * len);
-        memmove (EJS_ARRAY_ELEMENTS(_this), args, sizeof(ejsval) * argc);
+        memmove (EJS_DENSE_ARRAY_ELEMENTS(_this) + argc, EJS_DENSE_ARRAY_ELEMENTS(_this), sizeof(ejsval) * len);
+        memmove (EJS_DENSE_ARRAY_ELEMENTS(_this), args, sizeof(ejsval) * argc);
         EJS_ARRAY_LEN(_this) += argc;
         return NUMBER_TO_EJSVAL(len + argc);
     }
@@ -357,12 +359,12 @@ _ejs_Array_prototype_concat (ejsval env, ejsval _this, uint32_t argc, ejsval*arg
         numElements += EJS_ARRAY_LEN(args[i]);
     }
 
-    ejsval rv = _ejs_array_new(numElements);
+    ejsval rv = _ejs_array_new(numElements, EJS_FALSE);
     numElements = 0;
-    memmove (EJS_ARRAY_ELEMENTS(rv) + numElements, EJS_ARRAY_ELEMENTS(_this), sizeof(ejsval) * EJS_ARRAY_LEN(_this));
+    memmove (EJS_DENSE_ARRAY_ELEMENTS(rv) + numElements, EJS_DENSE_ARRAY_ELEMENTS(_this), sizeof(ejsval) * EJS_ARRAY_LEN(_this));
     numElements += EJS_ARRAY_LEN(_this);
     for (i = 0; i < argc; i ++) {
-        memmove (EJS_ARRAY_ELEMENTS(rv) + numElements, EJS_ARRAY_ELEMENTS(args[i]), sizeof(ejsval) * EJS_ARRAY_LEN(args[i]));
+        memmove (EJS_DENSE_ARRAY_ELEMENTS(rv) + numElements, EJS_DENSE_ARRAY_ELEMENTS(args[i]), sizeof(ejsval) * EJS_ARRAY_LEN(args[i]));
         numElements += EJS_ARRAY_LEN(args[i]);
     }
     EJS_ARRAY_LEN(rv) = numElements;
@@ -380,10 +382,10 @@ _ejs_array_slice_dense (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     begin = MIN(begin, len);
     end = MIN(end, len);
 
-    ejsval rv = _ejs_array_new(end-begin);
+    ejsval rv = _ejs_array_new(end-begin, EJS_FALSE);
 
-    memmove (&EJS_ARRAY_ELEMENTS(rv)[0],
-             &EJS_ARRAY_ELEMENTS(_this)[begin],
+    memmove (&EJS_DENSE_ARRAY_ELEMENTS(rv)[0],
+             &EJS_DENSE_ARRAY_ELEMENTS(_this)[begin],
              (end-begin) * sizeof(ejsval));
 
     return rv;
@@ -407,7 +409,7 @@ _ejs_Array_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval* arg
 
     /* 2. Let A be a new array created as if by the expression new Array() where Array is the standard built-in  */
     /*    constructor with that name. */
-    ejsval A = _ejs_array_new(0);
+    ejsval A = _ejs_array_new(0, EJS_FALSE);
 
     /* 3. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length". */
     ejsval lenVal = _ejs_object_getprop (O, _ejs_atom_length);
@@ -495,7 +497,7 @@ _ejs_Array_prototype_join (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
     int i;
 
     for (i = 0; i < num_strings; i ++) {
-        strings[i] = ToString(EJS_ARRAY_ELEMENTS(_this)[i]);
+        strings[i] = ToString(EJS_DENSE_ARRAY_ELEMENTS(_this)[i]);
         result_len += EJSVAL_TO_STRLEN(strings[i]);
     }
 
@@ -562,7 +564,7 @@ _ejs_Array_prototype_map (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     ejsval T = thisArg;
 
     /* 6. Let A be a new array created as if by the expression new Array(len) where Array is the standard builtin constructor with that name and len is the value of len. */
-    ejsval A = _ejs_array_new(0); // XXX we need to fix the len constructor
+    ejsval A = _ejs_array_new(len, EJS_FALSE);
     
     /* 7. Let k be 0. */
     uint32_t k = 0;
@@ -627,7 +629,7 @@ _ejs_Array_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
         int i;
         foreach_args[2] = O;
         for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
-            foreach_args[0] = EJS_ARRAY_ELEMENTS(_this)[i];
+            foreach_args[0] = EJS_DENSE_ARRAY_ELEMENTS(_this)[i];
             foreach_args[1] = NUMBER_TO_EJSVAL(i);
             _ejs_invoke_closure (callbackfn, thisArg, 2, foreach_args);
         }
@@ -693,7 +695,7 @@ _ejs_Array_prototype_splice (ejsval env, ejsval _this, uint32_t argc, ejsval* ar
     ejsval deleteCount = _ejs_undefined;
 
     if (argc == 0)
-        return _ejs_array_new(0);
+        return _ejs_array_new(0, EJS_FALSE);
 
     start = args[0];
     if (argc > 1)
@@ -703,7 +705,7 @@ _ejs_Array_prototype_splice (ejsval env, ejsval _this, uint32_t argc, ejsval* ar
     ejsval O = ToObject(_this);
     /* 2. Let A be a new array created as if by the expression new Array() where Array is the standard built-in 
           constructor with that name. */
-    ejsval A = _ejs_array_new(0);
+    ejsval A = _ejs_array_new(0, EJS_FALSE);
     /* 3. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length". */
     ejsval lenVal = _ejs_object_getprop (O, _ejs_atom_length);
     /* 4. Let len be ToUint32(lenVal). */
@@ -850,7 +852,7 @@ _ejs_Array_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
     ejsval needle = args[0];
     if (EJSVAL_IS_NULL(needle)) {
         for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
-            if (EJSVAL_IS_NULL (EJS_ARRAY_ELEMENTS(_this)[i])) {
+            if (EJSVAL_IS_NULL (EJS_DENSE_ARRAY_ELEMENTS(_this)[i])) {
                 rv = i;
                 break;
             }
@@ -858,7 +860,7 @@ _ejs_Array_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
     }
     else {
         for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
-            if (EJSVAL_TO_BOOLEAN(_ejs_op_strict_eq (needle, EJS_ARRAY_ELEMENTS(_this)[i]))) {
+            if (EJSVAL_TO_BOOLEAN(_ejs_op_strict_eq (needle, EJS_DENSE_ARRAY_ELEMENTS(_this)[i]))) {
                 rv = i;
                 break;
             }
@@ -874,13 +876,17 @@ _ejs_Array_isArray (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
     if (argc == 0 || EJSVAL_IS_NULL(args[0]) || !EJSVAL_IS_OBJECT(args[0]))
         return _ejs_false;
 
-    return BOOLEAN_TO_EJSVAL (!strcmp (CLASSNAME(EJSVAL_TO_OBJECT(args[0])), "Array"));
+    EJSObject* obj = EJSVAL_TO_OBJECT(args[0]);
+    // spec says the following string compare on internal classname,
+    // but we can just directly compare pointers.
+    //return BOOLEAN_TO_EJSVAL (!strcmp (CLASSNAME(EJSVAL_TO_OBJECT(args[0])), "Array"));
+    return BOOLEAN_TO_EJSVAL(obj->ops == &_ejs_array_specops || obj->ops == &_ejs_sparsearray_specops);
 }
 
 void
 _ejs_array_init(ejsval global)
 {
-    _ejs_sparsearray_specops =  _ejs_object_specops;
+    _ejs_sparsearray_specops =  _ejs_array_specops;
     _ejs_sparsearray_specops.class_name = "Array";
 
     _ejs_Array = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Array, (EJSClosureFunc)_ejs_Array_impl);
@@ -888,7 +894,7 @@ _ejs_array_init(ejsval global)
     _ejs_object_setprop (global,           _ejs_atom_Array,      _ejs_Array);
 
     _ejs_gc_add_root (&_ejs_Array_proto);
-    _ejs_Array_proto = _ejs_array_new(0);
+    _ejs_Array_proto = _ejs_array_new(0, EJS_FALSE);
     EJSVAL_TO_OBJECT(_ejs_Array_proto)->proto = _ejs_Object_prototype;
     _ejs_object_define_value_property (_ejs_Array, _ejs_atom_prototype, _ejs_Array_proto, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     _ejs_object_define_value_property (_ejs_Array_proto, _ejs_atom_constructor, _ejs_Array,
@@ -938,7 +944,7 @@ _ejs_array_specop_get (ejsval obj, ejsval propertyName)
             //printf ("getprop(%d) on an array, returning undefined\n", idx);
             return _ejs_undefined;
         }
-        return EJS_ARRAY_ELEMENTS(obj)[idx];
+        return EJS_DENSE_ARRAY_ELEMENTS(obj)[idx];
     }
 
     // we also handle the length getter here
@@ -970,7 +976,7 @@ _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName)
             // XXX we leak this.  need to change get_own_property to use an out param instead of a return value
             EJSPropertyDesc* desc = (EJSPropertyDesc*)malloc(sizeof(EJSPropertyDesc));
             _ejs_property_desc_set_writable (desc, EJS_TRUE);
-            _ejs_property_desc_set_value (desc, EJS_ARRAY_ELEMENTS(obj)[idx]);
+            _ejs_property_desc_set_value (desc, EJS_DENSE_ARRAY_ELEMENTS(obj)[idx]);
             return desc;
         }
     }
@@ -1007,24 +1013,32 @@ _ejs_array_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag
     }
 
     if (is_index) {
-        if (idx >= EJS_ARRAY_ALLOC(obj)) {
-            // we're doing a store to an index larger than our allocated space
-            if (EJSVAL_IS_DENSE_ARRAY(obj)) {
-                // we're a dense array, realloc to include up to idx+1
+        if (EJSVAL_IS_DENSE_ARRAY(obj)) {
+            // we're a dense array, realloc to include up to idx+1
 
+            if (idx >= EJS_DENSE_ARRAY_ALLOC(obj)) {
+                // we're doing a store to an index larger than our allocated space
                 // XXX this is of course totally insane, as it causes:
                 //     a=[]; a[10000000]=1;
                 //     to allocate 10000000+1 ejsvals.
                 //     need some logic to switch to a sparse array if need be.
-                maybe_realloc_dense ((EJSArray*)EJSVAL_TO_OBJECT(obj), idx - EJS_ARRAY_ALLOC(obj) + 1);
+                maybe_realloc_dense ((EJSArray*)EJSVAL_TO_OBJECT(obj), idx - EJS_DENSE_ARRAY_ALLOC(obj) + 1);
             }
-            else {
-                // we're already sparse, just give up as none of this is implemented yet.
-                abort();
+
+            // if we now have a hole, fill in the range with special values to indicate this
+            if (idx > EJS_ARRAY_LEN(obj)) {
+                for (int i = idx; i >= EJS_ARRAY_LEN(obj); i --) {
+                    EJS_DENSE_ARRAY_ELEMENTS(obj)[i] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
+                }
             }
+
+            EJS_DENSE_ARRAY_ELEMENTS(obj)[idx] = val;
         }
-        EJS_ARRAY_ELEMENTS(obj)[idx] = val;
-        EJS_ARRAY_LEN(obj) = idx + 1;
+        else {
+            // we're already sparse, just give up as none of this is implemented yet.
+            EJS_NOT_IMPLEMENTED();
+        }
+        EJS_ARRAY_LEN(obj) = MAX(EJS_ARRAY_LEN(obj), idx + 1);
         return;
     }
     // if we fail there, we fall back to the object impl below
@@ -1074,7 +1088,7 @@ _ejs_array_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
 
     // if it's outside the array bounds, do nothing
     if (idx < EJS_ARRAY_LEN(obj))
-        EJS_ARRAY_ELEMENTS(obj)[idx] = _ejs_undefined;
+        EJS_DENSE_ARRAY_ELEMENTS(obj)[idx] = _ejs_undefined;
     return EJS_TRUE;
 }
 
@@ -1087,10 +1101,67 @@ _ejs_array_specop_default_value (ejsval obj, const char *hint)
 static EJSBool
 _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag)
 {
-    if (!ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName))) {
-        EJS_ARRAY_LEN(obj) = ToUint32(_ejs_property_desc_get_value(propertyDescriptor));
+    // check if propertyName is a uint32, or a string that we can convert to an uint32
+    EJSBool is_index = EJS_FALSE;
+    ejsval idx_val = ToNumber(propertyName);
+    int idx;
+    if (EJSVAL_IS_NUMBER(idx_val)) {
+        double n = EJSVAL_TO_NUMBER(idx_val);
+        if (floor(n) == n) {
+            idx = (int)n;
+            is_index = EJS_TRUE;
+        }
+    }
+
+    if (is_index) {
+        if (EJSVAL_IS_DENSE_ARRAY(obj)) {
+            // we're a dense array, realloc to include up to idx+1
+
+            if (idx >= EJS_DENSE_ARRAY_ALLOC(obj)) {
+                // we're doing a store to an index larger than our allocated space
+                // XXX this is of course totally insane, as it causes:
+                //     a=[]; a[10000000]=1;
+                //     to allocate 10000000+1 ejsvals.
+                //     need some logic to switch to a sparse array if need be.
+                maybe_realloc_dense ((EJSArray*)EJSVAL_TO_OBJECT(obj), idx - EJS_DENSE_ARRAY_ALLOC(obj) + 1);
+
+                if (idx > EJS_ARRAY_LEN(obj)) {
+                    for (int i = idx; i >= EJS_ARRAY_LEN(obj); i --) {
+                        EJS_DENSE_ARRAY_ELEMENTS(obj)[i] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
+                    }
+                }
+            }
+
+            EJS_DENSE_ARRAY_ELEMENTS(obj)[idx] = propertyDescriptor->value;
+        }
+        else {
+            // we're already sparse, just give up as none of this is implemented yet.
+            EJS_NOT_IMPLEMENTED();
+        }
+        EJS_ARRAY_LEN(obj) = MAX(EJS_ARRAY_LEN(obj), idx + 1);
         return EJS_TRUE;
     }
+
+    propertyName = ToString(propertyName);
+    if (!ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName))) {
+        // XXX more from 15.4.5.1 here
+        int newLen = ToUint32(_ejs_property_desc_get_value(propertyDescriptor));
+        int oldLen = EJS_ARRAY_LEN(obj);
+
+        if (EJSVAL_IS_DENSE_ARRAY(obj)) {
+            if (newLen > oldLen) {
+                maybe_realloc_dense ((EJSArray*)EJSVAL_TO_OBJECT(obj), newLen);
+                for (int i = oldLen; i < newLen; i ++)
+                    EJS_DENSE_ARRAY_ELEMENTS(obj)[i] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
+            }
+        }
+        else {
+        }
+
+        EJS_ARRAY_LEN(obj) = newLen;
+        return EJS_TRUE;
+    }
+
     return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
 }
 
@@ -1104,14 +1175,36 @@ _ejs_array_specop_allocate()
 static void
 _ejs_array_specop_finalize (EJSObject* obj)
 {
-    free (((EJSArray*)obj)->elements);
+    if (EJSARRAY_IS_SPARSE(obj)) {
+        EJSArray* arr = (EJSArray*)obj;
+        for (int i = 0; i < arr->sparse.arraylet_num; i ++) {
+            Arraylet al = arr->sparse.arraylets[i];
+            free (al.elements);
+        }
+        free (arr->sparse.arraylets);
+    }
+    else {
+        free (EJSDENSEARRAY_ELEMENTS(obj));
+    }
     _ejs_object_specops.finalize (obj);
 }
 
 static void
 _ejs_array_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
-    _ejs_array_foreach_element ((EJSArray*)obj, scan_func);
+    if (EJSARRAY_IS_SPARSE(obj)) {
+        EJSArray* arr = (EJSArray*)obj;
+
+        for (int i = 0; i < arr->sparse.arraylet_num; i ++) {
+            Arraylet al = arr->sparse.arraylets[i];
+            for (int j = 0; j < al.length; j ++)
+                scan_func (al.elements[j]);
+        }
+    }
+    else {
+        for (int i = 0; i < EJSARRAY_LEN(obj); i ++)
+            scan_func (EJSDENSEARRAY_ELEMENTS(obj)[i]);
+    }
     _ejs_object_specops.scan (obj, scan_func);
 }
 

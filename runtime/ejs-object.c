@@ -594,37 +594,7 @@ _ejs_object_setprop (ejsval val, ejsval key, ejsval value)
         EJS_NOT_IMPLEMENTED();
     }
 
-    if (EJSVAL_IS_ARRAY(val)) {
-        // check if key is a uint32, or a string that we can convert to an uint32
-        int idx = -1;
-        if (EJSVAL_IS_NUMBER(key)) {
-            double n = EJSVAL_TO_NUMBER(key);
-            if (floor(n) == n) {
-                idx = (int)n;
-            }
-        }
-
-        if (idx != -1) {
-            if (idx >= EJS_ARRAY_ALLOC(val)) {
-                int new_alloc = idx + 10;
-                ejsval* new_elements = (ejsval*)malloc (sizeof(ejsval) * new_alloc);
-                memmove (new_elements, EJS_ARRAY_ELEMENTS(val), EJS_ARRAY_ALLOC(val) * sizeof(ejsval));
-                free (EJS_ARRAY_ELEMENTS(val));
-                EJS_ARRAY_ELEMENTS(val) = new_elements;
-                EJS_ARRAY_ALLOC(val) = new_alloc;
-            }
-            EJS_ARRAY_ELEMENTS(val)[idx] = value;
-            EJS_ARRAY_LEN(val) = idx + 1;
-            return value;
-        }
-        // if we fail there, we fall back to the object impl below
-    }
-
-    ejsval real_key = ToString(key);
-
-    // this should be:
-    OP(EJSVAL_TO_OBJECT(val), put)(val, real_key, value, EJS_FALSE);
-
+    OP(EJSVAL_TO_OBJECT(val), put)(val, key, value, EJS_FALSE);
 
     return value;
 }
@@ -816,7 +786,7 @@ _ejs_Object_getOwnPropertyNames (ejsval env, ejsval _this, uint32_t argc, ejsval
     EJSObject* O = EJSVAL_TO_OBJECT(obj);
     /* 2. Let array be the result of creating a new object as if by the expression new Array () where Array is the 
           standard built-in constructor with that name. */
-    ejsval arr = _ejs_array_new(O->map.num);
+    ejsval arr = _ejs_array_new(O->map.num, EJS_FALSE);
     EJSArray* array = (EJSArray*)EJSVAL_TO_OBJECT(arr);
     /* 3. Let n be 0. */
     int n = 0;
@@ -828,7 +798,7 @@ _ejs_Object_getOwnPropertyNames (ejsval env, ejsval _this, uint32_t argc, ejsval
         /*    b. Call the [[DefineOwnProperty]] internal method of array with arguments ToString(n), the
                  PropertyDescriptor {[[Value]]: name, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: 
                  true}, and false. */
-        EJSARRAY_ELEMENTS(array)[n] = propName;
+        EJSDENSEARRAY_ELEMENTS(array)[n] = propName;
         /*    c. Increment n by 1. */
         ++n;
     }
@@ -896,7 +866,9 @@ _ejs_Object_defineProperty (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
     EJSObject *obj = EJSVAL_TO_OBJECT(O);
 
     /* 2. Let name be ToString(P). */
-    ejsval name = ToString(P);
+    // we skip this and handle it in object_specop_define_own_property
+    //ejsval name = ToString(P);
+    ejsval name = P;
 
     /* 3. Let desc be the result of calling ToPropertyDescriptor with Attributes as the argument. */
     EJSPropertyDesc desc;
@@ -1448,6 +1420,9 @@ static void
 _ejs_object_specop_put (ejsval O, ejsval P, ejsval V, EJSBool Throw)
 {
     EJSObject* obj = EJSVAL_TO_OBJECT(O);
+
+    P = ToString(P);
+
     /* 1. If the result of calling the [[CanPut]] internal method of O with argument P is false, then */
     if (!OP(obj,can_put)(O, P)) {
         /*    a. If Throw is true, then throw a TypeError exception. */

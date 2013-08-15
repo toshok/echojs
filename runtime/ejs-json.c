@@ -54,7 +54,7 @@ json_value_to_ejsval(JSON_Value *v, ejsval *rv)
         JSON_Array *arr = json_value_get_array (v);
         int count = json_array_get_count (arr);
 
-        *rv = _ejs_array_new (0);
+        *rv = _ejs_array_new (count, EJS_FALSE);
 
         for (int i = 0; i < count; i ++) {
             ejsval propkey = _ejs_number_new (i);
@@ -164,7 +164,7 @@ JA(StringifyState *state, ejsval value)
     /* 4. Let indent be the concatenation of indent and gap. */
     state->indent = _ejs_string_concat (state->indent, state->gap);
     /* 5. Let partial be an empty List. */
-    ejsval partial = _ejs_array_new (0);
+    ejsval partial = _ejs_array_new (0, EJS_FALSE);
 
     /* 6. Let len be the result of calling the [[Get]] internal method of value with argument "length". */
     int len = EJS_ARRAY_LEN(value);
@@ -202,10 +202,10 @@ JA(StringifyState *state, ejsval value)
             /*        i. Let properties be a String formed by concatenating all the element Strings of partial with
                          each adjacent pair of Strings separated with the comma character. A comma is not inserted 
                          either before the first String or after the last String. */
-            ejsval properties = EJS_ARRAY_ELEMENTS(partial)[0];
+            ejsval properties = EJS_DENSE_ARRAY_ELEMENTS(partial)[0];
             ejsval comma_str = _ejs_string_new_utf8(",");
             for (int i = 1; i < EJS_ARRAY_LEN(partial); i ++) {
-                properties = _ejs_string_concatv (properties, comma_str, EJS_ARRAY_ELEMENTS(partial)[i], _ejs_null);
+                properties = _ejs_string_concatv (properties, comma_str, EJS_DENSE_ARRAY_ELEMENTS(partial)[i], _ejs_null);
             }
 
             /*        ii. Let final be the result of concatenating "[", properties, and "]". */
@@ -222,9 +222,9 @@ JA(StringifyState *state, ejsval value)
             /*        ii. Let properties be a String formed by concatenating all the element Strings of partial with 
                           each adjacent pair of Strings separated with separator. The separator String is not inserted 
                           either before the first String or after the last String. */
-            ejsval properties = EJS_ARRAY_ELEMENTS(partial)[0];
+            ejsval properties = EJS_DENSE_ARRAY_ELEMENTS(partial)[0];
             for (int i = 1; i < EJS_ARRAY_LEN(partial); i ++) {
-                properties = _ejs_string_concatv (properties, separator, EJS_ARRAY_ELEMENTS(partial)[i], _ejs_null);
+                properties = _ejs_string_concatv (properties, separator, EJS_DENSE_ARRAY_ELEMENTS(partial)[i], _ejs_null);
             }
             /*        iii. Let final be the result of concatenating "[", the line feed character, indent, properties, the 
                            line feed character, stepback, and "]". */
@@ -270,7 +270,7 @@ JO(StringifyState *state, ejsval value)
               [[Enumerable]] attribute is true. The ordering of the Strings should be the same as that used by the 
               Object.keys standard built-in function. */
         EJSObject* value_obj = EJSVAL_TO_OBJECT(value);
-        K = _ejs_array_new (0);
+        K = _ejs_array_new (0, EJS_FALSE);
         for (int i = 0; i < value_obj->map.num; i ++) {
             if (!_ejs_property_desc_is_enumerable(&value_obj->map.properties[i]))
                 continue;
@@ -279,11 +279,11 @@ JO(StringifyState *state, ejsval value)
         }
     }
     /* 7. Let partial be an empty List. */
-    ejsval partial = _ejs_array_new (0);
+    ejsval partial = _ejs_array_new (0, EJS_FALSE);
 
     /* 8. For each element P of K. */
     for (int kk = 0; kk < EJS_ARRAY_LEN(K); kk++) {
-        ejsval P = EJS_ARRAY_ELEMENTS(K)[kk];
+        ejsval P = EJS_DENSE_ARRAY_ELEMENTS(K)[kk];
 
         /*    a. Let strP be the result of calling the abstract operation Str with arguments P and value. */
         ejsval strP = Str(state, P, value);
@@ -317,10 +317,10 @@ JO(StringifyState *state, ejsval value)
             /*        i. Let properties be a String formed by concatenating all the element Strings of partial with 
                          each adjacent pair of Strings separated with the comma character. A comma is not inserted 
                          either before the first String or after the last String.  */
-            ejsval properties = EJS_ARRAY_ELEMENTS(partial)[0];
+            ejsval properties = EJS_DENSE_ARRAY_ELEMENTS(partial)[0];
             ejsval comma_str = _ejs_string_new_utf8(",");
             for (int i = 1; i < EJS_ARRAY_LEN(partial); i ++) {
-                properties = _ejs_string_concatv (properties, comma_str, EJS_ARRAY_ELEMENTS(partial)[i], _ejs_null);
+                properties = _ejs_string_concatv (properties, comma_str, EJS_DENSE_ARRAY_ELEMENTS(partial)[i], _ejs_null);
             }
             /*        ii. Let final be the result of concatenating "{", properties, and "}". */
             final = _ejs_string_concatv (_ejs_string_new_utf8("{"),
@@ -336,9 +336,9 @@ JO(StringifyState *state, ejsval value)
             /*        ii. Let properties be a String formed by concatenating all the element Strings of partial with 
                           each adjacent pair of Strings separated with separator. The separator String is not inserted 
                           either before the first String or after the last String. */
-            ejsval properties = EJS_ARRAY_ELEMENTS(partial)[0];
+            ejsval properties = EJS_DENSE_ARRAY_ELEMENTS(partial)[0];
             for (int i = 1; i < EJS_ARRAY_LEN(partial); i ++) {
-                properties = _ejs_string_concatv (properties, separator, EJS_ARRAY_ELEMENTS(partial)[i], _ejs_null);
+                properties = _ejs_string_concatv (properties, separator, EJS_DENSE_ARRAY_ELEMENTS(partial)[i], _ejs_null);
             }
             /*        iii. Let final be the result of concatenating "{", the line feed character, indent, properties, the 
                            line feed character, stepback, and "}". */
@@ -548,11 +548,11 @@ _ejs_JSON_stringify (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         /*    b. Else if the [[Class]] internal property of replacer is "Array", then */
         else if (EJSVAL_IS_ARRAY(replacer)) {
             /*       i. Let PropertyList  be an empty internal List */
-            state.PropertyList = _ejs_array_new(0);
+            state.PropertyList = _ejs_array_new(0, EJS_FALSE);
             /*       ii. For each value v of a property of replacer that has an array index property name. The
                          properties are enumerated in the ascending array index order of their names. */
             for (int i = 0; i < EJS_ARRAY_LEN(replacer); i ++) {
-                ejsval v = EJS_ARRAY_ELEMENTS(replacer)[i];
+                ejsval v = EJS_DENSE_ARRAY_ELEMENTS(replacer)[i];
                 /*           1. Let item be undefined. */
                 ejsval item = _ejs_undefined;
                 /*           2. If Type(v) is String then let item be v. */

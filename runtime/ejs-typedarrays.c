@@ -223,7 +223,7 @@ _ejs_ArrayBuffer_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsva
                  EJSObject* arr = EJSVAL_TO_OBJECT(args[0]);            \
                  int i;                                                 \
                  for (i = 0; i < EJSARRAY_LEN (arr); i ++) {            \
-                     ((elementtype*)buf_data)[i] = (elementtype)EJSVAL_TO_NUMBER(EJSARRAY_ELEMENTS(arr)[i]); \
+                     ((elementtype*)buf_data)[i] = (elementtype)EJSVAL_TO_NUMBER(EJSDENSEARRAY_ELEMENTS(arr)[i]); \
                  }                                                      \
              }                                                          \
              else {                                                     \
@@ -539,7 +539,7 @@ _ejs_arraybuffer_specop_get (ejsval obj, ejsval propertyName)
             printf ("getprop(%d) on an array, returning undefined\n", idx);
             return _ejs_undefined;
         }
-        return EJS_ARRAY_ELEMENTS(obj)[idx];
+        return EJS_DENSE_ARRAY_ELEMENTS(obj)[idx];
     }
 
     // we also handle the length getter here
@@ -585,17 +585,17 @@ _ejs_arraybuffer_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBoo
     }
 
     if (idx != -1) {
-        if (idx >= EJS_ARRAY_ALLOC(obj)) {
+        if (idx >= EJS_DENSE_ARRAY_ALLOC(obj)) {
             int new_alloc = idx + 10;
             ejsval* new_elements = (ejsval*)malloc (sizeof(ejsval*) * new_alloc);
-            memmove (new_elements, EJS_ARRAY_ELEMENTS(obj), EJS_ARRAY_ALLOC(obj) * sizeof(ejsval));
-            free (EJS_ARRAY_ELEMENTS(obj));
-            EJS_ARRAY_ELEMENTS(obj) = new_elements;
-            EJS_ARRAY_ALLOC(obj) = new_alloc;
+            memmove (new_elements, EJS_DENSE_ARRAY_ELEMENTS(obj), EJS_DENSE_ARRAY_ALLOC(obj) * sizeof(ejsval));
+            free (EJS_DENSE_ARRAY_ELEMENTS(obj));
+            EJS_DENSE_ARRAY_ELEMENTS(obj) = new_elements;
+            EJS_DENSE_ARRAY_ALLOC(obj) = new_alloc;
         }
-        EJS_ARRAY_ELEMENTS(obj)[idx] = val;
+        EJS_DENSE_ARRAY_ELEMENTS(obj)[idx] = val;
         EJS_ARRAY_LEN(obj) = idx + 1;
-        if (EJS_ARRAY_LEN(obj) >= EJS_ARRAY_ALLOC(obj))
+        if (EJS_ARRAY_LEN(obj) >= EJS_DENSE_ARRAY_ALLOC(obj))
             abort();
         return;
     }
@@ -646,7 +646,7 @@ _ejs_arraybuffer_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
 
     // if it's outside the array bounds, do nothing
     if (idx < EJS_ARRAY_LEN(obj))
-        EJS_ARRAY_ELEMENTS(obj)[idx] = _ejs_undefined;
+        EJS_DENSE_ARRAY_ELEMENTS(obj)[idx] = _ejs_undefined;
     return EJS_TRUE;
 }
 
