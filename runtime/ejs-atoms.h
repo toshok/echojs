@@ -144,6 +144,10 @@ EJS_ATOM(indexOf)
 EJS_ATOM(join)
 EJS_ATOM(forEach)
 EJS_ATOM(map)
+EJS_ATOM(every)
+EJS_ATOM(some)
+EJS_ATOM(reduce)
+EJS_ATOM(reduceRight)
 
 // global functions
 EJS_ATOM(isNaN)

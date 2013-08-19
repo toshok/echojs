@@ -347,6 +347,7 @@ _ejs_Array_prototype_pop (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
     }
 }
 
+// ECMA262: 15.4.4.4
 static ejsval
 _ejs_Array_prototype_concat (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
@@ -391,6 +392,7 @@ _ejs_array_slice_dense (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return rv;
 }
 
+// ECMA262: 15.4.4.10
 static ejsval
 _ejs_Array_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
@@ -462,6 +464,7 @@ _ejs_Array_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval* arg
     return A;
 }
 
+// ECMA262: 15.4.4.5
 static ejsval
 _ejs_Array_prototype_join (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
@@ -538,70 +541,29 @@ _ejs_Array_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *
     return _ejs_Array_prototype_join (env, _this, 0, NULL);
 }
 
+// ECMA262: 15.4.4.15
 static ejsval
-_ejs_Array_prototype_map (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+_ejs_Array_prototype_lastIndexOf (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
-    ejsval callbackfn = _ejs_undefined;
-    ejsval thisArg = _ejs_undefined;
-    if (argc > 0) callbackfn = args[0];
-    if (argc > 1) thisArg = args[1];
-
-    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
-    ejsval O = ToObject(_this);
-
-    /* 2. Let lenValue be the result of calling the [[Get]] internal method of O with the argument "length".*/
-    ejsval lenVal = _ejs_object_getprop (O, _ejs_atom_length);
-        
-    /* 3. Let len be ToUint32(lenValue). */
-    uint32_t len = ToUint32(lenVal);
-
-    /* 4. If IsCallable(callbackfn) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_FUNCTION(callbackfn)) {
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Array.prototype.map called with a non-function.");
-    }
-
-    /* 5. If thisArg was supplied, let T be thisArg; else let T be undefined. */
-    ejsval T = thisArg;
-
-    /* 6. Let A be a new array created as if by the expression new Array(len) where Array is the standard builtin constructor with that name and len is the value of len. */
-    ejsval A = _ejs_array_new(len, EJS_FALSE);
-    
-    /* 7. Let k be 0. */
-    uint32_t k = 0;
-    /* 8. Repeat, while k < len */
-    while (k < len) {
-        /* a. Let Pk be ToString(k). */
-        ejsval Pk = ToString (NUMBER_TO_EJSVAL(k));
-
-        /* b. Let kPresent be the result of calling the [[HasProperty]] internal method of O with argument Pk. */
-        EJSBool kPresent = OP(EJSVAL_TO_OBJECT(O), has_property)(O, Pk);
-
-        /* c. If kPresent is true, then */
-        if (kPresent) {
-            /* i. Let kValue be the result of calling the [[Get]] internal method of O with argument Pk. */
-            ejsval kValue = _ejs_object_getprop (O, Pk);
-            /* ii. Let mappedValue be the result of calling the [[Call]] internal method of callbackfn with T as */
-            /*     the this value and argument list containing kValue, k, and O. */
-            ejsval map_args[3];
-            map_args[0] = kValue;
-            map_args[1] = NUMBER_TO_EJSVAL(k);
-            map_args[2] = O;
-            ejsval mappedValue = _ejs_invoke_closure (callbackfn, T, 2, map_args);
-
-            /* iii. Call the [[DefineOwnProperty]] internal method of A with arguments Pk, Property */
-            /*      Descriptor {[[Value]]: mappedValue, [[Writable]]: true, [[Enumerable]]: true, */
-            /*      [[Configurable]]: true}, and false. */
-
-            _ejs_object_setprop (A, NUMBER_TO_EJSVAL(k), mappedValue); // XXX
-
-        }
-        /* d. Increase k by 1. */
-        k++;
-    }
-    /* 9. Return A. */
-    return A;
+    EJS_NOT_IMPLEMENTED();
 }
 
+
+// ECMA262: 15.4.4.16
+static ejsval
+_ejs_Array_prototype_every (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
+{
+    EJS_NOT_IMPLEMENTED();
+}
+
+// ECMA262: 15.4.4.17
+static ejsval
+_ejs_Array_prototype_some (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
+{
+    EJS_NOT_IMPLEMENTED();
+}
+
+// ECMA262: 15.4.4.18
 static ejsval
 _ejs_Array_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
@@ -671,6 +633,172 @@ _ejs_Array_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
     }
 
     return _ejs_undefined;
+}
+
+// ECMA262: 15.4.4.19
+static ejsval
+_ejs_Array_prototype_map (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    ejsval callbackfn = _ejs_undefined;
+    ejsval thisArg = _ejs_undefined;
+    if (argc > 0) callbackfn = args[0];
+    if (argc > 1) thisArg = args[1];
+
+    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
+
+    /* 2. Let lenValue be the result of calling the [[Get]] internal method of O with the argument "length".*/
+    ejsval lenVal = _ejs_object_getprop (O, _ejs_atom_length);
+        
+    /* 3. Let len be ToUint32(lenValue). */
+    uint32_t len = ToUint32(lenVal);
+
+    /* 4. If IsCallable(callbackfn) is false, throw a TypeError exception. */
+    if (!EJSVAL_IS_FUNCTION(callbackfn)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Array.prototype.map called with a non-function.");
+    }
+
+    /* 5. If thisArg was supplied, let T be thisArg; else let T be undefined. */
+    ejsval T = thisArg;
+
+    /* 6. Let A be a new array created as if by the expression new Array(len) where Array is the standard builtin constructor with that name and len is the value of len. */
+    ejsval A = _ejs_array_new(len, EJS_FALSE);
+    
+    /* 7. Let k be 0. */
+    uint32_t k = 0;
+    /* 8. Repeat, while k < len */
+    while (k < len) {
+        /* a. Let Pk be ToString(k). */
+        ejsval Pk = ToString (NUMBER_TO_EJSVAL(k));
+
+        /* b. Let kPresent be the result of calling the [[HasProperty]] internal method of O with argument Pk. */
+        EJSBool kPresent = OP(EJSVAL_TO_OBJECT(O), has_property)(O, Pk);
+
+        /* c. If kPresent is true, then */
+        if (kPresent) {
+            /* i. Let kValue be the result of calling the [[Get]] internal method of O with argument Pk. */
+            ejsval kValue = _ejs_object_getprop (O, Pk);
+            /* ii. Let mappedValue be the result of calling the [[Call]] internal method of callbackfn with T as */
+            /*     the this value and argument list containing kValue, k, and O. */
+            ejsval map_args[3];
+            map_args[0] = kValue;
+            map_args[1] = NUMBER_TO_EJSVAL(k);
+            map_args[2] = O;
+            ejsval mappedValue = _ejs_invoke_closure (callbackfn, T, 2, map_args);
+
+            /* iii. Call the [[DefineOwnProperty]] internal method of A with arguments Pk, Property */
+            /*      Descriptor {[[Value]]: mappedValue, [[Writable]]: true, [[Enumerable]]: true, */
+            /*      [[Configurable]]: true}, and false. */
+
+            _ejs_object_setprop (A, NUMBER_TO_EJSVAL(k), mappedValue); // XXX
+
+        }
+        /* d. Increase k by 1. */
+        k++;
+    }
+    /* 9. Return A. */
+    return A;
+}
+
+// ECMA262: 15.4.4.21
+static ejsval
+_ejs_Array_prototype_reduce (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    ejsval callbackfn = _ejs_undefined;
+    ejsval initialValue = _ejs_undefined;
+    if (argc > 0) callbackfn = args[0];
+    if (argc > 1) initialValue = args[1];
+
+    if (!EJSVAL_IS_NULL_OR_UNDEFINED(_this)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Array.prototype.reduce called on null or undefined.");
+    }
+
+    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
+
+    /* 2. Let lenValue be the result of calling the [[Get]] internal method of O with the argument "length". */
+    ejsval lenVal = _ejs_object_getprop (O, _ejs_atom_length);
+
+    /* 3. Let len be ToUint32(lenValue). */
+    uint32_t len = ToUint32(lenVal);
+
+    /* 4. If IsCallable(callbackfn) is false, throw a TypeError exception. */
+    if (!EJSVAL_IS_FUNCTION(callbackfn)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Array.prototype.reduce called with a non-function.");
+    }
+
+    /* 5. If len is 0 and initialValue is not present, throw a TypeError exception. */
+    if (!len == 0 && argc > 1 /* don't use EJSVAL_IS_UNDEFINED(initialValue), as 'undefined' passed for initialValue passes */) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Reduce of empty array with no initial value");
+    }
+    /* 6. Let k be 0. */
+    int k = 0;
+
+    ejsval accumulator;
+
+    /* 7. If initialValue is present, then */
+    if (argc > 1 /* don't use EJSVAL_IS_UNDEFINED(initialValue), as 'undefined' passed for initialValue passes */) {
+        /*    a. Set accumulator to initialValue. */
+        accumulator = initialValue;
+    }
+    /* 8. Else, initialValue is not present */
+    else {
+        /*    a. Let kPresent be false. */
+        EJSBool kPresent = EJS_FALSE;
+        /*    b. Repeat, while kPresent is false and k < len */
+        while (kPresent && k < len) {
+            /*       i. Let Pk be ToString(k). */
+            ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
+
+            /*       ii. Let kPresent be the result of calling the [[HasProperty]] internal method of O with argument Pk. */
+            EJSBool kPresent = OP(EJSVAL_TO_OBJECT(O), has_property)(O, Pk);
+
+            /*       iii. If kPresent is true, then */
+            if (kPresent) {
+                /*            1. Let accumulator be the result of calling the [[Get]] internal method of O with argument Pk. */
+                accumulator = OP(EJSVAL_TO_OBJECT(O),get)(O, Pk);
+            }
+            /*       iv. Increase k by 1. */
+            k++;
+        }
+        /*    c. If kPresent is false, throw a TypeError exception. */
+        if (kPresent)
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Reduce of empty array with no initial value");
+    }
+    /* 9. Repeat, while k < len */
+    while (k < len) {
+        /*    a. Let Pk be ToString(k). */
+        ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
+
+        /*    b. Let kPresent be the result of calling the [[HasProperty]] internal method of O with argument Pk. */
+        EJSBool kPresent = OP(EJSVAL_TO_OBJECT(O), has_property)(O, Pk);
+
+        /*    c. If kPresent is true, then */
+        if (kPresent) {
+            /*       i. Let kValue be the result of calling the [[Get]] internal method of O with argument Pk. */
+            ejsval kValue = _ejs_object_getprop (O, Pk);
+            /*       ii. Let accumulator be the result of calling the [[Call]] internal method of callbackfn with  */
+            /*           undefined as the this value and argument list containing accumulator, kValue, k, and O. */
+            ejsval reduce_args[4];
+            reduce_args[0] = accumulator;
+            reduce_args[1] = kValue;
+            reduce_args[2] = NUMBER_TO_EJSVAL(k);
+            reduce_args[3] = O;
+            _ejs_invoke_closure (callbackfn, _ejs_undefined, 4, reduce_args);
+        }
+        /*    d. Increase k by 1. */
+        k++;
+    }
+
+    /* 10. Return accumulator. */
+    return accumulator;
+}
+
+// ECMA262: 15.4.4.22
+static ejsval
+_ejs_Array_prototype_reduceRight (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
+{
+    EJS_NOT_IMPLEMENTED();
 }
 
 static inline int
@@ -914,9 +1042,14 @@ _ejs_array_init(ejsval global)
     PROTO_METHOD(slice);
     PROTO_METHOD(splice);
     PROTO_METHOD(indexOf);
+    PROTO_METHOD(lastIndexOf);
     PROTO_METHOD(join);
     PROTO_METHOD(forEach);
+    PROTO_METHOD(every);
+    PROTO_METHOD(some);
     PROTO_METHOD(map);
+    PROTO_METHOD(reduce);
+    PROTO_METHOD(reduceRight);
 
     PROTO_METHOD(toString);
 
