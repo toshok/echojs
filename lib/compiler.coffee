@@ -955,7 +955,7 @@ class LLVMIRVisitor extends NodeVisitor
                 obj
 
         visitArrayExpression: (n) ->
-                obj = @createCall @ejs_runtime.array_new, [consts.int32 0], "arrtmp", !@ejs_runtime.array_new.doesNotThrow
+                obj = @createCall @ejs_runtime.array_new, [consts.int32(0), consts.false()], "arrtmp", !@ejs_runtime.array_new.doesNotThrow
                 i = 0;
                 for el in n.elements
                         val = @visit el
