@@ -625,7 +625,7 @@ _ejs_finalizer_thread ()
                 pthread_mutex_lock (&info->page_mutex);
                 if (info->num_free_cells == info->num_cells) {
                     if (info->los_info) {
-                        printf ("releasing large object!\n");
+                        fprintf (stderr, "releasing large object!\n");
                         release_to_los (info->los_info);
                     }
                     else {
@@ -895,7 +895,7 @@ mark_from_roots()
     for (RootSetEntry *entry = root_set; entry; entry = entry->next) {
         num_roots++;
         if (entry->root) {
-            ejsval rootval = *((ejsval*)entry->root);
+            ejsval rootval = *entry->root;
             if (!EJSVAL_IS_GCTHING_IMPL(rootval))
                 continue;
             GCObjectPtr root_ptr = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(rootval);
@@ -907,6 +907,8 @@ mark_from_roots()
                 continue;
 
             BitmapCell cell = page->page_bitmap[cell_idx];
+            if (IS_FREE(cell))   continue; // skip free cells
+            if (!IS_WHITE(cell)) continue; // skip pointers to gray/black cells
             WORKLIST_PUSH_AND_GRAY_CELL(root_ptr, cell);
         }
     }
@@ -1189,8 +1191,11 @@ alloc_from_los(size_t size, EJSScanType scan_type)
     rv->page_info.num_cells = 1;
     rv->page_info.num_free_cells = 0;
     rv->page_info.los_info = rv;
+
     SET_WHITE(rv->page_info.page_bitmap[0]);
     SET_ALLOCATED(rv->page_info.page_bitmap[0]);
+
+    *((GCObjectHeader*)rv->page_info.page_start) = scan_type;
 
     rv->alloc_size = size;
 
