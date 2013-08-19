@@ -80,7 +80,7 @@ $(LIPOD_IOS_LIBRARY): $(SIM_LIBRARY) $(DEV_LIBRARY)
 	@echo [lipo] $< && lipo -create $(SIM_ARCH) $(SIM_LIBRARY) $(DEV_ARCH) $(DEV_LIBRARY) -output $@
 
 ejs-atoms-gen.c: ejs-atoms.h gen-atoms.js
-	@echo [GEN] $@ && ./gen-atoms.js > .tmp-$@ && mv .tmp-$@ $@
+	@echo [GEN] $@ && ./gen-atoms.js $< > .tmp-$@ && mv .tmp-$@ $@
 
 ejs-init.o.osx ejs-init.o.sim ejs-init.o.armv7: ejs-atoms-gen.c
 

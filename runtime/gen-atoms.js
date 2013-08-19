@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 var fs = require ("fs");
 
-var atom_def = fs.readFileSync ("ejs-atoms.h", "utf-8");
+var atom_def = fs.readFileSync (process.argv[2], "utf-8");
 
 var atom_lines = atom_def.split ("\n");
 var new_lines = [];
