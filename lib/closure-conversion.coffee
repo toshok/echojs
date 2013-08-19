@@ -426,7 +426,7 @@ class SubstituteVariables extends NodeVisitor
                 rv = []
                 
                 new_declarations = []
-                
+
                 # we loop until we find a variable that's closed over *and* has an initializer.
                 for decl in decls
                         decl.init = @visit decl.init
@@ -435,7 +435,7 @@ class SubstituteVariables extends NodeVisitor
                         if closed_over
                                 # for variables that are closed over but undefined, we skip them (thereby removing them from the list of decls)
 
-                                if decl.init? # FIXME: do we also need to check for an explicit 'undefined' here?
+                                if decl.init? # FIXME: we should also check for an explicit 'undefined' here
 
                                         # push the current set of new_declarations if there are any
                                         if new_declarations.length > 0
@@ -463,14 +463,16 @@ class SubstituteVariables extends NodeVisitor
                                 new_declarations.push decl
                         
 
+                # push the last set of new_declarations if there were any
                 if new_declarations.length > 0
-                        # push the last set of new_declarations if there were any
                         rv.push {
                                 type: syntax.VariableDeclaration
                                 declarations: new_declarations
                                 kind: n.kind
                         }
 
+                if rv.length is 0
+                        rv = { type: syntax.EmptyStatement }
                 rv
 
         visitProperty: (n) ->
