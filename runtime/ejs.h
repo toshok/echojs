@@ -75,6 +75,5 @@ extern ejsval _ejs_global;
 #define EJS_ATOM(atom) extern ejsval _ejs_atom_##atom; extern const jschar _ejs_ucs2_##atom[];
 #define EJS_ATOM2(atom,atom_name) extern ejsval _ejs_atom_##atom_name; extern const jschar _ejs_ucs2_##atom_name[];
 #include "ejs-atoms.h"
-#undef EJS_ATOM
 
 #endif // _ejs_h_
