@@ -112,8 +112,8 @@ namespace ejsllvm {
 
         _ejs_object_setprop_utf8 (exports,              "Type", _ejs_Type);
 
-#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Type, EJS_STRINGIFY(x), Type_##x)
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Type_proto, EJS_STRINGIFY(x), Type_prototype_##x)
+#define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Type, x, Type_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Type_proto, x, Type_prototype_##x)
 
         OBJ_METHOD(getDoubleTy);
         OBJ_METHOD(getInt64Ty);

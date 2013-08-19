@@ -108,7 +108,7 @@ namespace ejsllvm {
 
         std::vector<llvm::Value*> ArgsV;
         for (unsigned i = 0, e = EJSARRAY_LEN(argv); i != e; ++i) {
-            ArgsV.push_back (Value_GetLLVMObj(EJSARRAY_ELEMENTS(argv)[i]));
+            ArgsV.push_back (Value_GetLLVMObj(EJSDENSEARRAY_ELEMENTS(argv)[i]));
             if (ArgsV.back() == 0) abort(); // XXX throw an exception here
         }
 
@@ -128,7 +128,7 @@ namespace ejsllvm {
 
         std::vector<llvm::Value*> ArgsV;
         for (unsigned i = 0, e = EJSARRAY_LEN(argv); i != e; ++i) {
-            ArgsV.push_back (Value_GetLLVMObj(EJSARRAY_ELEMENTS(argv)[i]));
+            ArgsV.push_back (Value_GetLLVMObj(EJSDENSEARRAY_ELEMENTS(argv)[i]));
             if (ArgsV.back() == 0) abort(); // XXX throw an exception here
         }
 
@@ -215,7 +215,7 @@ namespace ejsllvm {
 
         std::vector<llvm::Value*> IdxV;
         for (unsigned i = 0, e = EJSARRAY_LEN(idxv); i != e; ++i) {
-            IdxV.push_back (Value_GetLLVMObj(EJSARRAY_ELEMENTS(idxv)[i]));
+            IdxV.push_back (Value_GetLLVMObj(EJSDENSEARRAY_ELEMENTS(idxv)[i]));
             if (IdxV.back() == 0) abort(); // XXX throw an exception here
         }
 
@@ -233,7 +233,7 @@ namespace ejsllvm {
 
         std::vector<llvm::Value*> IdxV;
         for (unsigned i = 0, e = EJSARRAY_LEN(idxv); i != e; ++i) {
-            IdxV.push_back (Value_GetLLVMObj(EJSARRAY_ELEMENTS(idxv)[i]));
+            IdxV.push_back (Value_GetLLVMObj(EJSDENSEARRAY_ELEMENTS(idxv)[i]));
             if (IdxV.back() == 0) abort(); // XXX throw an exception here
         }
 
@@ -370,7 +370,7 @@ namespace ejsllvm {
 
         _ejs_object_setprop_utf8 (exports,              "IRBuilder", _ejs_IRBuilder);
 
-#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_IRBuilder, EJS_STRINGIFY(x), IRBuilder_##x)
+#define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_IRBuilder, x, IRBuilder_##x)
 
         OBJ_METHOD(setInsertPoint);
         OBJ_METHOD(setInsertPointStartBB);

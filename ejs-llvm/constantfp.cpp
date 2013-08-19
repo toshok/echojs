@@ -39,8 +39,8 @@ namespace ejsllvm {
 
         _ejs_object_setprop_utf8 (exports,              "ConstantFP", _ejs_ConstantFP);
 
-#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_ConstantFP, EJS_STRINGIFY(x), ConstantFP_##x)
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_ConstantFP_proto, EJS_STRINGIFY(x), ConstantFP_prototype_##x)
+#define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_ConstantFP, x, ConstantFP_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_ConstantFP_proto, x, ConstantFP_prototype_##x)
 
         OBJ_METHOD(getDouble);
 

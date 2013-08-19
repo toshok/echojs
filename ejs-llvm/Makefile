@@ -38,8 +38,13 @@ $(OBJECTS): %.o: %.cpp
 	@$(CXX) -MM $(CXXFLAGS) $< > .deps/$@-deps
 	@echo [$(CXX)] $< && $(CXX) $(CXXFLAGS) -c $< -o $@
 
-clean:
-	rm -f $(OBJECTS) $(MODULE)
+clean-local::
+	rm -f $(OBJECTS) $(MODULE) ejs-llvm-atoms-gen.c
+
+ejs-llvm-atoms-gen.c: ejs-llvm-atoms.h $(TOP)/runtime/gen-atoms.js
+	@echo [GEN] $@ && $(TOP)/runtime/gen-atoms.js $< > .tmp-$@ && mv .tmp-$@ $@
+
+ejs-llvm.o: ejs-llvm-atoms-gen.c
 
 -include $(patsubst %.o,.deps/%.o-deps,$(OBJECTS))
 

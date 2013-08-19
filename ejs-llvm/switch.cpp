@@ -100,7 +100,7 @@ namespace ejsllvm {
         _ejs_Switch = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMSwitch", (EJSClosureFunc)Switch_impl, _ejs_Switch_proto);
         _ejs_object_setprop_utf8 (exports,              "Switch", _ejs_Switch);
 
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Switch_proto, EJS_STRINGIFY(x), Switch_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Switch_proto, x, Switch_prototype_##x)
 
         PROTO_METHOD(dump);
         PROTO_METHOD(toString);

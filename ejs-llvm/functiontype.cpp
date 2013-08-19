@@ -52,7 +52,7 @@ namespace ejsllvm {
 
         std::vector<llvm::Type*> arg_types;
         for (int i = 0; i < EJSARRAY_LEN(argTypes); i ++) {
-            arg_types.push_back (Type_GetLLVMObj(EJSARRAY_ELEMENTS(argTypes)[i]));
+            arg_types.push_back (Type_GetLLVMObj(EJSDENSEARRAY_ELEMENTS(argTypes)[i]));
         }
 
         llvm::FunctionType *FT = llvm::FunctionType::get(returnType,
@@ -105,8 +105,8 @@ namespace ejsllvm {
 
         _ejs_object_setprop_utf8 (exports,              "FunctionType", _ejs_FunctionType);
 
-#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_FunctionType, EJS_STRINGIFY(x), FunctionType_##x)
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_FunctionType_proto, EJS_STRINGIFY(x), FunctionType_prototype_##x)
+#define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_FunctionType, x, FunctionType_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_FunctionType_proto, x, FunctionType_prototype_##x)
 
         OBJ_METHOD(get);
         PROTO_METHOD(getReturnType);

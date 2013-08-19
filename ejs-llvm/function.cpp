@@ -100,11 +100,11 @@ namespace ejsllvm {
     }
 
     ejsval
-    Function_prototype_getArgs(ejsval env, ejsval _this, int argc, ejsval *args)
+    Function_prototype_get_args(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         Function* fun = ((Function*)EJSVAL_TO_OBJECT(_this));
         int size = fun->llvm_fun->arg_size();
-        ejsval result = _ejs_array_new(0);
+        ejsval result = _ejs_array_new(0, EJS_FALSE);
 
         unsigned Idx = 0;
         for (llvm::Function::arg_iterator AI = fun->llvm_fun->arg_begin(); Idx != size;
@@ -116,42 +116,42 @@ namespace ejsllvm {
     }
 
     ejsval
-    Function_prototype_getArgSize(ejsval env, ejsval _this, int argc, ejsval *args)
+    Function_prototype_get_argSize(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         Function* fun = ((Function*)EJSVAL_TO_OBJECT(_this));
         return NUMBER_TO_EJSVAL (fun->llvm_fun->arg_size());
     }
 
     ejsval
-    Function_prototype_getReturnType(ejsval env, ejsval _this, int argc, ejsval *args)
+    Function_prototype_get_returnType(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         Function* fun = ((Function*)EJSVAL_TO_OBJECT(_this));
         return Type_new (fun->llvm_fun->getReturnType());
     }
 
     ejsval
-    Function_prototype_getType(ejsval env, ejsval _this, int argc, ejsval *args)
+    Function_prototype_get_type(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         Function* fun = ((Function*)EJSVAL_TO_OBJECT(_this));
         return FunctionType_new (fun->llvm_fun->getFunctionType());
     }
 
     ejsval
-    Function_prototype_getDoesNotThrow(ejsval env, ejsval _this, int argc, ejsval *args)
+    Function_prototype_get_doesNotThrow(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         Function* fun = ((Function*)EJSVAL_TO_OBJECT(_this));
         return BOOLEAN_TO_EJSVAL(fun->llvm_fun->doesNotThrow());
     }
 
     ejsval
-    Function_prototype_getDoesNotAccessMemory(ejsval env, ejsval _this, int argc, ejsval *args)
+    Function_prototype_get_doesNotAccessMemory(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         Function* fun = ((Function*)EJSVAL_TO_OBJECT(_this));
         return BOOLEAN_TO_EJSVAL(fun->llvm_fun->doesNotAccessMemory());
     }
 
     ejsval
-    Function_prototype_getOnlyReadsMemory(ejsval env, ejsval _this, int argc, ejsval *args)
+    Function_prototype_get_onlyReadsMemory(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         Function* fun = ((Function*)EJSVAL_TO_OBJECT(_this));
         return BOOLEAN_TO_EJSVAL(fun->llvm_fun->onlyReadsMemory());
@@ -178,16 +178,16 @@ namespace ejsllvm {
 
         _ejs_object_setprop_utf8 (exports,              "Function", _ejs_Function);
 
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Function_proto, EJS_STRINGIFY(x), Function_prototype_##x)
-#define PROTO_ACCESSOR(x, y) EJS_INSTALL_GETTER(_ejs_Function_proto, x, Function_prototype_##y)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Function_proto, x, Function_prototype_##x)
+#define PROTO_ACCESSOR(x) EJS_INSTALL_ATOM_GETTER(_ejs_Function_proto, x, Function_prototype_get_##x)
 
-        PROTO_ACCESSOR("args", getArgs);
-        PROTO_ACCESSOR("argSize", getArgSize);
-        PROTO_ACCESSOR("returnType", getReturnType);
-        PROTO_ACCESSOR("type", getType);
-        PROTO_ACCESSOR("doesNotThrow", getDoesNotThrow);
-        PROTO_ACCESSOR("onlyReadsMemory", getOnlyReadsMemory);
-        PROTO_ACCESSOR("doesNotAccessMemory", getDoesNotAccessMemory);
+        PROTO_ACCESSOR(args);
+        PROTO_ACCESSOR(argSize);
+        PROTO_ACCESSOR(returnType);
+        PROTO_ACCESSOR(type);
+        PROTO_ACCESSOR(doesNotThrow);
+        PROTO_ACCESSOR(onlyReadsMemory);
+        PROTO_ACCESSOR(doesNotAccessMemory);
 
         PROTO_METHOD(dump);
         PROTO_METHOD(setOnlyReadsMemory);

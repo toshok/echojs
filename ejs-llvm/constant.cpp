@@ -65,8 +65,8 @@ namespace ejsllvm {
 
         _ejs_object_setprop_utf8 (exports,              "Constant", _ejs_Constant);
 
-#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Constant, EJS_STRINGIFY(x), Constant_##x)
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Constant_proto, EJS_STRINGIFY(x), Constant_prototype_##x)
+#define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Constant, x, Constant_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Constant_proto, x, Constant_prototype_##x)
 
         OBJ_METHOD(getNull);
         OBJ_METHOD(getAggregateZero);

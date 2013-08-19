@@ -76,14 +76,14 @@ namespace ejsllvm {
     }
 
     ejsval
-    BasicBlock_prototype_getName(ejsval env, ejsval _this, int argc, ejsval *args)
+    BasicBlock_prototype_get_name(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         BasicBlock* bb = ((BasicBlock*)EJSVAL_TO_OBJECT(_this));
         return _ejs_string_new_utf8(bb->llvm_bb->getName().data());
     }
 
     ejsval
-    BasicBlock_prototype_getParent(ejsval env, ejsval _this, int argc, ejsval *args)
+    BasicBlock_prototype_get_parent(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         BasicBlock* bb = ((BasicBlock*)EJSVAL_TO_OBJECT(_this));
         return Function_new (bb->llvm_bb->getParent());
@@ -110,11 +110,11 @@ namespace ejsllvm {
 
         _ejs_object_setprop_utf8 (exports,              "BasicBlock", _ejs_BasicBlock);
 
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_BasicBlock_proto, EJS_STRINGIFY(x), BasicBlock_prototype_##x)
-#define PROTO_ACCESSOR(x, y) EJS_INSTALL_GETTER(_ejs_BasicBlock_proto, x, BasicBlock_prototype_##y)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_BasicBlock_proto, x, BasicBlock_prototype_##x)
+#define PROTO_ACCESSOR(x) EJS_INSTALL_ATOM_GETTER(_ejs_BasicBlock_proto, x, BasicBlock_prototype_get_##x)
 
-        PROTO_ACCESSOR("name", getName);
-        PROTO_ACCESSOR("parent", getParent);
+        PROTO_ACCESSOR(name);
+        PROTO_ACCESSOR(parent);
 
         PROTO_METHOD(dump);
         PROTO_METHOD(toString);

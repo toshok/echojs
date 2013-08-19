@@ -112,7 +112,7 @@ namespace ejsllvm {
 
         _ejs_object_setprop_utf8 (exports,              "GlobalVariable", _ejs_GlobalVariable);
 
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_GlobalVariable_proto, EJS_STRINGIFY(x), GlobalVariable_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_GlobalVariable_proto, x, GlobalVariable_prototype_##x)
 
         PROTO_METHOD(setInitializer);
         PROTO_METHOD(dump);

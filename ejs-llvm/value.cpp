@@ -92,7 +92,7 @@ namespace ejsllvm {
 
         _ejs_object_setprop_utf8 (exports,              "Value", _ejs_Value);
 
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Value_proto, EJS_STRINGIFY(x), Value_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Value_proto, x, Value_prototype_##x)
 
         _ejs_object_setprop (_ejs_Value,       _ejs_atom_prototype,  _ejs_Value_proto);
 

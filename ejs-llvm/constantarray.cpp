@@ -30,7 +30,7 @@ namespace ejsllvm {
 
     std::vector< llvm::Constant*> element_constants;
     for (int i = 0; i < EJSARRAY_LEN(elements); i ++) {
-      element_constants.push_back (static_cast<llvm::Constant*>(Value_GetLLVMObj(EJSARRAY_ELEMENTS(elements)[i])));
+      element_constants.push_back (static_cast<llvm::Constant*>(Value_GetLLVMObj(EJSDENSEARRAY_ELEMENTS(elements)[i])));
     }
 
     return Value_new (llvm::ConstantArray::get(static_cast<llvm::ArrayType*>(array_type), element_constants));
@@ -46,8 +46,8 @@ namespace ejsllvm {
 
     _ejs_object_setprop_utf8 (exports,              "ConstantArray", _ejs_ConstantArray);
 
-#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_ConstantArray, EJS_STRINGIFY(x), ConstantArray_##x)
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_ConstantArray_proto, EJS_STRINGIFY(x), ConstantArray_prototype_##x)
+#define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_ConstantArray, x, ConstantArray_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_ConstantArray_proto, x, ConstantArray_prototype_##x)
 
     OBJ_METHOD(get);
 

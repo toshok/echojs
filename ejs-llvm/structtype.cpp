@@ -52,7 +52,7 @@ namespace ejsllvm {
 
         std::vector<llvm::Type*> element_types;
         for (int i = 0; i < EJSARRAY_LEN(elementTypes); i ++) {
-            element_types.push_back (Type_GetLLVMObj(EJSARRAY_ELEMENTS(elementTypes)[i]));
+            element_types.push_back (Type_GetLLVMObj(EJSDENSEARRAY_ELEMENTS(elementTypes)[i]));
         }
 
         ejsval rv = StructType_new(llvm::StructType::create(llvm::getGlobalContext(), element_types, name));
@@ -93,8 +93,8 @@ namespace ejsllvm {
 
         _ejs_object_setprop_utf8 (exports,              "StructType", _ejs_StructType);
 
-#define OBJ_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_StructType, EJS_STRINGIFY(x), StructType_##x)
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_StructType_proto, EJS_STRINGIFY(x), StructType_prototype_##x)
+#define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_StructType, x, StructType_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_StructType_proto, x, StructType_prototype_##x)
 
         OBJ_METHOD(create);
 

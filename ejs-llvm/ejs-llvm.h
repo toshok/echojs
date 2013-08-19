@@ -2,6 +2,7 @@
 #define EJS_LLVM_H
 
 #include "ejs.h"
+#include "ejs-string.h"
 
 #include <sstream>
 #include <string>
@@ -83,5 +84,7 @@
   ::llvm::Function* VAR = Function_GetLLVMObj(args[I]);
 
 extern std::string& trim(std::string& str);
+
+#include "ejs-llvm-atoms.h"
 
 #endif /* EJS_LLVM_H */

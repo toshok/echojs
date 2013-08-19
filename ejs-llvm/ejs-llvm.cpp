@@ -26,10 +26,17 @@ std::string& trim(std::string& str)
 
 using namespace ejsllvm;
 
+/* useful strings literals */
+#include "ejs-llvm-atoms-gen.c"
+
 extern "C" {
+
 void
 _ejs_llvm_init (ejsval global)
 {
+  // initialize our atoms before anything else
+  _ejs_init_static_strings();
+
   Type_init (global);
   FunctionType_init (global);
   StructType_init (global);

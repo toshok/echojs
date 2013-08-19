@@ -108,7 +108,7 @@ namespace ejsllvm {
 
         _ejs_object_setprop_utf8 (exports,              "LandingPad", _ejs_LandingPad);
 
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_LandingPad_proto, EJS_STRINGIFY(x), LandingPad_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_LandingPad_proto, x, LandingPad_prototype_##x)
 
         PROTO_METHOD(dump);
         PROTO_METHOD(toString);

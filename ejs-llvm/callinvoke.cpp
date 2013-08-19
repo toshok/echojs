@@ -113,7 +113,7 @@ namespace ejsllvm {
         _ejs_Call = tmpobj;
 
 
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Call_proto, EJS_STRINGIFY(x), Call_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Call_proto, x, Call_prototype_##x)
 
         _ejs_object_setprop (_ejs_Call,       _ejs_atom_prototype,  _ejs_Call_proto);
 
@@ -224,7 +224,7 @@ namespace ejsllvm {
 
         _ejs_object_setprop_utf8 (exports,              "Invoke", _ejs_Invoke);
 
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Invoke_proto, EJS_STRINGIFY(x), Invoke_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Invoke_proto, x, Invoke_prototype_##x)
 
         PROTO_METHOD(setOnlyReadsMemory);
         PROTO_METHOD(setDoesNotAccessMemory);

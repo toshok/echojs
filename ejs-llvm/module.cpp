@@ -98,7 +98,7 @@ namespace ejsllvm {
 
         std::vector< llvm::Type*> param_types;
         for (int i = 0; i < EJSARRAY_LEN(paramTypes); i ++) {
-            param_types.push_back (Type_GetLLVMObj(EJSARRAY_ELEMENTS(paramTypes)[i]));
+            param_types.push_back (Type_GetLLVMObj(EJSDENSEARRAY_ELEMENTS(paramTypes)[i]));
         }
 
         llvm::FunctionType *FT = llvm::FunctionType::get(returnType, param_types, false);
@@ -146,7 +146,7 @@ namespace ejsllvm {
 
         std::vector< llvm::Type*> param_types;
         for (int i = 0; i < EJSARRAY_LEN(paramTypes); i ++) {
-            param_types.push_back (Type_GetLLVMObj(EJSARRAY_ELEMENTS(paramTypes)[i]));
+            param_types.push_back (Type_GetLLVMObj(EJSDENSEARRAY_ELEMENTS(paramTypes)[i]));
         }
 
         llvm::FunctionType *FT = llvm::FunctionType::get(returnType, param_types, false);
@@ -245,7 +245,7 @@ namespace ejsllvm {
 
         _ejs_object_setprop_utf8 (exports,              "Module", _ejs_Module);
 
-#define PROTO_METHOD(x) EJS_INSTALL_FUNCTION(_ejs_Module_proto, EJS_STRINGIFY(x), Module_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Module_proto, x, Module_prototype_##x)
 
         PROTO_METHOD(getGlobalVariable);
         PROTO_METHOD(getOrInsertIntrinsic);
