@@ -40,6 +40,9 @@ namespace jsllvm {
     static v8::Handle<v8::Value> CreatePhi(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateGlobalStringPtr(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateUnreachable(const v8::Arguments& args);
+    static v8::Handle<v8::Value> CreateAnd(const v8::Arguments& args);
+    static v8::Handle<v8::Value> CreateZExt(const v8::Arguments& args);
+    static v8::Handle<v8::Value> CreateIntToPtr(const v8::Arguments& args);
 
     static v8::Handle<v8::Value> CreateSwitch(const v8::Arguments& args);
 

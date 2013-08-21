@@ -51,6 +51,9 @@ namespace jsllvm {
     NODE_SET_METHOD(s_func, "createPointerCast", IRBuilder::CreatePointerCast);
     NODE_SET_METHOD(s_func, "createFPCast", IRBuilder::CreateFPCast);
     NODE_SET_METHOD(s_func, "createUnreachable", IRBuilder::CreateUnreachable);
+    NODE_SET_METHOD(s_func, "createAnd", IRBuilder::CreateAnd);
+    NODE_SET_METHOD(s_func, "createZExt", IRBuilder::CreateZExt);
+    NODE_SET_METHOD(s_func, "createIntToPtr", IRBuilder::CreateIntToPtr);
 
     NODE_SET_METHOD(s_func, "createSwitch", IRBuilder::CreateSwitch);
 
@@ -137,6 +140,42 @@ namespace jsllvm {
   {
     HandleScope scope;
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(builder.CreateUnreachable()));
+    return scope.Close(result);
+  }
+
+  v8::Handle<v8::Value> IRBuilder::CreateAnd(const v8::Arguments& args)
+  {
+    HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(0, lhs);
+    REQ_LLVM_VAL_ARG(1, rhs);
+    REQ_UTF8_ARG(2, name);
+
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(builder.CreateAnd(lhs, rhs, *name)));
+    return scope.Close(result);
+  }
+
+  v8::Handle<v8::Value> IRBuilder::CreateZExt(const v8::Arguments& args)
+  {
+    HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(0, V);
+    REQ_LLVM_TYPE_ARG(1, dest_ty);
+    REQ_UTF8_ARG(2, name);
+
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(builder.CreateZExt(V, dest_ty, *name)));
+    return scope.Close(result);
+  }
+
+  v8::Handle<v8::Value> IRBuilder::CreateIntToPtr(const v8::Arguments& args)
+  {
+    HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(0, V);
+    REQ_LLVM_TYPE_ARG(1, dest_ty);
+    REQ_UTF8_ARG(2, name);
+
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(builder.CreateIntToPtr(V, dest_ty, *name)));
     return scope.Close(result);
   }
 

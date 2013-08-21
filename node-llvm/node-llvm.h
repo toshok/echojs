@@ -34,10 +34,10 @@
   Local<Array> VAR = Local<Array>::Cast(args[I]);
 
 #define REQ_INT_ARG(I, VAR)                                           \
-  if (args.Length() <= (I) || !args[I]->IsInt32())			\
+  if (args.Length() <= (I) || !args[I]->IsNumber())			\
     return ThrowException(Exception::TypeError(                         \
 					       String::New("Argument " #I " must be a integer"))); \
-  int32_t VAR = args[I]->Int32Value();
+  int64_t VAR = (int64_t)args[I]->NumberValue();
 
 #define REQ_DOUBLE_ARG(I, VAR)                                           \
   if (args.Length() <= (I) || !args[I]->IsNumber())			\

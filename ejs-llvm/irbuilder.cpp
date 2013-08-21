@@ -330,6 +330,33 @@ namespace ejsllvm {
     }
 
     ejsval
+    IRBuilder_createAnd(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        REQ_LLVM_VAL_ARG(0, lhs);
+        REQ_LLVM_VAL_ARG(1, rhs);
+        REQ_UTF8_ARG(2, name);
+        return Value_new (_llvm_builder.CreateAnd(lhs, rhs, name));
+    }
+
+    ejsval
+    IRBuilder_createZExt(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        REQ_LLVM_VAL_ARG(0, V);
+        REQ_LLVM_TYPE_ARG(1, dest_ty);
+        REQ_UTF8_ARG(2, name);
+        return Value_new (_llvm_builder.CreateZExt(V, dest_ty, name));
+    }
+
+    ejsval
+    IRBuilder_createIntToPtr(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        REQ_LLVM_VAL_ARG(0, V);
+        REQ_LLVM_TYPE_ARG(1, dest_ty);
+        REQ_UTF8_ARG(2, name);
+        return Value_new (_llvm_builder.CreateIntToPtr(V, dest_ty, name));
+    }
+
+    ejsval
     IRBuilder_createSwitch(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         REQ_LLVM_VAL_ARG(0, V);
@@ -397,6 +424,9 @@ namespace ejsllvm {
         OBJ_METHOD(createPhi);
         OBJ_METHOD(createGlobalStringPtr);
         OBJ_METHOD(createUnreachable);
+        OBJ_METHOD(createAnd);
+        OBJ_METHOD(createZExt);
+        OBJ_METHOD(createIntToPtr);
 
         OBJ_METHOD(createSwitch);
     
