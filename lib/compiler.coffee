@@ -23,8 +23,10 @@ ir = llvm.IRBuilder
 # disable this for now because it breaks more of the exception tests
 decompose_closure_on_invoke = false
 
+opencode_intrinsics = true
+
 BUILTIN_PARAMS = [
-  { type: syntax.Identifier, name: "%closure", llvm_type: types.EjsClosureEnv }
+  { type: syntax.Identifier, name: "%closure", llvm_type: types.EjsValue } # should be EjsClosureEnv
   { type: syntax.Identifier, name: "%this",    llvm_type: types.EjsValue }
   { type: syntax.Identifier, name: "%argc",    llvm_type: types.int32 }
 ]
@@ -32,7 +34,7 @@ BUILTIN_PARAMS = [
 hasOwn = Object::hasOwnProperty
 
 class LLVMIRVisitor extends NodeVisitor
-        constructor: (@module, @filename) ->
+        constructor: (@module, @filename, @options) ->
 
                 # build up our runtime method table
                 @ejs_intrinsics =
@@ -983,7 +985,7 @@ class LLVMIRVisitor extends NodeVisitor
 
         generateEJSValueForString: (id) ->
                 name = "ejsval-string-#{id}"
-                strglobal = new llvm.GlobalVariable @module, types.EjsValue, name, llvm.Constant.getAggregateZero types.EjsValue
+                strglobal = new llvm.GlobalVariable @module, types.EjsValue, name, (consts.int64 0) #llvm.Constant.getAggregateZero types.EjsValue
                 @module.getOrInsertGlobal name, types.EjsValue
                 
         addStringLiteralInitialization: (name, ucs2, primstr, val, len) ->
@@ -1344,12 +1346,33 @@ class LLVMIRVisitor extends NodeVisitor
         handleSlotIntrinsic: (exp) ->
                 env = @visitOrNull exp.arguments[0]
                 slotnum = exp.arguments[1].value
-                ir.createCall @ejs_runtime.get_env_slot_val, [env, (consts.int32 slotnum)], "slot_val_tmp"
+                if opencode_intrinsics and @options.target_pointer_size is 64
+                        # for 64bit platforms, we can open code this pretty easily
+                        #
+                        #  %ref = handleSlotRefIntrinsic
+                        #  %ret = load i64* %ref, align 8
+                        #
+                        slot_ref = @handleSlotRefIntrinsic exp
+                        ir.createLoad slot_ref, "slot_ref_load"
+                else
+                        ir.createCall @ejs_runtime.get_env_slot_val, [env, (consts.int32 slotnum)], "slot_val_tmp"
 
         handleSlotRefIntrinsic: (exp) ->
                 env = @visitOrNull exp.arguments[0]
                 slotnum = exp.arguments[1].value
-                ir.createCall @ejs_runtime.get_env_slot_ref, [env, (consts.int32 slotnum)], "slot_ref_tmp"
+
+                if opencode_intrinsics and @options.target_pointer_size is 64
+                        # for 64bit platforms, we can open code this pretty easily
+                        # 
+                        #  %1 = and i64 %env.coerce, 140737488355327
+                        #  %2 = inttoptr i64 %1 to %struct._EJSClosureEnv*
+                        #  %.02 = getelementptr inbounds %struct._EJSClosureEnv* %2, i64 0, i32 2, i64 %slot_num, i32 0
+                        env_payload = ir.createAnd env, (consts.int64 0x7fffffffffff), "envpayload"
+                        envp = ir.createIntToPtr env_payload, types.EjsClosureEnv.pointerTo(), "envp"
+
+                        ir.createInBoundsGetElementPointer envp, [(consts.int64 0), (consts.int32 2), (consts.int64 slotnum), (consts.int32 0)], "slot_ref"
+                else
+                        ir.createCall @ejs_runtime.get_env_slot_ref, [env, (consts.int32 slotnum)], "slot_ref_tmp"
 
 class AddFunctionsVisitor extends NodeVisitor
         constructor: (@module) ->
@@ -1415,7 +1438,7 @@ insert_toplevel_func = (tree, filename) ->
         tree.body = [toplevel]
         tree
 
-exports.compile = (tree, base_output_filename, source_filename) ->
+exports.compile = (tree, base_output_filename, source_filename, options) ->
         console.warn "#{bold()}COMPILE#{reset()} #{source_filename} -> #{base_output_filename}"
         
         tree = insert_toplevel_func tree, source_filename
@@ -1441,7 +1464,7 @@ exports.compile = (tree, base_output_filename, source_filename) ->
 
         debug.log -> escodegen.generate tree
 
-        visitor = new LLVMIRVisitor module, source_filename
+        visitor = new LLVMIRVisitor module, source_filename, options
         visitor.visit tree
 
         module

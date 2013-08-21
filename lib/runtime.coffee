@@ -5,13 +5,13 @@ runtime_interface =
         personality:           -> @module.getOrInsertExternalFunction "__ejs_personality_v0",           types.int32, [types.int32, types.int32, types.int64, types.int8Pointer, types.int8Pointer]
 
         invoke_closure:        -> types.takes_builtins @module.getOrInsertExternalFunction "_ejs_invoke_closure", types.EjsValue, [types.EjsValue, types.EjsValue, types.int32, types.EjsValue.pointerTo()]
-        make_closure:          -> @module.getOrInsertExternalFunction "_ejs_function_new", types.EjsValue, [types.EjsClosureEnv, types.EjsValue, types.EjsClosureFunc]
-        make_anon_closure:     -> @module.getOrInsertExternalFunction "_ejs_function_new_anon", types.EjsValue, [types.EjsClosureEnv, types.EjsClosureFunc]
+        make_closure:          -> @module.getOrInsertExternalFunction "_ejs_function_new", types.EjsValue, [types.EjsValue, types.EjsValue, types.EjsClosureFunc]
+        make_anon_closure:     -> @module.getOrInsertExternalFunction "_ejs_function_new_anon", types.EjsValue, [types.EjsValue, types.EjsClosureFunc]
         decompose_closure:     -> @module.getOrInsertExternalFunction "_ejs_decompose_closure", types.bool, [types.EjsValue, types.EjsClosureFunc.pointerTo(), types.EjsClosureEnv.pointerTo(), types.EjsValue.pointerTo()]
 
         make_closure_env:      -> @module.getOrInsertExternalFunction "_ejs_closureenv_new", types.EjsValue, [types.int32]
-        get_env_slot_val:      -> @module.getOrInsertExternalFunction "_ejs_closureenv_get_slot", types.EjsValue, [types.EjsClosureEnv, types.int32]
-        get_env_slot_ref:      -> @module.getOrInsertExternalFunction "_ejs_closureenv_get_slot_ref", types.EjsValue.pointerTo(), [types.EjsClosureEnv, types.int32]
+        get_env_slot_val:      -> @module.getOrInsertExternalFunction "_ejs_closureenv_get_slot", types.EjsValue, [types.EjsValue, types.int32]
+        get_env_slot_ref:      -> @module.getOrInsertExternalFunction "_ejs_closureenv_get_slot_ref", types.EjsValue.pointerTo(), [types.EjsValue, types.int32]
         
         object_create:         -> @module.getOrInsertExternalFunction "_ejs_object_create",             types.EjsValue, [types.EjsValue]
         arguments_new:         -> types.does_not_throw @module.getOrInsertExternalFunction "_ejs_arguments_new",             types.EjsValue, [types.int32, types.EjsValue.pointerTo()]
