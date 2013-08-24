@@ -71,7 +71,21 @@ namespace jsllvm {
     HandleScope scope;
     REQ_LLVM_TYPE_ARG(0, ty);
     REQ_INT_ARG(1, v);
-    Handle<v8::Value> result = Value::New(llvm::Constant::getIntegerValue(ty, llvm::APInt(ty->getPrimitiveSizeInBits(), v)));
+
+    Handle<v8::Value> result;
+    if (args.Length() == 2)
+      result = Value::New(llvm::Constant::getIntegerValue(ty, llvm::APInt(ty->getPrimitiveSizeInBits(), v)));
+    else if (args.Length() == 3 && args[2]->IsNumber() && ty->getPrimitiveSizeInBits() == 64) {
+      // allow a 3 arg form for 64 bit ints:
+      // constant = llvm.Constant.getIntegerValue types.int64, ch, cl
+      int64_t vhi = v;
+      int64_t vlo = (int64_t)args[2]->NumberValue();
+      result = Value::New(llvm::Constant::getIntegerValue(ty, llvm::APInt(ty->getPrimitiveSizeInBits(), (int64_t)(vhi << 32 | vlo))));
+    }
+    else {
+      return ThrowException(Exception::TypeError(String::New("Invalid parameters to Constant.getIntegerValue")));
+    }
+
     return scope.Close(result);
   }
 

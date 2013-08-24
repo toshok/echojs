@@ -279,6 +279,18 @@ namespace ejsllvm {
     }
 
     ejsval
+    IRBuilder_createICmpUGt(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        REQ_LLVM_VAL_ARG(0, left);
+        REQ_LLVM_VAL_ARG(1, right);
+        REQ_UTF8_ARG(2, name);
+
+        ejsval rv = Value_new (_llvm_builder.CreateICmpUGT(left, right, name));
+        free (name);
+        return rv;
+    }
+
+    ejsval
     IRBuilder_createBr(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         REQ_LLVM_BB_ARG(0, dest);
@@ -357,6 +369,15 @@ namespace ejsllvm {
     }
 
     ejsval
+    IRBuilder_createBitCast(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        REQ_LLVM_VAL_ARG(0, V);
+        REQ_LLVM_TYPE_ARG(1, dest_ty);
+        REQ_UTF8_ARG(2, name);
+        return Value_new (_llvm_builder.CreateBitCast(V, dest_ty, name));
+    }
+
+    ejsval
     IRBuilder_createSwitch(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         REQ_LLVM_VAL_ARG(0, V);
@@ -364,6 +385,17 @@ namespace ejsllvm {
         REQ_INT_ARG(2, num_cases);
 
         return Switch_new (_llvm_builder.CreateSwitch(V, Dest, num_cases));
+    }
+
+    ejsval
+    IRBuilder_createSelect(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        REQ_LLVM_VAL_ARG(0, C);
+        REQ_LLVM_VAL_ARG(1, True);
+        REQ_LLVM_VAL_ARG(2, False);
+        REQ_UTF8_ARG(3, name);
+
+        return Value_new(_llvm_builder.CreateSelect(C, True, False, name));
     }
 
     ejsval
@@ -419,6 +451,7 @@ namespace ejsllvm {
         OBJ_METHOD(createStructGetElementPointer);
         OBJ_METHOD(createICmpEq);
         OBJ_METHOD(createICmpSGt);
+        OBJ_METHOD(createICmpUGt);
         OBJ_METHOD(createBr);
         OBJ_METHOD(createCondBr);
         OBJ_METHOD(createPhi);
@@ -427,8 +460,10 @@ namespace ejsllvm {
         OBJ_METHOD(createAnd);
         OBJ_METHOD(createZExt);
         OBJ_METHOD(createIntToPtr);
+        OBJ_METHOD(createBitCast);
 
         OBJ_METHOD(createSwitch);
+        OBJ_METHOD(createSelect);
     
         OBJ_METHOD(createLandingPad);
         OBJ_METHOD(createResume);

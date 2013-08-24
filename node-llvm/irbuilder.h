@@ -35,6 +35,7 @@ namespace jsllvm {
     static v8::Handle<v8::Value> CreateStructGetElementPointer(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateICmpEq(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateICmpSGt(const v8::Arguments& args);
+    static v8::Handle<v8::Value> CreateICmpUGt(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateBr(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateCondBr(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreatePhi(const v8::Arguments& args);
@@ -43,8 +44,10 @@ namespace jsllvm {
     static v8::Handle<v8::Value> CreateAnd(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateZExt(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateIntToPtr(const v8::Arguments& args);
+    static v8::Handle<v8::Value> CreateBitCast(const v8::Arguments& args);
 
     static v8::Handle<v8::Value> CreateSwitch(const v8::Arguments& args);
+    static v8::Handle<v8::Value> CreateSelect(const v8::Arguments& args);
 
     static v8::Handle<v8::Value> CreateLandingPad(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateResume(const v8::Arguments& args);

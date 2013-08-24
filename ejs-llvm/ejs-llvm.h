@@ -34,7 +34,7 @@
 #define REQ_INT_ARG(I, VAR)						\
   if (argc <= (I) /*|| !args[I]->IsInt32()*/)				\
     abort();								\
-  int32_t VAR = (int32_t)EJSVAL_TO_NUMBER(args[I]);
+  int64_t VAR = (int64_t)EJSVAL_TO_NUMBER(args[I]);
 
 #define REQ_DOUBLE_ARG(I, VAR)						\
   if (argc <= (I) /*|| !args[I]->IsNumber()*/)				\

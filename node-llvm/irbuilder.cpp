@@ -44,6 +44,7 @@ namespace jsllvm {
     NODE_SET_METHOD(s_func, "createStructGetElementPointer", IRBuilder::CreateStructGetElementPointer);
     NODE_SET_METHOD(s_func, "createICmpEq", IRBuilder::CreateICmpEq);
     NODE_SET_METHOD(s_func, "createICmpSGt", IRBuilder::CreateICmpSGt);
+    NODE_SET_METHOD(s_func, "createICmpUGt", IRBuilder::CreateICmpUGt);
     NODE_SET_METHOD(s_func, "createCondBr", IRBuilder::CreateCondBr);
     NODE_SET_METHOD(s_func, "createBr", IRBuilder::CreateBr);
     NODE_SET_METHOD(s_func, "createPhi", IRBuilder::CreatePhi);
@@ -54,8 +55,10 @@ namespace jsllvm {
     NODE_SET_METHOD(s_func, "createAnd", IRBuilder::CreateAnd);
     NODE_SET_METHOD(s_func, "createZExt", IRBuilder::CreateZExt);
     NODE_SET_METHOD(s_func, "createIntToPtr", IRBuilder::CreateIntToPtr);
+    NODE_SET_METHOD(s_func, "createBitCast", IRBuilder::CreateBitCast);
 
     NODE_SET_METHOD(s_func, "createSwitch", IRBuilder::CreateSwitch);
+    NODE_SET_METHOD(s_func, "createSelect", IRBuilder::CreateSelect);
 
     NODE_SET_METHOD(s_func, "createLandingPad", IRBuilder::CreateLandingPad);
     NODE_SET_METHOD(s_func, "createResume", IRBuilder::CreateResume);
@@ -176,6 +179,18 @@ namespace jsllvm {
     REQ_UTF8_ARG(2, name);
 
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(builder.CreateIntToPtr(V, dest_ty, *name)));
+    return scope.Close(result);
+  }
+
+  v8::Handle<v8::Value> IRBuilder::CreateBitCast(const v8::Arguments& args)
+  {
+    HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(0, V);
+    REQ_LLVM_TYPE_ARG(1, dest_ty);
+    REQ_UTF8_ARG(2, name);
+
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(builder.CreateBitCast(V, dest_ty, *name)));
     return scope.Close(result);
   }
 
@@ -362,6 +377,18 @@ namespace jsllvm {
     return scope.Close(result);
   }
 
+  v8::Handle<v8::Value> IRBuilder::CreateICmpUGt(const v8::Arguments& args)
+  {
+    HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(0, left);
+    REQ_LLVM_VAL_ARG(1, right);
+    REQ_UTF8_ARG(2, name);
+
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateICmpUGT(left, right, *name)));
+    return scope.Close(result);
+  }
+
   v8::Handle<v8::Value> IRBuilder::CreateBr(const v8::Arguments& args)
   {
     HandleScope scope;
@@ -416,6 +443,19 @@ namespace jsllvm {
     REQ_INT_ARG(2, num_cases);
 
     Handle<v8::Value> result = Switch::New(IRBuilder::builder.CreateSwitch(V, Dest, num_cases));
+    return scope.Close(result);
+  }
+
+  v8::Handle<v8::Value> IRBuilder::CreateSelect(const v8::Arguments& args)
+  {
+    HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(0, C);
+    REQ_LLVM_VAL_ARG(1, True);
+    REQ_LLVM_VAL_ARG(2, False);
+    REQ_UTF8_ARG(3, name);
+
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateSelect(C, True, False, *name)));
     return scope.Close(result);
   }
 
