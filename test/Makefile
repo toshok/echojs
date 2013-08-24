@@ -3,13 +3,16 @@
 
 TOPDIR=$(shell pwd)/..
 NODE_PATH=$(TOPDIR)/node-llvm/build/Release:$(TOPDIR)/lib/generated:$(TOPDIR)/lib:$(TOPDIR)/esprima:$(TOPDIR)/escodegen:$(TOPDIR)/estraverse
+NODE_FLAGS=--harmony --harmony-typeof
 
 TESTS:=$(wildcard *[0-9].js)
 
 TESTS:=$(filter-out alloc1.js,$(TESTS))
-ifeq ($(EJS_STAGE),1)
+#ifeq ($(EJS_STAGE),1)
 TESTS:=$(filter-out esprima-roundtrip1.js,$(TESTS))
-endif
+#endif
+#TESTS:=$(filter-out esprima-roundtrip2.js,$(TESTS))
+#TESTS:=$(filter-out esprima1.js,$(TESTS))
 
 ESPRIMA_TESTS=$(filter esprima%,$(TESTS))
 ESPRIMA_TESTS:=$(ESPRIMA_TESTS:%.js=%.js.exe)
@@ -38,6 +41,11 @@ check: check-unit-tests run-tests
 check-stage1: check-unit-tests run-tests-stage1
 
 check-unit-tests: check-llvm check-set #check-free
+
+build-tests: $(patsubst %.js,%.js.exe,$(TESTS))
+
+build-tests-stage1:
+	@$(MAKE) EJS_DRIVER="$(TOPDIR)/ejs.js.exe" EJS_STAGE=1 build-tests
 
 check-llvm: terminal.js echo-assert.js
 	@NODE_PATH=$(NODE_PATH):. coffee llvm-test.coffee
@@ -115,7 +123,7 @@ echo-%:
 	-@EXE=`echo $<`; ./$$EXE > $@
 
 .%.js.node-out: %.js
-	@NODE_PATH=$(NODE_PATH) node $< > $@
+	@NODE_PATH=$(NODE_PATH) node $(NODE_FLAGS) $< > $@
 
 $(ESPRIMA_TESTS): %.js.exe: %.js $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js $(TOPDIR)/estraverse/estraverse.js $(TOPDIR)/runtime/libecho.a
 	@cp $(TOPDIR)/esprima/esprima.js .
