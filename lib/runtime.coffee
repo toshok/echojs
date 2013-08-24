@@ -22,8 +22,8 @@ runtime_interface =
         truthy:                -> types.does_not_throw types.does_not_access_memory @module.getOrInsertExternalFunction "_ejs_truthy",                    types.bool, [types.EjsValue]
         object_setprop:        -> @module.getOrInsertExternalFunction "_ejs_object_setprop",            types.EjsValue, [types.EjsValue, types.EjsValue, types.EjsValue]
         object_getprop:        -> types.only_reads_memory @module.getOrInsertExternalFunction "_ejs_object_getprop",           types.EjsValue, [types.EjsValue, types.EjsValue]
-        object_getprop_utf8:   -> types.only_reads_memory @module.getOrInsertExternalFunction "_ejs_object_getprop_utf8",      types.EjsValue, [types.EjsValue, types.string]
-        object_setprop_utf8:   -> @module.getOrInsertExternalFunction "_ejs_object_setprop_utf8",       types.EjsValue, [types.EjsValue, types.string, types.EjsValue]
+        global_setprop:        -> @module.getOrInsertExternalFunction "_ejs_global_setprop",            types.EjsValue, [types.EjsValue, types.EjsValue]
+        global_getprop:        -> types.only_reads_memory @module.getOrInsertExternalFunction "_ejs_global_getprop",           types.EjsValue, [types.EjsValue]
 
         object_define_value_prop: -> @module.getOrInsertExternalFunction "_ejs_object_define_value_property",  types.bool, [types.EjsValue, types.EjsValue, types.EjsValue, types.int32];
         
@@ -37,6 +37,14 @@ runtime_interface =
         rethrow:               -> @module.getOrInsertExternalFunction "_ejs_rethrow",                   types.void, [types.EjsValue]
 
         init_string_literal:   -> @module.getOrInsertExternalFunction "_ejs_string_init_literal",       types.void, [types.string, types.EjsValue.pointerTo(), types.EjsPrimString.pointerTo(), types.jschar.pointerTo(), types.int32]
+
+        typeof_is_object:      -> @module.getOrInsertExternalFunction "_ejs_op_typeof_is_object",       types.EjsValue, [types.EjsValue]
+        typeof_is_function:    -> @module.getOrInsertExternalFunction "_ejs_op_typeof_is_function",     types.EjsValue, [types.EjsValue]
+        typeof_is_string:      -> @module.getOrInsertExternalFunction "_ejs_op_typeof_is_string",       types.EjsValue, [types.EjsValue]
+        typeof_is_number:      -> @module.getOrInsertExternalFunction "_ejs_op_typeof_is_number",       types.EjsValue, [types.EjsValue]
+        typeof_is_undefined:   -> @module.getOrInsertExternalFunction "_ejs_op_typeof_is_undefined",    types.EjsValue, [types.EjsValue]
+        typeof_is_null:        -> @module.getOrInsertExternalFunction "_ejs_op_typeof_is_null",         types.EjsValue, [types.EjsValue]
+        typeof_is_boolean:     -> @module.getOrInsertExternalFunction "_ejs_op_typeof_is_boolean",      types.EjsValue, [types.EjsValue]
         
         undefined:             -> @module.getOrInsertGlobal           "_ejs_undefined",                 types.EjsValue
         "true":                -> @module.getOrInsertGlobal           "_ejs_true",                      types.EjsValue

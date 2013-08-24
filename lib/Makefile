@@ -6,6 +6,7 @@ COFFEE_FILES=				\
 	debug.coffee			\
 	echo-util.coffee		\
 	closure-conversion.coffee	\
+	optimizations.coffee		\
 	set.coffee			\
 	stack.coffee			\
 	types.coffee			\

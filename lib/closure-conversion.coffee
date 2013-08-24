@@ -6,7 +6,18 @@ debug = require 'debug'
 { Stack } = require 'stack'
 { Set } = require 'set'
 { NodeVisitor } = require 'nodevisitor'
-{ genGlobalFunctionName, genAnonymousFunctionName, deep_copy_object, map, foldl, reject } = require 'echo-util'
+
+echo_util = require 'echo-util'
+genGlobalFunctionName = echo_util.genGlobalFunctionName
+genAnonymousFunctionName = echo_util.genAnonymousFunctionName
+deep_copy_object = echo_util.deep_copy_object
+map = echo_util.map
+foldl = echo_util.foldl
+reject = echo_util.reject
+create_intrinsic = echo_util.create_intrinsic
+create_identifier = echo_util.create_identifier
+create_string_literal = echo_util.create_string_literal
+create_number_literal = echo_util.create_number_literal
 
 hasOwnProperty = Object.prototype.hasOwnProperty
 
@@ -83,16 +94,6 @@ LocateEnv = class LocateEnv extends NodeVisitor
                 
                 n.ejs_substitute = true
                 n
-
-create_identifier = (x) ->
-        throw new Error "invalid name in create_identifier" if not x
-        type: syntax.Identifier, name: x
-create_string_literal = (x) ->
-        throw new Error "invalid string in create_string_literal" if not x
-        type: syntax.Literal, value: x, raw: "\"#{x}\""
-create_number_literal = (x) ->
-        throw new Error "invalid number in create_number_literal" if typeof x isnt "number"
-        type: syntax.Literal, value: x, raw: "#{x}"
 
 # this should move to echo-desugar.coffee
 
@@ -531,10 +532,7 @@ class SubstituteVariables extends NodeVisitor
                                 declarations: [{
                                         type: syntax.VariableDeclarator
                                         id:  create_identifier env_name
-                                        init:
-                                                type: syntax.CallExpression
-                                                callee: create_identifier "%makeClosureEnv"
-                                                arguments: [create_number_literal n.ejs_env.closed.size() + if n.ejs_env.parent? then 1 else 0]
+                                        init: create_intrinsic "makeClosureEnv", [create_number_literal n.ejs_env.closed.size() + if n.ejs_env.parent? then 1 else 0]
                                 }],
                                 kind: "let"
                         }
@@ -557,10 +555,7 @@ class SubstituteVariables extends NodeVisitor
                                         expression:
                                                 type: syntax.AssignmentExpression,
                                                 operator: "="
-                                                left:
-                                                        type: syntax.CallExpression
-                                                        callee: create_identifier "%slot"
-                                                        arguments: [ (create_identifier env_name), (create_number_literal parent_env_slot), (create_string_literal parent_env_name) ]
+                                                left: create_intrinsic "slot", [ (create_identifier env_name), (create_number_literal parent_env_slot), (create_string_literal parent_env_name) ]
                                                 right: create_identifier parent_env_name
                                         
                                 }
@@ -574,10 +569,7 @@ class SubstituteVariables extends NodeVisitor
                                                 expression:
                                                         type: syntax.AssignmentExpression,
                                                         operator: "="
-                                                        left:
-                                                                type: syntax.CallExpression
-                                                                callee: create_identifier "%slot"
-                                                                arguments: [ (create_identifier env_name), (create_number_literal n.ejs_env.slot_mapping[param.name]), (create_string_literal param.name) ]
+                                                        left: create_intrinsic "slot", [ (create_identifier env_name), (create_number_literal n.ejs_env.slot_mapping[param.name]), (create_string_literal param.name) ]
                                                         right: create_identifier param.name
                                         }
 
@@ -602,11 +594,7 @@ class SubstituteVariables extends NodeVisitor
                         prepend_environment = (exps) ->
                                 obj = create_identifier env_name
                                 for prop in exps
-                                        obj = {
-                                                type: syntax.CallExpression,
-                                                callee: create_identifier "%slot"
-                                                arguments: [ obj, prop ]
-                                        }
+                                        obj = create_intrinsic "slot", [ obj, prop ]
                                 obj
 
                         # if there are existing mappings prepend "%env." (a MemberExpression) to them
@@ -619,10 +607,7 @@ class SubstituteVariables extends NodeVisitor
 
                         new_mapping["%env"] = create_identifier env_name
                         n.ejs_env.closed.map (sym) ->
-                                new_mapping[sym] =
-                                        type: syntax.CallExpression
-                                        callee: create_identifier "%slot"
-                                        arguments: [ (create_identifier env_name), (create_number_literal n.ejs_env.slot_mapping[sym]), (create_string_literal sym) ]
+                                new_mapping[sym] = create_intrinsic "slot", [ (create_identifier env_name), (create_number_literal n.ejs_env.slot_mapping[sym]), (create_string_literal sym) ]
 
                         @mappings.push new_mapping
                         @visitFunctionBody n
@@ -641,18 +626,10 @@ class SubstituteVariables extends NodeVisitor
                         if n.type is syntax.FunctionDeclaration
                                 throw "there should be no FunctionDeclarations at this point"
                         else # n.type is syntax.FunctionExpression
-                                if n.id?
-                                        call_exp =
-                                                type: syntax.CallExpression,
-                                                callee: create_identifier "%makeClosure"
-                                                arguments: [ (if n.ejs_env.parent? then (create_identifier "%env_#{n.ejs_env.parent.id}") else { type: syntax.Literal, value: null}), (create_string_literal n.id.name), n ]
+                                return if n.id?
+                                        create_intrinsic "makeClosure", [ (if n.ejs_env.parent? then (create_identifier "%env_#{n.ejs_env.parent.id}") else { type: syntax.Literal, value: null}), (create_string_literal n.id.name), n ]
                                 else
-                                        call_exp =
-                                                type: syntax.CallExpression,
-                                                callee: create_identifier "%makeAnonClosure"
-                                                arguments: [ (if n.ejs_env.parent? then (create_identifier "%env_#{n.ejs_env.parent.id}") else { type: syntax.Literal, value: null}), n ]
-                                
-                                return call_exp
+                                        create_intrinsic "makeAnonClosure", [ (if n.ejs_env.parent? then (create_identifier "%env_#{n.ejs_env.parent.id}") else { type: syntax.Literal, value: null}), n ]
                 n
             catch e
                 console.warn "exception: " + e
@@ -671,9 +648,7 @@ class SubstituteVariables extends NodeVisitor
 
                 @function_stack.top.scratch_size = Math.max @function_stack.top.scratch_size, n.arguments.length
 
-                n.arguments.unshift n.callee
-                n.callee = create_identifier "%invokeClosure"
-                n
+                create_intrinsic "invokeClosure", [n.callee].concat n.arguments
 
         visitNewExpression: (n) ->
                 super
@@ -686,9 +661,7 @@ class SubstituteVariables extends NodeVisitor
 
                 @function_stack.top.scratch_size = Math.max @function_stack.top.scratch_size, n.arguments.length
 
-                n.arguments.unshift n.callee
-                n.callee = create_identifier "%invokeClosure"
-                n
+                create_intrinsic "invokeClosure", [n.callee].concat n.arguments
 
 #
 #   This pass walks the tree and moves all function expressions to the toplevel.
@@ -717,10 +690,7 @@ class LambdaLift extends NodeVisitor
                 if n.scratch_size > 0
                         alloc_scratch =
                                 type: syntax.ExpressionStatement
-                                expression:
-                                        type: syntax.CallExpression
-                                        callee: create_identifier "%createArgScratchArea"
-                                        arguments: [ { type: syntax.Literal, value: n.scratch_size } ]
+                                expression: create_intrinsic "createArgScratchArea", [ { type: syntax.Literal, value: n.scratch_size } ]
                         n.body.body = [alloc_scratch].concat n.body.body
                 
         visitFunctionDeclaration: (n) ->

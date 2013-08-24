@@ -8,6 +8,7 @@ path = require 'path'
 { Set } = require 'set'
 { NodeVisitor } = require 'nodevisitor'
 closure_conversion = require 'closure-conversion'
+optimizations = require 'optimizations'
 { genId, bold, reset } = require 'echo-util'
 
 { ExitableScope, TryExitableScope, SwitchExitableScope, LoopExitableScope } = require 'exitable-scope'
@@ -44,6 +45,13 @@ class LLVMIRVisitor extends NodeVisitor
                         createArgScratchArea: @handleCreateArgScratchAreaIntrinsic
                         makeClosureEnv: @handleMakeClosureEnvIntrinsic
                         slot: @handleSlotIntrinsic
+                        typeofIsObject: @handleTypeofIsObjectIntrinsic
+                        typeofIsFunction: @handleTypeofIsFunctionIntrinsic
+                        typeofIsString: @handleTypeofIsStringIntrinsic
+                        typeofIsNumber: @handleTypeofIsNumberIntrinsic
+                        typeofIsUndefined: @handleTypeofIsUndefinedIntrinsic
+                        typeofIsNull: @handleTypeofIsNullIntrinsic
+                        typeofIsBoolean: @handleTypeofIsBooleanIntrinsic
 
                 @llvm_intrinsics =
                         gcroot: -> module.getOrInsertIntrinsic "@llvm.gcroot"
@@ -83,26 +91,50 @@ class LLVMIRVisitor extends NodeVisitor
         createLoad: (value, name) ->
                 rv = ir.createLoad value, name
                 rv
-                
+
         loadBoolEjsValue: (n) ->
-                boolval = @createLoad (if n then @ejs_runtime['true'] else @ejs_runtime['false']), "load_bool"
-                boolval.is_constant = true
-                boolval.constant_val = n
+                if opencode_intrinsics and @options.target_pointer_size is 64
+                        boolval = (consts.int64_lowhi 0xfff98000, if n then 0x00000001 else 0x000000000)
+                else
+                        boolval = @createLoad (if n then @ejs_runtime['true'] else @ejs_runtime['false']), "load_bool"
+                        boolval.is_constant = true
+                        boolval.constant_val = n
                 boolval
                 
         loadNullEjsValue: ->
-                nullval = @createLoad @ejs_runtime['null'], "load_null"
-                nullval.is_constant = true
-                nullval.constant_val = null
+                if opencode_intrinsics and @options.target_pointer_size is 64
+                        nullval = (consts.int64_lowhi 0xfffb8000, 0x00000000)
+                else
+                        nullval = @createLoad @ejs_runtime['null'], "load_null"
+                        nullval.is_constant = true
+                        nullval.constant_val = null
                 nullval
                 
         loadUndefinedEjsValue: ->
-                undef = @createLoad @ejs_runtime.undefined, "load_undefined"
-                undef.is_constant = true
-                undef.constant_val = undefined
+                if opencode_intrinsics and @options.target_pointer_size is 64
+                        undef = (consts.int64_lowhi 0xfff90000, 0x00000000)
+                else
+                        undef = @createLoad @ejs_runtime.undefined, "load_undefined"
+                        undef.is_constant = true
+                        undef.constant_val = undefined
                 undef
-                
-        loadGlobal: -> @createLoad @ejs_runtime.global, "load_global"
+
+        storeGlobal: (prop, value) ->
+                # we store obj.prop, prop is an id
+                if prop.type is syntax.Identifier
+                        pname = prop.name
+                else # prop.type is syntax.Literal
+                        pname = prop.value
+
+                c = @getAtom pname
+
+                debug.log -> "createPropertyStore #{obj}[#{pname}]"
+                        
+                @createCall @ejs_runtime.global_setprop, [c, value], "globalpropstore_#{pname}"
+
+        loadGlobal: (prop) ->
+                pname = @getAtom prop.name
+                @createCall @ejs_runtime.global_getprop, [pname], "globalloadprop_#{prop.name}"
 
         visitWithScope: (scope, children) ->
                 @scope_stack.push scope
@@ -577,7 +609,7 @@ class LLVMIRVisitor extends NodeVisitor
                         if dest?
                                 result = ir.createStore rhvalue, dest
                         else
-                                result = @createPropertyStore @loadGlobal(), lhs, rhvalue, false
+                                result = @storeGlobal lhs, rhvalue
                         result
                 else if lhs.type is syntax.MemberExpression
                         object_alloca = @createAlloca @currentFunction, types.EjsValue, "object_alloca"
@@ -785,13 +817,7 @@ class LLVMIRVisitor extends NodeVisitor
 
                 if n.left.is_constant? and n.right.is_constant?
                         console.warn "we could totally evaluate this at compile time, yo"
-                        
 
-                if left_visited.literal? and right_visited.literal?
-                        if typeof left_visited.literal.value is "number" and typeof right_visited.literal.value is "number"
-                                if n.operator is "<"
-                                        return @loadBoolEjsValue left_visited.literal.value < right_visited.literal.value
-                                        
                 # call the actual runtime binaryop method
                 @createCall callee, [(@createLoad left_alloca, "binop_left_load"), (@createLoad right_alloca, "binop_right_load")], "result_#{builtin}", !callee.doesNotThrow
 
@@ -940,7 +966,7 @@ class LLVMIRVisitor extends NodeVisitor
 
                 if not rv
                         debug.log -> "Symbol '#{val}' not found in current scope"
-                        rv = @createPropertyLoad @loadGlobal(), n, false, false
+                        rv = @loadGlobal n
 
                 debug.log -> "returning #{rv}"
                 rv
@@ -1058,25 +1084,21 @@ class LLVMIRVisitor extends NodeVisitor
                 # number literals
                 if typeof n.value is "number"
                         debug.log -> "literal number: #{n.value}"
-                        if n.value is 0
-                                numload = @createLoad @ejs_runtime['zero'], "load_zero"
-                        else if n.value is 1
-                                numload = @createLoad @ejs_runtime['one'], "load_one"
+                        literal_key = "num-" + n.value
+                        if @currentFunction.literalAllocas[literal_key]
+                                num_alloca = @currentFunction.literalAllocas[literal_key]
                         else
-                                literal_key = "num-" + n.value
-                                if @currentFunction.literalAllocas[literal_key]
-                                        num_alloca = @currentFunction.literalAllocas[literal_key]
-                                else
-                                        # only create 1 instance of num literals used in a function, and allocate them in the entry block
-                                        @doInsideBlock @currentFunction.entry_bb, =>
-                                                num_alloca = ir.createAlloca types.EjsValue, "num-alloca-#{n.value}"
-                                                c = llvm.ConstantFP.getDouble n.value
-                                                number_new = @ejs_runtime.number_new
-                                                call = @createCall number_new, [c], "numconst-#{n.value}", !number_new.doesNotThrow
-                                                ir.createStore call, num_alloca
-                                                @currentFunction.literalAllocas[literal_key] = num_alloca
-                                        
-                                numload = @createLoad num_alloca, "%num_alloca"
+                                # only create 1 instance of num literals used in a function, and allocate them in the entry block
+                                @doInsideBlock @currentFunction.entry_bb, =>
+                                        num_alloca = ir.createAlloca types.EjsValue, "num-alloca-#{n.value}"
+                                        c = llvm.ConstantFP.getDouble n.value
+                                        if opencode_intrinsics and @options.target_pointer_size is 64
+                                                val = ir.createBitCast c, types.EjsValue, "numconst-#{n.value}"
+                                        else
+                                                val = @createCall @ejs_runtime.number_new, [c], "numconst-#{n.value}", !@ejs_runtime.number_new.doesNotThrow
+                                        ir.createStore val, num_alloca
+                                        @currentFunction.literalAllocas[literal_key] = num_alloca
+                        numload = @createLoad num_alloca, "%num_alloca"
                         numload.literal = n
                         debug.log -> "numload = #{numload}"
                         return numload
@@ -1367,13 +1389,48 @@ class LLVMIRVisitor extends NodeVisitor
                         #  %1 = and i64 %env.coerce, 140737488355327
                         #  %2 = inttoptr i64 %1 to %struct._EJSClosureEnv*
                         #  %.02 = getelementptr inbounds %struct._EJSClosureEnv* %2, i64 0, i32 2, i64 %slot_num, i32 0
-                        env_payload = ir.createAnd env, (consts.int64 0x7fffffffffff), "envpayload"
+                        env_payload = ir.createAnd env, (consts.int64_lowhi 0x7fff, 0xffffffff), "envpayload"
                         envp = ir.createIntToPtr env_payload, types.EjsClosureEnv.pointerTo(), "envp"
 
                         ir.createInBoundsGetElementPointer envp, [(consts.int64 0), (consts.int32 2), (consts.int64 slotnum), (consts.int32 0)], "slot_ref"
                 else
                         ir.createCall @ejs_runtime.get_env_slot_ref, [env, (consts.int32 slotnum)], "slot_ref_tmp"
 
+        handleTypeofIsObjectIntrinsic: (exp) ->
+                if opencode_intrinsics and @options.target_pointer_size is 64
+                        cmp = ir.createICmpUGt (@visitOrNull exp.arguments[0]), (consts.int64_lowhi 0xfffbffff, 0xffffffff), "cmpresult"
+                        t = @loadBoolEjsValue true
+                        f = @loadBoolEjsValue false
+                        ir.createSelect cmp, t, f, "sel"
+                else
+                        ir.createCall @ejs_runtime.typeof_is_object, [@visitOrNull exp.arguments[0]], "is_object"
+
+        handleTypeofIsFunctionIntrinsic: (exp) ->
+                # FIXME we should inline this as well, but it's a more complicated check (needs to do both is_object and a specops check)
+                ir.createCall @ejs_runtime.typeof_is_function, [@visitOrNull exp.arguments[0]], "is_function"
+
+        handleTypeofIsStringIntrinsic: (exp) ->
+                if opencode_intrinsics and @options.target_pointer_size is 64
+                        mask = ir.createAnd (@visitOrNull exp.arguments[0]), (consts.int64_lowhi 0xffff8000, 0x00000000), "mask.i"
+                        cmp = ir.createICmpEq mask, (consts.int64_lowhi 0xfffa8000, 0x00000000), "cmpresult"
+                        t = @loadBoolEjsValue true
+                        f = @loadBoolEjsValue false
+                        ir.createSelect cmp, t, f, "sel"
+                else
+                        ir.createCall @ejs_runtime.typeof_is_string, [@visitOrNull exp.arguments[0]], "is_string"
+                                
+        handleTypeofIsNumberIntrinsic: (exp) ->
+                ir.createCall @ejs_runtime.typeof_is_number, [@visitOrNull exp.arguments[0]], "is_number"
+                
+        handleTypeofIsUndefinedIntrinsic: (exp) ->
+                ir.createCall @ejs_runtime.typeof_is_undefined, [@visitOrNull exp.arguments[0]], "is_undefined"
+
+        handleTypeofIsNullIntrinsic: (exp) ->
+                ir.createCall @ejs_runtime.typeof_is_null, [@visitOrNull exp.arguments[0]], "is_null"
+
+        handleTypeofIsBooleanIntrinsic: (exp) ->
+                ir.createCall @ejs_runtime.typeof_is_boolean, [@visitOrNull exp.arguments[0]], "is_boolean"
+                
 class AddFunctionsVisitor extends NodeVisitor
         constructor: (@module) ->
                 super
@@ -1453,6 +1510,11 @@ exports.compile = (tree, base_output_filename, source_filename, options) ->
         tree = closure_conversion.convert tree, path.basename source_filename
 
         debug.log 1, "after closure conversion"
+        debug.log 1, -> escodegen.generate tree
+
+        tree = optimizations.run tree
+        
+        debug.log 1, "after optimization"
         debug.log 1, -> escodegen.generate tree
         
         module = new llvm.Module "compiled-#{base_output_filename}"

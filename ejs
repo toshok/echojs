@@ -32,13 +32,21 @@ add_external_module = (modinfo) ->
         [library,module_name,module_entrypoint,link_flags] = modinfo.split ','
         options.external_modules.push { library, module_name, module_entrypoint, link_flags }
 
+target_pointer_size = 64
+
 set_target = (targetinfo) ->
         switch targetinfo
-          when "osx" then options.target = "osx"
-          when "sim" then options.target = "sim"
-          when "dev" then options.target = "dev"
-          else
-                throw "invalid target specification `#{targetinfo}'."
+                when "osx"
+                        options.target = "osx"
+                        target_pointer_size = 64
+                when "sim"
+                        options.target = "sim"
+                        target_pointer_size = 32
+                when "dev"
+                        options.target = "dev"
+                        target_pointer_size = 32
+                else
+                        throw "invalid target specification `#{targetinfo}'."
 
 set_extra_clang_args = (arginfo) ->
         options.extra_clang_args = arginfo
@@ -93,6 +101,9 @@ output_options = ->
         console.warn 'Options:'
         for a of args
                 console.warn "   #{a}:  #{args[a].help}"
+
+# defaults
+set_target "osx"
 
 if argv.length > 0
         skipNext = 0
@@ -189,7 +200,7 @@ compileFile = (filename, content, compileCallback) ->
                 process.exit -1
 
         base_filename = util.genFreshFileName path.basename filename
-        compiled_module = compiler.compile parse_tree, base_filename, filename
+        compiled_module = compiler.compile parse_tree, base_filename, filename, target_pointer_size: target_pointer_size
 
         ll_filename = "/tmp/#{base_filename}.ll"
         bc_filename = "/tmp/#{base_filename}.bc"

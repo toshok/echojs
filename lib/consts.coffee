@@ -19,6 +19,12 @@ exports.int64 = (c) ->
         constant.constant_val = c
         constant
 
+exports.int64_lowhi = (ch, cl) ->
+        constant = llvm.Constant.getIntegerValue types.int64, ch, cl
+        constant.is_constant = true
+        constant.constant_val = [ ch, cl ]
+        constant
+
 exports.null = (t) -> llvm.Constant.getNull t
 
 exports.true = -> llvm.Constant.getIntegerValue types.bool, 1
