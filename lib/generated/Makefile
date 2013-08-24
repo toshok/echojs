@@ -84,10 +84,14 @@ EXTRA_JS_SOURCES= ../../esprima/esprima.js ../../escodegen/escodegen.js ../../es
 
 bootstrap:
 	@$(MAKE) make-stage1 || exit 1
+	@cp ejs.js.exe ../../ejs.js.exe.stage1
 	@mv ejs.js.exe ../..
 	@$(MAKE) make-stage2 || exit 1
+	@cp ejs.js.exe ../../ejs.js.exe.stage2
 	@mv ejs.js.exe ../..
 	@$(MAKE) make-stage3 || exit 1
+	@cp ejs.js.exe ../../ejs.js.exe.stage3
+	@mv ejs.js.exe ../..
 	@echo "done, woohoo"
 
 make-stage1: $(wildcard *.js) ejs.js
@@ -97,27 +101,25 @@ make-stage1: $(wildcard *.js) ejs.js
 	@echo "****************************************************"
 	@echo "****************************************************"
 	@$(MAKE) -C ..
-	time NODE_PATH=$(TOP)/node-llvm/build/Release:$(TOP)/lib/generated:$(TOP)/esprima:$(TOP)/escodegen:$(TOP)/estraverse ../../ejs --leave-temp --module "../../ejs-llvm/libejsllvm-module.a,llvm,_ejs_llvm_init,$(LLVM_LINK_FLAGS)" ejs.js $(JS_SOURCES) $(EXTRA_JS_SOURCES)
+	time NODE_PATH=$(TOP)/node-llvm/build/Release:$(TOP)/lib/generated:$(TOP)/esprima:$(TOP)/escodegen:$(TOP)/estraverse ../../ejs -d --leave-temp --module "../../ejs-llvm/libejsllvm-module.a,llvm,_ejs_llvm_init,$(LLVM_LINK_FLAGS)" ejs.js $(JS_SOURCES) $(EXTRA_JS_SOURCES)
 
-make-stage2: ejs.js
+make-stage2: $(wildcard *.js) ejs.js
 	@echo "****************************************************"
 	@echo "****************************************************"
 	@echo "Building stage 2 (compiling ejs-ejs with ejs-ejs)"
 	@echo "****************************************************"
 	@echo "****************************************************"
 	@$(MAKE) -C ..
-	time `pwd`/../../ejs.js.exe --leave-temp --module "../../ejs-llvm/libejsllvm-module.a,llvm,_ejs_llvm_init,$(LLVM_LINK_FLAGS)" ejs.js $(JS_SOURCES) $(EXTRA_JS_SOURCES)
+	time `pwd`/../../ejs.js.exe -d --leave-temp --module "../../ejs-llvm/libejsllvm-module.a,llvm,_ejs_llvm_init,$(LLVM_LINK_FLAGS)" ejs.js $(JS_SOURCES) $(EXTRA_JS_SOURCES)
 
-make-stage3: ejs.js
+make-stage3: $(wildcard *.js) ejs.js
 	@echo "****************************************************"
 	@echo "****************************************************"
 	@echo "Building stage 3 (compiling ejs-ejs with ejs-ejs)"
 	@echo "****************************************************"
 	@echo "****************************************************"
 	@$(MAKE) -C ..
-	@cp ../../ejs .
-	@coffee -c ejs
-	time `pwd`/../../ejs.js.exe --leave-temp --module "../../ejs-llvm/libejsllvm-module.a,llvm,_ejs_llvm_init,$(LLVM_LINK_FLAGS)" ejs.js $(JS_SOURCES) $(EXTRA_JS_SOURCES)
+	time `pwd`/../../ejs.js.exe -d --leave-temp --module "../../ejs-llvm/libejsllvm-module.a,llvm,_ejs_llvm_init,$(LLVM_LINK_FLAGS)" ejs.js $(JS_SOURCES) $(EXTRA_JS_SOURCES)
 
 ejs.coffee: ../../ejs
 	@cp ../../ejs ejs.coffee
