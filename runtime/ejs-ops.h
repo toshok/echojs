@@ -19,6 +19,14 @@ ejsval ToObject(ejsval exp);
 ejsval ToBoolean(ejsval exp);
 EJSBool ToEJSBool(ejsval exp);
 
+ejsval _ejs_op_typeof_is_object(ejsval exp);
+ejsval _ejs_op_typeof_is_function(ejsval exp);
+ejsval _ejs_op_typeof_is_string(ejsval exp);
+ejsval _ejs_op_typeof_is_number(ejsval exp);
+ejsval _ejs_op_typeof_is_undefined(ejsval exp);
+ejsval _ejs_op_typeof_is_null(ejsval exp);
+ejsval _ejs_op_typeof_is_boolean(ejsval exp);
+
 ejsval _ejs_op_neg (ejsval exp);
 ejsval _ejs_op_not (ejsval exp);
 ejsval _ejs_op_void (ejsval exp);

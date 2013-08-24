@@ -321,10 +321,52 @@ _ejs_op_void (ejsval exp)
 }
 
 ejsval
+_ejs_op_typeof_is_object(ejsval exp)
+{
+    return EJSVAL_IS_OBJECT(exp) ? _ejs_true : _ejs_false;
+}
+
+ejsval
+_ejs_op_typeof_is_function(ejsval exp)
+{
+    return EJSVAL_IS_FUNCTION(exp) ? _ejs_true : _ejs_false;
+}
+
+ejsval
+_ejs_op_typeof_is_string(ejsval exp)
+{
+    return EJSVAL_IS_STRING(exp) ? _ejs_true : _ejs_false;
+}
+
+ejsval
+_ejs_op_typeof_is_number(ejsval exp)
+{
+    return EJSVAL_IS_NUMBER(exp) ? _ejs_true : _ejs_false;
+}
+
+ejsval
+_ejs_op_typeof_is_undefined(ejsval exp)
+{
+    return EJSVAL_IS_UNDEFINED(exp) ? _ejs_true : _ejs_false;
+}
+
+ejsval
+_ejs_op_typeof_is_boolean(ejsval exp)
+{
+    return EJSVAL_IS_BOOLEAN(exp) ? _ejs_true : _ejs_false;
+}
+
+ejsval
+_ejs_op_typeof_is_null(ejsval exp)
+{
+    return EJSVAL_IS_NULL(exp) ? _ejs_true : _ejs_false;
+}
+
+ejsval
 _ejs_op_typeof (ejsval exp)
 {
     if (EJSVAL_IS_NULL(exp))
-        return _ejs_atom_object;
+        return _ejs_atom_null;
     else if (EJSVAL_IS_BOOLEAN(exp))
         return _ejs_atom_boolean;
     else if (EJSVAL_IS_STRING(exp))
