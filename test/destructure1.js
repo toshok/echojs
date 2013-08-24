@@ -1,5 +1,5 @@
 
-function foo({x:x, y:y}) {
+function foo({x, y}) {
   console.log(x + " + " + y);
 }
 
