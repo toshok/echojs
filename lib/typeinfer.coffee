@@ -1,134 +1,220 @@
-lexer = require 'lexer'
-parser = require 'parser'
-definitions = require 'definitions'
-tokens = definitions.tokens
+esprima = require 'esprima'
+syntax = esprima.Syntax
+escodegen = require 'escodegen'
+debug = require 'debug'
+
+{ Stack } = require 'stack'
+{ Set } = require 'set'
+{ NodeVisitor } = require 'nodevisitor'
+
+echo_util = require 'echo-util'
 
 class Type
-  isCompatible: (ty) -> false
+        isCompatible: (ty) -> false
 
 class FunctionType extends Type
-  constructor: (@return_type, @parameter_types) ->
+        constructor: (@return_type, @parameter_types) ->
 
-  isCompatible: (ty) ->
-    if not ty instanceof FunctionType
-      false
-    else if not @return_type.isCompatible ty.return_type
-      false
-    else if not parametersCompatible(ty)
-      false
-    else
-      true
+        isCompatible: (ty) ->
+                if not ty instanceof FunctionType
+                        false
+                else if not @return_type.isCompatible ty.return_type
+                        false
+                else if not parametersCompatible(ty)
+                        false
+                else
+                        true
 
-  parametersCompatible: (param_tys) ->
-    # XXX JS allows partial application (leaves the other types Undefined...)
-    if param_tys.length != parameter_types.length
-      return false;
-    return false if not @parameter_types[i].isCompatible param_tys.length[i] for i in [0..param_tys.length]
+        parametersCompatible: (param_tys) ->
+                # XXX JS allows partial application (leaves the other types Undefined...)
+                if param_tys.length != parameter_types.length
+                        return false;
+                return false if not @parameter_types[i].isCompatible param_tys.length[i] for i in [0..param_tys.length]
+                true
 
 
 class UndefinedType extends Type
-  isCompatible: (ty) -> false
-  @is: (ty) -> ty instance of UndefinedType
+        isCompatible: (ty) -> false
+        toString: -> "Undefined"
+        @is: (ty) -> ty instance of UndefinedType
 
 class VoidType extends Type
-  isCompatible: (ty) -> ty instanceof VoidType
-  @is: (ty) -> ty instanceof VoidType
+        isCompatible: (ty) -> ty instanceof VoidType
+        toString: -> "Void"
+        @is: (ty) -> ty instanceof VoidType
 
 class AnyType extends Type
-  isCompatible: (ty) -> true
-  @is: (ty) -> ty instanceof AnyType
+        isCompatible: (ty) -> true
+        toString: -> "Any"
+        @is: (ty) -> ty instanceof AnyType
 
 class NumberType extends Type
-  isCompatible: (ty) -> ty instanceof NumberType
-  @is: (ty) -> ty instanceof NumberType
+        isCompatible: (ty) -> ty instanceof NumberType
+        toString: -> "Number"
+        @is: (ty) -> ty instanceof NumberType
 
 class StringType extends Type
-  isCompatible: (ty) -> ty instanceof StringType
-  @is: (ty) -> ty instanceof StringType
+        isCompatible: (ty) -> ty instanceof StringType
+        toString: -> "String"
+        @is: (ty) -> ty instanceof StringType
 
 class MultiType extends Type
-  constructor: ->
-    @types = []
+        constructor: ->
+                @types = []
 
-  isCompatible: (ty) ->
-    for mty in @types
-      if mty isCompatible ty
-        true
-    false
+        isCompatible: (ty) ->
+                for mty in @types
+                        if mty isCompatible ty
+                                true
+                false
 
-  addType: (ty) ->
-    @types.unshift ty
+        addType: (ty) ->
+                @types.unshift ty
 
-class InferVisitor
-  constructor: ->
-    @changed = false
-  
-  infer: (ast,env) ->
-    @changed = false
-    @inferAst ast
+        toString: -> "Multi[#{t for t in @types}]"
 
-  isChanged: -> @changed
+class InferVisitor extends NodeVisitor
+        constructor: (@initial_env) ->
+                @stable = false
+                super true
 
+        isStable: -> @stable
 
-  inferAst: (ast,env) ->
-    if ast instanceof parser.Script
-      # scripts are an odd case.  they don't have a type themselves, but contain things that do,
-      # so we just iterate over it
-      @inferAst node for node in ast.children
-    else if ast instanceof parser.Number
-      if not NumberType.is(ast.type)
-        assignType ast, new NumberType
-    else if ast instanceof parser.Identifier
-      if not ast.type
-        # check if the identifier is defined in the env
-        if ast.name in env
-          assignType ast, env[ast.name]
-    else if ast instanceof parser.Decl
-      if ast.initializer
-        env[ast.name] = @inferAst ast.initializer, env
-    else if ast instanceof parser.Call
-      funtype = @infertAst ast.callee, env
-      argtypes = @inferAst arg, env for arg in ast.arguments
-      # unify the funtype with argtypes
-      # this is the complicated bit, since information can travel in both directions:
-      #   1. if the function body (and therefore the function type) has an undefined/any type
+        visit: (exp) ->
+                console.warn "visiting #{exp.type}"
+                super
+        
+        infer: (exp) ->
+                while not @stable
+                        @stable = true
+                        exp = @visit exp
+                console.warn "types are stable, returning from inference pass"
+                exp
 
-    # and finally we return the type of the ast
-    ast.type
-      
-  assignType: (ast, ty) ->
-    if not ast.type
-      # The ast node didn't have a type specified before
-      ast.type = ty
-    else if ast.type instanceof MultiType
-      # The ast node is already polymorphic, add the new type to the bunch
-      ast.type.addType ty
-    else
-      # The ast node is monomorphic, and now becomes polymorphic
-      current_type = ast.type
-      ast.type = new MultiType
-      ast.type.addType current_type
-      ast.type.addType ty
+        visitProgram: (program) ->
+                super
 
-    @changed = true
+        visitIdentifier: (exp) ->
+                if not InferVisitor.getType exp
+                        # check if the identifier is defined in the env
+                        if exp.name in @env
+                                @assignType exp, @env[exp.name]
+                exp
+
+        visitCallExpression: (exp) ->
+                super
+                # unify the callee type with argtypes
+                # this is the complicated bit, since information can travel in both directions:
+                #   1. if the function body (and therefore the function type) has an undefined/any type
+                exp
+
+        visitFunctionExpression: (exp) ->
+                exp
+
+        visitReturn: (n) ->
+                debug.log "visitReturn"
+                #if @iifeStack.top.iife_rv?
+
+        visitBinaryExpression: (exp) ->
+                super
+                switch exp.operator
+                        when "+"
+                                if StringType.is(@getType exp.left) or StringType.is(@getType exp.right)
+                                        @assignType exp, new StringType
+                                else
+                                        @assignType exp, new NumberType
+                        when "-"
+                                # FIXME we need a way to push a the
+                                # NumberType down to left/right so
+                                # the compiler can possibly optimize
+                                # them.
+                                @assignType exp, new NumberType
+                        when "*"
+                                # FIXME we need a way to push a the
+                                # NumberType down to left/right so
+                                # the compiler can possibly optimize
+                                # them.
+                                @assignType exp, new NumberType
+                        when "/"
+                                # FIXME we need a way to push a the
+                                # NumberType down to left/right so
+                                # the compiler can possibly optimize
+                                # them.
+                                @assignType exp, new NumberType
+                exp
+        visitVariableDeclarator: (exp) ->
+                super
+                # we need to associate the type of exp.init (if there
+                # is one) with exp.id in the current environment.
+                exp
+
+        visitLiteral: (exp) ->
+                if typeof exp.value is 'number'
+                        if not NumberType.is InferVisitor.getType exp
+                                @assignType exp, new NumberType
+                exp
+
+        @getType: (exp) -> return exp._ejs_inferredtype
+        getType: (exp) -> InferVisitor.getType exp
+
+        assignType: (ast, ty) ->
+                console.warn "assigning type of #{ty}"
+                if not ast._ejs_inferredtype
+                        # The ast node didn't have a type specified before
+                        Object.defineProperty ast, "_ejs_inferredtype",
+                                value: ty
+                                enumerable: true
+                                configurable: true
+                                writable: true
+                        console.warn "assigned type #{ast._ejs_inferredtype}"
+                else if ast._ejs_inferredtype instanceof MultiType
+                        # The ast node is already polymorphic, add the new type to the bunch
+                        ast._ejs_inferredtype.addType ty
+                else
+                        # The ast node is monomorphic, and now becomes polymorphic
+                        current_type = ast._ejs_inferredtype
+                        ast._ejs_inferredtype = new MultiType
+                        ast._ejs_inferredtype.addType current_type
+                        ast._ejs_inferredtype.addType ty
+
+                @changed = true
 
 class TypeInfer
-  constructor: (@ast) ->
-    @defaultGlobalEnvironment = [
-      { "print": (new FunctionType (new VoidType()), [new AnyType()]) }
-    ]
+        constructor: ->
+                @defaultGlobalEnvironment = [
+                        { "print": (new FunctionType (new VoidType()), [new AnyType()]) }
+                ]
 
-#  placeUndefinedTypes: (tree) ->
-#    tree.type = new UndefinedType
-#    placeUndefinedTypes x for x in tree.children
+        run: (tree) ->
+                # walk the entire tree placing UndefinedTypes everywhere.
+                # placeUndefinedTypes @tree
 
-  run: ->
-    # walk the entire tree placing UndefinedTypes everywhere.
-    # placeUndefinedTypes @ast
+                visitor = new InferVisitor @defaultGlobalEnvironment
+                visitor.infer tree
 
-    visitor = new InferVisitor
+exports.run = run = (tree) ->
+        typeinfer = new TypeInfer
+        typeinfer.run tree
 
-    visitor.infer @ast, @defaultGlobalEnvironment
-    visitor.infer @ast, @defaultGlobalEnvironment while visitor.isChanged()
+# tests
 
-exports.TypeInfer = TypeInfer
+class DumpInferredTypesVisitor extends NodeVisitor
+        constructor: ->
+                super true
+                
+        visit: (exp) ->
+                return null if not exp?
+                console.warn "dumping #{exp.type}"
+                ty = InferVisitor.getType exp
+                if ty
+                        console.warn "inferred type of #{escodegen.generate exp} is '#{ty}'"
+                super
+                        
+dump = (tree)->
+        dumpvisitor = new DumpInferredTypesVisitor
+        dumpvisitor.visit tree
+###
+dump run esprima.parse "5;"
+dump run esprima.parse "4 + 5;"
+dump run esprima.parse "function () { return 5; }"
+###
