@@ -10,14 +10,12 @@ filter = (x) ->
                         rv.push y
         rv
         
-hasOwn = Object.prototype.hasOwnProperty
-
 exports.NodeVisitor = class NodeVisitor
-        constructor: ->
+        constructor: (@dontcopy) ->
 
         shallowCopy: (o) ->
                 new_o = Object.create Object.getPrototypeOf o
-                new_o[x] = o[x] for x of o when hasOwn.apply o, [x]
+                new_o[x] = o[x] for x in Object.getOwnPropertyNames o
                 new_o
                 
         visitProgram: (n) ->
@@ -218,7 +216,7 @@ exports.NodeVisitor = class NodeVisitor
                 debug.indent()
                 debug.log "#{n.type}>"
 
-                new_n = @shallowCopy n
+                new_n = if @dontcopy then n else @shallowCopy n
                 rv = null
                 switch new_n.type
                         when syntax.Program              then rv = @visitProgram new_n
