@@ -661,7 +661,9 @@ class SubstituteVariables extends NodeVisitor
 
                 @function_stack.top.scratch_size = Math.max @function_stack.top.scratch_size, n.arguments.length
 
-                create_intrinsic "invokeClosure", [n.callee].concat n.arguments
+                rv = create_intrinsic "invokeClosure", [n.callee].concat n.arguments
+                rv.type = syntax.NewExpression
+                rv
 
 #
 #   This pass walks the tree and moves all function expressions to the toplevel.
