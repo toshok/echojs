@@ -44,13 +44,13 @@ runtime_interface =
 
         init_string_literal:   -> @module.getOrInsertExternalFunction "_ejs_string_init_literal",       types.void, [types.string, types.EjsValue.pointerTo(), types.EjsPrimString.pointerTo(), types.jschar.pointerTo(), types.int32]
 
-        typeof_is_object:      -> @module.getOrInsertExternalFunction "_ejs_op_typeof_is_object",       types.EjsValue, [types.EjsValue]
-        typeof_is_function:    -> @module.getOrInsertExternalFunction "_ejs_op_typeof_is_function",     types.EjsValue, [types.EjsValue]
-        typeof_is_string:      -> @module.getOrInsertExternalFunction "_ejs_op_typeof_is_string",       types.EjsValue, [types.EjsValue]
-        typeof_is_number:      -> @module.getOrInsertExternalFunction "_ejs_op_typeof_is_number",       types.EjsValue, [types.EjsValue]
-        typeof_is_undefined:   -> @module.getOrInsertExternalFunction "_ejs_op_typeof_is_undefined",    types.EjsValue, [types.EjsValue]
-        typeof_is_null:        -> @module.getOrInsertExternalFunction "_ejs_op_typeof_is_null",         types.EjsValue, [types.EjsValue]
-        typeof_is_boolean:     -> @module.getOrInsertExternalFunction "_ejs_op_typeof_is_boolean",      types.EjsValue, [types.EjsValue]
+        typeof_is_object:      -> returns_ejsval_bool only_reads_memory @module.getOrInsertExternalFunction "_ejs_op_typeof_is_object",       types.EjsValue, [types.EjsValue]
+        typeof_is_function:    -> returns_ejsval_bool only_reads_memory @module.getOrInsertExternalFunction "_ejs_op_typeof_is_function",     types.EjsValue, [types.EjsValue]
+        typeof_is_string:      -> returns_ejsval_bool only_reads_memory @module.getOrInsertExternalFunction "_ejs_op_typeof_is_string",       types.EjsValue, [types.EjsValue]
+        typeof_is_number:      -> returns_ejsval_bool only_reads_memory @module.getOrInsertExternalFunction "_ejs_op_typeof_is_number",       types.EjsValue, [types.EjsValue]
+        typeof_is_undefined:   -> returns_ejsval_bool only_reads_memory @module.getOrInsertExternalFunction "_ejs_op_typeof_is_undefined",    types.EjsValue, [types.EjsValue]
+        typeof_is_null:        -> returns_ejsval_bool only_reads_memory @module.getOrInsertExternalFunction "_ejs_op_typeof_is_null",         types.EjsValue, [types.EjsValue]
+        typeof_is_boolean:     -> returns_ejsval_bool only_reads_memory @module.getOrInsertExternalFunction "_ejs_op_typeof_is_boolean",      types.EjsValue, [types.EjsValue]
         
         undefined:             -> @module.getOrInsertGlobal           "_ejs_undefined",                 types.EjsValue
         "true":                -> @module.getOrInsertGlobal           "_ejs_true",                      types.EjsValue
