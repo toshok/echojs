@@ -38,3 +38,6 @@ exports.does_not_throw = (n) ->
         n.setDoesNotThrow()
         n
 
+exports.returns_ejsval_bool = (n) ->
+        n.returns_ejsval_bool = true
+        n

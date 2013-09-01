@@ -219,11 +219,6 @@ class LLVMIRVisitor extends NodeVisitor
                         @createCall @ejs_runtime.object_getprop, [obj, pname], "getprop_#{prop.name}", canThrow
                 
 
-        createLoadThis: () ->
-                _this = @findIdentifierInScope "%this"
-                return @createLoad _this, "load_this"
-
-
         visitOrNull: (n) -> (@visit n) || @loadNullEjsValue()
         visitOrUndefined: (n) -> (@visit n) || @loadUndefinedEjsValue()
         
@@ -343,8 +338,11 @@ class LLVMIRVisitor extends NodeVisitor
 
         generateCondBr: (exp, then_bb, else_bb) ->
                 exp_value = @visit exp
-                cond_truthy = @createCall @ejs_runtime.truthy, [exp_value], "cond_truthy"
-                cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
+                if exp_value._ejs_returns_ejsval_bool
+                        cmp = ir.createICmpEq exp_value, (@loadBoolEjsValue false), "cmpresult"
+                else
+                        cond_truthy = @createCall @ejs_runtime.truthy, [exp_value], "cond_truthy"
+                        cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
                 ir.createCondBr cmp, else_bb, then_bb
                 exp_value
                 
@@ -476,7 +474,10 @@ class LLVMIRVisitor extends NodeVisitor
                 result = @createAlloca @currentFunction, types.EjsValue, "%update_result"
                 argument = @visit n.argument
                 
-                one = @createLoad @ejs_runtime['one'], "load_one"
+                if opencode_intrinsics and @options.target_pointer_size is 64
+                        one = ir.createBitCast (llvm.ConstantFP.getDouble 1), types.EjsValue, "load_one"
+                else
+                        one = @createLoad @ejs_runtime['one'], "load_one"
                 
                 if not n.prefix
                         # postfix updates store the argument before the op
@@ -820,7 +821,7 @@ class LLVMIRVisitor extends NodeVisitor
 
                 # call the actual runtime binaryop method
                 @createCall callee, [(@createLoad left_alloca, "binop_left_load"), (@createLoad right_alloca, "binop_right_load")], "result_#{builtin}", !callee.doesNotThrow
-
+                
         visitLogicalExpression: (n) ->
                 debug.log -> "operator = '#{n.operator}'"
                 result = @createAlloca @currentFunction, types.EjsValue, "result_#{n.operator}"
@@ -929,7 +930,7 @@ class LLVMIRVisitor extends NodeVisitor
 
         visitThisExpression: (n) ->
                 debug.log "visitThisExpression"
-                @createLoadThis()
+                @createLoad (@findIdentifierInScope "%this"), "load_this"
 
         visitIdentifier: (n) ->
                 debug.log -> "identifier #{n.name}"
@@ -979,7 +980,6 @@ class LLVMIRVisitor extends NodeVisitor
                         key = if property.key.type is syntax.Identifier then @getAtom property.key.name else @visit property.key
 
                         @createCall @ejs_runtime.object_define_value_prop, [obj, key, val, consts.int32 0x77], "define_value_prop_#{property.key}"
-                        #@createPropertyStore obj, key, val, false
                 obj
 
         visitArrayExpression: (n) ->
@@ -1131,6 +1131,7 @@ class LLVMIRVisitor extends NodeVisitor
                         calltmp.setOnlyReadsMemory() if not callee.doesNotAccessMemory and callee.onlyReadsMemory
                         # after we've made our call we need to change the insertion point to our continuation
                         ir.setInsertPoint normal_block
+                calltmp._ejs_returns_ejsval_bool = callee.returns_ejsval_bool
                 calltmp
         
         visitThrow: (n) ->
@@ -1512,11 +1513,17 @@ exports.compile = (tree, base_output_filename, source_filename, options) ->
         debug.log 1, "after closure conversion"
         debug.log 1, -> escodegen.generate tree
 
+        ###
+        tree = typeinfer.run tree
+        
+        debug.log 1, "after type inference"
+        debug.log 1, -> escodegen.generate tree
+        ###             
         tree = optimizations.run tree
         
         debug.log 1, "after optimization"
         debug.log 1, -> escodegen.generate tree
-        
+
         module = new llvm.Module "compiled-#{base_output_filename}"
 
         module.toplevel_name = toplevel_name
