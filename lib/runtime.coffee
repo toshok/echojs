@@ -1,10 +1,16 @@
 llvm = require 'llvm'
 types = require 'types'
 
+takes_builtins = types.takes_builtins
+does_not_throw = types.does_not_throw
+does_not_access_memory = types.does_not_access_memory
+only_reads_memory = types.only_reads_memory
+returns_ejsval_bool = types.returns_ejsval_bool
+
 runtime_interface =
         personality:           -> @module.getOrInsertExternalFunction "__ejs_personality_v0",           types.int32, [types.int32, types.int32, types.int64, types.int8Pointer, types.int8Pointer]
 
-        invoke_closure:        -> types.takes_builtins @module.getOrInsertExternalFunction "_ejs_invoke_closure", types.EjsValue, [types.EjsValue, types.EjsValue, types.int32, types.EjsValue.pointerTo()]
+        invoke_closure:        -> takes_builtins @module.getOrInsertExternalFunction "_ejs_invoke_closure", types.EjsValue, [types.EjsValue, types.EjsValue, types.int32, types.EjsValue.pointerTo()]
         make_closure:          -> @module.getOrInsertExternalFunction "_ejs_function_new", types.EjsValue, [types.EjsValue, types.EjsValue, types.EjsClosureFunc]
         make_anon_closure:     -> @module.getOrInsertExternalFunction "_ejs_function_new_anon", types.EjsValue, [types.EjsValue, types.EjsClosureFunc]
         decompose_closure:     -> @module.getOrInsertExternalFunction "_ejs_decompose_closure", types.bool, [types.EjsValue, types.EjsClosureFunc.pointerTo(), types.EjsClosureEnv.pointerTo(), types.EjsValue.pointerTo()]
@@ -14,16 +20,16 @@ runtime_interface =
         get_env_slot_ref:      -> @module.getOrInsertExternalFunction "_ejs_closureenv_get_slot_ref", types.EjsValue.pointerTo(), [types.EjsValue, types.int32]
         
         object_create:         -> @module.getOrInsertExternalFunction "_ejs_object_create",             types.EjsValue, [types.EjsValue]
-        arguments_new:         -> types.does_not_throw @module.getOrInsertExternalFunction "_ejs_arguments_new",             types.EjsValue, [types.int32, types.EjsValue.pointerTo()]
+        arguments_new:         -> does_not_throw @module.getOrInsertExternalFunction "_ejs_arguments_new",             types.EjsValue, [types.int32, types.EjsValue.pointerTo()]
         array_new:             -> @module.getOrInsertExternalFunction "_ejs_array_new",                 types.EjsValue, [types.int32, types.bool]
-        number_new:            -> types.does_not_throw types.does_not_access_memory @module.getOrInsertExternalFunction "_ejs_number_new",                types.EjsValue, [types.double]
-        string_new_utf8:       -> types.only_reads_memory types.does_not_throw @module.getOrInsertExternalFunction "_ejs_string_new_utf8",           types.EjsValue, [types.string]
+        number_new:            -> does_not_throw does_not_access_memory @module.getOrInsertExternalFunction "_ejs_number_new",                types.EjsValue, [types.double]
+        string_new_utf8:       -> only_reads_memory does_not_throw @module.getOrInsertExternalFunction "_ejs_string_new_utf8",           types.EjsValue, [types.string]
         regexp_new_utf8:       -> @module.getOrInsertExternalFunction "_ejs_regexp_new_utf8",           types.EjsValue, [types.string, types.string]
-        truthy:                -> types.does_not_throw types.does_not_access_memory @module.getOrInsertExternalFunction "_ejs_truthy",                    types.bool, [types.EjsValue]
+        truthy:                -> does_not_throw does_not_access_memory @module.getOrInsertExternalFunction "_ejs_truthy",                    types.bool, [types.EjsValue]
         object_setprop:        -> @module.getOrInsertExternalFunction "_ejs_object_setprop",            types.EjsValue, [types.EjsValue, types.EjsValue, types.EjsValue]
-        object_getprop:        -> types.only_reads_memory @module.getOrInsertExternalFunction "_ejs_object_getprop",           types.EjsValue, [types.EjsValue, types.EjsValue]
+        object_getprop:        -> only_reads_memory @module.getOrInsertExternalFunction "_ejs_object_getprop",           types.EjsValue, [types.EjsValue, types.EjsValue]
         global_setprop:        -> @module.getOrInsertExternalFunction "_ejs_global_setprop",            types.EjsValue, [types.EjsValue, types.EjsValue]
-        global_getprop:        -> types.only_reads_memory @module.getOrInsertExternalFunction "_ejs_global_getprop",           types.EjsValue, [types.EjsValue]
+        global_getprop:        -> only_reads_memory @module.getOrInsertExternalFunction "_ejs_global_getprop",           types.EjsValue, [types.EjsValue]
 
         object_define_value_prop: -> @module.getOrInsertExternalFunction "_ejs_object_define_value_property",  types.bool, [types.EjsValue, types.EjsValue, types.EjsValue, types.int32];
         
@@ -66,9 +72,9 @@ runtime_interface =
 
         "unop-":           -> @module.getOrInsertExternalFunction "_ejs_op_neg",         types.EjsValue, [types.EjsValue]
         "unop+":           -> @module.getOrInsertExternalFunction "_ejs_op_plus",        types.EjsValue, [types.EjsValue]
-        "unop!":           -> types.returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_not",         types.EjsValue, [types.EjsValue]
+        "unop!":           -> returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_not",         types.EjsValue, [types.EjsValue]
         "unop~":           -> @module.getOrInsertExternalFunction "_ejs_op_bitwise_not", types.EjsValue, [types.EjsValue]
-        "unoptypeof":      -> types.does_not_throw @module.getOrInsertExternalFunction "_ejs_op_typeof",      types.EjsValue, [types.EjsValue]
+        "unoptypeof":      -> does_not_throw @module.getOrInsertExternalFunction "_ejs_op_typeof",      types.EjsValue, [types.EjsValue]
         "unopdelete":      -> @module.getOrInsertExternalFunction "_ejs_op_delete",      types.EjsValue, [types.EjsValue, types.EjsValue] # this is a unop, but ours only works for memberexpressions
         "unopvoid":        -> @module.getOrInsertExternalFunction "_ejs_op_void",        types.EjsValue, [types.EjsValue]
         "binop^":          -> @module.getOrInsertExternalFunction "_ejs_op_bitwise_xor", types.EjsValue, [types.EjsValue, types.EjsValue]
@@ -79,20 +85,20 @@ runtime_interface =
         "binop>>>":        -> @module.getOrInsertExternalFunction "_ejs_op_ursh",        types.EjsValue, [types.EjsValue, types.EjsValue]
         "binop<<<":        -> @module.getOrInsertExternalFunction "_ejs_op_ulsh",        types.EjsValue, [types.EjsValue, types.EjsValue]
         "binop%":          -> @module.getOrInsertExternalFunction "_ejs_op_mod",         types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop+":          -> types.only_reads_memory @module.getOrInsertExternalFunction "_ejs_op_add",         types.EjsValue, [types.EjsValue, types.EjsValue]
+        "binop+":          -> only_reads_memory @module.getOrInsertExternalFunction "_ejs_op_add",         types.EjsValue, [types.EjsValue, types.EjsValue]
         "binop*":          -> @module.getOrInsertExternalFunction "_ejs_op_mult",        types.EjsValue, [types.EjsValue, types.EjsValue]
         "binop/":          -> @module.getOrInsertExternalFunction "_ejs_op_div",         types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop<":          -> types.returns_ejsval_bool types.only_reads_memory @module.getOrInsertExternalFunction "_ejs_op_lt",          types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop<=":         -> types.returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_le",          types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop>":          -> types.returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_gt",          types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop>=":         -> types.returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_ge",          types.EjsValue, [types.EjsValue, types.EjsValue]
+        "binop<":          -> returns_ejsval_bool only_reads_memory @module.getOrInsertExternalFunction "_ejs_op_lt",          types.EjsValue, [types.EjsValue, types.EjsValue]
+        "binop<=":         -> returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_le",          types.EjsValue, [types.EjsValue, types.EjsValue]
+        "binop>":          -> returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_gt",          types.EjsValue, [types.EjsValue, types.EjsValue]
+        "binop>=":         -> returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_ge",          types.EjsValue, [types.EjsValue, types.EjsValue]
         "binop-":          -> @module.getOrInsertExternalFunction "_ejs_op_sub",         types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop===":        -> types.returns_ejsval_bool types.does_not_throw types.does_not_access_memory @module.getOrInsertExternalFunction "_ejs_op_strict_eq",   types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop==":         -> types.returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_eq",          types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop!==":        -> types.returns_ejsval_bool types.does_not_throw types.does_not_access_memory @module.getOrInsertExternalFunction "_ejs_op_strict_neq",  types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop!=":         -> types.returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_neq",         types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binopinstanceof": -> types.returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_instanceof",  types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binopin":         -> types.returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_in",          types.EjsValue, [types.EjsValue, types.EjsValue]
+        "binop===":        -> returns_ejsval_bool does_not_throw does_not_access_memory @module.getOrInsertExternalFunction "_ejs_op_strict_eq",   types.EjsValue, [types.EjsValue, types.EjsValue]
+        "binop==":         -> returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_eq",          types.EjsValue, [types.EjsValue, types.EjsValue]
+        "binop!==":        -> returns_ejsval_bool does_not_throw does_not_access_memory @module.getOrInsertExternalFunction "_ejs_op_strict_neq",  types.EjsValue, [types.EjsValue, types.EjsValue]
+        "binop!=":         -> returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_neq",         types.EjsValue, [types.EjsValue, types.EjsValue]
+        "binopinstanceof": -> returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_instanceof",  types.EjsValue, [types.EjsValue, types.EjsValue]
+        "binopin":         -> returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_in",          types.EjsValue, [types.EjsValue, types.EjsValue]
 
 exports.createInterface = (module) ->
         runtime =
