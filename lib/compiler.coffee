@@ -1400,11 +1400,11 @@ class LLVMIRVisitor extends NodeVisitor
         handleTypeofIsObjectIntrinsic: (exp) ->
                 if opencode_intrinsics and @options.target_pointer_size is 64
                         cmp = ir.createICmpUGt (@visitOrNull exp.arguments[0]), (consts.int64_lowhi 0xfffbffff, 0xffffffff), "cmpresult"
-                        t = @loadBoolEjsValue true
-                        f = @loadBoolEjsValue false
-                        ir.createSelect cmp, t, f, "sel"
+                        rv = ir.createSelect cmp, (@loadBoolEjsValue true), (@loadBoolEjsValue false), "sel"
+                        rv._ejs_returns_ejsval_bool = true
+                        rv
                 else
-                        ir.createCall @ejs_runtime.typeof_is_object, [@visitOrNull exp.arguments[0]], "is_object"
+                        @createCall @ejs_runtime.typeof_is_object, [@visitOrNull exp.arguments[0]], "is_object", false
 
         handleTypeofIsFunctionIntrinsic: (exp) ->
                 # FIXME we should inline this as well, but it's a more complicated check (needs to do both is_object and a specops check)
@@ -1418,19 +1418,19 @@ class LLVMIRVisitor extends NodeVisitor
                         f = @loadBoolEjsValue false
                         ir.createSelect cmp, t, f, "sel"
                 else
-                        ir.createCall @ejs_runtime.typeof_is_string, [@visitOrNull exp.arguments[0]], "is_string"
+                        @createCall @ejs_runtime.typeof_is_string, [@visitOrNull exp.arguments[0]], "is_string", false
                                 
         handleTypeofIsNumberIntrinsic: (exp) ->
-                ir.createCall @ejs_runtime.typeof_is_number, [@visitOrNull exp.arguments[0]], "is_number"
+                @createCall @ejs_runtime.typeof_is_number, [@visitOrNull exp.arguments[0]], "is_number", false
                 
         handleTypeofIsUndefinedIntrinsic: (exp) ->
-                ir.createCall @ejs_runtime.typeof_is_undefined, [@visitOrNull exp.arguments[0]], "is_undefined"
+                @createCall @ejs_runtime.typeof_is_undefined, [@visitOrNull exp.arguments[0]], "is_undefined", false
 
         handleTypeofIsNullIntrinsic: (exp) ->
-                ir.createCall @ejs_runtime.typeof_is_null, [@visitOrNull exp.arguments[0]], "is_null"
+                @createCall @ejs_runtime.typeof_is_null, [@visitOrNull exp.arguments[0]], "is_null", false
 
         handleTypeofIsBooleanIntrinsic: (exp) ->
-                ir.createCall @ejs_runtime.typeof_is_boolean, [@visitOrNull exp.arguments[0]], "is_boolean"
+                @createCall @ejs_runtime.typeof_is_boolean, [@visitOrNull exp.arguments[0]], "is_boolean", false
                 
 class AddFunctionsVisitor extends NodeVisitor
         constructor: (@module) ->
