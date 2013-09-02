@@ -12,14 +12,14 @@ class EqIdioms extends NodeVisitor
         is_string_literal = (e) -> e.type is syntax.Literal and typeof e.value is "string"
 
         visitBinaryExpression: (exp) ->
-                return super if exp.operator isnt "==" and exp.operator isnt "==="
+                return super if exp.operator isnt "==" and exp.operator isnt "===" and exp.operator isnt "!=" and exp.operator isnt "!=="
 
                 left = exp.left
                 right = exp.right
 
                 # for typeof checks against string literals, both == and === work
                 if (is_typeof(left) and is_string_literal(right)) or (is_typeof(right) and is_string_literal(left))
-                        if is_typeof(left)
+                        if is_typeof left
                                 typecheck = right.value
                                 typeofarg = left.argument
                         else
@@ -37,7 +37,14 @@ class EqIdioms extends NodeVisitor
                                 else
                                         throw new Error "invalid typeof check against '#{typecheck}'";
 
-                        return create_intrinsic intrinsic, [typeofarg]
+                        rv = create_intrinsic intrinsic, [typeofarg]
+                        if exp.operator[0] is '!'
+                                rv = {
+                                        type: syntax.UnaryExpression
+                                        operator: "!"
+                                        argument: rv
+                                }
+                        rv
 
                 super
 
