@@ -7,6 +7,18 @@ debug = require 'debug'
 
 { create_intrinsic } = require 'echo-util'
 
+#
+# EqIdioms checks for the following things:
+#
+# typeof() checks against constant strings.
+#
+#   For most cases we can inline the test directly into LLVM IR (in
+#   compiler.coffee), and in the cases where we can't easily, we can
+#   call specialized runtime builtins that don't require us to
+#   allocate a string do a comparison.
+#
+# ... more?
+# 
 class EqIdioms extends NodeVisitor
         is_typeof = (e) -> e.type is syntax.UnaryExpression and e.operator is "typeof"
         is_string_literal = (e) -> e.type is syntax.Literal and typeof e.value is "string"
@@ -44,7 +56,7 @@ class EqIdioms extends NodeVisitor
                                         operator: "!"
                                         argument: rv
                                 }
-                        rv
+                        return rv
 
                 super
 
