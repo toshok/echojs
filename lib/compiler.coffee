@@ -789,6 +789,17 @@ class LLVMIRVisitor extends NodeVisitor
                                 return @createCall callee, [(@visitOrNull n.argument.object), (@visit fake_literal)], "result"
                         else
                                 throw "unhandled delete syntax"
+                else if n.operator is "!"
+                        arg_value =  @visitOrNull n.argument
+                        if opencode_intrinsics and @options.target_pointer_size is 64 and arg_value._ejs_returns_ejsval_bool
+                                cmp = ir.createICmpEq arg_value, (@loadBoolEjsValue true), "cmpresult"
+                                t = @loadBoolEjsValue true
+                                f = @loadBoolEjsValue false
+                                rv = ir.createSelect cmp, f, t, "sel"
+                                rv._ejs_returns_ejsval_bool = true
+                                rv
+                        else
+                                @createCall callee, [arg_value], "result"
                 else
                         if not callee
                                 throw "Internal error: unary operator '#{n.operator}' not implemented"
@@ -1416,7 +1427,9 @@ class LLVMIRVisitor extends NodeVisitor
                         cmp = ir.createICmpEq mask, (consts.int64_lowhi 0xfffa8000, 0x00000000), "cmpresult"
                         t = @loadBoolEjsValue true
                         f = @loadBoolEjsValue false
-                        ir.createSelect cmp, t, f, "sel"
+                        rv = ir.createSelect cmp, t, f, "sel"
+                        rv._ejs_returns_ejsval_bool = true
+                        rv
                 else
                         @createCall @ejs_runtime.typeof_is_string, [@visitOrNull exp.arguments[0]], "is_string", false
                                 
@@ -1431,7 +1444,7 @@ class LLVMIRVisitor extends NodeVisitor
 
         handleTypeofIsBooleanIntrinsic: (exp) ->
                 @createCall @ejs_runtime.typeof_is_boolean, [@visitOrNull exp.arguments[0]], "is_boolean", false
-                
+
 class AddFunctionsVisitor extends NodeVisitor
         constructor: (@module) ->
                 super
