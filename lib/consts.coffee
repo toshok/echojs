@@ -1,6 +1,12 @@
 types = require 'types'
 llvm = require 'llvm'
 
+exports.string = (ir, c) ->
+        constant = ir.createGlobalStringPtr c, "strconst"
+        constant.is_constant = true
+        constant.constant_val = c
+        constant
+        
 exports.jschar = (c) ->
         constant = llvm.Constant.getIntegerValue types.jschar, c
         constant.is_constant = true
