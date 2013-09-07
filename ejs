@@ -17,6 +17,7 @@ temp_files = []
 options =
         # our defaults:
         debug_level: 0
+        record_types: false
         output_filename: null
         combine_scripts: false
         show_help: false
@@ -92,6 +93,9 @@ args =
         "--ios-min":
                 option:  "ios_min"
                 help:    "the minimum version of ios to support.  Default is 5.0."
+        "--record-types":
+                flag:    "record_types"
+                help:    "generates an executable which records types in a format later used for optimizations."
 
 output_usage = ->
         console.warn 'Usage:';
@@ -200,7 +204,7 @@ compileFile = (filename, content, compileCallback) ->
                 process.exit -1
 
         base_filename = util.genFreshFileName path.basename filename
-        compiled_module = compiler.compile parse_tree, base_filename, filename, target_pointer_size: target_pointer_size
+        compiled_module = compiler.compile parse_tree, base_filename, filename, options
 
         ll_filename = "/tmp/#{base_filename}.ll"
         bc_filename = "/tmp/#{base_filename}.bc"
