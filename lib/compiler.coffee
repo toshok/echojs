@@ -6,10 +6,10 @@ path = require 'path'
 
 { Stack } = require 'stack'
 { Set } = require 'set'
-{ NodeVisitor } = require 'nodevisitor'
+{ TreeTransformer } = require 'nodevisitor'
 closure_conversion = require 'closure-conversion'
 optimizations = require 'optimizations'
-{ genId, bold, reset } = require 'echo-util'
+{ genId, startGenerator, bold, reset } = require 'echo-util'
 
 { ExitableScope, TryExitableScope, SwitchExitableScope, LoopExitableScope } = require 'exitable-scope'
 
@@ -34,9 +34,12 @@ BUILTIN_PARAMS = [
 
 hasOwn = Object::hasOwnProperty
 
-class LLVMIRVisitor extends NodeVisitor
+class LLVMIRVisitor extends TreeTransformer
         constructor: (@module, @filename, @options) ->
 
+                if @options.record_types
+                        @genRecordId = startGenerator()
+                        
                 # build up our runtime method table
                 @ejs_intrinsics =
                         invokeClosure: @handleInvokeClosureIntrinsic
@@ -632,8 +635,16 @@ class LLVMIRVisitor extends NodeVisitor
                         callee = @ejs_runtime[builtin]
                         if not callee
                                 throw "Internal error: unhandled binary operator '#{n.operator}'"
-                        rhvalue = @createCall callee, [(@visit lhs), rhvalue], "result_#{builtin}", !callee.doesNotThrow
+
+                        lhvalue = @visit lhs
+                        if @options.record_types
+                                @createCall @ejs_runtime.record_binop, [(consts.int32 @genRecordId()), (consts.string ir, n.operator[0]), lhvalue, rhvalue], ""
+                                
+                        rhvalue = @createCall callee, [lhvalue, rhvalue], "result_#{builtin}", !callee.doesNotThrow
+
                 
+                if @options.record_types
+                        @createCall @ejs_runtime.record_assignment, [(consts.int32 @genRecordId()), rhvalue], ""
                 @storeValueInDest rhvalue, lhs
 
                 # we need to visit lhs after the store so that we load the value, but only if it's used
@@ -829,6 +840,9 @@ class LLVMIRVisitor extends NodeVisitor
 
                 if n.left.is_constant? and n.right.is_constant?
                         console.warn "we could totally evaluate this at compile time, yo"
+
+                if @options.record_types
+                        @createCall @ejs_runtime.record_binop, [(consts.int32 @genRecordId()), (consts.string ir, n.operator), (@createLoad left_alloca, "binop_left_load"), (@createLoad right_alloca, "binop_right_load")], ""
 
                 # call the actual runtime binaryop method
                 @createCall callee, [(@createLoad left_alloca, "binop_left_load"), (@createLoad right_alloca, "binop_right_load")], "result_#{builtin}", !callee.doesNotThrow
@@ -1029,7 +1043,7 @@ class LLVMIRVisitor extends NodeVisitor
                 saved_insert_point = ir.getInsertBlock()
 
                 ir.setInsertPointStartBB @literalInitializationBB
-                strname = ir.createGlobalStringPtr name, "strname"
+                strname = consts.string ir, name
 
                 arg0 = strname
                 arg1 = val
@@ -1084,8 +1098,8 @@ class LLVMIRVisitor extends NodeVisitor
                 if typeof n.raw is "string" and n.raw[0] is '/'
                         debug.log -> "literal regexp: #{n.raw}"
 
-                        source = ir.createGlobalStringPtr n.value.source, "regexpsource"
-                        flags = ir.createGlobalStringPtr "#{if n.value.global then 'g' else ''}#{if n.value.multiline then 'm' else ''}#{if n.value.ignoreCase then 'i' else ''}", "regexpflags"
+                        source = consts.string ir, n.value.source
+                        flags = consts.string ir, "#{if n.value.global then 'g' else ''}#{if n.value.multiline then 'm' else ''}#{if n.value.ignoreCase then 'i' else ''}"
                         
                         regexp_new_utf8 = @ejs_runtime.regexp_new_utf8
                         regexpcall = @createCall regexp_new_utf8, [source, flags], "regexptmp", !regexp_new_utf8.doesNotThrow
@@ -1350,10 +1364,21 @@ class LLVMIRVisitor extends NodeVisitor
                         calltmp = @createCall @ejs_runtime.invoke_closure, argv, "calltmp", true
                         store = ir.createStore calltmp, call_result
         
-                if ctor_context
-                        argv[1]
+                call_result_load = @createLoad call_result, "call_result_load"
+
+                return call_result_load if not ctor_context
+
+                # in the ctor context, we need to check if the return
+                # value was an object.  if it was, we return it,
+                # otherwise we return argv[0]
+
+                if opencode_intrinsics and @options.target_pointer_size is 64
+                        cmp = ir.createICmpUGt call_result_load, (consts.int64_lowhi 0xfffbffff, 0xffffffff), "cmpresult"
                 else
-                        @createLoad call_result, "call_result_load"
+                        call_result_is_object = @createCall @ejs_runtime.typeof_is_object, [call_result_load], "call_result_is_object", false
+                        cmp = ir.createICmpEq call_result_is_object, (@loadBoolEjsValue true), "cmpresult"
+                return ir.createSelect cmp, call_result_load, argv[0], "sel"
+                        
                         
         handleMakeClosureIntrinsic: (exp, ctor_context= false) ->
                 argv = @visitArgsForCall @ejs_runtime.make_closure, false, exp.arguments
@@ -1445,7 +1470,7 @@ class LLVMIRVisitor extends NodeVisitor
         handleTypeofIsBooleanIntrinsic: (exp) ->
                 @createCall @ejs_runtime.typeof_is_boolean, [@visitOrNull exp.arguments[0]], "is_boolean", false
 
-class AddFunctionsVisitor extends NodeVisitor
+class AddFunctionsVisitor extends TreeTransformer
         constructor: (@module) ->
                 super
 
