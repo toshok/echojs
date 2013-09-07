@@ -5,7 +5,7 @@ debug = require 'debug'
 
 { Stack } = require 'stack'
 { Set } = require 'set'
-{ NodeVisitor } = require 'nodevisitor'
+{ TreeTransformer } = require 'nodevisitor'
 
 echo_util = require 'echo-util'
 genGlobalFunctionName = echo_util.genGlobalFunctionName
@@ -30,7 +30,7 @@ hasOwnProperty = Object.prototype.hasOwnProperty
 #     parent: ...  // the parent environment object
 #   }
 # 
-LocateEnv = class LocateEnv extends NodeVisitor
+LocateEnv = class LocateEnv extends TreeTransformer
         constructor: ->
                 super
                 @envs = new Stack
@@ -97,7 +97,7 @@ LocateEnv = class LocateEnv extends NodeVisitor
 
 # this should move to echo-desugar.coffee
 
-class HoistFuncDecls extends NodeVisitor
+class HoistFuncDecls extends TreeTransformer
         constructor: ->
                 @prepends = []
                 
@@ -128,7 +128,7 @@ class HoistFuncDecls extends NodeVisitor
 # to:
 #   var foo = function foo() { }
 # 
-class FuncDeclsToVars extends NodeVisitor
+class FuncDeclsToVars extends TreeTransformer
         visitFunctionDeclaration: (n) ->
                 if n.toplevel
                         super
@@ -166,7 +166,7 @@ class FuncDeclsToVars extends NodeVisitor
 #       ....
 #    }
 # 
-class HoistVars extends NodeVisitor
+class HoistVars extends TreeTransformer
         constructor: () ->
                 super
                 @function_stack = new Stack
@@ -246,9 +246,9 @@ class HoistVars extends NodeVisitor
                                 }
                 n
 
-# this class really doesn't behave like a normal NodeVisitor, as it modifies the tree in-place
-# check the free() function near the top of the file for the actual implementation.
-class ComputeFree extends NodeVisitor
+# this class really doesn't behave like a normal TreeTransformer, as it modifies the tree in-place.
+# XXX reformulate this as a TreeVisitor subclass.
+class ComputeFree extends TreeTransformer
         constructor: ->
                 @call_free = @free.bind @
                 super
@@ -346,7 +346,7 @@ class ComputeFree extends NodeVisitor
                 
 # 1) allocates the environment at the start of the n
 # 2) adds mappings for all .closed variables
-class SubstituteVariables extends NodeVisitor
+class SubstituteVariables extends TreeTransformer
         constructor: (module) ->
                 super
                 @function_stack = new Stack
@@ -675,7 +675,7 @@ class SubstituteVariables extends NodeVisitor
 # 
 #   2. There are no free variables in the function expressions.
 #
-class LambdaLift extends NodeVisitor
+class LambdaLift extends TreeTransformer
         constructor: (@filename) ->
                 super
                 @functions = []
@@ -733,7 +733,7 @@ class LambdaLift extends NodeVisitor
                         name: global_name
                 }
 
-class NameAnonymousFunctions extends NodeVisitor
+class NameAnonymousFunctions extends TreeTransformer
         visitAssignmentExpression: (n) ->
                 n = super n
                 lhs = n.left
