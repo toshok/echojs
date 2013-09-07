@@ -594,12 +594,15 @@ _ejs_finalizer_thread ()
             info = find_page_and_cell (fin->gcobj, &cell_idx);
 
             if (!info) {
+#if spew
                 int page_index = PTR_TO_ARENA_PAGE_INDEX(fin->gcobj);
                 PageInfo *page = arena->page_infos[page_index];
                 fprintf (stderr, "fin->gcobj = %p\n", fin->gcobj);
                 fprintf (stderr, "page_index = %d, using page %p\n", page_index, page);
                 fprintf (stderr, "sizeof cell for page = %zd\n", arena->page_infos[page_index]->cell_size);
                 fprintf (stderr, "aligned to cell size? %s\n", IS_ALIGNED_TO(fin->gcobj, arena->page_infos[page_index]->cell_size) ? "yes" : "no");
+#endif
+                continue;
             }
 
             assert(info);
@@ -800,6 +803,7 @@ sweep_heap()
     int pages_visited = 0;
     int pages_skipped = 0;
 
+#if 0
     // if we're getting too far ahead of the finalizer, wait
     if (finalizer_list) {
         pthread_mutex_lock (&finalizer_mutex);
@@ -810,6 +814,7 @@ sweep_heap()
         }
         pthread_mutex_unlock (&finalizer_mutex);
     }
+#endif
 
     // sweep the entire heap, freeing white nodes
     for (int a = 0, e = num_arenas; a < e; a ++) {
