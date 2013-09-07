@@ -1,30 +1,247 @@
 syntax = (require 'esprima').Syntax
 debug = require 'debug'
 
-filter = (x) ->
-        rv = []
-        for y in x when y
-                if y.length
-                        rv = rv.concat y
-                else
-                        rv.push y
-        rv
-        
-exports.NodeVisitor = class NodeVisitor
-        constructor: (@dontcopy) ->
+exports.TreeVisitor = class TreeVisitor
+        visitProgram: (n) ->
+                @visit n.body
+                
+        visitFunction: (n) ->
+                @visit n.params
 
-        shallowCopy: (o) ->
+        visitFunctionDeclaration: (n) ->
+                @visitFunction n
+                
+        visitFunctionExpression: (n) ->
+                @visitFunction n
+
+        visitBlock: (n) ->
+                @visit n.body
+
+        visitLabeledStatement: (n) ->
+                @visit n.body
+
+        visitEmptyStatement: (n) ->
+
+        visitExpressionStatement: (n) ->
+                @visit n.expression
+                
+        visitSwitch: (n) ->
+                @visit n.discriminant
+                @visit _case for _case in n.cases
+                
+        visitCase: (n) ->
+                @visit n.test
+                @visit _con for _con in n.consequent
+                
+        visitFor: (n) ->
+                @visit n.init
+                @visit n.test
+                @visit n.update
+                @visit n.body
+                
+        visitWhile: (n) ->
+                @visit n.test
+                @visit n.body
+                
+        visitIf: (n) ->
+                @visit n.test
+                @visit n.consequent
+                @visit n.alternate
+                
+        visitForIn: (n) ->
+                @visit n.left
+                @visit n.right
+                @visit n.body
+                
+        visitDo: (n) ->
+                @visit n.body
+                @visit n.test
+                
+        visitIdentifier: (n) ->
+        visitLiteral: (n) ->
+        visitThisExpression: (n) ->
+        visitBreak: (n) ->
+        visitContinue: (n) ->
+                
+        visitTry: (n) ->
+                @visit n.block
+                if n.handlers?
+                        @visit n.handlers
+                @visit n.finalizer
+
+        visitCatchClause: (n) ->
+                @visit n.param
+                @visit n.guard
+                @visit n.body
+                
+        visitThrow: (n) ->
+                @visit n.argument
+                
+        visitReturn: (n) ->
+                @visit n.argument
+                
+        visitWith: (n) ->
+                @visit n.object
+                @visit n.body
+                
+        visitVariableDeclaration: (n) ->
+                @visit n.declarations
+
+        visitVariableDeclarator: (n) ->
+                @visit n.id
+                @visit n.init
+                                
+        visitLabeledStatement: (n) ->
+                @visit n.label
+                @visit n.body
+                
+        visitAssignmentExpression: (n) ->
+                @visit n.left
+                @visit n.right
+                
+        visitConditionalExpression: (n) ->
+                @visit n.test
+                @visit n.consequent
+                @visit n.alternate
+                
+        visitLogicalExpression: (n) ->
+                @visit n.left
+                @visit n.right
+                
+        visitBinaryExpression: (n) ->
+                @visit n.left
+                @visit n.right
+
+        visitUnaryExpression: (n) -> @visit n.argument
+
+        visitUpdateExpression: (n) -> @visit n.argument
+
+        visitMemberExpression: (n) ->
+                @visit n.object
+                if n.computed
+                        @visit n.property
+                
+        visitRelationalExpression: (n) ->
+                @visit n.left
+                @visit n.right
+                
+        visitSequenceExpression: (n) ->
+                @visit n.expressions
+                
+        visitNewExpression: (n) ->
+                @visit n.callee
+                @visit n.arguments
+
+        visitObjectExpression: (n) ->
+                @visit n.properties
+
+        visitArrayExpression: (n) ->
+                @visit n.elements
+
+        visitProperty: (n) ->
+                @visit n.key
+                @visit n.value
+                                
+        visitCallExpression: (n) ->
+                @visit n.callee
+                @visit n.arguments
+                
+        visit: (n) ->
+                if not n?
+                        debug.log "child is null!>"
+                        return null
+
+                if Array.isArray n
+                        return n.map (el) => @visit el
+                        
+                debug.indent()
+                debug.log "#{n.type}>"
+
+                rv = null
+                switch n.type
+                        when syntax.Program               then rv = @visitProgram n
+                        when syntax.FunctionDeclaration   then rv = @visitFunctionDeclaration n
+                        when syntax.FunctionExpression    then rv = @visitFunctionExpression n
+                        when syntax.LabeledStatement      then rv = @visitLabeledStatement n
+                        when syntax.BlockStatement        then rv = @visitBlock n
+                        when syntax.ExpressionStatement   then rv = @visitExpressionStatement n
+                        when syntax.SwitchStatement       then rv = @visitSwitch n
+                        when syntax.SwitchCase            then rv = @visitCase n
+                        when syntax.ForStatement          then rv = @visitFor n
+                        when syntax.WhileStatement        then rv = @visitWhile n
+                        when syntax.IfStatement           then rv = @visitIf n
+                        when syntax.ForInStatement        then rv = @visitForIn n
+                        when syntax.DoWhileStatement      then rv = @visitDo n
+                        when syntax.BreakStatement        then rv = @visitBreak n
+                        when syntax.ContinueStatement     then rv = @visitContinue n
+                        when syntax.TryStatement          then rv = @visitTry n
+                        when syntax.CatchClause           then rv = @visitCatchClause n
+                        when syntax.ThrowStatement        then rv = @visitThrow n
+                        when syntax.ReturnStatement       then rv = @visitReturn n
+                        when syntax.WithStatement         then rv = @visitWith n
+                        when syntax.VariableDeclaration   then rv = @visitVariableDeclaration n
+                        when syntax.VariableDeclarator    then rv = @visitVariableDeclarator n
+                        when syntax.LabeledStatement      then rv = @visitLabeledStatement n
+                        when syntax.AssignmentExpression  then rv = @visitAssignmentExpression n
+                        when syntax.ConditionalExpression then rv = @visitConditionalExpression n
+                        when syntax.LogicalExpression     then rv = @visitLogicalExpression n
+                        when syntax.NewExpression         then rv = @visitNewExpression n
+                        when syntax.ThisExpression        then rv = @visitThisExpression n
+                        when syntax.BinaryExpression      then rv = @visitBinaryExpression n
+                        when syntax.UnaryExpression       then rv = @visitUnaryExpression n
+                        when syntax.UpdateExpression      then rv = @visitUpdateExpression n
+                        when syntax.MemberExpression      then rv = @visitMemberExpression n
+                        when syntax.RelationalExpression  then rv = @visitRelationalExpression n
+                        when syntax.SequenceExpression    then rv = @visitSequenceExpression n
+                        when syntax.ObjectExpression      then rv = @visitObjectExpression n
+                        when syntax.ArrayExpression       then rv = @visitArrayExpression n
+                        when syntax.Identifier            then rv = @visitIdentifier n
+                        when syntax.Literal               then rv = @visitLiteral n
+                        when syntax.CallExpression        then rv = @visitCallExpression n
+                        when syntax.Property              then rv = @visitProperty n
+                        when syntax.EmptyStatement        then rv = @visitEmptyStatement n
+                        else
+                            throw "PANIC: unknown parse node type #{n.type}"
+                        
+                debug.log "<#{n.type}"
+                debug.unindent()
+                rv
+
+exports.TreeTransformer = class TreeTransformer extends TreeVisitor
+        shallowCopy = (o) ->
+                return null if not o?
+                
                 new_o = Object.create Object.getPrototypeOf o
                 new_o[x] = o[x] for x in Object.getOwnPropertyNames o
                 new_o
-                
+
+        # for collections, returns all non-null.  for single item properties,
+        # just always returns the item.
+        filter = (x) ->
+                return x if not Array.isArray x
+        
+                rv = []
+                for y in x when y?
+                        if Array.isArray y
+                                rv = rv.concat y
+                        else
+                                rv.push y
+                rv
+
+        visit: (n) ->
+                # for non-array n's, just return the transformed node
+                return super shallowCopy n unless Array.isArray n
+
+                # for array n's, we need to copy them all before visiting them
+                return filter super n.map shallowCopy
+        
         visitProgram: (n) ->
-                n.body = filter (@visit child for child in n.body)
+                n.body = @visit n.body
                 n
                 
         visitFunction: (n) ->
-                n.params = filter (@visit param for param in n.params)
-                n.body = @visit n.body
+                n.params = @visit n.params
+                n.body   = @visit n.body
                 n
 
         visitFunctionDeclaration: (n) ->
@@ -34,7 +251,7 @@ exports.NodeVisitor = class NodeVisitor
                 @visitFunction n
 
         visitBlock: (n) ->
-                n.body = filter (@visit child for child in n.body)
+                n.body = @visit n.body
                 n
 
         visitLabeledStatement: (n) ->
@@ -50,19 +267,19 @@ exports.NodeVisitor = class NodeVisitor
                 
         visitSwitch: (n) ->
                 n.discriminant = @visit n.discriminant
-                n.cases = filter (@visit _case for _case in n.cases)
+                n.cases        = @visit n.cases
                 n
                 
         visitCase: (n) ->
-                n.test = @visit n.test
-                n.consequent = filter (@visit _con for _con in n.consequent)
+                n.test       = @visit n.test
+                n.consequent = @visit n.consequent
                 n
                 
         visitFor: (n) ->
-                n.init = @visit n.init
-                n.test = @visit n.test
+                n.init   = @visit n.init
+                n.test   = @visit n.test
                 n.update = @visit n.update
-                n.body = @visit n.body
+                n.body   = @visit n.body
                 n
                 
         visitWhile: (n) ->
@@ -71,15 +288,15 @@ exports.NodeVisitor = class NodeVisitor
                 n
                 
         visitIf: (n) ->
-                n.test = @visit n.test
+                n.test       = @visit n.test
                 n.consequent = @visit n.consequent
-                n.alternate = @visit n.alternate
+                n.alternate  = @visit n.alternate
                 n
                 
         visitForIn: (n) ->
-                n.left = @visit n.left
+                n.left  = @visit n.left
                 n.right = @visit n.right
-                n.body = @visit n.body
+                n.body  = @visit n.body
                 n
                 
         visitDo: (n) ->
@@ -96,7 +313,7 @@ exports.NodeVisitor = class NodeVisitor
         visitTry: (n) ->
                 n.block = @visit n.block
                 if n.handlers?
-                        n.handlers = filter (@visit handler for handler in n.handlers)
+                        n.handlers = @visit n.handlers
                 else
                         n.handlers = null
                 n.finalizer = @visit n.finalizer
@@ -118,54 +335,49 @@ exports.NodeVisitor = class NodeVisitor
                 
         visitWith: (n) ->
                 n.object = @visit n.object
-                n.body = @visit n.body
+                n.body   = @visit n.body
                 n
                 
         visitVariableDeclaration: (n) ->
-                n.declarations = filter (@visit decl for decl in n.declarations)
+                n.declarations = @visit n.declarations
                 n
 
         visitVariableDeclarator: (n) ->
-                n.id = @visit n.id
+                n.id   = @visit n.id
                 n.init = @visit n.init
                 n
                                 
         visitLabeledStatement: (n) ->
                 n.label = @visit n.label
-                n.body = @visit n.body
+                n.body  = @visit n.body
                 n
                 
         visitAssignmentExpression: (n) ->
-                n.left = @visit n.left
-                # we don't visit the operator since it's not a separate node
+                n.left  = @visit n.left
                 n.right = @visit n.right
                 n
                 
         visitConditionalExpression: (n) ->
-                n.test = @visit n.test
+                n.test       = @visit n.test
                 n.consequent = @visit n.consequent
-                n.alternate = @visit n.alternate
+                n.alternate  = @visit n.alternate
                 n
                 
         visitLogicalExpression: (n) ->
-                n.left = @visit n.left
-                # we don't visit the operator since it's not a separate node
+                n.left  = @visit n.left
                 n.right = @visit n.right
                 n
                 
         visitBinaryExpression: (n) ->
-                n.left = @visit n.left
-                # we don't visit the operator since it's not a separate node
+                n.left  = @visit n.left
                 n.right = @visit n.right
                 n
 
         visitUnaryExpression: (n) ->
-                # we don't visit the operator since it's not a separate node
                 n.argument = @visit n.argument
                 n
 
         visitUpdateExpression: (n) ->
-                # we don't visit the operator since it's not a separate node
                 n.argument = @visit n.argument
                 n
 
@@ -176,94 +388,34 @@ exports.NodeVisitor = class NodeVisitor
                 n
                 
         visitRelationalExpression: (n) ->
-                n.left = @visit n.left
-                # we don't visit the operator since it's not a separate node
+                console.log n
+                n.left  = @visit n.left
                 n.right = @visit n.right
                 n
                 
         visitSequenceExpression: (n) ->
-                n.expressions = filter (@visit exp for exp in n.expressions)
+                n.expressions = @visit n.expressions
                 n
                 
         visitNewExpression: (n) ->
-                n.callee = @visit n.callee
-                n.arguments = filter (@visit arg for arg in n.arguments)
+                n.callee    = @visit n.callee
+                n.arguments = @visit n.arguments
                 n
 
         visitObjectExpression: (n) ->
-                n.properties = filter (@visit property for property in n.properties)
+                n.properties = @visit n.properties
                 n
 
         visitArrayExpression: (n) ->
-                n.elements = filter (@visit element for element in n.elements)
+                n.elements = @visit n.elements
                 n
 
         visitProperty: (n) ->
-                n.key = @visit n.key
+                n.key   = @visit n.key
                 n.value = @visit n.value
                 n
                                 
         visitCallExpression: (n) ->
-                n.callee = @visit n.callee
-                n.arguments = filter (@visit arg for arg in n.arguments)
+                n.callee    = @visit n.callee
+                n.arguments = @visit n.arguments
                 n
-                
-        visit: (n) ->
-                if not n?
-                        debug.log "child is null!>"
-                        return null
-
-                debug.indent()
-                debug.log "#{n.type}>"
-
-                new_n = if @dontcopy then n else @shallowCopy n
-                rv = null
-                switch new_n.type
-                        when syntax.Program              then rv = @visitProgram new_n
-                        when syntax.FunctionDeclaration  then rv = @visitFunctionDeclaration new_n
-                        when syntax.FunctionExpression   then rv = @visitFunctionExpression new_n
-                        when syntax.LabeledStatement     then rv = @visitLabeledStatement new_n
-                        when syntax.BlockStatement       then rv = @visitBlock new_n
-                        when syntax.ExpressionStatement  then rv = @visitExpressionStatement new_n
-                        when syntax.SwitchStatement      then rv = @visitSwitch new_n
-                        when syntax.SwitchCase           then rv = @visitCase new_n
-                        when syntax.ForStatement         then rv = @visitFor new_n
-                        when syntax.WhileStatement       then rv = @visitWhile new_n
-                        when syntax.IfStatement          then rv = @visitIf new_n
-                        when syntax.ForInStatement       then rv = @visitForIn new_n
-                        when syntax.DoWhileStatement     then rv = @visitDo new_n
-                        when syntax.BreakStatement       then rv = @visitBreak new_n
-                        when syntax.ContinueStatement    then rv = @visitContinue new_n
-                        when syntax.TryStatement         then rv = @visitTry new_n
-                        when syntax.CatchClause          then rv = @visitCatchClause new_n
-                        when syntax.ThrowStatement       then rv = @visitThrow new_n
-                        when syntax.ReturnStatement      then rv = @visitReturn new_n
-                        when syntax.WithStatement        then rv = @visitWith new_n
-                        when syntax.VariableDeclaration  then rv = @visitVariableDeclaration new_n
-                        when syntax.VariableDeclarator   then rv = @visitVariableDeclarator new_n
-                        when syntax.LabeledStatement     then rv = @visitLabeledStatement new_n
-                        when syntax.AssignmentExpression then rv = @visitAssignmentExpression new_n
-                        when syntax.ConditionalExpression then rv = @visitConditionalExpression new_n
-                        when syntax.LogicalExpression    then rv = @visitLogicalExpression new_n
-                        when syntax.NewExpression        then rv = @visitNewExpression new_n
-                        when syntax.ThisExpression       then rv = @visitThisExpression new_n
-                        when syntax.BinaryExpression     then rv = @visitBinaryExpression new_n
-                        when syntax.UnaryExpression      then rv = @visitUnaryExpression new_n
-                        when syntax.UpdateExpression     then rv = @visitUpdateExpression new_n
-                        when syntax.MemberExpression     then rv = @visitMemberExpression new_n
-                        when syntax.RelationalExpression then rv = @visitRelationalExpression new_n
-                        when syntax.SequenceExpression   then rv = @visitSequenceExpression new_n
-                        when syntax.ObjectExpression     then rv = @visitObjectExpression new_n
-                        when syntax.ArrayExpression      then rv = @visitArrayExpression new_n
-                        when syntax.Identifier           then rv = @visitIdentifier new_n
-                        when syntax.Literal              then rv = @visitLiteral new_n
-                        when syntax.CallExpression       then rv = @visitCallExpression new_n
-                        when syntax.Property             then rv = @visitProperty new_n
-                        when syntax.EmptyStatement       then rv = @visitEmptyStatement new_n
-                        else
-                            throw "PANIC: unknown parse node type #{n.type}"
-                        
-                debug.log "<#{n.type}"
-                debug.unindent()
-                rv
-
