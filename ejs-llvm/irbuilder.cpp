@@ -1,5 +1,5 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
- * vim: set ts=4 sw=4 et tw=99 ft=cpp:
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset:
+ * 4 -*- vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
 #include "ejs-llvm.h"
@@ -80,7 +80,7 @@ namespace ejsllvm {
     {
         REQ_LLVM_VAL_ARG(0,val);
         REQ_LLVM_TYPE_ARG(1,ty);
-        REQ_UTF8_ARG(2,name);
+        FALLBACK_EMPTY_UTF8_ARG(2,name);
 
         ejsval rv = Value_new(_llvm_builder.CreatePointerCast(val, ty, name));
         free (name);
@@ -92,7 +92,7 @@ namespace ejsllvm {
     {
         REQ_LLVM_VAL_ARG(0,val);
         REQ_LLVM_TYPE_ARG(1,ty);
-        REQ_UTF8_ARG(2,name);
+        FALLBACK_EMPTY_UTF8_ARG(2,name);
 
         ejsval rv = Value_new (_llvm_builder.CreateFPCast(val, ty, name));
         free (name);
@@ -104,7 +104,7 @@ namespace ejsllvm {
     {
         REQ_LLVM_VAL_ARG(0, callee);
         REQ_ARRAY_ARG(1, argv);
-        REQ_UTF8_ARG(2, name);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
 
         std::vector<llvm::Value*> ArgsV;
         for (unsigned i = 0, e = EJSARRAY_LEN(argv); i != e; ++i) {
@@ -124,7 +124,7 @@ namespace ejsllvm {
         REQ_ARRAY_ARG(1, argv);
         REQ_LLVM_BB_ARG(2, normal_dest);
         REQ_LLVM_BB_ARG(3, unwind_dest);
-        REQ_UTF8_ARG(4, name);
+        FALLBACK_EMPTY_UTF8_ARG(4, name);
 
         std::vector<llvm::Value*> ArgsV;
         for (unsigned i = 0, e = EJSARRAY_LEN(argv); i != e; ++i) {
@@ -142,7 +142,7 @@ namespace ejsllvm {
     {
         REQ_LLVM_VAL_ARG(0, left);
         REQ_LLVM_VAL_ARG(1, right);
-        REQ_UTF8_ARG(2, name);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
 
         ejsval rv = Value_new (_llvm_builder.CreateFAdd(left, right, name));
         free (name);
@@ -153,7 +153,7 @@ namespace ejsllvm {
     IRBuilder_createAlloca(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         REQ_LLVM_TYPE_ARG(0, ty);
-        REQ_UTF8_ARG(1, name);
+        FALLBACK_EMPTY_UTF8_ARG(1, name);
 
         ejsval rv = Value_new (_llvm_builder.CreateAlloca(ty, 0, name));
         free (name);
@@ -164,7 +164,7 @@ namespace ejsllvm {
     IRBuilder_createLoad(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         REQ_LLVM_VAL_ARG(0, val);
-        REQ_UTF8_ARG(1, name);
+        FALLBACK_EMPTY_UTF8_ARG(1, name);
 
         ejsval rv = Value_new (_llvm_builder.CreateLoad(val, name));
         free (name);
@@ -185,7 +185,7 @@ namespace ejsllvm {
     {
         REQ_LLVM_VAL_ARG(0, val);
         REQ_LLVM_VAL_ARG(1, idx);
-        REQ_UTF8_ARG(2, name);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
 
         ejsval rv = Value_new (_llvm_builder.CreateExtractElement(val, idx, name));
         free (name);
@@ -198,7 +198,7 @@ namespace ejsllvm {
     {
         REQ_LLVM_VAL_ARG(0, val);
         REQ_INT_ARG(1, idx);
-        REQ_UTF8_ARG(2, name);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
 
         ejsval rv = Value_new (_llvm_builder.CreateExtractValue(val, idx, name));
         free (name);
@@ -211,7 +211,7 @@ namespace ejsllvm {
     {
         REQ_LLVM_VAL_ARG(0, val);
         REQ_ARRAY_ARG(1, idxv);
-        REQ_UTF8_ARG(2, name);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
 
         std::vector<llvm::Value*> IdxV;
         for (unsigned i = 0, e = EJSARRAY_LEN(idxv); i != e; ++i) {
@@ -229,7 +229,7 @@ namespace ejsllvm {
     {
         REQ_LLVM_VAL_ARG(0, val);
         REQ_ARRAY_ARG(1, idxv);
-        REQ_UTF8_ARG(2, name);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
 
         std::vector<llvm::Value*> IdxV;
         for (unsigned i = 0, e = EJSARRAY_LEN(idxv); i != e; ++i) {
@@ -247,7 +247,7 @@ namespace ejsllvm {
     {
         REQ_LLVM_VAL_ARG(0, val);
         REQ_INT_ARG(1, idx);
-        REQ_UTF8_ARG(2, name);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
 
         ejsval rv = Value_new (_llvm_builder.CreateStructGEP(val, idx, name));
         free (name);
@@ -259,7 +259,7 @@ namespace ejsllvm {
     {
         REQ_LLVM_VAL_ARG(0, left);
         REQ_LLVM_VAL_ARG(1, right);
-        REQ_UTF8_ARG(2, name);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
 
         ejsval rv = Value_new (_llvm_builder.CreateICmpEQ(left, right, name));
         free (name);
@@ -271,7 +271,7 @@ namespace ejsllvm {
     {
         REQ_LLVM_VAL_ARG(0, left);
         REQ_LLVM_VAL_ARG(1, right);
-        REQ_UTF8_ARG(2, name);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
 
         ejsval rv = Value_new (_llvm_builder.CreateICmpSGT(left, right, name));
         free (name);
@@ -283,7 +283,7 @@ namespace ejsllvm {
     {
         REQ_LLVM_VAL_ARG(0, left);
         REQ_LLVM_VAL_ARG(1, right);
-        REQ_UTF8_ARG(2, name);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
 
         ejsval rv = Value_new (_llvm_builder.CreateICmpUGT(left, right, name));
         free (name);
@@ -315,7 +315,7 @@ namespace ejsllvm {
 #if notyet
         REQ_LLVM_TYPE_ARG(0, ty);
         REQ_INT_ARG(1, incoming_values);
-        REQ_UTF8_ARG(2, name);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
 
         ejsval rv = Value_new (_llvm_builder.CreatePHI(ty, incoming_values, name));
         free (name);
@@ -327,7 +327,7 @@ namespace ejsllvm {
     IRBuilder_createGlobalStringPtr(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         REQ_UTF8_ARG(0, val);
-        REQ_UTF8_ARG(1, name);
+        FALLBACK_EMPTY_UTF8_ARG(1, name);
 
         ejsval rv = Value_new (_llvm_builder.CreateGlobalStringPtr(val, name));
         free (val);
@@ -346,7 +346,7 @@ namespace ejsllvm {
     {
         REQ_LLVM_VAL_ARG(0, lhs);
         REQ_LLVM_VAL_ARG(1, rhs);
-        REQ_UTF8_ARG(2, name);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
         return Value_new (_llvm_builder.CreateAnd(lhs, rhs, name));
     }
 
@@ -355,7 +355,7 @@ namespace ejsllvm {
     {
         REQ_LLVM_VAL_ARG(0, V);
         REQ_LLVM_TYPE_ARG(1, dest_ty);
-        REQ_UTF8_ARG(2, name);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
         return Value_new (_llvm_builder.CreateZExt(V, dest_ty, name));
     }
 
@@ -364,7 +364,7 @@ namespace ejsllvm {
     {
         REQ_LLVM_VAL_ARG(0, V);
         REQ_LLVM_TYPE_ARG(1, dest_ty);
-        REQ_UTF8_ARG(2, name);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
         return Value_new (_llvm_builder.CreateIntToPtr(V, dest_ty, name));
     }
 
@@ -373,7 +373,7 @@ namespace ejsllvm {
     {
         REQ_LLVM_VAL_ARG(0, V);
         REQ_LLVM_TYPE_ARG(1, dest_ty);
-        REQ_UTF8_ARG(2, name);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
         return Value_new (_llvm_builder.CreateBitCast(V, dest_ty, name));
     }
 
@@ -393,7 +393,7 @@ namespace ejsllvm {
         REQ_LLVM_VAL_ARG(0, C);
         REQ_LLVM_VAL_ARG(1, True);
         REQ_LLVM_VAL_ARG(2, False);
-        REQ_UTF8_ARG(3, name);
+        FALLBACK_EMPTY_UTF8_ARG(3, name);
 
         return Value_new(_llvm_builder.CreateSelect(C, True, False, name));
     }
@@ -404,7 +404,7 @@ namespace ejsllvm {
         REQ_LLVM_TYPE_ARG(0, ty);
         REQ_LLVM_VAL_ARG(1, persFn);
         REQ_INT_ARG(2, num_clauses);
-        REQ_UTF8_ARG(3, name);
+        FALLBACK_EMPTY_UTF8_ARG(3, name);
 
         ejsval rv = LandingPad_new (_llvm_builder.CreateLandingPad(ty, persFn, num_clauses, name));
         free (name);

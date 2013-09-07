@@ -51,6 +51,19 @@
     abort();								\
   char* VAR = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[I]));
 
+#define FALLBACK_UTF8_ARG(I, VAR, FALLBACK)				\
+  char* VAR;								\
+  if (argc <= (I)) { 							\
+    VAR = (char*)"";							\
+  }									\
+  else {								\
+    /*if (!args[I]->IsString())	*/					\
+    /*  abort();		*/					\
+    VAR = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[I]));			\
+  }									\
+
+#define FALLBACK_EMPTY_UTF8_ARG(I, VAR) FALLBACK_UTF8_ARG(I, VAR, "")
+
 #define REQ_LLVM_VAL_ARG(I, VAR)					\
   if (argc <= (I) || !EJSVAL_IS_OBJECT(args[I]) /*|| !jsllvm::Value::HasInstance(args[I]) */) { \
     printf ("in function %s\n", __PRETTY_FUNCTION__);			\
