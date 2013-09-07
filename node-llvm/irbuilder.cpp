@@ -122,7 +122,7 @@ namespace jsllvm {
     HandleScope scope;
     REQ_LLVM_VAL_ARG(0,val);
     REQ_LLVM_TYPE_ARG(1,ty);
-    REQ_UTF8_ARG(2,name);
+    FALLBACK_EMPTY_UTF8_ARG(2,name);
 
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(builder.CreatePointerCast(val, ty, *name)));
     return scope.Close(result);
@@ -133,7 +133,7 @@ namespace jsllvm {
     HandleScope scope;
     REQ_LLVM_VAL_ARG(0,val);
     REQ_LLVM_TYPE_ARG(1,ty);
-    REQ_UTF8_ARG(2,name);
+    FALLBACK_EMPTY_UTF8_ARG(2,name);
 
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(builder.CreateFPCast(val, ty, *name)));
     return scope.Close(result);
@@ -152,7 +152,7 @@ namespace jsllvm {
 
     REQ_LLVM_VAL_ARG(0, lhs);
     REQ_LLVM_VAL_ARG(1, rhs);
-    REQ_UTF8_ARG(2, name);
+    FALLBACK_EMPTY_UTF8_ARG(2, name);
 
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(builder.CreateAnd(lhs, rhs, *name)));
     return scope.Close(result);
@@ -164,7 +164,7 @@ namespace jsllvm {
 
     REQ_LLVM_VAL_ARG(0, V);
     REQ_LLVM_TYPE_ARG(1, dest_ty);
-    REQ_UTF8_ARG(2, name);
+    FALLBACK_EMPTY_UTF8_ARG(2, name);
 
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(builder.CreateZExt(V, dest_ty, *name)));
     return scope.Close(result);
@@ -176,7 +176,7 @@ namespace jsllvm {
 
     REQ_LLVM_VAL_ARG(0, V);
     REQ_LLVM_TYPE_ARG(1, dest_ty);
-    REQ_UTF8_ARG(2, name);
+    FALLBACK_EMPTY_UTF8_ARG(2, name);
 
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(builder.CreateIntToPtr(V, dest_ty, *name)));
     return scope.Close(result);
@@ -188,7 +188,7 @@ namespace jsllvm {
 
     REQ_LLVM_VAL_ARG(0, V);
     REQ_LLVM_TYPE_ARG(1, dest_ty);
-    REQ_UTF8_ARG(2, name);
+    FALLBACK_EMPTY_UTF8_ARG(2, name);
 
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(builder.CreateBitCast(V, dest_ty, *name)));
     return scope.Close(result);
@@ -200,7 +200,7 @@ namespace jsllvm {
 
     REQ_LLVM_VAL_ARG(0, callee);
     REQ_ARRAY_ARG(1, argv);
-    REQ_UTF8_ARG(2, name);
+    FALLBACK_EMPTY_UTF8_ARG(2, name);
 
     std::vector<llvm::Value*> ArgsV;
     for (unsigned i = 0, e = argv->Length(); i != e; ++i) {
@@ -221,7 +221,7 @@ namespace jsllvm {
     REQ_ARRAY_ARG(1, argv);
     REQ_LLVM_BB_ARG(2, normal_dest);
     REQ_LLVM_BB_ARG(3, unwind_dest);
-    REQ_UTF8_ARG(4, name);
+    FALLBACK_EMPTY_UTF8_ARG(4, name);
 
     std::vector<llvm::Value*> ArgsV;
     for (unsigned i = 0, e = argv->Length(); i != e; ++i) {
@@ -240,7 +240,7 @@ namespace jsllvm {
 
     REQ_LLVM_VAL_ARG(0, left);
     REQ_LLVM_VAL_ARG(1, right);
-    REQ_UTF8_ARG(2, name);
+    FALLBACK_EMPTY_UTF8_ARG(2, name);
     
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateFAdd(left, right, *name)));
     return scope.Close(result);
@@ -251,7 +251,7 @@ namespace jsllvm {
     HandleScope scope;
 
     REQ_LLVM_TYPE_ARG(0, ty);
-    REQ_UTF8_ARG(1, name);
+    FALLBACK_EMPTY_UTF8_ARG(1, name);
     
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateAlloca(ty, 0, *name)));
     return scope.Close(result);
@@ -262,7 +262,7 @@ namespace jsllvm {
     HandleScope scope;
 
     REQ_LLVM_VAL_ARG(0, val);
-    REQ_UTF8_ARG(1, name);
+    FALLBACK_EMPTY_UTF8_ARG(1, name);
     
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateLoad(val, *name)));
     return scope.Close(result);
@@ -285,7 +285,7 @@ namespace jsllvm {
 
     REQ_LLVM_VAL_ARG(0, val);
     REQ_LLVM_VAL_ARG(1, idx);
-    REQ_UTF8_ARG(2, name);
+    FALLBACK_EMPTY_UTF8_ARG(2, name);
 
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateExtractElement(val,idx, *name)));
     return scope.Close(result);
@@ -297,7 +297,7 @@ namespace jsllvm {
 
     REQ_LLVM_VAL_ARG(0, val);
     REQ_INT_ARG(1, idx);
-    REQ_UTF8_ARG(2, name);
+    FALLBACK_EMPTY_UTF8_ARG(2, name);
 
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateExtractValue(val,idx, *name)));
     return scope.Close(result);
@@ -309,7 +309,7 @@ namespace jsllvm {
 
     REQ_LLVM_VAL_ARG(0, val);
     REQ_ARRAY_ARG(1, idxv);
-    REQ_UTF8_ARG(2, name);
+    FALLBACK_EMPTY_UTF8_ARG(2, name);
 
     std::vector<llvm::Value*> IdxV;
     for (unsigned i = 0, e = idxv->Length(); i != e; ++i) {
@@ -328,7 +328,7 @@ namespace jsllvm {
 
     REQ_LLVM_VAL_ARG(0, val);
     REQ_ARRAY_ARG(1, idxv);
-    REQ_UTF8_ARG(2, name);
+    FALLBACK_EMPTY_UTF8_ARG(2, name);
 
     std::vector<llvm::Value*> IdxV;
     for (unsigned i = 0, e = idxv->Length(); i != e; ++i) {
@@ -347,7 +347,7 @@ namespace jsllvm {
 
     REQ_LLVM_VAL_ARG(0, val);
     REQ_INT_ARG(1, idx);
-    REQ_UTF8_ARG(2, name);
+    FALLBACK_EMPTY_UTF8_ARG(2, name);
 
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateStructGEP(val, idx, *name)));
     return scope.Close(result);
@@ -359,7 +359,7 @@ namespace jsllvm {
 
     REQ_LLVM_VAL_ARG(0, left);
     REQ_LLVM_VAL_ARG(1, right);
-    REQ_UTF8_ARG(2, name);
+    FALLBACK_EMPTY_UTF8_ARG(2, name);
 
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateICmpEQ(left, right, *name)));
     return scope.Close(result);
@@ -371,7 +371,7 @@ namespace jsllvm {
 
     REQ_LLVM_VAL_ARG(0, left);
     REQ_LLVM_VAL_ARG(1, right);
-    REQ_UTF8_ARG(2, name);
+    FALLBACK_EMPTY_UTF8_ARG(2, name);
 
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateICmpSGT(left, right, *name)));
     return scope.Close(result);
@@ -383,7 +383,7 @@ namespace jsllvm {
 
     REQ_LLVM_VAL_ARG(0, left);
     REQ_LLVM_VAL_ARG(1, right);
-    REQ_UTF8_ARG(2, name);
+    FALLBACK_EMPTY_UTF8_ARG(2, name);
 
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateICmpUGT(left, right, *name)));
     return scope.Close(result);
@@ -417,7 +417,7 @@ namespace jsllvm {
 
     REQ_LLVM_TYPE_ARG(0, ty);
     REQ_INT_ARG(1, incoming_values);
-    REQ_UTF8_ARG(2, name);
+    FALLBACK_EMPTY_UTF8_ARG(2, name);
 
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreatePHI(ty, incoming_values, *name)));
     return scope.Close(result);
@@ -427,8 +427,8 @@ namespace jsllvm {
   {
     HandleScope scope;
 
-    REQ_UTF8_ARG(0, val);
-    REQ_UTF8_ARG(1, name);
+    FALLBACK_EMPTY_UTF8_ARG(0, val);
+    FALLBACK_EMPTY_UTF8_ARG(1, name);
 
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateGlobalStringPtr(*val, *name)));
     return scope.Close(result);
@@ -453,7 +453,7 @@ namespace jsllvm {
     REQ_LLVM_VAL_ARG(0, C);
     REQ_LLVM_VAL_ARG(1, True);
     REQ_LLVM_VAL_ARG(2, False);
-    REQ_UTF8_ARG(3, name);
+    FALLBACK_EMPTY_UTF8_ARG(3, name);
 
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateSelect(C, True, False, *name)));
     return scope.Close(result);
@@ -466,7 +466,7 @@ namespace jsllvm {
     REQ_LLVM_TYPE_ARG(0, ty);
     REQ_LLVM_VAL_ARG(1, persFn);
     REQ_INT_ARG(2, num_clauses);
-    REQ_UTF8_ARG(3, name);
+    FALLBACK_EMPTY_UTF8_ARG(3, name);
 
     Handle<v8::Value> result = LandingPad::New(IRBuilder::builder.CreateLandingPad(ty, persFn, num_clauses, *name));
     return scope.Close(result);

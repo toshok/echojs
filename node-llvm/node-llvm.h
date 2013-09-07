@@ -64,6 +64,21 @@
   Local<String> VAR##_str = Local<String>::Cast(args[I]); \
   String::Utf8Value VAR(VAR##_str);
 
+#define FALLBACK_UTF8_ARG(I, VAR, FALLBACK)				\
+  Local<String> VAR##_str;						\
+  if (args.Length() <= (I)) {						\
+    VAR##_str = String::New("");					\
+  }									\
+  else {								\
+    if (!args[I]->IsString())						\
+      return ThrowException(Exception::TypeError(			\
+						 String::New("Argument " #I " must be a string"))); \
+    VAR##_str = Local<String>::Cast(args[I]);				\
+  }									\
+  String::Utf8Value VAR(VAR##_str);
+
+#define FALLBACK_EMPTY_UTF8_ARG(I, VAR) FALLBACK_UTF8_ARG(I, VAR, "")
+
 #define REQ_LLVM_VAL_ARG(I, VAR)					\
   if (args.Length() <= (I) || !args[I]->IsObject() /* XXX || !jsllvm::Value::HasInstance(args[I]) */) {	\
     printf ("in function %s\n", __PRETTY_FUNCTION__);			\
