@@ -19,9 +19,9 @@ escodegen = require 'escodegen'
 syntax = esprima.Syntax
 debug = require 'debug'
 
-{ NodeVisitor } = require 'nodevisitor'
+{ TreeTransformer } = require 'TreeTransformer'
 
-class VarToLet extends NodeVisitor
+class VarToLet extends TreeTransformer
         constructor: ->
                 @varsStack = []
                 super
@@ -55,7 +55,7 @@ class VarToLet extends NodeVisitor
                 return if assignments.length > 0 then assignments else null
 
 
-class RemoveIIFE extends NodeVisitor
+class RemoveIIFE extends TreeTransformer
         visitCallExpression: (n) ->
                 if n.callee.type is syntax.FunctionExpression and n.callee.params.length is 0  # let's limit this to 0-arg IIFE's for now
                         body = @visit n.callee.body
