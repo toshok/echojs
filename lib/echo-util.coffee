@@ -16,13 +16,15 @@ exports.reject = (o, pred) ->
         rv[prop] = o[prop] for prop in (Object.getOwnPropertyNames o) when not pred prop
         rv
         
-gen = 0
+exports.startGenerator = startGenerator = ->
+        _gen = 0
+        () ->
+                id = _gen
+                _gen += 1
+                id
+                
+exports.genId = genId = startGenerator()
 
-exports.genId = genId = ->
-        id = gen
-        gen += 1
-        id
-        
 exports.genFreshFileName = (x) ->
         "#{x}.#{genId()}"
 
