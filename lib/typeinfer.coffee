@@ -5,7 +5,7 @@ debug = require 'debug'
 
 { Stack } = require 'stack'
 { Set } = require 'set'
-{ NodeVisitor } = require 'nodevisitor'
+{ TreeVisitor } = require 'nodevisitor'
 
 echo_util = require 'echo-util'
 
@@ -31,6 +31,8 @@ class FunctionType extends Type
                         return false;
                 return false if not @parameter_types[i].isCompatible param_tys.length[i] for i in [0..param_tys.length]
                 true
+
+        toString: -> "(#{t for t in (@parameter_types.join(', ').split(' '))}) -> #{@return_type}"
 
 
 class UndefinedType extends Type
@@ -73,15 +75,14 @@ class MultiType extends Type
 
         toString: -> "Multi[#{t for t in @types}]"
 
-class InferVisitor extends NodeVisitor
+class InferVisitor extends TreeVisitor
         constructor: (@initial_env) ->
                 @stable = false
-                super true
+                @function_stack = new Stack
 
         isStable: -> @stable
 
         visit: (exp) ->
-                console.warn "visiting #{exp.type}"
                 super
         
         infer: (exp) ->
@@ -91,11 +92,10 @@ class InferVisitor extends NodeVisitor
                 console.warn "types are stable, returning from inference pass"
                 exp
 
-        visitProgram: (program) ->
-                super
+        visitProgram: (program) -> super
 
         visitIdentifier: (exp) ->
-                if not InferVisitor.getType exp
+                if not @getType exp
                         # check if the identifier is defined in the env
                         if exp.name in @env
                                 @assignType exp, @env[exp.name]
@@ -103,44 +103,62 @@ class InferVisitor extends NodeVisitor
 
         visitCallExpression: (exp) ->
                 super
-                # unify the callee type with argtypes
-                # this is the complicated bit, since information can travel in both directions:
-                #   1. if the function body (and therefore the function type) has an undefined/any type
+                # If we have a type for the callee in our environment,
+                # try to look up a matching signature for
+                # parameters/arguments.
+                # 
+                # If we find one, then use the return type of that
+                # signature as exp's inferred type.
+                #
+                # If we don't find one, we need to re-traverse the
+                # function using the inferred argument types to see
+                # what the return type could be.
+                exp
+
+        visitFunctionBody: (exp) ->
+                @function_stack.push exp
+                exp.body = @visit exp.body
+                @function_stack.pop()
                 exp
 
         visitFunctionExpression: (exp) ->
-                exp
+                @visitFunctionBody exp
 
-        visitReturn: (n) ->
+        visitFunctionDeclaration: (exp) ->
+                @visitFunctionBody exp
+
+        visitReturn: (exp) ->
+                super
                 debug.log "visitReturn"
-                #if @iifeStack.top.iife_rv?
+                @assignType @function_stack.top, new FunctionType (@getType exp.argument), []
+                exp
 
         visitBinaryExpression: (exp) ->
                 super
                 switch exp.operator
                         when "+"
-                                if StringType.is(@getType exp.left) or StringType.is(@getType exp.right)
+                                if StringType.is @getType exp.left
                                         @assignType exp, new StringType
+                                        @setDesiredType exp.right, new StringType
+                                else if StringType.is @getType exp.right
+                                        @assignType exp, new StringType
+                                        @setDesiredType exp.left, new StringType
                                 else
                                         @assignType exp, new NumberType
+                                        @setDesiredType exp.left, new NumberType
+                                        @setDesiredType exp.right, new NumberType
                         when "-"
-                                # FIXME we need a way to push a the
-                                # NumberType down to left/right so
-                                # the compiler can possibly optimize
-                                # them.
                                 @assignType exp, new NumberType
+                                @setDesiredType exp.left, new NumberType
+                                @setDesiredType exp.right, new NumberType
                         when "*"
-                                # FIXME we need a way to push a the
-                                # NumberType down to left/right so
-                                # the compiler can possibly optimize
-                                # them.
                                 @assignType exp, new NumberType
+                                @setDesiredType exp.left, new NumberType
+                                @setDesiredType exp.right, new NumberType
                         when "/"
-                                # FIXME we need a way to push a the
-                                # NumberType down to left/right so
-                                # the compiler can possibly optimize
-                                # them.
                                 @assignType exp, new NumberType
+                                @setDesiredType exp.left, new NumberType
+                                @setDesiredType exp.right, new NumberType
                 exp
         visitVariableDeclarator: (exp) ->
                 super
@@ -150,15 +168,16 @@ class InferVisitor extends NodeVisitor
 
         visitLiteral: (exp) ->
                 if typeof exp.value is 'number'
-                        if not NumberType.is InferVisitor.getType exp
-                                @assignType exp, new NumberType
+                        @assignType exp, new NumberType
+                else if typeof exp.value is 'string'
+                        @assignType exp, new StringType
                 exp
 
         @getType: (exp) -> return exp._ejs_inferredtype
         getType: (exp) -> InferVisitor.getType exp
 
         assignType: (ast, ty) ->
-                console.warn "assigning type of #{ty}"
+                #console.warn "assigning type of #{ty}"
                 if not ast._ejs_inferredtype
                         # The ast node didn't have a type specified before
                         Object.defineProperty ast, "_ejs_inferredtype",
@@ -166,7 +185,7 @@ class InferVisitor extends NodeVisitor
                                 enumerable: true
                                 configurable: true
                                 writable: true
-                        console.warn "assigned type #{ast._ejs_inferredtype}"
+                        #console.warn "assigned type #{ast._ejs_inferredtype}"
                 else if ast._ejs_inferredtype instanceof MultiType
                         # The ast node is already polymorphic, add the new type to the bunch
                         ast._ejs_inferredtype.addType ty
@@ -177,6 +196,11 @@ class InferVisitor extends NodeVisitor
                         ast._ejs_inferredtype.addType current_type
                         ast._ejs_inferredtype.addType ty
 
+                @changed = true
+
+        setDesiredType: (ast, ty) ->
+                #console.warn "setting desired type of #{ty}"
+                ast._ejs_desiredtype = ty
                 @changed = true
 
 class TypeInfer
@@ -198,13 +222,10 @@ exports.run = run = (tree) ->
 
 # tests
 
-class DumpInferredTypesVisitor extends NodeVisitor
-        constructor: ->
-                super true
-                
+class DumpInferredTypesVisitor extends TreeVisitor
         visit: (exp) ->
                 return null if not exp?
-                console.warn "dumping #{exp.type}"
+                #console.warn "dumping #{exp.type}"
                 ty = InferVisitor.getType exp
                 if ty
                         console.warn "inferred type of #{escodegen.generate exp} is '#{ty}'"
@@ -213,8 +234,8 @@ class DumpInferredTypesVisitor extends NodeVisitor
 dump = (tree)->
         dumpvisitor = new DumpInferredTypesVisitor
         dumpvisitor.visit tree
-###
+
 dump run esprima.parse "5;"
 dump run esprima.parse "4 + 5;"
-dump run esprima.parse "function () { return 5; }"
-###
+dump run esprima.parse "function foo () { return 5; }"
+dump run esprima.parse "function foo () { return 5; return 'hi'; }"
