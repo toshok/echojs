@@ -11,12 +11,17 @@
 #include "ejs-ops.h"
 #include "ejs-closureenv.h"
 
-
 ejsval
 _ejs_closureenv_new (uint32_t length)
 {
     size_t value_size = sizeof(EJSClosureEnv) + sizeof(ejsval) * (length - 1);
     EJSClosureEnv* env = _ejs_gc_new_closureenv(value_size);
+    return _ejs_closure_init (env, length);
+}
+
+ejsval
+_ejs_closure_init (EJSClosureEnv* env, uint32_t length)
+{
     env->length = length;
     for (int i = 0; i < length; i ++) {
         env->slots[i] = _ejs_undefined;
