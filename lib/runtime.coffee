@@ -100,6 +100,9 @@ runtime_interface =
         "binopinstanceof": -> returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_instanceof",  types.EjsValue, [types.EjsValue, types.EjsValue]
         "binopin":         -> returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_in",          types.EjsValue, [types.EjsValue, types.EjsValue]
 
+        record_binop:      -> @module.getOrInsertExternalFunction "_ejs_record_binop",      types.void, [types.int32, types.string, types.EjsValue, types.EjsValue]
+        record_assignment: -> @module.getOrInsertExternalFunction "_ejs_record_assignment", types.void, [types.int32, types.EjsValue]
+
 exports.createInterface = (module) ->
         runtime =
                 module: module
