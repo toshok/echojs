@@ -15,6 +15,7 @@ map = echo_util.map
 foldl = echo_util.foldl
 reject = echo_util.reject
 create_intrinsic = echo_util.create_intrinsic
+is_intrinsic = echo_util.is_intrinsic
 create_identifier = echo_util.create_identifier
 create_string_literal = echo_util.create_string_literal
 create_number_literal = echo_util.create_number_literal
@@ -552,12 +553,7 @@ class SubstituteVariables extends TreeTransformer
                                 parent_env_slot = n.ejs_env.slot_mapping[parent_env_name]
                                 prepends.push {
                                         type: syntax.ExpressionStatement
-                                        expression:
-                                                type: syntax.AssignmentExpression,
-                                                operator: "="
-                                                left: create_intrinsic "slot", [ (create_identifier env_name), (create_number_literal parent_env_slot), (create_string_literal parent_env_name) ]
-                                                right: create_identifier parent_env_name
-                                        
+                                        expression: create_intrinsic "setSlot", [ (create_identifier env_name), (create_number_literal parent_env_slot), (create_string_literal parent_env_name), (create_identifier parent_env_name) ]
                                 }
                                 
 
@@ -566,11 +562,7 @@ class SubstituteVariables extends TreeTransformer
                                 if n.ejs_env.closed.has param.name
                                         prepends.push {
                                                 type: syntax.ExpressionStatement
-                                                expression:
-                                                        type: syntax.AssignmentExpression,
-                                                        operator: "="
-                                                        left: create_intrinsic "slot", [ (create_identifier env_name), (create_number_literal n.ejs_env.slot_mapping[param.name]), (create_string_literal param.name) ]
-                                                        right: create_identifier param.name
+                                                expression: create_intrinsic "setSlot", [ (create_identifier env_name), (create_number_literal n.ejs_env.slot_mapping[param.name]), (create_string_literal param.name), (create_identifier param.name) ]
                                         }
 
                         new_mapping = deep_copy_object @currentMapping()
@@ -750,6 +742,129 @@ class NameAnonymousFunctions extends TreeTransformer
                         rhs.displayName = escodegen.generate lhs
                 n
 
+class MarkLocalAndGlobalVariables extends TreeTransformer
+        constructor: ->
+                # initialize the scope stack with the global (empty) scope
+                @scope_stack = new Stack Object.create null
+
+        findIdentifierInScope: (ident) ->
+                for scope in @scope_stack.stack
+                        if hasOwnProperty.call scope, ident.name
+                                return true
+                return false
+
+        intrinsicForIdentifier: (id, prefix) ->
+                is_local = @findIdentifierInScope id
+                "#{prefix}#{if is_local then 'Local' else 'Global'}"
+                
+        visitWithScope: (scope, children) ->
+                @scope_stack.push scope
+                if Array.isArray children
+                        rv = (@visit child for child in children)
+                else
+                        rv = @visit children
+                @scope_stack.pop()
+                rv
+
+        visitVariableDeclarator: (n) ->
+                @scope_stack.top[n.id.name] = true
+                n
+
+        visitObjectExpression: (n) ->
+                for property in n.properties
+                        property.value = @visit property.value
+                n
+                
+        visitAssignmentExpression: (n) ->
+                lhs = n.left
+                rhs = @visit n.right
+                if n.operator.length is 1
+                        new_rhs = rhs
+                else
+                        new_rhs = {
+                                type:     syntax.BinaryExpression,
+                                operator: n.operator[0]
+                                left:     lhs
+                                right:    rhs
+                        }
+                
+                if is_intrinsic "slot", lhs
+                        create_intrinsic "setSlot", [lhs.arguments[0], lhs.arguments[1], new_rhs]
+                else if lhs.type is syntax.Identifier
+                        if @findIdentifierInScope lhs
+                                create_intrinsic "setLocal", [lhs, new_rhs]
+                        else
+                                create_intrinsic "setGlobal", [lhs, new_rhs]
+                else
+                        n.left = @visit n.left
+                        n
+                        
+
+        ###
+        visitUpdateExpression: (n) ->
+                argument = n.argument
+                new_rhs = {
+                        type:     syntax.BinaryExpression,
+                        operator: n.operator[0]
+                        left:     @visit argument
+                        right:    { type: syntax.Literal, value: 1, raw: "1" }
+                }
+                
+                if is_intrinsic "slot", argument
+                        create_intrinsic "setSlot", [argument.arguments[0], argument.arguments[1], new_rhs]
+                else # argument.type is syntax.Identifier
+                        create_intrinsic (@intrinsicForIdentifier argument, "set"), [argument, new_rhs]
+        ###
+
+        visitBlock: (n) ->
+                n.body = @visitWithScope (Object.create null), n.body
+                n
+
+        visitCallExpression: (n) ->
+                # at this point there shouldn't be call expressions for anything other than intrinsics,
+                # so we leave callee alone and just iterate over the args.
+                n.arguments = @visit n.arguments
+                n
+
+        visitNewExpression: (n) ->
+                # at this point there shouldn't be new expressions for anything other than intrinsics,
+                # so we leave callee alone and just iterate over the args.
+                n.arguments = @visit n.arguments
+                n
+
+        visitFunction: (n) ->
+                new_scope = Object.create null
+                new_scope[p.name] = true for p in n.params
+                new_scope["arguments"] = true
+                new_body = @visitWithScope new_scope, n.body
+                n.body = new_body
+                n
+
+        visitLabeledStatement: (n) ->
+                n.body  = @visit n.body
+                n
+
+        visitCatchClause: (n) ->
+                new_scope = Object.create null
+                new_scope[n.param.name] = true
+                n.guard = @visit n.guard
+                n.body = @visitWithScope new_scope, n.body
+                n
+
+        visitIdentifier: (n) ->
+                create_intrinsic (@intrinsicForIdentifier n, "get"), [n]
+
+        visitForIn: (n) ->
+                n.right = @visit n.right
+                n.body  = @visit n.body
+                n
+
+class ReplaceUnaryVoid extends TreeTransformer
+        visitUnaryExpression: (n) ->
+                if n.operator is "void" and n.argument.type is syntax.Literal and n.argument.value is 0
+                        return create_intrinsic "builtinUndefined", []
+                n
+                                                
 transform_dump_tree = (n, indent=0) ->
         stringified_indent = ('' for i in [0..(indent*2)]).join('| ')
         console.log "#{stringified_indent}.type = syntax.#{n.type}"
@@ -779,6 +894,8 @@ passes = [
         LocateEnv,
         NameAnonymousFunctions,
         SubstituteVariables,
+        MarkLocalAndGlobalVariables,
+        ReplaceUnaryVoid
         LambdaLift
         ]
 
