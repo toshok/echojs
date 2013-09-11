@@ -28,24 +28,23 @@ options =
         ios_sdk: "5.0"
         ios_min: "5.0"
         basename: false
+        target_pointer_size: 64
 
 add_external_module = (modinfo) ->
         [library,module_name,module_entrypoint,link_flags] = modinfo.split ','
         options.external_modules.push { library, module_name, module_entrypoint, link_flags }
 
-target_pointer_size = 64
-
 set_target = (targetinfo) ->
         switch targetinfo
                 when "osx"
                         options.target = "osx"
-                        target_pointer_size = 64
+                        options.target_pointer_size = 64
                 when "sim"
                         options.target = "sim"
-                        target_pointer_size = 32
+                        options.target_pointer_size = 32
                 when "dev"
                         options.target = "dev"
-                        target_pointer_size = 32
+                        options.target_pointer_size = 32
                 else
                         throw "invalid target specification `#{targetinfo}'."
 
