@@ -388,7 +388,6 @@ exports.TreeTransformer = class TreeTransformer extends TreeVisitor
                 n
                 
         visitRelationalExpression: (n) ->
-                console.log n
                 n.left  = @visit n.left
                 n.right = @visit n.right
                 n
