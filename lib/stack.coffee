@@ -1,7 +1,9 @@
 
 exports.Stack = class Stack
-        constructor: ->
+        constructor: (initial)->
                 @stack = []
+                @stack.unshift initial if initial?
+                        
 
         push: (o) ->
                 @stack.unshift o
