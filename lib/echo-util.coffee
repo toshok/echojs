@@ -59,3 +59,5 @@ exports.create_intrinsic = (name, args) ->
         type: syntax.CallExpression
         callee: create_identifier "%#{name}"
         arguments: args
+exports.is_intrinsic = (name, n) ->
+        n.type is syntax.CallExpression and n.callee.name is "%#{name}"
