@@ -294,8 +294,10 @@ class ComputeFree extends TreeTransformer
                                 exp.ejs_free_vars = (@free exp.body).subtract (@param_names exp.params)
                                 exp.ejs_decls = exp.body.ejs_decls.union (@param_names exp.params)
                         when syntax.FunctionExpression
-                                exp.ejs_free_vars = (@free exp.body).subtract (@param_names exp.params)
-                                exp.ejs_decls = exp.body.ejs_decls.union (@param_names exp.params)
+                                param_names = @param_names exp.params
+                                param_names.add exp.rest.name if exp.rest?
+                                exp.ejs_free_vars = (@free exp.body).subtract param_names
+                                exp.ejs_decls = exp.body.ejs_decls.union param_names
                         when syntax.LabeledStatement      then exp.ejs_free_vars = @free exp.body
                         when syntax.BlockStatement        then exp.ejs_free_vars = @free_blocklike exp, exp.body
                         when syntax.TryStatement          then exp.ejs_free_vars = Set.union.apply null, [(@free exp.block)].concat (map @call_free, exp.handlers)
@@ -832,6 +834,7 @@ class MarkLocalAndGlobalVariables extends TreeTransformer
         visitFunction: (n) ->
                 new_scope = Object.create null
                 new_scope[p.name] = true for p in n.params
+                new_scope[n.rest.name] = true if n.rest?
                 new_scope["arguments"] = true
                 new_body = @visitWithScope new_scope, n.body
                 n.body = new_body

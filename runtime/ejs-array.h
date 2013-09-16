@@ -62,6 +62,10 @@ extern EJSSpecOps _ejs_sparsearray_specops;
 
 ejsval _ejs_array_new (int numElements, EJSBool fill);
 
+// creates a new array and populates it by pushing numElements from
+// the vector elements
+ejsval _ejs_array_new_copy (int numElements, ejsval *elements);
+
 void _ejs_array_foreach_element (EJSArray* arr, EJSValueFunc foreach_func);
 
 void _ejs_array_init(ejsval global);

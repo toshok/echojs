@@ -22,6 +22,7 @@ runtime_interface =
         object_create:         -> @module.getOrInsertExternalFunction "_ejs_object_create",             types.EjsValue, [types.EjsValue]
         arguments_new:         -> does_not_throw @module.getOrInsertExternalFunction "_ejs_arguments_new",             types.EjsValue, [types.int32, types.EjsValue.pointerTo()]
         array_new:             -> @module.getOrInsertExternalFunction "_ejs_array_new",                 types.EjsValue, [types.int32, types.bool]
+        array_new_copy:        -> @module.getOrInsertExternalFunction "_ejs_array_new_copy",            types.EjsValue, [types.int32, types.EjsValue.pointerTo()]
         number_new:            -> does_not_throw does_not_access_memory @module.getOrInsertExternalFunction "_ejs_number_new",                types.EjsValue, [types.double]
         string_new_utf8:       -> only_reads_memory does_not_throw @module.getOrInsertExternalFunction "_ejs_string_new_utf8",           types.EjsValue, [types.string]
         regexp_new_utf8:       -> @module.getOrInsertExternalFunction "_ejs_regexp_new_utf8",           types.EjsValue, [types.string, types.string]

@@ -80,6 +80,14 @@ _ejs_array_new (int numElements, EJSBool fill)
     return OBJECT_TO_EJSVAL(rv);
 }
 
+ejsval
+_ejs_array_new_copy (int numElements, ejsval *elements)
+{
+    ejsval arr = _ejs_array_new (0, EJS_FALSE);
+    _ejs_array_push_dense (arr, numElements, elements);
+    return arr;
+}
+
 static void
 maybe_realloc_dense (EJSArray *arr, int amount_to_add)
 {

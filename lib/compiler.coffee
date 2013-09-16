@@ -763,14 +763,19 @@ class LLVMIRVisitor extends TreeTransformer
                                 ir.createCondBr cmp, then_bb, else_bb
                         
                                 ir.setInsertPoint then_bb
+                                # in the then branch, the argument was
+                                # provided, pull the value out of the
+                                # args array
                                 arg_ptr = ir.createGetElementPointer args_load, [(consts.int32 i-BUILTIN_PARAMS.length)], "arg#{i-BUILTIN_PARAMS.length}_ptr"
-                                debug.log -> "arg_ptr = #{arg_ptr}"
                                 arg = @createLoad arg_ptr, "arg#{i-BUILTIN_PARAMS.length-1}_load"
                                 store = ir.createStore arg, allocas[i+1]
-                                debug.log -> "store #{store}"
                                 ir.createBr merge_bb
 
                                 ir.setInsertPoint else_bb
+                                # in the else branch, the argument
+                                # wasn't provided.  if it has a
+                                # default value, evaluate that here
+                                # and store it in the alloca.
                                 if n.defaults[i-BUILTIN_PARAMS.length]?
                                         arg_ptr = ir.createGetElementPointer args_load, [(consts.int32 i-BUILTIN_PARAMS.length)], "arg#{i-BUILTIN_PARAMS.length}_ptr"
                                         arg = @visit n.defaults[i-BUILTIN_PARAMS.length], "arg#{i-BUILTIN_PARAMS.length-1}_default_value"
@@ -779,6 +784,39 @@ class LLVMIRVisitor extends TreeTransformer
 
                                 ir.setInsertPoint merge_bb
 
+                if n.rest?
+                        has_rest_bb = new llvm.BasicBlock "has_rest_bb", insertFunc
+                        no_rest_bb = new llvm.BasicBlock "no_rest_bb", insertFunc
+                        rest_merge_bb = new llvm.BasicBlock "rest_merge", insertFunc
+                        
+                        rest_alloca = @createAlloca @currentFunction, types.EjsValue, "local_rest_object"
+
+                        load_argc = @createLoad @currentFunction.topScope["%argc"], "argc_load"
+
+                        cmp = ir.createICmpSGt load_argc, (consts.int32 n.params.length-BUILTIN_PARAMS.length), "argcmpresult"
+                        ir.createCondBr cmp, has_rest_bb, no_rest_bb
+
+                        ir.setInsertPoint has_rest_bb
+                        # we have > args than are declared, shove
+                        # the rest into the rest parameter
+                        load_args = @createLoad @currentFunction.topScope["%args"], "args_load"
+                        gep = ir.createInBoundsGetElementPointer load_args, [(consts.int32 n.params.length-BUILTIN_PARAMS.length)], "rest_arg_gep"
+                        load_argc = ir.createNswSub load_argc, (consts.int32 n.params.length-BUILTIN_PARAMS.length)
+                        rest_value = @createCall @ejs_runtime.array_new_copy, [load_argc, gep], "argstmp", !@ejs_runtime.array_new_copy.doesNotThrow
+                        ir.createStore rest_value, rest_alloca
+                        ir.createBr rest_merge_bb
+
+                        ir.setInsertPoint no_rest_bb
+                        # we have <= args than are declared, so the rest parameter is just an empty array
+                        rest_value = @createCall @ejs_runtime.array_new, [consts.int32(0), consts.false()], "arrtmp", !@ejs_runtime.array_new.doesNotThrow
+                        ir.createStore rest_value, rest_alloca
+                        ir.createBr rest_merge_bb
+
+                        ir.setInsertPoint rest_merge_bb
+                        
+                        @currentFunction.topScope[n.rest.name] = rest_alloca
+                        @currentFunction.restArgPresent = true
+                                
                 @iifeStack = new Stack
 
                 @finallyStack = []
@@ -1320,6 +1358,9 @@ class LLVMIRVisitor extends TreeTransformer
                 # only initialize/create it if the function is
                 # actually going to use it.
                 if exp.arguments[0].name is "arguments"
+                        if @currentFunction.restArgPresent
+                                throw new SyntaxError "'arguments' object may not be used in conjunction with a rest parameter"
+
                         arguments_alloca = @createAlloca @currentFunction, types.EjsValue, "local_arguments_object"
                         saved_insert_point = ir.getInsertBlock()
                         ir.setInsertPoint @currentFunction.entry_bb
