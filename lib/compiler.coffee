@@ -771,6 +771,10 @@ class LLVMIRVisitor extends TreeTransformer
                                 ir.createBr merge_bb
 
                                 ir.setInsertPoint else_bb
+                                if n.defaults[i-BUILTIN_PARAMS.length]?
+                                        arg_ptr = ir.createGetElementPointer args_load, [(consts.int32 i-BUILTIN_PARAMS.length)], "arg#{i-BUILTIN_PARAMS.length}_ptr"
+                                        arg = @visit n.defaults[i-BUILTIN_PARAMS.length], "arg#{i-BUILTIN_PARAMS.length-1}_default_value"
+                                        ir.createStore arg, allocas[i+1]
                                 ir.createBr merge_bb
 
                                 ir.setInsertPoint merge_bb
