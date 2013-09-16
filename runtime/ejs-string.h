@@ -27,15 +27,16 @@ void _ejs_string_init(ejsval global);
 
 /* primitive strings can exist in a few different forms
 
-   1: a statically allocated C string that isn't freed when the primitive string is destroyed.
-      we use these for atoms - known strings in both the runtime and compiler.
+   1: a statically allocated C string that isn't freed when the
+      primitive string is destroyed.  We use these for atoms - known
+      strings in both the runtime and compiler and for strings that
+      appear in JS source as literals.
 
-   2: strings that appear in JS source as string literals.  these are gc allocated, and the character
-      data is freed when the strnig is destroyed.
+   2: ropes built up by concatenating strings together.
 
-   3: ropes built up by concatenating strings together.
-
-   4: dependent strings made by taking substrings/slices of other strings when the resulting string is "large"
+   3: dependent strings made by taking substrings/slices of other
+      strings when the resulting string is large and we don't want to
+      waste a lot of space with a copy.
 */
 #define EJSVAL_TO_FLAT_STRING(v)  _ejs_string_flatten(v)->data.flat
 #define EJSVAL_TO_STRING(v)       EJSVAL_TO_STRING_IMPL(v)
@@ -61,8 +62,8 @@ struct _EJSPrimString {
     uint32_t length;
     union {
         // utf8 \0 terminated
-        //    for normal strings, this points to the memory location just beyond this struct - i.e. (char*)primStringPointer + sizeof(_EJSPrimString)
-        //    for atoms, this points to the statically compiled C string constant.
+        //    for flattened strings, this points to the memory location just beyond this struct - i.e. (char*)primStringPointer + sizeof(_EJSPrimString)
+        //    for atoms/string literals, this points to the statically compiled C string constant.
         jschar *flat;
         struct {
             struct _EJSPrimString *left;
