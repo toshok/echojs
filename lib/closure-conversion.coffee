@@ -282,8 +282,8 @@ class ComputeFree extends TreeTransformer
 
         # TODO: move this into the @visit method
         free: (exp) ->
-                if not exp?
-                        return new Set
+                return new Set if not exp?
+                        
                 switch exp.type
                         when syntax.Program
                                 decls = @decl_names @collect_decls exp.body
@@ -293,11 +293,9 @@ class ComputeFree extends TreeTransformer
                         when syntax.FunctionDeclaration
                                 exp.ejs_free_vars = (@free exp.body).subtract (@param_names exp.params)
                                 exp.ejs_decls = exp.body.ejs_decls.union (@param_names exp.params)
-                                exp.ejs_free_vars
                         when syntax.FunctionExpression
                                 exp.ejs_free_vars = (@free exp.body).subtract (@param_names exp.params)
                                 exp.ejs_decls = exp.body.ejs_decls.union (@param_names exp.params)
-                                exp.ejs_free_vars
                         when syntax.LabeledStatement      then exp.ejs_free_vars = @free exp.body
                         when syntax.BlockStatement        then exp.ejs_free_vars = @free_blocklike exp, exp.body
                         when syntax.TryStatement          then exp.ejs_free_vars = Set.union.apply null, [(@free exp.block)].concat (map @call_free, exp.handlers)
@@ -305,7 +303,6 @@ class ComputeFree extends TreeTransformer
                                 param_set = if exp.param?.name? then new Set [exp.param.name] else new Set
                                 exp.ejs_free_vars = (@free exp.body).subtract param_set
                                 exp.ejs_decls = exp.body.ejs_decls.union param_set
-                                exp.ejs_free_vars
                         when syntax.VariableDeclaration   then exp.ejs_free_vars = Set.union.apply null, (map @call_free, exp.declarations)
                         when syntax.VariableDeclarator    then exp.ejs_free_vars = @free exp.init
                         when syntax.ExpressionStatement   then exp.ejs_free_vars = @free exp.expression
