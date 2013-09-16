@@ -38,8 +38,8 @@ static int _ejs_spew_level = (spew);
 
 void _ejs_gc_dump_heap_stats();
 
-// 128MB heap.  deal with it, suckers
-#define MAX_HEAP_SIZE (128 * 1024 * 1024)
+// 256MB heap.  deal with it, suckers
+#define MAX_HEAP_SIZE (256 * 1024 * 1024)
 
 #ifndef PAGE_SIZE
 #define PAGE_SIZE 4096
