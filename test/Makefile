@@ -8,11 +8,6 @@ NODE_FLAGS=--harmony --harmony-typeof
 TESTS:=$(wildcard *[0-9].js)
 
 TESTS:=$(filter-out alloc1.js,$(TESTS))
-#ifeq ($(EJS_STAGE),1)
-TESTS:=$(filter-out esprima-roundtrip1.js,$(TESTS))
-#endif
-#TESTS:=$(filter-out esprima-roundtrip2.js,$(TESTS))
-#TESTS:=$(filter-out esprima1.js,$(TESTS))
 
 ESPRIMA_TESTS=$(filter esprima%,$(TESTS))
 ESPRIMA_TESTS:=$(ESPRIMA_TESTS:%.js=%.js.exe)
