@@ -113,7 +113,7 @@ function test() {
         testcases[tc].passed = writeTestCaseResult(
                             testcases[tc].expect,
                             testcases[tc].actual(),
-                            testcases[tc].description +" = "+ testcases[tc].actual );
+                            testcases[tc].description +" = "+ testcases[tc].actual() );
         testcases[tc].reason += ( testcases[tc].passed ) ? "" : "wrong value ";
     }
     stopTest();
@@ -210,7 +210,7 @@ function stopTest()	{
 function getFailedCases() {
   for (	var	i =	0; i < testcases.length; i++ ) {
 	 if	( !	testcases[i].passed	) {
-		print( testcases[i].description	+" = " +testcases[i].actual	+" expected: "+	testcases[i].expect	);
+		print( testcases[i].description	+" = " +testcases[i].actual()	+" expected: "+	testcases[i].expect	);
 	 }
   }
 }

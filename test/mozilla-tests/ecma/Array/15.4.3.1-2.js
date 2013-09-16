@@ -44,12 +44,12 @@ function getTestCases() {
     var item = 0;
     var ARRAY_PROTO = Array.prototype;
 
-    array[item++] = new TestCase( SECTION,  "var props = ''; for ( p in Array  ) { props += p } props", "", eval("var props = ''; for ( p in Array  ) { props += p } props") );
+    array[item++] = new TestCase( SECTION,  "var props = ''; for ( p in Array  ) { props += p } props", "", function() { var props = ''; for ( p in Array  ) { props += p } return props; } );
 
-    array[item++] = new TestCase( SECTION,  "Array.prototype = null; Array.prototype",   ARRAY_PROTO, eval("Array.prototype = null; Array.prototype") );
+    array[item++] = new TestCase( SECTION,  "Array.prototype = null; Array.prototype",   ARRAY_PROTO, function() { Array.prototype = null; return Array.prototype; } );
 
-    array[item++] = new TestCase( SECTION,  "delete Array.prototype",                   false,       delete Array.prototype );
-    array[item++] = new TestCase( SECTION,  "delete Array.prototype; Array.prototype",  ARRAY_PROTO, eval("delete Array.prototype; Array.prototype") );
+    array[item++] = new TestCase( SECTION,  "delete Array.prototype",                   false,       function() { return delete Array.prototype; } );
+    array[item++] = new TestCase( SECTION,  "delete Array.prototype; Array.prototype",  ARRAY_PROTO, function() { delete Array.prototype; return Array.prototype; } );
 
     return ( array );
 }
@@ -57,8 +57,8 @@ function test() {
     for ( tc=0; tc < testcases.length; tc++ ) {
         testcases[tc].passed = writeTestCaseResult(
                             testcases[tc].expect,
-                            testcases[tc].actual,
-                            testcases[tc].description +" = "+ testcases[tc].actual );
+                            testcases[tc].actual(),
+                            testcases[tc].description +" = "+ testcases[tc].actual() );
         testcases[tc].reason += ( testcases[tc].passed ) ? "" : "wrong value ";
     }
     stopTest();

@@ -49,22 +49,22 @@ function getTestCases() {
     var array = new Array();
     var item = 0;
 
-    array[item++] = new TestCase( SECTION,  "(Array()).length",             0,                              (Array()).length );
-    array[item++] = new TestCase( SECTION,	"(Array(0)).length",            0,                              (Array(0)).length );
-    array[item++] = new TestCase( SECTION,	"(Array(1)).length",            1,                              (Array(1)).length );
-    array[item++] = new TestCase( SECTION,	"(Array(10)).length",           10,                             (Array(10)).length );
-    array[item++] = new TestCase( SECTION,	"(Array('1')).length",          1,                              (Array('1')).length );
-    array[item++] = new TestCase( SECTION,	"(Array(1000)).length",         1000,                           (Array(1000)).length );
-    array[item++] = new TestCase( SECTION,	"(Array('1000')).length",       1,                              (Array('1000')).length );
-    array[item++] = new TestCase( SECTION,	"(Array(4294967295)).length",   ToUint32(4294967295),           (Array(4294967295)).length );
-    array[item++] = new TestCase( SECTION,	"(Array(Math.pow(2,31)-1)).length",     ToUint32(Math.pow(2,31)-1),     (Array(Math.pow(2,31)-1)).length );
-    array[item++] = new TestCase( SECTION,	"(Array(Math.pow(2,31))).length",       ToUint32(Math.pow(2,31)),       (Array(Math.pow(2,31))).length );
-    array[item++] = new TestCase( SECTION,	"(Array(Math.pow(2,31)+1)).length",     ToUint32(Math.pow(2,31)+1),     (Array(Math.pow(2,31)+1)).length );
-    array[item++] = new TestCase( SECTION,	"(Array('8589934592')).length", 1,                              (Array("8589934592")).length );
-    array[item++] = new TestCase( SECTION,	"(Array('4294967296')).length", 1,                              (Array("4294967296")).length );
-    array[item++] = new TestCase( SECTION,	"(Array(1073741823)).length",   ToUint32(1073741823),           (Array(1073741823)).length );
-    array[item++] = new TestCase( SECTION,	"(Array(1073741824)).length",   ToUint32(1073741824),	        (Array(1073741824)).length );
-    array[item++] = new TestCase( SECTION,	"(Array('a string')).length",   1,                              (Array("a string")).length );
+    array[item++] = new TestCase( SECTION,  "(Array()).length",             0,                              function() { return (Array()).length; } );
+    array[item++] = new TestCase( SECTION,	"(Array(0)).length",            0,                              function() { return (Array(0)).length; } );
+    array[item++] = new TestCase( SECTION,	"(Array(1)).length",            1,                              function() { return (Array(1)).length; } );
+    array[item++] = new TestCase( SECTION,	"(Array(10)).length",           10,                             function() { return (Array(10)).length; } );
+    array[item++] = new TestCase( SECTION,	"(Array('1')).length",          1,                              function() { return (Array('1')).length; } );
+    array[item++] = new TestCase( SECTION,	"(Array(1000)).length",         1000,                           function() { return (Array(1000)).length; } );
+    array[item++] = new TestCase( SECTION,	"(Array('1000')).length",       1,                              function() { return (Array('1000')).length; } );
+    array[item++] = new TestCase( SECTION,	"(Array(4294967295)).length",   ToUint32(4294967295),           function() { return (Array(4294967295)).length; } );
+    array[item++] = new TestCase( SECTION,	"(Array(Math.pow(2,31)-1)).length",     ToUint32(Math.pow(2,31)-1),     function() { return (Array(Math.pow(2,31)-1)).length; } );
+    array[item++] = new TestCase( SECTION,	"(Array(Math.pow(2,31))).length",       ToUint32(Math.pow(2,31)),       function() { return (Array(Math.pow(2,31))).length; } );
+    array[item++] = new TestCase( SECTION,	"(Array(Math.pow(2,31)+1)).length",     ToUint32(Math.pow(2,31)+1),     function() { return (Array(Math.pow(2,31)+1)).length; } );
+    array[item++] = new TestCase( SECTION,	"(Array('8589934592')).length", 1,                              function() { return (Array("8589934592")).length; } );
+    array[item++] = new TestCase( SECTION,	"(Array('4294967296')).length", 1,                              function() { return (Array("4294967296")).length; } );
+    array[item++] = new TestCase( SECTION,	"(Array(1073741823)).length",   ToUint32(1073741823),           function() { return (Array(1073741823)).length; } );
+    array[item++] = new TestCase( SECTION,	"(Array(1073741824)).length",   ToUint32(1073741824),	        function() { return (Array(1073741824)).length; } );
+    array[item++] = new TestCase( SECTION,	"(Array('a string')).length",   1,                              function() { return (Array("a string")).length; } );
 
     return ( array );
 }
@@ -72,8 +72,8 @@ function test() {
     for ( tc=0; tc < testcases.length; tc++ ) {
         testcases[tc].passed = writeTestCaseResult(
                             testcases[tc].expect,
-                            testcases[tc].actual,
-                            testcases[tc].description +" = "+ testcases[tc].actual );
+                            testcases[tc].actual(),
+                            testcases[tc].description +" = "+ testcases[tc].actual() );
         testcases[tc].reason += ( testcases[tc].passed ) ? "" : "wrong value ";
     }
     stopTest();

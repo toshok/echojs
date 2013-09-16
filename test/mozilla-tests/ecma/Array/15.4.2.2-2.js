@@ -63,23 +63,23 @@ function getTestCases() {
     var array = new Array();
     var item = 0;
 
-    array[item++] = new TestCase( SECTION,	"(new Array(new Number(1073741823))).length",   1,      (new Array(new Number(1073741823))).length );
-    array[item++] = new TestCase( SECTION,	"(new Array(new Number(0))).length",            1,      (new Array(new Number(0))).length );
-    array[item++] = new TestCase( SECTION,	"(new Array(new Number(1000))).length",         1,      (new Array(new Number(1000))).length );
-    array[item++] = new TestCase( SECTION,	"(new Array('mozilla, larryzilla, curlyzilla')).length", 1,  (new Array('mozilla, larryzilla, curlyzilla')).length );
-    array[item++] = new TestCase( SECTION,	"(new Array(true)).length",                     1,      (new Array(true)).length );
-    array[item++] = new TestCase( SECTION,	"(new Array(false)).length",                    1,      (new Array(false)).length);
-    array[item++] = new TestCase( SECTION,	"(new Array(new Boolean(true)).length",         1,      (new Array(new Boolean(true))).length );
-    array[item++] = new TestCase( SECTION,	"(new Array(new Boolean(false)).length",        1,      (new Array(new Boolean(false))).length );
+    array[item++] = new TestCase( SECTION,	"(new Array(new Number(1073741823))).length",   1,      function() { return (new Array(new Number(1073741823))).length; } );
+    array[item++] = new TestCase( SECTION,	"(new Array(new Number(0))).length",            1,      function() { return (new Array(new Number(0))).length; } );
+    array[item++] = new TestCase( SECTION,	"(new Array(new Number(1000))).length",         1,      function() { return (new Array(new Number(1000))).length; } );
+    array[item++] = new TestCase( SECTION,	"(new Array('mozilla, larryzilla, curlyzilla')).length", 1,  function() { return (new Array('mozilla, larryzilla, curlyzilla')).length; } );
+    array[item++] = new TestCase( SECTION,	"(new Array(true)).length",                     1,      function() { return (new Array(true)).length; } );
+    array[item++] = new TestCase( SECTION,	"(new Array(false)).length",                    1,      function() { return (new Array(false)).length; });
+    array[item++] = new TestCase( SECTION,	"(new Array(new Boolean(true)).length",         1,      function() { return (new Array(new Boolean(true))).length; } );
+    array[item++] = new TestCase( SECTION,	"(new Array(new Boolean(false)).length",        1,      function() { return (new Array(new Boolean(false))).length; } );
     return ( array );
 }
 function test() {
     for ( tc=0; tc < testcases.length; tc++ ) {
         testcases[tc].passed = writeTestCaseResult(
                             testcases[tc].expect,
-                            testcases[tc].actual,
+                            testcases[tc].actual(),
                             testcases[tc].description +" = "+
-                            testcases[tc].actual );
+                            testcases[tc].actual() );
         testcases[tc].reason += ( testcases[tc].passed )
                              ? ""
                              : "wrong value ";

@@ -83,15 +83,15 @@ successfully to a host object is implementation dependent.
 function getTestCases() {
     var ARR_PROTOTYPE = Array.prototype;
 
-    testcases[testcases.length] = new TestCase( SECTION, "Array.prototype.reverse.length",           0,      Array.prototype.reverse.length );
-    testcases[testcases.length] = new TestCase( SECTION, "delete Array.prototype.reverse.length",    false,  delete Array.prototype.reverse.length );
-    testcases[testcases.length] = new TestCase( SECTION, "delete Array.prototype.reverse.length; Array.prototype.reverse.length",    0, eval("delete Array.prototype.reverse.length; Array.prototype.reverse.length") );
+    testcases[testcases.length] = new TestCase( SECTION, "Array.prototype.reverse.length",           0,      function() { return Array.prototype.reverse.length; } );
+    testcases[testcases.length] = new TestCase( SECTION, "delete Array.prototype.reverse.length",    false,  function() { return delete Array.prototype.reverse.length; } );
+    testcases[testcases.length] = new TestCase( SECTION, "delete Array.prototype.reverse.length; Array.prototype.reverse.length",    0, function() { delete Array.prototype.reverse.length; return Array.prototype.reverse.length; } );
 
     // length of array is 0
     testcases[testcases.length] = new TestCase(   SECTION,
                                     "var A = new Array();   A.reverse(); A.length",
                                     0,
-                                    eval("var A = new Array();   A.reverse(); A.length") );
+                                    function() { var A = new Array();   A.reverse(); return A.length; } );
     return ( testcases );
 }
 function CheckItems( R, A ) {
@@ -100,15 +100,15 @@ function CheckItems( R, A ) {
                                             SECTION,
                                             "A["+i+ "]",
                                             R[i],
-                                            A[i] );
+                                            function() { return A[i]; } );
     }
 }
 function test() {
     for ( tc=0; tc < testcases.length; tc++ ) {
         testcases[tc].passed = writeTestCaseResult(
                             testcases[tc].expect,
-                            testcases[tc].actual,
-                            testcases[tc].description +" = "+ testcases[tc].actual );
+                            testcases[tc].actual(),
+                            testcases[tc].description +" = "+ testcases[tc].actual() );
         testcases[tc].reason += ( testcases[tc].passed ) ? "" : "wrong value ";
     }
     stopTest();

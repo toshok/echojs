@@ -51,58 +51,58 @@ function getTestCases() {
 
     var ARR_PROTOTYPE = Array.prototype;
 
-    array[item++] = new TestCase( SECTION, "Array.prototype.join.length",           1,      Array.prototype.join.length );
-    array[item++] = new TestCase( SECTION, "delete Array.prototype.join.length",    false,  delete Array.prototype.join.length );
-    array[item++] = new TestCase( SECTION, "delete Array.prototype.join.length; Array.prototype.join.length",    1, eval("delete Array.prototype.join.length; Array.prototype.join.length") );
+    array[item++] = new TestCase( SECTION, "Array.prototype.join.length",           1,      function() { return Array.prototype.join.length; } );
+    array[item++] = new TestCase( SECTION, "delete Array.prototype.join.length",    false,  function() { return delete Array.prototype.join.length; } );
+    array[item++] = new TestCase( SECTION, "delete Array.prototype.join.length; Array.prototype.join.length",    1, function() { delete Array.prototype.join.length; return Array.prototype.join.length; } );
 
     // case where array length is 0
 
     array[item++] = new TestCase(   SECTION,
                                     "var TEST_ARRAY = new Array(); TEST_ARRAY.join()",
                                     "",
-                                    eval("var TEST_ARRAY = new Array(); TEST_ARRAY.join()") );
+                                    function() { var TEST_ARRAY = new Array(); return TEST_ARRAY.join(); } );
 
     // array length is 0, but spearator is specified
 
     array[item++] = new TestCase(   SECTION,
                                     "var TEST_ARRAY = new Array(); TEST_ARRAY.join(' ')",
                                     "",
-                                    eval("var TEST_ARRAY = new Array(); TEST_ARRAY.join(' ')") );
+                                    function() { var TEST_ARRAY = new Array(); return TEST_ARRAY.join(' '); } );
 
     // length is greater than 0, separator is supplied
     array[item++] = new TestCase(   SECTION,
                                     "var TEST_ARRAY = new Array(null, void 0, true, false, 123, new Object(), new Boolean(true) ); TEST_ARRAY.join('&')",
                                     "&&true&false&123&[object Object]&true",
-                                    eval("var TEST_ARRAY = new Array(null, void 0, true, false, 123, new Object(), new Boolean(true) ); TEST_ARRAY.join('&')") );
+                                    function() { var TEST_ARRAY = new Array(null, void 0, true, false, 123, new Object(), new Boolean(true) ); return TEST_ARRAY.join('&'); } );
 
     // length is greater than 0, separator is empty string
     array[item++] = new TestCase(   SECTION,
                                     "var TEST_ARRAY = new Array(null, void 0, true, false, 123, new Object(), new Boolean(true) ); TEST_ARRAY.join('')",
                                     "truefalse123[object Object]true",
-                                    eval("var TEST_ARRAY = new Array(null, void 0, true, false, 123, new Object(), new Boolean(true) ); TEST_ARRAY.join('')") );
+                                    function() { var TEST_ARRAY = new Array(null, void 0, true, false, 123, new Object(), new Boolean(true) ); return TEST_ARRAY.join(''); } );
     // length is greater than 0, separator is undefined
     array[item++] = new TestCase(   SECTION,
                                     "var TEST_ARRAY = new Array(null, void 0, true, false, 123, new Object(), new Boolean(true) ); TEST_ARRAY.join(void 0)",
                                     ",,true,false,123,[object Object],true",
-                                    eval("var TEST_ARRAY = new Array(null, void 0, true, false, 123, new Object(), new Boolean(true) ); TEST_ARRAY.join(void 0)") );
+                                    function() { var TEST_ARRAY = new Array(null, void 0, true, false, 123, new Object(), new Boolean(true) ); return TEST_ARRAY.join(void 0); } );
 
     // length is greater than 0, separator is not supplied
     array[item++] = new TestCase(   SECTION,
                                     "var TEST_ARRAY = new Array(null, void 0, true, false, 123, new Object(), new Boolean(true) ); TEST_ARRAY.join()",
                                     ",,true,false,123,[object Object],true",
-                                    eval("var TEST_ARRAY = new Array(null, void 0, true, false, 123, new Object(), new Boolean(true) ); TEST_ARRAY.join()") );
+                                    function() { var TEST_ARRAY = new Array(null, void 0, true, false, 123, new Object(), new Boolean(true) ); return TEST_ARRAY.join(); } );
 
     // separator is a control character
     array[item++] = new TestCase(   SECTION,
                                     "var TEST_ARRAY = new Array(null, void 0, true, false, 123, new Object(), new Boolean(true) ); TEST_ARRAY.join('\v')",
                                     unescape("%u000B%u000Btrue%u000Bfalse%u000B123%u000B[object Object]%u000Btrue"),
-                                    eval("var TEST_ARRAY = new Array(null, void 0, true, false, 123, new Object(), new Boolean(true) ); TEST_ARRAY.join('\v')") );
+                                    function() { var TEST_ARRAY = new Array(null, void 0, true, false, 123, new Object(), new Boolean(true) ); return TEST_ARRAY.join('\v'); } );
 
     // length of array is 1
     array[item++] = new TestCase(   SECTION,
                                     "var TEST_ARRAY = new Array(true) ); TEST_ARRAY.join('\v')",
                                     "true",
-                                    eval("var TEST_ARRAY = new Array(true); TEST_ARRAY.join('\v')") );
+                                    function() { var TEST_ARRAY = new Array(true); return TEST_ARRAY.join('\v'); } );
 
 
     SEPARATOR = "\t"
@@ -121,17 +121,17 @@ function getTestCases() {
 
     TEST_ARRAY = eval( "new Array( "+ARGUMENTS +")" );
 
-    array[item++] = new TestCase( SECTION, "TEST_ARRAY.join("+SEPARATOR+")",   TEST_RESULT,    TEST_ARRAY.join( SEPARATOR ) );
+    array[item++] = new TestCase( SECTION, "TEST_ARRAY.join("+SEPARATOR+")",   TEST_RESULT,    function() { return TEST_ARRAY.join( SEPARATOR ); } );
 
     array[item++] = new TestCase( SECTION, "(new Array( Boolean(true), Boolean(false), null,  void 0, Number(1e+21), Number(1e-7))).join()",
                                        "true,false,,,1e+21,1e-7",
-                                       (new Array( Boolean(true), Boolean(false), null,  void 0, Number(1e+21), Number(1e-7))).join() );
+                                       function() { return (new Array( Boolean(true), Boolean(false), null,  void 0, Number(1e+21), Number(1e-7))).join(); } );
 
     // this is not an Array object
     array[item++] = new TestCase(   SECTION,
                                     "var OB = new Object_1('true,false,111,0.5,1.23e6,NaN,void 0,null'); OB.join(':')",
                                     "true:false:111:0.5:1230000:NaN::",
-                                    eval("var OB = new Object_1('true,false,111,0.5,1.23e6,NaN,void 0,null'); OB.join(':')") );
+                                    function() { var OB = new Object_1('true,false,111,0.5,1.23e6,NaN,void 0,null'); return OB.join(':')"; } );
 
 
 
@@ -141,8 +141,8 @@ function test() {
     for ( tc=0; tc < testcases.length; tc++ ) {
         testcases[tc].passed = writeTestCaseResult(
                             testcases[tc].expect,
-                            testcases[tc].actual,
-                            testcases[tc].description +" = "+ testcases[tc].actual );
+                            testcases[tc].actual(),
+                            testcases[tc].description +" = "+ testcases[tc].actual() );
         testcases[tc].reason += ( testcases[tc].passed ) ? "" : "wrong value ";
     }
     stopTest();

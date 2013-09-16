@@ -43,6 +43,7 @@
     writeHeaderToLog( SECTION + " "+ TITLE);
 
     var testcases = getTestCases();
+    console.log ('calling tests');
     test();
 
 function ToUint32( n ) {
@@ -60,15 +61,15 @@ function getTestCases() {
     var array = new Array();
     var item = 0;
 
-    array[item++] = new TestCase( SECTION,	"typeof Array(1,2)",        "object",           typeof Array(1,2) );
-    array[item++] = new TestCase( SECTION,	"(Array(1,2)).toString",    Array.prototype.toString,    (Array(1,2)).toString );
+    array[item++] = new TestCase( SECTION,	"typeof Array(1,2)",        "object",           function() { return typeof Array(1,2); } );
+    array[item++] = new TestCase( SECTION,	"(Array(1,2)).toString",    Array.prototype.toString,    function() { return (Array(1,2)).toString; } );
     array[item++] = new TestCase( SECTION,
                                     "var arr = Array(1,2,3); arr.toString = Object.prototype.toString; arr.toString()",
                                     "[object Array]",
                                     function () { var arr = Array(1,2,3); arr.toString = Object.prototype.toString; return arr.toString(); } );
 
 
-    array[item++] = new TestCase( SECTION,	"(Array(1,2)).length",      2,                  (Array(1,2)).length );
+    array[item++] = new TestCase( SECTION,	"(Array(1,2)).length",      2,                  function () { return (Array(1,2)).length; } );
     array[item++] = new TestCase( SECTION,	"var arr = (Array(1,2)); arr[0]",  1,           function () { var arr = (Array(1,2)); return arr[0]; } );
     array[item++] = new TestCase( SECTION,	"var arr = (Array(1,2)); arr[1]",  2,           function () { var arr = (Array(1,2)); return arr[1]; } );
     array[item++] = new TestCase( SECTION,	"var arr = (Array(1,2)); String(arr)",  "1,2",  function () { var arr = (Array(1,2)); return String(arr); } );
@@ -79,8 +80,8 @@ function test() {
     for ( tc=0; tc < testcases.length; tc++ ) {
         testcases[tc].passed = writeTestCaseResult(
                             testcases[tc].expect,
-                            testcases[tc].actual,
-                            testcases[tc].description +" = "+ testcases[tc].actual );
+                            testcases[tc].actual(),
+                            testcases[tc].description +" = "+ testcases[tc].actual() );
         testcases[tc].reason += ( testcases[tc].passed ) ? "" : "wrong value ";
     }
     stopTest();

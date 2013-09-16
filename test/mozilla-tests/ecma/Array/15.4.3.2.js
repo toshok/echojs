@@ -41,15 +41,15 @@
 function getTestCases() {
     var array = new Array();
     var item = 0;
-    array[item++] = new TestCase( SECTION,	"Array.length",      1,        Array.length );
+    array[item++] = new TestCase( SECTION,	"Array.length",      1,        function() { return Array.length; } );
     return ( array );
 }
 function test() {
     for ( tc=0; tc < testcases.length; tc++ ) {
         testcases[tc].passed = writeTestCaseResult(
                             testcases[tc].expect,
-                            testcases[tc].actual,
-                            testcases[tc].description +" = "+ testcases[tc].actual );
+                            testcases[tc].actual(),
+                            testcases[tc].description +" = "+ testcases[tc].actual() );
         testcases[tc].reason += ( testcases[tc].passed ) ? "" : "wrong value ";
     }
     stopTest();

@@ -45,18 +45,18 @@
 function getTestCases() {
     var array = new Array();
     var item = 0;
-    array[item++] = new TestCase( SECTION,	"new   Array() +''",        "",                 (new Array()) +"" );
-    array[item++] = new TestCase( SECTION,	"typeof new Array()",       "object",           (typeof new Array()) );
+    array[item++] = new TestCase( SECTION,	"new   Array() +''",        "",                 function() { return (new Array()) +""; } );
+    array[item++] = new TestCase( SECTION,	"typeof new Array()",       "object",           function() { return (typeof new Array()); } );
     array[item++] = new TestCase(   SECTION,
                                     "var arr = new Array(); arr.getClass = Object.prototype.toString; arr.getClass()",
                                     "[object Array]",
-                                    eval("var arr = new Array(); arr.getClass = Object.prototype.toString; arr.getClass()") );
+                                    function() { var arr = new Array(); arr.getClass = Object.prototype.toString; return arr.getClass(); } );
 
-    array[item++] = new TestCase( SECTION,	"(new Array()).length",     0,                  (new Array()).length );
-    array[item++] = new TestCase( SECTION,	"(new Array()).toString == Array.prototype.toString",   true,       (new Array()).toString == Array.prototype.toString );
-    array[item++] = new TestCase( SECTION,	"(new Array()).join  == Array.prototype.join",          true,       (new Array()).join  == Array.prototype.join );
-    array[item++] = new TestCase( SECTION,	"(new Array()).reverse == Array.prototype.reverse",     true,       (new Array()).reverse  == Array.prototype.reverse );
-    array[item++] = new TestCase( SECTION,	"(new Array()).sort  == Array.prototype.sort",          true,       (new Array()).sort  == Array.prototype.sort );
+    array[item++] = new TestCase( SECTION,	"(new Array()).length",     0,                  function() { return (new Array()).length; } );
+    array[item++] = new TestCase( SECTION,	"(new Array()).toString == Array.prototype.toString",   true,       function() { return (new Array()).toString == Array.prototype.toString; } );
+    array[item++] = new TestCase( SECTION,	"(new Array()).join  == Array.prototype.join",          true,       function() { return (new Array()).join  == Array.prototype.join; } );
+    array[item++] = new TestCase( SECTION,	"(new Array()).reverse == Array.prototype.reverse",     true,       function() { return (new Array()).reverse  == Array.prototype.reverse; } );
+    array[item++] = new TestCase( SECTION,	"(new Array()).sort  == Array.prototype.sort",          true,       function() { return (new Array()).sort  == Array.prototype.sort; } );
 
     return ( array );
 }
@@ -64,8 +64,8 @@ function test() {
     for ( tc=0; tc < testcases.length; tc++ ) {
         testcases[tc].passed = writeTestCaseResult(
                             testcases[tc].expect,
-                            testcases[tc].actual,
-                            testcases[tc].description +" = "+ testcases[tc].actual );
+                            testcases[tc].actual(),
+                            testcases[tc].description +" = "+ testcases[tc].actual() );
 
         testcases[tc].reason += ( testcases[tc].passed ) ? "" : "wrong value ";
     }

@@ -45,15 +45,15 @@ function getTestCases() {
     var array = new Array();
     var item = 0;
 
-    array[item++] = new TestCase( SECTION,  "Array.prototype.toString.length",  0,  Array.prototype.toString.length );
+    array[item++] = new TestCase( SECTION,  "Array.prototype.toString.length",  0,  function() { return Array.prototype.toString.length; } );
 
-    array[item++] = new TestCase( SECTION,  "(new Array()).toString()",     "",     (new Array()).toString() );
-    array[item++] = new TestCase( SECTION,  "(new Array(2)).toString()",    ",",    (new Array(2)).toString() );
-    array[item++] = new TestCase( SECTION,  "(new Array(0,1)).toString()",  "0,1",  (new Array(0,1)).toString() );
-    array[item++] = new TestCase( SECTION,  "(new Array( Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY)).toString()",  "NaN,Infinity,-Infinity",   (new Array( Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY)).toString() );
+    array[item++] = new TestCase( SECTION,  "(new Array()).toString()",     "",     function() { return (new Array()).toString(); } );
+    array[item++] = new TestCase( SECTION,  "(new Array(2)).toString()",    ",",    function() { return (new Array(2)).toString(); } );
+    array[item++] = new TestCase( SECTION,  "(new Array(0,1)).toString()",  "0,1",  function() { return (new Array(0,1)).toString(); } );
+    array[item++] = new TestCase( SECTION,  "(new Array( Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY)).toString()",  "NaN,Infinity,-Infinity",   function() { return (new Array( Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY)).toString(); } );
 
-    array[item++] = new TestCase( SECTION,  "(new Array( Boolean(1), Boolean(0))).toString()",   "true,false",   (new Array(Boolean(1),Boolean(0))).toString() );
-    array[item++] = new TestCase( SECTION,  "(new Array(void 0,null)).toString()",    ",",    (new Array(void 0,null)).toString() );
+    array[item++] = new TestCase( SECTION,  "(new Array( Boolean(1), Boolean(0))).toString()",   "true,false",   function() { return (new Array(Boolean(1),Boolean(0))).toString(); } );
+    array[item++] = new TestCase( SECTION,  "(new Array(void 0,null)).toString()",    ",",    function() { return (new Array(void 0,null)).toString(); } );
 
     var EXPECT_STRING = "";
     var MYARR = new Array();
@@ -65,7 +65,7 @@ function getTestCases() {
 
     EXPECT_STRING = EXPECT_STRING.substring( 0, EXPECT_STRING.length -1 );
 
-    array[item++] = new TestCase( SECTION, "MYARR.toString()",  EXPECT_STRING,  MYARR.toString() );
+    array[item++] = new TestCase( SECTION, "MYARR.toString()",  EXPECT_STRING,  function() { return MYARR.toString(); } );
 
 
     return ( array );
@@ -74,8 +74,8 @@ function test() {
     for ( tc=0 ; tc < testcases.length; tc++ ) {
         testcases[tc].passed = writeTestCaseResult(
                             testcases[tc].expect,
-                            testcases[tc].actual,
-                            testcases[tc].description +" = "+ testcases[tc].actual );
+                            testcases[tc].actual(),
+                            testcases[tc].description +" = "+ testcases[tc].actual() );
         testcases[tc].reason += ( testcases[tc].passed ) ? "" : "wrong value ";
     }
     stopTest();
