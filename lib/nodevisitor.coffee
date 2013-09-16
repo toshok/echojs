@@ -4,58 +4,72 @@ debug = require 'debug'
 exports.TreeVisitor = class TreeVisitor
         visitProgram: (n) ->
                 @visit n.body
+                undefined
                 
         visitFunction: (n) ->
                 @visit n.params
+                undefined
 
         visitFunctionDeclaration: (n) ->
                 @visitFunction n
+                undefined
                 
         visitFunctionExpression: (n) ->
                 @visitFunction n
+                undefined
 
         visitBlock: (n) ->
                 @visit n.body
+                undefined
 
         visitLabeledStatement: (n) ->
                 @visit n.body
+                undefined
 
         visitEmptyStatement: (n) ->
 
         visitExpressionStatement: (n) ->
                 @visit n.expression
+                undefined
                 
         visitSwitch: (n) ->
                 @visit n.discriminant
                 @visit _case for _case in n.cases
+                undefined
                 
         visitCase: (n) ->
                 @visit n.test
                 @visit _con for _con in n.consequent
+                undefined
                 
         visitFor: (n) ->
                 @visit n.init
                 @visit n.test
                 @visit n.update
                 @visit n.body
+                undefined
                 
         visitWhile: (n) ->
                 @visit n.test
                 @visit n.body
+                undefined
                 
         visitIf: (n) ->
                 @visit n.test
                 @visit n.consequent
                 @visit n.alternate
+                undefined
                 
         visitForIn: (n) ->
                 @visit n.left
                 @visit n.right
                 @visit n.body
+                undefined
                 
         visitDo: (n) ->
                 @visit n.body
                 @visit n.test
+                undefined
                 
         visitIdentifier: (n) ->
         visitLiteral: (n) ->
@@ -68,87 +82,111 @@ exports.TreeVisitor = class TreeVisitor
                 if n.handlers?
                         @visit n.handlers
                 @visit n.finalizer
+                undefined
 
         visitCatchClause: (n) ->
                 @visit n.param
                 @visit n.guard
                 @visit n.body
+                undefined
                 
         visitThrow: (n) ->
                 @visit n.argument
+                undefined
                 
         visitReturn: (n) ->
                 @visit n.argument
+                undefined
                 
         visitWith: (n) ->
                 @visit n.object
                 @visit n.body
+                undefined
                 
         visitVariableDeclaration: (n) ->
                 @visit n.declarations
+                undefined
 
         visitVariableDeclarator: (n) ->
                 @visit n.id
                 @visit n.init
+                undefined
                                 
         visitLabeledStatement: (n) ->
                 @visit n.label
                 @visit n.body
+                undefined
                 
         visitAssignmentExpression: (n) ->
                 @visit n.left
                 @visit n.right
+                undefined
                 
         visitConditionalExpression: (n) ->
                 @visit n.test
                 @visit n.consequent
                 @visit n.alternate
+                undefined
                 
         visitLogicalExpression: (n) ->
                 @visit n.left
                 @visit n.right
+                undefined
                 
         visitBinaryExpression: (n) ->
                 @visit n.left
                 @visit n.right
+                undefined
 
-        visitUnaryExpression: (n) -> @visit n.argument
+        visitUnaryExpression: (n) ->
+                @visit n.argument
+                undefined
 
-        visitUpdateExpression: (n) -> @visit n.argument
+        visitUpdateExpression: (n) ->
+                @visit n.argument
+                undefined
 
         visitMemberExpression: (n) ->
                 @visit n.object
                 if n.computed
                         @visit n.property
+                undefined
                 
         visitRelationalExpression: (n) ->
                 @visit n.left
                 @visit n.right
+                undefined
                 
         visitSequenceExpression: (n) ->
                 @visit n.expressions
+                undefined
                 
         visitNewExpression: (n) ->
                 @visit n.callee
                 @visit n.arguments
+                undefined
 
         visitObjectExpression: (n) ->
                 @visit n.properties
+                undefined
 
         visitArrayExpression: (n) ->
                 @visit n.elements
+                undefined
 
         visitProperty: (n) ->
                 @visit n.key
                 @visit n.value
+                undefined
                                 
         visitCallExpression: (n) ->
                 @visit n.callee
                 @visit n.arguments
+                undefined
                 
         visit: (n) ->
                 if not n?
-                        debug.log "child is null!>"
+                        debug.log "child is null!"
                         return null
 
                 if Array.isArray n
@@ -203,9 +241,11 @@ exports.TreeVisitor = class TreeVisitor
                         else
                             throw "PANIC: unknown parse node type #{n.type}"
                         
-                debug.log "<#{n.type}"
+                debug.log "<#{n.type}, rv = #{if rv then rv.type else 'null'}"
                 debug.unindent()
                 rv
+
+        toString: () -> "TreeVisitor"
 
 exports.TreeTransformer = class TreeTransformer extends TreeVisitor
         shallowCopy = (o) ->
@@ -418,3 +458,5 @@ exports.TreeTransformer = class TreeTransformer extends TreeVisitor
                 n.callee    = @visit n.callee
                 n.arguments = @visit n.arguments
                 n
+                
+        toString: () -> "TreeTransformer"
