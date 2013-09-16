@@ -49,6 +49,8 @@ namespace jsllvm {
     static v8::Handle<v8::Value> CreateSwitch(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateSelect(const v8::Arguments& args);
 
+    static v8::Handle<v8::Value> CreateNswSub(const v8::Arguments& args);
+
     static v8::Handle<v8::Value> CreateLandingPad(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateResume(const v8::Arguments& args);
 

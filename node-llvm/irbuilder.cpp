@@ -60,6 +60,8 @@ namespace jsllvm {
     NODE_SET_METHOD(s_func, "createSwitch", IRBuilder::CreateSwitch);
     NODE_SET_METHOD(s_func, "createSelect", IRBuilder::CreateSelect);
 
+    NODE_SET_METHOD(s_func, "createNswSub", IRBuilder::CreateNswSub);
+
     NODE_SET_METHOD(s_func, "createLandingPad", IRBuilder::CreateLandingPad);
     NODE_SET_METHOD(s_func, "createResume", IRBuilder::CreateResume);
 
@@ -456,6 +458,18 @@ namespace jsllvm {
     FALLBACK_EMPTY_UTF8_ARG(3, name);
 
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateSelect(C, True, False, *name)));
+    return scope.Close(result);
+  }
+
+  v8::Handle<v8::Value> IRBuilder::CreateNswSub(const v8::Arguments& args)
+  {
+    HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(0, lhs);
+    REQ_LLVM_VAL_ARG(1, rhs);
+    FALLBACK_EMPTY_UTF8_ARG(2, name);
+
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateNSWSub(lhs, rhs, *name)));
     return scope.Close(result);
   }
 

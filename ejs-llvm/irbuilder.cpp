@@ -399,6 +399,16 @@ namespace ejsllvm {
     }
 
     ejsval
+    IRBuilder_createNswSub(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        REQ_LLVM_VAL_ARG(0, lhs);
+        REQ_LLVM_VAL_ARG(1, rhs);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
+
+        return Value_new(_llvm_builder.CreateNSWSub(lhs, rhs, name));
+    }
+
+    ejsval
     IRBuilder_createLandingPad(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         REQ_LLVM_TYPE_ARG(0, ty);
@@ -464,6 +474,8 @@ namespace ejsllvm {
 
         OBJ_METHOD(createSwitch);
         OBJ_METHOD(createSelect);
+
+        OBJ_METHOD(createNswSub);
     
         OBJ_METHOD(createLandingPad);
         OBJ_METHOD(createResume);
