@@ -305,8 +305,12 @@ class LLVMIRVisitor extends TreeTransformer
                         test = @visit case_checks[casenum].test
                         eqop = @ejs_runtime["binop==="]
                         discTest = @createCall eqop, [discr, test], "test", !eqop.doesNotThrow
-                        disc_truthy = @createCall @ejs_runtime.truthy, [discTest], "disc_truthy"
-                        disc_cmp = ir.createICmpEq disc_truthy, consts.false(), "disccmpresult"
+                        
+                        if discTest._ejs_returns_ejsval_bool
+                                disc_cmp = ir.createICmpEq discTest, (@loadBoolEjsValue false), "disc_result"
+                        else
+                                disc_truthy = @createCall @ejs_runtime.truthy, [exp_value], "disc_truthy"
+                                disc_cmp = ir.createICmpEq cond_truthy, consts.false(), "disccmpresult"
                         ir.createCondBr disc_cmp, case_checks[casenum+1].dest_check, case_checks[casenum].body
                         ir.setInsertPoint case_checks[casenum+1].dest_check
 
