@@ -45,6 +45,13 @@ ejsval _ejs_global;
 /* useful strings literals */
 #include "ejs-atoms-gen.c"
 
+ejsval
+_ejs_eval (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+  _ejs_throw_nativeerror_utf8 (EJS_ERROR, "EJS doesn't support eval()");
+  return _ejs_undefined;
+}
+
 void
 _ejs_init(int argc, char** argv)
 {
@@ -62,6 +69,8 @@ _ejs_init(int argc, char** argv)
 
     _ejs_object_setprop (_ejs_global, _ejs_atom_undefined, _ejs_undefined);
     _ejs_object_setprop (_ejs_global, _ejs_atom_NaN, _ejs_nan);
+    _ejs_object_setprop (_ejs_global, _ejs_atom_eval, _ejs_function_new_native (_ejs_undefined, _ejs_atom_eval, _ejs_eval));
+
 
     _ejs_object_init_proto();
 

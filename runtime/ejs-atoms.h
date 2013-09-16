@@ -248,3 +248,5 @@ EJS_ATOM(statusText)
 EJS_ATOM(responseText)
 EJS_ATOM(responseXML)
 EJS_ATOM(onreadystatechange)
+
+EJS_ATOM(eval)
