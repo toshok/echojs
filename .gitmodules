@@ -1,22 +1,22 @@
 [submodule "esprima"]
 	path = esprima
-	url = https://github.com/ariya/esprima.git
+	url = git@github.com:ariya/esprima.git
 [submodule "llvm"]
 	path = llvm
 	url = http://llvm.org/git/llvm.git
 	ignore = dirty
 [submodule "escodegen"]
 	path = escodegen
-	url = https://github.com/Constellation/escodegen.git
+	url = git@github.com:Constellation/escodegen.git
 [submodule "parson"]
 	path = parson
-	url = https://github.com/toshok/parson.git
+	url = git@github.com:toshok/parson.git
 [submodule "estraverse"]
 	path = estraverse
-	url = https://github.com/Constellation/estraverse.git
+	url = git@github.com:Constellation/estraverse.git
 [submodule "pcre"]
 	path = pcre
-	url = https://github.com/toshok/pcre.git
+	url = git@github.com:toshok/pcre.git
 [submodule "pirouette"]
 	path = pirouette
-	url = https://github.com/toshok/pirouette.git
+	url = git@github.com:toshok/pirouette.git
