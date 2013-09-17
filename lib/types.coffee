@@ -17,6 +17,33 @@ exports.EjsPropIterator = EjsPropIteratorTy = EjsValueTy
 exports.EjsClosureFunc  = EjsClosureFuncTy = (llvm.FunctionType.get EjsValueTy, [EjsValueTy, EjsValueTy, int32Ty, EjsValueTy.pointerTo()]).pointerTo()
 exports.EjsPrimString   = EjsPrimStringTy = llvm.StructType.create "EjsPrimString", [int32Ty, int32Ty, int64Ty, int64Ty ] # XXX not the real structure but it should be good
 
+exports.EjsSpecops      = EjsSpecopsTy = llvm.StructType.create "struct.EJSSpecOps", [] # XXX
+
+exports.EjsPropertyMap  = EjsPropertyMapTy = llvm.StructType.create "struct.EJSPropertyMap", [
+        jscharTy.pointerTo().pointerTo(),   # jschar **names;
+        llvm.Type.getInt8Ty().pointerTo(),  # EJSPropertyDesc *propertiesn;
+        int32Ty,                            # int allocated;
+        int32Ty                             # int num;
+]
+        
+exports.EjsObject = EjsObjectTy = llvm.StructType.create "struct.EJSObject", [
+        int32Ty,                  # GCObjectHeader gc_header;
+        EjsSpecopsTy.pointerTo(), # EJSSpecOps*    ops;
+        EjsValueTy                # ejsval         proto; // the __proto__ property
+        EjsPropertyMapTy          # EJSPropertyMap map;
+]
+
+exports.EjsFunction = EjsFunctionTy = llvm.StructType.create "struct.EJSFunction", [
+        EjsObjectTy,             # EJSObject obj;
+        EjsClosureFuncTy,        # EJSClosureFunc func;
+        EjsValueTy,              # ejsval   env;
+
+        int32Ty,                 # EJSBool  bound;
+        EjsValueTy,              # ejsval   bound_this;
+        int32Ty,                 # uint32_t bound_argc;
+        EjsValueTy.pointerTo()   # ejsval*  bound_args;
+]
+
 # exception types
 
 # the c++ typeinfo for our exceptions

@@ -20,10 +20,6 @@ runtime = require 'runtime'
 llvm = require 'llvm'
 ir = llvm.IRBuilder
 
-# set to true to inline more of the call sequence at call sites (we still have to call into the runtime to decompose the closure itself for now)
-# disable this for now because it breaks more of the exception tests
-decompose_closure_on_invoke = false
-
 opencode_intrinsics = true
 
 BUILTIN_PARAMS = [
@@ -555,7 +551,7 @@ class LLVMIRVisitor extends TreeTransformer
                                 ir.createStore @loadUndefinedEjsValue(), @iifeStack.top.iife_rv
                         ir.createBr @iifeStack.top.iife_dest_bb
                 else
-                        rv = if n.argument? then (@visit n.argument) else @loadUndefinedEjsValue()
+                        rv = @visitOrUndefined n.argument
                         
                         if @finallyStack.length > 0
                                 @returnValueAlloca = @createAlloca @currentFunction, types.EjsValue, "returnValue" unless @returnValueAlloca?
@@ -1397,7 +1393,57 @@ class LLVMIRVisitor extends TreeTransformer
                 @createCall @ejs_runtime.global_setprop, [pname, value], "globalpropstore_#{exp.arguments[0].name}"
                 value
 
+        emitEjsvalTo: (val, type, prefix) ->
+                if opencode_intrinsics and @options.target_pointer_size is 64
+                        #  %1 = and i64 %val, 140737488355327
+                        #  %2 = inttoptr i64 %1 to %struct._EJSObject*
+                        payload = ir.createAnd val, (consts.int64_lowhi 0x7fff, 0xffffffff), "#{prefix}_payload"
+                        ir.createIntToPtr payload, type, "#{prefix}_load"
+                else
+                        throw new Error "emitEjsvalTo not implemented for this case"
+                        
+                
+        emitLoadSpecops: (obj) ->
+                if opencode_intrinsics and @options.target_pointer_size is 64
+                        # %1 = getelementptr inbounds %struct._EJSObject* %obj, i64 0, i32 1
+                        # %specops_load = load %struct.EJSSpecOps** %1, align 8, !tbaa !0
+                        specops_slot = ir.createInBoundsGetElementPointer obj, [(consts.int64 0), (consts.int32 1)], "specops_slot"
+                        ir.createLoad specops_slot, "specops_load"
+                else
+                        throw new Error "emitLoadSpecops not implemented for this case"
+
+        emitThrowNativeError: (errorCode, errorMessage) ->
+                @createCall @ejs_runtime.throw_nativeerror_utf8, [(consts.int32 errorCode), (consts.string ir, errorMessage)], "", true
+                ir.createUnreachable()
+
+        emitLoadEjsFunctionIsBound: (closure) ->
+                if opencode_intrinsics and @options.target_pointer_size is 64
+                        bound_slot_gep = ir.createInBoundsGetElementPointer closure, [(consts.int64 1), (consts.int32 2)], "bound_slot_gep"
+                        bound_slot = ir.createBitCast bound_slot_gep, types.int32.pointerTo(), "bound_slot"
+                        ir.createLoad bound_slot, "bound_load"
+                else
+                        throw new Error "emitLoadEjsFunctionIsBound not implemented for this case"
+
+        emitLoadEjsFunctionClosureFunc: (closure) ->
+                if opencode_intrinsics and @options.target_pointer_size is 64
+                        func_slot_gep = ir.createInBoundsGetElementPointer closure, [consts.int64 1], "func_slot_gep"
+                        func_slot = ir.createBitCast func_slot_gep, types.EjsClosureFunc.pointerTo(), "func_slot"
+                        ir.createLoad func_slot, "func_load"
+                else
+                        throw new Error "emitLoadEjsFunctionClosureFunc not implemented for this case"
+                
+        emitLoadEjsFunctionClosureEnv: (closure) ->
+                if opencode_intrinsics and @options.target_pointer_size is 64
+                        env_slot_gep = ir.createInBoundsGetElementPointer closure, [(consts.int64 1),(consts.int32 1)], "env_slot_gep"
+                        env_slot = ir.createBitCast env_slot_gep, types.EjsValue.pointerTo(), "env_slot"
+                        ir.createLoad env_slot, "env_load"
+                else
+                        throw new Error "emitLoadEjsFunctionClosureEnv not implemented for this case"
+                
         handleInvokeClosure: (exp, ctor_context= false) ->
+                insertBlock = ir.getInsertBlock()
+                insertFunc = insertBlock.parent
+                
                 if ctor_context
                         argv = @visitArgsForConstruct @ejs_runtime.invoke_closure, exp.arguments
                 else
@@ -1421,48 +1467,64 @@ class LLVMIRVisitor extends TreeTransformer
                 argv = modified_argv
                 call_result = @createAlloca @currentFunction, types.EjsValue, "call_result"
 
-                if decompose_closure_on_invoke
-                        insertBlock = ir.getInsertBlock()
-                        insertFunc = insertBlock.parent
-
-                        # inline decomposition of the closure (with a fallback to the runtime invoke if there are bound args)
-                        # and direct call
-                        runtime_invoke_bb = new llvm.BasicBlock "runtime_invoke_bb", insertFunc
+                if opencode_intrinsics and @options.target_pointer_size is 64
+                        candidate_is_object_bb = new llvm.BasicBlock "candidate_is_object_bb", insertFunc
+                        check_if_function_is_bound_bb = new llvm.BasicBlock "check_if_function_is_bound_bb", insertFunc
+                        object_isnt_function_bb = new llvm.BasicBlock "object_isnt_function_bb", insertFunc
                         direct_invoke_bb = new llvm.BasicBlock "direct_invoke_bb", insertFunc
+                        runtime_invoke_bb = new llvm.BasicBlock "runtime_invoke_bb", insertFunc
                         invoke_merge_bb = new llvm.BasicBlock "invoke_merge_bb", insertFunc
-
-                        func_alloca = @createAlloca @currentFunction, types.EjsClosureFunc, "direct_invoke_func"
-                        env_alloca  = @createAlloca @currentFunction, types.EjsClosureEnv, "direct_invoke_env"
-                        this_alloca = @createAlloca @currentFunction, types.EjsValue, "direct_invoke_this"
-
-                        # provide the default "this" for decompose_closure.  if one was bound it'll get overwritten
-                        ir.createStore argv[1], this_alloca
                         
-                        decompose_args = [ argv[0], func_alloca, env_alloca, this_alloca ]
-                        decompose_rv = @createCall @ejs_runtime.decompose_closure, decompose_args, "decompose_rv", true
-                        cmp = ir.createICmpEq decompose_rv, consts.false(), "cmpresult"
-                        ir.createCondBr cmp, runtime_invoke_bb, direct_invoke_bb
+                        candidate = argv[0]
+                        cmp = ir.createICmpUGt candidate, (consts.int64_lowhi 0xfffbffff, 0xffffffff), "cmpresult"
+                        ir.createCondBr cmp, candidate_is_object_bb, object_isnt_function_bb
 
-                        # if there were bound args we have to fall back to the runtime invoke method (since we can't
-                        # guarantee enough room in our scratch area -- should we inline a check here or pass the length
-                        # of the scratch area to decompose?  perhaps...FIXME)
-                        #
-                        @doInsideBlock runtime_invoke_bb, =>
-                                calltmp = @createCall @ejs_runtime.invoke_closure, argv, "calltmp", true
-                                store = ir.createStore calltmp, call_result
-                                ir.createBr invoke_merge_bb
+                        @doInsideBlock object_isnt_function_bb, =>
+                                # we have something other than a function, throw.
+                                @emitThrowNativeError 5, "object is not a function" # this '5' should be 'EJS_TYPE_ERROR'
+                                # unreachable
 
-                        # in the successful case we modify our argv with the responses and directly invoke the closure func
-                        @doInsideBlock direct_invoke_bb, =>
-                                direct_args = [ (@createLoad env_alloca, "env"), (@createLoad this_alloca, "this"), argv[2], argv[3] ]
-                                calltmp = @createCall (@createLoad func_alloca, "func"), direct_args, "calltmp"
-                                store = ir.createStore calltmp, call_result
-                                ir.createBr invoke_merge_bb
+                        @doInsideBlock candidate_is_object_bb, =>
+                                closure = @emitEjsvalTo argv[0], types.EjsObject.pointerTo(), "closure"
+
+                                specops_load = @emitLoadSpecops closure
+                        
+                                cmp = ir.createICmpEq specops_load, @ejs_runtime.function_specops, "function_specops_cmp"
+                                ir.createCondBr cmp, check_if_function_is_bound_bb, object_isnt_function_bb
+
+                                @doInsideBlock check_if_function_is_bound_bb, =>
+
+                                        # we know we have a function.  now we need to
+                                        # check if it's bound.  if it's bound we defer
+                                        # to the runtime code for now.  if it's not
+                                        # bound (which should be the common case) we
+                                        # can dispatch it inline.
+
+                                        load_isbound = @emitLoadEjsFunctionIsBound closure
+
+                                        cmp = ir.createICmpEq load_isbound, (consts.int32 0), "notbound?"
+                                        ir.createCondBr cmp, direct_invoke_bb, runtime_invoke_bb
+
+                                        @doInsideBlock runtime_invoke_bb, =>
+                                                calltmp = @createCall @ejs_runtime.invoke_closure, argv, "calltmp", true
+                                                ir.createStore calltmp, call_result
+                                                ir.createBr invoke_merge_bb
+                        
+                                        # in the successful case we modify our argv with the responses and directly invoke the closure func
+                                        @doInsideBlock direct_invoke_bb, =>
+                                                func_load = @emitLoadEjsFunctionClosureFunc closure
+                                                env_load = @emitLoadEjsFunctionClosureEnv closure
+
+                                                calltmp = @createCall func_load, [env_load, argv[1], argv[2], argv[3]], "calltmp"
+                                                ir.createStore calltmp, call_result
+                                                ir.createBr invoke_merge_bb
 
                         ir.setInsertPoint invoke_merge_bb
+
                 else
                         calltmp = @createCall @ejs_runtime.invoke_closure, argv, "calltmp", true
                         store = ir.createStore calltmp, call_result
+                        
         
                 call_result_load = @createLoad call_result, "call_result_load"
 
@@ -1531,14 +1593,7 @@ class LLVMIRVisitor extends TreeTransformer
                 slotnum = exp.arguments[1].value
 
                 if opencode_intrinsics and @options.target_pointer_size is 64
-                        # for 64bit platforms, we can open code this pretty easily
-                        # 
-                        #  %1 = and i64 %env.coerce, 140737488355327
-                        #  %2 = inttoptr i64 %1 to %struct._EJSClosureEnv*
-                        #  %.02 = getelementptr inbounds %struct._EJSClosureEnv* %2, i64 0, i32 2, i64 %slot_num, i32 0
-                        env_payload = ir.createAnd env, (consts.int64_lowhi 0x7fff, 0xffffffff), "envpayload"
-                        envp = ir.createIntToPtr env_payload, types.EjsClosureEnv.pointerTo(), "envp"
-
+                        envp = @emitEjsvalTo env, types.EjsClosureEnv.pointerTo(), "closureenv"
                         ir.createInBoundsGetElementPointer envp, [(consts.int64 0), (consts.int32 2), (consts.int64 slotnum), (consts.int32 0)], "slot_ref"
                 else
                         ir.createCall @ejs_runtime.get_env_slot_ref, [env, (consts.int32 slotnum)], "slot_ref_tmp"
@@ -1553,8 +1608,42 @@ class LLVMIRVisitor extends TreeTransformer
                         @createCall @ejs_runtime.typeof_is_object, [@visitOrNull exp.arguments[0]], "is_object", false
 
         handleTypeofIsFunction: (exp) ->
-                # FIXME we should inline this as well, but it's a more complicated check (needs to do both is_object and a specops check)
-                ir.createCall @ejs_runtime.typeof_is_function, [@visitOrNull exp.arguments[0]], "is_function"
+                if opencode_intrinsics and @options.target_pointer_size is 64
+                        insertBlock = ir.getInsertBlock()
+                        insertFunc  = insertBlock.parent
+                        
+                        typeofIsFunction_alloca = @createAlloca @currentFunction, types.EjsValue, "typeof_is_function"
+                        
+                        failure_bb   = new llvm.BasicBlock "typeof_function_false",     insertFunc
+                        is_object_bb = new llvm.BasicBlock "typeof_function_is_object", insertFunc
+                        success_bb   = new llvm.BasicBlock "typeof_function_true",      insertFunc
+                        merge_bb     = new llvm.BasicBlock "typeof_function_merge",     insertFunc
+                        
+                        candidate = @visitOrNull exp.arguments[0]
+                        cmp = ir.createICmpUGt candidate, (consts.int64_lowhi 0xfffbffff, 0xffffffff), "cmpresult"
+                        ir.createCondBr cmp, is_object_bb, failure_bb
+
+                        @doInsideBlock is_object_bb, =>
+                                obj = @emitEjsvalTo candidate, types.EjsObject.pointerTo(), "obj"
+                                specops_load = @emitLoadSpecops obj
+                                cmp = ir.createICmpEq specops_load, @ejs_runtime.function_specops, "function_specops_cmp"
+                                ir.createCondBr cmp, success_bb, failure_bb
+
+                        @doInsideBlock success_bb, =>
+                                ir.createStore (@loadBoolEjsValue true), typeofIsFunction_alloca, "store_typeof"
+                                ir.createBr merge_bb
+                                
+                        @doInsideBlock failure_bb, =>
+                                ir.createStore (@loadBoolEjsValue false), typeofIsFunction_alloca, "store_typeof"
+                                ir.createBr merge_bb
+
+                        ir.setInsertPoint merge_bb
+                        
+                        rv = ir.createLoad typeofIsFunction_alloca, "typeof_is_function"
+                        rv._ejs_returns_ejsval_bool = true
+                        rv
+                else
+                        ir.createCall @ejs_runtime.typeof_is_function, [@visitOrNull exp.arguments[0]], "is_function"
 
         handleTypeofIsString: (exp) ->
                 if opencode_intrinsics and @options.target_pointer_size is 64
@@ -1568,20 +1657,11 @@ class LLVMIRVisitor extends TreeTransformer
                 else
                         @createCall @ejs_runtime.typeof_is_string, [@visitOrNull exp.arguments[0]], "is_string", false
                                 
-        handleTypeofIsNumber: (exp) ->
-                @createCall @ejs_runtime.typeof_is_number, [@visitOrNull exp.arguments[0]], "is_number", false
-                
-        handleTypeofIsUndefined: (exp) ->
-                @createCall @ejs_runtime.typeof_is_undefined, [@visitOrNull exp.arguments[0]], "is_undefined", false
-
-        handleTypeofIsNull: (exp) ->
-                @createCall @ejs_runtime.typeof_is_null, [@visitOrNull exp.arguments[0]], "is_null", false
-
-        handleTypeofIsBoolean: (exp) ->
-                @createCall @ejs_runtime.typeof_is_boolean, [@visitOrNull exp.arguments[0]], "is_boolean", false
-
-        handleBuiltinUndefined: (exp) ->
-                @loadUndefinedEjsValue()
+        handleTypeofIsNumber:    (exp) -> @createCall @ejs_runtime.typeof_is_number,    [@visitOrNull exp.arguments[0]], "is_number", false
+        handleTypeofIsUndefined: (exp) -> @createCall @ejs_runtime.typeof_is_undefined, [@visitOrNull exp.arguments[0]], "is_undefined", false
+        handleTypeofIsNull:      (exp) -> @createCall @ejs_runtime.typeof_is_null,      [@visitOrNull exp.arguments[0]], "is_null", false
+        handleTypeofIsBoolean:   (exp) -> @createCall @ejs_runtime.typeof_is_boolean,   [@visitOrNull exp.arguments[0]], "is_boolean", false
+        handleBuiltinUndefined:  (exp) -> @loadUndefinedEjsValue()
 
 class AddFunctionsVisitor extends TreeTransformer
         constructor: (@module) ->

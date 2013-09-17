@@ -40,6 +40,7 @@ runtime_interface =
         prop_iterator_free:    -> @module.getOrInsertExternalFunction "_ejs_property_iterator_free",    types.void, [types.EjsPropIterator]
         begin_catch:           -> @module.getOrInsertExternalFunction "_ejs_begin_catch",               types.EjsValue, [types.int8Pointer]
         end_catch:             -> @module.getOrInsertExternalFunction "_ejs_end_catch",                 types.EjsValue, []
+        throw_nativeerror_utf8:-> @module.getOrInsertExternalFunction "_ejs_throw_nativeerror_utf8",    types.void, [types.int32, types.string]
         throw:                 -> @module.getOrInsertExternalFunction "_ejs_throw",                     types.void, [types.EjsValue]
         rethrow:               -> @module.getOrInsertExternalFunction "_ejs_rethrow",                   types.void, [types.EjsValue]
 
@@ -70,6 +71,7 @@ runtime_interface =
         "atom-Array":          -> @module.getOrInsertGlobal           "_ejs_atom_Array",                types.EjsValue
         global:                -> @module.getOrInsertGlobal           "_ejs_global",                    types.EjsValue
         exception_typeinfo:    -> @module.getOrInsertGlobal           "EJS_EHTYPE_ejsvalue",            types.EjsExceptionTypeInfo
+        function_specops:      -> @module.getOrInsertGlobal           "_ejs_function_specops",          types.EjsSpecops
 
         "unop-":           -> @module.getOrInsertExternalFunction "_ejs_op_neg",         types.EjsValue, [types.EjsValue]
         "unop+":           -> @module.getOrInsertExternalFunction "_ejs_op_plus",        types.EjsValue, [types.EjsValue]
