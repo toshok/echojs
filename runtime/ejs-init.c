@@ -30,6 +30,7 @@
 #if IOS
 #include "ejs-webgl.h"
 #endif
+#include "ejs-proxy.h"
 
 const ejsval _ejs_undefined = STATIC_BUILD_EJSVAL(EJSVAL_TAG_UNDEFINED, 0);
 ejsval _ejs_nan;
@@ -88,6 +89,9 @@ _ejs_init(int argc, char** argv)
     _ejs_date_init(_ejs_global);
     _ejs_json_init(_ejs_global);
     _ejs_math_init(_ejs_global);
+
+    // ES6 bits
+    _ejs_proxy_init(_ejs_global);
 
     _ejs_typedarrays_init(_ejs_global);
 #if IOS

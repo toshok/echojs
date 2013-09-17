@@ -250,3 +250,8 @@ EJS_ATOM(responseXML)
 EJS_ATOM(onreadystatechange)
 
 EJS_ATOM(eval)
+
+// es6
+EJS_ATOM(Proxy)
+//EJS_ATOM(create)
+EJS_ATOM(createFunction)
