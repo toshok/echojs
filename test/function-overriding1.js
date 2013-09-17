@@ -7,12 +7,10 @@ function tryInvoke(f) {
 }
 
 function foo() {
-//  var f;
 
   tryInvoke(f);
 
-//  f = function() {
- function f() {
+  function f() {
     console.log ("hello world1");
   }
 
@@ -22,8 +20,7 @@ function foo() {
 
   tryInvoke(f);
 
-//  f = function() {
- function f() {
+  function f() {
     console.log ("hello world2");
   }
 
