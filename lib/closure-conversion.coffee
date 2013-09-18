@@ -291,13 +291,20 @@ class ComputeFree extends TreeTransformer
                                 exp.ejs_decls = decls
                                 exp.ejs_free_vars = uses.subtract decls
                         when syntax.FunctionDeclaration
-                                exp.ejs_free_vars = (@free exp.body).subtract (@param_names exp.params)
-                                exp.ejs_decls = exp.body.ejs_decls.union (@param_names exp.params)
+                                param_names = @param_names exp.params
+                                param_names.add exp.rest.name if exp.rest?
+                                exp.ejs_free_vars = (@free exp.body).subtract param_names
+                                exp.ejs_decls = exp.body.ejs_decls.union param_names
                         when syntax.FunctionExpression
                                 param_names = @param_names exp.params
                                 param_names.add exp.rest.name if exp.rest?
                                 exp.ejs_free_vars = (@free exp.body).subtract param_names
                                 exp.ejs_decls = exp.body.ejs_decls.union param_names
+                        when syntax.ArrowFunctionExpression
+                                param_names = @param_names exp.params
+                                param_names.add exp.rest.name if exp.rest?
+                                exp.ejs_free_vars = (@free exp.body).subtract param_names
+                                exp.ejs_decls = if exp.body.ejs_decls? then exp.body.ejs_decls.union param_names else param_names
                         when syntax.LabeledStatement      then exp.ejs_free_vars = @free exp.body
                         when syntax.BlockStatement        then exp.ejs_free_vars = @free_blocklike exp, exp.body
                         when syntax.TryStatement          then exp.ejs_free_vars = Set.union.apply null, [(@free exp.block)].concat (map @call_free, exp.handlers)
@@ -690,7 +697,25 @@ class LambdaLift extends TreeTransformer
                 n.body = @visit n.body
                 @maybePrependScratchArea n
                 n
-        
+
+
+        visitArrowFunctionExpression: (n) ->
+                # this doesn't really belong here, but if we're
+                # dealing with an arrow function with an expression
+                # for a body, replace the body with a block statement
+                # with a return statement returning that expression
+                if n.expression
+                        console.warn "yoohoo"
+                        n.body = {
+                                type: syntax.BlockStatement
+                                body: [{
+                                        type: syntax.ReturnStatement
+                                        argument: n.body
+                                }]
+                        }
+                        n.espression = false
+                @visitFunctionExpression n
+                
         visitFunctionExpression: (n) ->
                 if n.displayName?
                         global_name = genGlobalFunctionName n.displayName, @filename
