@@ -23,6 +23,7 @@
 #include "ejs-regexp.h"
 #include "ejs-require.h"
 #include "ejs-string.h"
+#include "ejs-symbol.h"
 #include "ejs-typedarrays.h"
 #include "ejs-uri.h"
 #include "ejs-value.h"
@@ -92,6 +93,7 @@ _ejs_init(int argc, char** argv)
 
     // ES6 bits
     _ejs_proxy_init(_ejs_global);
+    _ejs_symbol_init(_ejs_global);
 
     _ejs_typedarrays_init(_ejs_global);
 #if IOS

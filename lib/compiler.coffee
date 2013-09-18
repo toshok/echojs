@@ -52,6 +52,7 @@ class LLVMIRVisitor extends TreeTransformer
                         typeofIsObject:       @handleTypeofIsObject
                         typeofIsFunction:     @handleTypeofIsFunction
                         typeofIsString:       @handleTypeofIsString
+                        typeofIsSymbol:       @handleTypeofIsSymbol
                         typeofIsNumber:       @handleTypeofIsNumber
                         typeofIsUndefined:    @handleTypeofIsUndefined
                         typeofIsNull:         @handleTypeofIsNull
@@ -1644,6 +1645,44 @@ class LLVMIRVisitor extends TreeTransformer
                         rv
                 else
                         ir.createCall @ejs_runtime.typeof_is_function, [@visitOrNull exp.arguments[0]], "is_function"
+
+        handleTypeofIsSymbol: (exp) ->
+                if opencode_intrinsics and @options.target_pointer_size is 64
+                        insertBlock = ir.getInsertBlock()
+                        insertFunc  = insertBlock.parent
+                        
+                        typeofIsSymbol_alloca = @createAlloca @currentFunction, types.EjsValue, "typeof_is_symbol"
+                        
+                        failure_bb   = new llvm.BasicBlock "typeof_symbol_false",     insertFunc
+                        is_object_bb = new llvm.BasicBlock "typeof_symbol_is_object", insertFunc
+                        success_bb   = new llvm.BasicBlock "typeof_symbol_true",      insertFunc
+                        merge_bb     = new llvm.BasicBlock "typeof_symbol_merge",     insertFunc
+                        
+                        candidate = @visitOrNull exp.arguments[0]
+                        cmp = ir.createICmpUGt candidate, (consts.int64_lowhi 0xfffbffff, 0xffffffff), "cmpresult"
+                        ir.createCondBr cmp, is_object_bb, failure_bb
+
+                        @doInsideBlock is_object_bb, =>
+                                obj = @emitEjsvalTo candidate, types.EjsObject.pointerTo(), "obj"
+                                specops_load = @emitLoadSpecops obj
+                                cmp = ir.createICmpEq specops_load, @ejs_runtime.symbol_specops, "symbol_specops_cmp"
+                                ir.createCondBr cmp, success_bb, failure_bb
+
+                        @doInsideBlock success_bb, =>
+                                ir.createStore (@loadBoolEjsValue true), typeofIsSymbol_alloca, "store_typeof"
+                                ir.createBr merge_bb
+                                
+                        @doInsideBlock failure_bb, =>
+                                ir.createStore (@loadBoolEjsValue false), typeofIsSymbol_alloca, "store_typeof"
+                                ir.createBr merge_bb
+
+                        ir.setInsertPoint merge_bb
+                        
+                        rv = ir.createLoad typeofIsSymbol_alloca, "typeof_is_symbol"
+                        rv._ejs_returns_ejsval_bool = true
+                        rv
+                else
+                        ir.createCall @ejs_runtime.typeof_is_symbol, [@visitOrNull exp.arguments[0]], "is_symbol"
 
         handleTypeofIsString: (exp) ->
                 if opencode_intrinsics and @options.target_pointer_size is 64

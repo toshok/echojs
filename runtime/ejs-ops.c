@@ -14,6 +14,7 @@
 #include "ejs-number.h"
 #include "ejs-object.h"
 #include "ejs-string.h"
+#include "ejs-symbol.h"
 #include "ejs-boolean.h"
 #include "ejs-ops.h"
 #include "ejs-error.h"
@@ -339,6 +340,12 @@ _ejs_op_typeof_is_string(ejsval exp)
 }
 
 ejsval
+_ejs_op_typeof_is_symbol(ejsval exp)
+{
+    return EJSVAL_IS_SYMBOL(exp) ? _ejs_true : _ejs_false;
+}
+
+ejsval
 _ejs_op_typeof_is_number(ejsval exp)
 {
     return EJSVAL_IS_NUMBER(exp) ? _ejs_true : _ejs_false;
@@ -371,6 +378,8 @@ _ejs_op_typeof (ejsval exp)
         return _ejs_atom_boolean;
     else if (EJSVAL_IS_STRING(exp))
         return _ejs_atom_string;
+    else if (EJSVAL_IS_SYMBOL(exp))
+        return _ejs_atom_symbol;
     else if (EJSVAL_IS_NUMBER(exp))
         return _ejs_atom_number;
     else if (EJSVAL_IS_UNDEFINED(exp))

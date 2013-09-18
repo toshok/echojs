@@ -42,6 +42,7 @@ class EqIdioms extends TreeTransformer
                                 when "object"    then intrinsic = "typeofIsObject"
                                 when "function"  then intrinsic = "typeofIsFunction"
                                 when "string"    then intrinsic = "typeofIsString"
+                                when "symbol"    then intrinsic = "typeofIsSymbol"
                                 when "undefined" then intrinsic = "typeofIsUndefined"
                                 when "number"    then intrinsic = "typeofIsNumber"
                                 when "null"      then intrinsic = "typeofIsNull"

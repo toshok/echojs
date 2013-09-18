@@ -22,6 +22,7 @@ EJSBool ToEJSBool(ejsval exp);
 ejsval _ejs_op_typeof_is_object(ejsval exp);
 ejsval _ejs_op_typeof_is_function(ejsval exp);
 ejsval _ejs_op_typeof_is_string(ejsval exp);
+ejsval _ejs_op_typeof_is_symbol(ejsval exp);
 ejsval _ejs_op_typeof_is_number(ejsval exp);
 ejsval _ejs_op_typeof_is_undefined(ejsval exp);
 ejsval _ejs_op_typeof_is_null(ejsval exp);

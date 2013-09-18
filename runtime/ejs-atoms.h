@@ -16,6 +16,7 @@ EJS_ATOM(name)
 EJS_ATOM(object)
 EJS_ATOM(function)
 EJS_ATOM(string)
+EJS_ATOM(symbol)
 EJS_ATOM(boolean)
 EJS_ATOM(number)
 
