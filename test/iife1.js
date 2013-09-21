@@ -1,8 +1,13 @@
-var x = "hello world";
+function sayIt(x,w) {
+  console.log (x + w);
+}
 
-console.log (x);
+var x = "hello";
+var world = " world";
+
+sayIt (x, world);
 (function() {
-  var x = "goodbye world";
-  console.log (x);
+  var x = "goodbye";
+  sayIt(x, world);
 })();
-console.log (x);
+sayIt (x, world);
