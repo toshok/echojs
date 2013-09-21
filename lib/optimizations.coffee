@@ -5,7 +5,7 @@ debug = require 'debug'
 
 { TreeTransformer } = require 'nodevisitor'
 
-{ create_intrinsic } = require 'echo-util'
+{ create_intrinsic, is_intrinsic } = require 'echo-util'
 
 #
 # EqIdioms checks for the following things:
@@ -139,7 +139,7 @@ class LoopCounter extends TreeTransformer
 
                 # now make sure the init block initializes update_identifier_name
 
-                if exp.init.type isnt VariableDeclaration and exp.init.type isnt AssignmentExpression
+                if exp.init.type isnt VariableDeclaration and exp.init.type isnt syntax.AssignmentExpression
                         return super
 
                 if exp.init.type is VariableDeclaration
@@ -157,10 +157,17 @@ class LoopCounter extends TreeTransformer
                         
                 # if we've made it here, we have an expression we can deal with.
 ###                
+
+passes = [
+        EqIdioms
+        ]
         
 exports.run = (tree) ->
 
-        eq_idioms = new EqIdioms
-        tree = eq_idioms.visit tree
-        
+        passes.forEach (passType) ->
+                pass = new passType
+                tree = pass.visit tree
+                debug.log 2, "after: #{passType.name}"
+                debug.log 2, -> escodegen.generate tree
+
         return tree
