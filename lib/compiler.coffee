@@ -68,16 +68,15 @@ class LLVMIRVisitor extends TreeTransformer
                 @literalInitializationFunction = @module.getOrInsertFunction "_ejs_module_init_string_literals_#{@filename}", types.void, []
 
                 # initialize the scope stack with the global (empty) scope
-                @scope_stack = new Stack
-                @scope_stack.push Object.create null
+                @scope_stack = new Stack Object.create null
 
                 entry_bb = new llvm.BasicBlock "entry", @literalInitializationFunction
                 return_bb = new llvm.BasicBlock "return", @literalInitializationFunction
 
-                @doInsideBlock entry_bb, =>
+                @doInsideBBlock entry_bb, =>
                         ir.createBr return_bb
 
-                @doInsideBlock return_bb, =>
+                @doInsideBBlock return_bb, =>
                         ir.createRetVoid()
 
                 @literalInitializationBB = entry_bb
@@ -88,7 +87,12 @@ class LLVMIRVisitor extends TreeTransformer
         beginCatch: (result) -> ir.createCall @ejs_runtime.begin_catch, [(ir.createPointerCast result, types.int8Pointer, "")], "catchval"
         endCatch:            -> ir.createCall @ejs_runtime.end_catch, [], "endcatch"
 
-        doInsideBlock: (b, f) ->
+        doInsideExitableScope: (scope, f) ->
+                scope.enter()
+                f()
+                scope.leave()
+                
+        doInsideBBlock: (b, f) ->
                 saved = ir.getInsertBlock()
                 ir.setInsertPoint b
                 f()
@@ -103,7 +107,6 @@ class LLVMIRVisitor extends TreeTransformer
                         boolval = (consts.int64_lowhi 0xfff98000, if n then 0x00000001 else 0x000000000)
                 else
                         boolval = @createLoad (if n then @ejs_runtime['true'] else @ejs_runtime['false']), "load_bool"
-                        boolval.is_constant = true
                         boolval.constant_val = n
                 boolval
                 
@@ -112,7 +115,6 @@ class LLVMIRVisitor extends TreeTransformer
                         nullval = (consts.int64_lowhi 0xfffb8000, 0x00000000)
                 else
                         nullval = @createLoad @ejs_runtime['null'], "load_null"
-                        nullval.is_constant = true
                         nullval.constant_val = null
                 nullval
                 
@@ -121,7 +123,6 @@ class LLVMIRVisitor extends TreeTransformer
                         undef = (consts.int64_lowhi 0xfff90000, 0x00000000)
                 else
                         undef = @createLoad @ejs_runtime.undefined, "load_undefined"
-                        undef.is_constant = true
                         undef.constant_val = undefined
                 undef
 
@@ -292,49 +293,45 @@ class LLVMIRVisitor extends TreeTransformer
 
                 case_checks.push dest_check: if defaultCase? then defaultCase.bb else merge_bb
 
-                scope = new SwitchExitableScope merge_bb
-                scope.enter()
+                @doInsideExitableScope (new SwitchExitableScope merge_bb), =>
 
-                # insert all the code for the tests
-                ir.createBr case_checks[0].dest_check
-                ir.setInsertPoint case_checks[0].dest_check
-                for casenum in [0...case_checks.length-1]
-                        test = @visit case_checks[casenum].test
-                        eqop = @ejs_runtime["binop==="]
-                        discTest = @createCall eqop, [discr, test], "test", !eqop.doesNotThrow
+                        # insert all the code for the tests
+                        ir.createBr case_checks[0].dest_check
+                        ir.setInsertPoint case_checks[0].dest_check
+                        for casenum in [0...case_checks.length-1]
+                                test = @visit case_checks[casenum].test
+                                eqop = @ejs_runtime["binop==="]
+                                discTest = @createCall eqop, [discr, test], "test", !eqop.doesNotThrow
                         
-                        if discTest._ejs_returns_ejsval_bool
-                                disc_cmp = ir.createICmpEq discTest, (@loadBoolEjsValue false), "disc_result"
-                        else
-                                disc_truthy = @createCall @ejs_runtime.truthy, [exp_value], "disc_truthy"
-                                disc_cmp = ir.createICmpEq cond_truthy, consts.false(), "disccmpresult"
-                        ir.createCondBr disc_cmp, case_checks[casenum+1].dest_check, case_checks[casenum].body
-                        ir.setInsertPoint case_checks[casenum+1].dest_check
+                                if discTest._ejs_returns_ejsval_bool
+                                        disc_cmp = ir.createICmpEq discTest, (@loadBoolEjsValue false), "disc_result"
+                                else
+                                        disc_truthy = @createCall @ejs_runtime.truthy, [exp_value], "disc_truthy"
+                                        disc_cmp = ir.createICmpEq cond_truthy, consts.false(), "disccmpresult"
+                                ir.createCondBr disc_cmp, case_checks[casenum+1].dest_check, case_checks[casenum].body
+                                ir.setInsertPoint case_checks[casenum+1].dest_check
 
 
-                case_bodies = []
+                        case_bodies = []
                 
-                # now insert all the code for the case consequents
-                for _case in n.cases
-                        case_bodies.push bb:_case.bb, consequent:_case.consequent
+                        # now insert all the code for the case consequents
+                        for _case in n.cases
+                                case_bodies.push bb:_case.bb, consequent:_case.consequent
 
-                case_bodies.push bb:merge_bb
+                        case_bodies.push bb:merge_bb
                 
-                for casenum in [0...case_bodies.length-1]
-                        ir.setInsertPoint case_bodies[casenum].bb
-                        for c of case_bodies[casenum].consequent
-                                @visit case_bodies[casenum].consequent[c]
-                        ir.createBr case_bodies[casenum+1].bb
+                        for casenum in [0...case_bodies.length-1]
+                                ir.setInsertPoint case_bodies[casenum].bb
+                                for c of case_bodies[casenum].consequent
+                                        @visit case_bodies[casenum].consequent[c]
+                                ir.createBr case_bodies[casenum+1].bb
                         
-                ir.setInsertPoint merge_bb
-
-                scope.leave()
+                        ir.setInsertPoint merge_bb
 
                 merge_bb
                 
         visitCase: (n) ->
                 throw "we shouldn't get here, case statements are handled in visitSwitch"
-                        
                 
         visitLabeledStatement: (n) ->
                 n.body.label = n.label.name
@@ -360,36 +357,32 @@ class LLVMIRVisitor extends TreeTransformer
                 insertBlock = ir.getInsertBlock()
                 insertFunc = insertBlock.parent
 
-                init_bb = new llvm.BasicBlock "for_init", insertFunc
-                test_bb = new llvm.BasicBlock "for_test", insertFunc
-                body_bb = new llvm.BasicBlock "for_body", insertFunc
+                init_bb   = new llvm.BasicBlock "for_init",   insertFunc
+                test_bb   = new llvm.BasicBlock "for_test",   insertFunc
+                body_bb   = new llvm.BasicBlock "for_body",   insertFunc
                 update_bb = new llvm.BasicBlock "for_update", insertFunc
-                merge_bb = new llvm.BasicBlock "for_merge", insertFunc
+                merge_bb  = new llvm.BasicBlock "for_merge",  insertFunc
 
                 ir.createBr init_bb
 
-                @doInsideBlock init_bb, =>
+                @doInsideBBlock init_bb, =>
                         @visit n.init
                         ir.createBr test_bb
 
-                @doInsideBlock test_bb, =>
+                @doInsideBBlock test_bb, =>
                         if n.test
                                 @generateCondBr n.test, body_bb, merge_bb
                         else
                                 ir.createBr body_bb
 
-                scope = new LoopExitableScope n.label, update_bb, merge_bb
-                scope.enter()
+                @doInsideExitableScope (new LoopExitableScope n.label, update_bb, merge_bb), =>
+                        @doInsideBBlock body_bb, =>
+                                @visit n.body
+                                ir.createBr update_bb
 
-                @doInsideBlock body_bb, =>
-                        @visit n.body
-                        ir.createBr update_bb
-
-                @doInsideBlock update_bb, =>
-                        @visit n.update
-                        ir.createBr test_bb
-
-                scope.leave()
+                        @doInsideBBlock update_bb, =>
+                                @visit n.update
+                                ir.createBr test_bb
 
                 ir.setInsertPoint merge_bb
                 merge_bb
@@ -403,14 +396,10 @@ class LLVMIRVisitor extends TreeTransformer
 
                 ir.createBr body_bb
 
-                scope = new LoopExitableScope n.label, body_bb, merge_bb
-                scope.enter()
-                
-                @doInsideBlock body_bb, =>
-                        @visit n.body
-                        @generateCondBr n.test, body_bb, merge_bb
-
-                scope.leave()
+                @doInsideExitableScope (new LoopExitableScope n.label, body_bb, merge_bb), =>
+                        @doInsideBBlock body_bb, =>
+                                @visit n.body
+                                @generateCondBr n.test, body_bb, merge_bb
                                 
                 ir.setInsertPoint merge_bb
                 merge_bb
@@ -426,17 +415,13 @@ class LLVMIRVisitor extends TreeTransformer
 
                 ir.createBr while_bb
 
-                @doInsideBlock while_bb, =>
+                @doInsideBBlock while_bb, =>
                         @generateCondBr n.test, body_bb, merge_bb
 
-                scope = new LoopExitableScope n.label, while_bb, merge_bb
-                scope.enter()
-                
-                @doInsideBlock body_bb, =>
-                        @visit n.body
-                        ir.createBr while_bb
-
-                scope.leave()
+                @doInsideExitableScope (new LoopExitableScope n.label, while_bb, merge_bb), =>
+                        @doInsideBBlock body_bb, =>
+                                @visit n.body
+                                ir.createBr while_bb
                                 
                 ir.setInsertPoint merge_bb
                 merge_bb
@@ -460,22 +445,32 @@ class LLVMIRVisitor extends TreeTransformer
                                 
                 ir.createBr forin_bb
 
-                scope = new LoopExitableScope n.label, forin_bb, merge_bb
-                scope.enter()
+                @doInsideExitableScope (new LoopExitableScope n.label, forin_bb, merge_bb), =>
+                        # forin_bb:
+                        #     moreleft = prop_iterator_next (iterator, true)
+                        #     if moreleft === false
+                        #         goto merge_bb
+                        #     else
+                        #         goto body_bb
+                        # 
+                        @doInsideBBlock forin_bb, =>
+                                moreleft = @createCall @ejs_runtime.prop_iterator_next, [iterator, consts.true()], "moreleft"
+                                cmp = ir.createICmpEq moreleft, consts.false(), "cmpmoreleft"
+                                ir.createCondBr cmp, merge_bb, body_bb
 
-                @doInsideBlock forin_bb, =>
-                        moreleft = @createCall @ejs_runtime.prop_iterator_next, [iterator, consts.true()], "moreleft"
-                        cmp = ir.createICmpEq moreleft, consts.false(), "cmpmoreleft"
-                        ir.createCondBr cmp, merge_bb, body_bb
+                        # body_bb:
+                        #     current = prop_iteratorcurrent (iterator)
+                        #     *lhs = current
+                        #      <body>
+                        #     goto forin_bb
+                        @doInsideBBlock body_bb, =>
+                                current = @createCall @ejs_runtime.prop_iterator_current, [iterator], "iterator_current"
+                                @storeValueInDest current, lhs
+                                @visit n.body
+                                ir.createBr forin_bb
 
-                @doInsideBlock body_bb, =>
-                        current = @createCall @ejs_runtime.prop_iterator_current, [iterator], "iterator_current"
-                        @storeValueInDest current, lhs
-                        @visit n.body
-                        ir.createBr forin_bb
-
-                scope.leave()
-
+                # merge_bb:
+                # 
                 ir.setInsertPoint merge_bb
                 merge_bb
                 
@@ -526,13 +521,13 @@ class LLVMIRVisitor extends TreeTransformer
 
                 @generateCondBr n.test, then_bb, (if else_bb? then else_bb else merge_bb)
 
-                @doInsideBlock then_bb, =>
+                @doInsideBBlock then_bb, =>
                         then_val = @visit n.consequent
                         ir.createStore then_val, cond_val if load_result
                         ir.createBr merge_bb
 
                 if n.alternate?
-                        @doInsideBlock else_bb, =>
+                        @doInsideBBlock else_bb, =>
                                 else_val = @visit n.alternate
                                 ir.createStore else_val, cond_val if load_result
                                 ir.createBr merge_bb
@@ -842,21 +837,19 @@ class LLVMIRVisitor extends TreeTransformer
                 callee = @ejs_runtime[builtin]
         
                 if n.operator is "delete"
-                        if n.argument.type is syntax.MemberExpression
-                                fake_literal =
-                                        type: syntax.Literal
-                                        value: n.argument.property.name
-                                        raw: "'#{n.argument.property.name}'"
-                                return @createCall callee, [(@visitOrNull n.argument.object), (@visit fake_literal)], "result"
-                        else
-                                throw "unhandled delete syntax"
+                        throw "unhandled delete syntax" if n.argument.type isnt syntax.MemberExpression
+                        
+                        fake_literal =
+                                type: syntax.Literal
+                                value: n.argument.property.name
+                                raw: "'#{n.argument.property.name}'"
+                        return @createCall callee, [(@visitOrNull n.argument.object), (@visit fake_literal)], "result"
+                                
                 else if n.operator is "!"
                         arg_value =  @visitOrNull n.argument
                         if opencode_intrinsics and @options.target_pointer_size is 64 and arg_value._ejs_returns_ejsval_bool
                                 cmp = ir.createICmpEq arg_value, (@loadBoolEjsValue true), "cmpresult"
-                                t = @loadBoolEjsValue true
-                                f = @loadBoolEjsValue false
-                                rv = ir.createSelect cmp, f, t, "sel"
+                                rv = ir.createSelect cmp, (@loadBoolEjsValue false), (@loadBoolEjsValue true), "sel"
                                 rv._ejs_returns_ejsval_bool = true
                                 rv
                         else
@@ -887,9 +880,6 @@ class LLVMIRVisitor extends TreeTransformer
                 right_visited = @visit n.right
                 ir.createStore right_visited, right_alloca
 
-                if n.left.is_constant? and n.right.is_constant?
-                        console.warn "we could totally evaluate this at compile time, yo"
-
                 if @options.record_types
                         @createCall @ejs_runtime.record_binop, [(consts.int32 @genRecordId()), (consts.string ir, n.operator), (@createLoad left_alloca, "binop_left_load"), (@createLoad right_alloca, "binop_right_load")], ""
 
@@ -910,7 +900,7 @@ class LLVMIRVisitor extends TreeTransformer
                 # we invert the test here - check if the condition is false/0
                 left_visited = @generateCondBr n.left, left_bb, right_bb
 
-                @doInsideBlock left_bb, =>
+                @doInsideBBlock left_bb, =>
                         # inside the else branch, left was truthy
                         if n.operator is "||"
                                 # for || we short circuit out here
@@ -922,7 +912,7 @@ class LLVMIRVisitor extends TreeTransformer
                                 throw "Internal error 99.1"
                         ir.createBr merge_bb
 
-                @doInsideBlock right_bb, =>
+                @doInsideBBlock right_bb, =>
                         # inside the then branch, left was falsy
                         if n.operator is "||"
                                 # for || we evaluate the second and store it
@@ -1163,7 +1153,7 @@ class LLVMIRVisitor extends TreeTransformer
                                 num_alloca = @currentFunction.literalAllocas[literal_key]
                         else
                                 # only create 1 instance of num literals used in a function, and allocate them in the entry block
-                                @doInsideBlock @currentFunction.entry_bb, =>
+                                @doInsideBBlock @currentFunction.entry_bb, =>
                                         num_alloca = ir.createAlloca types.EjsValue, "num-alloca-#{n.value}"
                                         c = llvm.ConstantFP.getDouble n.value
                                         if opencode_intrinsics and @options.target_pointer_size is 64
@@ -1234,17 +1224,14 @@ class LLVMIRVisitor extends TreeTransformer
                         branch_target = merge_block
 
                 scope = new TryExitableScope @currentFunction.cleanup_reason, branch_target, (-> new llvm.BasicBlock "exception", insertFunc), finally_block?
-                scope.enter()
+                @doInsideExitableScope scope, =>
+                        @visit n.block
 
-                @visit n.block
-
-                if n.finalizer?
-                        @finallyStack.shift()
+                        if n.finalizer?
+                                @finallyStack.shift()
                 
-                # at the end of the try block branch to our branch_target (either the finally block or the merge block after the try{}) with REASON_FALLOFF
-                scope.exitAft false
-
-                scope.leave()
+                        # at the end of the try block branch to our branch_target (either the finally block or the merge block after the try{}) with REASON_FALLOFF
+                        scope.exitAft false
 
                 if scope.landing_pad_block? and n.handlers.length > 0
                         catch_block = new llvm.BasicBlock "catch_bb", insertFunc
@@ -1254,7 +1241,7 @@ class LLVMIRVisitor extends TreeTransformer
                         # the scope's landingpad block is created if needed by @createCall (using that function we pass in as the last argument to TryExitableScope's ctor.)
                         # if a try block includes no calls, there's no need for an landing pad block as nothing can throw, and we don't bother generating any code for the
                         # catch clause.
-                        @doInsideBlock scope.landing_pad_block, =>
+                        @doInsideBBlock scope.landing_pad_block, =>
 
                                 landing_pad_type = llvm.StructType.create "", [types.int8Pointer, types.int32]
                                 # XXX is it an error to have multiple catch handlers, as JS doesn't allow you to filter by type?
@@ -1276,7 +1263,7 @@ class LLVMIRVisitor extends TreeTransformer
 
                                 # if we have a catch clause, create catch_bb
                                 if n.handlers.length > 0
-                                        @doInsideBlock catch_block, =>
+                                        @doInsideBBlock catch_block, =>
                                                 # call _ejs_begin_catch to return the actual exception
                                                 catchval = @beginCatch exception
                                 
@@ -1300,20 +1287,20 @@ class LLVMIRVisitor extends TreeTransformer
                                 ###
                                 # Unwind Resume Block (calls _Unwind_Resume)
                                 unwind_resume_block = new llvm.BasicBlock "unwind_resume", insertFunc
-                                @doInsideBlock unwind_resume_block, =>
+                                @doInsideBBlock unwind_resume_block, =>
                                         ir.createResume caught_result
                                 ###
 
                 # Finally Block
                 if n.finalizer?
-                        @doInsideBlock finally_block, =>
+                        @doInsideBBlock finally_block, =>
                                 @visit n.finalizer
 
                                 cleanup_reason = @createLoad @currentFunction.cleanup_reason, "cleanup_reason_load"
 
                                 if @returnValueAlloca?
                                         return_tramp = new llvm.BasicBlock "return_tramp", insertFunc
-                                        @doInsideBlock return_tramp, =>
+                                        @doInsideBBlock return_tramp, =>
                                 
                                                 if @finallyStack.length > 0
                                                         ir.createStore (consts.int32 ExitableScope.REASON_RETURN), @currentFunction.cleanup_reason
@@ -1327,14 +1314,14 @@ class LLVMIRVisitor extends TreeTransformer
                                         switch_stmt.addCase (consts.int32 ExitableScope.REASON_RETURN), return_tramp
 
                                 falloff_tramp = new llvm.BasicBlock "falloff_tramp", insertFunc
-                                @doInsideBlock falloff_tramp, =>
+                                @doInsideBBlock falloff_tramp, =>
                                         ir.createBr merge_block
                                 switch_stmt.addCase (consts.int32 TryExitableScope.REASON_FALLOFF_TRY), falloff_tramp
 
                                 for s in [0...scope.destinations.length]
                                         dest_tramp = new llvm.BasicBlock "dest_tramp", insertFunc
                                         dest = scope.destinations[s]
-                                        @doInsideBlock dest_tramp, =>
+                                        @doInsideBBlock dest_tramp, =>
                                                 if dest.reason == TryExitableScope.REASON_BREAK
                                                         dest.scope.exitAft true
                                                 else if dest.reason == TryExitableScope.REASON_CONTINUE
@@ -1480,12 +1467,12 @@ class LLVMIRVisitor extends TreeTransformer
                         cmp = ir.createICmpUGt candidate, (consts.int64_lowhi 0xfffbffff, 0xffffffff), "cmpresult"
                         ir.createCondBr cmp, candidate_is_object_bb, object_isnt_function_bb
 
-                        @doInsideBlock object_isnt_function_bb, =>
+                        @doInsideBBlock object_isnt_function_bb, =>
                                 # we have something other than a function, throw.
                                 @emitThrowNativeError 5, "object is not a function" # this '5' should be 'EJS_TYPE_ERROR'
                                 # unreachable
 
-                        @doInsideBlock candidate_is_object_bb, =>
+                        @doInsideBBlock candidate_is_object_bb, =>
                                 closure = @emitEjsvalTo argv[0], types.EjsObject.pointerTo(), "closure"
 
                                 specops_load = @emitLoadSpecops closure
@@ -1493,7 +1480,7 @@ class LLVMIRVisitor extends TreeTransformer
                                 cmp = ir.createICmpEq specops_load, @ejs_runtime.function_specops, "function_specops_cmp"
                                 ir.createCondBr cmp, check_if_function_is_bound_bb, object_isnt_function_bb
 
-                                @doInsideBlock check_if_function_is_bound_bb, =>
+                                @doInsideBBlock check_if_function_is_bound_bb, =>
 
                                         # we know we have a function.  now we need to
                                         # check if it's bound.  if it's bound we defer
@@ -1506,13 +1493,13 @@ class LLVMIRVisitor extends TreeTransformer
                                         cmp = ir.createICmpEq load_isbound, (consts.int32 0), "notbound?"
                                         ir.createCondBr cmp, direct_invoke_bb, runtime_invoke_bb
 
-                                        @doInsideBlock runtime_invoke_bb, =>
+                                        @doInsideBBlock runtime_invoke_bb, =>
                                                 calltmp = @createCall @ejs_runtime.invoke_closure, argv, "calltmp", true
                                                 ir.createStore calltmp, call_result
                                                 ir.createBr invoke_merge_bb
                         
                                         # in the successful case we modify our argv with the responses and directly invoke the closure func
-                                        @doInsideBlock direct_invoke_bb, =>
+                                        @doInsideBBlock direct_invoke_bb, =>
                                                 func_load = @emitLoadEjsFunctionClosureFunc closure
                                                 env_load = @emitLoadEjsFunctionClosureEnv closure
 
@@ -1624,17 +1611,17 @@ class LLVMIRVisitor extends TreeTransformer
                         cmp = ir.createICmpUGt candidate, (consts.int64_lowhi 0xfffbffff, 0xffffffff), "cmpresult"
                         ir.createCondBr cmp, is_object_bb, failure_bb
 
-                        @doInsideBlock is_object_bb, =>
+                        @doInsideBBlock is_object_bb, =>
                                 obj = @emitEjsvalTo candidate, types.EjsObject.pointerTo(), "obj"
                                 specops_load = @emitLoadSpecops obj
                                 cmp = ir.createICmpEq specops_load, @ejs_runtime.function_specops, "function_specops_cmp"
                                 ir.createCondBr cmp, success_bb, failure_bb
 
-                        @doInsideBlock success_bb, =>
+                        @doInsideBBlock success_bb, =>
                                 ir.createStore (@loadBoolEjsValue true), typeofIsFunction_alloca, "store_typeof"
                                 ir.createBr merge_bb
                                 
-                        @doInsideBlock failure_bb, =>
+                        @doInsideBBlock failure_bb, =>
                                 ir.createStore (@loadBoolEjsValue false), typeofIsFunction_alloca, "store_typeof"
                                 ir.createBr merge_bb
 
@@ -1662,17 +1649,17 @@ class LLVMIRVisitor extends TreeTransformer
                         cmp = ir.createICmpUGt candidate, (consts.int64_lowhi 0xfffbffff, 0xffffffff), "cmpresult"
                         ir.createCondBr cmp, is_object_bb, failure_bb
 
-                        @doInsideBlock is_object_bb, =>
+                        @doInsideBBlock is_object_bb, =>
                                 obj = @emitEjsvalTo candidate, types.EjsObject.pointerTo(), "obj"
                                 specops_load = @emitLoadSpecops obj
                                 cmp = ir.createICmpEq specops_load, @ejs_runtime.symbol_specops, "symbol_specops_cmp"
                                 ir.createCondBr cmp, success_bb, failure_bb
 
-                        @doInsideBlock success_bb, =>
+                        @doInsideBBlock success_bb, =>
                                 ir.createStore (@loadBoolEjsValue true), typeofIsSymbol_alloca, "store_typeof"
                                 ir.createBr merge_bb
                                 
-                        @doInsideBlock failure_bb, =>
+                        @doInsideBBlock failure_bb, =>
                                 ir.createStore (@loadBoolEjsValue false), typeofIsSymbol_alloca, "store_typeof"
                                 ir.createBr merge_bb
 
