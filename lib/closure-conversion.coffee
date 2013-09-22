@@ -19,6 +19,7 @@ is_intrinsic = echo_util.is_intrinsic
 create_identifier = echo_util.create_identifier
 create_string_literal = echo_util.create_string_literal
 create_number_literal = echo_util.create_number_literal
+startGenerator = echo_util.startGenerator
 
 hasOwnProperty = Object.prototype.hasOwnProperty
 
@@ -691,13 +692,12 @@ class LambdaLift extends TreeTransformer
                         alloc_scratch =
                                 type: syntax.ExpressionStatement
                                 expression: create_intrinsic "createArgScratchArea", [ { type: syntax.Literal, value: n.scratch_size } ]
-                        n.body.body = [alloc_scratch].concat n.body.body
+                        n.body.body.unshift alloc_scratch
                 
         visitFunctionDeclaration: (n) ->
                 n.body = @visit n.body
                 @maybePrependScratchArea n
                 n
-
 
         visitArrowFunctionExpression: (n) ->
                 # this doesn't really belong here, but if we're
@@ -715,7 +715,7 @@ class LambdaLift extends TreeTransformer
                         }
                         n.espression = false
                 @visitFunctionExpression n
-                
+
         visitFunctionExpression: (n) ->
                 if n.displayName?
                         global_name = genGlobalFunctionName n.displayName, @filename
@@ -749,6 +749,7 @@ class LambdaLift extends TreeTransformer
                         name: global_name
                 }
 
+
 class NameAnonymousFunctions extends TreeTransformer
         visitAssignmentExpression: (n) ->
                 n = super n
@@ -761,7 +762,7 @@ class NameAnonymousFunctions extends TreeTransformer
                 #   <identifier> = function <identifier> () { }
                 #if lhs.type is syntax.Identifier and rhs.type is syntax.FunctionExpression and not rhs.id?.name
                 #        rhs.display = <something pretty about the lhs>
-                #n
+                #
                 if rhs.type is syntax.FunctionExpression and not rhs.id?.name
                         rhs.displayName = escodegen.generate lhs
                 n
@@ -889,7 +890,91 @@ class ReplaceUnaryVoid extends TreeTransformer
                 if n.operator is "void" and n.argument.type is syntax.Literal and n.argument.value is 0
                         return create_intrinsic "builtinUndefined", []
                 n
-                                                
+
+class InlineSomeIIFEs extends TreeTransformer
+
+        constructor: ->
+                @function_stack = new Stack
+                @iife_generator = startGenerator()
+
+        visitFunction: (n) ->
+                @function_stack.push n
+                rv = super
+                @function_stack.pop
+                rv
+                
+        visitExpressionStatement: (n) ->
+                # bail out early if we know we aren't in the right place
+                if is_intrinsic "invokeClosure", n.expression
+                        candidate = n.expression
+                else if is_intrinsic "setSlot", n.expression
+                        candidate = n.expression.arguments[2]
+                else if (is_intrinsic "setGlobal", n.expression) or (is_intrinsic "setLocal", n.expression)
+                        candidate = n.expression.arguments[1]
+                else
+                        return n
+
+                return n if not is_intrinsic "invokeClosure", candidate
+                return n if not (is_intrinsic "makeClosure", candidate.arguments[0]) and not (is_intrinsic "makeAnonClosure", candidate.arguments[0])
+
+                arity = candidate.arguments[0].arguments[1].params.length
+                arg_count = candidate.arguments.length - 1 # %invokeClosure's first arg is the callee
+
+                console.warn "arity = #{arity}.  arg_count = #{arg_count}"
+
+                return n if arg_count > arity
+
+                # at this point we know we have a zero arg IIFE in an expression statement, ala:
+                #
+                # (function(x, ...) { ...body...})(y, ...);
+                #
+                # so just inline { ...body... } in place of the
+                # expression statement, after doing some magic to fix
+                # up argument bindings (done here) and return
+                # statements in the body (done in LLVMIRVisitor).
+
+                iife_rv_id = create_identifier "%iife_rv_#{@iife_generator()}"
+
+                replacement = { type: syntax.BlockStatement, body: [] }
+
+                replacement.body.push {
+                        type: syntax.VariableDeclaration,
+                        kind: "let",
+                        declarations: [{
+                                type: syntax.VariableDeclarator
+                                id:   iife_rv_id
+                                init: undefined
+                        }]
+                }
+
+                for i in [0...arity]
+                        replacement.body.push {
+                                type: syntax.VariableDeclaration,
+                                kind: "let",
+                                declarations: [{
+                                        type: syntax.VariableDeclarator
+                                        id:   candidate.arguments[0].arguments[1].params[i]
+                                        init: if i <= arg_count then candidate.arguments[i+1] else undefined
+                                }]
+                        }
+                        
+                @function_stack.top.scratch_size = Math.max @function_stack.top.scratch_size, candidate.arguments[0].arguments[1].scratch_size
+
+                body = candidate.arguments[0].arguments[1].body
+                body.ejs_iife_rv = iife_rv_id
+                body.fromIIFE = true
+
+                replacement.body.push body
+
+                if is_intrinsic "setSlot", n.expression
+                        n.expression.arguments[2] = create_intrinsic "getLocal", [iife_rv_id]
+                        replacement.body.push n
+                else if (is_intrinsic "setGlobal", n.expression) or (is_intrinsic "setLocal", n.expression)
+                        n.expression.arguments[1] = create_intrinsic "getLocal", [iife_rv_id]
+                        replacement.body.push n
+                        
+                return replacement
+                                                                                                
 transform_dump_tree = (n, indent=0) ->
         stringified_indent = ('' for i in [0..(indent*2)]).join('| ')
         console.log "#{stringified_indent}.type = syntax.#{n.type}"
@@ -912,15 +997,16 @@ transform_dump_tree = (n, indent=0) ->
         undefined
 
 passes = [
-        HoistFuncDecls,
-        FuncDeclsToVars,
-        HoistVars,
-        ComputeFree,
-        LocateEnv,
-        NameAnonymousFunctions,
-        SubstituteVariables,
-        MarkLocalAndGlobalVariables,
+        HoistFuncDecls
+        FuncDeclsToVars
+        HoistVars
+        ComputeFree
+        LocateEnv
+        NameAnonymousFunctions
+        SubstituteVariables
+        MarkLocalAndGlobalVariables
         ReplaceUnaryVoid
+        InlineSomeIIFEs
         LambdaLift
         ]
 

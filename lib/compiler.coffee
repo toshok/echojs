@@ -238,25 +238,25 @@ class LLVMIRVisitor extends TreeTransformer
         visitBlock: (n) ->
                 new_scope = Object.create null
 
+                iife_dest_bb = null
                 iife_rv = null
-                iife_bb = null
                 
                 if n.fromIIFE
                         insertBlock = ir.getInsertBlock()
                         insertFunc = insertBlock.parent
-                        
-                        iife_rv = @createAlloca @currentFunction, types.EjsValue, "%iife_rv"
-                        iife_bb = new llvm.BasicBlock "iife_dest", insertFunc
 
-                @iifeStack.push iife_rv: iife_rv, iife_dest_bb: iife_bb
+                        iife_dest_bb = new llvm.BasicBlock "iife_dest", insertFunc
+                        iife_rv = n.ejs_iife_rv
+
+                @iifeStack.push { iife_rv, iife_dest_bb }
 
                 @visitWithScope new_scope, n.body
 
                 @iifeStack.pop()
-                if iife_bb
-                        ir.createBr iife_bb
-                        ir.setInsertPoint iife_bb
-                        rv = @createLoad iife_rv, "%iife_rv_load"
+                if iife_dest_bb
+                        ir.createBr iife_dest_bb
+                        ir.setInsertPoint iife_dest_bb
+                        rv = @createLoad (@findIdentifierInScope n.ejs_iife_rv.name), "%iife_rv_load"
                         rv
                 else
                         n
@@ -539,19 +539,18 @@ class LLVMIRVisitor extends TreeTransformer
                         merge_bb
                 
         visitReturn: (n) ->
-                debug.log "visitReturn"
                 if @iifeStack.top.iife_rv?
+                        # if we're inside an IIFE, convert the return statement into a store to the iife_rv alloca + a branch to the iife's dest bb
                         if n.argument?
-                                ir.createStore (@visit n.argument), @iifeStack.top.iife_rv
-                        else
-                                ir.createStore @loadUndefinedEjsValue(), @iifeStack.top.iife_rv
+                                ir.createStore (@visit n.argument), @findIdentifierInScope @iifeStack.top.iife_rv.name
                         ir.createBr @iifeStack.top.iife_dest_bb
                 else
+                        # otherwise generate an llvm IR ret
                         rv = @visitOrUndefined n.argument
                         
                         if @finallyStack.length > 0
-                                @returnValueAlloca = @createAlloca @currentFunction, types.EjsValue, "returnValue" unless @returnValueAlloca?
-                                ir.createStore rv, @returnValueAlloca
+                                @currentFunction.returnValueAlloca = @createAlloca @currentFunction, types.EjsValue, "returnValue" unless @currentFunction.returnValueAlloca?
+                                ir.createStore rv, @currentFunction.returnValueAlloca
                                 ir.createStore (consts.int32 ExitableScope.REASON_RETURN), @currentFunction.cleanup_reason
                                 ir.createBr @finallyStack[0]
                         else
@@ -562,36 +561,22 @@ class LLVMIRVisitor extends TreeTransformer
                                                 
 
         visitVariableDeclaration: (n) ->
-                if n.kind is "var"
-                        # vars are hoisted to the containing function's toplevel scope
-                        scope = @currentFunction.topScope
+                throw new Error("internal compiler error.  'var' declarations should have been transformed to 'let's by this point.") if n.kind is "var"
+                        
+                # lets and consts are not hoisted to the containing function's toplevel, but instead are bound in the lexical block they inhabit
+                scope = @scope_stack.top
 
-                        {allocas,new_allocas} = @createAllocas @currentFunction, n.declarations, scope
-                        for i in [0...n.declarations.length]
-                                if not n.declarations[i].init?
-                                        # there was not an initializer. we only store undefined
-                                        # if the alloca is newly allocated.
-                                        if new_allocas[i]
-                                                initializer = @visitOrUndefined n.declarations[i].init
-                                                ir.createStore initializer, allocas[i]
-                                else
+                {allocas,new_allocas} = @createAllocas @currentFunction, n.declarations, scope
+                for i in [0...n.declarations.length]
+                        if not n.declarations[i].init?
+                                # there was not an initializer. we only store undefined
+                                # if the alloca is newly allocated.
+                                if new_allocas[i]
                                         initializer = @visitOrUndefined n.declarations[i].init
                                         ir.createStore initializer, allocas[i]
-                else # if n.kind is "let" or n.kind is "const"
-                        # lets and consts are not hoisted to the containing function's toplevel, but instead are bound in the lexical block they inhabit
-                        scope = @scope_stack.top
-
-                        {allocas,new_allocas} = @createAllocas @currentFunction, n.declarations, scope
-                        for i in [0...n.declarations.length]
-                                if not n.declarations[i].init?
-                                        # there was not an initializer. we only store undefined
-                                        # if the alloca is newly allocated.
-                                        if new_allocas[i]
-                                                initializer = @visitOrUndefined n.declarations[i].init
-                                                ir.createStore initializer, allocas[i]
-                                else
-                                        initializer = @visitOrUndefined n.declarations[i].init
-                                        ir.createStore initializer, allocas[i]
+                        else
+                                initializer = @visitOrUndefined n.declarations[i].init
+                                ir.createStore initializer, allocas[i]
 
         visitMemberExpression: (n) ->
                 obj_result = @createAlloca @currentFunction, types.EjsValue, "result_obj"
@@ -1298,7 +1283,7 @@ class LLVMIRVisitor extends TreeTransformer
 
                                 cleanup_reason = @createLoad @currentFunction.cleanup_reason, "cleanup_reason_load"
 
-                                if @returnValueAlloca?
+                                if @currentFunction.returnValueAlloca?
                                         return_tramp = new llvm.BasicBlock "return_tramp", insertFunc
                                         @doInsideBBlock return_tramp, =>
                                 
@@ -1306,11 +1291,11 @@ class LLVMIRVisitor extends TreeTransformer
                                                         ir.createStore (consts.int32 ExitableScope.REASON_RETURN), @currentFunction.cleanup_reason
                                                         ir.createBr @finallyStack[0]
                                                 else
-                                                        rv = @createLoad @returnValueAlloca, "rv"
+                                                        rv = @createLoad @currentFunction.returnValueAlloca, "rv"
                                                         ir.createRet rv
                         
                                 switch_stmt = ir.createSwitch cleanup_reason, merge_block, scope.destinations.length + 1
-                                if @returnValueAlloca?
+                                if @currentFunction.returnValueAlloca?
                                         switch_stmt.addCase (consts.int32 ExitableScope.REASON_RETURN), return_tramp
 
                                 falloff_tramp = new llvm.BasicBlock "falloff_tramp", insertFunc
