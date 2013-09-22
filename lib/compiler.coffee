@@ -75,11 +75,8 @@ class LLVMIRVisitor extends TreeTransformer
                 entry_bb = new llvm.BasicBlock "entry", @literalInitializationFunction
                 return_bb = new llvm.BasicBlock "return", @literalInitializationFunction
 
-                @doInsideBBlock entry_bb, =>
-                        ir.createBr return_bb
-
-                @doInsideBBlock return_bb, =>
-                        ir.createRetVoid()
+                @doInsideBBlock entry_bb, => ir.createBr return_bb
+                @doInsideBBlock return_bb, => ir.createRetVoid()
 
                 @literalInitializationBB = entry_bb
 
