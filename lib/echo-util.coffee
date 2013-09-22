@@ -23,18 +23,20 @@ exports.startGenerator = startGenerator = ->
                 _gen += 1
                 id
                 
-exports.genId = genId = startGenerator()
+filenameGenerator = startGenerator()
 
 exports.genFreshFileName = (x) ->
-        "#{x}.#{genId()}"
+        "#{x}.#{filenameGenerator()}"
+
+functionNameGenerator = startGenerator()
 
 exports.genGlobalFunctionName = (x, filename) ->
         prefix = if filename? then "__ejs[#{filename}]" else "__ejs_fn"
-        "#{prefix}_#{x}_#{genId()}"
+        "#{prefix}_#{x}_#{functionNameGenerator()}"
 
 exports.genAnonymousFunctionName = (filename) ->
         prefix = if filename? then "__ejs[#{filename}]_%anon" else "__ejs_%anon"
-        "#{prefix}_#{genId()}"
+        "#{prefix}_#{functionNameGenerator()}"
 
 exports.bold = ->
         if process?.stderr?.isTTY

@@ -9,7 +9,7 @@ path = require 'path'
 { TreeTransformer } = require 'nodevisitor'
 closure_conversion = require 'closure-conversion'
 optimizations = require 'optimizations'
-{ genId, startGenerator, bold, reset, is_intrinsic } = require 'echo-util'
+{ startGenerator, bold, reset, is_intrinsic } = require 'echo-util'
 
 { ExitableScope, TryExitableScope, SwitchExitableScope, LoopExitableScope } = require 'exitable-scope'
 
@@ -33,6 +33,8 @@ hasOwn = Object::hasOwnProperty
 class LLVMIRVisitor extends TreeTransformer
         constructor: (@module, @filename, @options) ->
 
+                @idgen = startGenerator()
+                
                 if @options.record_types
                         @genRecordId = startGenerator()
                         
@@ -1088,7 +1090,7 @@ class LLVMIRVisitor extends TreeTransformer
         
                 literal_key = "string-" + str
                 if not @module_atoms[literal_key]?
-                        literalId = genId()
+                        literalId = @idgen()
                         ucs2_data = @generateUCS2 literalId, str
                         primstring = @generateEJSPrimString literalId, str.length
                         @module_atoms[literal_key] = @generateEJSValueForString literalId
