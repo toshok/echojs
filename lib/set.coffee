@@ -18,18 +18,21 @@ exports.Set = class Set
         values: -> Object.getOwnPropertyNames @set
         
         union: (other_set) ->
+                return @ if not other_set?
                 result = new Set
                 @map (el) -> result.add el
                 other_set.map (el) -> result.add el
                 result
 
         subtract: (other_set) ->
+                return @ if not other_set?
                 result = new Set 
                 @map (el) -> result.add el if not other_set.has el
                 result
 
         intersect: (other_set) ->
                 result = new Set
+                return result if not other_set?
                 @map (el) -> result.add el if other_set.has el
                 result
 
