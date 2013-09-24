@@ -292,6 +292,7 @@ class ComputeFree extends TreeTransformer
                                 exp.ejs_decls = decls
                                 exp.ejs_free_vars = uses.subtract decls
                         when syntax.FunctionDeclaration
+                                # this should only happen for the toplevel function we create to wrap the source file
                                 param_names = @param_names exp.params
                                 param_names.add exp.rest.name if exp.rest?
                                 exp.ejs_free_vars = (@free exp.body).subtract param_names
@@ -300,12 +301,12 @@ class ComputeFree extends TreeTransformer
                                 param_names = @param_names exp.params
                                 param_names.add exp.rest.name if exp.rest?
                                 exp.ejs_free_vars = (@free exp.body).subtract param_names
-                                exp.ejs_decls = exp.body.ejs_decls.union param_names
+                                exp.ejs_decls = param_names.union exp.body.ejs_decls
                         when syntax.ArrowFunctionExpression
                                 param_names = @param_names exp.params
                                 param_names.add exp.rest.name if exp.rest?
                                 exp.ejs_free_vars = (@free exp.body).subtract param_names
-                                exp.ejs_decls = if exp.body.ejs_decls? then exp.body.ejs_decls.union param_names else param_names
+                                exp.ejs_decls = param_names.union exp.body.ejs_decls
                         when syntax.LabeledStatement      then exp.ejs_free_vars = @free exp.body
                         when syntax.BlockStatement        then exp.ejs_free_vars = @free_blocklike exp, exp.body
                         when syntax.TryStatement          then exp.ejs_free_vars = Set.union.apply null, [(@free exp.block)].concat (map @call_free, exp.handlers)
@@ -503,6 +504,7 @@ class SubstituteVariables extends TreeTransformer
                 
         visitFunction: (n) ->
             try
+                new_mapping = deep_copy_object @currentMapping()
                 if n.ejs_env.closed.empty() and not n.ejs_env.nested_requires_env
                         n.body.body.unshift
                                 type: syntax.VariableDeclaration,
@@ -514,7 +516,6 @@ class SubstituteVariables extends TreeTransformer
                                                 value: null
                                 }],
                                 kind: "let"
-                        @visitFunctionBody n
                 else
                         # okay, we know we need a fresh environment in this function
                         
@@ -572,17 +573,12 @@ class SubstituteVariables extends TreeTransformer
                                                 expression: create_intrinsic "setSlot", [ (create_identifier env_name), (create_number_literal n.ejs_env.slot_mapping[param.name]), (create_string_literal param.name), (create_identifier param.name) ]
                                         }
 
-                        new_mapping = deep_copy_object @currentMapping()
                         new_mapping["%slot_mapping"] = n.ejs_env.slot_mapping
                         ###
                         for mapped_id of n.ejs_env.slot_mapping
                                 if new_mapping[mapped_id] is undefined
                                         console.log "new_mapping[#{mapped_id}] == undefined"
                         ###
-
-                        # remove all mappings for variables declared in this block
-                        if n.ejs_decls?
-                                new_mapping = reject new_mapping, (sym) -> n.ejs_decls.has sym
 
                         flatten_memberexp = (exp, mapping) ->
                                 if exp.type isnt syntax.CallExpression
@@ -608,10 +604,15 @@ class SubstituteVariables extends TreeTransformer
                         n.ejs_env.closed.map (sym) ->
                                 new_mapping[sym] = create_intrinsic "slot", [ (create_identifier env_name), (create_number_literal n.ejs_env.slot_mapping[sym]), (create_string_literal sym) ]
 
-                        @mappings.push new_mapping
-                        @visitFunctionBody n
+                # remove all mappings for variables declared in this function
+                if n.ejs_decls?
+                        new_mapping = reject new_mapping, (sym) -> (n.ejs_decls.has sym) and not (n.ejs_env.closed.has sym)
+
+                @mappings.push new_mapping
+                @visitFunctionBody n
+                if prepends?
                         n.body.body = prepends.concat n.body.body
-                        @mappings.pop()
+                @mappings.pop()
 
                 # convert function expressions to an explicit closure creation, so:
                 # 
@@ -705,7 +706,6 @@ class LambdaLift extends TreeTransformer
                 # for a body, replace the body with a block statement
                 # with a return statement returning that expression
                 if n.expression
-                        console.warn "yoohoo"
                         n.body = {
                                 type: syntax.BlockStatement
                                 body: [{
@@ -891,40 +891,60 @@ class ReplaceUnaryVoid extends TreeTransformer
                         return create_intrinsic "builtinUndefined", []
                 n
 
-class InlineSomeIIFEs extends TreeTransformer
+#
+# special pass to inline some common idioms dealing with IIFEs
+# (immediately invoked function expressions).
+#
+#    (function(x1, x2, ...) { ... body ... }(y1, y2, ...);
+#
+# This is a common way to provide scoping in ES5 and earlier.  It is
+# unnecessary with the addition of 'let' in ES6.  We assume that all
+# bindings in 'body' have been replace by 'let' or 'const' (meaning
+# that all hoisting has been done.)
+#
+# we translate this form into the following equivalent inlined form:
+#
+#    {
+#        let x1 = y1;
+#        let x2 = y2;
+#
+#        ...
+# 
+#        { ... body ... }
+#    }
+#
+# we limit the inlining to those where count(y) <= count(x).
+# otherwise we'd need to ensure that the evaluation of the extra y's
+# takes place before the body is executed, even if they aren't used.
+#
+# Another form we can optimize is the following:
+#
+#    (function() { body }).call(this)
+#
+# this form can be inlined directly as:
+#
+#    { body }
+# 
+class IIFEIdioms extends TreeTransformer
 
         constructor: ->
                 @function_stack = new Stack
                 @iife_generator = startGenerator()
+                super
 
         visitFunction: (n) ->
                 @function_stack.push n
                 rv = super
                 @function_stack.pop
                 rv
-                
-        visitExpressionStatement: (n) ->
-                # bail out early if we know we aren't in the right place
-                if is_intrinsic "invokeClosure", n.expression
-                        candidate = n.expression
-                else if is_intrinsic "setSlot", n.expression
-                        candidate = n.expression.arguments[2]
-                else if (is_intrinsic "setGlobal", n.expression) or (is_intrinsic "setLocal", n.expression)
-                        candidate = n.expression.arguments[1]
-                else
-                        return n
 
-                return n if not is_intrinsic "invokeClosure", candidate
-                return n if not (is_intrinsic "makeClosure", candidate.arguments[0]) and not (is_intrinsic "makeAnonClosure", candidate.arguments[0])
-
+        maybeInlineIIFE: (candidate, n) ->
                 arity = candidate.arguments[0].arguments[1].params.length
                 arg_count = candidate.arguments.length - 1 # %invokeClosure's first arg is the callee
 
-                console.warn "arity = #{arity}.  arg_count = #{arg_count}"
-
                 return n if arg_count > arity
 
-                # at this point we know we have a zero arg IIFE in an expression statement, ala:
+                # at this point we know we have an IIFE in an expression statement, ala:
                 #
                 # (function(x, ...) { ...body...})(y, ...);
                 #
@@ -932,7 +952,7 @@ class InlineSomeIIFEs extends TreeTransformer
                 # expression statement, after doing some magic to fix
                 # up argument bindings (done here) and return
                 # statements in the body (done in LLVMIRVisitor).
-
+                # 
                 iife_rv_id = create_identifier "%iife_rv_#{@iife_generator()}"
 
                 replacement = { type: syntax.BlockStatement, body: [] }
@@ -974,6 +994,61 @@ class InlineSomeIIFEs extends TreeTransformer
                         replacement.body.push n
                         
                 return replacement
+
+        maybeInlineIIFECall: (candidate, n) ->
+                return n if candidate.arguments.length isnt 2 or candidate.arguments[1].type isnt syntax.ThisExpression
+
+                iife_rv_id = create_identifier "%iife_rv_#{@iife_generator()}"
+
+                replacement = { type: syntax.BlockStatement, body: [] }
+
+                replacement.body.push {
+                        type: syntax.VariableDeclaration,
+                        kind: "let",
+                        declarations: [{
+                                type: syntax.VariableDeclarator
+                                id:   iife_rv_id
+                                init: undefined
+                        }]
+                }
+
+                body = candidate.arguments[0].object.arguments[1].body
+                body.ejs_iife_rv = iife_rv_id
+                body.fromIIFE = true
+
+                replacement.body.push body
+
+                if is_intrinsic "setSlot", n.expression
+                        n.expression.arguments[2] = create_intrinsic "getLocal", [iife_rv_id]
+                        replacement.body.push n
+                else if (is_intrinsic "setGlobal", n.expression) or (is_intrinsic "setLocal", n.expression)
+                        n.expression.arguments[1] = create_intrinsic "getLocal", [iife_rv_id]
+                        replacement.body.push n
+
+                return replacement
+        
+        visitExpressionStatement: (n) ->
+                isMakeClosure = (a) -> (is_intrinsic "makeClosure", a) or (is_intrinsic "makeAnonClosure", a)
+                # bail out early if we know we aren't in the right place
+                if is_intrinsic "invokeClosure", n.expression
+                        candidate = n.expression
+                else if is_intrinsic "setSlot", n.expression
+                        candidate = n.expression.arguments[2]
+                else if (is_intrinsic "setGlobal", n.expression) or (is_intrinsic "setLocal", n.expression)
+                        candidate = n.expression.arguments[1]
+                else
+                        return n
+
+                # at this point candidate should only be an invokeClosure intrinsic
+                return n if not is_intrinsic "invokeClosure", candidate
+
+                if isMakeClosure candidate.arguments[0]
+                        return @maybeInlineIIFE candidate, n
+                else if candidate.arguments[0].type is syntax.MemberExpression and (isMakeClosure candidate.arguments[0].object) and candidate.arguments[0].property.name is "call"
+                        return @maybeInlineIIFECall candidate, n
+                else
+                        return n
+                        
                                                                                                 
 transform_dump_tree = (n, indent=0) ->
         stringified_indent = ('' for i in [0..(indent*2)]).join('| ')
@@ -1006,7 +1081,7 @@ passes = [
         SubstituteVariables
         MarkLocalAndGlobalVariables
         ReplaceUnaryVoid
-        InlineSomeIIFEs
+        IIFEIdioms
         LambdaLift
         ]
 
