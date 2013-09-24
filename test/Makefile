@@ -7,7 +7,12 @@ NODE_FLAGS=--harmony --harmony-typeof
 
 TESTS:=$(wildcard *[0-9].js)
 
+# this test just sucks
 TESTS:=$(filter-out alloc1.js,$(TESTS))
+
+# these test for es6 stuff that neither node nor ejs supports
+TESTS:=$(filter-out destructure1.js,$(TESTS))
+TESTS:=$(filter-out module1.js,$(TESTS))
 
 ESPRIMA_TESTS=$(filter esprima%,$(TESTS))
 ESPRIMA_TESTS:=$(ESPRIMA_TESTS:%.js=%.js.exe)
@@ -88,9 +93,9 @@ format-results:
 
 compile-tests: $(patsubst %.js,%.js.exe,$(TESTS))
 
-test-%: echo-% .%.js.ejs-out .%.js.node-out
+test-%: echo-% .%.js.ejs-out %.js.expected-out
 	-@test_js=`echo $@|sed -e s,test-,,`.js; \
-	if cmp -s .$$test_js.ejs-out .$$test_js.node-out ; then \
+	if cmp -s .$$test_js.ejs-out $$test_js.expected-out ; then \
 		if grep -e ^$$test_js .expected-failures /dev/null 2>&1; then \
 			echo "\033[33mXSUCCESS\033[0m"; \
 			echo $$test_js >> .xsuccess; \
@@ -105,7 +110,7 @@ test-%: echo-% .%.js.ejs-out .%.js.node-out
 		else \
 			echo "\033[31mFAILURE\033[0m"; \
 			echo $$test_js >> .failures; \
-			diff -u .$$test_js.ejs-out .$$test_js.node-out > .$$test_js.diff; \
+			diff -u .$$test_js.ejs-out $$test_js.expected-out > .$$test_js.diff; \
 		fi \
 	fi
 
@@ -119,7 +124,7 @@ echo-%:
 .%.js.ejs-out: %.js.exe
 	-@EXE=`echo $<`; ./$$EXE > $@
 
-.%.js.node-out: %.js
+%.js.expected-out: %.js
 	@NODE_PATH=$(NODE_PATH) node $(NODE_FLAGS) $< > $@
 
 $(ESPRIMA_TESTS): %.js.exe: %.js $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js $(TOPDIR)/estraverse/estraverse.js $(TOPDIR)/runtime/libecho.a
@@ -149,6 +154,9 @@ node-path:
 
 clean: clean-results clean-esprima-roundtrip
 	rm -f *.o *.js.exe terminal.js echo-assert.js .*.diff .*-out .failures .successes .xfail .xsuccess
+
+.PRECIOUS: $(TESTS:%.js=%.js.expected-out)
+
 
 .INTERMEDIATE: terminal.js echo-assert.js
 

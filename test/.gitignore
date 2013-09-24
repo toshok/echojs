@@ -11,7 +11,7 @@ esprima.js
 estraverse.js
 *.diff
 *.ejs-out
-*.node-out
+*.expected-out
 .failures
 .successes
 .xfail
