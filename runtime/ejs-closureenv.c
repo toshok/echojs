@@ -22,6 +22,8 @@ _ejs_closureenv_new (uint32_t length)
 ejsval
 _ejs_closure_init (EJSClosureEnv* env, uint32_t length)
 {
+    assert (length > 0);
+
     env->length = length;
     for (int i = 0; i < length; i ++) {
         env->slots[i] = _ejs_undefined;
@@ -32,6 +34,7 @@ _ejs_closure_init (EJSClosureEnv* env, uint32_t length)
 ejsval
 _ejs_closureenv_get_slot (ejsval env, uint32_t slot)
 {
+    assert (EJSVAL_IS_CLOSUREENV(env));
     EJSClosureEnv* env_ = EJSVAL_TO_CLOSUREENV_IMPL(env);
     assert(slot < env_->length);
     return env_->slots[slot];
@@ -40,6 +43,7 @@ _ejs_closureenv_get_slot (ejsval env, uint32_t slot)
 ejsval*
 _ejs_closureenv_get_slot_ref (ejsval env, uint32_t slot)
 {
+    assert (EJSVAL_IS_CLOSUREENV(env));
     EJSClosureEnv* env_ = EJSVAL_TO_CLOSUREENV_IMPL(env);
     assert(slot < env_->length);
     return &env_->slots[slot];
