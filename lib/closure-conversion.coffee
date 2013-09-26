@@ -131,6 +131,8 @@ class HoistFuncDecls extends TreeTransformer
 #   var foo = function foo() { }
 # 
 class FuncDeclsToVars extends TreeTransformer
+        constructor: -> super
+        
         visitFunctionDeclaration: (n) ->
                 if n.toplevel
                         super
@@ -357,9 +359,9 @@ class ComputeFree extends TreeTransformer
 # 2) adds mappings for all .closed variables
 class SubstituteVariables extends TreeTransformer
         constructor: (module) ->
-                super
                 @function_stack = new Stack
                 @mappings = new Stack
+                super
 
         currentMapping: -> if @mappings.depth > 0 then @mappings.top else Object.create null
 
@@ -677,9 +679,9 @@ class SubstituteVariables extends TreeTransformer
 #
 class LambdaLift extends TreeTransformer
         constructor: (@filename) ->
-                super
                 @functions = []
                 @mappings = new Stack
+                super
 
         currentMapping: -> if @mappings.depth > 0 then @mappings.top else Object.create null
 
@@ -751,6 +753,7 @@ class LambdaLift extends TreeTransformer
 
 
 class NameAnonymousFunctions extends TreeTransformer
+        constructor: -> super
         visitAssignmentExpression: (n) ->
                 n = super n
                 lhs = n.left
@@ -799,7 +802,7 @@ class MarkLocalAndGlobalVariables extends TreeTransformer
                 for property in n.properties
                         property.value = @visit property.value
                 n
-                
+
         visitAssignmentExpression: (n) ->
                 lhs = n.left
                 rhs = @visit n.right
@@ -822,6 +825,7 @@ class MarkLocalAndGlobalVariables extends TreeTransformer
                                 create_intrinsic "setGlobal", [lhs, new_rhs]
                 else
                         n.left = @visit n.left
+                        n.right = new_rhs
                         n
                         
 
@@ -886,6 +890,8 @@ class MarkLocalAndGlobalVariables extends TreeTransformer
                 n
 
 class ReplaceUnaryVoid extends TreeTransformer
+        constructor: -> super
+        
         visitUnaryExpression: (n) ->
                 if n.operator is "void" and n.argument.type is syntax.Literal and n.argument.value is 0
                         return create_intrinsic "builtinUndefined", []
