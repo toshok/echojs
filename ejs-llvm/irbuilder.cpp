@@ -291,6 +291,18 @@ namespace ejsllvm {
     }
 
     ejsval
+    IRBuilder_createICmpULt(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        REQ_LLVM_VAL_ARG(0, left);
+        REQ_LLVM_VAL_ARG(1, right);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
+
+        ejsval rv = Value_new (_llvm_builder.CreateICmpULT(left, right, name));
+        free (name);
+        return rv;
+    }
+
+    ejsval
     IRBuilder_createBr(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         REQ_LLVM_BB_ARG(0, dest);
@@ -462,6 +474,7 @@ namespace ejsllvm {
         OBJ_METHOD(createICmpEq);
         OBJ_METHOD(createICmpSGt);
         OBJ_METHOD(createICmpUGt);
+        OBJ_METHOD(createICmpULt);
         OBJ_METHOD(createBr);
         OBJ_METHOD(createCondBr);
         OBJ_METHOD(createPhi);
