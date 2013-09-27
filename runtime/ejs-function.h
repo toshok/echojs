@@ -32,6 +32,11 @@ EJS_BEGIN_DECLS
     _ejs_object_setprop (o, _ejs_atom_##n, tmpfunc);                    \
     EJS_MACRO_END
 
+#define EJS_INSTALL_ATOM_FUNCTION_VAL(o,n,f) ({                         \
+    ejsval tmpfunc = _ejs_function_new_native (_ejs_null, _ejs_atom_##n, (EJSClosureFunc)f); \
+    _ejs_object_setprop (o, _ejs_atom_##n, tmpfunc);            \
+    tmpfunc; })
+
 #define EJS_INSTALL_ATOM_FUNCTION_FLAGS(o,n,f,flags) EJS_MACRO_START         \
     _ejs_object_define_value_property (o, _ejs_atom_##n, _ejs_function_new_native (_ejs_null, _ejs_atom_##n, (EJSClosureFunc)f), flags); \
     EJS_MACRO_END
