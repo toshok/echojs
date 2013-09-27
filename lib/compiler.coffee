@@ -20,8 +20,6 @@ runtime = require 'runtime'
 llvm = require 'llvm'
 ir = llvm.IRBuilder
 
-opencode_intrinsics = true
-
 BUILTIN_PARAMS = [
   { type: syntax.Identifier, name: "%closure", llvm_type: types.EjsValue } # should be EjsClosureEnv
   { type: syntax.Identifier, name: "%this",    llvm_type: types.EjsValue }
@@ -39,28 +37,37 @@ class LLVMIRVisitor extends TreeTransformer
                         @genRecordId = startGenerator()
                         
                 # build up our runtime method table
-                @ejs_intrinsics =
-                        getLocal:             @handleGetLocal
-                        setLocal:             @handleSetLocal
-                        getGlobal:            @handleGetGlobal
-                        setGlobal:            @handleSetGlobal
-                        slot:                 @handleGetSlot
-                        setSlot:              @handleSetSlot
-                        invokeClosure:        @handleInvokeClosure
-                        makeClosure:          @handleMakeClosure
-                        makeAnonClosure:      @handleMakeAnonClosure
-                        createArgScratchArea: @handleCreateArgScratchArea
-                        makeClosureEnv:       @handleMakeClosureEnv
-                        typeofIsObject:       @handleTypeofIsObject
-                        typeofIsFunction:     @handleTypeofIsFunction
-                        typeofIsString:       @handleTypeofIsString
-                        typeofIsSymbol:       @handleTypeofIsSymbol
-                        typeofIsNumber:       @handleTypeofIsNumber
-                        typeofIsUndefined:    @handleTypeofIsUndefined
-                        typeofIsNull:         @handleTypeofIsNull
-                        typeofIsBoolean:      @handleTypeofIsBoolean
-                        builtinUndefined:     @handleBuiltinUndefined
+                @ejs_intrinsics = Object.create null,
+                        getLocal:             { value: @handleGetLocal }
+                        setLocal:             { value: @handleSetLocal }
+                        getGlobal:            { value: @handleGetGlobal }
+                        setGlobal:            { value: @handleSetGlobal }
+                        slot:                 { value: @handleGetSlot }
+                        setSlot:              { value: @handleSetSlot }
+                        invokeClosure:        { value: @handleInvokeClosure }
+                        makeClosure:          { value: @handleMakeClosure }
+                        makeAnonClosure:      { value: @handleMakeAnonClosure }
+                        createArgScratchArea: { value: @handleCreateArgScratchArea }
+                        makeClosureEnv:       { value: @handleMakeClosureEnv }
+                        typeofIsObject:       { value: @handleTypeofIsObject }
+                        typeofIsFunction:     { value: @handleTypeofIsFunction }
+                        typeofIsString:       { value: @handleTypeofIsString }
+                        typeofIsSymbol:       { value: @handleTypeofIsSymbol }
+                        typeofIsNumber:       { value: @handleTypeofIsNumber }
+                        typeofIsUndefined:    { value: @handleTypeofIsUndefined }
+                        typeofIsNull:         { value: @handleTypeofIsNull }
+                        typeofIsBoolean:      { value: @handleTypeofIsBoolean }
+                        builtinUndefined:     { value: @handleBuiltinUndefined }
 
+                # disable setSlot for now
+                @opencode_intrinsics = []
+                @opencode_intrinsics[intrinsic] = true for intrinsic of @ejs_intrinsic
+                @opencode_LoadOne = true
+                @opencode_UnaryNot = true
+                @opencode_NumberNew = true
+                
+                @opencode_intrinsics.setSlot = false
+                
                 @llvm_intrinsics =
                         gcroot: -> module.getOrInsert "@llvm.gcroot"
                 
@@ -102,7 +109,7 @@ class LLVMIRVisitor extends TreeTransformer
                 rv
 
         loadBoolEjsValue: (n) ->
-                if opencode_intrinsics and @options.target_pointer_size is 64
+                if @options.target_pointer_size is 64
                         boolval = (consts.int64_lowhi 0xfff98000, if n then 0x00000001 else 0x000000000)
                 else
                         boolval = @createLoad (if n then @ejs_runtime['true'] else @ejs_runtime['false']), "load_bool"
@@ -110,7 +117,7 @@ class LLVMIRVisitor extends TreeTransformer
                 boolval
                 
         loadNullEjsValue: ->
-                if opencode_intrinsics and @options.target_pointer_size is 64
+                if @options.target_pointer_size is 64
                         nullval = (consts.int64_lowhi 0xfffb8000, 0x00000000)
                 else
                         nullval = @createLoad @ejs_runtime['null'], "load_null"
@@ -118,7 +125,7 @@ class LLVMIRVisitor extends TreeTransformer
                 nullval
                 
         loadUndefinedEjsValue: ->
-                if opencode_intrinsics and @options.target_pointer_size is 64
+                if @options.target_pointer_size is 64
                         undef = (consts.int64_lowhi 0xfff90000, 0x00000000)
                 else
                         undef = @createLoad @ejs_runtime.undefined, "load_undefined"
@@ -478,7 +485,7 @@ class LLVMIRVisitor extends TreeTransformer
                 result = @createAlloca @currentFunction, types.EjsValue, "%update_result"
                 argument = @visit n.argument
                 
-                if opencode_intrinsics and @options.target_pointer_size is 64
+                if @opencode_LoadOne and @options.target_pointer_size is 64
                         one = ir.createBitCast (llvm.ConstantFP.getDouble 1), types.EjsValue, "load_one"
                 else
                         one = @createLoad @ejs_runtime['one'], "load_one"
@@ -831,7 +838,7 @@ class LLVMIRVisitor extends TreeTransformer
                                 
                 else if n.operator is "!"
                         arg_value =  @visitOrNull n.argument
-                        if opencode_intrinsics and @options.target_pointer_size is 64 and arg_value._ejs_returns_ejsval_bool
+                        if @opencodeUnaryNot and @options.target_pointer_size is 64 and arg_value._ejs_returns_ejsval_bool
                                 cmp = ir.createICmpEq arg_value, (@loadBoolEjsValue true), "cmpresult"
                                 rv = ir.createSelect cmp, (@loadBoolEjsValue false), (@loadBoolEjsValue true), "sel"
                                 rv._ejs_returns_ejsval_bool = true
@@ -957,11 +964,12 @@ class LLVMIRVisitor extends TreeTransformer
                 debug.log -> "          arguments length = #{n.arguments.length}"
                 debug.log -> "          arguments[#{i}] =  #{JSON.stringify n.arguments[i]}" for i in [0...n.arguments.length]
 
-                intrinsicHandler = @ejs_intrinsics[n.callee.name.slice 1]
+                unescapedName = n.callee.name.slice 1
+                intrinsicHandler = @ejs_intrinsics[unescapedName]
                 if not intrinsicHandler?
                         throw new Error "Internal error: callee should not be null in visitCallExpression (callee = '#{n.callee.name}', arguments = #{n.arguments.length})"
 
-                intrinsicHandler.call @, n
+                intrinsicHandler.call @, n, @opencode_intrinsics[unescapedName], false
                 
         visitNewExpression: (n) ->
                 if n.callee.type isnt syntax.Identifier or n.callee.name[0] isnt '%'
@@ -970,11 +978,12 @@ class LLVMIRVisitor extends TreeTransformer
                 if n.callee.name isnt "%invokeClosure"
                         throw "new expressions may only have a callee of %invokeClosure, callee = #{n.callee.name}"
                         
-                intrinsicHandler = @ejs_intrinsics[n.callee.name.slice 1]
+                unescapedName = n.callee.name.slice 1
+                intrinsicHandler = @ejs_intrinsics[unescapedName]
                 if not intrinsicHandler
                         throw "Internal error: ctor should not be null"
 
-                intrinsicHandler.call @, n, true
+                intrinsicHandler.call @, n, @opencode_intrinsics[unescapedName], true
 
         visitThisExpression: (n) ->
                 debug.log "visitThisExpression"
@@ -1058,7 +1067,7 @@ class LLVMIRVisitor extends TreeTransformer
                 strglobal
 
         generateEJSValueForString: (id) ->
-                name = "ejsval-string-#{id}"
+                name = "ejsval-#{id}"
                 strglobal = new llvm.GlobalVariable @module, types.EjsValue, name, (consts.int64 0) #llvm.Constant.getAggregateZero types.EjsValue
                 @module.getOrInsertGlobal name, types.EjsValue
                 
@@ -1090,7 +1099,7 @@ class LLVMIRVisitor extends TreeTransformer
                         literalId = @idgen()
                         ucs2_data = @generateUCS2 literalId, str
                         primstring = @generateEJSPrimString literalId, str.length
-                        @module_atoms[literal_key] = @generateEJSValueForString literalId
+                        @module_atoms[literal_key] = @generateEJSValueForString literal_key
                         @addStringLiteralInitialization str, ucs2_data, primstring, @module_atoms[literal_key], str.length
 
                 strload = @createLoad @module_atoms[literal_key], "literal_load"
@@ -1132,24 +1141,26 @@ class LLVMIRVisitor extends TreeTransformer
                 # number literals
                 if typeof n.value is "number"
                         debug.log -> "literal number: #{n.value}"
-                        literal_key = "num-" + n.value
-                        if @currentFunction.literalAllocas[literal_key]
-                                num_alloca = @currentFunction.literalAllocas[literal_key]
+                        
+                        if @opencode_NumberNew and @options.target_pointer_size is 64
+                                c = llvm.ConstantFP.getDouble n.value
+                                return ir.createBitCast c, types.EjsValue, "numconst-#{n.value}"
                         else
-                                # only create 1 instance of num literals used in a function, and allocate them in the entry block
-                                @doInsideBBlock @currentFunction.entry_bb, =>
-                                        num_alloca = ir.createAlloca types.EjsValue, "num-alloca-#{n.value}"
-                                        c = llvm.ConstantFP.getDouble n.value
-                                        if opencode_intrinsics and @options.target_pointer_size is 64
-                                                val = ir.createBitCast c, types.EjsValue, "numconst-#{n.value}"
-                                        else
+                                literal_key = "num-" + n.value
+                                if @currentFunction.literalAllocas[literal_key]
+                                        num_alloca = @currentFunction.literalAllocas[literal_key]
+                                else
+                                        # only create 1 instance of num literals used in a function, and allocate them in the entry block
+                                        @doInsideBBlock @currentFunction.entry_bb, =>
+                                                num_alloca = ir.createAlloca types.EjsValue, "num-alloca-#{n.value}"
+                                                c = llvm.ConstantFP.getDouble n.value
                                                 val = @createCall @ejs_runtime.number_new, [c], "numconst-#{n.value}", !@ejs_runtime.number_new.doesNotThrow
-                                        ir.createStore val, num_alloca
-                                        @currentFunction.literalAllocas[literal_key] = num_alloca
-                        numload = @createLoad num_alloca, "%num_alloca"
-                        numload.literal = n
-                        debug.log -> "numload = #{numload}"
-                        return numload
+                                                ir.createStore val, num_alloca
+                                                @currentFunction.literalAllocas[literal_key] = num_alloca
+                                numload = @createLoad num_alloca, "%num_alloca"
+                                numload.literal = n
+                                debug.log -> "numload = #{numload}"
+                                return numload
 
                 # boolean literals
                 if typeof n.value is "boolean"
@@ -1317,7 +1328,7 @@ class LLVMIRVisitor extends TreeTransformer
                         
                 ir.setInsertPoint merge_block
 
-        handleGetLocal: (exp) ->
+        handleGetLocal: (exp, opencode) ->
                 source = @findIdentifierInScope exp.arguments[0].name
                 if source?
                         return @createLoad source, "load_#{exp.arguments[0].name}"
@@ -1347,26 +1358,27 @@ class LLVMIRVisitor extends TreeTransformer
                         
                 throw new Error "identifier not found: #{exp.arguments[0].name}"
 
-        handleSetLocal: (exp) ->
+        handleSetLocal: (exp, opencode) ->
                 dest = @findIdentifierInScope exp.arguments[0].name
                 throw new Error "identifier not found: #{exp.arguments[0].name}" if not dest?
                 new_local_val = @visit exp.arguments[1]
                 ir.createStore new_local_val, dest
                 new_local_val
                                 
-        handleGetGlobal: (exp) ->
+        handleGetGlobal: (exp, opencode) ->
                 pname = @getAtom exp.arguments[0].name
                 @createCall @ejs_runtime.global_getprop, [pname], "globalloadprop_#{exp.arguments[0].name}"
         
-        handleSetGlobal: (exp) ->
+        handleSetGlobal: (exp, opencode) ->
                 pname = @getAtom exp.arguments[0].name
                 value = @visit exp.arguments[1]
 
                 @createCall @ejs_runtime.global_setprop, [pname, value], "globalpropstore_#{exp.arguments[0].name}"
                 value
 
+        # this method assumes it's called in an opencoded context
         emitEjsvalTo: (val, type, prefix) ->
-                if opencode_intrinsics and @options.target_pointer_size is 64
+                if @options.target_pointer_size is 64
                         #  %1 = and i64 %val, 140737488355327
                         #  %2 = inttoptr i64 %1 to %struct._EJSObject*
                         payload = ir.createAnd val, (consts.int64_lowhi 0x7fff, 0xffffffff), "#{prefix}_payload"
@@ -1375,8 +1387,9 @@ class LLVMIRVisitor extends TreeTransformer
                         throw new Error "emitEjsvalTo not implemented for this case"
                         
                 
+        # this method assumes it's called in an opencoded context
         emitLoadSpecops: (obj) ->
-                if opencode_intrinsics and @options.target_pointer_size is 64
+                if @options.target_pointer_size is 64
                         # %1 = getelementptr inbounds %struct._EJSObject* %obj, i64 0, i32 1
                         # %specops_load = load %struct.EJSSpecOps** %1, align 8, !tbaa !0
                         specops_slot = ir.createInBoundsGetElementPointer obj, [(consts.int64 0), (consts.int32 1)], "specops_slot"
@@ -1388,31 +1401,34 @@ class LLVMIRVisitor extends TreeTransformer
                 @createCall @ejs_runtime.throw_nativeerror_utf8, [(consts.int32 errorCode), (consts.string ir, errorMessage)], "", true
                 ir.createUnreachable()
 
+        # this method assumes it's called in an opencoded context
         emitLoadEjsFunctionIsBound: (closure) ->
-                if opencode_intrinsics and @options.target_pointer_size is 64
+                if @options.target_pointer_size is 64
                         bound_slot_gep = ir.createInBoundsGetElementPointer closure, [(consts.int64 1), (consts.int32 2)], "bound_slot_gep"
                         bound_slot = ir.createBitCast bound_slot_gep, types.int32.pointerTo(), "bound_slot"
                         ir.createLoad bound_slot, "bound_load"
                 else
                         throw new Error "emitLoadEjsFunctionIsBound not implemented for this case"
 
+        # this method assumes it's called in an opencoded context
         emitLoadEjsFunctionClosureFunc: (closure) ->
-                if opencode_intrinsics and @options.target_pointer_size is 64
+                if @options.target_pointer_size is 64
                         func_slot_gep = ir.createInBoundsGetElementPointer closure, [consts.int64 1], "func_slot_gep"
                         func_slot = ir.createBitCast func_slot_gep, types.EjsClosureFunc.pointerTo(), "func_slot"
                         ir.createLoad func_slot, "func_load"
                 else
                         throw new Error "emitLoadEjsFunctionClosureFunc not implemented for this case"
                 
+        # this method assumes it's called in an opencoded context
         emitLoadEjsFunctionClosureEnv: (closure) ->
-                if opencode_intrinsics and @options.target_pointer_size is 64
+                if @options.target_pointer_size is 64
                         env_slot_gep = ir.createInBoundsGetElementPointer closure, [(consts.int64 1),(consts.int32 1)], "env_slot_gep"
                         env_slot = ir.createBitCast env_slot_gep, types.EjsValue.pointerTo(), "env_slot"
                         ir.createLoad env_slot, "env_load"
                 else
                         throw new Error "emitLoadEjsFunctionClosureEnv not implemented for this case"
                 
-        handleInvokeClosure: (exp, ctor_context= false) ->
+        handleInvokeClosure: (exp, opencode, ctor_context) ->
                 insertBlock = ir.getInsertBlock()
                 insertFunc = insertBlock.parent
                 
@@ -1439,7 +1455,7 @@ class LLVMIRVisitor extends TreeTransformer
                 argv = modified_argv
                 call_result = @createAlloca @currentFunction, types.EjsValue, "call_result"
 
-                if opencode_intrinsics and @options.target_pointer_size is 64
+                if opencode and @options.target_pointer_size is 64
                         candidate_is_object_bb = new llvm.BasicBlock "candidate_is_object_bb", insertFunc
                         check_if_function_is_bound_bb = new llvm.BasicBlock "check_if_function_is_bound_bb", insertFunc
                         object_isnt_function_bb = new llvm.BasicBlock "object_isnt_function_bb", insertFunc
@@ -1506,7 +1522,7 @@ class LLVMIRVisitor extends TreeTransformer
                 # value was an object.  if it was, we return it,
                 # otherwise we return argv[0]
 
-                if opencode_intrinsics and @options.target_pointer_size is 64
+                if opencode and @options.target_pointer_size is 64
                         cmp = ir.createICmpUGt call_result_load, (consts.int64_lowhi 0xfffbffff, 0xffffffff), "cmpresult"
                 else
                         call_result_is_object = @createCall @ejs_runtime.typeof_is_object, [call_result_load], "call_result_is_object", false
@@ -1514,44 +1530,44 @@ class LLVMIRVisitor extends TreeTransformer
                 return ir.createSelect cmp, call_result_load, argv[1], "sel"
                         
                         
-        handleMakeClosure: (exp, ctor_context= false) ->
+        handleMakeClosure: (exp, opencode) ->
                 argv = @visitArgsForCall @ejs_runtime.make_closure, false, exp.arguments
                 closure_result = @createAlloca @currentFunction, types.EjsValue, "closure_result"
                 calltmp = ir.createCall @ejs_runtime.make_closure, argv, "closure_tmp"
                 store = ir.createStore calltmp, closure_result
                 @createLoad closure_result, "closure_result_load"
 
-        handleMakeAnonClosure: (exp, ctor_context= false) ->
+        handleMakeAnonClosure: (exp, opencode) ->
                 argv = @visitArgsForCall @ejs_runtime.make_anon_closure, false, exp.arguments
                 closure_result = @createAlloca @currentFunction, types.EjsValue, "closure_result"
                 calltmp = ir.createCall @ejs_runtime.make_anon_closure, argv, "closure_tmp"
                 store = ir.createStore calltmp, closure_result
                 @createLoad closure_result, "closure_result_load"
                 
-        handleCreateArgScratchArea: (exp, ctor_context= false) ->
+        handleCreateArgScratchArea: (exp, opencode) ->
                 argsArrayType = llvm.ArrayType.get types.EjsValue, exp.arguments[0].value
                 @currentFunction.scratch_area = @createAlloca @currentFunction, argsArrayType, "args_scratch_area"
 
-        handleMakeClosureEnv: (exp, ctor_context= false) ->
+        handleMakeClosureEnv: (exp, opencode) ->
                 size = exp.arguments[0].value
                 ir.createCall @ejs_runtime.make_closure_env, [consts.int32 size], "env_tmp"
 
-        handleGetSlot: (exp) ->
+        handleGetSlot: (exp, opencode) ->
                 env = @visitOrNull exp.arguments[0]
                 slotnum = exp.arguments[1].value
-                if opencode_intrinsics and @options.target_pointer_size is 64
+                if opencode and @options.target_pointer_size is 64
                         # for 64bit platforms, we can open code this pretty easily
                         #
                         #  %ref = handleSlotRef
                         #  %ret = load i64* %ref, align 8
                         #
-                        slot_ref = @handleSlotRef exp
+                        slot_ref = @handleSlotRef exp, opencode
                         ir.createLoad slot_ref, "slot_ref_load"
                 else
                         ir.createCall @ejs_runtime.get_env_slot_val, [env, (consts.int32 slotnum)], "slot_val_tmp"
 
-        handleSetSlot: (exp) ->
-                slotref = @handleSlotRef exp
+        handleSetSlot: (exp, opencode) ->
+                slotref = @handleSlotRef exp, opencode
                 if exp.arguments.length is 4
                         new_slot_val = @visit exp.arguments[3]
                         ir.createStore new_slot_val, slotref
@@ -1560,18 +1576,18 @@ class LLVMIRVisitor extends TreeTransformer
                         ir.createStore new_slot_val, slotref
                 new_slot_val
 
-        handleSlotRef: (exp) ->
+        handleSlotRef: (exp, opencode) ->
                 env = @visitOrNull exp.arguments[0]
                 slotnum = exp.arguments[1].value
 
-                if opencode_intrinsics and @options.target_pointer_size is 64
+                if opencode and @options.target_pointer_size is 64
                         envp = @emitEjsvalTo env, types.EjsClosureEnv.pointerTo(), "closureenv"
                         ir.createInBoundsGetElementPointer envp, [(consts.int64 0), (consts.int32 2), (consts.int64 slotnum), (consts.int32 0)], "slot_ref"
                 else
                         ir.createCall @ejs_runtime.get_env_slot_ref, [env, (consts.int32 slotnum)], "slot_ref_tmp"
 
-        handleTypeofIsObject: (exp) ->
-                if opencode_intrinsics and @options.target_pointer_size is 64
+        handleTypeofIsObject: (exp, opencode) ->
+                if opencode and @options.target_pointer_size is 64
                         cmp = ir.createICmpUGt (@visitOrNull exp.arguments[0]), (consts.int64_lowhi 0xfffbffff, 0xffffffff), "cmpresult"
                         rv = ir.createSelect cmp, (@loadBoolEjsValue true), (@loadBoolEjsValue false), "sel"
                         rv._ejs_returns_ejsval_bool = true
@@ -1579,8 +1595,8 @@ class LLVMIRVisitor extends TreeTransformer
                 else
                         @createCall @ejs_runtime.typeof_is_object, [@visitOrNull exp.arguments[0]], "is_object", false
 
-        handleTypeofIsFunction: (exp) ->
-                if opencode_intrinsics and @options.target_pointer_size is 64
+        handleTypeofIsFunction: (exp, opencode) ->
+                if opencode and @options.target_pointer_size is 64
                         insertBlock = ir.getInsertBlock()
                         insertFunc  = insertBlock.parent
                         
@@ -1617,8 +1633,8 @@ class LLVMIRVisitor extends TreeTransformer
                 else
                         ir.createCall @ejs_runtime.typeof_is_function, [@visitOrNull exp.arguments[0]], "is_function"
 
-        handleTypeofIsSymbol: (exp) ->
-                if opencode_intrinsics and @options.target_pointer_size is 64
+        handleTypeofIsSymbol: (exp, opencode) ->
+                if opencode and @options.target_pointer_size is 64
                         insertBlock = ir.getInsertBlock()
                         insertFunc  = insertBlock.parent
                         
@@ -1655,8 +1671,8 @@ class LLVMIRVisitor extends TreeTransformer
                 else
                         ir.createCall @ejs_runtime.typeof_is_symbol, [@visitOrNull exp.arguments[0]], "is_symbol"
 
-        handleTypeofIsString: (exp) ->
-                if opencode_intrinsics and @options.target_pointer_size is 64
+        handleTypeofIsString: (exp, opencode) ->
+                if opencode and @options.target_pointer_size is 64
                         mask = ir.createAnd (@visitOrNull exp.arguments[0]), (consts.int64_lowhi 0xffff8000, 0x00000000), "mask.i"
                         cmp = ir.createICmpEq mask, (consts.int64_lowhi 0xfffa8000, 0x00000000), "cmpresult"
                         t = @loadBoolEjsValue true
@@ -1667,10 +1683,33 @@ class LLVMIRVisitor extends TreeTransformer
                 else
                         @createCall @ejs_runtime.typeof_is_string, [@visitOrNull exp.arguments[0]], "is_string", false
                                 
-        handleTypeofIsNumber:    (exp) -> @createCall @ejs_runtime.typeof_is_number,    [@visitOrNull exp.arguments[0]], "is_number", false
-        handleTypeofIsUndefined: (exp) -> @createCall @ejs_runtime.typeof_is_undefined, [@visitOrNull exp.arguments[0]], "is_undefined", false
-        handleTypeofIsNull:      (exp) -> @createCall @ejs_runtime.typeof_is_null,      [@visitOrNull exp.arguments[0]], "is_null", false
-        handleTypeofIsBoolean:   (exp) -> @createCall @ejs_runtime.typeof_is_boolean,   [@visitOrNull exp.arguments[0]], "is_boolean", false
+        handleTypeofIsNumber:    (exp, opencode) ->
+                if opencode and @options.target_pointer_size is 64
+                        cmp = ir.createICmpULt candidate, (consts.int64_lowhi 0xfff80001, 0x00000000), "cmpresult"
+                        rv = ir.createSelect cmp, (@loadBoolEjsValue true), (@loadBoolEjsValue false), "sel"
+                        rv._ejs_returns_ejsval_bool = true
+                        rv
+                else
+                        @createCall @ejs_runtime.typeof_is_number,    [@visitOrNull exp.arguments[0]], "is_number", false
+        handleTypeofIsUndefined: (exp, opencode) ->
+                if opencode and @options.target_pointer_size is 64
+                        cmp = ir.createICmpEq (@visitOrUndefined exp.arguments[0]), (consts.int64_lowhi 0xfff90000, 0x00000000), "cmpresult"
+                        rv = ir.createSelect cmp, (@loadBoolEjsValue true), (@loadBoolEjsValue false), "sel"
+                        rv._ejs_returns_ejsval_bool = true
+                        rv
+                else
+                        @createCall @ejs_runtime.typeof_is_undefined, [@visitOrNull exp.arguments[0]], "is_undefined", false
+                
+        handleTypeofIsNull:      (exp) -> console.log "typeof_is_null"; @createCall @ejs_runtime.typeof_is_null,      [@visitOrNull exp.arguments[0]], "is_null", false
+        handleTypeofIsBoolean:   (exp, opencode) ->
+                if opencode and @options.target_pointer_size is 64
+                        mask = ir.createAnd (@visitOrNull exp.arguments[0]), (consts.int64_lowhi 0xffff8000, 0x00000000), "mask.i"
+                        cmp = ir.createICmpEq mask, (consts.int64_lowhi 0xfff98000, 0x00000000), "cmpresult"
+                        rv = ir.createSelect cmp, (@loadBoolEjsValue true), (@loadBoolEjsValue false), "sel"
+                        rv._ejs_returns_ejsval_bool = true
+                        rv
+                else
+                        @createCall @ejs_runtime.typeof_is_boolean,   [@visitOrNull exp.arguments[0]], "is_boolean", false
         handleBuiltinUndefined:  (exp) -> @loadUndefinedEjsValue()
 
 class AddFunctionsVisitor extends TreeTransformer
