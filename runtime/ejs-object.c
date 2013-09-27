@@ -751,7 +751,7 @@ _ejs_Object_getPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
     
     /* 1. If Type(O) is not Object throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(obj)) {
-        printf ("throw TypeError, _this isn't an Object\n");
+        printf ("throw TypeError, argument isn't an Object\n");
         EJS_NOT_IMPLEMENTED();
     }
     
