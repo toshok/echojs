@@ -39,6 +39,9 @@ ejsval _ejs_regexp_new_utf8(const char *pattern, const char *flags);
 
 ejsval _ejs_regexp_replace(ejsval str, ejsval search, ejsval replace);
 
+/* we expose this publicly because String.prototype.match needs to call it directly */
+ejsval _ejs_RegExp_prototype_exec_closure;
+
 EJS_END_DECLS
 
 #endif /* _ejs_regexp_h */

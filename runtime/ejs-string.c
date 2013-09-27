@@ -464,7 +464,106 @@ _ejs_String_prototype_localeCompare (ejsval env, ejsval _this, uint32_t argc, ej
 static ejsval
 _ejs_String_prototype_match (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    EJS_NOT_IMPLEMENTED();
+    ejsval regexp;
+
+    if (argc > 0)
+        regexp = args[0];
+
+    /* 1. Call CheckObjectCoercible passing the this value as its argument. */
+    /* 2. Let S be the result of calling ToString, giving it the this value as its argument. */
+    ejsval S = ToString(_this);
+
+    ejsval rx;
+    EJSObject* rxo;
+
+    if (EJSVAL_IS_REGEXP(regexp)) {
+        /* 3. If Type(regexp) is Object and the value of the [[Class]]
+              internal property of regexp is "RegExp", then let rx be
+              regexp; */
+        rx = regexp;
+    }
+    else {
+        /* 4. Else, let rx be a new RegExp object created as if by the
+              expression new RegExp( regexp) where RegExp is the standard
+              built-in constructor with that name. */
+        rx = _ejs_regexp_new (regexp, _ejs_undefined/* XXX? */);
+    }
+    rxo = EJSVAL_TO_OBJECT(rx);
+        
+
+    /* 5. Let global be the result of calling the [[Get]] internal method of rx with argument "global". */
+    ejsval global = OP(rxo,get) (rx, _ejs_atom_global);
+    
+    /* 6. Let exec be the standard built-in function RegExp.prototype.exec (see 15.10.6.2) */
+    ejsval exec = _ejs_RegExp_prototype_exec_closure;
+
+    /* 7. If global is not true, then */
+    if (!_ejs_truthy(ToBoolean(global))) {
+        /*    a. Return the result of calling the [[Call]] internal method of exec with rx as the this value and argument list containing S. */
+        ejsval call_args[1];
+        call_args[0] = S;
+        return _ejs_invoke_closure (exec, rx, 1, call_args);
+    }
+    /* 8. Else, global is true */
+    else {
+        /*    a. Call the [[Put]] internal method of rx with arguments "lastIndex" and 0. */
+        OP(rxo, put)(rx, _ejs_atom_lastIndex, NUMBER_TO_EJSVAL(0), EJS_FALSE);
+
+        /*    b. Let A be a new array created as if by the expression new Array() where Array is the standard built-in constructor with that name. */
+        ejsval A = _ejs_array_new(0, EJS_FALSE);
+
+        /*    c. Let previousLastIndex be 0. */
+        ejsval previousLastIndex = NUMBER_TO_EJSVAL(0);
+
+        /*    d. Let n be 0. */
+        int n = 0;
+
+        /*    e. Let lastMatch be true. */
+        EJSBool lastMatch = EJS_TRUE;
+
+        /*    f. Repeat, while lastMatch is true */
+        while (lastMatch) {
+            /* i. Let result be the result of calling the [[Call]] internal method of exec with rx as the this value and argument list containing S. */
+            ejsval call_args[1];
+            call_args[0] = S;
+            ejsval result = _ejs_invoke_closure (exec, rx, 1, call_args);
+            /* ii. If result is null, then set lastMatch to false. */
+            if (EJSVAL_IS_NULL(result)) {
+                lastMatch = EJS_FALSE;
+            }
+            /* iii. Else, result is not null */
+            else {
+                /* 1. Let thisIndex be the result of calling the [[Get]] internal method of rx with argument "lastIndex". */
+                ejsval thisIndex = OP(rxo, get)(rx, _ejs_atom_lastIndex);
+                
+                /* 2. If thisIndex = previousLastIndex then */
+                if (EJSVAL_EQ(thisIndex, previousLastIndex)) {
+                    /* a. Call the [[Put]] internal method of rx with arguments "lastIndex" and thisIndex+1. */
+                    /* b. Set previousLastIndex to thisIndex+1. */
+                    previousLastIndex = NUMBER_TO_EJSVAL (EJSVAL_TO_NUMBER(thisIndex) + 1);
+                    OP(rxo, put)(rx, _ejs_atom_lastIndex, previousLastIndex, EJS_FALSE);
+                }
+                /* 3. Else, set previousLastIndex to thisIndex. */
+                else {
+                    previousLastIndex = thisIndex;
+                }
+                /* 4. Let matchStr be the result of calling the [[Get]] internal method of result with argument "0". */
+                ejsval matchStr = OP(rxo, get)(rx, NUMBER_TO_EJSVAL(0));
+
+                /* 5. Call the [[DefineOwnProperty]] internal method of A with arguments ToString(n), the Property Descriptor {[[Value]]: matchStr, [[Writable]]: true, [[Enumerable]]: true, [[configurable]]: true}, and false. */
+                _ejs_object_setprop (A, NUMBER_TO_EJSVAL(n), matchStr);
+
+                /* 6. Increment n. */
+                n++;
+            }
+        }
+
+        /*    g. If n = 0, then return null. */
+        if (n == 0) return _ejs_null;
+
+        /*    h. Return A. */
+        return A;
+    }
 }
 
 static ejsval

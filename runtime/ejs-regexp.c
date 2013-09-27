@@ -193,10 +193,32 @@ _ejs_RegExp_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 15.10.6.2
-static ejsval
+ejsval
 _ejs_RegExp_prototype_exec (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    EJS_NOT_IMPLEMENTED();
+    printf ("in _ejs_RegExp_prototype_exec\n");
+
+    if (!EJSVAL_IS_REGEXP(_this))
+        EJS_NOT_IMPLEMENTED();
+
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+
+    ejsval subject = _ejs_undefined;
+    if (argc > 0) subject = args[0];
+
+    pcre16_extra extra;
+    memset (&extra, 0, sizeof(extra));
+
+    EJSPrimString *flat_subject = _ejs_string_flatten (subject);
+    jschar* subject_chars = flat_subject->data.flat;
+
+    int ovec[3];
+
+    int rv = pcre16_exec((pcre16*)re->compiled_pattern, &extra,
+                         subject_chars, flat_subject->length, 0,
+                         PCRE_NO_UTF16_CHECK, ovec, 3);
+
+    return rv == PCRE_ERROR_NOMATCH ? _ejs_false : _ejs_true;
 }
 
 // ECMA262: 15.10.6.3
@@ -282,9 +304,12 @@ _ejs_regexp_init(ejsval global)
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_RegExp, x, _ejs_RegExp_##x)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_RegExp_proto, x, _ejs_RegExp_prototype_##x)
+#define PROTO_METHOD_VAL(x) EJS_INSTALL_ATOM_FUNCTION_VAL(_ejs_RegExp_proto, x, _ejs_RegExp_prototype_##x)
 #define PROTO_GETTER(x) EJS_INSTALL_ATOM_GETTER(_ejs_RegExp_proto, x, _ejs_RegExp_prototype_get_##x)
 
-    PROTO_METHOD(exec);
+    _ejs_gc_add_root (&_ejs_RegExp_prototype_exec_closure);
+    _ejs_RegExp_prototype_exec_closure = PROTO_METHOD_VAL(exec);
+
     PROTO_METHOD(test);
     PROTO_METHOD(toString);
 
