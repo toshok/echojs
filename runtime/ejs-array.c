@@ -1081,7 +1081,7 @@ _ejs_array_specop_get (ejsval obj, ejsval propertyName)
     }
 
     if (is_index) {
-        if (idx < 0 || idx > EJS_ARRAY_LEN(obj)) {
+        if (idx < 0 || idx >= EJS_ARRAY_LEN(obj)) {
             //printf ("getprop(%d) on an array, returning undefined\n", idx);
             return _ejs_undefined;
         }
