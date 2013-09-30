@@ -6,13 +6,8 @@ LLVM_LINK_FLAGS = \
   -lm \
   -lLLVMMCDisassembler \
   -lLLVMXCoreCodeGen \
-  -lLLVMXCoreAsmPrinter \
   -lLLVMXCoreInfo \
-  -lLLVMSystemZCodeGen \
-  -lLLVMSystemZAsmPrinter \
-  -lLLVMSystemZInfo \
   -lLLVMSparcCodeGen \
-  -lLLVMSparcAsmPrinter \
   -lLLVMSparcInfo \
   -lLLVMPowerPCCodeGen \
   -lLLVMPowerPCAsmPrinter \
@@ -37,16 +32,8 @@ LLVM_LINK_FLAGS = \
   -lLLVMInstrumentation \
   -lLLVMJIT \
   -lLLVMExecutionEngine \
-  -lLLVMCppBackend \
   -lLLVMCppBackendInfo \
-  -lLLVMCellSPUCodeGen \
-  -lLLVMCellSPUAsmPrinter \
   -lLLVMCellSPUInfo \
-  -lLLVMCBackend \
-  -lLLVMCBackendInfo \
-  -lLLVMBlackfinCodeGen \
-  -lLLVMBlackfinAsmPrinter \
-  -lLLVMBlackfinInfo \
   -lLLVMBitWriter \
   -lLLVMX86Disassembler \
   -lLLVMX86AsmParser \
@@ -61,9 +48,7 @@ LLVM_LINK_FLAGS = \
   -lLLVMARMInfo \
   -lLLVMArchive \
   -lLLVMBitReader \
-  -lLLVMAlphaCodeGen \
   -lLLVMSelectionDAG \
-  -lLLVMAlphaAsmPrinter \
   -lLLVMAsmPrinter \
   -lLLVMMCParser \
   -lLLVMCodeGen \
@@ -75,9 +60,7 @@ LLVM_LINK_FLAGS = \
   -lLLVMTarget \
   -lLLVMMC \
   -lLLVMCore \
-  -lLLVMAlphaInfo \
-  -lLLVMSupport \
-  -lLLVMSystem
+  -lLLVMSupport
 
 JS_SOURCES=$(filter-out ejs.js,$(wildcard *.js))
 EXTRA_JS_SOURCES= ../../esprima/esprima.js ../../escodegen/escodegen.js ../../estraverse/estraverse.js
@@ -101,7 +84,7 @@ make-stage1: $(wildcard *.js) ejs.js
 	@echo "****************************************************"
 	@echo "****************************************************"
 	@$(MAKE) -C ..
-	time NODE_PATH=$(TOP)/node-llvm/build/Release:$(TOP)/lib/generated:$(TOP)/esprima:$(TOP)/escodegen:$(TOP)/estraverse ../../ejs -d --leave-temp --module "../../ejs-llvm/libejsllvm-module.a,llvm,_ejs_llvm_init,$(LLVM_LINK_FLAGS)" ejs.js $(JS_SOURCES) $(EXTRA_JS_SOURCES)
+	time NODE_PATH=$(TOP)/node-llvm/build/Release:$(TOP)/lib/generated:$(TOP)/esprima:$(TOP)/escodegen:$(TOP)/estraverse ../../ejs --leave-temp --module "../../ejs-llvm/libejsllvm-module.a,llvm,_ejs_llvm_init,$(LLVM_LINK_FLAGS)" ejs.js $(JS_SOURCES) $(EXTRA_JS_SOURCES)
 
 make-stage2: $(wildcard *.js) ejs.js
 	@echo "****************************************************"
@@ -110,7 +93,7 @@ make-stage2: $(wildcard *.js) ejs.js
 	@echo "****************************************************"
 	@echo "****************************************************"
 	@$(MAKE) -C ..
-	time `pwd`/../../ejs.js.exe -d --leave-temp --module "../../ejs-llvm/libejsllvm-module.a,llvm,_ejs_llvm_init,$(LLVM_LINK_FLAGS)" ejs.js $(JS_SOURCES) $(EXTRA_JS_SOURCES)
+	time `pwd`/../../ejs.js.exe --leave-temp --module "../../ejs-llvm/libejsllvm-module.a,llvm,_ejs_llvm_init,$(LLVM_LINK_FLAGS)" ejs.js $(JS_SOURCES) $(EXTRA_JS_SOURCES)
 
 make-stage3: $(wildcard *.js) ejs.js
 	@echo "****************************************************"
@@ -119,7 +102,7 @@ make-stage3: $(wildcard *.js) ejs.js
 	@echo "****************************************************"
 	@echo "****************************************************"
 	@$(MAKE) -C ..
-	time `pwd`/../../ejs.js.exe -d --leave-temp --module "../../ejs-llvm/libejsllvm-module.a,llvm,_ejs_llvm_init,$(LLVM_LINK_FLAGS)" ejs.js $(JS_SOURCES) $(EXTRA_JS_SOURCES)
+	time `pwd`/../../ejs.js.exe --leave-temp --module "../../ejs-llvm/libejsllvm-module.a,llvm,_ejs_llvm_init,$(LLVM_LINK_FLAGS)" ejs.js $(JS_SOURCES) $(EXTRA_JS_SOURCES)
 
 ejs.coffee: ../../ejs
 	@cp ../../ejs ejs.coffee
