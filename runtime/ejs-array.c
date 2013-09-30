@@ -1115,7 +1115,7 @@ _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName)
     if (is_index) {
         if (idx >= 0 || idx < EJS_ARRAY_LEN(obj)) {
             // XXX we leak this.  need to change get_own_property to use an out param instead of a return value
-            EJSPropertyDesc* desc = (EJSPropertyDesc*)malloc(sizeof(EJSPropertyDesc));
+            EJSPropertyDesc* desc = (EJSPropertyDesc*)calloc(sizeof(EJSPropertyDesc), 1);
             _ejs_property_desc_set_writable (desc, EJS_TRUE);
             _ejs_property_desc_set_value (desc, EJS_DENSE_ARRAY_ELEMENTS(obj)[idx]);
             return desc;

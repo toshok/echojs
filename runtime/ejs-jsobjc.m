@@ -79,6 +79,7 @@
 #if spidermonkey
 		JS_AddStringRoot ([_ctx jsContext], &_jsstr);
 #endif
+        free (buf);
 	}
 
 	return _jsstr;

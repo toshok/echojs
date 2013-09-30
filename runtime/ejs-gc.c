@@ -797,6 +797,11 @@ static int white_objs = 0;
 static int large_objs = 0;
 static int total_objs = 0;
 
+static int num_object_allocs = 0;
+static int num_closureenv_allocs = 0;
+static int num_primstr_allocs = 0;
+
+
 static void
 sweep_heap()
 {
@@ -1121,6 +1126,11 @@ _ejs_gc_shutdown()
 {
     _ejs_gc_collect_inner(EJS_TRUE);
     SPEW(1, fprintf (stderr, "total allocs = %d\n", total_allocs));
+
+    fprintf (stderr, "gc allocation stats (_ejs_gc_shutdown):\n");
+    fprintf (stderr, "  objects: %d\n", num_object_allocs);
+    fprintf (stderr, "  closureenv: %d\n", num_closureenv_allocs);
+    fprintf (stderr, "  primstr: %d\n", num_primstr_allocs);
 }
 
 /* Compute the smallest power of 2 that is >= x. */
@@ -1226,7 +1236,13 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     num_allocs ++;
     total_allocs ++;
 
-    if (!gc_disabled && ((num_allocs == 100000 || alloc_size >= 20*1024*1024) || (collect_every_alloc && collect_every_alloc == num_allocs))) {
+    switch (scan_type) {
+    case EJS_SCAN_TYPE_PRIMSTR: num_primstr_allocs ++; break;
+    case EJS_SCAN_TYPE_OBJECT: num_object_allocs ++; break;
+    case EJS_SCAN_TYPE_CLOSUREENV: num_closureenv_allocs ++; break;
+    }
+
+    if (!gc_disabled && ((num_allocs == 100000 || alloc_size >= 40*1024*1024) || (collect_every_alloc && collect_every_alloc == num_allocs))) {
         _ejs_gc_collect();
         alloc_size = 0;
         num_allocs = 0;
@@ -1356,6 +1372,35 @@ _ejs_GC_collect (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return _ejs_undefined;
 }
 
+static ejsval
+_ejs_GC_dumpAllocationStats (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    char* tag = NULL;
+
+    if (argc > 0) {
+        tag = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[0]));
+    }
+
+    if (tag) {
+        fprintf (stderr, "gc allocation stats (%s):\n", tag);
+    }
+    else {
+        fprintf (stderr, "gc allocation stats:\n");
+    }
+
+    fprintf (stderr, "  objects: %d\n", num_object_allocs);
+    fprintf (stderr, "  closureenv: %d\n", num_closureenv_allocs);
+    fprintf (stderr, "  primstr: %d\n", num_primstr_allocs);
+
+    num_object_allocs = 0;
+    num_closureenv_allocs = 0;
+    num_primstr_allocs = 0;
+
+    if (tag) free (tag);
+
+    return _ejs_undefined;
+}
+
 void
 _ejs_GC_init(ejsval global)
 {
@@ -1367,6 +1412,7 @@ _ejs_GC_init(ejsval global)
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_GC, x, _ejs_GC_##x)
 
     OBJ_METHOD(collect);
+    OBJ_METHOD(dumpAllocationStats);
 
 #undef OBJ_METHOD
 }

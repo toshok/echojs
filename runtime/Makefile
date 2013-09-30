@@ -43,6 +43,16 @@ OSX_OBJECTS=$(C_SOURCES:%.c=%.o.osx) $(OBJC_SOURCES:%.m=%.o.osx) main.o.osx
 SIM_OBJECTS=$(C_SOURCES:%.c=%.o.sim) $(OBJC_SOURCES:%.m=%.o.sim) main.o.sim
 DEV_OBJECTS=$(C_SOURCES:%.c=%.o.armv7) $(OBJC_SOURCES:%.m=%.o.armv7) main.o.armv7
 
+analyze_plists_c = $(C_SOURCES:%.c=%.plist) main.plist
+analyze_plists_objc = $(OBJC_SOURCES:%.m=%.plist) 
+
+$(analyze_plists_c): %.plist: %.c
+	@echo "  CCSA  " $<
+	@$(OSX_CC) $(OSX_CFLAGS) --analyze $< -o $@
+$(analyze_plists_objc): %.plist: %.m
+	@echo "  CCSA  " $<
+	@$(OSX_CC) $(OSX_CFLAGS) --analyze $< -o $@
+
 OSX_LIBRARY=$(LIBRARY)
 SIM_LIBRARY=$(LIBRARY).sim
 DEV_LIBRARY=$(LIBRARY).armv7
@@ -54,10 +64,10 @@ TARGET_LIBRARIES=$(LIPOD_IOS_LIBRARY) $(OSX_LIBRARY)
 
 ALL_OBJECTS=$(SIM_OBJECTS) $(DEV_OBJECTS) $(OSX_OBJECTS)
 
-all-local:: $(ALL_LIBRARIES)
+all-local:: $(ALL_LIBRARIES) $(analyze_plists_c) $(analyze_plists_objc)
 
 clean-local::
-	rm -f test $(ALL_OBJECTS) $(ALL_LIBRARIES) ejs-atoms-gen.c
+	rm -f test $(ALL_OBJECTS) $(ALL_LIBRARIES) ejs-atoms-gen.c $(analyze_plists_c) $(analyze_plists_objc)
 
 VPATH=.:../parson
 

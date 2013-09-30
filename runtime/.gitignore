@@ -9,3 +9,4 @@ ejs-webgl-constants-sorted.h
 *.a.armv7
 *.a.ios
 *.a
+*.plist

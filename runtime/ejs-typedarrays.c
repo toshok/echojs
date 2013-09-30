@@ -587,7 +587,7 @@ _ejs_arraybuffer_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBoo
     if (idx != -1) {
         if (idx >= EJS_DENSE_ARRAY_ALLOC(obj)) {
             int new_alloc = idx + 10;
-            ejsval* new_elements = (ejsval*)malloc (sizeof(ejsval*) * new_alloc);
+            ejsval* new_elements = (ejsval*)malloc (sizeof(ejsval) * new_alloc);
             memmove (new_elements, EJS_DENSE_ARRAY_ELEMENTS(obj), EJS_DENSE_ARRAY_ALLOC(obj) * sizeof(ejsval));
             free (EJS_DENSE_ARRAY_ELEMENTS(obj));
             EJS_DENSE_ARRAY_ELEMENTS(obj) = new_elements;

@@ -87,7 +87,9 @@ _ejs_fs_readFileSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     read(fd, buf, fd_stat.st_size);
     close(fd);
 
-    return _ejs_string_new_utf8_len(buf, fd_stat.st_size);
+    ejsval rv = _ejs_string_new_utf8_len(buf, fd_stat.st_size);
+    free(buf);
+    return rv;
 }
 
 ejsval
@@ -199,6 +201,7 @@ _ejs_child_process_spawn (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     }
     for (int i = 0; i < EJSARRAY_LEN(argv_rest)+1; i ++)
         free (argv[i]);
+    free (argv);
     return _ejs_undefined;
 }
 

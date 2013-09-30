@@ -470,10 +470,17 @@ _ejs_property_iterator_new (ejsval forVal)
 
         iterator->forObj = forVal;
         iterator->num = 0;
-        iterator->keys = (ejsval*)malloc(sizeof(ejsval) * num);
-        for (int i = 0; i < num; i ++) {
-            iterator->keys[iterator->num++] = _ejs_string_new_ucs2(keys[i]);
+        if (num > 0) {
+            iterator->keys = (ejsval*)malloc(sizeof(ejsval) * num);
+            for (int i = 0; i < num; i ++) {
+                printf ("aiieeee\n");
+                iterator->keys[iterator->num++] = _ejs_string_new_ucs2(keys[i]);
+            }
         }
+        else {
+            iterator->keys = NULL;
+        }
+
         free (keys);
 
         return iter;

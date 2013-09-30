@@ -353,7 +353,7 @@ _ejs_String_prototype_charAt (ejsval env, ejsval _this, uint32_t argc, ejsval *a
     }
 
     if (idx < 0 || idx > EJSVAL_TO_STRLEN(primStr))
-        return _ejs_string_new_utf8 ("");
+        return _ejs_atom_empty;
 
     char c[2];
     c[0] = EJSVAL_TO_FLAT_STRING(primStr)[idx];
@@ -653,8 +653,7 @@ _ejs_String_prototype_substr (ejsval env, ejsval _this, uint32_t argc, ejsval *a
 
     /* 8. Return a String containing Result(6) consecutive characters from Result(1) beginning with the character at  */
     /*    position Result(5). */
-    jschar* result1_str = EJSVAL_TO_FLAT_STRING(Result1);
-    return _ejs_string_new_ucs2_len(result1_str + Result5, Result6);
+    return _ejs_string_new_substring (Result1, Result5, Result6);
 }
 
 static ejsval
@@ -1404,6 +1403,7 @@ _ejs_string_to_utf8(EJSPrimString* primstr)
         int adv = ucs2_to_utf8_char (ucs2, p);
         if (adv < 1) {
             printf ("error converting ucs2 to utf8, index %d\n", i);
+            free(buf);
             return NULL;
         }
         p += adv;

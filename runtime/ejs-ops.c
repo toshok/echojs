@@ -109,10 +109,34 @@ IntToUCS2(jschar *cbuf, jsint i, jsint base)
     return cp;
 }
 
+static const ejsval* builtin_numbers_atoms[] = {
+    &_ejs_atom_0,&_ejs_atom_1,&_ejs_atom_2,&_ejs_atom_3,&_ejs_atom_4,&_ejs_atom_5,&_ejs_atom_6,&_ejs_atom_7,&_ejs_atom_8,&_ejs_atom_9,&_ejs_atom_10,
+    &_ejs_atom_11,&_ejs_atom_12,&_ejs_atom_13,&_ejs_atom_14,&_ejs_atom_15,&_ejs_atom_16,&_ejs_atom_17,&_ejs_atom_18,&_ejs_atom_19,&_ejs_atom_20,&_ejs_atom_21,
+    &_ejs_atom_22,&_ejs_atom_23,&_ejs_atom_24,&_ejs_atom_25,&_ejs_atom_26,&_ejs_atom_27,&_ejs_atom_28,&_ejs_atom_29,&_ejs_atom_30,&_ejs_atom_31,&_ejs_atom_32,
+    &_ejs_atom_33,&_ejs_atom_34,&_ejs_atom_35,&_ejs_atom_36,&_ejs_atom_37,&_ejs_atom_38,&_ejs_atom_39,&_ejs_atom_40,&_ejs_atom_41,&_ejs_atom_42,&_ejs_atom_43,
+    &_ejs_atom_44,&_ejs_atom_45,&_ejs_atom_46,&_ejs_atom_47,&_ejs_atom_48,&_ejs_atom_49,&_ejs_atom_50,&_ejs_atom_51,&_ejs_atom_52,&_ejs_atom_53,&_ejs_atom_54,
+    &_ejs_atom_55,&_ejs_atom_56,&_ejs_atom_57,&_ejs_atom_58,&_ejs_atom_59,&_ejs_atom_60,&_ejs_atom_61,&_ejs_atom_62,&_ejs_atom_63,&_ejs_atom_64,&_ejs_atom_65,
+    &_ejs_atom_66,&_ejs_atom_67,&_ejs_atom_68,&_ejs_atom_69,&_ejs_atom_70,&_ejs_atom_71,&_ejs_atom_72,&_ejs_atom_73,&_ejs_atom_74,&_ejs_atom_75,&_ejs_atom_76,
+    &_ejs_atom_77,&_ejs_atom_78,&_ejs_atom_79,&_ejs_atom_80,&_ejs_atom_81,&_ejs_atom_82,&_ejs_atom_83,&_ejs_atom_84,&_ejs_atom_85,&_ejs_atom_86,&_ejs_atom_87,
+    &_ejs_atom_88,&_ejs_atom_89,&_ejs_atom_90,&_ejs_atom_91,&_ejs_atom_92,&_ejs_atom_93,&_ejs_atom_94,&_ejs_atom_95,&_ejs_atom_96,&_ejs_atom_97,&_ejs_atom_98,
+    &_ejs_atom_99,&_ejs_atom_100,&_ejs_atom_101,&_ejs_atom_102,&_ejs_atom_103,&_ejs_atom_104,&_ejs_atom_105,&_ejs_atom_106,&_ejs_atom_107,&_ejs_atom_108,&_ejs_atom_109,
+    &_ejs_atom_110,&_ejs_atom_111,&_ejs_atom_112,&_ejs_atom_113,&_ejs_atom_114,&_ejs_atom_115,&_ejs_atom_116,&_ejs_atom_117,&_ejs_atom_118,&_ejs_atom_119,&_ejs_atom_120,
+    &_ejs_atom_121,&_ejs_atom_122,&_ejs_atom_123,&_ejs_atom_124,&_ejs_atom_125,&_ejs_atom_126,&_ejs_atom_127,&_ejs_atom_128,&_ejs_atom_129,&_ejs_atom_130,&_ejs_atom_131,
+    &_ejs_atom_132,&_ejs_atom_133,&_ejs_atom_134,&_ejs_atom_135,&_ejs_atom_136,&_ejs_atom_137,&_ejs_atom_138,&_ejs_atom_139,&_ejs_atom_140,&_ejs_atom_141,&_ejs_atom_142,
+    &_ejs_atom_143,&_ejs_atom_144,&_ejs_atom_145,&_ejs_atom_146,&_ejs_atom_147,&_ejs_atom_148,&_ejs_atom_149,&_ejs_atom_150,&_ejs_atom_151,&_ejs_atom_152,&_ejs_atom_153,
+    &_ejs_atom_154,&_ejs_atom_155,&_ejs_atom_156,&_ejs_atom_157,&_ejs_atom_158,&_ejs_atom_159,&_ejs_atom_160,&_ejs_atom_161,&_ejs_atom_162,&_ejs_atom_163,&_ejs_atom_164,
+    &_ejs_atom_165,&_ejs_atom_166,&_ejs_atom_167,&_ejs_atom_168,&_ejs_atom_169,&_ejs_atom_170,&_ejs_atom_171,&_ejs_atom_172,&_ejs_atom_173,&_ejs_atom_174,&_ejs_atom_175,
+    &_ejs_atom_176,&_ejs_atom_177,&_ejs_atom_178,&_ejs_atom_179,&_ejs_atom_180,&_ejs_atom_181,&_ejs_atom_182,&_ejs_atom_183,&_ejs_atom_184,&_ejs_atom_185,&_ejs_atom_186,
+    &_ejs_atom_187,&_ejs_atom_188,&_ejs_atom_189,&_ejs_atom_190,&_ejs_atom_191,&_ejs_atom_192,&_ejs_atom_193,&_ejs_atom_194,&_ejs_atom_195,&_ejs_atom_196,&_ejs_atom_197,
+    &_ejs_atom_198,&_ejs_atom_199,&_ejs_atom_200
+};
+
 ejsval NumberToString(double d)
 {
     int32_t i;
     if (EJSDOUBLE_IS_INT32(d, &i)) {
+        if (i >=0 && i <= 200)
+            return *builtin_numbers_atoms[i];
         jschar int_buf[UINT32_CHAR_BUFFER_LENGTH+1];
         jschar *cp = IntToUCS2(int_buf, i, 10);
         return _ejs_string_new_ucs2 (cp);
@@ -369,6 +393,13 @@ _ejs_op_typeof_is_null(ejsval exp)
     return EJSVAL_IS_NULL(exp) ? _ejs_true : _ejs_false;
 }
 
+int
+_ejs_op_foo(ejsval exp)
+{
+    return (EJSVAL_IS_NULL(exp) || EJSVAL_IS_UNDEFINED(exp)) ? 1 : 0;
+}
+
+
 ejsval
 _ejs_op_typeof (ejsval exp)
 {
@@ -551,7 +582,7 @@ _ejs_op_ulsh (ejsval lhs, ejsval rhs)
 ejsval
 _ejs_op_add (ejsval lhs, ejsval rhs)
 {
-    ejsval rv = _ejs_nan;
+    ejsval rv;
 
     ejsval lprim, rprim;
 
@@ -575,8 +606,8 @@ _ejs_op_add (ejsval lhs, ejsval rhs)
 ejsval
 _ejs_op_mult (ejsval lhs, ejsval rhs)
 {
-    if (EJSVAL_IS_NUMBER(lhs)) {
-        return NUMBER_TO_EJSVAL (EJSVAL_TO_NUMBER(lhs) * ToDouble (rhs));
+    if (EJSVAL_IS_NUMBER(lhs) || EJSVAL_IS_NUMBER(rhs)) {
+        return NUMBER_TO_EJSVAL (ToDouble(lhs) * ToDouble(rhs));
     }
     else if (EJSVAL_IS_STRING(lhs)) {
         // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
