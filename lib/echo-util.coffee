@@ -59,7 +59,7 @@ exports.create_number_literal = (x) ->
         type: syntax.Literal, value: x, raw: "#{x}"
 exports.create_intrinsic = (name, args) ->
         type: syntax.CallExpression
-        callee: create_identifier "%#{name}"
+        callee: create_identifier name
         arguments: args
 exports.is_intrinsic = (name, n) ->
-        n.type is syntax.CallExpression and n.callee.name is "%#{name}"
+        n.type is syntax.CallExpression and n.callee.name is name

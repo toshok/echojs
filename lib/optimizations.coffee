@@ -17,11 +17,13 @@ debug = require 'debug'
 #   call specialized runtime builtins that don't require us to
 #   allocate a string do a comparison.
 #
-# ... more?
+# ==/!= of constants null or undefined
 # 
 class EqIdioms extends TreeTransformer
         is_typeof = (e) -> e.type is syntax.UnaryExpression and e.operator is "typeof"
         is_string_literal = (e) -> e.type is syntax.Literal and typeof e.value is "string"
+        is_undefined_literal = (e) -> e.type is syntax.Literal and e.value is undefined
+        is_null_literal = (e) -> e.type is syntax.Literal and e.value is null
 
         visitBinaryExpression: (exp) ->
                 return super if exp.operator isnt "==" and exp.operator isnt "===" and exp.operator isnt "!=" and exp.operator isnt "!=="
@@ -39,14 +41,14 @@ class EqIdioms extends TreeTransformer
                                 typeofarg = right.argument
 
                         switch typecheck
-                                when "object"    then intrinsic = "typeofIsObject"
-                                when "function"  then intrinsic = "typeofIsFunction"
-                                when "string"    then intrinsic = "typeofIsString"
-                                when "symbol"    then intrinsic = "typeofIsSymbol"
-                                when "undefined" then intrinsic = "typeofIsUndefined"
-                                when "number"    then intrinsic = "typeofIsNumber"
-                                when "null"      then intrinsic = "typeofIsNull"
-                                when "boolean"   then intrinsic = "typeofIsBoolean"
+                                when "object"    then intrinsic = "%typeofIsObject"
+                                when "function"  then intrinsic = "%typeofIsFunction"
+                                when "string"    then intrinsic = "%typeofIsString"
+                                when "symbol"    then intrinsic = "%typeofIsSymbol"
+                                when "number"    then intrinsic = "%typeofIsNumber"
+                                when "boolean"   then intrinsic = "%typeofIsBoolean"
+                                when "null"      then intrinsic = "%isNull"
+                                when "undefined" then intrinsic = "%isUndefined"
                                 else
                                         throw new Error "invalid typeof check against '#{typecheck}'";
 
@@ -59,6 +61,48 @@ class EqIdioms extends TreeTransformer
                                 }
                         return rv
 
+                if exp.operator is "==" or exp.operator is "!="
+                        if is_null_literal(left) or is_null_literal(right) or is_undefined_literal(left) or is_undefined_literal(right)
+                                if is_null_literal(left) or is_undefined_literal(left)
+                                        checkarg = right
+                                else
+                                        checkarg = left
+                                rv = create_intrinsic "%isNullOrUndefined", [checkarg]
+                                if exp.operator[0] is '!'
+                                        rv = {
+                                                type: syntax.UnaryExpression
+                                                operator: "!"
+                                                argument: rv
+                                        }
+                                return rv
+
+                if exp.operator is "===" or exp.operator is "!=="
+                        if is_null_literal(left) or is_null_literal(right)
+                                if is_null_literal(left)
+                                        checkarg = right
+                                else
+                                        checkarg = left
+                                rv = create_intrinsic "%isNull", [checkarg]
+                                if exp.operator[0] is '!'
+                                        rv = {
+                                                type: syntax.UnaryExpression
+                                                operator: "!"
+                                                argument: rv
+                                        }
+                                return rv
+                        if is_undefined_literal(left) or is_undefined_literal(right)
+                                if is_null_literal(left)
+                                        checkarg = right
+                                else
+                                        checkarg = left
+                                rv = create_intrinsic "%isNull", [checkarg]
+                                if exp.operator[0] is '!'
+                                        rv = {
+                                                type: syntax.UnaryExpression
+                                                operator: "!"
+                                                argument: rv
+                                        }
+                                return rv
                 super
 
 ###

@@ -506,13 +506,17 @@ class SubstituteVariables extends TreeTransformer
                 
         visitFunction: (n) ->
             try
+                this_env_name = "%env_#{n.ejs_env.id}"
+                if n.ejs_env.parent?
+                        parent_env_name = "%env_#{n.ejs_env.parent.id}"
+                
                 new_mapping = deep_copy_object @currentMapping()
                 if n.ejs_env.closed.empty() and not n.ejs_env.nested_requires_env
                         n.body.body.unshift
                                 type: syntax.VariableDeclaration,
                                 declarations: [{
                                         type: syntax.VariableDeclarator
-                                        id:  create_identifier "%env_#{n.ejs_env.id}"
+                                        id:  create_identifier this_env_name
                                         init:
                                                 type: syntax.Literal
                                                 value: null
@@ -520,30 +524,14 @@ class SubstituteVariables extends TreeTransformer
                                 kind: "let"
                 else
                         # okay, we know we need a fresh environment in this function
-                        
-                        env_name = "%env_#{n.ejs_env.id}"
-
-                        collect_make_closure_args = (closed, parent) ->
-                                i = 0
-                                args = []
-                                if parent?
-                                        args.push create_string_literal "%env_#{parent.id}"
-                                        args.push create_number_literal i
-                                        i += 1
-                                closed.map (el) ->
-                                        args.push create_string_literal el
-                                        args.push create_number_literal i
-                                        i += 1
-                                args
-                        
                         prepends = []
                         # insert environment creation (at the start of the function body)
                         prepends.push {
                                 type: syntax.VariableDeclaration,
                                 declarations: [{
                                         type: syntax.VariableDeclarator
-                                        id:  create_identifier env_name
-                                        init: create_intrinsic "makeClosureEnv", [create_number_literal n.ejs_env.closed.size() + if n.ejs_env.parent? then 1 else 0]
+                                        id:  create_identifier this_env_name
+                                        init: create_intrinsic "%makeClosureEnv", [create_number_literal n.ejs_env.closed.size() + if n.ejs_env.parent? then 1 else 0]
                                 }],
                                 kind: "let"
                         }
@@ -551,7 +539,7 @@ class SubstituteVariables extends TreeTransformer
                         n.ejs_env.slot_mapping = Object.create null
                         i = 0
                         if n.ejs_env.parent?
-                                n.ejs_env.slot_mapping["%env_#{n.ejs_env.parent.id}"] = i
+                                n.ejs_env.slot_mapping[parent_env_name] = i
                                 i += 1
                         n.ejs_env.closed.map (el) ->
                                 n.ejs_env.slot_mapping[el] = i
@@ -559,11 +547,10 @@ class SubstituteVariables extends TreeTransformer
                                 
                         
                         if n.ejs_env.parent?
-                                parent_env_name = "%env_#{n.ejs_env.parent.id}"
                                 parent_env_slot = n.ejs_env.slot_mapping[parent_env_name]
                                 prepends.push {
                                         type: syntax.ExpressionStatement
-                                        expression: create_intrinsic "setSlot", [ (create_identifier env_name), (create_number_literal parent_env_slot), (create_string_literal parent_env_name), (create_identifier parent_env_name) ]
+                                        expression: create_intrinsic "%setSlot", [ (create_identifier this_env_name), (create_number_literal parent_env_slot), (create_string_literal parent_env_name), (create_identifier parent_env_name) ]
                                 }
                                 
 
@@ -572,7 +559,7 @@ class SubstituteVariables extends TreeTransformer
                                 if n.ejs_env.closed.has param.name
                                         prepends.push {
                                                 type: syntax.ExpressionStatement
-                                                expression: create_intrinsic "setSlot", [ (create_identifier env_name), (create_number_literal n.ejs_env.slot_mapping[param.name]), (create_string_literal param.name), (create_identifier param.name) ]
+                                                expression: create_intrinsic "%setSlot", [ (create_identifier this_env_name), (create_number_literal n.ejs_env.slot_mapping[param.name]), (create_string_literal param.name), (create_identifier param.name) ]
                                         }
 
                         new_mapping["%slot_mapping"] = n.ejs_env.slot_mapping
@@ -589,9 +576,9 @@ class SubstituteVariables extends TreeTransformer
                                         (flatten_memberexp exp.arguments[0], mapping).concat [exp.arguments[1]]
 
                         prepend_environment = (exps) ->
-                                obj = create_identifier env_name
+                                obj = create_identifier this_env_name
                                 for prop in exps
-                                        obj = create_intrinsic "slot", [ obj, prop ]
+                                        obj = create_intrinsic "%slot", [ obj, prop ]
                                 obj
 
                         # if there are existing mappings prepend "%env." (a MemberExpression) to them
@@ -602,9 +589,9 @@ class SubstituteVariables extends TreeTransformer
                         
                         # and add mappings for all variables in .closed from "x" to "%env.x"
 
-                        new_mapping["%env"] = create_identifier env_name
+                        new_mapping["%env"] = create_identifier this_env_name
                         n.ejs_env.closed.map (sym) ->
-                                new_mapping[sym] = create_intrinsic "slot", [ (create_identifier env_name), (create_number_literal n.ejs_env.slot_mapping[sym]), (create_string_literal sym) ]
+                                new_mapping[sym] = create_intrinsic "%slot", [ (create_identifier this_env_name), (create_number_literal n.ejs_env.slot_mapping[sym]), (create_string_literal sym) ]
 
                 # remove all mappings for variables declared in this function
                 if n.ejs_decls?
@@ -629,9 +616,9 @@ class SubstituteVariables extends TreeTransformer
                                 throw "there should be no FunctionDeclarations at this point"
                         else # n.type is syntax.FunctionExpression
                                 return if n.id?
-                                        create_intrinsic "makeClosure", [ (if n.ejs_env.parent? then (create_identifier "%env_#{n.ejs_env.parent.id}") else { type: syntax.Literal, value: null}), (create_string_literal n.id.name), n ]
+                                        create_intrinsic "%makeClosure", [ (if n.ejs_env.parent? then (create_identifier parent_env_name) else { type: syntax.Literal, value: null}), (create_string_literal n.id.name), n ]
                                 else
-                                        create_intrinsic "makeAnonClosure", [ (if n.ejs_env.parent? then (create_identifier "%env_#{n.ejs_env.parent.id}") else { type: syntax.Literal, value: null}), n ]
+                                        create_intrinsic "%makeAnonClosure", [ (if n.ejs_env.parent? then (create_identifier parent_env_name) else { type: syntax.Literal, value: null}), n ]
                 n
             catch e
                 console.warn "exception: " + e
@@ -650,7 +637,7 @@ class SubstituteVariables extends TreeTransformer
 
                 @function_stack.top.scratch_size = Math.max @function_stack.top.scratch_size, n.arguments.length
 
-                create_intrinsic "invokeClosure", [n.callee].concat n.arguments
+                create_intrinsic "%invokeClosure", [n.callee].concat n.arguments
 
         visitNewExpression: (n) ->
                 super
@@ -663,7 +650,7 @@ class SubstituteVariables extends TreeTransformer
 
                 @function_stack.top.scratch_size = Math.max @function_stack.top.scratch_size, n.arguments.length
 
-                rv = create_intrinsic "invokeClosure", [n.callee].concat n.arguments
+                rv = create_intrinsic "%invokeClosure", [n.callee].concat n.arguments
                 rv.type = syntax.NewExpression
                 rv
 
@@ -694,7 +681,7 @@ class LambdaLift extends TreeTransformer
                 if n.scratch_size > 0
                         alloc_scratch =
                                 type: syntax.ExpressionStatement
-                                expression: create_intrinsic "createArgScratchArea", [ { type: syntax.Literal, value: n.scratch_size } ]
+                                expression: create_intrinsic "%createArgScratchArea", [ { type: syntax.Literal, value: n.scratch_size } ]
                         n.body.body.unshift alloc_scratch
                 
         visitFunctionDeclaration: (n) ->
@@ -816,13 +803,13 @@ class MarkLocalAndGlobalVariables extends TreeTransformer
                                 right:    rhs
                         }
                 
-                if is_intrinsic "slot", lhs
-                        create_intrinsic "setSlot", [lhs.arguments[0], lhs.arguments[1], new_rhs]
+                if is_intrinsic "%slot", lhs
+                        create_intrinsic "%setSlot", [lhs.arguments[0], lhs.arguments[1], new_rhs]
                 else if lhs.type is syntax.Identifier
                         if @findIdentifierInScope lhs
-                                create_intrinsic "setLocal", [lhs, new_rhs]
+                                create_intrinsic "%setLocal", [lhs, new_rhs]
                         else
-                                create_intrinsic "setGlobal", [lhs, new_rhs]
+                                create_intrinsic "%setGlobal", [lhs, new_rhs]
                 else
                         n.left = @visit n.left
                         n.right = new_rhs
@@ -839,10 +826,10 @@ class MarkLocalAndGlobalVariables extends TreeTransformer
                         right:    { type: syntax.Literal, value: 1, raw: "1" }
                 }
                 
-                if is_intrinsic "slot", argument
-                        create_intrinsic "setSlot", [argument.arguments[0], argument.arguments[1], new_rhs]
+                if is_intrinsic "%slot", argument
+                        create_intrinsic "%setSlot", [argument.arguments[0], argument.arguments[1], new_rhs]
                 else # argument.type is syntax.Identifier
-                        create_intrinsic (@intrinsicForIdentifier argument, "set"), [argument, new_rhs]
+                        create_intrinsic (@intrinsicForIdentifier argument, "%set"), [argument, new_rhs]
         ###
 
         visitBlock: (n) ->
@@ -882,7 +869,7 @@ class MarkLocalAndGlobalVariables extends TreeTransformer
                 n
 
         visitIdentifier: (n) ->
-                create_intrinsic (@intrinsicForIdentifier n, "get"), [n]
+                create_intrinsic (@intrinsicForIdentifier n, "%get"), [n]
 
         visitForIn: (n) ->
                 n.right = @visit n.right
@@ -894,7 +881,7 @@ class ReplaceUnaryVoid extends TreeTransformer
         
         visitUnaryExpression: (n) ->
                 if n.operator is "void" and n.argument.type is syntax.Literal and n.argument.value is 0
-                        return create_intrinsic "builtinUndefined", []
+                        return create_intrinsic "%builtinUndefined", []
                 n
 
 #
@@ -992,11 +979,11 @@ class IIFEIdioms extends TreeTransformer
 
                 replacement.body.push body
 
-                if is_intrinsic "setSlot", n.expression
-                        n.expression.arguments[2] = create_intrinsic "getLocal", [iife_rv_id]
+                if is_intrinsic "%setSlot", n.expression
+                        n.expression.arguments[2] = create_intrinsic "%getLocal", [iife_rv_id]
                         replacement.body.push n
-                else if (is_intrinsic "setGlobal", n.expression) or (is_intrinsic "setLocal", n.expression)
-                        n.expression.arguments[1] = create_intrinsic "getLocal", [iife_rv_id]
+                else if (is_intrinsic "%setGlobal", n.expression) or (is_intrinsic "setLocal", n.expression)
+                        n.expression.arguments[1] = create_intrinsic "%getLocal", [iife_rv_id]
                         replacement.body.push n
                         
                 return replacement
@@ -1024,29 +1011,29 @@ class IIFEIdioms extends TreeTransformer
 
                 replacement.body.push body
 
-                if is_intrinsic "setSlot", n.expression
-                        n.expression.arguments[2] = create_intrinsic "getLocal", [iife_rv_id]
+                if is_intrinsic "%setSlot", n.expression
+                        n.expression.arguments[2] = create_intrinsic "%getLocal", [iife_rv_id]
                         replacement.body.push n
-                else if (is_intrinsic "setGlobal", n.expression) or (is_intrinsic "setLocal", n.expression)
-                        n.expression.arguments[1] = create_intrinsic "getLocal", [iife_rv_id]
+                else if (is_intrinsic "%setGlobal", n.expression) or (is_intrinsic "setLocal", n.expression)
+                        n.expression.arguments[1] = create_intrinsic "%getLocal", [iife_rv_id]
                         replacement.body.push n
 
                 return replacement
         
         visitExpressionStatement: (n) ->
-                isMakeClosure = (a) -> (is_intrinsic "makeClosure", a) or (is_intrinsic "makeAnonClosure", a)
+                isMakeClosure = (a) -> (is_intrinsic "%makeClosure", a) or (is_intrinsic "makeAnonClosure", a)
                 # bail out early if we know we aren't in the right place
-                if is_intrinsic "invokeClosure", n.expression
+                if is_intrinsic "%invokeClosure", n.expression
                         candidate = n.expression
-                else if is_intrinsic "setSlot", n.expression
+                else if is_intrinsic "%setSlot", n.expression
                         candidate = n.expression.arguments[2]
-                else if (is_intrinsic "setGlobal", n.expression) or (is_intrinsic "setLocal", n.expression)
+                else if (is_intrinsic "%setGlobal", n.expression) or (is_intrinsic "%setLocal", n.expression)
                         candidate = n.expression.arguments[1]
                 else
                         return n
 
                 # at this point candidate should only be an invokeClosure intrinsic
-                return n if not is_intrinsic "invokeClosure", candidate
+                return n if not is_intrinsic "%invokeClosure", candidate
 
                 if isMakeClosure candidate.arguments[0]
                         return @maybeInlineIIFE candidate, n
