@@ -7,7 +7,6 @@ COFFEE_SOURCES=				\
 	echo-util.coffee		\
 	closure-conversion.coffee	\
 	optimizations.coffee		\
-	stack.coffee			\
 	types.coffee			\
 	consts.coffee			\
 	exitable-scope.coffee		\
@@ -15,7 +14,8 @@ COFFEE_SOURCES=				\
 	terminal.coffee
 
 JS_SOURCES=				\
-	set.js
+	set.js				\
+	stack.js
 
 DESTDIR = generated
 
