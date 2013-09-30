@@ -198,7 +198,7 @@ exports.TreeVisitor = class TreeVisitor
                         return n.map (el) => @visit el
                         
                 debug.indent()
-                debug.log "#{n.type}>"
+                debug.log -> "#{n.type}>"
 
                 rv = null
                 switch n.type
@@ -247,7 +247,7 @@ exports.TreeVisitor = class TreeVisitor
                         else
                             throw "PANIC: unknown parse node type #{n.type}"
                         
-                debug.log "<#{n.type}, rv = #{if rv then rv.type else 'null'}"
+                debug.log -> "<#{n.type}, rv = #{if rv then rv.type else 'null'}"
                 debug.unindent()
                 rv
 
