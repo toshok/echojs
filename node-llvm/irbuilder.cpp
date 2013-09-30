@@ -54,6 +54,7 @@ namespace jsllvm {
     NODE_SET_METHOD(s_func, "createFPCast", IRBuilder::CreateFPCast);
     NODE_SET_METHOD(s_func, "createUnreachable", IRBuilder::CreateUnreachable);
     NODE_SET_METHOD(s_func, "createAnd", IRBuilder::CreateAnd);
+    NODE_SET_METHOD(s_func, "createOr", IRBuilder::CreateOr);
     NODE_SET_METHOD(s_func, "createZExt", IRBuilder::CreateZExt);
     NODE_SET_METHOD(s_func, "createIntToPtr", IRBuilder::CreateIntToPtr);
     NODE_SET_METHOD(s_func, "createBitCast", IRBuilder::CreateBitCast);
@@ -158,6 +159,18 @@ namespace jsllvm {
     FALLBACK_EMPTY_UTF8_ARG(2, name);
 
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(builder.CreateAnd(lhs, rhs, *name)));
+    return scope.Close(result);
+  }
+
+  v8::Handle<v8::Value> IRBuilder::CreateOr(const v8::Arguments& args)
+  {
+    HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(0, lhs);
+    REQ_LLVM_VAL_ARG(1, rhs);
+    FALLBACK_EMPTY_UTF8_ARG(2, name);
+
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(builder.CreateOr(lhs, rhs, *name)));
     return scope.Close(result);
   }
 

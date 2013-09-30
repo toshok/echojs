@@ -363,6 +363,15 @@ namespace ejsllvm {
     }
 
     ejsval
+    IRBuilder_createOr(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        REQ_LLVM_VAL_ARG(0, lhs);
+        REQ_LLVM_VAL_ARG(1, rhs);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
+        return Value_new (_llvm_builder.CreateOr(lhs, rhs, name));
+    }
+
+    ejsval
     IRBuilder_createZExt(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         REQ_LLVM_VAL_ARG(0, V);
@@ -481,6 +490,7 @@ namespace ejsllvm {
         OBJ_METHOD(createGlobalStringPtr);
         OBJ_METHOD(createUnreachable);
         OBJ_METHOD(createAnd);
+        OBJ_METHOD(createOr);
         OBJ_METHOD(createZExt);
         OBJ_METHOD(createIntToPtr);
         OBJ_METHOD(createBitCast);
