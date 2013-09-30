@@ -1,13 +1,12 @@
 TOP=..
 
-COFFEE_FILES=				\
+COFFEE_SOURCES=				\
 	nodevisitor.coffee		\
 	compiler.coffee			\
 	debug.coffee			\
 	echo-util.coffee		\
 	closure-conversion.coffee	\
 	optimizations.coffee		\
-	set.coffee			\
 	stack.coffee			\
 	types.coffee			\
 	consts.coffee			\
@@ -15,16 +14,22 @@ COFFEE_FILES=				\
 	runtime.coffee			\
 	terminal.coffee
 
+JS_SOURCES=				\
+	set.js
+
 DESTDIR = generated
 
-JS_FILES=$(COFFEE_FILES:%.coffee=$(DESTDIR)/%.js)
+GENERATED_FILES=$(COFFEE_SOURCES:%.coffee=$(DESTDIR)/%.js) $(JS_SOURCES:%.js=$(DESTDIR)/%.js)
 
-all-local:: $(JS_FILES)
+all-local:: $(GENERATED_FILES)
 
 clean-local::
-	rm -f $(JS_FILES)
+	rm -f $(GENERATED_FILES)
 
 $(DESTDIR)/%.js: %.coffee
 	coffee -o $(DESTDIR) -c $<
+
+$(DESTDIR)/%.js: %.js
+	cp $< $@
 
 include $(TOP)/build/build.mk
