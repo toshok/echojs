@@ -60,24 +60,34 @@ class LLVMIRVisitor extends TreeVisitor
                         isUndefined:          { value: @handleIsUndefined, enumerable: true }
                         isNull:               { value: @handleIsNull, enumerable: true }
 
-                # disable setSlot for now
-                @opencode_intrinsics = {}
-                @opencode_intrinsics[intrinsic] = false for intrinsic of @ejs_intrinsics
-                @opencode_LoadOne = true
-                @opencode_UnaryNot = true
-                @opencode_NumberNew = true
+                @opencode_intrinsics =
+                        loadOne           : true
+                        unaryNot          : true
+                        numberNew         : true
+                        
+                        getLocal          : true # unused
+                        setLocal          : true # unused
+                        getGlobal         : true # unused
+                        setGlobal         : true # unused
+                        slot              : false
+                        setSlot           : false # causes a crash when self-hosting
                 
-                #@opencode_intrinsics.setSlot = false
-
-                @opencode_intrinsics.typeofIsObject = true
-                @opencode_intrinsics.typeofIsFunction = true
-                @opencode_intrinsics.typeofIsString = true
-                @opencode_intrinsics.typeofIsSymbol = true
-                @opencode_intrinsics.typeofIsNumber = true
-                @opencode_intrinsics.typeofIsBoolean = true
-                @opencode_intrinsics.isNull = true
-                @opencode_intrinsics.isUndefined = true
-                #@opencode_intrinsics.isNullOrUndefined = true
+                        invokeClosure     : false
+                        makeClosure       : false
+                        makeAnonClosure   : false
+                        createArgScratchArea : false
+                        makeClosureEnv    : false
+                
+                        typeofIsObject    : true
+                        typeofIsFunction  : true
+                        typeofIsString    : true
+                        typeofIsSymbol    : true
+                        typeofIsNumber    : true
+                        typeofIsBoolean   : true
+                        builtinUndefined  : true
+                        isNullOrUndefined : false # causes a crash when self-hosting
+                        isUndefined       : true
+                        isNull            : true
                 
                 @llvm_intrinsics =
                         gcroot: -> module.getOrInsert "@llvm.gcroot"
@@ -496,7 +506,7 @@ class LLVMIRVisitor extends TreeVisitor
                 result = @createAlloca @currentFunction, types.EjsValue, "%update_result"
                 argument = @visit n.argument
                 
-                if @opencode_LoadOne and @options.target_pointer_size is 64
+                if @opencode_intrinsics.loadOne and @options.target_pointer_size is 64
                         one = ir.createBitCast (llvm.ConstantFP.getDouble 1), types.EjsValue, "load_one"
                 else
                         one = @createLoad @ejs_runtime['one'], "load_one"
@@ -849,7 +859,7 @@ class LLVMIRVisitor extends TreeVisitor
                                 
                 else if n.operator is "!"
                         arg_value =  @visitOrNull n.argument
-                        if @opencodeUnaryNot and @options.target_pointer_size is 64 and arg_value._ejs_returns_ejsval_bool
+                        if @opencode_intrinsics.unaryNot and @options.target_pointer_size is 64 and arg_value._ejs_returns_ejsval_bool
                                 cmp = ir.createICmpEq arg_value, (@loadBoolEjsValue true), "cmpresult"
                                 rv = ir.createSelect cmp, (@loadBoolEjsValue false), (@loadBoolEjsValue true), "sel"
                                 rv._ejs_returns_ejsval_bool = true
@@ -1153,7 +1163,7 @@ class LLVMIRVisitor extends TreeVisitor
                 if typeof n.value is "number"
                         debug.log -> "literal number: #{n.value}"
                         
-                        if @opencode_NumberNew and @options.target_pointer_size is 64
+                        if @opencode_intrinsics.numberNew and @options.target_pointer_size is 64
                                 c = llvm.ConstantFP.getDouble n.value
                                 return ir.createBitCast c, types.EjsValue, "numconst-#{n.value}"
                         else
