@@ -3,7 +3,7 @@ escodegen = require 'escodegen'
 syntax = esprima.Syntax
 debug = require 'debug'
 
-{ TreeTransformer } = require 'nodevisitor'
+{ TreeVisitor } = require 'nodevisitor'
 
 { create_intrinsic, is_intrinsic } = require 'echo-util'
 
@@ -19,7 +19,7 @@ debug = require 'debug'
 #
 # ==/!= of constants null or undefined
 # 
-class EqIdioms extends TreeTransformer
+class EqIdioms extends TreeVisitor
         is_typeof = (e) -> e.type is syntax.UnaryExpression and e.operator is "typeof"
         is_string_literal = (e) -> e.type is syntax.Literal and typeof e.value is "string"
         is_undefined_literal = (e) -> e.type is syntax.Literal and e.value is undefined
@@ -129,7 +129,7 @@ class EqIdioms extends TreeTransformer
 #
 #   for (i = 0; i < 100000; i += n) ...
 # 
-class LoopCounter extends TreeTransformer
+class LoopCounter extends TreeVisitor
         visitFor: (exp) ->
                 # we only handle update and assignment expressions
                 if exp.update.left.type isnt syntax.Identifier

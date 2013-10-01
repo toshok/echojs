@@ -564,8 +564,8 @@
     _count = map->num;
 	_names = _count == 0 ? NULL : (CKString**)malloc(_count * sizeof(CKString*));
     for (uint32_t i = 0; i < _count; i ++) {
-        jschar *name = map->names[i];
-        char* utf8 = ucs2_to_utf8(name);
+        ejsval name = map->names[i];
+        char* utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name));
 
         _names[i] = [[CKString alloc] initWithUTF8CString:utf8];
         free (utf8);

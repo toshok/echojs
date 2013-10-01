@@ -129,5 +129,5 @@ _ejs_init(int argc, char** argv)
     ejsval _ejs_ejs_global = _ejs_object_new (_ejs_null, &_ejs_object_specops);
     _ejs_object_setprop (_ejs_global, _ejs_atom___ejs, _ejs_ejs_global);
 
-    _ejs_GC_init(_ejs_global);
+    _ejs_GC_init(_ejs_ejs_global);
 }

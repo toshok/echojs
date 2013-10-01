@@ -6,7 +6,7 @@ path = require 'path'
 
 { Stack } = require 'stack'
 { Set } = require 'set'
-{ TreeTransformer, TreeVisitor } = require 'nodevisitor'
+{ TreeVisitor } = require 'nodevisitor'
 closure_conversion = require 'closure-conversion'
 optimizations = require 'optimizations'
 { startGenerator, bold, reset, is_intrinsic } = require 'echo-util'
@@ -1734,7 +1734,7 @@ class LLVMIRVisitor extends TreeVisitor
                 
         handleBuiltinUndefined:  (exp) -> @loadUndefinedEjsValue()
 
-class AddFunctionsVisitor extends TreeTransformer
+class AddFunctionsVisitor extends TreeVisitor
         constructor: (@module) ->
                 super
 

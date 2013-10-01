@@ -95,7 +95,7 @@ typedef struct {
 #define _ejs_property_desc_get_setter(p) _ejs_property_desc_get_value_flag_default(p, setter, EJS_PROP_FLAGS_SETTER_SET, _ejs_undefined)
     
 struct _EJSPropertyMap {
-    jschar **names;
+    ejsval *names;
     EJSPropertyDesc *properties;
     int allocated;
     int num;
@@ -104,7 +104,7 @@ struct _EJSPropertyMap {
 typedef struct _EJSPropertyMap EJSPropertyMap;
 typedef struct _EJSPropertyIterator EJSPropertyIterator;
 
-typedef void (*EJSPropertyDescFunc)(jschar* name, EJSPropertyDesc *desc, void* data);
+typedef void (*EJSPropertyDescFunc)(ejsval name, EJSPropertyDesc *desc, void* data);
 
 typedef ejsval           (*SpecOpGet) (ejsval obj, ejsval propertyName);
 typedef EJSPropertyDesc* (*SpecOpGetOwnProperty) (ejsval obj, ejsval propertyName);
@@ -166,7 +166,7 @@ struct _EJSObject {
 EJS_BEGIN_DECLS
 
 void _ejs_propertymap_init (EJSPropertyMap* map, int initial_allocation);
-int _ejs_propertymap_lookup (EJSPropertyMap *map, const jschar *name, EJSBool add_if_not_found);
+int _ejs_propertymap_lookup (EJSPropertyMap *map, ejsval name, EJSBool add_if_not_found);
 void _ejs_propertymap_foreach_value (EJSPropertyMap *map, EJSValueFunc foreach_func);
 void _ejs_propertymap_foreach_property (EJSPropertyMap *map, EJSPropertyDescFunc foreach_func, void* data);
 
@@ -205,6 +205,7 @@ void _ejs_object_init(ejsval global);
 // we shouldn't expose this method, we should expose a helper method that calls this.
 ejsval _ejs_Object_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args);
 
+void _ejs_Object_init (ejsval ejs_global);
 EJS_END_DECLS
 
 #endif // _ejs_object_h_

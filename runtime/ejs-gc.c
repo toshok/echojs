@@ -1402,12 +1402,10 @@ _ejs_GC_dumpAllocationStats (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
 }
 
 void
-_ejs_GC_init(ejsval global)
+_ejs_GC_init(ejsval ejs_obj)
 {
     _ejs_GC = _ejs_object_new (_ejs_Object_prototype, &_ejs_object_specops);
-
-    ejsval __ejs = _ejs_object_getprop (global, _ejs_atom___ejs);
-    _ejs_object_setprop (__ejs, _ejs_atom_GC, _ejs_GC);
+    _ejs_object_setprop (ejs_obj, _ejs_atom_GC, _ejs_GC);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_GC, x, _ejs_GC_##x)
 

@@ -2,6 +2,13 @@ terminal = require "terminal"
 esprima = require 'esprima'
 syntax = esprima.Syntax
 
+exports.shallow_copy_object = (o) ->
+        return null if not o?
+
+        new_o = Object.create Object.getPrototypeOf o
+        new_o[x] = o[x] for x in Object.getOwnPropertyNames o
+        new_o
+        
 exports.deep_copy_object = (o) -> JSON.parse JSON.stringify o
 
 exports.map = map = (f, arr) ->

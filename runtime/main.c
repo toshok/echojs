@@ -9,7 +9,7 @@
 #include "ejs-function.h"
 #include "ejs-string.h"
 
-#define GC_ON_SHUTDOWN 1
+#define GC_ON_SHUTDOWN 0
 
 extern const char *entry_filename;
 

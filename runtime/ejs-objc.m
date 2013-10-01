@@ -1053,7 +1053,7 @@ register_members (Class cls, CKObject* obj, NSMutableDictionary* method_map)
             _ejs_property_desc_has_setter(&_obj->map.properties[i])) {
 			if (_ejs_property_desc_has_getter(&_obj->map.properties[i])) {
 
-                char *utf8 = ucs2_to_utf8(_obj->map.names[i]);
+                char *utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(_obj->map.names[i]));
                 CKString* name = [CKString stringWithUTF8CString:utf8];
 
                 CKObject *getter = [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(_obj->map.properties[i].getter)];
@@ -1070,7 +1070,7 @@ register_members (Class cls, CKObject* obj, NSMutableDictionary* method_map)
 			}
 		}
 		else {
-            char *utf8 = ucs2_to_utf8(_obj->map.names[i]);
+            char *utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(_obj->map.names[i]));
             CKString* name = [CKString stringWithUTF8CString:utf8];
             free (utf8);
             NSString* name_nsstr = [name nsString];

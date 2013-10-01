@@ -2,205 +2,39 @@ syntax = (require 'esprima').Syntax
 debug = require 'debug'
 
 exports.TreeVisitor = class TreeVisitor
-        visitProgram: (n) ->
-                @visit n.body
-                undefined
-                
-        visitFunction: (n) ->
-                @visit n.params
-                @visit n.body
-                undefined
+        # for collections, returns all non-null.  for single item properties,
+        # just always returns the item.
+        filter = (x) ->
+                return x if not Array.isArray x
+        
+                rv = []
+                for y in x when y?
+                        if Array.isArray y
+                                rv = rv.concat y
+                        else
+                                rv.push y
+                rv
 
-        visitFunctionDeclaration: (n) ->
-                @visitFunction n
-                undefined
-                
-        visitFunctionExpression: (n) ->
-                @visitFunction n
-                undefined
-
-        visitArrowFunctionExpression: (n) ->
-                @visitFunction n
-                undefined
-                
-        visitBlock: (n) ->
-                @visit n.body
-                undefined
-
-        visitLabeledStatement: (n) ->
-                @visit n.body
-                undefined
-
-        visitEmptyStatement: (n) ->
-
-        visitExpressionStatement: (n) ->
-                @visit n.expression
-                undefined
-                
-        visitSwitch: (n) ->
-                @visit n.discriminant
-                @visit _case for _case in n.cases
-                undefined
-                
-        visitCase: (n) ->
-                @visit n.test
-                @visit _con for _con in n.consequent
-                undefined
-                
-        visitFor: (n) ->
-                @visit n.init
-                @visit n.test
-                @visit n.update
-                @visit n.body
-                undefined
-                
-        visitWhile: (n) ->
-                @visit n.test
-                @visit n.body
-                undefined
-                
-        visitIf: (n) ->
-                @visit n.test
-                @visit n.consequent
-                @visit n.alternate
-                undefined
-                
-        visitForIn: (n) ->
-                @visit n.left
-                @visit n.right
-                @visit n.body
-                undefined
-                
-        visitDo: (n) ->
-                @visit n.body
-                @visit n.test
-                undefined
-                
-        visitIdentifier: (n) ->
-        visitLiteral: (n) ->
-        visitThisExpression: (n) ->
-        visitBreak: (n) ->
-        visitContinue: (n) ->
-                
-        visitTry: (n) ->
-                @visit n.block
-                if n.handlers?
-                        @visit n.handlers
-                @visit n.finalizer
-                undefined
-
-        visitCatchClause: (n) ->
-                @visit n.param
-                @visit n.guard
-                @visit n.body
-                undefined
-                
-        visitThrow: (n) ->
-                @visit n.argument
-                undefined
-                
-        visitReturn: (n) ->
-                @visit n.argument
-                undefined
-                
-        visitWith: (n) ->
-                @visit n.object
-                @visit n.body
-                undefined
-                
-        visitVariableDeclaration: (n) ->
-                @visit n.declarations
-                undefined
-
-        visitVariableDeclarator: (n) ->
-                @visit n.id
-                @visit n.init
-                undefined
-                                
-        visitLabeledStatement: (n) ->
-                @visit n.label
-                @visit n.body
-                undefined
-                
-        visitAssignmentExpression: (n) ->
-                @visit n.left
-                @visit n.right
-                undefined
-                
-        visitConditionalExpression: (n) ->
-                @visit n.test
-                @visit n.consequent
-                @visit n.alternate
-                undefined
-                
-        visitLogicalExpression: (n) ->
-                @visit n.left
-                @visit n.right
-                undefined
-                
-        visitBinaryExpression: (n) ->
-                @visit n.left
-                @visit n.right
-                undefined
-
-        visitUnaryExpression: (n) ->
-                @visit n.argument
-                undefined
-
-        visitUpdateExpression: (n) ->
-                @visit n.argument
-                undefined
-
-        visitMemberExpression: (n) ->
-                @visit n.object
-                if n.computed
-                        @visit n.property
-                undefined
-                
-        visitRelationalExpression: (n) ->
-                @visit n.left
-                @visit n.right
-                undefined
-                
-        visitSequenceExpression: (n) ->
-                @visit n.expressions
-                undefined
-                
-        visitNewExpression: (n) ->
-                @visit n.callee
-                @visit n.arguments
-                undefined
-
-        visitObjectExpression: (n) ->
-                @visit n.properties
-                undefined
-
-        visitArrayExpression: (n) ->
-                @visit n.elements
-                undefined
-
-        visitProperty: (n) ->
-                @visit n.key
-                @visit n.value
-                undefined
-                                
-        visitCallExpression: (n) ->
-                @visit n.callee
-                @visit n.arguments
-                undefined
+        visitArray: (arr) ->
+                i = 0
+                e = arr.length
+                while i < e
+                        arr[i] = @visit arr[i]
+                        if arr[i] is null
+                                arr.splice i, 1
+                                e = arr.length
+                        else
+                                i += 1
+                arr
                 
         visit: (n) ->
-                if not n?
-                        debug.log "child is null!"
-                        return null
+                return null if not n?
 
-                if Array.isArray n
-                        return n.map (el) => @visit el
-                        
-                debug.indent()
-                debug.log -> "#{n.type}>"
+                return @visitArray n if Array.isArray n
 
-                rv = null
+                #debug.indent()
+                #debug.log -> "#{n.type}>"
+
                 switch n.type
                         when syntax.Program                 then rv = @visitProgram n
                         when syntax.FunctionDeclaration     then rv = @visitFunctionDeclaration n
@@ -246,47 +80,19 @@ exports.TreeVisitor = class TreeVisitor
                         when syntax.EmptyStatement          then rv = @visitEmptyStatement n
                         else
                             throw "PANIC: unknown parse node type #{n.type}"
-                        
-                debug.log -> "<#{n.type}, rv = #{if rv then rv.type else 'null'}"
-                debug.unindent()
-                rv
-
-        toString: () -> "TreeVisitor"
-
-exports.TreeTransformer = class TreeTransformer extends TreeVisitor
-        shallowCopy = (o) ->
-                return null if not o?
                 
-                new_o = Object.create Object.getPrototypeOf o
-                new_o[x] = o[x] for x in Object.getOwnPropertyNames o
-                new_o
+                #debug.log -> "<#{n.type}, rv = #{if rv then rv.type else 'null'}"
+                #debug.unindent()
 
-        # for collections, returns all non-null.  for single item properties,
-        # just always returns the item.
-        filter = (x) ->
-                return x if not Array.isArray x
-        
-                rv = []
-                for y in x when y?
-                        if Array.isArray y
-                                rv = rv.concat y
-                        else
-                                rv.push y
-                rv
+                return n if rv is undefined or rv is n
+                return rv
 
-        visit: (n) ->
-                # for non-array n's, just return the transformed node
-                return super shallowCopy n unless Array.isArray n
-
-                # for array n's, we need to copy them all before visiting them
-                return filter super n.map shallowCopy
-        
         visitProgram: (n) ->
-                n.body = @visit n.body
+                n.body = @visitArray n.body
                 n
                 
         visitFunction: (n) ->
-                n.params = @visit n.params
+                n.params = @visitArray n.params
                 n.body   = @visit n.body
                 n
 
@@ -300,7 +106,7 @@ exports.TreeTransformer = class TreeTransformer extends TreeVisitor
                 @visitFunction n
 
         visitBlock: (n) ->
-                n.body = @visit n.body
+                n.body = @visitArray n.body
                 n
 
         visitLabeledStatement: (n) ->
@@ -316,7 +122,7 @@ exports.TreeTransformer = class TreeTransformer extends TreeVisitor
                 
         visitSwitch: (n) ->
                 n.discriminant = @visit n.discriminant
-                n.cases        = @visit n.cases
+                n.cases        = @visitArray n.cases
                 n
                 
         visitCase: (n) ->
@@ -388,7 +194,7 @@ exports.TreeTransformer = class TreeTransformer extends TreeVisitor
                 n
                 
         visitVariableDeclaration: (n) ->
-                n.declarations = @visit n.declarations
+                n.declarations = @visitArray n.declarations
                 n
 
         visitVariableDeclarator: (n) ->
@@ -442,20 +248,20 @@ exports.TreeTransformer = class TreeTransformer extends TreeVisitor
                 n
                 
         visitSequenceExpression: (n) ->
-                n.expressions = @visit n.expressions
+                n.expressions = @visitArray n.expressions
                 n
                 
         visitNewExpression: (n) ->
                 n.callee    = @visit n.callee
-                n.arguments = @visit n.arguments
+                n.arguments = @visitArray n.arguments
                 n
 
         visitObjectExpression: (n) ->
-                n.properties = @visit n.properties
+                n.properties = @visitArray n.properties
                 n
 
         visitArrayExpression: (n) ->
-                n.elements = @visit n.elements
+                n.elements = @visitArray n.elements
                 n
 
         visitProperty: (n) ->
@@ -465,7 +271,7 @@ exports.TreeTransformer = class TreeTransformer extends TreeVisitor
                                 
         visitCallExpression: (n) ->
                 n.callee    = @visit n.callee
-                n.arguments = @visit n.arguments
+                n.arguments = @visitArray n.arguments
                 n
                 
-        toString: () -> "TreeTransformer"
+        toString: () -> "TreeVisitor"

@@ -5,11 +5,12 @@ debug = require 'debug'
 
 { Stack } = require 'stack'
 { Set } = require 'set'
-{ TreeTransformer } = require 'nodevisitor'
+{ TreeVisitor } = require 'nodevisitor'
 
 echo_util = require 'echo-util'
 genGlobalFunctionName = echo_util.genGlobalFunctionName
 genAnonymousFunctionName = echo_util.genAnonymousFunctionName
+shallow_copy_object = echo_util.shallow_copy_object
 deep_copy_object = echo_util.deep_copy_object
 map = echo_util.map
 foldl = echo_util.foldl
@@ -32,7 +33,7 @@ hasOwnProperty = Object.prototype.hasOwnProperty
 #     parent: ...  // the parent environment object
 #   }
 # 
-LocateEnv = class LocateEnv extends TreeTransformer
+LocateEnv = class LocateEnv extends TreeVisitor
         constructor: ->
                 super
                 @envs = new Stack
@@ -99,27 +100,35 @@ LocateEnv = class LocateEnv extends TreeTransformer
 
 # this should move to echo-desugar.coffee
 
-class HoistFuncDecls extends TreeTransformer
+class HoistFuncDecls extends TreeVisitor
         constructor: ->
                 @prepends = []
                 
         visitFunction: (n) ->
-                @prepends.unshift []
-                super
+                @prepends.unshift null
+                n.body = @visit n.body
                 # we're assuming n.body is a BlockStatement here...
-                n.body.body = @prepends.shift().concat n.body.body
+                new_prepends = @prepends.shift()
+                if new_prepends isnt null
+                        n.body.body = new_prepends.concat n.body.body
                 n
         
         visitBlock: (n) ->
-                super
+                n = super n
+                return n if n.body.length == 0
 
-                new_body = []
-                for child in n.body
+                i = 0
+                e = n.body.length
+                while i < e
+                        child = n.body[i]
                         if child.type is syntax.FunctionDeclaration
+                                if @prepends[0] is null
+                                        @prepends[0] = []
                                 @prepends[0].push child
+                                n.body.splice i, 1
+                                e = n.body.length
                         else
-                                new_body.push child
-                n.body = new_body
+                                i += 1
                 n
 
 # convert all function declarations to variable assignments
@@ -130,7 +139,7 @@ class HoistFuncDecls extends TreeTransformer
 # to:
 #   var foo = function foo() { }
 # 
-class FuncDeclsToVars extends TreeTransformer
+class FuncDeclsToVars extends TreeVisitor
         constructor: -> super
         
         visitFunctionDeclaration: (n) ->
@@ -170,7 +179,7 @@ class FuncDeclsToVars extends TreeTransformer
 #       ....
 #    }
 # 
-class HoistVars extends TreeTransformer
+class HoistVars extends TreeVisitor
         constructor: () ->
                 super
                 @function_stack = new Stack
@@ -250,9 +259,91 @@ class HoistVars extends TreeTransformer
                                 }
                 n
 
-# this class really doesn't behave like a normal TreeTransformer, as it modifies the tree in-place.
+# this pass converts all arrow functions to normal anonymous function
+# expressions with a closed-over 'this'
+#
+# take the following:
+#
+# function foo() {
+#   let mapper = (arr) => {
+#     arr.map (el => el * this.x);
+#   };
+# }
+#
+# This will be compiled to:
+#
+# function foo() {
+#   let _this_010 = this;
+#   let mapper = function (arr) {
+#     arr.map (function (el) { return el * _this_010.x; });
+#   };
+# }
+#
+# and the usual closure conversion stuff will make sure the bindings
+# exists in the closure env as usual.
+# 
+DesugarArrowFunctions = class DesugarArrowFunctions extends TreeVisitor
+        definesThis: (n) -> n.type is syntax.FunctionDeclaration or n.type is syntax.FunctionExpression
+        
+        constructor: ->
+                @mapping = []
+                @thisGen = startGenerator()
+
+        visitArrowFunctionExpression: (n) ->
+                if n.expression
+                        n.body = {
+                                type: syntax.BlockStatement
+                                body: [{
+                                        type: syntax.ReturnStatement
+                                        argument: n.body
+                                }]
+                        }
+                        n.expression = false
+                n = @visitFunction n
+                n.type = syntax.FunctionExpression
+                n
+
+        visitThisExpression: (n) ->
+                return { type: syntax.Literal, value: undefined } if @mapping.length == 0
+
+                topfunc = @mapping[0].func
+
+                for m in @mapping
+                        if @definesThis m.func
+                                # if we're already on top, just return the existing thisExpression
+                                return n if topfunc is m
+
+                                return create_identifier m.id if m.id?
+
+                                m.id = "_this_#{@thisGen()}"
+
+                                m.prepend = {
+                                        type: syntax.VariableDeclaration
+                                        declarations: [{
+                                                type: syntax.VariableDeclarator
+                                                id:  create_identifier m.id
+                                                init:
+                                                        type: syntax.ThisExpression
+                                        }],
+                                        kind: "let"
+                                }
+
+                                return create_identifier m.id
+
+                throw new Error("no binding for 'this' available for arrow function")
+        
+        visitFunction: (n) ->
+                @mapping.unshift { func: n, id: null }
+                n = super n
+                m = @mapping.shift()
+                if m.prepend?
+                        n.body.body.unshift m.prepend
+                n
+                
+
+# this class really doesn't behave like a normal TreeVisitor, as it modifies the tree in-place.
 # XXX reformulate this as a TreeVisitor subclass.
-class ComputeFree extends TreeTransformer
+class ComputeFree extends TreeVisitor
         constructor: ->
                 @call_free = @free.bind @
                 super
@@ -357,7 +448,7 @@ class ComputeFree extends TreeTransformer
                 
 # 1) allocates the environment at the start of the n
 # 2) adds mappings for all .closed variables
-class SubstituteVariables extends TreeTransformer
+class SubstituteVariables extends TreeVisitor
         constructor: (module) ->
                 @function_stack = new Stack
                 @mappings = new Stack
@@ -503,14 +594,15 @@ class SubstituteVariables extends TreeTransformer
                 @function_stack.pop()
                 
                 n
-                
+
         visitFunction: (n) ->
             try
                 this_env_name = "%env_#{n.ejs_env.id}"
                 if n.ejs_env.parent?
                         parent_env_name = "%env_#{n.ejs_env.parent.id}"
-                
-                new_mapping = deep_copy_object @currentMapping()
+
+                #console.log JSON.stringify @currentMapping()                
+                new_mapping = shallow_copy_object @currentMapping()
                 if n.ejs_env.closed.empty() and not n.ejs_env.nested_requires_env
                         n.body.body.unshift
                                 type: syntax.VariableDeclaration,
@@ -563,11 +655,6 @@ class SubstituteVariables extends TreeTransformer
                                         }
 
                         new_mapping["%slot_mapping"] = n.ejs_env.slot_mapping
-                        ###
-                        for mapped_id of n.ejs_env.slot_mapping
-                                if new_mapping[mapped_id] is undefined
-                                        console.log "new_mapping[#{mapped_id}] == undefined"
-                        ###
 
                         flatten_memberexp = (exp, mapping) ->
                                 if exp.type isnt syntax.CallExpression
@@ -623,7 +710,7 @@ class SubstituteVariables extends TreeTransformer
             catch e
                 console.warn "exception: " + e
                 console.warn "compiling the following code:"
-                console.warn escodegen.generate n
+                #console.warn escodegen.generate n
                 throw e
                 
         visitCallExpression: (n) ->
@@ -664,13 +751,10 @@ class SubstituteVariables extends TreeTransformer
 # 
 #   2. There are no free variables in the function expressions.
 #
-class LambdaLift extends TreeTransformer
+class LambdaLift extends TreeVisitor
         constructor: (@filename) ->
                 @functions = []
-                @mappings = new Stack
                 super
-
-        currentMapping: -> if @mappings.depth > 0 then @mappings.top else Object.create null
 
         visitProgram: (program) ->
                 super
@@ -689,22 +773,6 @@ class LambdaLift extends TreeTransformer
                 @maybePrependScratchArea n
                 n
 
-        visitArrowFunctionExpression: (n) ->
-                # this doesn't really belong here, but if we're
-                # dealing with an arrow function with an expression
-                # for a body, replace the body with a block statement
-                # with a return statement returning that expression
-                if n.expression
-                        n.body = {
-                                type: syntax.BlockStatement
-                                body: [{
-                                        type: syntax.ReturnStatement
-                                        argument: n.body
-                                }]
-                        }
-                        n.espression = false
-                @visitFunctionExpression n
-
         visitFunctionExpression: (n) ->
                 if n.displayName?
                         global_name = genGlobalFunctionName n.displayName, @filename
@@ -713,9 +781,6 @@ class LambdaLift extends TreeTransformer
                 else
                         global_name = genAnonymousFunctionName(@filename)
                 
-                if n.id?.name?
-                        @currentMapping()[n.id.name] = global_name
-
                 n.type = syntax.FunctionDeclaration
                 n.id =
                         type: syntax.Identifier
@@ -723,11 +788,7 @@ class LambdaLift extends TreeTransformer
 
                 @functions.push n
 
-                new_mapping = deep_copy_object @currentMapping()
-
-                @mappings.push new_mapping
                 n.body = @visit n.body
-                @mappings.pop()
 
                 @maybePrependScratchArea n
 
@@ -739,7 +800,7 @@ class LambdaLift extends TreeTransformer
                 }
 
 
-class NameAnonymousFunctions extends TreeTransformer
+class NameAnonymousFunctions extends TreeVisitor
         constructor: -> super
         visitAssignmentExpression: (n) ->
                 n = super n
@@ -757,7 +818,7 @@ class NameAnonymousFunctions extends TreeTransformer
                         rhs.displayName = escodegen.generate lhs
                 n
 
-class MarkLocalAndGlobalVariables extends TreeTransformer
+class MarkLocalAndGlobalVariables extends TreeVisitor
         constructor: ->
                 # initialize the scope stack with the global (empty) scope
                 @scope_stack = new Stack Object.create null
@@ -815,37 +876,37 @@ class MarkLocalAndGlobalVariables extends TreeTransformer
                         n.right = new_rhs
                         n
                         
-
-        ###
-        visitUpdateExpression: (n) ->
-                argument = n.argument
-                new_rhs = {
-                        type:     syntax.BinaryExpression,
-                        operator: n.operator[0]
-                        left:     @visit argument
-                        right:    { type: syntax.Literal, value: 1, raw: "1" }
-                }
-                
-                if is_intrinsic "%slot", argument
-                        create_intrinsic "%setSlot", [argument.arguments[0], argument.arguments[1], new_rhs]
-                else # argument.type is syntax.Identifier
-                        create_intrinsic (@intrinsicForIdentifier argument, "%set"), [argument, new_rhs]
-        ###
-
         visitBlock: (n) ->
                 n.body = @visitWithScope (Object.create null), n.body
                 n
 
         visitCallExpression: (n) ->
-                # at this point there shouldn't be call expressions for anything other than intrinsics,
-                # so we leave callee alone and just iterate over the args.
-                n.arguments = @visit n.arguments
+                # at this point there shouldn't be call expressions
+                # for anything other than intrinsics, so we leave
+                # callee alone and just iterate over the args.  we
+                # skip the first one since that is guaranteed to be an
+                # identifier that we don't want rewrapped, or an
+                # intrinsic already wrapping the identifier.
+
+                if n.arguments[0].type is syntax.CallExpression
+                        new_args = @visit n.arguments.slice 1
+                        new_args.unshift n.arguments[0]
+                else
+                        new_args = @visit n.arguments
+                        n.arguments = new_args
                 n
 
         visitNewExpression: (n) ->
-                # at this point there shouldn't be new expressions for anything other than intrinsics,
-                # so we leave callee alone and just iterate over the args.
-                n.arguments = @visit n.arguments
+                # at this point there shouldn't be call expressions
+                # for anything other than intrinsics, so we leave
+                # callee alone and just iterate over the args.  we
+                # skip the first one since that is guaranteed to be an
+                # identifier that we don't want rewrapped, or an
+                # intrinsic already wrapping the identifier.
+                
+                new_args = @visit n.arguments.slice 1
+                new_args.unshift n.arguments[0]
+                n.arguments = new_args
                 n
 
         visitFunction: (n) ->
@@ -876,7 +937,7 @@ class MarkLocalAndGlobalVariables extends TreeTransformer
                 n.body  = @visit n.body
                 n
 
-class ReplaceUnaryVoid extends TreeTransformer
+class ReplaceUnaryVoid extends TreeVisitor
         constructor: -> super
         
         visitUnaryExpression: (n) ->
@@ -918,7 +979,7 @@ class ReplaceUnaryVoid extends TreeTransformer
 #
 #    { body }
 # 
-class IIFEIdioms extends TreeTransformer
+class IIFEIdioms extends TreeVisitor
 
         constructor: ->
                 @function_stack = new Stack
@@ -1068,6 +1129,7 @@ passes = [
         HoistFuncDecls
         FuncDeclsToVars
         HoistVars
+        DesugarArrowFunctions
         ComputeFree
         LocateEnv
         NameAnonymousFunctions
@@ -1081,11 +1143,13 @@ passes = [
 exports.convert = (tree, filename) ->
         debug.log "before:"
         debug.log -> escodegen.generate tree
+        #__ejs.GC.dumpAllocationStats "before closure conversion" if __ejs?
 
         passes.forEach (passType) ->
                 pass = new passType(filename)
                 tree = pass.visit tree
                 debug.log 2, "after: #{passType.name}"
                 debug.log 2, -> escodegen.generate tree
+                #__ejs.GC.dumpAllocationStats "after #{passType.name}" if __ejs?
 
         tree

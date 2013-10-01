@@ -274,7 +274,7 @@ JO(StringifyState *state, ejsval value)
         for (int i = 0; i < value_obj->map.num; i ++) {
             if (!_ejs_property_desc_is_enumerable(&value_obj->map.properties[i]))
                 continue;
-            ejsval propname = _ejs_string_new_ucs2(value_obj->map.names[i]);
+            ejsval propname = value_obj->map.names[i];
             _ejs_array_push_dense(K, 1, &propname);
         }
     }

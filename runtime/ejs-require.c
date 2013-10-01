@@ -78,7 +78,7 @@ require_user_module (const char* name, ejsval *module)
         }
         if (!strcmp (map->name, name)) {
             if (EJSVAL_IS_NULL(map->cached_exports)) {
-                fprintf (stderr, "require'ing %s.\n", name);
+                //fprintf (stderr, "require'ing %s.\n", name);
                 _ejs_gc_add_root (&map->cached_exports);
                 map->cached_exports = _ejs_object_new(_ejs_null, &_ejs_object_specops);
                 ejsval prev_exports = _ejs_object_getprop (_ejs_global, _ejs_atom_exports);
@@ -91,7 +91,7 @@ require_user_module (const char* name, ejsval *module)
 
                 _ejs_object_setprop(_ejs_global, _ejs_atom_exports, prev_exports);
                 _ejs_gc_remove_root (&prev_exports);
-                fprintf (stderr, "done require'ing %s.\n", name);
+                //fprintf (stderr, "done require'ing %s.\n", name);
             }
             *module = map->cached_exports;
             return EJS_TRUE;
@@ -111,7 +111,7 @@ _ejs_require_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     char* arg_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(arg));
 
     if (!EJSVAL_IS_STRING(arg)) {
-        fprintf (stderr, "required called with non-string\n");
+        //fprintf (stderr, "required called with non-string\n");
         free (arg_utf8);
         return _ejs_null;
     }
