@@ -15,17 +15,31 @@ exports.TreeVisitor = class TreeVisitor
                                 rv.push y
                 rv
 
+        # a rather disgusting in-place filter+flatten visitor
         visitArray: (arr) ->
                 i = 0
                 e = arr.length
                 while i < e
-                        arr[i] = @visit arr[i]
-                        if arr[i] is null
+                        tmp = @visit arr[i]
+                        if tmp is null
                                 arr.splice i, 1
                                 e = arr.length
+                        else if Array.isArray tmp
+                                tmplen = tmp.length
+                                if tmplen > 0
+                                        tmp.unshift 1
+                                        tmp.unshift i
+                                        arr.splice.apply arr, tmp
+                                        i += tmplen
+                                        e = arr.length
+                                else
+                                        arr.splice i, 1
+                                        e = arr.length
                         else
+                                arr[i] = tmp
                                 i += 1
                 arr
+                
                 
         visit: (n) ->
                 return null if not n?
