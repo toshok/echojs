@@ -105,6 +105,14 @@ class EqIdioms extends TreeVisitor
                                 return rv
                 super
 
+class ReplaceUnaryVoid extends TreeVisitor
+        constructor: -> super
+        
+        visitUnaryExpression: (n) ->
+                if n.operator is "void" and n.argument.type is syntax.Literal and n.argument.value is 0
+                        return create_intrinsic "%builtinUndefined", []
+                n
+
 ###
 # this class looks for loops whose counter is never assigned inside
 # the body of the loop, and we can detect that it always remains in
@@ -204,6 +212,7 @@ class LoopCounter extends TreeVisitor
 
 passes = [
         EqIdioms
+        ReplaceUnaryVoid
         ]
         
 exports.run = (tree) ->

@@ -601,10 +601,10 @@ class SubstituteVariables extends TreeVisitor
                 if n.ejs_env.parent?
                         parent_env_name = "%env_#{n.ejs_env.parent.id}"
 
-                #console.log JSON.stringify @currentMapping()                
+                env_prepends = []
                 new_mapping = shallow_copy_object @currentMapping()
                 if n.ejs_env.closed.empty() and not n.ejs_env.nested_requires_env
-                        n.body.body.unshift
+                        env_prepends.push {
                                 type: syntax.VariableDeclaration,
                                 declarations: [{
                                         type: syntax.VariableDeclarator
@@ -614,11 +614,10 @@ class SubstituteVariables extends TreeVisitor
                                                 value: null
                                 }],
                                 kind: "let"
+                        }
                 else
-                        # okay, we know we need a fresh environment in this function
-                        prepends = []
                         # insert environment creation (at the start of the function body)
-                        prepends.push {
+                        env_prepends.push {
                                 type: syntax.VariableDeclaration,
                                 declarations: [{
                                         type: syntax.VariableDeclarator
@@ -640,7 +639,7 @@ class SubstituteVariables extends TreeVisitor
                         
                         if n.ejs_env.parent?
                                 parent_env_slot = n.ejs_env.slot_mapping[parent_env_name]
-                                prepends.push {
+                                env_prepends.push {
                                         type: syntax.ExpressionStatement
                                         expression: create_intrinsic "%setSlot", [ (create_identifier this_env_name), (create_number_literal parent_env_slot), (create_string_literal parent_env_name), (create_identifier parent_env_name) ]
                                 }
@@ -649,7 +648,7 @@ class SubstituteVariables extends TreeVisitor
                         # we need to push assignments of any closed over parameters into the environment at this point
                         for param in n.params
                                 if n.ejs_env.closed.has param.name
-                                        prepends.push {
+                                        env_prepends.push {
                                                 type: syntax.ExpressionStatement
                                                 expression: create_intrinsic "%setSlot", [ (create_identifier this_env_name), (create_number_literal n.ejs_env.slot_mapping[param.name]), (create_string_literal param.name), (create_identifier param.name) ]
                                         }
@@ -686,8 +685,8 @@ class SubstituteVariables extends TreeVisitor
 
                 @mappings.push new_mapping
                 @visitFunctionBody n
-                if prepends?
-                        n.body.body = prepends.concat n.body.body
+                if env_prepends.length > 0
+                        n.body.body = env_prepends.concat n.body.body
                 @mappings.pop()
 
                 # convert function expressions to an explicit closure creation, so:
@@ -702,10 +701,11 @@ class SubstituteVariables extends TreeVisitor
                         if n.type is syntax.FunctionDeclaration
                                 throw "there should be no FunctionDeclarations at this point"
                         else # n.type is syntax.FunctionExpression
-                                return if n.id?
-                                        create_intrinsic "%makeClosure", [ (if n.ejs_env.parent? then (create_identifier parent_env_name) else { type: syntax.Literal, value: null}), (create_string_literal n.id.name), n ]
+                                if n.id?
+                                        return create_intrinsic "%makeClosure", [ (if n.ejs_env.parent? then (create_identifier parent_env_name) else { type: syntax.Literal, value: null}), (create_string_literal n.id.name), n ]
                                 else
-                                        create_intrinsic "%makeAnonClosure", [ (if n.ejs_env.parent? then (create_identifier parent_env_name) else { type: syntax.Literal, value: null}), n ]
+                                        return create_intrinsic "%makeAnonClosure", [ (if n.ejs_env.parent? then (create_identifier parent_env_name) else { type: syntax.Literal, value: null}), n ]
+
                 n
             catch e
                 console.warn "exception: " + e
@@ -723,7 +723,6 @@ class SubstituteVariables extends TreeVisitor
                 #   invokeClosure(X, %this, %argCount, arg1, arg2, ...);
 
                 @function_stack.top.scratch_size = Math.max @function_stack.top.scratch_size, n.arguments.length
-
                 create_intrinsic "%invokeClosure", [n.callee].concat n.arguments
 
         visitNewExpression: (n) ->
@@ -937,14 +936,6 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
                 n.body  = @visit n.body
                 n
 
-class ReplaceUnaryVoid extends TreeVisitor
-        constructor: -> super
-        
-        visitUnaryExpression: (n) ->
-                if n.operator is "void" and n.argument.type is syntax.Literal and n.argument.value is 0
-                        return create_intrinsic "%builtinUndefined", []
-                n
-
 #
 # special pass to inline some common idioms dealing with IIFEs
 # (immediately invoked function expressions).
@@ -1102,28 +1093,6 @@ class IIFEIdioms extends TreeVisitor
                         return @maybeInlineIIFECall candidate, n
                 else
                         return n
-                        
-                                                                                                
-transform_dump_tree = (n, indent=0) ->
-        stringified_indent = ('' for i in [0..(indent*2)]).join('| ')
-        console.log "#{stringified_indent}.type = syntax.#{n.type}"
-        console.log "#{stringified_indent}.js = #{escodegen.generate n, { format: { compact: true } } }"
-        console.log "#{stringified_indent}.free = #{n.ejs_free_vars}" if n.ejs_free_vars?
-        console.log "#{stringified_indent}.env.decls = #{n.ejs_env.decls}" if n.ejs_env?
-        console.log "#{stringified_indent}.env.closed = #{n.ejs_env.closed}" if n.ejs_env?
-        props_to_skip = ["type", "id", "loc", "ejs_free_vars", "ejs_decls", "ejs_env"]
-        Object.getOwnPropertyNames(n).forEach (propName) ->
-                if (props_to_skip.indexOf propname) is -1
-                        if n[propname]?.type?
-                                console.log "#{stringified_indent}.#{propname}:"
-                                transform_dump_tree n[propname], indent+1
-                        else if Array.isArray n[propname]
-                                console.log "#{stringified_indent}.#{propname}: ["
-                                (transform_dump_tree element, indent+1) for element in n[propname]
-                                console.log "#{stringified_indent}]"
-                        else
-                                console.log "#{stringified_indent}.#{propname} = #{JSON.stringify n[propname]}"
-        undefined
 
 passes = [
         HoistFuncDecls
@@ -1135,7 +1104,6 @@ passes = [
         NameAnonymousFunctions
         SubstituteVariables
         MarkLocalAndGlobalVariables
-        ReplaceUnaryVoid
         IIFEIdioms
         LambdaLift
         ]
