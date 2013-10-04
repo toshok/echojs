@@ -92,6 +92,9 @@ exports.TreeVisitor = class TreeVisitor
                         when syntax.CallExpression          then rv = @visitCallExpression n
                         when syntax.Property                then rv = @visitProperty n
                         when syntax.EmptyStatement          then rv = @visitEmptyStatement n
+                        when syntax.ClassDeclaration        then rv = @visitClassDeclaration n
+                        when syntax.ClassBody               then rv = @visitClassBody n
+                        when syntax.MethodDefinition        then rv = @visitMethodDefinition n
                         else
                             throw "PANIC: unknown parse node type #{n.type}"
                 
@@ -287,5 +290,17 @@ exports.TreeVisitor = class TreeVisitor
                 n.callee    = @visit n.callee
                 n.arguments = @visitArray n.arguments
                 n
-                
+
+        visitClassDeclaration: (n) ->
+                n.body = @visit n.body
+                n
+
+        visitClassBody: (n) ->
+                n.body = @visitArray n.body
+                n
+
+        visitMethodDefinition: (n) ->
+                n.value = @visit n.value
+                n
+                                
         toString: () -> "TreeVisitor"

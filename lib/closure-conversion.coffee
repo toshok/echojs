@@ -25,6 +25,250 @@ startGenerator = echo_util.startGenerator
 hasOwnProperty = Object.prototype.hasOwnProperty
 
 #
+# converts:
+#
+# class Subclass extends Baseclass
+#   constructor (/* ctor args */) { /* ctor body */ }
+#
+#   method (/* method args */) { /* method body */ }
+#
+# to:
+#
+# let Subclass = (function (_super) {
+#   %extends(Subclass, _super);
+#   function Subclass (/* ctor args */) { /* ctor body */ }
+#   Subclass.prototype.method = function(/* method args */) { /* method body */ };
+#   return Subclass;
+# })(Baseclass)
+# 
+# 
+DesugarClasses = class DesugarClasses extends TreeVisitor
+        constructor: ->
+                super
+
+        visitClassDeclaration: (n) ->
+                class_init_iife_body = []
+
+                [properties, methods, sproperties, smethods] = @gather_members n
+
+                ctor = null
+                for method_key of methods
+                        # if it's a method with name 'constructor' output the special ctor function
+                        if method_key is 'constructor'
+                                ctor = methods[method_key]
+                                class_init_iife_body.push @create_constructor methods[method_key], n
+                        else
+                                class_init_iife_body.push @create_proto_method methods[method_key], n
+
+                for method_key of smethods
+                        class_init_iife_body.push @create_static_method smethods[method_key], n
+
+                proto_props = @create_properties properties, n, false
+                class_init_iife_body.push proto_props if proto_props?
+                        
+                static_props = @create_properties sproperties, n, true
+                class_init_iife_body.push static_props if static_props?
+
+                # generate and prepend a default ctor if there isn't one declared.
+                # It looks like this in code:
+                #   function Subclass (...args) { _super.call(this, args...); }
+                if not ctor?
+                        class_init_iife_body.unshift @create_default_constructor n
+                           
+
+                # make sure we return the function from our iife
+                class_init_iife_body.push
+                        type: syntax.ReturnStatement
+                        argument: n.id
+                
+                # this block forms the outer wrapper iife + initializer:
+                # 
+                #  let %className = (function (%super?) { ... })(%superClassName);
+                #
+                class_init = 
+                        type: syntax.VariableDeclaration
+                        kind: "let"
+                        declarations: [{
+                                type: syntax.VariableDeclarator
+                                id:   n.id
+                                init:
+                                        type: syntax.CallExpression
+                                        callee:
+                                                type: syntax.FunctionExpression
+                                                id:   null
+                                                body: 
+                                                        type: syntax.BlockStatement
+                                                        body: class_init_iife_body
+                                                params: if n.superClass? then [create_identifier "%super"] else []
+                                                defaults: []
+                                                rest: null
+                                                generator: false
+                                                expression: false
+                                        arguments: if n.superClass? then [n.superClass] else []
+                        }]
+                        
+                class_init
+
+        gather_members: (ast_class) ->
+                methods     = Object.create null
+                smethods    = Object.create null
+                properties  = Object.create null
+                sproperties = Object.create null
+
+                for class_element in ast_class.body.body
+                        if class_element.static and class_element.key.name is "prototype"
+                                throw new SyntaxError "Illegal method name 'prototype' on static class member."
+                                
+                        if class_element.kind is ""
+                                # a method
+                                method_hash = if class_element.static then smethods else methods
+                                throw new SyntaxError "method '#{class_element.key.name}' has already been defined." if method_hash[class_element.key.name]?
+                                method_hash[class_element.key.name] = class_element
+                        else
+                                # a property
+                                property_hash = if class_element.static then sproperties else properties
+                                
+                                property_hash[class_element.key.name] = Object.create(null) if not property_hash[class_element.key.name]?
+
+                                throw new SyntaxError "a '#{class_element.kind}' method for '#{class_element.key.name}' has already been defined." if property_hash[class_element.key.name][class_element.kind]?
+                                property_hash[class_element.key.name][class_element.kind] = class_element
+
+                [properties, methods, sproperties, smethods]
+                        
+                
+        create_constructor: (ast_method, ast_class) ->
+                return {
+                        type: syntax.FunctionDeclaration
+                        id: ast_class.id
+                        body: ast_method.value.body
+                        params: ast_method.value.params
+                        defaults: ast_method.value.defaults
+                        rest: ast_method.value.rest
+                        generator: false
+                        expression: false
+                }
+
+        create_default_constructor: (ast_class) ->
+                return {
+                        type: syntax.FunctionDeclaration
+                        id: ast_class.id
+                        body:
+                                # XXX splat args into the call to super's ctor
+                                type: syntax.BlockStatement
+                                body: []
+                        params: []
+                        defaults: []
+                        rest: create_identifier "args"
+                        generator: false
+                        expression: false
+                }
+                
+        create_proto_method: (ast_method, ast_class) ->
+                proto_member =
+                        type: syntax.MemberExpression
+                        object:
+                                type: syntax.MemberExpression
+                                object: ast_class.id
+                                property: create_identifier "prototype"
+                                computed: false
+                        property: ast_method.key
+                        computed: false
+
+                method =
+                        type: syntax.FunctionExpression
+                        id: ast_method.key
+                        body: ast_method.value.body
+                        params: ast_method.value.params
+                        defaults: []
+                        rest: null
+                        generator: false
+                        expression: false
+                        
+                
+                return {
+                        type: syntax.ExpressionStatement
+                        expression:
+                                type: syntax.AssignmentExpression
+                                operator: "="
+                                left: proto_member
+                                right: method
+                }
+
+        create_static_method: (ast_method, ast_class) ->
+                method =
+                        type: syntax.FunctionExpression
+                        id: ast_method.key
+                        body: ast_method.value.body
+                        params: ast_method.value.params
+                        defaults: []
+                        rest: null
+                        generator: false
+                        expression: false
+                        
+                
+                return {
+                        type: syntax.ExpressionStatement
+                        expression:
+                                type: syntax.AssignmentExpression
+                                operator: "="
+                                left:
+                                        type: syntax.MemberExpression
+                                        object: ast_class.id
+                                        property: ast_method.key
+                                        computed:false
+                                right: method
+                }
+
+        create_properties: (properties, ast_class, are_static) ->
+                propdescs = []
+                
+                for pname of properties
+                        prop = properties[pname]
+                        accessors = []
+                        name = null
+
+                        if prop.get?
+                                accessors.push { type: syntax.Property, key: create_identifier("get"), value: prop.get.value, kind: "init" }
+                                name = prop.get.key
+                        if prop.set?
+                                accessors.push { type: syntax.Property, key: create_identifier("set"), value: prop.set.value, kind: "init" }
+                                name = prop.set.key
+                        
+                        propdescs.push
+                                type: syntax.Property
+                                key: name
+                                value:
+                                        type: syntax.ObjectExpression
+                                        properties: accessors
+                                kind: "init"
+
+                return null if propdescs.length is 0
+                        
+                propdescs_literal =
+                        type: syntax.ObjectExpression
+                        properties: propdescs
+                
+                if are_static
+                        target = ast_class.id
+                else
+                        target =
+                                type: syntax.MemberExpression
+                                object: ast_class.id
+                                property: create_identifier "prototype"
+                                computed: false
+                                
+                return {
+                        type: syntax.ExpressionStatement
+                        expression:
+                                type: syntax.CallExpression
+                                callee:
+                                        type: syntax.MemberExpression
+                                        object: create_identifier "Object"
+                                        property: create_identifier "defineProperties"
+                                arguments: [target, propdescs_literal]
+                }
+
+#
 # each element in env is an object of the form:
 #   { exp: ...     // the AST node corresponding to this environment.  will be a function or a BlockStatement. (right now just functions)
 #     id:  ...     // the number/id of this environment
@@ -257,6 +501,8 @@ class HoistVars extends TreeVisitor
                                         type: syntax.ExpressionStatement
                                         expression: assign_exp
                                 }
+                else
+                        n = super
                 n
 
 # this pass converts all arrow functions to normal anonymous function
@@ -1095,6 +1341,7 @@ class IIFEIdioms extends TreeVisitor
                         return n
 
 passes = [
+        DesugarClasses
         HoistFuncDecls
         FuncDeclsToVars
         HoistVars
