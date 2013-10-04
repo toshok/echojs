@@ -1817,8 +1817,8 @@ exports.compile = (tree, base_output_filename, source_filename, options) ->
 
         toplevel_name = tree.body[0].id.name
         
-        debug.log 1, "before closure conversion"
-        debug.log 1, -> escodegen.generate tree
+        #debug.log 1, "before closure conversion"
+        #debug.log 1, -> escodegen.generate tree
         
         tree = closure_conversion.convert tree, path.basename source_filename
 
