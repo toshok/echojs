@@ -34,8 +34,8 @@ hasOwnProperty = Object.prototype.hasOwnProperty
 #
 # to:
 #
-# let Subclass = (function (_super) {
-#   %extends(Subclass, _super);
+# let Subclass = (function(%super) {
+#   %extends(Subclass, %super);
 #   function Subclass (/* ctor args */) { /* ctor body */ }
 #   Subclass.prototype.method = function(/* method args */) { /* method body */ };
 #   return Subclass;
@@ -45,8 +45,45 @@ hasOwnProperty = Object.prototype.hasOwnProperty
 DesugarClasses = class DesugarClasses extends TreeVisitor
         constructor: ->
                 super
+                @class_stack = new Stack
+                @method_stack = new Stack
+
+        visitCallExpression: (n) ->
+                if n.callee.type is syntax.Identifier and n.callee.name is "super"
+                        n.callee =
+                                type: syntax.MemberExpression
+                                object:
+                                        type: syntax.MemberExpression
+                                        object: create_identifier "%super"
+                                        property: create_identifier "prototype"
+                                        computed: false
+                                property: @method_stack.top
+                                computed: false
+                n.arguments = @visitArray n.arguments
+                n
+
+        visitNewExpression: (n) ->
+                if n.callee.type is syntax.Identifier and n.callee.name is "super"
+                        n.callee = create_identifier "%super"
+                n.arguments = @visitArray n.arguments
+                n
+                
+        visitIdentifier: (n) ->
+                return create_identifier "%super" if n.name is "super"
+                n
 
         visitClassDeclaration: (n) ->
+                # we visit all the functions defined in the class so that 'super' is replaced with '%super'
+                @class_stack.push n
+
+                # XXX this push/pop should really be handled in @visitMethodDefinition
+                for class_element in n.body.body
+                        @method_stack.push class_element.key
+                        class_element.value = @visit class_element.value
+                        @method_stack.pop
+                
+                @class_stack.pop()
+                        
                 class_init_iife_body = []
 
                 [properties, methods, sproperties, smethods] = @gather_members n
