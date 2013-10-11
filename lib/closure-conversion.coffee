@@ -47,6 +47,7 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
                 super
                 @class_stack = new Stack
                 @method_stack = new Stack
+                @superid = create_identifier "%super"
 
         visitCallExpression: (n) ->
                 if n.callee.type is syntax.Identifier and n.callee.name is "super"
@@ -54,7 +55,7 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
                                 type: syntax.MemberExpression
                                 object:
                                         type: syntax.MemberExpression
-                                        object: create_identifier "%super"
+                                        object: @superid
                                         property: create_identifier "prototype"
                                         computed: false
                                 property: @method_stack.top
@@ -64,12 +65,12 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
 
         visitNewExpression: (n) ->
                 if n.callee.type is syntax.Identifier and n.callee.name is "super"
-                        n.callee = create_identifier "%super"
+                        n.callee = @superid
                 n.arguments = @visitArray n.arguments
                 n
                 
         visitIdentifier: (n) ->
-                return create_identifier "%super" if n.name is "super"
+                return @superid if n.name is "super"
                 n
 
         visitClassDeclaration: (n) ->
@@ -136,7 +137,7 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
                                                 body: 
                                                         type: syntax.BlockStatement
                                                         body: class_init_iife_body
-                                                params: if n.superClass? then [create_identifier "%super"] else []
+                                                params: if n.superClass? then [@superid] else []
                                                 defaults: []
                                                 rest: null
                                                 generator: false
