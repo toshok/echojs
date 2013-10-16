@@ -943,7 +943,11 @@ _ejs_rethrow ()
 ejsval
 _ejs_isNaN (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
-    EJS_NOT_IMPLEMENTED();
+    ejsval num = _ejs_undefined;
+    if (argc >= 1)
+        num = args[0];
+
+    return isnan(ToDouble(num)) ? _ejs_true : _ejs_false;
 }
 
 ejsval
