@@ -695,7 +695,6 @@ _ejs_object_getprop_utf8 (ejsval obj, const char *key)
     if (EJSVAL_IS_PRIMITIVE(obj)) {
         obj = ToObject(obj);
     }
-
     return _ejs_object_getprop (obj, _ejs_string_new_utf8(key));
 }
 
@@ -1298,15 +1297,15 @@ _ejs_object_init_proto()
     _ejs_gc_add_root (&_ejs_Object__proto__);
     _ejs_gc_add_root (&_ejs_Object_prototype);
 
+    EJSObject* prototype = _ejs_gc_new(EJSObject);
+    _ejs_Object_prototype = OBJECT_TO_EJSVAL(prototype);
+    _ejs_init_object (prototype, _ejs_null, &_ejs_object_specops);
+
     EJSFunction* __proto__ = _ejs_gc_new(EJSFunction);
     _ejs_Object__proto__ = OBJECT_TO_EJSVAL(__proto__);
     _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_function_specops);
     __proto__->func = _ejs_Function_empty;
     __proto__->env = _ejs_null;
-
-    EJSObject* prototype = _ejs_gc_new(EJSObject);
-    _ejs_Object_prototype = OBJECT_TO_EJSVAL(prototype);
-    _ejs_init_object (prototype, _ejs_null, &_ejs_object_specops);
 
     _ejs_object_define_value_property (_ejs_Object__proto__, _ejs_atom_name, _ejs_atom_empty, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 }
