@@ -299,5 +299,7 @@ _ejs_math_init(ejsval global)
     OBJ_METHOD(tan);
 
 #undef OBJ_METHOD
+
+    _ejs_object_setprop (_ejs_Math, _ejs_atom_PI, NUMBER_TO_EJSVAL(M_PI));
 }
 

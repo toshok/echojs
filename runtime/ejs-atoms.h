@@ -112,7 +112,7 @@ EJS_ATOM(isPrototypeOf)
 EJS_ATOM(propertyIsEnumerable)
 
 
-// Math method names
+// Math method/property names
 EJS_ATOM(abs)
 EJS_ATOM(acos)
 EJS_ATOM(asin)
@@ -131,6 +131,7 @@ EJS_ATOM(round)
 EJS_ATOM(sin)
 EJS_ATOM(sqrt)
 EJS_ATOM(tan)
+EJS_ATOM(PI)
 
 // Array method names
 EJS_ATOM(isArray)
