@@ -14,7 +14,7 @@
 #include "ejs-error.h"
 
 // num > SPARSE_ARRAY_CUTOFF in "Array($num)" or "new Array($num)" triggers a sparse array
-#define SPARSE_ARRAY_CUTOFF 250
+#define SPARSE_ARRAY_CUTOFF 50000
 
 static ejsval  _ejs_array_specop_get (ejsval obj, ejsval propertyName);
 static EJSPropertyDesc* _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName);
@@ -70,7 +70,7 @@ _ejs_array_new (int numElements, EJSBool fill)
         rv->dense.array_alloc = numElements + 5;
         rv->dense.elements = (ejsval*)malloc(rv->dense.array_alloc * sizeof (ejsval));
         for (int i = 0; i < numElements; i ++)
-            rv->dense.elements[i] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);            
+            rv->dense.elements[i] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
     }
 
     rv->array_length = numElements;
