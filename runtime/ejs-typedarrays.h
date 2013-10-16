@@ -59,11 +59,13 @@ typedef struct _EJSTypedArray {
 } EJSTypedArray;
 
 #define EJSVAL_IS_TYPEDARRAY(v) (EJSVAL_IS_OBJECT(v) &&         \
-                                 (EJSVAL_TO_OBJECT(v)->ops == &_ejs_int8array_specops))
+                                (EJSVAL_TO_OBJECT(v)->ops == &_ejs_int8array_specops || \
+                                 EJSVAL_TO_OBJECT(v)->ops == &_ejs_int32array_specops || \
+                                 EJSVAL_TO_OBJECT(v)->ops == &_ejs_float32array_specops))
 
 #define EJSVAL_IS_ARRAYBUFFER(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_arraybuffer_specops))
 
-#define EJSOBJECT_IS_TYPEDARRAY(v) (v->ops == &_ejs_int8array_specops)
+#define EJSOBJECT_IS_TYPEDARRAY(v) (v->ops == &_ejs_int8array_specops || v->ops == &_ejs_uint16array_specops || v->ops == &_ejs_int32array_specops || v->ops == &_ejs_float32array_specops)
 #define EJSOBJECT_IS_ARRAYBUFFER(v) (v->ops == &_ejs_arraybuffer_specops)
 
 
@@ -85,6 +87,10 @@ extern EJSSpecOps _ejs_arraybuffer_specops;
 extern ejsval _ejs_Int8Array;
 extern ejsval _ejs_Int8Array_proto;
 extern EJSSpecOps _ejs_int8array_specops;
+
+extern ejsval _ejs_Uint16Array;
+extern ejsval _ejs_Uint16Array_proto;
+extern EJSSpecOps _ejs_uint16array_specops;
 
 extern ejsval _ejs_Int32Array;
 extern ejsval _ejs_Int32Array_proto;
