@@ -203,7 +203,7 @@ webglactiveinfo_get_name (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 	return _ejs_string_new_utf8 ([info name]);
 }
 
-#define SPEW(x) x
+#define SPEW(x)
 #define CHECK_GL_ERRORS 1
 
 #define WEBGL_UNPACK_FLIP_Y_WEBGL 0x9240
@@ -283,12 +283,12 @@ JSMETHOD (bindBuffer) {
 	// FIXME check args
 	GLenum target = (GLenum)EJSVAL_TO_NUMBER (args[0]);
 	GLuint buffer_id = 0;
-	if (!EJSVAL_IS_PRIMITIVE(args[1])) {
+	if (EJSVAL_IS_OBJECT(args[1])) {
 		WebGLBuffer *buffer = (WebGLBuffer*)get_peer (args[1]);
 		buffer_id = [buffer glId];
 	}
     
-	SPEW(NSLog (@"glBindBuffer (%d, %d)", target, buffer_id);)
+	SPEW(NSLog (@"glBindBuffer (%x, %d)", target, buffer_id);)
 	glBindBuffer (target, buffer_id);
 	CHECK_GL;
     
@@ -342,7 +342,7 @@ JSMETHOD (bindTexture) {
 	GLenum target = (GLenum)EJSVAL_TO_NUMBER (args[0]);
     
 	GLuint texture_id = 0;
-	if (!EJSVAL_IS_PRIMITIVE (args[1])) {
+	if (EJSVAL_IS_OBJECT (args[1])) {
 		// XXX further type check here to see if it's a WebGLTexture
 		WebGLTexture *texture = (WebGLTexture*)get_peer (args[1]);
 		texture_id = [texture glId];
@@ -453,7 +453,7 @@ JSMETHOD (bufferData) {
 		SPEW(NSLog (@"arg[1] is a number");)
 		bufferSize = (GLsizeiptr)EJSVAL_TO_NUMBER (args[1]);
 	}
-	else if (!EJSVAL_IS_PRIMITIVE(args[1])) {
+	else if (EJSVAL_IS_OBJECT(args[1])) {
 		EJSObject* obj = EJSVAL_TO_OBJECT (args[1]);
 		if (EJSOBJECT_IS_TYPEDARRAY(obj)) {
 			SPEW(NSLog (@"arg[1] is an array buffer view subclass");)
@@ -466,13 +466,17 @@ JSMETHOD (bufferData) {
                 bufferSize = (GLsizeiptr)EJSARRAYBUFFER_BYTE_LEN(obj);
 			bufferData = _ejs_arraybuffer_get_data(obj);
 		}
+        else {
+            NSLog (@"uhh...");
+            abort();
+        }
 	}
 	else {
 		NSLog (@"webgl is lame 56");
 		abort();
 	}
     
-	SPEW(NSLog(@"glBufferData");)
+	SPEW(NSLog(@"glBufferData (%x)", target);)
 	glBufferData (target, bufferSize, bufferData, usage);
 	CHECK_GL;
     
@@ -1849,6 +1853,8 @@ uniformMatrix_fv (size_t c, uint32_t argc, ejsval *args)
 	}
 	else {
 		NSLog(@"non array-like object passed to uniform*fv");
+        const char* arg2_as_str = [[CKValue valueWithJSValue:args[2]] utf8StringValue];
+        NSLog(@"arg2 = %s", arg2_as_str);
 		abort();
 	}
 
