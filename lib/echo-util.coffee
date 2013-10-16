@@ -64,9 +64,9 @@ exports.create_string_literal = (x) ->
 exports.create_number_literal = (x) ->
         throw new Error "invalid number in create_number_literal" if typeof x isnt "number"
         type: syntax.Literal, value: x, raw: "#{x}"
-exports.create_intrinsic = (name, args) ->
+exports.create_intrinsic = (id, args) ->
         type: syntax.CallExpression
-        callee: create_identifier name
+        callee: id
         arguments: args
 exports.is_intrinsic = (name, n) ->
         n.type is syntax.CallExpression and n.callee.name is name

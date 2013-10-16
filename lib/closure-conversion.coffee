@@ -24,6 +24,19 @@ startGenerator = echo_util.startGenerator
 
 hasOwnProperty = Object.prototype.hasOwnProperty
 
+superid = create_identifier "%super"
+makeClosureEnv_id = create_identifier "%makeClosureEnv"
+makeClosure_id = create_identifier "%makeClosure"
+makeAnonClosure_id = create_identifier "%makeAnonClosure"
+setSlot_id = create_identifier "%setSlot"
+slot_id = create_identifier "%slot"
+invokeClosure_id = create_identifier "%invokeClosure"
+setLocal_id = create_identifier "%setLocal"
+setGlobal_id = create_identifier "%setGlobal"
+getLocal_id = create_identifier "%getLocal"
+getGlobal_id = create_identifier "%getGlobal"
+createArgScratchArea_id = create_identifier "%createArgScratchArea"
+
 #
 # converts:
 #
@@ -47,7 +60,6 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
                 super
                 @class_stack = new Stack
                 @method_stack = new Stack
-                @superid = create_identifier "%super"
 
         visitCallExpression: (n) ->
                 if n.callee.type is syntax.Identifier and n.callee.name is "super"
@@ -55,7 +67,7 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
                                 type: syntax.MemberExpression
                                 object:
                                         type: syntax.MemberExpression
-                                        object: @superid
+                                        object: superid
                                         property: create_identifier "prototype"
                                         computed: false
                                 property: @method_stack.top
@@ -65,12 +77,12 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
 
         visitNewExpression: (n) ->
                 if n.callee.type is syntax.Identifier and n.callee.name is "super"
-                        n.callee = @superid
+                        n.callee = superid
                 n.arguments = @visitArray n.arguments
                 n
                 
         visitIdentifier: (n) ->
-                return @superid if n.name is "super"
+                return superid if n.name is "super"
                 n
 
         visitClassDeclaration: (n) ->
@@ -137,7 +149,7 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
                                                 body: 
                                                         type: syntax.BlockStatement
                                                         body: class_init_iife_body
-                                                params: if n.superClass? then [@superid] else []
+                                                params: if n.superClass? then [superid] else []
                                                 defaults: []
                                                 rest: null
                                                 generator: false
@@ -501,7 +513,15 @@ class HoistVars extends TreeVisitor
                 n.right = @visit n.right
                 n.body = @visit n.body
                 n
-                        
+
+        visitForOf: (n) ->
+                if n.left.type is syntax.VariableDeclaration
+                        @function_stack.top.vars.add n.left.declarations[0].id.name
+                        n.left = create_identifier n.left.declarations[0].id.name
+                n.right = @visit n.right
+                n.body = @visit n.body
+                n
+                                                
         visitVariableDeclaration: (n) ->
                 if n.kind is "var"
                         # check to see if there are any initializers, which we'll convert to assignment expressions
@@ -630,6 +650,7 @@ DesugarArrowFunctions = class DesugarArrowFunctions extends TreeVisitor
 class ComputeFree extends TreeVisitor
         constructor: ->
                 @call_free = @free.bind @
+                @setUnion = Set.union
                 super
                 
         visit: (n) ->
@@ -646,14 +667,14 @@ class ComputeFree extends TreeVisitor
                 new Set result
 
         param_names: (arr) ->
-                new Set map ((id) -> id.name), arr
+                new Set arr.map ((id) -> id.name)
 
         collect_decls: (body) ->
                 statement for statement in body when statement.type is syntax.VariableDeclaration or statement.type is syntax.FunctionDeclaration
 
         free_blocklike: (exp,body) ->
                 decls = @decl_names @collect_decls body
-                uses = Set.union.apply null, map @call_free, body
+                uses = @setUnion.apply null, body.map @call_free
                 exp.ejs_decls = decls
                 exp.ejs_free_vars = uses.subtract decls
                 exp.ejs_free_vars
@@ -665,42 +686,43 @@ class ComputeFree extends TreeVisitor
                 switch exp.type
                         when syntax.Program
                                 decls = @decl_names @collect_decls exp.body
-                                uses = Set.union.apply null, (map @call_free, exp.body)
+                                uses = @setUnion.apply null, exp.body.map @call_free
                                 exp.ejs_decls = decls
                                 exp.ejs_free_vars = uses.subtract decls
                         when syntax.FunctionDeclaration
                                 # this should only happen for the toplevel function we create to wrap the source file
                                 param_names = @param_names exp.params
                                 param_names.add exp.rest.name if exp.rest?
-                                exp.ejs_free_vars = (@free exp.body).subtract param_names
+                                exp.ejs_free_vars = @free(exp.body).subtract param_names
                                 exp.ejs_decls = exp.body.ejs_decls.union param_names
                         when syntax.FunctionExpression
                                 param_names = @param_names exp.params
                                 param_names.add exp.rest.name if exp.rest?
-                                exp.ejs_free_vars = (@free exp.body).subtract param_names
+                                exp.ejs_free_vars = @free(exp.body).subtract param_names
                                 exp.ejs_decls = param_names.union exp.body.ejs_decls
                         when syntax.ArrowFunctionExpression
                                 param_names = @param_names exp.params
                                 param_names.add exp.rest.name if exp.rest?
-                                exp.ejs_free_vars = (@free exp.body).subtract param_names
+                                exp.ejs_free_vars = @free(exp.body).subtract param_names
                                 exp.ejs_decls = param_names.union exp.body.ejs_decls
                         when syntax.LabeledStatement      then exp.ejs_free_vars = @free exp.body
                         when syntax.BlockStatement        then exp.ejs_free_vars = @free_blocklike exp, exp.body
-                        when syntax.TryStatement          then exp.ejs_free_vars = Set.union.apply null, [(@free exp.block)].concat (map @call_free, exp.handlers)
+                        when syntax.TryStatement          then exp.ejs_free_vars = @setUnion.apply null, [@free(exp.block)].concat exp.handlers.map @call_free
                         when syntax.CatchClause
                                 param_set = if exp.param?.name? then new Set [exp.param.name] else new Set
-                                exp.ejs_free_vars = (@free exp.body).subtract param_set
+                                exp.ejs_free_vars = @free(exp.body).subtract param_set
                                 exp.ejs_decls = exp.body.ejs_decls.union param_set
-                        when syntax.VariableDeclaration   then exp.ejs_free_vars = Set.union.apply null, (map @call_free, exp.declarations)
+                        when syntax.VariableDeclaration   then exp.ejs_free_vars = @setUnion.apply null, exp.declarations.map @call_free
                         when syntax.VariableDeclarator    then exp.ejs_free_vars = @free exp.init
                         when syntax.ExpressionStatement   then exp.ejs_free_vars = @free exp.expression
                         when syntax.Identifier            then exp.ejs_free_vars = new Set [exp.name]
                         when syntax.ThrowStatement        then exp.ejs_free_vars = @free exp.argument
-                        when syntax.ForStatement          then exp.ejs_free_vars = Set.union.apply null, (map @call_free, [exp.init, exp.test, exp.update, exp.body])
-                        when syntax.ForInStatement        then exp.ejs_free_vars = Set.union.apply null, (map @call_free, [exp.left, exp.right, exp.body])
-                        when syntax.WhileStatement        then exp.ejs_free_vars = Set.union.apply null, (map @call_free, [exp.test, exp.body])
-                        when syntax.DoWhileStatement      then exp.ejs_free_vars = Set.union.apply null, (map @call_free, [exp.test, exp.body])
-                        when syntax.SwitchStatement       then exp.ejs_free_vars = Set.union.apply null, [@free exp.discriminant].concat (map @call_free, exp.cases)
+                        when syntax.ForStatement          then exp.ejs_free_vars = @setUnion.call null, @free(exp.init), @free(exp.test), @free(exp.update), @free(exp.body)
+                        when syntax.ForInStatement        then exp.ejs_free_vars = @setUnion.call null, @free(exp.left), @free(exp.right), @free(exp.body)
+                        when syntax.ForOfStatement        then exp.ejs_free_vars = @setUnion.call null, @free(exp.left), @free(exp.right), @free(exp.body)
+                        when syntax.WhileStatement        then exp.ejs_free_vars = @setUnion.call null, @free(exp.test), @free(exp.body)
+                        when syntax.DoWhileStatement      then exp.ejs_free_vars = @setUnion.call null, @free(exp.test), @free(exp.body)
+                        when syntax.SwitchStatement       then exp.ejs_free_vars = @setUnion.apply null, [@free exp.discriminant].concat exp.cases.map @call_free
                         when syntax.SwitchCase            then exp.ejs_free_vars = @free_blocklike exp, exp.consequent
                         when syntax.EmptyStatement        then exp.ejs_free_vars = new Set
                         when syntax.BreakStatement        then exp.ejs_free_vars = new Set
@@ -708,22 +730,22 @@ class ComputeFree extends TreeVisitor
                         when syntax.UpdateExpression      then exp.ejs_free_vars = @free exp.argument
                         when syntax.ReturnStatement       then exp.ejs_free_vars = @free exp.argument
                         when syntax.UnaryExpression       then exp.ejs_free_vars = @free exp.argument
-                        when syntax.BinaryExpression      then exp.ejs_free_vars = (@free exp.left).union @free exp.right
-                        when syntax.LogicalExpression     then exp.ejs_free_vars = (@free exp.left).union @free exp.right
+                        when syntax.BinaryExpression      then exp.ejs_free_vars = @free(exp.left).union @free exp.right
+                        when syntax.LogicalExpression     then exp.ejs_free_vars = @free(exp.left).union @free exp.right
                         when syntax.MemberExpression      then exp.ejs_free_vars = @free exp.object # we don't traverse into the property
-                        when syntax.CallExpression        then exp.ejs_free_vars = Set.union.apply null, [(@free exp.callee)].concat (map @call_free, exp.arguments)
-                        when syntax.NewExpression         then exp.ejs_free_vars = Set.union.apply null, [(@free exp.callee)].concat (map @call_free, exp.arguments)
-                        when syntax.SequenceExpression    then exp.ejs_free_vars = Set.union.apply null, map @call_free, exp.expressions
-                        when syntax.ConditionalExpression then exp.ejs_free_vars = Set.union.apply null, [(@free exp.test), (@free exp.cconsequent), (@free exp.alternate)]
+                        when syntax.CallExpression        then exp.ejs_free_vars = @setUnion.apply null, [@free exp.callee].concat exp.arguments.map @call_free
+                        when syntax.NewExpression         then exp.ejs_free_vars = @setUnion.apply null, [@free exp.callee].concat exp.arguments.map @call_free
+                        when syntax.SequenceExpression    then exp.ejs_free_vars = @setUnion.apply null, exp.expressions.map @call_free
+                        when syntax.ConditionalExpression then exp.ejs_free_vars = @setUnion.call null, @free(exp.test), @free(exp.consequent), @free(exp.alternate)
                         when syntax.Literal               then exp.ejs_free_vars = new Set
                         when syntax.ThisExpression        then exp.ejs_free_vars = new Set
                         when syntax.Property              then exp.ejs_free_vars = @free exp.value # we skip the key
                         when syntax.ObjectExpression
-                                exp.ejs_free_vars = if exp.properties.length is 0 then (new Set) else Set.union.apply null, map @call_free, (p.value for p in exp.properties)
+                                exp.ejs_free_vars = if exp.properties.length is 0 then (new Set) else @setUnion.apply null, (@free p.value for p in exp.properties)
                         when syntax.ArrayExpression
-                                exp.ejs_free_vars = if exp.elements.length is 0 then (new Set) else Set.union.apply null, map @call_free, exp.elements
-                        when syntax.IfStatement           then exp.ejs_free_vars = Set.union.apply null, [(@free exp.test), (@free exp.consequent), (@free exp.alternate)]
-                        when syntax.AssignmentExpression  then exp.ejs_free_vars = (@free exp.left).union @free exp.right
+                                exp.ejs_free_vars = if exp.elements.length is 0 then (new Set) else @setUnion.apply null, exp.elements.map @call_free
+                        when syntax.IfStatement           then exp.ejs_free_vars = @setUnion.call null, @free(exp.test), @free(exp.consequent), @free(exp.alternate)
+                        when syntax.AssignmentExpression  then exp.ejs_free_vars = @free(exp.left).union @free exp.right
                 
                         else throw "Internal error: unhandled node type '#{exp.type}' in free()"
                 exp.ejs_free_vars
@@ -773,6 +795,7 @@ class SubstituteVariables extends TreeVisitor
                 n.right = @visit n.right
                 n.body = @visit n.body
                 if Array.isArray left
+                        console.log "whu?"
                         n.left = create_identifier left[0].declarations[0].id.name
                         return {
                                 type: syntax.BlockStatement
@@ -782,6 +805,11 @@ class SubstituteVariables extends TreeVisitor
                         n.left = left
                         n
 
+        visitForOf: (n) ->
+                n.left  = @visit n.left
+                n.right = @visit n.right
+                n.body  = @visit n.body
+                n
 
         visitVariableDeclaration: (n) ->
                 # here we do some magic depending on whether or not
@@ -906,7 +934,7 @@ class SubstituteVariables extends TreeVisitor
                                 declarations: [{
                                         type: syntax.VariableDeclarator
                                         id:  create_identifier this_env_name
-                                        init: create_intrinsic "%makeClosureEnv", [create_number_literal n.ejs_env.closed.size() + if n.ejs_env.parent? then 1 else 0]
+                                        init: create_intrinsic makeClosureEnv_id, [create_number_literal n.ejs_env.closed.size() + if n.ejs_env.parent? then 1 else 0]
                                 }],
                                 kind: "let"
                         }
@@ -925,7 +953,7 @@ class SubstituteVariables extends TreeVisitor
                                 parent_env_slot = n.ejs_env.slot_mapping[parent_env_name]
                                 env_prepends.push {
                                         type: syntax.ExpressionStatement
-                                        expression: create_intrinsic "%setSlot", [ (create_identifier this_env_name), (create_number_literal parent_env_slot), (create_string_literal parent_env_name), (create_identifier parent_env_name) ]
+                                        expression: create_intrinsic setSlot_id, [ (create_identifier this_env_name), (create_number_literal parent_env_slot), (create_string_literal parent_env_name), (create_identifier parent_env_name) ]
                                 }
                                 
 
@@ -934,7 +962,7 @@ class SubstituteVariables extends TreeVisitor
                                 if n.ejs_env.closed.has param.name
                                         env_prepends.push {
                                                 type: syntax.ExpressionStatement
-                                                expression: create_intrinsic "%setSlot", [ (create_identifier this_env_name), (create_number_literal n.ejs_env.slot_mapping[param.name]), (create_string_literal param.name), (create_identifier param.name) ]
+                                                expression: create_intrinsic setSlot_id, [ (create_identifier this_env_name), (create_number_literal n.ejs_env.slot_mapping[param.name]), (create_string_literal param.name), (create_identifier param.name) ]
                                         }
 
                         new_mapping["%slot_mapping"] = n.ejs_env.slot_mapping
@@ -948,7 +976,7 @@ class SubstituteVariables extends TreeVisitor
                         prepend_environment = (exps) ->
                                 obj = create_identifier this_env_name
                                 for prop in exps
-                                        obj = create_intrinsic "%slot", [ obj, prop ]
+                                        obj = create_intrinsic slot_id, [ obj, prop ]
                                 obj
 
                         # if there are existing mappings prepend "%env." (a MemberExpression) to them
@@ -961,7 +989,7 @@ class SubstituteVariables extends TreeVisitor
 
                         new_mapping["%env"] = create_identifier this_env_name
                         n.ejs_env.closed.map (sym) ->
-                                new_mapping[sym] = create_intrinsic "%slot", [ (create_identifier this_env_name), (create_number_literal n.ejs_env.slot_mapping[sym]), (create_string_literal sym) ]
+                                new_mapping[sym] = create_intrinsic slot_id, [ (create_identifier this_env_name), (create_number_literal n.ejs_env.slot_mapping[sym]), (create_string_literal sym) ]
 
                 # remove all mappings for variables declared in this function
                 if n.ejs_decls?
@@ -986,9 +1014,9 @@ class SubstituteVariables extends TreeVisitor
                                 throw "there should be no FunctionDeclarations at this point"
                         else # n.type is syntax.FunctionExpression
                                 if n.id?
-                                        return create_intrinsic "%makeClosure", [ (if n.ejs_env.parent? then (create_identifier parent_env_name) else { type: syntax.Literal, value: null}), (create_string_literal n.id.name), n ]
+                                        return create_intrinsic makeClosure_id, [ (if n.ejs_env.parent? then (create_identifier parent_env_name) else { type: syntax.Literal, value: null}), (create_string_literal n.id.name), n ]
                                 else
-                                        return create_intrinsic "%makeAnonClosure", [ (if n.ejs_env.parent? then (create_identifier parent_env_name) else { type: syntax.Literal, value: null}), n ]
+                                        return create_intrinsic makeAnonClosure_id, [ (if n.ejs_env.parent? then (create_identifier parent_env_name) else { type: syntax.Literal, value: null}), n ]
 
                 n
             catch e
@@ -1007,7 +1035,7 @@ class SubstituteVariables extends TreeVisitor
                 #   invokeClosure(X, %this, %argCount, arg1, arg2, ...);
 
                 @function_stack.top.scratch_size = Math.max @function_stack.top.scratch_size, n.arguments.length
-                create_intrinsic "%invokeClosure", [n.callee].concat n.arguments
+                create_intrinsic invokeClosure_id, [n.callee].concat n.arguments
 
         visitNewExpression: (n) ->
                 super
@@ -1020,7 +1048,7 @@ class SubstituteVariables extends TreeVisitor
 
                 @function_stack.top.scratch_size = Math.max @function_stack.top.scratch_size, n.arguments.length
 
-                rv = create_intrinsic "%invokeClosure", [n.callee].concat n.arguments
+                rv = create_intrinsic invokeClosure_id, [n.callee].concat n.arguments
                 rv.type = syntax.NewExpression
                 rv
 
@@ -1048,7 +1076,7 @@ class LambdaLift extends TreeVisitor
                 if n.scratch_size > 0
                         alloc_scratch =
                                 type: syntax.ExpressionStatement
-                                expression: create_intrinsic "%createArgScratchArea", [ { type: syntax.Literal, value: n.scratch_size } ]
+                                expression: create_intrinsic createArgScratchArea_id, [ { type: syntax.Literal, value: n.scratch_size } ]
                         n.body.body.unshift alloc_scratch
                 
         visitFunctionDeclaration: (n) ->
@@ -1112,9 +1140,9 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
                                 return true
                 return false
 
-        intrinsicForIdentifier: (id, prefix) ->
+        intrinsicForIdentifier: (id) ->
                 is_local = @findIdentifierInScope id
-                "#{prefix}#{if is_local then 'Local' else 'Global'}"
+                if is_local then getLocal_id else getGlobal_id
                 
         visitWithScope: (scope, children) ->
                 @scope_stack.push scope
@@ -1148,12 +1176,12 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
                         }
                 
                 if is_intrinsic "%slot", lhs
-                        create_intrinsic "%setSlot", [lhs.arguments[0], lhs.arguments[1], new_rhs]
+                        create_intrinsic setSlot_id, [lhs.arguments[0], lhs.arguments[1], new_rhs]
                 else if lhs.type is syntax.Identifier
                         if @findIdentifierInScope lhs
-                                create_intrinsic "%setLocal", [lhs, new_rhs]
+                                create_intrinsic setLocal_id, [lhs, new_rhs]
                         else
-                                create_intrinsic "%setGlobal", [lhs, new_rhs]
+                                create_intrinsic setGlobal_id, [lhs, new_rhs]
                 else
                         n.left = @visit n.left
                         n.right = new_rhs
@@ -1213,9 +1241,14 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
                 n
 
         visitIdentifier: (n) ->
-                create_intrinsic (@intrinsicForIdentifier n, "%get"), [n]
+                create_intrinsic @intrinsicForIdentifier(n), [n]
 
         visitForIn: (n) ->
+                n.right = @visit n.right
+                n.body  = @visit n.body
+                n
+                
+        visitForOf: (n) ->
                 n.right = @visit n.right
                 n.body  = @visit n.body
                 n
@@ -1316,10 +1349,10 @@ class IIFEIdioms extends TreeVisitor
                 replacement.body.push body
 
                 if is_intrinsic "%setSlot", n.expression
-                        n.expression.arguments[2] = create_intrinsic "%getLocal", [iife_rv_id]
+                        n.expression.arguments[2] = create_intrinsic getLocal_id, [iife_rv_id]
                         replacement.body.push n
                 else if (is_intrinsic "%setGlobal", n.expression) or (is_intrinsic "setLocal", n.expression)
-                        n.expression.arguments[1] = create_intrinsic "%getLocal", [iife_rv_id]
+                        n.expression.arguments[1] = create_intrinsic getLocal_id, [iife_rv_id]
                         replacement.body.push n
                         
                 return replacement
@@ -1348,10 +1381,10 @@ class IIFEIdioms extends TreeVisitor
                 replacement.body.push body
 
                 if is_intrinsic "%setSlot", n.expression
-                        n.expression.arguments[2] = create_intrinsic "%getLocal", [iife_rv_id]
+                        n.expression.arguments[2] = create_intrinsic getLocal_id, [iife_rv_id]
                         replacement.body.push n
                 else if (is_intrinsic "%setGlobal", n.expression) or (is_intrinsic "setLocal", n.expression)
-                        n.expression.arguments[1] = create_intrinsic "%getLocal", [iife_rv_id]
+                        n.expression.arguments[1] = create_intrinsic getLocal_id, [iife_rv_id]
                         replacement.body.push n
 
                 return replacement
@@ -1396,13 +1429,12 @@ passes = [
 exports.convert = (tree, filename) ->
         debug.log "before:"
         debug.log -> escodegen.generate tree
-        #__ejs.GC.dumpAllocationStats "before closure conversion" if __ejs?
 
         passes.forEach (passType) ->
                 pass = new passType(filename)
                 tree = pass.visit tree
                 debug.log 2, "after: #{passType.name}"
                 debug.log 2, -> escodegen.generate tree
-                #__ejs.GC.dumpAllocationStats "after #{passType.name}" if __ejs?
+                __ejs.GC.dumpAllocationStats "after #{passType.name}" if __ejs?
 
         tree

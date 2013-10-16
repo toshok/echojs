@@ -95,6 +95,7 @@ exports.TreeVisitor = class TreeVisitor
                         when syntax.ClassDeclaration        then rv = @visitClassDeclaration n
                         when syntax.ClassBody               then rv = @visitClassBody n
                         when syntax.MethodDefinition        then rv = @visitMethodDefinition n
+                        when syntax.ForOfStatement          then rv = @visitForOf n
                         else
                             throw "PANIC: unknown parse node type #{n.type}"
                 
@@ -166,6 +167,12 @@ exports.TreeVisitor = class TreeVisitor
                 n
                 
         visitForIn: (n) ->
+                n.left  = @visit n.left
+                n.right = @visit n.right
+                n.body  = @visit n.body
+                n
+                
+        visitForOf: (n) ->
                 n.left  = @visit n.left
                 n.right = @visit n.right
                 n.body  = @visit n.body
@@ -302,5 +309,5 @@ exports.TreeVisitor = class TreeVisitor
         visitMethodDefinition: (n) ->
                 n.value = @visit n.value
                 n
-                                
+
         toString: () -> "TreeVisitor"

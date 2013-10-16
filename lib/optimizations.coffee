@@ -5,7 +5,18 @@ debug = require 'debug'
 
 { TreeVisitor } = require 'nodevisitor'
 
-{ create_intrinsic, is_intrinsic } = require 'echo-util'
+{ create_intrinsic, is_intrinsic, create_identifier } = require 'echo-util'
+
+typeofIsObject_id = create_identifier "%typeofIsObject"
+typeofIsFunction_id = create_identifier "%typeofIsFunction"
+typeofIsString_id = create_identifier "%typeofIsString"
+typeofIsSymbol_id = create_identifier "%typeofIsSymbol"
+typeofIsNumber_id = create_identifier "%typeofIsNumber"
+typeofIsBoolean_id = create_identifier "%typeofIsBoolean"
+isNull_id = create_identifier "%isNull"
+isUndefined_id = create_identifier "%isUndefined"
+isNullOrUndefined_id = create_identifier "%isNullOrUndefined"
+builtinUndefined_id = create_identifier "%builtinUndefined"
 
 #
 # EqIdioms checks for the following things:
@@ -41,14 +52,14 @@ class EqIdioms extends TreeVisitor
                                 typeofarg = right.argument
 
                         switch typecheck
-                                when "object"    then intrinsic = "%typeofIsObject"
-                                when "function"  then intrinsic = "%typeofIsFunction"
-                                when "string"    then intrinsic = "%typeofIsString"
-                                when "symbol"    then intrinsic = "%typeofIsSymbol"
-                                when "number"    then intrinsic = "%typeofIsNumber"
-                                when "boolean"   then intrinsic = "%typeofIsBoolean"
-                                when "null"      then intrinsic = "%isNull"
-                                when "undefined" then intrinsic = "%isUndefined"
+                                when "object"    then intrinsic = typeofIsObject_id
+                                when "function"  then intrinsic = typeofIsFunction_id
+                                when "string"    then intrinsic = typeofIsString_id
+                                when "symbol"    then intrinsic = typeofIsSymbol_id
+                                when "number"    then intrinsic = typeofIsNumber_id
+                                when "boolean"   then intrinsic = typeofIsBoolean_id
+                                when "null"      then intrinsic = isNull_id
+                                when "undefined" then intrinsic = isUndefined_id
                                 else
                                         throw new Error "invalid typeof check against '#{typecheck}'";
 
@@ -63,12 +74,11 @@ class EqIdioms extends TreeVisitor
 
                 if exp.operator is "==" or exp.operator is "!="
                         if is_null_literal(left) or is_null_literal(right) or is_undefined_literal(left) or is_undefined_literal(right)
-                                if is_null_literal(left) or is_undefined_literal(left)
-                                        checkarg = right
-                                else
-                                        checkarg = left
-                                rv = create_intrinsic "%isNullOrUndefined", [checkarg]
-                                if exp.operator[0] is '!'
+                                
+                                checkarg = if is_null_literal(left) or is_undefined_literal(left) then right else left
+                                
+                                rv = create_intrinsic isNullOrUndefined_id, [checkarg]
+                                if exp.operator is "!="
                                         rv = {
                                                 type: syntax.UnaryExpression
                                                 operator: "!"
@@ -78,12 +88,11 @@ class EqIdioms extends TreeVisitor
 
                 if exp.operator is "===" or exp.operator is "!=="
                         if is_null_literal(left) or is_null_literal(right)
-                                if is_null_literal(left)
-                                        checkarg = right
-                                else
-                                        checkarg = left
-                                rv = create_intrinsic "%isNull", [checkarg]
-                                if exp.operator[0] is '!'
+                                
+                                checkarg = if is_null_literal(left) then right else left
+
+                                rv = create_intrinsic isNull_id, [checkarg]
+                                if exp.operator is "!=="
                                         rv = {
                                                 type: syntax.UnaryExpression
                                                 operator: "!"
@@ -91,12 +100,11 @@ class EqIdioms extends TreeVisitor
                                         }
                                 return rv
                         if is_undefined_literal(left) or is_undefined_literal(right)
-                                if is_null_literal(left)
-                                        checkarg = right
-                                else
-                                        checkarg = left
-                                rv = create_intrinsic "%isNull", [checkarg]
-                                if exp.operator[0] is '!'
+                                
+                                checkarg = if is_null_literal(left) then right else left
+
+                                rv = create_intrinsic isNull_id, [checkarg]
+                                if exp.operator is "!=="
                                         rv = {
                                                 type: syntax.UnaryExpression
                                                 operator: "!"
@@ -110,7 +118,7 @@ class ReplaceUnaryVoid extends TreeVisitor
         
         visitUnaryExpression: (n) ->
                 if n.operator is "void" and n.argument.type is syntax.Literal and n.argument.value is 0
-                        return create_intrinsic "%builtinUndefined", []
+                        return create_intrinsic builtinUndefined_id, []
                 n
 
 ###

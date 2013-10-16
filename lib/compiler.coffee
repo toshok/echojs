@@ -69,14 +69,14 @@ class LLVMIRVisitor extends TreeVisitor
                         setLocal          : true # unused
                         getGlobal         : true # unused
                         setGlobal         : true # unused
-                        slot              : false
+                        slot              : true
                         setSlot           : false # causes a crash when self-hosting
                 
                         invokeClosure     : false
-                        makeClosure       : false
-                        makeAnonClosure   : false
-                        createArgScratchArea : false
-                        makeClosureEnv    : false
+                        makeClosure       : true
+                        makeAnonClosure   : true
+                        createArgScratchArea : true
+                        makeClosureEnv    : true
                 
                         typeofIsObject    : true
                         typeofIsFunction  : true
@@ -500,7 +500,9 @@ class LLVMIRVisitor extends TreeVisitor
                 # 
                 ir.setInsertPoint merge_bb
                 merge_bb
-                
+
+        visitForOf: (n) ->
+                throw "for-of statements are not supported yet"
                 
         visitUpdateExpression: (n) ->
                 result = @createAlloca @currentFunction, types.EjsValue, "%update_result"
@@ -1739,7 +1741,7 @@ class LLVMIRVisitor extends TreeVisitor
                         cmp2 = ir.createICmpEq arg, consts.int64_lowhi(0xffb80000, 0x00000000), "cmpresult2"
                         @createEjsBoolSelect ir.createOr cmp1, cmp2, "or"
                 else
-                        @createCall @ejs_runtime["binop=="],   [arg, @loadNullEjsValue()], "eqNullOrUndefined", false
+                        @createCall @ejs_runtime["binop=="],   [arg, @loadNullEjsValue()], "is_null_or_undefined", false
                 
                 
         handleBuiltinUndefined:  (exp) -> @loadUndefinedEjsValue()
@@ -1780,18 +1782,6 @@ class AddFunctionsVisitor extends TreeVisitor
 sanitize_with_regexp = (filename) ->
         filename.replace /[.,-\/\\]/g, "_" # this is insanely inadequate
 
-sanitize_with_replace = (filename) ->
-        replace_all = (str, from, to) ->
-                while (str.indexOf from) > -1
-                        str = str.replace from, to
-                str
-
-        filename = replace_all filename, ".", "_"
-        filename = replace_all filename, ",", "_"
-        filename = replace_all filename, "-", "_"
-        filename = replace_all filename, "/", "_"
-        filename = replace_all filename, "\\", "_"
-        
 insert_toplevel_func = (tree, filename) ->
         toplevel =
                 type: syntax.FunctionDeclaration,
