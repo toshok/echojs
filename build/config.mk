@@ -30,7 +30,7 @@ CFLAGS=-g -O0 -Wall -I. -Wno-unused-function
 MIN_IOS_VERSION=5.0
 
 DEVELOPER_ROOT?=/Applications/Xcode.app/Contents/Developer
-IOS_SDK_VERSION?=6.1
+IOS_SDK_VERSION?=7.0
 
 OSX_ARCH=-arch x86_64
 OSX_CFLAGS=$(CFLAGS) -DOSX=1
