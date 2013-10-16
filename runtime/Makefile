@@ -84,7 +84,7 @@ $(OSX_LIBRARY): $(OSX_OBJECTS)
 	@echo [ar osx] $@ && /usr/bin/ar rc $@ $(OSX_OBJECTS)
 
 $(SIM_LIBRARY): $(SIM_OBJECTS)
-	@echo [ar sim] $@ && $(IOSSIM_BIN)/ar rc $@ $(SIM_OBJECTS)
+	@echo [ar sim] $@ && /usr/bin/ar rc $@ $(SIM_OBJECTS)
 
 $(DEV_LIBRARY): $(DEV_OBJECTS)
 	@echo [ar armv7] $@ && $(IOSDEV_BIN)/ar rc $@ $(DEV_OBJECTS)
