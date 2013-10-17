@@ -96,7 +96,7 @@ class LLVMIRVisitor extends TreeVisitor
 
                 @module_atoms = Object.create null
                 @literalInitializationFunction = @module.getOrInsertFunction "_ejs_module_init_string_literals_#{@filename}", types.void, []
-
+                
                 # initialize the scope stack with the global (empty) scope
                 @scope_stack = new Stack Object.create null
 
@@ -588,11 +588,18 @@ class LLVMIRVisitor extends TreeVisitor
                         
                                 ir.createRet @createLoad return_alloca, "return_load"
                                                 
+        visitImportDeclaration: (n) ->
+                scope = @scope_stack.top
 
+                {allocas,new_allocas} = @createAllocas @currentFunction, n.specifiers, scope
+                
+                # XXX more here - initialize the allocas to their import values
+                for i in [0...n.specifiers.length]
+                        ir.createStore @loadUndefinedEjsValue(), allocas[i]
+                                
         visitVariableDeclaration: (n) ->
                 throw new Error("internal compiler error.  'var' declarations should have been transformed to 'let's by this point.") if n.kind is "var"
                         
-                # lets and consts are not hoisted to the containing function's toplevel, but instead are bound in the lexical block they inhabit
                 scope = @scope_stack.top
 
                 {allocas,new_allocas} = @createAllocas @currentFunction, n.declarations, scope

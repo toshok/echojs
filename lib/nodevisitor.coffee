@@ -63,6 +63,7 @@ exports.TreeVisitor = class TreeVisitor
                         when syntax.WhileStatement          then rv = @visitWhile n
                         when syntax.IfStatement             then rv = @visitIf n
                         when syntax.ForInStatement          then rv = @visitForIn n
+                        when syntax.ForOfStatement          then rv = @visitForOf n
                         when syntax.DoWhileStatement        then rv = @visitDo n
                         when syntax.BreakStatement          then rv = @visitBreak n
                         when syntax.ContinueStatement       then rv = @visitContinue n
@@ -95,7 +96,10 @@ exports.TreeVisitor = class TreeVisitor
                         when syntax.ClassDeclaration        then rv = @visitClassDeclaration n
                         when syntax.ClassBody               then rv = @visitClassBody n
                         when syntax.MethodDefinition        then rv = @visitMethodDefinition n
-                        when syntax.ForOfStatement          then rv = @visitForOf n
+                        when syntax.ExportDeclaration       then rv = @visitExportDeclaration n
+                        when syntax.ModuleDeclaration       then rv = @visitModuleDeclaration n
+                        when syntax.ImportDeclaration       then rv = @visitImportDeclaration n
+                        when syntax.ImportSpecifier         then rv = @visitImportSpecifier n
                         else
                             throw "PANIC: unknown parse node type #{n.type}"
                 
@@ -310,4 +314,21 @@ exports.TreeVisitor = class TreeVisitor
                 n.value = @visit n.value
                 n
 
+        visitModuleDeclaration: (n) ->
+                n.id = @visit n.id
+                n.body = @visit n.body
+                n
+
+        visitExportDeclaration: (n) ->
+                n.declaration = @visit n.declaration
+                n
+                
+        visitImportDeclaration: (n) ->
+                n.specifiers = @visitArray n.specifiers
+                n
+
+        visitImportSpecifier: (n) ->
+                n.id = @visit n.id
+                n
+                
         toString: () -> "TreeVisitor"

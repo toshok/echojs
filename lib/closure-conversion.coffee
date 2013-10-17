@@ -666,7 +666,7 @@ class ComputeFree extends TreeVisitor
                                 result.push n.id.name
                 new Set result
 
-        param_names: (arr) ->
+        id_names: (arr) ->
                 new Set arr.map ((id) -> id.name)
 
         collect_decls: (body) ->
@@ -682,7 +682,11 @@ class ComputeFree extends TreeVisitor
         # TODO: move this into the @visit method
         free: (exp) ->
                 return new Set if not exp?
-                        
+
+                # define the properties we'll be filling in below, so that we can make them non-enumerable
+                Object.defineProperty exp, "ejs_decls",     { value: undefined, writable: true, configurable: true }
+                Object.defineProperty exp, "ejs_free_vars", { value: undefined, writable: true, configurable: true }
+                
                 switch exp.type
                         when syntax.Program
                                 decls = @decl_names @collect_decls exp.body
@@ -691,17 +695,17 @@ class ComputeFree extends TreeVisitor
                                 exp.ejs_free_vars = uses.subtract decls
                         when syntax.FunctionDeclaration
                                 # this should only happen for the toplevel function we create to wrap the source file
-                                param_names = @param_names exp.params
+                                param_names = @id_names exp.params
                                 param_names.add exp.rest.name if exp.rest?
                                 exp.ejs_free_vars = @free(exp.body).subtract param_names
                                 exp.ejs_decls = exp.body.ejs_decls.union param_names
                         when syntax.FunctionExpression
-                                param_names = @param_names exp.params
+                                param_names = @id_names exp.params
                                 param_names.add exp.rest.name if exp.rest?
                                 exp.ejs_free_vars = @free(exp.body).subtract param_names
                                 exp.ejs_decls = param_names.union exp.body.ejs_decls
                         when syntax.ArrowFunctionExpression
-                                param_names = @param_names exp.params
+                                param_names = @id_names exp.params
                                 param_names.add exp.rest.name if exp.rest?
                                 exp.ejs_free_vars = @free(exp.body).subtract param_names
                                 exp.ejs_decls = param_names.union exp.body.ejs_decls
@@ -746,7 +750,16 @@ class ComputeFree extends TreeVisitor
                                 exp.ejs_free_vars = if exp.elements.length is 0 then (new Set) else @setUnion.apply null, exp.elements.map @call_free
                         when syntax.IfStatement           then exp.ejs_free_vars = @setUnion.call null, @free(exp.test), @free(exp.consequent), @free(exp.alternate)
                         when syntax.AssignmentExpression  then exp.ejs_free_vars = @free(exp.left).union @free exp.right
-                
+                        when syntax.ModuleDeclaration     then exp.ejs_free_vars = @free exp.body
+                        when syntax.ExportDeclaration
+                                exp.ejs_free_vars = @free exp.declaration
+                                exp.ejs_decls = exp.declaration.ejs_decls
+                                
+                        when syntax.ImportDeclaration
+                                exp.ejs_decls = new Set exp.specifiers.map ((specifier) -> specifier.id.name)
+                                # no free vars in an ImportDeclaration
+                                exp.ejs_free_vars = new Set
+                                
                         else throw "Internal error: unhandled node type '#{exp.type}' in free()"
                 exp.ejs_free_vars
 
@@ -1154,6 +1167,10 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
                 rv
 
         visitVariableDeclarator: (n) ->
+                @scope_stack.top[n.id.name] = true
+                n
+
+        visitImportSpecifier: (n) ->
                 @scope_stack.top[n.id.name] = true
                 n
 
