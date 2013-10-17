@@ -100,6 +100,22 @@ namespace ejsllvm {
     }
 
     ejsval
+    Function_prototype_setExternalLinkage(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        Function* fun = ((Function*)EJSVAL_TO_OBJECT(_this));
+        fun->llvm_fun->setLinkage (llvm::Function::ExternalLinkage);
+        return _ejs_undefined;
+    }
+
+    ejsval
+    Function_prototype_setInternalLinkage(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        Function* fun = ((Function*)EJSVAL_TO_OBJECT(_this));
+        fun->llvm_fun->setLinkage (llvm::Function::InternalLinkage);
+        return _ejs_undefined;
+    }
+
+    ejsval
     Function_prototype_get_args(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         Function* fun = ((Function*)EJSVAL_TO_OBJECT(_this));
@@ -194,6 +210,8 @@ namespace ejsllvm {
         PROTO_METHOD(setDoesNotAccessMemory);
         PROTO_METHOD(setDoesNotThrow);
         PROTO_METHOD(setGC);
+        PROTO_METHOD(setExternalLinkage);
+        PROTO_METHOD(setInternalLinkage);
         PROTO_METHOD(toString);
 
 #undef PROTO_METHOD

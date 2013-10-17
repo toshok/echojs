@@ -32,6 +32,8 @@ namespace jsllvm {
     NODE_SET_PROTOTYPE_METHOD(s_ct, "setDoesNotAccessMemory", Function::SetDoesNotAccessMemory);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "setDoesNotThrow", Function::SetDoesNotThrow);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "setGC", Function::SetGC);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "setExternalLinkage", Function::SetInternalLinkage);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "setInternalLinkage", Function::SetInternalLinkage);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", Function::ToString);
 
     s_func = Persistent<v8::Function>::New(s_ct->GetFunction());
@@ -104,6 +106,22 @@ namespace jsllvm {
     Function* fun = ObjectWrap::Unwrap<Function>(args.This());
     REQ_UTF8_ARG(0, name);
     fun->llvm_fun->setGC(*name);
+    return scope.Close(Undefined());
+  }
+
+  Handle<v8::Value> Function::SetExternalLinkage (const Arguments& args)
+  {
+    HandleScope scope;
+    Function* fun = ObjectWrap::Unwrap<Function>(args.This());
+    fun->llvm_fun->setLinkage (llvm::Function::ExternalLinkage);
+    return scope.Close(Undefined());
+  }
+
+  Handle<v8::Value> Function::SetInternalLinkage (const Arguments& args)
+  {
+    HandleScope scope;
+    Function* fun = ObjectWrap::Unwrap<Function>(args.This());
+    fun->llvm_fun->setLinkage (llvm::Function::InternalLinkage);
     return scope.Close(Undefined());
   }
 

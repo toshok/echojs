@@ -97,6 +97,9 @@ class LLVMIRVisitor extends TreeVisitor
                 @module_atoms = Object.create null
                 @literalInitializationFunction = @module.getOrInsertFunction "_ejs_module_init_string_literals_#{@filename}", types.void, []
                 
+                # this function is only ever called by this module's toplevel
+                @literalInitializationFunction.setInternalLinkage()
+                
                 # initialize the scope stack with the global (empty) scope
                 @scope_stack = new Stack Object.create null
 
