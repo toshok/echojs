@@ -1778,6 +1778,7 @@ class AddFunctionsVisitor extends TreeVisitor
 
                 # the LLVMIR func we allocate takes the proper EJSValue** parameter in the 4th spot instead of all the parameters
                 n.ir_func = types.takes_builtins @module.getOrInsertFunction n.ir_name, types.EjsValue, (param.llvm_type for param in BUILTIN_PARAMS).concat [types.EjsValue.pointerTo()]
+                n.ir_func.setInternalLinkage() if not n.toplevel
 
                 # enable shadow stack map for gc roots
                 #n.ir_func.setGC "shadow-stack"
