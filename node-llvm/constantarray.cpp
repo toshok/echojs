@@ -45,7 +45,7 @@ namespace jsllvm {
     REQ_ARRAY_ARG(1, elements);
 
     std::vector< llvm::Constant*> element_constants;
-    for (int i = 0; i < elements->Length(); i ++) {
+    for (uint32_t i = 0; i < elements->Length(); i ++) {
       element_constants.push_back (static_cast<llvm::Constant*>(Value::GetLLVMObj(elements->Get(i))));
     }
 

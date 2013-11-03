@@ -39,7 +39,7 @@ namespace jsllvm {
     REQ_ARRAY_ARG (1, elementTypes)
 
     std::vector< llvm::Type*> element_types;
-    for (int i = 0; i < elementTypes->Length(); i ++) {
+    for (uint32_t i = 0; i < elementTypes->Length(); i ++) {
       element_types.push_back (Type::GetLLVMObj(elementTypes->Get(i)));
     }
 

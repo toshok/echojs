@@ -149,10 +149,10 @@ namespace jsllvm {
   {
     HandleScope scope;
     Function* fun = ObjectWrap::Unwrap<Function>(info.This());
-    int size = fun->llvm_fun->arg_size();
+    uint32_t size = fun->llvm_fun->arg_size();
     Local<Array> result = v8::Array::New(size);
 
-    unsigned Idx = 0;
+    uint32_t Idx = 0;
     for (llvm::Function::arg_iterator AI = fun->llvm_fun->arg_begin(); Idx != size;
 	 ++AI, ++Idx) {
       result->Set(Idx, Value::New(AI));

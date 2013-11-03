@@ -112,7 +112,7 @@ namespace jsllvm {
     REQ_ARRAY_ARG(2, paramTypes);
 
     std::vector< llvm::Type*> param_types;
-    for (int i = 0; i < paramTypes->Length(); i ++) {
+    for (uint32_t i = 0; i < paramTypes->Length(); i ++) {
       param_types.push_back (Type::GetLLVMObj(paramTypes->Get(i)));
     }
 
@@ -169,7 +169,7 @@ namespace jsllvm {
     REQ_ARRAY_ARG(2, paramTypes);
 
     std::vector< llvm::Type*> param_types;
-    for (int i = 0; i < paramTypes->Length(); i ++) {
+    for (uint32_t i = 0; i < paramTypes->Length(); i ++) {
       param_types.push_back (Type::GetLLVMObj(paramTypes->Get(i)));
     }
 
