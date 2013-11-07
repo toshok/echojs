@@ -245,7 +245,8 @@ void _ejs_exception_rethrow(void)
 ejsval _ejs_begin_catch(void *exc_gen)
 {
     SPEW(printf ("EXCEPTIONS: handling exception %p at %p\n", exc_gen, __builtin_return_address(0)));
-    return (ejsval)__cxa_begin_catch(exc_gen);
+    struct ejs_exception *exc = (struct ejs_exception*)__cxa_begin_catch(exc_gen);
+    return exc->val;
 }
 
 
@@ -261,8 +262,6 @@ static char _ejs_exception_do_catch(struct ejs_typeinfo *catch_tinfo,
                                     void **throw_obj_p, 
                                     unsigned outer)
 {
-    ejsval exception;
-
     if (throw_tinfo->vtable != ejs_ehtype_vtable+2) {
         // Only ejs types can be caught here.
         SPEW(printf ("EXCEPTIONS: skipping catch(?)\n"));
@@ -275,7 +274,6 @@ static char _ejs_exception_do_catch(struct ejs_typeinfo *catch_tinfo,
         return 1;
     }
 
-    exception = *(ejsval*)throw_obj_p;
     SPEW(printf ("EXCEPTIONS: catch()\n"));
     return 1;
 }
