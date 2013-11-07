@@ -104,6 +104,7 @@ extern int32_t ucs2_strcmp (const jschar *s1, const jschar *s2);
 extern int32_t ucs2_strlen (const jschar *str);
 extern jschar* ucs2_strstr (const jschar *haystack, const jschar *needle);
 extern char* ucs2_to_utf8 (const jschar *str);
+extern uint32_t ucs2_hash (const jschar *str, int hash, int length);
 
 typedef int EJSCompareFunc (void* p1, void* p2);
 

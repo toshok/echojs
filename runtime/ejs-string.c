@@ -48,6 +48,19 @@ ucs2_strlen (const jschar *str)
     return rv;
 }
 
+uint32_t
+ucs2_hash (const jschar* str, int32_t hash, int length)
+{
+    while (*str && length >= 0) {
+        hash = (hash << 5) - hash * (*str++);
+        if (!*str)
+            return hash;
+        hash = (hash << 5) - hash + (*str++);
+        length --;
+    }
+    return (uint32_t)hash;
+}
+
 jschar*
 ucs2_strstr (const jschar *haystack,
              const jschar *needle)
@@ -1361,6 +1374,72 @@ EJSPrimString*
 _ejs_string_flatten (ejsval str)
 {
     return _ejs_primstring_flatten (EJSVAL_TO_STRING_IMPL(str));
+}
+
+static uint32_t
+hash_dep (int hash, EJSPrimString* n, int* off, int* len)
+{
+    // nothing left to hash
+    if (*len == 0)
+        return hash;
+
+    // first step is to locate the node that contains the start of our characters
+    if (*off >= 0) {
+        switch (EJS_PRIMSTR_GET_TYPE(n)) {
+        case EJS_STRING_FLAT:
+            if (*off < n->length) {
+                int length_to_hash = MIN(*len, n->length - *off);
+                hash = ucs2_hash (n->data.flat + *off, hash, length_to_hash);
+                *len -= length_to_hash;
+                *off = 0;
+            }
+            else {
+                *off -= n->length;
+            }
+            break;
+        case EJS_STRING_ROPE:
+            hash = hash_dep (hash, n->data.rope.left, off, len);
+            hash = hash_dep (hash, n->data.rope.right, off, len);
+            break;
+        case EJS_STRING_DEPENDENT:
+            *off += n->data.dependent.off;
+            hash = hash_dep(hash, n->data.dependent.dep, off, len);
+            break;
+        }
+    }
+    return hash;
+}
+
+static uint32_t
+_ejs_primstring_hash_inner (EJSPrimString* primstr, int cur_hash)
+{
+    switch (EJS_PRIMSTR_GET_TYPE(primstr)) {
+    case EJS_STRING_FLAT:
+        return ucs2_hash (primstr->data.flat, 0, primstr->length);
+    case EJS_STRING_DEPENDENT: {
+        int length = primstr->length;
+        int off = 0;
+        return hash_dep (0, primstr, &off, &length);
+    }
+    case EJS_STRING_ROPE: {
+        int hash = _ejs_primstring_hash_inner (primstr->data.rope.left, cur_hash);
+        return _ejs_primstring_hash_inner (primstr->data.rope.right, hash);
+    }
+    }
+}
+
+uint32_t
+_ejs_primstring_hash (EJSPrimString* primstr)
+{
+    return _ejs_primstring_hash_inner (primstr, 0);
+}
+
+uint32_t
+_ejs_string_hash (ejsval str)
+{
+    assert (EJSVAL_IS_STRING(str));
+
+    return _ejs_primstring_hash (EJSVAL_TO_STRING_IMPL(str));
 }
 
 
