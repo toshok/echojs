@@ -1044,19 +1044,18 @@ coffeekit_ctor_tramp (id obj, SEL sel, ...)
 static CKObject*
 register_members (Class cls, CKObject* obj, NSMutableDictionary* method_map)
 {
-	size_t i;
 	CKObject* ctor = NULL;
     EJSObject* _obj = [obj jsObject];
 
-	for (i = 0; i < _obj->map.num; i ++) {
-        if (_ejs_property_desc_has_getter(&_obj->map.properties[i]) ||
-            _ejs_property_desc_has_setter(&_obj->map.properties[i])) {
-			if (_ejs_property_desc_has_getter(&_obj->map.properties[i])) {
+    for (_EJSPropertyMapEntry* s = _obj->map.head_insert; s; s = s->next_insert) {
+        if (_ejs_property_desc_has_getter(s->desc) || 
+            _ejs_property_desc_has_setter(s->desc)) {
+			if (_ejs_property_desc_has_getter(s->desc)) {
 
-                char *utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(_obj->map.names[i]));
+                char *utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(s->name));
                 CKString* name = [CKString stringWithUTF8CString:utf8];
 
-                CKObject *getter = [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(_obj->map.properties[i].getter)];
+                CKObject *getter = [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(s->desc->getter)];
                 NSLog (@"there was a getter for %@", [name nsString]);
 				CKValue* ck_ivar = [getter valueForPropertyNS:@"_ck_ivar"];
 
@@ -1070,7 +1069,7 @@ register_members (Class cls, CKObject* obj, NSMutableDictionary* method_map)
 			}
 		}
 		else {
-            char *utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(_obj->map.names[i]));
+            char *utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(s->name));
             CKString* name = [CKString stringWithUTF8CString:utf8];
             free (utf8);
             NSString* name_nsstr = [name nsString];

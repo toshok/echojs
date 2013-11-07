@@ -233,119 +233,202 @@ FromPropertyDescriptor(EJSPropertyDesc* Desc)
     return obj;
 }
 
-void
-_ejs_propertymap_init (EJSPropertyMap *map, int initial_allocation)
+EJSPropertyDesc*
+_ejs_propertydesc_new ()
 {
-    if (initial_allocation) {
-        map->names = (ejsval*)calloc(sizeof(ejsval), initial_allocation);
-        map->properties = (EJSPropertyDesc*)calloc(sizeof (EJSPropertyDesc), initial_allocation);
-    }
-    else {
-        map->names = NULL;
-        map->properties = NULL;
-    }
-    map->num = 0;
-    map->allocated = initial_allocation;
+    return (EJSPropertyDesc*)calloc (sizeof(EJSPropertyDesc), 1);
+}
+
+void
+_ejs_propertydesc_free (EJSPropertyDesc* desc)
+{
+    free (desc);
+}
+
+static int primes[] = {
+    9, 17, 31, 67, 131, 257, 521, 1031, 2053, 4099
+};
+static int nprimes = sizeof(primes) / sizeof(primes[0]);
+
+void
+_ejs_propertymap_init (EJSPropertyMap *map)
+{
+    fprintf (stderr, "%p: init\n", map);
+    map->head_insert = map->tail_insert = NULL;
+    map->buckets = NULL;
+    map->nbuckets = 0;
+    map->inuse = 0;
 }
 
 void
 _ejs_propertymap_free (EJSPropertyMap *map)
 {
-    map->num = 0;
-    map->allocated = 0;
-    free (map->names);
-    map->names = NULL;
-    free (map->properties);
-    map->properties = NULL;
+    fprintf (stderr, "%p: free\n", map);
+    map->nbuckets = 0;
+    map->inuse = 0;
+    
+    _EJSPropertyMapEntry* s = map->head_insert;
+    while (s) {
+        _EJSPropertyMapEntry* next = s->next_insert;
+        free (s->desc);
+        free (s);
+        s = next;
+    }
+    free (map->buckets);
+    map->buckets = NULL;
+    map->head_insert = map->tail_insert = NULL;
 }
 
 void
 _ejs_propertymap_foreach_value (EJSPropertyMap* map, EJSValueFunc foreach_func)
 {
-    for (int i = 0; i < map->num; i ++) {
-        EJSPropertyDesc *desc = &map->properties[i];
-        if (!_ejs_property_desc_has_value (desc))
-            continue;
-        foreach_func (desc->value);
+    for (_EJSPropertyMapEntry *s = map->head_insert; s; s = s->next_insert) {
+        if (_ejs_property_desc_has_value (s->desc))
+            foreach_func(s->desc->value);
     }
 }
 
 void
 _ejs_propertymap_foreach_property (EJSPropertyMap* map, EJSPropertyDescFunc foreach_func, void* data)
 {
-    for (int i = 0; i < map->num; i ++) {
-        ejsval name = map->names[i];
-        EJSPropertyDesc *desc = &map->properties[i];
-
-        foreach_func (name, desc, data);
+    for (_EJSPropertyMapEntry *s = map->head_insert; s; s = s->next_insert) {
+        foreach_func (s->name, s->desc, data);
     }
 }
 
 void
-_ejs_propertymap_delete_named (EJSPropertyMap *map, const char *name)
+_ejs_propertymap_remove (EJSPropertyMap *map, ejsval name)
 {
-    EJS_NOT_IMPLEMENTED();
+    fprintf (stderr, "%p: remove (%s)\n", map, ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name)));
+    if (map->inuse == 0) {
+        fprintf (stderr, "  map empty, returning early\n");
+        return;
+    }
+
+    uint32_t hashcode = _ejs_string_hash(name);
+    int bucket = (int)(hashcode % map->nbuckets);
+
+    _EJSPropertyMapEntry* prev = NULL;
+    _EJSPropertyMapEntry* s = map->buckets[bucket];
+    while (s) {
+        if (EJSVAL_TO_BOOLEAN(_ejs_op_strict_eq(s->name, name))) {
+            fprintf (stderr, "  found entry in bucket (hashcode %d, bucket %d)\n", hashcode, bucket);
+            if (prev)
+                prev->next_bucket = s->next_bucket;
+            else
+                map->buckets[bucket] = s->next_bucket;
+
+            if (map->head_insert == s) {
+                map->head_insert = s->next_insert;
+                if (map->tail_insert == s)
+                    map->tail_insert = NULL;
+            }
+            else {
+                // FIXME do we need a doubly linked list for the insert-list instead of this second traversal?
+                _EJSPropertyMapEntry *prev_insert;
+                for (prev_insert = map->head_insert; prev_insert; prev_insert = prev_insert->next_insert) {
+                    if (prev_insert->next_insert == s) {
+                        fprintf (stderr, "  found entry in insert list\n");
+                        prev_insert->next_insert = s->next_insert;
+                        if (map->tail_insert == s)
+                            map->tail_insert = prev_insert;
+                        break;
+                    }
+                }
+            }
+                
+
+            free (s->desc);
+            free (s);
+            map->inuse --;
+            return;
+        }
+        prev = s;
+        s = s->next_bucket;
+    }
+}
+
+EJSPropertyDesc*
+_ejs_propertymap_lookup (EJSPropertyMap* map, ejsval name)
+{
+    fprintf (stderr, "%p: lookup (%s)\n", map, ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name)));
+    if (map->inuse == 0)
+        return NULL;
+
+    uint32_t hashcode = _ejs_string_hash(name);
+    int bucket = (int)(hashcode % map->nbuckets);
+
+    for (_EJSPropertyMapEntry* s = map->buckets[bucket]; s; s = s->next_bucket) {
+        if (EJSVAL_TO_BOOLEAN(_ejs_op_strict_eq(s->name, name)))
+            return s->desc;
+    }
+    return NULL;
+}
+
+static void
+_ejs_propertymap_rehash (EJSPropertyMap* map)
+{
+    // find the next prime up
+    int new_size = -1;
+    for (int i = 0; i < nprimes-1; i ++) {
+        if (map->nbuckets == primes[i]) {
+            new_size = primes[i+1];
+            break;
+        }
+    }
+    if (new_size == -1)
+        abort();
+
+    free (map->buckets);
+    map->nbuckets = new_size;
+    map->buckets = (_EJSPropertyMapEntry**)calloc (sizeof(_EJSPropertyMapEntry*), map->nbuckets);
+
+    for (_EJSPropertyMapEntry *s = map->head_insert; s; s = s->next_insert) {
+        uint32_t hashcode = _ejs_string_hash(s->name);
+        int bucket = (int)(hashcode % map->nbuckets);
+
+        s->next_bucket = map->buckets[bucket];
+        map->buckets[bucket] = s;
+    }
 }
 
 void
-_ejs_propertymap_delete_desc (EJSPropertyMap *map, EJSPropertyDesc *desc)
+_ejs_propertymap_insert (EJSPropertyMap* map, ejsval name, EJSPropertyDesc* desc)
 {
-    int i;
-    for (i = 0; i < map->num; i ++) {
-        if (desc == &map->properties[i]) {
-            if (i < map->num - 1) {
-                memmove (&map->names[i], &map->names[i+1], (map->num - (i+1)) * sizeof(char*));
-                memmove (&map->properties[i], &map->properties[i+1], (map->num - (i + 1)) * sizeof(EJSPropertyDesc*));
-            }
-            map->num--;
+    fprintf (stderr, "%p: insert (%s)\n", map, ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name)));
+    if (map->buckets == NULL) {
+        map->nbuckets = primes[0];
+        map->buckets = calloc (sizeof(_EJSPropertyMapEntry*), map->nbuckets);
+    }
+
+    uint32_t hashcode = _ejs_string_hash(name);
+    int bucket = (int)(hashcode % map->nbuckets);
+
+    for (_EJSPropertyMapEntry* s = map->buckets[bucket]; s; s = s->next_bucket) {
+        if (EJSVAL_TO_BOOLEAN(_ejs_op_strict_eq(s->name, name))) {
+            _ejs_propertydesc_free (s->desc);
+            s->desc = desc;
             return;
         }
     }
-    EJS_NOT_IMPLEMENTED();
-}
+    _EJSPropertyMapEntry* new_s = malloc(sizeof(_EJSPropertyMapEntry));
+    new_s->name = name;
+    new_s->desc = desc;
+    new_s->next_bucket = map->buckets[bucket];
+    new_s->next_insert = NULL;
+    map->buckets[bucket] = new_s;
+    map->inuse ++;
 
-int
-_ejs_propertymap_lookup (EJSPropertyMap *map, ejsval name, EJSBool add_if_not_found)
-{
-    int i;
-    for (i = 0; i < map->num; i ++) {
-        if (!ucs2_strcmp (EJSVAL_TO_FLAT_STRING(map->names[i]), EJSVAL_TO_FLAT_STRING(name)))
-            return i;
+    if (!map->head_insert)
+        map->head_insert = new_s;
+
+    if (map->tail_insert)
+        map->tail_insert->next_insert = new_s;
+    map->tail_insert = new_s;
+
+    if (map->inuse > map->nbuckets * 0.75) {
+        _ejs_propertymap_rehash (map);
     }
-  
-    int idx = -1;
-    if (add_if_not_found) {
-        idx = map->num++;
-        if (map->allocated == 0 || idx == map->allocated - 1) {
-            int new_allocated = map->allocated + 10;
-
-            ejsval *new_names = (ejsval*)malloc(sizeof(ejsval) * new_allocated);
-            EJSPropertyDesc* new_properties = (EJSPropertyDesc*)calloc (sizeof(EJSPropertyDesc), new_allocated);
-
-            memmove (new_names, map->names, map->allocated * sizeof(ejsval));
-            memmove (new_properties, map->properties, map->allocated * sizeof(EJSPropertyDesc));
-
-            if (map->names)
-                free (map->names);
-            if (map->properties)
-                free (map->properties);
-
-            map->names = new_names;
-            map->properties = new_properties;
-
-            map->allocated = new_allocated;
-        }
-        map->names[idx] = name;
-
-#if DEBUG_PROPMAP
-        printf ("after inserting item, map %p is %d long:\n", map, map->num);
-        for (i = 0; i < map->num; i ++) {
-            printf ("  [%d]: %p %s\n", i, map->names[i], map->names[i]);
-        }
-#endif
-    }
-
-    return idx;
 }
 
 /* property iterators */
@@ -411,18 +494,16 @@ collect_keys (ejsval objval, int *num, int *alloc, ejsval **keys)
         return;
 
     EJSObject *obj = EJSVAL_TO_OBJECT(objval);
-    EJSPropertyMap *map = &obj->map;
+    assert(obj);
 
-    if (map) {
-        for (int i = 0; i < map->num; i ++) {
-            if (_ejs_property_desc_is_enumerable (&map->properties[i]) && !name_in_keys (map->names[i], *keys, *num)) {
-                if (*num == *alloc-1) {
-                    // we need to reallocate
-                    (*alloc) += 10;
-                    *keys = (ejsval*)realloc (*keys, (*alloc) * sizeof(ejsval));
-                }
-                (*keys)[(*num)++] = map->names[i];
+    for (_EJSPropertyMapEntry *s = obj->map.head_insert; s; s = s->next_insert) {
+        if (_ejs_property_desc_is_enumerable (s->desc) && !name_in_keys (s->name, *keys, *num)) {
+            if (*num == *alloc-1) {
+                // we need to reallocate
+                (*alloc) += 10;
+                *keys = (ejsval*)realloc (*keys, (*alloc) * sizeof(ejsval));
             }
+            (*keys)[(*num)++] = s->name;
         }
     }
 
@@ -528,7 +609,7 @@ _ejs_init_object (EJSObject* obj, ejsval proto, EJSSpecOps *ops)
 {
     obj->proto = proto;
     obj->ops = ops ? ops : &_ejs_object_specops;
-    _ejs_propertymap_init (&obj->map, obj->ops == &_ejs_object_specops ? 5 : 0);
+    _ejs_propertymap_init (&obj->map);
     EJS_OBJECT_SET_EXTENSIBLE(obj);
 #if notyet
     ((GCObjectPtr)obj)->gc_data = 0x01; // HAS_FINALIZE
@@ -790,32 +871,37 @@ _ejs_Object_getOwnPropertyDescriptor (ejsval env, ejsval _this, uint32_t argc, e
 static ejsval
 _ejs_Object_getOwnPropertyNames (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    ejsval obj = _ejs_undefined;
+    ejsval O = _ejs_undefined;
     if (argc > 0)
-        obj = args[0];
+        O = args[0];
 
     /* 1. If Type(O) is not Object throw a TypeError exception. */
-    if (!EJSVAL_IS_OBJECT(obj)) {
+    if (!EJSVAL_IS_OBJECT(O)) {
         printf ("throw TypeError, _this isn't an Object\n");
         EJS_NOT_IMPLEMENTED();
     }
-    EJSObject* O = EJSVAL_TO_OBJECT(obj);
+    EJSObject* O_ = EJSVAL_TO_OBJECT(O);
+
     /* 2. Let array be the result of creating a new object as if by the expression new Array () where Array is the 
           standard built-in constructor with that name. */
-    ejsval arr = _ejs_array_new(O->map.num, EJS_FALSE);
-    EJSArray* array = (EJSArray*)EJSVAL_TO_OBJECT(arr);
+    ejsval arr = _ejs_array_new(0, EJS_FALSE);
+
     /* 3. Let n be 0. */
-    int n = 0;
+
     /* 4. For each named own property P of O */
-    while (n < O->map.num) {
+    for (_EJSPropertyMapEntry* s = O_->map.head_insert; s; s = s->next_insert) {
+        if (!_ejs_property_desc_is_enumerable(s->desc))
+            continue;
+
         /*    a. Let name be the String value that is the name of P. */
-        ejsval name = O->map.names[n];
+        ejsval name = s->name;
+
         /*    b. Call the [[DefineOwnProperty]] internal method of array with arguments ToString(n), the
                  PropertyDescriptor {[[Value]]: name, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: 
                  true}, and false. */
-        EJSDENSEARRAY_ELEMENTS(array)[n] = name;
+        _ejs_array_push_dense(arr, 1, &name);
+
         /*    c. Increment n by 1. */
-        ++n;
     }
     /* 5. Return array. */
 
@@ -928,8 +1014,8 @@ _ejs_Object_defineProperties (ejsval env, ejsval _this, uint32_t argc, ejsval *a
 
     /* 3. Let names be an internal list containing the names of each enumerable own property of props. */
     int names_len = 0;
-    for (int p = 0; p < props_obj->map.num; p ++) {
-        if (_ejs_property_desc_is_enumerable (&props_obj->map.properties[p]))
+    for (_EJSPropertyMapEntry *s = props_obj->map.head_insert; s; s = s->next_insert) {
+        if (_ejs_property_desc_is_enumerable (s->desc))
             names_len ++;
     }
 
@@ -940,9 +1026,9 @@ _ejs_Object_defineProperties (ejsval env, ejsval _this, uint32_t argc, ejsval *a
 
     ejsval* names = malloc(names_len * sizeof(ejsval));
     int n = 0;
-    for (int p = 0; p < props_obj->map.num; p ++) {
-        if (_ejs_property_desc_is_enumerable(&props_obj->map.properties[p]))
-            names[n++] = props_obj->map.names[p];
+    for (_EJSPropertyMapEntry *s = props_obj->map.head_insert; s; s = s->next_insert) {
+        if (_ejs_property_desc_is_enumerable(s->desc))
+            names[n++] = s->name;
     }
 
     /* 4. Let descriptors be an empty internal List. */
@@ -998,17 +1084,16 @@ _ejs_Object_seal (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     // XXX this needs special handling for arrays (and other objects?)
 
     /* 2. For each named own property name P of O, */
-    for (int n = 0; n < obj->map.num; n++) {
-        ejsval P = obj->map.names[n];
+    for (_EJSPropertyMapEntry* s = obj->map.head_insert; s; s = s->next_insert) {
 
         /*    a. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with P. */
-        EJSPropertyDesc* desc = OP(obj,get_own_property)(O, P);
+        EJSPropertyDesc* desc = s->desc;
 
         /*    b. If desc.[[Configurable]] is true, set desc.[[Configurable]] to false. */
-        EJS_NOT_IMPLEMENTED();
+        if (_ejs_property_desc_is_configurable(desc))
+            _ejs_property_desc_set_configurable(desc, EJS_FALSE);
 
         /*    c. Call the [[DefineOwnProperty]] internal method of O with P, desc, and true as arguments. */
-        OP(obj,define_own_property)(O, P, desc, EJS_TRUE);
     }
 
     /* 3. Set the [[Extensible]] internal property of O to false. */
@@ -1035,8 +1120,9 @@ _ejs_Object_freeze (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     // XXX this needs special handling for arrays (and other objects?)
 
     /* 2. For each named own property name P of O, */
-    for (int n = 0; n < obj->map.num; n++) {
-        ejsval P = obj->map.names[n];
+    ejsval iter = _ejs_property_iterator_new(O);
+    while (_ejs_property_iterator_next(iter, EJS_TRUE)) {
+        ejsval P = _ejs_property_iterator_current(iter);
 
         /*    a. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with P. */
         EJSPropertyDesc* desc = OP(obj,get_own_property)(O, P);
@@ -1100,8 +1186,9 @@ _ejs_Object_isSealed (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     // XXX this needs special handling for arrays (and other objects?)
 
     /* 2. For each named own property name P of O, */
-    for (int n = 0; n < obj->map.num; n++) {
-        ejsval P = obj->map.names[n];
+    ejsval iter = _ejs_property_iterator_new(O);
+    while (_ejs_property_iterator_next(iter, EJS_TRUE)) {
+        ejsval P = _ejs_property_iterator_current(iter);
 
         /*    a. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with P. */
         EJSPropertyDesc* desc = OP(obj,get_own_property)(O, P);
@@ -1136,8 +1223,9 @@ _ejs_Object_isFrozen (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     // XXX this needs special handling for arrays (and other objects?)
 
     /* 2. For each named own property name P of O, */
-    for (int n = 0; n < obj->map.num; n++) {
-        ejsval P = obj->map.names[n];
+    ejsval iter = _ejs_property_iterator_new(O);
+    while (_ejs_property_iterator_next(iter, EJS_TRUE)) {
+        ejsval P = _ejs_property_iterator_current(iter);
 
         /*    a. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with P. */
         EJSPropertyDesc* desc = OP(obj,get_own_property)(O, P);
@@ -1399,10 +1487,7 @@ _ejs_object_specop_get_own_property (ejsval obj, ejsval propertyName)
     ejsval property_str = ToString(propertyName);
     EJSObject* obj_ = EJSVAL_TO_OBJECT(obj);
 
-    int idx = _ejs_propertymap_lookup (&obj_->map, property_str, EJS_FALSE);
-    if (idx == -1)
-        return NULL;
-    return &obj_->map.properties[idx];
+    return _ejs_propertymap_lookup (&obj_->map, property_str);
 }
 
 // ECMA262: 8.12.2
@@ -1569,7 +1654,7 @@ _ejs_object_specop_delete (ejsval O, ejsval P, EJSBool Throw)
     /* 3. If desc.[[Configurable]] is true, then */
     if (_ejs_property_desc_is_configurable(desc)) {
         /*    a. Remove the own property with name P from O. */
-        _ejs_propertymap_delete_desc (&obj->map, desc);
+        _ejs_propertymap_remove (&obj->map, P);
         /*    b. Return true. */
         return EJS_TRUE;
     }
@@ -1619,15 +1704,14 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
 
     /* 4. If current is undefined and extensible is true, then */
     if (!current && extensible) {
+        EJSPropertyDesc *dest = _ejs_propertydesc_new();
+
         /*    a. If  IsGenericDescriptor(Desc) or IsDataDescriptor(Desc) is true, then */
         if (IsGenericDescriptor(Desc) || IsDataDescriptor(Desc)) {
             /*       i. Create an own data property named P of object O whose [[Value]], [[Writable]],  */
             /*          [[Enumerable]] and [[Configurable]] attribute values are described by Desc. If the value of */
             /*          an attribute field of Desc is absent, the attribute of the newly created property is set to its  */
             /*          default value. */
-            int idx = _ejs_propertymap_lookup (&obj->map, P, EJS_TRUE);
-            EJSPropertyDesc *dest = &obj->map.properties[idx];
-
             if (_ejs_property_desc_has_value (Desc))
                 _ejs_property_desc_set_value (dest, _ejs_property_desc_get_value (Desc));
             if (_ejs_property_desc_has_configurable (Desc))
@@ -1643,9 +1727,6 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
             /*          [[Enumerable]] and [[Configurable]] attribute values are described by Desc. If the value of  */
             /*          an attribute field of Desc is absent, the attribute of the newly created property is set to its  */
             /*          default value. */
-            int idx = _ejs_propertymap_lookup (&obj->map, P, EJS_TRUE);
-            EJSPropertyDesc *dest = &obj->map.properties[idx];
-
             if (_ejs_property_desc_has_getter (Desc))
                 _ejs_property_desc_set_getter (dest, _ejs_property_desc_get_getter (Desc));
             if (_ejs_property_desc_has_setter (Desc))
@@ -1655,6 +1736,8 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
             if (_ejs_property_desc_has_enumerable (Desc))
                 _ejs_property_desc_set_enumerable (dest, _ejs_property_desc_is_enumerable (Desc));
         }
+        _ejs_propertymap_insert (&obj->map, P, dest);
+
         /*    c. Return true. */
         return EJS_TRUE;
     }
@@ -1755,8 +1838,7 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
 
     /* 12. For each attribute field of Desc that is present, set the correspondingly named attribute of the property  */
     /*     named P of object O to the value of the field. */
-    int idx = _ejs_propertymap_lookup (&obj->map, P, EJS_TRUE);
-    EJSPropertyDesc *dest = &obj->map.properties[idx];
+    EJSPropertyDesc* dest = _ejs_propertymap_lookup (&obj->map, P);
 
     if (_ejs_property_desc_has_getter (Desc))
         _ejs_property_desc_set_getter (dest, _ejs_property_desc_get_getter (Desc));

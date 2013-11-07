@@ -62,7 +62,7 @@ exports.create_string_literal = (x) ->
         throw new Error "invalid string in create_string_literal" if not x
         type: syntax.Literal, value: x, raw: "\"#{x}\""
 exports.create_number_literal = (x) ->
-        throw new Error "invalid number in create_number_literal" if typeof x isnt "number"
+        throw new Error "invalid number '#{x}' (#{typeof x}) in create_number_literal" if typeof x isnt "number"
         type: syntax.Literal, value: x, raw: "#{x}"
 exports.create_intrinsic = (id, args) ->
         type: syntax.CallExpression

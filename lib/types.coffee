@@ -20,10 +20,11 @@ exports.EjsPrimString   = EjsPrimStringTy = llvm.StructType.create "EjsPrimStrin
 exports.EjsSpecops      = EjsSpecopsTy = llvm.StructType.create "struct.EJSSpecOps", [] # XXX
 
 exports.EjsPropertyMap  = EjsPropertyMapTy = llvm.StructType.create "struct.EJSPropertyMap", [
-        jscharTy.pointerTo().pointerTo(),   # jschar **names;
-        llvm.Type.getInt8Ty().pointerTo(),  # EJSPropertyDesc *propertiesn;
-        int32Ty,                            # int allocated;
-        int32Ty                             # int num;
+        jscharTy.pointerTo(),               # _EJSPropertyMapSlot** slots
+        jscharTy.pointerTo(),               # _EJSPropertyMapSlot* first_insert
+        jscharTy.pointerTo(),               # _EJSPropertyMapSlot* last_insert
+        int32Ty,                            # int nslots;
+        int32Ty                             # int inuse;
 ]
         
 exports.EjsObject = EjsObjectTy = llvm.StructType.create "struct.EJSObject", [

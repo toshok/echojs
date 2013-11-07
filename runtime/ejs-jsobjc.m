@@ -561,14 +561,20 @@
 
     EJSObject* _obj = [obj jsObject];
     EJSPropertyMap *map = &_obj->map;
-    _count = map->num;
-	_names = _count == 0 ? NULL : (CKString**)malloc(_count * sizeof(CKString*));
-    for (uint32_t i = 0; i < _count; i ++) {
-        ejsval name = map->names[i];
-        char* utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name));
+    _count = map->inuse;
+    if (_count == 0) {
+        _names = NULL;
+    }
+    else {
+        _names = (CKString**)malloc(_count * sizeof(CKString*));
+        uint32_t i = 0;
+        for (_EJSPropertyMapEntry* s = map->head_insert; s; s = s->next_insert) {
+            ejsval name = s->name;
+            char* utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name));
 
-        _names[i] = [[CKString alloc] initWithUTF8CString:utf8];
-        free (utf8);
+            _names[i++] = [[CKString alloc] initWithUTF8CString:utf8];
+            free (utf8);
+        }
     }
 
     return self;

@@ -37,6 +37,9 @@ typedef struct {
     ejsval setter;
 } EJSPropertyDesc;
 
+EJSPropertyDesc* _ejs_propertydesc_new ();
+void _ejs_propertydesc_free (EJSPropertyDesc* desc);
+
 #define _ejs_property_desc_set_flag(p, v, propflag, flagset) EJS_MACRO_START \
     if ((v)) {                                                          \
         (p)->flags |= (propflag);                                       \
@@ -94,11 +97,24 @@ typedef struct {
 #define _ejs_property_desc_get_getter(p) _ejs_property_desc_get_value_flag_default(p, getter, EJS_PROP_FLAGS_GETTER_SET, _ejs_undefined)
 #define _ejs_property_desc_get_setter(p) _ejs_property_desc_get_value_flag_default(p, setter, EJS_PROP_FLAGS_SETTER_SET, _ejs_undefined)
     
+typedef struct _EJSPropertyMapEntry _EJSPropertyMapEntry;
+struct _EJSPropertyMapEntry {
+    // the next entry in this bucket
+    _EJSPropertyMapEntry *next_bucket;
+
+    // the next entry in insertion order
+    _EJSPropertyMapEntry *next_insert;
+
+    ejsval name;
+    EJSPropertyDesc *desc;
+};
+
 struct _EJSPropertyMap {
-    ejsval *names;
-    EJSPropertyDesc *properties;
-    int allocated;
-    int num;
+    _EJSPropertyMapEntry* head_insert;
+    _EJSPropertyMapEntry* tail_insert;
+    _EJSPropertyMapEntry** buckets;
+    int nbuckets;
+    int inuse;
 };
 
 typedef struct _EJSPropertyMap EJSPropertyMap;
@@ -165,8 +181,10 @@ struct _EJSObject {
 
 EJS_BEGIN_DECLS
 
-void _ejs_propertymap_init (EJSPropertyMap* map, int initial_allocation);
-int _ejs_propertymap_lookup (EJSPropertyMap *map, ejsval name, EJSBool add_if_not_found);
+void _ejs_propertymap_init (EJSPropertyMap* map);
+EJSPropertyDesc* _ejs_propertymap_lookup (EJSPropertyMap *map, ejsval name);
+void _ejs_propertymap_insert (EJSPropertyMap *map, ejsval name, EJSPropertyDesc* desc);
+void _ejs_propertymap_remove (EJSPropertyMap *map, ejsval name);
 void _ejs_propertymap_foreach_value (EJSPropertyMap *map, EJSValueFunc foreach_func);
 void _ejs_propertymap_foreach_property (EJSPropertyMap *map, EJSPropertyDescFunc foreach_func, void* data);
 
