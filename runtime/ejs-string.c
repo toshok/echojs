@@ -1431,7 +1431,9 @@ _ejs_primstring_hash_inner (EJSPrimString* primstr, int cur_hash)
 uint32_t
 _ejs_primstring_hash (EJSPrimString* primstr)
 {
-    return _ejs_primstring_hash_inner (primstr, 0);
+    if (!EJS_PRIMSTR_HAS_HASH(primstr))
+        primstr->hash = _ejs_primstring_hash_inner (primstr, 0);
+    return primstr->hash;
 }
 
 uint32_t

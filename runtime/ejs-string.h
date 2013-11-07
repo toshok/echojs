@@ -48,8 +48,7 @@ typedef enum {
     EJS_STRING_DEPENDENT = 3
 } EJSPrimStringType;
 
-#define EJS_PRIMSTR_TYPE_MASK 0x03
-
+#define EJS_PRIMSTR_TYPE_MASK 0x07
 #define EJS_PRIMSTR_TYPE_MASK_SHIFTED (EJS_PRIMSTR_TYPE_MASK << EJS_GC_USER_FLAGS_SHIFT)
 
 #define EJS_PRIMSTR_SET_TYPE(s,t) (((EJSObject*)(s))->gc_header |= (t) << EJS_GC_USER_FLAGS_SHIFT)
@@ -57,9 +56,14 @@ typedef enum {
 
 #define EJS_PRIMSTR_GET_TYPE(s)   ((EJSPrimStringType)((((EJSPrimString*)(s))->gc_header & EJS_PRIMSTR_TYPE_MASK_SHIFTED) >> EJS_GC_USER_FLAGS_SHIFT))
 
+#define EJS_PRIMSTR_HAS_HASH_MASK 0x08
+#define EJS_PRIMSTR_HAS_HASH_MASK_SHIFTED (EJS_PRIMSTR_HAS_HASH_MASK << EJS_GC_USER_FLAGS_SHIFT)
+#define EJS_PRIMSTR_HAS_HASH(s) ((((EJSPrimString*)(s))->gc_header & EJS_PRIMSTR_HAS_HASH_MASK_SHIFTED) >> EJS_GC_USER_FLAGS_SHIFT) != 0
+
 struct _EJSPrimString {
     GCObjectHeader gc_header;
     uint32_t length;
+    int32_t hash;
     union {
         // utf8 \0 terminated
         //    for flattened strings, this points to the memory location just beyond this struct - i.e. (char*)primStringPointer + sizeof(_EJSPrimString)
