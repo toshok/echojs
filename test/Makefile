@@ -37,6 +37,7 @@ $(call addExpectedFailure, array19.js,              "we don't support property d
 $(call addExpectedFailure, sparsearray1.js,         "sparse array support is very much not there yet")
 $(call addExpectedFailure, fib1.js,                 "we don't output numbers correctly (integers with exponent <= 20 should print out normally)")
 $(call addExpectedFailure, const1.js,               "we permit assigning to const bindings")
+$(call addExpectedFailure, forof1.js,               "we don't support for-of yet")
 
 check: check-unit-tests run-tests
 
