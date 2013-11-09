@@ -253,7 +253,7 @@ static int nprimes = sizeof(primes) / sizeof(primes[0]);
 void
 _ejs_propertymap_init (EJSPropertyMap *map)
 {
-    fprintf (stderr, "%p: init\n", map);
+    //fprintf (stderr, "%p: init\n", map);
     map->head_insert = map->tail_insert = NULL;
     map->buckets = NULL;
     map->nbuckets = 0;
@@ -263,7 +263,7 @@ _ejs_propertymap_init (EJSPropertyMap *map)
 void
 _ejs_propertymap_free (EJSPropertyMap *map)
 {
-    fprintf (stderr, "%p: free\n", map);
+    //fprintf (stderr, "%p: free\n", map);
     map->nbuckets = 0;
     map->inuse = 0;
     
@@ -299,7 +299,7 @@ _ejs_propertymap_foreach_property (EJSPropertyMap* map, EJSPropertyDescFunc fore
 void
 _ejs_propertymap_remove (EJSPropertyMap *map, ejsval name)
 {
-    fprintf (stderr, "%p: remove (%s)\n", map, ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name)));
+    //fprintf (stderr, "%p: remove (%s)\n", map, ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name)));
     if (map->inuse == 0) {
         fprintf (stderr, "  map empty, returning early\n");
         return;
@@ -351,7 +351,6 @@ _ejs_propertymap_remove (EJSPropertyMap *map, ejsval name)
 EJSPropertyDesc*
 _ejs_propertymap_lookup (EJSPropertyMap* map, ejsval name)
 {
-    fprintf (stderr, "%p: lookup (%s)\n", map, ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name)));
     if (map->inuse == 0)
         return NULL;
 
@@ -395,7 +394,7 @@ _ejs_propertymap_rehash (EJSPropertyMap* map)
 void
 _ejs_propertymap_insert (EJSPropertyMap* map, ejsval name, EJSPropertyDesc* desc)
 {
-    fprintf (stderr, "%p: insert (%s)\n", map, ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name)));
+    //fprintf (stderr, "%p: insert (%s)\n", map, ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name)));
     if (map->buckets == NULL) {
         map->nbuckets = primes[0];
         map->buckets = calloc (sizeof(_EJSPropertyMapEntry*), map->nbuckets);
@@ -525,26 +524,23 @@ _ejs_property_iterator_new (ejsval forVal)
         return OBJECT_TO_EJSVAL(iterator);
     }
 
-    if (EJSVAL_IS_ARRAY(forVal)) {
-        int num_keys = EJS_ARRAY_LEN(forVal);
-
-        // iterate over array keys first then additional properties
-        iterator->forObj = forVal;
-        iterator->num = 0;
-        iterator->keys = (ejsval*)malloc(sizeof(ejsval) * num_keys);
-        for (int i = 0; i < num_keys; i ++) {
-            iterator->keys[iterator->num++] = ToString(NUMBER_TO_EJSVAL(i));
-        }
-        return iter;
-    }
-    else if (EJSVAL_IS_OBJECT(forVal)) {
-
-        int num, alloc;
+    if (EJSVAL_IS_OBJECT(forVal)) {
+        int num = 0;
+        int alloc = 10;
         ejsval* keys;
 
-        num = 0;
-        alloc = 10;
+        if (EJSVAL_IS_ARRAY(forVal))
+            alloc += EJS_ARRAY_LEN(forVal);
+
         keys = (ejsval*)malloc (alloc * sizeof(ejsval));
+
+        if (EJSVAL_IS_ARRAY(forVal)) {
+            // iterate over array keys first then additional properties
+            for (int i = 0; i < EJS_ARRAY_LEN(forVal); i ++) {
+                // XXX skip holes
+                keys[num++] = ToString(NUMBER_TO_EJSVAL(i));
+            }
+        }
 
         collect_keys (forVal, &num, &alloc, &keys);
 
