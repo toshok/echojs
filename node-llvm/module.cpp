@@ -62,7 +62,7 @@ namespace jsllvm {
     HandleScope scope;
     if (args.Length()) {
       REQ_UTF8_ARG(0, name);
-      Module* module = new Module(new llvm::Module(std::string(*name), llvm::getGlobalContext()));
+      Module* module = new Module(new llvm::Module(*name, llvm::getGlobalContext()));
       module->Wrap(args.This());
     }
     return scope.Close(args.This());
