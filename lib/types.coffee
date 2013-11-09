@@ -30,8 +30,8 @@ exports.EjsPropertyMap  = EjsPropertyMapTy = llvm.StructType.create "struct.EJSP
 exports.EjsObject = EjsObjectTy = llvm.StructType.create "struct.EJSObject", [
         int32Ty,                  # GCObjectHeader gc_header;
         EjsSpecopsTy.pointerTo(), # EJSSpecOps*    ops;
-        EjsValueTy                # ejsval         proto; // the __proto__ property
-        EjsPropertyMapTy          # EJSPropertyMap map;
+        EjsValueTy,               # ejsval         proto; // the __proto__ property
+        EjsPropertyMapTy,         # EJSPropertyMap map;
 ]
 
 exports.EjsFunction = EjsFunctionTy = llvm.StructType.create "struct.EJSFunction", [
