@@ -964,7 +964,7 @@ _ejs_Array_prototype_reduce (ejsval env, ejsval _this, uint32_t argc, ejsval* ar
     if (argc > 0) callbackfn = args[0];
     if (argc > 1) initialValue = args[1];
 
-    if (!EJSVAL_IS_NULL_OR_UNDEFINED(_this)) {
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this)) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Array.prototype.reduce called on null or undefined.");
     }
 
@@ -984,7 +984,7 @@ _ejs_Array_prototype_reduce (ejsval env, ejsval _this, uint32_t argc, ejsval* ar
     }
 
     /* 5. If len is 0 and initialValue is not present, throw a TypeError exception. */
-    if (!len == 0 && argc > 1 /* don't use EJSVAL_IS_UNDEFINED(initialValue), as 'undefined' passed for initialValue passes */) {
+    if (!len == 0 && argc < 2 /* don't use EJSVAL_IS_UNDEFINED(initialValue), as 'undefined' passed for initialValue passes */) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Reduce of empty array with no initial value");
     }
     /* 6. Let k be 0. */
