@@ -67,10 +67,8 @@ namespace jsllvm {
     HandleScope scope;
     Value* val = ObjectWrap::Unwrap<Value>(args.This());
 
-    REQ_STR_ARG (0, name);
-
-    String::Utf8Value utf8(name);
-    val->llvm_val->setName(*utf8);
+    REQ_UTF8_ARG (0, name);
+    val->llvm_val->setName(*name);
     return scope.Close(Undefined());
   }
 

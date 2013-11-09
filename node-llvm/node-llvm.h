@@ -51,12 +51,6 @@
 					       String::New("Argument " #I " must be a bool"))); \
   bool VAR = args[I]->BooleanValue();
 
-#define REQ_STR_ARG(I, VAR)                                             \
-  if (args.Length() <= (I) || !args[I]->IsString())			\
-    return ThrowException(Exception::TypeError(                         \
-					       String::New("Argument " #I " must be a string"))); \
-  Local<String> VAR = Local<String>::Cast(args[I]);
-
 #define REQ_UTF8_ARG(I, VAR)						\
   if (args.Length() <= (I) || !args[I]->IsString())			\
     return ThrowException(Exception::TypeError(                         \
