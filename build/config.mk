@@ -25,7 +25,7 @@ MKDIR=mkdir -p
 INSTALL=install
 CP=cp
 
-CFLAGS=-g -O0 -Wall -I. -Wno-unused-function
+CFLAGS=-g -O3 -Wall -I. -Wno-unused-function
 
 MIN_IOS_VERSION=5.0
 
