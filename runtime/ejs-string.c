@@ -51,13 +51,14 @@ ucs2_strlen (const jschar *str)
 uint32_t
 ucs2_hash (const jschar* str, int32_t hash, int length)
 {
-    while (*str && length >= 0) {
-        hash = (hash << 5) - hash * (*str++);
-        if (!*str)
-            return hash;
-        hash = (hash << 5) - hash + (*str++);
+    const char* p = (const char*)str;
+
+    while (length >= 0) {
+        hash = (hash << 5) - hash * (*p++);
+        hash = (hash << 5) - hash + (*p++);
         length --;
     }
+
     return (uint32_t)hash;
 }
 
@@ -1415,11 +1416,11 @@ _ejs_primstring_hash_inner (EJSPrimString* primstr, int cur_hash)
 {
     switch (EJS_PRIMSTR_GET_TYPE(primstr)) {
     case EJS_STRING_FLAT:
-        return ucs2_hash (primstr->data.flat, 0, primstr->length);
+        return ucs2_hash (primstr->data.flat, cur_hash, primstr->length);
     case EJS_STRING_DEPENDENT: {
         int length = primstr->length;
         int off = 0;
-        return hash_dep (0, primstr, &off, &length);
+        return hash_dep (cur_hash, primstr, &off, &length);
     }
     case EJS_STRING_ROPE: {
         int hash = _ejs_primstring_hash_inner (primstr->data.rope.left, cur_hash);
@@ -1431,8 +1432,10 @@ _ejs_primstring_hash_inner (EJSPrimString* primstr, int cur_hash)
 uint32_t
 _ejs_primstring_hash (EJSPrimString* primstr)
 {
-    if (!EJS_PRIMSTR_HAS_HASH(primstr))
+    if (!EJS_PRIMSTR_HAS_HASH(primstr)) {
         primstr->hash = _ejs_primstring_hash_inner (primstr, 0);
+        EJS_PRIMSTR_SET_HAS_HASH(primstr);
+    }
     return primstr->hash;
 }
 
@@ -1443,7 +1446,6 @@ _ejs_string_hash (ejsval str)
 
     return _ejs_primstring_hash (EJSVAL_TO_STRING_IMPL(str));
 }
-
 
 jschar
 _ejs_string_char_code_at(EJSPrimString* primstr, int i)
@@ -1499,6 +1501,7 @@ void
 _ejs_string_init_literal (const char *name, ejsval *val, EJSPrimString* str, jschar* ucs2_data, int32_t length)
 {
     str->length = length;
+    str->hash = 0;
     str->gc_header = (EJS_STRING_FLAT<<EJS_GC_USER_FLAGS_SHIFT);
     str->data.flat = ucs2_data;
     *val = STRING_TO_EJSVAL(str);

@@ -59,6 +59,7 @@ typedef enum {
 #define EJS_PRIMSTR_HAS_HASH_MASK 0x08
 #define EJS_PRIMSTR_HAS_HASH_MASK_SHIFTED (EJS_PRIMSTR_HAS_HASH_MASK << EJS_GC_USER_FLAGS_SHIFT)
 #define EJS_PRIMSTR_HAS_HASH(s) ((((EJSPrimString*)(s))->gc_header & EJS_PRIMSTR_HAS_HASH_MASK_SHIFTED) >> EJS_GC_USER_FLAGS_SHIFT) != 0
+#define EJS_PRIMSTR_SET_HAS_HASH(s) ((((EJSPrimString*)(s))->gc_header |= EJS_PRIMSTR_HAS_HASH_MASK_SHIFTED))
 
 struct _EJSPrimString {
     GCObjectHeader gc_header;
