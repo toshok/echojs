@@ -1452,6 +1452,6 @@ exports.convert = (tree, filename) ->
                 tree = pass.visit tree
                 debug.log 2, "after: #{passType.name}"
                 debug.log 2, -> escodegen.generate tree
-                __ejs.GC.dumpAllocationStats "after #{passType.name}" if __ejs?
+                debug.log 3, -> __ejs.GC.dumpAllocationStats "after #{passType.name}" if __ejs?
 
         tree
