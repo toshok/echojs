@@ -224,6 +224,24 @@ namespace ejsllvm {
         return _ejs_undefined;
     }
 
+    ejsval
+    Module_prototype_writeBitcodeToFile(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        Module *module = ((Module*)EJSVAL_TO_OBJECT(_this));
+
+        REQ_UTF8_ARG(0, path);
+
+        std::string error;
+        llvm::raw_fd_ostream OS(path, error, llvm::raw_fd_ostream::F_Binary);
+        // check error
+
+        llvm::WriteBitcodeToFile (module->llvm_module, OS);
+
+        free (path);
+
+        return _ejs_undefined;
+    }
+
     llvm::Module*
     Module_GetLLVMObj(ejsval val)
     {
@@ -256,6 +274,7 @@ namespace ejsllvm {
         PROTO_METHOD(dump);
         PROTO_METHOD(toString);
         PROTO_METHOD(writeToFile);
+        PROTO_METHOD(writeBitcodeToFile);
 
 #undef PROTO_METHOD
     }

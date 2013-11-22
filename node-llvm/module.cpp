@@ -30,6 +30,7 @@ namespace jsllvm {
     NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", Module::Dump);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", Module::ToString);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "writeToFile", Module::WriteToFile);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "writeBitcodeToFile", Module::WriteBitcodeToFile);
 
     s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
     target->Set(String::NewSymbol("Module"),
@@ -217,6 +218,23 @@ namespace jsllvm {
     module->llvm_module->print(str_ostream, NULL);
 
     return scope.Close(String::New(trim(str_ostream.str()).c_str()));
+  }
+
+  Handle<v8::Value> Module::WriteBitcodeToFile (const Arguments& args)
+  {
+    HandleScope scope;
+    Module* module = ObjectWrap::Unwrap<Module>(args.This());
+
+    REQ_UTF8_ARG(0, path);
+
+    std::string error;
+    llvm::raw_fd_ostream OS(*path, error, llvm::raw_fd_ostream::F_Binary);
+    // check error
+
+
+    llvm::WriteBitcodeToFile (module->llvm_module, OS);
+
+    return scope.Close(Undefined());
   }
 
   Handle<v8::Value> Module::WriteToFile (const Arguments& args)

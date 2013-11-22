@@ -16,6 +16,7 @@
 #include "llvm/IRBuilder.h"
 #include "llvm/Support/raw_os_ostream.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Bitcode/ReaderWriter.h"
 
 #define ADD_STACK_ROOT(t,v,i) t v = i
 
