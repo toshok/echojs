@@ -60,15 +60,6 @@ runtime_interface =
         "null":                -> @module.getOrInsertGlobal           "_ejs_null",                      types.EjsValue
         "one":                 -> @module.getOrInsertGlobal           "_ejs_one",                       types.EjsValue
         "zero":                -> @module.getOrInsertGlobal           "_ejs_zero",                      types.EjsValue
-        "atom-null":           -> @module.getOrInsertGlobal           "_ejs_atom_null",                 types.EjsValue
-        "atom-undefined":      -> @module.getOrInsertGlobal           "_ejs_atom_undefined",            types.EjsValue
-        "atom-length":         -> @module.getOrInsertGlobal           "_ejs_atom_length",               types.EjsValue
-        "atom-__ejs":          -> @module.getOrInsertGlobal           "_ejs_atom___ejs",                types.EjsValue
-        "atom-object":         -> @module.getOrInsertGlobal           "_ejs_atom_object",               types.EjsValue
-        "atom-function":       -> @module.getOrInsertGlobal           "_ejs_atom_function",             types.EjsValue
-        "atom-prototype":      -> @module.getOrInsertGlobal           "_ejs_atom_prototype",            types.EjsValue
-        "atom-Object":         -> @module.getOrInsertGlobal           "_ejs_atom_Object",               types.EjsValue
-        "atom-Array":          -> @module.getOrInsertGlobal           "_ejs_atom_Array",                types.EjsValue
         global:                -> @module.getOrInsertGlobal           "_ejs_global",                    types.EjsValue
         exception_typeinfo:    -> @module.getOrInsertGlobal           "EJS_EHTYPE_ejsvalue",            types.EjsExceptionTypeInfo
         function_specops:      -> @module.getOrInsertGlobal           "_ejs_function_specops",          types.EjsSpecops
@@ -80,28 +71,6 @@ runtime_interface =
         "unoptypeof":      -> does_not_throw @module.getOrInsertExternalFunction "_ejs_op_typeof",      types.EjsValue, [types.EjsValue]
         "unopdelete":      -> @module.getOrInsertExternalFunction "_ejs_op_delete",      types.EjsValue, [types.EjsValue, types.EjsValue] # this is a unop, but ours only works for memberexpressions
         "unopvoid":        -> @module.getOrInsertExternalFunction "_ejs_op_void",        types.EjsValue, [types.EjsValue]
-        "binop^":          -> @module.getOrInsertExternalFunction "_ejs_op_bitwise_xor", types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop&":          -> @module.getOrInsertExternalFunction "_ejs_op_bitwise_and", types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop|":          -> @module.getOrInsertExternalFunction "_ejs_op_bitwise_or",  types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop>>":         -> @module.getOrInsertExternalFunction "_ejs_op_rsh",         types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop<<":         -> @module.getOrInsertExternalFunction "_ejs_op_lsh",         types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop>>>":        -> @module.getOrInsertExternalFunction "_ejs_op_ursh",        types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop<<<":        -> @module.getOrInsertExternalFunction "_ejs_op_ulsh",        types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop%":          -> @module.getOrInsertExternalFunction "_ejs_op_mod",         types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop+":          -> only_reads_memory @module.getOrInsertExternalFunction "_ejs_op_add",         types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop*":          -> @module.getOrInsertExternalFunction "_ejs_op_mult",        types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop/":          -> @module.getOrInsertExternalFunction "_ejs_op_div",         types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop<":          -> returns_ejsval_bool only_reads_memory @module.getOrInsertExternalFunction "_ejs_op_lt",          types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop<=":         -> returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_le",          types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop>":          -> returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_gt",          types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop>=":         -> returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_ge",          types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop-":          -> @module.getOrInsertExternalFunction "_ejs_op_sub",         types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop===":        -> returns_ejsval_bool does_not_throw does_not_access_memory @module.getOrInsertExternalFunction "_ejs_op_strict_eq",   types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop==":         -> returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_eq",          types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop!==":        -> returns_ejsval_bool does_not_throw does_not_access_memory @module.getOrInsertExternalFunction "_ejs_op_strict_neq",  types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binop!=":         -> returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_neq",         types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binopinstanceof": -> returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_instanceof",  types.EjsValue, [types.EjsValue, types.EjsValue]
-        "binopin":         -> returns_ejsval_bool @module.getOrInsertExternalFunction "_ejs_op_in",          types.EjsValue, [types.EjsValue, types.EjsValue]
 
         record_binop:      -> @module.getOrInsertExternalFunction "_ejs_record_binop",      types.void, [types.int32, types.string, types.EjsValue, types.EjsValue]
         record_assignment: -> @module.getOrInsertExternalFunction "_ejs_record_assignment", types.void, [types.int32, types.EjsValue]
@@ -111,4 +80,43 @@ exports.createInterface = (module) ->
                 module: module
         Object.defineProperty runtime, k, { get: runtime_interface[k] } for k of runtime_interface
         runtime
+
+exports.createBinopsInterface = (module) ->
+        return Object.create null, {
+                "^":          { get: -> module.getOrInsertExternalFunction "_ejs_op_bitwise_xor", types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "&":          { get: -> module.getOrInsertExternalFunction "_ejs_op_bitwise_and", types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "|":          { get: -> module.getOrInsertExternalFunction "_ejs_op_bitwise_or",  types.EjsValue, [types.EjsValue, types.EjsValue] }
+                ">>":         { get: -> module.getOrInsertExternalFunction "_ejs_op_rsh",         types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "<<":         { get: -> module.getOrInsertExternalFunction "_ejs_op_lsh",         types.EjsValue, [types.EjsValue, types.EjsValue] }
+                ">>>":        { get: -> module.getOrInsertExternalFunction "_ejs_op_ursh",        types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "<<<":        { get: -> module.getOrInsertExternalFunction "_ejs_op_ulsh",        types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "%":          { get: -> module.getOrInsertExternalFunction "_ejs_op_mod",         types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "+":          { get: -> only_reads_memory module.getOrInsertExternalFunction "_ejs_op_add",         types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "*":          { get: -> module.getOrInsertExternalFunction "_ejs_op_mult",        types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "/":          { get: -> module.getOrInsertExternalFunction "_ejs_op_div",         types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "<":          { get: -> returns_ejsval_bool only_reads_memory module.getOrInsertExternalFunction "_ejs_op_lt",          types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "<=":         { get: -> returns_ejsval_bool module.getOrInsertExternalFunction "_ejs_op_le",          types.EjsValue, [types.EjsValue, types.EjsValue] }
+                ">":          { get: -> returns_ejsval_bool module.getOrInsertExternalFunction "_ejs_op_gt",          types.EjsValue, [types.EjsValue, types.EjsValue] }
+                ">=":         { get: -> returns_ejsval_bool module.getOrInsertExternalFunction "_ejs_op_ge",          types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "-":          { get: -> module.getOrInsertExternalFunction "_ejs_op_sub",         types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "===":        { get: -> returns_ejsval_bool does_not_throw does_not_access_memory module.getOrInsertExternalFunction "_ejs_op_strict_eq",   types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "==":         { get: -> returns_ejsval_bool module.getOrInsertExternalFunction "_ejs_op_eq",          types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "!==":        { get: -> returns_ejsval_bool does_not_throw does_not_access_memory module.getOrInsertExternalFunction "_ejs_op_strict_neq",  types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "!=":         { get: -> returns_ejsval_bool module.getOrInsertExternalFunction "_ejs_op_neq",         types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "instanceof": { get: -> returns_ejsval_bool module.getOrInsertExternalFunction "_ejs_op_instanceof",  types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "in":         { get: -> returns_ejsval_bool module.getOrInsertExternalFunction "_ejs_op_in",          types.EjsValue, [types.EjsValue, types.EjsValue] }
+        }                
+        
+exports.createAtomsInterface = (module) ->
+        return Object.create null, {
+                "null":      { get: -> module.getOrInsertGlobal           "_ejs_atom_null",                 types.EjsValue }
+                "undefined": { get: -> module.getOrInsertGlobal           "_ejs_atom_undefined",            types.EjsValue }
+                "length":    { get: -> module.getOrInsertGlobal           "_ejs_atom_length",               types.EjsValue }
+                "__ejs":     { get: -> module.getOrInsertGlobal           "_ejs_atom___ejs",                types.EjsValue }
+                "object":    { get: -> module.getOrInsertGlobal           "_ejs_atom_object",               types.EjsValue }
+                "function":  { get: -> module.getOrInsertGlobal           "_ejs_atom_function",             types.EjsValue }
+                "prototype": { get: -> module.getOrInsertGlobal           "_ejs_atom_prototype",            types.EjsValue }
+                "Object":    { get: -> module.getOrInsertGlobal           "_ejs_atom_Object",               types.EjsValue }
+                "Array":     { get: -> module.getOrInsertGlobal           "_ejs_atom_Array",                types.EjsValue }
+        }
         

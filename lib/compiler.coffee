@@ -4,6 +4,69 @@ syntax = esprima.Syntax
 debug = require 'debug'
 path = require 'path'
 
+_ArrayExpression = syntax.ArrayExpression
+_ArrayPattern = syntax.ArrayPattern
+_ArrowFunctionExpression = syntax.ArrowFunctionExpression
+_AssignmentExpression = syntax.AssignmentExpression
+_BinaryExpression = syntax.BinaryExpression
+_BlockStatement = syntax.BlockStatement
+_BreakStatement = syntax.BreakStatement
+_CallExpression = syntax.CallExpression
+_CatchClause = syntax.CatchClause
+_ClassBody = syntax.ClassBody
+_ClassDeclaration = syntax.ClassDeclaration
+_ClassExpression = syntax.ClassExpression
+_ClassHeritage = syntax.ClassHeritage
+_ComprehensionBlock = syntax.ComprehensionBlock
+_ComprehensionExpression = syntax.ComprehensionExpression
+_ConditionalExpression = syntax.ConditionalExpression
+_ContinueStatement = syntax.ContinueStatement
+_DebuggerStatement = syntax.DebuggerStatement
+_DoWhileStatement = syntax.DoWhileStatement
+_EmptyStatement = syntax.EmptyStatement
+_ExportDeclaration = syntax.ExportDeclaration
+_ExportBatchSpecifier = syntax.ExportBatchSpecifier
+_ExportSpecifier = syntax.ExportSpecifier
+_ExpressionStatement = syntax.ExpressionStatement
+_ForInStatement = syntax.ForInStatement
+_ForOfStatement = syntax.ForOfStatement
+_ForStatement = syntax.ForStatement
+_FunctionDeclaration = syntax.FunctionDeclaration
+_FunctionExpression = syntax.FunctionExpression
+_Identifier = syntax.Identifier
+_IfStatement = syntax.IfStatement
+_ImportDeclaration = syntax.ImportDeclaration
+_ImportSpecifier = syntax.ImportSpecifier
+_LabeledStatement = syntax.LabeledStatement
+_Literal = syntax.Literal
+_LogicalExpression = syntax.LogicalExpression
+_MemberExpression = syntax.MemberExpression
+_MethodDefinition = syntax.MethodDefinition
+_ModuleDeclaration = syntax.ModuleDeclaration
+_NewExpression = syntax.NewExpression
+_ObjectExpression = syntax.ObjectExpression
+_ObjectPattern = syntax.ObjectPattern
+_Program = syntax.Program
+_Property = syntax.Property
+_ReturnStatement = syntax.ReturnStatement
+_SequenceExpression = syntax.SequenceExpression
+_SpreadElement = syntax.SpreadElement
+_SwitchCase = syntax.SwitchCase
+_SwitchStatement = syntax.SwitchStatement
+_TaggedTemplateExpression = syntax.TaggedTemplateExpression
+_TemplateElement = syntax.TemplateElement
+_TemplateLiteral = syntax.TemplateLiteral
+_ThisExpression = syntax.ThisExpression
+_ThrowStatement = syntax.ThrowStatement
+_TryStatement = syntax.TryStatement
+_UnaryExpression = syntax.UnaryExpression
+_UpdateExpression = syntax.UpdateExpression
+_VariableDeclaration = syntax.VariableDeclaration
+_VariableDeclarator = syntax.VariableDeclarator
+_WhileStatement = syntax.WhileStatement
+_WithStatement = syntax.WithStatement
+_YieldExpression = syntax.YieldExpression
+
 { Stack } = require 'stack'
 { Set } = require 'set'
 { TreeVisitor } = require 'nodevisitor'
@@ -21,9 +84,9 @@ llvm = require 'llvm'
 ir = llvm.IRBuilder
 
 BUILTIN_PARAMS = [
-  { type: syntax.Identifier, name: "%closure", llvm_type: types.EjsValue } # should be EjsClosureEnv
-  { type: syntax.Identifier, name: "%this",    llvm_type: types.EjsValue }
-  { type: syntax.Identifier, name: "%argc",    llvm_type: types.int32 }
+  { type: _Identifier, name: "%closure", llvm_type: types.EjsValue } # should be EjsClosureEnv
+  { type: _Identifier, name: "%this",    llvm_type: types.EjsValue }
+  { type: _Identifier, name: "%argc",    llvm_type: types.int32 }
 ]
 
 hasOwn = Object::hasOwnProperty
@@ -93,6 +156,8 @@ class LLVMIRVisitor extends TreeVisitor
                         gcroot: -> module.getOrInsert "@llvm.gcroot"
                 
                 @ejs_runtime = runtime.createInterface module
+                @ejs_binops = runtime.createBinopsInterface module
+                @ejs_atoms = runtime.createAtomsInterface module
 
                 @module_atoms = Object.create null
                 @literalInitializationFunction = @module.getOrInsertFunction "_ejs_module_init_string_literals_#{@filename}", types.void, []
@@ -158,9 +223,9 @@ class LLVMIRVisitor extends TreeVisitor
 
         storeGlobal: (prop, value) ->
                 # we store obj.prop, prop is an id
-                if prop.type is syntax.Identifier
+                if prop.type is _Identifier
                         pname = prop.name
-                else # prop.type is syntax.Literal
+                else # prop.type is _Literal
                         pname = prop.value
 
                 c = @getAtom pname
@@ -228,14 +293,12 @@ class LLVMIRVisitor extends TreeVisitor
         createPropertyStore: (obj,prop,rhs,computed) ->
                 if computed
                         # we store obj[prop], prop can be any value
-                        prop_alloca = @createAlloca @currentFunction, types.EjsValue, "prop_alloca"
-                        ir.createStore (@visit prop), prop_alloca
-                        @createCall @ejs_runtime.object_setprop, [obj, (@createLoad prop_alloca, "%prop_alloca"), rhs], "propstore_computed"
+                        @createCall @ejs_runtime.object_setprop, [obj, (@visit prop), rhs], "propstore_computed"
                 else
                         # we store obj.prop, prop is an id
-                        if prop.type is syntax.Identifier
+                        if prop.type is _Identifier
                                 pname = prop.name
-                        else # prop.type is syntax.Literal
+                        else # prop.type is _Literal
                                 pname = prop.value
 
                         c = @getAtom pname
@@ -330,7 +393,7 @@ class LLVMIRVisitor extends TreeVisitor
                         ir.setInsertPoint case_checks[0].dest_check
                         for casenum in [0...case_checks.length-1]
                                 test = @visit case_checks[casenum].test
-                                eqop = @ejs_runtime["binop==="]
+                                eqop = @ejs_binops["==="]
                                 discTest = @createCall eqop, [discr, test], "test", !eqop.doesNotThrow
                         
                                 if discTest._ejs_returns_ejsval_bool
@@ -521,7 +584,7 @@ class LLVMIRVisitor extends TreeVisitor
                         ir.createStore argument, result
 
                 # argument = argument $op 1
-                update_op = @ejs_runtime["binop#{if n.operator is '++' then '+' else '-'}"]
+                update_op = @ejs_binops[if n.operator is '++' then '+' else '-']
                 temp = @createCall update_op, [argument, one], "update_temp", !update_op.doesNotThrow
                 
                 @storeValueInDest temp, n.argument
@@ -618,28 +681,18 @@ class LLVMIRVisitor extends TreeVisitor
                                 ir.createStore initializer, allocas[i]
 
         visitMemberExpression: (n) ->
-                obj_result = @createAlloca @currentFunction, types.EjsValue, "result_obj"
-                obj_visit = @visit n.object
-                ir.createStore obj_visit, obj_result
-                obj_load = @createLoad obj_result, "obj_load"
-                rv = @createPropertyLoad obj_load, n.property, n.computed
-                load_result = @createAlloca @currentFunction, types.EjsValue, "load_result"
-                ir.createStore rv, load_result
-                if not n.result_not_used
-                        @createLoad load_result, "rv"
+                @createPropertyLoad (@visit n.object), n.property, n.computed
 
         storeValueInDest: (rhvalue, lhs) ->
-                if lhs.type is syntax.Identifier
+                if lhs.type is _Identifier
                         dest = @findIdentifierInScope lhs.name
                         if dest?
                                 result = ir.createStore rhvalue, dest
                         else
                                 result = @storeGlobal lhs, rhvalue
                         result
-                else if lhs.type is syntax.MemberExpression
-                        object_alloca = @createAlloca @currentFunction, types.EjsValue, "object_alloca"
-                        ir.createStore (@visit lhs.object), object_alloca
-                        result = @createPropertyStore (@createLoad object_alloca, "load_object"), lhs.property, rhvalue, lhs.computed
+                else if lhs.type is _MemberExpression
+                        result = @createPropertyStore (@visit lhs.object), lhs.property, rhvalue, lhs.computed
                 else if is_intrinsic "%slot", lhs
                         ir.createStore rhvalue, (@handleSlotRef lhs)
                 else if is_intrinsic "%getLocal", lhs
@@ -649,7 +702,7 @@ class LLVMIRVisitor extends TreeVisitor
 
                         @createCall @ejs_runtime.global_setprop, [pname, rhvalue], "globalpropstore_#{lhs.arguments[0].name}"
                 else
-                        throw "unhandled lhs #{escodegen.generate lhs}"
+                        throw new Error "unhandled lhs #{escodegen.generate lhs}"
 
         visitAssignmentExpression: (n) ->
                 lhs = n.left
@@ -658,16 +711,14 @@ class LLVMIRVisitor extends TreeVisitor
                 rhvalue = @visit rhs
                 if n.operator.length is 2
                         # cribbed from visitBinaryExpression
-                        builtin = "binop#{n.operator[0]}"
-                        callee = @ejs_runtime[builtin]
-                        if not callee
-                                throw "Internal error: unhandled binary operator '#{n.operator}'"
+                        callee = @ejs_binops[n.operator[0]]
+                        throw new Error "unhandled binary operator '#{n.operator}'" if not callee
 
                         lhvalue = @visit lhs
                         if @options.record_types
                                 @createCall @ejs_runtime.record_binop, [(consts.int32 @genRecordId()), (consts.string ir, n.operator[0]), lhvalue, rhvalue], ""
                                 
-                        rhvalue = @createCall callee, [lhvalue, rhvalue], "result_#{builtin}", !callee.doesNotThrow
+                        rhvalue = @createCall callee, [lhvalue, rhvalue], "result_#{n.operator[0]}", !callee.doesNotThrow
 
                 
                 if @options.record_types
@@ -676,7 +727,7 @@ class LLVMIRVisitor extends TreeVisitor
 
                 # we need to visit lhs after the store so that we load the value, but only if it's used
                 if not n.result_not_used
-                        rhvalue
+                        return rhvalue
 
         visitFunction: (n) ->
                 debug.log -> "        function #{n.ir_name} at #{@filename}:#{if n.loc? then n.loc.start.line else '<unknown>'}" if not n.toplevel?
@@ -686,10 +737,10 @@ class LLVMIRVisitor extends TreeVisitor
 
                 for param in n.params
                         debug.log param.type
-                        if param.type is syntax.MemberExpression
+                        if param.type is _MemberExpression
                                 debug.log param.object.type
                                 debug.log param.property.name
-                        if param.type isnt syntax.Identifier
+                        if param.type isnt _Identifier
                                 debug.log "we don't handle destructured/defaulted parameters yet"
                                 console.warn JSON.stringify param
                                 throw "we don't handle destructured/defaulted parameters yet"
@@ -735,7 +786,7 @@ class LLVMIRVisitor extends TreeVisitor
 
                 # now create allocas for the formal parameters
                 for param in n.params[BUILTIN_PARAMS.length..]
-                        if param.type is syntax.Identifier
+                        if param.type is _Identifier
                                 alloca = @createAlloca @currentFunction, types.EjsValue, "local_#{param.name}"
                                 new_scope[param.name] = alloca
                                 allocas.push alloca
@@ -861,10 +912,10 @@ class LLVMIRVisitor extends TreeVisitor
                 callee = @ejs_runtime[builtin]
         
                 if n.operator is "delete"
-                        throw "unhandled delete syntax" if n.argument.type isnt syntax.MemberExpression
+                        throw "unhandled delete syntax" if n.argument.type isnt _MemberExpression
                         
                         fake_literal =
-                                type: syntax.Literal
+                                type: _Literal
                                 value: n.argument.property.name
                                 raw: "'#{n.argument.property.name}'"
                         return @createCall callee, [(@visitOrNull n.argument.object), (@visit fake_literal)], "result"
@@ -879,7 +930,7 @@ class LLVMIRVisitor extends TreeVisitor
                         else
                                 @createCall callee, [arg_value], "result"
                 else
-                        throw "Internal error: unary operator '#{n.operator}' not implemented" if not callee
+                        throw new Error "Internal error: unary operator '#{n.operator}' not implemented" if not callee
                         @createCall callee, [@visitOrNull n.argument], "result"
                 
 
@@ -891,24 +942,19 @@ class LLVMIRVisitor extends TreeVisitor
                 
         visitBinaryExpression: (n) ->
                 debug.log -> "operator = '#{n.operator}'"
-                builtin = "binop#{n.operator}"
-                callee = @ejs_runtime[builtin]
+                callee = @ejs_binops[n.operator]
                 
-                throw "Internal error: unhandled binary operator '#{n.operator}'" if not callee
+                throw new Error "Internal error: unhandled binary operator '#{n.operator}'" if not callee
 
-                left_alloca = @createAlloca @currentFunction, types.EjsValue, "binop_left"
                 left_visited = @visit n.left
-                ir.createStore left_visited, left_alloca
-                
-                right_alloca = @createAlloca @currentFunction, types.EjsValue, "binop_right"
                 right_visited = @visit n.right
-                ir.createStore right_visited, right_alloca
 
                 if @options.record_types
-                        @createCall @ejs_runtime.record_binop, [(consts.int32 @genRecordId()), (consts.string ir, n.operator), (@createLoad left_alloca, "binop_left_load"), (@createLoad right_alloca, "binop_right_load")], ""
+                        @createCall @ejs_runtime.record_binop, [(consts.int32 @genRecordId()), (consts.string ir, n.operator), left_visited, right_visited], ""
 
                 # call the actual runtime binaryop method
-                @createCall callee, [(@createLoad left_alloca, "binop_left_load"), (@createLoad right_alloca, "binop_right_load")], "result_#{builtin}", !callee.doesNotThrow
+                rv = @createCall callee, [left_visited, right_visited], "result_#{n.operator}", !callee.doesNotThrow
+                rv
                 
         visitLogicalExpression: (n) ->
                 debug.log -> "operator = '#{n.operator}'"
@@ -957,7 +1003,7 @@ class LLVMIRVisitor extends TreeVisitor
                 args_offset = 0
                 if callee.takes_builtins
                         args_offset = 1
-                        if pullThisFromArg0 and args[0].type is syntax.MemberExpression
+                        if pullThisFromArg0 and args[0].type is _MemberExpression
                                 thisArg = @visit args[0].object
                                 closure = @createPropertyLoad thisArg, args[0].property, args[0].computed
                         else
@@ -1005,7 +1051,7 @@ class LLVMIRVisitor extends TreeVisitor
                 intrinsicHandler.call @, n, @opencode_intrinsics[unescapedName], false
                 
         visitNewExpression: (n) ->
-                if n.callee.type isnt syntax.Identifier or n.callee.name[0] isnt '%'
+                if n.callee.type isnt _Identifier or n.callee.name[0] isnt '%'
                         throw "invalid ctor #{JSON.stringify n.callee}"
 
                 if n.callee.name isnt "%invokeClosure"
@@ -1067,7 +1113,7 @@ class LLVMIRVisitor extends TreeVisitor
                 obj = @createCall object_create, [@loadNullEjsValue()], "objtmp", !object_create.doesNotThrow
                 for property in n.properties
                         val = @visit property.value
-                        key = if property.key.type is syntax.Identifier then @getAtom property.key.name else @visit property.key
+                        key = if property.key.type is _Identifier then @getAtom property.key.name else @visit property.key
 
                         @createCall @ejs_runtime.object_define_value_prop, [obj, key, val, consts.int32 0x77], "define_value_prop_#{property.key}"
                 obj
@@ -1077,7 +1123,7 @@ class LLVMIRVisitor extends TreeVisitor
                 i = 0;
                 for el in n.elements
                         val = @visit el
-                        index = type: syntax.Literal, value: i
+                        index = type: _Literal, value: i
                         @createPropertyStore obj, index, val, true
                         i = i + 1
                 obj
@@ -1121,21 +1167,19 @@ class LLVMIRVisitor extends TreeVisitor
 
         getAtom: (str) ->
                 # check if it's an atom (a runtime library constant) first of all
-                atom_name = "atom-#{str}"
-                if @ejs_runtime[atom_name]?
-                        return @createLoad @ejs_runtime[atom_name], "%str_atom_load"
+                if hasOwn.call @ejs_atoms, str
+                        return @createLoad @ejs_atoms[str], "%str_atom_load"
 
                 # if it's not, we create a constant and embed it in this module
         
-                literal_key = "string-" + str
-                if not @module_atoms[literal_key]?
+                if not hasOwn.call @module_atoms, str
                         literalId = @idgen()
                         ucs2_data = @generateUCS2 literalId, str
                         primstring = @generateEJSPrimString literalId, str.length
-                        @module_atoms[literal_key] = @generateEJSValueForString literal_key
-                        @addStringLiteralInitialization str, ucs2_data, primstring, @module_atoms[literal_key], str.length
+                        @module_atoms[str] = @generateEJSValueForString str
+                        @addStringLiteralInitialization str, ucs2_data, primstring, @module_atoms[str], str.length
 
-                strload = @createLoad @module_atoms[literal_key], "literal_load"
+                strload = @createLoad @module_atoms[str], "literal_load"
                         
         visitLiteral: (n) ->
                 # null literals, load _ejs_null
@@ -1751,7 +1795,7 @@ class LLVMIRVisitor extends TreeVisitor
                         cmp2 = ir.createICmpEq arg, consts.int64_lowhi(0xffb80000, 0x00000000), "cmpresult2"
                         @createEjsBoolSelect ir.createOr cmp1, cmp2, "or"
                 else
-                        @createCall @ejs_runtime["binop=="],   [arg, @loadNullEjsValue()], "is_null_or_undefined", false
+                        @createCall @ejs_binops["=="],   [arg, @loadNullEjsValue()], "is_null_or_undefined", false
                 
                 
         handleBuiltinUndefined:  (exp) -> @loadUndefinedEjsValue()
@@ -1795,15 +1839,15 @@ sanitize_with_regexp = (filename) ->
 
 insert_toplevel_func = (tree, filename) ->
         toplevel =
-                type: syntax.FunctionDeclaration,
+                type: _FunctionDeclaration,
                 id:
-                        type: syntax.Identifier
+                        type: _Identifier
                         name: "_ejs_toplevel_#{sanitize_with_regexp filename}"
                 params: [
-                        { type: syntax.Identifier, name: "%env_unused" }
+                        { type: _Identifier, name: "%env_unused" }
                 ]
                 body:
-                        type: syntax.BlockStatement
+                        type: _BlockStatement
                         body: tree.body
                 toplevel: true
         tree.body = [toplevel]

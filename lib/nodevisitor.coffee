@@ -1,6 +1,70 @@
 syntax = (require 'esprima').Syntax
 debug = require 'debug'
 
+_ArrayExpression = syntax.ArrayExpression
+_ArrayPattern = syntax.ArrayPattern
+_ArrowFunctionExpression = syntax.ArrowFunctionExpression
+_AssignmentExpression = syntax.AssignmentExpression
+_BinaryExpression = syntax.BinaryExpression
+_BlockStatement = syntax.BlockStatement
+_BreakStatement = syntax.BreakStatement
+_CallExpression = syntax.CallExpression
+_CatchClause = syntax.CatchClause
+_ClassBody = syntax.ClassBody
+_ClassDeclaration = syntax.ClassDeclaration
+_ClassExpression = syntax.ClassExpression
+_ClassHeritage = syntax.ClassHeritage
+_ComprehensionBlock = syntax.ComprehensionBlock
+_ComprehensionExpression = syntax.ComprehensionExpression
+_ConditionalExpression = syntax.ConditionalExpression
+_ContinueStatement = syntax.ContinueStatement
+_DebuggerStatement = syntax.DebuggerStatement
+_DoWhileStatement = syntax.DoWhileStatement
+_EmptyStatement = syntax.EmptyStatement
+_ExportDeclaration = syntax.ExportDeclaration
+_ExportBatchSpecifier = syntax.ExportBatchSpecifier
+_ExportSpecifier = syntax.ExportSpecifier
+_ExpressionStatement = syntax.ExpressionStatement
+_ForInStatement = syntax.ForInStatement
+_ForOfStatement = syntax.ForOfStatement
+_ForStatement = syntax.ForStatement
+_FunctionDeclaration = syntax.FunctionDeclaration
+_FunctionExpression = syntax.FunctionExpression
+_Identifier = syntax.Identifier
+_IfStatement = syntax.IfStatement
+_ImportDeclaration = syntax.ImportDeclaration
+_ImportSpecifier = syntax.ImportSpecifier
+_LabeledStatement = syntax.LabeledStatement
+_Literal = syntax.Literal
+_LogicalExpression = syntax.LogicalExpression
+_MemberExpression = syntax.MemberExpression
+_MethodDefinition = syntax.MethodDefinition
+_ModuleDeclaration = syntax.ModuleDeclaration
+_NewExpression = syntax.NewExpression
+_ObjectExpression = syntax.ObjectExpression
+_ObjectPattern = syntax.ObjectPattern
+_Program = syntax.Program
+_Property = syntax.Property
+_ReturnStatement = syntax.ReturnStatement
+_SequenceExpression = syntax.SequenceExpression
+_SpreadElement = syntax.SpreadElement
+_SwitchCase = syntax.SwitchCase
+_SwitchStatement = syntax.SwitchStatement
+_TaggedTemplateExpression = syntax.TaggedTemplateExpression
+_TemplateElement = syntax.TemplateElement
+_TemplateLiteral = syntax.TemplateLiteral
+_ThisExpression = syntax.ThisExpression
+_ThrowStatement = syntax.ThrowStatement
+_TryStatement = syntax.TryStatement
+_UnaryExpression = syntax.UnaryExpression
+_UpdateExpression = syntax.UpdateExpression
+_VariableDeclaration = syntax.VariableDeclaration
+_VariableDeclarator = syntax.VariableDeclarator
+_WhileStatement = syntax.WhileStatement
+_WithStatement = syntax.WithStatement
+_YieldExpression = syntax.YieldExpression
+
+
 exports.TreeVisitor = class TreeVisitor
         # for collections, returns all non-null.  for single item properties,
         # just always returns the item.
@@ -50,56 +114,55 @@ exports.TreeVisitor = class TreeVisitor
                 #debug.log -> "#{n.type}>"
 
                 switch n.type
-                        when syntax.Program                 then rv = @visitProgram n
-                        when syntax.FunctionDeclaration     then rv = @visitFunctionDeclaration n
-                        when syntax.FunctionExpression      then rv = @visitFunctionExpression n
-                        when syntax.ArrowFunctionExpression then rv = @visitArrowFunctionExpression n
-                        when syntax.LabeledStatement        then rv = @visitLabeledStatement n
-                        when syntax.BlockStatement          then rv = @visitBlock n
-                        when syntax.ExpressionStatement     then rv = @visitExpressionStatement n
-                        when syntax.SwitchStatement         then rv = @visitSwitch n
-                        when syntax.SwitchCase              then rv = @visitCase n
-                        when syntax.ForStatement            then rv = @visitFor n
-                        when syntax.WhileStatement          then rv = @visitWhile n
-                        when syntax.IfStatement             then rv = @visitIf n
-                        when syntax.ForInStatement          then rv = @visitForIn n
-                        when syntax.ForOfStatement          then rv = @visitForOf n
-                        when syntax.DoWhileStatement        then rv = @visitDo n
-                        when syntax.BreakStatement          then rv = @visitBreak n
-                        when syntax.ContinueStatement       then rv = @visitContinue n
-                        when syntax.TryStatement            then rv = @visitTry n
-                        when syntax.CatchClause             then rv = @visitCatchClause n
-                        when syntax.ThrowStatement          then rv = @visitThrow n
-                        when syntax.ReturnStatement         then rv = @visitReturn n
-                        when syntax.WithStatement           then rv = @visitWith n
-                        when syntax.VariableDeclaration     then rv = @visitVariableDeclaration n
-                        when syntax.VariableDeclarator      then rv = @visitVariableDeclarator n
-                        when syntax.LabeledStatement        then rv = @visitLabeledStatement n
-                        when syntax.AssignmentExpression    then rv = @visitAssignmentExpression n
-                        when syntax.ConditionalExpression   then rv = @visitConditionalExpression n
-                        when syntax.LogicalExpression       then rv = @visitLogicalExpression n
-                        when syntax.NewExpression           then rv = @visitNewExpression n
-                        when syntax.ThisExpression          then rv = @visitThisExpression n
-                        when syntax.BinaryExpression        then rv = @visitBinaryExpression n
-                        when syntax.UnaryExpression         then rv = @visitUnaryExpression n
-                        when syntax.UpdateExpression        then rv = @visitUpdateExpression n
-                        when syntax.MemberExpression        then rv = @visitMemberExpression n
-                        when syntax.RelationalExpression    then rv = @visitRelationalExpression n
-                        when syntax.SequenceExpression      then rv = @visitSequenceExpression n
-                        when syntax.ObjectExpression        then rv = @visitObjectExpression n
-                        when syntax.ArrayExpression         then rv = @visitArrayExpression n
-                        when syntax.Identifier              then rv = @visitIdentifier n
-                        when syntax.Literal                 then rv = @visitLiteral n
-                        when syntax.CallExpression          then rv = @visitCallExpression n
-                        when syntax.Property                then rv = @visitProperty n
-                        when syntax.EmptyStatement          then rv = @visitEmptyStatement n
-                        when syntax.ClassDeclaration        then rv = @visitClassDeclaration n
-                        when syntax.ClassBody               then rv = @visitClassBody n
-                        when syntax.MethodDefinition        then rv = @visitMethodDefinition n
-                        when syntax.ExportDeclaration       then rv = @visitExportDeclaration n
-                        when syntax.ModuleDeclaration       then rv = @visitModuleDeclaration n
-                        when syntax.ImportDeclaration       then rv = @visitImportDeclaration n
-                        when syntax.ImportSpecifier         then rv = @visitImportSpecifier n
+                        when _Program                 then rv = @visitProgram n
+                        when _FunctionDeclaration     then rv = @visitFunctionDeclaration n
+                        when _FunctionExpression      then rv = @visitFunctionExpression n
+                        when _ArrowFunctionExpression then rv = @visitArrowFunctionExpression n
+                        when _LabeledStatement        then rv = @visitLabeledStatement n
+                        when _BlockStatement          then rv = @visitBlock n
+                        when _ExpressionStatement     then rv = @visitExpressionStatement n
+                        when _SwitchStatement         then rv = @visitSwitch n
+                        when _SwitchCase              then rv = @visitCase n
+                        when _ForStatement            then rv = @visitFor n
+                        when _WhileStatement          then rv = @visitWhile n
+                        when _IfStatement             then rv = @visitIf n
+                        when _ForInStatement          then rv = @visitForIn n
+                        when _ForOfStatement          then rv = @visitForOf n
+                        when _DoWhileStatement        then rv = @visitDo n
+                        when _BreakStatement          then rv = @visitBreak n
+                        when _ContinueStatement       then rv = @visitContinue n
+                        when _TryStatement            then rv = @visitTry n
+                        when _CatchClause             then rv = @visitCatchClause n
+                        when _ThrowStatement          then rv = @visitThrow n
+                        when _ReturnStatement         then rv = @visitReturn n
+                        when _WithStatement           then rv = @visitWith n
+                        when _VariableDeclaration     then rv = @visitVariableDeclaration n
+                        when _VariableDeclarator      then rv = @visitVariableDeclarator n
+                        when _LabeledStatement        then rv = @visitLabeledStatement n
+                        when _AssignmentExpression    then rv = @visitAssignmentExpression n
+                        when _ConditionalExpression   then rv = @visitConditionalExpression n
+                        when _LogicalExpression       then rv = @visitLogicalExpression n
+                        when _NewExpression           then rv = @visitNewExpression n
+                        when _ThisExpression          then rv = @visitThisExpression n
+                        when _BinaryExpression        then rv = @visitBinaryExpression n
+                        when _UnaryExpression         then rv = @visitUnaryExpression n
+                        when _UpdateExpression        then rv = @visitUpdateExpression n
+                        when _MemberExpression        then rv = @visitMemberExpression n
+                        when _SequenceExpression      then rv = @visitSequenceExpression n
+                        when _ObjectExpression        then rv = @visitObjectExpression n
+                        when _ArrayExpression         then rv = @visitArrayExpression n
+                        when _Identifier              then rv = @visitIdentifier n
+                        when _Literal                 then rv = @visitLiteral n
+                        when _CallExpression          then rv = @visitCallExpression n
+                        when _Property                then rv = @visitProperty n
+                        when _EmptyStatement          then rv = @visitEmptyStatement n
+                        when _ClassDeclaration        then rv = @visitClassDeclaration n
+                        when _ClassBody               then rv = @visitClassBody n
+                        when _MethodDefinition        then rv = @visitMethodDefinition n
+                        when _ExportDeclaration       then rv = @visitExportDeclaration n
+                        when _ModuleDeclaration       then rv = @visitModuleDeclaration n
+                        when _ImportDeclaration       then rv = @visitImportDeclaration n
+                        when _ImportSpecifier         then rv = @visitImportSpecifier n
                         else
                             throw "PANIC: unknown parse node type #{n.type}"
                 
@@ -268,11 +331,6 @@ exports.TreeVisitor = class TreeVisitor
                 n.object = @visit n.object
                 if n.computed
                         n.property = @visit n.property
-                n
-                
-        visitRelationalExpression: (n) ->
-                n.left  = @visit n.left
-                n.right = @visit n.right
                 n
                 
         visitSequenceExpression: (n) ->
