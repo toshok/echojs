@@ -1339,36 +1339,35 @@ flatten_dep (jschar **p, EJSPrimString *n, int* off, int* len)
 EJSPrimString*
 _ejs_primstring_flatten (EJSPrimString* primstr)
 {
-    switch (EJS_PRIMSTR_GET_TYPE(primstr)) {
-    case EJS_STRING_FLAT:
+    if (EJS_PRIMSTR_GET_TYPE(primstr) == EJS_STRING_FLAT)
         return primstr;
+
+    jschar *buffer = (jschar*)calloc(sizeof(jschar), primstr->length + 1);
+    jschar *p = buffer;
+
+    switch (EJS_PRIMSTR_GET_TYPE(primstr)) {
     case EJS_STRING_DEPENDENT: {
         // modify the string in-place, switching from a dep to a flat string
-        jschar *buffer = (jschar*)calloc(sizeof(jschar), primstr->length + 1);
-        jschar *p = buffer;
         int off = 0;
         int length = primstr->length;
         flatten_dep (&p, primstr, &off, &length);
-        // assert (off == 0);
+        //assert (off == 0);
         //assert (length == 0);
-        EJS_PRIMSTR_CLEAR_TYPE(primstr);
-        EJS_PRIMSTR_SET_TYPE(primstr, EJS_STRING_FLAT);
-        primstr->data.flat = buffer;
-        return primstr;
+        break;
     }
     case EJS_STRING_ROPE: {
         // modify the string in-place, switching from a rope to a flat string
-        jschar *buffer = (jschar*)calloc(sizeof(jschar), primstr->length + 1);
-        jschar *p = buffer;
         flatten_rope (&p, primstr);
-        EJS_PRIMSTR_CLEAR_TYPE(primstr);
-        EJS_PRIMSTR_SET_TYPE(primstr, EJS_STRING_FLAT);
-        primstr->data.flat = buffer;
-        return primstr;
+        break;
     }
     default:
-        EJS_NOT_IMPLEMENTED();
+        EJS_NOT_REACHED();
     }
+
+    EJS_PRIMSTR_CLEAR_TYPE(primstr);
+    EJS_PRIMSTR_SET_TYPE(primstr, EJS_STRING_FLAT);
+    primstr->data.flat = buffer;
+    return primstr;
 }
 
 EJSPrimString*
