@@ -301,7 +301,7 @@ _ejs_propertymap_remove (EJSPropertyMap *map, ejsval name)
 {
     //fprintf (stderr, "%p: remove (%s)\n", map, ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name)));
     if (map->inuse == 0) {
-        fprintf (stderr, "  map empty, returning early\n");
+        //fprintf (stderr, "  map empty, returning early\n");
         return;
     }
 
@@ -312,7 +312,7 @@ _ejs_propertymap_remove (EJSPropertyMap *map, ejsval name)
     _EJSPropertyMapEntry* s = map->buckets[bucket];
     while (s) {
         if (EJSVAL_TO_BOOLEAN(_ejs_op_strict_eq(s->name, name))) {
-            fprintf (stderr, "  found entry in bucket (hashcode %d, bucket %d)\n", hashcode, bucket);
+            //fprintf (stderr, "  found entry in bucket (hashcode %d, bucket %d)\n", hashcode, bucket);
             if (prev)
                 prev->next_bucket = s->next_bucket;
             else
@@ -328,7 +328,7 @@ _ejs_propertymap_remove (EJSPropertyMap *map, ejsval name)
                 _EJSPropertyMapEntry *prev_insert;
                 for (prev_insert = map->head_insert; prev_insert; prev_insert = prev_insert->next_insert) {
                     if (prev_insert->next_insert == s) {
-                        fprintf (stderr, "  found entry in insert list\n");
+                        //fprintf (stderr, "  found entry in insert list\n");
                         prev_insert->next_insert = s->next_insert;
                         if (map->tail_insert == s)
                             map->tail_insert = prev_insert;
