@@ -1170,16 +1170,18 @@ class LLVMIRVisitor extends TreeVisitor
                 if hasOwn.call @ejs_atoms, str
                         return @createLoad @ejs_atoms[str], "%str_atom_load"
 
+                # XXX we need to prepend the 'atom-' here because str could be === '__proto__' which fouls up our lookup.
+                #     this can be fixed when we support ES6 Maps (@module_atoms would be a map).
+                key = "atom-#{str}"
                 # if it's not, we create a constant and embed it in this module
-        
-                if not hasOwn.call @module_atoms, str
+                if not hasOwn.call @module_atoms, key
                         literalId = @idgen()
                         ucs2_data = @generateUCS2 literalId, str
                         primstring = @generateEJSPrimString literalId, str.length
-                        @module_atoms[str] = @generateEJSValueForString str
-                        @addStringLiteralInitialization str, ucs2_data, primstring, @module_atoms[str], str.length
+                        @module_atoms[key] = @generateEJSValueForString str
+                        @addStringLiteralInitialization str, ucs2_data, primstring, @module_atoms[key], str.length
 
-                strload = @createLoad @module_atoms[str], "literal_load"
+                strload = @createLoad @module_atoms[key], "literal_load"
                         
         visitLiteral: (n) ->
                 # null literals, load _ejs_null
