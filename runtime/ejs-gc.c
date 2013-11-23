@@ -81,11 +81,12 @@ EJSBool gc_disabled;
 int collect_every_alloc = 0;
 
 typedef struct EJSFinalizerEntry {
-    EJS_LIST_HEADER(struct EJSFinalizerEntry);
+    EJS_SLIST_HEADER(struct EJSFinalizerEntry);
     GCObjectPtr gcobj;
 } EJSFinalizerEntry;
 
 static pthread_mutex_t big_gc_lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
+static pthread_mutex_t arena_lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
 
 #define LOCK_GC() do {                                                  \
         /*fprintf (stderr, "locking gc at %s:%d\n", __PRETTY_FUNCTION__, __LINE__); */ \
@@ -95,9 +96,15 @@ static pthread_mutex_t big_gc_lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
         /*fprintf (stderr, "unlocking gc at %s:%d\n", __PRETTY_FUNCTION__, __LINE__); */ \
         pthread_mutex_unlock(&big_gc_lock);     \
     } while (0)
-static pthread_cond_t finalizer_cond = PTHREAD_COND_INITIALIZER;
-static pthread_mutex_t finalizer_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
-static pthread_cond_t wait_for_finalizer_cond = PTHREAD_COND_INITIALIZER;
+
+#define LOCK_ARENAS() do {                                                  \
+        /*fprintf (stderr, "locking arenas at %s:%d\n", __PRETTY_FUNCTION__, __LINE__); */ \
+        pthread_mutex_lock(&arena_lock);                               \
+    } while (0)
+#define UNLOCK_ARENAS() do {                        \
+        /*fprintf (stderr, "unlocking arenas at %s:%d\n", __PRETTY_FUNCTION__, __LINE__); */ \
+        pthread_mutex_unlock(&arena_lock);     \
+    } while (0)
 static pthread_t finalizer_thread;
 static EJSFinalizerEntry* finalizer_list;
 
@@ -446,23 +453,24 @@ find_arena(GCObjectPtr ptr)
 static PageInfo*
 find_page_and_cell(GCObjectPtr ptr, int *cell_idx)
 {
-    LOCK_GC();
+    LOCK_ARENAS();
 
     Arena *arena = find_arena(ptr);
+
+    UNLOCK_ARENAS();
+
     if (EJS_LIKELY (arena != NULL)) {
         SANITY(verify_arena(arena));
 
         int page_index = PTR_TO_ARENA_PAGE_INDEX(ptr);
 
         if (page_index < 0 || page_index > arena->num_pages) {
-            UNLOCK_GC();
             return NULL;
         }
 
         PageInfo *page = arena->page_infos[page_index];
 
         if (!IS_ALIGNED_TO(ptr, page->cell_size)) {
-            UNLOCK_GC();
             return NULL; // can't possibly point to allocated cells.
         }
 
@@ -471,19 +479,18 @@ find_page_and_cell(GCObjectPtr ptr, int *cell_idx)
             assert(*cell_idx >= 0 && *cell_idx < CELLS_IN_PAGE(page));
         }
 
-        UNLOCK_GC();
         return page;
     }
-    else {
-        // check if it's in the LOS
-        for (LargeObjectInfo *lobj = los_list; lobj; lobj = lobj->next) {
-            if (lobj->page_info.page_start == ptr) {
-                if (cell_idx) {
-                    *cell_idx = 0;
-                }
-                UNLOCK_GC();
-                return &lobj->page_info;
+
+    // check if it's in the LOS
+    LOCK_GC();
+    for (LargeObjectInfo *lobj = los_list; lobj; lobj = lobj->next) {
+        if (lobj->page_info.page_start == ptr) {
+            if (cell_idx) {
+                *cell_idx = 0;
             }
+            UNLOCK_GC();
+            return &lobj->page_info;
         }
     }
     UNLOCK_GC();
@@ -535,7 +542,9 @@ alloc_new_page(size_t cell_size)
     }
 
     // need a new arena
+    LOCK_ARENAS();
     Arena* arena = arena_new();
+    UNLOCK_ARENAS();
     return alloc_page_from_arena(arena, cell_size);
 }
 
@@ -569,23 +578,21 @@ static void*
 _ejs_finalizer_thread ()
 {
     while (EJS_TRUE) {
-        pthread_mutex_lock (&finalizer_mutex);
-        pthread_cond_wait (&finalizer_cond, &finalizer_mutex);
-        if (!finalizer_list) {
-            pthread_mutex_unlock (&finalizer_mutex);
-            return NULL;
-        }
+        usleep (200);
 
-        EJSFinalizerEntry *this_run;
-        this_run = finalizer_list;
-        finalizer_list = NULL;
+        EJSFinalizerEntry* this_run;
 
-        pthread_mutex_unlock (&finalizer_mutex);
+        do {
+            this_run = finalizer_list;
+        } while (!__sync_bool_compare_and_swap (&finalizer_list, this_run, NULL));
+
+        if (!this_run)
+            continue;
 
         SPEW(1, fprintf (stderr, "starting finalizer run\n"));
         while (this_run) {
             EJSFinalizerEntry *fin = this_run;
-            EJS_LIST_DETACH(fin, this_run);
+            this_run = fin->next;
 
             Arena *arena = PTR_TO_ARENA(fin->gcobj);
             PageInfo* info;
@@ -645,9 +652,6 @@ _ejs_finalizer_thread ()
             free (fin);
         }
         SPEW(1, fprintf (stderr, "finished finalizer run\n"));
-        pthread_mutex_lock (&finalizer_mutex);
-        pthread_cond_signal (&wait_for_finalizer_cond);
-        pthread_mutex_unlock (&finalizer_mutex);
     }
     return NULL;
 }
@@ -808,19 +812,6 @@ sweep_heap()
     int pages_visited = 0;
     int pages_skipped = 0;
 
-#if 0
-    // if we're getting too far ahead of the finalizer, wait
-    if (finalizer_list) {
-        pthread_mutex_lock (&finalizer_mutex);
-        if (finalizer_list) {
-            SPEW (2, fprintf (stderr, "finalizer list is %d entries long, waiting...\n", finalizer_length(finalizer_list)));
-            pthread_cond_wait (&wait_for_finalizer_cond, &finalizer_mutex);
-            SPEW (2, fprintf (stderr, "finalizer thread signaled us, waking up.\n"));
-        }
-        pthread_mutex_unlock (&finalizer_mutex);
-    }
-#endif
-
     // sweep the entire heap, freeing white nodes
     for (int a = 0, e = num_arenas; a < e; a ++) {
         Arena* arena = heap_arenas[a];
@@ -846,12 +837,11 @@ sweep_heap()
                         white_objs++;
                         EJSFinalizerEntry *fin = (EJSFinalizerEntry*)calloc(1, sizeof(EJSFinalizerEntry));
                         fin->gcobj = info->page_start + c * info->cell_size;
-                        // this should likely be an append, and an EJSList* type so we have constant time appends
-                        pthread_mutex_lock (&finalizer_mutex);
 
-                        EJS_LIST_PREPEND(fin, finalizer_list); 
-
-                        pthread_mutex_unlock (&finalizer_mutex);
+                        // use a cmpswap instruction to atomically prepend to the start of the list
+                        do {
+                            fin->next = finalizer_list;
+                        } while (!__sync_bool_compare_and_swap (&finalizer_list, fin->next, fin));
 
                         SET_FINALIZABLE(info->page_bitmap[c]);
                     }
@@ -875,12 +865,10 @@ sweep_heap()
             fin->gcobj = info->page_start;
             EJS_LIST_DETACH(lobj, los_list);
 
-            // this should likely be an append, and an EJSList* type so we have constant time appends
-            pthread_mutex_lock (&finalizer_mutex);
-
-            EJS_LIST_PREPEND(fin, finalizer_list);
-
-            pthread_mutex_unlock (&finalizer_mutex);
+            // use a cmpswap instruction to atomically prepend to the start of the list
+            do {
+                fin->next = finalizer_list;
+            } while (!__sync_bool_compare_and_swap (&finalizer_list, fin->next, fin));
 
             SET_FINALIZABLE(info->page_bitmap[0]);
         }
@@ -890,12 +878,6 @@ sweep_heap()
         lobj = next;
     }
     SPEW(2, { fprintf (stderr, "\n"); });
-
-    if (white_objs) {
-        pthread_mutex_lock (&finalizer_mutex);
-        pthread_cond_signal (&finalizer_cond);
-        pthread_mutex_unlock (&finalizer_mutex);
-    }
 }
 
 static void
