@@ -4,7 +4,7 @@ LLVM_CXXFLAGS="`$LLVM_CONFIG --cxxflags` -fno-rtti"
 LLVM_LDFLAGS=`$LLVM_CONFIG --ldflags`
 LLVM_LIBS=`$LLVM_CONFIG --libs core bitwriter jit x86codegen`
 LLVM_LIBS:="$LLVM_LDFLAGS $LLVM_LIBS -lstdc++"
-LLVM_CONFIGURE_ARGS=--disable-jit --enable-static
+LLVM_CONFIGURE_ARGS=--disable-jit --enable-static --enable-optimized --disable-assertions
 
 PCRE_CONFIGURE_ARGS=--enable-pcre16 --enable-utf
 
