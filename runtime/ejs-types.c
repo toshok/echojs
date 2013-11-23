@@ -35,27 +35,18 @@ _ejs_list_prepend_node (EJSList *list, EJSListNode* node)
 }
 
 void
-_ejs_list_detach_node (EJSList *list, EJSListNode* node)
+_ejs_list_detach_node (EJSList *list, EJSListNode* n)
 {
-  for (EJSListNode* n = list->head; n; n = n->next) {
-    if (n == node) {
+  if (list->head == n)
+    list->head = n->next;
+  if (list->tail == n)
+    list->tail = n->prev;
 
-      if (n == list->head)
-	list->head = list->head->next;
-      if (n == list->tail)
-	list->tail = list->tail->prev;
-
-      if (n->next)
-	n->next->prev = n->prev;
-      if (n->prev)
-	n->prev->next = n->next;
-      n->next = n->prev = NULL;
-
-      return;
-    }
-  }
-  printf ("_ejs_list_detach_node couldn't find node\n");
-  abort();
+  if (n->next)
+    n->next->prev = n->prev;
+  if (n->prev)
+    n->prev->next = n->next;
+  n->next = n->prev = NULL;
 }
 
 void
