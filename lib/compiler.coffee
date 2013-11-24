@@ -72,7 +72,7 @@ _YieldExpression = syntax.YieldExpression
 { TreeVisitor } = require 'nodevisitor'
 closure_conversion = require 'closure-conversion'
 optimizations = require 'optimizations'
-{ startGenerator, bold, reset, is_intrinsic } = require 'echo-util'
+{ startGenerator, is_intrinsic } = require 'echo-util'
 
 { ExitableScope, TryExitableScope, SwitchExitableScope, LoopExitableScope } = require 'exitable-scope'
 
@@ -1856,8 +1856,6 @@ insert_toplevel_func = (tree, filename) ->
         tree
 
 exports.compile = (tree, base_output_filename, source_filename, options) ->
-        console.warn "#{bold()}COMPILE#{reset()} #{source_filename} -> #{base_output_filename}"
-        
         tree = insert_toplevel_func tree, source_filename
 
         debug.log -> escodegen.generate tree

@@ -196,13 +196,16 @@ target_path_prepend =
         dev: "#{dev_bin}"
 
 compileFile = (filename, content, compileCallback) ->
+        base_filename = util.genFreshFileName path.basename filename
+
+        console.warn "#{util.bold()}COMPILE#{util.reset()} #{filename} -> #{base_filename}"
+        
         try
                 parse_tree = esprima.parse content, loc: (if __ejs? then false else true), raw: true
         catch e
                 console.warn "parse error at #{e}:"
                 process.exit -1
 
-        base_filename = util.genFreshFileName path.basename filename
         compiled_module = compiler.compile parse_tree, base_filename, filename, options
 
         ll_filename = "/tmp/#{base_filename}.ll"
