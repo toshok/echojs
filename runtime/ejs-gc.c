@@ -360,6 +360,7 @@ arena_new()
     new_arena->end = arena_start + ARENA_SIZE;
     new_arena->pos = (void*)ALIGN(arena_start + sizeof(Arena), PAGE_SIZE);
 
+    LOCK_ARENAS();
     int insert_point = -1;
     for (int i = 0; i < num_arenas; i ++) {
         if (new_arena < heap_arenas[i]) {
@@ -372,6 +373,7 @@ arena_new()
         memmove (&heap_arenas[insert_point + 1], &heap_arenas[insert_point], (num_arenas-insert_point-1)*sizeof(Arena*));
     heap_arenas[insert_point] = new_arena;
     num_arenas++;
+    UNLOCK_ARENAS();
 
     return new_arena;
 }
@@ -445,7 +447,15 @@ static Arena*
 find_arena(GCObjectPtr ptr)
 {
     void* arena_ptr = PTR_TO_ARENA(ptr);
-    void* rv = bsearch (&arena_ptr, heap_arenas, num_arenas, sizeof(Arena*), compare_ptrs);
+    Arena* local_arenas[MAX_ARENAS];
+    int local_num_arenas;
+
+    LOCK_ARENAS();
+    local_num_arenas = num_arenas;
+    memmove (local_arenas, heap_arenas, local_num_arenas*sizeof(Arena*));
+    UNLOCK_ARENAS();
+
+    void* rv = bsearch (&arena_ptr, local_arenas, local_num_arenas, sizeof(Arena*), compare_ptrs);
     if (!rv) return NULL;
     return *(Arena**)rv;
 }
@@ -453,11 +463,7 @@ find_arena(GCObjectPtr ptr)
 static PageInfo*
 find_page_and_cell(GCObjectPtr ptr, int *cell_idx)
 {
-    LOCK_ARENAS();
-
     Arena *arena = find_arena(ptr);
-
-    UNLOCK_ARENAS();
 
     if (EJS_LIKELY (arena != NULL)) {
         SANITY(verify_arena(arena));
@@ -578,7 +584,7 @@ static void*
 _ejs_finalizer_thread ()
 {
     while (EJS_TRUE) {
-        usleep (200);
+        usleep (500);
 
         EJSFinalizerEntry* this_run;
 
