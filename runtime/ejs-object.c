@@ -264,9 +264,6 @@ void
 _ejs_propertymap_free (EJSPropertyMap *map)
 {
     //fprintf (stderr, "%p: free\n", map);
-    map->nbuckets = 0;
-    map->inuse = 0;
-    
     _EJSPropertyMapEntry* s = map->head_insert;
     while (s) {
         _EJSPropertyMapEntry* next = s->next_insert;
@@ -275,8 +272,6 @@ _ejs_propertymap_free (EJSPropertyMap *map)
         s = next;
     }
     free (map->buckets);
-    map->buckets = NULL;
-    map->head_insert = map->tail_insert = NULL;
 }
 
 void
@@ -1863,8 +1858,6 @@ void
 _ejs_object_specop_finalize(EJSObject* obj)
 {
     _ejs_propertymap_free (&obj->map);
-    obj->proto = _ejs_null;
-    obj->ops = NULL;
 }
 
 static void
