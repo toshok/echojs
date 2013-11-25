@@ -133,7 +133,7 @@ class LLVMIRVisitor extends TreeVisitor
                         getGlobal         : true # unused
                         setGlobal         : true # unused
                         slot              : true
-                        setSlot           : false # causes a crash when self-hosting
+                        setSlot           : true
                 
                         invokeClosure     : false
                         makeClosure       : true
@@ -1797,7 +1797,7 @@ class LLVMIRVisitor extends TreeVisitor
                         cmp2 = ir.createICmpEq arg, consts.int64_lowhi(0xffb80000, 0x00000000), "cmpresult2"
                         @createEjsBoolSelect ir.createOr cmp1, cmp2, "or"
                 else
-                        @createCall @ejs_binops["=="],   [arg, @loadNullEjsValue()], "is_null_or_undefined", false
+                        @createCall @ejs_binops["=="],   [@loadNullEjsValue(), arg], "is_null_or_undefined", false
                 
                 
         handleBuiltinUndefined:  (exp) -> @loadUndefinedEjsValue()
