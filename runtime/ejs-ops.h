@@ -19,6 +19,9 @@ ejsval ToObject(ejsval exp);
 ejsval ToBoolean(ejsval exp);
 EJSBool ToEJSBool(ejsval exp);
 
+EJSBool SameValue(ejsval x, ejsval y);
+EJSBool SameValueZero(ejsval x, ejsval y);
+
 ejsval _ejs_op_typeof_is_object(ejsval exp);
 ejsval _ejs_op_typeof_is_function(ejsval exp);
 ejsval _ejs_op_typeof_is_string(ejsval exp);

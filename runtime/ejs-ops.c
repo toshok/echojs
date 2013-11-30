@@ -272,22 +272,6 @@ ejsval ToObject(ejsval exp)
         EJS_NOT_IMPLEMENTED();
 }
 
-ejsval ToBoolean(ejsval exp)
-{
-    if (EJSVAL_IS_NULL(exp) || EJSVAL_IS_UNDEFINED(exp))
-        return _ejs_false;
-    else if (EJSVAL_IS_BOOLEAN(exp))
-        return exp;
-    else if (EJSVAL_IS_NUMBER(exp))
-        return EJSVAL_TO_NUMBER(exp) == 0 ? _ejs_false : _ejs_true;
-    else if (EJSVAL_IS_STRING(exp))
-        return EJSVAL_TO_STRLEN(exp) == 0 ? _ejs_false : _ejs_true;
-    else if (EJSVAL_IS_OBJECT(exp))
-        return _ejs_true;
-    else
-        EJS_NOT_IMPLEMENTED();
-}
-
 EJSBool ToEJSBool(ejsval exp)
 {
     if (EJSVAL_IS_NULL(exp) || EJSVAL_IS_UNDEFINED(exp))
@@ -304,6 +288,11 @@ EJSBool ToEJSBool(ejsval exp)
         EJS_NOT_IMPLEMENTED();
 }
 
+ejsval ToBoolean(ejsval exp)
+{
+    return BOOLEAN_TO_EJSVAL(ToEJSBool(exp));
+}
+
 ejsval ToPrimitive(ejsval exp)
 {
     if (EJSVAL_IS_OBJECT(exp)) {
@@ -311,6 +300,109 @@ ejsval ToPrimitive(ejsval exp)
     }
     else
         return exp;
+}
+
+EJSBool
+SameValue(ejsval x, ejsval y)
+{
+    // 1. ReturnIfAbrupt(x).
+    // 2. ReturnIfAbrupt(y).
+
+    // 3. If Type(x) is different from Type(y), return false.
+    if (EJSVAL_TO_TAG(x) != EJSVAL_TO_TAG(y)) return EJS_FALSE;
+
+    // 4. If Type(x) is Undefined, return true.
+    if (EJSVAL_IS_UNDEFINED(x)) return EJS_TRUE;
+
+    // 5. If Type(x) is Null, return true.
+    if (EJSVAL_IS_NULL(x)) return EJS_TRUE;
+
+    // 6. If Type(x) is Number, then
+    if (EJSVAL_IS_NUMBER(x)) {
+        //    a. If x is NaN and y is NaN, return true.
+        if (isnan(EJSVAL_TO_NUMBER(x)) && isnan(EJSVAL_TO_NUMBER(y))) return EJS_TRUE;
+        //    b. If x is +0 and y is -0, return false.
+        if (EJSVAL_TO_NUMBER(x) == 0.0 && EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(y))) return EJS_FALSE;
+        //    c. If x is -0 and y is +0, return false.
+        if (EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(x)) == 0.0 && EJSVAL_TO_NUMBER(y) == 0) return EJS_FALSE;
+        //    d. If x is the same Number value as y, return true.
+        if (EJSVAL_TO_NUMBER(x) == EJSVAL_TO_NUMBER(y)) return EJS_TRUE;
+        //    e. Return false.
+        return EJS_FALSE;
+    }
+    // 7. If Type(x) is String, then
+    if (EJSVAL_IS_STRING(x)) {
+        //    a. If x and y are exactly the same sequence of code units (same length and same code units in corresponding positions) return true;
+        //       otherwise, return false.
+        if (EJSVAL_TO_STRLEN(x) != EJSVAL_TO_STRLEN(y)) return EJS_FALSE;
+
+        // XXX there is doubtless a more efficient way to compare two ropes, but we convert but to flat strings for now.
+        return ucs2_strcmp (EJSVAL_TO_FLAT_STRING(x), EJSVAL_TO_FLAT_STRING(y)) ? EJS_FALSE : EJS_TRUE;
+    }
+    // 8. If Type(x) is Boolean, then
+    if (EJSVAL_IS_BOOLEAN(x)) {
+        //    a. If x and y are both true or both false, then return true; otherwise, return false.
+        return EJSVAL_TO_BOOLEAN(x) == EJSVAL_TO_BOOLEAN(y) ? EJS_TRUE : EJS_FALSE;
+    }
+    // 9. If Type(x) is Symbol, then
+    if (EJSVAL_IS_SYMBOL(x)) {
+        //    a. If x and y are both the same Symbol value, then return true; otherwise, return false.
+        EJS_NOT_IMPLEMENTED();
+    }
+    // 10. Return true if x and y are the same Object value. Otherwise, return false.
+    return EJSVAL_EQ(x, y);
+}
+
+// same as SameValue, except in its treatment of +/- 0
+EJSBool
+SameValueZero(ejsval x, ejsval y)
+{
+    // 1. ReturnIfAbrupt(x).
+    // 2. ReturnIfAbrupt(y).
+
+    // 3. If Type(x) is different from Type(y), return false.
+    if (EJSVAL_TO_TAG(x) != EJSVAL_TO_TAG(y)) return EJS_FALSE;
+
+    // 4. If Type(x) is Undefined, return true.
+    if (EJSVAL_IS_UNDEFINED(x)) return EJS_TRUE;
+
+    // 5. If Type(x) is Null, return true.
+    if (EJSVAL_IS_NULL(x)) return EJS_TRUE;
+
+    // 6. If Type(x) is Number, then
+    if (EJSVAL_IS_NUMBER(x)) {
+        //    a. If x is NaN and y is NaN, return true.
+        if (isnan(EJSVAL_TO_NUMBER(x)) && isnan(EJSVAL_TO_NUMBER(y))) return EJS_TRUE;
+        //    b. If x is +0 and y is -0, return true.
+        if (EJSVAL_TO_NUMBER(x) == 0.0 && EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(y))) return EJS_TRUE;
+        //    c. If x is -0 and y is +0, return tryue.
+        if (EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(x)) == 0.0 && EJSVAL_TO_NUMBER(y) == 0) return EJS_TRUE;
+        //    d. If x is the same Number value as y, return true.
+        if (EJSVAL_TO_NUMBER(x) == EJSVAL_TO_NUMBER(y)) return EJS_TRUE;
+        //    e. Return false.
+        return EJS_FALSE;
+    }
+    // 7. If Type(x) is String, then
+    if (EJSVAL_IS_STRING(x)) {
+        //    a. If x and y are exactly the same sequence of code units (same length and same code units in corresponding positions) return true;
+        //       otherwise, return false.
+        if (EJSVAL_TO_STRLEN(x) != EJSVAL_TO_STRLEN(y)) return EJS_FALSE;
+
+        // XXX there is doubtless a more efficient way to compare two ropes, but we convert but to flat strings for now.
+        return ucs2_strcmp (EJSVAL_TO_FLAT_STRING(x), EJSVAL_TO_FLAT_STRING(y)) ? EJS_FALSE : EJS_TRUE;
+    }
+    // 8. If Type(x) is Boolean, then
+    if (EJSVAL_IS_BOOLEAN(x)) {
+        //    a. If x and y are both true or both false, then return true; otherwise, return false.
+        return EJSVAL_TO_BOOLEAN(x) == EJSVAL_TO_BOOLEAN(y) ? EJS_TRUE : EJS_FALSE;
+    }
+    // 9. If Type(x) is Symbol, then
+    if (EJSVAL_IS_SYMBOL(x)) {
+        //    a. If x and y are both the same Symbol value, then return true; otherwise, return false.
+        EJS_NOT_IMPLEMENTED();
+    }
+    // 10. Return true if x and y are the same Object value. Otherwise, return false.
+    return EJSVAL_EQ(x, y);
 }
 
 ejsval
@@ -807,14 +899,14 @@ _ejs_op_eq (ejsval x, ejsval y)
         if (EJSVAL_IS_NULL(x)) return _ejs_true;
         /*    c. If Type(x) is Number, then */
         if (EJSVAL_IS_NUMBER(x)) {
-            /*       i. If x is NaN, return false.© Ecma International 2011 81 */
+            /*       i. If x is NaN, return false. */
             if (isnan(EJSVAL_TO_NUMBER(x))) return _ejs_false;
             /*       ii. If y is NaN, return false. */
             if (isnan(EJSVAL_TO_NUMBER(y))) return _ejs_false;
             /*       iii. If x is the same Number value as y, return true. */
             if (EJSVAL_TO_NUMBER(x) == EJSVAL_TO_NUMBER(y)) return _ejs_true;
-            /*       iv. If x is +0 and y is 0, return true.*/
-            /*       v. If x is 0 and y is +0, return true. */
+            /*       iv. If x is +0 and y is -0, return true.*/
+            /*       v. If x is -0 and y is +0, return true. */
             /*       vi. Return false. */
             return _ejs_false;
         }

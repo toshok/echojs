@@ -9,18 +9,28 @@
 #include "ejs-value.h"
 #include "ejs-object.h"
 
+typedef struct _EJSKeyValueEntry {
+    // the next entry in insertion order
+    struct _EJSKeyValueEntry *next_insert;
+    ejsval key;
+    ejsval value;
+} EJSKeyValueEntry;
+
 typedef struct {
     /* object header */
     EJSObject obj;
 
-    // XXX more stuff here
+    ejsval comparator;
+
+    EJSKeyValueEntry* head_insert;
+    EJSKeyValueEntry* tail_insert;
 } EJSMap;
 
 EJS_BEGIN_DECLS
 
 extern ejsval _ejs_Map;
 extern ejsval _ejs_Map_prototype;
-extern EJSSpecOps _ejs_Map_specops;
+extern EJSSpecOps _ejs_map_specops;
 
 void _ejs_map_init(ejsval global);
 

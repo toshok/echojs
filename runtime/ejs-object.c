@@ -18,6 +18,7 @@
 #include "ejs-regexp.h"
 #include "ejs-date.h"
 #include "ejs-array.h"
+#include "ejs-map.h"
 #include "ejs-typedarrays.h"
 #include "ejs-function.h"
 #include "ejs-error.h"
@@ -625,6 +626,7 @@ _ejs_object_create (ejsval proto)
     if      (EJSVAL_EQ(proto, _ejs_Object_prototype)) ops = &_ejs_object_specops;
     else if (EJSVAL_EQ(proto, _ejs_Array_proto))      ops = &_ejs_array_specops;
     else if (EJSVAL_EQ(proto, _ejs_String_prototype)) ops = &_ejs_string_specops;
+    else if (EJSVAL_EQ(proto, _ejs_Map_prototype))    ops = &_ejs_map_specops;
     else if (EJSVAL_EQ(proto, _ejs_Number_proto))     ops = &_ejs_number_specops;
     else if (EJSVAL_EQ(proto, _ejs_RegExp_proto))     ops = &_ejs_regexp_specops;
     else if (EJSVAL_EQ(proto, _ejs_Date_proto))       ops = &_ejs_date_specops;

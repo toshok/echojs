@@ -28,6 +28,7 @@
 #include "ejs-uri.h"
 #include "ejs-value.h"
 #include "ejs-xhr.h"
+#include "ejs-map.h"
 #if IOS
 #include "ejs-webgl.h"
 #endif
@@ -94,6 +95,7 @@ _ejs_init(int argc, char** argv)
     // ES6 bits
     _ejs_proxy_init(_ejs_global);
     _ejs_symbol_init(_ejs_global);
+    _ejs_map_init(_ejs_global);
 
     _ejs_typedarrays_init(_ejs_global);
 #if IOS

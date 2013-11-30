@@ -38,6 +38,7 @@ $(call addExpectedFailure, sparsearray1.js,         "sparse array support is ver
 $(call addExpectedFailure, fib1.js,                 "we don't output numbers correctly (integers with exponent <= 20 should print out normally)")
 $(call addExpectedFailure, const1.js,               "we permit assigning to const bindings")
 $(call addExpectedFailure, forof1.js,               "we don't support for-of yet")
+$(call addExpectedFailure, map1.js,                 "we throw the right exception but node 0.8 doesn't")
 
 check: check-unit-tests run-tests
 

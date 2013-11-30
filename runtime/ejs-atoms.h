@@ -255,6 +255,7 @@ EJS_ATOM(onreadystatechange)
 EJS_ATOM(eval)
 
 // es6
+EJS_ATOM(is)
 EJS_ATOM(Map)
 EJS_ATOM(clear)
 EJS_ATOM(delete)
