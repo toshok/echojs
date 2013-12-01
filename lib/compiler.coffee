@@ -166,7 +166,7 @@ class LLVMIRVisitor extends TreeVisitor
                 @literalInitializationFunction.setInternalLinkage()
                 
                 # initialize the scope stack with the global (empty) scope
-                @scope_stack = new Stack Object.create null
+                @scope_stack = new Stack new Map
 
                 entry_bb = new llvm.BasicBlock "entry", @literalInitializationFunction
                 return_bb = new llvm.BasicBlock "return", @literalInitializationFunction
@@ -245,8 +245,8 @@ class LLVMIRVisitor extends TreeVisitor
 
         findIdentifierInScope: (ident) ->
                 for scope in @scope_stack.stack
-                        if hasOwn.call scope, ident
-                                return scope[ident]
+                        if scope.has ident
+                                return scope.get ident
                 null
 
                                 
@@ -275,12 +275,12 @@ class LLVMIRVisitor extends TreeVisitor
                 j = 0
                 for i in [0...ids.length]
                         name = ids[i].id.name
-                        if !hasOwn.call scope, name
+                        if !scope.has name
                                 allocas[j] = ir.createAlloca types.EjsValue, "local_#{name}"
-                                scope[name] = allocas[j]
+                                scope.set name, allocas[j]
                                 new_allocas[j] = true
                         else
-                                allocas[j] = scope[name]
+                                allocas[j] = scope.get name
                                 new_allocas[j] = false
                         j = j + 1
                                 
@@ -329,7 +329,7 @@ class LLVMIRVisitor extends TreeVisitor
                 @visit func for func in n.body
 
         visitBlock: (n) ->
-                new_scope = Object.create null
+                new_scope = new Map
 
                 iife_dest_bb = null
                 iife_rv = null
@@ -763,7 +763,7 @@ class LLVMIRVisitor extends TreeVisitor
 
                 ir.setInsertPoint entry_bb
 
-                new_scope = Object.create null
+                new_scope = new Map
 
                 # we save off the top scope and entry_bb of the function so that we can hoist vars there
                 ir_func.topScope = new_scope
@@ -776,19 +776,19 @@ class LLVMIRVisitor extends TreeVisitor
                 # create allocas for the builtin args
                 for i in [0...BUILTIN_PARAMS.length]
                         alloca = ir.createAlloca BUILTIN_PARAMS[i].llvm_type, "local_#{n.params[i].name}"
-                        new_scope[n.params[i].name] = alloca
+                        new_scope.set n.params[i].name, alloca
                         allocas.push alloca
 
                 # create an alloca to store our 'EJSValue** args' parameter, so we can pull the formal parameters out of it
                 args_alloca = ir.createAlloca types.EjsValue.pointerTo(), "local_%args"
-                new_scope["%args"] = args_alloca
+                new_scope.set "%args", args_alloca
                 allocas.push args_alloca
 
                 # now create allocas for the formal parameters
                 for param in n.params[BUILTIN_PARAMS.length..]
                         if param.type is _Identifier
                                 alloca = @createAlloca @currentFunction, types.EjsValue, "local_#{param.name}"
-                                new_scope[param.name] = alloca
+                                new_scope.set param.name, alloca
                                 allocas.push alloca
                         else
                                 debug.log "we don't handle destructured args at the moment."
@@ -858,7 +858,7 @@ class LLVMIRVisitor extends TreeVisitor
                         
                         rest_alloca = @createAlloca @currentFunction, types.EjsValue, "local_rest_object"
 
-                        load_argc = @createLoad @currentFunction.topScope["%argc"], "argc_load"
+                        load_argc = @createLoad @currentFunction.topScope.get("%argc"), "argc_load"
 
                         cmp = ir.createICmpSGt load_argc, (consts.int32 n.params.length-BUILTIN_PARAMS.length), "argcmpresult"
                         ir.createCondBr cmp, has_rest_bb, no_rest_bb
@@ -866,7 +866,7 @@ class LLVMIRVisitor extends TreeVisitor
                         ir.setInsertPoint has_rest_bb
                         # we have > args than are declared, shove
                         # the rest into the rest parameter
-                        load_args = @createLoad @currentFunction.topScope["%args"], "args_load"
+                        load_args = @createLoad @currentFunction.topScope.get("%args"), "args_load"
                         gep = ir.createInBoundsGetElementPointer load_args, [(consts.int32 n.params.length-BUILTIN_PARAMS.length)], "rest_arg_gep"
                         load_argc = ir.createNswSub load_argc, (consts.int32 n.params.length-BUILTIN_PARAMS.length)
                         rest_value = @createCall @ejs_runtime.array_new_copy, [load_argc, gep], "argstmp", !@ejs_runtime.array_new_copy.doesNotThrow
@@ -881,7 +881,7 @@ class LLVMIRVisitor extends TreeVisitor
 
                         ir.setInsertPoint rest_merge_bb
                         
-                        @currentFunction.topScope[n.rest.name] = rest_alloca
+                        @currentFunction.topScope.set n.rest.name, rest_alloca
                         @currentFunction.restArgPresent = true
                                 
                 @iifeStack = new Stack
@@ -1085,13 +1085,13 @@ class LLVMIRVisitor extends TreeVisitor
                         saved_insert_point = ir.getInsertBlock()
                         ir.setInsertPoint @currentFunction.entry_bb
 
-                        load_argc = @createLoad @currentFunction.topScope["%argc"], "argc_load"
-                        load_args = @createLoad @currentFunction.topScope["%args"], "args_load"
+                        load_argc = @createLoad @currentFunction.topScope.get("%argc"), "argc_load"
+                        load_args = @createLoad @currentFunction.topScope.get("%args"), "args_load"
 
                         args_new = @ejs_runtime.arguments_new
                         arguments_object = @createCall args_new, [load_argc, load_args], "argstmp", !args_new.doesNotThrow
                         ir.createStore arguments_object, arguments_alloca
-                        @currentFunction.topScope["arguments"] = arguments_alloca
+                        @currentFunction.topScope.set "arguments", arguments_alloca
 
                         ir.setInsertPoint saved_insert_point
                         rv = @createLoad arguments_alloca, "load_arguments"
@@ -1342,11 +1342,11 @@ class LLVMIRVisitor extends TreeVisitor
                                                 catchval = @beginCatch exception
                                 
                                                 # create a new scope which maps the catch parameter name (the "e" in "try { } catch (e) { }") to catchval
-                                                catch_scope = Object.create null
+                                                catch_scope = new Map
                                                 if n.handlers[0].param?.name?
                                                         catch_name = n.handlers[0].param.name
                                                         alloca = @createAlloca @currentFunction, types.EjsValue, "local_catch_#{catch_name}"
-                                                        catch_scope[catch_name] = alloca
+                                                        catch_scope.set catch_name, alloca
                                                         ir.createStore catchval, alloca
 
                                                 @visitWithScope catch_scope, [n.handlers[0]]
@@ -1423,13 +1423,13 @@ class LLVMIRVisitor extends TreeVisitor
                         saved_insert_point = ir.getInsertBlock()
                         ir.setInsertPoint @currentFunction.entry_bb
 
-                        load_argc = @createLoad @currentFunction.topScope["%argc"], "argc_load"
-                        load_args = @createLoad @currentFunction.topScope["%args"], "args_load"
+                        load_argc = @createLoad @currentFunction.topScope.get("%argc"), "argc_load"
+                        load_args = @createLoad @currentFunction.topScope.get("%args"), "args_load"
 
                         args_new = @ejs_runtime.arguments_new
                         arguments_object = @createCall args_new, [load_argc, load_args], "argstmp", !args_new.doesNotThrow
                         ir.createStore arguments_object, arguments_alloca
-                        @currentFunction.topScope["arguments"] = arguments_alloca
+                        @currentFunction.topScope.set "arguments", arguments_alloca
 
                         ir.setInsertPoint saved_insert_point
                         rv = @createLoad arguments_alloca, "load_arguments"
