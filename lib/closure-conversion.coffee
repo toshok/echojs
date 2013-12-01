@@ -1208,12 +1208,11 @@ class NameAnonymousFunctions extends TreeVisitor
 class MarkLocalAndGlobalVariables extends TreeVisitor
         constructor: ->
                 # initialize the scope stack with the global (empty) scope
-                @scope_stack = new Stack Object.create null
+                @scope_stack = new Stack new Map
 
         findIdentifierInScope: (ident) ->
                 for scope in @scope_stack.stack
-                        if hasOwnProperty.call scope, ident.name
-                                return true
+                        return true if scope.has(ident.name)
                 return false
 
         intrinsicForIdentifier: (id) ->
@@ -1230,11 +1229,11 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
                 rv
 
         visitVariableDeclarator: (n) ->
-                @scope_stack.top[n.id.name] = true
+                @scope_stack.top.set(n.id.name, true)
                 n
 
         visitImportSpecifier: (n) ->
-                @scope_stack.top[n.id.name] = true
+                @scope_stack.top.set(n.id.name, true)
                 n
 
         visitObjectExpression: (n) ->
@@ -1268,7 +1267,7 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
                         n
                         
         visitBlock: (n) ->
-                n.body = @visitWithScope (Object.create null), n.body
+                n.body = @visitWithScope(new Map(), n.body)
                 n
 
         visitCallExpression: (n) ->
@@ -1301,10 +1300,10 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
                 n
 
         visitFunction: (n) ->
-                new_scope = Object.create null
-                new_scope[p.name] = true for p in n.params
-                new_scope[n.rest.name] = true if n.rest?
-                new_scope["arguments"] = true
+                new_scope = new Map
+                new_scope.set(p.name, true) for p in n.params
+                new_scope.set(n.rest.name, true) if n.rest?
+                new_scope.set("arguments", true)
                 new_body = @visitWithScope new_scope, n.body
                 n.body = new_body
                 n
@@ -1314,8 +1313,8 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
                 n
 
         visitCatchClause: (n) ->
-                new_scope = Object.create null
-                new_scope[n.param.name] = true
+                new_scope = new Map
+                new_scope.set(n.param.name, true)
                 n.guard = @visit n.guard
                 n.body = @visitWithScope new_scope, n.body
                 n
