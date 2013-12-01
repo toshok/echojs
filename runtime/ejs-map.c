@@ -556,7 +556,16 @@ _ejs_map_specop_allocate ()
 static void
 _ejs_map_specop_finalize (EJSObject* obj)
 {
-    EJS_NOT_IMPLEMENTED();
+    EJSMap* map = (EJSMap*)obj;
+
+    EJSKeyValueEntry* s = map->head_insert;
+    while (s) {
+        EJSKeyValueEntry* next = s->next_insert;
+        free (s);
+        s = next;
+    }
+
+    _ejs_object_specops.finalize (obj);
 }
 
 static void
