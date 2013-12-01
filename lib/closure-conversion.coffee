@@ -223,10 +223,10 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
                 class_init
 
         gather_members: (ast_class) ->
-                methods     = Object.create null
-                smethods    = Object.create null
-                properties  = Object.create null
-                sproperties = Object.create null
+                methods     = new Map
+                smethods    = new Map
+                properties  = new Map
+                sproperties = new Map
 
                 for class_element in ast_class.body.body
                         if class_element.static and class_element.key.name is "prototype"
@@ -234,17 +234,17 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
                                 
                         if class_element.kind is ""
                                 # a method
-                                method_hash = if class_element.static then smethods else methods
-                                throw new SyntaxError "method '#{class_element.key.name}' has already been defined." if method_hash[class_element.key.name]?
-                                method_hash[class_element.key.name] = class_element
+                                method_map = if class_element.static then smethods else methods
+                                throw new SyntaxError "method '#{class_element.key.name}' has already been defined." if method_map.has(class_element.key.name)
+                                method_map.set(class_element.key.name, class_element)
                         else
                                 # a property
-                                property_hash = if class_element.static then sproperties else properties
+                                property_map = if class_element.static then sproperties else properties
                                 
-                                property_hash[class_element.key.name] = Object.create(null) if not property_hash[class_element.key.name]?
+                                property_map.set(class_element.key.name, new Map) if not property_map.has(class_element.key.name)
 
-                                throw new SyntaxError "a '#{class_element.kind}' method for '#{class_element.key.name}' has already been defined." if property_hash[class_element.key.name][class_element.kind]?
-                                property_hash[class_element.key.name][class_element.kind] = class_element
+                                throw new SyntaxError "a '#{class_element.kind}' method for '#{class_element.key.name}' has already been defined." if property_map.get(class_element.key.name).has(class_element.kind)
+                                property_map.get(class_element.key.name).set(class_element.kind, class_element)
 
                 [properties, methods, sproperties, smethods]
                         
