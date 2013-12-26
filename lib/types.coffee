@@ -9,12 +9,15 @@ exports.int32       = int32Ty       = llvm.Type.getInt32Ty()
 exports.int64       = int64Ty       = llvm.Type.getInt64Ty()
 exports.double      = doubleTy      = llvm.Type.getDoubleTy()
 
-exports.EjsValue = EjsValueTy = int64Ty
 exports.EjsValueLayout = EjsValueLayoutTy = llvm.StructType.create "EjsValueType", [int64Ty]
+exports.EjsValue = EjsValueTy = EjsValueLayoutTy
 
 exports.EjsClosureEnv   = EjsClosureEnvTy = llvm.StructType.create "struct.EJSClosureEnv", [int32Ty, int32Ty, (llvm.ArrayType.get EjsValueLayoutTy, 1)]
 exports.EjsPropIterator = EjsPropIteratorTy = EjsValueTy
-exports.EjsClosureFunc  = EjsClosureFuncTy = (llvm.FunctionType.get EjsValueTy, [EjsValueTy, EjsValueTy, int32Ty, EjsValueTy.pointerTo()]).pointerTo()
+#exports.EjsClosureFunc  = EjsClosureFuncTy = (llvm.FunctionType.get EjsValueTy, [EjsValueTy, EjsValueTy, int32Ty, EjsValueTy.pointerTo()]).pointerTo()
+exports.EjsClosureFunc  = EjsClosureFuncTy = (llvm.FunctionType.get voidTy, [EjsValueTy.pointerTo(), EjsValueTy, EjsValueTy, int32Ty, EjsValueTy.pointerTo()]).pointerTo()
+exports.getEjsClosureFunc = (abi) -> abi.createFunctionType(EjsValueTy, [EjsValueTy, EjsValueTy, int32Ty, EjsValueTy.pointerTo()]).pointerTo()
+        
 exports.EjsPrimString   = EjsPrimStringTy = llvm.StructType.create "EjsPrimString", [int32Ty, int32Ty, int64Ty, int64Ty ] # XXX not the real structure but it should be good
 
 exports.EjsSpecops      = EjsSpecopsTy = llvm.StructType.create "struct.EJSSpecOps", [] # XXX
