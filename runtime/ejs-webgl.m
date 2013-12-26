@@ -177,7 +177,7 @@ EJSSpecOps WebGLTexture_specops;
 EJSSpecOps WebGLActiveInfo_specops;
 EJSSpecOps WebGLUniformLocation_specops;
 
-static ejsval WebGLActiveInfo__proto__;
+static ejsval WebGLActiveInfo__proto__ EJSVAL_ALIGNMENT;
 
 static ejsval
 webglactiveinfo_get_size (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
@@ -203,7 +203,7 @@ webglactiveinfo_get_name (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 	return _ejs_string_new_utf8 ([info name]);
 }
 
-#define SPEW(x)
+#define SPEW(x) x
 #define CHECK_GL_ERRORS 1
 
 #define WEBGL_UNPACK_FLIP_Y_WEBGL 0x9240
@@ -1710,24 +1710,29 @@ uniform_fv (size_t c, uint32_t argc, ejsval *args)
     
 	count /= c;
     
+    SPEW(NSLog(@"glUniform%zufv (loc = %d, count = %d, array_buffer = %p", c, loc, count, array_buffer);)
+        SPEW(for (int i = 0; i < count; i ++) {
+                switch (c) {
+                case 1: NSLog (@"%g", array_buffer[i]); break;
+                case 2: NSLog (@"%g %g", array_buffer[i*2 + 0], array_buffer[i*2 + 1]); break;
+                case 3: NSLog (@"%g %g %g", array_buffer[i*3 + 0], array_buffer[i*3 + 1], array_buffer[i*3 + 2]); break;
+                case 4: NSLog (@"%g %g %g %g", array_buffer[i*4 + 0], array_buffer[i*4 + 1], array_buffer[i*4 + 2], array_buffer[i*4 + 3]); break;
+                }
+            });
 	switch (c) {
-        case 1:
-		SPEW(NSLog(@"glUniform1fv (loc = %d, count = %d, array_buffer = %p", loc, count, array_buffer);)
+    case 1:
 		glUniform1fv (loc, count, array_buffer);
 		break;
-        case 2:
-		SPEW(NSLog(@"glUniform2fv (loc = %d, count = %d, array_buffer = %p", loc, count, array_buffer);)
+    case 2:
 		glUniform2fv (loc, count, array_buffer);
 		break;
-        case 3:
-		SPEW(NSLog(@"glUniform3fv (loc = %d, count = %d, array_buffer = %p", loc, count, array_buffer);)
+    case 3:
 		glUniform3fv (loc, count, array_buffer);
 		break;
-        case 4:
-		SPEW(NSLog(@"glUniform4fv (loc = %d, count = %d, array_buffer = %p", loc, count, array_buffer);)
+    case 4:
 		glUniform4fv (loc, count, array_buffer);
 		break;
-        default:
+    default:
 		abort();
 	}
 	CHECK_GL;
@@ -1863,41 +1868,25 @@ uniformMatrix_fv (size_t c, uint32_t argc, ejsval *args)
     
 	GLint count = array_length / (c * c);
     
-	switch (c) {
-        case 2:
-		SPEW(NSLog(@"glUniformMatrix2fv(loc = %d, count = %d, transpose = %d, array_buffer = %p)", loc, count, transpose, array_buffer);)
+    SPEW(NSLog(@"glUniformMatrix%zufv(loc = %d, count = %d, transpose = %d, array_buffer = %p)", c, loc, count, transpose, array_buffer);)
 		SPEW({
-		    NSLog(@"matrix = ");
-		    int i;
-		    for (i = 0; i < array_length; i ++) {
-		      NSLog(@"  [%d] = %g", i, array_buffer[i]);
-		    }
-		})            
+                NSLog(@"matrix = ");
+                int i;
+                for (i = 0; i < array_length; i ++) {
+                    NSLog(@"  [%d] = %g", i, array_buffer[i]);
+                }
+            })
+    switch (c) {
+    case 2:
 		glUniformMatrix2fv (loc, count, transpose, array_buffer);
 		break;
-        case 3:
-		SPEW(NSLog(@"glUniformMatrix3fv(loc = %d, count = %d, transpose = %d, array_buffer = %p)", loc, count, transpose, array_buffer);)
-		SPEW({
-		    NSLog(@"matrix = ");
-		    int i;
-		    for (i = 0; i < array_length; i ++) {
-		      NSLog(@"  [%d] = %g", i, array_buffer[i]);
-		    }
-		})            
+    case 3:
 		glUniformMatrix3fv (loc, count, transpose, array_buffer);
 		break;
-        case 4:
-		SPEW(NSLog(@"glUniformMatrix4fv(loc = %d, count = %d, transpose = %d, array_buffer = %p)", loc, count, transpose, array_buffer);)
-		SPEW({
-		    NSLog(@"matrix = ");
-		    int i;
-		    for (i = 0; i < array_length; i ++) {
-		      NSLog(@"  [%d] = %g", i, array_buffer[i]);
-		    }
-		})
+    case 4:
 		glUniformMatrix4fv (loc, count, transpose, array_buffer);
 		break;
-        default:
+    default:
 		abort();
 	}
 	CHECK_GL;
