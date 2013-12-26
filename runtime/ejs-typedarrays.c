@@ -2,7 +2,6 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
-#include <assert.h>
 #include <string.h>
 #include <math.h>
 
@@ -66,35 +65,35 @@ static EJSSpecOps _ejs_typedarray_specops = {
 
 #define EJS_TYPEDARRAY_LEN(arrobj)      (((EJSTypedArray*)EJSVAL_TO_OBJECT(arrobj))->length)
 
-ejsval _ejs_ArrayBuffer_proto;
-ejsval _ejs_ArrayBuffer;
+ejsval _ejs_ArrayBuffer_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_ArrayBuffer EJSVAL_ALIGNMENT;
 
-ejsval _ejs_Int8Array_proto;
-ejsval _ejs_Int8Array;
+ejsval _ejs_Int8Array_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Int8Array EJSVAL_ALIGNMENT;
 
-ejsval _ejs_Uint8Array_proto;
-ejsval _ejs_Uint8Array;
+ejsval _ejs_Uint8Array_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Uint8Array EJSVAL_ALIGNMENT;
 
-ejsval _ejs_Uint8ClampedArray_proto;
-ejsval _ejs_Uint8ClampedArray;
+ejsval _ejs_Uint8ClampedArray_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Uint8ClampedArray EJSVAL_ALIGNMENT;
 
-ejsval _ejs_Int16Array_proto;
-ejsval _ejs_Int16Array;
+ejsval _ejs_Int16Array_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Int16Array EJSVAL_ALIGNMENT;
 
-ejsval _ejs_Uint16Array_proto;
-ejsval _ejs_Uint16Array;
+ejsval _ejs_Uint16Array_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Uint16Array EJSVAL_ALIGNMENT;
 
-ejsval _ejs_Int32Array_proto;
-ejsval _ejs_Int32Array;
+ejsval _ejs_Int32Array_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Int32Array EJSVAL_ALIGNMENT;
 
-ejsval _ejs_Uint32Array_proto;
-ejsval _ejs_Uint32Array;
+ejsval _ejs_Uint32Array_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Uint32Array EJSVAL_ALIGNMENT;
 
-ejsval _ejs_Float32Array_proto;
-ejsval _ejs_Float32Array;
+ejsval _ejs_Float32Array_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Float32Array EJSVAL_ALIGNMENT;
 
-ejsval _ejs_Float64Array_proto;
-ejsval _ejs_Float64Array;
+ejsval _ejs_Float64Array_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Float64Array EJSVAL_ALIGNMENT;
 
 ejsval
 _ejs_arraybuffer_new (int size)
@@ -206,7 +205,7 @@ _ejs_ArrayBuffer_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsva
              arr->byteLength = array_len * (elementSizeInBytes);        \
              arr->buffer = _ejs_arraybuffer_new (arr->byteLength);      \
                                                                         \
-             LOG ("need to copy the existing data from the typed array to this array\n"); \
+             _ejs_log ("need to copy the existing data from the typed array to this array\n"); \
              EJS_NOT_IMPLEMENTED();                                     \
          }                                                              \
          else if (EJSVAL_IS_ARRAY(args[0])) {                           \
@@ -227,7 +226,7 @@ _ejs_ArrayBuffer_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsva
                  }                                                      \
              }                                                          \
              else {                                                     \
-                 LOG ("need to implement normal array object copying for sparse arrays.  or do we?\n"); \
+                 _ejs_log ("need to implement normal array object copying for sparse arrays.  or do we?\n"); \
                  EJS_NOT_IMPLEMENTED();                                 \
              }                                                          \
          }                                                              \
@@ -269,7 +268,7 @@ _ejs_ArrayBuffer_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsva
          }                                                              \
      }                                                                  \
      else {                                                             \
-         LOG ("arg0 not a number or object...\n");                      \
+         _ejs_log ("arg0 not a number or object...\n");                      \
          EJS_NOT_IMPLEMENTED();                                         \
      }                                                                  \
                                                                         \

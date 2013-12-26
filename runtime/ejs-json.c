@@ -2,7 +2,6 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
-#include <assert.h>
 #include <string.h>
 #include <math.h>
 
@@ -16,7 +15,7 @@
 #include "ejs-boolean.h"
 #include "../parson/parson.h"
 
-ejsval _ejs_JSON;
+ejsval _ejs_JSON EJSVAL_ALIGNMENT;
 
 static EJSBool
 json_value_to_ejsval(JSON_Value *v, ejsval *rv)

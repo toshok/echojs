@@ -611,8 +611,8 @@ _ejs_XMLHttpRequest_prototype_set_onreadystatechange (ejsval env, ejsval _this, 
     return _ejs_undefined;
 }
 
-ejsval _ejs_XMLHttpRequest;
-ejsval _ejs_XMLHttpRequest_proto;
+ejsval _ejs_XMLHttpRequest EJSVAL_ALIGNMENT;
+ejsval _ejs_XMLHttpRequest_proto EJSVAL_ALIGNMENT;
 
 static ejsval
 _ejs_XMLHttpRequest_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)

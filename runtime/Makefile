@@ -36,6 +36,7 @@ C_SOURCES= \
 
 OBJC_SOURCES= \
 	ejs-jsobjc.m \
+	ejs-log.m \
 	ejs-objc.m \
 	ejs-webgl.m \
 	ejs-xhr.m
@@ -91,7 +92,7 @@ $(DEV_LIBRARY): $(DEV_OBJECTS)
 	@echo [ar armv7] $@ && $(IOSDEV_BIN)/ar rc $@ $(DEV_OBJECTS)
 
 $(LIPOD_IOS_LIBRARY): $(SIM_LIBRARY) $(DEV_LIBRARY)
-	@echo [lipo] $< && lipo -create $(SIM_ARCH) $(SIM_LIBRARY) $(DEV_ARCH) $(DEV_LIBRARY) -output $@
+	@echo [lipo] $@ && lipo -create $(SIM_ARCH) $(SIM_LIBRARY) $(DEV_ARCH) $(DEV_LIBRARY) -output $@
 
 ejs-atoms-gen.c: ejs-atoms.h gen-atoms.js
 	@echo [GEN] $@ && ./gen-atoms.js $< > .tmp-$@ && mv .tmp-$@ $@
@@ -129,6 +130,7 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch
 %.o.armv7: %.c
 	@mkdir -p .deps
 	@$(DEV_CC) -MM -ObjC $(IOSDEV_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.dev,,`/$@/ > .deps/$@-deps
+	@echo PATH=$(IOSDEV_BIN):$$PATH $(DEV_CC) -ObjC $(IOSDEV_CFLAGS) -c -o $@ $<
 	@echo [$(DEV_CC) armv7] $< && PATH=$(IOSDEV_BIN):$$PATH $(DEV_CC) -ObjC $(IOSDEV_CFLAGS) -c -o $@ $<
 
 %.o.armv7: %.m

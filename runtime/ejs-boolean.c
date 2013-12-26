@@ -2,7 +2,6 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
-#include <assert.h>
 #include <string.h>
 
 #include "ejs-ops.h"
@@ -42,8 +41,8 @@ EJSSpecOps _ejs_boolean_specops = {
     _ejs_boolean_specop_scan
 };
 
-ejsval _ejs_Boolean;
-ejsval _ejs_Boolean_proto;
+ejsval _ejs_Boolean EJSVAL_ALIGNMENT;
+ejsval _ejs_Boolean_proto EJSVAL_ALIGNMENT;
 
 static ejsval
 _ejs_Boolean_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)

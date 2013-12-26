@@ -2,7 +2,6 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
-#include <assert.h>
 #include <string.h>
 #include <math.h>
 
@@ -134,8 +133,8 @@ _ejs_array_pop_dense(ejsval array)
     return EJSDENSEARRAY_ELEMENTS(arr)[--EJSARRAY_LEN(arr)];
 }
 
-ejsval _ejs_Array_proto;
-ejsval _ejs_Array;
+ejsval _ejs_Array_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Array EJSVAL_ALIGNMENT;
 
 static ejsval
 _ejs_Array_impl (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
@@ -848,7 +847,7 @@ _ejs_Array_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
         for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
             foreach_args[0] = EJS_DENSE_ARRAY_ELEMENTS(_this)[i];
             foreach_args[1] = NUMBER_TO_EJSVAL(i);
-            _ejs_invoke_closure (callbackfn, thisArg, 2, foreach_args);
+            _ejs_invoke_closure (callbackfn, thisArg, 3, foreach_args);
         }
     }
     else {
@@ -880,7 +879,7 @@ _ejs_Array_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
                 foreach_args[0] = kValue;
                 foreach_args[1] = NUMBER_TO_EJSVAL(k);
                 foreach_args[2] = O;
-                _ejs_invoke_closure (callbackfn, thisArg, 2, foreach_args);
+                _ejs_invoke_closure (callbackfn, thisArg, 3, foreach_args);
             }
             /* d. Increase k by 1. */
             k++;

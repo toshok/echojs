@@ -1,7 +1,6 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
-#include <assert.h>
 #include <string.h>
 #include <math.h>
 #include <stdint.h>
@@ -19,32 +18,39 @@ _ejs_closureenv_new (uint32_t length)
     return _ejs_closure_init (env, length);
 }
 
+void
+test_closureenv()
+{
+    ejsval foo = _ejs_closureenv_new(7);
+}
+
 ejsval
 _ejs_closure_init (EJSClosureEnv* env, uint32_t length)
 {
-    assert (length > 0);
+    EJS_ASSERT (length > 0);
 
     env->length = length;
     for (int i = 0; i < length; i ++) {
         env->slots[i] = _ejs_undefined;
     }
+    _ejs_log ("returning from _ejs_closure_init");
     return CLOSUREENV_TO_EJSVAL_IMPL(env);
 }
 
 ejsval
 _ejs_closureenv_get_slot (ejsval env, uint32_t slot)
 {
-    assert (EJSVAL_IS_CLOSUREENV(env));
+    EJS_ASSERT (EJSVAL_IS_CLOSUREENV(env));
     EJSClosureEnv* env_ = EJSVAL_TO_CLOSUREENV_IMPL(env);
-    assert(slot < env_->length);
+    EJS_ASSERT(slot < env_->length);
     return env_->slots[slot];
 }
 
 ejsval*
 _ejs_closureenv_get_slot_ref (ejsval env, uint32_t slot)
 {
-    assert (EJSVAL_IS_CLOSUREENV(env));
+    EJS_ASSERT (EJSVAL_IS_CLOSUREENV(env));
     EJSClosureEnv* env_ = EJSVAL_TO_CLOSUREENV_IMPL(env);
-    assert(slot < env_->length);
+    EJS_ASSERT(slot < env_->length);
     return &env_->slots[slot];
 }

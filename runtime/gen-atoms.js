@@ -30,7 +30,7 @@ for (var i = 0, e = atom_lines.length; i < e; i ++) {
 
   if (atom != null) {
     // output the ucs2 literal for the atom
-    var line = "const jschar _ejs_ucs2_" + atom_name + "[] = { ";
+    var line = "const jschar _ejs_ucs2_" + atom_name + "[] EJSVAL_ALIGNMENT = { ";
     for (var cn = 0, ce = atom.length; cn < ce; cn ++) {
       line += "0x";
       var code = atom.charCodeAt(cn);
@@ -48,8 +48,8 @@ for (var i = 0, e = atom_lines.length; i < e; i ++) {
     line += " 0x0000 };";
     new_lines.push(line);
 
-    new_lines.push("static EJSPrimString _ejs_primstring_" + atom_name + "= { .gc_header = (EJS_STRING_FLAT<<EJS_GC_USER_FLAGS_SHIFT), .length = " + atom.length + ", .data = { .flat = NULL }};");
-    new_lines.push("ejsval _ejs_atom_" + atom_name + ";");
+    new_lines.push("static EJSPrimString _ejs_primstring_" + atom_name + " EJSVAL_ALIGNMENT = { .gc_header = (EJS_STRING_FLAT<<EJS_GC_USER_FLAGS_SHIFT), .length = " + atom.length + ", .data = { .flat = NULL }};");
+    new_lines.push("ejsval _ejs_atom_" + atom_name + " EJSVAL_ALIGNMENT;");
 
     atom_names.push(atom_name);
   }

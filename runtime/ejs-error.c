@@ -1,7 +1,6 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
-#include <assert.h>
 #include <string.h>
 #include <math.h>
 #include <stdint.h>
@@ -23,20 +22,20 @@
 
 EJSSpecOps _ejs_error_specops;
 
-ejsval _ejs_Error;
-ejsval _ejs_Error_proto;
-ejsval _ejs_EvalError;
-ejsval _ejs_EvalError_proto;
-ejsval _ejs_RangeError;
-ejsval _ejs_RangeError_proto;
-ejsval _ejs_ReferenceError;
-ejsval _ejs_ReferenceError_proto;
-ejsval _ejs_SyntaxError;
-ejsval _ejs_SyntaxError_proto;
-ejsval _ejs_TypeError;
-ejsval _ejs_TypeError_proto;
-ejsval _ejs_URIError;
-ejsval _ejs_URIError_proto;
+ejsval _ejs_Error EJSVAL_ALIGNMENT;
+ejsval _ejs_Error_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_EvalError EJSVAL_ALIGNMENT;
+ejsval _ejs_EvalError_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_RangeError EJSVAL_ALIGNMENT;
+ejsval _ejs_RangeError_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_ReferenceError EJSVAL_ALIGNMENT;
+ejsval _ejs_ReferenceError_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_SyntaxError EJSVAL_ALIGNMENT;
+ejsval _ejs_SyntaxError_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_TypeError EJSVAL_ALIGNMENT;
+ejsval _ejs_TypeError_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_URIError EJSVAL_ALIGNMENT;
+ejsval _ejs_URIError_proto EJSVAL_ALIGNMENT;
 
 #define NATIVE_ERROR_CTOR(err)                                          \
     static ejsval                                                       \
@@ -116,7 +115,7 @@ _ejs_nativeerror_new (EJSNativeErrorType err_type, ejsval msg)
 ejsval
 _ejs_nativeerror_new_utf8 (EJSNativeErrorType err_type, const char *message)
 {
-    fprintf (stderr, "throwing '%s'\n", message);
+    _ejs_log ("throwing '%s'\n", message);
     ejsval msg = _ejs_string_new_utf8 (message);
     return _ejs_nativeerror_new (err_type, msg);
 }

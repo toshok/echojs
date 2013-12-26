@@ -2,7 +2,6 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
-#include <assert.h>
 #include <math.h>
 
 #include "ejs-ops.h"
@@ -11,7 +10,7 @@
 #include "ejs-math.h"
 #include "ejs-string.h"
 
-ejsval _ejs_Math;
+ejsval _ejs_Math EJSVAL_ALIGNMENT;
 
 // ECMA262: 15.8.2.1
 static ejsval

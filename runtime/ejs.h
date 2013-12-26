@@ -22,6 +22,7 @@
 #define EJS_STRINGIFY(x) #x
 
 #include "ejs-types.h"
+#include "ejs-log.h"
 
 typedef int32_t EJSBool;
 
@@ -44,13 +45,20 @@ typedef int32_t EJSBool;
 #endif
 
 #define EJS_NOT_IMPLEMENTED() EJS_MACRO_START                           \
-    LOG ("%s:%s:%d not implemented.\n", __PRETTY_FUNCTION__, __FILE__, __LINE__); \
+    _ejs_log ("%s:%s:%d not implemented.\n", __PRETTY_FUNCTION__, __FILE__, __LINE__); \
     abort();                                                            \
     EJS_MACRO_END
 
 #define EJS_NOT_REACHED() EJS_MACRO_START                               \
-    LOG ("%s:%s:%d should not be reached.\n", __PRETTY_FUNCTION__, __FILE__, __LINE__); \
+    _ejs_log ("%s:%s:%d should not be reached.\n", __PRETTY_FUNCTION__, __FILE__, __LINE__); \
     abort();                                                            \
+    EJS_MACRO_END
+
+#define EJS_ASSERT(x) EJS_MACRO_START                                   \
+    if (!(x)) {                                                         \
+        _ejs_log ("%s:%s:%d assertion failed `%s'.\n", __PRETTY_FUNCTION__, __FILE__, __LINE__, #x); \
+        abort();                                                        \
+    }                                                                   \
     EJS_MACRO_END
 
 typedef struct _EJSPrimString EJSPrimString;

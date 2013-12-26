@@ -2,7 +2,6 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
-#include <assert.h>
 #include <math.h>
 #include <string.h>
 
@@ -45,7 +44,7 @@ EJSSpecOps _ejs_arguments_specops = {
 
 #define EJSOBJ_IS_ARGUMENTS(obj) (((EJSObject*)obj)->proto == _ejs_Arguments__proto__)
 
-ejsval _ejs_Arguments__proto__;
+ejsval _ejs_Arguments__proto__ EJSVAL_ALIGNMENT;
 
 ejsval
 _ejs_arguments_new (int numElements, ejsval* args)

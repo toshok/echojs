@@ -199,7 +199,7 @@ ejsval ToNumber(ejsval exp)
         return _ejs_nan;
     else if (EJSVAL_IS_OBJECT(exp)) {
         if (EJSVAL_IS_DATE(exp)) {
-            return NUMBER_TO_EJSVAL(mktime(&((EJSDate*)EJSVAL_TO_OBJECT(exp))->tm));
+            return NUMBER_TO_EJSVAL(_ejs_date_get_time ((EJSDate*)EJSVAL_TO_OBJECT(exp)));
         }
         // XXX if it's an array
         //       and .length == 0, return 0.
@@ -1023,6 +1023,7 @@ _ejs_truthy (ejsval val)
 void
 _ejs_throw (ejsval exp)
 {
+    _ejs_log ("throwing an exception omg");
     _ejs_exception_throw (ToObject(exp));
 }
 

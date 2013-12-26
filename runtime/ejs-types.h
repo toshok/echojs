@@ -60,7 +60,7 @@ typedef uint32_t GCObjectHeader;
     EJS_MACRO_END
 
 #define EJS_LIST_INSERT_BEFORE(v, l, bef) EJS_MACRO_START   \
-    assert (l);                                             \
+    EJS_ASSERT (l);                                         \
     if ((bef) == NULL) {                                    \
         EJS_LIST_PREPEND(v, l);                             \
     }                                                       \

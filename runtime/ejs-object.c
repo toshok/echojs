@@ -7,7 +7,6 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include <math.h>
 
 #include "ejs-value.h"
@@ -254,7 +253,7 @@ static int nprimes = sizeof(primes) / sizeof(primes[0]);
 void
 _ejs_propertymap_init (EJSPropertyMap *map)
 {
-    //fprintf (stderr, "%p: init\n", map);
+    //_ejs_log ("%p: init\n", map);
     map->head_insert = map->tail_insert = NULL;
     map->buckets = NULL;
     map->nbuckets = 0;
@@ -264,7 +263,7 @@ _ejs_propertymap_init (EJSPropertyMap *map)
 void
 _ejs_propertymap_free (EJSPropertyMap *map)
 {
-    //fprintf (stderr, "%p: free\n", map);
+    //_ejs_log ("%p: free\n", map);
     _EJSPropertyMapEntry* s = map->head_insert;
     while (s) {
         _EJSPropertyMapEntry* next = s->next_insert;
@@ -295,9 +294,9 @@ _ejs_propertymap_foreach_property (EJSPropertyMap* map, EJSPropertyDescFunc fore
 void
 _ejs_propertymap_remove (EJSPropertyMap *map, ejsval name)
 {
-    //fprintf (stderr, "%p: remove (%s)\n", map, ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name)));
+    //_ejs_log ("%p: remove (%s)\n", map, ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name)));
     if (map->inuse == 0) {
-        //fprintf (stderr, "  map empty, returning early\n");
+        //_ejs_log ("  map empty, returning early\n");
         return;
     }
 
@@ -308,7 +307,7 @@ _ejs_propertymap_remove (EJSPropertyMap *map, ejsval name)
     _EJSPropertyMapEntry* s = map->buckets[bucket];
     while (s) {
         if (EJSVAL_TO_BOOLEAN(_ejs_op_strict_eq(s->name, name))) {
-            //fprintf (stderr, "  found entry in bucket (hashcode %d, bucket %d)\n", hashcode, bucket);
+            //_ejs_log ("  found entry in bucket (hashcode %d, bucket %d)\n", hashcode, bucket);
             if (prev)
                 prev->next_bucket = s->next_bucket;
             else
@@ -324,7 +323,7 @@ _ejs_propertymap_remove (EJSPropertyMap *map, ejsval name)
                 _EJSPropertyMapEntry *prev_insert;
                 for (prev_insert = map->head_insert; prev_insert; prev_insert = prev_insert->next_insert) {
                     if (prev_insert->next_insert == s) {
-                        //fprintf (stderr, "  found entry in insert list\n");
+                        //_ejs_log ("  found entry in insert list\n");
                         prev_insert->next_insert = s->next_insert;
                         if (map->tail_insert == s)
                             map->tail_insert = prev_insert;
@@ -390,7 +389,7 @@ _ejs_propertymap_rehash (EJSPropertyMap* map)
 void
 _ejs_propertymap_insert (EJSPropertyMap* map, ejsval name, EJSPropertyDesc* desc)
 {
-    //fprintf (stderr, "%p: insert (%s)\n", map, ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name)));
+    //_ejs_log ("%p: insert (%s)\n", map, ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name)));
     if (map->buckets == NULL) {
         map->nbuckets = primes[0];
         map->buckets = calloc (sizeof(_EJSPropertyMapEntry*), map->nbuckets);
@@ -489,7 +488,7 @@ collect_keys (ejsval objval, int *num, int *alloc, ejsval **keys)
         return;
 
     EJSObject *obj = EJSVAL_TO_OBJECT(objval);
-    assert(obj);
+    EJS_ASSERT(obj);
 
     for (_EJSPropertyMapEntry *s = obj->map.head_insert; s; s = s->next_insert) {
         if (_ejs_property_desc_is_enumerable (s->desc) && !name_in_keys (s->name, *keys, *num)) {
@@ -651,7 +650,7 @@ _ejs_object_create (ejsval proto)
     
     ejsval objval = _ejs_object_new (proto, ops);
     //EJSObject* obj = EJSVAL_TO_OBJECT(objval);
-    //LOG ("ejs_object_create returned %p\n", obj);
+    //_ejs_log ("ejs_object_create returned %p\n", obj);
     return objval;
 }
 
@@ -665,7 +664,7 @@ ejsval
 _ejs_object_setprop (ejsval val, ejsval key, ejsval value)
 {
     if (EJSVAL_IS_PRIMITIVE(val)) {
-        LOG ("setprop on primitive.  ignoring\n");
+        _ejs_log ("setprop on primitive.  ignoring\n");
         EJS_NOT_IMPLEMENTED();
     }
 
@@ -686,7 +685,7 @@ _ejs_object_getprop (ejsval obj, ejsval key)
 #if DEBUG_LAST_LOOKUP
         if (last_lookup) {
             char *last_utf8 = ucs2_to_utf8(last_lookup);
-            fprintf (stderr, "last property lookup was for: %s\n", last_utf8);
+            _ejs_log ("last property lookup was for: %s\n", last_utf8);
             free (last_utf8);
         }
 #endif
@@ -746,12 +745,12 @@ ejsval
 _ejs_object_setprop_utf8 (ejsval val, const char *key, ejsval value)
 {
     if (EJSVAL_IS_NULL(val) || EJSVAL_IS_UNDEFINED(val)) {
-        printf ("throw ReferenceError\n");
+        _ejs_log ("throw ReferenceError\n");
         abort();
     }
 
     if (EJSVAL_IS_PRIMITIVE(val)) {
-        printf ("setprop on primitive.  ignoring\n");
+        _ejs_log ("setprop on primitive.  ignoring\n");
         return value;
     }
 
@@ -762,7 +761,7 @@ ejsval
 _ejs_object_getprop_utf8 (ejsval obj, const char *key)
 {
     if (EJSVAL_IS_NULL(obj) || EJSVAL_IS_UNDEFINED(obj)) {
-        printf ("throw TypeError, key is %s\n", key);
+        _ejs_log ("throw TypeError, key is %s\n", key);
         EJS_NOT_IMPLEMENTED();
     }
 
@@ -776,27 +775,27 @@ void
 _ejs_dump_value (ejsval val)
 {
     if (EJSVAL_IS_UNDEFINED(val)) {
-        printf ("undefined\n");
+        _ejs_log ("undefined\n");
     }
     else if (EJSVAL_IS_NUMBER(val)) {
-        printf ("number: " EJS_NUMBER_FORMAT "\n", EJSVAL_TO_NUMBER(val));
+        _ejs_log ("number: " EJS_NUMBER_FORMAT "\n", EJSVAL_TO_NUMBER(val));
     }
     else if (EJSVAL_IS_BOOLEAN(val)) {
-        printf ("boolean: %s\n", EJSVAL_TO_BOOLEAN(val) ? "true" : "false");
+        _ejs_log ("boolean: %s\n", EJSVAL_TO_BOOLEAN(val) ? "true" : "false");
     }
     else if (EJSVAL_IS_STRING(val)) {
         char* val_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(val));
-        printf ("string: '%s'\n", val_utf8);
+        _ejs_log ("string: '%s'\n", val_utf8);
         free (val_utf8);
     }
     else if (EJSVAL_IS_OBJECT(val)) {
-        printf ("<object %s>\n", CLASSNAME(EJSVAL_TO_OBJECT(val)));
+        _ejs_log ("<object %s>\n", CLASSNAME(EJSVAL_TO_OBJECT(val)));
     }
 }
 
-ejsval _ejs_Object;
-ejsval _ejs_Object__proto__;
-ejsval _ejs_Object_prototype;
+ejsval _ejs_Object EJSVAL_ALIGNMENT;
+ejsval _ejs_Object__proto__ EJSVAL_ALIGNMENT;
+ejsval _ejs_Object_prototype EJSVAL_ALIGNMENT;
 
 static ejsval
 _ejs_Object_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -804,13 +803,13 @@ _ejs_Object_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     if (EJSVAL_IS_UNDEFINED(_this)) {
         // ECMA262: 15.2.1.1
     
-        printf ("called Object() as a function!\n");
+        _ejs_log ("called Object() as a function!\n");
         return _ejs_null;
     }
     else {
         // ECMA262: 15.2.2
 
-        printf ("called Object() as a constructor!\n");
+        _ejs_log ("called Object() as a constructor!\n");
         return _ejs_null;
     }
 }
@@ -825,7 +824,7 @@ _ejs_Object_getPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
     
     /* 1. If Type(O) is not Object throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(obj)) {
-        printf ("throw TypeError, argument isn't an Object\n");
+        _ejs_log ("throw TypeError, argument isn't an Object\n");
         EJS_NOT_IMPLEMENTED();
     }
     
@@ -845,7 +844,7 @@ _ejs_Object_getOwnPropertyDescriptor (ejsval env, ejsval _this, uint32_t argc, e
 
     /* 1. If Type(O) is not Object throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O)) {
-        printf ("throw TypeError, O isn't an Object\n");
+        _ejs_log ("throw TypeError, O isn't an Object\n");
         EJS_NOT_IMPLEMENTED();
     }
     EJSObject *obj = EJSVAL_TO_OBJECT(O);
@@ -870,7 +869,7 @@ _ejs_Object_getOwnPropertyNames (ejsval env, ejsval _this, uint32_t argc, ejsval
 
     /* 1. If Type(O) is not Object throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O)) {
-        printf ("throw TypeError, _this isn't an Object\n");
+        _ejs_log ("throw TypeError, _this isn't an Object\n");
         EJS_NOT_IMPLEMENTED();
     }
     EJSObject* O_ = EJSVAL_TO_OBJECT(O);
@@ -915,7 +914,7 @@ _ejs_Object_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     /* 1. If Type(O) is not Object or Null throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT_OR_NULL(O)) {
-        printf ("throw TypeError, O isn't an Object or null\n");
+        _ejs_log ("throw TypeError, O isn't an Object or null\n");
         EJS_NOT_IMPLEMENTED();
     }
 
@@ -993,7 +992,7 @@ _ejs_Object_defineProperties (ejsval env, ejsval _this, uint32_t argc, ejsval *a
 
     /* 1. If Type(O) is not Object throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O)) {
-        printf ("throw TypeError, _this isn't an Object\n");
+        _ejs_log ("throw TypeError, _this isn't an Object\n");
         EJS_NOT_IMPLEMENTED();
     }
     EJSObject *obj = EJSVAL_TO_OBJECT(O);
@@ -1069,7 +1068,7 @@ _ejs_Object_seal (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     /* 1. If Type(O) is not Object throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O)) {
-        printf ("throw TypeError, O isn't an Object\n");
+        _ejs_log ("throw TypeError, O isn't an Object\n");
         EJS_NOT_IMPLEMENTED();
     }
     EJSObject* obj = EJSVAL_TO_OBJECT(O);
@@ -1105,7 +1104,7 @@ _ejs_Object_freeze (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     /* 1. If Type(O) is not Object throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O)) {
-        printf ("throw TypeError, O isn't an Object\n");
+        _ejs_log ("throw TypeError, O isn't an Object\n");
         EJS_NOT_IMPLEMENTED();
     }
     EJSObject* obj = EJSVAL_TO_OBJECT(O);
@@ -1150,7 +1149,7 @@ _ejs_Object_preventExtensions (ejsval env, ejsval _this, uint32_t argc, ejsval *
 
     /* 1. If Type(O) is not Object throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O)) {
-        printf ("throw TypeError, O isn't an Object\n");
+        _ejs_log ("throw TypeError, O isn't an Object\n");
         EJS_NOT_IMPLEMENTED();
     }
     EJSObject* obj = EJSVAL_TO_OBJECT(O);
@@ -1171,7 +1170,7 @@ _ejs_Object_isSealed (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     /* 1. If Type(O) is not Object throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O)) {
-        printf ("throw TypeError, O isn't an Object\n");
+        _ejs_log ("throw TypeError, O isn't an Object\n");
         EJS_NOT_IMPLEMENTED();
     }
     EJSObject* obj = EJSVAL_TO_OBJECT(O);
@@ -1208,7 +1207,7 @@ _ejs_Object_isFrozen (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     /* 1. If Type(O) is not Object throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O)) {
-        printf ("throw TypeError, O isn't an Object\n");
+        _ejs_log ("throw TypeError, O isn't an Object\n");
         EJS_NOT_IMPLEMENTED();
     }
     EJSObject* obj = EJSVAL_TO_OBJECT(O);
@@ -1251,7 +1250,7 @@ _ejs_Object_isExtensible (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     /* 1. If Type(O) is not Object throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O)) {
-        printf ("throw TypeError, O isn't an Object\n");
+        _ejs_log ("throw TypeError, O isn't an Object\n");
         EJS_NOT_IMPLEMENTED();
     }
     EJSObject* obj = EJSVAL_TO_OBJECT(O);
@@ -1449,14 +1448,14 @@ _ejs_object_specop_get (ejsval obj_, ejsval propertyName)
     EJSPropertyDesc* desc = OP(EJSVAL_TO_OBJECT(obj_),get_property) (obj_, pname);
     /* 2. If desc is undefined, return undefined. */
     if (desc == NULL) {
-        // printf ("property lookup on a %s object, propname %s => undefined\n", CLASSNAME(EJSVAL_TO_OBJECT(obj_)), EJSVAL_TO_FLAT_STRING(pname));
+        // _ejs_log ("property lookup on a %s object, propname %s => undefined\n", CLASSNAME(EJSVAL_TO_OBJECT(obj_)), EJSVAL_TO_FLAT_STRING(pname));
         return _ejs_undefined;
     }
 
     /* 3. If IsDataDescriptor(desc) is true, return desc.[[Value]]. */
     if (IsDataDescriptor(desc)) {
         // if (EJSVAL_IS_UNDEFINED(desc->value))
-        //     printf ("property lookup on a %s object, propname %s => undefined\n", CLASSNAME(EJSVAL_TO_OBJECT(obj_)), EJSVAL_TO_FLAT_STRING(pname));
+        //     _ejs_log ("property lookup on a %s object, propname %s => undefined\n", CLASSNAME(EJSVAL_TO_OBJECT(obj_)), EJSVAL_TO_FLAT_STRING(pname));
         return desc->value;
     }
 
@@ -1465,7 +1464,7 @@ _ejs_object_specop_get (ejsval obj_, ejsval propertyName)
 
     /* 5. If getter is undefined, return undefined. */
     if (EJSVAL_IS_UNDEFINED(getter)) {
-        // printf ("property lookup on a %s object, propname %s => undefined getter\n", CLASSNAME(EJSVAL_TO_OBJECT(obj_)), EJSVAL_TO_FLAT_STRING(pname));
+        // _ejs_log ("property lookup on a %s object, propname %s => undefined getter\n", CLASSNAME(EJSVAL_TO_OBJECT(obj_)), EJSVAL_TO_FLAT_STRING(pname));
         return _ejs_undefined;
     }
 
@@ -1520,7 +1519,7 @@ _ejs_object_specop_put (ejsval O, ejsval P, ejsval V, EJSBool Throw)
     if (!OP(obj,can_put)(O, P)) {
         /*    a. If Throw is true, then throw a TypeError exception. */
         if (Throw) {
-            printf ("throw TypeError\n");
+            _ejs_log ("throw TypeError\n");
             EJS_NOT_IMPLEMENTED();
         }
         else {
@@ -1547,7 +1546,7 @@ _ejs_object_specop_put (ejsval O, ejsval P, ejsval V, EJSBool Throw)
     if (IsAccessorDescriptor(desc)) {
         /*    a. Let setter be desc.[[Set]] which cannot be undefined. */
         ejsval setter = _ejs_property_desc_get_setter(desc);
-        assert (EJSVAL_IS_FUNCTION(setter));
+        EJS_ASSERT (EJSVAL_IS_FUNCTION(setter));
         /*    b. Call the [[Call]] internal method of setter providing O as the this value and providing V as the sole argument. */
         _ejs_invoke_closure (setter, O, 1, &V);
     }
@@ -1866,7 +1865,7 @@ static void
 scan_property (ejsval name, EJSPropertyDesc *desc, EJSValueFunc scan_func)
 {
 #if DEBUG_GC
-    printf ("scan property desc = %p, name = %s\n", desc, ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name)));
+    _ejs_log ("scan property desc = %p, name = %s\n", desc, ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name)));
 #endif
 
     scan_func (name);
@@ -1874,22 +1873,22 @@ scan_property (ejsval name, EJSPropertyDesc *desc, EJSValueFunc scan_func)
     if (_ejs_property_desc_has_value (desc)) {
 #if DEBUG_GC
         if (EJSVAL_IS_OBJECT(desc->value)) {
-        	printf ("   has_value %p\n", EJSVAL_TO_OBJECT(desc->value));
+        	_ejs_log ("   has_value %p\n", EJSVAL_TO_OBJECT(desc->value));
     	}
         else
-        	printf ("   has_value\n");
+        	_ejs_log ("   has_value\n");
 #endif
         scan_func (desc->value);
     }
     if (_ejs_property_desc_has_getter (desc)) {
 #if DEBUG_GC
-        printf ("   has_getter\n");
+        _ejs_log ("   has_getter\n");
 #endif
         scan_func (desc->getter); 
     }
     if (_ejs_property_desc_has_setter (desc)) {
 #if DEBUG_GC
-        printf ("   has_setter\n");
+        _ejs_log ("   has_setter\n");
 #endif
         scan_func (desc->setter);
     }

@@ -1,7 +1,6 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
-#include <assert.h>
 #include <string.h>
 #include <math.h>
 #include <stdint.h>
@@ -268,9 +267,9 @@ EJSSpecOps _ejs_string_specops = {
     _ejs_string_specop_scan
 };
 
-ejsval _ejs_String;
-ejsval _ejs_String__proto__;
-ejsval _ejs_String_prototype;
+ejsval _ejs_String EJSVAL_ALIGNMENT;
+ejsval _ejs_String__proto__ EJSVAL_ALIGNMENT;
+ejsval _ejs_String_prototype EJSVAL_ALIGNMENT;
 
 static ejsval
 _ejs_String_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -1351,8 +1350,8 @@ _ejs_primstring_flatten (EJSPrimString* primstr)
         int off = 0;
         int length = primstr->length;
         flatten_dep (&p, primstr, &off, &length);
-        //assert (off == 0);
-        //assert (length == 0);
+        //EJS_ASSERT (off == 0);
+        //EJS_ASSERT (length == 0);
         break;
     }
     case EJS_STRING_ROPE: {
@@ -1441,7 +1440,7 @@ _ejs_primstring_hash (EJSPrimString* primstr)
 uint32_t
 _ejs_string_hash (ejsval str)
 {
-    assert (EJSVAL_IS_STRING(str));
+    EJS_ASSERT (EJSVAL_IS_STRING(str));
 
     return _ejs_primstring_hash (EJSVAL_TO_STRING_IMPL(str));
 }

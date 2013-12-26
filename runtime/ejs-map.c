@@ -459,8 +459,8 @@ _ejs_Map_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     //     l. ReturnIfAbrupt(status).
 }
 
-ejsval _ejs_Map;
-ejsval _ejs_Map_prototype;
+ejsval _ejs_Map EJSVAL_ALIGNMENT;
+ejsval _ejs_Map_prototype EJSVAL_ALIGNMENT;
 
 void
 _ejs_map_init(ejsval global)

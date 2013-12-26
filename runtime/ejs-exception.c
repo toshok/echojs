@@ -12,6 +12,7 @@
 #include <execinfo.h>
 
 
+#if !defined(__arm__)
 #define spew 0
 #if spew
 #define SPEW(x) x
@@ -802,3 +803,48 @@ void _ejs_exception_init(void)
     // call std::set_terminate
     old_terminate = _ZSt13set_terminatePFvvE(&_ejs_terminate);
 }
+#else
+struct ejs_typeinfo {
+    // Position of vtable and name fields must match C++ typeinfo object
+    const void **vtable;  // always ejs_ehtype_vtable+2
+    const char *name;     // c++ typeinfo string
+};
+
+struct ejs_typeinfo EJS_EHTYPE_ejsvalue = {
+    NULL,
+    "ejsvalue", 
+    // XXX nanboxing breaks this NULL
+};
+
+int
+__ejs_personality_v0()
+{
+    EJS_NOT_IMPLEMENTED();
+}
+
+
+void _ejs_exception_init(void)
+{
+}
+
+void _ejs_end_catch(void)
+{
+    EJS_NOT_IMPLEMENTED();
+}
+
+void _ejs_begin_catch(void)
+{
+    EJS_NOT_IMPLEMENTED();
+}
+
+void _ejs_exception_throw(ejsval val)
+{
+    EJS_NOT_IMPLEMENTED();
+}
+
+void _ejs_exception_rethrow()
+{
+    EJS_NOT_IMPLEMENTED();
+}
+
+#endif

@@ -89,20 +89,20 @@ static pthread_mutex_t big_gc_lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
 static pthread_mutex_t arena_lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
 
 #define LOCK_GC() do {                                                  \
-        /*fprintf (stderr, "locking gc at %s:%d\n", __PRETTY_FUNCTION__, __LINE__); */ \
+        /*_ejs_log ("locking gc at %s:%d\n", __PRETTY_FUNCTION__, __LINE__); */ \
         pthread_mutex_lock(&big_gc_lock);                               \
     } while (0)
 #define UNLOCK_GC() do {                        \
-        /*fprintf (stderr, "unlocking gc at %s:%d\n", __PRETTY_FUNCTION__, __LINE__); */ \
+        /*_ejs_log ("unlocking gc at %s:%d\n", __PRETTY_FUNCTION__, __LINE__); */ \
         pthread_mutex_unlock(&big_gc_lock);     \
     } while (0)
 
 #define LOCK_ARENAS() do {                                                  \
-        /*fprintf (stderr, "locking arenas at %s:%d\n", __PRETTY_FUNCTION__, __LINE__); */ \
+        /*_ejs_log ("locking arenas at %s:%d\n", __PRETTY_FUNCTION__, __LINE__); */ \
         pthread_mutex_lock(&arena_lock);                               \
     } while (0)
 #define UNLOCK_ARENAS() do {                        \
-        /*fprintf (stderr, "unlocking arenas at %s:%d\n", __PRETTY_FUNCTION__, __LINE__); */ \
+        /*_ejs_log ("unlocking arenas at %s:%d\n", __PRETTY_FUNCTION__, __LINE__); */ \
         pthread_mutex_unlock(&arena_lock);     \
     } while (0)
 static pthread_t finalizer_thread;
@@ -198,20 +198,22 @@ static RootSetEntry *root_set;
 static void*
 alloc_from_os(size_t size, size_t align)
 {
-    if (align == 0)
+    if (align == 0) {
+        size = MAX(size, PAGE_SIZE);
         return mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, MAP_FD, 0);
+    }
 
     void* res = mmap(NULL, size*2, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, MAP_FD, 0);
-    SPEW(2, fprintf (stderr, "mmap returned %p\n", res));
+    SPEW(2, _ejs_log ("mmap returned %p\n", res));
 
     if (((uintptr_t)res % align) == 0) {
         // the memory was aligned, unmap the second half of our mapping
         // XXX should we just rejoice and add both halves?
-        SPEW(2, fprintf (stderr, "already aligned\n"));
+        SPEW(2, _ejs_log ("already aligned\n"));
         munmap (res + size, size);
     }
     else {
-        SPEW(2, fprintf (stderr, "not aligned\n"));
+        SPEW(2, _ejs_log ("not aligned\n"));
         // align res, and unmap the areas before/after the new mapping
         void *aligned_res = (void*)ALIGN(res, align);
         // the area before
@@ -219,7 +221,7 @@ alloc_from_os(size_t size, size_t align)
         // the area after
         munmap (aligned_res+size, size*2 - (uintptr_t)(aligned_res+size));
         res = aligned_res;
-        SPEW(2, fprintf (stderr, "aligned ptr = %p\n", res));
+        SPEW(2, _ejs_log ("aligned ptr = %p\n", res));
     }
     return res;
 }
@@ -338,7 +340,7 @@ static void
 verify_arena(Arena *arena)
 {
     for (int i = 0; i < arena->num_pages; i ++) {
-        assert (arena->pages[i] == arena->page_infos[i]->page_start);
+        EJS_ASSERT (arena->pages[i] == arena->page_infos[i]->page_start);
     }
 }
 #endif
@@ -348,10 +350,10 @@ static Arena*
 arena_new()
 {
     if (num_arenas == MAX_ARENAS-1) {
-        fprintf (stderr, "ejs heap exhausted");
+        _ejs_log ("ejs heap exhausted");
         abort();
     }
-    SPEW(1, fprintf (stderr, "num_arenas = %d, max = %d\n", num_arenas, MAX_ARENAS));
+    SPEW(1, _ejs_log ("num_arenas = %d, max = %d\n", num_arenas, MAX_ARENAS));
 
     void* arena_start = alloc_from_os(ARENA_SIZE, ARENA_SIZE);
 
@@ -393,6 +395,7 @@ alloc_page_info_from_arena(Arena *arena, void *page_data, size_t cell_size)
     info->cell_size = cell_size;
     info->num_cells = CELLS_OF_SIZE(cell_size);
     info->num_free_cells = info->num_cells;
+    EJS_ASSERT(info->num_cells > 0);
     info->page_start = page_data;
     info->page_end = info->page_start + PAGE_SIZE;
     // allocate a bitmap large enough to store any sized object so we can reuse the bitmap
@@ -415,7 +418,7 @@ alloc_page_from_arena(Arena *arena, size_t cell_size)
         info->num_free_cells = info->num_cells;
         info->bump_ptr = info->page_start;
         memset (info->page_bitmap, CELL_FREE, info->num_cells * sizeof(BitmapCell));
-        SPEW(3, fprintf (stderr, "alloc_page_from_arena for cell size %zd = %p\n", info->cell_size, info));
+        SPEW(3, _ejs_log ("alloc_page_from_arena from free pages for cell size %zd = %p\n", info->cell_size, info));
         return info;
     }
     else if (page_data < arena->end) {
@@ -424,7 +427,7 @@ alloc_page_from_arena(Arena *arena, size_t cell_size)
         arena->pos = page_data + PAGE_SIZE;
         arena->pages[page_idx] = page_data;
         arena->page_infos[page_idx] = info;
-        SPEW(3, fprintf (stderr, "alloc_page_from_arena for cell size %zd = %p\n", info->cell_size, info));
+        SPEW(3, _ejs_log ("alloc_page_from_arena from bump pointer for cell size %zd = %p\n", info->cell_size, info));
         return info;
     }
     else {
@@ -482,7 +485,7 @@ find_page_and_cell(GCObjectPtr ptr, int *cell_idx)
 
         if (cell_idx) {
             *cell_idx = PTR_TO_CELL(ptr, page);
-            assert(*cell_idx >= 0 && *cell_idx < CELLS_IN_PAGE(page));
+            EJS_ASSERT(*cell_idx >= 0 && *cell_idx < CELLS_IN_PAGE(page));
         }
 
         return page;
@@ -539,19 +542,24 @@ is_white (GCObjectPtr ptr)
 static PageInfo*
 alloc_new_page(size_t cell_size)
 {
-    SPEW(2, fprintf (stderr, "allocating new page for cell size %zd\n", cell_size));
+    SPEW(2, _ejs_log ("allocating new page for cell size %zd\n", cell_size));
     PageInfo *rv = NULL;
     for (int i = 0; i < num_arenas; i ++) {
         rv = alloc_page_from_arena(heap_arenas[i], cell_size);
-        if (rv)
+        if (rv) {
+            SPEW(2, _ejs_log ("  => %p", rv));
             return rv;
+        }
     }
 
     // need a new arena
+    SPEW(2, _ejs_log ("unable to find page in current arenas, allocating a new one"));
     LOCK_ARENAS();
     Arena* arena = arena_new();
     UNLOCK_ARENAS();
-    return alloc_page_from_arena(arena, cell_size);
+    rv = alloc_page_from_arena(arena, cell_size);
+    SPEW(2, _ejs_log ("  => %p", rv));
+    return rv;
 }
 
 static void
@@ -559,22 +567,22 @@ finalize_object(GCObjectPtr p)
 {
     GCObjectHeader* headerp = (GCObjectHeader*)p;
     if ((*headerp & EJS_SCAN_TYPE_OBJECT) != 0) {
-        SPEW(2, fprintf (stderr, "finalizing object %p(%s)\n", p, CLASSNAME(p)));
+        SPEW(2, _ejs_log ("finalizing object %p(%s)\n", p, CLASSNAME(p)));
         OP(p, finalize)((EJSObject*)p);
     }
     else if ((*headerp & EJS_SCAN_TYPE_CLOSUREENV) != 0) {
-        SPEW(2, fprintf (stderr, "finalizing closureenv %p\n", p));
+        SPEW(2, _ejs_log ("finalizing closureenv %p\n", p));
     }
     else if ((*headerp & EJS_SCAN_TYPE_PRIMSTR) != 0) {
         SPEW(2, {
                 EJSPrimString* primstr = (EJSPrimString*)p;
                 if (EJS_PRIMSTR_GET_TYPE(primstr) == EJS_STRING_FLAT) {
                     char* utf8 = ucs2_to_utf8(primstr->data.flat);
-                    fprintf (stderr, "finalizing flat primitive string %p(%s)\n", p, utf8);
+                    _ejs_log ("finalizing flat primitive string %p(%s)\n", p, utf8);
                     free (utf8);
                 }
                 else {
-                    fprintf (stderr, "finalizing primitive string %p\n", p);
+                    _ejs_log ("finalizing primitive string %p\n", p);
                 }
             });
     }
@@ -595,7 +603,7 @@ _ejs_finalizer_thread ()
         if (!this_run)
             continue;
 
-        SPEW(1, fprintf (stderr, "starting finalizer run\n"));
+        SPEW(1, _ejs_log ("starting finalizer run\n"));
         while (this_run) {
             EJSFinalizerEntry *fin = this_run;
             this_run = fin->next;
@@ -610,27 +618,27 @@ _ejs_finalizer_thread ()
 #if spew
                 int page_index = PTR_TO_ARENA_PAGE_INDEX(fin->gcobj);
                 PageInfo *page = arena->page_infos[page_index];
-                fprintf (stderr, "fin->gcobj = %p\n", fin->gcobj);
-                fprintf (stderr, "page_index = %d, using page %p\n", page_index, page);
-                fprintf (stderr, "sizeof cell for page = %zd\n", arena->page_infos[page_index]->cell_size);
-                fprintf (stderr, "aligned to cell size? %s\n", IS_ALIGNED_TO(fin->gcobj, arena->page_infos[page_index]->cell_size) ? "yes" : "no");
+                _ejs_log ("fin->gcobj = %p\n", fin->gcobj);
+                _ejs_log ("page_index = %d, using page %p\n", page_index, page);
+                _ejs_log ("sizeof cell for page = %zd\n", arena->page_infos[page_index]->cell_size);
+                _ejs_log ("aligned to cell size? %s\n", IS_ALIGNED_TO(fin->gcobj, arena->page_infos[page_index]->cell_size) ? "yes" : "no");
 #endif
                 continue;
             }
 
-            assert(info);
+            EJS_ASSERT(info);
             if (IS_FREE(info->page_bitmap[cell_idx])) {
                 continue;
             }
             if (!IS_FINALIZABLE(info->page_bitmap[cell_idx]))
-                fprintf (stderr, "%p->page_bitmap[%d] (corresponding to object %p) is not finalizable\n", info, cell_idx, info->page_start + (cell_idx * info->cell_size));
-            assert(IS_FINALIZABLE(info->page_bitmap[cell_idx]));
+                _ejs_log ("%p->page_bitmap[%d] (corresponding to object %p) is not finalizable\n", info, cell_idx, info->page_start + (cell_idx * info->cell_size));
+            EJS_ASSERT(IS_FINALIZABLE(info->page_bitmap[cell_idx]));
 
             finalize_object(fin->gcobj);
             memset (fin->gcobj, 0, info->cell_size);
 
             SET_FREE(info->page_bitmap[cell_idx]);
-            SPEW(3, fprintf (stderr, "finalized object %p in page %p, num_free_cells == %zd\n", fin->gcobj, info, info->num_free_cells + 1));
+            SPEW(3, _ejs_log ("finalized object %p in page %p, num_free_cells == %zd\n", fin->gcobj, info, info->num_free_cells + 1));
             // if this page is empty, move it to this arena's free list
             pthread_mutex_lock (&info->page_mutex);
             info->num_free_cells ++;
@@ -641,11 +649,11 @@ _ejs_finalizer_thread ()
                 pthread_mutex_lock (&info->page_mutex);
                 if (info->num_free_cells == info->num_cells) {
                     if (info->los_info) {
-                        fprintf (stderr, "releasing large object!\n");
+                        _ejs_log ("releasing large object!\n");
                         release_to_los (info->los_info);
                     }
                     else {
-                        SPEW(2, fprintf (stderr, "page %p is empty, putting it on the free list\n", info));
+                        SPEW(2, _ejs_log ("page %p is empty, putting it on the free list\n", info));
                         // the page is empty, add it to the arena's free page list.
                         int bucket = ffs(info->cell_size) - OBJECT_SIZE_LOW_LIMIT_BITS;
                         _ejs_list_detach_node (&heap_pages[bucket], (EJSListNode*)info);
@@ -657,7 +665,7 @@ _ejs_finalizer_thread ()
             }
             free (fin);
         }
-        SPEW(1, fprintf (stderr, "finished finalizer run\n"));
+        SPEW(1, _ejs_log ("finished finalizer run\n"));
     }
     return NULL;
 }
@@ -665,7 +673,11 @@ _ejs_finalizer_thread ()
 void
 _ejs_gc_init()
 {
+#if IOS
+    gc_disabled = EJS_TRUE;
+#else
     gc_disabled = getenv("EJS_GC_DISABLE") != NULL;
+#endif
     char* n_allocs = getenv("EJS_GC_EVERY_N_ALLOC");
     if (n_allocs)
         collect_every_alloc = atoi(n_allocs);
@@ -677,8 +689,10 @@ _ejs_gc_init()
 
     root_set = NULL;
 
+#if false
     // start up the finalizer thread
     pthread_create (&finalizer_thread, NULL, _ejs_finalizer_thread, NULL);
+#endif
 }
 
 static void
@@ -763,8 +777,13 @@ mark_pointers_in_range(GCObjectPtr* low, GCObjectPtr* high)
 static void
 mark_ejsvals_in_range(void* low, void* high)
 {
-    void* p;
-    for (p = low; p < high - sizeof(ejsval); p++) {
+    void* p = low;
+#if IOS
+    while (((uintptr_t)p) & 0x7) {
+        p++;
+    }
+#endif
+    for (; p < high - sizeof(ejsval); p += sizeof(ejsval)) {
         ejsval candidate_val = *((ejsval*)p);
         if (EJSVAL_IS_GCTHING_IMPL(candidate_val)) {
             GCObjectPtr gcptr = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(candidate_val);
@@ -772,19 +791,19 @@ mark_ejsvals_in_range(void* low, void* high)
             if (gcptr == NULL)            continue; // skip nulls.
 
             int cell_idx;
-            PageInfo *p = find_page_and_cell(gcptr, &cell_idx);
-            if (p) {
+            PageInfo *page = find_page_and_cell(gcptr, &cell_idx);
+            if (page) {
                 // XXX more checks before we start treating the pointer like a GCObjectPtr?
-                BitmapCell cell = p->page_bitmap[cell_idx];
+                BitmapCell cell = page->page_bitmap[cell_idx];
                 if (IS_FREE(cell)) continue; // skip free cells
                 if (!IS_WHITE(cell)) continue; // skip pointers to gray/black cells
 
                 if (EJSVAL_IS_STRING(candidate_val)) {
-                    SPEW(4, fprintf (stderr, "found ptr to %p(PrimString) on stack\n", EJSVAL_TO_STRING(candidate_val)));
+                    SPEW(4, _ejs_log ("found ptr to %p(PrimString) on stack\n", EJSVAL_TO_STRING(candidate_val)));
                     WORKLIST_PUSH_AND_GRAY_CELL(gcptr, cell);
                 }
                 else {
-                    //SPEW(fprintf (stderr, "found ptr to %p(%s) on stack\n", EJSVAL_TO_OBJECT(candidate_val), CLASSNAME(EJSVAL_TO_OBJECT(candidate_val))));
+                    //SPEW(_ejs_log ("found ptr to %p(%s) on stack\n", EJSVAL_TO_OBJECT(candidate_val), CLASSNAME(EJSVAL_TO_OBJECT(candidate_val))));
                     WORKLIST_PUSH_AND_GRAY_CELL(gcptr, cell);
                 }
             }
@@ -857,7 +876,7 @@ sweep_heap()
     }
     
     // sweep the large object store
-    SPEW(2, fprintf (stderr, "sweeping los: "));
+    SPEW(2, _ejs_log ("sweeping los: "));
     LargeObjectInfo *lobj = los_list;
     while (lobj) {
         large_objs ++;
@@ -865,7 +884,7 @@ sweep_heap()
         BitmapCell cell = info->page_bitmap[0];
         LargeObjectInfo *next = lobj->next;
         if (!IS_FINALIZABLE(cell) && IS_WHITE(cell)) {
-            SPEW(2, { fprintf (stderr, "l"); fflush(stderr); });
+            SPEW(2, { _ejs_log ("l"); fflush(stderr); });
             white_objs++;
             EJSFinalizerEntry *fin = (EJSFinalizerEntry*)calloc(1, sizeof(EJSFinalizerEntry));
             fin->gcobj = info->page_start;
@@ -879,16 +898,17 @@ sweep_heap()
             SET_FINALIZABLE(info->page_bitmap[0]);
         }
         else {
-            SPEW(2, { fprintf (stderr, "L"); fflush(stderr); });
+            SPEW(2, { _ejs_log ("L"); fflush(stderr); });
         }
         lobj = next;
     }
-    SPEW(2, { fprintf (stderr, "\n"); });
+    SPEW(2, { _ejs_log ("\n"); });
 }
 
 static void
 mark_from_roots()
 {
+    SPEW (2, _ejs_log ("marking from roots"));
     // mark from our roots
     for (RootSetEntry *entry = root_set; entry; entry = entry->next) {
         num_roots++;
@@ -910,6 +930,7 @@ mark_from_roots()
             WORKLIST_PUSH_AND_GRAY_CELL(root_ptr, cell);
         }
     }
+    SPEW (2, _ejs_log ("done marking from roots"));
 }
 
 #if IOS
@@ -964,7 +985,7 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
 #endif
 
     // very simple stop the world collector
-    SPEW(1, fprintf (stderr, "collection started\n"));
+    SPEW(1, _ejs_log ("collection started\n"));
 
     num_roots = 0;
     white_objs = 0;
@@ -994,7 +1015,7 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
         uint64_t usec_before = tvbefore.tv_sec * 1000000 + tvbefore.tv_usec;
         uint64_t usec_after = tvafter.tv_sec * 1000000 + tvafter.tv_usec;
 
-        fprintf (stderr, "gc scan took %gms\n", (usec_after - usec_before) / 1000.0);
+        _ejs_log ("gc scan took %gms\n", (usec_after - usec_before) / 1000.0);
     }
 #endif
 
@@ -1015,16 +1036,16 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
         uint64_t usec_before = tvbefore.tv_sec * 1000000 + tvbefore.tv_usec;
         uint64_t usec_after = tvafter.tv_sec * 1000000 + tvafter.tv_usec;
 
-        fprintf (stderr, "gc sweep took %gms\n", (usec_after - usec_before) / 1000.0);
+        _ejs_log ("gc sweep took %gms\n", (usec_after - usec_before) / 1000.0);
     }
 #endif
 
 #if gc_timings > 1
-    fprintf (stderr, "_ejs_gc_collect stats:\n");
-    fprintf (stderr, "   num_roots: %d\n", num_roots);
-    fprintf (stderr, "   total objects: %d\n", total_objs);
-    fprintf (stderr, "   num large objects: %d\n", large_objs);
-    fprintf (stderr, "   garbage objects: %d\n", white_objs);
+    _ejs_log ("_ejs_gc_collect stats:\n");
+    _ejs_log ("   num_roots: %d\n", num_roots);
+    _ejs_log ("   total objects: %d\n", total_objs);
+    _ejs_log ("   num large objects: %d\n", large_objs);
+    _ejs_log ("   garbage objects: %d\n", white_objs);
 #endif
 
     unsigned int tmp = black_mask;
@@ -1044,7 +1065,7 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
 
         root_set = NULL;
 
-        SPEW(1, fprintf (stderr, "final gc page statistics:\n");
+        SPEW(1, _ejs_log ("final gc page statistics:\n");
              for (int hp = 0; hp < HEAP_PAGELISTS_COUNT; hp++) {
                  int len = 0;
 
@@ -1052,7 +1073,7 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
                          len ++;
                  });
 
-                 fprintf (stderr, "  size: %d     pages: %d\n", 1<<(hp + 3), len);
+                 _ejs_log ("  size: %d     pages: %d\n", 1<<(hp + 3), len);
              });
     }
 #if sanity
@@ -1067,7 +1088,7 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
         }
     }
 #endif
-    SPEW(1, fprintf (stderr, "collection finished\n"));
+    SPEW(1, _ejs_log ("collection finished\n"));
 }
 
 static size_t
@@ -1099,8 +1120,8 @@ _ejs_gc_collect()
     uint64_t usec_before = tvbefore.tv_sec * 1000000 + tvbefore.tv_usec;
     uint64_t usec_after = tvafter.tv_sec * 1000000 + tvafter.tv_usec;
 
-    fprintf (stderr, "gc collect took %gms\n", (usec_after - usec_before) / 1000.0);
-    fprintf (stderr, "   for a heap size of %zdMB\n", heap_size/(1024*1024));
+    _ejs_log ("gc collect took %gms\n", (usec_after - usec_before) / 1000.0);
+    _ejs_log ("   for a heap size of %zdMB\n", heap_size/(1024*1024));
 #if gc_timings > 1
     _ejs_gc_dump_heap_stats();
 #endif
@@ -1113,12 +1134,12 @@ void
 _ejs_gc_shutdown()
 {
     _ejs_gc_collect_inner(EJS_TRUE);
-    SPEW(1, fprintf (stderr, "total allocs = %d\n", total_allocs));
+    SPEW(1, _ejs_log ("total allocs = %d\n", total_allocs));
 
-    fprintf (stderr, "gc allocation stats (_ejs_gc_shutdown):\n");
-    fprintf (stderr, "  objects: %d\n", num_object_allocs);
-    fprintf (stderr, "  closureenv: %d\n", num_closureenv_allocs);
-    fprintf (stderr, "  primstr: %d\n", num_primstr_allocs);
+    _ejs_log ("gc allocation stats (_ejs_gc_shutdown):\n");
+    _ejs_log ("  objects: %d\n", num_object_allocs);
+    _ejs_log ("  closureenv: %d\n", num_closureenv_allocs);
+    _ejs_log ("  primstr: %d\n", num_primstr_allocs);
 }
 
 /* Compute the smallest power of 2 that is >= x. */
@@ -1144,15 +1165,15 @@ alloc_from_page(PageInfo *info)
 {
     pthread_mutex_lock (&info->page_mutex);
 
-    assert (info->num_free_cells > 0);
+    EJS_ASSERT (info->num_free_cells > 0);
     
     GCObjectPtr rv = NULL;
     int cell;
 
-    SPEW(2, fprintf (stderr, "allocating object from page %p (cell size %zd)\n", info, info->cell_size));
+    SPEW(2, _ejs_log ("allocating object from page %p (cell size %zd)\n", info, info->cell_size));
 
     if (info->bump_ptr) {
-        rv = (GCObjectPtr)info->bump_ptr;
+        rv = (GCObjectPtr)ALIGN(info->bump_ptr, 8);
         cell = PTR_TO_CELL(info->bump_ptr, info);
         info->bump_ptr += info->cell_size;
         // check if we can service the next alloc request from the bump_ptr.  if we can't, switch
@@ -1169,7 +1190,7 @@ alloc_from_page(PageInfo *info)
         }
     }
 
-    assert (rv);
+    EJS_ASSERT (rv);
 
     SET_ALLOCATED(info->page_bitmap[cell]);
     SET_WHITE(info->page_bitmap[cell]);
@@ -1178,7 +1199,7 @@ alloc_from_page(PageInfo *info)
 
     pthread_mutex_unlock (&info->page_mutex);
 
-    SPEW(2, fprintf (stderr, "allocated obj %p from page %p (cell size %zd), free cells remaining %zd\n", rv, info, info->cell_size, info->num_free_cells));
+    SPEW(2, _ejs_log ("allocated obj %p from page %p (cell size %zd), free cells remaining %zd\n", rv, info, info->cell_size, info->num_free_cells));
     return rv;
 }
 
@@ -1186,24 +1207,37 @@ static GCObjectPtr
 alloc_from_los(size_t size, EJSScanType scan_type)
 {
     // allocate enough space for the object, our header, and our bitmap.  leave room enough to align the return value
+    _ejs_log ("los1 size = %d", size + sizeof(LargeObjectInfo) + 16);
     LargeObjectInfo *rv = alloc_from_os(size + sizeof(LargeObjectInfo) + 16, 0);
 
+    _ejs_log ("los2 rv = %p", rv);
     rv->page_info.page_bitmap = (char*)((void*)rv + sizeof(LargeObjectInfo)); // our 1 byte bitmap comes right after the header
+    _ejs_log ("los3");
     rv->page_info.page_start = (void*)ALIGN((void*)rv + sizeof(LargeObjectInfo) + 1, 8);
+    _ejs_log ("los4");
     rv->page_info.cell_size = size;
+    _ejs_log ("los5");
     rv->page_info.num_cells = 1;
+    _ejs_log ("los6");
     rv->page_info.num_free_cells = 0;
+    _ejs_log ("los7");
     rv->page_info.los_info = rv;
 
+    _ejs_log ("los8");
     SET_WHITE(rv->page_info.page_bitmap[0]);
+    _ejs_log ("los9");
     SET_ALLOCATED(rv->page_info.page_bitmap[0]);
 
+    _ejs_log ("los10");
     *((GCObjectHeader*)rv->page_info.page_start) = scan_type;
 
+    _ejs_log ("los11");
     rv->alloc_size = size;
 
+    _ejs_log ("los12");
     EJS_LIST_PREPEND (rv, los_list);
-    //fprintf (stderr, "alloc_from_los returning %p\n, los_list = %p\n", rv->page_info.page_start, los_list);
+    //_ejs_log ("alloc_from_los returning %p\n, los_list = %p\n", rv->page_info.page_start, los_list);
+    _ejs_log ("los13");
     return rv->page_info.page_start;
 }
 
@@ -1242,7 +1276,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     bucket = ffs(bucket_size) - OBJECT_SIZE_LOW_LIMIT_BITS;
 
     if (bucket > HEAP_PAGELISTS_COUNT) {
-        SPEW(2, fprintf (stderr, "need to alloc from los!!!\n"));
+        SPEW(2, _ejs_log ("need to alloc from los!!!\n"));
         return alloc_from_los(size, scan_type);
     }
 
@@ -1258,6 +1292,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     rv = alloc_from_page(info);
     *((GCObjectHeader*)rv) = scan_type;
 
+#if false
     if (info->num_free_cells == 0) {
         // if the page is full, bump it to the end of the list (if there's more than 1 page in the list)
         if (heap_pages[bucket].head != heap_pages[bucket].tail) {
@@ -1265,6 +1300,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
             _ejs_list_append_node (&heap_pages[bucket], (EJSListNode*)info);
         }
     }
+#endif
 
     UNLOCK_GC();
 
@@ -1308,16 +1344,16 @@ page_list_count (PageInfo* page)
 void
 _ejs_gc_dump_heap_stats()
 {
-    fprintf (stderr, "arenas:\n");
+    _ejs_log ("arenas:\n");
     for (int i = 0; i < num_arenas; i ++) {
-        fprintf (stderr, "  [%d] - %p - %p\n", i, heap_arenas[i], heap_arenas[i]->end);
+        _ejs_log ("  [%d] - %p - %p\n", i, heap_arenas[i], heap_arenas[i]->end);
     }
 
     for (int i = 0; i < HEAP_PAGELISTS_COUNT; i ++) {
 #if gc_timings > 3
         EJSBool printed_something = EJS_FALSE;
 #endif
-        fprintf (stderr, "heap_pages[%d, size %d] : %d pages\n", i, 1 << (i + OBJECT_SIZE_LOW_LIMIT_BITS), _ejs_list_length (&heap_pages[i]));
+        _ejs_log ("heap_pages[%d, size %d] : %d pages\n", i, 1 << (i + OBJECT_SIZE_LOW_LIMIT_BITS), _ejs_list_length (&heap_pages[i]));
 #if gc_timings > 3
         EJS_LIST_FOREACH (&heap_pages[i], PageInfo, page, {
             GCObjectPtr p = page->page_start;
@@ -1325,28 +1361,28 @@ _ejs_gc_dump_heap_stats()
                 if (IS_FREE(page->page_bitmap[c]) || IS_FINALIZABLE(page->page_bitmap[c]))
                     continue;
                 GCObjectHeader* headerp = (GCObjectHeader*)p;
-                if ((*headerp & EJS_SCAN_TYPE_OBJECT) != 0)          fprintf (stderr, "O");
-                else if ((*headerp & EJS_SCAN_TYPE_CLOSUREENV) != 0) fprintf (stderr, "C");
-                else if ((*headerp & EJS_SCAN_TYPE_PRIMSTR) != 0)    fprintf (stderr, "S");
+                if ((*headerp & EJS_SCAN_TYPE_OBJECT) != 0)          _ejs_log ("O");
+                else if ((*headerp & EJS_SCAN_TYPE_CLOSUREENV) != 0) _ejs_log ("C");
+                else if ((*headerp & EJS_SCAN_TYPE_PRIMSTR) != 0)    _ejs_log ("S");
                 printed_something = EJS_TRUE;
             }
         })
         if (printed_something)
-            fprintf (stderr, "\n");
+            _ejs_log ("\n");
 #endif
     }
 
-    fprintf (stderr, "\n");
+    _ejs_log ("\n");
 
     if (los_list) {
-        fprintf (stderr, "large object store: ");
+        _ejs_log ("large object store: ");
         for (LargeObjectInfo* lobj = los_list; lobj; lobj = lobj->next) {
             GCObjectHeader* headerp = (GCObjectHeader*)lobj->page_info.page_start;
-            if ((*headerp & EJS_SCAN_TYPE_OBJECT) != 0)          fprintf (stderr, "O");
-            else if ((*headerp & EJS_SCAN_TYPE_CLOSUREENV) != 0) fprintf (stderr, "C");
-            else if ((*headerp & EJS_SCAN_TYPE_PRIMSTR) != 0)    fprintf (stderr, "S");
+            if ((*headerp & EJS_SCAN_TYPE_OBJECT) != 0)          _ejs_log ("O");
+            else if ((*headerp & EJS_SCAN_TYPE_CLOSUREENV) != 0) _ejs_log ("C");
+            else if ((*headerp & EJS_SCAN_TYPE_PRIMSTR) != 0)    _ejs_log ("S");
         }
-        fprintf (stderr, "\n");
+        _ejs_log ("\n");
     }
 }
 
@@ -1370,15 +1406,15 @@ _ejs_GC_dumpAllocationStats (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     }
 
     if (tag) {
-        fprintf (stderr, "gc allocation stats (%s):\n", tag);
+        _ejs_log ("gc allocation stats (%s):\n", tag);
     }
     else {
-        fprintf (stderr, "gc allocation stats:\n");
+        _ejs_log ("gc allocation stats:\n");
     }
 
-    fprintf (stderr, "  objects: %d\n", num_object_allocs);
-    fprintf (stderr, "  closureenv: %d\n", num_closureenv_allocs);
-    fprintf (stderr, "  primstr: %d\n", num_primstr_allocs);
+    _ejs_log ("  objects: %d\n", num_object_allocs);
+    _ejs_log ("  closureenv: %d\n", num_closureenv_allocs);
+    _ejs_log ("  primstr: %d\n", num_primstr_allocs);
 
     num_object_allocs = 0;
     num_closureenv_allocs = 0;

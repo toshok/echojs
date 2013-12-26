@@ -2,7 +2,6 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
-#include <assert.h>
 #include <string.h>
 
 #include "ejs-ops.h"
@@ -100,8 +99,8 @@ _ejs_regexp_replace(ejsval str, ejsval search_re, ejsval replace)
             ejsval substr_match = _ejs_string_new_substring (str, ovec[0], ovec[1] - ovec[0]);
             ejsval capture = _ejs_string_new_substring (str, ovec[2], ovec[3] - ovec[2]);
 
-            fprintf (stderr, "substring match is %s\n", ucs2_to_utf8(_ejs_string_flatten(substr_match)->data.flat));
-            fprintf (stderr, "capture is %s\n", ucs2_to_utf8(_ejs_string_flatten(capture)->data.flat));
+            _ejs_log ("substring match is %s\n", ucs2_to_utf8(_ejs_string_flatten(substr_match)->data.flat));
+            _ejs_log ("capture is %s\n", ucs2_to_utf8(_ejs_string_flatten(capture)->data.flat));
 
             int argc = 3;
             ejsval args[3];
@@ -139,8 +138,8 @@ _ejs_regexp_replace(ejsval str, ejsval search_re, ejsval replace)
 }
 
 
-ejsval _ejs_RegExp;
-ejsval _ejs_RegExp_proto;
+ejsval _ejs_RegExp EJSVAL_ALIGNMENT;
+ejsval _ejs_RegExp_proto EJSVAL_ALIGNMENT;
 
 static ejsval
 _ejs_RegExp_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)

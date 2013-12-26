@@ -1197,17 +1197,25 @@ register_js_class (CKObject* proto,
 static ejsval
 _ejs_objc_registerJSClass (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
+    _ejs_log ("entering _ejs_objc_registerJSClass");
+
     // unused ejsval ctor = args[0]
     CKObject* proto = [[CKValue valueWithJSValue:args[1]] objectValue];
-    
+
+    _ejs_log ("1");
+
     char *register_cstr = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[2]));
+    _ejs_log ("2 %s", register_cstr);
+    _ejs_dump_value(args[3]);
     char *super_register_cstr = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[3]));
+    _ejs_log ("3 %s", super_register_cstr);
 
     register_js_class (proto, register_cstr, super_register_cstr);
 
     free (register_cstr);
     free (super_register_cstr);
 
+    _ejs_log ("leaving _ejs_objc_registerJSClass");
     return _ejs_undefined;
 }
 

@@ -11,7 +11,7 @@
 typedef struct {
     const char* name;
     EJSClosureFunc func;
-    ejsval cached_exports;
+    ejsval cached_exports EJSVAL_ALIGNMENT;
 } EJSRequire;
 
 typedef ejsval (*ExternalModuleEntry) (ejsval exports);
@@ -19,7 +19,7 @@ typedef ejsval (*ExternalModuleEntry) (ejsval exports);
 typedef struct {
     const char* name;
     ExternalModuleEntry func;
-    ejsval cached_exports;
+    ejsval cached_exports EJSVAL_ALIGNMENT;
 } EJSExternalModuleRequire;
 
 EJS_BEGIN_DECLS

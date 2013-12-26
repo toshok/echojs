@@ -36,3 +36,9 @@ _ejs_record_assignment (int id, ejsval val)
 {
     printf ("for id %d, assignment: val=%s\n", id, type_name(val));
 }
+
+void
+_ejs_record_getprop (int id, ejsval obj, ejsval prop)
+{
+    printf ("for id %d, getprop\n", id);
+}

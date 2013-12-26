@@ -24,7 +24,7 @@ static EJSRequire builtin_module_map[] = {
 };
 static int num_builtin_modules = sizeof(builtin_module_map) / sizeof(builtin_module_map[0]);
 
-ejsval _ejs_require;
+ejsval _ejs_require EJSVAL_ALIGNMENT;
 
 EJSBool
 require_builtin_module (const char* name, ejsval *module)
@@ -78,7 +78,7 @@ require_user_module (const char* name, ejsval *module)
         }
         if (!strcmp (map->name, name)) {
             if (EJSVAL_IS_NULL(map->cached_exports)) {
-                //fprintf (stderr, "require'ing %s.\n", name);
+                _ejs_log ("require'ing %s.\n", name);
                 _ejs_gc_add_root (&map->cached_exports);
                 map->cached_exports = _ejs_object_new(_ejs_null, &_ejs_object_specops);
                 ejsval prev_exports = _ejs_object_getprop (_ejs_global, _ejs_atom_exports);
@@ -91,7 +91,7 @@ require_user_module (const char* name, ejsval *module)
 
                 _ejs_object_setprop(_ejs_global, _ejs_atom_exports, prev_exports);
                 _ejs_gc_remove_root (&prev_exports);
-                //fprintf (stderr, "done require'ing %s.\n", name);
+                _ejs_log ("done require'ing %s.\n", name);
             }
             *module = map->cached_exports;
             return EJS_TRUE;
@@ -104,32 +104,39 @@ require_user_module (const char* name, ejsval *module)
 static ejsval
 _ejs_require_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    if (argc < 1)
+    _ejs_log ("in _ejs_require_impl");
+    if (argc < 1) {
         return _ejs_undefined;
+    }
 
     ejsval arg = args[0];
-    char* arg_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(arg));
 
     if (!EJSVAL_IS_STRING(arg)) {
-        //fprintf (stderr, "required called with non-string\n");
-        free (arg_utf8);
+        _ejs_log ("required called with non-string\n");
         return _ejs_null;
     }
 
-    ejsval module;
+    char* arg_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(arg));
+
+    ejsval module EJSVAL_ALIGNMENT;
     if (require_builtin_module (arg_utf8, &module)) {
+        _ejs_log ("returning builtin module for %s", arg_utf8);
         free (arg_utf8);
         return module;
     }
+    _ejs_log ("1");
     if (require_external_module (arg_utf8, &module)) {
+        _ejs_log ("returning external module for %s", arg_utf8);
         free (arg_utf8);
         return module;
     }
+    _ejs_log ("2");
     if (require_user_module (arg_utf8, &module)) {
+        _ejs_log ("returning user module for %s", arg_utf8);
         free (arg_utf8);
         return module;
     }
-    fprintf (stderr, "require('%s') failed: module not included in build.\n", arg_utf8);
+    _ejs_log ("require('%s') failed: module not included in build.\n", arg_utf8);
     free (arg_utf8);
     return _ejs_null;
 }

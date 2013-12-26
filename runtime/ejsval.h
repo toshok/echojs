@@ -54,9 +54,11 @@ EJS_BEGIN_DECLS
 
 #define EJS_STATIC_ASSERT(x)
 
+#if IOS
+#define EJS_BITS_PER_WORD 32
+#else
 #define EJS_BITS_PER_WORD 64
-#include <assert.h>
-#define EJS_ASSERT assert
+#endif
 
 /******************************************************************************/
 
@@ -404,7 +406,15 @@ EJS_STATIC_ASSERT(sizeof(ejsval_layout) == 8);
 
 #if EJS_BITS_PER_WORD == 32
 
-#define STATIC_BUILD_EJSVAL(tag, payload) { .asBits = (((uint64_t)(uint32_t)tag) << 32) | payload }
+#define STATIC_BUILD_EJSVAL(t, p) { .s = { .tag = (t), .payload = { .u32 = (uint32_t)(p) } } }
+#define STATIC_BUILD_DOUBLE_EJSVAL(v) { .asDouble = v }
+#define STATIC_BUILD_BOOLEAN_EJSVAL(b) { .s = { .tag = EJSVAL_TAG_BOOLEAN, .payload = { .boo = (b) } } }
+
+static EJS_ALWAYS_INLINE EJSValueTag
+EJSVAL_TO_TAG(ejsval_layout l)
+{
+    return l.s.tag;
+}
 
 /*
  * N.B. GCC, in some but not all cases, chooses to emit signed comparison of
@@ -503,7 +513,7 @@ CLOSUREENV_TO_EJSVAL_IMPL(EJSClosureEnv *env)
 {
     ejsval_layout l;
     EJS_ASSERT(env);
-    l.s.tag = EJSVAL_TAG_CLOSURENV;
+    l.s.tag = EJSVAL_TAG_CLOSUREENV;
     l.s.payload.env = env;
     return l;
 }
@@ -589,7 +599,7 @@ PRIVATE_PTR_TO_EJSVAL_IMPL(const void *ptr)
     ejsval_layout l;
     EJS_ASSERT(((uint32_t)ptr & 1) == 0);
     l.s.tag = (EJSValueTag)0;
-    l.s.payload.ptr = ptr;
+    l.s.payload.ptr = (void*)ptr;
     EJS_ASSERT(EJSVAL_IS_DOUBLE_IMPL(l));
     return l;
 }
@@ -616,7 +626,7 @@ EJSVAL_TO_GCTHING_IMPL(ejsval_layout l)
 static EJS_ALWAYS_INLINE EJSBool
 EJSVAL_IS_TRACEABLE_IMPL(ejsval_layout l)
 {
-    return l.s.tag == EJSVAL_TAG_STRING || l.s.tag == EJS_TAG_CLOSUREENV || l.s.tag == EJSVAL_TAG_OBJECT;
+    return l.s.tag == EJSVAL_TAG_STRING || l.s.tag == EJSVAL_TAG_CLOSUREENV || l.s.tag == EJSVAL_TAG_OBJECT;
 }
 
 static EJS_ALWAYS_INLINE uint32_t

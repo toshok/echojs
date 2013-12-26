@@ -4,7 +4,6 @@
 
 //#define DEBUG_FUNCTIONS 1
 
-#include <assert.h>
 #include <string.h>
 
 #include "ejs-value.h"
@@ -148,8 +147,8 @@ _ejs_function_new_utf8 (ejsval env, const char *name, EJSClosureFunc func)
 }
 
 
-ejsval _ejs_Function__proto__;
-ejsval _ejs_Function;
+ejsval _ejs_Function__proto__ EJSVAL_ALIGNMENT;
+ejsval _ejs_Function EJSVAL_ALIGNMENT;
 
 static ejsval
 _ejs_Function_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -246,7 +245,7 @@ _ejs_Function_prototype_apply (ejsval env, ejsval _this, uint32_t argc, ejsval *
 static ejsval
 _ejs_Function_prototype_call (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    // XXX nanboxing breaks this assert (EJSVAL_IS_FUNCTION(_this));
+    // XXX nanboxing breaks this EJS_ASSERT (EJSVAL_IS_FUNCTION(_this));
 
     ejsval thisArg = _ejs_undefined;
   
@@ -405,7 +404,7 @@ _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args)
         extern jschar* last_lookup;
         if (last_lookup) {
             char *last_utf8 = ucs2_to_utf8(last_lookup);
-            fprintf (stderr, "last property lookup was for: %s\n", last_utf8);
+            _ejs_log ("last property lookup was for: %s\n", last_utf8);
             free (last_utf8);
         }
 #endif
