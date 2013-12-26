@@ -25,8 +25,8 @@ options =
         target: "osx"
         external_modules: []
         extra_clang_args: ""
-        ios_sdk: "5.0"
-        ios_min: "5.0"
+        ios_sdk: "7.0"
+        ios_min: "7.0"
         basename: false
         target_pointer_size: 64
 
@@ -88,10 +88,10 @@ args =
                 help:    "extra arguments to pass to the clang command (used to compile the .s to .o)"
         "--ios-sdk":
                 option:  "ios_sdk"
-                help:    "the version of the ios sdk to use.  useful if more than one is installed.  Default is 5.0."
+                help:    "the version of the ios sdk to use.  useful if more than one is installed.  Default is 7.0."
         "--ios-min":
                 option:  "ios_min"
-                help:    "the minimum version of ios to support.  Default is 5.0."
+                help:    "the minimum version of ios to support.  Default is 7.0."
         "--record-types":
                 flag:    "record_types"
                 help:    "generates an executable which records types in a format later used for optimizations."
@@ -154,8 +154,8 @@ compiled_modules = []
 esprima = require 'esprima'
 compiler = require 'compiler'
 
-sim_base="/Developer/Platforms/iPhoneSimulator.platform"
-dev_base="/Developer/Platforms/iPhoneOS.platform"
+sim_base="/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform"
+dev_base="/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform"
 
 sim_bin="#{sim_base}/Developer/usr/bin"
 dev_bin="#{dev_base}/Developer/usr/bin"
@@ -163,12 +163,12 @@ dev_bin="#{dev_base}/Developer/usr/bin"
 target_llc_args =
         osx: ["-march=x86-64"]
         sim: ["-march=x86"]
-        dev: ["-march=arm"]
+        dev: ["-march=arm", "-mtriple=thumbv7-apple-ios", "-mattr=+v6", "-relocation-model=pic", "-soft-float" ]
 
 target_linker =
         osx: "clang++"
-        sim: "#{sim_bin}/clang++"
-        dev: "#{dev_bin}/clang++"
+        sim: "clang++"
+        dev: "clang++"
         
 target_link_args =
         osx: [ ]
@@ -178,7 +178,7 @@ target_link_args =
 target_libraries =
         osx: [ "-framework", "Foundation", "-framework", "AppKit" ]
         sim: [ "-framework", "Foundation", "-framework", "UIKit", "-framework", "GLKit", "-framework", "OpenGLES", "-framework", "CoreGraphics" ]
-        dev: [ "-framework", "Foundation", "-framework", "UIKit" ]
+        dev: [ "-framework", "Foundation", "-framework", "UIKit", "-framework", "GLKit", "-framework", "OpenGLES", "-framework", "CoreGraphics" ]
 
 target_libecho =
         osx: "runtime/libecho.a"
@@ -261,9 +261,9 @@ generate_require_map = ->
         map.write "#include \"#{relative_to_ejs_exe 'runtime/ejs.h'}\"\n"
         map.write "extern \"C\" {\n"
         map.write "typedef ejsval (*ExternalModuleEntry) (ejsval exports);\n"
-        map.write "typedef struct { const char* name;  ExternalModuleEntry func;  ejsval cached_exports; } EJSExternalModuleRequire;\n"
+        map.write "typedef struct { const char* name;  ExternalModuleEntry func;  ejsval cached_exports EJSVAL_ALIGNMENT; } EJSExternalModuleRequire;\n"
         map.write "typedef ejsval (*ToplevelFunc) (ejsval env, ejsval _this, int argc, ejsval *args);\n"
-        map.write "typedef struct { const char* name;  ToplevelFunc func;  ejsval cached_exports; } EJSRequire;\n"
+        map.write "typedef struct { const char* name;  ToplevelFunc func;  ejsval cached_exports EJSVAL_ALIGNMENT; } EJSRequire;\n"
         options.external_modules.forEach ({ module_entrypoint }) ->
                 map.write "extern ejsval #{module_entrypoint} (ejsval exports);\n"
 
