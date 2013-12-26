@@ -25,9 +25,9 @@ MKDIR=mkdir -p
 INSTALL=install
 CP=cp
 
-CFLAGS=-g -O3 -Wall -I. -Wno-unused-function
+CFLAGS=-g -O0 -Wall -I. -Wno-unused-function
 
-MIN_IOS_VERSION=5.0
+MIN_IOS_VERSION=7.0
 
 DEVELOPER_ROOT?=/Applications/Xcode.app/Contents/Developer
 IOS_SDK_VERSION?=7.0
@@ -36,15 +36,15 @@ OSX_ARCH=-arch x86_64
 OSX_CFLAGS=$(CFLAGS) -DOSX=1
 
 IOSSIM_ARCH=-arch i386
-IOSSIM_ARCH_FLAGS=
 IOSSIM_TRIPLE=i386-apple-darwin
+IOSSIM_ARCH_FLAGS=
 IOSSIM_ROOT=$(DEVELOPER_ROOT)/Platforms/iPhoneSimulator.platform/Developer
 IOSSIM_BIN=$(IOSSIM_ROOT)/usr/bin
 IOSSIM_SYSROOT=$(IOSSIM_ROOT)/SDKs/iPhoneSimulator$(IOS_SDK_VERSION).sdk
 
 IOSDEV_ARCH=-arch armv7
-IOSDEV_ARCH_FLAGS=-mthumb
 IOSDEV_TRIPLE=armv7-apple-darwin
+IOSDEV_ARCH_FLAGS=-mthumb -std=gnu99
 IOSDEV_ROOT=$(DEVELOPER_ROOT)/Platforms/iPhoneOS.platform/Developer
 IOSDEV_BIN=$(IOSDEV_ROOT)/usr/bin
 IOSDEV_SYSROOT=$(IOSDEV_ROOT)/SDKs/iPhoneOS$(IOS_SDK_VERSION).sdk 
