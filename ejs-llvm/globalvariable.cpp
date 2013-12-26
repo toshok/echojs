@@ -95,6 +95,18 @@ namespace ejsllvm {
         return _ejs_undefined;
     }
 
+    ejsval
+    GlobalVariable_prototype_setAlignment(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        GlobalVariable* global = (GlobalVariable*)EJSVAL_TO_OBJECT(_this);
+
+        REQ_INT_ARG (0, alignment);
+
+        global->llvm_global->setAlignment (alignment);
+
+        return _ejs_undefined;
+    }
+
     llvm::GlobalVariable*
     GlobalVariable_GetLLVMObj(ejsval val)
     {
@@ -114,6 +126,7 @@ namespace ejsllvm {
 
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_GlobalVariable_proto, x, GlobalVariable_prototype_##x)
 
+        PROTO_METHOD(setAlignment);
         PROTO_METHOD(setInitializer);
         PROTO_METHOD(dump);
         PROTO_METHOD(toString);

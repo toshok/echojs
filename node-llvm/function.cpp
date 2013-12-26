@@ -21,6 +21,7 @@ namespace jsllvm {
 
     s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("args"), Function::GetArgs);
     s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("argSize"), Function::GetArgSize);
+    s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("name"), Function::GetName);
     s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("returnType"), Function::GetReturnType);
     s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("type"), Function::GetType);
     s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("doesNotThrow"), Function::GetDoesNotThrow);
@@ -35,6 +36,8 @@ namespace jsllvm {
     NODE_SET_PROTOTYPE_METHOD(s_ct, "setExternalLinkage", Function::SetInternalLinkage);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "setInternalLinkage", Function::SetInternalLinkage);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", Function::ToString);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "setStructRet", Function::SetStructRet);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "hasStructRetAttr", Function::HasStructRetAttr);
 
     s_func = Persistent<v8::Function>::New(s_ct->GetFunction());
     target->Set(String::NewSymbol("LLVMFunction"),
@@ -137,6 +140,27 @@ namespace jsllvm {
     return scope.Close(String::New(trim(str_ostream.str()).c_str()));
   }
 
+  Handle<v8::Value> Function::SetStructRet(const Arguments& args)
+  {
+    HandleScope scope;
+    Function* fun = ObjectWrap::Unwrap<Function>(args.This());
+
+    fun->llvm_fun->addAttribute(1 /* first arg */,
+				llvm::Attribute::StructRet);
+
+    return scope.Close(Undefined());
+  }
+
+  Handle<v8::Value> Function::HasStructRetAttr (const Arguments& args)
+  {
+    HandleScope scope;
+    Function* fun = ObjectWrap::Unwrap<Function>(args.This());
+
+    Handle<v8::Value> result = Boolean::New(fun->llvm_fun->hasStructRetAttr());
+
+    return scope.Close(result);
+  }
+
   Handle<v8::Value> Function::GetArgSize (Local<String> property, const AccessorInfo& info)
   {
     HandleScope scope;
@@ -159,6 +183,14 @@ namespace jsllvm {
     }
 
     return scope.Close(result);
+  }
+
+  Handle<v8::Value> Function::GetName (Local<String> property, const AccessorInfo& info)
+  {
+    HandleScope scope;
+    Function* fun = ObjectWrap::Unwrap<Function>(info.This());
+    std::string fun_name = fun->llvm_fun->getName();
+    return scope.Close(String::New(fun_name.c_str()));
   }
 
   Handle<v8::Value> Function::GetReturnType (Local<String> property, const AccessorInfo& info)

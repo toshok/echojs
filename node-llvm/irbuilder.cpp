@@ -7,6 +7,8 @@
 #include "switch.h"
 #include "callinvoke.h"
 #include "basicblock.h"
+#include "allocainst.h"
+#include "loadinst.h"
 
 using namespace node;
 using namespace v8;
@@ -269,7 +271,7 @@ namespace jsllvm {
     REQ_LLVM_TYPE_ARG(0, ty);
     FALLBACK_EMPTY_UTF8_ARG(1, name);
     
-    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateAlloca(ty, 0, *name)));
+    Handle<v8::Value> result = AllocaInst::New(IRBuilder::builder.CreateAlloca(ty, 0, *name));
     return scope.Close(result);
   }
 
@@ -280,7 +282,7 @@ namespace jsllvm {
     REQ_LLVM_VAL_ARG(0, val);
     FALLBACK_EMPTY_UTF8_ARG(1, name);
     
-    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateLoad(val, *name)));
+    Handle<v8::Value> result = LoadInst::New(IRBuilder::builder.CreateLoad(val, *name));
     return scope.Close(result);
   }
 

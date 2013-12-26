@@ -15,6 +15,8 @@
 #include "switch.h"
 #include "callinvoke.h"
 #include "basicblock.h"
+#include "allocainst.h"
+#include "loadinst.h"
 
 namespace ejsllvm {
 
@@ -155,7 +157,7 @@ namespace ejsllvm {
         REQ_LLVM_TYPE_ARG(0, ty);
         FALLBACK_EMPTY_UTF8_ARG(1, name);
 
-        ejsval rv = Value_new (_llvm_builder.CreateAlloca(ty, 0, name));
+        ejsval rv = AllocaInst_new (_llvm_builder.CreateAlloca(ty, 0, name));
         free (name);
         return rv;
     }
@@ -166,7 +168,7 @@ namespace ejsllvm {
         REQ_LLVM_VAL_ARG(0, val);
         FALLBACK_EMPTY_UTF8_ARG(1, name);
 
-        ejsval rv = Value_new (_llvm_builder.CreateLoad(val, name));
+        ejsval rv = LoadInst_new (_llvm_builder.CreateLoad(val, name));
         free (name);
         return rv;
     }

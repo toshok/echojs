@@ -1,6 +1,7 @@
 TOP=..
 
 SOURCES= \
+	allocainst.cpp \
 	arraytype.cpp \
 	basicblock.cpp \
 	callinvoke.cpp \
@@ -13,6 +14,7 @@ SOURCES= \
 	globalvariable.cpp \
 	irbuilder.cpp \
 	landingpad.cpp \
+	loadinst.cpp \
 	module.cpp \
 	structtype.cpp \
 	switch.cpp \

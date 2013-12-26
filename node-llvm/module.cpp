@@ -31,6 +31,8 @@ namespace jsllvm {
     NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", Module::ToString);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "writeToFile", Module::WriteToFile);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "writeBitcodeToFile", Module::WriteBitcodeToFile);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "setDataLayout", Module::SetDataLayout);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "setTriple", Module::SetTriple);
 
     s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
     target->Set(String::NewSymbol("Module"),
@@ -124,6 +126,8 @@ namespace jsllvm {
     // XXX this needs to come from the js call, since when we hoist anonymous methods we'll need to give them a private linkage.
     f->setLinkage (llvm::Function::ExternalLinkage);
 
+    //f->setCallingConv (llvm::CallingConv::ARM_AAPCS);
+
     // XXX the args might not be identifiers but might instead be destructuring expressions.  punt for now.
 
 #if notyet
@@ -178,6 +182,7 @@ namespace jsllvm {
 
     llvm::Function* f = static_cast< llvm::Function*>(module->llvm_module->getOrInsertFunction(*name, FT));
     f->setLinkage (llvm::Function::ExternalLinkage);
+    //f->setCallingConv (llvm::CallingConv::ARM_AAPCS);
 
     Handle<v8::Value> result = Function::New(f);
     return scope.Close(result);
@@ -228,7 +233,7 @@ namespace jsllvm {
     REQ_UTF8_ARG(0, path);
 
     std::string error;
-    llvm::raw_fd_ostream OS(*path, error, llvm::raw_fd_ostream::F_Binary);
+    llvm::raw_fd_ostream OS(*path, error, llvm::sys::fs::F_Binary);
     // check error
 
 
@@ -248,6 +253,30 @@ namespace jsllvm {
     llvm::raw_os_ostream raw_stream(output_file);
     module->llvm_module->print(raw_stream, NULL);
     output_file.close();
+
+    return scope.Close(Undefined());
+  }
+  
+  Handle<v8::Value> Module::SetDataLayout (const v8::Arguments& args)
+  {
+    HandleScope scope;
+    Module* module = ObjectWrap::Unwrap<Module>(args.This());
+
+    REQ_UTF8_ARG(0, dataLayout);
+
+    module->llvm_module->setDataLayout (*dataLayout);
+
+    return scope.Close(Undefined());
+  }
+
+  Handle<v8::Value> Module::SetTriple (const v8::Arguments& args)
+  {
+    HandleScope scope;
+    Module* module = ObjectWrap::Unwrap<Module>(args.This());
+
+    REQ_UTF8_ARG(0, triple);
+
+    module->llvm_module->setTargetTriple (*triple);
 
     return scope.Close(Undefined());
   }

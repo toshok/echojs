@@ -116,6 +116,22 @@ namespace ejsllvm {
     }
 
     ejsval
+    Function_prototype_setStructRet(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        Function* fun = ((Function*)EJSVAL_TO_OBJECT(_this));
+        fun->llvm_fun->addAttribute(1 /* first arg */,
+                                    llvm::Attribute::StructRet);
+        return _ejs_undefined;
+    }
+
+    ejsval
+    Function_prototype_hasStructRetAttr(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        Function* fun = ((Function*)EJSVAL_TO_OBJECT(_this));
+        return fun->llvm_fun->hasStructRetAttr() ? _ejs_true : _ejs_false;
+    }
+
+    ejsval
     Function_prototype_get_args(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         Function* fun = ((Function*)EJSVAL_TO_OBJECT(_this));
@@ -143,6 +159,14 @@ namespace ejsllvm {
     {
         Function* fun = ((Function*)EJSVAL_TO_OBJECT(_this));
         return Type_new (fun->llvm_fun->getReturnType());
+    }
+
+    ejsval
+    Function_prototype_get_name(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        Function* fun = ((Function*)EJSVAL_TO_OBJECT(_this));
+        std::string fun_name = fun->llvm_fun->getName();
+        return _ejs_string_new_utf8(fun_name.c_str());
     }
 
     ejsval
@@ -199,6 +223,7 @@ namespace ejsllvm {
 
         PROTO_ACCESSOR(args);
         PROTO_ACCESSOR(argSize);
+        PROTO_ACCESSOR(name);
         PROTO_ACCESSOR(returnType);
         PROTO_ACCESSOR(type);
         PROTO_ACCESSOR(doesNotThrow);
@@ -213,6 +238,9 @@ namespace ejsllvm {
         PROTO_METHOD(setExternalLinkage);
         PROTO_METHOD(setInternalLinkage);
         PROTO_METHOD(toString);
+
+        PROTO_METHOD(hasStructRetAttr);
+        PROTO_METHOD(setStructRet);
 
 #undef PROTO_METHOD
 #undef PROTO_ACCESSOR

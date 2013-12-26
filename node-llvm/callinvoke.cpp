@@ -26,6 +26,7 @@ namespace jsllvm {
     NODE_SET_PROTOTYPE_METHOD(s_ct, "setOnlyReadsMemory", Call::SetOnlyReadsMemory);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "setDoesNotAccessMemory", Call::SetDoesNotAccessMemory);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "setDoesNotThrow", Call::SetDoesNotThrow);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "setStructRet", Call::SetStructRet);
 
     s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
     target->Set(String::NewSymbol("CallInst"),
@@ -103,6 +104,15 @@ namespace jsllvm {
     return scope.Close(Undefined());
   }
 
+  Handle<v8::Value> Call::SetStructRet(const v8::Arguments& args)
+  {
+    HandleScope scope;
+    Call* _call = ObjectWrap::Unwrap<Call>(args.This());
+    _call->llvm_call->addAttribute(1 /* first arg */,
+				   llvm::Attribute::StructRet);
+    return scope.Close(Undefined());
+  }
+
   Persistent<FunctionTemplate> Call::s_ct;
   Persistent<Function> Call::s_func;
 
@@ -124,6 +134,7 @@ namespace jsllvm {
     NODE_SET_PROTOTYPE_METHOD(s_ct, "setOnlyReadsMemory", Invoke::SetOnlyReadsMemory);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "setDoesNotAccessMemory", Invoke::SetDoesNotAccessMemory);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "setDoesNotThrow", Invoke::SetDoesNotThrow);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "setStructRet", Invoke::SetStructRet);
 
     s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
     target->Set(String::NewSymbol("InvokeInst"),
@@ -198,6 +209,15 @@ namespace jsllvm {
     HandleScope scope;
     Invoke* _invoke = ObjectWrap::Unwrap<Invoke>(args.This());
     _invoke->llvm_invoke->setDoesNotThrow();
+    return scope.Close(Undefined());
+  }
+
+  Handle<v8::Value> Invoke::SetStructRet(const v8::Arguments& args)
+  {
+    HandleScope scope;
+    Invoke* _invoke = ObjectWrap::Unwrap<Invoke>(args.This());
+    _invoke->llvm_invoke->addAttribute(1 /* first arg */,
+				       llvm::Attribute::StructRet);
     return scope.Close(Undefined());
   }
 

@@ -1,4 +1,5 @@
 #include "node-llvm.h"
+#include "allocainst.h"
 #include "type.h"
 #include "functiontype.h"
 #include "structtype.h"
@@ -19,6 +20,7 @@
 #include "landingpad.h"
 #include "switch.h"
 #include "callinvoke.h"
+#include "loadinst.h"
 
 std::string& trim(std::string& str)
 {
@@ -37,6 +39,8 @@ extern "C" {
     jsllvm::ArrayType::Init(target);
     jsllvm::Value::Init(target);
     jsllvm::Instruction::Init(target);
+    jsllvm::LoadInst::Init(target);
+    jsllvm::AllocaInst::Init(target);
     jsllvm::Function::Init(target);
     jsllvm::GlobalVariable::Init(target);
     jsllvm::BasicBlock::Init(target);
@@ -52,14 +56,14 @@ extern "C" {
     jsllvm::Call::Init(target);
     jsllvm::Invoke::Init(target);
 
-    jsllvm::DIBuilder::Init(target);
-    jsllvm::DIDescriptor::Init(target);
-    jsllvm::DIType::Init(target);
-    jsllvm::DIScope::Init(target);
-    jsllvm::DISubprogram::Init(target);
-    jsllvm::DIFile::Init(target);
-    jsllvm::DILexicalBlock::Init(target);
-    jsllvm::DebugLoc::Init(target);
+    //jsllvm::DIBuilder::Init(target);
+    //jsllvm::DIDescriptor::Init(target);
+    //jsllvm::DIType::Init(target);
+    //jsllvm::DIScope::Init(target);
+    //jsllvm::DISubprogram::Init(target);
+    //jsllvm::DIFile::Init(target);
+    //jsllvm::DILexicalBlock::Init(target);
+    //jsllvm::DebugLoc::Init(target);
   }
 
   NODE_MODULE(llvm, init);

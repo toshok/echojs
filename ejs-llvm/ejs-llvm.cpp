@@ -14,6 +14,8 @@
 #include "function.h"
 #include "value.h"
 #include "switch.h"
+#include "allocainst.h"
+#include "loadinst.h"
 #include "landingpad.h"
 
 std::string& trim(std::string& str)
@@ -55,6 +57,8 @@ _ejs_llvm_init (ejsval global)
   ConstantFP_init (global);
   Switch_init (global);
   LandingPad_init (global);
+  AllocaInst_init (global);
+  LoadInst_init (global);
 #if notyet
   PHINode_init (global);
 #endif

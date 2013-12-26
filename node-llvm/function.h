@@ -37,6 +37,10 @@ namespace jsllvm {
     static v8::Handle<v8::Value> SetInternalLinkage (const v8::Arguments& args);
     static v8::Handle<v8::Value> ToString (const v8::Arguments& args);
 
+    static v8::Handle<v8::Value> SetStructRet (const v8::Arguments& args);
+    static v8::Handle<v8::Value> HasStructRetAttr (const v8::Arguments& args);
+
+    static v8::Handle<v8::Value> GetName(v8::Local<v8::String> property, const v8::AccessorInfo& info);
     static v8::Handle<v8::Value> GetReturnType(v8::Local<v8::String> property, const v8::AccessorInfo& info);
     static v8::Handle<v8::Value> GetArgs(v8::Local<v8::String> property, const v8::AccessorInfo& info);
     static v8::Handle<v8::Value> GetArgSize(v8::Local<v8::String> property, const v8::AccessorInfo& info);

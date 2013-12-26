@@ -21,6 +21,7 @@ namespace jsllvm {
 
     NODE_SET_PROTOTYPE_METHOD (s_ct, "dump", GlobalVariable::Dump);
     NODE_SET_PROTOTYPE_METHOD (s_ct, "setInitializer", GlobalVariable::SetInitializer);
+    NODE_SET_PROTOTYPE_METHOD (s_ct, "setAlignment", GlobalVariable::SetAlignment);
     NODE_SET_PROTOTYPE_METHOD (s_ct, "toString", GlobalVariable::ToString);
 
     s_func = Persistent<Function>::New(s_ct->GetFunction());
@@ -81,6 +82,17 @@ namespace jsllvm {
     REQ_LLVM_CONST_ARG (0, init);
 
     val->llvm_global->setInitializer(init);
+    return scope.Close(Undefined());
+  }
+
+  Handle< ::v8::Value> GlobalVariable::SetAlignment(const Arguments& args)
+  {
+    HandleScope scope;
+    GlobalVariable* val = ObjectWrap::Unwrap<GlobalVariable>(args.This());
+
+    REQ_INT_ARG (0, alignment);
+
+    val->llvm_global->setAlignment(alignment);
     return scope.Close(Undefined());
   }
 

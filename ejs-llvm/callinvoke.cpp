@@ -92,6 +92,15 @@ namespace ejsllvm {
         return _ejs_undefined;
     }
 
+    ejsval
+    Call_prototype_setStructRet(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        Call* call = ((Call*)EJSVAL_TO_OBJECT(_this));
+        call->llvm_call->addAttribute(1 /* first arg */,
+                                      llvm::Attribute::StructRet);
+        return _ejs_undefined;
+    }
+
     llvm::CallInst*
     Call_GetLLVMObj(ejsval val)
     {
@@ -120,6 +129,7 @@ namespace ejsllvm {
         PROTO_METHOD(setOnlyReadsMemory);
         PROTO_METHOD(setDoesNotAccessMemory);
         PROTO_METHOD(setDoesNotThrow);
+        PROTO_METHOD(setStructRet);
         PROTO_METHOD(dump);
         PROTO_METHOD(toString);
 
@@ -203,6 +213,15 @@ namespace ejsllvm {
         return _ejs_undefined;
     }
 
+    ejsval
+    Invoke_prototype_setStructRet(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        Invoke* invoke = ((Invoke*)EJSVAL_TO_OBJECT(_this));
+        invoke->llvm_invoke->addAttribute(1 /* first arg */,
+                                          llvm::Attribute::StructRet);
+        return _ejs_undefined;
+    }
+
     llvm::InvokeInst*
     Invoke_GetLLVMObj(ejsval val)
     {
@@ -229,6 +248,7 @@ namespace ejsllvm {
         PROTO_METHOD(setOnlyReadsMemory);
         PROTO_METHOD(setDoesNotAccessMemory);
         PROTO_METHOD(setDoesNotThrow);
+        PROTO_METHOD(setStructRet);
         PROTO_METHOD(dump);
         PROTO_METHOD(toString);
 

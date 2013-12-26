@@ -232,13 +232,35 @@ namespace ejsllvm {
         REQ_UTF8_ARG(0, path);
 
         std::string error;
-        llvm::raw_fd_ostream OS(path, error, llvm::raw_fd_ostream::F_Binary);
+        llvm::raw_fd_ostream OS(path, error, llvm::sys::fs::F_Binary);
         // check error
 
         llvm::WriteBitcodeToFile (module->llvm_module, OS);
 
         free (path);
 
+        return _ejs_undefined;
+    }
+
+    ejsval
+    Module_prototype_setDataLayout(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        Module *module = ((Module*)EJSVAL_TO_OBJECT(_this));
+
+        REQ_UTF8_ARG(0, dataLayout);
+
+        module->llvm_module->setDataLayout (dataLayout);
+        return _ejs_undefined;
+    }
+
+    ejsval
+    Module_prototype_setTriple(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        Module *module = ((Module*)EJSVAL_TO_OBJECT(_this));
+
+        REQ_UTF8_ARG(0, triple);
+
+        module->llvm_module->setTargetTriple (triple);
         return _ejs_undefined;
     }
 
@@ -275,6 +297,8 @@ namespace ejsllvm {
         PROTO_METHOD(toString);
         PROTO_METHOD(writeToFile);
         PROTO_METHOD(writeBitcodeToFile);
+        PROTO_METHOD(setDataLayout);
+        PROTO_METHOD(setTriple);
 
 #undef PROTO_METHOD
     }
