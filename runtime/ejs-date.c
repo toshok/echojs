@@ -2,8 +2,6 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
-#include <assert.h>
-
 #include "ejs-ops.h"
 #include "ejs-value.h"
 #include "ejs-function.h"
@@ -42,22 +40,25 @@ EJSSpecOps _ejs_date_specops = {
 };
 
 ejsval
-_ejs_date_new_unix (int timestamp)
+_ejs_date_unix_now ()
 {
     EJSDate* rv = _ejs_gc_new (EJSDate);
 
     _ejs_init_object ((EJSObject*)rv, _ejs_Date_proto, &_ejs_date_specops);
 
-    time_t t = (time_t)timestamp;
-
-    if (!localtime_r(&t, &rv->tm))
-        EJS_NOT_IMPLEMENTED();
+    gettimeofday (&rv->tv, &rv->tz);
 
     return OBJECT_TO_EJSVAL(rv);
 }
 
-ejsval _ejs_Date;
-ejsval _ejs_Date_proto;
+double
+_ejs_date_get_time (EJSDate *date)
+{
+    return (double)date->tv.tv_sec * 1000 + (double)date->tv.tv_usec / 1000;
+}
+
+ejsval _ejs_Date EJSVAL_ALIGNMENT;
+ejsval _ejs_Date_proto EJSVAL_ALIGNMENT;
 
 static ejsval
 _ejs_Date_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -65,7 +66,7 @@ _ejs_Date_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     if (EJSVAL_IS_UNDEFINED(_this)) {
         // called as a function
         if (argc == 0) {
-            return _ejs_date_new_unix(time(NULL));
+            return _ejs_date_unix_now();
         }
         else {
             EJS_NOT_IMPLEMENTED();
@@ -76,13 +77,12 @@ _ejs_Date_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
         // new Date (year, month [, date [, hours [, minutes [, seconds [, ms ] ] ] ] ] )
 
-        if (argc <= 1) {
-            time_t t = (time_t)time(NULL);
-
-            if (!gmtime_r(&t, &date->tm))
+        if (argc < 2) {
+            if (gettimeofday (&date->tv, &date->tz) < 0)
                 EJS_NOT_IMPLEMENTED();
         }
         else {
+#if wrong
             // there are all sorts of validation steps here that are missing from ejs
             date->tm.tm_year = (int)(ToDouble(args[0]) - 1900);
             date->tm.tm_mon = (int)(ToDouble(args[1]));
@@ -90,7 +90,16 @@ _ejs_Date_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
             if (argc > 3) date->tm.tm_hour = (int)(ToDouble(args[3]));
             if (argc > 4) date->tm.tm_min = (int)(ToDouble(args[4]));
             if (argc > 5) date->tm.tm_sec = (int)(ToDouble(args[5]));
-            // ms?
+
+            int ms = (int)(ToDouble(args[6]));
+            if (ms > 1000) {
+                date->tm.tm_sec += ms / 1000;
+                ms = ms % 1000;
+            }
+            // XXX more ms here
+#else
+    EJS_NOT_IMPLEMENTED();
+#endif
         }
       
         return _this;
@@ -100,6 +109,7 @@ _ejs_Date_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 static ejsval
 _ejs_Date_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
+#if wrong
     EJSDate *date = (EJSDate*)EJSVAL_TO_OBJECT(_this);
 
     // returns strings of the format 'Tue Aug 28 2012 16:45:58 GMT-0700 (PDT)'
@@ -111,22 +121,27 @@ _ejs_Date_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *a
         strftime (date_buf, sizeof(date_buf), "%a %b %d %Y %T GMT%z (%Z)", &date->tm);
 
     return _ejs_string_new_utf8 (date_buf);
+#else
+    EJS_NOT_IMPLEMENTED();
+#endif
 }
 
 static ejsval
 _ejs_Date_prototype_getTimezoneOffset (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
+#if wrong
     EJSDate *date = (EJSDate*)EJSVAL_TO_OBJECT(_this);
 
     return NUMBER_TO_EJSVAL (date->tm.tm_gmtoff);
+#else
+    EJS_NOT_IMPLEMENTED();
+#endif
 }
 
 static ejsval
 _ejs_Date_prototype_getTime (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    EJSDate *date = (EJSDate*)EJSVAL_TO_OBJECT(_this);
-
-    return NUMBER_TO_EJSVAL (mktime (&date->tm));
+    return NUMBER_TO_EJSVAL(_ejs_date_get_time ((EJSDate*)EJSVAL_TO_OBJECT(_this)));
 }
 
 void

@@ -5,7 +5,7 @@
 #ifndef _ejs_date_h_
 #define _ejs_date_h_
 
-#include <time.h>
+#include <sys/time.h>
 #include "ejs-object.h"
 
 typedef struct {
@@ -13,7 +13,8 @@ typedef struct {
     EJSObject obj;
 
     /* date specific data */
-    struct tm tm;
+    struct timeval tv;
+    struct timezone tz;
 } EJSDate;
 
 
@@ -23,7 +24,8 @@ extern ejsval _ejs_Date;
 extern ejsval _ejs_Date_proto;
 extern EJSSpecOps _ejs_date_specops;
 
-ejsval _ejs_date_new_unix (int timestamp);
+ejsval _ejs_date_new_unix (int tv_sec, int tv_usec);
+double _ejs_date_get_time (EJSDate* date);
 
 void _ejs_date_init(ejsval global);
 
