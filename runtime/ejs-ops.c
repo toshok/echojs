@@ -1023,7 +1023,6 @@ _ejs_truthy (ejsval val)
 void
 _ejs_throw (ejsval exp)
 {
-    _ejs_log ("throwing an exception omg");
     _ejs_exception_throw (ToObject(exp));
 }
 

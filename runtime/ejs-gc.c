@@ -1207,37 +1207,24 @@ static GCObjectPtr
 alloc_from_los(size_t size, EJSScanType scan_type)
 {
     // allocate enough space for the object, our header, and our bitmap.  leave room enough to align the return value
-    _ejs_log ("los1 size = %d", size + sizeof(LargeObjectInfo) + 16);
     LargeObjectInfo *rv = alloc_from_os(size + sizeof(LargeObjectInfo) + 16, 0);
 
-    _ejs_log ("los2 rv = %p", rv);
     rv->page_info.page_bitmap = (char*)((void*)rv + sizeof(LargeObjectInfo)); // our 1 byte bitmap comes right after the header
-    _ejs_log ("los3");
     rv->page_info.page_start = (void*)ALIGN((void*)rv + sizeof(LargeObjectInfo) + 1, 8);
-    _ejs_log ("los4");
     rv->page_info.cell_size = size;
-    _ejs_log ("los5");
     rv->page_info.num_cells = 1;
-    _ejs_log ("los6");
     rv->page_info.num_free_cells = 0;
-    _ejs_log ("los7");
     rv->page_info.los_info = rv;
 
-    _ejs_log ("los8");
     SET_WHITE(rv->page_info.page_bitmap[0]);
-    _ejs_log ("los9");
     SET_ALLOCATED(rv->page_info.page_bitmap[0]);
 
-    _ejs_log ("los10");
     *((GCObjectHeader*)rv->page_info.page_start) = scan_type;
 
-    _ejs_log ("los11");
     rv->alloc_size = size;
 
-    _ejs_log ("los12");
     EJS_LIST_PREPEND (rv, los_list);
     //_ejs_log ("alloc_from_los returning %p\n, los_list = %p\n", rv->page_info.page_start, los_list);
-    _ejs_log ("los13");
     return rv->page_info.page_start;
 }
 
