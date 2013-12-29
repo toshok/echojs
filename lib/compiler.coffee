@@ -313,74 +313,39 @@ class LLVMIRVisitor extends TreeVisitor
                 rv
 
         loadBoolEjsValue: (n) ->
+                name = if n then "true" else "false"
+                bool_alloca = @createAlloca @currentFunction, types.EjsValue, "#{name}_alloca"
+                alloca_as_int64 = ir.createBitCast bool_alloca, types.int64.pointerTo(), "alloca_as_pointer"
                 if @options.target_pointer_size is 64
-                        name = if n then "true" else "false"
-                        bool_alloca = @createAlloca @currentFunction, types.EjsValue, "#{name}_alloca"
-                        alloca_as_int64 = ir.createBitCast bool_alloca, types.int64.pointerTo(), "alloca_as_pointer"
                         ir.createStore consts.int64_lowhi(0xfff98000, if n then 0x00000001 else 0x000000000), alloca_as_int64
-                        ir.createLoad bool_alloca, "#{name}_load"
                 else
-                        # fixme verify this
-                        bool_alloca = @createAlloca @currentFunction, types.EjsValue, "bool_alloca"
-                        alloca_as_int64 = ir.createBitCast bool_alloca, types.int64.pointerTo(), "alloca_as_pointer"
                         ir.createStore consts.int64_lowhi(0xffffff83, if n then 0x00000001 else 0x00000000), alloca_as_int64
-                        ir.createLoad bool_alloca, "bool_load"
+                ir.createLoad bool_alloca, "#{name}_load"
 
         loadDoubleEjsValue: (n) ->
-                if @opencode_intrinsics.numberNew
-                        c = llvm.ConstantFP.getDouble n
-                        num_alloca = @createAlloca @currentFunction, types.EjsValue, "num_alloca"
-                        alloca_as_double = ir.createBitCast num_alloca, types.double.pointerTo(), "alloca_as_pointer"
-                        ir.createStore c, alloca_as_double 
-                        return ir.createLoad num_alloca, "numload"
-                else
-                        literal_key = "num-" + n
-                        if @currentFunction.literalAllocas[literal_key]
-                                num_alloca = @currentFunction.literalAllocas[literal_key]
-                        else
-                                # only create 1 instance of num literals used in a function, and allocate them in the entry block
-                                @doInsideBBlock @currentFunction.entry_bb, =>
-                                        num_alloca = ir.createAlloca types.EjsValue, "num-alloca-#{n}"
-                                        c = llvm.ConstantFP.getDouble n
-                                        val = @createCall @ejs_runtime.number_new, [c], "numconst-#{n}", !@ejs_runtime.number_new.doesNotThrow
-                                        ir.createStore val, num_alloca
-                                        @currentFunction.literalAllocas[literal_key] = num_alloca
-                        numload = @createLoad num_alloca, "%num_alloca"
-                        numload.literal = n
-                        debug.log -> "numload = #{numload}"
-                        return numload
+                c = llvm.ConstantFP.getDouble n
+                num_alloca = @createAlloca @currentFunction, types.EjsValue, "num_alloca"
+                alloca_as_double = ir.createBitCast num_alloca, types.double.pointerTo(), "alloca_as_pointer"
+                ir.createStore c, alloca_as_double 
+                ir.createLoad num_alloca, "numload"
                 
         loadNullEjsValue: ->
+                null_alloca = @createAlloca @currentFunction, types.EjsValue, "null_alloca"
+                alloca_as_int64 = ir.createBitCast null_alloca, types.int64.pointerTo(), "alloca_as_pointer"
                 if @options.target_pointer_size is 64
-                        @currentAllocas.null = @createAlloca @currentFunction, types.EjsValue, "null_alloca" unless @currentAllocas.null?
-                        alloca_as_int64 = ir.createBitCast @currentAllocas.null, types.int64.pointerTo(), "alloca_as_pointer"
                         ir.createStore consts.int64_lowhi(0xfffb8000, 0x00000000), alloca_as_int64
-                        ir.createLoad @currentAllocas.null, "nullload"
-                else
-                        ###
-                        # fixme verify this
-                        @currentAllocas.num = @createAlloca @currentFunction, types.EjsValue, "num_alloca" unless @currentAllocas.num?
-                        alloca_as_int64 = ir.createBitCast @currentAllocas.num, types.int64.pointerTo(), "alloca_as_pointer"
+                else # 32 bit
                         ir.createStore consts.int64_lowhi(0xffffff87, 0x00000000), alloca_as_int64
-                        ir.createLoad @currentAllocas.num, "numload"
-                        ###
-                        return ir.createLoad @ejs_runtime['null'], "null_load"
+                ir.createLoad null_alloca, "nullload"
                 
         loadUndefinedEjsValue: ->
+                undef_alloca = @createAlloca @currentFunction, types.EjsValue, "undef_alloca"
+                alloca_as_int64 = ir.createBitCast undef_alloca, types.int64.pointerTo(), "alloca_as_pointer"
                 if @options.target_pointer_size is 64
-                        @currentAllocas.undef = @createAlloca @currentFunction, types.EjsValue, "undef_alloca" unless @currentAllocas.undef?
-                        alloca_as_int64 = ir.createBitCast @currentAllocas.undef, types.int64.pointerTo(), "alloca_as_pointer"
                         ir.createStore consts.int64_lowhi(0xfff90000, 0x00000000), alloca_as_int64
-                        ir.createLoad @currentAllocas.undef, "undefload"
-                else
-                        ###
-                        # fixme verify this
-                        @currentAllocas.num = @createAlloca @currentFunction, types.EjsValue, "num_alloca" unless @currentAllocas.num?
-                        alloca_as_int64 = ir.createBitCast @currentAllocas.num, types.int64.pointerTo(), "alloca_as_pointer"
+                else # 32 bit
                         ir.createStore consts.int64_lowhi(0xffffff82, 0x00000000), alloca_as_int64
-                        ir.createLoad @currentAllocas.num, "numload"
-                        ###
-                        return ir.createLoad @ejs_runtime['undefined'], "undefined_load"
+                ir.createLoad undef_alloca, "undefload"
 
         storeGlobal: (prop, value) ->
                 # we store obj.prop, prop is an id
@@ -566,7 +531,7 @@ class LLVMIRVisitor extends TreeVisitor
                                 discTest = @createCall eqop, [discr, test], "test", !eqop.doesNotThrow
                         
                                 if discTest._ejs_returns_ejsval_bool
-                                        disc_cmp = @createEjsValueCmpEQ discTest, @loadBoolEjsValue(false)
+                                        disc_cmp = @createEjsValueCmpEq discTest, @loadBoolEjsValue(false)
                                 else
                                         disc_truthy = @createCall @ejs_runtime.truthy, [discTest], "disc_truthy"
                                         disc_cmp = ir.createICmpEq disc_truthy, consts.false(), "disccmpresult"
@@ -605,7 +570,7 @@ class LLVMIRVisitor extends TreeVisitor
         visitContinue: (n) ->
                 return ExitableScope.scopeStack.exitFore n.label?.name
 
-        createEjsValueCmpEQ: (x, y) ->
+        createEjsvalCmpEq: (x, y) ->
                 x_alloc = @createAlloca @currentFunction, types.EjsValue, "x_alloca"
                 ir.createStore x, x_alloc
                 x_ptr = ir.createBitCast x_alloc, types.int64.pointerTo(), "x_ptr"
@@ -621,7 +586,7 @@ class LLVMIRVisitor extends TreeVisitor
         generateCondBr: (exp, then_bb, else_bb) ->
                 exp_value = @visit exp
                 if exp_value._ejs_returns_ejsval_bool
-                        cmp = @createEjsValueCmpEQ exp_value, (@loadBoolEjsValue false), "cmpresult"
+                        cmp = @createEjsvalCmpEq exp_value, (@loadBoolEjsValue false), "cmpresult"
                 else
                         cond_truthy = @createCall @ejs_runtime.truthy, [exp_value], "cond_truthy"
                         cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
@@ -936,7 +901,6 @@ class LLVMIRVisitor extends TreeVisitor
                 #debug.log -> "param #{param.llvm_type} #{param.name}" for param in n.formal_params
 
                 @currentFunction = ir_func
-                @currentAllocas = {}
 
                 # Create a new basic block to start insertion into.
                 entry_bb = new llvm.BasicBlock "entry", ir_func
@@ -988,7 +952,7 @@ class LLVMIRVisitor extends TreeVisitor
                 body_bb = new llvm.BasicBlock "body", ir_func
                 ir.setInsertPoint body_bb
 
-                @createCall @ejs_runtime.log, [consts.string(ir, "entering #{n.ir_name}")], ""
+                #@createCall @ejs_runtime.log, [consts.string(ir, "entering #{n.ir_name}")], ""
                 
                 if n.toplevel?
                         ir.createCall @literalInitializationFunction, [], ""
@@ -1005,14 +969,14 @@ class LLVMIRVisitor extends TreeVisitor
                                 else_bb  = new llvm.BasicBlock "arg_else", insertFunc
                                 merge_bb = new llvm.BasicBlock "arg_merge", insertFunc
 
-                                cmp = ir.createICmpSGt load_argc, (consts.int32 i), "argcmpresult"
+                                cmp = ir.createICmpSGt load_argc, consts.int32(i), "argcmpresult"
                                 ir.createCondBr cmp, then_bb, else_bb
                         
                                 ir.setInsertPoint then_bb
                                 # in the then branch, the argument was
                                 # provided, pull the value out of the
                                 # args array
-                                arg_ptr = ir.createGetElementPointer args_load, [(consts.int32 i)], "arg#{i}_ptr"
+                                arg_ptr = ir.createGetElementPointer args_load, [consts.int32(i)], "arg#{i}_ptr"
                                 arg = @createLoad arg_ptr, "arg#{i}_load"
                                 store = ir.createStore arg, allocas[first_formal_index+i]
                                 ir.createBr merge_bb
@@ -1023,7 +987,7 @@ class LLVMIRVisitor extends TreeVisitor
                                 # default value, evaluate that here
                                 # and store it in the alloca.
                                 if n.defaults[i]?
-                                        arg_ptr = ir.createGetElementPointer args_load, [(consts.int32 i)], "arg#{i}_ptr"
+                                        arg_ptr = ir.createGetElementPointer args_load, [consts.int32(i)], "arg#{i}_ptr"
                                         arg = @visit n.defaults[i], "arg#{i}_default_value"
                                         ir.createStore arg, allocas[first_formal_index+i]
                                 ir.createBr merge_bb
@@ -1039,14 +1003,14 @@ class LLVMIRVisitor extends TreeVisitor
 
                         load_argc = @createLoad @currentFunction.topScope.get("%argc"), "argc_load"
 
-                        cmp = ir.createICmpSGt load_argc, (consts.int32 n.formal_params.length), "argcmpresult"
+                        cmp = ir.createICmpSGt load_argc, consts.int32(n.formal_params.length), "argcmpresult"
                         ir.createCondBr cmp, has_rest_bb, no_rest_bb
 
                         ir.setInsertPoint has_rest_bb
                         # we have > args than are declared, shove the rest into the rest parameter
                         load_args = @createLoad @currentFunction.topScope.get("%args"), "args_load"
-                        gep = ir.createInBoundsGetElementPointer load_args, [(consts.int32 n.formal_params.length)], "rest_arg_gep"
-                        load_argc = ir.createNswSub load_argc, (consts.int32 n.formal_params.length)
+                        gep = ir.createInBoundsGetElementPointer load_args, [consts.int32(n.formal_params.length)], "rest_arg_gep"
+                        load_argc = ir.createNswSub load_argc, consts.int32(n.formal_params.length)
                         rest_value = @createCall @ejs_runtime.array_new_copy, [load_argc, gep], "argstmp", !@ejs_runtime.array_new_copy.doesNotThrow
                         ir.createStore rest_value, rest_alloca
                         ir.createBr rest_merge_bb
@@ -1078,7 +1042,6 @@ class LLVMIRVisitor extends TreeVisitor
                 ir.createBr body_bb
                         
                 @currentFunction = null
-                @currentAllocas = {}
 
                 ir.setInsertPoint insertBlock
 
@@ -1110,7 +1073,7 @@ class LLVMIRVisitor extends TreeVisitor
                 else if n.operator is "!"
                         arg_value =  @visitOrNull n.argument
                         if @opencode_intrinsics.unaryNot and @options.target_pointer_size is 64 and arg_value._ejs_returns_ejsval_bool
-                                cmp = ir.createICmpEq arg_value, @loadBoolEjsValue(true), "cmpresult"
+                                cmp = @createEjsvalCmpEq arg_value, @loadBoolEjsValue(true), "cmpresult"
                                 rv = ir.createSelect cmp, @loadBoolEjsValue(false), @loadBoolEjsValue(true), "sel"
                                 rv._ejs_returns_ejsval_bool = true
                                 rv
@@ -1137,7 +1100,7 @@ class LLVMIRVisitor extends TreeVisitor
                 right_visited = @visit n.right
 
                 if @options.record_types
-                        @createCall @ejs_runtime.record_binop, [(consts.int32 @genRecordId()), (consts.string ir, n.operator), left_visited, right_visited], ""
+                        @createCall @ejs_runtime.record_binop, [consts.int32(@genRecordId()), consts.string(ir, n.operator), left_visited, right_visited], ""
 
                 # call the actual runtime binaryop method
                 rv = @createCall callee, [left_visited, right_visited], "result_#{n.operator}", !callee.doesNotThrow
@@ -1203,11 +1166,13 @@ class LLVMIRVisitor extends TreeVisitor
                         argv.push consts.int32 args.length    # %argc
 
                         if args.length > 0
+                                visited = (@visitOrNull(a) for a in args)
+                                
                                 args.forEach (a,i) =>
-                                        gep = ir.createGetElementPointer @currentFunction.scratch_area, [(consts.int32 0), (consts.int64 i)], "arg_gep_#{i}"
-                                        store = ir.createStore @visitOrNull(args[i]), gep, "argv[#{i}]-store"
+                                        gep = ir.createGetElementPointer @currentFunction.scratch_area, [consts.int32(0), consts.int64(i)], "arg_gep_#{i}"
+                                        store = ir.createStore visited[i], gep, "argv[#{i}]-store"
 
-                                argsCast = ir.createGetElementPointer @currentFunction.scratch_area, [(consts.int32 0), (consts.int64 0)], "call_args_load"
+                                argsCast = ir.createGetElementPointer @currentFunction.scratch_area, [consts.int32(0), consts.int64(0)], "call_args_load"
 
                                 argv.push argsCast
                         else
@@ -1237,11 +1202,13 @@ class LLVMIRVisitor extends TreeVisitor
                 argv.push consts.int32 args.length                                  # %argc
 
                 if args.length > 0
-                        argv.forEach (a,i) =>
-                                gep = ir.createGetElementPointer @currentFunction.scratch_area, [(consts.int32 0), (consts.int64 i)], "arg_gep_#{i}"
-                                store = ir.createStore @visitOrNull(args[i]), gep, "argv[#{i}]-store"
+                        visited = (@visitOrNull(a) for a in args)
+                        
+                        visited.forEach (a,i) =>
+                                gep = ir.createGetElementPointer @currentFunction.scratch_area, [consts.int32(0), consts.int64(i)], "arg_gep_#{i}"
+                                store = ir.createStore visited[i], gep, "argv[#{i}]-store"
 
-                        argsCast = ir.createGetElementPointer @currentFunction.scratch_area, [(consts.int32 0), (consts.int64 0)], "call_args_load"
+                        argsCast = ir.createGetElementPointer @currentFunction.scratch_area, [consts.int32(0), consts.int64(0)], "call_args_load"
 
                         argv.push argsCast
                 else
@@ -1277,7 +1244,7 @@ class LLVMIRVisitor extends TreeVisitor
 
         visitThisExpression: (n) ->
                 debug.log "visitThisExpression"
-                @createLoad (@findIdentifierInScope "%this"), "load_this"
+                @createLoad @findIdentifierInScope("%this"), "load_this"
 
         visitIdentifier: (n) ->
                 debug.log -> "identifier #{n.name}"
@@ -1326,7 +1293,7 @@ class LLVMIRVisitor extends TreeVisitor
                         val = @visit property.value
                         key = if property.key.type is _Identifier then @getAtom property.key.name else @visit property.key
 
-                        @createCall @ejs_runtime.object_define_value_prop, [obj, key, val, consts.int32 0x77], "define_value_prop_#{property.key}"
+                        @createCall @ejs_runtime.object_define_value_prop, [obj, key, val, consts.int32 0x77], "define_value_prop_#{property.key.name}"
                 obj
 
         visitArrayExpression: (n) ->
@@ -1375,15 +1342,15 @@ class LLVMIRVisitor extends TreeVisitor
                 arg0 = strname
                 arg1 = val
                 arg2 = primstr
-                arg3 = ir.createInBoundsGetElementPointer ucs2, [(consts.int32 0), (consts.int32 0)], "ucs2"
+                arg3 = ir.createInBoundsGetElementPointer ucs2, [consts.int32(0), consts.int32(0)], "ucs2"
 
-                ir.createCall @ejs_runtime.init_string_literal, [arg0, arg1, arg2, arg3, consts.int32 len], ""
+                ir.createCall @ejs_runtime.init_string_literal, [arg0, arg1, arg2, arg3, consts.int32(len)], ""
                 ir.setInsertPoint saved_insert_point
 
         getAtom: (str) ->
                 # check if it's an atom (a runtime library constant) first of all
                 if hasOwn.call @ejs_atoms, str
-                        return @createLoad @ejs_atoms[str], "%str_atom_load"
+                        return @createLoad @ejs_atoms[str], "#{str}_atom_load"
 
                 # XXX we need to prepend the 'atom-' here because str could be === '__proto__' which fouls up our lookup.
                 #     this can be fixed when we support ES6 Maps (@module_atoms would be a map).
@@ -1567,19 +1534,19 @@ class LLVMIRVisitor extends TreeVisitor
                                         @doInsideBBlock return_tramp, =>
                                 
                                                 if @finallyStack.length > 0
-                                                        ir.createStore (consts.int32 ExitableScope.REASON_RETURN), @currentFunction.cleanup_reason
+                                                        ir.createStore consts.int32(ExitableScope.REASON_RETURN), @currentFunction.cleanup_reason
                                                         ir.createBr @finallyStack[0]
                                                 else
                                                         @createRet @createLoad @currentFunction.returnValueAlloca, "rv"
                         
                                 switch_stmt = ir.createSwitch cleanup_reason, merge_block, scope.destinations.length + 1
                                 if @currentFunction.returnValueAlloca?
-                                        switch_stmt.addCase (consts.int32 ExitableScope.REASON_RETURN), return_tramp
+                                        switch_stmt.addCase consts.int32(ExitableScope.REASON_RETURN), return_tramp
 
                                 falloff_tramp = new llvm.BasicBlock "falloff_tramp", insertFunc
                                 @doInsideBBlock falloff_tramp, =>
                                         ir.createBr merge_block
-                                switch_stmt.addCase (consts.int32 TryExitableScope.REASON_FALLOFF_TRY), falloff_tramp
+                                switch_stmt.addCase consts.int32(TryExitableScope.REASON_FALLOFF_TRY), falloff_tramp
 
                                 for s in [0...scope.destinations.length]
                                         dest_tramp = new llvm.BasicBlock "dest_tramp", insertFunc
@@ -1646,9 +1613,7 @@ class LLVMIRVisitor extends TreeVisitor
         # this method assumes it's called in an opencoded context
         emitEjsvalTo: (val, type, prefix) ->
                 if @options.target_pointer_size is 64
-                        #  %1 = and i64 %val, 140737488355327
-                        #  %2 = inttoptr i64 %1 to %struct._EJSObject*
-                        payload = ir.createAnd val, (consts.int64_lowhi 0x7fff, 0xffffffff), "#{prefix}_payload"
+                        payload = @createEjsvalAnd val, consts.int64_lowhi(0x7fff, 0xffffffff), "#{prefix}_payload"
                         ir.createIntToPtr payload, type, "#{prefix}_load"
                 else
                         throw new Error "emitEjsvalTo not implemented for this case"
@@ -1659,19 +1624,19 @@ class LLVMIRVisitor extends TreeVisitor
                 if @options.target_pointer_size is 64
                         # %1 = getelementptr inbounds %struct._EJSObject* %obj, i64 0, i32 1
                         # %specops_load = load %struct.EJSSpecOps** %1, align 8, !tbaa !0
-                        specops_slot = ir.createInBoundsGetElementPointer obj, [(consts.int64 0), (consts.int32 1)], "specops_slot"
+                        specops_slot = ir.createInBoundsGetElementPointer obj, [consts.int64(0), consts.int32(1)], "specops_slot"
                         ir.createLoad specops_slot, "specops_load"
                 else
                         throw new Error "emitLoadSpecops not implemented for this case"
 
         emitThrowNativeError: (errorCode, errorMessage) ->
-                @createCall @ejs_runtime.throw_nativeerror_utf8, [(consts.int32 errorCode), (consts.string ir, errorMessage)], "", true
+                @createCall @ejs_runtime.throw_nativeerror_utf8, [consts.int32(errorCode), consts.string(ir, errorMessage)], "", true
                 ir.createUnreachable()
 
         # this method assumes it's called in an opencoded context
         emitLoadEjsFunctionIsBound: (closure) ->
                 if @options.target_pointer_size is 64
-                        bound_slot_gep = ir.createInBoundsGetElementPointer closure, [(consts.int64 1), (consts.int32 2)], "bound_slot_gep"
+                        bound_slot_gep = ir.createInBoundsGetElementPointer closure, [consts.int64(1), consts.int32(2)], "bound_slot_gep"
                         bound_slot = ir.createBitCast bound_slot_gep, types.int32.pointerTo(), "bound_slot"
                         ir.createLoad bound_slot, "bound_load"
                 else
@@ -1680,7 +1645,7 @@ class LLVMIRVisitor extends TreeVisitor
         # this method assumes it's called in an opencoded context
         emitLoadEjsFunctionClosureFunc: (closure) ->
                 if @options.target_pointer_size is 64
-                        func_slot_gep = ir.createInBoundsGetElementPointer closure, [consts.int64 1], "func_slot_gep"
+                        func_slot_gep = ir.createInBoundsGetElementPointer closure, [consts.int64(1)], "func_slot_gep"
                         func_slot = ir.createBitCast func_slot_gep, types.EjsClosureFunc.pointerTo(), "func_slot"
                         ir.createLoad func_slot, "func_load"
                 else
@@ -1689,7 +1654,7 @@ class LLVMIRVisitor extends TreeVisitor
         # this method assumes it's called in an opencoded context
         emitLoadEjsFunctionClosureEnv: (closure) ->
                 if @options.target_pointer_size is 64
-                        env_slot_gep = ir.createInBoundsGetElementPointer closure, [(consts.int64 1),(consts.int32 1)], "env_slot_gep"
+                        env_slot_gep = ir.createInBoundsGetElementPointer closure, [consts.int64(1), consts.int32(1)], "env_slot_gep"
                         env_slot = ir.createBitCast env_slot_gep, types.EjsValue.pointerTo(), "env_slot"
                         ir.createLoad env_slot, "env_load"
                 else
@@ -1713,7 +1678,7 @@ class LLVMIRVisitor extends TreeVisitor
                         invoke_merge_bb = new llvm.BasicBlock "invoke_merge_bb", insertFunc
                         
                         candidate = argv[0]
-                        cmp = ir.createICmpUGt candidate, (consts.int64_lowhi 0xfffbffff, 0xffffffff), "cmpresult"
+                        cmp = @createEjsvalICmpUGt candidate, consts.int64_lowhi(0xfffbffff, 0xffffffff), "cmpresult"
                         ir.createCondBr cmp, candidate_is_object_bb, object_isnt_function_bb
 
                         @doInsideBBlock object_isnt_function_bb, =>
@@ -1739,7 +1704,7 @@ class LLVMIRVisitor extends TreeVisitor
 
                                         load_isbound = @emitLoadEjsFunctionIsBound closure
 
-                                        cmp = ir.createICmpEq load_isbound, (consts.int32 0), "notbound?"
+                                        cmp = ir.createICmpEq load_isbound, consts.int32(0), "notbound?"
                                         ir.createCondBr cmp, direct_invoke_bb, runtime_invoke_bb
 
                                         @doInsideBBlock runtime_invoke_bb, =>
@@ -1766,16 +1731,16 @@ class LLVMIRVisitor extends TreeVisitor
                 # otherwise we return argv[0]
 
                 if opencode and @options.target_pointer_size is 64
-                        cmp = ir.createICmpUGt call_result, (consts.int64_lowhi 0xfffbffff, 0xffffffff), "cmpresult"
+                        cmp = @createEjsvalICmpUGt call_result, consts.int64_lowhi(0xfffbffff, 0xffffffff), "cmpresult"
                 else
                         call_result_is_object = @createCall @ejs_runtime.typeof_is_object, [call_result], "call_result_is_object", false
                         if call_result_is_object._ejs_returns_ejsval_bool
-                                cmp = @createEjsValueCmpEQ call_result_is_object, (@loadBoolEjsValue true), "cmpresult"
+                                cmp = @createEjsvalCmpEq call_result_is_object, (@loadBoolEjsValue true), "cmpresult"
                         else
                                 cond_truthy = @createCall @ejs_runtime.truthy, [call_result_is_object], "cond_truthy"
                                 cmp = ir.createICmpEq cond_truthy, consts.true(), "cmpresult"
-                                
-                return ir.createSelect cmp, call_result, argv[2], "sel"
+
+                return ir.createSelect cmp, call_result, argv[@abi.this_param_index], "sel"
                         
                         
         handleMakeClosure: (exp, opencode) ->
@@ -1822,19 +1787,33 @@ class LLVMIRVisitor extends TreeVisitor
 
                 if opencode and @options.target_pointer_size is 64
                         envp = @emitEjsvalTo env, types.EjsClosureEnv.pointerTo(), "closureenv"
-                        ir.createInBoundsGetElementPointer envp, [(consts.int64 0), (consts.int32 2), (consts.int64 slotnum), (consts.int32 0)], "slot_ref"
+                        ir.createInBoundsGetElementPointer envp, [consts.int64(0), consts.int32(2), consts.int64(slotnum)], "slot_ref"
                 else
-                        @createCall @ejs_runtime.get_env_slot_ref, [env, (consts.int32 slotnum)], "slot_ref_tmp", false
+                        @createCall @ejs_runtime.get_env_slot_ref, [env, consts.int32(slotnum)], "slot_ref_tmp", false
 
         createEjsBoolSelect: (val) ->
                 rv = ir.createSelect val, @loadBoolEjsValue(true), @loadBoolEjsValue(false), "sel"
                 rv._ejs_returns_ejsval_bool = true
                 rv
+
+        getEjsvalBits: (arg) ->
+                bits_alloc = @createAlloca @currentFunction, types.EjsValue, "bits_alloca"
+                ir.createStore arg, bits_alloc
+                bits_ptr = ir.createBitCast bits_alloc, types.int64.pointerTo(), "bits_ptr"
+                ir.createLoad bits_ptr, "bits_load"
                 
+        createEjsvalICmpUGt: (arg, i64_const, name) -> ir.createICmpUGt @getEjsvalBits(arg), i64_const, name
+
+        createEjsvalICmpULt: (arg, i64_const, name) -> ir.createICmpULt @getEjsvalBits(arg), i64_const, name
+
+        createEjsvalICmpEq: (arg, i64_const, name) ->  ir.createICmpEq @getEjsvalBits(arg), i64_const, name
+                
+        createEjsvalAnd: (arg, i64_const, name) ->     ir.createAnd @getEjsvalBits(arg), i64_const, name
+        
         handleTypeofIsObject: (exp, opencode) ->
                 arg = @visitOrNull exp.arguments[0]
                 if opencode and @options.target_pointer_size is 64
-                        @createEjsBoolSelect ir.createICmpUGt arg, consts.int64_lowhi(0xfffbffff, 0xffffffff), "cmpresult"
+                        @createEjsBoolSelect @createEjsvalICmpUGt arg, consts.int64_lowhi(0xfffbffff, 0xffffffff), "cmpresult"
                 else
                         @createCall @ejs_runtime.typeof_is_object, [arg], "is_object", false
 
@@ -1850,8 +1829,8 @@ class LLVMIRVisitor extends TreeVisitor
                         is_object_bb = new llvm.BasicBlock "typeof_function_is_object", insertFunc
                         success_bb   = new llvm.BasicBlock "typeof_function_true",      insertFunc
                         merge_bb     = new llvm.BasicBlock "typeof_function_merge",     insertFunc
-                        
-                        cmp = ir.createICmpUGt arg, (consts.int64_lowhi 0xfffbffff, 0xffffffff), "cmpresult"
+
+                        cmp = @createEjsvalICmpUGt arg, consts.int64_lowhi(0xfffbffff, 0xffffffff), "cmpresult"
                         ir.createCondBr cmp, is_object_bb, failure_bb
 
                         @doInsideBBlock is_object_bb, =>
@@ -1889,7 +1868,7 @@ class LLVMIRVisitor extends TreeVisitor
                         success_bb   = new llvm.BasicBlock "typeof_symbol_true",      insertFunc
                         merge_bb     = new llvm.BasicBlock "typeof_symbol_merge",     insertFunc
                         
-                        cmp = ir.createICmpUGt arg, (consts.int64_lowhi 0xfffbffff, 0xffffffff), "cmpresult"
+                        cmp = @createEjsvalICmpUGt arg, consts.int64_lowhi(0xfffbffff, 0xffffffff), "cmpresult"
                         ir.createCondBr cmp, is_object_bb, failure_bb
 
                         @doInsideBBlock is_object_bb, =>
@@ -1917,7 +1896,7 @@ class LLVMIRVisitor extends TreeVisitor
         handleTypeofIsString: (exp, opencode) ->
                 arg = @visitOrNull exp.arguments[0]
                 if opencode and @options.target_pointer_size is 64
-                        mask = ir.createAnd arg, consts.int64_lowhi(0xffff8000, 0x00000000), "mask.i"
+                        mask = @createEjsvalAnd arg, consts.int64_lowhi(0xffff8000, 0x00000000), "mask.i"
                         @createEjsBoolSelect ir.createICmpEq mask, consts.int64_lowhi(0xfffa8000, 0x00000000), "cmpresult"
                 else
                         @createCall @ejs_runtime.typeof_is_string, [arg], "is_string", false
@@ -1925,37 +1904,37 @@ class LLVMIRVisitor extends TreeVisitor
         handleTypeofIsNumber:    (exp, opencode) ->
                 arg = @visitOrNull exp.arguments[0]
                 if opencode and @options.target_pointer_size is 64
-                        @createEjsBoolSelect ir.createICmpULt arg, consts.int64_lowhi(0xfff80001, 0x00000000), "cmpresult"
+                        @createEjsBoolSelect @createEjsvalICmpULt arg, consts.int64_lowhi(0xfff80001, 0x00000000), "cmpresult"
                 else
                         @createCall @ejs_runtime.typeof_is_number,    [arg], "is_number", false
 
         handleTypeofIsBoolean:   (exp, opencode) ->
                 arg = @visitOrNull exp.arguments[0]
                 if opencode and @options.target_pointer_size is 64
-                        mask = ir.createAnd arg, consts.int64_lowhi(0xffff8000, 0x00000000), "mask.i"
-                        @createEjsBoolSelect ir.createICmpEq mask, consts.int64_lowhi(0xfff98000, 0x00000000), "cmpresult"
+                        mask = @createEjsvalAnd arg, consts.int64_lowhi(0xffff8000, 0x00000000), "mask.i"
+                        @createEjsBoolSelect @createEjsvalICmpEq mask, consts.int64_lowhi(0xfff98000, 0x00000000), "cmpresult"
                 else
                         @createCall @ejs_runtime.typeof_is_boolean,   [arg], "is_boolean", false
 
         handleIsUndefined: (exp, opencode) ->
                 arg = @visitOrNull exp.arguments[0]
                 if opencode and @options.target_pointer_size is 64
-                        @createEjsBoolSelect ir.createICmpEq arg, consts.int64_lowhi(0xfff90000, 0x00000000), "cmpresult"
+                        @createEjsBoolSelect @createEjsvalICmpEq arg, consts.int64_lowhi(0xfff90000, 0x00000000), "cmpresult"
                 else
                         @createCall @ejs_runtime.typeof_is_undefined, [arg], "is_undefined", false
                 
         handleIsNull: (exp, opencode) ->
                 arg = @visitOrNull exp.arguments[0]
                 if opencode and @options.target_pointer_size is 64
-                        @createEjsBoolSelect ir.createICmpEq arg, consts.int64_lowhi(0xfffb8000, 0x00000000), "cmpresult"
+                        @createEjsBoolSelect @createEjsvalICmpEq arg, consts.int64_lowhi(0xfffb8000, 0x00000000), "cmpresult"
                 else
                         @createCall @ejs_runtime.typeof_is_null,      [arg], "is_null", false
                         
         handleIsNullOrUndefined: (exp, opencode) ->
                 arg = @visitOrNull exp.arguments[0]
                 if opencode and @options.target_pointer_size is 64
-                        cmp1 = ir.createICmpEq arg, consts.int64_lowhi(0xfff90000, 0x00000000), "cmpresult1"
-                        cmp2 = ir.createICmpEq arg, consts.int64_lowhi(0xffb80000, 0x00000000), "cmpresult2"
+                        cmp1 = @createEjsvalICmpEq arg, consts.int64_lowhi(0xfff90000, 0x00000000), "cmpresult1"
+                        cmp2 = @createEjsvalICmpEq arg, consts.int64_lowhi(0xffb80000, 0x00000000), "cmpresult2"
                         @createEjsBoolSelect ir.createOr cmp1, cmp2, "or"
                 else
                         @createCall @ejs_binops["=="],   [@loadNullEjsValue(), arg], "is_null_or_undefined", false
@@ -1982,7 +1961,7 @@ class AddFunctionsVisitor extends TreeVisitor
                 n.formal_params = n.params
 
                 n.params = ({ type: _Identifier, name: param.name, llvm_type: param.llvm_type } for param in @abi.ejs_params)
-                n.params[1].name = env_name
+                n.params[@abi.env_param_index].name = env_name
 
                 # create the llvm IR function using our platform calling convention
                 n.ir_func = types.takes_builtins @abi.createFunction @module, n.ir_name, @abi.ejs_return_type, (param.llvm_type for param in n.params)
