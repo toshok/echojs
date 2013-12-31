@@ -6,7 +6,7 @@ LLVM_LIBS=`$LLVM_CONFIG --libs core bitwriter jit x86codegen`
 LLVM_LIBS:="$LLVM_LDFLAGS $LLVM_LIBS -lstdc++"
 LLVM_CONFIGURE_ARGS=--disable-jit --enable-static --enable-optimized --disable-assertions
 
-PCRE_CONFIGURE_ARGS=--enable-pcre16 --enable-utf
+PCRE_CONFIGURE_ARGS=--enable-pcre16 --enable-utf --disable-cpp
 
 CFLAGS=-I$(TOP)/runtime
 
@@ -25,21 +25,21 @@ configure-pcre-iossim:
 	@mkdir -p pcre-iossim
 	(cd pcre-iossim && \
 	PATH=$(IOSSIM_ROOT)/usr/bin:$$PATH \
-	CC="/Applications/Xcode.app/Contents/Developer/usr/bin/gcc $(IOSSIM_ARCH) $(IOSSIM_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSSIM_SYSROOT)" \
-	CXX="/Applications/Xcode.app/Contents/Developer/usr/bin/g++ $(IOSSIM_ARCH) $(IOSSIM_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSSIM_SYSROOT)" \
-	LD="/Applications/Xcode.app/Contents/Developer/usr/bin/gcc" \
+	CC="clang $(IOSSIM_ARCH) $(IOSSIM_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSSIM_SYSROOT)" \
+	CXX="clang++ $(IOSSIM_ARCH) $(IOSSIM_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSSIM_SYSROOT)" \
+	LD="clang" \
 	AS="$(IOSSIM_ROOT)/usr/bin/as" \
-	../$(TOP)/pcre/configure --host=$(IOSSIM_TRIPLE) $(PCRE_CONFIGURE_ARGS)) || rm -rf pcre-iossim
+	../$(TOP)/pcre/configure --host=$(IOSSIM_TRIPLE) $(PCRE_CONFIGURE_ARGS)) #|| rm -rf pcre-iossim
 
 configure-pcre-iosdev:
 	@mkdir -p pcre-iosdev
 	(cd pcre-iosdev && \
 	PATH=$(IOSDEV_ROOT)/usr/bin:$$PATH \
-	CC="/Applications/Xcode.app/Contents/Developer/usr/bin/gcc $(IOSDEV_ARCH) $(IOSDEV_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSDEV_SYSROOT)" \
-	CXX="/Applications/Xcode.app/Contents/Developer/usr/bin/gcc $(IOSDEV_ARCH) $(IOSDEV_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSDEV_SYSROOT)" \
-	LD="/Applications/Xcode.app/Contents/Developer/usr/bin/gcc" \
+	CC="clang $(IOSDEV_ARCH) $(IOSDEV_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSDEV_SYSROOT)" \
+	CXX="clang++ $(IOSDEV_ARCH) $(IOSDEV_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSDEV_SYSROOT)" \
+	LD="clang" \
 	AS="$(IOSDEV_ROOT)/usr/bin/as" \
-	../$(TOP)/pcre/configure --host=$(IOSDEV_TRIPLE) $(PCRE_CONFIGURE_ARGS)) || rm -rf pcre-iosdev
+	../$(TOP)/pcre/configure --host=$(IOSDEV_TRIPLE) $(PCRE_CONFIGURE_ARGS)) #|| rm -rf pcre-iosdev
 
 build-pcre-osx: configure-pcre-osx
 	$(MAKE) -C pcre-osx pcre_chartables.c libpcre16.la
