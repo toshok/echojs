@@ -29,7 +29,7 @@ configure-pcre-iossim:
 	CXX="clang++ $(IOSSIM_ARCH) $(IOSSIM_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSSIM_SYSROOT)" \
 	LD="clang" \
 	AS="$(IOSSIM_ROOT)/usr/bin/as" \
-	../$(TOP)/pcre/configure --host=$(IOSSIM_TRIPLE) $(PCRE_CONFIGURE_ARGS)) #|| rm -rf pcre-iossim
+	../$(TOP)/pcre/configure --host=$(IOSSIM_TRIPLE) $(PCRE_CONFIGURE_ARGS)) || rm -rf pcre-iossim
 
 configure-pcre-iosdev:
 	@mkdir -p pcre-iosdev
@@ -39,7 +39,7 @@ configure-pcre-iosdev:
 	CXX="clang++ $(IOSDEV_ARCH) $(IOSDEV_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSDEV_SYSROOT)" \
 	LD="clang" \
 	AS="$(IOSDEV_ROOT)/usr/bin/as" \
-	../$(TOP)/pcre/configure --host=$(IOSDEV_TRIPLE) $(PCRE_CONFIGURE_ARGS)) #|| rm -rf pcre-iosdev
+	../$(TOP)/pcre/configure --host=$(IOSDEV_TRIPLE) $(PCRE_CONFIGURE_ARGS)) || rm -rf pcre-iosdev
 
 build-pcre-osx: configure-pcre-osx
 	$(MAKE) -C pcre-osx pcre_chartables.c libpcre16.la
