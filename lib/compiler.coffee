@@ -1772,13 +1772,13 @@ class LLVMIRVisitor extends TreeVisitor
                 ir.createLoad slot_ref, "slot_ref_load"
 
         handleSetSlot: (exp, opencode) ->
-                slotref = @handleSlotRef exp, opencode
                 if exp.arguments.length is 4
                         new_slot_val = @visit exp.arguments[3]
-                        ir.createStore new_slot_val, slotref
                 else
                         new_slot_val = @visit exp.arguments[2]
-                        ir.createStore new_slot_val, slotref
+
+                slotref = @handleSlotRef exp, opencode
+                ir.createStore new_slot_val, slotref
                 new_slot_val
 
         handleSlotRef: (exp, opencode) ->
