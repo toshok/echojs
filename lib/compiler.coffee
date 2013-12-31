@@ -161,10 +161,14 @@ class ArmABI extends ABI
                         sret_alloca = @createAlloca fromFunction, types.EjsValue, "sret"
                         argv.unshift sret_alloca
 
+                        sret_as_i8 = ir.createBitCast sret_alloca, types.int8Pointer, "sret_as_i8"
+                        ir.createLifetimeStart sret_as_i8, consts.int64(8) #sizeof(ejsval)
                         call = super fromFunction, callee, argv, ""
                         call.setStructRet()
 
-                        ir.createLoad sret_alloca, callname
+                        rv = ir.createLoad sret_alloca, callname
+                        ir.createLifetimeEnd sret_as_i8, consts.int64(8) #sizeof(ejsval)
+                        rv
                 else
                         super
 
@@ -173,11 +177,15 @@ class ArmABI extends ABI
                         sret_alloca = @createAlloca fromFunction, types.EjsValue, "sret"
                         argv.unshift sret_alloca
 
+                        sret_as_i8 = ir.createBitCast sret_alloca, types.int8Pointer, "sret_as_i8"
+                        ir.createLifetimeStart sret_as_i8, consts.int64(8) #sizeof(ejsval)
                         call = super fromFunction, callee, argv, normal_block, exc_block, ""
                         call.setStructRet()
 
                         ir.setInsertPoint normal_block
-                        ir.createLoad sret_alloca, callname
+                        rv = ir.createLoad sret_alloca, callname
+                        ir.createLifetimeEnd sret_as_i8, consts.int64(8) #sizeof(ejsval)
+                        rv
                 else
                         super
 

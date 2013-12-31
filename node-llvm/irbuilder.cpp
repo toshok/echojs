@@ -69,6 +69,9 @@ namespace jsllvm {
     NODE_SET_METHOD(s_func, "createLandingPad", IRBuilder::CreateLandingPad);
     NODE_SET_METHOD(s_func, "createResume", IRBuilder::CreateResume);
 
+    NODE_SET_METHOD(s_func, "createLifetimeStart", IRBuilder::CreateLifetimeStart);
+    NODE_SET_METHOD(s_func, "createLifetimeEnd", IRBuilder::CreateLifetimeEnd);
+
     target->Set(String::NewSymbol("IRBuilder"),
 		s_func);
   }
@@ -521,6 +524,28 @@ namespace jsllvm {
     REQ_LLVM_VAL_ARG(0, val);
 
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateResume(val)));
+    return scope.Close(result);
+  }
+
+  v8::Handle<v8::Value> IRBuilder::CreateLifetimeStart(const v8::Arguments& args)
+  {
+    HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(0, val);
+    REQ_LLVM_CONST_INT_ARG(1, size);
+
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateLifetimeStart(val, size)));
+    return scope.Close(result);
+  }
+
+  v8::Handle<v8::Value> IRBuilder::CreateLifetimeEnd(const v8::Arguments& args)
+  {
+    HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(0, val);
+    REQ_LLVM_CONST_INT_ARG(1, size);
+
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateLifetimeEnd(val, size)));
     return scope.Close(result);
   }
 

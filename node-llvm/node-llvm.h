@@ -90,6 +90,14 @@
   }									\
   ::llvm::Constant* VAR = static_cast< ::llvm::Constant*>(jsllvm::Value::GetLLVMObj(args[I]));
 
+#define REQ_LLVM_CONST_INT_ARG(I, VAR)					\
+  if (args.Length() <= (I) || !args[I]->IsObject() /* XXX || !jsllvm::Constant::HasInstance(args[I]) */) {	\
+    printf ("in function %s\n", __PRETTY_FUNCTION__);			\
+    return ThrowException(Exception::TypeError(				\
+					       String::New("Argument " #I " must be an llvm ConstantInt"))); \
+  }									\
+  ::llvm::ConstantInt* VAR = static_cast< ::llvm::ConstantInt*>(jsllvm::Value::GetLLVMObj(args[I]));
+
 #define REQ_LLVM_MODULE_ARG(I, VAR)					\
   if (args.Length() <= (I) || !args[I]->IsObject() /* XXX || !jsllvm::Constant::HasInstance(args[I]) */) {	\
     printf ("in function %s\n", __PRETTY_FUNCTION__);			\
