@@ -171,9 +171,9 @@ target_linker =
         dev: "clang++"
         
 target_link_args =
-        osx: [ ]
-        sim: [ "-isysroot", "#{sim_base}/Developer/SDKs/iPhoneSimulator#{options.ios_sdk}.sdk", "-arch", "i386", "-miphoneos-version-min=#{options.ios_min}" ]
-        dev: [ "-isysroot", "#{dev_base}/Developer/SDKs/iPhoneOS#{options.ios_sdk}.sdk", "-arch", "armv7", "-miphoneos-version-min=#{options.ios_min}" ]
+        osx: [ "-DEJS_BITS_PER_WORD=64", "-DIS_LITTLE_ENDIAN=1" ]
+        sim: [ "-arch", "i386",  "-isysroot", "#{sim_base}/Developer/SDKs/iPhoneSimulator#{options.ios_sdk}.sdk", "-miphoneos-version-min=#{options.ios_min}", "-DEJS_BITS_PER_WORD=32", "-DIS_LITTLE_ENDIAN=1"]
+        dev: [ "-arch", "armv7", "-isysroot", "#{dev_base}/Developer/SDKs/iPhoneOS#{options.ios_sdk}.sdk", "-miphoneos-version-min=#{options.ios_min}", "-DEJS_BITS_PER_WORD=32", "-DIS_LITTLE_ENDIAN=1" ]
 
 target_libraries =
         osx: [ "-framework", "Foundation", "-framework", "AppKit" ]
