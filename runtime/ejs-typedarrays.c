@@ -239,7 +239,7 @@ _ejs_ArrayBuffer_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsva
              uint32_t byteLength = buffer->size;                        \
                                                                         \
              if (argc > 1) byteOffset = ToUint32(args[1]);              \
-             if (argc > 2) byteLength = ToUint32(args[2]);              \
+             if (argc > 2) byteLength = ToUint32(args[2]) * elementSizeInBytes;              \
                                                                         \
              if (byteOffset > buffer->size)              byteOffset = buffer->size; \
              if (byteOffset + byteLength > buffer->size) byteLength = buffer->size - byteOffset; \
