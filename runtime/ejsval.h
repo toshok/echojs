@@ -54,12 +54,6 @@ EJS_BEGIN_DECLS
 
 #define EJS_STATIC_ASSERT(x)
 
-#if IOS
-#define EJS_BITS_PER_WORD 32
-#else
-#define EJS_BITS_PER_WORD 64
-#endif
-
 /******************************************************************************/
 
 /* To avoid a circular dependency, pull in the necessary pieces of jsnum.h. */
