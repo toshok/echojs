@@ -278,6 +278,7 @@ class LLVMIRVisitor extends TreeVisitor
                 @ejs_runtime = runtime.createInterface module, @abi
                 @ejs_binops = runtime.createBinopsInterface module, @abi
                 @ejs_atoms = runtime.createAtomsInterface module
+                @ejs_globals = runtime.createGlobalsInterface module
 
                 @module_atoms = Object.create null
                 @literalInitializationFunction = @module.getOrInsertFunction "_ejs_module_init_string_literals_#{@filename}", types.void, []
@@ -293,7 +294,7 @@ class LLVMIRVisitor extends TreeVisitor
 
                 @doInsideBBlock entry_bb, => ir.createBr return_bb
                 @doInsideBBlock return_bb, =>
-                        @createCall @ejs_runtime.log, [(consts.string ir, "done with literal initialization")], ""
+                        #@createCall @ejs_runtime.log, [(consts.string ir, "done with literal initialization")], ""
                         ir.createRetVoid()
 
                 @literalInitializationBB = entry_bb
@@ -328,7 +329,9 @@ class LLVMIRVisitor extends TreeVisitor
                         ir.createStore consts.int64_lowhi(0xfff98000, if n then 0x00000001 else 0x000000000), alloca_as_int64
                 else
                         ir.createStore consts.int64_lowhi(0xffffff83, if n then 0x00000001 else 0x00000000), alloca_as_int64
-                ir.createLoad bool_alloca, "#{name}_load"
+                rv = ir.createLoad bool_alloca, "#{name}_load"
+                rv._ejs_returns_ejsval_bool = true
+                rv
 
         loadDoubleEjsValue: (n) ->
                 c = llvm.ConstantFP.getDouble n
@@ -369,8 +372,13 @@ class LLVMIRVisitor extends TreeVisitor
                 @createCall @ejs_runtime.global_setprop, [c, value], "globalpropstore_#{pname}"
 
         loadGlobal: (prop) ->
-                pname = @getAtom prop.name
-                @createCall @ejs_runtime.global_getprop, [pname], "globalloadprop_#{prop.name}"
+                gname = prop.name
+                
+                if @options.frozen_global and hasOwn.call @ejs_globals, gname
+                        return ir.createLoad @ejs_globals[prop.name], "load-#{gname}"
+
+                pname = @getAtom gname
+                @createCall @ejs_runtime.global_getprop, [pname], "globalloadprop_#{gname}"
 
         visitWithScope: (scope, children) ->
                 @scope_stack.push scope
@@ -594,7 +602,7 @@ class LLVMIRVisitor extends TreeVisitor
         generateCondBr: (exp, then_bb, else_bb) ->
                 exp_value = @visit exp
                 if exp_value._ejs_returns_ejsval_bool
-                        cmp = @createEjsvalCmpEq exp_value, (@loadBoolEjsValue false), "cmpresult"
+                        cmp = @createEjsvalCmpEq exp_value, @loadBoolEjsValue(false), "cmpresult"
                 else
                         cond_truthy = @createCall @ejs_runtime.truthy, [exp_value], "cond_truthy"
                         cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
@@ -1609,10 +1617,12 @@ class LLVMIRVisitor extends TreeVisitor
                 new_local_val
                                 
         handleGetGlobal: (exp, opencode) ->
-                pname = @getAtom exp.arguments[0].name
-                @createCall @ejs_runtime.global_getprop, [pname], "globalloadprop_#{exp.arguments[0].name}"
+                @loadGlobal exp.arguments[0]
         
         handleSetGlobal: (exp, opencode) ->
+                if @options.frozen_global
+                        throw new SyntaxError "cannot set global property '#{exp.arguments[0].name}' when using --frozen-global"
+                        
                 pname = @getAtom exp.arguments[0].name
                 value = @visit exp.arguments[1]
 

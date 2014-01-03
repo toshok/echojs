@@ -103,11 +103,12 @@ _ejs_console_warn (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return output (stderr, argc, args);
 }
 
+ejsval _ejs_console EJSVAL_ALIGNMENT;
 
 void
 _ejs_console_init(ejsval global)
 {
-    ejsval _ejs_console = _ejs_object_new (_ejs_null, &_ejs_object_specops);
+    _ejs_console = _ejs_object_new (_ejs_null, &_ejs_object_specops);
     _ejs_object_setprop (global, _ejs_atom_console, _ejs_console);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_console, x, _ejs_console_##x)

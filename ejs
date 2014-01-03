@@ -17,6 +17,7 @@ temp_files = []
 options =
         # our defaults:
         debug_level: 0
+        frozen_global: false
         record_types: false
         output_filename: null
         combine_scripts: false
@@ -95,6 +96,9 @@ args =
         "--record-types":
                 flag:    "record_types"
                 help:    "generates an executable which records types in a format later used for optimizations."
+        "--frozen-global":
+                flag:    "frozen_global"
+                help:    "compiler acts as if the global object is frozen after initialization, allowing for faster access."
 
 output_usage = ->
         console.warn 'Usage:';

@@ -124,4 +124,27 @@ exports.createAtomsInterface = (module) ->
                 "Object":    { get: -> module.getOrInsertGlobal           "_ejs_atom_Object",               types.EjsValue }
                 "Array":     { get: -> module.getOrInsertGlobal           "_ejs_atom_Array",                types.EjsValue }
         }
-        
+
+exports.createGlobalsInterface = (module) ->
+        return Object.create null, {
+                "Object":       { get: -> module.getOrInsertGlobal           "_ejs_Object",                 types.EjsValue }
+                "Boolean":      { get: -> module.getOrInsertGlobal           "_ejs_Boolean",                types.EjsValue }
+                "String":       { get: -> module.getOrInsertGlobal           "_ejs_String",                 types.EjsValue }
+                "Number":       { get: -> module.getOrInsertGlobal           "_ejs_Number",                 types.EjsValue }
+                "Array":        { get: -> module.getOrInsertGlobal           "_ejs_Array",                  types.EjsValue }
+                "Date":         { get: -> module.getOrInsertGlobal           "_ejs_Date",                   types.EjsValue }
+                "Error":        { get: -> module.getOrInsertGlobal           "_ejs_Error",                  types.EjsValue }
+                "Function":     { get: -> module.getOrInsertGlobal           "_ejs_Function",               types.EjsValue }
+                "JSON":         { get: -> module.getOrInsertGlobal           "_ejs_JSON",                   types.EjsValue }
+                "Math":         { get: -> module.getOrInsertGlobal           "_ejs_Math",                   types.EjsValue }
+                "console":      { get: -> module.getOrInsertGlobal           "_ejs_console",                types.EjsValue }
+                "require":      { get: -> module.getOrInsertGlobal           "_ejs_require",                types.EjsValue }
+                "ArrayBuffer":  { get: -> module.getOrInsertGlobal           "_ejs_ArrayBuffer",            types.EjsValue }
+                "Int8Array":    { get: -> module.getOrInsertGlobal           "_ejs_Int8Array",              types.EjsValue }
+                "Uint16Array":  { get: -> module.getOrInsertGlobal           "_ejs_Uint16Array",            types.EjsValue }
+                "Int32Array":   { get: -> module.getOrInsertGlobal           "_ejs_Int32Array",             types.EjsValue }
+                "Float32Array": { get: -> module.getOrInsertGlobal           "_ejs_Float32Array",           types.EjsValue }
+                # kind of a hack, but since we don't define these...
+                "window":       { get: -> module.getOrInsertGlobal           "_ejs_undefined",              types.EjsValue }
+                "document":     { get: -> module.getOrInsertGlobal           "_ejs_undefined",              types.EjsValue }
+        }
