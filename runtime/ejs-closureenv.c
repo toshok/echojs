@@ -18,12 +18,6 @@ _ejs_closureenv_new (uint32_t length)
     return _ejs_closure_init (env, length);
 }
 
-void
-test_closureenv()
-{
-    ejsval foo = _ejs_closureenv_new(7);
-}
-
 ejsval
 _ejs_closure_init (EJSClosureEnv* env, uint32_t length)
 {
@@ -33,7 +27,6 @@ _ejs_closure_init (EJSClosureEnv* env, uint32_t length)
     for (int i = 0; i < length; i ++) {
         env->slots[i] = _ejs_undefined;
     }
-    _ejs_log ("returning from _ejs_closure_init");
     return CLOSUREENV_TO_EJSVAL_IMPL(env);
 }
 
