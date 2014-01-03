@@ -104,7 +104,8 @@ _ejs_arraybuffer_new (int size)
 
     rv->dependent = EJS_FALSE;
     rv->size = size;
-    rv->data.alloced_buf = calloc(1, size);
+    if (size)
+        rv->data.alloced_buf = calloc(1, size);
 
     return OBJECT_TO_EJSVAL(rv);
 }
@@ -142,7 +143,8 @@ _ejs_ArrayBuffer_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     EJSArrayBuffer* buffer = (EJSArrayBuffer*)EJSVAL_TO_OBJECT(_this);
     buffer->dependent = EJS_FALSE;
     buffer->size = size;
-    buffer->data.alloced_buf = calloc (1, size);
+    if (size)
+        buffer->data.alloced_buf = calloc (1, size);
 
     return _this;
 }
