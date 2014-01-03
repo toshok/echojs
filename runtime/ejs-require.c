@@ -78,7 +78,6 @@ require_user_module (const char* name, ejsval *module)
         }
         if (!strcmp (map->name, name)) {
             if (EJSVAL_IS_NULL(map->cached_exports)) {
-                _ejs_log ("require'ing %s.\n", name);
                 _ejs_gc_add_root (&map->cached_exports);
                 map->cached_exports = _ejs_object_new(_ejs_null, &_ejs_object_specops);
                 ejsval prev_exports = _ejs_object_getprop (_ejs_global, _ejs_atom_exports);
@@ -91,7 +90,6 @@ require_user_module (const char* name, ejsval *module)
 
                 _ejs_object_setprop(_ejs_global, _ejs_atom_exports, prev_exports);
                 _ejs_gc_remove_root (&prev_exports);
-                _ejs_log ("done require'ing %s.\n", name);
             }
             *module = map->cached_exports;
             return EJS_TRUE;
@@ -104,7 +102,6 @@ require_user_module (const char* name, ejsval *module)
 static ejsval
 _ejs_require_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    _ejs_log ("in _ejs_require_impl");
     if (argc < 1) {
         return _ejs_undefined;
     }
@@ -120,19 +117,14 @@ _ejs_require_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     ejsval module EJSVAL_ALIGNMENT;
     if (require_builtin_module (arg_utf8, &module)) {
-        _ejs_log ("returning builtin module for %s", arg_utf8);
         free (arg_utf8);
         return module;
     }
-    _ejs_log ("1");
     if (require_external_module (arg_utf8, &module)) {
-        _ejs_log ("returning external module for %s", arg_utf8);
         free (arg_utf8);
         return module;
     }
-    _ejs_log ("2");
     if (require_user_module (arg_utf8, &module)) {
-        _ejs_log ("returning user module for %s", arg_utf8);
         free (arg_utf8);
         return module;
     }
