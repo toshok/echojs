@@ -208,10 +208,10 @@ compileFile = (filename, content, compileCallback) ->
 
         compiled_module = compiler.compile parse_tree, base_filename, filename, options
 
-        ll_filename = "/tmp/#{base_filename}.ll"
-        bc_filename = "/tmp/#{base_filename}.bc"
-        ll_opt_filename = "/tmp/#{base_filename}.ll.opt"
-        o_filename = "/tmp/#{base_filename}.o"
+        ll_filename = "/tmp/#{base_filename}-#{options.target}.ll"
+        bc_filename = "/tmp/#{base_filename}-#{options.target}.bc"
+        ll_opt_filename = "/tmp/#{base_filename}-#{options.target}.ll.opt"
+        o_filename = "/tmp/#{base_filename}-#{options.target}.o"
 
         temp_files.push ll_filename, bc_filename, ll_opt_filename, o_filename
         
