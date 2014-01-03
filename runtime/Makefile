@@ -144,11 +144,10 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch
 	@echo [$(CC) armv7] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) $(IOSDEVS_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
 
 $(analyze_plists_c): %.plist: %.c
-	@echo "  CCSA  " $<
-	@$(CC) $(OSX_CFLAGS) --analyze $< -o $@
+	@echo [$(CC) analyze] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) $(OSX_CFLAGS) --analyze $< -o $@
+
 $(analyze_plists_objc): %.plist: %.m
-	@echo "  CCSA  " $<
-	@$(CC) $(OSX_CFLAGS) --analyze $< -o $@
+	@echo [$(CC) analyze] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) $(OSX_CFLAGS) --analyze $< -o $@
 
 
 -include $(patsubst %.o.osx,.deps/%.o.osx-deps,$(OSX_OBJECTS))
