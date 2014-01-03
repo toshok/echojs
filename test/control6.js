@@ -1,4 +1,4 @@
-j = 0;
+var j = 0;
 outer: while (j < 5) {
   j = j + 1;
   var i = 0;

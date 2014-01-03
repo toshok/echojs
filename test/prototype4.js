@@ -1,9 +1,9 @@
 
-a = new String("hi there");
+var a = new String("hi there");
 
-toString = Object.prototype.toString;
+var toString = Object.prototype.toString;
 
-if (typeof console !== "undefined") print = console.log
+if (typeof console !== "undefined") var print = console.log
 
 print ("1: " + (Object.__proto__ === Function.__proto__))
 print ("2: " + (Object.__proto__ === String.__proto__))

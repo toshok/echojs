@@ -2,9 +2,9 @@
 function A() { }
 var a = new A();
 
-toString = Object.prototype.toString;
+var toString = Object.prototype.toString;
 
-if (typeof console !== "undefined") print = console.log
+if (typeof console !== "undefined") var print = console.log
 
 print ("1: " + (a.prototype === undefined));
 print ("2: " + (toString.call(a.__proto__)));

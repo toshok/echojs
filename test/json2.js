@@ -1,4 +1,4 @@
-if (typeof console !== "undefined") print = console.log;
+if (typeof console !== "undefined") var print = console.log;
 
 var arr = JSON.parse("[1,2,3,4,5]");
 console.log (arr[0]);

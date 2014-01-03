@@ -7,7 +7,7 @@ var Class = {
   }
 };
 
-Foo = Class.create();
+var Foo = Class.create();
 Foo.prototype = {
   initialize: function (x, y, z) {
     console.log (x);

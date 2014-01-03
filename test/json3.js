@@ -1,4 +1,4 @@
-if (typeof console !== "undefined") print = console.log;
+if (typeof console !== "undefined") var print = console.log;
 var a = { b: 1, c: 2, d: 3, e: 4, f: 5 };
 var a_str = JSON.stringify (a);
 var b = JSON.parse(a_str);

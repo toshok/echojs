@@ -1,9 +1,9 @@
 
 function a() { }
 
-toString = Object.prototype.toString;
+var toString = Object.prototype.toString;
 
-if (typeof console !== "undefined") print = console.log
+if (typeof console !== "undefined") var print = console.log
 
 print ("1: " + (toString.call(a.prototype)));
 print ("2: " + (toString.call(a.__proto__)));
