@@ -158,12 +158,12 @@ _ejs_objc_init(ejsval global)
     _ejs_gc_add_root (&_ejs_ObjcHandle_proto);
     _ejs_ObjcHandle_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_objchandle_specops);
 
-    _ejs_ObjcHandle = _ejs_function_new_utf8 (_ejs_null, "ObjcHandle", (EJSClosureFunc)_ejs_ObjcHandle_impl);
+    _ejs_ObjcHandle = _ejs_function_new_native (_ejs_null, _ejs_atom_ObjcHandle, _ejs_ObjcHandle_impl);
 
     _ejs_object_setprop (_ejs_ObjcHandle, _ejs_atom_prototype,  _ejs_ObjcHandle_proto);
     _ejs_object_setprop (_ejs_ObjcHandle_proto, _ejs_atom_constructor,  _ejs_ObjcHandle);
 
-    _ejs_object_setprop_utf8 (global, "ObjcHandle", _ejs_ObjcHandle);
+    _ejs_object_setprop (global, _ejs_atom_ObjcHandle, _ejs_ObjcHandle);
 
     _ejs_coffeekitobject_specops =  _ejs_object_specops;
     _ejs_coffeekitobject_specops.class_name = "PirouetteObject";
@@ -171,15 +171,15 @@ _ejs_objc_init(ejsval global)
     _ejs_gc_add_root (&_ejs_CoffeeKitObject_proto);
     _ejs_CoffeeKitObject_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_coffeekitobject_specops);
 
-    _ejs_CoffeeKitObject = _ejs_function_new_utf8 (_ejs_null, "PirouetteObject", (EJSClosureFunc)_ejs_CoffeeKitObject_impl);
+    _ejs_CoffeeKitObject = _ejs_function_new_native (_ejs_null, _ejs_atom_PirouetteObject, (EJSClosureFunc)_ejs_CoffeeKitObject_impl);
 
     _ejs_object_setprop (_ejs_CoffeeKitObject, _ejs_atom_prototype,  _ejs_CoffeeKitObject_proto);
     _ejs_object_setprop (_ejs_CoffeeKitObject_proto, _ejs_atom_constructor,  _ejs_CoffeeKitObject);
 
-    EJS_INSTALL_FUNCTION(_ejs_CoffeeKitObject, "setHandle", _ejs_CoffeeKitObject_setHandle);
-    EJS_INSTALL_FUNCTION(_ejs_CoffeeKitObject_proto, "toString", _ejs_CoffeeKitObject_prototype_toString);
+    EJS_INSTALL_ATOM_FUNCTION(_ejs_CoffeeKitObject, setHandle, _ejs_CoffeeKitObject_setHandle);
+    EJS_INSTALL_ATOM_FUNCTION(_ejs_CoffeeKitObject_proto, toString, _ejs_CoffeeKitObject_prototype_toString);
 
-    _ejs_object_setprop_utf8 (global, "PirouetteObject", _ejs_CoffeeKitObject);
+    _ejs_object_setprop (global, _ejs_atom_PirouetteObject, _ejs_CoffeeKitObject);
 }
 
 
@@ -1197,25 +1197,16 @@ register_js_class (CKObject* proto,
 static ejsval
 _ejs_objc_registerJSClass (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
-    _ejs_log ("entering _ejs_objc_registerJSClass");
-
     // unused ejsval ctor = args[0]
     CKObject* proto = [[CKValue valueWithJSValue:args[1]] objectValue];
-
-    _ejs_log ("1");
-
     char *register_cstr = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[2]));
-    _ejs_log ("2 %s", register_cstr);
-    _ejs_dump_value(args[3]);
     char *super_register_cstr = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[3]));
-    _ejs_log ("3 %s", super_register_cstr);
 
     register_js_class (proto, register_cstr, super_register_cstr);
 
     free (register_cstr);
     free (super_register_cstr);
 
-    _ejs_log ("leaving _ejs_objc_registerJSClass");
     return _ejs_undefined;
 }
 
