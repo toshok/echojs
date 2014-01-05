@@ -542,8 +542,8 @@ _ejs_arraybuffer_specop_get (ejsval obj, ejsval propertyName)
     }
 
     // we also handle the length getter here
-    if (EJSVAL_IS_STRING(propertyName) && !ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName))) {
-        return NUMBER_TO_EJSVAL (EJS_ARRAY_LEN(obj));
+    if (EJSVAL_IS_STRING(propertyName) && !ucs2_strcmp (_ejs_ucs2_byteLength, EJSVAL_TO_FLAT_STRING(propertyName))) {
+        return NUMBER_TO_EJSVAL (EJS_ARRAY_BUFFER_BYTE_LEN(obj));
     }
 
     // otherwise we fallback to the object implementation
