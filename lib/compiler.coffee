@@ -133,7 +133,7 @@ class ABI
                 
         createCall: (fromFunction, callee, argv, callname) -> ir.createCall callee, argv, callname
         createInvoke: (fromFunction, callee, argv, normal_block, exc_block, callname) -> ir.createInvoke callee, argv, normal_block, exc_block, callname
-        createRet: (fromFunction, value) -> ir.createRet val
+        createRet: (fromFunction, value) -> ir.createRet value
         createExternalFunction: (inModule, name, ret_type, param_types) -> inModule.getOrInsertExternalFunction name, ret_type, param_types
         createFunction: (inModule, name, ret_type, param_types) -> inModule.getOrInsertFunction name, ret_type, param_types
         createFunctionType: (ret_type, param_types) -> llvm.FunctionType.get ret_type, param_types
