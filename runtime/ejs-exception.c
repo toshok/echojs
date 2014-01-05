@@ -12,7 +12,7 @@
 #include <execinfo.h>
 
 
-#if !defined(__arm__)
+#if !defined(IOS)
 #define spew 0
 #if spew
 #define SPEW(x) x
