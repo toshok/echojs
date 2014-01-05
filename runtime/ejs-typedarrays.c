@@ -241,7 +241,7 @@ _ejs_ArrayBuffer_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsva
              uint32_t byteLength = buffer->size;                        \
                                                                         \
              if (argc > 1) byteOffset = ToUint32(args[1]);              \
-             if (argc > 2) byteLength = ToUint32(args[2]);              \
+             if (argc > 2) byteLength = ToUint32(args[2]) * elementSizeInBytes;              \
                                                                         \
              if (byteOffset > buffer->size)              byteOffset = buffer->size; \
              if (byteOffset + byteLength > buffer->size) byteLength = buffer->size - byteOffset; \
@@ -544,8 +544,8 @@ _ejs_arraybuffer_specop_get (ejsval obj, ejsval propertyName)
     }
 
     // we also handle the length getter here
-    if (EJSVAL_IS_STRING(propertyName) && !ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName))) {
-        return NUMBER_TO_EJSVAL (EJS_ARRAY_LEN(obj));
+    if (EJSVAL_IS_STRING(propertyName) && !ucs2_strcmp (_ejs_ucs2_byteLength, EJSVAL_TO_FLAT_STRING(propertyName))) {
+        return NUMBER_TO_EJSVAL (EJS_ARRAY_BUFFER_BYTE_LEN(obj));
     }
 
     // otherwise we fallback to the object implementation
