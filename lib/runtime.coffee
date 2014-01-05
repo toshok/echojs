@@ -138,12 +138,24 @@ exports.createGlobalsInterface = (module) ->
                 "JSON":         { get: -> module.getOrInsertGlobal           "_ejs_JSON",                   types.EjsValue }
                 "Math":         { get: -> module.getOrInsertGlobal           "_ejs_Math",                   types.EjsValue }
                 "console":      { get: -> module.getOrInsertGlobal           "_ejs_console",                types.EjsValue }
-                "require":      { get: -> module.getOrInsertGlobal           "_ejs_require",                types.EjsValue }
                 "ArrayBuffer":  { get: -> module.getOrInsertGlobal           "_ejs_ArrayBuffer",            types.EjsValue }
                 "Int8Array":    { get: -> module.getOrInsertGlobal           "_ejs_Int8Array",              types.EjsValue }
                 "Uint16Array":  { get: -> module.getOrInsertGlobal           "_ejs_Uint16Array",            types.EjsValue }
                 "Int32Array":   { get: -> module.getOrInsertGlobal           "_ejs_Int32Array",             types.EjsValue }
                 "Float32Array": { get: -> module.getOrInsertGlobal           "_ejs_Float32Array",           types.EjsValue }
+                "XMLHttpRequest": { get: -> module.getOrInsertGlobal           "_ejs_XMLHttpRequest",       types.EjsValue }
+                "process":      { get: -> module.getOrInsertGlobal           "_ejs_Process",                types.EjsValue }
+                
+                "require":      { get: -> module.getOrInsertGlobal           "_ejs_require",                types.EjsValue }
+                "isNaN":        { get: -> module.getOrInsertGlobal           "_ejs_isNaN",                  types.EjsValue }
+                "isFinite":     { get: -> module.getOrInsertGlobal           "_ejs_isFinite",               types.EjsValue }
+                "parseInt":     { get: -> module.getOrInsertGlobal           "_ejs_parseInt",               types.EjsValue }
+                "parseFloat":   { get: -> module.getOrInsertGlobal           "_ejs_parseFloat",             types.EjsValue }
+                "decodeURI":    { get: -> module.getOrInsertGlobal           "_ejs_decodeURI",              types.EjsValue }
+                "encodeURI":    { get: -> module.getOrInsertGlobal           "_ejs_encodeURI",              types.EjsValue }
+                "decodeURIComponent":  { get: -> module.getOrInsertGlobal           "_ejs_decodeURIComponent",              types.EjsValue }
+                "encodeURIComponent":  { get: -> module.getOrInsertGlobal           "_ejs_encodeURIComponent",              types.EjsValue }
+        
                 # kind of a hack, but since we don't define these...
                 "window":       { get: -> module.getOrInsertGlobal           "_ejs_undefined",              types.EjsValue }
                 "document":     { get: -> module.getOrInsertGlobal           "_ejs_undefined",              types.EjsValue }

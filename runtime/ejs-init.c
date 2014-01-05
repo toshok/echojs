@@ -44,7 +44,6 @@ const ejsval _ejs_one EJSVAL_ALIGNMENT = STATIC_BUILD_DOUBLE_EJSVAL(1);
 
 ejsval _ejs_global EJSVAL_ALIGNMENT;
 
-
 /* useful strings literals */
 #include "ejs-atoms-gen.c"
 
@@ -102,7 +101,10 @@ _ejs_init(int argc, char** argv)
     _ejs_webgl_init(_ejs_global);
 #endif
 
-#define GLOBAL_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_global, x, _ejs_##x)
+#define GLOBAL_METHOD(x) EJS_MACRO_START                                \
+    _ejs_##x = _ejs_function_new_native (_ejs_null, _ejs_atom_##x, (EJSClosureFunc)_ejs_##x##_impl); \
+    _ejs_object_setprop (_ejs_global, _ejs_atom_##x, _ejs_##x);         \
+    EJS_MACRO_END
 
     GLOBAL_METHOD(isNaN);
     GLOBAL_METHOD(isFinite);

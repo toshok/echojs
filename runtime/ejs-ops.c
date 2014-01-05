@@ -19,6 +19,12 @@
 #include "ejs-ops.h"
 #include "ejs-error.h"
 
+ejsval _ejs_isNaN EJSVAL_ALIGNMENT;
+ejsval _ejs_isFinite EJSVAL_ALIGNMENT;
+ejsval _ejs_parseInt EJSVAL_ALIGNMENT;
+ejsval _ejs_parseFloat EJSVAL_ALIGNMENT;
+
+
 static const size_t UINT32_CHAR_BUFFER_LENGTH = sizeof("4294967295") - 1;
 
 static char *
@@ -1033,7 +1039,7 @@ _ejs_rethrow ()
 }
 
 ejsval
-_ejs_isNaN (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+_ejs_isNaN_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     ejsval num = _ejs_undefined;
     if (argc >= 1)
@@ -1043,7 +1049,7 @@ _ejs_isNaN (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 }
 
 ejsval
-_ejs_isFinite (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+_ejs_isFinite_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     EJS_NOT_IMPLEMENTED();
 }
@@ -1051,7 +1057,7 @@ _ejs_isFinite (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 // ECMA262 15.1.2.2
 // parseInt (string , radix)
 ejsval
-_ejs_parseInt (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+_ejs_parseInt_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     ejsval string = _ejs_undefined;
     ejsval radix = _ejs_undefined;
@@ -1172,7 +1178,7 @@ _ejs_parseInt (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 }
 
 ejsval
-_ejs_parseFloat (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+_ejs_parseFloat_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     if (argc == 0)
         return _ejs_nan;
