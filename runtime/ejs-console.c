@@ -54,7 +54,8 @@ output (FILE *outfile, uint32_t argc, ejsval *args)
             }
         }
         else if (EJSVAL_IS_ERROR(args[i])) {
-            ejsval strval = _ejs_object_getprop(args[i], _ejs_atom_name);
+            ejsval strval = ToString(args[i]);
+
             char* strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(strval));
             OUTPUT ("[%s]", strval_utf8);
             free (strval_utf8);
