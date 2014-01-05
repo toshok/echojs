@@ -133,6 +133,7 @@ class ABI
                 
         createCall: (fromFunction, callee, argv, callname) -> ir.createCall callee, argv, callname
         createInvoke: (fromFunction, callee, argv, normal_block, exc_block, callname) -> ir.createInvoke callee, argv, normal_block, exc_block, callname
+        createRet: (fromFunction, value) -> ir.createRet val
         createExternalFunction: (inModule, name, ret_type, param_types) -> inModule.getOrInsertExternalFunction name, ret_type, param_types
         createFunction: (inModule, name, ret_type, param_types) -> inModule.getOrInsertFunction name, ret_type, param_types
         createFunctionType: (ret_type, param_types) -> llvm.FunctionType.get ret_type, param_types
@@ -189,6 +190,10 @@ class ArmABI extends ABI
                 else
                         super
 
+        createRet: (fromFunction, value) ->
+                ir.createStore value, fromFunction.args[0]
+                ir.createRetVoid()
+        
         createExternalFunction: (inModule, name, ret_type, param_types) ->
                 @createFunction inModule, name, ret_type, param_types, true
                 
@@ -1065,11 +1070,7 @@ class LLVMIRVisitor extends TreeVisitor
 
         createRet: (x) ->
                 #@createCall @ejs_runtime.log, [consts.string(ir, "leaving #{@currentFunction.name}")], ""
-                if @options.target is "dev"
-                        ir.createStore x, @currentFunction.args[0]
-                        ir.createRetVoid()
-                else
-                        ir.createRet x
+                @abi.createRet @currentFunction, x
                         
         visitUnaryExpression: (n) ->
                 debug.log -> "operator = '#{n.operator}'"
@@ -2011,7 +2012,7 @@ insert_toplevel_func = (tree, filename) ->
         tree
 
 exports.compile = (tree, base_output_filename, source_filename, options) ->
-        abi = if options.target is "dev" then new ArmABI() else new ABI()
+        abi = if (options.target is "armv7" or options.target is "armv7s") then new ArmABI() else new ABI()
                 
         tree = insert_toplevel_func tree, source_filename
 

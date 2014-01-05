@@ -43,9 +43,12 @@ set_target = (targetinfo) ->
                 when "sim"
                         options.target = "sim"
                         options.target_pointer_size = 32
-                when "dev"
-                        options.target = "dev"
+                when "armv7"
+                        options.target = "armv7"
                         options.target_pointer_size = 32
+                when "armv7s"
+                        options.target = "armv7s"
+                        options.target_pointer_size = 64
                 else
                         throw "invalid target specification `#{targetinfo}'."
 
@@ -167,37 +170,44 @@ dev_bin="#{dev_base}/Developer/usr/bin"
 target_llc_args =
         osx: ["-march=x86-64"]
         sim: ["-march=x86"]
-        dev: ["-march=arm", "-mtriple=thumbv7-apple-ios", "-mattr=+v6", "-relocation-model=pic", "-soft-float" ]
+        armv7: ["-march=arm", "-mtriple=thumbv7-apple-ios", "-mattr=+v6", "-relocation-model=pic", "-soft-float" ]
+        armv7s: ["-march=aarch64", "-mtriple=thumbv7s-apple-ios", "-mattr=+fp-armv8", "-relocation-model=pic" ]
 
 target_linker =
         osx: "clang++"
         sim: "clang++"
-        dev: "clang++"
+        armv7: "clang++"
+        armv7s: "clang++"
         
 target_link_args =
         osx: [ "-DEJS_BITS_PER_WORD=64", "-DIS_LITTLE_ENDIAN=1" ]
         sim: [ "-arch", "i386",  "-isysroot", "#{sim_base}/Developer/SDKs/iPhoneSimulator#{options.ios_sdk}.sdk", "-miphoneos-version-min=#{options.ios_min}", "-DEJS_BITS_PER_WORD=32", "-DIS_LITTLE_ENDIAN=1"]
-        dev: [ "-arch", "armv7", "-isysroot", "#{dev_base}/Developer/SDKs/iPhoneOS#{options.ios_sdk}.sdk", "-miphoneos-version-min=#{options.ios_min}", "-DEJS_BITS_PER_WORD=32", "-DIS_LITTLE_ENDIAN=1" ]
+        armv7: [ "-arch", "armv7", "-isysroot", "#{dev_base}/Developer/SDKs/iPhoneOS#{options.ios_sdk}.sdk", "-miphoneos-version-min=#{options.ios_min}", "-DEJS_BITS_PER_WORD=32", "-DIS_LITTLE_ENDIAN=1" ]
+        armv7s: [ "-arch", "armv7s", "-isysroot", "#{dev_base}/Developer/SDKs/iPhoneOS#{options.ios_sdk}.sdk", "-miphoneos-version-min=#{options.ios_min}", "-DEJS_BITS_PER_WORD=64", "-DIS_LITTLE_ENDIAN=1" ]
 
 target_libraries =
         osx: [ "-framework", "Foundation", "-framework", "AppKit" ]
         sim: [ "-framework", "Foundation", "-framework", "UIKit", "-framework", "GLKit", "-framework", "OpenGLES", "-framework", "CoreGraphics" ]
-        dev: [ "-framework", "Foundation", "-framework", "UIKit", "-framework", "GLKit", "-framework", "OpenGLES", "-framework", "CoreGraphics" ]
+        armv7: [ "-framework", "Foundation", "-framework", "UIKit", "-framework", "GLKit", "-framework", "OpenGLES", "-framework", "CoreGraphics" ]
+        armv7s: [ "-framework", "Foundation", "-framework", "UIKit", "-framework", "GLKit", "-framework", "OpenGLES", "-framework", "CoreGraphics" ]
 
 target_libecho =
         osx: "runtime/libecho.a"
         sim: "runtime/libecho.a.ios"
-        dev: "runtime/libecho.a.ios"
+        armv7: "runtime/libecho.a.ios"
+        armv7s: "runtime/libecho.a.ios"
 
 extra_libs =
         osx: "external-deps/pcre-osx/.libs/libpcre16.a"
         sim: "external-deps/pcre-iossim/.libs/libpcre16.a"
-        dev: "external-deps/pcre-iosdev/.libs/libpcre16.a"
+        armv7: "external-deps/pcre-iosdev/.libs/libpcre16.a"
+        armv7s: "external-deps/pcre-iosdev/.libs/libpcre16.a"
 
 target_path_prepend =
         osx: ""
         sim: "#{sim_bin}"
-        dev: "#{dev_bin}"
+        armv7: "#{dev_bin}"
+        armv7s: "#{dev_bin}"
 
 compileFile = (filename, content, compileCallback) ->
         base_filename = util.genFreshFileName path.basename filename
