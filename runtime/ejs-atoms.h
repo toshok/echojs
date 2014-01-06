@@ -68,6 +68,7 @@ EJS_ATOM(Int32Array)
 EJS_ATOM(Uint32Array)
 EJS_ATOM(Float32Array)
 EJS_ATOM(Float64Array)
+EJS_ATOM(DataView)
 EJS_ATOM(BYTES_PER_ELEMENT)
 
 // error types

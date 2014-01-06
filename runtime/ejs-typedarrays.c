@@ -65,6 +65,24 @@ static EJSSpecOps _ejs_typedarray_specops = {
 
 #define EJS_TYPEDARRAY_LEN(arrobj)      (((EJSTypedArray*)EJSVAL_TO_OBJECT(arrobj))->length)
 
+static EJSObject* _ejs_dataview_specop_allocate ();
+static void     _ejs_dataview_specop_finalize (EJSObject* obj);
+static void     _ejs_dataview_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
+
+EJSSpecOps _ejs_dataview_specops = {
+    "DataView",
+
+    NULL, NULL, NULL,
+    NULL, NULL, NULL,
+    NULL, NULL, NULL,
+    NULL,
+
+    _ejs_dataview_specop_allocate,
+    _ejs_dataview_specop_finalize,
+    _ejs_dataview_specop_scan
+};
+
+
 ejsval _ejs_ArrayBuffer_proto EJSVAL_ALIGNMENT;
 ejsval _ejs_ArrayBuffer EJSVAL_ALIGNMENT;
 
@@ -709,6 +727,26 @@ _ejs_typedarray_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSTypedArray *arr = (EJSTypedArray*)obj;
     scan_func(arr->buffer);
+    _ejs_object_specops.scan (obj, scan_func);
+}
+
+static EJSObject*
+_ejs_dataview_specop_allocate ()
+{
+    return (EJSObject*)_ejs_gc_new (EJSDataView);
+}
+
+static void
+_ejs_dataview_specop_finalize (EJSObject* obj)
+{
+    _ejs_object_specops.finalize (obj);
+}
+
+static void
+_ejs_dataview_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
+{
+    EJSDataView *view = (EJSDataView*)obj;
+    scan_func (view->buffer);
     _ejs_object_specops.scan (obj, scan_func);
 }
 
