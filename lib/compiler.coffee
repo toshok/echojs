@@ -1931,7 +1931,7 @@ class LLVMIRVisitor extends TreeVisitor
                 arg = @visitOrNull exp.arguments[0]
                 if opencode and @options.target_pointer_size is 64
                         mask = @createEjsvalAnd arg, consts.int64_lowhi(0xffff8000, 0x00000000), "mask.i"
-                        @createEjsBoolSelect @createEjsvalICmpEq mask, consts.int64_lowhi(0xfff98000, 0x00000000), "cmpresult"
+                        @createEjsBoolSelect ir.createICmpEq mask, consts.int64_lowhi(0xfff98000, 0x00000000), "cmpresult"
                 else
                         @createCall @ejs_runtime.typeof_is_boolean,   [arg], "is_boolean", false
 
