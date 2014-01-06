@@ -239,12 +239,21 @@ _ejs_ArrayBuffer_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsva
              /* TypedArray(ArrayBuffer buffer, unsigned long byteOffset, unsigned long length) */ \
              uint32_t byteOffset = 0;                                   \
              uint32_t byteLength = buffer->size;                        \
+             EJSBool lengthSpecified = EJS_FALSE;                       \
                                                                         \
              if (argc > 1) byteOffset = ToUint32(args[1]);              \
-             if (argc > 2) byteLength = ToUint32(args[2]) * elementSizeInBytes;              \
+             if (argc > 2) {                                            \
+                 byteLength = ToUint32(args[2]) * elementSizeInBytes;   \
+                 lengthSpecified = EJS_TRUE;                            \
+             }                                                          \
                                                                         \
              if (byteOffset > buffer->size)              byteOffset = buffer->size; \
-             if (byteOffset + byteLength > buffer->size) byteLength = buffer->size - byteOffset; \
+             if (byteOffset + byteLength > buffer->size) {              \
+                 if (lengthSpecified)                                   \
+                     _ejs_throw_nativeerror_utf8 (EJS_RANGE_ERROR, "Length is out of range."); \
+                 else                                                   \
+                     byteLength = buffer->size - byteOffset;            \
+             }                                                          \
                                                                         \
              if ((byteOffset % sizeof (elementtype)) != 0)              \
                  _ejs_throw_nativeerror_utf8 (EJS_RANGE_ERROR, "Byte offset / length is not aligned."); \
