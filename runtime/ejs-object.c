@@ -777,6 +777,9 @@ _ejs_dump_value (ejsval val)
     if (EJSVAL_IS_UNDEFINED(val)) {
         _ejs_log ("undefined\n");
     }
+    else if (EJSVAL_IS_NULL(val)) {
+        _ejs_log ("null\n");
+    }
     else if (EJSVAL_IS_NUMBER(val)) {
         _ejs_log ("number: " EJS_NUMBER_FORMAT "\n", EJSVAL_TO_NUMBER(val));
     }
