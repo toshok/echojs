@@ -203,7 +203,7 @@ webglactiveinfo_get_name (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 	return _ejs_string_new_utf8 ([info name]);
 }
 
-#define SPEW(x) x
+#define SPEW(x)
 #define CHECK_GL_ERRORS 1
 
 #define WEBGL_UNPACK_FLIP_Y_WEBGL 0x9240
@@ -303,7 +303,7 @@ JSMETHOD (bindFramebuffer) {
 	// FIXME check args
 	GLenum target = (GLenum)EJSVAL_TO_NUMBER (args[0]);
 	GLuint framebuffer = 0;
-	if (!EJSVAL_IS_PRIMITIVE(args[1])) {
+	if (EJSVAL_IS_OBJECT(args[1])) {
 		WebGLFramebuffer *buffer = (WebGLFramebuffer*)get_peer (args[1]);
 		framebuffer = [buffer glId];
 	}
@@ -322,7 +322,7 @@ JSMETHOD (bindRenderbuffer) {
 	// FIXME check args
 	GLenum target = (GLenum)EJSVAL_TO_NUMBER (args[0]);
 	GLuint buffer_id = 0;
-	if (!EJSVAL_IS_PRIMITIVE (args[1])) {
+	if (EJSVAL_IS_OBJECT (args[1])) {
 		WebGLRenderbuffer *buffer = (WebGLRenderbuffer*)get_peer (args[1]);
 		buffer_id = [buffer glId];
 	}
@@ -1425,6 +1425,7 @@ JSMETHOD (texImage2D) {
 		format = (GLenum)EJSVAL_TO_NUMBER(args[3]);
 		type = (GLenum)EJSVAL_TO_NUMBER(args[4]);
 		NSLog(@"1");
+        _ejs_dump_value (args[5]);
 		UIImage* uiimage = (UIImage*)get_objc_id ([[CKValue valueWithJSValue:args[5]] objectValue]);
 		NSLog(@"2, uiimage = %@", uiimage);
         
@@ -1572,7 +1573,7 @@ uniform_f (size_t c, uint32_t argc, ejsval *args)
 #if notyet
 	//if (EJSVAL_IS_OBJECTOfClass (ctx, args[0], WebGLUniformLocationClass)) {
 #endif
-	if (!EJSVAL_IS_PRIMITIVE (args[0])) {
+	if (EJSVAL_IS_OBJECT (args[0])) {
 		loc = (int)get_peer (args[0]);
 	}
 	else if (EJSVAL_IS_NUMBER (args[0])) {
@@ -1624,7 +1625,7 @@ uniform_i (size_t c, uint32_t argc, ejsval *args)
 #if notyet
 	//if (EJSVAL_IS_OBJECTOfClass (ctx, args[0], WebGLUniformLocationClass)) {
 #endif
-	if (!EJSVAL_IS_PRIMITIVE (args[0])) {
+	if (EJSVAL_IS_OBJECT (args[0])) {
 		loc = (int)get_peer (args[0]);
 	}
 	else if (EJSVAL_IS_NUMBER (args[0])) {
@@ -1680,7 +1681,7 @@ uniform_fv (size_t c, uint32_t argc, ejsval *args)
 #if notyet
 	//if (EJSVAL_IS_OBJECTOfClass (ctx, args[0], WebGLUniformLocationClass)) {
 #endif
-	if (!EJSVAL_IS_PRIMITIVE (args[0])) {
+	if (EJSVAL_IS_OBJECT (args[0])) {
 		loc = (int)get_peer (args[0]);
 	}
 	else if (EJSVAL_IS_NUMBER (args[0])) {
@@ -1764,7 +1765,7 @@ uniform_iv (size_t c, uint32_t argc, ejsval *args)
 #if notyet
 	//if (EJSVAL_IS_OBJECTOfClass (ctx, args[0], WebGLUniformLocationClass)) {
 #endif
-	if (!EJSVAL_IS_PRIMITIVE (args[0])) {
+	if (EJSVAL_IS_OBJECT (args[0])) {
 		loc = (int)get_peer (args[0]);
 	}
 	else if (EJSVAL_IS_NUMBER (args[0])) {
@@ -1834,7 +1835,7 @@ uniformMatrix_fv (size_t c, uint32_t argc, ejsval *args)
 #if notyet
 	//if (EJSVAL_IS_OBJECTOfClass (ctx, args[0], WebGLUniformLocationClass)) {
 #endif
-	if (!EJSVAL_IS_PRIMITIVE (args[0])) {
+	if (EJSVAL_IS_OBJECT (args[0])) {
 		loc = (int)get_peer (args[0]);
 	}
 	else if (EJSVAL_IS_NUMBER (args[0])) {
@@ -1942,7 +1943,7 @@ JSMETHOD (useProgram) {
     
 	// FIXME check args
 	GLuint program_id = 0;
-	if (!EJSVAL_IS_PRIMITIVE (args[0])) {
+	if (EJSVAL_IS_OBJECT (args[0])) {
 		WebGLProgram *program = (WebGLProgram*)get_peer (args[0]);
 		program_id = [program glId];
 	}
