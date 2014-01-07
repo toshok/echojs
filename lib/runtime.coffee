@@ -96,17 +96,17 @@ exports.createBinopsInterface = (module, abi) ->
                 ">>>":        { get: -> abi.createExternalFunction module, "_ejs_op_ursh",        types.EjsValue, [types.EjsValue, types.EjsValue] }
                 "<<<":        { get: -> abi.createExternalFunction module, "_ejs_op_ulsh",        types.EjsValue, [types.EjsValue, types.EjsValue] }
                 "%":          { get: -> abi.createExternalFunction module, "_ejs_op_mod",         types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "+":          { get: -> only_reads_memory abi.createExternalFunction module, "_ejs_op_add",         types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "+":          { get: -> abi.createExternalFunction module, "_ejs_op_add",         types.EjsValue, [types.EjsValue, types.EjsValue] }
                 "*":          { get: -> abi.createExternalFunction module, "_ejs_op_mult",        types.EjsValue, [types.EjsValue, types.EjsValue] }
                 "/":          { get: -> abi.createExternalFunction module, "_ejs_op_div",         types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "<":          { get: -> returns_ejsval_bool only_reads_memory abi.createExternalFunction module, "_ejs_op_lt",          types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "-":          { get: -> abi.createExternalFunction module, "_ejs_op_sub",         types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "<":          { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_lt",          types.EjsValue, [types.EjsValue, types.EjsValue] }
                 "<=":         { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_le",          types.EjsValue, [types.EjsValue, types.EjsValue] }
                 ">":          { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_gt",          types.EjsValue, [types.EjsValue, types.EjsValue] }
                 ">=":         { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_ge",          types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "-":          { get: -> abi.createExternalFunction module, "_ejs_op_sub",         types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "===":        { get: -> returns_ejsval_bool does_not_throw does_not_access_memory abi.createExternalFunction module, "_ejs_op_strict_eq",   types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "===":        { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_strict_eq",   types.EjsValue, [types.EjsValue, types.EjsValue] }
                 "==":         { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_eq",          types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "!==":        { get: -> returns_ejsval_bool does_not_throw does_not_access_memory abi.createExternalFunction module, "_ejs_op_strict_neq",  types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "!==":        { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_strict_neq",  types.EjsValue, [types.EjsValue, types.EjsValue] }
                 "!=":         { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_neq",         types.EjsValue, [types.EjsValue, types.EjsValue] }
                 "instanceof": { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_instanceof",  types.EjsValue, [types.EjsValue, types.EjsValue] }
                 "in":         { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_in",          types.EjsValue, [types.EjsValue, types.EjsValue] }
