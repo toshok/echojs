@@ -230,7 +230,8 @@ compileFile = (filename, content, compileCallback) ->
         temp_files.push ll_filename, bc_filename, ll_opt_filename, o_filename
         
         llvm_as_args = ["-o=#{bc_filename}", ll_filename]
-        opt_args = ["-O3", "-early-cse", "-mem2reg", "-adce", "-strip-dead-prototypes", "-instsimplify", "-S", "-o=#{ll_opt_filename}", bc_filename]
+        #opt_args = ["-O3", "-early-cse", "-mem2reg", "-adce", "-strip-dead-prototypes", "-instsimplify", "-S", "-o=#{ll_opt_filename}", bc_filename]
+        opt_args = ["-O1", "-strip-dead-prototypes", "-S", "-o=#{ll_opt_filename}", bc_filename]
         llc_args = target_llc_args[options.target].concat ["-filetype=obj", "-o=#{o_filename}", ll_opt_filename]
 
         compiled_module.writeToFile ll_filename
