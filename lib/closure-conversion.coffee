@@ -1241,6 +1241,9 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
                         property.value = @visit property.value
                 n
 
+        # we split up assignment operators +=/-=/etc into their
+        # component operator + assignment so we can mark lhs as
+        # setLocal/setGlobal/etc, and rhs getLocal/getGlobal/etc
         visitAssignmentExpression: (n) ->
                 lhs = n.left
                 rhs = @visit n.right
@@ -1253,6 +1256,7 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
                                 left:     lhs
                                 right:    rhs
                         }
+                        n.operator = '='
                 
                 if is_intrinsic "%slot", lhs
                         create_intrinsic setSlot_id, [lhs.arguments[0], lhs.arguments[1], new_rhs]
