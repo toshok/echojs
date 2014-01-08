@@ -874,17 +874,9 @@ class LLVMIRVisitor extends TreeVisitor
                 rhs = n.right
 
                 rhvalue = @visit rhs
+
                 if n.operator.length is 2
-                        # cribbed from visitBinaryExpression
-                        callee = @ejs_binops[n.operator[0]]
-                        throw new Error "unhandled binary operator '#{n.operator}'" if not callee
-
-                        lhvalue = @visit lhs
-                        if @options.record_types
-                                @createCall @ejs_runtime.record_binop, [(consts.int32 @genRecordId()), (consts.string ir, n.operator[0]), lhvalue, rhvalue], ""
-                                
-                        rhvalue = @createCall callee, [lhvalue, rhvalue], "result_#{n.operator[0]}", !callee.doesNotThrow
-
+                        throw new Error "binary assignment operators '#{n.operator}' shouldn't exist at this point"
                 
                 if @options.record_types
                         @createCall @ejs_runtime.record_assignment, [(consts.int32 @genRecordId()), rhvalue], ""
