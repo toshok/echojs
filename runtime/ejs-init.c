@@ -54,9 +54,41 @@ _ejs_eval (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
   return _ejs_undefined;
 }
 
+static void
+_ejs_init_classes()
+{
+    _ejs_Class_initialize (&_ejs_arguments_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_array_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_boolean_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_date_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_error_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_function_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_map_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_number_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_regexp_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_string_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_symbol_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_arraybuffer_specops, &_ejs_object_specops);
+#if IOS
+    _ejs_Class_initialize (&WebGLRenderingContext_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&WebGLBuffer_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&WebGLFramebuffer_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&WebGLRenderbuffer_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&WebGLProgram_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&WebGLShader_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&WebGLTexture_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&WebGLActiveInfo_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&WebGLUniformLocation_specops, &_ejs_object_specops);
+#endif
+    _ejs_Class_initialize (&_ejs_xmlhttprequest_specops, &_ejs_object_specops);
+}
+
 void
 _ejs_init(int argc, char** argv)
 {
+    // process class inheritance
+    _ejs_init_classes();
+
     // initialize our atoms before anything else
     _ejs_init_static_strings();
 

@@ -2181,41 +2181,41 @@ _ejs_objc_allocateWebGLRenderingContext (ejsval env, ejsval _this, uint32_t argc
 	return obj;
 }
 
-EJSSpecOps WebGLRenderingContext_specops;
-EJSSpecOps WebGLBuffer_specops;
-EJSSpecOps WebGLFramebuffer_specops;
-EJSSpecOps WebGLRenderbuffer_specops;
-EJSSpecOps WebGLProgram_specops;
-EJSSpecOps WebGLShader_specops;
-EJSSpecOps WebGLTexture_specops;
-EJSSpecOps WebGLActiveInfo_specops;
-EJSSpecOps WebGLUniformLocation_specops;
+#define EJS_WEBGL_OBJ(n) EJS_DEFINE_CLASS(n, #n, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, finalize_release_private_data, OP_INHERIT)
+#define EJS_WEBGL_INHERIT_ALL(n) EJS_DEFINE_CLASS(n, #n, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT)
+
+EJS_DEFINE_CLASS(WebGLRenderingContext, "WebGLRenderingContext",
+                 webglrenderingcontext_specop_get,
+                 OP_INHERIT, // get_own_property,
+                 OP_INHERIT, // get_property,
+                 OP_INHERIT, // put,
+                 OP_INHERIT, // can_put,
+                 webglrenderingcontext_specop_has_property,
+                 OP_INHERIT, // delete,
+                 OP_INHERIT, // default_value
+                 OP_INHERIT, // define_own_property
+                 OP_INHERIT, // has_instance
+                 OP_INHERIT, // allocate
+                 finalize_release_private_data,
+                 OP_INHERIT  // scan
+                 )
+
+EJS_WEBGL_OBJ(WebGLBuffer);
+EJS_WEBGL_OBJ(WebGLFramebuffer);
+EJS_WEBGL_OBJ(WebGLRenderbuffer);
+EJS_WEBGL_OBJ(WebGLProgram);
+EJS_WEBGL_OBJ(WebGLShader);
+EJS_WEBGL_OBJ(WebGLTexture);
+EJS_WEBGL_OBJ(WebGLActiveInfo);
+
+EJS_WEBGL_INHERIT_ALL(WebGLUniformLocation);
+
+#undef EJS_WEBGL_OBJ
+#undef EJS_WEBGL_INHERIT_ALL
 
 void
 _ejs_webgl_init(ejsval global)
 {
-    WebGLRenderingContext_specops = _ejs_object_specops;
-    WebGLRenderingContext_specops.class_name = "WebGLRenderingContext";
-    WebGLRenderingContext_specops.has_property = webglrenderingcontext_specop_has_property;
-    WebGLRenderingContext_specops.get = webglrenderingcontext_specop_get;
-    WebGLRenderingContext_specops.finalize = finalize_release_private_data;
-
-    EJSSpecOps webgl_obj_specops = _ejs_object_specops;
-    webgl_obj_specops.finalize = finalize_release_private_data;
-
-#define WEBGL_SPECOPS(n) n##_specops = webgl_obj_specops; n##_specops.class_name = #n
-
-    WEBGL_SPECOPS(WebGLBuffer);
-    WEBGL_SPECOPS(WebGLFramebuffer);
-    WEBGL_SPECOPS(WebGLRenderbuffer);
-    WEBGL_SPECOPS(WebGLProgram);
-    WEBGL_SPECOPS(WebGLShader);
-    WEBGL_SPECOPS(WebGLTexture);
-    WEBGL_SPECOPS(WebGLActiveInfo);
-
-    WebGLUniformLocation_specops = _ejs_object_specops;
-    WebGLUniformLocation_specops.class_name = "WebGLUniformLocation";
-
     WebGLActiveInfo__proto__ = _ejs_object_create (_ejs_Object_prototype);
     EJS_INSTALL_GETTER (WebGLActiveInfo__proto__, "size", webglactiveinfo_get_size);
     EJS_INSTALL_GETTER (WebGLActiveInfo__proto__, "type", webglactiveinfo_get_type);

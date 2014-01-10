@@ -13,37 +13,26 @@
 #include "ejs-error.h"
 #include "ejs-string.h"
 
-static ejsval  _ejs_function_specop_get (ejsval obj, ejsval propertyName);
-static EJSPropertyDesc* _ejs_function_specop_get_own_property (ejsval obj, ejsval propertyName);
-static EJSPropertyDesc* _ejs_function_specop_get_property (ejsval obj, ejsval propertyName);
-static void    _ejs_function_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
-static EJSBool _ejs_function_specop_can_put (ejsval obj, ejsval propertyName);
-static EJSBool _ejs_function_specop_has_property (ejsval obj, ejsval propertyName);
-static EJSBool _ejs_function_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
-static ejsval  _ejs_function_specop_default_value (ejsval obj, const char *hint);
-static EJSBool _ejs_function_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
 static EJSBool _ejs_function_specop_has_instance (ejsval obj, ejsval lval);
 static EJSObject* _ejs_function_specop_allocate ();
 static void    _ejs_function_specop_finalize (EJSObject* obj);
 static void    _ejs_function_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
 
-EJSSpecOps _ejs_function_specops = {
-    "Function",
-    _ejs_function_specop_get,
-    _ejs_function_specop_get_own_property,
-    _ejs_function_specop_get_property,
-    _ejs_function_specop_put,
-    _ejs_function_specop_can_put,
-    _ejs_function_specop_has_property,
-    _ejs_function_specop_delete,
-    _ejs_function_specop_default_value,
-    _ejs_function_specop_define_own_property,
-    _ejs_function_specop_has_instance,
-
-    _ejs_function_specop_allocate,
-    _ejs_function_specop_finalize,
-    _ejs_function_specop_scan
-};
+EJS_DEFINE_CLASS(function, "Function",
+                 OP_INHERIT, // get
+                 OP_INHERIT, // get_own_property
+                 OP_INHERIT, // get_property
+                 OP_INHERIT, // put
+                 OP_INHERIT, // can_put
+                 OP_INHERIT, // has_property
+                 OP_INHERIT, // delete
+                 OP_INHERIT, // default_value
+                 OP_INHERIT, // define_own_property
+                 _ejs_function_specop_has_instance,
+                 _ejs_function_specop_allocate,
+                 _ejs_function_specop_finalize,
+                 _ejs_function_specop_scan
+                 )
 
 EJSBool trace = EJS_FALSE;
 
@@ -454,60 +443,6 @@ _ejs_decompose_closure (ejsval closure, EJSClosureFunc* func, ejsval* env,
         *_this = fun->bound_this;
 
     return EJS_TRUE;
-}
-
-static ejsval
-_ejs_function_specop_get (ejsval obj, ejsval propertyName)
-{
-    return _ejs_object_specops.get (obj, propertyName);
-}
-
-static EJSPropertyDesc*
-_ejs_function_specop_get_own_property (ejsval obj, ejsval propertyName)
-{
-    return _ejs_object_specops.get_own_property (obj, propertyName);
-}
-
-static EJSPropertyDesc*
-_ejs_function_specop_get_property (ejsval obj, ejsval propertyName)
-{
-    return _ejs_object_specops.get_property (obj, propertyName);
-}
-
-static void
-_ejs_function_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag)
-{
-    _ejs_object_specops.put (obj, propertyName, val, flag);
-}
-
-static EJSBool
-_ejs_function_specop_can_put (ejsval obj, ejsval propertyName)
-{
-    return _ejs_object_specops.can_put (obj, propertyName);
-}
-
-static EJSBool
-_ejs_function_specop_has_property (ejsval obj, ejsval propertyName)
-{
-    return _ejs_object_specops.has_property (obj, propertyName);
-}
-
-static EJSBool
-_ejs_function_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
-{
-    return _ejs_object_specops._delete (obj, propertyName, flag);
-}
-
-static ejsval
-_ejs_function_specop_default_value (ejsval obj, const char *hint)
-{
-    return _ejs_object_specops.default_value (obj, hint);
-}
-
-static EJSBool
-_ejs_function_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag)
-{
-    return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
 }
 
 // ECMA262: 15.3.5.3

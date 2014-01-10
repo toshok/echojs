@@ -158,6 +158,14 @@ typedef struct {
     SpecOpScan     scan;     // used to enumerate object references
 } EJSSpecOps;
 
+#define OP_INHERIT (void*)-1
+#define EJS_DEFINE_CLASS(n, class_name, get, get_own_property, get_property, put, can_put, has_property, _delete, default_value, define_own_property, has_instance, allocate, finalize, scan) \
+    EJSSpecOps _ejs_##n##_specops = {                                   \
+        (class_name), (get), (get_own_property), (get_property), (put), (can_put), (has_property), (_delete), (default_value), (define_own_property), (has_instance), (allocate), (finalize), (scan) \
+    };
+
+void _ejs_Class_initialize (EJSSpecOps *child, EJSSpecOps* parent);
+
 #define EJS_OBJECT_EXTENSIBLE_FLAG 0x01
 
 #define EJS_OBJECT_EXTENSIBLE_FLAG_SHIFTED (EJS_OBJECT_EXTENSIBLE_FLAG << EJS_GC_USER_FLAGS_SHIFT)
