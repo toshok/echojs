@@ -2,7 +2,9 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
-//#define NO_ZEROCOST_EXCEPTIONS 1
+#if IOS
+#define NO_ZEROCOST_EXCEPTIONS 1
+#endif
 
 #include "ejs-exception.h"
 #include "ejs-string.h"
@@ -12,7 +14,6 @@
 #include <execinfo.h>
 
 
-#if !defined(IOS)
 #define spew 0
 #if spew
 #define SPEW(x) x
@@ -169,8 +170,6 @@ ejs_setUncaughtExceptionHandler(ejs_uncaught_exception_handler fn)
  * Exception personality
  **********************************************************************/
 
-static void call_alt_handlers(struct _Unwind_Context *ctx);
-
 _Unwind_Reason_Code 
 EJS_PERSONALITY(int version,
                 _Unwind_Action actions,
@@ -178,20 +177,11 @@ EJS_PERSONALITY(int version,
                 struct _Unwind_Exception *exceptionObject,
                 struct _Unwind_Context *context)
 {
-    EJSBool unwinding = ((actions & _UA_CLEANUP_PHASE)  ||  
-                         (actions & _UA_FORCE_UNWIND));
-
-    SPEW(printf ("EXCEPTIONS: %s through frame [ip=%p sp=%p] "
+    SPEW(_ejs_log ("EXCEPTIONS: %s through frame [ip=%p sp=%p] "
                  "for exception %p\n", 
                  unwinding ? "unwinding" : "searching", 
                  (void*)(_Unwind_GetIP(context)-1),
                  (void*)_Unwind_GetCFA(context), exceptionObject));
-
-    // If we're executing the unwind, call this frame's alt handlers, if any.
-    if (unwinding) {
-        SPEW(printf ("call_alt_handlers!\n"););
-        //call_alt_handlers(context);
-    }
 
     // Let C++ handle the unwind itself.
     return CXX_PERSONALITY(version, actions, exceptionClass, 
@@ -222,9 +212,8 @@ void _ejs_exception_throw(ejsval val)
     exc->tinfo.vtable = ejs_ehtype_vtable+2;
 
     SPEW({
-            char* utf8_exc = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(ToString(val)));
-            printf ("EXCEPTIONS: throwing %p (object %s)\n", exc, utf8_exc);
-            free (utf8_exc);
+            _ejs_log ("EXCEPTIONS: throwing %p\n", exc);
+            _ejs_dump_value (val);
         });
     
     //    EJS_RUNTIME_EJS_EXCEPTION_THROW(obj);  // dtrace probe to log throw activity
@@ -235,7 +224,7 @@ void _ejs_exception_throw(ejsval val)
 
 void _ejs_exception_rethrow(void)
 {
-    SPEW(printf ("EXCEPTIONS: rethrowing current exception\n"));
+    SPEW(_ejs_log ("EXCEPTIONS: rethrowing current exception\n"));
     
     //    EJS_RUNTIME_EJS_EXCEPTION_RETHROW(); // dtrace probe to log throw activity.
     __cxa_rethrow();
@@ -245,7 +234,7 @@ void _ejs_exception_rethrow(void)
 
 ejsval _ejs_begin_catch(void *exc_gen)
 {
-    SPEW(printf ("EXCEPTIONS: handling exception %p at %p\n", exc_gen, __builtin_return_address(0)));
+    SPEW(_ejs_log ("EXCEPTIONS: handling exception %p at %p\n", exc_gen, __builtin_return_address(0)));
     struct ejs_exception *exc = (struct ejs_exception*)__cxa_begin_catch(exc_gen);
     return exc->val;
 }
@@ -253,7 +242,7 @@ ejsval _ejs_begin_catch(void *exc_gen)
 
 void _ejs_end_catch(void)
 {
-    SPEW(printf ("EXCEPTIONS: finishing handler\n"));
+    SPEW(_ejs_log ("EXCEPTIONS: finishing handler\n"));
     __cxa_end_catch();
 }
 
@@ -265,17 +254,17 @@ static char _ejs_exception_do_catch(struct ejs_typeinfo *catch_tinfo,
 {
     if (throw_tinfo->vtable != ejs_ehtype_vtable+2) {
         // Only ejs types can be caught here.
-        SPEW(printf ("EXCEPTIONS: skipping catch(?)\n"));
+        SPEW(_ejs_log ("EXCEPTIONS: skipping catch(?)\n"));
         return 0;
     }
 
     // `catch (EJSObject*)` always catches ejs types.
     if (catch_tinfo == &EJS_EHTYPE_ejsvalue) {
-        SPEW(printf ("EXCEPTIONS: catch(EJSValue*)\n"));
+        SPEW(_ejs_log ("EXCEPTIONS: catch(EJSValue*)\n"));
         return 1;
     }
 
-    SPEW(printf ("EXCEPTIONS: catch()\n"));
+    SPEW(_ejs_log ("EXCEPTIONS: catch()\n"));
     return 1;
 }
 
@@ -293,7 +282,7 @@ static char _ejs_exception_do_catch(struct ejs_typeinfo *catch_tinfo,
 static terminate_handler old_terminate = NULL;
 static void _ejs_terminate(void)
 {
-    SPEW(printf ("EXCEPTIONS: terminating\n"));
+    SPEW(_ejs_log ("EXCEPTIONS: terminating\n"));
 
     if (! __cxa_current_exception_type()) {
         // No current exception.
@@ -301,14 +290,14 @@ static void _ejs_terminate(void)
     }
     else {
         // for right now assume that we got here from an ejs exception.
-        printf ("unhandled exception: \n");
-        printf ("trace:\n");
+        _ejs_log ("unhandled exception: \n");
+        _ejs_log ("trace:\n");
 
         void* callstack[128];
         int i, frames = backtrace(callstack, 128);
         char** strs = backtrace_symbols(callstack, frames);
         for (i = 0; i < frames; ++i) {
-            printf("%s\n", strs[i]);
+            _ejs_log("%s\n", strs[i]);
         }
         free(strs);
         exit(-1);
@@ -337,18 +326,7 @@ static void _ejs_terminate(void)
  * alt handler support - zerocost implementation only
  **********************************************************************/
 
-#ifdef NO_ZEROCOST_EXCEPTIONS
-
-__private_extern__ void _destroyAltHandlerList(struct alt_handler_list *list)
-{
-}
-
-static void call_alt_handlers(struct _Unwind_Context *ctx)
-{
-    // unsupported in sjlj environments
-}
-
-#else
+#if !defined(NO_ZEROCOST_EXCEPTIONS)
 
 #include <libunwind.h>
 
@@ -472,7 +450,7 @@ static uintptr_t read_address(uintptr_t *pp,
         break;
 #endif
     default:
-        SPEW(printf("unknown DWARF EH encoding 0x%x at %p\n", 
+        SPEW(_ejs_log("unknown DWARF EH encoding 0x%x at %p\n", 
                     encoding, (void *)*pp));
         break;
     }
@@ -495,7 +473,7 @@ static uintptr_t read_address(uintptr_t *pp,
             result += bases->func;
             break;
         case DW_EH_PE_aligned:
-            SPEW(printf ("unknown DWARF EH encoding 0x%x at %p\n", 
+            SPEW(_ejs_log ("unknown DWARF EH encoding 0x%x at %p\n", 
                          encoding, (void *)*pp));
             break;
         default:
@@ -625,177 +603,9 @@ static struct frame_range findHandler(void)
     return (struct frame_range){0, 0, 0};
 }
 
-#if false
-
-// This data structure assumes the number of 
-// active alt handlers per frame is small.
-struct alt_handler_data {
-    uintptr_t ip_start;
-    uintptr_t ip_end;
-    uintptr_t cfa;
-    ejs_exception_handler fn;
-    void *context;
-};
-
-struct alt_handler_list {
-    unsigned int allocated;
-    unsigned int used;
-    struct alt_handler_data *handlers;
-};
-
-
-static struct alt_handler_list *
-fetch_handler_list(EJSBool create)
-{
-    _ejs_pthread_data *data = _ejs_fetch_pthread_data(create);
-    if (!data) return NULL;
-
-    struct alt_handler_list *list = data->handlerList;
-    if (!list) {
-        if (!create) return NULL;
-        list = _calloc_internal(1, sizeof(*list));
-        data->handlerList = list;
-    }
-
-    return list;
-}
-
-
-__private_extern__ void _destroyAltHandlerList(struct alt_handler_list *list)
-{
-    if (list) {
-        if (list->handlers) {
-            _free_internal(list->handlers);
-        }
-        _free_internal(list);
-    }
-}
-
-uintptr_t _ejs_addExceptionHandler(ejs_exception_handler fn, void *context)
-{ 
-    // Find the closest enclosing frame with ejs catch handlers
-    struct frame_range target_frame = findHandler();
-    if (!target_frame.ip_start) {
-        // No suitable enclosing handler found.
-        return 0;
-    }
-
-    // Record this alt handler for the discovered frame.
-    struct alt_handler_list *list = fetch_handler_list(YES);
-    unsigned int i = 0;
-
-    if (list->used == list->allocated) {
-        list->allocated = list->allocated*2 ?: 4;
-        list->handlers = _realloc_internal(list->handlers, list->allocated * sizeof(list->handlers[0]));
-        bzero(&list->handlers[list->used], (list->allocated - list->used) * sizeof(list->handlers[0]));
-        i = list->used;
-    }
-    else {
-        for (i = 0; i < list->allocated; i++) {
-            if (list->handlers[i].ip_start == 0  &&  
-                list->handlers[i].ip_end == 0  &&  
-                list->handlers[i].cfa == 0) 
-                {
-                    break;
-                }
-        }
-        if (i == list->allocated) {
-            _ejs_fatal("alt handlers in ejs runtime are buggy!");
-        }
-    }
-
-    struct alt_handler_data *data = &list->handlers[i];
-
-    data->ip_start = target_frame.ip_start;
-    data->ip_end = target_frame.ip_end;
-    data->cfa = target_frame.cfa;
-    data->fn = fn;
-    data->context = context;
-    list->used++;
-
-    if (PrintAltHandlers) {
-        SPEW(printf("ALT HANDLERS: installing alt handler %d %p(%p) on "
-                    "frame [ip=%p..%p sp=%p]\n", i+1, data->fn, data->context, 
-                    (void *)data->ip_start, (void *)data->ip_end, 
-                    (void *)data->cfa));
-    }
-
-    if (list->used > 1000) {
-        static int warned = 0;
-        if (!warned) {
-            SPEW(printf("ALT HANDLERS: *** over 1000 alt handlers installed; "
-                        "this is probably a bug\n"));
-            warned = 1;
-        }
-    }
-
-    return i+1;
-}
-
-
-void _ejs_removeExceptionHandler(uintptr_t token)
-{
-    if (!token) {
-        // ejs_addExceptionHandler failed
-        return;
-    }
-    unsigned int i = (unsigned int)(token - 1);
-    
-    struct alt_handler_list *list = fetch_handler_list(NO);
-    if (!list  ||  list->used == 0) {
-        // no handlers present
-        SPEW(printf("ALT HANDLERS: *** can't remove alt handler %lu "
-                    "(no alt handlers present)\n", token));
-        return;
-    }
-    if (i >= list->allocated) {
-        // bogus token
-        SPEW(printf("ALT HANDLERS: *** can't remove alt handler %lu "
-                    "(current max is %u)\n", token, list->allocated));
-        return;
-    }
-
-    struct alt_handler_data *data = &list->handlers[i];
-    SPEW(printf("ALT HANDLERS: removing   alt handler %d %p(%p) on "
-                "frame [ip=%p..%p sp=%p]\n", i+1, data->fn, data->context, 
-                (void *)data->ip_start, (void *)data->ip_end, 
-                (void *)data->cfa));
-    bzero(data, sizeof(*data));
-    list->used--;
-}
-
-// called in order registered, to match 32-bit _NSAddAltHandler2
-// fixme reverse registration order matches c++ destructors better
-static void call_alt_handlers(struct _Unwind_Context *ctx)
-{
-    uintptr_t ip = _Unwind_GetIP(ctx) - 1;
-    uintptr_t cfa = _Unwind_GetCFA(ctx);
-    unsigned int i;
-    
-    struct alt_handler_list *list = fetch_handler_list(FALSE);
-    if (!list  ||  list->used == 0) return;
-
-    for (i = 0; i < list->allocated; i++) {
-        struct alt_handler_data *data = &list->handlers[i];
-        if (ip >= data->ip_start  &&  ip < data->ip_end  &&  data->cfa == cfa) 
-            {
-                // Copy and clear before the callback, in case the 
-                // callback manipulates the alt handler list.
-                struct alt_handler_data copy = *data;
-                bzero(data, sizeof(*data));
-                list->used--;
-                SPEW(printf("EXCEPTIONS: calling alt handler %p(%p) from "
-                            "frame [ip=%p..%p sp=%p]\n", copy.fn, copy.context, 
-                            (void *)copy.ip_start, (void *)copy.ip_end, 
-                            (void *)copy.cfa));
-                if (copy.fn) (*copy.fn)(nil, copy.context);
-            }
-    }
-}
-#endif
-
 // ! NO_ZEROCOST_EXCEPTIONS
 #endif
+
 
 
 void _ejs_exception_init(void)
@@ -803,48 +613,3 @@ void _ejs_exception_init(void)
     // call std::set_terminate
     old_terminate = _ZSt13set_terminatePFvvE(&_ejs_terminate);
 }
-#else
-struct ejs_typeinfo {
-    // Position of vtable and name fields must match C++ typeinfo object
-    const void **vtable;  // always ejs_ehtype_vtable+2
-    const char *name;     // c++ typeinfo string
-};
-
-struct ejs_typeinfo EJS_EHTYPE_ejsvalue = {
-    NULL,
-    "ejsvalue", 
-    // XXX nanboxing breaks this NULL
-};
-
-int
-__ejs_personality_v0()
-{
-    EJS_NOT_IMPLEMENTED();
-}
-
-
-void _ejs_exception_init(void)
-{
-}
-
-void _ejs_end_catch(void)
-{
-    EJS_NOT_IMPLEMENTED();
-}
-
-void _ejs_begin_catch(void)
-{
-    EJS_NOT_IMPLEMENTED();
-}
-
-void _ejs_exception_throw(ejsval val)
-{
-    EJS_NOT_IMPLEMENTED();
-}
-
-void _ejs_exception_rethrow()
-{
-    EJS_NOT_IMPLEMENTED();
-}
-
-#endif
