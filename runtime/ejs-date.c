@@ -8,6 +8,8 @@
 #include "ejs-date.h"
 #include "ejs-string.h"
 
+#include <string.h>
+
 static ejsval  _ejs_date_specop_get (ejsval obj, ejsval propertyName);
 static EJSPropertyDesc* _ejs_date_specop_get_own_property (ejsval obj, ejsval propertyName);
 static EJSPropertyDesc* _ejs_date_specop_get_property (ejsval obj, ejsval propertyName);
@@ -66,7 +68,9 @@ _ejs_Date_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     if (EJSVAL_IS_UNDEFINED(_this)) {
         // called as a function
         if (argc == 0) {
-            return _ejs_date_unix_now();
+            // XXX we shouldn't be creating a date object here and immediately throwing it away.
+            // instead just refactor and create the string directly
+            return ToString(_ejs_date_unix_now());
         }
         else {
             EJS_NOT_IMPLEMENTED();
@@ -82,24 +86,30 @@ _ejs_Date_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
                 EJS_NOT_IMPLEMENTED();
         }
         else {
-#if wrong
-            // there are all sorts of validation steps here that are missing from ejs
-            date->tm.tm_year = (int)(ToDouble(args[0]) - 1900);
-            date->tm.tm_mon = (int)(ToDouble(args[1]));
-            if (argc > 2) date->tm.tm_mday = (int)(ToDouble(args[2]));
-            if (argc > 3) date->tm.tm_hour = (int)(ToDouble(args[3]));
-            if (argc > 4) date->tm.tm_min = (int)(ToDouble(args[4]));
-            if (argc > 5) date->tm.tm_sec = (int)(ToDouble(args[5]));
+            struct tm tm;
+            int ms = 0;
 
-            int ms = (int)(ToDouble(args[6]));
-            if (ms > 1000) {
-                date->tm.tm_sec += ms / 1000;
-                ms = ms % 1000;
+            memset (&tm, 0, sizeof(tm));
+            // there are all sorts of validation steps here that are missing from ejs
+            tm.tm_year = ToInteger(args[0]) - 1900;
+            tm.tm_mon = ToInteger(args[1]);
+            
+            tm.tm_mday = (argc > 2) ? ToInteger(args[2]) : 1;
+            tm.tm_hour = (argc > 3) ? ToInteger(args[3]) : 0;
+            tm.tm_hour = (argc > 4) ? ToInteger(args[4]) : 0;
+            tm.tm_sec  = (argc > 5) ? ToInteger(args[5]) : 0;
+   
+            if (argc > 6) {
+                ms = ToInteger(args[6]);
+                if (ms > 1000) {
+                    tm.tm_sec += ms / 1000;
+                    ms = ms % 1000;
+                }
             }
-            // XXX more ms here
-#else
-    EJS_NOT_IMPLEMENTED();
-#endif
+
+            time_t time_in_sec = mktime(&tm);
+            date->tv.tv_sec = time_in_sec;
+            date->tv.tv_usec = ms * 1000;
         }
       
         return _this;
@@ -109,33 +119,37 @@ _ejs_Date_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 static ejsval
 _ejs_Date_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-#if wrong
     EJSDate *date = (EJSDate*)EJSVAL_TO_OBJECT(_this);
+    struct tm tm;
+
+    memset (&tm, 0, sizeof(tm));
+
+    time_t time_in_sec = date->tv.tv_sec;
+
+    localtime_r (&time_in_sec, &tm);
 
     // returns strings of the format 'Tue Aug 28 2012 16:45:58 GMT-0700 (PDT)'
 
     char date_buf[256];
-    if (date->tm.tm_gmtoff == 0)
-        strftime (date_buf, sizeof(date_buf), "%a %b %d %Y %T GMT", &date->tm);
+    if (tm.tm_gmtoff == 0)
+        strftime (date_buf, sizeof(date_buf), "%a %b %d %Y %T GMT", &tm);
     else
-        strftime (date_buf, sizeof(date_buf), "%a %b %d %Y %T GMT%z (%Z)", &date->tm);
+        strftime (date_buf, sizeof(date_buf), "%a %b %d %Y %T GMT%z (%Z)", &tm);
 
     return _ejs_string_new_utf8 (date_buf);
-#else
-    EJS_NOT_IMPLEMENTED();
-#endif
 }
 
 static ejsval
 _ejs_Date_prototype_getTimezoneOffset (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-#if wrong
     EJSDate *date = (EJSDate*)EJSVAL_TO_OBJECT(_this);
+    struct tm tm;
 
-    return NUMBER_TO_EJSVAL (date->tm.tm_gmtoff);
-#else
-    EJS_NOT_IMPLEMENTED();
-#endif
+    time_t time_in_sec = date->tv.tv_sec;
+
+    localtime_r (&time_in_sec, &tm);
+
+    return NUMBER_TO_EJSVAL (tm.tm_gmtoff);
 }
 
 static ejsval
