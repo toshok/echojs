@@ -219,7 +219,7 @@ alloc_from_os(size_t size, size_t align)
         // the area before
         munmap (res, (uintptr_t)aligned_res - (uintptr_t)res);
         // the area after
-        munmap (aligned_res+size, size*2 - (uintptr_t)(aligned_res+size));
+        munmap (aligned_res+size, (uintptr_t)res+size*2 - (uintptr_t)aligned_res+size);
         res = aligned_res;
         SPEW(2, _ejs_log ("aligned ptr = %p\n", res));
     }
@@ -567,14 +567,14 @@ finalize_object(GCObjectPtr p)
 {
     GCObjectHeader* headerp = (GCObjectHeader*)p;
     if ((*headerp & EJS_SCAN_TYPE_OBJECT) != 0) {
-        SPEW(2, _ejs_log ("finalizing object %p(%s)\n", p, CLASSNAME(p)));
+        SPEW(1, _ejs_log ("finalizing object %p(%s)\n", p, CLASSNAME(p)));
         OP(p, finalize)((EJSObject*)p);
     }
     else if ((*headerp & EJS_SCAN_TYPE_CLOSUREENV) != 0) {
-        SPEW(2, _ejs_log ("finalizing closureenv %p\n", p));
+        SPEW(1, _ejs_log ("finalizing closureenv %p\n", p));
     }
     else if ((*headerp & EJS_SCAN_TYPE_PRIMSTR) != 0) {
-        SPEW(2, {
+        SPEW(1, {
                 EJSPrimString* primstr = (EJSPrimString*)p;
                 if (EJS_PRIMSTR_GET_TYPE(primstr) == EJS_STRING_FLAT) {
                     char* utf8 = ucs2_to_utf8(primstr->data.flat);
@@ -673,11 +673,7 @@ _ejs_finalizer_thread ()
 void
 _ejs_gc_init()
 {
-#if IOS
-    gc_disabled = EJS_TRUE;
-#else
     gc_disabled = getenv("EJS_GC_DISABLE") != NULL;
-#endif
     char* n_allocs = getenv("EJS_GC_EVERY_N_ALLOC");
     if (n_allocs)
         collect_every_alloc = atoi(n_allocs);
@@ -689,10 +685,8 @@ _ejs_gc_init()
 
     root_set = NULL;
 
-#if false
     // start up the finalizer thread
     pthread_create (&finalizer_thread, NULL, _ejs_finalizer_thread, NULL);
-#endif
 }
 
 static void
@@ -934,7 +928,20 @@ mark_from_roots()
 }
 
 #if IOS
+#if arm
+#define MARK_REGISTERS EJS_MACRO_START \
+    GCObjectPtr __r0, __r1, __r2, __r3, __r4, __r5, __r6, __r7, __r8, __r9, __r10, __r11, __r12;
+    __asm ("str r0, %0; str r1, %1; str r2, %2; str r3, %3; str r4, %4; str r5, %5; str r6, %6;" \
+           "str r7, %7; str r8, %8; str r9, %9; str r10, %10; str r11, %11; str r12, %12;" \
+          : "=m"(__r0), "=m"(__r1), "=m"(__r2), "=m"(__r3), "=m"(__r4),  \
+            "=m"(__r5), "=m"(__r6), "=m"(__r7), "=m"(__r8),  "=m"(__r9), \
+            "=m"(__r10), "=m"(__r11), "=m"(__r12));                      \
+                                                                         \
+    mark_pointers_in_range(&__r12, &__r0);                               \
+    EJS_MACRO_END
+#else
 #define MARK_REGISTERS
+#endif
 #elif OSX
 #define MARK_REGISTERS EJS_MACRO_START \
     GCObjectPtr __rax, __rbx, __rcx, __rdx, __rsi, __rdi, __rbp, __rsp, __r8, __r9, __r10, __r11, __r12, __r13, __r14, __r15; \
