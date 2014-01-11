@@ -167,16 +167,6 @@ finalize_release_private_data (EJSObject* obj)
 	[peer release];
 }
 
-EJSSpecOps WebGLRenderingContext_specops;
-EJSSpecOps WebGLBuffer_specops;
-EJSSpecOps WebGLFramebuffer_specops;
-EJSSpecOps WebGLRenderbuffer_specops;
-EJSSpecOps WebGLProgram_specops;
-EJSSpecOps WebGLShader_specops;
-EJSSpecOps WebGLTexture_specops;
-EJSSpecOps WebGLActiveInfo_specops;
-EJSSpecOps WebGLUniformLocation_specops;
-
 static ejsval WebGLActiveInfo__proto__ EJSVAL_ALIGNMENT;
 
 static ejsval
@@ -596,7 +586,7 @@ JSMETHOD (createBuffer) {
 	CHECK_GL;
 
     EJSWebGLObject *obj = _ejs_gc_new(EJSWebGLObject);
-    _ejs_init_object ((EJSObject*)obj, _ejs_Object__proto__, &WebGLBuffer_specops);
+    _ejs_init_object ((EJSObject*)obj, _ejs_Object__proto__, &_ejs_WebGLBuffer_specops);
     
     obj->peer = [[WebGLBuffer alloc] initWithGLId:buf];
 
@@ -613,7 +603,7 @@ JSMETHOD (createFramebuffer) {
 	CHECK_GL;
 
     EJSWebGLObject *obj = _ejs_gc_new(EJSWebGLObject);
-    _ejs_init_object ((EJSObject*)obj, _ejs_Object__proto__, &WebGLFramebuffer_specops);
+    _ejs_init_object ((EJSObject*)obj, _ejs_Object__proto__, &_ejs_WebGLFramebuffer_specops);
     
     obj->peer = [[WebGLFramebuffer alloc] initWithGLId:buf];
 
@@ -630,7 +620,7 @@ JSMETHOD (createRenderbuffer) {
 	CHECK_GL;
 
     EJSWebGLObject *obj = _ejs_gc_new(EJSWebGLObject);
-    _ejs_init_object ((EJSObject*)obj, _ejs_Object__proto__, &WebGLRenderbuffer_specops);
+    _ejs_init_object ((EJSObject*)obj, _ejs_Object__proto__, &_ejs_WebGLRenderbuffer_specops);
     
     obj->peer = [[WebGLRenderbuffer alloc] initWithGLId:buf];
 
@@ -646,7 +636,7 @@ JSMETHOD (createProgram) {
 	CHECK_GL;
 
     EJSWebGLObject *obj = _ejs_gc_new(EJSWebGLObject);
-    _ejs_init_object ((EJSObject*)obj, _ejs_Object__proto__, &WebGLProgram_specops);
+    _ejs_init_object ((EJSObject*)obj, _ejs_Object__proto__, &_ejs_WebGLProgram_specops);
     
     obj->peer = [[WebGLProgram alloc] initWithGLId:programId];
 
@@ -665,7 +655,7 @@ JSMETHOD (createShader) {
 	CHECK_GL;
 
     EJSWebGLObject *obj = _ejs_gc_new(EJSWebGLObject);
-    _ejs_init_object ((EJSObject*)obj, _ejs_Object__proto__, &WebGLShader_specops);
+    _ejs_init_object ((EJSObject*)obj, _ejs_Object__proto__, &_ejs_WebGLShader_specops);
     
     obj->peer = [[WebGLShader alloc] initWithGLId:shaderId];
 
@@ -682,7 +672,7 @@ JSMETHOD (createTexture) {
 	CHECK_GL;
 
     EJSWebGLObject *obj = _ejs_gc_new(EJSWebGLObject);
-    _ejs_init_object ((EJSObject*)obj, _ejs_Object__proto__, &WebGLTexture_specops);
+    _ejs_init_object ((EJSObject*)obj, _ejs_Object__proto__, &_ejs_WebGLTexture_specops);
     
     obj->peer = [[WebGLTexture alloc] initWithGLId:tex];
 
@@ -1004,7 +994,7 @@ JSMETHOD (getActiveAttrib) {
 	SPEW(NSLog (@"getActiveAttrib index = %d, name = %s, type = %d, size = %d", index, name, type, size);)
 
     EJSWebGLObject *obj = _ejs_gc_new(EJSWebGLObject);
-    _ejs_init_object ((EJSObject*)obj, WebGLActiveInfo__proto__, &WebGLActiveInfo_specops);
+    _ejs_init_object ((EJSObject*)obj, WebGLActiveInfo__proto__, &_ejs_WebGLActiveInfo_specops);
     
     obj->peer = [[WebGLActiveInfo alloc] initWithName:name type:type size:size];
 
@@ -1045,7 +1035,7 @@ JSMETHOD (getActiveUniform) {
 	CHECK_GL;
 
     EJSWebGLObject *obj = _ejs_gc_new(EJSWebGLObject);
-    _ejs_init_object ((EJSObject*)obj, WebGLActiveInfo__proto__, &WebGLActiveInfo_specops);
+    _ejs_init_object ((EJSObject*)obj, WebGLActiveInfo__proto__, &_ejs_WebGLActiveInfo_specops);
     
     obj->peer = [[WebGLActiveInfo alloc] initWithName:name type:type size:size];
 
@@ -1265,7 +1255,7 @@ JSMETHOD (getUniformLocation) {
 	free(name);
 
     EJSWebGLObject *obj = _ejs_gc_new(EJSWebGLObject);
-    _ejs_init_object ((EJSObject*)obj, _ejs_Object__proto__, &WebGLUniformLocation_specops);
+    _ejs_init_object ((EJSObject*)obj, _ejs_Object__proto__, &_ejs_WebGLUniformLocation_specops);
     
     obj->peer = (id)loc;
 
@@ -2053,7 +2043,7 @@ _ejs_objc_allocateWebGLRenderingContext (ejsval env, ejsval _this, uint32_t argc
 	SPEW(NSLog (@"EAGLContext = %p\n", eagl_context);)
 
     EJSWebGLObject *glContext = _ejs_gc_new(EJSWebGLObject);
-    _ejs_init_object ((EJSObject*)glContext, _ejs_Object__proto__, &WebGLRenderingContext_specops);
+    _ejs_init_object ((EJSObject*)glContext, _ejs_Object__proto__, &_ejs_WebGLRenderingContext_specops);
 
     glContext->peer = eagl_context; // XXX retain?
 

@@ -657,21 +657,30 @@ _ejs_object_create (ejsval proto)
 void
 _ejs_Class_initialize (EJSSpecOps *child, EJSSpecOps* parent)
 {
-#define MAYBE_INHERIT(p) if ((void*)(child->p) == OP_INHERIT) child->p = parent->p;  EJS_ASSERT ((void*)(child->p) != OP_INHERIT)
+#define MAYBE_INHERIT(p) EJS_MACRO_START                                \
+        if ((void*)(child->p) == OP_INHERIT)                            \
+            child->p = parent->p;                                       \
+    EJS_ASSERT((void*)(child->p) != OP_INHERIT);                        \
+    EJS_MACRO_END
 
-    MAYBE_INHERIT(get);
-    MAYBE_INHERIT(get_own_property);
-    MAYBE_INHERIT(get_property);
-    MAYBE_INHERIT(put);
-    MAYBE_INHERIT(can_put);
-    MAYBE_INHERIT(has_property);
-    MAYBE_INHERIT(_delete);
-    MAYBE_INHERIT(default_value);
-    MAYBE_INHERIT(define_own_property);
+#define MAYBE_INHERIT_DISALLOW_NULL(p) EJS_MACRO_START                  \
+        MAYBE_INHERIT(p);                                               \
+    EJS_ASSERT(child->p);                                               \
+    EJS_MACRO_END
+    
+    MAYBE_INHERIT_DISALLOW_NULL(get);
+    MAYBE_INHERIT_DISALLOW_NULL(get_own_property);
+    MAYBE_INHERIT_DISALLOW_NULL(get_property);
+    MAYBE_INHERIT_DISALLOW_NULL(put);
+    MAYBE_INHERIT_DISALLOW_NULL(can_put);
+    MAYBE_INHERIT_DISALLOW_NULL(has_property);
+    MAYBE_INHERIT_DISALLOW_NULL(_delete);
+    MAYBE_INHERIT_DISALLOW_NULL(default_value);
+    MAYBE_INHERIT_DISALLOW_NULL(define_own_property);
     MAYBE_INHERIT(has_instance);
-    MAYBE_INHERIT(allocate);
-    MAYBE_INHERIT(finalize);
-    MAYBE_INHERIT(scan);
+    MAYBE_INHERIT_DISALLOW_NULL(allocate);
+    MAYBE_INHERIT_DISALLOW_NULL(finalize);
+    MAYBE_INHERIT_DISALLOW_NULL(scan);
 }
 
 ejsval

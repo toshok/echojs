@@ -70,15 +70,15 @@ _ejs_init_classes()
     _ejs_Class_initialize (&_ejs_symbol_specops, &_ejs_object_specops);
     _ejs_Class_initialize (&_ejs_arraybuffer_specops, &_ejs_object_specops);
 #if IOS
-    _ejs_Class_initialize (&WebGLRenderingContext_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&WebGLBuffer_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&WebGLFramebuffer_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&WebGLRenderbuffer_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&WebGLProgram_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&WebGLShader_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&WebGLTexture_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&WebGLActiveInfo_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&WebGLUniformLocation_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_WebGLRenderingContext_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_WebGLBuffer_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_WebGLFramebuffer_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_WebGLRenderbuffer_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_WebGLProgram_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_WebGLShader_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_WebGLTexture_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_WebGLActiveInfo_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_WebGLUniformLocation_specops, &_ejs_object_specops);
 #endif
     _ejs_Class_initialize (&_ejs_xmlhttprequest_specops, &_ejs_object_specops);
 }

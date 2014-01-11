@@ -5,15 +5,15 @@
 #import "ejs-jsobjc.h"
 #import <OpenGLES/ES2/gl.h>
 
-extern EJSSpecOps WebGLRenderingContext_specops;
-extern EJSSpecOps WebGLBuffer_specops;
-extern EJSSpecOps WebGLFramebuffer_specops;
-extern EJSSpecOps WebGLRenderbuffer_specops;
-extern EJSSpecOps WebGLProgram_specops;
-extern EJSSpecOps WebGLShader_specops;
-extern EJSSpecOps WebGLTexture_specops;
-extern EJSSpecOps WebGLActiveInfo_specops;
-extern EJSSpecOps WebGLUniformLocation_specops;
+extern EJSSpecOps _ejs_WebGLRenderingContext_specops;
+extern EJSSpecOps _ejs_WebGLBuffer_specops;
+extern EJSSpecOps _ejs_WebGLFramebuffer_specops;
+extern EJSSpecOps _ejs_WebGLRenderbuffer_specops;
+extern EJSSpecOps _ejs_WebGLProgram_specops;
+extern EJSSpecOps _ejs_WebGLShader_specops;
+extern EJSSpecOps _ejs_WebGLTexture_specops;
+extern EJSSpecOps _ejs_WebGLActiveInfo_specops;
+extern EJSSpecOps _ejs_WebGLUniformLocation_specops;
 
 ejsval _ejs_objc_allocateWebGLRenderingContext (ejsval env, ejsval _this, uint32_t argc, ejsval *args);
 
