@@ -1282,12 +1282,12 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
                 # identifier that we don't want rewrapped, or an
                 # intrinsic already wrapping the identifier.
 
-                if n.arguments[0].type is _CallExpression
+                if n.arguments[0].type is _Identifier
                         new_args = @visit n.arguments.slice 1
                         new_args.unshift n.arguments[0]
                 else
                         new_args = @visit n.arguments
-                        n.arguments = new_args
+                n.arguments = new_args
                 n
 
         visitNewExpression: (n) ->
@@ -1325,16 +1325,6 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
 
         visitIdentifier: (n) ->
                 create_intrinsic @intrinsicForIdentifier(n), [n]
-
-        visitForIn: (n) ->
-                n.right = @visit n.right
-                n.body  = @visit n.body
-                n
-                
-        visitForOf: (n) ->
-                n.right = @visit n.right
-                n.body  = @visit n.body
-                n
 
 #
 # special pass to inline some common idioms dealing with IIFEs
