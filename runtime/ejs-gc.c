@@ -620,8 +620,10 @@ _ejs_finalizer_thread ()
                 PageInfo *page = arena->page_infos[page_index];
                 _ejs_log ("fin->gcobj = %p\n", fin->gcobj);
                 _ejs_log ("page_index = %d, using page %p\n", page_index, page);
-                _ejs_log ("sizeof cell for page = %zd\n", arena->page_infos[page_index]->cell_size);
-                _ejs_log ("aligned to cell size? %s\n", IS_ALIGNED_TO(fin->gcobj, arena->page_infos[page_index]->cell_size) ? "yes" : "no");
+                if (page) {
+                    _ejs_log ("sizeof cell for page = %zd\n", arena->page_infos[page_index]->cell_size);
+                    _ejs_log ("aligned to cell size? %s\n", IS_ALIGNED_TO(fin->gcobj, arena->page_infos[page_index]->cell_size) ? "yes" : "no");
+                }
 #endif
                 continue;
             }
