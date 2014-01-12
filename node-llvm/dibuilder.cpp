@@ -26,6 +26,7 @@ namespace jsllvm {
     NODE_SET_PROTOTYPE_METHOD(s_ct, "createCompileUnit", DIBuilder::CreateCompileUnit);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "createFile", DIBuilder::CreateFile);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "createFunction", DIBuilder::CreateFunction);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "createLexicalBlock", DIBuilder::CreateLexicalBlock);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "finalize", DIBuilder::Finalize);
 
     s_func = Persistent<v8::Function>::New(s_ct->GetFunction());
@@ -74,8 +75,6 @@ namespace jsllvm {
   void
   DIBuilder::Initialize ()
   {
-    llvm::DIType int32Type = llvm_dibuilder->createBasicType ("EJSValue", 4, 4, llvm::dwarf::DW_ATE_signed);
-    ejsValueType = llvm_dibuilder->createPointerType (int32Type, 4);
   }
 
   Handle<v8::Value> DIBuilder::CreateCompileUnit(const Arguments& args)
@@ -90,13 +89,13 @@ namespace jsllvm {
     REQ_UTF8_ARG(4, flags);
     REQ_INT_ARG(5, runtimeVersion);
 
-    dib->llvm_dibuilder->createCompileUnit(llvm::dwarf::DW_LANG_C99,
-					   *file, *dir,
-					   *producer,
-					   isOptimized,
-					   *flags,
-					   runtimeVersion);
-    return scope.Close(Undefined());
+    Handle<v8::Value> result = DIDescriptor::New(dib->llvm_dibuilder->createCompileUnit(llvm::dwarf::DW_LANG_C99,
+											*file, *dir,
+											*producer,
+											isOptimized,
+											*flags,
+											runtimeVersion));
+    return scope.Close(result);
   }
 
   Handle<v8::Value> DIBuilder::CreateFile(const Arguments& args)
@@ -107,23 +106,29 @@ namespace jsllvm {
     REQ_UTF8_ARG(0, file);
     REQ_UTF8_ARG(1, dir);
 
-    Handle<v8::Value> result = DIFile::New(dib->llvm_dibuilder->createFile(*file, *dir));
+    llvm::DIFile llvm_file = dib->llvm_dibuilder->createFile(*file, *dir);
+
+    std::vector<llvm::Value*> membertypes;
+    membertypes.push_back (dib->llvm_dibuilder->createBasicType ("unsigned long long", 64, 64, llvm::dwarf::DW_ATE_unsigned));
+
+    dib->ejsValueType = dib->llvm_dibuilder->createStructType (llvm_file, "ejsval",
+							       llvm_file, 0, 64, 64, 0, llvm::DIType(),
+							       dib->llvm_dibuilder->getOrCreateArray(membertypes));
+
+    dib->ejsValuePointerType = dib->llvm_dibuilder->createPointerType (dib->ejsValueType, sizeof(void*)*8);
+
+    Handle<v8::Value> result = DIFile::New(llvm_file);
     return scope.Close(result);
   }
 
-  llvm::DIType DIBuilder::CreateDIFunctionType(llvm::DIFile file, llvm::FunctionType *fty)
+  llvm::DICompositeType DIBuilder::CreateDIFunctionType(llvm::DIFile file, llvm::FunctionType *fty)
   {
     std::vector<llvm::Value*> args;
     args.push_back (ejsValueType);
+    args.push_back (ejsValueType);
+    args.push_back (llvm_dibuilder->createBasicType ("unsigned int", 32, 32, llvm::dwarf::DW_ATE_unsigned));
+    args.push_back (ejsValuePointerType);
 
-#if false
-    const ParameterList & params = type->params();
-    for (ParameterList::const_iterator it = params.begin(); it != params.end(); ++it) {
-      const ParameterDefn * param = *it;
-      DIType ptype = CreateDIParameterType(param->type());
-      args.push_back(ptype);
-    }
-#endif
     return llvm_dibuilder->createSubroutineType(file, llvm_dibuilder->getOrCreateArray(args));
   }
 
@@ -159,6 +164,21 @@ namespace jsllvm {
     return scope.Close(result);
   }
 
+  Handle<v8::Value> DIBuilder::CreateLexicalBlock(const Arguments& args)
+  {
+    HandleScope scope;
+    DIBuilder* dib = ObjectWrap::Unwrap<DIBuilder>(args.This());
+
+    REQ_LLVM_DISCOPE_ARG(0, parentScope);
+    REQ_LLVM_DIFILE_ARG(1, file);
+    REQ_INT_ARG(2, line);
+    REQ_INT_ARG(3, col);
+
+    Handle<v8::Value> result = DILexicalBlock::New(dib->llvm_dibuilder->createLexicalBlock (parentScope, file, line, col));
+
+    return scope.Close(result);
+  }
+
   Handle<v8::Value> DIBuilder::Finalize(const Arguments& args)
   {
     HandleScope scope;
@@ -184,6 +204,8 @@ namespace jsllvm {
     s_ct = Persistent<FunctionTemplate>::New(t);
     s_ct->InstanceTemplate()->SetInternalFieldCount(1);
     s_ct->SetClassName(String::NewSymbol("DIDescriptor"));
+
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "verify", DIDescriptor::Verify);
 
     s_func = Persistent<v8::Function>::New(s_ct->GetFunction());
     target->Set(String::NewSymbol("DIDescriptor"),
@@ -216,6 +238,16 @@ namespace jsllvm {
 
   DIDescriptor::~DIDescriptor()
   {
+  }
+
+  Handle<v8::Value> DIDescriptor::Verify(const Arguments& args)
+  {
+    HandleScope scope;
+
+    DIDescriptor* did = ObjectWrap::Unwrap<DIDescriptor>(args.This());
+    bool passed = did->llvm_didescriptor.Verify();
+
+    return scope.Close(passed ? True() : False());
   }
 
   Persistent<FunctionTemplate> DIDescriptor::s_ct;
@@ -338,6 +370,8 @@ namespace jsllvm {
     s_ct->InstanceTemplate()->SetInternalFieldCount(1);
     s_ct->SetClassName(String::NewSymbol("DISubprogram"));
 
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "verify", DISubprogram::Verify);
+
     s_func = Persistent<v8::Function>::New(s_ct->GetFunction());
     target->Set(String::NewSymbol("DISubprogram"),
 		s_func);
@@ -371,6 +405,16 @@ namespace jsllvm {
   {
   }
 
+  Handle<v8::Value> DISubprogram::Verify(const Arguments& args)
+  {
+    HandleScope scope;
+
+    DISubprogram* dis = ObjectWrap::Unwrap<DISubprogram>(args.This());
+    bool passed = dis->llvm_disubprogram.Verify();
+
+    return scope.Close(passed ? True() : False());
+  }
+
   Persistent<FunctionTemplate> DISubprogram::s_ct;
   Persistent<v8::Function> DISubprogram::s_func;
 
@@ -389,6 +433,8 @@ namespace jsllvm {
     s_ct = Persistent<FunctionTemplate>::New(t);
     s_ct->InstanceTemplate()->SetInternalFieldCount(1);
     s_ct->SetClassName(String::NewSymbol("DIFile"));
+
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "verify", DIFile::Verify);
 
     s_func = Persistent<v8::Function>::New(s_ct->GetFunction());
     target->Set(String::NewSymbol("DIFile"),
@@ -421,6 +467,16 @@ namespace jsllvm {
 
   DIFile::~DIFile()
   {
+  }
+
+  Handle<v8::Value> DIFile::Verify(const Arguments& args)
+  {
+    HandleScope scope;
+
+    DIFile* dif = ObjectWrap::Unwrap<DIFile>(args.This());
+    bool passed = dif->llvm_difile.Verify();
+
+    return scope.Close(passed ? True() : False());
   }
 
   Persistent<FunctionTemplate> DIFile::s_ct;

@@ -14,6 +14,7 @@
 #include "llvm/Analysis/Verifier.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Metadata.h"
 #include "llvm/DIBuilder.h"
 #include "llvm/DebugInfo.h"
 #include "llvm/Support/raw_os_ostream.h"
@@ -141,6 +142,14 @@
     return ThrowException(Exception::TypeError(				\
 					       String::New("Argument " #I " must be an llvm DebugLoc"))); \
   ::llvm::DebugLoc VAR = jsllvm::DebugLoc::GetLLVMObj(args[I]);
+
+#define REQ_LLVM_MDNODE_ARG(I, VAR)					\
+  if (args.Length() <= (I) || !args[I]->IsObject() /* XXX || !jsllvm::MDNode::HasInstance(args[I]) */) {	\
+    printf ("in function %s\n", __PRETTY_FUNCTION__);			\
+    return ThrowException(Exception::TypeError(				\
+					       String::New("Argument " #I " must be an llvm MDNode"))); \
+  }									\
+  ::llvm::MDNode* VAR = jsllvm::MDNode::GetLLVMObj(args[I]);
 
 extern std::string& trim(std::string& str);
 
