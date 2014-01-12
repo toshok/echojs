@@ -23,39 +23,6 @@
 #include "ejs-error.h"
 #include "ejs-xhr.h"
 
-static ejsval           _ejs_object_specop_get (ejsval obj, ejsval propertyName);
-static EJSPropertyDesc* _ejs_object_specop_get_own_property (ejsval obj, ejsval propertyName);
-static EJSPropertyDesc* _ejs_object_specop_get_property (ejsval obj, ejsval propertyName);
-static void             _ejs_object_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
-static EJSBool          _ejs_object_specop_can_put (ejsval obj, ejsval propertyName);
-static EJSBool          _ejs_object_specop_has_property (ejsval obj, ejsval propertyName);
-static EJSBool          _ejs_object_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
-static ejsval           _ejs_object_specop_default_value (ejsval obj, const char *hint);
-static EJSBool          _ejs_object_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
-static EJSBool          _ejs_object_specop_enumerate_properties (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
-static EJSObject*       _ejs_object_specop_allocate ();
-static void             _ejs_object_specop_finalize (EJSObject* obj);
-static void             _ejs_object_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
-
-EJSSpecOps _ejs_object_specops = {
-    "Object",
-    _ejs_object_specop_get,
-    _ejs_object_specop_get_own_property,
-    _ejs_object_specop_get_property,
-    _ejs_object_specop_put,
-    _ejs_object_specop_can_put,
-    _ejs_object_specop_has_property,
-    _ejs_object_specop_delete,
-    _ejs_object_specop_default_value,
-    _ejs_object_specop_define_own_property,
-    NULL, /* [[HasInstance]] */
-
-    _ejs_object_specop_allocate,
-    _ejs_object_specop_finalize,
-    _ejs_object_specop_scan
-};
-
-
 // ECMA262: 8.10.1
 static EJSBool
 IsAccessorDescriptor(EJSPropertyDesc* Desc)
@@ -1932,3 +1899,21 @@ _ejs_object_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     _ejs_propertymap_foreach_property (&obj->map, (EJSPropertyDescFunc)scan_property, scan_func);
     scan_func (obj->proto);
 }
+
+EJSSpecOps _ejs_object_specops = {
+    "Object",
+    _ejs_object_specop_get,
+    _ejs_object_specop_get_own_property,
+    _ejs_object_specop_get_property,
+    _ejs_object_specop_put,
+    _ejs_object_specop_can_put,
+    _ejs_object_specop_has_property,
+    _ejs_object_specop_delete,
+    _ejs_object_specop_default_value,
+    _ejs_object_specop_define_own_property,
+    NULL, /* [[HasInstance]] */
+
+    _ejs_object_specop_allocate,
+    _ejs_object_specop_finalize,
+    _ejs_object_specop_scan
+};

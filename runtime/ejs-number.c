@@ -10,25 +10,6 @@
 #include "ejs-function.h"
 #include "ejs-string.h"
 
-static ejsval  _ejs_number_specop_default_value (ejsval obj, const char *hint);
-static EJSObject* _ejs_number_specop_allocate ();
-
-EJS_DEFINE_CLASS(number, "Number",
-                 OP_INHERIT, // get
-                 OP_INHERIT, // get_own_property
-                 OP_INHERIT, // get_property
-                 OP_INHERIT, // put
-                 OP_INHERIT, // can_put
-                 OP_INHERIT, // has_property
-                 OP_INHERIT, // delete
-                 _ejs_number_specop_default_value,
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
-                 _ejs_number_specop_allocate,
-                 OP_INHERIT, // finalize
-                 OP_INHERIT  // scan
-                 )
-
 ejsval _ejs_Number EJSVAL_ALIGNMENT;
 ejsval _ejs_Number_proto EJSVAL_ALIGNMENT;
 
@@ -111,5 +92,19 @@ _ejs_number_specop_allocate()
     return (EJSObject*)_ejs_gc_new (EJSNumber);
 }
 
-
+EJS_DEFINE_CLASS(number, "Number",
+                 OP_INHERIT, // get
+                 OP_INHERIT, // get_own_property
+                 OP_INHERIT, // get_property
+                 OP_INHERIT, // put
+                 OP_INHERIT, // can_put
+                 OP_INHERIT, // has_property
+                 OP_INHERIT, // delete
+                 _ejs_number_specop_default_value,
+                 OP_INHERIT, // define_own_property
+                 OP_INHERIT, // has_instance
+                 _ejs_number_specop_allocate,
+                 OP_INHERIT, // finalize
+                 OP_INHERIT  // scan
+                 )
 

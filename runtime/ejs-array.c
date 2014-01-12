@@ -15,34 +15,6 @@
 // num > SPARSE_ARRAY_CUTOFF in "Array($num)" or "new Array($num)" triggers a sparse array
 #define SPARSE_ARRAY_CUTOFF 50000
 
-static ejsval           _ejs_array_specop_get (ejsval obj, ejsval propertyName);
-static EJSPropertyDesc* _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName);
-static void             _ejs_array_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
-static EJSBool          _ejs_array_specop_has_property (ejsval obj, ejsval propertyName);
-static EJSBool          _ejs_array_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
-static EJSBool          _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
-static EJSObject*       _ejs_array_specop_allocate ();
-static void             _ejs_array_specop_finalize (EJSObject* obj);
-static void             _ejs_array_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
-
-EJS_DEFINE_CLASS(array, "Array",
-                 _ejs_array_specop_get,
-                 _ejs_array_specop_get_own_property,
-                 OP_INHERIT, // get_property
-                 _ejs_array_specop_put,
-                 OP_INHERIT, // can_put
-                 _ejs_array_specop_has_property,
-                 _ejs_array_specop_delete,
-                 OP_INHERIT, // default_value
-                 _ejs_array_specop_define_own_property,
-                 OP_INHERIT, // has_instance
-                 _ejs_array_specop_allocate,
-                 _ejs_array_specop_finalize,
-                 _ejs_array_specop_scan
-                 )
-
-EJSSpecOps _ejs_sparsearray_specops;
-
 #define _EJS_ARRAY_LEN(arrobj)      (((EJSArray*)arrobj)->array_length)
 #define _EJS_ARRAY_ELEMENTS(arrobj) (((EJSArray*)arrobj)->elements)
 
@@ -1646,4 +1618,22 @@ _ejs_array_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     }
     _ejs_object_specops.scan (obj, scan_func);
 }
+
+EJS_DEFINE_CLASS(array, "Array",
+                 _ejs_array_specop_get,
+                 _ejs_array_specop_get_own_property,
+                 OP_INHERIT, // get_property
+                 _ejs_array_specop_put,
+                 OP_INHERIT, // can_put
+                 _ejs_array_specop_has_property,
+                 _ejs_array_specop_delete,
+                 OP_INHERIT, // default_value
+                 _ejs_array_specop_define_own_property,
+                 OP_INHERIT, // has_instance
+                 _ejs_array_specop_allocate,
+                 _ejs_array_specop_finalize,
+                 _ejs_array_specop_scan
+                 )
+
+EJSSpecOps _ejs_sparsearray_specops;
 

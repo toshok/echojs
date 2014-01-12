@@ -236,26 +236,6 @@ ucs2_to_utf8 (const jschar *str)
 }
 
 
-static ejsval _ejs_string_specop_get (ejsval obj, ejsval propertyName);
-static EJSObject* _ejs_string_specop_allocate ();
-static void      _ejs_string_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
-
-EJS_DEFINE_CLASS(string, "String",
-                 _ejs_string_specop_get,
-                 OP_INHERIT, // get_own_property
-                 OP_INHERIT, // get_property
-                 OP_INHERIT, // put
-                 OP_INHERIT, // can_put
-                 OP_INHERIT, // has_property
-                 OP_INHERIT, // delete
-                 OP_INHERIT, // default_value
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
-                 _ejs_string_specop_allocate,
-                 OP_INHERIT, // finalize
-                 _ejs_string_specop_scan
-                 )
-
 ejsval _ejs_String EJSVAL_ALIGNMENT;
 ejsval _ejs_String__proto__ EJSVAL_ALIGNMENT;
 ejsval _ejs_String_prototype EJSVAL_ALIGNMENT;
@@ -1062,6 +1042,23 @@ _ejs_string_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     scan_func (ejss->primStr);
     _ejs_object_specops.scan (obj, scan_func);
 }
+
+EJS_DEFINE_CLASS(string, "String",
+                 _ejs_string_specop_get,
+                 OP_INHERIT, // get_own_property
+                 OP_INHERIT, // get_property
+                 OP_INHERIT, // put
+                 OP_INHERIT, // can_put
+                 OP_INHERIT, // has_property
+                 OP_INHERIT, // delete
+                 OP_INHERIT, // default_value
+                 OP_INHERIT, // define_own_property
+                 OP_INHERIT, // has_instance
+                 _ejs_string_specop_allocate,
+                 OP_INHERIT, // finalize
+                 _ejs_string_specop_scan
+                 )
+
 
 
 /// EJSPrimString's

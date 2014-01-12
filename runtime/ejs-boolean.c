@@ -10,25 +10,6 @@
 #include "ejs-function.h"
 #include "ejs-string.h"
 
-static ejsval  _ejs_boolean_specop_default_value (ejsval obj, const char *hint);
-static EJSObject* _ejs_boolean_specop_allocate ();
-
-EJS_DEFINE_CLASS(boolean, "Boolean",
-                 OP_INHERIT, // get
-                 OP_INHERIT, // get_own_property
-                 OP_INHERIT, // get_property
-                 OP_INHERIT, // put
-                 OP_INHERIT, // can_put
-                 OP_INHERIT, // has_property
-                 OP_INHERIT, // delete
-                 _ejs_boolean_specop_default_value,
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
-                 _ejs_boolean_specop_allocate,
-                 OP_INHERIT, // finalize
-                 OP_INHERIT  // scan
-                 )
-
 ejsval _ejs_Boolean EJSVAL_ALIGNMENT;
 ejsval _ejs_Boolean_proto EJSVAL_ALIGNMENT;
 
@@ -118,3 +99,20 @@ _ejs_boolean_specop_allocate()
 {
     return (EJSObject*)_ejs_gc_new (EJSBoolean);
 }
+
+EJS_DEFINE_CLASS(boolean, "Boolean",
+                 OP_INHERIT, // get
+                 OP_INHERIT, // get_own_property
+                 OP_INHERIT, // get_property
+                 OP_INHERIT, // put
+                 OP_INHERIT, // can_put
+                 OP_INHERIT, // has_property
+                 OP_INHERIT, // delete
+                 _ejs_boolean_specop_default_value,
+                 OP_INHERIT, // define_own_property
+                 OP_INHERIT, // has_instance
+                 _ejs_boolean_specop_allocate,
+                 OP_INHERIT, // finalize
+                 OP_INHERIT  // scan
+                 )
+

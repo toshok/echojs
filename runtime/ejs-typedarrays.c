@@ -13,49 +13,7 @@
 #include "ejs-array.h"
 #include "ejs-error.h"
 
-static ejsval  _ejs_arraybuffer_specop_get (ejsval obj, ejsval propertyName);
-static EJSPropertyDesc* _ejs_arraybuffer_specop_get_own_property (ejsval obj, ejsval propertyName);
-static void    _ejs_arraybuffer_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
-static EJSBool _ejs_arraybuffer_specop_has_property (ejsval obj, ejsval propertyName);
-static EJSBool _ejs_arraybuffer_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
-static EJSObject* _ejs_arraybuffer_specop_allocate ();
-static void    _ejs_arraybuffer_specop_finalize (EJSObject* obj);
-static void    _ejs_arraybuffer_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
-
-EJS_DEFINE_CLASS(arraybuffer, "ArrayBuffer",
-                 _ejs_arraybuffer_specop_get,
-                 _ejs_arraybuffer_specop_get_own_property,
-                 OP_INHERIT, // get_property
-                 _ejs_arraybuffer_specop_put,
-                 OP_INHERIT, // can_put
-                 _ejs_arraybuffer_specop_has_property,
-                 _ejs_arraybuffer_specop_delete,
-                 OP_INHERIT, // default_value
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
-                 _ejs_arraybuffer_specop_allocate,
-                 _ejs_arraybuffer_specop_finalize,
-                 _ejs_arraybuffer_specop_scan
-                 )
-
-static EJSObject* _ejs_typedarray_specop_allocate ();
-static void    _ejs_typedarray_specop_finalize (EJSObject* obj);
-static void    _ejs_typedarray_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
-
-/* specops that are shared by all the typed array types with overrides for particular methods */
-static EJSSpecOps _ejs_typedarray_specops = {
-    "TypedArray",
-
-    NULL, NULL, NULL,
-    NULL, NULL, NULL,
-    NULL, NULL, NULL,
-    NULL,
-
-    _ejs_typedarray_specop_allocate,
-    _ejs_typedarray_specop_finalize,
-    _ejs_typedarray_specop_scan
-};
-
+static EJSSpecOps _ejs_typedarray_specops;
 
 #define EJS_TYPEDARRAY_LEN(arrobj)      (((EJSTypedArray*)EJSVAL_TO_OBJECT(arrobj))->length)
 
@@ -670,6 +628,22 @@ _ejs_arraybuffer_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     _ejs_object_specops.scan (obj, scan_func);
 }
 
+EJS_DEFINE_CLASS(arraybuffer, "ArrayBuffer",
+                 _ejs_arraybuffer_specop_get,
+                 _ejs_arraybuffer_specop_get_own_property,
+                 OP_INHERIT, // get_property
+                 _ejs_arraybuffer_specop_put,
+                 OP_INHERIT, // can_put
+                 _ejs_arraybuffer_specop_has_property,
+                 _ejs_arraybuffer_specop_delete,
+                 OP_INHERIT, // default_value
+                 OP_INHERIT, // define_own_property
+                 OP_INHERIT, // has_instance
+                 _ejs_arraybuffer_specop_allocate,
+                 _ejs_arraybuffer_specop_finalize,
+                 _ejs_arraybuffer_specop_scan
+                 )
+
 
 static EJSObject*
 _ejs_typedarray_specop_allocate()
@@ -693,3 +667,16 @@ _ejs_typedarray_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     _ejs_object_specops.scan (obj, scan_func);
 }
 
+/* specops that are shared by all the typed array types with overrides for particular methods */
+static EJSSpecOps _ejs_typedarray_specops = {
+    "TypedArray",
+
+    NULL, NULL, NULL,
+    NULL, NULL, NULL,
+    NULL, NULL, NULL,
+    NULL,
+
+    _ejs_typedarray_specop_allocate,
+    _ejs_typedarray_specop_finalize,
+    _ejs_typedarray_specop_scan
+};

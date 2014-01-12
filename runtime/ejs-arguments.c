@@ -10,27 +10,6 @@
 #include "ejs-arguments.h"
 #include "ejs-string.h"
 
-static ejsval  _ejs_arguments_specop_get (ejsval obj, ejsval propertyName);
-static EJSBool _ejs_arguments_specop_has_property (ejsval obj, ejsval propertyName);
-static EJSObject* _ejs_arguments_specop_allocate ();
-static void    _ejs_arguments_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
-
-EJS_DEFINE_CLASS(arguments, "Arguments",
-                 _ejs_arguments_specop_get,
-                 OP_INHERIT, // get_own_property
-                 OP_INHERIT, // get_property
-                 OP_INHERIT, // put
-                 OP_INHERIT, // can_put
-                 _ejs_arguments_specop_has_property,
-                 OP_INHERIT, // delete
-                 OP_INHERIT, // default_value
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
-                 _ejs_arguments_specop_allocate,
-                 OP_INHERIT, // finalize
-                 _ejs_arguments_specop_scan
-                 )
-
 #define EJSOBJ_IS_ARGUMENTS(obj) (((EJSObject*)obj)->proto == _ejs_Arguments__proto__)
 
 ejsval _ejs_Arguments__proto__ EJSVAL_ALIGNMENT;
@@ -121,3 +100,19 @@ _ejs_arguments_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
         scan_func (args->args[i]);
     _ejs_object_specops.scan (obj, scan_func);
 }
+
+EJS_DEFINE_CLASS(arguments, "Arguments",
+                 _ejs_arguments_specop_get,
+                 OP_INHERIT, // get_own_property
+                 OP_INHERIT, // get_property
+                 OP_INHERIT, // put
+                 OP_INHERIT, // can_put
+                 _ejs_arguments_specop_has_property,
+                 OP_INHERIT, // delete
+                 OP_INHERIT, // default_value
+                 OP_INHERIT, // define_own_property
+                 OP_INHERIT, // has_instance
+                 _ejs_arguments_specop_allocate,
+                 OP_INHERIT, // finalize
+                 _ejs_arguments_specop_scan
+                 )

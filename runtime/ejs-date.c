@@ -10,24 +10,6 @@
 
 #include <string.h>
 
-static EJSObject* _ejs_date_specop_allocate ();
-
-EJS_DEFINE_CLASS(date, "Date",
-                 OP_INHERIT, // get
-                 OP_INHERIT, // get_own_property
-                 OP_INHERIT, // get_property
-                 OP_INHERIT, // put
-                 OP_INHERIT, // can_put
-                 OP_INHERIT, // has_property
-                 OP_INHERIT, // delete
-                 OP_INHERIT, // default_value
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
-                 _ejs_date_specop_allocate,
-                 OP_INHERIT, // finalize
-                 OP_INHERIT  // scan
-                 )
-
 ejsval
 _ejs_date_unix_now ()
 {
@@ -169,3 +151,20 @@ _ejs_date_specop_allocate()
 {
     return (EJSObject*)_ejs_gc_new (EJSDate);
 }
+
+EJS_DEFINE_CLASS(date, "Date",
+                 OP_INHERIT, // get
+                 OP_INHERIT, // get_own_property
+                 OP_INHERIT, // get_property
+                 OP_INHERIT, // put
+                 OP_INHERIT, // can_put
+                 OP_INHERIT, // has_property
+                 OP_INHERIT, // delete
+                 OP_INHERIT, // default_value
+                 OP_INHERIT, // define_own_property
+                 OP_INHERIT, // has_instance
+                 _ejs_date_specop_allocate,
+                 OP_INHERIT, // finalize
+                 OP_INHERIT  // scan
+                 )
+

@@ -13,27 +13,6 @@
 #include "ejs-error.h"
 #include "ejs-string.h"
 
-static EJSBool _ejs_function_specop_has_instance (ejsval obj, ejsval lval);
-static EJSObject* _ejs_function_specop_allocate ();
-static void    _ejs_function_specop_finalize (EJSObject* obj);
-static void    _ejs_function_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
-
-EJS_DEFINE_CLASS(function, "Function",
-                 OP_INHERIT, // get
-                 OP_INHERIT, // get_own_property
-                 OP_INHERIT, // get_property
-                 OP_INHERIT, // put
-                 OP_INHERIT, // can_put
-                 OP_INHERIT, // has_property
-                 OP_INHERIT, // delete
-                 OP_INHERIT, // default_value
-                 OP_INHERIT, // define_own_property
-                 _ejs_function_specop_has_instance,
-                 _ejs_function_specop_allocate,
-                 _ejs_function_specop_finalize,
-                 _ejs_function_specop_scan
-                 )
-
 EJSBool trace = EJS_FALSE;
 
 static int indent_level = 0;
@@ -501,3 +480,20 @@ _ejs_function_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 
     _ejs_object_specops.scan (obj, scan_func);
 }
+
+EJS_DEFINE_CLASS(function, "Function",
+                 OP_INHERIT, // get
+                 OP_INHERIT, // get_own_property
+                 OP_INHERIT, // get_property
+                 OP_INHERIT, // put
+                 OP_INHERIT, // can_put
+                 OP_INHERIT, // has_property
+                 OP_INHERIT, // delete
+                 OP_INHERIT, // default_value
+                 OP_INHERIT, // define_own_property
+                 _ejs_function_specop_has_instance,
+                 _ejs_function_specop_allocate,
+                 _ejs_function_specop_finalize,
+                 _ejs_function_specop_scan
+                 )
+

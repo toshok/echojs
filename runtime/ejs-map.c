@@ -13,26 +13,6 @@
 
 typedef EJSBool (*ComparatorFunc)(ejsval, ejsval);
 
-static EJSObject* _ejs_map_specop_allocate ();
-static void    _ejs_map_specop_finalize (EJSObject* obj);
-static void    _ejs_map_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
-
-EJS_DEFINE_CLASS(map, "Map",
-                 OP_INHERIT, // get
-                 OP_INHERIT, // get_own_property
-                 OP_INHERIT, // get_property
-                 OP_INHERIT, // put
-                 OP_INHERIT, // can_put
-                 OP_INHERIT, // has_property
-                 OP_INHERIT, // delete
-                 OP_INHERIT, // default_value
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
-                 _ejs_map_specop_allocate,
-                 _ejs_map_specop_finalize,
-                 _ejs_map_specop_scan
-                 )
-
 // ES6: 23.1.3.1
 // Map.prototype.clear ()
 ejsval
@@ -515,3 +495,20 @@ _ejs_map_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 
     _ejs_object_specops.scan (obj, scan_func);
 }
+
+EJS_DEFINE_CLASS(map, "Map",
+                 OP_INHERIT, // get
+                 OP_INHERIT, // get_own_property
+                 OP_INHERIT, // get_property
+                 OP_INHERIT, // put
+                 OP_INHERIT, // can_put
+                 OP_INHERIT, // has_property
+                 OP_INHERIT, // delete
+                 OP_INHERIT, // default_value
+                 OP_INHERIT, // define_own_property
+                 OP_INHERIT, // has_instance
+                 _ejs_map_specop_allocate,
+                 _ejs_map_specop_finalize,
+                 _ejs_map_specop_scan
+                 )
+

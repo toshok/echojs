@@ -20,22 +20,6 @@
 #import <Foundation/Foundation.h>
 #endif
 
-EJS_DEFINE_CLASS(error, "Error",
-                 OP_INHERIT, // get
-                 OP_INHERIT, // get_own_property
-                 OP_INHERIT, // get_property
-                 OP_INHERIT, // put
-                 OP_INHERIT, // can_put
-                 OP_INHERIT, // has_property
-                 OP_INHERIT, // delete
-                 OP_INHERIT, // default_value
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
-                 OP_INHERIT, // allocate
-                 OP_INHERIT, // finalize
-                 OP_INHERIT  // scan
-                 )
-
 ejsval _ejs_Error EJSVAL_ALIGNMENT;
 ejsval _ejs_Error_proto EJSVAL_ALIGNMENT;
 ejsval _ejs_EvalError EJSVAL_ALIGNMENT;
@@ -182,4 +166,20 @@ _ejs_throw_nativeerror (EJSNativeErrorType error_type, ejsval message)
     _ejs_throw (exc);
     EJS_NOT_REACHED();
 }
+
+EJS_DEFINE_CLASS(error, "Error",
+                 OP_INHERIT, // get
+                 OP_INHERIT, // get_own_property
+                 OP_INHERIT, // get_property
+                 OP_INHERIT, // put
+                 OP_INHERIT, // can_put
+                 OP_INHERIT, // has_property
+                 OP_INHERIT, // delete
+                 OP_INHERIT, // default_value
+                 OP_INHERIT, // define_own_property
+                 OP_INHERIT, // has_instance
+                 OP_INHERIT, // allocate
+                 OP_INHERIT, // finalize
+                 OP_INHERIT  // scan
+                 )
 
