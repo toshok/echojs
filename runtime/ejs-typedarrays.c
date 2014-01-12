@@ -65,6 +65,15 @@ static EJSSpecOps _ejs_typedarray_specops = {
 
 #define EJS_TYPEDARRAY_LEN(arrobj)      (((EJSTypedArray*)EJSVAL_TO_OBJECT(arrobj))->length)
 
+static ejsval  _ejs_dataview_specop_get (ejsval obj, ejsval propertyName);
+static EJSPropertyDesc* _ejs_dataview_specop_get_own_property (ejsval obj, ejsval propertyName);
+static EJSPropertyDesc* _ejs_dataview_specop_get_property (ejsval obj, ejsval propertyName);
+static void    _ejs_dataview_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
+static EJSBool _ejs_dataview_specop_can_put (ejsval obj, ejsval propertyName);
+static EJSBool _ejs_dataview_specop_has_property (ejsval obj, ejsval propertyName);
+static EJSBool _ejs_dataview_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
+static ejsval  _ejs_dataview_specop_default_value (ejsval obj, const char *hint);
+static EJSBool _ejs_dataview_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
 static EJSObject* _ejs_dataview_specop_allocate ();
 static void     _ejs_dataview_specop_finalize (EJSObject* obj);
 static void     _ejs_dataview_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
@@ -72,9 +81,15 @@ static void     _ejs_dataview_specop_scan (EJSObject* obj, EJSValueFunc scan_fun
 EJSSpecOps _ejs_dataview_specops = {
     "DataView",
 
-    NULL, NULL, NULL,
-    NULL, NULL, NULL,
-    NULL, NULL, NULL,
+    _ejs_dataview_specop_get,
+    _ejs_dataview_specop_get_own_property,
+    _ejs_dataview_specop_get_property,
+    _ejs_dataview_specop_put,
+    _ejs_dataview_specop_can_put,
+    _ejs_dataview_specop_has_property,
+    _ejs_dataview_specop_delete,
+    _ejs_dataview_specop_default_value,
+    _ejs_dataview_specop_define_own_property,
     NULL,
 
     _ejs_dataview_specop_allocate,
@@ -112,6 +127,9 @@ ejsval _ejs_Float32Array EJSVAL_ALIGNMENT;
 
 ejsval _ejs_Float64Array_proto EJSVAL_ALIGNMENT;
 ejsval _ejs_Float64Array EJSVAL_ALIGNMENT;
+
+ejsval _ejs_DataView_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_DataView EJSVAL_ALIGNMENT;
 
 ejsval
 _ejs_arraybuffer_new (int size)
@@ -190,6 +208,33 @@ _ejs_ArrayBuffer_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsva
     }
 
     return _ejs_arraybuffer_new_slice(_this, offset, len);
+}
+
+static ejsval
+_ejs_DataView_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    if (EJSVAL_IS_UNDEFINED(_this)) {
+        _ejs_log ("DataView called as a function\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+
+    if (argc == 0 || !EJSVAL_IS_ARRAYBUFFER(args[0])) {
+        _ejs_log ("arg0 not an ArrayBuffer object\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+
+    EJSArrayBuffer* buff = (EJSArrayBuffer*)EJSVAL_TO_OBJECT(args[0]);
+
+    EJSDataView* view = (EJSDataView*)EJSVAL_TO_OBJECT(_this);
+    view->buffer = args[0];
+    view->byteOffset = 0;
+    view->byteLength = buff->size;
+
+    _ejs_object_define_value_property (_this, _ejs_atom_byteLength, DOUBLE_TO_EJSVAL_IMPL(view->byteLength), EJS_PROP_FLAGS_ENUMERABLE);
+    _ejs_object_define_value_property (_this, _ejs_atom_byteOffset, DOUBLE_TO_EJSVAL_IMPL(view->byteOffset), EJS_PROP_FLAGS_ENUMERABLE);
+    _ejs_object_define_value_property (_this, _ejs_atom_buffer, view->buffer, EJS_PROP_FLAGS_ENUMERABLE);
+
+    return _this;
 }
 
 #define EJS_TYPED_ARRAY(EnumType, ArrayType, arraytype, elementtype, elementSizeInBytes) \
@@ -481,6 +526,15 @@ _ejs_typedarray_get_data(EJSObject* arr)
     return buffer_data + typed_array->byteOffset;
 }
 
+void*
+_ejs_dataview_get_data(EJSObject* view)
+{
+    EJSDataView* data_view = (EJSDataView*)view;
+    void *buffer_data = _ejs_arraybuffer_get_data (EJSVAL_TO_OBJECT(data_view->buffer));
+
+    return buffer_data + data_view->byteOffset;
+}
+
 void
 _ejs_typedarrays_init(ejsval global)
 {
@@ -497,6 +551,16 @@ _ejs_typedarrays_init(ejsval global)
         _ejs_object_setprop (_ejs_ArrayBuffer, _ejs_atom_prototype,   _ejs_ArrayBuffer_proto);
 
         PROTO_METHOD(ArrayBuffer, slice);
+    }
+
+    // DataView
+    {
+        _ejs_DataView = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_DataView, (EJSClosureFunc)_ejs_DataView_impl);
+        _ejs_object_setprop (global,            _ejs_atom_DataView, _ejs_DataView);
+
+        _ejs_gc_add_root (&_ejs_DataView_proto);
+        _ejs_DataView_proto = _ejs_object_new (_ejs_null, &_ejs_object_specops);
+        _ejs_object_setprop (_ejs_DataView, _ejs_atom_prototype, _ejs_DataView_proto);
     }
 
 #define ADD_TYPEDARRAY(EnumType, ArrayType, arraytype, elementSizeInBytes) EJS_MACRO_START \
@@ -728,6 +792,137 @@ _ejs_typedarray_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     EJSTypedArray *arr = (EJSTypedArray*)obj;
     scan_func(arr->buffer);
     _ejs_object_specops.scan (obj, scan_func);
+}
+
+static ejsval
+_ejs_dataview_specop_get (ejsval obj, ejsval propertyName)
+{
+    // check if propertyName is an integer, or a string that we can convert to an int
+    EJSBool is_index = EJS_FALSE;
+    int idx = 0;
+    if (EJSVAL_IS_NUMBER(propertyName)) {
+        double n = EJSVAL_TO_NUMBER(propertyName);
+        if (floor(n) == n) {
+            idx = (int)n;
+            is_index = EJS_TRUE;
+        }
+    }
+
+    // Index for DataView is byte-based.
+    if (is_index) {
+        if (idx < 0 || idx > EJS_DATA_VIEW_BYTE_LEN(obj))
+            return _ejs_undefined;
+
+         void *data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(obj));
+         return NUMBER_TO_EJSVAL ((double)((unsigned char*)data)[idx]);
+    }
+
+    // otherwise we fallback to the object implementation
+    return _ejs_object_specops.get (obj, propertyName);
+}
+
+static EJSPropertyDesc*
+_ejs_dataview_specop_get_own_property (ejsval obj, ejsval propertyName)
+{
+    if (EJSVAL_IS_NUMBER(propertyName)) {
+        double needle = EJSVAL_TO_NUMBER(propertyName);
+        int needle_int;
+        if (EJSDOUBLE_IS_INT32(needle, &needle_int)) {
+            if (needle_int >= 0 && needle_int < EJS_DATA_VIEW_BYTE_LEN(obj))
+                return NULL; // XXX
+        }
+    }
+
+    return _ejs_object_specops.get_own_property (obj, propertyName);
+}
+
+static EJSPropertyDesc*
+_ejs_dataview_specop_get_property (ejsval obj, ejsval propertyName)
+{
+    return _ejs_object_specops.get_property (obj, propertyName);
+}
+
+static void
+_ejs_dataview_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag)
+{
+     EJSBool is_index = EJS_FALSE;
+     ejsval idx_val = ToNumber(propertyName);
+     int idx;
+     if (EJSVAL_IS_NUMBER(idx_val)) {
+         double n = EJSVAL_TO_NUMBER(idx_val);
+         if (floor(n) == n) {
+             idx = (int)n;
+             is_index = EJS_TRUE;
+         }
+     }
+
+     if (is_index) {
+         if (idx < 0 || idx >= EJS_DATA_VIEW_BYTE_LEN(obj))
+             return;
+
+         void* data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(obj));
+         ((unsigned char*)data)[idx] = (unsigned char)EJSVAL_TO_NUMBER(val);
+
+         return;
+     }
+
+    _ejs_object_specops.put (obj, propertyName, val, flag);
+}
+
+static EJSBool _ejs_dataview_specop_can_put (ejsval obj, ejsval propertyName)
+{
+    return _ejs_object_specops.can_put (obj, propertyName);
+}
+
+static EJSBool
+_ejs_dataview_specop_has_property (ejsval obj, ejsval propertyName)
+{
+    // check if propertyName is a uint32, or a string that we can convert to an uint32
+    int idx = -1;
+    if (EJSVAL_IS_NUMBER(propertyName)) {
+        double n = EJSVAL_TO_NUMBER(propertyName);
+        if (floor(n) == n) {
+            idx = (int)n;
+
+            return idx > 0 && idx < EJS_DATA_VIEW_BYTE_LEN(obj);
+        }
+    }
+
+    return _ejs_object_specops.has_property (obj, propertyName);
+}
+
+static EJSBool
+_ejs_dataview_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
+{
+    int idx = -1;
+    if (EJSVAL_IS_NUMBER(propertyName)) {
+        double n = EJSVAL_TO_NUMBER(propertyName);
+        if (floor(n) == n) {
+            idx = (int)n;
+        }
+    }
+
+    if (idx == -1)
+        return _ejs_object_specops._delete (obj, propertyName, flag);
+
+    if (idx < EJS_DATA_VIEW_BYTE_LEN(obj)) {
+         //void* data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(obj));
+         //((unsigned char*)data)[idx] = _ejs_undefined;
+    }
+
+    return EJS_FALSE;
+}
+
+static ejsval
+_ejs_dataview_specop_default_value (ejsval obj, const char *hint)
+{
+    return _ejs_object_specops.default_value (obj, hint);
+}
+
+static EJSBool
+_ejs_dataview_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag)
+{
+    return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
 }
 
 static EJSObject*
