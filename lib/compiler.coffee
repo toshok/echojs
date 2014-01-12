@@ -219,6 +219,9 @@ class ArmABI extends ABI
 class LLVMIRVisitor extends TreeVisitor
         constructor: (@module, @filename, @options, @abi) ->
 
+                if @options.debug
+                        @initDebugBuilder()
+                
                 @idgen = startGenerator()
                 
                 if @options.record_types
@@ -293,6 +296,7 @@ class LLVMIRVisitor extends TreeVisitor
                 
                 # initialize the scope stack with the global (empty) scope
                 @scope_stack = new Stack new Map
+                @debug_scope_stack = new Stack
 
                 entry_bb = new llvm.BasicBlock "entry", @literalInitializationFunction
                 return_bb = new llvm.BasicBlock "return", @literalInitializationFunction
@@ -306,6 +310,35 @@ class LLVMIRVisitor extends TreeVisitor
 
         # lots of helper methods
 
+        finalizeDebug: ->
+                if not @dibuilder?
+                        return
+                        
+                throw new Error "compile unit debuginfo verification failed" if not @dicu.verify()
+                throw new Error "file debuginfo verification failed" if not @difile.verify()
+                @dibuilder.finalize()
+                @module.addModuleFlag llvm.MDNode.get([consts.int32(2), llvm.MDString.get("Dwarf Version"), consts.int32(2)])
+                @module.addModuleFlag llvm.MDNode.get([consts.int32(1), llvm.MDString.get("Dwarf Info Version"), consts.int32(1)])
+                
+
+        initDebugBuilder: ->
+                @dibuilder = new llvm.DIBuilder @module
+                full_filename = path.resolve(@filename)
+                dirname = path.dirname(full_filename)
+                basename = path.basename(full_filename)
+                @dicu = @dibuilder.createCompileUnit basename,
+                                             dirname,
+                                             "0.001 ejs", # generator FIXME pull this from someplace else
+                                             false,       # isOptimized
+                                             "",          # flags
+                                             0            # runtime version
+                @difile = @dibuilder.createFile basename, dirname
+
+        setDebugLoc: (inst, loc) ->
+                if @dibuilder and @debug_scope_stack.depth > 0 and loc?
+                        inst.setDebugLoc(llvm.DebugLoc.get loc.start.line, loc.start.column, @debug_scope_stack.top)
+                
+                
         # result should be the landingpad's value
         beginCatch: (result) -> @createCall @ejs_runtime.begin_catch, [ir.createPointerCast(result, types.int8Pointer, "")], "begincatch"
         endCatch:            -> @createCall @ejs_runtime.end_catch, [], "endcatch"
@@ -338,30 +371,44 @@ class LLVMIRVisitor extends TreeVisitor
                 rv._ejs_returns_ejsval_bool = true
                 rv
 
-        loadDoubleEjsValue: (n) ->
+        loadDoubleEjsValue: (n, loc) ->
                 c = llvm.ConstantFP.getDouble n
                 num_alloca = @createAlloca @currentFunction, types.EjsValue, "num_alloca"
                 alloca_as_double = ir.createBitCast num_alloca, types.double.pointerTo(), "alloca_as_pointer"
-                ir.createStore c, alloca_as_double 
-                ir.createLoad num_alloca, "numload"
+                @setDebugLoc alloca_as_double, loc
+                store = ir.createStore c, alloca_as_double 
+                @setDebugLoc store, loc
+                load = ir.createLoad num_alloca, "numload"
+                @setDebugLoc load, loc
+                load
                 
-        loadNullEjsValue: ->
+        loadNullEjsValue: (loc) ->
                 null_alloca = @createAlloca @currentFunction, types.EjsValue, "null_alloca"
                 alloca_as_int64 = ir.createBitCast null_alloca, types.int64.pointerTo(), "alloca_as_pointer"
+                @setDebugLoc alloca_as_int64, loc
                 if @options.target_pointer_size is 64
-                        ir.createStore consts.int64_lowhi(0xfffb8000, 0x00000000), alloca_as_int64
+                        store = ir.createStore consts.int64_lowhi(0xfffb8000, 0x00000000), alloca_as_int64
+                        @setDebugLoc store, loc
                 else # 32 bit
-                        ir.createStore consts.int64_lowhi(0xffffff87, 0x00000000), alloca_as_int64
-                ir.createLoad null_alloca, "nullload"
+                        store = ir.createStore consts.int64_lowhi(0xffffff87, 0x00000000), alloca_as_int64
+                        @setDebugLoc store, loc
+                load = ir.createLoad null_alloca, "nullload"
+                @setDebugLoc load, loc
+                load
                 
-        loadUndefinedEjsValue: ->
+        loadUndefinedEjsValue: (loc) ->
                 undef_alloca = @createAlloca @currentFunction, types.EjsValue, "undef_alloca"
                 alloca_as_int64 = ir.createBitCast undef_alloca, types.int64.pointerTo(), "alloca_as_pointer"
+                @setDebugLoc alloca_as_int64, loc
                 if @options.target_pointer_size is 64
-                        ir.createStore consts.int64_lowhi(0xfff90000, 0x00000000), alloca_as_int64
+                        store = ir.createStore consts.int64_lowhi(0xfff90000, 0x00000000), alloca_as_int64
+                        @setDebugLoc store, loc
                 else # 32 bit
-                        ir.createStore consts.int64_lowhi(0xffffff82, 0x00000000), alloca_as_int64
-                ir.createLoad undef_alloca, "undefload"
+                        store = ir.createStore consts.int64_lowhi(0xffffff82, 0x00000000), alloca_as_int64
+                        @setDebugLoc store, loc
+                load = ir.createLoad undef_alloca, "undefload"
+                @setDebugLoc load, loc
+                load
 
         storeGlobal: (prop, value) ->
                 # we store obj.prop, prop is an id
@@ -371,24 +418,34 @@ class LLVMIRVisitor extends TreeVisitor
                         pname = prop.value
 
                 c = @getAtom pname
-
+                @setDebugLoc c, prop.loc
+                
                 debug.log -> "createPropertyStore #{obj}[#{pname}]"
                         
-                @createCall @ejs_runtime.global_setprop, [c, value], "globalpropstore_#{pname}"
+                call = @createCall @ejs_runtime.global_setprop, [c, value], "globalpropstore_#{pname}"
+                @setDebugLoc call, prop.loc
+                call
 
         loadGlobal: (prop) ->
                 gname = prop.name
                 
                 if @options.frozen_global and hasOwn.call @ejs_globals, gname
-                        return ir.createLoad @ejs_globals[prop.name], "load-#{gname}"
+                        load = ir.createLoad @ejs_globals[prop.name], "load-#{gname}"
+                        @setDebugLoc load, prop.loc
+                        return load
 
                 pname = @getAtom gname
-                @createCall @ejs_runtime.global_getprop, [pname], "globalloadprop_#{gname}"
-
-        visitWithScope: (scope, children) ->
+                @setDebugLoc pname, prop.loc
+                rv = @createCall @ejs_runtime.global_getprop, [pname], "globalloadprop_#{gname}"
+                @setDebugLoc rv, prop.loc
+                rv
+                
+        visitWithScope: (scope, debug_scope, children) ->
                 @scope_stack.push scope
+                @debug_scope_stack.push debug_scope if @debug_scope_stack? and debug_scope?
                 @visit child for child in children
                 @scope_stack.pop()
+                @debug_scope_stack.pop() if @debug_scope_stack? and debug_scope?
 
         findIdentifierInScope: (ident) ->
                 for scope in @scope_stack.stack
@@ -455,27 +512,34 @@ class LLVMIRVisitor extends TreeVisitor
                         
                         @createCall @ejs_runtime.object_setprop, [obj, c, rhs], "propstore_#{pname}"
                 
-        createPropertyLoad: (obj,prop,computed,canThrow = true) ->
+        createPropertyLoad: (obj,prop,computed,loc = null,canThrow = true) ->
                 if computed
                         # we load obj[prop], prop can be any value
                         loadprop = @visit prop
                         
                         if @options.record_types
-                                @createCall @ejs_runtime.record_getprop, [(consts.int32 @genRecordId()), obj, loadprop], ""
-                                                
-                        @createCall @ejs_runtime.object_getprop, [obj, loadprop], "getprop_computed", canThrow
+                                record = @createCall @ejs_runtime.record_getprop, [(consts.int32 @genRecordId()), obj, loadprop], ""
+                                @setDebugLoc record, loc
+
+                        rv = @createCall @ejs_runtime.object_getprop, [obj, loadprop], "getprop_computed", canThrow
+                        @setDebugLoc rv, loc
+                        rv
                 else
                         # we load obj.prop, prop is an id
                         pname = @getAtom prop.name
+                        @setDebugLoc pname, loc
 
                         if @options.record_types
-                                @createCall @ejs_runtime.record_getprop, [(consts.int32 @genRecordId()), obj, pname], ""
+                                record = @createCall @ejs_runtime.record_getprop, [(consts.int32 @genRecordId()), obj, pname], ""
+                                @setDebugLoc record, loc
 
-                        @createCall @ejs_runtime.object_getprop, [obj, pname], "getprop_#{prop.name}", canThrow
+                        rv = @createCall @ejs_runtime.object_getprop, [obj, pname], "getprop_#{prop.name}", canThrow
+                        @setDebugLoc rv, loc
+                        rv
                 
 
-        visitOrNull: (n) -> (@visit n) || @loadNullEjsValue()
-        visitOrUndefined: (n) -> (@visit n) || @loadUndefinedEjsValue()
+        visitOrNull: (n) -> @visit(n) || @loadNullEjsValue(n?.loc)
+        visitOrUndefined: (n) -> @visit(n) || @loadUndefinedEjsValue(n?.loc)
         
         visitProgram: (n) ->
                 # by the time we make it here the program has been
@@ -498,7 +562,10 @@ class LLVMIRVisitor extends TreeVisitor
 
                 @iifeStack.push { iife_rv, iife_dest_bb }
 
-                @visitWithScope new_scope, n.body
+                if @dibuilder?
+                        new_debug_scope = @dibuilder.createLexicalBlock(@debug_scope_stack.top, @difile, n.loc.start.line, n.loc.start.column)
+                        
+                @visitWithScope new_scope, new_debug_scope, n.body
 
                 @iifeStack.pop()
                 if iife_dest_bb
@@ -608,10 +675,14 @@ class LLVMIRVisitor extends TreeVisitor
                 exp_value = @visit exp
                 if exp_value._ejs_returns_ejsval_bool
                         cmp = @createEjsvalCmpEq exp_value, @loadBoolEjsValue(false), "cmpresult"
+                        @setDebugLoc cmp, exp.loc
                 else
                         cond_truthy = @createCall @ejs_runtime.truthy, [exp_value], "cond_truthy"
+                        @setDebugLoc cond_truthy, exp.loc
                         cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
-                ir.createCondBr cmp, else_bb, then_bb
+                        @setDebugLoc cmp, exp.loc
+                br = ir.createCondBr cmp, else_bb, then_bb
+                @setDebugLoc br, exp.loc
                 exp_value
                 
         visitFor: (n) ->
@@ -742,7 +813,7 @@ class LLVMIRVisitor extends TreeVisitor
                 result = @createAlloca @currentFunction, types.EjsValue, "%update_result"
                 argument = @visit n.argument
                 
-                one = @loadDoubleEjsValue 1
+                one = @loadDoubleEjsValue 1, n.loc
                 
                 if not n.prefix
                         # postfix updates store the argument before the op
@@ -802,11 +873,14 @@ class LLVMIRVisitor extends TreeVisitor
                 if @iifeStack.top.iife_rv?
                         # if we're inside an IIFE, convert the return statement into a store to the iife_rv alloca + a branch to the iife's dest bb
                         if n.argument?
-                                ir.createStore (@visit n.argument), @findIdentifierInScope @iifeStack.top.iife_rv.name
-                        ir.createBr @iifeStack.top.iife_dest_bb
+                                store = ir.createStore @visit(n.argument), @findIdentifierInScope(@iifeStack.top.iife_rv.name)
+                                @setDebugLoc store, n.loc
+                        br = ir.createBr @iifeStack.top.iife_dest_bb
+                        @setDebugLoc br, n.loc
+                        br
                 else
                         # otherwise generate an llvm IR ret
-                        rv = @visitOrUndefined n.argument
+                        rv = @visitOrUndefined(n.argument)
                         
                         if @finallyStack.length > 0
                                 @currentFunction.returnValueAlloca = @createAlloca @currentFunction, types.EjsValue, "returnValue" unless @currentFunction.returnValueAlloca?
@@ -815,9 +889,13 @@ class LLVMIRVisitor extends TreeVisitor
                                 ir.createBr @finallyStack[0]
                         else
                                 return_alloca = @createAlloca @currentFunction, types.EjsValue, "return_alloca"
-                                ir.createStore rv, return_alloca
-
-                                @createRet @createLoad return_alloca, "return_load"
+                                store = ir.createStore rv, return_alloca
+                                @setDebugLoc store, n.loc
+                                load = @createLoad return_alloca, "return_load"
+                                @setDebugLoc load, n.loc
+                                ret = @createRet load
+                                @setDebugLoc ret, n.loc
+                                ret
                                                 
         visitImportDeclaration: (n) ->
                 scope = @scope_stack.top
@@ -825,28 +903,30 @@ class LLVMIRVisitor extends TreeVisitor
                 {allocas,new_allocas} = @createAllocas @currentFunction, n.specifiers, scope
                 
                 # XXX more here - initialize the allocas to their import values
+                undef = @loadUndefinedEjsValue(n.loc)
                 for i in [0...n.specifiers.length]
-                        ir.createStore @loadUndefinedEjsValue(), allocas[i]
+                        store = ir.createStore undef, allocas[i]
+                        @setDebugLoc store, n.loc
                                 
         visitVariableDeclaration: (n) ->
                 throw new Error("internal compiler error.  'var' declarations should have been transformed to 'let's by this point.") if n.kind is "var"
-                        
+
                 scope = @scope_stack.top
 
                 {allocas,new_allocas} = @createAllocas @currentFunction, n.declarations, scope
                 for i in [0...n.declarations.length]
-                        if not n.declarations[i].init?
+                        if not n.declarations[i].init
                                 # there was not an initializer. we only store undefined
                                 # if the alloca is newly allocated.
                                 if new_allocas[i]
-                                        initializer = @visitOrUndefined n.declarations[i].init
+                                        initializer = @loadUndefinedEjsValue(n.declarations[i].loc)
                                         ir.createStore initializer, allocas[i]
                         else
                                 initializer = @visitOrUndefined n.declarations[i].init
                                 ir.createStore initializer, allocas[i]
 
         visitMemberExpression: (n) ->
-                @createPropertyLoad (@visit n.object), n.property, n.computed
+                @createPropertyLoad @visit(n.object), n.property, n.computed, n.loc
 
         storeValueInDest: (rhvalue, lhs) ->
                 if lhs.type is _Identifier
@@ -874,13 +954,15 @@ class LLVMIRVisitor extends TreeVisitor
                 rhs = n.right
 
                 rhvalue = @visit rhs
-
+                @setDebugLoc rhvalue, rhs.loc
+                
                 if n.operator.length is 2
-                        throw new Error "binary assignment operators '#{n.operator}' shouldn't exist at this point"
+                        throw new Error "binary assignment operators '#{n.operator}' shouldn't exist at this point, expression is #{escodegen.generate n}, #{n.loc.start.line}"
                 
                 if @options.record_types
                         @createCall @ejs_runtime.record_assignment, [(consts.int32 @genRecordId()), rhvalue], ""
-                @storeValueInDest rhvalue, lhs
+                store = @storeValueInDest rhvalue, lhs
+                @setDebugLoc store, lhs.loc
 
                 # we need to visit lhs after the store so that we load the value, but only if it's used
                 if not n.result_not_used
@@ -888,7 +970,7 @@ class LLVMIRVisitor extends TreeVisitor
 
         visitFunction: (n) ->
                 debug.log -> "        function #{n.ir_name} at #{@filename}:#{if n.loc? then n.loc.start.line else '<unknown>'}" if not n.toplevel?
-                
+
                 # save off the insert point so we can get back to it after generating this function
                 insertBlock = ir.getInsertBlock()
 
@@ -915,6 +997,21 @@ class LLVMIRVisitor extends TreeVisitor
 
                 @currentFunction = ir_func
 
+                # output debug info for this function
+                if @dibuilder
+                        @difunction = @dibuilder.createFunction (if n.name? then n.name else n.ir_name),
+                                "",
+                                @difile,
+                                n.loc.start.line,
+                                false,                  # isLocaltoUnit (FIXME, we should actually be emitting global functions for the toplevel, and local ones for everything else)
+                                true,                   # isDefinition
+                                n.body.loc.start.line,  # scopeLine
+                                0,                      # flags
+                                false,                  # is optimized?
+                                ir_func                 # the llvm IR function
+
+                        @debug_scope_stack.push @difunction
+                
                 # Create a new basic block to start insertion into.
                 entry_bb = new llvm.BasicBlock "entry", ir_func
 
@@ -934,6 +1031,7 @@ class LLVMIRVisitor extends TreeVisitor
                 for param in n.params
                         alloca = ir.createAlloca param.llvm_type, "local_#{param.name}"
                         alloca.setAlignment 8
+                        @setDebugLoc alloca, n.body.loc
                         new_scope.set param.name, alloca
                         allocas.push alloca
                                 
@@ -943,6 +1041,7 @@ class LLVMIRVisitor extends TreeVisitor
                         if param.type is _Identifier
                                 alloca = @createAlloca @currentFunction, types.EjsValue, "local_#{param.name}"
                                 new_scope.set param.name, alloca
+                                @setDebugLoc alloca, n.body.loc
                                 allocas.push alloca
                         else
                                 debug.log "we don't handle destructured args at the moment."
@@ -954,12 +1053,15 @@ class LLVMIRVisitor extends TreeVisitor
                 # now store the arguments (use .. to include our args array) onto the stack
                 for i in [0...n.params.length]
                         store = ir.createStore ir_args[i], allocas[i]
+                        @setDebugLoc store, n.body.loc
                         debug.log -> "store #{store} *builtin"
 
                 # initialize all our named parameters to undefined
                 args_load = @createLoad @currentFunction.topScope.get("%args"), "args_load"
+                @setDebugLoc args_load, n.body.loc
                 for formal_alloca in allocas[first_formal_index..]
-                        store = ir.createStore @loadUndefinedEjsValue(), formal_alloca
+                        store = ir.createStore @loadUndefinedEjsValue(n.body.loc), formal_alloca
+                        @setDebugLoc store, n.body.loc
                                 
                         
                 body_bb = new llvm.BasicBlock "body", ir_func
@@ -968,7 +1070,9 @@ class LLVMIRVisitor extends TreeVisitor
                 #@createCall @ejs_runtime.log, [consts.string(ir, "entering #{n.ir_name}")], ""
                 
                 if n.toplevel?
-                        ir.createCall @literalInitializationFunction, [], ""
+                        init_strings = ir.createCall @literalInitializationFunction, [], ""
+                        @setDebugLoc init_strings, n.body.loc
+                        
 
                 insertFunc = body_bb.parent
         
@@ -976,6 +1080,7 @@ class LLVMIRVisitor extends TreeVisitor
                 # any arg that isn't specified isn't pulled in, and is only accessible via the arguments object.
                 if n.formal_params.length > 0
                         load_argc = @createLoad @currentFunction.topScope.get("%argc"), "argc"
+                        @setDebugLoc load_argc, n.body.loc
                 
                         for i in [0...n.formal_params.length]
                                 then_bb  = new llvm.BasicBlock "arg_then", insertFunc
@@ -983,16 +1088,22 @@ class LLVMIRVisitor extends TreeVisitor
                                 merge_bb = new llvm.BasicBlock "arg_merge", insertFunc
 
                                 cmp = ir.createICmpSGt load_argc, consts.int32(i), "argcmpresult"
-                                ir.createCondBr cmp, then_bb, else_bb
+                                @setDebugLoc cmp, n.body.loc
+                                condbr = ir.createCondBr cmp, then_bb, else_bb
+                                @setDebugLoc condbr, n.body.loc
                         
                                 ir.setInsertPoint then_bb
                                 # in the then branch, the argument was
                                 # provided, pull the value out of the
                                 # args array
                                 arg_ptr = ir.createGetElementPointer args_load, [consts.int32(i)], "arg#{i}_ptr"
+                                @setDebugLoc arg_ptr, n.body.loc
                                 arg = @createLoad arg_ptr, "arg#{i}_load"
+                                @setDebugLoc arg, n.body.loc
                                 store = ir.createStore arg, allocas[first_formal_index+i]
-                                ir.createBr merge_bb
+                                @setDebugLoc store, n.body.loc
+                                br = ir.createBr merge_bb
+                                @setDebugLoc br, n.body.loc
 
                                 ir.setInsertPoint else_bb
                                 # in the else branch, the argument
@@ -1001,9 +1112,14 @@ class LLVMIRVisitor extends TreeVisitor
                                 # and store it in the alloca.
                                 if n.defaults[i]?
                                         arg_ptr = ir.createGetElementPointer args_load, [consts.int32(i)], "arg#{i}_ptr"
+                                        @setDebugLoc arg_ptr, n.body.loc
                                         arg = @visit n.defaults[i], "arg#{i}_default_value"
-                                        ir.createStore arg, allocas[first_formal_index+i]
-                                ir.createBr merge_bb
+                                        @setDebugLoc arg, n.body.loc
+                                        store = ir.createStore arg, allocas[first_formal_index+i]
+                                        @setDebugLoc store, n.body.loc
+                                br = ir.createBr merge_bb
+                                @setDebugLoc br, n.body.loc
+                                
 
                                 ir.setInsertPoint merge_bb
 
@@ -1042,19 +1158,28 @@ class LLVMIRVisitor extends TreeVisitor
                 @iifeStack = new Stack
 
                 @finallyStack = []
-                
-                @visitWithScope new_scope, [n.body]
+
+                @visitWithScope new_scope, null, [n.body]
 
                 # XXX more needed here - this lacks all sorts of control flow stuff.
                 # Finish off the function.
-                @createRet @loadUndefinedEjsValue()
+                end_loc = { start: { line: n.loc.end.line, column: n.loc.end.column } } if n.loc?
+                ret = @createRet @loadUndefinedEjsValue(end_loc)
+                @setDebugLoc ret, end_loc
 
                 # insert an unconditional branch from entry_bb to body here, now that we're
                 # sure we're not going to be inserting allocas into the entry_bb anymore.
                 ir.setInsertPoint entry_bb
-                ir.createBr body_bb
+                br = ir.createBr body_bb
+                @setDebugLoc br, n.body.loc
                         
                 @currentFunction = null
+
+                if @difunction
+                        @debug_scope_stack.push()
+
+                throw new Error "function debuginfo verification failed" if @difunction and not @difunction.verify()
+                @difunction = null
 
                 ir.setInsertPoint insertBlock
 
@@ -1083,14 +1208,20 @@ class LLVMIRVisitor extends TreeVisitor
                         arg_value =  @visitOrNull n.argument
                         if @opencode_intrinsics.unaryNot and @options.target_pointer_size is 64 and arg_value._ejs_returns_ejsval_bool
                                 cmp = @createEjsvalCmpEq arg_value, @loadBoolEjsValue(true), "cmpresult"
+                                @setDebugLoc cmp, n.loc
                                 rv = ir.createSelect cmp, @loadBoolEjsValue(false), @loadBoolEjsValue(true), "sel"
+                                @setDebugLoc rv, n.loc
                                 rv._ejs_returns_ejsval_bool = true
                                 rv
                         else
-                                @createCall callee, [arg_value], "result"
+                                call = @createCall callee, [arg_value], "result"
+                                @setDebugLoc call, n.loc
+                                call
                 else
                         throw new Error "Internal error: unary operator '#{n.operator}' not implemented" if not callee
-                        @createCall callee, [@visitOrNull n.argument], "result"
+                        call = @createCall callee, [@visitOrNull n.argument], "result"
+                        @setDebugLoc call, n.loc
+                        call
                 
 
         visitSequenceExpression: (n) ->
@@ -1113,6 +1244,7 @@ class LLVMIRVisitor extends TreeVisitor
 
                 # call the actual runtime binaryop method
                 rv = @createCall callee, [left_visited, right_visited], "result_#{n.operator}", !callee.doesNotThrow
+                @setDebugLoc rv, n.loc
                 rv
                 
         visitLogicalExpression: (n) ->
@@ -1128,44 +1260,56 @@ class LLVMIRVisitor extends TreeVisitor
 
                 # we invert the test here - check if the condition is false/0
                 left_visited = @generateCondBr n.left, left_bb, right_bb
-
+                @setDebugLoc left_visited, n.loc
+                
                 @doInsideBBlock left_bb, =>
                         # inside the else branch, left was truthy
                         if n.operator is "||"
                                 # for || we short circuit out here
-                                ir.createStore left_visited, result
+                                store = ir.createStore left_visited, result
+                                @setDebugLoc store, n.loc
+                                store
                         else if n.operator is "&&"
                                 # for && we evaluate the second and store it
-                                ir.createStore (@visit n.right), result
+                                store = ir.createStore (@visit n.right), result
+                                @setDebugLoc store, n.loc
+                                store
                         else
                                 throw "Internal error 99.1"
-                        ir.createBr merge_bb
+                        br = ir.createBr merge_bb
+                        @setDebugLoc br, n.loc
 
                 @doInsideBBlock right_bb, =>
                         # inside the then branch, left was falsy
                         if n.operator is "||"
                                 # for || we evaluate the second and store it
-                                ir.createStore (@visit n.right), result
+                                store = ir.createStore (@visit n.right), result
+                                @setDebugLoc store, n.loc
                         else if n.operator is "&&"
                                 # for && we short circuit out here
-                                ir.createStore left_visited, result
+                                store = ir.createStore left_visited, result
+                                @setDebugLoc store, n.loc
                         else
                                 throw "Internal error 99.1"
-                        ir.createBr merge_bb
+                        br = ir.createBr merge_bb
+                        @setDebugLoc br, n.loc
 
                 ir.setInsertPoint merge_bb
-                @createLoad result, "result_#{n.operator}_load"
+                load = @createLoad result, "result_#{n.operator}_load"
+                @setDebugLoc load, n.loc
+                load
 
-        visitArgsForCall: (callee, pullThisFromArg0, args) ->
+        visitArgsForCall: (callee, pullThisFromArg0, args, loc) ->
                 args = args.slice()
                 argv = []
 
                 if callee.takes_builtins
                         if pullThisFromArg0 and args[0].type is _MemberExpression
                                 thisArg = @visit args[0].object
-                                closure = @createPropertyLoad thisArg, args[0].property, args[0].computed
+                                closure = @createPropertyLoad thisArg, args[0].property, args[0].computed, loc
                         else
                                 thisArg = @loadUndefinedEjsValue()
+                                @setDebugLoc thisArg, loc
                                 closure = @visit args[0]
 
                         args.shift()
@@ -1179,9 +1323,12 @@ class LLVMIRVisitor extends TreeVisitor
                                 
                                 args.forEach (a,i) =>
                                         gep = ir.createGetElementPointer @currentFunction.scratch_area, [consts.int32(0), consts.int64(i)], "arg_gep_#{i}"
+                                        @setDebugLoc gep, loc
                                         store = ir.createStore visited[i], gep, "argv[#{i}]-store"
+                                        @setDebugLoc store, loc
 
                                 argsCast = ir.createGetElementPointer @currentFunction.scratch_area, [consts.int32(0), consts.int64(0)], "call_args_load"
+                                @setDebugLoc argsCast, loc
 
                                 argv.push argsCast
                         else
@@ -1192,7 +1339,7 @@ class LLVMIRVisitor extends TreeVisitor
 
                 argv
 
-        visitArgsForConstruct: (callee, args) ->
+        visitArgsForConstruct: (callee, args, loc) ->
                 args = args.slice()
                 argv = []
                 # constructors are always .takes_builtins, so we can skip the other case
@@ -1201,11 +1348,12 @@ class LLVMIRVisitor extends TreeVisitor
                 ctor = @visit args[0]
                 args.shift()
 
-                proto = @createPropertyLoad ctor, { name: "prototype" }, false
+                proto = @createPropertyLoad ctor, { name: "prototype" }, false, loc
 
                 create = @ejs_runtime.object_create
                 thisArg = @createCall create, [proto], "objtmp", !create.doesNotThrow
-
+                @setDebugLoc thisArg, loc
+                
                 argv.push ctor                                                      # %closure
                 argv.push thisArg                                                   # %this
                 argv.push consts.int32 args.length                                  # %argc
@@ -1215,9 +1363,12 @@ class LLVMIRVisitor extends TreeVisitor
                         
                         visited.forEach (a,i) =>
                                 gep = ir.createGetElementPointer @currentFunction.scratch_area, [consts.int32(0), consts.int64(i)], "arg_gep_#{i}"
+                                @setDebugLoc gep, loc
                                 store = ir.createStore visited[i], gep, "argv[#{i}]-store"
+                                @setDebugLoc store, loc
 
                         argsCast = ir.createGetElementPointer @currentFunction.scratch_area, [consts.int32(0), consts.int64(0)], "call_args_load"
+                        @setDebugLoc argsCast, loc
 
                         argv.push argsCast
                 else
@@ -1253,7 +1404,9 @@ class LLVMIRVisitor extends TreeVisitor
 
         visitThisExpression: (n) ->
                 debug.log "visitThisExpression"
-                @createLoad @findIdentifierInScope("%this"), "load_this"
+                load = @createLoad @findIdentifierInScope("%this"), "load_this"
+                @setDebugLoc load, n.loc
+                load
 
         visitIdentifier: (n) ->
                 debug.log -> "identifier #{n.name}"
@@ -1262,6 +1415,7 @@ class LLVMIRVisitor extends TreeVisitor
                 if source?
                         debug.log -> "found identifier in scope, at #{source}"
                         rv = @createLoad source, "load_#{val}"
+                        @setDebugLoc rv, n.loc
                         return rv
 
                 # special handling of the arguments object here, so we
@@ -1282,6 +1436,7 @@ class LLVMIRVisitor extends TreeVisitor
 
                         ir.setInsertPoint saved_insert_point
                         rv = @createLoad arguments_alloca, "load_arguments"
+                        @setDebugLoc rv, n.loc
                         return rv
 
                 rv = null
@@ -1297,7 +1452,7 @@ class LLVMIRVisitor extends TreeVisitor
 
         visitObjectExpression: (n) ->
                 object_create = @ejs_runtime.object_create
-                obj = @createCall object_create, [@loadNullEjsValue()], "objtmp", !object_create.doesNotThrow
+                obj = @createCall object_create, [@loadNullEjsValue(n.loc)], "objtmp", !object_create.doesNotThrow
                 for property in n.properties
                         val = @visit property.value
                         key = if property.key.type is _Identifier then @getAtom property.key.name else @visit property.key
@@ -1378,14 +1533,14 @@ class LLVMIRVisitor extends TreeVisitor
                 # null literals, load _ejs_null
                 if n.value is null
                         debug.log "literal: null"
-                        return @loadNullEjsValue()
+                        return @loadNullEjsValue(n.loc)
 
                         
                 # undefined literals, load _ejs_undefined
                 if n.value is undefined
                         debug.log "literal: undefined"
-                        return @loadUndefinedEjsValue()
-
+                        return @loadUndefinedEjsValue(n.loc)
+                        
                 # string literals
                 if typeof n.raw is "string" and (n.raw[0] is '"' or n.raw[0] is "'")
                         debug.log -> "literal string: #{n.value}"
@@ -1394,6 +1549,7 @@ class LLVMIRVisitor extends TreeVisitor
                         
                         strload.literal = n
                         debug.log -> "strload = #{strload}"
+                        @setDebugLoc strload, n.loc
                         return strload
 
                 # regular expression literals
@@ -1406,17 +1562,18 @@ class LLVMIRVisitor extends TreeVisitor
                         regexp_new_utf8 = @ejs_runtime.regexp_new_utf8
                         regexpcall = @createCall regexp_new_utf8, [source, flags], "regexptmp", !regexp_new_utf8.doesNotThrow
                         debug.log -> "regexpcall = #{regexpcall}"
+                        @setDebugLoc regexpcall, n.loc
                         return regexpcall
 
                 # number literals
                 if typeof n.value is "number"
                         debug.log -> "literal number: #{n.value}"
-                        return @loadDoubleEjsValue n.value
+                        return @loadDoubleEjsValue n.value, n.loc
 
                 # boolean literals
                 if typeof n.value is "boolean"
                         debug.log -> "literal boolean: #{n.value}"
-                        return @loadBoolEjsValue n.value
+                        return @loadBoolEjsValue n.value, n.loc
 
                 throw "Internal error: unrecognized literal of type #{typeof n.value}"
 
@@ -1440,7 +1597,8 @@ class LLVMIRVisitor extends TreeVisitor
         
         visitThrow: (n) ->
                 arg = @visit n.argument
-                @createCall @ejs_runtime.throw, [arg], "", true
+                throwinst = @createCall @ejs_runtime.throw, [arg], "", true
+                @setDebugLoc throwinst, n.loc
                 ir.createUnreachable()
 
         visitTry: (n) ->
@@ -1509,13 +1667,15 @@ class LLVMIRVisitor extends TreeVisitor
                                 
                                                 # create a new scope which maps the catch parameter name (the "e" in "try { } catch (e) { }") to catchval
                                                 catch_scope = new Map
+                                                if @dibuilder
+                                                        catch_debug_scope = @dibuilder.createLexicalBlock @debug_scope_stack.top, @difile, n.handlers[0].loc.start.line, n.handlers[0].loc.start.column
                                                 if n.handlers[0].param?.name?
                                                         catch_name = n.handlers[0].param.name
                                                         alloca = @createAlloca @currentFunction, types.EjsValue, "local_catch_#{catch_name}"
                                                         catch_scope.set catch_name, alloca
                                                         ir.createStore catchval, alloca
 
-                                                @visitWithScope catch_scope, [n.handlers[0]]
+                                                @visitWithScope catch_scope, catch_debug_scope, [n.handlers[0]]
 
                                                 # unsure about this one - we should likely call end_catch if another exception is thrown from the catch block?
                                                 @endCatch()
@@ -1575,7 +1735,9 @@ class LLVMIRVisitor extends TreeVisitor
         handleGetLocal: (exp, opencode) ->
                 source = @findIdentifierInScope exp.arguments[0].name
                 if source?
-                        return @createLoad source, "load_#{exp.arguments[0].name}"
+                        rv = @createLoad source, "load_#{exp.arguments[0].name}"
+                        @setDebugLoc rv, exp.loc
+                        return rv
 
                 # special handling of the arguments object here, so we
                 # only initialize/create it if the function is
@@ -1598,6 +1760,7 @@ class LLVMIRVisitor extends TreeVisitor
 
                         ir.setInsertPoint saved_insert_point
                         rv = @createLoad arguments_alloca, "load_arguments"
+                        @setDebugLoc rv, exp.loc
                         return rv
                         
                 throw new Error "identifier not found: #{exp.arguments[0].name}"
@@ -1606,7 +1769,8 @@ class LLVMIRVisitor extends TreeVisitor
                 dest = @findIdentifierInScope exp.arguments[0].name
                 throw new Error "identifier not found: #{exp.arguments[0].name}" if not dest?
                 new_local_val = @visit exp.arguments[1]
-                ir.createStore new_local_val, dest
+                store = ir.createStore new_local_val, dest
+                @setDebugLoc store, exp.loc
                 new_local_val
                                 
         handleGetGlobal: (exp, opencode) ->
@@ -1617,9 +1781,13 @@ class LLVMIRVisitor extends TreeVisitor
                         throw new SyntaxError "cannot set global property '#{exp.arguments[0].name}' when using --frozen-global"
                         
                 pname = @getAtom exp.arguments[0].name
+                @setDebugLoc pname, exp.arguments[0].loc
                 value = @visit exp.arguments[1]
+                @setDebugLoc value, exp.arguments[1].loc
 
-                @createCall @ejs_runtime.global_setprop, [pname, value], "globalpropstore_#{exp.arguments[0].name}"
+                rv = @createCall @ejs_runtime.global_setprop, [pname, value], "globalpropstore_#{exp.arguments[0].name}"
+                @setDebugLoc rv, exp.loc
+                rv
 
         # this method assumes it's called in an opencoded context
         emitEjsvalTo: (val, type, prefix) ->
@@ -1641,8 +1809,9 @@ class LLVMIRVisitor extends TreeVisitor
                         throw new Error "emitLoadSpecops not implemented for this case"
 
         emitThrowNativeError: (errorCode, errorMessage) ->
-                @createCall @ejs_runtime.throw_nativeerror_utf8, [consts.int32(errorCode), consts.string(ir, errorMessage)], "", true
+                call = @createCall @ejs_runtime.throw_nativeerror_utf8, [consts.int32(errorCode), consts.string(ir, errorMessage)], "", true
                 ir.createUnreachable()
+                call
 
         # this method assumes it's called in an opencoded context
         emitLoadEjsFunctionIsBound: (closure) ->
@@ -1676,9 +1845,9 @@ class LLVMIRVisitor extends TreeVisitor
                 insertFunc = insertBlock.parent
 
                 if ctor_context
-                        argv = @visitArgsForConstruct @ejs_runtime.invoke_closure, exp.arguments
+                        argv = @visitArgsForConstruct @ejs_runtime.invoke_closure, exp.arguments, exp.loc
                 else
-                        argv = @visitArgsForCall @ejs_runtime.invoke_closure, true, exp.arguments
+                        argv = @visitArgsForCall @ejs_runtime.invoke_closure, true, exp.arguments, exp.loc
 
                 if opencode and @options.target_pointer_size is 64
                         candidate_is_object_bb = new llvm.BasicBlock "candidate_is_object_bb", insertFunc
@@ -1720,6 +1889,7 @@ class LLVMIRVisitor extends TreeVisitor
 
                                         @doInsideBBlock runtime_invoke_bb, =>
                                                 call_result = @createCall @ejs_runtime.invoke_closure, argv, "callresult", true
+                                                @setDebugLoc call_result, exp.loc
                                                 ir.createBr invoke_merge_bb
                         
                                         # in the successful case we modify our argv with the responses and directly invoke the closure func
@@ -1728,12 +1898,14 @@ class LLVMIRVisitor extends TreeVisitor
                                                 env_load = @emitLoadEjsFunctionClosureEnv closure
 
                                                 call_result = @createCall func_load, [env_load, argv[1], argv[2], argv[3]], "callresult"
+                                                @setDebugLoc call_result, exp.loc
                                                 ir.createBr invoke_merge_bb
 
                         ir.setInsertPoint invoke_merge_bb
 
                 else
                         call_result = @createCall @ejs_runtime.invoke_closure, argv, "call", true
+                        @setDebugLoc call_result, exp.loc
 
                 return call_result if not ctor_context
 
@@ -1743,15 +1915,22 @@ class LLVMIRVisitor extends TreeVisitor
 
                 if opencode and @options.target_pointer_size is 64
                         cmp = @createEjsvalICmpUGt call_result, consts.int64_lowhi(0xfffbffff, 0xffffffff), "cmpresult"
+                        @setDebugLoc cmp, exp.loc
                 else
                         call_result_is_object = @createCall @ejs_runtime.typeof_is_object, [call_result], "call_result_is_object", false
+                        @setDebugLoc call_result_is_object, exp.loc
                         if call_result_is_object._ejs_returns_ejsval_bool
                                 cmp = @createEjsvalCmpEq call_result_is_object, (@loadBoolEjsValue true), "cmpresult"
+                                @setDebugLoc cmp, exp.loc
                         else
                                 cond_truthy = @createCall @ejs_runtime.truthy, [call_result_is_object], "cond_truthy"
+                                @setDebugLoc cond_truthy, exp.loc
                                 cmp = ir.createICmpEq cond_truthy, consts.true(), "cmpresult"
+                                @setDebugLoc cmp, exp.loc
 
-                return ir.createSelect cmp, call_result, argv[@abi.this_param_index], "sel"
+                select = ir.createSelect cmp, call_result, argv[@abi.this_param_index], "sel"
+                @setDebugLoc select, exp.loc
+                select
                         
                         
         handleMakeClosure: (exp, opencode) ->
@@ -1948,7 +2127,7 @@ class LLVMIRVisitor extends TreeVisitor
                         cmp2 = @createEjsvalICmpEq arg, consts.int64_lowhi(0xffb80000, 0x00000000), "cmpresult2"
                         @createEjsBoolSelect ir.createOr cmp1, cmp2, "or"
                 else
-                        @createCall @ejs_binops["=="],   [@loadNullEjsValue(), arg], "is_null_or_undefined", false
+                        @createCall @ejs_binops["=="],   [@loadNullEjsValue(exp.loc), arg], "is_null_or_undefined", false
                 
                 
         handleBuiltinUndefined:  (exp) -> @loadUndefinedEjsValue()
@@ -1999,6 +2178,20 @@ insert_toplevel_func = (tree, filename) ->
                 body:
                         type: _BlockStatement
                         body: tree.body
+                        loc:
+                                start:
+                                        line: tree.loc.start.line
+                                        column: tree.loc.start.column
+                                end:
+                                        line: tree.loc.end.line
+                                        column: tree.loc.end.column
+                loc:
+                        start:
+                                line: tree.loc.start.line
+                                column: tree.loc.start.column
+                        end:
+                                line: tree.loc.end.line
+                                column: tree.loc.end.column
                 toplevel: true
         tree.body = [toplevel]
         tree
@@ -2042,5 +2235,6 @@ exports.compile = (tree, base_output_filename, source_filename, options) ->
 
         visitor = new LLVMIRVisitor module, source_filename, options, abi
         visitor.visit tree
+        visitor.finalizeDebug()
 
         module

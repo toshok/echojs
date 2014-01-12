@@ -593,9 +593,10 @@ class HoistVars extends TreeVisitor
                                 if n.declarations[i].init?
                                         assignment =
                                                 type: _AssignmentExpression
-                                                left: create_identifier n.declarations[i].id.name
+                                                left: create_identifier n.declarations[i].id.name, n.declarations[i].loc
                                                 right: @visit n.declarations[i].init
                                                 operator: "="
+                                                loc: n.declarations[i].loc
 
                                         assignments.push assignment
 
@@ -663,7 +664,9 @@ DesugarArrowFunctions = class DesugarArrowFunctions extends TreeVisitor
                                 body: [{
                                         type: _ReturnStatement
                                         argument: n.body
+                                        loc: n.body.loc
                                 }]
+                                loc: n.body.loc
                         }
                         n.expression = false
                 n = @visitFunction n
@@ -671,7 +674,7 @@ DesugarArrowFunctions = class DesugarArrowFunctions extends TreeVisitor
                 n
 
         visitThisExpression: (n) ->
-                return { type: _Literal, value: undefined } if @mapping.length == 0
+                return { type: _Literal, value: undefined, loc: n.loc } if @mapping.length == 0
 
                 topfunc = @mapping[0].func
 
@@ -994,12 +997,16 @@ class SubstituteVariables extends TreeVisitor
                 if n.ejs_env.closed.empty() and not n.ejs_env.nested_requires_env
                         env_prepends.push {
                                 type: _VariableDeclaration,
+                                # XXX the use of n.body.loc here is of course wrong here, since the end location is further down the file potentially.
+                                # but we don't use the end location for anything.
                                 declarations: [{
                                         type: _VariableDeclarator
                                         id:  create_identifier this_env_name
                                         init:
                                                 type: _Literal
                                                 value: null
+                                                loc: n.body.loc
+                                        loc: n.body.loc
                                 }],
                                 kind: "let"
                         }
@@ -1009,8 +1016,8 @@ class SubstituteVariables extends TreeVisitor
                                 type: _VariableDeclaration,
                                 declarations: [{
                                         type: _VariableDeclarator
-                                        id:  create_identifier this_env_name
-                                        init: create_intrinsic makeClosureEnv_id, [create_number_literal n.ejs_env.closed.size() + if n.ejs_env.parent? then 1 else 0]
+                                        id:  create_identifier this_env_name, n.body.loc
+                                        init: create_intrinsic makeClosureEnv_id, [create_number_literal n.ejs_env.closed.size() + if n.ejs_env.parent? then 1 else 0], n.body.loc
                                 }],
                                 kind: "let"
                         }
@@ -1029,7 +1036,8 @@ class SubstituteVariables extends TreeVisitor
                                 parent_env_slot = n.ejs_env.slot_mapping[parent_env_name]
                                 env_prepends.push {
                                         type: _ExpressionStatement
-                                        expression: create_intrinsic setSlot_id, [ (create_identifier this_env_name), (create_number_literal parent_env_slot), (create_string_literal parent_env_name), (create_identifier parent_env_name) ]
+                                        expression: create_intrinsic setSlot_id, [ create_identifier(this_env_name, n.body.loc), create_number_literal(parent_env_slot, n.body.loc), create_string_literal(parent_env_name, n.body.loc), create_identifier(parent_env_name, n.body.loc) ]
+                                        loc: n.body.loc
                                 }
                                 
 
@@ -1038,32 +1046,33 @@ class SubstituteVariables extends TreeVisitor
                                 if n.ejs_env.closed.has param.name
                                         env_prepends.push {
                                                 type: _ExpressionStatement
-                                                expression: create_intrinsic setSlot_id, [ (create_identifier this_env_name), (create_number_literal n.ejs_env.slot_mapping[param.name]), (create_string_literal param.name), (create_identifier param.name) ]
+                                                expression: create_intrinsic setSlot_id, [ create_identifier(this_env_name, n.body.loc), create_number_literal(n.ejs_env.slot_mapping[param.name], n.body.loc), create_string_literal(param.name, n.body.loc), create_identifier(param.name, n.body.loc) ]
+                                                loc: n.body.loc
                                         }
 
                         new_mapping["%slot_mapping"] = n.ejs_env.slot_mapping
 
                         flatten_memberexp = (exp, mapping) ->
                                 if exp.type isnt _CallExpression
-                                        [create_number_literal mapping[exp.name]]
+                                        [create_number_literal(mapping[exp.name], exp.loc)]
                                 else
-                                        (flatten_memberexp exp.arguments[0], mapping).concat [exp.arguments[1]]
+                                        flatten_memberexp(exp.arguments[0], mapping).concat [exp.arguments[1]]
 
-                        prepend_environment = (exps) ->
-                                obj = create_identifier this_env_name
+                        prepend_environment = (exps, loc) ->
+                                obj = create_identifier(this_env_name, loc)
                                 for prop in exps
-                                        obj = create_intrinsic slot_id, [ obj, prop ]
+                                        obj = create_intrinsic(slot_id, [ obj, prop ], prop.loc)
                                 obj
 
                         # if there are existing mappings prepend "%env." (a MemberExpression) to them
                         for mapped of new_mapping
                                 val = new_mapping[mapped]
                                 if mapped isnt "%slot_mapping"
-                                        new_mapping[mapped] = prepend_environment (flatten_memberexp val, n.ejs_env.slot_mapping)
+                                        new_mapping[mapped] = prepend_environment(flatten_memberexp(val, n.ejs_env.slot_mapping), val.loc)
                         
                         # and add mappings for all variables in .closed from "x" to "%env.x"
 
-                        new_mapping["%env"] = create_identifier this_env_name
+                        new_mapping["%env"] = create_identifier this_env_name, 
                         n.ejs_env.closed.map (sym) ->
                                 new_mapping[sym] = create_intrinsic slot_id, [ (create_identifier this_env_name), (create_number_literal n.ejs_env.slot_mapping[sym]), (create_string_literal sym) ]
 
@@ -1111,7 +1120,7 @@ class SubstituteVariables extends TreeVisitor
                 #   invokeClosure(X, %this, %argCount, arg1, arg2, ...);
 
                 @function_stack.top.scratch_size = Math.max @function_stack.top.scratch_size, n.arguments.length
-                create_intrinsic invokeClosure_id, [n.callee].concat n.arguments
+                create_intrinsic invokeClosure_id, [n.callee].concat(n.arguments), n.loc
 
         visitNewExpression: (n) ->
                 super
@@ -1124,7 +1133,7 @@ class SubstituteVariables extends TreeVisitor
 
                 @function_stack.top.scratch_size = Math.max @function_stack.top.scratch_size, n.arguments.length
 
-                rv = create_intrinsic invokeClosure_id, [n.callee].concat n.arguments
+                rv = create_intrinsic invokeClosure_id, [n.callee].concat(n.arguments), n.loc
                 rv.type = _NewExpression
                 rv
 
@@ -1255,16 +1264,17 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
                                 operator: n.operator[0]
                                 left:     lhs
                                 right:    rhs
+                                loc:      rhs.loc
                         }
                         n.operator = '='
                 
                 if is_intrinsic "%slot", lhs
-                        create_intrinsic setSlot_id, [lhs.arguments[0], lhs.arguments[1], new_rhs]
+                        create_intrinsic setSlot_id, [lhs.arguments[0], lhs.arguments[1], new_rhs], lhs.loc
                 else if lhs.type is _Identifier
                         if @findIdentifierInScope lhs
-                                create_intrinsic setLocal_id, [lhs, new_rhs]
+                                create_intrinsic setLocal_id, [lhs, new_rhs], lhs.loc
                         else
-                                create_intrinsic setGlobal_id, [lhs, new_rhs]
+                                create_intrinsic setGlobal_id, [lhs, new_rhs], lhs.loc
                 else
                         n.left = @visit n.left
                         n.right = new_rhs
@@ -1324,7 +1334,7 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
                 n
 
         visitIdentifier: (n) ->
-                create_intrinsic @intrinsicForIdentifier(n), [n]
+                create_intrinsic @intrinsicForIdentifier(n), [n], n.loc
 
 #
 # special pass to inline some common idioms dealing with IIFEs

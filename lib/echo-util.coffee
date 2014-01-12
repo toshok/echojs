@@ -55,18 +55,22 @@ exports.reset = ->
                 return terminal.ANSIStyle("reset");
         return ""
 
-exports.create_identifier = create_identifier = (x) ->
+exports.create_identifier = create_identifier = (x, loc) ->
         throw new Error "invalid name in create_identifier" if not x
-        type: syntax.Identifier, name: x
-exports.create_string_literal = (x) ->
+        type: syntax.Identifier, name: x, loc: loc
+
+exports.create_string_literal = (x, loc) ->
         throw new Error "invalid string in create_string_literal" if not x
-        type: syntax.Literal, value: x, raw: "\"#{x}\""
-exports.create_number_literal = (x) ->
+        type: syntax.Literal, value: x, raw: "\"#{x}\"", loc: loc
+
+exports.create_number_literal = (x, loc) ->
         throw new Error "invalid number '#{x}' (#{typeof x}) in create_number_literal" if typeof x isnt "number"
-        type: syntax.Literal, value: x, raw: "#{x}"
-exports.create_intrinsic = (id, args) ->
+        type: syntax.Literal, value: x, raw: "#{x}", loc: loc
+        
+exports.create_intrinsic = (id, args, loc) ->
         type: syntax.CallExpression
         callee: id
         arguments: args
+        loc: loc
 exports.is_intrinsic = (name, n) ->
         n.type is syntax.CallExpression and n.callee.name is name
