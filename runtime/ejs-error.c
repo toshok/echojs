@@ -20,7 +20,21 @@
 #import <Foundation/Foundation.h>
 #endif
 
-EJSSpecOps _ejs_error_specops;
+EJS_DEFINE_CLASS(error, "Error",
+                 OP_INHERIT, // get
+                 OP_INHERIT, // get_own_property
+                 OP_INHERIT, // get_property
+                 OP_INHERIT, // put
+                 OP_INHERIT, // can_put
+                 OP_INHERIT, // has_property
+                 OP_INHERIT, // delete
+                 OP_INHERIT, // default_value
+                 OP_INHERIT, // define_own_property
+                 OP_INHERIT, // has_instance
+                 OP_INHERIT, // allocate
+                 OP_INHERIT, // finalize
+                 OP_INHERIT  // scan
+                 )
 
 ejsval _ejs_Error EJSVAL_ALIGNMENT;
 ejsval _ejs_Error_proto EJSVAL_ALIGNMENT;
@@ -123,9 +137,6 @@ _ejs_nativeerror_new_utf8 (EJSNativeErrorType err_type, const char *message)
 void
 _ejs_error_init(ejsval global)
 {
-    _ejs_error_specops = _ejs_object_specops;
-    _ejs_error_specops.class_name = "Error";
-
     ejsval toString = _ejs_function_new_native (_ejs_null, _ejs_atom_toString, (EJSClosureFunc)_ejs_Error_prototype_toString);
     _ejs_gc_add_root (&toString);
     

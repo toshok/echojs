@@ -1,3 +1,8 @@
+// pirouette specific things (move these to a separate compiler addon at some point)
+EJS_ATOM(ObjcHandle)
+EJS_ATOM(PirouetteObject)
+EJS_ATOM(setHandle)
+
 // empty things
 EJS_ATOM2(,empty)
 EJS_ATOM2([],empty_array)

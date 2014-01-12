@@ -1,5 +1,5 @@
-esprima = require ('esprima');
-escodegen = require ('escodegen');
+var esprima = require ('esprima');
+var escodegen = require ('escodegen');
 
 var str = "Set.prototype.member = function (el) { return hasOwn.call(this.set, el); };"
 

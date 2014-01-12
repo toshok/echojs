@@ -44,27 +44,22 @@ OBJC_SOURCES= \
 OSX_OBJECTS=$(C_SOURCES:%.c=%.o.osx) $(OBJC_SOURCES:%.m=%.o.osx) main.o.osx
 SIM_OBJECTS=$(C_SOURCES:%.c=%.o.sim) $(OBJC_SOURCES:%.m=%.o.sim) main.o.sim
 DEV_OBJECTS=$(C_SOURCES:%.c=%.o.armv7) $(OBJC_SOURCES:%.m=%.o.armv7) main.o.armv7
+DEVS_OBJECTS=$(C_SOURCES:%.c=%.o.armv7s) $(OBJC_SOURCES:%.m=%.o.armv7s) main.o.armv7s
 
 analyze_plists_c = $(C_SOURCES:%.c=%.plist) main.plist
 analyze_plists_objc = $(OBJC_SOURCES:%.m=%.plist) 
 
-$(analyze_plists_c): %.plist: %.c
-	@echo "  CCSA  " $<
-	@$(OSX_CC) $(OSX_CFLAGS) --analyze $< -o $@
-$(analyze_plists_objc): %.plist: %.m
-	@echo "  CCSA  " $<
-	@$(OSX_CC) $(OSX_CFLAGS) --analyze $< -o $@
-
 OSX_LIBRARY=$(LIBRARY)
 SIM_LIBRARY=$(LIBRARY).sim
 DEV_LIBRARY=$(LIBRARY).armv7
+DEVS_LIBRARY=$(LIBRARY).armv7s
 LIPOD_IOS_LIBRARY=$(LIBRARY).ios
 
-ALL_LIBRARIES=$(OSX_LIBRARY) $(SIM_LIBRARY) $(DEV_LIBRARY) $(LIPOD_IOS_LIBRARY)
+ALL_LIBRARIES=$(OSX_LIBRARY) $(SIM_LIBRARY) $(DEV_LIBRARY) $(DEVS_LIBRARY) $(LIPOD_IOS_LIBRARY)
 
 TARGET_LIBRARIES=$(LIPOD_IOS_LIBRARY) $(OSX_LIBRARY)
 
-ALL_OBJECTS=$(SIM_OBJECTS) $(DEV_OBJECTS) $(OSX_OBJECTS)
+ALL_OBJECTS=$(SIM_OBJECTS) $(DEV_OBJECTS) $(DEVS_OBJECTS) $(OSX_OBJECTS)
 
 all-local:: $(ALL_LIBRARIES) $(analyze_plists_c) $(analyze_plists_objc)
 
@@ -73,9 +68,7 @@ clean-local::
 
 VPATH=.:../parson
 
-OSX_CC=clang
-SIM_CC=clang
-DEV_CC=clang
+CC=clang
 
 CFLAGS += -I../external-deps/pcre-osx
 IOSSIM_CFLAGS += -I../external-deps/pcre-iossim
@@ -91,53 +84,73 @@ $(SIM_LIBRARY): $(SIM_OBJECTS)
 $(DEV_LIBRARY): $(DEV_OBJECTS)
 	@echo [ar armv7] $@ && $(IOSDEV_BIN)/ar rc $@ $(DEV_OBJECTS)
 
-$(LIPOD_IOS_LIBRARY): $(SIM_LIBRARY) $(DEV_LIBRARY)
-	@echo [lipo] $@ && lipo -create $(SIM_ARCH) $(SIM_LIBRARY) $(DEV_ARCH) $(DEV_LIBRARY) -output $@
+$(DEVS_LIBRARY): $(DEVS_OBJECTS)
+	@echo [ar armv7s] $@ && $(IOSDEVS_BIN)/ar rc $@ $(DEVS_OBJECTS)
+
+$(LIPOD_IOS_LIBRARY): $(SIM_LIBRARY) $(DEV_LIBRARY) $(DEVS_LIBRARY)
+	@echo [lipo] $@ && lipo -create $(SIM_ARCH) $(SIM_LIBRARY) $(DEV_ARCH) $(DEV_LIBRARY) $(DEVS_ARCH) $(DEVS_LIBRARY) -output $@
 
 ejs-atoms-gen.c: ejs-atoms.h gen-atoms.js
 	@echo [GEN] $@ && ./gen-atoms.js $< > .tmp-$@ && mv .tmp-$@ $@
 
-ejs-init.o.osx ejs-init.o.sim ejs-init.o.armv7: ejs-atoms-gen.c
+ejs-init.o.osx ejs-init.o.sim ejs-init.o.armv7 ejs-init.o.armv7s: ejs-atoms-gen.c
 
 ejs-webgl-constants-sorted.h: ejs-webgl-constants.h
 	@echo [GEN] $@ && (grep WEBGL_CONSTANT $< | sort > $@)
 
-ejs-webgl.o.osx ejs-webgl.o.sim ejs-webgl.o.armv7: ejs-webgl-constants-sorted.h
+ejs-webgl.o.osx ejs-webgl.o.sim ejs-webgl.o.armv7 ejs-webgl.o.armv7s: ejs-webgl-constants-sorted.h
 
 
 OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch
 
 %.o.osx: %.c
 	@mkdir -p .deps
-	@$(OSX_CC) -MM $(OSX_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.osx,,`/$@/ > .deps/$@-deps
-	@echo [$(OSX_CC) osx] $< && $(OSX_CC) -ObjC $(OSX_CFLAGS)  -c -o $@ $<
+	@$(CC) -MM $(OSX_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.osx,,`/$@/ > .deps/$@-deps
+	@echo [$(CC) osx] $< && $(CC) -ObjC $(OSX_CFLAGS)  -c -o $@ $<
 
 %.o.osx: %.m
 	@mkdir -p .deps
-	@$(OSX_CC) -MM $(OSX_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.osx,,`/$@/ > .deps/$@-deps
-	@echo [$(OSX_CC) osx] $< && $(OSX_CC) $(OSX_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
+	@$(CC) -MM $(OSX_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.osx,,`/$@/ > .deps/$@-deps
+	@echo [$(CC) osx] $< && $(CC) $(OSX_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
 
 %.o.sim: %.c
 	@mkdir -p .deps
-	@$(SIM_CC) -MM $(IOSSIM_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.sim,,`/$@/ > .deps/$@-deps
-	echo [$(SIM_CC) sim] $< && PATH=$(IOSSIM_BIN):$$PATH $(SIM_CC) -ObjC $(IOSSIM_CFLAGS) -c -o $@ $<
+	@$(CC) -MM $(IOSSIM_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.sim,,`/$@/ > .deps/$@-deps
+	@echo [$(CC) sim] $< && PATH=$(IOSSIM_BIN):$$PATH $(CC) -ObjC $(IOSSIM_CFLAGS) -c -o $@ $<
 
 %.o.sim: %.m
 	@mkdir -p .deps
-	@$(SIM_CC) -MM -ObjC $(IOSSIM_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.sim,,`/$@/ > .deps/$@-deps
-	@echo [$(SIM_CC) sim] $< && PATH=$(IOSSIM_BIN):$$PATH $(SIM_CC) $(IOSSIM_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
+	@$(CC) -MM -ObjC $(IOSSIM_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.sim,,`/$@/ > .deps/$@-deps
+	@echo [$(CC) sim] $< && PATH=$(IOSSIM_BIN):$$PATH $(CC) $(IOSSIM_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
 
 %.o.armv7: %.c
 	@mkdir -p .deps
-	@$(DEV_CC) -MM -ObjC $(IOSDEV_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.dev,,`/$@/ > .deps/$@-deps
-	@echo PATH=$(IOSDEV_BIN):$$PATH $(DEV_CC) -ObjC $(IOSDEV_CFLAGS) -c -o $@ $<
-	@echo [$(DEV_CC) armv7] $< && PATH=$(IOSDEV_BIN):$$PATH $(DEV_CC) -ObjC $(IOSDEV_CFLAGS) -c -o $@ $<
+	@$(CC) -MM -ObjC $(IOSDEV_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7,,`/$@/ > .deps/$@-deps
+	@echo [$(CC) armv7] $< && PATH=$(IOSDEV_BIN):$$PATH $(CC) -ObjC $(IOSDEV_CFLAGS) -c -o $@ $<
 
 %.o.armv7: %.m
 	@mkdir -p .deps
-	@$(DEV_CC) -MM -ObjC $(IOSDEV_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.dev,,`/$@/ > .deps/$@-deps
-	@echo [$(DEV_CC) armv7] $< && PATH=$(IOSDEV_BIN):$$PATH $(DEV_CC) $(IOSDEV_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
+	@$(CC) -MM -ObjC $(IOSDEV_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7,,`/$@/ > .deps/$@-deps
+	@echo [$(CC) armv7] $< && PATH=$(IOSDEV_BIN):$$PATH $(CC) $(IOSDEV_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
+
+%.o.armv7s: %.c
+	@mkdir -p .deps
+	@$(CC) -MM -ObjC $(IOSDEVS_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7s,,`/$@/ > .deps/$@-deps
+	@echo [$(CC) armv7s] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) -ObjC $(IOSDEVS_CFLAGS) -c -o $@ $<
+
+%.o.armv7s: %.m
+	@mkdir -p .deps
+	@$(CC) -MM -ObjC $(IOSDEVS_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7s,,`/$@/ > .deps/$@-deps
+	@echo [$(CC) armv7] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) $(IOSDEVS_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
+
+$(analyze_plists_c): %.plist: %.c
+	@echo [$(CC) analyze] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) $(OSX_CFLAGS) --analyze $< -o $@
+
+$(analyze_plists_objc): %.plist: %.m
+	@echo [$(CC) analyze] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) $(OSX_CFLAGS) --analyze $< -o $@
+
 
 -include $(patsubst %.o.osx,.deps/%.o.osx-deps,$(OSX_OBJECTS))
 -include $(patsubst %.o.sim,.deps/%.o.sim-deps,$(SIM_OBJECTS))
 -include $(patsubst %.o.armv7,.deps/%.o.armv7-deps,$(DEV_OBJECTS))
+-include $(patsubst %.o.armv7s,.deps/%.o.armv7s-deps,$(DEVS_OBJECTS))

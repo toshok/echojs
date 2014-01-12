@@ -96,17 +96,17 @@ exports.createBinopsInterface = (module, abi) ->
                 ">>>":        { get: -> abi.createExternalFunction module, "_ejs_op_ursh",        types.EjsValue, [types.EjsValue, types.EjsValue] }
                 "<<<":        { get: -> abi.createExternalFunction module, "_ejs_op_ulsh",        types.EjsValue, [types.EjsValue, types.EjsValue] }
                 "%":          { get: -> abi.createExternalFunction module, "_ejs_op_mod",         types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "+":          { get: -> only_reads_memory abi.createExternalFunction module, "_ejs_op_add",         types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "+":          { get: -> abi.createExternalFunction module, "_ejs_op_add",         types.EjsValue, [types.EjsValue, types.EjsValue] }
                 "*":          { get: -> abi.createExternalFunction module, "_ejs_op_mult",        types.EjsValue, [types.EjsValue, types.EjsValue] }
                 "/":          { get: -> abi.createExternalFunction module, "_ejs_op_div",         types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "<":          { get: -> returns_ejsval_bool only_reads_memory abi.createExternalFunction module, "_ejs_op_lt",          types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "-":          { get: -> abi.createExternalFunction module, "_ejs_op_sub",         types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "<":          { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_lt",          types.EjsValue, [types.EjsValue, types.EjsValue] }
                 "<=":         { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_le",          types.EjsValue, [types.EjsValue, types.EjsValue] }
                 ">":          { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_gt",          types.EjsValue, [types.EjsValue, types.EjsValue] }
                 ">=":         { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_ge",          types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "-":          { get: -> abi.createExternalFunction module, "_ejs_op_sub",         types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "===":        { get: -> returns_ejsval_bool does_not_throw does_not_access_memory abi.createExternalFunction module, "_ejs_op_strict_eq",   types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "===":        { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_strict_eq",   types.EjsValue, [types.EjsValue, types.EjsValue] }
                 "==":         { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_eq",          types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "!==":        { get: -> returns_ejsval_bool does_not_throw does_not_access_memory abi.createExternalFunction module, "_ejs_op_strict_neq",  types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "!==":        { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_strict_neq",  types.EjsValue, [types.EjsValue, types.EjsValue] }
                 "!=":         { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_neq",         types.EjsValue, [types.EjsValue, types.EjsValue] }
                 "instanceof": { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_instanceof",  types.EjsValue, [types.EjsValue, types.EjsValue] }
                 "in":         { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_in",          types.EjsValue, [types.EjsValue, types.EjsValue] }
@@ -124,4 +124,39 @@ exports.createAtomsInterface = (module) ->
                 "Object":    { get: -> module.getOrInsertGlobal           "_ejs_atom_Object",               types.EjsValue }
                 "Array":     { get: -> module.getOrInsertGlobal           "_ejs_atom_Array",                types.EjsValue }
         }
+
+exports.createGlobalsInterface = (module) ->
+        return Object.create null, {
+                "Object":       { get: -> module.getOrInsertGlobal           "_ejs_Object",                 types.EjsValue }
+                "Boolean":      { get: -> module.getOrInsertGlobal           "_ejs_Boolean",                types.EjsValue }
+                "String":       { get: -> module.getOrInsertGlobal           "_ejs_String",                 types.EjsValue }
+                "Number":       { get: -> module.getOrInsertGlobal           "_ejs_Number",                 types.EjsValue }
+                "Array":        { get: -> module.getOrInsertGlobal           "_ejs_Array",                  types.EjsValue }
+                "Date":         { get: -> module.getOrInsertGlobal           "_ejs_Date",                   types.EjsValue }
+                "Error":        { get: -> module.getOrInsertGlobal           "_ejs_Error",                  types.EjsValue }
+                "Function":     { get: -> module.getOrInsertGlobal           "_ejs_Function",               types.EjsValue }
+                "JSON":         { get: -> module.getOrInsertGlobal           "_ejs_JSON",                   types.EjsValue }
+                "Math":         { get: -> module.getOrInsertGlobal           "_ejs_Math",                   types.EjsValue }
+                "console":      { get: -> module.getOrInsertGlobal           "_ejs_console",                types.EjsValue }
+                "ArrayBuffer":  { get: -> module.getOrInsertGlobal           "_ejs_ArrayBuffer",            types.EjsValue }
+                "Int8Array":    { get: -> module.getOrInsertGlobal           "_ejs_Int8Array",              types.EjsValue }
+                "Uint16Array":  { get: -> module.getOrInsertGlobal           "_ejs_Uint16Array",            types.EjsValue }
+                "Int32Array":   { get: -> module.getOrInsertGlobal           "_ejs_Int32Array",             types.EjsValue }
+                "Float32Array": { get: -> module.getOrInsertGlobal           "_ejs_Float32Array",           types.EjsValue }
+                "XMLHttpRequest": { get: -> module.getOrInsertGlobal           "_ejs_XMLHttpRequest",       types.EjsValue }
+                "process":      { get: -> module.getOrInsertGlobal           "_ejs_Process",                types.EjsValue }
+                
+                "require":      { get: -> module.getOrInsertGlobal           "_ejs_require",                types.EjsValue }
+                "isNaN":        { get: -> module.getOrInsertGlobal           "_ejs_isNaN",                  types.EjsValue }
+                "isFinite":     { get: -> module.getOrInsertGlobal           "_ejs_isFinite",               types.EjsValue }
+                "parseInt":     { get: -> module.getOrInsertGlobal           "_ejs_parseInt",               types.EjsValue }
+                "parseFloat":   { get: -> module.getOrInsertGlobal           "_ejs_parseFloat",             types.EjsValue }
+                "decodeURI":    { get: -> module.getOrInsertGlobal           "_ejs_decodeURI",              types.EjsValue }
+                "encodeURI":    { get: -> module.getOrInsertGlobal           "_ejs_encodeURI",              types.EjsValue }
+                "decodeURIComponent":  { get: -> module.getOrInsertGlobal           "_ejs_decodeURIComponent",              types.EjsValue }
+                "encodeURIComponent":  { get: -> module.getOrInsertGlobal           "_ejs_encodeURIComponent",              types.EjsValue }
         
+                # kind of a hack, but since we don't define these...
+                "window":       { get: -> module.getOrInsertGlobal           "_ejs_undefined",              types.EjsValue }
+                "document":     { get: -> module.getOrInsertGlobal           "_ejs_undefined",              types.EjsValue }
+        }

@@ -4,9 +4,11 @@ ejs-webgl-constants-sorted.h
 *.o.osx
 *.o.sim
 *.o.armv7
+*.o.armv7s
 *.a.osx
 *.a.sim
 *.a.armv7
+*.a.armv7s
 *.a.ios
 *.a
 *.plist

@@ -1,4 +1,4 @@
-foo = {};
+var foo = {};
 foo.bar = {};
 foo.bar.baz = "hello world";
 

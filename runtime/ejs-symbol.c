@@ -20,23 +20,21 @@ static EJSObject* _ejs_symbol_specop_allocate ();
 static void    _ejs_symbol_specop_finalize (EJSObject* obj);
 static void    _ejs_symbol_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
 
-EJSSpecOps _ejs_symbol_specops = {
-    "Symbol",
-    _ejs_symbol_specop_get,
-    _ejs_symbol_specop_get_own_property,
-    _ejs_symbol_specop_get_property,
-    _ejs_symbol_specop_put,
-    _ejs_symbol_specop_can_put,
-    _ejs_symbol_specop_has_property,
-    _ejs_symbol_specop_delete,
-    _ejs_symbol_specop_default_value,
-    _ejs_symbol_specop_define_own_property,
-    NULL, /* [[HasInstance]] */
-
-    _ejs_symbol_specop_allocate,
-    _ejs_symbol_specop_finalize,
-    _ejs_symbol_specop_scan
-};
+EJS_DEFINE_CLASS(symbol, "Symbol",
+                 _ejs_symbol_specop_get,
+                 _ejs_symbol_specop_get_own_property,
+                 _ejs_symbol_specop_get_property,
+                 _ejs_symbol_specop_put,
+                 _ejs_symbol_specop_can_put,
+                 _ejs_symbol_specop_has_property,
+                 _ejs_symbol_specop_delete,
+                 _ejs_symbol_specop_default_value,
+                 _ejs_symbol_specop_define_own_property,
+                 OP_INHERIT, // has_instance
+                 _ejs_symbol_specop_allocate,
+                 _ejs_symbol_specop_finalize,
+                 _ejs_symbol_specop_scan
+                 )
 
 void
 _ejs_symbol_init(ejsval global)

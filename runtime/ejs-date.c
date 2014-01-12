@@ -8,36 +8,25 @@
 #include "ejs-date.h"
 #include "ejs-string.h"
 
-static ejsval  _ejs_date_specop_get (ejsval obj, ejsval propertyName);
-static EJSPropertyDesc* _ejs_date_specop_get_own_property (ejsval obj, ejsval propertyName);
-static EJSPropertyDesc* _ejs_date_specop_get_property (ejsval obj, ejsval propertyName);
-static void    _ejs_date_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
-static EJSBool _ejs_date_specop_can_put (ejsval obj, ejsval propertyName);
-static EJSBool _ejs_date_specop_has_property (ejsval obj, ejsval propertyName);
-static EJSBool _ejs_date_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
-static ejsval  _ejs_date_specop_default_value (ejsval obj, const char *hint);
-static EJSBool _ejs_date_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
+#include <string.h>
+
 static EJSObject* _ejs_date_specop_allocate ();
-static void    _ejs_date_specop_finalize (EJSObject* obj);
-static void    _ejs_date_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
 
-EJSSpecOps _ejs_date_specops = {
-    "Date",
-    _ejs_date_specop_get,
-    _ejs_date_specop_get_own_property,
-    _ejs_date_specop_get_property,
-    _ejs_date_specop_put,
-    _ejs_date_specop_can_put,
-    _ejs_date_specop_has_property,
-    _ejs_date_specop_delete,
-    _ejs_date_specop_default_value,
-    _ejs_date_specop_define_own_property,
-    NULL, /* [[HasInstance]] */
-
-    _ejs_date_specop_allocate,
-    _ejs_date_specop_finalize,
-    _ejs_date_specop_scan,
-};
+EJS_DEFINE_CLASS(date, "Date",
+                 OP_INHERIT, // get
+                 OP_INHERIT, // get_own_property
+                 OP_INHERIT, // get_property
+                 OP_INHERIT, // put
+                 OP_INHERIT, // can_put
+                 OP_INHERIT, // has_property
+                 OP_INHERIT, // delete
+                 OP_INHERIT, // default_value
+                 OP_INHERIT, // define_own_property
+                 OP_INHERIT, // has_instance
+                 _ejs_date_specop_allocate,
+                 OP_INHERIT, // finalize
+                 OP_INHERIT  // scan
+                 )
 
 ejsval
 _ejs_date_unix_now ()
@@ -66,7 +55,9 @@ _ejs_Date_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     if (EJSVAL_IS_UNDEFINED(_this)) {
         // called as a function
         if (argc == 0) {
-            return _ejs_date_unix_now();
+            // XXX we shouldn't be creating a date object here and immediately throwing it away.
+            // instead just refactor and create the string directly
+            return ToString(_ejs_date_unix_now());
         }
         else {
             EJS_NOT_IMPLEMENTED();
@@ -82,24 +73,30 @@ _ejs_Date_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
                 EJS_NOT_IMPLEMENTED();
         }
         else {
-#if wrong
-            // there are all sorts of validation steps here that are missing from ejs
-            date->tm.tm_year = (int)(ToDouble(args[0]) - 1900);
-            date->tm.tm_mon = (int)(ToDouble(args[1]));
-            if (argc > 2) date->tm.tm_mday = (int)(ToDouble(args[2]));
-            if (argc > 3) date->tm.tm_hour = (int)(ToDouble(args[3]));
-            if (argc > 4) date->tm.tm_min = (int)(ToDouble(args[4]));
-            if (argc > 5) date->tm.tm_sec = (int)(ToDouble(args[5]));
+            struct tm tm;
+            int ms = 0;
 
-            int ms = (int)(ToDouble(args[6]));
-            if (ms > 1000) {
-                date->tm.tm_sec += ms / 1000;
-                ms = ms % 1000;
+            memset (&tm, 0, sizeof(tm));
+            // there are all sorts of validation steps here that are missing from ejs
+            tm.tm_year = ToInteger(args[0]) - 1900;
+            tm.tm_mon = ToInteger(args[1]);
+            
+            tm.tm_mday = (argc > 2) ? ToInteger(args[2]) : 1;
+            tm.tm_hour = (argc > 3) ? ToInteger(args[3]) : 0;
+            tm.tm_hour = (argc > 4) ? ToInteger(args[4]) : 0;
+            tm.tm_sec  = (argc > 5) ? ToInteger(args[5]) : 0;
+   
+            if (argc > 6) {
+                ms = ToInteger(args[6]);
+                if (ms > 1000) {
+                    tm.tm_sec += ms / 1000;
+                    ms = ms % 1000;
+                }
             }
-            // XXX more ms here
-#else
-    EJS_NOT_IMPLEMENTED();
-#endif
+
+            time_t time_in_sec = mktime(&tm);
+            date->tv.tv_sec = time_in_sec;
+            date->tv.tv_usec = ms * 1000;
         }
       
         return _this;
@@ -109,33 +106,37 @@ _ejs_Date_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 static ejsval
 _ejs_Date_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-#if wrong
     EJSDate *date = (EJSDate*)EJSVAL_TO_OBJECT(_this);
+    struct tm tm;
+
+    memset (&tm, 0, sizeof(tm));
+
+    time_t time_in_sec = date->tv.tv_sec;
+
+    localtime_r (&time_in_sec, &tm);
 
     // returns strings of the format 'Tue Aug 28 2012 16:45:58 GMT-0700 (PDT)'
 
     char date_buf[256];
-    if (date->tm.tm_gmtoff == 0)
-        strftime (date_buf, sizeof(date_buf), "%a %b %d %Y %T GMT", &date->tm);
+    if (tm.tm_gmtoff == 0)
+        strftime (date_buf, sizeof(date_buf), "%a %b %d %Y %T GMT", &tm);
     else
-        strftime (date_buf, sizeof(date_buf), "%a %b %d %Y %T GMT%z (%Z)", &date->tm);
+        strftime (date_buf, sizeof(date_buf), "%a %b %d %Y %T GMT%z (%Z)", &tm);
 
     return _ejs_string_new_utf8 (date_buf);
-#else
-    EJS_NOT_IMPLEMENTED();
-#endif
 }
 
 static ejsval
 _ejs_Date_prototype_getTimezoneOffset (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-#if wrong
     EJSDate *date = (EJSDate*)EJSVAL_TO_OBJECT(_this);
+    struct tm tm;
 
-    return NUMBER_TO_EJSVAL (date->tm.tm_gmtoff);
-#else
-    EJS_NOT_IMPLEMENTED();
-#endif
+    time_t time_in_sec = date->tv.tv_sec;
+
+    localtime_r (&time_in_sec, &tm);
+
+    return NUMBER_TO_EJSVAL (tm.tm_gmtoff);
 }
 
 static ejsval
@@ -163,74 +164,8 @@ _ejs_date_init(ejsval global)
 #undef PROTO_METHOD
 }
 
-static ejsval
-_ejs_date_specop_get (ejsval obj, ejsval propertyName)
-{
-    return _ejs_object_specops.get (obj, propertyName);
-}
-
-static EJSPropertyDesc*
-_ejs_date_specop_get_own_property (ejsval obj, ejsval propertyName)
-{
-    return _ejs_object_specops.get_own_property (obj, propertyName);
-}
-
-static EJSPropertyDesc*
-_ejs_date_specop_get_property (ejsval obj, ejsval propertyName)
-{
-    return _ejs_object_specops.get_property (obj, propertyName);
-}
-
-static void
-_ejs_date_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag)
-{
-    _ejs_object_specops.put (obj, propertyName, val, flag);
-}
-
-static EJSBool
-_ejs_date_specop_can_put (ejsval obj, ejsval propertyName)
-{
-    return _ejs_object_specops.can_put (obj, propertyName);
-}
-
-static EJSBool
-_ejs_date_specop_has_property (ejsval obj, ejsval propertyName)
-{
-    return _ejs_object_specops.has_property (obj, propertyName);
-}
-
-static EJSBool
-_ejs_date_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
-{
-    return _ejs_object_specops._delete (obj, propertyName, flag);
-}
-
-static ejsval
-_ejs_date_specop_default_value (ejsval obj, const char *hint)
-{
-    return _ejs_object_specops.default_value (obj, hint);
-}
-
-static EJSBool
-_ejs_date_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag)
-{
-    return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
-}
-
 static EJSObject*
 _ejs_date_specop_allocate()
 {
     return (EJSObject*)_ejs_gc_new (EJSDate);
-}
-
-static void
-_ejs_date_specop_finalize (EJSObject* obj)
-{
-    _ejs_object_specops.finalize (obj);
-}
-
-static void
-_ejs_date_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
-{
-    _ejs_object_specops.scan (obj, scan_func);
 }

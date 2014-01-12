@@ -81,10 +81,12 @@ _ejs_Process_cwd (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return _ejs_string_new_utf8(cwd);
 }
 
+ejsval _ejs_Process EJSVAL_ALIGNMENT;
+
 void
 _ejs_process_init(ejsval global, uint32_t argc, char **argv)
 {
-    ejsval _ejs_Process = _ejs_object_new (_ejs_null, &_ejs_object_specops);
+    _ejs_Process = _ejs_object_new (_ejs_null, &_ejs_object_specops);
     _ejs_object_setprop (global, _ejs_atom_process, _ejs_Process);
 
     ejsval _argv = _ejs_array_new (argc, EJS_FALSE);

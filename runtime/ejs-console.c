@@ -54,7 +54,8 @@ output (FILE *outfile, uint32_t argc, ejsval *args)
             }
         }
         else if (EJSVAL_IS_ERROR(args[i])) {
-            ejsval strval = _ejs_object_getprop(args[i], _ejs_atom_name);
+            ejsval strval = ToString(args[i]);
+
             char* strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(strval));
             OUTPUT ("[%s]", strval_utf8);
             free (strval_utf8);
@@ -103,11 +104,12 @@ _ejs_console_warn (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return output (stderr, argc, args);
 }
 
+ejsval _ejs_console EJSVAL_ALIGNMENT;
 
 void
 _ejs_console_init(ejsval global)
 {
-    ejsval _ejs_console = _ejs_object_new (_ejs_null, &_ejs_object_specops);
+    _ejs_console = _ejs_object_new (_ejs_null, &_ejs_object_specops);
     _ejs_object_setprop (global, _ejs_atom_console, _ejs_console);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_console, x, _ejs_console_##x)

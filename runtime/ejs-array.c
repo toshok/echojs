@@ -17,34 +17,29 @@
 
 static ejsval           _ejs_array_specop_get (ejsval obj, ejsval propertyName);
 static EJSPropertyDesc* _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName);
-static EJSPropertyDesc* _ejs_array_specop_get_property (ejsval obj, ejsval propertyName);
 static void             _ejs_array_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
-static EJSBool          _ejs_array_specop_can_put (ejsval obj, ejsval propertyName);
 static EJSBool          _ejs_array_specop_has_property (ejsval obj, ejsval propertyName);
 static EJSBool          _ejs_array_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
-static ejsval           _ejs_array_specop_default_value (ejsval obj, const char *hint);
 static EJSBool          _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
 static EJSObject*       _ejs_array_specop_allocate ();
 static void             _ejs_array_specop_finalize (EJSObject* obj);
 static void             _ejs_array_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
 
-EJSSpecOps _ejs_array_specops = {
-    "Array",
-    _ejs_array_specop_get,
-    _ejs_array_specop_get_own_property,
-    _ejs_array_specop_get_property,
-    _ejs_array_specop_put,
-    _ejs_array_specop_can_put,
-    _ejs_array_specop_has_property,
-    _ejs_array_specop_delete,
-    _ejs_array_specop_default_value,
-    _ejs_array_specop_define_own_property,
-    NULL, /* [[HasInstance]] */
-
-    _ejs_array_specop_allocate,
-    _ejs_array_specop_finalize,
-    _ejs_array_specop_scan
-};
+EJS_DEFINE_CLASS(array, "Array",
+                 _ejs_array_specop_get,
+                 _ejs_array_specop_get_own_property,
+                 OP_INHERIT, // get_property
+                 _ejs_array_specop_put,
+                 OP_INHERIT, // can_put
+                 _ejs_array_specop_has_property,
+                 _ejs_array_specop_delete,
+                 OP_INHERIT, // default_value
+                 _ejs_array_specop_define_own_property,
+                 OP_INHERIT, // has_instance
+                 _ejs_array_specop_allocate,
+                 _ejs_array_specop_finalize,
+                 _ejs_array_specop_scan
+                 )
 
 EJSSpecOps _ejs_sparsearray_specops;
 
@@ -1345,7 +1340,6 @@ void
 _ejs_array_init(ejsval global)
 {
     _ejs_sparsearray_specops =  _ejs_array_specops;
-    _ejs_sparsearray_specops.class_name = "Array";
 
     _ejs_Array = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Array, (EJSClosureFunc)_ejs_Array_impl);
 
@@ -1454,12 +1448,6 @@ _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName)
     return _ejs_object_specops.get_own_property (obj, propertyName);
 }
 
-static EJSPropertyDesc*
-_ejs_array_specop_get_property (ejsval obj, ejsval propertyName)
-{
-    return _ejs_object_specops.get_property (obj, propertyName);
-}
-
 static void
 _ejs_array_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag)
 {
@@ -1510,12 +1498,6 @@ _ejs_array_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag
 }
 
 static EJSBool
-_ejs_array_specop_can_put (ejsval obj, ejsval propertyName)
-{
-    return _ejs_object_specops.can_put (obj, propertyName);
-}
-
-static EJSBool
 _ejs_array_specop_has_property (ejsval obj, ejsval propertyName)
 {
     // check if propertyName is an integer, or a string that we can convert to an int
@@ -1553,12 +1535,6 @@ _ejs_array_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
     if (idx < EJS_ARRAY_LEN(obj))
         EJS_DENSE_ARRAY_ELEMENTS(obj)[idx] = _ejs_undefined;
     return EJS_TRUE;
-}
-
-static ejsval
-_ejs_array_specop_default_value (ejsval obj, const char *hint)
-{
-    return _ejs_object_specops.default_value (obj, hint);
 }
 
 static EJSBool

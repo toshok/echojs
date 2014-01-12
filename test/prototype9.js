@@ -1,6 +1,6 @@
 function f() {}
 
-if (typeof console !== "undefined") print = console.log
+if (typeof console !== "undefined") var print = console.log
 
 print (typeof f); // "function"
 print (typeof f.prototype); // "object""

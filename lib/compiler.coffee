@@ -133,6 +133,7 @@ class ABI
                 
         createCall: (fromFunction, callee, argv, callname) -> ir.createCall callee, argv, callname
         createInvoke: (fromFunction, callee, argv, normal_block, exc_block, callname) -> ir.createInvoke callee, argv, normal_block, exc_block, callname
+        createRet: (fromFunction, value) -> ir.createRet value
         createExternalFunction: (inModule, name, ret_type, param_types) -> inModule.getOrInsertExternalFunction name, ret_type, param_types
         createFunction: (inModule, name, ret_type, param_types) -> inModule.getOrInsertFunction name, ret_type, param_types
         createFunctionType: (ret_type, param_types) -> llvm.FunctionType.get ret_type, param_types
@@ -161,13 +162,13 @@ class ArmABI extends ABI
                         sret_alloca = @createAlloca fromFunction, types.EjsValue, "sret"
                         argv.unshift sret_alloca
 
-                        sret_as_i8 = ir.createBitCast sret_alloca, types.int8Pointer, "sret_as_i8"
-                        ir.createLifetimeStart sret_as_i8, consts.int64(8) #sizeof(ejsval)
+                        #sret_as_i8 = ir.createBitCast sret_alloca, types.int8Pointer, "sret_as_i8"
+                        #ir.createLifetimeStart sret_as_i8, consts.int64(8) #sizeof(ejsval)
                         call = super fromFunction, callee, argv, ""
                         call.setStructRet()
 
                         rv = ir.createLoad sret_alloca, callname
-                        ir.createLifetimeEnd sret_as_i8, consts.int64(8) #sizeof(ejsval)
+                        #ir.createLifetimeEnd sret_as_i8, consts.int64(8) #sizeof(ejsval)
                         rv
                 else
                         super
@@ -177,18 +178,22 @@ class ArmABI extends ABI
                         sret_alloca = @createAlloca fromFunction, types.EjsValue, "sret"
                         argv.unshift sret_alloca
 
-                        sret_as_i8 = ir.createBitCast sret_alloca, types.int8Pointer, "sret_as_i8"
-                        ir.createLifetimeStart sret_as_i8, consts.int64(8) #sizeof(ejsval)
+                        #sret_as_i8 = ir.createBitCast sret_alloca, types.int8Pointer, "sret_as_i8"
+                        #ir.createLifetimeStart sret_as_i8, consts.int64(8) #sizeof(ejsval)
                         call = super fromFunction, callee, argv, normal_block, exc_block, ""
                         call.setStructRet()
 
                         ir.setInsertPoint normal_block
                         rv = ir.createLoad sret_alloca, callname
-                        ir.createLifetimeEnd sret_as_i8, consts.int64(8) #sizeof(ejsval)
+                        #ir.createLifetimeEnd sret_as_i8, consts.int64(8) #sizeof(ejsval)
                         rv
                 else
                         super
 
+        createRet: (fromFunction, value) ->
+                ir.createStore value, fromFunction.args[0]
+                ir.createRetVoid()
+        
         createExternalFunction: (inModule, name, ret_type, param_types) ->
                 @createFunction inModule, name, ret_type, param_types, true
                 
@@ -278,6 +283,7 @@ class LLVMIRVisitor extends TreeVisitor
                 @ejs_runtime = runtime.createInterface module, @abi
                 @ejs_binops = runtime.createBinopsInterface module, @abi
                 @ejs_atoms = runtime.createAtomsInterface module
+                @ejs_globals = runtime.createGlobalsInterface module
 
                 @module_atoms = Object.create null
                 @literalInitializationFunction = @module.getOrInsertFunction "_ejs_module_init_string_literals_#{@filename}", types.void, []
@@ -293,7 +299,7 @@ class LLVMIRVisitor extends TreeVisitor
 
                 @doInsideBBlock entry_bb, => ir.createBr return_bb
                 @doInsideBBlock return_bb, =>
-                        @createCall @ejs_runtime.log, [(consts.string ir, "done with literal initialization")], ""
+                        #@createCall @ejs_runtime.log, [(consts.string ir, "done with literal initialization")], ""
                         ir.createRetVoid()
 
                 @literalInitializationBB = entry_bb
@@ -328,7 +334,9 @@ class LLVMIRVisitor extends TreeVisitor
                         ir.createStore consts.int64_lowhi(0xfff98000, if n then 0x00000001 else 0x000000000), alloca_as_int64
                 else
                         ir.createStore consts.int64_lowhi(0xffffff83, if n then 0x00000001 else 0x00000000), alloca_as_int64
-                ir.createLoad bool_alloca, "#{name}_load"
+                rv = ir.createLoad bool_alloca, "#{name}_load"
+                rv._ejs_returns_ejsval_bool = true
+                rv
 
         loadDoubleEjsValue: (n) ->
                 c = llvm.ConstantFP.getDouble n
@@ -369,8 +377,13 @@ class LLVMIRVisitor extends TreeVisitor
                 @createCall @ejs_runtime.global_setprop, [c, value], "globalpropstore_#{pname}"
 
         loadGlobal: (prop) ->
-                pname = @getAtom prop.name
-                @createCall @ejs_runtime.global_getprop, [pname], "globalloadprop_#{prop.name}"
+                gname = prop.name
+                
+                if @options.frozen_global and hasOwn.call @ejs_globals, gname
+                        return ir.createLoad @ejs_globals[prop.name], "load-#{gname}"
+
+                pname = @getAtom gname
+                @createCall @ejs_runtime.global_getprop, [pname], "globalloadprop_#{gname}"
 
         visitWithScope: (scope, children) ->
                 @scope_stack.push scope
@@ -594,7 +607,7 @@ class LLVMIRVisitor extends TreeVisitor
         generateCondBr: (exp, then_bb, else_bb) ->
                 exp_value = @visit exp
                 if exp_value._ejs_returns_ejsval_bool
-                        cmp = @createEjsvalCmpEq exp_value, (@loadBoolEjsValue false), "cmpresult"
+                        cmp = @createEjsvalCmpEq exp_value, @loadBoolEjsValue(false), "cmpresult"
                 else
                         cond_truthy = @createCall @ejs_runtime.truthy, [exp_value], "cond_truthy"
                         cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
@@ -861,17 +874,9 @@ class LLVMIRVisitor extends TreeVisitor
                 rhs = n.right
 
                 rhvalue = @visit rhs
+
                 if n.operator.length is 2
-                        # cribbed from visitBinaryExpression
-                        callee = @ejs_binops[n.operator[0]]
-                        throw new Error "unhandled binary operator '#{n.operator}'" if not callee
-
-                        lhvalue = @visit lhs
-                        if @options.record_types
-                                @createCall @ejs_runtime.record_binop, [(consts.int32 @genRecordId()), (consts.string ir, n.operator[0]), lhvalue, rhvalue], ""
-                                
-                        rhvalue = @createCall callee, [lhvalue, rhvalue], "result_#{n.operator[0]}", !callee.doesNotThrow
-
+                        throw new Error "binary assignment operators '#{n.operator}' shouldn't exist at this point"
                 
                 if @options.record_types
                         @createCall @ejs_runtime.record_assignment, [(consts.int32 @genRecordId()), rhvalue], ""
@@ -1057,11 +1062,7 @@ class LLVMIRVisitor extends TreeVisitor
 
         createRet: (x) ->
                 #@createCall @ejs_runtime.log, [consts.string(ir, "leaving #{@currentFunction.name}")], ""
-                if @options.target is "dev"
-                        ir.createStore x, @currentFunction.args[0]
-                        ir.createRetVoid()
-                else
-                        ir.createRet x
+                @abi.createRet @currentFunction, x
                         
         visitUnaryExpression: (n) ->
                 debug.log -> "operator = '#{n.operator}'"
@@ -1609,10 +1610,12 @@ class LLVMIRVisitor extends TreeVisitor
                 new_local_val
                                 
         handleGetGlobal: (exp, opencode) ->
-                pname = @getAtom exp.arguments[0].name
-                @createCall @ejs_runtime.global_getprop, [pname], "globalloadprop_#{exp.arguments[0].name}"
+                @loadGlobal exp.arguments[0]
         
         handleSetGlobal: (exp, opencode) ->
+                if @options.frozen_global
+                        throw new SyntaxError "cannot set global property '#{exp.arguments[0].name}' when using --frozen-global"
+                        
                 pname = @getAtom exp.arguments[0].name
                 value = @visit exp.arguments[1]
 
@@ -1920,7 +1923,7 @@ class LLVMIRVisitor extends TreeVisitor
                 arg = @visitOrNull exp.arguments[0]
                 if opencode and @options.target_pointer_size is 64
                         mask = @createEjsvalAnd arg, consts.int64_lowhi(0xffff8000, 0x00000000), "mask.i"
-                        @createEjsBoolSelect @createEjsvalICmpEq mask, consts.int64_lowhi(0xfff98000, 0x00000000), "cmpresult"
+                        @createEjsBoolSelect ir.createICmpEq mask, consts.int64_lowhi(0xfff98000, 0x00000000), "cmpresult"
                 else
                         @createCall @ejs_runtime.typeof_is_boolean,   [arg], "is_boolean", false
 
@@ -2001,7 +2004,7 @@ insert_toplevel_func = (tree, filename) ->
         tree
 
 exports.compile = (tree, base_output_filename, source_filename, options) ->
-        abi = if options.target is "dev" then new ArmABI() else new ABI()
+        abi = if (options.target is "armv7" or options.target is "armv7s") then new ArmABI() else new ABI()
                 
         tree = insert_toplevel_func tree, source_filename
 

@@ -10,36 +10,24 @@
 #include "ejs-function.h"
 #include "ejs-string.h"
 
-static ejsval  _ejs_number_specop_get (ejsval obj, ejsval propertyName);
-static EJSPropertyDesc* _ejs_number_specop_get_own_property (ejsval obj, ejsval propertyName);
-static EJSPropertyDesc* _ejs_number_specop_get_property (ejsval obj, ejsval propertyName);
-static void    _ejs_number_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
-static EJSBool _ejs_number_specop_can_put (ejsval obj, ejsval propertyName);
-static EJSBool _ejs_number_specop_has_property (ejsval obj, ejsval propertyName);
-static EJSBool _ejs_number_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
 static ejsval  _ejs_number_specop_default_value (ejsval obj, const char *hint);
-static EJSBool _ejs_number_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
 static EJSObject* _ejs_number_specop_allocate ();
-static void    _ejs_number_specop_finalize (EJSObject* obj);
-static void    _ejs_number_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
 
-EJSSpecOps _ejs_number_specops = {
-    "Number",
-    _ejs_number_specop_get,
-    _ejs_number_specop_get_own_property,
-    _ejs_number_specop_get_property,
-    _ejs_number_specop_put,
-    _ejs_number_specop_can_put,
-    _ejs_number_specop_has_property,
-    _ejs_number_specop_delete,
-    _ejs_number_specop_default_value,
-    _ejs_number_specop_define_own_property,
-    NULL, /* [[HasInstance]] */
-
-    _ejs_number_specop_allocate,
-    _ejs_number_specop_finalize,
-    _ejs_number_specop_scan
-};
+EJS_DEFINE_CLASS(number, "Number",
+                 OP_INHERIT, // get
+                 OP_INHERIT, // get_own_property
+                 OP_INHERIT, // get_property
+                 OP_INHERIT, // put
+                 OP_INHERIT, // can_put
+                 OP_INHERIT, // has_property
+                 OP_INHERIT, // delete
+                 _ejs_number_specop_default_value,
+                 OP_INHERIT, // define_own_property
+                 OP_INHERIT, // has_instance
+                 _ejs_number_specop_allocate,
+                 OP_INHERIT, // finalize
+                 OP_INHERIT  // scan
+                 )
 
 ejsval _ejs_Number EJSVAL_ALIGNMENT;
 ejsval _ejs_Number_proto EJSVAL_ALIGNMENT;
@@ -103,49 +91,6 @@ _ejs_number_init(ejsval global)
 #undef PROTO_METHOD
 }
 
-
-static ejsval
-_ejs_number_specop_get (ejsval obj, ejsval propertyName)
-{
-    return _ejs_object_specops.get (obj, propertyName);
-}
-
-static EJSPropertyDesc*
-_ejs_number_specop_get_own_property (ejsval obj, ejsval propertyName)
-{
-    return _ejs_object_specops.get_own_property (obj, propertyName);
-}
-
-static EJSPropertyDesc*
-_ejs_number_specop_get_property (ejsval obj, ejsval propertyName)
-{
-    return _ejs_object_specops.get_property (obj, propertyName);
-}
-
-static void
-_ejs_number_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag)
-{
-    _ejs_object_specops.put (obj, propertyName, val, flag);
-}
-
-static EJSBool
-_ejs_number_specop_can_put (ejsval obj, ejsval propertyName)
-{
-    return _ejs_object_specops.can_put (obj, propertyName);
-}
-
-static EJSBool
-_ejs_number_specop_has_property (ejsval obj, ejsval propertyName)
-{
-    return _ejs_object_specops.has_property (obj, propertyName);
-}
-
-static EJSBool
-_ejs_number_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
-{
-    return _ejs_object_specops._delete (obj, propertyName, flag);
-}
-
 static ejsval
 _ejs_number_specop_default_value (ejsval obj, const char *hint)
 {
@@ -160,26 +105,11 @@ _ejs_number_specop_default_value (ejsval obj, const char *hint)
         return _ejs_object_specops.default_value (obj, hint);
 }
 
-static EJSBool
-_ejs_number_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag)
-{
-    return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
-}
-
 EJSObject*
 _ejs_number_specop_allocate()
 {
     return (EJSObject*)_ejs_gc_new (EJSNumber);
 }
 
-static void
-_ejs_number_specop_finalize (EJSObject* obj)
-{
-    _ejs_object_specops.finalize (obj);
-}
 
-static void
-_ejs_number_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
-{
-    _ejs_object_specops.scan (obj, scan_func);
-}
+

@@ -655,6 +655,26 @@ _ejs_object_create (ejsval proto)
     return objval;
 }
 
+void
+_ejs_Class_initialize (EJSSpecOps *child, EJSSpecOps* parent)
+{
+#define MAYBE_INHERIT(p) if ((void*)(child->p) == OP_INHERIT) child->p = parent->p;  EJS_ASSERT ((void*)(child->p) != OP_INHERIT)
+
+    MAYBE_INHERIT(get);
+    MAYBE_INHERIT(get_own_property);
+    MAYBE_INHERIT(get_property);
+    MAYBE_INHERIT(put);
+    MAYBE_INHERIT(can_put);
+    MAYBE_INHERIT(has_property);
+    MAYBE_INHERIT(_delete);
+    MAYBE_INHERIT(default_value);
+    MAYBE_INHERIT(define_own_property);
+    MAYBE_INHERIT(has_instance);
+    MAYBE_INHERIT(allocate);
+    MAYBE_INHERIT(finalize);
+    MAYBE_INHERIT(scan);
+}
+
 ejsval
 _ejs_number_new (double value)
 {
@@ -777,6 +797,9 @@ _ejs_dump_value (ejsval val)
 {
     if (EJSVAL_IS_UNDEFINED(val)) {
         _ejs_log ("undefined\n");
+    }
+    else if (EJSVAL_IS_NULL(val)) {
+        _ejs_log ("null\n");
     }
     else if (EJSVAL_IS_NUMBER(val)) {
         _ejs_log ("number: " EJS_NUMBER_FORMAT "\n", EJSVAL_TO_NUMBER(val));

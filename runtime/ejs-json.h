@@ -9,7 +9,7 @@
 
 EJS_BEGIN_DECLS
 
-extern ejsval _ejs_Json;
+extern ejsval _ejs_JSON;
 
 void _ejs_json_init(ejsval global);
 

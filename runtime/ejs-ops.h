@@ -66,10 +66,15 @@ EJSBool _ejs_truthy (ejsval val);
 
 void _ejs_throw (ejsval exp);
 
-ejsval _ejs_isNaN (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
-ejsval _ejs_isFinite (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
-ejsval _ejs_parseInt (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
-ejsval _ejs_parseFloat (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
+extern ejsval _ejs_isNaN;
+extern ejsval _ejs_isFinite;
+extern ejsval _ejs_parseInt;
+extern ejsval _ejs_parseFloat;
+
+ejsval _ejs_isNaN_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
+ejsval _ejs_isFinite_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
+ejsval _ejs_parseInt_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
+ejsval _ejs_parseFloat_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
 
 EJS_END_DECLS
 

@@ -1,6 +1,6 @@
 var baz = console.invalidfield;
 
-foo = {};
+var foo = {};
 foo.bar = {};
 foo.bar.baz = "hello world";
 foo.bar.fweep = function() { return 1; };

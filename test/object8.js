@@ -1,4 +1,4 @@
-if (typeof(console) == "object") print = console.log;
+if (typeof(console) == "object") var print = console.log;
 
 var a = {b : 15};
 

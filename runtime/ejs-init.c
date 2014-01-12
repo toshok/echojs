@@ -44,7 +44,6 @@ const ejsval _ejs_one EJSVAL_ALIGNMENT = STATIC_BUILD_DOUBLE_EJSVAL(1);
 
 ejsval _ejs_global EJSVAL_ALIGNMENT;
 
-
 /* useful strings literals */
 #include "ejs-atoms-gen.c"
 
@@ -55,9 +54,41 @@ _ejs_eval (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
   return _ejs_undefined;
 }
 
+static void
+_ejs_init_classes()
+{
+    _ejs_Class_initialize (&_ejs_arguments_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_array_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_boolean_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_date_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_error_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_function_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_map_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_number_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_regexp_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_string_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_symbol_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_arraybuffer_specops, &_ejs_object_specops);
+#if IOS
+    _ejs_Class_initialize (&WebGLRenderingContext_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&WebGLBuffer_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&WebGLFramebuffer_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&WebGLRenderbuffer_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&WebGLProgram_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&WebGLShader_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&WebGLTexture_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&WebGLActiveInfo_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&WebGLUniformLocation_specops, &_ejs_object_specops);
+#endif
+    _ejs_Class_initialize (&_ejs_xmlhttprequest_specops, &_ejs_object_specops);
+}
+
 void
 _ejs_init(int argc, char** argv)
 {
+    // process class inheritance
+    _ejs_init_classes();
+
     // initialize our atoms before anything else
     _ejs_init_static_strings();
 
@@ -102,7 +133,10 @@ _ejs_init(int argc, char** argv)
     _ejs_webgl_init(_ejs_global);
 #endif
 
-#define GLOBAL_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_global, x, _ejs_##x)
+#define GLOBAL_METHOD(x) EJS_MACRO_START                                \
+    _ejs_##x = _ejs_function_new_native (_ejs_null, _ejs_atom_##x, (EJSClosureFunc)_ejs_##x##_impl); \
+    _ejs_object_setprop (_ejs_global, _ejs_atom_##x, _ejs_##x);         \
+    EJS_MACRO_END
 
     GLOBAL_METHOD(isNaN);
     GLOBAL_METHOD(isFinite);

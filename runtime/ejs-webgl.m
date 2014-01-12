@@ -203,7 +203,7 @@ webglactiveinfo_get_name (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 	return _ejs_string_new_utf8 ([info name]);
 }
 
-#define SPEW(x) x
+#define SPEW(x)
 #define CHECK_GL_ERRORS 1
 
 #define WEBGL_UNPACK_FLIP_Y_WEBGL 0x9240
@@ -303,7 +303,7 @@ JSMETHOD (bindFramebuffer) {
 	// FIXME check args
 	GLenum target = (GLenum)EJSVAL_TO_NUMBER (args[0]);
 	GLuint framebuffer = 0;
-	if (!EJSVAL_IS_PRIMITIVE(args[1])) {
+	if (EJSVAL_IS_OBJECT(args[1])) {
 		WebGLFramebuffer *buffer = (WebGLFramebuffer*)get_peer (args[1]);
 		framebuffer = [buffer glId];
 	}
@@ -322,7 +322,7 @@ JSMETHOD (bindRenderbuffer) {
 	// FIXME check args
 	GLenum target = (GLenum)EJSVAL_TO_NUMBER (args[0]);
 	GLuint buffer_id = 0;
-	if (!EJSVAL_IS_PRIMITIVE (args[1])) {
+	if (EJSVAL_IS_OBJECT (args[1])) {
 		WebGLRenderbuffer *buffer = (WebGLRenderbuffer*)get_peer (args[1]);
 		buffer_id = [buffer glId];
 	}
@@ -1425,6 +1425,7 @@ JSMETHOD (texImage2D) {
 		format = (GLenum)EJSVAL_TO_NUMBER(args[3]);
 		type = (GLenum)EJSVAL_TO_NUMBER(args[4]);
 		NSLog(@"1");
+        _ejs_dump_value (args[5]);
 		UIImage* uiimage = (UIImage*)get_objc_id ([[CKValue valueWithJSValue:args[5]] objectValue]);
 		NSLog(@"2, uiimage = %@", uiimage);
         
@@ -1572,7 +1573,7 @@ uniform_f (size_t c, uint32_t argc, ejsval *args)
 #if notyet
 	//if (EJSVAL_IS_OBJECTOfClass (ctx, args[0], WebGLUniformLocationClass)) {
 #endif
-	if (!EJSVAL_IS_PRIMITIVE (args[0])) {
+	if (EJSVAL_IS_OBJECT (args[0])) {
 		loc = (int)get_peer (args[0]);
 	}
 	else if (EJSVAL_IS_NUMBER (args[0])) {
@@ -1624,7 +1625,7 @@ uniform_i (size_t c, uint32_t argc, ejsval *args)
 #if notyet
 	//if (EJSVAL_IS_OBJECTOfClass (ctx, args[0], WebGLUniformLocationClass)) {
 #endif
-	if (!EJSVAL_IS_PRIMITIVE (args[0])) {
+	if (EJSVAL_IS_OBJECT (args[0])) {
 		loc = (int)get_peer (args[0]);
 	}
 	else if (EJSVAL_IS_NUMBER (args[0])) {
@@ -1680,7 +1681,7 @@ uniform_fv (size_t c, uint32_t argc, ejsval *args)
 #if notyet
 	//if (EJSVAL_IS_OBJECTOfClass (ctx, args[0], WebGLUniformLocationClass)) {
 #endif
-	if (!EJSVAL_IS_PRIMITIVE (args[0])) {
+	if (EJSVAL_IS_OBJECT (args[0])) {
 		loc = (int)get_peer (args[0]);
 	}
 	else if (EJSVAL_IS_NUMBER (args[0])) {
@@ -1764,7 +1765,7 @@ uniform_iv (size_t c, uint32_t argc, ejsval *args)
 #if notyet
 	//if (EJSVAL_IS_OBJECTOfClass (ctx, args[0], WebGLUniformLocationClass)) {
 #endif
-	if (!EJSVAL_IS_PRIMITIVE (args[0])) {
+	if (EJSVAL_IS_OBJECT (args[0])) {
 		loc = (int)get_peer (args[0]);
 	}
 	else if (EJSVAL_IS_NUMBER (args[0])) {
@@ -1834,7 +1835,7 @@ uniformMatrix_fv (size_t c, uint32_t argc, ejsval *args)
 #if notyet
 	//if (EJSVAL_IS_OBJECTOfClass (ctx, args[0], WebGLUniformLocationClass)) {
 #endif
-	if (!EJSVAL_IS_PRIMITIVE (args[0])) {
+	if (EJSVAL_IS_OBJECT (args[0])) {
 		loc = (int)get_peer (args[0]);
 	}
 	else if (EJSVAL_IS_NUMBER (args[0])) {
@@ -1942,7 +1943,7 @@ JSMETHOD (useProgram) {
     
 	// FIXME check args
 	GLuint program_id = 0;
-	if (!EJSVAL_IS_PRIMITIVE (args[0])) {
+	if (EJSVAL_IS_OBJECT (args[0])) {
 		WebGLProgram *program = (WebGLProgram*)get_peer (args[0]);
 		program_id = [program glId];
 	}
@@ -2180,41 +2181,41 @@ _ejs_objc_allocateWebGLRenderingContext (ejsval env, ejsval _this, uint32_t argc
 	return obj;
 }
 
-EJSSpecOps WebGLRenderingContext_specops;
-EJSSpecOps WebGLBuffer_specops;
-EJSSpecOps WebGLFramebuffer_specops;
-EJSSpecOps WebGLRenderbuffer_specops;
-EJSSpecOps WebGLProgram_specops;
-EJSSpecOps WebGLShader_specops;
-EJSSpecOps WebGLTexture_specops;
-EJSSpecOps WebGLActiveInfo_specops;
-EJSSpecOps WebGLUniformLocation_specops;
+#define EJS_WEBGL_OBJ(n) EJS_DEFINE_CLASS(n, #n, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, finalize_release_private_data, OP_INHERIT)
+#define EJS_WEBGL_INHERIT_ALL(n) EJS_DEFINE_CLASS(n, #n, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT)
+
+EJS_DEFINE_CLASS(WebGLRenderingContext, "WebGLRenderingContext",
+                 webglrenderingcontext_specop_get,
+                 OP_INHERIT, // get_own_property,
+                 OP_INHERIT, // get_property,
+                 OP_INHERIT, // put,
+                 OP_INHERIT, // can_put,
+                 webglrenderingcontext_specop_has_property,
+                 OP_INHERIT, // delete,
+                 OP_INHERIT, // default_value
+                 OP_INHERIT, // define_own_property
+                 OP_INHERIT, // has_instance
+                 OP_INHERIT, // allocate
+                 finalize_release_private_data,
+                 OP_INHERIT  // scan
+                 )
+
+EJS_WEBGL_OBJ(WebGLBuffer);
+EJS_WEBGL_OBJ(WebGLFramebuffer);
+EJS_WEBGL_OBJ(WebGLRenderbuffer);
+EJS_WEBGL_OBJ(WebGLProgram);
+EJS_WEBGL_OBJ(WebGLShader);
+EJS_WEBGL_OBJ(WebGLTexture);
+EJS_WEBGL_OBJ(WebGLActiveInfo);
+
+EJS_WEBGL_INHERIT_ALL(WebGLUniformLocation);
+
+#undef EJS_WEBGL_OBJ
+#undef EJS_WEBGL_INHERIT_ALL
 
 void
 _ejs_webgl_init(ejsval global)
 {
-    WebGLRenderingContext_specops = _ejs_object_specops;
-    WebGLRenderingContext_specops.class_name = "WebGLRenderingContext";
-    WebGLRenderingContext_specops.has_property = webglrenderingcontext_specop_has_property;
-    WebGLRenderingContext_specops.get = webglrenderingcontext_specop_get;
-    WebGLRenderingContext_specops.finalize = finalize_release_private_data;
-
-    EJSSpecOps webgl_obj_specops = _ejs_object_specops;
-    webgl_obj_specops.finalize = finalize_release_private_data;
-
-#define WEBGL_SPECOPS(n) n##_specops = webgl_obj_specops; n##_specops.class_name = #n
-
-    WEBGL_SPECOPS(WebGLBuffer);
-    WEBGL_SPECOPS(WebGLFramebuffer);
-    WEBGL_SPECOPS(WebGLRenderbuffer);
-    WEBGL_SPECOPS(WebGLProgram);
-    WEBGL_SPECOPS(WebGLShader);
-    WEBGL_SPECOPS(WebGLTexture);
-    WEBGL_SPECOPS(WebGLActiveInfo);
-
-    WebGLUniformLocation_specops = _ejs_object_specops;
-    WebGLUniformLocation_specops.class_name = "WebGLUniformLocation";
-
     WebGLActiveInfo__proto__ = _ejs_object_create (_ejs_Object_prototype);
     EJS_INSTALL_GETTER (WebGLActiveInfo__proto__, "size", webglactiveinfo_get_size);
     EJS_INSTALL_GETTER (WebGLActiveInfo__proto__, "type", webglactiveinfo_get_type);

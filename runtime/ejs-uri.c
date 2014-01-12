@@ -6,27 +6,32 @@
 
 #include "ejs-uri.h"
 
+ejsval _ejs_decodeURI EJSVAL_ALIGNMENT;
+ejsval _ejs_decodeURIComponent EJSVAL_ALIGNMENT;
+ejsval _ejs_encodeURI EJSVAL_ALIGNMENT;
+ejsval _ejs_encodeURIComponent EJSVAL_ALIGNMENT;
+
 ejsval
-_ejs_decodeURI (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+_ejs_decodeURI_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 ejsval
-_ejs_decodeURIComponent (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+_ejs_decodeURIComponent_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 
 ejsval
-_ejs_encodeURI (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+_ejs_encodeURI_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 ejsval
-_ejs_encodeURIComponent (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+_ejs_encodeURIComponent_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     EJS_NOT_IMPLEMENTED();
 }

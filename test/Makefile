@@ -27,6 +27,7 @@ endef
 EXPECTED_FAILURES=
 $(call addExpectedFailure, argv1.js,                "node passes ['node','argv1.js'], we return ['argv1.js.exe']")
 $(call addExpectedFailure, date1.js,                "fails because we test the Date() function, which returns the current time.  this differs from the current time when the node test runs.  bleah.")
+$(call addExpectedFailure, date3.js,                "the first date is off by an hour.  timegm/localtime_r screwup?")
 $(call addExpectedFailure, forin2.js,               "fails because we don't properly handle deleting properties while iterating")
 $(call addExpectedFailure, forin5.js,               "fails because we enumerate the entire range 0..length of an array, including the holes.")
 $(call addExpectedFailure, json4.js,                "fails due to properties being serialized in a different order.")
@@ -39,6 +40,8 @@ $(call addExpectedFailure, fib1.js,                 "we don't output numbers cor
 $(call addExpectedFailure, const1.js,               "we permit assigning to const bindings")
 $(call addExpectedFailure, forof1.js,               "we don't support for-of yet")
 $(call addExpectedFailure, map1.js,                 "we throw the right exception but node 0.8 doesn't")
+$(call addExpectedFailure, class1.js,               "node 0.8.10 fails to compile this due to incomplete Map implementation")
+$(call addExpectedFailure, class2.js,               "node 0.8.10 fails to compile this due to incomplete Map implementation")
 
 check: check-unit-tests run-tests
 

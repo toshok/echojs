@@ -4,7 +4,7 @@ function fib(n) {
   var SZ = Math.pow(2,64);
 
   for(var i = 0; i < n; i++) {
-      t = b;
+      var t = b;
       b = (a+b)%SZ;
       a = t;
   }
