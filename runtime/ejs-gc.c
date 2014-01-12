@@ -219,7 +219,7 @@ alloc_from_os(size_t size, size_t align)
         // the area before
         munmap (res, (uintptr_t)aligned_res - (uintptr_t)res);
         // the area after
-        munmap (aligned_res+size, (uintptr_t)res+size*2 - (uintptr_t)aligned_res+size);
+        munmap (aligned_res+size, (uintptr_t)res+size*2 - (uintptr_t)(aligned_res+size));
         res = aligned_res;
         SPEW(2, _ejs_log ("aligned ptr = %p\n", res));
     }
