@@ -8,19 +8,20 @@ function dumpStuff (view)
   console.log ("byte length: " + view.byteLength);
 
   for (var i = 0; i < view.byteLength; i++)
-    console.log (view.getInt8 (i));
+    console.log (view[i]);
 }
 
-view.setInt8 (0, 1);
-view.setInt8 (1, 3);
-view.setInt8 (2, 5);
-view.setInt8 (3, 7);
+view[0] = 1;
+view[1] = 3;
+view[2] = 5;
+view[3] = 7;
 
 dumpStuff (view);
 
 var view2 = new DataView (buff, 2, 2);
-view2.setInt8 (0, 111);
-view2.setInt8 (1, 113);
+view2[0] = 111;
+view2[1] = 113;
 
 dumpStuff (view2);
+dumpStuff (view);
 
