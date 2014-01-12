@@ -159,6 +159,7 @@ node-path:
 
 clean: clean-results clean-esprima-roundtrip
 	rm -f *.o *.js.exe terminal.js echo-assert.js .*.diff .*-out .failures .successes .xfail .xsuccess
+	rm -rf *.dSYM
 
 .PRECIOUS: $(TESTS:%.js=%.js.expected-out)
 
