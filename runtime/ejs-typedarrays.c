@@ -219,12 +219,29 @@ _ejs_DataView_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         EJS_NOT_IMPLEMENTED();
     }
 
+    EJSDataView* view = (EJSDataView*)EJSVAL_TO_OBJECT(_this);
     EJSArrayBuffer* buff = (EJSArrayBuffer*)EJSVAL_TO_OBJECT(args[0]);
 
-    EJSDataView* view = (EJSDataView*)EJSVAL_TO_OBJECT(_this);
+    uint32_t offset;
+    uint32_t len;
+
+    switch (argc) {
+    case 1:
+        offset = 0;
+        len = buff->size;
+        break;
+    case 2:
+        offset = EJSVAL_TO_NUMBER(args[1]);
+        len = buff->size - offset;
+        break;
+    default:
+        offset = EJSVAL_TO_NUMBER(args[1]);
+        len = EJSVAL_TO_NUMBER(args[2]);
+    }
+
     view->buffer = args[0];
-    view->byteOffset = 0;
-    view->byteLength = buff->size;
+    view->byteOffset = offset;
+    view->byteLength = len;
 
     _ejs_object_define_value_property (_this, _ejs_atom_byteLength, DOUBLE_TO_EJSVAL_IMPL(view->byteLength), EJS_PROP_FLAGS_ENUMERABLE);
     _ejs_object_define_value_property (_this, _ejs_atom_byteOffset, DOUBLE_TO_EJSVAL_IMPL(view->byteOffset), EJS_PROP_FLAGS_ENUMERABLE);
