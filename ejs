@@ -17,7 +17,6 @@ temp_files = []
 options =
         # our defaults:
         debug_level: 0
-        debug: false
         frozen_global: false
         record_types: false
         output_filename: null
@@ -64,9 +63,6 @@ args =
                 handler: increase_debug_level
                 handlerArgc: 0
                 help:    "debug output.  more instances of this flag increase the amount of spew."
-        "-g":
-                flag:    "debug"
-                help:    "generate executables with debugging info"
         "-s":
                 flag:    "combine_scripts"
                 help:    "treat all toplevels as being 1 context, evaluating them in the order present on the command line"
@@ -239,7 +235,7 @@ compileFile = (filename, content, compileCallback) ->
         #opt_args = "-mem2reg -no-aa -tbaa -targetlibinfo -basicaa -notti -preverify -domtree -verify -simplifycfg -domtree -sroa -early-cse -lower-expect -targetlibinfo -no-aa -tbaa -basicaa -notti -globalopt -ipsccp -deadargelim -instcombine -simplifycfg -basiccg -prune-eh -inline-cost -inline -functionattrs -sroa -domtree -early-cse -lazy-value-info -jump-threading -correlated-propagation -simplifycfg -instcombine -tailcallelim -simplifycfg -reassociate -domtree -loops -loop-simplify -lcssa -loop-rotate -licm -lcssa -loop-unswitch -instcombine -scalar-evolution -loop-simplify -lcssa -indvars -loop-idiom -loop-deletion -loop-unroll -memdep -gvn -memdep -memcpyopt -sccp -instcombine -lazy-value-info -jump-threading -correlated-propagation -domtree -memdep -dse -loops -scalar-evolution -slp-vectorizer -adce -simplifycfg -instcombine -domtree -loops -loop-simplify -lcssa -scalar-evolution -loop-simplify -lcssa -loop-vectorize -instcombine -simplifycfg -strip-dead-prototypes -globaldce -constmerge -preverify -domtree -verify".split(" ").concat ["-o=#{ll_opt_filename}", bc_filename]
                 
         opt_args = ["-O1", "-strip-dead-prototypes", "-S", "-o=#{ll_opt_filename}", bc_filename]
-        llc_args = target_llc_args[options.target].concat ["-O0", "-filetype=obj", "-o=#{o_filename}"]
+        llc_args = target_llc_args[options.target].concat ["-filetype=obj", "-o=#{o_filename}", ll_opt_filename]
 
         compiled_module.writeToFile ll_filename
 
@@ -253,27 +249,20 @@ compileFile = (filename, content, compileCallback) ->
                 o_filenames.push o_filename
                 compileCallback()
         else
-                run_llc = ->
-                        debug.log 1, "executing `llc #{llc_args.join ' '}'"
-                        llc = spawn "llc", llc_args
-                        llc.stderr.on "data", (data) -> console.warn "#{data}"
-                        llc.on "exit", (code) ->
-                                o_filenames.push o_filename
-                                compileCallback()
-                                
-                if options.debug
-                        llc_args = llc_args.concat ll_filename                                
-                        run_llc()
-                else
-                        llc_args = llc_args.concat ll_opt_filename                                
-                        debug.log 1, "executing `llvm-as #{llvm_as_args.join ' '}'"
-                        llvm_as = spawn "llvm-as", llvm_as_args
-                        llvm_as.stderr.on "data", (data) -> console.warn "#{data}"
-                        llvm_as.on "exit", (code) ->
-                                debug.log 1, "executing `opt #{opt_args.join ' '}'"
-                                opt = spawn "opt", opt_args
-                                opt.stderr.on "data", (data) -> console.warn "#{data}"
-                                opt.on "exit", (code) -> run_llc()
+                debug.log 1, "executing `llvm-as #{llvm_as_args.join ' '}'"
+                llvm_as = spawn "llvm-as", llvm_as_args
+                llvm_as.stderr.on "data", (data) -> console.warn "#{data}"
+                llvm_as.on "exit", (code) ->
+                        debug.log 1, "executing `opt #{opt_args.join ' '}'"
+                        opt = spawn "opt", opt_args
+                        opt.stderr.on "data", (data) -> console.warn "#{data}"
+                        opt.on "exit", (code) ->
+                                debug.log 1, "executing `llc #{llc_args.join ' '}'"
+                                llc = spawn "llc", llc_args
+                                llc.stderr.on "data", (data) -> console.warn "#{data}"
+                                llc.on "exit", (code) ->
+                                        o_filenames.push o_filename
+                                        compileCallback()
 
 relative_to_ejs_exe = (n) ->
         path.resolve (path.dirname process.argv[if __ejs? then 0 else 1]), n
@@ -327,15 +316,11 @@ do_final_link = ->
         process.env.PATH = "#{target_path_prepend[options.target]}:#{process.env.PATH}"
 
         output_filename = options.output_filename || "#{files[0]}.exe"
-        clang_args = target_link_args[options.target].concat ["-o", output_filename]
+        clang_args = target_link_args[options.target].concat ["-o", output_filename].concat o_filenames
 
         # XXX we shouldn't need this, but build is failing while compiling the require map
         clang_args.push "-I."
-
-        if options.debug
-                clang_args.push "-g"
-
-        clang_args = clang_args.concat o_filenames
+        
         clang_args.push map_filename
         
         clang_args.push relative_to_ejs_exe target_libecho[options.target]
