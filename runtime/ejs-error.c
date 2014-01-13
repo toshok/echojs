@@ -113,7 +113,6 @@ _ejs_nativeerror_new (EJSNativeErrorType err_type, ejsval msg)
 ejsval
 _ejs_nativeerror_new_utf8 (EJSNativeErrorType err_type, const char *message)
 {
-    _ejs_log ("throwing '%s'\n", message);
     ejsval msg = _ejs_string_new_utf8 (message);
     return _ejs_nativeerror_new (err_type, msg);
 }
