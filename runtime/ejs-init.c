@@ -166,4 +166,5 @@ _ejs_init(int argc, char** argv)
     _ejs_object_setprop (_ejs_global, _ejs_atom___ejs, _ejs_ejs_global);
 
     _ejs_GC_init(_ejs_ejs_global);
+    _ejs_gc_allocate_oom_exceptions();
 }

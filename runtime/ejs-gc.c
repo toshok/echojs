@@ -16,6 +16,8 @@
 #include "ejs-function.h"
 #include "ejs-value.h"
 #include "ejs-string.h"
+#include "ejs-error.h"
+#include "ejs-ops.h"
 #include "ejsval.h"
 
 #include <pthread.h>
@@ -35,6 +37,10 @@ static int _ejs_spew_level = (spew);
 #else
 #define SANITY(x)
 #endif
+
+// exceptions to throw if we're out of memory
+static ejsval los_allocation_failed_exc EJSVAL_ALIGNMENT;
+static ejsval page_allocation_failed_exc EJSVAL_ALIGNMENT;
 
 void _ejs_gc_dump_heap_stats();
 
@@ -200,10 +206,16 @@ alloc_from_os(size_t size, size_t align)
 {
     if (align == 0) {
         size = MAX(size, PAGE_SIZE);
-        return mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, MAP_FD, 0);
+        void* res = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, MAP_FD, 0);
+        _ejs_log ("mmap for 0 alignment = %p\n", res);
+        return res == MAP_FAILED ? NULL : res;
     }
 
     void* res = mmap(NULL, size*2, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, MAP_FD, 0);
+    if (res == MAP_FAILED) {
+        return NULL;
+    }
+
     SPEW(2, _ejs_log ("mmap returned %p\n", res));
 
     if (((uintptr_t)res % align) == 0) {
@@ -356,6 +368,8 @@ arena_new()
     SPEW(1, _ejs_log ("num_arenas = %d, max = %d\n", num_arenas, MAX_ARENAS));
 
     void* arena_start = alloc_from_os(ARENA_SIZE, ARENA_SIZE);
+    if (arena_start == NULL)
+        return NULL;
 
     Arena* new_arena = arena_start;
 
@@ -557,6 +571,8 @@ alloc_new_page(size_t cell_size)
     LOCK_ARENAS();
     Arena* arena = arena_new();
     UNLOCK_ARENAS();
+    if (arena == NULL)
+        return NULL;
     rv = alloc_page_from_arena(arena, cell_size);
     SPEW(2, _ejs_log ("  => %p", rv));
     return rv;
@@ -689,6 +705,16 @@ _ejs_gc_init()
 
     // start up the finalizer thread
     pthread_create (&finalizer_thread, NULL, _ejs_finalizer_thread, NULL);
+}
+
+void
+_ejs_gc_allocate_oom_exceptions()
+{
+    _ejs_gc_add_root (&los_allocation_failed_exc);
+    los_allocation_failed_exc  = _ejs_nativeerror_new_utf8 (EJS_ERROR, "LOS allocation failed");
+
+    _ejs_gc_add_root (&page_allocation_failed_exc);
+    page_allocation_failed_exc = _ejs_nativeerror_new_utf8 (EJS_ERROR, "page allocation failed");
 }
 
 static void
@@ -1217,6 +1243,8 @@ alloc_from_los(size_t size, EJSScanType scan_type)
 {
     // allocate enough space for the object, our header, and our bitmap.  leave room enough to align the return value
     LargeObjectInfo *rv = alloc_from_os(size + sizeof(LargeObjectInfo) + 16, 0);
+    if (rv == NULL)
+        return NULL;
 
     rv->page_info.page_bitmap = (char*)((void*)rv + sizeof(LargeObjectInfo)); // our 1 byte bitmap comes right after the header
     rv->page_info.page_start = (void*)ALIGN((void*)rv + sizeof(LargeObjectInfo) + 1, 8);
@@ -1261,6 +1289,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     }
 
     if (!gc_disabled && ((num_allocs == 100000 || alloc_size >= 40*1024*1024) || (collect_every_alloc && collect_every_alloc == num_allocs))) {
+    allocation_failed:
         _ejs_gc_collect();
         alloc_size = 0;
         num_allocs = 0;
@@ -1273,7 +1302,18 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
 
     if (bucket > HEAP_PAGELISTS_COUNT) {
         SPEW(2, _ejs_log ("need to alloc from los!!!\n"));
-        return alloc_from_los(size, scan_type);
+        GCObjectPtr rv = alloc_from_los(size, scan_type);
+        if (rv == NULL) {
+            if (num_allocs == 0) {
+                _ejs_log ("los allocation (size = %d) failed twice, throwing", size);
+                _ejs_throw (los_allocation_failed_exc);
+            }
+            else {
+                _ejs_log ("los allocation (size = %d) failed, trying to collect", size);
+                goto allocation_failed;
+            }
+        }
+        return rv;
     }
 
     LOCK_GC();
@@ -1282,6 +1322,14 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     PageInfo* info = (PageInfo*)heap_pages[bucket].head;
     if (!info || !info->num_free_cells) {
         info = alloc_new_page(bucket_size);
+        if (info == NULL) {
+            if (num_allocs == 0)
+                _ejs_throw (page_allocation_failed_exc);
+            else {
+                _ejs_log ("page allocation failed, trying to collect");
+                goto allocation_failed;
+            }
+        }
         _ejs_list_prepend_node (&heap_pages[bucket], (EJSListNode*)info);
     }
 
