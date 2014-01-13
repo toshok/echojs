@@ -152,7 +152,7 @@ _ejs_CoffeeKitObject_prototype_toString (ejsval env, ejsval _this, uint32_t argc
 void
 _ejs_objc_init(ejsval global)
 {
-    _ejs_objchandle_specops =  _ejs_object_specops;
+    _ejs_objchandle_specops =  _ejs_Object_specops;
     _ejs_objchandle_specops.class_name = "ObjcHandle";
 
     _ejs_gc_add_root (&_ejs_ObjcHandle_proto);
@@ -165,7 +165,7 @@ _ejs_objc_init(ejsval global)
 
     _ejs_object_setprop (global, _ejs_atom_ObjcHandle, _ejs_ObjcHandle);
 
-    _ejs_coffeekitobject_specops =  _ejs_object_specops;
+    _ejs_coffeekitobject_specops =  _ejs_Object_specops;
     _ejs_coffeekitobject_specops.class_name = "PirouetteObject";
 
     _ejs_gc_add_root (&_ejs_CoffeeKitObject_proto);

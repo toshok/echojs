@@ -61,7 +61,7 @@ _ejs_number_init(ejsval global)
     _ejs_object_setprop (global, _ejs_atom_Number, _ejs_Number);
 
     _ejs_gc_add_root (&_ejs_Number_proto);
-    _ejs_Number_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_number_specops);
+    _ejs_Number_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_Number_specops);
     _ejs_object_setprop (_ejs_Number,       _ejs_atom_prototype,  _ejs_Number_proto);
 
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Number_proto, x, _ejs_Number_prototype_##x)
@@ -83,7 +83,7 @@ _ejs_number_specop_default_value (ejsval obj, const char *hint)
         EJS_NOT_IMPLEMENTED();
     }
     else
-        return _ejs_object_specops.default_value (obj, hint);
+        return _ejs_Object_specops.default_value (obj, hint);
 }
 
 EJSObject*
@@ -92,7 +92,7 @@ _ejs_number_specop_allocate()
     return (EJSObject*)_ejs_gc_new (EJSNumber);
 }
 
-EJS_DEFINE_CLASS(number, "Number",
+EJS_DEFINE_CLASS(Number,
                  OP_INHERIT, // get
                  OP_INHERIT, // get_own_property
                  OP_INHERIT, // get_property

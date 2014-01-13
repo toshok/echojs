@@ -155,7 +155,7 @@ FromPropertyDescriptor(EJSPropertyDesc* Desc)
 
     /* 2. Let obj be the result of creating  a new object as if by the expression new Object() where Object  is the standard  */
     /*    built-in constructor with that name. */
-    ejsval obj = _ejs_object_new(_ejs_Object_prototype, &_ejs_object_specops);
+    ejsval obj = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
     EJSObject* obj_ = EJSVAL_TO_OBJECT(obj);
 
     /* 3. If IsDataDescriptor(Desc) is true, then */
@@ -566,7 +566,7 @@ void
 _ejs_init_object (EJSObject* obj, ejsval proto, EJSSpecOps *ops)
 {
     obj->proto = proto;
-    obj->ops = ops ? ops : &_ejs_object_specops;
+    obj->ops = ops ? ops : &_ejs_Object_specops;
     _ejs_propertymap_init (&obj->map);
     EJS_OBJECT_SET_EXTENSIBLE(obj);
 #if notyet
@@ -589,22 +589,22 @@ _ejs_object_create (ejsval proto)
 
     EJSSpecOps *ops = NULL;
 
-    if      (EJSVAL_EQ(proto, _ejs_Object_prototype)) ops = &_ejs_object_specops;
-    else if (EJSVAL_EQ(proto, _ejs_Array_proto))      ops = &_ejs_array_specops;
-    else if (EJSVAL_EQ(proto, _ejs_String_prototype)) ops = &_ejs_string_specops;
-    else if (EJSVAL_EQ(proto, _ejs_Map_prototype))    ops = &_ejs_map_specops;
-    else if (EJSVAL_EQ(proto, _ejs_Number_proto))     ops = &_ejs_number_specops;
-    else if (EJSVAL_EQ(proto, _ejs_RegExp_proto))     ops = &_ejs_regexp_specops;
-    else if (EJSVAL_EQ(proto, _ejs_Date_proto))       ops = &_ejs_date_specops;
-    else if (EJSVAL_EQ(proto, _ejs_ArrayBuffer_proto)) ops = &_ejs_arraybuffer_specops;
-    else if (EJSVAL_EQ(proto, _ejs_EvalError_proto))  ops = &_ejs_error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_RangeError_proto))  ops = &_ejs_error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_ReferenceError_proto))  ops = &_ejs_error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_SyntaxError_proto))  ops = &_ejs_error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_TypeError_proto))  ops = &_ejs_error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_URIError_proto))  ops = &_ejs_error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_Error_proto))  ops = &_ejs_error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_XMLHttpRequest_proto))  ops = &_ejs_xmlhttprequest_specops;
+    if      (EJSVAL_EQ(proto, _ejs_Object_prototype)) ops = &_ejs_Object_specops;
+    else if (EJSVAL_EQ(proto, _ejs_Array_proto))      ops = &_ejs_Array_specops;
+    else if (EJSVAL_EQ(proto, _ejs_String_prototype)) ops = &_ejs_String_specops;
+    else if (EJSVAL_EQ(proto, _ejs_Map_prototype))    ops = &_ejs_Map_specops;
+    else if (EJSVAL_EQ(proto, _ejs_Number_proto))     ops = &_ejs_Number_specops;
+    else if (EJSVAL_EQ(proto, _ejs_RegExp_proto))     ops = &_ejs_RegExp_specops;
+    else if (EJSVAL_EQ(proto, _ejs_Date_proto))       ops = &_ejs_Date_specops;
+    else if (EJSVAL_EQ(proto, _ejs_ArrayBuffer_proto)) ops = &_ejs_ArrayBuffer_specops;
+    else if (EJSVAL_EQ(proto, _ejs_EvalError_proto))  ops = &_ejs_Error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_RangeError_proto))  ops = &_ejs_Error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_ReferenceError_proto))  ops = &_ejs_Error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_SyntaxError_proto))  ops = &_ejs_Error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_TypeError_proto))  ops = &_ejs_Error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_URIError_proto))  ops = &_ejs_Error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_Error_proto))  ops = &_ejs_Error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_XMLHttpRequest_proto))  ops = &_ejs_XMLHttpRequest_specops;
     else {
         for (int i = 0; i < EJS_TYPEDARRAY_TYPE_COUNT; i ++) {
             if (EJSVAL_EQ(proto, _ejs_typed_array_protos[i]))
@@ -919,7 +919,7 @@ _ejs_Object_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     /* 2. Let obj be the result of creating a new object as if by the expression new Object() where Object is the  */
     /*    standard built-in constructor with that name */
-    ejsval obj = _ejs_object_new(_ejs_null, &_ejs_object_specops);
+    ejsval obj = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
 
     /* 3. Set the [[Prototype]] internal property of obj to O. */
     EJSVAL_TO_OBJECT(obj)->proto = O;
@@ -1378,11 +1378,11 @@ _ejs_object_init_proto()
 
     EJSObject* prototype = _ejs_gc_new(EJSObject);
     _ejs_Object_prototype = OBJECT_TO_EJSVAL(prototype);
-    _ejs_init_object (prototype, _ejs_null, &_ejs_object_specops);
+    _ejs_init_object (prototype, _ejs_null, &_ejs_Object_specops);
 
     EJSFunction* __proto__ = _ejs_gc_new(EJSFunction);
     _ejs_Object__proto__ = OBJECT_TO_EJSVAL(__proto__);
-    _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_function_specops);
+    _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_Function_specops);
     __proto__->func = _ejs_Function_empty;
     __proto__->env = _ejs_null;
 
@@ -1900,20 +1900,18 @@ _ejs_object_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     scan_func (obj->proto);
 }
 
-EJSSpecOps _ejs_object_specops = {
-    "Object",
-    _ejs_object_specop_get,
-    _ejs_object_specop_get_own_property,
-    _ejs_object_specop_get_property,
-    _ejs_object_specop_put,
-    _ejs_object_specop_can_put,
-    _ejs_object_specop_has_property,
-    _ejs_object_specop_delete,
-    _ejs_object_specop_default_value,
-    _ejs_object_specop_define_own_property,
-    NULL, /* [[HasInstance]] */
-
-    _ejs_object_specop_allocate,
-    _ejs_object_specop_finalize,
-    _ejs_object_specop_scan
-};
+EJS_DEFINE_CLASS(Object,
+                 _ejs_object_specop_get,
+                 _ejs_object_specop_get_own_property,
+                 _ejs_object_specop_get_property,
+                 _ejs_object_specop_put,
+                 _ejs_object_specop_can_put,
+                 _ejs_object_specop_has_property,
+                 _ejs_object_specop_delete,
+                 _ejs_object_specop_default_value,
+                 _ejs_object_specop_define_own_property,
+                 NULL, /* [[HasInstance]] */
+                 _ejs_object_specop_allocate,
+                 _ejs_object_specop_finalize,
+                 _ejs_object_specop_scan
+                 )

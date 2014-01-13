@@ -40,7 +40,7 @@ ejsval _ejs_URIError_proto EJSVAL_ALIGNMENT;
     _ejs_##err##_impl (ejsval env, ejsval _this, uint32_t argc, ejsval*args) \
     {                                                                   \
         if (EJSVAL_IS_UNDEFINED(_this))                                 \
-            _this = _ejs_object_new (_ejs_##err##_proto, &_ejs_error_specops); \
+            _this = _ejs_object_new (_ejs_##err##_proto, &_ejs_Error_specops); \
                                                                         \
         if (argc >= 1) {                                                \
             _ejs_object_setprop (_this, _ejs_atom_message, ToString(args[0])); \
@@ -93,7 +93,7 @@ _ejs_nativeerror_new (EJSNativeErrorType err_type, ejsval msg)
     case EJS_URI_ERROR:       proto = _ejs_URIError_proto; break;
     }
 
-    _ejs_init_object (exc_obj, proto, &_ejs_error_specops);
+    _ejs_init_object (exc_obj, proto, &_ejs_Error_specops);
 
     ejsval exc = OBJECT_TO_EJSVAL(exc_obj);
 
@@ -126,7 +126,7 @@ _ejs_error_init(ejsval global)
 #define EJS_ADD_NATIVE_ERROR_TYPE(err) EJS_MACRO_START                  \
     _ejs_##err = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_##err, (EJSClosureFunc)_ejs_##err##_impl); \
     _ejs_object_setprop (global, _ejs_atom_##err, _ejs_##err);          \
-    _ejs_##err##_proto = _ejs_object_new(_ejs_null, &_ejs_object_specops); \
+    _ejs_##err##_proto = _ejs_object_new(_ejs_null, &_ejs_Object_specops); \
     _ejs_object_setprop (_ejs_##err,       _ejs_atom_prototype,  _ejs_##err##_proto); \
                                                                     \
     _ejs_object_setprop (_ejs_##err##_proto, _ejs_atom_name, _ejs_atom_##err); \
@@ -166,7 +166,7 @@ _ejs_throw_nativeerror (EJSNativeErrorType error_type, ejsval message)
     EJS_NOT_REACHED();
 }
 
-EJS_DEFINE_CLASS(error, "Error",
+EJS_DEFINE_CLASS(Error,
                  OP_INHERIT, // get
                  OP_INHERIT, // get_own_property
                  OP_INHERIT, // get_property

@@ -252,7 +252,7 @@ _ejs_String_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     else {
         // called as a constructor
         EJSString* str = (EJSString*)EJSVAL_TO_OBJECT(_this);
-        ((EJSObject*)str)->ops = &_ejs_string_specops;
+        ((EJSObject*)str)->ops = &_ejs_String_specops;
 
         if (argc > 0) {
             str->primStr = ToString(args[0]);
@@ -944,13 +944,13 @@ _ejs_string_init_proto()
     _ejs_gc_add_root (&_ejs_String_prototype);
 
     EJSFunction* __proto__ = _ejs_gc_new(EJSFunction);
-    _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_function_specops);
+    _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_Function_specops);
     __proto__->func = _ejs_Function_empty;
     __proto__->env = _ejs_null;
     _ejs_String__proto__ = OBJECT_TO_EJSVAL(__proto__);
 
     EJSObject* prototype = _ejs_gc_new(EJSObject);
-    _ejs_init_object (prototype, _ejs_null, &_ejs_string_specops);
+    _ejs_init_object (prototype, _ejs_null, &_ejs_String_specops);
     _ejs_String_prototype = OBJECT_TO_EJSVAL(prototype);
 
     _ejs_object_define_value_property (OBJECT_TO_EJSVAL(__proto__), _ejs_atom_name, _ejs_atom_empty, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
@@ -1026,7 +1026,7 @@ _ejs_string_specop_get (ejsval obj, ejsval propertyName)
     }
 
     // otherwise we fallback to the object implementation
-    return _ejs_object_specops.get (obj, propertyName);
+    return _ejs_Object_specops.get (obj, propertyName);
 }
 
 static EJSObject*
@@ -1040,10 +1040,10 @@ _ejs_string_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSString* ejss = (EJSString*)obj;
     scan_func (ejss->primStr);
-    _ejs_object_specops.scan (obj, scan_func);
+    _ejs_Object_specops.scan (obj, scan_func);
 }
 
-EJS_DEFINE_CLASS(string, "String",
+EJS_DEFINE_CLASS(String,
                  _ejs_string_specop_get,
                  OP_INHERIT, // get_own_property
                  OP_INHERIT, // get_property

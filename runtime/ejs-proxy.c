@@ -36,7 +36,7 @@ _ejs_Proxy_createFunction (ejsval env, ejsval this, uint32_t argc, ejsval* args)
 void
 _ejs_proxy_init(ejsval global)
 {
-    ejsval _ejs_Proxy = _ejs_object_new (_ejs_null, &_ejs_object_specops);
+    ejsval _ejs_Proxy = _ejs_object_new (_ejs_null, &_ejs_Object_specops);
     _ejs_object_setprop (global, _ejs_atom_Proxy, _ejs_Proxy);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Proxy, x, _ejs_Proxy_##x)

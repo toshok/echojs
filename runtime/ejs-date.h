@@ -22,7 +22,7 @@ EJS_BEGIN_DECLS
 
 extern ejsval _ejs_Date;
 extern ejsval _ejs_Date_proto;
-extern EJSSpecOps _ejs_date_specops;
+extern EJSSpecOps _ejs_Date_specops;
 
 ejsval _ejs_date_new_unix (int tv_sec, int tv_usec);
 double _ejs_date_get_time (EJSDate* date);

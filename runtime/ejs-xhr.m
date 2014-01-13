@@ -610,7 +610,7 @@ _ejs_xmlhttprequest_init(ejsval global)
     _ejs_object_setprop (global, _ejs_atom_XMLHttpRequest, _ejs_XMLHttpRequest);
 
     _ejs_gc_add_root (&_ejs_XMLHttpRequest_proto);
-    _ejs_XMLHttpRequest_proto = _ejs_object_new(_ejs_null, &_ejs_object_specops);
+    _ejs_XMLHttpRequest_proto = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
     _ejs_object_setprop (_ejs_XMLHttpRequest,       _ejs_atom_prototype,  _ejs_XMLHttpRequest_proto);
 
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_XMLHttpRequest_proto, x, _ejs_XMLHttpRequest_prototype_##x, EJS_PROP_NOT_ENUMERABLE)
@@ -642,7 +642,7 @@ _ejs_xmlhttprequest_specop_allocate()
     return (EJSObject*)_ejs_gc_new (EJSXMLHttpRequest);
 }
 
-EJS_DEFINE_CLASS(xmlhttprequest, "XMLHttpRequest",
+EJS_DEFINE_CLASS(XMLHttpRequest,
                  OP_INHERIT, // get,
                  OP_INHERIT, // get_own_property,
                  OP_INHERIT, // get_property,

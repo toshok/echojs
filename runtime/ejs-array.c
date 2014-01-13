@@ -44,7 +44,7 @@ _ejs_array_new (int numElements, EJSBool fill)
         rv->sparse.arraylets = (Arraylet*)calloc(rv->sparse.arraylet_alloc, sizeof(Arraylet));
     }
     else {
-        _ejs_init_object ((EJSObject*)rv, _ejs_Array_proto, &_ejs_array_specops);
+        _ejs_init_object ((EJSObject*)rv, _ejs_Array_proto, &_ejs_Array_specops);
 
         rv->dense.array_alloc = numElements + 5;
         rv->dense.elements = (ejsval*)malloc(rv->dense.array_alloc * sizeof (ejsval));
@@ -133,7 +133,7 @@ _ejs_Array_impl (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
         else if (argc == 1 && EJSVAL_IS_NUMBER(args[0])) {
             int alloc = ToUint32(args[0]);
             if (alloc > SPARSE_ARRAY_CUTOFF) {
-                arr->obj.ops = &_ejs_array_specops;
+                arr->obj.ops = &_ejs_Array_specops;
 
                 arr->sparse.arraylet_alloc = 5;
                 arr->sparse.arraylet_num = 0;
@@ -1305,13 +1305,13 @@ _ejs_Array_isArray (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
     // spec says the following string compare on internal classname,
     // but we can just directly compare pointers.
     //return BOOLEAN_TO_EJSVAL (!strcmp (CLASSNAME(EJSVAL_TO_OBJECT(args[0])), "Array"));
-    return BOOLEAN_TO_EJSVAL(obj->ops == &_ejs_array_specops || obj->ops == &_ejs_sparsearray_specops);
+    return BOOLEAN_TO_EJSVAL(obj->ops == &_ejs_Array_specops || obj->ops == &_ejs_sparsearray_specops);
 }
 
 void
 _ejs_array_init(ejsval global)
 {
-    _ejs_sparsearray_specops =  _ejs_array_specops;
+    _ejs_sparsearray_specops =  _ejs_Array_specops;
 
     _ejs_Array = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Array, (EJSClosureFunc)_ejs_Array_impl);
 
@@ -1382,7 +1382,7 @@ _ejs_array_specop_get (ejsval obj, ejsval propertyName)
     }
 
     // otherwise we fallback to the object implementation
-    return _ejs_object_specops.get (obj, propertyName);
+    return _ejs_Object_specops.get (obj, propertyName);
 }
 
 static EJSPropertyDesc*
@@ -1417,7 +1417,7 @@ _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName)
         return &arr->array_length_desc;
     }
 
-    return _ejs_object_specops.get_own_property (obj, propertyName);
+    return _ejs_Object_specops.get_own_property (obj, propertyName);
 }
 
 static void
@@ -1466,7 +1466,7 @@ _ejs_array_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag
     }
     // if we fail there, we fall back to the object impl below
 
-    _ejs_object_specops.put (obj, propertyName, val, flag);
+    _ejs_Object_specops.put (obj, propertyName, val, flag);
 }
 
 static EJSBool
@@ -1485,7 +1485,7 @@ _ejs_array_specop_has_property (ejsval obj, ejsval propertyName)
 
     // if we fail there, we fall back to the object impl below
 
-    return _ejs_object_specops.has_property (obj, propertyName);
+    return _ejs_Object_specops.has_property (obj, propertyName);
 }
 
 static EJSBool
@@ -1501,7 +1501,7 @@ _ejs_array_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
     }
 
     if (idx == -1)
-        return _ejs_object_specops._delete (obj, propertyName, flag);
+        return _ejs_Object_specops._delete (obj, propertyName, flag);
 
     // if it's outside the array bounds, do nothing
     if (idx < EJS_ARRAY_LEN(obj))
@@ -1573,7 +1573,7 @@ _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPrope
         return EJS_TRUE;
     }
 
-    return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
+    return _ejs_Object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
 }
 
 static EJSObject*
@@ -1597,7 +1597,7 @@ _ejs_array_specop_finalize (EJSObject* obj)
     else {
         free (EJSDENSEARRAY_ELEMENTS(obj));
     }
-    _ejs_object_specops.finalize (obj);
+    _ejs_Object_specops.finalize (obj);
 }
 
 static void
@@ -1616,10 +1616,10 @@ _ejs_array_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
         for (int i = 0; i < EJSARRAY_LEN(obj); i ++)
             scan_func (EJSDENSEARRAY_ELEMENTS(obj)[i]);
     }
-    _ejs_object_specops.scan (obj, scan_func);
+    _ejs_Object_specops.scan (obj, scan_func);
 }
 
-EJS_DEFINE_CLASS(array, "Array",
+EJS_DEFINE_CLASS(Array,
                  _ejs_array_specop_get,
                  _ejs_array_specop_get_own_property,
                  OP_INHERIT, // get_property

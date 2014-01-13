@@ -465,7 +465,7 @@
 
 -(BOOL)isFunction
 {
-    return _obj->ops == &_ejs_function_specops;
+    return _obj->ops == &_ejs_Function_specops;
 }
 
 -(BOOL)isConstructor
@@ -483,7 +483,7 @@
 
 -(BOOL)isArray
 {
-    return _obj->ops == &_ejs_array_specops || _obj->ops == &_ejs_sparsearray_specops;
+    return _obj->ops == &_ejs_Array_specops || _obj->ops == &_ejs_sparsearray_specops;
 }
 
 -(jsuint)arrayLength

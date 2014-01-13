@@ -85,7 +85,7 @@ _ejs_symbol_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     EJS_NOT_IMPLEMENTED();
 }
 
-EJS_DEFINE_CLASS(symbol, "Symbol",
+EJS_DEFINE_CLASS(Symbol,
                  _ejs_symbol_specop_get,
                  _ejs_symbol_specop_get_own_property,
                  _ejs_symbol_specop_get_property,

@@ -28,7 +28,7 @@ EJS_BEGIN_DECLS
 
 extern ejsval _ejs_RegExp;
 extern ejsval _ejs_RegExp_proto;
-extern EJSSpecOps _ejs_regexp_specops;
+extern EJSSpecOps _ejs_RegExp_specops;
 
 
 void _ejs_regexp_init(ejsval global);

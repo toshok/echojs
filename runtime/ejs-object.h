@@ -159,9 +159,9 @@ typedef struct {
 } EJSSpecOps;
 
 #define OP_INHERIT (void*)-1
-#define EJS_DEFINE_CLASS(n, class_name, get, get_own_property, get_property, put, can_put, has_property, _delete, default_value, define_own_property, has_instance, allocate, finalize, scan) \
+#define EJS_DEFINE_CLASS(n, get, get_own_property, get_property, put, can_put, has_property, _delete, default_value, define_own_property, has_instance, allocate, finalize, scan) \
     EJSSpecOps _ejs_##n##_specops = {                                   \
-        (class_name), (get), (get_own_property), (get_property), (put), (can_put), (has_property), (_delete), (default_value), (define_own_property), (has_instance), (allocate), (finalize), (scan) \
+        #n, (get), (get_own_property), (get_property), (put), (can_put), (has_property), (_delete), (default_value), (define_own_property), (has_instance), (allocate), (finalize), (scan) \
     };
 
 void _ejs_Class_initialize (EJSSpecOps *child, EJSSpecOps* parent);
@@ -216,7 +216,7 @@ void    _ejs_property_iterator_free (ejsval iterator);
 extern ejsval _ejs_Object;
 extern ejsval _ejs_Object__proto__;
 extern ejsval _ejs_Object_prototype;
-extern EJSSpecOps _ejs_object_specops;
+extern EJSSpecOps _ejs_Object_specops;
 
 void _ejs_object_init_proto();
 

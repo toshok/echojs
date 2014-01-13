@@ -2009,7 +2009,7 @@ webglrenderingcontext_specop_has_property (ejsval O, ejsval P)
     
 	if (constant_info == NULL) {
 		free (prop);
-        return _ejs_object_specops.has_property (O, P);
+        return _ejs_Object_specops.has_property (O, P);
 	}
 
 	free (prop);
@@ -2027,7 +2027,7 @@ webglrenderingcontext_specop_get (ejsval O, ejsval P)
     
 	if (constant_info == NULL) {
 		free (prop);
-        return _ejs_object_specops.get (O, P);
+        return _ejs_Object_specops.get (O, P);
 	}
 
 	free (prop);
@@ -2171,10 +2171,10 @@ _ejs_objc_allocateWebGLRenderingContext (ejsval env, ejsval _this, uint32_t argc
 	return obj;
 }
 
-#define EJS_WEBGL_OBJ(n) EJS_DEFINE_CLASS(n, #n, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, finalize_release_private_data, OP_INHERIT)
-#define EJS_WEBGL_INHERIT_ALL(n) EJS_DEFINE_CLASS(n, #n, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT)
+#define EJS_WEBGL_OBJ(n) EJS_DEFINE_CLASS(n, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, finalize_release_private_data, OP_INHERIT)
+#define EJS_WEBGL_INHERIT_ALL(n) EJS_DEFINE_CLASS(n, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT)
 
-EJS_DEFINE_CLASS(WebGLRenderingContext, "WebGLRenderingContext",
+EJS_DEFINE_CLASS(WebGLRenderingContext,
                  webglrenderingcontext_specop_get,
                  OP_INHERIT, // get_own_property,
                  OP_INHERIT, // get_property,
