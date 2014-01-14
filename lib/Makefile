@@ -14,6 +14,7 @@ COFFEE_SOURCES=				\
 	terminal.coffee
 
 JS_SOURCES=				\
+	map.js				\
 	set.js				\
 	stack.js
 
