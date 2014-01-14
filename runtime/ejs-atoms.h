@@ -157,6 +157,18 @@ EJS_ATOM(some)
 EJS_ATOM(reduce)
 EJS_ATOM(reduceRight)
 
+// Typed array method names
+EJS_ATOM(getInt8)
+EJS_ATOM(setInt8)
+EJS_ATOM(getInt16)
+EJS_ATOM(setInt16)
+EJS_ATOM(getInt32)
+EJS_ATOM(setInt32)
+EJS_ATOM(getFloat32)
+EJS_ATOM(setFloat32)
+EJS_ATOM(getFloat64)
+EJS_ATOM(setFloat64)
+
 // global functions
 EJS_ATOM(isNaN)
 EJS_ATOM(isFinite)

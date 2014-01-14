@@ -250,6 +250,40 @@ _ejs_DataView_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return _this;
 }
 
+#define EJS_DATA_VIEW_METHOD_IMPL(ElementType, elementtype)         \
+    static ejsval                                                   \
+    _ejs_DataView_prototype_get##ElementType##_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+    {                                                               \
+        if (argc == 0) {                                            \
+            _ejs_log ("wrong number of arguments\n");               \
+            EJS_NOT_IMPLEMENTED();                                  \
+        }                                                           \
+                                                                    \
+        void* data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(_this)); \
+        uint32_t idx = EJSVAL_TO_NUMBER(args[0]);                   \
+        return NUMBER_TO_EJSVAL ((double)((elementtype*)data)[idx]);    \
+    }                                                               \
+                                                                    \
+    static void                                                     \
+    _ejs_DataView_prototype_set##ElementType##_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+    {                                                               \
+        if (argc == 0) {                                            \
+            _ejs_log ("wrong number of arguments\n");               \
+            EJS_NOT_IMPLEMENTED();                                  \
+        }                                                           \
+                                                                    \
+        void* data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(_this)); \
+        uint32_t idx = EJSVAL_TO_NUMBER(args[0]);                   \
+        ejsval val = args[1];                                       \
+        ((elementtype*)data)[idx] = (elementtype)EJSVAL_TO_NUMBER(val); \
+    }                                                               \
+
+EJS_DATA_VIEW_METHOD_IMPL(Int8, int8_t);
+EJS_DATA_VIEW_METHOD_IMPL(Int16, int16_t);
+EJS_DATA_VIEW_METHOD_IMPL(Int32, int32_t);
+EJS_DATA_VIEW_METHOD_IMPL(Float32, float);
+EJS_DATA_VIEW_METHOD_IMPL(Float64, double);
+
 #define EJS_TYPED_ARRAY(EnumType, ArrayType, arraytype, elementtype, elementSizeInBytes) \
     static ejsval                                                       \
     _ejs_##ArrayType##Array_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
@@ -562,6 +596,7 @@ _ejs_typedarrays_init(ejsval global)
 {
 #define OBJ_METHOD(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t, x, _ejs_##t##_##x)
 #define PROTO_METHOD(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t##_proto, x, _ejs_##t##_prototype_##x)
+#define PROTO_METHOD_IMPL(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t##_proto, x, _ejs_##t##_prototype_##x##_impl)
 
     // ArrayBuffer
     {
@@ -583,6 +618,17 @@ _ejs_typedarrays_init(ejsval global)
         _ejs_gc_add_root (&_ejs_DataView_proto);
         _ejs_DataView_proto = _ejs_object_new (_ejs_null, &_ejs_object_specops);
         _ejs_object_setprop (_ejs_DataView, _ejs_atom_prototype, _ejs_DataView_proto);
+
+        PROTO_METHOD_IMPL(DataView, getInt8);
+        PROTO_METHOD_IMPL(DataView, setInt8);
+        PROTO_METHOD_IMPL(DataView, getInt16);
+        PROTO_METHOD_IMPL(DataView, setInt16);
+        PROTO_METHOD_IMPL(DataView, getInt32);
+        PROTO_METHOD_IMPL(DataView, setInt32);
+        PROTO_METHOD_IMPL(DataView, getFloat32);
+        PROTO_METHOD_IMPL(DataView, setFloat32);
+        PROTO_METHOD_IMPL(DataView, getFloat64);
+        PROTO_METHOD_IMPL(DataView, setFloat64);
     }
 
 #define ADD_TYPEDARRAY(EnumType, ArrayType, arraytype, elementSizeInBytes) EJS_MACRO_START \
