@@ -54,9 +54,13 @@ typedef int32_t EJSBool;
     abort();                                                            \
     EJS_MACRO_END
 
-#define EJS_ASSERT(x) EJS_MACRO_START                                   \
-    if (!(x)) {                                                         \
-        _ejs_log ("%s:%s:%d assertion failed `%s'.\n", __PRETTY_FUNCTION__, __FILE__, __LINE__, #x); \
+#define EJS_ASSERT_VAL(assertion,msg,v) ({ EJS_ASSERT_MSG(assertion,msg); (v); })
+
+#define EJS_ASSERT(assertion) EJS_ASSERT_MSG(assertion,#assertion)
+
+#define EJS_ASSERT_MSG(assertion,msg) EJS_MACRO_START                   \
+    if (!(assertion)) {                                                 \
+        _ejs_log ("%s:%s:%d assertion failed `%s'.\n", __PRETTY_FUNCTION__, __FILE__, __LINE__, (msg)); \
         abort();                                                        \
     }                                                                   \
     EJS_MACRO_END

@@ -183,7 +183,7 @@ struct _EJSObject {
 };
 
 
-#define OP(o,op) (((EJSObject*)o)->ops->op)
+#define OP(o,op) EJS_ASSERT_VAL(o, "object is null in call to " #op " op", (((EJSObject*)o)->ops->op))
 
 #define CLASSNAME(o) OP(o,class_name)
 

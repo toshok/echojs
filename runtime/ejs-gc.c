@@ -91,6 +91,9 @@ typedef struct EJSFinalizerEntry {
     GCObjectPtr gcobj;
 } EJSFinalizerEntry;
 
+static pthread_mutex_t finalizer_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t finalizer_cond = PTHREAD_COND_INITIALIZER;
+
 static pthread_mutex_t big_gc_lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
 static pthread_mutex_t arena_lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
 
@@ -314,7 +317,7 @@ static unsigned int white_mask = CELL_WHITE_MASK_START;
         _bc = (cell);                                                   \
     } while (!__sync_bool_compare_and_swap (&cell, _bc, (_bc & ~CELL_FREE))); \
     EJS_MACRO_END
-    
+
 #define IS_FREE(cell) (((cell) & CELL_FREE) == CELL_FREE)
 #define IS_FINALIZABLE(cell) (((cell) & CELL_FINALIZABLE) == CELL_FINALIZABLE)
 #define IS_GRAY(cell) (((cell) & CELL_COLOR_MASK) == CELL_GRAY_MASK)
@@ -361,10 +364,9 @@ verify_arena(Arena *arena)
 static Arena*
 arena_new()
 {
-    if (num_arenas == MAX_ARENAS-1) {
-        _ejs_log ("ejs heap exhausted");
-        abort();
-    }
+    if (num_arenas == MAX_ARENAS-1)
+        return NULL;
+
     SPEW(1, _ejs_log ("num_arenas = %d, max = %d\n", num_arenas, MAX_ARENAS));
 
     void* arena_start = alloc_from_os(ARENA_SIZE, ARENA_SIZE);
@@ -583,32 +585,34 @@ finalize_object(GCObjectPtr p)
 {
     GCObjectHeader* headerp = (GCObjectHeader*)p;
     if ((*headerp & EJS_SCAN_TYPE_OBJECT) != 0) {
-        SPEW(1, _ejs_log ("finalizing object %p(%s)\n", p, CLASSNAME(p)));
+        SPEW(2, _ejs_log ("finalizing object %p(%s)\n", p, CLASSNAME(p)));
         OP(p, finalize)((EJSObject*)p);
     }
     else if ((*headerp & EJS_SCAN_TYPE_CLOSUREENV) != 0) {
-        SPEW(1, _ejs_log ("finalizing closureenv %p\n", p));
+        SPEW(2, _ejs_log ("finalizing closureenv %p\n", p));
     }
     else if ((*headerp & EJS_SCAN_TYPE_PRIMSTR) != 0) {
         SPEW(1, {
                 EJSPrimString* primstr = (EJSPrimString*)p;
                 if (EJS_PRIMSTR_GET_TYPE(primstr) == EJS_STRING_FLAT) {
                     char* utf8 = ucs2_to_utf8(primstr->data.flat);
-                    _ejs_log ("finalizing flat primitive string %p(%s)\n", p, utf8);
+                    SPEW(2, _ejs_log ("finalizing flat primitive string %p(%s)\n", p, utf8));
                     free (utf8);
                 }
                 else {
-                    _ejs_log ("finalizing primitive string %p\n", p);
+                    SPEW(2, _ejs_log ("finalizing primitive string %p\n", p));
                 }
             });
     }
 }
 
+static EJSBool gc_waiting;
+
 static void*
 _ejs_finalizer_thread ()
 {
     while (EJS_TRUE) {
-        usleep (500);
+        usleep (750);
 
         EJSFinalizerEntry* this_run;
 
@@ -653,7 +657,7 @@ _ejs_finalizer_thread ()
             EJS_ASSERT(IS_FINALIZABLE(info->page_bitmap[cell_idx]));
 
             finalize_object(fin->gcobj);
-            memset (fin->gcobj, 0, info->cell_size);
+            memset (fin->gcobj, 0xaf, info->cell_size);
 
             SET_FREE(info->page_bitmap[cell_idx]);
             SPEW(3, _ejs_log ("finalized object %p in page %p, num_free_cells == %zd\n", fin->gcobj, info, info->num_free_cells + 1));
@@ -684,6 +688,15 @@ _ejs_finalizer_thread ()
             free (fin);
         }
         SPEW(1, _ejs_log ("finished finalizer run\n"));
+
+        EJSBool is_gc_waiting;
+        do {
+            is_gc_waiting = gc_waiting;
+        } while (!__sync_bool_compare_and_swap (&gc_waiting, is_gc_waiting, EJS_FALSE));
+        if (is_gc_waiting) {
+            pthread_mutex_lock (&finalizer_mutex);
+            pthread_cond_signal (&finalizer_cond);
+        }
     }
     return NULL;
 }
@@ -1273,10 +1286,13 @@ release_to_los (LargeObjectInfo *lobj)
 
 size_t alloc_size = 0;
 int num_allocs = 0;
+size_t alloc_size_at_last_gc = 0;
 
 GCObjectPtr
 _ejs_gc_alloc(size_t size, EJSScanType scan_type)
 {
+    GCObjectPtr rv = NULL;
+
     alloc_size += size;
 
     num_allocs ++;
@@ -1288,13 +1304,16 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     case EJS_SCAN_TYPE_CLOSUREENV: num_closureenv_allocs ++; break;
     }
 
-    if (!gc_disabled && ((num_allocs == 100000 || alloc_size >= 40*1024*1024) || (collect_every_alloc && collect_every_alloc == num_allocs))) {
-    allocation_failed:
+    if (!gc_disabled && ((num_allocs == 200000 || (alloc_size - alloc_size_at_last_gc) >= 40*1024*1024) || (collect_every_alloc && collect_every_alloc == num_allocs))) {
+        //        if (num_allocs == 200000) _ejs_log ("collecting due to num_allocs == %d, alloc_size = %d, alloc_size size last gc = %d", num_allocs, alloc_size, alloc_size - alloc_size_at_last_gc);
+        //        if (alloc_size - alloc_size_at_last_gc >= 40*1024*1024) _ejs_log ("collecting due to allocs since last gc\n");
         _ejs_gc_collect();
-        alloc_size = 0;
+        alloc_size_at_last_gc = alloc_size;
         num_allocs = 0;
     }
 
+    retry_allocation:
+    {
     int bucket;
     int bucket_size = pow2_ceil(size);
 
@@ -1302,7 +1321,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
 
     if (bucket > HEAP_PAGELISTS_COUNT) {
         SPEW(2, _ejs_log ("need to alloc from los!!!\n"));
-        GCObjectPtr rv = alloc_from_los(size, scan_type);
+        rv = alloc_from_los(size, scan_type);
         if (rv == NULL) {
             if (num_allocs == 0) {
                 _ejs_log ("los allocation (size = %d) failed twice, throwing", size);
@@ -1310,7 +1329,17 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
             }
             else {
                 _ejs_log ("los allocation (size = %d) failed, trying to collect", size);
-                goto allocation_failed;
+                UNLOCK_GC();
+                _ejs_gc_collect ();
+                pthread_mutex_lock (&finalizer_mutex);
+                EJSBool is_gc_waiting;
+                do {
+                    is_gc_waiting = gc_waiting;
+                } while (!__sync_bool_compare_and_swap (&gc_waiting, is_gc_waiting, EJS_TRUE));
+                pthread_cond_wait (&finalizer_cond, &finalizer_mutex);
+                alloc_size_at_last_gc = alloc_size;
+                num_allocs = 0;
+                goto retry_allocation;
             }
         }
         return rv;
@@ -1318,7 +1347,6 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
 
     LOCK_GC();
 
-    GCObjectPtr rv = NULL;
     PageInfo* info = (PageInfo*)heap_pages[bucket].head;
     if (!info || !info->num_free_cells) {
         info = alloc_new_page(bucket_size);
@@ -1327,7 +1355,17 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
                 _ejs_throw (page_allocation_failed_exc);
             else {
                 _ejs_log ("page allocation failed, trying to collect");
-                goto allocation_failed;
+                UNLOCK_GC();
+                _ejs_gc_collect ();
+                pthread_mutex_lock (&finalizer_mutex);
+                EJSBool is_gc_waiting;
+                do {
+                    is_gc_waiting = gc_waiting;
+                } while (!__sync_bool_compare_and_swap (&gc_waiting, is_gc_waiting, EJS_TRUE));
+                pthread_cond_wait (&finalizer_cond, &finalizer_mutex);
+                alloc_size_at_last_gc = alloc_size;
+                num_allocs = 0;
+                goto retry_allocation;
             }
         }
         _ejs_list_prepend_node (&heap_pages[bucket], (EJSListNode*)info);
@@ -1347,7 +1385,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
 #endif
 
     UNLOCK_GC();
-
+    }
     return rv;
 }
 
