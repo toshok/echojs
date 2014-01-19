@@ -2031,7 +2031,7 @@ exports.compile = (tree, base_output_filename, source_filename, options) ->
         debug.log 1, "after optimization"
         debug.log 1, -> escodegen.generate tree
 
-        module = new llvm.Module "compiled-#{base_output_filename}"
+        module = new llvm.Module base_output_filename
         
         module.toplevel_name = toplevel_name
 
