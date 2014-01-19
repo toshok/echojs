@@ -560,7 +560,7 @@
 	self = [super init];
 
     EJSObject* _obj = [obj jsObject];
-    EJSPropertyMap *map = &_obj->map;
+    EJSPropertyMap *map = _obj->map;
     _count = map->inuse;
     if (_count == 0) {
         _names = NULL;

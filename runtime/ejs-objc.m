@@ -1047,7 +1047,7 @@ register_members (Class cls, CKObject* obj, NSMutableDictionary* method_map)
 	CKObject* ctor = NULL;
     EJSObject* _obj = [obj jsObject];
 
-    for (_EJSPropertyMapEntry* s = _obj->map.head_insert; s; s = s->next_insert) {
+    for (_EJSPropertyMapEntry* s = _obj->map->head_insert; s; s = s->next_insert) {
         if (_ejs_property_desc_has_getter(s->desc) || 
             _ejs_property_desc_has_setter(s->desc)) {
 			if (_ejs_property_desc_has_getter(s->desc)) {

@@ -270,7 +270,7 @@ JO(StringifyState *state, ejsval value)
               Object.keys standard built-in function. */
         EJSObject* value_obj = EJSVAL_TO_OBJECT(value);
         K = _ejs_array_new (0, EJS_FALSE);
-        for (_EJSPropertyMapEntry *s = value_obj->map.head_insert; s; s = s->next_insert) {
+        for (_EJSPropertyMapEntry *s = value_obj->map->head_insert; s; s = s->next_insert) {
             if (!_ejs_property_desc_is_enumerable(s->desc))
                 continue;
 
