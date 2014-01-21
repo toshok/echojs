@@ -278,10 +278,10 @@ swapBytes (void* value, int elementSizeInBytes)
 {
     switch (elementSizeInBytes) {
     case 2:
-        *((short*)value) = EJS_SWAP_2BYTES(*((short*)value));
+        *((uint16_t*)value) = EJS_SWAP_2BYTES(*((uint16_t*)value));
         break;
     case 4:
-        *((int*)value) = EJS_SWAP_4BYTES(*((int*)value));
+        *((uint32_t*)value) = EJS_SWAP_4BYTES(*((uint32_t*)value));
         break;
     case 8:
         *((uint64_t*)value) = EJS_SWAP_8BYTES(*((uint64_t*)value));
