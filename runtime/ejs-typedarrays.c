@@ -250,39 +250,95 @@ _ejs_DataView_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return _this;
 }
 
-#define EJS_DATA_VIEW_METHOD_IMPL(ElementType, elementtype)         \
+static inline EJSBool
+needToSwap(EJSBool littleEndian)
+{
+#ifdef IS_LITTLE_ENDIAN
+    return !littleEndian;
+#else
+    return littleEndian;
+#endif
+}
+
+#define EJS_SWAP_2BYTES(x)                                              \
+    ( ((x >> 8) & 0x00FF) | ((x << 8) & 0xFF00) )
+
+#define EJS_SWAP_4BYTES(x)                                              \
+    ( ((x >> 24) & 0x000000FF) | ((x >> 8) & 0x0000FF00) |              \
+      ((x << 8) & 0x00FF0000) | ((x << 24) & 0xFF000000) )
+
+#define EJS_SWAP_8BYTES(x)                                              \
+   ( ((x >> 56) & 0x00000000000000FF) | ((x >> 40) & 0x000000000000FF00) |      \
+      ((x >> 24) & 0x0000000000FF0000) | ((x >> 8) & 0x000000000FF000000) |     \
+      ((x << 8) & 0x000000FF00000000) | ((x << 24) & 0x0000FF0000000000) |      \
+      ((x << 40) & 0x00FF000000000000) | ((x << 56) & 0xFF00000000000000) )
+
+static void
+swapBytes (void* value, int elementSizeInBytes)
+{
+    switch (elementSizeInBytes) {
+    case 2:
+        *((short*)value) = EJS_SWAP_2BYTES(*((short*)value));
+        break;
+    case 4:
+        *((int*)value) = EJS_SWAP_4BYTES(*((int*)value));
+        break;
+    case 8:
+        *((uint64_t*)value) = EJS_SWAP_8BYTES(*((uint64_t*)value));
+        break;
+    default: /* just return the original value */
+        break;
+    }
+}
+
+#define EJS_DATA_VIEW_METHOD_IMPL(ElementType, elementtype, elementSizeInBytes)     \
     static ejsval                                                   \
     _ejs_DataView_prototype_get##ElementType##_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
     {                                                               \
-        if (argc == 0) {                                            \
+        if (argc < 1) {                                             \
             _ejs_log ("wrong number of arguments\n");               \
             EJS_NOT_IMPLEMENTED();                                  \
         }                                                           \
                                                                     \
-        void* data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(_this)); \
         uint32_t idx = EJSVAL_TO_NUMBER(args[0]);                   \
-        return NUMBER_TO_EJSVAL ((double)((elementtype*)data)[idx]);    \
+        EJSBool littleEndian = EJS_FALSE;                           \
+        if (argc > 1)                                               \
+            littleEndian = EJSVAL_TO_BOOLEAN(args[1]);              \
+                                                                    \
+        void* data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(_this)); \
+        elementtype val = ((elementtype*)data)[idx];                \
+        if (needToSwap(littleEndian))                               \
+            swapBytes(&val, elementSizeInBytes);                    \
+                                                                    \
+        return NUMBER_TO_EJSVAL(val);                               \
     }                                                               \
                                                                     \
     static void                                                     \
     _ejs_DataView_prototype_set##ElementType##_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
     {                                                               \
-        if (argc == 0) {                                            \
+        if (argc < 2) {                                             \
             _ejs_log ("wrong number of arguments\n");               \
             EJS_NOT_IMPLEMENTED();                                  \
         }                                                           \
                                                                     \
-        void* data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(_this)); \
         uint32_t idx = EJSVAL_TO_NUMBER(args[0]);                   \
-        ejsval val = args[1];                                       \
-        ((elementtype*)data)[idx] = (elementtype)EJSVAL_TO_NUMBER(val); \
+        elementtype val = (elementtype)EJSVAL_TO_NUMBER(args[1]);   \
+        EJSBool littleEndian = EJS_FALSE;                           \
+        if (argc > 2)                                               \
+            littleEndian = EJSVAL_TO_BOOLEAN(args[2]);              \
+                                                                    \
+        if (needToSwap(littleEndian))                               \
+            swapBytes(&val, elementSizeInBytes);                    \
+                                                                    \
+        void* data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(_this)); \
+        ((elementtype*)data)[idx] = val; \
     }                                                               \
 
-EJS_DATA_VIEW_METHOD_IMPL(Int8, int8_t);
-EJS_DATA_VIEW_METHOD_IMPL(Int16, int16_t);
-EJS_DATA_VIEW_METHOD_IMPL(Int32, int32_t);
-EJS_DATA_VIEW_METHOD_IMPL(Float32, float);
-EJS_DATA_VIEW_METHOD_IMPL(Float64, double);
+EJS_DATA_VIEW_METHOD_IMPL(Int8, int8_t, 1);
+EJS_DATA_VIEW_METHOD_IMPL(Int16, int16_t, 2);
+EJS_DATA_VIEW_METHOD_IMPL(Int32, int32_t, 4);
+EJS_DATA_VIEW_METHOD_IMPL(Float32, float, 4);
+EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
 
 #define EJS_TYPED_ARRAY(EnumType, ArrayType, arraytype, elementtype, elementSizeInBytes) \
     static ejsval                                                       \
