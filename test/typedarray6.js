@@ -28,3 +28,11 @@ console.log (view3.getInt32 (4));
 console.log (view3.getInt32 (8));
 console.log (view3.getInt32 (12));
 
+view.setFloat64 (0, 3.1416, true);
+view.setFloat64 (8, 666.999, false);
+
+console.log (view.getFloat64 (0, true));
+console.log (view.getFloat64 (8, false));
+
+console.log (view.getFloat64 (0, false));
+console.log (view.getFloat64 (8, true));
