@@ -24,7 +24,7 @@ EJS_BEGIN_DECLS
 
 extern ejsval _ejs_ObjcHandle;
 extern ejsval _ejs_ObjcHandle_proto;
-extern EJSSpecOps _ejs_objchandle_specops;
+extern EJSSpecOps _ejs_ObjcHandle_specops;
 
 extern ejsval _ejs_objc_handle_new (id handle);
 id ejs_objc_handle_get_id (ejsval handleval);
@@ -32,7 +32,7 @@ id ejs_objc_handle_get_id (ejsval handleval);
 
 extern ejsval _ejs_CoffeeKitObject;
 extern ejsval _ejs_CoffeeKitObject_proto;
-extern EJSSpecOps _ejs_coffeekitobject_specops;
+extern EJSSpecOps _ejs_CoffeeKitObject_specops;
 
 extern void _ejs_objc_init(ejsval global);
 

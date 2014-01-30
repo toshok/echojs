@@ -30,7 +30,7 @@ EJS_BEGIN_DECLS
 
 extern ejsval _ejs_Map;
 extern ejsval _ejs_Map_prototype;
-extern EJSSpecOps _ejs_map_specops;
+extern EJSSpecOps _ejs_Map_specops;
 
 void _ejs_map_init(ejsval global);
 

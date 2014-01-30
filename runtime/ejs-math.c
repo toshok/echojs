@@ -273,7 +273,7 @@ _ejs_Math_tan (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 void
 _ejs_math_init(ejsval global)
 {
-    _ejs_Math = _ejs_object_new (_ejs_Object_prototype, &_ejs_object_specops);
+    _ejs_Math = _ejs_object_new (_ejs_Object_prototype, &_ejs_Object_specops);
     _ejs_object_setprop (global, _ejs_atom_Math, _ejs_Math);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Math, x, _ejs_Math_##x)

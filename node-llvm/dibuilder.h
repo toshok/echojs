@@ -28,13 +28,15 @@ namespace jsllvm {
     void Initialize ();
 
     ::llvm::DIType ejsValueType;
+    ::llvm::DIType ejsValuePointerType;
 
     static v8::Handle<v8::Value> CreateCompileUnit(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateFile(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateFunction(const v8::Arguments& args);
+    static v8::Handle<v8::Value> CreateLexicalBlock(const v8::Arguments& args);
     static v8::Handle<v8::Value> Finalize(const v8::Arguments& args);
 
-    llvm::DIType CreateDIFunctionType(llvm::DIFile file, llvm::FunctionType *fty);
+    llvm::DICompositeType CreateDIFunctionType(llvm::DIFile file, llvm::FunctionType *fty);
 
     static v8::Persistent<v8::FunctionTemplate> s_ct;
     static v8::Persistent<v8::Function> s_func;
@@ -47,6 +49,8 @@ namespace jsllvm {
 
     static v8::Handle<v8::Value> New(llvm::DIDescriptor descriptor);
     static v8::Handle<v8::Value> New(const v8::Arguments& args);
+
+    static v8::Handle<v8::Value> Verify(const v8::Arguments& args);
 
     static llvm::DIDescriptor GetLLVMObj (v8::Local<v8::Value> value) {
       return node::ObjectWrap::Unwrap<DIDescriptor>(value->ToObject())->llvm_didescriptor;
@@ -114,6 +118,8 @@ namespace jsllvm {
     static v8::Handle<v8::Value> New(llvm::DISubprogram subprogram);
     static v8::Handle<v8::Value> New(const v8::Arguments& args);
 
+    static v8::Handle<v8::Value> Verify(const v8::Arguments& args);
+
     static llvm::DISubprogram GetLLVMObj (v8::Local<v8::Value> value) {
       return node::ObjectWrap::Unwrap<DISubprogram>(value->ToObject())->llvm_disubprogram;
     }
@@ -135,6 +141,8 @@ namespace jsllvm {
 
     static v8::Handle<v8::Value> New(llvm::DIFile file);
     static v8::Handle<v8::Value> New(const v8::Arguments& args);
+
+    static v8::Handle<v8::Value> Verify(const v8::Arguments& args);
 
     static llvm::DIFile GetLLVMObj (v8::Local<v8::Value> value) {
       return node::ObjectWrap::Unwrap<DIFile>(value->ToObject())->llvm_difile;

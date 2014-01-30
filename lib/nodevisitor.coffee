@@ -112,7 +112,7 @@ exports.TreeVisitor = class TreeVisitor
 
                 #debug.indent()
                 #debug.log -> "#{n.type}>"
-
+                
                 switch n.type
                         when _Program                 then rv = @visitProgram n
                         when _FunctionDeclaration     then rv = @visitFunctionDeclaration n
@@ -164,7 +164,7 @@ exports.TreeVisitor = class TreeVisitor
                         when _ImportDeclaration       then rv = @visitImportDeclaration n
                         when _ImportSpecifier         then rv = @visitImportSpecifier n
                         else
-                            throw "PANIC: unknown parse node type #{n.type}"
+                            throw new Error "PANIC: unknown parse node type #{n.type}"
                 
                 #debug.log -> "<#{n.type}, rv = #{if rv then rv.type else 'null'}"
                 #debug.unindent()

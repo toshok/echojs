@@ -68,6 +68,7 @@ _YieldExpression = syntax.YieldExpression
 
 { Stack } = require 'stack'
 { Set } = require 'set'
+{ Map } = require 'map'
 { TreeVisitor } = require 'nodevisitor'
 
 echo_util = require 'echo-util'
@@ -156,7 +157,7 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
                 for class_element in n.body.body
                         @method_stack.push class_element.key
                         class_element.value = @visit class_element.value
-                        @method_stack.pop
+                        @method_stack.pop()
                 
                 @class_stack.pop()
                         
@@ -165,35 +166,34 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
                 [properties, methods, sproperties, smethods] = @gather_members n
 
                 ctor = null
-                for method_key of methods
+                methods.forEach  (m, mkey) =>
                         # if it's a method with name 'constructor' output the special ctor function
-                        if method_key is 'constructor'
-                                ctor = methods[method_key]
-                                class_init_iife_body.push @create_constructor methods[method_key], n
+                        if mkey is 'constructor'
+                                ctor = m
+                                class_init_iife_body.push @create_constructor m, n
                         else
-                                class_init_iife_body.push @create_proto_method methods[method_key], n
+                                class_init_iife_body.push @create_proto_method m, n
 
-                for method_key of smethods
-                        class_init_iife_body.push @create_static_method smethods[method_key], n
+                smethods.forEach (sm) =>
+                        class_init_iife_body.push @create_static_method sm, n
 
                 proto_props = @create_properties properties, n, false
-                class_init_iife_body.push proto_props if proto_props?
+                class_init_iife_body = class_init_iife_body.concat(proto_props) if proto_props?
                         
                 static_props = @create_properties sproperties, n, true
-                class_init_iife_body.push static_props if static_props?
+                class_init_iife_body = class_init_iife_body.concat(static_props) if static_props?
 
                 # generate and prepend a default ctor if there isn't one declared.
                 # It looks like this in code:
                 #   function Subclass (...args) { _super.call(this, args...); }
                 if not ctor?
                         class_init_iife_body.unshift @create_default_constructor n
-                           
 
                 # make sure we return the function from our iife
                 class_init_iife_body.push
                         type: _ReturnStatement
                         argument: n.id
-                
+
                 # this block forms the outer wrapper iife + initializer:
                 # 
                 #  let %className = (function (%super?) { ... })(%superClassName);
@@ -334,33 +334,35 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
 
         create_properties: (properties, ast_class, are_static) ->
                 propdescs = []
-                
-                for pname of properties
-                        prop = properties[pname]
+
+                properties.forEach (prop_map, prop) =>
                         accessors = []
                         name = null
 
-                        if prop.get?
-                                accessors.push { type: _Property, key: create_identifier("get"), value: prop.get.value, kind: "init" }
-                                name = prop.get.key
+                        getter = prop_map.get("get")
+                        setter = prop_map.get("set")
+
+                        if getter?
+                                accessors.push { type: _Property, key: create_identifier("get"), value: getter.value, kind: "init" }
+                                name = prop
                         if prop.set?
-                                accessors.push { type: _Property, key: create_identifier("set"), value: prop.set.value, kind: "init" }
-                                name = prop.set.key
-                        
+                                accessors.push { type: _Property, key: create_identifier("set"), value: setter.value, kind: "init" }
+                                name = prop
+
                         propdescs.push
                                 type: _Property
-                                key: name
+                                key: create_identifier name
                                 value:
                                         type: _ObjectExpression
                                         properties: accessors
                                 kind: "init"
 
                 return null if propdescs.length is 0
-                        
+
                 propdescs_literal =
                         type: _ObjectExpression
                         properties: propdescs
-                
+
                 if are_static
                         target = ast_class.id
                 else
@@ -369,7 +371,7 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
                                 object: ast_class.id
                                 property: create_identifier "prototype"
                                 computed: false
-                                
+
                 return {
                         type: _ExpressionStatement
                         expression:
@@ -1282,12 +1284,12 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
                 # identifier that we don't want rewrapped, or an
                 # intrinsic already wrapping the identifier.
 
-                if n.arguments[0].type is _CallExpression
+                if n.arguments[0].type is _Identifier
                         new_args = @visit n.arguments.slice 1
                         new_args.unshift n.arguments[0]
                 else
                         new_args = @visit n.arguments
-                        n.arguments = new_args
+                n.arguments = new_args
                 n
 
         visitNewExpression: (n) ->
@@ -1325,16 +1327,6 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
 
         visitIdentifier: (n) ->
                 create_intrinsic @intrinsicForIdentifier(n), [n]
-
-        visitForIn: (n) ->
-                n.right = @visit n.right
-                n.body  = @visit n.body
-                n
-                
-        visitForOf: (n) ->
-                n.right = @visit n.right
-                n.body  = @visit n.body
-                n
 
 #
 # special pass to inline some common idioms dealing with IIFEs
@@ -1509,13 +1501,17 @@ passes = [
         LambdaLift
         ]
 
-exports.convert = (tree, filename) ->
+exports.convert = (tree, filename, options) ->
         debug.log "before:"
         debug.log -> escodegen.generate tree
 
         passes.forEach (passType) ->
                 pass = new passType(filename)
                 tree = pass.visit tree
+                if options.debug_passes.has (passType.name)
+                        console.log "after: #{passType.name}"
+                        console.log escodegen.generate tree
+                        
                 debug.log 2, "after: #{passType.name}"
                 debug.log 2, -> escodegen.generate tree
                 debug.log 3, -> __ejs.GC.dumpAllocationStats "after #{passType.name}" if __ejs?

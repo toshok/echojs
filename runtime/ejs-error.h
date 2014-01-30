@@ -20,9 +20,9 @@ typedef enum {
     EJS_URI_ERROR
 } EJSNativeErrorType;
 
-#define EJSVAL_IS_ERROR(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_error_specops))
+#define EJSVAL_IS_ERROR(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Error_specops))
 
-extern EJSSpecOps _ejs_error_specops;
+extern EJSSpecOps _ejs_Error_specops;
 
 extern ejsval _ejs_Error_proto;
 extern ejsval _ejs_EvalError_proto;

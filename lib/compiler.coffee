@@ -2015,7 +2015,7 @@ exports.compile = (tree, base_output_filename, source_filename, options) ->
         #debug.log 1, "before closure conversion"
         #debug.log 1, -> escodegen.generate tree
 
-        tree = closure_conversion.convert tree, path.basename source_filename
+        tree = closure_conversion.convert tree, path.basename(source_filename), options
 
         debug.log 1, "after closure conversion"
         debug.log 1, -> escodegen.generate tree

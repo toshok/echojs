@@ -5,6 +5,7 @@
 #include "function.h"
 #include "value.h"
 #include "globalvariable.h"
+#include "metadata.h"
 
 using namespace node;
 using namespace v8;
@@ -33,6 +34,7 @@ namespace jsllvm {
     NODE_SET_PROTOTYPE_METHOD(s_ct, "writeBitcodeToFile", Module::WriteBitcodeToFile);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "setDataLayout", Module::SetDataLayout);
     NODE_SET_PROTOTYPE_METHOD(s_ct, "setTriple", Module::SetTriple);
+    NODE_SET_PROTOTYPE_METHOD(s_ct, "addModuleFlag", Module::AddModuleFlag);
 
     s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
     target->Set(String::NewSymbol("Module"),
@@ -253,6 +255,18 @@ namespace jsllvm {
     llvm::raw_os_ostream raw_stream(output_file);
     module->llvm_module->print(raw_stream, NULL);
     output_file.close();
+
+    return scope.Close(Undefined());
+  }
+
+  Handle<v8::Value> Module::AddModuleFlag (const v8::Arguments& args)
+  {
+    HandleScope scope;
+    Module* module = ObjectWrap::Unwrap<Module>(args.This());
+
+    REQ_LLVM_MDNODE_ARG(0, node);
+
+    module->llvm_module->addModuleFlag (node);
 
     return scope.Close(Undefined());
   }

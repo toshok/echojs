@@ -19,7 +19,7 @@ typedef struct {
 
 EJS_BEGIN_DECLS
 
-extern EJSSpecOps _ejs_symbol_specops;
+extern EJSSpecOps _ejs_Symbol_specops;
 
 void _ejs_symbol_init(ejsval global);
 

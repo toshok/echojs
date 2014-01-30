@@ -10,30 +10,12 @@
 
 #include <string.h>
 
-static EJSObject* _ejs_date_specop_allocate ();
-
-EJS_DEFINE_CLASS(date, "Date",
-                 OP_INHERIT, // get
-                 OP_INHERIT, // get_own_property
-                 OP_INHERIT, // get_property
-                 OP_INHERIT, // put
-                 OP_INHERIT, // can_put
-                 OP_INHERIT, // has_property
-                 OP_INHERIT, // delete
-                 OP_INHERIT, // default_value
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
-                 _ejs_date_specop_allocate,
-                 OP_INHERIT, // finalize
-                 OP_INHERIT  // scan
-                 )
-
 ejsval
 _ejs_date_unix_now ()
 {
     EJSDate* rv = _ejs_gc_new (EJSDate);
 
-    _ejs_init_object ((EJSObject*)rv, _ejs_Date_proto, &_ejs_date_specops);
+    _ejs_init_object ((EJSObject*)rv, _ejs_Date_proto, &_ejs_Date_specops);
 
     gettimeofday (&rv->tv, &rv->tz);
 
@@ -152,7 +134,7 @@ _ejs_date_init(ejsval global)
     _ejs_object_setprop (global, _ejs_atom_Date, _ejs_Date);
 
     _ejs_gc_add_root (&_ejs_Date_proto);
-    _ejs_Date_proto = _ejs_object_new(_ejs_null, &_ejs_object_specops);
+    _ejs_Date_proto = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
     _ejs_object_setprop (_ejs_Date,       _ejs_atom_prototype,  _ejs_Date_proto);
 
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Date_proto, x, _ejs_Date_prototype_##x, EJS_PROP_NOT_ENUMERABLE)
@@ -169,3 +151,20 @@ _ejs_date_specop_allocate()
 {
     return (EJSObject*)_ejs_gc_new (EJSDate);
 }
+
+EJS_DEFINE_CLASS(Date,
+                 OP_INHERIT, // get
+                 OP_INHERIT, // get_own_property
+                 OP_INHERIT, // get_property
+                 OP_INHERIT, // put
+                 OP_INHERIT, // can_put
+                 OP_INHERIT, // has_property
+                 OP_INHERIT, // delete
+                 OP_INHERIT, // default_value
+                 OP_INHERIT, // define_own_property
+                 OP_INHERIT, // has_instance
+                 _ejs_date_specop_allocate,
+                 OP_INHERIT, // finalize
+                 OP_INHERIT  // scan
+                 )
+

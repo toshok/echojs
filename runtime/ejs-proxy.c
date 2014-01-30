@@ -7,37 +7,6 @@
 #include "ejs-error.h"
 #include "ejs-function.h"
 
-static ejsval  _ejs_proxy_specop_get (ejsval obj, ejsval propertyName);
-static EJSPropertyDesc* _ejs_proxy_specop_get_own_property (ejsval obj, ejsval propertyName);
-static EJSPropertyDesc* _ejs_proxy_specop_get_property (ejsval obj, ejsval propertyName);
-static void    _ejs_proxy_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
-static EJSBool _ejs_proxy_specop_can_put (ejsval obj, ejsval propertyName);
-static EJSBool _ejs_proxy_specop_has_property (ejsval obj, ejsval propertyName);
-static EJSBool _ejs_proxy_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
-static ejsval  _ejs_proxy_specop_default_value (ejsval obj, const char *hint);
-static EJSBool _ejs_proxy_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
-static EJSObject* _ejs_proxy_specop_allocate ();
-static void    _ejs_proxy_specop_finalize (EJSObject* obj);
-static void    _ejs_proxy_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
-
-EJSSpecOps _ejs_proxy_specops = {
-    "Proxy",
-    _ejs_proxy_specop_get,
-    _ejs_proxy_specop_get_own_property,
-    _ejs_proxy_specop_get_property,
-    _ejs_proxy_specop_put,
-    _ejs_proxy_specop_can_put,
-    _ejs_proxy_specop_has_property,
-    _ejs_proxy_specop_delete,
-    _ejs_proxy_specop_default_value,
-    _ejs_proxy_specop_define_own_property,
-    NULL, /* [[HasInstance]] */
-
-    _ejs_proxy_specop_allocate,
-    _ejs_proxy_specop_finalize,
-    _ejs_proxy_specop_scan
-};
-
 ejsval
 _ejs_Proxy_create (ejsval env, ejsval this, uint32_t argc, ejsval* args)
 {
@@ -67,7 +36,7 @@ _ejs_Proxy_createFunction (ejsval env, ejsval this, uint32_t argc, ejsval* args)
 void
 _ejs_proxy_init(ejsval global)
 {
-    ejsval _ejs_Proxy = _ejs_object_new (_ejs_null, &_ejs_object_specops);
+    ejsval _ejs_Proxy = _ejs_object_new (_ejs_null, &_ejs_Object_specops);
     _ejs_object_setprop (global, _ejs_atom_Proxy, _ejs_Proxy);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Proxy, x, _ejs_Proxy_##x)
@@ -150,3 +119,22 @@ _ejs_proxy_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJS_NOT_IMPLEMENTED();
 }
+
+EJSSpecOps _ejs_proxy_specops = {
+    "Proxy",
+    _ejs_proxy_specop_get,
+    _ejs_proxy_specop_get_own_property,
+    _ejs_proxy_specop_get_property,
+    _ejs_proxy_specop_put,
+    _ejs_proxy_specop_can_put,
+    _ejs_proxy_specop_has_property,
+    _ejs_proxy_specop_delete,
+    _ejs_proxy_specop_default_value,
+    _ejs_proxy_specop_define_own_property,
+    NULL, /* [[HasInstance]] */
+
+    _ejs_proxy_specop_allocate,
+    _ejs_proxy_specop_finalize,
+    _ejs_proxy_specop_scan
+};
+

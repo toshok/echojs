@@ -256,17 +256,17 @@ uint16_t ToUint16(ejsval exp)
 ejsval ToObject(ejsval exp)
 {
     if (EJSVAL_IS_BOOLEAN(exp)) {
-        ejsval new_boolean = _ejs_object_new (_ejs_Boolean_proto, &_ejs_boolean_specops);
+        ejsval new_boolean = _ejs_object_new (_ejs_Boolean_proto, &_ejs_Boolean_specops);
         _ejs_invoke_closure (_ejs_Boolean, new_boolean, 1, &exp);
         return new_boolean;
     }
     else if (EJSVAL_IS_NUMBER(exp)) {
-        ejsval new_number = _ejs_object_new (_ejs_Number_proto, &_ejs_number_specops);
+        ejsval new_number = _ejs_object_new (_ejs_Number_proto, &_ejs_Number_specops);
         _ejs_invoke_closure (_ejs_Number, new_number, 1, &exp);
         return new_number;
     }
     else if (EJSVAL_IS_STRING(exp)) {
-        ejsval new_str = _ejs_object_new (_ejs_String_prototype, &_ejs_string_specops);
+        ejsval new_str = _ejs_object_new (_ejs_String_prototype, &_ejs_String_specops);
         _ejs_invoke_closure (_ejs_String, new_str, 1, &exp);
         return new_str;
     }

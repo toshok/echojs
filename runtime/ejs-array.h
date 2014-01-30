@@ -49,7 +49,7 @@ typedef struct {
 #define EJS_DENSE_ARRAY_ALLOC(obj)    EJSDENSEARRAY_ALLOC(EJSVAL_TO_OBJECT(obj))
 #define EJS_DENSE_ARRAY_ELEMENTS(obj) EJSDENSEARRAY_ELEMENTS(EJSVAL_TO_OBJECT(obj))
 
-#define EJSVAL_IS_DENSE_ARRAY(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_array_specops))
+#define EJSVAL_IS_DENSE_ARRAY(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Array_specops))
 #define EJSVAL_IS_SPARSE_ARRAY(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_sparsearray_specops))
 #define EJSARRAY_IS_SPARSE(arrobj) (((EJSObject*)(arrobj))->ops == &_ejs_sparsearray_specops)
 
@@ -57,7 +57,7 @@ EJS_BEGIN_DECLS
 
 extern ejsval _ejs_Array;
 extern ejsval _ejs_Array_proto;
-extern EJSSpecOps _ejs_array_specops;
+extern EJSSpecOps _ejs_Array_specops;
 extern EJSSpecOps _ejs_sparsearray_specops;
 
 ejsval _ejs_array_new (int numElements, EJSBool fill);

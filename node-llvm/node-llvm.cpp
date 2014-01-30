@@ -21,6 +21,7 @@
 #include "switch.h"
 #include "callinvoke.h"
 #include "loadinst.h"
+#include "metadata.h"
 
 std::string& trim(std::string& str)
 {
@@ -56,14 +57,17 @@ extern "C" {
     jsllvm::Call::Init(target);
     jsllvm::Invoke::Init(target);
 
-    //jsllvm::DIBuilder::Init(target);
-    //jsllvm::DIDescriptor::Init(target);
-    //jsllvm::DIType::Init(target);
-    //jsllvm::DIScope::Init(target);
-    //jsllvm::DISubprogram::Init(target);
-    //jsllvm::DIFile::Init(target);
-    //jsllvm::DILexicalBlock::Init(target);
-    //jsllvm::DebugLoc::Init(target);
+    jsllvm::MDNode::Init(target);
+    jsllvm::MDString::Init(target);
+
+    jsllvm::DIBuilder::Init(target);
+    jsllvm::DIDescriptor::Init(target);
+    jsllvm::DIType::Init(target);
+    jsllvm::DIScope::Init(target);
+    jsllvm::DISubprogram::Init(target);
+    jsllvm::DIFile::Init(target);
+    jsllvm::DILexicalBlock::Init(target);
+    jsllvm::DebugLoc::Init(target);
   }
 
   NODE_MODULE(llvm, init);

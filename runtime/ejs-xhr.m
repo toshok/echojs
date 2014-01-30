@@ -229,35 +229,6 @@ typedef struct {
     id peer;
 } EJSXMLHttpRequest;
 
-static ejsval  _ejs_xmlhttprequest_specop_get (ejsval obj, ejsval propertyName);
-static EJSPropertyDesc* _ejs_xmlhttprequest_specop_get_own_property (ejsval obj, ejsval propertyName);
-static EJSPropertyDesc* _ejs_xmlhttprequest_specop_get_property (ejsval obj, ejsval propertyName);
-static void    _ejs_xmlhttprequest_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
-static EJSBool _ejs_xmlhttprequest_specop_can_put (ejsval obj, ejsval propertyName);
-static EJSBool _ejs_xmlhttprequest_specop_has_property (ejsval obj, ejsval propertyName);
-static EJSBool _ejs_xmlhttprequest_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
-static ejsval  _ejs_xmlhttprequest_specop_default_value (ejsval obj, const char *hint);
-static EJSBool _ejs_xmlhttprequest_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
-static EJSObject* _ejs_xmlhttprequest_specop_allocate ();
-static void    _ejs_xmlhttprequest_specop_finalize (EJSObject* obj);
-static void    _ejs_xmlhttprequest_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
-
-EJS_DEFINE_CLASS(xmlhttprequest, "XMLHttpRequest",
-                 OP_INHERIT, // get,
-                 OP_INHERIT, // get_own_property,
-                 OP_INHERIT, // get_property,
-                 OP_INHERIT, // put,
-                 OP_INHERIT, // can_put,
-                 OP_INHERIT, // has_property,
-                 OP_INHERIT, // delete,
-                 OP_INHERIT, // default_value
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
-                 _ejs_xmlhttprequest_specop_allocate,
-                 OP_INHERIT, // finalize
-                 OP_INHERIT  // scan
-                 )
-
 static id
 get_peer (ejsval obj)
 {
@@ -639,7 +610,7 @@ _ejs_xmlhttprequest_init(ejsval global)
     _ejs_object_setprop (global, _ejs_atom_XMLHttpRequest, _ejs_XMLHttpRequest);
 
     _ejs_gc_add_root (&_ejs_XMLHttpRequest_proto);
-    _ejs_XMLHttpRequest_proto = _ejs_object_new(_ejs_null, &_ejs_object_specops);
+    _ejs_XMLHttpRequest_proto = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
     _ejs_object_setprop (_ejs_XMLHttpRequest,       _ejs_atom_prototype,  _ejs_XMLHttpRequest_proto);
 
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_XMLHttpRequest_proto, x, _ejs_XMLHttpRequest_prototype_##x, EJS_PROP_NOT_ENUMERABLE)
@@ -670,3 +641,19 @@ _ejs_xmlhttprequest_specop_allocate()
 {
     return (EJSObject*)_ejs_gc_new (EJSXMLHttpRequest);
 }
+
+EJS_DEFINE_CLASS(XMLHttpRequest,
+                 OP_INHERIT, // get,
+                 OP_INHERIT, // get_own_property,
+                 OP_INHERIT, // get_property,
+                 OP_INHERIT, // put,
+                 OP_INHERIT, // can_put,
+                 OP_INHERIT, // has_property,
+                 OP_INHERIT, // delete,
+                 OP_INHERIT, // default_value
+                 OP_INHERIT, // define_own_property
+                 OP_INHERIT, // has_instance
+                 _ejs_xmlhttprequest_specop_allocate,
+                 OP_INHERIT, // finalize
+                 OP_INHERIT  // scan
+                 )

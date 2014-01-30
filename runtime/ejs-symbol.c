@@ -7,35 +7,6 @@
 #include "ejs-error.h"
 #include "ejs-function.h"
 
-static ejsval  _ejs_symbol_specop_get (ejsval obj, ejsval propertyName);
-static EJSPropertyDesc* _ejs_symbol_specop_get_own_property (ejsval obj, ejsval propertyName);
-static EJSPropertyDesc* _ejs_symbol_specop_get_property (ejsval obj, ejsval propertyName);
-static void    _ejs_symbol_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
-static EJSBool _ejs_symbol_specop_can_put (ejsval obj, ejsval propertyName);
-static EJSBool _ejs_symbol_specop_has_property (ejsval obj, ejsval propertyName);
-static EJSBool _ejs_symbol_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
-static ejsval  _ejs_symbol_specop_default_value (ejsval obj, const char *hint);
-static EJSBool _ejs_symbol_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
-static EJSObject* _ejs_symbol_specop_allocate ();
-static void    _ejs_symbol_specop_finalize (EJSObject* obj);
-static void    _ejs_symbol_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
-
-EJS_DEFINE_CLASS(symbol, "Symbol",
-                 _ejs_symbol_specop_get,
-                 _ejs_symbol_specop_get_own_property,
-                 _ejs_symbol_specop_get_property,
-                 _ejs_symbol_specop_put,
-                 _ejs_symbol_specop_can_put,
-                 _ejs_symbol_specop_has_property,
-                 _ejs_symbol_specop_delete,
-                 _ejs_symbol_specop_default_value,
-                 _ejs_symbol_specop_define_own_property,
-                 OP_INHERIT, // has_instance
-                 _ejs_symbol_specop_allocate,
-                 _ejs_symbol_specop_finalize,
-                 _ejs_symbol_specop_scan
-                 )
-
 void
 _ejs_symbol_init(ejsval global)
 {
@@ -113,3 +84,19 @@ _ejs_symbol_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJS_NOT_IMPLEMENTED();
 }
+
+EJS_DEFINE_CLASS(Symbol,
+                 _ejs_symbol_specop_get,
+                 _ejs_symbol_specop_get_own_property,
+                 _ejs_symbol_specop_get_property,
+                 _ejs_symbol_specop_put,
+                 _ejs_symbol_specop_can_put,
+                 _ejs_symbol_specop_has_property,
+                 _ejs_symbol_specop_delete,
+                 _ejs_symbol_specop_default_value,
+                 _ejs_symbol_specop_define_own_property,
+                 OP_INHERIT, // has_instance
+                 _ejs_symbol_specop_allocate,
+                 _ejs_symbol_specop_finalize,
+                 _ejs_symbol_specop_scan
+                 )

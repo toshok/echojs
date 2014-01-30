@@ -35,7 +35,7 @@ require_builtin_module (const char* name, ejsval *module)
             if (EJSVAL_IS_NULL(builtin_module_map[i].cached_exports)) {
                 //	printf ("require'ing %s.\n", EJSVAL_TO_FLAT_STRING(arg));
                 _ejs_gc_add_root (&builtin_module_map[i].cached_exports);
-                builtin_module_map[i].cached_exports = _ejs_object_new(_ejs_null, &_ejs_object_specops);
+                builtin_module_map[i].cached_exports = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
                 builtin_module_map[i].func(_ejs_null, _ejs_undefined, 1, &builtin_module_map[i].cached_exports);
             }
             *module = builtin_module_map[i].cached_exports;
@@ -57,7 +57,7 @@ require_external_module (const char* name, ejsval *module)
         if (!strcmp (_ejs_external_module_require_map[i].name, name)) {
             if (EJSVAL_IS_NULL(_ejs_external_module_require_map[i].cached_exports)) {
                 _ejs_gc_add_root (&_ejs_external_module_require_map[i].cached_exports);
-                _ejs_external_module_require_map[i].cached_exports = _ejs_object_new(_ejs_null, &_ejs_object_specops);
+                _ejs_external_module_require_map[i].cached_exports = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
                 _ejs_external_module_require_map[i].func(_ejs_external_module_require_map[i].cached_exports);
             }
             *module = _ejs_external_module_require_map[i].cached_exports;
@@ -79,7 +79,7 @@ require_user_module (const char* name, ejsval *module)
         if (!strcmp (map->name, name)) {
             if (EJSVAL_IS_NULL(map->cached_exports)) {
                 _ejs_gc_add_root (&map->cached_exports);
-                map->cached_exports = _ejs_object_new(_ejs_null, &_ejs_object_specops);
+                map->cached_exports = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
                 ejsval prev_exports = _ejs_object_getprop (_ejs_global, _ejs_atom_exports);
                 _ejs_gc_add_root (&prev_exports);
                 _ejs_object_setprop(_ejs_global, _ejs_atom_exports, map->cached_exports);

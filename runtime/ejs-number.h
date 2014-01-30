@@ -19,7 +19,7 @@ EJS_BEGIN_DECLS
 
 extern ejsval _ejs_Number;
 extern ejsval _ejs_Number_proto;
-extern EJSSpecOps _ejs_number_specops;
+extern EJSSpecOps _ejs_Number_specops;
 
 void _ejs_number_init(ejsval global);
 

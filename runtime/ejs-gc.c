@@ -16,6 +16,8 @@
 #include "ejs-function.h"
 #include "ejs-value.h"
 #include "ejs-string.h"
+#include "ejs-error.h"
+#include "ejs-ops.h"
 #include "ejsval.h"
 
 #include <pthread.h>
@@ -35,6 +37,10 @@ static int _ejs_spew_level = (spew);
 #else
 #define SANITY(x)
 #endif
+
+// exceptions to throw if we're out of memory
+static ejsval los_allocation_failed_exc EJSVAL_ALIGNMENT;
+static ejsval page_allocation_failed_exc EJSVAL_ALIGNMENT;
 
 void _ejs_gc_dump_heap_stats();
 
@@ -200,10 +206,16 @@ alloc_from_os(size_t size, size_t align)
 {
     if (align == 0) {
         size = MAX(size, PAGE_SIZE);
-        return mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, MAP_FD, 0);
+        void* res = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, MAP_FD, 0);
+        _ejs_log ("mmap for 0 alignment = %p\n", res);
+        return res == MAP_FAILED ? NULL : res;
     }
 
     void* res = mmap(NULL, size*2, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, MAP_FD, 0);
+    if (res == MAP_FAILED) {
+        return NULL;
+    }
+
     SPEW(2, _ejs_log ("mmap returned %p\n", res));
 
     if (((uintptr_t)res % align) == 0) {
@@ -219,7 +231,7 @@ alloc_from_os(size_t size, size_t align)
         // the area before
         munmap (res, (uintptr_t)aligned_res - (uintptr_t)res);
         // the area after
-        munmap (aligned_res+size, size*2 - (uintptr_t)(aligned_res+size));
+        munmap (aligned_res+size, (uintptr_t)res+size*2 - (uintptr_t)(aligned_res+size));
         res = aligned_res;
         SPEW(2, _ejs_log ("aligned ptr = %p\n", res));
     }
@@ -356,6 +368,8 @@ arena_new()
     SPEW(1, _ejs_log ("num_arenas = %d, max = %d\n", num_arenas, MAX_ARENAS));
 
     void* arena_start = alloc_from_os(ARENA_SIZE, ARENA_SIZE);
+    if (arena_start == NULL)
+        return NULL;
 
     Arena* new_arena = arena_start;
 
@@ -557,6 +571,8 @@ alloc_new_page(size_t cell_size)
     LOCK_ARENAS();
     Arena* arena = arena_new();
     UNLOCK_ARENAS();
+    if (arena == NULL)
+        return NULL;
     rv = alloc_page_from_arena(arena, cell_size);
     SPEW(2, _ejs_log ("  => %p", rv));
     return rv;
@@ -567,14 +583,14 @@ finalize_object(GCObjectPtr p)
 {
     GCObjectHeader* headerp = (GCObjectHeader*)p;
     if ((*headerp & EJS_SCAN_TYPE_OBJECT) != 0) {
-        SPEW(2, _ejs_log ("finalizing object %p(%s)\n", p, CLASSNAME(p)));
+        SPEW(1, _ejs_log ("finalizing object %p(%s)\n", p, CLASSNAME(p)));
         OP(p, finalize)((EJSObject*)p);
     }
     else if ((*headerp & EJS_SCAN_TYPE_CLOSUREENV) != 0) {
-        SPEW(2, _ejs_log ("finalizing closureenv %p\n", p));
+        SPEW(1, _ejs_log ("finalizing closureenv %p\n", p));
     }
     else if ((*headerp & EJS_SCAN_TYPE_PRIMSTR) != 0) {
-        SPEW(2, {
+        SPEW(1, {
                 EJSPrimString* primstr = (EJSPrimString*)p;
                 if (EJS_PRIMSTR_GET_TYPE(primstr) == EJS_STRING_FLAT) {
                     char* utf8 = ucs2_to_utf8(primstr->data.flat);
@@ -620,8 +636,10 @@ _ejs_finalizer_thread ()
                 PageInfo *page = arena->page_infos[page_index];
                 _ejs_log ("fin->gcobj = %p\n", fin->gcobj);
                 _ejs_log ("page_index = %d, using page %p\n", page_index, page);
-                _ejs_log ("sizeof cell for page = %zd\n", arena->page_infos[page_index]->cell_size);
-                _ejs_log ("aligned to cell size? %s\n", IS_ALIGNED_TO(fin->gcobj, arena->page_infos[page_index]->cell_size) ? "yes" : "no");
+                if (page) {
+                    _ejs_log ("sizeof cell for page = %zd\n", arena->page_infos[page_index]->cell_size);
+                    _ejs_log ("aligned to cell size? %s\n", IS_ALIGNED_TO(fin->gcobj, arena->page_infos[page_index]->cell_size) ? "yes" : "no");
+                }
 #endif
                 continue;
             }
@@ -673,11 +691,7 @@ _ejs_finalizer_thread ()
 void
 _ejs_gc_init()
 {
-#if IOS
-    gc_disabled = EJS_TRUE;
-#else
     gc_disabled = getenv("EJS_GC_DISABLE") != NULL;
-#endif
     char* n_allocs = getenv("EJS_GC_EVERY_N_ALLOC");
     if (n_allocs)
         collect_every_alloc = atoi(n_allocs);
@@ -689,10 +703,18 @@ _ejs_gc_init()
 
     root_set = NULL;
 
-#if false
     // start up the finalizer thread
     pthread_create (&finalizer_thread, NULL, _ejs_finalizer_thread, NULL);
-#endif
+}
+
+void
+_ejs_gc_allocate_oom_exceptions()
+{
+    _ejs_gc_add_root (&los_allocation_failed_exc);
+    los_allocation_failed_exc  = _ejs_nativeerror_new_utf8 (EJS_ERROR, "LOS allocation failed");
+
+    _ejs_gc_add_root (&page_allocation_failed_exc);
+    page_allocation_failed_exc = _ejs_nativeerror_new_utf8 (EJS_ERROR, "page allocation failed");
 }
 
 static void
@@ -934,7 +956,20 @@ mark_from_roots()
 }
 
 #if IOS
+#if arm
+#define MARK_REGISTERS EJS_MACRO_START \
+    GCObjectPtr __r0, __r1, __r2, __r3, __r4, __r5, __r6, __r7, __r8, __r9, __r10, __r11, __r12;
+    __asm ("str r0, %0; str r1, %1; str r2, %2; str r3, %3; str r4, %4; str r5, %5; str r6, %6;" \
+           "str r7, %7; str r8, %8; str r9, %9; str r10, %10; str r11, %11; str r12, %12;" \
+          : "=m"(__r0), "=m"(__r1), "=m"(__r2), "=m"(__r3), "=m"(__r4),  \
+            "=m"(__r5), "=m"(__r6), "=m"(__r7), "=m"(__r8),  "=m"(__r9), \
+            "=m"(__r10), "=m"(__r11), "=m"(__r12));                      \
+                                                                         \
+    mark_pointers_in_range(&__r12, &__r0);                               \
+    EJS_MACRO_END
+#else
 #define MARK_REGISTERS
+#endif
 #elif OSX
 #define MARK_REGISTERS EJS_MACRO_START \
     GCObjectPtr __rax, __rbx, __rcx, __rdx, __rsi, __rdi, __rbp, __rsp, __r8, __r9, __r10, __r11, __r12, __r13, __r14, __r15; \
@@ -1208,6 +1243,8 @@ alloc_from_los(size_t size, EJSScanType scan_type)
 {
     // allocate enough space for the object, our header, and our bitmap.  leave room enough to align the return value
     LargeObjectInfo *rv = alloc_from_os(size + sizeof(LargeObjectInfo) + 16, 0);
+    if (rv == NULL)
+        return NULL;
 
     rv->page_info.page_bitmap = (char*)((void*)rv + sizeof(LargeObjectInfo)); // our 1 byte bitmap comes right after the header
     rv->page_info.page_start = (void*)ALIGN((void*)rv + sizeof(LargeObjectInfo) + 1, 8);
@@ -1252,6 +1289,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     }
 
     if (!gc_disabled && ((num_allocs == 100000 || alloc_size >= 40*1024*1024) || (collect_every_alloc && collect_every_alloc == num_allocs))) {
+    allocation_failed:
         _ejs_gc_collect();
         alloc_size = 0;
         num_allocs = 0;
@@ -1264,7 +1302,18 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
 
     if (bucket > HEAP_PAGELISTS_COUNT) {
         SPEW(2, _ejs_log ("need to alloc from los!!!\n"));
-        return alloc_from_los(size, scan_type);
+        GCObjectPtr rv = alloc_from_los(size, scan_type);
+        if (rv == NULL) {
+            if (num_allocs == 0) {
+                _ejs_log ("los allocation (size = %d) failed twice, throwing", size);
+                _ejs_throw (los_allocation_failed_exc);
+            }
+            else {
+                _ejs_log ("los allocation (size = %d) failed, trying to collect", size);
+                goto allocation_failed;
+            }
+        }
+        return rv;
     }
 
     LOCK_GC();
@@ -1273,6 +1322,14 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     PageInfo* info = (PageInfo*)heap_pages[bucket].head;
     if (!info || !info->num_free_cells) {
         info = alloc_new_page(bucket_size);
+        if (info == NULL) {
+            if (num_allocs == 0)
+                _ejs_throw (page_allocation_failed_exc);
+            else {
+                _ejs_log ("page allocation failed, trying to collect");
+                goto allocation_failed;
+            }
+        }
         _ejs_list_prepend_node (&heap_pages[bucket], (EJSListNode*)info);
     }
 
@@ -1415,7 +1472,7 @@ _ejs_GC_dumpAllocationStats (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
 void
 _ejs_GC_init(ejsval ejs_obj)
 {
-    _ejs_GC = _ejs_object_new (_ejs_Object_prototype, &_ejs_object_specops);
+    _ejs_GC = _ejs_object_new (_ejs_Object_prototype, &_ejs_Object_specops);
     _ejs_object_setprop (ejs_obj, _ejs_atom_GC, _ejs_GC);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_GC, x, _ejs_GC_##x)

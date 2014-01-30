@@ -85,7 +85,7 @@ extern ejsval _ejs_function_new_without_proto (ejsval env, ejsval name, EJSClosu
 
 extern ejsval _ejs_Function;
 extern ejsval _ejs_Function__proto__;
-extern EJSSpecOps _ejs_function_specops;
+extern EJSSpecOps _ejs_Function_specops;
 
 extern void _ejs_function_init(ejsval global);
 

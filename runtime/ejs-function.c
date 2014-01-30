@@ -13,27 +13,6 @@
 #include "ejs-error.h"
 #include "ejs-string.h"
 
-static EJSBool _ejs_function_specop_has_instance (ejsval obj, ejsval lval);
-static EJSObject* _ejs_function_specop_allocate ();
-static void    _ejs_function_specop_finalize (EJSObject* obj);
-static void    _ejs_function_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
-
-EJS_DEFINE_CLASS(function, "Function",
-                 OP_INHERIT, // get
-                 OP_INHERIT, // get_own_property
-                 OP_INHERIT, // get_property
-                 OP_INHERIT, // put
-                 OP_INHERIT, // can_put
-                 OP_INHERIT, // has_property
-                 OP_INHERIT, // delete
-                 OP_INHERIT, // default_value
-                 OP_INHERIT, // define_own_property
-                 _ejs_function_specop_has_instance,
-                 _ejs_function_specop_allocate,
-                 _ejs_function_specop_finalize,
-                 _ejs_function_specop_scan
-                 )
-
 EJSBool trace = EJS_FALSE;
 
 static int indent_level = 0;
@@ -51,7 +30,7 @@ _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func)
 {
     EJSFunction *rv = _ejs_gc_new(EJSFunction);
     
-    _ejs_init_object ((EJSObject*)rv, _ejs_Function__proto__, &_ejs_function_specops);
+    _ejs_init_object ((EJSObject*)rv, _ejs_Function__proto__, &_ejs_Function_specops);
 
     rv->func = func;
     rv->env = env;
@@ -59,7 +38,7 @@ _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func)
     ejsval fun = OBJECT_TO_EJSVAL(rv);
 
     // ECMA262: 15.3.2.1
-    ejsval fun_proto = _ejs_object_new (_ejs_Object_prototype, &_ejs_object_specops);
+    ejsval fun_proto = _ejs_object_new (_ejs_Object_prototype, &_ejs_Object_specops);
     _ejs_object_define_value_property (fun, _ejs_atom_prototype, fun_proto, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
 
     _ejs_object_define_value_property (fun_proto, _ejs_atom_constructor, fun, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
@@ -72,7 +51,7 @@ _ejs_function_new_without_proto (ejsval env, ejsval name, EJSClosureFunc func)
 {
     EJSFunction *rv = _ejs_gc_new(EJSFunction);
     
-    _ejs_init_object ((EJSObject*)rv, _ejs_Function__proto__, &_ejs_function_specops);
+    _ejs_init_object ((EJSObject*)rv, _ejs_Function__proto__, &_ejs_Function_specops);
 
     rv->func = func;
     rv->env = env;
@@ -89,7 +68,7 @@ _ejs_function_new_utf8_with_proto (ejsval env, const char* name, EJSClosureFunc 
     ejsval function_name = _ejs_string_new_utf8 (name);
     EJSFunction *rv = _ejs_gc_new(EJSFunction);
     
-    _ejs_init_object ((EJSObject*)rv, _ejs_Function__proto__, &_ejs_function_specops);
+    _ejs_init_object ((EJSObject*)rv, _ejs_Function__proto__, &_ejs_Function_specops);
 
     rv->func = func;
     rv->env = env;
@@ -108,7 +87,7 @@ _ejs_function_new_native (ejsval env, ejsval name, EJSClosureFunc func)
 {
     EJSFunction *rv = _ejs_gc_new(EJSFunction);
     
-    _ejs_init_object ((EJSObject*)rv, _ejs_Function__proto__, &_ejs_function_specops);
+    _ejs_init_object ((EJSObject*)rv, _ejs_Function__proto__, &_ejs_Function_specops);
 
     rv->func = func;
     rv->env = env;
@@ -331,7 +310,7 @@ _ejs_function_init_proto()
 
     EJSFunction* __proto__ = _ejs_gc_new(EJSFunction);
     _ejs_Function__proto__ = OBJECT_TO_EJSVAL(__proto__);
-    _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_function_specops);
+    _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_Function_specops);
     __proto__->func = _ejs_Function_empty;
     __proto__->env = _ejs_null;
 
@@ -485,7 +464,7 @@ _ejs_function_specop_finalize (EJSObject* obj)
     EJSFunction* f = (EJSFunction*)obj;
     if (f->bound_args)
         free (f->bound_args);
-    _ejs_object_specops.finalize (obj);
+    _ejs_Object_specops.finalize (obj);
 }
 
 static void
@@ -499,5 +478,22 @@ _ejs_function_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
             scan_func (f->bound_args[i]);
     }
 
-    _ejs_object_specops.scan (obj, scan_func);
+    _ejs_Object_specops.scan (obj, scan_func);
 }
+
+EJS_DEFINE_CLASS(Function,
+                 OP_INHERIT, // get
+                 OP_INHERIT, // get_own_property
+                 OP_INHERIT, // get_property
+                 OP_INHERIT, // put
+                 OP_INHERIT, // can_put
+                 OP_INHERIT, // has_property
+                 OP_INHERIT, // delete
+                 OP_INHERIT, // default_value
+                 OP_INHERIT, // define_own_property
+                 _ejs_function_specop_has_instance,
+                 _ejs_function_specop_allocate,
+                 _ejs_function_specop_finalize,
+                 _ejs_function_specop_scan
+                 )
+

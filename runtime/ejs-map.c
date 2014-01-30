@@ -8,30 +8,10 @@
 #include "ejs-function.h"
 #include "ejs-ops.h"
 
-#define EJSVAL_IS_MAP(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_map_specops))
+#define EJSVAL_IS_MAP(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Map_specops))
 #define EJSVAL_TO_MAP(v)     ((EJSMap*)EJSVAL_TO_OBJECT(v))
 
 typedef EJSBool (*ComparatorFunc)(ejsval, ejsval);
-
-static EJSObject* _ejs_map_specop_allocate ();
-static void    _ejs_map_specop_finalize (EJSObject* obj);
-static void    _ejs_map_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
-
-EJS_DEFINE_CLASS(map, "Map",
-                 OP_INHERIT, // get
-                 OP_INHERIT, // get_own_property
-                 OP_INHERIT, // get_property
-                 OP_INHERIT, // put
-                 OP_INHERIT, // can_put
-                 OP_INHERIT, // has_property
-                 OP_INHERIT, // delete
-                 OP_INHERIT, // default_value
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
-                 _ejs_map_specop_allocate,
-                 _ejs_map_specop_finalize,
-                 _ejs_map_specop_scan
-                 )
 
 // ES6: 23.1.3.1
 // Map.prototype.clear ()
@@ -380,7 +360,7 @@ _ejs_Map_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     if (EJSVAL_IS_UNDEFINED(map)) {
         EJSObject* obj = (EJSObject*)_ejs_gc_new(EJSMap);
-        _ejs_init_object (obj, _ejs_Map_prototype, &_ejs_map_specops);
+        _ejs_init_object (obj, _ejs_Map_prototype, &_ejs_Map_specops);
         map = OBJECT_TO_EJSVAL(obj);
     }
 
@@ -458,7 +438,7 @@ _ejs_map_init(ejsval global)
     _ejs_object_setprop (global, _ejs_atom_Map, _ejs_Map);
 
     _ejs_gc_add_root (&_ejs_Map_prototype);
-    _ejs_Map_prototype = _ejs_object_new(_ejs_null, &_ejs_object_specops); // XXX should be a Map
+    _ejs_Map_prototype = _ejs_object_new(_ejs_null, &_ejs_Object_specops); // XXX should be a Map
     _ejs_object_setprop (_ejs_Map,       _ejs_atom_prototype,  _ejs_Map_prototype);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Map, x, _ejs_Map_##x)
@@ -499,7 +479,7 @@ _ejs_map_specop_finalize (EJSObject* obj)
         s = next;
     }
 
-    _ejs_object_specops.finalize (obj);
+    _ejs_Object_specops.finalize (obj);
 }
 
 static void
@@ -513,5 +493,22 @@ _ejs_map_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
         scan_func (s->value);
     }
 
-    _ejs_object_specops.scan (obj, scan_func);
+    _ejs_Object_specops.scan (obj, scan_func);
 }
+
+EJS_DEFINE_CLASS(Map,
+                 OP_INHERIT, // get
+                 OP_INHERIT, // get_own_property
+                 OP_INHERIT, // get_property
+                 OP_INHERIT, // put
+                 OP_INHERIT, // can_put
+                 OP_INHERIT, // has_property
+                 OP_INHERIT, // delete
+                 OP_INHERIT, // default_value
+                 OP_INHERIT, // define_own_property
+                 OP_INHERIT, // has_instance
+                 _ejs_map_specop_allocate,
+                 _ejs_map_specop_finalize,
+                 _ejs_map_specop_scan
+                 )
+

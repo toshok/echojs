@@ -5,6 +5,7 @@ fs = require 'fs'
 util = require 'echo-util'
 { spawn } = require 'child_process'
 debug = require 'debug'
+{ Set } = require 'set'
         
 # if we're running under coffee/node, argv will be ["coffee", ".../ejs", ...]
 # if we're running the compiled ejs.exe, argv will be [".../ejs.js.exe", ...]
@@ -17,6 +18,7 @@ temp_files = []
 options =
         # our defaults:
         debug_level: 0
+        debug_passes: new Set
         frozen_global: false
         record_types: false
         output_filename: null
@@ -57,12 +59,19 @@ set_extra_clang_args = (arginfo) ->
 
 increase_debug_level = ->
         options.debug_level += 1
+
+add_debug_after_pass = (passname) ->
+        options.debug_passes.add passname
         
 args =
         "-d":
                 handler: increase_debug_level
                 handlerArgc: 0
                 help:    "debug output.  more instances of this flag increase the amount of spew."
+        "--debug-after":
+                handler: add_debug_after_pass
+                handlerArgc: 1
+                help:    "dump the IR tree after the named pass"
         "-s":
                 flag:    "combine_scripts"
                 help:    "treat all toplevels as being 1 context, evaluating them in the order present on the command line"
@@ -232,9 +241,9 @@ compileFile = (filename, content, compileCallback) ->
         
         llvm_as_args = ["-o=#{bc_filename}", ll_filename]
 
-        opt_args = "-mem2reg -no-aa -tbaa -targetlibinfo -basicaa -notti -preverify -domtree -verify -simplifycfg -domtree -sroa -early-cse -lower-expect -targetlibinfo -no-aa -tbaa -basicaa -notti -globalopt -ipsccp -deadargelim -instcombine -simplifycfg -basiccg -prune-eh -inline-cost -inline -functionattrs -sroa -domtree -early-cse -lazy-value-info -jump-threading -correlated-propagation -simplifycfg -instcombine -tailcallelim -simplifycfg -reassociate -domtree -loops -loop-simplify -lcssa -loop-rotate -licm -lcssa -loop-unswitch -instcombine -scalar-evolution -loop-simplify -lcssa -indvars -loop-idiom -loop-deletion -loop-unroll -memdep -gvn -memdep -memcpyopt -sccp -instcombine -lazy-value-info -jump-threading -correlated-propagation -domtree -memdep -dse -loops -scalar-evolution -slp-vectorizer -adce -simplifycfg -instcombine -domtree -loops -loop-simplify -lcssa -scalar-evolution -loop-simplify -lcssa -loop-vectorize -instcombine -simplifycfg -strip-dead-prototypes -globaldce -constmerge -preverify -domtree -verify".split(" ").concat ["-o=#{ll_opt_filename}", bc_filename]
+        #opt_args = "-mem2reg -no-aa -tbaa -targetlibinfo -basicaa -notti -preverify -domtree -verify -simplifycfg -domtree -sroa -early-cse -lower-expect -targetlibinfo -no-aa -tbaa -basicaa -notti -globalopt -ipsccp -deadargelim -instcombine -simplifycfg -basiccg -prune-eh -inline-cost -inline -functionattrs -sroa -domtree -early-cse -lazy-value-info -jump-threading -correlated-propagation -simplifycfg -instcombine -tailcallelim -simplifycfg -reassociate -domtree -loops -loop-simplify -lcssa -loop-rotate -licm -lcssa -loop-unswitch -instcombine -scalar-evolution -loop-simplify -lcssa -indvars -loop-idiom -loop-deletion -loop-unroll -memdep -gvn -memdep -memcpyopt -sccp -instcombine -lazy-value-info -jump-threading -correlated-propagation -domtree -memdep -dse -loops -scalar-evolution -slp-vectorizer -adce -simplifycfg -instcombine -domtree -loops -loop-simplify -lcssa -scalar-evolution -loop-simplify -lcssa -loop-vectorize -instcombine -simplifycfg -strip-dead-prototypes -globaldce -constmerge -preverify -domtree -verify".split(" ").concat ["-o=#{ll_opt_filename}", bc_filename]
                 
-        #opt_args = ["-O1", "-strip-dead-prototypes", "-S", "-o=#{ll_opt_filename}", bc_filename]
+        opt_args = ["-O1", "-strip-dead-prototypes", "-S", "-o=#{ll_opt_filename}", bc_filename]
         llc_args = target_llc_args[options.target].concat ["-filetype=obj", "-o=#{o_filename}", ll_opt_filename]
 
         compiled_module.writeToFile ll_filename

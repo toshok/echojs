@@ -57,30 +57,30 @@ _ejs_eval (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 static void
 _ejs_init_classes()
 {
-    _ejs_Class_initialize (&_ejs_arguments_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&_ejs_array_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&_ejs_boolean_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&_ejs_date_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&_ejs_error_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&_ejs_function_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&_ejs_map_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&_ejs_number_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&_ejs_regexp_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&_ejs_string_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&_ejs_symbol_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&_ejs_arraybuffer_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_Arguments_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_Array_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_Boolean_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_Date_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_Error_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_Function_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_Map_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_Number_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_RegExp_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_String_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_Symbol_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_ArrayBuffer_specops, &_ejs_Object_specops);
 #if IOS
-    _ejs_Class_initialize (&WebGLRenderingContext_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&WebGLBuffer_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&WebGLFramebuffer_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&WebGLRenderbuffer_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&WebGLProgram_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&WebGLShader_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&WebGLTexture_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&WebGLActiveInfo_specops, &_ejs_object_specops);
-    _ejs_Class_initialize (&WebGLUniformLocation_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_WebGLRenderingContext_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_WebGLBuffer_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_WebGLFramebuffer_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_WebGLRenderbuffer_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_WebGLProgram_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_WebGLShader_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_WebGLTexture_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_WebGLActiveInfo_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_WebGLUniformLocation_specops, &_ejs_Object_specops);
 #endif
-    _ejs_Class_initialize (&_ejs_xmlhttprequest_specops, &_ejs_object_specops);
+    _ejs_Class_initialize (&_ejs_XMLHttpRequest_specops, &_ejs_Object_specops);
 }
 
 void
@@ -97,7 +97,7 @@ _ejs_init(int argc, char** argv)
 
     // initialization or ECMA262 builtins
     _ejs_gc_add_root (&_ejs_global);
-    _ejs_global = _ejs_object_new (_ejs_null, &_ejs_object_specops);
+    _ejs_global = _ejs_object_new (_ejs_null, &_ejs_Object_specops);
 
     _ejs_nan = NUMBER_TO_EJSVAL(nan("7734"));
 
@@ -162,8 +162,9 @@ _ejs_init(int argc, char** argv)
     // semi-useful runtime features, like a call to force a GC.  the
     // compiler also uses the presence of __ejs to disable
     // buggy/nonfunctional code (like those that use regexps)
-    ejsval _ejs_ejs_global = _ejs_object_new (_ejs_null, &_ejs_object_specops);
+    ejsval _ejs_ejs_global = _ejs_object_new (_ejs_null, &_ejs_Object_specops);
     _ejs_object_setprop (_ejs_global, _ejs_atom___ejs, _ejs_ejs_global);
 
     _ejs_GC_init(_ejs_ejs_global);
+    _ejs_gc_allocate_oom_exceptions();
 }

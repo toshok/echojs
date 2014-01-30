@@ -73,11 +73,10 @@ typedef struct _EJSDataView {
                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_int32array_specops || \
                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_float32array_specops))
 
-#define EJSVAL_IS_ARRAYBUFFER(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_arraybuffer_specops))
-#define EJSVAL_IS_DATAVIEW(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_dataview_specops))
+#define EJSVAL_IS_ARRAYBUFFER(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_ArrayBuffer_specops))
 
 #define EJSOBJECT_IS_TYPEDARRAY(v) (v->ops == &_ejs_int8array_specops || v->ops == &_ejs_uint16array_specops || v->ops == &_ejs_int32array_specops || v->ops == &_ejs_float32array_specops)
-#define EJSOBJECT_IS_ARRAYBUFFER(v) (v->ops == &_ejs_arraybuffer_specops)
+#define EJSOBJECT_IS_ARRAYBUFFER(v) (v->ops == &_ejs_ArrayBuffer_specops)
 #define EJSOBJECT_IS_DATAVIEW(v) (v->ops == &_ejs_dataview_specops)
 
 
@@ -96,7 +95,7 @@ EJS_BEGIN_DECLS
 
 extern ejsval _ejs_ArrayBuffer;
 extern ejsval _ejs_ArrayBuffer_proto;
-extern EJSSpecOps _ejs_arraybuffer_specops;
+extern EJSSpecOps _ejs_ArrayBuffer_specops;
 
 extern ejsval _ejs_Int8Array;
 extern ejsval _ejs_Int8Array_proto;

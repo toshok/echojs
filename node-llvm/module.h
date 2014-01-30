@@ -37,6 +37,8 @@ namespace jsllvm {
     static v8::Handle<v8::Value> WriteToFile (const v8::Arguments& args);
     static v8::Handle<v8::Value> WriteBitcodeToFile (const v8::Arguments& args);
 
+    static v8::Handle<v8::Value> AddModuleFlag (const v8::Arguments& args);
+
     static v8::Handle<v8::Value> SetDataLayout (const v8::Arguments& args);
     static v8::Handle<v8::Value> SetTriple (const v8::Arguments& args);
 

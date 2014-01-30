@@ -13,49 +13,7 @@
 #include "ejs-array.h"
 #include "ejs-error.h"
 
-static ejsval  _ejs_arraybuffer_specop_get (ejsval obj, ejsval propertyName);
-static EJSPropertyDesc* _ejs_arraybuffer_specop_get_own_property (ejsval obj, ejsval propertyName);
-static void    _ejs_arraybuffer_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
-static EJSBool _ejs_arraybuffer_specop_has_property (ejsval obj, ejsval propertyName);
-static EJSBool _ejs_arraybuffer_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
-static EJSObject* _ejs_arraybuffer_specop_allocate ();
-static void    _ejs_arraybuffer_specop_finalize (EJSObject* obj);
-static void    _ejs_arraybuffer_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
-
-EJS_DEFINE_CLASS(arraybuffer, "ArrayBuffer",
-                 _ejs_arraybuffer_specop_get,
-                 _ejs_arraybuffer_specop_get_own_property,
-                 OP_INHERIT, // get_property
-                 _ejs_arraybuffer_specop_put,
-                 OP_INHERIT, // can_put
-                 _ejs_arraybuffer_specop_has_property,
-                 _ejs_arraybuffer_specop_delete,
-                 OP_INHERIT, // default_value
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
-                 _ejs_arraybuffer_specop_allocate,
-                 _ejs_arraybuffer_specop_finalize,
-                 _ejs_arraybuffer_specop_scan
-                 )
-
-static EJSObject* _ejs_typedarray_specop_allocate ();
-static void    _ejs_typedarray_specop_finalize (EJSObject* obj);
-static void    _ejs_typedarray_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
-
-/* specops that are shared by all the typed array types with overrides for particular methods */
-static EJSSpecOps _ejs_typedarray_specops = {
-    "TypedArray",
-
-    NULL, NULL, NULL,
-    NULL, NULL, NULL,
-    NULL, NULL, NULL,
-    NULL,
-
-    _ejs_typedarray_specop_allocate,
-    _ejs_typedarray_specop_finalize,
-    _ejs_typedarray_specop_scan
-};
-
+static EJSSpecOps _ejs_typedarray_specops;
 
 #define EJS_TYPEDARRAY_LEN(arrobj)      (((EJSTypedArray*)EJSVAL_TO_OBJECT(arrobj))->length)
 
@@ -130,7 +88,7 @@ _ejs_arraybuffer_new (int size)
 {
     EJSArrayBuffer *rv = _ejs_gc_new(EJSArrayBuffer);
 
-    _ejs_init_object ((EJSObject*)rv, _ejs_ArrayBuffer_proto, &_ejs_arraybuffer_specops);
+    _ejs_init_object ((EJSObject*)rv, _ejs_ArrayBuffer_proto, &_ejs_ArrayBuffer_specops);
 
     rv->dependent = EJS_FALSE;
     rv->size = size;
@@ -146,7 +104,7 @@ _ejs_arraybuffer_new_slice (ejsval bufferval, int offset, int size)
     EJSArrayBuffer* rv = _ejs_gc_new(EJSArrayBuffer);
     EJSArrayBuffer* buffer = (EJSArrayBuffer*)EJSVAL_TO_OBJECT(bufferval);
 
-    _ejs_init_object ((EJSObject*)rv, _ejs_ArrayBuffer_proto, &_ejs_arraybuffer_specops);
+    _ejs_init_object ((EJSObject*)rv, _ejs_ArrayBuffer_proto, &_ejs_ArrayBuffer_specops);
 
     rv->dependent = EJS_TRUE;
     rv->data.dependent.offset = MIN(buffer->size, offset);
@@ -484,7 +442,7 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
      }                                                                  \
                                                                         \
      /* otherwise we fallback to the object implementation */           \
-     return _ejs_object_specops.get (obj, propertyName);                \
+     return _ejs_Object_specops.get (obj, propertyName);                \
  }                                                                      \
                                                                         \
  static EJSPropertyDesc*                                                \
@@ -498,13 +456,13 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
                  return NULL; /* XXX */                                 \
          }                                                              \
      }                                                                  \
-     return _ejs_object_specops.get_own_property (obj, propertyName);   \
+     return _ejs_Object_specops.get_own_property (obj, propertyName);   \
  }                                                                      \
                                                                         \
  static EJSPropertyDesc*                                                \
  _ejs_##arraytype##array_specop_get_property (ejsval obj, ejsval propertyName) \
  {                                                                      \
-     return _ejs_object_specops.get_property (obj, propertyName);       \
+     return _ejs_Object_specops.get_property (obj, propertyName);       \
  }                                                                      \
                                                                         \
  static void                                                            \
@@ -534,13 +492,13 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
  static EJSBool                                                         \
  _ejs_##arraytype##array_specop_can_put (ejsval obj, ejsval propertyName) \
  {                                                                      \
-     return _ejs_object_specops.can_put (obj, propertyName);            \
+     return _ejs_Object_specops.can_put (obj, propertyName);            \
  }                                                                      \
                                                                         \
  static EJSBool                                                         \
  _ejs_##arraytype##array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag) \
  {                                                                      \
-     return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag); \
+     return _ejs_Object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag); \
  }                                                                      \
                                                                         \
  static EJSBool                                                         \
@@ -660,7 +618,7 @@ _ejs_typedarrays_init(ejsval global)
         _ejs_object_setprop (global,           _ejs_atom_ArrayBuffer, _ejs_ArrayBuffer);
 
         _ejs_gc_add_root (&_ejs_ArrayBuffer_proto);
-        _ejs_ArrayBuffer_proto = _ejs_object_new(_ejs_null, &_ejs_object_specops);
+        _ejs_ArrayBuffer_proto = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
         _ejs_object_setprop (_ejs_ArrayBuffer, _ejs_atom_prototype,   _ejs_ArrayBuffer_proto);
 
         PROTO_METHOD(ArrayBuffer, slice);
@@ -702,7 +660,7 @@ _ejs_typedarrays_init(ejsval global)
     _ejs_object_setprop (global,         _ejs_atom_##ArrayType##Array,  _ejs_##ArrayType##Array); \
                                                                         \
     _ejs_gc_add_root (&_ejs_##ArrayType##Array_proto);                  \
-    _ejs_##ArrayType##Array_proto = _ejs_object_new(_ejs_null, &_ejs_object_specops); \
+    _ejs_##ArrayType##Array_proto = _ejs_object_new(_ejs_null, &_ejs_Object_specops); \
     _ejs_object_setprop (_ejs_##ArrayType##Array, _ejs_atom_prototype,  _ejs_##ArrayType##Array_proto); \
                                                                         \
     /* make sure ctor.BYTES_PER_ELEMENT is defined */                   \
@@ -753,7 +711,7 @@ _ejs_arraybuffer_specop_get (ejsval obj, ejsval propertyName)
     }
 
     // otherwise we fallback to the object implementation
-    return _ejs_object_specops.get (obj, propertyName);
+    return _ejs_Object_specops.get (obj, propertyName);
 }
 
 static EJSPropertyDesc*
@@ -768,7 +726,7 @@ _ejs_arraybuffer_specop_get_own_property (ejsval obj, ejsval propertyName)
         }
     }
 
-    return _ejs_object_specops.get_own_property (obj, propertyName);
+    return _ejs_Object_specops.get_own_property (obj, propertyName);
 }
 
 static void
@@ -800,7 +758,7 @@ _ejs_arraybuffer_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBoo
     }
     // if we fail there, we fall back to the object impl below
 
-    _ejs_object_specops.put (obj, propertyName, val, flag);
+    _ejs_Object_specops.put (obj, propertyName, val, flag);
 }
 
 static EJSBool
@@ -819,7 +777,7 @@ _ejs_arraybuffer_specop_has_property (ejsval obj, ejsval propertyName)
 
     // if we fail there, we fall back to the object impl below
 
-    return _ejs_object_specops.has_property (obj, propertyName);
+    return _ejs_Object_specops.has_property (obj, propertyName);
 }
 
 static EJSBool
@@ -835,7 +793,7 @@ _ejs_arraybuffer_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
     }
 
     if (idx == -1)
-        return _ejs_object_specops._delete (obj, propertyName, flag);
+        return _ejs_Object_specops._delete (obj, propertyName, flag);
 
     // if it's outside the array bounds, do nothing
     if (idx < EJS_ARRAY_LEN(obj))
@@ -858,7 +816,7 @@ _ejs_arraybuffer_specop_finalize (EJSObject* obj)
         free (arraybuf->data.alloced_buf);
         arraybuf->data.alloced_buf = NULL;
     }
-    _ejs_object_specops.finalize (obj);
+    _ejs_Object_specops.finalize (obj);
 }
 
 static void
@@ -868,8 +826,24 @@ _ejs_arraybuffer_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     if (arraybuf->dependent) {
         scan_func (arraybuf->data.dependent.buf);
     }
-    _ejs_object_specops.scan (obj, scan_func);
+    _ejs_Object_specops.scan (obj, scan_func);
 }
+
+EJS_DEFINE_CLASS(ArrayBuffer,
+                 _ejs_arraybuffer_specop_get,
+                 _ejs_arraybuffer_specop_get_own_property,
+                 OP_INHERIT, // get_property
+                 _ejs_arraybuffer_specop_put,
+                 OP_INHERIT, // can_put
+                 _ejs_arraybuffer_specop_has_property,
+                 _ejs_arraybuffer_specop_delete,
+                 OP_INHERIT, // default_value
+                 OP_INHERIT, // define_own_property
+                 OP_INHERIT, // has_instance
+                 _ejs_arraybuffer_specop_allocate,
+                 _ejs_arraybuffer_specop_finalize,
+                 _ejs_arraybuffer_specop_scan
+                 )
 
 
 static EJSObject*
@@ -883,7 +857,7 @@ static void
 _ejs_typedarray_specop_finalize (EJSObject* obj)
 {
     //EJSTypedArray *arr = (EJSTypedArray*)obj;
-    _ejs_object_specops.finalize (obj);
+    _ejs_Object_specops.finalize (obj);
 }
 
 static void
@@ -891,7 +865,7 @@ _ejs_typedarray_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSTypedArray *arr = (EJSTypedArray*)obj;
     scan_func(arr->buffer);
-    _ejs_object_specops.scan (obj, scan_func);
+    _ejs_Object_specops.scan (obj, scan_func);
 }
 
 static ejsval
@@ -1045,3 +1019,16 @@ _ejs_dataview_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     _ejs_object_specops.scan (obj, scan_func);
 }
 
+/* specops that are shared by all the typed array types with overrides for particular methods */
+static EJSSpecOps _ejs_typedarray_specops = {
+    "TypedArray",
+
+    NULL, NULL, NULL,
+    NULL, NULL, NULL,
+    NULL, NULL, NULL,
+    NULL,
+
+    _ejs_typedarray_specop_allocate,
+    _ejs_typedarray_specop_finalize,
+    _ejs_typedarray_specop_scan
+};

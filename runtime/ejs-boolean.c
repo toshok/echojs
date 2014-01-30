@@ -10,25 +10,6 @@
 #include "ejs-function.h"
 #include "ejs-string.h"
 
-static ejsval  _ejs_boolean_specop_default_value (ejsval obj, const char *hint);
-static EJSObject* _ejs_boolean_specop_allocate ();
-
-EJS_DEFINE_CLASS(boolean, "Boolean",
-                 OP_INHERIT, // get
-                 OP_INHERIT, // get_own_property
-                 OP_INHERIT, // get_property
-                 OP_INHERIT, // put
-                 OP_INHERIT, // can_put
-                 OP_INHERIT, // has_property
-                 OP_INHERIT, // delete
-                 _ejs_boolean_specop_default_value,
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
-                 _ejs_boolean_specop_allocate,
-                 OP_INHERIT, // finalize
-                 OP_INHERIT  // scan
-                 )
-
 ejsval _ejs_Boolean EJSVAL_ALIGNMENT;
 ejsval _ejs_Boolean_proto EJSVAL_ALIGNMENT;
 
@@ -88,7 +69,7 @@ _ejs_boolean_init(ejsval global)
 
 
     _ejs_gc_add_root (&_ejs_Boolean_proto);
-    _ejs_Boolean_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_object_specops);
+    _ejs_Boolean_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
     _ejs_object_setprop (_ejs_Boolean,       _ejs_atom_prototype,  _ejs_Boolean_proto);
 
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Boolean_proto, x, _ejs_Boolean_prototype_##x, EJS_PROP_NOT_ENUMERABLE)
@@ -110,7 +91,7 @@ _ejs_boolean_specop_default_value (ejsval obj, const char *hint)
         EJS_NOT_IMPLEMENTED();
     }
     else
-        return _ejs_object_specops.default_value (obj, hint);
+        return _ejs_Object_specops.default_value (obj, hint);
 }
 
 EJSObject*
@@ -118,3 +99,20 @@ _ejs_boolean_specop_allocate()
 {
     return (EJSObject*)_ejs_gc_new (EJSBoolean);
 }
+
+EJS_DEFINE_CLASS(Boolean,
+                 OP_INHERIT, // get
+                 OP_INHERIT, // get_own_property
+                 OP_INHERIT, // get_property
+                 OP_INHERIT, // put
+                 OP_INHERIT, // can_put
+                 OP_INHERIT, // has_property
+                 OP_INHERIT, // delete
+                 _ejs_boolean_specop_default_value,
+                 OP_INHERIT, // define_own_property
+                 OP_INHERIT, // has_instance
+                 _ejs_boolean_specop_allocate,
+                 OP_INHERIT, // finalize
+                 OP_INHERIT  // scan
+                 )
+

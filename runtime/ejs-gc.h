@@ -25,6 +25,7 @@ typedef void* GCObjectPtr;
 
 extern void _ejs_GC_init(ejsval global);
 extern void _ejs_gc_init();
+extern void _ejs_gc_allocate_oom_exceptions();
 extern void _ejs_gc_shutdown();
 extern void _ejs_gc_collect();
 

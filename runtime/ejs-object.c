@@ -23,39 +23,6 @@
 #include "ejs-error.h"
 #include "ejs-xhr.h"
 
-static ejsval           _ejs_object_specop_get (ejsval obj, ejsval propertyName);
-static EJSPropertyDesc* _ejs_object_specop_get_own_property (ejsval obj, ejsval propertyName);
-static EJSPropertyDesc* _ejs_object_specop_get_property (ejsval obj, ejsval propertyName);
-static void             _ejs_object_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
-static EJSBool          _ejs_object_specop_can_put (ejsval obj, ejsval propertyName);
-static EJSBool          _ejs_object_specop_has_property (ejsval obj, ejsval propertyName);
-static EJSBool          _ejs_object_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
-static ejsval           _ejs_object_specop_default_value (ejsval obj, const char *hint);
-static EJSBool          _ejs_object_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
-static EJSBool          _ejs_object_specop_enumerate_properties (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
-static EJSObject*       _ejs_object_specop_allocate ();
-static void             _ejs_object_specop_finalize (EJSObject* obj);
-static void             _ejs_object_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
-
-EJSSpecOps _ejs_object_specops = {
-    "Object",
-    _ejs_object_specop_get,
-    _ejs_object_specop_get_own_property,
-    _ejs_object_specop_get_property,
-    _ejs_object_specop_put,
-    _ejs_object_specop_can_put,
-    _ejs_object_specop_has_property,
-    _ejs_object_specop_delete,
-    _ejs_object_specop_default_value,
-    _ejs_object_specop_define_own_property,
-    NULL, /* [[HasInstance]] */
-
-    _ejs_object_specop_allocate,
-    _ejs_object_specop_finalize,
-    _ejs_object_specop_scan
-};
-
-
 // ECMA262: 8.10.1
 static EJSBool
 IsAccessorDescriptor(EJSPropertyDesc* Desc)
@@ -188,7 +155,7 @@ FromPropertyDescriptor(EJSPropertyDesc* Desc)
 
     /* 2. Let obj be the result of creating  a new object as if by the expression new Object() where Object  is the standard  */
     /*    built-in constructor with that name. */
-    ejsval obj = _ejs_object_new(_ejs_Object_prototype, &_ejs_object_specops);
+    ejsval obj = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
     EJSObject* obj_ = EJSVAL_TO_OBJECT(obj);
 
     /* 3. If IsDataDescriptor(Desc) is true, then */
@@ -599,7 +566,7 @@ void
 _ejs_init_object (EJSObject* obj, ejsval proto, EJSSpecOps *ops)
 {
     obj->proto = proto;
-    obj->ops = ops ? ops : &_ejs_object_specops;
+    obj->ops = ops ? ops : &_ejs_Object_specops;
     _ejs_propertymap_init (&obj->map);
     EJS_OBJECT_SET_EXTENSIBLE(obj);
 #if notyet
@@ -622,23 +589,23 @@ _ejs_object_create (ejsval proto)
 
     EJSSpecOps *ops = NULL;
 
-    if      (EJSVAL_EQ(proto, _ejs_Object_prototype)) ops = &_ejs_object_specops;
-    else if (EJSVAL_EQ(proto, _ejs_Array_proto))      ops = &_ejs_array_specops;
-    else if (EJSVAL_EQ(proto, _ejs_String_prototype)) ops = &_ejs_string_specops;
-    else if (EJSVAL_EQ(proto, _ejs_Map_prototype))    ops = &_ejs_map_specops;
-    else if (EJSVAL_EQ(proto, _ejs_Number_proto))     ops = &_ejs_number_specops;
-    else if (EJSVAL_EQ(proto, _ejs_RegExp_proto))     ops = &_ejs_regexp_specops;
-    else if (EJSVAL_EQ(proto, _ejs_Date_proto))       ops = &_ejs_date_specops;
-    else if (EJSVAL_EQ(proto, _ejs_ArrayBuffer_proto)) ops = &_ejs_arraybuffer_specops;
+    if      (EJSVAL_EQ(proto, _ejs_Object_prototype)) ops = &_ejs_Object_specops;
+    else if (EJSVAL_EQ(proto, _ejs_Array_proto))      ops = &_ejs_Array_specops;
+    else if (EJSVAL_EQ(proto, _ejs_String_prototype)) ops = &_ejs_String_specops;
+    else if (EJSVAL_EQ(proto, _ejs_Map_prototype))    ops = &_ejs_Map_specops;
+    else if (EJSVAL_EQ(proto, _ejs_Number_proto))     ops = &_ejs_Number_specops;
+    else if (EJSVAL_EQ(proto, _ejs_RegExp_proto))     ops = &_ejs_RegExp_specops;
+    else if (EJSVAL_EQ(proto, _ejs_Date_proto))       ops = &_ejs_Date_specops;
+    else if (EJSVAL_EQ(proto, _ejs_ArrayBuffer_proto)) ops = &_ejs_ArrayBuffer_specops;
     else if (EJSVAL_EQ(proto, _ejs_DataView_proto)) ops = &_ejs_dataview_specops;
-    else if (EJSVAL_EQ(proto, _ejs_EvalError_proto))  ops = &_ejs_error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_RangeError_proto))  ops = &_ejs_error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_ReferenceError_proto))  ops = &_ejs_error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_SyntaxError_proto))  ops = &_ejs_error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_TypeError_proto))  ops = &_ejs_error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_URIError_proto))  ops = &_ejs_error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_Error_proto))  ops = &_ejs_error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_XMLHttpRequest_proto))  ops = &_ejs_xmlhttprequest_specops;
+    else if (EJSVAL_EQ(proto, _ejs_EvalError_proto))  ops = &_ejs_Error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_RangeError_proto))  ops = &_ejs_Error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_ReferenceError_proto))  ops = &_ejs_Error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_SyntaxError_proto))  ops = &_ejs_Error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_TypeError_proto))  ops = &_ejs_Error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_URIError_proto))  ops = &_ejs_Error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_Error_proto))  ops = &_ejs_Error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_XMLHttpRequest_proto))  ops = &_ejs_XMLHttpRequest_specops;
     else {
         for (int i = 0; i < EJS_TYPEDARRAY_TYPE_COUNT; i ++) {
             if (EJSVAL_EQ(proto, _ejs_typed_array_protos[i]))
@@ -658,21 +625,30 @@ _ejs_object_create (ejsval proto)
 void
 _ejs_Class_initialize (EJSSpecOps *child, EJSSpecOps* parent)
 {
-#define MAYBE_INHERIT(p) if ((void*)(child->p) == OP_INHERIT) child->p = parent->p;  EJS_ASSERT ((void*)(child->p) != OP_INHERIT)
+#define MAYBE_INHERIT(p) EJS_MACRO_START                                \
+        if ((void*)(child->p) == OP_INHERIT)                            \
+            child->p = parent->p;                                       \
+    EJS_ASSERT((void*)(child->p) != OP_INHERIT);                        \
+    EJS_MACRO_END
 
-    MAYBE_INHERIT(get);
-    MAYBE_INHERIT(get_own_property);
-    MAYBE_INHERIT(get_property);
-    MAYBE_INHERIT(put);
-    MAYBE_INHERIT(can_put);
-    MAYBE_INHERIT(has_property);
-    MAYBE_INHERIT(_delete);
-    MAYBE_INHERIT(default_value);
-    MAYBE_INHERIT(define_own_property);
+#define MAYBE_INHERIT_DISALLOW_NULL(p) EJS_MACRO_START                  \
+        MAYBE_INHERIT(p);                                               \
+    EJS_ASSERT(child->p);                                               \
+    EJS_MACRO_END
+    
+    MAYBE_INHERIT_DISALLOW_NULL(get);
+    MAYBE_INHERIT_DISALLOW_NULL(get_own_property);
+    MAYBE_INHERIT_DISALLOW_NULL(get_property);
+    MAYBE_INHERIT_DISALLOW_NULL(put);
+    MAYBE_INHERIT_DISALLOW_NULL(can_put);
+    MAYBE_INHERIT_DISALLOW_NULL(has_property);
+    MAYBE_INHERIT_DISALLOW_NULL(_delete);
+    MAYBE_INHERIT_DISALLOW_NULL(default_value);
+    MAYBE_INHERIT_DISALLOW_NULL(define_own_property);
     MAYBE_INHERIT(has_instance);
-    MAYBE_INHERIT(allocate);
-    MAYBE_INHERIT(finalize);
-    MAYBE_INHERIT(scan);
+    MAYBE_INHERIT_DISALLOW_NULL(allocate);
+    MAYBE_INHERIT_DISALLOW_NULL(finalize);
+    MAYBE_INHERIT_DISALLOW_NULL(scan);
 }
 
 ejsval
@@ -944,7 +920,7 @@ _ejs_Object_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     /* 2. Let obj be the result of creating a new object as if by the expression new Object() where Object is the  */
     /*    standard built-in constructor with that name */
-    ejsval obj = _ejs_object_new(_ejs_null, &_ejs_object_specops);
+    ejsval obj = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
 
     /* 3. Set the [[Prototype]] internal property of obj to O. */
     EJSVAL_TO_OBJECT(obj)->proto = O;
@@ -1403,11 +1379,11 @@ _ejs_object_init_proto()
 
     EJSObject* prototype = _ejs_gc_new(EJSObject);
     _ejs_Object_prototype = OBJECT_TO_EJSVAL(prototype);
-    _ejs_init_object (prototype, _ejs_null, &_ejs_object_specops);
+    _ejs_init_object (prototype, _ejs_null, &_ejs_Object_specops);
 
     EJSFunction* __proto__ = _ejs_gc_new(EJSFunction);
     _ejs_Object__proto__ = OBJECT_TO_EJSVAL(__proto__);
-    _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_function_specops);
+    _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_Function_specops);
     __proto__->func = _ejs_Function_empty;
     __proto__->env = _ejs_null;
 
@@ -1924,3 +1900,19 @@ _ejs_object_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     _ejs_propertymap_foreach_property (&obj->map, (EJSPropertyDescFunc)scan_property, scan_func);
     scan_func (obj->proto);
 }
+
+EJS_DEFINE_CLASS(Object,
+                 _ejs_object_specop_get,
+                 _ejs_object_specop_get_own_property,
+                 _ejs_object_specop_get_property,
+                 _ejs_object_specop_put,
+                 _ejs_object_specop_can_put,
+                 _ejs_object_specop_has_property,
+                 _ejs_object_specop_delete,
+                 _ejs_object_specop_default_value,
+                 _ejs_object_specop_define_own_property,
+                 NULL, /* [[HasInstance]] */
+                 _ejs_object_specop_allocate,
+                 _ejs_object_specop_finalize,
+                 _ejs_object_specop_scan
+                 )

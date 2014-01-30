@@ -13,25 +13,6 @@
 
 #include "pcre.h"
 
-static EJSObject* _ejs_regexp_specop_allocate ();
-static void      _ejs_regexp_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
-
-EJS_DEFINE_CLASS(regexp, "RegExp",
-                 OP_INHERIT, // get
-                 OP_INHERIT, // get_own_property
-                 OP_INHERIT, // get_property
-                 OP_INHERIT, // put
-                 OP_INHERIT, // can_put
-                 OP_INHERIT, // has_property
-                 OP_INHERIT, // delete
-                 OP_INHERIT, // default_value
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
-                 _ejs_regexp_specop_allocate,
-                 OP_INHERIT, // finalize
-                 _ejs_regexp_specop_scan
-                 )
-
 static ejsval _ejs_RegExp_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args);
 
 ejsval
@@ -39,7 +20,7 @@ _ejs_regexp_new (ejsval pattern, ejsval flags)
 {
     EJSRegExp* rv = _ejs_gc_new(EJSRegExp);
 
-    _ejs_init_object ((EJSObject*)rv, _ejs_RegExp_proto, &_ejs_regexp_specops);
+    _ejs_init_object ((EJSObject*)rv, _ejs_RegExp_proto, &_ejs_RegExp_specops);
 
     ejsval args[2] = { pattern, flags };
 
@@ -136,7 +117,7 @@ _ejs_RegExp_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     if (EJSVAL_IS_UNDEFINED(_this)) {
         // called as a function
-        _this = _ejs_object_new(_ejs_RegExp_proto, &_ejs_regexp_specops);
+        _this = _ejs_object_new(_ejs_RegExp_proto, &_ejs_RegExp_specops);
     }
 
     re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
@@ -286,7 +267,7 @@ _ejs_regexp_init(ejsval global)
     _ejs_object_setprop (global, _ejs_atom_RegExp, _ejs_RegExp);
 
     _ejs_gc_add_root (&_ejs_RegExp_proto);
-    _ejs_RegExp_proto = _ejs_object_new(_ejs_null, &_ejs_object_specops);
+    _ejs_RegExp_proto = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
     _ejs_object_setprop (_ejs_RegExp,       _ejs_atom_prototype,  _ejs_RegExp_proto);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_RegExp, x, _ejs_RegExp_##x)
@@ -323,5 +304,22 @@ _ejs_regexp_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     scan_func (re->pattern);
     scan_func (re->flags);
 
-    _ejs_object_specops.scan (obj, scan_func);
+    _ejs_Object_specops.scan (obj, scan_func);
 }
+
+EJS_DEFINE_CLASS(RegExp,
+                 OP_INHERIT, // get
+                 OP_INHERIT, // get_own_property
+                 OP_INHERIT, // get_property
+                 OP_INHERIT, // put
+                 OP_INHERIT, // can_put
+                 OP_INHERIT, // has_property
+                 OP_INHERIT, // delete
+                 OP_INHERIT, // default_value
+                 OP_INHERIT, // define_own_property
+                 OP_INHERIT, // has_instance
+                 _ejs_regexp_specop_allocate,
+                 OP_INHERIT, // finalize
+                 _ejs_regexp_specop_scan
+                 )
+
