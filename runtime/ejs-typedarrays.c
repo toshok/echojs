@@ -630,7 +630,7 @@ _ejs_typedarrays_init(ejsval global)
         _ejs_object_setprop (global,            _ejs_atom_DataView, _ejs_DataView);
 
         _ejs_gc_add_root (&_ejs_DataView_proto);
-        _ejs_DataView_proto = _ejs_object_new (_ejs_null, &_ejs_object_specops);
+        _ejs_DataView_proto = _ejs_object_new (_ejs_null, &_ejs_Object_specops);
         _ejs_object_setprop (_ejs_DataView, _ejs_atom_prototype, _ejs_DataView_proto);
 
         PROTO_METHOD_IMPL(DataView, getInt8);
@@ -892,7 +892,7 @@ _ejs_dataview_specop_get (ejsval obj, ejsval propertyName)
     }
 
     // otherwise we fallback to the object implementation
-    return _ejs_object_specops.get (obj, propertyName);
+    return _ejs_Object_specops.get (obj, propertyName);
 }
 
 static EJSPropertyDesc*
@@ -907,13 +907,13 @@ _ejs_dataview_specop_get_own_property (ejsval obj, ejsval propertyName)
         }
     }
 
-    return _ejs_object_specops.get_own_property (obj, propertyName);
+    return _ejs_Object_specops.get_own_property (obj, propertyName);
 }
 
 static EJSPropertyDesc*
 _ejs_dataview_specop_get_property (ejsval obj, ejsval propertyName)
 {
-    return _ejs_object_specops.get_property (obj, propertyName);
+    return _ejs_Object_specops.get_property (obj, propertyName);
 }
 
 static void
@@ -940,12 +940,12 @@ _ejs_dataview_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool f
          return;
      }
 
-    _ejs_object_specops.put (obj, propertyName, val, flag);
+    _ejs_Object_specops.put (obj, propertyName, val, flag);
 }
 
 static EJSBool _ejs_dataview_specop_can_put (ejsval obj, ejsval propertyName)
 {
-    return _ejs_object_specops.can_put (obj, propertyName);
+    return _ejs_Object_specops.can_put (obj, propertyName);
 }
 
 static EJSBool
@@ -962,7 +962,7 @@ _ejs_dataview_specop_has_property (ejsval obj, ejsval propertyName)
         }
     }
 
-    return _ejs_object_specops.has_property (obj, propertyName);
+    return _ejs_Object_specops.has_property (obj, propertyName);
 }
 
 static EJSBool
@@ -977,7 +977,7 @@ _ejs_dataview_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
     }
 
     if (idx == -1)
-        return _ejs_object_specops._delete (obj, propertyName, flag);
+        return _ejs_Object_specops._delete (obj, propertyName, flag);
 
     if (idx < EJS_DATA_VIEW_BYTE_LEN(obj)) {
          //void* data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(obj));
@@ -990,13 +990,13 @@ _ejs_dataview_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
 static ejsval
 _ejs_dataview_specop_default_value (ejsval obj, const char *hint)
 {
-    return _ejs_object_specops.default_value (obj, hint);
+    return _ejs_Object_specops.default_value (obj, hint);
 }
 
 static EJSBool
 _ejs_dataview_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag)
 {
-    return _ejs_object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
+    return _ejs_Object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
 }
 
 static EJSObject*
@@ -1008,7 +1008,7 @@ _ejs_dataview_specop_allocate ()
 static void
 _ejs_dataview_specop_finalize (EJSObject* obj)
 {
-    _ejs_object_specops.finalize (obj);
+    _ejs_Object_specops.finalize (obj);
 }
 
 static void
@@ -1016,7 +1016,7 @@ _ejs_dataview_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSDataView *view = (EJSDataView*)obj;
     scan_func (view->buffer);
-    _ejs_object_specops.scan (obj, scan_func);
+    _ejs_Object_specops.scan (obj, scan_func);
 }
 
 /* specops that are shared by all the typed array types with overrides for particular methods */
