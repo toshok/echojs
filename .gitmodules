@@ -1,6 +1,6 @@
 [submodule "esprima"]
 	path = esprima
-	url = git@github.com:ariya/esprima.git
+	url = https://github.com/ariya/esprima.git
 	branch = harmony
 [submodule "llvm"]
 	path = llvm
@@ -9,16 +9,16 @@
 	branch = release_34
 [submodule "escodegen"]
 	path = escodegen
-	url = git@github.com:Constellation/escodegen.git
+	url = https://github.com/Constellation/escodegen.git
 [submodule "parson"]
 	path = parson
-	url = git@github.com:toshok/parson.git
+	url = https://github.com/toshok/parson.git
 [submodule "estraverse"]
 	path = estraverse
-	url = git@github.com:Constellation/estraverse.git
+	url = https://github.com/Constellation/estraverse.git
 [submodule "pcre"]
 	path = pcre
-	url = git@github.com:toshok/pcre.git
+	url = https://github.com/toshok/pcre.git
 [submodule "pirouette"]
 	path = pirouette
-	url = git@github.com:toshok/pirouette.git
+	url = https://github.com/toshok/pirouette.git
