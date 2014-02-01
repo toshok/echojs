@@ -5,6 +5,7 @@ before_install:
 
 install:
   - sh ./ci/install-node.sh
-  - sudo npm install -g coffee
+  - sudo npm install -g coffee-script
+  - brew install llvm34
 
 before_script:
