@@ -4,6 +4,7 @@ before_install:
   - brew update
 
 install:
+  - export PATH=$PATH:/usr/local/share/npm/bin
   - sh ./ci/install-node.sh
   - sh ./ci/install-coffeescript.sh
   - sh ./ci/install-llvm.sh
