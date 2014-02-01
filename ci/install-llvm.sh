@@ -1,1 +1,1 @@
-brew install -v llvm34
+brew install -v --disable-shared --without-python --without-libffi llvm34
