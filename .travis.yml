@@ -10,4 +10,8 @@ install:
   - sh ./ci/install-coffeescript.sh
   - sh ./ci/install-llvm.sh
 
-before_script:
+before_script: make
+
+script:
+  - cd test
+  - make

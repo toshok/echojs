@@ -83,15 +83,21 @@ format-results:
 	echo "$$xsuccess_count unexpected successes, $$success_count expected"; \
 	echo "$$failure_count unexpected failures, $$xfail_count expected"; \
 	echo "============"; \
+	failed=false; \
 	if test -f .failures; then \
 	  echo "Unexpected failures:"; \
 	  cat .failures; \
 	  echo; \
+	  failed=true; \
 	fi; \
 	if test -f .xsuccess; then \
 	  echo "Unexpected successes:"; \
 	  cat .xsuccess; \
 	  echo; \
+	  failed=true; \
+	fi; \
+	if x$failed = xtrue; then \
+	  exit -1; \
 	fi
 
 compile-tests: $(patsubst %.js,%.js.exe,$(TESTS))
