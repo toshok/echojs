@@ -1,1 +1,1 @@
-brew install llvm34
+brew install -v llvm34
