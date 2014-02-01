@@ -2,6 +2,7 @@ language: objective-c
 
 before_install:
   - brew update
+  - brew tap homebrew/versions
 
 install:
   - export PATH=$PATH:/usr/local/share/npm/bin
