@@ -2,11 +2,6 @@
 	path = esprima
 	url = https://github.com/ariya/esprima.git
 	branch = harmony
-[submodule "llvm"]
-	path = llvm
-	url = http://llvm.org/git/llvm.git
-	ignore = dirty
-	branch = release_34
 [submodule "escodegen"]
 	path = escodegen
 	url = https://github.com/Constellation/escodegen.git

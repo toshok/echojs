@@ -10,9 +10,9 @@ PCRE_CONFIGURE_ARGS=--enable-pcre16 --enable-utf --disable-cpp
 
 CFLAGS=-I$(TOP)/runtime
 
-all-local:: build-llvm build-pcre
+all-local:: build-pcre
 
-clean-local:: clean-llvm clean-pcre
+clean-local:: clean-pcre
 
 configure-pcre: configure-pcre-iossim configure-pcre-iosdev configure-pcre-osx
 
