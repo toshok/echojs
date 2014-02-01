@@ -1,11 +1,14 @@
 
 all: build
 
+LLVM_CXXFLAGS:=$(shell llvm-config$(LLVM_SUFFIX) --cxxflags)
+LLVM_LINKFLAGS:=$(shell llvm-config$(LLVM_SUFFIX) --ldflags --libs)
+
 build: configure
-	node-waf build
+	@LLVM_CXXFLAGS="$(LLVM_CXXFLAGS)" LLVM_LINKFLAGS="$(LLVM_LINKFLAGS)" node-waf build
 
 configure:
-	node-waf configure 
+	@LLVM_CXXFLAGS="$(LLVM_CXXFLAGS)" LLVM_LINKFLAGS="$(LLVM_LINKFLAGS)" node-waf configure 
 
 clean:
-	node-waf clean
+	@LLVM_CXXFLAGS="$(LLVM_CXXFLAGS)" LLVM_LINKFLAGS="$(LLVM_LINKFLAGS)" node-waf clean

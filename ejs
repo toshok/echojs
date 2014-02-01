@@ -252,22 +252,22 @@ compileFile = (filename, content, compileCallback) ->
 
         if __ejs?
                 # in ejs spawn is synchronous.
-                spawn "llvm-as", llvm_as_args
-                spawn "opt", opt_args
-                spawn "llc", llc_args
+                spawn "llvm-as#{process.env.LLVM_SUFFIX}", llvm_as_args
+                spawn "opt#{process.env.LLVM_SUFFIX}", opt_args
+                spawn "llc#{process.env.LLVM_SUFFIX}", llc_args
                 o_filenames.push o_filename
                 compileCallback()
         else
                 debug.log 1, "executing `llvm-as #{llvm_as_args.join ' '}'"
-                llvm_as = spawn "llvm-as", llvm_as_args
+                llvm_as = spawn "llvm-as#{process.env.LLVM_SUFFIX}", llvm_as_args
                 llvm_as.stderr.on "data", (data) -> console.warn "#{data}"
                 llvm_as.on "exit", (code) ->
                         debug.log 1, "executing `opt #{opt_args.join ' '}'"
-                        opt = spawn "opt", opt_args
+                        opt = spawn "opt#{process.env.LLVM_SUFFIX}", opt_args
                         opt.stderr.on "data", (data) -> console.warn "#{data}"
                         opt.on "exit", (code) ->
                                 debug.log 1, "executing `llc #{llc_args.join ' '}'"
-                                llc = spawn "llc", llc_args
+                                llc = spawn "llc#{process.env.LLVM_SUFFIX}", llc_args
                                 llc.stderr.on "data", (data) -> console.warn "#{data}"
                                 llc.on "exit", (code) ->
                                         o_filenames.push o_filename

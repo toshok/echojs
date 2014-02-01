@@ -1,3 +1,5 @@
+import os
+
 def set_options(opt):
   opt.tool_options("compiler_cxx")
 
@@ -6,89 +8,16 @@ def configure(conf):
   conf.check_tool("node_addon")
 
 def build(bld):
-  obj = bld.new_task_gen("cxx", "shlib", "node_addon")
-  bld.env.append_value('LINKFLAGS', '-L/usr/local/lib')
-  bld.env.append_value('LINKFLAGS', '-lpthread')
-  bld.env.append_value('LINKFLAGS', '-lm')
-  bld.env.append_value('LINKFLAGS', '-static')
-  bld.env.append_value('LINKFLAGS', '-lLLVMMCDisassembler')
-  bld.env.append_value('LINKFLAGS', '-lLLVMXCoreCodeGen')
-  bld.env.append_value('LINKFLAGS', '-lLLVMXCoreAsmPrinter')
-  bld.env.append_value('LINKFLAGS', '-lLLVMXCoreInfo')
-  bld.env.append_value('LINKFLAGS', '-lLLVMSystemZCodeGen')
-  bld.env.append_value('LINKFLAGS', '-lLLVMSystemZAsmPrinter')
-  bld.env.append_value('LINKFLAGS', '-lLLVMSystemZInfo')
-  bld.env.append_value('LINKFLAGS', '-lLLVMSparcCodeGen')
-  bld.env.append_value('LINKFLAGS', '-lLLVMSparcAsmPrinter')
-  bld.env.append_value('LINKFLAGS', '-lLLVMSparcInfo')
-  bld.env.append_value('LINKFLAGS', '-lLLVMPowerPCCodeGen')
-  bld.env.append_value('LINKFLAGS', '-lLLVMPowerPCAsmPrinter')
-  bld.env.append_value('LINKFLAGS', '-lLLVMPowerPCInfo')
-  bld.env.append_value('LINKFLAGS', '-lLLVMPTXCodeGen')
-  bld.env.append_value('LINKFLAGS', '-lLLVMPTXAsmPrinter')
-  bld.env.append_value('LINKFLAGS', '-lLLVMPTXInfo')
-  bld.env.append_value('LINKFLAGS', '-lLLVMMipsAsmPrinter')
-  bld.env.append_value('LINKFLAGS', '-lLLVMMipsCodeGen')
-  bld.env.append_value('LINKFLAGS', '-lLLVMMipsInfo')
-  bld.env.append_value('LINKFLAGS', '-lLLVMMSP430CodeGen')
-  bld.env.append_value('LINKFLAGS', '-lLLVMMSP430Info')
-  bld.env.append_value('LINKFLAGS', '-lLLVMMSP430AsmPrinter')
-  bld.env.append_value('LINKFLAGS', '-lLLVMMBlazeDisassembler')
-  bld.env.append_value('LINKFLAGS', '-lLLVMMBlazeAsmParser')
-  bld.env.append_value('LINKFLAGS', '-lLLVMMBlazeCodeGen')
-  bld.env.append_value('LINKFLAGS', '-lLLVMMBlazeAsmPrinter')
-  bld.env.append_value('LINKFLAGS', '-lLLVMMBlazeInfo')
-  bld.env.append_value('LINKFLAGS', '-lLLVMLinker')
-  bld.env.append_value('LINKFLAGS', '-lLLVMipo')
-  bld.env.append_value('LINKFLAGS', '-lLLVMInterpreter')
-  bld.env.append_value('LINKFLAGS', '-lLLVMInstrumentation')
-  bld.env.append_value('LINKFLAGS', '-lLLVMJIT')
-  bld.env.append_value('LINKFLAGS', '-lLLVMExecutionEngine')
-  bld.env.append_value('LINKFLAGS', '-lLLVMCppBackend')
-  bld.env.append_value('LINKFLAGS', '-lLLVMCppBackendInfo')
-  bld.env.append_value('LINKFLAGS', '-lLLVMCellSPUCodeGen')
-  bld.env.append_value('LINKFLAGS', '-lLLVMCellSPUAsmPrinter')
-  bld.env.append_value('LINKFLAGS', '-lLLVMCellSPUInfo')
-  bld.env.append_value('LINKFLAGS', '-lLLVMCBackend')
-  bld.env.append_value('LINKFLAGS', '-lLLVMCBackendInfo')
-  bld.env.append_value('LINKFLAGS', '-lLLVMBlackfinCodeGen')
-  bld.env.append_value('LINKFLAGS', '-lLLVMBlackfinAsmPrinter')
-  bld.env.append_value('LINKFLAGS', '-lLLVMBlackfinInfo')
-  bld.env.append_value('LINKFLAGS', '-lLLVMBitWriter')
-  bld.env.append_value('LINKFLAGS', '-lLLVMX86Disassembler')
-  bld.env.append_value('LINKFLAGS', '-lLLVMX86AsmParser')
-  bld.env.append_value('LINKFLAGS', '-lLLVMX86CodeGen')
-  bld.env.append_value('LINKFLAGS', '-lLLVMX86AsmPrinter')
-  bld.env.append_value('LINKFLAGS', '-lLLVMX86Info')
-  bld.env.append_value('LINKFLAGS', '-lLLVMAsmParser')
-  bld.env.append_value('LINKFLAGS', '-lLLVMARMDisassembler')
-  bld.env.append_value('LINKFLAGS', '-lLLVMARMAsmParser')
-  bld.env.append_value('LINKFLAGS', '-lLLVMARMCodeGen')
-  bld.env.append_value('LINKFLAGS', '-lLLVMARMAsmPrinter')
-  bld.env.append_value('LINKFLAGS', '-lLLVMARMInfo')
-  bld.env.append_value('LINKFLAGS', '-lLLVMArchive')
-  bld.env.append_value('LINKFLAGS', '-lLLVMBitReader')
-  bld.env.append_value('LINKFLAGS', '-lLLVMAlphaCodeGen')
-  bld.env.append_value('LINKFLAGS', '-lLLVMSelectionDAG')
-  bld.env.append_value('LINKFLAGS', '-lLLVMAlphaAsmPrinter')
-  bld.env.append_value('LINKFLAGS', '-lLLVMAsmPrinter')
-  bld.env.append_value('LINKFLAGS', '-lLLVMMCParser')
-  bld.env.append_value('LINKFLAGS', '-lLLVMCodeGen')
-  bld.env.append_value('LINKFLAGS', '-lLLVMScalarOpts')
-  bld.env.append_value('LINKFLAGS', '-lLLVMInstCombine')
-  bld.env.append_value('LINKFLAGS', '-lLLVMTransformUtils')
-  bld.env.append_value('LINKFLAGS', '-lLLVMipa')
-  bld.env.append_value('LINKFLAGS', '-lLLVMAnalysis')
-  bld.env.append_value('LINKFLAGS', '-lLLVMTarget')
-  bld.env.append_value('LINKFLAGS', '-lLLVMMC')
-  bld.env.append_value('LINKFLAGS', '-lLLVMCore')
-  bld.env.append_value('LINKFLAGS', '-lLLVMAlphaInfo')
-  bld.env.append_value('LINKFLAGS', '-lLLVMSupport')
-  bld.env.append_value('LINKFLAGS', '-lLLVMSystem')
+  print(os.environ.get("FOO"));
 
-# taken from llvm-config --cxxflags
-  obj.cxxflags = ["-I/usr/local/include", "-D_DEBUG", "-D_GNU_SOURCE", "-D__STDC_LIMIT_MACROS", "-D__STDC_CONSTANT_MACROS", "-g", "-fno-exceptions", "-fno-rtti", "-fno-common", "-Woverloaded-virtual", "-Wcast-qual"]
-#  obj.cxxflags = ["-g", "-D_FILE_OFFSET_BITS=64", "-D_LARGEFILE_SOURCE", "-Wall"]
+  obj = bld.new_task_gen("cxx", "shlib", "node_addon")
+
+  for flag in os.environ.get("LLVM_LINKFLAGS").split(" "):
+    bld.env.append_value('LINKFLAGS', flag)
+
+  # taken from llvm-config --cxxflags
+
+  obj.cxxflags = os.environ.get("LLVM_CXXFLAGS").split(" ")
   obj.target = "llvm"
   obj.source = ["allocainst.cpp",
   	        "arraytype.cpp",
