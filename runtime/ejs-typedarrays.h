@@ -58,6 +58,16 @@ typedef struct _EJSTypedArray {
     EJSTypedArrayType element_type;
 } EJSTypedArray;
 
+typedef struct _EJSDataView {
+    /* object header */
+    EJSObject obj;
+
+    /* buffer data view */
+    ejsval buffer;
+    uint32_t byteOffset;
+    uint32_t byteLength;
+} EJSDataView;
+
 #define EJSVAL_IS_TYPEDARRAY(v) (EJSVAL_IS_OBJECT(v) &&         \
                                 (EJSVAL_TO_OBJECT(v)->ops == &_ejs_int8array_specops || \
                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_int32array_specops || \
@@ -67,16 +77,19 @@ typedef struct _EJSTypedArray {
 
 #define EJSOBJECT_IS_TYPEDARRAY(v) (v->ops == &_ejs_int8array_specops || v->ops == &_ejs_uint16array_specops || v->ops == &_ejs_int32array_specops || v->ops == &_ejs_float32array_specops)
 #define EJSOBJECT_IS_ARRAYBUFFER(v) (v->ops == &_ejs_ArrayBuffer_specops)
+#define EJSOBJECT_IS_DATAVIEW(v) (v->ops == &_ejs_dataview_specops)
 
 
 #define EJS_TYPED_ARRAY_LEN(obj) (((EJSTypedArray*)EJSVAL_TO_OBJECT(obj))->length)
 #define EJS_TYPED_ARRAY_BYTE_LEN(obj) (((EJSTypedArray*)EJSVAL_TO_OBJECT(obj))->byteLength)
 #define EJS_ARRAY_BUFFER_BYTE_LEN(obj) (((EJSArrayBuffer*)EJSVAL_TO_OBJECT(obj))->size)
+#define EJS_DATA_VIEW_BYTE_LEN(obj) (((EJSDataView*)EJSVAL_TO_OBJECT(obj))->byteLength)
 
 #define EJSTYPEDARRAY_LEN(obj) (((EJSTypedArray*)(obj))->length)
 #define EJSTYPEDARRAY_BYTE_LEN(obj) (((EJSTypedArray*)(obj))->byteLength)
 #define EJSTYPEDARRAY_ELEMENT_TYPE(obj) (((EJSTypedArray*)(obj))->element_type)
 #define EJSARRAYBUFFER_BYTE_LEN(obj) (((EJSArrayBuffer*)obj)->size)
+#define EJSDATAVIEW_BYTE_LEN(obj) (((EJSDataView*)obj)->bytLength)
 
 EJS_BEGIN_DECLS
 
@@ -100,10 +113,15 @@ extern ejsval _ejs_Float32Array;
 extern ejsval _ejs_Float32Array_proto;
 extern EJSSpecOps _ejs_float32array_specops;
 
+extern ejsval _ejs_DataView;
+extern ejsval _ejs_DataView_proto;
+extern EJSSpecOps _ejs_dataview_specops;
+
 void _ejs_typedarrays_init(ejsval global);
 
 void* _ejs_arraybuffer_get_data(EJSObject* arr);
 void* _ejs_typedarray_get_data(EJSObject* arr);
+void* _ejs_dataview_get_data(EJSObject* view);
 
 ejsval _ejs_typedarray_new (EJSTypedArrayType element_type, uint32_t length);
 ejsval _ejs_typedarray_new_from_array (EJSTypedArrayType element_type, ejsval arrayObj);

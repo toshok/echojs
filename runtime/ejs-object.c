@@ -597,6 +597,7 @@ _ejs_object_create (ejsval proto)
     else if (EJSVAL_EQ(proto, _ejs_RegExp_proto))     ops = &_ejs_RegExp_specops;
     else if (EJSVAL_EQ(proto, _ejs_Date_proto))       ops = &_ejs_Date_specops;
     else if (EJSVAL_EQ(proto, _ejs_ArrayBuffer_proto)) ops = &_ejs_ArrayBuffer_specops;
+    else if (EJSVAL_EQ(proto, _ejs_DataView_proto)) ops = &_ejs_dataview_specops;
     else if (EJSVAL_EQ(proto, _ejs_EvalError_proto))  ops = &_ejs_Error_specops;
     else if (EJSVAL_EQ(proto, _ejs_RangeError_proto))  ops = &_ejs_Error_specops;
     else if (EJSVAL_EQ(proto, _ejs_ReferenceError_proto))  ops = &_ejs_Error_specops;

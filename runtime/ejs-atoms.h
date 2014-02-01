@@ -73,6 +73,7 @@ EJS_ATOM(Int32Array)
 EJS_ATOM(Uint32Array)
 EJS_ATOM(Float32Array)
 EJS_ATOM(Float64Array)
+EJS_ATOM(DataView)
 EJS_ATOM(BYTES_PER_ELEMENT)
 
 // error types
@@ -155,6 +156,18 @@ EJS_ATOM(every)
 EJS_ATOM(some)
 EJS_ATOM(reduce)
 EJS_ATOM(reduceRight)
+
+// Typed array method names
+EJS_ATOM(getInt8)
+EJS_ATOM(setInt8)
+EJS_ATOM(getInt16)
+EJS_ATOM(setInt16)
+EJS_ATOM(getInt32)
+EJS_ATOM(setInt32)
+EJS_ATOM(getFloat32)
+EJS_ATOM(setFloat32)
+EJS_ATOM(getFloat64)
+EJS_ATOM(setFloat64)
 
 // global functions
 EJS_ATOM(isNaN)
