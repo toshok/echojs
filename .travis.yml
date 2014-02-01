@@ -1,0 +1,10 @@
+language: objective-c
+
+before_install:
+  - brew update
+
+install:
+  - sh ./ci/install-node.sh
+  - sudo npm install -g coffee
+
+before_script:
