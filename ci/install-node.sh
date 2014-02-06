@@ -5,3 +5,4 @@ OSX=mountain_lion
 tar -C /usr/local/Cellar -xvf node-0.10.25.$OSX.bottle.tar.gz
 rm node-0.10.25.$OSX.bottle.tar.gz
 brew link node
+npm install -g node-gyp
