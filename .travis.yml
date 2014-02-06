@@ -12,9 +12,10 @@ install:
 
 before_script:
   - export LLVM_SUFFIX=-3.4
+  - export PATH=$PATH:/usr/local/share/npm/bin
   - make
 
 script:
   - export LLVM_SUFFIX=-3.4
-  - cd test
-  - make
+  - export PATH=$PATH:/usr/local/share/npm/bin
+  - make check
