@@ -57,13 +57,15 @@ LIPOD_IOS_LIBRARY=$(LIBRARY).ios
 
 ifeq ($(CI),true)
 ALL_LIBRARIES=$(OSX_LIBRARY)
+ALL_TARGETS=$(ALL_LIBRARIES)
 else
 ALL_LIBRARIES=$(OSX_LIBRARY) $(SIM_LIBRARY) $(DEV_LIBRARY) $(DEVS_LIBRARY) $(LIPOD_IOS_LIBRARY)
+ALL_TARGETS=$(ALL_LIBRARIES) $(analyze_plists_c) $(analyze_plists_objc)
 endif
 
 ALL_OBJECTS=$(SIM_OBJECTS) $(DEV_OBJECTS) $(DEVS_OBJECTS) $(OSX_OBJECTS)
 
-all-local:: $(ALL_LIBRARIES) $(analyze_plists_c) $(analyze_plists_objc)
+all-local:: $(ALL_TARGETS)
 
 clean-local::
 	rm -f test $(ALL_OBJECTS) $(ALL_LIBRARIES) ejs-atoms-gen.c $(analyze_plists_c) $(analyze_plists_objc)
