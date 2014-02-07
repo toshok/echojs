@@ -1974,17 +1974,12 @@ class AddFunctionsVisitor extends TreeVisitor
                 n.params = ({ type: _Identifier, name: param.name, llvm_type: param.llvm_type } for param in @abi.ejs_params)
                 n.params[@abi.env_param_index].name = env_name
 
-                console.log 'a'
                 # create the llvm IR function using our platform calling convention
                 n.ir_func = types.takes_builtins @abi.createFunction @module, n.ir_name, @abi.ejs_return_type, (param.llvm_type for param in n.params)
-                console.log 'b'
                 n.ir_func.setInternalLinkage() if not n.toplevel
 
-                console.log 'c'
                 ir_args = n.ir_func.args
-                console.log 'd'
                 ir_args[i].setName(n.params[i].name) for i in [0...n.params.length]
-                console.log 'e'
 
                 # we don't need to recurse here since we won't have nested functions at this point
                 n
@@ -2036,23 +2031,16 @@ exports.compile = (tree, base_output_filename, source_filename, options) ->
         debug.log 1, "after optimization"
         debug.log 1, -> escodegen.generate tree
 
-        console.warn 1
         module = new llvm.Module base_output_filename
         
-        console.warn 2
         module.toplevel_name = toplevel_name
 
-        console.warn 3
         visitor = new AddFunctionsVisitor module, abi
         tree = visitor.visit tree
 
-        console.warn 4
         debug.log -> escodegen.generate tree
 
-        console.warn 5
         visitor = new LLVMIRVisitor module, source_filename, options, abi
-        console.warn 6
         visitor.visit tree
 
-        console.warn 7
         module
