@@ -2031,16 +2031,23 @@ exports.compile = (tree, base_output_filename, source_filename, options) ->
         debug.log 1, "after optimization"
         debug.log 1, -> escodegen.generate tree
 
+        console.warn 1
         module = new llvm.Module base_output_filename
         
+        console.warn 2
         module.toplevel_name = toplevel_name
 
+        console.warn 3
         visitor = new AddFunctionsVisitor module, abi
         tree = visitor.visit tree
 
+        console.warn 4
         debug.log -> escodegen.generate tree
 
+        console.warn 5
         visitor = new LLVMIRVisitor module, source_filename, options, abi
+        console.warn 6
         visitor.visit tree
 
+        console.warn 7
         module
