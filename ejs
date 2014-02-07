@@ -252,7 +252,9 @@ compileFile = (filename, content, compileCallback) ->
         opt_args = ["-O1", "-strip-dead-prototypes", "-S", "-o=#{ll_opt_filename}", bc_filename]
         llc_args = target_llc_args[options.target].concat ["-filetype=obj", "-o=#{o_filename}", ll_opt_filename]
 
+        debug.log 1, "writing #{ll_filename}"
         compiled_module.writeToFile ll_filename
+        debug.log 1, "done writing #{ll_filename}"
 
         compiled_modules.push filename: (if options.basename then path.basename(filename) else filename), module_toplevel: compiled_module.toplevel_name
 
