@@ -14,7 +14,19 @@ all-local:: build-pcre
 
 clean-local:: clean-pcre
 
-configure-pcre: configure-pcre-iossim configure-pcre-iosdev configure-pcre-osx
+ifeq ($(CI),true)
+PCRE_TARGETS=osx
+else
+PCRE_TARGETS=iossim iosdev osx
+endif
+
+
+configure-pcre: $(PCRE_TARGETS:%=configure-pcre-%)
+
+build-pcre: $(PCRE_TARGETS:%=build-pcre-%)
+
+clean-pcre: $(PCRE_TARGETS:%=clean-pcre-%)
+
 
 configure-pcre-osx:
 	@mkdir -p pcre-osx
@@ -50,16 +62,14 @@ build-pcre-iossim: configure-pcre-iossim
 build-pcre-iosdev: configure-pcre-iosdev
 	$(MAKE) -C pcre-iosdev pcre_chartables.c libpcre16.la
 
-build-pcre: build-pcre-osx build-pcre-iossim build-pcre-iosdev
-
-install-pcre:
-	$(MAKE) -C pcre install
-
-clean-pcre:
-	@test -d pcre-osx && $(MAKE) -C pcre-osx clean
+clean-pcre-iossim:
 	@test -d pcre-iossim && $(MAKE) -C pcre-iossim clean
+
+clean-pcre-iosdev:
 	@test -d pcre-iosdev && $(MAKE) -C pcre-iosdev clean
 
+clean-pcre-osx:
+	@test -d pcre-osx    && $(MAKE) -C pcre-osx clean
 
 configure-llvm:
 	@mkdir -p llvm-osx
