@@ -96,8 +96,8 @@ format-results:
 	  echo; \
 	  failed=true; \
 	fi; \
-	if x$failed = xtrue; then \
-	  exit -1; \
+	if test "x$$failed" = xtrue; then \
+	  exit 1; \
 	fi
 
 compile-tests: $(patsubst %.js,%.js.exe,$(TESTS))
