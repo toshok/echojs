@@ -14,7 +14,7 @@ all-local:: build-pcre
 
 clean-local:: clean-pcre
 
-ifeq ($(CI),true)
+ifneq ($(TRAVIS_BUILD_NUMBER),)
 PCRE_TARGETS=osx
 else
 PCRE_TARGETS=iossim iosdev osx

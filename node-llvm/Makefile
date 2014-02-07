@@ -11,7 +11,7 @@ LLVM_DEFINES    := $(subst -D,,$(LLVM_DEFINES))
 
 LLVM_LINKFLAGS  := $(shell $(LLVM_CONFIG) --ldflags --libs)
 
-ifeq ($(CI),true)
+ifneq ($(TRAVIS_BUILD_NUMBER),)
 # travis-ci osx machines are 10.8.5, so fix our min version there
 MIN_OSX_VERSION=10.8
 else
