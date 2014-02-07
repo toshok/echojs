@@ -20,4 +20,4 @@ script:
   - export LLVM_SUFFIX=-3.4
   - export PATH=$PATH:/usr/local/share/npm/bin
   - make check
-  - if test -f test/.failures -o -f test/.xsuccess; then exit -1; fi
+  - (if test -f test/.failures -o -f test/.xsuccess; then exit -1; fi)
