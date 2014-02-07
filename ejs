@@ -224,7 +224,6 @@ compileFile = (filename, content, compileCallback) ->
         console.warn "#{util.bold()}COMPILE#{util.reset()} #{filename} -> #{base_filename}"
         
         try
-                #parse_tree = esprima.parse content, loc: (if __ejs? then false else true), raw: true
                 parse_tree = esprima.parse content, { loc: true, raw: true }
         catch e
                 console.warn "parse error at #{e}:"
