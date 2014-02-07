@@ -238,19 +238,16 @@ compileFile = (filename, content, compileCallback) ->
                 console.warn "error #{e}"
                 process.exit -1
 
-        ll_filename = "/tmp/#{base_filename}-#{options.target}.ll"
-        bc_filename = "/tmp/#{base_filename}-#{options.target}.bc"
+        ll_filename     = "/tmp/#{base_filename}-#{options.target}.ll"
+        bc_filename     = "/tmp/#{base_filename}-#{options.target}.bc"
         ll_opt_filename = "/tmp/#{base_filename}-#{options.target}.ll.opt"
-        o_filename = "/tmp/#{base_filename}-#{options.target}.o"
+        o_filename      = "/tmp/#{base_filename}-#{options.target}.o"
 
         temp_files.push ll_filename, bc_filename, ll_opt_filename, o_filename
         
         llvm_as_args = ["-o=#{bc_filename}", ll_filename]
-
-        #opt_args = "-mem2reg -no-aa -tbaa -targetlibinfo -basicaa -notti -preverify -domtree -verify -simplifycfg -domtree -sroa -early-cse -lower-expect -targetlibinfo -no-aa -tbaa -basicaa -notti -globalopt -ipsccp -deadargelim -instcombine -simplifycfg -basiccg -prune-eh -inline-cost -inline -functionattrs -sroa -domtree -early-cse -lazy-value-info -jump-threading -correlated-propagation -simplifycfg -instcombine -tailcallelim -simplifycfg -reassociate -domtree -loops -loop-simplify -lcssa -loop-rotate -licm -lcssa -loop-unswitch -instcombine -scalar-evolution -loop-simplify -lcssa -indvars -loop-idiom -loop-deletion -loop-unroll -memdep -gvn -memdep -memcpyopt -sccp -instcombine -lazy-value-info -jump-threading -correlated-propagation -domtree -memdep -dse -loops -scalar-evolution -slp-vectorizer -adce -simplifycfg -instcombine -domtree -loops -loop-simplify -lcssa -scalar-evolution -loop-simplify -lcssa -loop-vectorize -instcombine -simplifycfg -strip-dead-prototypes -globaldce -constmerge -preverify -domtree -verify".split(" ").concat ["-o=#{ll_opt_filename}", bc_filename]
-                
-        opt_args = ["-O1", "-strip-dead-prototypes", "-S", "-o=#{ll_opt_filename}", bc_filename]
-        llc_args = target_llc_args[options.target].concat ["-filetype=obj", "-o=#{o_filename}", ll_opt_filename]
+        opt_args     = ["-O1", "-strip-dead-prototypes", "-S", "-o=#{ll_opt_filename}", bc_filename]
+        llc_args     = target_llc_args[options.target].concat ["-filetype=obj", "-o=#{o_filename}", ll_opt_filename]
 
         debug.log 1, "writing #{ll_filename}"
         compiled_module.writeToFile ll_filename
