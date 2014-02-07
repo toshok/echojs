@@ -16,6 +16,7 @@ before_script:
   - make
 
 script:
+  - env
   - export LLVM_SUFFIX=-3.4
   - export PATH=$PATH:/usr/local/share/npm/bin
   - make check

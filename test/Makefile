@@ -145,7 +145,7 @@ $(ESPRIMA_TESTS): %.js.exe: %.js $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodege
 clean-esprima-roundtrip:
 	@rm -f esprima.js escodegen.js estraverse.js
 
-EJS_DRIVER ?= NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --leave-temp -d
+EJS_DRIVER ?= DYLD_INSERT_LIBRARIES=/usr/lib/libgmalloc.dylib NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --leave-temp
 EJS_STAGE ?= 0
 
 %.js.exe: %.js $(TOPDIR)/runtime/libecho.a
