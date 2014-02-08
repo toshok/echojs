@@ -17,39 +17,6 @@ static EJSSpecOps _ejs_typedarray_specops;
 
 #define EJS_TYPEDARRAY_LEN(arrobj)      (((EJSTypedArray*)EJSVAL_TO_OBJECT(arrobj))->length)
 
-static ejsval  _ejs_dataview_specop_get (ejsval obj, ejsval propertyName);
-static EJSPropertyDesc* _ejs_dataview_specop_get_own_property (ejsval obj, ejsval propertyName);
-static EJSPropertyDesc* _ejs_dataview_specop_get_property (ejsval obj, ejsval propertyName);
-static void    _ejs_dataview_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
-static EJSBool _ejs_dataview_specop_can_put (ejsval obj, ejsval propertyName);
-static EJSBool _ejs_dataview_specop_has_property (ejsval obj, ejsval propertyName);
-static EJSBool _ejs_dataview_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag);
-static ejsval  _ejs_dataview_specop_default_value (ejsval obj, const char *hint);
-static EJSBool _ejs_dataview_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag);
-static EJSObject* _ejs_dataview_specop_allocate ();
-static void     _ejs_dataview_specop_finalize (EJSObject* obj);
-static void     _ejs_dataview_specop_scan (EJSObject* obj, EJSValueFunc scan_func);
-
-EJSSpecOps _ejs_dataview_specops = {
-    "DataView",
-
-    _ejs_dataview_specop_get,
-    _ejs_dataview_specop_get_own_property,
-    _ejs_dataview_specop_get_property,
-    _ejs_dataview_specop_put,
-    _ejs_dataview_specop_can_put,
-    _ejs_dataview_specop_has_property,
-    _ejs_dataview_specop_delete,
-    _ejs_dataview_specop_default_value,
-    _ejs_dataview_specop_define_own_property,
-    NULL,
-
-    _ejs_dataview_specop_allocate,
-    _ejs_dataview_specop_finalize,
-    _ejs_dataview_specop_scan
-};
-
-
 ejsval _ejs_ArrayBuffer_proto EJSVAL_ALIGNMENT;
 ejsval _ejs_ArrayBuffer EJSVAL_ALIGNMENT;
 
@@ -263,8 +230,9 @@ swapBytes (void* value, int elementSizeInBytes)
         if (argc > 1)                                               \
             littleEndian = EJSVAL_TO_BOOLEAN(args[1]);              \
                                                                     \
-        void* data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(_this)); \
-        elementtype val = ((elementtype*)data)[idx];                \
+        char* data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(_this)); \
+        elementtype val;                                            \
+        memcpy (&val, data + idx, elementSizeInBytes);              \
         if (needToSwap(littleEndian))                               \
             swapBytes(&val, elementSizeInBytes);                    \
                                                                     \
@@ -288,8 +256,8 @@ swapBytes (void* value, int elementSizeInBytes)
         if (needToSwap(littleEndian))                               \
             swapBytes(&val, elementSizeInBytes);                    \
                                                                     \
-        void* data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(_this)); \
-        ((elementtype*)data)[idx] = val; \
+        char* data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(_this)); \
+        memcpy (data+idx, &val, elementSizeInBytes);                \
     }                                                               \
 
 EJS_DATA_VIEW_METHOD_IMPL(Int8, int8_t, 1);
@@ -591,7 +559,6 @@ _ejs_typedarray_get_data(EJSObject* arr)
 {
     EJSTypedArray* typed_array = (EJSTypedArray*)arr;
     void* buffer_data = _ejs_arraybuffer_get_data (EJSVAL_TO_OBJECT(typed_array->buffer));
-
         
     return buffer_data + typed_array->byteOffset;
 }
@@ -1018,6 +985,23 @@ _ejs_dataview_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     scan_func (view->buffer);
     _ejs_Object_specops.scan (obj, scan_func);
 }
+
+EJS_DEFINE_CLASS(DataView,
+                 _ejs_dataview_specop_get,
+                 _ejs_dataview_specop_get_own_property,
+                 _ejs_dataview_specop_get_property,
+                 _ejs_dataview_specop_put,
+                 _ejs_dataview_specop_can_put,
+                 _ejs_dataview_specop_has_property,
+                 _ejs_dataview_specop_delete,
+                 _ejs_dataview_specop_default_value,
+                 _ejs_dataview_specop_define_own_property,
+                 NULL, // has_instance
+                 _ejs_dataview_specop_allocate,
+                 _ejs_dataview_specop_finalize,
+                 _ejs_dataview_specop_scan
+                 )
+
 
 /* specops that are shared by all the typed array types with overrides for particular methods */
 static EJSSpecOps _ejs_typedarray_specops = {
