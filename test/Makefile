@@ -38,6 +38,7 @@ $(call addExpectedFailure, json4.js,                "fails due to properties bei
 $(call addExpectedFailure, object6.js,              "fails because we don't define everything we should.")
 $(call addExpectedFailure, number1.js,              "fails because node outputs {} for console.log(new Number(5)), while spidermonkey and jsc output '5'.  we err on the SM/JSC side of things here.")
 $(call addExpectedFailure, typedarray3.js,          "we use %g to format floats/doubles, and differ when printing numbers.")
+$(call addExpectedFailure, typedarray6.js,          "we use %g to format floats/doubles, and differ when printing numbers.")
 $(call addExpectedFailure, array19.js,              "we don't support property descriptors at all for array elements.  also needs more from ECMA262 15.4.5.1")
 $(call addExpectedFailure, sparsearray1.js,         "sparse array support is very much not there yet")
 $(call addExpectedFailure, fib1.js,                 "we don't output numbers correctly (integers with exponent <= 20 should print out normally)")
