@@ -219,7 +219,7 @@ target_path_prepend =
         armv7s: "#{dev_bin}"
 
 llvm_commands = {}
-llvm_commands[x]="#{x}#{process.env.LLVM_SUFFIX}" for x in ["opt", "llc", "llvm-as"]
+llvm_commands[x]="#{x}#{process.env.LLVM_SUFFIX || ''}" for x in ["opt", "llc", "llvm-as"]
 
 compileFile = (filename, content, compileCallback) ->
         base_filename = util.genFreshFileName path.basename filename
