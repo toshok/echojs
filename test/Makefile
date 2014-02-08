@@ -1,3 +1,7 @@
+TOP=..
+
+-include $(TOP)/build/config.mk
+
 .IGNORE: # ignore all errors during test compilation/run so we always get a full run.
 .SILENT:
 

@@ -1,3 +1,6 @@
+TOP=..
+
+-include $(TOP)/build/config.mk
 
 LLVM_CONFIG=llvm-config$(LLVM_SUFFIX)
 
