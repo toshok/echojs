@@ -218,57 +218,71 @@ target_path_prepend =
         armv7: "#{dev_bin}"
         armv7s: "#{dev_bin}"
 
+llvm_commands = {}
+llvm_commands[x]="#{x}#{process.env.LLVM_SUFFIX || ''}" for x in ["opt", "llc", "llvm-as"]
+
 compileFile = (filename, content, compileCallback) ->
         base_filename = util.genFreshFileName path.basename filename
 
         console.warn "#{util.bold()}COMPILE#{util.reset()} #{filename} -> #{base_filename}"
         
         try
-                #parse_tree = esprima.parse content, loc: (if __ejs? then false else true), raw: true
                 parse_tree = esprima.parse content, { loc: true, raw: true }
         catch e
                 console.warn "parse error at #{e}:"
                 process.exit -1
 
-        compiled_module = compiler.compile parse_tree, base_filename, filename, options
+        try
+                compiled_module = compiler.compile parse_tree, base_filename, filename, options
+        catch e
+                console.warn "error #{e}"
+                process.exit -1
 
-        ll_filename = "/tmp/#{base_filename}-#{options.target}.ll"
-        bc_filename = "/tmp/#{base_filename}-#{options.target}.bc"
+        ll_filename     = "/tmp/#{base_filename}-#{options.target}.ll"
+        bc_filename     = "/tmp/#{base_filename}-#{options.target}.bc"
         ll_opt_filename = "/tmp/#{base_filename}-#{options.target}.ll.opt"
-        o_filename = "/tmp/#{base_filename}-#{options.target}.o"
+        o_filename      = "/tmp/#{base_filename}-#{options.target}.o"
 
         temp_files.push ll_filename, bc_filename, ll_opt_filename, o_filename
         
         llvm_as_args = ["-o=#{bc_filename}", ll_filename]
+        opt_args     = ["-O1", "-strip-dead-prototypes", "-S", "-o=#{ll_opt_filename}", bc_filename]
+        llc_args     = target_llc_args[options.target].concat ["-filetype=obj", "-o=#{o_filename}", ll_opt_filename]
 
-        #opt_args = "-mem2reg -no-aa -tbaa -targetlibinfo -basicaa -notti -preverify -domtree -verify -simplifycfg -domtree -sroa -early-cse -lower-expect -targetlibinfo -no-aa -tbaa -basicaa -notti -globalopt -ipsccp -deadargelim -instcombine -simplifycfg -basiccg -prune-eh -inline-cost -inline -functionattrs -sroa -domtree -early-cse -lazy-value-info -jump-threading -correlated-propagation -simplifycfg -instcombine -tailcallelim -simplifycfg -reassociate -domtree -loops -loop-simplify -lcssa -loop-rotate -licm -lcssa -loop-unswitch -instcombine -scalar-evolution -loop-simplify -lcssa -indvars -loop-idiom -loop-deletion -loop-unroll -memdep -gvn -memdep -memcpyopt -sccp -instcombine -lazy-value-info -jump-threading -correlated-propagation -domtree -memdep -dse -loops -scalar-evolution -slp-vectorizer -adce -simplifycfg -instcombine -domtree -loops -loop-simplify -lcssa -scalar-evolution -loop-simplify -lcssa -loop-vectorize -instcombine -simplifycfg -strip-dead-prototypes -globaldce -constmerge -preverify -domtree -verify".split(" ").concat ["-o=#{ll_opt_filename}", bc_filename]
-                
-        opt_args = ["-O1", "-strip-dead-prototypes", "-S", "-o=#{ll_opt_filename}", bc_filename]
-        llc_args = target_llc_args[options.target].concat ["-filetype=obj", "-o=#{o_filename}", ll_opt_filename]
-
+        debug.log 1, "writing #{ll_filename}"
         compiled_module.writeToFile ll_filename
+        debug.log 1, "done writing #{ll_filename}"
 
         compiled_modules.push filename: (if options.basename then path.basename(filename) else filename), module_toplevel: compiled_module.toplevel_name
 
         if __ejs?
                 # in ejs spawn is synchronous.
-                spawn "llvm-as", llvm_as_args
-                spawn "opt", opt_args
-                spawn "llc", llc_args
+                spawn llvm_commands["llvm-as"], llvm_as_args
+                spawn llvm_commands["opt"], opt_args
+                spawn llvm_commands["llc"], llc_args
                 o_filenames.push o_filename
                 compileCallback()
         else
-                debug.log 1, "executing `llvm-as #{llvm_as_args.join ' '}'"
-                llvm_as = spawn "llvm-as", llvm_as_args
+                debug.log 1, "executing `#{llvm_commands['llvm-as']} #{llvm_as_args.join ' '}'"
+                llvm_as = spawn llvm_commands["llvm-as"], llvm_as_args
                 llvm_as.stderr.on "data", (data) -> console.warn "#{data}"
+                llvm_as.on "error", (err) ->
+                        console.warn "error executing #{llvm_commands['llvm-as']}: #{err}"
+                        process.exit -1
                 llvm_as.on "exit", (code) ->
-                        debug.log 1, "executing `opt #{opt_args.join ' '}'"
-                        opt = spawn "opt", opt_args
+                        debug.log 1, "executing `#{llvm_commands['opt']} #{opt_args.join ' '}'"
+                        opt = spawn llvm_commands['opt'], opt_args
                         opt.stderr.on "data", (data) -> console.warn "#{data}"
+                        opt.on "error", (err) ->
+                                console.warn "error executing #{llvm_commands['opt']}: #{err}"
+                                process.exit -1
                         opt.on "exit", (code) ->
-                                debug.log 1, "executing `llc #{llc_args.join ' '}'"
-                                llc = spawn "llc", llc_args
+                                debug.log 1, "executing `#{llvm_commands['llc']} #{llc_args.join ' '}'"
+                                llc = spawn llvm_commands['llc'], llc_args
                                 llc.stderr.on "data", (data) -> console.warn "#{data}"
+                                llc.on "error", (err) ->
+                                        console.warn "error executing #{llvm_commands['llc']}: #{err}"
+                                        process.exit -1
                                 llc.on "exit", (code) ->
                                         o_filenames.push o_filename
                                         compileCallback()

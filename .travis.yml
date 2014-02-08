@@ -2,10 +2,22 @@ language: objective-c
 
 before_install:
   - brew update
+  - brew tap homebrew/versions
 
 install:
+  - export PATH=$PATH:/usr/local/share/npm/bin
   - sh ./ci/install-node.sh
   - sh ./ci/install-coffeescript.sh
   - sh ./ci/install-llvm.sh
 
 before_script:
+  - export LLVM_SUFFIX=-3.4
+  - export PATH=$PATH:/usr/local/share/npm/bin
+  - make
+
+script:
+  - env
+  - export LLVM_SUFFIX=-3.4
+  - export PATH=$PATH:/usr/local/share/npm/bin
+  - make check
+  - if test -f test/.failures -o -f test/.xsuccess; then exit -1; fi

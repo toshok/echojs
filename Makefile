@@ -1,6 +1,7 @@
 TOP=$(shell pwd)
 
-SUBDIRS=external-deps node-llvm ejs-llvm lib runtime
+#SUBDIRS=external-deps node-llvm ejs-llvm lib runtime
+SUBDIRS=external-deps node-llvm lib runtime
 
 all:
 

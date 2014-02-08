@@ -77,7 +77,7 @@ typedef struct _EJSDataView {
 
 #define EJSOBJECT_IS_TYPEDARRAY(v) (v->ops == &_ejs_int8array_specops || v->ops == &_ejs_uint16array_specops || v->ops == &_ejs_int32array_specops || v->ops == &_ejs_float32array_specops)
 #define EJSOBJECT_IS_ARRAYBUFFER(v) (v->ops == &_ejs_ArrayBuffer_specops)
-#define EJSOBJECT_IS_DATAVIEW(v) (v->ops == &_ejs_dataview_specops)
+#define EJSOBJECT_IS_DATAVIEW(v) (v->ops == &_ejs_DataView_specops)
 
 
 #define EJS_TYPED_ARRAY_LEN(obj) (((EJSTypedArray*)EJSVAL_TO_OBJECT(obj))->length)
@@ -115,7 +115,7 @@ extern EJSSpecOps _ejs_float32array_specops;
 
 extern ejsval _ejs_DataView;
 extern ejsval _ejs_DataView_proto;
-extern EJSSpecOps _ejs_dataview_specops;
+extern EJSSpecOps _ejs_DataView_specops;
 
 void _ejs_typedarrays_init(ejsval global);
 
