@@ -4,22 +4,36 @@ EchoJS - an ahead of time compiler and runtime for EcmaScript
 Building EchoJS
 ---------------
 
-You need a couple of external dependencies to get things running:
+Right now things only build on OSX.  I have easy access to other platforms, I just haven't had the time/motivation to do it given OSX is what I have in front of me every hour of every day, and ios development is my biggest goal.  Patches welcome!
+
+You'll need a couple of external dependencies to get things running:
 
 1. node.js
 2. llvm 3.4
 3. coffeescript
 
-The following commands should get you from 0 to echo-js built and tests run.
+The following commands should get you from 0 to echo-js built:
 
 ```sh
 $ brew install node
 $ brew install llvm34
 $ npm install -g coffeescript
+$ export LLVM_SUFFIX-3.4      # see below
+$ export MIN_OSX_VERSION=10.8 # only if you're running 10.8, see below
 $ cd echo-js
 $ make
-$ make check
 ```
+
+The environment variable LLVM_SUFFIX is used since homebrew installs the llvm34 executables as, e.g. `llvm-config-3.4` instead of `llvm-config`.  If you're using llvm 3.4 built from source, you can leave the variable unset.
+
+As for MIN_OSX_VERSION: homebrew's formula for llvm34 doesn't specify a -mmacosx-version-min= flag, so it builds to whatever you have on your machine.  Node.js's gyp support in node-gyp, however, *does* put a -mmacosx-version-min=10.5 flag.  A mismatch here causes the node-llvm binding to allocate llvm types using incorrect size calculations, and causes all manner of memory corruption.  If you're either running 10.5 or 10.9, you can leave the variable unset.  Otherwise, set it to the version of OSX you're running.  Hopefully some discussion with the homebrew folks will get this fixed upstream.
+
+both of these variable assignments can be placed in echo-js/build/config-local.mk.  I'm running mavericks locally, so my config-local.mk is as follows:
+
+```
+LLVM_SUFFIX-3.4
+```
+
 
 But... Why?
 -----------
