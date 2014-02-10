@@ -1,5 +1,25 @@
-Echo - a batch compiler for JS, written in CoffeeScript
-=======================================================
+EchoJS - an ahead of time compiler and runtime for EcmaScript
+=============================================================
+
+Building EchoJS
+---------------
+
+You need a couple of external dependencies to get things running:
+
+1. node.js
+2. llvm 3.4
+3. coffeescript
+
+The following commands should get you from 0 to echo-js built and tests run.
+
+```sh
+$ brew install node
+$ brew install llvm34
+$ npm install -g coffeescript
+$ cd echo-js
+$ make
+$ make check
+```
 
 But... Why?
 -----------
@@ -23,60 +43,6 @@ initial testing, spidermonkey was faster than JavaScriptCore, so I've
 been using SM as the performance goal.  It should be possible to beat
 the interpreter pretty easily, and the PGO/type inference gains should
 get us up near (but likely not reaching in the general case) the JITs.
-
-Why "Echo?"
------------
-
-Originally (check git history, before
-[ed3020dde](https://github.com/toshok/echo-js/commit/ed3020dde7d33018720b26484e98390ab6c69718))
-Echo was based directly on mozilla's Narcissus.  See
-http://en.wikipedia.org/wiki/Echo_and_Narcissus
-
-What works?
------------
-
-Quite a bit, although nearly everything has that
-first-pass-is-a-throwaway-implementation feel to it.
-
-Object, Function, String, Number, Array, Date, Regexp, Math builtins
-are there and mostly implemented against ECMA262.  Prototypes are
-there, although property lookups are still a linear search.
-
-The gc is a very simple mark and sweep, but seems to keep everything
-under control.
-
-Echo now uses mozilla's NaN-boxing jsval (called ejsval here) so
-primitive ints and doubles are stored unboxed.
-
-Closure environments are now using a much more compact (and more
-importantly much faster) representation.  Access to closed-over
-identifiers is now nearly as fast as to non-closed identifiers
-(a constant number of dereferences dictated by the number of
-enclosing environments.)
-
-What's next?
-------------
-
-Right now it's mostly tracking down compiler/runtime bugs that are
-keeping the self-hosted compiler from running.
-
-Typed arrays are another area that I'd like to see fleshed out sooner
-rather than later.  They're pretty simple from an implementation
-perspective.  Work on this has begun, check out runtime/ejs-typedarrays.c.
-
-I'm starting to bring over the objective-c binding code from coffeekit,
-originally closed-source but on its way into the open.
-
-Pass the crackpipe?
--------------------
-
-Echo will never (for obvious reasons) support eval or new Function to
-generate new code, but there's no reason a JS interpreter (say,
-narcissus) couldn't be embedded to fill that role.
-
-I'm fighting hard the urge to rebase the C runtime on top of the awesome
-[LLJS](http://mbebenita.github.com/LLJS/) syntax and compile that directly to efficient native code.
-What has two thumbs and wants to write a GC in JS?
 
 
 Big thanks
