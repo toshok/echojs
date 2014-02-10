@@ -24,11 +24,11 @@ $ cd echo-js
 $ make
 ```
 
-The environment variable LLVM_SUFFIX is used since homebrew installs the llvm34 executables as, e.g. `llvm-config-3.4` instead of `llvm-config`.  If you're using llvm 3.4 built from source, you can leave the variable unset.
+The environment variable `LLVM_SUFFIX` is used since homebrew installs the llvm34 executables as, e.g. `llvm-config-3.4` instead of `llvm-config`.  If you're using llvm 3.4 built from source, you can leave the variable unset.
 
-As for MIN_OSX_VERSION: homebrew's formula for llvm34 doesn't specify a -mmacosx-version-min= flag, so it builds to whatever you have on your machine.  Node.js's gyp support in node-gyp, however, *does* put a -mmacosx-version-min=10.5 flag.  A mismatch here causes the node-llvm binding to allocate llvm types using incorrect size calculations, and causes all manner of memory corruption.  If you're either running 10.5 or 10.9, you can leave the variable unset.  Otherwise, set it to the version of OSX you're running.  Hopefully some discussion with the homebrew folks will get this fixed upstream.
+As for `MIN_OSX_VERSION`: homebrew's formula for llvm34 doesn't specify a `-mmacosx-version-min=` flag, so it builds to whatever you have on your machine.  Node.js's gyp support in node-gyp, however, *does* put a `-mmacosx-version-min=10.5` flag.  A mismatch here causes the node-llvm binding to allocate llvm types using incorrect size calculations, and causes all manner of memory corruption.  If you're either running 10.5 or 10.9, you can leave the variable unset.  Otherwise, set it to the version of OSX you're running.  Hopefully some discussion with the homebrew folks will get this fixed upstream.
 
-both of these variable assignments can be placed in echo-js/build/config-local.mk.  I'm running mavericks locally, so my config-local.mk is as follows:
+both of these variable assignments can be placed in `echo-js/build/config-local.mk`.  I'm running mavericks locally, so my config-local.mk is as follows:
 
 ```
 LLVM_SUFFIX-3.4
