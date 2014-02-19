@@ -15,9 +15,11 @@ You'll need a couple of external dependencies to get things running:
 The following commands should get you from 0 to echo-js built:
 
 ```sh
+$ brew tap homebrew/versions  # so we can get the specific version of llvm below
 $ brew install node
 $ brew install llvm34
-$ npm install -g coffeescript
+$ npm install -g coffee-script
+$ npm install -g node-gyp
 $ export LLVM_SUFFIX-3.4      # see below
 $ export MIN_OSX_VERSION=10.8 # only if you're running 10.8, see below
 $ cd echo-js
