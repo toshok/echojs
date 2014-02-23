@@ -1,6 +1,6 @@
 #include <stdarg.h>
 
-#include "ejs-log.h"
+#include "ejs.h"
 
 #include <Foundation/NSObjCRuntime.h>
 #include <Foundation/NSString.h>
