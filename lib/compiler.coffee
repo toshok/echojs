@@ -1450,6 +1450,7 @@ class LLVMIRVisitor extends TreeVisitor
                 # the alloca that stores the reason we ended up in the finally block
                 @currentFunction.cleanup_reason = @createAlloca @currentFunction, types.int32, "cleanup_reason" unless @currentFunction.cleanup_reason?
 
+                # if we have a finally clause, create finally_block
                 if n.finalizer?
                         finally_block = new llvm.BasicBlock "finally_bb", insertFunc
                         @finallyStack.unshift finally_block
@@ -1457,11 +1458,7 @@ class LLVMIRVisitor extends TreeVisitor
                 # the merge bb where everything branches to after falling off the end of a catch/finally block
                 merge_block = new llvm.BasicBlock "try_merge", insertFunc
 
-                # if we have a finally clause, create finally_block
-                if finally_block?
-                        branch_target = finally_block
-                else
-                        branch_target = merge_block
+                branch_target = if finally_block? then finally_block else merge_block
 
                 scope = new TryExitableScope @currentFunction.cleanup_reason, branch_target, (-> new llvm.BasicBlock "exception", insertFunc), finally_block?
                 @doInsideExitableScope scope, =>
