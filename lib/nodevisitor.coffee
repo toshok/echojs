@@ -114,55 +114,68 @@ exports.TreeVisitor = class TreeVisitor
                 #debug.log -> "#{n.type}>"
                 
                 switch n.type
-                        when _Program                 then rv = @visitProgram n
-                        when _FunctionDeclaration     then rv = @visitFunctionDeclaration n
-                        when _FunctionExpression      then rv = @visitFunctionExpression n
+                        when _ArrayExpression         then rv = @visitArrayExpression n
+                        when _ArrayPattern            then rv = @visitArrayPattern n
                         when _ArrowFunctionExpression then rv = @visitArrowFunctionExpression n
-                        when _LabeledStatement        then rv = @visitLabeledStatement n
+                        when _AssignmentExpression    then rv = @visitAssignmentExpression n
+                        when _BinaryExpression        then rv = @visitBinaryExpression n
                         when _BlockStatement          then rv = @visitBlock n
+                        when _BreakStatement          then rv = @visitBreak n
+                        when _CallExpression          then rv = @visitCallExpression n
+                        when _CatchClause             then rv = @visitCatchClause n
+                        when _ClassBody               then rv = @visitClassBody n
+                        when _ClassDeclaration        then rv = @visitClassDeclaration n
+                        when _ClassExpression         then throw new Error "Unhandled AST node type: #{n.type}"
+                        when _ClassHeritage           then throw new Error "Unhandled AST node type: #{n.type}"
+                        when _ComprehensionBlock      then throw new Error "Unhandled AST node type: #{n.type}"
+                        when _ComprehensionExpression then throw new Error "Unhandled AST node type: #{n.type}"
+                        when _ConditionalExpression   then rv = @visitConditionalExpression n
+                        when _ContinueStatement       then rv = @visitContinue n
+                        when _DebuggerStatement       then throw new Error "Unhandled AST node type: #{n.type}"
+                        when _DoWhileStatement        then rv = @visitDo n
+                        when _EmptyStatement          then rv = @visitEmptyStatement n
+                        when _ExportDeclaration       then rv = @visitExportDeclaration n
+                        when _ExportBatchSpecifier    then throw new Error "Unhandled AST node type: #{n.type}"
+                        when _ExportSpecifier         then throw new Error "Unhandled AST node type: #{n.type}"
                         when _ExpressionStatement     then rv = @visitExpressionStatement n
-                        when _SwitchStatement         then rv = @visitSwitch n
-                        when _SwitchCase              then rv = @visitCase n
-                        when _ForStatement            then rv = @visitFor n
-                        when _WhileStatement          then rv = @visitWhile n
-                        when _IfStatement             then rv = @visitIf n
                         when _ForInStatement          then rv = @visitForIn n
                         when _ForOfStatement          then rv = @visitForOf n
-                        when _DoWhileStatement        then rv = @visitDo n
-                        when _BreakStatement          then rv = @visitBreak n
-                        when _ContinueStatement       then rv = @visitContinue n
-                        when _TryStatement            then rv = @visitTry n
-                        when _CatchClause             then rv = @visitCatchClause n
-                        when _ThrowStatement          then rv = @visitThrow n
-                        when _ReturnStatement         then rv = @visitReturn n
-                        when _WithStatement           then rv = @visitWith n
-                        when _VariableDeclaration     then rv = @visitVariableDeclaration n
-                        when _VariableDeclarator      then rv = @visitVariableDeclarator n
-                        when _LabeledStatement        then rv = @visitLabeledStatement n
-                        when _AssignmentExpression    then rv = @visitAssignmentExpression n
-                        when _ConditionalExpression   then rv = @visitConditionalExpression n
-                        when _LogicalExpression       then rv = @visitLogicalExpression n
-                        when _NewExpression           then rv = @visitNewExpression n
-                        when _ThisExpression          then rv = @visitThisExpression n
-                        when _BinaryExpression        then rv = @visitBinaryExpression n
-                        when _UnaryExpression         then rv = @visitUnaryExpression n
-                        when _UpdateExpression        then rv = @visitUpdateExpression n
-                        when _MemberExpression        then rv = @visitMemberExpression n
-                        when _SequenceExpression      then rv = @visitSequenceExpression n
-                        when _ObjectExpression        then rv = @visitObjectExpression n
-                        when _ArrayExpression         then rv = @visitArrayExpression n
+                        when _ForStatement            then rv = @visitFor n
+                        when _FunctionDeclaration     then rv = @visitFunctionDeclaration n
+                        when _FunctionExpression      then rv = @visitFunctionExpression n
                         when _Identifier              then rv = @visitIdentifier n
-                        when _Literal                 then rv = @visitLiteral n
-                        when _CallExpression          then rv = @visitCallExpression n
-                        when _Property                then rv = @visitProperty n
-                        when _EmptyStatement          then rv = @visitEmptyStatement n
-                        when _ClassDeclaration        then rv = @visitClassDeclaration n
-                        when _ClassBody               then rv = @visitClassBody n
-                        when _MethodDefinition        then rv = @visitMethodDefinition n
-                        when _ExportDeclaration       then rv = @visitExportDeclaration n
-                        when _ModuleDeclaration       then rv = @visitModuleDeclaration n
+                        when _IfStatement             then rv = @visitIf n
                         when _ImportDeclaration       then rv = @visitImportDeclaration n
                         when _ImportSpecifier         then rv = @visitImportSpecifier n
+                        when _LabeledStatement        then rv = @visitLabeledStatement n
+                        when _Literal                 then rv = @visitLiteral n
+                        when _LogicalExpression       then rv = @visitLogicalExpression n
+                        when _MemberExpression        then rv = @visitMemberExpression n
+                        when _MethodDefinition        then rv = @visitMethodDefinition n
+                        when _ModuleDeclaration       then rv = @visitModuleDeclaration n
+                        when _NewExpression           then rv = @visitNewExpression n
+                        when _ObjectExpression        then rv = @visitObjectExpression n
+                        when _ObjectPattern           then throw new Error "Unhandled AST node type: #{n.type}"
+                        when _Program                 then rv = @visitProgram n
+                        when _Property                then rv = @visitProperty n
+                        when _ReturnStatement         then rv = @visitReturn n
+                        when _SequenceExpression      then rv = @visitSequenceExpression n
+                        when _SpreadElement           then throw new Error "Unhandled AST node type: #{n.type}"
+                        when _SwitchCase              then rv = @visitCase n
+                        when _SwitchStatement         then rv = @visitSwitch n
+                        when _TaggedTemplateExpression then throw new Error "Unhandled AST node type: #{n.type}"
+                        when _TemplateElement         then throw new Error "Unhandled AST node type: #{n.type}"
+                        when _TemplateLiteral         then throw new Error "Unhandled AST node type: #{n.type}"
+                        when _ThisExpression          then rv = @visitThisExpression n
+                        when _ThrowStatement          then rv = @visitThrow n
+                        when _TryStatement            then rv = @visitTry n
+                        when _UnaryExpression         then rv = @visitUnaryExpression n
+                        when _UpdateExpression        then rv = @visitUpdateExpression n
+                        when _VariableDeclaration     then rv = @visitVariableDeclaration n
+                        when _VariableDeclarator      then rv = @visitVariableDeclarator n
+                        when _WhileStatement          then rv = @visitWhile n
+                        when _WithStatement           then rv = @visitWith n
+                        when _YieldExpression         then throw new Error "Unhandled AST node type: #{n.type}"
                         else
                             throw new Error "PANIC: unknown parse node type #{n.type}"
                 
@@ -388,5 +401,9 @@ exports.TreeVisitor = class TreeVisitor
         visitImportSpecifier: (n) ->
                 n.id = @visit n.id
                 n
-                
+
+        visitArrayPattern: (n) ->
+                n.elements = @visitArray n.elements
+                n
+
         toString: () -> "TreeVisitor"
