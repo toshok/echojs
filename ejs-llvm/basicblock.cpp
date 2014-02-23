@@ -99,7 +99,7 @@ namespace ejsllvm {
     void
     BasicBlock_init (ejsval exports)
     {
-        basicblock_specops = _ejs_object_specops;
+        basicblock_specops = _ejs_Object_specops;
         basicblock_specops.class_name = "LLVMBasicBlock";
         basicblock_specops.allocate = BasicBlock_allocate;
 

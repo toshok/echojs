@@ -274,7 +274,7 @@ namespace ejsllvm {
     void
     Module_init (ejsval exports)
     {
-        module_specops = _ejs_object_specops;
+        module_specops = _ejs_Object_specops;
         module_specops.class_name = "LLVMModule";
         module_specops.allocate = Module_allocate;
 

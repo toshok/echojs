@@ -79,7 +79,7 @@ namespace ejsllvm {
     void
     ArrayType_init (ejsval exports)
     {
-        arraytype_specops = _ejs_object_specops;
+        arraytype_specops = _ejs_Object_specops;
         arraytype_specops.class_name = "LLVMArray";
         arraytype_specops.allocate = ArrayType_allocate;
 

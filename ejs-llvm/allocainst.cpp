@@ -78,7 +78,7 @@ namespace ejsllvm {
     void
     AllocaInst_init (ejsval exports)
     {
-        allocainst_specops = _ejs_object_specops;
+        allocainst_specops = _ejs_Object_specops;
         allocainst_specops.class_name = "LLVMAllocaInst";
         allocainst_specops.allocate = AllocaInst_allocate;
 
