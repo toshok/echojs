@@ -15,7 +15,6 @@ TESTS:=$(wildcard *[0-9].js)
 TESTS:=$(filter-out alloc1.js,$(TESTS))
 
 # these test for es6 stuff that neither node nor ejs supports
-TESTS:=$(filter-out destructure1.js,$(TESTS))
 TESTS:=$(filter-out module1.js,$(TESTS))
 
 ESPRIMA_TESTS=$(filter esprima%,$(TESTS))
