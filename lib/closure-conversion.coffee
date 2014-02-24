@@ -1614,7 +1614,14 @@ class DesugarDestructuring extends TreeVisitor
 
                 n.declarations = decls
                 n
-                
+
+        visitAssignmentExpression: (n) ->
+                if n.left.type is ObjectPattern or n.left.type is ArrayPattern
+                        throw new Error "EJS doesn't support destructuring assignments yet (issue #16)"
+                        throw new SyntaxError "cannot use destructuring with assignment operators other than '='" if n.operator isnt "="
+                else
+                        n
+                                
 passes = [
         DesugarClasses
         DesugarDestructuring
