@@ -1,78 +1,77 @@
 esprima = require 'esprima'
 escodegen = require 'escodegen'
-syntax = esprima.Syntax
 debug = require 'debug'
 path = require 'path'
 
-_ArrayExpression = syntax.ArrayExpression
-_ArrayPattern = syntax.ArrayPattern
-_ArrowFunctionExpression = syntax.ArrowFunctionExpression
-_AssignmentExpression = syntax.AssignmentExpression
-_BinaryExpression = syntax.BinaryExpression
-_BlockStatement = syntax.BlockStatement
-_BreakStatement = syntax.BreakStatement
-_CallExpression = syntax.CallExpression
-_CatchClause = syntax.CatchClause
-_ClassBody = syntax.ClassBody
-_ClassDeclaration = syntax.ClassDeclaration
-_ClassExpression = syntax.ClassExpression
-_ClassHeritage = syntax.ClassHeritage
-_ComprehensionBlock = syntax.ComprehensionBlock
-_ComprehensionExpression = syntax.ComprehensionExpression
-_ConditionalExpression = syntax.ConditionalExpression
-_ContinueStatement = syntax.ContinueStatement
-_DebuggerStatement = syntax.DebuggerStatement
-_DoWhileStatement = syntax.DoWhileStatement
-_EmptyStatement = syntax.EmptyStatement
-_ExportDeclaration = syntax.ExportDeclaration
-_ExportBatchSpecifier = syntax.ExportBatchSpecifier
-_ExportSpecifier = syntax.ExportSpecifier
-_ExpressionStatement = syntax.ExpressionStatement
-_ForInStatement = syntax.ForInStatement
-_ForOfStatement = syntax.ForOfStatement
-_ForStatement = syntax.ForStatement
-_FunctionDeclaration = syntax.FunctionDeclaration
-_FunctionExpression = syntax.FunctionExpression
-_Identifier = syntax.Identifier
-_IfStatement = syntax.IfStatement
-_ImportDeclaration = syntax.ImportDeclaration
-_ImportSpecifier = syntax.ImportSpecifier
-_LabeledStatement = syntax.LabeledStatement
-_Literal = syntax.Literal
-_LogicalExpression = syntax.LogicalExpression
-_MemberExpression = syntax.MemberExpression
-_MethodDefinition = syntax.MethodDefinition
-_ModuleDeclaration = syntax.ModuleDeclaration
-_NewExpression = syntax.NewExpression
-_ObjectExpression = syntax.ObjectExpression
-_ObjectPattern = syntax.ObjectPattern
-_Program = syntax.Program
-_Property = syntax.Property
-_ReturnStatement = syntax.ReturnStatement
-_SequenceExpression = syntax.SequenceExpression
-_SpreadElement = syntax.SpreadElement
-_SwitchCase = syntax.SwitchCase
-_SwitchStatement = syntax.SwitchStatement
-_TaggedTemplateExpression = syntax.TaggedTemplateExpression
-_TemplateElement = syntax.TemplateElement
-_TemplateLiteral = syntax.TemplateLiteral
-_ThisExpression = syntax.ThisExpression
-_ThrowStatement = syntax.ThrowStatement
-_TryStatement = syntax.TryStatement
-_UnaryExpression = syntax.UnaryExpression
-_UpdateExpression = syntax.UpdateExpression
-_VariableDeclaration = syntax.VariableDeclaration
-_VariableDeclarator = syntax.VariableDeclarator
-_WhileStatement = syntax.WhileStatement
-_WithStatement = syntax.WithStatement
-_YieldExpression = syntax.YieldExpression
+{ ArrayExpression,
+  ArrayPattern,
+  ArrowFunctionExpression,
+  AssignmentExpression,
+  BinaryExpression,
+  BlockStatement,
+  BreakStatement,
+  CallExpression,
+  CatchClause,
+  ClassBody,
+  ClassDeclaration,
+  ClassExpression,
+  ClassHeritage,
+  ComprehensionBlock,
+  ComprehensionExpression,
+  ConditionalExpression,
+  ContinueStatement,
+  DebuggerStatement,
+  DoWhileStatement,
+  EmptyStatement,
+  ExportDeclaration,
+  ExportBatchSpecifier,
+  ExportSpecifier,
+  ExpressionStatement,
+  ForInStatement,
+  ForOfStatement,
+  ForStatement,
+  FunctionDeclaration,
+  FunctionExpression,
+  Identifier,
+  IfStatement,
+  ImportDeclaration,
+  ImportSpecifier,
+  LabeledStatement,
+  Literal,
+  LogicalExpression,
+  MemberExpression,
+  MethodDefinition,
+  ModuleDeclaration,
+  NewExpression,
+  ObjectExpression,
+  ObjectPattern,
+  Program,
+  Property,
+  ReturnStatement,
+  SequenceExpression,
+  SpreadElement,
+  SwitchCase,
+  SwitchStatement,
+  TaggedTemplateExpression,
+  TemplateElement,
+  TemplateLiteral,
+  ThisExpression,
+  ThrowStatement,
+  TryStatement,
+  UnaryExpression,
+  UpdateExpression,
+  VariableDeclaration,
+  VariableDeclarator,
+  WhileStatement,
+  WithStatement,
+  YieldExpression } = esprima.Syntax
 
 { Stack } = require 'stack'
 { Set } = require 'set'
 { TreeVisitor } = require 'nodevisitor'
 closure_conversion = require 'closure-conversion'
 optimizations = require 'optimizations'
-{ startGenerator, is_intrinsic } = require 'echo-util'
+{ startGenerator, is_intrinsic, create_identifier } = require 'echo-util'
 
 { ExitableScope, TryExitableScope, SwitchExitableScope, LoopExitableScope } = require 'exitable-scope'
 
@@ -365,9 +364,9 @@ class LLVMIRVisitor extends TreeVisitor
 
         storeGlobal: (prop, value) ->
                 # we store obj.prop, prop is an id
-                if prop.type is _Identifier
+                if prop.type is Identifier
                         pname = prop.name
-                else # prop.type is _Literal
+                else # prop.type is Literal
                         pname = prop.value
 
                 c = @getAtom pname
@@ -444,9 +443,9 @@ class LLVMIRVisitor extends TreeVisitor
                         @createCall @ejs_runtime.object_setprop, [obj, (@visit prop), rhs], "propstore_computed"
                 else
                         # we store obj.prop, prop is an id
-                        if prop.type is _Identifier
+                        if prop.type is Identifier
                                 pname = prop.name
-                        else # prop.type is _Literal
+                        else # prop.type is Literal
                                 pname = prop.value
 
                         c = @getAtom pname
@@ -849,14 +848,14 @@ class LLVMIRVisitor extends TreeVisitor
                 @createPropertyLoad (@visit n.object), n.property, n.computed
 
         storeValueInDest: (rhvalue, lhs) ->
-                if lhs.type is _Identifier
+                if lhs.type is Identifier
                         dest = @findIdentifierInScope lhs.name
                         if dest?
                                 result = ir.createStore rhvalue, dest
                         else
                                 result = @storeGlobal lhs, rhvalue
                         result
-                else if lhs.type is _MemberExpression
+                else if lhs.type is MemberExpression
                         result = @createPropertyStore (@visit lhs.object), lhs.property, rhvalue, lhs.computed
                 else if is_intrinsic "%slot", lhs
                         ir.createStore rhvalue, (@handleSlotRef lhs)
@@ -894,10 +893,10 @@ class LLVMIRVisitor extends TreeVisitor
 
                 for param in n.formal_params
                         debug.log param.type
-                        if param.type is _MemberExpression
+                        if param.type is MemberExpression
                                 debug.log param.object.type
                                 debug.log param.property.name
-                        if param.type isnt _Identifier
+                        if param.type isnt Identifier
                                 debug.log "we don't handle destructured/defaulted parameters yet"
                                 console.warn JSON.stringify param
                                 throw "we don't handle destructured/defaulted parameters yet"
@@ -940,7 +939,7 @@ class LLVMIRVisitor extends TreeVisitor
                 # now create allocas for the formal parameters
                 first_formal_index = allocas.length
                 for param in n.formal_params
-                        if param.type is _Identifier
+                        if param.type is Identifier
                                 alloca = @createAlloca @currentFunction, types.EjsValue, "local_#{param.name}"
                                 new_scope.set param.name, alloca
                                 allocas.push alloca
@@ -1071,10 +1070,10 @@ class LLVMIRVisitor extends TreeVisitor
                 callee = @ejs_runtime[builtin]
         
                 if n.operator is "delete"
-                        throw "unhandled delete syntax" if n.argument.type isnt _MemberExpression
+                        throw "unhandled delete syntax" if n.argument.type isnt MemberExpression
                         
                         fake_literal =
-                                type: _Literal
+                                type: Literal
                                 value: n.argument.property.name
                                 raw: "'#{n.argument.property.name}'"
                         return @createCall callee, [(@visitOrNull n.argument.object), (@visit fake_literal)], "result"
@@ -1161,7 +1160,7 @@ class LLVMIRVisitor extends TreeVisitor
                 argv = []
 
                 if callee.takes_builtins
-                        if pullThisFromArg0 and args[0].type is _MemberExpression
+                        if pullThisFromArg0 and args[0].type is MemberExpression
                                 thisArg = @visit args[0].object
                                 closure = @createPropertyLoad thisArg, args[0].property, args[0].computed
                         else
@@ -1238,7 +1237,7 @@ class LLVMIRVisitor extends TreeVisitor
                 intrinsicHandler.call @, n, @opencode_intrinsics[unescapedName], false
                 
         visitNewExpression: (n) ->
-                if n.callee.type isnt _Identifier or n.callee.name[0] isnt '%'
+                if n.callee.type isnt Identifier or n.callee.name[0] isnt '%'
                         throw "invalid ctor #{JSON.stringify n.callee}"
 
                 if n.callee.name isnt "%invokeClosure"
@@ -1300,7 +1299,7 @@ class LLVMIRVisitor extends TreeVisitor
                 obj = @createCall object_create, [@loadNullEjsValue()], "objtmp", !object_create.doesNotThrow
                 for property in n.properties
                         val = @visit property.value
-                        key = if property.key.type is _Identifier then @getAtom property.key.name else @visit property.key
+                        key = if property.key.type is Identifier then @getAtom property.key.name else @visit property.key
 
                         @createCall @ejs_runtime.object_define_value_prop, [obj, key, val, consts.int32 0x77], "define_value_prop_#{property.key.name}"
                 obj
@@ -1310,7 +1309,7 @@ class LLVMIRVisitor extends TreeVisitor
                 i = 0;
                 for el in n.elements
                         val = @visit el
-                        index = type: _Literal, value: i
+                        index = type: Literal, value: i
                         @createPropertyStore obj, index, val, true
                         i = i + 1
                 obj
@@ -1968,7 +1967,7 @@ class AddFunctionsVisitor extends TreeVisitor
                 # and store the JS formal parameters someplace else
                 n.formal_params = n.params
 
-                n.params = ({ type: _Identifier, name: param.name, llvm_type: param.llvm_type } for param in @abi.ejs_params)
+                n.params = ({ type: Identifier, name: param.name, llvm_type: param.llvm_type } for param in @abi.ejs_params)
                 n.params[@abi.env_param_index].name = env_name
 
                 # create the llvm IR function using our platform calling convention
@@ -1986,15 +1985,11 @@ sanitize_with_regexp = (filename) ->
 
 insert_toplevel_func = (tree, filename) ->
         toplevel =
-                type: _FunctionDeclaration,
-                id:
-                        type: _Identifier
-                        name: "_ejs_toplevel_#{sanitize_with_regexp filename}"
-                params: [
-                        { type: _Identifier, name: "%env_unused" }
-                ]
+                type: FunctionDeclaration,
+                id:   create_identifier("_ejs_toplevel_#{sanitize_with_regexp filename}")
+                params: [create_identifier("%env_unused")]
                 body:
-                        type: _BlockStatement
+                        type: BlockStatement
                         body: tree.body
                 toplevel: true
         tree.body = [toplevel]
