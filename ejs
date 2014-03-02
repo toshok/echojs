@@ -236,7 +236,7 @@ compileFile = (filename, content, compileCallback) ->
                 compiled_module = compiler.compile parse_tree, base_filename, filename, options
         catch e
                 console.warn "error #{e}"
-                process.exit -1
+                throw e
 
         ll_filename     = "/tmp/#{base_filename}-#{options.target}.ll"
         bc_filename     = "/tmp/#{base_filename}-#{options.target}.bc"
