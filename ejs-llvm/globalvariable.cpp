@@ -118,7 +118,7 @@ namespace ejsllvm {
     GlobalVariable_init (ejsval exports)
     {
         _ejs_gc_add_root (&_ejs_GlobalVariable_proto);
-        _ejs_GlobalVariable_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_object_specops);
+        _ejs_GlobalVariable_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
 
         _ejs_GlobalVariable = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMGlobalVariable", (EJSClosureFunc)GlobalVariable_impl, _ejs_GlobalVariable_proto);
 

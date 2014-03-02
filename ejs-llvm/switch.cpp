@@ -90,7 +90,7 @@ namespace ejsllvm {
     void
     Switch_init (ejsval exports)
     {
-        switch_specops = _ejs_object_specops;
+        switch_specops = _ejs_Object_specops;
         switch_specops.class_name = "LLVMSwitch";
         switch_specops.allocate = Switch_allocate;
 

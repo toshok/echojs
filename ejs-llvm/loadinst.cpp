@@ -78,7 +78,7 @@ namespace ejsllvm {
     void
     LoadInst_init (ejsval exports)
     {
-        loadinst_specops = _ejs_object_specops;
+        loadinst_specops = _ejs_Object_specops;
         loadinst_specops.class_name = "LLVMLoadInst";
         loadinst_specops.allocate = LoadInst_Allocate;
 

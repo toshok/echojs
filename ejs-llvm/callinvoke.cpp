@@ -111,7 +111,7 @@ namespace ejsllvm {
     void
     Call_init (ejsval exports)
     {
-        call_specops = _ejs_object_specops;
+        call_specops = _ejs_Object_specops;
         call_specops.class_name = "LLVMCall";
         call_specops.allocate = Call_allocate;
 
@@ -232,7 +232,7 @@ namespace ejsllvm {
     void
     Invoke_init (ejsval exports)
     {
-        invoke_specops = _ejs_object_specops;
+        invoke_specops = _ejs_Object_specops;
         invoke_specops.class_name = "LLVMInvoke";
         invoke_specops.allocate = Invoke_allocate;
 

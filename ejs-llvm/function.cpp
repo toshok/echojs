@@ -207,7 +207,7 @@ namespace ejsllvm {
     void
     Function_init (ejsval exports)
     {
-        function_specops = _ejs_object_specops;
+        function_specops = _ejs_Object_specops;
         function_specops.class_name = "LLVMFunction";
         function_specops.allocate = Function_allocate;
 

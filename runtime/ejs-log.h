@@ -5,7 +5,13 @@
 #ifndef _ejs_log_h
 #define _ejs_log_h
 
+#include "ejs.h"
+
+EJS_BEGIN_DECLS
+
 void _ejs_log (const char* fmt, ... );
 void _ejs_logstr (const char* str);
+
+EJS_END_DECLS
 
 #endif /* _ejs_log_h */

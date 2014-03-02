@@ -1,5 +1,7 @@
 TOP=..
 
+include $(TOP)/build/config.mk
+
 SOURCES= \
 	allocainst.cpp \
 	arraytype.cpp \
@@ -23,8 +25,16 @@ SOURCES= \
 
 
 CXX=clang++
-CXXFLAGS=-I../runtime -I/usr/local/include -g -D_DEBUG -D_GNU_SOURCE -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -fno-exceptions -fno-rtti -fno-common -Woverloaded-virtual -Wcast-qual -fPIC -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -I..
 
+LLVM_CONFIG=llvm-config$(LLVM_SUFFIX)
+
+LLVM_CXXFLAGS   := $(shell $(LLVM_CONFIG) --cxxflags)
+LLVM_INCLUDEDIR := $(shell $(LLVM_CONFIG) --includedir)
+
+LLVM_CXXFLAGS   := $(subst $(LLVM_CPPFLAGS),,$(LLVM_CXXFLAGS))
+LLVM_DEFINES    := $(subst -I$(LLVM_INCLUDEDIR),,$(LLVM_CPPFLAGS))
+
+CXXFLAGS=-I../runtime -I$(LLVM_INCLUDEDIR) $(LLVM_CXXFLAGS) $(OSX_CFLAGS)
 
 OBJECTS=$(SOURCES:%.cpp=%.o)
 

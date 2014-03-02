@@ -1,69 +1,68 @@
-syntax = (require 'esprima').Syntax
+esprima = require 'esprima'
 debug = require 'debug'
 
-_ArrayExpression = syntax.ArrayExpression
-_ArrayPattern = syntax.ArrayPattern
-_ArrowFunctionExpression = syntax.ArrowFunctionExpression
-_AssignmentExpression = syntax.AssignmentExpression
-_BinaryExpression = syntax.BinaryExpression
-_BlockStatement = syntax.BlockStatement
-_BreakStatement = syntax.BreakStatement
-_CallExpression = syntax.CallExpression
-_CatchClause = syntax.CatchClause
-_ClassBody = syntax.ClassBody
-_ClassDeclaration = syntax.ClassDeclaration
-_ClassExpression = syntax.ClassExpression
-_ClassHeritage = syntax.ClassHeritage
-_ComprehensionBlock = syntax.ComprehensionBlock
-_ComprehensionExpression = syntax.ComprehensionExpression
-_ConditionalExpression = syntax.ConditionalExpression
-_ContinueStatement = syntax.ContinueStatement
-_DebuggerStatement = syntax.DebuggerStatement
-_DoWhileStatement = syntax.DoWhileStatement
-_EmptyStatement = syntax.EmptyStatement
-_ExportDeclaration = syntax.ExportDeclaration
-_ExportBatchSpecifier = syntax.ExportBatchSpecifier
-_ExportSpecifier = syntax.ExportSpecifier
-_ExpressionStatement = syntax.ExpressionStatement
-_ForInStatement = syntax.ForInStatement
-_ForOfStatement = syntax.ForOfStatement
-_ForStatement = syntax.ForStatement
-_FunctionDeclaration = syntax.FunctionDeclaration
-_FunctionExpression = syntax.FunctionExpression
-_Identifier = syntax.Identifier
-_IfStatement = syntax.IfStatement
-_ImportDeclaration = syntax.ImportDeclaration
-_ImportSpecifier = syntax.ImportSpecifier
-_LabeledStatement = syntax.LabeledStatement
-_Literal = syntax.Literal
-_LogicalExpression = syntax.LogicalExpression
-_MemberExpression = syntax.MemberExpression
-_MethodDefinition = syntax.MethodDefinition
-_ModuleDeclaration = syntax.ModuleDeclaration
-_NewExpression = syntax.NewExpression
-_ObjectExpression = syntax.ObjectExpression
-_ObjectPattern = syntax.ObjectPattern
-_Program = syntax.Program
-_Property = syntax.Property
-_ReturnStatement = syntax.ReturnStatement
-_SequenceExpression = syntax.SequenceExpression
-_SpreadElement = syntax.SpreadElement
-_SwitchCase = syntax.SwitchCase
-_SwitchStatement = syntax.SwitchStatement
-_TaggedTemplateExpression = syntax.TaggedTemplateExpression
-_TemplateElement = syntax.TemplateElement
-_TemplateLiteral = syntax.TemplateLiteral
-_ThisExpression = syntax.ThisExpression
-_ThrowStatement = syntax.ThrowStatement
-_TryStatement = syntax.TryStatement
-_UnaryExpression = syntax.UnaryExpression
-_UpdateExpression = syntax.UpdateExpression
-_VariableDeclaration = syntax.VariableDeclaration
-_VariableDeclarator = syntax.VariableDeclarator
-_WhileStatement = syntax.WhileStatement
-_WithStatement = syntax.WithStatement
-_YieldExpression = syntax.YieldExpression
-
+{ ArrayExpression,
+  ArrayPattern,
+  ArrowFunctionExpression,
+  AssignmentExpression,
+  BinaryExpression,
+  BlockStatement,
+  BreakStatement,
+  CallExpression,
+  CatchClause,
+  ClassBody,
+  ClassDeclaration,
+  ClassExpression,
+  ClassHeritage,
+  ComprehensionBlock,
+  ComprehensionExpression,
+  ConditionalExpression,
+  ContinueStatement,
+  DebuggerStatement,
+  DoWhileStatement,
+  EmptyStatement,
+  ExportDeclaration,
+  ExportBatchSpecifier,
+  ExportSpecifier,
+  ExpressionStatement,
+  ForInStatement,
+  ForOfStatement,
+  ForStatement,
+  FunctionDeclaration,
+  FunctionExpression,
+  Identifier,
+  IfStatement,
+  ImportDeclaration,
+  ImportSpecifier,
+  LabeledStatement,
+  Literal,
+  LogicalExpression,
+  MemberExpression,
+  MethodDefinition,
+  ModuleDeclaration,
+  NewExpression,
+  ObjectExpression,
+  ObjectPattern,
+  Program,
+  Property,
+  ReturnStatement,
+  SequenceExpression,
+  SpreadElement,
+  SwitchCase,
+  SwitchStatement,
+  TaggedTemplateExpression,
+  TemplateElement,
+  TemplateLiteral,
+  ThisExpression,
+  ThrowStatement,
+  TryStatement,
+  UnaryExpression,
+  UpdateExpression,
+  VariableDeclaration,
+  VariableDeclarator,
+  WhileStatement,
+  WithStatement,
+  YieldExpression } = esprima.Syntax
 
 exports.TreeVisitor = class TreeVisitor
         # for collections, returns all non-null.  for single item properties,
@@ -114,55 +113,68 @@ exports.TreeVisitor = class TreeVisitor
                 #debug.log -> "#{n.type}>"
                 
                 switch n.type
-                        when _Program                 then rv = @visitProgram n
-                        when _FunctionDeclaration     then rv = @visitFunctionDeclaration n
-                        when _FunctionExpression      then rv = @visitFunctionExpression n
-                        when _ArrowFunctionExpression then rv = @visitArrowFunctionExpression n
-                        when _LabeledStatement        then rv = @visitLabeledStatement n
-                        when _BlockStatement          then rv = @visitBlock n
-                        when _ExpressionStatement     then rv = @visitExpressionStatement n
-                        when _SwitchStatement         then rv = @visitSwitch n
-                        when _SwitchCase              then rv = @visitCase n
-                        when _ForStatement            then rv = @visitFor n
-                        when _WhileStatement          then rv = @visitWhile n
-                        when _IfStatement             then rv = @visitIf n
-                        when _ForInStatement          then rv = @visitForIn n
-                        when _ForOfStatement          then rv = @visitForOf n
-                        when _DoWhileStatement        then rv = @visitDo n
-                        when _BreakStatement          then rv = @visitBreak n
-                        when _ContinueStatement       then rv = @visitContinue n
-                        when _TryStatement            then rv = @visitTry n
-                        when _CatchClause             then rv = @visitCatchClause n
-                        when _ThrowStatement          then rv = @visitThrow n
-                        when _ReturnStatement         then rv = @visitReturn n
-                        when _WithStatement           then rv = @visitWith n
-                        when _VariableDeclaration     then rv = @visitVariableDeclaration n
-                        when _VariableDeclarator      then rv = @visitVariableDeclarator n
-                        when _LabeledStatement        then rv = @visitLabeledStatement n
-                        when _AssignmentExpression    then rv = @visitAssignmentExpression n
-                        when _ConditionalExpression   then rv = @visitConditionalExpression n
-                        when _LogicalExpression       then rv = @visitLogicalExpression n
-                        when _NewExpression           then rv = @visitNewExpression n
-                        when _ThisExpression          then rv = @visitThisExpression n
-                        when _BinaryExpression        then rv = @visitBinaryExpression n
-                        when _UnaryExpression         then rv = @visitUnaryExpression n
-                        when _UpdateExpression        then rv = @visitUpdateExpression n
-                        when _MemberExpression        then rv = @visitMemberExpression n
-                        when _SequenceExpression      then rv = @visitSequenceExpression n
-                        when _ObjectExpression        then rv = @visitObjectExpression n
-                        when _ArrayExpression         then rv = @visitArrayExpression n
-                        when _Identifier              then rv = @visitIdentifier n
-                        when _Literal                 then rv = @visitLiteral n
-                        when _CallExpression          then rv = @visitCallExpression n
-                        when _Property                then rv = @visitProperty n
-                        when _EmptyStatement          then rv = @visitEmptyStatement n
-                        when _ClassDeclaration        then rv = @visitClassDeclaration n
-                        when _ClassBody               then rv = @visitClassBody n
-                        when _MethodDefinition        then rv = @visitMethodDefinition n
-                        when _ExportDeclaration       then rv = @visitExportDeclaration n
-                        when _ModuleDeclaration       then rv = @visitModuleDeclaration n
-                        when _ImportDeclaration       then rv = @visitImportDeclaration n
-                        when _ImportSpecifier         then rv = @visitImportSpecifier n
+                        when ArrayExpression         then rv = @visitArrayExpression n
+                        when ArrayPattern            then rv = @visitArrayPattern n
+                        when ArrowFunctionExpression then rv = @visitArrowFunctionExpression n
+                        when AssignmentExpression    then rv = @visitAssignmentExpression n
+                        when BinaryExpression        then rv = @visitBinaryExpression n
+                        when BlockStatement          then rv = @visitBlock n
+                        when BreakStatement          then rv = @visitBreak n
+                        when CallExpression          then rv = @visitCallExpression n
+                        when CatchClause             then rv = @visitCatchClause n
+                        when ClassBody               then rv = @visitClassBody n
+                        when ClassDeclaration        then rv = @visitClassDeclaration n
+                        when ClassExpression         then throw new Error "Unhandled AST node type: #{n.type}"
+                        when ClassHeritage           then throw new Error "Unhandled AST node type: #{n.type}"
+                        when ComprehensionBlock      then throw new Error "Unhandled AST node type: #{n.type}"
+                        when ComprehensionExpression then throw new Error "Unhandled AST node type: #{n.type}"
+                        when ConditionalExpression   then rv = @visitConditionalExpression n
+                        when ContinueStatement       then rv = @visitContinue n
+                        when DebuggerStatement       then throw new Error "Unhandled AST node type: #{n.type}"
+                        when DoWhileStatement        then rv = @visitDo n
+                        when EmptyStatement          then rv = @visitEmptyStatement n
+                        when ExportDeclaration       then rv = @visitExportDeclaration n
+                        when ExportBatchSpecifier    then throw new Error "Unhandled AST node type: #{n.type}"
+                        when ExportSpecifier         then throw new Error "Unhandled AST node type: #{n.type}"
+                        when ExpressionStatement     then rv = @visitExpressionStatement n
+                        when ForInStatement          then rv = @visitForIn n
+                        when ForOfStatement          then rv = @visitForOf n
+                        when ForStatement            then rv = @visitFor n
+                        when FunctionDeclaration     then rv = @visitFunctionDeclaration n
+                        when FunctionExpression      then rv = @visitFunctionExpression n
+                        when Identifier              then rv = @visitIdentifier n
+                        when IfStatement             then rv = @visitIf n
+                        when ImportDeclaration       then rv = @visitImportDeclaration n
+                        when ImportSpecifier         then rv = @visitImportSpecifier n
+                        when LabeledStatement        then rv = @visitLabeledStatement n
+                        when Literal                 then rv = @visitLiteral n
+                        when LogicalExpression       then rv = @visitLogicalExpression n
+                        when MemberExpression        then rv = @visitMemberExpression n
+                        when MethodDefinition        then rv = @visitMethodDefinition n
+                        when ModuleDeclaration       then rv = @visitModuleDeclaration n
+                        when NewExpression           then rv = @visitNewExpression n
+                        when ObjectExpression        then rv = @visitObjectExpression n
+                        when ObjectPattern           then rv = @visitObjectPattern n
+                        when Program                 then rv = @visitProgram n
+                        when Property                then rv = @visitProperty n
+                        when ReturnStatement         then rv = @visitReturn n
+                        when SequenceExpression      then rv = @visitSequenceExpression n
+                        when SpreadElement           then throw new Error "Unhandled AST node type: #{n.type}"
+                        when SwitchCase              then rv = @visitCase n
+                        when SwitchStatement         then rv = @visitSwitch n
+                        when TaggedTemplateExpression then throw new Error "Unhandled AST node type: #{n.type}"
+                        when TemplateElement         then throw new Error "Unhandled AST node type: #{n.type}"
+                        when TemplateLiteral         then throw new Error "Unhandled AST node type: #{n.type}"
+                        when ThisExpression          then rv = @visitThisExpression n
+                        when ThrowStatement          then rv = @visitThrow n
+                        when TryStatement            then rv = @visitTry n
+                        when UnaryExpression         then rv = @visitUnaryExpression n
+                        when UpdateExpression        then rv = @visitUpdateExpression n
+                        when VariableDeclaration     then rv = @visitVariableDeclaration n
+                        when VariableDeclarator      then rv = @visitVariableDeclarator n
+                        when WhileStatement          then rv = @visitWhile n
+                        when WithStatement           then rv = @visitWith n
+                        when YieldExpression         then throw new Error "Unhandled AST node type: #{n.type}"
                         else
                             throw new Error "PANIC: unknown parse node type #{n.type}"
                 
@@ -388,5 +400,13 @@ exports.TreeVisitor = class TreeVisitor
         visitImportSpecifier: (n) ->
                 n.id = @visit n.id
                 n
-                
+
+        visitArrayPattern: (n) ->
+                n.elements = @visitArray n.elements
+                n
+
+        visitObjectPattern: (n) ->
+                n.properties = @visitArray n.properties
+                n
+
         toString: () -> "TreeVisitor"

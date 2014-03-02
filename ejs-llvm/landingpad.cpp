@@ -97,7 +97,7 @@ namespace ejsllvm {
     void
     LandingPad_init (ejsval exports)
     {
-        landingpad_specops = _ejs_object_specops;
+        landingpad_specops = _ejs_Object_specops;
         landingpad_specops.class_name = "LLVMLandingPad";
         landingpad_specops.allocate = LandingPad_allocate;
 
