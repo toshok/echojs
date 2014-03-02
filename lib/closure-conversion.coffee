@@ -2,6 +2,8 @@ esprima = require 'esprima'
 escodegen = require 'escodegen'
 debug = require 'debug'
 
+{ CFA2 } = require 'jscfa2'
+
 { ArrayExpression,
   ArrayPattern,
   ArrowFunctionExpression,
@@ -539,25 +541,40 @@ class FuncDeclsToVars extends TreeVisitor
 class HoistVars extends TreeVisitor
         constructor: () ->
                 super
-                @function_stack = new Stack
+                @scope_stack = new Stack
 
-        visitFunction: (n) ->
-                @function_stack.push { func: n, vars: new Set }
+        create_empty_declarator = (decl_name) ->
+                type: VariableDeclarator
+                id: create_identifier decl_name
+                init: null
+
+                
+        visitProgram: (n) ->
+                vars = new Set
+                @scope_stack.push { func: n, vars: vars }
                 n = super
+                @scope_stack.pop()
 
-                create_empty_declarator = (decl_name) ->
-                        type: VariableDeclarator
-                        id: create_identifier decl_name
-                        init: null
+                return n if vars.size() is 0
 
-                if @function_stack.top.vars.size() > 0
-                        n.body.body.unshift {
-                                type: VariableDeclaration
-                                declarations: create_empty_declarator varname for varname in @function_stack.top.vars.keys()
-                                kind: "let"
-                        }
+                n.body.unshift
+                        type: VariableDeclaration
+                        declarations: create_empty_declarator varname for varname in vars.keys()
+                        kind: "let"
+                n
+        
+        visitFunction: (n) ->
+                vars = new Set
+                @scope_stack.push { func: n, vars: vars }
+                n = super
+                @scope_stack.pop()
 
-                @function_stack.pop()
+                return n if vars.size() is 0
+
+                n.body.body.unshift
+                        type: VariableDeclaration
+                        declarations: create_empty_declarator varname for varname in vars.keys()
+                        kind: "let"
                 n
 
         visitFor: (n) ->
@@ -571,7 +588,7 @@ class HoistVars extends TreeVisitor
                         
         visitForIn: (n) ->
                 if n.left.type is VariableDeclaration
-                        @function_stack.top.vars.add n.left.declarations[0].id.name
+                        @scope_stack.top.vars.add n.left.declarations[0].id.name
                         n.left = create_identifier n.left.declarations[0].id.name
                 n.right = @visit n.right
                 n.body = @visit n.body
@@ -579,7 +596,7 @@ class HoistVars extends TreeVisitor
 
         visitForOf: (n) ->
                 if n.left.type is VariableDeclaration
-                        @function_stack.top.vars.add n.left.declarations[0].id.name
+                        @scope_stack.top.vars.add n.left.declarations[0].id.name
                         n.left = create_identifier n.left.declarations[0].id.name
                 n.right = @visit n.right
                 n.body = @visit n.body
@@ -600,7 +617,7 @@ class HoistVars extends TreeVisitor
                                         assignments.push assignment
 
                         # vars are hoisted to the containing function's toplevel scope
-                        @function_stack.top.vars.add decl.id.name for decl in n.declarations
+                        @scope_stack.top.vars.add decl.id.name for decl in n.declarations
 
                         if assignments.length is 0
                                 return { type: EmptyStatement }
@@ -1621,7 +1638,11 @@ class DesugarDestructuring extends TreeVisitor
                         throw new SyntaxError "cannot use destructuring with assignment operators other than '='" if n.operator isnt "="
                 else
                         n
-                                
+
+# switch this to true if you want to experiment with the new CFA2
+# code.  definitely, definitely not ready for prime time.
+enable_cfa2 = false
+
 passes = [
         DesugarClasses
         DesugarDestructuring
@@ -1629,9 +1650,10 @@ passes = [
         FuncDeclsToVars
         HoistVars
         DesugarArrowFunctions
+        NameAnonymousFunctions
+        CFA2 if enable_cfa2
         ComputeFree
         LocateEnv
-        NameAnonymousFunctions
         SubstituteVariables
         MarkLocalAndGlobalVariables
         IIFEIdioms
@@ -1643,14 +1665,20 @@ exports.convert = (tree, filename, options) ->
         debug.log -> escodegen.generate tree
 
         passes.forEach (passType) ->
-                pass = new passType(filename)
-                tree = pass.visit tree
-                if options.debug_passes.has (passType.name)
-                        console.log "after: #{passType.name}"
-                        console.log escodegen.generate tree
-                        
-                debug.log 2, "after: #{passType.name}"
-                debug.log 2, -> escodegen.generate tree
-                debug.log 3, -> __ejs.GC.dumpAllocationStats "after #{passType.name}" if __ejs?
+                return if not passType?
+                try
+                        pass = new passType(filename)
+                        tree = pass.visit tree
+                        if options.debug_passes.has (passType.name)
+                                console.log "after: #{passType.name}"
+                                console.log escodegen.generate tree
+
+                        debug.log 2, "after: #{passType.name}"
+                        debug.log 2, -> escodegen.generate tree
+                        debug.log 3, -> __ejs.GC.dumpAllocationStats "after #{passType.name}" if __ejs?
+                catch e
+                        console.warn "exception in pass #{passType.name}"
+                        console.warn e
+                        throw e
 
         tree
