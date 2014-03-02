@@ -31,6 +31,7 @@ EJS_ATOM(Empty)
 EJS_ATOM(null)
 EJS_ATOM(undefined)
 EJS_ATOM(NaN)
+EJS_ATOM(Infinity)
 
 EJS_ATOM(true)
 EJS_ATOM(false)
