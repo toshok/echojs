@@ -128,6 +128,7 @@ class JSCore
         toStr  = (args) -> new Answer AbstractVal.ASTR
         toNum  = (args) -> new Answer AbstractVal.ANUM
         toBool = (args) -> new Answer AbstractVal.ABOOL
+        toVoid = (args) -> new Answer AbstractVal.AUNDEF
         toThis = (args) -> new Answer args[0]
 
         constructor: (heap) ->
@@ -546,6 +547,13 @@ class JSCore
                         bav = makeObjAbstractVal(count)
                         b.addProp("prototype-",    {aval:bpav, writable:false, enumerable:false, configurable:false})
                         bp.addProp("constructor-", {aval:bav,                  enumerable:false})
+
+                do ->
+                        _console = new AbstractObj({ addr: newCount(), proto: opav })
+                        consoleav = makeObjAbstractVal(count)
+                        go.addProp("console-",       {aval:consoleav,                               enumerable:false})
+                        _console.attachMethod("log",    0, toVoid)
+                        _console.attachMethod("warn",   0, toVoid)
                         
 
         globalObjectAbstractVal: () -> JSCore.global_object_av
@@ -554,12 +562,6 @@ class JSCore
 ##############################################
 ##############   UTILITIES  ##################
 ##############################################
-
-# search for an elm in the array that satisfies pred
-Array::member = (pred) ->
-        for el in @
-                return el if pred el
-        false
 
 Array::memq = (sth) ->
         for el in @
@@ -1432,7 +1434,7 @@ class TagVarRefs extends TreeVisitor
                 fn.kind = STACK if fn.kind isnt HEAP
                 params.forEach (p) ->
                         if p.kind isnt HEAP
-                                p.kind=STACK
+                                p.kind = STACK
                 # trim otherscopes
                 otherscopes.splice(len, innerscope.length)
                 n
@@ -1780,7 +1782,7 @@ evalExp = (n, fr) ->
 
                         # handle a ?= b where ? == [+,-,/,%,etc]
                         ans = evalExp(n.left, fr)
-                        return evalLval(n.left, n.operator, evalExp(n.right, fr), ans.v)
+                        return evalLval(n.left, n.operator[0], evalExp(n.right, fr), ans.v)
 
                 when FunctionExpression      then return new Answer(makeObjAbstractVal(n.addr), fr)
                 when ArrowFunctionExpression then return new Answer(makeObjAbstractVal(n.addr), fr)
