@@ -461,19 +461,15 @@ LocateEnv = class LocateEnv extends TreeVisitor
 
 class HoistFuncDecls extends TreeVisitor
         constructor: ->
-                @prepends = []
                 
         visitFunction: (n) ->
-                @prepends.unshift null
-                n.body = @visit n.body
-                # we're assuming n.body is a BlockStatement here...
-                new_prepends = @prepends.shift()
-                if new_prepends isnt null
-                        n.body.body = new_prepends.concat n.body.body
+                decls = new Map()
+                n.body = @visit n.body, decls
+                decls.forEach (fd) =>
+                        n.body.body.unshift fd
                 n
         
-        visitBlock: (n) ->
-                n = super n
+        visitBlock: (n, decls) ->
                 return n if n.body.length == 0
 
                 i = 0
@@ -481,13 +477,12 @@ class HoistFuncDecls extends TreeVisitor
                 while i < e
                         child = n.body[i]
                         if child.type is FunctionDeclaration
-                                if @prepends[0] is null
-                                        @prepends[0] = []
-                                @prepends[0].push child
+                                decls.set(child.id.name, @visit(child))
                                 n.body.splice i, 1
                                 e = n.body.length
                         else
                                 i += 1
+                n = super(n, decls)
                 n
 
 # convert all function declarations to variable assignments
@@ -1734,11 +1729,17 @@ class DesugarUpdateAssignments extends TreeVisitor
 # code.  definitely, definitely not ready for prime time.
 enable_cfa2 = false
 
+# the HoistFuncDecls phase transforms the AST to give v8 semantics
+# when faced with multiple function declarations within the same
+# function scope.
+#
+enable_hoist_func_decls_pass = true
+
 passes = [
         DesugarClasses
         DesugarDestructuring
         DesugarUpdateAssignments
-        HoistFuncDecls
+        HoistFuncDecls if enable_hoist_func_decls_pass
         FuncDeclsToVars
         HoistVars
         DesugarArrowFunctions
@@ -1761,7 +1762,7 @@ exports.convert = (tree, filename, options) ->
                 try
                         pass = new passType(filename)
                         tree = pass.visit tree
-                        if options.debug_passes.has (passType.name)
+                        if options.debug_passes.has(passType.name)
                                 console.log "after: #{passType.name}"
                                 console.log escodegen.generate tree
 
