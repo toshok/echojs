@@ -1,5 +1,8 @@
 
-var a = Array.of ('hola');
+var a = Array.of (7);
+console.log (a);
+
+a = Array.of ('hola');
 console.log (a);
 
 a = Array.of ('hola', 'world');
@@ -15,5 +18,5 @@ a = Array.of (null);
 console.log (a);
 
 a = Array.of ();
-console.log ();
+console.log (a);
 
