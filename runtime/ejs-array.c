@@ -1296,6 +1296,12 @@ _ejs_Array_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
 }
 
 static ejsval
+_ejs_Array_of (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    return _ejs_array_new_copy (argc, args);
+}
+
+static ejsval
 _ejs_Array_isArray (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
     if (argc == 0 || EJSVAL_IS_NULL(args[0]) || !EJSVAL_IS_OBJECT(args[0]))
@@ -1329,6 +1335,7 @@ _ejs_array_init(ejsval global)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Array_proto, x, _ejs_Array_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
 
     OBJ_METHOD(isArray);
+    OBJ_METHOD(of);
 
     PROTO_METHOD(push);
     PROTO_METHOD(pop);

@@ -156,6 +156,7 @@ EJS_ATOM(every)
 EJS_ATOM(some)
 EJS_ATOM(reduce)
 EJS_ATOM(reduceRight)
+EJS_ATOM(of)
 
 // Typed array method names
 EJS_ATOM(getInt8)
