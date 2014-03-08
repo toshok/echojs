@@ -11,7 +11,8 @@ COFFEE_SOURCES=				\
 	consts.coffee			\
 	exitable-scope.coffee		\
 	runtime.coffee			\
-	terminal.coffee
+	terminal.coffee			\
+	jscfa2.coffee
 
 JS_SOURCES=				\
 	map.js				\

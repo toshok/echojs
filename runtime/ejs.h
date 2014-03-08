@@ -77,6 +77,7 @@ void _ejs_init(int argc, char** argv);
 extern const ejsval _ejs_undefined;
 extern const ejsval _ejs_null;
 extern ejsval _ejs_nan;
+extern const ejsval _ejs_Infinity;
 extern const ejsval _ejs_true;
 extern const ejsval _ejs_false;
 extern const ejsval _ejs_zero;

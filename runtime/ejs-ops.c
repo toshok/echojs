@@ -18,6 +18,7 @@
 #include "ejs-boolean.h"
 #include "ejs-ops.h"
 #include "ejs-error.h"
+#include "ejs-array.h"
 
 ejsval _ejs_isNaN EJSVAL_ALIGNMENT;
 ejsval _ejs_isFinite EJSVAL_ALIGNMENT;
@@ -207,12 +208,18 @@ ejsval ToNumber(ejsval exp)
         if (EJSVAL_IS_DATE(exp)) {
             return NUMBER_TO_EJSVAL(_ejs_date_get_time ((EJSDate*)EJSVAL_TO_OBJECT(exp)));
         }
-        // XXX if it's an array
-        //       and .length == 0, return 0.
-        //       and .length == 1, return ToDouble(array->elements[0]) - yes, it's recursive
-        //       else return NaN
-        // for anything else, NaN
-        return _ejs_zero;
+        else if (EJSVAL_IS_ARRAY(exp)) {
+            int len = EJS_ARRAY_LEN(exp);
+            if (len == 0) return _ejs_zero;
+            else if (len > 1) return _ejs_nan;
+            else {
+                // XXX we need to support sparse arrays here too
+                EJS_ASSERT (EJSVAL_IS_DENSE_ARRAY(exp));
+                return ToNumber(EJS_DENSE_ARRAY_ELEMENTS(exp)[0]);
+            }
+        }
+        else
+            return _ejs_nan;
     }
     else
         EJS_NOT_IMPLEMENTED();
@@ -1051,7 +1058,12 @@ _ejs_isNaN_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 ejsval
 _ejs_isFinite_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
-    EJS_NOT_IMPLEMENTED();
+    if (argc < 1)
+        return _ejs_false;
+
+    ejsval num = args[0];
+
+    return isfinite(ToDouble(num)) ? _ejs_true : _ejs_false;
 }
 
 // ECMA262 15.1.2.2

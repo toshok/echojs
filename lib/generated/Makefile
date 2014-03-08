@@ -10,7 +10,7 @@ EXTRA_JS_SOURCES= ../../esprima/esprima.js ../../escodegen/escodegen.js ../../es
 make-stage1: $(wildcard *.js) ejs.js
 	@echo "****************************************************"
 	@echo "****************************************************"
-	@echo "Building stage $(1)"
+	@echo "Building stage 1"
 	@echo "****************************************************"
 	@echo "****************************************************"
 	@$(MAKE) -C ..

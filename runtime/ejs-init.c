@@ -36,6 +36,7 @@
 
 const ejsval _ejs_undefined EJSVAL_ALIGNMENT = STATIC_BUILD_EJSVAL(EJSVAL_TAG_UNDEFINED, 0);
 ejsval _ejs_nan;
+const ejsval _ejs_Infinity EJSVAL_ALIGNMENT = STATIC_BUILD_DOUBLE_EJSVAL(HUGE_VAL);
 const ejsval _ejs_null EJSVAL_ALIGNMENT = STATIC_BUILD_EJSVAL(EJSVAL_TAG_NULL, 0);
 const ejsval _ejs_true EJSVAL_ALIGNMENT = STATIC_BUILD_BOOLEAN_EJSVAL(EJS_TRUE);
 const ejsval _ejs_false EJSVAL_ALIGNMENT = STATIC_BUILD_BOOLEAN_EJSVAL(EJS_FALSE);
@@ -103,6 +104,7 @@ _ejs_init(int argc, char** argv)
 
     _ejs_object_setprop (_ejs_global, _ejs_atom_undefined, _ejs_undefined);
     _ejs_object_setprop (_ejs_global, _ejs_atom_NaN, _ejs_nan);
+    _ejs_object_setprop (_ejs_global, _ejs_atom_Infinity, _ejs_Infinity);
     _ejs_object_setprop (_ejs_global, _ejs_atom_eval, _ejs_function_new_native (_ejs_undefined, _ejs_atom_eval, _ejs_eval));
 
 

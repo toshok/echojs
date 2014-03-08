@@ -79,11 +79,11 @@ exports.TreeVisitor = class TreeVisitor
                 rv
 
         # a rather disgusting in-place filter+flatten visitor
-        visitArray: (arr) ->
+        visitArray: (arr, args...) ->
                 i = 0
                 e = arr.length
                 while i < e
-                        tmp = @visit arr[i]
+                        tmp = @visit arr[i], args...
                         if tmp is null
                                 arr.splice i, 1
                                 e = arr.length
@@ -104,7 +104,7 @@ exports.TreeVisitor = class TreeVisitor
                 arr
                 
                 
-        visit: (n) ->
+        visit: (n, args...) ->
                 return null if not n?
 
                 return @visitArray n if Array.isArray n
@@ -113,67 +113,67 @@ exports.TreeVisitor = class TreeVisitor
                 #debug.log -> "#{n.type}>"
                 
                 switch n.type
-                        when ArrayExpression         then rv = @visitArrayExpression n
-                        when ArrayPattern            then rv = @visitArrayPattern n
-                        when ArrowFunctionExpression then rv = @visitArrowFunctionExpression n
-                        when AssignmentExpression    then rv = @visitAssignmentExpression n
-                        when BinaryExpression        then rv = @visitBinaryExpression n
-                        when BlockStatement          then rv = @visitBlock n
-                        when BreakStatement          then rv = @visitBreak n
-                        when CallExpression          then rv = @visitCallExpression n
-                        when CatchClause             then rv = @visitCatchClause n
-                        when ClassBody               then rv = @visitClassBody n
-                        when ClassDeclaration        then rv = @visitClassDeclaration n
+                        when ArrayExpression         then rv = @visitArrayExpression n, args...
+                        when ArrayPattern            then rv = @visitArrayPattern n, args...
+                        when ArrowFunctionExpression then rv = @visitArrowFunctionExpression n, args...
+                        when AssignmentExpression    then rv = @visitAssignmentExpression n, args...
+                        when BinaryExpression        then rv = @visitBinaryExpression n, args...
+                        when BlockStatement          then rv = @visitBlock n, args...
+                        when BreakStatement          then rv = @visitBreak n, args...
+                        when CallExpression          then rv = @visitCallExpression n, args...
+                        when CatchClause             then rv = @visitCatchClause n, args...
+                        when ClassBody               then rv = @visitClassBody n, args...
+                        when ClassDeclaration        then rv = @visitClassDeclaration n, args...
                         when ClassExpression         then throw new Error "Unhandled AST node type: #{n.type}"
                         when ClassHeritage           then throw new Error "Unhandled AST node type: #{n.type}"
                         when ComprehensionBlock      then throw new Error "Unhandled AST node type: #{n.type}"
                         when ComprehensionExpression then throw new Error "Unhandled AST node type: #{n.type}"
-                        when ConditionalExpression   then rv = @visitConditionalExpression n
-                        when ContinueStatement       then rv = @visitContinue n
+                        when ConditionalExpression   then rv = @visitConditionalExpression n, args...
+                        when ContinueStatement       then rv = @visitContinue n, args...
                         when DebuggerStatement       then throw new Error "Unhandled AST node type: #{n.type}"
-                        when DoWhileStatement        then rv = @visitDo n
-                        when EmptyStatement          then rv = @visitEmptyStatement n
-                        when ExportDeclaration       then rv = @visitExportDeclaration n
+                        when DoWhileStatement        then rv = @visitDo n, args...
+                        when EmptyStatement          then rv = @visitEmptyStatement n, args...
+                        when ExportDeclaration       then rv = @visitExportDeclaration n, args...
                         when ExportBatchSpecifier    then throw new Error "Unhandled AST node type: #{n.type}"
                         when ExportSpecifier         then throw new Error "Unhandled AST node type: #{n.type}"
-                        when ExpressionStatement     then rv = @visitExpressionStatement n
-                        when ForInStatement          then rv = @visitForIn n
-                        when ForOfStatement          then rv = @visitForOf n
-                        when ForStatement            then rv = @visitFor n
-                        when FunctionDeclaration     then rv = @visitFunctionDeclaration n
-                        when FunctionExpression      then rv = @visitFunctionExpression n
-                        when Identifier              then rv = @visitIdentifier n
-                        when IfStatement             then rv = @visitIf n
-                        when ImportDeclaration       then rv = @visitImportDeclaration n
-                        when ImportSpecifier         then rv = @visitImportSpecifier n
-                        when LabeledStatement        then rv = @visitLabeledStatement n
-                        when Literal                 then rv = @visitLiteral n
-                        when LogicalExpression       then rv = @visitLogicalExpression n
-                        when MemberExpression        then rv = @visitMemberExpression n
-                        when MethodDefinition        then rv = @visitMethodDefinition n
-                        when ModuleDeclaration       then rv = @visitModuleDeclaration n
-                        when NewExpression           then rv = @visitNewExpression n
-                        when ObjectExpression        then rv = @visitObjectExpression n
-                        when ObjectPattern           then rv = @visitObjectPattern n
-                        when Program                 then rv = @visitProgram n
-                        when Property                then rv = @visitProperty n
-                        when ReturnStatement         then rv = @visitReturn n
-                        when SequenceExpression      then rv = @visitSequenceExpression n
+                        when ExpressionStatement     then rv = @visitExpressionStatement n, args...
+                        when ForInStatement          then rv = @visitForIn n, args...
+                        when ForOfStatement          then rv = @visitForOf n, args...
+                        when ForStatement            then rv = @visitFor n, args...
+                        when FunctionDeclaration     then rv = @visitFunctionDeclaration n, args...
+                        when FunctionExpression      then rv = @visitFunctionExpression n, args...
+                        when Identifier              then rv = @visitIdentifier n, args...
+                        when IfStatement             then rv = @visitIf n, args...
+                        when ImportDeclaration       then rv = @visitImportDeclaration n, args...
+                        when ImportSpecifier         then rv = @visitImportSpecifier n, args...
+                        when LabeledStatement        then rv = @visitLabeledStatement n, args...
+                        when Literal                 then rv = @visitLiteral n, args...
+                        when LogicalExpression       then rv = @visitLogicalExpression n, args...
+                        when MemberExpression        then rv = @visitMemberExpression n, args...
+                        when MethodDefinition        then rv = @visitMethodDefinition n, args...
+                        when ModuleDeclaration       then rv = @visitModuleDeclaration n, args...
+                        when NewExpression           then rv = @visitNewExpression n, args...
+                        when ObjectExpression        then rv = @visitObjectExpression n, args...
+                        when ObjectPattern           then rv = @visitObjectPattern n, args...
+                        when Program                 then rv = @visitProgram n, args...
+                        when Property                then rv = @visitProperty n, args...
+                        when ReturnStatement         then rv = @visitReturn n, args...
+                        when SequenceExpression      then rv = @visitSequenceExpression n, args...
                         when SpreadElement           then throw new Error "Unhandled AST node type: #{n.type}"
-                        when SwitchCase              then rv = @visitCase n
-                        when SwitchStatement         then rv = @visitSwitch n
+                        when SwitchCase              then rv = @visitCase n, args...
+                        when SwitchStatement         then rv = @visitSwitch n, args...
                         when TaggedTemplateExpression then throw new Error "Unhandled AST node type: #{n.type}"
                         when TemplateElement         then throw new Error "Unhandled AST node type: #{n.type}"
                         when TemplateLiteral         then throw new Error "Unhandled AST node type: #{n.type}"
-                        when ThisExpression          then rv = @visitThisExpression n
-                        when ThrowStatement          then rv = @visitThrow n
-                        when TryStatement            then rv = @visitTry n
-                        when UnaryExpression         then rv = @visitUnaryExpression n
-                        when UpdateExpression        then rv = @visitUpdateExpression n
-                        when VariableDeclaration     then rv = @visitVariableDeclaration n
-                        when VariableDeclarator      then rv = @visitVariableDeclarator n
-                        when WhileStatement          then rv = @visitWhile n
-                        when WithStatement           then rv = @visitWith n
+                        when ThisExpression          then rv = @visitThisExpression n, args...
+                        when ThrowStatement          then rv = @visitThrow n, args...
+                        when TryStatement            then rv = @visitTry n, args...
+                        when UnaryExpression         then rv = @visitUnaryExpression n, args...
+                        when UpdateExpression        then rv = @visitUpdateExpression n, args...
+                        when VariableDeclaration     then rv = @visitVariableDeclaration n, args...
+                        when VariableDeclarator      then rv = @visitVariableDeclarator n, args...
+                        when WhileStatement          then rv = @visitWhile n, args...
+                        when WithStatement           then rv = @visitWith n, args...
                         when YieldExpression         then throw new Error "Unhandled AST node type: #{n.type}"
                         else
                             throw new Error "PANIC: unknown parse node type #{n.type}"
@@ -184,82 +184,78 @@ exports.TreeVisitor = class TreeVisitor
                 return n if rv is undefined or rv is n
                 return rv
 
-        visitProgram: (n) ->
-                n.body = @visitArray n.body
+        visitProgram: (n, args...) ->
+                n.body = @visitArray n.body, args...
                 n
                 
-        visitFunction: (n) ->
-                n.params = @visitArray n.params
-                n.body   = @visit n.body
+        visitFunction: (n, args...) ->
+                n.params = @visitArray n.params, args...
+                n.body   = @visit n.body, args...
                 n
 
-        visitFunctionDeclaration: (n) ->
-                @visitFunction n
+        visitFunctionDeclaration: (n, args...) ->
+                @visitFunction n, args...
                 
-        visitFunctionExpression: (n) ->
-                @visitFunction n
+        visitFunctionExpression: (n, args...) ->
+                @visitFunction n, args...
 
-        visitArrowFunctionExpression: (n) ->
-                @visitFunction n
+        visitArrowFunctionExpression: (n, args...) ->
+                @visitFunction n, args...
 
-        visitBlock: (n) ->
-                n.body = @visitArray n.body
-                n
-
-        visitLabeledStatement: (n) ->
-                n.body = @visit n.body
+        visitBlock: (n, args...) ->
+                n.body = @visitArray n.body, args...
                 n
 
         visitEmptyStatement: (n) ->
                 n
 
-        visitExpressionStatement: (n) ->
-                n.expression = @visit n.expression
+        visitExpressionStatement: (n, args...) ->
+                n.expression = @visit n.expression, args...
                 n
                 
-        visitSwitch: (n) ->
-                n.discriminant = @visit n.discriminant
-                n.cases        = @visitArray n.cases
+        visitSwitch: (n, args...) ->
+                n.discriminant = @visit n.discriminant, args...
+                n.cases        = @visitArray n.cases, args...
                 n
                 
-        visitCase: (n) ->
-                n.test       = @visit n.test
-                n.consequent = @visit n.consequent
+        visitCase: (n, args...) ->
+                n.test       = @visit n.test, args...
+                n.consequent = @visit n.consequent, args...
                 n
                 
-        visitFor: (n) ->
-                n.init   = @visit n.init
-                n.test   = @visit n.test
-                n.update = @visit n.update
-                n.body   = @visit n.body
+        visitFor: (n, args...) ->
+                n.init   = @visit n.init, args...
+                n.test   = @visit n.test, args...
+                n.update = @visit n.update, args...
+                n.body   = @visit n.body, args...
                 n
                 
-        visitWhile: (n) ->
-                n.test = @visit n.test
-                n.body = @visit n.body
+        visitWhile: (n, args...) ->
+                n.test = @visit n.test, args...
+                n.body = @visit n.body, args...
                 n
                 
-        visitIf: (n) ->
-                n.test       = @visit n.test
-                n.consequent = @visit n.consequent
-                n.alternate  = @visit n.alternate
+        visitIf: (n, args...) ->
+                n.test       = @visit n.test, args...
+                n.consequent = @visit n.consequent, args...
+                n.alternate  = @visit n.alternate, args...
                 n
                 
-        visitForIn: (n) ->
-                n.left  = @visit n.left
-                n.right = @visit n.right
-                n.body  = @visit n.body
+        visitForIn: (n, args...) ->
+                n.left  = @visit n.left, args...
+                n.right = @visit n.right, args...
+                n.body  = @visit n.body, args...
                 n
                 
-        visitForOf: (n) ->
-                n.left  = @visit n.left
-                n.right = @visit n.right
-                n.body  = @visit n.body
+        visitForOf: (n, args...) ->
+                n.left  = @visit n.left, args...
+                n.right = @visit n.right, args...
+                n.body  = @visit n.body, args...
                 n
                 
-        visitDo: (n) ->
-                n.body = @visit n.body
-                n.test = @visit n.test
+        visitDo: (n, args...) ->
+                n.body = @visit n.body, args...
+                n.test = @visit n.test, args...
                 n
                 
         visitIdentifier: (n) -> n
@@ -268,145 +264,145 @@ exports.TreeVisitor = class TreeVisitor
         visitBreak: (n) -> n
         visitContinue: (n) -> n
                 
-        visitTry: (n) ->
-                n.block = @visit n.block
+        visitTry: (n, args...) ->
+                n.block = @visit n.block, args...
                 if n.handlers?
-                        n.handlers = @visit n.handlers
+                        n.handlers = @visit n.handlers, args...
                 else
                         n.handlers = null
-                n.finalizer = @visit n.finalizer
+                n.finalizer = @visit n.finalizer, args...
                 n
 
-        visitCatchClause: (n) ->
-                n.param = @visit n.param
-                n.guard = @visit n.guard
-                n.body = @visit n.body
+        visitCatchClause: (n, args...) ->
+                n.param = @visit n.param, args...
+                n.guard = @visit n.guard, args...
+                n.body = @visit n.body, args...
                 n
                 
-        visitThrow: (n) ->
-                n.argument = @visit n.argument
+        visitThrow: (n, args...) ->
+                n.argument = @visit n.argument, args...
                 n
                 
-        visitReturn: (n) ->
-                n.argument = @visit n.argument
+        visitReturn: (n, args...) ->
+                n.argument = @visit n.argument, args...
                 n
                 
-        visitWith: (n) ->
-                n.object = @visit n.object
-                n.body   = @visit n.body
+        visitWith: (n, args...) ->
+                n.object = @visit n.object, args...
+                n.body   = @visit n.body, args...
                 n
                 
-        visitVariableDeclaration: (n) ->
-                n.declarations = @visitArray n.declarations
+        visitVariableDeclaration: (n, args...) ->
+                n.declarations = @visitArray n.declarations, args...
                 n
 
-        visitVariableDeclarator: (n) ->
-                n.id   = @visit n.id
-                n.init = @visit n.init
+        visitVariableDeclarator: (n, args...) ->
+                n.id   = @visit n.id, args...
+                n.init = @visit n.init, args...
                 n
                                 
-        visitLabeledStatement: (n) ->
-                n.label = @visit n.label
-                n.body  = @visit n.body
+        visitLabeledStatement: (n, args...) ->
+                n.label = @visit n.label, args...
+                n.body  = @visit n.body, args...
                 n
                 
-        visitAssignmentExpression: (n) ->
-                n.left  = @visit n.left
-                n.right = @visit n.right
+        visitAssignmentExpression: (n, args...) ->
+                n.left  = @visit n.left, args...
+                n.right = @visit n.right, args...
                 n
                 
-        visitConditionalExpression: (n) ->
-                n.test       = @visit n.test
-                n.consequent = @visit n.consequent
-                n.alternate  = @visit n.alternate
+        visitConditionalExpression: (n, args...) ->
+                n.test       = @visit n.test, args...
+                n.consequent = @visit n.consequent, args...
+                n.alternate  = @visit n.alternate, args...
                 n
                 
-        visitLogicalExpression: (n) ->
-                n.left  = @visit n.left
-                n.right = @visit n.right
+        visitLogicalExpression: (n, args...) ->
+                n.left  = @visit n.left, args...
+                n.right = @visit n.right, args...
                 n
                 
-        visitBinaryExpression: (n) ->
-                n.left  = @visit n.left
-                n.right = @visit n.right
+        visitBinaryExpression: (n, args...) ->
+                n.left  = @visit n.left, args...
+                n.right = @visit n.right, args...
                 n
 
-        visitUnaryExpression: (n) ->
-                n.argument = @visit n.argument
+        visitUnaryExpression: (n, args...) ->
+                n.argument = @visit n.argument, args...
                 n
 
-        visitUpdateExpression: (n) ->
-                n.argument = @visit n.argument
+        visitUpdateExpression: (n, args...) ->
+                n.argument = @visit n.argument, args...
                 n
 
-        visitMemberExpression: (n) ->
-                n.object = @visit n.object
+        visitMemberExpression: (n, args...) ->
+                n.object = @visit n.object, args...
                 if n.computed
-                        n.property = @visit n.property
+                        n.property = @visit n.property, args...
                 n
                 
-        visitSequenceExpression: (n) ->
-                n.expressions = @visitArray n.expressions
+        visitSequenceExpression: (n, args...) ->
+                n.expressions = @visitArray n.expressions, args...
                 n
                 
-        visitNewExpression: (n) ->
-                n.callee    = @visit n.callee
-                n.arguments = @visitArray n.arguments
+        visitNewExpression: (n, args...) ->
+                n.callee    = @visit n.callee, args...
+                n.arguments = @visitArray n.arguments, args...
                 n
 
-        visitObjectExpression: (n) ->
-                n.properties = @visitArray n.properties
+        visitObjectExpression: (n, args...) ->
+                n.properties = @visitArray n.properties, args...
                 n
 
-        visitArrayExpression: (n) ->
-                n.elements = @visitArray n.elements
+        visitArrayExpression: (n, args...) ->
+                n.elements = @visitArray n.elements, args...
                 n
 
-        visitProperty: (n) ->
-                n.key   = @visit n.key
-                n.value = @visit n.value
+        visitProperty: (n, args...) ->
+                n.key   = @visit n.key, args...
+                n.value = @visit n.value, args...
                 n
                                 
-        visitCallExpression: (n) ->
-                n.callee    = @visit n.callee
-                n.arguments = @visitArray n.arguments
+        visitCallExpression: (n, args...) ->
+                n.callee    = @visit n.callee, args...
+                n.arguments = @visitArray n.arguments, args...
                 n
 
-        visitClassDeclaration: (n) ->
-                n.body = @visit n.body
+        visitClassDeclaration: (n, args...) ->
+                n.body = @visit n.body, args...
                 n
 
-        visitClassBody: (n) ->
-                n.body = @visitArray n.body
+        visitClassBody: (n, args...) ->
+                n.body = @visitArray n.body, args...
                 n
 
-        visitMethodDefinition: (n) ->
-                n.value = @visit n.value
+        visitMethodDefinition: (n, args...) ->
+                n.value = @visit n.value, args...
                 n
 
-        visitModuleDeclaration: (n) ->
-                n.id = @visit n.id
-                n.body = @visit n.body
+        visitModuleDeclaration: (n, args...) ->
+                n.id = @visit n.id, args...
+                n.body = @visit n.body, args...
                 n
 
-        visitExportDeclaration: (n) ->
-                n.declaration = @visit n.declaration
+        visitExportDeclaration: (n, args...) ->
+                n.declaration = @visit n.declaration, args...
                 n
                 
-        visitImportDeclaration: (n) ->
-                n.specifiers = @visitArray n.specifiers
+        visitImportDeclaration: (n, args...) ->
+                n.specifiers = @visitArray n.specifiers, args...
                 n
 
-        visitImportSpecifier: (n) ->
-                n.id = @visit n.id
+        visitImportSpecifier: (n, args...) ->
+                n.id = @visit n.id, args...
                 n
 
-        visitArrayPattern: (n) ->
-                n.elements = @visitArray n.elements
+        visitArrayPattern: (n, args...) ->
+                n.elements = @visitArray n.elements, args...
                 n
 
-        visitObjectPattern: (n) ->
-                n.properties = @visitArray n.properties
+        visitObjectPattern: (n, args...) ->
+                n.properties = @visitArray n.properties, args...
                 n
 
         toString: () -> "TreeVisitor"

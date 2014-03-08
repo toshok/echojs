@@ -569,8 +569,9 @@ class LLVMIRVisitor extends TreeVisitor
                 
                         for casenum in [0...case_bodies.length-1]
                                 ir.setInsertPoint case_bodies[casenum].bb
-                                for c of case_bodies[casenum].consequent
-                                        @visit case_bodies[casenum].consequent[c]
+                                case_bodies[casenum].consequent.forEach (consequent, i) =>
+                                        @visit consequent
+                                        
                                 ir.createBr case_bodies[casenum+1].bb
                         
                         ir.setInsertPoint merge_bb

@@ -2,6 +2,8 @@ esprima = require 'esprima'
 escodegen = require 'escodegen'
 debug = require 'debug'
 
+{ CFA2 } = require 'jscfa2'
+
 { ArrayExpression,
   ArrayPattern,
   ArrowFunctionExpression,
@@ -459,19 +461,15 @@ LocateEnv = class LocateEnv extends TreeVisitor
 
 class HoistFuncDecls extends TreeVisitor
         constructor: ->
-                @prepends = []
                 
         visitFunction: (n) ->
-                @prepends.unshift null
-                n.body = @visit n.body
-                # we're assuming n.body is a BlockStatement here...
-                new_prepends = @prepends.shift()
-                if new_prepends isnt null
-                        n.body.body = new_prepends.concat n.body.body
+                decls = new Map()
+                n.body = @visit n.body, decls
+                decls.forEach (fd) =>
+                        n.body.body.unshift fd
                 n
         
-        visitBlock: (n) ->
-                n = super n
+        visitBlock: (n, decls) ->
                 return n if n.body.length == 0
 
                 i = 0
@@ -479,13 +477,12 @@ class HoistFuncDecls extends TreeVisitor
                 while i < e
                         child = n.body[i]
                         if child.type is FunctionDeclaration
-                                if @prepends[0] is null
-                                        @prepends[0] = []
-                                @prepends[0].push child
+                                decls.set(child.id.name, @visit(child))
                                 n.body.splice i, 1
                                 e = n.body.length
                         else
                                 i += 1
+                n = super(n, decls)
                 n
 
 # convert all function declarations to variable assignments
@@ -539,25 +536,40 @@ class FuncDeclsToVars extends TreeVisitor
 class HoistVars extends TreeVisitor
         constructor: () ->
                 super
-                @function_stack = new Stack
+                @scope_stack = new Stack
 
-        visitFunction: (n) ->
-                @function_stack.push { func: n, vars: new Set }
+        create_empty_declarator = (decl_name) ->
+                type: VariableDeclarator
+                id: create_identifier decl_name
+                init: null
+
+                
+        visitProgram: (n) ->
+                vars = new Set
+                @scope_stack.push { func: n, vars: vars }
                 n = super
+                @scope_stack.pop()
 
-                create_empty_declarator = (decl_name) ->
-                        type: VariableDeclarator
-                        id: create_identifier decl_name
-                        init: null
+                return n if vars.size() is 0
 
-                if @function_stack.top.vars.size() > 0
-                        n.body.body.unshift {
-                                type: VariableDeclaration
-                                declarations: create_empty_declarator varname for varname in @function_stack.top.vars.keys()
-                                kind: "let"
-                        }
+                n.body.unshift
+                        type: VariableDeclaration
+                        declarations: create_empty_declarator varname for varname in vars.keys()
+                        kind: "let"
+                n
+        
+        visitFunction: (n) ->
+                vars = new Set
+                @scope_stack.push { func: n, vars: vars }
+                n = super
+                @scope_stack.pop()
 
-                @function_stack.pop()
+                return n if vars.size() is 0
+
+                n.body.body.unshift
+                        type: VariableDeclaration
+                        declarations: create_empty_declarator varname for varname in vars.keys()
+                        kind: "let"
                 n
 
         visitFor: (n) ->
@@ -571,7 +583,7 @@ class HoistVars extends TreeVisitor
                         
         visitForIn: (n) ->
                 if n.left.type is VariableDeclaration
-                        @function_stack.top.vars.add n.left.declarations[0].id.name
+                        @scope_stack.top.vars.add n.left.declarations[0].id.name
                         n.left = create_identifier n.left.declarations[0].id.name
                 n.right = @visit n.right
                 n.body = @visit n.body
@@ -579,7 +591,7 @@ class HoistVars extends TreeVisitor
 
         visitForOf: (n) ->
                 if n.left.type is VariableDeclaration
-                        @function_stack.top.vars.add n.left.declarations[0].id.name
+                        @scope_stack.top.vars.add n.left.declarations[0].id.name
                         n.left = create_identifier n.left.declarations[0].id.name
                 n.right = @visit n.right
                 n.body = @visit n.body
@@ -600,7 +612,7 @@ class HoistVars extends TreeVisitor
                                         assignments.push assignment
 
                         # vars are hoisted to the containing function's toplevel scope
-                        @function_stack.top.vars.add decl.id.name for decl in n.declarations
+                        @scope_stack.top.vars.add decl.id.name for decl in n.declarations
 
                         if assignments.length is 0
                                 return { type: EmptyStatement }
@@ -1241,33 +1253,20 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
                         property.value = @visit property.value
                 n
 
-        # we split up assignment operators +=/-=/etc into their
-        # component operator + assignment so we can mark lhs as
-        # setLocal/setGlobal/etc, and rhs getLocal/getGlobal/etc
         visitAssignmentExpression: (n) ->
                 lhs = n.left
-                rhs = @visit n.right
-                if n.operator.length is 1
-                        new_rhs = rhs
-                else
-                        new_rhs = {
-                                type:     BinaryExpression,
-                                operator: n.operator[0]
-                                left:     lhs
-                                right:    rhs
-                        }
-                        n.operator = '='
+                visited_rhs = @visit n.right
                 
                 if is_intrinsic "%slot", lhs
-                        create_intrinsic setSlot_id, [lhs.arguments[0], lhs.arguments[1], new_rhs]
+                        create_intrinsic setSlot_id, [lhs.arguments[0], lhs.arguments[1], visited_rhs]
                 else if lhs.type is Identifier
                         if @findIdentifierInScope lhs
-                                create_intrinsic setLocal_id, [lhs, new_rhs]
+                                create_intrinsic setLocal_id, [lhs, visited_rhs]
                         else
-                                create_intrinsic setGlobal_id, [lhs, new_rhs]
+                                create_intrinsic setGlobal_id, [lhs, visited_rhs]
                 else
                         n.left = @visit n.left
-                        n.right = new_rhs
+                        n.right = visited_rhs
                         n
                         
         visitBlock: (n) ->
@@ -1621,17 +1620,133 @@ class DesugarDestructuring extends TreeVisitor
                         throw new SyntaxError "cannot use destructuring with assignment operators other than '='" if n.operator isnt "="
                 else
                         n
+
+# we split up assignment operators +=/-=/etc into their
+# component operator + assignment so we can mark lhs as
+# setLocal/setGlobal/etc, and rhs getLocal/getGlobal/etc
+class DesugarUpdateAssignments extends TreeVisitor
+        updateGen = startGenerator()
+        freshUpdate = () -> "_update_#{updateGen()}"
+        
+        constructor: (n) ->
+                @debug = true
+                @updateGen = startGenerator()
+
+        visitProgram: (n) ->
+                n.prepends = []
+                n = super(n, n)
+                if n.prepends.length > 0
+                        n.body = n.prepends.concat(n.body)
+                n
+                
+        visitBlock: (n) ->
+                n.prepends = []
+                n = super(n, n)
+                if n.prepends.length > 0
+                        n.body = n.prepends.concat(n.body)
+                n
+        
+        visitAssignmentExpression: (n, parentBlock) ->
+                n = super(n, parentBlock)
+                if n.operator.length is 2
+                        if n.left.type is Identifier
+                                # for identifiers we just expand a+= b to a = a + b
+                                n.right = {
+                                        type:     BinaryExpression,
+                                        operator: n.operator[0]
+                                        left:     n.left
+                                        right:    n.right
+                                }
+                                n.operator = '='
+                        else if n.left.type is MemberExpression
+
+                                complex_exp = (n) ->
+                                        return false if not n?
+                                        return false if n.type is Literal
+                                        return false if n.type is Identifier
+                                        return true
+
+                                prepend_update = () ->
+                                        update_id = create_identifier freshUpdate()
+                                        parentBlock.prepends.unshift {
+                                                type: VariableDeclaration
+                                                declarations: [{
+                                                        type: VariableDeclarator
+                                                        id:   update_id 
+                                                        init: null
+                                                }],
+                                                kind: "let"
+                                        }
+                                        update_id
                                 
+                                object_exp = n.left.object
+                                prop_exp = n.left.property
+
+                                expressions = []
+
+                                if complex_exp object_exp
+                                        update_id = prepend_update()
+                                        expressions.push {
+                                                type: AssignmentExpression
+                                                operator: '='
+                                                left: update_id
+                                                right: object_exp
+                                        }
+                                        n.left.object = update_id
+
+                                if complex_exp prop_exp
+                                        update_id = prepend_update()
+                                        expressions.push {
+                                                type: AssignmentExpression
+                                                operator: '='
+                                                left: update_id
+                                                right: prop_exp
+                                        }
+                                        n.left.property = update_id
+
+                                n.right =
+                                        type:     BinaryExpression,
+                                        operator: n.operator[0]
+                                        left:
+                                                type:     MemberExpression
+                                                object:   n.left.object
+                                                property: n.left.property
+                                                computed: n.computed
+                                        right:    n.right
+                                n.operator = "="
+                                
+                                if expressions.length isnt 0
+                                        expressions.push n
+                                        return { type: SequenceExpression, expressions: expressions }
+                                n
+                        else
+                                throw new Error "unexpected expression type #{n.left.type} in update assign expression."
+                n
+                                
+                                
+                
+# switch this to true if you want to experiment with the new CFA2
+# code.  definitely, definitely not ready for prime time.
+enable_cfa2 = false
+
+# the HoistFuncDecls phase transforms the AST to give v8 semantics
+# when faced with multiple function declarations within the same
+# function scope.
+#
+enable_hoist_func_decls_pass = true
+
 passes = [
         DesugarClasses
         DesugarDestructuring
-        HoistFuncDecls
+        DesugarUpdateAssignments
+        HoistFuncDecls if enable_hoist_func_decls_pass
         FuncDeclsToVars
         HoistVars
         DesugarArrowFunctions
+        NameAnonymousFunctions
+        CFA2 if enable_cfa2
         ComputeFree
         LocateEnv
-        NameAnonymousFunctions
         SubstituteVariables
         MarkLocalAndGlobalVariables
         IIFEIdioms
@@ -1643,14 +1758,20 @@ exports.convert = (tree, filename, options) ->
         debug.log -> escodegen.generate tree
 
         passes.forEach (passType) ->
-                pass = new passType(filename)
-                tree = pass.visit tree
-                if options.debug_passes.has (passType.name)
-                        console.log "after: #{passType.name}"
-                        console.log escodegen.generate tree
-                        
-                debug.log 2, "after: #{passType.name}"
-                debug.log 2, -> escodegen.generate tree
-                debug.log 3, -> __ejs.GC.dumpAllocationStats "after #{passType.name}" if __ejs?
+                return if not passType?
+                try
+                        pass = new passType(filename)
+                        tree = pass.visit tree
+                        if options.debug_passes.has(passType.name)
+                                console.log "after: #{passType.name}"
+                                console.log escodegen.generate tree
+
+                        debug.log 2, "after: #{passType.name}"
+                        debug.log 2, -> escodegen.generate tree
+                        debug.log 3, -> __ejs.GC.dumpAllocationStats "after #{passType.name}" if __ejs?
+                catch e
+                        console.warn "exception in pass #{passType.name}"
+                        console.warn e
+                        throw e
 
         tree
