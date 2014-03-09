@@ -40,6 +40,8 @@ $(call addExpectedFailure, typedarray3.js,          "we use %g to format floats/
 $(call addExpectedFailure, typedarray6.js,          "we use %g to format floats/doubles, and differ when printing numbers.")
 $(call addExpectedFailure, array19.js,              "we don't support property descriptors at all for array elements.  also needs more from ECMA262 15.4.5.1")
 $(call addExpectedFailure, array23.js,              "node does not have Array.of() yet.")
+$(call addExpectedFailure, array24.js,              "node does not have Array.find() yet.")
+$(call addExpectedFailure, array25.js,              "node does not have Array.findIndex() yet.")
 $(call addExpectedFailure, sparsearray1.js,         "sparse array support is very much not there yet")
 $(call addExpectedFailure, fib1.js,                 "we don't output numbers correctly (integers with exponent <= 20 should print out normally)")
 $(call addExpectedFailure, const1.js,               "we permit assigning to const bindings")
