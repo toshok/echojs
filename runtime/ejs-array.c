@@ -1469,6 +1469,7 @@ _ejs_array_init(ejsval global)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Array_proto, x, _ejs_Array_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
 
     OBJ_METHOD(isArray);
+    // ECMA 6
     OBJ_METHOD(of);
 
     PROTO_METHOD(push);
@@ -1487,6 +1488,7 @@ _ejs_array_init(ejsval global)
     PROTO_METHOD(map);
     PROTO_METHOD(reduce);
     PROTO_METHOD(reduceRight);
+    // ECMA 6
     PROTO_METHOD(find);
     PROTO_METHOD(findIndex);
 
