@@ -158,6 +158,8 @@ EJS_ATOM(some)
 EJS_ATOM(reduce)
 EJS_ATOM(reduceRight)
 EJS_ATOM(of)
+EJS_ATOM(find)
+EJS_ATOM(findIndex)
 
 // Typed array method names
 EJS_ATOM(getInt8)
