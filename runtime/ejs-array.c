@@ -1271,10 +1271,10 @@ _ejs_Array_prototype_splice (ejsval env, ejsval _this, uint32_t argc, ejsval* ar
 static ejsval
 _ejs_Array_prototype_find (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    ejsval callbackfn = _ejs_undefined;
+    ejsval predicate = _ejs_undefined;
     ejsval thisArg = _ejs_undefined;
 
-    if (argc >= 1) callbackfn = args[0];
+    if (argc >= 1) predicate = args[0];
     if (argc >= 2) thisArg = args[1];
 
     if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
@@ -1290,7 +1290,7 @@ _ejs_Array_prototype_find (ejsval env, ejsval _this, uint32_t argc, ejsval *args
     uint32_t len = ToUint32(lenValue);
 
     /* 6. If IsCallable(predicate) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_FUNCTION(callbackfn))
+    if (!EJSVAL_IS_FUNCTION(predicate))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "callback function is not a function");
 
     /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
@@ -1311,14 +1311,14 @@ _ejs_Array_prototype_find (ejsval env, ejsval _this, uint32_t argc, ejsval *args
             /* i. Let kValue be the result of Get(O, Pk). */
             ejsval kValue = OP(Oobj,get)(O, Pk);
 
-            ejsval callbackargs[3] = {
+            ejsval predicateargs[3] = {
                 kValue,
                 NUMBER_TO_EJSVAL(k),
                 O
             };
 
             /* iii. Let testResult be the result of calling the [[Call]] internal method of predicate... */
-            ejsval testResult = _ejs_invoke_closure (callbackfn, T, 3, callbackargs);
+            ejsval testResult = _ejs_invoke_closure (predicate, T, 3, predicateargs);
 
             /* v. If ToBoolean(testResult) is true, return kValue. */
             if (EJSVAL_TO_BOOLEAN(ToBoolean(testResult)))
@@ -1338,10 +1338,10 @@ _ejs_Array_prototype_find (ejsval env, ejsval _this, uint32_t argc, ejsval *args
 static ejsval
 _ejs_Array_prototype_findIndex (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    ejsval callbackfn = _ejs_undefined;
+    ejsval predicate = _ejs_undefined;
     ejsval thisArg = _ejs_undefined;
 
-    if (argc >= 1) callbackfn = args[0];
+    if (argc >= 1) predicate = args[0];
     if (argc >= 2) thisArg = args[1];
 
     if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
@@ -1357,7 +1357,7 @@ _ejs_Array_prototype_findIndex (ejsval env, ejsval _this, uint32_t argc, ejsval 
     uint32_t len = ToUint32(lenValue);
 
     /* 6. If IsCallable(predicate) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_FUNCTION(callbackfn))
+    if (!EJSVAL_IS_FUNCTION(predicate))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "callback function is not a function");
 
     /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
@@ -1378,14 +1378,14 @@ _ejs_Array_prototype_findIndex (ejsval env, ejsval _this, uint32_t argc, ejsval 
             /* i. Let kValue be the result of Get(O, Pk). */
             ejsval kValue = OP(Oobj,get)(O, Pk);
 
-            ejsval callbackargs[3] = {
+            ejsval predicateargs[3] = {
                 kValue,
                 NUMBER_TO_EJSVAL(k),
                 O
             };
 
             /* iii. Let testResult be the result of calling the [[Call]] internal method of predicate... */
-            ejsval testResult = _ejs_invoke_closure (callbackfn, T, 3, callbackargs);
+            ejsval testResult = _ejs_invoke_closure (predicate, T, 3, predicateargs);
 
             /* v. If ToBoolean(testResult) is true, return k. */
             if (EJSVAL_TO_BOOLEAN(ToBoolean(testResult)))
