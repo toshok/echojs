@@ -182,9 +182,9 @@ class JSCore
         
                 # Object is a heap var that will contain an Aval that points to o
                 o = go.attachMethod("Object", 0, _Object)
-                oav = makeObjAbstractVal count
-                o.addProp  "prototype-",   aval:opav, writeable:false, enumerable:false, configurable:false
-                op.addProp "constructor-", aval:oav,                   enumerable: false
+                oav = makeObjAbstractVal(count)
+                o.addProp("prototype-",   { aval:opav, writeable:false, enumerable:false, configurable:false })
+                op.addProp("constructor-", { aval:oav,                   enumerable: false })
 
                 # Function
                 f = new AbstractObj({ addr: newCount(), proto: o_pav })
@@ -195,19 +195,19 @@ class JSCore
                 o_p.addProp "constructor-", aval:fav,                    enumerable:false
 
                 # Methods are attached here because o_pav must be defined already.
-                go.attachMethod  "isFinite",       1, toBool
-                go.attachMethod  "isNaN",          1, toBool
-                go.attachMethod  "parseInt",       1, toNum
-                go.attachMethod  "hasOwnProperty", 1, toBool
-                go.attachMethod  "toString",       0, toStr
-                go.attachMethod  "valueOf",        0, toThis
-                o_p.attachMethod "toString",       0, toStr
-                o_p.attachMethod "call",           0, (args, withNew, cn) ->
+                go.attachMethod("isFinite",       1, toBool)
+                go.attachMethod("isNaN",          1, toBool)
+                go.attachMethod("parseInt",       1, toNum)
+                go.attachMethod("hasOwnProperty", 1, toBool)
+                go.attachMethod("toString",       0, toStr)
+                go.attachMethod("valueOf",        0, toThis)
+                o_p.attachMethod("toString",       0, toStr)
+                o_p.attachMethod("call",           0, (args, withNew, cn) ->
                         f = args.shift()
                         args.unshift(JSCore.global_object_av) if not args[0]?
-                        f.callFun(args, cn)
+                        f.callFun(args, cn))
 
-                o_p.attachMethod "apply", 2, (args, withNew, cn) ->
+                o_p.attachMethod("apply", 2, (args, withNew, cn) ->
                         recv = args[1] or JSCore.global_object_av
                         a2 = args[2]
                         rands = undefined
@@ -253,7 +253,7 @@ class JSCore
                                 ans = evalFun clos, rands, false, cn
                                 retval = AbstractVal.join retval, ans.v
                                 errval = AbstractVal.maybejoin errval, ans.err
-                        return new Answer(retval, undefined, errval)
+                        return new Answer(retval, undefined, errval))
 
 
                 # Array.prototype
@@ -498,8 +498,8 @@ class JSCore
                         # Math
                         m = new AbstractObj({ addr: newCount(), proto: opav })
                         mav = makeObjAbstractVal(count)
-                        go.addProp("Math-",       {aval:mav,                               enumerable:false})
-                        m.addProp("constructor-", {aval:oav,                               enumerable:false})
+                        go.addProp("Math-",       {aval:mav,                              enumerable:false})
+                        m.addProp("constructor-", {aval:oav,                              enumerable:false})
                         m.addProp("E-",           {aval:AbstractVal.ANUM, writable:false, enumerable:false, configurable:false})
                         m.addProp("LN10-",        {aval:AbstractVal.ANUM, writable:false, enumerable:false, configurable:false})
                         m.addProp("LN2-",         {aval:AbstractVal.ANUM, writable:false, enumerable:false, configurable:false})
@@ -682,24 +682,33 @@ frameGet = (fr, param) ->
 
 # fun. node, array of AbstractVal, timestamp  -> [AbstractVal, AbstractVal] or false
 searchSummary = (n, args, ts) ->
+        console.log "searching summary for `#{n.id.name}'!"
         n_summaries = summaries[n.addr]
-        return false if n_summaries.ts < ts
+        if n_summaries.ts < ts
+                console.log "returning false"
+                return false
         
         insouts = n_summaries.insouts
         # Start from the end to find the elm that was pushed last
         for i in [insouts.length-1..0]
                 summary = insouts[i]
                 # If no widening, turn AbstractVal.lt to AbstractVal.eq in the next line.
-                return summary.slice(-2) if arrayeq(AbstractVal.lt, args, summary[0])
+                if arrayeq(AbstractVal.lt, args, summary[0])
+                        console.log "found it!"
+                        return summary.slice(-2)
+        console.log "default, returning false"
         false
 
 
 # function node -> boolean
 # check if any summary exists for this function node
-existsSummary = (n) -> summaries[n.addr].ts isnt INVALID_TIMESTAMP
+existsSummary = (n) ->
+        console.log "checking summary for `#{n.id.name}'!"
+        summaries[n.addr].ts isnt INVALID_TIMESTAMP
 
 # fun. node, array of AbstractVal, AbstractVal, AbstractVal or undefined, timestamp  -> void
 addSummary = (n, args, retval, errval, ts) ->
+        console.log "adding summary for `#{n.id.name}'!"
         addr = n.addr
         summary = summaries[addr]
         if summary.ts is ts
@@ -730,7 +739,7 @@ searchPending = (n, args) ->
         bucket = pending[n.addr]
         len = bucket.length
         # We use the number of pending calls to n to clear the stack.
-        return 0 if len is 0
+        return 0   if len is 0
         return len if bucket[0].ts < timestamp
         # Invariant: no two sets of args are related in \sqsubseteq.
         for i in [0...len]
@@ -740,7 +749,7 @@ searchPending = (n, args) ->
                 # The deeper frame can be widened, throw to it.
                 if arrayeq(AbstractVal.lt, bucket[i].args, args)
                         return i - len
-        return 0
+        0
 
 # function node, {args, timestamp} -> void
 addPending = (n, elm) -> pending[n.addr].push(elm)
@@ -830,20 +839,18 @@ class AbstractVal
         # Used when scalars need to be converted to objects
         baseToObj: () ->
                 return @ if (@base & 15) is 0
-                av = makeBaseAbstractVal 0
+                av = makeBaseAbstractVal(0)
+                av = AbstractVal.join(av, JSCore.generic_string_av)  if @base & 2 isnt 0
+                av = AbstractVal.join(av, JSCore.generic_number_av)  if @base & 1 isnt 0
+                av = AbstractVal.join(av, JSCore.generic_boolean_av) if @base & 12 isnt 0
                 av.objs = @objs
-                av = AbstractVal.join av, JSCore.generic_string_av  if @base & 2 isnt 0
-                av = AbstractVal.join av, JSCore.generic_number_av  if @base & 1 isnt 0
-                av = AbstractVal.join av, JSCore.generic_boolean_av if @base & 12 isnt 0
                 av
 
         # fun takes an AbstractObj
         forEachObj: (fun) ->
                 objaddrs = @objs
-                if objaddrs.length is 1 # make common case faster
-                        fun(heap[objaddrs[0]])
-                else
-                        objaddrs.forEach (addr) -> fun heap[addr]
+                console.log "forEachObj.length = #{objaddrs.length}"
+                objaddrs.forEach (addr) -> fun heap[addr]
 
         # Like forEachObj but fun returns a boolean; if it's true, we stop.
         forEachObjWhile: (fun) ->
@@ -884,6 +891,7 @@ class AbstractVal
                         clos = o.getFun()
                         return if not clos
                         debugCalls += 1
+                        console.log "calling #{clos.id.name}"
                         ans    = evalFun(clos, args, false, callNode)
                         retval = AbstractVal.join(retval, ans.v)
                         errval = AbstractVal.maybejoin(errval, ans.err)
@@ -1063,132 +1071,138 @@ class AbstractVal
 # toshok - this is pretty terrible.  it destructively updates the ast, changing node types, splicing them out, etc
 
 class FixAST extends TreeVisitor
-        visitProgram: (n) ->
-                fixAST(stm) for stm in n.body
+        visitProgram: (n, scope) ->
+                n.varDecls = [] if not n.varDecls?
+                fixAST(stm, n) for stm in n.body
                 false
                 
-        visitFunctionDeclaration: (n) ->
+        visitFunctionDeclaration: (n, scope) ->
                 throw new Error("there shouldn't be FunctionDeclarations by this point") if not n.toplevel
                 n.hasReturn = fixAST n.body
                 false
                 
-        visitFunctionExpression: (n) ->
+        visitFunctionExpression: (n, scope) ->
                 n.hasReturn = fixAST n.body
                 false
 
-        visitArrowFunctionExpression: (n) ->
+        visitArrowFunctionExpression: (n, scope) ->
                 n.hasReturn = fixAST n.body
                 false
 
-        visitBlock: (n) ->
+        visitBlock: (n, scope) ->
+                n.varDecls = [] if not n.varDecls?
+                ans = false
                 for stm in n.body
-                        return true if fixAST stm
-                false
+                        ans = fixAST(stm, n) || ans
+                ans
 
-        visitLabeledStatement: (n) -> fixAST n.body
+        visitLabeledStatement: (n, scope) -> fixAST n.body, scope
 
-        visitEmptyStatement: (n) -> false
+        visitEmptyStatement: (n, scope) -> false
 
-        visitExpressionStatement: (n, args...) ->
-                fixAST n.expression
+        visitExpressionStatement: (n, scope) ->
+                fixAST n.expression, scope
                 false
                 
-        visitSwitch: (n) ->
-                fixAST n.discriminant
+        visitSwitch: (n, scope) ->
+                fixAST n.discriminant, scope
                 for c in n.cases
-                        return true if fixAST(c)
+                        return true if fixAST(c, scope)
                 false
                 
-        visitCase: (n) ->
-                fixAST n.test
-                fixAST n.consequent
+        visitCase: (n, scope) ->
+                fixAST n.test, scope
+                fixAST n.consequent, scope
                 
-        visitFor: (n) ->
-                fixAST(n.init)   if n.init?
-                fixAST(n.test)   if n.test?
-                fixAST(n.update) if n.update?
-                fixAST(n.body)
+        visitFor: (n, scope) ->
+                fixAST(n.init, scope)   if n.init?
+                fixAST(n.test, scope)   if n.test?
+                fixAST(n.update, scope) if n.update?
+                fixAST(n.body, scope)
                 
-        visitWhile: (n) ->
-                fixAST(n.test)
-                fixAST(n.body)
+        visitWhile: (n, scope) ->
+                fixAST(n.test, scope)
+                fixAST(n.body, scope)
                 
-        visitIf: (n) ->
-                fixAST(n.test)
-                return fixAST(n.consequent) if not n.alternate?
-                fixAST(n.alternate)
+        visitIf: (n, scope) ->
+                fixAST(n.test, scope)
+                ans = fixAST(n.consequent, scope)
+                ans = (fixAST(n.alternate, scope) or ans) if n.alternate?
+                ans
                 
-        visitForIn: (n) ->
-                fixAST(n.left)
-                fixAST(n.right)
-                fixAST(n.body)
+        visitForIn: (n, scope) ->
+                fixAST(n.left, scope)
+                fixAST(n.right, scope)
+                fixAST(n.body, scope)
                 
-        visitForOf: (n) ->
-                fixAST(n.left)
-                fixAST(n.right)
-                fixAST(n.body)
+        visitForOf: (n, scope) ->
+                fixAST(n.left, scope)
+                fixAST(n.right, scope)
+                fixAST(n.body, scope)
                 
-        visitDo: (n, args...) ->
-                fixAST(n.test)
-                fixAST(n.body)
+        visitDo: (n, scope) ->
+                fixAST(n.test, scope)
+                fixAST(n.body, scope)
                 
-        visitIdentifier: (n) -> false
-        visitLiteral: (n) -> false
-        visitThisExpression: (n) -> false
-        visitBreak: (n) -> false
-        visitContinue: (n) -> false
+        visitIdentifier:     (n, scope) -> false
+        visitLiteral:        (n, scope) -> false
+        visitThisExpression: (n, scope) -> false
+        visitBreak:          (n, scope) -> false
+        visitContinue:       (n, scope) -> false
                 
-        visitTry: (n) ->
-                ans = fixAST(n.block)
+        visitTry: (n, scope) ->
+                ans = fixAST(n.block, scope)
                 for c in n.handlers
-                        ans2 = fixAST(c.block)
-                        ans = ans or ans2
-                ans2 = fixAST(n.finalizer) if n.finalizer?
-                ans or ans2
+                        ans = (fixAST(c.block, scope) or ans)
+                ans = (fixAST(n.finalizer, scope) or ans) if n.finalizer?
+                ans
 
-        visitCatchClause: (n) ->
-                fixAST(n.param)
-                fixAST(n.guard)
-                fixAST(n.body)
+        visitCatchClause: (n, scope) ->
+                fixAST(n.param, scope)
+                fixAST(n.guard, scope)
+                fixAST(n.body, scope)
                 
-        visitThrow: (n) ->
-                fixAST(n.argument)
+        visitThrow: (n, scope) ->
+                fixAST(n.argument, scope)
                 false
                 
-        visitReturn: (n) ->
-                fixAST(n.argument)
+        visitReturn: (n, scope) ->
+                fixAST(n.argument, scope)
                 true
                 
-        visitVariableDeclaration: (n) ->
-                fixAST(decl) for decl in n.declarations
+        visitVariableDeclaration: (n, scope) ->
+                fixAST(decl, scope) for decl in n.declarations
                 false
 
-        visitVariableDeclarator: (n) ->
-                fixAST(n.init)
+        visitVariableDeclarator: (n, scope) ->
+                console.log "pushing vardecl #{n.id.name}"
+                n.id.addr = newCount();
+                scope.varDecls.push(n.id)
+                fixAST(n.init, scope)
                 false
                                 
-        visitAssignmentExpression: (n) ->
-                fixAST(n.left)
-                fixAST(n.right)
+        visitAssignmentExpression: (n, scope) ->
+                fixAST(n.left, scope)
+                fixAST(n.right, scope)
                 false
                 
-        visitConditionalExpression: (n) ->
-                fixAST(n.test)
-                fixAST(n.consequent)
-                fixAST(n.alternate)
+        visitConditionalExpression: (n, scope) ->
+                fixAST(n.test, scope)
+                fixAST(n.consequent, scope)
+                fixAST(n.alternate, scope)
                 false
                 
-        visitLogicalExpression: (n) ->
-                fixAST(n.left)
-                fixAST(n.right)
+        visitLogicalExpression: (n, scope) ->
+                fixAST(n.left, scope)
+                fixAST(n.right, scope)
                 false
                 
-        visitBinaryExpression: (n) ->
-                fixAST(n.left)
-                fixAST(n.right)
+        visitBinaryExpression: (n, scope) ->
+                fixAST(n.left, scope)
+                fixAST(n.right, scope)
                 false
 
-        visitUnaryExpression: (n) ->
+        visitUnaryExpression: (n, scope) ->
                 ###
                 if n.operator is "-" and is_number_literal(n.argument)
                         n.type = Literal
@@ -1198,78 +1212,78 @@ class FixAST extends TreeVisitor
                 else
                         n.argument = fixAST(n.argument)
                 ###
-                fixAST(n.argument)
+                fixAST(n.argument, scope)
                 false
 
-        visitUpdateExpression: (n) ->
-                fixAST(n.argument)
+        visitUpdateExpression: (n, scope) ->
+                fixAST(n.argument, scope)
                 false
 
-        visitMemberExpression: (n) ->
-                fixAST(n.object)
-                fixAST(n.property)
+        visitMemberExpression: (n, scope) ->
+                fixAST(n.object, scope)
+                fixAST(n.property, scope)
                 # toshok - i don't like this:
                 if n.computed and is_number_literal(n.property)
                         n.property.raw = "'#{n.property.value}'"
                         n.property.value = "#{n.property.value}-"
                 false
                 
-        visitSequenceExpression: (n) ->
-                fixAST(exp) for exp in n.expressions
+        visitSequenceExpression: (n, scope) ->
+                fixAST(exp, scope) for exp in n.expressions
                 false
                 
-        visitNewExpression: (n) ->
-                fixAST(n.callee)
-                fixAST(arg) for arg in n.arguments
+        visitNewExpression: (n, scope) ->
+                fixAST(n.callee, scope)
+                fixAST(arg, scope) for arg in n.arguments
                 false
 
-        visitObjectExpression: (n) ->
+        visitObjectExpression: (n, scope) ->
                 # toshok - FIXME need to support get/set elements
-                fixAST(prop) for prop in n.properties
+                fixAST(prop, scope) for prop in n.properties
                 false
 
-        visitArrayExpression: (n) ->
-                fixAST(elm) for elm in n.elements
+        visitArrayExpression: (n, scope) ->
+                fixAST(elm, scope) for elm in n.elements
                 false
 
-        visitProperty: (n) ->
-                fixAST(n.key)
-                fixAST(n.value)
+        visitProperty: (n, scope) ->
+                fixAST(n.key, scope)
+                fixAST(n.value, scope)
                 false
                                 
-        visitCallExpression: (n) ->
-                fixAST(n.callee)
-                fixAST(arg) for arg in n.arguments
+        visitCallExpression: (n, scope) ->
+                fixAST(n.callee, scope)
+                fixAST(arg, scope) for arg in n.arguments
                 false
 
         ###
-        visitModuleDeclaration: (n, args...) ->
-                n.id = @visit n.id, args...
-                n.body = @visit n.body, args...
+        visitModuleDeclaration: (n, scope) ->
+                n.id = fixAST n.id, scope
+                n.body = fixAST n.body, scope
                 n
 
-        visitExportDeclaration: (n, args...) ->
-                n.declaration = @visit n.declaration, args...
+        visitExportDeclaration: (n, scope) ->
+                n.declaration = fixAST n.declaration, scope
                 n
                 
-        visitImportDeclaration: (n, args...) ->
-                n.specifiers = @visitArray n.specifiers, args...
+        visitImportDeclaration: (n, scope) ->
+                fixAST(spec, scope) For spec in n.specifiers
                 n
 
-        visitImportSpecifier: (n, args...) ->
-                n.id = @visit n.id, args...
+        visitImportSpecifier: (n, scope) ->
+                n.id = fixAST n.id, scope
                 n
 
-        visitArrayPattern: (n, args...) ->
-                n.elements = @visitArray n.elements, args...
+        visitArrayPattern: (n, scope) ->
+                fixAST(elm, scope) for prop in n.elements
                 n
 
-        visitObjectPattern: (n, args...) ->
-                n.properties = @visitArray n.properties, args...
+        visitObjectPattern: (n, scope) ->
+                fixAST(prop, scope) for prop in n.properties
                 n
         ###
 
-        visit: (n) ->
+        visit: (n, scope) ->
                 astSize += 1
                 super
 
@@ -1343,12 +1357,13 @@ class TagVarRefs extends TreeVisitor
 
         visitIdentifier: (n, innerscope, otherscopes, extra) ->
                 varname = n.name
+                console.log "looking up #{varname}"
                 # search var in innermost scope
                 if innerscope.length > 0
                         for i in [innerscope.length-1..0]
                                 boundvar = innerscope[i]
                                 if boundvar.name is varname
-                                        #print("stack ref: " + varname)
+                                        console.log "stack ref: #{varname}"
                                         n.kind = STACK
                                         # if boundvar is a heap var and some of its heap refs get mutated,
                                         # we may need to update bindings in frames during the cfa.
@@ -1360,7 +1375,7 @@ class TagVarRefs extends TreeVisitor
                         for i in [otherscopes.length-1..0]
                                 boundvar = otherscopes[i]
                                 if boundvar.name is varname
-                                        # print("heap ref: " + varname)
+                                        console.log "heap ref: #{varname}"
                                         n.kind = HEAP
                                         boundvar.kind = HEAP
                                         n.addr = boundvar.addr
@@ -1444,6 +1459,10 @@ class TagVarRefs extends TreeVisitor
                 # extend inner scope
                 j = innerscope.length
                 if vdecls?
+                        console.log "vdecls (#{vdecls.length})!"
+                        if vdecls.length > 0
+                                console.log escodegen.generate n
+                        console.log "before #{innerscope.length}"
                         Array::push.apply(innerscope, vdecls)
                 # tag the var refs in the body
                 n.body.forEach (stm) -> tagVarRefs(stm, innerscope, otherscopes)
@@ -1459,6 +1478,7 @@ class TagVarRefs extends TreeVisitor
                 # trim inner scope
                 if vdecls?
                         innerscope.splice(j, vdecls.length)
+                        console.log "after #{innerscope.length}"
                 n
 
         visitBlock: _blocklike
@@ -1524,6 +1544,7 @@ class InitDeclsInHeap extends TreeVisitor
                 n
                 
         visitFunction: (n) ->
+                console.log "addr for function #{n.id.name} is #{n.addr}"
                 objaddr = n.addr
                 fn = n.id 
                 obj = new AbstractObj({ addr: objaddr, fun: n, proto: JSCore.function_prototype_av })
@@ -1545,11 +1566,13 @@ class InitDeclsInHeap extends TreeVisitor
         visitBlock: (n) ->
                 n.body.forEach(initDeclsInHeap)
                 n
-                
-        visitProgram: (n) ->
-                #n.varDecls.forEach(function(vd){if (flags[vd.addr]) heap[vd.addr]=AbstractVal.BOTTOM;})
-                n.body.forEach(initDeclsInHeap)
-                n
+
+        #visitProgram: (n) ->
+        #        n.varDecls.forEach (vd) ->
+        #                console.log "#{vd.name} = BOTTOM"
+        #                heap[vd.addr] = AbstractVal.BOTTOM if flags[vd.addr]
+        #        n.body.forEach(initDeclsInHeap)
+        #        n
 
 initDeclsInHeap = do ->
         o = new InitDeclsInHeap
@@ -1570,11 +1593,11 @@ makeGenericObj = () ->
 # use n to get an lvalue, do the assignment and return the rvalue
 evalLval = (n, operator, ans, oldlval) -> 
         _stackref = (n, operator, ans, oldlval) ->
-                if operator?
-                        if operator is '+'
+                if operator isnt "="
+                        if operator[0] is '+'
                                 ans.v = AbstractVal.plus(ans.v, oldlval)
                         else
-                                ans.v = AbtractVal.ANUM
+                                ans.v = AbstractVal.ANUM
 
                 newav = AbstractVal.join(frameGet(ans.fr, n), ans.v)
                 frameSet(ans.fr, n, newav)
@@ -1583,8 +1606,8 @@ evalLval = (n, operator, ans, oldlval) ->
                 ans
         
         _heapref = (n, operator, ans, oldlval) ->
-                if operator?
-                        if operator is '+'
+                if operator isnt "="
+                        if operator[0] is '+'
                                 ans.v = AbstractVal.plus(ans.v, oldlval)
                         else
                                 ans.v = AbstractVal.ANUM
@@ -1658,9 +1681,10 @@ evalLval = (n, operator, ans, oldlval) ->
                         throw new Error("unhandled lval type #{n.type}")
 
 evalExp = (n, fr) ->
-
+        console.log "evalExp #{escodegen.generate n, escodegen.FORMAT_MINIFY}"
         _stackref = (n, fr) -> new Answer(frameGet(fr, n), fr)
-        _heapref  = (n, fr) -> new Answer(heap[n.addr], fr)
+        _heapref  = (n, fr) ->
+                new Answer(heap[n.addr], fr)
 
         _binary2bool = (n, fr) ->
                 ans1 = evalExp(n.left, fr)
@@ -1728,7 +1752,7 @@ evalExp = (n, fr) ->
 
         
         switch n.type
-                when Identifier 
+                when Identifier
                         return _stackref(n, fr) if n.kind is STACK
                         return _heapref(n, fr)
 
@@ -1776,13 +1800,8 @@ evalExp = (n, fr) ->
                 when LogicalExpression then return _handleBinaryExpression(n, fr)
                 
                 when AssignmentExpression
-                        if n.operator.length is 1
-                                # handle a = b
-                                return evalLval(n.left, n.operator, evalExp(n.right, fr))
-
-                        # handle a ?= b where ? == [+,-,/,%,etc]
-                        ans = evalExp(n.left, fr)
-                        return evalLval(n.left, n.operator[0], evalExp(n.right, fr), ans.v)
+                        # handle a = b
+                        return evalLval(n.left, n.operator, evalExp(n.right, fr))
 
                 when FunctionExpression      then return new Answer(makeObjAbstractVal(n.addr), fr)
                 when ArrowFunctionExpression then return new Answer(makeObjAbstractVal(n.addr), fr)
@@ -1883,34 +1902,28 @@ evalExp = (n, fr) ->
                                 return ans
 
                         # for non-computed property access (foo.bar) things are simpler
-                        ans = evalExp(n.object, fr)
-                        avobj = ans.v.baseToObj()
+                        ans        = evalExp(n.object, fr)
+                        avobj      = ans.v.baseToObj()
                         ans.thisav = avobj        # used by method calls
-                        ans.v = avobj.getProp(n.property.name)
+                        ans.v      = avobj.getProp(n.property.name)
                         return ans
 
                 when CallExpression
-                        # To see if the analysis reaches some program point in all.js, add some 
-                        # call: e10sDebug(some_msg) and uncomment the following code.
-                        # if (n.children[0].value === "e10sDebug") {
-                        #   print(n.children[1].children[0].value)
-                        # }
-
-                        ans = evalExp(n.callee, fr)
+                        ans    = evalExp(n.callee, fr)
                         errval = undefined
-                        rands = []
+                        rands  = []
                         rands.push(if ans.thisav then ans.thisav else JSCore.global_object_av)
-                        fr = ans.fr
+                        fr     = ans.fr
                         errval = ans.err
                         # evaluate arguments
                         n.arguments.forEach (rand) ->
-                                ans1 = evalExp(rand, fr)
+                                ans1   = evalExp(rand, fr)
+                                fr     = ans1.fr
                                 rands.push(ans1.v)
-                                fr = ans1.fr
                                 errval = AbstractVal.maybejoin(errval, ans1.err)
                         # call each function that can flow to the operator position
-                        ans = ans.v.callFun(rands, n)
-                        ans.fr = fr
+                        ans     = ans.v.callFun(rands, n)
+                        ans.fr  = fr
                         ans.err = AbstractVal.maybejoin(errval, ans.err)
                         return ans
 
@@ -1983,7 +1996,7 @@ evalExp = (n, fr) ->
 # node, frame -> Answer
 # Evaluate the statement and find which statement should be executed next.
 evalStm = (n, fr) ->
-
+        console.log "evalStm #{escodegen.generate n, escodegen.FORMAT_MINIFY}"
         switch n.type
                 when ExpressionStatement
                         ans = evalExp(n.expression, fr)
@@ -1991,8 +2004,11 @@ evalStm = (n, fr) ->
                         return ans
 
                 when Program             then return new Answer(n.kreg, fr)
+                        
                 when FunctionDeclaration then return new Answer(n.kreg, fr)
-                when VariableDeclaration then return new Answer(n.kreg, fr)
+                when VariableDeclaration
+                        n.declarations.forEach (vd) -> frameSet(fr, vd.id, AbstractVal.BOTTOM)
+                        return new Answer(n.kreg, fr)
                 when BlockStatement      then return new Answer(n.kreg, fr)
                 when SwitchCase          then return new Answer(n.kreg, fr)
                 when DoWhileStatement    then return new Answer(n.kreg, fr)
@@ -2032,7 +2048,7 @@ evalStm = (n, fr) ->
                                                 else
                                                         av = AbstractVal.join(av, AbstractVal.ASTR)
                                 ans.v = av
-                                ans = evalLval(n.iterator, undefined, ans)
+                                ans = evalLval(n.iterator, "=", ans)
                                 ans.v = b
                         return ans
 
@@ -2045,8 +2061,13 @@ evalStm = (n, fr) ->
 # exec'd after N and to the node that is exec'd if N throws an exception.
 class MarkConts extends TreeVisitor
 
+        visitFunctionDeclaration: (n, kreg, kexc) ->
+                n.kreg = kreg
+                n.kexc = kexc
+                super(n, undefined, undefined)
+                
         visitFunction: (n) ->
-                markConts(n.body, undefined, undefined)
+                n.body = markConts(n.body, undefined, undefined)
                 n
 
         visitBlock: (n, kreg, kexc) ->
@@ -2057,11 +2078,15 @@ class MarkConts extends TreeVisitor
                         n.kreg = kreg
                         return
 
-                n.kreg = ch[0]
                 len -= 1
                 for i in [0...len]
                         ch[i] = markConts(ch[i], ch[i+1], kexc)
+                        if ch[i]? and not n.kreg?
+                                n.kreg = ch[i]
+                                
                 ch[len] = markConts(ch[len], kreg, kexc)
+                if ch[len]? and not n.kreg?
+                        n.kreg = ch[len]
                 n
 
         visitProgram: (n, kreg, kexc) ->
@@ -2188,25 +2213,25 @@ class MarkConts extends TreeVisitor
                 update = n.update
 
                 n.kexc = kexc
-                if not init and not test    # for (;;<maybe-update>),     move immediately to the body
+                if not init? and not test?    # for (;;<maybe-update>),     move immediately to the body
                         n.kreg = body
-                else if init and not test   # for ($init;;<maybe-update>) move to init then body
-                        initStm = { type: ExpressionStatement, expression: init }
+                else if init? and not test?   # for ($init;;<maybe-update>) move to init then body
+                        initStm = type: ExpressionStatement, expression: init
                         n.kreg = initStm
                         markConts(initStm, body, kexc)
                 else # test exists
-                        testStm = { type: ExpressionStatement, expression: test }
+                        testStm = type: ExpressionStatement, expression: test
                         markConts(testStm, body, kexc)
                         if init             # for ($init;$test;<maybe-update>) do init followed by test
-                                initStm = { type: ExpressionStatement, expression: init }
+                                initStm = type: ExpressionStatement, expression: init
                                 n.kreg = initStm
                                 markConts(initStm, testStm, kexc)
                         else                # for (;$test;<maybe-update>) do test followed by body
                                 n.kreg = initStm
 
-                if update
+                if update?
                         # the update is the body's continuation, insert it between body and kreg
-                        updStm = { type: ExpressionStatement, expression: update }
+                        updStm = type: ExpressionStatement, expression: update
                         markConts(body, updStm, kexc)
                         markConts(updStm, kreg, kexc)
                 else
@@ -2215,6 +2240,11 @@ class MarkConts extends TreeVisitor
 
                 n
 
+        visitVariableDeclaration: (n, kreg, kexc) ->
+                n.kreg = kreg
+                n.kexc = kexc
+                n
+                
         # XXX toshok -- this appears to be lacking - do we not want to
         # convert n.right into an ExpressionStatement and make it the
         # n.kreg, followed by the body?
@@ -2245,7 +2275,8 @@ exports_object = null
 exports_object_av_addr = 0
 commonJSmode = false
 timedout = false
-timeout = 120  # stop after 2 minutes if you're not done
+#timeout = 120  # stop after 2 minutes if you're not done
+timeout = Infinity  # stop after 2 minutes if you're not done
 
 # A summary contains a function node (fn), an array of abstract values (args),
 # a timestamp (ts) and abstract values (res) and (err). It means: when we call
@@ -2502,7 +2533,7 @@ class AbstractObj
         mergeStrProps: () ->
                 return if @strPropsMerged
                 @mergeNumProps() if not @numPropsMerged
-                av = AbtractVal.BOTTOM
+                av = AbstractVal.BOTTOM
                 this.forEachOwnProp (pname, pval) =>
                         if pval.enumerable
                                 av = AbstractVal.join av, pval.aval
@@ -2631,6 +2662,7 @@ class StackCleaner extends Error
 # function node, array of AbstractVal, boolean, optional call node -> Answer w/out fr
 # Arg 4 is the node that caused the function call (if there is one).
 evalFun = (fn, args, withNew, cn) ->
+        console.log "evalFun #{fn.id.name}"
         script = fn.body
 
         retval = AbstractVal.BOTTOM
@@ -2676,19 +2708,19 @@ evalFun = (fn, args, withNew, cn) ->
                         # pending & exceptions prevent the runtime stack from growing too much.
                         pelm2 = searchPending(fn, args)
                         if pelm2 is 0
-                                pelm1 = args : args, ts : timestamp
-                                addPending fn, pelm1
+                                pelm1 = { args: args, ts: timestamp }
+                                addPending(fn, pelm1)
                         else if pelm2 is undefined
                                 # If a call eventually leads to itself, stop analyzing & return AbstractVal.BOTTOM.
                                 # Add a summary that describes the least solution.
                                 addSummary(fn, args, AbstractVal.BOTTOM, AbstractVal.BOTTOM, tsAtStart)
-                                return new Answer AbstractVal.BOTTOM, undefined, AbstractVal.BOTTOM
+                                return new Answer(AbstractVal.BOTTOM, undefined, AbstractVal.BOTTOM)
                         else if pelm2 > 0
                                 # There are pending calls that are obsolete because their timestamp is
                                 # old. Discard frames to not grow the stack too much.
-                                throw new StackCleaner fn, pelm2
+                                throw new StackCleaner(fn, pelm2)
                         else # if pelm2 < 0
-                                throw new StackCleaner fn, -pelm2, args
+                                throw new StackCleaner(fn, -pelm2, args)
                         w = []
                         fr = {}
                         params = fn.params
@@ -2713,15 +2745,21 @@ evalFun = (fn, args, withNew, cn) ->
                                 fr[RESTARGS] = restargs # special entry in the frame.
                                 
                         # bind a non-init`d var to bottom, not undefined.
-                        if script.varDecls?
-                                script.varDecls.forEach (vd) -> frameSet(fr, vd, AbstractVal.BOTTOM)
-
+                        #if not script.varDecls?
+                        #        console.warn "node #{script.type} lacks varDecls"
+                        #else
+                        #        script.varDecls.forEach (vd) -> frameSet(fr, vd, AbstractVal.BOTTOM)
+                                
                         w.push script.kreg
                         while w.length isnt 0
                                 n = w.pop()
                                 if n isnt undefined
                                         if n.type is ReturnStatement
-                                                ans = if n.argument then evalExp(n.argument, fr) else new Answer(AbstractVal.AUNDEF, fr)
+                                                if n.argument?
+                                                        console.log "return #{escodegen.generate n.argument}"
+                                                else
+                                                        console.log "return (void)0"
+                                                ans = if n.argument? then evalExp(n.argument, fr) else new Answer(AbstractVal.AUNDEF, fr)
                                                 # fr is passed to exprs/stms & mutated, no need to join(fr, ans.fr)
                                                 fr = ans.fr
                                                 retval = AbstractVal.join(retval, ans.v)
@@ -2739,9 +2777,13 @@ evalFun = (fn, args, withNew, cn) ->
                         result = searchSummary fn, args, tsAtStart
                         if not result or AbstractVal.lt(retval, result[0]) and AbstractVal.lt(errval, result[1])
                                 # Either fn isn't recursive, or the fixpt computation has finished.
+                                console.log "case1"
                                 addSummary(fn, args, retval, errval, tsAtStart if not result)
                                 return new Answer retval, undefined, errval
                         else
+                                console.log "case2"
+                                console.log "result[0] is #{JSON.stringify result[0]}, retval is #{JSON.stringify retval}"
+                                console.log "result[1] is #{JSON.stringify result[1]}, errval is #{JSON.stringify errval}"
                                 retval = AbstractVal.join result[0], retval
                                 errval = AbstractVal.join result[1], errval
                                 # The result changed the last summary; update summary and keep going.
@@ -2758,7 +2800,7 @@ evalFun = (fn, args, withNew, cn) ->
                                 throw e
                         if e.args?
                                 args = e.args
-
+                        console.log "hi"
 
 # maybe merge with evalFun at some point
 evalToplevel = (tl) ->
@@ -2768,8 +2810,6 @@ evalToplevel = (tl) ->
         initDeclsInHeap(tl)
 
         fr.thisav = JSCore.global_object_av
-        # bind a non-init`d var to bottom, different from assigning undefined to it.
-        tl.varDecls.forEach((vd) -> frameSet(fr, vd, AbstractVal.BOTTOM))              if tl.varDecls
 
         # evaluate the stms of the toplevel in order
         w.push(tl.kreg)
@@ -2780,7 +2820,9 @@ evalToplevel = (tl) ->
                                 # record error, return in toplevel
                                 console.log("toplevel return with with non-empty stack")
                         else
+                                console.time("evalStm");
                                 ans = evalStm(n, fr)
+                                console.timeEnd("evalStm");
                                 fr = ans.fr
                                 w.push(ans.v)
                                 # FIXME: handle toplevel uncaught exception
@@ -2807,7 +2849,9 @@ exports.CFA2 = class CFA2
                 astSize = 0
                 initGlobals()
                 initOtherGlobals() if initOtherGlobals
+                console.time("fixAST")
                 fixAST ast
+                console.timeEnd("fixAST")
                 new JSCore(heap)
                 initOtherObjs() if initOtherObjs
                 if commonJSmode # create the exports object
@@ -2817,23 +2861,33 @@ exports.CFA2 = class CFA2
                         exports_object_av_addr = count
                         exports_object.obj = e
                         
+                console.time("labelAST")
                 labelAST(ast)
+                console.timeEnd("labelAST")
+                console.time("tagVarRefs")
                 tagVarRefs(ast, [], [], "toplevel")
+                console.timeEnd("tagVarRefs")
+                console.time("markConts")
                 markConts(ast, undefined, undefined)
+                console.timeEnd("markConts")
                 try
                         console.log "Done with preamble. Analysis starting on node #{ast.type}."
+                        console.time("eval")
                         evalToplevel(ast)
+                        console.timeEnd("eval")
                         console.log "after cfa2"
                         console.log "AST size: #{astSize}"
                         console.log "ts: #{timestamp}"
                         #dumpHeap "heapdump.txt"
 
                 catch e
+                        console.timeEnd("eval")
                         if e.message isnt "timeout"
                                 console.log e.message
                                 e.code = CFA_ERROR if not ("code" in e)
                                 throw e
                         else
+                                console.log "timed out"
                                 timedout = true
 
                 ast
