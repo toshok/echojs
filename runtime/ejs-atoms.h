@@ -160,6 +160,7 @@ EJS_ATOM(reduceRight)
 // ECMA 6
 EJS_ATOM(of)
 EJS_ATOM(from)
+EJS_ATOM(fill)
 EJS_ATOM(find)
 EJS_ATOM(findIndex)
 
