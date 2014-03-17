@@ -29,7 +29,7 @@ clean-local::
 	rm -f $(GENERATED_FILES)
 
 $(DESTDIR)/%.js: %.coffee
-	coffee -o $(DESTDIR) -c $<
+	coffee -m -o $(DESTDIR) -c $<
 
 $(DESTDIR)/%.js: %.js
 	cp $< $@
