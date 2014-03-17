@@ -1436,6 +1436,110 @@ _ejs_Array_of (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 static ejsval
+_ejs_Array_from (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval itemsArg = _ejs_undefined;
+    ejsval mapfn = _ejs_undefined;
+    /*
+    ejsval thisArg = _ejs_undefined;
+    ejsval T;
+    */
+    EJSBool mapping;
+
+    if (argc >= 1)
+        itemsArg = args[0];
+
+    /*
+    if (argc >= 2)
+        mapfn = args[1];
+
+    if (argc >= 3)
+        thisArg = args[2];
+    */
+
+    /* 1. Let C be the this value. */
+    /*ejsval C = _this; */
+
+    /* 2. Let items be ToObject(arrayLike). */
+    ejsval items = ToObject(itemsArg);
+    EJSObject *itemsObj = EJSVAL_TO_OBJECT(items);
+
+    if (EJSVAL_IS_UNDEFINED(mapfn))
+        /* 3. If mapfn is undefined, then let mapping be false. */
+        mapping = EJS_FALSE;
+    else {
+        /* 5. */
+
+        /*  a. If IsCallable(mapfn) is false, throw a TypeError exception. */
+        if (!EJSVAL_IS_FUNCTION(mapfn))
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "map function is not a function");
+
+        /*  b.If thisArg was supplied, let T be thisArg; else let T be undefined. */
+        /*T = thisArg; */
+
+        /*  c. Let mapping be true */
+        mapping = EJS_TRUE;
+    }
+
+    /* 6. Let usingIterator be IsIterable(items). */
+    EJSBool usingIterator = EJS_FALSE;
+
+    /* 8. If usingIterator is true, then */
+    if (usingIterator) {
+    }
+
+    /* 10. Let lenValue be the result of Get(items, "length"). */
+    ejsval lenValue = _ejs_object_getprop(items, _ejs_atom_length);
+    /* 11. Let len be ToLength(lenValue). */
+    uint32_t len = ToUint32(lenValue);
+
+    ejsval A = _ejs_undefined;
+    /* 13. If IsConstructor(C) is true, then */
+    if (EJS_FALSE) {
+    } else
+        /* 14. Else */
+        /*  a. Let A be the result of the abstract operation ArrayCreate with argument len. */
+        A = _ejs_array_new (len, EJS_FALSE);
+
+    /* 16. Let k be 0. */
+    uint32_t k = 0;
+
+    /* 17. Repeat, while k < len */
+    while (k < len) {
+        /* a. Let Pk be ToString(k). */
+        ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
+        /* b. Let kPresent be the result of HasProperty(items, Pk). */
+        EJSBool kPresent = OP(itemsObj,has_property)(items, Pk);
+
+        /* d. If kPresent is true, then */
+        if (kPresent) {
+            /* i. Let kValue be the result of Get(items, Pk). */
+            ejsval kValue = _ejs_object_getprop(items, Pk);
+
+            ejsval mappedValue = _ejs_undefined;
+
+            /* iii. If mapping is true, then */
+            if (mapping) {
+            } else
+            /* iv. Else, let mappedValue be kValue. */
+                mappedValue = kValue;
+
+            /* v. Let defineStatus be the result of CreateDataPropertyOrThrow(A, Pk, mappedValue). */
+            _ejs_object_setprop (A, Pk, mappedValue);
+        }
+
+        /* e. Increase k by 1. */
+        k++;
+    }
+
+    /* 18. Let putStatus be the result of Put(A, "length", len, true). */
+    _ejs_object_setprop (A, _ejs_atom_length, NUMBER_TO_EJSVAL(len));
+
+    /* 20. Return A. */
+    return A;
+}
+
+static ejsval
 _ejs_Array_isArray (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
     if (argc == 0 || EJSVAL_IS_NULL(args[0]) || !EJSVAL_IS_OBJECT(args[0]))
@@ -1471,6 +1575,7 @@ _ejs_array_init(ejsval global)
     OBJ_METHOD(isArray);
     // ECMA 6
     OBJ_METHOD(of);
+    OBJ_METHOD(from);
 
     PROTO_METHOD(push);
     PROTO_METHOD(pop);

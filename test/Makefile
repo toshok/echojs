@@ -42,6 +42,7 @@ $(call addExpectedFailure, array19.js,              "we don't support property d
 $(call addExpectedFailure, array23.js,              "node does not have Array.of() yet.")
 $(call addExpectedFailure, array24.js,              "node does not have Array.find() yet.")
 $(call addExpectedFailure, array25.js,              "node does not have Array.findIndex() yet.")
+$(call addExpectedFailure, array26.js,              "node does not have Array.from() yet.")
 $(call addExpectedFailure, sparsearray1.js,         "sparse array support is very much not there yet")
 $(call addExpectedFailure, fib1.js,                 "we don't output numbers correctly (integers with exponent <= 20 should print out normally)")
 $(call addExpectedFailure, const1.js,               "we permit assigning to const bindings")
