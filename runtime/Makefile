@@ -1,8 +1,10 @@
 TOP=..
 
 include $(TOP)/build/build.mk
+-include $(TOP)/env.config
 
-LIBRARY=libecho.a
+LIBRARY?=libecho.a
+
 C_SOURCES= \
 	ejs-arguments.c \
 	ejs-array.c \
@@ -49,11 +51,11 @@ DEVS_OBJECTS=$(C_SOURCES:%.c=%.o.armv7s) $(OBJC_SOURCES:%.m=%.o.armv7s) main.o.a
 analyze_plists_c = $(C_SOURCES:%.c=%.plist) main.plist
 analyze_plists_objc = $(OBJC_SOURCES:%.m=%.plist) 
 
-OSX_LIBRARY=$(LIBRARY)
-SIM_LIBRARY=$(LIBRARY).sim
-DEV_LIBRARY=$(LIBRARY).armv7
-DEVS_LIBRARY=$(LIBRARY).armv7s
-LIPOD_IOS_LIBRARY=$(LIBRARY).ios
+OSX_LIBRARY?=$(LIBRARY)
+SIM_LIBRARY?=$(LIBRARY).sim
+DEV_LIBRARY?=$(LIBRARY).armv7
+DEVS_LIBRARY?=$(LIBRARY).armv7s
+LIPOD_IOS_LIBRARY?=$(LIBRARY).ios
 
 ifneq ($(TRAVIS_BUILD_NUMBER),)
 ALL_LIBRARIES=$(OSX_LIBRARY)

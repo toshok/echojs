@@ -1,3 +1,5 @@
+-include $(TOP)/env.mk
+
 PRODUCT_NAME=EchoJS
 PRODUCT_VERSION=0.1
 
@@ -24,10 +26,11 @@ DIST_ROOT=$(PRODUCT_INSTALL_ROOT)
 MKDIR=mkdir -p
 INSTALL=install
 CP=cp
+LN=ln -sf
 
 CFLAGS=-g -O2 -Wall -I. -Wno-unused-function
 
-MIN_IOS_VERSION=7.0
+MIN_IOS_VERSION?=7.0
 
 DEVELOPER_ROOT?=/Applications/Xcode.app/Contents/Developer
 IOS_SDK_VERSION?=7.0
