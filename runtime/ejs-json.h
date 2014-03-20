@@ -2,7 +2,7 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
-#ifndef _ejs_math_h_
+#ifndef _ejs_json_h_
 #define _ejs_json_h_
 
 #include "ejs-object.h"
