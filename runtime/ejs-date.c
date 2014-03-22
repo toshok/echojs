@@ -127,6 +127,15 @@ _ejs_Date_prototype_getTime (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     return NUMBER_TO_EJSVAL(_ejs_date_get_time ((EJSDate*)EJSVAL_TO_OBJECT(_this)));
 }
 
+static ejsval
+_ejs_Date_now (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    struct timeval tv;
+    struct timezone tz;
+    gettimeofday (&tv, &tz);
+    return NUMBER_TO_EJSVAL(tv.tv_sec * 1000 + tv.tv_usec / 1000);
+}
+
 void
 _ejs_date_init(ejsval global)
 {
@@ -138,10 +147,13 @@ _ejs_date_init(ejsval global)
     _ejs_object_setprop (_ejs_Date,       _ejs_atom_prototype,  _ejs_Date_proto);
 
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Date_proto, x, _ejs_Date_prototype_##x, EJS_PROP_NOT_ENUMERABLE)
+#define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Date, x, _ejs_Date_##x, EJS_PROP_NOT_ENUMERABLE)
 
     PROTO_METHOD(toString);
     PROTO_METHOD(getTime);
     PROTO_METHOD(getTimezoneOffset);
+
+    OBJ_METHOD(now);
 
 #undef PROTO_METHOD
 }
