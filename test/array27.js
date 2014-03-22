@@ -1,4 +1,3 @@
-
 var arr = new Array ('hola', 'world', 'lots', 'of', 'fun');
 console.log (arr);
 
