@@ -110,14 +110,14 @@ _ejs_stream_write (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
                 continue;
             perror ("write");
             free (buf);
-            return _ejs_undefined;
+            return _ejs_false;
         }
         remaining -= num_written;
         offset += num_written;
     } while (remaining > 0);
 
     free (buf);
-    return _ejs_undefined;
+    return _ejs_true;
 }
 
 ejsval
