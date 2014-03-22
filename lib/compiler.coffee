@@ -3,6 +3,8 @@ escodegen = require 'escodegen'
 debug = require 'debug'
 path = require 'path'
 
+{ Map } = require 'map'
+
 { ArrayExpression,
   ArrayPattern,
   ArrowFunctionExpression,
@@ -225,6 +227,8 @@ class LLVMIRVisitor extends TreeVisitor
                         
                 # build up our runtime method table
                 @ejs_intrinsics = Object.create null,
+                        moduleGet:            { value: @handleModuleGet, enumerable: true }
+                        moduleImportBatch:    { value: @handleModuleImportBatch, enumerable: true }
                         getLocal:             { value: @handleGetLocal, enumerable: true }
                         setLocal:             { value: @handleSetLocal, enumerable: true }
                         getGlobal:            { value: @handleGetGlobal, enumerable: true }
@@ -251,7 +255,8 @@ class LLVMIRVisitor extends TreeVisitor
                         loadOne           : true
                         unaryNot          : true
                         numberNew         : true
-                        
+
+                        moduleGet         : true # unused
                         getLocal          : true # unused
                         setLocal          : true # unused
                         getGlobal         : true # unused
@@ -850,19 +855,19 @@ class LLVMIRVisitor extends TreeVisitor
 
         storeValueInDest: (rhvalue, lhs) ->
                 if lhs.type is Identifier
-                        dest = @findIdentifierInScope lhs.name
+                        dest = @findIdentifierInScope(lhs.name)
                         if dest?
-                                result = ir.createStore rhvalue, dest
+                                result = ir.createStore(rhvalue, dest)
                         else
-                                result = @storeGlobal lhs, rhvalue
+                                result = @storeGlobal(lhs, rhvalue)
                         result
                 else if lhs.type is MemberExpression
-                        result = @createPropertyStore (@visit lhs.object), lhs.property, rhvalue, lhs.computed
-                else if is_intrinsic "%slot", lhs
-                        ir.createStore rhvalue, (@handleSlotRef lhs)
-                else if is_intrinsic "%getLocal", lhs
+                        result = @createPropertyStore(@visit(lhs.object), lhs.property, rhvalue, lhs.computed)
+                else if is_intrinsic(lhs, "%slot")
+                        ir.createStore rhvalue, @handleSlotRef(lhs)
+                else if is_intrinsic(lhs, "%getLocal")
                         ir.createStore rhvalue, @findIdentifierInScope lhs.arguments[0].name
-                else if is_intrinsic "%getGlobal", lhs
+                else if is_intrinsic(lhs, "%getGlobal")
                         pname = @getAtom lhs.arguments[0].name
 
                         @createCall @ejs_runtime.global_setprop, [pname, rhvalue], "globalpropstore_#{lhs.arguments[0].name}"
@@ -1298,11 +1303,42 @@ class LLVMIRVisitor extends TreeVisitor
         visitObjectExpression: (n) ->
                 object_create = @ejs_runtime.object_create
                 obj = @createCall object_create, [@loadNullEjsValue()], "objtmp", !object_create.doesNotThrow
-                for property in n.properties
-                        val = @visit property.value
-                        key = if property.key.type is Identifier then @getAtom property.key.name else @visit property.key
 
-                        @createCall @ejs_runtime.object_define_value_prop, [obj, key, val, consts.int32 0x77], "define_value_prop_#{property.key.name}"
+                accessor_map = new Map()
+
+                # gather all properties so we can emit get+set as a single call to define_accessor_prop.
+                for property in n.properties
+                        propname = if property.key.type is Literal then property.key.value else property.key.name
+                        
+                        if property.kind is "get" or property.kind is "set"
+                                accessor_map.set(propname, new Map) if not accessor_map.has(propname)
+                                throw new SyntaxError "a '#{property.kind}' method for '#{propname}' has already been defined." if accessor_map.get(propname).has(property.kind)
+                                throw new SyntaxError "#{property.key.loc.start.line}: property name #{propname} appears once in object literal." if accessor_map.get(propname).has("init")
+                        else if property.kind is "init"
+                                throw new SyntaxError "#{property.key.loc.start.line}: property name #{propname} appears once in object literal." if accessor_map.has(propname)
+                                accessor_map.set(propname, new Map)
+                        else
+                                throw new Error("unrecognized property kind `#{property.kind}'")
+                                
+                        accessor_map.get(propname).set(property.kind, property)
+
+                accessor_map.forEach (prop_map, propname) =>
+                        key = @getAtom propname
+                        # XXX we need something like this line below to handle computed properties, but those are broken at the moment
+                        #key = if property.key.type is Identifier then @getAtom property.key.name else @visit property.key
+
+                        if prop_map.has("init")
+                                val = @visit(prop_map.get("init").value)
+                                @createCall @ejs_runtime.object_define_value_prop, [obj, key, val, consts.int32 0x77], "define_value_prop_#{propname}"
+                        else
+                                getter = prop_map.get("get")
+                                setter = prop_map.get("set")
+
+                                get_method = if getter then @visit(getter.value) else @loadUndefinedEjsValue()
+                                set_method = if setter then @visit(setter.value) else @loadUndefinedEjsValue()
+
+                                @createCall @ejs_runtime.object_define_accessor_prop, [obj, key, get_method, set_method, consts.int32 0x19], "define_accessor_prop_#{propname}"
+                                
                 obj
 
         visitArrayExpression: (n) ->
@@ -1569,6 +1605,17 @@ class LLVMIRVisitor extends TreeVisitor
                         
                 ir.setInsertPoint merge_block
 
+        handleModuleGet: (exp, opencode) ->
+                moduleString = @visit exp.arguments[0]
+                @createCall @ejs_runtime.module_get, [moduleString], "moduletmp"
+
+        handleModuleImportBatch: (exp, opencode) ->
+                fromImport = @visit exp.arguments[0]
+                specifiers = @visit exp.arguments[1]
+                toExport = @visit exp.arguments[2]
+
+                @createCall @ejs_runtime.module_import_batch, [fromImport, specifiers, toExport], ""
+                                
         handleGetLocal: (exp, opencode) ->
                 source = @findIdentifierInScope exp.arguments[0].name
                 if source?
@@ -2037,3 +2084,32 @@ exports.compile = (tree, base_output_filename, source_filename, options) ->
         visitor.visit tree
 
         module
+
+class GatherImports extends TreeVisitor
+        constructor: () ->
+                @importList = []
+
+        _addSource: (source) ->
+                @importList.push(source) if @importList.indexOf(source) is -1
+        
+        visitImportDeclaration: (n) ->
+                if n.source.type isnt Literal or typeof n.source.raw isnt "string"
+                        throw new Error("import sources must be strings")
+                @_addSource(n.source.value)
+                n
+                
+        visitExportDeclaration: (n) ->
+                if n.source?
+                        source = n.source
+                        if source.type isnt Literal or typeof source.raw isnt "string"
+                                throw new Error("import sources must be strings")
+                        @_addSource(source.value)
+                n
+
+                
+        
+exports.gatherImports = (tree) ->
+        visitor = new GatherImports()
+        visitor.visit(tree)
+        visitor.importList
+        

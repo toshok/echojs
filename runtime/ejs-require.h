@@ -28,6 +28,9 @@ extern ejsval _ejs_require;
 
 extern void _ejs_require_init(ejsval global);
 
+extern ejsval _ejs_module_get (ejsval name);
+extern void   _ejs_module_import_batch (ejsval fromImport, ejsval specifiers, ejsval toExport);
+
 EJS_END_DECLS
 
 #endif /* _ejs_require_h */

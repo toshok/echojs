@@ -70,6 +70,11 @@ exports.create_intrinsic = (id, args) ->
         type: syntax.CallExpression
         callee: id
         arguments: args
-exports.is_intrinsic = (name, n) ->
-        n.type is syntax.CallExpression and n.callee.name is name
+exports.is_intrinsic = (n, name) ->
+        return false if n.type isnt syntax.CallExpression
+        return false if n.callee.type isnt syntax.Identifier
+        return false if n.callee.name[0] isnt "%"
+        if name?
+                return false if n.callee.name isnt name
+        true
 

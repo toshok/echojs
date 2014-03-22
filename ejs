@@ -144,7 +144,7 @@ if argv.length > 0
                                         skipNext = o.handlerArgc
                         else
                                 # end of options signals the rest of the array is files
-                                files = argv.slice ai
+                                file_args = argv.slice ai
                                 break
 
 if options.show_help
@@ -153,7 +153,7 @@ if options.show_help
         output_options()
         process.exit 0
         
-if files.length is 0
+if file_args.length is 0
         output_usage()
         process.exit 0
 
@@ -163,7 +163,7 @@ files_remaining = 0
 
 o_filenames = []
 
-base_filenames = (path.basename file for file in files)
+base_filenames = (path.basename file for file in file_args)
 
 compiled_modules = []
 
@@ -221,16 +221,19 @@ target_path_prepend =
 llvm_commands = {}
 llvm_commands[x]="#{x}#{process.env.LLVM_SUFFIX || ''}" for x in ["opt", "llc", "llvm-as"]
 
-compileFile = (filename, content, compileCallback) ->
-        base_filename = util.genFreshFileName path.basename filename
-
-        console.warn "#{util.bold()}COMPILE#{util.reset()} #{filename} -> #{base_filename}"
-        
+parseFile = (filename, content) ->
         try
                 parse_tree = esprima.parse content, { loc: true, raw: true }
         catch e
                 console.warn "parse error at #{e}:"
                 process.exit -1
+
+        return parse_tree
+        
+compileFile = (filename, parse_tree, compileCallback) ->
+        base_filename = util.genFreshFileName path.basename filename
+
+        console.warn "#{util.bold()}COMPILE#{util.reset()} #{filename} -> #{base_filename}"
 
         try
                 compiled_module = compiler.compile parse_tree, base_filename, filename, options
@@ -291,14 +294,14 @@ relative_to_ejs_exe = (n) ->
         path.resolve (path.dirname process.argv[if __ejs? then 0 else 1]), n
 
 
-generate_require_map = ->
+generate_import_map = (modules) ->
         sanitize = (filename, c_callable) ->
                 filename = filename.replace /\.js$/, ""
                 if c_callable
                         filename = filename.replace /[.,-\/\\]/g, "_" # this is insanely inadequate
                 filename
-        map_path = "/tmp/#{util.genFreshFileName path.basename files[0]}-require-map.cpp"
-        map = fs.createWriteStream map_path
+        map_path = "/tmp/#{util.genFreshFileName path.basename main_file}-import-map.cpp"
+        map = fs.createWriteStream(map_path)
         map.write "#include \"#{relative_to_ejs_exe 'runtime/ejs.h'}\"\n"
         map.write "extern \"C\" {\n"
         map.write "typedef ejsval (*ExternalModuleEntry) (ejsval exports);\n"
@@ -308,11 +311,11 @@ generate_require_map = ->
         options.external_modules.forEach ({ module_entrypoint }) ->
                 map.write "extern ejsval #{module_entrypoint} (ejsval exports);\n"
 
-        compiled_modules.forEach ({ filename, module_toplevel }) ->
+        modules.forEach ({ filename, module_toplevel }) ->
                 map.write "extern ejsval #{module_toplevel} (ejsval env, ejsval _this, int argc, ejsval *args);\n"
 
         map.write "EJSRequire _ejs_require_map[] = {\n"
-        compiled_modules.forEach ({ filename, module_toplevel }) ->
+        modules.forEach ({ filename, module_toplevel }) ->
                 map.write "  { \"#{sanitize path.basename(filename), false}\", #{module_toplevel}, 0 },\n"
         map.write "  { 0, 0, 0 }\n"
         map.write "};\n"
@@ -333,12 +336,12 @@ generate_require_map = ->
         map_path
 
 
-do_final_link = ->
-        map_filename = generate_require_map compiled_modules
+do_final_link = (main_file) ->
+        map_filename = generate_import_map compiled_modules
 
         process.env.PATH = "#{target_path_prepend[options.target]}:#{process.env.PATH}"
 
-        output_filename = options.output_filename || "#{files[0]}.exe"
+        output_filename = options.output_filename || "#{main_file}.exe"
         clang_args = target_link_args[options.target].concat ["-o", output_filename].concat o_filenames
 
         # XXX we shouldn't need this, but build is failing while compiling the require map
@@ -378,24 +381,42 @@ cleanup = (done) ->
                         files_to_delete = files_to_delete - 1
                         done() if files_to_delete is 0
                 
-file_compiled = ->
-        files_remaining = files_remaining - 1
-        do_final_link() if files_remaining is 0
-
 if options.combine_scripts
         script_content = ""
         files.forEach (filename) ->
                 script_content = script_content + fs.readFileSync filename, 'utf-8'
-        compileFile files[0], script_content, do_final_link
+        file_ast = parseFile(files[0], script_content)
+        compileFile(files[0], file_ast)
+        do_final_link(files[0])
 else
-        file_num = 0
-        compileNextFile = ->
-                return do_final_link() if file_num == files.length
-                filename = files[file_num]
-                file_num += 1
-                compileFile filename, (fs.readFileSync filename, 'utf-8'), compileNextFile
-        compileNextFile()
+        main_file = file_args[0]
+        work_list = file_args.slice()
+        files = []
 
+        # starting at the main file, gather all files we'll need
+        while work_list.length isnt 0
+                file = work_list.pop()
+
+                file_contents = fs.readFileSync(file, 'utf-8')
+                file_ast = parseFile(file, file_contents)
+                
+                imports = compiler.gatherImports(file_ast)
+
+                files.push({file_name: file, file_ast: file_ast})
+                                
+                for i in imports
+                        if files.indexOf(i) is -1 and work_list.indexOf(i) is -1
+                                work_list.push(i+".js")
+
+        # now compile them
+        compileNextFile = ->
+                if files.length is 0
+                        do_final_link(main_file)
+                        return
+                f = files.pop()
+                compileFile f.file_name, f.file_ast, compileNextFile
+        compileNextFile()
+        
 # Local Variables:
 # mode: coffee
 # End:

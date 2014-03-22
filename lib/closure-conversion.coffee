@@ -99,6 +99,8 @@ setLocal_id             = create_identifier "%setLocal"
 setGlobal_id            = create_identifier "%setGlobal"
 getLocal_id             = create_identifier "%getLocal"
 getGlobal_id            = create_identifier "%getGlobal"
+moduleGet_id            = create_identifier "%moduleGet"
+moduleImportBatch_id          = create_identifier "%moduleImportBatch"
 createArgScratchArea_id = create_identifier "%createArgScratchArea"
 
 #
@@ -240,7 +242,8 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
                         else
                                 # a property
                                 property_map = if class_element.static then sproperties else properties
-                                
+
+                                # XXX this is broken for computed properties
                                 property_map.set(class_element.key.name, new Map) if not property_map.has(class_element.key.name)
 
                                 throw new SyntaxError "a '#{class_element.kind}' method for '#{class_element.key.name}' has already been defined." if property_map.get(class_element.key.name).has(class_element.kind)
@@ -1114,7 +1117,7 @@ class SubstituteVariables extends TreeVisitor
                 throw e
                 
         visitCallExpression: (n) ->
-                super
+                n = super
 
                 # replace calls of the form:
                 #   X (arg1, arg2, ...)
@@ -1122,6 +1125,7 @@ class SubstituteVariables extends TreeVisitor
                 # with
                 #   invokeClosure(X, %this, %argCount, arg1, arg2, ...);
 
+                return n if is_intrinsic(n)
                 @function_stack.top.scratch_size = Math.max @function_stack.top.scratch_size, n.arguments.length
                 create_intrinsic invokeClosure_id, [n.callee].concat n.arguments
 
@@ -1198,6 +1202,16 @@ class LambdaLift extends TreeVisitor
                         name: global_name
                 }
 
+        ###
+        # XXX don't leave me in
+        #
+        # convert all properties to init, since escodegen can't seem to deal with get/set properties
+        visitProperty: (n) ->
+                n = super
+                n.kind = "init"
+                n
+        ###
+
 
 class NameAnonymousFunctions extends TreeVisitor
         constructor: -> super
@@ -1257,7 +1271,7 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
                 lhs = n.left
                 visited_rhs = @visit n.right
                 
-                if is_intrinsic "%slot", lhs
+                if is_intrinsic lhs, "%slot"
                         create_intrinsic setSlot_id, [lhs.arguments[0], lhs.arguments[1], visited_rhs]
                 else if lhs.type is Identifier
                         if @findIdentifierInScope lhs
@@ -1420,10 +1434,10 @@ class IIFEIdioms extends TreeVisitor
 
                 replacement.body.push body
 
-                if is_intrinsic "%setSlot", n.expression
+                if is_intrinsic(n.expression, "%setSlot")
                         n.expression.arguments[2] = create_intrinsic getLocal_id, [iife_rv_id]
                         replacement.body.push n
-                else if (is_intrinsic "%setGlobal", n.expression) or (is_intrinsic "setLocal", n.expression)
+                else if is_intrinsic(n.expression, "%setGlobal") or is_intrinsic(n.expression, "setLocal".expression)
                         n.expression.arguments[1] = create_intrinsic getLocal_id, [iife_rv_id]
                         replacement.body.push n
                         
@@ -1452,29 +1466,29 @@ class IIFEIdioms extends TreeVisitor
 
                 replacement.body.push body
 
-                if is_intrinsic "%setSlot", n.expression
+                if is_intrinsic(n.expression, "%setSlot")
                         n.expression.arguments[2] = create_intrinsic getLocal_id, [iife_rv_id]
                         replacement.body.push n
-                else if (is_intrinsic "%setGlobal", n.expression) or (is_intrinsic "setLocal", n.expression)
+                else if is_intrinsic(n.expression, "%setGlobal") or is_intrinsic(n.expression, "setLocal")
                         n.expression.arguments[1] = create_intrinsic getLocal_id, [iife_rv_id]
                         replacement.body.push n
 
                 return replacement
         
         visitExpressionStatement: (n) ->
-                isMakeClosure = (a) -> (is_intrinsic "%makeClosure", a) or (is_intrinsic "makeAnonClosure", a)
+                isMakeClosure = (a) -> is_intrinsic(a, "%makeClosure") or is_intrinsic(a, "makeAnonClosure")
                 # bail out early if we know we aren't in the right place
-                if is_intrinsic "%invokeClosure", n.expression
+                if is_intrinsic(n.expression, "%invokeClosure")
                         candidate = n.expression
-                else if is_intrinsic "%setSlot", n.expression
+                else if is_intrinsic(n.expression, "%setSlot")
                         candidate = n.expression.arguments[2]
-                else if (is_intrinsic "%setGlobal", n.expression) or (is_intrinsic "%setLocal", n.expression)
+                else if is_intrinsic(n.expression, "%setGlobal") or is_intrinsic(n.expression, "%setLocal")
                         candidate = n.expression.arguments[1]
                 else
                         return n
 
                 # at this point candidate should only be an invokeClosure intrinsic
-                return n if not is_intrinsic "%invokeClosure", candidate
+                return n if not is_intrinsic(candidate, "%invokeClosure")
 
                 if isMakeClosure candidate.arguments[0]
                         return @maybeInlineIIFE candidate, n
@@ -1485,7 +1499,7 @@ class IIFEIdioms extends TreeVisitor
                         
 class DesugarDestructuring extends TreeVisitor
         gen = startGenerator()
-        fresh = () -> create_identifier "destruct_tmp#{gen()}"
+        fresh = () -> create_identifier "%destruct_tmp#{gen()}"
 
         # given an assignment { pattern } = id
         # 
@@ -1626,7 +1640,7 @@ class DesugarDestructuring extends TreeVisitor
 # setLocal/setGlobal/etc, and rhs getLocal/getGlobal/etc
 class DesugarUpdateAssignments extends TreeVisitor
         updateGen = startGenerator()
-        freshUpdate = () -> "_update_#{updateGen()}"
+        freshUpdate = () -> "%update_#{updateGen()}"
         
         constructor: (n) ->
                 @debug = true
@@ -1722,9 +1736,138 @@ class DesugarUpdateAssignments extends TreeVisitor
                         else
                                 throw new Error "unexpected expression type #{n.left.type} in update assign expression."
                 n
-                                
-                                
+
+# For imports, this pass desugars
+#     import { ... } from "foo"
+# into
+#     { ... } = %moduleGet("foo")
+#
+# a bug in esprima treats these two as identical:
+#    import foo from "foo"
+#    import { foo } from "foo"
+#
+# so for now we only accept specifiers with 1 identifier, and treat it like the first one above (no destructuring)
+#
+# For exports, this pass desugars
+#    export function foo () { }
+#    export let bar = 5;
+# into
+#    function foo () { }
+#    exports.foo = foo;
+#    let bar = 5;
+#    exports.bar = bar;
+#
+# whether this is correct or not, I have no idea.
+# 
+class DesugarImportExport extends TreeVisitor
+        importGen = startGenerator()
+        freshId = (prefix) -> create_identifier "%#{prefix}_#{importGen()}"
+
+        constructor: ->
+                super
                 
+        create_lhs = (specifiers) ->
+                throw new Error("internal compiler error, only form \"import blah from 'blah'\" supported") if specifiers.length isnt 1
+                specifiers[0].id
+
+        generate_export_return = (exported, batch_exported) ->
+                exported_getters = []
+                for exp in exported
+                        exported_getters.push {
+                                type: Property,
+                                key: exp,
+                                value: {
+                                        type: FunctionExpression,
+                                        params: [],
+                                        body:
+                                                type: BlockStatement
+                                                body: [
+                                                        { type: ReturnStatement, argument: exp }
+                                                ]
+                                },
+                                kind: "get"
+                        }
+
+                obj_literal = { type: ObjectExpression, properties: exported_getters }
+
+                if batch_exported.length is 0
+                        return [ { type: ReturnStatement, argument: obj_literal } ]
+
+                # batch_exported.length > 0, so we need to insert
+                # loops over the import tmp id, adding the identifiers
+                # to our new export object
+
+                export_id = freshId("export")
+                
+                ret = [{
+                        type: VariableDeclaration,
+                        declarations: [{
+                                type: VariableDeclarator,
+                                id:   export_id,
+                                init: obj_literal
+                        }],
+                        kind: "let"
+                }]
+
+                for batch in batch_exported
+                        spec_arg = { type: ArrayExpression, elements: batch.specifiers }
+                        ret.push { type: ExpressionStatement, expression: create_intrinsic(moduleImportBatch_id, [batch.source, spec_arg, export_id]) }
+
+                ret.push { type: ReturnStatement, argument: export_id }
+                ret                
+        
+        visitFunction: (n) ->
+                return n if not n.toplevel
+                
+                @exports = []
+                @batch_exports = []
+                n = super
+                n.body.body.push exret for exret in generate_export_return(@exports, @batch_exports)
+                n
+                
+        visitImportDeclaration: (n) ->
+                assign = { type: AssignmentExpression, operator: "=" }
+                assign.right = create_intrinsic(moduleGet_id, [n.source])
+                assign.left = create_lhs(n.specifiers)
+
+                { type: ExpressionStatement, expression: assign, loc: n.loc }
+
+        visitExportDeclaration: (n) ->
+                # handle the following case in two parts:
+                #    export * from "foo"
+                #
+                if not n.declaration
+                        import_tmp = freshId("import")
+                        
+                        import_specifiers = []
+                        if n.specifiers.length > 1 or n.specifiers[0].type isnt ExportBatchSpecifier
+                                import_specifiers = (create_string_literal(spec.id.name) for spec in n.specifiers)
+
+                        @batch_exports.push { source: import_tmp, specifiers: import_specifiers }
+                        
+                        return {
+                                type: VariableDeclaration,
+                                declarations: [{
+                                        type: VariableDeclarator,
+                                        id:   import_tmp
+                                        init: create_intrinsic(moduleGet_id, [n.source])
+                                }],
+                                kind: "let"
+                        }
+                        
+
+                if n.declaration.type is FunctionDeclaration
+                        @exports.push n.declaration.id
+                        return n.declaration
+                        
+                if n.declaration.type is VariableDeclaration
+                        @exports.push decl.id for decl in n.declaration.declarations
+                        return n.declaration
+                
+                throw new Error("Unsupported type of export declaration #{n.declaration.type}")
+                
+                
+
 # switch this to true if you want to experiment with the new CFA2
 # code.  definitely, definitely not ready for prime time.
 enable_cfa2 = false
@@ -1736,6 +1879,7 @@ enable_cfa2 = false
 enable_hoist_func_decls_pass = true
 
 passes = [
+        DesugarImportExport
         DesugarClasses
         DesugarDestructuring
         DesugarUpdateAssignments

@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "ejs.h"
+#include "ejs-array.h"
 #include "ejs-object.h"
 #include "ejs-require.h"
 #include "ejs-function.h"
@@ -79,17 +80,7 @@ require_user_module (const char* name, ejsval *module)
         if (!strcmp (map->name, name)) {
             if (EJSVAL_IS_NULL(map->cached_exports)) {
                 _ejs_gc_add_root (&map->cached_exports);
-                map->cached_exports = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
-                ejsval prev_exports = _ejs_object_getprop (_ejs_global, _ejs_atom_exports);
-                _ejs_gc_add_root (&prev_exports);
-                _ejs_object_setprop(_ejs_global, _ejs_atom_exports, map->cached_exports);
-
-                ejsval args[1];
-                args[0] = map->cached_exports;
-                map->func (_ejs_null, _ejs_undefined, 1, args);
-
-                _ejs_object_setprop(_ejs_global, _ejs_atom_exports, prev_exports);
-                _ejs_gc_remove_root (&prev_exports);
+                map->cached_exports = map->func (_ejs_null, _ejs_undefined, 0, NULL);
             }
             *module = map->cached_exports;
             return EJS_TRUE;
@@ -99,20 +90,9 @@ require_user_module (const char* name, ejsval *module)
 }
 
 
-static ejsval
-_ejs_require_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+ejsval
+_ejs_module_get (ejsval arg)
 {
-    if (argc < 1) {
-        return _ejs_undefined;
-    }
-
-    ejsval arg = args[0];
-
-    if (!EJSVAL_IS_STRING(arg)) {
-        _ejs_log ("required called with non-string\n");
-        return _ejs_null;
-    }
-
     char* arg_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(arg));
 
     ejsval module EJSVAL_ALIGNMENT;
@@ -131,6 +111,53 @@ _ejs_require_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     _ejs_log ("require('%s') failed: module not included in build.\n", arg_utf8);
     free (arg_utf8);
     return _ejs_null;
+}
+
+static ejsval
+_ejs_require_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    if (argc < 1) {
+        return _ejs_undefined;
+    }
+
+    ejsval arg = args[0];
+
+    if (!EJSVAL_IS_STRING(arg)) {
+        _ejs_log ("required called with non-string\n");
+        return _ejs_null;
+    }
+
+    return _ejs_module_get(arg);
+}
+
+typedef struct {
+    EJSObject* toObj;
+    EJSArray* specifiers;
+} ImportBatchData;
+
+static void
+import_batch_foreach (ejsval name, EJSPropertyDesc *desc, void* data)
+{
+    ImportBatchData* import_data = (ImportBatchData*)data;
+    EJSObject* toObj = import_data->toObj;
+    EJSArray* specifiers = import_data->specifiers;
+    
+    if (!specifiers || _ejs_array_indexof (specifiers, name) != -1)
+        _ejs_propertymap_insert (toObj->map, name, desc);
+}
+
+void
+_ejs_module_import_batch(ejsval fromImport, ejsval specifiers, ejsval toExport)
+{
+    EJSObject* fromObj = EJSVAL_TO_OBJECT(fromImport);
+    EJSObject* toObj = EJSVAL_TO_OBJECT(toExport);
+    EJSArray*  specArray = (EJSArray*)EJSVAL_TO_OBJECT(specifiers);
+
+    ImportBatchData data;
+    data.toObj = toObj;
+    data.specifiers = EJSARRAY_LEN(specArray) == 0 ? NULL : specArray;
+
+    _ejs_propertymap_foreach_property(fromObj->map, import_batch_foreach, &data);
 }
 
 void

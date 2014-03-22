@@ -1466,33 +1466,38 @@ _ejs_Array_prototype_findIndex (ejsval env, ejsval _this, uint32_t argc, ejsval 
     return NUMBER_TO_EJSVAL(-1);
 }
 
-static ejsval
-_ejs_Array_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
+int
+_ejs_array_indexof (EJSArray* haystack, ejsval needle)
 {
-    if (argc != 1)
-        return NUMBER_TO_EJSVAL (-1);
-
-    int i;
     int rv = -1;
-    ejsval needle = args[0];
     if (EJSVAL_IS_NULL(needle)) {
-        for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
-            if (EJSVAL_IS_NULL (EJS_DENSE_ARRAY_ELEMENTS(_this)[i])) {
+        for (int i = 0; i < EJSARRAY_LEN(haystack); i ++) {
+            if (EJSVAL_IS_NULL (EJSDENSEARRAY_ELEMENTS(haystack)[i])) {
                 rv = i;
                 break;
             }
         }
     }
     else {
-        for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
-            if (EJSVAL_TO_BOOLEAN(_ejs_op_strict_eq (needle, EJS_DENSE_ARRAY_ELEMENTS(_this)[i]))) {
+        for (int i = 0; i < EJSARRAY_LEN(haystack); i ++) {
+            if (EJSVAL_TO_BOOLEAN(_ejs_op_strict_eq (needle, EJSDENSEARRAY_ELEMENTS(haystack)[i]))) {
                 rv = i;
                 break;
             }
         }
     }
 
-    return NUMBER_TO_EJSVAL (rv);
+    return rv;
+}
+
+// XXX toshok - isnt' this method supposed to be generic?
+static ejsval
+_ejs_Array_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
+{
+    if (argc != 1)
+        return NUMBER_TO_EJSVAL (-1);
+
+    return NUMBER_TO_EJSVAL(_ejs_array_indexof((EJSArray*)EJSVAL_TO_OBJECT(_this), args[0]));
 }
 
 static ejsval

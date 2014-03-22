@@ -67,6 +67,7 @@ ejsval _ejs_array_new (int numElements, EJSBool fill);
 ejsval _ejs_array_new_copy (int numElements, ejsval *elements);
 
 void _ejs_array_foreach_element (EJSArray* arr, EJSValueFunc foreach_func);
+int _ejs_array_indexof (EJSArray* haystack, ejsval needle);
 
 void _ejs_array_init(ejsval global);
 

@@ -10,6 +10,9 @@ returns_ejsval_bool = types.returns_ejsval_bool
 runtime_interface =
         personality:           -> @abi.createExternalFunction @module, "__ejs_personality_v0",           types.int32, [types.int32, types.int32, types.int64, types.int8Pointer, types.int8Pointer]
 
+        module_get:            -> @abi.createExternalFunction @module, "_ejs_module_get", types.EjsValue, [types.EjsValue]
+        module_import_batch:   -> @abi.createExternalFunction @module, "_ejs_module_import_batch", types.void, [types.EjsValue, types.EjsValue, types.EjsValue]
+
         invoke_closure:        -> takes_builtins @abi.createExternalFunction @module, "_ejs_invoke_closure", types.EjsValue, [types.EjsValue, types.EjsValue, types.int32, types.EjsValue.pointerTo()]
         make_closure:          -> @abi.createExternalFunction @module, "_ejs_function_new", types.EjsValue, [types.EjsValue, types.EjsValue, types.getEjsClosureFunc(@abi)]
         make_anon_closure:     -> @abi.createExternalFunction @module, "_ejs_function_new_anon", types.EjsValue, [types.EjsValue, types.getEjsClosureFunc(@abi)]
@@ -32,6 +35,7 @@ runtime_interface =
         global_setprop:        -> @abi.createExternalFunction @module, "_ejs_global_setprop",            types.EjsValue, [types.EjsValue, types.EjsValue]
         global_getprop:        -> only_reads_memory @abi.createExternalFunction @module, "_ejs_global_getprop",           types.EjsValue, [types.EjsValue]
 
+        object_define_accessor_prop: -> @abi.createExternalFunction @module, "_ejs_object_define_accessor_property",  types.bool, [types.EjsValue, types.EjsValue, types.EjsValue, types.EjsValue, types.int32];
         object_define_value_prop: -> @abi.createExternalFunction @module, "_ejs_object_define_value_property",  types.bool, [types.EjsValue, types.EjsValue, types.EjsValue, types.int32];
         
         prop_iterator_new:     -> @abi.createExternalFunction @module, "_ejs_property_iterator_new",     types.EjsPropIterator, [types.EjsValue]

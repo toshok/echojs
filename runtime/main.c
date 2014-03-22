@@ -42,9 +42,7 @@ main(int argc, char** argv)
 
     _ejs_init(argc, argv);
 
-    ejsval entry_name = _ejs_string_new_utf8(entry_filename);
-
-    _ejs_invoke_closure (_ejs_require, _ejs_null, 1, &entry_name);
+    _ejs_module_get (_ejs_string_new_utf8(entry_filename));
 
 #if GC_ON_SHUTDOWN
     _ejs_gc_shutdown();
