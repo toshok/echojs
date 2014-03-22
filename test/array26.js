@@ -1,4 +1,3 @@
-
 var obj = { "length": 3, "0": "hola", "1": "world", "2": 3.14 };
 
 var arr = Array.from (obj);

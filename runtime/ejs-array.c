@@ -1332,6 +1332,99 @@ _ejs_Array_prototype_fill (ejsval env, ejsval _this, uint32_t argc, ejsval *args
     return O;
 }
 
+// ECMA 262 (6): 22.1.3.7
+// Array.prototype.filter ( callbackfn, thisArg = undefined )
+static ejsval
+_ejs_Array_prototype_filter (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval callbackfn = _ejs_undefined;
+    ejsval thisArg = _ejs_undefined;
+
+    if (argc >= 1) callbackfn = args[0];
+    if (argc >= 2) thisArg = args[1];
+
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Array.find called on null or undefined");
+
+    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
+    EJSObject* Oobj = EJSVAL_TO_OBJECT(O);
+
+    /* 3. Let lenValue be the result of Get(O, "length"). */
+    ejsval lenValue = OP(Oobj,get)(O, _ejs_atom_length);
+    /* 4. Let len be ToLength(lenValue). */
+    uint32_t len = ToUint32(lenValue);
+
+    /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
+    if (!EJSVAL_IS_FUNCTION(callbackfn))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "callback function is not a function");
+
+    /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
+    ejsval T = thisArg;
+
+    /* 8. Let A be undefined. */
+    ejsval A = _ejs_undefined;
+
+    /* 9. If O is an exotic Array object, then
+          a. Let C be Get(O, "constructor").
+          b. ReturnIfAbrupt(C).
+          c. If IsConstructor(C) is true, then
+             i. Let thisRealm be the running execution context’s Realm.
+             ii. If thisRealm and the value of C’s [[Realm]] internal slot are the same value, then
+                 1. Let A be the result of calling the [[Construct]] internal method of C with an argument list containing the single item 0.
+    */
+
+    /* 10. If A is undefined, then */
+    if (EJSVAL_IS_UNDEFINED(A)) {
+        /* a. Let A be the result of the abstract operation ArrayCreate with argument 0. */
+        A = _ejs_array_new(0, EJS_FALSE);
+    }
+
+    /* 12. Let k be 0. */
+    int k = 0;
+
+    /* 13. Let to be 0. */
+    int to = 0;
+
+    /* 14. Repeat, while k < len */
+    while (k < len) {
+        /* a. Let Pk be ToString(k). */
+        ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
+        /* b. Let kPresent be the result of HasProperty(O, Pk). */
+        EJSBool kPresent = OP(Oobj,has_property)(O, Pk);
+
+        /* d. If kPresent is true, then */
+        if (kPresent) {
+            /* i. Let kValue be the result of Get(O, Pk). */
+            ejsval kValue = OP(Oobj,get)(O, Pk);
+
+            /* iii. Let selected be the result of calling the [[Call]] internal method of callbackfn with T as
+               thisArgument and a List containing kValue, k, and O as argumentsList. */
+            ejsval argumentsList[3] = {
+                kValue,
+                NUMBER_TO_EJSVAL(k),
+                O
+            };
+            ejsval selected = _ejs_invoke_closure (callbackfn, T, 3, argumentsList);
+
+            /* v. If ToBoolean(selected) is true, then */
+            if (EJSVAL_TO_BOOLEAN(ToBoolean(selected))) {
+                /* 1. Let status be the result of CreateDataPropertyOrThrow (A, ToString(to), kValue). */
+                
+                _ejs_object_define_value_property (A, NUMBER_TO_EJSVAL(to), kValue, EJS_PROP_FLAGS_ENUMERABLE | EJS_PROP_FLAGS_CONFIGURABLE | EJS_PROP_FLAGS_WRITABLE);
+                /* 3. Increase to by 1. */
+                to ++;
+            }
+        }
+
+        /* e. Increase k by 1. */
+        k ++;
+    }
+
+    /* 15. Return A. */
+    return A;
+}
+
 // ECMA 262 (6): 22.1.3.8
 // Array.prototype.find ( predicate , thisArg = undefined )
 static ejsval
@@ -1664,6 +1757,7 @@ _ejs_array_init(ejsval global)
     PROTO_METHOD(map);
     PROTO_METHOD(reduce);
     PROTO_METHOD(reduceRight);
+    PROTO_METHOD(filter);
     // ECMA 6
     PROTO_METHOD(fill);
     PROTO_METHOD(find);

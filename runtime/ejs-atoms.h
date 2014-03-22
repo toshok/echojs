@@ -163,6 +163,7 @@ EJS_ATOM(from)
 EJS_ATOM(fill)
 EJS_ATOM(find)
 EJS_ATOM(findIndex)
+EJS_ATOM(filter)
 
 // Typed array method names
 EJS_ATOM(getInt8)
