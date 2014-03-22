@@ -475,7 +475,27 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
      EJS_NOT_IMPLEMENTED();                                             \
  }                                                                      \
                                                                         \
- EJSSpecOps _ejs_##arraytype##array_specops;
+ EJSSpecOps _ejs_##arraytype##array_specops;                            \
+                                                                        \
+ static ejsval                                                          \
+ _ejs_##ArrayType##Array_prototype_set_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+ {                                                                      \
+     /* XXX needs a lot of help here... */                              \
+     OP(EJSVAL_TO_OBJECT(_this), put)(_this, args[0], args[1], EJS_FALSE); \
+     return args[1];                                                    \
+ }                                                                      \
+                                                                        \
+ static ejsval                                                          \
+ _ejs_##ArrayType##Array_prototype_get_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+ {                                                                      \
+     EJS_NOT_IMPLEMENTED();                                             \
+ }                                                                      \
+                                                                        \
+ static ejsval                                                          \
+ _ejs_##ArrayType##Array_prototype_subarray_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+ {                                                                      \
+     EJS_NOT_IMPLEMENTED();                                             \
+ }
 
 EJS_TYPED_ARRAY(INT8, Int8, int8, int8_t, 1);
 EJS_TYPED_ARRAY(UINT8, Uint8, uint8, uint8_t, 1);
@@ -637,6 +657,9 @@ _ejs_typedarrays_init(ejsval global)
     _ejs_typed_array_protos[EJS_TYPEDARRAY_##EnumType] = _ejs_##ArrayType##Array_proto; \
     _ejs_typed_array_specops[EJS_TYPEDARRAY_##EnumType] = &_ejs_##arraytype##array_specops; \
                                                                         \
+    PROTO_METHOD_IMPL(ArrayType##Array, get);                           \
+    PROTO_METHOD_IMPL(ArrayType##Array, set);                           \
+    PROTO_METHOD_IMPL(ArrayType##Array, subarray);                      \
 EJS_MACRO_END
 
     ADD_TYPEDARRAY(INT8, Int8, int8, 1);

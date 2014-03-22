@@ -113,6 +113,10 @@ extern ejsval _ejs_Float32Array;
 extern ejsval _ejs_Float32Array_proto;
 extern EJSSpecOps _ejs_float32array_specops;
 
+extern ejsval _ejs_Float64Array;
+extern ejsval _ejs_Float64Array_proto;
+extern EJSSpecOps _ejs_float64array_specops;
+
 extern ejsval _ejs_DataView;
 extern ejsval _ejs_DataView_proto;
 extern EJSSpecOps _ejs_DataView_specops;
