@@ -176,6 +176,7 @@ EJS_ATOM(getFloat32)
 EJS_ATOM(setFloat32)
 EJS_ATOM(getFloat64)
 EJS_ATOM(setFloat64)
+EJS_ATOM(subarray)
 
 // global functions
 EJS_ATOM(isNaN)
@@ -237,6 +238,7 @@ EJS_ATOM(ignoreCase)
 //EJS_ATOM(toString)
 EJS_ATOM(getTime)
 EJS_ATOM(getTimezoneOffset)
+EJS_ATOM(now)
 
 // Function functions
 //EJS_ATOM(toString)
