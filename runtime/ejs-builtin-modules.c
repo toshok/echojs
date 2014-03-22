@@ -128,14 +128,22 @@ _ejs_stream_end (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return _ejs_undefined;
 }
 
-ejsval
-_ejs_fs_createWriteStream (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+static ejsval
+_ejs_wrapFdWithStream (int fd)
 {
     ejsval stream = _ejs_object_create(_ejs_null);
 
     EJS_INSTALL_FUNCTION (stream, "write", _ejs_stream_write);
     EJS_INSTALL_FUNCTION (stream, "end", _ejs_stream_end);
 
+    _ejs_object_setprop_utf8 (stream, "%internal_fd", NUMBER_TO_EJSVAL(fd));
+
+    return stream;
+}
+
+ejsval
+_ejs_fs_createWriteStream (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
     char *utf8_path = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[0]));
 
     int fd = open (utf8_path, O_CREAT | O_TRUNC | O_WRONLY, 0777);
@@ -146,9 +154,7 @@ _ejs_fs_createWriteStream (ejsval env, ejsval _this, uint32_t argc, ejsval* args
         return _ejs_undefined;
     }
 
-    _ejs_object_setprop_utf8 (stream, "%internal_fd", NUMBER_TO_EJSVAL(fd));
-
-    return stream;
+    return _ejs_wrapFdWithStream(fd);  
 }
 
 ejsval
@@ -211,6 +217,9 @@ _ejs_child_process_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval*
     ejsval exports = args[0];
 
     EJS_INSTALL_FUNCTION(exports, "spawn", _ejs_child_process_spawn);
+
+    _ejs_object_setprop_utf8 (exports, "stdout", _ejs_wrapFdWithStream(1));
+    _ejs_object_setprop_utf8 (exports, "stderr", _ejs_wrapFdWithStream(2));
 
     return _ejs_undefined;
 }
