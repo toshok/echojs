@@ -1308,8 +1308,8 @@ class LLVMIRVisitor extends TreeVisitor
 
                 # gather all properties so we can emit get+set as a single call to define_accessor_prop.
                 for property in n.properties
-                        propname = if property.key.type is Literal then property.key.value else property.key.name
-                        
+                        propname = if property.key.type is Literal then String(property.key.value) else property.key.name
+
                         if property.kind is "get" or property.kind is "set"
                                 accessor_map.set(propname, new Map) if not accessor_map.has(propname)
                                 throw new SyntaxError "a '#{property.kind}' method for '#{propname}' has already been defined." if accessor_map.get(propname).has(property.kind)
