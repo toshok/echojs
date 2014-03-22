@@ -1611,7 +1611,7 @@ class DesugarDestructuring extends TreeVisitor
                                         id: obj_tmp_id
                                         init: decl.init
                                 createObjectPatternBindings(obj_tmp_id, decl.id, decls)
-                        if decl.id.type is ArrayPattern
+                        else if decl.id.type is ArrayPattern
                                 # create a fresh tmp and declare it
                                 array_tmp_id = fresh()
                                 decls.push
