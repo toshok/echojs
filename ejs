@@ -22,7 +22,6 @@ options =
         frozen_global: false
         record_types: false
         output_filename: null
-        combine_scripts: false
         show_help: false
         leave_temp_files: false
         target: "osx"
@@ -72,9 +71,6 @@ args =
                 handler: add_debug_after_pass
                 handlerArgc: 1
                 help:    "dump the IR tree after the named pass"
-        "-s":
-                flag:    "combine_scripts"
-                help:    "treat all toplevels as being 1 context, evaluating them in the order present on the command line"
         "-o":
                 option:  "output_filename"
                 help:    "name of the output file."
@@ -316,7 +312,7 @@ generate_import_map = (modules) ->
 
         map.write "EJSRequire _ejs_require_map[] = {\n"
         modules.forEach ({ filename, module_toplevel }) ->
-                map.write "  { \"#{sanitize path.basename(filename), false}\", #{module_toplevel}, 0 },\n"
+                map.write "  { \"#{sanitize filename, false}\", #{module_toplevel}, 0 },\n"
         map.write "  { 0, 0, 0 }\n"
         map.write "};\n"
 
@@ -381,41 +377,33 @@ cleanup = (done) ->
                         files_to_delete = files_to_delete - 1
                         done() if files_to_delete is 0
                 
-if options.combine_scripts
-        script_content = ""
-        files.forEach (filename) ->
-                script_content = script_content + fs.readFileSync filename, 'utf-8'
-        file_ast = parseFile(files[0], script_content)
-        compileFile(files[0], file_ast)
-        do_final_link(files[0])
-else
-        main_file = file_args[0]
-        work_list = file_args.slice()
-        files = []
+main_file = file_args[0]
+work_list = file_args.slice()
+files = []
 
-        # starting at the main file, gather all files we'll need
-        while work_list.length isnt 0
-                file = work_list.pop()
+# starting at the main file, gather all files we'll need
+while work_list.length isnt 0
+        file = work_list.pop()
 
-                file_contents = fs.readFileSync(file, 'utf-8')
-                file_ast = parseFile(file, file_contents)
-                
-                imports = compiler.gatherImports(file_ast)
+        file_contents = fs.readFileSync(file, 'utf-8')
+        file_ast = parseFile(file, file_contents)
+        
+        imports = compiler.gatherImports(path.dirname(file), file_ast)
 
-                files.push({file_name: file, file_ast: file_ast})
-                                
-                for i in imports
-                        if files.indexOf(i) is -1 and work_list.indexOf(i) is -1
-                                work_list.push(i+".js")
+        files.push({file_name: file, file_ast: file_ast})
+                        
+        for i in imports
+                if files.indexOf(i) is -1 and work_list.indexOf(i) is -1
+                        work_list.push(i+".js")
 
-        # now compile them
-        compileNextFile = ->
-                if files.length is 0
-                        do_final_link(main_file)
-                        return
-                f = files.pop()
-                compileFile f.file_name, f.file_ast, compileNextFile
-        compileNextFile()
+# now compile them
+compileNextFile = ->
+        if files.length is 0
+                do_final_link(main_file)
+                return
+        f = files.pop()
+        compileFile f.file_name, f.file_ast, compileNextFile
+compileNextFile()
         
 # Local Variables:
 # mode: coffee

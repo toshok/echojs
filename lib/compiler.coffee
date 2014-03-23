@@ -2086,16 +2086,21 @@ exports.compile = (tree, base_output_filename, source_filename, options) ->
         module
 
 class GatherImports extends TreeVisitor
-        constructor: () ->
+        constructor: (@path) ->
                 @importList = []
 
-        _addSource: (source) ->
-                @importList.push(source) if @importList.indexOf(source) is -1
+        addSource: (source) ->
+                if source[0] is "/"
+                        source_path = source
+                else
+                        source_path = "#{@path}/#{source}"
+                @importList.push(source_path) if @importList.indexOf(source_path) is -1
+                source_path
         
         visitImportDeclaration: (n) ->
                 if n.source.type isnt Literal or typeof n.source.raw isnt "string"
                         throw new Error("import sources must be strings")
-                @_addSource(n.source.value)
+                n.source.value = @addSource(n.source.value)
                 n
                 
         visitExportDeclaration: (n) ->
@@ -2103,13 +2108,13 @@ class GatherImports extends TreeVisitor
                         source = n.source
                         if source.type isnt Literal or typeof source.raw isnt "string"
                                 throw new Error("import sources must be strings")
-                        @_addSource(source.value)
+                        n.source.value = @addSource(source.value)
                 n
 
                 
         
-exports.gatherImports = (tree) ->
-        visitor = new GatherImports()
+exports.gatherImports = (filename, tree) ->
+        visitor = new GatherImports(filename)
         visitor.visit(tree)
         visitor.importList
         
