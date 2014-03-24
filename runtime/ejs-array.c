@@ -1266,6 +1266,72 @@ _ejs_Array_prototype_splice (ejsval env, ejsval _this, uint32_t argc, ejsval* ar
     return A;
 }
 
+// ECMA 262 (6) 22.1.3.6
+// Array.prototype.fill (value, start = 0, end = this.length)
+static ejsval
+_ejs_Array_prototype_fill (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval value = _ejs_undefined;
+    ejsval start = _ejs_undefined;
+    ejsval end = _ejs_undefined;
+
+    if (argc >= 1)
+        value = args[0];
+
+    if (argc >= 2)
+        start = args[1];
+
+    if (argc >= 3)
+        end = args[2];
+
+    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
+
+    /* 3. Let lenVal be the result of Get(O, "length"). */
+    ejsval lenVal = _ejs_object_getprop (O, _ejs_atom_length);
+    /* 4. Let len be ToLength(lenVal). */
+    uint32_t len = ToUint32(lenVal);
+
+    /* 6. Let relativeStart be ToInteger(start). */
+    int32_t relativeStart = ToInteger(start);
+
+    /* 8. If relativeStart is negative, let k be max((len + relativeStart),0); else let k be min(relativeStart, len). */
+    int32_t k;
+    if (relativeStart < 0)
+        k = max (len + relativeStart, 0);
+    else
+        k = min (relativeStart, len);
+
+    /* 9. If end is undefined, let relativeEnd be len; else let relativeEnd be ToInteger(end). */
+    int32_t relativeEnd;
+    if (EJSVAL_IS_UNDEFINED(end))
+        relativeEnd = len;
+    else
+        relativeEnd = ToInteger(end);
+
+    /* 11. If relativeEnd is negative, let final be max((len + relativeEnd),0); else let final be min(relativeEnd, len). */
+    int32_t final;
+    if (relativeEnd < 0)
+        final = max(len + relativeEnd, 0);
+    else
+        final = min(relativeEnd, len);
+
+    /* 12. Repeat, while k < final */
+    while (k < final) {
+        /*  a. Let Pk be ToString(k). */
+        ejsval Pk = NUMBER_TO_EJSVAL(k);
+
+        /*  b. Let putStatus be the result of Put(O, Pk, value, true). */
+        OP(EJSVAL_TO_OBJECT(O), put)(O, Pk, value, EJS_TRUE);
+
+        /*  d. Increase k by 1. */
+        k++;
+    }
+
+    /* 13. Return O. */
+    return O;
+}
+
 // ECMA 262 (6): 22.1.3.8
 // Array.prototype.find ( predicate , thisArg = undefined )
 static ejsval
@@ -1594,6 +1660,7 @@ _ejs_array_init(ejsval global)
     PROTO_METHOD(reduce);
     PROTO_METHOD(reduceRight);
     // ECMA 6
+    PROTO_METHOD(fill);
     PROTO_METHOD(find);
     PROTO_METHOD(findIndex);
 
