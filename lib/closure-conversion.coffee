@@ -1827,7 +1827,11 @@ class DesugarImportExport extends TreeVisitor
                 
         visitImportDeclaration: (n) ->
                 assign = { type: AssignmentExpression, operator: "=" }
-                assign.right = create_intrinsic(moduleGet_id, [n.source])
+                assign.right = 
+                        type:     MemberExpression
+                        object:   create_intrinsic(moduleGet_id, [n.source])
+                        property: create_identifier "default"
+                        computed: false
                 assign.left = create_lhs(n.specifiers)
 
                 { type: ExpressionStatement, expression: assign, loc: n.loc }
@@ -1854,16 +1858,37 @@ class DesugarImportExport extends TreeVisitor
                                 }],
                                 kind: "let"
                         }
-                        
 
+                # export function foo () { ... }
                 if n.declaration.type is FunctionDeclaration
                         @exports.push n.declaration.id
                         return n.declaration
-                        
+
+                # export let foo = bar;
                 if n.declaration.type is VariableDeclaration
                         @exports.push decl.id for decl in n.declaration.declarations
                         return n.declaration
-                
+
+                # export foo = bar;
+                if n.declaration.type is VariableDeclarator
+                        @exports.push n.declaration.id
+                        return n.declaration
+
+                # export default = ...;
+                # 
+                if n.default
+                        default_id = create_identifier "default"
+                        @exports.push default_id
+                        return {
+                                type: VariableDeclaration,
+                                declarations: [{
+                                        type: VariableDeclarator,
+                                        id:   default_id
+                                        init: n.declaration
+                                }],
+                                kind: "var"
+                        }
+
                 throw new Error("Unsupported type of export declaration #{n.declaration.type}")
                 
                 
