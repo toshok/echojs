@@ -15,7 +15,11 @@ TESTS:=$(wildcard *[0-9].js)
 TESTS:=$(filter-out alloc1.js,$(TESTS))
 
 # these test for es6 stuff that neither node nor ejs supports
-TESTS:=$(filter-out module1.js,$(TESTS))
+TESTS:=$(filter-out modules2.js,$(TESTS))
+
+# disable the esprima tests for the time being, as the new module syntax (and losing require) breaks them.
+# we need to fork esprima/escodegen/estraverse and port them to es6 modules for these tests.
+TESTS:=$(filter-out esprima%,$(TESTS))
 
 ESPRIMA_TESTS=$(filter esprima%,$(TESTS))
 ESPRIMA_TESTS:=$(ESPRIMA_TESTS:%.js=%.js.exe)
@@ -144,14 +148,14 @@ echo-%:
 %.js.expected-out: %.js
 	@NODE_PATH=$(NODE_PATH) node $(NODE_FLAGS) $< > $@
 
-$(ESPRIMA_TESTS): %.js.exe: %.js $(TOPDIR)/esprima/esprima.js $(TOPDIR)/escodegen/escodegen.js $(TOPDIR)/estraverse/estraverse.js $(TOPDIR)/runtime/libecho.a
-	@cp $(TOPDIR)/esprima/esprima.js .
-	@cp $(TOPDIR)/escodegen/escodegen.js .
-	@cp $(TOPDIR)/estraverse/estraverse.js .
-	@echo [ejs stage$(EJS_STAGE)] $< && $(EJS_DRIVER) --leave-temp $< esprima.js escodegen.js estraverse.js
+$(ESPRIMA_TESTS): %.js.exe: %.js $(TOPDIR)/esprima/esprima-es6.js $(TOPDIR)/escodegen/escodegen-es6.js $(TOPDIR)/estraverse/estraverse-es6.js $(TOPDIR)/runtime/libecho.a
+	@cp $(TOPDIR)/esprima/esprima-es6.js .
+	@cp $(TOPDIR)/escodegen/escodegen-es6.js .
+	@cp $(TOPDIR)/estraverse/estraverse-es6.js .
+	@echo [ejs stage$(EJS_STAGE)] $< && $(EJS_DRIVER) --leave-temp $<
 
 clean-esprima-roundtrip:
-	@rm -f esprima.js escodegen.js estraverse.js
+	@rm -f esprima-es6.js escodegen-es6.js estraverse-es6.js
 
 EJS_DRIVER ?= NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --leave-temp
 EJS_STAGE ?= 0

@@ -1,10 +1,10 @@
 
-import foo1 from "modules1/foo1"
-import foo2 from "modules1/foo2"
+import methodInFoo1 from "modules1/foo1"
+import methodInFoo2 from "modules1/foo2"
 import foo3 from "modules1/foo3"
 
-foo1.methodInFoo1();
-foo2.methodInFoo2();
+methodInFoo1();
+methodInFoo2();
 foo3.methodInFoo3_1();
 foo3.methodInFoo3_2();
 foo3.methodInFoo3_3();

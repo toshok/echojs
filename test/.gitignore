@@ -9,6 +9,9 @@ set.js
 escodegen.js
 esprima.js
 estraverse.js
+escodegen-es6.js
+esprima-es6.js
+estraverse-es6.js
 *.diff
 *.ejs-out
 *.expected-out
