@@ -391,10 +391,11 @@ while work_list.length isnt 0
         imports = compiler.gatherImports(path.dirname(file), file_ast)
 
         files.push({file_name: file, file_ast: file_ast})
-                        
+
         for i in imports
-                if files.indexOf(i) is -1 and work_list.indexOf(i) is -1
-                        work_list.push(i+".js")
+                js_file = i + ".js"
+                if work_list.indexOf(js_file) is -1 and not files.some((el) -> el.file_name is js_file)
+                        work_list.push(js_file)
 
 # now compile them
 compileNextFile = ->
