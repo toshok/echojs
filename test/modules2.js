@@ -1,7 +1,3 @@
 
-module "foo" {
-  export let x = "hello world";
-}
-
-import { x } from "foo";
-console.log (x);
+module methodFromFoo1 from "modules1/foo1";
+methodFromFoo1();

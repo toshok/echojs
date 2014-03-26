@@ -1890,6 +1890,24 @@ class DesugarImportExport extends TreeVisitor
                         }
 
                 throw new Error("Unsupported type of export declaration #{n.declaration.type}")
+
+        visitModuleDeclaration: (n) ->
+                
+                init = 
+                        type:     MemberExpression
+                        object:   create_intrinsic(moduleGet_id, [n.source])
+                        property: create_identifier "default"
+                        computed: false
+
+                return {
+                        type: VariableDeclaration,
+                        declarations: [{
+                                type: VariableDeclarator,
+                                id: n.id,
+                                init: init,
+                        }],
+                        kind: "let"
+                }
                 
                 
 

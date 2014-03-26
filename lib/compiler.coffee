@@ -2110,6 +2110,14 @@ class GatherImports extends TreeVisitor
                                 throw new Error("import sources must be strings")
                         n.source.value = @addSource(source.value)
                 n
+                
+        visitModuleDeclaration: (n) ->
+                if n.source?
+                        source = n.source
+                        if source.type isnt Literal or typeof source.raw isnt "string"
+                                throw new Error("import sources must be strings")
+                        n.source.value = @addSource(source.value)
+                n
 
                 
         
