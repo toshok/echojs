@@ -1826,6 +1826,15 @@ class DesugarImportExport extends TreeVisitor
                 n
                 
         visitImportDeclaration: (n) ->
+                if n.specifiers.length is 0
+                        # no specifiers, it's of the form:  import from "foo"
+                        return create_intrinsic(moduleGet_id, [n.source])
+
+                # otherwise it's of the form: import Specifiers from "foo"
+                # 
+                # right now esprima doesn't differentiate between
+                # import {foo} from "foo" and import foo from "foo",
+                # so we only support default import.
                 assign = { type: AssignmentExpression, operator: "=" }
                 assign.right = 
                         type:     MemberExpression
@@ -1892,7 +1901,6 @@ class DesugarImportExport extends TreeVisitor
                 throw new Error("Unsupported type of export declaration #{n.declaration.type}")
 
         visitModuleDeclaration: (n) ->
-                
                 init = 
                         type:     MemberExpression
                         object:   create_intrinsic(moduleGet_id, [n.source])
