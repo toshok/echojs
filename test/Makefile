@@ -114,9 +114,9 @@ format-results:
 
 compile-tests: $(patsubst %.js,%.js.exe,$(TESTS))
 
-test-%: echo-% .%.js.ejs-out %.js.expected-out
+test-%: echo-% .%.js.ejs-out expected/%.js.expected-out
 	-@test_js=`echo $@|sed -e s,test-,,`.js; \
-	if cmp -s .$$test_js.ejs-out $$test_js.expected-out ; then \
+	if cmp -s .$$test_js.ejs-out expected/$$test_js.expected-out ; then \
 		if grep -e ^$$test_js .expected-failures /dev/null 2>&1; then \
 			echo "\033[33mXSUCCESS\033[0m"; \
 			echo $$test_js >> .xsuccess; \
@@ -131,7 +131,7 @@ test-%: echo-% .%.js.ejs-out %.js.expected-out
 		else \
 			echo "\033[31mFAILURE\033[0m"; \
 			echo $$test_js >> .failures; \
-			diff -u .$$test_js.ejs-out $$test_js.expected-out > .$$test_js.diff; \
+			diff -u .$$test_js.ejs-out expected/$$test_js.expected-out > .$$test_js.diff; \
 		fi \
 	fi
 
@@ -145,7 +145,7 @@ echo-%:
 .%.js.ejs-out: %.js.exe
 	-@EXE=`echo $<`; ./$$EXE > $@
 
-%.js.expected-out: %.js
+expected/%.js.expected-out: %.js
 	@NODE_PATH=$(NODE_PATH) node $(NODE_FLAGS) $< > $@
 
 $(ESPRIMA_TESTS): %.js.exe: %.js $(TOPDIR)/esprima/esprima-es6.js $(TOPDIR)/escodegen/escodegen-es6.js $(TOPDIR)/estraverse/estraverse-es6.js $(TOPDIR)/runtime/libecho.a
@@ -177,7 +177,7 @@ clean: clean-results clean-esprima-roundtrip
 	rm -f *.o *.js.exe terminal.js echo-assert.js .*.diff .*-out .failures .successes .xfail .xsuccess
 	rm -rf *.dSYM
 
-.PRECIOUS: $(TESTS:%.js=%.js.expected-out)
+.PRECIOUS: $(TESTS:%.js=expected/%.js.expected-out)
 
 
 .INTERMEDIATE: terminal.js echo-assert.js
