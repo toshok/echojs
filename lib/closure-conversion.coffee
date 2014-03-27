@@ -1737,28 +1737,6 @@ class DesugarUpdateAssignments extends TreeVisitor
                                 throw new Error "unexpected expression type #{n.left.type} in update assign expression."
                 n
 
-# For imports, this pass desugars
-#     import { ... } from "foo"
-# into
-#     { ... } = %moduleGet("foo")
-#
-# a bug in esprima treats these two as identical:
-#    import foo from "foo"
-#    import { foo } from "foo"
-#
-# so for now we only accept specifiers with 1 identifier, and treat it like the first one above (no destructuring)
-#
-# For exports, this pass desugars
-#    export function foo () { }
-#    export let bar = 5;
-# into
-#    function foo () { }
-#    exports.foo = foo;
-#    let bar = 5;
-#    exports.bar = bar;
-#
-# whether this is correct or not, I have no idea.
-# 
 class DesugarImportExport extends TreeVisitor
         importGen = startGenerator()
         freshId = (prefix) -> create_identifier "%#{prefix}_#{importGen()}"
@@ -1775,14 +1753,14 @@ class DesugarImportExport extends TreeVisitor
                 for exp in exported
                         exported_getters.push {
                                 type: Property,
-                                key: exp,
+                                key: exp.name or exp.id,
                                 value: {
                                         type: FunctionExpression,
                                         params: [],
                                         body:
                                                 type: BlockStatement
                                                 body: [
-                                                        { type: ReturnStatement, argument: exp }
+                                                        { type: ReturnStatement, argument: exp.id }
                                                 ]
                                 },
                                 kind: "get"
@@ -1828,37 +1806,70 @@ class DesugarImportExport extends TreeVisitor
         visitImportDeclaration: (n) ->
                 if n.specifiers.length is 0
                         # no specifiers, it's of the form:  import from "foo"
+                        # don't waste a decl for this type
                         return create_intrinsic(moduleGet_id, [n.source])
 
-                # otherwise it's of the form: import Specifiers from "foo"
+                # otherwise create a fresh declaration for the module object
                 # 
-                # right now esprima doesn't differentiate between
-                # import {foo} from "foo" and import foo from "foo",
-                # so we only support default import.
-                assign = { type: AssignmentExpression, operator: "=" }
-                assign.right = 
-                        type:     MemberExpression
-                        object:   create_intrinsic(moduleGet_id, [n.source])
-                        property: create_identifier "default"
-                        computed: false
-                assign.left = create_lhs(n.specifiers)
+                # let %import_decl = %moduleGet("moduleName")
+                # 
+                import_tmp = freshId("import")
+                import_decls =  {
+                        type: VariableDeclaration,
+                        declarations: [{
+                                type: VariableDeclarator,
+                                id:   import_tmp
+                                init: create_intrinsic(moduleGet_id, [n.source])
+                        }],
+                        kind: "let"
+                }
 
-                { type: ExpressionStatement, expression: assign, loc: n.loc }
+                if n.kind is "default"
+                        #
+                        # let #{n.specifiers[0].id} = %import_decl.default
+                        # 
+                        throw new SyntaxError("default imports should have only one ImportSpecifier") if n.specifiers.length isnt 1
+                        import_decls.declarations.push {
+                                type: VariableDeclarator,
+                                id:   n.specifiers[0].id
+                                init: {
+                                        type: MemberExpression,
+                                        object: import_tmp,
+                                        property: create_identifier "default"
+                                        computed: false
+                                }
+                        }
+                else
+                        for spec in n.specifiers
+                                #
+                                # let #{spec.id} = %import_decl.#{spec.name || spec.id }
+                                # 
+                                import_decls.declarations.push {
+                                        type: VariableDeclarator,
+                                        id:   spec.name or spec.id
+                                        init: {
+                                                type: MemberExpression,
+                                                object: import_tmp,
+                                                property: spec.id
+                                                computed: false
+                                        }
+                                }
+
+                return import_decls
 
         visitExportDeclaration: (n) ->
                 # handle the following case in two parts:
                 #    export * from "foo"
-                #
-                if not n.declaration
-                        import_tmp = freshId("import")
-                        
-                        import_specifiers = []
-                        if n.specifiers.length > 1 or n.specifiers[0].type isnt ExportBatchSpecifier
-                                import_specifiers = (create_string_literal(spec.id.name) for spec in n.specifiers)
 
-                        @batch_exports.push { source: import_tmp, specifiers: import_specifiers }
-                        
-                        return {
+                if n.source?
+                        # we either have:
+                        #   export * from "foo"
+                        # or
+                        #   export { ... } from "foo"
+
+                        # import the module regardless
+                        import_tmp = freshId("import")
+                        export_decl = {
                                 type: VariableDeclaration,
                                 declarations: [{
                                         type: VariableDeclarator,
@@ -1867,27 +1878,50 @@ class DesugarImportExport extends TreeVisitor
                                 }],
                                 kind: "let"
                         }
+                             
+                        if n.default
+                                # export * from "foo"
+                                throw new SyntaxError("invalid export") if n.specifiers.length isnt 1 or n.specifiers[0].type isnt ExportBatchSpecifier
+                                @batch_exports.push { source: import_tmp, specifiers: [] }
+                        else
+                                # export { ... } from "foo"
+                                for spec in n.specifiers
+                                        spectmp = freshId("spec")
+                                        export_decl.declarations.push {
+                                                type: VariableDeclarator,
+                                                id:   spectmp
+                                                init: {
+                                                        type: MemberExpression,
+                                                        object: import_tmp,
+                                                        property: spec.id
+                                                        computed: false
+                                                }
+                                        }
+
+                                        @exports.push { name: spec.name, id: spectmp }
+                        console.log escodegen.generate export_decl
+                        return export_decl
 
                 # export function foo () { ... }
                 if n.declaration.type is FunctionDeclaration
-                        @exports.push n.declaration.id
+                        @exports.push { id: n.declaration.id }
                         return n.declaration
 
                 # export let foo = bar;
                 if n.declaration.type is VariableDeclaration
-                        @exports.push decl.id for decl in n.declaration.declarations
+                        @exports.push({ id: decl.id }) for decl in n.declaration.declarations
                         return n.declaration
 
                 # export foo = bar;
                 if n.declaration.type is VariableDeclarator
-                        @exports.push n.declaration.id
+                        @exports.push { id: n.declaration.id }
                         return n.declaration
 
                 # export default = ...;
                 # 
                 if n.default
                         default_id = create_identifier "default"
-                        @exports.push default_id
+                        @exports.push { id: default_id }
                         return {
                                 type: VariableDeclaration,
                                 declarations: [{
