@@ -63,6 +63,9 @@ add_debug_after_pass = (passname) ->
         options.debug_passes.add passname
         
 args =
+        "-q":
+                flag:    "quiet"
+                help:    "don't output anything during compilation except errors."
         "-d":
                 handler: increase_debug_level
                 handlerArgc: 0
@@ -229,7 +232,7 @@ parseFile = (filename, content) ->
 compileFile = (filename, parse_tree, compileCallback) ->
         base_filename = util.genFreshFileName path.basename filename
 
-        console.warn "#{util.bold()}COMPILE#{util.reset()} #{filename} -> #{base_filename}"
+        console.warn "#{util.bold()}COMPILE#{util.reset()} #{filename} -> #{base_filename}" if not options.quiet
 
         try
                 compiled_module = compiler.compile parse_tree, base_filename, filename, options
@@ -354,21 +357,21 @@ do_final_link = (main_file) ->
 
         clang_args = clang_args.concat target_libraries[options.target]
 
-        console.warn "#{util.bold()}LINK#{util.reset()} #{output_filename}"
+        console.warn "#{util.bold()}LINK#{util.reset()} #{output_filename}" if not options.quiet
         
         debug.log 1, "executing `#{target_linker[options.target]} #{clang_args.join ' '}'"
         
         if __ejs?
                 spawn target_linker[options.target], clang_args
                 # we ignore leave_tmp_files here
-                console.warn "#{util.bold()}done.#{util.reset()}"
+                console.warn "#{util.bold()}done.#{util.reset()}" if not options.quiet
         else
                 clang = spawn target_linker[options.target], clang_args
                 clang.stderr.on "data", (data) -> console.warn "#{data}"
                 clang.on "exit", (code) ->
                         if not options.leave_temp_files
                                 cleanup ->
-                                        console.warn "#{util.bold()}done.#{util.reset()}"
+                                        console.warn "#{util.bold()}done.#{util.reset()}" if not options.quiet
 
 cleanup = (done) ->
         files_to_delete = temp_files.length

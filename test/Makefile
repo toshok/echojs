@@ -40,6 +40,7 @@ $(call addExpectedFailure, forin5.js,               "fails because we enumerate 
 $(call addExpectedFailure, json4.js,                "fails due to properties being serialized in a different order.")
 $(call addExpectedFailure, object6.js,              "fails because we don't define everything we should.")
 $(call addExpectedFailure, number1.js,              "fails because node outputs {} for console.log(new Number(5)), while spidermonkey and jsc output '5'.  we err on the SM/JSC side of things here.")
+$(call addExpectedFailure, typedarray0.js,          "we throw an exception when typed array constructors are called as functions.")
 $(call addExpectedFailure, typedarray3.js,          "we use %g to format floats/doubles, and differ when printing numbers.")
 $(call addExpectedFailure, typedarray6.js,          "we use %g to format floats/doubles, and differ when printing numbers.")
 $(call addExpectedFailure, array19.js,              "we don't support property descriptors at all for array elements.  also needs more from ECMA262 15.4.5.1")
@@ -114,22 +115,23 @@ format-results:
 
 compile-tests: $(patsubst %.js,%.js.exe,$(TESTS))
 
-test-%: echo-% .%.js.ejs-out expected/%.js.expected-out
+test-%: .%.js.ejs-out expected/%.js.expected-out
 	-@test_js=`echo $@|sed -e s,test-,,`.js; \
+	if [ -z "$V" ]; then /bin/echo -n [stage$(EJS_STAGE)] $$test_js; else echo $(EJS_DRIVER) $$test_js; fi; \
 	if cmp -s .$$test_js.ejs-out expected/$$test_js.expected-out ; then \
 		if grep -e ^$$test_js .expected-failures /dev/null 2>&1; then \
-			echo "\033[33mXSUCCESS\033[0m"; \
+			echo "   \033[33mXSUCCESS\033[0m"; \
 			echo $$test_js >> .xsuccess; \
 		else \
-			echo "\033[32mSUCCESS\033[0m"; \
+			echo "   \033[32mSUCCESS\033[0m"; \
 			echo $$test_js >> .successes; \
 		fi \
 	else \
 		if grep -e ^$$test_js .expected-failures > /dev/null 2>&1; then \
-			echo "\033[33mXFAIL\033[0m"; \
+			echo "   \033[33mXFAIL\033[0m"; \
 			echo $$test_js >> .xfail; \
 		else \
-			echo "\033[31mFAILURE\033[0m"; \
+			echo "   \033[31mFAILURE\033[0m"; \
 			echo $$test_js >> .failures; \
 			diff -u .$$test_js.ejs-out expected/$$test_js.expected-out > .$$test_js.diff; \
 		fi \
@@ -146,6 +148,7 @@ echo-%:
 	-@EXE=`echo $<`; ./$$EXE > $@
 
 expected/%.js.expected-out: %.js
+	echo running node for $<
 	@NODE_PATH=$(NODE_PATH) node $(NODE_FLAGS) $< > $@
 
 $(ESPRIMA_TESTS): %.js.exe: %.js $(TOPDIR)/esprima/esprima-es6.js $(TOPDIR)/escodegen/escodegen-es6.js $(TOPDIR)/estraverse/estraverse-es6.js $(TOPDIR)/runtime/libecho.a
@@ -157,11 +160,10 @@ $(ESPRIMA_TESTS): %.js.exe: %.js $(TOPDIR)/esprima/esprima-es6.js $(TOPDIR)/esco
 clean-esprima-roundtrip:
 	@rm -f esprima-es6.js escodegen-es6.js estraverse-es6.js
 
-EJS_DRIVER ?= NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --leave-temp
+EJS_DRIVER ?= NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --leave-temp -q
 EJS_STAGE ?= 0
 
 %.js.exe: %.js $(TOPDIR)/runtime/libecho.a
-	@if [ -z "$V" ]; then echo [ejs stage$(EJS_STAGE)] $<; else echo $(EJS_DRIVER) $<; fi
 	@$(EJS_DRIVER) $<
 
 v8-%.js.exe: v8/%.js $(TOPDIR)/runtime/libecho.a
