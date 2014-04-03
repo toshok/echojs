@@ -12,4 +12,5 @@ bootstrap:
 	$(MAKE) -C lib/generated bootstrap
 
 include $(TOP)/build/build.mk
-
+include $(TOP)/build/buildlibs.mk
+include $(TOP)/build/install.mk

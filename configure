@@ -1,0 +1,125 @@
+#!/bin/bash
+usage()
+{
+cat <<EOF
+Usage:
+  --prefix                  Installation prefix (default: $(pwd)/out)
+  --llvm                    llvm suffix (for LLVM_SUFFIX)
+  --minosx                  Minimum OSX Version (if not on Mavericks)
+  --minios                  Minimum IOS Version (default 7.0)
+  --iossdk                  IOS SDK Version (default 7.0)
+
+Example:
+
+To build on Mountain Lion with XCode 4.6 and an llvm installed from brew (see README):
+
+  ./configure --minosx=10.8 --minios=6.1 --iossdk=6.1 --llvm=-34
+
+EOF
+}
+
+CNF=env.mk
+SH=env.sh
+
+cnf_append()
+{
+    printf "%-30s := %s\n" "$1" "${@:2}" >> $CNF
+}
+
+sh_append()
+{
+    printf "export %s=%s\n" "$1" "${@:2}" >> $SH
+}
+
+p=$(pwd)
+LIBRARY=libecho.a
+ALL_LIBRARIES="$LIBRARY $LIBRARY.sim $LIBRARY.armv7 $LIBRARY.armv7s $LIBRARY.ios"
+
+INSTALLDIR=$p/out
+LLVM_SUFFIX=
+MIN_OSX_VERSION=
+MIN_IOS_VERSION=
+IOS_SDK_VERSION=
+CONFIG=Release
+
+
+for arg; do
+  case "$arg" in
+    --help | -h)
+        usage
+        exit 1
+      ;;
+    --prefix=* )
+      INSTALLDIR=$(echo $arg|sed -e 's,.*=,,')
+      ;;
+    --llvm=* )
+      LLVM_SUFFIX=$(echo $arg|sed -e 's,.*=,,')
+      ;;
+    --minosx=* )
+      MIN_OSX_VERSION=$(echo $arg|sed -e 's,.*=,,')
+      ;;
+    --minios=* )
+      MIN_IOS_VERSION=$(echo $arg|sed -e 's,.*=,,')
+      ;;
+    --iossdk=* )
+      IOS_SDK_VERSION=$(echo $arg|sed -e 's,.*=,,')
+      ;;
+  esac
+done
+
+echo "Configuring..."
+
+cat >config.log <<EOF
+  $ $0 $@
+EOF
+
+rm -f $CNF
+rm -f $SH
+
+cnf_append "TOP" "$(pwd)"
+cnf_append "INSTALLDIR" "$INSTALLDIR"
+sh_append "INSTALLDIR" "$INSTALLDIR"
+cnf_append "OSX_LIBRARY" "$LIBRARY"
+cnf_append "SIM_LIBRARY" "$LIBRARY.sim"
+cnf_append "DEV_LIBRARY" "$LIBRARY.armv7"
+cnf_append "DEVS_LIBRARY" "$LIBRARY.armv7s"
+cnf_append "LIPOD_IOS_LIBRARY" "$LIBRARY.ios"
+cnf_append "ALL_LIBRARIES" "$ALL_LIBRARIES"
+
+if [ "x$LLVM_SUFFIX" != "x" ]; then
+    cnf_append "LLVM_SUFFIX" "$LLVM_SUFFIX"
+    sh_append "LLVM_SUFFIX" "$LLVM_SUFFIX"
+fi
+
+if [ "x$MIN_OSX_VERSION" != "x" ]; then
+    cnf_append "MIN_OSX_VERSION" "$MIN_OSX_VERSION"
+    sh_append "MIN_OSX_VERSION" "$MIN_OSX_VERSION"
+fi
+
+if [ "x$MIN_IOS_VERSION" != "x" ]; then
+    cnf_append "MIN_IOS_VERSION" "$MIN_IOS_VERSION"
+fi
+
+if [ "x$IOS_SDK_VERSION" != "x" ]; then
+    cnf_append "IOS_SDK_VERSION" "$IOS_SDK_VERSION"
+fi
+
+cnf_append "CONFIG" "$CONFIG"
+
+if [ ! -d $INSTALLDIR ]; then
+    mkdir $INSTALLDIR
+fi
+
+git submodule init
+git submodule update
+
+cat <<EOF
+
+Configuration done.
+You should now run:
+
+  ". ./env.sh" to load the environment settings (mind the dots)
+  "make libs" to build stuff
+  "make install" to install everything into $INSTALLDIR
+
+EOF
