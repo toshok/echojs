@@ -21,7 +21,7 @@ static EJSRequire builtin_module_map[] = {
     { "path", _ejs_path_module_func },
     { "fs", _ejs_fs_module_func },
     { "child_process", _ejs_child_process_module_func },
-    { "objc_internal", _ejs_objc_module_func }
+    { "@objc_internal", _ejs_objc_module_func }
 };
 static int num_builtin_modules = sizeof(builtin_module_map) / sizeof(builtin_module_map[0]);
 
@@ -80,7 +80,8 @@ require_user_module (const char* name, ejsval *module)
         if (!strcmp (map->name, name)) {
             if (EJSVAL_IS_NULL(map->cached_exports)) {
                 _ejs_gc_add_root (&map->cached_exports);
-                map->cached_exports = map->func (_ejs_null, _ejs_undefined, 0, NULL);
+                map->cached_exports = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
+                map->func (_ejs_null, _ejs_undefined, 1, &map->cached_exports);
             }
             *module = map->cached_exports;
             return EJS_TRUE;
