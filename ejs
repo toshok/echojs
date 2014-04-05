@@ -27,9 +27,8 @@ options =
         target: "osx"
         external_modules: []
         extra_clang_args: ""
-        ios_sdk: "7.0"
+        ios_sdk: "7.1"
         ios_min: "7.0"
-        basename: false
         target_pointer_size: 64
 
 add_external_module = (modinfo) ->
@@ -77,9 +76,6 @@ args =
         "-o":
                 option:  "output_filename"
                 help:    "name of the output file."
-        "--basename":
-                flag:    "basename"
-                help:    "strip paths off .js files so you can require them using just the filename"
         "--leave-temp":
                 flag:    "leave_temp_files"
                 help:    "leave temporary files in /tmp from compilation"
@@ -224,7 +220,7 @@ parseFile = (filename, content) ->
         try
                 parse_tree = esprima.parse content, { loc: true, raw: true }
         catch e
-                console.warn "parse error at #{e}:"
+                console.warn "#{filename}: #{e}:"
                 process.exit -1
 
         return parse_tree
@@ -232,7 +228,7 @@ parseFile = (filename, content) ->
 compileFile = (filename, parse_tree, compileCallback) ->
         base_filename = util.genFreshFileName path.basename filename
 
-        console.warn "#{util.bold()}COMPILE#{util.reset()} #{filename} -> #{base_filename}" if not options.quiet
+        console.warn "#{util.bold()}COMPILE#{util.reset()} #{filename} #{if options.debug_level > 0 then '-> #{base_filename}' else ''}" if not options.quiet
 
         try
                 compiled_module = compiler.compile parse_tree, base_filename, filename, options
@@ -391,7 +387,7 @@ while work_list.length isnt 0
         file_contents = fs.readFileSync(file, 'utf-8')
         file_ast = parseFile(file, file_contents)
         
-        imports = compiler.gatherImports(path.dirname(file), file_ast)
+        imports = compiler.gatherImports(path.dirname(file), process.cwd(), file_ast)
 
         files.push({file_name: file, file_ast: file_ast})
 
@@ -399,6 +395,9 @@ while work_list.length isnt 0
                 js_file = i + ".js"
                 if work_list.indexOf(js_file) is -1 and not files.some((el) -> el.file_name is js_file)
                         work_list.push(js_file)
+
+# reverse the list so the main program is the first thing we compile
+files.reverse()
 
 # now compile them
 compileNextFile = ->
