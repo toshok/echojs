@@ -252,9 +252,7 @@ class LLVMIRVisitor extends TreeVisitor
                         isNull:               { value: @handleIsNull, enumerable: true }
 
                 @opencode_intrinsics =
-                        loadOne           : true
                         unaryNot          : true
-                        numberNew         : true
 
                         moduleGet         : true # unused
                         getLocal          : true # unused
@@ -1922,7 +1920,7 @@ class LLVMIRVisitor extends TreeVisitor
         isBoolean: (val) ->
                 throw new Error("not supported on this architecture") if @options.target_pointer_size isnt 64
                 mask = @createEjsvalAnd val, consts.int64_lowhi(0xffff8000, 0x00000000), "mask.i"
-                @createEjsBoolSelect ir.createICmpEq mask, consts.int64_lowhi(0xfff98000, 0x00000000), "cmpresult"
+                ir.createICmpEq mask, consts.int64_lowhi(0xfff98000, 0x00000000), "cmpresult"
 
         isTrue: (val) ->
                 throw new Error("not supported on this architecture") if @options.target_pointer_size isnt 64
