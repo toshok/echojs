@@ -1751,7 +1751,6 @@ class DesugarImportExport extends TreeVisitor
                 specifiers[0].id
 
         define_export_property = (exported_id, local_id = exported_id) ->
-                console.log "exporting #{local_id.name} as #{exported_id.name}"
                 exports_id = create_identifier("exports") # XXX as with compiler.coffee, this 'exports' should be '%exports' if the module has ES6 module declarations
 
                 Object_defineProperty = {
