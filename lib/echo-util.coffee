@@ -64,8 +64,8 @@ exports.create_string_literal = (x) ->
 exports.create_number_literal = (x) ->
         throw new Error "invalid number '#{x}' (#{typeof x}) in create_number_literal" if typeof x isnt "number"
         type: syntax.Literal, value: x, raw: "#{x}"
-exports.is_number_literal = (n) ->
-        n.type is syntax.Literal and typeof n.value is "number"
+exports.is_number_literal = (n) -> n.type is syntax.Literal and typeof n.value is "number"
+exports.is_string_literal = (n) -> n.type is syntax.Literal and typeof n.raw is "string"
 exports.create_intrinsic = (id, args) ->
         type: syntax.CallExpression
         callee: id
