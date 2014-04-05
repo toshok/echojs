@@ -1745,20 +1745,22 @@ class DesugarImportExport extends TreeVisitor
 
         constructor: ->
                 super
-                
+
+        Object_defineProperty = {
+                type: MemberExpression,
+                computed: false,
+                object: create_identifier("Object"),
+                property: create_identifier("defineProperty")
+        }
+                                
         create_lhs = (specifiers) ->
                 throw new Error("internal compiler error, only form \"import blah from 'blah'\" supported") if specifiers.length isnt 1
                 specifiers[0].id
 
         define_export_property = (exported_id, local_id = exported_id) ->
+                # return esprima.parse("Object.defineProperty(exports, '#{exported_id.name}', { get: function() { return #{local_id.name}; } });");
+                
                 exports_id = create_identifier("exports") # XXX as with compiler.coffee, this 'exports' should be '%exports' if the module has ES6 module declarations
-
-                Object_defineProperty = {
-                        type: MemberExpression,
-                        computed: false,
-                        object: create_identifier("Object"),
-                        property: create_identifier("defineProperty")
-                }
 
                 getter = {
                         type: FunctionExpression,
@@ -1769,6 +1771,8 @@ class DesugarImportExport extends TreeVisitor
                                 body: [
                                         { type: ReturnStatement, argument: local_id }
                                 ]
+
+
                 }
                         
                 property_literal = {
