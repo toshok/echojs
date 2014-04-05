@@ -501,7 +501,8 @@ class FuncDeclsToVars extends TreeVisitor
         
         visitFunctionDeclaration: (n) ->
                 if n.toplevel
-                        super
+                        n.body = @visit n.body
+                        return n
                 else
                         func_exp = n
                         func_exp.type = FunctionExpression
@@ -809,6 +810,7 @@ class ComputeFree extends TreeVisitor
                         when EmptyStatement        then exp.ejs_free_vars = new Set
                         when BreakStatement        then exp.ejs_free_vars = new Set
                         when ContinueStatement     then exp.ejs_free_vars = new Set
+                        when SpreadElement         then exp.ejs_free_vars = @free exp.argument
                         when UpdateExpression      then exp.ejs_free_vars = @free exp.argument
                         when ReturnStatement       then exp.ejs_free_vars = @free exp.argument
                         when UnaryExpression       then exp.ejs_free_vars = @free exp.argument
@@ -1748,66 +1750,62 @@ class DesugarImportExport extends TreeVisitor
                 throw new Error("internal compiler error, only form \"import blah from 'blah'\" supported") if specifiers.length isnt 1
                 specifiers[0].id
 
-        generate_export_return = (exported, batch_exported) ->
-                exported_getters = []
-                for exp in exported
-                        exported_getters.push {
-                                type: Property,
-                                key: exp.name or exp.id,
-                                value: {
-                                        type: FunctionExpression,
-                                        params: [],
-                                        body:
-                                                type: BlockStatement
-                                                body: [
-                                                        { type: ReturnStatement, argument: exp.id }
-                                                ]
-                                },
-                                kind: "get"
+        define_export_property = (exported_id, local_id = exported_id) ->
+                console.log "exporting #{local_id.name} as #{exported_id.name}"
+                exports_id = create_identifier("exports") # XXX as with compiler.coffee, this 'exports' should be '%exports' if the module has ES6 module declarations
+
+                Object_defineProperty = {
+                        type: MemberExpression,
+                        computed: false,
+                        object: create_identifier("Object"),
+                        property: create_identifier("defineProperty")
+                }
+
+                getter = {
+                        type: FunctionExpression,
+                        params: [],
+                        defaults: [],
+                        body:
+                                type: BlockStatement
+                                body: [
+                                        { type: ReturnStatement, argument: local_id }
+                                ]
+                }
+                        
+                property_literal = {
+                        type: ObjectExpression,
+                        properties: [
+                                { type: Property, kind: "init", key: create_identifier("get"), value: getter }
+                        ]
+                }
+
+                return {
+                        type: ExpressionStatement,
+                        expression: {
+                                type: CallExpression
+                                callee: Object_defineProperty,
+                                arguments: [
+                                        exports_id,
+                                        create_string_literal(exported_id.name),
+                                        property_literal
+                                ]
                         }
-
-                obj_literal = { type: ObjectExpression, properties: exported_getters }
-
-                if batch_exported.length is 0
-                        return [ { type: ReturnStatement, argument: obj_literal } ]
-
-                # batch_exported.length > 0, so we need to insert
-                # loops over the import tmp id, adding the identifiers
-                # to our new export object
-
-                export_id = freshId("export")
+                }
                 
-                ret = [{
-                        type: VariableDeclaration,
-                        declarations: [{
-                                type: VariableDeclarator,
-                                id:   export_id,
-                                init: obj_literal
-                        }],
-                        kind: "let"
-                }]
-
-                for batch in batch_exported
-                        spec_arg = { type: ArrayExpression, elements: batch.specifiers }
-                        ret.push { type: ExpressionStatement, expression: create_intrinsic(moduleImportBatch_id, [batch.source, spec_arg, export_id]) }
-
-                ret.push { type: ReturnStatement, argument: export_id }
-                ret                
-        
+                
         visitFunction: (n) ->
                 return n if not n.toplevel
                 
                 @exports = []
                 @batch_exports = []
-                n = super
-                n.body.body.push exret for exret in generate_export_return(@exports, @batch_exports)
-                n
+
+                super
                 
         visitImportDeclaration: (n) ->
                 if n.specifiers.length is 0
                         # no specifiers, it's of the form:  import from "foo"
                         # don't waste a decl for this type
-                        return create_intrinsic(moduleGet_id, [n.source])
+                        return create_intrinsic(moduleGet_id, [n.source_path])
 
                 # otherwise create a fresh declaration for the module object
                 # 
@@ -1819,7 +1817,7 @@ class DesugarImportExport extends TreeVisitor
                         declarations: [{
                                 type: VariableDeclarator,
                                 id:   import_tmp
-                                init: create_intrinsic(moduleGet_id, [n.source])
+                                init: create_intrinsic(moduleGet_id, [n.source_path])
                         }],
                         kind: "let"
                 }
@@ -1874,11 +1872,12 @@ class DesugarImportExport extends TreeVisitor
                                 declarations: [{
                                         type: VariableDeclarator,
                                         id:   import_tmp
-                                        init: create_intrinsic(moduleGet_id, [n.source])
+                                        init: create_intrinsic(moduleGet_id, [n.source_path])
                                 }],
                                 kind: "let"
                         }
-                             
+
+                        export_stuff = []                             
                         if n.default
                                 # export * from "foo"
                                 throw new SyntaxError("invalid export") if n.specifiers.length isnt 1 or n.specifiers[0].type isnt ExportBatchSpecifier
@@ -1899,48 +1898,59 @@ class DesugarImportExport extends TreeVisitor
                                         }
 
                                         @exports.push { name: spec.name, id: spectmp }
-                        console.log escodegen.generate export_decl
-                        return export_decl
+                                        export_stuff.push(define_export_property(spec.name, spectmp))
+                        export_stuff.unshift(export_decl)
+                        return export_stuff
 
+                export_id = create_identifier("exports");
+                
                 # export function foo () { ... }
                 if n.declaration.type is FunctionDeclaration
                         @exports.push { id: n.declaration.id }
-                        return n.declaration
+                        
+                        return [n.declaration, define_export_property(n.declaration.id)]
 
                 # export let foo = bar;
                 if n.declaration.type is VariableDeclaration
-                        @exports.push({ id: decl.id }) for decl in n.declaration.declarations
-                        return n.declaration
+                        export_defines = []
+                        for decl in n.declaration.declarations
+                                @exports.push({ id: decl.id })
+                                export_defines.push(define_export_property(decl.id))
+                        export_defines.unshift(n.declaration)
+                        return export_defines
 
                 # export foo = bar;
                 if n.declaration.type is VariableDeclarator
                         @exports.push { id: n.declaration.id }
-                        return n.declaration
+                        return [n.declaration, define_export_property(n.declaration.id)]
 
                 # export default = ...;
                 # 
                 if n.default
+                        local_default_id = create_identifier "%default"
                         default_id = create_identifier "default"
                         @exports.push { id: default_id }
-                        return {
+                        
+                        local_decl = {
                                 type: VariableDeclaration,
                                 declarations: [{
                                         type: VariableDeclarator,
-                                        id:   default_id
+                                        id:   local_default_id
                                         init: n.declaration
                                 }],
                                 kind: "var"
                         }
+                        export_define = define_export_property(default_id, local_default_id)
+                        return [local_decl, export_define]
 
                 throw new Error("Unsupported type of export declaration #{n.declaration.type}")
 
         visitModuleDeclaration: (n) ->
-                init = 
-                        type:     MemberExpression
-                        object:   create_intrinsic(moduleGet_id, [n.source])
-                        property: create_identifier "default"
-                        computed: false
-
+                # this isn't quite right.  I believe this form creates
+                # a new instance and puts new properties on it that
+                # map to the module, instead of just returning the
+                # module object.
+                init = create_intrinsic(moduleGet_id, [n.source_path])
                 return {
                         type: VariableDeclaration,
                         declarations: [{
