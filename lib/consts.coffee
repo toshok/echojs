@@ -42,3 +42,5 @@ exports.bool = (c) ->
         constant.constant_val = c
         constant
 
+exports.ejsval_true  = () -> exports.int64_lowhi(0xfff98000, 0x00000001)
+exports.ejsval_false = () -> exports.int64_lowhi(0xfff98000, 0x00000000)
