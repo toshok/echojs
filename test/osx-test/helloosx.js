@@ -1,61 +1,58 @@
-let foundation = require('foundation'),
-    appkit = require('appkit'),
-    objc = require( 'objc');
+import { NSObject } from 'foundation';
+import { NSButton, NSBezelStyle, NSWindow, NSApplicationDelegate, NSApplication } from 'appkit';
+import { override, instanceSelector, outlet, sig } from 'objc';
 
-let AppDelegate = foundation.NSObject.extendClass("AppDelegate", {
+let AppDelegate = NSObject.extendClass("AppDelegate", () => ({
 
     // we don't need to specify the selector here, since the
     // conforms-to-protocol machinery picks it up (based on field name)
     // and fills it in for us.
     didFinishLaunching: function() {
-      let window = this.window;
+	let window = this.window;
 
-      window.title = "Hello OSX, Love CoffeeKit";
+	window.title = "Hello OSX, Love CoffeeKit";
 
-      // newWith$Stuff = ctor + call initWith$Stuff
-      let button = button = appkit.NSButton.newWithFrame({ x: 100, y: window.contentView.bounds.height - 50, width: 200, height: 50 });
-      button.bezelStyle = appkit.NSBezelStyle.RoundedBezelStyle;
-      button.title = "Click me... please?";
+	// newWith$Stuff = ctor + call initWith$Stuff
+	let button        = NSButton.newWithFrame({ x: 100, y: window.contentView.bounds.height - 50,
+						    width: 200, height: 50 });
+	button.bezelStyle = NSBezelStyle.RoundedBezelStyle;
+	button.title      = "Click me... please?";
 
-      button.clicked = function () {
-        let newbutton = appkit.NSButton.newWithFrame({ x: 100, y: window.contentView.bounds.height - 120, width: 200, height: 50 });
-        newbutton.bezelStyle = appkit.NSBezelStyle.RoundedBezelStyle;
-        newbutton.title = "you clicked me!";
-        window.contentView.addSubview(newbutton);
+	button.clicked = function () {
+            let newbutton        = NSButton.newWithFrame({ x: 100, y: window.contentView.bounds.height - 120,
+							   width: 200, height: 50 });
+            newbutton.bezelStyle = NSBezelStyle.RoundedBezelStyle;
+            newbutton.title      = "you clicked me!";
+            window.contentView.addSubview(newbutton);
 
-        this.xmlhttp = new XMLHttpRequest();
-	let that = this;
-        this.xmlhttp.onreadystatechange = function() {
-	    console.log ("readyState == " + that.xmlhttp.readyState);
-            if (that.xmlhttp.readyState === 4){
-                console.log ("woohoo!");
-		console.log (that.xmlhttp.responseText);
-            }
-        };
-	console.log (this.xmlhttp.onreadystatechange);
-        this.xmlhttp.open('GET', 'http://www.google.com/', true);
-        this.xmlhttp.send();
-      };
+	    // need 'this.xmlhttp', not a local here, since XMLHttpRequest doesn't root itself
+	    // while waiting for a response
+            this.xmlhttp = new XMLHttpRequest();
+            this.xmlhttp.onreadystatechange = () => {
+		console.log ("readyState == " + this.xmlhttp.readyState);
+		if (this.xmlhttp.readyState === 4) {
+                    console.log ("woohoo!");
+		    console.log (this.xmlhttp.responseText);
+		}
+            };
+	    console.log (this.xmlhttp.onreadystatechange);
+            this.xmlhttp.open('GET', 'http://www.google.com/', true);
+            this.xmlhttp.send();
+	};
 
-      window.contentView.addSubview(button);
+	window.contentView.addSubview(button);
     },
 
-    // we don't need the selector here either.  objc.override walks the
-    // prototype chain at registration time to find the method we're overriding,
-    // and uses its selector/type signature.
-    //dealloc: objc.override (function () {
-			    //}),
-
-    /* XXX we shouldn't need this, but without the selector registered the outlet doesn't get set for some reason... */
-    setWindow: objc.instanceSelector("setWindow:").returns(objc.sig.Void)
-                                                  .params([ appkit.NSWindow ])
-                                                  .impl(function (v) {
-                                                     this.window = v;
-                                                  }),
-    window: objc.outlet (appkit.NSWindow)
-  }, [
-  /* protocols this type conforms to */
-  appkit.NSApplicationDelegate
+    /* XXX we shouldn't need this (the outlet below should be enough), but without the selector
+       explicitly registered the outlet doesn't get set for some reason... */
+    setWindow: instanceSelector("setWindow:")
+	       .returns(sig.Void)
+               .params([ NSWindow ])
+               .impl(function (v) { this.window = v; }),
+    window: outlet (NSWindow)
+}), [
+    /* protocols this type conforms to */
+    NSApplicationDelegate
 ]);
 
-appkit.NSApplication.main(process.argv);
+NSApplication.main(process.argv);
