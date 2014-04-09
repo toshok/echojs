@@ -1163,6 +1163,20 @@ _ejs_Object_preventExtensions (ejsval env, ejsval _this, uint32_t argc, ejsval *
     return O;
 }
 
+// ECMA262: 19.1.2.10
+static ejsval
+_ejs_Object_is (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval value1 = _ejs_undefined;
+    ejsval value2 = _ejs_undefined;
+
+    if (argc > 0) value1 = args[0];
+    if (argc > 1) value2 = args[1];
+
+    return SameValue(value1, value2) ? _ejs_true : _ejs_false;
+}
+
+
 // ECMA262: 15.2.3.11
 static ejsval
 _ejs_Object_isSealed (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -1417,6 +1431,7 @@ _ejs_object_init (ejsval global)
     OBJ_METHOD(seal);
     OBJ_METHOD(freeze);
     OBJ_METHOD(preventExtensions);
+    OBJ_METHOD(is);
     OBJ_METHOD(isSealed);
     OBJ_METHOD(isFrozen);
     OBJ_METHOD(isExtensible);
