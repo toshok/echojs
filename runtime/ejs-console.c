@@ -2,6 +2,8 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
+#include <math.h>
+
 #include "ejs-console.h"
 #include "ejs-gc.h"
 #include "ejs-ops.h"
@@ -31,8 +33,20 @@ output (FILE *outfile, uint32_t argc, ejsval *args)
             int di;
             if (EJSDOUBLE_IS_INT32(d, &di))
                 OUTPUT ("%d", di);
-            else
-                OUTPUT (EJS_NUMBER_FORMAT, d);
+            else {
+                int classified = fpclassify(d);
+                if (classified == FP_INFINITE) {
+                    if (d < 0)
+                        OUTPUT0 ("-Infinity");
+                    else
+                        OUTPUT0 ("Infinity");
+                }
+                else if (classified == FP_NAN) {
+                    OUTPUT0 ("NaN");
+                }
+                else
+                    OUTPUT (EJS_NUMBER_FORMAT, d);
+            }
         }
         else if (EJSVAL_IS_ARRAY(args[i])) {
             char* strval_utf8;

@@ -1,4 +1,6 @@
 
+console.log(Infinity);
+console.log(-Infinity);
 console.log('isFinite() = ' + isFinite());
 console.log('isFinite("1") = ' + isFinite("1"));
 console.log('isFinite(true) = ' + isFinite(true));
