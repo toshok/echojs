@@ -7,6 +7,9 @@
 
 #include "ejs-object.h"
 
+#define EJS_MAX_SAFE_INTEGER 9007199254740991LL
+#define EJS_MIN_SAFE_INTEGER -9007199254740991LL
+
 typedef struct {
     /* object header */
     EJSObject obj;

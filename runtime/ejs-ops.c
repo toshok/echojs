@@ -150,7 +150,15 @@ ejsval NumberToString(double d)
     }
 
     char num_buf[256];
-    snprintf (num_buf, sizeof(num_buf), EJS_NUMBER_FORMAT, d);
+    int classified = fpclassify(d);
+    if (classified == FP_INFINITE) {
+        if (d < 0)
+            strcpy (num_buf, "-Infinity");
+        else
+            strcpy (num_buf, "Infinity");
+    }
+    else
+        snprintf (num_buf, sizeof(num_buf), EJS_NUMBER_FORMAT, d);
     return _ejs_string_new_utf8 (num_buf);
 }
 
@@ -230,7 +238,7 @@ double ToDouble(ejsval exp)
     return EJSVAL_TO_NUMBER(ToNumber(exp));
 }
 
-int32_t ToInteger(ejsval exp)
+int64_t ToInteger(ejsval exp)
 {
     // XXX sorely lacking
     /* 1. Let number be the result of calling ToNumber on the input argument. */
@@ -245,7 +253,7 @@ int32_t ToInteger(ejsval exp)
         return d;
     /* 4. Return the result of computing sign(number)  floor(abs(number) */
     int sign = d < 0 ? -1 : 1;
-    return (int)(sign * floor(abs(d)));
+    return (int64_t)(sign * floor(abs(d)));
 }
 
 uint32_t ToUint32(ejsval exp)
@@ -417,6 +425,44 @@ SameValueZero(ejsval x, ejsval y)
     // 10. Return true if x and y are the same Object value. Otherwise, return false.
     return EJSVAL_EQ(x, y);
 }
+
+ejsval
+_ejs_clz32 (ejsval v)
+{
+    uint32_t val = ToUint32(v);
+
+    // from qemu source:
+
+    /* Binary search for leading zeros.  */
+
+    int cnt = 0;
+
+    if (!(val & 0xFFFF0000U)) {
+        cnt += 16;
+        val <<= 16;
+    }
+    if (!(val & 0xFF000000U)) {
+        cnt += 8;
+        val <<= 8;
+    }
+    if (!(val & 0xF0000000U)) {
+        cnt += 4;
+        val <<= 4;
+    }
+    if (!(val & 0xC0000000U)) {
+        cnt += 2;
+        val <<= 2;
+    }
+    if (!(val & 0x80000000U)) {
+        cnt++;
+        val <<= 1;
+    }
+    if (!(val & 0x80000000U)) {
+        cnt++;
+    }
+    return NUMBER_TO_EJSVAL(cnt);
+}
+
 
 ejsval
 _ejs_op_neg (ejsval exp)

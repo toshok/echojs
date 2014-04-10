@@ -270,6 +270,198 @@ _ejs_Math_tan (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return NUMBER_TO_EJSVAL(tan (x_));
 }
 
+
+static ejsval
+_ejs_Math_clz32 (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval v = _ejs_undefined;
+    if (argc > 1) v = args[0];
+
+    return _ejs_clz32(v);
+}
+
+static ejsval
+_ejs_Math_imul (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    if (argc != 2)
+        return NUMBER_TO_EJSVAL(0);
+
+    // When the Math.imul is called with arguments x and y the following steps are taken:
+    // 1. Let a be ToUint32(x).
+    uint32_t a = ToUint32(args[0]);
+    // 2. ReturnIfAbrupt(a).
+    // 3. Let b be ToUint32(y).
+    uint32_t b = ToUint32(args[1]);
+    // 4. ReturnIfAbrupt(b).
+    // 5. Let product be (a × b) modulo 2^32.
+    uint64_t product = ((uint64_t)a * (uint64_t)b) % (2LL<<32);
+
+    // 6. If product ≥ 2^31, return product − 2^32, otherwise return product.
+    if (product >= 2LL<<31)
+        return NUMBER_TO_EJSVAL(product - (2LL<<32));
+    else
+        return NUMBER_TO_EJSVAL(product);
+}
+
+// Returns the sign of the x, indicating whether x is positive, negative or zero.
+static ejsval
+_ejs_Math_sign (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+
+    double x_ = ToDouble(x);
+
+    // 1. If x is NaN, the result is NaN.
+    if (isnan(x_))
+        return _ejs_nan;
+
+    // 2. If x is −0, the result is −0.
+    // 3. If x is +0, the result is +0.
+    // 4. If x is negative and not −0, the result is −1.
+    // 5. If x is positive and not +0, the result is +1.
+
+    if (x_ < 0)
+        return NUMBER_TO_EJSVAL(-1);
+    else if (x_ > 0)
+        return NUMBER_TO_EJSVAL(1);
+    else /* x is zero, either positive or negative */
+        return x;
+}
+
+static ejsval
+_ejs_Math_log10 (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    // Returns an implementation-dependent approximation to the base 10 logarithm of x.
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+
+    double x_ = ToDouble(x);
+
+    // 1. If x is NaN, the result is NaN.
+    if (isnan(x_))
+        return _ejs_nan;
+
+    // 2. If x is less than 0, the result is NaN.
+    if (x_ < 0)
+        return _ejs_nan;
+
+    // 3. If x is +0, the result is +0.
+    // 4. If x is −0, the result is −0.
+    if (x_ == 0)
+        return x;
+
+    // 5. If x is 1, the result is +0.
+    // 6. If x is +∞, the result is +∞.
+    return NUMBER_TO_EJSVAL(log10(x_));
+}
+
+static ejsval
+_ejs_Math_log2 (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+    return NUMBER_TO_EJSVAL(log2(ToDouble(x)));
+}
+
+static ejsval
+_ejs_Math_log1p (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+    return NUMBER_TO_EJSVAL(log1p(ToDouble(x)));
+}
+
+static ejsval
+_ejs_Math_expm1 (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+    return NUMBER_TO_EJSVAL(expm1(ToDouble(x)));
+}
+
+static ejsval
+_ejs_Math_cosh (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+    return NUMBER_TO_EJSVAL(cosh(ToDouble(x)));
+}
+
+static ejsval
+_ejs_Math_sinh (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+    return NUMBER_TO_EJSVAL(sinh(ToDouble(x)));
+}
+
+static ejsval
+_ejs_Math_tanh (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+    return NUMBER_TO_EJSVAL(tanh(ToDouble(x)));
+}
+
+static ejsval
+_ejs_Math_acosh (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+    return NUMBER_TO_EJSVAL(acosh(ToDouble(x)));
+}
+
+static ejsval
+_ejs_Math_asinh (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+    return NUMBER_TO_EJSVAL(asinh(ToDouble(x)));
+}
+
+static ejsval
+_ejs_Math_atanh (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+    return NUMBER_TO_EJSVAL(atanh(ToDouble(x)));
+}
+
+static ejsval
+_ejs_Math_hypot (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval x = _ejs_undefined;
+    ejsval y = _ejs_undefined;
+    if (argc > 0) x = args[0];
+    if (argc > 1) y = args[1];
+    return NUMBER_TO_EJSVAL(hypot(ToDouble(x), ToDouble(y)));
+}
+
+static ejsval
+_ejs_Math_trunc (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+    return NUMBER_TO_EJSVAL(trunc(ToDouble(x)));
+}
+
+static ejsval
+_ejs_Math_fround (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+    return NUMBER_TO_EJSVAL((float)ToDouble(x));
+}
+
+static ejsval
+_ejs_Math_cbrt (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval x = _ejs_undefined;
+    if (argc > 0) x = args[0];
+    return NUMBER_TO_EJSVAL(cbrt(ToDouble(x)));
+}
+
 void
 _ejs_math_init(ejsval global)
 {
@@ -297,8 +489,28 @@ _ejs_math_init(ejsval global)
     OBJ_METHOD(sqrt);
     OBJ_METHOD(tan);
 
+    // ES6
+    OBJ_METHOD(clz32);
+    OBJ_METHOD(imul);
+    OBJ_METHOD(sign);
+    OBJ_METHOD(log10);
+    OBJ_METHOD(log2);
+    OBJ_METHOD(log1p);
+    OBJ_METHOD(expm1);
+    OBJ_METHOD(cosh);
+    OBJ_METHOD(sinh);
+    OBJ_METHOD(tanh);
+    OBJ_METHOD(acosh);
+    OBJ_METHOD(asinh);
+    OBJ_METHOD(atanh);
+    OBJ_METHOD(hypot);
+    OBJ_METHOD(trunc);
+    OBJ_METHOD(fround);
+    OBJ_METHOD(cbrt);
+
 #undef OBJ_METHOD
 
     _ejs_object_setprop (_ejs_Math, _ejs_atom_PI, NUMBER_TO_EJSVAL(M_PI));
+    _ejs_object_setprop (_ejs_Math, _ejs_atom_E, NUMBER_TO_EJSVAL(M_E));
 }
 
