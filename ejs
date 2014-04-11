@@ -148,7 +148,7 @@ if options.show_help
         output_options()
         process.exit 0
         
-if file_args.length is 0
+if not file_args? or file_args.length is 0
         output_usage()
         process.exit 0
 
