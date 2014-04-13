@@ -559,7 +559,6 @@ _ejs_Array_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval* arg
     while (k < final) {
         /* a. Let Pk be ToString(k). */
         ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
-        ejsval nk = NUMBER_TO_EJSVAL(k);
 
         /* b. Let kPresent be the result of calling the [[HasProperty]] internal method of O with argument Pk. */
         EJSBool kPresent = OP(EJSVAL_TO_OBJECT(O),has_property)(O, Pk);
@@ -572,7 +571,7 @@ _ejs_Array_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval* arg
             /*    ii. Call the [[DefineOwnProperty]] internal method of A with arguments ToString(n), Property  */
             /*        Descriptor {[[Value]]: kValue, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]:  */
             /*        true}, and false. */
-            _ejs_object_setprop (A, nk, kValue);
+            _ejs_object_setprop (A, NUMBER_TO_EJSVAL(n), kValue);
         }
 
         /* d. Increase k by 1. */
