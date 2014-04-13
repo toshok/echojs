@@ -312,6 +312,79 @@ _ejs_Array_prototype_unshift (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
     return NUMBER_TO_EJSVAL(len+argCount);
 }
 
+// ECMA262: 15.4.4.9
+static ejsval
+_ejs_Array_prototype_reverse (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    // 1. Let O be the result of calling ToObject passing the this value as the argument.
+    ejsval O = ToObject(_this);
+
+    // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
+    ejsval lenVal = OP(EJSVAL_TO_OBJECT(O),get)(O, _ejs_atom_length);
+    // 3. Let len be ToUint32(lenVal).
+    uint32_t len = ToUint32(lenVal);
+
+    // 4. Let middle be floor(len/2). 
+    uint32_t middle = len / 2;
+
+    // 5. Let lower be 0. 
+    uint32_t lower = 0;
+
+    // 6. Repeat, while lower != middle 
+    while (lower != middle) {
+        //    a. Let upper be len - lower - 1. 
+        uint32_t upper = len - lower - 1;
+
+        //    b. Let upperP be ToString(upper). 
+        ejsval upperP = ToString(NUMBER_TO_EJSVAL(upper));
+
+        //    c. Let lowerP be ToString(lower). 
+        ejsval lowerP = ToString(NUMBER_TO_EJSVAL(lower));
+
+        //    d. Let lowerValue be the result of calling the [[Get]] internal method of O with argument lowerP. 
+        ejsval lowerValue = OP(EJSVAL_TO_OBJECT(O),get)(O, lowerP);
+
+        //    e. Let upperValue be the result of calling the [[Get]] internal method of O with argument upperP . 
+        ejsval upperValue = OP(EJSVAL_TO_OBJECT(O),get)(O, upperP);
+
+        //    f. Let lowerExists be the result of calling the [[HasProperty]] internal method of O with argument lowerP. 
+        EJSBool lowerExists = OP(EJSVAL_TO_OBJECT(O),has_property)(O, lowerP);
+
+        //    g. Let upperExists be the result of calling the [[HasProperty]] internal method of O with argument upperP. 
+        EJSBool upperExists = OP(EJSVAL_TO_OBJECT(O),has_property)(O, upperP);
+
+        //    h. If lowerExists is true and upperExists is true, then 
+        if (lowerExists && upperExists) {
+            //       i. Call the [[Put]] internal method of O with arguments lowerP, upperValue, and true . 
+            OP(EJSVAL_TO_OBJECT(O),put)(O, lowerP, upperValue, EJS_TRUE);
+
+            //       ii. Call the [[Put]] internal method of O with arguments upperP, lowerValue, and true . 
+            OP(EJSVAL_TO_OBJECT(O),put)(O, upperP, lowerValue, EJS_TRUE);
+        }
+        //    i. Else if lowerExists is false and upperExists is true, then 
+        else if (!lowerExists && upperExists) {
+            //       i. Call the [[Put]] internal method of O with arguments lowerP, upperValue, and true . 
+            OP(EJSVAL_TO_OBJECT(O),put)(O, lowerP, upperValue, EJS_TRUE);
+            //       ii. Call the [[Delete]] internal method of O, with arguments upperP and true. 
+            OP(EJSVAL_TO_OBJECT(O),_delete)(O, upperP, EJS_TRUE);
+        }
+        //    j. Else if lowerExists is true and upperExists is false, then 
+        else if (lowerExists && !upperExists) {
+            //       i. Call the [[Delete]] internal method of O, with arguments lowerP and true . 
+            OP(EJSVAL_TO_OBJECT(O),_delete)(O, lowerP, EJS_TRUE);
+            //       ii. Call the [[Put]] internal method of O with arguments upperP, lowerValue, and true . 
+            OP(EJSVAL_TO_OBJECT(O),put)(O, upperP, lowerValue, EJS_TRUE);
+        }
+        //    k. Else, both lowerExists and upperExists are false 
+        //       i. No action is required. 
+
+        //    l. Increase lower by 1. 
+        lower ++;
+    }
+    // 7. Return O
+    return O;
+}
+
 // ECMA262: 15.4.4.7
 static ejsval
 _ejs_Array_prototype_push (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
@@ -1758,6 +1831,7 @@ _ejs_array_init(ejsval global)
     PROTO_METHOD(reduce);
     PROTO_METHOD(reduceRight);
     PROTO_METHOD(filter);
+    PROTO_METHOD(reverse);
     // ECMA 6
     PROTO_METHOD(fill);
     PROTO_METHOD(find);

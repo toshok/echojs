@@ -176,6 +176,7 @@ EJS_ATOM(every)
 EJS_ATOM(some)
 EJS_ATOM(reduce)
 EJS_ATOM(reduceRight)
+EJS_ATOM(reverse)
 // ECMA 6
 EJS_ATOM(of)
 EJS_ATOM(from)
