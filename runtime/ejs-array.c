@@ -474,20 +474,28 @@ _ejs_Array_prototype_concat (ejsval env, ejsval _this, uint32_t argc, ejsval*arg
 {
     int numElements;
 
-    // hacky fast path for everything being an array
-    numElements = EJS_ARRAY_LEN(_this);
-    int i;
-    for (i = 0; i < argc; i ++) {
-        numElements += EJS_ARRAY_LEN(args[i]);
+    numElements = EJS_ARRAY_LEN(_this); // we need to verify that we haven't been call'ed on something...
+    for (int i = 0; i < argc; i ++) {
+        if (EJSVAL_IS_ARRAY(args[i]))
+            numElements += EJS_ARRAY_LEN(args[i]);
+        else
+            numElements += 1;
     }
 
     ejsval rv = _ejs_array_new(numElements, EJS_FALSE);
     numElements = 0;
+
     memmove (EJS_DENSE_ARRAY_ELEMENTS(rv) + numElements, EJS_DENSE_ARRAY_ELEMENTS(_this), sizeof(ejsval) * EJS_ARRAY_LEN(_this));
     numElements += EJS_ARRAY_LEN(_this);
-    for (i = 0; i < argc; i ++) {
-        memmove (EJS_DENSE_ARRAY_ELEMENTS(rv) + numElements, EJS_DENSE_ARRAY_ELEMENTS(args[i]), sizeof(ejsval) * EJS_ARRAY_LEN(args[i]));
-        numElements += EJS_ARRAY_LEN(args[i]);
+    for (int i = 0; i < argc; i ++) {
+        if (EJSVAL_IS_ARRAY(args[i])) {
+            memmove (EJS_DENSE_ARRAY_ELEMENTS(rv) + numElements, EJS_DENSE_ARRAY_ELEMENTS(args[i]), sizeof(ejsval) * EJS_ARRAY_LEN(args[i]));
+            numElements += EJS_ARRAY_LEN(args[i]);
+        }
+        else {
+            EJS_DENSE_ARRAY_ELEMENTS(rv)[numElements] = args[i];
+            numElements ++;
+        }
     }
     EJS_ARRAY_LEN(rv) = numElements;
 
