@@ -3,6 +3,7 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 #include <libgen.h>
 
 #include <stdlib.h>
@@ -11,6 +12,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/param.h>
 
 #include "ejs-ops.h"
 #include "ejs-value.h"
@@ -18,6 +20,7 @@
 #include "ejs-function.h"
 #include "ejs-string.h"
 #include "ejs-builtin-modules.h"
+#include "ejs-error.h"
 
 ////
 /// path module
@@ -45,13 +48,110 @@ _ejs_path_basename (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return rv;
 }
 
+static char*
+resolve(char* from, char* to)
+{
+    int rv_len = strlen(from) + strlen(to) + 2;
+    char* rv = malloc(rv_len);
+    memset(rv, 0, rv_len);
+
+    strcat(rv, from);
+    strcat(rv, "/");
+    strcat(rv, to);
+
+    return rv;
+}
+
 static ejsval
 _ejs_path_resolve (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     // FIXME node's implementation is a lot more flexible.  we just combine the paths with a / between them.
     ejsval from = args[0];
     ejsval to = args[1];
+
+    char *from_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(from));
+    char *to_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(to));
+
+    char* resolved = resolve(from_utf8, to_utf8);
+
+    ejsval rv = _ejs_string_new_utf8(resolved);
+
+    free (from_utf8);
+    free (to_utf8);
+    free (resolved);
+
+    return rv;
+
     return _ejs_string_concat (from, _ejs_string_concat (_ejs_string_new_utf8("/"), to));
+}
+
+static char*
+make_absolute(char* path)
+{
+    char cwd[MAXPATHLEN];
+    getcwd(cwd, MAXPATHLEN);
+
+    char* rv = resolve (cwd, path);
+    free (path);
+
+    return rv;
+}
+
+static ejsval
+_ejs_path_relative (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    ejsval from = _ejs_undefined;
+    ejsval to = _ejs_undefined;
+
+    if (argc > 0) from = args[0];
+    if (argc > 1) to = args[1];
+
+    if (!EJSVAL_IS_STRING(from) || !EJSVAL_IS_STRING(to))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Arguments to path.relative must be strings");
+
+    char *from_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(from));
+    char *to_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(to));
+
+    if (from_utf8[0] != '/') from_utf8 = make_absolute(from_utf8);
+    if (to_utf8[0] != '/') to_utf8 = make_absolute(to_utf8);
+
+    char* p = to_utf8 + strlen(to_utf8) - 1;
+    int up = 0;
+    EJSBool seen_slash = EJS_FALSE;
+
+    while (p != to_utf8) {
+        if (*p == '/') {
+            if (seen_slash) continue; // skip adjacent slashes
+            seen_slash = EJS_TRUE;
+            char* prefix = strndup(to_utf8, p - to_utf8);
+            if (strstr(from_utf8, prefix) == from_utf8) {
+                free (prefix);
+                goto done;
+            }
+            free (prefix);
+            up ++;
+        }
+        else {
+            seen_slash = EJS_FALSE;
+        }
+        p--;
+    }
+    // we made it all the way to the end, fall through to building up our string
+
+ done:
+    {
+        ejsval dotdotslash = _ejs_string_new_utf8("../");
+        ejsval rv = _ejs_string_new_utf8(p+1);
+        while (up >= 0) {
+            rv = _ejs_string_concat(dotdotslash, rv);
+            up--;
+        }
+
+        free (from_utf8);
+        free (to_utf8);
+
+        return rv;
+    }
 }
 
 ejsval
@@ -62,6 +162,7 @@ _ejs_path_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     EJS_INSTALL_FUNCTION(exports, "dirname", _ejs_path_dirname);
     EJS_INSTALL_FUNCTION(exports, "basename", _ejs_path_basename);
     EJS_INSTALL_FUNCTION(exports, "resolve", _ejs_path_resolve);
+    EJS_INSTALL_FUNCTION(exports, "relative", _ejs_path_relative);
 
     return _ejs_undefined;
 }
