@@ -44,8 +44,8 @@ static ejsval page_allocation_failed_exc EJSVAL_ALIGNMENT;
 
 void _ejs_gc_dump_heap_stats();
 
-// 256MB heap.  deal with it, suckers
-#define MAX_HEAP_SIZE (256 * 1024 * 1024)
+// 1GB heap.  deal with it, suckers
+#define MAX_HEAP_SIZE (1024 * 1024 * 1024)
 
 #ifndef PAGE_SIZE
 #define PAGE_SIZE 4096
@@ -210,7 +210,7 @@ alloc_from_os(size_t size, size_t align)
     if (align == 0) {
         size = MAX(size, PAGE_SIZE);
         void* res = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, MAP_FD, 0);
-        _ejs_log ("mmap for 0 alignment = %p\n", res);
+        SPEW(2, _ejs_log ("mmap for 0 alignment = %p\n", res));
         return res == MAP_FAILED ? NULL : res;
     }
 
@@ -480,7 +480,7 @@ find_arena(GCObjectPtr ptr)
 }
 
 static PageInfo*
-find_page_and_cell(GCObjectPtr ptr, int *cell_idx)
+find_page_and_cell(GCObjectPtr ptr, uint32_t *cell_idx)
 {
     Arena *arena = find_arena(ptr);
 
@@ -525,7 +525,7 @@ find_page_and_cell(GCObjectPtr ptr, int *cell_idx)
 static void
 set_gray (GCObjectPtr ptr)
 {
-    int cell_idx;
+    uint32_t cell_idx;
     PageInfo *page = find_page_and_cell(ptr, &cell_idx);
     if (!page)
         return;
@@ -536,7 +536,7 @@ set_gray (GCObjectPtr ptr)
 static void
 set_black (GCObjectPtr ptr)
 {
-    int cell_idx;
+    uint32_t cell_idx;
     PageInfo *page = find_page_and_cell(ptr, &cell_idx);
     if (!page)
         return;
@@ -547,7 +547,7 @@ set_black (GCObjectPtr ptr)
 static EJSBool
 is_white (GCObjectPtr ptr)
 {
-    int cell_idx;
+    uint32_t cell_idx;
     PageInfo *page = find_page_and_cell(ptr, &cell_idx);
     if (!page)
         return EJS_FALSE;
@@ -606,8 +606,6 @@ finalize_object(GCObjectPtr p)
     }
 }
 
-static EJSBool gc_waiting;
-
 static void*
 _ejs_finalizer_thread ()
 {
@@ -630,7 +628,7 @@ _ejs_finalizer_thread ()
 
             Arena *arena = PTR_TO_ARENA(fin->gcobj);
             PageInfo* info;
-            int cell_idx;
+            uint32_t cell_idx;
 
             info = find_page_and_cell (fin->gcobj, &cell_idx);
 
@@ -657,7 +655,7 @@ _ejs_finalizer_thread ()
             EJS_ASSERT(IS_FINALIZABLE(info->page_bitmap[cell_idx]));
 
             finalize_object(fin->gcobj);
-            memset (fin->gcobj, 0xaf, info->cell_size);
+            memset (fin->gcobj, 0x00, info->cell_size);
 
             SET_FREE(info->page_bitmap[cell_idx]);
             SPEW(3, _ejs_log ("finalized object %p in page %p, num_free_cells == %zd\n", fin->gcobj, info, info->num_free_cells + 1));
@@ -689,14 +687,9 @@ _ejs_finalizer_thread ()
         }
         SPEW(1, _ejs_log ("finished finalizer run\n"));
 
-        EJSBool is_gc_waiting;
-        do {
-            is_gc_waiting = gc_waiting;
-        } while (!__sync_bool_compare_and_swap (&gc_waiting, is_gc_waiting, EJS_FALSE));
-        if (is_gc_waiting) {
-            pthread_mutex_lock (&finalizer_mutex);
-            pthread_cond_signal (&finalizer_cond);
-        }
+        pthread_mutex_lock (&finalizer_mutex);
+        pthread_cond_signal (&finalizer_cond);
+        pthread_mutex_unlock (&finalizer_mutex);
     }
     return NULL;
 }
@@ -763,7 +756,7 @@ _scan_from_ejsprimstr(EJSPrimString *primStr)
 static void
 _scan_from_ejsclosureenv(EJSClosureEnv *env)
 {
-    for (int i = 0; i < env->length; i ++) {
+    for (uint32_t i = 0; i < env->length; i ++) {
         _scan_ejsvalue (env->slots[i]);
     }
 }
@@ -795,7 +788,7 @@ mark_pointers_in_range(GCObjectPtr* low, GCObjectPtr* high)
 
         if (gcptr == NULL)            continue; // skip nulls.
 
-        int cell_idx;
+        uint32_t cell_idx;
 
         PageInfo *page = find_page_and_cell(gcptr, &cell_idx);
         if (!page)                    continue; // skip values outside our heap.
@@ -825,7 +818,7 @@ mark_ejsvals_in_range(void* low, void* high)
 
             if (gcptr == NULL)            continue; // skip nulls.
 
-            int cell_idx;
+            uint32_t cell_idx;
             PageInfo *page = find_page_and_cell(gcptr, &cell_idx);
             if (page) {
                 // XXX more checks before we start treating the pointer like a GCObjectPtr?
@@ -954,7 +947,7 @@ mark_from_roots()
             GCObjectPtr root_ptr = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(rootval);
             if (root_ptr == NULL)
                 continue;
-            int cell_idx;
+            uint32_t cell_idx;
             PageInfo* page = find_page_and_cell(root_ptr, &cell_idx);
             if (!page)
                 continue;
@@ -1216,7 +1209,7 @@ alloc_from_page(PageInfo *info)
     EJS_ASSERT (info->num_free_cells > 0);
     
     GCObjectPtr rv = NULL;
-    int cell;
+    uint32_t cell;
 
     SPEW(2, _ejs_log ("allocating object from page %p (cell size %zd)\n", info, info->cell_size));
 
@@ -1332,11 +1325,8 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
                 UNLOCK_GC();
                 _ejs_gc_collect ();
                 pthread_mutex_lock (&finalizer_mutex);
-                EJSBool is_gc_waiting;
-                do {
-                    is_gc_waiting = gc_waiting;
-                } while (!__sync_bool_compare_and_swap (&gc_waiting, is_gc_waiting, EJS_TRUE));
                 pthread_cond_wait (&finalizer_cond, &finalizer_mutex);
+                pthread_mutex_unlock (&finalizer_mutex);
                 alloc_size_at_last_gc = alloc_size;
                 num_allocs = 0;
                 goto retry_allocation;
@@ -1358,11 +1348,8 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
                 UNLOCK_GC();
                 _ejs_gc_collect ();
                 pthread_mutex_lock (&finalizer_mutex);
-                EJSBool is_gc_waiting;
-                do {
-                    is_gc_waiting = gc_waiting;
-                } while (!__sync_bool_compare_and_swap (&gc_waiting, is_gc_waiting, EJS_TRUE));
                 pthread_cond_wait (&finalizer_cond, &finalizer_mutex);
+                pthread_mutex_unlock (&finalizer_mutex);
                 alloc_size_at_last_gc = alloc_size;
                 num_allocs = 0;
                 goto retry_allocation;
