@@ -66,8 +66,14 @@ static ejsval
 _ejs_path_resolve (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     // FIXME node's implementation is a lot more flexible.  we just combine the paths with a / between them.
-    ejsval from = args[0];
-    ejsval to = args[1];
+    ejsval from = _ejs_undefined;
+    ejsval to = _ejs_undefined;
+
+    if (argc > 0) from = args[0];
+    if (argc > 1) to = args[1];
+
+    if (!EJSVAL_IS_STRING(from) || !EJSVAL_IS_STRING(to))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Arguments to path.resolve must be strings");
 
     char *from_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(from));
     char *to_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(to));
@@ -81,8 +87,6 @@ _ejs_path_resolve (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     free (resolved);
 
     return rv;
-
-    return _ejs_string_concat (from, _ejs_string_concat (_ejs_string_new_utf8("/"), to));
 }
 
 static char*
@@ -101,19 +105,19 @@ static ejsval
 _ejs_path_relative (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     ejsval from = _ejs_undefined;
-    ejsval to = _ejs_undefined;
+    ejsval to   = _ejs_undefined;
 
     if (argc > 0) from = args[0];
-    if (argc > 1) to = args[1];
+    if (argc > 1) to   = args[1];
 
     if (!EJSVAL_IS_STRING(from) || !EJSVAL_IS_STRING(to))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Arguments to path.relative must be strings");
 
     char *from_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(from));
-    char *to_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(to));
+    char *to_utf8   = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(to));
 
     if (from_utf8[0] != '/') from_utf8 = make_absolute(from_utf8);
-    if (to_utf8[0] != '/') to_utf8 = make_absolute(to_utf8);
+    if (to_utf8[0]   != '/') to_utf8   = make_absolute(to_utf8);
 
     char* p = to_utf8 + strlen(to_utf8) - 1;
     int up = 0;
@@ -278,7 +282,7 @@ _ejs_child_process_spawn (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 
     char **argv = (char**)calloc(sizeof(char*), EJSARRAY_LEN(argv_rest) + 2);
     argv[0] = argv0;
-    for (int i = 0; i < EJSARRAY_LEN(argv_rest); i ++)
+    for (uint32_t i = 0; i < EJSARRAY_LEN(argv_rest); i ++)
         argv[1+i] = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(ToString(EJSDENSEARRAY_ELEMENTS(argv_rest)[i])));
 
     pid_t pid;
@@ -306,7 +310,7 @@ _ejs_child_process_spawn (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
         break;
     }
     }
-    for (int i = 0; i < EJSARRAY_LEN(argv_rest)+1; i ++)
+    for (uint32_t i = 0; i < EJSARRAY_LEN(argv_rest)+1; i ++)
         free (argv[i]);
     free (argv);
     return _ejs_undefined;
