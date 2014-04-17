@@ -101,6 +101,14 @@ _ejs_arguments_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     _ejs_Object_specops.scan (obj, scan_func);
 }
 
+static void
+_ejs_arguments_specop_finalize (EJSObject* obj)
+{
+    EJSArguments* args = (EJSArguments*)obj;
+    free (args->args);
+    _ejs_Object_specops.finalize (obj);
+}
+
 EJS_DEFINE_CLASS(Arguments,
                  _ejs_arguments_specop_get,
                  OP_INHERIT, // get_own_property
@@ -113,6 +121,6 @@ EJS_DEFINE_CLASS(Arguments,
                  OP_INHERIT, // define_own_property
                  OP_INHERIT, // has_instance
                  _ejs_arguments_specop_allocate,
-                 OP_INHERIT, // finalize
+                 _ejs_arguments_specop_finalize,
                  _ejs_arguments_specop_scan
                  )
