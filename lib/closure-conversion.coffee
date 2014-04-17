@@ -1901,7 +1901,7 @@ class DesugarImportExport extends TreeVisitor
                                         }
 
                                         @exports.push { name: spec.name, id: spectmp }
-                                        export_stuff.push(define_export_property(spec.name, spectmp))
+                                        export_stuff.push(define_export_property(spec.name || spec.id, spectmp))
                         export_stuff.unshift(export_decl)
                         return export_stuff
 
