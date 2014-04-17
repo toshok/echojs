@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <libgen.h>
+#include <assert.h>
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -49,44 +50,73 @@ _ejs_path_basename (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 }
 
 static char*
-resolve(char* from, char* to)
+resolvev(char** paths, int num_paths)
 {
-    int rv_len = strlen(from) + strlen(to) + 2;
-    char* rv = malloc(rv_len);
-    memset(rv, 0, rv_len);
+    if (num_paths == 1) return strdup(paths[0]);
 
-    strcat(rv, from);
-    strcat(rv, "/");
-    strcat(rv, to);
+    char* stack[MAXPATHLEN];
+    memset(stack, 0, sizeof(char*) * MAXPATHLEN);
+    int sp = 0;
 
-    return rv;
-}
+    // we treat paths as a stack of path elements.  walk all the path
+    // elements of a given path, popping for '..', doing nothing for
+    // '.', and pushing for anything else.
+    for (int i = 0; i < num_paths; i ++) {
+        char* p = paths[i];
+        if (*p == '/') {
+            // this should only be true for the first path
+            assert(i == 0);
+            while (*p == '/') p++; // consume all /'s at the start of the path
+        }
 
-static ejsval
-_ejs_path_resolve (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
-    // FIXME node's implementation is a lot more flexible.  we just combine the paths with a / between them.
-    ejsval from = _ejs_undefined;
-    ejsval to = _ejs_undefined;
+        while (*p) {
+            if (*p == '.') {
+                if (*(p+1) == '.' && *(p+2) == '/') {
+                    if (sp) {
+                        if (stack[sp])
+                            free (stack[sp]);
+                        sp--;
+                    }
+                    p += 3;
+                    while (*p == '/') p++; // consume all adjacent /'s
+                    continue;
+                }
+                else if (*(p+1) == '/') {
+                    p += 2;
+                    while (*p == '/') p++; // consume all adjacent /'s
+                    continue;
+                }
+            }
 
-    if (argc > 0) from = args[0];
-    if (argc > 1) to = args[1];
+            char component[MAXPATHLEN];
+            memset(component, 0, sizeof(component));
+            int c = 0;
+            while (*p && *p != '/') {
+                component[c++] = *p++;
+            }
+            if (*p == '/') while (*p == '/') p++; // consume all adjacent /'s
+            if (c > 0) {
+                stack[sp++] = strdup(component);
+            }
+        }
+    }
 
-    if (!EJSVAL_IS_STRING(from) || !EJSVAL_IS_STRING(to))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Arguments to path.resolve must be strings");
+    // now that we're done the stack contains the contents of the path
+    char result_utf8[MAXPATHLEN];
+    memset (result_utf8, 0, sizeof(result_utf8));
+    char *p;
 
-    char *from_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(from));
-    char *to_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(to));
+    p = result_utf8;
+    for (int s = 0; s < sp; s ++) {
+        *p++ = '/';
+        char *c = stack[s];
+        while (*c) *p++ = *c++;
+    }
 
-    char* resolved = resolve(from_utf8, to_utf8);
+    for (int s = 0; s < sp; s ++)
+        free(stack[s]);
 
-    ejsval rv = _ejs_string_new_utf8(resolved);
-
-    free (from_utf8);
-    free (to_utf8);
-    free (resolved);
-
-    return rv;
+    return strdup(result_utf8);
 }
 
 static char*
@@ -95,8 +125,56 @@ make_absolute(char* path)
     char cwd[MAXPATHLEN];
     getcwd(cwd, MAXPATHLEN);
 
-    char* rv = resolve (cwd, path);
+    char* paths[2];
+    paths[0] = cwd;
+    paths[1] = path;
+
+    char* rv = resolvev (paths, 2);
     free (path);
+
+    return rv;
+}
+
+static ejsval
+_ejs_path_resolve (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    char** paths_utf8 = (char**)calloc(argc + 1, sizeof(char*));
+    int num_paths = 0;
+
+    char cwd[MAXPATHLEN];
+    getcwd(cwd, MAXPATHLEN);
+
+    paths_utf8[num_paths++] = strdup(cwd);
+
+    for (int i = 0; i < argc; i ++) {
+        ejsval arg = args[i];
+
+        if (!EJSVAL_IS_STRING(arg)) {
+            for (int j = 0; j < num_paths; j ++) free(paths_utf8[j]);
+            free (paths_utf8);
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Arguments to path.resolve must be strings");
+        }
+
+        paths_utf8[num_paths++] = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(arg));
+    }
+
+    int start_path;
+    for (start_path = num_paths-1; start_path >= 0; start_path --) {
+        if (paths_utf8[start_path][0] == '/')
+            break;
+    }
+    // at this point paths_utf8[start_path] is our "root" for
+    // resolving.  it is either the right-most absolute path in the
+    // argument list, or $cwd if there wasn't an absolute path in the
+    // args.
+
+    char* resolved = resolvev(&paths_utf8[start_path], num_paths - start_path);
+
+    ejsval rv = _ejs_string_new_utf8(resolved);
+
+    free (resolved);
+    for (int j = 0; j < num_paths; j ++) free(paths_utf8[j]);
+    free (paths_utf8);
 
     return rv;
 }
@@ -128,6 +206,11 @@ _ejs_path_relative (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
             if (seen_slash) continue; // skip adjacent slashes
             seen_slash = EJS_TRUE;
             char* prefix = strndup(to_utf8, p - to_utf8);
+            if (!strcmp(from_utf8, prefix)) {
+                up = -1;
+                free (prefix);
+                goto done;
+            }
             if (strstr(from_utf8, prefix) == from_utf8) {
                 free (prefix);
                 goto done;
@@ -182,11 +265,23 @@ _ejs_fs_readFileSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     char* utf8_path = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[0]));
 
     int fd = open (utf8_path, O_RDONLY);
-    free(utf8_path);
+    if (fd == -1) {
+        char buf[256];
+        snprintf (buf, sizeof(buf), "%s: `%s`", strerror(errno), utf8_path);
+        free(utf8_path);
+        _ejs_throw_nativeerror_utf8 (EJS_ERROR, buf);
+    }
 
     struct stat fd_stat;
 
-    fstat (fd, &fd_stat);
+    int stat_rv = fstat (fd, &fd_stat);
+    if (stat_rv == -1) {
+        char buf[256];
+        snprintf (buf, sizeof(buf), "%s: `%s`", strerror(errno), utf8_path);
+        free(utf8_path);
+        _ejs_throw_nativeerror_utf8 (EJS_ERROR, buf);
+    }
+    free(utf8_path);
 
     char *buf = (char*)malloc (fd_stat.st_size);
     read(fd, buf, fd_stat.st_size);

@@ -1,0 +1,10 @@
+var path = require("path");
+console.log(path.resolve ("/hi/there", "./bar"));
+console.log(path.resolve ("/hi/there", "../bar"));
+console.log(path.resolve ("/hi/there", "../../bar"));
+console.log(path.resolve ("/hi/there", "../../../bar"));
+console.log(path.resolve ("/hi/there", "../../../../bar"));
+console.log(path.resolve ("/hi/there", "../../../../bar/fweep"));
+console.log(path.resolve ("/hi//there", "bar"));
+console.log(path.resolve ("/hi////there", "bar"));
+console.log(path.resolve ("/hi/there", "/fweep"));
