@@ -227,29 +227,29 @@ class LLVMIRVisitor extends TreeVisitor
                         
                 # build up our runtime method table
                 @ejs_intrinsics = Object.create null,
-                        moduleGet:            { value: @handleModuleGet, enumerable: true }
-                        moduleImportBatch:    { value: @handleModuleImportBatch, enumerable: true }
-                        getLocal:             { value: @handleGetLocal, enumerable: true }
-                        setLocal:             { value: @handleSetLocal, enumerable: true }
-                        getGlobal:            { value: @handleGetGlobal, enumerable: true }
-                        setGlobal:            { value: @handleSetGlobal, enumerable: true }
-                        slot:                 { value: @handleGetSlot, enumerable: true }
-                        setSlot:              { value: @handleSetSlot, enumerable: true }
-                        invokeClosure:        { value: @handleInvokeClosure, enumerable: true }
-                        makeClosure:          { value: @handleMakeClosure, enumerable: true }
-                        makeAnonClosure:      { value: @handleMakeAnonClosure, enumerable: true }
-                        createArgScratchArea: { value: @handleCreateArgScratchArea, enumerable: true }
-                        makeClosureEnv:       { value: @handleMakeClosureEnv, enumerable: true }
-                        typeofIsObject:       { value: @handleTypeofIsObject, enumerable: true }
-                        typeofIsFunction:     { value: @handleTypeofIsFunction, enumerable: true }
-                        typeofIsString:       { value: @handleTypeofIsString, enumerable: true }
-                        typeofIsSymbol:       { value: @handleTypeofIsSymbol, enumerable: true }
-                        typeofIsNumber:       { value: @handleTypeofIsNumber, enumerable: true }
-                        typeofIsBoolean:      { value: @handleTypeofIsBoolean, enumerable: true }
-                        builtinUndefined:     { value: @handleBuiltinUndefined, enumerable: true }
-                        isNullOrUndefined:    { value: @handleIsNullOrUndefined, enumerable: true }
-                        isUndefined:          { value: @handleIsUndefined, enumerable: true }
-                        isNull:               { value: @handleIsNull, enumerable: true }
+                        moduleGet:            value: @handleModuleGet
+                        moduleImportBatch:    value: @handleModuleImportBatch
+                        getLocal:             value: @handleGetLocal
+                        setLocal:             value: @handleSetLocal
+                        getGlobal:            value: @handleGetGlobal
+                        setGlobal:            value: @handleSetGlobal
+                        slot:                 value: @handleGetSlot
+                        setSlot:              value: @handleSetSlot
+                        invokeClosure:        value: @handleInvokeClosure
+                        makeClosure:          value: @handleMakeClosure
+                        makeAnonClosure:      value: @handleMakeAnonClosure
+                        createArgScratchArea: value: @handleCreateArgScratchArea
+                        makeClosureEnv:       value: @handleMakeClosureEnv
+                        typeofIsObject:       value: @handleTypeofIsObject
+                        typeofIsFunction:     value: @handleTypeofIsFunction
+                        typeofIsString:       value: @handleTypeofIsString
+                        typeofIsSymbol:       value: @handleTypeofIsSymbol
+                        typeofIsNumber:       value: @handleTypeofIsNumber
+                        typeofIsBoolean:      value: @handleTypeofIsBoolean
+                        builtinUndefined:     value: @handleBuiltinUndefined
+                        isNullOrUndefined:    value: @handleIsNullOrUndefined
+                        isUndefined:          value: @handleIsUndefined
+                        isNull:               value: @handleIsNull
 
                 @opencode_intrinsics =
                         unaryNot          : true
@@ -301,7 +301,7 @@ class LLVMIRVisitor extends TreeVisitor
 
                 @doInsideBBlock entry_bb, => ir.createBr return_bb
                 @doInsideBBlock return_bb, =>
-                        #@createCall @ejs_runtime.log, [(consts.string ir, "done with literal initialization")], ""
+                        #@createCall @ejs_runtime.log, [consts.string(ir, "done with literal initialization")], ""
                         ir.createRetVoid()
 
                 @literalInitializationBB = entry_bb
@@ -361,14 +361,8 @@ class LLVMIRVisitor extends TreeVisitor
                 ir.createLoad null_alloca, "nullload"
                 
         loadUndefinedEjsValue: ->
-                return ir.createLoad(@currentFunction.undef_alloca, "undefload") if @currentFunction.undef_alloca?
-                if @currentFunction.undef_alloca?
-                        undef_alloca = @currentFunction.undef_alloca
-                else
-                        undef_alloca = @createAlloca @currentFunction, types.EjsValue, "undef_alloca"
+                undef_alloca = @createAlloca @currentFunction, types.EjsValue, "undef_alloca"
                 @storeUndefined undef_alloca
-                if not @currentFunction.undef_alloca?
-                        @currentFunction.undef_alloca = undef_alloca
                 ir.createLoad undef_alloca, "undefload"
 
         storeUndefined: (alloca, name) ->
@@ -493,7 +487,7 @@ class LLVMIRVisitor extends TreeVisitor
         createPropertyStore: (obj,prop,rhs,computed) ->
                 if computed
                         # we store obj[prop], prop can be any value
-                        @createCall @ejs_runtime.object_setprop, [obj, (@visit prop), rhs], "propstore_computed"
+                        @createCall @ejs_runtime.object_setprop, [obj, @visit(prop), rhs], "propstore_computed"
                 else
                         # we store obj.prop, prop is an id
                         if prop.type is Identifier
@@ -513,7 +507,7 @@ class LLVMIRVisitor extends TreeVisitor
                         loadprop = @visit prop
                         
                         if @options.record_types
-                                @createCall @ejs_runtime.record_getprop, [(consts.int32 @genRecordId()), obj, loadprop], ""
+                                @createCall @ejs_runtime.record_getprop, [consts.int32(@genRecordId()), obj, loadprop], ""
                                                 
                         @createCall @ejs_runtime.object_getprop, [obj, loadprop], "getprop_computed", canThrow
                 else
@@ -521,13 +515,13 @@ class LLVMIRVisitor extends TreeVisitor
                         pname = @getAtom prop.name
 
                         if @options.record_types
-                                @createCall @ejs_runtime.record_getprop, [(consts.int32 @genRecordId()), obj, pname], ""
+                                @createCall @ejs_runtime.record_getprop, [consts.int32(@genRecordId()), obj, pname], ""
 
                         @createCall @ejs_runtime.object_getprop, [obj, pname], "getprop_#{prop.name}", canThrow
                 
 
-        visitOrNull: (n) -> (@visit n) || @loadNullEjsValue()
-        visitOrUndefined: (n) -> (@visit n) || @loadUndefinedEjsValue()
+        visitOrNull:      (n) -> @visit(n) || @loadNullEjsValue()
+        visitOrUndefined: (n) -> @visit(n) || @loadUndefinedEjsValue()
         
         visitProgram: (n) ->
                 # by the time we make it here the program has been
@@ -556,7 +550,7 @@ class LLVMIRVisitor extends TreeVisitor
                 if iife_dest_bb
                         ir.createBr iife_dest_bb
                         ir.setInsertPoint iife_dest_bb
-                        rv = @createLoad (@findIdentifierInScope n.ejs_iife_rv.name), "%iife_rv_load"
+                        rv = @createLoad @findIdentifierInScope(n.ejs_iife_rv.name), "%iife_rv_load"
                         rv
                 else
                         n
@@ -842,7 +836,7 @@ class LLVMIRVisitor extends TreeVisitor
                 if @iifeStack.top.iife_rv?
                         # if we're inside an IIFE, convert the return statement into a store to the iife_rv alloca + a branch to the iife's dest bb
                         if n.argument?
-                                ir.createStore (@visit n.argument), @findIdentifierInScope @iifeStack.top.iife_rv.name
+                                ir.createStore @visit(n.argument), @findIdentifierInScope @iifeStack.top.iife_rv.name
                         ir.createBr @iifeStack.top.iife_dest_bb
                 else
                         # otherwise generate an llvm IR ret
@@ -851,7 +845,7 @@ class LLVMIRVisitor extends TreeVisitor
                         if @finallyStack.length > 0
                                 @currentFunction.returnValueAlloca = @createAlloca @currentFunction, types.EjsValue, "returnValue" unless @currentFunction.returnValueAlloca?
                                 ir.createStore rv, @currentFunction.returnValueAlloca
-                                ir.createStore (consts.int32 ExitableScope.REASON_RETURN), @currentFunction.cleanup_reason
+                                ir.createStore consts.int32(ExitableScope.REASON_RETURN), @currentFunction.cleanup_reason
                                 ir.createBr @finallyStack[0]
                         else
                                 return_alloca = @createAlloca @currentFunction, types.EjsValue, "return_alloca"
@@ -919,7 +913,7 @@ class LLVMIRVisitor extends TreeVisitor
                         throw new Error "binary assignment operators '#{n.operator}' shouldn't exist at this point"
                 
                 if @options.record_types
-                        @createCall @ejs_runtime.record_assignment, [(consts.int32 @genRecordId()), rhvalue], ""
+                        @createCall @ejs_runtime.record_assignment, [consts.int32(@genRecordId()), rhvalue], ""
                 @storeValueInDest rhvalue, lhs
 
                 # we need to visit lhs after the store so that we load the value, but only if it's used
@@ -1117,7 +1111,7 @@ class LLVMIRVisitor extends TreeVisitor
                                 type: Literal
                                 value: n.argument.property.name
                                 raw: "'#{n.argument.property.name}'"
-                        return @createCall callee, [(@visitOrNull n.argument.object), (@visit fake_literal)], "result"
+                        return @createCall callee, [@visitOrNull(n.argument.object), @visit(fake_literal)], "result"
                                 
                 else if n.operator is "!"
                         arg_value =  @visitOrNull n.argument
@@ -1185,7 +1179,7 @@ class LLVMIRVisitor extends TreeVisitor
                         # inside the then branch, left was falsy
                         if n.operator is "||"
                                 # for || we evaluate the second and store it
-                                ir.createStore (@visit n.right), result
+                                ir.createStore @visit(n.right), result
                         else if n.operator is "&&"
                                 # for && we short circuit out here
                                 ir.createStore left_visited, result
@@ -1286,7 +1280,7 @@ class LLVMIRVisitor extends TreeVisitor
                         
                 unescapedName = n.callee.name.slice 1
                 intrinsicHandler = @ejs_intrinsics[unescapedName]
-                if not intrinsicHandler
+                if not intrinsicHandler?
                         throw "Internal error: ctor should not be null"
 
                 intrinsicHandler.call @, n, @opencode_intrinsics[unescapedName], true
@@ -1328,7 +1322,7 @@ class LLVMIRVisitor extends TreeVisitor
                 debug.log -> "calling getFunction for #{val}"
                 rv = @module.getFunction val
 
-                if not rv
+                if not rv?
                         debug.log -> "Symbol '#{val}' not found in current scope"
                         rv = @loadGlobal n
 
@@ -1694,11 +1688,12 @@ class LLVMIRVisitor extends TreeVisitor
         handleSetGlobal: (exp, opencode) ->
                 if @options.frozen_global
                         throw new SyntaxError "cannot set global property '#{exp.arguments[0].name}' when using --frozen-global"
-                        
-                pname = @getAtom exp.arguments[0].name
+
+                pname = exp.arguments[0].name
+                patom = @getAtom pname
                 value = @visit exp.arguments[1]
 
-                @createCall @ejs_runtime.global_setprop, [pname, value], "globalpropstore_#{exp.arguments[0].name}"
+                @createCall @ejs_runtime.global_setprop, [patom, value], "globalpropstore_#{pname}"
 
         # this method assumes it's called in an opencoded context
         emitEjsvalTo: (val, type, prefix) ->
@@ -1901,8 +1896,8 @@ class LLVMIRVisitor extends TreeVisitor
                 
         createEjsvalICmpUGt: (arg, i64_const, name) -> ir.createICmpUGt @getEjsvalBits(arg), i64_const, name
         createEjsvalICmpULt: (arg, i64_const, name) -> ir.createICmpULt @getEjsvalBits(arg), i64_const, name
-        createEjsvalICmpEq: (arg, i64_const, name) ->  ir.createICmpEq @getEjsvalBits(arg), i64_const, name
-        createEjsvalAnd: (arg, i64_const, name) ->     ir.createAnd @getEjsvalBits(arg), i64_const, name
+        createEjsvalICmpEq:  (arg, i64_const, name) -> ir.createICmpEq  @getEjsvalBits(arg), i64_const, name
+        createEjsvalAnd:     (arg, i64_const, name) -> ir.createAnd     @getEjsvalBits(arg), i64_const, name
 
         isObject: (val) ->
                 throw new Error("not supported on this architecture") if @options.target_pointer_size isnt 64
