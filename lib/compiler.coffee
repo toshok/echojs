@@ -2187,7 +2187,7 @@ class GatherImports extends TreeVisitor
                 throw new Error("import sources must be strings") if not is_string_literal(n.source)
 
                 if isInternalModule(n.source.value)
-                        n.source_path = create_string_literal(n.source_value)
+                        n.source_path = create_string_literal(n.source.value)
                         return n
                 
                 if n.source[0] is "/"
