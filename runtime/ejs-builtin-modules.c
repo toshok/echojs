@@ -279,6 +279,7 @@ _ejs_fs_readFileSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
         char buf[256];
         snprintf (buf, sizeof(buf), "%s: `%s`", strerror(errno), utf8_path);
         free(utf8_path);
+        close(fd);
         _ejs_throw_nativeerror_utf8 (EJS_ERROR, buf);
     }
     free(utf8_path);
