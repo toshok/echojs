@@ -107,7 +107,7 @@ exports.TreeVisitor = class TreeVisitor
         visit: (n, args...) ->
                 return null if not n?
 
-                return @visitArray n if Array.isArray n
+                return @visitArray n, args... if Array.isArray n
 
                 #debug.indent()
                 #debug.log -> "#{n.type}>"
