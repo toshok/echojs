@@ -334,7 +334,7 @@ _ejs_String_prototype_charAt (ejsval env, ejsval _this, uint32_t argc, ejsval *a
         idx = (int)EJSVAL_TO_NUMBER(args[0]);
     }
 
-    if (idx < 0 || idx > EJSVAL_TO_STRLEN(primStr))
+    if (idx < 0 || idx >= EJSVAL_TO_STRLEN(primStr))
         return _ejs_atom_empty;
 
     char c[2];
@@ -1012,12 +1012,10 @@ _ejs_string_specop_get (ejsval obj, ejsval propertyName)
 
     EJSString* estr = (EJSString*)EJSVAL_TO_OBJECT(obj);
     if (is_index) {
-        if (idx < 0 || idx > EJSVAL_TO_STRLEN(estr->primStr))
+        if (idx < 0 || idx >= EJSVAL_TO_STRLEN(estr->primStr))
             return _ejs_undefined;
-        char c[2];
-        c[0] = EJSVAL_TO_FLAT_STRING(estr->primStr)[idx];
-        c[1] = '\0';
-        return _ejs_string_new_utf8 (c);
+        jschar c = EJSVAL_TO_FLAT_STRING(estr->primStr)[idx];
+        return _ejs_string_new_ucs2_len (&c, 1);
     }
 
     // we also handle the length getter here
@@ -1079,6 +1077,7 @@ _ejs_string_new_utf8 (const char* str)
     while (*stru) {
         *p++ = utf8_to_ucs2 (stru, &stru);
     }
+    *p = 0;
     return STRING_TO_EJSVAL(rv);
 }
 
@@ -1099,6 +1098,7 @@ _ejs_string_new_utf8_len (const char* str, int len)
         if (len == 0)
             break;
     }
+    *p = 0;
     return STRING_TO_EJSVAL(rv);
 }
 
@@ -1113,6 +1113,7 @@ _ejs_string_new_ucs2 (const jschar* str)
     rv->length = str_len;
     rv->data.flat = (jschar*)((char*)rv + sizeof(EJSPrimString));
     memmove (rv->data.flat, str, str_len * sizeof(jschar));
+    rv->data.flat[str_len] = 0;
     return STRING_TO_EJSVAL(rv);
 }
 
@@ -1126,6 +1127,7 @@ _ejs_string_new_ucs2_len (const jschar* str, int len)
     rv->length = len;
     rv->data.flat = (jschar*)((char*)rv + sizeof(EJSPrimString));
     memmove (rv->data.flat, str, len * sizeof(jschar));
+    rv->data.flat[len] = 0;
     return STRING_TO_EJSVAL(rv);
 }
 
