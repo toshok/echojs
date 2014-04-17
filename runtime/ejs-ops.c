@@ -201,13 +201,20 @@ ejsval ToNumber(ejsval exp)
     else if (EJSVAL_IS_BOOLEAN(exp))
         return EJSVAL_TO_BOOLEAN(exp) ? _ejs_one : _ejs_zero;
     else if (EJSVAL_IS_STRING(exp)) {
-        char* num_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(exp));
+        char num_utf8_buf[128];
+        memset(num_utf8_buf, 0, sizeof(num_utf8_buf));
+        char* num_utf8 = ucs2_to_utf8_buf(EJSVAL_TO_FLAT_STRING(exp), num_utf8_buf, sizeof(num_utf8_buf));
+        if (num_utf8 == NULL) {
+            num_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(exp));
+        }
         char *endptr;
         double d = strtod(num_utf8, &endptr);
-        if (*endptr != '\0')
+        if (*endptr != '\0') {
+            if (num_utf8 != num_utf8_buf) free (num_utf8);
             return _ejs_nan;
+        }
         ejsval rv = NUMBER_TO_EJSVAL(d); // XXX NaN
-        free (num_utf8);
+        if (num_utf8 != num_utf8_buf) free (num_utf8);
         return rv;
     }
     else if (EJSVAL_IS_UNDEFINED(exp))

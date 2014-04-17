@@ -235,6 +235,36 @@ ucs2_to_utf8 (const jschar *str)
     return conservative;
 }
 
+char*
+ucs2_to_utf8_buf (const jschar *str, char* buf, size_t buf_size)
+{
+    int len = ucs2_strlen(str);
+    if (len > buf_size) // easy check right off the bat
+        return NULL;
+
+    const jschar *p = str;
+    char *c = buf;
+
+    while (*p) {
+        int adv = ucs2_to_utf8_char (*p, c);
+        if (adv < 1) {
+            // more here XXX
+            break;
+        }
+        c += adv;
+        if (c - buf > buf_size)
+            return NULL;
+
+        p++;
+        len --;
+        if (len == 0)
+            break;
+    }
+
+    *c = 0;
+    return buf;
+}
+
 
 ejsval _ejs_String EJSVAL_ALIGNMENT;
 ejsval _ejs_String__proto__ EJSVAL_ALIGNMENT;
