@@ -346,6 +346,28 @@ _ejs_String_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *
     }
 }
 
+jschar
+_ejs_string_ucs2_at (EJSPrimString* primstr, uint32_t offset)
+{
+    switch (EJS_PRIMSTR_GET_TYPE(primstr)) {
+    case EJS_STRING_DEPENDENT:
+        return _ejs_string_ucs2_at (primstr->data.dependent.dep, offset + primstr->data.dependent.off);
+    case EJS_STRING_ROPE:
+        if (offset < primstr->data.rope.left->length) {
+            return _ejs_string_ucs2_at (primstr->data.rope.left, offset);
+        }
+        else {
+            return _ejs_string_ucs2_at (primstr->data.rope.right, offset - primstr->data.rope.left->length);
+        }
+    case EJS_STRING_FLAT:
+        // the character is in this flat string
+        return primstr->data.flat[offset];
+    default:
+        EJS_NOT_IMPLEMENTED();
+    }
+}
+
+
 static ejsval
 _ejs_String_prototype_charAt (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
@@ -367,10 +389,8 @@ _ejs_String_prototype_charAt (ejsval env, ejsval _this, uint32_t argc, ejsval *a
     if (idx < 0 || idx >= EJSVAL_TO_STRLEN(primStr))
         return _ejs_atom_empty;
 
-    char c[2];
-    c[0] = EJSVAL_TO_FLAT_STRING(primStr)[idx];
-    c[1] = '\0';
-    return _ejs_string_new_utf8 (c);
+    jschar c = _ejs_string_ucs2_at(EJSVAL_TO_STRING(primStr), idx);
+    return _ejs_string_new_ucs2_len (&c, 1);
 }
 
 static ejsval
@@ -394,7 +414,7 @@ _ejs_String_prototype_charCodeAt (ejsval env, ejsval _this, uint32_t argc, ejsva
     if (idx < 0 || idx >= EJSVAL_TO_STRLEN(primStr))
         return _ejs_nan;
 
-    return NUMBER_TO_EJSVAL (EJSVAL_TO_FLAT_STRING(primStr)[idx]);
+    return NUMBER_TO_EJSVAL (_ejs_string_ucs2_at(EJSVAL_TO_STRING(primStr), idx));
 }
 
 static ejsval
@@ -1044,7 +1064,7 @@ _ejs_string_specop_get (ejsval obj, ejsval propertyName)
     if (is_index) {
         if (idx < 0 || idx >= EJSVAL_TO_STRLEN(estr->primStr))
             return _ejs_undefined;
-        jschar c = EJSVAL_TO_FLAT_STRING(estr->primStr)[idx];
+        jschar c = _ejs_string_ucs2_at (EJSVAL_TO_STRING(estr->primStr), idx);
         return _ejs_string_new_ucs2_len (&c, 1);
     }
 
@@ -1100,14 +1120,18 @@ _ejs_string_new_utf8 (const char* str)
 
     EJSPrimString* rv = _ejs_gc_new_primstr(value_size);
     EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_FLAT);
-    rv->length = str_len;
     rv->data.flat = (jschar*)((char*)rv + sizeof(EJSPrimString));
     jschar *p = rv->data.flat;
     const unsigned char *stru = (const unsigned char*)str;
     while (*stru) {
-        *p++ = utf8_to_ucs2 (stru, &stru);
+        jschar c = utf8_to_ucs2 (stru, &stru);
+        if (c == (jschar)-1) {
+            break;
+        }
+        *p++ = c;
     }
     *p = 0;
+    rv->length = p - rv->data.flat;
     return STRING_TO_EJSVAL(rv);
 }
 
@@ -1118,17 +1142,19 @@ _ejs_string_new_utf8_len (const char* str, int len)
 
     EJSPrimString* rv = _ejs_gc_new_primstr(value_size);
     EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_FLAT);
-    rv->length = len;
     rv->data.flat = (jschar*)((char*)rv + sizeof(EJSPrimString));
     jschar *p = rv->data.flat;
     const unsigned char *stru = (const unsigned char*)str;
-    while (*stru) {
-        *p++ = utf8_to_ucs2 (stru, &stru);
-        len--;
-        if (len == 0)
+    while (len > 0) {
+        jschar c = utf8_to_ucs2 (stru, &stru);
+        if (c == (jschar)-1) {
             break;
+        }
+        *p++ = c;
+        len--;
     }
     *p = 0;
+    rv->length = p - rv->data.flat;
     return STRING_TO_EJSVAL(rv);
 }
 

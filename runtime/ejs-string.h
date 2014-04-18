@@ -93,6 +93,8 @@ ejsval _ejs_string_concatv (ejsval first, ...);
 EJSPrimString* _ejs_string_flatten (ejsval str);
 EJSPrimString* _ejs_primstring_flatten (EJSPrimString* primstr);
 
+jschar _ejs_string_ucs2_at (EJSPrimString* primstr, uint32_t offset);
+
 uint32_t _ejs_string_hash (ejsval str);
 
 char* _ejs_string_to_utf8(EJSPrimString* primstr);
