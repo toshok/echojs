@@ -282,13 +282,33 @@ _ejs_fs_readFileSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
         close(fd);
         _ejs_throw_nativeerror_utf8 (EJS_ERROR, buf);
     }
+
+    int amount_to_read = fd_stat.st_size;
+    int amount_read = 0;
+    char *buf = (char*)calloc (1, amount_to_read+1);
+    do {
+        int c = read(fd, buf + amount_read, amount_to_read);
+        if (c == -1) {
+            if (errno == EINTR)
+                continue;
+            else {
+                char msg[256];
+                snprintf (msg, sizeof(msg), "%s: `%s`", strerror(errno), utf8_path);
+                free(utf8_path);
+                close(fd);
+                free (buf);
+                _ejs_throw_nativeerror_utf8 (EJS_ERROR, msg);
+            }
+        }
+        else {
+            amount_to_read -= c;
+            amount_read += c;
+        }
+    } while (amount_to_read > 0);
+
     free(utf8_path);
 
-    char *buf = (char*)malloc (fd_stat.st_size);
-    read(fd, buf, fd_stat.st_size);
-    close(fd);
-
-    ejsval rv = _ejs_string_new_utf8_len(buf, fd_stat.st_size);
+    ejsval rv = _ejs_string_new_utf8_len(buf, amount_read);
     free(buf);
     return rv;
 }
