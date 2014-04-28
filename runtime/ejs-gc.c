@@ -22,6 +22,8 @@
 
 #include <pthread.h>
 
+#define clear_on_finalize 0
+
 #define spew 0
 #define sanity 0
 #define gc_timings 0
@@ -44,8 +46,8 @@ static ejsval page_allocation_failed_exc EJSVAL_ALIGNMENT;
 
 void _ejs_gc_dump_heap_stats();
 
-// 1GB heap.  deal with it, suckers
-#define MAX_HEAP_SIZE (1024 * 1024 * 1024)
+// 2GB heap.  deal with it, suckers
+#define MAX_HEAP_SIZE (2048LL * 1024LL * 1024LL)
 
 #ifndef PAGE_SIZE
 #define PAGE_SIZE 4096
@@ -375,6 +377,8 @@ arena_new()
 
     Arena* new_arena = arena_start;
 
+    memset (new_arena, 0, sizeof(Arena));
+
     new_arena->end = arena_start + ARENA_SIZE;
     new_arena->pos = (void*)ALIGN(arena_start + sizeof(Arena), PAGE_SIZE);
 
@@ -626,11 +630,20 @@ _ejs_finalizer_thread ()
             EJSFinalizerEntry *fin = this_run;
             this_run = fin->next;
 
-            Arena *arena = PTR_TO_ARENA(fin->gcobj);
+            Arena *arena = find_arena(fin->gcobj);
+
             PageInfo* info;
             uint32_t cell_idx;
 
-            info = find_page_and_cell (fin->gcobj, &cell_idx);
+            if (arena) {
+                info = find_page_and_cell (fin->gcobj, &cell_idx);
+            }
+            else {
+                // must be a large object, the page info is stored in its header
+                LargeObjectInfo* los_info = (LargeObjectInfo*)(((intptr_t)fin->gcobj - sizeof(LargeObjectInfo) - 8) & ~0x7);
+                info = &los_info->page_info;
+                cell_idx = 0;
+            }
 
             if (!info) {
 #if spew
@@ -655,7 +668,13 @@ _ejs_finalizer_thread ()
             EJS_ASSERT(IS_FINALIZABLE(info->page_bitmap[cell_idx]));
 
             finalize_object(fin->gcobj);
-            memset (fin->gcobj, 0x00, info->cell_size);
+            memset (fin->gcobj,
+#if clear_on_finalize
+                    0x00,
+#else
+                    0xaf,
+#endif
+                    info->cell_size);
 
             SET_FREE(info->page_bitmap[cell_idx]);
             SPEW(3, _ejs_log ("finalized object %p in page %p, num_free_cells == %zd\n", fin->gcobj, info, info->num_free_cells + 1));
@@ -666,7 +685,6 @@ _ejs_finalizer_thread ()
 
             if (info->num_free_cells == info->num_cells) {
                 LOCK_GC();
-                pthread_mutex_lock (&info->page_mutex);
                 if (info->num_free_cells == info->num_cells) {
                     if (info->los_info) {
                         _ejs_log ("releasing large object!\n");
@@ -674,13 +692,14 @@ _ejs_finalizer_thread ()
                     }
                     else {
                         SPEW(2, _ejs_log ("page %p is empty, putting it on the free list\n", info));
+                        pthread_mutex_lock (&info->page_mutex);
                         // the page is empty, add it to the arena's free page list.
                         int bucket = ffs(info->cell_size) - OBJECT_SIZE_LOW_LIMIT_BITS;
                         _ejs_list_detach_node (&heap_pages[bucket], (EJSListNode*)info);
                         EJS_LIST_PREPEND (info, arena->free_pages);
+                        pthread_mutex_unlock (&info->page_mutex);
                     }
                 }
-                pthread_mutex_unlock (&info->page_mutex);
                 UNLOCK_GC();
             }
             free (fin);
@@ -891,6 +910,8 @@ sweep_heap()
                         EJSFinalizerEntry *fin = (EJSFinalizerEntry*)calloc(1, sizeof(EJSFinalizerEntry));
                         fin->gcobj = info->page_start + c * info->cell_size;
 
+                        EJS_ASSERT(find_arena(fin->gcobj));
+
                         // use a cmpswap instruction to atomically prepend to the start of the list
                         do {
                             fin->next = finalizer_list;
@@ -923,6 +944,7 @@ sweep_heap()
                 fin->next = finalizer_list;
             } while (!__sync_bool_compare_and_swap (&finalizer_list, fin->next, fin));
 
+            printf ("setting info->page_bitmap[0] to finalizable, for info %p\n", info);
             SET_FINALIZABLE(info->page_bitmap[0]);
         }
         else {
@@ -1241,6 +1263,10 @@ alloc_from_page(PageInfo *info)
     pthread_mutex_unlock (&info->page_mutex);
 
     SPEW(2, _ejs_log ("allocated obj %p from page %p (cell size %zd), free cells remaining %zd\n", rv, info, info->cell_size, info->num_free_cells));
+
+#if !clear_on_finalize
+    memset(rv, 0, info->cell_size);
+#endif
     return rv;
 }
 
@@ -1252,8 +1278,8 @@ alloc_from_los(size_t size, EJSScanType scan_type)
     if (rv == NULL)
         return NULL;
 
-    rv->page_info.page_bitmap = (char*)((void*)rv + sizeof(LargeObjectInfo)); // our 1 byte bitmap comes right after the header
-    rv->page_info.page_start = (void*)ALIGN((void*)rv + sizeof(LargeObjectInfo) + 1, 8);
+    rv->page_info.page_bitmap = (char*)((void*)rv + sizeof(LargeObjectInfo)); // our bitmap comes right after the header
+    rv->page_info.page_start = (void*)ALIGN((void*)rv + sizeof(LargeObjectInfo) + 8, 8);
     rv->page_info.cell_size = size;
     rv->page_info.num_cells = 1;
     rv->page_info.num_free_cells = 0;
