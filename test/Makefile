@@ -17,6 +17,7 @@ TESTS:=$(filter-out alloc1.js,$(TESTS))
 # these test for es6 stuff that neither node nor ejs supports
 TESTS:=$(filter-out modules2.js,$(TESTS))
 TESTS:=$(filter-out spread3.js,$(TESTS))
+TESTS:=$(filter-out iterators1.js,$(TESTS))
 
 # disable the esprima tests for the time being, as the new module syntax (and losing require) breaks them.
 # we need to fork esprima/escodegen/estraverse and port them to es6 modules for these tests.
