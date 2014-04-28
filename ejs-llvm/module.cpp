@@ -34,6 +34,13 @@ namespace ejsllvm {
         return (EJSObject*)_ejs_gc_new(Module);
     }
 
+    static void Module_finalize(EJSObject* obj)
+    {
+        Module* module = (Module*)obj;
+        if (module->llvm_module)
+            delete module->llvm_module;
+        _ejs_Object_specops.finalize(obj);
+    }
 
     static ejsval _ejs_Module_proto;
     static ejsval _ejs_Module;
@@ -277,6 +284,7 @@ namespace ejsllvm {
         module_specops = _ejs_Object_specops;
         module_specops.class_name = "LLVMModule";
         module_specops.allocate = Module_allocate;
+        module_specops.finalize = Module_finalize;
 
         _ejs_gc_add_root (&_ejs_Module_proto);
         _ejs_Module_proto = _ejs_object_new(_ejs_Object_prototype, &module_specops);
