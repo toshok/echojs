@@ -172,7 +172,7 @@ sim_bin="#{sim_base}/Developer/usr/bin"
 dev_bin="#{dev_base}/Developer/usr/bin"
 
 target_llc_args =
-        osx: ["-march=x86-64"]
+        osx: ["-march=x86-64", "-disable-fp-elim"]
         sim: ["-march=x86"]
         armv7: ["-march=arm", "-mtriple=thumbv7-apple-ios", "-mattr=+v6", "-relocation-model=pic", "-soft-float" ]
         armv7s: ["-march=aarch64", "-mtriple=thumbv7s-apple-ios", "-mattr=+fp-armv8", "-relocation-model=pic" ]
@@ -221,6 +221,9 @@ parseFile = (filename, content) ->
                 parse_tree = esprima.parse content, { loc: true, raw: true }
         catch e
                 console.warn "#{filename}: #{e}:"
+
+                console.log "file contents was ```#{content}```"
+                
                 process.exit -1
 
         return parse_tree
@@ -259,7 +262,7 @@ compileFile = (filename, parse_tree, compileCallback) ->
                 spawn llvm_commands["opt"], opt_args
                 spawn llvm_commands["llc"], llc_args
                 o_filenames.push o_filename
-                compileCallback()
+                compileCallback() if compileCallback?
         else
                 debug.log 1, "executing `#{llvm_commands['llvm-as']} #{llvm_as_args.join ' '}'"
                 llvm_as = spawn llvm_commands["llvm-as"], llvm_as_args
@@ -400,13 +403,19 @@ while work_list.length isnt 0
 files.reverse()
 
 # now compile them
-compileNextFile = ->
-        if files.length is 0
-                do_final_link(main_file)
-                return
-        f = files.pop()
-        compileFile f.file_name, f.file_ast, compileNextFile
-compileNextFile()
+#
+if __ejs?
+        for f in files
+                compileFile f.file_name, f.file_ast
+        do_final_link(main_file)
+else
+        compileNextFile = ->
+                if files.length is 0
+                        do_final_link(main_file)
+                        return
+                f = files.pop()
+                compileFile f.file_name, f.file_ast, compileNextFile
+        compileNextFile()
         
 # Local Variables:
 # mode: coffee
