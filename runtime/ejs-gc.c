@@ -348,8 +348,9 @@ struct _LargeObjectInfo {
 #define OBJECT_SIZE_LOW_LIMIT_BITS 3   // number of bits required to represent a pointer (3 == 8 bytes for 64 bit)
 #define OBJECT_SIZE_HIGH_LIMIT_BITS 10 // max object size for the non-LOS allocator = 1024
 
-#define HEAP_PAGELISTS_COUNT (OBJECT_SIZE_HIGH_LIMIT_BITS - OBJECT_SIZE_LOW_LIMIT_BITS)
-static EJSList heap_pages[HEAP_PAGELISTS_COUNT+1];
+#define HEAP_PAGELISTS_COUNT (OBJECT_SIZE_HIGH_LIMIT_BITS - OBJECT_SIZE_LOW_LIMIT_BITS) + 1 // +1 because we're inclusive on 10
+
+static EJSList heap_pages[HEAP_PAGELISTS_COUNT];
 static LargeObjectInfo *los_list;
 
 #if sanity
@@ -687,7 +688,7 @@ _ejs_finalizer_thread ()
                 LOCK_GC();
                 if (info->num_free_cells == info->num_cells) {
                     if (info->los_info) {
-                        _ejs_log ("releasing large object!\n");
+                        _ejs_log ("releasing large object (size %zd)!\n", info->los_info->alloc_size);
                         release_to_los (info->los_info);
                     }
                     else {
@@ -910,6 +911,8 @@ sweep_heap()
                         EJSFinalizerEntry *fin = (EJSFinalizerEntry*)calloc(1, sizeof(EJSFinalizerEntry));
                         fin->gcobj = info->page_start + c * info->cell_size;
 
+                        SPEW(2, { _ejs_log ("gcobj %p is finalizable\n", fin->gcobj); });
+
                         EJS_ASSERT(find_arena(fin->gcobj));
 
                         // use a cmpswap instruction to atomically prepend to the start of the list
@@ -933,22 +936,22 @@ sweep_heap()
         BitmapCell cell = info->page_bitmap[0];
         LargeObjectInfo *next = lobj->next;
         if (!IS_FINALIZABLE(cell) && IS_WHITE(cell)) {
-            SPEW(2, { _ejs_log ("l"); fflush(stderr); });
+            //            SPEW(2, { _ejs_log ("l"); fflush(stderr); });
             white_objs++;
             EJSFinalizerEntry *fin = (EJSFinalizerEntry*)calloc(1, sizeof(EJSFinalizerEntry));
             fin->gcobj = info->page_start;
             EJS_LIST_DETACH(lobj, los_list);
 
+            SPEW(2, { _ejs_log ("los gcobj %p is finalizable\n", fin->gcobj); });
             // use a cmpswap instruction to atomically prepend to the start of the list
             do {
                 fin->next = finalizer_list;
             } while (!__sync_bool_compare_and_swap (&finalizer_list, fin->next, fin));
 
-            printf ("setting info->page_bitmap[0] to finalizable, for info %p\n", info);
             SET_FINALIZABLE(info->page_bitmap[0]);
         }
         else {
-            SPEW(2, { _ejs_log ("L"); fflush(stderr); });
+            //            SPEW(2, { _ejs_log ("L"); fflush(stderr); });
         }
         lobj = next;
     }
@@ -1336,10 +1339,10 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     int bucket;
     int bucket_size = pow2_ceil(size);
 
-    bucket = ffs(bucket_size) - OBJECT_SIZE_LOW_LIMIT_BITS;
+    bucket = ffs(bucket_size);
 
-    if (bucket > HEAP_PAGELISTS_COUNT) {
-        SPEW(2, _ejs_log ("need to alloc from los!!!\n"));
+    if (bucket > OBJECT_SIZE_HIGH_LIMIT_BITS) {
+        SPEW(2, _ejs_log ("need to alloc %zd from los!!!\n", size));
         rv = alloc_from_los(size, scan_type);
         if (rv == NULL) {
             if (num_allocs == 0) {
@@ -1360,6 +1363,8 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
         }
         return rv;
     }
+
+    bucket -= OBJECT_SIZE_LOW_LIMIT_BITS;
 
     LOCK_GC();
 
