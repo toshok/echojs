@@ -816,11 +816,13 @@ class ComputeFree extends TreeVisitor
                         when UnaryExpression       then exp.ejs_free_vars = @free exp.argument
                         when BinaryExpression      then exp.ejs_free_vars = @free(exp.left).union @free exp.right
                         when LogicalExpression     then exp.ejs_free_vars = @free(exp.left).union @free exp.right
-                        when MemberExpression      then exp.ejs_free_vars = @free exp.object # we don't traverse into the property
+                        when MemberExpression      then exp.ejs_free_vars = @free(exp.object) # we don't traverse into the property
                         when CallExpression        then exp.ejs_free_vars = @setUnion.apply null, [@free exp.callee].concat exp.arguments.map @call_free
                         when NewExpression         then exp.ejs_free_vars = @setUnion.apply null, [@free exp.callee].concat exp.arguments.map @call_free
                         when SequenceExpression    then exp.ejs_free_vars = @setUnion.apply null, exp.expressions.map @call_free
                         when ConditionalExpression then exp.ejs_free_vars = @setUnion.call null, @free(exp.test), @free(exp.consequent), @free(exp.alternate)
+                        when TaggedTemplateExpression then exp.ejs_free_vars = @free exp.quasi
+                        when TemplateLiteral       then exp.ejs_free_vars = @setUnion.apply null, exp.expressions.map @call_free
                         when Literal               then exp.ejs_free_vars = new Set
                         when ThisExpression        then exp.ejs_free_vars = new Set
                         when Property              then exp.ejs_free_vars = @free exp.value # we skip the key
@@ -834,7 +836,6 @@ class ComputeFree extends TreeVisitor
                         when ExportDeclaration
                                 exp.ejs_free_vars = @free exp.declaration
                                 exp.ejs_decls = exp.declaration.ejs_decls
-                                
                         when ImportDeclaration
                                 exp.ejs_decls = new Set exp.specifiers.map ((specifier) -> specifier.id.name)
                                 # no free vars in an ImportDeclaration
