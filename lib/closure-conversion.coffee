@@ -100,8 +100,11 @@ setGlobal_id            = create_identifier "%setGlobal"
 getLocal_id             = create_identifier "%getLocal"
 getGlobal_id            = create_identifier "%getGlobal"
 moduleGet_id            = create_identifier "%moduleGet"
-moduleImportBatch_id          = create_identifier "%moduleImportBatch"
-createArgScratchArea_id = create_identifier "%createArgScratchArea"
+moduleImportBatch_id    = create_identifier "%moduleImportBatch"
+templateCallsite_id    = create_identifier "%templateCallsite"
+templateHandlerCall_id = create_identifier "%templateHandlerCall"
+templateDefaultHandlerCall_id = create_identifier "%templateDefaultHandlerCall"
+createArgScratchArea_id       = create_identifier "%createArgScratchArea"
 
 #
 # converts:
@@ -1638,6 +1641,48 @@ class DesugarDestructuring extends TreeVisitor
                 else
                         n
 
+class DesugarTemplates extends TreeVisitor
+        callsiteGen = startGenerator()
+        freshUpdate = () -> "%callsiteId_#{callsiteGen()}"
+        
+        generateCreateCallsiteId: (n) ->
+                raw_elements = []
+                cooked_elements = []
+                for q in n.quasis
+                        raw_elements.push    create_string_literal q.value.raw
+                        cooked_elements.push create_string_literal q.value.cooked
+
+                qo = {
+                        type: ObjectExpression,
+                        properties: [
+                                {
+                                   type: Property,
+                                   kind: "init",
+                                   key: create_identifier("raw"),
+                                   value: { type: ArrayExpression, elements: raw_elements }
+                                }
+                                {
+                                   type: Property,
+                                   kind: "init",
+                                   key: create_identifier("cooked"),
+                                   value: { type: ArrayExpression, elements: cooked_elements }
+                                }
+                        ]
+                }
+
+                create_intrinsic templateCallsite_id, [create_identifier(freshUpdate()), qo]
+                
+                        
+        visitTaggedTemplateExpression: (n) ->
+                substitutions = { type: ArrayExpression, elements: n.quasi.expressions }
+                create_intrinsic templateHandlerCall_id, [n.tag, @generateCreateCallsiteId(n.quasi), substitutions]
+                
+        visitTemplateLiteral: (n) ->
+                cooked = { type: ArrayExpression, elements: (create_string_literal(q.value.cooked) for q in n.quasis) }
+                substitutions = { type: ArrayExpression, elements: n.expressions }
+                create_intrinsic templateDefaultHandlerCall_id, [cooked, substitutions]
+                
+                
 # we split up assignment operators +=/-=/etc into their
 # component operator + assignment so we can mark lhs as
 # setLocal/setGlobal/etc, and rhs getLocal/getGlobal/etc
@@ -1982,6 +2027,7 @@ passes = [
         DesugarClasses
         DesugarDestructuring
         DesugarUpdateAssignments
+        DesugarTemplates
         HoistFuncDecls if enable_hoist_func_decls_pass
         FuncDeclsToVars
         HoistVars

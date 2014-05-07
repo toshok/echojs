@@ -48,6 +48,8 @@ runtime_interface =
         throw:                 -> @abi.createExternalFunction @module, "_ejs_throw",                     types.void, [types.EjsValue]
         rethrow:               -> @abi.createExternalFunction @module, "_ejs_rethrow",                   types.void, [types.EjsValue]
 
+        ToString:              -> @abi.createExternalFunction @module, "ToString",                       types.EjsValue, [types.EjsValue]
+        string_concat:         -> @abi.createExternalFunction @module, "_ejs_string_concat",             types.EjsValue, [types.EjsValue, types.EjsValue]
         init_string_literal:   -> @abi.createExternalFunction @module, "_ejs_string_init_literal",       types.void, [types.string, types.EjsValue.pointerTo(), types.EjsPrimString.pointerTo(), types.jschar.pointerTo(), types.int32]
 
         typeof_is_object:      -> returns_ejsval_bool only_reads_memory @abi.createExternalFunction @module, "_ejs_op_typeof_is_object",       types.EjsValue, [types.EjsValue]

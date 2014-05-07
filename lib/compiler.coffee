@@ -227,6 +227,8 @@ class LLVMIRVisitor extends TreeVisitor
                         
                 # build up our runtime method table
                 @ejs_intrinsics = Object.create null,
+                        templateDefaultHandlerCall: value: @handleTemplateDefaultHandlerCall
+                        templateHandlerCall:  value: @handleTemplateHandlerCall
                         moduleGet:            value: @handleModuleGet
                         moduleImportBatch:    value: @handleModuleImportBatch
                         getLocal:             value: @handleGetLocal
@@ -254,6 +256,9 @@ class LLVMIRVisitor extends TreeVisitor
                 @opencode_intrinsics =
                         unaryNot          : true
 
+                        templateDefaultHandlerCall: true
+                        templateHandlerCall:        true # unused
+                        
                         moduleGet         : true # unused
                         getLocal          : true # unused
                         setLocal          : true # unused
@@ -1633,6 +1638,36 @@ class LLVMIRVisitor extends TreeVisitor
                                 switch_stmt
                         
                 ir.setInsertPoint merge_block
+
+        handleTemplateDefaultHandlerCall: (exp, opencode) ->
+                # we should probably only inline the construction of the string if substitutions.length < $some-number
+                cooked_strings = exp.arguments[0].elements
+                substitutions = exp.arguments[1].elements
+                
+                cooked_i = 0
+                sub_i = 0
+                strval = null
+
+                concat_string = (s) =>
+                        if not strval
+                                strval = s
+                        else
+                                strval = @createCall @ejs_runtime.string_concat, [strval, s], "strconcat"
+                
+                while cooked_i < cooked_strings.length
+                        c = cooked_strings[cooked_i]
+                        cooked_i += 1
+                        if c.length isnt 0
+                                concat_string @getAtom(c.value)
+                        if sub_i < substitutions.length
+                                sub = @visit substitutions[sub_i]
+                                concat_string @createCall(@ejs_runtime.ToString, [sub], "subToString")
+                                sub_i += 1
+
+                strval
+
+        handleTemplateHandlerCall: (exp, opencode) ->
+                
 
         handleModuleGet: (exp, opencode) ->
                 moduleString = @visit exp.arguments[0]
