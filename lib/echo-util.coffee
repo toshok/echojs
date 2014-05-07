@@ -59,7 +59,7 @@ exports.create_identifier = create_identifier = (x) ->
         throw new Error "invalid name in create_identifier" if not x
         type: syntax.Identifier, name: x
 exports.create_string_literal = (x) ->
-        throw new Error "invalid string in create_string_literal" if not x
+        throw new Error "invalid string in create_string_literal" if not x?
         type: syntax.Literal, value: x, raw: "\"#{x}\""
 exports.create_number_literal = (x) ->
         throw new Error "invalid number '#{x}' (#{typeof x}) in create_number_literal" if typeof x isnt "number"
