@@ -51,7 +51,6 @@ $(call addExpectedFailure, fib1.js,                 "we don't output numbers cor
 $(call addExpectedFailure, const1.js,               "we permit assigning to const bindings")
 $(call addExpectedFailure, forof1.js,               "we don't support for-of yet")
 $(call addExpectedFailure, map1.js,                 "we throw the right exception but node 0.8 doesn't")
-$(call addExpectedFailure, template-string2.js,     "we don't compile tagged template literals (handler`literal`) yet")
 
 check: check-unit-tests run-tests
 

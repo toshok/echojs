@@ -228,7 +228,7 @@ class LLVMIRVisitor extends TreeVisitor
                 # build up our runtime method table
                 @ejs_intrinsics = Object.create null,
                         templateDefaultHandlerCall: value: @handleTemplateDefaultHandlerCall
-                        templateHandlerCall:  value: @handleTemplateHandlerCall
+                        templateCallsite:     value: @handleTemplateCallsite
                         moduleGet:            value: @handleModuleGet
                         moduleImportBatch:    value: @handleModuleImportBatch
                         getLocal:             value: @handleGetLocal
@@ -257,7 +257,6 @@ class LLVMIRVisitor extends TreeVisitor
                         unaryNot          : true
 
                         templateDefaultHandlerCall: true
-                        templateHandlerCall:        true # unused
                         
                         moduleGet         : true # unused
                         getLocal          : true # unused
@@ -1666,8 +1665,68 @@ class LLVMIRVisitor extends TreeVisitor
 
                 strval
 
-        handleTemplateHandlerCall: (exp, opencode) ->
-                
+        handleTemplateCallsite: (exp, opencode) ->
+                # we expect to be called with context something of the form:
+                #
+                #   function generate_callsiteId0 () {
+                #       %templateCallsite(%callsiteId_0, {
+                #           raw: [],
+                #           cooked: []
+                #       });
+                #   }
+                # 
+                # and we need to generate something along the lines of:
+                #
+                #   global const %callsiteId_0 = null; // an llvm IR construct
+                #
+                #   function generate_callsiteId0 () {
+                #       if (!%callsiteId_0) {
+                #           _ejs_gc_add_root(&%callsiteId_0);
+                #           %callsiteId_0 = { raw: [], cooked: [] };
+                #           %callsiteId_0.freeze();
+                #       }
+                #       return callsiteId_0;
+                #   }
+                #
+                # our containing function already exists, so we just
+                # need to replace the intrinsic with the new contents.
+                #
+                # XXX there's no reason to dynamically create the
+                # callsite, other than it being easier for now.  The
+                # callsite id's structure is known at compile time so
+                # everything could be allocated from the data segment
+                # and just used from there (much the same way we do
+                # with string literals.)
+
+                callsite_id = exp.arguments[0].value
+                callsite_obj_literal = exp.arguments[1]
+
+                insertBlock = ir.getInsertBlock()
+                insertFunc = insertBlock.parent
+
+                then_bb   = new llvm.BasicBlock "then",  insertFunc
+                merge_bb  = new llvm.BasicBlock "merge", insertFunc
+
+                callsite_alloca = @createAlloca @currentFunction, types.EjsValue, "local_#{callsite_id}"
+
+                callsite_global = new llvm.GlobalVariable @module, types.EjsValue, callsite_id, llvm.Constant.getAggregateZero(types.EjsValue)
+                global_callsite_load = @createLoad callsite_global, "load_global_callsite"
+                ir.createStore global_callsite_load, callsite_alloca
+
+                callsite_load = ir.createLoad callsite_alloca, "load_local_callsite"
+
+                isnull = @isNumber callsite_load
+                ir.createCondBr isnull, then_bb, merge_bb
+
+                @doInsideBBlock then_bb, =>
+                        # XXX missing: register callsite_obj gc root
+                        callsite_obj = @visit callsite_obj_literal
+                        ir.createStore callsite_obj, callsite_global
+                        ir.createStore callsite_obj, callsite_alloca
+                        ir.createBr merge_bb
+                        
+                ir.setInsertPoint merge_bb
+                ir.createRet ir.createLoad callsite_alloca, "load_local_callsite"
 
         handleModuleGet: (exp, opencode) ->
                 moduleString = @visit exp.arguments[0]
