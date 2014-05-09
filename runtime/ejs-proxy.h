@@ -13,8 +13,8 @@ typedef struct {
     /* object header */
     EJSObject obj;
 
-    ejsval handler;
-    ejsval target;
+    ejsval handler; // [[ProxyHandler]]
+    ejsval target;  // [[ProxyTarget]]
 
     // traps which, if overridden, are called from a proxy's
     // specops. if they aren't overridden, the equivalent specop is

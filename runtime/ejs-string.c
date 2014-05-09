@@ -1092,6 +1092,8 @@ _ejs_string_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 }
 
 EJS_DEFINE_CLASS(String,
+                 OP_INHERIT, // [[GetPrototypeOf]]
+                 OP_INHERIT, // [[SetPrototypeOf]]
                  _ejs_string_specop_get,
                  OP_INHERIT, // get_own_property
                  OP_INHERIT, // get_property

@@ -122,6 +122,8 @@ typedef struct _EJSPropertyIterator EJSPropertyIterator;
 
 typedef void (*EJSPropertyDescFunc)(ejsval name, EJSPropertyDesc *desc, void* data);
 
+typedef ejsval           (*SpecOpGetPrototypeOf) (ejsval obj);
+typedef EJSBool          (*SpecOpSetPrototypeOf) (ejsval obj, ejsval proto);
 typedef ejsval           (*SpecOpGet) (ejsval obj, ejsval propertyName);
 typedef EJSPropertyDesc* (*SpecOpGetOwnProperty) (ejsval obj, ejsval propertyName);
 typedef EJSPropertyDesc* (*SpecOpGetProperty) (ejsval obj, ejsval propertyName);
@@ -140,6 +142,10 @@ typedef void             (*SpecOpScan) (EJSObject* obj, EJSValueFunc scan_func);
 typedef struct {
     // special ops defined in the standard
     const char* class_name;
+
+    SpecOpGetPrototypeOf get_prototype_of;
+    SpecOpSetPrototypeOf set_prototype_of;
+
     SpecOpGet get;
     SpecOpGetOwnProperty get_own_property;
     SpecOpGetProperty get_property;
@@ -159,9 +165,9 @@ typedef struct {
 } EJSSpecOps;
 
 #define OP_INHERIT (void*)-1
-#define EJS_DEFINE_CLASS(n, get, get_own_property, get_property, put, can_put, has_property, _delete, default_value, define_own_property, has_instance, allocate, finalize, scan) \
+#define EJS_DEFINE_CLASS(n, get_prototype_of, set_prototype_of, get, get_own_property, get_property, put, can_put, has_property, _delete, default_value, define_own_property, has_instance, allocate, finalize, scan) \
     EJSSpecOps _ejs_##n##_specops = {                                   \
-        #n, (get), (get_own_property), (get_property), (put), (can_put), (has_property), (_delete), (default_value), (define_own_property), (has_instance), (allocate), (finalize), (scan) \
+        #n, (get_prototype_of), (set_prototype_of), (get), (get_own_property), (get_property), (put), (can_put), (has_property), (_delete), (default_value), (define_own_property), (has_instance), (allocate), (finalize), (scan) \
     };
 
 void _ejs_Class_initialize (EJSSpecOps *child, EJSSpecOps* parent);
@@ -178,7 +184,7 @@ void _ejs_Class_initialize (EJSSpecOps *child, EJSSpecOps* parent);
 struct _EJSObject {
     GCObjectHeader   gc_header;
     EJSSpecOps*      ops;
-    ejsval           proto; // the __proto__ property
+    ejsval           proto; // [[Prototype]]
     EJSPropertyMap*  map;
 };
 

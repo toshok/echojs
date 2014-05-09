@@ -432,7 +432,7 @@ static EJSSpecOps _ejs_property_iterator_specops = {
     NULL, NULL, NULL,
     NULL, NULL, NULL,
     NULL, NULL, NULL,
-    NULL,
+    NULL, NULL, NULL,
 
     _ejs_property_iterator_specop_allocate,
     _ejs_property_iterator_specop_finalize,
@@ -638,6 +638,8 @@ _ejs_Class_initialize (EJSSpecOps *child, EJSSpecOps* parent)
     EJS_ASSERT(child->p);                                               \
     EJS_MACRO_END
     
+    MAYBE_INHERIT_DISALLOW_NULL(get_prototype_of);
+    MAYBE_INHERIT_DISALLOW_NULL(set_prototype_of);
     MAYBE_INHERIT_DISALLOW_NULL(get);
     MAYBE_INHERIT_DISALLOW_NULL(get_own_property);
     MAYBE_INHERIT_DISALLOW_NULL(get_property);
@@ -831,7 +833,48 @@ _ejs_Object_getPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
     }
     
     /* 2. Return the value of the [[Prototype]] internal property of O. */
-    return EJSVAL_TO_OBJECT(obj)->proto;
+    return OP(EJSVAL_TO_OBJECT(obj),get_prototype_of)(obj);
+}
+
+// ECMA262: 19.1.2.18
+// Object.setPrototypeOf ( O, proto )
+static ejsval
+_ejs_Object_setPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    // When the setPrototypeOf function is called with arguments O and proto, the following steps are taken:
+
+    ejsval O = _ejs_undefined;
+    ejsval proto = _ejs_undefined;
+    if (argc > 0)
+        O = args[0];
+    if (argc > 1)
+        proto = args[1];
+
+    // 1. Let O be CheckObjectCoercible(O).
+    // 2. ReturnIfAbrupt(O).
+    if (!EJSVAL_IS_OBJECT(O) && !EJSVAL_IS_NULL(O)) {
+        _ejs_log ("throw TypeError\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+    // 3. If Type(proto) is neither Object nor Null, then throw a TypeError exception.
+    if (!EJSVAL_IS_OBJECT(proto) && !EJSVAL_IS_NULL(proto)) {
+        _ejs_log ("throw TypeError\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+
+    // 4. If Type(O) is not Object, then return O.
+    if (!EJSVAL_IS_OBJECT(O))
+        return O;
+    // 5. Let status be the result of calling the [[SetPrototypeOf]] internal method of O with argument proto.
+    EJSBool status = OP(EJSVAL_TO_OBJECT(O),set_prototype_of)(O,proto);
+    // 6. ReturnIfAbrupt(status).
+    // 7. If status is false, then throw a TypeError exception.
+    if (!status) {
+        _ejs_log ("throw TypeError\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+    // 8. Return O.
+    return O;
 }
 
 // ECMA262: 15.2.3.3
@@ -1351,7 +1394,7 @@ _ejs_Object_prototype_isPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ej
     /* 3. Repeat */
     while (EJS_TRUE) {
         /*    a. Let V be the value of the [[Prototype]] internal property of V. */
-        V = EJSVAL_TO_OBJECT(V)->proto;
+        V = OP(EJSVAL_TO_OBJECT(V),get_prototype_of)(V);
 
         /*    b. if V is null, return false */
         if (EJSVAL_IS_NULL(V))
@@ -1423,6 +1466,7 @@ _ejs_object_init (ejsval global)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_Object_prototype, x, _ejs_Object_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
 
     OBJ_METHOD(getPrototypeOf);
+    OBJ_METHOD(setPrototypeOf);
     OBJ_METHOD(getOwnPropertyDescriptor);
     OBJ_METHOD(getOwnPropertyNames);
     OBJ_METHOD(create);
@@ -1449,6 +1493,73 @@ _ejs_object_init (ejsval global)
 }
 
 
+// [[GetPrototypeOf]] ECMA262: 9.1.1
+static ejsval
+_ejs_object_specop_get_prototype_of (ejsval obj)
+{
+    return EJSVAL_TO_OBJECT(obj)->proto;
+}
+
+// [[SetPrototypeOf]] ECMA262: 9.1.1
+static EJSBool
+_ejs_object_specop_set_prototype_of (ejsval O, ejsval V)
+{
+    EJSObject* O_ = EJSVAL_TO_OBJECT(O);
+
+    // When the [[SetPrototypeOf]] internal method of O is called with argument V the following steps are taken:
+
+    // 1. Assert: Either Type(V) is Object or Type(V) is Null.
+    if (!EJSVAL_IS_OBJECT(V) && !EJSVAL_IS_NULL(V)) {
+        _ejs_log ("throw TypeError\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+        
+    // 2. Let extensible be the value of the [[Extensible]] internal slot of O.
+    EJSBool extensible = EJS_OBJECT_IS_EXTENSIBLE(O_);
+
+    // 3. Let current be the value of the [[Prototype]] internal slot of O.
+    ejsval current = O_->proto;
+
+    // 4. If SameValue(V, current), then return true.
+    if (SameValue(V, current))
+        return EJS_TRUE;
+
+    // 5. If extensible is false, then return false.
+    if (!extensible)
+        return EJS_FALSE;
+
+    // 6. If V is not null, then
+    if (!EJSVAL_IS_NULL(V)) {
+        //    a. Let p be V.
+        ejsval p = V;
+        //    b. Repeat, while p is not null
+        while (!EJSVAL_IS_NULL(p)) {
+            //       i.   If SameValue(p, O) is true, then return false.
+            if (SameValue(p, O))
+                return EJS_FALSE;
+            //       ii.  Let nextp be the result of calling the [[GetPrototypeOf]] internal method of p with no arguments.
+            ejsval nextp = OP(EJSVAL_TO_OBJECT(p),get_prototype_of)(p);
+            //       iii. ReturnIfAbrupt(nextp).
+            //       iv.  Let p be nextp.
+            p = nextp;
+        }
+    }
+
+    // toshok -- why are re-doing this?  steps 4 and 5 above appear to already have taken care of these cases.
+
+    // 7. Let extensible be the value of the [[Extensible]] internal slot of O.
+    // 8. If extensible is false, then
+    //    a. Let current2 be the value of the [[Prototype]] internal slot of O.
+    //    b. If SameValue(V, current2) is true, then return true.
+    //    c. Return false.
+
+
+    // 9. Set the value of the [[Prototype]] internal slot of O to V.
+    O_->proto = V;
+
+    // 10. Return true.
+    return EJS_TRUE;
+}
 
 // ECMA262: 8.12.3
 static ejsval
@@ -1459,7 +1570,7 @@ _ejs_object_specop_get (ejsval obj_, ejsval propertyName)
     pname = ToString(propertyName);
 
     if (!ucs2_strcmp(_ejs_ucs2___proto__, EJSVAL_TO_FLAT_STRING(pname)))
-        return EJSVAL_TO_OBJECT(obj_)->proto;
+        return OP(EJSVAL_TO_OBJECT(obj_),get_prototype_of) (obj_);
 
     /* 1. Let desc be the result of calling the [[GetProperty]] internal method of O with property name P. */
     EJSPropertyDesc* desc = OP(EJSVAL_TO_OBJECT(obj_),get_property) (obj_, pname);
@@ -1512,7 +1623,7 @@ _ejs_object_specop_get_property (ejsval O, ejsval P)
         return prop;
 
     /* 3. Let proto be the value of the [[Prototype]] internal property of O. */
-    ejsval proto = obj->proto;
+    ejsval proto = OP(obj,get_prototype_of)(O);
 
     /* 4. If proto is null, return undefined. */
     if (EJSVAL_IS_NULL(proto))
@@ -1603,7 +1714,7 @@ _ejs_object_specop_can_put (ejsval O, ejsval P)
         return _ejs_property_desc_is_writable(desc);
     }
     /* 3. Let proto be the [[Prototype]] internal property of O. */
-    ejsval proto = obj->proto;
+    ejsval proto = OP(obj,get_prototype_of)(O);
 
     /* 4. If proto is null, then return the value of the [[Extensible]] internal property of O. */
     if (EJSVAL_IS_NULL(proto))
@@ -1919,6 +2030,8 @@ _ejs_object_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 }
 
 EJS_DEFINE_CLASS(Object,
+                 _ejs_object_specop_get_prototype_of,
+                 _ejs_object_specop_set_prototype_of,
                  _ejs_object_specop_get,
                  _ejs_object_specop_get_own_property,
                  _ejs_object_specop_get_property,

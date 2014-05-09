@@ -49,6 +49,18 @@ _ejs_proxy_init(ejsval global)
 
 
 static ejsval
+_ejs_proxy_specop_get_prototype_of (ejsval obj)
+{
+    EJS_NOT_IMPLEMENTED();
+}
+
+static EJSBool
+_ejs_proxy_specop_set_prototype_of (ejsval obj, ejsval proto)
+{
+    EJS_NOT_IMPLEMENTED();
+}
+
+static ejsval
 _ejs_proxy_specop_get (ejsval obj, ejsval propertyName)
 {
     EJS_NOT_IMPLEMENTED();
@@ -122,6 +134,8 @@ _ejs_proxy_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 
 EJSSpecOps _ejs_proxy_specops = {
     "Proxy",
+    _ejs_proxy_specop_get_prototype_of,
+    _ejs_proxy_specop_set_prototype_of,
     _ejs_proxy_specop_get,
     _ejs_proxy_specop_get_own_property,
     _ejs_proxy_specop_get_property,

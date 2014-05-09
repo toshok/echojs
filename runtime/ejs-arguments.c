@@ -110,6 +110,8 @@ _ejs_arguments_specop_finalize (EJSObject* obj)
 }
 
 EJS_DEFINE_CLASS(Arguments,
+                 OP_INHERIT, // [[GetPrototypeOf]]
+                 OP_INHERIT, // [[SetPrototypeOf]]
                  _ejs_arguments_specop_get,
                  OP_INHERIT, // get_own_property
                  OP_INHERIT, // get_property

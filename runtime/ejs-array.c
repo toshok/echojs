@@ -2117,6 +2117,8 @@ _ejs_array_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 }
 
 EJS_DEFINE_CLASS(Array,
+                 OP_INHERIT, // [[GetPrototypeOf]]
+                 OP_INHERIT, // [[SetPrototypeOf]]
                  _ejs_array_specop_get,
                  _ejs_array_specop_get_own_property,
                  OP_INHERIT, // get_property

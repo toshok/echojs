@@ -820,6 +820,8 @@ _ejs_arraybuffer_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 }
 
 EJS_DEFINE_CLASS(ArrayBuffer,
+                 OP_INHERIT, // [[GetPrototypeOf]]
+                 OP_INHERIT, // [[SetPrototypeOf]]
                  _ejs_arraybuffer_specop_get,
                  _ejs_arraybuffer_specop_get_own_property,
                  OP_INHERIT, // get_property
@@ -1010,6 +1012,8 @@ _ejs_dataview_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 }
 
 EJS_DEFINE_CLASS(DataView,
+                 OP_INHERIT, // [[GetPrototypeOf]]
+                 OP_INHERIT, // [[SetPrototypeOf]]
                  _ejs_dataview_specop_get,
                  _ejs_dataview_specop_get_own_property,
                  _ejs_dataview_specop_get_property,
@@ -1033,7 +1037,7 @@ static EJSSpecOps _ejs_typedarray_specops = {
     NULL, NULL, NULL,
     NULL, NULL, NULL,
     NULL, NULL, NULL,
-    NULL,
+    NULL, NULL, NULL,
 
     _ejs_typedarray_specop_allocate,
     _ejs_typedarray_specop_finalize,

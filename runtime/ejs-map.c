@@ -497,6 +497,8 @@ _ejs_map_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 }
 
 EJS_DEFINE_CLASS(Map,
+                 OP_INHERIT, // [[GetPrototypeOf]]
+                 OP_INHERIT, // [[SetPrototypeOf]]
                  OP_INHERIT, // get
                  OP_INHERIT, // get_own_property
                  OP_INHERIT, // get_property

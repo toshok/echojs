@@ -643,6 +643,8 @@ _ejs_xmlhttprequest_specop_allocate()
 }
 
 EJS_DEFINE_CLASS(XMLHttpRequest,
+                 OP_INHERIT, // [[GetPrototypeOf]]
+                 OP_INHERIT, // [[SetPrototypeOf]]
                  OP_INHERIT, // get,
                  OP_INHERIT, // get_own_property,
                  OP_INHERIT, // get_property,
