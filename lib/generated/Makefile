@@ -26,7 +26,7 @@ bootstrap::
 	@cp ejs.js.exe ../../ejs.js.exe.stage1
 	@mv ejs.js.exe ../..
 
-stages := $(shell seq 2 3)
+stages := $(shell seq 2 6)
 
 define stage_template
 make-stage$(1): $(wildcard *.js) ejs.js $(EXTRA_JS_SOURCES)

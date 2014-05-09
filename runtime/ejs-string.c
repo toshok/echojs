@@ -987,6 +987,73 @@ _ejs_String_fromCharCode (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return rv;
 }
 
+// ECMA262: 10.1.1 Static Semantics: UTF-16Encoding
+static int
+codepoint_to_codeunits(int64_t codepoint, jschar* units)
+{
+    // 1. Assert: 0 ≤ cp ≤ 0x10FFFF. 
+    EJS_ASSERT (codepoint >= 0 && codepoint <= 0x10FFFF);
+
+    // 2. If cp ≤ 65535, then return cp.
+    if (codepoint <= 65535) {
+        *units = (jschar)codepoint;
+        return 1;
+    }
+    
+    // 3. Let cu1 be floor((cp – 65536) / 1024) + 55296. NOTE 55296 is 0xD800. 
+    *units = (jschar)(floor((codepoint - 0x10000) / 1024) + 0xD800);
+    // 4. Let cu2 be ((cp – 65536) modulo 1024) + 56320. NOTE 56320 is 0xDC00.
+    *(units+1) = (jschar)((codepoint - 0x10000) % 1024) + 0xDC00;
+    // 5. Return the code unit sequence consisting of cu1 followed by cu2.
+    return 2;
+}
+  
+// ECMA262: 21.1.2.2 String.fromCodePoint ( ...codePoints ) 
+static ejsval
+_ejs_String_fromCodePoint (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    if (argc == 0)
+        return _ejs_atom_empty;
+
+    // 1. Assert: codePoints is a well-formed rest parameter object
+    // 2. Let length be the result of Get(codePoints, "length"). 
+    uint32_t length = argc;
+
+    // 3. Let elements be a new List. 
+    jschar* elements = (jschar*)malloc(sizeof(jschar) * 2*length); // a safe maximum
+    jschar* el = elements;
+
+    // 4. Let nextIndex be 0. 
+    uint32_t nextIndex = 0;
+    // 5. Repeat while nextIndex < length 
+    while (nextIndex < length) {
+        //    a. Let next be the result of Get(codePoints, ToString(nextIndex)). 
+        ejsval next = args[nextIndex];
+        //    b. Let nextCP be ToNumber(next).
+        ejsval nextCP = ToNumber(next);
+        //    c. ReturnIfAbrupt(nextCP). 
+        //    d. If SameValue(nextCP, ToInteger(nextCP)) is false, then throw a RangeError exception. 
+        if (ToDouble(nextCP) != ToInteger(nextCP))
+            _ejs_throw_nativeerror_utf8(EJS_RANGE_ERROR, "1"); // XXX
+        int64_t nextCP_ = ToInteger(nextCP);
+
+        //    e. If nextCP < 0 or nextCP > 0x10FFFF, then throw a RangeError exception.
+        if (nextCP_ < 0 || nextCP_ > 0x10FFFF) {
+            _ejs_throw_nativeerror_utf8(EJS_RANGE_ERROR, "2"); // XXX
+        }
+
+        //    f. Append the elements of the UTF-16Encoding (10.1.1) of nextCP to the end of elements.
+        el += codepoint_to_codeunits(nextCP_, el);
+
+        //    g. Let nextIndex be nextIndex + 1. 
+        nextIndex ++;
+    }
+    // 6. Return the String value whose elements are, in order, the elements in the List elements. If length is 0, the empty string is returned. 
+    ejsval rv = _ejs_string_new_ucs2_len (elements, el - elements);
+    free(elements);
+    return rv;
+}
+
 static void
 _ejs_string_init_proto()
 {
@@ -1041,6 +1108,7 @@ _ejs_string_init(ejsval global)
     PROTO_METHOD(valueOf);
 
     OBJ_METHOD(fromCharCode);
+    OBJ_METHOD(fromCodePoint);
 
 #undef OBJ_METHOD
 #undef PROTO_METHOD

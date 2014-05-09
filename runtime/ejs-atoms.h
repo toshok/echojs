@@ -235,6 +235,7 @@ EJS_ATOM(toUpperCase)
 EJS_ATOM(trim)
 //EJS_ATOM(valueOf)
 EJS_ATOM(fromCharCode)
+EJS_ATOM(fromCodePoint)
 
 // Number functions
 //EJS_ATOM(valueOf)

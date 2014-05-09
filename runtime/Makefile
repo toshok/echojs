@@ -8,8 +8,8 @@ C_SOURCES= \
 	ejs-array.c \
 	ejs-boolean.c \
 	ejs-builtin-modules.c \
-	ejs-console.c \
 	ejs-closureenv.c \
+	ejs-console.c \
 	ejs-date.c \
 	ejs-error.c \
 	ejs-exception.c \
@@ -152,6 +152,11 @@ $(analyze_plists_c): %.plist: %.c
 
 $(analyze_plists_objc): %.plist: %.m
 	@echo [$(CC) analyze] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) $(OSX_CFLAGS) --analyze $< -o $@
+
+
+class-test: $(C_SOURCES:%.c=%.o.osx) $(OBJC_SOURCES:%.m=%.o.osx) class-test.o.osx
+	@echo [$(CC) osx] $< 
+	$(CC) -ObjC $(OSX_CFLAGS) -o $@ $(C_SOURCES:%.c=%.o.osx) $(OBJC_SOURCES:%.m=%.o.osx) class-test.o.osx ../external-deps/pcre-osx/.libs/libpcre16.a -framework Foundation -framework AppKit -lstdc++
 
 
 -include $(patsubst %.o.osx,.deps/%.o.osx-deps,$(OSX_OBJECTS))

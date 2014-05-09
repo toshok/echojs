@@ -4,7 +4,7 @@ TOP=../..
 #	cp $(TOP)/pirouette/bindings/generated/*.js .
 
 all: copy-pirouette
-	../../ejs --leave-temp helloosx.js
+	../../ejs.js.exe --leave-temp helloosx.js
 	mkdir -p HelloOSX.app/Contents/MacOS/
 	cp helloosx.js.exe HelloOSX.app/Contents/MacOS/
 
