@@ -1149,7 +1149,6 @@ _ejs_String_prototype_endsWith(ejsval env, ejsval _this, uint32_t argc, ejsval *
     if (EJSVAL_IS_OBJECT(searchString)) {
         //    a. Let isRegExp be HasProperty(searchString, @@isRegExp). 
         //    b. If isRegExp is true, then throw a TypeError exception. 
-        // FIXME
         if (EJSVAL_IS_REGEXP(searchString)) {
             _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "2"); // XXX
         }
@@ -1300,6 +1299,60 @@ _ejs_String_prototype_repeat(ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     return T;
 }
 
+// ECMA262 21.1.3.6 String.prototype.contains ( searchString [ , position ] ) 
+static ejsval
+_ejs_String_prototype_contains(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval searchString = _ejs_undefined;
+    ejsval position = _ejs_undefined;
+    if (argc > 0)
+        searchString = args[0];
+    if (argc > 1)
+        position = args[1];
+
+    _this = ToObject(_this);
+    // 1. Let O be CheckObjectCoercible(this value). 
+    if (!EJSVAL_IS_OBJECT(_this) && !EJSVAL_IS_NULL(_this)) {
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "1"); // XXX
+    }
+
+    // 2. Let S be ToString(O). 
+    // 3. ReturnIfAbrupt(S). 
+    ejsval S = ToString(_this);
+
+    // 4. If Type(searchString) is Object, then 
+    if (EJSVAL_IS_OBJECT(searchString)) {
+        // a. Let isRegExp be HasProperty(searchString, @@isRegExp). 
+        // b. If isRegExp is true, then throw a TypeError exception. 
+        if (EJSVAL_IS_REGEXP(searchString)) {
+            _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "2"); // XXX
+        }
+    }
+    // 5. Let searchStr be ToString(searchString). 
+    // 6. ReturnIfAbrupt(searchStr). 
+    ejsval searchStr = ToString(searchString);
+
+    // 7. Let pos be ToInteger(position). (If position is undefined, this step produces the value 0). 
+    // 8. ReturnIfAbrupt(pos). 
+    int64_t pos = ToInteger(position);
+
+    // 9. Let len be the number of elements in S. 
+    uint32_t len = EJSVAL_TO_STRLEN(S);
+
+    // 10. Let start be min(max(pos, 0), len). 
+    int64_t start = MIN(MAX(pos, 0), len);
+
+    EJSPrimString* prim_S = _ejs_string_flatten(S);
+    EJSPrimString* prim_searchStr = _ejs_string_flatten(searchStr);
+
+    return ucs2_strstr(prim_S->data.flat + start, prim_searchStr->data.flat) ? _ejs_true : _ejs_false;
+
+    // 11. Let searchLen be the number of elements in searchStr. 
+    // 12. If there exists any integer k not smaller than start such that k + searchLen is not greater than len, 
+    //     and for all nonnegative integers j less than searchLen, the character at position k+j of S is the same 
+    //     as the character at position j of searchStr, return true; but if there is no such integer k, return false.
+}
+
 static void
 _ejs_string_init_proto()
 {
@@ -1336,6 +1389,7 @@ _ejs_string_init(ejsval global)
     PROTO_METHOD(charCodeAt);
     PROTO_METHOD(codePointAt);
     PROTO_METHOD(concat);
+    PROTO_METHOD(contains);
     PROTO_METHOD(endsWith);
     PROTO_METHOD(indexOf);
     PROTO_METHOD(lastIndexOf);
