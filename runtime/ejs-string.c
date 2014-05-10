@@ -1054,6 +1054,60 @@ _ejs_String_fromCodePoint (ejsval env, ejsval _this, uint32_t argc, ejsval *args
     return rv;
 }
 
+// ECMA262: 21.1.3.3 String.prototype.codePointAt ( pos ) 
+// NOTE Returns a nonnegative integer Number less than 1114112 (0x110000) that is the UTF-16 encoded code 
+// point value starting at the string element at position pos in the String resulting from converting this object to a String. If 
+// there is no element at that position, the result is undefined. If a valid UTF-16 surrogate pair does not begin at pos, the 
+// result is the code unit at pos.
+static ejsval
+_ejs_String_prototype_codePointAt(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    // When the codePointAt method is called with one argument pos, the following steps are taken: 
+    ejsval pos = _ejs_undefined;
+    if (argc > 0)
+        pos = args[0];
+
+    _this = ToObject(_this);
+
+    // 1. Let O be CheckObjectCoercible(this value). 
+    if (!EJSVAL_IS_OBJECT(_this) && !EJSVAL_IS_NULL(_this)) {
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "1"); // XXX
+    }
+
+    // 2. Let S be ToString(O).
+    // 3. ReturnIfAbrupt(S). 
+    ejsval S = ToString(_this);
+
+    // 4. Let position be ToInteger(pos). 
+    int64_t position = ToInteger(pos);
+
+    // 5. ReturnIfAbrupt(position). 
+
+    // 6. Let size be the number of elements in S. 
+    uint32_t size = EJSVAL_TO_STRLEN(S);
+
+    // 7. If position < 0 or position ≥ size, return undefined. 
+    if (position < 0 || position >= size)
+        return _ejs_undefined;
+
+    // 8. Let first be the code unit value of the element at index position in the String S. 
+    uint64_t first = _ejs_string_ucs2_at (EJSVAL_TO_STRING(S), position);
+
+    // 9. If first < 0xD800 or first > 0xDBFF or position+1 = size, then return first. 
+    if (first < 0xD800 || first > 0xDBFF || position+1 == size)
+        return NUMBER_TO_EJSVAL(first);
+
+    // 10. Let second be the code unit value of the element at index position+1 in the String S. 
+    uint64_t second = _ejs_string_ucs2_at (EJSVAL_TO_STRING(S), position+1);
+
+    // 11. If second < 0xDC00 or second > 0xDFFF, then return first. 
+    if (second < 0xDC00 || second > 0xDFFF)
+        return NUMBER_TO_EJSVAL(first);
+
+    // 12. Return ((first – 0xD800) × 1024) + (second – 0xDC00) + 0x10000. 
+    return NUMBER_TO_EJSVAL(((first - 0xD800) * 1024) + (second - 0xDC00) + 0x10000);
+}
+
 // ECMA262: 21.1.3.13 String.prototype.repeat ( count )
 static ejsval
 _ejs_String_prototype_repeat(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -1136,6 +1190,7 @@ _ejs_string_init(ejsval global)
 
     PROTO_METHOD(charAt);
     PROTO_METHOD(charCodeAt);
+    PROTO_METHOD(codePointAt);
     PROTO_METHOD(concat);
     PROTO_METHOD(indexOf);
     PROTO_METHOD(lastIndexOf);

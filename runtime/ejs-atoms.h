@@ -216,6 +216,7 @@ EJS_ATOM(stringify)
 // String functions
 EJS_ATOM(charAt)
 EJS_ATOM(charCodeAt)
+EJS_ATOM(codePointAt)
 //EJS_ATOM(concat)
 //EJS_ATOM(indexOf)
 EJS_ATOM(lastIndexOf)

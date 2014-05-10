@@ -1,0 +1,7 @@
+[RangeError: 3]
+
+abc
+abcabc
+abcabcabc
+[RangeError: 2]
+abcabc
