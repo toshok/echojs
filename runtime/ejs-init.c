@@ -29,6 +29,7 @@
 #include "ejs-value.h"
 #include "ejs-xhr.h"
 #include "ejs-map.h"
+#include "ejs-set.h"
 #if IOS
 #include "ejs-webgl.h"
 #endif
@@ -65,6 +66,7 @@ _ejs_init_classes()
     _ejs_Class_initialize (&_ejs_Error_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Function_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Map_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_Set_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Number_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_RegExp_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_String_specops, &_ejs_Object_specops);
@@ -129,6 +131,7 @@ _ejs_init(int argc, char** argv)
     _ejs_proxy_init(_ejs_global);
     _ejs_symbol_init(_ejs_global);
     _ejs_map_init(_ejs_global);
+    _ejs_set_init(_ejs_global);
 
     _ejs_typedarrays_init(_ejs_global);
 #if IOS

@@ -27,6 +27,7 @@ C_SOURCES= \
 	ejs-recording.c \
 	ejs-regexp.c \
 	ejs-require.c \
+	ejs-set.c \
 	ejs-string.c \
 	ejs-symbol.c \
 	ejs-typedarrays.c \
