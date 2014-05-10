@@ -1054,6 +1054,54 @@ _ejs_String_fromCodePoint (ejsval env, ejsval _this, uint32_t argc, ejsval *args
     return rv;
 }
 
+// ECMA262: 21.1.3.13 String.prototype.repeat ( count )
+static ejsval
+_ejs_String_prototype_repeat(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval count = _ejs_undefined;
+    if (argc > 0)
+        count = args[0];
+
+    _this = ToObject(_this);
+
+    // 1. Let O be CheckObjectCoercible(this value).
+    if (!EJSVAL_IS_OBJECT(_this) && !EJSVAL_IS_NULL(_this)) {
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "1"); // XXX
+    }
+
+    // 2. Let S be ToString(O).
+    ejsval S = ToString(_this);
+
+    // 3. ReturnIfAbrupt(S).
+    // 4. Let n be the result of calling ToInteger(count).
+    // 5. ReturnIfAbrupt(n).
+    double n_ = ToDouble(count);
+
+    // 7. If n is +∞, then throw a RangeError exception.
+    if (isinf(n_))
+        _ejs_throw_nativeerror_utf8(EJS_RANGE_ERROR, "2"); // XXX
+
+    int64_t n = (int64_t)n_;
+
+    // 6. If n < 0, then throw a RangeError exception.
+    if (n < 0)
+        _ejs_throw_nativeerror_utf8(EJS_RANGE_ERROR, "3"); // XXX
+
+    // 8. Let T be a String value that is made from n copies of S appended together. If n is 0, T is the empty String.
+    if (n == 0)
+        return _ejs_atom_empty;
+
+    ejsval T = S;
+    n--;
+    while (n > 0) {
+        T = _ejs_string_concat(T, S);
+        n--;
+    }
+
+    // 9. Return T.
+    return T;
+}
+
 static void
 _ejs_string_init_proto()
 {
@@ -1093,6 +1141,7 @@ _ejs_string_init(ejsval global)
     PROTO_METHOD(lastIndexOf);
     PROTO_METHOD(localeCompare);
     PROTO_METHOD(match);
+    PROTO_METHOD(repeat);
     PROTO_METHOD(replace);
     PROTO_METHOD(search);
     PROTO_METHOD(slice);
