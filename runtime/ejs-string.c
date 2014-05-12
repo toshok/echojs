@@ -524,7 +524,7 @@ _ejs_String_prototype_match (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
         
 
     /* 5. Let global be the result of calling the [[Get]] internal method of rx with argument "global". */
-    ejsval global = OP(rxo,get) (rx, _ejs_atom_global);
+    ejsval global = OP(rxo,get) (rx, _ejs_atom_global, rx);
     
     /* 6. Let exec be the standard built-in function RegExp.prototype.exec (see 15.10.6.2) */
     ejsval exec = _ejs_RegExp_prototype_exec_closure;
@@ -539,7 +539,7 @@ _ejs_String_prototype_match (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     /* 8. Else, global is true */
     else {
         /*    a. Call the [[Put]] internal method of rx with arguments "lastIndex" and 0. */
-        OP(rxo, put)(rx, _ejs_atom_lastIndex, NUMBER_TO_EJSVAL(0), EJS_FALSE);
+        OP(rxo, put)(rx, _ejs_atom_lastIndex, NUMBER_TO_EJSVAL(0), rx, EJS_FALSE);
 
         /*    b. Let A be a new array created as if by the expression new Array() where Array is the standard built-in constructor with that name. */
         ejsval A = _ejs_array_new(0, EJS_FALSE);
@@ -566,21 +566,21 @@ _ejs_String_prototype_match (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
             /* iii. Else, result is not null */
             else {
                 /* 1. Let thisIndex be the result of calling the [[Get]] internal method of rx with argument "lastIndex". */
-                ejsval thisIndex = OP(rxo, get)(rx, _ejs_atom_lastIndex);
+                ejsval thisIndex = OP(rxo, get)(rx, _ejs_atom_lastIndex, rx);
                 
                 /* 2. If thisIndex = previousLastIndex then */
                 if (EJSVAL_EQ(thisIndex, previousLastIndex)) {
                     /* a. Call the [[Put]] internal method of rx with arguments "lastIndex" and thisIndex+1. */
                     /* b. Set previousLastIndex to thisIndex+1. */
                     previousLastIndex = NUMBER_TO_EJSVAL (EJSVAL_TO_NUMBER(thisIndex) + 1);
-                    OP(rxo, put)(rx, _ejs_atom_lastIndex, previousLastIndex, EJS_FALSE);
+                    OP(rxo, put)(rx, _ejs_atom_lastIndex, previousLastIndex, rx, EJS_FALSE);
                 }
                 /* 3. Else, set previousLastIndex to thisIndex. */
                 else {
                     previousLastIndex = thisIndex;
                 }
                 /* 4. Let matchStr be the result of calling the [[Get]] internal method of result with argument "0". */
-                ejsval matchStr = OP(rxo, get)(rx, NUMBER_TO_EJSVAL(0));
+                ejsval matchStr = OP(rxo, get)(rx, NUMBER_TO_EJSVAL(0), rx);
 
                 /* 5. Call the [[DefineOwnProperty]] internal method of A with arguments ToString(n), the Property Descriptor {[[Value]]: matchStr, [[Writable]]: true, [[Enumerable]]: true, [[configurable]]: true}, and false. */
                 _ejs_object_setprop (A, NUMBER_TO_EJSVAL(n), matchStr);
@@ -1419,7 +1419,7 @@ _ejs_string_init(ejsval global)
 }
 
 static ejsval
-_ejs_string_specop_get (ejsval obj, ejsval propertyName)
+_ejs_string_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
 {
     // check if propertyName is an integer, or a string that we can convert to an int
     EJSBool is_index = EJS_FALSE;
@@ -1446,7 +1446,7 @@ _ejs_string_specop_get (ejsval obj, ejsval propertyName)
     }
 
     // otherwise we fallback to the object implementation
-    return _ejs_Object_specops.get (obj, propertyName);
+    return _ejs_Object_specops.get (obj, propertyName, receiver);
 }
 
 static EJSObject*

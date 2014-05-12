@@ -6,6 +6,7 @@
 #include "ejs-gc.h"
 #include "ejs-error.h"
 #include "ejs-function.h"
+#include "ejs-proxy.h"
 #include "ejs-ops.h"
 
 #define EJSVAL_IS_MAP(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Map_specops))
@@ -129,7 +130,7 @@ _ejs_Map_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
     // 4. If M’s [[MapData]] internal slot is undefined, then throw a TypeError exception.
 
     // 5. If IsCallable(callbackfn) is false, throw a TypeError exception.
-    if (!EJSVAL_IS_FUNCTION(callbackfn))
+    if (!EJSVAL_IS_CALLABLE(callbackfn))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Map.prototype.forEach callbackfn isn't a function.");
     
     // 6. If thisArg was supplied, let T be thisArg; else let T be undefined.
@@ -382,6 +383,7 @@ _ejs_Map_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         iter = _ejs_undefined;
     // 7. Else,
     else {
+        EJS_NOT_IMPLEMENTED();
         //    a. Let iter be the result of GetIterator(iterable).
         //    b. ReturnIfAbrupt(iter).
         //    c. Let adder be the result of Get(map, "set").

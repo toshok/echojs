@@ -25,6 +25,8 @@ typedef struct {
 
 EJS_BEGIN_DECLS
 
+extern ejsval _ejs_Proxy;
+extern ejsval _ejs_Proxy_prototype;
 extern EJSSpecOps _ejs_Proxy_specops;
 
 void _ejs_proxy_init(ejsval global);

@@ -9,6 +9,7 @@
 #include "ejs-value.h"
 #include "ejs-object.h"
 #include "ejs-function.h"
+#include "ejs-proxy.h"
 #include "ejs-array.h"
 #include "ejs-error.h"
 #include "ejs-string.h"
@@ -153,7 +154,7 @@ _ejs_Function_prototype_apply (ejsval env, ejsval _this, uint32_t argc, ejsval *
     ejsval func = _this;
 
     /* 1. If IsCallable(func) is false, then throw a TypeError exception. */
-    if (!EJSVAL_IS_FUNCTION(_this)) {
+    if (!EJSVAL_IS_CALLABLE(_this)) {
         printf ("throw TypeError, func is not callable\n");
         EJS_NOT_IMPLEMENTED();
     }
@@ -177,7 +178,7 @@ _ejs_Function_prototype_apply (ejsval env, ejsval _this, uint32_t argc, ejsval *
     EJSObject* argArray_ = EJSVAL_TO_OBJECT(argArray);
 
     /* 4. Let len be the result of calling the [[Get]] internal method of argArray with argument "length". */
-    ejsval len = OP(argArray_,get) (argArray, _ejs_atom_length);
+    ejsval len = OP(argArray_,get) (argArray, _ejs_atom_length, argArray);
 
     /* 5. Let n be ToUint32(len). */
     uint32_t n = (uint32_t)EJSVAL_TO_NUMBER(len);
@@ -194,7 +195,7 @@ _ejs_Function_prototype_apply (ejsval env, ejsval _this, uint32_t argc, ejsval *
         ejsval indexName = NUMBER_TO_EJSVAL(index);
         /*    b. Let nextArg be the result of calling the [[Get]] internal method of argArray with indexName as the  */
         /*       argument. */
-        ejsval nextArg = OP(argArray_,get)(argArray, indexName);
+        ejsval nextArg = OP(argArray_,get)(argArray, indexName, argArray);
         /*    c. Append nextArg as the last element of argList. */
         argList[index] = nextArg;
         /*    d. Set index to index + 1. */
@@ -236,7 +237,7 @@ _ejs_Function_prototype_bind (ejsval env, ejsval _this, uint32_t argc, ejsval *a
     ejsval Target = _this;
 
     /* 2. If IsCallable(Target) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_FUNCTION(Target)) {
+    if (!EJSVAL_IS_CALLABLE(Target)) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "object not a function");
     }
 
@@ -433,7 +434,7 @@ _ejs_function_specop_has_instance (ejsval F, ejsval V)
         return EJS_FALSE;
 
     /* 2. Let O be the result of calling the [[Get]] internal method of F with property name "prototype". */
-    ejsval O = OP(EJSVAL_TO_OBJECT(F),get)(F, _ejs_atom_prototype);
+    ejsval O = OP(EJSVAL_TO_OBJECT(F),get)(F, _ejs_atom_prototype, F);
 
     /* 3. If Type(O) is not Object, throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O)) {

@@ -34,7 +34,7 @@ _ejs_arguments_init(ejsval global)
 }
 
 static ejsval
-_ejs_arguments_specop_get (ejsval obj, ejsval propertyName)
+_ejs_arguments_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
 {
     EJSArguments* arguments = (EJSArguments*)EJSVAL_TO_OBJECT(obj);
 
@@ -64,7 +64,7 @@ _ejs_arguments_specop_get (ejsval obj, ejsval propertyName)
     }
 
     // otherwise we fallback to the object implementation
-    return _ejs_Object_specops.get (obj, propertyName);
+    return _ejs_Object_specops.get (obj, propertyName, receiver);
 }
 
 static EJSBool

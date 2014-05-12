@@ -382,7 +382,7 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
  }                                                                      \
                                                                         \
  static ejsval                                                          \
- _ejs_##arraytype##array_specop_get (ejsval obj, ejsval propertyName)   \
+ _ejs_##arraytype##array_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)  \
  {                                                                      \
      /* check if propertyName is an integer, or a string that we can convert to an int */ \
      EJSBool is_index = EJS_FALSE;                                      \
@@ -410,7 +410,7 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
      }                                                                  \
                                                                         \
      /* otherwise we fallback to the object implementation */           \
-     return _ejs_Object_specops.get (obj, propertyName);                \
+     return _ejs_Object_specops.get (obj, propertyName, receiver);      \
  }                                                                      \
                                                                         \
  static EJSPropertyDesc*                                                \
@@ -434,7 +434,7 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
  }                                                                      \
                                                                         \
  static void                                                            \
- _ejs_##arraytype##array_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag) \
+ _ejs_##arraytype##array_specop_put (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver, EJSBool flag) \
  {                                                                      \
      /* check if propertyName is an integer, or a string that we can convert to an int */ \
      EJSBool is_index = EJS_FALSE;                                      \
@@ -481,7 +481,7 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
  _ejs_##ArrayType##Array_prototype_set_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
  {                                                                      \
      /* XXX needs a lot of help here... */                              \
-     OP(EJSVAL_TO_OBJECT(_this), put)(_this, args[0], args[1], EJS_FALSE); \
+     OP(EJSVAL_TO_OBJECT(_this), put)(_this, args[0], args[1], _this, EJS_FALSE); \
      return args[1];                                                    \
  }                                                                      \
                                                                         \
@@ -674,7 +674,7 @@ EJS_MACRO_END
 }
 
 static ejsval
-_ejs_arraybuffer_specop_get (ejsval obj, ejsval propertyName)
+_ejs_arraybuffer_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
 {
     // check if propertyName is an integer, or a string that we can convert to an int
     EJSBool is_index = EJS_FALSE;
@@ -701,7 +701,7 @@ _ejs_arraybuffer_specop_get (ejsval obj, ejsval propertyName)
     }
 
     // otherwise we fallback to the object implementation
-    return _ejs_Object_specops.get (obj, propertyName);
+    return _ejs_Object_specops.get (obj, propertyName, receiver);
 }
 
 static EJSPropertyDesc*
@@ -720,7 +720,7 @@ _ejs_arraybuffer_specop_get_own_property (ejsval obj, ejsval propertyName)
 }
 
 static void
-_ejs_arraybuffer_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag)
+_ejs_arraybuffer_specop_put (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver, EJSBool flag)
 {
     // check if propertyName is a uint32, or a string that we can convert to an uint32
     int idx = -1;
@@ -748,7 +748,7 @@ _ejs_arraybuffer_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBoo
     }
     // if we fail there, we fall back to the object impl below
 
-    _ejs_Object_specops.put (obj, propertyName, val, flag);
+    _ejs_Object_specops.put (obj, propertyName, val, receiver, flag);
 }
 
 static EJSBool
@@ -861,7 +861,7 @@ _ejs_typedarray_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 }
 
 static ejsval
-_ejs_dataview_specop_get (ejsval obj, ejsval propertyName)
+_ejs_dataview_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
 {
     // check if propertyName is an integer, or a string that we can convert to an int
     EJSBool is_index = EJS_FALSE;
@@ -884,7 +884,7 @@ _ejs_dataview_specop_get (ejsval obj, ejsval propertyName)
     }
 
     // otherwise we fallback to the object implementation
-    return _ejs_Object_specops.get (obj, propertyName);
+    return _ejs_Object_specops.get (obj, propertyName, receiver);
 }
 
 static EJSPropertyDesc*
@@ -909,7 +909,7 @@ _ejs_dataview_specop_get_property (ejsval obj, ejsval propertyName)
 }
 
 static void
-_ejs_dataview_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag)
+_ejs_dataview_specop_put (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver, EJSBool flag)
 {
      EJSBool is_index = EJS_FALSE;
      ejsval idx_val = ToNumber(propertyName);
@@ -932,7 +932,7 @@ _ejs_dataview_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool f
          return;
      }
 
-    _ejs_Object_specops.put (obj, propertyName, val, flag);
+     _ejs_Object_specops.put (obj, propertyName, val, receiver, flag);
 }
 
 static EJSBool _ejs_dataview_specop_can_put (ejsval obj, ejsval propertyName)

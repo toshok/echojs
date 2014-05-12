@@ -9,6 +9,7 @@
 #include "ejs-ops.h"
 #include "ejs-array.h"
 #include "ejs-function.h"
+#include "ejs-proxy.h"
 #include "ejs-string.h"
 #include "ejs-error.h"
 
@@ -179,7 +180,7 @@ _ejs_Array_prototype_shift (ejsval env, ejsval _this, uint32_t argc, ejsval*args
     EJSObject* Oobj = EJSVAL_TO_OBJECT(O);
 
     // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
-    ejsval lenVal = OP(Oobj,get) (O, _ejs_atom_length);
+    ejsval lenVal = OP(Oobj,get) (O, _ejs_atom_length, O);
 
     // 3. Let len be ToUint32(lenVal).
     int len = ToUint32(lenVal);
@@ -187,13 +188,13 @@ _ejs_Array_prototype_shift (ejsval env, ejsval _this, uint32_t argc, ejsval*args
     // 4. If len is zero, then
     if (len == 0) {
         //   a. Call the [[Put]] internal method of O with arguments "length", 0, and true.
-        OP(Oobj,put) (O, _ejs_atom_length, NUMBER_TO_EJSVAL(0), EJS_TRUE);
+        OP(Oobj,put) (O, _ejs_atom_length, NUMBER_TO_EJSVAL(0), O, EJS_TRUE);
         //   b. Return undefined.
         return _ejs_undefined;
     }
 
     // 5. Let first be the result of calling the [[Get]] internal method of O with argument "0".
-    ejsval first = OP(Oobj,get) (O, _ejs_string_new_utf8 ("0"));
+    ejsval first = OP(Oobj,get) (O, _ejs_string_new_utf8 ("0"), O);
 
     // 6. Let k be 1.
     int k = 1;
@@ -211,10 +212,10 @@ _ejs_Array_prototype_shift (ejsval env, ejsval _this, uint32_t argc, ejsval*args
         //   d. If fromPresent is true, then
         if (fromPresent) {
             //     i. Let fromVal be the result of calling the [[Get]] internal method of O with argument from.
-            ejsval fromVal = OP(Oobj,get)(O, from);
+            ejsval fromVal = OP(Oobj,get)(O, from, O);
 
             //     ii. Call the [[Put]] internal method of O with arguments to, fromVal, and true.
-            OP(Oobj,put)(O, to, fromVal, EJS_TRUE);
+            OP(Oobj,put)(O, to, fromVal, O, EJS_TRUE);
         }
         //   e. Else, fromPresent is false
         else {
@@ -228,7 +229,7 @@ _ejs_Array_prototype_shift (ejsval env, ejsval _this, uint32_t argc, ejsval*args
     OP(Oobj,_delete) (O, NUMBER_TO_EJSVAL(len-1), EJS_TRUE);
 
     // 9. Call the [[Put]] internal method of O with arguments "length", (len–1) , and true.
-    OP(Oobj,put) (O, _ejs_atom_length, NUMBER_TO_EJSVAL(len-1), EJS_TRUE);
+    OP(Oobj,put) (O, _ejs_atom_length, NUMBER_TO_EJSVAL(len-1), O, EJS_TRUE);
     
     // 10. Return first.
     return first;
@@ -253,7 +254,7 @@ _ejs_Array_prototype_unshift (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
     EJSObject* Oobj = EJSVAL_TO_OBJECT(O);
 
     // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
-    ejsval lenVal = OP(Oobj,get)(O, _ejs_atom_length);
+    ejsval lenVal = OP(Oobj,get)(O, _ejs_atom_length, O);
 
     // 3. Let len be ToUint32(lenVal).
     uint32_t len = ToUint32(lenVal);
@@ -278,10 +279,10 @@ _ejs_Array_prototype_unshift (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
         //   d. If fromPresent is true, then
         if (fromPresent) {
             //      i. Let fromValue be the result of calling the [[Get]] internal method of O with argument from.
-            ejsval fromValue = OP(Oobj,get)(O, from);
+            ejsval fromValue = OP(Oobj,get)(O, from, O);
 
             //      ii. Call the [[Put]] internal method of O with arguments to, fromValue, and true.
-            OP(Oobj,put)(O, to, fromValue, EJS_TRUE);
+            OP(Oobj,put)(O, to, fromValue, O, EJS_TRUE);
         }
         //   e. Else, fromPresent is false
         else {
@@ -301,13 +302,13 @@ _ejs_Array_prototype_unshift (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
         ejsval E = args[i];
 
         //   b. Call the [[Put]] internal method of O with arguments ToString(j), E, and true.
-        OP(Oobj,put)(O, ToString(NUMBER_TO_EJSVAL(j)), E, EJS_TRUE);
+        OP(Oobj,put)(O, ToString(NUMBER_TO_EJSVAL(j)), E, O, EJS_TRUE);
         //   c. Increase j by 1.
         j++;
     }
 
     // 10. Call the [[Put]] internal method of O with arguments "length", len+argCount, and true.
-    OP(Oobj,put)(O, _ejs_atom_length, NUMBER_TO_EJSVAL(len+argCount), EJS_TRUE);
+    OP(Oobj,put)(O, _ejs_atom_length, NUMBER_TO_EJSVAL(len+argCount), O, EJS_TRUE);
     // 11. Return len+argCount.
     return NUMBER_TO_EJSVAL(len+argCount);
 }
@@ -320,7 +321,7 @@ _ejs_Array_prototype_reverse (ejsval env, ejsval _this, uint32_t argc, ejsval* a
     ejsval O = ToObject(_this);
 
     // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
-    ejsval lenVal = OP(EJSVAL_TO_OBJECT(O),get)(O, _ejs_atom_length);
+    ejsval lenVal = OP(EJSVAL_TO_OBJECT(O),get)(O, _ejs_atom_length, O);
     // 3. Let len be ToUint32(lenVal).
     uint32_t len = ToUint32(lenVal);
 
@@ -342,10 +343,10 @@ _ejs_Array_prototype_reverse (ejsval env, ejsval _this, uint32_t argc, ejsval* a
         ejsval lowerP = ToString(NUMBER_TO_EJSVAL(lower));
 
         //    d. Let lowerValue be the result of calling the [[Get]] internal method of O with argument lowerP. 
-        ejsval lowerValue = OP(EJSVAL_TO_OBJECT(O),get)(O, lowerP);
+        ejsval lowerValue = OP(EJSVAL_TO_OBJECT(O),get)(O, lowerP, O);
 
         //    e. Let upperValue be the result of calling the [[Get]] internal method of O with argument upperP . 
-        ejsval upperValue = OP(EJSVAL_TO_OBJECT(O),get)(O, upperP);
+        ejsval upperValue = OP(EJSVAL_TO_OBJECT(O),get)(O, upperP, O);
 
         //    f. Let lowerExists be the result of calling the [[HasProperty]] internal method of O with argument lowerP. 
         EJSBool lowerExists = OP(EJSVAL_TO_OBJECT(O),has_property)(O, lowerP);
@@ -356,15 +357,15 @@ _ejs_Array_prototype_reverse (ejsval env, ejsval _this, uint32_t argc, ejsval* a
         //    h. If lowerExists is true and upperExists is true, then 
         if (lowerExists && upperExists) {
             //       i. Call the [[Put]] internal method of O with arguments lowerP, upperValue, and true . 
-            OP(EJSVAL_TO_OBJECT(O),put)(O, lowerP, upperValue, EJS_TRUE);
+            OP(EJSVAL_TO_OBJECT(O),put)(O, lowerP, upperValue, O, EJS_TRUE);
 
             //       ii. Call the [[Put]] internal method of O with arguments upperP, lowerValue, and true . 
-            OP(EJSVAL_TO_OBJECT(O),put)(O, upperP, lowerValue, EJS_TRUE);
+            OP(EJSVAL_TO_OBJECT(O),put)(O, upperP, lowerValue, O, EJS_TRUE);
         }
         //    i. Else if lowerExists is false and upperExists is true, then 
         else if (!lowerExists && upperExists) {
             //       i. Call the [[Put]] internal method of O with arguments lowerP, upperValue, and true . 
-            OP(EJSVAL_TO_OBJECT(O),put)(O, lowerP, upperValue, EJS_TRUE);
+            OP(EJSVAL_TO_OBJECT(O),put)(O, lowerP, upperValue, O, EJS_TRUE);
             //       ii. Call the [[Delete]] internal method of O, with arguments upperP and true. 
             OP(EJSVAL_TO_OBJECT(O),_delete)(O, upperP, EJS_TRUE);
         }
@@ -373,7 +374,7 @@ _ejs_Array_prototype_reverse (ejsval env, ejsval _this, uint32_t argc, ejsval* a
             //       i. Call the [[Delete]] internal method of O, with arguments lowerP and true . 
             OP(EJSVAL_TO_OBJECT(O),_delete)(O, lowerP, EJS_TRUE);
             //       ii. Call the [[Put]] internal method of O with arguments upperP, lowerValue, and true . 
-            OP(EJSVAL_TO_OBJECT(O),put)(O, upperP, lowerValue, EJS_TRUE);
+            OP(EJSVAL_TO_OBJECT(O),put)(O, upperP, lowerValue, O, EJS_TRUE);
         }
         //    k. Else, both lowerExists and upperExists are false 
         //       i. No action is required. 
@@ -397,7 +398,7 @@ _ejs_Array_prototype_push (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
     ejsval O = ToObject(_this);
 
     // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
-    ejsval lenVal = OP(EJSVAL_TO_OBJECT(O),get)(O, _ejs_atom_length);
+    ejsval lenVal = OP(EJSVAL_TO_OBJECT(O),get)(O, _ejs_atom_length, O);
     // 3. Let n be ToUint32(lenVal).
     uint32_t n = ToUint32(lenVal);
 
@@ -411,12 +412,12 @@ _ejs_Array_prototype_push (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
         ejsval E = items[i];
 
         //    b. Call the [[Put]] internal method of O with arguments ToString(n), E, and true.
-        OP(EJSVAL_TO_OBJECT(O),put)(O, ToString(NUMBER_TO_EJSVAL(n)), E, EJS_TRUE);
+        OP(EJSVAL_TO_OBJECT(O),put)(O, ToString(NUMBER_TO_EJSVAL(n)), E, O, EJS_TRUE);
         //    c. Increase n by 1.
         n++;
     }
     // 6. Call the [[Put]] internal method of O with arguments "length", n, and true.
-    OP(EJSVAL_TO_OBJECT(O),put)(O, _ejs_atom_length, NUMBER_TO_EJSVAL(n), EJS_TRUE);
+    OP(EJSVAL_TO_OBJECT(O),put)(O, _ejs_atom_length, NUMBER_TO_EJSVAL(n), O, EJS_TRUE);
 
     // 7. Return n.
     return NUMBER_TO_EJSVAL(n);
@@ -434,7 +435,7 @@ _ejs_Array_prototype_pop (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
     ejsval O = ToObject(_this);
 
     // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
-    ejsval lenVal = OP(EJSVAL_TO_OBJECT(O),get)(O, _ejs_atom_length);
+    ejsval lenVal = OP(EJSVAL_TO_OBJECT(O),get)(O, _ejs_atom_length, O);
 
     // 3. Let len be ToUint32(lenVal).
     uint32_t len = ToUint32(lenVal);
@@ -442,7 +443,7 @@ _ejs_Array_prototype_pop (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
     // 4. If len is zero, 
     if (len == 0) {
         //    a. Call the [[Put]] internal method of O with arguments "length", 0, and true.
-        OP(EJSVAL_TO_OBJECT(O),put)(O, _ejs_atom_length, _ejs_zero, EJS_TRUE);
+        OP(EJSVAL_TO_OBJECT(O),put)(O, _ejs_atom_length, _ejs_zero, O, EJS_TRUE);
         // EJS: why is this done? to overwrite a accessor property?
 
         //    b. Return undefined.
@@ -454,14 +455,14 @@ _ejs_Array_prototype_pop (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
         ejsval indx = ToString(NUMBER_TO_EJSVAL(len-1));
 
         //    b. Let element be the result of calling the [[Get]] internal method of O with argument indx.
-        ejsval element = OP(EJSVAL_TO_OBJECT(O),get)(O, indx);
+        ejsval element = OP(EJSVAL_TO_OBJECT(O),get)(O, indx, O);
         
         //    c. Call the [[Delete]] internal method of O with arguments indx and true.
         OP(EJSVAL_TO_OBJECT(O),_delete)(O, indx, EJS_TRUE);
 
         //    d. Call the [[Put]] internal method of O with arguments "length", indx, and true.
         // EJS: both node 0.10.21 and firefox nightly change length to a number here, not 'index' which is a string.
-        OP(EJSVAL_TO_OBJECT(O),put)(O, _ejs_atom_length, NUMBER_TO_EJSVAL(len-1), EJS_TRUE);
+        OP(EJSVAL_TO_OBJECT(O),put)(O, _ejs_atom_length, NUMBER_TO_EJSVAL(len-1), O, EJS_TRUE);
 
         //    e. Return element.
         return element;
@@ -574,7 +575,7 @@ _ejs_Array_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval* arg
         /* c. If kPresent is true, then */
         if (kPresent) {
             /*    i. Let kValue be the result of calling the [[Get]] internal method of O with argument Pk. */
-            ejsval kValue = OP(EJSVAL_TO_OBJECT(O),get)(O, Pk);
+            ejsval kValue = OP(EJSVAL_TO_OBJECT(O),get)(O, Pk, O);
 
             /*    ii. Call the [[DefineOwnProperty]] internal method of A with arguments ToString(n), Property  */
             /*        Descriptor {[[Value]]: kValue, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]:  */
@@ -683,7 +684,7 @@ _ejs_Array_prototype_lastIndexOf (ejsval env, ejsval _this, uint32_t argc, ejsva
     EJSObject* Oobj = EJSVAL_TO_OBJECT(O);
 
     /* 2. Let lenValue be the result of calling the [[Get]] internal method of O with the argument "length". */
-    ejsval lenValue = OP(Oobj,get)(O, _ejs_atom_length);
+    ejsval lenValue = OP(Oobj,get)(O, _ejs_atom_length, O);
 
     /* 3. Let len be ToUint32(lenValue). */
     uint32_t len = ToUint32(lenValue);
@@ -717,7 +718,7 @@ _ejs_Array_prototype_lastIndexOf (ejsval env, ejsval _this, uint32_t argc, ejsva
         /*    b. If kPresent is true, then */
         if (kPresent) {
             /*       i. Let elementK be the result of calling the [[Get]] internal method of O with the argument ToString(k). */
-            ejsval elementK = OP(Oobj,get)(O, kstr);
+            ejsval elementK = OP(Oobj,get)(O, kstr, O);
             /*       ii. Let same be the result of applying the Strict Equality Comparision Algorithm to searchElement and elementK. */
             ejsval same = _ejs_op_strict_eq (searchElement, elementK);
 
@@ -748,12 +749,12 @@ _ejs_Array_prototype_every (ejsval env, ejsval _this, uint32_t argc, ejsval* arg
     EJSObject* Oobj = EJSVAL_TO_OBJECT(O);
 
     /* 2. Let lenValue be the result of calling the [[Get]] internal method of O with the argument "length".  */
-    ejsval lenValue = OP(Oobj,get)(O, _ejs_atom_length);
+    ejsval lenValue = OP(Oobj,get)(O, _ejs_atom_length, O);
     /* 3. Let len be ToUint32(lenValue).  */
     uint32_t len = ToUint32(lenValue);
 
     /* 4. If IsCallable(callbackfn) is false, throw a TypeError exception.  */
-    if (!EJSVAL_IS_FUNCTION(callbackfn))
+    if (!EJSVAL_IS_CALLABLE(callbackfn))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "callback function is not a function");
 
 
@@ -774,7 +775,7 @@ _ejs_Array_prototype_every (ejsval env, ejsval _this, uint32_t argc, ejsval* arg
         /*    c. If kPresent is true, then  */
         if (kPresent) {
             /*       i. Let kValue be the result of calling the [[Get]] internal method of O with argument Pk.  */
-            ejsval kValue = OP(Oobj,get)(O, Pk);
+            ejsval kValue = OP(Oobj,get)(O, Pk, O);
 
             /*       ii. Let testResult be the result of calling the [[Call]] internal method of callbackfn with T as the  */
             /*           this value and argument list containing kValue, k, and O.  */
@@ -814,12 +815,12 @@ _ejs_Array_prototype_some (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
     EJSObject* Oobj = EJSVAL_TO_OBJECT(O);
 
     /* 2. Let lenValue be the result of calling the [[Get]] internal method of O with the argument "length".  */
-    ejsval lenValue = OP(Oobj,get)(O, _ejs_atom_length);
+    ejsval lenValue = OP(Oobj,get)(O, _ejs_atom_length, O);
     /* 3. Let len be ToUint32(lenValue).  */
     uint32_t len = ToUint32(lenValue);
 
     /* 4. If IsCallable(callbackfn) is false, throw a TypeError exception.  */
-    if (!EJSVAL_IS_FUNCTION(callbackfn))
+    if (!EJSVAL_IS_CALLABLE(callbackfn))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "callback function is not a function");
 
     /* 5. If thisArg was supplied, let T be thisArg; else let T be undefined.  */
@@ -840,7 +841,7 @@ _ejs_Array_prototype_some (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
         /*    c. If kPresent is true, then  */
         if (kPresent) {
             /*       i. Let kValue be the result of calling the [[Get]] internal method of O with argument Pk.  */
-            ejsval kValue = OP(Oobj,get)(O, Pk);
+            ejsval kValue = OP(Oobj,get)(O, Pk, O);
 
             /*       ii. Let testResult be the result of calling the [[Call]] internal method of callbackfn with T as the  */
             /*           this value and argument list containing kValue, k, and O.  */
@@ -884,7 +885,7 @@ _ejs_Array_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
     ejsval O = ToObject(_this);
 
     /* 4. If IsCallable(callbackfn) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_FUNCTION(callbackfn))
+    if (!EJSVAL_IS_CALLABLE(callbackfn))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
 
     ejsval foreach_args[3];
@@ -955,7 +956,7 @@ _ejs_Array_prototype_map (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     uint32_t len = ToUint32(lenVal);
 
     /* 4. If IsCallable(callbackfn) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_FUNCTION(callbackfn)) {
+    if (!EJSVAL_IS_CALLABLE(callbackfn)) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Array.prototype.map called with a non-function.");
     }
 
@@ -1025,7 +1026,7 @@ _ejs_Array_prototype_reduce (ejsval env, ejsval _this, uint32_t argc, ejsval* ar
     uint32_t len = ToUint32(lenVal);
 
     /* 4. If IsCallable(callbackfn) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_FUNCTION(callbackfn)) {
+    if (!EJSVAL_IS_CALLABLE(callbackfn)) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Array.prototype.reduce called with a non-function.");
     }
 
@@ -1058,7 +1059,7 @@ _ejs_Array_prototype_reduce (ejsval env, ejsval _this, uint32_t argc, ejsval* ar
             /*       iii. If kPresent is true, then */
             if (kPresent) {
                 /*            1. Let accumulator be the result of calling the [[Get]] internal method of O with argument Pk. */
-                accumulator = OP(EJSVAL_TO_OBJECT(O),get)(O, Pk);
+                accumulator = OP(EJSVAL_TO_OBJECT(O),get)(O, Pk, O);
             }
             /*       iv. Increase k by 1. */
             k++;
@@ -1078,7 +1079,7 @@ _ejs_Array_prototype_reduce (ejsval env, ejsval _this, uint32_t argc, ejsval* ar
         /*    c. If kPresent is true, then */
         if (kPresent) {
             /*       i. Let kValue be the result of calling the [[Get]] internal method of O with argument Pk. */
-            ejsval kValue = OP(Oobj,get)(O,Pk);
+            ejsval kValue = OP(Oobj,get)(O, Pk, O);
             /*       ii. Let accumulator be the result of calling the [[Call]] internal method of callbackfn with  */
             /*           undefined as the this value and argument list containing accumulator, kValue, k, and O. */
             ejsval reduce_args[4] = {
@@ -1112,13 +1113,13 @@ _ejs_Array_prototype_reduceRight (ejsval env, ejsval _this, uint32_t argc, ejsva
     EJSObject* Oobj = EJSVAL_TO_OBJECT(O);
 
     /* 2. Let lenValue be the result of calling the [[Get]] internal method of O with the argument "length".  */
-    ejsval lenValue = OP(Oobj,get)(O, _ejs_atom_length);
+    ejsval lenValue = OP(Oobj,get)(O, _ejs_atom_length, O);
 
     /* 3. Let len be ToUint32(lenValue).  */
     uint32_t len = ToUint32(lenValue);
 
     /* 4. If IsCallable(callbackfn) is false, throw a TypeError exception.  */
-    if (!EJSVAL_IS_FUNCTION(callbackfn))
+    if (!EJSVAL_IS_CALLABLE(callbackfn))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "callback function is not a function");
 
     /* 5. If len is 0 and initialValue is not present, throw a TypeError exception.  */
@@ -1151,7 +1152,7 @@ _ejs_Array_prototype_reduceRight (ejsval env, ejsval _this, uint32_t argc, ejsva
             /*       iii. If kPresent is true, then  */
             if (kPresent) {
                 /*            1. Let accumulator be the result of calling the [[Get]] internal method of O with argument Pk.  */
-                accumulator = OP(Oobj,get)(O, Pk);
+                accumulator = OP(Oobj,get)(O, Pk, O);
             }
             /*       iv. Decrease k by 1.  */
             k--;
@@ -1171,7 +1172,7 @@ _ejs_Array_prototype_reduceRight (ejsval env, ejsval _this, uint32_t argc, ejsva
         /*    c. If kPresent is true, then  */
         if (kPresent) {
             /*       i. Let kValue be the result of calling the [[Get]] internal method of O with argument Pk.  */
-            ejsval kValue = OP(Oobj,get)(O,Pk);
+            ejsval kValue = OP(Oobj,get)(O, Pk, O);
 
             /*       ii. Let accumulator be the result of calling the [[Call]] internal method of callbackfn with  */
             /*           undefined as the this value and argument list containing accumulator, kValue, k, and O.  */
@@ -1402,7 +1403,7 @@ _ejs_Array_prototype_fill (ejsval env, ejsval _this, uint32_t argc, ejsval *args
         ejsval Pk = NUMBER_TO_EJSVAL(k);
 
         /*  b. Let putStatus be the result of Put(O, Pk, value, true). */
-        OP(EJSVAL_TO_OBJECT(O), put)(O, Pk, value, EJS_TRUE);
+        OP(EJSVAL_TO_OBJECT(O), put)(O, Pk, value, O, EJS_TRUE);
 
         /*  d. Increase k by 1. */
         k++;
@@ -1431,12 +1432,12 @@ _ejs_Array_prototype_filter (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     EJSObject* Oobj = EJSVAL_TO_OBJECT(O);
 
     /* 3. Let lenValue be the result of Get(O, "length"). */
-    ejsval lenValue = OP(Oobj,get)(O, _ejs_atom_length);
+    ejsval lenValue = OP(Oobj,get)(O, _ejs_atom_length, O);
     /* 4. Let len be ToLength(lenValue). */
     uint32_t len = ToUint32(lenValue);
 
     /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_FUNCTION(callbackfn))
+    if (!EJSVAL_IS_CALLABLE(callbackfn))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "callback function is not a function");
 
     /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
@@ -1476,7 +1477,7 @@ _ejs_Array_prototype_filter (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
         /* d. If kPresent is true, then */
         if (kPresent) {
             /* i. Let kValue be the result of Get(O, Pk). */
-            ejsval kValue = OP(Oobj,get)(O, Pk);
+            ejsval kValue = OP(Oobj,get)(O, Pk, O);
 
             /* iii. Let selected be the result of calling the [[Call]] internal method of callbackfn with T as
                thisArgument and a List containing kValue, k, and O as argumentsList. */
@@ -1524,12 +1525,12 @@ _ejs_Array_prototype_find (ejsval env, ejsval _this, uint32_t argc, ejsval *args
     EJSObject* Oobj = EJSVAL_TO_OBJECT(O);
 
     /* 3. Let lenValue be the result of Get(O, "length"). */
-    ejsval lenValue = OP(Oobj,get)(O, _ejs_atom_length);
+    ejsval lenValue = OP(Oobj,get)(O, _ejs_atom_length, O);
     /* 4. Let len be ToLength(lenValue). */
     uint32_t len = ToUint32(lenValue);
 
     /* 6. If IsCallable(predicate) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_FUNCTION(predicate))
+    if (!EJSVAL_IS_CALLABLE(predicate))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "callback function is not a function");
 
     /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
@@ -1548,7 +1549,7 @@ _ejs_Array_prototype_find (ejsval env, ejsval _this, uint32_t argc, ejsval *args
         /* d. If kPresent is true, then */
         if (kPresent) {
             /* i. Let kValue be the result of Get(O, Pk). */
-            ejsval kValue = OP(Oobj,get)(O, Pk);
+            ejsval kValue = OP(Oobj,get)(O, Pk, O);
 
             ejsval predicateargs[3] = {
                 kValue,
@@ -1591,12 +1592,12 @@ _ejs_Array_prototype_findIndex (ejsval env, ejsval _this, uint32_t argc, ejsval 
     EJSObject* Oobj = EJSVAL_TO_OBJECT(O);
 
     /* 3. Let lenValue be the result of Get(O, "length"). */
-    ejsval lenValue = OP(Oobj,get)(O, _ejs_atom_length);
+    ejsval lenValue = OP(Oobj,get)(O, _ejs_atom_length, O);
     /* 4. Let len be ToLength(lenValue). */
     uint32_t len = ToUint32(lenValue);
 
     /* 6. If IsCallable(predicate) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_FUNCTION(predicate))
+    if (!EJSVAL_IS_CALLABLE(predicate))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "callback function is not a function");
 
     /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
@@ -1615,7 +1616,7 @@ _ejs_Array_prototype_findIndex (ejsval env, ejsval _this, uint32_t argc, ejsval 
         /* d. If kPresent is true, then */
         if (kPresent) {
             /* i. Let kValue be the result of Get(O, Pk). */
-            ejsval kValue = OP(Oobj,get)(O, Pk);
+            ejsval kValue = OP(Oobj,get)(O, Pk, O);
 
             ejsval predicateargs[3] = {
                 kValue,
@@ -1715,7 +1716,7 @@ _ejs_Array_from (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         /* 5. */
 
         /*  a. If IsCallable(mapfn) is false, throw a TypeError exception. */
-        if (!EJSVAL_IS_FUNCTION(mapfn))
+        if (!EJSVAL_IS_CALLABLE(mapfn))
             _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "map function is not a function");
 
         /*  b.If thisArg was supplied, let T be thisArg; else let T be undefined. */
@@ -1851,7 +1852,7 @@ _ejs_array_init(ejsval global)
 }
 
 static ejsval
-_ejs_array_specop_get (ejsval obj, ejsval propertyName)
+_ejs_array_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
 {
     // check if propertyName is an integer, or a string that we can convert to an int
     EJSBool is_index = EJS_FALSE;
@@ -1879,7 +1880,7 @@ _ejs_array_specop_get (ejsval obj, ejsval propertyName)
     }
 
     // otherwise we fallback to the object implementation
-    return _ejs_Object_specops.get (obj, propertyName);
+    return _ejs_Object_specops.get (obj, propertyName, receiver);
 }
 
 static EJSPropertyDesc*
@@ -1918,7 +1919,7 @@ _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName)
 }
 
 static void
-_ejs_array_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag)
+_ejs_array_specop_put (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver, EJSBool flag)
 {
     // check if propertyName is a uint32, or a string that we can convert to an uint32
     EJSBool is_index = EJS_FALSE;
@@ -1963,7 +1964,7 @@ _ejs_array_specop_put (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag
     }
     // if we fail there, we fall back to the object impl below
 
-    _ejs_Object_specops.put (obj, propertyName, val, flag);
+    _ejs_Object_specops.put (obj, propertyName, val, receiver, flag);
 }
 
 static EJSBool

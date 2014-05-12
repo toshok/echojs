@@ -96,6 +96,10 @@ void _ejs_propertydesc_free (EJSPropertyDesc* desc);
 #define _ejs_property_desc_get_value(p) _ejs_property_desc_get_value_flag_default(p, value, EJS_PROP_FLAGS_VALUE_SET, _ejs_undefined)
 #define _ejs_property_desc_get_getter(p) _ejs_property_desc_get_value_flag_default(p, getter, EJS_PROP_FLAGS_GETTER_SET, _ejs_undefined)
 #define _ejs_property_desc_get_setter(p) _ejs_property_desc_get_value_flag_default(p, setter, EJS_PROP_FLAGS_SETTER_SET, _ejs_undefined)
+
+void    ToPropertyDescriptor (ejsval O, EJSPropertyDesc* desc);
+EJSBool IsDataDescriptor     (EJSPropertyDesc* Desc);
+EJSBool IsAccessorDescriptor (EJSPropertyDesc* Desc);
     
 typedef struct _EJSPropertyMapEntry _EJSPropertyMapEntry;
 struct _EJSPropertyMapEntry {
@@ -124,10 +128,10 @@ typedef void (*EJSPropertyDescFunc)(ejsval name, EJSPropertyDesc *desc, void* da
 
 typedef ejsval           (*SpecOpGetPrototypeOf) (ejsval obj);
 typedef EJSBool          (*SpecOpSetPrototypeOf) (ejsval obj, ejsval proto);
-typedef ejsval           (*SpecOpGet) (ejsval obj, ejsval propertyName);
+typedef ejsval           (*SpecOpGet) (ejsval obj, ejsval propertyName, ejsval receiver);
 typedef EJSPropertyDesc* (*SpecOpGetOwnProperty) (ejsval obj, ejsval propertyName);
 typedef EJSPropertyDesc* (*SpecOpGetProperty) (ejsval obj, ejsval propertyName);
-typedef void             (*SpecOpPut) (ejsval obj, ejsval propertyName, ejsval val, EJSBool flag);
+typedef void             (*SpecOpPut) (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver, EJSBool flag);
 typedef EJSBool          (*SpecOpCanPut) (ejsval obj, ejsval propertyName);
 typedef EJSBool          (*SpecOpHasProperty) (ejsval obj, ejsval propertyName);
 typedef EJSBool          (*SpecOpDelete) (ejsval obj, ejsval propertyName, EJSBool flag);

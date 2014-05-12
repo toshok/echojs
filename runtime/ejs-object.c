@@ -21,11 +21,13 @@
 #include "ejs-set.h"
 #include "ejs-typedarrays.h"
 #include "ejs-function.h"
+#include "ejs-proxy.h"
+#include "ejs-proxy.h"
 #include "ejs-error.h"
 #include "ejs-xhr.h"
 
 // ECMA262: 8.10.1
-static EJSBool
+EJSBool
 IsAccessorDescriptor(EJSPropertyDesc* Desc)
 {
     /* 1. If Desc is undefined, then return false. */
@@ -41,7 +43,7 @@ IsAccessorDescriptor(EJSPropertyDesc* Desc)
 }
 
 // ECMA262: 8.10.2
-static EJSBool
+EJSBool
 IsDataDescriptor(EJSPropertyDesc* Desc)
 {
     /* 1. If Desc is undefined, then return false. */
@@ -73,7 +75,7 @@ IsGenericDescriptor(EJSPropertyDesc* Desc)
 }
 
 // ECMA262: 8.10.5
-static void
+void
 ToPropertyDescriptor(ejsval O, EJSPropertyDesc *desc)
 {
     /* 1. If Type(Obj) is not Object throw a TypeError exception. */
@@ -89,33 +91,33 @@ ToPropertyDescriptor(ejsval O, EJSPropertyDesc *desc)
     if (OP(obj,has_property)(O, _ejs_atom_enumerable)) {
         /*    a. Let enum be the result of calling the [[Get]] internal method of Obj with "enumerable". */
         /*    b. Set the [[Enumerable]] field of desc to ToBoolean(enum). */
-        _ejs_property_desc_set_enumerable (desc, EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,get)(O, _ejs_atom_enumerable))));
+        _ejs_property_desc_set_enumerable (desc, EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,get)(O, _ejs_atom_enumerable, O))));
     }
     /* 4. If the result of calling the [[HasProperty]] internal method of Obj with argument "configurable" is true, then */
     if (OP(obj,has_property)(O, _ejs_atom_configurable)) {
         /*    a. Let conf  be the result of calling the [[Get]] internal method of Obj with argument "configurable". */
         /*    b. Set the [[Configurable]] field of desc to ToBoolean(conf). */
-        _ejs_property_desc_set_configurable (desc, EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,get)(O, _ejs_atom_configurable))));
+        _ejs_property_desc_set_configurable (desc, EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,get)(O, _ejs_atom_configurable, O))));
     }
     /* 5. If the result of calling the [[HasProperty]] internal method of Obj with argument "value" is true, then */
     if (OP(obj,has_property)(O, _ejs_atom_value)) {
         /*    a. Let value be the result of calling the [[Get]] internal method of Obj with argument "value". */
         /*    b. Set the [[Value]] field of desc to value. */
-        _ejs_property_desc_set_value (desc, OP(obj,get)(O, _ejs_atom_value));
+        _ejs_property_desc_set_value (desc, OP(obj,get)(O, _ejs_atom_value, O));
     }
     /* 6. If the result of calling the [[HasProperty]] internal method of Obj with argument "writable" is true, then */
     if (OP(obj,has_property)(O, _ejs_atom_writable)) {
         /*    a. Let writable be the result of calling the [[Get]] internal method of Obj with argument "writable". */
         /*    b. Set the [[Writable]] field of desc to ToBoolean(writable). */
-        _ejs_property_desc_set_writable (desc, EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,get)(O, _ejs_atom_writable))));
+        _ejs_property_desc_set_writable (desc, EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,get)(O, _ejs_atom_writable, O))));
     }
     /* 7. If the result of calling the [[HasProperty]] internal method of Obj with argument "get" is true, then */
     if (OP(obj,has_property)(O, _ejs_atom_get)) {
         /*    a. Let getter be the result of calling the [[Get]] internal method of Obj with argument "get". */
-        ejsval getter = OP(obj,get)(O, _ejs_atom_get);
+        ejsval getter = OP(obj,get)(O, _ejs_atom_get, O);
 
         /*    b. If IsCallable(getter) is false and getter is not undefined, then throw a TypeError exception. */
-        if (!EJSVAL_IS_FUNCTION(getter) && !EJSVAL_IS_UNDEFINED(getter)) {
+        if (!EJSVAL_IS_CALLABLE(getter) && !EJSVAL_IS_UNDEFINED(getter)) {
             _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Getter must be a function");
         }
 
@@ -125,10 +127,10 @@ ToPropertyDescriptor(ejsval O, EJSPropertyDesc *desc)
     /* 8. If the result of calling the [[HasProperty]] internal method of Obj with argument "set" is true, then */
     if (OP(obj,has_property)(O, _ejs_atom_set)) {
         /*    a. Let setter be the result of calling the [[Get]] internal method of Obj with argument "set". */
-        ejsval setter = OP(obj,get)(O, _ejs_atom_set);
+        ejsval setter = OP(obj,get)(O, _ejs_atom_set, O);
 
         /*    b. If IsCallable(setter) is false and setter is not undefined, then throw a TypeError exception. */
-        if (!EJSVAL_IS_FUNCTION(setter) && !EJSVAL_IS_UNDEFINED(setter)) {
+        if (!EJSVAL_IS_CALLABLE(setter) && !EJSVAL_IS_UNDEFINED(setter)) {
             _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Setter must be a function");
         }
 
@@ -597,6 +599,7 @@ _ejs_object_create (ejsval proto)
     else if (EJSVAL_EQ(proto, _ejs_String_prototype)) ops = &_ejs_String_specops;
     else if (EJSVAL_EQ(proto, _ejs_Map_prototype))    ops = &_ejs_Map_specops;
     else if (EJSVAL_EQ(proto, _ejs_Set_prototype))    ops = &_ejs_Set_specops;
+    else if (EJSVAL_EQ(proto, _ejs_Proxy_prototype))  ops = &_ejs_Proxy_specops;
     else if (EJSVAL_EQ(proto, _ejs_Number_proto))     ops = &_ejs_Number_specops;
     else if (EJSVAL_EQ(proto, _ejs_RegExp_proto))     ops = &_ejs_RegExp_specops;
     else if (EJSVAL_EQ(proto, _ejs_Date_proto))       ops = &_ejs_Date_specops;
@@ -671,7 +674,7 @@ _ejs_object_setprop (ejsval val, ejsval key, ejsval value)
         EJS_NOT_IMPLEMENTED();
     }
 
-    OP(EJSVAL_TO_OBJECT(val), put)(val, key, value, EJS_FALSE);
+    OP(EJSVAL_TO_OBJECT(val), put)(val, key, value, val, EJS_FALSE);
 
     return value;
 }
@@ -712,7 +715,7 @@ _ejs_object_getprop (ejsval obj, ejsval key)
     last_lookup = ucs2_strdup (EJSVAL_TO_FLAT_STRING(ToString(key)));
 #endif
 
-    return OP(EJSVAL_TO_OBJECT(obj),get)(obj, key);
+    return OP(EJSVAL_TO_OBJECT(obj),get)(obj, key, obj);
 }
 
 ejsval
@@ -1078,7 +1081,7 @@ _ejs_Object_defineProperties (ejsval env, ejsval _this, uint32_t argc, ejsval *a
         ejsval P = names[n];
 
         /* a. Let descObj be the result of calling the [[Get]] internal method of props with P as the argument. */
-        ejsval descObj = OP(props_obj,get)(props, P);
+        ejsval descObj = OP(props_obj,get)(props, P, props);
 
         DefinePropertiesPair *pair = &descriptors[n];
         /* b. Let desc be the result of calling ToPropertyDescriptor with descObj as the argument. */
@@ -1352,10 +1355,11 @@ _ejs_Object_prototype_toLocaleString (ejsval env, ejsval _this, uint32_t argc, e
     EJSObject* O_ = EJSVAL_TO_OBJECT(O);
 
     /* 2. Let toString be the result of calling the [[Get]] internal method of O passing "toString" as the argument. */
-    ejsval toString = OP(O_, get)(O, _ejs_atom_toString);
+    ejsval toString = OP(O_, get)(O, _ejs_atom_toString, O);
 
     /* 3. If IsCallable(toString) is false, throw a TypeError exception. */
-    // XXX
+    if (!EJSVAL_IS_CALLABLE(toString))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "toString property is not callable");
 
     /* 4. Return the result of calling the [[Call]] internal method of toString passing O as the this value and no arguments. */
     return _ejs_invoke_closure (toString, O, 0, NULL);
@@ -1565,7 +1569,7 @@ _ejs_object_specop_set_prototype_of (ejsval O, ejsval V)
 
 // ECMA262: 8.12.3
 static ejsval
-_ejs_object_specop_get (ejsval obj_, ejsval propertyName)
+_ejs_object_specop_get (ejsval obj_, ejsval propertyName, ejsval receiver)
 {
     ejsval pname;
 
@@ -1639,7 +1643,7 @@ _ejs_object_specop_get_property (ejsval O, ejsval P)
 
 // ECMA262: 8.12.5
 static void
-_ejs_object_specop_put (ejsval O, ejsval P, ejsval V, EJSBool Throw)
+_ejs_object_specop_put (ejsval O, ejsval P, ejsval V, ejsval Receiver, EJSBool Throw)
 {
     EJSObject* obj = EJSVAL_TO_OBJECT(O);
 

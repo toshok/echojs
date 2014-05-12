@@ -8,6 +8,7 @@
 #include "ejs-ops.h"
 #include "ejs-value.h"
 #include "ejs-function.h"
+#include "ejs-proxy.h"
 #include "ejs-json.h"
 #include "ejs-array.h"
 #include "ejs-number.h"
@@ -117,7 +118,7 @@ _ejs_JSON_parse (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     json_value_free (root_val);
 
     /* 4. If IsCallable(reviver) is true, then */
-    if (EJSVAL_IS_FUNCTION(reviver)) {
+    if (EJSVAL_IS_CALLABLE(reviver)) {
         printf ("no reviver support in JSON.parse yet\n");
         EJS_NOT_IMPLEMENTED();
         /*    a. Let root be a new object created as if by the expression new Object(), where Object is the
@@ -433,14 +434,14 @@ static ejsval
 Str(StringifyState *state, ejsval key, ejsval holder)
 {
     /* 1. Let value be the result of calling the [[Get]] internal method of holder with argument key. */
-    ejsval value = OP(EJSVAL_TO_OBJECT(holder), get)(holder, key);
+    ejsval value = OP(EJSVAL_TO_OBJECT(holder), get)(holder, key, holder);
 
     /* 2. If Type(value) is Object, then */
     if (EJSVAL_IS_OBJECT(value)) {
         /*    a. Let toJSON be the result of calling the [[Get]] internal method of value with argument "toJSON". */
-        ejsval toJSON = OP(EJSVAL_TO_OBJECT(holder), get)(holder, _ejs_atom_toJSON);
+        ejsval toJSON = OP(EJSVAL_TO_OBJECT(holder), get)(holder, _ejs_atom_toJSON, holder);
         /*    b. If IsCallable(toJSON) is true */
-        if (EJSVAL_IS_FUNCTION(toJSON)) {
+        if (EJSVAL_IS_CALLABLE(toJSON)) {
             /*       i. Let value be the result of calling the [[Call]] internal method of toJSON passing value as the 
                      this value and with an argument list consisting of key. */
             _ejs_invoke_closure (toJSON, value, 1, &key);
@@ -500,7 +501,7 @@ Str(StringifyState *state, ejsval key, ejsval holder)
     }
 
     /* 10. If Type(value) is Object, and IsCallable(value) is false */
-    if (EJSVAL_IS_OBJECT(value) && !EJSVAL_IS_FUNCTION(value)) {
+    if (EJSVAL_IS_OBJECT(value) && !EJSVAL_IS_CALLABLE(value)) {
         /*     a. If the [[Class]] internal property of value is "Array" then */
         if (EJSVAL_IS_ARRAY(value)) {
             /*        i. Return the result of calling the abstract operation JA with argument value. */
@@ -541,7 +542,7 @@ _ejs_JSON_stringify (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     /* 4. If Type(replacer) is Object, then */
     if (EJSVAL_IS_OBJECT(replacer)) {
         /*    a. If IsCallable(replacer) is true, then */
-        if (EJSVAL_IS_FUNCTION(replacer)) {
+        if (EJSVAL_IS_CALLABLE(replacer)) {
             /*       i. Let ReplacerFunction be replacer. */
             state.ReplacerFunction = replacer;
         }

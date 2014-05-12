@@ -2019,7 +2019,7 @@ webglrenderingcontext_specop_has_property (ejsval O, ejsval P)
 
 
 static ejsval
-webglrenderingcontext_specop_get (ejsval O, ejsval P)
+webglrenderingcontext_specop_get (ejsval O, ejsval P, ejsval receiver)
 {
     char *prop = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(P));
 
@@ -2027,7 +2027,7 @@ webglrenderingcontext_specop_get (ejsval O, ejsval P)
     
 	if (constant_info == NULL) {
 		free (prop);
-        return _ejs_Object_specops.get (O, P);
+        return _ejs_Object_specops.get (O, P, receiver);
 	}
 
 	free (prop);
