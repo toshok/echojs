@@ -35,6 +35,16 @@ ToPropertyKey(ejsval argument)
     return ToString(argument);
 }
 
+static uint32_t
+PropertyKeyHash (ejsval argument)
+{
+    EJS_ASSERT(EJSVAL_IS_STRING(argument) || EJSVAL_IS_SYMBOL(argument));
+    if (EJSVAL_IS_STRING(argument))
+        return _ejs_string_hash(argument);
+    else
+        return _ejs_symbol_hash(argument);
+}
+
 // ECMA262: 8.10.1
 EJSBool
 IsAccessorDescriptor(EJSPropertyDesc* Desc)
@@ -280,7 +290,7 @@ _ejs_propertymap_remove (EJSPropertyMap *map, ejsval name)
         return;
     }
 
-    uint32_t hashcode = _ejs_string_hash(name);
+    uint32_t hashcode = PropertyKeyHash(name);
     int bucket = (int)(hashcode % map->nbuckets);
 
     _EJSPropertyMapEntry* prev = NULL;
@@ -329,12 +339,7 @@ _ejs_propertymap_lookup (EJSPropertyMap* map, ejsval name)
     if (map->inuse == 0)
         return NULL;
 
-    uint32_t hashcode;
-    if (EJSVAL_IS_STRING(name))
-        hashcode = _ejs_string_hash(name);
-    else // must be a symbol
-        hashcode = _ejs_symbol_hash(name);
-
+    uint32_t hashcode = PropertyKeyHash(name);
     int bucket = (int)(hashcode % map->nbuckets);
 
     for (_EJSPropertyMapEntry* s = map->buckets[bucket]; s; s = s->next_bucket) {
@@ -363,7 +368,7 @@ _ejs_propertymap_rehash (EJSPropertyMap* map)
     map->buckets = (_EJSPropertyMapEntry**)calloc (sizeof(_EJSPropertyMapEntry*), map->nbuckets);
 
     for (_EJSPropertyMapEntry *s = map->head_insert; s; s = s->next_insert) {
-        uint32_t hashcode = _ejs_string_hash(s->name);
+        uint32_t hashcode = PropertyKeyHash(s->name);
         int bucket = (int)(hashcode % map->nbuckets);
 
         s->next_bucket = map->buckets[bucket];
@@ -380,12 +385,7 @@ _ejs_propertymap_insert (EJSPropertyMap* map, ejsval name, EJSPropertyDesc* desc
         map->buckets = calloc (sizeof(_EJSPropertyMapEntry*), map->nbuckets);
     }
 
-    uint32_t hashcode;
-    if (EJSVAL_IS_STRING(name))
-        hashcode = _ejs_string_hash(name);
-    else // must be a symbol
-        hashcode = _ejs_symbol_hash(name);
-
+    uint32_t hashcode = PropertyKeyHash(name);
     int bucket = (int)(hashcode % map->nbuckets);
 
     for (_EJSPropertyMapEntry* s = map->buckets[bucket]; s; s = s->next_bucket) {
