@@ -22,9 +22,18 @@
 #include "ejs-typedarrays.h"
 #include "ejs-function.h"
 #include "ejs-proxy.h"
-#include "ejs-proxy.h"
+#include "ejs-symbol.h"
 #include "ejs-error.h"
 #include "ejs-xhr.h"
+
+// ECMA262: 7.1.14
+ejsval
+ToPropertyKey(ejsval argument)
+{
+    if (EJSVAL_IS_SYMBOL(argument))
+        return argument;
+    return ToString(argument);
+}
 
 // ECMA262: 8.10.1
 EJSBool
@@ -320,7 +329,12 @@ _ejs_propertymap_lookup (EJSPropertyMap* map, ejsval name)
     if (map->inuse == 0)
         return NULL;
 
-    uint32_t hashcode = _ejs_string_hash(name);
+    uint32_t hashcode;
+    if (EJSVAL_IS_STRING(name))
+        hashcode = _ejs_string_hash(name);
+    else // must be a symbol
+        hashcode = _ejs_symbol_hash(name);
+
     int bucket = (int)(hashcode % map->nbuckets);
 
     for (_EJSPropertyMapEntry* s = map->buckets[bucket]; s; s = s->next_bucket) {
@@ -366,7 +380,12 @@ _ejs_propertymap_insert (EJSPropertyMap* map, ejsval name, EJSPropertyDesc* desc
         map->buckets = calloc (sizeof(_EJSPropertyMapEntry*), map->nbuckets);
     }
 
-    uint32_t hashcode = _ejs_string_hash(name);
+    uint32_t hashcode;
+    if (EJSVAL_IS_STRING(name))
+        hashcode = _ejs_string_hash(name);
+    else // must be a symbol
+        hashcode = _ejs_symbol_hash(name);
+
     int bucket = (int)(hashcode % map->nbuckets);
 
     for (_EJSPropertyMapEntry* s = map->buckets[bucket]; s; s = s->next_bucket) {
@@ -504,7 +523,7 @@ _ejs_property_iterator_new (ejsval forVal)
             // iterate over array keys first then additional properties
             for (int i = 0; i < EJS_ARRAY_LEN(forVal); i ++) {
                 // XXX skip holes
-                keys[num++] = ToString(NUMBER_TO_EJSVAL(i));
+                keys[num++] = ToPropertyKey(NUMBER_TO_EJSVAL(i));
             }
         }
 
@@ -900,7 +919,7 @@ _ejs_Object_getOwnPropertyDescriptor (ejsval env, ejsval _this, uint32_t argc, e
     EJSObject *obj = EJSVAL_TO_OBJECT(O);
 
     /* 2. Let name be ToString(P). */
-    ejsval name = ToString(P);
+    ejsval name = ToPropertyKey(P);
 
     /* 3. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with argument name. */
     EJSPropertyDesc* desc = OP(obj, get_own_property)(O, name);
@@ -909,9 +928,50 @@ _ejs_Object_getOwnPropertyDescriptor (ejsval env, ejsval _this, uint32_t argc, e
     return FromPropertyDescriptor(desc);
 }
 
-// ECMA262: 15.2.3.4
+// ECMA262: 19.1.2.7
 static ejsval
 _ejs_Object_getOwnPropertyNames (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval O = _ejs_undefined;
+    if (argc > 0) O = args[0];
+
+    /* 1. If Type(O) is not Object throw a TypeError exception. */
+    if (!EJSVAL_IS_OBJECT(O)) {
+        _ejs_log ("throw TypeError, _this isn't an Object\n");
+        EJS_NOT_IMPLEMENTED();
+    }
+    EJSObject* O_ = EJSVAL_TO_OBJECT(O);
+
+    /* 2. Let array be the result of creating a new object as if by the expression new Array () where Array is the standard built-in constructor with that name. */
+    ejsval arr = _ejs_array_new(0, EJS_FALSE);
+
+    /* 3. Let n be 0. */
+
+    /* 4. For each named own property P of O */
+    for (_EJSPropertyMapEntry* s = O_->map->head_insert; s; s = s->next_insert) {
+        if (!_ejs_property_desc_is_enumerable(s->desc))
+            continue;
+
+        /*    a. Let name be the String value that is the name of P. */
+        ejsval name = s->name;
+
+        if (!EJSVAL_IS_SYMBOL(name)) {
+            /*    b. Call the [[DefineOwnProperty]] internal method of array with arguments ToString(n), the
+                  PropertyDescriptor {[[Value]]: name, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: 
+                  true}, and false. */
+            _ejs_array_push_dense(arr, 1, &name);
+        }
+
+        /*    c. Increment n by 1. */
+    }
+    /* 5. Return array. */
+
+    return arr;
+}
+
+// ECMA262: 19.1.2.8
+static ejsval
+_ejs_Object_getOwnPropertySymbols (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval O = _ejs_undefined;
     if (argc > 0)
@@ -938,10 +998,12 @@ _ejs_Object_getOwnPropertyNames (ejsval env, ejsval _this, uint32_t argc, ejsval
         /*    a. Let name be the String value that is the name of P. */
         ejsval name = s->name;
 
-        /*    b. Call the [[DefineOwnProperty]] internal method of array with arguments ToString(n), the
-                 PropertyDescriptor {[[Value]]: name, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: 
-                 true}, and false. */
-        _ejs_array_push_dense(arr, 1, &name);
+        if (EJSVAL_IS_SYMBOL(name)) {
+            /*    b. Call the [[DefineOwnProperty]] internal method of array with arguments ToString(n), the
+                  PropertyDescriptor {[[Value]]: name, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: 
+                  true}, and false. */
+            _ejs_array_push_dense(arr, 1, &name);
+        }
 
         /*    c. Increment n by 1. */
     }
@@ -1323,11 +1385,12 @@ _ejs_Object_isExtensible (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return BOOLEAN_TO_EJSVAL(EJS_OBJECT_IS_EXTENSIBLE(obj));
 }
 
-// ECMA262: 15.2.3.14
+// ECMA262: 19.1.2.14
 static ejsval
 _ejs_Object_keys (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    EJS_NOT_IMPLEMENTED();
+    // toshok - is this really not identical to Object.getOwnPropertyNames?
+    return _ejs_Object_getOwnPropertyNames(env, _this, argc, args);
 }
 
 // ECMA262: 15.2.4.2
@@ -1420,7 +1483,7 @@ _ejs_Object_prototype_propertyIsEnumerable (ejsval env, ejsval _this, uint32_t a
     if (argc > 0) V = args[0];
 
     /* 1. Let P be ToString(V). */
-    ejsval P = ToString(V);
+    ejsval P = ToPropertyKey(V);
 
     /* 2. Let O be the result of calling ToObject passing the this value as the argument. */
     ejsval O = ToObject(_this);
@@ -1475,6 +1538,7 @@ _ejs_object_init (ejsval global)
     OBJ_METHOD(setPrototypeOf);
     OBJ_METHOD(getOwnPropertyDescriptor);
     OBJ_METHOD(getOwnPropertyNames);
+    OBJ_METHOD(getOwnPropertySymbols);
     OBJ_METHOD(create);
     OBJ_METHOD(defineProperty);
     OBJ_METHOD(defineProperties);
@@ -1571,11 +1635,9 @@ _ejs_object_specop_set_prototype_of (ejsval O, ejsval V)
 static ejsval
 _ejs_object_specop_get (ejsval obj_, ejsval propertyName, ejsval receiver)
 {
-    ejsval pname;
+    ejsval pname = ToPropertyKey(propertyName);
 
-    pname = ToString(propertyName);
-
-    if (!ucs2_strcmp(_ejs_ucs2___proto__, EJSVAL_TO_FLAT_STRING(pname)))
+    if (EJSVAL_IS_STRING(pname) && !ucs2_strcmp(_ejs_ucs2___proto__, EJSVAL_TO_FLAT_STRING(pname)))
         return OP(EJSVAL_TO_OBJECT(obj_),get_prototype_of) (obj_);
 
     /* 1. Let desc be the result of calling the [[GetProperty]] internal method of O with property name P. */
@@ -1610,7 +1672,7 @@ _ejs_object_specop_get (ejsval obj_, ejsval propertyName, ejsval receiver)
 static EJSPropertyDesc*
 _ejs_object_specop_get_own_property (ejsval obj, ejsval propertyName)
 {
-    ejsval property_str = ToString(propertyName);
+    ejsval property_str = ToPropertyKey(propertyName);
     EJSObject* obj_ = EJSVAL_TO_OBJECT(obj);
 
     return _ejs_propertymap_lookup (obj_->map, property_str);
@@ -1647,7 +1709,8 @@ _ejs_object_specop_put (ejsval O, ejsval P, ejsval V, ejsval Receiver, EJSBool T
 {
     EJSObject* obj = EJSVAL_TO_OBJECT(O);
 
-    P = ToString(P);
+    if (!EJSVAL_IS_SYMBOL(P) && !EJSVAL_IS_STRING(P))
+        P = ToPropertyKey(P);
 
     /* 1. If the result of calling the [[CanPut]] internal method of O with argument P is false, then */
     if (!OP(obj,can_put)(O, P)) {

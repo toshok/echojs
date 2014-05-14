@@ -13,17 +13,33 @@ typedef struct {
     /* object header */
     EJSObject obj;
 
-    /* when symbols are created, do we want to store a name here? */
-    // ejsval name;
+    ejsval description;
+
+    // if lsb is 0 we haven't calculated it yet
+    uint32_t hashcode;
 } EJSSymbol;
 
 EJS_BEGIN_DECLS
 
+extern ejsval _ejs_Symbol;
+extern ejsval _ejs_Symbol_prototype;
 extern EJSSpecOps _ejs_Symbol_specops;
+
+// our well known symbols
+extern ejsval _ejs_sym_create;
+extern ejsval _ejs_sym_hasInstance;
+extern ejsval _ejs_sym_isConcatSpreadable;
+extern ejsval _ejs_sym_isRegExp;
+extern ejsval _ejs_sym_iterator;
+extern ejsval _ejs_sym_toPrimitive;
+extern ejsval _ejs_sym_toStringTag;
+extern ejsval _ejs_sym_unscopables;
 
 void _ejs_symbol_init(ejsval global);
 
-ejsval _ejs_symbol_new ();
+ejsval _ejs_symbol_new (ejsval description);
+
+uint32_t _ejs_symbol_hash (ejsval symbol);
 
 EJS_END_DECLS
 
