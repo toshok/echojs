@@ -98,6 +98,7 @@ EJS_ATOM(argv)
 EJS_ATOM(process)
 
 // Object method/property names
+EJS_ATOM(assign)
 EJS_ATOM(getPrototypeOf)
 EJS_ATOM(setPrototypeOf)
 EJS_ATOM(getOwnPropertyDescriptor)

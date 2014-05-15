@@ -1012,7 +1012,87 @@ _ejs_Object_getOwnPropertySymbols (ejsval env, ejsval _this, uint32_t argc, ejsv
     return arr;
 }
 
+// ECMA262: 19.1.2.1
+/* Object.assign ( target, ...source ) */
+static ejsval
+_ejs_Object_assign (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval target = _ejs_undefined;
+    if (argc > 0) target = args[0];
+
+    // 1. Let to be ToObject(target). 
+    // 2. ReturnIfAbrupt(to). 
+    ejsval to = ToObject(target);
+
+    EJSObject* to_ = EJSVAL_TO_OBJECT(to);
+
+    // 3. If fewer than two arguments were passed,then return to. 
+    if (argc < 2)
+        return to;
+
+    // 4. Let sourceList be the List of argument vales starting with the second argument. 
+    // 5. For each element nextSource of sourceList, in ascending index order, 
+    for (int source_i = 1; source_i < argc; source_i ++) {
+        ejsval nextSource = args[source_i];
+        //    a. Let from be ToObject(nextSource). 
+        //    b. ReturnIfAbrupt(from). 
+        ejsval from = ToObject(nextSource);
+        if (!EJSVAL_IS_OBJECT(from)) {
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "null/undefined passed to Object.assign");
+        }
+
+        EJSObject* from_ = EJSVAL_TO_OBJECT(from);
+
+        //    c. Let keysArray be the result of calling the [[OwnPropertyKeys]] internal method of nextSource. 
+        //    d. ReturnIfAbrupt(keysArray). 
+
+        //    e. Let lenValue be Get(keysArray, "length"). 
+        //    f. Let len be ToLength(lenValue). 
+        //    g. ReturnIfAbrupt(len). 
+
+        //    h. Let nextIndex be 0. 
+
+        //    i. Let gotAllNames be false. 
+        //EJSBool gotAllNames = EJS_FALSE;  XXX this is unused
+
+        //    j. Let pendingException be undefined. 
+        ejsval pendingException = _ejs_undefined;
+
+        //    k. Repeat while nextIndex < len, 
+        for (_EJSPropertyMapEntry* s = from_->map->head_insert; s; s = s->next_insert) {
+            //       i. Let nextKey be Get(keysArray, ToString(nextIndex)). 
+            //       ii. ReturnIfAbrupt(nextKey). 
+            ejsval nextKey = s->name;
+
+            //       iii. Let desc be the result of calling the [[GetOwnProperty]] internal method of from with argument nextKey. 
+            EJSPropertyDesc* desc = s->desc;
+            //       iv. If desc is an abrupt completion, then 
+            //           1. If pendingException is undefined, then set pendingException to desc. 
+            
+            //       v. Else if desc is not undefined and desc.[[Enumerable]] is true, then 
+            if (desc && _ejs_property_desc_is_enumerable(desc)) {
+                //          1. Let propValue be Get(from, nextKey). 
+                ejsval propValue = OP(from_,get)(from, nextKey, from);
+                //          2. If propValue is an abrupt completion, then 
+                //             a. If pendingException is undefined, then set pendingException to propValue. 
+                //          3. else 
+                //             a. Let status be Put(to, nextKey, propValue, true); 
+                OP(to_,put)(to, nextKey, propValue, to, EJS_TRUE);
+                //             b. If status is an abrupt completion, then 
+                //                i. If pendingException is undefined, then set pendingException to status. 
+            }
+            //       vi. Increment nextIndex by 1. 
+        }
+        //    l. If pendingException is not undefined, then return pendingException. 
+        if (!EJSVAL_IS_UNDEFINED(pendingException))
+            return pendingException;
+    }
+    // 6. Return to.
+    return to;
+}
+
 static ejsval _ejs_Object_defineProperties (ejsval env, ejsval _this, uint32_t argc, ejsval *args);
+
 
 // ECMA262: 15.2.3.5
 /* Object.create ( O [, Properties] ) */
@@ -1534,6 +1614,7 @@ _ejs_object_init (ejsval global)
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_Object, x, _ejs_Object_##x, EJS_PROP_NOT_ENUMERABLE)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_Object_prototype, x, _ejs_Object_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
 
+    OBJ_METHOD(assign);
     OBJ_METHOD(getPrototypeOf);
     OBJ_METHOD(setPrototypeOf);
     OBJ_METHOD(getOwnPropertyDescriptor);
