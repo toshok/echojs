@@ -189,6 +189,7 @@ _ejs_number_init(ejsval global)
     PROTO_METHOD(clz);
     OBJ_METHOD(isFinite);
     OBJ_METHOD(isInteger);
+    OBJ_METHOD(isSafeInteger);
     OBJ_METHOD(isNaN);
 
     _ejs_object_setprop (_ejs_Number, _ejs_atom_EPSILON, NUMBER_TO_EJSVAL(nextafter(1, INFINITY)));
