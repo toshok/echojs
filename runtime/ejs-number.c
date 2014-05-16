@@ -87,6 +87,22 @@ _ejs_Number_isFinite (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 static ejsval
+_ejs_Number_toInteger (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval argument = _ejs_undefined;
+    if (argc > 0) argument = args[0];
+
+    double number = ToDouble(argument);
+    if (isnan(number))
+        return NUMBER_TO_EJSVAL(+0);
+    
+    if (number == 0 || fpclassify(number) == FP_INFINITE)
+        return NUMBER_TO_EJSVAL(number);
+
+    return NUMBER_TO_EJSVAL ((number < 0 ? -1 : 1) * floor(fabs(number)));
+}
+
+static ejsval
 _ejs_Number_isInteger (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval number = _ejs_undefined;
@@ -191,6 +207,7 @@ _ejs_number_init(ejsval global)
     OBJ_METHOD(isInteger);
     OBJ_METHOD(isSafeInteger);
     OBJ_METHOD(isNaN);
+    OBJ_METHOD(toInteger);
 
     _ejs_object_setprop (_ejs_Number, _ejs_atom_EPSILON, NUMBER_TO_EJSVAL(nextafter(1, INFINITY)));
     _ejs_object_setprop (_ejs_Number, _ejs_atom_MAX_SAFE_INTEGER, NUMBER_TO_EJSVAL(EJS_MAX_SAFE_INTEGER));
