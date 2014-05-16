@@ -274,6 +274,8 @@ EJS_ATOM(global)
 EJS_ATOM(lastIndex)
 EJS_ATOM(multiline)
 EJS_ATOM(ignoreCase)
+EJS_ATOM(sticky)
+EJS_ATOM(unicode)
 
 // Date functions
 //EJS_ATOM(toString)

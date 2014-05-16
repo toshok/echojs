@@ -153,6 +153,8 @@ _ejs_RegExp_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
             if      (chars[i] == 'g' && !re->global)     { re->global     = EJS_TRUE; continue; }
             else if (chars[i] == 'i' && !re->ignoreCase) { re->ignoreCase = EJS_TRUE; continue; }
             else if (chars[i] == 'm' && !re->multiline)  { re->multiline  = EJS_TRUE; continue; }
+            else if (chars[i] == 'y' && !re->sticky)     { re->sticky     = EJS_TRUE; continue; }
+            else if (chars[i] == 'u' && !re->unicode)    { re->unicode    = EJS_TRUE; continue; }
             _ejs_throw_nativeerror_utf8 (EJS_SYNTAX_ERROR, "Invalid flag supplied to RegExp constructor");
         }
     }
@@ -253,6 +255,20 @@ _ejs_RegExp_prototype_get_multiline (ejsval env, ejsval _this, uint32_t argc, ej
 }
 
 static ejsval
+_ejs_RegExp_prototype_get_sticky (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+    return BOOLEAN_TO_EJSVAL(re->sticky);
+}
+
+static ejsval
+_ejs_RegExp_prototype_get_unicode (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+    return BOOLEAN_TO_EJSVAL(re->unicode);
+}
+
+static ejsval
 _ejs_RegExp_prototype_get_source (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
@@ -286,6 +302,8 @@ _ejs_regexp_init(ejsval global)
     PROTO_GETTER(lastIndex);
     PROTO_GETTER(multiline);
     PROTO_GETTER(source);
+    PROTO_GETTER(sticky);
+    PROTO_GETTER(unicode);
 
 #undef OBJ_METHOD
 #undef PROTO_METHOD

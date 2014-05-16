@@ -19,6 +19,8 @@ TESTS:=$(filter-out modules2.js,$(TESTS))
 TESTS:=$(filter-out spread3.js,$(TESTS))
 TESTS:=$(filter-out iterators1.js,$(TESTS))
 TESTS:=$(filter-out proxy4.js,$(TESTS))
+# esprima uses the JS regexp ctor while parsing regexps to validate them.  node can't deal with the regexp in this file.
+TESTS:=$(filter-out regexp6.js,$(TESTS))
 
 # disable the esprima tests for the time being, as the new module syntax (and losing require) breaks them.
 # we need to fork esprima/escodegen/estraverse and port them to es6 modules for these tests.
@@ -52,6 +54,7 @@ $(call addExpectedFailure, fib1.js,                 "we don't output numbers cor
 $(call addExpectedFailure, const1.js,               "we permit assigning to const bindings")
 $(call addExpectedFailure, forof1.js,               "we don't support for-of yet")
 $(call addExpectedFailure, map1.js,                 "we throw the right exception but node 0.8 doesn't")
+$(call addExpectedFailure, regexp5.js,              "we don't support for the y flag")
 
 check: check-unit-tests run-tests
 

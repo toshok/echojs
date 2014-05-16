@@ -19,6 +19,9 @@ typedef struct {
     EJSBool ignoreCase;
     EJSBool multiline;
 
+    EJSBool sticky;
+    EJSBool unicode;
+
     int lastIndex;
 
     void* compiled_pattern;
