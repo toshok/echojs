@@ -15,6 +15,8 @@ typedef struct {
     EJSBool boolean;
 } EJSBoolean;
 
+#define EJSVAL_TO_BOOLEAN_OBJECT(v) ((EJSBoolean*)EJSVAL_TO_OBJECT(v))
+
 EJS_BEGIN_DECLS
 
 extern ejsval _ejs_Boolean;

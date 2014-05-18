@@ -28,7 +28,7 @@ _ejs_Boolean_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         return BOOLEAN_TO_EJSVAL(b);
     }
     else {
-        EJSBoolean* b = (EJSBoolean*)EJSVAL_TO_OBJECT(_this);
+        EJSBoolean* b = EJSVAL_TO_BOOLEAN_OBJECT(_this);
 
         if (argc > 0) {
             b->boolean = ToEJSBool(args[0]);
@@ -49,7 +49,7 @@ _ejs_Boolean_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval
         b = EJSVAL_TO_BOOLEAN(_this);
     }
     else {
-        b = ((EJSBoolean*)EJSVAL_TO_OBJECT(_this))->boolean;
+        b = EJSVAL_TO_BOOLEAN_OBJECT(_this)->boolean;
     }
 
     return b ? _ejs_atom_true : _ejs_atom_false;
@@ -58,7 +58,7 @@ _ejs_Boolean_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval
 static ejsval
 _ejs_Boolean_prototype_valueOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    EJSBoolean *b = (EJSBoolean*)EJSVAL_TO_OBJECT(_this);
+    EJSBoolean *b = EJSVAL_TO_BOOLEAN_OBJECT(_this);
     return BOOLEAN_TO_EJSVAL(b->boolean);
 }
 
@@ -87,8 +87,7 @@ static ejsval
 _ejs_boolean_specop_default_value (ejsval obj, const char *hint)
 {
     if (!strcmp (hint, "PreferredType") || !strcmp(hint, "Boolean")) {
-        EJSBoolean *b = (EJSBoolean*)EJSVAL_TO_OBJECT(obj);
-        return BOOLEAN_TO_EJSVAL(b->boolean);
+        return BOOLEAN_TO_EJSVAL(EJSVAL_TO_BOOLEAN_OBJECT(obj)->boolean);
     }
     else if (!strcmp (hint, "String")) {
         EJS_NOT_IMPLEMENTED();
