@@ -9,6 +9,10 @@
 #include "ejs-value.h"
 #include "ejs-object.h"
 
+#define EJSVAL_IS_PROXY(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Proxy_specops))
+#define EJSVAL_TO_PROXY(v)     ((EJSProxy*)EJSVAL_TO_OBJECT(v))
+
+
 typedef struct {
     /* object header */
     EJSObject obj;

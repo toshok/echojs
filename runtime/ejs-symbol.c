@@ -109,23 +109,24 @@ _ejs_Symbol_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_Symbol, x, _ejs_Symbol_##x, EJS_PROP_NOT_ENUMERABLE)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_Symbol_prototype, x, _ejs_Symbol_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
+#define PROTO_PROPERTY(x) 
 #define WELL_KNOWN_SYMBOL(x) EJS_MACRO_START                            \
-    _ejs_gc_add_root (&_ejs_sym_##x);                                   \
-    _ejs_sym_##x = _ejs_symbol_new(_ejs_atom_Symbol_##x);               \
-    _ejs_object_define_value_property (_ejs_Symbol, _ejs_atom_##x, _ejs_sym_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_NOT_CONFIGURABLE); \
+    _ejs_gc_add_root (&_ejs_Symbol_##x);                                \
+    _ejs_Symbol_##x = _ejs_symbol_new(_ejs_atom_Symbol_##x);            \
+    _ejs_object_define_value_property (_ejs_Symbol, _ejs_atom_##x, _ejs_Symbol_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_NOT_CONFIGURABLE); \
     EJS_MACRO_END
 
 ejsval _ejs_Symbol EJSVAL_ALIGNMENT;
 ejsval _ejs_Symbol_prototype EJSVAL_ALIGNMENT;
 
-ejsval _ejs_sym_create EJSVAL_ALIGNMENT;
-ejsval _ejs_sym_hasInstance EJSVAL_ALIGNMENT;
-ejsval _ejs_sym_isConcatSpreadable EJSVAL_ALIGNMENT;
-ejsval _ejs_sym_isRegExp EJSVAL_ALIGNMENT;
-ejsval _ejs_sym_iterator EJSVAL_ALIGNMENT;
-ejsval _ejs_sym_toPrimitive EJSVAL_ALIGNMENT;
-ejsval _ejs_sym_toStringTag EJSVAL_ALIGNMENT;
-ejsval _ejs_sym_unscopables EJSVAL_ALIGNMENT;
+ejsval _ejs_Symbol_create EJSVAL_ALIGNMENT;
+ejsval _ejs_Symbol_hasInstance EJSVAL_ALIGNMENT;
+ejsval _ejs_Symbol_isConcatSpreadable EJSVAL_ALIGNMENT;
+ejsval _ejs_Symbol_isRegExp EJSVAL_ALIGNMENT;
+ejsval _ejs_Symbol_iterator EJSVAL_ALIGNMENT;
+ejsval _ejs_Symbol_toPrimitive EJSVAL_ALIGNMENT;
+ejsval _ejs_Symbol_toStringTag EJSVAL_ALIGNMENT;
+ejsval _ejs_Symbol_unscopables EJSVAL_ALIGNMENT;
 
 void
 _ejs_symbol_init(ejsval global)
@@ -151,6 +152,8 @@ _ejs_symbol_init(ejsval global)
     WELL_KNOWN_SYMBOL(toPrimitive);
     WELL_KNOWN_SYMBOL(toStringTag);
     WELL_KNOWN_SYMBOL(unscopables);
+
+    _ejs_object_define_value_property (_ejs_Symbol_prototype, _ejs_Symbol_toStringTag, _ejs_atom_Symbol, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
 }
 
 ejsval

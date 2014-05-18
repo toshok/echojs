@@ -12,8 +12,7 @@
 #include "ejs-string.h"
 #include "ejs-array.h"
 #include "ejs-error.h"
-
-static EJSSpecOps _ejs_typedarray_specops;
+#include "ejs-symbol.h"
 
 #define EJS_TYPEDARRAY_LEN(arrobj)      (((EJSTypedArray*)EJSVAL_TO_OBJECT(arrobj))->length)
 
@@ -495,7 +494,28 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
  _ejs_##ArrayType##Array_prototype_subarray_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
  {                                                                      \
      EJS_NOT_IMPLEMENTED();                                             \
- }
+ }                                                                      \
+                                                                        \
+static ejsval                                                          \
+_ejs_##ArrayType##Array_prototype_get_toStringTag (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+{                                                                       \
+    if (!EJSVAL_IS_TYPEDARRAY(_this))                                   \
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "get toStringTag called on non-type array"); \
+                                                                        \
+    EJSTypedArray* arr = EJSVAL_TO_TYPEDARRAY(_this);                   \
+    switch (arr->element_type) {                                        \
+    case EJS_TYPEDARRAY_INT8:          return _ejs_atom_Int8Array;      \
+    case EJS_TYPEDARRAY_UINT8:         return _ejs_atom_Uint8Array;     \
+    case EJS_TYPEDARRAY_UINT8CLAMPED:  return _ejs_atom_Uint8ClampedArray; \
+    case EJS_TYPEDARRAY_INT16:         return _ejs_atom_Int16Array;     \
+    case EJS_TYPEDARRAY_UINT16:        return _ejs_atom_Uint16Array;    \
+    case EJS_TYPEDARRAY_INT32:         return _ejs_atom_Int32Array;     \
+    case EJS_TYPEDARRAY_UINT32:        return _ejs_atom_Uint32Array;    \
+    case EJS_TYPEDARRAY_FLOAT32:       return _ejs_atom_Float32Array;   \
+    case EJS_TYPEDARRAY_FLOAT64:       return _ejs_atom_Float64Array;   \
+    default: EJS_NOT_IMPLEMENTED();                                     \
+    } \
+}
 
 EJS_TYPED_ARRAY(INT8, Int8, int8, int8_t, 1);
 EJS_TYPED_ARRAY(UINT8, Uint8, uint8, uint8_t, 1);
@@ -598,6 +618,7 @@ _ejs_typedarrays_init(ejsval global)
 #define OBJ_METHOD(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t, x, _ejs_##t##_##x)
 #define PROTO_METHOD(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t##_proto, x, _ejs_##t##_prototype_##x)
 #define PROTO_METHOD_IMPL(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t##_proto, x, _ejs_##t##_prototype_##x##_impl)
+#define PROTO_GETTER(t,x) EJS_INSTALL_SYMBOL_GETTER(_ejs_##t##_proto, x, _ejs_##t##_prototype_get_##x)
 
     // ArrayBuffer
     {
@@ -609,6 +630,8 @@ _ejs_typedarrays_init(ejsval global)
         _ejs_object_setprop (_ejs_ArrayBuffer, _ejs_atom_prototype,   _ejs_ArrayBuffer_proto);
 
         PROTO_METHOD(ArrayBuffer, slice);
+
+        _ejs_object_define_value_property (_ejs_ArrayBuffer_proto, _ejs_Symbol_toStringTag, _ejs_atom_ArrayBuffer, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
     }
 
     // DataView
@@ -630,19 +653,11 @@ _ejs_typedarrays_init(ejsval global)
         PROTO_METHOD_IMPL(DataView, setFloat32);
         PROTO_METHOD_IMPL(DataView, getFloat64);
         PROTO_METHOD_IMPL(DataView, setFloat64);
+
+        _ejs_object_define_value_property (_ejs_DataView_proto, _ejs_Symbol_toStringTag, _ejs_atom_DataView, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
     }
 
 #define ADD_TYPEDARRAY(EnumType, ArrayType, arraytype, elementSizeInBytes) EJS_MACRO_START \
-    _ejs_##arraytype##array_specops = _ejs_typedarray_specops; \
-    _ejs_##arraytype##array_specops.class_name = #ArrayType "Array"; \
-    _ejs_##arraytype##array_specops.get = _ejs_##arraytype##array_specop_get; \
-    _ejs_##arraytype##array_specops.get_own_property = _ejs_##arraytype##array_specop_get_own_property; \
-    _ejs_##arraytype##array_specops.get_property = _ejs_##arraytype##array_specop_get_property; \
-    _ejs_##arraytype##array_specops.put = _ejs_##arraytype##array_specop_put; \
-    _ejs_##arraytype##array_specops.can_put = _ejs_##arraytype##array_specop_can_put; \
-    _ejs_##arraytype##array_specops.has_property = _ejs_##arraytype##array_specop_has_property; \
-    _ejs_##arraytype##array_specops.define_own_property = _ejs_##arraytype##array_specop_define_own_property; \
-                                                                        \
     _ejs_##ArrayType##Array = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_##ArrayType##Array, (EJSClosureFunc)_ejs_##ArrayType##Array_impl); \
     _ejs_object_setprop (global,         _ejs_atom_##ArrayType##Array,  _ejs_##ArrayType##Array); \
                                                                         \
@@ -660,6 +675,7 @@ _ejs_typedarrays_init(ejsval global)
     PROTO_METHOD_IMPL(ArrayType##Array, get);                           \
     PROTO_METHOD_IMPL(ArrayType##Array, set);                           \
     PROTO_METHOD_IMPL(ArrayType##Array, subarray);                      \
+    PROTO_GETTER(ArrayType##Array, toStringTag); /* XXX needs to be enumerable: false, configurable: true */ \
 EJS_MACRO_END
 
     ADD_TYPEDARRAY(INT8, Int8, int8, 1);
@@ -715,6 +731,8 @@ _ejs_arraybuffer_specop_get_own_property (ejsval obj, ejsval propertyName)
                 return NULL; // XXX
         }
     }
+
+    // XXX we need to handle the length property here (see EJSArray's get_own_property)
 
     return _ejs_Object_specops.get_own_property (obj, propertyName);
 }
@@ -1029,17 +1047,32 @@ EJS_DEFINE_CLASS(DataView,
                  _ejs_dataview_specop_scan
                  )
 
+#define ADD_TYPEDARRAY_SPECOPS(ArrayType, arraytype)                   \
+    EJSSpecOps _ejs_##arraytype##array_specops = {                     \
+        #ArrayType "Array",                                            \
+        OP_INHERIT, OP_INHERIT,                                        \
+        _ejs_##arraytype##array_specop_get,                            \
+        _ejs_##arraytype##array_specop_get_own_property,               \
+        _ejs_##arraytype##array_specop_get_property,                   \
+        _ejs_##arraytype##array_specop_put,                            \
+        _ejs_##arraytype##array_specop_can_put,                        \
+        _ejs_##arraytype##array_specop_has_property,                   \
+        OP_INHERIT,                                                    \
+        OP_INHERIT,                                                    \
+        _ejs_##arraytype##array_specop_define_own_property,            \
+        OP_INHERIT,                                                    \
+        _ejs_typedarray_specop_allocate,                               \
+        _ejs_typedarray_specop_finalize,                               \
+        _ejs_typedarray_specop_scan                                    \
+    };
 
-/* specops that are shared by all the typed array types with overrides for particular methods */
-static EJSSpecOps _ejs_typedarray_specops = {
-    "TypedArray",
 
-    NULL, NULL, NULL,
-    NULL, NULL, NULL,
-    NULL, NULL, NULL,
-    NULL, NULL, NULL,
-
-    _ejs_typedarray_specop_allocate,
-    _ejs_typedarray_specop_finalize,
-    _ejs_typedarray_specop_scan
-};
+ADD_TYPEDARRAY_SPECOPS(Int8, int8);
+ADD_TYPEDARRAY_SPECOPS(Uint8, uint8);
+//ADD_TYPEDARRAY_SPECOPS(Uint8Clamped, uint8clamped);
+ADD_TYPEDARRAY_SPECOPS(Int16, int16);
+ADD_TYPEDARRAY_SPECOPS(Uint16, uint16);
+ADD_TYPEDARRAY_SPECOPS(Int32, int32);
+ADD_TYPEDARRAY_SPECOPS(Uint32, uint32);
+ADD_TYPEDARRAY_SPECOPS(Float32, float32);
+ADD_TYPEDARRAY_SPECOPS(Float64, float64);

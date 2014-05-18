@@ -14,6 +14,7 @@
 #include "ejs-number.h"
 #include "ejs-string.h"
 #include "ejs-boolean.h"
+#include "ejs-symbol.h"
 #include "../parson/parson.h"
 
 ejsval _ejs_JSON EJSVAL_ALIGNMENT;
@@ -641,6 +642,8 @@ _ejs_json_init(ejsval global)
 {
     _ejs_JSON = _ejs_object_new (_ejs_Object_prototype, &_ejs_Object_specops);
     _ejs_object_setprop (global, _ejs_atom_JSON, _ejs_JSON);
+
+    _ejs_object_define_value_property (_ejs_JSON, _ejs_Symbol_toStringTag, _ejs_atom_JSON, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_JSON, x, _ejs_JSON_##x)
 

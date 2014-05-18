@@ -73,6 +73,17 @@ _ejs_init_classes()
     _ejs_Class_initialize (&_ejs_String_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Symbol_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_ArrayBuffer_specops, &_ejs_Object_specops);
+
+    _ejs_Class_initialize (&_ejs_int8array_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_uint8array_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_int16array_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_uint16array_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_int32array_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_uint32array_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_float32array_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_float64array_specops, &_ejs_Object_specops);
+
+    _ejs_Class_initialize (&_ejs_DataView_specops, &_ejs_Object_specops);
 #if IOS
     _ejs_Class_initialize (&_ejs_WebGLRenderingContext_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_WebGLBuffer_specops, &_ejs_Object_specops);
@@ -117,6 +128,8 @@ _ejs_init(int argc, char** argv)
 
     _ejs_object_init(_ejs_global);
 
+    _ejs_symbol_init(_ejs_global);
+
     _ejs_error_init(_ejs_global);
     _ejs_arguments_init(_ejs_global);
     _ejs_array_init(_ejs_global);
@@ -130,7 +143,6 @@ _ejs_init(int argc, char** argv)
 
     // ES6 bits
     _ejs_proxy_init(_ejs_global);
-    _ejs_symbol_init(_ejs_global);
     _ejs_map_init(_ejs_global);
     _ejs_set_init(_ejs_global);
 

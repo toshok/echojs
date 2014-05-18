@@ -8,6 +8,7 @@
 #include "ejs-function.h"
 #include "ejs-proxy.h"
 #include "ejs-ops.h"
+#include "ejs-symbol.h"
 
 #define EJSVAL_IS_SET(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Set_specops))
 #define EJSVAL_TO_SET(v)     ((EJSSet*)EJSVAL_TO_OBJECT(v))
@@ -344,7 +345,7 @@ _ejs_set_init(ejsval global)
     PROTO_METHOD(values);
     //PROTO_METHOD(keys);   // XXX this should be the same function object as Set.prototype.values
     // XXX (ES6 23.2.3.11) Set.prototype [ @@iterator ]( )
-    // XXX (ES6 23.2.3.12) Set.prototype [ @@toStringTag ]
+    _ejs_object_define_value_property (_ejs_Set_prototype, _ejs_Symbol_toStringTag, _ejs_atom_Set, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
 
 #undef OBJ_METHOD
 #undef PROTO_METHOD

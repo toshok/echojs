@@ -26,14 +26,14 @@ extern ejsval _ejs_Symbol_prototype;
 extern EJSSpecOps _ejs_Symbol_specops;
 
 // our well known symbols
-extern ejsval _ejs_sym_create;
-extern ejsval _ejs_sym_hasInstance;
-extern ejsval _ejs_sym_isConcatSpreadable;
-extern ejsval _ejs_sym_isRegExp;
-extern ejsval _ejs_sym_iterator;
-extern ejsval _ejs_sym_toPrimitive;
-extern ejsval _ejs_sym_toStringTag;
-extern ejsval _ejs_sym_unscopables;
+extern ejsval _ejs_Symbol_create;
+extern ejsval _ejs_Symbol_hasInstance;
+extern ejsval _ejs_Symbol_isConcatSpreadable;
+extern ejsval _ejs_Symbol_isRegExp;
+extern ejsval _ejs_Symbol_iterator;
+extern ejsval _ejs_Symbol_toPrimitive;
+extern ejsval _ejs_Symbol_toStringTag;
+extern ejsval _ejs_Symbol_unscopables;
 
 void _ejs_symbol_init(ejsval global);
 

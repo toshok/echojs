@@ -9,6 +9,7 @@
 #include "ejs-boolean.h"
 #include "ejs-function.h"
 #include "ejs-string.h"
+#include "ejs-symbol.h"
 
 ejsval _ejs_Boolean EJSVAL_ALIGNMENT;
 ejsval _ejs_Boolean_proto EJSVAL_ALIGNMENT;
@@ -78,6 +79,8 @@ _ejs_boolean_init(ejsval global)
     PROTO_METHOD(toString);
 
 #undef PROTO_METHOD
+
+    _ejs_object_define_value_property (_ejs_Boolean_proto, _ejs_Symbol_toStringTag, _ejs_atom_Boolean, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
 }
 
 static ejsval

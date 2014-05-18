@@ -8,6 +8,7 @@
 #include "ejs-function.h"
 #include "ejs-proxy.h"
 #include "ejs-ops.h"
+#include "ejs-symbol.h"
 
 #define EJSVAL_IS_MAP(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Map_specops))
 #define EJSVAL_TO_MAP(v)     ((EJSMap*)EJSVAL_TO_OBJECT(v))
@@ -459,6 +460,8 @@ _ejs_map_init(ejsval global)
     // XXX (ES6 23.1.3.10) get Map.prototype.size
     PROTO_METHOD(values);
     // XXX (ES6 23.1.3.12) Map.prototype [ @@iterator ]( )
+
+    _ejs_object_define_value_property (_ejs_Map_prototype, _ejs_Symbol_toStringTag, _ejs_atom_Map, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
 #undef OBJ_METHOD
 #undef PROTO_METHOD
 }

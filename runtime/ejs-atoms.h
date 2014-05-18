@@ -9,6 +9,7 @@ EJS_ATOM2([],empty_array)
 EJS_ATOM2({},empty_object)
 
 EJS_ATOM2(/,slash)
+EJS_ATOM2(~,tilde)
 
 // common properties/methods
 EJS_ATOM(__proto__)
@@ -51,6 +52,7 @@ EJS_ATOM(get)
 EJS_ATOM(set)
 
 // class names
+EJS_ATOM(Arguments)
 EJS_ATOM(Array)
 EJS_ATOM(Boolean)
 EJS_ATOM(Date)
@@ -360,6 +362,13 @@ EJS_ATOM2(Symbol.iterator,Symbol_iterator)
 EJS_ATOM2(Symbol.toPrimitive,Symbol_toPrimitive)
 EJS_ATOM2(Symbol.toStringTag,Symbol_toStringTag)
 EJS_ATOM2(Symbol.unscopables,Symbol_unscopables)
+
+// handy toString stuff
+EJS_ATOM2([object Null],null_toString)
+EJS_ATOM2([object Undefined],undefined_toString)
+EJS_ATOM2([object ,toString_prefix)
+EJS_ATOM2(],toString_suffix)
+EJS_ATOM2(???,unknown_tag)
 
 // some numbers
 EJS_ATOM2(0,0)

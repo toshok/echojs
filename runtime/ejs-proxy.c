@@ -8,9 +8,6 @@
 #include "ejs-function.h"
 #include "ejs-ops.h"
 
-#define EJSVAL_IS_PROXY(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Proxy_specops))
-#define EJSVAL_TO_PROXY(v)     ((EJSProxy*)EJSVAL_TO_OBJECT(v))
-
 ejsval
 _ejs_Proxy_create (ejsval env, ejsval this, uint32_t argc, ejsval* args)
 {

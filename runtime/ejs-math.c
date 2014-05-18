@@ -9,6 +9,7 @@
 #include "ejs-function.h"
 #include "ejs-math.h"
 #include "ejs-string.h"
+#include "ejs-symbol.h"
 
 ejsval _ejs_Math EJSVAL_ALIGNMENT;
 
@@ -512,5 +513,7 @@ _ejs_math_init(ejsval global)
 
     _ejs_object_setprop (_ejs_Math, _ejs_atom_PI, NUMBER_TO_EJSVAL(M_PI));
     _ejs_object_setprop (_ejs_Math, _ejs_atom_E, NUMBER_TO_EJSVAL(M_E));
+
+    _ejs_object_define_value_property (_ejs_Math, _ejs_Symbol_toStringTag, _ejs_atom_Math, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
 }
 

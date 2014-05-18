@@ -13,6 +13,9 @@
 #include "ejs-ops.h"
 #include "ejs-object.h"
 #include "ejs-number.h"
+#include "ejs-arguments.h"
+#include "ejs-boolean.h"
+#include "ejs-proxy.h"
 #include "ejs-string.h"
 #include "ejs-regexp.h"
 #include "ejs-date.h"
@@ -1473,20 +1476,97 @@ _ejs_Object_keys (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return _ejs_Object_getOwnPropertyNames(env, _this, argc, args);
 }
 
-// ECMA262: 15.2.4.2
+// ECMA262: 19.1.3.6
 ejsval
 _ejs_Object_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    char buf[1024];
-    const char *classname;
+    // 1. If the this value is undefined, return "[object Undefined]". 
+    if (EJSVAL_IS_UNDEFINED(_this))
+        return _ejs_atom_undefined_toString;
+    // 2. If the this value is null, return "[object Null]". 
     if (EJSVAL_IS_NULL(_this))
-        classname = "Null";
-    else if (EJSVAL_IS_UNDEFINED(_this))
-        classname = "Undefined";
-    else
-        classname = CLASSNAME(EJSVAL_TO_OBJECT(ToObject(_this)));
-    snprintf (buf, sizeof(buf), "[object %s]", classname);
-    return _ejs_string_new_utf8 (buf);
+        return _ejs_atom_null_toString;
+
+    ejsval builtinTag;
+
+    // 3. Let O be the result of calling ToObject passing the this value as the argument. 
+    ejsval O = ToObject(_this);
+    EJSBool check_for_subclasses = EJS_TRUE;
+    // 4. If O is an exotic Array object, then let builtinTag be "Array". 
+    if (EJSVAL_IS_ARRAY(O)) {
+        builtinTag = _ejs_atom_Array;
+    }
+    // 5. Else, if O is an exotic String object, then let builtinTag be "String". 
+    else if (EJSVAL_IS_STRING_OBJECT(O)) {
+        builtinTag = _ejs_atom_String;
+    }
+    // 6. Else, if O is an exotic Proxy object, then let builtinTag be "Proxy". 
+    else if (EJSVAL_IS_PROXY(O)) {
+        builtinTag = _ejs_atom_Proxy;
+        check_for_subclasses = EJS_FALSE;
+    }
+    // 7. Else, if O is an exotic arguments object, then let builtinTag be "Arguments". 
+    else if (EJSVAL_IS_ARGUMENTS(O)) {
+        builtinTag = _ejs_atom_Arguments;
+    }
+    // 8. Else, if O is an ECMAScript function object, a built-in function object, or a bound function exotic object, then let builtinTag be "Function". 
+    else if (EJSVAL_IS_FUNCTION(O)) {
+        builtinTag = _ejs_atom_Function;
+    }
+    // 9. Else, if O has an [[ErrorData]] internal slot, then let builtinTag be "Error". 
+    else if (EJSVAL_IS_ERROR(O)) {
+        builtinTag = _ejs_atom_Error;
+    }
+    // 10. Else, if O has a [[BooleanData]] internal slot, then let builtinTag be "Boolean". 
+    else if (EJSVAL_IS_BOOLEAN_OBJECT(O)) {
+        builtinTag = _ejs_atom_Boolean;
+    }
+    // 11. Else, if O has a [[NumberData]] internal slot, then let builtinTag be "Number". 
+    else if (EJSVAL_IS_NUMBER_OBJECT(O)) {
+        builtinTag = _ejs_atom_Number;
+    }
+    // 12. Else, if O has a [[DateValue]] internal slot, then let builtinTag be "Date". 
+    else if (EJSVAL_IS_DATE(O)) {
+        builtinTag = _ejs_atom_Date;
+    }
+    // 13. Else, if O has a [[RegExpMatcher]] internal slot, then let builtinTag be "RegExp". 
+    else if (EJSVAL_IS_REGEXP(O)) {
+        builtinTag = _ejs_atom_RegExp;
+    }
+    // 14. Else, let builtinTag be "Object". 
+    else {
+        builtinTag = _ejs_atom_Object;
+        check_for_subclasses = EJS_FALSE;
+    }
+
+    // 15. Let hasTag be the result of HasProperty(O, @@toStringTag). 
+    // 16. ReturnIfAbrupt(hasTag). 
+    EJSBool hasTag = OP(EJSVAL_TO_OBJECT(O),has_property)(O, _ejs_Symbol_toStringTag);
+
+    ejsval tag;
+    // 17. If hasTag is false, then let tag be builtinTag. 
+    if (!hasTag) {
+        tag = builtinTag;
+    }
+    // 18. Else, 
+    else {
+        //     a. Let tag be the result of Get(O, @@toStringTag). 
+        //     b. If tag is an abrupt completion, let tag be NormalCompletion("???"). 
+        //     c. Let tag be tag.[[value]]. 
+        tag = OP(EJSVAL_TO_OBJECT(O),get)(O, _ejs_Symbol_toStringTag, O);
+
+        //     d. If Type(tag) is not String, let tag be "???". 
+        if (!EJSVAL_IS_STRING(tag))
+            tag = _ejs_atom_unknown_tag;
+            
+        //     e. If tag is any of "Arguments", "Array", "Boolean", "Date", "Error", "Function", "Number", "RegExp", or
+        //        "String" and SameValue(tag, builtinTag) is false, then let tag be the string value "~" concatenated with
+        //        the current value of tag. 
+        if (check_for_subclasses && !SameValue(tag, builtinTag))
+            tag = _ejs_string_concat(_ejs_atom_tilde, tag);
+    }
+    // 19. Return the String value that is the result of concatenating the three Strings "[object ", tag, and "]". 
+    return _ejs_string_concatv(_ejs_atom_toString_prefix, tag, _ejs_atom_toString_suffix, _ejs_null);
 }
 
 // ECMA262: 15.2.4.3
@@ -1902,7 +1982,7 @@ _ejs_object_specop_has_property (ejsval O, ejsval P)
     EJSObject* obj = EJSVAL_TO_OBJECT(O);
 
     /* 1. Let desc be the result of calling the [[GetProperty]] internal method of O with property name P. */
-    EJSPropertyDesc* desc = OP(obj,get_own_property)(O, P);
+    EJSPropertyDesc* desc = OP(obj,get_property)(O, P);
     
     /* 2. If desc is undefined, then return false. */
     if (!desc)
