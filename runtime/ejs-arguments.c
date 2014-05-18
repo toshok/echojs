@@ -10,8 +10,6 @@
 #include "ejs-arguments.h"
 #include "ejs-string.h"
 
-#define EJSOBJ_IS_ARGUMENTS(obj) (((EJSObject*)obj)->proto == _ejs_Arguments__proto__)
-
 ejsval _ejs_Arguments__proto__ EJSVAL_ALIGNMENT;
 
 ejsval
@@ -19,7 +17,7 @@ _ejs_arguments_new (int numElements, ejsval* args)
 {
     ejsval rv = _ejs_object_new (_ejs_Arguments__proto__, &_ejs_Arguments_specops);
 
-    EJSArguments* arguments = (EJSArguments*)EJSVAL_TO_OBJECT(rv);
+    EJSArguments* arguments = EJSVAL_TO_ARGUMENTS(rv);
     arguments->argc = numElements;
     arguments->args = (ejsval*)calloc(numElements, sizeof (ejsval));
     memmove (arguments->args, args, sizeof(ejsval) * numElements);
@@ -36,7 +34,7 @@ _ejs_arguments_init(ejsval global)
 static ejsval
 _ejs_arguments_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
 {
-    EJSArguments* arguments = (EJSArguments*)EJSVAL_TO_OBJECT(obj);
+    EJSArguments* arguments = EJSVAL_TO_ARGUMENTS(obj);
 
     // check if propertyName is an integer, or a string that we can convert to an int
     EJSBool is_index = EJS_FALSE;

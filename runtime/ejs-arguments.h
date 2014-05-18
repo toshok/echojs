@@ -7,6 +7,10 @@
 
 #include "ejs-object.h"
 
+#define EJSVAL_IS_ARGUMENTS(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Arguments_specops))
+#define EJSVAL_TO_ARGUMENTS(v)     ((EJSArguments*)EJSVAL_TO_OBJECT(v))
+
+
 typedef struct {
     /* object header */
     EJSObject obj;
