@@ -13,7 +13,7 @@
 #include "ejs-string.h"
 
 ejsval _ejs_Number EJSVAL_ALIGNMENT;
-ejsval _ejs_Number_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Number_prototype EJSVAL_ALIGNMENT;
 
 static ejsval
 _ejs_Number_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -185,11 +185,11 @@ _ejs_number_init(ejsval global)
     _ejs_Number = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Number, (EJSClosureFunc)_ejs_Number_impl);
     _ejs_object_setprop (global, _ejs_atom_Number, _ejs_Number);
 
-    _ejs_gc_add_root (&_ejs_Number_proto);
-    _ejs_Number_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_Number_specops);
-    _ejs_object_setprop (_ejs_Number,       _ejs_atom_prototype,  _ejs_Number_proto);
+    _ejs_gc_add_root (&_ejs_Number_prototype);
+    _ejs_Number_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Number_specops);
+    _ejs_object_setprop (_ejs_Number,       _ejs_atom_prototype,  _ejs_Number_prototype);
 
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Number_proto, x, _ejs_Number_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Number_prototype, x, _ejs_Number_prototype_##x)
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Number, x, _ejs_Number_##x)
 
     PROTO_METHOD(valueOf);

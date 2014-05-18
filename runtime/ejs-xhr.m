@@ -581,7 +581,7 @@ _ejs_XMLHttpRequest_prototype_set_onreadystatechange (ejsval env, ejsval _this, 
 }
 
 ejsval _ejs_XMLHttpRequest EJSVAL_ALIGNMENT;
-ejsval _ejs_XMLHttpRequest_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_XMLHttpRequest_prototype EJSVAL_ALIGNMENT;
 
 static ejsval
 _ejs_XMLHttpRequest_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -609,13 +609,13 @@ _ejs_xmlhttprequest_init(ejsval global)
     _ejs_XMLHttpRequest = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_XMLHttpRequest, (EJSClosureFunc)_ejs_XMLHttpRequest_impl);
     _ejs_object_setprop (global, _ejs_atom_XMLHttpRequest, _ejs_XMLHttpRequest);
 
-    _ejs_gc_add_root (&_ejs_XMLHttpRequest_proto);
-    _ejs_XMLHttpRequest_proto = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
-    _ejs_object_setprop (_ejs_XMLHttpRequest,       _ejs_atom_prototype,  _ejs_XMLHttpRequest_proto);
+    _ejs_gc_add_root (&_ejs_XMLHttpRequest_prototype);
+    _ejs_XMLHttpRequest_prototype = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
+    _ejs_object_setprop (_ejs_XMLHttpRequest,       _ejs_atom_prototype,  _ejs_XMLHttpRequest_prototype);
 
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_XMLHttpRequest_proto, x, _ejs_XMLHttpRequest_prototype_##x, EJS_PROP_NOT_ENUMERABLE)
-#define PROTO_GETTER(x) EJS_INSTALL_ATOM_GETTER(_ejs_XMLHttpRequest_proto, x, _ejs_XMLHttpRequest_prototype_get_##x)
-#define PROTO_ACCESSORS(x) EJS_INSTALL_ATOM_ACCESSORS(_ejs_XMLHttpRequest_proto, x, _ejs_XMLHttpRequest_prototype_get_##x, _ejs_XMLHttpRequest_prototype_set_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_XMLHttpRequest_prototype, x, _ejs_XMLHttpRequest_prototype_##x, EJS_PROP_NOT_ENUMERABLE)
+#define PROTO_GETTER(x) EJS_INSTALL_ATOM_GETTER(_ejs_XMLHttpRequest_prototype, x, _ejs_XMLHttpRequest_prototype_get_##x)
+#define PROTO_ACCESSORS(x) EJS_INSTALL_ATOM_ACCESSORS(_ejs_XMLHttpRequest_prototype, x, _ejs_XMLHttpRequest_prototype_get_##x, _ejs_XMLHttpRequest_prototype_set_##x)
 
     PROTO_METHOD(open);
     PROTO_METHOD(send);

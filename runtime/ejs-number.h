@@ -21,7 +21,7 @@ typedef struct {
 EJS_BEGIN_DECLS
 
 extern ejsval _ejs_Number;
-extern ejsval _ejs_Number_proto;
+extern ejsval _ejs_Number_prototype;
 extern EJSSpecOps _ejs_Number_specops;
 
 void _ejs_number_init(ejsval global);

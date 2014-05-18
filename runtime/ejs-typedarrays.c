@@ -16,37 +16,37 @@
 
 #define EJS_TYPEDARRAY_LEN(arrobj)      (((EJSTypedArray*)EJSVAL_TO_OBJECT(arrobj))->length)
 
-ejsval _ejs_ArrayBuffer_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_ArrayBuffer_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_ArrayBuffer EJSVAL_ALIGNMENT;
 
-ejsval _ejs_Int8Array_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Int8Array_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_Int8Array EJSVAL_ALIGNMENT;
 
-ejsval _ejs_Uint8Array_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Uint8Array_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_Uint8Array EJSVAL_ALIGNMENT;
 
-ejsval _ejs_Uint8ClampedArray_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Uint8ClampedArray_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_Uint8ClampedArray EJSVAL_ALIGNMENT;
 
-ejsval _ejs_Int16Array_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Int16Array_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_Int16Array EJSVAL_ALIGNMENT;
 
-ejsval _ejs_Uint16Array_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Uint16Array_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_Uint16Array EJSVAL_ALIGNMENT;
 
-ejsval _ejs_Int32Array_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Int32Array_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_Int32Array EJSVAL_ALIGNMENT;
 
-ejsval _ejs_Uint32Array_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Uint32Array_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_Uint32Array EJSVAL_ALIGNMENT;
 
-ejsval _ejs_Float32Array_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Float32Array_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_Float32Array EJSVAL_ALIGNMENT;
 
-ejsval _ejs_Float64Array_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Float64Array_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_Float64Array EJSVAL_ALIGNMENT;
 
-ejsval _ejs_DataView_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_DataView_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_DataView EJSVAL_ALIGNMENT;
 
 ejsval
@@ -54,7 +54,7 @@ _ejs_arraybuffer_new (int size)
 {
     EJSArrayBuffer *rv = _ejs_gc_new(EJSArrayBuffer);
 
-    _ejs_init_object ((EJSObject*)rv, _ejs_ArrayBuffer_proto, &_ejs_ArrayBuffer_specops);
+    _ejs_init_object ((EJSObject*)rv, _ejs_ArrayBuffer_prototype, &_ejs_ArrayBuffer_specops);
 
     rv->dependent = EJS_FALSE;
     rv->size = size;
@@ -70,7 +70,7 @@ _ejs_arraybuffer_new_slice (ejsval bufferval, int offset, int size)
     EJSArrayBuffer* rv = _ejs_gc_new(EJSArrayBuffer);
     EJSArrayBuffer* buffer = (EJSArrayBuffer*)EJSVAL_TO_OBJECT(bufferval);
 
-    _ejs_init_object ((EJSObject*)rv, _ejs_ArrayBuffer_proto, &_ejs_ArrayBuffer_specops);
+    _ejs_init_object ((EJSObject*)rv, _ejs_ArrayBuffer_prototype, &_ejs_ArrayBuffer_specops);
 
     rv->dependent = EJS_TRUE;
     rv->data.dependent.offset = MIN(buffer->size, offset);
@@ -616,22 +616,22 @@ void
 _ejs_typedarrays_init(ejsval global)
 {
 #define OBJ_METHOD(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t, x, _ejs_##t##_##x)
-#define PROTO_METHOD(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t##_proto, x, _ejs_##t##_prototype_##x)
-#define PROTO_METHOD_IMPL(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t##_proto, x, _ejs_##t##_prototype_##x##_impl)
-#define PROTO_GETTER(t,x) EJS_INSTALL_SYMBOL_GETTER(_ejs_##t##_proto, x, _ejs_##t##_prototype_get_##x)
+#define PROTO_METHOD(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t##_prototype, x, _ejs_##t##_prototype_##x)
+#define PROTO_METHOD_IMPL(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t##_prototype, x, _ejs_##t##_prototype_##x##_impl)
+#define PROTO_GETTER(t,x) EJS_INSTALL_SYMBOL_GETTER(_ejs_##t##_prototype, x, _ejs_##t##_prototype_get_##x)
 
     // ArrayBuffer
     {
         _ejs_ArrayBuffer = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_ArrayBuffer, (EJSClosureFunc)_ejs_ArrayBuffer_impl);
         _ejs_object_setprop (global,           _ejs_atom_ArrayBuffer, _ejs_ArrayBuffer);
 
-        _ejs_gc_add_root (&_ejs_ArrayBuffer_proto);
-        _ejs_ArrayBuffer_proto = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
-        _ejs_object_setprop (_ejs_ArrayBuffer, _ejs_atom_prototype,   _ejs_ArrayBuffer_proto);
+        _ejs_gc_add_root (&_ejs_ArrayBuffer_prototype);
+        _ejs_ArrayBuffer_prototype = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
+        _ejs_object_setprop (_ejs_ArrayBuffer, _ejs_atom_prototype,   _ejs_ArrayBuffer_prototype);
 
         PROTO_METHOD(ArrayBuffer, slice);
 
-        _ejs_object_define_value_property (_ejs_ArrayBuffer_proto, _ejs_Symbol_toStringTag, _ejs_atom_ArrayBuffer, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
+        _ejs_object_define_value_property (_ejs_ArrayBuffer_prototype, _ejs_Symbol_toStringTag, _ejs_atom_ArrayBuffer, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
     }
 
     // DataView
@@ -639,9 +639,9 @@ _ejs_typedarrays_init(ejsval global)
         _ejs_DataView = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_DataView, (EJSClosureFunc)_ejs_DataView_impl);
         _ejs_object_setprop (global,            _ejs_atom_DataView, _ejs_DataView);
 
-        _ejs_gc_add_root (&_ejs_DataView_proto);
-        _ejs_DataView_proto = _ejs_object_new (_ejs_null, &_ejs_Object_specops);
-        _ejs_object_setprop (_ejs_DataView, _ejs_atom_prototype, _ejs_DataView_proto);
+        _ejs_gc_add_root (&_ejs_DataView_prototype);
+        _ejs_DataView_prototype = _ejs_object_new (_ejs_null, &_ejs_Object_specops);
+        _ejs_object_setprop (_ejs_DataView, _ejs_atom_prototype, _ejs_DataView_prototype);
 
         PROTO_METHOD_IMPL(DataView, getInt8);
         PROTO_METHOD_IMPL(DataView, setInt8);
@@ -654,22 +654,22 @@ _ejs_typedarrays_init(ejsval global)
         PROTO_METHOD_IMPL(DataView, getFloat64);
         PROTO_METHOD_IMPL(DataView, setFloat64);
 
-        _ejs_object_define_value_property (_ejs_DataView_proto, _ejs_Symbol_toStringTag, _ejs_atom_DataView, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
+        _ejs_object_define_value_property (_ejs_DataView_prototype, _ejs_Symbol_toStringTag, _ejs_atom_DataView, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
     }
 
 #define ADD_TYPEDARRAY(EnumType, ArrayType, arraytype, elementSizeInBytes) EJS_MACRO_START \
     _ejs_##ArrayType##Array = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_##ArrayType##Array, (EJSClosureFunc)_ejs_##ArrayType##Array_impl); \
     _ejs_object_setprop (global,         _ejs_atom_##ArrayType##Array,  _ejs_##ArrayType##Array); \
                                                                         \
-    _ejs_gc_add_root (&_ejs_##ArrayType##Array_proto);                  \
-    _ejs_##ArrayType##Array_proto = _ejs_object_new(_ejs_null, &_ejs_Object_specops); \
-    _ejs_object_setprop (_ejs_##ArrayType##Array, _ejs_atom_prototype,  _ejs_##ArrayType##Array_proto); \
+    _ejs_gc_add_root (&_ejs_##ArrayType##Array_prototype);                  \
+    _ejs_##ArrayType##Array_prototype = _ejs_object_new(_ejs_null, &_ejs_Object_specops); \
+    _ejs_object_setprop (_ejs_##ArrayType##Array, _ejs_atom_prototype,  _ejs_##ArrayType##Array_prototype); \
                                                                         \
     /* make sure ctor.BYTES_PER_ELEMENT is defined */                   \
     _ejs_object_define_value_property (_ejs_##ArrayType##Array, _ejs_atom_BYTES_PER_ELEMENT, NUMBER_TO_EJSVAL(elementSizeInBytes), EJS_PROP_FLAGS_ENUMERABLE); \
                                                                         \
     _ejs_typed_array_elsizes[EJS_TYPEDARRAY_##EnumType] = elementSizeInBytes; \
-    _ejs_typed_array_protos[EJS_TYPEDARRAY_##EnumType] = _ejs_##ArrayType##Array_proto; \
+    _ejs_typed_array_protos[EJS_TYPEDARRAY_##EnumType] = _ejs_##ArrayType##Array_prototype; \
     _ejs_typed_array_specops[EJS_TYPEDARRAY_##EnumType] = &_ejs_##arraytype##array_specops; \
                                                                         \
     PROTO_METHOD_IMPL(ArrayType##Array, get);                           \

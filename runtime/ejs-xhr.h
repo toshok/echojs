@@ -10,7 +10,7 @@
 EJS_BEGIN_DECLS
 
 extern ejsval _ejs_XMLHttpRequest;
-extern ejsval _ejs_XMLHttpRequest_proto;
+extern ejsval _ejs_XMLHttpRequest_prototype;
 extern EJSSpecOps _ejs_XMLHttpRequest_specops;
 
 void _ejs_xmlhttprequest_init(ejsval global);

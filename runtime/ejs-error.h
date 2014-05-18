@@ -24,13 +24,13 @@ typedef enum {
 
 extern EJSSpecOps _ejs_Error_specops;
 
-extern ejsval _ejs_Error_proto;
-extern ejsval _ejs_EvalError_proto;
-extern ejsval _ejs_RangeError_proto;
-extern ejsval _ejs_ReferenceError_proto;
-extern ejsval _ejs_SyntaxError_proto;
-extern ejsval _ejs_TypeError_proto;
-extern ejsval _ejs_URIError_proto;
+extern ejsval _ejs_Error_prototype;
+extern ejsval _ejs_EvalError_prototype;
+extern ejsval _ejs_RangeError_prototype;
+extern ejsval _ejs_ReferenceError_prototype;
+extern ejsval _ejs_SyntaxError_prototype;
+extern ejsval _ejs_TypeError_prototype;
+extern ejsval _ejs_URIError_prototype;
 
 extern ejsval _ejs_nativeerror_new (EJSNativeErrorType error_type, ejsval message);
 extern ejsval _ejs_nativeerror_new_utf8 (EJSNativeErrorType error_type, const char* message);

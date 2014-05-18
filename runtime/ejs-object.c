@@ -617,24 +617,24 @@ _ejs_object_create (ejsval proto)
     EJSSpecOps *ops = NULL;
 
     if      (EJSVAL_EQ(proto, _ejs_Object_prototype)) ops = &_ejs_Object_specops;
-    else if (EJSVAL_EQ(proto, _ejs_Array_proto))      ops = &_ejs_Array_specops;
+    else if (EJSVAL_EQ(proto, _ejs_Array_prototype))  ops = &_ejs_Array_specops;
     else if (EJSVAL_EQ(proto, _ejs_String_prototype)) ops = &_ejs_String_specops;
     else if (EJSVAL_EQ(proto, _ejs_Map_prototype))    ops = &_ejs_Map_specops;
     else if (EJSVAL_EQ(proto, _ejs_Set_prototype))    ops = &_ejs_Set_specops;
     else if (EJSVAL_EQ(proto, _ejs_Proxy_prototype))  ops = &_ejs_Proxy_specops;
-    else if (EJSVAL_EQ(proto, _ejs_Number_proto))     ops = &_ejs_Number_specops;
-    else if (EJSVAL_EQ(proto, _ejs_RegExp_proto))     ops = &_ejs_RegExp_specops;
-    else if (EJSVAL_EQ(proto, _ejs_Date_proto))       ops = &_ejs_Date_specops;
-    else if (EJSVAL_EQ(proto, _ejs_ArrayBuffer_proto)) ops = &_ejs_ArrayBuffer_specops;
-    else if (EJSVAL_EQ(proto, _ejs_DataView_proto)) ops = &_ejs_DataView_specops;
-    else if (EJSVAL_EQ(proto, _ejs_EvalError_proto))  ops = &_ejs_Error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_RangeError_proto))  ops = &_ejs_Error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_ReferenceError_proto))  ops = &_ejs_Error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_SyntaxError_proto))  ops = &_ejs_Error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_TypeError_proto))  ops = &_ejs_Error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_URIError_proto))  ops = &_ejs_Error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_Error_proto))  ops = &_ejs_Error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_XMLHttpRequest_proto))  ops = &_ejs_XMLHttpRequest_specops;
+    else if (EJSVAL_EQ(proto, _ejs_Number_prototype)) ops = &_ejs_Number_specops;
+    else if (EJSVAL_EQ(proto, _ejs_RegExp_prototype)) ops = &_ejs_RegExp_specops;
+    else if (EJSVAL_EQ(proto, _ejs_Date_prototype))   ops = &_ejs_Date_specops;
+    else if (EJSVAL_EQ(proto, _ejs_ArrayBuffer_prototype)) ops = &_ejs_ArrayBuffer_specops;
+    else if (EJSVAL_EQ(proto, _ejs_DataView_prototype)) ops = &_ejs_DataView_specops;
+    else if (EJSVAL_EQ(proto, _ejs_EvalError_prototype))  ops = &_ejs_Error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_RangeError_prototype))  ops = &_ejs_Error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_ReferenceError_prototype))  ops = &_ejs_Error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_SyntaxError_prototype))  ops = &_ejs_Error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_TypeError_prototype))  ops = &_ejs_Error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_URIError_prototype))  ops = &_ejs_Error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_Error_prototype))  ops = &_ejs_Error_specops;
+    else if (EJSVAL_EQ(proto, _ejs_XMLHttpRequest_prototype))  ops = &_ejs_XMLHttpRequest_specops;
     else {
         for (int i = 0; i < EJS_TYPEDARRAY_TYPE_COUNT; i ++) {
             if (EJSVAL_EQ(proto, _ejs_typed_array_protos[i]))

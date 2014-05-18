@@ -102,43 +102,43 @@ typedef struct _EJSDataView {
 EJS_BEGIN_DECLS
 
 extern ejsval _ejs_ArrayBuffer;
-extern ejsval _ejs_ArrayBuffer_proto;
+extern ejsval _ejs_ArrayBuffer_prototype;
 extern EJSSpecOps _ejs_ArrayBuffer_specops;
 
 extern ejsval _ejs_Int8Array;
-extern ejsval _ejs_Int8Array_proto;
+extern ejsval _ejs_Int8Array_prototype;
 extern EJSSpecOps _ejs_int8array_specops;
 
 extern ejsval _ejs_Uint8Array;
-extern ejsval _ejs_Uint8Array_proto;
+extern ejsval _ejs_Uint8Array_prototype;
 extern EJSSpecOps _ejs_uint8array_specops;
 
 extern ejsval _ejs_Int16Array;
-extern ejsval _ejs_Int16Array_proto;
+extern ejsval _ejs_Int16Array_prototype;
 extern EJSSpecOps _ejs_int16array_specops;
 
 extern ejsval _ejs_Uint16Array;
-extern ejsval _ejs_Uint16Array_proto;
+extern ejsval _ejs_Uint16Array_prototype;
 extern EJSSpecOps _ejs_uint16array_specops;
 
 extern ejsval _ejs_Int32Array;
-extern ejsval _ejs_Int32Array_proto;
+extern ejsval _ejs_Int32Array_prototype;
 extern EJSSpecOps _ejs_int32array_specops;
 
 extern ejsval _ejs_Uint32Array;
-extern ejsval _ejs_Uint32Array_proto;
+extern ejsval _ejs_Uint32Array_prototype;
 extern EJSSpecOps _ejs_uint32array_specops;
 
 extern ejsval _ejs_Float32Array;
-extern ejsval _ejs_Float32Array_proto;
+extern ejsval _ejs_Float32Array_prototype;
 extern EJSSpecOps _ejs_float32array_specops;
 
 extern ejsval _ejs_Float64Array;
-extern ejsval _ejs_Float64Array_proto;
+extern ejsval _ejs_Float64Array_prototype;
 extern EJSSpecOps _ejs_float64array_specops;
 
 extern ejsval _ejs_DataView;
-extern ejsval _ejs_DataView_proto;
+extern ejsval _ejs_DataView_prototype;
 extern EJSSpecOps _ejs_DataView_specops;
 
 void _ejs_typedarrays_init(ejsval global);

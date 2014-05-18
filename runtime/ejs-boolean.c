@@ -12,7 +12,7 @@
 #include "ejs-symbol.h"
 
 ejsval _ejs_Boolean EJSVAL_ALIGNMENT;
-ejsval _ejs_Boolean_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Boolean_prototype EJSVAL_ALIGNMENT;
 
 static ejsval
 _ejs_Boolean_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -69,18 +69,18 @@ _ejs_boolean_init(ejsval global)
     _ejs_object_setprop (global, _ejs_atom_Boolean, _ejs_Boolean);
 
 
-    _ejs_gc_add_root (&_ejs_Boolean_proto);
-    _ejs_Boolean_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
-    _ejs_object_setprop (_ejs_Boolean,       _ejs_atom_prototype,  _ejs_Boolean_proto);
+    _ejs_gc_add_root (&_ejs_Boolean_prototype);
+    _ejs_Boolean_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
+    _ejs_object_setprop (_ejs_Boolean,       _ejs_atom_prototype,  _ejs_Boolean_prototype);
 
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Boolean_proto, x, _ejs_Boolean_prototype_##x, EJS_PROP_NOT_ENUMERABLE)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Boolean_prototype, x, _ejs_Boolean_prototype_##x, EJS_PROP_NOT_ENUMERABLE)
 
     PROTO_METHOD(valueOf);
     PROTO_METHOD(toString);
 
 #undef PROTO_METHOD
 
-    _ejs_object_define_value_property (_ejs_Boolean_proto, _ejs_Symbol_toStringTag, _ejs_atom_Boolean, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
+    _ejs_object_define_value_property (_ejs_Boolean_prototype, _ejs_Symbol_toStringTag, _ejs_atom_Boolean, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
 }
 
 static ejsval

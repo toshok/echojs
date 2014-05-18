@@ -20,7 +20,7 @@ typedef struct {
 EJS_BEGIN_DECLS
 
 extern ejsval _ejs_Boolean;
-extern ejsval _ejs_Boolean_proto;
+extern ejsval _ejs_Boolean_prototype;
 extern EJSSpecOps _ejs_Boolean_specops;
 
 void _ejs_boolean_init(ejsval global);

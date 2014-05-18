@@ -15,7 +15,7 @@ _ejs_date_unix_now ()
 {
     EJSDate* rv = _ejs_gc_new (EJSDate);
 
-    _ejs_init_object ((EJSObject*)rv, _ejs_Date_proto, &_ejs_Date_specops);
+    _ejs_init_object ((EJSObject*)rv, _ejs_Date_prototype, &_ejs_Date_specops);
 
     gettimeofday (&rv->tv, &rv->tz);
 
@@ -29,7 +29,7 @@ _ejs_date_get_time (EJSDate *date)
 }
 
 ejsval _ejs_Date EJSVAL_ALIGNMENT;
-ejsval _ejs_Date_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Date_prototype EJSVAL_ALIGNMENT;
 
 static ejsval
 _ejs_Date_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -142,11 +142,11 @@ _ejs_date_init(ejsval global)
     _ejs_Date = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Date, (EJSClosureFunc)_ejs_Date_impl);
     _ejs_object_setprop (global, _ejs_atom_Date, _ejs_Date);
 
-    _ejs_gc_add_root (&_ejs_Date_proto);
-    _ejs_Date_proto = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
-    _ejs_object_setprop (_ejs_Date,       _ejs_atom_prototype,  _ejs_Date_proto);
+    _ejs_gc_add_root (&_ejs_Date_prototype);
+    _ejs_Date_prototype = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
+    _ejs_object_setprop (_ejs_Date,       _ejs_atom_prototype,  _ejs_Date_prototype);
 
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Date_proto, x, _ejs_Date_prototype_##x, EJS_PROP_NOT_ENUMERABLE)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Date_prototype, x, _ejs_Date_prototype_##x, EJS_PROP_NOT_ENUMERABLE)
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Date, x, _ejs_Date_##x, EJS_PROP_NOT_ENUMERABLE)
 
     PROTO_METHOD(toString);

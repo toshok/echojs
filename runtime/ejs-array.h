@@ -56,7 +56,7 @@ typedef struct {
 EJS_BEGIN_DECLS
 
 extern ejsval _ejs_Array;
-extern ejsval _ejs_Array_proto;
+extern ejsval _ejs_Array_prototype;
 extern EJSSpecOps _ejs_Array_specops;
 extern EJSSpecOps _ejs_sparsearray_specops;
 

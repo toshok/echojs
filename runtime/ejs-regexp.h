@@ -30,7 +30,7 @@ typedef struct {
 EJS_BEGIN_DECLS
 
 extern ejsval _ejs_RegExp;
-extern ejsval _ejs_RegExp_proto;
+extern ejsval _ejs_RegExp_prototype;
 extern EJSSpecOps _ejs_RegExp_specops;
 
 

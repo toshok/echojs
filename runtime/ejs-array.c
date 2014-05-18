@@ -38,14 +38,14 @@ _ejs_array_new (int numElements, EJSBool fill)
     EJSArray* rv = _ejs_gc_new (EJSArray);
 
     if (numElements > SPARSE_ARRAY_CUTOFF) {
-        _ejs_init_object ((EJSObject*)rv, _ejs_Array_proto, &_ejs_sparsearray_specops);
+        _ejs_init_object ((EJSObject*)rv, _ejs_Array_prototype, &_ejs_sparsearray_specops);
 
         rv->sparse.arraylet_alloc = 5;
         rv->sparse.arraylet_num = 0;
         rv->sparse.arraylets = (Arraylet*)calloc(rv->sparse.arraylet_alloc, sizeof(Arraylet));
     }
     else {
-        _ejs_init_object ((EJSObject*)rv, _ejs_Array_proto, &_ejs_Array_specops);
+        _ejs_init_object ((EJSObject*)rv, _ejs_Array_prototype, &_ejs_Array_specops);
 
         rv->dense.array_alloc = numElements + 5;
         rv->dense.elements = (ejsval*)malloc(rv->dense.array_alloc * sizeof (ejsval));
@@ -101,7 +101,7 @@ _ejs_array_pop_dense(ejsval array)
     return EJSDENSEARRAY_ELEMENTS(arr)[--EJSARRAY_LEN(arr)];
 }
 
-ejsval _ejs_Array_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Array_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_Array EJSVAL_ALIGNMENT;
 
 static ejsval
@@ -1806,15 +1806,15 @@ _ejs_array_init(ejsval global)
 
     _ejs_object_setprop (global,           _ejs_atom_Array,      _ejs_Array);
 
-    _ejs_gc_add_root (&_ejs_Array_proto);
-    _ejs_Array_proto = _ejs_array_new(0, EJS_FALSE);
-    EJSVAL_TO_OBJECT(_ejs_Array_proto)->proto = _ejs_Object_prototype;
-    _ejs_object_define_value_property (_ejs_Array, _ejs_atom_prototype, _ejs_Array_proto, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
-    _ejs_object_define_value_property (_ejs_Array_proto, _ejs_atom_constructor, _ejs_Array,
+    _ejs_gc_add_root (&_ejs_Array_prototype);
+    _ejs_Array_prototype = _ejs_array_new(0, EJS_FALSE);
+    EJSVAL_TO_OBJECT(_ejs_Array_prototype)->proto = _ejs_Object_prototype;
+    _ejs_object_define_value_property (_ejs_Array, _ejs_atom_prototype, _ejs_Array_prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (_ejs_Array_prototype, _ejs_atom_constructor, _ejs_Array,
                                        EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Array, x, _ejs_Array_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Array_proto, x, _ejs_Array_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Array_prototype, x, _ejs_Array_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
 
     OBJ_METHOD(isArray);
     // ECMA 6

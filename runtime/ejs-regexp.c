@@ -20,7 +20,7 @@ _ejs_regexp_new (ejsval pattern, ejsval flags)
 {
     EJSRegExp* rv = _ejs_gc_new(EJSRegExp);
 
-    _ejs_init_object ((EJSObject*)rv, _ejs_RegExp_proto, &_ejs_RegExp_specops);
+    _ejs_init_object ((EJSObject*)rv, _ejs_RegExp_prototype, &_ejs_RegExp_specops);
 
     ejsval args[2] = { pattern, flags };
 
@@ -108,7 +108,7 @@ _ejs_regexp_replace(ejsval str, ejsval search_re, ejsval replace)
 
 
 ejsval _ejs_RegExp EJSVAL_ALIGNMENT;
-ejsval _ejs_RegExp_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_RegExp_prototype EJSVAL_ALIGNMENT;
 
 static ejsval
 _ejs_RegExp_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -117,7 +117,7 @@ _ejs_RegExp_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     if (EJSVAL_IS_UNDEFINED(_this)) {
         // called as a function
-        _this = _ejs_object_new(_ejs_RegExp_proto, &_ejs_RegExp_specops);
+        _this = _ejs_object_new(_ejs_RegExp_prototype, &_ejs_RegExp_specops);
     }
 
     re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
@@ -282,14 +282,14 @@ _ejs_regexp_init(ejsval global)
     _ejs_RegExp = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_RegExp, (EJSClosureFunc)_ejs_RegExp_impl);
     _ejs_object_setprop (global, _ejs_atom_RegExp, _ejs_RegExp);
 
-    _ejs_gc_add_root (&_ejs_RegExp_proto);
-    _ejs_RegExp_proto = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
-    _ejs_object_setprop (_ejs_RegExp,       _ejs_atom_prototype,  _ejs_RegExp_proto);
+    _ejs_gc_add_root (&_ejs_RegExp_prototype);
+    _ejs_RegExp_prototype = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
+    _ejs_object_setprop (_ejs_RegExp,       _ejs_atom_prototype,  _ejs_RegExp_prototype);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_RegExp, x, _ejs_RegExp_##x)
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_RegExp_proto, x, _ejs_RegExp_prototype_##x)
-#define PROTO_METHOD_VAL(x) EJS_INSTALL_ATOM_FUNCTION_VAL(_ejs_RegExp_proto, x, _ejs_RegExp_prototype_##x)
-#define PROTO_GETTER(x) EJS_INSTALL_ATOM_GETTER(_ejs_RegExp_proto, x, _ejs_RegExp_prototype_get_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_RegExp_prototype, x, _ejs_RegExp_prototype_##x)
+#define PROTO_METHOD_VAL(x) EJS_INSTALL_ATOM_FUNCTION_VAL(_ejs_RegExp_prototype, x, _ejs_RegExp_prototype_##x)
+#define PROTO_GETTER(x) EJS_INSTALL_ATOM_GETTER(_ejs_RegExp_prototype, x, _ejs_RegExp_prototype_get_##x)
 
     _ejs_gc_add_root (&_ejs_RegExp_prototype_exec_closure);
     _ejs_RegExp_prototype_exec_closure = PROTO_METHOD_VAL(exec);

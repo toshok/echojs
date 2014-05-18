@@ -21,26 +21,26 @@
 #endif
 
 ejsval _ejs_Error EJSVAL_ALIGNMENT;
-ejsval _ejs_Error_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_Error_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_EvalError EJSVAL_ALIGNMENT;
-ejsval _ejs_EvalError_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_EvalError_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_RangeError EJSVAL_ALIGNMENT;
-ejsval _ejs_RangeError_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_RangeError_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_ReferenceError EJSVAL_ALIGNMENT;
-ejsval _ejs_ReferenceError_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_ReferenceError_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_SyntaxError EJSVAL_ALIGNMENT;
-ejsval _ejs_SyntaxError_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_SyntaxError_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_TypeError EJSVAL_ALIGNMENT;
-ejsval _ejs_TypeError_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_TypeError_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_URIError EJSVAL_ALIGNMENT;
-ejsval _ejs_URIError_proto EJSVAL_ALIGNMENT;
+ejsval _ejs_URIError_prototype EJSVAL_ALIGNMENT;
 
 #define NATIVE_ERROR_CTOR(err)                                          \
     static ejsval                                                       \
     _ejs_##err##_impl (ejsval env, ejsval _this, uint32_t argc, ejsval*args) \
     {                                                                   \
         if (EJSVAL_IS_UNDEFINED(_this))                                 \
-            _this = _ejs_object_new (_ejs_##err##_proto, &_ejs_Error_specops); \
+            _this = _ejs_object_new (_ejs_##err##_prototype, &_ejs_Error_specops); \
                                                                         \
         if (argc >= 1) {                                                \
             _ejs_object_setprop (_this, _ejs_atom_message, ToString(args[0])); \
@@ -84,13 +84,13 @@ _ejs_nativeerror_new (EJSNativeErrorType err_type, ejsval msg)
 
     ejsval proto;
     switch (err_type) {
-    case EJS_ERROR:           proto = _ejs_Error_proto; break;
-    case EJS_EVAL_ERROR:      proto = _ejs_EvalError_proto; break;
-    case EJS_RANGE_ERROR:     proto = _ejs_RangeError_proto; break;
-    case EJS_REFERENCE_ERROR: proto = _ejs_ReferenceError_proto; break;
-    case EJS_SYNTAX_ERROR:    proto = _ejs_SyntaxError_proto; break;
-    case EJS_TYPE_ERROR:      proto = _ejs_TypeError_proto; break;
-    case EJS_URI_ERROR:       proto = _ejs_URIError_proto; break;
+    case EJS_ERROR:           proto = _ejs_Error_prototype; break;
+    case EJS_EVAL_ERROR:      proto = _ejs_EvalError_prototype; break;
+    case EJS_RANGE_ERROR:     proto = _ejs_RangeError_prototype; break;
+    case EJS_REFERENCE_ERROR: proto = _ejs_ReferenceError_prototype; break;
+    case EJS_SYNTAX_ERROR:    proto = _ejs_SyntaxError_prototype; break;
+    case EJS_TYPE_ERROR:      proto = _ejs_TypeError_prototype; break;
+    case EJS_URI_ERROR:       proto = _ejs_URIError_prototype; break;
     }
 
     _ejs_init_object (exc_obj, proto, &_ejs_Error_specops);
@@ -126,11 +126,11 @@ _ejs_error_init(ejsval global)
 #define EJS_ADD_NATIVE_ERROR_TYPE(err) EJS_MACRO_START                  \
     _ejs_##err = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_##err, (EJSClosureFunc)_ejs_##err##_impl); \
     _ejs_object_setprop (global, _ejs_atom_##err, _ejs_##err);          \
-    _ejs_##err##_proto = _ejs_object_new(_ejs_null, &_ejs_Object_specops); \
-    _ejs_object_setprop (_ejs_##err,       _ejs_atom_prototype,  _ejs_##err##_proto); \
+    _ejs_##err##_prototype = _ejs_object_new(_ejs_null, &_ejs_Object_specops); \
+    _ejs_object_setprop (_ejs_##err,       _ejs_atom_prototype,  _ejs_##err##_prototype); \
                                                                     \
-    _ejs_object_setprop (_ejs_##err##_proto, _ejs_atom_name, _ejs_atom_##err); \
-    _ejs_object_setprop (_ejs_##err##_proto, _ejs_atom_toString, toString); \
+    _ejs_object_setprop (_ejs_##err##_prototype, _ejs_atom_name, _ejs_atom_##err); \
+    _ejs_object_setprop (_ejs_##err##_prototype, _ejs_atom_toString, toString); \
 EJS_MACRO_END
 
     EJS_ADD_NATIVE_ERROR_TYPE(Error);
