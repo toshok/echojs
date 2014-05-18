@@ -434,44 +434,6 @@ SameValueZero(ejsval x, ejsval y)
 }
 
 ejsval
-_ejs_clz32 (ejsval v)
-{
-    uint32_t val = ToUint32(v);
-
-    // from qemu source:
-
-    /* Binary search for leading zeros.  */
-
-    int cnt = 0;
-
-    if (!(val & 0xFFFF0000U)) {
-        cnt += 16;
-        val <<= 16;
-    }
-    if (!(val & 0xFF000000U)) {
-        cnt += 8;
-        val <<= 8;
-    }
-    if (!(val & 0xF0000000U)) {
-        cnt += 4;
-        val <<= 4;
-    }
-    if (!(val & 0xC0000000U)) {
-        cnt += 2;
-        val <<= 2;
-    }
-    if (!(val & 0x80000000U)) {
-        cnt++;
-        val <<= 1;
-    }
-    if (!(val & 0x80000000U)) {
-        cnt++;
-    }
-    return NUMBER_TO_EJSVAL(cnt);
-}
-
-
-ejsval
 _ejs_op_neg (ejsval exp)
 {
     return NUMBER_TO_EJSVAL (-ToDouble(exp));

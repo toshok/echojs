@@ -84,3 +84,6 @@ console.log(Math.cbrt(-1)); // -1
 console.log(Math.cbrt(0));  // 0
 console.log(Math.cbrt(1));  // 1
 console.log(Math.cbrt(2));  // 1.2599210498948734
+
+console.log(Math.clz32(0x111110));
+console.log(Math.clz32(0));

@@ -276,9 +276,44 @@ static ejsval
 _ejs_Math_clz32 (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval v = _ejs_undefined;
-    if (argc > 1) v = args[0];
+    if (argc > 0) v = args[0];
 
-    return _ejs_clz32(v);
+    uint32_t val = ToUint32(v);
+
+#if __has_builtin(__builtin_clz)
+    return NUMBER_TO_EJSVAL(val == 0 ? 0 : __builtin_clz(val));
+#else
+    // from qemu source:
+
+    /* Binary search for leading zeros.  */
+
+    int cnt = 0;
+
+    if (!(val & 0xFFFF0000U)) {
+        cnt += 16;
+        val <<= 16;
+    }
+    if (!(val & 0xFF000000U)) {
+        cnt += 8;
+        val <<= 8;
+    }
+    if (!(val & 0xF0000000U)) {
+        cnt += 4;
+        val <<= 4;
+    }
+    if (!(val & 0xC0000000U)) {
+        cnt += 2;
+        val <<= 2;
+    }
+    if (!(val & 0x80000000U)) {
+        cnt++;
+        val <<= 1;
+    }
+    if (!(val & 0x80000000U)) {
+        cnt++;
+    }
+    return NUMBER_TO_EJSVAL(cnt);
+#endif
 }
 
 static ejsval

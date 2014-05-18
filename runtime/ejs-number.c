@@ -56,13 +56,6 @@ _ejs_Number_prototype_valueOf (ejsval env, ejsval _this, uint32_t argc, ejsval *
 }
 
 static ejsval
-_ejs_Number_prototype_clz (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSNumber *num = (EJSNumber*)EJSVAL_TO_OBJECT(_this);
-    return _ejs_clz32 (NUMBER_TO_EJSVAL(num->number));
-}
-
-static ejsval
 _ejs_Number_isFinite (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval number = _ejs_undefined;
@@ -202,7 +195,6 @@ _ejs_number_init(ejsval global)
     PROTO_METHOD(valueOf);
     PROTO_METHOD(toString);
     // ES6
-    PROTO_METHOD(clz);
     OBJ_METHOD(isFinite);
     OBJ_METHOD(isInteger);
     OBJ_METHOD(isSafeInteger);

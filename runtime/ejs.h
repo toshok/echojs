@@ -8,6 +8,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifndef __has_builtin
+#define __has_builtin(x) 0
+#endif
+
 #if __cplusplus
 #define EJS_BEGIN_DECLS extern "C" {
 #define EJS_END_DECLS };

@@ -63,7 +63,6 @@ ejsval _ejs_op_instanceof (ejsval lhs, ejsval rhs);
 ejsval _ejs_op_in (ejsval lhs, ejsval rhs);
 
 EJSBool _ejs_truthy (ejsval val);
-ejsval _ejs_clz32 (ejsval val);
 
 void _ejs_throw (ejsval exp);
 
