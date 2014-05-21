@@ -319,6 +319,29 @@ _ejs_Set_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     //    g. ReturnIfAbrupt(status). 
 }
 
+// ECMA262: 23.2.2.2
+// Set[ @@create ] ( ) 
+static ejsval
+_ejs_Set_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    // 1. Let F be the this value. 
+    ejsval F = _this;
+
+    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Set[Symbol.create] is not a constructor");
+
+    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
+
+    // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%SetPrototype%", ([[SetData]]) ). 
+    ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+    if (EJSVAL_IS_UNDEFINED(proto))
+        proto = _ejs_Set_prototype;
+
+    EJSObject* obj = (EJSObject*)_ejs_gc_new (EJSSet);
+    _ejs_init_object (obj, proto, &_ejs_Set_specops);
+    return OBJECT_TO_EJSVAL(obj);
+}
+
 ejsval _ejs_Set EJSVAL_ALIGNMENT;
 ejsval _ejs_Set_prototype EJSVAL_ALIGNMENT;
 
@@ -346,6 +369,8 @@ _ejs_set_init(ejsval global)
     //PROTO_METHOD(keys);   // XXX this should be the same function object as Set.prototype.values
     // XXX (ES6 23.2.3.11) Set.prototype [ @@iterator ]( )
     _ejs_object_define_value_property (_ejs_Set_prototype, _ejs_Symbol_toStringTag, _ejs_atom_Set, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
+
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Set, create, _ejs_Set_create, EJS_PROP_NOT_ENUMERABLE);
 
 #undef OBJ_METHOD
 #undef PROTO_METHOD

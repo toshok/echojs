@@ -37,7 +37,9 @@ runtime_interface =
 
         object_define_accessor_prop: -> @abi.createExternalFunction @module, "_ejs_object_define_accessor_property",  types.bool, [types.EjsValue, types.EjsValue, types.EjsValue, types.EjsValue, types.int32];
         object_define_value_prop: -> @abi.createExternalFunction @module, "_ejs_object_define_value_property",  types.bool, [types.EjsValue, types.EjsValue, types.EjsValue, types.int32];
-        
+
+        object_set_prototype_of: -> @abi.createExternalFunction @module, "_ejs_object_set_prototype_of", types.EjsValue, [types.EjsValue, types.EjsValue];
+        object_create_wrapper:   -> @abi.createExternalFunction @module, "_ejs_object_create_wrapper",     types.EjsValue, [types.EjsValue];
         prop_iterator_new:     -> @abi.createExternalFunction @module, "_ejs_property_iterator_new",     types.EjsPropIterator, [types.EjsValue]
         prop_iterator_current: -> @abi.createExternalFunction @module, "_ejs_property_iterator_current", types.EjsValue, [types.EjsPropIterator]
         prop_iterator_next:    -> @abi.createExternalFunction @module, "_ejs_property_iterator_next",    types.bool, [types.EjsPropIterator, types.bool]
@@ -78,6 +80,7 @@ runtime_interface =
         "unopdelete":      -> @abi.createExternalFunction @module, "_ejs_op_delete",      types.EjsValue, [types.EjsValue, types.EjsValue] # this is a unop, but ours only works for memberexpressions
         "unopvoid":        -> @abi.createExternalFunction @module, "_ejs_op_void",        types.EjsValue, [types.EjsValue]
 
+        dump_value:        -> @abi.createExternalFunction @module, "_ejs_dump_value",        types.void, [types.EjsValue]
         log:               -> @abi.createExternalFunction @module, "_ejs_logstr",            types.void, [types.string]
         record_binop:      -> @abi.createExternalFunction @module, "_ejs_record_binop",      types.void, [types.int32, types.string, types.EjsValue, types.EjsValue]
         record_assignment: -> @abi.createExternalFunction @module, "_ejs_record_assignment", types.void, [types.int32, types.EjsValue]
@@ -134,6 +137,7 @@ exports.createAtomsInterface = (module) ->
 exports.createGlobalsInterface = (module) ->
         return Object.create null, {
                 "Object":       { get: -> module.getOrInsertGlobal           "_ejs_Object",                 types.EjsValue }
+                "Object_prototype": { get: -> module.getOrInsertGlobal           "_ejs_Object_prototype",   types.EjsValue }
                 "Boolean":      { get: -> module.getOrInsertGlobal           "_ejs_Boolean",                types.EjsValue }
                 "String":       { get: -> module.getOrInsertGlobal           "_ejs_String",                 types.EjsValue }
                 "Number":       { get: -> module.getOrInsertGlobal           "_ejs_Number",                 types.EjsValue }
@@ -165,4 +169,9 @@ exports.createGlobalsInterface = (module) ->
                 # kind of a hack, but since we don't define these...
                 "window":       { get: -> module.getOrInsertGlobal           "_ejs_undefined",              types.EjsValue }
                 "document":     { get: -> module.getOrInsertGlobal           "_ejs_undefined",              types.EjsValue }
+        }
+
+exports.createSymbolsInterface = (module) ->
+        return Object.create null, {
+                "create":      { get: -> module.getOrInsertGlobal           "_ejs_Symbol_create",           types.EjsValue }
         }

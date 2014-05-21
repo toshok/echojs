@@ -12,7 +12,7 @@ typedef struct {
     EJSObject obj;
 
     /* boolean specific data */
-    EJSBool boolean;
+    ejsval boolean_data;
 } EJSBoolean;
 
 #define EJSVAL_TO_BOOLEAN_OBJECT(v) ((EJSBoolean*)EJSVAL_TO_OBJECT(v))

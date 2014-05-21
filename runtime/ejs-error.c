@@ -15,6 +15,8 @@
 #include "ejs-ops.h"
 #include "ejs-string.h"
 #include "ejs-error.h"
+#include "ejs-proxy.h"
+#include "ejs-symbol.h"
 
 #if IOS
 #import <Foundation/Foundation.h>
@@ -77,6 +79,27 @@ _ejs_Error_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *
     return _ejs_string_concatv (name, sep, message, _ejs_null);
 }
 
+static ejsval
+_ejs_Error_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    // 1. Let F be the this value. 
+    ejsval F = _this;
+
+    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Error[Symbol.create] is not a constructor");
+
+    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
+
+    // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%ErrorPrototype%", ([[ErrorData]]) ). 
+    ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+    if (EJSVAL_IS_UNDEFINED(proto))
+        proto = _ejs_Error_prototype;
+
+    EJSObject* obj = (EJSObject*)_ejs_gc_new (EJSObject);
+    _ejs_init_object (obj, proto, &_ejs_Error_specops);
+    return OBJECT_TO_EJSVAL(obj);
+}
+
 ejsval
 _ejs_nativeerror_new (EJSNativeErrorType err_type, ejsval msg)
 {
@@ -131,6 +154,8 @@ _ejs_error_init(ejsval global)
                                                                     \
     _ejs_object_setprop (_ejs_##err##_prototype, _ejs_atom_name, _ejs_atom_##err); \
     _ejs_object_setprop (_ejs_##err##_prototype, _ejs_atom_toString, toString); \
+                                                                        \
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_##err, create, _ejs_Error_create, EJS_PROP_NOT_ENUMERABLE); \
 EJS_MACRO_END
 
     EJS_ADD_NATIVE_ERROR_TYPE(Error);

@@ -12,6 +12,7 @@
 #include "ejs-proxy.h"
 #include "ejs-string.h"
 #include "ejs-error.h"
+#include "ejs-symbol.h"
 
 // num > SPARSE_ARRAY_CUTOFF in "Array($num)" or "new Array($num)" triggers a sparse array
 #define SPARSE_ARRAY_CUTOFF 50000
@@ -1574,7 +1575,7 @@ _ejs_Array_prototype_find (ejsval env, ejsval _this, uint32_t argc, ejsval *args
 }
 
 // ECMA 262 (6): 22.1.3.9
-// Array.prototype.find ( predicate , thisArg = undefined )
+// Array.prototype.findIndex ( predicate , thisArg = undefined )
 static ejsval
 _ejs_Array_prototype_findIndex (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
@@ -1797,6 +1798,44 @@ _ejs_Array_isArray (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
     return BOOLEAN_TO_EJSVAL(obj->ops == &_ejs_Array_specops || obj->ops == &_ejs_sparsearray_specops);
 }
 
+static ejsval
+_ejs_Array_create(ejsval env, ejsval _this, uint32_t argc, ejsval*args)
+{
+    // 1. Let F be the this value. 
+    ejsval F = _this;
+
+    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Array[Symbol.create] is not a constructor");
+
+    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
+
+    // 2. Let proto be GetPrototypeFromConstructor(F, "%ArrayPrototype%"). 
+    // 3. ReturnIfAbrupt(proto). 
+    ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+    if (EJSVAL_IS_UNDEFINED(proto))
+        proto = _ejs_Array_prototype;
+
+    // 4. Let obj be ArrayCreate(undefined, proto). 
+    ejsval obj = _ejs_array_create(_ejs_undefined, proto);
+    // 5. Return obj
+    return obj;
+}
+
+ejsval
+_ejs_array_create (ejsval length, ejsval proto)
+{
+    // EJSBool init_state = EJS_TRUE;
+    if (EJSVAL_IS_UNDEFINED(length)) {
+        length = NUMBER_TO_EJSVAL(0);
+        //init_state = EJS_FALSE;
+    }
+
+    ejsval A = _ejs_array_new(ToUint32(length), EJS_TRUE);
+    EJSObject* A_ = EJSVAL_TO_OBJECT(A);
+    A_->proto = proto;
+    return A;
+}
+
 void
 _ejs_array_init(ejsval global)
 {
@@ -1812,6 +1851,8 @@ _ejs_array_init(ejsval global)
     _ejs_object_define_value_property (_ejs_Array, _ejs_atom_prototype, _ejs_Array_prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     _ejs_object_define_value_property (_ejs_Array_prototype, _ejs_atom_constructor, _ejs_Array,
                                        EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
+
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Array, create, _ejs_Array_create, EJS_PROP_NOT_ENUMERABLE);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Array, x, _ejs_Array_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Array_prototype, x, _ejs_Array_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)

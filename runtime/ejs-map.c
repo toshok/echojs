@@ -431,6 +431,27 @@ _ejs_Map_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     //     l. ReturnIfAbrupt(status).
 }
 
+static ejsval
+_ejs_Map_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    // 1. Let F be the this value. 
+    ejsval F = _this;
+
+    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Map[Symbol.create] is not a constructor");
+
+    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
+
+    // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%MapPrototype%", ([[MapData]]) ). 
+    ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+    if (EJSVAL_IS_UNDEFINED(proto))
+        proto = _ejs_Map_prototype;
+
+    EJSObject* obj = (EJSObject*)_ejs_gc_new (EJSMap);
+    _ejs_init_object (obj, proto, &_ejs_Map_specops);
+    return OBJECT_TO_EJSVAL(obj);
+}
+
 ejsval _ejs_Map EJSVAL_ALIGNMENT;
 ejsval _ejs_Map_prototype EJSVAL_ALIGNMENT;
 
@@ -462,6 +483,9 @@ _ejs_map_init(ejsval global)
     // XXX (ES6 23.1.3.12) Map.prototype [ @@iterator ]( )
 
     _ejs_object_define_value_property (_ejs_Map_prototype, _ejs_Symbol_toStringTag, _ejs_atom_Map, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
+
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Map, create, _ejs_Map_create, EJS_PROP_NOT_ENUMERABLE);
+
 #undef OBJ_METHOD
 #undef PROTO_METHOD
 }

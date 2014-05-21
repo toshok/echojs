@@ -252,6 +252,8 @@ class LLVMIRVisitor extends TreeVisitor
                         isNullOrUndefined:    value: @handleIsNullOrUndefined
                         isUndefined:          value: @handleIsUndefined
                         isNull:               value: @handleIsNull
+                        setPrototypeOf:       value: @handleSetPrototypeOf
+                        objectCreate:         value: @handleObjectCreate
 
                 @opencode_intrinsics =
                         unaryNot          : true
@@ -290,6 +292,7 @@ class LLVMIRVisitor extends TreeVisitor
                 @ejs_binops = runtime.createBinopsInterface module, @abi
                 @ejs_atoms = runtime.createAtomsInterface module
                 @ejs_globals = runtime.createGlobalsInterface module
+                @ejs_symbols = runtime.createSymbolsInterface module
 
                 @module_atoms = Object.create null
                 @literalInitializationFunction = @module.getOrInsertFunction "_ejs_module_init_string_literals_#{@filename}", types.void, []
@@ -326,6 +329,7 @@ class LLVMIRVisitor extends TreeVisitor
                 ir.setInsertPoint b
                 f()
                 ir.setInsertPoint saved
+                b
         
         createLoad: (value, name) ->
                 rv = ir.createLoad value, name
@@ -1230,7 +1234,14 @@ class LLVMIRVisitor extends TreeVisitor
 
                 argv
 
+        debugLog: (str) ->
+                if @options.debug_level > 0
+                        @createCall @ejs_runtime.log, [consts.string(ir, str)], ""
+
         visitArgsForConstruct: (callee, args) ->
+                insertBlock = ir.getInsertBlock()
+                insertFunc  = insertBlock.parent
+                
                 args = args.slice()
                 argv = []
                 # constructors are always .takes_builtins, so we can skip the other case
@@ -1239,13 +1250,35 @@ class LLVMIRVisitor extends TreeVisitor
                 ctor = @visit args[0]
                 args.shift()
 
-                proto = @createPropertyLoad ctor, { name: "prototype" }, false
+                # ECMA262 7.3.17 - 7.3.18
+                create_ordinary_object_bb = new llvm.BasicBlock("create_ordinary_object_bb", insertFunc)
+                creator_is_defined_bb     = new llvm.BasicBlock("creator_is_defined_bb",     insertFunc)
+                invalid_obj_bb            = new llvm.BasicBlock("invalid_obj_bb",            insertFunc)
+                obj_created_bb            = new llvm.BasicBlock("obj_created_bb",            insertFunc)
+                
+                this_alloca = @createAlloca @currentFunction, types.EjsValue, "this_alloca"
 
-                create = @ejs_runtime.object_create
-                thisArg = @createCall create, [proto], "objtmp", !create.doesNotThrow
+                creator = @createCall(@ejs_runtime.object_getprop, [ctor, ir.createLoad(@ejs_symbols.create, "load_Symbol_create")], "creator", true)
+                cmp_undefined = @isUndefined(creator)
+                ir.createCondBr(cmp_undefined, create_ordinary_object_bb, creator_is_defined_bb)
 
+                @doInsideBBlock create_ordinary_object_bb, =>
+                        thisArg = @createCall(@ejs_runtime.object_create, [ir.createLoad @ejs_globals.Object_prototype, "load_objproto"], "objtmp", false)
+                        ir.createStore thisArg, this_alloca
+                        ir.createBr obj_created_bb
+
+                @doInsideBBlock creator_is_defined_bb, =>
+                        thisArg = @createCall @ejs_runtime.invoke_closure, [creator, ctor, consts.int32(0), consts.null(types.EjsValue.pointerTo())], "thisArg", true
+                        ir.createStore thisArg, this_alloca
+                        cmp_object = @isObject(ir.createLoad(this_alloca, "load_this"))
+                        ir.createCondBr(cmp_object, obj_created_bb, invalid_obj_bb)
+
+                @doInsideBBlock invalid_obj_bb, =>
+                        @emitThrowNativeError 5, "return value from @@create is not an object" # this '5' should be 'EJS_TYPE_ERROR'
+
+                ir.setInsertPoint obj_created_bb
                 argv.push ctor                                                      # %closure
-                argv.push thisArg                                                   # %this
+                argv.push ir.createLoad(this_alloca, "load_this")                   # %this
                 argv.push consts.int32 args.length                                  # %argc
 
                 if args.length > 0
@@ -2154,6 +2187,17 @@ class LLVMIRVisitor extends TreeVisitor
                 
                 
         handleBuiltinUndefined:  (exp) -> @loadUndefinedEjsValue()
+
+        handleSetPrototypeOf:  (exp) ->
+                obj   = @visitOrNull exp.arguments[0]
+                proto = @visitOrNull exp.arguments[1]
+                @createCall @ejs_runtime.object_set_prototype_of, [obj, proto], "set_prototype_of", true
+                # we should check the return value of set_prototype_of
+
+        handleObjectCreate:  (exp) ->
+                proto = @visitOrNull exp.arguments[0]
+                @createCall @ejs_runtime.object_create_wrapper, [proto], "object_create", true
+                # we should check the return value of object_create_wrapper
 
 class AddFunctionsVisitor extends TreeVisitor
         constructor: (@module, @abi) ->

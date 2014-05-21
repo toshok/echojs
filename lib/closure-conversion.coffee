@@ -105,6 +105,8 @@ templateCallsite_id    = create_identifier "%templateCallsite"
 templateHandlerCall_id = create_identifier "%templateHandlerCall"
 templateDefaultHandlerCall_id = create_identifier "%templateDefaultHandlerCall"
 createArgScratchArea_id       = create_identifier "%createArgScratchArea"
+setPrototypeOf_id       = create_identifier "%setPrototypeOf"
+objectCreate_id         = create_identifier "%objectCreate"
 
 #
 # converts:
@@ -175,7 +177,40 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
                         # if it's a method with name 'constructor' output the special ctor function
                         if mkey is 'constructor'
                                 ctor = m
-                                class_init_iife_body.push @create_constructor m, n
+                                ctor_func = @create_constructor m, n
+                                class_init_iife_body.push ctor_func
+                                if n.superClass?
+                                        # 14.5.17 step 9, make sure the constructor's __proto__ is set to superClass
+                                        class_init_iife_body.push {
+                                                type: ExpressionStatement,
+                                                expression:
+                                                        type: CallExpression
+                                                        callee: setPrototypeOf_id
+                                                        arguments: [ctor_func.id, n.superClass]
+                                        }
+
+                                        # also set ctor.prototype = Object.create(superClass.prototype)
+                                        class_init_iife_body.push {
+                                                type: ExpressionStatement,
+                                                expression:
+                                                        type: AssignmentExpression
+                                                        operator: "="
+                                                        left:
+                                                                type: MemberExpression
+                                                                object: ctor_func.id
+                                                                property: create_identifier "prototype"
+                                                                computed: false
+                                                        right:
+                                                                type: CallExpression
+                                                                callee: objectCreate_id
+                                                                arguments: [{
+                                                                        type: MemberExpression
+                                                                        object: n.superClass
+                                                                        property: create_identifier "prototype"
+                                                                        computed: false
+                                                                }]
+                                        }
+                                        
                         else
                                 class_init_iife_body.push @create_proto_method m, n
 
@@ -190,7 +225,7 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
 
                 # generate and prepend a default ctor if there isn't one declared.
                 # It looks like this in code:
-                #   function Subclass (...args) { _super.call(this, args...); }
+                #   function Subclass (...args) { %super.call(this, args...); }
                 if not ctor?
                         class_init_iife_body.unshift @create_default_constructor n
 

@@ -10,6 +10,8 @@
 #include "ejs-function.h"
 #include "ejs-string.h"
 #include "ejs-symbol.h"
+#include "ejs-error.h"
+#include "ejs-proxy.h"
 
 ejsval _ejs_Boolean EJSVAL_ALIGNMENT;
 ejsval _ejs_Boolean_prototype EJSVAL_ALIGNMENT;
@@ -31,13 +33,38 @@ _ejs_Boolean_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         EJSBoolean* b = EJSVAL_TO_BOOLEAN_OBJECT(_this);
 
         if (argc > 0) {
-            b->boolean = ToEJSBool(args[0]);
+            b->boolean_data = ToEJSBool(args[0]) ? _ejs_true : _ejs_false;
         }
         else {
-            b->boolean = EJS_FALSE;
+            b->boolean_data = _ejs_false;
         }
         return _this;
     }
+}
+
+static ejsval
+_ejs_Boolean_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval F = _this;
+
+
+    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Boolean[Symbol.create] is not a constructor");
+        
+    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
+
+    ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+    if (EJSVAL_IS_UNDEFINED(proto)) {
+        proto = _ejs_Boolean_prototype;
+    }
+
+    if (!EJSVAL_IS_OBJECT(proto)) {
+        EJS_NOT_IMPLEMENTED(); // cross-realm doesn't exist in ejs yet
+    }
+
+    EJSObject* obj = (EJSObject*)_ejs_gc_new (EJSBoolean);
+    _ejs_init_object (obj, proto, &_ejs_Boolean_specops);
+    return OBJECT_TO_EJSVAL(obj);
 }
 
 static ejsval
@@ -45,12 +72,10 @@ _ejs_Boolean_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval
 {
     EJSBool b;
 
-    if (EJSVAL_IS_BOOLEAN(_this)) {
+    if (EJSVAL_IS_BOOLEAN(_this))
         b = EJSVAL_TO_BOOLEAN(_this);
-    }
-    else {
-        b = EJSVAL_TO_BOOLEAN_OBJECT(_this)->boolean;
-    }
+    else
+        b = EJSVAL_TO_BOOLEAN(EJSVAL_TO_BOOLEAN_OBJECT(_this)->boolean_data);
 
     return b ? _ejs_atom_true : _ejs_atom_false;
 }
@@ -59,7 +84,7 @@ static ejsval
 _ejs_Boolean_prototype_valueOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJSBoolean *b = EJSVAL_TO_BOOLEAN_OBJECT(_this);
-    return BOOLEAN_TO_EJSVAL(b->boolean);
+    return b->boolean_data;
 }
 
 void
@@ -71,7 +96,9 @@ _ejs_boolean_init(ejsval global)
 
     _ejs_gc_add_root (&_ejs_Boolean_prototype);
     _ejs_Boolean_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
-    _ejs_object_setprop (_ejs_Boolean,       _ejs_atom_prototype,  _ejs_Boolean_prototype);
+    _ejs_object_setprop (_ejs_Boolean, _ejs_atom_prototype, _ejs_Boolean_prototype);
+
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Boolean, create, _ejs_Boolean_create, EJS_PROP_NOT_ENUMERABLE);
 
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Boolean_prototype, x, _ejs_Boolean_prototype_##x, EJS_PROP_NOT_ENUMERABLE)
 
@@ -87,7 +114,7 @@ static ejsval
 _ejs_boolean_specop_default_value (ejsval obj, const char *hint)
 {
     if (!strcmp (hint, "PreferredType") || !strcmp(hint, "Boolean")) {
-        return BOOLEAN_TO_EJSVAL(EJSVAL_TO_BOOLEAN_OBJECT(obj)->boolean);
+        return EJSVAL_TO_BOOLEAN_OBJECT(obj)->boolean_data;
     }
     else if (!strcmp (hint, "String")) {
         EJS_NOT_IMPLEMENTED();

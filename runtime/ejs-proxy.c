@@ -7,6 +7,7 @@
 #include "ejs-error.h"
 #include "ejs-function.h"
 #include "ejs-ops.h"
+#include "ejs-symbol.h"
 
 ejsval
 _ejs_Proxy_create (ejsval env, ejsval this, uint32_t argc, ejsval* args)
@@ -81,6 +82,27 @@ _ejs_Proxy_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 ejsval _ejs_Proxy EJSVAL_ALIGNMENT;
 ejsval _ejs_Proxy_prototype EJSVAL_ALIGNMENT;
 
+static ejsval
+_ejs_Proxy_create_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    // 1. Let F be the this value. 
+    ejsval F = _this;
+
+    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Proxy[Symbol.create] is not a constructor");
+
+    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
+
+    // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%ObjectPrototype%", ([[ProxyTarget]], [[ProxyHandler]]) ). 
+    ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+    if (EJSVAL_IS_UNDEFINED(proto))
+        proto = _ejs_Object_prototype;
+
+    EJSObject* obj = (EJSObject*)_ejs_gc_new (EJSProxy);
+    _ejs_init_object (obj, proto, &_ejs_Proxy_specops);
+    return OBJECT_TO_EJSVAL(obj);
+}
+
 void
 _ejs_proxy_init(ejsval global)
 {
@@ -100,6 +122,8 @@ _ejs_proxy_init(ejsval global)
     OBJ_METHOD(createFunction);
 
 #undef OBJ_METHOD
+
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Proxy, create, _ejs_Proxy_create_impl, EJS_PROP_NOT_ENUMERABLE);
 }
 
 

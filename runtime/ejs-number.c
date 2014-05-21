@@ -11,6 +11,9 @@
 #include "ejs-number.h"
 #include "ejs-function.h"
 #include "ejs-string.h"
+#include "ejs-error.h"
+#include "ejs-proxy.h"
+#include "ejs-symbol.h"
 
 ejsval _ejs_Number EJSVAL_ALIGNMENT;
 ejsval _ejs_Number_prototype EJSVAL_ALIGNMENT;
@@ -179,6 +182,28 @@ _ejs_Number_isNaN (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return _ejs_false;
 }
 
+static ejsval
+_ejs_Number_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    // 1. Let F be the this value. 
+    ejsval F = _this;
+
+    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Number[Symbol.create] is not a constructor");
+
+    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
+
+    // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%NumberPrototype%", ([[NumberData]]) ). 
+    ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+    if (EJSVAL_IS_UNDEFINED(proto))
+        proto = _ejs_Number_prototype;
+
+    EJSObject* obj = (EJSObject*)_ejs_gc_new (EJSNumber);
+    _ejs_init_object (obj, proto, &_ejs_Number_specops);
+    return OBJECT_TO_EJSVAL(obj);
+}
+
+
 void
 _ejs_number_init(ejsval global)
 {
@@ -210,6 +235,8 @@ _ejs_number_init(ejsval global)
     _ejs_object_setprop (_ejs_Number, _ejs_atom_NEGATIVE_INFINITY, NUMBER_TO_EJSVAL(-INFINITY));
     _ejs_object_setprop (_ejs_Number, _ejs_atom_POSITIVE_INFINITY, NUMBER_TO_EJSVAL(INFINITY));
 
+
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Number, create, _ejs_Number_create, EJS_PROP_NOT_ENUMERABLE);
 
 #undef PROTO_METHOD
 }

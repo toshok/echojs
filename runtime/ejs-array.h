@@ -60,6 +60,7 @@ extern ejsval _ejs_Array_prototype;
 extern EJSSpecOps _ejs_Array_specops;
 extern EJSSpecOps _ejs_sparsearray_specops;
 
+ejsval _ejs_array_create (ejsval length, ejsval proto);
 ejsval _ejs_array_new (int numElements, EJSBool fill);
 
 // creates a new array and populates it by pushing numElements from

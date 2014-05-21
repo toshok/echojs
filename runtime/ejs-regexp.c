@@ -10,6 +10,8 @@
 #include "ejs-function.h"
 #include "ejs-string.h"
 #include "ejs-error.h"
+#include "ejs-symbol.h"
+#include "ejs-proxy.h"
 
 #include "pcre.h"
 
@@ -275,6 +277,31 @@ _ejs_RegExp_prototype_get_source (ejsval env, ejsval _this, uint32_t argc, ejsva
     return re->pattern;
 }
 
+static ejsval
+_ejs_RegExp_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    // 1. Let F be the this value. 
+    ejsval F = _this;
+
+    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in RegExp[Symbol.create] is not a constructor");
+
+    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
+
+    // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(constructor, "%RegExpPrototype%", ( [[RegExpMatcher]], [[OriginalSource]], [[OriginalFlags]])). 
+    ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+    if (EJSVAL_IS_UNDEFINED(proto))
+        proto = _ejs_RegExp_prototype;
+
+    EJSRegExp* re = (EJSRegExp*)_ejs_gc_new (EJSRegExp);
+    _ejs_init_object ((EJSObject*)re, proto, &_ejs_RegExp_specops);
+    
+    re->pattern = _ejs_undefined;
+    re->flags = _ejs_undefined;
+
+    return OBJECT_TO_EJSVAL((EJSObject*)re);
+}
+
 
 void
 _ejs_regexp_init(ejsval global)
@@ -307,6 +334,8 @@ _ejs_regexp_init(ejsval global)
 
 #undef OBJ_METHOD
 #undef PROTO_METHOD
+
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp, create, _ejs_RegExp_create, EJS_PROP_NOT_ENUMERABLE);
 }
 
 static EJSObject*

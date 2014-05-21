@@ -904,6 +904,15 @@ _ejs_Object_setPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
     return O;
 }
 
+// externally visible (for the compiler) wrapper around above native implementation.
+ejsval
+_ejs_object_set_prototype_of (ejsval obj, ejsval proto)
+{
+    ejsval args[] = { obj, proto };
+    return _ejs_Object_setPrototypeOf(_ejs_undefined, _ejs_undefined, 2, args);
+}
+
+
 // ECMA262: 15.2.3.3
 static ejsval
 _ejs_Object_getOwnPropertyDescriptor (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -1129,6 +1138,14 @@ _ejs_Object_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     /* 5. Return obj. */
     return obj;
+}
+
+// a simple externally visible wrapper around the above native impl that only supplied the prototype argument
+ejsval
+_ejs_object_create_wrapper (ejsval proto)
+{
+    ejsval args[] = { proto };
+    return _ejs_Object_create(_ejs_undefined, _ejs_undefined, 1, args);
 }
 
 // ECMA262: 15.2.3.6

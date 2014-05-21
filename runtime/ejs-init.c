@@ -130,6 +130,8 @@ _ejs_init(int argc, char** argv)
 
     _ejs_symbol_init(_ejs_global);
 
+    _ejs_function_add_symbols();
+
     _ejs_error_init(_ejs_global);
     _ejs_arguments_init(_ejs_global);
     _ejs_array_init(_ejs_global);

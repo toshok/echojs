@@ -6,7 +6,10 @@
 #include "ejs-value.h"
 #include "ejs-function.h"
 #include "ejs-date.h"
+#include "ejs-error.h"
 #include "ejs-string.h"
+#include "ejs-proxy.h"
+#include "ejs-symbol.h"
 
 #include <string.h>
 
@@ -136,6 +139,27 @@ _ejs_Date_now (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return NUMBER_TO_EJSVAL(tv.tv_sec * 1000 + tv.tv_usec / 1000);
 }
 
+static ejsval
+_ejs_Date_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    // 1. Let F be the this value. 
+    ejsval F = _this;
+
+    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Date[Symbol.create] is not a constructor");
+
+    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
+
+    // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%DatePrototype%", ([[DateData]]) ). 
+    ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+    if (EJSVAL_IS_UNDEFINED(proto))
+        proto = _ejs_Date_prototype;
+
+    EJSObject* obj = (EJSObject*)_ejs_gc_new (EJSDate);
+    _ejs_init_object (obj, proto, &_ejs_Date_specops);
+    return OBJECT_TO_EJSVAL(obj);
+}
+
 void
 _ejs_date_init(ejsval global)
 {
@@ -156,6 +180,8 @@ _ejs_date_init(ejsval global)
     OBJ_METHOD(now);
 
 #undef PROTO_METHOD
+
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Date, create, _ejs_Date_create, EJS_PROP_NOT_ENUMERABLE);
 }
 
 static EJSObject*

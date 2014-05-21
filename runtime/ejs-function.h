@@ -53,6 +53,11 @@ EJS_BEGIN_DECLS
     _ejs_object_define_value_property (o, funcname, tmpfunc, flags);    \
 EJS_MACRO_END
 
+#define EJS_INSTALL_SYMBOL_FUNCTION_FLAGS(o,n,f,flags) EJS_MACRO_START         \
+    ejsval tmpfunc = _ejs_function_new_native (_ejs_null, _ejs_atom_##n, (EJSClosureFunc)f); \
+    _ejs_object_define_value_property (o, _ejs_Symbol_##n, tmpfunc, flags);    \
+EJS_MACRO_END
+
 #define EJS_INSTALL_GETTER(o,n,f) EJS_MACRO_START                     \
     ejsval key = _ejs_string_new_utf8(n);                               \
     ejsval tmpfunc = _ejs_function_new_native (_ejs_null, key, (EJSClosureFunc)f); \
@@ -89,10 +94,11 @@ extern ejsval _ejs_function_new_utf8_with_proto (ejsval env, const char* name, E
 extern ejsval _ejs_function_new_without_proto (ejsval env, ejsval name, EJSClosureFunc func);
 
 extern ejsval _ejs_Function;
-extern ejsval _ejs_Function__proto__;
+extern ejsval _ejs_Function_prototype;
 extern EJSSpecOps _ejs_Function_specops;
 
 extern void _ejs_function_init(ejsval global);
+extern void _ejs_function_add_symbols();
 
 // used as the __proto__ for a number of builtin objects
 ejsval _ejs_Function_empty (ejsval env, ejsval _this, uint32_t argc, ejsval *args);

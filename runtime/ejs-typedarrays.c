@@ -13,6 +13,7 @@
 #include "ejs-array.h"
 #include "ejs-error.h"
 #include "ejs-symbol.h"
+#include "ejs-proxy.h"
 
 #define EJS_TYPEDARRAY_LEN(arrobj)      (((EJSTypedArray*)EJSVAL_TO_OBJECT(arrobj))->length)
 
@@ -104,6 +105,30 @@ _ejs_ArrayBuffer_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 static ejsval
+_ejs_ArrayBuffer_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval F = _this;
+
+    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in ArrayBuffer[Symbol.create] is not a constructor");
+
+    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
+
+    // 1. Let obj be the result of calling OrdinaryCreateFromConstructor(constructor, "%ArrayBufferPrototype%", ( [[ArrayBufferData]], [[ArrayBufferByteLength]]) ). 
+    // 2. ReturnIfAbrupt(obj). 
+    ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+    if (EJSVAL_IS_UNDEFINED(proto))
+        proto = _ejs_ArrayBuffer_prototype;
+
+    EJSObject* obj = (EJSObject*)_ejs_gc_new (EJSArrayBuffer);
+    _ejs_init_object (obj, proto, &_ejs_ArrayBuffer_specops);
+    
+    // 3. Set the [[ArrayBufferByteLength]] internal slot of obj to 0. 
+    // 4. Return obj. 
+    return OBJECT_TO_EJSVAL(obj);
+}
+
+static ejsval
 _ejs_ArrayBuffer_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJSArrayBuffer* buffer = (EJSArrayBuffer*)EJSVAL_TO_OBJECT(_this);
@@ -173,6 +198,32 @@ _ejs_DataView_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     return _this;
 }
+
+static ejsval
+_ejs_DataView_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    // 1. Let F be the this value. 
+    ejsval F = _this;
+
+    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in DataView[Symbol.create] is not a constructor");
+
+    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
+
+    // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%DataViewPrototype%", ([[DataView]], [[ViewedArrayBuffer]], [[ByteLength]], [[ByteOffset]]) ). 
+    ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+    if (EJSVAL_IS_UNDEFINED(proto))
+        proto = _ejs_DataView_prototype;
+
+    // 3. Set the value of obj’s [[DataView]] internal slot to true. 
+
+    EJSObject* obj = (EJSObject*)_ejs_gc_new (EJSDataView);
+    _ejs_init_object (obj, proto, &_ejs_DataView_specops);
+    
+    // 4. Return obj. 
+    return OBJECT_TO_EJSVAL(obj);
+}
+
 
 static inline EJSBool
 needToSwap(EJSBool littleEndian)
@@ -496,7 +547,8 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
      EJS_NOT_IMPLEMENTED();                                             \
  }                                                                      \
                                                                         \
-static ejsval                                                          \
+ /* this should be a single getter reused by all typed-arrays */        \
+static ejsval                                                           \
 _ejs_##ArrayType##Array_prototype_get_toStringTag (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
 {                                                                       \
     if (!EJSVAL_IS_TYPEDARRAY(_this))                                   \
@@ -514,8 +566,44 @@ _ejs_##ArrayType##Array_prototype_get_toStringTag (ejsval env, ejsval _this, uin
     case EJS_TYPEDARRAY_FLOAT32:       return _ejs_atom_Float32Array;   \
     case EJS_TYPEDARRAY_FLOAT64:       return _ejs_atom_Float64Array;   \
     default: EJS_NOT_IMPLEMENTED();                                     \
-    } \
+    }                                                                   \
+}                                                                       \
+                                                                        \
+static ejsval                                                           \
+ _ejs_##ArrayType##Array_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+{                                                                       \
+    /* 1. Let F be the this value. */                                   \
+    /* 2. If Type(F) is not Object, then throw a TypeError exception. */ \
+    ejsval F = _this;                                                   \
+                                                                        \
+    if (!EJSVAL_IS_CONSTRUCTOR(F))                                      \
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in "#ArrayType"Array[Symbol.create] is not a constructor"); \
+                                                                        \
+    EJSObject* F_ = EJSVAL_TO_OBJECT(F);                                \
+                                                                        \
+    /* 3. Let proto be GetPrototypeFromConstructor(F, "%TypedArrayPrototype%").  */ \
+    /* 4. ReturnIfAbrupt(proto).  */                                    \
+    ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);               \
+    if (EJSVAL_IS_UNDEFINED(proto)) {                                   \
+        proto = _ejs_##ArrayType##Array_prototype;                      \
+    }                                                                   \
+    /* 5. Let obj be IntegerIndexedObjectCreate (proto).  */            \
+    EJSTypedArray* obj = _ejs_gc_new (EJSTypedArray);           \
+    _ejs_init_object ((EJSObject*)obj, proto, _ejs_typed_array_specops[EJS_TYPEDARRAY_##EnumType]); \
+    /* 6. Add a [[ViewedArrayBuffer]] internal slot to obj and set its initial value to undefined.  */ \
+    obj->buffer = _ejs_undefined;                                       \
+    /* 7. Add a [[TypedArrayName]] internal slot to obj and set its initial value to undefined .  */ \
+    /* XXX element type? */                                             \
+    /* 8. Add a [[ByteLength]] internal slot to obj and set its initial value to 0. */ \
+    obj->byteLength = 0;                                                \
+    /* 9. Add a [[ByteOffset]] internal slot to obj and set its initial value to 0. */ \
+    obj->byteOffset = 0;                                                \
+    /* 10. Add an [[ArrayLength]] internal slot to obj and set its initial value to 0. */ \
+    obj->length = 0;                                                    \
+    /* 11. Return obj. */                                               \
+    return OBJECT_TO_EJSVAL((EJSObject*)obj);                           \
 }
+
 
 EJS_TYPED_ARRAY(INT8, Int8, int8, int8_t, 1);
 EJS_TYPED_ARRAY(UINT8, Uint8, uint8, uint8_t, 1);
@@ -632,6 +720,7 @@ _ejs_typedarrays_init(ejsval global)
         PROTO_METHOD(ArrayBuffer, slice);
 
         _ejs_object_define_value_property (_ejs_ArrayBuffer_prototype, _ejs_Symbol_toStringTag, _ejs_atom_ArrayBuffer, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
+        EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_ArrayBuffer, create, _ejs_ArrayBuffer_create, EJS_PROP_NOT_ENUMERABLE);
     }
 
     // DataView
@@ -655,6 +744,8 @@ _ejs_typedarrays_init(ejsval global)
         PROTO_METHOD_IMPL(DataView, setFloat64);
 
         _ejs_object_define_value_property (_ejs_DataView_prototype, _ejs_Symbol_toStringTag, _ejs_atom_DataView, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
+
+        EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_DataView, create, _ejs_DataView_create, EJS_PROP_NOT_ENUMERABLE);
     }
 
 #define ADD_TYPEDARRAY(EnumType, ArrayType, arraytype, elementSizeInBytes) EJS_MACRO_START \
@@ -676,6 +767,9 @@ _ejs_typedarrays_init(ejsval global)
     PROTO_METHOD_IMPL(ArrayType##Array, set);                           \
     PROTO_METHOD_IMPL(ArrayType##Array, subarray);                      \
     PROTO_GETTER(ArrayType##Array, toStringTag); /* XXX needs to be enumerable: false, configurable: true */ \
+                                                                        \
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_##ArrayType##Array, create, _ejs_##ArrayType##Array_create, EJS_PROP_NOT_ENUMERABLE); \
+                                                                        \
 EJS_MACRO_END
 
     ADD_TYPEDARRAY(INT8, Int8, int8, 1);

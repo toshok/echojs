@@ -241,6 +241,14 @@ void _ejs_object_init(ejsval global);
 // we shouldn't expose this method, we should expose a helper method that calls this.
 ejsval _ejs_Object_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args);
 
+// exposed so we can call the native implementation during class creation
+ejsval _ejs_object_set_prototype_of (ejsval obj, ejsval proto);
+
+// terrible name.  _ejs_object_create above needs to die and be
+// replaced with this.  we should be able to do that once all the
+// @@create implementations are there
+ejsval _ejs_object_create_wrapper (ejsval proto);
+
 void _ejs_Object_init (ejsval ejs_global);
 EJS_END_DECLS
 

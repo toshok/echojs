@@ -13,6 +13,7 @@
 #include "ejs-array.h"
 #include "ejs-error.h"
 #include "ejs-string.h"
+#include "ejs-symbol.h"
 
 EJSBool trace = EJS_FALSE;
 
@@ -31,7 +32,7 @@ _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func)
 {
     EJSFunction *rv = _ejs_gc_new(EJSFunction);
     
-    _ejs_init_object ((EJSObject*)rv, _ejs_Function__proto__, &_ejs_Function_specops);
+    _ejs_init_object ((EJSObject*)rv, _ejs_Function_prototype, &_ejs_Function_specops);
 
     rv->func = func;
     rv->env = env;
@@ -52,7 +53,7 @@ _ejs_function_new_without_proto (ejsval env, ejsval name, EJSClosureFunc func)
 {
     EJSFunction *rv = _ejs_gc_new(EJSFunction);
     
-    _ejs_init_object ((EJSObject*)rv, _ejs_Function__proto__, &_ejs_Function_specops);
+    _ejs_init_object ((EJSObject*)rv, _ejs_Function_prototype, &_ejs_Function_specops);
 
     rv->func = func;
     rv->env = env;
@@ -69,7 +70,7 @@ _ejs_function_new_utf8_with_proto (ejsval env, const char* name, EJSClosureFunc 
     ejsval function_name = _ejs_string_new_utf8 (name);
     EJSFunction *rv = _ejs_gc_new(EJSFunction);
     
-    _ejs_init_object ((EJSObject*)rv, _ejs_Function__proto__, &_ejs_Function_specops);
+    _ejs_init_object ((EJSObject*)rv, _ejs_Function_prototype, &_ejs_Function_specops);
 
     rv->func = func;
     rv->env = env;
@@ -88,7 +89,7 @@ _ejs_function_new_native (ejsval env, ejsval name, EJSClosureFunc func)
 {
     EJSFunction *rv = _ejs_gc_new(EJSFunction);
     
-    _ejs_init_object ((EJSObject*)rv, _ejs_Function__proto__, &_ejs_Function_specops);
+    _ejs_init_object ((EJSObject*)rv, _ejs_Function_prototype, &_ejs_Function_specops);
 
     rv->func = func;
     rv->env = env;
@@ -116,7 +117,7 @@ _ejs_function_new_utf8 (ejsval env, const char *name, EJSClosureFunc func)
 }
 
 
-ejsval _ejs_Function__proto__ EJSVAL_ALIGNMENT;
+ejsval _ejs_Function_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_Function EJSVAL_ALIGNMENT;
 
 static ejsval
@@ -297,25 +298,55 @@ _ejs_Function_prototype_bind (ejsval env, ejsval _this, uint32_t argc, ejsval *a
 }
 
 ejsval
-_ejs_Function_empty (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+_ejs_Function_empty (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     return _ejs_undefined;
+}
+
+static ejsval
+_ejs_Function_create(ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    _ejs_throw_nativeerror_utf8 (EJS_ERROR, "ejs doesn't support dynamic creation of functions");
+}
+
+static ejsval
+_ejs_Function_prototype_create(ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    ejsval F = _this;
+
+    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Function.prototype[Symbol.create] is not a constructor");
+        
+    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
+
+    ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+    if (EJSVAL_IS_UNDEFINED(proto)) {
+        proto = _ejs_Function_prototype;
+    }
+
+    if (!EJSVAL_IS_OBJECT(proto)) {
+        EJS_NOT_IMPLEMENTED(); // cross-realm doesn't exist in ejs yet
+    }
+
+    EJSObject* obj = (EJSObject*)_ejs_gc_new (EJSObject);
+    _ejs_init_object (obj, proto, &_ejs_Object_specops);
+    return OBJECT_TO_EJSVAL(obj);
 }
 
 static void
 _ejs_function_init_proto()
 {
-    _ejs_gc_add_root (&_ejs_Function__proto__);
+    _ejs_gc_add_root (&_ejs_Function_prototype);
 
-    // Function.__proto__ = function () { return undefined; }
+    // Function.prototype = function () { return undefined; }
 
-    EJSFunction* __proto__ = _ejs_gc_new(EJSFunction);
-    _ejs_Function__proto__ = OBJECT_TO_EJSVAL(__proto__);
-    _ejs_init_object ((EJSObject*)__proto__, _ejs_Object_prototype, &_ejs_Function_specops);
-    __proto__->func = _ejs_Function_empty;
-    __proto__->env = _ejs_null;
+    EJSFunction* proto = _ejs_gc_new(EJSFunction);
+    _ejs_Function_prototype = OBJECT_TO_EJSVAL(proto);
+    _ejs_init_object ((EJSObject*)proto, _ejs_Object_prototype, &_ejs_Function_specops);
+    proto->func = _ejs_Function_empty;
+    proto->env = _ejs_null;
 
-    _ejs_object_define_value_property (OBJECT_TO_EJSVAL(__proto__), _ejs_atom_name, _ejs_atom_empty, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (OBJECT_TO_EJSVAL(proto), _ejs_atom_name, _ejs_atom_empty, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 }
 
 void
@@ -329,11 +360,11 @@ _ejs_function_init(ejsval global)
     _ejs_object_setprop (global, _ejs_atom_Function, _ejs_Function);
 
     // ECMA262 15.3.3.1
-    _ejs_object_define_value_property (_ejs_Function, _ejs_atom_prototype, _ejs_Function__proto__, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (_ejs_Function, _ejs_atom_prototype, _ejs_Function_prototype, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     // ECMA262 15.3.3.2
     _ejs_object_define_value_property (_ejs_Function, _ejs_atom_length, NUMBER_TO_EJSVAL(1), EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_Function__proto__, x, _ejs_Function_prototype_##x, EJS_PROP_NOT_ENUMERABLE)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_Function_prototype, x, _ejs_Function_prototype_##x, EJS_PROP_NOT_ENUMERABLE)
 
     PROTO_METHOD(toString);
     PROTO_METHOD(apply);
@@ -342,6 +373,14 @@ _ejs_function_init(ejsval global)
 
 #undef PROTO_METHOD
 
+}
+
+void
+_ejs_function_add_symbols()
+{
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Function, create, _ejs_Function_create, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Function_prototype, create, _ejs_Function_prototype_create, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
 }
 
 #define DEBUG_FUNCTION_ENTER(x) EJS_MACRO_START                         \

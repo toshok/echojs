@@ -129,6 +129,12 @@ ejsval _ejs_Symbol_toStringTag EJSVAL_ALIGNMENT;
 ejsval _ejs_Symbol_unscopables EJSVAL_ALIGNMENT;
 
 void
+_ejs_Symbol_create_impl(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1"); // XXX
+}
+
+void
 _ejs_symbol_init(ejsval global)
 {
     _ejs_Symbol = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Symbol, (EJSClosureFunc)_ejs_Symbol_impl);
@@ -154,6 +160,8 @@ _ejs_symbol_init(ejsval global)
     WELL_KNOWN_SYMBOL(unscopables);
 
     _ejs_object_define_value_property (_ejs_Symbol_prototype, _ejs_Symbol_toStringTag, _ejs_atom_Symbol, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
+
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Symbol, create, _ejs_Symbol_create_impl, EJS_PROP_NOT_ENUMERABLE);
 }
 
 ejsval

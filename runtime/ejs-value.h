@@ -16,6 +16,7 @@ typedef double EJSPrimNumber;
 #define EJSVAL_IS_ARRAY(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Array_specops || EJSVAL_TO_OBJECT(v)->ops == &_ejs_sparsearray_specops))
 #define EJSVAL_IS_FUNCTION(v)  (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Function_specops))
 #define EJSVAL_IS_CALLABLE(v)  (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Function_specops || EJSVAL_TO_OBJECT(v)->ops == &_ejs_Proxy_specops))
+#define EJSVAL_IS_CONSTRUCTOR(v)  (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Function_specops || EJSVAL_TO_OBJECT(v)->ops == &_ejs_Proxy_specops)) // XXX this is lacking
 #define EJSVAL_IS_DATE(v)      (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Date_specops))
 #define EJSVAL_IS_REGEXP(v)    (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_RegExp_specops))
 #define EJSVAL_IS_NUMBER_OBJECT(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Number_specops))
