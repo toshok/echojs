@@ -61,6 +61,7 @@ EJS_ATOM(JSON)
 EJS_ATOM(Math)
 EJS_ATOM(Number)
 EJS_ATOM(Object)
+EJS_ATOM(Reflect)
 EJS_ATOM(RegExp)
 EJS_ATOM(String)
 
@@ -340,6 +341,10 @@ EJS_ATOM(values)
 EJS_ATOM(Proxy)
 //EJS_ATOM(create)
 EJS_ATOM(createFunction)
+EJS_ATOM(construct)
+EJS_ATOM(deleteProperty)
+EJS_ATOM(enumerate)
+EJS_ATOM(ownKeys)
 
 // symbol stuff
 EJS_ATOM(Symbol)

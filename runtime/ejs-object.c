@@ -1843,7 +1843,7 @@ _ejs_object_specop_get (ejsval obj_, ejsval propertyName, ejsval receiver)
     }
 
     /* 6. Return the result calling the [[Call]] internal method of getter providing O as the this value and providing no arguments */
-    return _ejs_invoke_closure (getter, obj_, 0, NULL);
+    return _ejs_invoke_closure (getter, receiver, 0, NULL);
 }
 
 // ECMA262: 8.12.1

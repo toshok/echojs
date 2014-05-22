@@ -97,6 +97,7 @@ void _ejs_propertydesc_free (EJSPropertyDesc* desc);
 #define _ejs_property_desc_get_getter(p) _ejs_property_desc_get_value_flag_default(p, getter, EJS_PROP_FLAGS_GETTER_SET, _ejs_undefined)
 #define _ejs_property_desc_get_setter(p) _ejs_property_desc_get_value_flag_default(p, setter, EJS_PROP_FLAGS_SETTER_SET, _ejs_undefined)
 
+ejsval  ToPropertyKey        (ejsval argument);
 void    ToPropertyDescriptor (ejsval O, EJSPropertyDesc* desc);
 EJSBool IsDataDescriptor     (EJSPropertyDesc* Desc);
 EJSBool IsAccessorDescriptor (EJSPropertyDesc* Desc);

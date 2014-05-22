@@ -34,6 +34,7 @@
 #include "ejs-webgl.h"
 #endif
 #include "ejs-proxy.h"
+#include "ejs-reflect.h"
 
 const ejsval _ejs_undefined EJSVAL_ALIGNMENT = STATIC_BUILD_EJSVAL(EJSVAL_TAG_UNDEFINED, 0);
 ejsval _ejs_nan;
@@ -132,6 +133,7 @@ _ejs_init(int argc, char** argv)
 
     _ejs_function_add_symbols();
 
+    _ejs_reflect_init(_ejs_global);
     _ejs_error_init(_ejs_global);
     _ejs_arguments_init(_ejs_global);
     _ejs_array_init(_ejs_global);
