@@ -292,8 +292,12 @@ ejsval ToObject(ejsval exp)
         _ejs_invoke_closure (_ejs_String, new_str, 1, &exp);
         return new_str;
     }
-    else if (EJSVAL_IS_UNDEFINED(exp))
-        return exp; // XXX
+    else if (EJSVAL_IS_UNDEFINED(exp)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1"); // XXX
+    }
+    else if (EJSVAL_IS_NULL(exp)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "2"); // XXX
+    }
     else if (EJSVAL_IS_OBJECT(exp))
         return exp;
     else

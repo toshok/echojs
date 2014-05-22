@@ -109,10 +109,19 @@ _ejs_Reflect_getOwnPropertyDescriptor (ejsval env, ejsval _this, uint32_t argc, 
     EJS_NOT_IMPLEMENTED();
 }
 
+// ECMA262: 26.1.8 Reflect.getPrototypeOf ( target ) 
 static ejsval
 _ejs_Reflect_getPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    EJS_NOT_IMPLEMENTED();
+    ejsval target = _ejs_undefined;
+    if (argc > 0) target = args[0];
+
+    // 1. Let obj be ToObject(target). 
+    // 2. ReturnIfAbrupt(obj). 
+    ejsval obj = ToObject(target);
+
+    // 3. Return the result of calling the [[GetPrototypeOf]] internal method of obj. 
+    return OP(EJSVAL_TO_OBJECT(obj),get_prototype_of)(obj);
 }
 
 // ECMA262: 26.1.9 Reflect.has ( target, propertyKey ) 
@@ -137,10 +146,19 @@ _ejs_Reflect_has (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(obj),has_property)(obj, key));
 }
 
+// ECMA262: 26.1.10 Reflect.isExtensible (target) 
 static ejsval
 _ejs_Reflect_isExtensible (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    EJS_NOT_IMPLEMENTED();
+    ejsval target = _ejs_undefined;
+    if (argc > 0) target = args[0];
+
+    // 1. Let obj be ToObject(target). 
+    // 2. ReturnIfAbrupt(obj). 
+    ejsval obj = ToObject(target);
+
+    // 3. Return the result of calling the [[IsExtensible]] internal method of obj.
+    return BOOLEAN_TO_EJSVAL(EJS_OBJECT_IS_EXTENSIBLE(EJSVAL_TO_OBJECT(obj)));
 }
 
 static ejsval
@@ -161,10 +179,26 @@ _ejs_Reflect_set (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     EJS_NOT_IMPLEMENTED();
 }
 
+// ECMA262: 26.1.14 Reflect.setPrototypeOf ( target, proto ) 
 static ejsval
 _ejs_Reflect_setPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    EJS_NOT_IMPLEMENTED();
+    ejsval target = _ejs_undefined;
+    ejsval proto = _ejs_undefined;
+
+    if (argc > 0) target = args[0];
+    if (argc > 1) proto  = args[1];
+
+    // 1. Let obj be ToObject(target). 
+    // 2. ReturnIfAbrupt(obj). 
+    ejsval obj = ToObject(target);
+
+    // 3. If Type(proto) is not Object and proto is not null, then throw a TypeError exception 
+    if (!EJSVAL_IS_OBJECT(proto) && !EJSVAL_IS_NULL(proto))
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "prototype argument must be an object or null");
+
+    // 4. Return the result of calling the [[SetPrototypeOf]] internal method of obj with argument proto. 
+    return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(obj), set_prototype_of)(target, proto));
 }
 
 void
