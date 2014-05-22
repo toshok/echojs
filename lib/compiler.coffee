@@ -254,6 +254,7 @@ class LLVMIRVisitor extends TreeVisitor
                         isNull:               value: @handleIsNull
                         setPrototypeOf:       value: @handleSetPrototypeOf
                         objectCreate:         value: @handleObjectCreate
+                        gatherRest:           value: @handleGatherRest
 
                 @opencode_intrinsics =
                         unaryNot          : true
@@ -1049,38 +1050,6 @@ class LLVMIRVisitor extends TreeVisitor
 
                                 ir.setInsertPoint merge_bb
 
-                if n.rest?
-                        has_rest_bb = new llvm.BasicBlock "has_rest_bb", insertFunc
-                        no_rest_bb = new llvm.BasicBlock "no_rest_bb", insertFunc
-                        rest_merge_bb = new llvm.BasicBlock "rest_merge", insertFunc
-                        
-                        rest_alloca = @createAlloca @currentFunction, types.EjsValue, "local_rest_object"
-
-                        load_argc = @createLoad @currentFunction.topScope.get("%argc"), "argc_load"
-
-                        cmp = ir.createICmpSGt load_argc, consts.int32(n.formal_params.length), "argcmpresult"
-                        ir.createCondBr cmp, has_rest_bb, no_rest_bb
-
-                        ir.setInsertPoint has_rest_bb
-                        # we have > args than are declared, shove the rest into the rest parameter
-                        load_args = @createLoad @currentFunction.topScope.get("%args"), "args_load"
-                        gep = ir.createInBoundsGetElementPointer load_args, [consts.int32(n.formal_params.length)], "rest_arg_gep"
-                        load_argc = ir.createNswSub load_argc, consts.int32(n.formal_params.length)
-                        rest_value = @createCall @ejs_runtime.array_new_copy, [load_argc, gep], "argstmp", !@ejs_runtime.array_new_copy.doesNotThrow
-                        ir.createStore rest_value, rest_alloca
-                        ir.createBr rest_merge_bb
-
-                        ir.setInsertPoint no_rest_bb
-                        # we have <= args than are declared, so the rest parameter is just an empty array
-                        rest_value = @createCall @ejs_runtime.array_new, [consts.int32(0), consts.false()], "arrtmp", !@ejs_runtime.array_new.doesNotThrow
-                        ir.createStore rest_value, rest_alloca
-                        ir.createBr rest_merge_bb
-
-                        ir.setInsertPoint rest_merge_bb
-                        
-                        @currentFunction.topScope.set n.rest.name, rest_alloca
-                        @currentFunction.restArgPresent = true
-                                
                 @iifeStack = new Stack
 
                 @finallyStack = []
@@ -2198,6 +2167,44 @@ class LLVMIRVisitor extends TreeVisitor
                 proto = @visitOrNull exp.arguments[0]
                 @createCall @ejs_runtime.object_create_wrapper, [proto], "object_create", true
                 # we should check the return value of object_create_wrapper
+
+        handleGatherRest: (exp) ->
+                rest_name = exp.arguments[0].value
+                formal_params_length = exp.arguments[1].value
+                
+                has_rest_bb = new llvm.BasicBlock "has_rest_bb", @currentFunction
+                no_rest_bb = new llvm.BasicBlock "no_rest_bb", @currentFunction
+                rest_merge_bb = new llvm.BasicBlock "rest_merge", @currentFunction
+                        
+                rest_alloca = @createAlloca @currentFunction, types.EjsValue, "local_rest_object"
+
+                load_argc = @createLoad @currentFunction.topScope.get("%argc"), "argc_load"
+
+                cmp = ir.createICmpSGt load_argc, consts.int32(formal_params_length), "argcmpresult"
+                ir.createCondBr cmp, has_rest_bb, no_rest_bb
+
+                ir.setInsertPoint has_rest_bb
+                # we have > args than are declared, shove the rest into the rest parameter
+                load_args = @createLoad @currentFunction.topScope.get("%args"), "args_load"
+                gep = ir.createInBoundsGetElementPointer load_args, [consts.int32(formal_params_length)], "rest_arg_gep"
+                load_argc = ir.createNswSub load_argc, consts.int32(formal_params_length)
+                rest_value = @createCall @ejs_runtime.array_new_copy, [load_argc, gep], "argstmp", !@ejs_runtime.array_new_copy.doesNotThrow
+                ir.createStore rest_value, rest_alloca
+                ir.createBr rest_merge_bb
+
+                ir.setInsertPoint no_rest_bb
+                # we have <= args than are declared, so the rest parameter is just an empty array
+                rest_value = @createCall @ejs_runtime.array_new, [consts.int32(0), consts.false()], "arrtmp", !@ejs_runtime.array_new.doesNotThrow
+                ir.createStore rest_value, rest_alloca
+                ir.createBr rest_merge_bb
+
+                ir.setInsertPoint rest_merge_bb
+                
+                @currentFunction.topScope.set rest_name, rest_alloca
+                @currentFunction.restArgPresent = true
+
+                ir.createLoad rest_alloca, "load_rest"
+                
 
 class AddFunctionsVisitor extends TreeVisitor
         constructor: (@module, @abi) ->

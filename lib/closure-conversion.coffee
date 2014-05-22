@@ -107,6 +107,7 @@ templateDefaultHandlerCall_id = create_identifier "%templateDefaultHandlerCall"
 createArgScratchArea_id       = create_identifier "%createArgScratchArea"
 setPrototypeOf_id       = create_identifier "%setPrototypeOf"
 objectCreate_id         = create_identifier "%objectCreate"
+gatherRest_id           = create_identifier "%gatherRest"
 
 #
 # converts:
@@ -186,7 +187,7 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
                                                 expression:
                                                         type: CallExpression
                                                         callee: setPrototypeOf_id
-                                                        arguments: [ctor_func.id, n.superClass]
+                                                        arguments: [ctor_func.id, superid]
                                         }
 
                                         # also set ctor.prototype = Object.create(superClass.prototype)
@@ -205,7 +206,7 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
                                                                 callee: objectCreate_id
                                                                 arguments: [{
                                                                         type: MemberExpression
-                                                                        object: n.superClass
+                                                                        object: superid
                                                                         property: create_identifier "prototype"
                                                                         computed: false
                                                                 }]
@@ -1360,7 +1361,6 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
         visitFunction: (n) ->
                 new_scope = new Map
                 new_scope.set(p.name, true) for p in n.params
-                new_scope.set(n.rest.name, true) if n.rest?
                 new_scope.set("arguments", true)
                 new_body = @visitWithScope new_scope, n.body
                 n.body = new_body
@@ -1739,7 +1739,7 @@ class DesugarTemplates extends TreeVisitor
                         },
                         params: [],
                         defaults: [],
-                        rest: [],
+                        rest: undefined,
                         generator: false,
                         expression: false
                 }
@@ -2093,7 +2093,41 @@ class DesugarImportExport extends TreeVisitor
                         }],
                         kind: "let"
                 }
-                
+
+#
+# convert from:
+#
+#   function name (arg1, arg2, arg3, ...rest) {
+#     // body
+#   }
+#
+# to:
+#
+#   function name (arg1, arg2, arg3) {
+#     let rest = %gatherRest('rest', 3);
+#     // body
+#   }
+# 
+class DesugarRestParameters extends TreeVisitor
+        visitFunction: (n) ->
+                n = super
+                if n.rest?
+                        rest_declaration = {
+                                type: VariableDeclaration
+                                kind: "let"
+                                declarations: [{
+                                        type: VariableDeclarator
+                                        id: n.rest
+                                        init:
+                                                type: CallExpression
+                                                callee: gatherRest_id
+                                                arguments: [create_string_literal(n.rest.name), create_number_literal(n.params.length)]
+                                }]
+                        }
+                        n.body.body.unshift rest_declaration
+                        n.rest = undefined
+                n
+                        
                 
 
 # switch this to true if you want to experiment with the new CFA2
@@ -2112,6 +2146,7 @@ passes = [
         DesugarDestructuring
         DesugarUpdateAssignments
         DesugarTemplates
+        DesugarRestParameters
         HoistFuncDecls if enable_hoist_func_decls_pass
         FuncDeclsToVars
         HoistVars
