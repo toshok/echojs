@@ -103,10 +103,29 @@ _ejs_Reflect_get (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return OP(EJSVAL_TO_OBJECT(obj),get)(obj, key, receiver);
 }
 
+// ECMA262: 26.1.7 Reflect.getOwnPropertyDescriptor ( target, propertyKey )
 static ejsval
 _ejs_Reflect_getOwnPropertyDescriptor (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    EJS_NOT_IMPLEMENTED();
+    ejsval target = _ejs_undefined;
+    ejsval propertyKey = _ejs_undefined;
+    if (argc > 0) target = args[0];
+    if (argc > 1) propertyKey = args[1];
+
+    // 1. Let obj be ToObject(target). 
+    // 2. ReturnIfAbrupt(obj). 
+    ejsval obj = ToObject(target);
+
+    // 3. Let key be ToPropertyKey(propertyKey). 
+    // 4. ReturnIfAbrupt(key). 
+    ejsval key = ToPropertyKey(propertyKey);
+
+    // 5. Let desc be the result of calling the [[GetOwnProperty]] internal method of obj with argument key. 
+    // 6. ReturnIfAbrupt(desc). 
+    EJSPropertyDesc* desc = OP(EJSVAL_TO_OBJECT(obj),get_own_property)(obj, key);
+
+    // 7. Return the result of calling FromPropertyDescriptor(desc). 
+    return FromPropertyDescriptor(desc);
 }
 
 // ECMA262: 26.1.8 Reflect.getPrototypeOf ( target ) 
@@ -161,15 +180,33 @@ _ejs_Reflect_isExtensible (ejsval env, ejsval _this, uint32_t argc, ejsval *args
     return BOOLEAN_TO_EJSVAL(EJS_OBJECT_IS_EXTENSIBLE(EJSVAL_TO_OBJECT(obj)));
 }
 
+// ECMA262: 26.1.11 Reflect.ownKeys ( target ) 
 static ejsval
 _ejs_Reflect_ownKeys (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
+    ejsval target = _ejs_undefined;
+    if (argc > 0) target = args[0];
+
+    // 1. Let obj be ToObject(target). 
+    // 2. ReturnIfAbrupt(obj). 
+    ejsval obj = ToObject(target);
+
+    // 3. Return the result of calling the [[OwnPropertyKeys]] internal method of obj.
     EJS_NOT_IMPLEMENTED();
 }
 
+// ECMA262: 26.1.12 Reflect.preventExtensions ( target ) 
 static ejsval
 _ejs_Reflect_preventExtensions (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
+    ejsval target = _ejs_undefined;
+    if (argc > 0) target = args[0];
+
+    // 1. Let obj be ToObject(target). 
+    // 2. ReturnIfAbrupt(obj). 
+    ejsval obj = ToObject(target);
+
+    // 3. Return the result of calling the [[PreventExtensions]] internal method of obj.
     EJS_NOT_IMPLEMENTED();
 }
 
