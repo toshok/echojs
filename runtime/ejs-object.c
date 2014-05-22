@@ -171,7 +171,7 @@ ToPropertyDescriptor(ejsval O, EJSPropertyDesc *desc)
 }
 
 // ECMA262: 8.10.4
-static ejsval
+ejsval
 FromPropertyDescriptor(EJSPropertyDesc* Desc)
 {
     /* 1. If Desc is undefined, then return undefined. */
