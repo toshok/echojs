@@ -173,10 +173,37 @@ _ejs_Reflect_preventExtensions (ejsval env, ejsval _this, uint32_t argc, ejsval 
     EJS_NOT_IMPLEMENTED();
 }
 
+// ECMA262: 26.1.13 Reflect.set ( target, propertyKey, V [ , receiver ] ) 
 static ejsval
 _ejs_Reflect_set (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    EJS_NOT_IMPLEMENTED();
+    ejsval target      = _ejs_undefined;
+    ejsval propertyKey = _ejs_undefined;
+    ejsval V           = _ejs_undefined;
+    ejsval receiver    = _ejs_undefined;
+
+    if (argc > 0) target       = args[0];
+    if (argc > 1) propertyKey  = args[1];
+    if (argc > 2) V            = args[2];
+    if (argc > 3) receiver     = args[3];
+
+    // 1. Let obj be ToObject(target). 
+    // 2. ReturnIfAbrupt(obj). 
+    ejsval obj = ToObject(target);
+
+    // 3. Let key be ToPropertyKey(propertyKey). 
+    // 4. ReturnIfAbrupt(key). 
+    ejsval key = ToPropertyKey(propertyKey);
+
+    // 5. If receiver is not present, then 
+    //    a. Let receiver be target. 
+    if (argc <= 3)
+        receiver = target;
+
+    // 6. Return the result of calling the [[Set]] internal method of obj with arguments key, V, and receiver. 
+    OP(EJSVAL_TO_OBJECT(obj),put)(obj, key, V, receiver, EJS_TRUE);
+
+    return _ejs_true; // XXX
 }
 
 // ECMA262: 26.1.14 Reflect.setPrototypeOf ( target, proto ) 

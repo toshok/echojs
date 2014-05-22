@@ -1923,7 +1923,7 @@ _ejs_object_specop_put (ejsval O, ejsval P, ejsval V, ejsval Receiver, EJSBool T
         ejsval setter = _ejs_property_desc_get_setter(desc);
         EJS_ASSERT (EJSVAL_IS_FUNCTION(setter));
         /*    b. Call the [[Call]] internal method of setter providing O as the this value and providing V as the sole argument. */
-        _ejs_invoke_closure (setter, O, 1, &V);
+        _ejs_invoke_closure (setter, Receiver, 2, &V);
     }
     else {
         /* 6. Else, create a named data property named P on object O as follows */
