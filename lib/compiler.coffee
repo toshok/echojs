@@ -1996,45 +1996,55 @@ class LLVMIRVisitor extends TreeVisitor
         createEjsvalAnd:     (arg, i64_const, name) -> ir.createAnd     @getEjsvalBits(arg), i64_const, name
 
         isObject: (val) ->
-                throw new Error("not supported on this architecture") if @options.target_pointer_size isnt 64
-                @createEjsvalICmpUGt val, consts.int64_lowhi(0xfffbffff, 0xffffffff), "cmpresult"
+                if @options.target_pointer_size is 64
+                        @createEjsvalICmpUGt val, consts.int64_lowhi(0xfffbffff, 0xffffffff), "cmpresult"
+                else
+                        mask = @createEjsvalAnd(val, consts.int64_lowhi(0xffffffff, 0x00000000), "mask.i")
+                        ir.createICmpEq(mask, consts.int64_lowhi(0xffffff88, 0x00000000), "cmpresult")
 
         isString: (val) ->
-                throw new Error("not supported on this architecture") if @options.target_pointer_size isnt 64
-                mask = @createEjsvalAnd val, consts.int64_lowhi(0xffff8000, 0x00000000), "mask.i"
-                ir.createICmpEq mask, consts.int64_lowhi(0xfffa8000, 0x00000000), "cmpresult"
+                if @options.target_pointer_size is 64
+                        mask = @createEjsvalAnd val, consts.int64_lowhi(0xffff8000, 0x00000000), "mask.i"
+                        ir.createICmpEq mask, consts.int64_lowhi(0xfffa8000, 0x00000000), "cmpresult"
+                else
+                        mask = @createEjsvalAnd(val, consts.int64_lowhi(0xffffffff, 0x00000000), "mask.i")
+                        ir.createICmpEq(mask, consts.int64_lowhi(0xffffff85, 0x00000000), "cmpresult")
 
         isNumber: (val) ->
-                throw new Error("not supported on this architecture") if @options.target_pointer_size isnt 64
-                @createEjsvalICmpULt val, consts.int64_lowhi(0xfff80001, 0x00000000), "cmpresult"
+                if @options.target_pointer_size is 64
+                        @createEjsvalICmpULt val, consts.int64_lowhi(0xfff80001, 0x00000000), "cmpresult"
+                else
+                        throw "not implemented yet"
                 
         isBoolean: (val) ->
-                throw new Error("not supported on this architecture") if @options.target_pointer_size isnt 64
-                mask = @createEjsvalAnd val, consts.int64_lowhi(0xffff8000, 0x00000000), "mask.i"
-                ir.createICmpEq mask, consts.int64_lowhi(0xfff98000, 0x00000000), "cmpresult"
+                if @options.target_pointer_size is 64
+                        mask = @createEjsvalAnd val, consts.int64_lowhi(0xffff8000, 0x00000000), "mask.i"
+                        ir.createICmpEq mask, consts.int64_lowhi(0xfff98000, 0x00000000), "cmpresult"
+                else
+                        mask = @createEjsvalAnd(val, consts.int64_lowhi(0xffffffff, 0x00000000), "mask.i")
+                        ir.createICmpEq(mask, consts.int64_lowhi(0xffffff83, 0x00000000), "cmpresult")
 
-        isTrue: (val) ->
-                throw new Error("not supported on this architecture") if @options.target_pointer_size isnt 64
-                ir.createICmpEq val, consts.ejsval_true(), "cmpresult"
-
-        isFalse: (val) ->
-                throw new Error("not supported on this architecture") if @options.target_pointer_size isnt 64
-                ir.createICmpEq val, consts.ejsval_false(), "cmpresult"
+        # these two could/should be changed to check for the specific bitpattern of _ejs_true/_ejs_false
+        isTrue: (val) -> ir.createICmpEq val, consts.ejsval_true(), "cmpresult"
+        isFalse: (val) -> ir.createICmpEq val, consts.ejsval_false(), "cmpresult"
                         
         isUndefined: (val) ->
-                throw new Error("not supported on this architecture") if @options.target_pointer_size isnt 64
-                @createEjsvalICmpEq val, consts.int64_lowhi(0xfff90000, 0x00000000), "cmpresult"
+                if @options.target_pointer_size is 64
+                        @createEjsvalICmpEq(val, consts.int64_lowhi(0xfff90000, 0x00000000), "cmpresult")
+                else
+                        mask = @createEjsvalAnd(val, consts.int64_lowhi(0xffffffff, 0x00000000), "mask.i")
+                        ir.createICmpEq(mask, consts.int64_lowhi(0xffffff82, 0x00000000), "cmpresult")
 
         isNull: (val) ->
-                throw new Error("not supported on this architecture") if @options.target_pointer_size isnt 64
-                @createEjsvalICmpEq val, consts.int64_lowhi(0xfffb8000, 0x00000000), "cmpresult"
+                if @options.target_pointer_size is 64
+                        @createEjsvalICmpEq val, consts.int64_lowhi(0xfffb8000, 0x00000000), "cmpresult"
+                else
+                        mask = @createEjsvalAnd(val, consts.int64_lowhi(0xffffffff, 0x00000000), "mask.i")
+                        ir.createICmpEq(mask, consts.int64_lowhi(0xffffff87, 0x00000000), "cmpresult")
 
         handleTypeofIsObject: (exp, opencode) ->
                 arg = @visitOrNull exp.arguments[0]
-                if opencode and @options.target_pointer_size is 64
-                        @createEjsBoolSelect(@isObject(arg))
-                else
-                        @createCall @ejs_runtime.typeof_is_object, [arg], "is_object", false
+                @createEjsBoolSelect(@isObject(arg))
 
         handleTypeofIsFunction: (exp, opencode) ->
                 arg = @visitOrNull exp.arguments[0]
@@ -2114,42 +2124,27 @@ class LLVMIRVisitor extends TreeVisitor
 
         handleTypeofIsString: (exp, opencode) ->
                 arg = @visitOrNull exp.arguments[0]
-                if opencode and @options.target_pointer_size is 64
-                        @createEjsBoolSelect(@isString(arg))
-                else
-                        @createCall @ejs_runtime.typeof_is_string, [arg], "is_string", false
+                @createEjsBoolSelect(@isString(arg))
                                 
         handleTypeofIsNumber:    (exp, opencode) ->
                 arg = @visitOrNull exp.arguments[0]
-                if opencode and @options.target_pointer_size is 64
-                        @createEjsBoolSelect(@isNumber(arg))
-                else
-                        @createCall @ejs_runtime.typeof_is_number,    [arg], "is_number", false
+                @createEjsBoolSelect(@isNumber(arg))
 
         handleTypeofIsBoolean:   (exp, opencode) ->
                 arg = @visitOrNull exp.arguments[0]
-                if opencode and @options.target_pointer_size is 64
-                        @createEjsBoolSelect(@isBoolean(arg))
-                else
-                        @createCall @ejs_runtime.typeof_is_boolean,   [arg], "is_boolean", false
+                @createEjsBoolSelect(@isBoolean(arg))
 
         handleIsUndefined: (exp, opencode) ->
                 arg = @visitOrNull exp.arguments[0]
-                if opencode and @options.target_pointer_size is 64
-                        @createEjsBoolSelect @createEjsvalICmpEq arg, consts.int64_lowhi(0xfff90000, 0x00000000), "cmpresult"
-                else
-                        @createCall @ejs_runtime.typeof_is_undefined, [arg], "is_undefined", false
+                @createEjsBoolSelect(@isUndefined(arg))
                 
         handleIsNull: (exp, opencode) ->
                 arg = @visitOrNull exp.arguments[0]
-                if opencode and @options.target_pointer_size is 64
-                        @createEjsBoolSelect(@isNull(arg))
-                else
-                        @createCall @ejs_runtime.typeof_is_null,      [arg], "is_null", false
+                @createEjsBoolSelect(@isNull(arg))
                         
         handleIsNullOrUndefined: (exp, opencode) ->
                 arg = @visitOrNull exp.arguments[0]
-                if opencode and @options.target_pointer_size is 64
+                if opencode
                         @createEjsBoolSelect(ir.createOr(@isNull(arg), @isUndefined(arg), "or"))
                 else
                         @createCall @ejs_binops["=="],   [@loadNullEjsValue(), arg], "is_null_or_undefined", false
@@ -2256,7 +2251,7 @@ insert_toplevel_func = (tree, filename) ->
 
 exports.compile = (tree, base_output_filename, source_filename, options) ->
         abi = if (options.target is "armv7" or options.target is "armv7s") then new ArmABI() else new ABI()
-                
+
         tree = insert_toplevel_func tree, source_filename
 
         debug.log -> escodegen.generate tree
