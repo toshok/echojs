@@ -153,9 +153,9 @@ ejsval NumberToString(double d)
     int classified = fpclassify(d);
     if (classified == FP_INFINITE) {
         if (d < 0)
-            strcpy (num_buf, "-Infinity");
+            return _ejs_atom_NegativeInfinity;
         else
-            strcpy (num_buf, "Infinity");
+            return _ejs_atom_Infinity;
     }
     else
         snprintf (num_buf, sizeof(num_buf), EJS_NUMBER_FORMAT, d);
