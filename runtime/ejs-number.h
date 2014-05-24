@@ -18,6 +18,8 @@ typedef struct {
     EJSPrimNumber number;
 } EJSNumber;
 
+#define EJSVAL_TO_NUMBER_OBJECT(v) ((EJSNumber*)EJSVAL_TO_OBJECT(v))
+
 EJS_BEGIN_DECLS
 
 extern ejsval _ejs_Number;
