@@ -18,7 +18,9 @@ namespace ejsllvm {
         llvm::AllocaInst *llvm_alloca;
     } AllocaInst;
 
-    static EJSSpecOps allocainst_specops;
+    static EJSSpecOps _ejs_AllocaInst_specops;
+    static ejsval _ejs_AllocaInst_prototype;
+    static ejsval _ejs_AllocaInst;
 
     static EJSObject* AllocaInst_allocate()
     {
@@ -26,8 +28,6 @@ namespace ejsllvm {
     }
 
 
-    static ejsval _ejs_AllocaInst_proto;
-    static ejsval _ejs_AllocaInst;
     static ejsval
     AllocaInst_impl (ejsval env, ejsval _this, int argc, ejsval *args)
     {
@@ -37,7 +37,7 @@ namespace ejsllvm {
     ejsval
     AllocaInst_new(llvm::AllocaInst* llvm_alloca)
     {
-        ejsval result = _ejs_object_new (_ejs_AllocaInst_proto, &allocainst_specops);
+        ejsval result = _ejs_object_new (_ejs_AllocaInst_prototype, &_ejs_AllocaInst_specops);
         ((AllocaInst*)EJSVAL_TO_OBJECT(result))->llvm_alloca = llvm_alloca;
         return result;
     }
@@ -78,18 +78,18 @@ namespace ejsllvm {
     void
     AllocaInst_init (ejsval exports)
     {
-        allocainst_specops = _ejs_Object_specops;
-        allocainst_specops.class_name = "LLVMAllocaInst";
-        allocainst_specops.allocate = AllocaInst_allocate;
+        _ejs_AllocaInst_specops = _ejs_Object_specops;
+        _ejs_AllocaInst_specops.class_name = "LLVMAllocaInst";
+        _ejs_AllocaInst_specops.allocate = AllocaInst_allocate;
 
-        _ejs_gc_add_root (&_ejs_AllocaInst_proto);
-        _ejs_AllocaInst_proto = _ejs_object_new(_ejs_Object_prototype, &allocainst_specops);
+        _ejs_gc_add_root (&_ejs_AllocaInst_prototype);
+        _ejs_AllocaInst_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_AllocaInst_specops);
 
-        _ejs_AllocaInst = _ejs_function_new_utf8_with_proto  (_ejs_null, "LLVMAllocaInst", (EJSClosureFunc)AllocaInst_impl, _ejs_AllocaInst_proto);
+        _ejs_AllocaInst = _ejs_function_new_utf8_with_proto  (_ejs_null, "LLVMAllocaInst", (EJSClosureFunc)AllocaInst_impl, _ejs_AllocaInst_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "AllocaInst", _ejs_AllocaInst);
 
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_AllocaInst_proto, x, AllocaInst_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_AllocaInst_prototype, x, AllocaInst_prototype_##x)
 
         PROTO_METHOD(dump);
         PROTO_METHOD(toString);

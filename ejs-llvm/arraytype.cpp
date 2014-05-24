@@ -20,15 +20,15 @@ namespace ejsllvm {
         llvm::ArrayType *type;
     } ArrayType;
 
-    static EJSSpecOps arraytype_specops;
+    static EJSSpecOps _ejs_ArrayType_specops;
+    ejsval _ejs_ArrayType_prototype EJSVAL_ALIGNMENT;
+    ejsval _ejs_ArrayType EJSVAL_ALIGNMENT;
 
     static EJSObject* ArrayType_allocate()
     {
         return (EJSObject*)_ejs_gc_new(ArrayType);
     }
 
-    ejsval _ejs_ArrayType_proto;
-    ejsval _ejs_ArrayType;
     static ejsval
     ArrayType_impl (ejsval env, ejsval _this, int argc, ejsval *args)
     {
@@ -38,7 +38,7 @@ namespace ejsllvm {
     ejsval
     ArrayType_new(llvm::ArrayType* llvm_ty)
     {
-        ejsval result = _ejs_object_new (_ejs_ArrayType_proto, &arraytype_specops);
+        ejsval result = _ejs_object_new (_ejs_ArrayType_prototype, &_ejs_ArrayType_specops);
         ((ArrayType*)EJSVAL_TO_OBJECT(result))->type = llvm_ty;
         return result;
     }
@@ -79,20 +79,20 @@ namespace ejsllvm {
     void
     ArrayType_init (ejsval exports)
     {
-        arraytype_specops = _ejs_Object_specops;
-        arraytype_specops.class_name = "LLVMArray";
-        arraytype_specops.allocate = ArrayType_allocate;
+        _ejs_ArrayType_specops = _ejs_Object_specops;
+        _ejs_ArrayType_specops.class_name = "LLVMArray";
+        _ejs_ArrayType_specops.allocate = ArrayType_allocate;
 
-        _ejs_gc_add_root (&_ejs_ArrayType_proto);
-        _ejs_ArrayType_proto = _ejs_object_new(_ejs_Object_prototype, &arraytype_specops);
+        _ejs_gc_add_root (&_ejs_ArrayType_prototype);
+        _ejs_ArrayType_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_ArrayType_specops);
 
-        _ejs_ArrayType = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMArrayType", (EJSClosureFunc)ArrayType_impl, _ejs_ArrayType_proto);
+        _ejs_ArrayType = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMArrayType", (EJSClosureFunc)ArrayType_impl, _ejs_ArrayType_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "ArrayType", _ejs_ArrayType);
 
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_ArrayType, x, ArrayType_##x)
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_ArrayType_proto, x, ArrayType_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_ArrayType_prototype, x, ArrayType_prototype_##x)
 
         OBJ_METHOD(get);
 
@@ -101,7 +101,6 @@ namespace ejsllvm {
 
 #undef PROTO_METHOD
 #undef OBJ_METHOD
-
     }
 
 };

@@ -22,8 +22,8 @@ namespace ejsllvm {
 
     static llvm::IRBuilder<> _llvm_builder(llvm::getGlobalContext());
 
-    static ejsval _ejs_IRBuilder_proto;
-    static ejsval _ejs_IRBuilder;
+    static ejsval _ejs_IRBuilder_prototype EJSVAL_ALIGNMENT;
+    static ejsval _ejs_IRBuilder EJSVAL_ALIGNMENT;
     static ejsval
     IRBuilder_impl (ejsval env, ejsval _this, int argc, ejsval *args)
     {
@@ -455,10 +455,10 @@ namespace ejsllvm {
     void
     IRBuilder_init (ejsval exports)
     {
-        _ejs_gc_add_root (&_ejs_IRBuilder_proto);
-        _ejs_IRBuilder_proto = _ejs_object_create(_ejs_Object_prototype);
+        _ejs_gc_add_root (&_ejs_IRBuilder_prototype);
+        _ejs_IRBuilder_prototype = _ejs_object_create(_ejs_Object_prototype);
 
-        _ejs_IRBuilder = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMIRBuilder", (EJSClosureFunc)IRBuilder_impl, _ejs_IRBuilder_proto);
+        _ejs_IRBuilder = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMIRBuilder", (EJSClosureFunc)IRBuilder_impl, _ejs_IRBuilder_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "IRBuilder", _ejs_IRBuilder);
 

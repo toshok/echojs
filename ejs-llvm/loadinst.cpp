@@ -18,7 +18,9 @@ namespace ejsllvm {
         llvm::LoadInst *llvm_load;
     } LoadInst;
 
-    static EJSSpecOps loadinst_specops;
+    static EJSSpecOps _ejs_LoadInst_specops;
+    static ejsval _ejs_LoadInst_prototype EJSVAL_ALIGNMENT;
+    static ejsval _ejs_LoadInst EJSVAL_ALIGNMENT;
 
     static EJSObject* LoadInst_Allocate()
     {
@@ -26,8 +28,6 @@ namespace ejsllvm {
     }
 
 
-    static ejsval _ejs_LoadInst_proto;
-    static ejsval _ejs_LoadInst;
     static ejsval
     LoadInst_impl (ejsval env, ejsval _this, int argc, ejsval *args)
     {
@@ -37,7 +37,7 @@ namespace ejsllvm {
     ejsval
     LoadInst_new(llvm::LoadInst* llvm_load)
     {
-        ejsval result = _ejs_object_new (_ejs_LoadInst_proto, &loadinst_specops);
+        ejsval result = _ejs_object_new (_ejs_LoadInst_prototype, &_ejs_LoadInst_specops);
         ((LoadInst*)EJSVAL_TO_OBJECT(result))->llvm_load = llvm_load;
         return result;
     }
@@ -78,18 +78,18 @@ namespace ejsllvm {
     void
     LoadInst_init (ejsval exports)
     {
-        loadinst_specops = _ejs_Object_specops;
-        loadinst_specops.class_name = "LLVMLoadInst";
-        loadinst_specops.allocate = LoadInst_Allocate;
+        _ejs_LoadInst_specops = _ejs_Object_specops;
+        _ejs_LoadInst_specops.class_name = "LLVMLoadInst";
+        _ejs_LoadInst_specops.allocate = LoadInst_Allocate;
 
-        _ejs_gc_add_root (&_ejs_LoadInst_proto);
-        _ejs_LoadInst_proto = _ejs_object_new(_ejs_Object_prototype, &loadinst_specops);
+        _ejs_gc_add_root (&_ejs_LoadInst_prototype);
+        _ejs_LoadInst_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_LoadInst_specops);
 
-        _ejs_LoadInst = _ejs_function_new_utf8_with_proto  (_ejs_null, "LLVMLoadInst", (EJSClosureFunc)LoadInst_impl, _ejs_LoadInst_proto);
+        _ejs_LoadInst = _ejs_function_new_utf8_with_proto  (_ejs_null, "LLVMLoadInst", (EJSClosureFunc)LoadInst_impl, _ejs_LoadInst_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "LoadInst", _ejs_LoadInst);
 
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_LoadInst_proto, x, LoadInst_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_LoadInst_prototype, x, LoadInst_prototype_##x)
 
         PROTO_METHOD(dump);
         PROTO_METHOD(toString);

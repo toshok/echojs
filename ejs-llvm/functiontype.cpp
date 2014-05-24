@@ -21,14 +21,14 @@ namespace ejsllvm {
         llvm::FunctionType *type;
     } FunctionType;
 
+    ejsval _ejs_FunctionType_prototype EJSVAL_ALIGNMENT;
+    ejsval _ejs_FunctionType EJSVAL_ALIGNMENT;
 
     EJSObject* FunctionType_alloc_instance()
     {
         return (EJSObject*)_ejs_gc_new(FunctionType);
     }
 
-    ejsval _ejs_FunctionType_proto;
-    ejsval _ejs_FunctionType;
     static ejsval
     FunctionType_impl (ejsval env, ejsval _this, int argc, ejsval *args)
     {
@@ -39,7 +39,7 @@ namespace ejsllvm {
     FunctionType_new(llvm::FunctionType* llvm_ty)
     {
         EJSObject* result = FunctionType_alloc_instance();
-        _ejs_init_object (result, _ejs_FunctionType_proto, NULL);
+        _ejs_init_object (result, _ejs_FunctionType_prototype, NULL);
         ((FunctionType*)result)->type = llvm_ty;
         return OBJECT_TO_EJSVAL(result);
     }
@@ -59,7 +59,7 @@ namespace ejsllvm {
                                                          arg_types, false);
 
         EJSObject* result = FunctionType_alloc_instance();
-        _ejs_init_object (result, _ejs_FunctionType_proto, NULL);
+        _ejs_init_object (result, _ejs_FunctionType_prototype, NULL);
         ((FunctionType*)result)->type = FT;
         return OBJECT_TO_EJSVAL(result);
     }
@@ -98,15 +98,15 @@ namespace ejsllvm {
     void
     FunctionType_init (ejsval exports)
     {
-        _ejs_gc_add_root (&_ejs_FunctionType_proto);
-        _ejs_FunctionType_proto = _ejs_object_create (Type_get_prototype());
+        _ejs_gc_add_root (&_ejs_FunctionType_prototype);
+        _ejs_FunctionType_prototype = _ejs_object_create (Type_get_prototype());
 
-        _ejs_FunctionType = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMFunctionType", (EJSClosureFunc)FunctionType_impl, _ejs_FunctionType_proto);
+        _ejs_FunctionType = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMFunctionType", (EJSClosureFunc)FunctionType_impl, _ejs_FunctionType_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "FunctionType", _ejs_FunctionType);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_FunctionType, x, FunctionType_##x)
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_FunctionType_proto, x, FunctionType_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_FunctionType_prototype, x, FunctionType_prototype_##x)
 
         OBJ_METHOD(get);
         PROTO_METHOD(getReturnType);

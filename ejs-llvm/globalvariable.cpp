@@ -10,6 +10,9 @@
 #include "ejs-array.h"
 #include "ejs-function.h"
 #include "ejs-string.h"
+#include "ejs-proxy.h"
+#include "ejs-symbol.h"
+#include "ejs-error.h"
 
 #include "value.h"
 #include "module.h"
@@ -26,15 +29,30 @@ namespace ejsllvm {
         llvm::GlobalVariable *llvm_global;
     } GlobalVariable;
 
+    static ejsval _ejs_GlobalVariable_prototype;
+    static ejsval _ejs_GlobalVariable;
+
     EJSObject* GlobalVariable_alloc_instance()
     {
         return (EJSObject*)_ejs_gc_new(GlobalVariable);
     }
 
+    static ejsval
+    GlobalVariable_create (ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        ejsval F = _this;
+        if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in GlobalVariable[Symbol.create] is not a constructor");
+        EJSObject* F_ = EJSVAL_TO_OBJECT(F);
+        // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%DatePrototype%", ([[DateData]]) ). 
+        ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+        if (EJSVAL_IS_UNDEFINED(proto))
+            proto = _ejs_GlobalVariable_prototype;
 
-
-    static ejsval _ejs_GlobalVariable_proto;
-    static ejsval _ejs_GlobalVariable;
+        EJSObject* obj = (EJSObject*)_ejs_gc_new (GlobalVariable);
+        _ejs_init_object (obj, proto, &_ejs_Object_specops);
+        return OBJECT_TO_EJSVAL(obj);
+    }
 
     static ejsval
     GlobalVariable_impl (ejsval env, ejsval _this, int argc, ejsval *args)
@@ -61,7 +79,7 @@ namespace ejsllvm {
     GlobalVariable_new(llvm::GlobalVariable* llvm_global)
     {
         EJSObject* result = GlobalVariable_alloc_instance();
-        _ejs_init_object (result, _ejs_GlobalVariable_proto, NULL);
+        _ejs_init_object (result, _ejs_GlobalVariable_prototype, NULL);
         ((GlobalVariable*)result)->llvm_global = llvm_global;
         return OBJECT_TO_EJSVAL(result);
     }
@@ -117,14 +135,14 @@ namespace ejsllvm {
     void
     GlobalVariable_init (ejsval exports)
     {
-        _ejs_gc_add_root (&_ejs_GlobalVariable_proto);
-        _ejs_GlobalVariable_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
+        _ejs_gc_add_root (&_ejs_GlobalVariable_prototype);
+        _ejs_GlobalVariable_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
 
-        _ejs_GlobalVariable = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMGlobalVariable", (EJSClosureFunc)GlobalVariable_impl, _ejs_GlobalVariable_proto);
+        _ejs_GlobalVariable = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMGlobalVariable", (EJSClosureFunc)GlobalVariable_impl, _ejs_GlobalVariable_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "GlobalVariable", _ejs_GlobalVariable);
 
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_GlobalVariable_proto, x, GlobalVariable_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_GlobalVariable_prototype, x, GlobalVariable_prototype_##x)
 
         PROTO_METHOD(setAlignment);
         PROTO_METHOD(setInitializer);
@@ -132,5 +150,7 @@ namespace ejsllvm {
         PROTO_METHOD(toString);
 
 #undef PROTO_METHOD
+
+        EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_GlobalVariable, create, GlobalVariable_create, EJS_PROP_NOT_ENUMERABLE);
     }
 };

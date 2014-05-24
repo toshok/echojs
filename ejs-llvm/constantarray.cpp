@@ -14,8 +14,8 @@
 
 namespace ejsllvm {
 
-  static ejsval _ejs_ConstantArray_proto;
-  static ejsval _ejs_ConstantArray;
+  static ejsval _ejs_ConstantArray_prototype EJSVAL_ALIGNMENT;
+  static ejsval _ejs_ConstantArray EJSVAL_ALIGNMENT;
   static ejsval
   ConstantArray_impl (ejsval env, ejsval _this, int argc, ejsval *args)
   {
@@ -39,15 +39,15 @@ namespace ejsllvm {
   void
   ConstantArray_init (ejsval exports)
   {
-    _ejs_gc_add_root (&_ejs_ConstantArray_proto);
-    _ejs_ConstantArray_proto = _ejs_object_create(_ejs_Object_prototype);
+    _ejs_gc_add_root (&_ejs_ConstantArray_prototype);
+    _ejs_ConstantArray_prototype = _ejs_object_create(_ejs_Object_prototype);
 
-    _ejs_ConstantArray = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMConstantArray", (EJSClosureFunc)ConstantArray_impl, _ejs_ConstantArray_proto);
+    _ejs_ConstantArray = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMConstantArray", (EJSClosureFunc)ConstantArray_impl, _ejs_ConstantArray_prototype);
 
     _ejs_object_setprop_utf8 (exports,              "ConstantArray", _ejs_ConstantArray);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_ConstantArray, x, ConstantArray_##x)
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_ConstantArray_proto, x, ConstantArray_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_ConstantArray_prototype, x, ConstantArray_prototype_##x)
 
     OBJ_METHOD(get);
 

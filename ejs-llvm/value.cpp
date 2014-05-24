@@ -23,6 +23,9 @@ namespace ejsllvm {
         llvm::Value *llvm_val;
     } Value;
 
+    static ejsval _ejs_Value_prototype EJSVAL_ALIGNMENT;
+    static ejsval _ejs_Value EJSVAL_ALIGNMENT;
+
     EJSObject* Value_alloc_instance()
     {
         return (EJSObject*)_ejs_gc_new(Value);
@@ -30,8 +33,6 @@ namespace ejsllvm {
 
 
 
-    static ejsval _ejs_Value_proto;
-    static ejsval _ejs_Value;
     static ejsval
     Value_impl (ejsval env, ejsval _this, int argc, ejsval *args)
     {
@@ -42,7 +43,7 @@ namespace ejsllvm {
     Value_new(llvm::Value* llvm_val)
     {
         EJSObject* result = Value_alloc_instance();
-        _ejs_init_object (result, _ejs_Value_proto, NULL);
+        _ejs_init_object (result, _ejs_Value_prototype, NULL);
         ((Value*)result)->llvm_val = llvm_val;
         return OBJECT_TO_EJSVAL(result);
     }
@@ -85,16 +86,16 @@ namespace ejsllvm {
     void
     Value_init (ejsval exports)
     {
-        _ejs_gc_add_root (&_ejs_Value_proto);
-        _ejs_Value_proto = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
+        _ejs_gc_add_root (&_ejs_Value_prototype);
+        _ejs_Value_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
 
-        _ejs_Value = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMValue", (EJSClosureFunc)Value_impl, _ejs_Value_proto);
+        _ejs_Value = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMValue", (EJSClosureFunc)Value_impl, _ejs_Value_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "Value", _ejs_Value);
 
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Value_proto, x, Value_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Value_prototype, x, Value_prototype_##x)
 
-        _ejs_object_setprop (_ejs_Value,       _ejs_atom_prototype,  _ejs_Value_proto);
+        _ejs_object_setprop (_ejs_Value,       _ejs_atom_prototype,  _ejs_Value_prototype);
 
         PROTO_METHOD(setName);
         PROTO_METHOD(dump);

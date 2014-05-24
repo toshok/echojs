@@ -8,6 +8,9 @@
 #include "ejs-array.h"
 #include "ejs-function.h"
 #include "ejs-string.h"
+#include "ejs-proxy.h"
+#include "ejs-error.h"
+#include "ejs-symbol.h"
 #include "function.h"
 #include "functiontype.h"
 #include "type.h"
@@ -22,17 +25,32 @@ namespace ejsllvm {
         llvm::BasicBlock *llvm_bb;
     } BasicBlock;
 
-    static EJSSpecOps basicblock_specops;
+    static EJSSpecOps _ejs_BasicBlock_specops;
+    static ejsval _ejs_BasicBlock_prototype EJSVAL_ALIGNMENT;
+    static ejsval _ejs_BasicBlock EJSVAL_ALIGNMENT;
 
     static EJSObject* BasicBlock_allocate()
     {
         return (EJSObject*)_ejs_gc_new(BasicBlock);
     }
 
+    static ejsval
+    BasicBlock_create (ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        ejsval F = _this;
+        if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in BasicBlock[Symbol.create] is not a constructor");
+        EJSObject* F_ = EJSVAL_TO_OBJECT(F);
+        // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%DatePrototype%", ([[DateData]]) ). 
+        ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+        if (EJSVAL_IS_UNDEFINED(proto))
+            proto = _ejs_BasicBlock_prototype;
 
+        EJSObject* obj = (EJSObject*)_ejs_gc_new (BasicBlock);
+        _ejs_init_object (obj, proto, &_ejs_BasicBlock_specops);
+        return OBJECT_TO_EJSVAL(obj);
+    }
 
-    static ejsval _ejs_BasicBlock_proto;
-    static ejsval _ejs_BasicBlock;
     static ejsval
     BasicBlock_impl (ejsval env, ejsval _this, int argc, ejsval *args)
     {
@@ -53,7 +71,7 @@ namespace ejsllvm {
     ejsval
     BasicBlock_new(llvm::BasicBlock* llvm_bb)
     {
-        ejsval result = _ejs_object_new (_ejs_BasicBlock_proto, &basicblock_specops);
+        ejsval result = _ejs_object_new (_ejs_BasicBlock_prototype, &_ejs_BasicBlock_specops);
         ((BasicBlock*)EJSVAL_TO_OBJECT(result))->llvm_bb = llvm_bb;
         return result;
     }
@@ -99,19 +117,19 @@ namespace ejsllvm {
     void
     BasicBlock_init (ejsval exports)
     {
-        basicblock_specops = _ejs_Object_specops;
-        basicblock_specops.class_name = "LLVMBasicBlock";
-        basicblock_specops.allocate = BasicBlock_allocate;
+        _ejs_BasicBlock_specops = _ejs_Object_specops;
+        _ejs_BasicBlock_specops.class_name = "LLVMBasicBlock";
+        _ejs_BasicBlock_specops.allocate = BasicBlock_allocate;
 
-        _ejs_gc_add_root (&_ejs_BasicBlock_proto);
-        _ejs_BasicBlock_proto = _ejs_object_new(_ejs_Object_prototype, &basicblock_specops);
+        _ejs_gc_add_root (&_ejs_BasicBlock_prototype);
+        _ejs_BasicBlock_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_BasicBlock_specops);
 
-        _ejs_BasicBlock = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMBasicBlock", (EJSClosureFunc)BasicBlock_impl, _ejs_BasicBlock_proto);
+        _ejs_BasicBlock = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMBasicBlock", (EJSClosureFunc)BasicBlock_impl, _ejs_BasicBlock_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "BasicBlock", _ejs_BasicBlock);
 
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_BasicBlock_proto, x, BasicBlock_prototype_##x)
-#define PROTO_ACCESSOR(x) EJS_INSTALL_ATOM_GETTER(_ejs_BasicBlock_proto, x, BasicBlock_prototype_get_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_BasicBlock_prototype, x, BasicBlock_prototype_##x)
+#define PROTO_ACCESSOR(x) EJS_INSTALL_ATOM_GETTER(_ejs_BasicBlock_prototype, x, BasicBlock_prototype_get_##x)
 
         PROTO_ACCESSOR(name);
         PROTO_ACCESSOR(parent);
@@ -121,6 +139,8 @@ namespace ejsllvm {
 
 #undef PROTO_METHOD
 #undef PROTO_ACCESSOR
+
+        EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_BasicBlock, create, BasicBlock_create, EJS_PROP_NOT_ENUMERABLE);
 
     }
 };

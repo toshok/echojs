@@ -21,14 +21,14 @@ namespace ejsllvm {
         llvm::StructType *type;
     } StructType;
 
+    static ejsval _ejs_StructType_prototype EJSVAL_ALIGNMENT;
+    static ejsval _ejs_StructType EJSVAL_ALIGNMENT;
 
     EJSObject* StructType_alloc_instance()
     {
         return (EJSObject*)_ejs_gc_new(StructType);
     }
 
-    static ejsval _ejs_StructType_proto;
-    static ejsval _ejs_StructType;
     static ejsval
     StructType_impl (ejsval env, ejsval _this, int argc, ejsval *args)
     {
@@ -39,7 +39,7 @@ namespace ejsllvm {
     StructType_new(llvm::StructType* llvm_ty)
     {
         EJSObject* result = StructType_alloc_instance();
-        _ejs_init_object (result, _ejs_StructType_proto, NULL);
+        _ejs_init_object (result, _ejs_StructType_prototype, NULL);
         ((StructType*)result)->type = llvm_ty;
         return OBJECT_TO_EJSVAL(result);
     }
@@ -88,13 +88,13 @@ namespace ejsllvm {
     void
     StructType_init (ejsval exports)
     {
-        _ejs_StructType_proto = _ejs_object_create (Type_get_prototype());
-        _ejs_StructType = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMStructType", (EJSClosureFunc)StructType_impl, _ejs_StructType_proto);
+        _ejs_StructType_prototype = _ejs_object_create (Type_get_prototype());
+        _ejs_StructType = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMStructType", (EJSClosureFunc)StructType_impl, _ejs_StructType_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "StructType", _ejs_StructType);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_StructType, x, StructType_##x)
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_StructType_proto, x, StructType_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_StructType_prototype, x, StructType_prototype_##x)
 
         OBJ_METHOD(create);
 

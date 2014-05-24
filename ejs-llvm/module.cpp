@@ -8,8 +8,11 @@
 #include "ejs-llvm.h"
 #include "ejs-object.h"
 #include "ejs-array.h"
+#include "ejs-error.h"
 #include "ejs-function.h"
 #include "ejs-string.h"
+#include "ejs-proxy.h"
+#include "ejs-symbol.h"
 
 #include "function.h"
 #include "type.h"
@@ -27,7 +30,9 @@ namespace ejsllvm {
         llvm::Module *llvm_module;
     } Module;
 
-    static EJSSpecOps module_specops;
+    static EJSSpecOps _ejs_Module_specops;
+    static ejsval _ejs_Module_prototype EJSVAL_ALIGNMENT;
+    static ejsval _ejs_Module EJSVAL_ALIGNMENT;
 
     static EJSObject* Module_allocate()
     {
@@ -42,8 +47,23 @@ namespace ejsllvm {
         _ejs_Object_specops.finalize(obj);
     }
 
-    static ejsval _ejs_Module_proto;
-    static ejsval _ejs_Module;
+    static ejsval
+    Module_create (ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        ejsval F = _this;
+        if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Module[Symbol.create] is not a constructor");
+        EJSObject* F_ = EJSVAL_TO_OBJECT(F);
+        // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%DatePrototype%", ([[DateData]]) ). 
+        ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+        if (EJSVAL_IS_UNDEFINED(proto))
+            proto = _ejs_Module_prototype;
+
+        EJSObject* obj = (EJSObject*)_ejs_gc_new (Module);
+        _ejs_init_object (obj, proto, &_ejs_Module_specops);
+        return OBJECT_TO_EJSVAL(obj);
+    }
+
     static ejsval
     Module_impl (ejsval env, ejsval _this, int argc, ejsval *args)
     {
@@ -281,19 +301,19 @@ namespace ejsllvm {
     void
     Module_init (ejsval exports)
     {
-        module_specops = _ejs_Object_specops;
-        module_specops.class_name = "LLVMModule";
-        module_specops.allocate = Module_allocate;
-        module_specops.finalize = Module_finalize;
+        _ejs_Module_specops = _ejs_Object_specops;
+        _ejs_Module_specops.class_name = "LLVMModule";
+        _ejs_Module_specops.allocate = Module_allocate;
+        _ejs_Module_specops.finalize = Module_finalize;
 
-        _ejs_gc_add_root (&_ejs_Module_proto);
-        _ejs_Module_proto = _ejs_object_new(_ejs_Object_prototype, &module_specops);
+        _ejs_gc_add_root (&_ejs_Module_prototype);
+        _ejs_Module_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Module_specops);
 
-        _ejs_Module = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMModule", (EJSClosureFunc)Module_impl, _ejs_Module_proto);
+        _ejs_Module = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMModule", (EJSClosureFunc)Module_impl, _ejs_Module_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "Module", _ejs_Module);
 
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Module_proto, x, Module_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Module_prototype, x, Module_prototype_##x)
 
         PROTO_METHOD(getGlobalVariable);
         PROTO_METHOD(getOrInsertIntrinsic);
@@ -309,5 +329,7 @@ namespace ejsllvm {
         PROTO_METHOD(setTriple);
 
 #undef PROTO_METHOD
+
+        EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Module, create, Module_create, EJS_PROP_NOT_ENUMERABLE);
     }
 };

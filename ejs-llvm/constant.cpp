@@ -15,8 +15,8 @@
 
 namespace ejsllvm {
 
-    static ejsval _ejs_Constant_proto;
-    static ejsval _ejs_Constant;
+    static ejsval _ejs_Constant_prototype EJSVAL_ALIGNMENT;
+    static ejsval _ejs_Constant EJSVAL_ALIGNMENT;
     static ejsval
     Constant_impl (ejsval env, ejsval _this, int argc, ejsval *args)
     {
@@ -67,15 +67,15 @@ namespace ejsllvm {
     void
     Constant_init (ejsval exports)
     {
-        _ejs_gc_add_root (&_ejs_Constant_proto);
-        _ejs_Constant_proto = _ejs_object_create(_ejs_Object_prototype);
+        _ejs_gc_add_root (&_ejs_Constant_prototype);
+        _ejs_Constant_prototype = _ejs_object_create(_ejs_Object_prototype);
 
-        _ejs_Constant = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMConstant", (EJSClosureFunc)Constant_impl, _ejs_Constant_proto);
+        _ejs_Constant = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMConstant", (EJSClosureFunc)Constant_impl, _ejs_Constant_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "Constant", _ejs_Constant);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Constant, x, Constant_##x)
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Constant_proto, x, Constant_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Constant_prototype, x, Constant_prototype_##x)
 
         OBJ_METHOD(getNull);
         OBJ_METHOD(getAggregateZero);

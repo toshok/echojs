@@ -28,7 +28,9 @@ namespace ejsllvm {
         llvm::LandingPadInst *llvm_landing_pad;
     } LandingPad;
 
-    static EJSSpecOps landingpad_specops;
+    static EJSSpecOps _ejs_LandingPad_specops;
+    static ejsval _ejs_LandingPad_prototype EJSVAL_ALIGNMENT;
+    static ejsval _ejs_LandingPad EJSVAL_ALIGNMENT;
 
     static EJSObject* LandingPad_allocate()
     {
@@ -36,8 +38,6 @@ namespace ejsllvm {
     }
 
 
-    static ejsval _ejs_LandingPad_proto;
-    static ejsval _ejs_LandingPad;
     static ejsval
     LandingPad_impl (ejsval env, ejsval _this, int argc, ejsval *args)
     {
@@ -47,7 +47,7 @@ namespace ejsllvm {
     ejsval
     LandingPad_new(llvm::LandingPadInst* llvm_landingpad)
     {
-        ejsval result = _ejs_object_new (_ejs_LandingPad_proto, &landingpad_specops);
+        ejsval result = _ejs_object_new (_ejs_LandingPad_prototype, &_ejs_LandingPad_specops);
         ((LandingPad*)EJSVAL_TO_OBJECT(result))->llvm_landing_pad = llvm_landingpad;
         return result;
     }
@@ -97,18 +97,18 @@ namespace ejsllvm {
     void
     LandingPad_init (ejsval exports)
     {
-        landingpad_specops = _ejs_Object_specops;
-        landingpad_specops.class_name = "LLVMLandingPad";
-        landingpad_specops.allocate = LandingPad_allocate;
+        _ejs_LandingPad_specops = _ejs_Object_specops;
+        _ejs_LandingPad_specops.class_name = "LLVMLandingPad";
+        _ejs_LandingPad_specops.allocate = LandingPad_allocate;
 
-        _ejs_gc_add_root (&_ejs_LandingPad_proto);
-        _ejs_LandingPad_proto = _ejs_object_new(_ejs_Object_prototype, &landingpad_specops);
+        _ejs_gc_add_root (&_ejs_LandingPad_prototype);
+        _ejs_LandingPad_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_LandingPad_specops);
 
-        _ejs_LandingPad = _ejs_function_new_utf8_with_proto  (_ejs_null, "LLVMLandingPad", (EJSClosureFunc)LandingPad_impl, _ejs_LandingPad_proto);
+        _ejs_LandingPad = _ejs_function_new_utf8_with_proto  (_ejs_null, "LLVMLandingPad", (EJSClosureFunc)LandingPad_impl, _ejs_LandingPad_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "LandingPad", _ejs_LandingPad);
 
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_LandingPad_proto, x, LandingPad_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_LandingPad_prototype, x, LandingPad_prototype_##x)
 
         PROTO_METHOD(dump);
         PROTO_METHOD(toString);

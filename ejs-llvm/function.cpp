@@ -8,6 +8,9 @@
 #include "ejs-array.h"
 #include "ejs-function.h"
 #include "ejs-string.h"
+#include "ejs-proxy.h"
+#include "ejs-symbol.h"
+#include "ejs-error.h"
 #include "function.h"
 #include "functiontype.h"
 #include "type.h"
@@ -23,17 +26,32 @@ namespace ejsllvm {
         llvm::Function *llvm_fun;
     } Function;
 
-    static EJSSpecOps function_specops;
+    static EJSSpecOps _ejs_Function_specops EJSVAL_ALIGNMENT;
+    static ejsval _ejs_Function_prototype EJSVAL_ALIGNMENT;
+    static ejsval _ejs_Function;
 
     static EJSObject* Function_allocate()
     {
         return (EJSObject*)_ejs_gc_new(Function);
     }
 
+    static ejsval
+    Function_create (ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        ejsval F = _this;
+        if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Function[Symbol.create] is not a constructor");
+        EJSObject* F_ = EJSVAL_TO_OBJECT(F);
+        // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%DatePrototype%", ([[DateData]]) ). 
+        ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+        if (EJSVAL_IS_UNDEFINED(proto))
+            proto = _ejs_Function_prototype;
 
+        EJSObject* obj = (EJSObject*)_ejs_gc_new (Function);
+        _ejs_init_object (obj, proto, &_ejs_Function_specops);
+        return OBJECT_TO_EJSVAL(obj);
+    }
 
-    static ejsval _ejs_Function_proto;
-    static ejsval _ejs_Function;
     static ejsval
     Function_impl (ejsval env, ejsval _this, int argc, ejsval *args)
     {
@@ -43,7 +61,7 @@ namespace ejsllvm {
     ejsval
     Function_new(llvm::Function* llvm_fun)
     {
-        ejsval result = _ejs_object_new (_ejs_Function_proto, &function_specops);
+        ejsval result = _ejs_object_new (_ejs_Function_prototype, &_ejs_Function_specops);
         ((Function*)EJSVAL_TO_OBJECT(result))->llvm_fun = llvm_fun;
         return result;
     }
@@ -207,19 +225,19 @@ namespace ejsllvm {
     void
     Function_init (ejsval exports)
     {
-        function_specops = _ejs_Object_specops;
-        function_specops.class_name = "LLVMFunction";
-        function_specops.allocate = Function_allocate;
+        _ejs_Function_specops = _ejs_Object_specops;
+        _ejs_Function_specops.class_name = "LLVMFunction";
+        _ejs_Function_specops.allocate = Function_allocate;
 
-        _ejs_gc_add_root (&_ejs_Function_proto);
-        _ejs_Function_proto = _ejs_object_new(_ejs_Object_prototype, &function_specops);
+        _ejs_gc_add_root (&_ejs_Function_prototype);
+        _ejs_Function_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Function_specops);
 
-        _ejs_Function = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMFunction", (EJSClosureFunc)Function_impl, _ejs_Function_proto);
+        _ejs_Function = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMFunction", (EJSClosureFunc)Function_impl, _ejs_Function_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "Function", _ejs_Function);
 
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Function_proto, x, Function_prototype_##x)
-#define PROTO_ACCESSOR(x) EJS_INSTALL_ATOM_GETTER(_ejs_Function_proto, x, Function_prototype_get_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Function_prototype, x, Function_prototype_##x)
+#define PROTO_ACCESSOR(x) EJS_INSTALL_ATOM_GETTER(_ejs_Function_prototype, x, Function_prototype_get_##x)
 
         PROTO_ACCESSOR(args);
         PROTO_ACCESSOR(argSize);
@@ -244,6 +262,8 @@ namespace ejsllvm {
 
 #undef PROTO_METHOD
 #undef PROTO_ACCESSOR
+
+        EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Function, create, Function_create, EJS_PROP_NOT_ENUMERABLE);
     }
 
 };

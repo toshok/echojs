@@ -27,7 +27,9 @@ namespace ejsllvm {
         llvm::CallInst *llvm_call;
     } Call;
 
-    static EJSSpecOps call_specops;
+    static EJSSpecOps _ejs_Call_specops;
+    static ejsval _ejs_Call_prototype EJSVAL_ALIGNMENT;
+    static ejsval _ejs_Call EJSVAL_ALIGNMENT;
 
     static EJSObject* Call_allocate()
     {
@@ -35,8 +37,6 @@ namespace ejsllvm {
     }
 
 
-    static ejsval _ejs_Call_proto;
-    static ejsval _ejs_Call;
     static ejsval
     Call_impl (ejsval env, ejsval _this, int argc, ejsval *args)
     {
@@ -46,7 +46,7 @@ namespace ejsllvm {
     ejsval
     Call_new(llvm::CallInst* llvm_call)
     {
-        ejsval result = _ejs_object_new (_ejs_Call_proto, &call_specops);
+        ejsval result = _ejs_object_new (_ejs_Call_prototype, &_ejs_Call_specops);
         ((Call*)EJSVAL_TO_OBJECT(result))->llvm_call = llvm_call;
         return result;
     }
@@ -111,20 +111,20 @@ namespace ejsllvm {
     void
     Call_init (ejsval exports)
     {
-        call_specops = _ejs_Object_specops;
-        call_specops.class_name = "LLVMCall";
-        call_specops.allocate = Call_allocate;
+        _ejs_Call_specops = _ejs_Object_specops;
+        _ejs_Call_specops.class_name = "LLVMCall";
+        _ejs_Call_specops.allocate = Call_allocate;
 
-        _ejs_gc_add_root (&_ejs_Call_proto);
-        _ejs_Call_proto = _ejs_object_new(_ejs_Object_prototype, &call_specops);
+        _ejs_gc_add_root (&_ejs_Call_prototype);
+        _ejs_Call_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Call_specops);
 
         ejsval tmpobj = _ejs_function_new_utf8 (_ejs_null, "LLVMCall", (EJSClosureFunc)Call_impl);
         _ejs_Call = tmpobj;
 
 
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Call_proto, x, Call_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Call_prototype, x, Call_prototype_##x)
 
-        _ejs_object_setprop (_ejs_Call,       _ejs_atom_prototype,  _ejs_Call_proto);
+        _ejs_object_setprop (_ejs_Call,       _ejs_atom_prototype,  _ejs_Call_prototype);
 
         PROTO_METHOD(setOnlyReadsMemory);
         PROTO_METHOD(setDoesNotAccessMemory);
@@ -148,7 +148,9 @@ namespace ejsllvm {
         llvm::InvokeInst *llvm_invoke;
     } Invoke;
 
-    static EJSSpecOps invoke_specops;
+    static EJSSpecOps _ejs_Invoke_specops;
+    static ejsval _ejs_Invoke_prototype EJSVAL_ALIGNMENT;
+    static ejsval _ejs_Invoke EJSVAL_ALIGNMENT;
 
     static EJSObject* Invoke_allocate()
     {
@@ -156,8 +158,6 @@ namespace ejsllvm {
     }
 
 
-    static ejsval _ejs_Invoke_proto;
-    static ejsval _ejs_Invoke;
     static ejsval
     Invoke_impl (ejsval env, ejsval _this, int argc, ejsval *args)
     {
@@ -167,7 +167,7 @@ namespace ejsllvm {
     ejsval
     Invoke_new(llvm::InvokeInst* llvm_invoke)
     {
-        ejsval result = _ejs_object_new (_ejs_Invoke_proto, &invoke_specops);
+        ejsval result = _ejs_object_new (_ejs_Invoke_prototype, &_ejs_Invoke_specops);
         ((Invoke*)EJSVAL_TO_OBJECT(result))->llvm_invoke = llvm_invoke;
         return result;
     }
@@ -232,18 +232,18 @@ namespace ejsllvm {
     void
     Invoke_init (ejsval exports)
     {
-        invoke_specops = _ejs_Object_specops;
-        invoke_specops.class_name = "LLVMInvoke";
-        invoke_specops.allocate = Invoke_allocate;
+        _ejs_Invoke_specops = _ejs_Object_specops;
+        _ejs_Invoke_specops.class_name = "LLVMInvoke";
+        _ejs_Invoke_specops.allocate = Invoke_allocate;
 
-        _ejs_gc_add_root (&_ejs_Invoke_proto);
-        _ejs_Invoke_proto = _ejs_object_new(_ejs_Object_prototype, &invoke_specops);
+        _ejs_gc_add_root (&_ejs_Invoke_prototype);
+        _ejs_Invoke_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Invoke_specops);
 
-        _ejs_Invoke = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMInvoke", (EJSClosureFunc)Invoke_impl, _ejs_Invoke_proto);
+        _ejs_Invoke = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMInvoke", (EJSClosureFunc)Invoke_impl, _ejs_Invoke_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "Invoke", _ejs_Invoke);
 
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Invoke_proto, x, Invoke_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Invoke_prototype, x, Invoke_prototype_##x)
 
         PROTO_METHOD(setOnlyReadsMemory);
         PROTO_METHOD(setDoesNotAccessMemory);

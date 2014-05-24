@@ -29,7 +29,9 @@ namespace ejsllvm {
         llvm::SwitchInst *llvm_switch;
     } Switch;
 
-    static EJSSpecOps switch_specops;
+    static EJSSpecOps _ejs_Switch_specops;
+    static ejsval _ejs_Switch_prototype EJSVAL_ALIGNMENT;
+    static ejsval _ejs_Switch EJSVAL_ALIGNMENT;
 
     static EJSObject* Switch_allocate()
     {
@@ -37,8 +39,6 @@ namespace ejsllvm {
     }
 
 
-    static ejsval _ejs_Switch_proto;
-    static ejsval _ejs_Switch;
     static ejsval
     Switch_impl (ejsval env, ejsval _this, int argc, ejsval *args)
     {
@@ -48,7 +48,7 @@ namespace ejsllvm {
     ejsval
     Switch_new(llvm::SwitchInst* llvm_switch)
     {
-        ejsval result = _ejs_object_new (_ejs_Switch_proto, &switch_specops);
+        ejsval result = _ejs_object_new (_ejs_Switch_prototype, &_ejs_Switch_specops);
         ((Switch*)EJSVAL_TO_OBJECT(result))->llvm_switch = llvm_switch;
         return result;
     }
@@ -90,17 +90,17 @@ namespace ejsllvm {
     void
     Switch_init (ejsval exports)
     {
-        switch_specops = _ejs_Object_specops;
-        switch_specops.class_name = "LLVMSwitch";
-        switch_specops.allocate = Switch_allocate;
+        _ejs_Switch_specops = _ejs_Object_specops;
+        _ejs_Switch_specops.class_name = "LLVMSwitch";
+        _ejs_Switch_specops.allocate = Switch_allocate;
 
-        _ejs_gc_add_root (&_ejs_Switch_proto);
-        _ejs_Switch_proto = _ejs_object_new(_ejs_Object_prototype, &switch_specops);
+        _ejs_gc_add_root (&_ejs_Switch_prototype);
+        _ejs_Switch_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Switch_specops);
 
-        _ejs_Switch = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMSwitch", (EJSClosureFunc)Switch_impl, _ejs_Switch_proto);
+        _ejs_Switch = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMSwitch", (EJSClosureFunc)Switch_impl, _ejs_Switch_prototype);
         _ejs_object_setprop_utf8 (exports,              "Switch", _ejs_Switch);
 
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Switch_proto, x, Switch_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Switch_prototype, x, Switch_prototype_##x)
 
         PROTO_METHOD(dump);
         PROTO_METHOD(toString);

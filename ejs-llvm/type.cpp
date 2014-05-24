@@ -20,19 +20,20 @@ namespace ejsllvm {
     } Type;
 
 
+    static ejsval _ejs_Type_prototype EJSVAL_ALIGNMENT;
+    ejsval _ejs_Type EJSVAL_ALIGNMENT;
+
     EJSObject* Type_alloc_instance()
     {
         return (EJSObject*)_ejs_gc_new(Type);
     }
 
-    static ejsval _ejs_Type_proto;
     ejsval
     Type_get_prototype()
     {
-        return _ejs_Type_proto;
+        return _ejs_Type_prototype;
     }
 
-    ejsval _ejs_Type;
     static ejsval
     Type_impl (ejsval env, ejsval _this, int argc, ejsval *args)
     {
@@ -90,7 +91,7 @@ namespace ejsllvm {
     Type_new(llvm::Type* llvm_ty)
     {
         EJSObject* result = Type_alloc_instance();
-        _ejs_init_object (result, _ejs_Type_proto, NULL);
+        _ejs_init_object (result, _ejs_Type_prototype, NULL);
         ((Type*)result)->type = llvm_ty;
         return OBJECT_TO_EJSVAL(result);
     }
@@ -105,15 +106,15 @@ namespace ejsllvm {
     void
     Type_init (ejsval exports)
     {
-        _ejs_gc_add_root (&_ejs_Type_proto);
-        _ejs_Type_proto = _ejs_object_create(_ejs_Object_prototype);
+        _ejs_gc_add_root (&_ejs_Type_prototype);
+        _ejs_Type_prototype = _ejs_object_create(_ejs_Object_prototype);
 
-        _ejs_Type = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMType", (EJSClosureFunc)Type_impl, _ejs_Type_proto);
+        _ejs_Type = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMType", (EJSClosureFunc)Type_impl, _ejs_Type_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "Type", _ejs_Type);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Type, x, Type_##x)
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Type_proto, x, Type_prototype_##x)
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Type_prototype, x, Type_prototype_##x)
 
         OBJ_METHOD(getDoubleTy);
         OBJ_METHOD(getInt64Ty);
