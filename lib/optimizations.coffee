@@ -1,14 +1,13 @@
 esprima = require 'esprima'
 escodegen = require 'escodegen'
 
-syntax = esprima.Syntax
-_BinaryExpression = syntax.BinaryExpression
-_UnaryExpression = syntax.UnaryExpression
-_Literal = syntax.Literal
-_AssignmentExpression = syntax.AssignmentExpression
-_Identifier = syntax.Identifier
-_UpdateExpression = syntax.UpdateExpression
-_VariableDeclaration = syntax.VariableDeclaration
+{ BinaryExpression,
+  UnaryExpression,
+  Literal,
+  AssignmentExpression,
+  Identifier,
+  UpdateExpression,
+  VariableDeclaration } = esprima.Syntax;
 
 debug = require 'debug'
 { TreeVisitor } = require 'nodevisitor'
@@ -39,10 +38,10 @@ builtinUndefined_id = create_identifier "%builtinUndefined"
 # ==/!= of constants null or undefined
 # 
 class EqIdioms extends TreeVisitor
-        is_typeof = (e) -> e.type is _UnaryExpression and e.operator is "typeof"
-        is_string_literal = (e) -> e.type is _Literal and typeof e.value is "string"
-        is_undefined_literal = (e) -> e.type is _Literal and e.value is undefined
-        is_null_literal = (e) -> e.type is _Literal and e.value is null
+        is_typeof = (e) -> e.type is UnaryExpression and e.operator is "typeof"
+        is_string_literal = (e) -> e.type is Literal and typeof e.value is "string"
+        is_undefined_literal = (e) -> e.type is Literal and e.value is undefined
+        is_null_literal = (e) -> e.type is Literal and e.value is null
 
         visitBinaryExpression: (exp) ->
                 return super if exp.operator isnt "==" and exp.operator isnt "===" and exp.operator isnt "!=" and exp.operator isnt "!=="
@@ -74,7 +73,7 @@ class EqIdioms extends TreeVisitor
                         rv = create_intrinsic intrinsic, [typeofarg]
                         if exp.operator[0] is '!'
                                 rv = {
-                                        type: _UnaryExpression
+                                        type: UnaryExpression
                                         operator: "!"
                                         argument: rv
                                 }
@@ -88,7 +87,7 @@ class EqIdioms extends TreeVisitor
                                 rv = create_intrinsic isNullOrUndefined_id, [checkarg]
                                 if exp.operator is "!="
                                         rv = {
-                                                type: _UnaryExpression
+                                                type: UnaryExpression
                                                 operator: "!"
                                                 argument: rv
                                         }
@@ -102,7 +101,7 @@ class EqIdioms extends TreeVisitor
                                 rv = create_intrinsic isNull_id, [checkarg]
                                 if exp.operator is "!=="
                                         rv = {
-                                                type: _UnaryExpression
+                                                type: UnaryExpression
                                                 operator: "!"
                                                 argument: rv
                                         }
@@ -114,7 +113,7 @@ class EqIdioms extends TreeVisitor
                                 rv = create_intrinsic isNull_id, [checkarg]
                                 if exp.operator is "!=="
                                         rv = {
-                                                type: _UnaryExpression
+                                                type: UnaryExpression
                                                 operator: "!"
                                                 argument: rv
                                         }
@@ -125,7 +124,7 @@ class ReplaceUnaryVoid extends TreeVisitor
         constructor: -> super
         
         visitUnaryExpression: (n) ->
-                if n.operator is "void" and n.argument.type is _Literal and n.argument.value is 0
+                if n.operator is "void" and n.argument.type is Literal and n.argument.value is 0
                         return create_intrinsic builtinUndefined_id, []
                 n
 
@@ -156,40 +155,40 @@ class ReplaceUnaryVoid extends TreeVisitor
 class LoopCounter extends TreeVisitor
         visitFor: (exp) ->
                 # we only handle update and assignment expressions
-                if exp.update.left.type isnt _Identifier
+                if exp.update.left.type isnt Identifier
                         return super
 
                 update_identifier_name = exp.update.left.name
                 
-                if exp.update.type isnt _UpdateExpression and exp.update.type isnt _AssignmentExpression
+                if exp.update.type isnt UpdateExpression and exp.update.type isnt AssignmentExpression
                         return super
 
-                if exp.update.type is _AssignmentExpression
+                if exp.update.type is AssignmentExpression
                         update_right = exp.update.right
                                 
                         # of the +=|-=|*=|/= operators, we only handle + and -
                         if exp.update.operator.length is 2
                                 if exp.update.operator[0] is '+' or exp.update.operator[0] is '-'
-                                        if update_right.type isnt _Literal or (typeof update_right.value) isnt 'number'
+                                        if update_right.type isnt Literal or (typeof update_right.value) isnt 'number'
                                                 return super
                                         # else we win and the update expression is ok
                                 else
                                         return super
                         # and for normal assignments, the rhs must be a binary expression with operator of + or - with the same identifier and an integer literal
                         else
-                                if update_right.type isnt _BinaryExpression
+                                if update_right.type isnt BinaryExpression
                                         return super
 
                                 if update_right.operator isnt '+' and update_right.operator isnt '-'
                                         return super
 
-                                if update_right.left.type is _Identifier and update_right.right.type is _Literal
+                                if update_right.left.type is Identifier and update_right.right.type is Literal
                                         if typeof update_right.right.value isnt 'number'
                                                 return super
                                         else if update_right.left.name isnt update_identifier_name
                                                 return super
                                         # else we win and the update expression is ok
-                                else if update_right.left.type is _Literal and update_right.right.type is _Identifier
+                                else if update_right.left.type is Literal and update_right.right.type is Identifier
                                         if typeof update_right.left.value isnt 'number'
                                                 return super
                                         else if update_right.right.name isnt update_identifier_name
@@ -198,8 +197,8 @@ class LoopCounter extends TreeVisitor
                                 else
                                         return super
 
-                else if exp.update.type is _UpdateExpression
-                        if update_right.type isnt _Literal or typeof update_right.value isnt 'number'
+                else if exp.update.type is UpdateExpression
+                        if update_right.type isnt Literal or typeof update_right.value isnt 'number'
                                 return super
                         # else we win and the update expression is ok
                 else
@@ -207,18 +206,18 @@ class LoopCounter extends TreeVisitor
 
                 # now make sure the init block initializes update_identifier_name
 
-                if exp.init.type isnt _VariableDeclaration and exp.init.type isnt _AssignmentExpression
+                if exp.init.type isnt VariableDeclaration and exp.init.type isnt AssignmentExpression
                         return super
 
-                if exp.init.type is _VariableDeclaration
+                if exp.init.type is VariableDeclaration
                         found = false
                         # check for var/let $update_identifier_name = ...
-                        found = found || (decl.id.name is update_identifier_name and decl.init.type is _Literal and typeof decl.init.value is 'number') for decl in exp.init.declarations
+                        found = found || (decl.id.name is update_identifier_name and decl.init.type is Literal and typeof decl.init.value is 'number') for decl in exp.init.declarations
                         if not found
                                 return super
                         # else we win and the initializer is ok
                 else
-                        if exp.init.left.type isnt _Identifier or exp.init.left.name isnt update_identifier_name
+                        if exp.init.left.type isnt Identifier or exp.init.left.name isnt update_identifier_name
                                 return super
                         # else we win and the initializer is ok
                         
