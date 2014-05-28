@@ -102,6 +102,10 @@ void    ToPropertyDescriptor   (ejsval O, EJSPropertyDesc* desc);
 ejsval  FromPropertyDescriptor (EJSPropertyDesc* Desc);
 EJSBool IsDataDescriptor       (EJSPropertyDesc* Desc);
 EJSBool IsAccessorDescriptor   (EJSPropertyDesc* Desc);
+
+ejsval Get (ejsval O, ejsval P);
+ejsval Put (ejsval O, ejsval P, ejsval V, EJSBool Throw);
+ejsval GetMethod (ejsval O, ejsval P);
     
 typedef struct _EJSPropertyMapEntry _EJSPropertyMapEntry;
 struct _EJSPropertyMapEntry {
@@ -132,49 +136,69 @@ typedef ejsval           (*SpecOpGetPrototypeOf) (ejsval obj);
 typedef EJSBool          (*SpecOpSetPrototypeOf) (ejsval obj, ejsval proto);
 typedef ejsval           (*SpecOpGet) (ejsval obj, ejsval propertyName, ejsval receiver);
 typedef EJSPropertyDesc* (*SpecOpGetOwnProperty) (ejsval obj, ejsval propertyName);
-typedef EJSPropertyDesc* (*SpecOpGetProperty) (ejsval obj, ejsval propertyName);
-typedef void             (*SpecOpPut) (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver, EJSBool flag);
-typedef EJSBool          (*SpecOpCanPut) (ejsval obj, ejsval propertyName);
+typedef EJSBool          (*SpecOpSet) (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver);
 typedef EJSBool          (*SpecOpHasProperty) (ejsval obj, ejsval propertyName);
 typedef EJSBool          (*SpecOpDelete) (ejsval obj, ejsval propertyName, EJSBool flag);
 typedef ejsval           (*SpecOpDefaultValue) (ejsval obj, const char *hint);
 typedef EJSBool          (*SpecOpDefineOwnProperty) (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool _throw);
-typedef EJSBool          (*SpecOpHasInstance) (ejsval obj, ejsval lval);
 
 typedef EJSObject*       (*SpecOpAllocate) ();
 typedef void             (*SpecOpFinalize) (EJSObject* obj);
 typedef void             (*SpecOpScan) (EJSObject* obj, EJSValueFunc scan_func);
 
+typedef EJSBool          (*SpecOpIsExtensible) (ejsval obj);
+typedef EJSBool          (*SpecOpPreventExtensions) (ejsval obj);
+typedef ejsval           (*SpecOpEnumerate) (ejsval obj);
+typedef ejsval           (*SpecOpOwnPropertyKeys) (ejsval obj);
+
 typedef struct {
     // special ops defined in the standard
     const char* class_name;
 
-    SpecOpGetPrototypeOf get_prototype_of;
-    SpecOpSetPrototypeOf set_prototype_of;
+    SpecOpGetPrototypeOf GetPrototypeOf;
+    SpecOpSetPrototypeOf SetPrototypeOf;
 
-    SpecOpGet get;
-    SpecOpGetOwnProperty get_own_property;
-    SpecOpGetProperty get_property;
-    SpecOpPut put;
-    SpecOpCanPut can_put;
-    SpecOpHasProperty has_property;
-    SpecOpDelete _delete;
-    SpecOpDefaultValue default_value;
-    SpecOpDefineOwnProperty define_own_property;
+    SpecOpIsExtensible IsExtensible;
+    SpecOpPreventExtensions PreventExtensions;
 
-    SpecOpHasInstance has_instance;
+    SpecOpGetOwnProperty GetOwnProperty;
+    SpecOpDefineOwnProperty DefineOwnProperty;
+    SpecOpHasProperty HasProperty;
+
+    SpecOpGet Get;
+    SpecOpSet Set;
+    SpecOpDelete Delete;
+    SpecOpEnumerate Enumerate;
+    SpecOpOwnPropertyKeys OwnPropertyKeys;
 
     // ejs-defined ops
-    SpecOpAllocate allocate; // allocates space for the new instance (but doesn't initialize it)
-    SpecOpFinalize finalize; // called when there are no remaining references to this object
-    SpecOpScan     scan;     // used to enumerate object references
+    SpecOpAllocate Allocate;
+    SpecOpFinalize Finalize; // called when there are no remaining references to this object
+    SpecOpScan     Scan;     // used to enumerate object references
 } EJSSpecOps;
 
 #define OP_INHERIT (void*)-1
-#define EJS_DEFINE_CLASS(n, get_prototype_of, set_prototype_of, get, get_own_property, get_property, put, can_put, has_property, _delete, default_value, define_own_property, has_instance, allocate, finalize, scan) \
+#define EJS_DEFINE_CLASS(n, get_prototype_of, set_prototype_of, is_extensible, prevent_extensions, get_own_property, define_own_property, has_property, get, set, _delete, enumerate, own_property_keys, allocate, finalize, scan) \
     EJSSpecOps _ejs_##n##_specops = {                                   \
-        #n, (get_prototype_of), (set_prototype_of), (get), (get_own_property), (get_property), (put), (can_put), (has_property), (_delete), (default_value), (define_own_property), (has_instance), (allocate), (finalize), (scan) \
+        .class_name = #n,                                               \
+        .GetPrototypeOf = (get_prototype_of),                           \
+        .SetPrototypeOf = (set_prototype_of),                           \
+        .IsExtensible = (is_extensible),                                \
+        .PreventExtensions = (prevent_extensions),                      \
+        .GetOwnProperty = (get_own_property),                           \
+        .DefineOwnProperty = (define_own_property),                     \
+        .HasProperty = (has_property),                                  \
+        .Get = (get),                                                   \
+        .Set = (set),                                                   \
+        .Delete = (_delete),                                            \
+        .Enumerate = (enumerate),                                       \
+        .OwnPropertyKeys = (own_property_keys),                         \
+        .Allocate = (allocate),                                         \
+        .Finalize = (finalize),                                         \
+        .Scan = (scan)                                                  \
     };
+#define EJS_DEFINE_INHERIT_ALL_CLASS(n) EJS_DEFINE_CLASS(n, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT)
+
 
 void _ejs_Class_initialize (EJSSpecOps *child, EJSSpecOps* parent);
 

@@ -386,7 +386,7 @@ _ejs_Number_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     EJSObject* F_ = EJSVAL_TO_OBJECT(F);
 
     // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%NumberPrototype%", ([[NumberData]]) ). 
-    ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
     if (EJSVAL_IS_UNDEFINED(proto))
         proto = _ejs_Number_prototype;
 
@@ -435,41 +435,4 @@ _ejs_number_init(ejsval global)
 #undef PROTO_METHOD
 }
 
-static ejsval
-_ejs_number_specop_default_value (ejsval obj, const char *hint)
-{
-    if (!strcmp (hint, "PreferredType") || !strcmp(hint, "Number")) {
-        EJSNumber *num = (EJSNumber*)EJSVAL_TO_OBJECT(obj);
-        return NUMBER_TO_EJSVAL(num->number);
-    }
-    else if (!strcmp (hint, "String")) {
-        EJS_NOT_IMPLEMENTED();
-    }
-    else
-        return _ejs_Object_specops.default_value (obj, hint);
-}
-
-EJSObject*
-_ejs_number_specop_allocate()
-{
-    return (EJSObject*)_ejs_gc_new (EJSNumber);
-}
-
-EJS_DEFINE_CLASS(Number,
-                 OP_INHERIT, // [[GetPrototypeOf]]
-                 OP_INHERIT, // [[SetPrototypeOf]]
-                 OP_INHERIT, // get
-                 OP_INHERIT, // get_own_property
-                 OP_INHERIT, // get_property
-                 OP_INHERIT, // put
-                 OP_INHERIT, // can_put
-                 OP_INHERIT, // has_property
-                 OP_INHERIT, // delete
-                 _ejs_number_specop_default_value,
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
-                 _ejs_number_specop_allocate,
-                 OP_INHERIT, // finalize
-                 OP_INHERIT  // scan
-                 )
-
+EJS_DEFINE_INHERIT_ALL_CLASS(Number)

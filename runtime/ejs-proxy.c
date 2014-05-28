@@ -94,7 +94,7 @@ _ejs_Proxy_create_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     EJSObject* F_ = EJSVAL_TO_OBJECT(F);
 
     // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%ObjectPrototype%", ([[ProxyTarget]], [[ProxyHandler]]) ). 
-    ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
     if (EJSVAL_IS_UNDEFINED(proto))
         proto = _ejs_Object_prototype;
 
@@ -144,14 +144,12 @@ _ejs_proxy_specop_get_prototype_of (ejsval O)
 
     // 4. Let trap be GetMethod(handler, "getPrototypeOf").
     // 5. ReturnIfAbrupt(trap). 
-    ejsval trap = OP(EJSVAL_TO_OBJECT(handler),get)(handler, _ejs_atom_getPrototypeOf, handler);
-    if (!EJSVAL_IS_UNDEFINED(trap) && !EJSVAL_IS_FUNCTION(trap))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "trap for getPrototypeOf is not a function");
+    ejsval trap = GetMethod(handler, _ejs_atom_getPrototypeOf);
 
     // 6. If trap is undefined, then 
     if (EJSVAL_IS_UNDEFINED(trap)) {
         //    a. Return the result of calling the [[GetPrototypeOf]] internal method of target. 
-        return OP(EJSVAL_TO_OBJECT(target),get_prototype_of)(target);
+        return OP(EJSVAL_TO_OBJECT(target),GetPrototypeOf)(target);
     }
 
     // 7. Let handlerProto be the result of calling the [[Call]] internal method of trap with handler as the this value and a new List containing target.
@@ -175,7 +173,7 @@ _ejs_proxy_specop_get_prototype_of (ejsval O)
 
     // 13. Let targetProto be the result of calling the [[GetPrototypeOf]] internal method of target. 
     // 14. ReturnIfAbrupt(targetProto).
-    ejsval targetProto = OP(_target,get_prototype_of)(target);
+    ejsval targetProto = OP(_target,GetPrototypeOf)(target);
 
     // 15. If SameValue(handlerProto, targetProto) is false, then throw a TypeError exception. 
     if (!SameValue(handlerProto, targetProto))
@@ -205,15 +203,12 @@ _ejs_proxy_specop_set_prototype_of (ejsval O, ejsval V)
 
     // 5. Let trap be GetMethod(handler, "setPrototypeOf"). 
     // 6. ReturnIfAbrupt(trap). 
-    ejsval trap = OP(EJSVAL_TO_OBJECT(handler),get)(handler, _ejs_atom_setPrototypeOf, handler);
-    if (!EJSVAL_IS_UNDEFINED(trap) && !EJSVAL_IS_FUNCTION(trap))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "trap for setPrototypeOf is not a function");
-    
+    ejsval trap = GetMethod(handler, _ejs_atom_setPrototypeOf);
 
     // 7. If trap is undefined, then 
     if (EJSVAL_IS_UNDEFINED(trap)) {
         // a. Return the result of calling the [[SetPrototypeOf]] internal method of target with argument V. 
-        return OP(_target,set_prototype_of)(target, V);
+        return OP(_target,SetPrototypeOf)(target, V);
     }
     // 8. Let trapResult be the result of calling the [[Call]] internal method of trap with handler as the this value and a new List containing target and V. 
     ejsval args[] = { target, V };
@@ -233,7 +228,7 @@ _ejs_proxy_specop_set_prototype_of (ejsval O, ejsval V)
 
     // 14. Let targetProto be the result of calling the [[GetPrototypeOf]] internal method of target. 
     // 15. ReturnIfAbrupt(targetProto). 
-    ejsval targetProto = OP(_target,get_prototype_of)(target);
+    ejsval targetProto = OP(_target,GetPrototypeOf)(target);
 
     // 16. If booleanTrapResult is true and SameValue(V, targetProto) is false, then throw a TypeError exception. 
     if (booleanTrapResult && SameValue(V, targetProto)) {
@@ -263,14 +258,12 @@ _ejs_proxy_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
 
     // 5. Let trap be GetMethod(handler, "get"). 
     // 6. ReturnIfAbrupt(trap). 
-    ejsval trap = OP(EJSVAL_TO_OBJECT(handler),get)(handler, _ejs_atom_get, receiver);
-    if (!EJSVAL_IS_UNDEFINED(trap) && !EJSVAL_IS_FUNCTION(trap))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "trap for get is not a function");
+    ejsval trap = GetMethod(handler, _ejs_atom_get);
 
     // 7. If trap is undefined, then 
     if (EJSVAL_IS_UNDEFINED(trap)) {
         //    a. Return the result of calling the [[Get]] internal method of target with arguments P and Receiver. 
-        return OP(_target,get)(target, propertyName, receiver);
+        return OP(_target,Get)(target, propertyName, receiver);
     }
 
     // 8. Let trapResult be the result of calling the [[Call]] internal method of trap with handler as the this value and a new List containing target, P, and Receiver. 
@@ -280,7 +273,7 @@ _ejs_proxy_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
 
     // 10. Let targetDesc be the result of calling the [[GetOwnProperty]] internal method of target with argument P.
     // 11. ReturnIfAbrupt(targetDesc). 
-    EJSPropertyDesc* targetDesc = OP(_target,get_own_property)(target, propertyName);
+    EJSPropertyDesc* targetDesc = OP(_target,GetOwnProperty)(target, propertyName);
 
     // 12. If targetDesc is not undefined, then 
     if (!targetDesc) {
@@ -321,14 +314,12 @@ _ejs_proxy_specop_get_own_property (ejsval O, ejsval P)
 
     // 5. Let trap be GetMethod(handler, "getOwnPropertyDescriptor"). 
     // 6. ReturnIfAbrupt(trap). 
-    ejsval trap = OP(EJSVAL_TO_OBJECT(handler),get)(handler, _ejs_atom_getOwnPropertyDescriptor, handler);
-    if (!EJSVAL_IS_UNDEFINED(trap) && !EJSVAL_IS_FUNCTION(trap))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "trap for getOwnPropertyDescriptor is not a function");
+    ejsval trap = GetMethod(handler, _ejs_atom_getOwnPropertyDescriptor);
 
     // 7. If trap is undefined, then 
     if (EJSVAL_IS_UNDEFINED(trap)) {
         //    a. Return the result of calling the [[GetOwnProperty]] internal method of target with argument P.
-        return OP(_target,get_own_property)(target, P);
+        return OP(_target,GetOwnProperty)(target, P);
     }
 
     // 8. Let trapResultObj be the result of calling the [[Call]] internal method of trap with handler as the this value and a new List containing target and P. 
@@ -343,7 +334,7 @@ _ejs_proxy_specop_get_own_property (ejsval O, ejsval P)
 
     // 11. Let targetDesc be the result of calling the [[GetOwnProperty]] internal method of target with argument P. 
     // 12. ReturnIfAbrupt(targetDesc). 
-    EJSPropertyDesc* targetDesc = OP(_target,get_own_property)(target, P);
+    EJSPropertyDesc* targetDesc = OP(_target,GetOwnProperty)(target, P);
 
     // 13. If trapResultObj is undefined, then 
     if (EJSVAL_IS_UNDEFINED(trapResultObj)) {
@@ -399,14 +390,8 @@ _ejs_proxy_specop_get_own_property (ejsval O, ejsval P)
 #endif
 }
 
-static EJSPropertyDesc*
-_ejs_proxy_specop_get_property (ejsval obj, ejsval propertyName)
-{
-    EJS_NOT_IMPLEMENTED();
-}
-
-static void
-_ejs_proxy_specop_put (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver, EJSBool flag)
+static EJSBool
+_ejs_proxy_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver)
 {
     // 1. Assert: IsPropertyKey(P) is true. 
 
@@ -427,14 +412,12 @@ _ejs_proxy_specop_put (ejsval obj, ejsval propertyName, ejsval val, ejsval recei
 
     // 5. Let trap be GetMethod(handler, "set"). 
     // 6. ReturnIfAbrupt(trap). 
-    ejsval trap = OP(EJSVAL_TO_OBJECT(handler),get)(handler, _ejs_atom_set, handler);
-    if (!EJSVAL_IS_UNDEFINED(trap) && !EJSVAL_IS_FUNCTION(trap))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "trap for set is not a function");
+    ejsval trap = GetMethod(handler, _ejs_atom_set);
 
     // 7. If trap is undefined, then 
     if (EJSVAL_IS_UNDEFINED(trap)) {
         // a. Return the result of calling the [[Set]] internal method of target with arguments P, V, and Receiver. 
-        return OP(_target,put)(target, propertyName, val, receiver, EJS_TRUE);
+        return OP(_target,Set)(target, propertyName, val, receiver);
     }
     // 8. Let trapResult be the result of calling the [[Call]] internal method of trap with handler as the this value and a new List containing target, P, V, and Receiver. 
     ejsval args[] = { target, propertyName, val, receiver };
@@ -446,11 +429,11 @@ _ejs_proxy_specop_put (ejsval obj, ejsval propertyName, ejsval val, ejsval recei
 
     // 11. If booleanTrapResult is false, then return false. 
     if (!booleanTrapResult)
-        return /*EJS_FALSE*/; // XXX
+        return EJS_FALSE;
 
     // 12. Let targetDesc be the result of calling the [[GetOwnProperty]] internal method of target with argument P. 
     // 13. ReturnIfAbrupt(targetDesc). 
-    EJSPropertyDesc* targetDesc = OP(_target,get_own_property)(target, propertyName);
+    EJSPropertyDesc* targetDesc = OP(_target,GetOwnProperty)(target, propertyName);
 
     // 14. If targetDesc is not undefined, then 
     if (targetDesc) {
@@ -468,13 +451,7 @@ _ejs_proxy_specop_put (ejsval obj, ejsval propertyName, ejsval val, ejsval recei
         }
     }
     // 15. Return true. 
-    return /*EJS_TRUE*/; // XXX
-}
-
-static EJSBool
-_ejs_proxy_specop_can_put (ejsval obj, ejsval propertyName)
-{
-    EJS_NOT_IMPLEMENTED();
+    return EJS_TRUE;
 }
 
 static EJSBool
@@ -498,14 +475,12 @@ _ejs_proxy_specop_has_property (ejsval O, ejsval P)
 
     // 5. Let trap be GetMethod(handler, "has"). 
     // 6. ReturnIfAbrupt(trap). 
-    ejsval trap = OP(EJSVAL_TO_OBJECT(handler),get)(handler, _ejs_atom_has, handler);
-    if (!EJSVAL_IS_UNDEFINED(trap) && !EJSVAL_IS_FUNCTION(trap))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "trap for has is not a function");
+    ejsval trap = GetMethod(handler, _ejs_atom_has);
 
     // 7. If trap is undefined, then 
     if (EJSVAL_IS_UNDEFINED(trap)) {
         //    a. Return the result of calling the [[HasProperty]] internal method of target with argument P. 
-        return OP(_target,has_property)(target, P);
+        return OP(_target,HasProperty)(target, P);
     }
 
     // 8. Let trapResult be the result of calling the [[Call]] internal method of trap with handler as the this value and a new List containing target and P. 
@@ -520,7 +495,7 @@ _ejs_proxy_specop_has_property (ejsval O, ejsval P)
     if (!booleanTrapResult) {
         //     a. Let targetDesc be the result of calling the [[GetOwnProperty]] internal method of target with argument P. 
         //     b. ReturnIfAbrupt(targetDesc). 
-        EJSPropertyDesc* targetDesc = OP(_target,get_own_property)(target, P);
+        EJSPropertyDesc* targetDesc = OP(_target,GetOwnProperty)(target, P);
 
         //     c. If targetDesc is not undefined, then 
         if (!targetDesc) {
@@ -541,21 +516,142 @@ _ejs_proxy_specop_has_property (ejsval O, ejsval P)
 }
 
 static EJSBool
-_ejs_proxy_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
+_ejs_proxy_specop_delete (ejsval O, ejsval P, EJSBool unusedflag)
 {
-    EJS_NOT_IMPLEMENTED();
-}
+    // 1. Assert: IsPropertyKey(P) is true. 
 
-static ejsval
-_ejs_proxy_specop_default_value (ejsval obj, const char *hint)
-{
-    EJS_NOT_IMPLEMENTED();
+    EJSProxy* proxy = EJSVAL_TO_PROXY(O);
+
+    // 2. Let handler be the value of the [[ProxyHandler]] internal slot of O. 
+    ejsval handler = proxy->handler;
+
+    // 3. If handler is null, then throw a TypeError exception. 
+    if (EJSVAL_IS_NULL(handler)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1"); // XXX
+    }
+
+    // 4. Let target be the value of the [[ProxyTarget]] internal slot of O. 
+    ejsval target = proxy->target;
+
+    EJSObject* _target = EJSVAL_TO_OBJECT(target);
+
+    // 5. Let trap be GetMethod(handler, "deleteProperty"). 
+    // 6. ReturnIfAbrupt(trap). 
+    ejsval trap = GetMethod(handler, _ejs_atom_deleteProperty);
+
+    // 7. If trap is undefined, then 
+    if (EJSVAL_IS_UNDEFINED(trap)) {
+        //    a. Return the result of calling the [[Delete]] internal method of target with argument P. 
+        return OP(_target,Delete)(target, P, unusedflag);
+    }
+
+    // 8. Let trapResult be the result of calling the [[Call]] internal method of trap with handler as the this value and a new List containing target and P. 
+    ejsval args[] = { target, P };
+    ejsval trapResult = _ejs_invoke_closure(trap, handler, 2, args);
+
+    // 9. Let booleanTrapResult be ToBoolean(trapResult). 
+    // 10. ReturnIfAbrupt(booleanTrapResult). 
+    EJSBool booleanTrapResult = ToEJSBool(trapResult);
+
+    // 11. If booleanTrapResult is false, then return false. 
+    if (!booleanTrapResult)
+        return EJS_FALSE;
+
+    // 12. Let targetDesc be the result of calling the [[GetOwnProperty]] internal method of target with argument P. 
+    // 13. ReturnIfAbrupt(targetDesc). 
+    EJSPropertyDesc* targetDesc = OP(_target,GetOwnProperty)(target, P);
+
+    // 14. If targetDesc is undefined, then return true. 
+    if (!targetDesc)
+        return EJS_TRUE;
+
+    // 15. If targetDesc.[[Configurable]] is false, then throw a TypeError exception. 
+    // 16. Return true. 
+    return EJS_TRUE;
 }
 
 static EJSBool
-_ejs_proxy_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag)
+_ejs_proxy_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Desc, EJSBool unusedflag)
 {
-    EJS_NOT_IMPLEMENTED();
+    // 1. Assert: IsPropertyKey(P) is true. 
+    EJSProxy* proxy = EJSVAL_TO_PROXY(O);
+
+    // 2. Let handler be the value of the [[ProxyHandler]] internal slot of O. 
+    ejsval handler = proxy->handler;
+
+    // 3. If handler is null, then throw a TypeError exception. 
+    if (EJSVAL_IS_NULL(handler)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1"); // XXX
+    }
+
+    // 4. Let target be the value of the [[ProxyTarget]] internal slot of O. 
+    ejsval target = proxy->target;
+
+    EJSObject* _target = EJSVAL_TO_OBJECT(target);
+
+    // 5. Let trap be GetMethod(handler, "defineProperty"). 
+    // 6. ReturnIfAbrupt(trap). 
+    ejsval trap = GetMethod(handler, _ejs_atom_defineProperty);
+
+    // 7. If trap is undefined, then 
+    if (EJSVAL_IS_UNDEFINED(trap)) {
+        //    a. Return the result of calling the [[DefineOwnProperty]] internal method of target with arguments P and Desc. 
+        return OP(_target,DefineOwnProperty)(target, P, Desc, unusedflag);
+    }
+
+    // 8. Let descObj be FromPropertyDescriptor(Desc). 
+    // 9. NOTE If Desc was originally generated from an object using ToPropertyDescriptor, then descObj will be that original object. 
+    ejsval descObj = FromPropertyDescriptor(Desc);
+
+    // 10. Let trapResult be the result of calling the [[Call]] internal method of trap with handler as the this value and a new List containing target, P, and descObj. 
+    ejsval args[] = { target, P, descObj };
+    ejsval trapResult = _ejs_invoke_closure(trap, handler, 3, args);
+
+    // 11. Let booleanTrapResult be ToBoolean(trapResult). 
+    // 12. ReturnIfAbrupt(booleanTrapResult). 
+    EJSBool booleanTrapResult = ToEJSBool(trapResult);
+
+    // 13. If booleanTrapResult is false, then return false. 
+    if (!booleanTrapResult)
+        return EJS_FALSE;
+
+    // 14. Let targetDesc be the result of calling the [[GetOwnProperty]] internal method of target with argument P. 
+    // 15. ReturnIfAbrupt(targetDesc). 
+    EJSPropertyDesc* targetDesc = OP(_target,GetOwnProperty)(target, P);
+
+    // 16. Let extensibleTarget be IsExtensible(target). 
+    // 17. ReturnIfAbrupt(extensibleTarget). 
+    EJSBool extensibleTarget = EJS_OBJECT_IS_EXTENSIBLE(_target);
+
+    EJSBool settingConfigFalse;
+
+    // 18. If Desc has a [[Configurable]] field and if Desc.[[Configurable]] is false, then 
+    if (_ejs_property_desc_has_configurable (Desc) && !_ejs_property_desc_is_configurable(Desc)) {
+        //     a. Let settingConfigFalse be true. 
+        settingConfigFalse = EJS_TRUE;
+    }
+    // 19. Else let settingConfigFalse be false. 
+    else {
+        settingConfigFalse = EJS_FALSE;
+    }
+
+    // 20. If targetDesc is undefined, then 
+    if (!targetDesc) {
+        //     a. If extensibleTarget is false, then throw a TypeError exception. 
+        if (!extensibleTarget)
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "2"); // XXX
+        //     b. If settingConfigFalse is true, then throw a TypeError exception. 
+        if (settingConfigFalse)
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "3"); // XXX
+    }
+    // 21. Else targetDesc is not undefined,
+    else {
+        //     a. If IsCompatiblePropertyDescriptor(extensibleTarget, Desc , targetDesc) is false, then throw a TypeError exception. 
+        //     b. If settingConfigFalse is true and targetDesc.[[Configurable]] is true, then throw a TypeError exception. 
+        EJS_NOT_IMPLEMENTED();
+    }
+    // 22. Return true. 
+    return EJS_TRUE;
 }
 
 static EJSObject*
@@ -570,26 +666,24 @@ _ejs_proxy_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     EJSProxy* proxy = (EJSProxy*)obj;
     scan_func(proxy->target);
     scan_func(proxy->handler);
-    _ejs_Object_specops.scan (obj, scan_func);
+    _ejs_Object_specops.Scan (obj, scan_func);
 }
 
-EJSSpecOps _ejs_Proxy_specops = {
-    "Proxy",
-    _ejs_proxy_specop_get_prototype_of,
-    _ejs_proxy_specop_set_prototype_of,
-    _ejs_proxy_specop_get,
-    _ejs_proxy_specop_get_own_property,
-    _ejs_proxy_specop_get_property,
-    _ejs_proxy_specop_put,
-    _ejs_proxy_specop_can_put,
-    _ejs_proxy_specop_has_property,
-    _ejs_proxy_specop_delete,
-    _ejs_proxy_specop_default_value,
-    _ejs_proxy_specop_define_own_property,
-    NULL, /* [[HasInstance]] */
-
-    _ejs_proxy_specop_allocate,
-    OP_INHERIT,
-    _ejs_proxy_specop_scan
-};
+EJS_DEFINE_CLASS(Proxy,
+                 _ejs_proxy_specop_get_prototype_of,
+                 _ejs_proxy_specop_set_prototype_of,
+                 OP_INHERIT, // XXX [[IsExtensible]]
+                 OP_INHERIT, // XXX [[PreventExtensions]]
+                 _ejs_proxy_specop_get_own_property,
+                 _ejs_proxy_specop_define_own_property,
+                 _ejs_proxy_specop_has_property,
+                 _ejs_proxy_specop_get,
+                 _ejs_proxy_specop_set,
+                 _ejs_proxy_specop_delete,
+                 OP_INHERIT, // XXX [[Enumerate]]
+                 OP_INHERIT, // XXX [[OwnPropertyKeys]]
+                 _ejs_proxy_specop_allocate,
+                 OP_INHERIT, // [[Finalize]]
+                 _ejs_proxy_specop_scan
+                 )
 

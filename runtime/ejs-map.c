@@ -443,7 +443,7 @@ _ejs_Map_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     EJSObject* F_ = EJSVAL_TO_OBJECT(F);
 
     // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%MapPrototype%", ([[MapData]]) ). 
-    ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
     if (EJSVAL_IS_UNDEFINED(proto))
         proto = _ejs_Map_prototype;
 
@@ -508,7 +508,7 @@ _ejs_map_specop_finalize (EJSObject* obj)
         s = next;
     }
 
-    _ejs_Object_specops.finalize (obj);
+    _ejs_Object_specops.Finalize (obj);
 }
 
 static void
@@ -522,22 +522,22 @@ _ejs_map_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
         scan_func (s->value);
     }
 
-    _ejs_Object_specops.scan (obj, scan_func);
+    _ejs_Object_specops.Scan (obj, scan_func);
 }
 
 EJS_DEFINE_CLASS(Map,
                  OP_INHERIT, // [[GetPrototypeOf]]
                  OP_INHERIT, // [[SetPrototypeOf]]
-                 OP_INHERIT, // get
-                 OP_INHERIT, // get_own_property
-                 OP_INHERIT, // get_property
-                 OP_INHERIT, // put
-                 OP_INHERIT, // can_put
-                 OP_INHERIT, // has_property
-                 OP_INHERIT, // delete
-                 OP_INHERIT, // default_value
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
+                 OP_INHERIT, // [[IsExtensible]]
+                 OP_INHERIT, // [[PreventExtensions]]
+                 OP_INHERIT, // [[GetOwnProperty]]
+                 OP_INHERIT, // [[DefineOwnProperty]]
+                 OP_INHERIT, // [[HasProperty]]
+                 OP_INHERIT, // [[Get]]
+                 OP_INHERIT, // [[Set]]
+                 OP_INHERIT, // [[Delete]]
+                 OP_INHERIT, // [[Enumerate]]
+                 OP_INHERIT, // [[OwnPropertyKeys]]
                  _ejs_map_specop_allocate,
                  _ejs_map_specop_finalize,
                  _ejs_map_specop_scan

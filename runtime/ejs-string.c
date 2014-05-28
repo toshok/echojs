@@ -524,7 +524,7 @@ _ejs_String_prototype_match (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
         
 
     /* 5. Let global be the result of calling the [[Get]] internal method of rx with argument "global". */
-    ejsval global = OP(rxo,get) (rx, _ejs_atom_global, rx);
+    ejsval global = OP(rxo,Get) (rx, _ejs_atom_global, rx);
     
     /* 6. Let exec be the standard built-in function RegExp.prototype.exec (see 15.10.6.2) */
     ejsval exec = _ejs_RegExp_prototype_exec_closure;
@@ -539,7 +539,7 @@ _ejs_String_prototype_match (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     /* 8. Else, global is true */
     else {
         /*    a. Call the [[Put]] internal method of rx with arguments "lastIndex" and 0. */
-        OP(rxo, put)(rx, _ejs_atom_lastIndex, NUMBER_TO_EJSVAL(0), rx, EJS_FALSE);
+        OP(rxo,Set)(rx, _ejs_atom_lastIndex, NUMBER_TO_EJSVAL(0), rx);
 
         /*    b. Let A be a new array created as if by the expression new Array() where Array is the standard built-in constructor with that name. */
         ejsval A = _ejs_array_new(0, EJS_FALSE);
@@ -566,21 +566,21 @@ _ejs_String_prototype_match (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
             /* iii. Else, result is not null */
             else {
                 /* 1. Let thisIndex be the result of calling the [[Get]] internal method of rx with argument "lastIndex". */
-                ejsval thisIndex = OP(rxo, get)(rx, _ejs_atom_lastIndex, rx);
+                ejsval thisIndex = OP(rxo,Get)(rx, _ejs_atom_lastIndex, rx);
                 
                 /* 2. If thisIndex = previousLastIndex then */
                 if (EJSVAL_EQ(thisIndex, previousLastIndex)) {
                     /* a. Call the [[Put]] internal method of rx with arguments "lastIndex" and thisIndex+1. */
                     /* b. Set previousLastIndex to thisIndex+1. */
                     previousLastIndex = NUMBER_TO_EJSVAL (EJSVAL_TO_NUMBER(thisIndex) + 1);
-                    OP(rxo, put)(rx, _ejs_atom_lastIndex, previousLastIndex, rx, EJS_FALSE);
+                    OP(rxo,Set)(rx, _ejs_atom_lastIndex, previousLastIndex, rx);
                 }
                 /* 3. Else, set previousLastIndex to thisIndex. */
                 else {
                     previousLastIndex = thisIndex;
                 }
                 /* 4. Let matchStr be the result of calling the [[Get]] internal method of result with argument "0". */
-                ejsval matchStr = OP(rxo, get)(rx, NUMBER_TO_EJSVAL(0), rx);
+                ejsval matchStr = OP(rxo,Get)(rx, NUMBER_TO_EJSVAL(0), rx);
 
                 /* 5. Call the [[DefineOwnProperty]] internal method of A with arguments ToString(n), the Property Descriptor {[[Value]]: matchStr, [[Writable]]: true, [[Enumerable]]: true, [[configurable]]: true}, and false. */
                 _ejs_object_setprop (A, NUMBER_TO_EJSVAL(n), matchStr);
@@ -1446,7 +1446,7 @@ _ejs_string_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
     }
 
     // otherwise we fallback to the object implementation
-    return _ejs_Object_specops.get (obj, propertyName, receiver);
+    return _ejs_Object_specops.Get (obj, propertyName, receiver);
 }
 
 static EJSObject*
@@ -1460,24 +1460,24 @@ _ejs_string_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSString* ejss = (EJSString*)obj;
     scan_func (ejss->primStr);
-    _ejs_Object_specops.scan (obj, scan_func);
+    _ejs_Object_specops.Scan (obj, scan_func);
 }
 
 EJS_DEFINE_CLASS(String,
                  OP_INHERIT, // [[GetPrototypeOf]]
                  OP_INHERIT, // [[SetPrototypeOf]]
+                 OP_INHERIT, // [[IsExtensible]]
+                 OP_INHERIT, // [[PreventExtensions]]
+                 OP_INHERIT, // [[GetOwnProperty]]
+                 OP_INHERIT, // [[DefineOwnProperty]]
+                 OP_INHERIT, // [[HasProperty]]
                  _ejs_string_specop_get,
-                 OP_INHERIT, // get_own_property
-                 OP_INHERIT, // get_property
-                 OP_INHERIT, // put
-                 OP_INHERIT, // can_put
-                 OP_INHERIT, // has_property
-                 OP_INHERIT, // delete
-                 OP_INHERIT, // default_value
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
+                 OP_INHERIT, // [[Set]]
+                 OP_INHERIT, // [[Delete]]
+                 OP_INHERIT, // [[Enumerate]]
+                 OP_INHERIT, // [[OwnPropertyKeys]]
                  _ejs_string_specop_allocate,
-                 OP_INHERIT, // finalize
+                 OP_INHERIT, // [[Finalize]]
                  _ejs_string_specop_scan
                  )
 

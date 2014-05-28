@@ -27,6 +27,8 @@ typedef struct {
 
 EJS_BEGIN_DECLS
 
+#define EJSVAL_IS_BOUND_FUNCTION(o) (EJSVAL_IS_FUNCTION(o) && ((EJSFunction*)EJSVAL_TO_OBJECT(o))->bound)
+
 #define EJS_INSTALL_ATOM_FUNCTION(o,n,f) EJS_MACRO_START                \
     ejsval tmpfunc = _ejs_function_new_native (_ejs_null, _ejs_atom_##n, (EJSClosureFunc)f); \
     _ejs_object_setprop (o, _ejs_atom_##n, tmpfunc);                    \

@@ -67,11 +67,11 @@ _ejs_Error_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *
     }
 
     EJSObject *_thisobj = EJSVAL_TO_OBJECT(_this);
-    ejsval name = OP(_thisobj, get)(_this, _ejs_atom_name, _this);
+    ejsval name = OP(_thisobj,Get)(_this, _ejs_atom_name, _this);
     if (EJSVAL_IS_NULL_OR_UNDEFINED(name))
         name = _ejs_atom_Error;
 
-    ejsval message = OP(_thisobj, get)(_this, _ejs_atom_message, _this);
+    ejsval message = OP(_thisobj,Get)(_this, _ejs_atom_message, _this);
     if (EJSVAL_IS_NULL_OR_UNDEFINED(message))
         return name;
 
@@ -91,7 +91,7 @@ _ejs_Error_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     EJSObject* F_ = EJSVAL_TO_OBJECT(F);
 
     // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%ErrorPrototype%", ([[ErrorData]]) ). 
-    ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
     if (EJSVAL_IS_UNDEFINED(proto))
         proto = _ejs_Error_prototype;
 
@@ -191,21 +191,4 @@ _ejs_throw_nativeerror (EJSNativeErrorType error_type, ejsval message)
     EJS_NOT_REACHED();
 }
 
-EJS_DEFINE_CLASS(Error,
-                 OP_INHERIT, // [[GetPrototypeOf]]
-                 OP_INHERIT, // [[SetPrototypeOf]]
-                 OP_INHERIT, // get
-                 OP_INHERIT, // get_own_property
-                 OP_INHERIT, // get_property
-                 OP_INHERIT, // put
-                 OP_INHERIT, // can_put
-                 OP_INHERIT, // has_property
-                 OP_INHERIT, // delete
-                 OP_INHERIT, // default_value
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
-                 OP_INHERIT, // allocate
-                 OP_INHERIT, // finalize
-                 OP_INHERIT  // scan
-                 )
-
+EJS_DEFINE_INHERIT_ALL_CLASS(Error)

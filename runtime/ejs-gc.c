@@ -591,7 +591,7 @@ finalize_object(GCObjectPtr p)
     GCObjectHeader* headerp = (GCObjectHeader*)p;
     if ((*headerp & EJS_SCAN_TYPE_OBJECT) != 0) {
         SPEW(2, _ejs_log ("finalizing object %p(%s)\n", p, CLASSNAME(p)));
-        OP(p, finalize)((EJSObject*)p);
+        OP(p,Finalize)((EJSObject*)p);
     }
     else if ((*headerp & EJS_SCAN_TYPE_CLOSUREENV) != 0) {
         SPEW(2, _ejs_log ("finalizing closureenv %p\n", p));
@@ -758,7 +758,7 @@ _scan_ejsvalue (ejsval val)
 static void
 _scan_from_ejsobject(EJSObject* obj)
 {
-    OP(obj,scan)(obj, _scan_ejsvalue);
+    OP(obj,Scan)(obj, _scan_ejsvalue);
 }
 
 static void

@@ -15,9 +15,11 @@ ejsval _ejs_Arguments__proto__ EJSVAL_ALIGNMENT;
 ejsval
 _ejs_arguments_new (int numElements, ejsval* args)
 {
-    ejsval rv = _ejs_object_new (_ejs_Arguments__proto__, &_ejs_Arguments_specops);
+    EJSArguments* arguments = _ejs_gc_new(EJSArguments);
+    ejsval rv = OBJECT_TO_EJSVAL(arguments);
 
-    EJSArguments* arguments = EJSVAL_TO_ARGUMENTS(rv);
+    _ejs_init_object ((EJSObject*)arguments, _ejs_Arguments__proto__, &_ejs_Arguments_specops);
+    
     arguments->argc = numElements;
     arguments->args = (ejsval*)calloc(numElements, sizeof (ejsval));
     memmove (arguments->args, args, sizeof(ejsval) * numElements);
@@ -62,7 +64,7 @@ _ejs_arguments_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
     }
 
     // otherwise we fallback to the object implementation
-    return _ejs_Object_specops.get (obj, propertyName, receiver);
+    return _ejs_Object_specops.Get (obj, propertyName, receiver);
 }
 
 static EJSBool
@@ -81,7 +83,7 @@ _ejs_arguments_specop_has_property (ejsval obj, ejsval propertyName)
     }
 
     // if we fail there, we fall back to the object impl below
-    return _ejs_Object_specops.has_property (obj, propertyName);
+    return _ejs_Object_specops.HasProperty (obj, propertyName);
 }
 
 static EJSObject*
@@ -96,7 +98,7 @@ _ejs_arguments_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     EJSArguments* args = (EJSArguments*)obj;
     for (int i = 0; i < args->argc; i ++)
         scan_func (args->args[i]);
-    _ejs_Object_specops.scan (obj, scan_func);
+    _ejs_Object_specops.Scan (obj, scan_func);
 }
 
 static void
@@ -104,22 +106,22 @@ _ejs_arguments_specop_finalize (EJSObject* obj)
 {
     EJSArguments* args = (EJSArguments*)obj;
     free (args->args);
-    _ejs_Object_specops.finalize (obj);
+    _ejs_Object_specops.Finalize (obj);
 }
 
 EJS_DEFINE_CLASS(Arguments,
                  OP_INHERIT, // [[GetPrototypeOf]]
                  OP_INHERIT, // [[SetPrototypeOf]]
-                 _ejs_arguments_specop_get,
-                 OP_INHERIT, // get_own_property
-                 OP_INHERIT, // get_property
-                 OP_INHERIT, // put
-                 OP_INHERIT, // can_put
+                 OP_INHERIT, // [[IsExtensible]]
+                 OP_INHERIT, // [[PreventExtensions]]
+                 OP_INHERIT, // [[GetOwnProperty]]
+                 OP_INHERIT, // [[DefineOwnProperty]]
                  _ejs_arguments_specop_has_property,
-                 OP_INHERIT, // delete
-                 OP_INHERIT, // default_value
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
+                 _ejs_arguments_specop_get,
+                 OP_INHERIT, // [[Set]]
+                 OP_INHERIT, // [[Delete]]
+                 OP_INHERIT, // [[Enumerate]]
+                 OP_INHERIT, // [[OwnPropertyKeys]]
                  _ejs_arguments_specop_allocate,
                  _ejs_arguments_specop_finalize,
                  _ejs_arguments_specop_scan

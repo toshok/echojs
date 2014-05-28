@@ -29,12 +29,65 @@
 #include "ejs-error.h"
 #include "ejs-xhr.h"
 
+// ECMA262: 7.3.1 Get (O, P) 
+ejsval
+Get (ejsval O, ejsval P)
+{
+    // 1. Assert: Type(O) is Object. 
+    // 2. Assert: IsPropertyKey(P) is true. 
+    // 3. Return the result of calling the [[Get]] internal method of O passing P and O as the arguments
+    return OP(EJSVAL_TO_OBJECT(O),Get)(O, P, O);
+}
+
+// ECMA262: 7.3.2 Put (O, P, V, Throw) 
+ejsval
+Put (ejsval O, ejsval P, ejsval V, EJSBool Throw)
+{
+    // 1. Assert: Type(O) is Object. 
+    // 2. Assert: IsPropertyKey(P) is true. 
+    // 3. Assert: Type(Throw) is Boolean. 
+    // 4. Let success be the result of calling the [[Set]] internal method of O passing P, V, and O as the arguments. 
+    // 5. ReturnIfAbrupt(success). 
+    EJSBool success = OP(EJSVAL_TO_OBJECT(O),Set)(O, P, V, O);
+    // 6. If success is false and Throw is true, then throw a TypeError exception. 
+    if (!success && Throw)
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "[[Set]] failed");
+        
+    // 7. Return success. 
+    return BOOLEAN_TO_EJSVAL(success);
+}
+
+// ECMA262: 7.3.7 GetMethod (O, P) 
+ejsval
+GetMethod (ejsval O, ejsval P)
+{
+    // 1. Assert: Type(O) is Object. 
+    // 2. Assert: IsPropertyKey(P) is true. 
+    // 3. Let func be the result of calling the [[Get]] internal method of O passing P and O as the arguments.
+    // 4. ReturnIfAbrupt(func). 
+    ejsval func = OP(EJSVAL_TO_OBJECT(O),Get)(O, P, O);
+    // 5. If func is undefined, then return undefined. 
+    if (EJSVAL_IS_UNDEFINED(func))
+        return func;
+    // 6. If IsCallable(func) is false, then throw a TypeError exception. 
+    if (!EJSVAL_IS_CALLABLE(func))
+        _ejs_throw_nativeerror (EJS_TYPE_ERROR, _ejs_string_concat(_ejs_atom_error_not_callable, ToString(P)));
+
+    // 7. Return func. 
+    return func;
+}
+
 // ECMA262: 7.1.14
 ejsval
 ToPropertyKey(ejsval argument)
 {
+    // 1. ReturnIfAbrupt(argument). 
+
+    // 2. If Type(argument) is Symbol, then 
     if (EJSVAL_IS_SYMBOL(argument))
+        //    a. Return argument. 
         return argument;
+    // 3. Return ToString(argument). 
     return ToString(argument);
 }
 
@@ -48,7 +101,7 @@ PropertyKeyHash (ejsval argument)
         return _ejs_symbol_hash(argument);
 }
 
-// ECMA262: 8.10.1
+// ECMA262: 6.2.4.1
 EJSBool
 IsAccessorDescriptor(EJSPropertyDesc* Desc)
 {
@@ -64,7 +117,7 @@ IsAccessorDescriptor(EJSPropertyDesc* Desc)
     return EJS_TRUE;
 }
 
-// ECMA262: 8.10.2
+// ECMA262: 6.2.4.2
 EJSBool
 IsDataDescriptor(EJSPropertyDesc* Desc)
 {
@@ -80,7 +133,7 @@ IsDataDescriptor(EJSPropertyDesc* Desc)
     return EJS_TRUE;
 }
 
-// ECMA262: 8.10.3
+// ECMA262: 6.2.4.3
 static EJSBool
 IsGenericDescriptor(EJSPropertyDesc* Desc)
 {
@@ -96,81 +149,7 @@ IsGenericDescriptor(EJSPropertyDesc* Desc)
     return EJS_FALSE;
 }
 
-// ECMA262: 8.10.5
-void
-ToPropertyDescriptor(ejsval O, EJSPropertyDesc *desc)
-{
-    /* 1. If Type(Obj) is not Object throw a TypeError exception. */
-    if (!EJSVAL_IS_OBJECT(O)) {
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "ToPropertyDescriptor called on non-object");
-    }
-    EJSObject* obj = EJSVAL_TO_OBJECT(O);
-    memset (desc, 0, sizeof(EJSPropertyDesc));
-
-    /* 2. Let desc be the result of creating a new Property Descriptor that initially has no fields. */
-
-    /* 3. If the result of calling the [[HasProperty]] internal method of Obj with argument "enumerable" is true, then */
-    if (OP(obj,has_property)(O, _ejs_atom_enumerable)) {
-        /*    a. Let enum be the result of calling the [[Get]] internal method of Obj with "enumerable". */
-        /*    b. Set the [[Enumerable]] field of desc to ToBoolean(enum). */
-        _ejs_property_desc_set_enumerable (desc, EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,get)(O, _ejs_atom_enumerable, O))));
-    }
-    /* 4. If the result of calling the [[HasProperty]] internal method of Obj with argument "configurable" is true, then */
-    if (OP(obj,has_property)(O, _ejs_atom_configurable)) {
-        /*    a. Let conf  be the result of calling the [[Get]] internal method of Obj with argument "configurable". */
-        /*    b. Set the [[Configurable]] field of desc to ToBoolean(conf). */
-        _ejs_property_desc_set_configurable (desc, EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,get)(O, _ejs_atom_configurable, O))));
-    }
-    /* 5. If the result of calling the [[HasProperty]] internal method of Obj with argument "value" is true, then */
-    if (OP(obj,has_property)(O, _ejs_atom_value)) {
-        /*    a. Let value be the result of calling the [[Get]] internal method of Obj with argument "value". */
-        /*    b. Set the [[Value]] field of desc to value. */
-        _ejs_property_desc_set_value (desc, OP(obj,get)(O, _ejs_atom_value, O));
-    }
-    /* 6. If the result of calling the [[HasProperty]] internal method of Obj with argument "writable" is true, then */
-    if (OP(obj,has_property)(O, _ejs_atom_writable)) {
-        /*    a. Let writable be the result of calling the [[Get]] internal method of Obj with argument "writable". */
-        /*    b. Set the [[Writable]] field of desc to ToBoolean(writable). */
-        _ejs_property_desc_set_writable (desc, EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,get)(O, _ejs_atom_writable, O))));
-    }
-    /* 7. If the result of calling the [[HasProperty]] internal method of Obj with argument "get" is true, then */
-    if (OP(obj,has_property)(O, _ejs_atom_get)) {
-        /*    a. Let getter be the result of calling the [[Get]] internal method of Obj with argument "get". */
-        ejsval getter = OP(obj,get)(O, _ejs_atom_get, O);
-
-        /*    b. If IsCallable(getter) is false and getter is not undefined, then throw a TypeError exception. */
-        if (!EJSVAL_IS_CALLABLE(getter) && !EJSVAL_IS_UNDEFINED(getter)) {
-            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Getter must be a function");
-        }
-
-        /*    c. Set the [[Get]] field of desc to getter. */
-        _ejs_property_desc_set_getter (desc, getter);
-    }
-    /* 8. If the result of calling the [[HasProperty]] internal method of Obj with argument "set" is true, then */
-    if (OP(obj,has_property)(O, _ejs_atom_set)) {
-        /*    a. Let setter be the result of calling the [[Get]] internal method of Obj with argument "set". */
-        ejsval setter = OP(obj,get)(O, _ejs_atom_set, O);
-
-        /*    b. If IsCallable(setter) is false and setter is not undefined, then throw a TypeError exception. */
-        if (!EJSVAL_IS_CALLABLE(setter) && !EJSVAL_IS_UNDEFINED(setter)) {
-            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Setter must be a function");
-        }
-
-        /*    c. Set the [[Set]] field of desc to setter. */
-        _ejs_property_desc_set_setter (desc, setter);
-    }
-    /* 9. If either desc.[[Get]] or desc.[[Set]] are present, then */
-    if (_ejs_property_desc_has_getter(desc) || _ejs_property_desc_has_setter(desc)) {
-        /*    a. If either desc.[[Value]] or desc.[[Writable]] are present, then throw a TypeError exception. */
-        if (_ejs_property_desc_has_value(desc) || _ejs_property_desc_has_writable(desc)) {
-            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Invalid property.  A property cannot both have accessors and be writable or have a value");
-        }
-    }
-
-    /* 10. Return desc. */
-}
-
-// ECMA262: 8.10.4
+// ECMA262: 6.2.4.4
 ejsval
 FromPropertyDescriptor(EJSPropertyDesc* Desc)
 {
@@ -178,51 +157,136 @@ FromPropertyDescriptor(EJSPropertyDesc* Desc)
     if (!Desc)
         return _ejs_undefined;
 
-    /* 2. Let obj be the result of creating  a new object as if by the expression new Object() where Object  is the standard  */
-    /*    built-in constructor with that name. */
+    // 2. If Desc has an [[Origin]] field, then return Desc.[[Origin]]. 
+
+    // 3. Let obj be ObjectCreate(%ObjectPrototype%). 
     ejsval obj = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
     EJSObject* obj_ = EJSVAL_TO_OBJECT(obj);
 
-    /* 3. If IsDataDescriptor(Desc) is true, then */
-    if (IsDataDescriptor(Desc)) {
-        /*    a. Call the [[DefineOwnProperty]] internal method of obj with arguments "value", Property Descriptor  */
-        /*       {[[Value]]: Desc.[[Value]], [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
+    // 4. Assert: obj is an extensible ordinary object with no own properties. 
+
+    // 5. If Desc has a [[Value]] field, then 
+    if (_ejs_property_desc_has_value(Desc)) {
+        //    a. Call OrdinaryDefineOwnProperty with arguments obj, "value", and PropertyDescriptor{[[Value]]: Desc.[[Value]], [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true} 
         EJSPropertyDesc value_desc = { .value= Desc->value, .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE };
+        OP(obj_, DefineOwnProperty)(obj, _ejs_atom_value, &value_desc, EJS_FALSE);
+    }
 
-        OP(obj_, define_own_property)(obj, _ejs_atom_value, &value_desc, EJS_FALSE);
-
-        /*    b. Call the [[DefineOwnProperty]] internal method of obj with arguments "writable", Property Descriptor  */
-        /*       {[[Value]]: Desc.[[Writable]], [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
+    // 6. If Desc has a [[Writable]] field, then 
+    if (_ejs_property_desc_has_writable(Desc)) {
+        // a. Call OrdinaryDefineOwnProperty with arguments obj, "writable", and PropertyDescriptor{[[Value]]: Desc.[[Writable]], [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}.
         EJSPropertyDesc writable_desc = { .value= BOOLEAN_TO_EJSVAL(_ejs_property_desc_is_writable(Desc)), .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE };
-
-        OP(obj_, define_own_property)(obj, _ejs_atom_writable, &writable_desc, EJS_FALSE);
+        OP(obj_, DefineOwnProperty)(obj, _ejs_atom_writable, &writable_desc, EJS_FALSE);
     }
-    else {
-        /* 4. Else, IsAccessorDescriptor(Desc) must be true, so */
-        /*    a. Call the [[DefineOwnProperty]] internal method of obj with arguments "get", Property Descriptor */
-        /*       {[[Value]]: Desc.[[Get]], [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
+
+    // 7. If Desc has a [[Get]] field, then
+    if (_ejs_property_desc_has_getter(Desc)) {
+        //    a. Call OrdinaryDefineOwnProperty with arguments obj, "get", and PropertyDescriptor{[[Value]]: Desc.[[Get]], [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}. 
         EJSPropertyDesc get_desc = { .value= _ejs_property_desc_get_getter(Desc), .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE };
-
-        OP(obj_, define_own_property)(obj, _ejs_atom_get, &get_desc, EJS_FALSE);
-
-        /*    b. Call the [[DefineOwnProperty]] internal method of obj with arguments "set", Property Descriptor */
-        /*       {[[Value]]: Desc.[[Set]], [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
-        EJSPropertyDesc set_desc = { .value= _ejs_property_desc_get_setter(Desc), .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE };
-
-        OP(obj_, define_own_property)(obj, _ejs_atom_set, &set_desc, EJS_FALSE);
+        OP(obj_, DefineOwnProperty)(obj, _ejs_atom_get, &get_desc, EJS_FALSE);
     }
-    /* 5. Call the [[DefineOwnProperty]] internal method of obj with arguments "enumerable", Property Descriptor */
-    /*    {[[Value]]: Desc.[[Enumerable]], [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
-    EJSPropertyDesc enumerable_desc = { .value= BOOLEAN_TO_EJSVAL(_ejs_property_desc_is_enumerable(Desc)), .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE };
-    OP(obj_, define_own_property)(obj, _ejs_atom_enumerable, &enumerable_desc, EJS_FALSE);
 
-    /* 6. Call the [[DefineOwnProperty]] internal method of obj with arguments "configurable", Property Descriptor */
-    /*    {[[Value]]: Desc.[[Configurable]], [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
-    EJSPropertyDesc configurable_desc = { .value= BOOLEAN_TO_EJSVAL(_ejs_property_desc_is_configurable(Desc)), .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE };
-    OP(obj_, define_own_property)(obj, _ejs_atom_configurable, &configurable_desc, EJS_FALSE);
+    // 8. If Desc has a [[Set]] field, then
+    if (_ejs_property_desc_has_getter(Desc)) {
+        //    a. Call OrdinaryDefineOwnProperty with arguments obj, "set", and PropertyDescriptor{[[Value]]: Desc.[[Set]], [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}. 
+        EJSPropertyDesc set_desc = { .value= _ejs_property_desc_get_setter(Desc), .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE };
+        OP(obj_, DefineOwnProperty)(obj, _ejs_atom_set, &set_desc, EJS_FALSE);
+    }
 
-    /* 7. Return obj. */
+    // 9. If Desc has an [[Enumerable]] field, then 
+    if (_ejs_property_desc_has_enumerable(Desc)) {
+        //    a. Call OrdinaryDefineOwnProperty with arguments obj, "enumerable", and PropertyDescriptor{[[Value]]: Desc.[[Enumerable]], [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}. 
+        EJSPropertyDesc enumerable_desc = { .value= BOOLEAN_TO_EJSVAL(_ejs_property_desc_is_enumerable(Desc)), .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE };
+        OP(obj_, DefineOwnProperty)(obj, _ejs_atom_enumerable, &enumerable_desc, EJS_FALSE);
+    }
+
+    // 10. If Desc has a [[Configurable]] field, then 
+    if (_ejs_property_desc_has_configurable(Desc)) {
+        //    a. Call OrdinaryDefineOwnProperty with arguments obj , "configurable", and PropertyDescriptor{[[Value]]: Desc.[[Configurable]], [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}. 
+        EJSPropertyDesc configurable_desc = { .value= BOOLEAN_TO_EJSVAL(_ejs_property_desc_is_configurable(Desc)), .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE };
+        OP(obj_, DefineOwnProperty)(obj, _ejs_atom_configurable, &configurable_desc, EJS_FALSE);
+    }
+
+    // 11. Return obj. 
     return obj;
+}
+
+// ECMA262: 6.2.4.5
+void
+ToPropertyDescriptor(ejsval Obj, EJSPropertyDesc *desc)
+{
+    // 1. ReturnIfAbrupt(Obj). 
+    // 2. If Type(Obj) is not Object throw a TypeError exception. 
+    if (!EJSVAL_IS_OBJECT(Obj)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "ToPropertyDescriptor called on non-object");
+    }
+    EJSObject* obj = EJSVAL_TO_OBJECT(Obj);
+
+    // 3. Let desc be a new Property Descriptor that initially has no fields. 
+    memset (desc, 0, sizeof(EJSPropertyDesc));
+
+    // 4. If HasProperty(Obj, "enumerable") is true, then 
+    if (OP(obj,HasProperty)(Obj, _ejs_atom_enumerable)) {
+        //    a. Let enum be Get(Obj, "enumerable"). 
+        //    b. ReturnIfAbrupt(enum). 
+        //    c. Set the [[Enumerable]] field of desc to ToBoolean(enum). 
+        _ejs_property_desc_set_enumerable (desc, EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,Get)(Obj, _ejs_atom_enumerable, Obj))));
+    }
+    // 5. If HasProperty(Obj, "configurable") is true, then 
+    if (OP(obj,HasProperty)(Obj, _ejs_atom_configurable)) {
+        //    a. Let conf be Get(Obj, "configurable"). 
+        //    b. ReturnIfAbrupt(conf). 
+        //    c. Set the [[Configurable]] field of desc to ToBoolean(conf). 
+        _ejs_property_desc_set_configurable (desc, EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,Get)(Obj, _ejs_atom_configurable, Obj))));
+    }
+    // 6. If HasProperty(Obj, "value") is true, then 
+    if (OP(obj,HasProperty)(Obj, _ejs_atom_value)) {
+        //    a. Let value be Get(Obj, "value"). 
+        //    b. ReturnIfAbrupt(value). 
+        //    c. Set the [[Value]] field of desc to value. 
+        _ejs_property_desc_set_value (desc, OP(obj,Get)(Obj, _ejs_atom_value, Obj));
+    }
+    // 7. If HasProperty(Obj, "writable") is true, then 
+    if (OP(obj,HasProperty)(Obj, _ejs_atom_writable)) {
+        //    a. Let writable be Get(Obj, "writable"). 
+        //    b. ReturnIfAbrupt(writable). 
+        //    c. Set the [[Writable]] field of desc to ToBoolean(writable). 
+        _ejs_property_desc_set_writable (desc, EJSVAL_TO_BOOLEAN(ToBoolean(OP(obj,Get)(Obj, _ejs_atom_writable, Obj))));
+    }
+    // 8. If HasProperty(Obj, "get") is true, then 
+    if (OP(obj,HasProperty)(Obj, _ejs_atom_get)) {
+        //    a. Let getter be Get(Obj, "get"). 
+        //    b. ReturnIfAbrupt(getter). 
+        ejsval getter = OP(obj,Get)(Obj, _ejs_atom_get, Obj);
+
+        //    c. If IsCallable(getter) is false and getter is not undefined, then throw a TypeError exception. 
+        if (!EJSVAL_IS_CALLABLE(getter) && !EJSVAL_IS_UNDEFINED(getter)) {
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Getter must be callable");
+        }
+        //    d. Set the [[Get]] field of desc to getter. 
+        _ejs_property_desc_set_getter (desc, getter);
+    }
+    // 9. If HasProperty(Obj, "set") is true, then 
+    if (OP(obj,HasProperty)(Obj, _ejs_atom_set)) {
+        //    a. Let setter be Get(Obj, "set"). 
+        //    b. ReturnIfAbrupt(setter). 
+        ejsval setter = OP(obj,Get)(Obj, _ejs_atom_set, Obj);
+        //    c. If IsCallable(setter) is false and setter is not undefined, then throw a TypeError exception. 
+        if (!EJSVAL_IS_CALLABLE(setter) && !EJSVAL_IS_UNDEFINED(setter)) {
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Setter must be a function");
+        }
+        //    d. Set the [[Set]] field of desc to setter. 
+        _ejs_property_desc_set_setter (desc, setter);
+    }
+    // 10. If either desc.[[Get]] or desc.[[Set]] are present, then 
+    if (_ejs_property_desc_has_getter(desc) || _ejs_property_desc_has_setter(desc)) {
+        /*    a. If either desc.[[Value]] or desc.[[Writable]] are present, then throw a TypeError exception. */
+        if (_ejs_property_desc_has_value(desc) || _ejs_property_desc_has_writable(desc)) {
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Invalid property.  A property cannot both have accessors and be writable or have a value");
+        }
+    }
+    // 11. Set the [[Origin]] field of desc to Obj. 
+    // 12. Return desc. 
 }
 
 EJSPropertyDesc*
@@ -452,17 +516,22 @@ _ejs_property_iterator_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     }
 }
 
-static EJSSpecOps _ejs_property_iterator_specops = {
-    "<EJSPropertyIterator>",
-    NULL, NULL, NULL,
-    NULL, NULL, NULL,
-    NULL, NULL, NULL,
-    NULL, NULL, NULL,
-
-    _ejs_property_iterator_specop_allocate,
-    _ejs_property_iterator_specop_finalize,
-    _ejs_property_iterator_specop_scan
-};
+static EJS_DEFINE_CLASS(_EJSPropertyIterator,
+                        OP_INHERIT, // [[GetPrototypeOf]]
+                        OP_INHERIT, // [[SetPrototypeOf]]
+                        OP_INHERIT, // [[IsExtensible]]
+                        OP_INHERIT, // [[PreventExtensions]]
+                        OP_INHERIT, // [[GetOwnProperty]]
+                        OP_INHERIT, // [[DefineOwnProperty]]
+                        OP_INHERIT, // [[HasProperty]]
+                        OP_INHERIT, // [[Get]]
+                        OP_INHERIT, // [[Set]]
+                        OP_INHERIT, // [[Delete]]
+                        OP_INHERIT, // [[Enumerate]]
+                        OP_INHERIT, // [[OwnPropertyKeys]]
+                        _ejs_property_iterator_specop_allocate,
+                        _ejs_property_iterator_specop_finalize,
+                        _ejs_property_iterator_specop_scan)
 
 static EJSBool
 name_in_keys (ejsval name, ejsval *keys, int num)
@@ -502,7 +571,7 @@ _ejs_property_iterator_new (ejsval forVal)
 {
     // the iterator-using code for for..in should handle a null iterator return value,
     // which would save us this allocation.
-    ejsval iter = _ejs_object_new (_ejs_null, &_ejs_property_iterator_specops);
+    ejsval iter = _ejs_object_new (_ejs_null, &_ejs__EJSPropertyIterator_specops);
     EJSPropertyIterator* iterator = (EJSPropertyIterator*)EJSVAL_TO_OBJECT(iter);
 
     iterator->current = -1;
@@ -604,7 +673,7 @@ _ejs_init_object (EJSObject* obj, ejsval proto, EJSSpecOps *ops)
 ejsval
 _ejs_object_new (ejsval proto, EJSSpecOps *ops)
 {
-    EJSObject *obj = ops->allocate();
+    EJSObject *obj = ops->Allocate();
     _ejs_init_object (obj, proto, ops);
     return OBJECT_TO_EJSVAL(obj);
 }
@@ -665,21 +734,21 @@ _ejs_Class_initialize (EJSSpecOps *child, EJSSpecOps* parent)
     EJS_ASSERT(child->p);                                               \
     EJS_MACRO_END
     
-    MAYBE_INHERIT_DISALLOW_NULL(get_prototype_of);
-    MAYBE_INHERIT_DISALLOW_NULL(set_prototype_of);
-    MAYBE_INHERIT_DISALLOW_NULL(get);
-    MAYBE_INHERIT_DISALLOW_NULL(get_own_property);
-    MAYBE_INHERIT_DISALLOW_NULL(get_property);
-    MAYBE_INHERIT_DISALLOW_NULL(put);
-    MAYBE_INHERIT_DISALLOW_NULL(can_put);
-    MAYBE_INHERIT_DISALLOW_NULL(has_property);
-    MAYBE_INHERIT_DISALLOW_NULL(_delete);
-    MAYBE_INHERIT_DISALLOW_NULL(default_value);
-    MAYBE_INHERIT_DISALLOW_NULL(define_own_property);
-    MAYBE_INHERIT(has_instance);
-    MAYBE_INHERIT_DISALLOW_NULL(allocate);
-    MAYBE_INHERIT_DISALLOW_NULL(finalize);
-    MAYBE_INHERIT_DISALLOW_NULL(scan);
+    MAYBE_INHERIT_DISALLOW_NULL(GetPrototypeOf);
+    MAYBE_INHERIT_DISALLOW_NULL(SetPrototypeOf);
+    MAYBE_INHERIT_DISALLOW_NULL(IsExtensible);
+    MAYBE_INHERIT_DISALLOW_NULL(PreventExtensions);
+    MAYBE_INHERIT_DISALLOW_NULL(GetOwnProperty);
+    MAYBE_INHERIT_DISALLOW_NULL(DefineOwnProperty);
+    MAYBE_INHERIT_DISALLOW_NULL(HasProperty);
+    MAYBE_INHERIT_DISALLOW_NULL(Get);
+    MAYBE_INHERIT_DISALLOW_NULL(Set);
+    MAYBE_INHERIT_DISALLOW_NULL(Delete);
+    MAYBE_INHERIT_DISALLOW_NULL(Enumerate);
+    MAYBE_INHERIT_DISALLOW_NULL(OwnPropertyKeys);
+    MAYBE_INHERIT_DISALLOW_NULL(Allocate);
+    MAYBE_INHERIT_DISALLOW_NULL(Finalize);
+    MAYBE_INHERIT_DISALLOW_NULL(Scan);
 }
 
 ejsval
@@ -696,7 +765,7 @@ _ejs_object_setprop (ejsval val, ejsval key, ejsval value)
         EJS_NOT_IMPLEMENTED();
     }
 
-    OP(EJSVAL_TO_OBJECT(val), put)(val, key, value, val, EJS_FALSE);
+    OP(EJSVAL_TO_OBJECT(val),Set)(val, key, value, val);
 
     return value;
 }
@@ -737,7 +806,7 @@ _ejs_object_getprop (ejsval obj, ejsval key)
     last_lookup = ucs2_strdup (EJSVAL_TO_FLAT_STRING(ToString(key)));
 #endif
 
-    return OP(EJSVAL_TO_OBJECT(obj),get)(obj, key, obj);
+    return OP(EJSVAL_TO_OBJECT(obj),Get)(obj, key, obj);
 }
 
 ejsval
@@ -757,7 +826,7 @@ _ejs_object_define_value_property (ejsval obj, ejsval key, ejsval value, uint32_
 {
     EJSObject *_obj = EJSVAL_TO_OBJECT(obj);
     EJSPropertyDesc desc = { .value = value, .flags = flags | EJS_PROP_FLAGS_VALUE_SET };
-    return OP(_obj,define_own_property)(obj, key, &desc, EJS_FALSE);
+    return OP(_obj,DefineOwnProperty)(obj, key, &desc, EJS_FALSE);
 }
 
 EJSBool
@@ -765,7 +834,7 @@ _ejs_object_define_accessor_property (ejsval obj, ejsval key, ejsval get, ejsval
 {
     EJSObject *_obj = EJSVAL_TO_OBJECT(obj);
     EJSPropertyDesc desc = { .value = _ejs_undefined, .getter = get, .setter = set, .flags = flags | EJS_PROP_FLAGS_SETTER_SET | EJS_PROP_FLAGS_GETTER_SET };
-    return OP(_obj,define_own_property)(obj, key, &desc, EJS_FALSE);
+    return OP(_obj,DefineOwnProperty)(obj, key, &desc, EJS_FALSE);
 }
 
 
@@ -845,22 +914,20 @@ _ejs_Object_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     }
 }
 
-// ECMA262: 15.2.3.2
+// ECMA262: 19.1.2.9 Object.getPrototypeOf ( O ) 
 static ejsval
 _ejs_Object_getPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    ejsval obj = _ejs_undefined;
+    ejsval O = _ejs_undefined;
     if (argc > 0)
-        obj = args[0];
+        O = args[0];
     
-    /* 1. If Type(O) is not Object throw a TypeError exception. */
-    if (!EJSVAL_IS_OBJECT(obj)) {
-        _ejs_log ("throw TypeError, argument isn't an Object\n");
-        EJS_NOT_IMPLEMENTED();
-    }
-    
-    /* 2. Return the value of the [[Prototype]] internal property of O. */
-    return OP(EJSVAL_TO_OBJECT(obj),get_prototype_of)(obj);
+    // 1. Let obj be ToObject(O). 
+    // 2. ReturnIfAbrupt(obj). 
+    ejsval obj = ToObject(O);
+
+    // 3. Return the result of calling the [[GetPrototypeOf]] internal method of obj. 
+    return OP(EJSVAL_TO_OBJECT(obj),GetPrototypeOf)(obj);
 }
 
 // ECMA262: 19.1.2.18
@@ -893,8 +960,8 @@ _ejs_Object_setPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
     if (!EJSVAL_IS_OBJECT(O))
         return O;
     // 5. Let status be the result of calling the [[SetPrototypeOf]] internal method of O with argument proto.
-    EJSBool status = OP(EJSVAL_TO_OBJECT(O),set_prototype_of)(O,proto);
     // 6. ReturnIfAbrupt(status).
+    EJSBool status = OP(EJSVAL_TO_OBJECT(O),SetPrototypeOf)(O,proto);
     // 7. If status is false, then throw a TypeError exception.
     if (!status) {
         _ejs_log ("throw TypeError\n");
@@ -912,8 +979,7 @@ _ejs_object_set_prototype_of (ejsval obj, ejsval proto)
     return _ejs_Object_setPrototypeOf(_ejs_undefined, _ejs_undefined, 2, args);
 }
 
-
-// ECMA262: 15.2.3.3
+// ECMA262: 19.1.2.6 Object.getOwnPropertyDescriptor ( O, P ) 
 static ejsval
 _ejs_Object_getOwnPropertyDescriptor (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
@@ -923,24 +989,23 @@ _ejs_Object_getOwnPropertyDescriptor (ejsval env, ejsval _this, uint32_t argc, e
     if (argc > 0) O = args[0];
     if (argc > 1) P = args[1];
 
-    /* 1. If Type(O) is not Object throw a TypeError exception. */
-    if (!EJSVAL_IS_OBJECT(O)) {
-        _ejs_log ("throw TypeError, O isn't an Object\n");
-        EJS_NOT_IMPLEMENTED();
-    }
-    EJSObject *obj = EJSVAL_TO_OBJECT(O);
+    // 1. Let obj be ToObject(O). 
+    // 2. ReturnIfAbrupt(obj). 
+    ejsval obj = ToObject(O);
 
-    /* 2. Let name be ToString(P). */
-    ejsval name = ToPropertyKey(P);
+    // 3. Let key be ToPropertyKey(P). 
+    // 4. ReturnIfAbrupt(key). 
+    ejsval key = ToPropertyKey(P);
 
-    /* 3. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with argument name. */
-    EJSPropertyDesc* desc = OP(obj, get_own_property)(O, name);
+    // 5. Let desc be the result of calling the [[GetOwnProperty]] internal method of obj with argument key. 
+    // 6. ReturnIfAbrupt(desc). 
+    EJSPropertyDesc* desc = OP(EJSVAL_TO_OBJECT(obj),GetOwnProperty)(obj, key);
 
-    /* 4. Return the result of calling FromPropertyDescriptor(desc) (8.10.4).  */
+    // 7. Return the result of calling FromPropertyDescriptor(desc). 
     return FromPropertyDescriptor(desc);
 }
 
-// ECMA262: 19.1.2.7
+// ECMA262: 19.1.2.7 Object.getOwnPropertyNames ( O ) 
 static ejsval
 _ejs_Object_getOwnPropertyNames (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
@@ -1084,12 +1149,12 @@ _ejs_Object_assign (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
             //       v. Else if desc is not undefined and desc.[[Enumerable]] is true, then 
             if (desc && _ejs_property_desc_is_enumerable(desc)) {
                 //          1. Let propValue be Get(from, nextKey). 
-                ejsval propValue = OP(from_,get)(from, nextKey, from);
+                ejsval propValue = OP(from_,Get)(from, nextKey, from);
                 //          2. If propValue is an abrupt completion, then 
                 //             a. If pendingException is undefined, then set pendingException to propValue. 
                 //          3. else 
                 //             a. Let status be Put(to, nextKey, propValue, true); 
-                OP(to_,put)(to, nextKey, propValue, to, EJS_TRUE);
+                ejsval status = Put(to, nextKey, propValue, EJS_TRUE);
                 //             b. If status is an abrupt completion, then 
                 //                i. If pendingException is undefined, then set pendingException to status. 
             }
@@ -1180,7 +1245,7 @@ _ejs_Object_defineProperty (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
     ToPropertyDescriptor(Attributes, &desc);
 
     /* 4. Call the [[DefineOwnProperty]] internal method of O with arguments name, desc, and true. */
-    OP(obj,define_own_property)(O, name, &desc, EJS_TRUE);
+    OP(obj,DefineOwnProperty)(O, name, &desc, EJS_TRUE);
 
     /* 5. Return O. */
     return O;
@@ -1243,7 +1308,7 @@ _ejs_Object_defineProperties (ejsval env, ejsval _this, uint32_t argc, ejsval *a
         ejsval P = names[n];
 
         /* a. Let descObj be the result of calling the [[Get]] internal method of props with P as the argument. */
-        ejsval descObj = OP(props_obj,get)(props, P, props);
+        ejsval descObj = OP(props_obj,Get)(props, P, props);
 
         DefinePropertiesPair *pair = &descriptors[n];
         /* b. Let desc be the result of calling ToPropertyDescriptor with descObj as the argument. */
@@ -1261,7 +1326,7 @@ _ejs_Object_defineProperties (ejsval env, ejsval _this, uint32_t argc, ejsval *a
         EJSPropertyDesc* desc = &descriptors[d].desc;
 
         /*    c. Call the [[DefineOwnProperty]] internal method of O with arguments P, desc, and true. */
-        OP(obj,define_own_property)(O, P, desc, EJS_TRUE);
+        OP(obj,DefineOwnProperty)(O, P, desc, EJS_TRUE);
     }
 
     free (names);
@@ -1271,13 +1336,30 @@ _ejs_Object_defineProperties (ejsval env, ejsval _this, uint32_t argc, ejsval *a
     return O;
 }
 
-// ECMA262: 15.2.3.8
+// ECMA262: 19.1.2.17 Object.seal ( O ) 
 static ejsval
 _ejs_Object_seal (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
 
+    // 1. If Type(O) is not Object, return O. 
+    if (!EJSVAL_IS_OBJECT(O))
+        return O;
+
+    EJSBool status = EJS_FALSE;
+    // 2. Let status be the result of SetIntegrityLevel( O, "sealed"). 
+    // 3. ReturnIfAbrupt(status). 
+    EJS_NOT_IMPLEMENTED();
+
+    // 4. If status is false, throw a TypeError exception. 
+    if (!status)
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Unable to seal object");
+
+    // 5. Return O. 
+    return O;
+
+#if false
     /* 1. If Type(O) is not Object throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O)) {
         _ejs_log ("throw TypeError, O isn't an Object\n");
@@ -1305,12 +1387,33 @@ _ejs_Object_seal (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     /* 4. Return O. */
     return O;
+#endif
 }
 
-// FIXME ECMA262: 15.2.3.9
+// ECMA262: 19.1.2.5 Object.freeze ( O ) 
 static ejsval
 _ejs_Object_freeze (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
+    ejsval O = _ejs_undefined;
+    if (argc > 0) O = args[0];
+
+    // 1. If Type(O) is not Object, return O. 
+    if (!EJSVAL_IS_OBJECT(O))
+        return O;
+
+    EJSBool status = EJS_FALSE;
+    // 2. Let status be the result of SetIntegrityLevel( O, "frozen"). 
+    // 3. ReturnIfAbrupt(status). 
+    EJS_NOT_IMPLEMENTED();
+
+    // 4. If status is false, throw a TypeError exception. 
+    if (!status)
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Unable to freeze object");
+
+    // 5. Return O. 
+    return O;
+
+#if false
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
 
@@ -1329,7 +1432,7 @@ _ejs_Object_freeze (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         ejsval P = _ejs_property_iterator_current(iter);
 
         /*    a. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with P. */
-        EJSPropertyDesc* desc = OP(obj,get_own_property)(O, P);
+        EJSPropertyDesc* desc = OP(obj,GetOwnProperty)(O, P);
 
         /*    b. If IsDataDescriptor(desc) is true, then */
         if (IsDataDescriptor(desc)) {
@@ -1342,7 +1445,7 @@ _ejs_Object_freeze (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         }
 
         /*    d. Call the [[DefineOwnProperty]] internal method of O with P, desc, and true as arguments. */
-        OP(obj,define_own_property)(O, P, desc, EJS_TRUE);
+        OP(obj,DefineOwnProperty)(O, P, desc, EJS_TRUE);
     }
 
     /* 3. Set the [[Extensible]] internal property of O to false. */
@@ -1350,30 +1453,33 @@ _ejs_Object_freeze (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     /* 4. Return O. */
     return O;
+#endif
 }
 
-// ECMA262: 15.2.3.10
+// ECMA262: 19.1.2.15 Object.preventExtensions ( O ) 
 static ejsval
 _ejs_Object_preventExtensions (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
 
-    /* 1. If Type(O) is not Object throw a TypeError exception. */
-    if (!EJSVAL_IS_OBJECT(O)) {
-        _ejs_log ("throw TypeError, O isn't an Object\n");
-        EJS_NOT_IMPLEMENTED();
-    }
-    EJSObject* obj = EJSVAL_TO_OBJECT(O);
+    // 1. If Type(O) is not Object, return O. 
+    if (!EJSVAL_IS_OBJECT(O))
+        return O;
 
-    /* 2. Set the [[Extensible]] internal property of O to false. */
-    EJS_OBJECT_CLEAR_EXTENSIBLE(obj);
+    // 2. Let status be the result of calling the [[PreventExtensions]] internal method of O.
+    // 3. ReturnIfAbrupt(status).
+    EJSBool status = OP(EJSVAL_TO_OBJECT(O),PreventExtensions)(O);
+    
+    // 4. If status is false, throw a TypeError exception.
+    if (!status)
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "[[PreventExtensions]] returned false");
 
-    /* 3. Return O. */
+    // 5. Return O.
     return O;
 }
 
-// ECMA262: 19.1.2.10
+// ECMA262: 19.1.2.10 Object.is ( value1, value2 )
 static ejsval
 _ejs_Object_is (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
@@ -1383,17 +1489,24 @@ _ejs_Object_is (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     if (argc > 0) value1 = args[0];
     if (argc > 1) value2 = args[1];
 
-    return SameValue(value1, value2) ? _ejs_true : _ejs_false;
+    return BOOLEAN_TO_EJSVAL(SameValue(value1, value2));
 }
 
 
-// ECMA262: 15.2.3.11
+// ECMA262: 19.1.2.13 Object.isSealed ( O ) 
 static ejsval
 _ejs_Object_isSealed (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
 
+    // 1. If Type(O) is not Object, return true. 
+    if (!EJSVAL_IS_OBJECT(O))
+        return _ejs_true;
+
+    // 2. Return TestIntegrityLevel(O, "sealed"). 
+    EJS_NOT_IMPLEMENTED();
+#if false
     /* 1. If Type(O) is not Object throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O)) {
         _ejs_log ("throw TypeError, O isn't an Object\n");
@@ -1409,7 +1522,7 @@ _ejs_Object_isSealed (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         ejsval P = _ejs_property_iterator_current(iter);
 
         /*    a. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with P. */
-        EJSPropertyDesc* desc = OP(obj,get_own_property)(O, P);
+        EJSPropertyDesc* desc = OP(obj,GetOwnProperty)(O, P);
 
         /*    b. If desc.[[Configurable]] is true, then return false. */
         if (_ejs_property_desc_is_configurable(desc))
@@ -1422,12 +1535,24 @@ _ejs_Object_isSealed (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     /* 4. Otherwise, return false. */
     return _ejs_false;
+#endif
 }
 
-// ECMA262: 15.2.3.12
+// ECMA262: 19.1.2.12 Object.isFrozen ( O ) 
 static ejsval
 _ejs_Object_isFrozen (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
+    ejsval O = _ejs_undefined;
+    if (argc > 0) O = args[0];
+
+    // 1. If Type(O) is not Object, return true. 
+    if (!EJSVAL_IS_OBJECT(O))
+        return _ejs_true;
+
+    // 2. Return TestIntegrityLevel(O, "frozen"). 
+    EJS_NOT_IMPLEMENTED();
+
+#if false
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
 
@@ -1446,7 +1571,7 @@ _ejs_Object_isFrozen (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         ejsval P = _ejs_property_iterator_current(iter);
 
         /*    a. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with P. */
-        EJSPropertyDesc* desc = OP(obj,get_own_property)(O, P);
+        EJSPropertyDesc* desc = OP(obj,GetOwnProperty)(O, P);
 
         /*    b. If IsDataDescriptor(desc) is true then */
         if (IsDataDescriptor(desc)) {
@@ -1465,6 +1590,7 @@ _ejs_Object_isFrozen (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     
     /* 4. Otherwise, return false. */
     return _ejs_false;
+#endif
 }
 
 // ECMA262: 15.2.3.13
@@ -1474,15 +1600,12 @@ _ejs_Object_isExtensible (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
 
-    /* 1. If Type(O) is not Object throw a TypeError exception. */
-    if (!EJSVAL_IS_OBJECT(O)) {
-        _ejs_log ("throw TypeError, O isn't an Object\n");
-        EJS_NOT_IMPLEMENTED();
-    }
-    EJSObject* obj = EJSVAL_TO_OBJECT(O);
-
-    /* 2. Return the Boolean value of the [[Extensible]] internal property of O */
-    return BOOLEAN_TO_EJSVAL(EJS_OBJECT_IS_EXTENSIBLE(obj));
+    // 1. If Type(O) is not Object, return false. 
+    if (!EJSVAL_IS_OBJECT(O))
+        return _ejs_false;
+    
+    // 2. Return the result of IsExtensible(O).
+    return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(O),IsExtensible)(O));
 }
 
 // ECMA262: 19.1.2.14
@@ -1558,7 +1681,7 @@ _ejs_Object_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval 
 
     // 15. Let hasTag be the result of HasProperty(O, @@toStringTag). 
     // 16. ReturnIfAbrupt(hasTag). 
-    EJSBool hasTag = OP(EJSVAL_TO_OBJECT(O),has_property)(O, _ejs_Symbol_toStringTag);
+    EJSBool hasTag = OP(EJSVAL_TO_OBJECT(O),HasProperty)(O, _ejs_Symbol_toStringTag);
 
     ejsval tag;
     // 17. If hasTag is false, then let tag be builtinTag. 
@@ -1570,7 +1693,7 @@ _ejs_Object_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval 
         //     a. Let tag be the result of Get(O, @@toStringTag). 
         //     b. If tag is an abrupt completion, let tag be NormalCompletion("???"). 
         //     c. Let tag be tag.[[value]]. 
-        tag = OP(EJSVAL_TO_OBJECT(O),get)(O, _ejs_Symbol_toStringTag, O);
+        tag = OP(EJSVAL_TO_OBJECT(O),Get)(O, _ejs_Symbol_toStringTag, O);
 
         //     d. If Type(tag) is not String, let tag be "???". 
         if (!EJSVAL_IS_STRING(tag))
@@ -1595,7 +1718,7 @@ _ejs_Object_prototype_toLocaleString (ejsval env, ejsval _this, uint32_t argc, e
     EJSObject* O_ = EJSVAL_TO_OBJECT(O);
 
     /* 2. Let toString be the result of calling the [[Get]] internal method of O passing "toString" as the argument. */
-    ejsval toString = OP(O_, get)(O, _ejs_atom_toString, O);
+    ejsval toString = OP(O_, Get)(O, _ejs_atom_toString, O);
 
     /* 3. If IsCallable(toString) is false, throw a TypeError exception. */
     if (!EJSVAL_IS_CALLABLE(toString))
@@ -1620,7 +1743,7 @@ _ejs_Object_prototype_hasOwnProperty (ejsval env, ejsval _this, uint32_t argc, e
     if (EJS_UNLIKELY(argc > 0))
         needle = args[0];
 
-    return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(_this),get_own_property)(_this, needle) != NULL);
+    return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(_this),GetOwnProperty)(_this, needle) != NULL);
 }
 
 // ECMA262: 15.2.4.6
@@ -1640,7 +1763,7 @@ _ejs_Object_prototype_isPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ej
     /* 3. Repeat */
     while (EJS_TRUE) {
         /*    a. Let V be the value of the [[Prototype]] internal property of V. */
-        V = OP(EJSVAL_TO_OBJECT(V),get_prototype_of)(V);
+        V = OP(EJSVAL_TO_OBJECT(V),GetPrototypeOf)(V);
 
         /*    b. if V is null, return false */
         if (EJSVAL_IS_NULL(V))
@@ -1667,7 +1790,7 @@ _ejs_Object_prototype_propertyIsEnumerable (ejsval env, ejsval _this, uint32_t a
     EJSObject* O_ = EJSVAL_TO_OBJECT(O);
 
     /* 3. Let desc be the result of calling the [[GetOwnProperty]] internal method of O passing P as the argument. */
-    EJSPropertyDesc* desc = OP(O_, get_own_property)(O, P);
+    EJSPropertyDesc* desc = OP(O_, GetOwnProperty)(O, P);
     /* 4. If desc is undefined, return false. */
     if (!desc)
         return _ejs_false;
@@ -1786,7 +1909,7 @@ _ejs_object_specop_set_prototype_of (ejsval O, ejsval V)
             if (SameValue(p, O))
                 return EJS_FALSE;
             //       ii.  Let nextp be the result of calling the [[GetPrototypeOf]] internal method of p with no arguments.
-            ejsval nextp = OP(EJSVAL_TO_OBJECT(p),get_prototype_of)(p);
+            ejsval nextp = OP(EJSVAL_TO_OBJECT(p),GetPrototypeOf)(p);
             //       iii. ReturnIfAbrupt(nextp).
             //       iv.  Let p be nextp.
             p = nextp;
@@ -1809,41 +1932,53 @@ _ejs_object_specop_set_prototype_of (ejsval O, ejsval V)
     return EJS_TRUE;
 }
 
-// ECMA262: 8.12.3
+// ECMA262: 9.1.8 [[Get]] (P, Receiver) 
 static ejsval
-_ejs_object_specop_get (ejsval obj_, ejsval propertyName, ejsval receiver)
+_ejs_object_specop_get (ejsval O, ejsval P, ejsval Receiver)
 {
-    ejsval pname = ToPropertyKey(propertyName);
+    // 1. Assert: IsPropertyKey(P) is true. 
+    ejsval pname = ToPropertyKey(P); // XXX this shouldn't be necessary, but ejs passes numbers here
 
     if (EJSVAL_IS_STRING(pname) && !ucs2_strcmp(_ejs_ucs2___proto__, EJSVAL_TO_FLAT_STRING(pname)))
-        return OP(EJSVAL_TO_OBJECT(obj_),get_prototype_of) (obj_);
+        return OP(EJSVAL_TO_OBJECT(O),GetPrototypeOf) (O);
 
-    /* 1. Let desc be the result of calling the [[GetProperty]] internal method of O with property name P. */
-    EJSPropertyDesc* desc = OP(EJSVAL_TO_OBJECT(obj_),get_property) (obj_, pname);
-    /* 2. If desc is undefined, return undefined. */
+    // 2. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with argument P. 
+    // 3. ReturnIfAbrupt(desc). 
+    EJSPropertyDesc* desc = OP(EJSVAL_TO_OBJECT(O),GetOwnProperty) (O, P);
+
+    // 4. If desc is undefined, then 
     if (desc == NULL) {
-        // _ejs_log ("property lookup on a %s object, propname %s => undefined\n", CLASSNAME(EJSVAL_TO_OBJECT(obj_)), EJSVAL_TO_FLAT_STRING(pname));
-        return _ejs_undefined;
+        //    a. Let parent be the result of calling the [[GetPrototypeOf]] internal method of O. 
+        //    b. ReturnIfAbrupt(parent). 
+        ejsval parent = OP(EJSVAL_TO_OBJECT(O),GetPrototypeOf)(O);
+        //    c. If parent is null, then return undefined.
+        if (EJSVAL_IS_NULL(parent)) {
+            // _ejs_log ("property lookup on a %s object, propname %s => undefined\n", CLASSNAME(EJSVAL_TO_OBJECT(O)), EJSVAL_TO_FLAT_STRING(pname));
+            return _ejs_undefined;
+        }
+
+        //    d. Return the result of calling the [[Get]] internal method of parent with arguments P and Receiver. 
+        return OP(EJSVAL_TO_OBJECT(parent),Get)(parent, P, Receiver);
     }
 
-    /* 3. If IsDataDescriptor(desc) is true, return desc.[[Value]]. */
+    // 5. If IsDataDescriptor(desc) is true, return desc.[[Value]]. 
     if (IsDataDescriptor(desc)) {
         // if (EJSVAL_IS_UNDEFINED(desc->value))
-        //     _ejs_log ("property lookup on a %s object, propname %s => undefined\n", CLASSNAME(EJSVAL_TO_OBJECT(obj_)), EJSVAL_TO_FLAT_STRING(pname));
+        //     _ejs_log ("property lookup on a %s object, propname %s => undefined\n", CLASSNAME(EJSVAL_TO_OBJECT(O)), EJSVAL_TO_FLAT_STRING(pname));
         return desc->value;
     }
 
-    /* 4. Otherwise, IsAccessorDescriptor(desc) must be true so, let getter be desc.[[Get]]. */
+    // 6. Otherwise, IsAccessorDescriptor(desc) must be true so, let getter be desc.[[Get]]. 
     ejsval getter = _ejs_property_desc_get_getter(desc);
 
-    /* 5. If getter is undefined, return undefined. */
+    // 7. If getter is undefined, return undefined. 
     if (EJSVAL_IS_UNDEFINED(getter)) {
-        // _ejs_log ("property lookup on a %s object, propname %s => undefined getter\n", CLASSNAME(EJSVAL_TO_OBJECT(obj_)), EJSVAL_TO_FLAT_STRING(pname));
+        // _ejs_log ("property lookup on a %s object, propname %s => undefined getter\n", CLASSNAME(EJSVAL_TO_OBJECT(O)), EJSVAL_TO_FLAT_STRING(pname));
         return _ejs_undefined;
     }
 
-    /* 6. Return the result calling the [[Call]] internal method of getter providing O as the this value and providing no arguments */
-    return _ejs_invoke_closure (getter, receiver, 0, NULL);
+    // 8. Return the result of calling the [[Call]] internal method of getter with Receiver as the thisArgument and an empty List as argumentsList. 
+    return _ejs_invoke_closure (getter, Receiver, 0, NULL);
 }
 
 // ECMA262: 8.12.1
@@ -1856,157 +1991,106 @@ _ejs_object_specop_get_own_property (ejsval obj, ejsval propertyName)
     return _ejs_propertymap_lookup (obj_->map, property_str);
 }
 
-// ECMA262: 8.12.2
-static EJSPropertyDesc*
-_ejs_object_specop_get_property (ejsval O, ejsval P)
-{
-    EJSObject* obj = EJSVAL_TO_OBJECT(O);
-    /* 1. Let prop be the result of calling the [[GetOwnProperty]] internal method of O with property name P. */
-    EJSPropertyDesc* prop = OP(obj,get_own_property)(O, P);
-
-    /* 2. If prop is not undefined, return prop. */
-    if (prop)
-        return prop;
-
-    /* 3. Let proto be the value of the [[Prototype]] internal property of O. */
-    ejsval proto = OP(obj,get_prototype_of)(O);
-
-    /* 4. If proto is null, return undefined. */
-    if (EJSVAL_IS_NULL(proto))
-        return NULL;
-
-    EJSObject* proto_obj = EJSVAL_TO_OBJECT(proto);
-
-    /* 5. Return the result of calling the [[GetProperty]] internal method of proto with argument P. */
-    return OP(proto_obj, get_property)(proto, P);
-}
-
-// ECMA262: 8.12.5
-static void
-_ejs_object_specop_put (ejsval O, ejsval P, ejsval V, ejsval Receiver, EJSBool Throw)
-{
-    EJSObject* obj = EJSVAL_TO_OBJECT(O);
-
-    if (!EJSVAL_IS_SYMBOL(P) && !EJSVAL_IS_STRING(P))
-        P = ToPropertyKey(P);
-
-    /* 1. If the result of calling the [[CanPut]] internal method of O with argument P is false, then */
-    if (!OP(obj,can_put)(O, P)) {
-        /*    a. If Throw is true, then throw a TypeError exception. */
-        if (Throw) {
-            _ejs_log ("throw TypeError\n");
-            EJS_NOT_IMPLEMENTED();
-        }
-        else {
-            return;
-        }
-    }
-    /* 2. Let ownDesc be the result of calling the [[GetOwnProperty]] internal method of O with argument P. */
-    EJSPropertyDesc* ownDesc = OP(obj,get_own_property)(O, P);
-    
-    /* 3. If IsDataDescriptor(ownDesc) is true, then */
-    if (IsDataDescriptor(ownDesc)) {
-        /*    a. Let valueDesc be the Property Descriptor {[[Value]]: V}. */
-        EJSPropertyDesc valueDesc = { .value = V, .flags = EJS_PROP_FLAGS_VALUE_SET };
-        /*    b. Call the [[DefineOwnProperty]] internal method of O passing P, valueDesc, and Throw as arguments. */
-        OP(obj,define_own_property)(O, P, &valueDesc, Throw);
-        /*    c. Return. */
-        return;
-    }
-    /* 4. Let desc be the result of calling the [[GetProperty]] internal method of O with argument P. This may be */
-    /*    either an own or inherited accessor property descriptor or an inherited data property descriptor. */
-    EJSPropertyDesc* desc = OP(obj,get_property)(O, P);
-
-    /* 5. If IsAccessorDescriptor(desc) is true, then */
-    if (IsAccessorDescriptor(desc)) {
-        /*    a. Let setter be desc.[[Set]] which cannot be undefined. */
-        ejsval setter = _ejs_property_desc_get_setter(desc);
-        EJS_ASSERT (EJSVAL_IS_FUNCTION(setter));
-        /*    b. Call the [[Call]] internal method of setter providing O as the this value and providing V as the sole argument. */
-        _ejs_invoke_closure (setter, Receiver, 2, &V);
-    }
-    else {
-        /* 6. Else, create a named data property named P on object O as follows */
-        /*    a. Let newDesc be the Property Descriptor */
-        /*       {[[Value]]: V, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}. */
-        EJSPropertyDesc newDesc = { .value = V, .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE };
-
-        /*    b. Call the [[DefineOwnProperty]] internal method of O passing P, newDesc, and Throw as arguments. */
-        OP(obj,define_own_property)(O, P, &newDesc, Throw);
-    }
-    /* 7. Return. */
-}
-
-// ECMA262: 8.12.4
+// ECMA262: 9.1.9
 static EJSBool
-_ejs_object_specop_can_put (ejsval O, ejsval P)
+_ejs_object_specop_set (ejsval O, ejsval P, ejsval V, ejsval Receiver)
 {
-    EJSObject* obj = EJSVAL_TO_OBJECT(O);
+    EJSPropertyDesc undefined_desc = { .value = _ejs_undefined, .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE };
 
-    /* 1. Let desc be the result of calling the [[GetProperty]] internal method of O with property name P. */
-    EJSPropertyDesc* desc = OP(obj,get_own_property)(O, P);
+    // 1. Assert: IsPropertyKey(P) is true. 
+    P = ToPropertyKey(P); // XXX this shouldn't be necessary, but ejs passes numbers here
+    
+    // 2. Let ownDesc be the result of calling the [[GetOwnProperty]] internal method of O with argument P. 
+    // 3. ReturnIfAbrupt(ownDesc). 
+    EJSPropertyDesc* ownDesc = OP(EJSVAL_TO_OBJECT(O),GetOwnProperty)(O, P);
 
-    /* 2. If desc is not undefined, then */
-    if (desc) {
-        /* a. If IsAccessorDescriptor(desc) is true, then */
-        if (IsAccessorDescriptor(desc)) {
-            /*    i. If desc.[[Set]] is undefined, then return false. */
-            if (EJSVAL_IS_UNDEFINED(_ejs_property_desc_get_setter(desc)))
-                return EJS_FALSE;
-
-            /*    ii. Else return true. */
-            return EJS_TRUE;
+    // 4. If ownDesc is undefined, then 
+    if (!ownDesc) {
+        //    a. Let parent be the result of calling the [[GetPrototypeOf]] internal method of O. 
+        //    b. ReturnIfAbrupt(parent). 
+        ejsval parent = OP(EJSVAL_TO_OBJECT(O),GetPrototypeOf)(O);
+        //    c. If parent is not null, then 
+        if (!EJSVAL_IS_NULL(parent)) {
+            //       i. Return the result of calling the [[Set]] internal method of parent with arguments P, V, and Receiver. 
+            return OP(EJSVAL_TO_OBJECT(parent),Set)(parent, P, V, Receiver);
         }
-        /* b. Else, desc must be a DataDescriptor so return the value of desc.[[Writable]]. */
-        return _ejs_property_desc_is_writable(desc);
+        //    d. Else, 
+        else {
+            //       i. Let ownDesc be the PropertyDescriptor{[[Value]]: undefined, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}. 
+            ownDesc = &undefined_desc;
+        }
     }
-    /* 3. Let proto be the [[Prototype]] internal property of O. */
-    ejsval proto = OP(obj,get_prototype_of)(O);
 
-    /* 4. If proto is null, then return the value of the [[Extensible]] internal property of O. */
-    if (EJSVAL_IS_NULL(proto))
-        return EJS_OBJECT_IS_EXTENSIBLE(obj);
-
-    /* 5. Let inherited be the result of calling the [[GetProperty]] internal method of proto with property name P. */
-    EJSPropertyDesc* inherited = OP(EJSVAL_TO_OBJECT(proto),get_property)(proto, P);
-
-    /* 6. If inherited is undefined, return the value of the [[Extensible]] internal property of O. */
-    if (!inherited)
-        return EJS_OBJECT_IS_EXTENSIBLE(obj);
-
-    /* 7. If IsAccessorDescriptor(inherited) is true, then */
-    if (IsAccessorDescriptor(inherited)) {
-        /* a. If inherited.[[Set]] is undefined, then return false.*/
-        if (EJSVAL_IS_UNDEFINED(_ejs_property_desc_get_setter(inherited)))
-            return EJS_FALSE;
-        /* b. Else return true. */
-        return EJS_TRUE;
-    }
-    /* 8. Else, inherited must be a DataDescriptor*/
-    else {
-        /* a. If the [[Extensible]] internal property of O is false, return false. */
-        if (!EJS_OBJECT_IS_EXTENSIBLE(obj))
+    // 5. If IsDataDescriptor(ownDesc) is true, then 
+    if (IsDataDescriptor(ownDesc)) {
+        //    a. If ownDesc.[[Writable]] is false, return false. 
+        if (!_ejs_property_desc_is_writable(ownDesc))
             return EJS_FALSE;
 
-        /* b. Else return the value of inherited.[[Writable]]. */
-        return _ejs_property_desc_is_writable (inherited);
+        //    b. If Type(Receiver) is not Object, return false.
+        if (!EJSVAL_IS_OBJECT(Receiver))
+            return EJS_FALSE;
+
+        //    c. Let existingDescriptor be the result of calling the [[GetOwnProperty]] internal method of Receiver with argument P. 
+        //    d. ReturnIfAbrupt(existingDescriptor). 
+        EJSPropertyDesc* existingDescriptor = OP(EJSVAL_TO_OBJECT(Receiver),GetOwnProperty)(Receiver, P);
+
+        //    e. If existingDescriptor is not undefined, then 
+        if (existingDescriptor) {
+            //       i. Let valueDesc be the PropertyDescriptor{[[Value]]: V}. 
+            //       ii. Return the result of calling the [[DefineOwnProperty]] internal method of Receiver with arguments P and valueDesc. 
+            EJSPropertyDesc valueDesc = { .value = V, .flags = EJS_PROP_FLAGS_VALUE_SET };
+            return OP(EJSVAL_TO_OBJECT(Receiver),DefineOwnProperty)(Receiver, P, &valueDesc, EJS_FALSE); /* XXX not sure about last parameter here, it's an ES5-ism */
+        }
+        //    f. Else Receiver does not currently have a property P, 
+        else {
+            //       i. Return CreateDataProperty(Receiver, P, V). 
+            return _ejs_object_define_value_property (Receiver, P, V, EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
+        }
     }
+
+    // 6. If IsAccessorDescriptor(ownDesc) is true, then 
+    if (IsAccessorDescriptor(ownDesc)) {
+        //    a. Let setter be ownDesc.[[Set]]. 
+        ejsval setter = _ejs_property_desc_get_setter(ownDesc);
+        //    b. If setter is undefined, return false. 
+        if (EJSVAL_IS_UNDEFINED(setter))
+            return EJS_FALSE;
+        
+        //    c. Let setterResult be the result of calling the [[Call]] internal method of setter providing Receiver as thisArgument and a new List containing V as argumentsList. 
+        //    d. ReturnIfAbrupt(setterResult). 
+        /* unused ejsval setterResult = */ _ejs_invoke_closure(setter, Receiver, 1, &V);
+    }
+    // e. Return true.
+    return EJS_TRUE;
 }
 
+
+// ECMA262: 9.1.7 [[HasProperty]](P) 
 static EJSBool
 _ejs_object_specop_has_property (ejsval O, ejsval P)
 {
-    EJSObject* obj = EJSVAL_TO_OBJECT(O);
+    // 1. Assert: IsPropertyKey(P) is true. 
 
-    /* 1. Let desc be the result of calling the [[GetProperty]] internal method of O with property name P. */
-    EJSPropertyDesc* desc = OP(obj,get_property)(O, P);
-    
-    /* 2. If desc is undefined, then return false. */
-    if (!desc)
-        return EJS_FALSE;
+    // 2. Let hasOwn be the result of calling the [[GetOwnProperty]] internal method of O with argument P. 
+    // 3. ReturnIfAbrupt(hasOwn). 
+    EJSPropertyDesc* hasOwn = OP(EJSVAL_TO_OBJECT(O),GetOwnProperty)(O, P);
 
-    /* 3. Else return true. */
-    return EJS_TRUE;
+    // 4. If hasOwn is not undefined, then return true. 
+    if (hasOwn)
+        return EJS_TRUE;
+
+    // 5. Let parent be the result of calling the [[GetPrototypeOf]] internal method of O. 
+    // 6. ReturnIfAbrupt(parent). 
+    ejsval parent = OP(EJSVAL_TO_OBJECT(O),GetPrototypeOf)(O);
+
+    // 7. If parent is not null, then 
+    if (!EJSVAL_IS_NULL(parent)) {
+        //    a. Return the result of calling the [[HasProperty]] internal method of parent with argument P. 
+        return OP(EJSVAL_TO_OBJECT(parent),HasProperty)(parent, P);
+    }
+    // 8. Return false. 
+    return EJS_FALSE;
 }
 
 static EJSBool
@@ -2014,7 +2098,7 @@ _ejs_object_specop_delete (ejsval O, ejsval P, EJSBool Throw)
 {
     EJSObject* obj = EJSVAL_TO_OBJECT(O);
     /* 1. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with property name P. */
-    EJSPropertyDesc* desc = OP(obj,get_own_property)(O, P);
+    EJSPropertyDesc* desc = OP(obj,GetOwnProperty)(O, P);
     /* 2. If desc is undefined, then return true. */
     if (!desc)
         return EJS_TRUE;
@@ -2033,20 +2117,6 @@ _ejs_object_specop_delete (ejsval O, ejsval P, EJSBool Throw)
     return EJS_FALSE;
 }
 
-static ejsval
-_ejs_object_specop_default_value (ejsval obj, const char *hint)
-{
-    if (!strcmp (hint, "PreferredType") || !strcmp(hint, "String")) {
-        // this should look up ToString and call it
-        return ToString(obj);
-    }
-    else if (!strcmp (hint, "String")) {
-        EJS_NOT_IMPLEMENTED();
-    }
-
-    EJS_NOT_IMPLEMENTED();
-}
-
 // ECMA262: 8.12.9
 static EJSBool
 _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Desc, EJSBool Throw)
@@ -2060,7 +2130,7 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
 
     EJSObject* obj = EJSVAL_TO_OBJECT(O);
     /* 1. Let current be the result of calling the [[GetOwnProperty]] internal method of O with property name P. */
-    EJSPropertyDesc* current = OP(obj, get_own_property)(O, P);
+    EJSPropertyDesc* current = OP(obj, GetOwnProperty)(O, P);
 
     /* 2. Let extensible be the value of the [[Extensible]] internal property of O. */
     EJSBool extensible = EJS_OBJECT_IS_EXTENSIBLE(obj);
@@ -2276,19 +2346,52 @@ _ejs_object_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     scan_func (obj->proto);
 }
 
+// ECMA262: 9.1.3 [[IsExtensible]] ( ) 
+static EJSBool
+_ejs_object_specop_is_extensible(ejsval O)
+{
+    // 1. Return the value of the [[Extensible]] internal slot of O. 
+    return EJS_OBJECT_IS_EXTENSIBLE(EJSVAL_TO_OBJECT(O));
+}
+
+// ECMA262: 9.1.4 [[PreventExtensions]] ( ) 
+static EJSBool
+_ejs_object_specop_preventextensions (ejsval O)
+{
+    // 1. Set the value of the [[Extensible]] internal slot of O to false. 
+    EJS_OBJECT_CLEAR_EXTENSIBLE(EJSVAL_TO_OBJECT(O));
+
+    // 2. Return true. 
+    return EJS_TRUE;
+}
+
+// ECMA262: 9.1.11 [[Enumerate]] () 
+static ejsval
+_ejs_object_specop_enumerate (ejsval O)
+{
+    EJS_NOT_IMPLEMENTED();
+}
+
+// ECMA262: 9.1.12 [[OwnPropertyKeys]] ( ) 
+static ejsval
+_ejs_object_specop_own_property_keys (ejsval O)
+{
+    EJS_NOT_IMPLEMENTED();
+}
+
 EJS_DEFINE_CLASS(Object,
                  _ejs_object_specop_get_prototype_of,
                  _ejs_object_specop_set_prototype_of,
-                 _ejs_object_specop_get,
+                 _ejs_object_specop_is_extensible,
+                 _ejs_object_specop_preventextensions,
                  _ejs_object_specop_get_own_property,
-                 _ejs_object_specop_get_property,
-                 _ejs_object_specop_put,
-                 _ejs_object_specop_can_put,
-                 _ejs_object_specop_has_property,
-                 _ejs_object_specop_delete,
-                 _ejs_object_specop_default_value,
                  _ejs_object_specop_define_own_property,
-                 NULL, /* [[HasInstance]] */
+                 _ejs_object_specop_has_property,
+                 _ejs_object_specop_get,
+                 _ejs_object_specop_set,
+                 _ejs_object_specop_delete,
+                 _ejs_object_specop_enumerate,
+                 _ejs_object_specop_own_property_keys,
                  _ejs_object_specop_allocate,
                  _ejs_object_specop_finalize,
                  _ejs_object_specop_scan

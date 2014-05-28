@@ -202,17 +202,17 @@ _ejs_symbol_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 EJS_DEFINE_CLASS(Symbol,
                  OP_INHERIT, // [[GetPrototypeOf]]
                  OP_INHERIT, // [[SetPrototypeOf]]
-                 OP_INHERIT,
-                 OP_INHERIT,
-                 OP_INHERIT,
-                 OP_INHERIT,
-                 OP_INHERIT,
-                 OP_INHERIT,
-                 OP_INHERIT,
-                 OP_INHERIT,
-                 OP_INHERIT,
-                 OP_INHERIT,
+                 OP_INHERIT, // [[IsExtensible]]
+                 OP_INHERIT, // [[PreventExtensions]]
+                 OP_INHERIT, // [[GetOwnProperty]]
+                 OP_INHERIT, // [[DefineOwnProperty]]
+                 OP_INHERIT, // [[HasProperty]]
+                 OP_INHERIT, // [[Get]]
+                 OP_INHERIT, // [[Set]]
+                 OP_INHERIT, // [[Delete]]
+                 OP_INHERIT, // [[Enumerate]]
+                 OP_INHERIT, // [[OwnPropertyKeys]]
                  _ejs_symbol_specop_allocate,
-                 OP_INHERIT,
+                 OP_INHERIT, // [[Finalize]]
                  _ejs_symbol_specop_scan
                  )

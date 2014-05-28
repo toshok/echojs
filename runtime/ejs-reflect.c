@@ -100,7 +100,7 @@ _ejs_Reflect_get (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         receiver = target;
 
     // 6. Return the result of calling the [[Get]] internal method of obj with arguments key, and receiver
-    return OP(EJSVAL_TO_OBJECT(obj),get)(obj, key, receiver);
+    return OP(EJSVAL_TO_OBJECT(obj),Get)(obj, key, receiver);
 }
 
 // ECMA262: 26.1.7 Reflect.getOwnPropertyDescriptor ( target, propertyKey )
@@ -122,7 +122,7 @@ _ejs_Reflect_getOwnPropertyDescriptor (ejsval env, ejsval _this, uint32_t argc, 
 
     // 5. Let desc be the result of calling the [[GetOwnProperty]] internal method of obj with argument key. 
     // 6. ReturnIfAbrupt(desc). 
-    EJSPropertyDesc* desc = OP(EJSVAL_TO_OBJECT(obj),get_own_property)(obj, key);
+    EJSPropertyDesc* desc = OP(EJSVAL_TO_OBJECT(obj),GetOwnProperty)(obj, key);
 
     // 7. Return the result of calling FromPropertyDescriptor(desc). 
     return FromPropertyDescriptor(desc);
@@ -140,7 +140,7 @@ _ejs_Reflect_getPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     ejsval obj = ToObject(target);
 
     // 3. Return the result of calling the [[GetPrototypeOf]] internal method of obj. 
-    return OP(EJSVAL_TO_OBJECT(obj),get_prototype_of)(obj);
+    return OP(EJSVAL_TO_OBJECT(obj),GetPrototypeOf)(obj);
 }
 
 // ECMA262: 26.1.9 Reflect.has ( target, propertyKey ) 
@@ -162,7 +162,7 @@ _ejs_Reflect_has (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     ejsval key = ToPropertyKey(propertyKey);
     
     // 5. Return the result of calling the [[HasProperty]] internal method of obj with argument key.
-    return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(obj),has_property)(obj, key));
+    return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(obj),HasProperty)(obj, key));
 }
 
 // ECMA262: 26.1.10 Reflect.isExtensible (target) 
@@ -238,9 +238,7 @@ _ejs_Reflect_set (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         receiver = target;
 
     // 6. Return the result of calling the [[Set]] internal method of obj with arguments key, V, and receiver. 
-    OP(EJSVAL_TO_OBJECT(obj),put)(obj, key, V, receiver, EJS_TRUE);
-
-    return _ejs_true; // XXX
+    return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(obj),Set)(obj, key, V, receiver));
 }
 
 // ECMA262: 26.1.14 Reflect.setPrototypeOf ( target, proto ) 
@@ -262,7 +260,7 @@ _ejs_Reflect_setPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
         _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "prototype argument must be an object or null");
 
     // 4. Return the result of calling the [[SetPrototypeOf]] internal method of obj with argument proto. 
-    return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(obj), set_prototype_of)(target, proto));
+    return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(obj), SetPrototypeOf)(target, proto));
 }
 
 void

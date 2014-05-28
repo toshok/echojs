@@ -645,17 +645,17 @@ _ejs_xmlhttprequest_specop_allocate()
 EJS_DEFINE_CLASS(XMLHttpRequest,
                  OP_INHERIT, // [[GetPrototypeOf]]
                  OP_INHERIT, // [[SetPrototypeOf]]
-                 OP_INHERIT, // get,
-                 OP_INHERIT, // get_own_property,
-                 OP_INHERIT, // get_property,
-                 OP_INHERIT, // put,
-                 OP_INHERIT, // can_put,
-                 OP_INHERIT, // has_property,
-                 OP_INHERIT, // delete,
-                 OP_INHERIT, // default_value
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
+                 OP_INHERIT, // [[IsExtensible]]
+                 OP_INHERIT, // [[PreventExtensions]]
+                 OP_INHERIT, // [[GetOwnProperty]]
+                 OP_INHERIT, // [[DefineOwnProperty]]
+                 OP_INHERIT, // [[HasProperty]]
+                 OP_INHERIT, // [[Get]]
+                 OP_INHERIT, // [[Set]]
+                 OP_INHERIT, // [[Delete]]
+                 OP_INHERIT, // [[Enumerate]]
+                 OP_INHERIT, // [[OwnPropertyKeys]]
                  _ejs_xmlhttprequest_specop_allocate,
-                 OP_INHERIT, // finalize
-                 OP_INHERIT  // scan
+                 OP_INHERIT, // [[Finalize]]
+                 OP_INHERIT  // [[Scan]]
                  )

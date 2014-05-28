@@ -2009,7 +2009,7 @@ webglrenderingcontext_specop_has_property (ejsval O, ejsval P)
     
 	if (constant_info == NULL) {
 		free (prop);
-        return _ejs_Object_specops.has_property (O, P);
+        return _ejs_Object_specops.HasProperty (O, P);
 	}
 
 	free (prop);
@@ -2027,7 +2027,7 @@ webglrenderingcontext_specop_get (ejsval O, ejsval P, ejsval receiver)
     
 	if (constant_info == NULL) {
 		free (prop);
-        return _ejs_Object_specops.get (O, P, receiver);
+        return _ejs_Object_specops.Get (O, P, receiver);
 	}
 
 	free (prop);
@@ -2172,24 +2172,22 @@ _ejs_objc_allocateWebGLRenderingContext (ejsval env, ejsval _this, uint32_t argc
 }
 
 #define EJS_WEBGL_OBJ(n) EJS_DEFINE_CLASS(n, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, finalize_release_private_data, OP_INHERIT)
-#define EJS_WEBGL_INHERIT_ALL(n) EJS_DEFINE_CLASS(n, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT)
-
 EJS_DEFINE_CLASS(WebGLRenderingContext,
                  OP_INHERIT, // [[GetPrototypeOf]]
                  OP_INHERIT, // [[SetPrototypeOf]]
-                 webglrenderingcontext_specop_get,
-                 OP_INHERIT, // get_own_property,
-                 OP_INHERIT, // get_property,
-                 OP_INHERIT, // put,
-                 OP_INHERIT, // can_put,
+                 OP_INHERIT, // [[IsExtensible]]
+                 OP_INHERIT, // [[PreventExtensions]]
+                 OP_INHERIT, // [[GetOwnProperty]]
+                 OP_INHERIT, // [[DefineOwnProperty]]
                  webglrenderingcontext_specop_has_property,
-                 OP_INHERIT, // delete,
-                 OP_INHERIT, // default_value
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
-                 OP_INHERIT, // allocate
+                 webglrenderingcontext_specop_get,
+                 OP_INHERIT, // [[Set]]
+                 OP_INHERIT, // [[Delete]]
+                 OP_INHERIT, // [[Enumerate]]
+                 OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Allocate]]
                  finalize_release_private_data,
-                 OP_INHERIT  // scan
+                 OP_INHERIT  // [[Scan]]
                  )
 
 EJS_WEBGL_OBJ(WebGLBuffer);
@@ -2200,7 +2198,7 @@ EJS_WEBGL_OBJ(WebGLShader);
 EJS_WEBGL_OBJ(WebGLTexture);
 EJS_WEBGL_OBJ(WebGLActiveInfo);
 
-EJS_WEBGL_INHERIT_ALL(WebGLUniformLocation);
+EJS_DEFINE_INHERIT_ALL_CLASS(WebGLUniformLocation);
 
 #undef EJS_WEBGL_OBJ
 #undef EJS_WEBGL_INHERIT_ALL

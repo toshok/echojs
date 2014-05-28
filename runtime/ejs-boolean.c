@@ -53,7 +53,7 @@ _ejs_Boolean_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         
     EJSObject* F_ = EJSVAL_TO_OBJECT(F);
 
-    ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
     if (EJSVAL_IS_UNDEFINED(proto)) {
         proto = _ejs_Boolean_prototype;
     }
@@ -110,19 +110,6 @@ _ejs_boolean_init(ejsval global)
     _ejs_object_define_value_property (_ejs_Boolean_prototype, _ejs_Symbol_toStringTag, _ejs_atom_Boolean, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
 }
 
-static ejsval
-_ejs_boolean_specop_default_value (ejsval obj, const char *hint)
-{
-    if (!strcmp (hint, "PreferredType") || !strcmp(hint, "Boolean")) {
-        return EJSVAL_TO_BOOLEAN_OBJECT(obj)->boolean_data;
-    }
-    else if (!strcmp (hint, "String")) {
-        EJS_NOT_IMPLEMENTED();
-    }
-    else
-        return _ejs_Object_specops.default_value (obj, hint);
-}
-
 EJSObject*
 _ejs_boolean_specop_allocate()
 {
@@ -132,18 +119,17 @@ _ejs_boolean_specop_allocate()
 EJS_DEFINE_CLASS(Boolean,
                  OP_INHERIT, // [[GetPrototypeOf]]
                  OP_INHERIT, // [[SetPrototypeOf]]
-                 OP_INHERIT, // get
-                 OP_INHERIT, // get_own_property
-                 OP_INHERIT, // get_property
-                 OP_INHERIT, // put
-                 OP_INHERIT, // can_put
-                 OP_INHERIT, // has_property
-                 OP_INHERIT, // delete
-                 _ejs_boolean_specop_default_value,
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
+                 OP_INHERIT, // [[IsExtensible]]
+                 OP_INHERIT, // [[PreventExtensions]]
+                 OP_INHERIT, // [[GetOwnProperty]]
+                 OP_INHERIT, // [[DefineOwnProperty]]
+                 OP_INHERIT, // [[HasProperty]]
+                 OP_INHERIT, // [[Get]]
+                 OP_INHERIT, // [[Set]]
+                 OP_INHERIT, // [[Delete]]
+                 OP_INHERIT, // [[Enumerate]]
+                 OP_INHERIT, // [[OwnPropertyKeys]]
                  _ejs_boolean_specop_allocate,
-                 OP_INHERIT, // finalize
-                 OP_INHERIT  // scan
+                 OP_INHERIT, // [[Finalize]]
+                 OP_INHERIT  // [[Scan]]
                  )
-

@@ -380,6 +380,11 @@ EJS_ATOM2([object ,toString_prefix)
 EJS_ATOM2(],toString_suffix)
 EJS_ATOM2(???,unknown_tag)
 
+// ToPrimitive hints
+//EJS_ATOM(string)
+//EJS_ATOM(number)
+EJS_ATOM(default)
+
 // some numbers
 EJS_ATOM2(0,0)
 EJS_ATOM2(1,1)
@@ -604,3 +609,7 @@ EJS_ATOM2(000000000000000000,zero_18)
 EJS_ATOM2(0000000000000000000,zero_19)
 EJS_ATOM2(00000000000000000000,zero_20)
 EJS_ATOM2(000000000000000000000,zero_21)
+
+// some errors:
+
+EJS_ATOM2(property is not callable: ,error_not_callable)

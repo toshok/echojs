@@ -435,12 +435,12 @@ static ejsval
 Str(StringifyState *state, ejsval key, ejsval holder)
 {
     /* 1. Let value be the result of calling the [[Get]] internal method of holder with argument key. */
-    ejsval value = OP(EJSVAL_TO_OBJECT(holder), get)(holder, key, holder);
+    ejsval value = OP(EJSVAL_TO_OBJECT(holder),Get)(holder, key, holder);
 
     /* 2. If Type(value) is Object, then */
     if (EJSVAL_IS_OBJECT(value)) {
         /*    a. Let toJSON be the result of calling the [[Get]] internal method of value with argument "toJSON". */
-        ejsval toJSON = OP(EJSVAL_TO_OBJECT(holder), get)(holder, _ejs_atom_toJSON, holder);
+        ejsval toJSON = OP(EJSVAL_TO_OBJECT(holder),Get)(holder, _ejs_atom_toJSON, holder);
         /*    b. If IsCallable(toJSON) is true */
         if (EJSVAL_IS_CALLABLE(toJSON)) {
             /*       i. Let value be the result of calling the [[Call]] internal method of toJSON passing value as the 
@@ -632,7 +632,7 @@ _ejs_JSON_stringify (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     /* 10. Call the [[DefineOwnProperty]]  internal method of wrapper with arguments the empty String, the Property 
        Descriptor {[[Value]]: value, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
     EJSPropertyDesc desc = { .value = value, .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE };
-    OP(EJSVAL_TO_OBJECT(wrapper), define_own_property)(wrapper, _ejs_atom_empty, &desc, EJS_FALSE);
+    OP(EJSVAL_TO_OBJECT(wrapper), DefineOwnProperty)(wrapper, _ejs_atom_empty, &desc, EJS_FALSE);
     /* 11. Return the result of calling the abstract operation Str with the empty String and wrapper. */
     return Str(&state, _ejs_atom_empty, wrapper);
 }

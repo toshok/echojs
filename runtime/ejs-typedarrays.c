@@ -116,7 +116,7 @@ _ejs_ArrayBuffer_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     // 1. Let obj be the result of calling OrdinaryCreateFromConstructor(constructor, "%ArrayBufferPrototype%", ( [[ArrayBufferData]], [[ArrayBufferByteLength]]) ). 
     // 2. ReturnIfAbrupt(obj). 
-    ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
     if (EJSVAL_IS_UNDEFINED(proto))
         proto = _ejs_ArrayBuffer_prototype;
 
@@ -211,7 +211,7 @@ _ejs_DataView_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     EJSObject* F_ = EJSVAL_TO_OBJECT(F);
 
     // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%DataViewPrototype%", ([[DataView]], [[ViewedArrayBuffer]], [[ByteLength]], [[ByteOffset]]) ). 
-    ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
     if (EJSVAL_IS_UNDEFINED(proto))
         proto = _ejs_DataView_prototype;
 
@@ -460,7 +460,7 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
      }                                                                  \
                                                                         \
      /* otherwise we fallback to the object implementation */           \
-     return _ejs_Object_specops.get (obj, propertyName, receiver);      \
+     return _ejs_Object_specops.Get (obj, propertyName, receiver);      \
  }                                                                      \
                                                                         \
  static EJSPropertyDesc*                                                \
@@ -474,17 +474,11 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
                  return NULL; /* XXX */                                 \
          }                                                              \
      }                                                                  \
-     return _ejs_Object_specops.get_own_property (obj, propertyName);   \
+     return _ejs_Object_specops.GetOwnProperty (obj, propertyName);     \
  }                                                                      \
                                                                         \
- static EJSPropertyDesc*                                                \
- _ejs_##arraytype##array_specop_get_property (ejsval obj, ejsval propertyName) \
- {                                                                      \
-     return _ejs_Object_specops.get_property (obj, propertyName);       \
- }                                                                      \
-                                                                        \
- static void                                                            \
- _ejs_##arraytype##array_specop_put (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver, EJSBool flag) \
+ static EJSBool                                                         \
+ _ejs_##arraytype##array_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver) \
  {                                                                      \
      /* check if propertyName is an integer, or a string that we can convert to an int */ \
      EJSBool is_index = EJS_FALSE;                                      \
@@ -500,23 +494,18 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
                                                                         \
      if (is_index) {                                                    \
          if (idx < 0 || idx >= EJS_TYPEDARRAY_LEN(obj)) {               \
-             return;                                                    \
+             return EJS_TRUE;                                           \
          }                                                              \
          void* data = _ejs_typedarray_get_data (EJSVAL_TO_OBJECT(obj)); \
          ((elementtype*)data)[idx] = (elementtype)EJSVAL_TO_NUMBER(val); \
      }                                                                  \
- }                                                                      \
-                                                                        \
- static EJSBool                                                         \
- _ejs_##arraytype##array_specop_can_put (ejsval obj, ejsval propertyName) \
- {                                                                      \
-     return _ejs_Object_specops.can_put (obj, propertyName);            \
+     return EJS_FALSE; /* XXX */                                        \
  }                                                                      \
                                                                         \
  static EJSBool                                                         \
  _ejs_##arraytype##array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag) \
  {                                                                      \
-     return _ejs_Object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag); \
+     return _ejs_Object_specops.DefineOwnProperty (obj, propertyName, propertyDescriptor, flag); \
  }                                                                      \
                                                                         \
  static EJSBool                                                         \
@@ -531,7 +520,7 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
  _ejs_##ArrayType##Array_prototype_set_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
  {                                                                      \
      /* XXX needs a lot of help here... */                              \
-     OP(EJSVAL_TO_OBJECT(_this), put)(_this, args[0], args[1], _this, EJS_FALSE); \
+     OP(EJSVAL_TO_OBJECT(_this), Set)(_this, args[0], args[1], _this); \
      return args[1];                                                    \
  }                                                                      \
                                                                         \
@@ -583,7 +572,7 @@ static ejsval                                                           \
                                                                         \
     /* 3. Let proto be GetPrototypeFromConstructor(F, "%TypedArrayPrototype%").  */ \
     /* 4. ReturnIfAbrupt(proto).  */                                    \
-    ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);               \
+    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);               \
     if (EJSVAL_IS_UNDEFINED(proto)) {                                   \
         proto = _ejs_##ArrayType##Array_prototype;                      \
     }                                                                   \
@@ -811,7 +800,7 @@ _ejs_arraybuffer_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
     }
 
     // otherwise we fallback to the object implementation
-    return _ejs_Object_specops.get (obj, propertyName, receiver);
+    return _ejs_Object_specops.Get (obj, propertyName, receiver);
 }
 
 static EJSPropertyDesc*
@@ -828,11 +817,11 @@ _ejs_arraybuffer_specop_get_own_property (ejsval obj, ejsval propertyName)
 
     // XXX we need to handle the length property here (see EJSArray's get_own_property)
 
-    return _ejs_Object_specops.get_own_property (obj, propertyName);
+    return _ejs_Object_specops.GetOwnProperty (obj, propertyName);
 }
 
-static void
-_ejs_arraybuffer_specop_put (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver, EJSBool flag)
+static EJSBool
+_ejs_arraybuffer_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver)
 {
     // check if propertyName is a uint32, or a string that we can convert to an uint32
     int idx = -1;
@@ -856,11 +845,11 @@ _ejs_arraybuffer_specop_put (ejsval obj, ejsval propertyName, ejsval val, ejsval
         EJS_ARRAY_LEN(obj) = idx + 1;
         if (EJS_ARRAY_LEN(obj) >= EJS_DENSE_ARRAY_ALLOC(obj))
             abort();
-        return;
+        return EJS_TRUE;
     }
     // if we fail there, we fall back to the object impl below
 
-    _ejs_Object_specops.put (obj, propertyName, val, receiver, flag);
+    return _ejs_Object_specops.Set (obj, propertyName, val, receiver);
 }
 
 static EJSBool
@@ -879,7 +868,7 @@ _ejs_arraybuffer_specop_has_property (ejsval obj, ejsval propertyName)
 
     // if we fail there, we fall back to the object impl below
 
-    return _ejs_Object_specops.has_property (obj, propertyName);
+    return _ejs_Object_specops.HasProperty (obj, propertyName);
 }
 
 static EJSBool
@@ -895,7 +884,7 @@ _ejs_arraybuffer_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
     }
 
     if (idx == -1)
-        return _ejs_Object_specops._delete (obj, propertyName, flag);
+        return _ejs_Object_specops.Delete (obj, propertyName, flag);
 
     // if it's outside the array bounds, do nothing
     if (idx < EJS_ARRAY_LEN(obj))
@@ -909,7 +898,6 @@ _ejs_arraybuffer_specop_allocate()
     return (EJSObject*)_ejs_gc_new (EJSArrayBuffer);
 }
 
-
 static void
 _ejs_arraybuffer_specop_finalize (EJSObject* obj)
 {
@@ -918,7 +906,7 @@ _ejs_arraybuffer_specop_finalize (EJSObject* obj)
         free (arraybuf->data.alloced_buf);
         arraybuf->data.alloced_buf = NULL;
     }
-    _ejs_Object_specops.finalize (obj);
+    _ejs_Object_specops.Finalize (obj);
 }
 
 static void
@@ -928,27 +916,26 @@ _ejs_arraybuffer_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     if (arraybuf->dependent) {
         scan_func (arraybuf->data.dependent.buf);
     }
-    _ejs_Object_specops.scan (obj, scan_func);
+    _ejs_Object_specops.Scan (obj, scan_func);
 }
 
 EJS_DEFINE_CLASS(ArrayBuffer,
                  OP_INHERIT, // [[GetPrototypeOf]]
                  OP_INHERIT, // [[SetPrototypeOf]]
-                 _ejs_arraybuffer_specop_get,
+                 OP_INHERIT, // [[IsExtensible]]
+                 OP_INHERIT, // [[PreventExtensions]]
                  _ejs_arraybuffer_specop_get_own_property,
-                 OP_INHERIT, // get_property
-                 _ejs_arraybuffer_specop_put,
-                 OP_INHERIT, // can_put
+                 OP_INHERIT, // [[DefineOwnProperty]]
                  _ejs_arraybuffer_specop_has_property,
+                 _ejs_arraybuffer_specop_get,
+                 _ejs_arraybuffer_specop_set,
                  _ejs_arraybuffer_specop_delete,
-                 OP_INHERIT, // default_value
-                 OP_INHERIT, // define_own_property
-                 OP_INHERIT, // has_instance
+                 OP_INHERIT, // [[Enumerate]]
+                 OP_INHERIT, // [[OwnPropertyKeys]]
                  _ejs_arraybuffer_specop_allocate,
                  _ejs_arraybuffer_specop_finalize,
                  _ejs_arraybuffer_specop_scan
                  )
-
 
 static EJSObject*
 _ejs_typedarray_specop_allocate()
@@ -956,12 +943,11 @@ _ejs_typedarray_specop_allocate()
     return (EJSObject*)_ejs_gc_new (EJSTypedArray);
 }
 
-
 static void
 _ejs_typedarray_specop_finalize (EJSObject* obj)
 {
     //EJSTypedArray *arr = (EJSTypedArray*)obj;
-    _ejs_Object_specops.finalize (obj);
+    _ejs_Object_specops.Finalize (obj);
 }
 
 static void
@@ -969,7 +955,7 @@ _ejs_typedarray_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSTypedArray *arr = (EJSTypedArray*)obj;
     scan_func(arr->buffer);
-    _ejs_Object_specops.scan (obj, scan_func);
+    _ejs_Object_specops.Scan (obj, scan_func);
 }
 
 static ejsval
@@ -996,7 +982,7 @@ _ejs_dataview_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
     }
 
     // otherwise we fallback to the object implementation
-    return _ejs_Object_specops.get (obj, propertyName, receiver);
+    return _ejs_Object_specops.Get (obj, propertyName, receiver);
 }
 
 static EJSPropertyDesc*
@@ -1011,17 +997,11 @@ _ejs_dataview_specop_get_own_property (ejsval obj, ejsval propertyName)
         }
     }
 
-    return _ejs_Object_specops.get_own_property (obj, propertyName);
+    return _ejs_Object_specops.GetOwnProperty (obj, propertyName);
 }
 
-static EJSPropertyDesc*
-_ejs_dataview_specop_get_property (ejsval obj, ejsval propertyName)
-{
-    return _ejs_Object_specops.get_property (obj, propertyName);
-}
-
-static void
-_ejs_dataview_specop_put (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver, EJSBool flag)
+static EJSBool
+_ejs_dataview_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver)
 {
      EJSBool is_index = EJS_FALSE;
      ejsval idx_val = ToNumber(propertyName);
@@ -1036,20 +1016,15 @@ _ejs_dataview_specop_put (ejsval obj, ejsval propertyName, ejsval val, ejsval re
 
      if (is_index) {
          if (idx < 0 || idx >= EJS_DATA_VIEW_BYTE_LEN(obj))
-             return;
+             return EJS_FALSE;
 
          void* data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(obj));
          ((unsigned char*)data)[idx] = (unsigned char)EJSVAL_TO_NUMBER(val);
 
-         return;
+         return EJS_TRUE;
      }
 
-     _ejs_Object_specops.put (obj, propertyName, val, receiver, flag);
-}
-
-static EJSBool _ejs_dataview_specop_can_put (ejsval obj, ejsval propertyName)
-{
-    return _ejs_Object_specops.can_put (obj, propertyName);
+     return _ejs_Object_specops.Set (obj, propertyName, val, receiver);
 }
 
 static EJSBool
@@ -1066,7 +1041,7 @@ _ejs_dataview_specop_has_property (ejsval obj, ejsval propertyName)
         }
     }
 
-    return _ejs_Object_specops.has_property (obj, propertyName);
+    return _ejs_Object_specops.HasProperty (obj, propertyName);
 }
 
 static EJSBool
@@ -1081,7 +1056,7 @@ _ejs_dataview_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
     }
 
     if (idx == -1)
-        return _ejs_Object_specops._delete (obj, propertyName, flag);
+        return _ejs_Object_specops.Delete (obj, propertyName, flag);
 
     if (idx < EJS_DATA_VIEW_BYTE_LEN(obj)) {
          //void* data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(obj));
@@ -1091,16 +1066,10 @@ _ejs_dataview_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
     return EJS_FALSE;
 }
 
-static ejsval
-_ejs_dataview_specop_default_value (ejsval obj, const char *hint)
-{
-    return _ejs_Object_specops.default_value (obj, hint);
-}
-
 static EJSBool
 _ejs_dataview_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag)
 {
-    return _ejs_Object_specops.define_own_property (obj, propertyName, propertyDescriptor, flag);
+    return _ejs_Object_specops.DefineOwnProperty (obj, propertyName, propertyDescriptor, flag);
 }
 
 static EJSObject*
@@ -1110,34 +1079,28 @@ _ejs_dataview_specop_allocate ()
 }
 
 static void
-_ejs_dataview_specop_finalize (EJSObject* obj)
-{
-    _ejs_Object_specops.finalize (obj);
-}
-
-static void
 _ejs_dataview_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSDataView *view = (EJSDataView*)obj;
     scan_func (view->buffer);
-    _ejs_Object_specops.scan (obj, scan_func);
+    _ejs_Object_specops.Scan (obj, scan_func);
 }
 
 EJS_DEFINE_CLASS(DataView,
                  OP_INHERIT, // [[GetPrototypeOf]]
                  OP_INHERIT, // [[SetPrototypeOf]]
-                 _ejs_dataview_specop_get,
+                 OP_INHERIT, // [[IsExtensible]]
+                 OP_INHERIT, // [[PreventExtensions]]
                  _ejs_dataview_specop_get_own_property,
-                 _ejs_dataview_specop_get_property,
-                 _ejs_dataview_specop_put,
-                 _ejs_dataview_specop_can_put,
-                 _ejs_dataview_specop_has_property,
-                 _ejs_dataview_specop_delete,
-                 _ejs_dataview_specop_default_value,
                  _ejs_dataview_specop_define_own_property,
-                 NULL, // has_instance
+                 _ejs_dataview_specop_has_property,
+                 _ejs_dataview_specop_get,
+                 _ejs_dataview_specop_set,
+                 _ejs_dataview_specop_delete,
+                 OP_INHERIT, // [[Enumerate]]
+                 OP_INHERIT, // [[OwnPropertyKeys]]
                  _ejs_dataview_specop_allocate,
-                 _ejs_dataview_specop_finalize,
+                 OP_INHERIT, // [[Finalize]]
                  _ejs_dataview_specop_scan
                  )
 
@@ -1145,15 +1108,15 @@ EJS_DEFINE_CLASS(DataView,
     EJSSpecOps _ejs_##arraytype##array_specops = {                     \
         #ArrayType "Array",                                            \
         OP_INHERIT, OP_INHERIT,                                        \
-        _ejs_##arraytype##array_specop_get,                            \
+        OP_INHERIT, OP_INHERIT,                                        \
         _ejs_##arraytype##array_specop_get_own_property,               \
-        _ejs_##arraytype##array_specop_get_property,                   \
-        _ejs_##arraytype##array_specop_put,                            \
-        _ejs_##arraytype##array_specop_can_put,                        \
-        _ejs_##arraytype##array_specop_has_property,                   \
-        OP_INHERIT,                                                    \
-        OP_INHERIT,                                                    \
         _ejs_##arraytype##array_specop_define_own_property,            \
+        _ejs_##arraytype##array_specop_has_property,                   \
+        _ejs_##arraytype##array_specop_get,                            \
+        _ejs_##arraytype##array_specop_set,                            \
+        OP_INHERIT,                                                    \
+        OP_INHERIT,                                                    \
+        OP_INHERIT,                                                    \
         OP_INHERIT,                                                    \
         _ejs_typedarray_specop_allocate,                               \
         _ejs_typedarray_specop_finalize,                               \

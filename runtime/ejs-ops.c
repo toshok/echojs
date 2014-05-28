@@ -19,6 +19,7 @@
 #include "ejs-ops.h"
 #include "ejs-error.h"
 #include "ejs-array.h"
+#include "ejs-proxy.h"
 
 ejsval _ejs_isNaN EJSVAL_ALIGNMENT;
 ejsval _ejs_isFinite EJSVAL_ALIGNMENT;
@@ -325,13 +326,89 @@ ejsval ToBoolean(ejsval exp)
     return BOOLEAN_TO_EJSVAL(ToEJSBool(exp));
 }
 
-ejsval ToPrimitive(ejsval exp)
+typedef enum {
+    TO_PRIM_HINT_DEFAULT,
+    TO_PRIM_HINT_STRING,
+    TO_PRIM_HINT_NUMBER
+} ToPrimitiveHint;
+static ejsval
+OrdinaryToPrimitive(ejsval O, ToPrimitiveHint hint)
 {
-    if (EJSVAL_IS_OBJECT(exp)) {
-        return OP(EJSVAL_TO_OBJECT(exp),default_value) (exp, "PreferredType");
+    // 1. Assert: Type(O) is Object 
+    // 2. Assert: Type(hint) is String and its value is either "string" or "number". 
+    ejsval stringMethodNames[] = { _ejs_atom_toString, _ejs_atom_valueOf };
+    ejsval numberMethodNames[] = { _ejs_atom_valueOf, _ejs_atom_toString };
+    ejsval *methodNames;
+
+    // 3. If hint is "string", then 
+    if (hint == TO_PRIM_HINT_STRING) {
+        //    a. Let methodNames be the List ( "toString", "valueOf"). 
+        methodNames = stringMethodNames;
     }
-    else
-        return exp;
+    // 4. Else, 
+    else {
+        //    a. Let methodNames be the List ( "valueOf", "toString"). 
+        methodNames = numberMethodNames;
+    }
+    // 5. For each name in methodNames in List order, do 
+    for (int i = 0; i < 2; i ++) {
+        ejsval name = methodNames[i];
+        //    a. Let method be Get(O, name). 
+        //    b. ReturnIfAbrupt(method). 
+        ejsval method = Get(O, name);
+        //    c. If IsCallable(method) is true then, 
+        if (EJSVAL_IS_CALLABLE(method)) {
+            //       i. Let result be the result of calling the [[Call]] internal method of method, with O as thisArgument and an empty List as argumentsList. 
+            //       ii. ReturnIfAbrupt(result). 
+            ejsval result = _ejs_invoke_closure(method, O, 0, NULL);
+            //       iii. If Type(result) is not Object, then return result. 
+            if (!EJSVAL_IS_OBJECT(result))
+                return result;
+        }
+    }
+    // 6. Throw a TypeError exception. 
+    _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "couldn't convert object to primitive");
+}
+
+// ECMA262: 7.1.1 ToPrimitive
+ejsval
+ToPrimitive(ejsval inputargument, ToPrimitiveHint PreferredType)
+{
+    if (!EJSVAL_IS_OBJECT(inputargument))
+        return inputargument;
+
+    ejsval hint;
+    switch (PreferredType) {
+        // 1. If PreferredType was not passed, let hint be "default". 
+    case TO_PRIM_HINT_DEFAULT: hint = _ejs_atom_default; break;
+        // 2. Else if PreferredType is hint String, let hint be "string". 
+    case TO_PRIM_HINT_STRING: hint = _ejs_atom_string; break;
+        // 3. Else PreferredType is hint Number, let hint be "number". 
+    case TO_PRIM_HINT_NUMBER: hint = _ejs_atom_number; break;
+    }
+
+    // 4. Let exoticToPrim be GetMethod(inputargument, @@toPrimitive). 
+    // 5. ReturnIfAbrupt(exoticToPrim). 
+    ejsval exoticToPrim = GetMethod(inputargument, _ejs_Symbol_toPrimitive);
+
+    // 6. If exoticToPrim is not undefined, then 
+    if (!EJSVAL_IS_UNDEFINED(exoticToPrim)) {
+        //    a. Let result be the result of calling the [[Call]] internal method of exoticToPrim, with input argument as thisArgument and a List containing( hint) as argumentsList. 
+        //    b. ReturnIfAbrupt(result). 
+        ejsval result = _ejs_invoke_closure (exoticToPrim, inputargument, 1, &hint);
+        //    c. If result is an ECMAScript language value and Type(result) is not Object, then return result. 
+        if (!EJSVAL_IS_OBJECT(result))
+            return result;
+        //    d. Else, throw a TypeError exception. 
+        else
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "@@toPrimitive returned an object");
+    }
+    // 7. If hint is "default" then, let hint be "number". 
+    if (PreferredType == TO_PRIM_HINT_DEFAULT)
+        PreferredType = TO_PRIM_HINT_NUMBER;
+
+    // 8. Return OrdinaryToPrimitive(inputargument,hint).
+    return OrdinaryToPrimitive(inputargument, PreferredType);
 }
 
 EJSBool
@@ -554,7 +631,7 @@ _ejs_op_delete (ejsval obj, ejsval prop)
 {
     EJSObject *obj_ = EJSVAL_TO_OBJECT(obj);
 
-    EJSBool delete_rv = OP(obj_,_delete)(obj, prop, EJS_FALSE); // we need this for the mozilla tests... strict mode problem?
+    EJSBool delete_rv = OP(obj_,Delete)(obj, prop, EJS_FALSE); // we need this for the mozilla tests... strict mode problem?
 
     return BOOLEAN_TO_EJSVAL(delete_rv);
 }
@@ -710,8 +787,8 @@ _ejs_op_add (ejsval lhs, ejsval rhs)
 
     ejsval lprim, rprim;
 
-    lprim = ToPrimitive(lhs);
-    rprim = ToPrimitive(rhs);
+    lprim = ToPrimitive(lhs, TO_PRIM_HINT_DEFAULT);
+    rprim = ToPrimitive(rhs, TO_PRIM_HINT_DEFAULT);
 
     if (EJSVAL_IS_STRING(lhs) || EJSVAL_IS_STRING(rhs)) {
         ejsval lhstring = ToString(lhs);
@@ -983,12 +1060,12 @@ _ejs_op_eq (ejsval x, ejsval y)
     /* 8. If Type(x) is either String or Number and Type(y) is Object, */
     if (EJSVAL_IS_OBJECT(y) && (EJSVAL_IS_STRING(x) || EJSVAL_IS_STRING(x))) {
         /*    return the result of the comparison x == ToPrimitive(y). */
-        return _ejs_op_eq(x, ToPrimitive(y));
+        return _ejs_op_eq(x, ToPrimitive(y, TO_PRIM_HINT_DEFAULT));
     }
     /* 9. If Type(x) is Object and Type(y) is either String or Number, */
     if (EJSVAL_IS_OBJECT(x) && (EJSVAL_IS_STRING(y) || EJSVAL_IS_STRING(y))) {
         /*    return the result of the comparison ToPrimitive(x) == y. */
-        return _ejs_op_eq(ToPrimitive(x), y);
+        return _ejs_op_eq(ToPrimitive(x, TO_PRIM_HINT_DEFAULT), y);
     }
     /* 10. Return false. */
     return _ejs_false;
@@ -1000,30 +1077,70 @@ _ejs_op_neq (ejsval lhs, ejsval rhs)
     return BOOLEAN_TO_EJSVAL (!EJSVAL_TO_BOOLEAN (_ejs_op_eq (lhs, rhs)));
 }
 
-// ECMA262: 11.8.6
-ejsval
-_ejs_op_instanceof (ejsval lhs, ejsval rhs)
+static ejsval
+OrdinaryHasInstance(ejsval C, ejsval O)
 {
-    /* 1. Let lref be the result of evaluating RelationalExpression. */
-    /* 2. Let lval be GetValue(lref). */
-    /* 3. Let rref be the result of evaluating ShiftExpression. */
-    /* 4. Let rval be GetValue(rref). */
+    // 1. If IsCallable(C) is false, return false. 
+    if (!EJSVAL_IS_CALLABLE(C))
+        return _ejs_false;
 
-    /* 5. If Type(rval) is not Object, throw a TypeError exception. */
-    if (!EJSVAL_IS_OBJECT(rhs)) {
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "rhs of instanceof check must be a function");
-    }
-    
-    EJSObject *obj = EJSVAL_TO_OBJECT(rhs);
-
-    /* 6. If rval does not have a [[HasInstance]] internal method, throw a TypeError exception. */
-    if (!OP(obj,has_instance)) {
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "rhs of instanceof check must be a function");
+    // 2. If C has a [[BoundTargetFunction]] internal slot, then 
+    if (EJSVAL_IS_BOUND_FUNCTION(C)) {
+        //    a. Let BC be the value of C’s [[BoundTargetFunction]] internal slot. 
+        //    b. Return InstanceofOperator(O,BC) (see 12.9.4). 
         EJS_NOT_IMPLEMENTED();
     }
+    // 3. If Type(O) is not Object, return false. 
+    if (!EJSVAL_IS_OBJECT(O))
+        return _ejs_false;
 
-    /* 7. Return the result of calling the [[HasInstance]] internal method of rval with argument lval. */
-    return OP(obj,has_instance) (rhs, lhs) ? _ejs_true : _ejs_false;
+    // 4. Let P be Get(C, "prototype"). 
+    // 5. ReturnIfAbrupt(P). 
+    ejsval P = Get(C, _ejs_atom_prototype);
+    // 6. If Type(P) is not Object, throw a TypeError exception. 
+    if (!EJSVAL_IS_OBJECT(P))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "prototype is not an object");
+        
+    // 7. Repeat 
+    while (EJS_TRUE) {
+        //    a. Set O to the result of calling the [[GetPrototypeOf]] internal method of O with no arguments. 
+        //    b. ReturnIfAbrupt(O). 
+        O = OP(EJSVAL_TO_OBJECT(O),GetPrototypeOf)(O);
+        //    c. If O is null, return false. 
+        if (EJSVAL_IS_NULL(O))
+            return _ejs_false;
+        //    d. If SameValue(P, O) is true, return true. 
+        if (SameValue(P, O))
+            return _ejs_true;
+    }
+}
+
+ejsval
+_ejs_op_instanceof (ejsval O, ejsval C)
+{
+    // ECMA262 12.9.4 Runtime Semantics: InstanceofOperator(O, C) 
+    // 1. If Type(C) is not Object, throw a TypeError exception. 
+    if (!EJSVAL_IS_OBJECT(C)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "rhs of instanceof check must be an object");
+    }
+    // 2. Let instOfHandler be GetMethod(C,@@hasInstance). 
+    // 3. ReturnIfAbrupt(instOfHandler). 
+    ejsval instOfHandler = GetMethod(C, _ejs_Symbol_hasInstance);
+
+    // 4. If instOfHandler is not undefined, then 
+    if (!EJSVAL_IS_UNDEFINED(instOfHandler)) {
+        //    a. Let result be the result of calling the [[Call]] internal method of instOfHandler passing C as thisArgument and a new List containing O as argumentsList. 
+        ejsval result = _ejs_invoke_closure(instOfHandler, C, 1, &O);
+        //    b. Return ToBoolean(result). 
+        return ToBoolean(result);
+    }
+
+    // 5. If IsCallable(C) is false, then throw a TypeError exception. 
+    if (!EJSVAL_IS_CALLABLE(C))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1"); // XXX
+
+    // 6. Return OrdinaryHasInstance(C, O). 
+    return OrdinaryHasInstance(C, O);
 }
 
 // ECMA262: 11.8.7
@@ -1042,7 +1159,7 @@ _ejs_op_in (ejsval lhs, ejsval rhs)
     EJSObject *obj = EJSVAL_TO_OBJECT(rhs);
 
     /* 6. Return the result of calling the [[HasProperty]] internal method of rval with argument ToString(lval). */
-    return OP(obj,has_property) (rhs, lhs) ? _ejs_true : _ejs_false;
+    return OP(obj,HasProperty) (rhs, lhs) ? _ejs_true : _ejs_false;
 }
 
 EJSBool

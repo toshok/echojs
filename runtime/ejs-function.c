@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "ejs-value.h"
+#include "ejs-ops.h"
 #include "ejs-object.h"
 #include "ejs-function.h"
 #include "ejs-proxy.h"
@@ -179,7 +180,7 @@ _ejs_Function_prototype_apply (ejsval env, ejsval _this, uint32_t argc, ejsval *
     EJSObject* argArray_ = EJSVAL_TO_OBJECT(argArray);
 
     /* 4. Let len be the result of calling the [[Get]] internal method of argArray with argument "length". */
-    ejsval len = OP(argArray_,get) (argArray, _ejs_atom_length, argArray);
+    ejsval len = OP(argArray_,Get) (argArray, _ejs_atom_length, argArray);
 
     /* 5. Let n be ToUint32(len). */
     uint32_t n = (uint32_t)EJSVAL_TO_NUMBER(len);
@@ -196,7 +197,7 @@ _ejs_Function_prototype_apply (ejsval env, ejsval _this, uint32_t argc, ejsval *
         ejsval indexName = NUMBER_TO_EJSVAL(index);
         /*    b. Let nextArg be the result of calling the [[Get]] internal method of argArray with indexName as the  */
         /*       argument. */
-        ejsval nextArg = OP(argArray_,get)(argArray, indexName, argArray);
+        ejsval nextArg = OP(argArray_,Get)(argArray, indexName, argArray);
         /*    c. Append nextArg as the last element of argList. */
         argList[index] = nextArg;
         /*    d. Set index to index + 1. */
@@ -319,7 +320,7 @@ _ejs_Function_prototype_create(ejsval env, ejsval _this, uint32_t argc, ejsval* 
         
     EJSObject* F_ = EJSVAL_TO_OBJECT(F);
 
-    ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
     if (EJSVAL_IS_UNDEFINED(proto)) {
         proto = _ejs_Function_prototype;
     }
@@ -420,6 +421,10 @@ _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args)
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "object not a function");
     }
 
+    if (!EJSVAL_IS_NULL_OR_UNDEFINED(_this) && EJSVAL_IS_PRIMITIVE(_this)) {
+        _this = ToObject(_this);
+    }
+
     EJSFunction *fun = (EJSFunction*)EJSVAL_TO_OBJECT(closure);
     if (!fun->bound)
         return fun->func (fun->env, _this, argc, args);
@@ -473,7 +478,7 @@ _ejs_function_specop_has_instance (ejsval F, ejsval V)
         return EJS_FALSE;
 
     /* 2. Let O be the result of calling the [[Get]] internal method of F with property name "prototype". */
-    ejsval O = OP(EJSVAL_TO_OBJECT(F),get)(F, _ejs_atom_prototype, F);
+    ejsval O = OP(EJSVAL_TO_OBJECT(F),Get)(F, _ejs_atom_prototype, F);
 
     /* 3. If Type(O) is not Object, throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O)) {
@@ -495,6 +500,7 @@ _ejs_function_specop_has_instance (ejsval F, ejsval V)
 static EJSObject*
 _ejs_function_specop_allocate ()
 {
+    // we shouldn't ever get here..
     EJS_NOT_IMPLEMENTED();
 }
 
@@ -504,7 +510,7 @@ _ejs_function_specop_finalize (EJSObject* obj)
     EJSFunction* f = (EJSFunction*)obj;
     if (f->bound_args)
         free (f->bound_args);
-    _ejs_Object_specops.finalize (obj);
+    _ejs_Object_specops.Finalize (obj);
 }
 
 static void
@@ -518,22 +524,22 @@ _ejs_function_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
             scan_func (f->bound_args[i]);
     }
 
-    _ejs_Object_specops.scan (obj, scan_func);
+    _ejs_Object_specops.Scan (obj, scan_func);
 }
 
 EJS_DEFINE_CLASS(Function,
                  OP_INHERIT, // [[GetPrototypeOf]]
                  OP_INHERIT, // [[SetPrototypeOf]]
-                 OP_INHERIT, // get
-                 OP_INHERIT, // get_own_property
-                 OP_INHERIT, // get_property
-                 OP_INHERIT, // put
-                 OP_INHERIT, // can_put
-                 OP_INHERIT, // has_property
-                 OP_INHERIT, // delete
-                 OP_INHERIT, // default_value
-                 OP_INHERIT, // define_own_property
-                 _ejs_function_specop_has_instance,
+                 OP_INHERIT, // [[IsExtensible]]
+                 OP_INHERIT, // [[PreventExtensions]]
+                 OP_INHERIT, // [[GetOwnProperty]]
+                 OP_INHERIT, // [[DefineOwnProperty]]
+                 OP_INHERIT, // [[HasProperty]]
+                 OP_INHERIT, // [[Get]]
+                 OP_INHERIT, // [[Set]]
+                 OP_INHERIT, // [[Delete]]
+                 OP_INHERIT, // [[Enumerate]]
+                 OP_INHERIT, // [[OwnPropertyKeys]]
                  _ejs_function_specop_allocate,
                  _ejs_function_specop_finalize,
                  _ejs_function_specop_scan
