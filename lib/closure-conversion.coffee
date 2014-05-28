@@ -144,12 +144,13 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
                                         computed: false
                                 property: @method_stack.top
                                 computed: false
+                else
+                        n.callee = @visit n.callee
                 n.arguments = @visitArray n.arguments
                 n
 
         visitNewExpression: (n) ->
-                if n.callee.type is Identifier and n.callee.name is "super"
-                        n.callee = superid
+                n.callee = @visit n.callee
                 n.arguments = @visitArray n.arguments
                 n
                 
