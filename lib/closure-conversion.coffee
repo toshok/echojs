@@ -133,17 +133,31 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
                 @class_stack = new Stack
                 @method_stack = new Stack
 
+        createSuperReference = (is_static, id) ->
+                if is_static
+                        obj = superid
+                else
+                        obj = {
+                                type: MemberExpression
+                                object: superid
+                                property: create_identifier "prototype"
+                                computed: false
+                        }
+
+                if not id?
+                        return obj
+                        
+                return {
+                        type: MemberExpression
+                        object: obj
+                        property: id
+                        computed: false
+                }
+                        
+        
         visitCallExpression: (n) ->
                 if n.callee.type is Identifier and n.callee.name is "super"
-                        n.callee =
-                                type: MemberExpression
-                                object:
-                                        type: MemberExpression
-                                        object: superid
-                                        property: create_identifier "prototype"
-                                        computed: false
-                                property: @method_stack.top
-                                computed: false
+                        n.callee = createSuperReference @method_stack.top.static, @method_stack.top.key
                 else
                         n.callee = @visit n.callee
                 n.arguments = @visitArray n.arguments
@@ -155,7 +169,8 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
                 n
                 
         visitIdentifier: (n) ->
-                return superid if n.name is "super"
+                if n.name is "super"
+                        return createSuperReference @method_stack.top.static
                 n
 
         visitClassDeclaration: (n) ->
@@ -164,7 +179,7 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
 
                 # XXX this push/pop should really be handled in @visitMethodDefinition
                 for class_element in n.body.body
-                        @method_stack.push class_element.key
+                        @method_stack.push class_element
                         class_element.value = @visit class_element.value
                         @method_stack.pop()
                 
