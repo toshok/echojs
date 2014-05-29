@@ -1107,17 +1107,18 @@ EJS_DEFINE_CLASS(DataView,
 #define ADD_TYPEDARRAY_SPECOPS(ArrayType, arraytype)                   \
     EJSSpecOps _ejs_##arraytype##array_specops = {                     \
         #ArrayType "Array",                                            \
-        OP_INHERIT, OP_INHERIT,                                        \
-        OP_INHERIT, OP_INHERIT,                                        \
+        OP_INHERIT, /* [[GetPrototypeOf]] */                           \
+        OP_INHERIT, /* [[SetPrototypeOf]] */                           \
+        OP_INHERIT, /* [[IsExtensible]] */                             \
+        OP_INHERIT, /* [[PreventExtensions]] */                        \
         _ejs_##arraytype##array_specop_get_own_property,               \
         _ejs_##arraytype##array_specop_define_own_property,            \
         _ejs_##arraytype##array_specop_has_property,                   \
         _ejs_##arraytype##array_specop_get,                            \
         _ejs_##arraytype##array_specop_set,                            \
-        OP_INHERIT,                                                    \
-        OP_INHERIT,                                                    \
-        OP_INHERIT,                                                    \
-        OP_INHERIT,                                                    \
+        OP_INHERIT, /* [[Delete]] */                                   \
+        OP_INHERIT, /* [[Enumerate]] */                                \
+        OP_INHERIT, /* [[OwnPropertyKeys]] */                          \
         _ejs_typedarray_specop_allocate,                               \
         _ejs_typedarray_specop_finalize,                               \
         _ejs_typedarray_specop_scan                                    \
