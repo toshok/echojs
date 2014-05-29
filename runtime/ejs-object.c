@@ -1336,6 +1336,115 @@ _ejs_Object_defineProperties (ejsval env, ejsval _this, uint32_t argc, ejsval *a
     return O;
 }
 
+typedef enum {
+    INTEGRITY_SEALED,
+    INTEGRITY_FROZEN
+} IntegrityLevel;
+
+// ECMA262: 7.3.11 SetIntegrityLevel (O, level) 
+static ejsval
+SetIntegrityLevel (ejsval O, IntegrityLevel level)
+{
+    // 1. Assert: Type(O) is Object. 
+    EJSObject* O_ = EJSVAL_TO_OBJECT(O);
+
+    // 2. Assert: level is either "sealed" or "frozen". 
+    // 3. Let keysArray be the result of calling the [[OwnPropertyKeys]] internal method of O. 
+    ejsval keysArray = OP(O_,OwnPropertyKeys)(O);
+
+    // 4. Let keys be CreateListFromArrayLike(keysArray). 
+    // 5. ReturnIfAbrupt(keys). 
+
+    // 6. Let pendingException be undefined. 
+    ejsval pendingException = _ejs_undefined;
+
+    // 7. If level is "sealed", then 
+    if (level == INTEGRITY_SEALED) {
+        //    a. Repeat for each element k of keys, 
+        //       i. Let status be DefinePropertyOrThrow(O, k, PropertyDescriptor{ [[Configurable]]: false}). 
+        //       ii. If status is an abrupt completion, then 
+        //           1. If pendingException is undefined, then set pendingException to status. 
+    }
+    // 8. Else level is "frozen", 
+    else {
+        //    a. Repeat for each element k of keys, 
+        //       i. Let status be the result of calling the [[GetOwnProperty]] internal method of O with k. 
+        //       ii. If status is an abrupt completion, then 
+        //           1. If pendingException is undefined, then set pendingException to status. 
+        //       iii. Else, 
+        //            1. Let currentDesc be status.[[value]]. 
+        //            2. If currentDesc is not undefined, then 
+        //               a. If IsAccessorDescriptor(currentDesc) is true, then 
+        //                  i. Let desc be the PropertyDescriptor{[[Configurable]]: false}. 
+        //               b. Else, 
+        //                  i. Let desc be the PropertyDescriptor { [[Configurable]]: false, [[Writable]]: false }. 
+        //               c. Let status be DefinePropertyOrThrow(O, k, desc). 
+        //               d. If status is an abrupt completion, then
+        //                  i. If pendingException is undefined, then set pendingException to status. 
+    }
+    // 9. If pendingException is not undefined, then return pendingException. 
+    if (!EJSVAL_IS_UNDEFINED(pendingException))
+        return pendingException;
+
+    // 10. Return the result of calling the [[PreventExtensions]] internal method of O
+    return BOOLEAN_TO_EJSVAL(OP(O_,PreventExtensions)(O));
+}
+
+// ECMA262: 7.3.12 TestIntegrityLevel (O, level) 
+static ejsval
+TestIntegrityLevel (ejsval O, IntegrityLevel level)
+{
+    // 1. Assert: Type(O) is Object. 
+    // 2. Assert: level is either "sealed" or "frozen". 
+    // 3. Let status be IsExtensible(O). 
+    // 4. ReturnIfAbrupt(status). 
+    EJSBool status = EJS_OBJECT_IS_EXTENSIBLE(EJSVAL_TO_OBJECT(O));
+    // 5. If status is true, then return false 
+    if (status)
+        return _ejs_false;
+
+    // 6. NOTE If the object is extensible, none of its properties are examined. 
+
+    // 7. Let keysArray be the result of calling the [[OwnPropertyKeys]] internal method of O. 
+    // 8. Let keys be CreateListFromArrayLike(keysArray). 
+    // 9. ReturnIfAbrupt(keys). 
+    
+    // 20. Let pendingException be undefined. 
+    ejsval pendingException = _ejs_undefined;
+
+    // 11. Let configurable be false. 
+    EJSBool configurable = EJS_FALSE;
+
+    // 12. Let writable be false. 
+    EJSBool writable = EJS_FALSE;
+
+    // 13. Repeat for each element k of keys, 
+    //     a. Let status be the result of calling the [[GetOwnProperty]] internal method of O with k. 
+    //     b. If status is an abrupt completion, then 
+    //        i. If pendingException is undefined, then set pendingException to status. 
+    //        ii. Let configurable be true. 
+    //     c. Else, 
+    //        i. Let currentDesc be status.[[value]]. 
+    //        ii. If currentDesc is not undefined, then 
+    //            1. Set configurable to configurable logically ored with currentDesc.[[Configurable]]. 
+    //            2. If IsDataDescriptor(currentDesc) is true, then 
+    //               a. Set writable to writable logically ored with currentDesc.[[Writable]]. 
+    // 14. If pendingException is not undefined, then return pendingException. 
+    if (!EJSVAL_IS_UNDEFINED(pendingException))
+        return pendingException;
+
+    // 15. If level is "frozen" and writable is true, then return false. 
+    if (level == INTEGRITY_FROZEN && writable)
+        return _ejs_false;
+
+    // 16. If configurable is true, then return false. 
+    if (configurable)
+        return _ejs_false;
+
+    // 17. Return true.
+    return _ejs_true;
+}
+
 // ECMA262: 19.1.2.17 Object.seal ( O ) 
 static ejsval
 _ejs_Object_seal (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -1347,47 +1456,16 @@ _ejs_Object_seal (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     if (!EJSVAL_IS_OBJECT(O))
         return O;
 
-    EJSBool status = EJS_FALSE;
     // 2. Let status be the result of SetIntegrityLevel( O, "sealed"). 
     // 3. ReturnIfAbrupt(status). 
-    EJS_NOT_IMPLEMENTED();
+    ejsval status = SetIntegrityLevel(O, INTEGRITY_SEALED);
 
     // 4. If status is false, throw a TypeError exception. 
-    if (!status)
+    if (!EJSVAL_EQ(status, _ejs_false))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Unable to seal object");
 
     // 5. Return O. 
     return O;
-
-#if false
-    /* 1. If Type(O) is not Object throw a TypeError exception. */
-    if (!EJSVAL_IS_OBJECT(O)) {
-        _ejs_log ("throw TypeError, O isn't an Object\n");
-        EJS_NOT_IMPLEMENTED();
-    }
-    EJSObject* obj = EJSVAL_TO_OBJECT(O);
-
-    // XXX this needs special handling for arrays (and other objects?)
-
-    /* 2. For each named own property name P of O, */
-    for (_EJSPropertyMapEntry* s = obj->map->head_insert; s; s = s->next_insert) {
-
-        /*    a. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with P. */
-        EJSPropertyDesc* desc = s->desc;
-
-        /*    b. If desc.[[Configurable]] is true, set desc.[[Configurable]] to false. */
-        if (_ejs_property_desc_is_configurable(desc))
-            _ejs_property_desc_set_configurable(desc, EJS_FALSE);
-
-        /*    c. Call the [[DefineOwnProperty]] internal method of O with P, desc, and true as arguments. */
-    }
-
-    /* 3. Set the [[Extensible]] internal property of O to false. */
-    EJS_OBJECT_CLEAR_EXTENSIBLE(obj);
-
-    /* 4. Return O. */
-    return O;
-#endif
 }
 
 // ECMA262: 19.1.2.5 Object.freeze ( O ) 
@@ -1401,59 +1479,16 @@ _ejs_Object_freeze (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     if (!EJSVAL_IS_OBJECT(O))
         return O;
 
-    EJSBool status = EJS_FALSE;
     // 2. Let status be the result of SetIntegrityLevel( O, "frozen"). 
     // 3. ReturnIfAbrupt(status). 
-    EJS_NOT_IMPLEMENTED();
+    ejsval status = SetIntegrityLevel(O, INTEGRITY_FROZEN);
 
     // 4. If status is false, throw a TypeError exception. 
-    if (!status)
+    if (!EJSVAL_EQ(status, _ejs_false))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Unable to freeze object");
 
     // 5. Return O. 
     return O;
-
-#if false
-    ejsval O = _ejs_undefined;
-    if (argc > 0) O = args[0];
-
-    /* 1. If Type(O) is not Object throw a TypeError exception. */
-    if (!EJSVAL_IS_OBJECT(O)) {
-        _ejs_log ("throw TypeError, O isn't an Object\n");
-        EJS_NOT_IMPLEMENTED();
-    }
-    EJSObject* obj = EJSVAL_TO_OBJECT(O);
-
-    // XXX this needs special handling for arrays (and other objects?)
-
-    /* 2. For each named own property name P of O, */
-    ejsval iter = _ejs_property_iterator_new(O);
-    while (_ejs_property_iterator_next(iter, EJS_TRUE)) {
-        ejsval P = _ejs_property_iterator_current(iter);
-
-        /*    a. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with P. */
-        EJSPropertyDesc* desc = OP(obj,GetOwnProperty)(O, P);
-
-        /*    b. If IsDataDescriptor(desc) is true, then */
-        if (IsDataDescriptor(desc)) {
-            /*       i. If desc.[[Writable]] is true, set desc.[[Writable]] to false. */
-            if (_ejs_property_desc_is_writable(desc))
-                _ejs_property_desc_set_writable(desc, EJS_FALSE);
-            /*    c. If desc.[[Configurable]] is true, set desc.[[Configurable]] to false. */
-            if (_ejs_property_desc_is_configurable(desc))
-                _ejs_property_desc_set_configurable(desc, EJS_FALSE);
-        }
-
-        /*    d. Call the [[DefineOwnProperty]] internal method of O with P, desc, and true as arguments. */
-        OP(obj,DefineOwnProperty)(O, P, desc, EJS_TRUE);
-    }
-
-    /* 3. Set the [[Extensible]] internal property of O to false. */
-    EJS_OBJECT_CLEAR_EXTENSIBLE(obj);
-
-    /* 4. Return O. */
-    return O;
-#endif
 }
 
 // ECMA262: 19.1.2.15 Object.preventExtensions ( O ) 
@@ -1505,37 +1540,7 @@ _ejs_Object_isSealed (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         return _ejs_true;
 
     // 2. Return TestIntegrityLevel(O, "sealed"). 
-    EJS_NOT_IMPLEMENTED();
-#if false
-    /* 1. If Type(O) is not Object throw a TypeError exception. */
-    if (!EJSVAL_IS_OBJECT(O)) {
-        _ejs_log ("throw TypeError, O isn't an Object\n");
-        EJS_NOT_IMPLEMENTED();
-    }
-    EJSObject* obj = EJSVAL_TO_OBJECT(O);
-
-    // XXX this needs special handling for arrays (and other objects?)
-
-    /* 2. For each named own property name P of O, */
-    ejsval iter = _ejs_property_iterator_new(O);
-    while (_ejs_property_iterator_next(iter, EJS_TRUE)) {
-        ejsval P = _ejs_property_iterator_current(iter);
-
-        /*    a. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with P. */
-        EJSPropertyDesc* desc = OP(obj,GetOwnProperty)(O, P);
-
-        /*    b. If desc.[[Configurable]] is true, then return false. */
-        if (_ejs_property_desc_is_configurable(desc))
-            return _ejs_false;
-    }
-
-    /* 3. If the [[Extensible]] internal property of O is false, then return true. */
-    if (!EJS_OBJECT_IS_EXTENSIBLE(obj))
-        return _ejs_true;
-
-    /* 4. Otherwise, return false. */
-    return _ejs_false;
-#endif
+    return TestIntegrityLevel(O, INTEGRITY_SEALED);
 }
 
 // ECMA262: 19.1.2.12 Object.isFrozen ( O ) 
@@ -1550,47 +1555,7 @@ _ejs_Object_isFrozen (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         return _ejs_true;
 
     // 2. Return TestIntegrityLevel(O, "frozen"). 
-    EJS_NOT_IMPLEMENTED();
-
-#if false
-    ejsval O = _ejs_undefined;
-    if (argc > 0) O = args[0];
-
-    /* 1. If Type(O) is not Object throw a TypeError exception. */
-    if (!EJSVAL_IS_OBJECT(O)) {
-        _ejs_log ("throw TypeError, O isn't an Object\n");
-        EJS_NOT_IMPLEMENTED();
-    }
-    EJSObject* obj = EJSVAL_TO_OBJECT(O);
-
-    // XXX this needs special handling for arrays (and other objects?)
-
-    /* 2. For each named own property name P of O, */
-    ejsval iter = _ejs_property_iterator_new(O);
-    while (_ejs_property_iterator_next(iter, EJS_TRUE)) {
-        ejsval P = _ejs_property_iterator_current(iter);
-
-        /*    a. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with P. */
-        EJSPropertyDesc* desc = OP(obj,GetOwnProperty)(O, P);
-
-        /*    b. If IsDataDescriptor(desc) is true then */
-        if (IsDataDescriptor(desc)) {
-            /*       i. If desc.[[Writable]] is true, return false. */
-            if (_ejs_property_desc_is_writable(desc))
-                return _ejs_false;
-            /*    c. If desc.[[Configurable]] is true, then return false. */
-            if (_ejs_property_desc_is_configurable(desc))
-                return _ejs_false;
-        }
-    }
-
-    /* 3. If the [[Extensible]] internal property of O is false, then return true. */
-    if (!EJS_OBJECT_IS_EXTENSIBLE(obj))
-        return _ejs_true;
-    
-    /* 4. Otherwise, return false. */
-    return _ejs_false;
-#endif
+    return TestIntegrityLevel(O, INTEGRITY_FROZEN);
 }
 
 // ECMA262: 15.2.3.13
@@ -1728,11 +1693,11 @@ _ejs_Object_prototype_toLocaleString (ejsval env, ejsval _this, uint32_t argc, e
     return _ejs_invoke_closure (toString, O, 0, NULL);
 }
 
-// ECMA262: 15.2.4.4
+// ECMA262: 19.1.3.7 Object.prototype.valueOf () 
 static ejsval
 _ejs_Object_prototype_valueOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    EJS_NOT_IMPLEMENTED();
+    return ToObject(_this);
 }
 
 // ECMA262: 15.2.4.5
@@ -2369,6 +2334,21 @@ _ejs_object_specop_preventextensions (ejsval O)
 static ejsval
 _ejs_object_specop_enumerate (ejsval O)
 {
+    // 1. Let proto be the result of calling the [[GetPrototypeOf]] internal method of O with no arguments. 
+    // 2. ReturnIfAbrupt(proto). 
+    // 3. If proto is the value null, then 
+    //    a. Let propList be a new empty List. 
+    // 4. Else 
+    //    a. Let propList be the result of calling the [[Enumerate]] internal method of proto. 
+    // 5. ReturnIfAbrupt(propList). 
+    // 6. For each name that is the property key of an own property of O 
+    //    a. If Type(name) is String, then 
+    //       i. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with argument name. 
+    //       ii. ReturnIfAbrupt(desc). 
+    //       iii. If name is an element of propList, then remove name as an element of propList. 
+    //       iv. If desc.[[Enumerable]] is true, then add name as an element of propList. 
+    // 7. Order the elements of propList in an implementation defined order. 
+    // 8. Return propList. 
     EJS_NOT_IMPLEMENTED();
 }
 
@@ -2376,6 +2356,14 @@ _ejs_object_specop_enumerate (ejsval O)
 static ejsval
 _ejs_object_specop_own_property_keys (ejsval O)
 {
+    // 1. Let keys be a new empty List. 
+    // 2. For each own property key P of O that is an integer index, in ascending numeric index order 
+    //    a. Add P as the last element of keys. 
+    // 3. For each own property key P of O that is a String but is not an integer index, in property creation order 
+    //    a. Add P as the last element of keys. 
+    // 4. For each own property key P of O that is a Symbol, in property creation order
+    //    a. Add P as the last element of keys. 
+    // 5. Return CreateListIteratorCreateArrayFromList(keys). 
     EJS_NOT_IMPLEMENTED();
 }
 
