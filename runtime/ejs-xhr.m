@@ -12,6 +12,8 @@
 #include "ejs-xhr.h"
 #include "ejs-string.h"
 #include "ejs-error.h"
+#include "ejs-proxy.h"
+#include "ejs-symbol.h"
 
 #define THROW_ARG_COUNT_EXCEPTION(expected_count) _ejs_throw_nativeerror_utf8 (EJS_ERROR/*XXX*/, "argument count mismatch")
 
@@ -603,6 +605,27 @@ _ejs_XMLHttpRequest_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return _this;
 }
 
+static ejsval
+_ejs_XMLHttpRequest_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    // 1. Let F be the this value. 
+    ejsval F = _this;
+
+    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in XMLHttpRequest[Symbol.create] is not a constructor");
+
+    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
+
+    // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%XMLHttpRequestPrototype%", ([[XHRData]]) ). 
+    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
+    if (EJSVAL_IS_UNDEFINED(proto))
+        proto = _ejs_XMLHttpRequest_prototype;
+
+    EJSObject* obj = (EJSObject*)_ejs_gc_new (EJSXMLHttpRequest);
+    _ejs_init_object (obj, proto, &_ejs_XMLHttpRequest_specops);
+    return OBJECT_TO_EJSVAL(obj);
+}
+
 void
 _ejs_xmlhttprequest_init(ejsval global)
 {
@@ -634,6 +657,8 @@ _ejs_xmlhttprequest_init(ejsval global)
 #undef PROTO_METHOD
 #undef PROTO_GETTER
 #undef PROTO_ACCESSORS
+
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_XMLHttpRequest, create, _ejs_XMLHttpRequest_create, EJS_PROP_NOT_ENUMERABLE);
 }
 
 static EJSObject*
