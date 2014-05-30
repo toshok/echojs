@@ -662,7 +662,21 @@ invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
             }
             break;
         }
-                
+
+        case _C_FLT: {
+            float v = (float)[val numberValue];
+			SPEW(NSLog (@"arg %d: marshaling float = %g", i, v);)
+            [inv setArgument:&v atIndex:objc_arg_num];
+            break;
+        }
+
+        case _C_DBL: {
+            double v = (double)[val numberValue];
+			SPEW(NSLog (@"arg %d: marshaling double = %g", i, v);)
+            [inv setArgument:&v atIndex:objc_arg_num];
+            break;
+        }
+
         case _C_INT: {
             int v = (int)[val numberValue];
 			SPEW(NSLog (@"arg %d: marshaling int = %d", i, v);)
