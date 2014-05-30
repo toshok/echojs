@@ -1336,6 +1336,21 @@ _ejs_Object_defineProperties (ejsval env, ejsval _this, uint32_t argc, ejsval *a
     return O;
 }
 
+static EJSBool
+DefinePropertyOrThrow (ejsval O, ejsval P, EJSPropertyDesc* desc)
+{
+    // 1. Assert: Type(O) is Object. 
+    // 2. Assert: IsPropertyKey(P) is true. 
+    // 3. Let success be the result of calling the [[DefineOwnProperty]] internal method of O passing P and desc as arguments. 
+    // 4. ReturnIfAbrupt(success). 
+    EJSBool success = OP(EJSVAL_TO_OBJECT(O),DefineOwnProperty)(O, P, desc, EJS_FALSE);
+    // 5. If success is false, then throw a TypeError exception. 
+    if (!success)
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1"); // XXX
+    // 6. Return success. 
+    return success;
+}
+
 typedef enum {
     INTEGRITY_SEALED,
     INTEGRITY_FROZEN
@@ -1354,6 +1369,18 @@ SetIntegrityLevel (ejsval O, IntegrityLevel level)
 
     // 4. Let keys be CreateListFromArrayLike(keysArray). 
     // 5. ReturnIfAbrupt(keys). 
+    ejsval* keys = NULL;
+
+    ejsval len = Get(keysArray, _ejs_atom_length);
+    uint32_t n = ToUint32(len);
+
+    if (n > 0) {
+        keys = alloca(sizeof(ejsval) * n);
+        for (int i = 0; i < n; i ++) {
+            keys[i] = Get(keysArray, ToString(NUMBER_TO_EJSVAL(i)));
+        }
+    }
+
 
     // 6. Let pendingException be undefined. 
     ejsval pendingException = _ejs_undefined;
@@ -1361,26 +1388,57 @@ SetIntegrityLevel (ejsval O, IntegrityLevel level)
     // 7. If level is "sealed", then 
     if (level == INTEGRITY_SEALED) {
         //    a. Repeat for each element k of keys, 
-        //       i. Let status be DefinePropertyOrThrow(O, k, PropertyDescriptor{ [[Configurable]]: false}). 
-        //       ii. If status is an abrupt completion, then 
-        //           1. If pendingException is undefined, then set pendingException to status. 
+        for (int i = 0; i < n; i ++) {
+            ejsval k = keys[i];
+            EJSPropertyDesc desc = { EJS_PROP_FLAGS_CONFIGURABLE_SET };
+            //       i. Let status be DefinePropertyOrThrow(O, k, PropertyDescriptor{ [[Configurable]]: false}). 
+            DefinePropertyOrThrow(O, k, &desc);
+            //       ii. If status is an abrupt completion, then 
+            if (EJS_FALSE /* XXX */) {
+                //           1. If pendingException is undefined, then set pendingException to status. 
+            }
+        }
     }
     // 8. Else level is "frozen", 
     else {
         //    a. Repeat for each element k of keys, 
-        //       i. Let status be the result of calling the [[GetOwnProperty]] internal method of O with k. 
-        //       ii. If status is an abrupt completion, then 
-        //           1. If pendingException is undefined, then set pendingException to status. 
-        //       iii. Else, 
-        //            1. Let currentDesc be status.[[value]]. 
-        //            2. If currentDesc is not undefined, then 
-        //               a. If IsAccessorDescriptor(currentDesc) is true, then 
-        //                  i. Let desc be the PropertyDescriptor{[[Configurable]]: false}. 
-        //               b. Else, 
-        //                  i. Let desc be the PropertyDescriptor { [[Configurable]]: false, [[Writable]]: false }. 
-        //               c. Let status be DefinePropertyOrThrow(O, k, desc). 
-        //               d. If status is an abrupt completion, then
-        //                  i. If pendingException is undefined, then set pendingException to status. 
+        for (int i = 0; i < n; i ++) {
+            ejsval k = keys[i];
+            //       i. Let status be the result of calling the [[GetOwnProperty]] internal method of O with k. 
+            EJSPropertyDesc* currentDesc = OP(EJSVAL_TO_OBJECT(O),GetOwnProperty)(O, k);
+            //       ii. If status is an abrupt completion, then 
+            if (EJS_FALSE /* XXX */) {
+                //           1. If pendingException is undefined, then set pendingException to status. 
+            }
+            //       iii. Else, 
+            else {
+                //            1. Let currentDesc be status.[[value]]. 
+                //            2. If currentDesc is not undefined, then 
+                if (currentDesc) {
+                    EJSPropertyDesc desc;
+                    memset(&desc, 0, sizeof(desc));
+
+                    //               a. If IsAccessorDescriptor(currentDesc) is true, then 
+                    if (IsAccessorDescriptor(currentDesc)) {
+                        //                  i. Let desc be the PropertyDescriptor{[[Configurable]]: false}. 
+                        _ejs_property_desc_set_configurable(&desc, EJS_FALSE);
+                    }
+                    //               b. Else, 
+                    else {
+                        //                  i. Let desc be the PropertyDescriptor { [[Configurable]]: false, [[Writable]]: false }. 
+                        _ejs_property_desc_set_configurable(&desc, EJS_FALSE);
+                        _ejs_property_desc_set_writable(&desc, EJS_FALSE);
+                    }
+                    //               c. Let status be DefinePropertyOrThrow(O, k, desc). 
+                    DefinePropertyOrThrow(O, k, &desc);
+
+                    //               d. If status is an abrupt completion, then
+                    if (EJS_FALSE /* XXX */) {
+                        //                  i. If pendingException is undefined, then set pendingException to status. 
+                    }
+                }
+            }
+        }
     }
     // 9. If pendingException is not undefined, then return pendingException. 
     if (!EJSVAL_IS_UNDEFINED(pendingException))
@@ -1461,7 +1519,7 @@ _ejs_Object_seal (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     ejsval status = SetIntegrityLevel(O, INTEGRITY_SEALED);
 
     // 4. If status is false, throw a TypeError exception. 
-    if (!EJSVAL_EQ(status, _ejs_false))
+    if (EJSVAL_EQ(status, _ejs_false))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Unable to seal object");
 
     // 5. Return O. 
@@ -1484,7 +1542,7 @@ _ejs_Object_freeze (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     ejsval status = SetIntegrityLevel(O, INTEGRITY_FROZEN);
 
     // 4. If status is false, throw a TypeError exception. 
-    if (!EJSVAL_EQ(status, _ejs_false))
+    if (EJSVAL_EQ(status, _ejs_false))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Unable to freeze object");
 
     // 5. Return O. 
@@ -2356,15 +2414,52 @@ _ejs_object_specop_enumerate (ejsval O)
 static ejsval
 _ejs_object_specop_own_property_keys (ejsval O)
 {
+    EJSObject* O_ = EJSVAL_TO_OBJECT(O);
+
+    ejsval* numberkeys = malloc(sizeof(ejsval) *O_->map->inuse);
+    int num_numberkeys = 0;
+    ejsval* stringkeys = malloc(sizeof(ejsval) *O_->map->inuse);
+    int num_stringkeys = 0;
+    ejsval* symbolkeys = malloc(sizeof(ejsval) *O_->map->inuse);
+    int num_symbolkeys = 0;
     // 1. Let keys be a new empty List. 
-    // 2. For each own property key P of O that is an integer index, in ascending numeric index order 
-    //    a. Add P as the last element of keys. 
-    // 3. For each own property key P of O that is a String but is not an integer index, in property creation order 
-    //    a. Add P as the last element of keys. 
-    // 4. For each own property key P of O that is a Symbol, in property creation order
-    //    a. Add P as the last element of keys. 
+    for (_EJSPropertyMapEntry *s = O_->map->head_insert; s; s = s->next_insert) {
+        if (EJSVAL_IS_STRING(s->name)) {
+            ejsval idx_val = ToNumber(s->name);
+            int idx;
+            if (EJSVAL_IS_NUMBER(idx_val)) {
+                double n = EJSVAL_TO_NUMBER(idx_val);
+                if (floor(n) == n) {
+                    // 2. For each own property key P of O that is an integer index, in ascending numeric index order 
+                    //    a. Add P as the last element of keys. 
+                    numberkeys[num_numberkeys++] = s->name;
+                    continue;
+                }
+            }
+            // 3. For each own property key P of O that is a String but is not an integer index, in property creation order 
+            //    a. Add P as the last element of keys. 
+            stringkeys[num_stringkeys++] = s->name;
+        }
+        else {
+            // 4. For each own property key P of O that is a Symbol, in property creation order
+            //    a. Add P as the last element of keys. 
+            symbolkeys[num_symbolkeys++] = s->name;
+        }
+    }
+
+    ejsval keys = _ejs_array_new (num_numberkeys + num_stringkeys + num_symbolkeys, EJS_FALSE);
+    ejsval* elements = EJS_DENSE_ARRAY_ELEMENTS(keys);
+
+    memmove (elements, numberkeys, num_numberkeys * sizeof(ejsval));
+    memmove (elements + num_numberkeys * sizeof(ejsval), stringkeys, num_stringkeys * sizeof(ejsval));
+    memmove (elements + (num_numberkeys + num_stringkeys) * sizeof(ejsval), symbolkeys, num_symbolkeys * sizeof(ejsval));
+
+    free (numberkeys);
+    free (stringkeys);
+    free (symbolkeys);
+
     // 5. Return CreateListIteratorCreateArrayFromList(keys). 
-    EJS_NOT_IMPLEMENTED();
+    return keys;
 }
 
 EJS_DEFINE_CLASS(Object,
