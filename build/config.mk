@@ -9,6 +9,9 @@ $(TOP)/build/host-config.mk:
 
 -include $(TOP)/build/host-config.mk
 
+# we don't care about the version here
+HOST_OS:=$(patsubst darwin%,darwin,$(HOST_OS))
+
 PRODUCT_NAME=EchoJS
 PRODUCT_VERSION=0.1
 
@@ -51,7 +54,7 @@ OSX_CFLAGS=$(CFLAGS) -DOSX=1 -DTARGET_CPU_AMD64=1 -DEJS_BITS_PER_WORD=64 -DIS_LI
 
 IOSSIM_ARCH=-arch i386
 IOSSIM_TRIPLE=i386-apple-darwin
-IOSSIM_ARCH_FLAGS=-TARGET_CPU_X86=1 -DEJS_BITS_PER_WORD=32 -DIS_LITTLE_ENDIAN=1
+IOSSIM_ARCH_FLAGS=-DTARGET_CPU_X86=1 -DEJS_BITS_PER_WORD=32 -DIS_LITTLE_ENDIAN=1
 IOSSIM_ROOT=$(DEVELOPER_ROOT)/Platforms/iPhoneSimulator.platform/Developer
 IOSSIM_BIN=$(IOSSIM_ROOT)/usr/bin
 IOSSIM_SYSROOT=$(IOSSIM_ROOT)/SDKs/iPhoneSimulator$(IOS_SDK_VERSION).sdk
