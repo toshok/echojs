@@ -1,46 +1,66 @@
 import { NSObject } from 'foundation';
-import { NSButton, NSBezelStyle, NSWindow, NSApplicationDelegate, NSApplication } from 'appkit';
+import { NSScrollView, NSTextField, NSTableView, NSTableColumn, NSButton, NSBezelStyle, NSWindow, NSApplicationDelegate, NSApplication } from 'appkit';
 import { override, instanceSelector, outlet, sig } from 'objc';
 
 let AppDelegate = NSObject.extendClass("AppDelegate", () => ({
 
-    // we don't need to specify the selector here, since the
-    // conforms-to-protocol machinery picks it up (based on field name)
-    // and fills it in for us.
     didFinishLaunching: function() {
 	let window = this.window;
+	let contentView = window.contentView;
+	let contentBounds = contentView.bounds;
 
-	window.title = "Hello OSX, Love CoffeeKit";
+	window.title = "Hello OSX, Love Pirouette";
 
 	// newWith$Stuff = ctor + call initWith$Stuff
-	let button        = NSButton.newWithFrame({ x: 100, y: window.contentView.bounds.height - 50,
+	let button        = NSButton.newWithFrame({ x: 100, y: contentBounds.height - 50,
 						    width: 200, height: 50 });
 	button.bezelStyle = NSBezelStyle.RoundedBezelStyle;
-	button.title      = "Click me... please?";
+	button.title      = "Fetch Headlines";
 
-	button.clicked = function () {
-            let newbutton        = NSButton.newWithFrame({ x: 100, y: window.contentView.bounds.height - 120,
-							   width: 200, height: 50 });
-            newbutton.bezelStyle = NSBezelStyle.RoundedBezelStyle;
-            newbutton.title      = "you clicked me!";
-            window.contentView.addSubview(newbutton);
+	let tabledata = [];
 
-	    // need 'this.xmlhttp', not a local here, since XMLHttpRequest doesn't root itself
-	    // while waiting for a response
-            this.xmlhttp = new XMLHttpRequest();
-            this.xmlhttp.onreadystatechange = () => {
-		console.log ("readyState == " + this.xmlhttp.readyState);
-		if (this.xmlhttp.readyState === 4) {
-                    console.log ("woohoo!");
-		    console.log (this.xmlhttp.responseText);
-		}
-            };
-	    console.log (this.xmlhttp.onreadystatechange);
-            this.xmlhttp.open('GET', 'http://www.google.com/', true);
-            this.xmlhttp.send();
+	let scrollView = NSScrollView.newWithFrame({ x: 10, y: 10, width: contentBounds.width - 20, height: contentBounds.height - 180 });
+	scrollView.hasVerticalScroller = true;
+	let table = NSTableView.newWithFrame(scrollView.contentView.bounds);
+	let tablecolumn = NSTableColumn.newWithIdentifier("column");
+	tablecolumn.width = contentBounds.width - 20;
+
+	table.addTableColumn(tablecolumn);
+
+	table.dataSource = {
+	    numberOfRows: () => tabledata.length
 	};
 
-	window.contentView.addSubview(button);
+	table.delegate = {
+	    viewFor: function (tv, column, row) { // needs to be function() to get dynamic 'this' below
+		const viewid = "StoryView";
+		let result = tv.makeViewWithIdentifier(viewid, this);
+		
+		if (!result)
+		    result = NSTextField.newWithFrame({ x: 0, y: 0, width: 100, height: 15 });
+
+		result.stringValue = tabledata[row].data.title;
+		result.identifier = viewid;
+
+		return result;
+	    }
+	};
+
+	button.clicked = () => {
+	    this.xmlhttp = new XMLHttpRequest();
+	    this.xmlhttp.open('GET', 'http://www.reddit.com/r/programming/top.json', true);
+	    this.xmlhttp.onreadystatechange = () => {
+		if (this.xmlhttp.readyState === 4) {
+		    tabledata = JSON.parse(this.xmlhttp.responseText).data.children;
+		    table.reloadData();
+		}
+	    };
+	    this.xmlhttp.send();
+	};
+
+	contentView.addSubview(button);
+	scrollView.documentView = table;
+	contentView.addSubview(scrollView);
     },
 
     /* XXX we shouldn't need this (the outlet below should be enough), but without the selector
