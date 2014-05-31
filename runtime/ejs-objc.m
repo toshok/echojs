@@ -678,21 +678,27 @@ invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
         }
 
         case _C_INT: {
-            int v = (int)[val numberValue];
+            int32_t v = (int32_t)[val numberValue];
 			SPEW(NSLog (@"arg %d: marshaling int = %d", i, v);)
             [inv setArgument:&v atIndex:objc_arg_num];
             break;
         }
                 
         case _C_UINT: {
-            unsigned int v = (unsigned int)[val numberValue];
+            uint32_t v = (uint32_t)[val numberValue];
 			SPEW(NSLog (@"arg %d: marshaling uint = %u", i, v);)
             [inv setArgument:&v atIndex:objc_arg_num];
             break;
         }
                 
+        case _C_LNG_LNG: {
+            int64_t v = (int64_t)[val numberValue];
+            [inv setArgument:&v atIndex:objc_arg_num];
+            break;
+        }
+
         case _C_ULNG_LNG: {
-            unsigned long long v = (unsigned long long)[val numberValue];
+            uint64_t v = (uint64_t)[val numberValue];
             [inv setArgument:&v atIndex:objc_arg_num];
             break;
         }
@@ -824,28 +830,28 @@ invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     }
             
     case _C_CHR:
-        rv = [CKValue numberValue:*(char*)return_buffer];
+        rv = [CKValue numberValue:*(int8_t*)return_buffer];
         break;            
     case _C_UCHR:
-        rv = [CKValue numberValue:*(unsigned char*)return_buffer];
+        rv = [CKValue numberValue:*(uint8_t*)return_buffer];
         break;            
     case _C_SHT:
-        rv = [CKValue numberValue:*(short*)return_buffer];
+        rv = [CKValue numberValue:*(int16_t*)return_buffer];
         break;            
     case _C_USHT:
-        rv = [CKValue numberValue:*(unsigned short*)return_buffer];
+        rv = [CKValue numberValue:*(uint16_t*)return_buffer];
         break;            
     case _C_INT:
-        rv = [CKValue numberValue:*(int*)return_buffer];
+        rv = [CKValue numberValue:*(int32_t*)return_buffer];
         break;            
     case _C_UINT:
-        rv = [CKValue numberValue:*(unsigned int*)return_buffer];
+        rv = [CKValue numberValue:*(uint32_t*)return_buffer];
         break;
     case _C_LNG_LNG:
-        rv = [CKValue numberValue:*(long long*)return_buffer];
+        rv = [CKValue numberValue:*(int64_t*)return_buffer];
         break;
     case _C_ULNG_LNG:
-        rv = [CKValue numberValue:*(unsigned long long*)return_buffer];
+        rv = [CKValue numberValue:*(uint64_t*)return_buffer];
         break;
 
     default: {
@@ -950,7 +956,22 @@ coffeekit_method_tramp (id obj, SEL sel, ...)
                 break;
             }
             case _C_INT: {
-                NSInteger i = va_arg(ap, NSInteger);
+                int32_t i = va_arg(ap, int32_t);
+                [inv setArgument:[CKValue numberValue:i] atIndex:jsarg_num];
+                break;
+            }
+            case _C_UINT: {
+                uint32_t i = va_arg(ap, uint32_t);
+                [inv setArgument:[CKValue numberValue:i] atIndex:jsarg_num];
+                break;
+            }
+            case _C_LNG_LNG: {
+                int64_t i = va_arg(ap, int64_t);
+                [inv setArgument:[CKValue numberValue:i] atIndex:jsarg_num];
+                break;
+            }
+            case _C_ULNG_LNG: {
+                uint64_t i = va_arg(ap, uint64_t);
                 [inv setArgument:[CKValue numberValue:i] atIndex:jsarg_num];
                 break;
             }
@@ -991,10 +1012,14 @@ coffeekit_method_tramp (id obj, SEL sel, ...)
             if ([rv isString]) return [[rv stringValue] nsString];
             return [rv isObject] ? get_objc_id([rv objectValue]) : NULL;
         }
-        case _C_INT: {
+        case _C_INT:
+        case _C_LNG:
+        case _C_LNG_LNG: {
             return [rv isNumber] ? (void*)(NSInteger)[rv numberValue] : (void*)(NSInteger)0;
         }
-        case _C_UINT: {
+        case _C_UINT:
+        case _C_ULNG:
+        case _C_ULNG_LNG: {
             return [rv isNumber] ? (void*)(NSUInteger)[rv numberValue] : (void*)(NSUInteger)0;
         }
         case _C_CLASS: {
