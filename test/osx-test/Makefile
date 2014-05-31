@@ -1,10 +1,12 @@
 TOP=../..
 
+EJS_DRIVER?=../../ejs
+
 #	make -C $(TOP)/pirouette/bindings
 #	cp $(TOP)/pirouette/bindings/generated/*.js .
 
 all: copy-pirouette
-	../../ejs.js.exe --leave-temp helloosx.js
+	$(EJS_DRIVER) --leave-temp helloosx.js
 	mkdir -p HelloOSX.app/Contents/MacOS/
 	cp helloosx.js.exe HelloOSX.app/Contents/MacOS/
 
