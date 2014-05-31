@@ -1,12 +1,12 @@
 import { NSObject } from 'foundation';
-import { NSScrollView, NSTextField, NSTableView, NSTableColumn, NSButton, NSBezelStyle, NSWindow, NSApplicationDelegate, NSApplication } from 'appkit';
-import { override, instanceSelector, outlet, sig } from 'objc';
+import { NSView, NSScrollView, NSTextField, NSTableView, NSTableColumn, NSButton, NSBezelStyle, NSWindow, NSApplicationDelegate, NSApplication } from 'appkit';
+import { chainCtor, override, instanceSelector, instanceProperty, outlet, sig } from 'objc';
 
 let AppDelegate = NSObject.extendClass("AppDelegate", () => ({
 
     didFinishLaunching: function() {
-	let window = this.window;
-	let contentView = window.contentView;
+	let window        = this.window;
+	let contentView   = window.contentView;
 	let contentBounds = contentView.bounds;
 
 	window.title = "Hello OSX, Love Pirouette";
@@ -14,15 +14,16 @@ let AppDelegate = NSObject.extendClass("AppDelegate", () => ({
 	// newWith$Stuff = ctor + call initWith$Stuff
 	let button        = NSButton.newWithFrame({ x: 100, y: contentBounds.height - 50,
 						    width: 200, height: 50 });
-	button.bezelStyle = NSBezelStyle.RoundedBezelStyle;
+	button.bezelStyle = NSBezelStyle.Rounded;
 	button.title      = "Fetch Headlines";
 
 	let tabledata = [];
 
-	let scrollView = NSScrollView.newWithFrame({ x: 10, y: 10, width: contentBounds.width - 20, height: contentBounds.height - 180 });
+	let scrollView    = NSScrollView.newWithFrame({ x: 10, y: 10, width: contentBounds.width - 20, height: contentBounds.height - 180 });
 	scrollView.hasVerticalScroller = true;
-	let table = NSTableView.newWithFrame(scrollView.contentView.bounds);
-	let tablecolumn = NSTableColumn.newWithIdentifier("column");
+
+	let table         = NSTableView.newWithFrame(scrollView.contentView.bounds);
+	let tablecolumn   = NSTableColumn.newWithIdentifier("column");
 	tablecolumn.width = contentBounds.width - 20;
 
 	table.addTableColumn(tablecolumn);
@@ -32,26 +33,34 @@ let AppDelegate = NSObject.extendClass("AppDelegate", () => ({
 	};
 
 	table.delegate = {
-	    viewFor: function (tv, column, row) { // needs to be function() to get dynamic 'this' below
-		const viewid = "StoryView";
-		let result = tv.makeViewWithIdentifier(viewid, this);
+	    // needs to be function() to get dynamic 'this' below
+	    viewFor: function (tv, column, row) {
+		let result = tv.makeViewWithIdentifier("StoryView", this);
 		
-		if (!result)
-		    result = NSTextField.newWithFrame({ x: 0, y: 0, width: 100, height: 15 });
+		if (!result) {
+		    result = NSTextField.newWithFrame({ x: 0, y: 0, width: 100, height: 20 });
+		    result.selectable = 
+			result.bezeled =
+			result.editable =
+			result.bordered = false;
+		}
 
 		result.stringValue = tabledata[row].data.title;
-		result.identifier = viewid;
+		result.identifier = "StoryView";
 
 		return result;
-	    }
+	    },
+
+	    rowHeight: () => 20
 	};
 
 	button.clicked = () => {
 	    this.xmlhttp = new XMLHttpRequest();
-	    this.xmlhttp.open('GET', 'http://www.reddit.com/r/programming/top.json', true);
+	    this.xmlhttp.open('GET', 'http://www.reddit.com/r/programming/top.json?limit=50', true);
 	    this.xmlhttp.onreadystatechange = () => {
 		if (this.xmlhttp.readyState === 4) {
 		    tabledata = JSON.parse(this.xmlhttp.responseText).data.children;
+		    console.log (`there are ${tabledata.length} rows`);
 		    table.reloadData();
 		}
 	    };
