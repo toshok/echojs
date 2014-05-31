@@ -1,5 +1,7 @@
 TOP=..
 
+include $(TOP)/build/config.mk
+
 COFFEE_SOURCES=				\
 	nodevisitor.coffee		\
 	compiler.coffee			\

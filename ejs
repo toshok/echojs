@@ -1,4 +1,14 @@
-#!/usr/bin/env coffee --nodejs --harmony
+#!/bin/sh
+###
+# this driver script used to do:  #!/usr/bin/env coffee --nodejs --harmony
+# this works fine on OSX, but linux/netbsd (at least) don't like it.
+# I don't want to supply yet another driver script, so we use this glorious
+# hack.
+#
+# the shell interprets the next line, and when it re-execs
+# coffee on this same file, coffee ignores it (# # # is a block quote)
+exec coffee --nodejs --harmony "$0" "$@"
+###
 
 path = require 'path'
 fs = require 'fs'
@@ -37,6 +47,9 @@ add_external_module = (modinfo) ->
 
 set_target = (targetinfo) ->
         switch targetinfo
+                when "linux_amd64"
+                        options.target = "linux_amd64"
+                        options.target_pointer_size = 64
                 when "osx"
                         options.target = "osx"
                         options.target_pointer_size = 64
@@ -86,26 +99,27 @@ args =
         "--help":
                 flag:    "show_help",
                 help:    "output this help info."
-        "--target":
-                handler: set_target
-                handlerArgc: 1
-                help:    "--target osx|sim|dev"
         "--extra-clang-args":
                 handler: set_extra_clang_args
                 handlerArgc: 1
                 help:    "extra arguments to pass to the clang command (used to compile the .s to .o)"
-        "--ios-sdk":
-                option:  "ios_sdk"
-                help:    "the version of the ios sdk to use.  useful if more than one is installed.  Default is 7.0."
-        "--ios-min":
-                option:  "ios_min"
-                help:    "the minimum version of ios to support.  Default is 7.0."
         "--record-types":
                 flag:    "record_types"
                 help:    "generates an executable which records types in a format later used for optimizations."
         "--frozen-global":
                 flag:    "frozen_global"
                 help:    "compiler acts as if the global object is frozen after initialization, allowing for faster access."
+
+        "--target":
+                handler: set_target
+                handlerArgc: 1
+                help:    "--target linux_amd64|osx|sim|dev"
+        "--ios-sdk":
+                option:  "ios_sdk"
+                help:    "the version of the ios sdk to use.  useful if more than one is installed.  Default is 7.0."
+        "--ios-min":
+                option:  "ios_min"
+                help:    "the minimum version of ios to support.  Default is 7.0."
 
 output_usage = ->
         console.warn 'Usage:';
@@ -172,42 +186,49 @@ sim_bin="#{sim_base}/Developer/usr/bin"
 dev_bin="#{dev_base}/Developer/usr/bin"
 
 target_llc_args =
+        linux_amd64: ["-march=x86-64", "-disable-fp-elim"]
         osx: ["-march=x86-64", "-disable-fp-elim"]
         sim: ["-march=x86"]
         armv7: ["-march=arm", "-mtriple=thumbv7-apple-ios", "-mattr=+v6", "-relocation-model=pic", "-soft-float" ]
         armv7s: ["-march=aarch64", "-mtriple=thumbv7s-apple-ios", "-mattr=+fp-armv8", "-relocation-model=pic" ]
 
 target_linker =
+        linux_amd64: "clang++"
         osx: "clang++"
         sim: "clang++"
         armv7: "clang++"
         armv7s: "clang++"
         
 target_link_args =
+        linux_amd64: [ "-DEJS_BITS_PER_WORD=64", "-DIS_LITTLE_ENDIAN=1" ]
         osx: [ "-DEJS_BITS_PER_WORD=64", "-DIS_LITTLE_ENDIAN=1" ]
         sim: [ "-arch", "i386",  "-isysroot", "#{sim_base}/Developer/SDKs/iPhoneSimulator#{options.ios_sdk}.sdk", "-miphoneos-version-min=#{options.ios_min}", "-DEJS_BITS_PER_WORD=32", "-DIS_LITTLE_ENDIAN=1"]
         armv7: [ "-arch", "armv7", "-isysroot", "#{dev_base}/Developer/SDKs/iPhoneOS#{options.ios_sdk}.sdk", "-miphoneos-version-min=#{options.ios_min}", "-DEJS_BITS_PER_WORD=32", "-DIS_LITTLE_ENDIAN=1" ]
         armv7s: [ "-arch", "armv7s", "-isysroot", "#{dev_base}/Developer/SDKs/iPhoneOS#{options.ios_sdk}.sdk", "-miphoneos-version-min=#{options.ios_min}", "-DEJS_BITS_PER_WORD=64", "-DIS_LITTLE_ENDIAN=1" ]
 
 target_libraries =
+        linux_amd64: [ "-lpthread" ]
         osx: [ "-framework", "Foundation", "-framework", "AppKit" ]
         sim: [ "-framework", "Foundation", "-framework", "UIKit", "-framework", "GLKit", "-framework", "OpenGLES", "-framework", "CoreGraphics" ]
         armv7: [ "-framework", "Foundation", "-framework", "UIKit", "-framework", "GLKit", "-framework", "OpenGLES", "-framework", "CoreGraphics" ]
         armv7s: [ "-framework", "Foundation", "-framework", "UIKit", "-framework", "GLKit", "-framework", "OpenGLES", "-framework", "CoreGraphics" ]
 
 target_libecho =
+        linux_amd64: "runtime/libecho.a"
         osx: "runtime/libecho.a"
         sim: "runtime/libecho.a.ios"
         armv7: "runtime/libecho.a.ios"
         armv7s: "runtime/libecho.a.ios"
 
 extra_libs =
+        linux_amd64: "external-deps/pcre-linux/.libs/libpcre16.a"
         osx: "external-deps/pcre-osx/.libs/libpcre16.a"
         sim: "external-deps/pcre-iossim/.libs/libpcre16.a"
         armv7: "external-deps/pcre-iosdev/.libs/libpcre16.a"
         armv7s: "external-deps/pcre-iosdev/.libs/libpcre16.a"
 
 target_path_prepend =
+        linux_amd64: ""
         osx: ""
         sim: "#{sim_bin}"
         armv7: "#{dev_bin}"

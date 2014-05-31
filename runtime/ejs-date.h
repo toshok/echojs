@@ -5,6 +5,7 @@
 #ifndef _ejs_date_h_
 #define _ejs_date_h_
 
+#include <time.h>
 #include <sys/time.h>
 #include "ejs-object.h"
 

@@ -22,7 +22,7 @@ else
 MIN_OSX_VERSION?=10.9
 endif
 
-all: build
+all-local:: build
 
 build: configure
 	@LLVM_CXXFLAGS="$(LLVM_CXXFLAGS)" LLVM_INCLUDEDIR="$(LLVM_INCLUDEDIR)" LLVM_LINKFLAGS="$(LLVM_LINKFLAGS)" LLVM_DEFINES="$(LLVM_DEFINES)" MIN_OSX_VERSION="$(MIN_OSX_VERSION)" node-gyp build
@@ -30,5 +30,7 @@ build: configure
 configure:
 	@LLVM_CXXFLAGS="$(LLVM_CXXFLAGS)" LLVM_INCLUDEDIR="$(LLVM_INCLUDEDIR)" LLVM_LINKFLAGS="$(LLVM_LINKFLAGS)" LLVM_DEFINES="$(LLVM_DEFINES)" MIN_OSX_VERSION="$(MIN_OSX_VERSION)" node-gyp configure
 
-clean:
+clean-local::
 	node-gyp clean
+
+-include $(TOP)/build/build.mk

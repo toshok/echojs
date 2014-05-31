@@ -56,6 +56,8 @@ $(call addExpectedFailure, forof1.js,               "we don't support for-of yet
 $(call addExpectedFailure, map1.js,                 "we throw the right exception but node 0.8 doesn't")
 $(call addExpectedFailure, regexp5.js,              "we don't support for the y flag")
 
+all-local:: check
+
 check: check-unit-tests run-tests
 
 check-stage1: check-unit-tests run-tests-stage1
@@ -194,3 +196,5 @@ compare-%:
 	mv /tmp/$$test_js.1.ll $$test_js.ll.stage1; \
 	diff -us $$test_js.ll.stage0 $$test_js.ll.stage1; \
 	rm $$test_js.ll.stage0 $$test_js.ll.stage1
+
+-include $(TOP)/build/build.mk

@@ -78,12 +78,12 @@ void _ejs_gc_dump_heap_stats();
 #define ALIGN(v,a) (((uintptr_t)(v) + (a)-1) & ~((a)-1))
 #define IS_ALLOC_ALIGNED(v) IS_ALIGNED_TO(v, ALLOC_ALIGN)
 
-// #if osx
+#if IOS || OSX
 #include <mach/vm_statistics.h>
 #define MAP_FD VM_MAKE_TAG (VM_MEMORY_APPLICATION_SPECIFIC_16)
-// #else
-// #define MAP_FD -1
-// #endif
+#else
+#define MAP_FD -1
+#endif
 
 EJSBool gc_disabled;
 int collect_every_alloc = 0;
@@ -96,8 +96,8 @@ typedef struct EJSFinalizerEntry {
 static pthread_mutex_t finalizer_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t finalizer_cond = PTHREAD_COND_INITIALIZER;
 
-static pthread_mutex_t big_gc_lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
-static pthread_mutex_t arena_lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
+static pthread_mutex_t big_gc_lock = PTHREAD_MUTEX_INITIALIZER; // actually recursive, see _ejs_gc_init
+static pthread_mutex_t arena_lock = PTHREAD_MUTEX_INITIALIZER;
 
 #define LOCK_GC() do {                                                  \
         /*_ejs_log ("locking gc at %s:%d\n", __PRETTY_FUNCTION__, __LINE__); */ \
@@ -717,6 +717,12 @@ _ejs_finalizer_thread ()
 void
 _ejs_gc_init()
 {
+    pthread_mutexattr_t mattr;
+    pthread_mutexattr_init (&mattr);
+    pthread_mutexattr_settype (&mattr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init (&big_gc_lock, &mattr);
+    pthread_mutex_init (&arena_lock, &mattr);
+
     gc_disabled = getenv("EJS_GC_DISABLE") != NULL;
     char* n_allocs = getenv("EJS_GC_EVERY_N_ALLOC");
     if (n_allocs)
@@ -986,8 +992,7 @@ mark_from_roots()
     SPEW (2, _ejs_log ("done marking from roots"));
 }
 
-#if IOS
-#if arm
+#if TARGET_CPU_ARM32
 #define MARK_REGISTERS EJS_MACRO_START \
     GCObjectPtr __r0, __r1, __r2, __r3, __r4, __r5, __r6, __r7, __r8, __r9, __r10, __r11, __r12;
     __asm ("str r0, %0; str r1, %1; str r2, %2; str r3, %3; str r4, %4; str r5, %5; str r6, %6;" \
@@ -998,10 +1003,7 @@ mark_from_roots()
                                                                          \
     mark_pointers_in_range(&__r12, &__r0);                               \
     EJS_MACRO_END
-#else
-#define MARK_REGISTERS
-#endif
-#elif OSX
+#elif TARGET_CPU_AMD64
 #define MARK_REGISTERS EJS_MACRO_START \
     GCObjectPtr __rax, __rbx, __rcx, __rdx, __rsi, __rdi, __rbp, __rsp, __r8, __r9, __r10, __r11, __r12, __r13, __r14, __r15; \
     __asm ("movq %%rax, %0; movq %%rbx, %1; movq %%rcx, %2; movq %%rdx, %3; movq %%rsi, %4;" \

@@ -1,6 +1,6 @@
 TOP=..
 
-include $(TOP)/build/build.mk
+include $(TOP)/build/config.mk
 
 LIBRARY=libecho.a
 C_SOURCES= \
@@ -36,6 +36,46 @@ C_SOURCES= \
 	ejs-uri.c \
 	parson.c
 
+VPATH=.:../parson
+
+CC=clang
+
+
+ejs-atoms-gen.c: ejs-atoms.h gen-atoms.js
+	@echo [GEN] $@ && ./gen-atoms.js $< > .tmp-$@ && mv .tmp-$@ $@
+
+ifeq ($(HOST_OS),linux)
+ALL_LIBRARIES=$(LIBRARY)
+ALL_TARGETS=$(ALL_LIBRARIES)
+
+LINUX_OBJECTS=$(C_SOURCES:%.c=%.o.linux) $(OBJC_SOURCES:%.m=%.o.linux) ejs-log.o.linux main.o.linux
+
+ALL_OBJECTS=$(LINUX_OBJECTS)
+
+CFLAGS += -I../external-deps/pcre-linux
+
+ejs-init.o.linux: ejs-atoms-gen.c
+
+$(LIBRARY): $(LINUX_OBJECTS)
+	@echo [ar linux] $@ && /usr/bin/ar rc $@ $(LINUX_OBJECTS)
+
+OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch
+
+%.o.linux: %.c
+	@mkdir -p .deps
+	@$(CC) -MM $(LINUX_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.linux,,`/$@/ > .deps/$@-deps
+	@echo [$(CC) linux] $< && $(CC) -ObjC $(LINUX_CFLAGS)  -c -o $@ $<
+
+%.o.linux: %.m
+	@mkdir -p .deps
+	@$(CC) -MM $(LINUX_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.linux,,`/$@/ > .deps/$@-deps
+	@echo [$(CC) linux] $< && $(CC) $(LINUX_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
+
+-include $(patsubst %.o.linux,.deps/%.o.linux-deps,$(LINUX_OBJECTS))
+endif
+
+ifeq ($(HOST_OS),darwin)
+
 OBJC_SOURCES= \
 	ejs-jsobjc.m \
 	ejs-log.m \
@@ -67,15 +107,6 @@ endif
 
 ALL_OBJECTS=$(SIM_OBJECTS) $(DEV_OBJECTS) $(DEVS_OBJECTS) $(OSX_OBJECTS)
 
-all-local:: $(ALL_TARGETS)
-
-clean-local::
-	rm -f test $(ALL_OBJECTS) $(ALL_LIBRARIES) ejs-atoms-gen.c $(analyze_plists_c) $(analyze_plists_objc)
-
-VPATH=.:../parson
-
-CC=clang
-
 CFLAGS += -I../external-deps/pcre-osx
 IOSSIM_CFLAGS += -I../external-deps/pcre-iossim
 IOSDEV_CFLAGS += -I../external-deps/pcre-iosdev
@@ -95,9 +126,6 @@ $(DEVS_LIBRARY): $(DEVS_OBJECTS)
 
 $(LIPOD_IOS_LIBRARY): $(SIM_LIBRARY) $(DEV_LIBRARY) $(DEVS_LIBRARY)
 	@echo [lipo] $@ && lipo -create $(SIM_ARCH) $(SIM_LIBRARY) $(DEV_ARCH) $(DEV_LIBRARY) $(DEVS_ARCH) $(DEVS_LIBRARY) -output $@
-
-ejs-atoms-gen.c: ejs-atoms.h gen-atoms.js
-	@echo [GEN] $@ && ./gen-atoms.js $< > .tmp-$@ && mv .tmp-$@ $@
 
 ejs-init.o.osx ejs-init.o.sim ejs-init.o.armv7 ejs-init.o.armv7s: ejs-atoms-gen.c
 
@@ -165,3 +193,11 @@ class-test: $(C_SOURCES:%.c=%.o.osx) $(OBJC_SOURCES:%.m=%.o.osx) class-test.o.os
 -include $(patsubst %.o.sim,.deps/%.o.sim-deps,$(SIM_OBJECTS))
 -include $(patsubst %.o.armv7,.deps/%.o.armv7-deps,$(DEV_OBJECTS))
 -include $(patsubst %.o.armv7s,.deps/%.o.armv7s-deps,$(DEVS_OBJECTS))
+endif
+
+all-local:: $(ALL_TARGETS)
+
+clean-local::
+	rm -f test $(ALL_OBJECTS) $(ALL_LIBRARIES) ejs-atoms-gen.c $(analyze_plists_c) $(analyze_plists_objc)
+
+include $(TOP)/build/build.mk

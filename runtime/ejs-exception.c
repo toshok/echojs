@@ -522,11 +522,11 @@ static EJSBool isEjsExceptionCatcher(uintptr_t lsda, uintptr_t ip,
 
         if (ip < bases->func + start) {
             // no more source ranges
-            return FALSE;
+            return EJS_FALSE;
         } 
         else if (ip < bases->func + start + len) {
             // found the range
-            if (!pad) return FALSE;  // ...but it has no landing pad
+            if (!pad) return EJS_FALSE;  // ...but it has no landing pad
             // found the landing pad
             action_record = action ? action_record_table + action - 1 : 0;
             *try_start = bases->func + start;
@@ -535,11 +535,11 @@ static EJSBool isEjsExceptionCatcher(uintptr_t lsda, uintptr_t ip,
         }        
     }
     
-    if (!action_record) return FALSE;  // no catch handlers
+    if (!action_record) return EJS_FALSE;  // no catch handlers
 
     // has handlers, destructors, and/or throws specifications
     // Use this frame if it has any handlers
-    EJSBool has_handler = FALSE;
+    EJSBool has_handler = EJS_FALSE;
     p = action_record;
     intptr_t offset;
     do {

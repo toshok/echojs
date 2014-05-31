@@ -27,7 +27,9 @@
 #include "ejs-typedarrays.h"
 #include "ejs-uri.h"
 #include "ejs-value.h"
+#if IOS || OSX
 #include "ejs-xhr.h"
+#endif
 #include "ejs-map.h"
 #include "ejs-set.h"
 #if IOS
@@ -96,7 +98,9 @@ _ejs_init_classes()
     _ejs_Class_initialize (&_ejs_WebGLActiveInfo_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_WebGLUniformLocation_specops, &_ejs_Object_specops);
 #endif
+#if IOS || OSX
     _ejs_Class_initialize (&_ejs_XMLHttpRequest_specops, &_ejs_Object_specops);
+#endif
 }
 
 void
@@ -178,7 +182,9 @@ _ejs_init(int argc, char** argv)
     _ejs_console_init(_ejs_global);
     _ejs_process_init(_ejs_global, argc, argv);
 
+#if IOS || OSX
     _ejs_xmlhttprequest_init(_ejs_global);
+#endif
 
     // a special global (__ejs) under which we can stuff other
     // semi-useful runtime features, like a call to force a GC.  the

@@ -1,4 +1,5 @@
 TOP=..
+include $(TOP)/build/config.mk
 
 LLVM_CXXFLAGS="`$LLVM_CONFIG --cxxflags` -fno-rtti"
 LLVM_LDFLAGS=`$LLVM_CONFIG --ldflags`
@@ -14,10 +15,14 @@ all-local:: build-pcre
 
 clean-local:: clean-pcre
 
+ifeq ($(HOST_OS),linux)
+PCRE_TARGETS=linux
+else
 ifneq ($(TRAVIS_BUILD_NUMBER),)
 PCRE_TARGETS=osx
 else
 PCRE_TARGETS=iossim iosdev osx
+endif
 endif
 
 
@@ -27,6 +32,10 @@ build-pcre: $(PCRE_TARGETS:%=build-pcre-%)
 
 clean-pcre: $(PCRE_TARGETS:%=clean-pcre-%)
 
+configure-pcre-linux:
+	@mkdir -p pcre-linux
+	(cd pcre-linux && \
+	../$(TOP)/pcre/configure $(PCRE_CONFIGURE_ARGS)) || rm -rf pcre-linux
 
 configure-pcre-osx:
 	@mkdir -p pcre-osx
@@ -53,6 +62,9 @@ configure-pcre-iosdev:
 	AS="$(IOSDEV_ROOT)/usr/bin/as" \
 	../$(TOP)/pcre/configure --host=$(IOSDEV_TRIPLE) $(PCRE_CONFIGURE_ARGS)) || rm -rf pcre-iosdev
 
+build-pcre-linux: configure-pcre-linux
+	$(MAKE) -C pcre-linux pcre_chartables.c libpcre16.la
+
 build-pcre-osx: configure-pcre-osx
 	$(MAKE) -C pcre-osx pcre_chartables.c libpcre16.la
 
@@ -70,18 +82,5 @@ clean-pcre-iosdev:
 
 clean-pcre-osx:
 	@test -d pcre-osx    && $(MAKE) -C pcre-osx clean
-
-configure-llvm:
-	@mkdir -p llvm-osx
-	(cd llvm-osx && \
-	../$(TOP)/llvm/configure  $(LLVM_CONFIGURE_ARGS)) || rm -rf llvm-osx
-
-build-llvm: configure-llvm
-	$(MAKE) -C llvm-osx
-
-install-llvm:
-
-clean-llvm:
-	@test -d llvm-osx && $(MAKE) -C llvm-osx clean
 
 include $(TOP)/build/build.mk

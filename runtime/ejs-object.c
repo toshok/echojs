@@ -703,7 +703,9 @@ _ejs_object_create (ejsval proto)
     else if (EJSVAL_EQ(proto, _ejs_TypeError_prototype))  ops = &_ejs_Error_specops;
     else if (EJSVAL_EQ(proto, _ejs_URIError_prototype))  ops = &_ejs_Error_specops;
     else if (EJSVAL_EQ(proto, _ejs_Error_prototype))  ops = &_ejs_Error_specops;
+#if IOS || OSX
     else if (EJSVAL_EQ(proto, _ejs_XMLHttpRequest_prototype))  ops = &_ejs_XMLHttpRequest_specops;
+#endif
     else {
         for (int i = 0; i < EJS_TYPEDARRAY_TYPE_COUNT; i ++) {
             if (EJSVAL_EQ(proto, _ejs_typed_array_protos[i]))

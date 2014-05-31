@@ -13,6 +13,7 @@
 
 extern const char *entry_filename;
 
+#include <signal.h>
 #include <setjmp.h>
 #include <unistd.h>
 
