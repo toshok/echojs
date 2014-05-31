@@ -992,9 +992,9 @@ mark_from_roots()
     SPEW (2, _ejs_log ("done marking from roots"));
 }
 
-#if TARGET_CPU_ARM32
+#if TARGET_CPU_ARM
 #define MARK_REGISTERS EJS_MACRO_START \
-    GCObjectPtr __r0, __r1, __r2, __r3, __r4, __r5, __r6, __r7, __r8, __r9, __r10, __r11, __r12;
+    GCObjectPtr __r0, __r1, __r2, __r3, __r4, __r5, __r6, __r7, __r8, __r9, __r10, __r11, __r12; \
     __asm ("str r0, %0; str r1, %1; str r2, %2; str r3, %3; str r4, %4; str r5, %5; str r6, %6;" \
            "str r7, %7; str r8, %8; str r9, %9; str r10, %10; str r11, %11; str r12, %12;" \
           : "=m"(__r0), "=m"(__r1), "=m"(__r2), "=m"(__r3), "=m"(__r4),  \
@@ -1015,6 +1015,8 @@ mark_from_roots()
                                                                         \
     mark_pointers_in_range(&__r15, &__rax);                             \
     EJS_MACRO_END
+#elif TARGET_CPU_X86
+#define MARK_REGISTERS // just keep the build limping along
 #else
 #error "put code here to mark registers"
 #endif
