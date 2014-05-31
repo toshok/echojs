@@ -221,9 +221,6 @@ parseFile = (filename, content) ->
                 parse_tree = esprima.parse content, { loc: true, raw: true }
         catch e
                 console.warn "#{filename}: #{e}:"
-
-                console.log "file contents was ```#{content}```"
-                
                 process.exit -1
 
         return parse_tree
