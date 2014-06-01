@@ -27,6 +27,8 @@ files = []
 temp_files = []
 
 host_arch = os.arch()
+host_arch = "x86-64" if host_arch is "x64" # why didn't we just standardize on 'amd64'?  sigh
+
 host_platform = os.platform()
 
 console.log "running on #{host_platform}-#{host_arch}"
