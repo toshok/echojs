@@ -170,7 +170,6 @@ static void _ejs_exception_destructor(void *exc_gen) {
     struct ejs_exception *exc = (struct ejs_exception *)exc_gen;
     // remove the gc root for the throw exception
     _ejs_gc_remove_root (&exc->val);
-    __cxa_free_exception (exc_gen);
 }
 
 
