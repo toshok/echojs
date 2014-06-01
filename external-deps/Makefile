@@ -75,12 +75,15 @@ build-pcre-iosdev: configure-pcre-iosdev
 	$(MAKE) -C pcre-iosdev pcre_chartables.c libpcre16.la
 
 clean-pcre-iossim:
-	@test -d pcre-iossim && $(MAKE) -C pcre-iossim clean
+	-@test -d pcre-iossim && $(MAKE) -C pcre-iossim clean
 
 clean-pcre-iosdev:
-	@test -d pcre-iosdev && $(MAKE) -C pcre-iosdev clean
+	-@test -d pcre-iosdev && $(MAKE) -C pcre-iosdev clean
 
 clean-pcre-osx:
-	@test -d pcre-osx    && $(MAKE) -C pcre-osx clean
+	-@test -d pcre-osx    && $(MAKE) -C pcre-osx clean
+
+clean-pcre-linux:
+	-@test -d pcre-linux  && $(MAKE) -C pcre-linux clean
 
 include $(TOP)/build/build.mk
