@@ -74,6 +74,7 @@ typedef void (*terminate_handler) ();
 // mangled std::set_terminate()
 extern terminate_handler _ZSt13set_terminatePFvvE(terminate_handler);
 extern void *__cxa_allocate_exception(size_t thrown_size);
+extern void *__cxa_free_exception(void *exc);
 extern void __cxa_throw(void *exc, void *typeinfo, void (*destructor)(void *)) __attribute__((noreturn));
 extern void *__cxa_begin_catch(void *exc);
 extern void __cxa_end_catch(void);
@@ -100,27 +101,24 @@ EJS_END_DECLS
 
 // ejs's internal exception types and data
 
-extern const void *ejs_ehtype_vtable[];
-
 struct ejs_typeinfo {
     // Position of vtable and name fields must match C++ typeinfo object
-    const void **vtable;  // always ejs_ehtype_vtable+2
+    const void **vtable;  // always &ejs_ehtype_vtable[2]
     const char *name;     // c++ typeinfo string
 };
+
+static void _ejs_exception_noop(void) { } 
+static int32_t _ejs_exception_false(void) { return 0; } 
+static int32_t _ejs_exception_true(void) { return 1; } 
+static char _ejs_exception_do_catch(struct ejs_typeinfo *catch_tinfo, 
+                                    struct ejs_typeinfo *throw_tinfo, 
+                                    void **throw_obj_p, 
+                                    unsigned outer);
 
 struct ejs_exception {
     ejsval val;
     struct ejs_typeinfo tinfo;
 };
-
-
-static void _ejs_exception_noop(void) { } 
-static char _ejs_exception_false(void) { return 0; } 
-static char _ejs_exception_true(void) { return 1; } 
-static char _ejs_exception_do_catch(struct ejs_typeinfo *catch_tinfo, 
-                                    struct ejs_typeinfo *throw_tinfo, 
-                                    void **throw_obj_p, 
-                                    unsigned outer);
 
 const void *ejs_ehtype_vtable[] = {
     NULL,  // typeinfo's vtable? - fixme 
@@ -134,37 +132,12 @@ const void *ejs_ehtype_vtable[] = {
 };
 
 struct ejs_typeinfo EJS_EHTYPE_ejsvalue = {
-    ejs_ehtype_vtable+2, 
+    &ejs_ehtype_vtable[2], 
     "ejsvalue", 
     // XXX nanboxing breaks this NULL
 };
 
 
-
-#if false
-/***********************************************************************
- * _ejs_default_uncaught_exception_handler
- * Default uncaught exception handler. Expected to be overridden by Foundation.
- **********************************************************************/
-static void _ejs_default_uncaught_exception_handler(EJSObject* exception)
-{
-}
-static ejs_uncaught_exception_handler uncaught_handler = _ejs_default_uncaught_exception_handler;
-
-
-/***********************************************************************
- * ejs_setUncaughtExceptionHandler
- * Set a handler for uncaught Objective-C exceptions. 
- * Returns the previous handler. 
- **********************************************************************/
-ejs_uncaught_exception_handler 
-ejs_setUncaughtExceptionHandler(ejs_uncaught_exception_handler fn)
-{
-    ejs_uncaught_exception_handler result = uncaught_handler;
-    uncaught_handler = fn;
-    return result;
-}
-#endif
 
 /***********************************************************************
  * Exception personality
@@ -177,9 +150,9 @@ EJS_PERSONALITY(int version,
                 struct _Unwind_Exception *exceptionObject,
                 struct _Unwind_Context *context)
 {
-    SPEW(_ejs_log ("EXCEPTIONS: %s through frame [ip=%p sp=%p] "
+    //SPEW(_ejs_log ("EXCEPTIONS: %s through frame [ip=%p sp=%p] "
+    SPEW(_ejs_log ("EXCEPTIONS: through frame [ip=%p sp=%p] "
                  "for exception %p\n", 
-                 unwinding ? "unwinding" : "searching", 
                  (void*)(_Unwind_GetIP(context)-1),
                  (void*)_Unwind_GetCFA(context), exceptionObject));
 
@@ -197,6 +170,7 @@ static void _ejs_exception_destructor(void *exc_gen) {
     struct ejs_exception *exc = (struct ejs_exception *)exc_gen;
     // remove the gc root for the throw exception
     _ejs_gc_remove_root (&exc->val);
+    __cxa_free_exception (exc_gen);
 }
 
 
@@ -209,7 +183,7 @@ void _ejs_exception_throw(ejsval val)
     // need to root the exception until it's caught
     _ejs_gc_add_root(&exc->val);
 
-    exc->tinfo.vtable = ejs_ehtype_vtable+2;
+    exc->tinfo = EJS_EHTYPE_ejsvalue;
 
     SPEW({
             _ejs_log ("EXCEPTIONS: throwing %p\n", exc);
@@ -217,7 +191,7 @@ void _ejs_exception_throw(ejsval val)
         });
     
     //    EJS_RUNTIME_EJS_EXCEPTION_THROW(obj);  // dtrace probe to log throw activity
-    __cxa_throw(exc, &exc->tinfo, &_ejs_exception_destructor);
+    __cxa_throw(exc, &exc->tinfo, _ejs_exception_destructor);
     __builtin_trap();
 }
 
@@ -235,7 +209,11 @@ void _ejs_exception_rethrow(void)
 ejsval _ejs_begin_catch(void *exc_gen)
 {
     SPEW(_ejs_log ("EXCEPTIONS: handling exception %p at %p\n", exc_gen, __builtin_return_address(0)));
+#if linux
+    struct ejs_exception *exc = (struct ejs_exception*)(exc_gen + 32 /*sizeof(struct _Unwind_Exception)*/);
+#else
     struct ejs_exception *exc = (struct ejs_exception*)__cxa_begin_catch(exc_gen);
+#endif
     return exc->val;
 }
 
@@ -260,7 +238,7 @@ static char _ejs_exception_do_catch(struct ejs_typeinfo *catch_tinfo,
 
     // `catch (EJSObject*)` always catches ejs types.
     if (catch_tinfo == &EJS_EHTYPE_ejsvalue) {
-        SPEW(_ejs_log ("EXCEPTIONS: catch(EJSValue*)\n"));
+        SPEW(_ejs_log ("EXCEPTIONS: catch(EJSValue* %p (%p))\n", throw_obj_p, *throw_obj_p));
         return 1;
     }
 
