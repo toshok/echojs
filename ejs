@@ -10,6 +10,7 @@
 exec coffee --nodejs --harmony "$0" "$@"
 ###
 
+os = require 'os'
 path = require 'path'
 fs = require 'fs'
 util = require 'echo-util'
@@ -25,6 +26,11 @@ argv = process.argv.slice slice_count
 files = []
 temp_files = []
 
+host_arch = os.arch()
+host_platform = os.platform()
+
+console.log "running on #{host_platform}-#{host_arch}"
+
 options =
         # our defaults:
         debug_level: 0
@@ -34,7 +40,8 @@ options =
         output_filename: null
         show_help: false
         leave_temp_files: false
-        target: "osx"
+        target_arch: host_arch
+        target_platform: host_platform
         external_modules: []
         extra_clang_args: ""
         ios_sdk: "7.1"
@@ -45,25 +52,37 @@ add_external_module = (modinfo) ->
         [library,module_name,module_entrypoint,link_flags] = modinfo.split ','
         options.external_modules.push { library, module_name, module_entrypoint, link_flags }
 
-set_target = (targetinfo) ->
-        switch targetinfo
-                when "linux_amd64"
-                        options.target = "linux_amd64"
-                        options.target_pointer_size = 64
-                when "osx"
-                        options.target = "osx"
-                        options.target_pointer_size = 64
-                when "sim"
-                        options.target = "sim"
-                        options.target_pointer_size = 32
-                when "armv7"
-                        options.target = "armv7"
-                        options.target_pointer_size = 32
-                when "armv7s"
-                        options.target = "armv7s"
-                        options.target_pointer_size = 64
-                else
-                        throw "invalid target specification `#{targetinfo}'."
+arch_info = {
+        "x86-64": { pointer_size: 64, little_endian: true, llc_arch: "x86-64",  clang_arch: "x86_64" }
+        x86:      { pointer_size: 32, little_endian: true, llc_arch: "x86",     clang_arch: "i386" }
+        arm:      { pointer_size: 32, little_endian: true, llc_arch: "arm",     clang_arch: "armv7" }
+        aarch64:  { pointer_size: 64, little_endian: true, llc_arch: "aarch64", clang_arch: "aarch64" }
+}
+
+set_target_arch = (arch) ->
+        if options.target?
+                throw new Error "--arch and --target cannot be specified at the same time"
+
+        if not arch in arch_info
+                throw new Error "invalid arch `#{arch}'."
+                
+        options.target_arch         = arch
+        options.target_pointer_size = arch_info[arch].pointer_size
+                
+set_target = (alias) ->
+        target_aliases = {
+                linux_amd64: { platform: "linux",  arch: "x86-64" },
+                osx:         { platform: "darwin", arch: "x86-64" },
+                sim:         { platform: "darwin", arch: "x86" },
+                dev:         { platform: "darwin", arch: "arm" },
+        }
+        if not alias in target_aliases
+                throw new Error "invalid target alias `#{alias}'."
+
+        options.target = alias
+        options.target_platform     = target_aliases[alias].platform
+        options.target_arch         = target_aliases[alias].arch 
+        options.target_pointer_size = arch_info[options.target_arch].pointer_size
 
 set_extra_clang_args = (arginfo) ->
         options.extra_clang_args = arginfo
@@ -91,7 +110,7 @@ args =
                 help:    "name of the output file."
         "--leave-temp":
                 flag:    "leave_temp_files"
-                help:    "leave temporary files in /tmp from compilation"
+                help:    "leave temporary files in $TMPDIR from compilation"
         "--module":
                 handler: add_external_module
                 handlerArgc: 1
@@ -110,10 +129,16 @@ args =
                 flag:    "frozen_global"
                 help:    "compiler acts as if the global object is frozen after initialization, allowing for faster access."
 
+        "--arch":
+                handler: set_target_arch
+                handlerArgc: 1
+                help:    "--arch x86-64|x86|arm|aarch64"
+
         "--target":
                 handler: set_target
                 handlerArgc: 1
                 help:    "--target linux_amd64|osx|sim|dev"
+                
         "--ios-sdk":
                 option:  "ios_sdk"
                 help:    "the version of the ios sdk to use.  useful if more than one is installed.  Default is 7.0."
@@ -129,9 +154,6 @@ output_options = ->
         console.warn 'Options:'
         for a of args
                 console.warn "   #{a}:  #{args[a].help}"
-
-# defaults
-set_target "osx"
 
 if argv.length > 0
         skipNext = 0
@@ -166,6 +188,8 @@ if not file_args? or file_args.length is 0
         output_usage()
         process.exit 0
 
+console.log "generating code for #{options.target_platform}-#{options.target_arch}"
+
 debug.setLevel options.debug_level
 
 files_remaining = 0
@@ -185,54 +209,66 @@ dev_base="/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform
 sim_bin="#{sim_base}/Developer/usr/bin"
 dev_bin="#{dev_base}/Developer/usr/bin"
 
-target_llc_args =
-        linux_amd64: ["-march=x86-64", "-disable-fp-elim"]
-        osx: ["-march=x86-64", "-disable-fp-elim"]
-        sim: ["-march=x86"]
-        armv7: ["-march=arm", "-mtriple=thumbv7-apple-ios", "-mattr=+v6", "-relocation-model=pic", "-soft-float" ]
-        armv7s: ["-march=aarch64", "-mtriple=thumbv7s-apple-ios", "-mattr=+fp-armv8", "-relocation-model=pic" ]
+target_llc_args = (platform, arch) ->
+        args = ["-march=#{arch_info[options.target_arch].llc_arch}", "-disable-fp-elim" ]
+        if arch is "arm"
+                args = args.concat ["-mtriple=thumbv7-apple-ios", "-mattr=+v6", "-relocation-model=pic", "-soft-float" ]
+        if arch is "aarch64"
+                args = args.concat ["-mtriple=thumbv7s-apple-ios", "-mattr=+fp-armv8", "-relocation-model=pic" ]
+        args
 
-target_linker =
-        linux_amd64: "clang++"
-        osx: "clang++"
-        sim: "clang++"
-        armv7: "clang++"
-        armv7s: "clang++"
+target_linker = "clang++"
         
-target_link_args =
-        linux_amd64: [ "-DEJS_BITS_PER_WORD=64", "-DIS_LITTLE_ENDIAN=1" ]
-        osx: [ "-DEJS_BITS_PER_WORD=64", "-DIS_LITTLE_ENDIAN=1" ]
-        sim: [ "-arch", "i386",  "-isysroot", "#{sim_base}/Developer/SDKs/iPhoneSimulator#{options.ios_sdk}.sdk", "-miphoneos-version-min=#{options.ios_min}", "-DEJS_BITS_PER_WORD=32", "-DIS_LITTLE_ENDIAN=1"]
-        armv7: [ "-arch", "armv7", "-isysroot", "#{dev_base}/Developer/SDKs/iPhoneOS#{options.ios_sdk}.sdk", "-miphoneos-version-min=#{options.ios_min}", "-DEJS_BITS_PER_WORD=32", "-DIS_LITTLE_ENDIAN=1" ]
-        armv7s: [ "-arch", "armv7s", "-isysroot", "#{dev_base}/Developer/SDKs/iPhoneOS#{options.ios_sdk}.sdk", "-miphoneos-version-min=#{options.ios_min}", "-DEJS_BITS_PER_WORD=64", "-DIS_LITTLE_ENDIAN=1" ]
+target_link_args = (platform, arch) ->
+        args = [ "-arch", arch_info[options.target_arch].clang_arch ]
+        
+        return args if platform is "linux"
+        if platform is "darwin"
+                return args if arch is "x86-64"
+                if arch is "x86"                
+                        return args.concat [ "-isysroot", "#{sim_base}/Developer/SDKs/iPhoneSimulator#{options.ios_sdk}.sdk", "-miphoneos-version-min=#{options.ios_min}" ]
+                return args.concat [ "-isysroot", "#{dev_base}/Developer/SDKs/iPhoneOS#{options.ios_sdk}.sdk", "-miphoneos-version-min=#{options.ios_min}" ]
+        []
+        
 
-target_libraries =
-        linux_amd64: [ "-lpthread" ]
-        osx: [ "-framework", "Foundation", "-framework", "AppKit" ]
-        sim: [ "-framework", "Foundation", "-framework", "UIKit", "-framework", "GLKit", "-framework", "OpenGLES", "-framework", "CoreGraphics" ]
-        armv7: [ "-framework", "Foundation", "-framework", "UIKit", "-framework", "GLKit", "-framework", "OpenGLES", "-framework", "CoreGraphics" ]
-        armv7s: [ "-framework", "Foundation", "-framework", "UIKit", "-framework", "GLKit", "-framework", "OpenGLES", "-framework", "CoreGraphics" ]
+target_libraries = (platform, arch) ->
+        return [ "-lpthread" ] if platform is "linux"
 
-target_libecho =
-        linux_amd64: "runtime/libecho.a"
-        osx: "runtime/libecho.a"
-        sim: "runtime/libecho.a.ios"
-        armv7: "runtime/libecho.a.ios"
-        armv7s: "runtime/libecho.a.ios"
+        if platform is "darwin"
+                rv = [ "-framework", "Foundation" ]
 
-extra_libs =
-        linux_amd64: "external-deps/pcre-linux/.libs/libpcre16.a"
-        osx: "external-deps/pcre-osx/.libs/libpcre16.a"
-        sim: "external-deps/pcre-iossim/.libs/libpcre16.a"
-        armv7: "external-deps/pcre-iosdev/.libs/libpcre16.a"
-        armv7s: "external-deps/pcre-iosdev/.libs/libpcre16.a"
+                # for osx we only need Foundation and AppKit
+                return rv.concat [ "-framework" , "AppKit" ] if arch is "x86-64"
 
-target_path_prepend =
-        linux_amd64: ""
-        osx: ""
-        sim: "#{sim_bin}"
-        armv7: "#{dev_bin}"
-        armv7s: "#{dev_bin}"
+                # for any other darwin we're dealing with ios, so...
+                return rv.concat [ "-framework", "UIKit", "-framework", "GLKit", "-framework", "OpenGLES", "-framework", "CoreGraphics" ]
+        []
+
+
+target_libecho = (platform, arch) ->
+        return "runtime/libecho.a"    if platform is "linux"
+        if platform is "darwin"
+                return "runtime/libecho.a" if arch is "x86-64"
+
+                return "runtime/libecho.a.ios"
+
+        throw new Error("shouldn't get here")
+
+        
+target_extra_libs = (platform, arch) ->
+        return "external-deps/pcre-linux/.libs/libpcre16.a" if platform is "linux"
+
+        if platform is "darwin"
+                return "external-deps/pcre-osx/.libs/libpcre16.a" if arch is "x86-64"
+                return "external-deps/pcre-iossim/.libs/libpcre16.a" if arch is "x86"
+                return "external-deps/pcre-iosdev/.libs/libpcre16.a" if arch is "arm"
+                return "external-deps/pcre-iosdevaarch64/.libs/libpcre16.a" if arch is "aarch64"
+
+target_path_prepend = (platform, arch) ->
+        if platform is "darwin"
+                return "#{sim_bin}" if arch is "x86"
+                return "#{dev_bin}" if arch is "arm" or arch is "aarch64"
+        ""                
 
 llvm_commands = {}
 llvm_commands[x]="#{x}#{process.env.LLVM_SUFFIX || ''}" for x in ["opt", "llc", "llvm-as"]
@@ -257,16 +293,16 @@ compileFile = (filename, parse_tree, compileCallback) ->
                 console.warn "error #{e}"
                 throw e
 
-        ll_filename     = "/tmp/#{base_filename}-#{options.target}.ll"
-        bc_filename     = "/tmp/#{base_filename}-#{options.target}.bc"
-        ll_opt_filename = "/tmp/#{base_filename}-#{options.target}.ll.opt"
-        o_filename      = "/tmp/#{base_filename}-#{options.target}.o"
+        ll_filename     = "#{os.tmpdir()}/#{base_filename}-#{options.target}.ll"
+        bc_filename     = "#{os.tmpdir()}/#{base_filename}-#{options.target}.bc"
+        ll_opt_filename = "#{os.tmpdir()}/#{base_filename}-#{options.target}.ll.opt"
+        o_filename      = "#{os.tmpdir()}/#{base_filename}-#{options.target}.o"
 
         temp_files.push ll_filename, bc_filename, ll_opt_filename, o_filename
         
         llvm_as_args = ["-o=#{bc_filename}", ll_filename]
         opt_args     = ["-O1", "-strip-dead-prototypes", "-S", "-o=#{ll_opt_filename}", bc_filename]
-        llc_args     = target_llc_args[options.target].concat ["-filetype=obj", "-o=#{o_filename}", ll_opt_filename]
+        llc_args     = target_llc_args(options.target_platform,options.target_arch).concat ["-filetype=obj", "-o=#{o_filename}", ll_opt_filename]
 
         debug.log 1, "writing #{ll_filename}"
         compiled_module.writeToFile ll_filename
@@ -316,7 +352,7 @@ generate_import_map = (modules) ->
                 if c_callable
                         filename = filename.replace /[.,-\/\\]/g, "_" # this is insanely inadequate
                 filename
-        map_path = "/tmp/#{util.genFreshFileName path.basename main_file}-import-map.cpp"
+        map_path = "#{os.tmpdir()}/#{util.genFreshFileName path.basename main_file}-import-map.cpp"
         map = fs.createWriteStream(map_path)
         map.write "#include \"#{relative_to_ejs_exe 'runtime/ejs.h'}\"\n"
         map.write "extern \"C\" {\n"
@@ -355,35 +391,37 @@ generate_import_map = (modules) ->
 do_final_link = (main_file) ->
         map_filename = generate_import_map compiled_modules
 
-        process.env.PATH = "#{target_path_prepend[options.target]}:#{process.env.PATH}"
+        process.env.PATH = "#{target_path_prepend(options.target_platform,options.target_arch)}:#{process.env.PATH}"
 
         output_filename = options.output_filename || "#{main_file}.exe"
-        clang_args = target_link_args[options.target].concat ["-o", output_filename].concat o_filenames
-
+        clang_args = target_link_args(options.target_platform, options.target_arch).concat ["-DEJS_BITS_PER_WORD=#{options.target_pointer_size}", "-o", output_filename].concat o_filenames
+        if arch_info[options.target_arch].little_endian
+                clang_args.unshift("-DIS_LITTLE_ENDIAN=1")
+                
         # XXX we shouldn't need this, but build is failing while compiling the require map
         clang_args.push "-I."
         
         clang_args.push map_filename
         
-        clang_args.push relative_to_ejs_exe target_libecho[options.target]
-        clang_args.push relative_to_ejs_exe extra_libs[options.target]
+        clang_args.push relative_to_ejs_exe target_libecho(options.target_platform, options.target_arch)
+        clang_args.push relative_to_ejs_exe target_extra_libs(options.target_platform, options.target_arch)
         
         options.external_modules.forEach (extern_module) ->
                 clang_args.push extern_module.library
                 clang_args = clang_args.concat extern_module.link_flags.split " "
 
-        clang_args = clang_args.concat target_libraries[options.target]
+        clang_args = clang_args.concat target_libraries(options.target_platform, options.target_arch)
 
         console.warn "#{util.bold()}LINK#{util.reset()} #{output_filename}" if not options.quiet
         
-        debug.log 1, "executing `#{target_linker[options.target]} #{clang_args.join ' '}'"
+        debug.log 1, "executing `#{target_linker} #{clang_args.join ' '}'"
         
         if __ejs?
-                spawn target_linker[options.target], clang_args
+                spawn target_linker, clang_args
                 # we ignore leave_tmp_files here
                 console.warn "#{util.bold()}done.#{util.reset()}" if not options.quiet
         else
-                clang = spawn target_linker[options.target], clang_args
+                clang = spawn target_linker, clang_args
                 clang.stderr.on "data", (data) -> console.warn "#{data}"
                 clang.on "exit", (code) ->
                         if not options.leave_temp_files
