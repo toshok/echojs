@@ -31,8 +31,6 @@ host_arch = "x86-64" if host_arch is "x64" # why didn't we just standardize on '
 
 host_platform = os.platform()
 
-console.log "running on #{host_platform}-#{host_arch}"
-
 options =
         # our defaults:
         debug_level: 0
@@ -196,7 +194,9 @@ if not file_args? or file_args.length is 0
         output_usage()
         process.exit 0
 
-console.log "generating code for #{options.target_platform}-#{options.target_arch}"
+if not options.quiet
+        console.log "running on #{host_platform}-#{host_arch}"
+        console.log "generating code for #{options.target_platform}-#{options.target_arch}"
 
 debug.setLevel options.debug_level
 
