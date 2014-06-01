@@ -229,8 +229,12 @@ target_linker = "clang++"
         
 target_link_args = (platform, arch) ->
         args = [ "-arch", arch_info[options.target_arch].clang_arch ]
-        
-        return args if platform is "linux"
+
+        if platform is "linux"
+                # on ubuntu 14.04, at least, clang spits out a warning about this flag being unused (presumably because there's no other arch)
+                return [] if arch is "x86-64"
+                return args
+
         if platform is "darwin"
                 return args if arch is "x86-64"
                 if arch is "x86"                
