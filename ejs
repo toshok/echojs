@@ -65,6 +65,12 @@ set_target_arch = (arch) ->
         if options.target?
                 throw new Error "--arch and --target cannot be specified at the same time"
 
+        # we accept some arch aliases
+
+        arch = "x86-64" if arch is "amd64"
+        arch = "x86-64" if arch is "x86_64"
+        arch = "x86"    if arch is "i386"
+
         if not arch in arch_info
                 throw new Error "invalid arch `#{arch}'."
                 
