@@ -75,8 +75,13 @@ set_target_arch = (arch) ->
                 
         options.target_arch         = arch
         options.target_pointer_size = arch_info[arch].pointer_size
-                
-set_target = (alias) ->
+
+set_target = (platform, arch) ->
+        options.target_platform     = platform
+        options.target_arch         = arch
+        options.target_pointer_size = arch_info[arch].pointer_size
+
+set_targetalias = (alias) ->
         target_aliases = {
                 linux_amd64: { platform: "linux",  arch: "x86-64" },
                 osx:         { platform: "darwin", arch: "x86-64" },
@@ -87,9 +92,7 @@ set_target = (alias) ->
                 throw new Error "invalid target alias `#{alias}'."
 
         options.target = alias
-        options.target_platform     = target_aliases[alias].platform
-        options.target_arch         = target_aliases[alias].arch 
-        options.target_pointer_size = arch_info[options.target_arch].pointer_size
+        set_target target_aliases[alias].platform, target_aliases[alias].arch
 
 set_extra_clang_args = (arginfo) ->
         options.extra_clang_args = arginfo
@@ -142,7 +145,7 @@ args =
                 help:    "--arch x86-64|x86|arm|aarch64"
 
         "--target":
-                handler: set_target
+                handler: set_target_alias
                 handlerArgc: 1
                 help:    "--target linux_amd64|osx|sim|dev"
                 
@@ -161,6 +164,9 @@ output_options = ->
         console.warn 'Options:'
         for a of args
                 console.warn "   #{a}:  #{args[a].help}"
+
+# default to the host platform/arch
+set_target host_platform, host_arch
 
 if argv.length > 0
         skipNext = 0
