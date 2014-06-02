@@ -81,7 +81,7 @@ set_target = (platform, arch) ->
         options.target_arch         = arch
         options.target_pointer_size = arch_info[arch].pointer_size
 
-set_targetalias = (alias) ->
+set_target_alias = (alias) ->
         target_aliases = {
                 linux_amd64: { platform: "linux",  arch: "x86-64" },
                 osx:         { platform: "darwin", arch: "x86-64" },
