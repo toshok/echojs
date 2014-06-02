@@ -28,6 +28,7 @@ temp_files = []
 
 host_arch = os.arch()
 host_arch = "x86-64" if host_arch is "x64" # why didn't we just standardize on 'amd64'?  sigh
+host_arch = "x86"    if host_arch is "ia32"
 
 host_platform = os.platform()
 
