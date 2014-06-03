@@ -139,7 +139,7 @@ class ABI
         createFunction: (inModule, name, ret_type, param_types) -> inModule.getOrInsertFunction name, ret_type, param_types
         createFunctionType: (ret_type, param_types) -> llvm.FunctionType.get ret_type, param_types
 
-# armv7 requires us to pass a pointer to a stack slot for the return value when it's EjsValue.
+# armv7/x86 requires us to pass a pointer to a stack slot for the return value when it's EjsValue.
 # so functions that would normally be defined as:
 # 
 #   ejsval _ejs_normal_func (ejsval env, ejsval this, uint32_t argc, ejsval* args)
@@ -148,7 +148,7 @@ class ABI
 # 
 #   void _ejs_sret_func (ejsval* sret, ejsval env, ejsval this, uint32_t argc, ejsval* args)
 # 
-class ArmABI extends ABI
+class SRetABI extends ABI
         constructor: () ->
                 super
                 @ejs_return_type = types.void
@@ -2250,7 +2250,7 @@ insert_toplevel_func = (tree, filename) ->
         tree
 
 exports.compile = (tree, base_output_filename, source_filename, options) ->
-        abi = if (options.target is "armv7" or options.target is "armv7s") then new ArmABI() else new ABI()
+        abi = if (options.target_arch is "armv7" or options.target_arch is "armv7s" or options.target_arch is "x86") then new SRetABI() else new ABI()
 
         tree = insert_toplevel_func tree, source_filename
 
