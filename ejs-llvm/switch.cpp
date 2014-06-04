@@ -92,7 +92,7 @@ namespace ejsllvm {
     {
         _ejs_Switch_specops = _ejs_Object_specops;
         _ejs_Switch_specops.class_name = "LLVMSwitch";
-        _ejs_Switch_specops.allocate = Switch_allocate;
+        _ejs_Switch_specops.Allocate = Switch_allocate;
 
         _ejs_gc_add_root (&_ejs_Switch_prototype);
         _ejs_Switch_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Switch_specops);

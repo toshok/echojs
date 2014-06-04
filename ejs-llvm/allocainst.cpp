@@ -80,7 +80,7 @@ namespace ejsllvm {
     {
         _ejs_AllocaInst_specops = _ejs_Object_specops;
         _ejs_AllocaInst_specops.class_name = "LLVMAllocaInst";
-        _ejs_AllocaInst_specops.allocate = AllocaInst_allocate;
+        _ejs_AllocaInst_specops.Allocate = AllocaInst_allocate;
 
         _ejs_gc_add_root (&_ejs_AllocaInst_prototype);
         _ejs_AllocaInst_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_AllocaInst_specops);

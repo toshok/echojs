@@ -43,7 +43,7 @@ namespace ejsllvm {
             _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Function[Symbol.create] is not a constructor");
         EJSObject* F_ = EJSVAL_TO_OBJECT(F);
         // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%DatePrototype%", ([[DateData]]) ). 
-        ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+        ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
         if (EJSVAL_IS_UNDEFINED(proto))
             proto = _ejs_Function_prototype;
 
@@ -227,7 +227,7 @@ namespace ejsllvm {
     {
         _ejs_Function_specops = _ejs_Object_specops;
         _ejs_Function_specops.class_name = "LLVMFunction";
-        _ejs_Function_specops.allocate = Function_allocate;
+        _ejs_Function_specops.Allocate = Function_allocate;
 
         _ejs_gc_add_root (&_ejs_Function_prototype);
         _ejs_Function_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Function_specops);

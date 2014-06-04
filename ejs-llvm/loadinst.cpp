@@ -80,7 +80,7 @@ namespace ejsllvm {
     {
         _ejs_LoadInst_specops = _ejs_Object_specops;
         _ejs_LoadInst_specops.class_name = "LLVMLoadInst";
-        _ejs_LoadInst_specops.allocate = LoadInst_Allocate;
+        _ejs_LoadInst_specops.Allocate = LoadInst_Allocate;
 
         _ejs_gc_add_root (&_ejs_LoadInst_prototype);
         _ejs_LoadInst_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_LoadInst_specops);
