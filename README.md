@@ -20,7 +20,7 @@ $ brew install node
 $ brew install llvm34
 $ npm install -g coffee-script
 $ npm install -g node-gyp
-$ export LLVM_SUFFIX-3.4      # see below
+$ export LLVM_SUFFIX=3.4      # see below
 $ export MIN_OSX_VERSION=10.8 # only if you're running 10.8, see below
 $ cd echo-js
 $ make
