@@ -9,13 +9,43 @@
 #include <sys/time.h>
 #include "ejs-object.h"
 
+#define EJSVAL_IS_PROMISE(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Promise_specops))
+#define EJSVAL_TO_PROMISE(v)     ((EJSPromise*)EJSVAL_TO_OBJECT(v))
+
+#define EJSVAL_IS_PROMISE_CAPABILITY(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_PromiseCapability_specops))
+#define EJSVAL_TO_PROMISE_CAPABILITY(v)     ((EJSPromiseCapability*)EJSVAL_TO_OBJECT(v))
+
+typedef enum {
+    PROMISE_STATE_PENDING,
+    PROMISE_STATE_FULFILLED,
+    PROMISE_STATE_REJECTED
+} PromiseState;
+
+typedef struct {
+    EJSListNode _listnode;
+    ejsval capabilities;
+    ejsval handler;
+} EJSPromiseReaction;
+
+typedef struct {
+    /* object header */
+    EJSObject obj;
+
+    ejsval promise;
+    ejsval reject;
+    ejsval resolve;
+} EJSPromiseCapability;
+
 typedef struct {
     /* object header */
     EJSObject obj;
 
     /* promise specific data */
-    struct timeval tv;
-    struct timezone tz;
+    PromiseState state;
+    ejsval result;
+    ejsval constructor;
+    EJSList fulfillReactions;
+    EJSList rejectReactions;
 } EJSPromise;
 
 

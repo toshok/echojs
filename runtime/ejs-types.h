@@ -131,7 +131,7 @@ void _ejs_list_pop_head (EJSList *list);
 
 int _ejs_list_length (EJSList *list);
 
-#define EJS_LIST_FOREACH(l,t,v,b) for (t* (v) = (t*)(l)->head; (v); (v) = (t*)(v)->next) b
+#define EJS_LIST_FOREACH(l,t,v,b) for (t* (v) = (t*)(l)->head; (v); (v) = (t*)((EJSListNode*)(v))->next) b
 
 EJS_END_DECLS
 
