@@ -42,7 +42,7 @@ namespace ejsllvm {
             _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in BasicBlock[Symbol.create] is not a constructor");
         EJSObject* F_ = EJSVAL_TO_OBJECT(F);
         // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%DatePrototype%", ([[DateData]]) ). 
-        ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+        ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
         if (EJSVAL_IS_UNDEFINED(proto))
             proto = _ejs_BasicBlock_prototype;
 
@@ -119,7 +119,7 @@ namespace ejsllvm {
     {
         _ejs_BasicBlock_specops = _ejs_Object_specops;
         _ejs_BasicBlock_specops.class_name = "LLVMBasicBlock";
-        _ejs_BasicBlock_specops.allocate = BasicBlock_allocate;
+        _ejs_BasicBlock_specops.Allocate = BasicBlock_allocate;
 
         _ejs_gc_add_root (&_ejs_BasicBlock_prototype);
         _ejs_BasicBlock_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_BasicBlock_specops);

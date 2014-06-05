@@ -113,7 +113,7 @@ namespace ejsllvm {
     {
         _ejs_Call_specops = _ejs_Object_specops;
         _ejs_Call_specops.class_name = "LLVMCall";
-        _ejs_Call_specops.allocate = Call_allocate;
+        _ejs_Call_specops.Allocate = Call_allocate;
 
         _ejs_gc_add_root (&_ejs_Call_prototype);
         _ejs_Call_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Call_specops);
@@ -234,7 +234,7 @@ namespace ejsllvm {
     {
         _ejs_Invoke_specops = _ejs_Object_specops;
         _ejs_Invoke_specops.class_name = "LLVMInvoke";
-        _ejs_Invoke_specops.allocate = Invoke_allocate;
+        _ejs_Invoke_specops.Allocate = Invoke_allocate;
 
         _ejs_gc_add_root (&_ejs_Invoke_prototype);
         _ejs_Invoke_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Invoke_specops);

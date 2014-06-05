@@ -45,7 +45,7 @@ namespace ejsllvm {
             _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in GlobalVariable[Symbol.create] is not a constructor");
         EJSObject* F_ = EJSVAL_TO_OBJECT(F);
         // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%DatePrototype%", ([[DateData]]) ). 
-        ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+        ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
         if (EJSVAL_IS_UNDEFINED(proto))
             proto = _ejs_GlobalVariable_prototype;
 
