@@ -421,20 +421,26 @@ class LLVMIRVisitor extends TreeVisitor
         storeGlobal: (prop, value) ->
                 # we store obj.prop, prop is an id
                 if prop.type is Identifier
-                        pname = prop.name
+                        gname = prop.name
                 else # prop.type is Literal
-                        pname = prop.value
+                        gname = prop.value
 
-                c = @getAtom pname
+                if not hasOwn.call @ejs_globals, gname
+                        throw new ReferenceError "unknown identifier `#{gname}' at line #{prop.loc.start.line}"
 
-                debug.log -> "createPropertyStore #{obj}[#{pname}]"
+                c = @getAtom gname
+
+                debug.log -> "createPropertyStore #{obj}[#{gname}]"
                         
-                @createCall @ejs_runtime.global_setprop, [c, value], "globalpropstore_#{pname}"
+                @createCall @ejs_runtime.global_setprop, [c, value], "globalpropstore_#{gname}"
 
         loadGlobal: (prop) ->
                 gname = prop.name
-                
-                if @options.frozen_global and hasOwn.call @ejs_globals, gname
+
+                if not hasOwn.call @ejs_globals, gname
+                        throw new ReferenceError "unknown identifier `#{gname}' at line #{prop.loc.start.line}"
+                        
+                if @options.frozen_global
                         return ir.createLoad @ejs_globals[prop.name], "load-#{gname}"
 
                 pname = @getAtom gname
@@ -906,9 +912,11 @@ class LLVMIRVisitor extends TreeVisitor
                 else if is_intrinsic(lhs, "%getLocal")
                         ir.createStore rhvalue, @findIdentifierInScope lhs.arguments[0].name
                 else if is_intrinsic(lhs, "%getGlobal")
-                        pname = @getAtom lhs.arguments[0].name
+                        gname = lhs.arguments[0].name
+                        if not hasOwn.call @ejs_globals, gname
+                                throw new ReferenceError "unknown identifier `#{gname}' at line #{lhs.loc.start.line}"
 
-                        @createCall @ejs_runtime.global_setprop, [pname, rhvalue], "globalpropstore_#{lhs.arguments[0].name}"
+                        @createCall @ejs_runtime.global_setprop, [@getAtom(gname), rhvalue], "globalpropstore_#{lhs.arguments[0].name}"
                 else
                         throw new Error "unhandled lhs #{escodegen.generate lhs}"
 
@@ -1295,6 +1303,9 @@ class LLVMIRVisitor extends TreeVisitor
                 debug.log "visitThisExpression"
                 @createLoad @findIdentifierInScope("%this"), "load_this"
 
+        visitSpreadElement: (n) ->
+                throw new Error("halp")
+                
         visitIdentifier: (n) ->
                 debug.log -> "identifier #{n.name}"
                 val = n.name
@@ -1782,14 +1793,18 @@ class LLVMIRVisitor extends TreeVisitor
                 @loadGlobal exp.arguments[0]
         
         handleSetGlobal: (exp, opencode) ->
+                gname = exp.arguments[0].name
+
+                if not hasOwn.call @ejs_globals, gname
+                        throw new ReferenceError "unknown identifier `#{gname}' at line #{exp.loc.start.line}"
+
                 if @options.frozen_global
                         throw new SyntaxError "cannot set global property '#{exp.arguments[0].name}' when using --frozen-global"
-
-                pname = exp.arguments[0].name
-                patom = @getAtom pname
+                                
+                gatom = @getAtom gname
                 value = @visit exp.arguments[1]
 
-                @createCall @ejs_runtime.global_setprop, [patom, value], "globalpropstore_#{pname}"
+                @createCall @ejs_runtime.global_setprop, [gatom, value], "globalpropstore_#{gname}"
 
         # this method assumes it's called in an opencoded context
         emitEjsvalTo: (val, type, prefix) ->
