@@ -142,18 +142,36 @@ exports.createGlobalsInterface = (module) ->
                 "String":       { get: -> module.getOrInsertGlobal           "_ejs_String",                 types.EjsValue }
                 "Number":       { get: -> module.getOrInsertGlobal           "_ejs_Number",                 types.EjsValue }
                 "Array":        { get: -> module.getOrInsertGlobal           "_ejs_Array",                  types.EjsValue }
+                "DataView":     { get: -> module.getOrInsertGlobal           "_ejs_DataView",               types.EjsValue }
                 "Date":         { get: -> module.getOrInsertGlobal           "_ejs_Date",                   types.EjsValue }
                 "Error":        { get: -> module.getOrInsertGlobal           "_ejs_Error",                  types.EjsValue }
+                "EvalError":    { get: -> module.getOrInsertGlobal           "_ejs_EvalError",              types.EjsValue }
+                "RangeError":   { get: -> module.getOrInsertGlobal           "_ejs_RangeError",             types.EjsValue }
+                "ReferenceError": { get: -> module.getOrInsertGlobal         "_ejs_ReferenceError",         types.EjsValue }
+                "SyntaxError":  { get: -> module.getOrInsertGlobal           "_ejs_SyntaxError",            types.EjsValue }
+                "TypeError":    { get: -> module.getOrInsertGlobal           "_ejs_TypeError",              types.EjsValue }
+                "URIError":     { get: -> module.getOrInsertGlobal           "_ejs_URIError",               types.EjsValue }
                 "Function":     { get: -> module.getOrInsertGlobal           "_ejs_Function",               types.EjsValue }
                 "JSON":         { get: -> module.getOrInsertGlobal           "_ejs_JSON",                   types.EjsValue }
                 "Math":         { get: -> module.getOrInsertGlobal           "_ejs_Math",                   types.EjsValue }
+                "Map":          { get: -> module.getOrInsertGlobal           "_ejs_Map",                    types.EjsValue }
+                "Proxy":        { get: -> module.getOrInsertGlobal           "_ejs_Proxy",                  types.EjsValue }
+                "Promise":      { get: -> module.getOrInsertGlobal           "_ejs_Promise",                types.EjsValue }
+                "Reflect":      { get: -> module.getOrInsertGlobal           "_ejs_Reflect",                types.EjsValue }
+                "RegExp":       { get: -> module.getOrInsertGlobal           "_ejs_RegExp",                 types.EjsValue }
+                "Symbol":       { get: -> module.getOrInsertGlobal           "_ejs_Symbol",                 types.EjsValue }
+                "Set":          { get: -> module.getOrInsertGlobal           "_ejs_Set",                    types.EjsValue }
                 "console":      { get: -> module.getOrInsertGlobal           "_ejs_console",                types.EjsValue }
                 "ArrayBuffer":  { get: -> module.getOrInsertGlobal           "_ejs_ArrayBuffer",            types.EjsValue }
                 "Int8Array":    { get: -> module.getOrInsertGlobal           "_ejs_Int8Array",              types.EjsValue }
-                "Uint16Array":  { get: -> module.getOrInsertGlobal           "_ejs_Uint16Array",            types.EjsValue }
+                "Int16Array":   { get: -> module.getOrInsertGlobal           "_ejs_Int16Array",             types.EjsValue }
                 "Int32Array":   { get: -> module.getOrInsertGlobal           "_ejs_Int32Array",             types.EjsValue }
+                "Uint8Array":   { get: -> module.getOrInsertGlobal           "_ejs_Uint8Array",             types.EjsValue }
+                "Uint16Array":  { get: -> module.getOrInsertGlobal           "_ejs_Uint16Array",            types.EjsValue }
+                "Uint32Array":  { get: -> module.getOrInsertGlobal           "_ejs_Uint32Array",            types.EjsValue }
                 "Float32Array": { get: -> module.getOrInsertGlobal           "_ejs_Float32Array",           types.EjsValue }
-                "XMLHttpRequest": { get: -> module.getOrInsertGlobal           "_ejs_XMLHttpRequest",       types.EjsValue }
+                "Float64Array": { get: -> module.getOrInsertGlobal           "_ejs_Float64Array",           types.EjsValue }
+                "XMLHttpRequest": { get: -> module.getOrInsertGlobal         "_ejs_XMLHttpRequest",       types.EjsValue }
                 "process":      { get: -> module.getOrInsertGlobal           "_ejs_Process",                types.EjsValue }
                 
                 "require":      { get: -> module.getOrInsertGlobal           "_ejs_require",                types.EjsValue }
@@ -165,7 +183,11 @@ exports.createGlobalsInterface = (module) ->
                 "encodeURI":    { get: -> module.getOrInsertGlobal           "_ejs_encodeURI",              types.EjsValue }
                 "decodeURIComponent":  { get: -> module.getOrInsertGlobal           "_ejs_decodeURIComponent",              types.EjsValue }
                 "encodeURIComponent":  { get: -> module.getOrInsertGlobal           "_ejs_encodeURIComponent",              types.EjsValue }
-        
+
+                "undefined": { get: -> module.getOrInsertGlobal "_ejs_undefined", types.EjsValue }
+                "Infinity":  { get: -> module.getOrInsertGlobal "_ejs_Infinity",  types.EjsValue }
+                "NaN":       { get: -> module.getOrInsertGlobal "_ejs_nan",       types.EjsValue }
+                
                 # kind of a hack, but since we don't define these...
                 "window":       { get: -> module.getOrInsertGlobal           "_ejs_undefined",              types.EjsValue }
                 "document":     { get: -> module.getOrInsertGlobal           "_ejs_undefined",              types.EjsValue }
