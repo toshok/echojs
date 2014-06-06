@@ -1330,12 +1330,12 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
                 visited_rhs = @visit n.right
                 
                 if is_intrinsic lhs, "%slot"
-                        create_intrinsic setSlot_id, [lhs.arguments[0], lhs.arguments[1], visited_rhs]
+                        create_intrinsic setSlot_id, [lhs.arguments[0], lhs.arguments[1], visited_rhs], lhs.loc
                 else if lhs.type is Identifier
                         if @findIdentifierInScope lhs
-                                create_intrinsic setLocal_id, [lhs, visited_rhs]
+                                create_intrinsic setLocal_id, [lhs, visited_rhs], lhs.loc
                         else
-                                create_intrinsic setGlobal_id, [lhs, visited_rhs]
+                                create_intrinsic setGlobal_id, [lhs, visited_rhs], lhs.loc
                 else
                         n.left = @visit n.left
                         n.right = visited_rhs

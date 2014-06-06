@@ -66,10 +66,11 @@ exports.create_number_literal = (x) ->
         type: syntax.Literal, value: x, raw: "#{x}"
 exports.is_number_literal = (n) -> n.type is syntax.Literal and typeof n.value is "number"
 exports.is_string_literal = (n) -> n.type is syntax.Literal and typeof n.raw is "string"
-exports.create_intrinsic = (id, args) ->
+exports.create_intrinsic = (id, args, loc) ->
         type: syntax.CallExpression
         callee: id
         arguments: args
+        loc: loc
 exports.is_intrinsic = (n, name) ->
         return false if n.type isnt syntax.CallExpression
         return false if n.callee.type isnt syntax.Identifier
