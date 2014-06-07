@@ -2048,6 +2048,9 @@ class DesugarImportExport extends TreeVisitor
                         else
                                 # export { ... } from "foo"
                                 for spec in n.specifiers
+                                        if not @exportLists[n.source_path.value]?.ids.has(spec.id.name)
+                                                throw new SourceReferenceError("module `#{n.source_path.value}' doesn't export `#{spec.id.name}'", @filename, spec.id.loc)
+                                        
                                         spectmp = freshId("spec")
                                         export_decl.declarations.push {
                                                 type: VariableDeclarator,

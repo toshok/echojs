@@ -2371,7 +2371,7 @@ class GatherImports extends TreeVisitor
                                 @addDefaultExport(@filename)
                         else
                                 for spec in n.specifiers
-                                        @addExportIdentifier(@filename, spec.id.name)
+                                        @addExportIdentifier(@filename, spec.name?.name or spec.id?.name)
                         n
                 else if n.declaration.type is FunctionDeclaration                        
                         @addExportIdentifier(@filename, n.declaration.id.name) 
