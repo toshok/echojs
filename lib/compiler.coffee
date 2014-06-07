@@ -2253,7 +2253,7 @@ insert_toplevel_func = (tree, filename) ->
         tree.body = [toplevel]
         tree
 
-exports.compile = (tree, base_output_filename, source_filename, options) ->
+exports.compile = (tree, base_output_filename, source_filename, export_lists, options) ->
         abi = if (options.target_arch is "armv7" or options.target_arch is "armv7s" or options.target_arch is "x86") then new SRetABI() else new ABI()
 
         tree = insert_toplevel_func tree, source_filename
@@ -2265,7 +2265,7 @@ exports.compile = (tree, base_output_filename, source_filename, options) ->
         #debug.log 1, "before closure conversion"
         #debug.log 1, -> escodegen.generate tree
 
-        tree = closure_conversion.convert tree, path.basename(source_filename), options
+        tree = closure_conversion.convert tree, path.basename(source_filename), export_lists, options
 
         debug.log 1, "after closure conversion"
         debug.log 1, -> escodegen.generate tree
@@ -2320,9 +2320,12 @@ exports.compile = (tree, base_output_filename, source_filename, options) ->
 #    imported modules
 #
 class GatherImports extends TreeVisitor
-        constructor: (@path, @toplevel_path) ->
+        constructor: (@filename, @path, @toplevel_path, @exportLists) ->
                 @importList = []
-
+                # remove our .js suffix since all imports are suffix-free
+                if @filename.lastIndexOf(".js") == @filename.length - 3
+                        @filename = @filename.substring(0, @filename.length-3)
+                
         isInternalModule = (source) -> source[0] is "@"
                 
         addSource: (n) ->
@@ -2346,13 +2349,44 @@ class GatherImports extends TreeVisitor
 
                 n.source_path = create_string_literal(source_path)
                 n
-        
+
+        addDefaultExport: (path) ->
+                if not hasOwn.call @exportLists, path
+                        @exportLists[path] = Object.create(null)
+                        @exportLists[path].ids = new Set()
+                @exportLists[path].has_default = true
+                
+        addExportIdentifier: (path, id) ->
+                if not hasOwn.call @exportLists, path
+                        @exportLists[path] = Object.create(null)
+                        @exportLists[path].ids = new Set()
+                @exportLists[path].ids.add(id)
+                
         visitImportDeclaration: (n) -> @addSource(n)
-        visitExportDeclaration: (n) -> @addSource(n)
+        visitExportDeclaration: (n) ->
+                n = @addSource(n)
+
+                if n.source?
+                        if n.default
+                                @addDefaultExport(@filename)
+                        else
+                                for spec in n.specifiers
+                                        @addExportIdentifier(@filename, spec.id.name)
+                        n
+                else if n.declaration.type is FunctionDeclaration                        
+                        @addExportIdentifier(@filename, n.declaration.id.name) 
+                else if n.declaration.type is VariableDeclaration
+                        for decl in n.declaration.declarations
+                                @addExportIdentifier(@filename, decl.id.name) 
+                else if n.declaration.type is VariableDeclarator
+                        @addExportIdentifier(@filename, n.declaration.id.name)
+                else if n.default
+                        @addDefaultExport(@filename)
+                n
         visitModuleDeclaration: (n) -> @addSource(n)
 
-exports.gatherImports = (filename, top_path, tree) ->
-        visitor = new GatherImports(filename, top_path)
+exports.gatherImports = (filename, path, top_path, tree, exportLists) ->
+        visitor = new GatherImports(filename, path, top_path, exportLists)
         visitor.visit(tree)
         visitor.importList
         

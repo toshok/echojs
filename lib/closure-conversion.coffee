@@ -1898,7 +1898,7 @@ class DesugarImportExport extends TreeVisitor
         importGen = startGenerator()
         freshId = (prefix) -> create_identifier "%#{prefix}_#{importGen()}"
 
-        constructor: ->
+        constructor: (@filename, @exportLists) ->
                 super
 
         Object_defineProperty = {
@@ -1983,7 +1983,10 @@ class DesugarImportExport extends TreeVisitor
                 if n.kind is "default"
                         #
                         # let #{n.specifiers[0].id} = %import_decl.default
-                        # 
+                        #
+                        if not @exportLists[n.source_path]?.has_default
+                                throw new SourceReferenceError("module `#{n.source_path}' doesn't have default export", @filename, n.loc)
+                                
                         throw new SyntaxError("default imports should have only one ImportSpecifier") if n.specifiers.length isnt 1
                         import_decls.declarations.push {
                                 type: VariableDeclarator,
@@ -1999,7 +2002,9 @@ class DesugarImportExport extends TreeVisitor
                         for spec in n.specifiers
                                 #
                                 # let #{spec.id} = %import_decl.#{spec.name || spec.id }
-                                # 
+                                #
+                                if not @exportLists[n.source_path.value]?.ids.has(spec.id.name)
+                                        throw new SourceReferenceError("module `#{n.source_path.value}' doesn't export `#{spec.id.name}'", @filename, spec.id.loc)
                                 import_decls.declarations.push {
                                         type: VariableDeclarator,
                                         id:   spec.name or spec.id
@@ -2186,14 +2191,14 @@ passes = [
         LambdaLift
         ]
 
-exports.convert = (tree, filename, options) ->
+exports.convert = (tree, filename, export_lists, options) ->
         debug.log "before:"
         debug.log -> escodegen.generate tree
 
         passes.forEach (passType) ->
                 return if not passType?
                 try
-                        pass = new passType(filename)
+                        pass = new passType(filename, export_lists)
                         tree = pass.visit tree
                         if options.debug_passes.has(passType.name)
                                 console.log "after: #{passType.name}"

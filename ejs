@@ -301,13 +301,13 @@ parseFile = (filename, content) ->
 
         return parse_tree
         
-compileFile = (filename, parse_tree, compileCallback) ->
+compileFile = (filename, parse_tree, export_lists, compileCallback) ->
         base_filename = util.genFreshFileName path.basename filename
 
         console.warn "#{util.bold()}COMPILE#{util.reset()} #{filename} #{if options.debug_level > 0 then '-> #{base_filename}' else ''}" if not options.quiet
 
         try
-                compiled_module = compiler.compile parse_tree, base_filename, filename, options
+                compiled_module = compiler.compile parse_tree, base_filename, filename, export_lists, options
         catch e
                 console.warn "#{e}"
                 process.exit(-1) if options.debug_level == 0
@@ -459,14 +459,16 @@ main_file = file_args[0]
 work_list = file_args.slice()
 files = []
 
+export_lists = Object.create(null)
+
 # starting at the main file, gather all files we'll need
 while work_list.length isnt 0
         file = work_list.pop()
 
         file_contents = fs.readFileSync(file, 'utf-8')
         file_ast = parseFile(file, file_contents)
-        
-        imports = compiler.gatherImports(path.dirname(file), process.cwd(), file_ast)
+
+        imports = compiler.gatherImports(file, path.dirname(file), process.cwd(), file_ast, export_lists)
 
         files.push({file_name: file, file_ast: file_ast})
 
@@ -482,7 +484,7 @@ files.reverse()
 #
 if __ejs?
         for f in files
-                compileFile f.file_name, f.file_ast
+                compileFile f.file_name, f.file_ast, export_lists
         do_final_link(main_file)
 else
         compileNextFile = ->
@@ -490,7 +492,7 @@ else
                         do_final_link(main_file)
                         return
                 f = files.pop()
-                compileFile f.file_name, f.file_ast, compileNextFile
+                compileFile f.file_name, f.file_ast, export_lists, compileNextFile
         compileNextFile()
         
 # Local Variables:
