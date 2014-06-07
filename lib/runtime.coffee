@@ -171,7 +171,7 @@ exports.createGlobalsInterface = (module) ->
                 "Uint32Array":  { get: -> module.getOrInsertGlobal           "_ejs_Uint32Array",            types.EjsValue }
                 "Float32Array": { get: -> module.getOrInsertGlobal           "_ejs_Float32Array",           types.EjsValue }
                 "Float64Array": { get: -> module.getOrInsertGlobal           "_ejs_Float64Array",           types.EjsValue }
-                "XMLHttpRequest": { get: -> module.getOrInsertGlobal         "_ejs_XMLHttpRequest",       types.EjsValue }
+                "XMLHttpRequest": { get: -> module.getOrInsertGlobal         "_ejs_XMLHttpRequest",         types.EjsValue }
                 "process":      { get: -> module.getOrInsertGlobal           "_ejs_Process",                types.EjsValue }
                 
                 "require":      { get: -> module.getOrInsertGlobal           "_ejs_require",                types.EjsValue }

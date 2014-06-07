@@ -425,9 +425,6 @@ class LLVMIRVisitor extends TreeVisitor
                 else # prop.type is Literal
                         gname = prop.value
 
-                if not hasOwn.call @ejs_globals, gname
-                        throw new ReferenceError "undeclared identifier `#{gname}' at line #{prop.loc.start.line}"
-
                 c = @getAtom gname
 
                 debug.log -> "createPropertyStore #{obj}[#{gname}]"
@@ -437,9 +434,6 @@ class LLVMIRVisitor extends TreeVisitor
         loadGlobal: (prop) ->
                 gname = prop.name
 
-                if not hasOwn.call @ejs_globals, gname
-                        throw new ReferenceError "undeclared identifier `#{gname}' at line #{prop.loc.start.line}"
-                        
                 if @options.frozen_global
                         return ir.createLoad @ejs_globals[prop.name], "load-#{gname}"
 
@@ -913,8 +907,6 @@ class LLVMIRVisitor extends TreeVisitor
                         ir.createStore rhvalue, @findIdentifierInScope lhs.arguments[0].name
                 else if is_intrinsic(lhs, "%getGlobal")
                         gname = lhs.arguments[0].name
-                        if not hasOwn.call @ejs_globals, gname
-                                throw new ReferenceError "undeclared identifier `#{gname}' at line #{lhs.loc.start.line}"
 
                         @createCall @ejs_runtime.global_setprop, [@getAtom(gname), rhvalue], "globalpropstore_#{lhs.arguments[0].name}"
                 else
@@ -1794,9 +1786,6 @@ class LLVMIRVisitor extends TreeVisitor
         
         handleSetGlobal: (exp, opencode) ->
                 gname = exp.arguments[0].name
-
-                if not hasOwn.call @ejs_globals, gname
-                        throw new ReferenceError "undeclared identifier `#{gname}' at line #{exp.loc.start.line}"
 
                 if @options.frozen_global
                         throw new SyntaxError "cannot set global property '#{exp.arguments[0].name}' when using --frozen-global"

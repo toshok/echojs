@@ -2,6 +2,10 @@ esprima = require 'esprima'
 escodegen = require 'escodegen'
 debug = require 'debug'
 
+runtime_globals = require('runtime').createGlobalsInterface(null)
+
+{ SourceReferenceError } = require 'errors'
+
 { CFA2 } = require 'jscfa2'
 
 { ArrayExpression,
@@ -1290,14 +1294,19 @@ class NameAnonymousFunctions extends TreeVisitor
                 n
 
 class MarkLocalAndGlobalVariables extends TreeVisitor
-        constructor: ->
+        constructor: (@fileName) ->
                 # initialize the scope stack with the global (empty) scope
                 @scope_stack = new Stack new Map
 
         findIdentifierInScope: (ident) ->
                 for scope in @scope_stack.stack
                         return true if scope.has(ident.name)
-                return false
+                # at this point it's going to be a global reference.
+                # make sure the identifier is one of our globals
+                if hasOwnProperty.call runtime_globals, ident.name
+                        return false
+
+                throw new SourceReferenceError("undeclared identifier `#{ident.name}'", @fileName, ident.loc)
 
         intrinsicForIdentifier: (id) ->
                 is_local = @findIdentifierInScope id
@@ -2194,8 +2203,8 @@ exports.convert = (tree, filename, options) ->
                         debug.log 2, -> escodegen.generate tree
                         debug.log 3, -> __ejs.GC.dumpAllocationStats "after #{passType.name}" if __ejs?
                 catch e
-                        console.warn "exception in pass #{passType.name}"
-                        console.warn e
+                        debug.log 2, "exception in pass #{passType.name}"
+                        debug.log 2, e
                         throw e
 
         tree

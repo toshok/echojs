@@ -121,11 +121,13 @@ _ejs_Promise_prototype_then (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     // 13. Else if the value of promise's [[PromiseState]] internal slot is "fulfilled", 
     else if (_promise->state == PROMISE_STATE_FULFILLED) {
         //     a. Let value be the value of promise's [[PromiseResult]] internal slot. 
+        ejsval value = _promise->result;
         //     b. Perform EnqueueTask("PromiseTasks", PromiseReactionTask, (fulfillReaction, value)). 
     }
     // 14. Else if the value of promise's [[PromiseState]] internal slot is "rejected", 
     else if (_promise->state == PROMISE_STATE_REJECTED) {
         //     a. Let reason be the value of promise's [[PromiseResult]] internal slot. 
+        ejsval reason = _promise->result;
         //     b. Perform EnqueueTask("PromiseTasks", PromiseReactionTask, (rejectReaction, reason)). 
     }
     else {
