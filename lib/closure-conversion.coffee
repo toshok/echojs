@@ -1990,8 +1990,8 @@ class DesugarImportExport extends TreeVisitor
                         #
                         # let #{n.specifiers[0].id} = %import_decl.default
                         #
-                        if not @exportLists[n.source_path]?.has_default
-                                reportError(ReferenceError, "module `#{n.source_path}' doesn't have default export", @filename, n.loc)
+                        if not @exportLists[n.source_path.value]?.has_default
+                                reportError(ReferenceError, "module `#{n.source_path.value}' doesn't have default export", @filename, n.loc)
 
                         reportError(ReferenceError, "default imports should have only one ImportSpecifier", @filename, n.loc) if n.specifiers.length isnt 1
                         import_decls.declarations.push {
