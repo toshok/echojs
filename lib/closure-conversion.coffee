@@ -4,7 +4,7 @@ debug = require 'debug'
 
 runtime_globals = require('runtime').createGlobalsInterface(null)
 
-{ SourceReferenceError } = require 'errors'
+{ reportError, reportWarning } = require 'errors'
 
 { CFA2 } = require 'jscfa2'
 
@@ -291,12 +291,13 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
 
                 for class_element in ast_class.body.body
                         if class_element.static and class_element.key.name is "prototype"
-                                throw new SyntaxError "Illegal method name 'prototype' on static class member."
+                                reportError(SyntaxError, "Illegal method name 'prototype' on static class member.", @filename, class_element.loc)
                                 
                         if class_element.kind is ""
                                 # a method
                                 method_map = if class_element.static then smethods else methods
-                                throw new SyntaxError "method '#{class_element.key.name}' has already been defined." if method_map.has(class_element.key.name)
+                                if method_map.has(class_element.key.name)
+                                        reportError(SyntaxError, "method '#{class_element.key.name}' has already been defined.", @filename, class_element.loc)
                                 method_map.set(class_element.key.name, class_element)
                         else
                                 # a property
@@ -305,7 +306,9 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
                                 # XXX this is broken for computed properties
                                 property_map.set(class_element.key.name, new Map) if not property_map.has(class_element.key.name)
 
-                                throw new SyntaxError "a '#{class_element.kind}' method for '#{class_element.key.name}' has already been defined." if property_map.get(class_element.key.name).has(class_element.kind)
+                                if property_map.get(class_element.key.name).has(class_element.kind)
+                                        reportError(SyntaxError, "a '#{class_element.kind}' method for '#{class_element.key.name}' has already been defined.", @filename, class_element.loc)
+
                                 property_map.get(class_element.key.name).set(class_element.kind, class_element)
 
                 [properties, methods, sproperties, smethods]
@@ -595,9 +598,10 @@ class FuncDeclsToVars extends TreeVisitor
 #       x = 5;
 #       ....
 #    }
-# 
+#
+# we also warn if x was already hoisted (if the decl for it already exists in the toplevel scope)
 class HoistVars extends TreeVisitor
-        constructor: () ->
+        constructor: (@filename) ->
                 super
                 @scope_stack = new Stack
 
@@ -675,7 +679,10 @@ class HoistVars extends TreeVisitor
                                         assignments.push assignment
 
                         # vars are hoisted to the containing function's toplevel scope
-                        @scope_stack.top.vars.add decl.id.name for decl in n.declarations
+                        for decl in n.declarations
+                                if @scope_stack.top.vars.has decl.id.name
+                                        reportWarning("multiple var declarations for `#{decl.id.name}' in this function.", @filename, n.loc)
+                                @scope_stack.top.vars.add decl.id.name
 
                         if assignments.length is 0
                                 return { type: EmptyStatement }
@@ -772,7 +779,7 @@ DesugarArrowFunctions = class DesugarArrowFunctions extends TreeVisitor
 
                                 return create_identifier m.id
 
-                throw new Error("no binding for 'this' available for arrow function")
+                reportError(SyntaxError, "no binding for 'this' available for arrow function", @filename, n.loc)
         
         visitFunction: (n) ->
                 @mapping.unshift { func: n, id: null }
@@ -1306,7 +1313,7 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
                 if hasOwnProperty.call runtime_globals, ident.name
                         return false
 
-                throw new SourceReferenceError("undeclared identifier `#{ident.name}'", @fileName, ident.loc)
+                reportError(ReferenceError, "undeclared identifier `#{ident.name}'", @fileName, ident.loc)
 
         intrinsicForIdentifier: (id) ->
                 is_local = @findIdentifierInScope id
@@ -1363,6 +1370,7 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
                 # intrinsic already wrapping the identifier.
 
                 if n.arguments[0].type is Identifier
+                        @findIdentifierInScope n.arguments[0]
                         new_args = @visit n.arguments.slice 1
                         new_args.unshift n.arguments[0]
                 else
@@ -1378,6 +1386,8 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
                 # identifier that we don't want rewrapped, or an
                 # intrinsic already wrapping the identifier.
                 
+                if n.arguments[0].type is Identifier
+                        @findIdentifierInScope n.arguments[0]
                 new_args = @visit n.arguments.slice 1
                 new_args.unshift n.arguments[0]
                 n.arguments = new_args
@@ -1689,7 +1699,7 @@ class DesugarDestructuring extends TreeVisitor
                         else if decl.id.type is Identifier
                                 decls.push(decl)
                         else
-                                throw new Error "unhandled type of variable declaration in DesugarDestructuring #{decl.id.type}"
+                                reportError(Error, "unhandled type of variable declaration in DesugarDestructuring #{decl.id.type}", @filename, n.loc)
 
                 n.declarations = decls
                 n
@@ -1697,7 +1707,7 @@ class DesugarDestructuring extends TreeVisitor
         visitAssignmentExpression: (n) ->
                 if n.left.type is ObjectPattern or n.left.type is ArrayPattern
                         throw new Error "EJS doesn't support destructuring assignments yet (issue #16)"
-                        throw new SyntaxError "cannot use destructuring with assignment operators other than '='" if n.operator isnt "="
+                        reportError(Error, "cannot use destructuring with assignment operators other than '='", @filename, n.loc) if n.operator isnt "="
                 else
                         n
 
@@ -1891,7 +1901,7 @@ class DesugarUpdateAssignments extends TreeVisitor
                                         return { type: SequenceExpression, expressions: expressions }
                                 n
                         else
-                                throw new Error "unexpected expression type #{n.left.type} in update assign expression."
+                                reportError(Error, "unexpected expression type #{n.left.type} in update assign expression.", @filename, n.left.loc)
                 n
 
 class DesugarImportExport extends TreeVisitor
@@ -1908,10 +1918,6 @@ class DesugarImportExport extends TreeVisitor
                 property: create_identifier("defineProperty")
         }
                                 
-        create_lhs = (specifiers) ->
-                throw new Error("internal compiler error, only form \"import blah from 'blah'\" supported") if specifiers.length isnt 1
-                specifiers[0].id
-
         define_export_property = (exported_id, local_id = exported_id) ->
                 # return esprima.parse("Object.defineProperty(exports, '#{exported_id.name}', { get: function() { return #{local_id.name}; } });");
                 
@@ -1985,9 +1991,9 @@ class DesugarImportExport extends TreeVisitor
                         # let #{n.specifiers[0].id} = %import_decl.default
                         #
                         if not @exportLists[n.source_path]?.has_default
-                                throw new SourceReferenceError("module `#{n.source_path}' doesn't have default export", @filename, n.loc)
-                                
-                        throw new SyntaxError("default imports should have only one ImportSpecifier") if n.specifiers.length isnt 1
+                                reportError(ReferenceError, "module `#{n.source_path}' doesn't have default export", @filename, n.loc)
+
+                        reportError(ReferenceError, "default imports should have only one ImportSpecifier", @filename, n.loc) if n.specifiers.length isnt 1
                         import_decls.declarations.push {
                                 type: VariableDeclarator,
                                 id:   n.specifiers[0].id
@@ -2004,7 +2010,7 @@ class DesugarImportExport extends TreeVisitor
                                 # let #{spec.id} = %import_decl.#{spec.name || spec.id }
                                 #
                                 if not @exportLists[n.source_path.value]?.ids.has(spec.id.name)
-                                        throw new SourceReferenceError("module `#{n.source_path.value}' doesn't export `#{spec.id.name}'", @filename, spec.id.loc)
+                                        reportError(ReferenceError, "module `#{n.source_path.value}' doesn't export `#{spec.id.name}'", @filename, spec.id.loc)
                                 import_decls.declarations.push {
                                         type: VariableDeclarator,
                                         id:   spec.name or spec.id
@@ -2043,13 +2049,14 @@ class DesugarImportExport extends TreeVisitor
                         export_stuff = []                             
                         if n.default
                                 # export * from "foo"
-                                throw new SyntaxError("invalid export") if n.specifiers.length isnt 1 or n.specifiers[0].type isnt ExportBatchSpecifier
+                                if n.specifiers.length isnt 1 or n.specifiers[0].type isnt ExportBatchSpecifier
+                                        reportError(SyntaxError, "invalid export", @filename, n.loc)
                                 @batch_exports.push { source: import_tmp, specifiers: [] }
                         else
                                 # export { ... } from "foo"
                                 for spec in n.specifiers
                                         if not @exportLists[n.source_path.value]?.ids.has(spec.id.name)
-                                                throw new SourceReferenceError("module `#{n.source_path.value}' doesn't export `#{spec.id.name}'", @filename, spec.id.loc)
+                                                reportError(ReferenceError, "module `#{n.source_path.value}' doesn't export `#{spec.id.name}'", @filename, spec.id.loc)
                                         
                                         spectmp = freshId("spec")
                                         export_decl.declarations.push {
@@ -2109,7 +2116,7 @@ class DesugarImportExport extends TreeVisitor
                         export_define = define_export_property(default_id, local_default_id)
                         return [local_decl, export_define]
 
-                throw new Error("Unsupported type of export declaration #{n.declaration.type}")
+                reportError(SyntaxError, "Unsupported type of export declaration #{n.declaration.type}", @filename, n.loc)
 
         visitModuleDeclaration: (n) ->
                 # this isn't quite right.  I believe this form creates
