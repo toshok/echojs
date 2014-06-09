@@ -96,104 +96,105 @@ exports.createInterface = (module, abi) ->
         runtime
 
 exports.createBinopsInterface = (module, abi) ->
+        createBinop = (n) -> abi.createExternalFunction module, n, types.EjsValue, [types.EjsValue, types.EjsValue]
         return Object.create null, {
-                "^":          { get: -> abi.createExternalFunction module, "_ejs_op_bitwise_xor", types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "&":          { get: -> abi.createExternalFunction module, "_ejs_op_bitwise_and", types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "|":          { get: -> abi.createExternalFunction module, "_ejs_op_bitwise_or",  types.EjsValue, [types.EjsValue, types.EjsValue] }
-                ">>":         { get: -> abi.createExternalFunction module, "_ejs_op_rsh",         types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "<<":         { get: -> abi.createExternalFunction module, "_ejs_op_lsh",         types.EjsValue, [types.EjsValue, types.EjsValue] }
-                ">>>":        { get: -> abi.createExternalFunction module, "_ejs_op_ursh",        types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "<<<":        { get: -> abi.createExternalFunction module, "_ejs_op_ulsh",        types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "%":          { get: -> abi.createExternalFunction module, "_ejs_op_mod",         types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "+":          { get: -> abi.createExternalFunction module, "_ejs_op_add",         types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "*":          { get: -> abi.createExternalFunction module, "_ejs_op_mult",        types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "/":          { get: -> abi.createExternalFunction module, "_ejs_op_div",         types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "-":          { get: -> abi.createExternalFunction module, "_ejs_op_sub",         types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "<":          { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_lt",          types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "<=":         { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_le",          types.EjsValue, [types.EjsValue, types.EjsValue] }
-                ">":          { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_gt",          types.EjsValue, [types.EjsValue, types.EjsValue] }
-                ">=":         { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_ge",          types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "===":        { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_strict_eq",   types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "==":         { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_eq",          types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "!==":        { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_strict_neq",  types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "!=":         { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_neq",         types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "instanceof": { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_instanceof",  types.EjsValue, [types.EjsValue, types.EjsValue] }
-                "in":         { get: -> returns_ejsval_bool abi.createExternalFunction module, "_ejs_op_in",          types.EjsValue, [types.EjsValue, types.EjsValue] }
+                "^":          { get: ->                     createBinop "_ejs_op_bitwise_xor" }
+                "&":          { get: ->                     createBinop "_ejs_op_bitwise_and" }
+                "|":          { get: ->                     createBinop "_ejs_op_bitwise_or" }
+                ">>":         { get: ->                     createBinop "_ejs_op_rsh" }
+                "<<":         { get: ->                     createBinop "_ejs_op_lsh" }
+                ">>>":        { get: ->                     createBinop "_ejs_op_ursh" }
+                "<<<":        { get: ->                     createBinop "_ejs_op_ulsh" }
+                "%":          { get: ->                     createBinop "_ejs_op_mod" }
+                "+":          { get: ->                     createBinop "_ejs_op_add" }
+                "*":          { get: ->                     createBinop "_ejs_op_mult" }
+                "/":          { get: ->                     createBinop "_ejs_op_div" }
+                "-":          { get: ->                     createBinop "_ejs_op_sub" }
+                "<":          { get: -> returns_ejsval_bool createBinop "_ejs_op_lt" }
+                "<=":         { get: -> returns_ejsval_bool createBinop "_ejs_op_le" }
+                ">":          { get: -> returns_ejsval_bool createBinop "_ejs_op_gt" }
+                ">=":         { get: -> returns_ejsval_bool createBinop "_ejs_op_ge" }
+                "===":        { get: -> returns_ejsval_bool createBinop "_ejs_op_strict_eq" }
+                "==":         { get: -> returns_ejsval_bool createBinop "_ejs_op_eq" }
+                "!==":        { get: -> returns_ejsval_bool createBinop "_ejs_op_strict_neq" }
+                "!=":         { get: -> returns_ejsval_bool createBinop "_ejs_op_neq" }
+                "instanceof": { get: -> returns_ejsval_bool createBinop "_ejs_op_instanceof" }
+                "in":         { get: -> returns_ejsval_bool createBinop "_ejs_op_in" }
         }                
         
 exports.createAtomsInterface = (module) ->
+        getGlobal = (n) -> module.getOrInsertGlobal n, types.EjsValue
         return Object.create null, {
-                "null":      { get: -> module.getOrInsertGlobal           "_ejs_atom_null",                 types.EjsValue }
-                "undefined": { get: -> module.getOrInsertGlobal           "_ejs_atom_undefined",            types.EjsValue }
-                "length":    { get: -> module.getOrInsertGlobal           "_ejs_atom_length",               types.EjsValue }
-                "__ejs":     { get: -> module.getOrInsertGlobal           "_ejs_atom___ejs",                types.EjsValue }
-                "object":    { get: -> module.getOrInsertGlobal           "_ejs_atom_object",               types.EjsValue }
-                "function":  { get: -> module.getOrInsertGlobal           "_ejs_atom_function",             types.EjsValue }
-                "prototype": { get: -> module.getOrInsertGlobal           "_ejs_atom_prototype",            types.EjsValue }
-                "Object":    { get: -> module.getOrInsertGlobal           "_ejs_atom_Object",               types.EjsValue }
-                "Array":     { get: -> module.getOrInsertGlobal           "_ejs_atom_Array",                types.EjsValue }
+                "null":      { get: -> getGlobal "_ejs_atom_null" }
+                "undefined": { get: -> getGlobal "_ejs_atom_undefined" }
+                "length":    { get: -> getGlobal "_ejs_atom_length" }
+                "__ejs":     { get: -> getGlobal "_ejs_atom___ejs" }
+                "object":    { get: -> getGlobal "_ejs_atom_object" }
+                "function":  { get: -> getGlobal "_ejs_atom_function" }
+                "prototype": { get: -> getGlobal "_ejs_atom_prototype" }
+                "Object":    { get: -> getGlobal "_ejs_atom_Object" }
+                "Array":     { get: -> getGlobal "_ejs_atom_Array" }
         }
 
 exports.createGlobalsInterface = (module) ->
+        getGlobal = (n) -> module.getOrInsertGlobal n, types.EjsValue
         return Object.create null, {
-                "Object":       { get: -> module.getOrInsertGlobal           "_ejs_Object",                 types.EjsValue }
-                "Object_prototype": { get: -> module.getOrInsertGlobal           "_ejs_Object_prototype",   types.EjsValue }
-                "Boolean":      { get: -> module.getOrInsertGlobal           "_ejs_Boolean",                types.EjsValue }
-                "String":       { get: -> module.getOrInsertGlobal           "_ejs_String",                 types.EjsValue }
-                "Number":       { get: -> module.getOrInsertGlobal           "_ejs_Number",                 types.EjsValue }
-                "Array":        { get: -> module.getOrInsertGlobal           "_ejs_Array",                  types.EjsValue }
-                "DataView":     { get: -> module.getOrInsertGlobal           "_ejs_DataView",               types.EjsValue }
-                "Date":         { get: -> module.getOrInsertGlobal           "_ejs_Date",                   types.EjsValue }
-                "Error":        { get: -> module.getOrInsertGlobal           "_ejs_Error",                  types.EjsValue }
-                "EvalError":    { get: -> module.getOrInsertGlobal           "_ejs_EvalError",              types.EjsValue }
-                "RangeError":   { get: -> module.getOrInsertGlobal           "_ejs_RangeError",             types.EjsValue }
-                "ReferenceError": { get: -> module.getOrInsertGlobal         "_ejs_ReferenceError",         types.EjsValue }
-                "SyntaxError":  { get: -> module.getOrInsertGlobal           "_ejs_SyntaxError",            types.EjsValue }
-                "TypeError":    { get: -> module.getOrInsertGlobal           "_ejs_TypeError",              types.EjsValue }
-                "URIError":     { get: -> module.getOrInsertGlobal           "_ejs_URIError",               types.EjsValue }
-                "Function":     { get: -> module.getOrInsertGlobal           "_ejs_Function",               types.EjsValue }
-                "JSON":         { get: -> module.getOrInsertGlobal           "_ejs_JSON",                   types.EjsValue }
-                "Math":         { get: -> module.getOrInsertGlobal           "_ejs_Math",                   types.EjsValue }
-                "Map":          { get: -> module.getOrInsertGlobal           "_ejs_Map",                    types.EjsValue }
-                "Proxy":        { get: -> module.getOrInsertGlobal           "_ejs_Proxy",                  types.EjsValue }
-                "Promise":      { get: -> module.getOrInsertGlobal           "_ejs_Promise",                types.EjsValue }
-                "Reflect":      { get: -> module.getOrInsertGlobal           "_ejs_Reflect",                types.EjsValue }
-                "RegExp":       { get: -> module.getOrInsertGlobal           "_ejs_RegExp",                 types.EjsValue }
-                "Symbol":       { get: -> module.getOrInsertGlobal           "_ejs_Symbol",                 types.EjsValue }
-                "Set":          { get: -> module.getOrInsertGlobal           "_ejs_Set",                    types.EjsValue }
-                "console":      { get: -> module.getOrInsertGlobal           "_ejs_console",                types.EjsValue }
-                "ArrayBuffer":  { get: -> module.getOrInsertGlobal           "_ejs_ArrayBuffer",            types.EjsValue }
-                "Int8Array":    { get: -> module.getOrInsertGlobal           "_ejs_Int8Array",              types.EjsValue }
-                "Int16Array":   { get: -> module.getOrInsertGlobal           "_ejs_Int16Array",             types.EjsValue }
-                "Int32Array":   { get: -> module.getOrInsertGlobal           "_ejs_Int32Array",             types.EjsValue }
-                "Uint8Array":   { get: -> module.getOrInsertGlobal           "_ejs_Uint8Array",             types.EjsValue }
-                "Uint16Array":  { get: -> module.getOrInsertGlobal           "_ejs_Uint16Array",            types.EjsValue }
-                "Uint32Array":  { get: -> module.getOrInsertGlobal           "_ejs_Uint32Array",            types.EjsValue }
-                "Float32Array": { get: -> module.getOrInsertGlobal           "_ejs_Float32Array",           types.EjsValue }
-                "Float64Array": { get: -> module.getOrInsertGlobal           "_ejs_Float64Array",           types.EjsValue }
-                "XMLHttpRequest": { get: -> module.getOrInsertGlobal         "_ejs_XMLHttpRequest",         types.EjsValue }
-                "process":      { get: -> module.getOrInsertGlobal           "_ejs_Process",                types.EjsValue }
-                
-                "require":      { get: -> module.getOrInsertGlobal           "_ejs_require",                types.EjsValue }
-                "isNaN":        { get: -> module.getOrInsertGlobal           "_ejs_isNaN",                  types.EjsValue }
-                "isFinite":     { get: -> module.getOrInsertGlobal           "_ejs_isFinite",               types.EjsValue }
-                "parseInt":     { get: -> module.getOrInsertGlobal           "_ejs_parseInt",               types.EjsValue }
-                "parseFloat":   { get: -> module.getOrInsertGlobal           "_ejs_parseFloat",             types.EjsValue }
-                "decodeURI":    { get: -> module.getOrInsertGlobal           "_ejs_decodeURI",              types.EjsValue }
-                "encodeURI":    { get: -> module.getOrInsertGlobal           "_ejs_encodeURI",              types.EjsValue }
-                "decodeURIComponent":  { get: -> module.getOrInsertGlobal           "_ejs_decodeURIComponent",              types.EjsValue }
-                "encodeURIComponent":  { get: -> module.getOrInsertGlobal           "_ejs_encodeURIComponent",              types.EjsValue }
-
-                "undefined": { get: -> module.getOrInsertGlobal "_ejs_undefined", types.EjsValue }
-                "Infinity":  { get: -> module.getOrInsertGlobal "_ejs_Infinity",  types.EjsValue }
-                "NaN":       { get: -> module.getOrInsertGlobal "_ejs_nan",       types.EjsValue }
-                
+                "Object":             { get: -> getGlobal "_ejs_Object" }
+                "Object_prototype":   { get: -> getGlobal "_ejs_Object_prototype" }
+                "Boolean":            { get: -> getGlobal "_ejs_Boolean" }
+                "String":             { get: -> getGlobal "_ejs_String" }
+                "Number":             { get: -> getGlobal "_ejs_Number" }
+                "Array":              { get: -> getGlobal "_ejs_Array" }
+                "DataView":           { get: -> getGlobal "_ejs_DataView" }
+                "Date":               { get: -> getGlobal "_ejs_Date" }
+                "Error":              { get: -> getGlobal "_ejs_Error" }
+                "EvalError":          { get: -> getGlobal "_ejs_EvalError" }
+                "RangeError":         { get: -> getGlobal "_ejs_RangeError" }
+                "ReferenceError":     { get: -> getGlobal "_ejs_ReferenceError" }
+                "SyntaxError":        { get: -> getGlobal "_ejs_SyntaxError" }
+                "TypeError":          { get: -> getGlobal "_ejs_TypeError" }
+                "URIError":           { get: -> getGlobal "_ejs_URIError" }
+                "Function":           { get: -> getGlobal "_ejs_Function" }
+                "JSON":               { get: -> getGlobal "_ejs_JSON" }
+                "Math":               { get: -> getGlobal "_ejs_Math" }
+                "Map":                { get: -> getGlobal "_ejs_Map" }
+                "Proxy":              { get: -> getGlobal "_ejs_Proxy" }
+                "Promise":            { get: -> getGlobal "_ejs_Promise" }
+                "Reflect":            { get: -> getGlobal "_ejs_Reflect" }
+                "RegExp":             { get: -> getGlobal "_ejs_RegExp" }
+                "Symbol":             { get: -> getGlobal "_ejs_Symbol" }
+                "Set":                { get: -> getGlobal "_ejs_Set" }
+                "console":            { get: -> getGlobal "_ejs_console" }
+                "ArrayBuffer":        { get: -> getGlobal "_ejs_ArrayBuffer" }
+                "Int8Array":          { get: -> getGlobal "_ejs_Int8Array" }
+                "Int16Array":         { get: -> getGlobal "_ejs_Int16Array" }
+                "Int32Array":         { get: -> getGlobal "_ejs_Int32Array" }
+                "Uint8Array":         { get: -> getGlobal "_ejs_Uint8Array" }
+                "Uint16Array":        { get: -> getGlobal "_ejs_Uint16Array" }
+                "Uint32Array":        { get: -> getGlobal "_ejs_Uint32Array" }
+                "Float32Array":       { get: -> getGlobal "_ejs_Float32Array" }
+                "Float64Array":       { get: -> getGlobal "_ejs_Float64Array" }
+                "XMLHttpRequest":     { get: -> getGlobal "_ejs_XMLHttpRequest" }
+                "process":            { get: -> getGlobal "_ejs_Process" }
+                "require":            { get: -> getGlobal "_ejs_require" }
+                "isNaN":              { get: -> getGlobal "_ejs_isNaN" }
+                "isFinite":           { get: -> getGlobal "_ejs_isFinite" }
+                "parseInt":           { get: -> getGlobal "_ejs_parseInt" }
+                "parseFloat":         { get: -> getGlobal "_ejs_parseFloat" }
+                "decodeURI":          { get: -> getGlobal "_ejs_decodeURI" }
+                "encodeURI":          { get: -> getGlobal "_ejs_encodeURI" }
+                "decodeURIComponent": { get: -> getGlobal "_ejs_decodeURIComponent" }
+                "encodeURIComponent": { get: -> getGlobal "_ejs_encodeURIComponent" }
+                "undefined":          { get: -> getGlobal "_ejs_undefined" }
+                "Infinity":           { get: -> getGlobal "_ejs_Infinity" }
+                "NaN":                { get: -> getGlobal "_ejs_nan" }
                 # kind of a hack, but since we don't define these...
-                "window":       { get: -> module.getOrInsertGlobal           "_ejs_undefined",              types.EjsValue }
-                "document":     { get: -> module.getOrInsertGlobal           "_ejs_undefined",              types.EjsValue }
+                "window":             { get: -> getGlobal "_ejs_undefined" }
+                "document":           { get: -> getGlobal "_ejs_undefined" }
         }
 
 exports.createSymbolsInterface = (module) ->
+        getGlobal = (n) -> module.getOrInsertGlobal n, types.EjsValue
         return Object.create null, {
-                "create":      { get: -> module.getOrInsertGlobal           "_ejs_Symbol_create",           types.EjsValue }
+                "create":      { get: -> getGlobal "_ejs_Symbol_create" }
         }
