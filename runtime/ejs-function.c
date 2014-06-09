@@ -449,6 +449,15 @@ _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args)
 }
 
 EJSBool
+_ejs_invoke_closure_catch(ejsval* retval, ejsval closure, ejsval _this, uint32_t argc, ejsval* args)
+{
+    // XXX this needs to be rewritten in llvm-ir to catch ejs exceptions thrown during the execution of @closure
+    // see https://github.com/toshok/echo-js/issues/31
+    *retval = _ejs_invoke_closure(closure, _this, argc, args);
+    return EJS_TRUE;
+}
+
+EJSBool
 _ejs_decompose_closure (ejsval closure, EJSClosureFunc* func, ejsval* env,
                         ejsval *_this)
 {

@@ -19,6 +19,25 @@ ejsval _ejs_Promise_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_identity_function EJSVAL_ALIGNMENT;
 ejsval _ejs_thrower_function EJSVAL_ALIGNMENT;
 
+static EJSBool
+GetIterator(ejsval* iterator, ejsval iterable)
+{
+    EJS_NOT_IMPLEMENTED();
+}
+
+static EJSBool
+IteratorStep(ejsval* next, ejsval iterator)
+{
+    EJS_NOT_IMPLEMENTED();
+}
+
+static EJSBool
+IteratorValue(ejsval* value, ejsval iterResult)
+{
+    EJS_NOT_IMPLEMENTED();
+}
+
+
 // ECMA262 25.4.5.4.0 Identity Functions 
 static ejsval
 identity(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -150,12 +169,31 @@ _ejs_Promise_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 static ejsval
 _ejs_Promise_all (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    EJS_NOT_IMPLEMENTED();
+    EJSBool success;
+
+    ejsval iterable = _ejs_undefined;
+    if (argc > 0) iterable = args[0];
+
     // 1. Let C be the this value. 
+    ejsval C = _this;
+
     // 2. Let promiseCapability be NewPromiseCapability(C). 
     // 3. ReturnIfAbrupt(promiseCapability). 
+    ejsval promiseCapability = NewPromiseCapability(C);
+    EJSPromiseCapability *cap = EJSVAL_TO_PROMISE_CAPABILITY(promiseCapability);
+
     // 4. Let iterator be GetIterator(iterable). 
+    ejsval iterator;
+    success = GetIterator(&iterator, iterable);
+
     // 5. IfAbruptRejectPromise(iterator, promiseCapability). 
+    if (!success) {
+        _ejs_invoke_closure(cap->reject, _ejs_undefined, 1, &iterator);
+        return cap->promise;
+    }
+
+    EJS_NOT_IMPLEMENTED();
+
     // 6. Let values be ArrayCreate(0). 
     // 7. Let remainingElementsCount be a new Record { [[value]]: 1 }. 
     // 8. Let index be 0. 
@@ -188,22 +226,75 @@ _ejs_Promise_all (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 static ejsval
 _ejs_Promise_race (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    EJS_NOT_IMPLEMENTED();
+    EJSBool success;
+
+    ejsval iterable = _ejs_undefined;
+    if (argc > 0) iterable = args[0];
+
     // 1. Let C be the this value. 
+    ejsval C = _this;
+
     // 2. Let promiseCapability be NewPromiseCapability(C). 
     // 3. ReturnIfAbrupt(promiseCapability). 
+    ejsval promiseCapability = NewPromiseCapability(C);
+    EJSPromiseCapability *cap = EJSVAL_TO_PROMISE_CAPABILITY(promiseCapability);
+
     // 4. Let iterator be GetIterator(iterable). 
+    ejsval iterator;
+    success = GetIterator(&iterator, iterable);
+    
     // 5. IfAbruptRejectPromise(iterator, promiseCapability).
+    if (!success) {
+        _ejs_invoke_closure(cap->reject, _ejs_undefined, 1, &iterator);
+        return cap->promise;
+    }
+
     // 6. Repeat 
-    //    a. Let next be IteratorStep(iterator). 
-    //    b. IfAbruptRejectPromise(next, promiseCapability). 
-    //    c. If next is false, return promiseCapability.[[Promise]]. 
-    //    d. Let nextValue be IteratorValue(next). 
-    //    e. IfAbruptRejectPromise(nextValue, promiseCapability). 
-    //    f. Let nextPromise be Invoke(C, "resolve", (nextValue)). 
-    //    g. IfAbruptRejectPromise(nextPromise, promiseCapability). 
-    //    h. Let result be Invoke(nextPromise, "then", (promiseCapability.[[Resolve]], promiseCapability.[[Reject]])). 
-    //    i. IfAbruptRejectPromise(result, promiseCapability). 
+    while (EJS_TRUE) {
+        ejsval next;
+
+        //    a. Let next be IteratorStep(iterator). 
+        EJSBool success = IteratorStep(&next, iterator);
+        //    b. IfAbruptRejectPromise(next, promiseCapability). 
+        if (!success) {
+            _ejs_invoke_closure(cap->reject, _ejs_undefined, 1, &next);
+            return cap->promise;
+        }
+
+        //    c. If next is false, return promiseCapability.[[Promise]]. 
+        if (EJSVAL_IS_BOOLEAN(next) && !EJSVAL_TO_BOOLEAN(next))
+            return cap->promise;
+
+        //    d. Let nextValue be IteratorValue(next). 
+        ejsval nextValue;
+        success = IteratorValue(&nextValue, next);
+
+        //    e. IfAbruptRejectPromise(nextValue, promiseCapability). 
+        if (!success) {
+            _ejs_invoke_closure(cap->reject, _ejs_undefined, 1, &nextValue);
+            return cap->promise;
+        }
+
+        //    f. Let nextPromise be Invoke(C, "resolve", (nextValue)). 
+        ejsval nextPromise;
+        success = _ejs_invoke_closure_catch(&nextPromise, C, _ejs_atom_resolve, 1, &nextValue);
+        //    g. IfAbruptRejectPromise(nextPromise, promiseCapability). 
+        if (!success) {
+            _ejs_invoke_closure(cap->reject, _ejs_undefined, 1, &nextPromise);
+            return cap->promise;
+        }
+
+        //    h. Let result be Invoke(nextPromise, "then", (promiseCapability.[[Resolve]], promiseCapability.[[Reject]])). 
+        ejsval result;
+        ejsval args[] = { cap->resolve, cap->reject };
+        success = _ejs_invoke_closure_catch(&result, nextPromise, _ejs_atom_then, 2, args);
+
+        //    i. IfAbruptRejectPromise(result, promiseCapability). 
+        if (!success) {
+            _ejs_invoke_closure(cap->reject, _ejs_undefined, 1, &result);
+            return cap->promise;
+        }
+    }
 }
 
 // ECMA262 25.4.4.4 Promise.reject ( r )
