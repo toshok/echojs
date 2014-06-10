@@ -1339,3 +1339,22 @@ _ejs_parseFloat_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 
     return rv;
 }
+
+ejsval
+_ejs_create_iter_result (ejsval value, ejsval done)
+{
+    /* 1. Assert: Type(done) is Boolean. */
+
+    /* 2. Let obj be ObjectCreate(%ObjectPrototype%). */
+    // Or _ejs_Object_prototype?
+    ejsval obj = _ejs_object_new (_ejs_null, &_ejs_Object_specops);
+
+    /* 3. Perform CreateDataProperty(obj, "value", value). */
+    _ejs_object_setprop (obj, _ejs_atom_value, value);
+
+    /* 4. Perform CreateDataProperty(obj, "done", done). */
+    _ejs_object_setprop (obj, _ejs_atom_done, done);
+
+    return obj;
+}
+

@@ -76,6 +76,8 @@ ejsval _ejs_isFinite_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args
 ejsval _ejs_parseInt_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
 ejsval _ejs_parseFloat_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
 
+ejsval _ejs_create_iter_result (ejsval value, ejsval done);
+
 EJS_END_DECLS
 
 #endif // _ejs_ops_h

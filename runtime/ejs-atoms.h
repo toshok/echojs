@@ -71,6 +71,7 @@ EJS_ATOM(String)
 
 EJS_ATOM(XMLHttpRequest)
 
+EJS_ATOM(ArrayIterator)
 EJS_ATOM(ArrayBuffer)
 EJS_ATOM(Int8Array)
 EJS_ATOM(Uint8Array)
@@ -194,6 +195,12 @@ EJS_ATOM(fill)
 EJS_ATOM(find)
 EJS_ATOM(findIndex)
 EJS_ATOM(filter)
+
+// Array iterator naes
+EJS_ATOM(next)
+EJS_ATOM(done)
+EJS_ATOM(key)
+EJS_ATOM(keyvalue)
 
 // Typed array method names
 EJS_ATOM(getInt8)

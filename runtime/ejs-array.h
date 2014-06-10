@@ -40,6 +40,15 @@ typedef struct {
     };
 } EJSArray;
 
+typedef struct {
+    /* object header */
+    EJSObject obj;
+
+    ejsval iterated;
+    ejsval kind;
+    int next_index;
+} EJSArrayIterator;
+
 #define EJSARRAY_LEN(obj)  (((EJSArray*)(obj))->array_length)
 #define EJS_ARRAY_LEN(obj) EJSARRAY_LEN(EJSVAL_TO_OBJECT(obj))
 
@@ -60,8 +69,14 @@ extern ejsval _ejs_Array_prototype;
 extern EJSSpecOps _ejs_Array_specops;
 extern EJSSpecOps _ejs_sparsearray_specops;
 
+extern ejsval _ejs_ArrayIterator;
+extern ejsval _ejs_ArrayIterator_prototype;
+extern EJSSpecOps _ejs_ArrayIterator_specops;
+
 ejsval _ejs_array_create (ejsval length, ejsval proto);
 ejsval _ejs_array_new (int numElements, EJSBool fill);
+
+ejsval _ejs_array_iterator_new(ejsval array, ejsval kind);
 
 // creates a new array and populates it by pushing numElements from
 // the vector elements

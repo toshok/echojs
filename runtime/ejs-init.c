@@ -64,6 +64,7 @@ _ejs_init_classes()
 {
     _ejs_Class_initialize (&_ejs_Arguments_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Array_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_ArrayIterator_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Boolean_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Date_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Error_specops, &_ejs_Object_specops);

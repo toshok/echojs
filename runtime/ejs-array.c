@@ -1676,6 +1676,28 @@ _ejs_Array_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
 }
 
 static ejsval
+_ejs_Array_prototype_keys (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    /* 1. Let O be the result of calling ToObject with the this value as its argument. */
+    /* 2. ReturnIfAbrupt(O). */
+    ejsval O = ToObject(_this);
+
+    /* 3. Return CreateArrayIterator(O, "key"). */
+    return _ejs_array_iterator_new (O, _ejs_atom_key);
+}
+
+static ejsval
+_ejs_Array_prototype_values (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    /* 1. Let O be the result of calling ToObject with the this value as its argument. */
+    /* 2. ReturnIfAbrupt(O). */
+    ejsval O = ToObject(_this);
+
+    /* 3. Return CreateArrayIterator(O, "value"). */
+    return _ejs_array_iterator_new (O, _ejs_atom_value);
+}
+
+static ejsval
 _ejs_Array_of (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     return _ejs_array_new_copy (argc, args);
@@ -1835,6 +1857,114 @@ _ejs_array_create (ejsval length, ejsval proto)
     return A;
 }
 
+ejsval
+_ejs_array_iterator_new(ejsval array, ejsval kind)
+{
+    /* 1. Let O be ToObject(array). */
+    /* 2. ReturnIfAbrupt(O). */
+    ejsval O = ToObject(array);
+
+    /* 3. Let iterator be ObjectCreate(%ArrayIteratorPrototype%,
+     * ([[IteratedObject]], [[ArrayIteratorNextIndex]], [[ArrayIterationKind]])). */
+    EJSArrayIterator *iter = _ejs_gc_new (EJSArrayIterator);
+    _ejs_init_object ((EJSObject*)iter, _ejs_ArrayIterator_prototype, &_ejs_ArrayIterator_specops);
+
+    /* 4. Set iterator’s [[IteratedObject]] internal slot to O. */
+    iter->iterated = O;
+
+    /* 5. Set iterator’s [[ArrayIteratorNextIndex]] internal slot to 0. */
+    iter->next_index = 0;
+
+    /* 6. Set iterator’s [[ArrayIterationKind]] internal slot to kind. */
+    iter->kind = kind;
+
+    /* 7. Return iterator. */
+    return OBJECT_TO_EJSVAL(iter);
+}
+
+ejsval _ejs_ArrayIterator_prototype EJSVAL_ALIGNMENT;
+ejsval _ejs_ArrayIterator EJSVAL_ALIGNMENT;
+
+static ejsval
+_ejs_ArrayIterator_impl (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
+{
+    /* Do nothing for now - as we don't allow the user to create iterators directly. */
+    return _this;
+}
+
+static ejsval
+_ejs_ArrayIterator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval result;
+
+    /* 1. Let O be the this value. */
+    /* 2. If Type(O) is not Object, throw a TypeError exception. */
+    ejsval O = ToObject(_this);
+    EJSArrayIterator *OObj = (EJSArrayIterator*)EJSVAL_TO_OBJECT(O);
+
+    /* 3. If O does not have all of the internal slots of an Array Iterator Instance (22.1.5.3),
+     * throw a TypeError exception. */
+
+    /* 4. Let a be the value of the [[IteratedObject]] internal slot of O. */
+    ejsval a = OObj->iterated;
+
+    /* 5. If a is undefined, then return CreateIterResultObject(undefined, true). */
+    if (EJSVAL_IS_UNDEFINED(a))
+        return _ejs_create_iter_result (_ejs_undefined, _ejs_true);
+
+    /* 6. Let index be the value of the [[ArrayIteratorNextIndex]] internal slot of O. */
+    uint32_t index = OObj->next_index;
+
+    /* 7. Let itemKind be the value of the [[ArrayIterationKind]] internal slot of O. */
+    ejsval itemKind = OObj->kind;
+
+    /* 8. Let lenValue be Get(a, "length"). */
+    EJSObject *aObj = EJSVAL_TO_OBJECT(a);
+    ejsval lenValue = OP(aObj,Get) (a, _ejs_atom_length, a);
+
+    /* 9. Let len be ToLength(lenValue). */
+    int len = ToUint32 (lenValue);
+
+    /* 11. If index ≥ len, then */
+    if (index >= len) {
+        /* a. Set the value of the [[IteratedObject]] internal slot of O to undefined. */
+        OObj->iterated = _ejs_undefined;
+
+        /* b. Return CreateIterResultObject(undefined, true). */
+        return _ejs_create_iter_result (_ejs_undefined, _ejs_true);
+    }
+
+    /* 12.  Set the value of the [[ArrayIteratorNextIndex]] internal slot of O to index+1. */
+    OObj->next_index = index + 1;
+
+    /* 13. If itemKind is "key", then let result be index. */
+    if (!ucs2_strcmp(EJSVAL_TO_FLAT_STRING(_ejs_atom_key), EJSVAL_TO_FLAT_STRING(itemKind)))
+        result = NUMBER_TO_EJSVAL(index);
+    /* 14.  Else */
+    else {
+        /* a. Let elementKey be ToString(index). */
+        /* b. Let elementValue be Get(a, elementKey). */
+        ejsval elementKey = ToString(NUMBER_TO_EJSVAL((index)));
+        ejsval elementValue = OP(aObj,Get) (a, elementKey, a);
+
+        /* 15. If itemKind is "value", then let result be elementValue. */
+        if (!ucs2_strcmp(EJSVAL_TO_FLAT_STRING(_ejs_atom_value), EJSVAL_TO_FLAT_STRING(itemKind)))
+            result = elementValue;
+        /* 16. Else, */
+        else {
+            /* a. Assert itemKind is "key+value" */
+            /* b. Let result be ArrayCreate(2). */
+            /* c. Assert: result is a new, well-formed Array object so the following operations will never fail. */
+            /* d. Call CreateDataProperty(result, "0", index). */
+            /* e. Call CreateDataProperty(result, "1", elementValue). */
+            EJS_NOT_IMPLEMENTED();
+        }
+    }
+
+    /* 17. Return CreateIterResultObject(result, false). */
+    return _ejs_create_iter_result (result, _ejs_false);
+}
+
 void
 _ejs_array_init(ejsval global)
 {
@@ -1883,11 +2013,27 @@ _ejs_array_init(ejsval global)
     PROTO_METHOD(fill);
     PROTO_METHOD(find);
     PROTO_METHOD(findIndex);
+    PROTO_METHOD(keys);
+    PROTO_METHOD(values);
 
     PROTO_METHOD(toString);
 
 #undef OBJ_METHOD
 #undef PROTO_METHOD
+
+    _ejs_ArrayIterator = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Array, (EJSClosureFunc)_ejs_ArrayIterator_impl);
+
+    _ejs_gc_add_root (&_ejs_ArrayIterator_prototype);
+    _ejs_ArrayIterator_prototype = _ejs_array_iterator_new(_ejs_Array_prototype, _ejs_atom_value);
+    EJSVAL_TO_OBJECT(_ejs_ArrayIterator_prototype)->proto = _ejs_Object_prototype;
+    _ejs_object_define_value_property (_ejs_ArrayIterator, _ejs_atom_prototype, _ejs_ArrayIterator_prototype,
+                                        EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (_ejs_ArrayIterator_prototype, _ejs_atom_constructor, _ejs_ArrayIterator,
+                                        EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
+
+#define PROTO_ITER_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_ArrayIterator_prototype, x, _ejs_ArrayIterator_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
+    PROTO_ITER_METHOD(next);
+#undef PROTO_ITER_METHOD
 }
 
 static ejsval
@@ -2175,4 +2321,6 @@ EJS_DEFINE_CLASS(Array,
                  )
 
 EJSSpecOps _ejs_sparsearray_specops;
+
+EJS_DEFINE_INHERIT_ALL_CLASS(ArrayIterator);
 
