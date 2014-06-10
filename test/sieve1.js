@@ -4,10 +4,7 @@ function primes (n) {
       return;
     else {
       if (!filter(cur)) {
-	if (typeof (console) === "object")
-	  console.log (cur);
-	else
-	  print (cur);
+	console.log (cur);
 	primes_internal (cur+1, remaining-1, function prime_filter (test) {
 			   return test%cur === 0 || filter (test);
 			 });

@@ -7,6 +7,7 @@ COFFEE_SOURCES=				\
 	compiler.coffee			\
 	debug.coffee			\
 	echo-util.coffee		\
+	errors.coffee			\
 	closure-conversion.coffee	\
 	optimizations.coffee		\
 	types.coffee			\

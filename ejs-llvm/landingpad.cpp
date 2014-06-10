@@ -99,7 +99,7 @@ namespace ejsllvm {
     {
         _ejs_LandingPad_specops = _ejs_Object_specops;
         _ejs_LandingPad_specops.class_name = "LLVMLandingPad";
-        _ejs_LandingPad_specops.allocate = LandingPad_allocate;
+        _ejs_LandingPad_specops.Allocate = LandingPad_allocate;
 
         _ejs_gc_add_root (&_ejs_LandingPad_prototype);
         _ejs_LandingPad_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_LandingPad_specops);

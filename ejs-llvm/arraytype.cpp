@@ -81,7 +81,7 @@ namespace ejsllvm {
     {
         _ejs_ArrayType_specops = _ejs_Object_specops;
         _ejs_ArrayType_specops.class_name = "LLVMArray";
-        _ejs_ArrayType_specops.allocate = ArrayType_allocate;
+        _ejs_ArrayType_specops.Allocate = ArrayType_allocate;
 
         _ejs_gc_add_root (&_ejs_ArrayType_prototype);
         _ejs_ArrayType_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_ArrayType_specops);

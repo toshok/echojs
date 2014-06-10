@@ -20,6 +20,7 @@
 #include "ejs-boolean.h"
 #include "ejs-object.h"
 #include "ejs-process.h"
+#include "ejs-promise.h"
 #include "ejs-regexp.h"
 #include "ejs-require.h"
 #include "ejs-string.h"
@@ -71,6 +72,7 @@ _ejs_init_classes()
     _ejs_Class_initialize (&_ejs_Function_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Map_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Proxy_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_Promise_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Set_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Number_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_RegExp_specops, &_ejs_Object_specops);
@@ -151,6 +153,7 @@ _ejs_init(int argc, char** argv)
     _ejs_math_init(_ejs_global);
 
     // ES6 bits
+    _ejs_promise_init(_ejs_global);
     _ejs_proxy_init(_ejs_global);
     _ejs_map_init(_ejs_global);
     _ejs_set_init(_ejs_global);

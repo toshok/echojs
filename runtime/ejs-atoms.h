@@ -68,6 +68,7 @@ EJS_ATOM(Object)
 EJS_ATOM(Reflect)
 EJS_ATOM(RegExp)
 EJS_ATOM(String)
+EJS_ATOM(Promise)
 
 EJS_ATOM(XMLHttpRequest)
 
@@ -379,6 +380,14 @@ EJS_ATOM2(Symbol.iterator,Symbol_iterator)
 EJS_ATOM2(Symbol.toPrimitive,Symbol_toPrimitive)
 EJS_ATOM2(Symbol.toStringTag,Symbol_toStringTag)
 EJS_ATOM2(Symbol.unscopables,Symbol_unscopables)
+
+// promises
+EJS_ATOM(catch)
+EJS_ATOM(then)
+EJS_ATOM(all)
+EJS_ATOM(race)
+EJS_ATOM(reject)
+EJS_ATOM(resolve)
 
 // handy toString stuff
 EJS_ATOM2([object Null],null_toString)

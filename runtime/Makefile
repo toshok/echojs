@@ -23,6 +23,7 @@ C_SOURCES= \
 	ejs-object.c \
 	ejs-ops.c \
 	ejs-process.c \
+	ejs-promise.c \
 	ejs-proxy.c \
 	ejs-recording.c \
 	ejs-reflect.c \

@@ -139,7 +139,7 @@ class ABI
         createFunction: (inModule, name, ret_type, param_types) -> inModule.getOrInsertFunction name, ret_type, param_types
         createFunctionType: (ret_type, param_types) -> llvm.FunctionType.get ret_type, param_types
 
-# armv7 requires us to pass a pointer to a stack slot for the return value when it's EjsValue.
+# armv7/x86 requires us to pass a pointer to a stack slot for the return value when it's EjsValue.
 # so functions that would normally be defined as:
 # 
 #   ejsval _ejs_normal_func (ejsval env, ejsval this, uint32_t argc, ejsval* args)
@@ -148,7 +148,7 @@ class ABI
 # 
 #   void _ejs_sret_func (ejsval* sret, ejsval env, ejsval this, uint32_t argc, ejsval* args)
 # 
-class ArmABI extends ABI
+class SRetABI extends ABI
         constructor: () ->
                 super
                 @ejs_return_type = types.void
@@ -421,20 +421,20 @@ class LLVMIRVisitor extends TreeVisitor
         storeGlobal: (prop, value) ->
                 # we store obj.prop, prop is an id
                 if prop.type is Identifier
-                        pname = prop.name
+                        gname = prop.name
                 else # prop.type is Literal
-                        pname = prop.value
+                        gname = prop.value
 
-                c = @getAtom pname
+                c = @getAtom gname
 
-                debug.log -> "createPropertyStore #{obj}[#{pname}]"
+                debug.log -> "createPropertyStore #{obj}[#{gname}]"
                         
-                @createCall @ejs_runtime.global_setprop, [c, value], "globalpropstore_#{pname}"
+                @createCall @ejs_runtime.global_setprop, [c, value], "globalpropstore_#{gname}"
 
         loadGlobal: (prop) ->
                 gname = prop.name
-                
-                if @options.frozen_global and hasOwn.call @ejs_globals, gname
+
+                if @options.frozen_global
                         return ir.createLoad @ejs_globals[prop.name], "load-#{gname}"
 
                 pname = @getAtom gname
@@ -906,9 +906,9 @@ class LLVMIRVisitor extends TreeVisitor
                 else if is_intrinsic(lhs, "%getLocal")
                         ir.createStore rhvalue, @findIdentifierInScope lhs.arguments[0].name
                 else if is_intrinsic(lhs, "%getGlobal")
-                        pname = @getAtom lhs.arguments[0].name
+                        gname = lhs.arguments[0].name
 
-                        @createCall @ejs_runtime.global_setprop, [pname, rhvalue], "globalpropstore_#{lhs.arguments[0].name}"
+                        @createCall @ejs_runtime.global_setprop, [@getAtom(gname), rhvalue], "globalpropstore_#{lhs.arguments[0].name}"
                 else
                         throw new Error "unhandled lhs #{escodegen.generate lhs}"
 
@@ -1295,6 +1295,9 @@ class LLVMIRVisitor extends TreeVisitor
                 debug.log "visitThisExpression"
                 @createLoad @findIdentifierInScope("%this"), "load_this"
 
+        visitSpreadElement: (n) ->
+                throw new Error("halp")
+                
         visitIdentifier: (n) ->
                 debug.log -> "identifier #{n.name}"
                 val = n.name
@@ -1782,14 +1785,15 @@ class LLVMIRVisitor extends TreeVisitor
                 @loadGlobal exp.arguments[0]
         
         handleSetGlobal: (exp, opencode) ->
+                gname = exp.arguments[0].name
+
                 if @options.frozen_global
                         throw new SyntaxError "cannot set global property '#{exp.arguments[0].name}' when using --frozen-global"
-
-                pname = exp.arguments[0].name
-                patom = @getAtom pname
+                                
+                gatom = @getAtom gname
                 value = @visit exp.arguments[1]
 
-                @createCall @ejs_runtime.global_setprop, [patom, value], "globalpropstore_#{pname}"
+                @createCall @ejs_runtime.global_setprop, [gatom, value], "globalpropstore_#{gname}"
 
         # this method assumes it's called in an opencoded context
         emitEjsvalTo: (val, type, prefix) ->
@@ -2249,8 +2253,8 @@ insert_toplevel_func = (tree, filename) ->
         tree.body = [toplevel]
         tree
 
-exports.compile = (tree, base_output_filename, source_filename, options) ->
-        abi = if (options.target is "armv7" or options.target is "armv7s") then new ArmABI() else new ABI()
+exports.compile = (tree, base_output_filename, source_filename, export_lists, options) ->
+        abi = if (options.target_arch is "armv7" or options.target_arch is "armv7s" or options.target_arch is "x86") then new SRetABI() else new ABI()
 
         tree = insert_toplevel_func tree, source_filename
 
@@ -2261,7 +2265,7 @@ exports.compile = (tree, base_output_filename, source_filename, options) ->
         #debug.log 1, "before closure conversion"
         #debug.log 1, -> escodegen.generate tree
 
-        tree = closure_conversion.convert tree, path.basename(source_filename), options
+        tree = closure_conversion.convert tree, path.basename(source_filename), export_lists, options
 
         debug.log 1, "after closure conversion"
         debug.log 1, -> escodegen.generate tree
@@ -2316,9 +2320,12 @@ exports.compile = (tree, base_output_filename, source_filename, options) ->
 #    imported modules
 #
 class GatherImports extends TreeVisitor
-        constructor: (@path, @toplevel_path) ->
+        constructor: (@filename, @path, @toplevel_path, @exportLists) ->
                 @importList = []
-
+                # remove our .js suffix since all imports are suffix-free
+                if @filename.lastIndexOf(".js") == @filename.length - 3
+                        @filename = @filename.substring(0, @filename.length-3)
+                
         isInternalModule = (source) -> source[0] is "@"
                 
         addSource: (n) ->
@@ -2342,13 +2349,44 @@ class GatherImports extends TreeVisitor
 
                 n.source_path = create_string_literal(source_path)
                 n
-        
+
+        addDefaultExport: (path) ->
+                if not hasOwn.call @exportLists, path
+                        @exportLists[path] = Object.create(null)
+                        @exportLists[path].ids = new Set()
+                @exportLists[path].has_default = true
+                
+        addExportIdentifier: (path, id) ->
+                if not hasOwn.call @exportLists, path
+                        @exportLists[path] = Object.create(null)
+                        @exportLists[path].ids = new Set()
+                @exportLists[path].ids.add(id)
+                
         visitImportDeclaration: (n) -> @addSource(n)
-        visitExportDeclaration: (n) -> @addSource(n)
+        visitExportDeclaration: (n) ->
+                n = @addSource(n)
+
+                if n.source?
+                        if n.default
+                                @addDefaultExport(@filename)
+                        else
+                                for spec in n.specifiers
+                                        @addExportIdentifier(@filename, spec.name?.name or spec.id?.name)
+                        n
+                else if n.declaration.type is FunctionDeclaration                        
+                        @addExportIdentifier(@filename, n.declaration.id.name) 
+                else if n.declaration.type is VariableDeclaration
+                        for decl in n.declaration.declarations
+                                @addExportIdentifier(@filename, decl.id.name) 
+                else if n.declaration.type is VariableDeclarator
+                        @addExportIdentifier(@filename, n.declaration.id.name)
+                else if n.default
+                        @addDefaultExport(@filename)
+                n
         visitModuleDeclaration: (n) -> @addSource(n)
 
-exports.gatherImports = (filename, top_path, tree) ->
-        visitor = new GatherImports(filename, top_path)
+exports.gatherImports = (filename, path, top_path, tree, exportLists) ->
+        visitor = new GatherImports(filename, path, top_path, exportLists)
         visitor.visit(tree)
         visitor.importList
         

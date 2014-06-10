@@ -44,7 +44,7 @@ namespace ejsllvm {
         Module* module = (Module*)obj;
         if (module->llvm_module)
             delete module->llvm_module;
-        _ejs_Object_specops.finalize(obj);
+        _ejs_Object_specops.Finalize(obj);
     }
 
     static ejsval
@@ -55,7 +55,7 @@ namespace ejsllvm {
             _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Module[Symbol.create] is not a constructor");
         EJSObject* F_ = EJSVAL_TO_OBJECT(F);
         // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%DatePrototype%", ([[DateData]]) ). 
-        ejsval proto = OP(F_,get)(F, _ejs_atom_prototype, F);
+        ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
         if (EJSVAL_IS_UNDEFINED(proto))
             proto = _ejs_Module_prototype;
 
@@ -303,8 +303,8 @@ namespace ejsllvm {
     {
         _ejs_Module_specops = _ejs_Object_specops;
         _ejs_Module_specops.class_name = "LLVMModule";
-        _ejs_Module_specops.allocate = Module_allocate;
-        _ejs_Module_specops.finalize = Module_finalize;
+        _ejs_Module_specops.Allocate = Module_allocate;
+        _ejs_Module_specops.Finalize = Module_finalize;
 
         _ejs_gc_add_root (&_ejs_Module_prototype);
         _ejs_Module_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Module_specops);

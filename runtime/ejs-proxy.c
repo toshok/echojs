@@ -505,6 +505,9 @@ _ejs_proxy_specop_has_property (ejsval O, ejsval P)
 
             //        ii. Let extensibleTarget be IsExtensible(target). 
             //        iii. ReturnIfAbrupt(extensibleTarget). 
+
+            // XXX
+
             //        iv. If extensibleTarget is false, then throw a TypeError exception. 
             if (!EJS_OBJECT_IS_EXTENSIBLE(_target))
                 _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "2"); // XXX
