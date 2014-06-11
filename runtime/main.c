@@ -45,6 +45,8 @@ main(int argc, char** argv)
 
     _ejs_module_get (_ejs_string_new_utf8(entry_filename));
 
+    _ejs_runloop_start();
+
 #if GC_ON_SHUTDOWN
     _ejs_gc_shutdown();
 #endif

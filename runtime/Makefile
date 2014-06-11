@@ -82,7 +82,8 @@ OBJC_SOURCES= \
 	ejs-log.m \
 	ejs-objc.m \
 	ejs-webgl.m \
-	ejs-xhr.m
+	ejs-xhr.m \
+	ejs-runloop-darwin.m
 
 OSX_OBJECTS=$(C_SOURCES:%.c=%.o.osx) $(OBJC_SOURCES:%.m=%.o.osx) main.o.osx
 SIM_OBJECTS=$(C_SOURCES:%.c=%.o.sim) $(OBJC_SOURCES:%.m=%.o.sim) main.o.sim

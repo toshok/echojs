@@ -1001,7 +1001,7 @@ _ejs_Object_getOwnPropertyDescriptor (ejsval env, ejsval _this, uint32_t argc, e
 
     // 5. Let desc be the result of calling the [[GetOwnProperty]] internal method of obj with argument key. 
     // 6. ReturnIfAbrupt(desc). 
-    EJSPropertyDesc* desc = OP(EJSVAL_TO_OBJECT(obj),GetOwnProperty)(obj, key);
+    EJSPropertyDesc* desc = OP(EJSVAL_TO_OBJECT(obj),GetOwnProperty)(obj, key, NULL);
 
     // 7. Return the result of calling FromPropertyDescriptor(desc). 
     return FromPropertyDescriptor(desc);
@@ -1339,7 +1339,7 @@ _ejs_Object_defineProperties (ejsval env, ejsval _this, uint32_t argc, ejsval *a
 }
 
 static EJSBool
-DefinePropertyOrThrow (ejsval O, ejsval P, EJSPropertyDesc* desc)
+DefinePropertyOrThrow (ejsval O, ejsval P, EJSPropertyDesc* desc, ejsval *exc)
 {
     // 1. Assert: Type(O) is Object. 
     // 2. Assert: IsPropertyKey(P) is true. 
@@ -1348,7 +1348,7 @@ DefinePropertyOrThrow (ejsval O, ejsval P, EJSPropertyDesc* desc)
     EJSBool success = OP(EJSVAL_TO_OBJECT(O),DefineOwnProperty)(O, P, desc, EJS_FALSE);
     // 5. If success is false, then throw a TypeError exception. 
     if (!success)
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1"); // XXX
+        *exc = _ejs_nativeerror_new_utf8 (EJS_TYPE_ERROR, "1"); // XXX
     // 6. Return success. 
     return success;
 }
@@ -1393,11 +1393,14 @@ SetIntegrityLevel (ejsval O, IntegrityLevel level)
         for (int i = 0; i < n; i ++) {
             ejsval k = keys[i];
             EJSPropertyDesc desc = { EJS_PROP_FLAGS_CONFIGURABLE_SET };
+            ejsval exc;
             //       i. Let status be DefinePropertyOrThrow(O, k, PropertyDescriptor{ [[Configurable]]: false}). 
-            DefinePropertyOrThrow(O, k, &desc);
+            EJSBool status = DefinePropertyOrThrow(O, k, &desc, &exc);
             //       ii. If status is an abrupt completion, then 
-            if (EJS_FALSE /* XXX */) {
+            if (!status) {
                 //           1. If pendingException is undefined, then set pendingException to status. 
+                if (EJSVAL_IS_UNDEFINED(pendingException))
+                    pendingException = exc;
             }
         }
     }
@@ -1407,10 +1410,13 @@ SetIntegrityLevel (ejsval O, IntegrityLevel level)
         for (int i = 0; i < n; i ++) {
             ejsval k = keys[i];
             //       i. Let status be the result of calling the [[GetOwnProperty]] internal method of O with k. 
-            EJSPropertyDesc* currentDesc = OP(EJSVAL_TO_OBJECT(O),GetOwnProperty)(O, k);
+            ejsval exc;
+            EJSPropertyDesc* currentDesc = OP(EJSVAL_TO_OBJECT(O),GetOwnProperty)(O, k, &exc);
             //       ii. If status is an abrupt completion, then 
-            if (EJS_FALSE /* XXX */) {
+            if (!currentDesc && !EJSVAL_IS_UNDEFINED(exc)) {
                 //           1. If pendingException is undefined, then set pendingException to status. 
+                if (EJSVAL_IS_UNDEFINED(pendingException))
+                    pendingException = exc;
             }
             //       iii. Else, 
             else {
@@ -1432,11 +1438,13 @@ SetIntegrityLevel (ejsval O, IntegrityLevel level)
                         _ejs_property_desc_set_writable(&desc, EJS_FALSE);
                     }
                     //               c. Let status be DefinePropertyOrThrow(O, k, desc). 
-                    DefinePropertyOrThrow(O, k, &desc);
+                    EJSBool status = DefinePropertyOrThrow(O, k, &desc, &exc);
 
                     //               d. If status is an abrupt completion, then
-                    if (EJS_FALSE /* XXX */) {
+                    if (!status) {
                         //                  i. If pendingException is undefined, then set pendingException to status. 
+                        if (EJSVAL_IS_UNDEFINED(pendingException))
+                            pendingException = exc;
                     }
                 }
             }
@@ -1444,7 +1452,7 @@ SetIntegrityLevel (ejsval O, IntegrityLevel level)
     }
     // 9. If pendingException is not undefined, then return pendingException. 
     if (!EJSVAL_IS_UNDEFINED(pendingException))
-        return pendingException;
+        _ejs_throw(pendingException); // returning an abrupt completion = throwing an exception
 
     // 10. Return the result of calling the [[PreventExtensions]] internal method of O
     return BOOLEAN_TO_EJSVAL(OP(O_,PreventExtensions)(O));
@@ -1768,7 +1776,7 @@ _ejs_Object_prototype_hasOwnProperty (ejsval env, ejsval _this, uint32_t argc, e
     if (EJS_UNLIKELY(argc > 0))
         needle = args[0];
 
-    return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(_this),GetOwnProperty)(_this, needle) != NULL);
+    return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(_this),GetOwnProperty)(_this, needle, NULL) != NULL);
 }
 
 // ECMA262: 15.2.4.6
@@ -1815,7 +1823,7 @@ _ejs_Object_prototype_propertyIsEnumerable (ejsval env, ejsval _this, uint32_t a
     EJSObject* O_ = EJSVAL_TO_OBJECT(O);
 
     /* 3. Let desc be the result of calling the [[GetOwnProperty]] internal method of O passing P as the argument. */
-    EJSPropertyDesc* desc = OP(O_, GetOwnProperty)(O, P);
+    EJSPropertyDesc* desc = OP(O_, GetOwnProperty)(O, P, NULL);
     /* 4. If desc is undefined, return false. */
     if (!desc)
         return _ejs_false;
@@ -1969,7 +1977,7 @@ _ejs_object_specop_get (ejsval O, ejsval P, ejsval Receiver)
 
     // 2. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with argument P. 
     // 3. ReturnIfAbrupt(desc). 
-    EJSPropertyDesc* desc = OP(EJSVAL_TO_OBJECT(O),GetOwnProperty) (O, P);
+    EJSPropertyDesc* desc = OP(EJSVAL_TO_OBJECT(O),GetOwnProperty) (O, P, NULL);
 
     // 4. If desc is undefined, then 
     if (desc == NULL) {
@@ -2027,7 +2035,7 @@ _ejs_object_specop_set (ejsval O, ejsval P, ejsval V, ejsval Receiver)
     
     // 2. Let ownDesc be the result of calling the [[GetOwnProperty]] internal method of O with argument P. 
     // 3. ReturnIfAbrupt(ownDesc). 
-    EJSPropertyDesc* ownDesc = OP(EJSVAL_TO_OBJECT(O),GetOwnProperty)(O, P);
+    EJSPropertyDesc* ownDesc = OP(EJSVAL_TO_OBJECT(O),GetOwnProperty)(O, P, NULL);
 
     // 4. If ownDesc is undefined, then 
     if (!ownDesc) {
@@ -2058,7 +2066,7 @@ _ejs_object_specop_set (ejsval O, ejsval P, ejsval V, ejsval Receiver)
 
         //    c. Let existingDescriptor be the result of calling the [[GetOwnProperty]] internal method of Receiver with argument P. 
         //    d. ReturnIfAbrupt(existingDescriptor). 
-        EJSPropertyDesc* existingDescriptor = OP(EJSVAL_TO_OBJECT(Receiver),GetOwnProperty)(Receiver, P);
+        EJSPropertyDesc* existingDescriptor = OP(EJSVAL_TO_OBJECT(Receiver),GetOwnProperty)(Receiver, P, NULL);
 
         //    e. If existingDescriptor is not undefined, then 
         if (existingDescriptor) {
@@ -2099,7 +2107,7 @@ _ejs_object_specop_has_property (ejsval O, ejsval P)
 
     // 2. Let hasOwn be the result of calling the [[GetOwnProperty]] internal method of O with argument P. 
     // 3. ReturnIfAbrupt(hasOwn). 
-    EJSPropertyDesc* hasOwn = OP(EJSVAL_TO_OBJECT(O),GetOwnProperty)(O, P);
+    EJSPropertyDesc* hasOwn = OP(EJSVAL_TO_OBJECT(O),GetOwnProperty)(O, P, NULL);
 
     // 4. If hasOwn is not undefined, then return true. 
     if (hasOwn)
@@ -2123,7 +2131,7 @@ _ejs_object_specop_delete (ejsval O, ejsval P, EJSBool Throw)
 {
     EJSObject* obj = EJSVAL_TO_OBJECT(O);
     /* 1. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with property name P. */
-    EJSPropertyDesc* desc = OP(obj,GetOwnProperty)(O, P);
+    EJSPropertyDesc* desc = OP(obj,GetOwnProperty)(O, P, NULL);
     /* 2. If desc is undefined, then return true. */
     if (!desc)
         return EJS_TRUE;
@@ -2155,7 +2163,7 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
 
     EJSObject* obj = EJSVAL_TO_OBJECT(O);
     /* 1. Let current be the result of calling the [[GetOwnProperty]] internal method of O with property name P. */
-    EJSPropertyDesc* current = OP(obj, GetOwnProperty)(O, P);
+    EJSPropertyDesc* current = OP(obj, GetOwnProperty)(O, P, NULL);
 
     /* 2. Let extensible be the value of the [[Extensible]] internal property of O. */
     EJSBool extensible = EJS_OBJECT_IS_EXTENSIBLE(obj);

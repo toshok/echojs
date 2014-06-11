@@ -135,7 +135,7 @@ typedef void (*EJSPropertyDescFunc)(ejsval name, EJSPropertyDesc *desc, void* da
 typedef ejsval           (*SpecOpGetPrototypeOf) (ejsval obj);
 typedef EJSBool          (*SpecOpSetPrototypeOf) (ejsval obj, ejsval proto);
 typedef ejsval           (*SpecOpGet) (ejsval obj, ejsval propertyName, ejsval receiver);
-typedef EJSPropertyDesc* (*SpecOpGetOwnProperty) (ejsval obj, ejsval propertyName);
+typedef EJSPropertyDesc* (*SpecOpGetOwnProperty) (ejsval obj, ejsval propertyName, ejsval* exc);
 typedef EJSBool          (*SpecOpSet) (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver);
 typedef EJSBool          (*SpecOpHasProperty) (ejsval obj, ejsval propertyName);
 typedef EJSBool          (*SpecOpDelete) (ejsval obj, ejsval propertyName, EJSBool flag);

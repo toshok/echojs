@@ -122,7 +122,7 @@ _ejs_Reflect_getOwnPropertyDescriptor (ejsval env, ejsval _this, uint32_t argc, 
 
     // 5. Let desc be the result of calling the [[GetOwnProperty]] internal method of obj with argument key. 
     // 6. ReturnIfAbrupt(desc). 
-    EJSPropertyDesc* desc = OP(EJSVAL_TO_OBJECT(obj),GetOwnProperty)(obj, key);
+    EJSPropertyDesc* desc = OP(EJSVAL_TO_OBJECT(obj),GetOwnProperty)(obj, key, NULL);
 
     // 7. Return the result of calling FromPropertyDescriptor(desc). 
     return FromPropertyDescriptor(desc);

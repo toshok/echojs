@@ -273,7 +273,7 @@ _ejs_proxy_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
 
     // 10. Let targetDesc be the result of calling the [[GetOwnProperty]] internal method of target with argument P.
     // 11. ReturnIfAbrupt(targetDesc). 
-    EJSPropertyDesc* targetDesc = OP(_target,GetOwnProperty)(target, propertyName);
+    EJSPropertyDesc* targetDesc = OP(_target,GetOwnProperty)(target, propertyName, NULL);
 
     // 12. If targetDesc is not undefined, then 
     if (!targetDesc) {
@@ -295,7 +295,7 @@ _ejs_proxy_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
 }
 
 static EJSPropertyDesc*
-_ejs_proxy_specop_get_own_property (ejsval O, ejsval P)
+_ejs_proxy_specop_get_own_property (ejsval O, ejsval P, ejsval* exc)
 {
     // 1. Assert: IsPropertyKey(P) is true. 
     EJSProxy* proxy = EJSVAL_TO_PROXY(O);
@@ -319,7 +319,7 @@ _ejs_proxy_specop_get_own_property (ejsval O, ejsval P)
     // 7. If trap is undefined, then 
     if (EJSVAL_IS_UNDEFINED(trap)) {
         //    a. Return the result of calling the [[GetOwnProperty]] internal method of target with argument P.
-        return OP(_target,GetOwnProperty)(target, P);
+        return OP(_target,GetOwnProperty)(target, P, NULL);
     }
 
     // 8. Let trapResultObj be the result of calling the [[Call]] internal method of trap with handler as the this value and a new List containing target and P. 
@@ -334,7 +334,7 @@ _ejs_proxy_specop_get_own_property (ejsval O, ejsval P)
 
     // 11. Let targetDesc be the result of calling the [[GetOwnProperty]] internal method of target with argument P. 
     // 12. ReturnIfAbrupt(targetDesc). 
-    EJSPropertyDesc* targetDesc = OP(_target,GetOwnProperty)(target, P);
+    EJSPropertyDesc* targetDesc = OP(_target,GetOwnProperty)(target, P, NULL);
 
     // 13. If trapResultObj is undefined, then 
     if (EJSVAL_IS_UNDEFINED(trapResultObj)) {
@@ -433,7 +433,7 @@ _ejs_proxy_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval recei
 
     // 12. Let targetDesc be the result of calling the [[GetOwnProperty]] internal method of target with argument P. 
     // 13. ReturnIfAbrupt(targetDesc). 
-    EJSPropertyDesc* targetDesc = OP(_target,GetOwnProperty)(target, propertyName);
+    EJSPropertyDesc* targetDesc = OP(_target,GetOwnProperty)(target, propertyName, NULL);
 
     // 14. If targetDesc is not undefined, then 
     if (targetDesc) {
@@ -495,7 +495,7 @@ _ejs_proxy_specop_has_property (ejsval O, ejsval P)
     if (!booleanTrapResult) {
         //     a. Let targetDesc be the result of calling the [[GetOwnProperty]] internal method of target with argument P. 
         //     b. ReturnIfAbrupt(targetDesc). 
-        EJSPropertyDesc* targetDesc = OP(_target,GetOwnProperty)(target, P);
+        EJSPropertyDesc* targetDesc = OP(_target,GetOwnProperty)(target, P, NULL);
 
         //     c. If targetDesc is not undefined, then 
         if (!targetDesc) {
@@ -562,7 +562,7 @@ _ejs_proxy_specop_delete (ejsval O, ejsval P, EJSBool unusedflag)
 
     // 12. Let targetDesc be the result of calling the [[GetOwnProperty]] internal method of target with argument P. 
     // 13. ReturnIfAbrupt(targetDesc). 
-    EJSPropertyDesc* targetDesc = OP(_target,GetOwnProperty)(target, P);
+    EJSPropertyDesc* targetDesc = OP(_target,GetOwnProperty)(target, P, NULL);
 
     // 14. If targetDesc is undefined, then return true. 
     if (!targetDesc)
@@ -620,7 +620,7 @@ _ejs_proxy_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Desc
 
     // 14. Let targetDesc be the result of calling the [[GetOwnProperty]] internal method of target with argument P. 
     // 15. ReturnIfAbrupt(targetDesc). 
-    EJSPropertyDesc* targetDesc = OP(_target,GetOwnProperty)(target, P);
+    EJSPropertyDesc* targetDesc = OP(_target,GetOwnProperty)(target, P, NULL);
 
     // 16. Let extensibleTarget be IsExtensible(target). 
     // 17. ReturnIfAbrupt(extensibleTarget). 

@@ -2089,7 +2089,7 @@ _ejs_array_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
 }
 
 static EJSPropertyDesc*
-_ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName)
+_ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName, ejsval *exc)
 {
     // check if propertyName is an integer, or a string that we can convert to an int
     EJSBool is_index = EJS_FALSE;
@@ -2120,7 +2120,7 @@ _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName)
         return &arr->array_length_desc;
     }
 
-    return _ejs_Object_specops.GetOwnProperty (obj, propertyName);
+    return _ejs_Object_specops.GetOwnProperty (obj, propertyName, exc);
 }
 
 static EJSBool

@@ -41,7 +41,7 @@ typedef uint32_t GCObjectHeader;
     t* prev;                                    \
     t* next
 #define EJS_LIST_INIT(v) EJS_MACRO_START        \
-    v->prev = v->next = NULL;                   \
+    (v)->prev = (v)->next = NULL;               \
     EJS_MACRO_END
 
 #define EJS_LIST_PREPEND(v,l) EJS_MACRO_START	\

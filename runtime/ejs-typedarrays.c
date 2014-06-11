@@ -464,7 +464,7 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
  }                                                                      \
                                                                         \
  static EJSPropertyDesc*                                                \
- _ejs_##arraytype##array_specop_get_own_property (ejsval obj, ejsval propertyName) \
+ _ejs_##arraytype##array_specop_get_own_property (ejsval obj, ejsval propertyName, ejsval* exc) \
  {                                                                      \
      if (EJSVAL_IS_NUMBER(propertyName)) {                              \
          double needle = EJSVAL_TO_NUMBER(propertyName);                \
@@ -474,7 +474,7 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
                  return NULL; /* XXX */                                 \
          }                                                              \
      }                                                                  \
-     return _ejs_Object_specops.GetOwnProperty (obj, propertyName);     \
+     return _ejs_Object_specops.GetOwnProperty (obj, propertyName, exc); \
  }                                                                      \
                                                                         \
  static EJSBool                                                         \
@@ -804,7 +804,7 @@ _ejs_arraybuffer_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
 }
 
 static EJSPropertyDesc*
-_ejs_arraybuffer_specop_get_own_property (ejsval obj, ejsval propertyName)
+_ejs_arraybuffer_specop_get_own_property (ejsval obj, ejsval propertyName, ejsval *exc)
 {
     if (EJSVAL_IS_NUMBER(propertyName)) {
         double needle = EJSVAL_TO_NUMBER(propertyName);
@@ -817,7 +817,7 @@ _ejs_arraybuffer_specop_get_own_property (ejsval obj, ejsval propertyName)
 
     // XXX we need to handle the length property here (see EJSArray's get_own_property)
 
-    return _ejs_Object_specops.GetOwnProperty (obj, propertyName);
+    return _ejs_Object_specops.GetOwnProperty (obj, propertyName, exc);
 }
 
 static EJSBool
@@ -986,7 +986,7 @@ _ejs_dataview_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
 }
 
 static EJSPropertyDesc*
-_ejs_dataview_specop_get_own_property (ejsval obj, ejsval propertyName)
+_ejs_dataview_specop_get_own_property (ejsval obj, ejsval propertyName, ejsval* exc)
 {
     if (EJSVAL_IS_NUMBER(propertyName)) {
         double needle = EJSVAL_TO_NUMBER(propertyName);
@@ -997,7 +997,7 @@ _ejs_dataview_specop_get_own_property (ejsval obj, ejsval propertyName)
         }
     }
 
-    return _ejs_Object_specops.GetOwnProperty (obj, propertyName);
+    return _ejs_Object_specops.GetOwnProperty (obj, propertyName, exc);
 }
 
 static EJSBool
