@@ -78,11 +78,13 @@ extern EJSSpecOps _ejs_ArrayIterator_specops;
 ejsval _ejs_array_create (ejsval length, ejsval proto);
 ejsval _ejs_array_new (int numElements, EJSBool fill);
 
-#define EJS_ARRAYITER_KIND_KEY      ((uint8_t)0x00)
-#define EJS_ARRAYITER_KIND_VALUE    ((uint8_t)0x01)
-#define EJS_ARRAYITER_KIND_KEYVALUE ((uint8_t)0x02)
+typedef enum {
+    EJS_ARRAYITER_KIND_KEY,
+    EJS_ARRAYITER_KIND_VALUE,
+    EJS_ARRAYITER_KIND_KEYVALUE
+} EJSArrayIteratorKind;
 
-ejsval _ejs_array_iterator_new(ejsval array, uint8_t kind);
+ejsval _ejs_array_iterator_new(ejsval array, EJSArrayIteratorKind kind);
 
 // creates a new array and populates it by pushing numElements from
 // the vector elements

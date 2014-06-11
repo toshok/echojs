@@ -1858,7 +1858,7 @@ _ejs_array_create (ejsval length, ejsval proto)
 }
 
 ejsval
-_ejs_array_iterator_new(ejsval array, uint8_t kind)
+_ejs_array_iterator_new(ejsval array, EJSArrayIteratorKind kind)
 {
     /* 1. Let O be ToObject(array). */
     /* 2. ReturnIfAbrupt(O). */
@@ -1921,7 +1921,7 @@ _ejs_ArrayIterator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsv
     uint32_t index = OObj->next_index;
 
     /* 7. Let itemKind be the value of the [[ArrayIterationKind]] internal slot of O. */
-    uint8_t itemKind = OObj->kind;
+    EJSArrayIteratorKind itemKind = OObj->kind;
 
     /* 8. Let lenValue be Get(a, "length"). */
     ejsval lenValue = Get (a, _ejs_atom_length);
