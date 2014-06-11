@@ -200,8 +200,6 @@ EJS_ATOM(filter)
 // Array iterator naes
 EJS_ATOM(next)
 EJS_ATOM(done)
-EJS_ATOM(key)
-EJS_ATOM(keyvalue)
 
 // Typed array method names
 EJS_ATOM(getInt8)
