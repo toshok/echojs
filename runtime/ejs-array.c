@@ -1924,8 +1924,7 @@ _ejs_ArrayIterator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsv
     uint8_t itemKind = OObj->kind;
 
     /* 8. Let lenValue be Get(a, "length"). */
-    EJSObject *aObj = EJSVAL_TO_OBJECT(a);
-    ejsval lenValue = OP(aObj,Get) (a, _ejs_atom_length, a);
+    ejsval lenValue = Get (a, _ejs_atom_length);
 
     /* 9. Let len be ToLength(lenValue). */
     int len = ToUint32 (lenValue);
@@ -1950,7 +1949,7 @@ _ejs_ArrayIterator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsv
         /* a. Let elementKey be ToString(index). */
         /* b. Let elementValue be Get(a, elementKey). */
         ejsval elementKey = ToString(NUMBER_TO_EJSVAL((index)));
-        ejsval elementValue = OP(aObj,Get) (a, elementKey, a);
+        ejsval elementValue = Get (a, elementKey);
 
         /* 15. If itemKind is "value", then let result be elementValue. */
         if (itemKind == EJS_ARRAYITER_KIND_VALUE)
