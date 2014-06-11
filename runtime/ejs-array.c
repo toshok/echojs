@@ -1683,7 +1683,7 @@ _ejs_Array_prototype_keys (ejsval env, ejsval _this, uint32_t argc, ejsval *args
     ejsval O = ToObject(_this);
 
     /* 3. Return CreateArrayIterator(O, "key"). */
-    return _ejs_array_iterator_new (O, _ejs_atom_key);
+    return _ejs_array_iterator_new (O, EJS_ARRAYITER_KIND_KEY);
 }
 
 static ejsval
@@ -1694,7 +1694,7 @@ _ejs_Array_prototype_values (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     ejsval O = ToObject(_this);
 
     /* 3. Return CreateArrayIterator(O, "value"). */
-    return _ejs_array_iterator_new (O, _ejs_atom_value);
+    return _ejs_array_iterator_new (O, EJS_ARRAYITER_KIND_VALUE);
 }
 
 static ejsval
@@ -1858,7 +1858,7 @@ _ejs_array_create (ejsval length, ejsval proto)
 }
 
 ejsval
-_ejs_array_iterator_new(ejsval array, ejsval kind)
+_ejs_array_iterator_new(ejsval array, uint8_t kind)
 {
     /* 1. Let O be ToObject(array). */
     /* 2. ReturnIfAbrupt(O). */
@@ -1916,7 +1916,7 @@ _ejs_ArrayIterator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsv
     uint32_t index = OObj->next_index;
 
     /* 7. Let itemKind be the value of the [[ArrayIterationKind]] internal slot of O. */
-    ejsval itemKind = OObj->kind;
+    uint8_t itemKind = OObj->kind;
 
     /* 8. Let lenValue be Get(a, "length"). */
     EJSObject *aObj = EJSVAL_TO_OBJECT(a);
@@ -1938,7 +1938,7 @@ _ejs_ArrayIterator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsv
     OObj->next_index = index + 1;
 
     /* 13. If itemKind is "key", then let result be index. */
-    if (!ucs2_strcmp(EJSVAL_TO_FLAT_STRING(_ejs_atom_key), EJSVAL_TO_FLAT_STRING(itemKind)))
+    if (itemKind == EJS_ARRAYITER_KIND_KEY)
         result = NUMBER_TO_EJSVAL(index);
     /* 14.  Else */
     else {
@@ -1948,7 +1948,7 @@ _ejs_ArrayIterator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsv
         ejsval elementValue = OP(aObj,Get) (a, elementKey, a);
 
         /* 15. If itemKind is "value", then let result be elementValue. */
-        if (!ucs2_strcmp(EJSVAL_TO_FLAT_STRING(_ejs_atom_value), EJSVAL_TO_FLAT_STRING(itemKind)))
+        if (itemKind == EJS_ARRAYITER_KIND_VALUE)
             result = elementValue;
         /* 16. Else, */
         else {
@@ -2024,7 +2024,7 @@ _ejs_array_init(ejsval global)
     _ejs_ArrayIterator = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Array, (EJSClosureFunc)_ejs_ArrayIterator_impl);
 
     _ejs_gc_add_root (&_ejs_ArrayIterator_prototype);
-    _ejs_ArrayIterator_prototype = _ejs_array_iterator_new(_ejs_Array_prototype, _ejs_atom_value);
+    _ejs_ArrayIterator_prototype = _ejs_array_iterator_new(_ejs_Array_prototype, EJS_ARRAYITER_KIND_VALUE);
     EJSVAL_TO_OBJECT(_ejs_ArrayIterator_prototype)->proto = _ejs_Object_prototype;
     _ejs_object_define_value_property (_ejs_ArrayIterator, _ejs_atom_prototype, _ejs_ArrayIterator_prototype,
                                         EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
