@@ -62,6 +62,8 @@ typedef struct {
 #define EJSVAL_IS_SPARSE_ARRAY(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_sparsearray_specops))
 #define EJSARRAY_IS_SPARSE(arrobj) (((EJSObject*)(arrobj))->ops == &_ejs_sparsearray_specops)
 
+#define EJSVAL_IS_ARRAYITERATOR(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_ArrayIterator_specops))
+
 EJS_BEGIN_DECLS
 
 extern ejsval _ejs_Array;

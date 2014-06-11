@@ -1899,11 +1899,16 @@ _ejs_ArrayIterator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsv
 
     /* 1. Let O be the this value. */
     /* 2. If Type(O) is not Object, throw a TypeError exception. */
-    ejsval O = ToObject(_this);
+    ejsval O = _this;
+    if (!EJSVAL_IS_OBJECT(O))
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, ".next called on non-object");
+
     EJSArrayIterator *OObj = (EJSArrayIterator*)EJSVAL_TO_OBJECT(O);
 
     /* 3. If O does not have all of the internal slots of an Array Iterator Instance (22.1.5.3),
      * throw a TypeError exception. */
+    if (!EJSVAL_IS_ARRAYITERATOR(O))
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, ".next called on non-ArrayIterator instance");
 
     /* 4. Let a be the value of the [[IteratedObject]] internal slot of O. */
     ejsval a = OObj->iterated;
