@@ -14,3 +14,7 @@ var values = arr.values();
 while (!(iter = values.next ()).done)
     console.log (iter.value);
 
+// 3. Go for entries()
+var entries = arr.entries();
+while (!(iter = entries.next()).done)
+    console.log (iter.value);

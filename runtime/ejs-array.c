@@ -1698,6 +1698,17 @@ _ejs_Array_prototype_values (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
 }
 
 static ejsval
+_ejs_Array_prototype_entries (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    /* 1. Let O be the result of calling ToObject with the this value as its argument. */
+    /* 2. ReturnIfAbrupt(O). */
+    ejsval O = ToObject(_this);
+
+    /* 3. Return CreateArrayIterator(O, "key+value"). */
+    return _ejs_array_iterator_new (O, EJS_ARRAYITER_KIND_KEYVALUE);
+}
+
+static ejsval
 _ejs_Array_of (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     return _ejs_array_new_copy (argc, args);
@@ -1958,10 +1969,14 @@ _ejs_ArrayIterator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsv
         else {
             /* a. Assert itemKind is "key+value" */
             /* b. Let result be ArrayCreate(2). */
+            result = _ejs_array_new(2, EJS_FALSE);
+
             /* c. Assert: result is a new, well-formed Array object so the following operations will never fail. */
             /* d. Call CreateDataProperty(result, "0", index). */
+            _ejs_object_setprop (result, NUMBER_TO_EJSVAL(0), NUMBER_TO_EJSVAL(index));
+
             /* e. Call CreateDataProperty(result, "1", elementValue). */
-            EJS_NOT_IMPLEMENTED();
+            _ejs_object_setprop (result, NUMBER_TO_EJSVAL(1), elementValue);
         }
     }
 
@@ -2019,6 +2034,7 @@ _ejs_array_init(ejsval global)
     PROTO_METHOD(findIndex);
     PROTO_METHOD(keys);
     PROTO_METHOD(values);
+    PROTO_METHOD(entries);
 
     PROTO_METHOD(toString);
 
