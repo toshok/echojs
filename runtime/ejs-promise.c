@@ -39,12 +39,6 @@ IteratorValue(ejsval* value, ejsval iterResult)
     EJS_NOT_IMPLEMENTED();
 }
 
-static void
-EnqueueTask()
-{
-    EJS_NOT_IMPLEMENTED();
-}
-
 // ECMA262 25.4.5.4.0 Identity Functions 
 static ejsval
 identity(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -62,6 +56,86 @@ thrower(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     if (argc > 0) x = args[0];
     _ejs_throw(x);
     EJS_NOT_REACHED();
+}
+
+static void PromiseReactionTask (EJSPromiseReaction* reaction, ejsval argument);
+static void PromiseResolveThenableTask (ejsval promiseToResolve, ejsval thenable, ejsval then);
+
+// PromiseReaction tasks
+typedef struct {
+    EJSPromiseReaction* reaction;
+    ejsval arg;
+} ReactionTaskArg;
+
+static void
+call_promise_reaction_task(void* data)
+{
+    ReactionTaskArg* arg = (ReactionTaskArg*)data;
+    PromiseReactionTask(arg->reaction, arg->arg);
+}
+
+static void
+reaction_arg_dtor(void* data)
+{
+    ReactionTaskArg* arg = (ReactionTaskArg*)data;
+    /* unroot the arg's ejsvals */
+    _ejs_gc_remove_root(&arg->reaction->handler);
+    _ejs_gc_remove_root(&arg->reaction->capabilities);
+    _ejs_gc_remove_root(&arg->arg);
+    free (arg->reaction);
+    free (arg);
+}
+
+static void
+EnqueuePromiseReactionTask (EJSPromiseReaction* reaction, ejsval value)
+{
+    ReactionTaskArg *arg = malloc(sizeof(ReactionTaskArg));
+    arg->reaction = reaction;
+    arg->arg = value;
+    /* root the ejsvals in EJSPromiseReaction and our value here */
+    _ejs_gc_add_root(&arg->reaction->handler);
+    _ejs_gc_add_root(&arg->reaction->capabilities);
+    _ejs_gc_add_root(&arg->arg);
+    _ejs_runloop_add_task(call_promise_reaction_task, arg, reaction_arg_dtor);
+}
+
+// PromiseResolveThenable tasks
+typedef struct {
+    ejsval promiseToResolve;
+    ejsval thenable;
+    ejsval then;
+} ResolveThenableTaskArg;
+
+static void
+call_promise_resolve_thenable_task(void* data)
+{
+    ResolveThenableTaskArg* arg = (ResolveThenableTaskArg*)data;
+    PromiseResolveThenableTask(arg->promiseToResolve, arg->thenable, arg->then);
+}
+
+static void
+resolve_thenable_arg_dtor(void* data)
+{
+    ResolveThenableTaskArg* arg = (ResolveThenableTaskArg*)data;
+    /* unroot the arg's ejsvals */
+    _ejs_gc_remove_root(&arg->promiseToResolve);
+    _ejs_gc_remove_root(&arg->thenable);
+    _ejs_gc_remove_root(&arg->then);
+    free (arg);
+}
+
+static void
+EnqueuePromiseResolveThenableTask (ejsval promiseToResolve, ejsval thenable, ejsval then)
+{
+    ResolveThenableTaskArg *arg = malloc(sizeof(ResolveThenableTaskArg));
+    arg->promiseToResolve = promiseToResolve;
+    arg->thenable = thenable;
+    arg->then = then;
+    /* root the ejsvals */
+    _ejs_gc_add_root(&arg->promiseToResolve);
+    _ejs_gc_add_root(&arg->thenable);
+    _ejs_gc_add_root(&arg->then);
+    _ejs_runloop_add_task(call_promise_resolve_thenable_task, arg, resolve_thenable_arg_dtor);
 }
 
 // ECMA262 25.4.1.8 RejectPromise ( promise, reason) 
@@ -90,7 +164,7 @@ static ejsval RejectPromise (ejsval promise, ejsval reason)
     //    1. Repeat for each reaction in reactions, in original insertion order 
     for (EJSPromiseReaction* reaction = reactions; reaction; reaction = reaction->next) {
         //       a. Perform EnqueueTask("PromiseTasks", PromiseReactionTask, (reaction, reason). 
-        EnqueueTask();
+        EnqueuePromiseReactionTask (reaction, reason);
     }
     //    2. Return undefined.
     return _ejs_undefined;
@@ -121,7 +195,7 @@ static ejsval FulfillPromise (ejsval promise, ejsval resolutionValue)
     //    1. Repeat for each reaction in reactions, in original insertion order 
     for (EJSPromiseReaction* reaction = reactions; reaction; reaction = reaction->next) {
         //       a. Perform EnqueueTask("PromiseTasks", PromiseReactionTask, (reaction, resolutionValue). 
-        EnqueueTask();
+        EnqueuePromiseReactionTask (reaction, resolutionValue);
     }
     //    2. Return undefined.
     return _ejs_undefined;
@@ -196,7 +270,7 @@ resolve(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         return FulfillPromise(promise, resolution);
     }
     // 12. Perform EnqueueTask ("PromiseTasks", PromiseResolveThenableTask, (promise, resolution, then))
-    EJS_NOT_IMPLEMENTED();
+    EnqueuePromiseResolveThenableTask (promise, resolution, then);
 
     // 13. Return undefined. 
     return _ejs_undefined;
@@ -343,17 +417,6 @@ PromiseReactionTask (EJSPromiseReaction* reaction, ejsval argument)
     success = _ejs_invoke_closure_catch(&status, EJS_CAPABILITY_GET_RESOLVE(promiseCapability), _ejs_undefined, 1, &handlerResult);
     
     // 10. NextTask status. 
-}
-
-typedef struct {
-    EJSPromiseReaction* reaction;
-    ejsval arg;
-} ReactionTaskArg;
-
-static void call_promise_reaction_task(void* data)
-{
-    ReactionTaskArg* arg = (ReactionTaskArg*)data;
-    PromiseReactionTask(arg->reaction, arg->arg);
 }
 
 // 25.4.2.2 PromiseResolveThenableTask ( promiseToResolve, thenable, then) 
@@ -511,13 +574,13 @@ _ejs_Promise_prototype_then (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     // 9. ReturnIfAbrupt(promiseCapability). 
     ejsval promiseCapability = NewPromiseCapability(C);
 
-    // 10. Let fulfillReaction be the PromiseReaction { [[Capabilities]]: promiseCapability, [[Handler]]: onFulfilled }.
-    EJSPromiseReaction* fulfillReaction = _ejs_promise_reaction_new (promiseCapability, onFulfilled);
-    // 11. Let rejectReaction  be the PromiseReaction { [[Capabilities]]: promiseCapability, [[Handler]]: onRejected  }.
-    EJSPromiseReaction* rejectReaction  = _ejs_promise_reaction_new (promiseCapability, onRejected);
-
     // 12. If the value of promise's [[PromiseState]] internal slot is "pending", 
     if (_promise->state == PROMISE_STATE_PENDING) {
+        // 10. Let fulfillReaction be the PromiseReaction { [[Capabilities]]: promiseCapability, [[Handler]]: onFulfilled }.
+        EJSPromiseReaction* fulfillReaction = _ejs_promise_reaction_new (promiseCapability, onFulfilled);
+        // 11. Let rejectReaction  be the PromiseReaction { [[Capabilities]]: promiseCapability, [[Handler]]: onRejected  }.
+        EJSPromiseReaction* rejectReaction  = _ejs_promise_reaction_new (promiseCapability, onRejected);
+
         //        a. Append fulfillReaction as the last element of the List that is the value of promise's [[PromiseFulfillReactions]] internal slot. 
         EJS_LIST_APPEND(EJSPromiseReaction, fulfillReaction, _promise->fulfillReactions);
         //        b. Append rejectReaction as the last element of the List that is the value of promise's [[PromiseRejectReactions]] internal slot. 
@@ -525,21 +588,23 @@ _ejs_Promise_prototype_then (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     }
     // 13. Else if the value of promise's [[PromiseState]] internal slot is "fulfilled", 
     else if (_promise->state == PROMISE_STATE_FULFILLED) {
+        // 10. Let fulfillReaction be the PromiseReaction { [[Capabilities]]: promiseCapability, [[Handler]]: onFulfilled }.
+        EJSPromiseReaction* fulfillReaction = _ejs_promise_reaction_new (promiseCapability, onFulfilled);
+
         //     a. Let value be the value of promise's [[PromiseResult]] internal slot. 
         ejsval value = _promise->result;
         //     b. Perform EnqueueTask("PromiseTasks", PromiseReactionTask, (fulfillReaction, value)). 
-
-        ReactionTaskArg *arg = malloc(sizeof(ReactionTaskArg));
-        arg->reaction = fulfillReaction;
-        arg->arg = value;
-        _ejs_runloop_add_task(call_promise_reaction_task, arg);
+        EnqueuePromiseReactionTask (fulfillReaction, value);
     }
     // 14. Else if the value of promise's [[PromiseState]] internal slot is "rejected", 
     else if (_promise->state == PROMISE_STATE_REJECTED) {
+        // 11. Let rejectReaction  be the PromiseReaction { [[Capabilities]]: promiseCapability, [[Handler]]: onRejected  }.
+        EJSPromiseReaction* rejectReaction  = _ejs_promise_reaction_new (promiseCapability, onRejected);
+
         //     a. Let reason be the value of promise's [[PromiseResult]] internal slot. 
         ejsval reason = _promise->result;
         //     b. Perform EnqueueTask("PromiseTasks", PromiseReactionTask, (rejectReaction, reason)). 
-        EnqueueTask();
+        EnqueuePromiseReactionTask (rejectReaction, reason);
     }
     else {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "2: shouldn't happen.  runtime error?");

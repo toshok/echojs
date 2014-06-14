@@ -29,6 +29,7 @@ C_SOURCES= \
 	ejs-reflect.c \
 	ejs-regexp.c \
 	ejs-require.c \
+	ejs-runloop-libuv.c \
 	ejs-set.c \
 	ejs-string.c \
 	ejs-symbol.c \
