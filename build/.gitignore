@@ -1,2 +1,2 @@
-.config-local.mk
+config-local.mk
 host-config.mk
