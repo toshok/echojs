@@ -113,6 +113,9 @@ setPrototypeOf_id       = create_identifier "%setPrototypeOf"
 objectCreate_id         = create_identifier "%objectCreate"
 gatherRest_id           = create_identifier "%gatherRest"
 
+class TransformPass extends TreeVisitor
+        constructor: (@options) ->
+                
 #
 # converts:
 #
@@ -131,7 +134,7 @@ gatherRest_id           = create_identifier "%gatherRest"
 # })(Baseclass)
 # 
 # 
-DesugarClasses = class DesugarClasses extends TreeVisitor
+DesugarClasses = class DesugarClasses extends TransformPass
         constructor: ->
                 super
                 @class_stack = new Stack
@@ -457,7 +460,7 @@ DesugarClasses = class DesugarClasses extends TreeVisitor
 #     parent: ...  // the parent environment object
 #   }
 # 
-LocateEnv = class LocateEnv extends TreeVisitor
+LocateEnv = class LocateEnv extends TransformPass
         constructor: ->
                 super
                 @envs = new Stack
@@ -524,9 +527,7 @@ LocateEnv = class LocateEnv extends TreeVisitor
 
 # this should move to echo-desugar.coffee
 
-class HoistFuncDecls extends TreeVisitor
-        constructor: ->
-                
+class HoistFuncDecls extends TransformPass
         visitFunction: (n) ->
                 decls = new Map()
                 n.body = @visit n.body, decls
@@ -558,9 +559,7 @@ class HoistFuncDecls extends TreeVisitor
 # to:
 #   var foo = function foo() { }
 # 
-class FuncDeclsToVars extends TreeVisitor
-        constructor: -> super
-        
+class FuncDeclsToVars extends TransformPass
         visitFunctionDeclaration: (n) ->
                 if n.toplevel
                         n.body = @visit n.body
@@ -600,8 +599,8 @@ class FuncDeclsToVars extends TreeVisitor
 #    }
 #
 # we also warn if x was already hoisted (if the decl for it already exists in the toplevel scope)
-class HoistVars extends TreeVisitor
-        constructor: (@filename) ->
+class HoistVars extends TransformPass
+        constructor: (options, @filename) ->
                 super
                 @scope_stack = new Stack
 
@@ -731,10 +730,11 @@ class HoistVars extends TreeVisitor
 # and the usual closure conversion stuff will make sure the bindings
 # exists in the closure env as usual.
 # 
-DesugarArrowFunctions = class DesugarArrowFunctions extends TreeVisitor
+DesugarArrowFunctions = class DesugarArrowFunctions extends TransformPass
         definesThis: (n) -> n.type is FunctionDeclaration or n.type is FunctionExpression
         
         constructor: ->
+                super
                 @mapping = []
                 @thisGen = startGenerator()
 
@@ -792,11 +792,11 @@ DesugarArrowFunctions = class DesugarArrowFunctions extends TreeVisitor
 
 # this class really doesn't behave like a normal TreeVisitor, as it modifies the tree in-place.
 # XXX reformulate this as a TreeVisitor subclass.
-class ComputeFree extends TreeVisitor
+class ComputeFree extends TransformPass
         constructor: ->
+                super
                 @call_free = @free.bind @
                 @setUnion = Set.union
-                super
                 
         visit: (n) ->
                 @free n
@@ -914,11 +914,11 @@ class ComputeFree extends TreeVisitor
                 
 # 1) allocates the environment at the start of the n
 # 2) adds mappings for all .closed variables
-class SubstituteVariables extends TreeVisitor
-        constructor: (module) ->
+class SubstituteVariables extends TransformPass
+        constructor: ->
+                super
                 @function_stack = new Stack
                 @mappings = new Stack
-                super
 
         currentMapping: -> if @mappings.depth > 0 then @mappings.top else Object.create null
 
@@ -964,12 +964,6 @@ class SubstituteVariables extends TreeVisitor
                 else
                         n.left = left
                         n
-
-        visitForOf: (n) ->
-                n.left  = @visit n.left
-                n.right = @visit n.right
-                n.body  = @visit n.body
-                n
 
         visitVariableDeclaration: (n) ->
                 # here we do some magic depending on whether or not
@@ -1223,10 +1217,10 @@ class SubstituteVariables extends TreeVisitor
 # 
 #   2. There are no free variables in the function expressions.
 #
-class LambdaLift extends TreeVisitor
-        constructor: (@filename) ->
-                @functions = []
+class LambdaLift extends TransformPass
+        constructor: (options, @filename) ->
                 super
+                @functions = []
 
         visitProgram: (program) ->
                 super
@@ -1282,8 +1276,7 @@ class LambdaLift extends TreeVisitor
         ###
 
 
-class NameAnonymousFunctions extends TreeVisitor
-        constructor: -> super
+class NameAnonymousFunctions extends TransformPass
         visitAssignmentExpression: (n) ->
                 n = super n
                 lhs = n.left
@@ -1300,8 +1293,9 @@ class NameAnonymousFunctions extends TreeVisitor
                         rhs.displayName = escodegen.generate lhs
                 n
 
-class MarkLocalAndGlobalVariables extends TreeVisitor
-        constructor: (@fileName) ->
+class MarkLocalAndGlobalVariables extends TransformPass
+        constructor: (options, @filename) ->
+                super
                 # initialize the scope stack with the global (empty) scope
                 @scope_stack = new Stack new Map
 
@@ -1313,7 +1307,11 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
                 if hasOwnProperty.call runtime_globals, ident.name
                         return false
 
-                reportError(ReferenceError, "undeclared identifier `#{ident.name}'", @fileName, ident.loc)
+                if @options.warn_on_undeclared
+                        reportWarning("undeclared identifier `#{ident.name}'", @filename, ident.loc)
+                else
+                        reportError(ReferenceError, "undeclared identifier `#{ident.name}'", @filename, ident.loc)
+                false
 
         intrinsicForIdentifier: (id) ->
                 is_local = @findIdentifierInScope id
@@ -1452,9 +1450,9 @@ class MarkLocalAndGlobalVariables extends TreeVisitor
 class IIFEIdioms extends TreeVisitor
 
         constructor: ->
+                super
                 @function_stack = new Stack
                 @iife_generator = startGenerator()
-                super
 
         visitFunction: (n) ->
                 @function_stack.push n
@@ -1573,7 +1571,7 @@ class IIFEIdioms extends TreeVisitor
                 else
                         return n
                         
-class DesugarDestructuring extends TreeVisitor
+class DesugarDestructuring extends TransformPass
         gen = startGenerator()
         fresh = () -> create_identifier "%destruct_tmp#{gen()}"
 
@@ -1711,7 +1709,7 @@ class DesugarDestructuring extends TreeVisitor
                 else
                         n
 
-class DesugarTemplates extends TreeVisitor
+class DesugarTemplates extends TransformPass
         # for template strings without a tag (i.e. of the form
         # `literal ${with}${possibly}${substitutions}`) we simply
         # inline the spec'ed behavior of the default handler (zipping
@@ -1805,11 +1803,12 @@ class DesugarTemplates extends TreeVisitor
 # we split up assignment operators +=/-=/etc into their
 # component operator + assignment so we can mark lhs as
 # setLocal/setGlobal/etc, and rhs getLocal/getGlobal/etc
-class DesugarUpdateAssignments extends TreeVisitor
+class DesugarUpdateAssignments extends TransformPass
         updateGen = startGenerator()
         freshUpdate = () -> "%update_#{updateGen()}"
         
-        constructor: (n) ->
+        constructor: ->
+                super
                 @debug = true
                 @updateGen = startGenerator()
 
@@ -1904,12 +1903,9 @@ class DesugarUpdateAssignments extends TreeVisitor
                                 reportError(Error, "unexpected expression type #{n.left.type} in update assign expression.", @filename, n.left.loc)
                 n
 
-class DesugarImportExport extends TreeVisitor
+class DesugarImportExport extends TransformPass
         importGen = startGenerator()
         freshId = (prefix) -> create_identifier "%#{prefix}_#{importGen()}"
-
-        constructor: (@filename, @exportLists) ->
-                super
 
         Object_defineProperty = {
                 type: MemberExpression,
@@ -2148,7 +2144,7 @@ class DesugarImportExport extends TreeVisitor
 #     // body
 #   }
 # 
-class DesugarRestParameters extends TreeVisitor
+class DesugarRestParameters extends TransformPass
         visitFunction: (n) ->
                 n = super
                 if n.rest?
@@ -2167,8 +2163,6 @@ class DesugarRestParameters extends TreeVisitor
                         n.body.body.unshift rest_declaration
                         n.rest = undefined
                 n
-                        
-                
 
 # switch this to true if you want to experiment with the new CFA2
 # code.  definitely, definitely not ready for prime time.
@@ -2208,7 +2202,7 @@ exports.convert = (tree, filename, export_lists, options) ->
         passes.forEach (passType) ->
                 return if not passType?
                 try
-                        pass = new passType(filename, export_lists)
+                        pass = new passType(options, filename, export_lists)
                         tree = pass.visit tree
                         if options.debug_passes.has(passType.name)
                                 console.log "after: #{passType.name}"

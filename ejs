@@ -36,6 +36,7 @@ options =
         # our defaults:
         debug_level: 0
         debug_passes: new Set
+        warn_on_undeclared: false
         frozen_global: false
         record_types: false
         output_filename: null
@@ -138,7 +139,10 @@ args =
         "--frozen-global":
                 flag:    "frozen_global"
                 help:    "compiler acts as if the global object is frozen after initialization, allowing for faster access."
-
+        "--warn-on-undeclared":
+                flag:    "warn_on_undeclared"
+                help:    "accesses to undeclared identifiers result in warnings (and global accesses).  By default they're an error."
+        
         "--arch":
                 handler: set_target_arch
                 handlerArgc: 1
