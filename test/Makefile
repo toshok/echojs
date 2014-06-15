@@ -8,6 +8,7 @@ TOP=..
 TOPDIR=$(shell pwd)/..
 NODE_PATH=$(TOPDIR)/node-llvm/build/Release:$(TOPDIR)/lib/generated:$(TOPDIR)/lib:$(TOPDIR)/esprima:$(TOPDIR)/escodegen:$(TOPDIR)/estraverse
 NODE_FLAGS=--harmony --harmony-typeof
+TRACEUR_FLAGS=--block-binding true
 
 TESTS:=$(wildcard *[0-9].js)
 
@@ -30,16 +31,22 @@ ESPRIMA_TESTS=$(filter esprima%,$(TESTS))
 ESPRIMA_TESTS:=$(ESPRIMA_TESTS:%.js=%.js.exe)
 
 addExpectedFailureInner=EXPECTED_FAILURES += $(1)
+addTraceurTestInner=TRACEUR_TESTS += $(1)
 
 define addExpectedFailure
   $(eval $(call addExpectedFailureInner, $(1)))
 endef
 
+define testAgainstTraceur
+  $(eval $(call addTraceurTestInner, $(1)))
+endef
 
 EXPECTED_FAILURES=
 $(call addExpectedFailure, argv1.js,                "node passes ['node','argv1.js'], we return ['argv1.js.exe']")
+$(call addExpectedFailure, computed-props1.js,      "esprima fails to parse the file")
 $(call addExpectedFailure, date1.js,                "fails because we test the Date() function, which returns the current time.  this differs from the current time when the node test runs.  bleah.")
 $(call addExpectedFailure, date3.js,                "the first date is off by an hour.  timegm/localtime_r screwup?")
+$(call addExpectedFailure, for5.js,                 "we don't create a block level (fresh) binding for i_")
 $(call addExpectedFailure, forin2.js,               "fails because we don't properly handle deleting properties while iterating")
 $(call addExpectedFailure, forin5.js,               "fails because we enumerate the entire range 0..length of an array, including the holes.")
 $(call addExpectedFailure, json4.js,                "fails due to properties being serialized in a different order.")
@@ -55,6 +62,21 @@ $(call addExpectedFailure, const1.js,               "we permit assigning to cons
 $(call addExpectedFailure, forof1.js,               "we don't support for-of yet")
 $(call addExpectedFailure, map1.js,                 "we throw the right exception but node 0.8 doesn't")
 $(call addExpectedFailure, regexp5.js,              "we don't support for the y flag")
+$(call addExpectedFailure, number-toFixed1.js,      "not implemented fully yet")
+$(call addExpectedFailure, number-toPrecision1.js,  "not implemented fully yet")
+$(call addExpectedFailure, tostring5.js,            "we don't throw when Date.prototype.toString is called on non-date objects.  instead we crash")
+$(call addExpectedFailure, spread5.js,              "doesn't compile with ejs currently")
+$(call addExpectedFailure, object7.js,              "we differ from node on property descriptor flags.  verify with spec")
+$(call addExpectedFailure, object9.js,              "we differ from node on property descriptor flags.  verify with spec")
+
+TRACEUR_TESTS=
+$(call testAgainstTraceur, for5.js)
+$(call testAgainstTraceur, computed-props1.js)
+$(call testAgainstTraceur, spread1.js)
+$(call testAgainstTraceur, spread2.js)
+$(call testAgainstTraceur, spread3.js)
+$(call testAgainstTraceur, spread4.js)
+$(call testAgainstTraceur, spread5.js)
 
 all-local:: check
 
@@ -78,7 +100,7 @@ check-set: terminal.js echo-assert.js
 check-free: terminal.js echo-assert.js
 	@NODE_PATH=$(NODE_PATH):. coffee free-test.coffee
 
-run-tests: clean-results prepare-xfail $(patsubst %.js,test-%,$(TESTS)) format-results
+run-tests: clean-results generate-expected prepare-xfail $(patsubst %.js,test-%,$(TESTS)) format-results
 
 run-tests-stage1:
 	@$(MAKE) EJS_DRIVER="$(TOPDIR)/ejs.js.exe" EJS_STAGE=1 run-tests
@@ -87,6 +109,8 @@ clean-results:
 	@rm -f .successes .failures .xfail .xsuccess .expected-failures
 
 write_xfail=echo $(1) >> .expected-failures
+
+generate-expected: $(patsubst %.js,expected/%.js.expected-out,$(TESTS))
 
 prepare-xfail:
 	@cat /dev/null > .expected-failures
@@ -152,8 +176,13 @@ echo-%:
 	-@EXE=`echo $<`; ./$$EXE > $@
 
 expected/%.js.expected-out: %.js
-	echo running node for $<
-	@NODE_PATH=$(NODE_PATH) node $(NODE_FLAGS) $< > $@
+	@if echo $(TRACEUR_TESTS) | grep $< > /dev/null; then \
+		echo Generating expected output for $< using traceur; \
+		NODE_PATH=$(NODE_PATH) traceur $(TRACEUR_FLAGS) $< > $@ ; \
+	else \
+		echo Generating expected output for $< using node; \
+		NODE_PATH=$(NODE_PATH) node $(NODE_FLAGS) $< > $@; \
+	fi
 
 $(ESPRIMA_TESTS): %.js.exe: %.js $(TOPDIR)/esprima/esprima-es6.js $(TOPDIR)/escodegen/escodegen-es6.js $(TOPDIR)/estraverse/estraverse-es6.js $(TOPDIR)/runtime/libecho.a
 	@cp $(TOPDIR)/esprima/esprima-es6.js .

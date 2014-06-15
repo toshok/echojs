@@ -1,0 +1,34 @@
+[EvalError]
+[RangeError]
+[ReferenceError]
+[SyntaxError]
+[TypeError]
+[URIError]
+[Error]
+EvalError
+RangeError
+ReferenceError
+SyntaxError
+TypeError
+URIError
+Error
+EvalError: yolo
+RangeError: yolo
+ReferenceError: yolo
+SyntaxError: yolo
+TypeError: yolo
+URIError: yolo
+Error: yolo
+false
+true
+false
+true
+false
+true
+false
+true
+false
+true
+false
+true
+YoloError: uh...

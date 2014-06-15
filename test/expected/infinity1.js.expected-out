@@ -1,0 +1,16 @@
+Infinity
+-Infinity
+isFinite() = false
+isFinite("1") = true
+isFinite(true) = true
+isFinite([]) = true
+isFinite([1]) = true
+isFinite([[1]]) = true
+isFinite([1,2]) = false
+isFinite([Infinity]) = false
+isFinite({}) = false
+isFinite(5) = true
+isFinite(NaN) = false
+isFinite(Infinity) = false
+isFinite(1, Infinity) = true
+isFinite(Infinity, 1) = false

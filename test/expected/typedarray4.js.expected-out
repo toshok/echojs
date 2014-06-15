@@ -1,0 +1,18 @@
+ArrayBuffer byte Length: 16
+Int32Array:
+ byteOffset: 0
+ byteLength: 16
+ length: 4
+Int16Array:
+ byteOffset: 0
+ byteLength: 16
+ length: 8
+Int32Array (all)
+ byteOffset: 0
+ byteLength: 16
+ length: 4
+Int32Array (4, 2):
+ byteOffset: 4
+ byteLength: 8
+ length: 2
+[RangeError: Length is out of range.]

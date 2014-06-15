@@ -1,0 +1,3 @@
+length = 2
+argv[0] = node
+argv[1] = /Users/toshok/src/coffeekit/echo-js/test/argv1.js
