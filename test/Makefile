@@ -56,7 +56,6 @@ $(call addExpectedFailure, typedarray0.js,          "we throw an exception when 
 $(call addExpectedFailure, typedarray3.js,          "we use %g to format floats/doubles, and differ when printing numbers.")
 $(call addExpectedFailure, typedarray6.js,          "we use %g to format floats/doubles, and differ when printing numbers.")
 $(call addExpectedFailure, array19.js,              "we don't support property descriptors at all for array elements.  also needs more from ECMA262 15.4.5.1")
-$(call addExpectedFailure, sparsearray1.js,         "sparse array support is very much not there yet")
 $(call addExpectedFailure, fib1.js,                 "we don't output numbers correctly (integers with exponent <= 20 should print out normally)")
 $(call addExpectedFailure, const1.js,               "we permit assigning to const bindings")
 $(call addExpectedFailure, forof1.js,               "we don't support for-of yet")
