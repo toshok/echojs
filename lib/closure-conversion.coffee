@@ -1953,6 +1953,9 @@ class DesugarImportExport extends TransformPass
                 }
                 
                 
+        constructor: (options, filename, @exportLists) ->
+                super
+        
         visitFunction: (n) ->
                 return n if not n.toplevel
                 
