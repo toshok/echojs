@@ -396,12 +396,22 @@ PromiseReactionTask (EJSPromiseReaction* reaction, ejsval argument)
     // 3. Let handler be reaction.[[Handler]]. 
     ejsval handler = reaction->handler;
 
-    // 4. If handler is "Identity", then let handlerResult be NormalCompletion(argument). 
-    // 5. Else If handler is "Thrower", then let handlerResult be Completion{[[type]]: throw, [[value]]: argument, [[target]]: empty}. 
-    // 6. Else, Let let handlerResult be the result of calling the [[Call]] internal method of handler passing undefined as thisArgument and (argument) as argumentsList. 
-    ejsval handlerResult;
+    EJSBool success;
+    ejsval handlerResult = _ejs_undefined;
 
-    EJSBool success = _ejs_invoke_closure_catch(&handlerResult, handler, _ejs_undefined, 1, &argument);
+    // 4. If handler is "Identity", then let handlerResult be NormalCompletion(argument). 
+    if (SameValue(handler, _ejs_identity_function)) {
+        success = EJS_TRUE;
+        handlerResult = argument;
+    }
+    // 5. Else If handler is "Thrower", then let handlerResult be Completion{[[type]]: throw, [[value]]: argument, [[target]]: empty}. 
+    if (SameValue(handler, _ejs_thrower_function)) {
+        success = EJS_FALSE;
+        handlerResult = argument;
+    }
+    // 6. Else, Let let handlerResult be the result of calling the [[Call]] internal method of handler passing undefined as thisArgument and (argument) as argumentsList. 
+    else
+        success = _ejs_invoke_closure_catch(&handlerResult, handler, _ejs_undefined, 1, &argument);
 
     ejsval status;
 
@@ -411,7 +421,7 @@ PromiseReactionTask (EJSPromiseReaction* reaction, ejsval argument)
         success = _ejs_invoke_closure_catch(&status, EJS_CAPABILITY_GET_REJECT(promiseCapability), _ejs_undefined, 1, &handlerResult);
 
         //    b. NextTask status. 
-        EJS_NOT_IMPLEMENTED();
+        return;//EJS_NOT_IMPLEMENTED();
     }
     // 8. Let handlerResult be handlerResult.[[value]]. 
     // 9. Let status be the result of calling the [[Call]] internal method of promiseCapability.[[Resolve]] passing undefined as thisArgument and (handlerResult) as argumentsList. 

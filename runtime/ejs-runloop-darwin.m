@@ -12,6 +12,7 @@ static int refcount = 0;
   void* data;
 }
 -(id)initWithTask:(Task)task data:(void*)data dtor:(TaskDataDtor)dtor;
+-(void)addToRunLoop;
 -(void)runTask;
 @end
 
@@ -25,10 +26,17 @@ static int refcount = 0;
   return self;
 }
 
+-(void)addToRunLoop
+{
+  refcount++;
+  [self performSelectorOnMainThread:@selector(runTask) withObject:self waitUntilDone:NO];
+}
+
 -(void)runTask
 {
   task(data);
-  dtor(data);
+  if (dtor)
+      dtor(data);
   refcount--;
   if (refcount == 0)
     exit(0);
@@ -40,18 +48,16 @@ static int refcount = 0;
 void
 _ejs_runloop_add_task(Task task, void* data, TaskDataDtor dtor)
 {
-  NSRunLoop* mainloop = [NSRunLoop currentRunLoop];
-
   id taskObj = [[TaskObj alloc] initWithTask:task data:data dtor:dtor];
-  [mainloop performSelector:@selector(runTask) target:taskObj argument:nil order:0 modes:[NSArray arrayWithObject:NSDefaultRunLoopMode]];
-  refcount++;
+  [taskObj addToRunLoop];
 }
 
 void
 _ejs_runloop_start()
 {
-  NSRunLoop* mainloop = [NSRunLoop currentRunLoop];
+  if (refcount == 0)
+    return;
 
-  while (refcount > 0 && [mainloop runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]]) printf ("refcount = %d\n", refcount);
+  [[NSRunLoop currentRunLoop] run];
 }
 #endif

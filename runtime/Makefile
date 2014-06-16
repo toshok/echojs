@@ -86,7 +86,7 @@ OBJC_SOURCES= \
 	ejs-xhr.m \
 	ejs-runloop-darwin.m
 
-OSX_OBJECTS=$(C_SOURCES:%.c=%.o.osx) $(OBJC_SOURCES:%.m=%.o.osx) main.o.osx
+OSX_OBJECTS=$(C_SOURCES:%.c=%.o.osx) $(OBJC_SOURCES:%.m=%.o.osx) ejs-invoke-closure-catch.o.osx main.o.osx
 SIM_OBJECTS=$(C_SOURCES:%.c=%.o.sim) $(OBJC_SOURCES:%.m=%.o.sim) main.o.sim
 DEV_OBJECTS=$(C_SOURCES:%.c=%.o.armv7) $(OBJC_SOURCES:%.m=%.o.armv7) main.o.armv7
 DEVS_OBJECTS=$(C_SOURCES:%.c=%.o.armv7s) $(OBJC_SOURCES:%.m=%.o.armv7s) main.o.armv7s
@@ -138,7 +138,7 @@ ejs-webgl-constants-sorted.h: ejs-webgl-constants.h
 ejs-webgl.o.osx ejs-webgl.o.sim ejs-webgl.o.armv7 ejs-webgl.o.armv7s: ejs-webgl-constants-sorted.h
 
 
-OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch
+OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch -fno-objc-arc
 
 %.o.osx: %.c
 	@mkdir -p .deps
@@ -149,6 +149,9 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch
 	@mkdir -p .deps
 	@$(CC) -MM $(OSX_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.osx,,`/$@/ > .deps/$@-deps
 	@echo [$(CC) osx] $< && $(CC) $(OSX_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
+
+%.o.osx: %.ll
+	@echo [llc osx] $< && llc -filetype=obj -o=$@ -O2 $<
 
 %.o.sim: %.c
 	@mkdir -p .deps

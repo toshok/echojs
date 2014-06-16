@@ -13,6 +13,7 @@ escodegen-es6.js
 esprima-es6.js
 estraverse-es6.js
 *.diff
+*.ll
 *.ejs-out
 .failures
 .successes
