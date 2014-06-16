@@ -325,7 +325,7 @@ compileFile = (filename, parse_tree, export_lists, compileCallback) ->
         temp_files.push ll_filename, bc_filename, ll_opt_filename, o_filename
         
         llvm_as_args = ["-o=#{bc_filename}", ll_filename]
-        opt_args     = ["-O1", "-strip-dead-prototypes", "-S", "-o=#{ll_opt_filename}", bc_filename]
+        opt_args     = ["-O2", "-strip-dead-prototypes", "-S", "-o=#{ll_opt_filename}", bc_filename]
         llc_args     = target_llc_args(options.target_platform,options.target_arch).concat ["-filetype=obj", "-o=#{o_filename}", ll_opt_filename]
 
         debug.log 1, "writing #{ll_filename}"
