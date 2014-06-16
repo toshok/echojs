@@ -650,11 +650,26 @@ static ejsval
 resolve_element (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     // 1. If the value of F's [[AlreadyCalled]] internal slot is true, then return undefined. 
+    if (EJSVAL_TO_BOOLEAN(EJS_RESOLVEELEMENT_GET_ALREADY_CALLED(env)))
+        return _ejs_undefined;
+
     // 2. Set the value of F's [[AlreadyCalled]] internal slot to true. 
+    EJS_RESOLVEELEMENT_SET_ALREADY_CALLED(env, _ejs_true);
+
     // 3. Let index be the value of F's [[Index]] internal slot. 
+    ejsval index = EJS_RESOLVEELEMENT_GET_INDEX(env);
+
     // 4. Let values be the value of F's [[Values]] internal slot. 
+    ejsval values = EJS_RESOLVEELEMENT_GET_VALUES(env);
+
     // 5. Let promiseCapability be the value of F's [[Capabilities]] internal slot. 
+    ejsval promiseCapability = EJS_RESOLVEELEMENT_GET_CAPABILITIES(env);
+
     // 6. Let remainingElementsCount be the value of F's [[RemainingElements]] internal slot. 
+
+    // XXX remainingElementsCount needs to be a boxed value so that resolve_element functions can update it
+    // XXX maybe an EJSNumber?  supposed to be immutable, but we could fudge.. or another closure.
+
     // 7. Let result be CreateDataProperty(values, ToString(index), x). 
     // 8. IfAbruptRejectPromise(result, promiseCapability). 
     // 9. Set remainingElementsCount.[[value]] to remainingElementsCount.[[value]] - 1. 
@@ -752,15 +767,15 @@ _ejs_Promise_all (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         ejsval resolveElement = _ejs_function_new_anon(resolvingElement_env, resolve_element);
 
         //    i. Set the [[AlreadyCalled]] internal slot of resolveElement to false. 
-        *_ejs_closureenv_get_slot_ref(resolvingElement_env, 0) = _ejs_false;
+        EJS_RESOLVEELEMENT_SET_ALREADY_CALLED(resolvingElement_env, _ejs_false);
         //    j. Set the [[Index]] internal slot of resolveElement to index. 
-        *_ejs_closureenv_get_slot_ref(resolvingElement_env, 1) = NUMBER_TO_EJSVAL(index);
+        EJS_RESOLVEELEMENT_SET_INDEX(resolvingElement_env, NUMBER_TO_EJSVAL(index));
         //    k. Set the [[Values]] internal slot of resolveElement to values. 
-        *_ejs_closureenv_get_slot_ref(resolvingElement_env, 2) = values;
+        EJS_RESOLVEELEMENT_SET_VALUES(resolvingElement_env, values);
         //    l. Set the [[Capabilities]] internal slot of resolveElement to promiseCapability. 
-        *_ejs_closureenv_get_slot_ref(resolvingElement_env, 3) = promiseCapability;
+        EJS_RESOLVEELEMENT_SET_CAPABILITIES(resolvingElement_env, promiseCapability);
         //    m. Set the [[RemainingElements]] internal slot of resolveElement to remainingElementsCount. 
-        *_ejs_closureenv_get_slot_ref(resolvingElement_env, 4) = NUMBER_TO_EJSVAL(remainingElementsCount);;
+        EJS_RESOLVEELEMENT_SET_REMAINING_ELEMENTS(resolvingElement_env, NUMBER_TO_EJSVAL(remainingElementsCount));
         //    n. Set remainingElementsCount.[[value]] to remainingElementsCount.[[value]] + 1. 
         remainingElementsCount++;
         //    o. Let result be Invoke(nextPromise, "then", (resolveElement, promiseCapability.[[Reject]])). 

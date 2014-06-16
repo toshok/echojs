@@ -33,6 +33,30 @@ typedef enum {
 #define EJS_CAPABILITY_SET_REJECT(cap,v)  (*_ejs_closureenv_get_slot_ref(cap, EJS_CAPABILITY_REJECT_SLOT)  = (v))
 #define EJS_CAPABILITY_SET_RESOLVE(cap,v) (*_ejs_closureenv_get_slot_ref(cap, EJS_CAPABILITY_RESOLVE_SLOT) = (v))
 
+#define EJS_RESOLVEELEMENT_ALREADY_CALLED_SLOT 0
+#define EJS_RESOLVEELEMENT_INDEX_SLOT 1
+#define EJS_RESOLVEELEMENT_VALUES_SLOT 2
+#define EJS_RESOLVEELEMENT_CAPABILITIES_SLOT 3
+#define EJS_RESOLVEELEMENT_REMAINING_ELEMENTS_SLOT 4
+#define EJS_RESOLVEELEMENT_VALUE_SLOT 5
+#define EJS_RESOLVEELEMENT_SLOT_COUNT 6
+
+#define EJS_RESOLVEELEMENT_NEW() (_ejs_closureenv_new(EJS_RESOLVEELEMENT_SLOT_COUNT))
+#define EJS_RESOLVEELEMENT_GET_ALREADY_CALLED(re)     (_ejs_closureenv_get_slot(re, EJS_RESOLVEELEMENT_ALREADY_CALLED_SLOT))
+#define EJS_RESOLVEELEMENT_GET_INDEX(re)              (_ejs_closureenv_get_slot(re, EJS_RESOLVEELEMENT_INDEX_SLOT))
+#define EJS_RESOLVEELEMENT_GET_VALUES(re)             (_ejs_closureenv_get_slot(re, EJS_RESOLVEELEMENT_VALUES_SLOT))
+#define EJS_RESOLVEELEMENT_GET_CAPABILITIES(re)       (_ejs_closureenv_get_slot(re, EJS_RESOLVEELEMENT_CAPABILITIES_SLOT))
+#define EJS_RESOLVEELEMENT_GET_REMAINING_ELEMENTS(re) (_ejs_closureenv_get_slot(re, EJS_RESOLVEELEMENT_REMAINING_ELEMENTS_SLOT))
+#define EJS_RESOLVEELEMENT_GET_VALUE(re)              (_ejs_closureenv_get_slot(re, EJS_RESOLVEELEMENT_VALUE_SLOT))
+
+#define EJS_RESOLVEELEMENT_SET_ALREADY_CALLED(re, v)     (*_ejs_closureenv_get_slot_ref(re, EJS_RESOLVEELEMENT_ALREADY_CALLED_SLOT) = v)
+#define EJS_RESOLVEELEMENT_SET_INDEX(re, v)              (*_ejs_closureenv_get_slot_ref(re, EJS_RESOLVEELEMENT_INDEX_SLOT) = v)
+#define EJS_RESOLVEELEMENT_SET_VALUES(re, v)             (*_ejs_closureenv_get_slot_ref(re, EJS_RESOLVEELEMENT_VALUES_SLOT) = v)
+#define EJS_RESOLVEELEMENT_SET_CAPABILITIES(re, v)       (*_ejs_closureenv_get_slot_ref(re, EJS_RESOLVEELEMENT_CAPABILITIES_SLOT) = v)
+#define EJS_RESOLVEELEMENT_SET_REMAINING_ELEMENTS(re, v) (*_ejs_closureenv_get_slot_ref(re, EJS_RESOLVEELEMENT_REMAINING_ELEMENTS_SLOT) = v)
+#define EJS_RESOLVEELEMENT_SET_VALUE(re, v)              (*_ejs_closureenv_get_slot_ref(re, EJS_RESOLVEELEMENT_VALUE_SLOT) = v)
+
+
 typedef struct EJSPromiseReaction {
     EJS_LIST_HEADER(struct EJSPromiseReaction);
     ejsval capabilities;
