@@ -3,6 +3,7 @@
  */
 
 #include "ejs-ops.h"
+#include "ejs-array.h"
 #include "ejs-value.h"
 #include "ejs-function.h"
 #include "ejs-promise.h"
@@ -644,6 +645,25 @@ _ejs_Promise_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return OBJECT_TO_EJSVAL(obj);
 }
 
+// ECMA262 25.4.4.1.1 Promise.all Resolve Element Functions
+static ejsval
+resolve_element (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    // 1. If the value of F's [[AlreadyCalled]] internal slot is true, then return undefined. 
+    // 2. Set the value of F's [[AlreadyCalled]] internal slot to true. 
+    // 3. Let index be the value of F's [[Index]] internal slot. 
+    // 4. Let values be the value of F's [[Values]] internal slot. 
+    // 5. Let promiseCapability be the value of F's [[Capabilities]] internal slot. 
+    // 6. Let remainingElementsCount be the value of F's [[RemainingElements]] internal slot. 
+    // 7. Let result be CreateDataProperty(values, ToString(index), x). 
+    // 8. IfAbruptRejectPromise(result, promiseCapability). 
+    // 9. Set remainingElementsCount.[[value]] to remainingElementsCount.[[value]] - 1. 
+    // 10. If remainingElementsCount.[[value]] is 0, 
+    //     a. Return the result of calling the [[Call]] internal method of promiseCapability.[[Resolve]] with undefined as thisArgument and (values) as argumentsList. 
+    // 11. Return undefined.
+    return _ejs_undefined;
+}
+
 // ECMA262 25.4.4.1 Promise.all ( iterable )
 static ejsval
 _ejs_Promise_all (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -670,34 +690,91 @@ _ejs_Promise_all (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
     }
 
-    EJS_NOT_IMPLEMENTED();
-
     // 6. Let values be ArrayCreate(0). 
+    ejsval values = _ejs_array_new(0, EJS_FALSE);
+
     // 7. Let remainingElementsCount be a new Record { [[value]]: 1 }. 
+    int remainingElementsCount = 1;
+
     // 8. Let index be 0. 
+    int index = 0;
+
     // 9. Repeat 
-    //    a. Let next be IteratorStep(iterator). 
-    //    b. IfAbruptRejectPromise(next, promiseCapability). 
-    //    c. If next is false, 
-    //       i. Set remainingElementsCount.[[value]] to remainingElementsCount.[[value]] - 1. 
-    //       ii. If remainingElementsCount.[[value]] is 0, 
-    //           1. Let resolveResult be the result of calling the [[Call]] internal method of promiseCapability.[[Resolve]] with undefined as thisArgument and (values) as argumentsList. 
-    //           2. ReturnIfAbrupt(resolveResult). 
-    //       iii. Return promiseCapability.[[Promise]]. 
-    //    d. Let nextValue be IteratorValue(next). 
-    //    e. IfAbruptRejectPromise(nextValue, promiseCapability). 
-    //    f. Let nextPromise be Invoke(C, "resolve", (nextValue)). 
-    //    g. IfAbruptRejectPromise(nextPromise, promiseCapability). 
-    //    h. Let resolveElement be a new built-in function object as defined in Promise.all Resolve Element Functions. 
-    //    i. Set the [[AlreadyCalled]] internal slot of resolveElement to false. 
-    //    j. Set the [[Index]] internal slot of resolveElement to index. 
-    //    k. Set the [[Values]] internal slot of resolveElement to values. 
-    //    l. Set the [[Capabilities]] internal slot of resolveElement to promiseCapability. 
-    //    m. Set the [[RemainingElements]] internal slot of resolveElement to remainingElementsCount. 
-    //    n. Set remainingElementsCount.[[value]] to remainingElementsCount.[[value]] + 1. 
-    //    o. Let result be Invoke(nextPromise, "then", (resolveElement, promiseCapability.[[Reject]])). 
-    //    p. IfAbruptRejectPromise(result, promiseCapability). 
-    //    q. Set index to index + 1.
+    while (EJS_TRUE) {
+        //    a. Let next be IteratorStep(iterator). 
+        ejsval next;
+        success = IteratorStep(&next, iterator);
+
+        //    b. IfAbruptRejectPromise(next, promiseCapability). 
+        if (!success) {
+            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), _ejs_undefined, 1, &next);
+            return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
+        }
+        //    c. If next is false, 
+        if (EJSVAL_IS_BOOLEAN(next) && !EJSVAL_TO_BOOLEAN(next)) {
+            //       i. Set remainingElementsCount.[[value]] to remainingElementsCount.[[value]] - 1. 
+            remainingElementsCount --;
+            //       ii. If remainingElementsCount.[[value]] is 0, 
+            if (remainingElementsCount == 0) {
+                //           1. Let resolveResult be the result of calling the [[Call]] internal method of promiseCapability.[[Resolve]] with undefined as thisArgument and (values) as argumentsList. 
+                ejsval resolveResult;
+                success = _ejs_invoke_closure_catch(&resolveResult, EJS_CAPABILITY_GET_RESOLVE(promiseCapability), _ejs_undefined, 1, &values);
+                //           2. ReturnIfAbrupt(resolveResult). 
+                if (!success) {
+                    _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), _ejs_undefined, 1, &resolveResult);
+                    return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
+                }
+            }
+            //       iii. Return promiseCapability.[[Promise]]. 
+            return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
+        }
+
+        //    d. Let nextValue be IteratorValue(next). 
+        ejsval nextValue;
+        success = IteratorValue(&nextValue, next);
+        //    e. IfAbruptRejectPromise(nextValue, promiseCapability). 
+        if (!success) {
+            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), _ejs_undefined, 1, &nextValue);
+            return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
+        }
+        //    f. Let nextPromise be Invoke(C, "resolve", (nextValue)). 
+        ejsval nextPromise;
+        success =  _ejs_invoke_closure_catch (&nextPromise, Get(C, _ejs_atom_resolve), C, 1, &nextValue);
+        
+        //    g. IfAbruptRejectPromise(nextPromise, promiseCapability).
+        if (!success) {
+            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), _ejs_undefined, 1, &nextPromise);
+            return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
+        }
+ 
+        //    h. Let resolveElement be a new built-in function object as defined in Promise.all Resolve Element Functions. 
+        ejsval resolvingElement_env = _ejs_closureenv_new(6);
+        ejsval resolveElement = _ejs_function_new_anon(resolvingElement_env, resolve_element);
+
+        //    i. Set the [[AlreadyCalled]] internal slot of resolveElement to false. 
+        *_ejs_closureenv_get_slot_ref(resolvingElement_env, 0) = _ejs_false;
+        //    j. Set the [[Index]] internal slot of resolveElement to index. 
+        *_ejs_closureenv_get_slot_ref(resolvingElement_env, 1) = NUMBER_TO_EJSVAL(index);
+        //    k. Set the [[Values]] internal slot of resolveElement to values. 
+        *_ejs_closureenv_get_slot_ref(resolvingElement_env, 2) = values;
+        //    l. Set the [[Capabilities]] internal slot of resolveElement to promiseCapability. 
+        *_ejs_closureenv_get_slot_ref(resolvingElement_env, 3) = promiseCapability;
+        //    m. Set the [[RemainingElements]] internal slot of resolveElement to remainingElementsCount. 
+        *_ejs_closureenv_get_slot_ref(resolvingElement_env, 4) = NUMBER_TO_EJSVAL(remainingElementsCount);;
+        //    n. Set remainingElementsCount.[[value]] to remainingElementsCount.[[value]] + 1. 
+        remainingElementsCount++;
+        //    o. Let result be Invoke(nextPromise, "then", (resolveElement, promiseCapability.[[Reject]])). 
+        ejsval thenargs[] = { resolveElement, EJS_CAPABILITY_GET_REJECT(promiseCapability) };
+        ejsval result;
+        success =  _ejs_invoke_closure_catch (&result, Get(nextPromise, _ejs_atom_then), nextPromise, 2, thenargs);
+        //    p. IfAbruptRejectPromise(result, promiseCapability). 
+        if (!success) {
+            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), _ejs_undefined, 1, &result);
+            return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
+        }
+        //    q. Set index to index + 1.
+        index ++;
+    }
 }
 
 // ECMA262 25.4.4.3 Promise.race ( iterable ) 
