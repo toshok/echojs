@@ -76,6 +76,8 @@ $(call testAgainstTraceur, spread2.js)
 $(call testAgainstTraceur, spread3.js)
 $(call testAgainstTraceur, spread4.js)
 $(call testAgainstTraceur, spread5.js)
+$(call testAgainstTraceur, promise1.js)
+$(call testAgainstTraceur, promise2.js)
 
 all-local:: check
 
