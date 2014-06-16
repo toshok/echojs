@@ -25,7 +25,6 @@ extern ejsval _ejs_Date;
 extern ejsval _ejs_Date_prototype;
 extern EJSSpecOps _ejs_Date_specops;
 
-ejsval _ejs_date_new_unix (int tv_sec, int tv_usec);
 double _ejs_date_get_time (EJSDate* date);
 
 void _ejs_date_init(ejsval global);
