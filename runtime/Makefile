@@ -151,7 +151,7 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch -fno-objc
 	@echo [$(CC) osx] $< && $(CC) $(OSX_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
 
 %.o.osx: %.ll
-	@echo [llc osx] $< && llc -filetype=obj -o=$@ -O2 $<
+	@echo [llc osx] $< && llc$(LLVM_SUFFIX) -filetype=obj -o=$@ -O2 $<
 
 %.o.sim: %.c
 	@mkdir -p .deps
