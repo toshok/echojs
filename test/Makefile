@@ -48,7 +48,6 @@ $(call addExpectedFailure, date3.js,                "the first date is off by an
 $(call addExpectedFailure, for5.js,                 "we don't create a block level (fresh) binding for i_")
 $(call addExpectedFailure, forin2.js,               "fails because we don't properly handle deleting properties while iterating")
 $(call addExpectedFailure, forin5.js,               "fails because we enumerate the entire range 0..length of an array, including the holes.")
-$(call addExpectedFailure, json4.js,                "fails due to properties being serialized in a different order.")
 $(call addExpectedFailure, object6.js,              "fails because we don't define everything we should.")
 $(call addExpectedFailure, number1.js,              "fails because node outputs {} for console.log(new Number(5)), while spidermonkey and jsc output '5'.  we err on the SM/JSC side of things here.")
 $(call addExpectedFailure, typedarray0.js,          "we throw an exception when typed array constructors are called as functions.")
