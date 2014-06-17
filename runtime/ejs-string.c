@@ -125,7 +125,7 @@ ucs2_strrstr (const jschar *haystack,
             const jschar *p2 = p+1;
             const jschar *n = needle_p-1;
 
-            if (!next_candidate && *p2 == *needle)
+            if (!next_candidate && *p2 == *needle_p)
                 next_candidate = p2;
 
             while (n >= needle) {
