@@ -2033,13 +2033,21 @@ _ejs_array_init(ejsval global)
     PROTO_METHOD(find);
     PROTO_METHOD(findIndex);
     PROTO_METHOD(keys);
-    PROTO_METHOD(values);
+
+    // we expand PROTO_METHOD(values) here so that we can install the function as @@iterator below
+    ejsval _values = _ejs_function_new_native (_ejs_null, _ejs_atom_values, (EJSClosureFunc)_ejs_Array_prototype_values);
+    _ejs_object_define_value_property (_ejs_Array_prototype, _ejs_atom_values, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
+
     PROTO_METHOD(entries);
 
     PROTO_METHOD(toString);
 
 #undef OBJ_METHOD
 #undef PROTO_METHOD
+
+    // 22.1.3.30 Array.prototype [ @@iterator ] ( )
+    // The initial value of the @@iterator property is the same function object as the initial value of the Array.prototype.values property.
+    _ejs_object_define_value_property (_ejs_Array_prototype, _ejs_Symbol_iterator, _values, EJS_PROP_NOT_ENUMERABLE);
 
     _ejs_ArrayIterator = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Array, (EJSClosureFunc)_ejs_ArrayIterator_impl);
 
@@ -2256,24 +2264,25 @@ _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPrope
         return EJS_TRUE;
     }
 
-    propertyName = ToString(propertyName);
-    if (!ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName))) {
-        // XXX more from 15.4.5.1 here
-        int newLen = ToUint32(_ejs_property_desc_get_value(propertyDescriptor));
-        int oldLen = EJS_ARRAY_LEN(obj);
+    if (EJSVAL_IS_STRING(propertyName)) {
+        if (!ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName))) {
+            // XXX more from 15.4.5.1 here
+            int newLen = ToUint32(_ejs_property_desc_get_value(propertyDescriptor));
+            int oldLen = EJS_ARRAY_LEN(obj);
 
-        if (EJSVAL_IS_DENSE_ARRAY(obj)) {
-            if (newLen > oldLen) {
-                maybe_realloc_dense ((EJSArray*)EJSVAL_TO_OBJECT(obj), newLen);
-                for (int i = oldLen; i < newLen; i ++)
-                    EJS_DENSE_ARRAY_ELEMENTS(obj)[i] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
+            if (EJSVAL_IS_DENSE_ARRAY(obj)) {
+                if (newLen > oldLen) {
+                    maybe_realloc_dense ((EJSArray*)EJSVAL_TO_OBJECT(obj), newLen);
+                    for (int i = oldLen; i < newLen; i ++)
+                        EJS_DENSE_ARRAY_ELEMENTS(obj)[i] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
+                }
             }
-        }
-        else {
-        }
+            else {
+            }
 
-        EJS_ARRAY_LEN(obj) = newLen;
-        return EJS_TRUE;
+            EJS_ARRAY_LEN(obj) = newLen;
+            return EJS_TRUE;
+        }
     }
 
     return _ejs_Object_specops.DefineOwnProperty (obj, propertyName, propertyDescriptor, flag);
