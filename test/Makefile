@@ -17,7 +17,6 @@ TESTS:=$(filter-out alloc1.js,$(TESTS))
 
 # these test for es6 stuff that neither node nor ejs supports
 TESTS:=$(filter-out modules2.js,$(TESTS))
-TESTS:=$(filter-out spread3.js,$(TESTS))
 TESTS:=$(filter-out iterators1.js,$(TESTS))
 TESTS:=$(filter-out proxy4.js,$(TESTS))
 # esprima uses the JS regexp ctor while parsing regexps to validate them.  node can't deal with the regexp in this file.
@@ -64,6 +63,7 @@ $(call addExpectedFailure, regexp5.js,              "we don't support for the y 
 $(call addExpectedFailure, number-toFixed1.js,      "not implemented fully yet")
 $(call addExpectedFailure, number-toPrecision1.js,  "not implemented fully yet")
 $(call addExpectedFailure, tostring5.js,            "we don't throw when Date.prototype.toString is called on non-date objects.  instead we crash")
+$(call addExpectedFailure, spread3.js,              "doesn't compile with ejs currently")
 $(call addExpectedFailure, spread5.js,              "doesn't compile with ejs currently")
 $(call addExpectedFailure, object7.js,              "we differ from node on property descriptor flags.  verify with spec")
 $(call addExpectedFailure, object9.js,              "we differ from node on property descriptor flags.  verify with spec")
