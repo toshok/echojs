@@ -2,6 +2,7 @@ path = require 'path'
 fs = require 'fs'
 esprima = require 'esprima'
 escodegen = require 'escodegen'
+{ create_string_literal, is_string_literal } = require 'echo-util'
 { TreeVisitor } = require 'nodevisitor'
 
 parseFile = (filename, content) ->
