@@ -6,7 +6,7 @@ runtime_globals = require('runtime').createGlobalsInterface(null)
 
 { reportError, reportWarning } = require 'errors'
 
-{ CFA2 } = require 'jscfa2'
+#{ CFA2 } = require 'jscfa2'
 
 { ArrayExpression,
   ArrayPattern,
@@ -2189,7 +2189,7 @@ passes = [
         HoistVars
         DesugarArrowFunctions
         NameAnonymousFunctions
-        CFA2 if enable_cfa2
+        #CFA2 if enable_cfa2
         ComputeFree
         LocateEnv
         SubstituteVariables

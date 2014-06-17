@@ -15,7 +15,6 @@ COFFEE_SOURCES=				\
 	exitable-scope.coffee		\
 	runtime.coffee			\
 	terminal.coffee			\
-	jscfa2.coffee			\
 	module-resolver.coffee
 
 JS_SOURCES=				\
