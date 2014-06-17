@@ -188,6 +188,7 @@ exports.createGlobalsInterface = (module) ->
                 "undefined":          { get: -> getGlobal "_ejs_undefined" }
                 "Infinity":           { get: -> getGlobal "_ejs_Infinity" }
                 "NaN":                { get: -> getGlobal "_ejs_nan" }
+                "__ejs":              { get: -> getGlobal "_ejs__ejs" }
                 # kind of a hack, but since we don't define these...
                 "window":             { get: -> getGlobal "_ejs_undefined" }
                 "document":           { get: -> getGlobal "_ejs_undefined" }

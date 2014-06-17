@@ -48,6 +48,7 @@ const ejsval _ejs_false EJSVAL_ALIGNMENT = STATIC_BUILD_BOOLEAN_EJSVAL(EJS_FALSE
 const ejsval _ejs_zero EJSVAL_ALIGNMENT = STATIC_BUILD_DOUBLE_EJSVAL(0);
 const ejsval _ejs_one EJSVAL_ALIGNMENT = STATIC_BUILD_DOUBLE_EJSVAL(1);
 
+ejsval _ejs__ejs EJSVAL_ALIGNMENT;
 ejsval _ejs_global EJSVAL_ALIGNMENT;
 
 /* useful strings literals */
@@ -194,9 +195,9 @@ _ejs_init(int argc, char** argv)
     // semi-useful runtime features, like a call to force a GC.  the
     // compiler also uses the presence of __ejs to disable
     // buggy/nonfunctional code (like those that use regexps)
-    ejsval _ejs_ejs_global = _ejs_object_new (_ejs_null, &_ejs_Object_specops);
-    _ejs_object_setprop (_ejs_global, _ejs_atom___ejs, _ejs_ejs_global);
+    _ejs__ejs = _ejs_object_new (_ejs_null, &_ejs_Object_specops);
+    _ejs_object_setprop (_ejs_global, _ejs_atom___ejs, _ejs__ejs);
 
-    _ejs_GC_init(_ejs_ejs_global);
+    _ejs_GC_init(_ejs__ejs);
     _ejs_gc_allocate_oom_exceptions();
 }
