@@ -427,7 +427,7 @@ class LLVMIRVisitor extends TreeVisitor
 
                 c = @getAtom gname
 
-                debug.log -> "createPropertyStore #{obj}[#{gname}]"
+                debug.log -> "createPropertyStore %global[#{gname}]"
                         
                 @createCall @ejs_runtime.global_setprop, [c, value], "globalpropstore_#{gname}"
 
