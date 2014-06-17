@@ -389,6 +389,59 @@ _ejs_fs_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return _ejs_undefined;
 }
 
+ejsval
+_ejs_os_tmpdir (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    char *tmpdir = getenv("TMPDIR");
+
+    // XXX i'm sure we need to worry about platform specific tmpdirs (ios?)
+    if (!tmpdir) tmpdir = (char*)"/tmp";
+
+    return _ejs_string_new_utf8(tmpdir);
+}
+
+ejsval
+_ejs_os_arch (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+#if TARGET_CPU_ARM
+    const char* arch = "arm";
+#elif TARGET_CPU_AMD64
+    const char* arch = "x64";
+#elif TARGET_CPU_X86
+    const char* arch = "x86";
+#else
+    const char* arch = "unknown";
+#endif
+
+    return _ejs_string_new_utf8(arch);
+}
+
+ejsval
+_ejs_os_platform (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+#if linux
+    const char* platform = "linux";
+#elif OSX || IOS
+    const char* platform = "darwin";
+#else
+    const char* arch = "unknown";
+#endif
+
+    return _ejs_string_new_utf8(platform);
+}
+
+ejsval
+_ejs_os_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    ejsval exports = args[0];
+
+    EJS_INSTALL_FUNCTION(exports, "tmpdir", _ejs_os_tmpdir);
+    EJS_INSTALL_FUNCTION(exports, "arch", _ejs_os_arch);
+    EJS_INSTALL_FUNCTION(exports, "platform", _ejs_os_platform);
+
+    return _ejs_undefined;
+}
+
 
 static ejsval
 _ejs_child_process_spawn (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
