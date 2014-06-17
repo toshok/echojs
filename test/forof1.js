@@ -1,2 +1,1 @@
-
-for (let i of ["hello", "world"]) console.log(i);
+for (var i of ["hello", "world"]) console.log(i);

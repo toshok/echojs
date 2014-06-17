@@ -57,7 +57,6 @@ $(call addExpectedFailure, typedarray6.js,          "we use %g to format floats/
 $(call addExpectedFailure, array19.js,              "we don't support property descriptors at all for array elements.  also needs more from ECMA262 15.4.5.1")
 $(call addExpectedFailure, fib1.js,                 "we don't output numbers correctly (integers with exponent <= 20 should print out normally)")
 $(call addExpectedFailure, const1.js,               "we permit assigning to const bindings")
-$(call addExpectedFailure, forof1.js,               "we don't support for-of yet")
 $(call addExpectedFailure, map1.js,                 "we throw the right exception but node 0.8 doesn't")
 $(call addExpectedFailure, regexp5.js,              "we don't support for the y flag")
 $(call addExpectedFailure, number-toFixed1.js,      "not implemented fully yet")
@@ -70,6 +69,8 @@ $(call addExpectedFailure, object9.js,              "we differ from node on prop
 
 TRACEUR_TESTS=
 $(call testAgainstTraceur, for5.js)
+$(call testAgainstTraceur, forof1.js)
+$(call testAgainstTraceur, forof2.js)
 $(call testAgainstTraceur, computed-props1.js)
 $(call testAgainstTraceur, spread1.js)
 $(call testAgainstTraceur, spread2.js)

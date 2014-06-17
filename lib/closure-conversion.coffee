@@ -2167,6 +2167,153 @@ class DesugarRestParameters extends TransformPass
                         n.rest = undefined
                 n
 
+#
+# desugars
+#
+#   for (let x of a) { ... }
+#
+# to:
+#
+#   {
+#     %forof = a[Symbol.iterator]();
+#     while (!(%iter_next = %forof.next()).done) {
+#       let x = %iter_next.value;
+#       { ... }
+#     }
+#   }
+class DesugarForOf extends TransformPass
+        forofgen = startGenerator()
+        freshForOf = (ident='') -> "%forof#{ident}_#{forofgen()}"
+
+        constructor: ->
+                super
+                @function_stack = new Stack
+
+        visitFunction: (n) ->
+                @function_stack.push n
+                rv = super
+                @function_stack.pop
+                rv
+
+        visitForOf: (n) ->
+                n.left = @visit n.left
+                n.right = @visit n.right
+                n.body = @visit n.body
+                
+                iterable_tmp   = freshForOf('tmp')
+                iter_name      = freshForOf('iter')
+                iter_next_name = freshForOf('next')
+                
+                iterable_id  = create_identifier iterable_tmp
+                iter_id      = create_identifier iter_name
+                iter_next_id = create_identifier iter_next_name
+
+                tmp_iterable_decl = {
+                        type: VariableDeclaration
+                        kind: "let"
+                        declarations: [{
+                                type: VariableDeclarator
+                                id: iterable_id
+                                init: n.right
+                        }]
+                }
+
+                get_iterator_stmt = {
+                        type: VariableDeclaration
+                        kind: "let"
+                        declarations: [{
+                                type: VariableDeclarator
+                                id: iter_id
+                                init:
+                                        type: CallExpression
+                                        callee:
+                                                type: MemberExpression
+                                                object: iterable_id
+                                                property:
+                                                        type: MemberExpression
+                                                        object: create_identifier "Symbol"
+                                                        property: create_identifier "iterator"
+                                                        computed: false
+                                                computed: true
+                                        arguments: []
+                        }]
+                }
+
+
+                if n.left.type is VariableDeclaration
+                        loop_iter_stmt = {
+                                type: VariableDeclaration
+                                kind: "let"
+                                declarations: [{
+                                        type: VariableDeclarator
+                                        id: n.left.declarations[0].id # can there be more than 1?
+                                        init:
+                                                type: MemberExpression
+                                                object: iter_next_id
+                                                property: create_identifier "value"
+                                }]
+                        }
+                else
+                        loop_iter_stmt = {
+                                type: ExpressionStatement
+                                expression:
+                                        type: AssignmentExpression
+                                        operator: "="
+                                        left: n.left
+                                        right:
+                                                type: MemberExpression
+                                                object: iter_next_id
+                                                property: create_identifier "value"
+                        }
+
+                next_decl = {
+                        type: VariableDeclaration
+                        kind: "let"
+                        declarations: [{
+                                type: VariableDeclarator
+                                id: iter_next_id
+                        }]
+                }
+                
+                while_stmt = {
+                        type: WhileStatement
+                        test:
+                                type: UnaryExpression
+                                operator: "!"
+                                argument:
+                                        type: MemberExpression
+                                        object:
+                                                type: AssignmentExpression
+                                                operator: "="
+                                                left: iter_next_id
+                                                right:
+                                                        type: CallExpression
+                                                        callee:
+                                                                type: MemberExpression
+                                                                object: iter_id
+                                                                property: create_identifier "next"
+                                                        arguments: []
+                                        property: create_identifier "done"
+                        body:
+                                type: BlockStatement
+                                body: [
+                                        loop_iter_stmt
+                                        n.body
+                                ]
+                }
+
+                outer_block = {
+                        type: BlockStatement
+                        body: [
+                                tmp_iterable_decl
+                                get_iterator_stmt
+                                next_decl
+                                while_stmt
+                        ]
+                }
+                outer_block
+                
+                
 # switch this to true if you want to experiment with the new CFA2
 # code.  definitely, definitely not ready for prime time.
 enable_cfa2 = false
@@ -2184,6 +2331,7 @@ passes = [
         DesugarUpdateAssignments
         DesugarTemplates
         DesugarRestParameters
+        DesugarForOf
         HoistFuncDecls if enable_hoist_func_decls_pass
         FuncDeclsToVars
         HoistVars
