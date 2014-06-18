@@ -105,13 +105,14 @@ getLocal_id             = create_identifier "%getLocal"
 getGlobal_id            = create_identifier "%getGlobal"
 moduleGet_id            = create_identifier "%moduleGet"
 moduleImportBatch_id    = create_identifier "%moduleImportBatch"
-templateCallsite_id    = create_identifier "%templateCallsite"
-templateHandlerCall_id = create_identifier "%templateHandlerCall"
+templateCallsite_id     = create_identifier "%templateCallsite"
+templateHandlerCall_id  = create_identifier "%templateHandlerCall"
 templateDefaultHandlerCall_id = create_identifier "%templateDefaultHandlerCall"
 createArgScratchArea_id       = create_identifier "%createArgScratchArea"
 setPrototypeOf_id       = create_identifier "%setPrototypeOf"
 objectCreate_id         = create_identifier "%objectCreate"
 gatherRest_id           = create_identifier "%gatherRest"
+arrayFromSpread_id      = create_identifier "%arrayFromSpread"
 
 class TransformPass extends TreeVisitor
         constructor: (@options) ->
@@ -2170,6 +2171,120 @@ class DesugarRestParameters extends TransformPass
 #
 # desugars
 #
+#   [1, 2, ...foo, 3, 4]
+# 
+#   o.foo(1, 2, ...foo, 3, 4)
+#
+# to:
+#
+#   %arrayFromSpread([1, 2], foo, [3, 4])
+#
+#   foo.apply(o, %arrayFromSpread([1, 2], foo, [3, 4])
+#
+class DesugarSpread extends TransformPass
+        visitArrayExpression: (n) ->
+                n = super
+                needs_desugaring = false
+                for el in n.elements
+                        if el.type is SpreadElement
+                                needs_desugaring = true
+
+                if needs_desugaring
+                        new_args = []
+                        current_elements = []
+                        for el in n.elements
+                                if el.type is SpreadElement
+                                        if current_elements.length is 0
+                                                # just push the spread argument into the new args
+                                                new_args.push el.argument
+                                        else
+                                                # push the current_elements as an array literal, then the spread.
+                                                # also reset current_elements to []
+                                                new_args.push { type: ArrayExpression, elements: current_elements }
+                                                new_args.push el.argument
+                                                current_elements = []
+                                else
+                                        current_elements.push el
+                        if current_elements.length isnt 0
+                                new_args.push { type: ArrayExpression, elements: current_elements }
+
+                        # check to see if we've just created an array of nothing but array literals, and flatten them all
+                        # into one and get rid of the spread altogether
+                        all_arrays = true
+                        for a in new_args
+                                all_arrays = false if a.type isnt ArrayExpression
+                                
+                        if all_arrays
+                                na = []
+                                for a in new_args
+                                       na = na.concat a.elements
+                                n.elements = na
+                                return n
+                        else
+                                return create_intrinsic arrayFromSpread_id, new_args
+
+                n
+
+        visitCallExpression: (n) ->
+                n = super
+                needs_desugaring = false
+                for el in n.arguments
+                        if el.type is SpreadElement
+                                needs_desugaring = true
+
+                if needs_desugaring
+                        new_args = []
+                        current_elements = []
+                        for el in n.arguments
+                                if is_intrinsic(el, "%arrayFromSpread")
+                                        # flatten spreads
+                                        new_args.concat el.arguments
+                                                
+                                else if el.type is SpreadElement
+                                        if current_elements.length is 0
+                                                # just push the spread argument into the new args
+                                                new_args.push el.argument
+                                        else
+                                                # push the current_elements as an array literal, then the spread.
+                                                # also reset current_elements to []
+                                                new_args.push { type: ArrayExpression, elements: current_elements }
+                                                new_args.push el.argument
+                                                current_elements = []
+                                else
+                                        current_elements.push el
+
+                        if current_elements.length isnt 0
+                                new_args.push { type: ArrayExpression, elements: current_elements }
+
+                        # check to see if we've just created an array of nothing but array literals, and flatten them all
+                        # into one and get rid of the spread altogether
+                        all_arrays = true
+                        for a in new_args
+                                all_arrays = false if a.type isnt ArrayExpression
+                        if all_arrays
+                                na = []
+                                for a in new_args
+                                       na = na.concat a.elements
+
+                                n.arguments = na
+                        else
+                                if n.callee.type is MemberExpression
+                                        receiver = n.callee.object
+                                else
+                                        receiver = { type: Literal, value: null }
+
+                                n.callee = {
+                                        type: MemberExpression
+                                        object: n.callee
+                                        property: create_identifier "apply"
+                                        computed: false
+                                }
+                        
+                                n.arguments = [receiver, create_intrinsic(arrayFromSpread_id, new_args)]
+                n
+#
+# desugars
+#
 #   for (let x of a) { ... }
 #
 # to:
@@ -2332,6 +2447,7 @@ passes = [
         DesugarTemplates
         DesugarRestParameters
         DesugarForOf
+        DesugarSpread
         HoistFuncDecls if enable_hoist_func_decls_pass
         FuncDeclsToVars
         HoistVars

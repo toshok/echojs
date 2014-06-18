@@ -255,6 +255,7 @@ class LLVMIRVisitor extends TreeVisitor
                         setPrototypeOf:       value: @handleSetPrototypeOf
                         objectCreate:         value: @handleObjectCreate
                         gatherRest:           value: @handleGatherRest
+                        arrayFromSpread:      value: @handleArrayFromSpread
 
                 @opencode_intrinsics =
                         unaryNot          : true
@@ -1938,6 +1939,7 @@ class LLVMIRVisitor extends TreeVisitor
                 
         handleCreateArgScratchArea: (exp, opencode) ->
                 argsArrayType = llvm.ArrayType.get types.EjsValue, exp.arguments[0].value
+                @currentFunction.scratch_length = exp.arguments[0].value
                 @currentFunction.scratch_area = @createAlloca @currentFunction, argsArrayType, "args_scratch_area"
                 @currentFunction.scratch_area.setAlignment 8
                 @currentFunction.scratch_area
@@ -2203,8 +2205,26 @@ class LLVMIRVisitor extends TreeVisitor
                 @currentFunction.restArgPresent = true
 
                 ir.createLoad rest_alloca, "load_rest"
-                
 
+        handleArrayFromSpread: (exp) ->
+                arg_count = exp.arguments.length
+                if @currentFunction.scratch_area? and @currentFunction.scratch_length < arg_count
+                        spreadArrayType = llvm.ArrayType.get types.EjsValue, arg_count
+                        @currentFunction.scratch_area = @createAlloca @currentFunction, spreadArrayType, "args_scratch_area"
+                        @currentFunction.scratch_area.setAlignment 8
+
+                # reuse the scratch area
+                spread_alloca = @currentFunction.scratch_area
+                visited = (@visitOrNull(a) for a in exp.arguments)
+                visited.forEach (a, i) =>
+                        gep = ir.createGetElementPointer spread_alloca, [consts.int32(0), consts.int64(i)], "spread_gep_#{i}"
+                        store = ir.createStore visited[i], gep, "spread[#{i}]-store"
+
+                argsCast = ir.createGetElementPointer spread_alloca, [consts.int32(0), consts.int64(0)], "spread_call_args_load"
+
+                argv = [consts.int32(arg_count), argsCast]
+                @createCall @ejs_runtime.array_from_iterables, argv, "spread_arr"
+                                
 class AddFunctionsVisitor extends TreeVisitor
         constructor: (@module, @abi) ->
 

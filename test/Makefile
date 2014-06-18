@@ -61,9 +61,7 @@ $(call addExpectedFailure, regexp5.js,              "we don't support for the y 
 $(call addExpectedFailure, number-toFixed1.js,      "not implemented fully yet")
 $(call addExpectedFailure, number-toPrecision1.js,  "not implemented fully yet")
 $(call addExpectedFailure, tostring5.js,            "we don't throw when Date.prototype.toString is called on non-date objects.  instead we crash")
-$(call addExpectedFailure, spread3.js,              "doesn't compile with ejs currently")
 $(call addExpectedFailure, spread5.js,              "doesn't compile with ejs currently")
-$(call addExpectedFailure, spread6.js,              "doesn't compile with ejs currently")
 $(call addExpectedFailure, object7.js,              "we differ from node on property descriptor flags.  verify with spec")
 $(call addExpectedFailure, object9.js,              "we differ from node on property descriptor flags.  verify with spec")
 

@@ -7,4 +7,4 @@ Foo.prototype[Symbol.iterator] = function() {
 };
 
 var foo = new Foo();
-console.log ([1, ...foo, 3][5]);
+console.log ([1, ...foo][5]);
