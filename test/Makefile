@@ -76,6 +76,7 @@ $(call testAgainstTraceur, spread3.js)
 $(call testAgainstTraceur, spread4.js)
 $(call testAgainstTraceur, spread5.js)
 $(call testAgainstTraceur, spread6.js)
+$(call testAgainstTraceur, spread7.js)
 $(call testAgainstTraceur, promise1.js)
 $(call testAgainstTraceur, promise2.js)
 
