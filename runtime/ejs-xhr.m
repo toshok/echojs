@@ -15,6 +15,8 @@
 #include "ejs-proxy.h"
 #include "ejs-symbol.h"
 
+extern int _ejs_runloop_darwin_refcount;
+
 #define THROW_ARG_COUNT_EXCEPTION(expected_count) _ejs_throw_nativeerror_utf8 (EJS_ERROR/*XXX*/, "argument count mismatch")
 
 typedef enum {
@@ -146,6 +148,8 @@ typedef enum {
     
 	NSURLRequest *urlRequest = [NSURLRequest requestWithURL:url];
 	connection = [[NSURLConnection alloc] initWithRequest:urlRequest delegate:self startImmediately:YES];
+
+    _ejs_runloop_darwin_refcount++;
 }
 
 -(void)sendWithString:(NSString*)data
@@ -217,6 +221,7 @@ typedef enum {
 		CKInvocation* inv = [CKInvocation invocationWithFunction:readystatechange argCount:0 thisObject:NULL];
 
 		[inv invoke];
+        _ejs_runloop_darwin_refcount--;
 	}
 }
 

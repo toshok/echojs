@@ -4,7 +4,7 @@
 #if IOS || OSX
 #import <Foundation/Foundation.h>
 
-static int refcount = 0;
+int _ejs_runloop_darwin_refcount = 0;
 
 @interface TaskObj : NSObject {
   Task task;
@@ -28,7 +28,7 @@ static int refcount = 0;
 
 -(void)addToRunLoop
 {
-  refcount++;
+  _ejs_runloop_darwin_refcount++;
   [self performSelectorOnMainThread:@selector(runTask) withObject:self waitUntilDone:NO];
 }
 
@@ -37,8 +37,8 @@ static int refcount = 0;
   task(data);
   if (dtor)
       dtor(data);
-  refcount--;
-  if (refcount == 0)
+  _ejs_runloop_darwin_refcount--;
+  if (_ejs_runloop_darwin_refcount == 0)
     exit(0);
 }
 
@@ -55,9 +55,9 @@ _ejs_runloop_add_task(Task task, void* data, TaskDataDtor dtor)
 void
 _ejs_runloop_start()
 {
-  if (refcount == 0)
+  if (_ejs_runloop_darwin_refcount == 0)
     return;
 
-  [[NSRunLoop currentRunLoop] run];
+  while (_ejs_runloop_darwin_refcount > 0 && [[NSRunLoop mainRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]]) ;
 }
 #endif
