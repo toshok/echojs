@@ -78,6 +78,7 @@ _ejs_init_classes()
     _ejs_Class_initialize (&_ejs_Number_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_RegExp_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_String_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_StringIterator_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Symbol_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_ArrayBuffer_specops, &_ejs_Object_specops);
 
