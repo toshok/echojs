@@ -29,7 +29,7 @@ exception:
   store i64 %begincatch, i64* %ref
   store i32 0, i32* %rv_alloc
 
-  %endcatch = call i64 @_ejs_end_catch()
+  call void @_ejs_end_catch()
 
   br label %try_merge
 
@@ -43,4 +43,4 @@ declare i64 @_ejs_invoke_closure(%EjsValueType, %EjsValueType, i32, %EjsValueTyp
 declare i32 @__ejs_personality_v0(i32, i32, i64, i8*, i8*)
 
 declare i64 @_ejs_begin_catch(i8*)
-declare i64 @_ejs_end_catch()
+declare void @_ejs_end_catch()
