@@ -15,6 +15,7 @@
 #include "ejs-ops.h"
 #include "ejs-string.h"
 #include "ejs-error.h"
+#include "ejs-symbol.h"
 
 int32_t
 ucs2_strcmp (const jschar *s1, const jschar *s2)
@@ -1353,6 +1354,126 @@ _ejs_String_prototype_contains(ejsval env, ejsval _this, uint32_t argc, ejsval *
     //     as the character at position j of searchStr, return true; but if there is no such integer k, return false.
 }
 
+static ejsval
+_ejs_String_prototype_iterator (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    /* 1. Let O be CheckObjectCoercible(this value). */
+    if (!EJSVAL_IS_OBJECT(_this) && !EJSVAL_IS_NULL(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1");
+
+    ejsval O = _this;
+
+    /* 2. Let S be ToString(O). */
+    /* 3. ReturnIfAbrupt(S). */
+    ejsval S = ToString(O);
+
+    /* 4. Return the result of calling the CreateStringIterator abstract operation with argument S. */
+    return _ejs_string_iterator_new (S);
+}
+
+/* 21.1.5.1 CreateStringIterator Abstract Operation */
+ejsval
+_ejs_string_iterator_new (ejsval string)
+{
+    /* 1. Let s be the result of calling ToString(string). */
+    /* 2. ReturnIfAbrupt(s). */
+    ejsval s = ToString(string);
+
+    /* 3. Let iterator be the result of ObjectCreate(%StringIteratorPrototype%,
+     * ([[IteratedStringt]], [[StringIteratorNextIndex]] )). */
+    EJSStringIterator *iterator = _ejs_gc_new (EJSStringIterator);
+    _ejs_init_object ((EJSObject*)iterator, _ejs_StringIterator_prototype, &_ejs_StringIterator_specops);
+
+    /* 4. Set iterator’s [[IteratedString]] internal slot to s. */
+    iterator->iterated = s;
+
+    /* 5. Set iterator’s [[StringIteratorNextIndex]] internal slot to 0. */
+    iterator->next_index = 0;
+
+    /* 6. Return iterator. */
+    return OBJECT_TO_EJSVAL(iterator);
+}
+
+
+ejsval _ejs_StringIterator_prototype EJSVAL_ALIGNMENT;
+ejsval _ejs_StringIterator EJSVAL_ALIGNMENT;
+
+static ejsval
+_ejs_StringIterator_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    return _this;
+}
+
+/* 21.1.5.2.1 %StringIteratorPrototype%.next () */
+static ejsval
+_ejs_StringIterator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    /* 1. Let O be the this value. */
+    ejsval O = _this;
+
+    /* 2. If Type(O) is not Object, throw a TypeError exception. */
+    if (!EJSVAL_IS_OBJECT(O))
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, ".next called on non-object");
+
+    /* 3. If O does not have all of the internal slots of an String Iterator Instance (21.1.5.3),
+     * throw a TypeError exception. */
+    if (!EJSVAL_IS_STRINGITERATOR(O))
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, ".next called on non-StringIterator instance");
+
+    EJSStringIterator *OObj = (EJSStringIterator*) EJSVAL_TO_OBJECT(O);
+
+    /* 4. Let s be the value of the [[IteratedString]] internal slot of O. */
+    ejsval s = OObj->iterated;
+
+    /* 5. If s is undefined, then return CreateIterResultObject(undefined, true). */
+    if (EJSVAL_IS_UNDEFINED(s))
+        return _ejs_create_iter_result (_ejs_undefined, _ejs_true);
+
+    ejsval sPrimStr;
+    if (EJSVAL_IS_STRING(s))
+        sPrimStr = s;
+    else {
+        EJSString *str = (EJSString*)EJSVAL_TO_OBJECT(s);
+        sPrimStr = str->primStr;
+    }
+
+    /* 6. Let position be the value of the [[StringIteratorNextIndex]] internal slot of O. */
+    uint32_t position = OObj->next_index;
+
+    /* 7. Let len be the number of elements in s. */
+    uint32_t len = EJSVAL_TO_STRLEN(s);
+
+    /* 8. If position ≥ len, then */
+    if (position >= len) {
+        /* a. Set the value of the [[IteratedString]] internal slot of O to undefined. */
+        OObj->iterated = _ejs_undefined;
+
+        /* b. Return CreateIterResultObject(undefined, true). */
+        return _ejs_create_iter_result (_ejs_undefined, _ejs_true);
+    }
+
+    /* 9. Let first be the code unit value of the element at index position in s.
+     * 10. If first < 0xD800 or first > 0xDBFF or position+1 = len,
+     * then let resultString be the string consisting of the single code unit first.
+     * 11. Else,
+     *      a. Let second be the code unit value of the element at index position+1 in the String S.
+     *      b. If second < 0xDC00 or second > 0xDFFF, then let resultString be the string consisting
+     *          of the single code unit first.
+     *      c. Else, let resultString be the string consisting of the code unit first followed by
+     *          the code unit second. */
+    jschar resultChar = _ejs_string_ucs2_at(EJSVAL_TO_STRING(sPrimStr), position);
+    ejsval resultString = _ejs_string_new_ucs2_len (&resultChar, 1);
+
+    /* 12. Let resultSize be the number of code units in resultString. */
+    uint32_t resultSize = 1;
+
+    /* 13. Set the value of the [[StringIteratorNextIndex]] internal slot of O to position+ resultSize. */
+    OObj->next_index = position + resultSize;
+
+    /* 14. Return CreateIterResultObject(resultString, false). */
+    return _ejs_create_iter_result (resultString, _ejs_false);
+}
+
 static void
 _ejs_string_init_proto()
 {
@@ -1414,8 +1535,27 @@ _ejs_string_init(ejsval global)
     OBJ_METHOD(fromCharCode);
     OBJ_METHOD(fromCodePoint);
 
+    ejsval _iterator = _ejs_function_new_native (_ejs_null, _ejs_Symbol_iterator, (EJSClosureFunc)_ejs_String_prototype_iterator);
+    _ejs_object_define_value_property (_ejs_String_prototype, _ejs_Symbol_iterator, _iterator, EJS_PROP_NOT_ENUMERABLE);
+
 #undef OBJ_METHOD
 #undef PROTO_METHOD
+
+
+    _ejs_StringIterator = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_String, (EJSClosureFunc)_ejs_StringIterator_impl);
+
+    _ejs_gc_add_root (&_ejs_StringIterator_prototype);
+    _ejs_StringIterator_prototype = _ejs_string_iterator_new(_ejs_String_prototype);
+    EJSVAL_TO_OBJECT(_ejs_StringIterator_prototype)->proto = _ejs_Object_prototype;
+    _ejs_object_define_value_property (_ejs_StringIterator, _ejs_atom_prototype, _ejs_StringIterator_prototype,
+                                        EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (_ejs_StringIterator_prototype, _ejs_atom_constructor, _ejs_StringIterator,
+                                        EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
+
+#define PROTO_ITER_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_StringIterator_prototype, x, _ejs_StringIterator_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
+    PROTO_ITER_METHOD(next);
+#undef PROTO_ITER_METHOD
+
 }
 
 static ejsval
@@ -1482,6 +1622,7 @@ EJS_DEFINE_CLASS(String,
                  )
 
 
+EJS_DEFINE_INHERIT_ALL_CLASS(StringIterator);
 
 /// EJSPrimString's
 
