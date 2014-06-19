@@ -1371,6 +1371,7 @@ _ejs_String_prototype_iterator (ejsval env, ejsval _this, uint32_t argc, ejsval 
     return _ejs_string_iterator_new (S);
 }
 
+/* 21.1.5.1 CreateStringIterator Abstract Operation */
 ejsval
 _ejs_string_iterator_new (ejsval string)
 {
@@ -1403,6 +1404,7 @@ _ejs_StringIterator_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return _this;
 }
 
+/* 21.1.5.2.1 %StringIteratorPrototype%.next () */
 static ejsval
 _ejs_StringIterator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
