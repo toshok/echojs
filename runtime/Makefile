@@ -87,9 +87,9 @@ OBJC_SOURCES= \
 	ejs-runloop-darwin.m
 
 OSX_OBJECTS=$(C_SOURCES:%.c=%.o.osx) $(OBJC_SOURCES:%.m=%.o.osx) ejs-invoke-closure-catch.o.osx main.o.osx
-SIM_OBJECTS=$(C_SOURCES:%.c=%.o.sim) $(OBJC_SOURCES:%.m=%.o.sim) main.o.sim
-DEV_OBJECTS=$(C_SOURCES:%.c=%.o.armv7) $(OBJC_SOURCES:%.m=%.o.armv7) main.o.armv7
-DEVS_OBJECTS=$(C_SOURCES:%.c=%.o.armv7s) $(OBJC_SOURCES:%.m=%.o.armv7s) main.o.armv7s
+SIM_OBJECTS=$(C_SOURCES:%.c=%.o.sim) $(OBJC_SOURCES:%.m=%.o.sim) ejs-invoke-closure-catch32.o.sim main.o.sim
+DEV_OBJECTS=$(C_SOURCES:%.c=%.o.armv7) $(OBJC_SOURCES:%.m=%.o.armv7) ejs-invoke-closure-catch32.o.armv7 main.o.armv7
+DEVS_OBJECTS=$(C_SOURCES:%.c=%.o.armv7s) $(OBJC_SOURCES:%.m=%.o.armv7s) ejs-invoke-closure-catch.o.armv7s main.o.armv7s
 
 analyze_plists_c = $(C_SOURCES:%.c=%.plist) main.plist
 analyze_plists_objc = $(OBJC_SOURCES:%.m=%.plist) 
@@ -163,6 +163,9 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch -fno-objc
 	@$(CC) -MM -ObjC $(IOSSIM_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.sim,,`/$@/ > .deps/$@-deps
 	@echo [$(CC) sim] $< && PATH=$(IOSSIM_BIN):$$PATH $(CC) $(IOSSIM_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
 
+%.o.sim: %.ll
+	@echo [llc sim] $< && llc$(LLVM_SUFFIX) -march=x86 -filetype=obj -o=$@ -O2 $<
+
 %.o.armv7: %.c
 	@mkdir -p .deps
 	@$(CC) -MM -ObjC $(IOSDEV_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7,,`/$@/ > .deps/$@-deps
@@ -173,6 +176,9 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch -fno-objc
 	@$(CC) -MM -ObjC $(IOSDEV_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7,,`/$@/ > .deps/$@-deps
 	@echo [$(CC) armv7] $< && PATH=$(IOSDEV_BIN):$$PATH $(CC) $(IOSDEV_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
 
+%.o.armv7: %.ll
+	@echo [llc armv7] $< && llc$(LLVM_SUFFIX) -march=arm -filetype=obj -o=$@ -O2 $<
+
 %.o.armv7s: %.c
 	@mkdir -p .deps
 	@$(CC) -MM -ObjC $(IOSDEVS_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7s,,`/$@/ > .deps/$@-deps
@@ -182,6 +188,9 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch -fno-objc
 	@mkdir -p .deps
 	@$(CC) -MM -ObjC $(IOSDEVS_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7s,,`/$@/ > .deps/$@-deps
 	@echo [$(CC) armv7] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) $(IOSDEVS_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
+
+%.o.armv7s: %.ll
+	@echo [llc armv7s] $< && llc$(LLVM_SUFFIX) -march=aarch64 -filetype=obj -o=$@ -O2 $<
 
 $(analyze_plists_c): %.plist: %.c
 	@echo [$(CC) analyze] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) $(OSX_CFLAGS) --analyze $< -o $@
