@@ -20,6 +20,7 @@ path = require 'path'
   ClassHeritage,
   ComprehensionBlock,
   ComprehensionExpression,
+  ComputedPropertyKey,
   ConditionalExpression,
   ContinueStatement,
   DebuggerStatement,
@@ -1347,28 +1348,32 @@ class LLVMIRVisitor extends TreeVisitor
 
                 # gather all properties so we can emit get+set as a single call to define_accessor_prop.
                 for property in n.properties
-                        propname = if property.key.type is Literal then String(property.key.value) else property.key.name
-
+                        if property.key.type is ComputedPropertyKey
+                                key = @visit property.key.expression
+                        else if property.key.type is Literal
+                                key = @getAtom String(property.key.value)
+                        else if property.key.type is Identifier
+                                key = @getAtom property.key.name
+                        
                         if property.kind is "get" or property.kind is "set"
-                                accessor_map.set(propname, new Map) if not accessor_map.has(propname)
-                                throw new SyntaxError "a '#{property.kind}' method for '#{propname}' has already been defined." if accessor_map.get(propname).has(property.kind)
-                                throw new SyntaxError "#{property.key.loc.start.line}: property name #{propname} appears once in object literal." if accessor_map.get(propname).has("init")
+                                accessor_map.set(key, new Map) if not accessor_map.has(key)
+                                throw new SyntaxError "a '#{property.kind}' method for '#{key}' has already been defined." if accessor_map.get(key).has(property.kind)
+                                throw new SyntaxError "#{property.key.loc.start.line}: property name #{key} appears once in object literal." if accessor_map.get(key).has("init")
                         else if property.kind is "init"
-                                throw new SyntaxError "#{property.key.loc.start.line}: property name #{propname} appears once in object literal." if accessor_map.has(propname)
-                                accessor_map.set(propname, new Map)
+                                throw new SyntaxError "#{property.key.loc.start.line}: property name #{key} appears once in object literal." if accessor_map.has(key)
+                                accessor_map.set(key, new Map)
                         else
                                 throw new Error("unrecognized property kind `#{property.kind}'")
                                 
-                        accessor_map.get(propname).set(property.kind, property)
+                        accessor_map.get(key).set(property.kind, property)
 
-                accessor_map.forEach (prop_map, propname) =>
-                        key = @getAtom propname
+                accessor_map.forEach (prop_map, propkey) =>
                         # XXX we need something like this line below to handle computed properties, but those are broken at the moment
                         #key = if property.key.type is Identifier then @getAtom property.key.name else @visit property.key
 
                         if prop_map.has("init")
                                 val = @visit(prop_map.get("init").value)
-                                @createCall @ejs_runtime.object_define_value_prop, [obj, key, val, consts.int32 0x77], "define_value_prop_#{propname}"
+                                @createCall @ejs_runtime.object_define_value_prop, [obj, propkey, val, consts.int32 0x77], "define_value_prop_#{key}"
                         else
                                 getter = prop_map.get("get")
                                 setter = prop_map.get("set")
@@ -1376,7 +1381,7 @@ class LLVMIRVisitor extends TreeVisitor
                                 get_method = if getter then @visit(getter.value) else @loadUndefinedEjsValue()
                                 set_method = if setter then @visit(setter.value) else @loadUndefinedEjsValue()
 
-                                @createCall @ejs_runtime.object_define_accessor_prop, [obj, key, get_method, set_method, consts.int32 0x19], "define_accessor_prop_#{propname}"
+                                @createCall @ejs_runtime.object_define_accessor_prop, [obj, propkey, get_method, set_method, consts.int32 0x19], "define_accessor_prop_#{key}"
                                 
                 obj
 
@@ -2380,9 +2385,13 @@ class GatherImports extends TreeVisitor
                 if not hasOwn.call @exportLists, path
                         @exportLists[path] = Object.create(null)
                         @exportLists[path].ids = new Set()
+                if id is "default"
+                        @exportLists[path].has_default = true
                 @exportLists[path].ids.add(id)
                 
-        visitImportDeclaration: (n) -> @addSource(n)
+        visitImportDeclaration: (n) ->
+                @addSource(n)
+                
         visitExportDeclaration: (n) ->
                 n = @addSource(n)
 
@@ -2393,15 +2402,18 @@ class GatherImports extends TreeVisitor
                                 for spec in n.specifiers
                                         @addExportIdentifier(@filename, spec.name?.name or spec.id?.name)
                         n
+                else if Array.isArray(n.declaration)
+                        for decl in n.declaration
+                                @addExportIdentifier(@filename, decl.id.name)
                 else if n.declaration.type is FunctionDeclaration                        
                         @addExportIdentifier(@filename, n.declaration.id.name) 
                 else if n.declaration.type is VariableDeclaration
                         for decl in n.declaration.declarations
-                                @addExportIdentifier(@filename, decl.id.name) 
+                                @addExportIdentifier(@filename, decl.id.name)
                 else if n.declaration.type is VariableDeclarator
                         @addExportIdentifier(@filename, n.declaration.id.name)
-                else if n.default
-                        @addDefaultExport(@filename)
+                else
+                        throw new Error("unhandled case in visitExportDeclaration");
                 n
         visitModuleDeclaration: (n) -> @addSource(n)
 
