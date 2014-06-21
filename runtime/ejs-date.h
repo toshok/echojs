@@ -14,6 +14,7 @@ typedef struct {
     EJSObject obj;
 
     /* date specific data */
+    EJSBool valid;
     struct timeval tv;
     struct timezone tz;
 } EJSDate;

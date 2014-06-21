@@ -95,7 +95,12 @@ _ejs_boolean_init(ejsval global)
 
 
     _ejs_gc_add_root (&_ejs_Boolean_prototype);
-    _ejs_Boolean_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
+
+    EJSBoolean* prototype = (EJSBoolean*)_ejs_gc_new(EJSBoolean);
+    _ejs_init_object ((EJSObject*)prototype, _ejs_null, &_ejs_Boolean_specops);
+    prototype->boolean_data = BOOLEAN_TO_EJSVAL(EJS_FALSE);
+    _ejs_Boolean_prototype = OBJECT_TO_EJSVAL(prototype);
+
     _ejs_object_setprop (_ejs_Boolean, _ejs_atom_prototype, _ejs_Boolean_prototype);
 
     EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Boolean, create, _ejs_Boolean_create, EJS_PROP_NOT_ENUMERABLE);

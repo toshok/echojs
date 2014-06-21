@@ -1,7 +1,12 @@
 console.log("date");
 console.log(Date.prototype.toString());
 console.log("object date.proto.tostring");
-console.log(({ toString: Date.prototype.toString }).toString())
+try {
+  console.log(({ toString: Date.prototype.toString }).toString())
+}
+catch(e) {
+  console.log(e);
+}
 console.log("number");
 console.log(Number.prototype.toString());
 console.log("string");

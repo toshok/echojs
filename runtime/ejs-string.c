@@ -1501,8 +1501,9 @@ _ejs_string_init_proto()
     __proto__->env = _ejs_null;
     _ejs_String__proto__ = OBJECT_TO_EJSVAL(__proto__);
 
-    EJSObject* prototype = _ejs_gc_new(EJSObject);
-    _ejs_init_object (prototype, _ejs_null, &_ejs_String_specops);
+    EJSString* prototype = (EJSString*)_ejs_gc_new(EJSString);
+    _ejs_init_object ((EJSObject*)prototype, _ejs_null, &_ejs_String_specops);
+    prototype->primStr = _ejs_atom_empty;
     _ejs_String_prototype = OBJECT_TO_EJSVAL(prototype);
 
     _ejs_object_define_value_property (OBJECT_TO_EJSVAL(__proto__), _ejs_atom_name, _ejs_atom_empty, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
