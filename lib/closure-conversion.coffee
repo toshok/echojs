@@ -490,7 +490,8 @@ LocateEnv = class LocateEnv extends TransformPass
                 n
 
         visitProperty: (n) ->
-                # we don't visit property keys here
+                if n.key.type is ComputedPropertyKey
+                        n.key = @visit n.key
                 n.value = @visit n.value
                 n
 
@@ -893,14 +894,15 @@ class ComputeFree extends TransformPass
                         when TemplateLiteral       then exp.ejs_free_vars = @setUnion.apply null, exp.expressions.map @call_free
                         when Literal               then exp.ejs_free_vars = new Set
                         when ThisExpression        then exp.ejs_free_vars = new Set
+                        when ComputedPropertyKey   then exp.ejs_free_vars = @free exp.expression
                         when Property
-                                if exp.computed
-                                        exp.ejs_free_vars = @free(exp.key).union @free exp.value
-                                else
-                                        exp.ejs_free_vars = @free exp.value # we skip the key
+                                exp.ejs_free_vars = @free exp.value
+                                if exp.key.type is ComputedPropertyKey
+                                        # we only do this when the key is computed, or else identifiers show up as free
+                                        exp.ejs_free_vars = exp.ejs_free_vars.union @free exp.key
                                 exp.ejs_free_vars
                         when ObjectExpression
-                                exp.ejs_free_vars = if exp.properties.length is 0 then (new Set) else @setUnion.apply null, (@free p.value for p in exp.properties)
+                                exp.ejs_free_vars = if exp.properties.length is 0 then (new Set) else @setUnion.apply null, (@free p for p in exp.properties)
                         when ArrayExpression
                                 exp.ejs_free_vars = if exp.elements.length is 0 then (new Set) else @setUnion.apply null, exp.elements.map @call_free
                         when IfStatement           then exp.ejs_free_vars = @setUnion.call null, @free(exp.test), @free(exp.consequent), @free(exp.alternate)
@@ -1052,7 +1054,8 @@ class SubstituteVariables extends TransformPass
                 rv
 
         visitProperty: (n) ->
-                # we don't visit property keys here
+                if n.key.type is ComputedPropertyKey
+                        n.key = @visit n.key
                 n.value = @visit n.value
                 n
 
