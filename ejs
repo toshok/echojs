@@ -298,7 +298,7 @@ llvm_commands[x]="#{x}#{process.env.LLVM_SUFFIX || ''}" for x in ["opt", "llc", 
 
 parseFile = (filename, content) ->
         try
-                parse_tree = esprima.parse content, { loc: true, raw: true }
+                parse_tree = esprima.parse content, { loc: true, raw: true, tolerant: true }
         catch e
                 console.warn "#{filename}: #{e}:"
                 process.exit -1
