@@ -19,9 +19,11 @@ typedef struct {
     ejsval   env;
 
     EJSBool  bound;
+#if not_anymore
     ejsval   bound_this;
     uint32_t bound_argc;
     ejsval*  bound_args;
+#endif
 } EJSFunction;
 
 

@@ -1358,7 +1358,7 @@ static ejsval
 _ejs_String_prototype_iterator (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     /* 1. Let O be CheckObjectCoercible(this value). */
-    if (!EJSVAL_IS_OBJECT(_this) && !EJSVAL_IS_NULL(_this))
+    if (!EJSVAL_IS_STRING(_this) && !EJSVAL_IS_OBJECT(_this) && !EJSVAL_IS_NULL(_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1");
 
     ejsval O = _this;

@@ -231,6 +231,45 @@ _ejs_Function_prototype_call (ejsval env, ejsval _this, uint32_t argc, ejsval *a
     return rv;
 }
 
+#define EJS_BOUNDFUNC_TARGET_SLOT 0
+#define EJS_BOUNDFUNC_THIS_SLOT 1
+#define EJS_BOUNDFUNC_ARGC_SLOT 2
+#define EJS_BOUNDFUNC_FIRST_ARG_SLOT 3
+#define EJS_BOUNDFUNC_RESERVED_SLOT_COUNT 2
+
+#define EJS_BOUNDFUNC_ENV_NEW(argc)      _ejs_closureenv_new(EJS_BOUNDFUNC_RESERVED_SLOT_COUNT + (argc))
+#define EJS_BOUNDFUNC_ENV_GET_TARGET(bf) _ejs_closureenv_get_slot((bf), EJS_BOUNDFUNC_TARGET_SLOT)
+#define EJS_BOUNDFUNC_ENV_GET_THIS(bf)   _ejs_closureenv_get_slot((bf), EJS_BOUNDFUNC_THIS_SLOT)
+#define EJS_BOUNDFUNC_ENV_GET_ARGC(bf)   _ejs_closureenv_get_slot((bf), EJS_BOUNDFUNC_ARGC_SLOT)
+#define EJS_BOUNDFUNC_ENV_GET_ARG(bf,a)  _ejs_closureenv_get_slot((bf), EJS_BOUNDFUNC_FIRST_ARG_SLOT + (a))
+
+#define EJS_BOUNDFUNC_ENV_SET_TARGET(bf,v) (*_ejs_closureenv_get_slot_ref((bf), EJS_BOUNDFUNC_TARGET_SLOT) = v)
+#define EJS_BOUNDFUNC_ENV_SET_THIS(bf,v)   (*_ejs_closureenv_get_slot_ref((bf), EJS_BOUNDFUNC_THIS_SLOT) = v)
+#define EJS_BOUNDFUNC_ENV_SET_ARGC(bf,v)   (*_ejs_closureenv_get_slot_ref((bf), EJS_BOUNDFUNC_ARGC_SLOT) = v)
+#define EJS_BOUNDFUNC_ENV_SET_ARG(bf,a,v)  (*_ejs_closureenv_get_slot_ref((bf), EJS_BOUNDFUNC_FIRST_ARG_SLOT + (a)) = v)
+
+static ejsval
+bound_wrapper (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval target = EJS_BOUNDFUNC_ENV_GET_TARGET(env);
+    ejsval thisArg = EJS_BOUNDFUNC_ENV_GET_THIS(env);
+    uint32_t bound_argc = ToUint32(EJS_BOUNDFUNC_ENV_GET_ARGC(env));
+
+    if (bound_argc == 0) {
+        return _ejs_invoke_closure(target, thisArg, argc, args);
+    }
+    else if (argc == 0) {
+        return _ejs_invoke_closure(target, thisArg, bound_argc, _ejs_closureenv_get_slot_ref(env, EJS_BOUNDFUNC_FIRST_ARG_SLOT));
+    }
+    else {
+        uint32_t call_argc = argc + bound_argc;
+        ejsval* call_args = alloca(sizeof(ejsval) * call_argc);
+        memcpy (call_args, _ejs_closureenv_get_slot_ref(env, EJS_BOUNDFUNC_FIRST_ARG_SLOT), sizeof(ejsval) * bound_argc);
+        memcpy (call_args + bound_argc, args, sizeof(ejsval) * argc);
+        return _ejs_invoke_closure(target, thisArg, call_argc, call_args);
+    }
+}
+
 // ECMA262 15.3.4.5
 static ejsval
 _ejs_Function_prototype_bind (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -243,31 +282,29 @@ _ejs_Function_prototype_bind (ejsval env, ejsval _this, uint32_t argc, ejsval *a
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "object not a function");
     }
 
-    if (argc == 0)
-        return _this;
-
     ejsval thisArg = _ejs_undefined;
-    if (argc >= 1)
+    if (argc > 0)
         thisArg = args[0];
 
-    EJSFunction *TargetFunc = (EJSFunction*)EJSVAL_TO_OBJECT(Target);
-
     /* 3. Let A be a new (possibly empty) internal list of all of the argument values provided after thisArg (arg1, arg2 etc), in order. */
-    int bound_argc = 0;
-    ejsval *bound_args = NULL;
-    if (argc > 1) {
-        bound_argc = argc-1;
-        bound_args = malloc(sizeof(ejsval) * bound_argc);
-        memcpy (bound_args, args, sizeof(ejsval) * bound_argc);
-    }
+    int bound_argc = argc > 1 ? argc - 1 : 0;
 
     /* 4. Let F be a new native ECMAScript object . */
 
-    ejsval F = _ejs_function_new (TargetFunc->env, _ejs_atom_empty, TargetFunc->func);
+    ejsval bound_env = EJS_BOUNDFUNC_ENV_NEW(bound_argc);
+    EJS_BOUNDFUNC_ENV_SET_TARGET(bound_env, Target);
+    EJS_BOUNDFUNC_ENV_SET_THIS(bound_env, thisArg);
+    EJS_BOUNDFUNC_ENV_SET_ARGC(bound_env, NUMBER_TO_EJSVAL(bound_argc));
+    for (int i = 0; i < bound_argc; i ++) {
+        EJS_BOUNDFUNC_ENV_SET_ARG(bound_env, i, args[i+1]);
+    }
+
+    ejsval F = _ejs_function_new_anon (bound_env, bound_wrapper);
     EJSFunction *F_ = (EJSFunction*)EJSVAL_TO_OBJECT(F);
 
     F_->bound = EJS_TRUE;
 
+#if not_anymore
     /* 5. Set all the internal methods, except for [[Get]], of F as specified in 8.12. */
     /* 6. Set the [[Get]] internal property of F as specified in 15.3.5.4. */
     /* 7. Set the [[TargetFunction]] internal property of F to Target. */
@@ -295,6 +332,7 @@ _ejs_Function_prototype_bind (ejsval env, ejsval _this, uint32_t argc, ejsval *a
     /* 21. Call the [[DefineOwnProperty]] internal method of F with arguments "arguments", PropertyDescriptor */
     /*     {[[Get]]: thrower, [[Set]]: thrower, [[Enumerable]]: false, [[Configurable]]: false}, and false. */
     /* 22. Return F. */
+#endif
     return F;
 }
 
@@ -426,9 +464,9 @@ _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args)
     }
 
     EJSFunction *fun = (EJSFunction*)EJSVAL_TO_OBJECT(closure);
-    if (!fun->bound)
-        return fun->func (fun->env, _this, argc, args);
+    return fun->func (fun->env, _this, argc, args);
 
+#if not_anymore
 
     if (fun->bound_argc > 0) {
         ejsval* new_args = (ejsval*)malloc(sizeof(ejsval) * fun->bound_argc + argc);
@@ -444,10 +482,11 @@ _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args)
 
     if (fun->bound_argc > 0)
         free (args);
-
     return rv;
+#endif
 }
 
+#if not_anymore
 EJSBool
 _ejs_decompose_closure (ejsval closure, EJSClosureFunc* func, ejsval* env,
                         ejsval *_this)
@@ -468,6 +507,7 @@ _ejs_decompose_closure (ejsval closure, EJSClosureFunc* func, ejsval* env,
 
     return EJS_TRUE;
 }
+#endif
 
 // ECMA262: 15.3.5.3
 static EJSBool
@@ -507,9 +547,11 @@ _ejs_function_specop_allocate ()
 static void
 _ejs_function_specop_finalize (EJSObject* obj)
 {
+#if notanymore
     EJSFunction* f = (EJSFunction*)obj;
     if (f->bound_args)
         free (f->bound_args);
+#endif
     _ejs_Object_specops.Finalize (obj);
 }
 
@@ -518,11 +560,13 @@ _ejs_function_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSFunction* f = (EJSFunction*)obj;
     scan_func (f->env);
+#if notanymore
     if (f->bound) {
         scan_func (f->bound_this);
         for (int i = 0; i < f->bound_argc; i ++)
             scan_func (f->bound_args[i]);
     }
+#endif
 
     _ejs_Object_specops.Scan (obj, scan_func);
 }

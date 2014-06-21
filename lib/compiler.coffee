@@ -271,7 +271,7 @@ class LLVMIRVisitor extends TreeVisitor
                         slot              : true
                         setSlot           : true
                 
-                        invokeClosure     : false
+                        invokeClosure     : true
                         makeClosure       : true
                         makeAnonClosure   : true
                         createArgScratchArea : true
@@ -1861,57 +1861,49 @@ class LLVMIRVisitor extends TreeVisitor
                         argv = @visitArgsForCall @ejs_runtime.invoke_closure, true, exp.arguments
 
                 if opencode and @options.target_pointer_size is 64
+                        #
+                        # generate basically the following code:
+                        #
+                        # f = argv[0]
+                        # if (EJSVAL_IS_FUNCTION(F)
+                        #   f->func(f->env, argv[1], argv[2], argv[3])
+                        # else
+                        #   _ejs_invoke_closure(...argv)
+                        # 
                         candidate_is_object_bb = new llvm.BasicBlock "candidate_is_object_bb", insertFunc
-                        check_if_function_is_bound_bb = new llvm.BasicBlock "check_if_function_is_bound_bb", insertFunc
-                        object_isnt_function_bb = new llvm.BasicBlock "object_isnt_function_bb", insertFunc
                         direct_invoke_bb = new llvm.BasicBlock "direct_invoke_bb", insertFunc
                         runtime_invoke_bb = new llvm.BasicBlock "runtime_invoke_bb", insertFunc
                         invoke_merge_bb = new llvm.BasicBlock "invoke_merge_bb", insertFunc
                         
-                        candidate = argv[0]
-                        cmp = @createEjsvalICmpUGt candidate, consts.int64_lowhi(0xfffbffff, 0xffffffff), "cmpresult"
-                        ir.createCondBr cmp, candidate_is_object_bb, object_isnt_function_bb
+                        cmp = @isObject(argv[0])
+                        ir.createCondBr cmp, candidate_is_object_bb, runtime_invoke_bb
 
+                        call_result_alloca = @createAlloca @currentFunction, types.EjsValue, "call_result"
+                        
                         @doInsideBBlock candidate_is_object_bb, =>
                                 closure = @emitEjsvalTo argv[0], types.EjsObject.pointerTo(), "closure"
 
                                 specops_load = @emitLoadSpecops closure
                         
                                 cmp = ir.createICmpEq specops_load, @ejs_runtime.function_specops, "function_specops_cmp"
-                                ir.createCondBr cmp, check_if_function_is_bound_bb, object_isnt_function_bb
+                                ir.createCondBr cmp, direct_invoke_bb, runtime_invoke_bb
 
-                                @doInsideBBlock check_if_function_is_bound_bb, =>
+                                # in the successful case we modify our argv with the responses and directly invoke the closure func
+                                @doInsideBBlock direct_invoke_bb, =>
+                                        func_load = @emitLoadEjsFunctionClosureFunc closure
+                                        env_load = @emitLoadEjsFunctionClosureEnv closure
+                                        call_result = @createCall func_load, [env_load, argv[1], argv[2], argv[3]], "callresult"
+                                        ir.createStore call_result, call_result_alloca
+                                        ir.createBr invoke_merge_bb
 
-                                        # we know we have a function.  now we need to
-                                        # check if it's bound.  if it's bound we defer
-                                        # to the runtime code for now.  if it's not
-                                        # bound (which should be the common case) we
-                                        # can dispatch it inline.
-
-                                        load_isbound = @emitLoadEjsFunctionIsBound closure
-
-                                        cmp = ir.createICmpEq load_isbound, consts.int32(0), "notbound?"
-                                        ir.createCondBr cmp, direct_invoke_bb, runtime_invoke_bb
-
-                                        @doInsideBBlock runtime_invoke_bb, =>
-                                                call_result = @createCall @ejs_runtime.invoke_closure, argv, "callresult", true
-                                                ir.createBr invoke_merge_bb
-                        
-                                        # in the successful case we modify our argv with the responses and directly invoke the closure func
-                                        @doInsideBBlock direct_invoke_bb, =>
-                                                func_load = @emitLoadEjsFunctionClosureFunc closure
-                                                env_load = @emitLoadEjsFunctionClosureEnv closure
-
-                                                call_result = @createCall func_load, [env_load, argv[1], argv[2], argv[3]], "callresult"
-                                                ir.createBr invoke_merge_bb
-
-                        @doInsideBBlock object_isnt_function_bb, =>
-                                # we have something other than a function, throw.
-                                @emitThrowNativeError 5, "object is not a function" # this '5' should be 'EJS_TYPE_ERROR'
-                                # unreachable
+                                @doInsideBBlock runtime_invoke_bb, =>
+                                        call_result = @createCall @ejs_runtime.invoke_closure, argv, "callresult", true
+                                        ir.createStore call_result, call_result_alloca
+                                        ir.createBr invoke_merge_bb
 
                         ir.setInsertPoint invoke_merge_bb
 
+                        call_result = ir.createLoad call_result_alloca, "call_result_load"
                 else
                         call_result = @createCall @ejs_runtime.invoke_closure, argv, "call", true
 
