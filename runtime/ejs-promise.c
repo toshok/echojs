@@ -23,19 +23,19 @@ ejsval _ejs_identity_function EJSVAL_ALIGNMENT;
 ejsval _ejs_thrower_function EJSVAL_ALIGNMENT;
 
 static EJSBool
-GetIterator(ejsval* iterator, ejsval iterable)
+GetIteratorP(ejsval* iterator, ejsval iterable)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 static EJSBool
-IteratorStep(ejsval* next, ejsval iterator)
+IteratorStepP(ejsval* next, ejsval iterator)
 {
     EJS_NOT_IMPLEMENTED();
 }
 
 static EJSBool
-IteratorValue(ejsval* value, ejsval iterResult)
+IteratorValueP(ejsval* value, ejsval iterResult)
 {
     EJS_NOT_IMPLEMENTED();
 }
@@ -707,7 +707,7 @@ _ejs_Promise_all (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     // 4. Let iterator be GetIterator(iterable). 
     ejsval iterator;
-    success = GetIterator(&iterator, iterable);
+    success = GetIteratorP(&iterator, iterable);
 
     // 5. IfAbruptRejectPromise(iterator, promiseCapability). 
     if (!success) {
@@ -728,7 +728,7 @@ _ejs_Promise_all (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     while (EJS_TRUE) {
         //    a. Let next be IteratorStep(iterator). 
         ejsval next;
-        success = IteratorStep(&next, iterator);
+        success = IteratorStepP(&next, iterator);
 
         //    b. IfAbruptRejectPromise(next, promiseCapability). 
         if (!success) {
@@ -756,7 +756,7 @@ _ejs_Promise_all (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
         //    d. Let nextValue be IteratorValue(next). 
         ejsval nextValue;
-        success = IteratorValue(&nextValue, next);
+        success = IteratorValueP(&nextValue, next);
         //    e. IfAbruptRejectPromise(nextValue, promiseCapability). 
         if (!success) {
             _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), _ejs_undefined, 1, &nextValue);
@@ -820,7 +820,7 @@ _ejs_Promise_race (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     // 4. Let iterator be GetIterator(iterable). 
     ejsval iterator;
-    success = GetIterator(&iterator, iterable);
+    success = GetIteratorP(&iterator, iterable);
     
     // 5. IfAbruptRejectPromise(iterator, promiseCapability).
     if (!success) {
@@ -833,7 +833,7 @@ _ejs_Promise_race (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         ejsval next;
 
         //    a. Let next be IteratorStep(iterator). 
-        EJSBool success = IteratorStep(&next, iterator);
+        EJSBool success = IteratorStepP(&next, iterator);
         //    b. IfAbruptRejectPromise(next, promiseCapability). 
         if (!success) {
             _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), _ejs_undefined, 1, &next);
@@ -846,7 +846,7 @@ _ejs_Promise_race (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
         //    d. Let nextValue be IteratorValue(next). 
         ejsval nextValue;
-        success = IteratorValue(&nextValue, next);
+        success = IteratorValueP(&nextValue, next);
 
         //    e. IfAbruptRejectPromise(nextValue, promiseCapability). 
         if (!success) {
