@@ -570,11 +570,6 @@ class LLVMIRVisitor extends TreeVisitor
                 insertBlock = ir.getInsertBlock()
                 insertFunc = insertBlock.parent
 
-                switch_bb = new llvm.BasicBlock "switch", insertFunc
-
-                ir.createBr switch_bb
-                ir.setInsertPoint switch_bb
-                
                 # find the default: case first
                 defaultCase = null
                 (if not _case.test then defaultCase = _case) for _case in n.cases
