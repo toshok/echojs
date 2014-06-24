@@ -25,6 +25,7 @@ runtime_globals = require('runtime').createGlobalsInterface(null)
   ComprehensionExpression,
   ConditionalExpression,
   ContinueStatement,
+  ComputedPropertyKey,
   DebuggerStatement,
   DoWhileStatement,
   EmptyStatement,
@@ -105,13 +106,14 @@ getLocal_id             = create_identifier "%getLocal"
 getGlobal_id            = create_identifier "%getGlobal"
 moduleGet_id            = create_identifier "%moduleGet"
 moduleImportBatch_id    = create_identifier "%moduleImportBatch"
-templateCallsite_id    = create_identifier "%templateCallsite"
-templateHandlerCall_id = create_identifier "%templateHandlerCall"
+templateCallsite_id     = create_identifier "%templateCallsite"
+templateHandlerCall_id  = create_identifier "%templateHandlerCall"
 templateDefaultHandlerCall_id = create_identifier "%templateDefaultHandlerCall"
 createArgScratchArea_id       = create_identifier "%createArgScratchArea"
 setPrototypeOf_id       = create_identifier "%setPrototypeOf"
 objectCreate_id         = create_identifier "%objectCreate"
 gatherRest_id           = create_identifier "%gatherRest"
+arrayFromSpread_id      = create_identifier "%arrayFromSpread"
 
 class TransformPass extends TreeVisitor
         constructor: (@options) ->
@@ -307,12 +309,12 @@ DesugarClasses = class DesugarClasses extends TransformPass
                                 property_map = if class_element.static then sproperties else properties
 
                                 # XXX this is broken for computed properties
-                                property_map.set(class_element.key.name, new Map) if not property_map.has(class_element.key.name)
+                                property_map.set(class_element.key, new Map) if not property_map.has(class_element.key)
 
-                                if property_map.get(class_element.key.name).has(class_element.kind)
-                                        reportError(SyntaxError, "a '#{class_element.kind}' method for '#{class_element.key.name}' has already been defined.", @filename, class_element.loc)
+                                if property_map.get(class_element.key).has(class_element.kind)
+                                        reportError(SyntaxError, "a '#{class_element.kind}' method for '#{escodegen.generate class_element.key}' has already been defined.", @filename, class_element.loc)
 
-                                property_map.get(class_element.key.name).set(class_element.kind, class_element)
+                                property_map.get(class_element.key).set(class_element.kind, class_element)
 
                 [properties, methods, sproperties, smethods]
                         
@@ -352,8 +354,8 @@ DesugarClasses = class DesugarClasses extends TransformPass
                                 object: ast_class.id
                                 property: create_identifier "prototype"
                                 computed: false
-                        property: ast_method.key
-                        computed: false
+                        property: if ast_method.key.type is ComputedPropertyKey then ast_method.key.expression else ast_method.key
+                        computed: ast_method.key.type is ComputedPropertyKey
 
                 method =
                         type: FunctionExpression
@@ -395,8 +397,8 @@ DesugarClasses = class DesugarClasses extends TransformPass
                                 left:
                                         type: MemberExpression
                                         object: ast_class.id
-                                        property: ast_method.key
-                                        computed:false
+                                        property: if ast_method.key.type is ComputedPropertyKey then ast_method.key.expression else ast_method.key
+                                        computed: ast_method.key.type is ComputedPropertyKey
                                 right: method
                 }
 
@@ -405,21 +407,21 @@ DesugarClasses = class DesugarClasses extends TransformPass
 
                 properties.forEach (prop_map, prop) =>
                         accessors = []
-                        name = null
+                        key = null
 
                         getter = prop_map.get("get")
                         setter = prop_map.get("set")
 
                         if getter?
                                 accessors.push { type: Property, key: create_identifier("get"), value: getter.value, kind: "init" }
-                                name = prop
+                                key = prop
                         if prop.set?
                                 accessors.push { type: Property, key: create_identifier("set"), value: setter.value, kind: "init" }
-                                name = prop
+                                key = prop
 
                         propdescs.push
                                 type: Property
-                                key: create_identifier name
+                                key: key
                                 value:
                                         type: ObjectExpression
                                         properties: accessors
@@ -488,7 +490,8 @@ LocateEnv = class LocateEnv extends TransformPass
                 n
 
         visitProperty: (n) ->
-                # we don't visit property keys here
+                if n.key.type is ComputedPropertyKey
+                        n.key = @visit n.key
                 n.value = @visit n.value
                 n
 
@@ -891,9 +894,15 @@ class ComputeFree extends TransformPass
                         when TemplateLiteral       then exp.ejs_free_vars = @setUnion.apply null, exp.expressions.map @call_free
                         when Literal               then exp.ejs_free_vars = new Set
                         when ThisExpression        then exp.ejs_free_vars = new Set
-                        when Property              then exp.ejs_free_vars = @free exp.value # we skip the key
+                        when ComputedPropertyKey   then exp.ejs_free_vars = @free exp.expression
+                        when Property
+                                exp.ejs_free_vars = @free exp.value
+                                if exp.key.type is ComputedPropertyKey
+                                        # we only do this when the key is computed, or else identifiers show up as free
+                                        exp.ejs_free_vars = exp.ejs_free_vars.union @free exp.key
+                                exp.ejs_free_vars
                         when ObjectExpression
-                                exp.ejs_free_vars = if exp.properties.length is 0 then (new Set) else @setUnion.apply null, (@free p.value for p in exp.properties)
+                                exp.ejs_free_vars = if exp.properties.length is 0 then (new Set) else @setUnion.apply null, (@free p for p in exp.properties)
                         when ArrayExpression
                                 exp.ejs_free_vars = if exp.elements.length is 0 then (new Set) else @setUnion.apply null, exp.elements.map @call_free
                         when IfStatement           then exp.ejs_free_vars = @setUnion.call null, @free(exp.test), @free(exp.consequent), @free(exp.alternate)
@@ -1045,7 +1054,8 @@ class SubstituteVariables extends TransformPass
                 rv
 
         visitProperty: (n) ->
-                # we don't visit property keys here
+                if n.key.type is ComputedPropertyKey
+                        n.key = @visit n.key
                 n.value = @visit n.value
                 n
 
@@ -1167,11 +1177,21 @@ class SubstituteVariables extends TransformPass
                         if n.type is FunctionDeclaration
                                 throw "there should be no FunctionDeclarations at this point"
                         else # n.type is FunctionExpression
+                                intrinsic_args = []
+                                intrinsic_args.push(if n.ejs_env.parent? then create_identifier(parent_env_name) else { type: Literal, value: null})
+                                
                                 if n.id?
-                                        return create_intrinsic makeClosure_id, [ (if n.ejs_env.parent? then (create_identifier parent_env_name) else { type: Literal, value: null}), (create_string_literal n.id.name), n ]
+                                        intrinsic_id = makeClosure_id
+                                        if n.id.type is Identifier
+                                                intrinsic_args.push(create_string_literal(n.id.name))
+                                        else
+                                                intrinsic_args.push(create_string_literal(escodegen.generate n.id))
                                 else
-                                        return create_intrinsic makeAnonClosure_id, [ (if n.ejs_env.parent? then (create_identifier parent_env_name) else { type: Literal, value: null}), n ]
+                                        intrinsic_id = makeAnonClosure_id
 
+                                intrinsic_args.push(n)
+                                
+                                return create_intrinsic intrinsic_id, intrinsic_args
                 n
             catch e
                 console.warn "exception: " + e
@@ -2098,7 +2118,7 @@ class DesugarImportExport extends TransformPass
 
                 # export default = ...;
                 # 
-                if n.default
+                if Array.isArray(n.declaration) and n.declaration[0].id.name is "default"
                         local_default_id = create_identifier "%default"
                         default_id = create_identifier "default"
                         @exports.push { id: default_id }
@@ -2108,7 +2128,7 @@ class DesugarImportExport extends TransformPass
                                 declarations: [{
                                         type: VariableDeclarator,
                                         id:   local_default_id
-                                        init: n.declaration
+                                        init: n.declaration[0].init
                                 }],
                                 kind: "var"
                         }
@@ -2167,6 +2187,120 @@ class DesugarRestParameters extends TransformPass
                         n.rest = undefined
                 n
 
+#
+# desugars
+#
+#   [1, 2, ...foo, 3, 4]
+# 
+#   o.foo(1, 2, ...foo, 3, 4)
+#
+# to:
+#
+#   %arrayFromSpread([1, 2], foo, [3, 4])
+#
+#   foo.apply(o, %arrayFromSpread([1, 2], foo, [3, 4])
+#
+class DesugarSpread extends TransformPass
+        visitArrayExpression: (n) ->
+                n = super
+                needs_desugaring = false
+                for el in n.elements
+                        if el.type is SpreadElement
+                                needs_desugaring = true
+
+                if needs_desugaring
+                        new_args = []
+                        current_elements = []
+                        for el in n.elements
+                                if el.type is SpreadElement
+                                        if current_elements.length is 0
+                                                # just push the spread argument into the new args
+                                                new_args.push el.argument
+                                        else
+                                                # push the current_elements as an array literal, then the spread.
+                                                # also reset current_elements to []
+                                                new_args.push { type: ArrayExpression, elements: current_elements }
+                                                new_args.push el.argument
+                                                current_elements = []
+                                else
+                                        current_elements.push el
+                        if current_elements.length isnt 0
+                                new_args.push { type: ArrayExpression, elements: current_elements }
+
+                        # check to see if we've just created an array of nothing but array literals, and flatten them all
+                        # into one and get rid of the spread altogether
+                        all_arrays = true
+                        for a in new_args
+                                all_arrays = false if a.type isnt ArrayExpression
+                                
+                        if all_arrays
+                                na = []
+                                for a in new_args
+                                       na = na.concat a.elements
+                                n.elements = na
+                                return n
+                        else
+                                return create_intrinsic arrayFromSpread_id, new_args
+
+                n
+
+        visitCallExpression: (n) ->
+                n = super
+                needs_desugaring = false
+                for el in n.arguments
+                        if el.type is SpreadElement
+                                needs_desugaring = true
+
+                if needs_desugaring
+                        new_args = []
+                        current_elements = []
+                        for el in n.arguments
+                                if is_intrinsic(el, "%arrayFromSpread")
+                                        # flatten spreads
+                                        new_args.concat el.arguments
+                                                
+                                else if el.type is SpreadElement
+                                        if current_elements.length is 0
+                                                # just push the spread argument into the new args
+                                                new_args.push el.argument
+                                        else
+                                                # push the current_elements as an array literal, then the spread.
+                                                # also reset current_elements to []
+                                                new_args.push { type: ArrayExpression, elements: current_elements }
+                                                new_args.push el.argument
+                                                current_elements = []
+                                else
+                                        current_elements.push el
+
+                        if current_elements.length isnt 0
+                                new_args.push { type: ArrayExpression, elements: current_elements }
+
+                        # check to see if we've just created an array of nothing but array literals, and flatten them all
+                        # into one and get rid of the spread altogether
+                        all_arrays = true
+                        for a in new_args
+                                all_arrays = false if a.type isnt ArrayExpression
+                        if all_arrays
+                                na = []
+                                for a in new_args
+                                       na = na.concat a.elements
+
+                                n.arguments = na
+                        else
+                                if n.callee.type is MemberExpression
+                                        receiver = n.callee.object
+                                else
+                                        receiver = { type: Literal, value: null }
+
+                                n.callee = {
+                                        type: MemberExpression
+                                        object: n.callee
+                                        property: create_identifier "apply"
+                                        computed: false
+                                }
+                        
+                                n.arguments = [receiver, create_intrinsic(arrayFromSpread_id, new_args)]
+                n
 #
 # desugars
 #
@@ -2332,6 +2466,7 @@ passes = [
         DesugarTemplates
         DesugarRestParameters
         DesugarForOf
+        DesugarSpread
         HoistFuncDecls if enable_hoist_func_decls_pass
         FuncDeclsToVars
         HoistVars

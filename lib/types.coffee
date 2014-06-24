@@ -31,10 +31,10 @@ exports.EjsPropertyMap  = EjsPropertyMapTy = llvm.StructType.create "struct.EJSP
 ]
         
 exports.EjsObject = EjsObjectTy = llvm.StructType.create "struct.EJSObject", [
-        int32Ty,                  # GCObjectHeader gc_header;
+        stringTy,                 # GCObjectHeader gc_header;
         EjsSpecopsTy.pointerTo(), # EJSSpecOps*    ops;
         EjsValueTy,               # ejsval         proto; // the __proto__ property
-        EjsPropertyMapTy,         # EJSPropertyMap map;
+        EjsPropertyMapTy.pointerTo(),  # EJSPropertyMap map;
 ]
 
 exports.EjsFunction = EjsFunctionTy = llvm.StructType.create "struct.EJSFunction", [
@@ -43,9 +43,6 @@ exports.EjsFunction = EjsFunctionTy = llvm.StructType.create "struct.EJSFunction
         EjsValueTy,              # ejsval   env;
 
         int32Ty,                 # EJSBool  bound;
-        EjsValueTy,              # ejsval   bound_this;
-        int32Ty,                 # uint32_t bound_argc;
-        EjsValueTy.pointerTo()   # ejsval*  bound_args;
 ]
 
 # exception types

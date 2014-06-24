@@ -16,7 +16,6 @@ runtime_interface =
         invoke_closure:        -> takes_builtins @abi.createExternalFunction @module, "_ejs_invoke_closure", types.EjsValue, [types.EjsValue, types.EjsValue, types.int32, types.EjsValue.pointerTo()]
         make_closure:          -> @abi.createExternalFunction @module, "_ejs_function_new", types.EjsValue, [types.EjsValue, types.EjsValue, types.getEjsClosureFunc(@abi)]
         make_anon_closure:     -> @abi.createExternalFunction @module, "_ejs_function_new_anon", types.EjsValue, [types.EjsValue, types.getEjsClosureFunc(@abi)]
-        decompose_closure:     -> @abi.createExternalFunction @module, "_ejs_decompose_closure", types.bool, [types.EjsValue, types.getEjsClosureFunc(@abi).pointerTo(), types.EjsClosureEnv.pointerTo(), types.EjsValue.pointerTo()]
 
         make_closure_env:      -> @abi.createExternalFunction @module, "_ejs_closureenv_new", types.EjsValue, [types.int32]
         get_env_slot_val:      -> @abi.createExternalFunction @module, "_ejs_closureenv_get_slot", types.EjsValue, [types.EjsValue, types.int32]
@@ -26,6 +25,7 @@ runtime_interface =
         arguments_new:         -> does_not_throw @abi.createExternalFunction @module, "_ejs_arguments_new",             types.EjsValue, [types.int32, types.EjsValue.pointerTo()]
         array_new:             -> @abi.createExternalFunction @module, "_ejs_array_new",                 types.EjsValue, [types.int32, types.bool]
         array_new_copy:        -> @abi.createExternalFunction @module, "_ejs_array_new_copy",            types.EjsValue, [types.int32, types.EjsValue.pointerTo()]
+        array_from_iterables:  -> @abi.createExternalFunction @module, "_ejs_array_from_iterables",      types.EjsValue, [types.int32, types.EjsValue.pointerTo()]
         number_new:            -> does_not_throw does_not_access_memory @abi.createExternalFunction @module, "_ejs_number_new",                types.EjsValue, [types.double]
         string_new_utf8:       -> only_reads_memory does_not_throw @abi.createExternalFunction @module, "_ejs_string_new_utf8",           types.EjsValue, [types.string]
         regexp_new_utf8:       -> @abi.createExternalFunction @module, "_ejs_regexp_new_utf8",           types.EjsValue, [types.string, types.string]

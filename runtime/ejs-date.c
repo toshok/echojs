@@ -82,6 +82,7 @@ _ejs_Date_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
             time_t time_in_sec = mktime(&tm);
             date->tv.tv_sec = time_in_sec;
             date->tv.tv_usec = ms * 1000;
+            date->valid = EJS_TRUE;
         }
       
         return _this;
@@ -91,7 +92,15 @@ _ejs_Date_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 static ejsval
 _ejs_Date_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
+    if (!EJSVAL_IS_DATE(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "this is not a Date object.");
+
     EJSDate *date = (EJSDate*)EJSVAL_TO_OBJECT(_this);
+
+    if (!date->valid) {
+        return _ejs_string_new_utf8 ("Invalid Date");
+    }
+
     struct tm tm;
 
     memset (&tm, 0, sizeof(tm));
@@ -167,7 +176,8 @@ _ejs_date_init(ejsval global)
     _ejs_object_setprop (global, _ejs_atom_Date, _ejs_Date);
 
     _ejs_gc_add_root (&_ejs_Date_prototype);
-    _ejs_Date_prototype = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
+    _ejs_Date_prototype = _ejs_object_new(_ejs_null, &_ejs_Date_specops);
+    
     _ejs_object_setprop (_ejs_Date,       _ejs_atom_prototype,  _ejs_Date_prototype);
 
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Date_prototype, x, _ejs_Date_prototype_##x, EJS_PROP_NOT_ENUMERABLE)

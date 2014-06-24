@@ -20,6 +20,7 @@ path = require 'path'
   ClassHeritage,
   ComprehensionBlock,
   ComprehensionExpression,
+  ComputedPropertyKey,
   ConditionalExpression,
   ContinueStatement,
   DebuggerStatement,
@@ -255,6 +256,7 @@ class LLVMIRVisitor extends TreeVisitor
                         setPrototypeOf:       value: @handleSetPrototypeOf
                         objectCreate:         value: @handleObjectCreate
                         gatherRest:           value: @handleGatherRest
+                        arrayFromSpread:      value: @handleArrayFromSpread
 
                 @opencode_intrinsics =
                         unaryNot          : true
@@ -269,7 +271,7 @@ class LLVMIRVisitor extends TreeVisitor
                         slot              : true
                         setSlot           : true
                 
-                        invokeClosure     : false
+                        invokeClosure     : true
                         makeClosure       : true
                         makeAnonClosure   : true
                         createArgScratchArea : true
@@ -568,11 +570,6 @@ class LLVMIRVisitor extends TreeVisitor
                 insertBlock = ir.getInsertBlock()
                 insertFunc = insertBlock.parent
 
-                switch_bb = new llvm.BasicBlock "switch", insertFunc
-
-                ir.createBr switch_bb
-                ir.setInsertPoint switch_bb
-                
                 # find the default: case first
                 defaultCase = null
                 (if not _case.test then defaultCase = _case) for _case in n.cases
@@ -1346,28 +1343,32 @@ class LLVMIRVisitor extends TreeVisitor
 
                 # gather all properties so we can emit get+set as a single call to define_accessor_prop.
                 for property in n.properties
-                        propname = if property.key.type is Literal then String(property.key.value) else property.key.name
-
+                        if property.key.type is ComputedPropertyKey
+                                key = @visit property.key.expression
+                        else if property.key.type is Literal
+                                key = @getAtom String(property.key.value)
+                        else if property.key.type is Identifier
+                                key = @getAtom property.key.name
+                        
                         if property.kind is "get" or property.kind is "set"
-                                accessor_map.set(propname, new Map) if not accessor_map.has(propname)
-                                throw new SyntaxError "a '#{property.kind}' method for '#{propname}' has already been defined." if accessor_map.get(propname).has(property.kind)
-                                throw new SyntaxError "#{property.key.loc.start.line}: property name #{propname} appears once in object literal." if accessor_map.get(propname).has("init")
+                                accessor_map.set(key, new Map) if not accessor_map.has(key)
+                                throw new SyntaxError "a '#{property.kind}' method for '#{key}' has already been defined." if accessor_map.get(key).has(property.kind)
+                                throw new SyntaxError "#{property.key.loc.start.line}: property name #{key} appears once in object literal." if accessor_map.get(key).has("init")
                         else if property.kind is "init"
-                                throw new SyntaxError "#{property.key.loc.start.line}: property name #{propname} appears once in object literal." if accessor_map.has(propname)
-                                accessor_map.set(propname, new Map)
+                                throw new SyntaxError "#{property.key.loc.start.line}: property name #{key} appears once in object literal." if accessor_map.has(key)
+                                accessor_map.set(key, new Map)
                         else
                                 throw new Error("unrecognized property kind `#{property.kind}'")
                                 
-                        accessor_map.get(propname).set(property.kind, property)
+                        accessor_map.get(key).set(property.kind, property)
 
-                accessor_map.forEach (prop_map, propname) =>
-                        key = @getAtom propname
+                accessor_map.forEach (prop_map, propkey) =>
                         # XXX we need something like this line below to handle computed properties, but those are broken at the moment
                         #key = if property.key.type is Identifier then @getAtom property.key.name else @visit property.key
 
                         if prop_map.has("init")
                                 val = @visit(prop_map.get("init").value)
-                                @createCall @ejs_runtime.object_define_value_prop, [obj, key, val, consts.int32 0x77], "define_value_prop_#{propname}"
+                                @createCall @ejs_runtime.object_define_value_prop, [obj, propkey, val, consts.int32 0x77], "define_value_prop_#{key}"
                         else
                                 getter = prop_map.get("get")
                                 setter = prop_map.get("set")
@@ -1375,7 +1376,7 @@ class LLVMIRVisitor extends TreeVisitor
                                 get_method = if getter then @visit(getter.value) else @loadUndefinedEjsValue()
                                 set_method = if setter then @visit(setter.value) else @loadUndefinedEjsValue()
 
-                                @createCall @ejs_runtime.object_define_accessor_prop, [obj, key, get_method, set_method, consts.int32 0x19], "define_accessor_prop_#{propname}"
+                                @createCall @ejs_runtime.object_define_accessor_prop, [obj, propkey, get_method, set_method, consts.int32 0x19], "define_accessor_prop_#{key}"
                                 
                 obj
 
@@ -1855,57 +1856,49 @@ class LLVMIRVisitor extends TreeVisitor
                         argv = @visitArgsForCall @ejs_runtime.invoke_closure, true, exp.arguments
 
                 if opencode and @options.target_pointer_size is 64
+                        #
+                        # generate basically the following code:
+                        #
+                        # f = argv[0]
+                        # if (EJSVAL_IS_FUNCTION(F)
+                        #   f->func(f->env, argv[1], argv[2], argv[3])
+                        # else
+                        #   _ejs_invoke_closure(...argv)
+                        # 
                         candidate_is_object_bb = new llvm.BasicBlock "candidate_is_object_bb", insertFunc
-                        check_if_function_is_bound_bb = new llvm.BasicBlock "check_if_function_is_bound_bb", insertFunc
-                        object_isnt_function_bb = new llvm.BasicBlock "object_isnt_function_bb", insertFunc
                         direct_invoke_bb = new llvm.BasicBlock "direct_invoke_bb", insertFunc
                         runtime_invoke_bb = new llvm.BasicBlock "runtime_invoke_bb", insertFunc
                         invoke_merge_bb = new llvm.BasicBlock "invoke_merge_bb", insertFunc
                         
-                        candidate = argv[0]
-                        cmp = @createEjsvalICmpUGt candidate, consts.int64_lowhi(0xfffbffff, 0xffffffff), "cmpresult"
-                        ir.createCondBr cmp, candidate_is_object_bb, object_isnt_function_bb
+                        cmp = @isObject(argv[0])
+                        ir.createCondBr cmp, candidate_is_object_bb, runtime_invoke_bb
 
+                        call_result_alloca = @createAlloca @currentFunction, types.EjsValue, "call_result"
+                        
                         @doInsideBBlock candidate_is_object_bb, =>
                                 closure = @emitEjsvalTo argv[0], types.EjsObject.pointerTo(), "closure"
 
                                 specops_load = @emitLoadSpecops closure
                         
                                 cmp = ir.createICmpEq specops_load, @ejs_runtime.function_specops, "function_specops_cmp"
-                                ir.createCondBr cmp, check_if_function_is_bound_bb, object_isnt_function_bb
+                                ir.createCondBr cmp, direct_invoke_bb, runtime_invoke_bb
 
-                                @doInsideBBlock check_if_function_is_bound_bb, =>
+                                # in the successful case we modify our argv with the responses and directly invoke the closure func
+                                @doInsideBBlock direct_invoke_bb, =>
+                                        func_load = @emitLoadEjsFunctionClosureFunc closure
+                                        env_load = @emitLoadEjsFunctionClosureEnv closure
+                                        call_result = @createCall func_load, [env_load, argv[1], argv[2], argv[3]], "callresult"
+                                        ir.createStore call_result, call_result_alloca
+                                        ir.createBr invoke_merge_bb
 
-                                        # we know we have a function.  now we need to
-                                        # check if it's bound.  if it's bound we defer
-                                        # to the runtime code for now.  if it's not
-                                        # bound (which should be the common case) we
-                                        # can dispatch it inline.
-
-                                        load_isbound = @emitLoadEjsFunctionIsBound closure
-
-                                        cmp = ir.createICmpEq load_isbound, consts.int32(0), "notbound?"
-                                        ir.createCondBr cmp, direct_invoke_bb, runtime_invoke_bb
-
-                                        @doInsideBBlock runtime_invoke_bb, =>
-                                                call_result = @createCall @ejs_runtime.invoke_closure, argv, "callresult", true
-                                                ir.createBr invoke_merge_bb
-                        
-                                        # in the successful case we modify our argv with the responses and directly invoke the closure func
-                                        @doInsideBBlock direct_invoke_bb, =>
-                                                func_load = @emitLoadEjsFunctionClosureFunc closure
-                                                env_load = @emitLoadEjsFunctionClosureEnv closure
-
-                                                call_result = @createCall func_load, [env_load, argv[1], argv[2], argv[3]], "callresult"
-                                                ir.createBr invoke_merge_bb
-
-                        @doInsideBBlock object_isnt_function_bb, =>
-                                # we have something other than a function, throw.
-                                @emitThrowNativeError 5, "object is not a function" # this '5' should be 'EJS_TYPE_ERROR'
-                                # unreachable
+                                @doInsideBBlock runtime_invoke_bb, =>
+                                        call_result = @createCall @ejs_runtime.invoke_closure, argv, "callresult", true
+                                        ir.createStore call_result, call_result_alloca
+                                        ir.createBr invoke_merge_bb
 
                         ir.setInsertPoint invoke_merge_bb
 
+                        call_result = ir.createLoad call_result_alloca, "call_result_load"
                 else
                         call_result = @createCall @ejs_runtime.invoke_closure, argv, "call", true
 
@@ -1938,6 +1931,7 @@ class LLVMIRVisitor extends TreeVisitor
                 
         handleCreateArgScratchArea: (exp, opencode) ->
                 argsArrayType = llvm.ArrayType.get types.EjsValue, exp.arguments[0].value
+                @currentFunction.scratch_length = exp.arguments[0].value
                 @currentFunction.scratch_area = @createAlloca @currentFunction, argsArrayType, "args_scratch_area"
                 @currentFunction.scratch_area.setAlignment 8
                 @currentFunction.scratch_area
@@ -2203,8 +2197,26 @@ class LLVMIRVisitor extends TreeVisitor
                 @currentFunction.restArgPresent = true
 
                 ir.createLoad rest_alloca, "load_rest"
-                
 
+        handleArrayFromSpread: (exp) ->
+                arg_count = exp.arguments.length
+                if @currentFunction.scratch_area? and @currentFunction.scratch_length < arg_count
+                        spreadArrayType = llvm.ArrayType.get types.EjsValue, arg_count
+                        @currentFunction.scratch_area = @createAlloca @currentFunction, spreadArrayType, "args_scratch_area"
+                        @currentFunction.scratch_area.setAlignment 8
+
+                # reuse the scratch area
+                spread_alloca = @currentFunction.scratch_area
+                visited = (@visitOrNull(a) for a in exp.arguments)
+                visited.forEach (a, i) =>
+                        gep = ir.createGetElementPointer spread_alloca, [consts.int32(0), consts.int64(i)], "spread_gep_#{i}"
+                        store = ir.createStore visited[i], gep, "spread[#{i}]-store"
+
+                argsCast = ir.createGetElementPointer spread_alloca, [consts.int32(0), consts.int64(0)], "spread_call_args_load"
+
+                argv = [consts.int32(arg_count), argsCast]
+                @createCall @ejs_runtime.array_from_iterables, argv, "spread_arr"
+                                
 class AddFunctionsVisitor extends TreeVisitor
         constructor: (@module, @abi) ->
 
@@ -2360,9 +2372,13 @@ class GatherImports extends TreeVisitor
                 if not hasOwn.call @exportLists, path
                         @exportLists[path] = Object.create(null)
                         @exportLists[path].ids = new Set()
+                if id is "default"
+                        @exportLists[path].has_default = true
                 @exportLists[path].ids.add(id)
                 
-        visitImportDeclaration: (n) -> @addSource(n)
+        visitImportDeclaration: (n) ->
+                @addSource(n)
+                
         visitExportDeclaration: (n) ->
                 n = @addSource(n)
 
@@ -2373,15 +2389,18 @@ class GatherImports extends TreeVisitor
                                 for spec in n.specifiers
                                         @addExportIdentifier(@filename, spec.name?.name or spec.id?.name)
                         n
+                else if Array.isArray(n.declaration)
+                        for decl in n.declaration
+                                @addExportIdentifier(@filename, decl.id.name)
                 else if n.declaration.type is FunctionDeclaration                        
                         @addExportIdentifier(@filename, n.declaration.id.name) 
                 else if n.declaration.type is VariableDeclaration
                         for decl in n.declaration.declarations
-                                @addExportIdentifier(@filename, decl.id.name) 
+                                @addExportIdentifier(@filename, decl.id.name)
                 else if n.declaration.type is VariableDeclarator
                         @addExportIdentifier(@filename, n.declaration.id.name)
-                else if n.default
-                        @addDefaultExport(@filename)
+                else
+                        throw new Error("unhandled case in visitExportDeclaration");
                 n
         visitModuleDeclaration: (n) -> @addSource(n)
 

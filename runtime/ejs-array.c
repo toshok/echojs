@@ -82,6 +82,36 @@ maybe_realloc_dense (EJSArray *arr, int amount_to_add)
     }
 }
 
+ejsval
+_ejs_array_from_iterables (int argc, ejsval* args)
+{
+    ejsval rv = _ejs_array_new (0, EJS_FALSE);
+    for (int i = 0; i < argc; i ++) {
+        ejsval iter = args[i];
+        if (EJSVAL_IS_DENSE_ARRAY(iter)) {
+            EJSArray *iter_arr = (EJSArray*)EJSVAL_TO_OBJECT(iter);
+            _ejs_array_push_dense (rv, EJSARRAY_LEN(iter_arr), EJSDENSEARRAY_ELEMENTS(iter_arr));
+        }
+        else {
+            // general iterator stuff
+            ejsval get_iterator = Get(iter, _ejs_Symbol_iterator);
+            ejsval iterator = _ejs_invoke_closure(get_iterator, iter, 0, NULL);
+            ejsval iterator_next = Get(iterator, _ejs_atom_next);
+            EJSBool done = EJS_FALSE;
+            while (!done) {
+                ejsval iterval = _ejs_invoke_closure(iterator_next, iterator, 0, NULL);
+                done = ToEJSBool(Get(iterval, _ejs_atom_done));
+                if (!done) {
+                    ejsval value = Get(iterval, _ejs_atom_value);
+                    _ejs_array_push_dense (rv, 1, &value);
+                }
+            }
+        }
+    }
+    return rv;
+}
+
+
 uint32_t
 _ejs_array_push_dense(ejsval array, int argc, ejsval *args)
 {
@@ -1714,6 +1744,9 @@ _ejs_Array_of (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return _ejs_array_new_copy (argc, args);
 }
 
+ejsval
+_ejs_array_from_iterables (int argc, ejsval* args);
+
 static ejsval
 _ejs_Array_from (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
@@ -2234,6 +2267,7 @@ _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPrope
             is_index = EJS_TRUE;
         }
     }
+
 
     if (is_index) {
         if (EJSVAL_IS_DENSE_ARRAY(obj)) {

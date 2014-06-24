@@ -403,7 +403,11 @@ _ejs_number_init(ejsval global)
     _ejs_object_setprop (global, _ejs_atom_Number, _ejs_Number);
 
     _ejs_gc_add_root (&_ejs_Number_prototype);
-    _ejs_Number_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Number_specops);
+    EJSNumber* prototype = (EJSNumber*)_ejs_gc_new(EJSNumber);
+    _ejs_init_object ((EJSObject*)prototype, _ejs_Object_prototype, &_ejs_Number_specops);
+    prototype->number = 0;
+    _ejs_Number_prototype = OBJECT_TO_EJSVAL(prototype);
+
     _ejs_object_setprop (_ejs_Number,       _ejs_atom_prototype,  _ejs_Number_prototype);
 
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Number_prototype, x, _ejs_Number_prototype_##x)

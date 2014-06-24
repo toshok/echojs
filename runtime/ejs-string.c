@@ -1358,7 +1358,7 @@ static ejsval
 _ejs_String_prototype_iterator (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     /* 1. Let O be CheckObjectCoercible(this value). */
-    if (!EJSVAL_IS_OBJECT(_this) && !EJSVAL_IS_NULL(_this))
+    if (!EJSVAL_IS_STRING(_this) && !EJSVAL_IS_OBJECT(_this) && !EJSVAL_IS_NULL(_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1");
 
     ejsval O = _this;
@@ -1452,20 +1452,35 @@ _ejs_StringIterator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejs
         return _ejs_create_iter_result (_ejs_undefined, _ejs_true);
     }
 
-    /* 9. Let first be the code unit value of the element at index position in s.
-     * 10. If first < 0xD800 or first > 0xDBFF or position+1 = len,
-     * then let resultString be the string consisting of the single code unit first.
-     * 11. Else,
-     *      a. Let second be the code unit value of the element at index position+1 in the String S.
-     *      b. If second < 0xDC00 or second > 0xDFFF, then let resultString be the string consisting
-     *          of the single code unit first.
-     *      c. Else, let resultString be the string consisting of the code unit first followed by
-     *          the code unit second. */
-    jschar resultChar = _ejs_string_ucs2_at(EJSVAL_TO_STRING(sPrimStr), position);
-    ejsval resultString = _ejs_string_new_ucs2_len (&resultChar, 1);
+    jschar chars[2];
+
+    /* 9. Let first be the code unit value of the element at index position in s. */
+    chars[0] = _ejs_string_ucs2_at(EJSVAL_TO_STRING(sPrimStr), position);
+
+    ejsval resultString;
+    uint32_t resultSize = 1;
+
+    // 10. If first < 0xD800 or first > 0xDBFF or position+1 = len then let resultString be the string consisting of the single code unit first.
+    if (chars[0] < 0xD800 || chars[0] > 0xDBFF || position+1 == len)
+        resultString = _ejs_string_new_ucs2_len(chars, 1);
+    // 11. Else,
+    else {
+        //      a. Let second be the code unit value of the element at index position+1 in the String S.
+        chars[1] = _ejs_string_ucs2_at(EJSVAL_TO_STRING(sPrimStr), position + 1);
+        //      b. If second < 0xDC00 or second > 0xDFFF, then let resultString be the string consisting
+        //         of the single code unit first.
+        if (chars[1] < 0xDc00 || chars[1] > 0xDFFF)
+            resultString = _ejs_string_new_ucs2_len(chars, 1);
+        //      c. Else, let resultString be the string consisting of the code unit first followed by
+        //          the code unit second. */
+        else {
+            resultString = _ejs_string_new_ucs2_len(chars, 2);
+            resultSize = 2;
+        }
+    }
 
     /* 12. Let resultSize be the number of code units in resultString. */
-    uint32_t resultSize = 1;
+    // done above.
 
     /* 13. Set the value of the [[StringIteratorNextIndex]] internal slot of O to position+ resultSize. */
     OObj->next_index = position + resultSize;
@@ -1486,8 +1501,9 @@ _ejs_string_init_proto()
     __proto__->env = _ejs_null;
     _ejs_String__proto__ = OBJECT_TO_EJSVAL(__proto__);
 
-    EJSObject* prototype = _ejs_gc_new(EJSObject);
-    _ejs_init_object (prototype, _ejs_null, &_ejs_String_specops);
+    EJSString* prototype = (EJSString*)_ejs_gc_new(EJSString);
+    _ejs_init_object ((EJSObject*)prototype, _ejs_null, &_ejs_String_specops);
+    prototype->primStr = _ejs_atom_empty;
     _ejs_String_prototype = OBJECT_TO_EJSVAL(prototype);
 
     _ejs_object_define_value_property (OBJECT_TO_EJSVAL(__proto__), _ejs_atom_name, _ejs_atom_empty, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);

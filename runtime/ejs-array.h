@@ -99,6 +99,7 @@ uint32_t _ejs_array_push_dense (ejsval array, int argc, ejsval* args);
 ejsval   _ejs_array_pop_dense (ejsval array);
 
 ejsval _ejs_array_join (ejsval array, ejsval sep);
+ejsval _ejs_array_from_iterables (int argc, ejsval* args);
 
 EJS_END_DECLS
 

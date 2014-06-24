@@ -42,7 +42,6 @@ endef
 
 EXPECTED_FAILURES=
 $(call addExpectedFailure, argv1.js,                "node passes ['node','argv1.js'], we return ['argv1.js.exe']")
-$(call addExpectedFailure, computed-props1.js,      "esprima fails to parse the file")
 $(call addExpectedFailure, date1.js,                "fails because we test the Date() function, which returns the current time.  this differs from the current time when the node test runs.  bleah.")
 $(call addExpectedFailure, date3.js,                "the first date is off by an hour.  timegm/localtime_r screwup?")
 $(call addExpectedFailure, for5.js,                 "we don't create a block level (fresh) binding for i_")
@@ -60,9 +59,6 @@ $(call addExpectedFailure, map1.js,                 "we throw the right exceptio
 $(call addExpectedFailure, regexp5.js,              "we don't support for the y flag")
 $(call addExpectedFailure, number-toFixed1.js,      "not implemented fully yet")
 $(call addExpectedFailure, number-toPrecision1.js,  "not implemented fully yet")
-$(call addExpectedFailure, tostring5.js,            "we don't throw when Date.prototype.toString is called on non-date objects.  instead we crash")
-$(call addExpectedFailure, spread3.js,              "doesn't compile with ejs currently")
-$(call addExpectedFailure, spread5.js,              "doesn't compile with ejs currently")
 $(call addExpectedFailure, object7.js,              "we differ from node on property descriptor flags.  verify with spec")
 $(call addExpectedFailure, object9.js,              "we differ from node on property descriptor flags.  verify with spec")
 
@@ -71,11 +67,14 @@ $(call testAgainstTraceur, for5.js)
 $(call testAgainstTraceur, forof1.js)
 $(call testAgainstTraceur, forof2.js)
 $(call testAgainstTraceur, computed-props1.js)
+$(call testAgainstTraceur, computed-props3.js)
 $(call testAgainstTraceur, spread1.js)
 $(call testAgainstTraceur, spread2.js)
 $(call testAgainstTraceur, spread3.js)
 $(call testAgainstTraceur, spread4.js)
 $(call testAgainstTraceur, spread5.js)
+$(call testAgainstTraceur, spread6.js)
+$(call testAgainstTraceur, spread7.js)
 $(call testAgainstTraceur, promise1.js)
 $(call testAgainstTraceur, promise2.js)
 
