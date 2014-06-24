@@ -1340,6 +1340,116 @@ _ejs_parseFloat_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return rv;
 }
 
+/* 7.4.1 CheckIterable ( obj ) */
+ejsval
+CheckIterable (ejsval obj)
+{
+    /* 1. If Type(obj) is not Object, then return undefined. */
+    if (!EJSVAL_IS_OBJECT(obj))
+        return _ejs_undefined;
+
+    /* 2. Let iteratorGetter be Get(obj, @@iterator). */
+    ejsval iteratorGetter = Get (obj, _ejs_Symbol_iterator);
+
+    /* 3. Return iteratorGetter. */
+    return iteratorGetter;
+}
+
+/* 7.4.2 GetIterator ( obj, method ) */
+ejsval
+GetIterator (ejsval obj, ejsval method)
+{
+    /* 1. If method was not passed, then */
+    if (EJSVAL_IS_UNDEFINED(method))
+        /* a. Let method be CheckIterable(obj). */
+        /* b. ReturnIfAbrupt(method). */
+        method = CheckIterable (obj);
+
+    /* 2. If IsCallable(method) is false, then throw a TypeError exception. */
+    if (!EJSVAL_IS_CALLABLE(method))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "method is not a function");
+
+    /* 3. Let iterator be the result of calling the [[Call]] internal method of method with
+     * obj as thisArgument and an empty List as argumentsList. */
+    ejsval iterator = _ejs_invoke_closure (method, obj, 0, NULL);
+
+    /* 4. If Type(iterator) is not Object, then throw a TypeError exception. */
+    if (!EJSVAL_IS_OBJECT(iterator))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "iterator is not an object");
+
+    return iterator;
+}
+
+/* 7.4.3 IteratorNext ( iterator, value ) */
+ejsval
+IteratorNext (ejsval iterator, ejsval value)
+{
+    ejsval result;
+
+    /* 1. If value was not passed, */
+    if (EJSVAL_IS_UNDEFINED(value))
+        /* Let result be Invoke(iterator, "next", ( )). */
+        result = _ejs_invoke_closure (Get(iterator, _ejs_atom_next), iterator, 0, NULL);
+    /* 2. Else, */
+    else
+        /* a. Let result be Invoke(iterator, "next", (value)). */
+        result = _ejs_invoke_closure (Get(iterator, _ejs_atom_next), iterator, 1, &value);
+
+    /* 3. If Type(result) is not Object, then throw a TypeError exception. */
+    if (!EJSVAL_IS_OBJECT(result))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "result is not an object");
+
+    /* 5. Return result. */
+    return result;
+}
+
+/* 7.4.4 IteratorComplete ( iterResult ) */
+ejsval
+IteratorComplete (ejsval iterResult)
+{
+    /* 1. Assert: Type(iterResult) is Object. */
+    if (!EJSVAL_IS_OBJECT(iterResult))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "iterResult is not an object");
+
+    /* 2. Let done be Get(iterResult, "done"). */
+    ejsval done = Get(iterResult, _ejs_atom_done);
+
+    /* 3. Return ToBoolean(done). */
+    return ToBoolean(done);
+}
+
+/* 7.4.5 IteratorValue ( iterResult ) */
+ejsval
+IteratorValue (ejsval iterResult)
+{
+    /* 1. Assert: Type(iterResult) is Object. */
+    if (!EJSVAL_IS_OBJECT(iterResult))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "iterResult is not an object");
+
+    /* 2. Return Get(iterResult, "value"). */
+    return Get(iterResult, _ejs_atom_value);
+}
+
+/* 7.4.6 IteratorStep ( iterator ) */
+ejsval
+IteratorStep (ejsval iterator)
+{
+    /* 1. Let result be IteratorNext(iterator). */
+    /* 2. ReturnIfAbrupt(result). */
+    ejsval result = IteratorNext (iterator, _ejs_undefined);
+
+    /* 3. Let done be IteratorComplete(result). */
+    ejsval done = IteratorComplete (result);
+
+    /* 5. If done is true, then return false. */
+    if (EJSVAL_TO_BOOLEAN(done))
+        return _ejs_false;
+
+    /* 6. Return result */
+    return result;
+}
+
+/* 7.4.7 CreateIterResultObject (value, done) */
 ejsval
 _ejs_create_iter_result (ejsval value, ejsval done)
 {

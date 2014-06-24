@@ -286,18 +286,23 @@ _ejs_Set_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     // 5. If iterable is not present, let iterable be undefined. 
     ejsval iterable = _ejs_undefined;
-    if (argc > 1)
+    if (argc > 0)
         iterable = args[0];
     ejsval iter = _ejs_undefined;
+    ejsval adder = _ejs_undefined;
+
     // 6. If iterable is either undefined or null, then let iter be undefined.
     // 7. Else, 
     if (!EJSVAL_IS_UNDEFINED(iterable) && !EJSVAL_IS_NULL(iterable)) {
-        EJS_NOT_IMPLEMENTED(); // XXX we don't support iterators at all yet
         //    a. Let iter be the result of GetIterator(iterable). 
         //    b. ReturnIfAbrupt(iter). 
-        //    c. Let adder be the result of Get(set, "add"). 
+        iter = GetIterator (iterable, _ejs_undefined);
+        //    c. Let adder be the result of Get(set, "add").
         //    d. ReturnIfAbrupt(adder). 
-        //    e. If IsCallable(adder) is false, throw a TypeError Exception. 
+        adder = Get (set, _ejs_atom_add);
+        //    e. If IsCallable(adder) is false, throw a TypeError Exception.
+        if (!EJSVAL_IS_CALLABLE(adder))
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Set.prototype.add is not a function");
     }
     // 8. If the value of sets’s [[SetData]] internal slot is not undefined, then throw a TypeError exception. 
     // 9. Assert: set has not been reentrantly initialized. 
@@ -307,16 +312,27 @@ _ejs_Set_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     if (EJSVAL_IS_UNDEFINED(iter))
         return set;
 
-    EJS_NOT_IMPLEMENTED(); // XXX we don't support iterators at all yet
     // 12. Repeat 
-    //    a. Let next be the result of IteratorStep(iter). 
-    //    b. ReturnIfAbrupt(next). 
-    //    c. If next is false, then return set. 
-    //    d. Let nextValue be IteratorValue(next). 
-    //    e. ReturnIfAbrupt(nextValue). 
-    //    f. Let status be the result of calling the [[Call]] internal method of adder with set as thisArgument 
-    //       and a List whose sole element is nextValue as argumentsList. 
-    //    g. ReturnIfAbrupt(status). 
+    for (;;) {
+        //    a. Let next be the result of IteratorStep(iter).
+        //    b. ReturnIfAbrupt(next).
+        ejsval next = IteratorStep (iter);
+
+        //    c. If next is false, then return set.
+        if (EJSVAL_TO_BOOLEAN(next) == EJSVAL_TO_BOOLEAN(_ejs_false))
+            return set;
+
+        //    d. Let nextValue be IteratorValue(next).
+        //    e. ReturnIfAbrupt(nextValue).
+        ejsval nextValue = IteratorValue (next);
+
+        //    f. Let status be the result of calling the [[Call]] internal method of adder with set as thisArgument
+        //       and a List whose sole element is nextValue as argumentsList.
+        //    g. ReturnIfAbrupt(status).
+        _ejs_invoke_closure (adder, set, 1, &nextValue);
+    }
+
+    return set;
 }
 
 // ECMA262: 23.2.2.2

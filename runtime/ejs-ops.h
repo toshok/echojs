@@ -76,6 +76,12 @@ ejsval _ejs_isFinite_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args
 ejsval _ejs_parseInt_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
 ejsval _ejs_parseFloat_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
 
+ejsval CheckIterableObject (ejsval obj);
+ejsval GetIterator (ejsval obj, ejsval method);
+ejsval IteratorNext (ejsval iterator, ejsval value);
+ejsval IteratorComplete (ejsval iterResult);
+ejsval IteratorValue (ejsval iterResult);
+ejsval IteratorStep (ejsval iterator);
 ejsval _ejs_create_iter_result (ejsval value, ejsval done);
 
 EJS_END_DECLS
