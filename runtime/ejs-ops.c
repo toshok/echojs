@@ -1442,7 +1442,7 @@ IteratorStep (ejsval iterator)
     ejsval done = IteratorComplete (result);
 
     /* 5. If done is true, then return false. */
-    if (EJSVAL_TO_BOOLEAN(done) == EJSVAL_TO_BOOLEAN(_ejs_true))
+    if (EJSVAL_TO_BOOLEAN(done))
         return _ejs_false;
 
     /* 6. Return result */

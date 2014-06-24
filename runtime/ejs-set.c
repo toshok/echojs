@@ -286,7 +286,7 @@ _ejs_Set_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     // 5. If iterable is not present, let iterable be undefined. 
     ejsval iterable = _ejs_undefined;
-    if (argc >= 1)
+    if (argc > 0)
         iterable = args[0];
     ejsval iter = _ejs_undefined;
     ejsval adder = _ejs_undefined;
