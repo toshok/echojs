@@ -319,7 +319,7 @@ _ejs_Set_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         ejsval next = IteratorStep (iter);
 
         //    c. If next is false, then return set.
-        if (EJSVAL_TO_BOOLEAN(next) == EJSVAL_TO_BOOLEAN(_ejs_false))
+        if (!EJSVAL_TO_BOOLEAN(next))
             return set;
 
         //    d. Let nextValue be IteratorValue(next).
