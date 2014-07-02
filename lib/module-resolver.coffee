@@ -2,8 +2,10 @@ path = require 'path'
 fs = require 'fs'
 esprima = require 'esprima'
 escodegen = require 'escodegen'
-{ create_string_literal, is_string_literal } = require 'echo-util'
+{ is_string_literal } = require 'echo-util'
 { TreeVisitor } = require 'nodevisitor'
+
+b = require 'ast-builder'
 
 parseFile = (filename, content) ->
         try
@@ -50,7 +52,7 @@ class GatherImports extends TreeVisitor
                 throw new Error("import sources must be strings") if not is_string_literal(n.source)
 
                 if isInternalModule(n.source.value)
-                        n.source_path = create_string_literal(n.source_value)
+                        n.source_path = b.literal(n.source_value)
                         return n
                 
                 if n.source[0] is "/"
@@ -63,7 +65,7 @@ class GatherImports extends TreeVisitor
                         
                 @importList.push(source_path) if @importList.indexOf(source_path) is -1
 
-                n.source_path = create_string_literal(source_path)
+                n.source_path = b.literal(source_path)
                 n
         
         visitImportDeclaration: (n) -> @addSource(n)

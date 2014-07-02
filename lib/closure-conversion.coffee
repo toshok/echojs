@@ -2,6 +2,8 @@ esprima = require 'esprima'
 escodegen = require 'escodegen'
 debug = require 'debug'
 
+b = require 'ast-builder'
+
 runtime_globals = require('runtime').createGlobalsInterface(null)
 
 { reportError, reportWarning } = require 'errors'
@@ -84,36 +86,37 @@ runtime_globals = require('runtime').createGlobalsInterface(null)
   map,
   foldl,
   reject,
-  create_intrinsic,
   is_intrinsic,
-  create_identifier,
-  create_string_literal,
-  create_number_literal,
   startGenerator } = require 'echo-util'
+
+intrinsic = (id, args, loc) ->
+        rv = b.callExpression(id, args)
+        rv.loc = loc
+        rv
 
 hasOwnProperty = Object.prototype.hasOwnProperty
 
-superid                 = create_identifier "%super"
-makeClosureEnv_id       = create_identifier "%makeClosureEnv"
-makeClosure_id          = create_identifier "%makeClosure"
-makeAnonClosure_id      = create_identifier "%makeAnonClosure"
-setSlot_id              = create_identifier "%setSlot"
-slot_id                 = create_identifier "%slot"
-invokeClosure_id        = create_identifier "%invokeClosure"
-setLocal_id             = create_identifier "%setLocal"
-setGlobal_id            = create_identifier "%setGlobal"
-getLocal_id             = create_identifier "%getLocal"
-getGlobal_id            = create_identifier "%getGlobal"
-moduleGet_id            = create_identifier "%moduleGet"
-moduleImportBatch_id    = create_identifier "%moduleImportBatch"
-templateCallsite_id     = create_identifier "%templateCallsite"
-templateHandlerCall_id  = create_identifier "%templateHandlerCall"
-templateDefaultHandlerCall_id = create_identifier "%templateDefaultHandlerCall"
-createArgScratchArea_id       = create_identifier "%createArgScratchArea"
-setPrototypeOf_id       = create_identifier "%setPrototypeOf"
-objectCreate_id         = create_identifier "%objectCreate"
-gatherRest_id           = create_identifier "%gatherRest"
-arrayFromSpread_id      = create_identifier "%arrayFromSpread"
+superid                 = b.identifier "%super"
+makeClosureEnv_id       = b.identifier "%makeClosureEnv"
+makeClosure_id          = b.identifier "%makeClosure"
+makeAnonClosure_id      = b.identifier "%makeAnonClosure"
+setSlot_id              = b.identifier "%setSlot"
+slot_id                 = b.identifier "%slot"
+invokeClosure_id        = b.identifier "%invokeClosure"
+setLocal_id             = b.identifier "%setLocal"
+setGlobal_id            = b.identifier "%setGlobal"
+getLocal_id             = b.identifier "%getLocal"
+getGlobal_id            = b.identifier "%getGlobal"
+moduleGet_id            = b.identifier "%moduleGet"
+moduleImportBatch_id    = b.identifier "%moduleImportBatch"
+templateCallsite_id     = b.identifier "%templateCallsite"
+templateHandlerCall_id  = b.identifier "%templateHandlerCall"
+templateDefaultHandlerCall_id = b.identifier "%templateDefaultHandlerCall"
+createArgScratchArea_id       = b.identifier "%createArgScratchArea"
+setPrototypeOf_id       = b.identifier "%setPrototypeOf"
+objectCreate_id         = b.identifier "%objectCreate"
+gatherRest_id           = b.identifier "%gatherRest"
+arrayFromSpread_id      = b.identifier "%arrayFromSpread"
 
 class TransformPass extends TreeVisitor
         constructor: (@options) ->
@@ -143,26 +146,11 @@ DesugarClasses = class DesugarClasses extends TransformPass
                 @method_stack = new Stack
 
         createSuperReference = (is_static, id) ->
-                if is_static
-                        obj = superid
-                else
-                        obj = {
-                                type: MemberExpression
-                                object: superid
-                                property: create_identifier "prototype"
-                                computed: false
-                        }
+                obj = if is_static then superid else b.memberExpression(superid, b.identifier('prototype'))
 
-                if not id?
-                        return obj
+                return obj if not id?
                         
-                return {
-                        type: MemberExpression
-                        object: obj
-                        property: id
-                        computed: false
-                }
-                        
+                b.memberExpression(obj, id)
         
         visitCallExpression: (n) ->
                 if n.callee.type is Identifier and n.callee.name is "super"
@@ -207,36 +195,13 @@ DesugarClasses = class DesugarClasses extends TransformPass
                                 class_init_iife_body.push ctor_func
                                 if n.superClass?
                                         # 14.5.17 step 9, make sure the constructor's __proto__ is set to superClass
-                                        class_init_iife_body.push {
-                                                type: ExpressionStatement,
-                                                expression:
-                                                        type: CallExpression
-                                                        callee: setPrototypeOf_id
-                                                        arguments: [ctor_func.id, superid]
-                                        }
+                                        class_init_iife_body.push b.expressionStatement(b.callExpression(setPrototypeOf_id, [ctor_func.id, superid]))
+
 
                                         # also set ctor.prototype = Object.create(superClass.prototype)
-                                        class_init_iife_body.push {
-                                                type: ExpressionStatement,
-                                                expression:
-                                                        type: AssignmentExpression
-                                                        operator: "="
-                                                        left:
-                                                                type: MemberExpression
-                                                                object: ctor_func.id
-                                                                property: create_identifier "prototype"
-                                                                computed: false
-                                                        right:
-                                                                type: CallExpression
-                                                                callee: objectCreate_id
-                                                                arguments: [{
-                                                                        type: MemberExpression
-                                                                        object: superid
-                                                                        property: create_identifier "prototype"
-                                                                        computed: false
-                                                                }]
-                                        }
-                                        
+                                        l = b.memberExpression(ctor_func.id,b.identifier("prototype"))
+                                        r = b.callExpression(objectCreate_id, [b.memberExpression(superid, b.identifier("prototype"))])
+                                        class_init_iife_body.push b.expressionStatement(b.assignmentExpression(l, "=", r))
                         else
                                 class_init_iife_body.push @create_proto_method m, n
 
@@ -256,37 +221,15 @@ DesugarClasses = class DesugarClasses extends TransformPass
                         class_init_iife_body.unshift @create_default_constructor n
 
                 # make sure we return the function from our iife
-                class_init_iife_body.push
-                        type: ReturnStatement
-                        argument: n.id
+                class_init_iife_body.push b.returnStatement(n.id)
 
                 # this block forms the outer wrapper iife + initializer:
                 # 
                 #  let %className = (function (%super?) { ... })(%superClassName);
                 #
-                class_init = 
-                        type: VariableDeclaration
-                        kind: "let"
-                        declarations: [{
-                                type: VariableDeclarator
-                                id:   n.id
-                                init:
-                                        type: CallExpression
-                                        callee:
-                                                type: FunctionExpression
-                                                id:   null
-                                                body: 
-                                                        type: BlockStatement
-                                                        body: class_init_iife_body
-                                                params: if n.superClass? then [superid] else []
-                                                defaults: []
-                                                rest: null
-                                                generator: false
-                                                expression: false
-                                        arguments: if n.superClass? then [n.superClass] else []
-                        }]
+                iife = b.functionExpression(null, (if n.superClass? then [superid] else []), b.blockStatement(class_init_iife_body))
                         
-                class_init
+                b.letDeclaration(n.id, b.callExpression(iife, if n.superClass? then [n.superClass] else []))
 
         gather_members: (ast_class) ->
                 methods     = new Map
@@ -320,87 +263,23 @@ DesugarClasses = class DesugarClasses extends TransformPass
                         
                 
         create_constructor: (ast_method, ast_class) ->
-                return {
-                        type: FunctionDeclaration
-                        id: ast_class.id
-                        body: ast_method.value.body
-                        params: ast_method.value.params
-                        defaults: ast_method.value.defaults
-                        rest: ast_method.value.rest
-                        generator: false
-                        expression: false
-                }
+                b.functionDeclaration(ast_class.id, ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest)
 
         create_default_constructor: (ast_class) ->
-                return {
-                        type: FunctionDeclaration
-                        id: ast_class.id
-                        body:
-                                # XXX splat args into the call to super's ctor
-                                type: BlockStatement
-                                body: []
-                        params: []
-                        defaults: []
-                        rest: create_identifier "args"
-                        generator: false
-                        expression: false
-                }
+                # XXX FIXME splat args into the call to super's ctor
+                b.functionDeclaration(ast_class.id, [], b.blockStatement(), [], b.identifier('args'))
                 
         create_proto_method: (ast_method, ast_class) ->
-                proto_member =
-                        type: MemberExpression
-                        object:
-                                type: MemberExpression
-                                object: ast_class.id
-                                property: create_identifier "prototype"
-                                computed: false
-                        property: if ast_method.key.type is ComputedPropertyKey then ast_method.key.expression else ast_method.key
-                        computed: ast_method.key.type is ComputedPropertyKey
-
-                method =
-                        type: FunctionExpression
-                        id: ast_method.key
-                        body: ast_method.value.body
-                        params: ast_method.value.params
-                        defaults: []
-                        rest: null
-                        generator: false
-                        expression: false
-                        
+                proto_member = b.memberExpression(b.memberExpression(ast_class.id, b.identifier('prototype')), (if ast_method.key.type is ComputedPropertyKey then ast_method.key.expression else ast_method.key), ast_method.key.type is ComputedPropertyKey)
                 
-                return {
-                        type: ExpressionStatement
-                        expression:
-                                type: AssignmentExpression
-                                operator: "="
-                                left: proto_member
-                                right: method
-                }
+                method = b.functionExpression(ast_method.key, ast_method.value.params, ast_method.value.body)
+
+                b.expressionStatement(b.assignmentExpression(proto_member, "=", method))
 
         create_static_method: (ast_method, ast_class) ->
-                method =
-                        type: FunctionExpression
-                        id: ast_method.key
-                        body: ast_method.value.body
-                        params: ast_method.value.params
-                        defaults: []
-                        rest: null
-                        generator: false
-                        expression: false
-                        
-                
-                return {
-                        type: ExpressionStatement
-                        expression:
-                                type: AssignmentExpression
-                                operator: "="
-                                left:
-                                        type: MemberExpression
-                                        object: ast_class.id
-                                        property: if ast_method.key.type is ComputedPropertyKey then ast_method.key.expression else ast_method.key
-                                        computed: ast_method.key.type is ComputedPropertyKey
-                                right: method
-                }
+                method = b.functionExpression(ast_method.key, ast_method.value.params, ast_method.value.body)
+
+                b.expressionStatement(b.assignmentExpression(b.memberExpression(ast_class.id, (if ast_method.key.type is ComputedPropertyKey then ast_method.key.expression else ast_method.key), ast_method.key.type is ComputedPropertyKey), "=", method))
 
         create_properties: (properties, ast_class, are_static) ->
                 propdescs = []
@@ -413,45 +292,24 @@ DesugarClasses = class DesugarClasses extends TransformPass
                         setter = prop_map.get("set")
 
                         if getter?
-                                accessors.push { type: Property, key: create_identifier("get"), value: getter.value, kind: "init" }
+                                accessors.push b.property(b.identifier("get"), getter.value)
                                 key = prop
                         if prop.set?
-                                accessors.push { type: Property, key: create_identifier("set"), value: setter.value, kind: "init" }
+                                accessors.push b.property(b.identifier("set"), setter.value)
                                 key = prop
 
-                        propdescs.push
-                                type: Property
-                                key: key
-                                value:
-                                        type: ObjectExpression
-                                        properties: accessors
-                                kind: "init"
+                        propdescs.push b.property(key, b.objectExpression(accessors))
 
                 return null if propdescs.length is 0
 
-                propdescs_literal =
-                        type: ObjectExpression
-                        properties: propdescs
+                propdescs_literal = b.objectExpression(propdescs)
 
                 if are_static
                         target = ast_class.id
                 else
-                        target =
-                                type: MemberExpression
-                                object: ast_class.id
-                                property: create_identifier "prototype"
-                                computed: false
+                        target = b.memberExpression(ast_class.id, b.identifier("prototype"))
 
-                return {
-                        type: ExpressionStatement
-                        expression:
-                                type: CallExpression
-                                callee:
-                                        type: MemberExpression
-                                        object: create_identifier "Object"
-                                        property: create_identifier "defineProperties"
-                                arguments: [target, propdescs_literal]
-                }
+                b.expressionStatement(b.callExpression(b.memberExpression(b.identifier("Object"), b.identifier("defineProperties")), [target, propdescs_literal]))
 
 #
 # each element in env is an object of the form:
@@ -571,15 +429,7 @@ class FuncDeclsToVars extends TransformPass
                         func_exp = n
                         func_exp.type = FunctionExpression
                         func_exp.body = @visit func_exp.body
-                        return {
-                                type: VariableDeclaration,
-                                declarations: [{
-                                        type: VariableDeclarator
-                                        id: create_identifier n.id.name
-                                        init: func_exp
-                                }],
-                                kind: "var"
-                        }
+                        return b.varDeclaration(b.identifier(n.id.name), func_exp)
 
 
 # hoists all vars to the start of the enclosing function, replacing
@@ -607,11 +457,7 @@ class HoistVars extends TransformPass
                 super
                 @scope_stack = new Stack
 
-        create_empty_declarator = (decl_name) ->
-                type: VariableDeclarator
-                id: create_identifier decl_name
-                init: null
-
+        create_empty_declarator = (decl_name) -> b.variableDeclarator(b.identifier(decl_name), b.null())
                 
         visitProgram: (n) ->
                 vars = new Set
@@ -621,10 +467,7 @@ class HoistVars extends TransformPass
 
                 return n if vars.size() is 0
 
-                n.body.unshift
-                        type: VariableDeclaration
-                        declarations: create_empty_declarator varname for varname in vars.keys()
-                        kind: "let"
+                n.body.unshift b.letDeclaration(create_empty_declarator varname for varname in vars.keys())
                 n
         
         visitFunction: (n) ->
@@ -635,10 +478,7 @@ class HoistVars extends TransformPass
 
                 return n if vars.size() is 0
 
-                n.body.body.unshift
-                        type: VariableDeclaration
-                        declarations: create_empty_declarator varname for varname in vars.keys()
-                        kind: "let"
+                n.body.body.unshift b.letDeclaration(create_empty_declarator varname for varname in vars.keys())
                 n
 
         visitFor: (n) ->
@@ -653,7 +493,7 @@ class HoistVars extends TransformPass
         visitForIn: (n) ->
                 if n.left.type is VariableDeclaration
                         @scope_stack.top.vars.add n.left.declarations[0].id.name
-                        n.left = create_identifier n.left.declarations[0].id.name
+                        n.left = b.identifier n.left.declarations[0].id.name
                 n.right = @visit n.right
                 n.body = @visit n.body
                 n
@@ -661,7 +501,7 @@ class HoistVars extends TransformPass
         visitForOf: (n) ->
                 if n.left.type is VariableDeclaration
                         @scope_stack.top.vars.add n.left.declarations[0].id.name
-                        n.left = create_identifier n.left.declarations[0].id.name
+                        n.left = b.identifier n.left.declarations[0].id.name
                 n.right = @visit n.right
                 n.body = @visit n.body
                 n
@@ -672,13 +512,7 @@ class HoistVars extends TransformPass
                         assignments = []
                         for i in [0...n.declarations.length]
                                 if n.declarations[i].init?
-                                        assignment =
-                                                type: AssignmentExpression
-                                                left: create_identifier n.declarations[i].id.name
-                                                right: @visit n.declarations[i].init
-                                                operator: "="
-
-                                        assignments.push assignment
+                                        assignments.push b.assignmentExpression(b.identifier(n.declarations[i].id.name), "=", @visit n.declarations[i].init)
 
                         # vars are hoisted to the containing function's toplevel scope
                         for decl in n.declarations
@@ -686,15 +520,12 @@ class HoistVars extends TransformPass
                                         reportWarning("multiple var declarations for `#{decl.id.name}' in this function.", @filename, n.loc)
                                 @scope_stack.top.vars.add decl.id.name
 
-                        if assignments.length is 0
-                                return { type: EmptyStatement }
+                        return b.emptyStatement() if assignments.length is 0
                                 
                         # now return the new assignments, which will replace the original variable
                         # declaration node.
                         if assignments.length > 1
-                                assign_exp =
-                                        type: SequenceExpression
-                                        expressions: assignments
+                                assign_exp = b.sequenceExpression(assignments)
                         else
                                 assign_exp = assignments[0]
 
@@ -702,10 +533,7 @@ class HoistVars extends TransformPass
                         if @skipExpressionStatement
                                 return assign_exp
                         else
-                                return {
-                                        type: ExpressionStatement
-                                        expression: assign_exp
-                                }
+                                return b.expressionStatement(assign_exp)
                 else
                         n = super
                 n
@@ -743,20 +571,14 @@ DesugarArrowFunctions = class DesugarArrowFunctions extends TransformPass
 
         visitArrowFunctionExpression: (n) ->
                 if n.expression
-                        n.body = {
-                                type: BlockStatement
-                                body: [{
-                                        type: ReturnStatement
-                                        argument: n.body
-                                }]
-                        }
+                        n.body = b.blockStatement([b.returnStatement(n.body)])
                         n.expression = false
                 n = @visitFunction n
                 n.type = FunctionExpression
                 n
 
         visitThisExpression: (n) ->
-                return { type: Literal, value: undefined } if @mapping.length == 0
+                return b.undefined() if @mapping.length == 0
 
                 topfunc = @mapping[0].func
 
@@ -765,22 +587,13 @@ DesugarArrowFunctions = class DesugarArrowFunctions extends TransformPass
                                 # if we're already on top, just return the existing thisExpression
                                 return n if topfunc is m
 
-                                return create_identifier m.id if m.id?
+                                return b.identifier m.id if m.id?
 
                                 m.id = "_this_#{@thisGen()}"
 
-                                m.prepend = {
-                                        type: VariableDeclaration
-                                        declarations: [{
-                                                type: VariableDeclarator
-                                                id:  create_identifier m.id
-                                                init:
-                                                        type: ThisExpression
-                                        }],
-                                        kind: "let"
-                                }
-
-                                return create_identifier m.id
+                                m.prepend = b.letDeclaration(b.identifier(m.id), b.thisExpression())
+                                
+                                return b.identifier m.id
 
                 reportError(SyntaxError, "no binding for 'this' available for arrow function", @filename, n.loc)
         
@@ -821,8 +634,12 @@ class ComputeFree extends TransformPass
                 statement for statement in body when statement.type is VariableDeclaration or statement.type is FunctionDeclaration
 
         free_blocklike: (exp,body) ->
-                decls = @decl_names @collect_decls body
-                uses = @setUnion.apply null, body.map @call_free
+                if body?
+                        decls = @decl_names @collect_decls body
+                        uses = @setUnion.apply null, body.map @call_free
+                else
+                        decls = []
+                        uses = new Set()
                 exp.ejs_decls = decls
                 exp.ejs_free_vars = uses.subtract decls
                 exp.ejs_free_vars
@@ -949,13 +766,10 @@ class SubstituteVariables extends TransformPass
                 n.body = @visit n.body
                 if Array.isArray init
                         n.init = null
-                        return {
-                                type: BlockStatement
-                                body: init.concat [n]
-                        }
-                else
-                        n.init = init
-                        n
+                        return b.blockStatement(init.concat([n]))
+
+                n.init = init
+                n
 
         visitForIn: (n) ->
                 # for-in loops complicate things.
@@ -965,14 +779,11 @@ class SubstituteVariables extends TransformPass
                 n.body = @visit n.body
                 if Array.isArray left
                         console.log "whu?"
-                        n.left = create_identifier left[0].declarations[0].id.name
-                        return {
-                                type: BlockStatement
-                                body: left.concat [n]
-                        }
-                else
-                        n.left = left
-                        n
+                        n.left = b.identifier(left[0].declarations[0].id.name)
+                        return b.blockStatement(left.concat([n]))
+
+                n.left = left
+                n
 
         visitVariableDeclaration: (n) ->
                 # here we do some magic depending on whether or not
@@ -1017,21 +828,10 @@ class SubstituteVariables extends TransformPass
 
                                         # push the current set of new_declarations if there are any
                                         if new_declarations.length > 0
-                                                rv.push {
-                                                        type: VariableDeclaration
-                                                        declarations: new_declarations
-                                                        kind: n.kind
-                                                }
+                                                rv.push b.variableDeclaration(n.kind, new_declarations)
 
                                         # splice in this assignment
-                                        rv.push {
-                                                type: ExpressionStatement
-                                                expression: 
-                                                        type: AssignmentExpression
-                                                        left: @currentMapping()[decl.id.name]
-                                                        right: decl.init
-                                                        operator: "="
-                                        }
+                                        rv.push b.expressionStatement(b.assignmentExpression(@currentMapping()[decl.id.name], "=", decl.init))
 
                                         # then re-init the new_declarations array
                                         new_declarations = []
@@ -1043,14 +843,10 @@ class SubstituteVariables extends TransformPass
 
                 # push the last set of new_declarations if there were any
                 if new_declarations.length > 0
-                        rv.push {
-                                type: VariableDeclaration
-                                declarations: new_declarations
-                                kind: n.kind
-                        }
+                        rv.push b.variableDeclaration(n.kind, new_declarations)
 
                 if rv.length is 0
-                        rv = { type: EmptyStatement }
+                        rv = b.emptyStatement()
                 rv
 
         visitProperty: (n) ->
@@ -1073,35 +869,17 @@ class SubstituteVariables extends TransformPass
 
         visitFunction: (n) ->
             try
-                this_env_name = "%env_#{n.ejs_env.id}"
+                this_env_id = b.identifier("%env_#{n.ejs_env.id}")
                 if n.ejs_env.parent?
                         parent_env_name = "%env_#{n.ejs_env.parent.id}"
 
                 env_prepends = []
                 new_mapping = shallow_copy_object @currentMapping()
                 if n.ejs_env.closed.empty() and not n.ejs_env.nested_requires_env
-                        env_prepends.push {
-                                type: VariableDeclaration,
-                                declarations: [{
-                                        type: VariableDeclarator
-                                        id:  create_identifier this_env_name
-                                        init:
-                                                type: Literal
-                                                value: null
-                                }],
-                                kind: "let"
-                        }
+                        env_prepends.push b.letDeclaration(this_env_id, b.null())
                 else
                         # insert environment creation (at the start of the function body)
-                        env_prepends.push {
-                                type: VariableDeclaration,
-                                declarations: [{
-                                        type: VariableDeclarator
-                                        id:  create_identifier this_env_name
-                                        init: create_intrinsic makeClosureEnv_id, [create_number_literal n.ejs_env.closed.size() + if n.ejs_env.parent? then 1 else 0]
-                                }],
-                                kind: "let"
-                        }
+                        env_prepends.push b.letDeclaration(this_env_id, intrinsic makeClosureEnv_id, [b.literal n.ejs_env.closed.size() + if n.ejs_env.parent? then 1 else 0])
 
                         n.ejs_env.slot_mapping = Object.create null
                         i = 0
@@ -1115,32 +893,26 @@ class SubstituteVariables extends TransformPass
                         
                         if n.ejs_env.parent?
                                 parent_env_slot = n.ejs_env.slot_mapping[parent_env_name]
-                                env_prepends.push {
-                                        type: ExpressionStatement
-                                        expression: create_intrinsic setSlot_id, [create_identifier(this_env_name), create_number_literal(parent_env_slot), create_string_literal(parent_env_name), create_identifier(parent_env_name) ]
-                                }
+                                env_prepends.push b.expressionStatement(intrinsic setSlot_id, [this_env_id, b.literal(parent_env_slot), b.literal(parent_env_name), b.identifier(parent_env_name) ]);
                                 
 
                         # we need to push assignments of any closed over parameters into the environment at this point
                         for param in n.params
                                 if n.ejs_env.closed.has param.name
-                                        env_prepends.push {
-                                                type: ExpressionStatement
-                                                expression: create_intrinsic setSlot_id, [ create_identifier(this_env_name), create_number_literal(n.ejs_env.slot_mapping[param.name]), create_string_literal(param.name), create_identifier(param.name) ]
-                                        }
+                                        env_prepends.push b.expressionStatement(intrinsic setSlot_id, [ this_env_id, b.literal(n.ejs_env.slot_mapping[param.name]), b.literal(param.name), b.identifier(param.name) ])
 
                         new_mapping["%slot_mapping"] = n.ejs_env.slot_mapping
 
                         flatten_memberexp = (exp, mapping) ->
                                 if exp.type isnt CallExpression
-                                        [create_number_literal(mapping[exp.name])]
+                                        [b.literal(mapping[exp.name])]
                                 else
                                         flatten_memberexp(exp.arguments[0], mapping).concat [exp.arguments[1]]
 
                         prepend_environment = (exps) ->
-                                obj = create_identifier(this_env_name)
+                                obj = this_env_id
                                 for prop in exps
-                                        obj = create_intrinsic(slot_id, [ obj, prop ])
+                                        obj = intrinsic(slot_id, [obj, prop])
                                 obj
 
                         # if there are existing mappings prepend "%env." (a MemberExpression) to them
@@ -1151,9 +923,9 @@ class SubstituteVariables extends TransformPass
                         
                         # and add mappings for all variables in .closed from "x" to "%env.x"
 
-                        new_mapping["%env"] = create_identifier this_env_name
+                        new_mapping["%env"] = this_env_id
                         n.ejs_env.closed.map (sym) ->
-                                new_mapping[sym] = create_intrinsic slot_id, [ (create_identifier this_env_name), (create_number_literal n.ejs_env.slot_mapping[sym]), (create_string_literal sym) ]
+                                new_mapping[sym] = intrinsic slot_id, [this_env_id, b.literal(n.ejs_env.slot_mapping[sym]), b.literal(sym)]
 
                 # remove all mappings for variables declared in this function
                 if n.ejs_decls?
@@ -1178,24 +950,24 @@ class SubstituteVariables extends TransformPass
                                 throw "there should be no FunctionDeclarations at this point"
                         else # n.type is FunctionExpression
                                 intrinsic_args = []
-                                intrinsic_args.push(if n.ejs_env.parent? then create_identifier(parent_env_name) else { type: Literal, value: null})
+                                intrinsic_args.push(if n.ejs_env.parent? then b.identifier(parent_env_name) else b.null())
                                 
                                 if n.id?
                                         intrinsic_id = makeClosure_id
                                         if n.id.type is Identifier
-                                                intrinsic_args.push(create_string_literal(n.id.name))
+                                                intrinsic_args.push(b.literal(n.id.name))
                                         else
-                                                intrinsic_args.push(create_string_literal(escodegen.generate n.id))
+                                                intrinsic_args.push(b.literal(escodegen.generate n.id))
                                 else
                                         intrinsic_id = makeAnonClosure_id
 
                                 intrinsic_args.push(n)
                                 
-                                return create_intrinsic intrinsic_id, intrinsic_args
+                                return intrinsic intrinsic_id, intrinsic_args
                 n
             catch e
                 console.warn "exception: " + e
-                console.warn "compiling the following code:"
+                #console.warn "compiling the following code:"
                 #console.warn escodegen.generate n
                 throw e
                 
@@ -1210,7 +982,7 @@ class SubstituteVariables extends TransformPass
 
                 return n if is_intrinsic(n)
                 @function_stack.top.scratch_size = Math.max @function_stack.top.scratch_size, n.arguments.length
-                create_intrinsic invokeClosure_id, [n.callee].concat n.arguments
+                intrinsic invokeClosure_id, [n.callee].concat n.arguments
 
         visitNewExpression: (n) ->
                 super
@@ -1223,7 +995,7 @@ class SubstituteVariables extends TransformPass
 
                 @function_stack.top.scratch_size = Math.max @function_stack.top.scratch_size, n.arguments.length
 
-                rv = create_intrinsic invokeClosure_id, [n.callee].concat n.arguments
+                rv = intrinsic invokeClosure_id, [n.callee].concat n.arguments
                 rv.type = NewExpression
                 rv
 
@@ -1249,10 +1021,7 @@ class LambdaLift extends TransformPass
 
         maybePrependScratchArea: (n) ->
                 if n.scratch_size > 0
-                        alloc_scratch =
-                                type: ExpressionStatement
-                                expression: create_intrinsic createArgScratchArea_id, [ { type: Literal, value: n.scratch_size } ]
-                        n.body.body.unshift alloc_scratch
+                        n.body.body.unshift b.expressionStatement(intrinsic createArgScratchArea_id, [ b.literal(n.scratch_size) ])
                 
         visitFunctionDeclaration: (n) ->
                 n.body = @visit n.body
@@ -1268,9 +1037,7 @@ class LambdaLift extends TransformPass
                         global_name = genAnonymousFunctionName(@filename)
                 
                 n.type = FunctionDeclaration
-                n.id =
-                        type: Identifier
-                        name: global_name
+                n.id = b.identifier(global_name)
 
                 @functions.push n
 
@@ -1278,12 +1045,9 @@ class LambdaLift extends TransformPass
 
                 @maybePrependScratchArea n
 
-                n.params.unshift create_identifier "%env_#{n.ejs_env.parent.id}"
+                n.params.unshift b.identifier("%env_#{n.ejs_env.parent.id}")
                 
-                return {
-                        type: Identifier,
-                        name: global_name
-                }
+                return b.identifier(global_name)
 
         ###
         # XXX don't leave me in
@@ -1364,12 +1128,12 @@ class MarkLocalAndGlobalVariables extends TransformPass
                 visited_rhs = @visit n.right
                 
                 if is_intrinsic lhs, "%slot"
-                        create_intrinsic setSlot_id, [lhs.arguments[0], lhs.arguments[1], visited_rhs], lhs.loc
+                        intrinsic setSlot_id, [lhs.arguments[0], lhs.arguments[1], visited_rhs], lhs.loc
                 else if lhs.type is Identifier
                         if @findIdentifierInScope lhs
-                                create_intrinsic setLocal_id, [lhs, visited_rhs], lhs.loc
+                                intrinsic setLocal_id, [lhs, visited_rhs], lhs.loc
                         else
-                                create_intrinsic setGlobal_id, [lhs, visited_rhs], lhs.loc
+                                intrinsic setGlobal_id, [lhs, visited_rhs], lhs.loc
                 else
                         n.left = @visit n.left
                         n.right = visited_rhs
@@ -1431,7 +1195,7 @@ class MarkLocalAndGlobalVariables extends TransformPass
                 n
 
         visitIdentifier: (n) ->
-                create_intrinsic @intrinsicForIdentifier(n), [n]
+                intrinsic @intrinsicForIdentifier(n), [n]
 
 #
 # special pass to inline some common idioms dealing with IIFEs
@@ -1495,30 +1259,14 @@ class IIFEIdioms extends TreeVisitor
                 # up argument bindings (done here) and return
                 # statements in the body (done in LLVMIRVisitor).
                 # 
-                iife_rv_id = create_identifier "%iife_rv_#{@iife_generator()}"
+                iife_rv_id = b.identifier "%iife_rv_#{@iife_generator()}"
 
-                replacement = { type: BlockStatement, body: [] }
+                replacement = b.blockStatement()
 
-                replacement.body.push {
-                        type: VariableDeclaration,
-                        kind: "let",
-                        declarations: [{
-                                type: VariableDeclarator
-                                id:   iife_rv_id
-                                init: undefined
-                        }]
-                }
+                replacement.body.push b.letDeclaration(iife_rv_id, b.undefined())
 
                 for i in [0...arity]
-                        replacement.body.push {
-                                type: VariableDeclaration,
-                                kind: "let",
-                                declarations: [{
-                                        type: VariableDeclarator
-                                        id:   candidate.arguments[0].arguments[1].params[i]
-                                        init: if i <= arg_count then candidate.arguments[i+1] else undefined
-                                }]
-                        }
+                        replacement.body.push b.letDeclaration(candidate.arguments[0].arguments[1].params[i], if i <= arg_count then candidate.arguments[i+1] else b.undefined())
                         
                 @function_stack.top.scratch_size = Math.max @function_stack.top.scratch_size, candidate.arguments[0].arguments[1].scratch_size
 
@@ -1529,10 +1277,10 @@ class IIFEIdioms extends TreeVisitor
                 replacement.body.push body
 
                 if is_intrinsic(n.expression, "%setSlot")
-                        n.expression.arguments[2] = create_intrinsic getLocal_id, [iife_rv_id]
+                        n.expression.arguments[2] = intrinsic getLocal_id, [iife_rv_id]
                         replacement.body.push n
                 else if is_intrinsic(n.expression, "%setGlobal") or is_intrinsic(n.expression, "setLocal".expression)
-                        n.expression.arguments[1] = create_intrinsic getLocal_id, [iife_rv_id]
+                        n.expression.arguments[1] = intrinsic getLocal_id, [iife_rv_id]
                         replacement.body.push n
                         
                 return replacement
@@ -1540,19 +1288,11 @@ class IIFEIdioms extends TreeVisitor
         maybeInlineIIFECall: (candidate, n) ->
                 return n if candidate.arguments.length isnt 2 or candidate.arguments[1].type isnt ThisExpression
 
-                iife_rv_id = create_identifier "%iife_rv_#{@iife_generator()}"
+                iife_rv_id = b.identifier "%iife_rv_#{@iife_generator()}"
 
-                replacement = { type: BlockStatement, body: [] }
+                replacement = b.blockStatement()
 
-                replacement.body.push {
-                        type: VariableDeclaration,
-                        kind: "let",
-                        declarations: [{
-                                type: VariableDeclarator
-                                id:   iife_rv_id
-                                init: undefined
-                        }]
-                }
+                replacement.body.push b.letDeclaration(iife_rv_id, b.undefined())
 
                 body = candidate.arguments[0].object.arguments[1].body
                 body.ejs_iife_rv = iife_rv_id
@@ -1561,10 +1301,10 @@ class IIFEIdioms extends TreeVisitor
                 replacement.body.push body
 
                 if is_intrinsic(n.expression, "%setSlot")
-                        n.expression.arguments[2] = create_intrinsic getLocal_id, [iife_rv_id]
+                        n.expression.arguments[2] = intrinsic getLocal_id, [iife_rv_id]
                         replacement.body.push n
                 else if is_intrinsic(n.expression, "%setGlobal") or is_intrinsic(n.expression, "setLocal")
-                        n.expression.arguments[1] = create_intrinsic getLocal_id, [iife_rv_id]
+                        n.expression.arguments[1] = intrinsic getLocal_id, [iife_rv_id]
                         replacement.body.push n
 
                 return replacement
@@ -1593,24 +1333,16 @@ class IIFEIdioms extends TreeVisitor
                         
 class DesugarDestructuring extends TransformPass
         gen = startGenerator()
-        fresh = () -> create_identifier "%destruct_tmp#{gen()}"
+        fresh = () -> b.identifier "%destruct_tmp#{gen()}"
 
         # given an assignment { pattern } = id
         # 
         createObjectPatternBindings = (id, pattern, decls) ->
                 for prop in pattern.properties
-                        memberexp = {
-                                type:     MemberExpression
-                                object:   id
-                                property: prop.key
-                        }
+                        memberexp = b.memberExpression(id, prop.key)
                         
-                        decls.push {
-                                type: VariableDeclarator
-                                id:   prop.key
-                                init: memberexp
-                        }
-                        
+                        decls.push b.variableDeclarator(prop.key, memberexp)
+
                         if prop.value.type is Identifier
                                 # this happens with things like:  function foo ({w:i}) { }
                                 throw new Error "not sure how to handle this case.." if prop.value.name isnt prop.key.name
@@ -1624,36 +1356,21 @@ class DesugarDestructuring extends TransformPass
         createArrayPatternBindings = (id, pattern, decls) ->
                 el_num = 0
                 for el in pattern.elements
-                        memberexp = {
-                                type:     MemberExpression
-                                object:   id
-                                computed: true
-                                property: create_number_literal(el_num)
-                        }
+                        memberexp = b.memberExpression(id, b.literal(el_num), true)
 
                         if el.type is Identifier
-                                decls.push {
-                                        type: VariableDeclarator
-                                        id:   el
-                                        init: memberexp
-                                }
+                                decls.push b.variableDeclarator(el, memberexp)
                         else if el.type is ObjectPattern
                                 p_id = fresh()
 
-                                decls.push {
-                                        type: VariableDeclarator
-                                        id:   p_id
-                                        init: memberexp
-                                }
+                                decls.push b.variableDeclarator(p_id, memberexp)
+
                                 createObjectPatternBindings(p_id, el, decls)
                         else if el.type is ArrayPattern
                                 p_id = fresh()
 
-                                decls.push {
-                                        type: VariableDeclarator
-                                        id:   p_id
-                                        init: memberexp
-                                }
+                                decls.push b.variableDeclarator(p_id, memberexp)
+
                                 createArrayPatternBindings(p_id, el, decls)
                         
                         el_num += 1
@@ -1669,19 +1386,13 @@ class DesugarDestructuring extends TransformPass
                         if p.type is ObjectPattern
                                 p_id = fresh()
                                 new_params.push p_id
-                                new_decl =
-                                        type: VariableDeclaration
-                                        kind: "let"
-                                        declarations: []
+                                new_decl = b.letDeclaration()
                                 createObjectPatternBindings(p_id, p, new_decl.declarations)
                                 new_decls.push new_decl
                         else if p.type is ArrayPattern
                                 p_id = fresh()
                                 new_params.push p_id
-                                new_decl =
-                                        type: VariableDeclaration
-                                        kind: "let"
-                                        declarations: []
+                                new_decl = b.letDeclaration()
                                 createArrayPatternBindings(p_id, p, new_decl.declarations)
                                 new_decls.push new_decl
                         else if p.type is Identifier
@@ -1700,18 +1411,12 @@ class DesugarDestructuring extends TransformPass
                 for decl in n.declarations
                         if decl.id.type is ObjectPattern
                                 obj_tmp_id = fresh()
-                                decls.push
-                                        type: VariableDeclarator
-                                        id: obj_tmp_id
-                                        init: decl.init
+                                decls.push b.variableDeclarator(obj_tmp_id, decl.init)
                                 createObjectPatternBindings(obj_tmp_id, decl.id, decls)
                         else if decl.id.type is ArrayPattern
                                 # create a fresh tmp and declare it
                                 array_tmp_id = fresh()
-                                decls.push
-                                        type: VariableDeclarator
-                                        id: array_tmp_id
-                                        init: decl.init
+                                decls.push b.variableDeclarator(array_tmp_id, decl.init)
                                 createArrayPatternBindings(array_tmp_id, decl.id, decls)
                                         
                         else if decl.id.type is Identifier
@@ -1759,65 +1464,27 @@ class DesugarTemplates extends TransformPass
                 raw_elements = []
                 cooked_elements = []
                 for q in quasis
-                        raw_elements.push    create_string_literal q.value.raw
-                        cooked_elements.push create_string_literal q.value.cooked
+                        raw_elements.push    b.literal q.value.raw
+                        cooked_elements.push b.literal q.value.cooked
 
-                qo = {
-                        type: ObjectExpression,
-                        properties: [
-                                {
-                                   type: Property,
-                                   kind: "init",
-                                   key: create_identifier("raw"),
-                                   value: { type: ArrayExpression, elements: raw_elements }
-                                }
-                                {
-                                   type: Property,
-                                   kind: "init",
-                                   key: create_identifier("cooked"),
-                                   value: { type: ArrayExpression, elements: cooked_elements }
-                                }
-                        ]
-                }
+                qo = b.objectExpression([b.property(b.identifier("raw"), b.arrayExpression(raw_elements)),
+                                         b.property(b.identifier("cooked"), b.arrayExpression(cooked_elements))])
 
-                return {
-                        type: FunctionDeclaration
-                        id: create_identifier "generate_#{name}"
-                        body: {
-                                type: BlockStatement,
-                                body: [{
-                                        type: ExpressionStatement,
-                                        expression: create_intrinsic templateCallsite_id, [create_string_literal(name), qo]
-                                }]
-                        },
-                        params: [],
-                        defaults: [],
-                        rest: undefined,
-                        generator: false,
-                        expression: false
-                }
-                
+                return b.functionDeclaration(b.identifier("generate_#{name}"), [],
+                        b.blockStatement([b.expressionStatement(intrinsic templateCallsite_id, [b.literal(name), qo])]))
                         
         visitTaggedTemplateExpression: (n, callsites) ->
                 callsiteid_func_id = freshCallsiteId();
                 callsite_func = @generateCreateCallsiteIdFunc(callsiteid_func_id, n.quasi.quasis)
                 callsites.push callsite_func
-                substitutions = { type: ArrayExpression, elements: n.quasi.expressions }
-                callsiteid_func_call = {
-                        type: CallExpression,
-                        callee: callsite_func.id
-                        arguments: []
-                }
-                return {
-                        type: CallExpression,
-                        callee: n.tag,
-                        arguments: [callsiteid_func_call, substitutions]
-                }
+                substitutions = b.arrayExpression(n.quasi.expressions)
+                callsiteid_func_call = b.callExpression(callsite_func.id, [])
+                return b.callExpression(n.tag, [callsiteid_func_call, substitutions])
                 
         visitTemplateLiteral: (n) ->
-                cooked = { type: ArrayExpression, elements: (create_string_literal(q.value.cooked) for q in n.quasis) }
-                substitutions = { type: ArrayExpression, elements: n.expressions }
-                create_intrinsic templateDefaultHandlerCall_id, [cooked, substitutions]
+                cooked = b.arrayExpression((b.literal(q.value.cooked) for q in n.quasis))
+                substitutions = b.arrayExpression(n.expressions)
+                intrinsic templateDefaultHandlerCall_id, [cooked, substitutions]
                 
                 
 # we split up assignment operators +=/-=/etc into their
@@ -1850,13 +1517,8 @@ class DesugarUpdateAssignments extends TransformPass
                 n = super(n, parentBlock)
                 if n.operator.length is 2
                         if n.left.type is Identifier
-                                # for identifiers we just expand a+= b to a = a + b
-                                n.right = {
-                                        type:     BinaryExpression,
-                                        operator: n.operator[0]
-                                        left:     n.left
-                                        right:    n.right
-                                }
+                                # for identifiers we just expand a += b to a = a + b
+                                n.right = b.binaryExpression(n.left, n.operator[0], n.right)
                                 n.operator = '='
                         else if n.left.type is MemberExpression
 
@@ -1867,16 +1529,8 @@ class DesugarUpdateAssignments extends TransformPass
                                         return true
 
                                 prepend_update = () ->
-                                        update_id = create_identifier freshUpdate()
-                                        parentBlock.prepends.unshift {
-                                                type: VariableDeclaration
-                                                declarations: [{
-                                                        type: VariableDeclarator
-                                                        id:   update_id 
-                                                        init: null
-                                                }],
-                                                kind: "let"
-                                        }
+                                        update_id = b.identifier freshUpdate()
+                                        parentBlock.prepends.unshift b.letDeclaration(update_id, b.null())
                                         update_id
                                 
                                 object_exp = n.left.object
@@ -1886,92 +1540,45 @@ class DesugarUpdateAssignments extends TransformPass
 
                                 if complex_exp object_exp
                                         update_id = prepend_update()
-                                        expressions.push {
-                                                type: AssignmentExpression
-                                                operator: '='
-                                                left: update_id
-                                                right: object_exp
-                                        }
+                                        expressions.push b.assignmentExpression(update_id, '=', object_exp)
                                         n.left.object = update_id
 
                                 if complex_exp prop_exp
                                         update_id = prepend_update()
-                                        expressions.push {
-                                                type: AssignmentExpression
-                                                operator: '='
-                                                left: update_id
-                                                right: prop_exp
-                                        }
+                                        expressions.push b.assignmentExpression(update_id, '=', prop_exp)
                                         n.left.property = update_id
 
-                                n.right =
-                                        type:     BinaryExpression,
-                                        operator: n.operator[0]
-                                        left:
-                                                type:     MemberExpression
-                                                object:   n.left.object
-                                                property: n.left.property
-                                                computed: n.computed
-                                        right:    n.right
+                                n.right = b.binaryExpression(b.memberExpression(n.left.object, n.left.property, n.computed), n.operator[0], n.right)
                                 n.operator = "="
                                 
                                 if expressions.length isnt 0
                                         expressions.push n
-                                        return { type: SequenceExpression, expressions: expressions }
+                                        return b.sequenceExpression(expressions)
                                 n
                         else
                                 reportError(Error, "unexpected expression type #{n.left.type} in update assign expression.", @filename, n.left.loc)
                 n
 
 class DesugarImportExport extends TransformPass
-        importGen = startGenerator()
-        freshId = (prefix) -> create_identifier "%#{prefix}_#{importGen()}"
+        exports_id = b.identifier("export") # XXX as with compiler.coffee, this 'exports' should be '%exports' if the module has ES6 module declarations
+        get_id = b.identifier("get")
+        Object_id = b.identifier("Object")
+        defineProperty_id = b.identifier("defineProperty")
+        
+        freshId = do ->
+                importGen = startGenerator()
+                (prefix) -> b.identifier "%#{prefix}_#{importGen()}"
 
-        Object_defineProperty = {
-                type: MemberExpression,
-                computed: false,
-                object: create_identifier("Object"),
-                property: create_identifier("defineProperty")
-        }
+        Object_defineProperty = b.memberExpression(Object_id, defineProperty_id)
                                 
         define_export_property = (exported_id, local_id = exported_id) ->
                 # return esprima.parse("Object.defineProperty(exports, '#{exported_id.name}', { get: function() { return #{local_id.name}; } });");
                 
-                exports_id = create_identifier("exports") # XXX as with compiler.coffee, this 'exports' should be '%exports' if the module has ES6 module declarations
-
-                getter = {
-                        type: FunctionExpression,
-                        params: [],
-                        defaults: [],
-                        body:
-                                type: BlockStatement
-                                body: [
-                                        { type: ReturnStatement, argument: local_id }
-                                ]
-
-
-                }
+                getter = b.functionExpression(undefined, [], b.blockStatement([b.returnStatement(local_id)]))
                         
-                property_literal = {
-                        type: ObjectExpression,
-                        properties: [
-                                { type: Property, kind: "init", key: create_identifier("get"), value: getter }
-                        ]
-                }
+                property_literal = b.objectExpression([b.property(get_id, getter)])
 
-                return {
-                        type: ExpressionStatement,
-                        expression: {
-                                type: CallExpression
-                                callee: Object_defineProperty,
-                                arguments: [
-                                        exports_id,
-                                        create_string_literal(exported_id.name),
-                                        property_literal
-                                ]
-                        }
-                }
-                
+                return b.expressionStatement(b.callExpression(Object_defineProperty, [exports_id, b.literal(exported_id.name), property_literal]))
                 
         constructor: (options, filename, @exportLists) ->
                 super
@@ -1988,22 +1595,14 @@ class DesugarImportExport extends TransformPass
                 if n.specifiers.length is 0
                         # no specifiers, it's of the form:  import from "foo"
                         # don't waste a decl for this type
-                        return create_intrinsic(moduleGet_id, [n.source_path])
+                        return intrinsic(moduleGet_id, [n.source_path])
 
                 # otherwise create a fresh declaration for the module object
                 # 
                 # let %import_decl = %moduleGet("moduleName")
                 # 
                 import_tmp = freshId("import")
-                import_decls =  {
-                        type: VariableDeclaration,
-                        declarations: [{
-                                type: VariableDeclarator,
-                                id:   import_tmp
-                                init: create_intrinsic(moduleGet_id, [n.source_path])
-                        }],
-                        kind: "let"
-                }
+                import_decls =  b.letDeclaration(import_tmp, intrinsic(moduleGet_id, [n.source_path]))
 
                 if n.kind is "default"
                         #
@@ -2013,16 +1612,7 @@ class DesugarImportExport extends TransformPass
                                 reportError(ReferenceError, "module `#{n.source_path.value}' doesn't have default export", @filename, n.loc)
 
                         reportError(ReferenceError, "default imports should have only one ImportSpecifier", @filename, n.loc) if n.specifiers.length isnt 1
-                        import_decls.declarations.push {
-                                type: VariableDeclarator,
-                                id:   n.specifiers[0].id
-                                init: {
-                                        type: MemberExpression,
-                                        object: import_tmp,
-                                        property: create_identifier "default"
-                                        computed: false
-                                }
-                        }
+                        import_decls.declarations.push b.variableDeclarator(n.specifiers[0].id, b.memberExpression(import_tmp, b.identifier("default")))
                 else
                         for spec in n.specifiers
                                 #
@@ -2030,16 +1620,7 @@ class DesugarImportExport extends TransformPass
                                 #
                                 if not @exportLists[n.source_path.value]?.ids.has(spec.id.name)
                                         reportError(ReferenceError, "module `#{n.source_path.value}' doesn't export `#{spec.id.name}'", @filename, spec.id.loc)
-                                import_decls.declarations.push {
-                                        type: VariableDeclarator,
-                                        id:   spec.name or spec.id
-                                        init: {
-                                                type: MemberExpression,
-                                                object: import_tmp,
-                                                property: spec.id
-                                                computed: false
-                                        }
-                                }
+                                import_decls.declarations.push b.variableDeclarator(spec.name or spec.id, b.memberExpression(import_tmp, spec.id))
 
                 return import_decls
 
@@ -2055,15 +1636,7 @@ class DesugarImportExport extends TransformPass
 
                         # import the module regardless
                         import_tmp = freshId("import")
-                        export_decl = {
-                                type: VariableDeclaration,
-                                declarations: [{
-                                        type: VariableDeclarator,
-                                        id:   import_tmp
-                                        init: create_intrinsic(moduleGet_id, [n.source_path])
-                                }],
-                                kind: "let"
-                        }
+                        export_decl = b.letDeclaration(import_tmp, intrinsic(moduleGet_id, [n.source_path]))
 
                         export_stuff = []                             
                         if n.default
@@ -2078,23 +1651,14 @@ class DesugarImportExport extends TransformPass
                                                 reportError(ReferenceError, "module `#{n.source_path.value}' doesn't export `#{spec.id.name}'", @filename, spec.id.loc)
                                         
                                         spectmp = freshId("spec")
-                                        export_decl.declarations.push {
-                                                type: VariableDeclarator,
-                                                id:   spectmp
-                                                init: {
-                                                        type: MemberExpression,
-                                                        object: import_tmp,
-                                                        property: spec.id
-                                                        computed: false
-                                                }
-                                        }
+                                        export_decl.declarations.push b.variableDeclarator(spectmp, b.memberExpression(import_tmp, spec_id))
 
                                         @exports.push { name: spec.name, id: spectmp }
                                         export_stuff.push(define_export_property(spec.name || spec.id, spectmp))
                         export_stuff.unshift(export_decl)
                         return export_stuff
 
-                export_id = create_identifier("exports");
+                export_id = b.identifier("exports");
                 
                 # export function foo () { ... }
                 if n.declaration.type is FunctionDeclaration
@@ -2119,19 +1683,12 @@ class DesugarImportExport extends TransformPass
                 # export default = ...;
                 # 
                 if Array.isArray(n.declaration) and n.declaration[0].id.name is "default"
-                        local_default_id = create_identifier "%default"
-                        default_id = create_identifier "default"
+                        local_default_id = b.identifier "%default"
+                        default_id = b.identifier "default"
                         @exports.push { id: default_id }
                         
-                        local_decl = {
-                                type: VariableDeclaration,
-                                declarations: [{
-                                        type: VariableDeclarator,
-                                        id:   local_default_id
-                                        init: n.declaration[0].init
-                                }],
-                                kind: "var"
-                        }
+                        local_decl = b.varDeclaration(local_default_id, n.declaration[0].init)
+
                         export_define = define_export_property(default_id, local_default_id)
                         return [local_decl, export_define]
 
@@ -2142,16 +1699,8 @@ class DesugarImportExport extends TransformPass
                 # a new instance and puts new properties on it that
                 # map to the module, instead of just returning the
                 # module object.
-                init = create_intrinsic(moduleGet_id, [n.source_path])
-                return {
-                        type: VariableDeclaration,
-                        declarations: [{
-                                type: VariableDeclarator,
-                                id: n.id,
-                                init: init,
-                        }],
-                        kind: "let"
-                }
+                init = intrinsic(moduleGet_id, [n.source_path])
+                return b.letDeclaration(n.id, init)
 
 #
 # convert from:
@@ -2171,18 +1720,7 @@ class DesugarRestParameters extends TransformPass
         visitFunction: (n) ->
                 n = super
                 if n.rest?
-                        rest_declaration = {
-                                type: VariableDeclaration
-                                kind: "let"
-                                declarations: [{
-                                        type: VariableDeclarator
-                                        id: n.rest
-                                        init:
-                                                type: CallExpression
-                                                callee: gatherRest_id
-                                                arguments: [create_string_literal(n.rest.name), create_number_literal(n.params.length)]
-                                }]
-                        }
+                        rest_declaration = b.letDeclaration(n.rest, b.callExpression(gatherRest_id, [b.literal(n.rest.name), b.literal(n.params.length)]))
                         n.body.body.unshift rest_declaration
                         n.rest = undefined
                 n
@@ -2219,13 +1757,13 @@ class DesugarSpread extends TransformPass
                                         else
                                                 # push the current_elements as an array literal, then the spread.
                                                 # also reset current_elements to []
-                                                new_args.push { type: ArrayExpression, elements: current_elements }
+                                                new_args.push b.arrayExpression(current_elements)
                                                 new_args.push el.argument
                                                 current_elements = []
                                 else
                                         current_elements.push el
                         if current_elements.length isnt 0
-                                new_args.push { type: ArrayExpression, elements: current_elements }
+                                new_args.push b.arrayExpression(current_elements)
 
                         # check to see if we've just created an array of nothing but array literals, and flatten them all
                         # into one and get rid of the spread altogether
@@ -2240,7 +1778,7 @@ class DesugarSpread extends TransformPass
                                 n.elements = na
                                 return n
                         else
-                                return create_intrinsic arrayFromSpread_id, new_args
+                                return intrinsic arrayFromSpread_id, new_args
 
                 n
 
@@ -2266,14 +1804,14 @@ class DesugarSpread extends TransformPass
                                         else
                                                 # push the current_elements as an array literal, then the spread.
                                                 # also reset current_elements to []
-                                                new_args.push { type: ArrayExpression, elements: current_elements }
+                                                new_args.push b.arrayExpression(current_elements)
                                                 new_args.push el.argument
                                                 current_elements = []
                                 else
                                         current_elements.push el
 
                         if current_elements.length isnt 0
-                                new_args.push { type: ArrayExpression, elements: current_elements }
+                                new_args.push b.arrayExpression(current_elements)
 
                         # check to see if we've just created an array of nothing but array literals, and flatten them all
                         # into one and get rid of the spread altogether
@@ -2290,16 +1828,10 @@ class DesugarSpread extends TransformPass
                                 if n.callee.type is MemberExpression
                                         receiver = n.callee.object
                                 else
-                                        receiver = { type: Literal, value: null }
+                                        receiver = b.null()
 
-                                n.callee = {
-                                        type: MemberExpression
-                                        object: n.callee
-                                        property: create_identifier "apply"
-                                        computed: false
-                                }
-                        
-                                n.arguments = [receiver, create_intrinsic(arrayFromSpread_id, new_args)]
+                                n.callee = b.memberExpression(n.callee, b.identifier("apply"))
+                                n.arguments = [receiver, intrinsic(arrayFromSpread_id, new_args)]
                 n
 #
 # desugars
@@ -2338,114 +1870,33 @@ class DesugarForOf extends TransformPass
                 iter_name      = freshForOf('iter')
                 iter_next_name = freshForOf('next')
                 
-                iterable_id  = create_identifier iterable_tmp
-                iter_id      = create_identifier iter_name
-                iter_next_id = create_identifier iter_next_name
+                iterable_id  = b.identifier iterable_tmp
+                iter_id      = b.identifier iter_name
+                iter_next_id = b.identifier iter_next_name
 
-                tmp_iterable_decl = {
-                        type: VariableDeclaration
-                        kind: "let"
-                        declarations: [{
-                                type: VariableDeclarator
-                                id: iterable_id
-                                init: n.right
-                        }]
-                }
+                tmp_iterable_decl = b.letDeclaration(iterable_id, n.right)
 
-                get_iterator_stmt = {
-                        type: VariableDeclaration
-                        kind: "let"
-                        declarations: [{
-                                type: VariableDeclarator
-                                id: iter_id
-                                init:
-                                        type: CallExpression
-                                        callee:
-                                                type: MemberExpression
-                                                object: iterable_id
-                                                property:
-                                                        type: MemberExpression
-                                                        object: create_identifier "Symbol"
-                                                        property: create_identifier "iterator"
-                                                        computed: false
-                                                computed: true
-                                        arguments: []
-                        }]
-                }
-
+                Symbol_iterator = b.memberExpression(b.identifier("Symbol"), b.identifier("iterator"))
+                get_iterator_stmt = b.letDeclaration(iter_id, b.callExpression(b.memberExpression(iterable_id, Symbol_iterator, true), []))
 
                 if n.left.type is VariableDeclaration
-                        loop_iter_stmt = {
-                                type: VariableDeclaration
-                                kind: "let"
-                                declarations: [{
-                                        type: VariableDeclarator
-                                        id: n.left.declarations[0].id # can there be more than 1?
-                                        init:
-                                                type: MemberExpression
-                                                object: iter_next_id
-                                                property: create_identifier "value"
-                                }]
-                        }
+                        loop_iter_stmt = b.letDeclaration(n.left.declarations[0].id # can there be more than 1?
+                                                          b.memberExpression(iter_next_id, b.identifier("value")))
                 else
-                        loop_iter_stmt = {
-                                type: ExpressionStatement
-                                expression:
-                                        type: AssignmentExpression
-                                        operator: "="
-                                        left: n.left
-                                        right:
-                                                type: MemberExpression
-                                                object: iter_next_id
-                                                property: create_identifier "value"
-                        }
+                        loop_iter_stmt = b.expressionStatement(b.assignmentExpression(n.left, "=", b.memberExpression(iter_next_id, b.identifier("value"))))
 
-                next_decl = {
-                        type: VariableDeclaration
-                        kind: "let"
-                        declarations: [{
-                                type: VariableDeclarator
-                                id: iter_next_id
-                        }]
-                }
+                next_decl = b.letDeclaration(iter_next_id, b.undefined())
+
+                not_done = b.unaryExpression("!", b.memberExpression(b.assignmentExpression(iter_next_id, "=", b.callExpression(b.memberExpression(iter_id, b.identifier("next")))), b.identifier("done")))
                 
-                while_stmt = {
-                        type: WhileStatement
-                        test:
-                                type: UnaryExpression
-                                operator: "!"
-                                argument:
-                                        type: MemberExpression
-                                        object:
-                                                type: AssignmentExpression
-                                                operator: "="
-                                                left: iter_next_id
-                                                right:
-                                                        type: CallExpression
-                                                        callee:
-                                                                type: MemberExpression
-                                                                object: iter_id
-                                                                property: create_identifier "next"
-                                                        arguments: []
-                                        property: create_identifier "done"
-                        body:
-                                type: BlockStatement
-                                body: [
-                                        loop_iter_stmt
-                                        n.body
-                                ]
-                }
+                while_stmt = b.whileStatement(not_done, b.blockStatement([loop_iter_stmt, n.body]))
 
-                outer_block = {
-                        type: BlockStatement
-                        body: [
-                                tmp_iterable_decl
-                                get_iterator_stmt
-                                next_decl
-                                while_stmt
-                        ]
-                }
-                outer_block
+                return b.blockStatement([
+                        tmp_iterable_decl
+                        get_iterator_stmt
+                        next_decl
+                        while_stmt
+                ])
                 
                 
 # switch this to true if you want to experiment with the new CFA2

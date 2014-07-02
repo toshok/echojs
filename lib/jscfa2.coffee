@@ -45,7 +45,9 @@
 esprima = require 'esprima'
 escodegen = require 'escodegen'
 
-{ create_identifier, is_number_literal } = require "echo-util"
+b = require 'ast-builder'
+
+{ is_number_literal } = require "echo-util"
 
 { TreeVisitor } = require "nodevisitor"
 
@@ -1393,11 +1395,11 @@ class TagVarRefs extends TreeVisitor
                         
                 #print("global: " + varname + " :: " + n.lineno)
                 n.type = MemberExpression
-                nthis = create_identifier("internalVar: global object")
+                nthis = b.identifier("internalVar: global object")
                 nthis.kind = HEAP
                 nthis.addr = JSCore.global_object_av_addr
                 n.object = nthis
-                n.property = create_identifier("#{n.name}-")
+                n.property = b.identifier("#{n.name}-")
                 n
 
         visitMemberExpression: (n, innerscope, otherscopes) ->
@@ -2566,7 +2568,7 @@ class AbstractObj
         # string, function, number -> function node
         funToNode = (name, code, arity) ->
                 n = { type: FunctionDeclaration }
-                n.id = create_identifier name
+                n.id = b.identifier name
                 n.builtin = true
                 n.addr = newCount()
                 pending[count] = 0

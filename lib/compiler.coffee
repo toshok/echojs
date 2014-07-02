@@ -74,13 +74,14 @@ path = require 'path'
 { TreeVisitor } = require 'nodevisitor'
 closure_conversion = require 'closure-conversion'
 optimizations = require 'optimizations'
-{ startGenerator, is_intrinsic, create_identifier, is_string_literal, create_string_literal } = require 'echo-util'
+{ startGenerator, is_intrinsic, is_string_literal } = require 'echo-util'
 
 { ExitableScope, TryExitableScope, SwitchExitableScope, LoopExitableScope } = require 'exitable-scope'
 
 types = require 'types'
 consts = require 'consts'
 runtime = require 'runtime'
+b = require 'ast-builder'
 
 llvm = require 'llvm'
 ir = llvm.IRBuilder
@@ -2254,8 +2255,8 @@ sanitize_with_regexp = (filename) ->
 insert_toplevel_func = (tree, filename) ->
         toplevel =
                 type: FunctionDeclaration,
-                id:   create_identifier("_ejs_toplevel_#{sanitize_with_regexp filename}")
-                params: [create_identifier("%env_unused"), create_identifier("exports")], # XXX this 'exports' should be '%exports' if the module has ES6 module declarations
+                id:   b.identifier("_ejs_toplevel_#{sanitize_with_regexp filename}")
+                params: [b.identifier("%env_unused"), b.identifier("exports")], # XXX this 'exports' should be '%exports' if the module has ES6 module declarations
                 defaults: []
                 body:
                         type: BlockStatement
@@ -2346,7 +2347,7 @@ class GatherImports extends TreeVisitor
                 throw new Error("import sources must be strings") if not is_string_literal(n.source)
 
                 if isInternalModule(n.source.value)
-                        n.source_path = create_string_literal(n.source.value)
+                        n.source_path = b.literal(n.source.value)
                         return n
                 
                 if n.source[0] is "/"
@@ -2359,7 +2360,7 @@ class GatherImports extends TreeVisitor
                         
                 @importList.push(source_path) if @importList.indexOf(source_path) is -1
 
-                n.source_path = create_string_literal(source_path)
+                n.source_path = b.literal(source_path)
                 n
 
         addDefaultExport: (path) ->

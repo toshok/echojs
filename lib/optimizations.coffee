@@ -12,18 +12,19 @@ escodegen = require 'escodegen'
 debug = require 'debug'
 { TreeVisitor } = require 'nodevisitor'
 
-{ create_intrinsic, is_intrinsic, create_identifier } = require 'echo-util'
+{ create_intrinsic, is_intrinsic } = require 'echo-util'
+b = require 'ast-builder'
 
-typeofIsObject_id = create_identifier "%typeofIsObject"
-typeofIsFunction_id = create_identifier "%typeofIsFunction"
-typeofIsString_id = create_identifier "%typeofIsString"
-typeofIsSymbol_id = create_identifier "%typeofIsSymbol"
-typeofIsNumber_id = create_identifier "%typeofIsNumber"
-typeofIsBoolean_id = create_identifier "%typeofIsBoolean"
-isNull_id = create_identifier "%isNull"
-isUndefined_id = create_identifier "%isUndefined"
-isNullOrUndefined_id = create_identifier "%isNullOrUndefined"
-builtinUndefined_id = create_identifier "%builtinUndefined"
+typeofIsObject_id = b.identifier "%typeofIsObject"
+typeofIsFunction_id = b.identifier "%typeofIsFunction"
+typeofIsString_id = b.identifier "%typeofIsString"
+typeofIsSymbol_id = b.identifier "%typeofIsSymbol"
+typeofIsNumber_id = b.identifier "%typeofIsNumber"
+typeofIsBoolean_id = b.identifier "%typeofIsBoolean"
+isNull_id = b.identifier "%isNull"
+isUndefined_id = b.identifier "%isUndefined"
+isNullOrUndefined_id = b.identifier "%isNullOrUndefined"
+builtinUndefined_id = b.identifier "%builtinUndefined"
 
 #
 # EqIdioms checks for the following things:
@@ -72,11 +73,7 @@ class EqIdioms extends TreeVisitor
 
                         rv = create_intrinsic intrinsic, [typeofarg]
                         if exp.operator[0] is '!'
-                                rv = {
-                                        type: UnaryExpression
-                                        operator: "!"
-                                        argument: rv
-                                }
+                                rv = b.unaryExpression('!', rv)
                         return rv
 
                 if exp.operator is "==" or exp.operator is "!="
@@ -86,11 +83,7 @@ class EqIdioms extends TreeVisitor
                                 
                                 rv = create_intrinsic isNullOrUndefined_id, [checkarg]
                                 if exp.operator is "!="
-                                        rv = {
-                                                type: UnaryExpression
-                                                operator: "!"
-                                                argument: rv
-                                        }
+                                        rv = b.unaryExpression('!', rv)
                                 return rv
 
                 if exp.operator is "===" or exp.operator is "!=="
@@ -100,11 +93,7 @@ class EqIdioms extends TreeVisitor
 
                                 rv = create_intrinsic isNull_id, [checkarg]
                                 if exp.operator is "!=="
-                                        rv = {
-                                                type: UnaryExpression
-                                                operator: "!"
-                                                argument: rv
-                                        }
+                                        rv = b.unaryExpression('!', rv)
                                 return rv
                         if is_undefined_literal(left) or is_undefined_literal(right)
                                 
@@ -112,11 +101,7 @@ class EqIdioms extends TreeVisitor
 
                                 rv = create_intrinsic isNull_id, [checkarg]
                                 if exp.operator is "!=="
-                                        rv = {
-                                                type: UnaryExpression
-                                                operator: "!"
-                                                argument: rv
-                                        }
+                                        rv = b.unaryExpression('!', rv)
                                 return rv
                 super
 

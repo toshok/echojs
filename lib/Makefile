@@ -3,6 +3,7 @@ TOP=..
 include $(TOP)/build/config.mk
 
 COFFEE_SOURCES=				\
+	ast-builder.coffee		\
 	nodevisitor.coffee		\
 	compiler.coffee			\
 	debug.coffee			\
