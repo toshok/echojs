@@ -18,7 +18,13 @@ exports.int32 = (c) ->
         constant.is_constant = true
         constant.constant_val = c
         constant
-                
+
+exports.int1 = (c) ->
+        constant = llvm.Constant.getIntegerValue types.int1, c
+        constant.is_constant = true
+        constant.constant_val = c
+        constant
+                                
 exports.int64 = (c) ->
         constant = llvm.Constant.getIntegerValue types.int64, c
         constant.is_constant = true
