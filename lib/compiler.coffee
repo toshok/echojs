@@ -646,14 +646,18 @@ class LLVMIRVisitor extends TreeVisitor
                 return ExitableScope.scopeStack.exitFore n.label?.name
 
         generateCondBr: (exp, then_bb, else_bb) ->
-                exp_value = @visit exp
-                if exp_value._ejs_returns_ejsval_bool
-                        cmp = @createEjsvalICmpEq(exp_value, consts.ejsval_false(), "cmpresult")
+                if exp.type is Literal and typeof exp.value is "boolean"
+                        cmp = consts.int1(if exp.value then 0 else 1) # we check for false below, so the then/else branches get swapped
                 else
-                        cond_truthy = @createCall @ejs_runtime.truthy, [exp_value], "cond_truthy"
-                        cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
+                        exp_value = @visit exp
+                        if exp_value._ejs_returns_ejsval_bool
+                                cmp = @createEjsvalICmpEq(exp_value, consts.ejsval_false(), "cmpresult")
+                        else
+                                cond_truthy = @createCall @ejs_runtime.truthy, [exp_value], "cond_truthy"
+                                cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
                 ir.createCondBr cmp, else_bb, then_bb
                 exp_value
+
                 
         visitFor: (n) ->
                 insertBlock = ir.getInsertBlock()
