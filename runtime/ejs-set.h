@@ -31,7 +31,30 @@ extern EJSSpecOps _ejs_Set_specops;
 
 void _ejs_set_init(ejsval global);
 
-void _ejs_set_new ();
+ejsval _ejs_set_new ();
+
+#define EJSVAL_IS_SETITERATOR(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_SetIterator_specops))
+
+typedef enum {
+    EJS_SET_ITER_KIND_KEY,
+    EJS_SET_ITER_KIND_VALUE,
+    EJS_SET_ITER_KIND_KEYVALUE
+} EJSSetIteratorKind;
+
+typedef struct {
+    /* object header */
+    EJSObject obj;
+
+    ejsval iterated;
+    EJSSetIteratorKind kind;
+    int next_index;
+} EJSSetIterator;
+
+extern ejsval _ejs_SetIterator;
+extern ejsval _ejs_SetIterator_prototype;
+extern EJSSpecOps _ejs_SetIterator_specops;
+
+ejsval _ejs_set_iterator_new (ejsval set, EJSSetIteratorKind kind);
 
 EJS_END_DECLS
 

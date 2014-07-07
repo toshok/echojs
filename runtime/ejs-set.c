@@ -3,6 +3,7 @@
  */
 
 #include "ejs-set.h"
+#include "ejs-array.h"
 #include "ejs-gc.h"
 #include "ejs-error.h"
 #include "ejs-function.h"
@@ -14,6 +15,15 @@
 #define EJSVAL_TO_SET(v)     ((EJSSet*)EJSVAL_TO_OBJECT(v))
 
 typedef EJSBool (*ComparatorFunc)(ejsval, ejsval);
+
+ejsval
+_ejs_set_new ()
+{
+    EJSSet *set = _ejs_gc_new (EJSSet);
+    _ejs_init_object ((EJSObject*)set, _ejs_Set_prototype, &_ejs_Set_specops);
+
+    return OBJECT_TO_EJSVAL(set);
+}
 
 // ES6: 23.1.3.1
 // Map.prototype.clear ()
@@ -94,7 +104,7 @@ _ejs_Set_prototype_entries (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
     ejsval S = _this;
 
     // 2. Return the result of calling the CreateSetIterator abstract operation with arguments S and "key+value".
-    EJS_NOT_IMPLEMENTED();
+    return _ejs_set_iterator_new (S, EJS_SET_ITER_KIND_KEYVALUE);
 }
 
 
@@ -253,8 +263,10 @@ ejsval
 _ejs_Set_prototype_values (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     // 1. Let S be the this value. 
-    // 2. Return the result of calling the CreateSetIterator abstract operation with argument S and "value". 
-    EJS_NOT_IMPLEMENTED();
+    ejsval S = _this;
+
+    // 2. Return the result of calling the CreateSetIterator abstract operation with argument S and "value".
+    return _ejs_set_iterator_new (S, EJS_SET_ITER_KIND_VALUE);
 }
 
 // ES6: 23.2.1.1 Set ( [ iterable ] )
@@ -361,6 +373,125 @@ _ejs_Set_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 ejsval _ejs_Set EJSVAL_ALIGNMENT;
 ejsval _ejs_Set_prototype EJSVAL_ALIGNMENT;
 
+ejsval
+_ejs_set_iterator_new (ejsval set, EJSSetIteratorKind kind)
+{
+    /* 1. If Type(set) is not Object, throw a TypeError exception. */
+    if (!EJSVAL_IS_OBJECT(set))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "set is not a Object");
+
+    /* 2. If set does not have a [[SetData]] internal slot throw a TypeError exception. */
+    if (!EJSVAL_IS_SET(set))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "value is not a Set");
+
+    /* 3. If set’s [[SetData]] internal slot is undefined, then throw a TypeError exception. */
+
+    /* 4. Let iterator be the result of ObjectCreate(%SetIteratorPrototype%,
+     * ([[IteratedSet]], [[SetNextIndex]], [[SetIterationKind]])). */
+    EJSSetIterator *iter = _ejs_gc_new (EJSSetIterator);
+    _ejs_init_object ((EJSObject*) iter, _ejs_SetIterator_prototype, &_ejs_SetIterator_specops);
+
+    /* 5. Set iterator’s [[IteratedSet]] internal slot to set. */
+    iter->iterated = set;
+
+    /* 6. Set iterator’s [[SetNextIndex]] internal slot to 0. */
+    iter->next_index = 0;
+
+    /* 7. Set iterator’s [[SetIterationKind]] internal slot to kind. */
+    iter->kind = kind;
+
+    /* 8. Return iterator */
+    return OBJECT_TO_EJSVAL(iter);
+}
+
+ejsval _ejs_SetIterator EJSVAL_ALIGNMENT;
+ejsval _ejs_SetIterator_prototype EJSVAL_ALIGNMENT;
+
+static ejsval
+_ejs_SetIterator_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    return _this;
+}
+
+static ejsval
+_ejs_SetIterator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    /* 1. Let O be the this value. */
+    ejsval O = _this;
+
+    /* 2. If Type(O) is not Object, throw a TypeError exception. */
+    if (!EJSVAL_IS_OBJECT(O))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, ".next called on non-object");
+
+    /* 3. If O does not have all of the internal slots of a Set Iterator Instance (23.2.5.3),
+     * throw a TypeError exception. */
+    if (!EJSVAL_IS_SETITERATOR(O))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, ".next called on non-SetIterator instance");
+
+    EJSSetIterator *OObj = (EJSSetIterator*)EJSVAL_TO_OBJECT(O);
+
+    /* 4. Let s be the value of the [[IteratedSet]] internal slot of O. */
+    ejsval s = OObj->iterated;
+
+    /* 5. Let index be the value of the [[SetNextIndex]] internal slot of O. */
+    uint32_t index = OObj->next_index;
+
+    /* 6. Let itemKind be the value of the [[SetIterationKind]] internal slot of O. */
+    EJSSetIteratorKind itemKind = OObj->kind;
+
+    /* 7. If s is undefined, then return CreateIterResultObject(undefined, true). */
+    if (EJSVAL_IS_UNDEFINED(s))
+        return _ejs_create_iter_result (_ejs_undefined, _ejs_true);
+
+    /* 8. Assert: s has a [[SetData]] internal slot and s has been initialized so the value of
+     * [[SetData]] is not undefined. */
+
+    /* 9. Let entries be the List that is the value of the [[SetData]] internal slot of s. */
+    EJSSetValueEntry *entries = EJSVAL_TO_SET(s)->head_insert;
+
+    /* 10. Repeat while index is less than the total number of elements of entries. The number of elements must
+     * be redetermined each time this method is evaluated. */
+    uint32_t i = 0;
+    for (EJSSetValueEntry *entry = entries; entry; entry = entry->next_insert, i++) {
+        if (index > i)
+            continue;
+
+        /* a. Let e be entries[index]. */
+        ejsval e = entry->value;
+
+        /* b. Set index to index+1; */
+        index = index + 1;
+
+        /* c. Set the [[SetNextIndex]] internal slot of O to index. */
+        OObj->next_index = index;
+
+        /* d. If e is not empty, then */
+        /*      i. If itemKind is "key+value" then, */
+        if (itemKind == EJS_SET_ITER_KIND_KEYVALUE) {
+            /* 1. Let result be the result of performing ArrayCreate(2). */
+            /* 2. Assert: result is a new, well-formed Array object so the following operations will never fail. */
+            ejsval result = _ejs_array_new (2, EJS_FALSE);
+
+            /* 3. Call CreateDataProperty(result, "0", e) . */
+            _ejs_object_setprop (result, NUMBER_TO_EJSVAL(0), e);
+
+            /* 4. Call CreateDataProperty(result, "1", e) . */
+            _ejs_object_setprop (result, NUMBER_TO_EJSVAL(1), e);
+
+            return _ejs_create_iter_result (result, _ejs_false);
+        }
+
+        /*      ii. Return CreateIterResultObject(e, false). */
+        return _ejs_create_iter_result (e, _ejs_false);
+    }
+
+    /* 11. Set the [[IteratedSet]] internal slot of O to undefined. */
+    OObj->iterated = _ejs_undefined;
+
+    /* 12. Return CreateIterResultObject(undefined, true). */
+    return _ejs_create_iter_result (_ejs_undefined, _ejs_true);
+}
+
 void
 _ejs_set_init(ejsval global)
 {
@@ -368,7 +499,7 @@ _ejs_set_init(ejsval global)
     _ejs_object_setprop (global, _ejs_atom_Set, _ejs_Set);
 
     _ejs_gc_add_root (&_ejs_Set_prototype);
-    _ejs_Set_prototype = _ejs_object_new(_ejs_null, &_ejs_Object_specops); // XXX should be a Set
+    _ejs_Set_prototype = _ejs_set_new ();
     _ejs_object_setprop (_ejs_Set,       _ejs_atom_prototype,  _ejs_Set_prototype);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Set, x, _ejs_Set_##x)
@@ -390,6 +521,21 @@ _ejs_set_init(ejsval global)
 
 #undef OBJ_METHOD
 #undef PROTO_METHOD
+
+    _ejs_SetIterator = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Set, (EJSClosureFunc)_ejs_SetIterator_impl);
+
+    _ejs_gc_add_root (&_ejs_SetIterator_prototype);
+    _ejs_SetIterator_prototype = _ejs_set_iterator_new(_ejs_Set_prototype, EJS_SET_ITER_KIND_VALUE);
+    EJSVAL_TO_OBJECT(_ejs_SetIterator_prototype)->proto = _ejs_Object_prototype;
+    _ejs_object_define_value_property (_ejs_SetIterator, _ejs_atom_prototype, _ejs_SetIterator_prototype,
+                                        EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (_ejs_SetIterator_prototype, _ejs_atom_constructor, _ejs_SetIterator,
+                                        EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
+
+#define PROTO_ITER_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_SetIterator_prototype, x, _ejs_SetIterator_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
+    PROTO_ITER_METHOD(next);
+#undef PROTO_ITER_METHOD
+
 }
 
 static EJSObject*
@@ -441,4 +587,6 @@ EJS_DEFINE_CLASS(Set,
                  _ejs_set_specop_finalize,
                  _ejs_set_specop_scan
                  )
+
+EJS_DEFINE_INHERIT_ALL_CLASS(SetIterator);
 
