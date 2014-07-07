@@ -104,8 +104,8 @@ exports.expressionStatement = (exp)                      -> type: ExpressionStat
 exports.forInStatement      = (left, right, body)        -> type: ForInStatement, left: isast(left), right: isast(right), body: isast(body)
 exports.forOfStatement      = (left, right, body)        -> type: ForOfStatement, left: isast(left), right: isast(right), body: isast(body)
 exports.forStatement        = (init, test, update, body) -> type: ForStatement, init: isast(init), test: isast(test), update: isast(update), body: isast(body)
-exports.functionDeclaration = (id, params, body, defaults=[], rest=null) -> type: FunctionDeclaration, id: isast(id), params: params.map(isast), body: isast(body), defaults: defaults.map(isast), rest: isnullableast(rest), generator: false, expression: false
-exports.functionExpression  = (id, params, body, defaults=[], rest=null) -> type: FunctionExpression,  id: isnullableast(id), params: params.map(isast), body: isast(body), defaults: defaults.map(isast), rest: isnullableast(rest), generator: false, expression: false
+exports.functionDeclaration = (id, params, body, defaults=[], rest=null) -> type: FunctionDeclaration, id: isast(id), params: params.map(isast), body: isast(body), defaults: defaults.map(isnullableast), rest: isnullableast(rest), generator: false, expression: false
+exports.functionExpression  = (id, params, body, defaults=[], rest=null) -> type: FunctionExpression,  id: isnullableast(id), params: params.map(isast), body: isast(body), defaults: defaults.map(isnullableast), rest: isnullableast(rest), generator: false, expression: false
 exports.identifier          = (name) -> type: Identifier, name: name
 exports.ifStatement = (test, consequent, alternate) -> type: IfStatement, test: isast(test), consequent: isast(consequent), alternate: isast(alternate)
 exports.importDeclaration
