@@ -2,6 +2,8 @@ terminal = require "terminal"
 esprima = require 'esprima'
 syntax = esprima.Syntax
 
+b = require 'ast-builder'
+
 exports.shallow_copy_object = (o) ->
         return null if not o?
 
@@ -69,4 +71,9 @@ exports.is_intrinsic = (n, name) ->
         if name?
                 return false if n.callee.name isnt name
         true
+
+exports.intrinsic = (id, args, loc) ->
+        rv = b.callExpression(id, args)
+        rv.loc = loc
+        rv
 

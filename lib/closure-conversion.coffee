@@ -87,12 +87,8 @@ runtime_globals = require('runtime').createGlobalsInterface(null)
   foldl,
   reject,
   is_intrinsic,
+  intrinsic,
   startGenerator } = require 'echo-util'
-
-intrinsic = (id, args, loc) ->
-        rv = b.callExpression(id, args)
-        rv.loc = loc
-        rv
 
 hasOwnProperty = Object.prototype.hasOwnProperty
 
@@ -267,6 +263,8 @@ DesugarClasses = class DesugarClasses extends TransformPass
                         
                 
         create_constructor: (ast_method, ast_class) ->
+                if ast_method.value.defaults?.type?
+                        console.log escodegen.generate ast_method.value.defaults
                 b.functionDeclaration(ast_class.id, ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest)
 
         create_default_constructor: (ast_class) ->
@@ -1407,7 +1405,8 @@ class DesugarDestructuring extends TransformPass
 
                 n.body.body = new_decls.concat(n.body.body)
                 n.params = new_params
-                super
+                n.body = @visit n.body
+                n
 
         visitVariableDeclaration: (n) ->
                 decls = []
@@ -1436,7 +1435,7 @@ class DesugarDestructuring extends TransformPass
                         throw new Error "EJS doesn't support destructuring assignments yet (issue #16)"
                         reportError(Error, "cannot use destructuring with assignment operators other than '='", @filename, n.loc) if n.operator isnt "="
                 else
-                        n
+                        super
 
 class DesugarTemplates extends TransformPass
         # for template strings without a tag (i.e. of the form
