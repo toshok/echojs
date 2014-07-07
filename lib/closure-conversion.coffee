@@ -171,6 +171,15 @@ DesugarClasses = class DesugarClasses extends TransformPass
                 n
 
         visitClassDeclaration: (n) ->
+                iife = @generateClassIIFE(n);
+                b.letDeclaration(n.id, b.callExpression(iife, if n.superClass? then [n.superClass] else []))
+                
+        visitClassExpression: (n) ->
+                iife = @generateClassIIFE(n);
+                b.callExpression(iife, if n.superClass? then [n.superClass] else [])
+
+
+        generateClassIIFE: (n) ->
                 # we visit all the functions defined in the class so that 'super' is replaced with '%super'
                 @class_stack.push n
 
@@ -223,13 +232,8 @@ DesugarClasses = class DesugarClasses extends TransformPass
                 # make sure we return the function from our iife
                 class_init_iife_body.push b.returnStatement(n.id)
 
-                # this block forms the outer wrapper iife + initializer:
-                # 
-                #  let %className = (function (%super?) { ... })(%superClassName);
-                #
-                iife = b.functionExpression(null, (if n.superClass? then [superid] else []), b.blockStatement(class_init_iife_body))
-                        
-                b.letDeclaration(n.id, b.callExpression(iife, if n.superClass? then [n.superClass] else []))
+                #  (function (%super?) { ... })
+                b.functionExpression(null, (if n.superClass? then [superid] else []), b.blockStatement(class_init_iife_body))
 
         gather_members: (ast_class) ->
                 methods     = new Map
@@ -272,12 +276,12 @@ DesugarClasses = class DesugarClasses extends TransformPass
         create_proto_method: (ast_method, ast_class) ->
                 proto_member = b.memberExpression(b.memberExpression(ast_class.id, b.identifier('prototype')), (if ast_method.key.type is ComputedPropertyKey then ast_method.key.expression else ast_method.key), ast_method.key.type is ComputedPropertyKey)
                 
-                method = b.functionExpression(ast_method.key, ast_method.value.params, ast_method.value.body)
+                method = b.functionExpression(ast_method.key, ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest)
 
                 b.expressionStatement(b.assignmentExpression(proto_member, "=", method))
 
         create_static_method: (ast_method, ast_class) ->
-                method = b.functionExpression(ast_method.key, ast_method.value.params, ast_method.value.body)
+                method = b.functionExpression(ast_method.key, ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest)
 
                 b.expressionStatement(b.assignmentExpression(b.memberExpression(ast_class.id, (if ast_method.key.type is ComputedPropertyKey then ast_method.key.expression else ast_method.key), ast_method.key.type is ComputedPropertyKey), "=", method))
 
@@ -1560,7 +1564,7 @@ class DesugarUpdateAssignments extends TransformPass
                 n
 
 class DesugarImportExport extends TransformPass
-        exports_id = b.identifier("export") # XXX as with compiler.coffee, this 'exports' should be '%exports' if the module has ES6 module declarations
+        exports_id = b.identifier("exports") # XXX as with compiler.coffee, this 'exports' should be '%exports' if the module has ES6 module declarations
         get_id = b.identifier("get")
         Object_id = b.identifier("Object")
         defineProperty_id = b.identifier("defineProperty")
@@ -1662,6 +1666,12 @@ class DesugarImportExport extends TransformPass
                 
                 # export function foo () { ... }
                 if n.declaration.type is FunctionDeclaration
+                        @exports.push { id: n.declaration.id }
+                        
+                        return [n.declaration, define_export_property(n.declaration.id)]
+
+                # export class Foo () { ... }
+                if n.declaration.type is ClassDeclaration
                         @exports.push { id: n.declaration.id }
                         
                         return [n.declaration, define_export_property(n.declaration.id)]
@@ -1915,13 +1925,13 @@ passes = [
         DesugarDestructuring
         DesugarUpdateAssignments
         DesugarTemplates
+        DesugarArrowFunctions
         DesugarRestParameters
         DesugarForOf
         DesugarSpread
         HoistFuncDecls if enable_hoist_func_decls_pass
         FuncDeclsToVars
         HoistVars
-        DesugarArrowFunctions
         NameAnonymousFunctions
         #CFA2 if enable_cfa2
         ComputeFree

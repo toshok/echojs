@@ -2397,7 +2397,9 @@ class GatherImports extends TreeVisitor
                 else if Array.isArray(n.declaration)
                         for decl in n.declaration
                                 @addExportIdentifier(@filename, decl.id.name)
-                else if n.declaration.type is FunctionDeclaration                        
+                else if n.declaration.type is FunctionDeclaration
+                        @addExportIdentifier(@filename, n.declaration.id.name) 
+                else if n.declaration.type is ClassDeclaration
                         @addExportIdentifier(@filename, n.declaration.id.name) 
                 else if n.declaration.type is VariableDeclaration
                         for decl in n.declaration.declarations

@@ -125,7 +125,7 @@ exports.TreeVisitor = class TreeVisitor
                         when CatchClause             then rv = @visitCatchClause n, args...
                         when ClassBody               then rv = @visitClassBody n, args...
                         when ClassDeclaration        then rv = @visitClassDeclaration n, args...
-                        when ClassExpression         then throw new Error "Unhandled AST node type: #{n.type}, #{JSON.stringify n}"
+                        when ClassExpression         then rv = @visitClassExpression n, args...
                         when ClassHeritage           then throw new Error "Unhandled AST node type: #{n.type}, #{JSON.stringify n}"
                         when ComprehensionBlock      then throw new Error "Unhandled AST node type: #{n.type}, #{JSON.stringify n}"
                         when ComprehensionExpression then throw new Error "Unhandled AST node type: #{n.type}, #{JSON.stringify n}"
@@ -383,6 +383,10 @@ exports.TreeVisitor = class TreeVisitor
                 n
 
         visitClassDeclaration: (n, args...) ->
+                n.body = @visit n.body, args...
+                n
+
+        visitClassExpression: (n, args...) ->
                 n.body = @visit n.body, args...
                 n
 
