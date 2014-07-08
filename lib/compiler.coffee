@@ -78,6 +78,8 @@ optimizations = require 'optimizations'
 
 { ExitableScope, TryExitableScope, SwitchExitableScope, LoopExitableScope } = require 'exitable-scope'
 
+{ reportError } = require 'errors'
+
 types = require 'types'
 consts = require 'consts'
 runtime = require 'runtime'
@@ -1365,11 +1367,11 @@ class LLVMIRVisitor extends TreeVisitor
                         #key = if property.key.type is Identifier then @getAtom property.key.name else @visit property.key
 
                         if propkey.type is ComputedPropertyKey
-                                propkey = @visit property.key.expression
+                                propkey = @visit propkey.expression
                         else if propkey.type is Literal
-                                propkey = @getAtom String(property.key.value)
+                                propkey = @getAtom String(propkey.value)
                         else if propkey.type is Identifier
-                                propkey = @getAtom property.key.name
+                                propkey = @getAtom propkey.name
 
                         if prop_map.has("init")
                                 val = @visit(prop_map.get("init").value)
@@ -1777,8 +1779,8 @@ class LLVMIRVisitor extends TreeVisitor
                         ir.setInsertPoint saved_insert_point
                         rv = @createLoad arguments_alloca, "load_arguments"
                         return rv
-                        
-                throw new Error "identifier not found: #{exp.arguments[0].name}"
+
+                reportError(ReferenceError, "identifier not found: #{exp.arguments[0].name}", @filename, exp.arguments[0].loc)
 
         handleSetLocal: (exp, opencode) ->
                 dest = @findIdentifierInScope exp.arguments[0].name
