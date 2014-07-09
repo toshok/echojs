@@ -432,7 +432,8 @@ do_final_link = (main_file) ->
         
         options.external_modules.forEach (extern_module) ->
                 clang_args.push extern_module.library
-                clang_args = clang_args.concat extern_module.link_flags.split " "
+                # very strange, not sure why we need this \n
+                clang_args = clang_args.concat extern_module.link_flags.replace('\n', ' ').split " "
 
         clang_args = clang_args.concat target_libraries(options.target_platform, options.target_arch)
 
