@@ -116,7 +116,7 @@ exports.literal            = (val) ->
         type: Literal, value: val, raw: raw
 exports.logicalExpression  = (l, op, r) -> type: LogicalExpression, left: isast(l), right: isast(r), operator: op
 exports.memberExpression   = (obj, prop, computed = false) -> type: MemberExpression, object: isast(obj), property: isast(prop), computed: computed
-exports.methodDefinition
+exports.methodDefinition   = (key, value, kind = "init") -> type: MethodDefinition, key: key, value: value, kind: kind
 exports.moduleDeclaration
 exports.newExpression
 exports.objectExpression = (properties) -> type: ObjectExpression, properties: properties.map(isast)
@@ -125,7 +125,7 @@ exports.program
 exports.property         = (key, value, kind = "init") -> type: Property, key: isast(key), value: isast(value), kind: kind
 exports.returnStatement  = (arg) -> type: ReturnStatement, argument: isast(arg)
 exports.sequenceExpression = (expressions) -> type: SequenceExpression, expressions: expressions.map(isast)
-exports.spreadElement
+exports.spreadElement    = (arg) -> type: SpreadElement, argument: arg
 exports.switchCase
 exports.switchStatement
 exports.taggedTemplateExpression
