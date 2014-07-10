@@ -150,7 +150,9 @@ DesugarClasses = class DesugarClasses extends TransformPass
         
         visitCallExpression: (n) ->
                 if n.callee.type is Identifier and n.callee.name is "super"
-                        n.callee = createSuperReference @method_stack.top.static, @method_stack.top.key
+                        super_ref = createSuperReference @method_stack.top.static, @method_stack.top.key
+                        n.callee = b.memberExpression(super_ref, b.identifier('call'))
+                        n.arguments.unshift(b.thisExpression())
                 else
                         n.callee = @visit n.callee
                 n.arguments = @visitArray n.arguments
@@ -196,17 +198,6 @@ DesugarClasses = class DesugarClasses extends TransformPass
                         # if it's a method with name 'constructor' output the special ctor function
                         if mkey is 'constructor'
                                 ctor = m
-                                ctor_func = @create_constructor m, n
-                                class_init_iife_body.push ctor_func
-                                if n.superClass?
-                                        # 14.5.17 step 9, make sure the constructor's __proto__ is set to superClass
-                                        class_init_iife_body.push b.expressionStatement(b.callExpression(setPrototypeOf_id, [ctor_func.id, superid]))
-
-
-                                        # also set ctor.prototype = Object.create(superClass.prototype)
-                                        l = b.memberExpression(ctor_func.id,b.identifier("prototype"))
-                                        r = b.callExpression(objectCreate_id, [b.memberExpression(superid, b.identifier("prototype"))])
-                                        class_init_iife_body.push b.expressionStatement(b.assignmentExpression(l, "=", r))
                         else
                                 class_init_iife_body.push @create_proto_method m, n
 
@@ -223,7 +214,22 @@ DesugarClasses = class DesugarClasses extends TransformPass
                 # It looks like this in code:
                 #   function Subclass (...args) { %super.call(this, args...); }
                 if not ctor?
-                        class_init_iife_body.unshift @create_default_constructor n
+                        ctor = @create_default_constructor n
+                        @method_stack.push ctor
+                        class_element.value = @visit ctor.value
+                        @method_stack.pop()
+                        
+                ctor_func = @create_constructor ctor, n
+                if n.superClass?
+                        # also set ctor.prototype = Object.create(superClass.prototype)
+                        l = b.memberExpression(ctor_func.id,b.identifier("prototype"))
+                        r = b.callExpression(objectCreate_id, [b.memberExpression(superid, b.identifier("prototype"))])
+                        class_init_iife_body.unshift b.expressionStatement(b.assignmentExpression(l, "=", r))
+
+                        # 14.5.17 step 9, make sure the constructor's __proto__ is set to superClass
+                        class_init_iife_body.unshift b.expressionStatement(b.callExpression(setPrototypeOf_id, [ctor_func.id, superid]))
+                class_init_iife_body.unshift ctor_func
+
 
                 # make sure we return the function from our iife
                 class_init_iife_body.push b.returnStatement(n.id)
@@ -268,8 +274,10 @@ DesugarClasses = class DesugarClasses extends TransformPass
                 b.functionDeclaration(ast_class.id, ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest)
 
         create_default_constructor: (ast_class) ->
-                # XXX FIXME splat args into the call to super's ctor
-                b.functionDeclaration(ast_class.id, [], b.blockStatement(), [], b.identifier('args'))
+                # splat args into the call to super's ctor if there's a superclass
+                args_id = b.identifier('args');
+                functionBody = b.blockStatement(if ast_class.superClass then [b.expressionStatement(b.callExpression(b.identifier('super'), [b.spreadElement(args_id)]))] else []);
+                b.methodDefinition(b.identifier('constructor'), b.functionExpression(null, [], functionBody, [], args_id));
                 
         create_proto_method: (ast_method, ast_class) ->
                 proto_member = b.memberExpression(b.memberExpression(ast_class.id, b.identifier('prototype')), (if ast_method.key.type is ComputedPropertyKey then ast_method.key.expression else ast_method.key), ast_method.key.type is ComputedPropertyKey)
