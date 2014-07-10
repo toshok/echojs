@@ -1480,9 +1480,8 @@ class DesugarTemplates extends TransformPass
                 callsiteid_func_id = freshCallsiteId();
                 callsite_func = @generateCreateCallsiteIdFunc(callsiteid_func_id, n.quasi.quasis)
                 callsites.push callsite_func
-                substitutions = b.arrayExpression(n.quasi.expressions)
                 callsiteid_func_call = b.callExpression(callsite_func.id, [])
-                return b.callExpression(n.tag, [callsiteid_func_call, substitutions])
+                return b.callExpression(n.tag, [callsiteid_func_call].concat(n.quasi.expressions))
                 
         visitTemplateLiteral: (n) ->
                 cooked = b.arrayExpression((b.literal(q.value.cooked) for q in n.quasis))
