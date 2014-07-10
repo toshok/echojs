@@ -1645,8 +1645,14 @@ _ejs_Object_isExtensible (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 static ejsval
 _ejs_Object_keys (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
+    ejsval O = _ejs_undefined;
+    if (argc > 0) O = args[0];
+
+    if (!EJSVAL_IS_OBJECT(O))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Object.keys called on non-object.");
+
     // toshok - is this really not identical to Object.getOwnPropertyNames?
-    return _ejs_Object_getOwnPropertyNames(env, _this, argc, args);
+    return _ejs_Object_getOwnPropertyNames(_ejs_undefined, _ejs_undefined, 1, &O);
 }
 
 // ECMA262: 19.1.3.6
@@ -2016,7 +2022,7 @@ _ejs_object_specop_get (ejsval O, ejsval P, ejsval Receiver)
 
 // ECMA262: 8.12.1
 static EJSPropertyDesc*
-_ejs_object_specop_get_own_property (ejsval obj, ejsval propertyName)
+_ejs_object_specop_get_own_property (ejsval obj, ejsval propertyName, ejsval* exc)
 {
     ejsval property_str = ToPropertyKey(propertyName);
     EJSObject* obj_ = EJSVAL_TO_OBJECT(obj);
