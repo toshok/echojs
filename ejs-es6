@@ -1,3 +1,7 @@
+/* -*- Mode: js2; tab-width: 4; indent-tabs-mode: nil; -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=js:
+ */
+
 let os = require('os');
 let path = require('path');
 let fs = require('fs');
@@ -88,6 +92,7 @@ function set_target_alias(alias) {
         sim:         { platform: "darwin", arch: "x86" },
         dev:         { platform: "darwin", arch: "arm" }
     };
+
     if (!(alias in target_aliases))
         throw new Error(`invalid target alias '${alias}'.`);
 
@@ -367,10 +372,10 @@ function compileFile(filename, parse_tree, export_lists, compileCallback) {
         throw e;
     }
 
-    let ll_filename     = `${os.tmpdir()}/${base_filename}-${options.target}.ll`;
-    let bc_filename     = `${os.tmpdir()}/${base_filename}-${options.target}.bc`;
-    let ll_opt_filename = `${os.tmpdir()}/${base_filename}-${options.target}.ll.opt`;
-    let o_filename      = `${os.tmpdir()}/${base_filename}-${options.target}.o`;
+    let ll_filename     = `${os.tmpdir()}/${base_filename}-${options.target_platform}-${options.target_arch}.ll`;
+    let bc_filename     = `${os.tmpdir()}/${base_filename}-${options.target_platform}-${options.target_arch}.bc`;
+    let ll_opt_filename = `${os.tmpdir()}/${base_filename}-${options.target_platform}-${options.target_arch}.ll.opt`;
+    let o_filename      = `${os.tmpdir()}/${base_filename}-${options.target_platform}-${options.target_arch}.o`;
 
     temp_files.push(ll_filename, bc_filename, ll_opt_filename, o_filename);
         
@@ -584,7 +589,3 @@ else {
     };
     compileNextFile();
 }
-        
-// Local Variables:
-// mode: js2
-// End:
