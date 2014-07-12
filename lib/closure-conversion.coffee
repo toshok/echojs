@@ -1289,7 +1289,7 @@ class IIFEIdioms extends TreeVisitor
                 if is_intrinsic(n.expression, "%setSlot")
                         n.expression.arguments[2] = intrinsic getLocal_id, [iife_rv_id]
                         replacement.body.push n
-                else if is_intrinsic(n.expression, "%setGlobal") or is_intrinsic(n.expression, "setLocal".expression)
+                else if is_intrinsic(n.expression, "%setGlobal") or is_intrinsic(n.expression, "%setLocal")
                         n.expression.arguments[1] = intrinsic getLocal_id, [iife_rv_id]
                         replacement.body.push n
                         
@@ -1313,7 +1313,7 @@ class IIFEIdioms extends TreeVisitor
                 if is_intrinsic(n.expression, "%setSlot")
                         n.expression.arguments[2] = intrinsic getLocal_id, [iife_rv_id]
                         replacement.body.push n
-                else if is_intrinsic(n.expression, "%setGlobal") or is_intrinsic(n.expression, "setLocal")
+                else if is_intrinsic(n.expression, "%setGlobal") or is_intrinsic(n.expression, "%setLocal")
                         n.expression.arguments[1] = intrinsic getLocal_id, [iife_rv_id]
                         replacement.body.push n
 
