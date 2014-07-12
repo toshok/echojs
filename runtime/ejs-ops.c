@@ -92,8 +92,8 @@ IntToUCS2(jschar *cbuf, jsint i, jsint base)
             *--end = '0' + digit;
             index = next;
         } while (index > 0);
-        return end;
-      break;
+        cp = end;
+        break;
     }
     case 16:
       do {
@@ -157,6 +157,9 @@ ejsval NumberToString(double d)
             return _ejs_atom_NegativeInfinity;
         else
             return _ejs_atom_Infinity;
+    }
+    else if (classified == FP_NAN) {
+        return _ejs_atom_NaN;
     }
     else
         snprintf (num_buf, sizeof(num_buf), EJS_NUMBER_FORMAT, d);
