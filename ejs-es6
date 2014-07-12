@@ -360,7 +360,7 @@ function compileFile(filename, parse_tree, export_lists, compileCallback) {
     let base_filename = genFreshFileName(path.basename(filename));
 
     if (!options.quiet)
-        console.warn (`${bold()}COMPILE${reset()} ${filename} ${options.debug_level > 0 ? '-> ${base_filename}' : ''}`);
+        console.warn (`${bold()}COMPILE${reset()} ${filename} ${options.debug_level > 0 ? base_filename : ''}`);
 
     let compiled_module;
     try {
