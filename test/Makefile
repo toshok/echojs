@@ -6,7 +6,7 @@ TOP=..
 .SILENT:
 
 TOPDIR=$(shell pwd)/..
-NODE_PATH=$(TOPDIR)/node-llvm/build/Release:$(TOPDIR)/lib/generated:$(TOPDIR)/lib:$(TOPDIR)/esprima:$(TOPDIR)/escodegen:$(TOPDIR)/estraverse
+NODE_PATH=$(TOPDIR)/node-llvm/build/Debug:$(TOPDIR)/lib/generated:$(TOPDIR)/lib:$(TOPDIR)/esprima:$(TOPDIR)/escodegen:$(TOPDIR)/estraverse
 NODE_FLAGS=--harmony --harmony-typeof
 TRACEUR_FLAGS=--block-binding true
 
@@ -63,11 +63,13 @@ $(call addExpectedFailure, object7.js,              "we differ from node on prop
 $(call addExpectedFailure, object9.js,              "we differ from node on property descriptor flags.  verify with spec")
 
 TRACEUR_TESTS=
+$(call testAgainstTraceur, array-subclass1.js)
 $(call testAgainstTraceur, for5.js)
 $(call testAgainstTraceur, forof1.js)
 $(call testAgainstTraceur, forof2.js)
 $(call testAgainstTraceur, computed-props1.js)
 $(call testAgainstTraceur, computed-props3.js)
+$(call testAgainstTraceur, shorthand-prop1.js)
 $(call testAgainstTraceur, spread1.js)
 $(call testAgainstTraceur, spread2.js)
 $(call testAgainstTraceur, spread3.js)
@@ -75,6 +77,7 @@ $(call testAgainstTraceur, spread4.js)
 $(call testAgainstTraceur, spread5.js)
 $(call testAgainstTraceur, spread6.js)
 $(call testAgainstTraceur, spread7.js)
+$(call testAgainstTraceur, string-fromCodePoint1.js)
 $(call testAgainstTraceur, promise1.js)
 $(call testAgainstTraceur, promise2.js)
 
