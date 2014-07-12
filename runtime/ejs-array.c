@@ -201,7 +201,7 @@ _ejs_Array_prototype_shift (ejsval env, ejsval _this, uint32_t argc, ejsval*args
             return _ejs_undefined;
         }
         ejsval first = EJS_DENSE_ARRAY_ELEMENTS(_this)[0];
-        memmove (EJS_DENSE_ARRAY_ELEMENTS(_this), EJS_DENSE_ARRAY_ELEMENTS(_this) + 1, sizeof(ejsval) * len-1);
+        memmove (EJS_DENSE_ARRAY_ELEMENTS(_this), EJS_DENSE_ARRAY_ELEMENTS(_this) + 1, sizeof(ejsval) * (len-1));
         EJS_ARRAY_LEN(_this) --;
         return first;
     }
