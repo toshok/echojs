@@ -189,6 +189,46 @@ utf8_to_ucs2 (const unsigned char * input, const unsigned char ** end_ptr)
 }
 
 static int
+utf16_to_utf8_char (const jschar* utf16, char* utf8, int *utf16_adv)
+{
+    jschar ucs2;
+
+    ucs2 = *utf16;
+    *utf16_adv = 1;
+
+    if (ucs2 < 0x80) {
+        utf8[0] = (char)ucs2;
+        return 1;
+    }
+    if (ucs2 >= 0x80  && ucs2 < 0x800) {
+        utf8[0] = (ucs2 >> 6)   | 0xC0;
+        utf8[1] = (ucs2 & 0x3F) | 0x80;
+        return 2;
+    }
+    if (ucs2 >= 0x800 && ucs2 < 0xFFFF) {
+        if (ucs2 >= 0xD800 && ucs2 <= 0xDFFF) {
+            // surrogate pair
+            jschar ucs2_2 = *(utf16 + 1);
+            uint32_t combined = 0x10000 + (((ucs2 - 0xD800) << 10) | (ucs2_2 - 0xDC00));
+
+            utf8[0] = 0xF0 | (combined >> 18);
+            utf8[1] = 0x80 | ((combined >> 12) & 0x3F);
+            utf8[2] = 0x80 | ((combined >> 6) & 0x3F);
+            utf8[3] = 0x80 | ((combined & 0x3F));
+
+            *utf16_adv = 2;
+            return 4;
+        }
+
+        utf8[0] = ((ucs2 >> 12)       ) | 0xE0;
+        utf8[1] = ((ucs2 >> 6 ) & 0x3F) | 0x80;
+        utf8[2] = ((ucs2      ) & 0x3F) | 0x80;
+        return 3;
+    }
+    EJS_NOT_IMPLEMENTED();
+}
+
+static int
 ucs2_to_utf8_char (jschar ucs2, char *utf8)
 {
     if (ucs2 < 0x80) {
@@ -201,32 +241,37 @@ ucs2_to_utf8_char (jschar ucs2, char *utf8)
         return 2;
     }
     if (ucs2 >= 0x800 && ucs2 < 0xFFFF) {
+        if (ucs2 >= 0xD800 && ucs2 <= 0xDFFF) {
+            EJS_NOT_IMPLEMENTED();
+        }
+
         utf8[0] = ((ucs2 >> 12)       ) | 0xE0;
         utf8[1] = ((ucs2 >> 6 ) & 0x3F) | 0x80;
         utf8[2] = ((ucs2      ) & 0x3F) | 0x80;
         return 3;
     }
-    return -1;
+    EJS_NOT_IMPLEMENTED();
 }
 
 char*
 ucs2_to_utf8 (const jschar *str)
 {
     int len = ucs2_strlen(str);
-    char *conservative = (char*)calloc (sizeof(char), len * 3 + 1);
+    char *conservative = (char*)calloc (sizeof(char), len * 4 + 1);
 
     const jschar *p = str;
     char *c = conservative;
+    int utf16_adv;
 
     while (*p) {
-        int adv = ucs2_to_utf8_char (*p, c);
+        int adv = utf16_to_utf8_char (p, c, &utf16_adv);
         if (adv < 1) {
             // more here XXX
             break;
         }
         c += adv;
 
-        p++;
+        p += utf16_adv;
         len --;
         if (len == 0)
             break;
@@ -1034,13 +1079,18 @@ _ejs_String_fromCodePoint (ejsval env, ejsval _this, uint32_t argc, ejsval *args
         ejsval nextCP = ToNumber(next);
         //    c. ReturnIfAbrupt(nextCP). 
         //    d. If SameValue(nextCP, ToInteger(nextCP)) is false, then throw a RangeError exception. 
-        if (ToDouble(nextCP) != ToInteger(nextCP))
-            _ejs_throw_nativeerror_utf8(EJS_RANGE_ERROR, "1"); // XXX
+        if (ToDouble(nextCP) != ToInteger(nextCP)) {
+            free (elements);
+            ejsval msg = _ejs_string_concat(_ejs_string_new_utf8("Invalid code point: "), ToString(nextCP));
+            _ejs_throw_nativeerror(EJS_RANGE_ERROR, msg);
+        }
         int64_t nextCP_ = ToInteger(nextCP);
 
         //    e. If nextCP < 0 or nextCP > 0x10FFFF, then throw a RangeError exception.
         if (nextCP_ < 0 || nextCP_ > 0x10FFFF) {
-            _ejs_throw_nativeerror_utf8(EJS_RANGE_ERROR, "2"); // XXX
+            free (elements);
+            ejsval msg = _ejs_string_concat(_ejs_string_new_utf8("Invalid code point: "), ToString(nextCP));
+            _ejs_throw_nativeerror(EJS_RANGE_ERROR, msg);
         }
 
         //    f. Append the elements of the UTF-16Encoding (10.1.1) of nextCP to the end of elements.
