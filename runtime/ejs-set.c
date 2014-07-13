@@ -452,8 +452,14 @@ _ejs_SetIterator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsval
     /* 10. Repeat while index is less than the total number of elements of entries. The number of elements must
      * be redetermined each time this method is evaluated. */
     uint32_t i = 0;
-    for (EJSSetValueEntry *entry = entries; entry; entry = entry->next_insert, i++) {
-        if (index > i)
+    for (EJSSetValueEntry *entry = entries; entry; entry = entry->next_insert) {
+
+        /* Ignore this item if is marked as empty */
+        if (EJSVAL_IS_NO_ITER_VALUE_MAGIC(entry->value))
+            continue;
+
+        /* Ignore this item if we haven't reached the initial needed point/index */
+        if (index > i++)
             continue;
 
         /* a. Let e be entries[index]. */
@@ -466,6 +472,8 @@ _ejs_SetIterator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsval
         OObj->next_index = index;
 
         /* d. If e is not empty, then */
+        /*  (see EJSVAL_IS_NO_ITER_VALUE_MAGIC check at the beginning of the loop */
+
         /*      i. If itemKind is "key+value" then, */
         if (itemKind == EJS_SET_ITER_KIND_KEYVALUE) {
             /* 1. Let result be the result of performing ArrayCreate(2). */

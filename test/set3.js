@@ -6,12 +6,28 @@ s.add ("pasta");
 s.add ("pizza");
 s.add ("salad");
 
-var values = s.values();
-var iter;
-while (!(iter = values.next()).done)
-    console.log (iter.value);
+function print_values (values) {
+    var iter;
+    while (!(iter = values.next()).done)
+        console.log (iter.value);
+}
 
-var entries = s.entries();
-while (!(iter = entries.next()).done)
-    console.log (iter.value);
+print_values (s.values());
+print_values (s.entries());
+console.log ();
+
+s.delete ("pasta");
+print_values (s.values());
+console.log ();
+
+s.delete("lasagna");
+print_values (s.values());
+console.log ();
+
+s.delete("salad");
+print_values(s.values());
+console.log ();
+
+s.delete("pizza");
+print_values(s.values());
 
