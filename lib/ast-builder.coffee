@@ -107,7 +107,7 @@ exports.forStatement        = (init, test, update, body) -> type: ForStatement, 
 exports.functionDeclaration = (id, params, body, defaults=[], rest=null) -> type: FunctionDeclaration, id: isast(id), params: params.map(isast), body: isast(body), defaults: defaults.map(isnullableast), rest: isnullableast(rest), generator: false, expression: false
 exports.functionExpression  = (id, params, body, defaults=[], rest=null) -> type: FunctionExpression,  id: isnullableast(id), params: params.map(isast), body: isast(body), defaults: defaults.map(isnullableast), rest: isnullableast(rest), generator: false, expression: false
 exports.identifier          = (name) -> type: Identifier, name: name
-exports.ifStatement = (test, consequent, alternate) -> type: IfStatement, test: isast(test), consequent: isast(consequent), alternate: isast(alternate)
+exports.ifStatement = (test, consequent, alternate) -> type: IfStatement, test: isast(test), consequent: isast(consequent), alternate: isnullableast(alternate)
 exports.importDeclaration
 exports.importSpecifier
 exports.labeledStatement   = (label, body) -> type: LabeledStatement, label: isast(label), body: body.map(isast)
