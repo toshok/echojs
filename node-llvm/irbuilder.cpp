@@ -47,6 +47,7 @@ namespace jsllvm {
     NODE_SET_METHOD(s_func, "createICmpEq", IRBuilder::CreateICmpEq);
     NODE_SET_METHOD(s_func, "createICmpSGt", IRBuilder::CreateICmpSGt);
     NODE_SET_METHOD(s_func, "createICmpUGt", IRBuilder::CreateICmpUGt);
+    NODE_SET_METHOD(s_func, "createICmpUGE", IRBuilder::CreateICmpUGE);
     NODE_SET_METHOD(s_func, "createICmpULt", IRBuilder::CreateICmpULt);
     NODE_SET_METHOD(s_func, "createCondBr", IRBuilder::CreateCondBr);
     NODE_SET_METHOD(s_func, "createBr", IRBuilder::CreateBr);
@@ -407,6 +408,18 @@ namespace jsllvm {
     FALLBACK_EMPTY_UTF8_ARG(2, name);
 
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateICmpUGT(left, right, *name)));
+    return scope.Close(result);
+  }
+
+  v8::Handle<v8::Value> IRBuilder::CreateICmpUGE(const v8::Arguments& args)
+  {
+    HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(0, left);
+    REQ_LLVM_VAL_ARG(1, right);
+    FALLBACK_EMPTY_UTF8_ARG(2, name);
+
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateICmpUGE(left, right, *name)));
     return scope.Close(result);
   }
 
