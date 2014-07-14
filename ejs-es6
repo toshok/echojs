@@ -218,7 +218,6 @@ if (argv.length > 0) {
                     for (let i = 0, e = o.handlerArgc; i < e; i ++)
                         handler_args.push(argv[++ai]);
                     o.handler.apply(null, handler_args);
-                    skipNext = o.handlerArgc;
                 }
             }
             else {
