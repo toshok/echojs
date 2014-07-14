@@ -103,6 +103,7 @@ setLocal_id             = b.identifier "%setLocal"
 setGlobal_id            = b.identifier "%setGlobal"
 getLocal_id             = b.identifier "%getLocal"
 getGlobal_id            = b.identifier "%getGlobal"
+getArg_id               = b.identifier "%getArg"
 moduleGet_id            = b.identifier "%moduleGet"
 moduleImportBatch_id    = b.identifier "%moduleImportBatch"
 templateCallsite_id     = b.identifier "%templateCallsite"
@@ -113,6 +114,7 @@ setPrototypeOf_id       = b.identifier "%setPrototypeOf"
 objectCreate_id         = b.identifier "%objectCreate"
 gatherRest_id           = b.identifier "%gatherRest"
 arrayFromSpread_id      = b.identifier "%arrayFromSpread"
+argPresent_id           = b.identifier "%argPresent"
 
 class TransformPass extends TreeVisitor
         constructor: (@options) ->
@@ -1161,13 +1163,14 @@ class MarkLocalAndGlobalVariables extends TransformPass
                 # identifier that we don't want rewrapped, or an
                 # intrinsic already wrapping the identifier.
 
-                if n.arguments[0].type is Identifier
-                        @findIdentifierInScope n.arguments[0]
-                        new_args = @visit n.arguments.slice 1
-                        new_args.unshift n.arguments[0]
-                else
-                        new_args = @visit n.arguments
-                n.arguments = new_args
+                if n.arguments.length > 0
+                        if n.arguments[0].type is Identifier
+                                @findIdentifierInScope n.arguments[0]
+                                new_args = @visit n.arguments.slice 1
+                                new_args.unshift n.arguments[0]
+                        else
+                                new_args = @visit n.arguments
+                        n.arguments = new_args
                 n
 
         visitNewExpression: (n) ->
@@ -1849,7 +1852,42 @@ class DesugarSpread extends TransformPass
                                 n.callee = b.memberExpression(n.callee, b.identifier("apply"))
                                 n.arguments = [receiver, intrinsic(arrayFromSpread_id, new_args)]
                 n
+
 #
+# desugars
+#
+#   function (a, b = a) { ... }
+#
+# to:
+#
+#   function (a, b) {
+#     a = %argPresent(0) ? %getArg(0) : undefined;
+#     b = %argPresent(1) ? %getArg(1) : a;
+#   }
+#
+class DesugarDefaults extends TransformPass
+        constructor: (options, @filename) ->
+                super
+
+        visitFunction: (n) ->
+                n = super(n)
+
+                prepends = []
+                seen_default = false
+
+                n.params.forEach (p, i) =>
+                        d = n.defaults[i]
+                        if d?
+                                seen_default = true
+                        else
+                                if seen_default
+                                        reportError(SyntaxError, "Cannot specify non-default parameter after a default parameter", @filename, p.loc)
+                                d = b.undefined()
+                        prepends.push(b.expressionStatement(b.assignmentExpression(p, '=', b.conditionalExpression(intrinsic(argPresent_id, [b.literal(i+1)]), intrinsic(getArg_id, [b.literal(i)]), d))))
+                n.body.body = prepends.concat(n.body.body)
+                n.defaults = []
+                n
+        
 # desugars
 #
 #   for (let x of a) { ... }
@@ -1932,6 +1970,7 @@ passes = [
         DesugarUpdateAssignments
         DesugarTemplates
         DesugarArrowFunctions
+        DesugarDefaults
         DesugarRestParameters
         DesugarForOf
         DesugarSpread

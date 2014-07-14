@@ -239,6 +239,7 @@ class LLVMIRVisitor extends TreeVisitor
                         setLocal:             value: @handleSetLocal
                         getGlobal:            value: @handleGetGlobal
                         setGlobal:            value: @handleSetGlobal
+                        getArg:               value: @handleGetArg
                         slot:                 value: @handleGetSlot
                         setSlot:              value: @handleSetSlot
                         invokeClosure:        value: @handleInvokeClosure
@@ -260,6 +261,7 @@ class LLVMIRVisitor extends TreeVisitor
                         objectCreate:         value: @handleObjectCreate
                         gatherRest:           value: @handleGatherRest
                         arrayFromSpread:      value: @handleArrayFromSpread
+                        argPresent:           value: @handleArgPresent
 
                 @opencode_intrinsics =
                         unaryNot          : true
@@ -1003,12 +1005,6 @@ class LLVMIRVisitor extends TreeVisitor
                         store = ir.createStore ir_args[i], allocas[i]
                         debug.log -> "store #{store} *builtin"
 
-                # initialize all our named parameters to undefined
-                args_load = @createLoad @currentFunction.topScope.get("%args"), "args_load"
-                for formal_alloca in allocas[first_formal_index..]
-                        store = @storeUndefined formal_alloca
-                                
-                        
                 body_bb = new llvm.BasicBlock "body", ir_func
                 ir.setInsertPoint body_bb
 
@@ -1019,41 +1015,6 @@ class LLVMIRVisitor extends TreeVisitor
 
                 insertFunc = body_bb.parent
         
-                # now pull the named parameters from our args array for the ones that were passed in.
-                # any arg that isn't specified isn't pulled in, and is only accessible via the arguments object.
-                if n.formal_params.length > 0
-                        load_argc = @createLoad @currentFunction.topScope.get("%argc"), "argc"
-                
-                        for i in [0...n.formal_params.length]
-                                then_bb  = new llvm.BasicBlock "arg_then", insertFunc
-                                else_bb  = new llvm.BasicBlock "arg_else", insertFunc
-                                merge_bb = new llvm.BasicBlock "arg_merge", insertFunc
-
-                                cmp = ir.createICmpSGt load_argc, consts.int32(i), "argcmpresult"
-                                ir.createCondBr cmp, then_bb, else_bb
-                        
-                                ir.setInsertPoint then_bb
-                                # in the then branch, the argument was
-                                # provided, pull the value out of the
-                                # args array
-                                arg_ptr = ir.createGetElementPointer args_load, [consts.int32(i)], "arg#{i}_ptr"
-                                arg = @createLoad arg_ptr, "arg#{i}_load"
-                                store = ir.createStore arg, allocas[first_formal_index+i]
-                                ir.createBr merge_bb
-
-                                ir.setInsertPoint else_bb
-                                # in the else branch, the argument
-                                # wasn't provided.  if it has a
-                                # default value, evaluate that here
-                                # and store it in the alloca.
-                                if n.defaults[i]?
-                                        arg_ptr = ir.createGetElementPointer args_load, [consts.int32(i)], "arg#{i}_ptr"
-                                        arg = @visit n.defaults[i], "arg#{i}_default_value"
-                                        ir.createStore arg, allocas[first_formal_index+i]
-                                ir.createBr merge_bb
-
-                                ir.setInsertPoint merge_bb
-
                 @iifeStack = new Stack
 
                 @finallyStack = []
@@ -1751,7 +1712,15 @@ class LLVMIRVisitor extends TreeVisitor
                 toExport = @visit exp.arguments[2]
 
                 @createCall @ejs_runtime.module_import_batch, [fromImport, specifiers, toExport], ""
+
+        handleGetArg: (exp, opencode) ->
+                load_args = @createLoad @currentFunction.topScope.get("%args"), "args_load"
+
+                arg_i = exp.arguments[0].value
+                arg_ptr = ir.createGetElementPointer load_args, [consts.int32(arg_i)], "arg#{arg_i}_ptr"
                                 
+                @createLoad arg_ptr, "arg#{arg_i}"
+                
         handleGetLocal: (exp, opencode) ->
                 source = @findIdentifierInScope exp.arguments[0].name
                 if source?
@@ -2223,6 +2192,13 @@ class LLVMIRVisitor extends TreeVisitor
 
                 argv = [consts.int32(arg_count), argsCast]
                 @createCall @ejs_runtime.array_from_iterables, argv, "spread_arr"
+
+        handleArgPresent: (exp) ->
+                load_argc = @createLoad @currentFunction.topScope.get("%argc"), "argc_n_load"
+
+                cmp = ir.createICmpUGE load_argc, consts.int32(exp.arguments[0].value), "argcmpresult"
+
+                @createEjsBoolSelect cmp
                                 
 class AddFunctionsVisitor extends TreeVisitor
         constructor: (@module, @abi) ->
@@ -2232,7 +2208,7 @@ class AddFunctionsVisitor extends TreeVisitor
                 if n?.id?.name?
                         n.ir_name = n.id.name
 
-                # at this point point n.params includes %env as its first param, and is followed by all the formal parameters from the original
+                # at this point n.params includes %env as its first param, and is followed by all the formal parameters from the original
                 # script source.  we remove the %env parameter and save off he rest of the formal parameter names, and replace the list with
                 # our runtime parameters.
 
@@ -2262,7 +2238,7 @@ insert_toplevel_func = (tree, filename) ->
         toplevel =
                 type: FunctionDeclaration,
                 id:   b.identifier("_ejs_toplevel_#{sanitize_with_regexp filename}")
-                params: [b.identifier("%env_unused"), b.identifier("exports")], # XXX this 'exports' should be '%exports' if the module has ES6 module declarations
+                params: [b.identifier("exports")], # XXX this 'exports' should be '%exports' if the module has ES6 module declarations
                 defaults: []
                 body:
                         type: BlockStatement
