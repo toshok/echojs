@@ -1273,8 +1273,11 @@ _ejs_parseInt_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     static jschar radix_8_chars[] = { '0', '1', '2', '3', '4', '5', '6', '7', 0 };
     static jschar radix_10_chars[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 0 };
     static jschar radix_16_chars[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 0 };
+    static jschar radix_16up_chars[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 0 };
 
     jschar* radix_chars;
+    jschar* radix_chars2 = NULL;
+
     switch (R) {
     case 8:
         radix_chars = radix_8_chars;
@@ -1284,6 +1287,7 @@ _ejs_parseInt_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
         break;
     case 16:
         radix_chars = radix_16_chars;
+        radix_chars2 = radix_16up_chars;
         break;
     default:
         EJS_NOT_IMPLEMENTED();
@@ -1296,8 +1300,10 @@ _ejs_parseInt_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
         jschar needle[2];
         needle[0] = S[Sidx+i];
         needle[1] = 0;
-        if (ucs2_strstr(radix_chars, needle)== NULL)
-            break;
+        if (ucs2_strstr(radix_chars, needle) == NULL) {
+            if (!radix_chars2 || ucs2_strstr(radix_chars2, needle) == NULL)
+                break;
+        }
     }
     /* 12. If Z is empty, return NaN. */
     if (i == 0) {
@@ -1317,7 +1323,15 @@ _ejs_parseInt_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
         needle[0] = S[Sidx+i];
         needle[1] = 0;
 
-        int digitval = (ucs2_strstr(radix_chars, needle) - radix_chars);
+        int digitval;
+        jschar* r;
+        if ((r = ucs2_strstr(radix_chars, needle))) {
+            digitval = r - radix_chars;
+        }
+        else {
+            r = ucs2_strstr(radix_chars2, needle);
+            digitval = r - radix_chars2;
+        }
         mathInt = mathInt*R + digitval;
     }
 
