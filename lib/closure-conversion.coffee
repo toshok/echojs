@@ -469,7 +469,7 @@ class HoistVars extends TransformPass
                 super
                 @scope_stack = new Stack
 
-        create_empty_declarator = (decl_name) -> b.variableDeclarator(b.identifier(decl_name), b.null())
+        create_empty_declarator = (decl_name) -> b.variableDeclarator(b.identifier(decl_name), b.undefined())
                 
         visitProgram: (n) ->
                 vars = new Set
