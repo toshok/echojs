@@ -144,6 +144,8 @@ DesugarClasses = class DesugarClasses extends TransformPass
                 @method_stack = new Stack
 
         createSuperReference = (is_static, id) ->
+                return superid if id?.name is "constructor"
+
                 obj = if is_static then superid else b.memberExpression(superid, b.identifier('prototype'))
 
                 return obj if not id?
