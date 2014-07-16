@@ -223,6 +223,8 @@ DesugarClasses = class DesugarClasses extends TransformPass
                         class_element.value = @visit ctor.value
                         @method_stack.pop()
                         
+                class_init_iife_body.unshift(b.expressionStatement(b.assignmentExpression(b.memberExpression(b.memberExpression(n.id, b.identifier("prototype")), b.identifier("constructor")), "=", n.id)))
+                        
                 ctor_func = @create_constructor ctor, n
                 if n.superClass?
                         # also set ctor.prototype = Object.create(superClass.prototype)
