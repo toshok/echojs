@@ -64,6 +64,7 @@ $(call addExpectedFailure, object9.js,              "we differ from node on prop
 
 TRACEUR_TESTS=
 $(call testAgainstTraceur, array-subclass1.js)
+$(call testAgainstTraceur, class3.js)
 $(call testAgainstTraceur, for5.js)
 $(call testAgainstTraceur, forof1.js)
 $(call testAgainstTraceur, forof2.js)
