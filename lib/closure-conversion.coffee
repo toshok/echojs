@@ -1668,7 +1668,7 @@ class DesugarImportExport extends TransformPass
                                                 reportError(ReferenceError, "module `#{n.source_path.value}' doesn't export `#{spec.id.name}'", @filename, spec.id.loc)
                                         
                                         spectmp = freshId("spec")
-                                        export_decl.declarations.push b.variableDeclarator(spectmp, b.memberExpression(import_tmp, spec_id))
+                                        export_decl.declarations.push b.variableDeclarator(spectmp, b.memberExpression(import_tmp, spec.id))
 
                                         @exports.push { name: spec.name, id: spectmp }
                                         export_stuff.push(define_export_property(spec.name || spec.id, spectmp))
