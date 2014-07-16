@@ -1693,7 +1693,7 @@ class LLVMIRVisitor extends TreeVisitor
                 ir.createCondBr isnull, then_bb, merge_bb
 
                 @doInsideBBlock then_bb, =>
-                        # XXX missing: register callsite_obj gc root
+                        @createCall(@ejs_runtime.gc_add_root, [callsite_global], "add_callsite_root");
                         callsite_obj = @visit callsite_obj_literal
                         ir.createStore callsite_obj, callsite_global
                         ir.createStore callsite_obj, callsite_alloca
