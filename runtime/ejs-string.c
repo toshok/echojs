@@ -111,20 +111,20 @@ ucs2_strrstr (const jschar *haystack,
               const jschar *needle)
 {
     int haystack_len = ucs2_strlen(haystack);
-    int needle_len = ucs2_strlen(needle);
+    int needle_len   = ucs2_strlen(needle);
 
     if (needle_len > haystack_len)
         return NULL;
 
-    const jschar* p = haystack + haystack_len - 1;
-    const jschar* needle_p = needle + needle_len - 1;
+    const jschar* p        = haystack + haystack_len - 1;
+    const jschar* needle_p = needle   + needle_len   - 1;
 
     while (p >= haystack) {
         const jschar *next_candidate = NULL;
 
         if (*p == *needle_p) {
             const jschar *p2 = p-1;
-            const jschar *n = needle_p-1;
+            const jschar *n  = needle_p-1;
 
             if (!next_candidate && *p2 == *needle_p)
                 next_candidate = p2;
@@ -137,13 +137,13 @@ ucs2_strrstr (const jschar *haystack,
                 if (!next_candidate && *p2 == *needle_p)
                     next_candidate = p2;
             }
-            if (needle_p < needle)
-                return (jschar*)p;
+            if (n < needle)
+                return (jschar*)p2+1;
 
             if (next_candidate)
                 p = next_candidate;
             else
-                p--;
+                p = p2-1;
             continue;
         }
         else {
