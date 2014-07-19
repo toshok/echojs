@@ -520,9 +520,13 @@ _ejs_set_init(ejsval global)
     PROTO_METHOD(forEach);
     PROTO_METHOD(has);
     // XXX (ES6 23.2.3.9) get Set.prototype.size
-    PROTO_METHOD(values);
-    //PROTO_METHOD(keys);   // XXX this should be the same function object as Set.prototype.values
-    // XXX (ES6 23.2.3.11) Set.prototype [ @@iterator ]( )
+
+    // expand PROTO_METHOD(values) here so that we can install the function for both keys and @@iterator below
+    ejsval _values = _ejs_function_new_native (_ejs_null, _ejs_atom_values, (EJSClosureFunc)_ejs_Set_prototype_values);
+    _ejs_object_define_value_property (_ejs_Set_prototype, _ejs_atom_values, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_FLAGS_WRITABLE | EJS_PROP_CONFIGURABLE);
+    _ejs_object_define_value_property (_ejs_Set_prototype, _ejs_atom_keys, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
+
+    _ejs_object_define_value_property (_ejs_Set_prototype, _ejs_Symbol_iterator, _values, EJS_PROP_NOT_ENUMERABLE);
     _ejs_object_define_value_property (_ejs_Set_prototype, _ejs_Symbol_toStringTag, _ejs_atom_Set, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
 
     EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Set, create, _ejs_Set_create, EJS_PROP_NOT_ENUMERABLE);

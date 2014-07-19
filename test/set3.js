@@ -14,6 +14,7 @@ function print_values (values) {
 
 print_values (s.values());
 print_values (s.entries());
+print_values (s.keys());
 console.log ();
 
 s.delete ("pasta");
