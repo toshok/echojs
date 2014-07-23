@@ -9,7 +9,8 @@ let spawn = require('child_process').spawn;
 
 module debug from 'lib/debug';
 import { Set } from 'lib/set-es6';
-import { compile, gatherImports } from 'lib/compiler';
+import { compile } from 'lib/compiler';
+import { gatherImports } from 'lib/passes/gather-imports';
 
 import { bold, reset, genFreshFileName } from 'lib/echo-util';
 
