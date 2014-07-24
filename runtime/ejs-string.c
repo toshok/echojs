@@ -1104,6 +1104,87 @@ _ejs_String_fromCodePoint (ejsval env, ejsval _this, uint32_t argc, ejsval *args
     free(elements);
     return rv;
 }
+
+// ECMA262: 21.1.2.4 String.raw ( callsite, ...substitutions )
+static ejsval
+_ejs_String_raw(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval callsite = _ejs_undefined;
+    if (argc > 0) callsite = args[0];
+
+    // 1. Let substitutions be a List consisting of all of the arguments passed to this function, starting with the second argument. If fewer than two arguments were passed, the List is empty.
+    ejsval* substitutions = NULL;
+    if (argc > 1) substitutions = args + 1;
+
+    // 2. Let numberOfSubstitutions be the numer of elements in substitutions.
+    uint32_t numberOfSubstitutions = 0;
+    if (argc > 1) numberOfSubstitutions = argc - 1;
+
+    // 3. Let cooked be ToObject(callsite).
+    // 4. ReturnIfAbrupt(cooked).
+    ejsval cooked = ToObject(callsite);
+
+    // 5. Let rawValue be the result of Get(cooked, "raw").
+    ejsval rawValue = Get(cooked, _ejs_atom_raw);
+
+    // 6. Let raw be ToObject(rawValue).
+    // 7. ReturnIfAbrupt(raw).
+    ejsval raw = ToObject(rawValue);
+
+    // 8. Let len be the result of Get(raw, "length").
+    ejsval len = Get(raw, _ejs_atom_length);
+
+    // 9. Let literalSegments be ToLength(len).
+    // 10. ReturnIfAbrupt(literalSegments).
+    int64_t literalSegments = ToInteger(len);
+
+    // 11. If literalSegments ≤ 0, then return the empty string.
+    if (literalSegments <= 0)
+        return _ejs_atom_empty;
+
+    // 12. Let stringElements be a new List.
+    ejsval stringElements = _ejs_array_new(0, EJS_FALSE);
+    // 13. Let nextIndex be 0.
+    int nextIndex = 0;
+
+    // 14. Repeat 
+    while (EJS_TRUE) {
+        //     a. Let nextKey be ToString(nextIndex).
+        ejsval nextKey = ToString(NUMBER_TO_EJSVAL(nextIndex));
+        //     b. Let next be the result of Get(raw, nextKey)
+        ejsval next = Get(raw, nextKey);
+
+        //     c. Let nextSeg be ToString(next).
+        //     d. ReturnIfAbrupt(nextSeg).
+        ejsval nextSeg = ToString(next);
+
+        //     e. Append in order the code unit elements of nextSeg to the end of stringElements.
+        _ejs_array_push_dense (stringElements, 1, &nextSeg);
+
+        //     f. If nextIndex + 1 = literalSegments, then
+        if (nextIndex + 1 == literalSegments)
+        //        i. Return the string value whose elements are, in order, the elements in the List stringElements. If stringElements has no elements, the empty string is returned.
+            return _ejs_array_join(stringElements, _ejs_atom_empty);
+
+        //     g. If nextIndex< numberOfSubstitutions, then let next be substitutions[nextIndex].
+        if (nextIndex < numberOfSubstitutions)
+            next = substitutions[nextIndex];
+        //     h. Else, let next is the empty String.
+        else
+            next = _ejs_atom_empty;
+
+        //     i. Let nextSub be ToString(next).
+        //     j. ReturnIfAbrupt(nextSub).
+        ejsval nextSub = ToString(next);
+
+        //     k. Append in order the code unit elements of nextSub to the end of stringElements.
+        _ejs_array_push_dense (stringElements, 1, &nextSub);
+
+        //     l. Let nextIndex be nextIndex + 1
+        nextIndex ++;
+    }
+}
+
 // ECMA262: 21.1.3.18 String.prototype.startsWith ( searchString [, position ] ) 
 static ejsval
 _ejs_String_prototype_startsWith(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -1600,6 +1681,7 @@ _ejs_string_init(ejsval global)
 
     OBJ_METHOD(fromCharCode);
     OBJ_METHOD(fromCodePoint);
+    OBJ_METHOD(raw);
 
     ejsval _iterator = _ejs_function_new_native (_ejs_null, _ejs_Symbol_iterator, (EJSClosureFunc)_ejs_String_prototype_iterator);
     _ejs_object_define_value_property (_ejs_String_prototype, _ejs_Symbol_iterator, _iterator, EJS_PROP_NOT_ENUMERABLE);
