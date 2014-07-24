@@ -1,14 +1,16 @@
 function test() {
-    var a = 1, b = {};
+    var a = 0, b = {};
     b[Symbol.iterator] = function() {
       return {
         next: function() {
-          return { value: "foo", done: false };
+          return { 
+            done: a === 1,
+            value: a++ 
+          };
         }
       };
     };
-
-    for (var c of b) { console.log(c); return c === 'foo'; } return false;
+    for (var c of b) { return c === 0; } return false;
 }
 
 console.log(test());
