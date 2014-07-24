@@ -550,8 +550,10 @@ class LLVMIRVisitor extends TreeVisitor
 
                 iife_dest_bb = null
                 iife_rv = null
+
+                fromIIFE = n.fromIIFE
                 
-                if n.fromIIFE
+                if fromIIFE
                         insertBlock = ir.getInsertBlock()
                         insertFunc = insertBlock.parent
 
@@ -563,13 +565,14 @@ class LLVMIRVisitor extends TreeVisitor
                 @visitWithScope new_scope, n.body
 
                 @iifeStack.pop()
-                if iife_dest_bb
+                
+                if fromIIFE
+
                         ir.createBr iife_dest_bb
                         ir.setInsertPoint iife_dest_bb
                         rv = @createLoad @findIdentifierInScope(n.ejs_iife_rv.name), "%iife_rv_load"
-                        rv
-                else
-                        n
+                        return rv
+                n
 
         visitSwitch: (n) ->
                 insertBlock = ir.getInsertBlock()
@@ -1689,11 +1692,12 @@ class LLVMIRVisitor extends TreeVisitor
 
                 callsite_load = ir.createLoad callsite_alloca, "load_local_callsite"
 
+                # this looks wrong but this is how we test for a 0 ejsval
                 isnull = @isNumber callsite_load
                 ir.createCondBr isnull, then_bb, merge_bb
 
                 @doInsideBBlock then_bb, =>
-                        @createCall(@ejs_runtime.gc_add_root, [callsite_global], "add_callsite_root");
+                        @createCall(@ejs_runtime.gc_add_root, [callsite_global], "");
                         callsite_obj = @visit callsite_obj_literal
                         ir.createStore callsite_obj, callsite_global
                         ir.createStore callsite_obj, callsite_alloca
@@ -1753,7 +1757,7 @@ class LLVMIRVisitor extends TreeVisitor
 
         handleSetLocal: (exp, opencode) ->
                 dest = @findIdentifierInScope exp.arguments[0].name
-                throw new Error "identifier not found: #{exp.arguments[0].name}" if not dest?
+                reportError(ReferenceError, "identifier not found: #{exp.arguments[0].name}", @filename, exp.arguments[0].loc) if not dest?
                 arg = exp.arguments[1]
                 @storeToDest dest, arg
                 ir.createLoad dest, "load_val"
