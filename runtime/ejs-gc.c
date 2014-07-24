@@ -770,12 +770,22 @@ _scan_from_ejsobject(EJSObject* obj)
 static void
 _scan_from_ejsprimstr(EJSPrimString *primStr)
 {
-    if (EJS_PRIMSTR_GET_TYPE(primStr) == EJS_STRING_ROPE) {
+    EJSPrimStringType strtype = EJS_PRIMSTR_GET_TYPE(primStr);
+
+    switch (strtype) {
+    case EJS_STRING_ROPE:
         // inline _scan_ejsvalue's push logic here to save creating an ejsval from the primStr only to destruct
         // it in _scan_ejsvalue
 
         WORKLIST_PUSH_AND_GRAY(primStr->data.rope.left);
         WORKLIST_PUSH_AND_GRAY(primStr->data.rope.right);
+        break;
+    case EJS_STRING_DEPENDENT:
+        WORKLIST_PUSH_AND_GRAY(primStr->data.dependent.dep);
+        break;
+    case EJS_STRING_FLAT:
+        // nothing to do here
+        break;
     }
 }
 

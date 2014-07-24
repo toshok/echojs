@@ -87,12 +87,8 @@ runtime_globals = require('runtime').createGlobalsInterface(null)
   foldl,
   reject,
   is_intrinsic,
+  intrinsic,
   startGenerator } = require 'echo-util'
-
-intrinsic = (id, args, loc) ->
-        rv = b.callExpression(id, args)
-        rv.loc = loc
-        rv
 
 hasOwnProperty = Object.prototype.hasOwnProperty
 
@@ -107,6 +103,7 @@ setLocal_id             = b.identifier "%setLocal"
 setGlobal_id            = b.identifier "%setGlobal"
 getLocal_id             = b.identifier "%getLocal"
 getGlobal_id            = b.identifier "%getGlobal"
+getArg_id               = b.identifier "%getArg"
 moduleGet_id            = b.identifier "%moduleGet"
 moduleImportBatch_id    = b.identifier "%moduleImportBatch"
 templateCallsite_id     = b.identifier "%templateCallsite"
@@ -117,6 +114,7 @@ setPrototypeOf_id       = b.identifier "%setPrototypeOf"
 objectCreate_id         = b.identifier "%objectCreate"
 gatherRest_id           = b.identifier "%gatherRest"
 arrayFromSpread_id      = b.identifier "%arrayFromSpread"
+argPresent_id           = b.identifier "%argPresent"
 
 class TransformPass extends TreeVisitor
         constructor: (@options) ->
@@ -146,6 +144,8 @@ DesugarClasses = class DesugarClasses extends TransformPass
                 @method_stack = new Stack
 
         createSuperReference = (is_static, id) ->
+                return superid if id?.name is "constructor"
+
                 obj = if is_static then superid else b.memberExpression(superid, b.identifier('prototype'))
 
                 return obj if not id?
@@ -154,7 +154,9 @@ DesugarClasses = class DesugarClasses extends TransformPass
         
         visitCallExpression: (n) ->
                 if n.callee.type is Identifier and n.callee.name is "super"
-                        n.callee = createSuperReference @method_stack.top.static, @method_stack.top.key
+                        super_ref = createSuperReference @method_stack.top.static, @method_stack.top.key
+                        n.callee = b.memberExpression(super_ref, b.identifier('call'))
+                        n.arguments.unshift(b.thisExpression())
                 else
                         n.callee = @visit n.callee
                 n.arguments = @visitArray n.arguments
@@ -171,6 +173,15 @@ DesugarClasses = class DesugarClasses extends TransformPass
                 n
 
         visitClassDeclaration: (n) ->
+                iife = @generateClassIIFE(n);
+                b.letDeclaration(n.id, b.callExpression(iife, if n.superClass? then [n.superClass] else []))
+                
+        visitClassExpression: (n) ->
+                iife = @generateClassIIFE(n);
+                b.callExpression(iife, if n.superClass? then [n.superClass] else [])
+
+
+        generateClassIIFE: (n) ->
                 # we visit all the functions defined in the class so that 'super' is replaced with '%super'
                 @class_stack.push n
 
@@ -191,17 +202,6 @@ DesugarClasses = class DesugarClasses extends TransformPass
                         # if it's a method with name 'constructor' output the special ctor function
                         if mkey is 'constructor'
                                 ctor = m
-                                ctor_func = @create_constructor m, n
-                                class_init_iife_body.push ctor_func
-                                if n.superClass?
-                                        # 14.5.17 step 9, make sure the constructor's __proto__ is set to superClass
-                                        class_init_iife_body.push b.expressionStatement(b.callExpression(setPrototypeOf_id, [ctor_func.id, superid]))
-
-
-                                        # also set ctor.prototype = Object.create(superClass.prototype)
-                                        l = b.memberExpression(ctor_func.id,b.identifier("prototype"))
-                                        r = b.callExpression(objectCreate_id, [b.memberExpression(superid, b.identifier("prototype"))])
-                                        class_init_iife_body.push b.expressionStatement(b.assignmentExpression(l, "=", r))
                         else
                                 class_init_iife_body.push @create_proto_method m, n
 
@@ -218,18 +218,30 @@ DesugarClasses = class DesugarClasses extends TransformPass
                 # It looks like this in code:
                 #   function Subclass (...args) { %super.call(this, args...); }
                 if not ctor?
-                        class_init_iife_body.unshift @create_default_constructor n
+                        ctor = @create_default_constructor n
+                        @method_stack.push ctor
+                        class_element.value = @visit ctor.value
+                        @method_stack.pop()
+
+                        
+                ctor_func = @create_constructor ctor, n
+                if n.superClass?
+                        class_init_iife_body.unshift(b.expressionStatement(b.assignmentExpression(b.memberExpression(b.memberExpression(n.id, b.identifier("prototype")), b.identifier("constructor")), "=", n.id)))
+                        # also set ctor.prototype = Object.create(superClass.prototype)
+                        l = b.memberExpression(ctor_func.id,b.identifier("prototype"))
+                        r = b.callExpression(objectCreate_id, [b.memberExpression(superid, b.identifier("prototype"))])
+                        class_init_iife_body.unshift b.expressionStatement(b.assignmentExpression(l, "=", r))
+
+                        # 14.5.17 step 9, make sure the constructor's __proto__ is set to superClass
+                        class_init_iife_body.unshift b.expressionStatement(b.callExpression(setPrototypeOf_id, [ctor_func.id, superid]))
+                class_init_iife_body.unshift ctor_func
+
 
                 # make sure we return the function from our iife
                 class_init_iife_body.push b.returnStatement(n.id)
 
-                # this block forms the outer wrapper iife + initializer:
-                # 
-                #  let %className = (function (%super?) { ... })(%superClassName);
-                #
-                iife = b.functionExpression(null, (if n.superClass? then [superid] else []), b.blockStatement(class_init_iife_body))
-                        
-                b.letDeclaration(n.id, b.callExpression(iife, if n.superClass? then [n.superClass] else []))
+                #  (function (%super?) { ... })
+                b.functionExpression(null, (if n.superClass? then [superid] else []), b.blockStatement(class_init_iife_body))
 
         gather_members: (ast_class) ->
                 methods     = new Map
@@ -263,21 +275,25 @@ DesugarClasses = class DesugarClasses extends TransformPass
                         
                 
         create_constructor: (ast_method, ast_class) ->
+                if ast_method.value.defaults?.type?
+                        console.log escodegen.generate ast_method.value.defaults
                 b.functionDeclaration(ast_class.id, ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest)
 
         create_default_constructor: (ast_class) ->
-                # XXX FIXME splat args into the call to super's ctor
-                b.functionDeclaration(ast_class.id, [], b.blockStatement(), [], b.identifier('args'))
+                # splat args into the call to super's ctor if there's a superclass
+                args_id = b.identifier('args');
+                functionBody = b.blockStatement(if ast_class.superClass then [b.expressionStatement(b.callExpression(b.identifier('super'), [b.spreadElement(args_id)]))] else []);
+                b.methodDefinition(b.identifier('constructor'), b.functionExpression(null, [], functionBody, [], args_id));
                 
         create_proto_method: (ast_method, ast_class) ->
                 proto_member = b.memberExpression(b.memberExpression(ast_class.id, b.identifier('prototype')), (if ast_method.key.type is ComputedPropertyKey then ast_method.key.expression else ast_method.key), ast_method.key.type is ComputedPropertyKey)
                 
-                method = b.functionExpression(ast_method.key, ast_method.value.params, ast_method.value.body)
+                method = b.functionExpression(ast_method.key, ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest)
 
                 b.expressionStatement(b.assignmentExpression(proto_member, "=", method))
 
         create_static_method: (ast_method, ast_class) ->
-                method = b.functionExpression(ast_method.key, ast_method.value.params, ast_method.value.body)
+                method = b.functionExpression(ast_method.key, ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest)
 
                 b.expressionStatement(b.assignmentExpression(b.memberExpression(ast_class.id, (if ast_method.key.type is ComputedPropertyKey then ast_method.key.expression else ast_method.key), ast_method.key.type is ComputedPropertyKey), "=", method))
 
@@ -457,7 +473,7 @@ class HoistVars extends TransformPass
                 super
                 @scope_stack = new Stack
 
-        create_empty_declarator = (decl_name) -> b.variableDeclarator(b.identifier(decl_name), b.null())
+        create_empty_declarator = (decl_name) -> b.variableDeclarator(b.identifier(decl_name), b.undefined())
                 
         visitProgram: (n) ->
                 vars = new Set
@@ -1151,13 +1167,14 @@ class MarkLocalAndGlobalVariables extends TransformPass
                 # identifier that we don't want rewrapped, or an
                 # intrinsic already wrapping the identifier.
 
-                if n.arguments[0].type is Identifier
-                        @findIdentifierInScope n.arguments[0]
-                        new_args = @visit n.arguments.slice 1
-                        new_args.unshift n.arguments[0]
-                else
-                        new_args = @visit n.arguments
-                n.arguments = new_args
+                if n.arguments.length > 0
+                        if n.arguments[0].type is Identifier
+                                @findIdentifierInScope n.arguments[0]
+                                new_args = @visit n.arguments.slice 1
+                                new_args.unshift n.arguments[0]
+                        else
+                                new_args = @visit n.arguments
+                        n.arguments = new_args
                 n
 
         visitNewExpression: (n) ->
@@ -1279,7 +1296,7 @@ class IIFEIdioms extends TreeVisitor
                 if is_intrinsic(n.expression, "%setSlot")
                         n.expression.arguments[2] = intrinsic getLocal_id, [iife_rv_id]
                         replacement.body.push n
-                else if is_intrinsic(n.expression, "%setGlobal") or is_intrinsic(n.expression, "setLocal".expression)
+                else if is_intrinsic(n.expression, "%setGlobal") or is_intrinsic(n.expression, "%setLocal")
                         n.expression.arguments[1] = intrinsic getLocal_id, [iife_rv_id]
                         replacement.body.push n
                         
@@ -1303,7 +1320,7 @@ class IIFEIdioms extends TreeVisitor
                 if is_intrinsic(n.expression, "%setSlot")
                         n.expression.arguments[2] = intrinsic getLocal_id, [iife_rv_id]
                         replacement.body.push n
-                else if is_intrinsic(n.expression, "%setGlobal") or is_intrinsic(n.expression, "setLocal")
+                else if is_intrinsic(n.expression, "%setGlobal") or is_intrinsic(n.expression, "%setLocal")
                         n.expression.arguments[1] = intrinsic getLocal_id, [iife_rv_id]
                         replacement.body.push n
 
@@ -1403,7 +1420,8 @@ class DesugarDestructuring extends TransformPass
 
                 n.body.body = new_decls.concat(n.body.body)
                 n.params = new_params
-                super
+                n.body = @visit n.body
+                n
 
         visitVariableDeclaration: (n) ->
                 decls = []
@@ -1432,7 +1450,7 @@ class DesugarDestructuring extends TransformPass
                         throw new Error "EJS doesn't support destructuring assignments yet (issue #16)"
                         reportError(Error, "cannot use destructuring with assignment operators other than '='", @filename, n.loc) if n.operator isnt "="
                 else
-                        n
+                        super
 
 class DesugarTemplates extends TransformPass
         # for template strings without a tag (i.e. of the form
@@ -1477,9 +1495,8 @@ class DesugarTemplates extends TransformPass
                 callsiteid_func_id = freshCallsiteId();
                 callsite_func = @generateCreateCallsiteIdFunc(callsiteid_func_id, n.quasi.quasis)
                 callsites.push callsite_func
-                substitutions = b.arrayExpression(n.quasi.expressions)
                 callsiteid_func_call = b.callExpression(callsite_func.id, [])
-                return b.callExpression(n.tag, [callsiteid_func_call, substitutions])
+                return b.callExpression(n.tag, [callsiteid_func_call].concat(n.quasi.expressions))
                 
         visitTemplateLiteral: (n) ->
                 cooked = b.arrayExpression((b.literal(q.value.cooked) for q in n.quasis))
@@ -1560,7 +1577,7 @@ class DesugarUpdateAssignments extends TransformPass
                 n
 
 class DesugarImportExport extends TransformPass
-        exports_id = b.identifier("export") # XXX as with compiler.coffee, this 'exports' should be '%exports' if the module has ES6 module declarations
+        exports_id = b.identifier("exports") # XXX as with compiler.coffee, this 'exports' should be '%exports' if the module has ES6 module declarations
         get_id = b.identifier("get")
         Object_id = b.identifier("Object")
         defineProperty_id = b.identifier("defineProperty")
@@ -1651,7 +1668,7 @@ class DesugarImportExport extends TransformPass
                                                 reportError(ReferenceError, "module `#{n.source_path.value}' doesn't export `#{spec.id.name}'", @filename, spec.id.loc)
                                         
                                         spectmp = freshId("spec")
-                                        export_decl.declarations.push b.variableDeclarator(spectmp, b.memberExpression(import_tmp, spec_id))
+                                        export_decl.declarations.push b.variableDeclarator(spectmp, b.memberExpression(import_tmp, spec.id))
 
                                         @exports.push { name: spec.name, id: spectmp }
                                         export_stuff.push(define_export_property(spec.name || spec.id, spectmp))
@@ -1662,6 +1679,12 @@ class DesugarImportExport extends TransformPass
                 
                 # export function foo () { ... }
                 if n.declaration.type is FunctionDeclaration
+                        @exports.push { id: n.declaration.id }
+                        
+                        return [n.declaration, define_export_property(n.declaration.id)]
+
+                # export class Foo () { ... }
+                if n.declaration.type is ClassDeclaration
                         @exports.push { id: n.declaration.id }
                         
                         return [n.declaration, define_export_property(n.declaration.id)]
@@ -1833,7 +1856,42 @@ class DesugarSpread extends TransformPass
                                 n.callee = b.memberExpression(n.callee, b.identifier("apply"))
                                 n.arguments = [receiver, intrinsic(arrayFromSpread_id, new_args)]
                 n
+
 #
+# desugars
+#
+#   function (a, b = a) { ... }
+#
+# to:
+#
+#   function (a, b) {
+#     a = %argPresent(0) ? %getArg(0) : undefined;
+#     b = %argPresent(1) ? %getArg(1) : a;
+#   }
+#
+class DesugarDefaults extends TransformPass
+        constructor: (options, @filename) ->
+                super
+
+        visitFunction: (n) ->
+                n = super(n)
+
+                prepends = []
+                seen_default = false
+
+                n.params.forEach (p, i) =>
+                        d = n.defaults[i]
+                        if d?
+                                seen_default = true
+                        else
+                                if seen_default
+                                        reportError(SyntaxError, "Cannot specify non-default parameter after a default parameter", @filename, p.loc)
+                                d = b.undefined()
+                        prepends.push(b.expressionStatement(b.assignmentExpression(p, '=', b.conditionalExpression(intrinsic(argPresent_id, [b.literal(i+1)]), intrinsic(getArg_id, [b.literal(i)]), d))))
+                n.body.body = prepends.concat(n.body.body)
+                n.defaults = []
+                n
+        
 # desugars
 #
 #   for (let x of a) { ... }
@@ -1915,13 +1973,14 @@ passes = [
         DesugarDestructuring
         DesugarUpdateAssignments
         DesugarTemplates
+        DesugarArrowFunctions
+        DesugarDefaults
         DesugarRestParameters
         DesugarForOf
         DesugarSpread
         HoistFuncDecls if enable_hoist_func_decls_pass
         FuncDeclsToVars
         HoistVars
-        DesugarArrowFunctions
         NameAnonymousFunctions
         #CFA2 if enable_cfa2
         ComputeFree

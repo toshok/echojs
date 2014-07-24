@@ -54,6 +54,7 @@ runtime_interface =
         string_concat:         -> @abi.createExternalFunction @module, "_ejs_string_concat",             types.EjsValue, [types.EjsValue, types.EjsValue]
         init_string_literal:   -> @abi.createExternalFunction @module, "_ejs_string_init_literal",       types.void, [types.string, types.EjsValue.pointerTo(), types.EjsPrimString.pointerTo(), types.jschar.pointerTo(), types.int32]
 
+        gc_add_root:           -> @abi.createExternalFunction @module, "_ejs_gc_add_root",               types.void, [types.EjsValue.pointerTo()]
         typeof_is_object:      -> returns_ejsval_bool only_reads_memory @abi.createExternalFunction @module, "_ejs_op_typeof_is_object",       types.EjsValue, [types.EjsValue]
         typeof_is_function:    -> returns_ejsval_bool only_reads_memory @abi.createExternalFunction @module, "_ejs_op_typeof_is_function",     types.EjsValue, [types.EjsValue]
         typeof_is_string:      -> returns_ejsval_bool only_reads_memory @abi.createExternalFunction @module, "_ejs_op_typeof_is_string",       types.EjsValue, [types.EjsValue]

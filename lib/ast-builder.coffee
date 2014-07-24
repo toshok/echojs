@@ -104,10 +104,10 @@ exports.expressionStatement = (exp)                      -> type: ExpressionStat
 exports.forInStatement      = (left, right, body)        -> type: ForInStatement, left: isast(left), right: isast(right), body: isast(body)
 exports.forOfStatement      = (left, right, body)        -> type: ForOfStatement, left: isast(left), right: isast(right), body: isast(body)
 exports.forStatement        = (init, test, update, body) -> type: ForStatement, init: isast(init), test: isast(test), update: isast(update), body: isast(body)
-exports.functionDeclaration = (id, params, body, defaults=[], rest=null) -> type: FunctionDeclaration, id: isast(id), params: params.map(isast), body: isast(body), defaults: defaults.map(isast), rest: isnullableast(rest), generator: false, expression: false
-exports.functionExpression  = (id, params, body, defaults=[], rest=null) -> type: FunctionExpression,  id: isnullableast(id), params: params.map(isast), body: isast(body), defaults: defaults.map(isast), rest: isnullableast(rest), generator: false, expression: false
+exports.functionDeclaration = (id, params, body, defaults=[], rest=null) -> type: FunctionDeclaration, id: isast(id), params: params.map(isast), body: isast(body), defaults: defaults.map(isnullableast), rest: isnullableast(rest), generator: false, expression: false
+exports.functionExpression  = (id, params, body, defaults=[], rest=null) -> type: FunctionExpression,  id: isnullableast(id), params: params.map(isast), body: isast(body), defaults: defaults.map(isnullableast), rest: isnullableast(rest), generator: false, expression: false
 exports.identifier          = (name) -> type: Identifier, name: name
-exports.ifStatement = (test, consequent, alternate) -> type: IfStatement, test: isast(test), consequent: isast(consequent), alternate: isast(alternate)
+exports.ifStatement = (test, consequent, alternate) -> type: IfStatement, test: isast(test), consequent: isast(consequent), alternate: isnullableast(alternate)
 exports.importDeclaration
 exports.importSpecifier
 exports.labeledStatement   = (label, body) -> type: LabeledStatement, label: isast(label), body: body.map(isast)
@@ -116,7 +116,7 @@ exports.literal            = (val) ->
         type: Literal, value: val, raw: raw
 exports.logicalExpression  = (l, op, r) -> type: LogicalExpression, left: isast(l), right: isast(r), operator: op
 exports.memberExpression   = (obj, prop, computed = false) -> type: MemberExpression, object: isast(obj), property: isast(prop), computed: computed
-exports.methodDefinition
+exports.methodDefinition   = (key, value, kind = "init") -> type: MethodDefinition, key: key, value: value, kind: kind
 exports.moduleDeclaration
 exports.newExpression
 exports.objectExpression = (properties) -> type: ObjectExpression, properties: properties.map(isast)
@@ -125,7 +125,7 @@ exports.program
 exports.property         = (key, value, kind = "init") -> type: Property, key: isast(key), value: isast(value), kind: kind
 exports.returnStatement  = (arg) -> type: ReturnStatement, argument: isast(arg)
 exports.sequenceExpression = (expressions) -> type: SequenceExpression, expressions: expressions.map(isast)
-exports.spreadElement
+exports.spreadElement    = (arg) -> type: SpreadElement, argument: arg
 exports.switchCase
 exports.switchStatement
 exports.taggedTemplateExpression

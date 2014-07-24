@@ -1,12 +1,12 @@
 *
 AZ
 Ğ„
-í¡¾í°„
-í¡¾í°„
-í ´í¼†aí ´í¼‡
-[RangeError: 1]
-[RangeError: 1]
-[RangeError: 2]
-[RangeError: 1]
-[RangeError: 1]
-[RangeError: 1]
+ğ¯ „
+ğ¯ „
+ğŒ†ağŒ‡
+[RangeError: Invalid code point: NaN]
+[RangeError: Invalid code point: Infinity]
+[RangeError: Invalid code point: -1]
+[RangeError: Invalid code point: 3.14]
+[RangeError: Invalid code point: 0.03]
+[RangeError: Invalid code point: NaN]
