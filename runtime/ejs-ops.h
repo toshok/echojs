@@ -18,6 +18,7 @@ uint32_t ToUint32(ejsval exp);
 ejsval ToObject(ejsval exp);
 ejsval ToBoolean(ejsval exp);
 EJSBool ToEJSBool(ejsval exp);
+EJSBool IsConcatSpreadable (ejsval O);
 
 EJSBool SameValue(ejsval x, ejsval y);
 EJSBool SameValueZero(ejsval x, ejsval y);

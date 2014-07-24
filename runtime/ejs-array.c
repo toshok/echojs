@@ -502,12 +502,106 @@ _ejs_Array_prototype_pop (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 
 // ECMA262: 15.4.4.4
 static ejsval
-_ejs_Array_prototype_concat (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
+_ejs_Array_prototype_concat (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
+    // 1. Let O be the result of calling ToObject passing the this value as the argument.
+    // 2. ReturnIfAbrupt(O).
+    ejsval O = ToObject(_this);
+
+    // 3. Let A be undefined.
+    ejsval A = _ejs_undefined;
+
+    // 4. If O is an exotic Array object, then
+    if (EJSVAL_IS_ARRAY(O)) {
+        //    a. Let C be Get(O, "constructor").
+        //    b. ReturnIfAbrupt(C).
+        //    c. If IsConstructor(C) is true, then
+        //       i. Let thisRealm be the running execution context’s Realm.
+        //       ii. If thisRealm and the value of C’s [[Realm]] internal slot are the same value, then
+        //           1. Let A be the result of calling the [[Construct]] internal method of C with argument (0).
+    }
+    // 5. If A is undefined, then
+    if (EJSVAL_IS_UNDEFINED(A)) {
+        //    a. Let A be ArrayCreate(0).
+        // 6. ReturnIfAbrupt(A).
+        A = _ejs_array_new(0, EJS_FALSE);
+    }
+    // 7. Let n be 0.
+    int n = 0;
+
+    // 8. Let items be a List whose first element is O and whose subsequent elements are, in left to right order, the arguments that were passed to this function invocation.
+    int num_items = argc;
+    int item_idx = -1;
+
+    // 9. Repeat, while items is not empty
+    while (item_idx < num_items) {
+        //    a. Remove the first element from items and let E be the value of the element.
+        ejsval E = item_idx == -1 ? O : args[item_idx];
+        item_idx ++;
+        
+        //    b. Let spreadable be IsConcatSpreadable(E).
+        //    c. ReturnIfAbrupt(spreadable).
+        EJSBool spreadable = IsConcatSpreadable(E);
+        //    d. If spreadable is true, then
+        if (spreadable) {
+            //       i. Let k be 0.
+            int k = 0;
+            //       ii. Let lenVal be Get(E, "length").
+            ejsval lenVal = Get(E, _ejs_atom_length);
+            
+            //       iii. Let len be ToLength(lenVal). 
+            //       iv. ReturnIfAbrupt(len).
+            int64_t len = ToInteger(lenVal);
+
+            //       v. Repeat, while k < len
+            while (k < len) {
+                //          1. Let P be ToString(k).
+                ejsval P = ToString(NUMBER_TO_EJSVAL(k));
+                //          2. Let exists be HasProperty(E, P).
+                //          3. ReturnIfAbrupt(exists).
+                EJSBool exists = OP(EJSVAL_TO_OBJECT(E),HasProperty)(E, P);
+                //          4. If exists is true, then
+                if (exists) {
+                    //             a. Let subElement be Get(E, P).
+                    //             b. ReturnIfAbrupt(subElement).
+                    ejsval subElement = Get(E, P);
+                    //             c. Let status be CreateDataPropertyOrThrow (A, ToString(n), subElement).
+                    //             d. ReturnIfAbrupt(status).
+                    _ejs_object_define_value_property (A, ToString(NUMBER_TO_EJSVAL(n)), subElement, EJS_PROP_FLAGS_ENUMERABLE | EJS_PROP_FLAGS_CONFIGURABLE | EJS_PROP_FLAGS_WRITABLE);
+                }
+                //          5. Increase n by 1.
+                n++;
+                //          6. Increase k by 1.
+                k++;
+            }
+        }
+        //    e. Else E is added as a single item rather than spread,
+        else {
+            //       i. Let status be CreateDataPropertyOrThrow (A, ToString(n), E).
+            //       ii. ReturnIfAbrupt(status).
+            _ejs_object_define_value_property (A, NUMBER_TO_EJSVAL(n), E, EJS_PROP_FLAGS_ENUMERABLE | EJS_PROP_FLAGS_CONFIGURABLE | EJS_PROP_FLAGS_WRITABLE);
+            //       iii. Increase n by 1
+            n++;
+        }
+
+    }
+
+    // 10. Let putStatus be Put(A, "length", n, true).
+    // 11. ReturnIfAbrupt(putStatus).
+    Put(A, _ejs_atom_length, NUMBER_TO_EJSVAL(n), EJS_TRUE);
+
+    // 12. Return A.
+    return A;
+
+
+#if old_code
     int numElements;
 
     numElements = EJS_ARRAY_LEN(_this); // we need to verify that we haven't been call'ed on something...
     for (int i = 0; i < argc; i ++) {
+        if (IsConcatSpreadable(args[i]))
+            numElements += 
+
         if (EJSVAL_IS_ARRAY(args[i]))
             numElements += EJS_ARRAY_LEN(args[i]);
         else
@@ -532,6 +626,7 @@ _ejs_Array_prototype_concat (ejsval env, ejsval _this, uint32_t argc, ejsval*arg
     EJS_ARRAY_LEN(rv) = numElements;
 
     return rv;
+#endif
 }
 
 static ejsval
