@@ -7,14 +7,13 @@ let path = require('path');
 let fs = require('fs');
 let spawn = require('child_process').spawn;
 
-module debug from 'lib/debug';
-import { Set } from 'lib/set-es6';
-import { compile } from 'lib/compiler';
+import * as debug        from 'lib/debug';
+import { Set }           from 'lib/set-es6';
+import { compile }       from 'lib/compiler';
 import { gatherImports } from 'lib/passes/gather-imports';
 
 import { bold, reset, genFreshFileName } from 'lib/echo-util';
-
-module esprima from 'esprima/esprima-es6';
+import * as esprima      from 'esprima/esprima-es6';
 
 // if we're running under coffee/node, argv will be ["coffee", ".../ejs", ...]
 // if we're running the compiled ejs.exe, argv will be [".../ejs.js.exe", ...]
