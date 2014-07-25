@@ -567,9 +567,6 @@ while (work_list.length !== 0) {
     }
 }
 
-// reverse the list so the main program is the first thing we compile
-files.reverse();
-
 // now compile them
 //
 if (typeof(__ejs) !== 'undefined') {
@@ -578,6 +575,8 @@ if (typeof(__ejs) !== 'undefined') {
     do_final_link(main_file);
 }
 else {
+    // reverse the list so the main program is the first thing we compile
+    files.reverse();
     let compileNextFile = () => {
         if (files.length === 0) {
             do_final_link(main_file);

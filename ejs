@@ -482,9 +482,6 @@ while work_list.length isnt 0
                 if work_list.indexOf(js_file) is -1 and not files.some((el) -> el.file_name is js_file)
                         work_list.push(js_file)
 
-# reverse the list so the main program is the first thing we compile
-files.reverse()
-
 # now compile them
 #
 if __ejs?
@@ -492,6 +489,8 @@ if __ejs?
                 compileFile f.file_name, f.file_ast, export_lists
         do_final_link(main_file)
 else
+        # reverse the list so the main program is the first thing we compile
+        files.reverse()
         compileNextFile = ->
                 if files.length is 0
                         do_final_link(main_file)
