@@ -2369,13 +2369,11 @@ class GatherImports extends TreeVisitor
         visitExportDeclaration: (n) ->
                 n = @addSource(n)
 
-                if n.source?
-                        if n.default
-                                @addDefaultExport(@filename)
-                        else
-                                for spec in n.specifiers
-                                        @addExportIdentifier(@filename, spec.name?.name or spec.id?.name)
-                        n
+                if n.default
+                        @addDefaultExport(@filename)
+                else if n.source?
+                        for spec in n.specifiers
+                                @addExportIdentifier(@filename, spec.name?.name or spec.id?.name)
                 else if Array.isArray(n.declaration)
                         for decl in n.declaration
                                 @addExportIdentifier(@filename, decl.id.name)

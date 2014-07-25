@@ -1599,7 +1599,7 @@ class DesugarImportExport extends TransformPass
                 
         constructor: (options, filename, @exportLists) ->
                 super
-        
+
         visitFunction: (n) ->
                 return n if not n.toplevel
                 
@@ -1621,17 +1621,18 @@ class DesugarImportExport extends TransformPass
                 import_tmp = freshId("import")
                 import_decls =  b.letDeclaration(import_tmp, intrinsic(moduleGet_id, [n.source_path]))
 
-                if n.kind is "default"
-                        #
-                        # let #{n.specifiers[0].id} = %import_decl.default
-                        #
-                        if not @exportLists[n.source_path.value]?.has_default
-                                reportError(ReferenceError, "module `#{n.source_path.value}' doesn't have default export", @filename, n.loc)
+                for spec in n.specifiers
+                        if spec.kind is "default"
+                                #
+                                # let #{n.specifiers[0].id} = %import_decl.default
+                                #
+                                if not @exportLists[n.source_path.value]?.has_default
+                                        reportError(ReferenceError, "module `#{n.source_path.value}' doesn't have default export", @filename, n.loc)
 
-                        reportError(ReferenceError, "default imports should have only one ImportSpecifier", @filename, n.loc) if n.specifiers.length isnt 1
-                        import_decls.declarations.push b.variableDeclarator(n.specifiers[0].id, b.memberExpression(import_tmp, b.identifier("default")))
-                else
-                        for spec in n.specifiers
+                                reportError(ReferenceError, "default imports should have only one ImportSpecifier", @filename, n.loc) if n.specifiers.length isnt 1
+                                import_decls.declarations.push b.variableDeclarator(n.specifiers[0].id, b.memberExpression(import_tmp, b.identifier("default")))
+
+                        else if spec.kind is "named"
                                 #
                                 # let #{spec.id} = %import_decl.#{spec.name || spec.id }
                                 #
@@ -1639,6 +1640,10 @@ class DesugarImportExport extends TransformPass
                                         reportError(ReferenceError, "module `#{n.source_path.value}' doesn't export `#{spec.id.name}'", @filename, spec.id.loc)
                                 import_decls.declarations.push b.variableDeclarator(spec.name or spec.id, b.memberExpression(import_tmp, spec.id))
 
+                        else # if spec.kind is "batch"
+                                # let #{spec.name} = %import_decl
+                                import_decls.declarations.push b.variableDeclarator(spec.name, import_tmp)
+                        
                 return import_decls
 
         visitExportDeclaration: (n) ->
@@ -1703,14 +1708,14 @@ class DesugarImportExport extends TransformPass
                         @exports.push { id: n.declaration.id }
                         return [n.declaration, define_export_property(n.declaration.id)]
 
-                # export default = ...;
+                # export default ...;
                 # 
-                if Array.isArray(n.declaration) and n.declaration[0].id.name is "default"
+                if n.default
                         local_default_id = b.identifier "%default"
                         default_id = b.identifier "default"
                         @exports.push { id: default_id }
                         
-                        local_decl = b.varDeclaration(local_default_id, n.declaration[0].init)
+                        local_decl = b.varDeclaration(local_default_id, n.declaration)
 
                         export_define = define_export_property(default_id, local_default_id)
                         return [local_decl, export_define]
@@ -1718,10 +1723,6 @@ class DesugarImportExport extends TransformPass
                 reportError(SyntaxError, "Unsupported type of export declaration #{n.declaration.type}", @filename, n.loc)
 
         visitModuleDeclaration: (n) ->
-                # this isn't quite right.  I believe this form creates
-                # a new instance and puts new properties on it that
-                # map to the module, instead of just returning the
-                # module object.
                 init = intrinsic(moduleGet_id, [n.source_path])
                 return b.letDeclaration(n.id, init)
 
