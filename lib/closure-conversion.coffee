@@ -1629,7 +1629,6 @@ class DesugarImportExport extends TransformPass
                                 if not @exportLists[n.source_path.value]?.has_default
                                         reportError(ReferenceError, "module `#{n.source_path.value}' doesn't have default export", @filename, n.loc)
 
-                                reportError(ReferenceError, "default imports should have only one ImportSpecifier", @filename, n.loc) if n.specifiers.length isnt 1
                                 import_decls.declarations.push b.variableDeclarator(n.specifiers[0].id, b.memberExpression(import_tmp, b.identifier("default")))
 
                         else if spec.kind is "named"
