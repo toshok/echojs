@@ -15,7 +15,12 @@ all-local::
 check:
 	$(MAKE) -C test check
 
-bootstrap:
-	$(MAKE) -C lib/generated bootstrap
+bootstrap: stage1 stage2
+
+stage1:
+	./ejs --warn-on-undeclared --module "./ejs-llvm/libejsllvm-module.a,llvm,_ejs_llvm_init,`llvm-config-3.4 --ldflags --libs`" ejs-es6
+
+stage2:
+	./ejs-es6.exe --warn-on-undeclared --module "./ejs-llvm/libejsllvm-module.a,llvm,_ejs_llvm_init,`llvm-config-3.4 --ldflags --libs`" ejs-es6
 
 include $(TOP)/build/build.mk
