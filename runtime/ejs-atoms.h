@@ -358,6 +358,7 @@ EJS_ATOM(construct)
 EJS_ATOM(deleteProperty)
 EJS_ATOM(enumerate)
 EJS_ATOM(ownKeys)
+EJS_ATOM(size)
 
 // symbol stuff
 EJS_ATOM(Symbol)
