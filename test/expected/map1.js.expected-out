@@ -1,1 +1,1 @@
-failed - should have thrown
+passed - threw exception in map ctor for !'is' comparator

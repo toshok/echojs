@@ -377,6 +377,7 @@ _ejs_Map_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     // 4. If map’s [[MapData]] internal slot is not undefined, then throw a TypeError exception.
 
     ejsval iter;
+    ejsval adder = _ejs_undefined;
 
     // 5. If iterable is not present, let iterable be undefined.
     // 6. If iterable is either undefined or null, then let iter be undefined.
@@ -384,12 +385,17 @@ _ejs_Map_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         iter = _ejs_undefined;
     // 7. Else,
     else {
-        EJS_NOT_IMPLEMENTED();
         //    a. Let iter be the result of GetIterator(iterable).
         //    b. ReturnIfAbrupt(iter).
+        iter = GetIterator(iterable, _ejs_undefined);
+
         //    c. Let adder be the result of Get(map, "set").
         //    d. ReturnIfAbrupt(adder).
+        adder = Get(map, _ejs_atom_set);
+
         //    e. If IsCallable(adder) is false, throw a TypeError Exception.
+        if (!EJSVAL_IS_CALLABLE(adder))
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "uncallable setter");
     }
 
     // 8. If comparator is not undefined, then
@@ -415,20 +421,38 @@ _ejs_Map_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     if (EJSVAL_IS_UNDEFINED(iter))
         return map;
 
-    EJS_NOT_IMPLEMENTED(); // we don't support iterators at all yet
     // 14. Repeat
-    //     a. Let next be the result of IteratorStep(iter).
-    //     b. ReturnIfAbrupt(next).
-    //     c. If next is false, then return NormalCompletion(map).
-    //     d. Let nextItem be IteratorValue(next).
-    //     e. ReturnIfAbrupt(nextItem).
-    //     f. If Type(nextItem) is not Object, then throw a TypeError exception.
-    //     g. Let k be the result of Get(nextItem, "0").
-    //     h. ReturnIfAbrupt(k).
-    //     i. Let v be the result of Get(nextItem, "1").
-    //     j. ReturnIfAbrupt(v).
-    //     k. Let status be the result of calling the [[Call]] internal method of adder with map as thisArgument and a List whose elements are k and v as argumentsList.
-    //     l. ReturnIfAbrupt(status).
+    while (EJS_TRUE) {
+        //     a. Let next be the result of IteratorStep(iter).
+        //     b. ReturnIfAbrupt(next).
+        ejsval next = IteratorStep(iter);
+
+        //     c. If next is false, then return NormalCompletion(map).
+        if (EJSVAL_IS_BOOLEAN(next) && !EJSVAL_TO_BOOLEAN(next))
+            return map;
+
+        //     d. Let nextItem be IteratorValue(next).
+        //     e. ReturnIfAbrupt(nextItem).
+        ejsval nextItem = IteratorValue(next);
+
+        //     f. If Type(nextItem) is not Object, then throw a TypeError exception.
+        if (!EJSVAL_IS_OBJECT(nextItem)) _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "uncallable setter");
+
+        //     g. Let k be the result of Get(nextItem, "0").
+        //     h. ReturnIfAbrupt(k).
+        ejsval k = Get(nextItem, _ejs_atom_0);
+
+        //     i. Let v be the result of Get(nextItem, "1").
+        //     j. ReturnIfAbrupt(v).
+        ejsval v = Get(nextItem, _ejs_atom_1);
+
+        //     k. Let status be the result of calling the [[Call]] internal method of adder with map as thisArgument and a List whose elements are k and v as argumentsList.
+        //     l. ReturnIfAbrupt(status).
+        ejsval adder_args[2];
+        adder_args[0] = k;
+        adder_args[1] = v;
+        _ejs_invoke_closure (adder, map, 2, adder_args);
+    }
 }
 
 static ejsval
