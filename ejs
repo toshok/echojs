@@ -470,17 +470,25 @@ export_lists = Object.create(null)
 while work_list.length isnt 0
         file = work_list.pop()
 
-        file_contents = fs.readFileSync(file, 'utf-8')
-        file_ast = parseFile(file, file_contents)
+        jsfile = file
+        try
+                if fs.statSync(file).isDirectory()
+                        jsfile = path.join(file, "index")
+        catch
+                # do nothing
+        if path.extname(jsfile) isnt ".js"
+                jsfile = jsfile + '.js'
+        
+        file_contents = fs.readFileSync(jsfile, 'utf-8')
+        file_ast = parseFile(jsfile, file_contents)
 
-        imports = compiler.gatherImports(file, path.dirname(file), process.cwd(), file_ast, export_lists)
+        imports = compiler.gatherImports(file, path.dirname(jsfile), process.cwd(), file_ast, export_lists)
 
         files.push({file_name: file, file_ast: file_ast})
 
         for i in imports
-                js_file = i + ".js"
-                if work_list.indexOf(js_file) is -1 and not files.some((el) -> el.file_name is js_file)
-                        work_list.push(js_file)
+                if work_list.indexOf(i) is -1 and not files.some((el) -> el.file_name is i)
+                        work_list.push(i)
 
 # now compile them
 #

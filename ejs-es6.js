@@ -1,16 +1,20 @@
-let os = System.import('os');
-let path = System.get('path');
-let fs = System.get('fs');
-let spawn = System.get('child_process').spawn;
+/* -*- Mode: js2; tab-width: 4; indent-tabs-mode: nil; -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=js:
+ */
 
-module debug from 'lib/debug';
-import { Set } from 'lib/set-es6';
-import { compile, gatherImports } from 'lib/compiler';
+let os = require('os');
+let path = require('path');
+let fs = require('fs');
+let spawn = require('child_process').spawn;
 
-import { bold, reset, genFreshFileName } from 'lib/echo-util';
+import * as debug        from './lib/debug';
+import { Set }           from './lib/set-es6';
+import { compile }       from './lib/compiler';
+import { gatherImports } from './lib/passes/gather-imports';
 
-module esprima from 'esprima/esprima-es6';
-        
+import { bold, reset, genFreshFileName } from './lib/echo-util';
+import * as esprima      from './esprima/esprima-es6';
+
 // if we're running under coffee/node, argv will be ["coffee", ".../ejs", ...]
 // if we're running the compiled ejs.exe, argv will be [".../ejs.js.exe", ...]
 let slice_count = typeof(__ejs) === "undefined" ? 2 : 1;
@@ -28,22 +32,22 @@ if (host_arch === "ia32")
 let host_platform = os.platform();
 
 let options = {
-        // our defaults:
-        debug_level: 0,
-        debug_passes: new Set(),
-        warn_on_undeclared: false,
-        frozen_global: false,
-        record_types: false,
-        output_filename: null,
-        show_help: false,
-        leave_temp_files: false,
-        target_arch: host_arch,
-        target_platform: host_platform,
-        external_modules: [],
-        extra_clang_args: "",
-        ios_sdk: "7.1",
-        ios_min: "7.0",
-        target_pointer_size: 64
+    // our defaults:
+    debug_level: 0,
+    debug_passes: new Set(),
+    warn_on_undeclared: false,
+    frozen_global: false,
+    record_types: false,
+    output_filename: null,
+    show_help: false,
+    leave_temp_files: false,
+    target_arch: host_arch,
+    target_platform: host_platform,
+    external_modules: [],
+    extra_clang_args: "",
+    ios_sdk: "7.1",
+    ios_min: "7.0",
+    target_pointer_size: 64
 };
 
 function add_external_module (modinfo) {
@@ -52,10 +56,10 @@ function add_external_module (modinfo) {
 }
 
 let arch_info = {
-        "x86-64": { pointer_size: 64, little_endian: true, llc_arch: "x86-64",  clang_arch: "x86_64" },
-        x86:      { pointer_size: 32, little_endian: true, llc_arch: "x86",     clang_arch: "i386" },
-        arm:      { pointer_size: 32, little_endian: true, llc_arch: "arm",     clang_arch: "armv7" },
-        aarch64:  { pointer_size: 64, little_endian: true, llc_arch: "aarch64", clang_arch: "aarch64" }
+    "x86-64": { pointer_size: 64, little_endian: true, llc_arch: "x86-64",  clang_arch: "x86_64" },
+    x86:      { pointer_size: 32, little_endian: true, llc_arch: "x86",     clang_arch: "i386" },
+    arm:      { pointer_size: 32, little_endian: true, llc_arch: "arm",     clang_arch: "armv7" },
+    aarch64:  { pointer_size: 64, little_endian: true, llc_arch: "aarch64", clang_arch: "aarch64" }
 };
 
 function set_target_arch(arch) {
@@ -70,7 +74,7 @@ function set_target_arch(arch) {
 
     if (! (arch in arch_info))
         throw new Error(`invalid arch '${arch}'.`);
-                
+    
     options.target_arch         = arch;
     options.target_pointer_size = arch_info[arch].pointer_size;
 }
@@ -88,6 +92,7 @@ function set_target_alias(alias) {
         sim:         { platform: "darwin", arch: "x86" },
         dev:         { platform: "darwin", arch: "arm" }
     };
+
     if (!(alias in target_aliases))
         throw new Error(`invalid target alias '${alias}'.`);
 
@@ -106,7 +111,7 @@ function increase_debug_level() {
 function add_debug_after_pass(passname) {
     options.debug_passes.add(passname);
 }
-        
+
 let args = {
     "-q": {
         flag:    "quiet",
@@ -180,7 +185,7 @@ function output_usage() {
     console.warn('Usage:');
     console.warn('   ejs [options] file1.js file2.js file.js ...');
 }
-        
+
 function output_options() {
     console.warn('Options:');
     for (let a of args.keys())
@@ -197,31 +202,30 @@ if (argv.length > 0) {
     for (let ai = 0, ae = argv.length; ai < ae; ai ++) {
         if (skipNext > 0) {
             skipNext -= 1;
-	}
+        }
         else {
             if (args[argv[ai]]) {
                 let o = args[argv[ai]];
                 if (o.flag) {
                     options[o.flag] = true;
-		}
+                }
                 else if (o.option) {
                     options[o.option] = argv[++ai];
                     skipNext = 1;
-		}
+                }
                 else if (o.handler) {
                     let handler_args = [];
-		    for (let i = 0, e = o.handlerArgc; i < e; i ++)
-			handler_args.push(argv[++ai]);
+                    for (let i = 0, e = o.handlerArgc; i < e; i ++)
+                        handler_args.push(argv[++ai]);
                     o.handler.apply(null, handler_args);
-                    skipNext = o.handlerArgc;
-		}
-	    }
+                }
+            }
             else {
                 // end of options signals the rest of the array is files
                 file_args = argv.slice(ai);
                 break;
-	    }
-	}
+            }
+        }
     }
 }
 
@@ -231,7 +235,7 @@ if (options.show_help) {
     output_options();
     process.exit(0);
 }
-        
+
 if (!file_args || file_args.length === 0) {
     output_usage();
     process.exit(0);
@@ -261,14 +265,14 @@ let dev_bin=`${dev_base}/Developer/usr/bin`;
 function target_llc_args(platform, arch) {
     let args = [`-march=${arch_info[options.target_arch].llc_arch}`, "-disable-fp-elim" ];
     if (arch === "arm")
-        args = args.concat ["-mtriple=thumbv7-apple-ios", "-mattr=+v6", "-relocation-model=pic", "-soft-float" ];
+        args = args.concat(["-mtriple=thumbv7-apple-ios", "-mattr=+v6", "-relocation-model=pic", "-soft-float" ]);
     if (arch === "aarch64")
-        args = args.concat ["-mtriple=thumbv7s-apple-ios", "-mattr=+fp-armv8", "-relocation-model=pic" ];
+        args = args.concat(["-mtriple=thumbv7s-apple-ios", "-mattr=+fp-armv8", "-relocation-model=pic" ]);
     return args;
 }
 
 let target_linker = "clang++";
-        
+
 function target_link_args(platform, arch) {
     let args = [ "-arch", arch_info[options.target_arch].clang_arch ];
 
@@ -282,12 +286,12 @@ function target_link_args(platform, arch) {
         if (arch === "x86-64") return args;
         if (arch === "x86")
             return args.concat([ "-isysroot", `${sim_base}/Developer/SDKs/iPhoneSimulator${options.ios_sdk}.sdk`, `-miphoneos-version-min=${options.ios_min}` ]);
-        return args.concat(["-isysroot", `${dev_base}/Developer/SDKs/iPhoneOS${options.ios_sdk}.sdk`, `-miphoneos-version-min=${options.ios_min}` ])
+        return args.concat(["-isysroot", `${dev_base}/Developer/SDKs/iPhoneOS${options.ios_sdk}.sdk`, `-miphoneos-version-min=${options.ios_min}` ]);
     }
 
     return [];
 }
-        
+
 
 function target_libraries(platform, arch) {
     if (platform === "linux") return [ "-lpthread" ];
@@ -315,7 +319,7 @@ function target_libecho(platform, arch) {
     return "runtime/libecho.a";
 }
 
-        
+
 function target_extra_libs(platform, arch) {
     if (platform === "linux")   return "external-deps/pcre-linux/.libs/libpcre16.a";
 
@@ -331,8 +335,8 @@ function target_extra_libs(platform, arch) {
 
 function target_path_prepend (platform, arch) {
     if (platform === "darwin") {
-	if (arch === "x86") return sim_bin;
-	if (arch === "arm" || arch === "aarch64") return dev_bin; 
+        if (arch === "x86") return sim_bin;
+        if (arch === "arm" || arch === "aarch64") return dev_bin; 
     }
     return "";
 }
@@ -350,12 +354,12 @@ function parseFile(filename, content) {
         process.exit(-1);
     }
 }
-        
+
 function compileFile(filename, parse_tree, export_lists, compileCallback) {
     let base_filename = genFreshFileName(path.basename(filename));
 
     if (!options.quiet)
-	console.warn (`${bold()}COMPILE${reset()} ${filename} ${options.debug_level > 0 ? '-> ${base_filename}' : ''}`);
+        console.warn (`${bold()}COMPILE${reset()} ${filename} ${options.debug_level > 0 ? base_filename : ''}`);
 
     let compiled_module;
     try {
@@ -367,16 +371,16 @@ function compileFile(filename, parse_tree, export_lists, compileCallback) {
         throw e;
     }
 
-    let ll_filename     = `${os.tmpdir()}/${base_filename}-${options.target}.ll`;
-    let bc_filename     = `${os.tmpdir()}/${base_filename}-${options.target}.bc`;
-    let ll_opt_filename = `${os.tmpdir()}/${base_filename}-${options.target}.ll.opt`;
-    let o_filename      = `${os.tmpdir()}/${base_filename}-${options.target}.o`;
+    let ll_filename     = `${os.tmpdir()}/${base_filename}-${options.target_platform}-${options.target_arch}.ll`;
+    let bc_filename     = `${os.tmpdir()}/${base_filename}-${options.target_platform}-${options.target_arch}.bc`;
+    let ll_opt_filename = `${os.tmpdir()}/${base_filename}-${options.target_platform}-${options.target_arch}.ll.opt`;
+    let o_filename      = `${os.tmpdir()}/${base_filename}-${options.target_platform}-${options.target_arch}.o`;
 
     temp_files.push(ll_filename, bc_filename, ll_opt_filename, o_filename);
-        
+    
     let llvm_as_args = [`-o=${bc_filename}`, ll_filename];
     let opt_args     = ["-O2", "-strip-dead-prototypes", "-S", `-o=${ll_opt_filename}`, bc_filename];
-    let llc_args     = target_llc_args(options.target_platform,options.target_arch).concat ["-filetype=obj", `-o=${o_filename}`, ll_opt_filename];
+    let llc_args     = target_llc_args(options.target_platform,options.target_arch).concat(["-filetype=obj", `-o=${o_filename}`, ll_opt_filename]);
 
     debug.log (1, `writing ${ll_filename}`);
     compiled_module.writeToFile(ll_filename);
@@ -390,7 +394,7 @@ function compileFile(filename, parse_tree, export_lists, compileCallback) {
         spawn(llvm_commands["opt"], opt_args);
         spawn(llvm_commands["llc"], llc_args);
         o_filenames.push(o_filename);
-	if (compileCallback)
+        if (compileCallback)
             compileCallback();
     }
     else {
@@ -400,7 +404,7 @@ function compileFile(filename, parse_tree, export_lists, compileCallback) {
         llvm_as.on ("error", (err) => {
             console.warn(`error executing ${llvm_commands['llvm-as']}: ${err}`);
             process.exit(-1);
-	});
+        });
         llvm_as.on ("exit", (code) => {
             debug.log(1, `executing '${llvm_commands['opt']} ${opt_args.join(' ')}'`);
             let opt = spawn(llvm_commands['opt'], opt_args);
@@ -408,7 +412,7 @@ function compileFile(filename, parse_tree, export_lists, compileCallback) {
             opt.on ("error", (err) => {
                 console.warn(`error executing ${llvm_commands['opt']}: ${err}`);
                 process.exit(-1);
-	    });
+            });
             opt.on ("exit", (code) => {
                 debug.log (1, `executing '${llvm_commands['llc']} ${llc_args.join(' ')}'`);
                 let llc = spawn(llvm_commands['llc'], llc_args);
@@ -416,13 +420,13 @@ function compileFile(filename, parse_tree, export_lists, compileCallback) {
                 llc.on ("error", (err) => {
                     console.warn(`error executing ${llvm_commands['llc']}: ${err}`);
                     process.exit(-1);
-		});
+                });
                 llc.on ("exit", (code) => {
                     o_filenames.push(o_filename);
                     compileCallback();
-		});
-	    });
-	});
+                });
+            });
+        });
     }
 }
 
@@ -433,10 +437,10 @@ function relative_to_ejs_exe(n) {
 
 function generate_import_map (modules) {
     let sanitize = (filename, c_callable) => {
-        let filename = filename.replace(/\.js$/, "");
+        let sfilename = filename.replace(/\.js$/, "");
         if (c_callable)
-            filename = filename.replace(/[.,-\/\\]/g, "_"); // this is insanely inadequate
-        return filename;
+            sfilename = sfilename.replace(/[.,-\/\\]/g, "_"); // this is insanely inadequate
+        return sfilename;
     };
     let map_path = `${os.tmpdir()}/${genFreshFileName(path.basename(main_file))}-import-map.cpp`;
     let map = fs.createWriteStream(map_path);
@@ -469,14 +473,14 @@ function generate_import_map (modules) {
     });
     map.write("  { 0, 0, 0 }\n");
     map.write("};\n");
-        
+    
     map.write(`const char *entry_filename = \"${sanitize(base_filenames[0], false)}\";\n`);
 
     map.write("};");
     map.end();
 
     temp_files.push(map_path);
-        
+    
     return map_path;
 }
 
@@ -490,15 +494,15 @@ function do_final_link(main_file) {
     let clang_args = target_link_args(options.target_platform, options.target_arch).concat([`-DEJS_BITS_PER_WORD=${options.target_pointer_size}`, "-o", output_filename].concat(o_filenames));
     if (arch_info[options.target_arch].little_endian)
         clang_args.unshift("-DIS_LITTLE_ENDIAN=1");
-                
+    
     // XXX we shouldn't need this, but build is failing while compiling the require map
     clang_args.push("-I.");
-        
+    
     clang_args.push(map_filename);
-        
+    
     clang_args.push(relative_to_ejs_exe(target_libecho(options.target_platform, options.target_arch)));
     clang_args.push(relative_to_ejs_exe(target_extra_libs(options.target_platform, options.target_arch)));
-        
+    
     options.external_modules.forEach ( (extern_module) => {
         clang_args.push (extern_module.library);
         // very strange, not sure why we need this \n
@@ -508,9 +512,9 @@ function do_final_link(main_file) {
     clang_args = clang_args.concat(target_libraries(options.target_platform, options.target_arch));
 
     if (!options.quiet) console.warn(`${bold()}LINK${reset()} ${output_filename}`);
-        
+    
     debug.log (1, `executing '${target_linker} ${clang_args.join(' ')}'`);
-        
+    
     if (typeof(__ejs) != "undefined") {
         spawn(target_linker, clang_args);
         // we ignore leave_tmp_files here
@@ -523,9 +527,9 @@ function do_final_link(main_file) {
             if (!options.leave_temp_files) {
                 cleanup ( () => {
                     if (!options.quiet) console.warn(`${bold()}done.${reset()}`);
-		});
-	    }
-	});
+                });
+            }
+        });
     }
 }
 
@@ -535,13 +539,12 @@ function cleanup(done) {
         fs.unlink(filename, (err) => {
             files_to_delete = files_to_delete - 1;
             if (files_to_delete === 0) done();
-	});
+        });
     });
 }
-                
+
 let main_file = file_args[0];
 let work_list = file_args.slice();
-let files = [];
 
 let export_lists = Object.create(null);
 
@@ -549,22 +552,31 @@ let export_lists = Object.create(null);
 while (work_list.length !== 0) {
     let file = work_list.pop();
 
-    let file_contents = fs.readFileSync(file, 'utf-8');
-    let file_ast = parseFile(file, file_contents);
+    let jsfile = file;
+    try {
+        if (fs.statSync(jsfile).isDirectory()) {
+            jsfile = path.join(jsfile, "index");
+        }
+    }
+    catch (e) {
+        console.log(e);
+    }
+    if (path.extname(jsfile) !== ".js")
+        jsfile = jsfile + '.js';
+    
+    let file_contents = fs.readFileSync(jsfile, 'utf-8');
+    let file_ast = parseFile(jsfile, file_contents);
 
-    let imports = gatherImports(file, path.dirname(file), process.cwd(), file_ast, export_lists);
+    let imports = gatherImports(file, path.dirname(jsfile), process.cwd(), file_ast, export_lists);
 
     files.push({file_name: file, file_ast: file_ast});
 
-    for (let i of imports) {
-        var js_file = i + ".js";
-        if (work_list.indexOf(js_file) === -1 && !files.some((el) => el.file_name === js_file))
-            work_list.push(js_file);
+    var i;
+    for (i of imports) {
+        if (work_list.indexOf(i) === -1 && !files.some((el) => el.file_name === i))
+            work_list.push(i);
     }
 }
-
-// reverse the list so the main program is the first thing we compile
-files.reverse();
 
 // now compile them
 //
@@ -574,17 +586,15 @@ if (typeof(__ejs) !== 'undefined') {
     do_final_link(main_file);
 }
 else {
+    // reverse the list so the main program is the first thing we compile
+    files.reverse();
     let compileNextFile = () => {
         if (files.length === 0) {
             do_final_link(main_file);
             return;
-	}
+        }
         let f = files.pop();
         compileFile (f.file_name, f.file_ast, export_lists, compileNextFile);
     };
     compileNextFile();
 }
-        
-// Local Variables:
-// mode: js2
-// End:
