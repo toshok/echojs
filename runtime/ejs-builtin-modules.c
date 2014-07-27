@@ -49,6 +49,23 @@ _ejs_path_basename (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return rv;
 }
 
+static ejsval
+_ejs_path_extname (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    ejsval rv = _ejs_atom_empty;
+    ejsval path = args[0];
+    char *utf8_path = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(path));
+    char *base = strdup(basename(utf8_path));
+    free (utf8_path);
+
+    char *p = strrchr(base, '.');
+    if (p != NULL)
+        rv = _ejs_string_new_utf8(p);
+
+    free(base);
+    return rv;
+}
+
 static char*
 resolvev(char** paths, int num_paths)
 {
@@ -248,6 +265,7 @@ _ejs_path_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 
     EJS_INSTALL_FUNCTION(exports, "dirname", _ejs_path_dirname);
     EJS_INSTALL_FUNCTION(exports, "basename", _ejs_path_basename);
+    EJS_INSTALL_FUNCTION(exports, "extname", _ejs_path_extname);
     EJS_INSTALL_FUNCTION(exports, "resolve", _ejs_path_resolve);
     EJS_INSTALL_FUNCTION(exports, "relative", _ejs_path_relative);
 
@@ -258,6 +276,108 @@ _ejs_path_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 /// fs module
 ///
 
+// free's @path before throwing the exception
+static void
+throw_errno_error(int _errno, char* path)
+{
+    char buf[256];
+    snprintf (buf, sizeof(buf), "%s: `%s`", strerror(_errno), path);
+    free(path);
+    _ejs_throw_nativeerror_utf8 (EJS_ERROR, buf);
+}
+
+#define EJS_STAT_SET_IS_FILE(s, v) (*_ejs_closureenv_get_slot_ref((s), 0) = (v))
+#define EJS_STAT_SET_IS_DIRECTORY(s, v) (*_ejs_closureenv_get_slot_ref((s), 1) = (v))
+#define EJS_STAT_SET_IS_CHARDEV(s, v) (*_ejs_closureenv_get_slot_ref((s), 2) = (v))
+#define EJS_STAT_SET_IS_SYMLINK(s, v) (*_ejs_closureenv_get_slot_ref((s), 3) = (v))
+#define EJS_STAT_SET_IS_FIFO(s, v) (*_ejs_closureenv_get_slot_ref((s), 4) = (v))
+#define EJS_STAT_SET_IS_SOCKET(s, v) (*_ejs_closureenv_get_slot_ref((s), 5) = (v))
+
+#define EJS_STAT_GET_IS_FILE(s) (_ejs_closureenv_get_slot((s), 0))
+#define EJS_STAT_GET_IS_DIRECTORY(s) (_ejs_closureenv_get_slot((s), 1))
+#define EJS_STAT_GET_IS_CHARDEV(s) (_ejs_closureenv_get_slot((s), 2))
+#define EJS_STAT_GET_IS_SYMLINK(s) (_ejs_closureenv_get_slot((s), 3))
+#define EJS_STAT_GET_IS_FIFO(s) (_ejs_closureenv_get_slot((s), 4))
+#define EJS_STAT_GET_IS_SOCKET(s) (_ejs_closureenv_get_slot((s), 5))
+
+static ejsval
+_ejs_fs_Stat_isFile(ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    return EJS_STAT_GET_IS_FILE(env);
+}
+
+static ejsval
+_ejs_fs_Stat_isDirectory(ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    return EJS_STAT_GET_IS_DIRECTORY(env);
+}
+
+static ejsval
+_ejs_fs_Stat_isCharacterDevice(ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    return EJS_STAT_GET_IS_CHARDEV(env);
+}
+
+static ejsval
+_ejs_fs_Stat_isSymbolicLink(ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    return EJS_STAT_GET_IS_SYMLINK(env);
+}
+
+static ejsval
+_ejs_fs_Stat_isFIFO(ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    return EJS_STAT_GET_IS_FIFO(env);
+}
+
+static ejsval
+_ejs_fs_Stat_isSocket(ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    return EJS_STAT_GET_IS_SOCKET(env);
+}
+
+static ejsval
+_ejs_fs_Stat_new(struct stat* sb)
+{
+    ejsval StatData = _ejs_closureenv_new(6);
+
+    EJS_STAT_SET_IS_FILE      (StatData, S_ISREG(sb->st_mode) ? _ejs_true : _ejs_false);
+    EJS_STAT_SET_IS_DIRECTORY (StatData, S_ISDIR(sb->st_mode) ? _ejs_true : _ejs_false);
+    EJS_STAT_SET_IS_CHARDEV   (StatData, S_ISCHR(sb->st_mode) ? _ejs_true : _ejs_false);
+    EJS_STAT_SET_IS_SYMLINK   (StatData, S_ISLNK(sb->st_mode) ? _ejs_true : _ejs_false);
+    EJS_STAT_SET_IS_FIFO      (StatData, S_ISFIFO(sb->st_mode) ? _ejs_true : _ejs_false);
+    EJS_STAT_SET_IS_SOCKET    (StatData, S_ISSOCK(sb->st_mode) ? _ejs_true : _ejs_false);
+
+    ejsval stat = _ejs_object_create(_ejs_null);
+
+#define STAT_FUNC(n) EJS_INSTALL_FUNCTION_ENV(stat, #n, _ejs_fs_Stat_##n, StatData)
+
+    STAT_FUNC (isFile);
+    STAT_FUNC (isDirectory);
+    STAT_FUNC (isCharacterDevice);
+    STAT_FUNC (isSymbolicLink);
+    STAT_FUNC (isFIFO);
+    STAT_FUNC (isSocket);
+
+#undef STAT_FUNC
+
+    return stat;
+}
+
+static ejsval
+_ejs_fs_statSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    char* utf8_path = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[0]));
+    struct stat sb;
+
+    int stat_rv = stat (utf8_path, &sb);
+    if (stat_rv == -1)
+        throw_errno_error(errno, utf8_path);
+
+    free(utf8_path);
+    return _ejs_fs_Stat_new(&sb);
+}
+
 static ejsval
 _ejs_fs_readFileSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
@@ -265,23 +385,14 @@ _ejs_fs_readFileSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     char* utf8_path = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[0]));
 
     int fd = open (utf8_path, O_RDONLY);
-    if (fd == -1) {
-        char buf[256];
-        snprintf (buf, sizeof(buf), "%s: `%s`", strerror(errno), utf8_path);
-        free(utf8_path);
-        _ejs_throw_nativeerror_utf8 (EJS_ERROR, buf);
-    }
+    if (fd == -1)
+        throw_errno_error(errno, utf8_path);
 
     struct stat fd_stat;
 
     int stat_rv = fstat (fd, &fd_stat);
-    if (stat_rv == -1) {
-        char buf[256];
-        snprintf (buf, sizeof(buf), "%s: `%s`", strerror(errno), utf8_path);
-        free(utf8_path);
-        close(fd);
-        _ejs_throw_nativeerror_utf8 (EJS_ERROR, buf);
-    }
+    if (stat_rv == -1)
+        throw_errno_error(errno, utf8_path);
 
     int amount_to_read = fd_stat.st_size;
     int amount_read = 0;
@@ -291,14 +402,11 @@ _ejs_fs_readFileSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
         if (c == -1) {
             if (errno == EINTR)
                 continue;
-            else {
-                char msg[256];
-                snprintf (msg, sizeof(msg), "%s: `%s`", strerror(errno), utf8_path);
-                free(utf8_path);
-                close(fd);
-                free (buf);
-                _ejs_throw_nativeerror_utf8 (EJS_ERROR, msg);
-            }
+
+            int read_errno = errno;
+            free(buf);
+            close(fd);
+            throw_errno_error(read_errno, utf8_path);
         }
         else {
             amount_to_read -= c;
@@ -383,6 +491,7 @@ _ejs_fs_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     ejsval exports = args[0];
 
+    EJS_INSTALL_FUNCTION(exports, "statSync", _ejs_fs_statSync);
     EJS_INSTALL_FUNCTION(exports, "readFileSync", _ejs_fs_readFileSync);
     EJS_INSTALL_FUNCTION(exports, "createWriteStream", _ejs_fs_createWriteStream);
 

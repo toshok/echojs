@@ -51,6 +51,12 @@ EJS_BEGIN_DECLS
     _ejs_object_setprop (o, funcname, tmpfunc);                         \
     EJS_MACRO_END
 
+#define EJS_INSTALL_FUNCTION_ENV(o,n,f,env) EJS_MACRO_START                \
+    ejsval funcname = _ejs_string_new_utf8(n);                          \
+    ejsval tmpfunc = _ejs_function_new_native (env, funcname, (EJSClosureFunc)f); \
+    _ejs_object_setprop (o, funcname, tmpfunc);                         \
+    EJS_MACRO_END
+
 #define EJS_INSTALL_FUNCTION_FLAGS(o,n,f,flags) EJS_MACRO_START         \
     ejsval funcname = _ejs_string_new_utf8(n);                          \
     ejsval tmpfunc = _ejs_function_new_native (_ejs_null, funcname, (EJSClosureFunc)f); \
