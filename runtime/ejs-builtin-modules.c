@@ -258,6 +258,24 @@ _ejs_path_relative (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     }
 }
 
+static ejsval
+_ejs_path_join (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    if (argc == 0)
+        return _ejs_atom_empty;
+
+    // XXX terrible, just join the strings in args with '/' between them.
+    ejsval rv = args[0];
+
+    for (int i = 1; i < argc; i ++) {
+        rv = _ejs_string_concat(rv, _ejs_atom_slash);
+        rv = _ejs_string_concat(rv, args[i]);
+    }
+
+    _ejs_string_flatten(rv);
+    return rv;
+}
+
 ejsval
 _ejs_path_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
@@ -268,6 +286,7 @@ _ejs_path_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     EJS_INSTALL_FUNCTION(exports, "extname", _ejs_path_extname);
     EJS_INSTALL_FUNCTION(exports, "resolve", _ejs_path_resolve);
     EJS_INSTALL_FUNCTION(exports, "relative", _ejs_path_relative);
+    EJS_INSTALL_FUNCTION(exports, "join", _ejs_path_join);
 
     return _ejs_undefined;
 }
