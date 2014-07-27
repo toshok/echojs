@@ -1612,7 +1612,7 @@ class DesugarImportExport extends TransformPass
                 if n.specifiers.length is 0
                         # no specifiers, it's of the form:  import from "foo"
                         # don't waste a decl for this type
-                        return intrinsic(moduleGet_id, [n.source_path])
+                        return b.expressionStatement(intrinsic(moduleGet_id, [n.source_path]))
 
                 # otherwise create a fresh declaration for the module object
                 # 
