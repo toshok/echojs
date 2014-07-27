@@ -1597,7 +1597,7 @@ class DesugarImportExport extends TransformPass
 
                 return b.expressionStatement(b.callExpression(Object_defineProperty, [exports_id, b.literal(exported_id.name), property_literal]))
                 
-        constructor: (options, filename, @exportLists) ->
+        constructor: (options, @filename, @exportLists) ->
                 super
 
         visitFunction: (n) ->
