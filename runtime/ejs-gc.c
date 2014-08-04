@@ -22,7 +22,7 @@
 
 #include <pthread.h>
 
-#define clear_on_finalize 0
+#define clear_on_finalize 1
 
 #define spew 0
 #define sanity 0
@@ -346,12 +346,17 @@ struct _LargeObjectInfo {
 };
 
 #define OBJECT_SIZE_LOW_LIMIT_BITS 3   // number of bits required to represent a pointer (3 == 8 bytes for 64 bit)
-#define OBJECT_SIZE_HIGH_LIMIT_BITS 10 // max object size for the non-LOS allocator = 1024
+#define OBJECT_SIZE_HIGH_LIMIT_BITS 11 // max object size for the non-LOS allocator = 2048
 
 #define HEAP_PAGELISTS_COUNT (OBJECT_SIZE_HIGH_LIMIT_BITS - OBJECT_SIZE_LOW_LIMIT_BITS) + 1 // +1 because we're inclusive on 10
 
 static EJSList heap_pages[HEAP_PAGELISTS_COUNT];
 static LargeObjectInfo *los_list;
+
+void* ptr_to_arena(void* ptr) { return PTR_TO_ARENA(ptr); }
+void* ptr_to_arena_page_base(void* ptr) { return PTR_TO_ARENA_PAGE_BASE(ptr); }
+uintptr_t ptr_to_arena_page_index(void* ptr) { return PTR_TO_ARENA_PAGE_INDEX(ptr); }
+uintptr_t ptr_to_cell(void* ptr, PageInfo* info ) { return PTR_TO_CELL(ptr, info); }
 
 #if sanity
 static void

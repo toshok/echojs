@@ -3,6 +3,8 @@ escodegen = require 'escodegen'
 debug = require 'debug'
 path = require 'path'
 
+node_compat = require 'node-compat'
+
 { Map } = require 'map'
 
 { ArrayExpression,
@@ -1307,8 +1309,9 @@ class LLVMIRVisitor extends TreeVisitor
                 rv
 
         visitObjectExpression: (n) ->
+                obj_proto = ir.createLoad @ejs_globals.Object_prototype, "load_objproto"
                 object_create = @ejs_runtime.object_create
-                obj = @createCall object_create, [@loadNullEjsValue()], "objtmp", !object_create.doesNotThrow
+                obj = @createCall object_create, [obj_proto], "objtmp", !object_create.doesNotThrow
 
                 accessor_map = new Map()
 
@@ -2138,8 +2141,8 @@ class LLVMIRVisitor extends TreeVisitor
 
         handleObjectCreate:  (exp) ->
                 proto = @visitOrNull exp.arguments[0]
-                @createCall @ejs_runtime.object_create_wrapper, [proto], "object_create", true
-                # we should check the return value of object_create_wrapper
+                @createCall @ejs_runtime.object_create, [proto], "object_create", true
+                # we should check the return value of object_create
 
         handleGatherRest: (exp) ->
                 rest_name = exp.arguments[0].value
@@ -2333,7 +2336,20 @@ class GatherImports extends TreeVisitor
                 throw new Error("import sources must be strings") if not is_string_literal(n.source)
 
                 if isInternalModule(n.source.value)
-                        n.source_path = b.literal(n.source.value)
+                        if n.source.value.indexOf('@node-compat/') is 0
+                                # add the exports here for node-compat modules
+                                module_name = n.source.value.slice('@node-compat/'.length)
+                                if not node_compat.modules[module_name]?
+                                        throw new Error("@node-compat module #{module_name} not found")
+                                if not hasOwn.call @exportLists, n.source.value
+                                        @exportLists[n.source.value] = Object.create(null)
+                                        @exportLists[n.source.value].ids = node_compat.modules[module_name]
+                                n.source_path = b.literal(n.source.value)
+
+                        # otherwise we just strip off the @
+                        else
+                                n.source_path = b.literal(n.source.value.slice(1))
+
                         return n
                 
                 if n.source[0] is "/"

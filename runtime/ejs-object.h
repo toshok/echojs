@@ -256,8 +256,7 @@ extern EJSSpecOps _ejs_Object_specops;
 
 void _ejs_object_init_proto();
 
-ejsval _ejs_object_new (ejsval proto, EJSSpecOps* ops);
-ejsval _ejs_object_create (ejsval proto);
+ejsval _ejs_object_new  (ejsval proto, EJSSpecOps* ops);
 void   _ejs_init_object (EJSObject *obj, ejsval proto, EJSSpecOps *ops);
 
 void _ejs_object_finalize(EJSObject *obj);
@@ -270,10 +269,7 @@ ejsval _ejs_Object_prototype_toString (ejsval env, ejsval _this, uint32_t argc, 
 // exposed so we can call the native implementation during class creation
 ejsval _ejs_object_set_prototype_of (ejsval obj, ejsval proto);
 
-// terrible name.  _ejs_object_create above needs to die and be
-// replaced with this.  we should be able to do that once all the
-// @@create implementations are there
-ejsval _ejs_object_create_wrapper (ejsval proto);
+ejsval _ejs_object_create (ejsval proto);
 
 void _ejs_Object_init (ejsval ejs_global);
 EJS_END_DECLS

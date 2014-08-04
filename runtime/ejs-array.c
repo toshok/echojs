@@ -50,8 +50,10 @@ _ejs_array_new (int numElements, EJSBool fill)
 
         rv->dense.array_alloc = numElements + 5;
         rv->dense.elements = (ejsval*)malloc(rv->dense.array_alloc * sizeof (ejsval));
-        for (int i = 0; i < numElements; i ++)
-            rv->dense.elements[i] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
+        if (fill) {
+            for (int i = 0; i < numElements; i ++)
+                rv->dense.elements[i] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
+        }
     }
 
     rv->array_length = numElements;
@@ -117,9 +119,8 @@ _ejs_array_push_dense(ejsval array, int argc, ejsval *args)
 {
     EJSArray *arr = (EJSArray*)EJSVAL_TO_OBJECT(array);
     maybe_realloc_dense (arr, argc);
-    for (int i = 0; i < argc; i ++) {
-        EJSDENSEARRAY_ELEMENTS(arr)[EJSARRAY_LEN(arr)++] = args[i];
-    }
+    memmove (&EJSDENSEARRAY_ELEMENTS(arr)[EJSARRAY_LEN(arr)], args, argc * sizeof(ejsval));
+    EJSARRAY_LEN(arr) += argc;
     return EJSARRAY_LEN(arr);
 }
 
@@ -155,14 +156,7 @@ _ejs_Array_impl (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
         // called as a constructor
         EJSArray* arr = (EJSArray*)EJSVAL_TO_OBJECT(_this);
 
-        if (argc == 0) {
-            int alloc = 5;
-
-            arr->array_length = 0;
-            arr->dense.array_alloc = alloc;
-            arr->dense.elements = (ejsval*)calloc(arr->dense.array_alloc, sizeof (ejsval));
-        }
-        else if (argc == 1 && EJSVAL_IS_NUMBER(args[0])) {
+        if (argc == 1 && EJSVAL_IS_NUMBER(args[0])) {
             int alloc = ToUint32(args[0]);
             if (alloc > SPARSE_ARRAY_CUTOFF) {
                 arr->obj.ops = &_ejs_Array_specops;
@@ -179,11 +173,10 @@ _ejs_Array_impl (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
         }
         else {
             arr->array_length = argc;
-            arr->dense.array_alloc = argc;
+            arr->dense.array_alloc = argc + 5;
             arr->dense.elements = (ejsval*)malloc(arr->dense.array_alloc * sizeof (ejsval));
 
-            for (int i = 0; i < argc; i ++)
-                arr->dense.elements[i] = args[i];
+            memmove (arr->dense.elements, args, argc * sizeof(ejsval));
         }
 
 
@@ -2212,7 +2205,10 @@ _ejs_array_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
             //printf ("getprop(%d) on an array, returning undefined\n", idx);
             return _ejs_undefined;
         }
-        return EJS_DENSE_ARRAY_ELEMENTS(obj)[idx];
+        ejsval rv = EJS_DENSE_ARRAY_ELEMENTS(obj)[idx];
+        if (EJSVAL_IS_ARRAY_HOLE_MAGIC(rv))
+            return _ejs_undefined;
+        return rv;
     }
 
     // we also handle the length getter here
@@ -2289,7 +2285,7 @@ _ejs_array_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval recei
 
             // if we now have a hole, fill in the range with special values to indicate this
             if (idx > EJS_ARRAY_LEN(obj)) {
-                for (int i = idx; i >= EJS_ARRAY_LEN(obj); i --) {
+                for (int i = idx-1; i >= EJS_ARRAY_LEN(obj); i --) {
                     EJS_DENSE_ARRAY_ELEMENTS(obj)[i] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
                 }
             }
@@ -2339,12 +2335,12 @@ _ejs_array_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
         }
     }
 
-    if (idx == -1)
+    if (idx < 0)
         return _ejs_Object_specops.Delete (obj, propertyName, flag);
 
     // if it's outside the array bounds, do nothing
     if (idx < EJS_ARRAY_LEN(obj))
-        EJS_DENSE_ARRAY_ELEMENTS(obj)[idx] = _ejs_undefined;
+        EJS_DENSE_ARRAY_ELEMENTS(obj)[idx] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
     return EJS_TRUE;
 }
 
@@ -2359,10 +2355,10 @@ _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPrope
         double n = EJSVAL_TO_NUMBER(idx_val);
         if (floor(n) == n) {
             idx = (int)n;
-            is_index = EJS_TRUE;
+            if (idx >= 0)
+                is_index = EJS_TRUE;
         }
     }
-
 
     if (is_index) {
         if (EJSVAL_IS_DENSE_ARRAY(obj)) {
@@ -2376,10 +2372,12 @@ _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPrope
                 //     need some logic to switch to a sparse array if need be.
                 maybe_realloc_dense ((EJSArray*)EJSVAL_TO_OBJECT(obj), idx - EJS_DENSE_ARRAY_ALLOC(obj) + 1);
 
-                if (idx > EJS_ARRAY_LEN(obj)) {
-                    for (int i = idx; i >= EJS_ARRAY_LEN(obj); i --) {
-                        EJS_DENSE_ARRAY_ELEMENTS(obj)[i] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
-                    }
+            }
+
+            // if we now have a hole, fill in the range with special values to indicate this
+            if (idx > EJS_ARRAY_LEN(obj)) {
+                for (int i = idx; i >= EJS_ARRAY_LEN(obj); i --) {
+                    EJS_DENSE_ARRAY_ELEMENTS(obj)[i] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
                 }
             }
 
@@ -2400,13 +2398,17 @@ _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPrope
             int oldLen = EJS_ARRAY_LEN(obj);
 
             if (EJSVAL_IS_DENSE_ARRAY(obj)) {
+                if (newLen > EJS_DENSE_ARRAY_ALLOC(obj))
+                    maybe_realloc_dense ((EJSArray*)EJSVAL_TO_OBJECT(obj), newLen - EJS_DENSE_ARRAY_ALLOC(obj) + 1);
+
                 if (newLen > oldLen) {
-                    maybe_realloc_dense ((EJSArray*)EJSVAL_TO_OBJECT(obj), newLen);
                     for (int i = oldLen; i < newLen; i ++)
                         EJS_DENSE_ARRAY_ELEMENTS(obj)[i] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
                 }
             }
             else {
+                // we're already sparse, just give up as none of this is implemented yet.
+                EJS_NOT_IMPLEMENTED();
             }
 
             EJS_ARRAY_LEN(obj) = newLen;

@@ -490,7 +490,7 @@ marshal_cgrect_as_jsvalue (CGRect *rect)
 	CKString* width_ = [CKString stringWithUTF8CString:"width"];
 	CKString* height_ = [CKString stringWithUTF8CString:"height"];
 
-    CKObject* peer = [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(_ejs_object_create (_ejs_null))];
+    CKObject* peer = [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(_ejs_object_create(_ejs_null))];
     
     [peer defineProperty:x_ value:[CKValue numberValue:rect->origin.x]
           attributes:RO_DONT_ENUM_PERMANENT];

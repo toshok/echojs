@@ -479,7 +479,7 @@ _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args)
 #if not_anymore
 
     if (fun->bound_argc > 0) {
-        ejsval* new_args = (ejsval*)malloc(sizeof(ejsval) * fun->bound_argc + argc);
+        ejsval* new_args = (ejsval*)malloc(sizeof(ejsval) * (fun->bound_argc + argc));
         memmove (new_args, fun->bound_args, sizeof(ejsval) * fun->bound_argc);
         memmove (&new_args[fun->bound_argc], args, argc);
         args = new_args;

@@ -37,7 +37,7 @@ json_value_to_ejsval(JSON_Value *v, ejsval *rv)
 
     case JSONObject: {
         JSON_Object *obj = json_value_get_object (v);
-        *rv = _ejs_object_create (_ejs_null);
+        *rv = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
 
         int count = json_object_get_count (obj);
         for (int i = 0; i < count; i ++) {
@@ -628,7 +628,7 @@ _ejs_JSON_stringify (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     /* 9. Let wrapper be a new object created as if by the expression new Object(), where Object is the 
        standard built-in constructor with that name. */
-    ejsval wrapper = _ejs_object_create(_ejs_Object_prototype);
+    ejsval wrapper = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
     /* 10. Call the [[DefineOwnProperty]]  internal method of wrapper with arguments the empty String, the Property 
        Descriptor {[[Value]]: value, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
     EJSPropertyDesc desc = { .value = value, .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE };

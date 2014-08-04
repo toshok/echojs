@@ -904,11 +904,15 @@ _ejs_String_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     }
     /* 11. If s = 0, then */
     if (s == 0) {
-        EJS_NOT_IMPLEMENTED();
         /*     a. Call SplitMatch(S, 0, R) and let z be its MatchResult result. */
+        MatchResultState z = SplitMatch(S, 0, R);
         /*     b. If z is not failure, return A. */
+        if (z.type != MATCH_RESULT_FAILURE)
+            return A;
+
         /*     c. Call the [[DefineOwnProperty]] internal method of A with arguments "0", Property Descriptor  */
         /*        {[[Value]]: S, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
+        _ejs_array_push_dense (A, 1, &S);
         /*     d. Return A. */
         return A;
     }

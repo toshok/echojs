@@ -32,6 +32,7 @@ typedef double EJSPrimNumber;
 #define EJSVAL_IS_OBJECT_OR_NULL(v) EJSVAL_IS_OBJECT_OR_NULL_IMPL(v)
 #define EJSVAL_IS_NULL_OR_UNDEFINED(v) (EJSVAL_IS_NULL(v) || EJSVAL_IS_UNDEFINED(v))
 #define EJSVAL_IS_NO_ITER_VALUE_MAGIC(v) (EJSVAL_IS_MAGIC_IMPL(v) && EJSVAL_TO_INT32_IMPL(v) == EJS_NO_ITER_VALUE)
+#define EJSVAL_IS_ARRAY_HOLE_MAGIC(v) (EJSVAL_IS_MAGIC_IMPL(v) && EJSVAL_TO_INT32_IMPL(v) == EJS_ARRAY_HOLE)
 
 #define EJSOBJECT_IS_ARRAY(v)     ((v)->ops == &_ejs_Array_specops || (v)->ops == &_ejs_sparsearray_specops)
 

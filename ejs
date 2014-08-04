@@ -429,11 +429,15 @@ do_final_link = (main_file) ->
         
         clang_args.push relative_to_ejs_exe target_libecho(options.target_platform, options.target_arch)
         clang_args.push relative_to_ejs_exe target_extra_libs(options.target_platform, options.target_arch)
-        
+
+        seen_external_modules = new Set()
         options.external_modules.forEach (extern_module) ->
+                return if seen_external_modules.has(extern_module.library) # don't include external modules more than once
+                seen_external_modules.add(extern_module.library)
+                
                 clang_args.push extern_module.library
                 # very strange, not sure why we need this \n
-                clang_args = clang_args.concat extern_module.link_flags.replace('\n', ' ').split " "
+                clang_args = clang_args.concat extern_module.link_flags.replace('\n', ' ').split(" ")
 
         clang_args = clang_args.concat target_libraries(options.target_platform, options.target_arch)
 
@@ -466,6 +470,11 @@ files = []
 
 export_lists = Object.create(null)
 
+for m in options.external_modules
+        mo = Object.create(null)
+        mo.ids = new Set()
+        export_lists[m.module_name] = mo
+        
 # starting at the main file, gather all files we'll need
 while work_list.length isnt 0
         file = work_list.pop()

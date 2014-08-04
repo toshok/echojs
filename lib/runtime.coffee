@@ -21,7 +21,6 @@ runtime_interface =
         get_env_slot_val:      -> @abi.createExternalFunction @module, "_ejs_closureenv_get_slot", types.EjsValue, [types.EjsValue, types.int32]
         get_env_slot_ref:      -> @abi.createExternalFunction @module, "_ejs_closureenv_get_slot_ref", types.EjsValue.pointerTo(), [types.EjsValue, types.int32]
         
-        object_create:         -> @abi.createExternalFunction @module, "_ejs_object_create",             types.EjsValue, [types.EjsValue]
         arguments_new:         -> does_not_throw @abi.createExternalFunction @module, "_ejs_arguments_new",             types.EjsValue, [types.int32, types.EjsValue.pointerTo()]
         array_new:             -> @abi.createExternalFunction @module, "_ejs_array_new",                 types.EjsValue, [types.int32, types.bool]
         array_new_copy:        -> @abi.createExternalFunction @module, "_ejs_array_new_copy",            types.EjsValue, [types.int32, types.EjsValue.pointerTo()]
@@ -39,7 +38,7 @@ runtime_interface =
         object_define_value_prop: -> @abi.createExternalFunction @module, "_ejs_object_define_value_property",  types.bool, [types.EjsValue, types.EjsValue, types.EjsValue, types.int32];
 
         object_set_prototype_of: -> @abi.createExternalFunction @module, "_ejs_object_set_prototype_of", types.EjsValue, [types.EjsValue, types.EjsValue];
-        object_create_wrapper:   -> @abi.createExternalFunction @module, "_ejs_object_create_wrapper",     types.EjsValue, [types.EjsValue];
+        object_create:         -> @abi.createExternalFunction @module, "_ejs_object_create",     types.EjsValue, [types.EjsValue];
         prop_iterator_new:     -> @abi.createExternalFunction @module, "_ejs_property_iterator_new",     types.EjsPropIterator, [types.EjsValue]
         prop_iterator_current: -> @abi.createExternalFunction @module, "_ejs_property_iterator_current", types.EjsValue, [types.EjsPropIterator]
         prop_iterator_next:    -> @abi.createExternalFunction @module, "_ejs_property_iterator_next",    types.bool, [types.EjsPropIterator, types.bool]

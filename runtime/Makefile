@@ -7,7 +7,6 @@ C_SOURCES= \
 	ejs-arguments.c \
 	ejs-array.c \
 	ejs-boolean.c \
-	ejs-builtin-modules.c \
 	ejs-closureenv.c \
 	ejs-console.c \
 	ejs-date.c \
@@ -190,7 +189,7 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch -fno-objc
 	@echo [$(CC) armv7] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) $(IOSDEVS_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
 
 %.o.armv7s: %.ll
-	@echo [llc armv7s] $< && llc$(LLVM_SUFFIX) -march=aarch64 -filetype=obj -o=$@ -O2 $<
+	@echo [llc armv7s] $< && llc$(LLVM_SUFFIX) -march=arm -filetype=obj -o=$@ -O2 $<
 
 $(analyze_plists_c): %.plist: %.c
 	@echo [$(CC) analyze] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) $(OSX_CFLAGS) --analyze $< -o $@
