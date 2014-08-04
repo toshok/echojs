@@ -20,7 +20,7 @@
 #include "ejs-array.h"
 #include "ejs-function.h"
 #include "ejs-string.h"
-#include "ejs-builtin-modules.h"
+#include "ejs-node-compat.h"
 #include "ejs-error.h"
 
 ////
@@ -277,10 +277,8 @@ _ejs_path_join (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 }
 
 ejsval
-_ejs_path_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+_ejs_path_module_func (ejsval exports)
 {
-    ejsval exports = args[0];
-
     EJS_INSTALL_FUNCTION(exports, "dirname", _ejs_path_dirname);
     EJS_INSTALL_FUNCTION(exports, "basename", _ejs_path_basename);
     EJS_INSTALL_FUNCTION(exports, "extname", _ejs_path_extname);
@@ -506,10 +504,8 @@ _ejs_fs_createWriteStream (ejsval env, ejsval _this, uint32_t argc, ejsval* args
 }
 
 ejsval
-_ejs_fs_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+_ejs_fs_module_func (ejsval exports)
 {
-    ejsval exports = args[0];
-
     EJS_INSTALL_FUNCTION(exports, "statSync", _ejs_fs_statSync);
     EJS_INSTALL_FUNCTION(exports, "readFileSync", _ejs_fs_readFileSync);
     EJS_INSTALL_FUNCTION(exports, "createWriteStream", _ejs_fs_createWriteStream);
@@ -559,10 +555,8 @@ _ejs_os_platform (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 }
 
 ejsval
-_ejs_os_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+_ejs_os_module_func (ejsval exports)
 {
-    ejsval exports = args[0];
-
     EJS_INSTALL_FUNCTION(exports, "tmpdir", _ejs_os_tmpdir);
     EJS_INSTALL_FUNCTION(exports, "arch", _ejs_os_arch);
     EJS_INSTALL_FUNCTION(exports, "platform", _ejs_os_platform);
@@ -614,10 +608,8 @@ _ejs_child_process_spawn (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 }
 
 ejsval
-_ejs_child_process_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+_ejs_child_process_module_func (ejsval exports)
 {
-    ejsval exports = args[0];
-
     EJS_INSTALL_FUNCTION(exports, "spawn", _ejs_child_process_spawn);
 
     _ejs_object_setprop_utf8 (exports, "stdout", _ejs_wrapFdWithStream(1));

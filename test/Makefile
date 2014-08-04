@@ -10,6 +10,11 @@ NODE_PATH=$(TOPDIR)/node-llvm/build/Release:$(TOPDIR)/lib/generated:$(TOPDIR)/li
 NODE_FLAGS=--harmony --harmony-typeof
 TRACEUR_FLAGS=--block-binding true
 
+NODE_COMPAT_MODULES=	--module "../node-compat/libejsnodecompat-module.a,@node-compat/path,_ejs_path_module_func," \
+			--module "../node-compat/libejsnodecompat-module.a,@node-compat/os,_ejs_os_module_func," \
+			--module "../node-compat/libejsnodecompat-module.a,@node-compat/fs,_ejs_fs_module_func," \
+			--module "../node-compat/libejsnodecompat-module.a,@node-compat/child_process,_ejs_child_process_module_func,"
+
 TESTS:=$(wildcard *[0-9].js)
 
 # this test just sucks
@@ -31,6 +36,7 @@ ESPRIMA_TESTS:=$(ESPRIMA_TESTS:%.js=%.js.exe)
 
 addExpectedFailureInner=EXPECTED_FAILURES += $(1)
 addTraceurTestInner=TRACEUR_TESTS += $(1)
+addNodeCompatTestInner=NODE_COMPAT_TESTS += $(1)
 
 define addExpectedFailure
   $(eval $(call addExpectedFailureInner, $(1)))
@@ -38,6 +44,10 @@ endef
 
 define testAgainstTraceur
   $(eval $(call addTraceurTestInner, $(1)))
+endef
+
+define nodeCompatTests
+  $(eval $(call addNodeCompatTestInner, $(1)))
 endef
 
 EXPECTED_FAILURES=
@@ -83,6 +93,11 @@ $(call testAgainstTraceur, string-raw1.js)
 $(call testAgainstTraceur, symbol-iterator1.js)
 $(call testAgainstTraceur, promise1.js)
 $(call testAgainstTraceur, promise2.js)
+
+NODE_COMPAT_TESTS=
+$(call nodeCompatTest, path-relative1.js)
+$(call nodeCompatTest, path-resolve1.js)
+$(call nodeCompatTest, path-stat1.js)
 
 all-local:: check
 
@@ -202,11 +217,14 @@ clean-esprima-roundtrip:
 EJS_DRIVER ?= NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --leave-temp -q
 EJS_STAGE ?= 0
 
+$(NODE_COMPAT_TESTS): %.js.exe: %.js $(TOPDIR)/runtime/libecho.a
+	@$(EJS_DRIVER) $(NODE_COMPAT_MODULES) $< 
+
 %.js.exe: %.js $(TOPDIR)/runtime/libecho.a
-	@$(EJS_DRIVER) $<
+	@$(EJS_DRIVER) $< 
 
 v8-%.js.exe: v8/%.js $(TOPDIR)/runtime/libecho.a
-	NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $<
+	NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $(NODE_COMPAT_MODULES) $<
 
 run-node:
 	NODE_PATH=$(NODE_PATH) node

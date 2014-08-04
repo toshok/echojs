@@ -2,10 +2,12 @@
  * vim: set ts=4 sw=4 et tw=99 ft=js:
  */
 
-let os = require('os');
-let path = require('path');
-let fs = require('fs');
-let spawn = require('child_process').spawn;
+import * as os from            '@node-compat/os';
+import * as path from          '@node-compat/path';
+import * as fs from            '@node-compat/fs';
+import * as child_process from '@node-compat/child_process';
+
+let spawn = child_process.spawn;
 
 import * as debug        from './lib/debug';
 import { Set }           from './lib/set-es6';
@@ -558,9 +560,7 @@ while (work_list.length !== 0) {
             jsfile = path.join(jsfile, "index");
         }
     }
-    catch (e) {
-        console.log(e);
-    }
+    catch (e) { }
     if (path.extname(jsfile) !== ".js")
         jsfile = jsfile + '.js';
     
