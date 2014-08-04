@@ -105,21 +105,18 @@ check: check-unit-tests run-tests
 
 check-stage1: check-unit-tests run-tests-stage1
 
-check-unit-tests: check-llvm check-set #check-free
+check-unit-tests: check-llvm check-set
 
 build-tests: $(patsubst %.js,%.js.exe,$(TESTS))
 
 build-tests-stage1:
 	@$(MAKE) EJS_DRIVER="$(TOPDIR)/ejs.js.exe" EJS_STAGE=1 build-tests
 
-check-llvm: terminal.js echo-assert.js
-	@NODE_PATH=$(NODE_PATH):. coffee llvm-test.coffee
+check-llvm:
+	mocha llvm-test.js
 
-check-set: terminal.js echo-assert.js
-	@NODE_PATH=$(NODE_PATH):. coffee set-test.coffee
-
-check-free: terminal.js echo-assert.js
-	@NODE_PATH=$(NODE_PATH):. coffee free-test.coffee
+check-set:
+	mocha set-test.js
 
 run-tests: clean-results generate-expected prepare-xfail $(patsubst %.js,test-%,$(TESTS)) format-results
 
@@ -233,13 +230,11 @@ node-path:
 	echo $(NODE_PATH)
 
 clean: clean-results clean-esprima-roundtrip
-	rm -f *.o *.js.exe terminal.js echo-assert.js .*.diff .*-out .failures .successes .xfail .xsuccess
+	rm -f *.o *.js.exe .*.diff .*-out .failures .successes .xfail .xsuccess
 	rm -rf *.dSYM
 
 .PRECIOUS: $(TESTS:%.js=expected/%.js.expected-out)
 
-
-.INTERMEDIATE: terminal.js echo-assert.js
 
 compare-%:
 	-@test_js=`echo $@|sed -e s,compare-,,`.js; \
