@@ -46,7 +46,7 @@ define testAgainstTraceur
   $(eval $(call addTraceurTestInner, $(1)))
 endef
 
-define nodeCompatTests
+define nodeCompatTest
   $(eval $(call addNodeCompatTestInner, $(1)))
 endef
 
@@ -97,7 +97,9 @@ $(call testAgainstTraceur, promise2.js)
 NODE_COMPAT_TESTS=
 $(call nodeCompatTest, path-relative1.js)
 $(call nodeCompatTest, path-resolve1.js)
-$(call nodeCompatTest, path-stat1.js)
+$(call nodeCompatTest, stat1.js)
+
+NODE_COMPAT_TESTS_EXES:=$(NODE_COMPAT_TESTS:%.js=%.js.exe)
 
 all-local:: check
 
@@ -214,7 +216,7 @@ clean-esprima-roundtrip:
 EJS_DRIVER ?= NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --leave-temp -q
 EJS_STAGE ?= 0
 
-$(NODE_COMPAT_TESTS): %.js.exe: %.js $(TOPDIR)/runtime/libecho.a
+$(NODE_COMPAT_TESTS_EXES): %.js.exe: %.js $(TOPDIR)/runtime/libecho.a
 	@$(EJS_DRIVER) $(NODE_COMPAT_MODULES) $< 
 
 %.js.exe: %.js $(TOPDIR)/runtime/libecho.a
