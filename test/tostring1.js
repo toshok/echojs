@@ -1,2 +1,2 @@
-var b = {}
+var b = {};
 console.log (b.toString());
