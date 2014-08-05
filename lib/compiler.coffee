@@ -947,14 +947,8 @@ class LLVMIRVisitor extends TreeVisitor
                 insertBlock = ir.getInsertBlock()
 
                 for param in n.formal_params
-                        debug.log param.type
-                        if param.type is MemberExpression
-                                debug.log param.object.type
-                                debug.log param.property.name
                         if param.type isnt Identifier
-                                debug.log "we don't handle destructured/defaulted parameters yet"
-                                console.warn JSON.stringify param
-                                throw "we don't handle destructured/defaulted parameters yet"
+                                throw new Error("formal parameters should only be identifiers by this point")
 
                 # XXX this methods needs to be augmented so that we can pass actual types (or the builtin args need
                 # to be reflected in jsllvm.cpp too).  maybe we can pass the names to this method and it can do it all
@@ -994,14 +988,9 @@ class LLVMIRVisitor extends TreeVisitor
                 # now create allocas for the formal parameters
                 first_formal_index = allocas.length
                 for param in n.formal_params
-                        if param.type is Identifier
-                                alloca = @createAlloca @currentFunction, types.EjsValue, "local_#{param.name}"
-                                new_scope.set param.name, alloca
-                                allocas.push alloca
-                        else
-                                debug.log "we don't handle destructured args at the moment."
-                                console.warn JSON.stringify param
-                                throw "we don't handle destructured args at the moment."
+                        alloca = @createAlloca @currentFunction, types.EjsValue, "local_#{param.name}"
+                        new_scope.set param.name, alloca
+                        allocas.push alloca
 
                 debug.log -> "alloca #{alloca}" for alloca in allocas
         
