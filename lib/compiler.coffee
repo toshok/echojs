@@ -1790,15 +1790,6 @@ class LLVMIRVisitor extends TreeVisitor
                 ir.createUnreachable()
 
         # this method assumes it's called in an opencoded context
-        emitLoadEjsFunctionIsBound: (closure) ->
-                if @options.target_pointer_size is 64
-                        bound_slot_gep = ir.createInBoundsGetElementPointer closure, [consts.int64(1), consts.int32(2)], "bound_slot_gep"
-                        bound_slot = ir.createBitCast bound_slot_gep, types.int32.pointerTo(), "bound_slot"
-                        ir.createLoad bound_slot, "bound_load"
-                else
-                        throw new Error "emitLoadEjsFunctionIsBound not implemented for this case"
-
-        # this method assumes it's called in an opencoded context
         emitLoadEjsFunctionClosureFunc: (closure) ->
                 if @options.target_pointer_size is 64
                         func_slot_gep = ir.createInBoundsGetElementPointer closure, [consts.int64(1)], "func_slot_gep"
