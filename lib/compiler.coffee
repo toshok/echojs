@@ -1053,9 +1053,7 @@ class LLVMIRVisitor extends TreeVisitor
                         arg_value =  @visitOrNull n.argument
                         if @opencode_intrinsics.unaryNot and @options.target_pointer_size is 64 and arg_value._ejs_returns_ejsval_bool
                                 cmp = @createEjsvalICmpEq arg_value, consts.ejsval_true(), "cmpresult"
-                                rv = ir.createSelect cmp, @loadBoolEjsValue(false), @loadBoolEjsValue(true), "sel"
-                                rv._ejs_returns_ejsval_bool = true
-                                rv
+                                @createEjsBoolSelect cmp
                         else
                                 @createCall callee, [arg_value], "result"
                 else
