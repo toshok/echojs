@@ -45,7 +45,9 @@
 esprima = require 'esprima'
 escodegen = require 'escodegen'
 
-{ create_identifier, is_number_literal } = require "echo-util"
+ast = require 'ast-builder'
+
+{ is_number_literal } = require "echo-util"
 
 { TreeVisitor } = require "nodevisitor"
 
@@ -213,7 +215,7 @@ class JSCore
                         rands = undefined
                         av = undefined
                         maxArity = 0
-                        retval = BOTTOM
+                        retval = AbstractVal.BOTTOM
                         # We can't compute the arguments once for all functions that
                         # may be applied. The functions may have different arity which
                         # impacts what goes to the restargs for each function.
@@ -225,8 +227,8 @@ class JSCore
                                 else
                                         pslen = clos.params.length
                                 # compute arguments
-                                restargs = BOTTOM
-                                rands = buildArray pslen, BOTTOM
+                                restargs = AbstractVal.BOTTOM
+                                rands = buildArray pslen, AbstractVal.BOTTOM
                                 if a2 # a2 is the array passed at the call to apply.
                                         a2.forEachObj (o) ->
                                                 if o.numPropsMerged
@@ -246,7 +248,7 @@ class JSCore
                                                                 break if !av
                                                                 restargs = AbstractVal.join restargs, av
                                 else
-                                        rands = buildArray pslen, BOTTOM
+                                        rands = buildArray pslen, AbstractVal.BOTTOM
                                 # do function call
                                 rands.unshift recv
                                 rands.push restargs
@@ -265,7 +267,7 @@ class JSCore
                         new Answer(AbstractVal.ANUM)
 
                 getelms = (args) ->
-                        av = BOTTOM
+                        av = AbstractVal.BOTTOM
                         args[0].forEachObj (o) -> av = AbstractVal.join(av, o.getNumProps())
                         new Answer(av)
 
@@ -682,10 +684,10 @@ frameGet = (fr, param) ->
 
 # fun. node, array of AbstractVal, timestamp  -> [AbstractVal, AbstractVal] or false
 searchSummary = (n, args, ts) ->
-        console.log "searching summary for `#{n.id.name}'!"
+        #console.log "searching summary for `#{n.id.name}'!"
         n_summaries = summaries[n.addr]
         if n_summaries.ts < ts
-                console.log "returning false"
+                #console.log "returning false"
                 return false
         
         insouts = n_summaries.insouts
@@ -694,21 +696,20 @@ searchSummary = (n, args, ts) ->
                 summary = insouts[i]
                 # If no widening, turn AbstractVal.lt to AbstractVal.eq in the next line.
                 if arrayeq(AbstractVal.lt, args, summary[0])
-                        console.log "found it!"
                         return summary.slice(-2)
-        console.log "default, returning false"
+        #console.log "default, returning false"
         false
 
 
 # function node -> boolean
 # check if any summary exists for this function node
 existsSummary = (n) ->
-        console.log "checking summary for `#{n.id.name}'!"
+        #console.log "checking summary for `#{n.id.name}'!"
         summaries[n.addr].ts isnt INVALID_TIMESTAMP
 
 # fun. node, array of AbstractVal, AbstractVal, AbstractVal or undefined, timestamp  -> void
 addSummary = (n, args, retval, errval, ts) ->
-        console.log "adding summary for `#{n.id.name}'!"
+        #console.log "adding summary for `#{n.id.name}'!"
         addr = n.addr
         summary = summaries[addr]
         if summary.ts is ts
@@ -769,6 +770,8 @@ class Answer
                 # v:   EvalExp puts abstracts values here, evalStm puts statements
                 # fr:  frame
                 # err: AbstractVal for exceptions thrown
+        toString: (indent) ->
+                @v.toString(indent)
 
 class AbstractProp
         # Constructor for abstract properties
@@ -849,7 +852,6 @@ class AbstractVal
         # fun takes an AbstractObj
         forEachObj: (fun) ->
                 objaddrs = @objs
-                console.log "forEachObj.length = #{objaddrs.length}"
                 objaddrs.forEach (addr) -> fun heap[addr]
 
         # Like forEachObj but fun returns a boolean; if it's true, we stop.
@@ -886,12 +888,11 @@ class AbstractVal
                 debugCalls = 0
                 errval = undefined
                 ans = undefined
-                
+
                 @baseToObj().forEachObj (o) ->
                         clos = o.getFun()
                         return if not clos
                         debugCalls += 1
-                        console.log "calling #{clos.id.name}"
                         ans    = evalFun(clos, args, false, callNode)
                         retval = AbstractVal.join(retval, ans.v)
                         errval = AbstractVal.maybejoin(errval, ans.err)
@@ -1393,11 +1394,11 @@ class TagVarRefs extends TreeVisitor
                         
                 #print("global: " + varname + " :: " + n.lineno)
                 n.type = MemberExpression
-                nthis = create_identifier("internalVar: global object")
+                nthis = ast.identifier("internalVar: global object")
                 nthis.kind = HEAP
                 nthis.addr = JSCore.global_object_av_addr
                 n.object = nthis
-                n.property = create_identifier("#{n.name}-")
+                n.property = ast.identifier("#{n.name}-")
                 n
 
         visitMemberExpression: (n, innerscope, otherscopes) ->
@@ -1459,10 +1460,8 @@ class TagVarRefs extends TreeVisitor
                 # extend inner scope
                 j = innerscope.length
                 if vdecls?
-                        console.log "vdecls (#{vdecls.length})!"
                         if vdecls.length > 0
                                 console.log escodegen.generate n
-                        console.log "before #{innerscope.length}"
                         Array::push.apply(innerscope, vdecls)
                 # tag the var refs in the body
                 n.body.forEach (stm) -> tagVarRefs(stm, innerscope, otherscopes)
@@ -1591,8 +1590,10 @@ makeGenericObj = () ->
 # function for evaluating lvalues
 # node, Answer, optional AbstractVal -> Answer
 # use n to get an lvalue, do the assignment and return the rvalue
-evalLval = (n, operator, ans, oldlval) -> 
+evalLval = (n, operator, ans, oldlval) ->
+        console.log "yo!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?"
         _stackref = (n, operator, ans, oldlval) ->
+                console.log "****_stackref"
                 if operator isnt "="
                         if operator[0] is '+'
                                 ans.v = AbstractVal.plus(ans.v, oldlval)
@@ -1606,6 +1607,7 @@ evalLval = (n, operator, ans, oldlval) ->
                 ans
         
         _heapref = (n, operator, ans, oldlval) ->
+                console.log "****_heapref"
                 if operator isnt "="
                         if operator[0] is '+'
                                 ans.v = AbstractVal.plus(ans.v, oldlval)
@@ -1614,6 +1616,7 @@ evalLval = (n, operator, ans, oldlval) ->
                 AbstractVal.updateHeapAv(n.addr, ans.v)
                 ans
 
+        console.log "n.type = #{escodegen.generate n}"
         switch n.type
                 when Identifier
                         if n.kind is STACK
@@ -1622,23 +1625,22 @@ evalLval = (n, operator, ans, oldlval) ->
                                 return _heapref(n, operator, ans, oldlval)
 
                 when MemberExpression
+                        rval = ans.v
+                        fr = ans.fr
+                        if operator is '+'
+                                rval = AbstractVal.plus(rval, oldlval)
+                        # XXX other operators?
+                        ansobj = evalExp(n.object, fr)
+                        avobj = ansobj.v
+                        fr = ansobj.fr
+                        errval = ansobj.err
+                        property = n.property
+                        
                         if n.computed
-                                rval = ans.v
-                                fr = ans.fr
-                                if operator?
-                                        if operator is '+'
-                                                rval = AbstractVal.plus(rval, oldlval)
-                                        else
-                                                rval = AbstractVal.ANUM
-                                ansobj = evalExp(n.object, fr)
-                                avobj = ansobj.v
-                                fr = ansobj.fr
-                                errval = ansobj.err
                                 # Unsound: ignore everything the index can eval to except numbers & strings
-                                property = n.property
                                 if property.type is Literal
                                         avobj.updateProp(property.value, rval)
-                                        return
+                                        return # XXX
                                 else
                                         ansprop = evalExp(prop, fr)
                                         avprop = ansprop.v
@@ -1653,19 +1655,10 @@ evalLval = (n, operator, ans, oldlval) ->
                                                 else
                                                         avobj.forEachObj (o) -> o.updateStrProps(rval)
 
-                                return new Answer(rval, fr, AbstractVal.maybejoin(errval, ans.err))
                         else
-                                if operator?
-                                        if operator is '+'
-                                                ans.v = AbstractVal.plus(ans.v, oldlval)
-                                        else
-                                                ans.v = AbstractVal.ANUM
+                                ansobj.v.updateProp(property.name, rval)
 
-                                        ans2 = evalExp(n.object, ans.fr)
-                                        ans2.v.updateProp(n.property.name, ans.v)
-                                        ans.fr = ans2.fr
-                                        ans.err = AbstractVal.maybejoin(ans.err, ans2.err)
-                                        return ans
+                        return new Answer(rval, fr, AbstractVal.maybejoin(errval, ans.err))
 
                 #override(ARGUMENTS, function(n, ans, oldlval) {
                 #        # FIXME: handle assignment to the arguments array
@@ -1681,7 +1674,6 @@ evalLval = (n, operator, ans, oldlval) ->
                         throw new Error("unhandled lval type #{n.type}")
 
 evalExp = (n, fr) ->
-        console.log "evalExp #{escodegen.generate n, escodegen.FORMAT_MINIFY}"
         _stackref = (n, fr) -> new Answer(frameGet(fr, n), fr)
         _heapref  = (n, fr) ->
                 new Answer(heap[n.addr], fr)
@@ -1689,48 +1681,38 @@ evalExp = (n, fr) ->
         _binary2bool = (n, fr) ->
                 ans1 = evalExp(n.left, fr)
                 ans2 = evalExp(n.right, ans1.fr)
-                ans2.v = AbstractVal.ABOOL
-                ans2.err = AbstractVal.maybejoin(ans1.err, ans2.err)
-                ans2
+                new Answer(AbstractVal.ABOOL, ans2.fr, AbstractVal.maybejoin(ans1.err, ans2.err))
 
         _binary2num = (n, fr) -> 
                 ans1 = evalExp(n.left, fr)
                 ans2 = evalExp(n.right, ans1.fr)
-                ans2.v = AbstractVal.ANUM
-                ans2.err = AbstractVal.maybejoin(ans1.err, ans2.err)
-                ans2
+                new Answer(AbstractVal.ANUM, ans2.fr, AbstractVal.maybejoin(ans1.err, ans2.err))
        
         _andor = (n, fr, pred1, pred2) ->
                 ans1 = evalExp(n.left, fr)
-                av   = ans1.v
-                return ans1 if pred1.call(av)
+                return ans1 if pred1.call(ans1.v)
                 
-                ans2     = evalExp(n.right, ans1.fr)
-                ans2.err = AbstractVal.maybejoin(ans1.err, ans2.err)
-                ans2.v   = AbstractVal.join(av, ans2.v) if not pred2.call(av)
-                ans2
+                ans2 = evalExp(n.right, ans1.fr)
+
+                new Answer((if pred2.call(ans1.v) then ans2.v else AbstractVal.join(ans1.v, ans2.v)), ans2.fr, AbstractVal.maybejoin(ans1.err, ans2.err))
 
         _handleBinaryExpression = (n, fr) ->
                 op = n.operator
                 if op is "in"
                         ans1 = evalExp(n.left, fr)
                         ans2 = evalExp(n.right, ans1.fr)
-                        ans2.err = AbstractVal.maybejoin(ans1.err, ans2.err)
                         pname = ans1.v.getStrLit()
                         ans2v = ans2.v
                         if not ans2v.hasObjs()
-                                ans2.v = AbstractVal.AFALS
+                                return new Answer(AbstractVal.AFALS, ans2.fr, AbstractVal.maybejoin(ans1.err, ans2.err))
                         else if not pname
-                                ans2.v = AbstractVal.ABOOL
+                                return new Answer(AbstractVal.ABOOL, ans2.fr, AbstractVal.maybejoin(ans1.err, ans2.err))
                         else
                                 av = AbstractVal.BOTTOM
                                 ans2v.forEachObj (o) ->
-                                        if not o.getProp(pname)
-                                                av = AbstractVal.join(av, AbstractVal.AFALS)
-                                        else
-                                                av = AbstractVal.join(av, AbstractVal.ATRU)
-                                ans2.v = av
-                        return ans2
+                                        av = AbstractVal.join(av, if not o.getProp(pname) then AbstractVal.AFALS else AbstractVal.ATRU)
+                                        
+                                return new Answer(av, ans2.fr, AbstractVal.maybejoin(ans1.err, ans2.err))
 
                 if ["!=", "==", "!==", "===", "<", "<=", ">", ">=", "instanceof"].memq(op)
                         return _binary2bool(n, fr)
@@ -1738,9 +1720,7 @@ evalExp = (n, fr) ->
                 if op is "+"
                         ans1 = evalExp(n.left, fr)
                         ans2 = evalExp(n.right, ans1.fr)
-                        ans2.v = AbstractVal.plus(ans1.v, ans2.v)
-                        ans2.err = AbstractVal.maybejoin(ans1.err, ans2.err)
-                        return ans2
+                        return new Answer(AbstractVal.plus(ans1.v, ans2.v), ans2.fr, AbstractVal.maybejoin(ans1.err, ans2.err))
 
                 if ["-", "*", "/", "%", "|", "^", "&", "<<", ">>", "<<<", ">>>"].memq(op)
                         return _binary2num(n, fr)
@@ -1921,6 +1901,7 @@ evalExp = (n, fr) ->
                                 fr     = ans1.fr
                                 rands.push(ans1.v)
                                 errval = AbstractVal.maybejoin(errval, ans1.err)
+                                
                         # call each function that can flow to the operator position
                         ans     = ans.v.callFun(rands, n)
                         ans.fr  = fr
@@ -1996,7 +1977,7 @@ evalExp = (n, fr) ->
 # node, frame -> Answer
 # Evaluate the statement and find which statement should be executed next.
 evalStm = (n, fr) ->
-        console.log "evalStm #{escodegen.generate n, escodegen.FORMAT_MINIFY}"
+        #console.log "evalStm #{escodegen.generate n, escodegen.FORMAT_MINIFY}"
         switch n.type
                 when ExpressionStatement
                         ans = evalExp(n.expression, fr)
@@ -2092,7 +2073,6 @@ class MarkConts extends TreeVisitor
         visitProgram: (n, kreg, kexc) ->
                 # visit our contents as if we were a block
                 @visitBlock(n, kreg, kexc)
-                n
 
         visitExpressionStatement: (n, kreg, kexc) ->
                 n.kreg = kreg
@@ -2124,7 +2104,7 @@ class MarkConts extends TreeVisitor
                 n.consequent = markConts(n.consequent, k, kexc)
                 k = n.consequent
 
-                condStm = { type: ExpressionStatement, expression: n.test }
+                condStm = ast.expressionStatement(n.test)
                 markConts(condStm, k, kexc)
 
                 n.kreg = condStm # first run the test
@@ -2152,7 +2132,7 @@ class MarkConts extends TreeVisitor
                         # If the guard or the body throw, the next catches (if any) can't handle
                         # the exception, we go to the finally block (if any) directly.      
                         n.guard = markConts(n.guard)
-                        guardStm = { type: ExpressionStatement, expression: n.guard }
+                        guardStm = ast.expressionStatement(n.guard)
                         n.kreg = guardStm
                         guardStm.kcatch = body       # this catch handles the exception
                         guardStm.knocatch = knocatch # this catch doesn't handle the exception
@@ -2163,7 +2143,7 @@ class MarkConts extends TreeVisitor
 
         visitSwitch: (n, kreg, kexc) ->
                 cases = n.cases
-                discStm = { type: ExpressionStatement, expression: n.discriminant }
+                discStm = ast.expressionStatement(n.discriminant)
                 n.kreg = discStm # first run the discriminant, then all branches in order
                 n.kexc = kexc
                 markConts(discStm, cases[0], kexc)
@@ -2178,7 +2158,7 @@ class MarkConts extends TreeVisitor
                 
                 n.kexc = kexc
                 if test?
-                        testStm = { type: ExpressionStatement, expression: n.test }
+                        testStm = ast.expressionStatement(n.test)
                         n.kreg = testStm
                         markConts(testStm, stms, kexc)
                 else
@@ -2188,7 +2168,7 @@ class MarkConts extends TreeVisitor
                 
         visitWhile: (n, kreg, kexc) ->
                 body = n.body
-                testStm = { type: ExpressionStatement, expression: n.test }
+                testStm = ast.expressionStatement(n.test)
                 n.kreg = testStm
                 n.kexc = kexc
                 markConts(testStm, body, kexc)
@@ -2197,7 +2177,7 @@ class MarkConts extends TreeVisitor
                 
         visitDo: (n, kreg, kexc) ->
                 body = n.body
-                testStm = { type: ExpressionStatement, expression: n.test }
+                testStm = ast.expressionStatement(n.test)
                 n.kreg = body
                 n.kexc = kexc
                 markConts(body, testStm, kexc)
@@ -2216,14 +2196,14 @@ class MarkConts extends TreeVisitor
                 if not init? and not test?    # for (;;<maybe-update>),     move immediately to the body
                         n.kreg = body
                 else if init? and not test?   # for ($init;;<maybe-update>) move to init then body
-                        initStm = type: ExpressionStatement, expression: init
+                        initStm = ast.expressionStatement(init)
                         n.kreg = initStm
                         markConts(initStm, body, kexc)
                 else # test exists
-                        testStm = type: ExpressionStatement, expression: test
+                        testStm = ast.expressionStatement(test)
                         markConts(testStm, body, kexc)
                         if init             # for ($init;$test;<maybe-update>) do init followed by test
-                                initStm = type: ExpressionStatement, expression: init
+                                initStm = ast.expressionStatement(init)
                                 n.kreg = initStm
                                 markConts(initStm, testStm, kexc)
                         else                # for (;$test;<maybe-update>) do test followed by body
@@ -2231,7 +2211,7 @@ class MarkConts extends TreeVisitor
 
                 if update?
                         # the update is the body's continuation, insert it between body and kreg
-                        updStm = type: ExpressionStatement, expression: update
+                        updStm = ast.expressionStatement(update)
                         markConts(body, updStm, kexc)
                         markConts(updStm, kreg, kexc)
                 else
@@ -2275,8 +2255,7 @@ exports_object = null
 exports_object_av_addr = 0
 commonJSmode = false
 timedout = false
-#timeout = 120  # stop after 2 minutes if you're not done
-timeout = Infinity  # stop after 2 minutes if you're not done
+timeout = 120  # stop after 2 minutes if you're not done
 
 # A summary contains a function node (fn), an array of abstract values (args),
 # a timestamp (ts) and abstract values (res) and (err). It means: when we call
@@ -2309,9 +2288,11 @@ initGlobals = () ->
 # string -> void
 # works only in NodeJS 
 dumpHeap = (filename) ->
+        fs = require('fs')
         fd = fs.openSync filename, "w", 0o0777
-        for h in heap
-                printf fd, "[#{i}]\n#{if heap[i]? then heap[i].toString(2) else ''}\n"
+        printf = (fd, s) -> fs.writeSync(fd, s, null, encoding='utf8')
+        heap.forEach (h, i) ->
+                printf fd, "[#{i}]\n#{if h? then h.toString(2) else ''}\n"
         fs.closeSync fd
 
 
@@ -2357,11 +2338,9 @@ class AbstractObj
                         return funToType @["-fun"], seenObjs
                 c = @getProp "constructor-"
                 types = []
-                if c is undefined
-                        return "Global Object"
+                return "Global Object" if c is undefined
                 c.forEachObj (o) ->
-                        if o["-fun"]?
-                                types.push o["-fun"].id.name
+                        types.push o["-fun"].id.name if o["-fun"]?
                 if types.length is 0
                         throw errorWithCode CFA_ERROR, "Didn't find a name for constructor"
                 normalizeUnionType types
@@ -2565,15 +2544,14 @@ class AbstractObj
 
         # string, function, number -> function node
         funToNode = (name, code, arity) ->
-                n = { type: FunctionDeclaration }
-                n.id = create_identifier name
+                n = ast.functionDeclaration(ast.identifier(name), [], ast.blockStatement())
                 n.builtin = true
                 n.addr = newCount()
                 pending[count] = 0
                 # built-in funs have no params property but they have an arity property
                 # instead. It's only used by the apply method.
                 n.arity = arity
-                n.body = code
+                n.acode = code
                 n
 
         # AbstractObj, string, function, number -> void
@@ -2662,7 +2640,7 @@ class StackCleaner extends Error
 # function node, array of AbstractVal, boolean, optional call node -> Answer w/out fr
 # Arg 4 is the node that caused the function call (if there is one).
 evalFun = (fn, args, withNew, cn) ->
-        console.log "evalFun #{fn.id.name}"
+        #console.log "evalFun #{fn.id.name}"
         script = fn.body
 
         retval = AbstractVal.BOTTOM
@@ -2755,10 +2733,10 @@ evalFun = (fn, args, withNew, cn) ->
                                 n = w.pop()
                                 if n isnt undefined
                                         if n.type is ReturnStatement
-                                                if n.argument?
-                                                        console.log "return #{escodegen.generate n.argument}"
-                                                else
-                                                        console.log "return (void)0"
+                                                #if n.argument?
+                                                #        console.log "return #{escodegen.generate n.argument}"
+                                                #else
+                                                #        console.log "return (void)0"
                                                 ans = if n.argument? then evalExp(n.argument, fr) else new Answer(AbstractVal.AUNDEF, fr)
                                                 # fr is passed to exprs/stms & mutated, no need to join(fr, ans.fr)
                                                 fr = ans.fr
@@ -2777,13 +2755,13 @@ evalFun = (fn, args, withNew, cn) ->
                         result = searchSummary fn, args, tsAtStart
                         if not result or AbstractVal.lt(retval, result[0]) and AbstractVal.lt(errval, result[1])
                                 # Either fn isn't recursive, or the fixpt computation has finished.
-                                console.log "case1"
+                                #console.log "case1"
                                 addSummary(fn, args, retval, errval, tsAtStart if not result)
                                 return new Answer retval, undefined, errval
                         else
-                                console.log "case2"
-                                console.log "result[0] is #{JSON.stringify result[0]}, retval is #{JSON.stringify retval}"
-                                console.log "result[1] is #{JSON.stringify result[1]}, errval is #{JSON.stringify errval}"
+                                #console.log "case2"
+                                #console.log "result[0] is #{JSON.stringify result[0]}, retval is #{JSON.stringify retval}"
+                                #console.log "result[1] is #{JSON.stringify result[1]}, errval is #{JSON.stringify errval}"
                                 retval = AbstractVal.join result[0], retval
                                 errval = AbstractVal.join result[1], errval
                                 # The result changed the last summary; update summary and keep going.
@@ -2800,7 +2778,6 @@ evalFun = (fn, args, withNew, cn) ->
                                 throw e
                         if e.args?
                                 args = e.args
-                        console.log "hi"
 
 # maybe merge with evalFun at some point
 evalToplevel = (tl) ->
@@ -2818,11 +2795,11 @@ evalToplevel = (tl) ->
                 if n isnt undefined # end of toplevel reached
                         if n.type is ReturnStatement
                                 # record error, return in toplevel
-                                console.log("toplevel return with with non-empty stack")
+                                #console.log("toplevel return with with non-empty stack")
                         else
-                                console.time("evalStm");
+                                #console.time("evalStm");
                                 ans = evalStm(n, fr)
-                                console.timeEnd("evalStm");
+                                #console.timeEnd("evalStm");
                                 fr = ans.fr
                                 w.push(ans.v)
                                 # FIXME: handle toplevel uncaught exception
@@ -2838,8 +2815,8 @@ evalToplevel = (tl) ->
                         
 # initGlobals and initCoreObjs are difficult to override. The next 2 vars help
 # clients of the analysis add stuff to happen during initialization
-initOtherGlobals = false
-initOtherObjs = false
+initOtherGlobals = undefined
+initOtherObjs = undefined
 
 exports.CFA2 = class CFA2
         constructor: (@filename) ->
@@ -2848,12 +2825,12 @@ exports.CFA2 = class CFA2
                 count = 0
                 astSize = 0
                 initGlobals()
-                initOtherGlobals() if initOtherGlobals
+                initOtherGlobals() if initOtherGlobals?
                 console.time("fixAST")
                 fixAST ast
                 console.timeEnd("fixAST")
                 new JSCore(heap)
-                initOtherObjs() if initOtherObjs
+                initOtherObjs() if initOtherObjs?
                 if commonJSmode # create the exports object
                         e = new AbstractObj(addr: newCount())
                         eav = makeObjAbstractVal count
@@ -2878,7 +2855,7 @@ exports.CFA2 = class CFA2
                         console.log "after cfa2"
                         console.log "AST size: #{astSize}"
                         console.log "ts: #{timestamp}"
-                        #dumpHeap "heapdump.txt"
+                        dumpHeap "heapdump.txt"
 
                 catch e
                         console.timeEnd("eval")
@@ -2930,3 +2907,30 @@ funToType = (n, seenObjs) ->
   
         outtype = "void" if outtype is "undefined"
         "#{outtype} function(#{instypes.join(', ')})"
+
+#new exports.CFA2("test").visit esprima.parse("function f(x) { return x * 2; }; f(2);")
+
+new exports.CFA2("test").visit esprima.parse("
+primes = function primes (n) {
+  primes_internal = function primes_internal (cur, remaining, filter) {
+    if (remaining === 0)
+      return;
+    else {
+      if (!filter(cur)) {
+	console.log (cur);
+	primes_internal (cur+1, remaining-1, function prime_filter (test) {
+			   return test%cur === 0 || filter (test);
+			 });
+      }
+      else {
+      	primes_internal (cur+1, remaining, filter);
+      }
+    }
+  };
+
+  base_filter = function base_filter (test) { return false; };
+  primes_internal (2, n, base_filter);
+};
+
+primes (5);
+")

@@ -1,4 +1,4 @@
-var path = require("path");
+import * as path from '@node-compat/path';
 
 console.log (path.relative ('/foo/bar/baz', '/foo/bar/bling'));
 console.log (path.relative('/data/orandea/test/aaa', '/data/orandea/impl/bbb'));

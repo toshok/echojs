@@ -5,6 +5,7 @@ exports.int8Pointer = int8PointerTy = stringTy
 exports.bool        = boolTy        = llvm.Type.getInt8Ty()
 exports.void        = voidTy        = llvm.Type.getVoidTy()
 exports.jschar      = jscharTy      = llvm.Type.getInt16Ty()
+exports.int1        = int1Ty        = llvm.Type.getInt1Ty()
 exports.int32       = int32Ty       = llvm.Type.getInt32Ty()
 exports.int64       = int64Ty       = llvm.Type.getInt64Ty()
 exports.double      = doubleTy      = llvm.Type.getDoubleTy()

@@ -18,7 +18,7 @@ extern char** environ;
 static ejsval
 _ejs_Process_get_env (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    ejsval env_obj = _ejs_object_create(_ejs_null);
+    ejsval env_obj = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
 
     char** p = environ;
 

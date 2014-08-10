@@ -5,7 +5,7 @@ include $(TOP)/build/config.mk
 LLVM_LINK_FLAGS = $(shell llvm-config$(LLVM_SUFFIX) --ldflags --libs)
 
 JS_SOURCES=$(filter-out ejs.js,$(wildcard *.js))
-EXTRA_JS_SOURCES= esprima.js escodegen.js estraverse.js
+#EXTRA_JS_SOURCES= esprima.js escodegen.js estraverse.js
 
 $(EXTRA_JS_SOURCES):
 	cp ../../esprima/esprima.js .

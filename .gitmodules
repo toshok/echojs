@@ -1,10 +1,11 @@
 [submodule "esprima"]
 	path = esprima
-	url = https://github.com/ariya/esprima.git
+	url = https://github.com/toshok/esprima.git
 	branch = harmony
 [submodule "escodegen"]
 	path = escodegen
 	url = https://github.com/toshok/escodegen.git
+	branch = harmony
 [submodule "parson"]
 	path = parson
 	url = https://github.com/toshok/parson.git

@@ -53,6 +53,7 @@ namespace ejsllvm {
     LLVM_TYPE_METHOD_PROXY(getInt32Ty)
     LLVM_TYPE_METHOD_PROXY(getInt16Ty)
     LLVM_TYPE_METHOD_PROXY(getInt8Ty)
+    LLVM_TYPE_METHOD_PROXY(getInt1Ty)
     LLVM_TYPE_METHOD_PROXY(getVoidTy)
 
 #undef LLVM_TYPE_METHOD_PROXY
@@ -121,6 +122,7 @@ namespace ejsllvm {
         OBJ_METHOD(getInt32Ty);
         OBJ_METHOD(getInt16Ty);
         OBJ_METHOD(getInt8Ty);
+        OBJ_METHOD(getInt1Ty);
         OBJ_METHOD(getVoidTy);
 
         PROTO_METHOD(pointerTo);

@@ -10,7 +10,6 @@
 #include "ejs-require.h"
 #include "ejs-function.h"
 #include "ejs-value.h"
-#include "ejs-builtin-modules.h"
 #include "ejs-string.h"
 #if IOS || OSX
 #include "ejs-objc.h"
@@ -20,10 +19,6 @@ extern EJSRequire _ejs_require_map[];
 extern EJSExternalModuleRequire _ejs_external_module_require_map[];
 
 static EJSRequire builtin_module_map[] = {
-    { "path", _ejs_path_module_func },
-    { "fs", _ejs_fs_module_func },
-    { "os", _ejs_os_module_func },
-    { "child_process", _ejs_child_process_module_func },
 #if IOS || OSX
     { "@objc_internal", _ejs_objc_module_func }
 #endif

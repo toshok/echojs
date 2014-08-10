@@ -302,7 +302,7 @@ _ejs_propertydesc_free (EJSPropertyDesc* desc)
 }
 
 static int primes[] = {
-    9, 17, 31, 67, 131, 257, 521, 1031, 2053, 4099
+    17, 31, 67, 131, 257, 521, 1031, 2053, 4099
 };
 static int nprimes = sizeof(primes) / sizeof(primes[0]);
 
@@ -676,50 +676,6 @@ _ejs_object_new (ejsval proto, EJSSpecOps *ops)
     EJSObject *obj = ops->Allocate();
     _ejs_init_object (obj, proto, ops);
     return OBJECT_TO_EJSVAL(obj);
-}
-
-ejsval
-_ejs_object_create (ejsval proto)
-{
-    if (EJSVAL_IS_NULL(proto)) proto = _ejs_Object_prototype;
-
-    EJSSpecOps *ops = NULL;
-
-    if      (EJSVAL_EQ(proto, _ejs_Object_prototype)) ops = &_ejs_Object_specops;
-    else if (EJSVAL_EQ(proto, _ejs_Array_prototype))  ops = &_ejs_Array_specops;
-    else if (EJSVAL_EQ(proto, _ejs_String_prototype)) ops = &_ejs_String_specops;
-    else if (EJSVAL_EQ(proto, _ejs_Map_prototype))    ops = &_ejs_Map_specops;
-    else if (EJSVAL_EQ(proto, _ejs_Set_prototype))    ops = &_ejs_Set_specops;
-    else if (EJSVAL_EQ(proto, _ejs_Proxy_prototype))  ops = &_ejs_Proxy_specops;
-    else if (EJSVAL_EQ(proto, _ejs_Number_prototype)) ops = &_ejs_Number_specops;
-    else if (EJSVAL_EQ(proto, _ejs_RegExp_prototype)) ops = &_ejs_RegExp_specops;
-    else if (EJSVAL_EQ(proto, _ejs_Date_prototype))   ops = &_ejs_Date_specops;
-    else if (EJSVAL_EQ(proto, _ejs_ArrayBuffer_prototype)) ops = &_ejs_ArrayBuffer_specops;
-    else if (EJSVAL_EQ(proto, _ejs_DataView_prototype)) ops = &_ejs_DataView_specops;
-    else if (EJSVAL_EQ(proto, _ejs_EvalError_prototype))  ops = &_ejs_Error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_RangeError_prototype))  ops = &_ejs_Error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_ReferenceError_prototype))  ops = &_ejs_Error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_SyntaxError_prototype))  ops = &_ejs_Error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_TypeError_prototype))  ops = &_ejs_Error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_URIError_prototype))  ops = &_ejs_Error_specops;
-    else if (EJSVAL_EQ(proto, _ejs_Error_prototype))  ops = &_ejs_Error_specops;
-#if IOS || OSX
-    else if (EJSVAL_EQ(proto, _ejs_XMLHttpRequest_prototype))  ops = &_ejs_XMLHttpRequest_specops;
-#endif
-    else {
-        for (int i = 0; i < EJS_TYPEDARRAY_TYPE_COUNT; i ++) {
-            if (EJSVAL_EQ(proto, _ejs_typed_array_protos[i]))
-                ops = _ejs_typed_array_specops[i];
-        }
-    }
-    
-    if (!ops)
-        ops = EJSVAL_TO_OBJECT(proto)->ops;
-    
-    ejsval objval = _ejs_object_new (proto, ops);
-    //EJSObject* obj = EJSVAL_TO_OBJECT(objval);
-    //_ejs_log ("ejs_object_create returned %p\n", obj);
-    return objval;
 }
 
 void
@@ -1209,7 +1165,7 @@ _ejs_Object_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
 // a simple externally visible wrapper around the above native impl that only supplied the prototype argument
 ejsval
-_ejs_object_create_wrapper (ejsval proto)
+_ejs_object_create (ejsval proto)
 {
     ejsval args[] = { proto };
     return _ejs_Object_create(_ejs_undefined, _ejs_undefined, 1, args);
@@ -1645,8 +1601,14 @@ _ejs_Object_isExtensible (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 static ejsval
 _ejs_Object_keys (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
+    ejsval O = _ejs_undefined;
+    if (argc > 0) O = args[0];
+
+    if (!EJSVAL_IS_OBJECT(O))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Object.keys called on non-object.");
+
     // toshok - is this really not identical to Object.getOwnPropertyNames?
-    return _ejs_Object_getOwnPropertyNames(env, _this, argc, args);
+    return _ejs_Object_getOwnPropertyNames(_ejs_undefined, _ejs_undefined, 1, &O);
 }
 
 // ECMA262: 19.1.3.6
@@ -2016,7 +1978,7 @@ _ejs_object_specop_get (ejsval O, ejsval P, ejsval Receiver)
 
 // ECMA262: 8.12.1
 static EJSPropertyDesc*
-_ejs_object_specop_get_own_property (ejsval obj, ejsval propertyName)
+_ejs_object_specop_get_own_property (ejsval obj, ejsval propertyName, ejsval* exc)
 {
     ejsval property_str = ToPropertyKey(propertyName);
     EJSObject* obj_ = EJSVAL_TO_OBJECT(obj);
@@ -2337,6 +2299,7 @@ void
 _ejs_object_specop_finalize(EJSObject* obj)
 {
     _ejs_propertymap_free (obj->map);
+    obj->map = NULL;
 }
 
 static void

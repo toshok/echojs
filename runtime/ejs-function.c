@@ -185,30 +185,40 @@ _ejs_Function_prototype_apply (ejsval env, ejsval _this, uint32_t argc, ejsval *
     /* 5. Let n be ToUint32(len). */
     uint32_t n = (uint32_t)EJSVAL_TO_NUMBER(len);
 
-    /* 6. Let argList be an empty List. */
-    ejsval* argList = (ejsval*)malloc(sizeof(ejsval) * n);
+    ejsval* argList;
+    EJSBool argList_allocated = EJS_FALSE;
 
-    /* 7. Let index be 0. */
-    int index = 0;
+    if (EJSVAL_IS_DENSE_ARRAY(argArray)) {
+        argList = EJSDENSEARRAY_ELEMENTS(argArray_);
+    }
+    else {
+        /* 6. Let argList be an empty List. */
+        argList = (ejsval*)malloc(sizeof(ejsval) * n);
+        argList_allocated = EJS_TRUE;
 
-    /* 8. Repeat while index < n */
-    while (index < n) {
-        /*    a. Let indexName be ToString(index). */
-        ejsval indexName = NUMBER_TO_EJSVAL(index);
-        /*    b. Let nextArg be the result of calling the [[Get]] internal method of argArray with indexName as the  */
-        /*       argument. */
-        ejsval nextArg = OP(argArray_,Get)(argArray, indexName, argArray);
-        /*    c. Append nextArg as the last element of argList. */
-        argList[index] = nextArg;
-        /*    d. Set index to index + 1. */
-        ++index;
+        /* 7. Let index be 0. */
+        int index = 0;
+
+        /* 8. Repeat while index < n */
+        while (index < n) {
+            /*    a. Let indexName be ToString(index). */
+            ejsval indexName = NUMBER_TO_EJSVAL(index);
+            /*    b. Let nextArg be the result of calling the [[Get]] internal method of argArray with indexName as the  */
+            /*       argument. */
+            ejsval nextArg = OP(argArray_,Get)(argArray, indexName, argArray);
+            /*    c. Append nextArg as the last element of argList. */
+            argList[index] = nextArg;
+            /*    d. Set index to index + 1. */
+            ++index;
+        }
     }
 
     /* 9. Return the result of calling the [[Call]] internal method of func, providing thisArg as the this value and */
     /*    argList as the list of arguments. */
     ejsval rv = EJSVAL_TO_FUNC(func) (EJSVAL_TO_ENV(func), thisArg, n, argList);
 
-    free (argList);
+    if (argList_allocated)
+        free (argList);
     return rv;
 }
 
@@ -235,7 +245,7 @@ _ejs_Function_prototype_call (ejsval env, ejsval _this, uint32_t argc, ejsval *a
 #define EJS_BOUNDFUNC_THIS_SLOT 1
 #define EJS_BOUNDFUNC_ARGC_SLOT 2
 #define EJS_BOUNDFUNC_FIRST_ARG_SLOT 3
-#define EJS_BOUNDFUNC_RESERVED_SLOT_COUNT 2
+#define EJS_BOUNDFUNC_RESERVED_SLOT_COUNT 3
 
 #define EJS_BOUNDFUNC_ENV_NEW(argc)      _ejs_closureenv_new(EJS_BOUNDFUNC_RESERVED_SLOT_COUNT + (argc))
 #define EJS_BOUNDFUNC_ENV_GET_TARGET(bf) _ejs_closureenv_get_slot((bf), EJS_BOUNDFUNC_TARGET_SLOT)
@@ -469,7 +479,7 @@ _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args)
 #if not_anymore
 
     if (fun->bound_argc > 0) {
-        ejsval* new_args = (ejsval*)malloc(sizeof(ejsval) * fun->bound_argc + argc);
+        ejsval* new_args = (ejsval*)malloc(sizeof(ejsval) * (fun->bound_argc + argc));
         memmove (new_args, fun->bound_args, sizeof(ejsval) * fun->bound_argc);
         memmove (&new_args[fun->bound_argc], args, argc);
         args = new_args;

@@ -151,6 +151,8 @@ _ejs_error_init(ejsval global)
     _ejs_object_setprop (global, _ejs_atom_##err, _ejs_##err);          \
     _ejs_##err##_prototype = _ejs_object_new(_ejs_null, &_ejs_Object_specops); \
     _ejs_object_setprop (_ejs_##err,       _ejs_atom_prototype,  _ejs_##err##_prototype); \
+    _ejs_object_define_value_property (_ejs_##err##_prototype, _ejs_atom_constructor, _ejs_##err,\
+                                       EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE); \
                                                                     \
     _ejs_object_setprop (_ejs_##err##_prototype, _ejs_atom_name, _ejs_atom_##err); \
     _ejs_object_setprop (_ejs_##err##_prototype, _ejs_atom_toString, toString); \

@@ -1,5 +1,5 @@
 class SourceError extends Error
-        constructor: (@errorType, @message, @filename, @loc) ->
+        constructor: (@errorType, @message, @filename, @loc = { start: { line: -1, column: -2 }}) ->
                 super @message
 
         reportToUser: () -> throw @

@@ -317,10 +317,10 @@ compileFile = (filename, parse_tree, export_lists, compileCallback) ->
                 process.exit(-1) if options.debug_level == 0
                 throw e
 
-        ll_filename     = "#{os.tmpdir()}/#{base_filename}-#{options.target}.ll"
-        bc_filename     = "#{os.tmpdir()}/#{base_filename}-#{options.target}.bc"
-        ll_opt_filename = "#{os.tmpdir()}/#{base_filename}-#{options.target}.ll.opt"
-        o_filename      = "#{os.tmpdir()}/#{base_filename}-#{options.target}.o"
+        ll_filename     = "#{os.tmpdir()}/#{base_filename}-#{options.target_platform}-#{options.target_arch}.ll"
+        bc_filename     = "#{os.tmpdir()}/#{base_filename}-#{options.target_platform}-#{options.target_arch}.bc"
+        ll_opt_filename = "#{os.tmpdir()}/#{base_filename}-#{options.target_platform}-#{options.target_arch}.ll.opt"
+        o_filename      = "#{os.tmpdir()}/#{base_filename}-#{options.target_platform}-#{options.target_arch}.o"
 
         temp_files.push ll_filename, bc_filename, ll_opt_filename, o_filename
         
@@ -429,10 +429,15 @@ do_final_link = (main_file) ->
         
         clang_args.push relative_to_ejs_exe target_libecho(options.target_platform, options.target_arch)
         clang_args.push relative_to_ejs_exe target_extra_libs(options.target_platform, options.target_arch)
-        
+
+        seen_external_modules = new Set()
         options.external_modules.forEach (extern_module) ->
+                return if seen_external_modules.has(extern_module.library) # don't include external modules more than once
+                seen_external_modules.add(extern_module.library)
+                
                 clang_args.push extern_module.library
-                clang_args = clang_args.concat extern_module.link_flags.split " "
+                # very strange, not sure why we need this \n
+                clang_args = clang_args.concat extern_module.link_flags.replace('\n', ' ').split(" ")
 
         clang_args = clang_args.concat target_libraries(options.target_platform, options.target_arch)
 
@@ -465,24 +470,34 @@ files = []
 
 export_lists = Object.create(null)
 
+for m in options.external_modules
+        mo = Object.create(null)
+        mo.ids = new Set()
+        export_lists[m.module_name] = mo
+        
 # starting at the main file, gather all files we'll need
 while work_list.length isnt 0
         file = work_list.pop()
 
-        file_contents = fs.readFileSync(file, 'utf-8')
-        file_ast = parseFile(file, file_contents)
+        jsfile = file
+        try
+                if fs.statSync(file).isDirectory()
+                        jsfile = path.join(file, "index")
+        catch
+                # do nothing
+        if path.extname(jsfile) isnt ".js"
+                jsfile = jsfile + '.js'
+        
+        file_contents = fs.readFileSync(jsfile, 'utf-8')
+        file_ast = parseFile(jsfile, file_contents)
 
-        imports = compiler.gatherImports(file, path.dirname(file), process.cwd(), file_ast, export_lists)
+        imports = compiler.gatherImports(file, path.dirname(jsfile), process.cwd(), file_ast, export_lists)
 
         files.push({file_name: file, file_ast: file_ast})
 
         for i in imports
-                js_file = i + ".js"
-                if work_list.indexOf(js_file) is -1 and not files.some((el) -> el.file_name is js_file)
-                        work_list.push(js_file)
-
-# reverse the list so the main program is the first thing we compile
-files.reverse()
+                if work_list.indexOf(i) is -1 and not files.some((el) -> el.file_name is i)
+                        work_list.push(i)
 
 # now compile them
 #
@@ -491,6 +506,8 @@ if __ejs?
                 compileFile f.file_name, f.file_ast, export_lists
         do_final_link(main_file)
 else
+        # reverse the list so the main program is the first thing we compile
+        files.reverse()
         compileNextFile = ->
                 if files.length is 0
                         do_final_link(main_file)

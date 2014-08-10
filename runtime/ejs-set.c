@@ -256,6 +256,41 @@ _ejs_Set_prototype_add (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
 // ES6: 23.2.3.9
 // get Set.prototype.size
+static ejsval
+_ejs_Set_prototype_get_size (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    // 1. Let S be the this value.
+    ejsval S = _this;
+
+    // 2. If Type(S) is not Object, then throw a TypeError exception.
+    if (!EJSVAL_IS_OBJECT(S)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Set size getter called with non-object this.");
+    }
+
+    // 3. If S does not have a [[SetData]] internal slot throw a TypeError exception.
+    if (!EJSVAL_IS_SET(S)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Set size getter called with non-Set this.");
+    }
+
+    EJSSet* _set = EJSVAL_TO_SET(S);
+
+    // 4. If S’s [[SetData]] internal slot is undefined, then throw a TypeError exception.
+
+    // 5. Let entries be the List that is the value of S’s [[SetData]] internal slot.
+    EJSSetValueEntry* entries = _set->head_insert;
+
+    // 6. Let count be 0.
+    uint32_t count = 0;
+    // 7. For each e that is an element of entries
+    for (EJSSetValueEntry* e = entries; e; e = e->next_insert) {
+        //   a. If e is not empty then
+        if (!EJSVAL_IS_NO_ITER_VALUE_MAGIC(e->value))
+            //      i. Set count to count+1.
+            count ++;
+    }
+    // 8. Return count.
+    return NUMBER_TO_EJSVAL(count);
+}
 
 // ES6: 23.2.3.10
 // Set.prototype.values ( )
@@ -512,6 +547,7 @@ _ejs_set_init(ejsval global)
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Set, x, _ejs_Set_##x)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_Set_prototype, x, _ejs_Set_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
+#define PROTO_GETTER(x) EJS_INSTALL_ATOM_GETTER(_ejs_Set_prototype, x, _ejs_Set_prototype_get_##x)
 
     PROTO_METHOD(add);
     PROTO_METHOD(clear);
@@ -519,7 +555,7 @@ _ejs_set_init(ejsval global)
     PROTO_METHOD(entries);
     PROTO_METHOD(forEach);
     PROTO_METHOD(has);
-    // XXX (ES6 23.2.3.9) get Set.prototype.size
+    PROTO_GETTER(size);
 
     // expand PROTO_METHOD(values) here so that we can install the function for both keys and @@iterator below
     ejsval _values = _ejs_function_new_native (_ejs_null, _ejs_atom_values, (EJSClosureFunc)_ejs_Set_prototype_values);

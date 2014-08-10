@@ -3,6 +3,8 @@ escodegen = require 'escodegen'
 debug = require 'debug'
 path = require 'path'
 
+node_compat = require 'node-compat'
+
 { Map } = require 'map'
 
 { ArrayExpression,
@@ -74,13 +76,16 @@ path = require 'path'
 { TreeVisitor } = require 'nodevisitor'
 closure_conversion = require 'closure-conversion'
 optimizations = require 'optimizations'
-{ startGenerator, is_intrinsic, create_identifier, is_string_literal, create_string_literal } = require 'echo-util'
+{ startGenerator, is_intrinsic, is_string_literal } = require 'echo-util'
 
 { ExitableScope, TryExitableScope, SwitchExitableScope, LoopExitableScope } = require 'exitable-scope'
+
+{ reportError } = require 'errors'
 
 types = require 'types'
 consts = require 'consts'
 runtime = require 'runtime'
+b = require 'ast-builder'
 
 llvm = require 'llvm'
 ir = llvm.IRBuilder
@@ -236,6 +241,7 @@ class LLVMIRVisitor extends TreeVisitor
                         setLocal:             value: @handleSetLocal
                         getGlobal:            value: @handleGetGlobal
                         setGlobal:            value: @handleSetGlobal
+                        getArg:               value: @handleGetArg
                         slot:                 value: @handleGetSlot
                         setSlot:              value: @handleSetSlot
                         invokeClosure:        value: @handleInvokeClosure
@@ -257,6 +263,7 @@ class LLVMIRVisitor extends TreeVisitor
                         objectCreate:         value: @handleObjectCreate
                         gatherRest:           value: @handleGatherRest
                         arrayFromSpread:      value: @handleArrayFromSpread
+                        argPresent:           value: @handleArgPresent
 
                 @opencode_intrinsics =
                         unaryNot          : true
@@ -545,8 +552,10 @@ class LLVMIRVisitor extends TreeVisitor
 
                 iife_dest_bb = null
                 iife_rv = null
+
+                fromIIFE = n.fromIIFE
                 
-                if n.fromIIFE
+                if fromIIFE
                         insertBlock = ir.getInsertBlock()
                         insertFunc = insertBlock.parent
 
@@ -558,13 +567,14 @@ class LLVMIRVisitor extends TreeVisitor
                 @visitWithScope new_scope, n.body
 
                 @iifeStack.pop()
-                if iife_dest_bb
+                
+                if fromIIFE
+
                         ir.createBr iife_dest_bb
                         ir.setInsertPoint iife_dest_bb
                         rv = @createLoad @findIdentifierInScope(n.ejs_iife_rv.name), "%iife_rv_load"
-                        rv
-                else
-                        n
+                        return rv
+                n
 
         visitSwitch: (n) ->
                 insertBlock = ir.getInsertBlock()
@@ -645,14 +655,18 @@ class LLVMIRVisitor extends TreeVisitor
                 return ExitableScope.scopeStack.exitFore n.label?.name
 
         generateCondBr: (exp, then_bb, else_bb) ->
-                exp_value = @visit exp
-                if exp_value._ejs_returns_ejsval_bool
-                        cmp = @createEjsvalICmpEq(exp_value, consts.ejsval_false(), "cmpresult")
+                if exp.type is Literal and typeof exp.value is "boolean"
+                        cmp = consts.int1(if exp.value then 0 else 1) # we check for false below, so the then/else branches get swapped
                 else
-                        cond_truthy = @createCall @ejs_runtime.truthy, [exp_value], "cond_truthy"
-                        cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
+                        exp_value = @visit exp
+                        if exp_value._ejs_returns_ejsval_bool
+                                cmp = @createEjsvalICmpEq(exp_value, consts.ejsval_false(), "cmpresult")
+                        else
+                                cond_truthy = @createCall @ejs_runtime.truthy, [exp_value], "cond_truthy"
+                                cmp = ir.createICmpEq cond_truthy, consts.false(), "cmpresult"
                 ir.createCondBr cmp, else_bb, then_bb
                 exp_value
+
                 
         visitFor: (n) ->
                 insertBlock = ir.getInsertBlock()
@@ -933,14 +947,8 @@ class LLVMIRVisitor extends TreeVisitor
                 insertBlock = ir.getInsertBlock()
 
                 for param in n.formal_params
-                        debug.log param.type
-                        if param.type is MemberExpression
-                                debug.log param.object.type
-                                debug.log param.property.name
                         if param.type isnt Identifier
-                                debug.log "we don't handle destructured/defaulted parameters yet"
-                                console.warn JSON.stringify param
-                                throw "we don't handle destructured/defaulted parameters yet"
+                                throw new Error("formal parameters should only be identifiers by this point")
 
                 # XXX this methods needs to be augmented so that we can pass actual types (or the builtin args need
                 # to be reflected in jsllvm.cpp too).  maybe we can pass the names to this method and it can do it all
@@ -980,14 +988,9 @@ class LLVMIRVisitor extends TreeVisitor
                 # now create allocas for the formal parameters
                 first_formal_index = allocas.length
                 for param in n.formal_params
-                        if param.type is Identifier
-                                alloca = @createAlloca @currentFunction, types.EjsValue, "local_#{param.name}"
-                                new_scope.set param.name, alloca
-                                allocas.push alloca
-                        else
-                                debug.log "we don't handle destructured args at the moment."
-                                console.warn JSON.stringify param
-                                throw "we don't handle destructured args at the moment."
+                        alloca = @createAlloca @currentFunction, types.EjsValue, "local_#{param.name}"
+                        new_scope.set param.name, alloca
+                        allocas.push alloca
 
                 debug.log -> "alloca #{alloca}" for alloca in allocas
         
@@ -996,12 +999,6 @@ class LLVMIRVisitor extends TreeVisitor
                         store = ir.createStore ir_args[i], allocas[i]
                         debug.log -> "store #{store} *builtin"
 
-                # initialize all our named parameters to undefined
-                args_load = @createLoad @currentFunction.topScope.get("%args"), "args_load"
-                for formal_alloca in allocas[first_formal_index..]
-                        store = @storeUndefined formal_alloca
-                                
-                        
                 body_bb = new llvm.BasicBlock "body", ir_func
                 ir.setInsertPoint body_bb
 
@@ -1012,41 +1009,6 @@ class LLVMIRVisitor extends TreeVisitor
 
                 insertFunc = body_bb.parent
         
-                # now pull the named parameters from our args array for the ones that were passed in.
-                # any arg that isn't specified isn't pulled in, and is only accessible via the arguments object.
-                if n.formal_params.length > 0
-                        load_argc = @createLoad @currentFunction.topScope.get("%argc"), "argc"
-                
-                        for i in [0...n.formal_params.length]
-                                then_bb  = new llvm.BasicBlock "arg_then", insertFunc
-                                else_bb  = new llvm.BasicBlock "arg_else", insertFunc
-                                merge_bb = new llvm.BasicBlock "arg_merge", insertFunc
-
-                                cmp = ir.createICmpSGt load_argc, consts.int32(i), "argcmpresult"
-                                ir.createCondBr cmp, then_bb, else_bb
-                        
-                                ir.setInsertPoint then_bb
-                                # in the then branch, the argument was
-                                # provided, pull the value out of the
-                                # args array
-                                arg_ptr = ir.createGetElementPointer args_load, [consts.int32(i)], "arg#{i}_ptr"
-                                arg = @createLoad arg_ptr, "arg#{i}_load"
-                                store = ir.createStore arg, allocas[first_formal_index+i]
-                                ir.createBr merge_bb
-
-                                ir.setInsertPoint else_bb
-                                # in the else branch, the argument
-                                # wasn't provided.  if it has a
-                                # default value, evaluate that here
-                                # and store it in the alloca.
-                                if n.defaults[i]?
-                                        arg_ptr = ir.createGetElementPointer args_load, [consts.int32(i)], "arg#{i}_ptr"
-                                        arg = @visit n.defaults[i], "arg#{i}_default_value"
-                                        ir.createStore arg, allocas[first_formal_index+i]
-                                ir.createBr merge_bb
-
-                                ir.setInsertPoint merge_bb
-
                 @iifeStack = new Stack
 
                 @finallyStack = []
@@ -1336,39 +1298,40 @@ class LLVMIRVisitor extends TreeVisitor
                 rv
 
         visitObjectExpression: (n) ->
+                obj_proto = ir.createLoad @ejs_globals.Object_prototype, "load_objproto"
                 object_create = @ejs_runtime.object_create
-                obj = @createCall object_create, [@loadNullEjsValue()], "objtmp", !object_create.doesNotThrow
+                obj = @createCall object_create, [obj_proto], "objtmp", !object_create.doesNotThrow
 
                 accessor_map = new Map()
 
                 # gather all properties so we can emit get+set as a single call to define_accessor_prop.
                 for property in n.properties
-                        if property.key.type is ComputedPropertyKey
-                                key = @visit property.key.expression
-                        else if property.key.type is Literal
-                                key = @getAtom String(property.key.value)
-                        else if property.key.type is Identifier
-                                key = @getAtom property.key.name
-                        
                         if property.kind is "get" or property.kind is "set"
-                                accessor_map.set(key, new Map) if not accessor_map.has(key)
-                                throw new SyntaxError "a '#{property.kind}' method for '#{key}' has already been defined." if accessor_map.get(key).has(property.kind)
-                                throw new SyntaxError "#{property.key.loc.start.line}: property name #{key} appears once in object literal." if accessor_map.get(key).has("init")
+                                accessor_map.set(property.key, new Map) if not accessor_map.has(property.key)
+                                throw new SyntaxError "a '#{property.kind}' method for '#{escodegen.generate property.key}' has already been defined." if accessor_map.get(property.key).has(property.kind)
+                                throw new SyntaxError "#{property.key.loc.start.line}: property name #{escodegen.generate property.key} appears once in object literal." if accessor_map.get(property.key).has("init")
                         else if property.kind is "init"
-                                throw new SyntaxError "#{property.key.loc.start.line}: property name #{key} appears once in object literal." if accessor_map.has(key)
-                                accessor_map.set(key, new Map)
+                                throw new SyntaxError "#{property.key.loc.start.line}: property name #{escodegen.generate property.key} appears once in object literal." if accessor_map.get(property.key)
+                                accessor_map.set(property.key, new Map)
                         else
                                 throw new Error("unrecognized property kind `#{property.kind}'")
                                 
-                        accessor_map.get(key).set(property.kind, property)
+                        accessor_map.get(property.key).set(property.kind, property)
 
                 accessor_map.forEach (prop_map, propkey) =>
                         # XXX we need something like this line below to handle computed properties, but those are broken at the moment
                         #key = if property.key.type is Identifier then @getAtom property.key.name else @visit property.key
 
+                        if propkey.type is ComputedPropertyKey
+                                propkey = @visit propkey.expression
+                        else if propkey.type is Literal
+                                propkey = @getAtom String(propkey.value)
+                        else if propkey.type is Identifier
+                                propkey = @getAtom propkey.name
+
                         if prop_map.has("init")
                                 val = @visit(prop_map.get("init").value)
-                                @createCall @ejs_runtime.object_define_value_prop, [obj, propkey, val, consts.int32 0x77], "define_value_prop_#{key}"
+                                @createCall @ejs_runtime.object_define_value_prop, [obj, propkey, val, consts.int32 0x77], "define_value_prop_#{propkey}"
                         else
                                 getter = prop_map.get("get")
                                 setter = prop_map.get("set")
@@ -1376,7 +1339,7 @@ class LLVMIRVisitor extends TreeVisitor
                                 get_method = if getter then @visit(getter.value) else @loadUndefinedEjsValue()
                                 set_method = if setter then @visit(setter.value) else @loadUndefinedEjsValue()
 
-                                @createCall @ejs_runtime.object_define_accessor_prop, [obj, propkey, get_method, set_method, consts.int32 0x19], "define_accessor_prop_#{key}"
+                                @createCall @ejs_runtime.object_define_accessor_prop, [obj, propkey, get_method, set_method, consts.int32 0x19], "define_accessor_prop_#{propkey}"
                                 
                 obj
 
@@ -1721,11 +1684,12 @@ class LLVMIRVisitor extends TreeVisitor
 
                 callsite_load = ir.createLoad callsite_alloca, "load_local_callsite"
 
+                # this looks wrong but this is how we test for a 0 ejsval
                 isnull = @isNumber callsite_load
                 ir.createCondBr isnull, then_bb, merge_bb
 
                 @doInsideBBlock then_bb, =>
-                        # XXX missing: register callsite_obj gc root
+                        @createCall(@ejs_runtime.gc_add_root, [callsite_global], "");
                         callsite_obj = @visit callsite_obj_literal
                         ir.createStore callsite_obj, callsite_global
                         ir.createStore callsite_obj, callsite_alloca
@@ -1744,7 +1708,15 @@ class LLVMIRVisitor extends TreeVisitor
                 toExport = @visit exp.arguments[2]
 
                 @createCall @ejs_runtime.module_import_batch, [fromImport, specifiers, toExport], ""
+
+        handleGetArg: (exp, opencode) ->
+                load_args = @createLoad @currentFunction.topScope.get("%args"), "args_load"
+
+                arg_i = exp.arguments[0].value
+                arg_ptr = ir.createGetElementPointer load_args, [consts.int32(arg_i)], "arg#{arg_i}_ptr"
                                 
+                @createLoad arg_ptr, "arg#{arg_i}"
+                
         handleGetLocal: (exp, opencode) ->
                 source = @findIdentifierInScope exp.arguments[0].name
                 if source?
@@ -1772,12 +1744,12 @@ class LLVMIRVisitor extends TreeVisitor
                         ir.setInsertPoint saved_insert_point
                         rv = @createLoad arguments_alloca, "load_arguments"
                         return rv
-                        
-                throw new Error "identifier not found: #{exp.arguments[0].name}"
+
+                reportError(ReferenceError, "identifier not found: #{exp.arguments[0].name}", @filename, exp.arguments[0].loc)
 
         handleSetLocal: (exp, opencode) ->
                 dest = @findIdentifierInScope exp.arguments[0].name
-                throw new Error "identifier not found: #{exp.arguments[0].name}" if not dest?
+                reportError(ReferenceError, "identifier not found: #{exp.arguments[0].name}", @filename, exp.arguments[0].loc) if not dest?
                 arg = exp.arguments[1]
                 @storeToDest dest, arg
                 ir.createLoad dest, "load_val"
@@ -2158,8 +2130,8 @@ class LLVMIRVisitor extends TreeVisitor
 
         handleObjectCreate:  (exp) ->
                 proto = @visitOrNull exp.arguments[0]
-                @createCall @ejs_runtime.object_create_wrapper, [proto], "object_create", true
-                # we should check the return value of object_create_wrapper
+                @createCall @ejs_runtime.object_create, [proto], "object_create", true
+                # we should check the return value of object_create
 
         handleGatherRest: (exp) ->
                 rest_name = exp.arguments[0].value
@@ -2216,6 +2188,13 @@ class LLVMIRVisitor extends TreeVisitor
 
                 argv = [consts.int32(arg_count), argsCast]
                 @createCall @ejs_runtime.array_from_iterables, argv, "spread_arr"
+
+        handleArgPresent: (exp) ->
+                load_argc = @createLoad @currentFunction.topScope.get("%argc"), "argc_n_load"
+
+                cmp = ir.createICmpUGE load_argc, consts.int32(exp.arguments[0].value), "argcmpresult"
+
+                @createEjsBoolSelect cmp
                                 
 class AddFunctionsVisitor extends TreeVisitor
         constructor: (@module, @abi) ->
@@ -2225,7 +2204,7 @@ class AddFunctionsVisitor extends TreeVisitor
                 if n?.id?.name?
                         n.ir_name = n.id.name
 
-                # at this point point n.params includes %env as its first param, and is followed by all the formal parameters from the original
+                # at this point n.params includes %env as its first param, and is followed by all the formal parameters from the original
                 # script source.  we remove the %env parameter and save off he rest of the formal parameter names, and replace the list with
                 # our runtime parameters.
 
@@ -2254,8 +2233,8 @@ sanitize_with_regexp = (filename) ->
 insert_toplevel_func = (tree, filename) ->
         toplevel =
                 type: FunctionDeclaration,
-                id:   create_identifier("_ejs_toplevel_#{sanitize_with_regexp filename}")
-                params: [create_identifier("%env_unused"), create_identifier("exports")], # XXX this 'exports' should be '%exports' if the module has ES6 module declarations
+                id:   b.identifier("_ejs_toplevel_#{sanitize_with_regexp filename}")
+                params: [b.identifier("exports")], # XXX this 'exports' should be '%exports' if the module has ES6 module declarations
                 defaults: []
                 body:
                         type: BlockStatement
@@ -2346,7 +2325,20 @@ class GatherImports extends TreeVisitor
                 throw new Error("import sources must be strings") if not is_string_literal(n.source)
 
                 if isInternalModule(n.source.value)
-                        n.source_path = create_string_literal(n.source.value)
+                        if n.source.value.indexOf('@node-compat/') is 0
+                                # add the exports here for node-compat modules
+                                module_name = n.source.value.slice('@node-compat/'.length)
+                                if not node_compat.modules[module_name]?
+                                        throw new Error("@node-compat module #{module_name} not found")
+                                if not hasOwn.call @exportLists, n.source.value
+                                        @exportLists[n.source.value] = Object.create(null)
+                                        @exportLists[n.source.value].ids = node_compat.modules[module_name]
+                                n.source_path = b.literal(n.source.value)
+
+                        # otherwise we just strip off the @
+                        else
+                                n.source_path = b.literal(n.source.value.slice(1))
+
                         return n
                 
                 if n.source[0] is "/"
@@ -2359,7 +2351,7 @@ class GatherImports extends TreeVisitor
                         
                 @importList.push(source_path) if @importList.indexOf(source_path) is -1
 
-                n.source_path = create_string_literal(source_path)
+                n.source_path = b.literal(source_path)
                 n
 
         addDefaultExport: (path) ->
@@ -2382,17 +2374,17 @@ class GatherImports extends TreeVisitor
         visitExportDeclaration: (n) ->
                 n = @addSource(n)
 
-                if n.source?
-                        if n.default
-                                @addDefaultExport(@filename)
-                        else
-                                for spec in n.specifiers
-                                        @addExportIdentifier(@filename, spec.name?.name or spec.id?.name)
-                        n
+                if n.default
+                        @addDefaultExport(@filename)
+                else if n.source?
+                        for spec in n.specifiers
+                                @addExportIdentifier(@filename, spec.name?.name or spec.id?.name)
                 else if Array.isArray(n.declaration)
                         for decl in n.declaration
                                 @addExportIdentifier(@filename, decl.id.name)
-                else if n.declaration.type is FunctionDeclaration                        
+                else if n.declaration.type is FunctionDeclaration
+                        @addExportIdentifier(@filename, n.declaration.id.name) 
+                else if n.declaration.type is ClassDeclaration
                         @addExportIdentifier(@filename, n.declaration.id.name) 
                 else if n.declaration.type is VariableDeclaration
                         for decl in n.declaration.declarations

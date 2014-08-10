@@ -10,6 +10,11 @@ NODE_PATH=$(TOPDIR)/node-llvm/build/Release:$(TOPDIR)/lib/generated:$(TOPDIR)/li
 NODE_FLAGS=--harmony --harmony-typeof
 TRACEUR_FLAGS=--block-binding true
 
+NODE_COMPAT_MODULES=	--module "../node-compat/libejsnodecompat-module.a,@node-compat/path,_ejs_path_module_func," \
+			--module "../node-compat/libejsnodecompat-module.a,@node-compat/os,_ejs_os_module_func," \
+			--module "../node-compat/libejsnodecompat-module.a,@node-compat/fs,_ejs_fs_module_func," \
+			--module "../node-compat/libejsnodecompat-module.a,@node-compat/child_process,_ejs_child_process_module_func,"
+
 TESTS:=$(wildcard *[0-9].js)
 
 # this test just sucks
@@ -31,6 +36,7 @@ ESPRIMA_TESTS:=$(ESPRIMA_TESTS:%.js=%.js.exe)
 
 addExpectedFailureInner=EXPECTED_FAILURES += $(1)
 addTraceurTestInner=TRACEUR_TESTS += $(1)
+addNodeCompatTestInner=NODE_COMPAT_TESTS += $(1)
 
 define addExpectedFailure
   $(eval $(call addExpectedFailureInner, $(1)))
@@ -38,6 +44,10 @@ endef
 
 define testAgainstTraceur
   $(eval $(call addTraceurTestInner, $(1)))
+endef
+
+define nodeCompatTest
+  $(eval $(call addNodeCompatTestInner, $(1)))
 endef
 
 EXPECTED_FAILURES=
@@ -55,7 +65,6 @@ $(call addExpectedFailure, typedarray6.js,          "we use %g to format floats/
 $(call addExpectedFailure, array19.js,              "we don't support property descriptors at all for array elements.  also needs more from ECMA262 15.4.5.1")
 $(call addExpectedFailure, fib1.js,                 "we don't output numbers correctly (integers with exponent <= 20 should print out normally)")
 $(call addExpectedFailure, const1.js,               "we permit assigning to const bindings")
-$(call addExpectedFailure, map1.js,                 "we throw the right exception but node 0.8 doesn't")
 $(call addExpectedFailure, regexp5.js,              "we don't support for the y flag")
 $(call addExpectedFailure, number-toFixed1.js,      "not implemented fully yet")
 $(call addExpectedFailure, number-toPrecision1.js,  "not implemented fully yet")
@@ -63,11 +72,15 @@ $(call addExpectedFailure, object7.js,              "we differ from node on prop
 $(call addExpectedFailure, object9.js,              "we differ from node on property descriptor flags.  verify with spec")
 
 TRACEUR_TESTS=
+$(call testAgainstTraceur, array-subclass1.js)
+$(call testAgainstTraceur, class3.js)
 $(call testAgainstTraceur, for5.js)
 $(call testAgainstTraceur, forof1.js)
 $(call testAgainstTraceur, forof2.js)
 $(call testAgainstTraceur, computed-props1.js)
 $(call testAgainstTraceur, computed-props3.js)
+$(call testAgainstTraceur, shorthand-prop1.js)
+$(call testAgainstTraceur, shorthand-method1.js)
 $(call testAgainstTraceur, spread1.js)
 $(call testAgainstTraceur, spread2.js)
 $(call testAgainstTraceur, spread3.js)
@@ -75,8 +88,18 @@ $(call testAgainstTraceur, spread4.js)
 $(call testAgainstTraceur, spread5.js)
 $(call testAgainstTraceur, spread6.js)
 $(call testAgainstTraceur, spread7.js)
+$(call testAgainstTraceur, string-fromCodePoint1.js)
+$(call testAgainstTraceur, string-raw1.js)
+$(call testAgainstTraceur, symbol-iterator1.js)
 $(call testAgainstTraceur, promise1.js)
 $(call testAgainstTraceur, promise2.js)
+
+NODE_COMPAT_TESTS=
+$(call nodeCompatTest, path-relative1.js)
+$(call nodeCompatTest, path-resolve1.js)
+$(call nodeCompatTest, stat1.js)
+
+NODE_COMPAT_TESTS_EXES:=$(NODE_COMPAT_TESTS:%.js=%.js.exe)
 
 all-local:: check
 
@@ -84,21 +107,18 @@ check: check-unit-tests run-tests
 
 check-stage1: check-unit-tests run-tests-stage1
 
-check-unit-tests: check-llvm check-set #check-free
+check-unit-tests: check-llvm check-set
 
 build-tests: $(patsubst %.js,%.js.exe,$(TESTS))
 
 build-tests-stage1:
 	@$(MAKE) EJS_DRIVER="$(TOPDIR)/ejs.js.exe" EJS_STAGE=1 build-tests
 
-check-llvm: terminal.js echo-assert.js
-	@NODE_PATH=$(NODE_PATH):. coffee llvm-test.coffee
+check-llvm:
+	mocha llvm-test.js
 
-check-set: terminal.js echo-assert.js
-	@NODE_PATH=$(NODE_PATH):. coffee set-test.coffee
-
-check-free: terminal.js echo-assert.js
-	@NODE_PATH=$(NODE_PATH):. coffee free-test.coffee
+check-set:
+	mocha set-test.js
 
 run-tests: clean-results generate-expected prepare-xfail $(patsubst %.js,test-%,$(TESTS)) format-results
 
@@ -196,11 +216,14 @@ clean-esprima-roundtrip:
 EJS_DRIVER ?= NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --leave-temp -q
 EJS_STAGE ?= 0
 
+$(NODE_COMPAT_TESTS_EXES): %.js.exe: %.js $(TOPDIR)/runtime/libecho.a
+	@$(EJS_DRIVER) $(NODE_COMPAT_MODULES) $< 
+
 %.js.exe: %.js $(TOPDIR)/runtime/libecho.a
-	@$(EJS_DRIVER) $<
+	@$(EJS_DRIVER) $< 
 
 v8-%.js.exe: v8/%.js $(TOPDIR)/runtime/libecho.a
-	NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $<
+	NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $(NODE_COMPAT_MODULES) $<
 
 run-node:
 	NODE_PATH=$(NODE_PATH) node
@@ -209,13 +232,11 @@ node-path:
 	echo $(NODE_PATH)
 
 clean: clean-results clean-esprima-roundtrip
-	rm -f *.o *.js.exe terminal.js echo-assert.js .*.diff .*-out .failures .successes .xfail .xsuccess
+	rm -f *.o *.js.exe .*.diff .*-out .failures .successes .xfail .xsuccess
 	rm -rf *.dSYM
 
 .PRECIOUS: $(TESTS:%.js=expected/%.js.expected-out)
 
-
-.INTERMEDIATE: terminal.js echo-assert.js
 
 compare-%:
 	-@test_js=`echo $@|sed -e s,compare-,,`.js; \

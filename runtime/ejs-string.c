@@ -111,20 +111,20 @@ ucs2_strrstr (const jschar *haystack,
               const jschar *needle)
 {
     int haystack_len = ucs2_strlen(haystack);
-    int needle_len = ucs2_strlen(needle);
+    int needle_len   = ucs2_strlen(needle);
 
     if (needle_len > haystack_len)
         return NULL;
 
-    const jschar* p = haystack + haystack_len - 1;
-    const jschar* needle_p = needle + needle_len - 1;
+    const jschar* p        = haystack + haystack_len - 1;
+    const jschar* needle_p = needle   + needle_len   - 1;
 
     while (p >= haystack) {
         const jschar *next_candidate = NULL;
 
         if (*p == *needle_p) {
-            const jschar *p2 = p+1;
-            const jschar *n = needle_p-1;
+            const jschar *p2 = p-1;
+            const jschar *n  = needle_p-1;
 
             if (!next_candidate && *p2 == *needle_p)
                 next_candidate = p2;
@@ -137,13 +137,13 @@ ucs2_strrstr (const jschar *haystack,
                 if (!next_candidate && *p2 == *needle_p)
                     next_candidate = p2;
             }
-            if (needle_p < needle)
-                return (jschar*)p;
+            if (n < needle)
+                return (jschar*)p2+1;
 
             if (next_candidate)
                 p = next_candidate;
             else
-                p--;
+                p = p2-1;
             continue;
         }
         else {
@@ -189,6 +189,46 @@ utf8_to_ucs2 (const unsigned char * input, const unsigned char ** end_ptr)
 }
 
 static int
+utf16_to_utf8_char (const jschar* utf16, char* utf8, int *utf16_adv)
+{
+    jschar ucs2;
+
+    ucs2 = *utf16;
+    *utf16_adv = 1;
+
+    if (ucs2 < 0x80) {
+        utf8[0] = (char)ucs2;
+        return 1;
+    }
+    if (ucs2 >= 0x80  && ucs2 < 0x800) {
+        utf8[0] = (ucs2 >> 6)   | 0xC0;
+        utf8[1] = (ucs2 & 0x3F) | 0x80;
+        return 2;
+    }
+    if (ucs2 >= 0x800 && ucs2 < 0xFFFF) {
+        if (ucs2 >= 0xD800 && ucs2 <= 0xDFFF) {
+            // surrogate pair
+            jschar ucs2_2 = *(utf16 + 1);
+            uint32_t combined = 0x10000 + (((ucs2 - 0xD800) << 10) | (ucs2_2 - 0xDC00));
+
+            utf8[0] = 0xF0 | (combined >> 18);
+            utf8[1] = 0x80 | ((combined >> 12) & 0x3F);
+            utf8[2] = 0x80 | ((combined >> 6) & 0x3F);
+            utf8[3] = 0x80 | ((combined & 0x3F));
+
+            *utf16_adv = 2;
+            return 4;
+        }
+
+        utf8[0] = ((ucs2 >> 12)       ) | 0xE0;
+        utf8[1] = ((ucs2 >> 6 ) & 0x3F) | 0x80;
+        utf8[2] = ((ucs2      ) & 0x3F) | 0x80;
+        return 3;
+    }
+    EJS_NOT_IMPLEMENTED();
+}
+
+static int
 ucs2_to_utf8_char (jschar ucs2, char *utf8)
 {
     if (ucs2 < 0x80) {
@@ -201,32 +241,37 @@ ucs2_to_utf8_char (jschar ucs2, char *utf8)
         return 2;
     }
     if (ucs2 >= 0x800 && ucs2 < 0xFFFF) {
+        if (ucs2 >= 0xD800 && ucs2 <= 0xDFFF) {
+            EJS_NOT_IMPLEMENTED();
+        }
+
         utf8[0] = ((ucs2 >> 12)       ) | 0xE0;
         utf8[1] = ((ucs2 >> 6 ) & 0x3F) | 0x80;
         utf8[2] = ((ucs2      ) & 0x3F) | 0x80;
         return 3;
     }
-    return -1;
+    EJS_NOT_IMPLEMENTED();
 }
 
 char*
 ucs2_to_utf8 (const jschar *str)
 {
     int len = ucs2_strlen(str);
-    char *conservative = (char*)calloc (sizeof(char), len * 3 + 1);
+    char *conservative = (char*)calloc (sizeof(char), len * 4 + 1);
 
     const jschar *p = str;
     char *c = conservative;
+    int utf16_adv;
 
     while (*p) {
-        int adv = ucs2_to_utf8_char (*p, c);
+        int adv = utf16_to_utf8_char (p, c, &utf16_adv);
         if (adv < 1) {
             // more here XXX
             break;
         }
         c += adv;
 
-        p++;
+        p += utf16_adv;
         len --;
         if (len == 0)
             break;
@@ -859,11 +904,15 @@ _ejs_String_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     }
     /* 11. If s = 0, then */
     if (s == 0) {
-        EJS_NOT_IMPLEMENTED();
         /*     a. Call SplitMatch(S, 0, R) and let z be its MatchResult result. */
+        MatchResultState z = SplitMatch(S, 0, R);
         /*     b. If z is not failure, return A. */
+        if (z.type != MATCH_RESULT_FAILURE)
+            return A;
+
         /*     c. Call the [[DefineOwnProperty]] internal method of A with arguments "0", Property Descriptor  */
         /*        {[[Value]]: S, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
+        _ejs_array_push_dense (A, 1, &S);
         /*     d. Return A. */
         return A;
     }
@@ -1034,13 +1083,18 @@ _ejs_String_fromCodePoint (ejsval env, ejsval _this, uint32_t argc, ejsval *args
         ejsval nextCP = ToNumber(next);
         //    c. ReturnIfAbrupt(nextCP). 
         //    d. If SameValue(nextCP, ToInteger(nextCP)) is false, then throw a RangeError exception. 
-        if (ToDouble(nextCP) != ToInteger(nextCP))
-            _ejs_throw_nativeerror_utf8(EJS_RANGE_ERROR, "1"); // XXX
+        if (ToDouble(nextCP) != ToInteger(nextCP)) {
+            free (elements);
+            ejsval msg = _ejs_string_concat(_ejs_string_new_utf8("Invalid code point: "), ToString(nextCP));
+            _ejs_throw_nativeerror(EJS_RANGE_ERROR, msg);
+        }
         int64_t nextCP_ = ToInteger(nextCP);
 
         //    e. If nextCP < 0 or nextCP > 0x10FFFF, then throw a RangeError exception.
         if (nextCP_ < 0 || nextCP_ > 0x10FFFF) {
-            _ejs_throw_nativeerror_utf8(EJS_RANGE_ERROR, "2"); // XXX
+            free (elements);
+            ejsval msg = _ejs_string_concat(_ejs_string_new_utf8("Invalid code point: "), ToString(nextCP));
+            _ejs_throw_nativeerror(EJS_RANGE_ERROR, msg);
         }
 
         //    f. Append the elements of the UTF-16Encoding (10.1.1) of nextCP to the end of elements.
@@ -1054,6 +1108,87 @@ _ejs_String_fromCodePoint (ejsval env, ejsval _this, uint32_t argc, ejsval *args
     free(elements);
     return rv;
 }
+
+// ECMA262: 21.1.2.4 String.raw ( callsite, ...substitutions )
+static ejsval
+_ejs_String_raw(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval callsite = _ejs_undefined;
+    if (argc > 0) callsite = args[0];
+
+    // 1. Let substitutions be a List consisting of all of the arguments passed to this function, starting with the second argument. If fewer than two arguments were passed, the List is empty.
+    ejsval* substitutions = NULL;
+    if (argc > 1) substitutions = args + 1;
+
+    // 2. Let numberOfSubstitutions be the numer of elements in substitutions.
+    uint32_t numberOfSubstitutions = 0;
+    if (argc > 1) numberOfSubstitutions = argc - 1;
+
+    // 3. Let cooked be ToObject(callsite).
+    // 4. ReturnIfAbrupt(cooked).
+    ejsval cooked = ToObject(callsite);
+
+    // 5. Let rawValue be the result of Get(cooked, "raw").
+    ejsval rawValue = Get(cooked, _ejs_atom_raw);
+
+    // 6. Let raw be ToObject(rawValue).
+    // 7. ReturnIfAbrupt(raw).
+    ejsval raw = ToObject(rawValue);
+
+    // 8. Let len be the result of Get(raw, "length").
+    ejsval len = Get(raw, _ejs_atom_length);
+
+    // 9. Let literalSegments be ToLength(len).
+    // 10. ReturnIfAbrupt(literalSegments).
+    int64_t literalSegments = ToInteger(len);
+
+    // 11. If literalSegments ≤ 0, then return the empty string.
+    if (literalSegments <= 0)
+        return _ejs_atom_empty;
+
+    // 12. Let stringElements be a new List.
+    ejsval stringElements = _ejs_array_new(0, EJS_FALSE);
+    // 13. Let nextIndex be 0.
+    int nextIndex = 0;
+
+    // 14. Repeat 
+    while (EJS_TRUE) {
+        //     a. Let nextKey be ToString(nextIndex).
+        ejsval nextKey = ToString(NUMBER_TO_EJSVAL(nextIndex));
+        //     b. Let next be the result of Get(raw, nextKey)
+        ejsval next = Get(raw, nextKey);
+
+        //     c. Let nextSeg be ToString(next).
+        //     d. ReturnIfAbrupt(nextSeg).
+        ejsval nextSeg = ToString(next);
+
+        //     e. Append in order the code unit elements of nextSeg to the end of stringElements.
+        _ejs_array_push_dense (stringElements, 1, &nextSeg);
+
+        //     f. If nextIndex + 1 = literalSegments, then
+        if (nextIndex + 1 == literalSegments)
+        //        i. Return the string value whose elements are, in order, the elements in the List stringElements. If stringElements has no elements, the empty string is returned.
+            return _ejs_array_join(stringElements, _ejs_atom_empty);
+
+        //     g. If nextIndex< numberOfSubstitutions, then let next be substitutions[nextIndex].
+        if (nextIndex < numberOfSubstitutions)
+            next = substitutions[nextIndex];
+        //     h. Else, let next is the empty String.
+        else
+            next = _ejs_atom_empty;
+
+        //     i. Let nextSub be ToString(next).
+        //     j. ReturnIfAbrupt(nextSub).
+        ejsval nextSub = ToString(next);
+
+        //     k. Append in order the code unit elements of nextSub to the end of stringElements.
+        _ejs_array_push_dense (stringElements, 1, &nextSub);
+
+        //     l. Let nextIndex be nextIndex + 1
+        nextIndex ++;
+    }
+}
+
 // ECMA262: 21.1.3.18 String.prototype.startsWith ( searchString [, position ] ) 
 static ejsval
 _ejs_String_prototype_startsWith(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -1550,6 +1685,7 @@ _ejs_string_init(ejsval global)
 
     OBJ_METHOD(fromCharCode);
     OBJ_METHOD(fromCodePoint);
+    OBJ_METHOD(raw);
 
     ejsval _iterator = _ejs_function_new_native (_ejs_null, _ejs_Symbol_iterator, (EJSClosureFunc)_ejs_String_prototype_iterator);
     _ejs_object_define_value_property (_ejs_String_prototype, _ejs_Symbol_iterator, _iterator, EJS_PROP_NOT_ENUMERABLE);

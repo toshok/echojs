@@ -2,6 +2,8 @@ terminal = require "terminal"
 esprima = require 'esprima'
 syntax = esprima.Syntax
 
+b = require 'ast-builder'
+
 exports.shallow_copy_object = (o) ->
         return null if not o?
 
@@ -55,15 +57,6 @@ exports.reset = ->
                 return terminal.ANSIStyle("reset");
         return ""
 
-exports.create_identifier = create_identifier = (x) ->
-        throw new Error "invalid name in create_identifier" if not x
-        type: syntax.Identifier, name: x
-exports.create_string_literal = (x) ->
-        throw new Error "invalid string in create_string_literal" if not x?
-        type: syntax.Literal, value: x, raw: "\"#{x}\""
-exports.create_number_literal = (x) ->
-        throw new Error "invalid number '#{x}' (#{typeof x}) in create_number_literal" if typeof x isnt "number"
-        type: syntax.Literal, value: x, raw: "#{x}"
 exports.is_number_literal = (n) -> n.type is syntax.Literal and typeof n.value is "number"
 exports.is_string_literal = (n) -> n.type is syntax.Literal and typeof n.raw is "string"
 exports.create_intrinsic = (id, args, loc) ->
@@ -78,4 +71,9 @@ exports.is_intrinsic = (n, name) ->
         if name?
                 return false if n.callee.name isnt name
         true
+
+exports.intrinsic = (id, args, loc) ->
+        rv = b.callExpression(id, args)
+        rv.loc = loc
+        rv
 
