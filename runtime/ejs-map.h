@@ -34,7 +34,30 @@ extern EJSSpecOps _ejs_Map_specops;
 
 void _ejs_map_init(ejsval global);
 
-void _ejs_map_new ();
+ejsval _ejs_map_new ();
+
+#define EJSVAL_IS_MAPITERATOR(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_MapIterator_specops))
+
+typedef enum {
+    EJS_MAP_ITER_KIND_KEY,
+    EJS_MAP_ITER_KIND_VALUE,
+    EJS_MAP_ITER_KIND_KEYVALUE,
+} EJSMapIteratorKind;
+
+typedef struct {
+    /* object header */
+    EJSObject obj;
+
+    ejsval iterated;
+    EJSMapIteratorKind kind;
+    int next_index;
+} EJSMapIterator;
+
+extern ejsval _ejs_MapIterator;
+extern ejsval _ejs_MapIterator_prototype;
+extern EJSSpecOps _ejs_MapIterator_specops;
+
+ejsval _ejs_map_iterator_new (ejsval map, EJSMapIteratorKind kind);
 
 EJS_END_DECLS
 

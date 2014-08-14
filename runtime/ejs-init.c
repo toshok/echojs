@@ -72,6 +72,7 @@ _ejs_init_classes()
     _ejs_Class_initialize (&_ejs_Error_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Function_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Map_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_MapIterator_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Proxy_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Promise_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Set_specops, &_ejs_Object_specops);
