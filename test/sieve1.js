@@ -18,4 +18,4 @@ function primes (n) {
   primes_internal (2, n, function base_filter (test) { return false; });
 }
 
-primes (1500);
+primes (100);
