@@ -414,10 +414,8 @@ LocateEnv = class LocateEnv extends TransformPass
                                 else
                                         env.nested_requires_env = true
                                         env = env.parent
-                else
-                        console.log "identifier #{n.name} is not closed over"
                 
-                n.ejs_substitute = true
+                        n.ejs_substitute = true
                 n
 
 # this should move to echo-desugar.coffee
@@ -466,19 +464,69 @@ class FuncDeclsToVars extends TransformPass
                         return b.varDeclaration(b.identifier(n.id.name), func_exp)
 
 
-class ConvertLetLoopVariables extends TransformPass
+class RemapIdentifiers extends TransformPass
+        constructor: (options, @filename, @initial_mapping) ->
+                @mappings = new Stack(@initial_mapping)
+                super
+
+        #visit: (n) ->
+        #        return n if @currentMapping().isEmpty()
+        #        super
+
+        visitBlock: (n) ->
+                # clone the mapping and push it onto the stack
+                @mappings.push shallow_copy_object @currentMapping()
+                super
+                @mappings.pop()
+                n
+
+        visitVariableDeclarator: (n) ->
+                # if the variable's name exists in the mapping clear it out
+                @currentMapping()[n.id.name] = null
+
+        visitObjectPattern: (n) ->
+                @currentMapping()[prop.key] = null for prop in n.properties
+                super
+
+        visitCatchClause: (n) ->
+                @mappings.push shallow_copy_object @currentMapping()
+                @currentMapping()[n.param.name] = null
+                super
+                @mappings.pop()
+                n
+                
+        visitFunction: (n) ->
+                @currentMapping()[n.id.name] = null if n.id?
+
+                @mappings.push shallow_copy_object @currentMapping()
+                @currentMapping()[n.rest.name] = null if n.rest?
+                super
+                @mappings.pop()
+                n
+                
+        visitIdentifier: (n) ->
+                if hasOwnProperty.call @currentMapping(), n.name
+                        mapped = @currentMapping()[n.name]
+                        return mapped if mapped?
+                n
+                
+        currentMapping: -> if @mappings.depth > 0 then @mappings.top else Object.create null
+                
+class DesugarLetLoopVars extends TransformPass
+        vargen = startGenerator()
+        freshLoopVar = (ident) -> "%loop_#{ident}_#{vargen()}"
+        
         constructor: (options, @filename) ->
                 super
 
-        visitForStatement: (n) ->
+        visitFor: (n) ->
                 return n if n.init?.type isnt VariableDeclaration
                 return n if n.init?.kind isnt 'let'
 
-                #
                 # we have a loop that looks like:
                 #
                 #  for (let x = ...; $test; $update) {
-                #      /* body */
+                #      /* body, containing a function that closes over x */
                 #  }
                 #
                 # we desugar this to:
@@ -492,6 +540,40 @@ class ConvertLetLoopVariables extends TransformPass
                 #      %loop_x = x;
                 #    }
                 #  }
+
+                n.init.kind = "var"
+                
+                mappings = Object.create null
+
+                for decl in n.init.declarations
+                        loopvar = b.identifier(freshLoopVar(decl.id.name))
+                        mappings[decl.id.name] = loopvar
+                        decl.id = loopvar
+                        
+                assignments = []
+                new_body = b.blockStatement()
+                
+                for loopvar of mappings
+                        # this gives us the "let x = %loop_x"
+                        # assignments, so get our fresh binding per
+                        # loop iteration
+                        new_body.body.push b.variableDeclaration('let', b.identifier(loopvar), mappings[loopvar])
+                        
+                        # and this gives us the assignment we put in
+                        # the finally block to capture changes made to
+                        # the loop variable in the body
+                        assignments.push b.expressionStatement(b.assignmentExpression(mappings[loopvar], '=', b.identifier(loopvar)))
+
+                new_body.body.push b.tryStatement(n.body, [], b.blockStatement(assignments))
+
+                n.body = new_body
+
+                remap = new RemapIdentifiers(@options, @filename, mappings)
+                n.test = remap.visit(n.test)
+                n.update = remap.visit(n.update)
+
+                n
+                
         
 # hoists all vars to the start of the enclosing function, replacing
 # any initializer with an assignment expression.  We also take the
@@ -2103,6 +2185,7 @@ passes = [
         DesugarSpread
         HoistFuncDecls if enable_hoist_func_decls_pass
         FuncDeclsToVars
+        DesugarLetLoopVars
         HoistVars
         NameAnonymousFunctions
         #CFA2 if enable_cfa2

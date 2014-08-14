@@ -1053,7 +1053,7 @@ class LLVMIRVisitor extends TreeVisitor
                         arg_value =  @visitOrNull n.argument
                         if @opencode_intrinsics.unaryNot and @options.target_pointer_size is 64 and arg_value._ejs_returns_ejsval_bool
                                 cmp = @createEjsvalICmpEq arg_value, consts.ejsval_true(), "cmpresult"
-                                @createEjsBoolSelect cmp
+                                @createEjsBoolSelect cmp, true
                         else
                                 @createCall callee, [arg_value], "result"
                 else
@@ -1144,7 +1144,7 @@ class LLVMIRVisitor extends TreeVisitor
 
                         if args.length > 0
                                 visited = (@visitOrNull(a) for a in args)
-                                
+
                                 visited.forEach (a,i) =>
                                         gep = ir.createGetElementPointer @currentFunction.scratch_area, [consts.int32(0), consts.int64(i)], "arg_gep_#{i}"
                                         store = ir.createStore visited[i], gep, "argv[#{i}]-store"
@@ -1933,8 +1933,8 @@ class LLVMIRVisitor extends TreeVisitor
                 else
                         @createCall @ejs_runtime.get_env_slot_ref, [env, consts.int32(slotnum)], "slot_ref_tmp", false
 
-        createEjsBoolSelect: (val) ->
-                rv = ir.createSelect val, @loadBoolEjsValue(true), @loadBoolEjsValue(false), "sel"
+        createEjsBoolSelect: (val, falseval = false) ->
+                rv = ir.createSelect val, @loadBoolEjsValue(not falseval), @loadBoolEjsValue(falseval), "sel"
                 rv._ejs_returns_ejsval_bool = true
                 rv
 

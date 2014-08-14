@@ -75,6 +75,7 @@ TRACEUR_TESTS=
 $(call testAgainstTraceur, array-subclass1.js)
 $(call testAgainstTraceur, class3.js)
 $(call testAgainstTraceur, for5.js)
+$(call testAgainstTraceur, for6.js)
 $(call testAgainstTraceur, forof1.js)
 $(call testAgainstTraceur, forof2.js)
 $(call testAgainstTraceur, computed-props1.js)
