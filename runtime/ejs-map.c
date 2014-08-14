@@ -3,6 +3,7 @@
  */
 
 #include "ejs-map.h"
+#include "ejs-array.h"
 #include "ejs-gc.h"
 #include "ejs-error.h"
 #include "ejs-function.h"
@@ -14,6 +15,15 @@
 #define EJSVAL_TO_MAP(v)     ((EJSMap*)EJSVAL_TO_OBJECT(v))
 
 typedef EJSBool (*ComparatorFunc)(ejsval, ejsval);
+
+ejsval
+_ejs_map_new ()
+{
+    EJSMap *map = _ejs_gc_new (EJSMap);
+    _ejs_init_object ((EJSObject*)map, _ejs_Object_prototype, &_ejs_Map_specops);
+
+    return OBJECT_TO_EJSVAL(map);
+}
 
 // ES6: 23.1.3.1
 // Map.prototype.clear ()
@@ -103,7 +113,7 @@ _ejs_Map_prototype_entries (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Map.prototype.get called with non-object this.");
 
     // 3. Return the result of calling the CreateMapIterator abstract operation with arguments M and "key+value".
-    EJS_NOT_IMPLEMENTED();
+    return _ejs_map_iterator_new (M, EJS_MAP_ITER_KIND_KEYVALUE);
 }
 
 // ES6: 23.1.3.5
@@ -260,7 +270,7 @@ _ejs_Map_prototype_keys (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     ejsval M = _this;
 
     // 2. Return the result of calling the CreateMapIterator abstract operation with arguments M and "key".
-    EJS_NOT_IMPLEMENTED();
+    return _ejs_map_iterator_new (M, EJS_MAP_ITER_KIND_KEY);
 }
 
 // ES6: 23.1.3.9
@@ -342,8 +352,10 @@ ejsval
 _ejs_Map_prototype_values (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     // 1. Let M be the this value.
+    ejsval M = _this;
+
     // 2. Return the result of calling the CreateMapIterator abstract operation with arguments M and "value".
-    EJS_NOT_IMPLEMENTED();
+    return _ejs_map_iterator_new (M, EJS_MAP_ITER_KIND_VALUE);
 }
 
 // ES6: 23.1.1.1
@@ -479,6 +491,138 @@ _ejs_Map_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 ejsval _ejs_Map EJSVAL_ALIGNMENT;
 ejsval _ejs_Map_prototype EJSVAL_ALIGNMENT;
 
+ejsval
+_ejs_map_iterator_new (ejsval map, EJSMapIteratorKind kind)
+{
+    /* 1. If Type(map) is not Object, throw a TypeError exception. */
+    if (!EJSVAL_IS_OBJECT(map))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "XXX");
+
+    /* 2. If map does not have a [[MapData]] internal slot throw a TypeError exception. */
+    if (!EJSVAL_IS_MAP(map))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "XXX");
+
+    /* 3. If the value of map’s [[MapData]] internal slot is undefined, then throw a TypeError exception. */
+
+    /* 4. Let iterator be the result of ObjectCreate(%MapIteratorPrototype%,
+     * ([[Map]], [[MapNextIndex]], [[MapIterationKind]])). */
+    EJSMapIterator *iterator = _ejs_gc_new (EJSMapIterator);
+    _ejs_init_object ((EJSObject*) iterator, _ejs_MapIterator_prototype, &_ejs_MapIterator_specops);
+
+    /* 5. Set iterator’s [[Map]] internal slot to map. */
+    iterator->iterated = map;
+
+    /* 6. Set iterator’s [[MapNextIndex]] internal slot to 0. */
+    iterator->next_index = 0;
+
+    /* 7. Set iterator’s [[MapIterationKind]] internal slot to kind. */
+    iterator->kind = kind;
+
+    return OBJECT_TO_EJSVAL(iterator);
+}
+
+ejsval _ejs_MapIterator EJSVAL_ALIGNMENT;
+ejsval _ejs_MapIterator_prototype EJSVAL_ALIGNMENT;
+
+static ejsval
+_ejs_MapIterator_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    return _this;
+}
+
+static ejsval
+_ejs_MapIterator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    /* 1. 0 Let O be the this value. */
+    ejsval O = _this;
+
+    /* 2. If Type(O) is not Object, throw a TypeError exception. */
+    if (!EJSVAL_IS_OBJECT(O))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "XXX");
+
+    /* 3. If O does not have all of the internal slots of a Map Iterator Instance (23.1.5.3),
+     * throw a TypeError exception. */
+    if (!EJSVAL_IS_MAPITERATOR(O))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "XXX");
+
+    EJSMapIterator *OObj = (EJSMapIterator*)EJSVAL_TO_OBJECT(O);
+
+    /* 4. Let m be the value of the [[Map]] internal slot of O. */
+    ejsval m = OObj->iterated;
+
+    /* 5. Let index be the value of the [[MapNextIndex]] internal slot of O. */
+    uint32_t index = OObj->next_index;
+
+    /* 6. Let itemKind be the value of the [[MapIterationKind]] internal slot of O. */
+    EJSMapIteratorKind itemKind = OObj->kind;
+
+    /* 7. If m is undefined, then return CreateIterResultObject(undefined, true) */
+    if (EJSVAL_IS_UNDEFINED(m))
+        return _ejs_create_iter_result (_ejs_undefined, _ejs_true);
+
+    /* 8. Assert: m has a [[MapData]] internal slot and m has been initialized so the value of
+     * [[MapData]] is not undefined. */
+
+    /* 9. Let entries be the List that is the value of the [[MapData]] internal slot of m. */
+    EJSKeyValueEntry* entries = EJSVAL_TO_MAP(m)->head_insert;
+
+    /* 10. Repeat while index is less than the total number of elements of entries. The number of elements must
+     * be redetermined each time this method is evaluated. */
+    uint32_t i = 0;
+    for (EJSKeyValueEntry *entry = entries; entry; entry = entry->next_insert) {
+
+        /* Ignore if this entry is marked as empty */
+        if (EJSVAL_IS_NO_ITER_VALUE_MAGIC(entry->key))
+            continue;
+
+        /* Ignore this item if we haven't reached the initial needed point/index */
+        if (index > i++)
+            continue;
+
+        /* a. Let e be the Record {[[key]], [[value]]} that is the value of entries[index]. */
+        EJSKeyValueEntry *e = entry;
+
+        /* b. Set index to index+1; */
+        index = index + 1;
+
+        /* c. Set the [[MapNextIndex]] internal slot of O to index. */
+        OObj->next_index = index;
+
+        /* d. If e.[[key]] is not empty, then */
+        /* (see EJSVAL_IS_NO_ITER_VALUE_MAGIC check at the beginning of the loop) */
+        ejsval result;
+
+        /*  i. If itemKind is "key" then, let result be e.[[key]]. */
+        if (itemKind == EJS_MAP_ITER_KIND_KEY)
+            result = e->key;
+        /*  ii. Else if itemKind is "value" then, let result be e.[[value]]. */
+        else if (itemKind == EJS_MAP_ITER_KIND_VALUE)
+            result = e->value;
+        /*  iii. Else, */
+        else {
+            /* 1. Assert: itemKind is "key+value". */
+            /* 2. Let result be the result of performing ArrayCreate(2). */
+            result = _ejs_array_new (2, EJS_FALSE);
+
+            /* 3. Assert: result is a new, well-formed Array object so the following operations will never fail. */
+            /* 4. Call CreateDataProperty(result, "0", e.[[key]]) . */
+            _ejs_object_setprop (result, NUMBER_TO_EJSVAL(0), e->key);
+
+            /* 5. Call CreateDataProperty(result, "1", e.[[value]]). */
+            _ejs_object_setprop (result, NUMBER_TO_EJSVAL(1), e->value);
+        }
+
+        /*  iv. Return CreateIterResultObject(result, false). */
+        return _ejs_create_iter_result (result, _ejs_false);
+    }
+
+    /* 11. Set the [[Map]] internal slot of O to undefined. */
+    OObj->iterated = _ejs_undefined;
+
+    /* 12. Return CreateIterResultObject(undefined, true). */
+    return _ejs_create_iter_result (_ejs_undefined, _ejs_true);
+}
+
 void
 _ejs_map_init(ejsval global)
 {
@@ -486,7 +630,7 @@ _ejs_map_init(ejsval global)
     _ejs_object_setprop (global, _ejs_atom_Map, _ejs_Map);
 
     _ejs_gc_add_root (&_ejs_Map_prototype);
-    _ejs_Map_prototype = _ejs_object_new(_ejs_null, &_ejs_Object_specops); // XXX should be a Map
+    _ejs_Map_prototype = _ejs_map_new ();
     _ejs_object_setprop (_ejs_Map,       _ejs_atom_prototype,  _ejs_Map_prototype);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Map, x, _ejs_Map_##x)
@@ -495,23 +639,41 @@ _ejs_map_init(ejsval global)
     PROTO_METHOD(clear);
     // XXX (ES6 23.1.3.2) Map.prototype.constructor
     PROTO_METHOD(delete);
-    PROTO_METHOD(entries);
     PROTO_METHOD(forEach);
     PROTO_METHOD(get);
     PROTO_METHOD(has);
     PROTO_METHOD(keys);
+    PROTO_METHOD(values);
     PROTO_METHOD(set);
 
     // XXX (ES6 23.1.3.10) get Map.prototype.size
-    PROTO_METHOD(values);
-    // XXX (ES6 23.1.3.12) Map.prototype [ @@iterator ]( )
 
+    // expand PROTO_METHOD(entries) here so we can install the function for @@iterator below
+    ejsval _entries = _ejs_function_new_native (_ejs_null, _ejs_atom_entries,  (EJSClosureFunc)_ejs_Map_prototype_entries);
+    _ejs_object_define_value_property (_ejs_Map_prototype, _ejs_atom_entries, _entries, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_FLAGS_WRITABLE | EJS_PROP_FLAGS_CONFIGURABLE);
+
+    _ejs_object_define_value_property (_ejs_Map_prototype, _ejs_Symbol_iterator, _entries, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_FLAGS_WRITABLE | EJS_PROP_FLAGS_CONFIGURABLE);
     _ejs_object_define_value_property (_ejs_Map_prototype, _ejs_Symbol_toStringTag, _ejs_atom_Map, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
 
     EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Map, create, _ejs_Map_create, EJS_PROP_NOT_ENUMERABLE);
 
 #undef OBJ_METHOD
 #undef PROTO_METHOD
+
+    _ejs_MapIterator = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Map, (EJSClosureFunc)_ejs_MapIterator_impl);
+
+    _ejs_gc_add_root (&_ejs_MapIterator_prototype);
+    _ejs_MapIterator_prototype = _ejs_map_iterator_new (_ejs_Map_prototype, EJS_MAP_ITER_KIND_VALUE);
+    EJSVAL_TO_OBJECT(_ejs_MapIterator_prototype)->proto = _ejs_Object_prototype;
+    _ejs_object_define_value_property (_ejs_MapIterator, _ejs_atom_prototype, _ejs_MapIterator_prototype,
+            EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (_ejs_MapIterator_prototype, _ejs_atom_constructor, _ejs_MapIterator,
+            EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
+
+#define PROTO_ITER_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_MapIterator_prototype, x, _ejs_MapIterator_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
+    PROTO_ITER_METHOD(next);
+#undef PROTO_ITER_METHOD
+
 }
 
 static EJSObject*
@@ -566,4 +728,6 @@ EJS_DEFINE_CLASS(Map,
                  _ejs_map_specop_finalize,
                  _ejs_map_specop_scan
                  )
+
+EJS_DEFINE_INHERIT_ALL_CLASS(MapIterator)
 
