@@ -11,6 +11,7 @@ COFFEE_SOURCES=				\
 	echo-util.coffee		\
 	errors.coffee			\
 	closure-conversion.coffee	\
+	new-cc.coffee			\
 	optimizations.coffee		\
 	types.coffee			\
 	consts.coffee			\

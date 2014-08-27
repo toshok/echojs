@@ -4,6 +4,8 @@ debug = require 'debug'
 
 b = require 'ast-builder'
 
+new_cc = require('new-cc')
+
 runtime_globals = require('runtime').createGlobalsInterface(null)
 
 { reportError, reportWarning } = require 'errors'
@@ -104,6 +106,7 @@ setGlobal_id            = b.identifier "%setGlobal"
 getLocal_id             = b.identifier "%getLocal"
 getGlobal_id            = b.identifier "%getGlobal"
 getArg_id               = b.identifier "%getArg"
+getArgumentsObject_id   = b.identifier "%getArgumentsObject"
 moduleGet_id            = b.identifier "%moduleGet"
 moduleImportBatch_id    = b.identifier "%moduleImportBatch"
 templateCallsite_id     = b.identifier "%templateCallsite"
@@ -566,11 +569,11 @@ class DesugarLetLoopVars extends TransformPass
 
                 new_body.body.push b.tryStatement(n.body, [], b.blockStatement(assignments))
 
-                n.body = new_body
-
                 remap = new RemapIdentifiers(@options, @filename, mappings)
                 n.test = remap.visit(n.test)
                 n.update = remap.visit(n.update)
+
+                n.body = @visit new_body
 
                 n
                 
@@ -1266,8 +1269,6 @@ class LambdaLift extends TransformPass
 
                 @maybePrependScratchArea n
 
-                n.params.unshift b.identifier("%env_#{n.ejs_env.parent.id}")
-                
                 return b.identifier(global_name)
 
         ###
@@ -1634,15 +1635,16 @@ class DesugarDestructuring extends TransformPass
                 for decl in n.declarations
                         if decl.id.type is ObjectPattern
                                 obj_tmp_id = fresh()
-                                decls.push b.variableDeclarator(obj_tmp_id, decl.init)
+                                decls.push b.variableDeclarator(obj_tmp_id, @visit(decl.init))
                                 createObjectPatternBindings(obj_tmp_id, decl.id, decls)
                         else if decl.id.type is ArrayPattern
                                 # create a fresh tmp and declare it
                                 array_tmp_id = fresh()
-                                decls.push b.variableDeclarator(array_tmp_id, decl.init)
+                                decls.push b.variableDeclarator(array_tmp_id, @visit(decl.init))
                                 createArrayPatternBindings(array_tmp_id, decl.id, decls)
                                         
                         else if decl.id.type is Identifier
+                                decl.init = @visit(decl.init)
                                 decls.push(decl)
                         else
                                 reportError(Error, "unhandled type of variable declaration in DesugarDestructuring #{decl.id.type}", @filename, n.loc)
@@ -2070,8 +2072,8 @@ class DesugarSpread extends TransformPass
 # to:
 #
 #   function (a, b) {
-#     a = %argPresent(0) ? %getArg(0) : undefined;
-#     b = %argPresent(1) ? %getArg(1) : a;
+#     a = %argPresent(1) ? %getArg(0) : undefined;
+#     b = %argPresent(2) ? %getArg(1) : a;
 #   }
 #
 class DesugarDefaults extends TransformPass
@@ -2092,11 +2094,36 @@ class DesugarDefaults extends TransformPass
                                 if seen_default
                                         reportError(SyntaxError, "Cannot specify non-default parameter after a default parameter", @filename, p.loc)
                                 d = b.undefined()
-                        prepends.push(b.expressionStatement(b.assignmentExpression(p, '=', b.conditionalExpression(intrinsic(argPresent_id, [b.literal(i+1)]), intrinsic(getArg_id, [b.literal(i)]), d))))
+                        prepends.push(b.letDeclaration(p, b.conditionalExpression(intrinsic(argPresent_id, [b.literal(i+1)]), intrinsic(getArg_id, [b.literal(i)]), d)))
                 n.body.body = prepends.concat(n.body.body)
                 n.defaults = []
                 n
-        
+
+class DesugarArguments extends TransformPass
+        constructor: (options, @filename) ->
+                super
+
+        visitIdentifier: (n) ->
+                return intrinsic(getArgumentsObject_id) if n.name is "arguments"
+                super
+
+        visitVariableDeclarator: (n) ->
+                if n.id.name is "arguments"
+                        reportError(SyntaxError, "Cannot declare variable named 'arguments'", @filename, n.id.loc)
+                super
+
+        visitAssignmentExpression: (n) ->
+                if n.left.type is Identifier and n.left.name is "arguments"
+                        reportError(SyntaxError, "Cannot set 'arguments'", @filename, n.left.loc)
+                super
+
+        visitProperty: (n) ->
+                if n.key.type is ComputedPropertyKey
+                        key = @visit n.key
+                n.value = @visit n.value
+                n
+                
+                
 # desugars
 #
 #   for (let x of a) { ... }
@@ -2172,6 +2199,12 @@ enable_cfa2 = false
 #
 enable_hoist_func_decls_pass = true
 
+class NewClosureConvert
+        constructor: (@options, @filename) ->
+
+        visit: (tree) ->
+                new_cc.Convert(@options, @filename, tree)
+                
 passes = [
         DesugarImportExport
         DesugarClasses
@@ -2188,12 +2221,9 @@ passes = [
         DesugarLetLoopVars
         HoistVars
         NameAnonymousFunctions
+        DesugarArguments
         #CFA2 if enable_cfa2
-        ComputeFree
-        LocateEnv
-        SubstituteVariables
-        MarkLocalAndGlobalVariables
-        IIFEIdioms
+        NewClosureConvert
         LambdaLift
         ]
 

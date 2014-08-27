@@ -237,6 +237,7 @@ class LLVMIRVisitor extends TreeVisitor
                         templateCallsite:     value: @handleTemplateCallsite
                         moduleGet:            value: @handleModuleGet
                         moduleImportBatch:    value: @handleModuleImportBatch
+                        getArgumentsObject:   value: @handleGetArgumentsObject
                         getLocal:             value: @handleGetLocal
                         setLocal:             value: @handleSetLocal
                         getGlobal:            value: @handleGetGlobal
@@ -1264,26 +1265,6 @@ class LLVMIRVisitor extends TreeVisitor
                         rv = @createLoad source, "load_#{val}"
                         return rv
 
-                # special handling of the arguments object here, so we
-                # only initialize/create it if the function is
-                # actually going to use it.
-                if val is "arguments"
-                        arguments_alloca = @createAlloca @currentFunction, types.EjsValue, "local_arguments_object"
-                        saved_insert_point = ir.getInsertBlock()
-                        ir.setInsertPoint @currentFunction.entry_bb
-
-                        load_argc = @createLoad @currentFunction.topScope.get("%argc"), "argc_load"
-                        load_args = @createLoad @currentFunction.topScope.get("%args"), "args_load"
-
-                        args_new = @ejs_runtime.arguments_new
-                        arguments_object = @createCall args_new, [load_argc, load_args], "argstmp", !args_new.doesNotThrow
-                        ir.createStore arguments_object, arguments_alloca
-                        @currentFunction.topScope.set "arguments", arguments_alloca
-
-                        ir.setInsertPoint saved_insert_point
-                        rv = @createLoad arguments_alloca, "load_arguments"
-                        return rv
-
                 rv = null
                 debug.log -> "calling getFunction for #{val}"
                 rv = @module.getFunction val
@@ -1714,6 +1695,22 @@ class LLVMIRVisitor extends TreeVisitor
                 arg_ptr = ir.createGetElementPointer load_args, [consts.int32(arg_i)], "arg#{arg_i}_ptr"
                                 
                 @createLoad arg_ptr, "arg#{arg_i}"
+
+        handleGetArgumentsObject: (exp, opencode) ->
+                arguments_alloca = @createAlloca @currentFunction, types.EjsValue, "local_arguments_object"
+                saved_insert_point = ir.getInsertBlock()
+                ir.setInsertPoint @currentFunction.entry_bb
+
+                load_argc = @createLoad @currentFunction.topScope.get("%argc"), "argc_load"
+                load_args = @createLoad @currentFunction.topScope.get("%args"), "args_load"
+
+                args_new = @ejs_runtime.arguments_new
+                arguments_object = @createCall args_new, [load_argc, load_args], "argstmp", !args_new.doesNotThrow
+                ir.createStore arguments_object, arguments_alloca
+                @currentFunction.topScope.set "arguments", arguments_alloca
+
+                ir.setInsertPoint saved_insert_point
+                @createLoad arguments_alloca, "load_arguments"
                 
         handleGetLocal: (exp, opencode) ->
                 source = @findIdentifierInScope exp.arguments[0].name
@@ -2189,10 +2186,11 @@ class AddFunctionsVisitor extends TreeVisitor
         constructor: (@module, @abi) ->
 
         visitFunction: (n) ->
-                n.ir_name = "_ejs_anonymous"
                 if n?.id?.name?
                         n.ir_name = n.id.name
-
+                else
+                        n.ir_name = "_ejs_anonymous"
+                
                 # at this point n.params includes %env as its first param, and is followed by all the formal parameters from the original
                 # script source.  we remove the %env parameter and save off he rest of the formal parameter names, and replace the list with
                 # our runtime parameters.
