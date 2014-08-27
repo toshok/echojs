@@ -146,7 +146,7 @@ exports.variableDeclaration = (kind, rest...)           ->
                         throw new Error("variable declarations must have equal numbers of identifiers and initializers")
                 decls = []
                 while rest.length > 0
-                        decls.push(exports.variableDeclarator(isast(rest.shift()), isast(rest.shift())))
+                        decls.push(exports.variableDeclarator(isast(rest.shift()), isnullableast(rest.shift())))
                 type: VariableDeclaration, kind: kind, declarations: decls
 
 exports.letDeclaration = (rest...) -> exports.variableDeclaration("let", rest...)
