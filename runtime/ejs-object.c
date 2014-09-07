@@ -91,6 +91,43 @@ ToPropertyKey(ejsval argument)
     return ToString(argument);
 }
 
+ejsval
+HasProperty(ejsval argument, ejsval property)
+{
+    // 1. Assert: Type(O) is Object.
+    if (!EJSVAL_IS_OBJECT(argument))
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "O is not an Object");
+
+    // 2. Assert: IsPropertyKey(P) is true.
+    property = ToPropertyKey(property);
+
+    // 3. Return the result of calling the [[HasProperty]] internal method of O with argument P.
+    EJSBool retval = OP(EJSVAL_TO_OBJECT(argument),HasProperty)(argument, property);
+    return BOOLEAN_TO_EJSVAL(retval);
+}
+
+ejsval
+DeletePropertyOrThrow(ejsval argument, ejsval property)
+{
+    /* 1. Assert: Type(O) is Object. */
+    if (!EJSVAL_IS_OBJECT(argument))
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "O is not an Object");
+
+    /* 2. Assert: IsPropertyKey(P) is true. */
+    argument = ToPropertyKey(argument);
+
+    /* 3. Let success be the result of calling the [[Delete]] internal method of O passing P as the argument. */
+    /* 4. ReturnIfAbrupt(success). */
+    EJSBool success = OP(EJSVAL_TO_OBJECT(argument),Delete)(argument, property, EJS_TRUE);
+
+    /* 5. If success is false, then throw a TypeError exception. */
+   if (!success)
+       _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "XXX");
+
+   printf("fuck\n");
+   return BOOLEAN_TO_EJSVAL(success);
+}
+
 static uint32_t
 PropertyKeyHash (ejsval argument)
 {
