@@ -1053,9 +1053,7 @@ class LLVMIRVisitor extends TreeVisitor
                         arg_value =  @visitOrNull n.argument
                         if @opencode_intrinsics.unaryNot and @options.target_pointer_size is 64 and arg_value._ejs_returns_ejsval_bool
                                 cmp = @createEjsvalICmpEq arg_value, consts.ejsval_true(), "cmpresult"
-                                rv = ir.createSelect cmp, @loadBoolEjsValue(false), @loadBoolEjsValue(true), "sel"
-                                rv._ejs_returns_ejsval_bool = true
-                                rv
+                                @createEjsBoolSelect cmp, true
                         else
                                 @createCall callee, [arg_value], "result"
                 else
@@ -1146,7 +1144,7 @@ class LLVMIRVisitor extends TreeVisitor
 
                         if args.length > 0
                                 visited = (@visitOrNull(a) for a in args)
-                                
+
                                 visited.forEach (a,i) =>
                                         gep = ir.createGetElementPointer @currentFunction.scratch_area, [consts.int32(0), consts.int64(i)], "arg_gep_#{i}"
                                         store = ir.createStore visited[i], gep, "argv[#{i}]-store"
@@ -1792,15 +1790,6 @@ class LLVMIRVisitor extends TreeVisitor
                 ir.createUnreachable()
 
         # this method assumes it's called in an opencoded context
-        emitLoadEjsFunctionIsBound: (closure) ->
-                if @options.target_pointer_size is 64
-                        bound_slot_gep = ir.createInBoundsGetElementPointer closure, [consts.int64(1), consts.int32(2)], "bound_slot_gep"
-                        bound_slot = ir.createBitCast bound_slot_gep, types.int32.pointerTo(), "bound_slot"
-                        ir.createLoad bound_slot, "bound_load"
-                else
-                        throw new Error "emitLoadEjsFunctionIsBound not implemented for this case"
-
-        # this method assumes it's called in an opencoded context
         emitLoadEjsFunctionClosureFunc: (closure) ->
                 if @options.target_pointer_size is 64
                         func_slot_gep = ir.createInBoundsGetElementPointer closure, [consts.int64(1)], "func_slot_gep"
@@ -1944,8 +1933,8 @@ class LLVMIRVisitor extends TreeVisitor
                 else
                         @createCall @ejs_runtime.get_env_slot_ref, [env, consts.int32(slotnum)], "slot_ref_tmp", false
 
-        createEjsBoolSelect: (val) ->
-                rv = ir.createSelect val, @loadBoolEjsValue(true), @loadBoolEjsValue(false), "sel"
+        createEjsBoolSelect: (val, falseval = false) ->
+                rv = ir.createSelect val, @loadBoolEjsValue(not falseval), @loadBoolEjsValue(falseval), "sel"
                 rv._ejs_returns_ejsval_bool = true
                 rv
 

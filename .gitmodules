@@ -11,7 +11,8 @@
 	url = https://github.com/toshok/parson.git
 [submodule "estraverse"]
 	path = estraverse
-	url = https://github.com/Constellation/estraverse.git
+	url = https://github.com/toshok/estraverse.git
+	branch = harmony
 [submodule "pcre"]
 	path = pcre
 	url = https://github.com/toshok/pcre.git

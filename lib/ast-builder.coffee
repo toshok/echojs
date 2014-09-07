@@ -84,7 +84,7 @@ exports.binaryExpression = (l, op, r) -> type: BinaryExpression, operator: op, l
 exports.blockStatement = (stmts = []) -> type: BlockStatement, body: stmts.map(isast)
 exports.breakStatement = (label) -> type: BreakStatement, label: isast(label)
 exports.callExpression = (callee, args = []) -> type: CallExpression, callee: isast(callee), arguments: args.map(isast)
-exports.catchClause 
+exports.catchClause = (param, body, guard) -> type: CatchClause, body: body, param: isast(param), guard: isnullableast(guard)
 exports.classBody
 exports.classDeclaration
 exports.classExpression
@@ -133,7 +133,7 @@ exports.templateElement
 exports.templateLiteral
 exports.thisExpression = -> type: ThisExpression
 exports.throwStatement = (arg) -> type: ThrowStatement, argument: isast(arg)
-exports.tryStatement
+exports.tryStatement = (block, handlers, finalizer) -> type: TryStatement, block: block, handlers: handlers, guardedHandlers: [], finalizer: finalizer
 exports.unaryExpression = (op, arg) -> type: UnaryExpression, operator: op, argument: isast(arg)
 exports.updateExpression
 exports.variableDeclaration = (kind, rest...)           ->
