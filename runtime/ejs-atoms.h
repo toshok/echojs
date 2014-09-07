@@ -190,6 +190,7 @@ EJS_ATOM(reduce)
 EJS_ATOM(reduceRight)
 EJS_ATOM(reverse)
 // ECMA 6
+EJS_ATOM(copyWithin)
 EJS_ATOM(of)
 EJS_ATOM(from)
 EJS_ATOM(fill)
