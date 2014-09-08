@@ -1759,6 +1759,131 @@ _ejs_Array_prototype_findIndex (ejsval env, ejsval _this, uint32_t argc, ejsval 
     return NUMBER_TO_EJSVAL(-1);
 }
 
+static ejsval
+_ejs_Array_prototype_copyWithin (ejsval env, ejsval _this, int argc, ejsval *argv)
+{
+    ejsval target = _ejs_undefined;
+    ejsval start = _ejs_undefined;
+    ejsval end = _ejs_undefined;
+
+    if (argc >= 1)
+        target = argv[0];
+
+    if (argc >= 2)
+        start = argv[1];
+
+    if (argc >= 3)
+        end = argv[2];
+
+    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    /* 2. ReturnIfAbrupt(O). */
+    ejsval O = ToObject(_this);
+
+    /* 3. Let lenVal be Get(O, "length"). */
+    ejsval lenVal = Get(O, _ejs_atom_length);
+
+    /* 4. Let len be ToLength(lenVal). */
+    /* 5. ReturnIfAbrupt(len). */
+    uint32_t len = ToInteger(lenVal);
+
+    /* 6. Let relativeTarget be ToInteger(target). */
+    /* 7. ReturnIfAbrupt(relativeTarget). */
+    int32_t relativeTarget = ToInteger(target);
+
+    /* 8. If relativeTarget is negative, let to be max((len + relativeTarget),0);
+     * else let to be min(relativeTarget, len). */
+    uint32_t to;
+    if (relativeTarget < 0)
+        to = max((len + relativeTarget), 0);
+    else
+        to = min(relativeTarget, len);
+
+    /* 9. Let relativeStart be ToInteger(start). */
+    int32_t relativeStart = ToInteger(start);
+
+    /* 11. If relativeStart is negative, let from be max((len + relativeStart),0);
+     * else let from be min(relativeStart, len). */
+    uint32_t from;
+    if (relativeStart < 0)
+        from = max((len + relativeStart), 0);
+    else
+        from = min(relativeStart, len);
+
+    /* 12. If end is undefined, let relativeEnd be len; else let relativeEnd be ToInteger(end). */
+    /* 13. ReturnIfAbrupt(relativeEnd). */
+    int32_t relativeEnd;
+    if (EJSVAL_IS_UNDEFINED(end))
+        relativeEnd = len;
+    else
+        relativeEnd = ToInteger(end);
+
+    /* 14. If relativeEnd is negative, let final be max((len + relativeEnd),0);
+     * else let final be min(relativeEnd, len). */
+    uint32_t final;
+    if (relativeEnd < 0)
+        final = max((len + relativeEnd), 0);
+    else
+        final = min(relativeEnd, len);
+
+    /* 15. Let count be min(final-from, len-to). */
+    uint32_t count = min(final - from, len - to);
+
+    /* 16.If from<to and to<from+count */
+    uint8_t direction;
+    if (from < to && to < from + count) {
+        direction = -1;
+        from = from + count - 1;
+        to = to + count - 1;
+    }
+    /* 17. Else, */
+    else {
+        /* a. Let direction = 1. */
+        direction = 1;
+    }
+
+    /* 18. Repeat, while count > 0 */
+    while (count > 0) {
+        /* a. Let fromKey be ToString(from). */
+        ejsval fromKey = ToString(NUMBER_TO_EJSVAL(from));
+
+        /* b. Let toKey be ToString(to). */
+        ejsval toKey = ToString(NUMBER_TO_EJSVAL(to));
+
+        /* c. Let fromPresent be HasProperty(O, fromKey). */
+        /* d. ReturnIfAbrupt(fromPresent). */
+        ejsval fromPresent = HasProperty(O, fromKey);
+
+        /* e. If fromPresent is true, then */
+        if (EJSVAL_TO_BOOLEAN(fromPresent)) {
+            /* i. Let fromVal be Get(O, fromKey). */
+            /* ii. ReturnIfAbrupt(fromVal). */
+            ejsval fromVal = Get(O, fromKey);
+
+            /* iii.Let putStatus be Put(O, toKey, fromVal, true). */
+            /* ReturnIfAbrupt(putStatus). */
+            Put(O, toKey, fromVal, EJS_TRUE);
+        }
+        /* f. Else fromPresent is false, */
+        else {
+            /* i. Let deleteStatus be DeletePropertyOrThrow(O, toKey). */
+            /* ii. ReturnIfAbrupt(deleteStatus). */
+            DeletePropertyOrThrow(O, toKey);
+        }
+
+        /* g. Let from be from + direction. */
+        from += direction;
+
+        /* h. Let to be to + direction. */
+        to += to + direction;
+
+        /* i. Let count be count − 1. */
+        count -= 1;
+    }
+
+    /* 19. Return O. */
+    return O;
+}
+
 int
 _ejs_array_indexof (EJSArray* haystack, ejsval needle)
 {
@@ -2150,6 +2275,7 @@ _ejs_array_init(ejsval global)
     PROTO_METHOD(filter);
     PROTO_METHOD(reverse);
     // ECMA 6
+    PROTO_METHOD(copyWithin);
     PROTO_METHOD(fill);
     PROTO_METHOD(find);
     PROTO_METHOD(findIndex);
