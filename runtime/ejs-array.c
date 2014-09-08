@@ -1776,15 +1776,18 @@ _ejs_Array_prototype_copyWithin (ejsval env, ejsval _this, int argc, ejsval *arg
         end = argv[2];
 
     /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    /* 2. ReturnIfAbrupt(O). */
     ejsval O = ToObject(_this);
 
     /* 3. Let lenVal be Get(O, "length"). */
     ejsval lenVal = Get(O, _ejs_atom_length);
 
     /* 4. Let len be ToLength(lenVal). */
+    /* 5. ReturnIfAbrupt(len). */
     uint32_t len = ToInteger(lenVal);
 
-    /* 5. Let relativeTarget be ToInteger(target). */
+    /* 6. Let relativeTarget be ToInteger(target). */
+    /* 7. ReturnIfAbrupt(relativeTarget). */
     int32_t relativeTarget = ToInteger(target);
 
     /* 8. If relativeTarget is negative, let to be max((len + relativeTarget),0);
@@ -1807,6 +1810,7 @@ _ejs_Array_prototype_copyWithin (ejsval env, ejsval _this, int argc, ejsval *arg
         from = min(relativeStart, len);
 
     /* 12. If end is undefined, let relativeEnd be len; else let relativeEnd be ToInteger(end). */
+    /* 13. ReturnIfAbrupt(relativeEnd). */
     int32_t relativeEnd;
     if (EJSVAL_IS_UNDEFINED(end))
         relativeEnd = len;
@@ -1830,9 +1834,14 @@ _ejs_Array_prototype_copyWithin (ejsval env, ejsval _this, int argc, ejsval *arg
         direction = -1;
         from = from + count - 1;
         to = to + count - 1;
-    } else
+    }
+    /* 17. Else, */
+    else {
+        /* a. Let direction = 1. */
         direction = 1;
+    }
 
+    /* 18. Repeat, while count > 0 */
     while (count > 0) {
         /* a. Let fromKey be ToString(from). */
         ejsval fromKey = ToString(NUMBER_TO_EJSVAL(from));
