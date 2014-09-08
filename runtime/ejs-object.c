@@ -124,7 +124,7 @@ DeletePropertyOrThrow(ejsval argument, ejsval property)
    if (!success)
        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "XXX");
 
-   printf("fuck\n");
+   /* 6. Return success. */
    return BOOLEAN_TO_EJSVAL(success);
 }
 
