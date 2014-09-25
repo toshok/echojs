@@ -280,7 +280,7 @@ DesugarClasses = class DesugarClasses extends TransformPass
         create_constructor: (ast_method, ast_class) ->
                 if ast_method.value.defaults?.type?
                         console.log escodegen.generate ast_method.value.defaults
-                b.functionDeclaration(ast_class.id, ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest)
+                b.functionDeclaration(ast_class.id, ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest, ast_method.value.loc)
 
         create_default_constructor: (ast_class) ->
                 # splat args into the call to super's ctor if there's a superclass
@@ -291,12 +291,12 @@ DesugarClasses = class DesugarClasses extends TransformPass
         create_proto_method: (ast_method, ast_class) ->
                 proto_member = b.memberExpression(b.memberExpression(ast_class.id, b.identifier('prototype')), (if ast_method.key.type is ComputedPropertyKey then ast_method.key.expression else ast_method.key), ast_method.key.type is ComputedPropertyKey)
                 
-                method = b.functionExpression(ast_method.key, ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest)
+                method = b.functionExpression(ast_method.key, ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest, ast_method.value.loc)
 
                 b.expressionStatement(b.assignmentExpression(proto_member, "=", method))
 
         create_static_method: (ast_method, ast_class) ->
-                method = b.functionExpression(ast_method.key, ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest)
+                method = b.functionExpression(ast_method.key, ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest, ast_method.value.loc)
 
                 b.expressionStatement(b.assignmentExpression(b.memberExpression(ast_class.id, (if ast_method.key.type is ComputedPropertyKey then ast_method.key.expression else ast_method.key), ast_method.key.type is ComputedPropertyKey), "=", method))
 

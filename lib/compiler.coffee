@@ -1740,6 +1740,7 @@ class LLVMIRVisitor extends TreeVisitor
                         rv = @createLoad arguments_alloca, "load_arguments"
                         return rv
 
+                console.log "blah #{@currentFunction.name}"
                 reportError(ReferenceError, "identifier not found: #{exp.arguments[0].name}", @filename, exp.arguments[0].loc)
 
         handleSetLocal: (exp, opencode) ->
@@ -2226,6 +2227,10 @@ insert_toplevel_func = (tree, filename) ->
                 body:
                         type: BlockStatement
                         body: tree.body
+                        loc:
+                                start:
+                                        line: 0
+                                        col: 0
                 toplevel: true
 
         tree.body = [toplevel]

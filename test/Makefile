@@ -54,7 +54,6 @@ EXPECTED_FAILURES=
 $(call addExpectedFailure, argv1.js,                "node passes ['node','argv1.js'], we return ['argv1.js.exe']")
 $(call addExpectedFailure, date1.js,                "fails because we test the Date() function, which returns the current time.  this differs from the current time when the node test runs.  bleah.")
 $(call addExpectedFailure, date3.js,                "the first date is off by an hour.  timegm/localtime_r screwup?")
-$(call addExpectedFailure, for5.js,                 "we don't create a block level (fresh) binding for i_")
 $(call addExpectedFailure, forin2.js,               "fails because we don't properly handle deleting properties while iterating")
 $(call addExpectedFailure, forin5.js,               "fails because we enumerate the entire range 0..length of an array, including the holes.")
 $(call addExpectedFailure, object6.js,              "fails because we don't define everything we should.")
@@ -74,6 +73,7 @@ $(call addExpectedFailure, object9.js,              "we differ from node on prop
 TRACEUR_TESTS=
 $(call testAgainstTraceur, array-subclass1.js)
 $(call testAgainstTraceur, class3.js)
+$(call testAgainstTraceur, closure3.js)
 $(call testAgainstTraceur, for5.js)
 $(call testAgainstTraceur, for6.js)
 $(call testAgainstTraceur, forof1.js)
