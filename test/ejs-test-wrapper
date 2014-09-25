@@ -34,6 +34,7 @@ stderr_handler = (data) ->
     process.stderr.write data.toString()
 
 error_handler = (err) ->
+    # Most likely the executed app was not found.
     process.stderr.write err.toString()
     process.exit 8
 
@@ -50,7 +51,7 @@ ejs.stderr.on "data", stderr_handler
 ejs.on "error", error_handler
 
 ejs.on "exit", (code) ->
-    # Run the code - or return if failed.
+    # Return if failed to compile.
     if code != 0
         process.exit code
 
@@ -58,6 +59,10 @@ ejs.on "exit", (code) ->
     test.stdout.on "data", stdout_handler
     test.stderr.on "data", stderr_handler
     test.on "error", error_handler
+    test.on "exit", (code) ->
+        # Let the parent know the actual executable failed.
+        if code != 0
+            process.exit code
 
 # General cleanup.
 process.on "exit", (code) ->
