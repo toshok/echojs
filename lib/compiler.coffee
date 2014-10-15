@@ -1270,11 +1270,18 @@ class LLVMIRVisitor extends TreeVisitor
                 rv = @module.getFunction val
 
                 if not rv?
-                        debug.log -> "Symbol '#{val}' not found in current scope"
-                        rv = @loadGlobal n
-
+                        @throwSyntaxError(val.loc, "Symbol '#{val}' not found in current scope")
                 debug.log -> "returning #{rv}"
                 rv
+
+        throwSyntaxError: (loc, msg) ->
+                if loc?
+                        str = "#{loc.start.line}: #{msg}"
+                else
+                        str = "#{@currentFunction.name}: #{msg}"
+
+                throw new SyntaxError(str)
+                
 
         visitObjectExpression: (n) ->
                 obj_proto = ir.createLoad @ejs_globals.Object_prototype, "load_objproto"
@@ -2210,7 +2217,8 @@ class AddFunctionsVisitor extends TreeVisitor
                 n.ir_func.setInternalLinkage() if not n.toplevel
 
                 ir_args = n.ir_func.args
-                ir_args[i].setName(n.params[i].name) for i in [0...n.params.length]
+                for i in [0...n.params.length]
+                        ir_args[i].setName(n.params[i].name)
 
                 # we don't need to recurse here since we won't have nested functions at this point
                 n

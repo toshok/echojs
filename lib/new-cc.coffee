@@ -187,7 +187,14 @@ class Scope
                 
         differentFunction: (otherscope) -> @location.func != otherscope.location.func
 
-                
+        debugString: () ->
+                str = "scope at line #{@location.block.loc?.start.line}"
+                if @isFunctionBodyScope()
+                        str = "#{str} : for function #{@location.func.id?.name}"
+                str = "#{str} : environment = #{@env?.name}"
+                str
+        
+
 class Binding
         constructor: (@name, @type, @is_const) ->
 
@@ -203,29 +210,32 @@ class Reference
         constructor: (@binding) ->
 
 class Environment
-        constructor: (@id, @scope) ->
+        constructor: (@id, @scope, @level) ->
                 @name = "%env_#{@id}"
                 @slot_map = new Map
                 @parentEnv = null
                 @childEnvs = []
 
+        hasSlots: () -> @slot_map.size() > 0
         hasSlot: (name) -> @slot_map.has(name)
-        getSlot: (name) -> @slot_map.get(name)
+        getSlot: (name) ->
+                rv = @slot_map.get(name)
+                throw new Error("environment #{@name} doesn't contain slot for #{name}") if rv is undefined
+                rv
         addSlot: (name) ->
                 return if @slot_map.has(name)
                 @slot_map.set(name, @slot_map.size())
                 return
+        slotCount: () -> @slot_map.size()
 
         addChild: (env) ->
-                console.log "addChild #{env.name}"
-                console.log "         #{env.parentEnv?.name}"
-                if env?.parentEnv?
-                        throw new Error("attempting to set #{env.name}'s to #{@name}, but is already has a a parent, #{env.parentEnv.name}")
+                if env?.parentEnv? and env?.parentEnv isnt @
+                        throw new Error("attempting to set #{env.name}'s parent to #{@name}, but it already has a a parent, #{env.parentEnv.name}")
                 env.addSlot(@name)
                 env.parentEnv = @
                 @childEnvs.push(env)
                 return
-        
+
 class ClosureConvert extends TransformPass
         
 allFunctions = []
@@ -298,7 +308,7 @@ SubstituteVariables = class SubstituteVariables extends TransformPass
                 if n.type is FunctionDeclaration
                         throw new Error("there should be no FunctionDeclarations at this point")
 
-                intrinsic_args = [b.identifier(n.params[0].name)]
+                intrinsic_args = [if n.params[0].name is "%env_unused" then b.undefined() else b.identifier(n.params[0].name, n.loc)]
                         
                 if n.id?
                         intrinsic_id = makeClosure_id
@@ -421,9 +431,6 @@ class CollectScopeNestingInfo extends TransformPass
                 n.init = @visit n.init
                 n
 
-        visit_stmt_array: (stmts, initial_bindings) ->
-                return this_scope
-
         doWithScope: (scope, fn) ->
                 scope.parentScope = @current_scope
                 if @current_scope
@@ -527,23 +534,46 @@ class CollectScopeNestingInfo extends TransformPass
                 n
 
 placeEnvironments = (root_scope) ->
-        env_path = []
-        env_id = 0
 
+        env_id = 0
+        
+        # the current "path" from the root environment to wherever we
+        # are currently.  we push when we enter a scope, and pop when
+        # we exit.  current environment is always the last one
+        env_path = []
+
+        # A map : function -> [environment]
+        # 
+        # where the value is an array of environments that contain
+        # bindings that the function references.  the array is not in
+        # sorted order.
         func_to_envs = new Map
 
         dump_func_envs = () ->
                 func_to_envs.forEach (v,k) ->
-                        debug.log "function #{k} (#{allFunctions[k].id?.name}) requires these environments:"
+                        debug.log "function #{allFunctions[k].id?.name} (#{k}) requires these environments:"
                         if not v? or v.length is 0
-                                debug.log "   none!"
+                                debug.log "  none!"
                         else
-                                for e in v
-                                        debug.log "  env: #{e.name}"
+                                debug.log "  env: #{e.name}" for e in v
+                                        
+        dump_scopes = (s, level) ->
+                debug.log s.debugString()
+                s.children.forEach (c) ->
+                        debug.indent()
+                        dump_scopes(c, level + 1)
+                        debug.unindent()
+                
 
-        walk_scope = (s) ->
+        walk_scope1 = (s, level) ->
+                #
+                # Collect external references to bindings defined in this scope.
+                #
+                #          referent                 reference
+                #     s <-------------> binding <---------------> referencingScope
+                #
                 debug.log "dealing with scope from line #{s.location.block.loc?.start.line}"
-                env = new Environment(env_id, s)
+                env = new Environment(env_id, s, level)
                 env_id += 1
                 env_path.push(env)
                 
@@ -553,6 +583,7 @@ placeEnvironments = (root_scope) ->
                 s.referents.forEach (reflist) ->
                         reflist.forEach (ref) ->
                                 referencingScope = ref.referencingScope
+                                debug.log "referent name is #{ref.binding.name}, s.func = #{s.location.func.id?.name}/#{s.location.func.loc?.start.line}, referencing scope = #{referencingScope.location.func.id?.name}/#{referencingScope.location.func.loc?.start.line}"
                                 if referencingScope.differentFunction(s)
                                         # the scopes are in different functions
                                         debug.log "reference to '#{ref.binding.name}' from outside declaring function (in function #{referencingScope.location.func.id?.name})!"
@@ -564,96 +595,197 @@ placeEnvironments = (root_scope) ->
                                         env.addSlot(ref.binding.name)
 
                                         # also, mark the referencing scope's function as needing this environment
-                                        debug.log "adding environment #{env.name}' to function #{referencingScope.location.func.id?.name}'s list of required environments"
                                         func_idx = allFunctions.indexOf(referencingScope.location.func)
                                         func_envs = func_to_envs.get(func_idx)
                                         if not func_envs?
                                                 func_envs = []
                                                 func_to_envs.set(func_idx, func_envs)
                                         if func_envs.indexOf(env) is -1
-                                                func_envs.unshift(env)
-
+                                                debug.log "adding environment #{env.name}' to function #{referencingScope.location.func.id?.name}'s list of required environments"
+                                                func_envs.push(env)
 
                 # recurse into our child scopes.  this can also cause parent environments to become necessary
                 s.children.forEach (c) ->
                         debug.indent()
-                        walk_scope(c)
+                        walk_scope1(c, level + 1)
                         debug.unindent()
 
-                # if we're the root scope of a function we should know right
-                # now what parent environments we need (they can only have
-                # come from above us)
+                # we're back in the scope passed to this function,
+                # having visited all parents and all children.  we
+                # should now know exactly which parent scopes have
+                # environments, and should be able to calculate the
+                # path to any bindings we reference.
+
+                # this is only necessary at the root scope within a
+                # function.
+
                 if s.isFunctionBodyScope()
                         do ->
                                 func = s.location.func
                                 func_idx = allFunctions.indexOf(func)
-                                debug.log("scope is function body scope for #{func_idx} #{func.id?.name}");
+                                debug.log(" scope is function body scope for #{func_idx} #{func.id?.name}/#{func.loc?.start.line}");
                                 func_envs = func_to_envs.get(func_idx)
-                                env_assignments = []
                                 if not func_envs? or func_envs.length is 0
                                         debug.log "unused environment"
-                                        env_name = "%env_unused"
-                                        debug.log func_to_envs.get(func_idx)
-                                else
-                                        ###
-                                        for fenv in func_envs
-                                                debug.log(" func_env #{fenv.name}")
-                                        for penv in env_path
-                                                debug.log(" env_path #{penv.name} #{penv.scope.isFunctionBodyScope()}")
-                                        ###
+                                else # func_envs.length >= 1
+                                        func_envs = func_envs.sort (a_env, b_env) -> a_env.level - b_env.level
 
-                                        env_name = func_envs[0].name
-                                        for i in [1...func_envs.length]
-                                                func_envs[i].addChild(func_envs[i-1])
-                                                debug.log "adding const #{func_envs[i].name} = slotIntrinsic(#{func_envs[i-1].name}, #{func_envs[i-1].name}.getSlot(#{func_envs[i].name}));"
-                                                debug.log "       const #{func_envs[i].name} = slotIntrinsic(#{func_envs[i-1].name}, #{func_envs[i-1].getSlot(func_envs[i].name)});"
-                                                env_assignments.push b.constDeclaration(b.identifier(func_envs[i].name), slotIntrinsic(func_envs[i-1].name, func_envs[i-1].getSlot(func_envs[i].name)))
+                                        if func_envs.length > 2
+                                                for i in [1...(func_envs.length-2)]
+                                                        try
+                                                                func_envs[i-1].addChild(func_envs[i])
+                                                        catch e
+                                                                console.log "1 while working on scope for function #{func_idx} #{func.id?.name}/#{func.loc?.start.line}"
+                                                                throw e
 
                                         if func_envs[0].scope.differentFunction(s)
-                                                # the environment for this function wasn't from this function
-                                                for fe in [(env_path.length-2)..1]  # -2 = skip ours
-                                                        if env_path[fe] is func_envs[0]
-                                                                break
-
-                                                        if env_path[fe].slot_map.size() > 0
-                                                                debug.log "marking env #{env_path[fe].name} as parent of env #{env_path[fe-1].name}"
-                                                                env_path[fe].addChild(env_path[fe-1])
-
-                                                        parent_func = env_path[fe].scope.location.func
-
-                                                        debug.log "parent func #{parent_func.id?.name} is getting env #{env_path[fe-1].name} added to the list"
-
-                                                        parent_func_idx = allFunctions.indexOf(parent_func)
-                                                        debug.log("parent_func_idx = #{parent_func_idx}")
-                                                        parent_envs = func_to_envs.get(parent_func_idx)
-                                                        if not parent_envs?
-                                                                debug.log("parent_envs was null")
-                                                                parent_envs = []
-                                                                func_to_envs.set(parent_func_idx, parent_envs)
-                                                        if parent_envs.indexOf(env_path[fe-1]) is -1
-                                                                debug.log ".push"
-                                                                parent_envs.unshift(env_path[fe-1])
+                                                debug.log " #{func_envs[0].name} was from a different function"
+                                                for fenv in func_envs
+                                                        debug.log(" func_env #{fenv.name} slots=#{fenv.slotCount()}")
+                                                debug.log "current path is:"
+                                                for penv in env_path
+                                                        debug.log(" env_path #{penv.name} #{penv.scope.isFunctionBodyScope()}")
                                                 
-                                # add the parameter we need
-                                func.params.unshift(b.identifier(env_name))
+                                                # the environment for this function wasn't from this function
+                                                if env_path.length > 2
+                                                        for fe in [(env_path.length-2)..1]  # -2 = skip ours
+                                                                #if env_path[fe] is func_envs[0]
+                                                                #        break
 
-                                # and add the assignments of all the environments this function needs
-                                if env_assignments.length > 0
-                                        func.body.body = env_assignments.concat(func.body.body)
+                                                                if env_path[fe].slot_map.size() > 0
+                                                                        try
+                                                                                env_path[fe-1].addChild(env_path[fe])
+                                                                        catch e
+                                                                                console.log "2 while working on scope for function #{func_idx} #{func.id?.name}/#{func.loc?.start.line}"
+                                                                                throw e
+
+                                                                parent_func = env_path[fe].scope.location.func
+
+                                                                debug.log "parent func #{parent_func.id?.name} is getting env #{env_path[fe-1].name} added to the list"
+
+                                                                parent_func_idx = allFunctions.indexOf(parent_func)
+                                                                debug.log("parent_func_idx = #{parent_func_idx}")
+                                                                parent_envs = func_to_envs.get(parent_func_idx)
+                                                                if not parent_envs?
+                                                                        debug.log("parent_envs was null")
+                                                                        parent_envs = []
+                                                                        func_to_envs.set(parent_func_idx, parent_envs)
+                                                                if parent_envs.indexOf(env_path[fe-1]) is -1
+                                                                        debug.log ".push"
+                                                                        parent_envs.unshift(env_path[fe-1])
+                                                else
+                                                        debug.log "env_path.length = #{env_path.length}"
                         
-                if s.env?
-                        if s.parentEnv?
-                                s.location.block.body.unshift(b.expressionStatement(setSlotIntrinsic(s.env.name, s.env.getSlot(s.env.parentEnv.name), b.identifier(s.env.parentEnv.name))))
-                        s.location.block.body.unshift(b.letDeclaration(b.identifier(s.env.name), intrinsic(makeClosureEnv_id, [b.literal(s.env.slot_map.size())])))
-                                
-
                 env_path.pop()
                 debug.log('')
 
+        walk_scope2 = (s, level) ->
+                debug.log "walk_scope3 for scope #{s.debugString()}"
+                debug.log "            ( env_path = #{env.name for env in env_path} )"
+                if s.env?
+                        env_path.push(s.env)
+                
+                if s.isFunctionBodyScope()
+                        do ->
+                                func = s.location.func
+                                func_idx = allFunctions.indexOf(func)
+                                debug.log(" ******* scope is function body scope for #{func_idx} #{func.id?.name} #{func.loc?.start.line}");
+                                func_envs = func_to_envs.get(func_idx)
+                                env_assignments = []
+
+                                parent_idx = -1
+                                if env_path.length > 0
+                                        parent_idx = env_path.length-1
+                                        if env_path[parent_idx].scope is s
+                                                parent_idx = parent_idx - 1
+                                
+                                if not func_envs? or func_envs.length is 0 or parent_idx < 0
+                                        debug.log "unused environment, func_envs.length = #{func_envs?.length} + env_path.length = #{env_path.length}"
+                                        env_name = "%env_unused"
+                                else # func_envs.length >= 1
+                                        func_envs = func_envs.sort (a_env, b_env) -> a_env.level - b_env.level
+
+                                        debug.log "for function body scope of #{s.location.func.id?.name}, current path is:"
+                                        for penv in env_path
+                                                debug.log(" env_path #{penv.name} #{penv.scope.isFunctionBodyScope()}")
+
+                                        env_name = env_path[parent_idx].name
+                                        debug.log "function needs to take #{env_name} as an argument"
+                                        if parent_idx >= 1
+                                                i = parent_idx
+                                                while i >= 1
+                                                        debug.log "adding const #{env_path[i-1].name} = slotIntrinsic(#{env_path[i].name}, #{env_path[i].name}.getSlot(#{env_path[i-1].name}));"
+                                                        debug.log "       const #{env_path[i-1].name} = slotIntrinsic(#{env_path[i].name}, #{env_path[i].getSlot(env_path[i-1].name)});"
+                                                        env_decl = b.constDeclaration(b.identifier(env_path[i-1].name), slotIntrinsic(env_path[i].name, env_path[i].getSlot(env_path[i-1].name)))
+                                                        env_decl.loc = func.body.loc
+                                                        env_assignments.push env_decl
+                                                        i = i - 1
+
+                                # add the parameter we need
+                                func.params.unshift(b.identifier(env_name, func.loc))
+                                
+                                # and add the assignments of all the environments this function needs
+                                if env_assignments.length > 0
+                                        func.body.body = env_assignments.concat(func.body.body)
+
+                if s.env?
+                        if s.env.parentEnv? and s.env.parentEnv.slotCount() > 0
+                                debug.log "outputting parent environment assignment.  parentEnv.name = #{s.env.parentEnv.name}, parentEnv.slotCount = #{s.env.parentEnv.slotCount()}"
+                                s.location.block.body.unshift(b.expressionStatement(setSlotIntrinsic(s.env.name, s.env.getSlot(s.env.parentEnv.name), b.identifier(s.env.parentEnv.name))))
+                        s.location.block.body.unshift(b.letDeclaration(b.identifier(s.env.name), intrinsic(makeClosureEnv_id, [b.literal(s.env.slot_map.size())])))
+                else
+                        debug.log "scope from line #{s.location.block.loc?.start.line} doesn't have environment"
+
+                s.children.forEach (c) ->
+                        debug.indent()
+                        walk_scope2(c, level + 1)
+                        debug.unindent()
+                        
+                if s.env?
+                        env_path.pop()
+                debug.log('')
+
+        
         #debug.setLevel(3)
-        walk_scope(root_scope)
-        #debug.setLevel(0)                     
+        walk_scope1(root_scope, 0)
+        debug.log("SCOPES:")
+        dump_scopes(root_scope, 0)
+        walk_scope2(root_scope, 0)
         dump_func_envs()
+        #debug.setLevel(0)
+
+class ValidateEnvironments extends TreeVisitor
+        is_undefined_literal = (e) ->
+                return true if e.type is Literal and e.value is undefined
+                e.type is UnaryExpression and e.operator is "void" and e.argument.value is 0
+        
+        constructor: (options, @filename) ->
+                super
+                @options = options
+
+        visitCallExpression: (n) ->
+                n = super
+                # make sure that the environment we assign to a
+                # closure is the same as the first arg to the function
+                if is_intrinsic(n, makeClosure_id.name) or is_intrinsic(n, makeAnonClosure_id.name)
+                        debug.log escodegen.generate n.arguments[0]
+                        debug.log is_undefined_literal(n.arguments[0])
+                        if not is_undefined_literal(n.arguments[0])
+                                closure_env = n.arguments[0].name
+                                closure_func = n.arguments[if is_intrinsic(n, makeClosure_id.name) then 2 else 1]
+                                func_env = closure_func.params[0].name
+                                if closure_env isnt func_env
+                                        throw new Error("closure created using environment #{closure_env}, while function takes #{func_env}")
+
+                else if is_intrinsic(n, setSlot_id.name)
+                        env_name = n.arguments[0].name
+                        env_id = env_name.substring("%env_".length)
+                        slot = n.arguments[1].value
+                else if is_intrinsic(n, slot_id.name)
+                        env_name = n.arguments[0].name
+                        env_id = env_name.substring("%env_".length)
+                        slot = n.arguments[1].value
+                n
 
 exports.Convert = (options, filename, tree) ->
         flattenDecls = new FlattenDeclarations(options, filename)
@@ -664,12 +796,14 @@ exports.Convert = (options, filename, tree) ->
 
         tree = collectScopes.visit(tree)
 
+        debug.log escodegen.generate tree
         placeEnvironments(collectScopes.root_scope)
 
         tree = substituteVariables.visit(tree)
 
-        #console.log(escodegen.generate(tree))
-        
+        validator = new ValidateEnvironments(options, filename)
+        tree = validator.visit(tree)
+
         tree
 
 ###
