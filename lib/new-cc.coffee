@@ -636,22 +636,13 @@ placeEnvironments = (root_scope) ->
                                                                 func_envs[i-1].addChild(func_envs[i])
                                                         catch e
                                                                 console.log "1 while working on scope for function #{func_idx} #{func.id?.name}/#{func.loc?.start.line}"
+                                                                console.log "func_envs = [#{env.name for env in func_envs}]"
                                                                 throw e
 
-                                        if func_envs[0].scope.differentFunction(s)
-                                                debug.log " #{func_envs[0].name} was from a different function"
-                                                for fenv in func_envs
-                                                        debug.log(" func_env #{fenv.name} slots=#{fenv.slotCount()}")
-                                                debug.log "current path is:"
-                                                for penv in env_path
-                                                        debug.log(" env_path #{penv.name} #{penv.scope.isFunctionBodyScope()}")
-                                                
+                                        if func_envs[func_envs.length-1].scope.differentFunction(s)
                                                 # the environment for this function wasn't from this function
                                                 if env_path.length > 2
-                                                        for fe in [(env_path.length-2)..1]  # -2 = skip ours
-                                                                #if env_path[fe] is func_envs[0]
-                                                                #        break
-
+                                                        for fe in [(env_path.length-1)..1]
                                                                 if env_path[fe].slot_map.size() > 0
                                                                         try
                                                                                 env_path[fe-1].addChild(env_path[fe])
