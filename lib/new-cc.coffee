@@ -710,6 +710,7 @@ placeEnvironments = (root_scope) ->
                                         e = current_e.parentEnv
                                         while e isnt prior_e
                                                 add_func_env(func_envs, e)
+                                                e = e.parentEnv
                                 idx -= 1
                         
 
