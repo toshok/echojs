@@ -291,7 +291,7 @@ DesugarClasses = class DesugarClasses extends TransformPass
         create_proto_method: (ast_method, ast_class) ->
                 proto_member = b.memberExpression(b.memberExpression(ast_class.id, b.identifier('prototype')), (if ast_method.key.type is ComputedPropertyKey then ast_method.key.expression else ast_method.key), ast_method.key.type is ComputedPropertyKey)
                 
-                method = b.functionExpression(ast_method.key, ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest, ast_method.value.loc)
+                method = b.functionExpression(b.identifier("#{ast_class.id.name}:#{ast_method.key.name}"), ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest, ast_method.value.loc)
 
                 b.expressionStatement(b.assignmentExpression(proto_member, "=", method))
 
@@ -2094,7 +2094,7 @@ class DesugarDefaults extends TransformPass
                                 if seen_default
                                         reportError(SyntaxError, "Cannot specify non-default parameter after a default parameter", @filename, p.loc)
                                 d = b.undefined()
-                        prepends.push(b.letDeclaration(p, b.conditionalExpression(intrinsic(argPresent_id, [b.literal(i+1)]), intrinsic(getArg_id, [b.literal(i)]), d)))
+                        prepends.push(b.letDeclaration(p, b.conditionalExpression(intrinsic(argPresent_id, [b.literal(i+1), b.literal(n.defaults[i]?)]), intrinsic(getArg_id, [b.literal(i)]), d)))
                 n.body.body = prepends.concat(n.body.body)
                 n.defaults = []
                 n
@@ -2119,7 +2119,7 @@ class DesugarArguments extends TransformPass
 
         visitProperty: (n) ->
                 if n.key.type is ComputedPropertyKey
-                        key = @visit n.key
+                        n.key = @visit n.key
                 n.value = @visit n.value
                 n
                 

@@ -2184,9 +2184,44 @@ class LLVMIRVisitor extends TreeVisitor
                 @createCall @ejs_runtime.array_from_iterables, argv, "spread_arr"
 
         handleArgPresent: (exp) ->
+                arg_num = exp.arguments[0].value
                 load_argc = @createLoad @currentFunction.topScope.get("%argc"), "argc_n_load"
+                cmp = ir.createICmpUGE load_argc, consts.int32(arg_num), "argcmpresult"
 
-                cmp = ir.createICmpUGE load_argc, consts.int32(exp.arguments[0].value), "argcmpresult"
+                if exp.arguments[1].value
+                        # we have a default value for this parameter, so we also need to tell if the value is undefined
+                        has_slot_bb = new llvm.BasicBlock "has_slot_bb", @currentFunction
+                        has_arg_bb  = new llvm.BasicBlock "has_arg_bb", @currentFunction
+                        no_arg_bb   = new llvm.BasicBlock "no_arg_bb", @currentFunction
+                        merge_bb    = new llvm.BasicBlock "arg_merge_bb", @currentFunction
+
+                        arg_present_alloca = @createAlloca @currentFunction, types.int1, "arg_#{arg_num}_present"
+                        ir.createCondBr cmp, has_slot_bb, no_arg_bb
+
+                        @doInsideBBlock has_slot_bb, =>
+                                # we actually have an arg slot for this number, so check if it's undefined
+                                load_args = @createLoad @currentFunction.topScope.get("%args"), "args_load"
+
+                                arg_ptr = ir.createGetElementPointer load_args, [consts.int32(arg_num-1)], "arg#{arg_num}_ptr"
+                                arg_load = @createLoad arg_ptr, "arg#{arg_num}"
+                                arg_is_undefined = @isUndefined(arg_load)
+                                ir.createCondBr arg_is_undefined, no_arg_bb, has_arg_bb
+
+                                ir.createBr(has_arg_bb)
+                                
+                        @doInsideBBlock has_arg_bb, =>
+                                # we have a slot and arg, win
+                                ir.createStore consts.int1(1), arg_present_alloca, "store_arg_present"
+                                ir.createBr(merge_bb)
+
+                        @doInsideBBlock no_arg_bb, =>
+                                # either we didn't have the slot, or the arg was undefined
+                                ir.createStore consts.int1(0), arg_present_alloca, "store_no_arg_present"
+                                ir.createBr(merge_bb)
+
+                        ir.setInsertPoint merge_bb
+                        load = ir.createLoad arg_present_alloca, "load_arg_present"
+                        cmp = ir.createICmpEq load, consts.int1(1), "arg_present"
 
                 @createEjsBoolSelect cmp
                                 
