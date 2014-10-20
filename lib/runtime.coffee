@@ -71,6 +71,7 @@ runtime_interface =
         global:                -> @module.getOrInsertGlobal           "_ejs_global",                    types.EjsValue
         exception_typeinfo:    -> @module.getOrInsertGlobal           "EJS_EHTYPE_ejsvalue",            types.EjsExceptionTypeInfo
         function_specops:      -> @module.getOrInsertGlobal           "_ejs_Function_specops",          types.EjsSpecops
+        symbol_specops:        -> @module.getOrInsertGlobal           "_ejs_Symbol_specops",            types.EjsSpecops
 
         "unop-":           -> @abi.createExternalFunction @module, "_ejs_op_neg",         types.EjsValue, [types.EjsValue]
         "unop+":           -> @abi.createExternalFunction @module, "_ejs_op_plus",        types.EjsValue, [types.EjsValue]
