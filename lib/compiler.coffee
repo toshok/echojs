@@ -1779,7 +1779,10 @@ class LLVMIRVisitor extends TreeVisitor
                 else
                         throw new Error "emitEjsvalTo not implemented for this case"
                         
-                
+
+        emitEjsvalToObjectPtr:     (val) -> @emitEjsvalTo(val, types.EjsObject.pointerTo(), "to_objectptr")
+        emitEjsvalToClosureEnvPtr: (val) -> @emitEjsvalTo(val, types.EjsClosureEnv.pointerTo(), "to_ptr")
+
         # this method assumes it's called in an opencoded context
         emitLoadSpecops: (obj) ->
                 if @options.target_pointer_size is 64
@@ -1842,11 +1845,9 @@ class LLVMIRVisitor extends TreeVisitor
                         call_result_alloca = @createAlloca @currentFunction, types.EjsValue, "call_result"
                         
                         @doInsideBBlock candidate_is_object_bb, =>
-                                closure = @emitEjsvalTo argv[0], types.EjsObject.pointerTo(), "closure"
+                                closure = @emitEjsvalToObjectPtr(argv[0])
 
-                                specops_load = @emitLoadSpecops closure
-                        
-                                cmp = ir.createICmpEq specops_load, @ejs_runtime.function_specops, "function_specops_cmp"
+                                cmp = @isObjectFunction(closure)
                                 ir.createCondBr cmp, direct_invoke_bb, runtime_invoke_bb
 
                                 # in the successful case we modify our argv with the responses and directly invoke the closure func
@@ -1933,7 +1934,7 @@ class LLVMIRVisitor extends TreeVisitor
                 slotnum = exp.arguments[1].value
 
                 if opencode and @options.target_pointer_size is 64
-                        envp = @emitEjsvalTo env, types.EjsClosureEnv.pointerTo(), "closureenv"
+                        envp = @emitEjsvalToClosureEnvPtr(env)
                         ir.createInBoundsGetElementPointer envp, [consts.int64(0), consts.int32(2), consts.int64(slotnum)], "slot_ref"
                 else
                         @createCall @ejs_runtime.get_env_slot_ref, [env, consts.int32(slotnum)], "slot_ref_tmp", false
@@ -1966,6 +1967,9 @@ class LLVMIRVisitor extends TreeVisitor
                         mask = @createEjsvalAnd(val, consts.int64_lowhi(0xffffffff, 0x00000000), "mask.i")
                         ir.createICmpEq(mask, consts.int64_lowhi(0xffffff88, 0x00000000), "cmpresult")
 
+        isObjectFunction: (obj) -> ir.createICmpEq(@emitLoadSpecops(obj), @ejs_runtime.function_specops, "function_specops_cmp")
+        isObjectSymbol:   (obj) -> ir.createICmpEq(@emitLoadSpecops(obj), @ejs_runtime.symbol_specops, "symbol_specops_cmp")
+                
         isString: (val) ->
                 if @options.target_pointer_size is 64
                         mask = @createEjsvalAnd val, consts.int64_lowhi(0xffff8000, 0x00000000), "mask.i"
@@ -2027,9 +2031,8 @@ class LLVMIRVisitor extends TreeVisitor
                         ir.createCondBr cmp, is_object_bb, failure_bb
 
                         @doInsideBBlock is_object_bb, =>
-                                obj = @emitEjsvalTo arg, types.EjsObject.pointerTo(), "obj"
-                                specops_load = @emitLoadSpecops(obj)
-                                cmp = ir.createICmpEq specops_load, @ejs_runtime.function_specops, "function_specops_cmp"
+                                obj = @emitEjsvalToObjectPtr(arg)
+                                cmp = @isObjectFunction(obj)
                                 ir.createCondBr cmp, success_bb, failure_bb
 
                         @doInsideBBlock success_bb, =>
@@ -2065,9 +2068,8 @@ class LLVMIRVisitor extends TreeVisitor
                         ir.createCondBr cmp, is_object_bb, failure_bb
 
                         @doInsideBBlock is_object_bb, =>
-                                obj = @emitEjsvalTo(arg, types.EjsObject.pointerTo(), "obj")
-                                specops_load = @emitLoadSpecops(obj)
-                                cmp = ir.createICmpEq specops_load, @ejs_runtime.symbol_specops, "symbol_specops_cmp"
+                                obj = @emitEjsvalToObjectPtr(arg)
+                                cmp = @isObjectSymbol(obj)
                                 ir.createCondBr cmp, success_bb, failure_bb
 
                         @doInsideBBlock success_bb, =>
