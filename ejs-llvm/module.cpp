@@ -41,9 +41,11 @@ namespace ejsllvm {
 
     static void Module_finalize(EJSObject* obj)
     {
+#if false
         Module* module = (Module*)obj;
         if (module->llvm_module)
             delete module->llvm_module;
+#endif
         _ejs_Object_specops.Finalize(obj);
     }
 
