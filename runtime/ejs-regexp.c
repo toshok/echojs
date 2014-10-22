@@ -168,8 +168,6 @@ _ejs_RegExp_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 ejsval
 _ejs_RegExp_prototype_exec (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    printf ("in _ejs_RegExp_prototype_exec\n");
-
     if (!EJSVAL_IS_REGEXP(_this))
         EJS_NOT_IMPLEMENTED();
 
