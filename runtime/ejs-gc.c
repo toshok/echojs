@@ -693,7 +693,7 @@ _ejs_finalizer_thread ()
                 LOCK_GC();
                 if (info->num_free_cells == info->num_cells) {
                     if (info->los_info) {
-                        _ejs_log ("releasing large object (size %zd)!\n", info->los_info->alloc_size);
+                        SPEW(2, _ejs_log ("releasing large object (size %zd)!\n", info->los_info->alloc_size));
                         release_to_los (info->los_info);
                     }
                     else {
