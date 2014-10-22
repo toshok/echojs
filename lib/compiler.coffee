@@ -348,25 +348,31 @@ class LLVMIRVisitor extends TreeVisitor
                 rv
 
         loadBoolEjsValue: (n) ->
-                name = if n then "true" else "false"
-                bool_alloca = @createAlloca @currentFunction, types.EjsValue, "#{name}_alloca"
-                alloca_as_int64 = ir.createBitCast bool_alloca, types.int64.pointerTo(), "alloca_as_pointer"
-                if @options.target_pointer_size is 64
-                        ir.createStore consts.int64_lowhi(0xfff98000, if n then 0x00000001 else 0x000000000), alloca_as_int64
+                name = if n then "true_alloca" else "false_alloca"
+                if @currentFunction[name]?
+                        bool_alloca = @currentFunction[name]
                 else
-                        ir.createStore consts.int64_lowhi(0xffffff83, if n then 0x00000001 else 0x00000000), alloca_as_int64
+                        bool_alloca = @createAlloca @currentFunction, types.EjsValue, name
+                        @currentFunction[name] = bool_alloca
+                        @doInsideBBlock @currentFunction.entry_bb, =>
+                                alloca_as_int64 = ir.createBitCast bool_alloca, types.int64.pointerTo(), "alloca_as_pointer"
+                                if @options.target_pointer_size is 64
+                                        ir.createStore consts.int64_lowhi(0xfff98000, if n then 0x00000001 else 0x000000000), alloca_as_int64
+                                else
+                                        ir.createStore consts.int64_lowhi(0xffffff83, if n then 0x00000001 else 0x00000000), alloca_as_int64
                 rv = ir.createLoad bool_alloca, "#{name}_load"
                 rv._ejs_returns_ejsval_bool = true
                 rv
 
         loadDoubleEjsValue: (n) ->
-                if @currentFunction["num_#{n}_alloca"]
-                        num_alloca = @currentFunction["num_#{n}_alloca"]
+                name = "num_#{n}_alloca"
+                if @currentFunction[name]?
+                        num_alloca = @currentFunction[name]
                 else
-                        num_alloca = @createAlloca @currentFunction, types.EjsValue, "num_#{n}_alloca"
-                @storeDouble num_alloca, n
-                if not @currentFunction["num_#{n}_alloca"]
-                        @currentFunction["num_#{n}_alloca"] = num_alloca
+                        num_alloca = @createAlloca @currentFunction, types.EjsValue, name
+                        @currentFunction[name] = num_alloca
+                        @doInsideBBlock @currentFunction.entry_bb, =>
+                                @storeDouble num_alloca, n
                 ir.createLoad num_alloca, "numload"
                 
         loadNullEjsValue: ->
@@ -374,14 +380,19 @@ class LLVMIRVisitor extends TreeVisitor
                         null_alloca = @currentFunction.null_alloca
                 else
                         null_alloca = @createAlloca @currentFunction, types.EjsValue, "null_alloca"
-                @storeNull null_alloca
-                if not @currentFunction.null_alloca?
                         @currentFunction.null_alloca = null_alloca
+                        @doInsideBBlock @currentFunction.entry_bb, =>
+                                @storeNull null_alloca
                 ir.createLoad null_alloca, "nullload"
                 
         loadUndefinedEjsValue: ->
-                undef_alloca = @createAlloca @currentFunction, types.EjsValue, "undef_alloca"
-                @storeUndefined undef_alloca
+                if @currentFunction.undef_alloca?
+                        undef_alloca = @currentFunction.undef_alloca
+                else
+                        undef_alloca = @createAlloca @currentFunction, types.EjsValue, "undef_alloca"
+                        @currentFunction.undef_alloca = undef_alloca
+                        @doInsideBBlock @currentFunction.entry_bb, =>
+                                @storeUndefined undef_alloca
                 ir.createLoad undef_alloca, "undefload"
 
         storeUndefined: (alloca, name) ->
@@ -1694,7 +1705,7 @@ class LLVMIRVisitor extends TreeVisitor
                 toExport = @visit exp.arguments[2]
 
                 @createCall @ejs_runtime.module_import_batch, [fromImport, specifiers, toExport], ""
-
+                
         handleGetArg: (exp, opencode) ->
                 load_args = @createLoad @currentFunction.topScope.get("%args"), "args_load"
 
