@@ -56,9 +56,9 @@ namespace ejsllvm {
             return Value_new (llvm::Constant::getIntegerValue(ty, llvm::APInt(ty->getPrimitiveSizeInBits(), v)));
         }
         else if (argc == 3 && EJSVAL_IS_NUMBER(args[2]) && ty->getPrimitiveSizeInBits() == 64) {
-            int64_t vhi = v;
-            int64_t vlo = (int64_t)EJSVAL_TO_NUMBER(args[2]);
-            return Value_new (llvm::Constant::getIntegerValue(ty, llvm::APInt(ty->getPrimitiveSizeInBits(), (int64_t)(vhi << 32 | vlo))));
+            uint64_t vhi = v;
+            uint32_t vlo = (uint32_t)EJSVAL_TO_NUMBER(args[2]);
+            return Value_new (llvm::Constant::getIntegerValue(ty, llvm::APInt(ty->getPrimitiveSizeInBits(), (int64_t)((vhi << 32) | vlo))));
         }
         else
             abort(); // FIXME throw an exception
