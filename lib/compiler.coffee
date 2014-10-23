@@ -279,7 +279,7 @@ class LLVMIRVisitor extends TreeVisitor
                         slot              : true
                         setSlot           : true
                 
-                        invokeClosure     : true
+                        invokeClosure     : false
                         makeClosure       : true
                         makeAnonClosure   : true
                         createArgScratchArea : true
@@ -347,53 +347,32 @@ class LLVMIRVisitor extends TreeVisitor
                 rv.setAlignment 8
                 rv
 
-        loadBoolEjsValue: (n) ->
-                name = if n then "true_alloca" else "false_alloca"
-                if @currentFunction[name]?
-                        bool_alloca = @currentFunction[name]
+        loadCachedEjsValue: (name, init) ->
+                alloca_name = "#{name}_alloca"
+                load_name = "#{name}_load"
+
+                if @currentFunction[alloca_name]
+                        alloca = @currentFunction[alloca_name]
                 else
-                        bool_alloca = @createAlloca @currentFunction, types.EjsValue, name
-                        @currentFunction[name] = bool_alloca
-                        @doInsideBBlock @currentFunction.entry_bb, =>
-                                alloca_as_int64 = ir.createBitCast bool_alloca, types.int64.pointerTo(), "alloca_as_pointer"
-                                if @options.target_pointer_size is 64
-                                        ir.createStore consts.int64_lowhi(0xfff98000, if n then 0x00000001 else 0x000000000), alloca_as_int64
-                                else
-                                        ir.createStore consts.int64_lowhi(0xffffff83, if n then 0x00000001 else 0x00000000), alloca_as_int64
-                rv = ir.createLoad bool_alloca, "#{name}_load"
+                        alloca = @createAlloca(@currentFunction, types.EjsValue, alloca_name)
+                        @currentFunction[alloca_name] = alloca
+                        @doInsideBBlock(@currentFunction.entry_bb, () -> init(alloca))
+
+                ir.createLoad(alloca, load_name)
+
+        loadBoolEjsValue: (n) ->
+                rv = @loadCachedEjsValue n, (alloca) =>
+                        alloca_as_int64 = ir.createBitCast(alloca, types.int64.pointerTo(), "alloca_as_pointer")
+                        if @options.target_pointer_size is 64
+                                ir.createStore(consts.int64_lowhi(0xfff98000,  if n then 0x00000001 else 0x000000000), alloca_as_int64)
+                        else
+                                ir.createStore(consts.int64_lowhi(0xffffff83,  if n then 0x00000001 else 0x000000000), alloca_as_int64)
                 rv._ejs_returns_ejsval_bool = true
                 rv
 
-        loadDoubleEjsValue: (n) ->
-                name = "num_#{n}_alloca"
-                if @currentFunction[name]?
-                        num_alloca = @currentFunction[name]
-                else
-                        num_alloca = @createAlloca @currentFunction, types.EjsValue, name
-                        @currentFunction[name] = num_alloca
-                        @doInsideBBlock @currentFunction.entry_bb, =>
-                                @storeDouble num_alloca, n
-                ir.createLoad num_alloca, "numload"
-                
-        loadNullEjsValue: ->
-                if @currentFunction.null_alloca?
-                        null_alloca = @currentFunction.null_alloca
-                else
-                        null_alloca = @createAlloca @currentFunction, types.EjsValue, "null_alloca"
-                        @currentFunction.null_alloca = null_alloca
-                        @doInsideBBlock @currentFunction.entry_bb, =>
-                                @storeNull null_alloca
-                ir.createLoad null_alloca, "nullload"
-                
-        loadUndefinedEjsValue: ->
-                if @currentFunction.undef_alloca?
-                        undef_alloca = @currentFunction.undef_alloca
-                else
-                        undef_alloca = @createAlloca @currentFunction, types.EjsValue, "undef_alloca"
-                        @currentFunction.undef_alloca = undef_alloca
-                        @doInsideBBlock @currentFunction.entry_bb, =>
-                                @storeUndefined undef_alloca
-                ir.createLoad undef_alloca, "undefload"
+        loadDoubleEjsValue:    (n) -> @loadCachedEjsValue("num_#{n}", (alloca) => @storeDouble(alloca, n))
+        loadNullEjsValue:      ()  -> @loadCachedEjsValue("null",     (alloca) => @storeNull(alloca))
+        loadUndefinedEjsValue: ()  -> @loadCachedEjsValue("undef",    (alloca) => @storeUndefined(alloca))
 
         storeUndefined: (alloca, name) ->
                 alloca_as_int64 = ir.createBitCast alloca, types.int64.pointerTo(), "alloca_as_pointer"
@@ -1341,7 +1320,7 @@ class LLVMIRVisitor extends TreeVisitor
                 obj
 
         visitArrayExpression: (n) ->
-                obj = @createCall @ejs_runtime.array_new, [consts.int32(0), consts.false()], "arrtmp", !@ejs_runtime.array_new.doesNotThrow
+                obj = @createCall @ejs_runtime.array_new, [consts.int32(n.elements.length), consts.false()], "arrtmp", !@ejs_runtime.array_new.doesNotThrow
                 i = 0;
                 for el in n.elements
                         val = @visit el
