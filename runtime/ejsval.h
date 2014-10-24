@@ -45,9 +45,8 @@
 
 EJS_BEGIN_DECLS
 
-// notyet for these
 #if defined(__GNUC__) || defined(__xlc__) || defined(__xlC__)
-#define EJS_ALWAYS_INLINE //__attribute__((always_inline))
+#define EJS_ALWAYS_INLINE __attribute__((always_inline))
 #else
 #define EJS_ALWAYS_INLINE
 #endif
