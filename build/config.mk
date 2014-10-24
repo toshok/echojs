@@ -39,7 +39,7 @@ MKDIR=mkdir -p
 INSTALL=install
 CP=cp
 
-CFLAGS=-g -O0 -Wall -I. -Wno-unused-function -fno-omit-frame-pointer
+CFLAGS=-g -O0 -Wall -I. -Wno-unused-function
 
 MIN_IOS_VERSION=8.0
 
