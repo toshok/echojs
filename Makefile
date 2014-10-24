@@ -14,7 +14,10 @@ all-local::
 check:
 	$(MAKE) -C test check
 
-bootstrap: stage1 stage2
+bootstrap: ejs-es6.js.exe.stage3
+	@cp ejs-es6.js.exe.stage3 ejs.exe
+	@ls -l ejs.exe
+	@echo DONE
 
 NODE_COMPAT_MODULES = --module "./node-compat/libejsnodecompat-module.a,@node-compat/path,_ejs_path_module_func," \
 		      --module "./node-compat/libejsnodecompat-module.a,@node-compat/os,_ejs_os_module_func," \
@@ -23,10 +26,32 @@ NODE_COMPAT_MODULES = --module "./node-compat/libejsnodecompat-module.a,@node-co
 
 LLVM_MODULE = --module "./ejs-llvm/libejsllvm-module.a,llvm,_ejs_llvm_init,`llvm-config-3.4 --ldflags --libs`"
 
-stage1:
-	./ejs --warn-on-undeclared $(LLVM_MODULE) $(NODE_COMPAT_MODULES) ejs-es6.js
+stage1: ejs-es6.js.exe.stage1
+	@cp ejs-es6.js.exe.stage1 ejs.exe
+	@ls -l ejs.exe
+	@echo DONE
 
-stage2:
-	./ejs-es6.js.exe --warn-on-undeclared $(LLVM_MODULE) $(NODE_COMPAT_MODULES) ejs-es6.js
+stage2: ejs-es6.js.exe.stage2
+	@cp ejs-es6.js.exe.stage2 ejs.exe
+	@ls -l ejs.exe
+	@echo DONE
+
+ejs-es6.js.exe.stage1:
+	@echo Building stage 1
+	@time ./ejs --leave-temp --warn-on-undeclared $(LLVM_MODULE) $(NODE_COMPAT_MODULES) ejs-es6.js
+	@mv ejs-es6.js.exe ejs-es6.js.exe.stage1
+
+ejs-es6.js.exe.stage2: ejs-es6.js.exe.stage1
+	@echo Building stage 2
+	@time ./ejs-es6.js.exe.stage1 --leave-temp --warn-on-undeclared $(LLVM_MODULE) $(NODE_COMPAT_MODULES) ejs-es6.js
+	@mv ejs-es6.js.exe ejs-es6.js.exe.stage2
+
+ejs-es6.js.exe.stage3: ejs-es6.js.exe.stage2
+	@echo Building stage 3
+	@time ./ejs-es6.js.exe.stage2 --leave-temp --warn-on-undeclared $(LLVM_MODULE) $(NODE_COMPAT_MODULES) ejs-es6.js
+	@mv ejs-es6.js.exe ejs-es6.js.exe.stage3
+
+echo-command-line:
+	@echo ./ejs.exe --leave-temp --warn-on-undeclared $(LLVM_MODULE) $(NODE_COMPAT_MODULES) ejs-es6.js
 
 include $(TOP)/build/build.mk
