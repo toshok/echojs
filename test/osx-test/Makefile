@@ -11,9 +11,7 @@ all: copy-pirouette
 	cp helloosx.js.exe HelloOSX.app/Contents/MacOS/
 
 copy-pirouette:
-	@cp $(TOP)/pirouette/bindings/objc.js .
-	@cp $(TOP)/pirouette/bindings/foundation.js .
-	@cp $(TOP)/pirouette/bindings/appkit.js .
+	@cp $(TOP)/pirouette/bindings/*.js .
 	@mkdir -p AppKit
 	@mkdir -p Foundation
 	@cp -r $(TOP)/pirouette/bindings/AppKit/ AppKit
