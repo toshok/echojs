@@ -480,14 +480,21 @@ for m in options.external_modules
 while work_list.length isnt 0
         file = work_list.pop()
 
+        # test to see if there's #{pathname}.js
         jsfile = file
+        if path.extname(jsfile) isnt ".js"
+                jsfile = jsfile + '.js' 
+
         try
+                is_file = fs.statSync(jsfile).isFile()
+        catch
+                is_file = false
+
+        if not is_file
+                # we don't catch this exception
                 if fs.statSync(file).isDirectory()
                         jsfile = path.join(file, "index")
-        catch
-                # do nothing
-        if path.extname(jsfile) isnt ".js"
-                jsfile = jsfile + '.js'
+                        is_file = fs.statSync(jsfile).isFile()
         
         file_contents = fs.readFileSync(jsfile, 'utf-8')
         file_ast = parseFile(jsfile, file_contents)
