@@ -1112,7 +1112,7 @@ _ejs_Object_assign (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
                 //             a. If pendingException is undefined, then set pendingException to propValue. 
                 //          3. else 
                 //             a. Let status be Put(to, nextKey, propValue, true); 
-                ejsval status = Put(to, nextKey, propValue, EJS_TRUE);
+                /*ejsval status =*/ Put(to, nextKey, propValue, EJS_TRUE);
                 //             b. If status is an abrupt completion, then 
                 //                i. If pendingException is undefined, then set pendingException to status. 
             }
@@ -2399,7 +2399,6 @@ _ejs_object_specop_own_property_keys (ejsval O)
     for (_EJSPropertyMapEntry *s = O_->map->head_insert; s; s = s->next_insert) {
         if (EJSVAL_IS_STRING(s->name)) {
             ejsval idx_val = ToNumber(s->name);
-            int idx;
             if (EJSVAL_IS_NUMBER(idx_val)) {
                 double n = EJSVAL_TO_NUMBER(idx_val);
                 if (floor(n) == n) {
