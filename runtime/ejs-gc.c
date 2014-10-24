@@ -1376,7 +1376,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     case EJS_SCAN_TYPE_CLOSUREENV: num_closureenv_allocs ++; break;
     }
 
-    if (!gc_disabled && ((num_allocs == 400000 || (alloc_size - alloc_size_at_last_gc) >= 40*1024*1024) || (collect_every_alloc && collect_every_alloc == num_allocs))) {
+    if (!gc_disabled && ((num_allocs == 800000 || (alloc_size - alloc_size_at_last_gc) >= 40*1024*1024) || (collect_every_alloc && collect_every_alloc == num_allocs))) {
         //        if (num_allocs == 400000) _ejs_log ("collecting due to num_allocs == %d, alloc_size = %d, alloc_size size last gc = %d\n", num_allocs, alloc_size, alloc_size - alloc_size_at_last_gc);
         //        if (alloc_size - alloc_size_at_last_gc >= 40*1024*1024) _ejs_log ("collecting due to allocs since last gc\n");
         _ejs_gc_collect();
