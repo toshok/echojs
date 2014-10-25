@@ -568,7 +568,7 @@ while (work_list.length !== 0) {
         if (!is_file) {
             // we don't catch this exception
             if (fs.statSync(file).isDirectory()) {
-                jsfile = path.join(file, "index");
+                jsfile = path.join(file, "index.js");
                 is_file = fs.statSync(jsfile).isFile();
             }
         }
