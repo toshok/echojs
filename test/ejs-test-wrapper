@@ -1,0 +1,71 @@
+#!/bin/sh
+###
+exec coffee --nodejs --harmony "$0" "$@"
+###
+
+fs = require 'fs'
+{ spawn } = require 'child_process'
+
+# Assume coffee for now
+slice_count = 2
+argv = process.argv.slice slice_count
+
+output_usage = () ->
+    console.warn "Usage:"
+    console.warn "  ejs-test-wrapper file.js"
+
+if argv.length == 0
+    output_usage()
+    process.exit 0
+
+topdir = "#{__dirname}/../"
+env = process.env
+env.NODE_PATH = "#{topdir}/node-llvm/build/Release:#{topdir}/lib/generated:#{topdir}/lib:#{topdir}/estraverse:#{topdir}/esprima:#{topdir}/escodegen"
+env.LLVM_SUFFIX = "-3.4"
+options = { "env": env }
+
+file = argv[0]
+exe_file = "output.exe"
+
+stdout_handler = (data) ->
+    process.stdout.write data.toString()
+
+stderr_handler = (data) ->
+    process.stderr.write data.toString()
+
+error_handler = (err) ->
+    # Most likely the executed app was not found.
+    process.stderr.write err.toString()
+    process.exit 8
+
+# Pre run cleanup.
+if fs.existsSync(exe_file)
+    fs.unlinkSync(exe_file)
+
+# Compilation.
+ejs_args = [ '--warn-on-undeclared', '-q', '-o', exe_file, file ]
+ejs = spawn "#{topdir}/ejs", ejs_args, options
+
+ejs.stdout.on "data", stdout_handler
+ejs.stderr.on "data", stderr_handler
+ejs.on "error", error_handler
+
+ejs.on "exit", (code) ->
+    # Return if failed to compile.
+    if code != 0
+        process.exit code
+
+    test = spawn './' + exe_file, [], options
+    test.stdout.on "data", stdout_handler
+    test.stderr.on "data", stderr_handler
+    test.on "error", error_handler
+    test.on "exit", (code) ->
+        # Let the parent know the actual executable failed.
+        if code != 0
+            process.exit code
+
+# General cleanup.
+process.on "exit", (code) ->
+    if fs.existsSync(exe_file)
+        fs.unlink(exe_file)
+

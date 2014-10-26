@@ -215,8 +215,6 @@ files_remaining = 0
 
 o_filenames = []
 
-base_filenames = (path.basename file for file in file_args)
-
 compiled_modules = []
 
 esprima = require 'esprima'
@@ -402,7 +400,7 @@ generate_import_map = (modules) ->
         map.write "  { 0, 0, 0 }\n"
         map.write "};\n"
         
-        map.write "const char *entry_filename = \"#{sanitize base_filenames[0], false}\";\n";
+        map.write "const char *entry_filename = \"#{sanitize file_args[0], false}\";\n";
 
         map.write "};"
         map.end()
