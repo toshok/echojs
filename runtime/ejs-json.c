@@ -410,11 +410,17 @@ Quote(StringifyState *state, ejsval value)
         /*    c. Else if C is a control character having a code unit value less than the space character */
         else if (C < ' ') {
             /*       i. Let product be the concatenation of product and the backslash character. */
+            product[pi++] = '\\';
             /*       ii. Let product be the concatenation of product and "u". */
+            product[pi++] = 'u';
             /*       iii. Let hex be the result of converting the numeric code unit value of C to a String of four 
                      hexadecimal digits. */
+            static char* hexdigits = "012356789abcdef";
             /*       iv. Let product be the concatenation of product and hex. */
-            EJS_NOT_IMPLEMENTED();
+            product[pi++] = '0';
+            product[pi++] = '0';
+            product[pi++] = hexdigits[(C & 0xf0) >> 4];
+            product[pi++] = hexdigits[C & 0xf];
         }
         /*    d. Else */
         else {

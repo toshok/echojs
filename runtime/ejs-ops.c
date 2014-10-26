@@ -1010,6 +1010,8 @@ _ejs_op_strict_eq (ejsval x, ejsval y)
     if (EJSVAL_IS_STRING(x)) {
         //    a. If x and y are exactly the same sequence of characters (same length and same characters in corresponding positions), return true.
         //    b. Else, return false.
+        if (EJSVAL_TO_STRLEN(x) != EJSVAL_TO_STRLEN(y))
+            return _ejs_false;
         return BOOLEAN_TO_EJSVAL (!ucs2_strcmp (EJSVAL_TO_FLAT_STRING(x), EJSVAL_TO_FLAT_STRING(y)));
     }
     // 6. If Type(x) is Boolean, then

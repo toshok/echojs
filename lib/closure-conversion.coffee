@@ -4,6 +4,8 @@ debug = require 'debug'
 
 b = require 'ast-builder'
 
+new_cc = require('new-cc')
+
 runtime_globals = require('runtime').createGlobalsInterface(null)
 
 { reportError, reportWarning } = require 'errors'
@@ -104,6 +106,7 @@ setGlobal_id            = b.identifier "%setGlobal"
 getLocal_id             = b.identifier "%getLocal"
 getGlobal_id            = b.identifier "%getGlobal"
 getArg_id               = b.identifier "%getArg"
+getArgumentsObject_id   = b.identifier "%getArgumentsObject"
 moduleGet_id            = b.identifier "%moduleGet"
 moduleImportBatch_id    = b.identifier "%moduleImportBatch"
 templateCallsite_id     = b.identifier "%templateCallsite"
@@ -277,7 +280,7 @@ DesugarClasses = class DesugarClasses extends TransformPass
         create_constructor: (ast_method, ast_class) ->
                 if ast_method.value.defaults?.type?
                         console.log escodegen.generate ast_method.value.defaults
-                b.functionDeclaration(ast_class.id, ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest)
+                b.functionDeclaration(ast_class.id, ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest, ast_method.value.loc)
 
         create_default_constructor: (ast_class) ->
                 # splat args into the call to super's ctor if there's a superclass
@@ -288,12 +291,12 @@ DesugarClasses = class DesugarClasses extends TransformPass
         create_proto_method: (ast_method, ast_class) ->
                 proto_member = b.memberExpression(b.memberExpression(ast_class.id, b.identifier('prototype')), (if ast_method.key.type is ComputedPropertyKey then ast_method.key.expression else ast_method.key), ast_method.key.type is ComputedPropertyKey)
                 
-                method = b.functionExpression(ast_method.key, ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest)
+                method = b.functionExpression(b.identifier("#{ast_class.id.name}:#{ast_method.key.name}"), ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest, ast_method.value.loc)
 
                 b.expressionStatement(b.assignmentExpression(proto_member, "=", method))
 
         create_static_method: (ast_method, ast_class) ->
-                method = b.functionExpression(ast_method.key, ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest)
+                method = b.functionExpression(ast_method.key, ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest, ast_method.value.loc)
 
                 b.expressionStatement(b.assignmentExpression(b.memberExpression(ast_class.id, (if ast_method.key.type is ComputedPropertyKey then ast_method.key.expression else ast_method.key), ast_method.key.type is ComputedPropertyKey), "=", method))
 
@@ -326,97 +329,6 @@ DesugarClasses = class DesugarClasses extends TransformPass
                         target = b.memberExpression(ast_class.id, b.identifier("prototype"))
 
                 b.expressionStatement(b.callExpression(b.memberExpression(b.identifier("Object"), b.identifier("defineProperties")), [target, propdescs_literal]))
-
-#
-# each element in env is an object of the form:
-#   { exp: ...     // the AST node corresponding to this environment.  will be a function or a BlockStatement. (right now just functions)
-#     id:  ...     // the number/id of this environment
-#     decls: ..    // a set of the variable names that are declared in this environment
-#     closed: ...  // a set of the variable names that are used from this environment (i.e. the ones that need to move to the environment)
-#     parent: ...  // the parent environment object
-#   }
-# 
-LocateEnv = class LocateEnv extends TransformPass
-        constructor: ->
-                super
-                @envs = new Stack
-                @env_id = 0
-
-        visitFunction: (n) ->
-                current_env = @envs.top if @envs.depth > 0
-                new_env = { exp: n, id: @env_id, decls: (if n.ejs_decls? then n.ejs_decls else new Set), closed: new Set, parent: current_env }
-                @env_id += 1
-                n.ejs_env = new_env
-                @envs.push new_env
-                # don't visit the parameters for the same reason we don't visit the id's of variable declarators below:
-                # we don't want a function to look like:  function foo (%env_1.x) { }
-                # instead of                              function foo (x) { }
-                n.body = @visit n.body
-                @envs.pop()
-                n
-
-        visitBlock: (n) ->
-                return super(n) if n.no_ejs_env
-                        
-                current_env = @envs.top if @envs.depth > 0
-                new_env = { exp: n, id: @env_id, decls: (if n.ejs_decls? then n.ejs_decls else new Set), closed: new Set, parent: current_env }
-                @env_id += 1
-                n.ejs_env = new_env
-                @envs.push new_env
-                super(n)
-                @envs.pop()
-                n
-
-        visitVariableDeclarator: (n) ->
-                # don't visit the id, as that will cause us to mark it ejs_substitute = true, and we'll end up with things like:
-                #   var %env_1.x = blah
-                # instead of what we want:
-                #   var x = blah
-                n.init = @visit n.init
-                n
-
-        visitProperty: (n) ->
-                if n.key.type is ComputedPropertyKey
-                        n.key = @visit n.key
-                n.value = @visit n.value
-                n
-
-        visitIdentifier: (n) ->
-                # find the environment in the env-stack that includes this variable's decl.  add it to the env's .closed set.
-                current_env = @envs.top
-                env = current_env
-
-                # if the current environment declares that identifier, nothing to do.
-                return n if env.decls.has n.name
-
-                closed_over = false
-                # look up our environment stack for the decl for it.
-                env = env.parent
-                intervening_function = false
-                while env?
-                        if env.decls?.has n.name
-                                closed_over = intervening_function
-                                env = null
-                        else
-                                if env.exp.type isnt BlockStatement # if it's a function
-                                        intervening_function = true
-                                env = env.parent
-                                
-
-                # if we found it higher on the function stack, we need to walk back up the stack forcing environments along the way, and make
-                # sure the frame that declares it knows that something down the stack closes over it.
-                if closed_over
-                        env = current_env.parent
-                        while env?
-                                if env.decls?.has n.name
-                                        env.closed.add n.name
-                                        env = null
-                                else
-                                        env.nested_requires_env = true
-                                        env = env.parent
-                
-                        n.ejs_substitute = true
-                n
 
 # this should move to echo-desugar.coffee
 
@@ -566,11 +478,11 @@ class DesugarLetLoopVars extends TransformPass
 
                 new_body.body.push b.tryStatement(n.body, [], b.blockStatement(assignments))
 
-                n.body = new_body
-
                 remap = new RemapIdentifiers(@options, @filename, mappings)
                 n.test = remap.visit(n.test)
                 n.update = remap.visit(n.update)
+
+                n.body = @visit new_body
 
                 n
                 
@@ -748,478 +660,7 @@ DesugarArrowFunctions = class DesugarArrowFunctions extends TransformPass
                         n.body.body.unshift m.prepend
                 n
                 
-
-# this class really doesn't behave like a normal TreeVisitor, as it modifies the tree in-place.
-# XXX reformulate this as a TreeVisitor subclass.
-class ComputeFree extends TransformPass
-        constructor: ->
-                super
-                @call_free = @free.bind @
-                @setUnion = Set.union
                 
-        visit: (n) ->
-                @free n
-                n
-
-        decl_names: (arr) ->
-                result = []
-                for n in arr
-                        if n.declarations?
-                                result = result.concat (decl.id.name for decl in n.declarations)
-                        else if n.id?
-                                result.push n.id.name
-                new Set result
-
-        id_names: (arr) ->
-                new Set arr.map ((id) -> id.name)
-
-        collect_decls: (body) ->
-                statement for statement in body when statement.type is VariableDeclaration or statement.type is FunctionDeclaration
-
-        free_blocklike: (exp,body) ->
-                if body?
-                        decls = @decl_names @collect_decls body
-                        uses = @setUnion.apply null, body.map @call_free
-                else
-                        decls = []
-                        uses = new Set()
-                exp.ejs_decls = decls
-                exp.ejs_free_vars = uses.subtract decls
-                exp.ejs_free_vars
-
-        get_decls = (exp) -> if not exp? then null else exp.ejs_decls
-        
-        # TODO: move this into the @visit method
-        free: (exp) ->
-                return new Set if not exp?
-
-                # define the properties we'll be filling in below, so that we can make them non-enumerable
-                Object.defineProperty exp, "ejs_decls",     { value: undefined, writable: true, configurable: true }
-                Object.defineProperty exp, "ejs_free_vars", { value: undefined, writable: true, configurable: true }
-                
-                switch exp.type
-                        when Program
-                                decls = @decl_names @collect_decls exp.body
-                                uses = @setUnion.apply null, exp.body.map @call_free
-                                exp.ejs_decls = decls
-                                exp.ejs_free_vars = uses.subtract decls
-                        when FunctionDeclaration
-                                # this should only happen for the toplevel function we create to wrap the source file
-                                param_names = @id_names exp.params
-                                param_names.add exp.rest.name if exp.rest?
-                                exp.ejs_free_vars = @free(exp.body).subtract param_names
-                                exp.ejs_decls = exp.body.ejs_decls.union param_names
-                        when FunctionExpression
-                                param_names = @id_names exp.params
-                                param_names.add exp.rest.name if exp.rest?
-                                exp.ejs_free_vars = @free(exp.body).subtract param_names
-                                exp.ejs_decls = param_names.union exp.body.ejs_decls
-                        when ArrowFunctionExpression
-                                param_names = @id_names exp.params
-                                param_names.add exp.rest.name if exp.rest?
-                                exp.ejs_free_vars = @free(exp.body).subtract param_names
-                                exp.ejs_decls = param_names.union exp.body.ejs_decls
-                        when LabeledStatement      then exp.ejs_free_vars = @free exp.body
-                        when BlockStatement        then exp.ejs_free_vars = @free_blocklike exp, exp.body
-                        when TryStatement          then exp.ejs_free_vars = @setUnion.apply null, [@free(exp.block)].concat exp.handlers.map @call_free
-                        when CatchClause
-                                param_set = if exp.param?.name? then new Set [exp.param.name] else new Set
-                                exp.ejs_free_vars = @free(exp.body).subtract param_set
-                                exp.ejs_decls = exp.body.ejs_decls.union param_set
-                        when VariableDeclaration   then exp.ejs_free_vars = @setUnion.apply null, exp.declarations.map @call_free
-                        when VariableDeclarator    then exp.ejs_free_vars = @free exp.init
-                        when ExpressionStatement   then exp.ejs_free_vars = @free exp.expression
-                        when Identifier            then exp.ejs_free_vars = new Set [exp.name]
-                        when ThrowStatement        then exp.ejs_free_vars = @free exp.argument
-                        when ForStatement
-                                decls = null
-                                if exp.init?.type is VariableDeclaration
-                                        decls = @decl_names [exp.init]
-
-                                uses = @setUnion.call null, @free(exp.init), @free(exp.test), @free(exp.update), @free(exp.body)
-                                exp.ejs_decls = decls
-                                exp.ejs_free_vars = uses.subtract decls
-                        when ForInStatement        then exp.ejs_free_vars = @setUnion.call null, @free(exp.left), @free(exp.right), @free(exp.body)
-                        when ForOfStatement        then exp.ejs_free_vars = @setUnion.call null, @free(exp.left), @free(exp.right), @free(exp.body)
-                        when WhileStatement        then exp.ejs_free_vars = @setUnion.call null, @free(exp.test), @free(exp.body)
-                        when DoWhileStatement      then exp.ejs_free_vars = @setUnion.call null, @free(exp.test), @free(exp.body)
-                        when SwitchStatement       then exp.ejs_free_vars = @setUnion.apply null, [@free exp.discriminant].concat exp.cases.map @call_free
-                        when SwitchCase            then exp.ejs_free_vars = @free_blocklike exp, exp.consequent
-                        when EmptyStatement        then exp.ejs_free_vars = new Set
-                        when BreakStatement        then exp.ejs_free_vars = new Set
-                        when ContinueStatement     then exp.ejs_free_vars = new Set
-                        when SpreadElement         then exp.ejs_free_vars = @free exp.argument
-                        when UpdateExpression      then exp.ejs_free_vars = @free exp.argument
-                        when ReturnStatement       then exp.ejs_free_vars = @free exp.argument
-                        when UnaryExpression       then exp.ejs_free_vars = @free exp.argument
-                        when BinaryExpression      then exp.ejs_free_vars = @free(exp.left).union @free exp.right
-                        when LogicalExpression     then exp.ejs_free_vars = @free(exp.left).union @free exp.right
-                        when MemberExpression      then exp.ejs_free_vars = @free(exp.object) # we don't traverse into the property
-                        when CallExpression        then exp.ejs_free_vars = @setUnion.apply null, [@free exp.callee].concat exp.arguments.map @call_free
-                        when NewExpression         then exp.ejs_free_vars = @setUnion.apply null, [@free exp.callee].concat exp.arguments.map @call_free
-                        when SequenceExpression    then exp.ejs_free_vars = @setUnion.apply null, exp.expressions.map @call_free
-                        when ConditionalExpression then exp.ejs_free_vars = @setUnion.call null, @free(exp.test), @free(exp.consequent), @free(exp.alternate)
-                        when TaggedTemplateExpression then exp.ejs_free_vars = @free exp.quasi
-                        when TemplateLiteral       then exp.ejs_free_vars = @setUnion.apply null, exp.expressions.map @call_free
-                        when Literal               then exp.ejs_free_vars = new Set
-                        when ThisExpression        then exp.ejs_free_vars = new Set
-                        when ComputedPropertyKey   then exp.ejs_free_vars = @free exp.expression
-                        when Property
-                                exp.ejs_free_vars = @free exp.value
-                                if exp.key.type is ComputedPropertyKey
-                                        # we only do this when the key is computed, or else identifiers show up as free
-                                        exp.ejs_free_vars = exp.ejs_free_vars.union @free exp.key
-                                exp.ejs_free_vars
-                        when ObjectExpression
-                                exp.ejs_free_vars = if exp.properties.length is 0 then (new Set) else @setUnion.apply null, (@free p for p in exp.properties)
-                        when ArrayExpression
-                                exp.ejs_free_vars = if exp.elements.length is 0 then (new Set) else @setUnion.apply null, exp.elements.map @call_free
-                        when IfStatement           then exp.ejs_free_vars = @setUnion.call null, @free(exp.test), @free(exp.consequent), @free(exp.alternate)
-                        when AssignmentExpression  then exp.ejs_free_vars = @free(exp.left).union @free exp.right
-                        when ModuleDeclaration     then exp.ejs_free_vars = @free exp.body
-                        when ExportDeclaration
-                                exp.ejs_free_vars = @free exp.declaration
-                                exp.ejs_decls = exp.declaration.ejs_decls
-                        when ImportDeclaration
-                                exp.ejs_decls = new Set exp.specifiers.map ((specifier) -> specifier.id.name)
-                                # no free vars in an ImportDeclaration
-                                exp.ejs_free_vars = new Set
-                                
-                        else throw "Internal error: unhandled node '#{JSON.stringify exp}' in free()"
-                exp.ejs_free_vars
-
-                
-                
-# 1) allocates the environment at the start of the n
-# 2) adds mappings for all .closed variables
-class SubstituteVariables extends TransformPass
-        constructor: ->
-                super
-                @function_stack = new Stack
-                @mappings = new Stack
-
-        currentMapping: -> if @mappings.depth > 0 then @mappings.top else Object.create null
-
-        visitIdentifier: (n) ->
-                if hasOwnProperty.call @currentMapping(), n.name
-                        return @currentMapping()[n.name]
-                n
-
-        visitFor: (n) ->
-                # for loops complicate things.
-                # if any of the variables declared in n.init are closed over
-                # we promote all of them outside of n.init.
-
-                @skipExpressionStatement = true
-                init = @visit n.init
-                @skipExpressionStatement = false
-                n.test = @visit n.test
-                n.update = @visit n.update
-                n.body = @visit n.body
-                if Array.isArray init
-                        n.init = null
-                        return b.blockStatement(init.concat([n]))
-
-                n.init = init
-                n
-
-        visitForIn: (n) ->
-                # for-in loops complicate things.
-
-                left = @visit n.left
-                n.right = @visit n.right
-                n.body = @visit n.body
-                if Array.isArray left
-                        console.log "whu?"
-                        n.left = b.identifier(left[0].declarations[0].id.name)
-                        return b.blockStatement(left.concat([n]))
-
-                n.left = left
-                n
-
-        visitVariableDeclaration: (n) ->
-                # here we do some magic depending on whether or not
-                # variables are closed over (i.e. pushed into the
-                # environment).
-                # 
-                # 1. for variables that are closed over that aren't
-                #    initialized (that is, they're implicitly
-                #    'undefined'), we just remove their declaration
-                #    entirely.  it's already been converted to a slot
-                #    everywhere else, and env slots are explicitly
-                #    initialized to undefined by the runtime.
-                #
-                # 2. for variables that are closed over that *are*
-                #    initialized, we splice them into the list and
-                #    split the VariableDeclaration node into two, so
-                #    if 'y' is closed over in the following input:
-                #
-                #    let x = 2, y = x * 2, z = 10;
-                #
-                #    we'll end up with this in the output:
-                #
-                #    let x = 2;
-                #    %slot(%env, 1, 'y') = x * 2;
-                #    let z = 10;
-                #
-                decls = n.declarations
-
-                rv = []
-                
-                new_declarations = []
-
-                # we loop until we find a variable that's closed over *and* has an initializer.
-                for decl in decls
-                        decl.init = @visit decl.init
-
-                        closed_over = hasOwnProperty.call @currentMapping(), decl.id.name
-                        if closed_over
-                                # for variables that are closed over but undefined, we skip them (thereby removing them from the list of decls)
-
-                                if decl.init? # FIXME: we should also check for an explicit 'undefined' here
-
-                                        # push the current set of new_declarations if there are any
-                                        if new_declarations.length > 0
-                                                rv.push b.variableDeclaration(n.kind, new_declarations)
-
-                                        # splice in this assignment
-                                        rv.push b.expressionStatement(b.assignmentExpression(@currentMapping()[decl.id.name], "=", decl.init))
-
-                                        # then re-init the new_declarations array
-                                        new_declarations = []
-                        
-                        else
-                                # for variables that aren't closed over, we just add them to the currect decl list.
-                                new_declarations.push decl
-                        
-
-                # push the last set of new_declarations if there were any
-                if new_declarations.length > 0
-                        rv.push b.variableDeclaration(n.kind, new_declarations)
-
-                if rv.length is 0
-                        rv = b.emptyStatement()
-                rv
-
-        visitProperty: (n) ->
-                if n.key.type is ComputedPropertyKey
-                        n.key = @visit n.key
-                n.value = @visit n.value
-                n
-
-        visitBlock: (n) ->
-                return super(n) if not n.ejs_env
-                
-                this_env_id = b.identifier("%env_#{n.ejs_env.id}")
-                if n.ejs_env.parent?
-                        parent_env_name = "%env_#{n.ejs_env.parent.id}"
-                        
-                env_prepends = []
-                new_mapping = shallow_copy_object @currentMapping()
-                
-                if n.ejs_env.closed.empty() and not n.ejs_env.nested_requires_env
-                        env_prepends.push b.letDeclaration(this_env_id, b.null())
-                else
-                        # insert environment creation (at the start of the block)
-                        env_prepends.push b.letDeclaration(this_env_id, intrinsic makeClosureEnv_id, [b.literal n.ejs_env.closed.size() + if n.ejs_env.parent? then 1 else 0])
-                
-                        n.ejs_env.slot_mapping = Object.create null
-                        i = 0
-                        if n.ejs_env.parent?
-                                n.ejs_env.slot_mapping[parent_env_name] = i
-                                i += 1
-                        n.ejs_env.closed.map (el) ->
-                                n.ejs_env.slot_mapping[el] = i
-                                i += 1
-                                
-                        
-                        if n.ejs_env.parent?
-                                parent_env_slot = n.ejs_env.slot_mapping[parent_env_name]
-                                env_prepends.push b.expressionStatement(intrinsic setSlot_id, [this_env_id, b.literal(parent_env_slot), b.literal(parent_env_name), b.identifier(parent_env_name) ]);
-
-                        # XXX here's where function handling pushes closed over parameters.  i'm guessing we need special logic for incoming environment slots for loop variables?
-
-                        new_mapping["%slot_mapping"] = n.ejs_env.slot_mapping
-
-                        flatten_memberexp = (exp, mapping) ->
-                                if exp.type isnt CallExpression
-                                        [b.literal(mapping[exp.name])]
-                                else
-                                        flatten_memberexp(exp.arguments[0], mapping).concat [exp.arguments[1]]
-
-                        prepend_environment = (exps) ->
-                                obj = this_env_id
-                                for prop in exps
-                                        obj = intrinsic(slot_id, [obj, prop])
-                                obj
-
-                        # if there are existing mappings prepend "%env." (a MemberExpression) to them
-                        for mapped of new_mapping
-                                val = new_mapping[mapped]
-                                if mapped isnt "%slot_mapping"
-                                        new_mapping[mapped] = prepend_environment(flatten_memberexp(val, n.ejs_env.slot_mapping))
-                        
-                        # and add mappings for all variables in .closed from "x" to "%env.x"
-
-                        new_mapping["%env"] = this_env_id
-                        n.ejs_env.closed.map (sym) ->
-                                new_mapping[sym] = intrinsic slot_id, [this_env_id, b.literal(n.ejs_env.slot_mapping[sym]), b.literal(sym)]
-
-                # remove all mappings for variables declared in this block
-                if n.ejs_decls?
-                        new_mapping = reject new_mapping, (sym) -> (n.ejs_decls.has sym) and not (n.ejs_env.closed.has sym)
-
-                @mappings.push new_mapping
-                super(n)
-                if env_prepends.length > 0
-                        n.body = env_prepends.concat n.body
-                @mappings.pop()
-                n
-
-        visitFunctionBody: (n) ->
-                n.scratch_size = 0
-                
-                # we use this instead of calling super in visitFunction because we don't want to visit parameters
-                # during this pass, or they'll be substituted with an %env.
-
-                @function_stack.push n
-                n.body = @visit n.body
-                @function_stack.pop()
-                
-                n
-
-        visitFunction: (n) ->
-            try
-                this_env_id = b.identifier("%env_#{n.ejs_env.id}")
-                if n.ejs_env.parent?
-                        parent_env_name = "%env_#{n.ejs_env.parent.id}"
-
-                env_prepends = []
-                new_mapping = shallow_copy_object @currentMapping()
-                if n.ejs_env.closed.empty() and not n.ejs_env.nested_requires_env
-                        env_prepends.push b.letDeclaration(this_env_id, b.null())
-                else
-                        # insert environment creation (at the start of the function body)
-                        env_prepends.push b.letDeclaration(this_env_id, intrinsic makeClosureEnv_id, [b.literal n.ejs_env.closed.size() + if n.ejs_env.parent? then 1 else 0])
-
-                        n.ejs_env.slot_mapping = Object.create null
-                        i = 0
-                        if n.ejs_env.parent?
-                                n.ejs_env.slot_mapping[parent_env_name] = i
-                                i += 1
-                        n.ejs_env.closed.map (el) ->
-                                n.ejs_env.slot_mapping[el] = i
-                                i += 1
-                                
-                        
-                        if n.ejs_env.parent?
-                                parent_env_slot = n.ejs_env.slot_mapping[parent_env_name]
-                                env_prepends.push b.expressionStatement(intrinsic setSlot_id, [this_env_id, b.literal(parent_env_slot), b.literal(parent_env_name), b.identifier(parent_env_name) ]);
-                                
-
-                        # we need to push assignments of any closed over parameters into the environment at this point
-                        for param in n.params
-                                if n.ejs_env.closed.has param.name
-                                        env_prepends.push b.expressionStatement(intrinsic setSlot_id, [ this_env_id, b.literal(n.ejs_env.slot_mapping[param.name]), b.literal(param.name), b.identifier(param.name) ])
-
-                        new_mapping["%slot_mapping"] = n.ejs_env.slot_mapping
-
-                        flatten_memberexp = (exp, mapping) ->
-                                if exp.type isnt CallExpression
-                                        [b.literal(mapping[exp.name])]
-                                else
-                                        flatten_memberexp(exp.arguments[0], mapping).concat [exp.arguments[1]]
-
-                        prepend_environment = (exps) ->
-                                obj = this_env_id
-                                for prop in exps
-                                        obj = intrinsic(slot_id, [obj, prop])
-                                obj
-
-                        # if there are existing mappings prepend "%env." (a MemberExpression) to them
-                        for mapped of new_mapping
-                                val = new_mapping[mapped]
-                                if mapped isnt "%slot_mapping"
-                                        new_mapping[mapped] = prepend_environment(flatten_memberexp(val, n.ejs_env.slot_mapping))
-                        
-                        # and add mappings for all variables in .closed from "x" to "%env.x"
-
-                        new_mapping["%env"] = this_env_id
-                        n.ejs_env.closed.map (sym) ->
-                                new_mapping[sym] = intrinsic slot_id, [this_env_id, b.literal(n.ejs_env.slot_mapping[sym]), b.literal(sym)]
-
-                # remove all mappings for variables declared in this function
-                if n.ejs_decls?
-                        new_mapping = reject new_mapping, (sym) -> (n.ejs_decls.has sym) and not (n.ejs_env.closed.has sym)
-
-                @mappings.push new_mapping
-                @visitFunctionBody n
-                if env_prepends.length > 0
-                        n.body.body = env_prepends.concat n.body.body
-                @mappings.pop()
-
-                # convert function expressions to an explicit closure creation, so:
-                # 
-                #    function X () { ...body... }
-                #
-                # replace inline with:
-                #
-                #    makeClosure(%current_env, "X", function X () { ...body... })
-
-                if not n.toplevel
-                        if n.type is FunctionDeclaration
-                                throw "there should be no FunctionDeclarations at this point"
-                        else # n.type is FunctionExpression
-                                intrinsic_args = []
-                                intrinsic_args.push(if n.ejs_env.parent? then b.identifier(parent_env_name) else b.null())
-                                
-                                if n.id?
-                                        intrinsic_id = makeClosure_id
-                                        if n.id.type is Identifier
-                                                intrinsic_args.push(b.literal(n.id.name))
-                                        else
-                                                intrinsic_args.push(b.literal(escodegen.generate n.id))
-                                else
-                                        intrinsic_id = makeAnonClosure_id
-
-                                intrinsic_args.push(n)
-                                
-                                return intrinsic intrinsic_id, intrinsic_args
-                n
-            catch e
-                console.warn "exception: " + e
-                #console.warn "compiling the following code:"
-                #console.warn escodegen.generate n
-                throw e
-                
-        visitCallExpression: (n) ->
-                n = super
-
-                # replace calls of the form:
-                #   X (arg1, arg2, ...)
-                # 
-                # with
-                #   invokeClosure(X, %this, %argCount, arg1, arg2, ...);
-
-                return n if is_intrinsic(n)
-                @function_stack.top.scratch_size = Math.max @function_stack.top.scratch_size, n.arguments.length
-                intrinsic invokeClosure_id, [n.callee].concat n.arguments
-
-        visitNewExpression: (n) ->
-                super
-
-                # replace calls of the form:
-                #   new X (arg1, arg2, ...)
-                # 
-                # with
-                #   invokeClosure(X, %this, %argCount, arg1, arg2, ...);
-
-                @function_stack.top.scratch_size = Math.max @function_stack.top.scratch_size, n.arguments.length
-
-                rv = intrinsic invokeClosure_id, [n.callee].concat n.arguments
-                rv.type = NewExpression
-                rv
-
 #
 #   This pass walks the tree and moves all function expressions to the toplevel.
 #
@@ -1266,8 +707,6 @@ class LambdaLift extends TransformPass
 
                 @maybePrependScratchArea n
 
-                n.params.unshift b.identifier("%env_#{n.ejs_env.parent.id}")
-                
                 return b.identifier(global_name)
 
         ###
@@ -1297,127 +736,6 @@ class NameAnonymousFunctions extends TransformPass
                 if rhs.type is FunctionExpression and not rhs.id?.name
                         rhs.displayName = escodegen.generate lhs
                 n
-
-class MarkLocalAndGlobalVariables extends TransformPass
-        constructor: (options, @filename) ->
-                super
-                # initialize the scope stack with the global (empty) scope
-                @scope_stack = new Stack new Map
-
-        findIdentifierInScope: (ident) ->
-                for scope in @scope_stack.stack
-                        return true if scope.has(ident.name)
-                # at this point it's going to be a global reference.
-                # make sure the identifier is one of our globals
-                if hasOwnProperty.call runtime_globals, ident.name
-                        return false
-
-                if @options.warn_on_undeclared
-                        reportWarning("undeclared identifier `#{ident.name}'", @filename, ident.loc)
-                else
-                        reportError(ReferenceError, "undeclared identifier `#{ident.name}'", @filename, ident.loc)
-                false
-
-        intrinsicForIdentifier: (id) ->
-                is_local = @findIdentifierInScope id
-                if is_local then getLocal_id else getGlobal_id
-                
-        visitWithScope: (scope, children) ->
-                @scope_stack.push scope
-                if Array.isArray children
-                        rv = (@visit child for child in children)
-                else
-                        rv = @visit children
-                @scope_stack.pop()
-                rv
-
-        visitVariableDeclarator: (n) ->
-                @scope_stack.top.set(n.id.name, true)
-                n
-
-        visitImportSpecifier: (n) ->
-                @scope_stack.top.set(n.id.name, true)
-                n
-
-        visitObjectExpression: (n) ->
-                for property in n.properties
-                        property.value = @visit property.value
-                n
-
-        visitAssignmentExpression: (n) ->
-                lhs = n.left
-                visited_rhs = @visit n.right
-                
-                if is_intrinsic lhs, "%slot"
-                        intrinsic setSlot_id, [lhs.arguments[0], lhs.arguments[1], visited_rhs], lhs.loc
-                else if lhs.type is Identifier
-                        if @findIdentifierInScope lhs
-                                intrinsic setLocal_id, [lhs, visited_rhs], lhs.loc
-                        else
-                                intrinsic setGlobal_id, [lhs, visited_rhs], lhs.loc
-                else
-                        n.left = @visit n.left
-                        n.right = visited_rhs
-                        n
-                        
-        visitBlock: (n) ->
-                n.body = @visitWithScope(new Map(), n.body)
-                n
-
-        visitCallExpression: (n) ->
-                # at this point there shouldn't be call expressions
-                # for anything other than intrinsics, so we leave
-                # callee alone and just iterate over the args.  we
-                # skip the first one since that is guaranteed to be an
-                # identifier that we don't want rewrapped, or an
-                # intrinsic already wrapping the identifier.
-
-                if n.arguments.length > 0
-                        if n.arguments[0].type is Identifier
-                                @findIdentifierInScope n.arguments[0]
-                                new_args = @visit n.arguments.slice 1
-                                new_args.unshift n.arguments[0]
-                        else
-                                new_args = @visit n.arguments
-                        n.arguments = new_args
-                n
-
-        visitNewExpression: (n) ->
-                # at this point there shouldn't be call expressions
-                # for anything other than intrinsics, so we leave
-                # callee alone and just iterate over the args.  we
-                # skip the first one since that is guaranteed to be an
-                # identifier that we don't want rewrapped, or an
-                # intrinsic already wrapping the identifier.
-                
-                if n.arguments[0].type is Identifier
-                        @findIdentifierInScope n.arguments[0]
-                new_args = @visit n.arguments.slice 1
-                new_args.unshift n.arguments[0]
-                n.arguments = new_args
-                n
-
-        visitFunction: (n) ->
-                new_scope = new Map
-                new_scope.set(p.name, true) for p in n.params
-                new_scope.set("arguments", true)
-                new_body = @visitWithScope new_scope, n.body
-                n.body = new_body
-                n
-
-        visitLabeledStatement: (n) ->
-                n.body  = @visit n.body
-                n
-
-        visitCatchClause: (n) ->
-                new_scope = new Map
-                new_scope.set(n.param.name, true)
-                n.guard = @visit n.guard
-                n.body = @visitWithScope new_scope, n.body
-                n
-
-        visitIdentifier: (n) ->
-                intrinsic @intrinsicForIdentifier(n), [n]
 
 #
 # special pass to inline some common idioms dealing with IIFEs
@@ -1634,15 +952,16 @@ class DesugarDestructuring extends TransformPass
                 for decl in n.declarations
                         if decl.id.type is ObjectPattern
                                 obj_tmp_id = fresh()
-                                decls.push b.variableDeclarator(obj_tmp_id, decl.init)
+                                decls.push b.variableDeclarator(obj_tmp_id, @visit(decl.init))
                                 createObjectPatternBindings(obj_tmp_id, decl.id, decls)
                         else if decl.id.type is ArrayPattern
                                 # create a fresh tmp and declare it
                                 array_tmp_id = fresh()
-                                decls.push b.variableDeclarator(array_tmp_id, decl.init)
+                                decls.push b.variableDeclarator(array_tmp_id, @visit(decl.init))
                                 createArrayPatternBindings(array_tmp_id, decl.id, decls)
                                         
                         else if decl.id.type is Identifier
+                                decl.init = @visit(decl.init)
                                 decls.push(decl)
                         else
                                 reportError(Error, "unhandled type of variable declaration in DesugarDestructuring #{decl.id.type}", @filename, n.loc)
@@ -2070,8 +1389,8 @@ class DesugarSpread extends TransformPass
 # to:
 #
 #   function (a, b) {
-#     a = %argPresent(0) ? %getArg(0) : undefined;
-#     b = %argPresent(1) ? %getArg(1) : a;
+#     a = %argPresent(1) ? %getArg(0) : undefined;
+#     b = %argPresent(2) ? %getArg(1) : a;
 #   }
 #
 class DesugarDefaults extends TransformPass
@@ -2092,11 +1411,36 @@ class DesugarDefaults extends TransformPass
                                 if seen_default
                                         reportError(SyntaxError, "Cannot specify non-default parameter after a default parameter", @filename, p.loc)
                                 d = b.undefined()
-                        prepends.push(b.expressionStatement(b.assignmentExpression(p, '=', b.conditionalExpression(intrinsic(argPresent_id, [b.literal(i+1)]), intrinsic(getArg_id, [b.literal(i)]), d))))
+                        prepends.push(b.letDeclaration(p, b.conditionalExpression(intrinsic(argPresent_id, [b.literal(i+1), b.literal(n.defaults[i]?)]), intrinsic(getArg_id, [b.literal(i)]), d)))
                 n.body.body = prepends.concat(n.body.body)
                 n.defaults = []
                 n
-        
+
+class DesugarArguments extends TransformPass
+        constructor: (options, @filename) ->
+                super
+
+        visitIdentifier: (n) ->
+                return intrinsic(getArgumentsObject_id) if n.name is "arguments"
+                super
+
+        visitVariableDeclarator: (n) ->
+                if n.id.name is "arguments"
+                        reportError(SyntaxError, "Cannot declare variable named 'arguments'", @filename, n.id.loc)
+                super
+
+        visitAssignmentExpression: (n) ->
+                if n.left.type is Identifier and n.left.name is "arguments"
+                        reportError(SyntaxError, "Cannot set 'arguments'", @filename, n.left.loc)
+                super
+
+        visitProperty: (n) ->
+                if n.key.type is ComputedPropertyKey
+                        n.key = @visit n.key
+                n.value = @visit n.value
+                n
+                
+                
 # desugars
 #
 #   for (let x of a) { ... }
@@ -2172,6 +1516,12 @@ enable_cfa2 = false
 #
 enable_hoist_func_decls_pass = true
 
+class NewClosureConvert
+        constructor: (@options, @filename) ->
+
+        visit: (tree) ->
+                new_cc.Convert(@options, @filename, tree)
+                
 passes = [
         DesugarImportExport
         DesugarClasses
@@ -2188,12 +1538,9 @@ passes = [
         DesugarLetLoopVars
         HoistVars
         NameAnonymousFunctions
+        DesugarArguments
         #CFA2 if enable_cfa2
-        ComputeFree
-        LocateEnv
-        SubstituteVariables
-        MarkLocalAndGlobalVariables
-        IIFEIdioms
+        NewClosureConvert
         LambdaLift
         ]
 

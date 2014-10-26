@@ -39,12 +39,12 @@ MKDIR=mkdir -p
 INSTALL=install
 CP=cp
 
-CFLAGS=-g -O0 -Wall -I. -Wno-unused-function -fno-omit-frame-pointer
+CFLAGS=-g -O0 -Wall -I. -Wno-unused-function
 
-MIN_IOS_VERSION=7.1
+MIN_IOS_VERSION=8.0
 
 DEVELOPER_ROOT?=/Applications/Xcode.app/Contents/Developer
-IOS_SDK_VERSION?=7.1
+IOS_SDK_VERSION?=8.1
 
 ifeq ($(HOST_CPU),x86-64)
 LINUX_ARCH=-arch x86_64

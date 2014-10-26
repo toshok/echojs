@@ -117,6 +117,7 @@ struct _EJSPropertyMapEntry {
     // the next entry in insertion order
     _EJSPropertyMapEntry *next_insert;
 
+    uint32_t hash;
     ejsval name;
     EJSPropertyDesc* desc;
 };

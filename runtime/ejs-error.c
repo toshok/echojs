@@ -175,7 +175,7 @@ void
 _ejs_throw_nativeerror_utf8 (EJSNativeErrorType error_type, const char *message)
 {
     ejsval exc = _ejs_nativeerror_new_utf8 (error_type, message);
-    _ejs_log ("throwing exception with message %s\n", message);
+    //_ejs_log ("throwing exception with message %s\n", message);
     _ejs_throw (exc);
     EJS_NOT_REACHED();
 }
@@ -186,7 +186,7 @@ _ejs_throw_nativeerror (EJSNativeErrorType error_type, ejsval message)
     ejsval exc = _ejs_nativeerror_new (error_type, message);
 
     char *message_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(message));
-    _ejs_log ("throwing exception with message %s\n", message_utf8);
+    //_ejs_log ("throwing exception with message %s\n", message_utf8);
     free (message_utf8);
 
     _ejs_throw (exc);

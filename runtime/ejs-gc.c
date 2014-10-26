@@ -116,6 +116,7 @@ static pthread_mutex_t arena_lock = PTHREAD_MUTEX_INITIALIZER;
         /*_ejs_log ("unlocking arenas at %s:%d\n", __PRETTY_FUNCTION__, __LINE__); */ \
         pthread_mutex_unlock(&arena_lock);     \
     } while (0)
+
 static pthread_t finalizer_thread;
 static EJSFinalizerEntry* finalizer_list;
 
@@ -475,25 +476,40 @@ compare_ptrs(const void* v1, const void* v2)
 static Arena*
 find_arena(GCObjectPtr ptr)
 {
-    void* arena_ptr = PTR_TO_ARENA(ptr);
-    Arena* local_arenas[MAX_ARENAS];
-    int local_num_arenas;
+    Arena* arena_ptr = PTR_TO_ARENA(ptr);
 
     LOCK_ARENAS();
-    local_num_arenas = num_arenas;
-    memmove (local_arenas, heap_arenas, local_num_arenas*sizeof(Arena*));
+    // inlined bsearch
+    void* rv = NULL;
+    Arena**base = heap_arenas;
+    for (int lim = num_arenas; lim != 0; lim >>= 1) {
+        Arena** p = base + (lim >> 1);
+        ptrdiff_t diff = (intptr_t)arena_ptr - (intptr_t)*p;
+        if (diff == 0) {
+            rv = *p;
+            break;
+        }
+        if (diff > 0) {  /* key > p: move right */
+            base = p + 1;
+            lim--;
+        }               /* else move left */
+    }
     UNLOCK_ARENAS();
-
-    void* rv = bsearch (&arena_ptr, local_arenas, local_num_arenas, sizeof(Arena*), compare_ptrs);
     if (!rv) return NULL;
     return *(Arena**)rv;
 }
 
-static PageInfo*
-find_page_and_cell(GCObjectPtr ptr, uint32_t *cell_idx)
+static Arena*
+find_arena_in_array(GCObjectPtr ptr, Arena** array, int length)
 {
-    Arena *arena = find_arena(ptr);
+    void* arena_ptr = PTR_TO_ARENA(ptr);
+    Arena **bsearch_rv = (Arena**)bsearch (&arena_ptr, array, length, sizeof(Arena*), compare_ptrs);
+    return bsearch_rv ? *bsearch_rv : NULL;
+}
 
+static PageInfo*
+find_page_and_cell_from_arena(GCObjectPtr ptr, uint32_t *cell_idx, Arena *arena)
+{
     if (EJS_LIKELY (arena != NULL)) {
         SANITY(verify_arena(arena));
 
@@ -521,15 +537,21 @@ find_page_and_cell(GCObjectPtr ptr, uint32_t *cell_idx)
     LOCK_GC();
     for (LargeObjectInfo *lobj = los_list; lobj; lobj = lobj->next) {
         if (lobj->page_info.page_start == ptr) {
-            if (cell_idx) {
-                *cell_idx = 0;
-            }
             UNLOCK_GC();
+            if (cell_idx)
+                *cell_idx = 0;
             return &lobj->page_info;
         }
     }
     UNLOCK_GC();
     return NULL;
+}
+
+static PageInfo*
+find_page_and_cell(GCObjectPtr ptr, uint32_t *cell_idx)
+{
+    Arena* arena = find_arena_in_array(ptr, heap_arenas, num_arenas);
+    return find_page_and_cell_from_arena(ptr, cell_idx, arena);
 }
 
 static void
@@ -619,8 +641,11 @@ finalize_object(GCObjectPtr p)
 static void*
 _ejs_finalizer_thread ()
 {
+    Arena* local_arenas[MAX_ARENAS];
+    int local_num_arenas;
+
     while (EJS_TRUE) {
-        usleep (750);
+        usleep (7500);
 
         EJSFinalizerEntry* this_run;
 
@@ -631,18 +656,23 @@ _ejs_finalizer_thread ()
         if (!this_run)
             continue;
 
+        LOCK_ARENAS();
+        local_num_arenas = num_arenas;
+        memmove (local_arenas, heap_arenas, local_num_arenas*sizeof(Arena*));
+        UNLOCK_ARENAS();
+
         SPEW(1, _ejs_log ("starting finalizer run\n"));
         while (this_run) {
             EJSFinalizerEntry *fin = this_run;
             this_run = fin->next;
 
-            Arena *arena = find_arena(fin->gcobj);
+            Arena* arena = find_arena_in_array(fin->gcobj, local_arenas, local_num_arenas);
 
             PageInfo* info;
             uint32_t cell_idx;
 
             if (arena) {
-                info = find_page_and_cell (fin->gcobj, &cell_idx);
+                info = find_page_and_cell_from_arena (fin->gcobj, &cell_idx, arena);
             }
             else {
                 // must be a large object, the page info is stored in its header
@@ -693,7 +723,7 @@ _ejs_finalizer_thread ()
                 LOCK_GC();
                 if (info->num_free_cells == info->num_cells) {
                     if (info->los_info) {
-                        _ejs_log ("releasing large object (size %zd)!\n", info->los_info->alloc_size);
+                        SPEW(2, _ejs_log ("releasing large object (size %zd)!\n", info->los_info->alloc_size));
                         release_to_los (info->los_info);
                     }
                     else {
@@ -733,8 +763,9 @@ _ejs_gc_init()
     if (n_allocs)
         collect_every_alloc = atoi(n_allocs);
 
-    // allocate an initial arena
-    arena_new();
+    // allocate an initial arenas
+    for (int i = 0; i < 10; i ++)
+        arena_new();
 
     _ejs_gc_worklist_init();
 
@@ -934,7 +965,7 @@ sweep_heap()
 
                         SPEW(2, { _ejs_log ("gcobj %p is finalizable\n", fin->gcobj); });
 
-                        EJS_ASSERT(find_arena(fin->gcobj));
+                        SANITY(EJS_ASSERT(find_arena(fin->gcobj)));
 
                         // use a cmpswap instruction to atomically prepend to the start of the list
                         do {
@@ -1345,8 +1376,8 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     case EJS_SCAN_TYPE_CLOSUREENV: num_closureenv_allocs ++; break;
     }
 
-    if (!gc_disabled && ((num_allocs == 200000 || (alloc_size - alloc_size_at_last_gc) >= 40*1024*1024) || (collect_every_alloc && collect_every_alloc == num_allocs))) {
-        //        if (num_allocs == 200000) _ejs_log ("collecting due to num_allocs == %d, alloc_size = %d, alloc_size size last gc = %d", num_allocs, alloc_size, alloc_size - alloc_size_at_last_gc);
+    if (!gc_disabled && ((num_allocs == 800000 || (alloc_size - alloc_size_at_last_gc) >= 40*1024*1024) || (collect_every_alloc && collect_every_alloc == num_allocs))) {
+        //        if (num_allocs == 400000) _ejs_log ("collecting due to num_allocs == %d, alloc_size = %d, alloc_size size last gc = %d\n", num_allocs, alloc_size, alloc_size - alloc_size_at_last_gc);
         //        if (alloc_size - alloc_size_at_last_gc >= 40*1024*1024) _ejs_log ("collecting due to allocs since last gc\n");
         _ejs_gc_collect();
         alloc_size_at_last_gc = alloc_size;

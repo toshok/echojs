@@ -1012,6 +1012,8 @@ _ejs_Array_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
         int i;
         foreach_args[2] = O;
         for (i = 0; i < EJS_ARRAY_LEN(_this); i ++) {
+            if (EJSVAL_IS_ARRAY_HOLE_MAGIC(EJS_DENSE_ARRAY_ELEMENTS(_this)[i]))
+                continue;
             foreach_args[0] = EJS_DENSE_ARRAY_ELEMENTS(_this)[i];
             foreach_args[1] = NUMBER_TO_EJSVAL(i);
             _ejs_invoke_closure (callbackfn, thisArg, 3, foreach_args);
@@ -2440,7 +2442,12 @@ _ejs_array_specop_has_property (ejsval obj, ejsval propertyName)
         double n = EJSVAL_TO_NUMBER(idx_val);
         if (floor(n) == n) {
             idx = (int)n;
-            return idx >= 0 && idx < EJS_ARRAY_LEN(obj);
+            if (idx >= 0 && idx < EJS_ARRAY_LEN(obj)) {
+                ejsval element = EJS_DENSE_ARRAY_ELEMENTS(obj)[idx];
+                if (EJSVAL_IS_ARRAY_HOLE_MAGIC(element))
+                    return EJS_FALSE;
+                return EJS_TRUE;
+            }
         }
     }
 

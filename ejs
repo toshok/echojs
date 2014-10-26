@@ -315,10 +315,11 @@ compileFile = (filename, parse_tree, export_lists, compileCallback) ->
                 process.exit(-1) if options.debug_level == 0
                 throw e
 
-        ll_filename     = "#{os.tmpdir()}/#{base_filename}-#{options.target_platform}-#{options.target_arch}.ll"
-        bc_filename     = "#{os.tmpdir()}/#{base_filename}-#{options.target_platform}-#{options.target_arch}.bc"
-        ll_opt_filename = "#{os.tmpdir()}/#{base_filename}-#{options.target_platform}-#{options.target_arch}.ll.opt"
-        o_filename      = "#{os.tmpdir()}/#{base_filename}-#{options.target_platform}-#{options.target_arch}.o"
+        base_output_name = "#{os.tmpdir()}/#{base_filename}-#{options.target_platform}-#{options.target_arch}"
+        ll_filename      = "#{base_output_name}.ll"
+        bc_filename      = "#{base_output_name}.bc"
+        ll_opt_filename  = "#{base_output_name}.ll.opt"
+        o_filename       = "#{base_output_name}.o"
 
         temp_files.push ll_filename, bc_filename, ll_opt_filename, o_filename
         
@@ -477,14 +478,21 @@ for m in options.external_modules
 while work_list.length isnt 0
         file = work_list.pop()
 
+        # test to see if there's #{pathname}.js
         jsfile = file
-        try
-                if fs.statSync(file).isDirectory()
-                        jsfile = path.join(file, "index")
-        catch
-                # do nothing
         if path.extname(jsfile) isnt ".js"
-                jsfile = jsfile + '.js'
+                jsfile = jsfile + '.js' 
+
+        try
+                is_file = fs.statSync(jsfile).isFile()
+        catch
+                is_file = false
+
+        if not is_file
+                # we don't catch this exception
+                if fs.statSync(file).isDirectory()
+                        jsfile = path.join(file, "index.js")
+                        is_file = fs.statSync(jsfile).isFile()
         
         file_contents = fs.readFileSync(jsfile, 'utf-8')
         file_ast = parseFile(jsfile, file_contents)

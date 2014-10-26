@@ -400,7 +400,7 @@ _ejs_propertymap_remove (EJSPropertyMap *map, ejsval name)
     _EJSPropertyMapEntry* prev = NULL;
     _EJSPropertyMapEntry* s = map->buckets[bucket];
     while (s) {
-        if (EJSVAL_TO_BOOLEAN(_ejs_op_strict_eq(s->name, name))) {
+        if (s->hash == hashcode && EJSVAL_TO_BOOLEAN(_ejs_op_strict_eq(s->name, name))) {
             //_ejs_log ("  found entry in bucket (hashcode %d, bucket %d)\n", hashcode, bucket);
             if (prev)
                 prev->next_bucket = s->next_bucket;
@@ -447,6 +447,8 @@ _ejs_propertymap_lookup (EJSPropertyMap* map, ejsval name)
     int bucket = (int)(hashcode % map->nbuckets);
 
     for (_EJSPropertyMapEntry* s = map->buckets[bucket]; s; s = s->next_bucket) {
+        if (s->hash != hashcode)
+            continue;
         if (EJSVAL_TO_BOOLEAN(_ejs_op_strict_eq(s->name, name)))
             return s->desc;
     }
@@ -472,7 +474,7 @@ _ejs_propertymap_rehash (EJSPropertyMap* map)
     map->buckets = (_EJSPropertyMapEntry**)calloc (sizeof(_EJSPropertyMapEntry*), map->nbuckets);
 
     for (_EJSPropertyMapEntry *s = map->head_insert; s; s = s->next_insert) {
-        uint32_t hashcode = PropertyKeyHash(s->name);
+        uint32_t hashcode = s->hash;
         int bucket = (int)(hashcode % map->nbuckets);
 
         s->next_bucket = map->buckets[bucket];
@@ -493,6 +495,8 @@ _ejs_propertymap_insert (EJSPropertyMap* map, ejsval name, EJSPropertyDesc* desc
     int bucket = (int)(hashcode % map->nbuckets);
 
     for (_EJSPropertyMapEntry* s = map->buckets[bucket]; s; s = s->next_bucket) {
+        if (s->hash != hashcode)
+            continue;
         if (EJSVAL_TO_BOOLEAN(_ejs_op_strict_eq(s->name, name))) {
             _ejs_propertydesc_free (s->desc);
             s->desc = desc;
@@ -500,6 +504,7 @@ _ejs_propertymap_insert (EJSPropertyMap* map, ejsval name, EJSPropertyDesc* desc
         }
     }
     _EJSPropertyMapEntry* new_s = malloc(sizeof(_EJSPropertyMapEntry));
+    new_s->hash = hashcode;
     new_s->name = name;
     new_s->desc = desc;
     new_s->next_bucket = map->buckets[bucket];
@@ -1149,7 +1154,7 @@ _ejs_Object_assign (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
                 //             a. If pendingException is undefined, then set pendingException to propValue. 
                 //          3. else 
                 //             a. Let status be Put(to, nextKey, propValue, true); 
-                ejsval status = Put(to, nextKey, propValue, EJS_TRUE);
+                /*ejsval status =*/ Put(to, nextKey, propValue, EJS_TRUE);
                 //             b. If status is an abrupt completion, then 
                 //                i. If pendingException is undefined, then set pendingException to status. 
             }
@@ -2436,7 +2441,6 @@ _ejs_object_specop_own_property_keys (ejsval O)
     for (_EJSPropertyMapEntry *s = O_->map->head_insert; s; s = s->next_insert) {
         if (EJSVAL_IS_STRING(s->name)) {
             ejsval idx_val = ToNumber(s->name);
-            int idx;
             if (EJSVAL_IS_NUMBER(idx_val)) {
                 double n = EJSVAL_TO_NUMBER(idx_val);
                 if (floor(n) == n) {

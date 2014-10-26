@@ -554,16 +554,26 @@ let export_lists = Object.create(null);
 while (work_list.length !== 0) {
     let file = work_list.pop();
 
+    let is_file = false;
     let jsfile = file;
-    try {
-        if (fs.statSync(jsfile).isDirectory()) {
-            jsfile = path.join(jsfile, "index");
-        }
-    }
-    catch (e) { }
     if (path.extname(jsfile) !== ".js")
         jsfile = jsfile + '.js';
-    
+
+    try {
+        is_file = fs.statSync(jsfile).isFile();
+    }
+    catch (e) {
+        is_file = false;
+
+        if (!is_file) {
+            // we don't catch this exception
+            if (fs.statSync(file).isDirectory()) {
+                jsfile = path.join(file, "index.js");
+                is_file = fs.statSync(jsfile).isFile();
+            }
+        }
+    }
+
     let file_contents = fs.readFileSync(jsfile, 'utf-8');
     let file_ast = parseFile(jsfile, file_contents);
 

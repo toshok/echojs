@@ -20,7 +20,7 @@ extern EJSExternalModuleRequire _ejs_external_module_require_map[];
 
 static EJSRequire builtin_module_map[] = {
 #if IOS || OSX
-    { "@objc_internal", _ejs_objc_module_func }
+    { "objc_internal", _ejs_objc_module_func }
 #endif
 };
 static int num_builtin_modules = sizeof(builtin_module_map) / sizeof(builtin_module_map[0]);

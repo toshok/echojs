@@ -97,9 +97,9 @@ class EqIdioms extends TreeVisitor
                                 return rv
                         if is_undefined_literal(left) or is_undefined_literal(right)
                                 
-                                checkarg = if is_null_literal(left) then right else left
+                                checkarg = if is_undefined_literal(left) then right else left
 
-                                rv = create_intrinsic isNull_id, [checkarg]
+                                rv = create_intrinsic isUndefined_id, [checkarg]
                                 if exp.operator is "!=="
                                         rv = b.unaryExpression('!', rv)
                                 return rv

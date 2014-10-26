@@ -20,23 +20,23 @@
 int32_t
 ucs2_strcmp (const jschar *s1, const jschar *s2)
 {
-    const jschar *s1p = s1;
-    const jschar *s2p = s2;
+    if (s1 == s2) return 0;
 
-    while (*s1p && *s2p && *s1p == *s2p) {
-        s1p++;
-        s2p++;
+    while (*s1 == *s2++) {
+        if (*s1++ == 0)
+            return 0;
     }
 
-    return ((int32_t)*s1p) - ((int32_t)*s2p);
+    return ((int32_t)*s1) - ((int32_t)*(s2 - 1));
 }
 
 jschar*
 ucs2_strdup (const jschar *str)
 {
     int32_t len = ucs2_strlen(str);
-    jschar* result = (jschar*)calloc(sizeof(jschar), len + 1);
+    jschar* result = (jschar*)malloc(sizeof(jschar) * (len + 1));
     memmove (result, str, len * sizeof(jschar));
+    result[len] = 0;
     return result;
 }
 

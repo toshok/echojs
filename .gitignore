@@ -16,8 +16,8 @@
 
 *.exe
 ejs.js
-ejs.js.exe.stage1
-ejs.js.exe.stage2
-ejs.js.exe.stage3
-
+ejs.exe
+ejs-es6.js.exe.stage1
+ejs-es6.js.exe.stage2
+ejs-es6.js.exe.stage3
 pcre-*
