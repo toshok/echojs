@@ -979,7 +979,9 @@ ejsval
 _ejs_op_strict_eq (ejsval x, ejsval y)
 {
     // 1. If Type(x) is different from Type(y), return false.
-    if (EJSVAL_TO_TAG(x) != EJSVAL_TO_TAG(y)) return _ejs_false;
+    if (EJSVAL_TO_TAG(x) != EJSVAL_TO_TAG(y) && EJSVAL_IS_NUMBER(x) != EJSVAL_IS_NUMBER(y)) {
+        return _ejs_false;
+    }
     
     // 2. If Type(x) is Undefined, return true.
     if (EJSVAL_IS_UNDEFINED(x)) return _ejs_true;
@@ -1001,7 +1003,7 @@ _ejs_op_strict_eq (ejsval x, ejsval y)
         //    d. If x is +0 and y is -0, return true.
         if (EJSVAL_TO_NUMBER(x) == 0.0 && EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(y))) return _ejs_true;
         //    e. If x is -0 and y is +0, return true.
-        if (EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(x)) == 0.0 && EJSVAL_TO_NUMBER(y) == 0) return _ejs_true;
+        if (EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(x)) && EJSVAL_TO_NUMBER(y) == 0) return _ejs_true;
 
         //    f. Return false.
         return _ejs_false;
