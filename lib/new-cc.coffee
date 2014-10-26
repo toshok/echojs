@@ -822,4 +822,7 @@ exports.Convert = (options, filename, tree) ->
         validator = new ValidateEnvironments(options, filename)
         tree = validator.visit(tree)
 
+        allFunctions = []
+        global_bindings = new Map()
+        
         tree
