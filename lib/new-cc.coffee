@@ -347,7 +347,7 @@ SubstituteVariables = class SubstituteVariables extends TransformPass
                                 else
                                         return intrinsic(setLocal_id, [n.left, rhs])
                         else if ref.binding.type is 'global'
-                                throw new Error("setGlobal bzzzt")
+                                return intrinsic(setGlobal_id, [n.left, rhs])
                         else
                                 throw new Error("unhandled binding type #{ref.binding.type}")
 
