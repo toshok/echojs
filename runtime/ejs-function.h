@@ -45,6 +45,12 @@ EJS_BEGIN_DECLS
     _ejs_object_define_value_property (o, _ejs_atom_##n, _ejs_function_new_native (_ejs_null, _ejs_atom_##n, (EJSClosureFunc)f), flags); \
     EJS_MACRO_END
 
+#define EJS_INSTALL_ATOM_FUNCTION_LEN_FLAGS(o,n,f,l,flags) EJS_MACRO_START  \
+    ejsval __f = _ejs_function_new_native (_ejs_null, _ejs_atom_##n, (EJSClosureFunc)f); \
+    _ejs_object_define_value_property (__f, _ejs_atom_length, NUMBER_TO_EJSVAL(l), EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE); \
+    _ejs_object_define_value_property (o, _ejs_atom_##n, __f, flags); \
+    EJS_MACRO_END
+
 #define EJS_INSTALL_FUNCTION(o,n,f) EJS_MACRO_START                    \
     ejsval funcname = _ejs_string_new_utf8(n);                          \
     ejsval tmpfunc = _ejs_function_new_native (_ejs_null, funcname, (EJSClosureFunc)f); \

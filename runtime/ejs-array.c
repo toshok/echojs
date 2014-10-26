@@ -2252,6 +2252,7 @@ _ejs_array_init(ejsval global)
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Array, x, _ejs_Array_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Array_prototype, x, _ejs_Array_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
+#define PROTO_METHOD_LEN(x,l) EJS_INSTALL_ATOM_FUNCTION_LEN_FLAGS (_ejs_Array_prototype, x, _ejs_Array_prototype_##x, l, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
 
     OBJ_METHOD(isArray);
     // ECMA 6
@@ -2279,7 +2280,7 @@ _ejs_array_init(ejsval global)
     // ECMA 6
     PROTO_METHOD(copyWithin);
     PROTO_METHOD(fill);
-    PROTO_METHOD(find);
+    PROTO_METHOD_LEN(find, 1);
     PROTO_METHOD(findIndex);
     PROTO_METHOD(keys);
 

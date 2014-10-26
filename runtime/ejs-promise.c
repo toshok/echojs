@@ -943,12 +943,15 @@ _ejs_promise_init(ejsval global)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Promise_prototype, x, _ejs_Promise_prototype_##x, EJS_PROP_NOT_ENUMERABLE)
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Promise, x, _ejs_Promise_##x, EJS_PROP_NOT_ENUMERABLE)
 
+#define PROTO_METHOD_LEN(x,l) EJS_INSTALL_ATOM_FUNCTION_LEN_FLAGS (_ejs_Promise_prototype, x, _ejs_Promise_prototype_##x, l, EJS_PROP_NOT_ENUMERABLE)
+#define OBJ_METHOD_LEN(x,l) EJS_INSTALL_ATOM_FUNCTION_LEN_FLAGS (_ejs_Promise, x, _ejs_Promise_##x, l, EJS_PROP_NOT_ENUMERABLE)
+
     PROTO_METHOD(catch);
     PROTO_METHOD(then);
 
     _ejs_object_define_value_property (_ejs_Promise_prototype, _ejs_Symbol_toStringTag, _ejs_atom_Promise, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
 
-    OBJ_METHOD(all);
+    OBJ_METHOD_LEN(all, 1);
     OBJ_METHOD(race);
     OBJ_METHOD(reject);
     OBJ_METHOD(resolve);

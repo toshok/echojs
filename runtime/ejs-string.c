@@ -1656,12 +1656,13 @@ _ejs_string_init(ejsval global)
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_String, x, _ejs_String_##x)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_String_prototype, x, _ejs_String_prototype_##x)
+#define PROTO_METHOD_LEN(x,l) EJS_INSTALL_ATOM_FUNCTION_LEN_FLAGS (_ejs_String_prototype, x, _ejs_String_prototype_##x, l, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
 
     PROTO_METHOD(charAt);
     PROTO_METHOD(charCodeAt);
     PROTO_METHOD(codePointAt);
     PROTO_METHOD(concat);
-    PROTO_METHOD(contains);
+    PROTO_METHOD_LEN(contains, 1);
     PROTO_METHOD(endsWith);
     PROTO_METHOD(indexOf);
     PROTO_METHOD(lastIndexOf);

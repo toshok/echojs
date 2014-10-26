@@ -281,7 +281,7 @@ _ejs_Math_clz32 (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     uint32_t val = ToUint32(v);
 
 #if __has_builtin(__builtin_clz)
-    return NUMBER_TO_EJSVAL(val == 0 ? 0 : __builtin_clz(val));
+    return NUMBER_TO_EJSVAL(val == 0 ? 32 : __builtin_clz(val));
 #else
     // from qemu source:
 
@@ -467,6 +467,8 @@ _ejs_Math_atanh (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 static ejsval
 _ejs_Math_hypot (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
+    if (argc == 0) return NUMBER_TO_EJSVAL(0);
+
     ejsval x = _ejs_undefined;
     ejsval y = _ejs_undefined;
     if (argc > 0) x = args[0];
@@ -505,6 +507,7 @@ _ejs_math_init(ejsval global)
     _ejs_object_setprop (global, _ejs_atom_Math, _ejs_Math);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Math, x, _ejs_Math_##x)
+#define OBJ_METHOD_LEN(x,l) EJS_INSTALL_ATOM_FUNCTION_LEN_FLAGS(_ejs_Math, x, _ejs_Math_##x, l, 0)
 
     OBJ_METHOD(abs);
     OBJ_METHOD(acos);
@@ -539,7 +542,7 @@ _ejs_math_init(ejsval global)
     OBJ_METHOD(acosh);
     OBJ_METHOD(asinh);
     OBJ_METHOD(atanh);
-    OBJ_METHOD(hypot);
+    OBJ_METHOD_LEN(hypot, 2);
     OBJ_METHOD(trunc);
     OBJ_METHOD(fround);
     OBJ_METHOD(cbrt);
