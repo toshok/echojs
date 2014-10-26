@@ -14,10 +14,7 @@ all-local::
 check:
 	$(MAKE) -C test check
 
-bootstrap: ejs-es6.js.exe.stage3
-	@cp ejs-es6.js.exe.stage3 ejs.exe
-	@ls -l ejs.exe
-	@echo DONE
+bootstrap: stage3
 
 NODE_COMPAT_MODULES = --module "./node-compat/libejsnodecompat-module.a,@node-compat/path,_ejs_path_module_func," \
 		      --module "./node-compat/libejsnodecompat-module.a,@node-compat/os,_ejs_os_module_func," \
@@ -33,6 +30,11 @@ stage1: ejs-es6.js.exe.stage1
 
 stage2: ejs-es6.js.exe.stage2
 	@cp ejs-es6.js.exe.stage2 ejs.exe
+	@ls -l ejs.exe
+	@echo DONE
+
+stage3: ejs-es6.js.exe.stage3
+	@cp ejs-es6.js.exe.stage3 ejs.exe
 	@ls -l ejs.exe
 	@echo DONE
 
