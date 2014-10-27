@@ -895,9 +895,14 @@ class DesugarDestructuring extends TransformPass
 
         createArrayPatternBindings = (id, pattern, decls) ->
                 el_num = 0
+                seen_spread = false
+                
                 for el in pattern.elements
                         memberexp = b.memberExpression(id, b.literal(el_num), true)
 
+                        if seen_spread
+                                reportError(SyntaxError, "elements after spread element in array pattern", el.loc)
+                                
                         if el.type is Identifier
                                 decls.push b.variableDeclarator(el, memberexp)
                         else if el.type is ObjectPattern
@@ -912,7 +917,12 @@ class DesugarDestructuring extends TransformPass
                                 decls.push b.variableDeclarator(p_id, memberexp)
 
                                 createArrayPatternBindings(p_id, el, decls)
-                        
+                        else if el.type is SpreadElement
+                                decls.push b.variableDeclarator(el.argument, b.callExpression(b.memberExpression(id, b.identifier("slice")), [b.literal(el_num)]))
+                                seen_spread = true
+                        else
+                                throw new Error("createArrayPatternBindings #{el.type}")
+
                         el_num += 1
 
         visitFunction: (n) ->
