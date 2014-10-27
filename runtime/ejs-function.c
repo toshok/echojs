@@ -314,35 +314,6 @@ _ejs_Function_prototype_bind (ejsval env, ejsval _this, uint32_t argc, ejsval *a
 
     F_->bound = EJS_TRUE;
 
-#if not_anymore
-    /* 5. Set all the internal methods, except for [[Get]], of F as specified in 8.12. */
-    /* 6. Set the [[Get]] internal property of F as specified in 15.3.5.4. */
-    /* 7. Set the [[TargetFunction]] internal property of F to Target. */
-    /* 8. Set the [[BoundThis]] internal property of F to the value of thisArg. */
-    F_->bound_this = thisArg;
-
-    /* 9. Set the [[BoundArgs]] internal property of F to A. */
-    F_->bound_argc = bound_argc;
-    F_->bound_args = bound_args;
-
-    /* 10. Set the [[Class]] internal property of F to "Function". */
-    /* 11. Set the [[Prototype]] internal property of F to the standard built-in Function prototype object as specified in 15.3.3.1. */
-    /* 12. Set the [[Call]] internal property of F as described in 15.3.4.5.1. */
-    /* 13. Set the [[Construct]] internal property of F as described in 15.3.4.5.2. */
-    /* 14. Set the [[HasInstance]] internal property of F as described in 15.3.4.5.3. */
-    /* 15. If the [[Class]] internal property of Target is "Function", then */
-    /*     a. Let L be the length property of Target minus the length of A. */
-    /*     b. Set the length own property of F to either 0 or L, whichever is larger.  */
-    /* 16. Else set the length own property of F to 0. */
-    /* 17. Set the attributes of the length own property of F to the values specified in 15.3.5.1. */
-    /* 18. Set the [[Extensible]] internal property of F to true. */
-    /* 19. Let thrower be the [[ThrowTypeError]] function Object (13.2.3). */
-    /* 20. Call the [[DefineOwnProperty]] internal method of F with arguments "caller", PropertyDescriptor  */
-    /*     {[[Get]]: thrower, [[Set]]: thrower, [[Enumerable]]: false, [[Configurable]]: false}, and false. */
-    /* 21. Call the [[DefineOwnProperty]] internal method of F with arguments "arguments", PropertyDescriptor */
-    /*     {[[Get]]: thrower, [[Set]]: thrower, [[Enumerable]]: false, [[Configurable]]: false}, and false. */
-    /* 22. Return F. */
-#endif
     return F;
 }
 
@@ -469,55 +440,15 @@ _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args)
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "object not a function");
     }
 
+#if 0
     if (!EJSVAL_IS_NULL_OR_UNDEFINED(_this) && EJSVAL_IS_PRIMITIVE(_this)) {
         _this = ToObject(_this);
     }
+#endif
 
     EJSFunction *fun = (EJSFunction*)EJSVAL_TO_OBJECT(closure);
     return fun->func (fun->env, _this, argc, args);
-
-#if not_anymore
-
-    if (fun->bound_argc > 0) {
-        ejsval* new_args = (ejsval*)malloc(sizeof(ejsval) * (fun->bound_argc + argc));
-        memmove (new_args, fun->bound_args, sizeof(ejsval) * fun->bound_argc);
-        memmove (&new_args[fun->bound_argc], args, argc);
-        args = new_args;
-        argc += fun->bound_argc;
-    }
-
-    DEBUG_FUNCTION_ENTER (closure);
-    ejsval rv = fun->func (fun->env, fun->bound_this, argc, args);
-    DEBUG_FUNCTION_EXIT (closure);
-
-    if (fun->bound_argc > 0)
-        free (args);
-    return rv;
-#endif
 }
-
-#if not_anymore
-EJSBool
-_ejs_decompose_closure (ejsval closure, EJSClosureFunc* func, ejsval* env,
-                        ejsval *_this)
-{
-    if (!EJSVAL_IS_FUNCTION(closure))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "object not a function");
-
-    EJSFunction *fun = (EJSFunction*)EJSVAL_TO_OBJECT(closure);
-
-    if (fun->bound_argc > 0)
-        return EJS_FALSE;
-
-    *func = fun->func;
-    *env = fun->env;
-
-    if (fun->bound)
-        *_this = fun->bound_this;
-
-    return EJS_TRUE;
-}
-#endif
 
 // ECMA262: 15.3.5.3
 static EJSBool
@@ -557,11 +488,6 @@ _ejs_function_specop_allocate ()
 static void
 _ejs_function_specop_finalize (EJSObject* obj)
 {
-#if notanymore
-    EJSFunction* f = (EJSFunction*)obj;
-    if (f->bound_args)
-        free (f->bound_args);
-#endif
     _ejs_Object_specops.Finalize (obj);
 }
 
@@ -570,14 +496,6 @@ _ejs_function_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSFunction* f = (EJSFunction*)obj;
     scan_func (f->env);
-#if notanymore
-    if (f->bound) {
-        scan_func (f->bound_this);
-        for (int i = 0; i < f->bound_argc; i ++)
-            scan_func (f->bound_args[i]);
-    }
-#endif
-
     _ejs_Object_specops.Scan (obj, scan_func);
 }
 

@@ -61,6 +61,28 @@ _ejs_eval (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
   return _ejs_undefined;
 }
 
+ejsval
+_ejs_unhandledException(ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    ejsval exc = _ejs_undefined;
+
+    if (argc > 0)
+        exc = args[0];
+
+    printf ("unhandled exception: ");
+    
+    if (EJSVAL_IS_UNDEFINED(exc)) {
+        EJS_NOT_IMPLEMENTED();
+    }
+    else {
+        ejsval str = ToString(exc);
+
+        printf ("%s\n", _ejs_string_to_utf8(_ejs_string_flatten(str)));
+    }
+    exit(-1);
+    return _ejs_undefined;
+}
+
 static void
 _ejs_init_classes()
 {
@@ -203,4 +225,6 @@ _ejs_init(int argc, char** argv)
 
     _ejs_GC_init(_ejs__ejs);
     _ejs_gc_allocate_oom_exceptions();
+
+    EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs__ejs, unhandledException, _ejs_unhandledException, 0);
 }

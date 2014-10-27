@@ -102,6 +102,7 @@ EJS_ATOM(exports)
 // our ejs-specific stuff
 EJS_ATOM(__ejs)
 EJS_ATOM(GC)
+EJS_ATOM(unhandledException)
 
 EJS_ATOM(argv)
 EJS_ATOM(process)
