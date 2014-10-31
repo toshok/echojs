@@ -303,13 +303,13 @@ parseFile = (filename, content) ->
 
         return parse_tree
         
-compileFile = (filename, parse_tree, export_lists, compileCallback) ->
+compileFile = (filename, parse_tree, export_lists, modules, compileCallback) ->
         base_filename = util.genFreshFileName path.basename filename
 
         console.warn "#{util.bold()}COMPILE#{util.reset()} #{filename} #{if options.debug_level > 0 then '-> #{base_filename}' else ''}" if not options.quiet
 
         try
-                compiled_module = compiler.compile parse_tree, base_filename, filename, export_lists, options
+                compiled_module = compiler.compile parse_tree, base_filename, filename, export_lists, modules, options
         catch e
                 console.warn "#{e}"
                 process.exit(-1) if options.debug_level == 0
@@ -375,33 +375,38 @@ generate_import_map = (modules) ->
                 if c_callable
                         filename = filename.replace /[.,-\/\\]/g, "_" # this is insanely inadequate
                 filename
-        map_path = "#{os.tmpdir()}/#{util.genFreshFileName path.basename main_file}-import-map.cpp"
+        map_path = "#{os.tmpdir()}/#{util.genFreshFileName path.basename main_file}-modules.cpp"
         map = fs.createWriteStream(map_path)
-        map.write "#include \"#{relative_to_ejs_exe 'runtime/ejs.h'}\"\n"
+        map.write "#include \"#{relative_to_ejs_exe 'runtime/ejs-module.h'}\"\n"
         map.write "extern \"C\" {\n"
-        map.write "typedef ejsval (*ExternalModuleEntry) (ejsval exports);\n"
-        map.write "typedef struct { const char* name;  ExternalModuleEntry func;  ejsval cached_exports EJSVAL_ALIGNMENT; } EJSExternalModuleRequire;\n"
-        map.write "typedef ejsval (*ToplevelFunc) (ejsval env, ejsval _this, int argc, ejsval *args);\n"
-        map.write "typedef struct { const char* name;  ToplevelFunc func;  ejsval cached_exports EJSVAL_ALIGNMENT; } EJSRequire;\n"
         options.external_modules.forEach ({ module_entrypoint }) ->
                 map.write "extern ejsval #{module_entrypoint} (ejsval exports);\n"
 
-        modules.forEach ({ filename, module_toplevel }) ->
-                map.write "extern ejsval #{module_toplevel} (ejsval env, ejsval _this, int argc, ejsval *args);\n"
+        modules.forEach (m) ->
+                map.write "extern EJSModule #{m.module_name};\n"
+                map.write "extern ejsval #{m.toplevel_function_name} (ejsval env, ejsval _this, uint32_t argc, ejsval* arg);\n"
 
-        map.write "EJSRequire _ejs_require_map[] = {\n"
-        modules.forEach ({ filename, module_toplevel }) ->
-                map.write "  { \"#{sanitize filename, false}\", #{module_toplevel}, 0 },\n"
-        map.write "  { 0, 0, 0 }\n"
+        map.write "EJSModule* _ejs_modules[] = {\n"
+        modules.forEach (m) ->
+                map.write "  &#{m.module_name},\n"
         map.write "};\n"
 
-        map.write "EJSExternalModuleRequire _ejs_external_module_require_map[] = {\n"
+        map.write "ejsval (*_ejs_module_toplevels[])(ejsval, ejsval, uint32_t, ejsval*) = {\n"
+        modules.forEach (m) ->
+                map.write " #{m.toplevel_function_name},\n"
+        map.write "};\n"
+        map.write "int _ejs_num_modules = sizeof(_ejs_modules) / sizeof(_ejs_modules[0]);\n\n"
+
+        map.write "EJSExternalModule _ejs_external_modules[] = {\n"
         options.external_modules.forEach ({ module_name, module_entrypoint }) ->
                 map.write "  { \"#{module_name}\", #{module_entrypoint}, 0 },\n"
-        map.write "  { 0, 0, 0 }\n"
         map.write "};\n"
-        
-        map.write "const char *entry_filename = \"#{sanitize file_args[0], false}\";\n";
+        map.write "int _ejs_num_external_modules = sizeof(_ejs_external_modules) / sizeof(_ejs_external_modules[0]);\n"
+
+        entry_module = file_args[0]
+        if entry_module.lastIndexOf(".js") == entry_module.length - 3
+                entry_module = entry_module.substring(0, entry_module.length-3)
+        map.write "const EJSModule* entry_module = &#{modules.get(entry_module).module_name};\n"
 
         map.write "};"
         map.end()
@@ -411,8 +416,8 @@ generate_import_map = (modules) ->
         map_path
 
 
-do_final_link = (main_file) ->
-        map_filename = generate_import_map compiled_modules
+do_final_link = (main_file, modules) ->
+        map_filename = generate_import_map modules
 
         process.env.PATH = "#{target_path_prepend(options.target_platform,options.target_arch)}:#{process.env.PATH}"
 
@@ -505,21 +510,25 @@ while work_list.length isnt 0
                 if work_list.indexOf(i) is -1 and not files.some((el) -> el.file_name is i)
                         work_list.push(i)
 
+
+compiler.dumpModules()
+allModules = compiler.getAllModules()
+
 # now compile them
 #
 if __ejs?
         for f in files
-                compileFile f.file_name, f.file_ast, export_lists
-        do_final_link(main_file)
+                compileFile f.file_name, f.file_ast, export_lists, allModules
+        do_final_link(main_file, allModules)
 else
         # reverse the list so the main program is the first thing we compile
         files.reverse()
         compileNextFile = ->
                 if files.length is 0
-                        do_final_link(main_file)
+                        do_final_link(main_file, allModules)
                         return
                 f = files.pop()
-                compileFile f.file_name, f.file_ast, export_lists, compileNextFile
+                compileFile f.file_name, f.file_ast, export_lists, allModules, compileNextFile
         compileNextFile()
         
 # Local Variables:

@@ -19,6 +19,7 @@
 #include "ejs-number.h"
 #include "ejs-boolean.h"
 #include "ejs-object.h"
+#include "ejs-module.h"
 #include "ejs-process.h"
 #include "ejs-promise.h"
 #include "ejs-regexp.h"
@@ -95,6 +96,7 @@ _ejs_init_classes()
     _ejs_Class_initialize (&_ejs_Function_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Map_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_MapIterator_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_Module_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Proxy_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Promise_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Set_specops, &_ejs_Object_specops);

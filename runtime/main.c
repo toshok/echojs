@@ -11,7 +11,7 @@
 
 #define GC_ON_SHUTDOWN 0
 
-extern const char *entry_filename;
+extern EJSModule* entry_module;
 
 #include <signal.h>
 #include <setjmp.h>
@@ -43,7 +43,7 @@ main(int argc, char** argv)
 
     _ejs_init(argc, argv);
 
-    _ejs_module_get (_ejs_string_new_utf8(entry_filename));
+    _ejs_module_resolve (entry_module);
 
     _ejs_runloop_start();
 

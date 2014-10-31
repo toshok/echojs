@@ -11,35 +11,39 @@
 #include "ejs-function.h"
 #include "ejs-value.h"
 #include "ejs-string.h"
+#include "ejs-module.h"
 #if IOS || OSX
 #include "ejs-objc.h"
 #endif
 
-extern EJSRequire _ejs_require_map[];
-extern EJSExternalModuleRequire _ejs_external_module_require_map[];
+extern EJSModule* _ejs_modules[];
+extern EJSClosureFunc _ejs_module_toplevels[];
+extern int _ejs_num_modules;
 
-static EJSRequire builtin_module_map[] = {
+extern EJSExternalModule _ejs_external_modules[];
+extern int _ejs_num_external_modules;
+
+static EJSExternalModule builtin_modules[] = {
 #if IOS || OSX
     { "objc_internal", _ejs_objc_module_func }
 #endif
 };
-static int num_builtin_modules = sizeof(builtin_module_map) / sizeof(builtin_module_map[0]);
+static int num_builtin_modules = sizeof(builtin_modules) / sizeof(builtin_modules[0]);
 
 ejsval _ejs_require EJSVAL_ALIGNMENT;
 
 EJSBool
 require_builtin_module (const char* name, ejsval *module)
 {
-    int i;
-    for (i = 0; i < num_builtin_modules; i ++) {
-        if (!strcmp (builtin_module_map[i].name, name)) {
-            if (EJSVAL_IS_NULL(builtin_module_map[i].cached_exports)) {
+    for (int i = 0; i < num_builtin_modules; i ++) {
+        if (!strcmp (builtin_modules[i].name, name)) {
+            if (EJSVAL_IS_NULL(builtin_modules[i].cached_module_obj)) {
                 //	printf ("require'ing %s.\n", EJSVAL_TO_FLAT_STRING(arg));
-                _ejs_gc_add_root (&builtin_module_map[i].cached_exports);
-                builtin_module_map[i].cached_exports = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
-                builtin_module_map[i].func(_ejs_null, _ejs_undefined, 1, &builtin_module_map[i].cached_exports);
+                _ejs_gc_add_root (&builtin_modules[i].cached_module_obj);
+                builtin_modules[i].cached_module_obj = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
+                builtin_modules[i].func(builtin_modules[i].cached_module_obj);
             }
-            *module = builtin_module_map[i].cached_exports;
+            *module = builtin_modules[i].cached_module_obj;
             return EJS_TRUE;
         }
     }
@@ -49,47 +53,45 @@ require_builtin_module (const char* name, ejsval *module)
 EJSBool
 require_external_module (const char* name, ejsval *module)
 {
-    int i = 0;
-    while (1) {
-        if (!_ejs_external_module_require_map[i].name) {
-            return EJS_FALSE;
-        }
-
-        if (!strcmp (_ejs_external_module_require_map[i].name, name)) {
-            if (EJSVAL_IS_NULL(_ejs_external_module_require_map[i].cached_exports)) {
-                _ejs_gc_add_root (&_ejs_external_module_require_map[i].cached_exports);
-                _ejs_external_module_require_map[i].cached_exports = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
-                _ejs_external_module_require_map[i].func(_ejs_external_module_require_map[i].cached_exports);
+    for (int i = 0; i < _ejs_num_external_modules; i ++) {
+        if (!strcmp (_ejs_external_modules[i].name, name)) {
+            if (EJSVAL_IS_NULL(_ejs_external_modules[i].cached_module_obj)) {
+                _ejs_gc_add_root (&_ejs_external_modules[i].cached_module_obj);
+                _ejs_external_modules[i].cached_module_obj = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
+                _ejs_external_modules[i].func(_ejs_external_modules[i].cached_module_obj);
             }
-            *module = _ejs_external_module_require_map[i].cached_exports;
+            *module = _ejs_external_modules[i].cached_module_obj;
             return EJS_TRUE;
         }
-        i++;
     }
+    return EJS_FALSE;
 }
 
 EJSBool
 require_user_module (const char* name, ejsval *module)
 {
-    int i = 0;
-    while (1) {
-        EJSRequire* map = &_ejs_require_map[i];
-        if (!map->name) {
-            return EJS_FALSE;
-        }
-        if (!strcmp (map->name, name)) {
-            if (EJSVAL_IS_NULL(map->cached_exports)) {
-                _ejs_gc_add_root (&map->cached_exports);
-                map->cached_exports = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
-                map->func (_ejs_null, _ejs_undefined, 1, &map->cached_exports);
-            }
-            *module = map->cached_exports;
+    for (int i = 0; i < _ejs_num_modules; i ++) {
+        EJSModule* mod = _ejs_modules[i];
+        if (mod->module_name && !strcmp (mod->module_name, name)) {
+            _ejs_module_toplevels[i](_ejs_null, OBJECT_TO_EJSVAL(mod), 0, NULL);
+            *module = OBJECT_TO_EJSVAL(mod);
             return EJS_TRUE;
         }
-        i++;
     }
+    return EJS_FALSE;
 }
 
+void
+_ejs_module_resolve(EJSModule* mod)
+{
+    for (int i = 0; i < _ejs_num_modules; i ++) {
+        if (_ejs_modules[i] == mod) {
+            _ejs_module_toplevels[i](_ejs_null, OBJECT_TO_EJSVAL(mod), 0, NULL);
+            return;
+        }
+    }
+    EJS_NOT_REACHED();
+}
 
 ejsval
 _ejs_module_get (ejsval arg)
@@ -131,36 +133,6 @@ _ejs_require_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return _ejs_module_get(arg);
 }
 
-typedef struct {
-    EJSObject* toObj;
-    EJSArray* specifiers;
-} ImportBatchData;
-
-static void
-import_batch_foreach (ejsval name, EJSPropertyDesc *desc, void* data)
-{
-    ImportBatchData* import_data = (ImportBatchData*)data;
-    EJSObject* toObj = import_data->toObj;
-    EJSArray* specifiers = import_data->specifiers;
-    
-    if (!specifiers || _ejs_array_indexof (specifiers, name) != -1)
-        _ejs_propertymap_insert (toObj->map, name, desc);
-}
-
-void
-_ejs_module_import_batch(ejsval fromImport, ejsval specifiers, ejsval toExport)
-{
-    EJSObject* fromObj = EJSVAL_TO_OBJECT(fromImport);
-    EJSObject* toObj = EJSVAL_TO_OBJECT(toExport);
-    EJSArray*  specArray = (EJSArray*)EJSVAL_TO_OBJECT(specifiers);
-
-    ImportBatchData data;
-    data.toObj = toObj;
-    data.specifiers = EJSARRAY_LEN(specArray) == 0 ? NULL : specArray;
-
-    _ejs_propertymap_foreach_property(fromObj->map, import_batch_foreach, &data);
-}
-
 void
 _ejs_require_init(ejsval global)
 {
@@ -169,22 +141,14 @@ _ejs_require_init(ejsval global)
   
     int i;
     for (i = 0; i < num_builtin_modules; i ++) {
-        builtin_module_map[i].cached_exports = _ejs_null;
+        builtin_modules[i].cached_module_obj = _ejs_null;
     }
 
-    i = 0;
-    while (1) {
-        if (!_ejs_external_module_require_map[i].name)
-            break;
-        _ejs_external_module_require_map[i].cached_exports = _ejs_null;
-        i++;
+    for (i = 0; i < _ejs_num_external_modules; i ++) {
+        _ejs_external_modules[i].cached_module_obj = _ejs_null;
     }
 
-    i = 0;
-    while (1) {
-        if (!_ejs_require_map[i].name)
-            break;
-        _ejs_require_map[i].cached_exports = _ejs_null;
-        i++;
+    for (i = 0; i < _ejs_num_modules; i ++) {
+        _ejs_init_object ((EJSObject*)_ejs_modules[i], _ejs_Object_prototype, &_ejs_Module_specops);
     }
 }

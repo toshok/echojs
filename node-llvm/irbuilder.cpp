@@ -60,6 +60,7 @@ namespace jsllvm {
     NODE_SET_METHOD(s_func, "createOr", IRBuilder::CreateOr);
     NODE_SET_METHOD(s_func, "createZExt", IRBuilder::CreateZExt);
     NODE_SET_METHOD(s_func, "createIntToPtr", IRBuilder::CreateIntToPtr);
+    NODE_SET_METHOD(s_func, "createPtrToInt", IRBuilder::CreatePtrToInt);
     NODE_SET_METHOD(s_func, "createBitCast", IRBuilder::CreateBitCast);
 
     NODE_SET_METHOD(s_func, "createSwitch", IRBuilder::CreateSwitch);
@@ -201,6 +202,18 @@ namespace jsllvm {
     FALLBACK_EMPTY_UTF8_ARG(2, name);
 
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(builder.CreateIntToPtr(V, dest_ty, *name)));
+    return scope.Close(result);
+  }
+
+  v8::Handle<v8::Value> IRBuilder::CreatePtrToInt(const v8::Arguments& args)
+  {
+    HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(0, V);
+    REQ_LLVM_TYPE_ARG(1, dest_ty);
+    FALLBACK_EMPTY_UTF8_ARG(2, name);
+
+    Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(builder.CreatePtrToInt(V, dest_ty, *name)));
     return scope.Close(result);
   }
 

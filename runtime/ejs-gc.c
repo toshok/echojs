@@ -19,6 +19,7 @@
 #include "ejs-error.h"
 #include "ejs-ops.h"
 #include "ejsval.h"
+#include "ejs-module.h"
 
 #include <pthread.h>
 
@@ -1014,7 +1015,8 @@ static void
 mark_from_roots()
 {
     SPEW (2, _ejs_log ("marking from roots"));
-    // mark from our roots
+
+    // mark from our registered roots
     for (RootSetEntry *entry = root_set; entry; entry = entry->next) {
         num_roots++;
         if (entry->root) {
@@ -1036,6 +1038,15 @@ mark_from_roots()
         }
     }
     SPEW (2, _ejs_log ("done marking from roots"));
+}
+
+static void
+mark_from_modules()
+{
+    SPEW(2, _ejs_log ("marking from module exotics"));
+
+    for (int i = 0; i < _ejs_num_modules; i ++)
+        _scan_from_ejsobject((EJSObject*)_ejs_modules[i]);
 }
 
 #if TARGET_CPU_ARM
@@ -1116,6 +1127,8 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
         mark_from_roots();
 
         total_objs = num_roots;
+
+        mark_from_modules();
 
         mark_thread_stack();
 

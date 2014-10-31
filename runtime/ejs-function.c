@@ -50,6 +50,12 @@ _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func)
 }
 
 ejsval
+_ejs_function_new_without_env (ejsval name, EJSClosureFunc func)
+{
+    return _ejs_function_new (_ejs_undefined, name, func);
+}
+
+ejsval
 _ejs_function_new_without_proto (ejsval env, ejsval name, EJSClosureFunc func)
 {
     EJSFunction *rv = _ejs_gc_new(EJSFunction);

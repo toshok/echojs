@@ -7,20 +7,7 @@
 
 #include "ejs.h"
 #include "ejs-function.h"
-
-typedef struct {
-    const char* name;
-    EJSClosureFunc func;
-    ejsval cached_exports EJSVAL_ALIGNMENT;
-} EJSRequire;
-
-typedef ejsval (*ExternalModuleEntry) (ejsval exports);
-
-typedef struct {
-    const char* name;
-    ExternalModuleEntry func;
-    ejsval cached_exports EJSVAL_ALIGNMENT;
-} EJSExternalModuleRequire;
+#include "ejs-module.h"
 
 EJS_BEGIN_DECLS
 
@@ -28,8 +15,8 @@ extern ejsval _ejs_require;
 
 extern void _ejs_require_init(ejsval global);
 
+void _ejs_module_resolve(EJSModule* mod);
 extern ejsval _ejs_module_get (ejsval name);
-extern void   _ejs_module_import_batch (ejsval fromImport, ejsval specifiers, ejsval toExport);
 
 EJS_END_DECLS
 

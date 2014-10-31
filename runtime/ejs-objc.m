@@ -1271,10 +1271,8 @@ _ejs_objc_NSApplicationMain (ejsval env, ejsval _this, uint32_t argc, ejsval* ar
 #endif
 
 ejsval
-_ejs_objc_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+_ejs_objc_module_func (ejsval exports)
 {
-    ejsval exports = args[0];
-
     EJS_INSTALL_FUNCTION(exports, "requireFramework", _ejs_objc_requireFramework);
     EJS_INSTALL_FUNCTION(exports, "allocInstance", _ejs_objc_allocInstance);
     EJS_INSTALL_FUNCTION(exports, "staticCall", _ejs_objc_staticCall);

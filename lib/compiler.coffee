@@ -76,7 +76,7 @@ node_compat = require 'node-compat'
 { TreeVisitor } = require 'nodevisitor'
 closure_conversion = require 'closure-conversion'
 optimizations = require 'optimizations'
-{ startGenerator, is_intrinsic, is_string_literal } = require 'echo-util'
+{ startGenerator, intrinsic, is_intrinsic, is_string_literal } = require 'echo-util'
 
 { ExitableScope, TryExitableScope, SwitchExitableScope, LoopExitableScope } = require 'exitable-scope'
 
@@ -89,6 +89,9 @@ b = require 'ast-builder'
 
 llvm = require 'llvm'
 ir = llvm.IRBuilder
+
+moduleGetSlot_id        = b.identifier "%moduleGetSlot"
+moduleSetSlot_id        = b.identifier "%moduleSetSlot"
 
 BUILTIN_PARAMS = [
   { name: "%env",     llvm_type: types.EjsValue } # should be EjsClosureEnv
@@ -224,7 +227,7 @@ class SRetABI extends ABI
                                 
         
 class LLVMIRVisitor extends TreeVisitor
-        constructor: (@module, @filename, @options, @abi) ->
+        constructor: (@module, @filename, @options, @abi, @allModules, @this_module_info) ->
 
                 @idgen = startGenerator()
                 
@@ -236,7 +239,9 @@ class LLVMIRVisitor extends TreeVisitor
                         templateDefaultHandlerCall: value: @handleTemplateDefaultHandlerCall
                         templateCallsite:     value: @handleTemplateCallsite
                         moduleGet:            value: @handleModuleGet
-                        moduleImportBatch:    value: @handleModuleImportBatch
+                        moduleGetSlot:        value: @handleModuleGetSlot
+                        moduleSetSlot:        value: @handleModuleSetSlot
+                        moduleGetExotic:      value: @handleModuleGetExotic
                         getArgumentsObject:   value: @handleGetArgumentsObject
                         getLocal:             value: @handleGetLocal
                         setLocal:             value: @handleSetLocal
@@ -247,6 +252,7 @@ class LLVMIRVisitor extends TreeVisitor
                         setSlot:              value: @handleSetSlot
                         invokeClosure:        value: @handleInvokeClosure
                         makeClosure:          value: @handleMakeClosure
+                        makeClosureNoEnv:     value: @handleMakeClosureNoEnv
                         makeAnonClosure:      value: @handleMakeAnonClosure
                         createArgScratchArea: value: @handleCreateArgScratchArea
                         makeClosureEnv:       value: @handleMakeClosureEnv
@@ -271,6 +277,10 @@ class LLVMIRVisitor extends TreeVisitor
 
                         templateDefaultHandlerCall: true
                         
+                        moduleGet            : true # unused
+                        moduleGetSlot        : false
+                        moduleSetSlot        : false
+                        moduleSetExotic      : false
                         moduleGet         : true # unused
                         getLocal          : true # unused
                         setLocal          : true # unused
@@ -326,6 +336,67 @@ class LLVMIRVisitor extends TreeVisitor
 
         # lots of helper methods
 
+        emitModuleInfo: () ->
+                this_module_type   = types.getModuleSpecificType(@this_module_info.module_name, @this_module_info.slot_num)
+                @this_module_global = new llvm.GlobalVariable @module, this_module_type, @this_module_info.module_name, llvm.Constant.getAggregateZero(this_module_type), true
+                @import_module_globals = new Map()
+                for import_module_string in @this_module_info.importList
+                        import_module_info = @allModules.get(import_module_string)
+                        @import_module_globals.set(import_module_string, new llvm.GlobalVariable(@module, types.EjsModule, import_module_info.module_name, null, true))
+                @this_module_initted = new llvm.GlobalVariable @module, types.bool, "#{@this_module_info.module_name}_initialized", consts.false(), false
+                return
+
+        emitModuleResolution: (module_accessors) ->
+                # @loadUndefinedEjsValue depends on this
+                @currentFunction = @toplevel_function
+                
+                ir.setInsertPoint @resolve_modules_bb
+
+                uninitialized_bb = new llvm.BasicBlock "module_uninitialized", @toplevel_function
+                initialized_bb = new llvm.BasicBlock "module_initialized", @toplevel_function
+
+                load_init_flag = ir.createLoad @this_module_initted, "load_init_flag"
+                load_init_cmp = ir.createICmpEq load_init_flag, consts.false(), "load_init_cmp"
+                
+                ir.createCondBr load_init_cmp, uninitialized_bb, initialized_bb
+                
+                ir.setInsertPoint uninitialized_bb
+                ir.createStore consts.true(), @this_module_initted
+
+                # fill in the information we know about this module
+                #  our name
+                name_slot = ir.createInBoundsGetElementPointer @this_module_global, [consts.int64(0), consts.int32(1)], "name_slot"
+                ir.createStore consts.string(ir, @this_module_info.path), name_slot
+
+                #  num_exports
+                num_exports_slot = ir.createInBoundsGetElementPointer @this_module_global, [consts.int64(0), consts.int32(2)], "num_exports_slot"
+                ir.createStore consts.int32(@this_module_info.slot_num), num_exports_slot
+
+                # define our accessor properties
+                module_accessors.forEach (accessor) =>
+                        get_func = accessor.getter?.ir_func or consts.null(types.EjsClosureFunc)
+                        set_func = accessor.setter?.ir_func or consts.null(types.EjsClosureFunc)
+                        module_arg = ir.createPointerCast(@this_module_global, types.EjsModule.pointerTo(), "")
+                        console.log 1
+                        get_func.dump()
+                        console.log 2
+                        set_func.dump()
+                        console.log 3
+                        module_arg.dump()
+                        console.log 4
+                        ir.createCall @ejs_runtime.module_add_export_accessors, [module_arg, consts.string(ir, accessor.key), get_func, set_func], ""
+                        console.log 5
+
+                for import_module_string in @this_module_info.importList
+                        import_module = @import_module_globals.get(import_module_string)
+                        @createCall @ejs_runtime.module_resolve, [import_module], "", !@ejs_runtime.module_resolve.doesNotThrow
+
+                ir.createBr @toplevel_body_bb
+
+                ir.setInsertPoint initialized_bb
+                ir.createRet @loadUndefinedEjsValue()
+
+                
         # result should be the landingpad's value
         beginCatch: (result) -> @createCall @ejs_runtime.begin_catch, [ir.createPointerCast(result, types.int8Pointer, "")], "begincatch"
         endCatch:            -> @createCall @ejs_runtime.end_catch, [], "endcatch"
@@ -698,13 +769,17 @@ class LLVMIRVisitor extends TreeVisitor
                 insertFunc = insertBlock.parent
                 
                 body_bb = new llvm.BasicBlock "do_body", insertFunc
+                test_bb = new llvm.BasicBlock "do_test", insertFunc
                 merge_bb = new llvm.BasicBlock "do_merge", insertFunc
 
                 ir.createBr body_bb
 
-                @doInsideExitableScope (new LoopExitableScope n.label, body_bb, merge_bb), =>
+                @doInsideExitableScope (new LoopExitableScope n.label, test_bb, merge_bb), =>
                         @doInsideBBlock body_bb, =>
                                 @visit n.body
+                                ir.createBr test_bb
+
+                        @doInsideBBlock test_bb, =>
                                 @generateCondBr n.test, body_bb, merge_bb
                                 
                 ir.setInsertPoint merge_bb
@@ -991,13 +1066,12 @@ class LLVMIRVisitor extends TreeVisitor
                         debug.log -> "store #{store} *builtin"
 
                 body_bb = new llvm.BasicBlock "body", ir_func
-                ir.setInsertPoint body_bb
 
                 #@createCall @ejs_runtime.log, [consts.string(ir, "entering #{n.ir_name}")], ""
                 
-                if n.toplevel?
-                        ir.createCall @literalInitializationFunction, [], ""
-
+                ir.setInsertPoint body_bb
+                ir.createCall @literalInitializationFunction, [], ""
+                
                 insertFunc = body_bb.parent
         
                 @iifeStack = new Stack
@@ -1010,11 +1084,20 @@ class LLVMIRVisitor extends TreeVisitor
                 # Finish off the function.
                 @createRet @loadUndefinedEjsValue()
 
-                # insert an unconditional branch from entry_bb to body here, now that we're
-                # sure we're not going to be inserting allocas into the entry_bb anymore.
-                ir.setInsertPoint entry_bb
-                ir.createBr body_bb
-                        
+                if n.toplevel
+                        @resolve_modules_bb = new llvm.BasicBlock "resolve_modules", ir_func
+                        @toplevel_body_bb = body_bb
+                        @toplevel_function = ir_func
+
+                        # branch to the resolve_modules_bb from our entry_bb, but only in the toplevel function
+                        ir.setInsertPoint entry_bb
+                        ir.createBr @resolve_modules_bb
+                else
+                        # branch to the body_bb from our entry_bb
+                        ir.setInsertPoint entry_bb
+                        ir.createBr body_bb
+
+
                 @currentFunction = null
 
                 ir.setInsertPoint insertBlock
@@ -1339,18 +1422,18 @@ class LLVMIRVisitor extends TreeVisitor
                 (array_data.push consts.jschar jsstr.charCodeAt i) for i in [0...jsstr.length]
                 array_data.push consts.jschar 0
                 array = llvm.ConstantArray.get ucsArrayType, array_data
-                arrayglobal = new llvm.GlobalVariable @module, ucsArrayType, "ucs2-#{id}", array
+                arrayglobal = new llvm.GlobalVariable @module, ucsArrayType, "ucs2-#{id}", array, false
                 arrayglobal.setAlignment 8
                 arrayglobal
 
         generateEJSPrimString: (id, len) ->
-                strglobal = new llvm.GlobalVariable @module, types.EjsPrimString, "primstring-#{id}", llvm.Constant.getAggregateZero types.EjsPrimString
+                strglobal = new llvm.GlobalVariable @module, types.EjsPrimString, "primstring-#{id}", llvm.Constant.getAggregateZero(types.EjsPrimString), false
                 strglobal.setAlignment 8
                 strglobal
 
         generateEJSValueForString: (id) ->
                 name = "ejsval-#{id}"
-                strglobal = new llvm.GlobalVariable @module, types.EjsValue, name, llvm.Constant.getAggregateZero(types.EjsValue)
+                strglobal = new llvm.GlobalVariable @module, types.EjsValue, name, llvm.Constant.getAggregateZero(types.EjsValue), false
                 strglobal.setAlignment 8
                 val = @module.getOrInsertGlobal name, types.EjsValue
                 val.setAlignment 8
@@ -1476,6 +1559,7 @@ class LLVMIRVisitor extends TreeVisitor
 
                 scope = new TryExitableScope @currentFunction.cleanup_reason, branch_target, (-> new llvm.BasicBlock "exception", insertFunc), finally_block?
                 @doInsideExitableScope scope, =>
+                        scope.enterTry()
                         @visit n.block
 
                         if n.finalizer?
@@ -1483,6 +1567,7 @@ class LLVMIRVisitor extends TreeVisitor
                 
                         # at the end of the try block branch to our branch_target (either the finally block or the merge block after the try{}) with REASON_FALLOFF
                         scope.exitAft false
+                        scope.leaveTry()
 
                 if scope.landing_pad_block? and n.handlers.length > 0
                         catch_block = new llvm.BasicBlock "catch_bb", insertFunc
@@ -1526,14 +1611,22 @@ class LLVMIRVisitor extends TreeVisitor
                                                         catch_scope.set catch_name, alloca
                                                         ir.createStore catchval, alloca
 
-                                                @visitWithScope catch_scope, [n.handlers[0]]
+                                                if n.finalizer?
+                                                        @finallyStack.unshift finally_block
+
+                                                @doInsideExitableScope scope, =>
+                                                        @visitWithScope catch_scope, [n.handlers[0]]
 
                                                 # unsure about this one - we should likely call end_catch if another exception is thrown from the catch block?
                                                 @endCatch()
 
-                                                # if we make it to the end of the catch block, branch unconditionally to the branch target (either this try's
-                                                # finally block or the merge pointer after the try)
-                                                ir.createBr branch_target
+                                                if n.finalizer?
+                                                        @finallyStack.shift()
+                
+                                                # at the end of the catch block branch to our branch_target (either the finally block or the merge block after the try{}) with REASON_FALLOFF
+                                                scope.exitAft false
+
+
 
                                 ###
                                 # Unwind Resume Block (calls _Unwind_Resume)
@@ -1654,7 +1747,7 @@ class LLVMIRVisitor extends TreeVisitor
 
                 callsite_alloca = @createAlloca @currentFunction, types.EjsValue, "local_#{callsite_id}"
 
-                callsite_global = new llvm.GlobalVariable @module, types.EjsValue, callsite_id, llvm.Constant.getAggregateZero(types.EjsValue)
+                callsite_global = new llvm.GlobalVariable @module, types.EjsValue, callsite_id, llvm.Constant.getAggregateZero(types.EjsValue), false
                 global_callsite_load = @createLoad callsite_global, "load_global_callsite"
                 ir.createStore global_callsite_load, callsite_alloca
 
@@ -1675,16 +1768,41 @@ class LLVMIRVisitor extends TreeVisitor
                 ir.createRet ir.createLoad callsite_alloca, "load_local_callsite"
 
         handleModuleGet: (exp, opencode) ->
-                moduleString = @visit exp.arguments[0]
-                @createCall @ejs_runtime.module_get, [moduleString], "moduletmp"
+                moduleString = exp.arguments[0].value
+                moduleInfo = @allModules.get(moduleString)
+                @createCall @ejs_runtime.module_get, [consts.string(ir, moduleString)], "moduletmp"
 
-        handleModuleImportBatch: (exp, opencode) ->
-                fromImport = @visit exp.arguments[0]
-                specifiers = @visit exp.arguments[1]
-                toExport = @visit exp.arguments[2]
+        handleModuleGetSlot: (exp, opencode) ->
+                moduleString = exp.arguments[0].value
+                exportId = exp.arguments[1].value
+                if moduleString is @this_module_info.path
+                        module_global = @this_module_global
+                else
+                        module_global = @import_module_globals.get(moduleString)
+                module_global = ir.createPointerCast(module_global, types.EjsModule.pointerTo(), "")
+                console.log "slot ref of #{moduleString}:#{exportId}"
+                console.log escodegen.generate exp
+                slot_ref = @createCall @ejs_runtime.module_get_slot_ref, [module_global, consts.int32(@allModules.get(moduleString).exports.get(exportId).slot_num)], "module_slot"
+                ir.createLoad slot_ref, "module_slot_load"
 
-                @createCall @ejs_runtime.module_import_batch, [fromImport, specifiers, toExport], ""
-                
+        handleModuleSetSlot: (exp, opencode) ->
+                moduleString = exp.arguments[0].value
+                exportId = exp.arguments[1].value
+                arg = exp.arguments[2]
+                if moduleString is @this_module_info.path
+                        module_global = @this_module_global
+                else
+                        module_global = @import_module_globals.get(moduleString)
+                module_global = ir.createPointerCast(module_global, types.EjsModule.pointerTo(), "")
+                slot_ref = @createCall @ejs_runtime.module_get_slot_ref, [module_global, consts.int32(@allModules.get(moduleString).exports.get(exportId).slot_num)], "module_slot"
+                @storeToDest slot_ref, arg
+
+                ir.createLoad slot_ref, "load_slot" # do we need this?  we don't need to keep assignment expression semantics for this
+
+        handleModuleGetExotic: (exp, opencode) ->
+                moduleString = @visit(exp.arguments[0])
+                @createCall @ejs_runtime.module_get, [moduleString], "get_module_exotic"
+
         handleGetArg: (exp, opencode) ->
                 load_args = @createLoad @currentFunction.topScope.get("%args"), "args_load"
 
@@ -1768,7 +1886,17 @@ class LLVMIRVisitor extends TreeVisitor
                         ir.createIntToPtr payload, type, "#{prefix}_load"
                 else
                         throw new Error "emitEjsvalTo not implemented for this case"
-                        
+
+        emitEjsvalFromPtr: (ptr, prefix) ->
+                if @options.target_pointer_size is 64
+                        fromptr_alloca = @createAlloca @currentFunction, types.EjsValue, "#{prefix}_ejsval"
+                        intval = ir.createPtrToInt ptr, types.int64, "#{prefix}_intval"
+                        payload = ir.createOr intval, consts.int64_lowhi(0xFFFC0000, 0x00000000), "#{prefix}_payload"
+                        alloca_as_int64 = ir.createBitCast fromptr_alloca, types.int64.pointerTo(), "#{prefix}_alloca_asptr"
+                        ir.createStore payload, alloca_as_int64, "#{prefix}_store"
+                        ir.createLoad fromptr_alloca, "#{prefix}_load"
+                else
+                        throw new Error "emitEjsvalTo not implemented for this case"
 
         emitEjsvalToObjectPtr:     (val) -> @emitEjsvalTo(val, types.EjsObject.pointerTo(), "to_objectptr")
         emitEjsvalToClosureEnvPtr: (val) -> @emitEjsvalTo(val, types.EjsClosureEnv.pointerTo(), "to_ptr")
@@ -1881,6 +2009,10 @@ class LLVMIRVisitor extends TreeVisitor
         handleMakeClosure: (exp, opencode) ->
                 argv = @visitArgsForCall @ejs_runtime.make_closure, false, exp.arguments
                 @createCall @ejs_runtime.make_closure, argv, "closure_tmp"
+
+        handleMakeClosureNoEnv: (exp, opencode) ->
+                argv = @visitArgsForCall @ejs_runtime.make_closure_noenv, false, exp.arguments
+                @createCall @ejs_runtime.make_closure_noenv, argv, "closure_tmp"
 
         handleMakeAnonClosure: (exp, opencode) ->
                 argv = @visitArgsForCall @ejs_runtime.make_anon_closure, false, exp.arguments
@@ -2253,28 +2385,48 @@ class AddFunctionsVisitor extends TreeVisitor
 sanitize_with_regexp = (filename) ->
         filename.replace /[.,-\/\\]/g, "_" # this is insanely inadequate
 
-insert_toplevel_func = (tree, filename) ->
+moduleGet_id            = b.identifier "%moduleGet"
+
+insert_toplevel_func = (tree, moduleInfo) ->
         toplevel =
                 type: FunctionDeclaration,
-                id:   b.identifier("_ejs_toplevel_#{sanitize_with_regexp filename}")
-                params: [b.identifier("exports")], # XXX this 'exports' should be '%exports' if the module has ES6 module declarations
+                id:   b.identifier(moduleInfo.toplevel_function_name)
+                params: []
                 defaults: []
                 body:
                         type: BlockStatement
                         body: tree.body
-                        loc:
-                                start:
-                                        line: 0
-                                        col: 0
                 toplevel: true
 
         tree.body = [toplevel]
         tree
 
-exports.compile = (tree, base_output_filename, source_filename, export_lists, options) ->
+###
+                        type: BlockStatement
+                        body: [{
+                                # add code in this module's toplevel to resolve its dependent modules (cause their toplevels to be invoked)
+                                type: BlockStatement
+                                body: b.expressionStatement(intrinsic(moduleGet_id, [b.literal(i)])) for i in moduleInfo.importList
+                                },
+                                {
+                                type: BlockStatement
+                                body: tree.body
+                                }]
+                        loc:
+                                start:
+                                        line: 0
+                                        col: 0
+###
+
+exports.compile = (tree, base_output_filename, source_filename, export_lists, module_infos, options) ->
         abi = if (options.target_arch is "armv7" or options.target_arch is "armv7s" or options.target_arch is "x86") then new SRetABI() else new ABI()
 
-        tree = insert_toplevel_func tree, source_filename
+        if source_filename.lastIndexOf(".js") == source_filename.length - 3
+                source_filename = source_filename.substring(0, source_filename.length-3)
+                
+        this_module_info = module_infos.get(source_filename)
+        
+        tree = insert_toplevel_func tree, this_module_info
 
         debug.log -> escodegen.generate tree
 
@@ -2283,7 +2435,7 @@ exports.compile = (tree, base_output_filename, source_filename, export_lists, op
         #debug.log 1, "before closure conversion"
         #debug.log 1, -> escodegen.generate tree
 
-        tree = closure_conversion.convert tree, path.basename(source_filename), export_lists, options
+        tree = closure_conversion.convert tree, source_filename, export_lists, module_infos, options
 
         debug.log 1, "after closure conversion"
         debug.log 1, -> escodegen.generate tree
@@ -2303,14 +2455,33 @@ exports.compile = (tree, base_output_filename, source_filename, export_lists, op
         
         module.toplevel_name = toplevel_name
 
+        module_accessors = []
+        this_module_info.exports.forEach (export_info, key) ->
+                module_prop = {key:key}
+                f = this_module_info.getExportGetter(key)
+                if f?
+                        module_prop.getter = f
+                        tree.body.push(f)
+                f = this_module_info.getExportSetter(key)
+                if f?
+                        module_prop.setter = f
+                        tree.body.push(f)
+                if module_prop.getter? or module_prop.setter?
+                        module_accessors.push module_prop
+        
         visitor = new AddFunctionsVisitor module, abi
         tree = visitor.visit tree
 
         debug.log -> escodegen.generate tree
 
-        visitor = new LLVMIRVisitor module, source_filename, options, abi
+        visitor = new LLVMIRVisitor module, source_filename, options, abi, module_infos, this_module_info
+        
+        visitor.emitModuleInfo()
+        
         visitor.visit tree
 
+        visitor.emitModuleResolution module_accessors
+        
         module
 
 # this class does two things
@@ -2337,12 +2508,61 @@ exports.compile = (tree, base_output_filename, source_filename, export_lists, op
 # 2. builds up a list (@importList) containing the list of all
 #    imported modules
 #
+
+class ModuleInfo
+        constructor: (@path) ->
+                @slot_num = 0
+                @exports = new Map()
+                @importList = []
+                @has_default = false
+                @toplevel_function_name = "_ejs_toplevel_#{sanitize_with_regexp path}"
+                @module_name = "_ejs_module_#{sanitize_with_regexp path}"
+
+        setHasDefaultExport: ->
+                @has_default = true
+                return
+                
+        hasDefaultExport: -> @has_default
+
+        addExport: (ident, constval) ->
+                @exports.set(ident, { constval: constval, slot_num: @slot_num })
+                @slot_num += 1
+                return
+
+        getExportGetter: (ident) ->
+                export_info = @exports.get(ident)
+                if export_info.constval?
+                        b.functionExpression(b.undefined(), [b.identifier("%env_unused")], b.blockStatement([b.returnStatement(export_info.constval)]))
+                else
+                        b.functionExpression(b.undefined(), [b.identifier("%env_unused")], b.blockStatement([b.returnStatement(intrinsic(moduleGetSlot_id, [b.literal(@path), b.literal(ident)]))]))
+
+        getExportSetter: (ident) ->
+                export_info = @exports.get(ident)
+                ###
+                if export_info.constval?
+                        undefined
+                else
+                        b.functionExpression(b.undefined(), [b.identifier("%env_unused"), b.identifier('value')], b.blockStatement([intrinsic(moduleSetSlot_id, [b.literal(@path), b.literal(ident), b.identifier('value')])]))
+                ###
+                b.functionExpression(b.undefined(), [b.identifier("%env_unused"), b.identifier('value')], b.blockStatement([intrinsic(moduleSetSlot_id, [b.literal(@path), b.literal(ident), b.identifier('value')])]))
+                                
+        addImportSource: (source_path) ->
+                @importList.push(source_path) if @importList.indexOf(source_path) is -1
+                return
+
+        
+allModules = new Map()
+
 class GatherImports extends TreeVisitor
         constructor: (@filename, @path, @toplevel_path, @exportLists) ->
                 @importList = []
                 # remove our .js suffix since all imports are suffix-free
                 if @filename.lastIndexOf(".js") == @filename.length - 3
                         @filename = @filename.substring(0, @filename.length-3)
+
+                @moduleInfo = new ModuleInfo(@filename)
+                
+                allModules.set(@filename, @moduleInfo)
                 
         isInternalModule = (source) -> source[0] is "@"
                 
@@ -2377,6 +2597,7 @@ class GatherImports extends TreeVisitor
                         source_path = path.relative(process.cwd(), source_path)
                         
                 @importList.push(source_path) if @importList.indexOf(source_path) is -1
+                @moduleInfo.addImportSource(source_path)
 
                 n.source_path = b.literal(source_path)
                 n
@@ -2386,13 +2607,17 @@ class GatherImports extends TreeVisitor
                         @exportLists[path] = Object.create(null)
                         @exportLists[path].ids = new Set()
                 @exportLists[path].has_default = true
+                @moduleInfo.addExport("default")
+                @moduleInfo.setHasDefaultExport()
                 
-        addExportIdentifier: (path, id) ->
+        addExportIdentifier: (path, id, constval) ->
                 if not hasOwn.call @exportLists, path
                         @exportLists[path] = Object.create(null)
                         @exportLists[path].ids = new Set()
                 if id is "default"
                         @exportLists[path].has_default = true
+                        @moduleInfo.setHasDefaultExport()
+                @moduleInfo.addExport(id, constval)
                 @exportLists[path].ids.add(id)
                 
         visitImportDeclaration: (n) ->
@@ -2415,14 +2640,33 @@ class GatherImports extends TreeVisitor
                         @addExportIdentifier(@filename, n.declaration.id.name) 
                 else if n.declaration.type is VariableDeclaration
                         for decl in n.declaration.declarations
-                                @addExportIdentifier(@filename, decl.id.name)
+                                @addExportIdentifier(@filename, decl.id.name, if n.declaration.kind is 'const' and decl.init.type is Literal then decl.init else undefined)
                 else if n.declaration.type is VariableDeclarator
                         @addExportIdentifier(@filename, n.declaration.id.name)
                 else
                         throw new Error("unhandled case in visitExportDeclaration");
                 n
+                
         visitModuleDeclaration: (n) -> @addSource(n)
 
+underline = (str) ->
+        rv = str + "\n"
+        under = ""
+        for i in [0...str.length]
+                rv += "-"
+        rv
+
+exports.getAllModules = -> allModules
+
+exports.dumpModules = ->
+        console.log underline "modules"
+        allModules.forEach (m) ->
+                console.log "#{m.path}"
+                console.log "   has default: #{m.hasDefaultExport()}"
+                if m.exports.size() > 0
+                        console.log "   slots:"
+                        m.exports.forEach (v, k) -> console.log "      #{k}: #{v.slot_num}"
+        
 exports.gatherImports = (filename, path, top_path, tree, exportLists) ->
         visitor = new GatherImports(filename, path, top_path, exportLists)
         visitor.visit(tree)

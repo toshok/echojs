@@ -47,6 +47,7 @@ namespace jsllvm {
     static v8::Handle<v8::Value> CreateOr(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateZExt(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateIntToPtr(const v8::Arguments& args);
+    static v8::Handle<v8::Value> CreatePtrToInt(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateBitCast(const v8::Arguments& args);
 
     static v8::Handle<v8::Value> CreateSwitch(const v8::Arguments& args);

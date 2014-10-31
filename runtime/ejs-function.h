@@ -100,6 +100,8 @@ extern ejsval _ejs_function_new_native (ejsval env, ejsval name, EJSClosureFunc 
 extern ejsval _ejs_function_new_anon (ejsval env, EJSClosureFunc func);
 extern ejsval _ejs_function_new_utf8 (ejsval env, const char* name, EJSClosureFunc func);
 
+extern ejsval _ejs_function_new_without_env (ejsval name, EJSClosureFunc func);
+
 extern ejsval _ejs_function_new_utf8_with_proto (ejsval env, const char* name, EJSClosureFunc func, ejsval prototype);
 
 // used during initialization so we don't create a prototype only to throw it away again

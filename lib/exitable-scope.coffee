@@ -48,13 +48,11 @@ exports.TryExitableScope = class TryExitableScope extends ExitableScope
                 @destinations = []
                 super()
 
-        enter: ->
+        enterTry: ->
                 TryExitableScope.unwindStack.push @
-                super
                 
-        leave: ->
+        leaveTry: ->
                 TryExitableScope.unwindStack.pop()
-                super
 
         getLandingPadBlock: ->
                 return @landing_pad_block if @landing_pad_block?

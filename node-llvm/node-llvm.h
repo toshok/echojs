@@ -23,41 +23,52 @@
 
 #define REQ_FUN_ARG(I, VAR)                                             \
   if (args.Length() <= (I) || !args[I]->IsFunction()) {			\
-    printf ("in function %s\n", __PRETTY_FUNCTION__);			\
-    return ThrowException(Exception::TypeError(                         \
-					       String::New("Argument " #I " must be a function"))); \
+    char buf[256];							\
+    snprintf(buf, 256, "Argument " #I " must be a function at %s:%d\n", __FILE__, __LINE__); \
+    return ThrowException(Exception::TypeError(String::New(buf)));	\
   }									\
   Local<Function> VAR = Local<Function>::Cast(args[I]);
 
 #define REQ_ARRAY_ARG(I, VAR)                                           \
-  if (args.Length() <= (I) || !args[I]->IsArray())			\
-    return ThrowException(Exception::TypeError(                         \
-					       String::New("Argument " #I " must be a array"))); \
+  if (args.Length() <= (I) || !args[I]->IsArray()) {			\
+    char buf[256];							\
+    snprintf(buf, 256, "Argument " #I " must be an array at %s:%d\n", __FILE__, __LINE__); \
+    return ThrowException(Exception::TypeError(String::New(buf)));	\
+  }									\
   Local<Array> VAR = Local<Array>::Cast(args[I]);
 
-#define REQ_INT_ARG(I, VAR)                                           \
-  if (args.Length() <= (I) || !args[I]->IsNumber())			\
-    return ThrowException(Exception::TypeError(                         \
-					       String::New("Argument " #I " must be a integer"))); \
+#define REQ_INT_ARG(I, VAR)						\
+  if (args.Length() <= (I) || !args[I]->IsNumber()) {			\
+    char buf[256];							\
+    snprintf(buf, 256, "Argument " #I " must be an integer at %s:%d\n", __FILE__, __LINE__); \
+    return ThrowException(Exception::TypeError(String::New(buf)));	\
+  }									\
   int64_t VAR = (int64_t)args[I]->NumberValue();
 
+
 #define REQ_DOUBLE_ARG(I, VAR)                                           \
-  if (args.Length() <= (I) || !args[I]->IsNumber())			\
-    return ThrowException(Exception::TypeError(                         \
-					       String::New("Argument " #I " must be a number"))); \
+  if (args.Length() <= (I) || !args[I]->IsNumber()) {			\
+    char buf[256];							\
+    snprintf(buf, 256, "Argument " #I " must be a number at %s:%d\n", __FILE__, __LINE__); \
+    return ThrowException(Exception::TypeError(String::New(buf)));	\
+  }									\
   double VAR = args[I]->NumberValue();
 
 #define REQ_BOOL_ARG(I, VAR)                                           \
-  if (args.Length() <= (I) || !args[I]->IsBoolean())			\
-    return ThrowException(Exception::TypeError(                         \
-					       String::New("Argument " #I " must be a bool"))); \
+  if (args.Length() <= (I) || !args[I]->IsBoolean()) {			\
+    char buf[256];							\
+    snprintf(buf, 256, "Argument " #I " must be a bool at %s:%d\n", __FILE__, __LINE__); \
+    return ThrowException(Exception::TypeError(String::New(buf)));	\
+  }									\
   bool VAR = args[I]->BooleanValue();
 
 #define REQ_UTF8_ARG(I, VAR)						\
-  if (args.Length() <= (I) || !args[I]->IsString())			\
-    return ThrowException(Exception::TypeError(                         \
-					       String::New("Argument " #I " must be a string"))); \
-  Local<String> VAR##_str = Local<String>::Cast(args[I]); \
+  if (args.Length() <= (I) || !args[I]->IsString()) {			\
+    char buf[256];							\
+    snprintf(buf, 256, "Argument " #I " must be a string at %s:%d\n", __FILE__, __LINE__); \
+    return ThrowException(Exception::TypeError(String::New(buf)));	\
+  }									\
+  Local<String> VAR##_str = Local<String>::Cast(args[I]);		\
   String::Utf8Value VAR(VAR##_str);
 
 #define FALLBACK_UTF8_ARG(I, VAR, FALLBACK)				\
@@ -66,9 +77,11 @@
     VAR##_str = String::New("");					\
   }									\
   else {								\
-    if (!args[I]->IsString())						\
-      return ThrowException(Exception::TypeError(			\
-						 String::New("Argument " #I " must be a string"))); \
+    if (!args[I]->IsString()) {						\
+      char buf[256];							\
+      snprintf(buf, 256, "Argument " #I " must be a string at %s:%d\n", __FILE__, __LINE__); \
+      return ThrowException(Exception::TypeError(String::New(buf)));	\
+    }									\
     VAR##_str = Local<String>::Cast(args[I]);				\
   }									\
   String::Utf8Value VAR(VAR##_str);
@@ -90,6 +103,18 @@
 					       String::New("Argument " #I " must be an llvm Constant"))); \
   }									\
   ::llvm::Constant* VAR = static_cast< ::llvm::Constant*>(jsllvm::Value::GetLLVMObj(args[I]));
+
+#define REQ_NULLABLE_LLVM_CONST_ARG(I, VAR)					\
+  ::llvm::Constant* VAR;						\
+  if (args.Length() > (I) && args[I]->IsNull())				\
+    VAR = NULL;								\
+  else if (args.Length() <= (I) || !args[I]->IsObject() /* XXX || !jsllvm::Constant::HasInstance(args[I]) */) { \
+    printf ("in function %s\n", __PRETTY_FUNCTION__);			\
+    return ThrowException(Exception::TypeError(				\
+					       String::New("Argument " #I " must be an llvm Constant"))); \
+  }									\
+  else									\
+    VAR = static_cast< ::llvm::Constant*>(jsllvm::Value::GetLLVMObj(args[I]));
 
 #define REQ_LLVM_CONST_INT_ARG(I, VAR)					\
   if (args.Length() <= (I) || !args[I]->IsObject() /* XXX || !jsllvm::Constant::HasInstance(args[I]) */) {	\
@@ -120,9 +145,11 @@
   ::llvm::BasicBlock* VAR = jsllvm::BasicBlock::GetLLVMObj(args[I]);
 
 #define REQ_LLVM_FUN_ARG(I, VAR) \
-  if (args.Length() <= (I) || !args[I]->IsObject() /* XXX || !jsllvm::Function::HasInstance(args[I]) */) \
+  if (args.Length() <= (I) || !args[I]->IsObject() /* XXX || !jsllvm::Function::HasInstance(args[I]) */) {  \
+    printf ("in function %s\n", __PRETTY_FUNCTION__);			\
     return ThrowException(Exception::TypeError(				\
 					       String::New("Argument " #I " must be an llvm Function"))); \
+  }									\
   ::llvm::Function* VAR = jsllvm::Function::GetLLVMObj(args[I]);
 
 #define REQ_LLVM_DIFILE_ARG(I, VAR) \

@@ -10,10 +10,13 @@ returns_ejsval_bool = types.returns_ejsval_bool
 runtime_interface =
         personality:           -> @abi.createExternalFunction @module, "__ejs_personality_v0",           types.int32, [types.int32, types.int32, types.int64, types.int8Pointer, types.int8Pointer]
 
+        module_resolve:        -> @abi.createExternalFunction @module, "_ejs_module_resolve", types.void, [types.EjsModule.pointerTo()]
         module_get:            -> @abi.createExternalFunction @module, "_ejs_module_get", types.EjsValue, [types.EjsValue]
-        module_import_batch:   -> @abi.createExternalFunction @module, "_ejs_module_import_batch", types.void, [types.EjsValue, types.EjsValue, types.EjsValue]
+        module_get_slot_ref:   -> @abi.createExternalFunction @module, "_ejs_module_get_slot_ref", types.EjsValue.pointerTo(), [types.EjsModule.pointerTo(), types.int32]
 
+        module_add_export_accessors: -> @abi.createExternalFunction @module, "_ejs_module_add_export_accessors", types.void, [types.EjsModule.pointerTo(), types.string, types.getEjsClosureFunc(@abi), types.getEjsClosureFunc(@abi)]
         invoke_closure:        -> takes_builtins @abi.createExternalFunction @module, "_ejs_invoke_closure", types.EjsValue, [types.EjsValue, types.EjsValue, types.int32, types.EjsValue.pointerTo()]
+        make_closure_noenv:    -> @abi.createExternalFunction @module, "_ejs_function_new_without_env", types.EjsValue, [types.EjsValue, types.getEjsClosureFunc(@abi)]
         make_closure:          -> @abi.createExternalFunction @module, "_ejs_function_new", types.EjsValue, [types.EjsValue, types.EjsValue, types.getEjsClosureFunc(@abi)]
         make_anon_closure:     -> @abi.createExternalFunction @module, "_ejs_function_new_anon", types.EjsValue, [types.EjsValue, types.getEjsClosureFunc(@abi)]
 

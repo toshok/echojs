@@ -46,6 +46,19 @@ exports.EjsFunction = EjsFunctionTy = llvm.StructType.create "struct.EJSFunction
         int32Ty,                 # EJSBool  bound;
 ]
 
+CreateModuleTy = (suffix, num_exports) ->
+        llvm.StructType.create "struct.EJSModule#{suffix}", [
+                EjsObjectTy,             # EJSObject obj;
+                stringTy,                # const char* module_name
+                int32Ty,                 # int32_t num_exports
+                llvm.ArrayType.get(EjsValueLayoutTy, num_exports)
+        ]
+        
+exports.EjsModule = EjsModuleTy = CreateModuleTy("", 1)
+
+exports.getModuleSpecificType = (module_name, num_exports) -> CreateModuleTy("_#{module_name}", num_exports)
+
+        
 # exception types
 
 # the c++ typeinfo for our exceptions

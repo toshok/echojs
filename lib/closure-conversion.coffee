@@ -96,6 +96,7 @@ hasOwnProperty = Object.prototype.hasOwnProperty
 
 superid                 = b.identifier "%super"
 makeClosureEnv_id       = b.identifier "%makeClosureEnv"
+makeClosureNoEnv_id     = b.identifier "%makeClosureNoEnv"
 makeClosure_id          = b.identifier "%makeClosure"
 makeAnonClosure_id      = b.identifier "%makeAnonClosure"
 setSlot_id              = b.identifier "%setSlot"
@@ -108,7 +109,9 @@ getGlobal_id            = b.identifier "%getGlobal"
 getArg_id               = b.identifier "%getArg"
 getArgumentsObject_id   = b.identifier "%getArgumentsObject"
 moduleGet_id            = b.identifier "%moduleGet"
-moduleImportBatch_id    = b.identifier "%moduleImportBatch"
+moduleGetSlot_id        = b.identifier "%moduleGetSlot"
+moduleSetSlot_id        = b.identifier "%moduleSetSlot"
+moduleGetExotic_id      = b.identifier "%moduleGetExotic"
 templateCallsite_id     = b.identifier "%templateCallsite"
 templateHandlerCall_id  = b.identifier "%templateHandlerCall"
 templateDefaultHandlerCall_id = b.identifier "%templateDefaultHandlerCall"
@@ -200,6 +203,8 @@ DesugarClasses = class DesugarClasses extends TransformPass
 
                 [properties, methods, sproperties, smethods] = @gather_members n
 
+                class_init_iife_body.push b.letDeclaration(b.identifier('proto'), b.memberExpression(n.id, b.identifier('prototype')));
+                        
                 ctor = null
                 methods.forEach  (m, mkey) =>
                         # if it's a method with name 'constructor' output the special ctor function
@@ -289,7 +294,7 @@ DesugarClasses = class DesugarClasses extends TransformPass
                 b.methodDefinition(b.identifier('constructor'), b.functionExpression(null, [], functionBody, [], args_id));
                 
         create_proto_method: (ast_method, ast_class) ->
-                proto_member = b.memberExpression(b.memberExpression(ast_class.id, b.identifier('prototype')), (if ast_method.key.type is ComputedPropertyKey then ast_method.key.expression else ast_method.key), ast_method.key.type is ComputedPropertyKey)
+                proto_member = b.memberExpression(b.identifier('proto'), (if ast_method.key.type is ComputedPropertyKey then ast_method.key.expression else ast_method.key), ast_method.key.type is ComputedPropertyKey)
                 
                 method = b.functionExpression(b.identifier("#{ast_class.id.name}:#{ast_method.key.name}"), ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest, ast_method.value.loc)
 
@@ -850,7 +855,7 @@ class IIFEIdioms extends TreeVisitor
                 return replacement
         
         visitExpressionStatement: (n) ->
-                isMakeClosure = (a) -> is_intrinsic(a, "%makeClosure") or is_intrinsic(a, "makeAnonClosure")
+                isMakeClosure = (a) -> is_intrinsic(a, "%makeClosure") or is_intrinsic(a, "%makeAnonClosure") or is_intrinsic(a, "%makeClosureNoEnv")
                 # bail out early if we know we aren't in the right place
                 if is_intrinsic(n.expression, "%invokeClosure")
                         candidate = n.expression
@@ -1131,7 +1136,7 @@ class DesugarImportExport extends TransformPass
 
                 return b.expressionStatement(b.callExpression(Object_defineProperty, [exports_id, b.literal(exported_id.name), property_literal]))
                 
-        constructor: (options, @filename, @exportLists) ->
+        constructor: (options, @filename, @exportLists, @allModules) ->
                 super
 
         visitFunction: (n) ->
@@ -1148,34 +1153,30 @@ class DesugarImportExport extends TransformPass
                         # don't waste a decl for this type
                         return b.expressionStatement(intrinsic(moduleGet_id, [n.source_path]))
 
-                # otherwise create a fresh declaration for the module object
-                # 
-                # let %import_decl = %moduleGet("moduleName")
-                # 
-                import_tmp = freshId("import")
-                import_decls =  b.letDeclaration(import_tmp, intrinsic(moduleGet_id, [n.source_path]))
+                import_decls =  b.letDeclaration()
 
+                module = @allModules.get(n.source_path.value)
                 for spec in n.specifiers
                         if spec.kind is "default"
                                 #
                                 # let #{n.specifiers[0].id} = %import_decl.default
                                 #
-                                if not @exportLists[n.source_path.value]?.has_default
+                                if not module.hasDefaultExport()
                                         reportError(ReferenceError, "module `#{n.source_path.value}' doesn't have default export", @filename, n.loc)
 
-                                import_decls.declarations.push b.variableDeclarator(n.specifiers[0].id, b.memberExpression(import_tmp, b.identifier("default")))
+                                import_decls.declarations.push b.variableDeclarator(n.specifiers[0].id, intrinsic(moduleGetSlot_id, [n.source_path, b.literal("default")]))
 
                         else if spec.kind is "named"
                                 #
                                 # let #{spec.id} = %import_decl.#{spec.name || spec.id }
                                 #
-                                if not @exportLists[n.source_path.value]?.ids.has(spec.id.name)
+                                if not module.exports.has(spec.id.name)
                                         reportError(ReferenceError, "module `#{n.source_path.value}' doesn't export `#{spec.id.name}'", @filename, spec.id.loc)
-                                import_decls.declarations.push b.variableDeclarator(spec.name or spec.id, b.memberExpression(import_tmp, spec.id))
+                                import_decls.declarations.push b.variableDeclarator(spec.name or spec.id, intrinsic(moduleGetSlot_id, [n.source_path, b.literal(spec.id.name)]))
 
                         else # if spec.kind is "batch"
                                 # let #{spec.name} = %import_decl
-                                import_decls.declarations.push b.variableDeclarator(spec.name, import_tmp)
+                                import_decls.declarations.push b.variableDeclarator(spec.name, intrinsic(moduleGetExotic_id, [n.source_path]))
                         
                 return import_decls
 
@@ -1213,45 +1214,38 @@ class DesugarImportExport extends TransformPass
                         export_stuff.unshift(export_decl)
                         return export_stuff
 
-                export_id = b.identifier("exports");
-                
                 # export function foo () { ... }
                 if n.declaration.type is FunctionDeclaration
                         @exports.push { id: n.declaration.id }
-                        
-                        return [n.declaration, define_export_property(n.declaration.id)]
+
+                        # we're going to pass it to the moduleSetSlot intrinsic, so it needs to be an expression (or else escodegen freaks out)
+                        n.declaration.type = FunctionExpression
+                        return b.expressionStatement(intrinsic(moduleSetSlot_id, [b.literal(@filename), b.literal(n.declaration.id.name), @visit(n.declaration)]))
 
                 # export class Foo () { ... }
                 if n.declaration.type is ClassDeclaration
                         @exports.push { id: n.declaration.id }
-                        
-                        return [n.declaration, define_export_property(n.declaration.id)]
+
+                        n.declaration.type = ClassExpression
+                        return b.expressionStatement(intrinsic(moduleSetSlot_id, [b.literal(@filename), b.literal(n.declaration.id.name), @visit(n.declaration)]))
 
                 # export let foo = bar;
                 if n.declaration.type is VariableDeclaration
                         export_defines = []
                         for decl in n.declaration.declarations
                                 @exports.push({ id: decl.id })
-                                export_defines.push(define_export_property(decl.id))
-                        export_defines.unshift(n.declaration)
+                                export_defines.push(b.expressionStatement(intrinsic(moduleSetSlot_id, [b.literal(@filename), b.literal(decl.id.name), @visit(decl.init)])))
                         return export_defines
 
                 # export foo = bar;
                 if n.declaration.type is VariableDeclarator
                         @exports.push { id: n.declaration.id }
-                        return [n.declaration, define_export_property(n.declaration.id)]
+                        return b.expressionStatement(intrinsic(moduleSetSlot_id, [b.literal(@filename), b.literal(n.declaration.id.name), @visit(n.declaration)]))
 
                 # export default ...;
                 # 
                 if n.default
-                        local_default_id = b.identifier "%default"
-                        default_id = b.identifier "default"
-                        @exports.push { id: default_id }
-                        
-                        local_decl = b.varDeclaration(local_default_id, n.declaration)
-
-                        export_define = define_export_property(default_id, local_default_id)
-                        return [local_decl, export_define]
+                        return b.expressionStatement(intrinsic(moduleSetSlot_id, [b.literal(@filename), b.literal("default"), @visit(n.declaration)]))
 
                 reportError(SyntaxError, "Unsupported type of export declaration #{n.declaration.type}", @filename, n.loc)
 
@@ -1527,10 +1521,10 @@ enable_cfa2 = false
 enable_hoist_func_decls_pass = true
 
 class NewClosureConvert
-        constructor: (@options, @filename) ->
+        constructor: (@options, @filename, exportList, @allModules) ->
 
         visit: (tree) ->
-                new_cc.Convert(@options, @filename, tree)
+                new_cc.Convert(@options, @filename, tree, @allModules)
                 
 passes = [
         DesugarImportExport
@@ -1554,14 +1548,14 @@ passes = [
         LambdaLift
         ]
 
-exports.convert = (tree, filename, export_lists, options) ->
+exports.convert = (tree, filename, export_lists, modules, options) ->
         debug.log "before:"
         debug.log -> escodegen.generate tree
 
         passes.forEach (passType) ->
                 return if not passType?
                 try
-                        pass = new passType(options, filename, export_lists)
+                        pass = new passType(options, filename, export_lists, modules)
                         tree = pass.visit tree
                         if options.debug_passes.has(passType.name)
                                 console.log "after: #{passType.name}"

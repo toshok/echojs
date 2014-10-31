@@ -95,6 +95,7 @@ hasOwnProperty = Object.prototype.hasOwnProperty
 superid                 = b.identifier "%super"
 makeClosureEnv_id       = b.identifier "%makeClosureEnv"
 makeClosure_id          = b.identifier "%makeClosure"
+makeClosureNoEnv_id     = b.identifier "%makeClosureNoEnv"
 makeAnonClosure_id      = b.identifier "%makeAnonClosure"
 setSlot_id              = b.identifier "%setSlot"
 slot_id                 = b.identifier "%slot"
@@ -105,6 +106,9 @@ getLocal_id             = b.identifier "%getLocal"
 getGlobal_id            = b.identifier "%getGlobal"
 getArg_id               = b.identifier "%getArg"
 moduleGet_id            = b.identifier "%moduleGet"
+moduleGetSlot_id        = b.identifier "%moduleGetSlot"
+moduleSetSlot_id        = b.identifier "%moduleSetSlot"
+moduleGetExotic_id      = b.identifier "%moduleGetExotic"
 moduleImportBatch_id    = b.identifier "%moduleImportBatch"
 templateCallsite_id     = b.identifier "%templateCallsite"
 templateHandlerCall_id  = b.identifier "%templateHandlerCall"
@@ -199,13 +203,23 @@ class Binding
         constructor: (@name, @type, @is_const) ->
 
 class LocalBinding extends Binding
-        constructor: (name, is_const) ->
-                super(name, 'local', is_const)
+        constructor: (name, is_const) -> super(name, 'local', is_const)
 
 class GlobalBinding extends Binding
-        constructor: (name, is_const) ->
-                super(name, 'global', is_const)
+        constructor: (name, is_const) -> super(name, 'global', is_const)
 
+class ModuleSlotBinding extends Binding
+        constructor: (@moduleString, @moduleExport, name, is_const) -> super(name, 'module', is_const)
+                
+        getLoadIntrinsic:        -> intrinsic(moduleGetSlot_id, [@moduleString, @moduleExport])
+        getStoreIntrinsic: (val) -> intrinsic(moduleSetSlot_id, [@moduleString, @moduleExport, val])
+                        
+class ModuleExoticBinding extends Binding
+        constructor: (@moduleString, name, is_const) -> super(name, 'module-exotic', is_const)
+                
+        getLoadIntrinsic:        -> intrinsic(moduleGetExotic_id, [@moduleString])
+        # no store intrinsic
+        
 class Reference
         constructor: (@binding) ->
 
@@ -236,14 +250,12 @@ class Environment
 
         toString: -> @name
 
-class ClosureConvert extends TransformPass
-        
 allFunctions = []
 
 global_bindings = new Map
 
 SubstituteVariables = class SubstituteVariables extends TransformPass
-        constructor: (options, @filename) ->
+        constructor: (options, @filename, @allModules) ->
                 @options = options
                 @current_scope = null
                 
@@ -308,16 +320,25 @@ SubstituteVariables = class SubstituteVariables extends TransformPass
                 if n.type is FunctionDeclaration
                         throw new Error("there should be no FunctionDeclarations at this point")
 
-                intrinsic_args = [if n.params[0].name is "%env_unused" then b.undefined() else b.identifier(n.params[0].name, n.loc)]
-                        
+
+                intrinsic_args = []
                 if n.id?
                         intrinsic_id = makeClosure_id
+                        if n.params[0].name is "%env_unused"
+                                intrinsic_id = makeClosureNoEnv_id
+                        else
+                                intrinsic_args.push(b.identifier(n.params[0].name, n.loc))
+
                         if n.id.type is Identifier
                                 intrinsic_args.push(b.literal(n.id.name))
                         else
                                 intrinsic_args.push(b.literal(escodegen.generate n.id))
                 else
                         intrinsic_id = makeAnonClosure_id
+                        if n.params[0].name is "%env_unused"
+                                intrinsic_args.push(b.undefined())
+                        else
+                                intrinsic_args.push(b.identifier(n.params[0].name, n.loc))
 
                 intrinsic_args.push(n)
                         
@@ -348,6 +369,8 @@ SubstituteVariables = class SubstituteVariables extends TransformPass
                                         return intrinsic(setLocal_id, [n.left, rhs])
                         else if ref.binding.type is 'global'
                                 return intrinsic(setGlobal_id, [n.left, rhs])
+                        else if ref.binding.type is 'module'
+                                return ref.binding.getStoreIntrinsic(@visit(rhs))
                         else
                                 throw new Error("unhandled binding type #{ref.binding.type}")
 
@@ -371,6 +394,15 @@ SubstituteVariables = class SubstituteVariables extends TransformPass
                                         return intrinsic(getLocal_id, [n])
                         else if ref.binding.type is 'global'
                                 return intrinsic(getGlobal_id, [n])
+                        else if ref.binding.type is 'module'
+                                # check if the export is const+literal.  if it is, just propagate it here
+                                module_info = @allModules.get(ref.binding.moduleString.value)
+                                export_info = module_info.exports.get(ref.binding.moduleExport.value)
+                                if export_info.constval?
+                                        return export_info.constval
+                                return ref.binding.getLoadIntrinsic()
+                        else if ref.binding.type is 'module-exotic'
+                                return ref.binding.getLoadIntrinsic()
                         else
                                 throw new Error("unhandled binding type #{ref.binding.type}")
 
@@ -394,7 +426,7 @@ SubstituteVariables = class SubstituteVariables extends TransformPass
                 n
 
 class FlattenDeclarations extends TransformPass
-        constructor: (options, @filename) ->
+        constructor: (options, @filename, @allModules) ->
                 super
 
         visitBlock: (n) ->
@@ -418,7 +450,7 @@ class FlattenDeclarations extends TransformPass
                 n
         
 class CollectScopeNestingInfo extends TransformPass
-        constructor: (options, @filename) ->
+        constructor: (options, @filename, @allModules) ->
                 super
                 @options = options
                 @block_stack = new Stack
@@ -448,7 +480,31 @@ class CollectScopeNestingInfo extends TransformPass
                 @func_stack.push(n)
                 fn()
                 @func_stack.pop()
-                
+
+        createBindingsForScope: (block, for_scope) ->
+                for s in block.body
+                        if s.type is VariableDeclaration
+                                # we're guaranteed to have variable declarations with a single declarator by the FlattenDeclarations pass
+                                d = s.declarations[0]
+                                if d.init
+                                        if is_intrinsic(d.init, "%moduleGetSlot")
+                                                for_scope.addBinding(new ModuleSlotBinding(d.init.arguments[0], d.init.arguments[1], d.id.name))
+                                                # we inline module slot loads at all their use points, so we no longer need this decl at all
+                                                s.type = EmptyStatement
+                                        else if is_intrinsic(d.init, "%moduleGetExotic")
+                                                for_scope.addBinding(new ModuleExoticBinding(d.init.arguments[0], d.id.name))
+                                        else
+                                                for_scope.addBinding(new LocalBinding(d.id.name, s.kind is 'const'))
+                                else
+                                        for_scope.addBinding(new LocalBinding(d.id.name, s.kind is 'const'))
+                        else if s.type is FunctionDeclaration and s.id?
+                                for_scope.addBinding(new LocalBinding(s.id.name, false, for_scope))
+                        else if s.type is ExpressionStatement and is_intrinsic(s.expression, "%moduleSetSlot")
+                                args = s.expression.arguments
+                                for_scope.addBinding(new ModuleSlotBinding(args[0], args[1], args[1].value))
+                                
+                return
+        
         visitBlock: (n, initial_bindings) ->
                 this_scope = new Scope(new Location(n, @func_stack.top))
                 if @root_scope is null
@@ -459,12 +515,7 @@ class CollectScopeNestingInfo extends TransformPass
                 # we have to gather decls before visiting our children
                 # so that if they refer to ids in this scope, we can
                 # create the proper Reference objects
-                for s in n.body
-                        if s.type is VariableDeclaration
-                                for d in s.declarations
-                                        this_scope.addBinding(new LocalBinding(d.id.name, s.kind is 'const'))
-                        else if s.type is FunctionDeclaration and s.id?
-                                this_scope.addBinding(new LocalBinding(s.id.name, false, this_scope))
+                @createBindingsForScope(n, this_scope)
 
                 @doWithScope this_scope, =>
                         @doWithBlock n, =>
@@ -805,10 +856,10 @@ class ValidateEnvironments extends TreeVisitor
                         slot = n.arguments[1].value
                 n
 
-exports.Convert = (options, filename, tree) ->
-        flattenDecls = new FlattenDeclarations(options, filename)
-        collectScopes = new CollectScopeNestingInfo(options, filename)
-        substituteVariables = new SubstituteVariables(options, filename)
+exports.Convert = (options, filename, tree, allModules) ->
+        flattenDecls = new FlattenDeclarations(options, filename, allModules)
+        collectScopes = new CollectScopeNestingInfo(options, filename, allModules)
+        substituteVariables = new SubstituteVariables(options, filename, allModules)
 
         tree = flattenDecls.visit(tree)
 

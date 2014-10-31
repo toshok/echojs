@@ -18,6 +18,7 @@ C_SOURCES= \
 	ejs-json.c \
 	ejs-map.c \
 	ejs-math.c \
+	ejs-module.c \
 	ejs-number.c \
 	ejs-object.c \
 	ejs-ops.c \

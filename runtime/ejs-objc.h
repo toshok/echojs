@@ -37,7 +37,7 @@ extern EJSSpecOps _ejs_CoffeeKitObject_specops;
 extern void _ejs_objc_init(ejsval global);
 
 // the module handler, so we can do "objc = require 'objc'"
-ejsval _ejs_objc_module_func (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
+ejsval _ejs_objc_module_func (ejsval exports);
 
 EJS_END_DECLS
 
