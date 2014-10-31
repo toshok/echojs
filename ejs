@@ -303,13 +303,15 @@ parseFile = (filename, content) ->
 
         return parse_tree
         
-compileFile = (filename, parse_tree, export_lists, modules, compileCallback) ->
+compileFile = (filename, parse_tree, modules, compileCallback) ->
         base_filename = util.genFreshFileName path.basename filename
 
-        console.warn "#{util.bold()}COMPILE#{util.reset()} #{filename} #{if options.debug_level > 0 then '-> #{base_filename}' else ''}" if not options.quiet
+        if not options.quiet
+                suffix = if options.debug_level > 0 then " -> #{base_filename}" else ''
+                console.warn "#{util.bold()}COMPILE#{util.reset()} #{filename}#{suffix}"
 
         try
-                compiled_module = compiler.compile parse_tree, base_filename, filename, export_lists, modules, options
+                compiled_module = compiler.compile parse_tree, base_filename, filename, modules, options
         catch e
                 console.warn "#{e}"
                 process.exit(-1) if options.debug_level == 0
@@ -472,13 +474,6 @@ main_file = file_args[0]
 work_list = file_args.slice()
 files = []
 
-export_lists = Object.create(null)
-
-for m in options.external_modules
-        mo = Object.create(null)
-        mo.ids = new Set()
-        export_lists[m.module_name] = mo
-        
 # starting at the main file, gather all files we'll need
 while work_list.length isnt 0
         file = work_list.pop()
@@ -502,7 +497,7 @@ while work_list.length isnt 0
         file_contents = fs.readFileSync(jsfile, 'utf-8')
         file_ast = parseFile(jsfile, file_contents)
 
-        imports = compiler.gatherImports(file, path.dirname(jsfile), process.cwd(), file_ast, export_lists)
+        imports = compiler.gatherImports(file, path.dirname(jsfile), process.cwd(), file_ast, options.external_modules)
 
         files.push({file_name: file, file_ast: file_ast})
 
@@ -518,7 +513,7 @@ allModules = compiler.getAllModules()
 #
 if __ejs?
         for f in files
-                compileFile f.file_name, f.file_ast, export_lists, allModules
+                compileFile f.file_name, f.file_ast, allModules
         do_final_link(main_file, allModules)
 else
         # reverse the list so the main program is the first thing we compile
@@ -528,7 +523,7 @@ else
                         do_final_link(main_file, allModules)
                         return
                 f = files.pop()
-                compileFile f.file_name, f.file_ast, export_lists, allModules, compileNextFile
+                compileFile f.file_name, f.file_ast, allModules, compileNextFile
         compileNextFile()
         
 # Local Variables:

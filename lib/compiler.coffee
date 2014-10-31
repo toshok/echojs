@@ -377,15 +377,7 @@ class LLVMIRVisitor extends TreeVisitor
                         get_func = accessor.getter?.ir_func or consts.null(types.EjsClosureFunc)
                         set_func = accessor.setter?.ir_func or consts.null(types.EjsClosureFunc)
                         module_arg = ir.createPointerCast(@this_module_global, types.EjsModule.pointerTo(), "")
-                        console.log 1
-                        get_func.dump()
-                        console.log 2
-                        set_func.dump()
-                        console.log 3
-                        module_arg.dump()
-                        console.log 4
                         ir.createCall @ejs_runtime.module_add_export_accessors, [module_arg, consts.string(ir, accessor.key), get_func, set_func], ""
-                        console.log 5
 
                 for import_module_string in @this_module_info.importList
                         import_module = @import_module_globals.get(import_module_string)
@@ -1780,8 +1772,6 @@ class LLVMIRVisitor extends TreeVisitor
                 else
                         module_global = @import_module_globals.get(moduleString)
                 module_global = ir.createPointerCast(module_global, types.EjsModule.pointerTo(), "")
-                console.log "slot ref of #{moduleString}:#{exportId}"
-                console.log escodegen.generate exp
                 slot_ref = @createCall @ejs_runtime.module_get_slot_ref, [module_global, consts.int32(@allModules.get(moduleString).exports.get(exportId).slot_num)], "module_slot"
                 ir.createLoad slot_ref, "module_slot_load"
 
@@ -2418,7 +2408,7 @@ insert_toplevel_func = (tree, moduleInfo) ->
                                         col: 0
 ###
 
-exports.compile = (tree, base_output_filename, source_filename, export_lists, module_infos, options) ->
+exports.compile = (tree, base_output_filename, source_filename, module_infos, options) ->
         abi = if (options.target_arch is "armv7" or options.target_arch is "armv7s" or options.target_arch is "x86") then new SRetABI() else new ABI()
 
         if source_filename.lastIndexOf(".js") == source_filename.length - 3
@@ -2435,7 +2425,7 @@ exports.compile = (tree, base_output_filename, source_filename, export_lists, mo
         #debug.log 1, "before closure conversion"
         #debug.log 1, -> escodegen.generate tree
 
-        tree = closure_conversion.convert tree, source_filename, export_lists, module_infos, options
+        tree = closure_conversion.convert tree, source_filename, module_infos, options
 
         debug.log 1, "after closure conversion"
         debug.log 1, -> escodegen.generate tree
@@ -2554,7 +2544,7 @@ class ModuleInfo
 allModules = new Map()
 
 class GatherImports extends TreeVisitor
-        constructor: (@filename, @path, @toplevel_path, @exportLists) ->
+        constructor: (@filename, @path, @toplevel_path) ->
                 @importList = []
                 # remove our .js suffix since all imports are suffix-free
                 if @filename.lastIndexOf(".js") == @filename.length - 3
@@ -2577,9 +2567,10 @@ class GatherImports extends TreeVisitor
                                 module_name = n.source.value.slice('@node-compat/'.length)
                                 if not node_compat.modules[module_name]?
                                         throw new Error("@node-compat module #{module_name} not found")
-                                if not hasOwn.call @exportLists, n.source.value
-                                        @exportLists[n.source.value] = Object.create(null)
-                                        @exportLists[n.source.value].ids = node_compat.modules[module_name]
+                                if not allModules.has(n.source.value)
+                                        internal_module = new ModuleInfo(n.source.value)
+                                        node_compat.modules[module_name].forEach (v) ->
+                                                internal_module.addExport(v);
                                 n.source_path = b.literal(n.source.value)
 
                         # otherwise we just strip off the @
@@ -2602,23 +2593,14 @@ class GatherImports extends TreeVisitor
                 n.source_path = b.literal(source_path)
                 n
 
-        addDefaultExport: (path) ->
-                if not hasOwn.call @exportLists, path
-                        @exportLists[path] = Object.create(null)
-                        @exportLists[path].ids = new Set()
-                @exportLists[path].has_default = true
+        addDefaultExport: () ->
                 @moduleInfo.addExport("default")
                 @moduleInfo.setHasDefaultExport()
                 
-        addExportIdentifier: (path, id, constval) ->
-                if not hasOwn.call @exportLists, path
-                        @exportLists[path] = Object.create(null)
-                        @exportLists[path].ids = new Set()
+        addExportIdentifier: (id, constval) ->
                 if id is "default"
-                        @exportLists[path].has_default = true
                         @moduleInfo.setHasDefaultExport()
                 @moduleInfo.addExport(id, constval)
-                @exportLists[path].ids.add(id)
                 
         visitImportDeclaration: (n) ->
                 @addSource(n)
@@ -2627,22 +2609,22 @@ class GatherImports extends TreeVisitor
                 n = @addSource(n)
 
                 if n.default
-                        @addDefaultExport(@filename)
+                        @addDefaultExport()
                 else if n.source?
                         for spec in n.specifiers
-                                @addExportIdentifier(@filename, spec.name?.name or spec.id?.name)
+                                @addExportIdentifier(spec.name?.name or spec.id?.name)
                 else if Array.isArray(n.declaration)
                         for decl in n.declaration
-                                @addExportIdentifier(@filename, decl.id.name)
+                                @addExportIdentifier(decl.id.name)
                 else if n.declaration.type is FunctionDeclaration
-                        @addExportIdentifier(@filename, n.declaration.id.name) 
+                        @addExportIdentifier(n.declaration.id.name) 
                 else if n.declaration.type is ClassDeclaration
-                        @addExportIdentifier(@filename, n.declaration.id.name) 
+                        @addExportIdentifier(n.declaration.id.name) 
                 else if n.declaration.type is VariableDeclaration
                         for decl in n.declaration.declarations
-                                @addExportIdentifier(@filename, decl.id.name, if n.declaration.kind is 'const' and decl.init.type is Literal then decl.init else undefined)
+                                @addExportIdentifier(decl.id.name, if n.declaration.kind is 'const' and decl.init.type is Literal then decl.init else undefined)
                 else if n.declaration.type is VariableDeclarator
-                        @addExportIdentifier(@filename, n.declaration.id.name)
+                        @addExportIdentifier(n.declaration.id.name)
                 else
                         throw new Error("unhandled case in visitExportDeclaration");
                 n
@@ -2667,8 +2649,8 @@ exports.dumpModules = ->
                         console.log "   slots:"
                         m.exports.forEach (v, k) -> console.log "      #{k}: #{v.slot_num}"
         
-exports.gatherImports = (filename, path, top_path, tree, exportLists) ->
-        visitor = new GatherImports(filename, path, top_path, exportLists)
+exports.gatherImports = (filename, path, top_path, tree) ->
+        visitor = new GatherImports(filename, path, top_path)
         visitor.visit(tree)
         visitor.importList
         

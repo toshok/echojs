@@ -1136,7 +1136,7 @@ class DesugarImportExport extends TransformPass
 
                 return b.expressionStatement(b.callExpression(Object_defineProperty, [exports_id, b.literal(exported_id.name), property_literal]))
                 
-        constructor: (options, @filename, @exportLists, @allModules) ->
+        constructor: (options, @filename, @allModules) ->
                 super
 
         visitFunction: (n) ->
@@ -1203,7 +1203,7 @@ class DesugarImportExport extends TransformPass
                         else
                                 # export { ... } from "foo"
                                 for spec in n.specifiers
-                                        if not @exportLists[n.source_path.value]?.ids.has(spec.id.name)
+                                        if not @allModules.get(n.source_path.value).exports.has(spec.id.name)
                                                 reportError(ReferenceError, "module `#{n.source_path.value}' doesn't export `#{spec.id.name}'", @filename, spec.id.loc)
                                         
                                         spectmp = freshId("spec")
@@ -1521,7 +1521,7 @@ enable_cfa2 = false
 enable_hoist_func_decls_pass = true
 
 class NewClosureConvert
-        constructor: (@options, @filename, exportList, @allModules) ->
+        constructor: (@options, @filename, @allModules) ->
 
         visit: (tree) ->
                 new_cc.Convert(@options, @filename, tree, @allModules)
@@ -1548,14 +1548,14 @@ passes = [
         LambdaLift
         ]
 
-exports.convert = (tree, filename, export_lists, modules, options) ->
+exports.convert = (tree, filename, modules, options) ->
         debug.log "before:"
         debug.log -> escodegen.generate tree
 
         passes.forEach (passType) ->
                 return if not passType?
                 try
-                        pass = new passType(options, filename, export_lists, modules)
+                        pass = new passType(options, filename, modules)
                         tree = pass.visit tree
                         if options.debug_passes.has(passType.name)
                                 console.log "after: #{passType.name}"
