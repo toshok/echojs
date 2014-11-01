@@ -76,7 +76,7 @@ node_compat = require 'node-compat'
 { TreeVisitor } = require 'nodevisitor'
 closure_conversion = require 'closure-conversion'
 optimizations = require 'optimizations'
-{ startGenerator, intrinsic, is_intrinsic, is_string_literal } = require 'echo-util'
+{ startGenerator, intrinsic, is_intrinsic, is_string_literal, underline, sanitize_with_regexp } = require 'echo-util'
 
 { ExitableScope, TryExitableScope, SwitchExitableScope, LoopExitableScope } = require 'exitable-scope'
 
@@ -280,7 +280,7 @@ class LLVMIRVisitor extends TreeVisitor
                         moduleGet            : true # unused
                         moduleGetSlot        : false
                         moduleSetSlot        : false
-                        moduleSetExotic      : false
+                        moduleGetExotic      : false
                         moduleGet         : true # unused
                         getLocal          : true # unused
                         setLocal          : true # unused
@@ -362,6 +362,8 @@ class LLVMIRVisitor extends TreeVisitor
                 
                 ir.setInsertPoint uninitialized_bb
                 ir.createStore consts.true(), @this_module_initted
+
+                ir.createCall @literalInitializationFunction, [], ""
 
                 # fill in the information we know about this module
                 #  our name
@@ -1052,7 +1054,7 @@ class LLVMIRVisitor extends TreeVisitor
 
                 debug.log -> "alloca #{alloca}" for alloca in allocas
         
-                # now store the arguments (use .. to include our args array) onto the stack
+                # now store the arguments onto the stack
                 for i in [0...n.params.length]
                         store = ir.createStore ir_args[i], allocas[i]
                         debug.log -> "store #{store} *builtin"
@@ -1062,8 +1064,7 @@ class LLVMIRVisitor extends TreeVisitor
                 #@createCall @ejs_runtime.log, [consts.string(ir, "entering #{n.ir_name}")], ""
                 
                 ir.setInsertPoint body_bb
-                ir.createCall @literalInitializationFunction, [], ""
-                
+
                 insertFunc = body_bb.parent
         
                 @iifeStack = new Stack
@@ -1760,9 +1761,8 @@ class LLVMIRVisitor extends TreeVisitor
                 ir.createRet ir.createLoad callsite_alloca, "load_local_callsite"
 
         handleModuleGet: (exp, opencode) ->
-                moduleString = exp.arguments[0].value
-                moduleInfo = @allModules.get(moduleString)
-                @createCall @ejs_runtime.module_get, [consts.string(ir, moduleString)], "moduletmp"
+                moduleString = this.visit(exp.arguments[0])
+                @createCall @ejs_runtime.module_get, [moduleString], "moduletmp"
 
         handleModuleGetSlot: (exp, opencode) ->
                 moduleString = exp.arguments[0].value
@@ -2372,9 +2372,6 @@ class AddFunctionsVisitor extends TreeVisitor
                 # we don't need to recurse here since we won't have nested functions at this point
                 n
 
-sanitize_with_regexp = (filename) ->
-        filename.replace /[.,-\/\\]/g, "_" # this is insanely inadequate
-
 moduleGet_id            = b.identifier "%moduleGet"
 
 insert_toplevel_func = (tree, moduleInfo) ->
@@ -2521,20 +2518,22 @@ class ModuleInfo
 
         getExportGetter: (ident) ->
                 export_info = @exports.get(ident)
+                function_id = b.identifier("get_export_#{ident}")
                 if export_info.constval?
-                        b.functionExpression(b.undefined(), [b.identifier("%env_unused")], b.blockStatement([b.returnStatement(export_info.constval)]))
+                        b.functionExpression(function_id, [b.identifier("%env_unused")], b.blockStatement([b.returnStatement(export_info.constval)]))
                 else
-                        b.functionExpression(b.undefined(), [b.identifier("%env_unused")], b.blockStatement([b.returnStatement(intrinsic(moduleGetSlot_id, [b.literal(@path), b.literal(ident)]))]))
+                        b.functionExpression(function_id, [b.identifier("%env_unused")], b.blockStatement([b.returnStatement(intrinsic(moduleGetSlot_id, [b.literal(@path), b.literal(ident)]))]))
 
         getExportSetter: (ident) ->
                 export_info = @exports.get(ident)
+                function_id = b.identifier("set_export_#{ident}")
                 ###
                 if export_info.constval?
                         undefined
                 else
-                        b.functionExpression(b.undefined(), [b.identifier("%env_unused"), b.identifier('value')], b.blockStatement([intrinsic(moduleSetSlot_id, [b.literal(@path), b.literal(ident), b.identifier('value')])]))
+                        b.functionExpression(function_id, [b.identifier("%env_unused"), b.identifier('value')], b.blockStatement([intrinsic(moduleSetSlot_id, [b.literal(@path), b.literal(ident), b.identifier('value')])]))
                 ###
-                b.functionExpression(b.undefined(), [b.identifier("%env_unused"), b.identifier('value')], b.blockStatement([intrinsic(moduleSetSlot_id, [b.literal(@path), b.literal(ident), b.identifier('value')])]))
+                b.functionExpression(function_id, [b.identifier("%env_unused"), b.identifier('value')], b.blockStatement([intrinsic(moduleSetSlot_id, [b.literal(@path), b.literal(ident), b.identifier('value')])]))
                                 
         addImportSource: (source_path) ->
                 @importList.push(source_path) if @importList.indexOf(source_path) is -1
@@ -2630,13 +2629,6 @@ class GatherImports extends TreeVisitor
                 n
                 
         visitModuleDeclaration: (n) -> @addSource(n)
-
-underline = (str) ->
-        rv = str + "\n"
-        under = ""
-        for i in [0...str.length]
-                rv += "-"
-        rv
 
 exports.getAllModules = -> allModules
 

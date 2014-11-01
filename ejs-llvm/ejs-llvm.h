@@ -77,6 +77,17 @@
     abort();								\
   ::llvm::Constant* VAR = static_cast< ::llvm::Constant*>(Value_GetLLVMObj(args[I]));
 
+#define REQ_NULLABLE_LLVM_CONST_ARG(I, VAR)					\
+  ::llvm::Constant* VAR;						\
+  if (argc > (I) && EJSVAL_IS_NULL(args[(I)]))				\
+    VAR = NULL;								\
+  else if (argc <= (I) || !EJSVAL_IS_OBJECT(args[I]) /* XXX || !jsllvm::Constant::HasInstance(args[I]) */) { \
+    printf ("in function %s\n", __PRETTY_FUNCTION__);			\
+    abort();								\
+  }									\
+  else									\
+    VAR = static_cast< ::llvm::Constant*>(Value_GetLLVMObj(args[I]));
+
 #define REQ_LLVM_MODULE_ARG(I, VAR)					\
   if (argc <= (I) /*|| !args[I]->IsObject() || !jsllvm::Constant::HasInstance(args[I]) */) \
     abort();								\

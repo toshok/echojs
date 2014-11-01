@@ -381,8 +381,6 @@ generate_import_map = (modules) ->
         map = fs.createWriteStream(map_path)
         map.write "#include \"#{relative_to_ejs_exe 'runtime/ejs-module.h'}\"\n"
         map.write "extern \"C\" {\n"
-        options.external_modules.forEach ({ module_entrypoint }) ->
-                map.write "extern ejsval #{module_entrypoint} (ejsval exports);\n"
 
         modules.forEach (m) ->
                 map.write "extern EJSModule #{m.module_name};\n"
@@ -399,6 +397,8 @@ generate_import_map = (modules) ->
         map.write "};\n"
         map.write "int _ejs_num_modules = sizeof(_ejs_modules) / sizeof(_ejs_modules[0]);\n\n"
 
+        options.external_modules.forEach ({ module_entrypoint }) ->
+                map.write "extern ejsval #{module_entrypoint} (ejsval exports);\n"
         map.write "EJSExternalModule _ejs_external_modules[] = {\n"
         options.external_modules.forEach ({ module_name, module_entrypoint }) ->
                 map.write "  { \"#{module_name}\", #{module_entrypoint}, 0 },\n"
@@ -506,7 +506,7 @@ while work_list.length isnt 0
                         work_list.push(i)
 
 
-compiler.dumpModules()
+debug.log 1, -> compiler.dumpModules()
 allModules = compiler.getAllModules()
 
 # now compile them

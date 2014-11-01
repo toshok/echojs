@@ -12,7 +12,7 @@ let spawn = child_process.spawn;
 import * as debug        from './lib/debug';
 import { Set }           from './lib/set-es6';
 import { compile }       from './lib/compiler';
-import { gatherImports } from './lib/passes/gather-imports';
+import { gatherImports, dumpModules, getAllModules } from './lib/passes/gather-imports';
 
 import { bold, reset, genFreshFileName } from './lib/echo-util';
 import * as esprima      from './esprima/esprima-es6';
@@ -357,21 +357,23 @@ function parseFile(filename, content) {
     }
 }
 
-function compileFile(filename, parse_tree, export_lists, compileCallback) {
+function compileFile(filename, parse_tree, modules, compileCallback) {
     let base_filename = genFreshFileName(path.basename(filename));
 
-    if (!options.quiet)
-        console.warn (`${bold()}COMPILE${reset()} ${filename} ${options.debug_level > 0 ? base_filename : ''}`);
+    if (!options.quiet) {
+        let suffix = options.debug_level > 0 ? ` -> ${base_filename}` : '';
+        console.warn (`${bold()}COMPILE${reset()} ${filename}${suffix}`);
+    }
 
     let compiled_module;
-    try {
-        compiled_module = compile(parse_tree, base_filename, filename, export_lists, options);
-    }
-    catch (e) {
-        console.warn(`${e}`);
-        if (options.debug_level == 0) process.exit(-1);
-        throw e;
-    }
+//    try {
+        compiled_module = compile(parse_tree, base_filename, filename, modules, options);
+//    }
+//    catch (e) {
+//        console.warn(`${e}`);
+//        if (options.debug_level == 0) process.exit(-1);
+//        throw e;
+//    }
 
     let ll_filename     = `${os.tmpdir()}/${base_filename}-${options.target_platform}-${options.target_arch}.ll`;
     let bc_filename     = `${os.tmpdir()}/${base_filename}-${options.target_platform}-${options.target_arch}.bc`;
@@ -390,46 +392,13 @@ function compileFile(filename, parse_tree, export_lists, compileCallback) {
 
     compiled_modules.push({ filename: options.basename ? path.basename(filename) : filename, module_toplevel: compiled_module.toplevel_name });
 
-    if (typeof(__ejs) !== "undefined") {
-        // in ejs spawn is synchronous.
-        spawn(llvm_commands["llvm-as"], llvm_as_args);
-        spawn(llvm_commands["opt"], opt_args);
-        spawn(llvm_commands["llc"], llc_args);
-        o_filenames.push(o_filename);
-        if (compileCallback)
-            compileCallback();
-    }
-    else {
-        debug.log (1, `executing '${llvm_commands['llvm-as']} ${llvm_as_args.join(' ')}'`);
-        let llvm_as = spawn(llvm_commands["llvm-as"], llvm_as_args);
-        llvm_as.stderr.on("data", (data) => { console.warn(`${data}`); });
-        llvm_as.on ("error", (err) => {
-            console.warn(`error executing ${llvm_commands['llvm-as']}: ${err}`);
-            process.exit(-1);
-        });
-        llvm_as.on ("exit", (code) => {
-            debug.log(1, `executing '${llvm_commands['opt']} ${opt_args.join(' ')}'`);
-            let opt = spawn(llvm_commands['opt'], opt_args);
-            opt.stderr.on ("data", (data) => { console.warn(`${data}`); });
-            opt.on ("error", (err) => {
-                console.warn(`error executing ${llvm_commands['opt']}: ${err}`);
-                process.exit(-1);
-            });
-            opt.on ("exit", (code) => {
-                debug.log (1, `executing '${llvm_commands['llc']} ${llc_args.join(' ')}'`);
-                let llc = spawn(llvm_commands['llc'], llc_args);
-                llc.stderr.on ("data", (data) => { console.warn(`${data}`); });
-                llc.on ("error", (err) => {
-                    console.warn(`error executing ${llvm_commands['llc']}: ${err}`);
-                    process.exit(-1);
-                });
-                llc.on ("exit", (code) => {
-                    o_filenames.push(o_filename);
-                    compileCallback();
-                });
-            });
-        });
-    }
+    // in ejs spawn is synchronous.
+    spawn(llvm_commands["llvm-as"], llvm_as_args);
+    spawn(llvm_commands["opt"], opt_args);
+    spawn(llvm_commands["llc"], llc_args);
+    o_filenames.push(o_filename);
+    if (compileCallback)
+        compileCallback();
 }
 
 function relative_to_ejs_exe(n) {
@@ -446,37 +415,43 @@ function generate_import_map (modules) {
     };
     let map_path = `${os.tmpdir()}/${genFreshFileName(path.basename(main_file))}-import-map.cpp`;
     let map = fs.createWriteStream(map_path);
-    map.write (`#include \"${relative_to_ejs_exe('runtime/ejs.h')}\"\n`);
-    map.write ("extern \"C\" {\n");
-    map.write ("typedef ejsval (*ExternalModuleEntry) (ejsval exports);\n");
-    map.write ("typedef struct { const char* name;  ExternalModuleEntry func;  ejsval cached_exports EJSVAL_ALIGNMENT; } EJSExternalModuleRequire;\n");
-    map.write ("typedef ejsval (*ToplevelFunc) (ejsval env, ejsval _this, int argc, ejsval *args);\n");
-    map.write ("typedef struct { const char* name;  ToplevelFunc func;  ejsval cached_exports EJSVAL_ALIGNMENT; } EJSRequire;\n");
-    options.external_modules.forEach( (module) => {
+    map.write (`#include "${relative_to_ejs_exe('runtime/ejs-module.h')}"\n`);
+    map.write ('extern "C" {\n');
+
+    modules.forEach( (module) => {
+        map.write(`extern EJSModule ${module.module_name};\n`);
+        map.write(`extern ejsval ${module.toplevel_function_name} (ejsval env, ejsval _this, uint32_t argc, ejsval *args);\n`);
+    });
+
+
+    map.write ("EJSModule* _ejs_modules[] = {\n");
+    modules.forEach ( (module) => {
+        map.write(`  &${module.module_name},\n`);
+    });
+    map.write ("};\n");
+
+    map.write('ejsval (*_ejs_module_toplevels[])(ejsval, ejsval, uint32_t, ejsval*) = {\n');
+    modules.forEach ( (module) => {
+        map.write(`  ${module.toplevel_function_name},\n`);
+    });
+    map.write ("};\n");
+    map.write('int _ejs_num_modules = sizeof(_ejs_modules) / sizeof(_ejs_modules[0]);\n\n');
+
+    options.external_modules.forEach ((module) => {
         map.write(`extern ejsval ${module.module_entrypoint} (ejsval exports);\n`);
     });
 
-    modules.forEach( (module) => {
-        map.write(`extern ejsval ${module.module_toplevel} (ejsval env, ejsval _this, int argc, ejsval *args);\n`);
-    });
-
-
-    map.write ("EJSRequire _ejs_require_map[] = {\n");
-    modules.forEach ( (module) => {
-        map.write(`  { \"${sanitize(module.filename, false)}\", ${module.module_toplevel}, 0 },\n`);
-    });
-
-    map.write ("  { 0, 0, 0 }\n");
-    map.write ("};\n");
-
-    map.write("EJSExternalModuleRequire _ejs_external_module_require_map[] = {\n");
+    map.write('EJSExternalModule _ejs_external_modules[] = {\n');
     options.external_modules.forEach ( (module) => {
         map.write(`  { \"${module.module_name}\", ${module.module_entrypoint}, 0 },\n`);
     });
-    map.write("  { 0, 0, 0 }\n");
-    map.write("};\n");
-    
-    map.write(`const char *entry_filename = \"${sanitize(base_filenames[0], false)}\";\n`);
+    map.write('};\n');
+    map.write('int _ejs_num_external_modules = sizeof(_ejs_external_modules) / sizeof(_ejs_external_modules[0]);\n');
+
+    let entry_module = file_args[0];
+    if (entry_module.lastIndexOf(".js") == entry_module.length - 3)
+        entry_module = entry_module.substring(0, entry_module.length-3);
+    map.write(`const EJSModule* entry_module = &${modules.get(entry_module).module_name};\n`);
 
     map.write("};");
     map.end();
@@ -487,8 +462,8 @@ function generate_import_map (modules) {
 }
 
 
-function do_final_link(main_file) {
-    let map_filename = generate_import_map(compiled_modules);
+function do_final_link(main_file, modules) {
+    let map_filename = generate_import_map(modules);
 
     process.env.PATH = `${target_path_prepend(options.target_platform,options.target_arch)}:${process.env.PATH}`;
 
@@ -505,10 +480,16 @@ function do_final_link(main_file) {
     clang_args.push(relative_to_ejs_exe(target_libecho(options.target_platform, options.target_arch)));
     clang_args.push(relative_to_ejs_exe(target_extra_libs(options.target_platform, options.target_arch)));
     
-    options.external_modules.forEach ( (extern_module) => {
-        clang_args.push (extern_module.library);
+    let seen_external_modules = new Set();
+    options.external_modules.forEach ((extern_module) => {
+        // don't include external modules more than once
+        if (seen_external_modules.has(extern_module.library)) return;
+
+        seen_external_modules.add(extern_module.library);
+                
+        clang_args.push(extern_module.library);
         // very strange, not sure why we need this \n
-        clang_args = clang_args.concat(extern_module.link_flags.replace('\n', ' ').split(' '));
+        clang_args = clang_args.concat(extern_module.link_flags.replace('\n', ' ').split(" "));
     });
 
     clang_args = clang_args.concat(target_libraries(options.target_platform, options.target_arch));
@@ -548,8 +529,6 @@ function cleanup(done) {
 let main_file = file_args[0];
 let work_list = file_args.slice();
 
-let export_lists = Object.create(null);
-
 // starting at the main file, gather all files we'll need
 while (work_list.length !== 0) {
     let file = work_list.pop();
@@ -577,7 +556,7 @@ while (work_list.length !== 0) {
     let file_contents = fs.readFileSync(jsfile, 'utf-8');
     let file_ast = parseFile(jsfile, file_contents);
 
-    let imports = gatherImports(file, path.dirname(jsfile), process.cwd(), file_ast, export_lists);
+    let imports = gatherImports(file, path.dirname(jsfile), process.cwd(), file_ast, options.external_modules);
 
     files.push({file_name: file, file_ast: file_ast});
 
@@ -588,23 +567,11 @@ while (work_list.length !== 0) {
     }
 }
 
+debug.log (2, () => dumpModules());
+let allModules = getAllModules();
+
 // now compile them
 //
-if (typeof(__ejs) !== 'undefined') {
-    for (let f of files)
-        compileFile(f.file_name, f.file_ast, export_lists);
-    do_final_link(main_file);
-}
-else {
-    // reverse the list so the main program is the first thing we compile
-    files.reverse();
-    let compileNextFile = () => {
-        if (files.length === 0) {
-            do_final_link(main_file);
-            return;
-        }
-        let f = files.pop();
-        compileFile (f.file_name, f.file_ast, export_lists, compileNextFile);
-    };
-    compileNextFile();
-}
+for (let f of files)
+    compileFile(f.file_name, f.file_ast, allModules);
+do_final_link(main_file, allModules);

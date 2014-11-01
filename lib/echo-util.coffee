@@ -57,6 +57,13 @@ exports.reset = ->
                 return terminal.ANSIStyle("reset");
         return ""
 
+exports.underline = (str) ->
+        rv = str + "\n"
+        under = ""
+        for i in [0...str.length]
+                rv += "-"
+        rv
+
 exports.is_number_literal = (n) -> n.type is syntax.Literal and typeof n.value is "number"
 exports.is_string_literal = (n) -> n.type is syntax.Literal and typeof n.raw is "string"
 exports.create_intrinsic = (id, args, loc) ->
@@ -76,4 +83,7 @@ exports.intrinsic = (id, args, loc) ->
         rv = b.callExpression(id, args)
         rv.loc = loc
         rv
+
+exports.sanitize_with_regexp = (filename) ->
+        filename.replace /[.,-\/\\]/g, "_" # this is insanely inadequate
 

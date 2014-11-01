@@ -404,6 +404,15 @@ namespace ejsllvm {
     }
 
     ejsval
+    IRBuilder_createPtrToInt(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        REQ_LLVM_VAL_ARG(0, V);
+        REQ_LLVM_TYPE_ARG(1, dest_ty);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
+        return Value_new (_llvm_builder.CreatePtrToInt(V, dest_ty, name));
+    }
+
+    ejsval
     IRBuilder_createBitCast(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         REQ_LLVM_VAL_ARG(0, V);
@@ -508,6 +517,7 @@ namespace ejsllvm {
         OBJ_METHOD(createOr);
         OBJ_METHOD(createZExt);
         OBJ_METHOD(createIntToPtr);
+        OBJ_METHOD(createPtrToInt);
         OBJ_METHOD(createBitCast);
 
         OBJ_METHOD(createSwitch);

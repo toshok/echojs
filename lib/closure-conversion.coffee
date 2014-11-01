@@ -108,7 +108,6 @@ getLocal_id             = b.identifier "%getLocal"
 getGlobal_id            = b.identifier "%getGlobal"
 getArg_id               = b.identifier "%getArg"
 getArgumentsObject_id   = b.identifier "%getArgumentsObject"
-moduleGet_id            = b.identifier "%moduleGet"
 moduleGetSlot_id        = b.identifier "%moduleGetSlot"
 moduleSetSlot_id        = b.identifier "%moduleSetSlot"
 moduleGetExotic_id      = b.identifier "%moduleGetExotic"
@@ -331,7 +330,7 @@ DesugarClasses = class DesugarClasses extends TransformPass
                 if are_static
                         target = ast_class.id
                 else
-                        target = b.memberExpression(ast_class.id, b.identifier("prototype"))
+                        target = b.identifier('proto')
 
                 b.expressionStatement(b.callExpression(b.memberExpression(b.identifier("Object"), b.identifier("defineProperties")), [target, propdescs_literal]))
 
@@ -1116,26 +1115,10 @@ class DesugarUpdateAssignments extends TransformPass
                 n
 
 class DesugarImportExport extends TransformPass
-        exports_id = b.identifier("exports") # XXX as with compiler.coffee, this 'exports' should be '%exports' if the module has ES6 module declarations
-        get_id = b.identifier("get")
-        Object_id = b.identifier("Object")
-        defineProperty_id = b.identifier("defineProperty")
-        
         freshId = do ->
                 importGen = startGenerator()
                 (prefix) -> b.identifier "%#{prefix}_#{importGen()}"
 
-        Object_defineProperty = b.memberExpression(Object_id, defineProperty_id)
-                                
-        define_export_property = (exported_id, local_id = exported_id) ->
-                # return esprima.parse("Object.defineProperty(exports, '#{exported_id.name}', { get: function() { return #{local_id.name}; } });");
-                
-                getter = b.functionExpression(undefined, [], b.blockStatement([b.returnStatement(local_id)]))
-                        
-                property_literal = b.objectExpression([b.property(get_id, getter)])
-
-                return b.expressionStatement(b.callExpression(Object_defineProperty, [exports_id, b.literal(exported_id.name), property_literal]))
-                
         constructor: (options, @filename, @allModules) ->
                 super
 
@@ -1151,7 +1134,7 @@ class DesugarImportExport extends TransformPass
                 if n.specifiers.length is 0
                         # no specifiers, it's of the form:  import from "foo"
                         # don't waste a decl for this type
-                        return b.expressionStatement(intrinsic(moduleGet_id, [n.source_path]))
+                        return b.expressionStatement(intrinsic(moduleGetExotic_id, [n.source_path]))
 
                 import_decls =  b.letDeclaration()
 
@@ -1192,9 +1175,8 @@ class DesugarImportExport extends TransformPass
 
                         # import the module regardless
                         import_tmp = freshId("import")
-                        export_decl = b.letDeclaration(import_tmp, intrinsic(moduleGet_id, [n.source_path]))
 
-                        export_stuff = []                             
+                        export_stuff = [b.letDeclaration(import_tmp, intrinsic(moduleGetExotic_id, [n.source_path]))]                             
                         if n.default
                                 # export * from "foo"
                                 if n.specifiers.length isnt 1 or n.specifiers[0].type isnt ExportBatchSpecifier
@@ -1205,13 +1187,10 @@ class DesugarImportExport extends TransformPass
                                 for spec in n.specifiers
                                         if not @allModules.get(n.source_path.value).exports.has(spec.id.name)
                                                 reportError(ReferenceError, "module `#{n.source_path.value}' doesn't export `#{spec.id.name}'", @filename, spec.id.loc)
-                                        
-                                        spectmp = freshId("spec")
-                                        export_decl.declarations.push b.variableDeclarator(spectmp, b.memberExpression(import_tmp, spec.id))
 
-                                        @exports.push { name: spec.name, id: spectmp }
-                                        export_stuff.push(define_export_property(spec.name || spec.id, spectmp))
-                        export_stuff.unshift(export_decl)
+                                        export_name = spec.name or spec.id
+
+                                        export_stuff.push(b.expressionStatement(intrinsic(moduleSetSlot_id, [b.literal(@filename), b.literal(export_name.name), b.memberExpression(import_tmp, spec.id)])));
                         return export_stuff
 
                 # export function foo () { ... }
@@ -1250,7 +1229,7 @@ class DesugarImportExport extends TransformPass
                 reportError(SyntaxError, "Unsupported type of export declaration #{n.declaration.type}", @filename, n.loc)
 
         visitModuleDeclaration: (n) ->
-                init = intrinsic(moduleGet_id, [n.source_path])
+                init = intrinsic(moduleGetExotic_id, [n.source_path])
                 return b.letDeclaration(n.id, init)
 
 #
