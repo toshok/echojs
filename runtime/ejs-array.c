@@ -2616,5 +2616,28 @@ EJS_DEFINE_CLASS(Array,
 
 EJSSpecOps _ejs_sparsearray_specops;
 
-EJS_DEFINE_INHERIT_ALL_CLASS(ArrayIterator);
+static void
+_ejs_array_iterator_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
+{
+    EJSArrayIterator* iter = (EJSArrayIterator*)obj;
+    scan_func(iter->iterated);
+    _ejs_Object_specops.Scan (obj, scan_func);
+}
 
+EJS_DEFINE_CLASS(ArrayIterator,
+                 OP_INHERIT, // [[GetPrototypeOf]]
+                 OP_INHERIT, // [[SetPrototypeOf]]
+                 OP_INHERIT, // [[IsExtensible]]
+                 OP_INHERIT, // [[PreventExtensions]]
+                 OP_INHERIT, // [[GetOwnProperty]]
+                 OP_INHERIT, // [[DefineOwnProperty]]
+                 OP_INHERIT, // [[HasProperty]]
+                 OP_INHERIT, // [[Get]]
+                 OP_INHERIT, // [[Set]]
+                 OP_INHERIT, // [[Delete]]
+                 OP_INHERIT, // [[Enumerate]]
+                 OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // allocate.  shouldn't ever be used
+                 OP_INHERIT, // finalize.  also shouldn't ever be used
+                 _ejs_array_iterator_specop_scan
+                 )

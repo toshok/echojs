@@ -1775,7 +1775,32 @@ EJS_DEFINE_CLASS(String,
                  )
 
 
-EJS_DEFINE_INHERIT_ALL_CLASS(StringIterator);
+
+static void
+_ejs_string_iterator_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
+{
+    EJSStringIterator* iter = (EJSStringIterator*)obj;
+    scan_func(iter->iterated);
+    _ejs_Object_specops.Scan (obj, scan_func);
+}
+
+EJS_DEFINE_CLASS(StringIterator,
+                 OP_INHERIT, // [[GetPrototypeOf]]
+                 OP_INHERIT, // [[SetPrototypeOf]]
+                 OP_INHERIT, // [[IsExtensible]]
+                 OP_INHERIT, // [[PreventExtensions]]
+                 OP_INHERIT, // [[GetOwnProperty]]
+                 OP_INHERIT, // [[DefineOwnProperty]]
+                 OP_INHERIT, // [[HasProperty]]
+                 OP_INHERIT, // [[Get]]
+                 OP_INHERIT, // [[Set]]
+                 OP_INHERIT, // [[Delete]]
+                 OP_INHERIT, // [[Enumerate]]
+                 OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // allocate.  shouldn't ever be used
+                 OP_INHERIT, // finalize.  also shouldn't ever be used
+                 _ejs_string_iterator_specop_scan
+                 )
 
 /// EJSPrimString's
 

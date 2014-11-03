@@ -729,5 +729,29 @@ EJS_DEFINE_CLASS(Map,
                  _ejs_map_specop_scan
                  )
 
-EJS_DEFINE_INHERIT_ALL_CLASS(MapIterator)
+static void
+_ejs_map_iterator_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
+{
+    EJSMapIterator* iter = (EJSMapIterator*)obj;
+    scan_func(iter->iterated);
+    _ejs_Object_specops.Scan (obj, scan_func);
+}
+
+EJS_DEFINE_CLASS(MapIterator,
+                 OP_INHERIT, // [[GetPrototypeOf]]
+                 OP_INHERIT, // [[SetPrototypeOf]]
+                 OP_INHERIT, // [[IsExtensible]]
+                 OP_INHERIT, // [[PreventExtensions]]
+                 OP_INHERIT, // [[GetOwnProperty]]
+                 OP_INHERIT, // [[DefineOwnProperty]]
+                 OP_INHERIT, // [[HasProperty]]
+                 OP_INHERIT, // [[Get]]
+                 OP_INHERIT, // [[Set]]
+                 OP_INHERIT, // [[Delete]]
+                 OP_INHERIT, // [[Enumerate]]
+                 OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // allocate.  shouldn't ever be used
+                 OP_INHERIT, // finalize.  also shouldn't ever be used
+                 _ejs_map_iterator_specop_scan
+                 )
 
