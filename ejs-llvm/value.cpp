@@ -72,7 +72,6 @@ namespace ejsllvm {
         REQ_UTF8_ARG (0, name);
 
         val->llvm_val->setName(name);
-        free(name);
         return _ejs_undefined;
     }
 

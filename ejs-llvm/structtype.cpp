@@ -55,9 +55,7 @@ namespace ejsllvm {
             element_types.push_back (Type_GetLLVMObj(EJSDENSEARRAY_ELEMENTS(elementTypes)[i]));
         }
 
-        ejsval rv = StructType_new(llvm::StructType::create(llvm::getGlobalContext(), element_types, name));
-        free (name);
-        return rv;
+        return StructType_new(llvm::StructType::create(llvm::getGlobalContext(), element_types, name));
     }
 
     ejsval

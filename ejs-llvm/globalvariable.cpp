@@ -71,7 +71,6 @@ namespace ejsllvm {
             REQ_BOOL_ARG(4, visible);
 
             gv->llvm_global = new ::llvm::GlobalVariable(*module, type, false, visible ? llvm::GlobalValue::ExternalLinkage : llvm::GlobalValue::InternalLinkage, init, name);
-            free(name); 
             return _this;
         }
     }

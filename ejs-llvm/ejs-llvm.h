@@ -50,17 +50,21 @@
 #define REQ_UTF8_ARG(I, VAR)						\
   if (argc <= (I) /*|| !args[I]->IsString()*/)				\
     abort();								\
-  char* VAR = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[I]));
+  char* VAR##_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[I]));	\
+  std::string VAR(VAR##_utf8);						\
+  free(VAR##_utf8);							\
 
 #define FALLBACK_UTF8_ARG(I, VAR, FALLBACK)				\
-  char* VAR;								\
+  std::string VAR;							\
   if (argc <= (I)) { 							\
-    VAR = (char*)"";							\
+    VAR = FALLBACK;							\
   }									\
   else {								\
     /*if (!args[I]->IsString())	*/					\
     /*  abort();		*/					\
-    VAR = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[I]));			\
+    char* tmp = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[I]));		\
+    VAR = tmp;								\
+    free(tmp);								\
   }									\
 
 #define FALLBACK_EMPTY_UTF8_ARG(I, VAR) FALLBACK_UTF8_ARG(I, VAR, "")

@@ -63,7 +63,6 @@ namespace ejsllvm {
             REQ_UTF8_ARG(0, name);
             REQ_LLVM_FUN_ARG(1, fun);
             bb->llvm_bb = llvm::BasicBlock::Create(llvm::getGlobalContext(), name, fun);
-            free (name);
             return _this;
         }
     }

@@ -77,7 +77,6 @@ namespace ejsllvm {
             Module* module = ((Module*)EJSVAL_TO_OBJECT(_this));
             REQ_UTF8_ARG(0, name);
             module->llvm_module = new llvm::Module(name, llvm::getGlobalContext());
-            free (name);
             return _this;
         }
     }
@@ -98,7 +97,7 @@ namespace ejsllvm {
 #endif
         llvm::Intrinsic::ID intrinsic_id;
 
-        if (!strcmp (id, "@llvm.gcroot")) {
+        if (!strcmp (id.c_str(), "@llvm.gcroot")) {
             intrinsic_id = llvm::Intrinsic::gcroot;
         }
         else {
@@ -110,8 +109,6 @@ namespace ejsllvm {
 #else
         llvm::Function* f = llvm::Intrinsic::getDeclaration (module->llvm_module, intrinsic_id);
 #endif
-
-        free (id);
 
         return Function_new (f);
     }
@@ -147,8 +144,6 @@ namespace ejsllvm {
             AI->setName(Args[Idx]);
 #endif
 
-        free (name);
-
         return Function_new (f);
     }
 
@@ -159,9 +154,7 @@ namespace ejsllvm {
         REQ_UTF8_ARG(0, name);
         REQ_LLVM_TYPE_ARG(1, type);
 
-        ejsval rv = GlobalVariable_new (static_cast<llvm::GlobalVariable*>(module->llvm_module->getOrInsertGlobal(name, type)));
-        free (name);
-        return rv;
+        return GlobalVariable_new (static_cast<llvm::GlobalVariable*>(module->llvm_module->getOrInsertGlobal(name, type)));
     }
 
     ejsval
@@ -183,8 +176,6 @@ namespace ejsllvm {
         llvm::Function* f = static_cast< llvm::Function*>(module->llvm_module->getOrInsertFunction(name, FT));
         f->setLinkage (llvm::Function::ExternalLinkage);
 
-        free (name);
-
         return Function_new (f);
     }
 
@@ -196,8 +187,6 @@ namespace ejsllvm {
         REQ_UTF8_ARG(0, name);
 	
         llvm::Function* f = static_cast< llvm::Function*>(module->llvm_module->getFunction(name));
-
-        free (name);
 
         if (f)
             return Function_new (f);
@@ -213,8 +202,6 @@ namespace ejsllvm {
         REQ_BOOL_ARG(1, allowInternal);
 
         ejsval rv = GlobalVariable_new (module->llvm_module->getGlobalVariable(name, allowInternal));
-
-        free (name);
 
         return rv;
     }
@@ -248,8 +235,6 @@ namespace ejsllvm {
         module->llvm_module->print(raw_stream, NULL);
         output_file.close();
 
-        free (path);
-
         return _ejs_undefined;
     }
 
@@ -261,12 +246,10 @@ namespace ejsllvm {
         REQ_UTF8_ARG(0, path);
 
         std::string error;
-        llvm::raw_fd_ostream OS(path, error, llvm::sys::fs::F_Binary);
+        llvm::raw_fd_ostream OS(path.c_str(), error, llvm::sys::fs::F_Binary);
         // check error
 
         llvm::WriteBitcodeToFile (module->llvm_module, OS);
-
-        free (path);
 
         return _ejs_undefined;
     }

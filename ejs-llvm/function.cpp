@@ -112,8 +112,7 @@ namespace ejsllvm {
     {
         Function* fun = ((Function*)EJSVAL_TO_OBJECT(_this));
         REQ_UTF8_ARG(0, name);
-        fun->llvm_fun->setGC(name);
-        free(name);
+        fun->llvm_fun->setGC(name.c_str());
         return _ejs_undefined;
     }
 

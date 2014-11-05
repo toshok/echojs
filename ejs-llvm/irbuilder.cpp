@@ -84,9 +84,7 @@ namespace ejsllvm {
         REQ_LLVM_TYPE_ARG(1,ty);
         FALLBACK_EMPTY_UTF8_ARG(2,name);
 
-        ejsval rv = Value_new(_llvm_builder.CreatePointerCast(val, ty, name));
-        free (name);
-        return rv;
+        return Value_new(_llvm_builder.CreatePointerCast(val, ty, name));
     }
 
     ejsval
@@ -96,9 +94,7 @@ namespace ejsllvm {
         REQ_LLVM_TYPE_ARG(1,ty);
         FALLBACK_EMPTY_UTF8_ARG(2,name);
 
-        ejsval rv = Value_new (_llvm_builder.CreateFPCast(val, ty, name));
-        free (name);
-        return rv;
+        return Value_new (_llvm_builder.CreateFPCast(val, ty, name));
     }
 
     ejsval
@@ -114,9 +110,7 @@ namespace ejsllvm {
             if (ArgsV.back() == 0) abort(); // XXX throw an exception here
         }
 
-        ejsval rv = Call_new (_llvm_builder.CreateCall(callee, ArgsV, name));
-        free (name);
-        return rv;
+        return Call_new (_llvm_builder.CreateCall(callee, ArgsV, name));
     }
 
     ejsval
@@ -134,9 +128,7 @@ namespace ejsllvm {
             if (ArgsV.back() == 0) abort(); // XXX throw an exception here
         }
 
-        ejsval rv = Invoke_new (_llvm_builder.CreateInvoke(callee, normal_dest, unwind_dest, ArgsV, name));
-        free (name);
-        return rv;
+        return Invoke_new (_llvm_builder.CreateInvoke(callee, normal_dest, unwind_dest, ArgsV, name));
     }
 
     ejsval
@@ -146,9 +138,7 @@ namespace ejsllvm {
         REQ_LLVM_VAL_ARG(1, right);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
 
-        ejsval rv = Value_new (_llvm_builder.CreateFAdd(left, right, name));
-        free (name);
-        return rv;
+        return Value_new (_llvm_builder.CreateFAdd(left, right, name));
     }
 
     ejsval
@@ -157,9 +147,7 @@ namespace ejsllvm {
         REQ_LLVM_TYPE_ARG(0, ty);
         FALLBACK_EMPTY_UTF8_ARG(1, name);
 
-        ejsval rv = AllocaInst_new (_llvm_builder.CreateAlloca(ty, 0, name));
-        free (name);
-        return rv;
+        return AllocaInst_new (_llvm_builder.CreateAlloca(ty, 0, name));
     }
 
     ejsval
@@ -168,9 +156,7 @@ namespace ejsllvm {
         REQ_LLVM_VAL_ARG(0, val);
         FALLBACK_EMPTY_UTF8_ARG(1, name);
 
-        ejsval rv = LoadInst_new (_llvm_builder.CreateLoad(val, name));
-        free (name);
-        return rv;
+        return LoadInst_new (_llvm_builder.CreateLoad(val, name));
     }
 
     ejsval
@@ -189,10 +175,7 @@ namespace ejsllvm {
         REQ_LLVM_VAL_ARG(1, idx);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
 
-        ejsval rv = Value_new (_llvm_builder.CreateExtractElement(val, idx, name));
-        free (name);
-
-        return rv;
+        return Value_new (_llvm_builder.CreateExtractElement(val, idx, name));
     }
 
     ejsval
@@ -202,10 +185,7 @@ namespace ejsllvm {
         REQ_INT_ARG(1, idx);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
 
-        ejsval rv = Value_new (_llvm_builder.CreateExtractValue(val, idx, name));
-        free (name);
-
-        return rv;
+        return Value_new (_llvm_builder.CreateExtractValue(val, idx, name));
     }
 
     ejsval
@@ -221,9 +201,7 @@ namespace ejsllvm {
             if (IdxV.back() == 0) abort(); // XXX throw an exception here
         }
 
-        ejsval rv = Value_new (_llvm_builder.CreateGEP(val, IdxV, name));
-        free (name);
-        return rv;
+        return Value_new (_llvm_builder.CreateGEP(val, IdxV, name));
     }
 
     ejsval
@@ -239,9 +217,7 @@ namespace ejsllvm {
             if (IdxV.back() == 0) abort(); // XXX throw an exception here
         }
 
-        ejsval rv = Value_new (_llvm_builder.CreateInBoundsGEP(val, IdxV, name));
-        free (name);
-        return rv;
+        return Value_new (_llvm_builder.CreateInBoundsGEP(val, IdxV, name));
     }
 
     ejsval
@@ -251,9 +227,7 @@ namespace ejsllvm {
         REQ_INT_ARG(1, idx);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
 
-        ejsval rv = Value_new (_llvm_builder.CreateStructGEP(val, idx, name));
-        free (name);
-        return rv;
+        return Value_new (_llvm_builder.CreateStructGEP(val, idx, name));
     }
 
     ejsval
@@ -263,9 +237,7 @@ namespace ejsllvm {
         REQ_LLVM_VAL_ARG(1, right);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
 
-        ejsval rv = Value_new (_llvm_builder.CreateICmpEQ(left, right, name));
-        free (name);
-        return rv;
+        return Value_new (_llvm_builder.CreateICmpEQ(left, right, name));
     }
 
     ejsval
@@ -275,9 +247,7 @@ namespace ejsllvm {
         REQ_LLVM_VAL_ARG(1, right);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
 
-        ejsval rv = Value_new (_llvm_builder.CreateICmpSGT(left, right, name));
-        free (name);
-        return rv;
+        return Value_new (_llvm_builder.CreateICmpSGT(left, right, name));
     }
 
     ejsval
@@ -287,9 +257,7 @@ namespace ejsllvm {
         REQ_LLVM_VAL_ARG(1, right);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
 
-        ejsval rv = Value_new (_llvm_builder.CreateICmpUGT(left, right, name));
-        free (name);
-        return rv;
+        return Value_new (_llvm_builder.CreateICmpUGT(left, right, name));
     }
 
     ejsval
@@ -299,9 +267,7 @@ namespace ejsllvm {
         REQ_LLVM_VAL_ARG(1, right);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
 
-        ejsval rv = Value_new (_llvm_builder.CreateICmpUGE(left, right, name));
-        free (name);
-        return rv;
+        return Value_new (_llvm_builder.CreateICmpUGE(left, right, name));
     }
 
     ejsval
@@ -311,9 +277,7 @@ namespace ejsllvm {
         REQ_LLVM_VAL_ARG(1, right);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
 
-        ejsval rv = Value_new (_llvm_builder.CreateICmpULT(left, right, name));
-        free (name);
-        return rv;
+        return Value_new (_llvm_builder.CreateICmpULT(left, right, name));
     }
 
     ejsval
@@ -355,10 +319,7 @@ namespace ejsllvm {
         REQ_UTF8_ARG(0, val);
         FALLBACK_EMPTY_UTF8_ARG(1, name);
 
-        ejsval rv = Value_new (_llvm_builder.CreateGlobalStringPtr(val, name));
-        free (val);
-        free (name);
-        return rv;
+        return Value_new (_llvm_builder.CreateGlobalStringPtr(val, name));
     }
 
     ejsval
@@ -460,9 +421,7 @@ namespace ejsllvm {
         REQ_INT_ARG(2, num_clauses);
         FALLBACK_EMPTY_UTF8_ARG(3, name);
 
-        ejsval rv = LandingPad_new (_llvm_builder.CreateLandingPad(ty, persFn, num_clauses, name));
-        free (name);
-        return rv;
+        return LandingPad_new (_llvm_builder.CreateLandingPad(ty, persFn, num_clauses, name));
     }
 
     ejsval
