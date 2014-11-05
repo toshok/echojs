@@ -1810,10 +1810,22 @@ _ejs_string_new_utf8 (const char* str)
     // XXX assume str is ascii for now
     int str_len = strlen(str);
     size_t value_size = sizeof(EJSPrimString) + sizeof(jschar) * (str_len + 1);
+    EJSBool ool_buffer = EJS_FALSE;
+
+    if (value_size > 2048) {
+        value_size = sizeof(EJSPrimString);
+        ool_buffer = EJS_TRUE;
+    }
 
     EJSPrimString* rv = _ejs_gc_new_primstr(value_size);
     EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_FLAT);
-    rv->data.flat = (jschar*)((char*)rv + sizeof(EJSPrimString));
+    if (ool_buffer) {
+        EJS_PRIMSTR_SET_HAS_OOL_BUFFER(rv);
+        rv->data.flat = (jschar*)malloc(sizeof(jschar) * (str_len + 1));
+    }
+    else {
+        rv->data.flat = (jschar*)((char*)rv + sizeof(EJSPrimString));
+    }
     jschar *p = rv->data.flat;
     const unsigned char *stru = (const unsigned char*)str;
     while (*stru) {
@@ -1832,10 +1844,22 @@ ejsval
 _ejs_string_new_utf8_len (const char* str, int len)
 {
     size_t value_size = sizeof(EJSPrimString) + sizeof(jschar) * (len + 1);
+    EJSBool ool_buffer = EJS_FALSE;
+
+    if (value_size > 2048) {
+        value_size = sizeof(EJSPrimString);
+        ool_buffer = EJS_TRUE;
+    }
 
     EJSPrimString* rv = _ejs_gc_new_primstr(value_size);
     EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_FLAT);
-    rv->data.flat = (jschar*)((char*)rv + sizeof(EJSPrimString));
+    if (ool_buffer) {
+        EJS_PRIMSTR_SET_HAS_OOL_BUFFER(rv);
+        rv->data.flat = (jschar*)malloc(sizeof(jschar) * (len + 1));
+    }
+    else {
+        rv->data.flat = (jschar*)((char*)rv + sizeof(EJSPrimString));
+    }
     jschar *p = rv->data.flat;
     const unsigned char *stru = (const unsigned char*)str;
     while (len > 0) {
@@ -1856,11 +1880,23 @@ _ejs_string_new_ucs2 (const jschar* str)
 {
     int str_len = ucs2_strlen(str);
     size_t value_size = sizeof(EJSPrimString) + sizeof(jschar) * (str_len + 1);
+    EJSBool ool_buffer = EJS_FALSE;
+
+    if (value_size > 2048) {
+        value_size = sizeof(EJSPrimString);
+        ool_buffer = EJS_TRUE;
+    }
 
     EJSPrimString* rv = _ejs_gc_new_primstr(value_size);
     EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_FLAT);
     rv->length = str_len;
-    rv->data.flat = (jschar*)((char*)rv + sizeof(EJSPrimString));
+    if (ool_buffer) {
+        EJS_PRIMSTR_SET_HAS_OOL_BUFFER(rv);
+        rv->data.flat = (jschar*)malloc(sizeof(jschar) * (str_len + 1));
+    }
+    else {
+        rv->data.flat = (jschar*)((char*)rv + sizeof(EJSPrimString));
+    }
     memmove (rv->data.flat, str, str_len * sizeof(jschar));
     rv->data.flat[str_len] = 0;
     return STRING_TO_EJSVAL(rv);
@@ -1870,11 +1906,23 @@ ejsval
 _ejs_string_new_ucs2_len (const jschar* str, int len)
 {
     size_t value_size = sizeof(EJSPrimString) + sizeof(jschar) * (len + 1);
+    EJSBool ool_buffer = EJS_FALSE;
+
+    if (value_size > 2048) {
+        value_size = sizeof(EJSPrimString);
+        ool_buffer = EJS_TRUE;
+    }
 
     EJSPrimString* rv = _ejs_gc_new_primstr(value_size);
     EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_FLAT);
     rv->length = len;
-    rv->data.flat = (jschar*)((char*)rv + sizeof(EJSPrimString));
+    if (ool_buffer) {
+        EJS_PRIMSTR_SET_HAS_OOL_BUFFER(rv);
+        rv->data.flat = (jschar*)malloc(sizeof(jschar) * (len + 1));
+    }
+    else {
+        rv->data.flat = (jschar*)((char*)rv + sizeof(EJSPrimString));
+    }
     memmove (rv->data.flat, str, len * sizeof(jschar));
     rv->data.flat[len] = 0;
     return STRING_TO_EJSVAL(rv);
@@ -2024,7 +2072,7 @@ _ejs_primstring_flatten (EJSPrimString* primstr)
     if (EJS_PRIMSTR_GET_TYPE(primstr) == EJS_STRING_FLAT)
         return primstr;
 
-    jschar *buffer = (jschar*)calloc(sizeof(jschar), primstr->length + 1);
+    jschar *buffer = (jschar*)malloc(sizeof(jschar) * (primstr->length + 1));
     jschar *p = buffer;
 
     switch (EJS_PRIMSTR_GET_TYPE(primstr)) {
@@ -2046,8 +2094,11 @@ _ejs_primstring_flatten (EJSPrimString* primstr)
         EJS_NOT_REACHED();
     }
 
+    buffer[primstr->length] = 0;
+
     EJS_PRIMSTR_CLEAR_TYPE(primstr);
     EJS_PRIMSTR_SET_TYPE(primstr, EJS_STRING_FLAT);
+    EJS_PRIMSTR_SET_HAS_OOL_BUFFER(primstr);
     primstr->data.flat = buffer;
     return primstr;
 }
