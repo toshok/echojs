@@ -408,6 +408,30 @@ SubstituteVariables = class SubstituteVariables extends TransformPass
 
                 intrinsic(getLocal_id, [n])
 
+        visitMemberExpression: (n) ->
+                n = super(n)
+                
+                return n if not is_intrinsic(n.object, "%moduleGetExotic") or n.computed
+                return n if n.property.type isnt Identifier and not is_string_literal(n.property)
+
+                moduleString = n.object.arguments[0]
+                moduleExport = if n.property.type is Identifier then n.property.name else n.property.raw
+                
+                return n if moduleString.value[0] is '@'
+                return n if not @allModules.has(moduleString.value)
+                
+                # we have a member expression where the object is a
+                # module exotic and the property is an identifier.
+                # rewrite it to use moduleGetSlot.
+
+
+                module_info = @allModules.get(moduleString.value)
+                if not module_info.exports.has(moduleExport)
+                        throw new Error("doesn't export") # XXX
+                export_info = module_info.exports.get(moduleExport)
+
+                intrinsic(moduleGetSlot_id, [moduleString, b.literal(moduleExport)])
+                
         visitObjectExpression: (n) ->
                 for property in n.properties
                         if property.key.type is ComputedPropertyKey
