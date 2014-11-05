@@ -17,6 +17,8 @@
 
 static ejsval _ejs_RegExp_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args);
 
+static const unsigned char* pcre16_tables;
+
 ejsval
 _ejs_regexp_new (ejsval pattern, ejsval flags)
 {
@@ -136,7 +138,6 @@ _ejs_RegExp_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     EJSPrimString *flat_pattern = _ejs_string_flatten (re->pattern);
     jschar* chars = flat_pattern->data.flat;
 
-    const unsigned char* pcre16_tables = pcre16_maketables();
     const char *pcre_error;
     int pcre_erroffset;
 
@@ -304,6 +305,8 @@ _ejs_RegExp_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 void
 _ejs_regexp_init(ejsval global)
 {
+    pcre16_tables = pcre16_maketables();
+
     _ejs_RegExp = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_RegExp, (EJSClosureFunc)_ejs_RegExp_impl);
     _ejs_object_setprop (global, _ejs_atom_RegExp, _ejs_RegExp);
 
