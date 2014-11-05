@@ -15,15 +15,27 @@ ejsval _ejs_Arguments__proto__ EJSVAL_ALIGNMENT;
 ejsval
 _ejs_arguments_new (int numElements, ejsval* args)
 {
-    EJSArguments* arguments = _ejs_gc_new(EJSArguments);
-    ejsval rv = OBJECT_TO_EJSVAL(arguments);
+    size_t value_size = sizeof(EJSArguments) + numElements * sizeof(ejsval);
+    EJSBool ool_buffer = EJS_FALSE;
 
+    if (value_size > 2048) {
+        value_size = sizeof(EJSArguments);
+        ool_buffer = EJS_TRUE;
+    }
+
+    EJSArguments* arguments = _ejs_gc_new_obj(EJSArguments, value_size);
     _ejs_init_object ((EJSObject*)arguments, _ejs_Arguments__proto__, &_ejs_Arguments_specops);
-    
+
     arguments->argc = numElements;
-    arguments->args = (ejsval*)calloc(numElements, sizeof (ejsval));
+    if (ool_buffer) {
+        arguments->args = (ejsval*)calloc(numElements, sizeof (ejsval));
+        EJS_ARGUMENTS_SET_HAS_OOL_BUFFER(arguments);
+    }
+    else {
+        arguments->args = (ejsval*)((char*)arguments + sizeof(EJSArguments));
+    }
     memmove (arguments->args, args, sizeof(ejsval) * numElements);
-    return rv;
+    return OBJECT_TO_EJSVAL(arguments);
 }
 
 void
@@ -105,7 +117,8 @@ static void
 _ejs_arguments_specop_finalize (EJSObject* obj)
 {
     EJSArguments* args = (EJSArguments*)obj;
-    free (args->args);
+    if (EJS_ARGUMENTS_HAS_OOL_BUFFER(args))
+        free (args->args);
     _ejs_Object_specops.Finalize (obj);
 }
 
