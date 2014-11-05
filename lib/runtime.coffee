@@ -45,7 +45,6 @@ runtime_interface =
         prop_iterator_new:     -> @abi.createExternalFunction @module, "_ejs_property_iterator_new",     types.EjsPropIterator, [types.EjsValue]
         prop_iterator_current: -> @abi.createExternalFunction @module, "_ejs_property_iterator_current", types.EjsValue, [types.EjsPropIterator]
         prop_iterator_next:    -> @abi.createExternalFunction @module, "_ejs_property_iterator_next",    types.bool, [types.EjsPropIterator, types.bool]
-        prop_iterator_free:    -> @abi.createExternalFunction @module, "_ejs_property_iterator_free",    types.void, [types.EjsPropIterator]
         begin_catch:           -> @abi.createExternalFunction @module, "_ejs_begin_catch",               types.EjsValue, [types.int8Pointer]
         end_catch:             -> @abi.createExternalFunction @module, "_ejs_end_catch",                 types.EjsValue, []
         throw_nativeerror_utf8:-> @abi.createExternalFunction @module, "_ejs_throw_nativeerror_utf8",    types.void, [types.int32, types.string]

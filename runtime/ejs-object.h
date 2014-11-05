@@ -32,8 +32,10 @@ typedef struct {
 #define EJS_PROP_NOT_WRITABLE     (EJS_PROP_FLAGS_WRITABLE_SET)
 
     uint32_t flags;
-    ejsval value;
-    ejsval getter;
+    union {
+        ejsval value;
+        ejsval getter;
+    };
     ejsval setter;
 } EJSPropertyDesc;
 

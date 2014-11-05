@@ -543,7 +543,9 @@ _ejs_property_iterator_specop_allocate ()
 static void
 _ejs_property_iterator_specop_finalize (EJSObject* obj)
 {
-    // nothing to do here, we've already been destroyed inline by the generated code.
+    EJSPropertyIterator* iterator = (EJSPropertyIterator*)obj;
+    free (iterator->keys);
+    _ejs_Object_specops.Finalize (obj);
 }
 
 static void
@@ -692,8 +694,7 @@ _ejs_property_iterator_next (ejsval iter, EJSBool free_on_end)
 void
 _ejs_property_iterator_free (ejsval iter)
 {
-    EJSPropertyIterator* iterator = (EJSPropertyIterator*)EJSVAL_TO_OBJECT(iter);
-    free (iterator->keys);
+    // stop doing this inline
 }
 
 
@@ -706,6 +707,7 @@ _ejs_init_object (EJSObject* obj, ejsval proto, EJSSpecOps *ops)
     obj->ops = ops ? ops : &_ejs_Object_specops;
     obj->map = calloc (sizeof(EJSPropertyMap), 1);
     _ejs_propertymap_init (obj->map);
+    //printf ("obj->map = %p\n", obj->map);
     EJS_OBJECT_SET_EXTENSIBLE(obj);
 #if notyet
     ((GCObjectPtr)obj)->gc_data = 0x01; // HAS_FINALIZE
@@ -833,7 +835,7 @@ EJSBool
 _ejs_object_define_accessor_property (ejsval obj, ejsval key, ejsval get, ejsval set, uint32_t flags)
 {
     EJSObject *_obj = EJSVAL_TO_OBJECT(obj);
-    EJSPropertyDesc desc = { .value = _ejs_undefined, .getter = get, .setter = set, .flags = flags | EJS_PROP_FLAGS_SETTER_SET | EJS_PROP_FLAGS_GETTER_SET };
+    EJSPropertyDesc desc = { .getter = get, .setter = set, .flags = flags | EJS_PROP_FLAGS_SETTER_SET | EJS_PROP_FLAGS_GETTER_SET };
     return OP(_obj,DefineOwnProperty)(obj, key, &desc, EJS_FALSE);
 }
 
@@ -2340,6 +2342,7 @@ _ejs_object_specop_allocate ()
 void 
 _ejs_object_specop_finalize(EJSObject* obj)
 {
+    //printf ("_ejs_propertymap_free(obj->map = %p)\n", obj->map);
     _ejs_propertymap_free (obj->map);
     obj->map = NULL;
 }
@@ -2347,32 +2350,15 @@ _ejs_object_specop_finalize(EJSObject* obj)
 static void
 scan_property (ejsval name, EJSPropertyDesc *desc, EJSValueFunc scan_func)
 {
-#if DEBUG_GC
-    _ejs_log ("scan property desc = %p, name = %s\n", desc, ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name)));
-#endif
-
     scan_func (name);
 
     if (_ejs_property_desc_has_value (desc)) {
-#if DEBUG_GC
-        if (EJSVAL_IS_OBJECT(desc->value)) {
-        	_ejs_log ("   has_value %p\n", EJSVAL_TO_OBJECT(desc->value));
-    	}
-        else
-        	_ejs_log ("   has_value\n");
-#endif
         scan_func (desc->value);
     }
     if (_ejs_property_desc_has_getter (desc)) {
-#if DEBUG_GC
-        _ejs_log ("   has_getter\n");
-#endif
         scan_func (desc->getter); 
     }
     if (_ejs_property_desc_has_setter (desc)) {
-#if DEBUG_GC
-        _ejs_log ("   has_setter\n");
-#endif
         scan_func (desc->setter);
     }
 }
