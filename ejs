@@ -294,15 +294,6 @@ target_path_prepend = (platform, arch) ->
 llvm_commands = {}
 llvm_commands[x]="#{x}#{process.env.LLVM_SUFFIX || ''}" for x in ["opt", "llc", "llvm-as"]
 
-parseFile = (filename, content) ->
-        try
-                parse_tree = esprima.parse content, { loc: true, raw: true, tolerant: true }
-        catch e
-                console.warn "#{filename}: #{e}:"
-                process.exit -1
-
-        return parse_tree
-        
 compileFile = (filename, parse_tree, modules, compileCallback) ->
         base_filename = util.genFreshFileName path.basename filename
 
@@ -335,37 +326,29 @@ compileFile = (filename, parse_tree, modules, compileCallback) ->
 
         compiled_modules.push filename: (if options.basename then path.basename(filename) else filename), module_toplevel: compiled_module.toplevel_name
 
-        if __ejs?
-                # in ejs spawn is synchronous.
-                spawn llvm_commands["llvm-as"], llvm_as_args
-                spawn llvm_commands["opt"], opt_args
-                spawn llvm_commands["llc"], llc_args
-                o_filenames.push o_filename
-                compileCallback() if compileCallback?
-        else
-                debug.log 1, "executing `#{llvm_commands['llvm-as']} #{llvm_as_args.join ' '}'"
-                llvm_as = spawn llvm_commands["llvm-as"], llvm_as_args
-                llvm_as.stderr.on "data", (data) -> console.warn "#{data}"
-                llvm_as.on "error", (err) ->
-                        console.warn "error executing #{llvm_commands['llvm-as']}: #{err}"
+        debug.log 1, "executing `#{llvm_commands['llvm-as']} #{llvm_as_args.join ' '}'"
+        llvm_as = spawn llvm_commands["llvm-as"], llvm_as_args
+        llvm_as.stderr.on "data", (data) -> console.warn "#{data}"
+        llvm_as.on "error", (err) ->
+                console.warn "error executing #{llvm_commands['llvm-as']}: #{err}"
+                process.exit -1
+        llvm_as.on "exit", (code) ->
+                debug.log 1, "executing `#{llvm_commands['opt']} #{opt_args.join ' '}'"
+                opt = spawn llvm_commands['opt'], opt_args
+                opt.stderr.on "data", (data) -> console.warn "#{data}"
+                opt.on "error", (err) ->
+                        console.warn "error executing #{llvm_commands['opt']}: #{err}"
                         process.exit -1
-                llvm_as.on "exit", (code) ->
-                        debug.log 1, "executing `#{llvm_commands['opt']} #{opt_args.join ' '}'"
-                        opt = spawn llvm_commands['opt'], opt_args
-                        opt.stderr.on "data", (data) -> console.warn "#{data}"
-                        opt.on "error", (err) ->
-                                console.warn "error executing #{llvm_commands['opt']}: #{err}"
+                opt.on "exit", (code) ->
+                        debug.log 1, "executing `#{llvm_commands['llc']} #{llc_args.join ' '}'"
+                        llc = spawn llvm_commands['llc'], llc_args
+                        llc.stderr.on "data", (data) -> console.warn "#{data}"
+                        llc.on "error", (err) ->
+                                console.warn "error executing #{llvm_commands['llc']}: #{err}"
                                 process.exit -1
-                        opt.on "exit", (code) ->
-                                debug.log 1, "executing `#{llvm_commands['llc']} #{llc_args.join ' '}'"
-                                llc = spawn llvm_commands['llc'], llc_args
-                                llc.stderr.on "data", (data) -> console.warn "#{data}"
-                                llc.on "error", (err) ->
-                                        console.warn "error executing #{llvm_commands['llc']}: #{err}"
-                                        process.exit -1
-                                llc.on "exit", (code) ->
-                                        o_filenames.push o_filename
-                                        compileCallback()
+                        llc.on "exit", (code) ->
+                                o_filenames.push o_filename
+                                compileCallback()
 
 relative_to_ejs_exe = (n) ->
         path.resolve (path.dirname process.argv[if __ejs? then 0 else 1]), n
@@ -417,7 +400,6 @@ generate_import_map = (modules) ->
         
         map_path
 
-
 do_final_link = (main_file, modules) ->
         map_filename = generate_import_map modules
 
@@ -451,17 +433,12 @@ do_final_link = (main_file, modules) ->
         
         debug.log 1, "executing `#{target_linker} #{clang_args.join ' '}'"
         
-        if __ejs?
-                spawn target_linker, clang_args
-                # we ignore leave_tmp_files here
-                console.warn "#{util.bold()}done.#{util.reset()}" if not options.quiet
-        else
-                clang = spawn target_linker, clang_args
-                clang.stderr.on "data", (data) -> console.warn "#{data}"
-                clang.on "exit", (code) ->
-                        if not options.leave_temp_files
-                                cleanup ->
-                                        console.warn "#{util.bold()}done.#{util.reset()}" if not options.quiet
+        clang = spawn target_linker, clang_args
+        clang.stderr.on "data", (data) -> console.warn "#{data}"
+        clang.on "exit", (code) ->
+                if not options.leave_temp_files
+                        cleanup ->
+                                console.warn "#{util.bold()}done.#{util.reset()}" if not options.quiet
 
 cleanup = (done) ->
         files_to_delete = temp_files.length
@@ -471,60 +448,21 @@ cleanup = (done) ->
                         done() if files_to_delete is 0
                 
 main_file = file_args[0]
-work_list = file_args.slice()
-files = []
-
-# starting at the main file, gather all files we'll need
-while work_list.length isnt 0
-        file = work_list.pop()
-
-        # test to see if there's #{pathname}.js
-        jsfile = file
-        if path.extname(jsfile) isnt ".js"
-                jsfile = jsfile + '.js' 
-
-        try
-                is_file = fs.statSync(jsfile).isFile()
-        catch
-                is_file = false
-
-        if not is_file
-                # we don't catch this exception
-                if fs.statSync(file).isDirectory()
-                        jsfile = path.join(file, "index.js")
-                        is_file = fs.statSync(jsfile).isFile()
-        
-        file_contents = fs.readFileSync(jsfile, 'utf-8')
-        file_ast = parseFile(jsfile, file_contents)
-
-        imports = compiler.gatherImports(file, path.dirname(jsfile), process.cwd(), file_ast, options.external_modules)
-
-        files.push({file_name: file, file_ast: file_ast})
-
-        for i in imports
-                if work_list.indexOf(i) is -1 and not files.some((el) -> el.file_name is i)
-                        work_list.push(i)
-
-
+files = compiler.gatherAllModules(file_args, options)
 debug.log 1, -> compiler.dumpModules()
 allModules = compiler.getAllModules()
 
 # now compile them
 #
-if __ejs?
-        for f in files
-                compileFile f.file_name, f.file_ast, allModules
-        do_final_link(main_file, allModules)
-else
-        # reverse the list so the main program is the first thing we compile
-        files.reverse()
-        compileNextFile = ->
-                if files.length is 0
-                        do_final_link(main_file, allModules)
-                        return
-                f = files.pop()
-                compileFile f.file_name, f.file_ast, allModules, compileNextFile
-        compileNextFile()
+# reverse the list so the main program is the first thing we compile
+files.reverse()
+compileNextFile = ->
+        if files.length is 0
+                do_final_link(main_file, allModules)
+                return
+        f = files.pop()
+        compileFile f.file_name, f.file_ast, allModules, compileNextFile
+compileNextFile()
         
 # Local Variables:
 # mode: coffee

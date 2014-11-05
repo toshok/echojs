@@ -2,6 +2,7 @@ esprima = require 'esprima'
 escodegen = require 'escodegen'
 debug = require 'debug'
 path = require 'path'
+fs = require 'fs'
 
 node_compat = require 'node-compat'
 
@@ -230,7 +231,7 @@ class LLVMIRVisitor extends TreeVisitor
         constructor: (@module, @filename, @options, @abi, @allModules, @this_module_info) ->
 
                 @idgen = startGenerator()
-                
+
                 if @options.record_types
                         @genRecordId = startGenerator()
                         
@@ -278,8 +279,8 @@ class LLVMIRVisitor extends TreeVisitor
                         templateDefaultHandlerCall: true
                         
                         moduleGet            : true # unused
-                        moduleGetSlot        : false
-                        moduleSetSlot        : false
+                        moduleGetSlot        : true
+                        moduleSetSlot        : true
                         moduleGetExotic      : false
                         moduleGet         : true # unused
                         getLocal          : true # unused
@@ -1764,34 +1765,47 @@ class LLVMIRVisitor extends TreeVisitor
                 moduleString = this.visit(exp.arguments[0])
                 @createCall @ejs_runtime.module_get, [moduleString], "moduletmp"
 
-        handleModuleGetSlot: (exp, opencode) ->
+        handleModuleSlotRef: (exp, opencode) ->
                 moduleString = exp.arguments[0].value
                 exportId = exp.arguments[1].value
+
                 if moduleString is @this_module_info.path
                         module_global = @this_module_global
                 else
                         module_global = @import_module_globals.get(moduleString)
                 module_global = ir.createPointerCast(module_global, types.EjsModule.pointerTo(), "")
-                slot_ref = @createCall @ejs_runtime.module_get_slot_ref, [module_global, consts.int32(@allModules.get(moduleString).exports.get(exportId).slot_num)], "module_slot"
+
+                slotnum = @allModules.get(moduleString).exports.get(exportId).slot_num;
+
+                if opencode && @options.target_pointer_size is 64
+                        return ir.createInBoundsGetElementPointer(module_global, [consts.int64(0), consts.int32(3), consts.int64(slotnum)], "slot_ref")
+                else
+                        return @createCall(@ejs_runtime.module_get_slot_ref, [module_global, consts.int32(slotnum)], "module_slot")
+                
+        handleModuleGetSlot: (exp, opencode) ->
+                slot_ref = @handleModuleSlotRef(exp, opencode)
                 ir.createLoad slot_ref, "module_slot_load"
 
         handleModuleSetSlot: (exp, opencode) ->
-                moduleString = exp.arguments[0].value
-                exportId = exp.arguments[1].value
                 arg = exp.arguments[2]
-                if moduleString is @this_module_info.path
-                        module_global = @this_module_global
-                else
-                        module_global = @import_module_globals.get(moduleString)
-                module_global = ir.createPointerCast(module_global, types.EjsModule.pointerTo(), "")
-                slot_ref = @createCall @ejs_runtime.module_get_slot_ref, [module_global, consts.int32(@allModules.get(moduleString).exports.get(exportId).slot_num)], "module_slot"
+
+                slot_ref = @handleModuleSlotRef(exp, opencode)
                 @storeToDest slot_ref, arg
 
                 ir.createLoad slot_ref, "load_slot" # do we need this?  we don't need to keep assignment expression semantics for this
 
         handleModuleGetExotic: (exp, opencode) ->
-                moduleString = @visit(exp.arguments[0])
-                @createCall @ejs_runtime.module_get, [moduleString], "get_module_exotic"
+                moduleString = exp.arguments[0].value
+
+                if moduleString is @this_module_info.path
+                        module_global = @this_module_global
+                        @emitEjsvalFromPtr module_global, "exotic"
+                else if @import_module_globals.has(moduleString)
+                        module_global = @import_module_globals.get(moduleString)
+                        #ir.createPointerCast(module_global, types.EjsModule.pointerTo(), "")
+                        @emitEjsvalFromPtr module_global, "exotic"
+                else
+                        @createCall @ejs_runtime.module_get, [@visit(exp.arguments[0])], "get_module_exotic"
 
         handleGetArg: (exp, opencode) ->
                 load_args = @createLoad @currentFunction.topScope.get("%args"), "args_load"
@@ -2362,8 +2376,9 @@ class AddFunctionsVisitor extends TreeVisitor
                 n.params[@abi.env_param_index].name = env_name
 
                 # create the llvm IR function using our platform calling convention
-                n.ir_func = types.takes_builtins @abi.createFunction @module, n.ir_name, @abi.ejs_return_type, (param.llvm_type for param in n.params)
-                n.ir_func.setInternalLinkage() if not n.toplevel
+                n.ir_func = types.takes_builtins @abi.createFunction(@module, n.ir_name, @abi.ejs_return_type, (param.llvm_type for param in n.params), true)
+                #n.ir_func.setInternalLinkage() if not n.toplevel
+                n.ir_func.setInternalLinkage() if not n.toplevel and n.ir_name.indexOf("__ejs") isnt 0
 
                 ir_args = n.ir_func.args
                 for i in [0...n.params.length]
@@ -2641,8 +2656,53 @@ exports.dumpModules = ->
                         console.log "   slots:"
                         m.exports.forEach (v, k) -> console.log "      #{k}: #{v.slot_num}"
         
-exports.gatherImports = (filename, path, top_path, tree) ->
+gatherImports = (filename, path, top_path, tree) ->
         visitor = new GatherImports(filename, path, top_path)
         visitor.visit(tree)
         visitor.importList
+        
+
+parseFile = (filename, content) ->
+        try
+                parse_tree = esprima.parse content, { loc: true, raw: true, tolerant: true }
+        catch e
+                console.warn "#{filename}: #{e}:"
+                process.exit -1
+
+        return parse_tree
+
+exports.gatherAllModules = (initial_file_list, options) ->
+        work_list = initial_file_list.slice()
+        files = []
+        while work_list.length isnt 0
+                file = work_list.pop()
+
+                # test to see if there's #{pathname}.js
+                jsfile = file
+                if path.extname(jsfile) isnt ".js"
+                        jsfile = jsfile + '.js' 
+
+                try
+                        is_file = fs.statSync(jsfile).isFile()
+                catch
+                        is_file = false
+
+                if not is_file
+                        # we don't catch this exception
+                        if fs.statSync(file).isDirectory()
+                                jsfile = path.join(file, "index.js")
+                                is_file = fs.statSync(jsfile).isFile()
+        
+                file_contents = fs.readFileSync(jsfile, 'utf-8')
+                file_ast = parseFile(jsfile, file_contents)
+
+                imports = gatherImports(file, path.dirname(jsfile), process.cwd(), file_ast, options.external_modules)
+
+                files.push({file_name: file, file_ast: file_ast})
+
+                for i in imports
+                        if work_list.indexOf(i) is -1 and not files.some((el) -> el.file_name is i)
+                                work_list.push(i)
+
+        files
         

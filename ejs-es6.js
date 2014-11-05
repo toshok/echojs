@@ -12,17 +12,15 @@ let spawn = child_process.spawn;
 import * as debug        from './lib/debug';
 import { Set }           from './lib/set-es6';
 import { compile }       from './lib/compiler';
-import { gatherImports, dumpModules, getAllModules } from './lib/passes/gather-imports';
+import { dumpModules, getAllModules, gatherAllModules } from './lib/passes/gather-imports';
 
 import { bold, reset, genFreshFileName } from './lib/echo-util';
-import * as esprima      from './esprima/esprima-es6';
 
 // if we're running under coffee/node, argv will be ["coffee", ".../ejs", ...]
 // if we're running the compiled ejs.exe, argv will be [".../ejs.js.exe", ...]
 let slice_count = typeof(__ejs) === "undefined" ? 2 : 1;
 let argv = process.argv.slice(slice_count);
 
-let files = [];
 let temp_files = [];
 
 let host_arch = os.arch();
@@ -347,17 +345,7 @@ let llvm_commands = {};
 for (let x of ["opt", "llc", "llvm-as"])
     llvm_commands[x]=`${x}${process.env.LLVM_SUFFIX || ''}`;
 
-function parseFile(filename, content) {
-    try {
-        return esprima.parse(content, { loc: true, raw: true, tolerant: true });
-    }
-    catch (e) {
-        console.warn(`${filename}: ${e}:`);
-        process.exit(-1);
-    }
-}
-
-function compileFile(filename, parse_tree, modules, compileCallback) {
+function compileFile(filename, parse_tree, modules) {
     let base_filename = genFreshFileName(path.basename(filename));
 
     if (!options.quiet) {
@@ -397,8 +385,6 @@ function compileFile(filename, parse_tree, modules, compileCallback) {
     spawn(llvm_commands["opt"], opt_args);
     spawn(llvm_commands["llc"], llc_args);
     o_filenames.push(o_filename);
-    if (compileCallback)
-        compileCallback();
 }
 
 function relative_to_ejs_exe(n) {
@@ -527,47 +513,9 @@ function cleanup(done) {
 }
 
 let main_file = file_args[0];
-let work_list = file_args.slice();
 
-// starting at the main file, gather all files we'll need
-while (work_list.length !== 0) {
-    let file = work_list.pop();
-
-    let is_file = false;
-    let jsfile = file;
-    if (path.extname(jsfile) !== ".js")
-        jsfile = jsfile + '.js';
-
-    try {
-        is_file = fs.statSync(jsfile).isFile();
-    }
-    catch (e) {
-        is_file = false;
-
-        if (!is_file) {
-            // we don't catch this exception
-            if (fs.statSync(file).isDirectory()) {
-                jsfile = path.join(file, "index.js");
-                is_file = fs.statSync(jsfile).isFile();
-            }
-        }
-    }
-
-    let file_contents = fs.readFileSync(jsfile, 'utf-8');
-    let file_ast = parseFile(jsfile, file_contents);
-
-    let imports = gatherImports(file, path.dirname(jsfile), process.cwd(), file_ast, options.external_modules);
-
-    files.push({file_name: file, file_ast: file_ast});
-
-    var i;
-    for (i of imports) {
-        if (work_list.indexOf(i) === -1 && !files.some((el) => el.file_name === i))
-            work_list.push(i);
-    }
-}
-
-debug.log (2, () => dumpModules());
+let files = gatherAllModules(file_args, options);
+debug.log (1, () => dumpModules());
 let allModules = getAllModules();
 
 // now compile them
