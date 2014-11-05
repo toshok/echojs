@@ -345,6 +345,20 @@ _ejs_Map_prototype_set (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
 // ES6: 23.1.3.10
 // get Map.prototype.size
+static ejsval
+_ejs_Map_prototype_get_size (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    EJSMap* _map = EJSVAL_TO_MAP(_this);
+    uint32_t size = 0;
+
+    EJSKeyValueEntry* entry = _map->head_insert;
+    while (entry) {
+        if (!EJSVAL_IS_NO_ITER_VALUE_MAGIC(entry->key))
+            size++;
+        entry = entry->next_insert;
+    }
+    return NUMBER_TO_EJSVAL(size);
+}
 
 // ES6: 23.1.3.11
 // Map.prototype.values ( )
@@ -635,6 +649,7 @@ _ejs_map_init(ejsval global)
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Map, x, _ejs_Map_##x)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_Map_prototype, x, _ejs_Map_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
+#define PROTO_GETTER(x) EJS_INSTALL_ATOM_GETTER(_ejs_Map_prototype, x, _ejs_Map_prototype_get_##x)
 
     PROTO_METHOD(clear);
     // XXX (ES6 23.1.3.2) Map.prototype.constructor
@@ -647,6 +662,7 @@ _ejs_map_init(ejsval global)
     PROTO_METHOD(set);
 
     // XXX (ES6 23.1.3.10) get Map.prototype.size
+    PROTO_GETTER(size);
 
     // expand PROTO_METHOD(entries) here so we can install the function for @@iterator below
     ejsval _entries = _ejs_function_new_native (_ejs_null, _ejs_atom_entries,  (EJSClosureFunc)_ejs_Map_prototype_entries);
