@@ -5,6 +5,7 @@
 #define _ejs_string_h_
 
 #include "ejs-object.h"
+#include <stddef.h> // for offsetof
 
 typedef struct {
     /* object header */
@@ -87,6 +88,9 @@ struct _EJSPrimString {
     } data;
 };
 
+#define EJS_PRIMSTR_FLAT_ALLOC_SIZE (offsetof(struct _EJSPrimString, data.flat) + sizeof(jschar*))
+#define EJS_PRIMSTR_ROPE_ALLOC_SIZE (offsetof(struct _EJSPrimString, data.rope.right) + sizeof(struct _EJSPrimString*))
+#define EJS_PRIMSTR_DEP_ALLOC_SIZE  (offsetof(struct _EJSPrimString, data.dependent.off) + sizeof(int))
 
 ejsval _ejs_string_new_utf8 (const char* str);
 ejsval _ejs_string_new_utf8_len (const char* str, int len);

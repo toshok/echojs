@@ -1809,11 +1809,11 @@ _ejs_string_new_utf8 (const char* str)
 {
     // XXX assume str is ascii for now
     int str_len = strlen(str);
-    size_t value_size = sizeof(EJSPrimString) + sizeof(jschar) * (str_len + 1);
+    size_t value_size = EJS_PRIMSTR_FLAT_ALLOC_SIZE + sizeof(jschar) * (str_len + 1);
     EJSBool ool_buffer = EJS_FALSE;
 
     if (value_size > 2048) {
-        value_size = sizeof(EJSPrimString);
+        value_size = EJS_PRIMSTR_FLAT_ALLOC_SIZE;
         ool_buffer = EJS_TRUE;
     }
 
@@ -1824,7 +1824,7 @@ _ejs_string_new_utf8 (const char* str)
         rv->data.flat = (jschar*)malloc(sizeof(jschar) * (str_len + 1));
     }
     else {
-        rv->data.flat = (jschar*)((char*)rv + sizeof(EJSPrimString));
+        rv->data.flat = (jschar*)((char*)rv + EJS_PRIMSTR_FLAT_ALLOC_SIZE);
     }
     jschar *p = rv->data.flat;
     const unsigned char *stru = (const unsigned char*)str;
@@ -1843,11 +1843,11 @@ _ejs_string_new_utf8 (const char* str)
 ejsval
 _ejs_string_new_utf8_len (const char* str, int len)
 {
-    size_t value_size = sizeof(EJSPrimString) + sizeof(jschar) * (len + 1);
+    size_t value_size = EJS_PRIMSTR_FLAT_ALLOC_SIZE + sizeof(jschar) * (len + 1);
     EJSBool ool_buffer = EJS_FALSE;
 
     if (value_size > 2048) {
-        value_size = sizeof(EJSPrimString);
+        value_size = EJS_PRIMSTR_FLAT_ALLOC_SIZE;
         ool_buffer = EJS_TRUE;
     }
 
@@ -1858,7 +1858,7 @@ _ejs_string_new_utf8_len (const char* str, int len)
         rv->data.flat = (jschar*)malloc(sizeof(jschar) * (len + 1));
     }
     else {
-        rv->data.flat = (jschar*)((char*)rv + sizeof(EJSPrimString));
+        rv->data.flat = (jschar*)((char*)rv + EJS_PRIMSTR_FLAT_ALLOC_SIZE);
     }
     jschar *p = rv->data.flat;
     const unsigned char *stru = (const unsigned char*)str;
@@ -1879,11 +1879,11 @@ ejsval
 _ejs_string_new_ucs2 (const jschar* str)
 {
     int str_len = ucs2_strlen(str);
-    size_t value_size = sizeof(EJSPrimString) + sizeof(jschar) * (str_len + 1);
+    size_t value_size = EJS_PRIMSTR_FLAT_ALLOC_SIZE + sizeof(jschar) * (str_len + 1);
     EJSBool ool_buffer = EJS_FALSE;
 
     if (value_size > 2048) {
-        value_size = sizeof(EJSPrimString);
+        value_size = EJS_PRIMSTR_FLAT_ALLOC_SIZE;
         ool_buffer = EJS_TRUE;
     }
 
@@ -1895,7 +1895,7 @@ _ejs_string_new_ucs2 (const jschar* str)
         rv->data.flat = (jschar*)malloc(sizeof(jschar) * (str_len + 1));
     }
     else {
-        rv->data.flat = (jschar*)((char*)rv + sizeof(EJSPrimString));
+        rv->data.flat = (jschar*)((char*)rv + EJS_PRIMSTR_FLAT_ALLOC_SIZE);
     }
     memmove (rv->data.flat, str, str_len * sizeof(jschar));
     rv->data.flat[str_len] = 0;
@@ -1905,11 +1905,11 @@ _ejs_string_new_ucs2 (const jschar* str)
 ejsval
 _ejs_string_new_ucs2_len (const jschar* str, int len)
 {
-    size_t value_size = sizeof(EJSPrimString) + sizeof(jschar) * (len + 1);
+    size_t value_size = EJS_PRIMSTR_FLAT_ALLOC_SIZE + sizeof(jschar) * (len + 1);
     EJSBool ool_buffer = EJS_FALSE;
 
     if (value_size > 2048) {
-        value_size = sizeof(EJSPrimString);
+        value_size = EJS_PRIMSTR_FLAT_ALLOC_SIZE;
         ool_buffer = EJS_TRUE;
     }
 
@@ -1921,7 +1921,7 @@ _ejs_string_new_ucs2_len (const jschar* str, int len)
         rv->data.flat = (jschar*)malloc(sizeof(jschar) * (len + 1));
     }
     else {
-        rv->data.flat = (jschar*)((char*)rv + sizeof(EJSPrimString));
+        rv->data.flat = (jschar*)((char*)rv + EJS_PRIMSTR_FLAT_ALLOC_SIZE);
     }
     memmove (rv->data.flat, str, len * sizeof(jschar));
     rv->data.flat[len] = 0;
@@ -1934,7 +1934,7 @@ _ejs_string_new_substring (ejsval str, int off, int len)
     // XXX we should probably validate off/len here..
 
     EJSPrimString *prim_str = EJSVAL_TO_STRING(str);
-    EJSPrimString* rv = _ejs_gc_new_primstr(sizeof(EJSPrimString));
+    EJSPrimString* rv = _ejs_gc_new_primstr(EJS_PRIMSTR_DEP_ALLOC_SIZE);
     EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_DEPENDENT);
     rv->length = len;
     rv->data.dependent.dep = prim_str;
@@ -1942,19 +1942,34 @@ _ejs_string_new_substring (ejsval str, int off, int len)
     return STRING_TO_EJSVAL(rv);
 }
 
+
+// length below which we eschew creating a rope and just create a flat string containing both primstrs
+#define FLAT_ROPE_THRESHOLD 32
+
+static void flatten_rope (jschar **p, EJSPrimString *n);
+
 ejsval
 _ejs_string_concat (ejsval left, ejsval right)
 {
     EJSPrimString* lhs = EJSVAL_TO_STRING(left);
     EJSPrimString* rhs = EJSVAL_TO_STRING(right);
     
-    EJSPrimString* rv = _ejs_gc_new_primstr (sizeof(EJSPrimString));
-    EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_ROPE);
-    rv->length = lhs->length + rhs->length;
-    rv->data.rope.left = lhs;
-    rv->data.rope.right = rhs;
-
-    return STRING_TO_EJSVAL(rv);
+    if (lhs->length + rhs->length < FLAT_ROPE_THRESHOLD) {
+        uint32_t new_strlen = lhs->length + rhs->length;
+        jschar buffer[FLAT_ROPE_THRESHOLD];
+        jschar *p = buffer;
+        flatten_rope(&p, lhs);
+        flatten_rope(&p, rhs);
+        return _ejs_string_new_ucs2_len(buffer, new_strlen);
+    }
+    else {
+        EJSPrimString* rv = _ejs_gc_new_primstr (EJS_PRIMSTR_ROPE_ALLOC_SIZE);
+        EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_ROPE);
+        rv->length = lhs->length + rhs->length;
+        rv->data.rope.left = lhs;
+        rv->data.rope.right = rhs;
+        return STRING_TO_EJSVAL(rv);
+    }
 }
 
 ejsval
@@ -2183,7 +2198,7 @@ jschar
 _ejs_string_char_code_at(EJSPrimString* primstr, int i)
 {
     if (i >= primstr->length) {
-        printf ("char_code_at error\n");
+        //printf ("char_code_at error\n");
         return (jschar)-1;
     }
 
@@ -2215,6 +2230,12 @@ _ejs_string_to_utf8(EJSPrimString* primstr)
 
     for (int i = 0; i < primstr->length; i ++) {
         jschar ucs2 = _ejs_string_char_code_at(primstr, i);
+        if (ucs2 == (jschar)-1) {
+            free (buf);
+            char error_buf[256];
+            snprintf (error_buf, sizeof(error_buf), "error converting ucs2 to utf8, index %d\n", i);
+            return strdup(error_buf);
+        }
         int adv = ucs2_to_utf8_char (ucs2, p);
         if (adv < 1) {
             printf ("error converting ucs2 to utf8, index %d\n", i);
@@ -2234,7 +2255,7 @@ _ejs_string_init_literal (const char *name, ejsval *val, EJSPrimString* str, jsc
 {
     str->length = length;
     str->hash = 0;
-    str->gc_header = (EJS_STRING_FLAT<<EJS_GC_USER_FLAGS_SHIFT);
+    str->gc_header = (EJS_STRING_FLAT|EJS_PRIMSTR_HAS_OOL_BUFFER_MASK) << EJS_GC_USER_FLAGS_SHIFT;
     str->data.flat = ucs2_data;
     *val = STRING_TO_EJSVAL(str);
 }
