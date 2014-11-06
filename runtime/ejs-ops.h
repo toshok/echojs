@@ -65,7 +65,7 @@ ejsval _ejs_op_in (ejsval lhs, ejsval rhs);
 
 EJSBool _ejs_truthy (ejsval val);
 
-void _ejs_throw (ejsval exp);
+void _ejs_throw (ejsval exp) __attribute__ ((noreturn));
 
 extern ejsval _ejs_isNaN;
 extern ejsval _ejs_isFinite;
