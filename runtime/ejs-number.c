@@ -424,7 +424,7 @@ _ejs_number_init(ejsval global)
     OBJ_METHOD(isNaN);
     OBJ_METHOD(toInteger);
 
-    _ejs_object_setprop (_ejs_Number, _ejs_atom_EPSILON, NUMBER_TO_EJSVAL(nextafter(1, INFINITY)));
+    _ejs_object_setprop (_ejs_Number, _ejs_atom_EPSILON, NUMBER_TO_EJSVAL(nextafter(1, INFINITY)-1));
     _ejs_object_setprop (_ejs_Number, _ejs_atom_MAX_SAFE_INTEGER, NUMBER_TO_EJSVAL(EJS_MAX_SAFE_INTEGER));
     _ejs_object_setprop (_ejs_Number, _ejs_atom_MIN_SAFE_INTEGER, NUMBER_TO_EJSVAL(EJS_MIN_SAFE_INTEGER));
     _ejs_object_setprop (_ejs_Number, _ejs_atom_MAX_VALUE, NUMBER_TO_EJSVAL(DBL_MAX));
