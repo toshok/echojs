@@ -2013,6 +2013,7 @@ _ejs_Array_from (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     /* 8. If usingIterator is true, then */
     if (usingIterator) {
+        EJS_NOT_IMPLEMENTED(); // XXX
     }
 
     /* 10. Let lenValue be the result of Get(items, "length"). */
