@@ -318,6 +318,7 @@ EJS_ATOM(warn)
 // gc functions
 EJS_ATOM(collect)
 EJS_ATOM(dumpAllocationStats)
+EJS_ATOM(dumpLiveStrings)
 
 // process functions/properties
 EJS_ATOM(exit)
