@@ -72,10 +72,10 @@ _ejs_array_new_copy (int numElements, ejsval *elements)
 }
 
 static void
-maybe_realloc_dense (EJSArray *arr, int amount_to_add)
+maybe_realloc_dense (EJSArray *arr, int high_index)
 {
-    if (arr->array_length + amount_to_add > arr->dense.array_alloc) {
-        int new_alloc = arr->array_length + amount_to_add + 32;
+    if (high_index >= arr->dense.array_alloc) {
+        int new_alloc = high_index + 32;
         ejsval* new_elements = (ejsval*)malloc(new_alloc * sizeof(ejsval));
         memmove (new_elements, arr->dense.elements, arr->array_length * sizeof(ejsval));
         free (arr->dense.elements);
@@ -118,7 +118,7 @@ uint32_t
 _ejs_array_push_dense(ejsval array, int argc, ejsval *args)
 {
     EJSArray *arr = (EJSArray*)EJSVAL_TO_OBJECT(array);
-    maybe_realloc_dense (arr, argc);
+    maybe_realloc_dense (arr, arr->array_length + argc);
     memmove (&EJSDENSEARRAY_ELEMENTS(arr)[EJSARRAY_LEN(arr)], args, argc * sizeof(ejsval));
     EJSARRAY_LEN(arr) += argc;
     return EJSARRAY_LEN(arr);
@@ -260,12 +260,12 @@ _ejs_Array_prototype_shift (ejsval env, ejsval _this, uint32_t argc, ejsval*args
 }
 
 static ejsval
-_ejs_Array_prototype_unshift (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
+_ejs_Array_prototype_unshift (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     // EJS fast path for arrays
     if (EJSVAL_IS_DENSE_ARRAY(_this)) {
         EJSArray *arr = (EJSArray*)EJSVAL_TO_OBJECT(_this);
-        maybe_realloc_dense (arr, argc);
+        maybe_realloc_dense (arr, arr->array_length + argc);
         int len = EJS_ARRAY_LEN(_this);
         memmove (EJS_DENSE_ARRAY_ELEMENTS(_this) + argc, EJS_DENSE_ARRAY_ELEMENTS(_this), sizeof(ejsval) * len);
         memmove (EJS_DENSE_ARRAY_ELEMENTS(_this), args, sizeof(ejsval) * argc);
@@ -2404,14 +2404,11 @@ _ejs_array_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval recei
         if (EJSVAL_IS_DENSE_ARRAY(obj)) {
             // we're a dense array, realloc to include up to idx+1
 
-            if (idx >= EJS_DENSE_ARRAY_ALLOC(obj)) {
-                // we're doing a store to an index larger than our allocated space
-                // XXX this is of course totally insane, as it causes:
-                //     a=[]; a[10000000]=1;
-                //     to allocate 10000000+1 ejsvals.
-                //     need some logic to switch to a sparse array if need be.
-                maybe_realloc_dense ((EJSArray*)EJSVAL_TO_OBJECT(obj), idx - EJS_DENSE_ARRAY_ALLOC(obj) + 1);
-            }
+            // XXX this is of course totally insane, as it causes:
+            //     a=[]; a[10000000]=1;
+            //     to allocate 10000000+1 ejsvals.
+            //     need some logic to switch to a sparse array if need be.
+            maybe_realloc_dense ((EJSArray*)EJSVAL_TO_OBJECT(obj), idx);
 
             // if we now have a hole, fill in the range with special values to indicate this
             if (idx > EJS_ARRAY_LEN(obj)) {
@@ -2505,7 +2502,7 @@ _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPrope
                 //     a=[]; a[10000000]=1;
                 //     to allocate 10000000+1 ejsvals.
                 //     need some logic to switch to a sparse array if need be.
-                maybe_realloc_dense ((EJSArray*)EJSVAL_TO_OBJECT(obj), idx - EJS_DENSE_ARRAY_ALLOC(obj) + 1);
+                maybe_realloc_dense ((EJSArray*)EJSVAL_TO_OBJECT(obj), idx);
 
             }
 
@@ -2534,7 +2531,7 @@ _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPrope
 
             if (EJSVAL_IS_DENSE_ARRAY(obj)) {
                 if (newLen > EJS_DENSE_ARRAY_ALLOC(obj))
-                    maybe_realloc_dense ((EJSArray*)EJSVAL_TO_OBJECT(obj), newLen - EJS_DENSE_ARRAY_ALLOC(obj) + 1);
+                    maybe_realloc_dense ((EJSArray*)EJSVAL_TO_OBJECT(obj), newLen);
 
                 if (newLen > oldLen) {
                     for (int i = oldLen; i < newLen; i ++)
