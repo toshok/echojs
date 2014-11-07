@@ -5,6 +5,8 @@
 #ifndef _ejs_runloop_h_
 #define _ejs_runloop_h_
 
+#include "ejs.h"
+
 EJS_BEGIN_DECLS
 
 typedef void (*Task)(void* data);
