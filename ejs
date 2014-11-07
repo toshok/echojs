@@ -253,7 +253,7 @@ target_link_args = (platform, arch) ->
         
 
 target_libraries = (platform, arch) ->
-        return [ "-lpthread" ] if platform is "linux"
+        return [ "-lpthread", "-luv" ] if platform is "linux"
 
         if platform is "darwin"
                 rv = [ "-framework", "Foundation" ]

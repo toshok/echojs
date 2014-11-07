@@ -294,7 +294,7 @@ function target_link_args(platform, arch) {
 
 
 function target_libraries(platform, arch) {
-    if (platform === "linux") return [ "-lpthread" ];
+    if (platform === "linux") return [ "-lpthread", "-luv" ];
 
     if (platform === "darwin") {
         let rv = [ "-framework", "Foundation" ];
