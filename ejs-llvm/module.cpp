@@ -230,7 +230,7 @@ namespace ejsllvm {
 
         REQ_UTF8_ARG(0, path);
 
-        std::ofstream output_file(path);
+        std::ofstream output_file(path.c_str());
         llvm::raw_os_ostream raw_stream(output_file);
         module->llvm_module->print(raw_stream, NULL);
         output_file.close();
