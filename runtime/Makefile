@@ -50,7 +50,13 @@ ifeq ($(HOST_OS),linux)
 ALL_LIBRARIES=$(LIBRARY)
 ALL_TARGETS=$(ALL_LIBRARIES)
 
-LINUX_OBJECTS=$(C_SOURCES:%.c=%.o.linux) $(OBJC_SOURCES:%.m=%.o.linux) ejs-log.o.linux main.o.linux
+ifeq ($(HOST_CPU),x86_64)
+INVOKE_CATCH=ejs-invoke-closure-catch.o.linux
+else
+INVOKE_CATCH=ejs-invoke-closure-catch32.o.linux
+endif
+
+LINUX_OBJECTS=$(C_SOURCES:%.c=%.o.linux) $(OBJC_SOURCES:%.m=%.o.linux) ejs-log.o.linux main.o.linux $(INVOKE_CATCH)
 
 ALL_OBJECTS=$(LINUX_OBJECTS)
 
@@ -72,6 +78,9 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch
 	@mkdir -p .deps
 	@$(CC) -MM $(LINUX_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.linux,,`/$@/ > .deps/$@-deps
 	@echo [$(CC) linux] $< && $(CC) $(LINUX_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
+
+%.o.linux: %.ll
+	@echo [llc linux] $< && llc$(LLVM_SUFFIX) -filetype=obj -o=$@ -O2 $<
 
 -include $(patsubst %.o.linux,.deps/%.o.linux-deps,$(LINUX_OBJECTS))
 endif
