@@ -8,6 +8,7 @@
 #include "ejs-require.h"
 #include "ejs-function.h"
 #include "ejs-string.h"
+#include "ejs-runloop.h"
 
 #define GC_ON_SHUTDOWN 0
 
