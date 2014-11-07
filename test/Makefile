@@ -6,7 +6,7 @@ TOP=..
 .SILENT:
 
 TOPDIR=$(shell pwd)/..
-NODE_PATH=$(TOPDIR)/node-llvm/build/Release:$(TOPDIR)/lib/generated:$(TOPDIR)/lib:$(TOPDIR)/esprima:$(TOPDIR)/escodegen:$(TOPDIR)/estraverse
+NODE_PATH=$(TOPDIR)/node-llvm/build/Release:$(TOPDIR)/lib/generated:$(TOPDIR)/esprima:$(TOPDIR)/escodegen:$(TOPDIR)/estraverse
 NODE_FLAGS=--harmony --harmony-typeof
 TRACEUR_FLAGS=--block-binding true
 
