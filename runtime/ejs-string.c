@@ -17,6 +17,13 @@
 #include "ejs-error.h"
 #include "ejs-symbol.h"
 
+// length below which we eschew creating a rope and just create a flat string containing both primstrs
+#define FLAT_ROPE_THRESHOLD 32
+
+// length below which we eschew creating a dependent string and just create a flat string containing the slice
+#define FLAT_DEP_THRESHOLD 32
+
+
 int32_t
 ucs2_strcmp (const jschar *s1, const jschar *s2)
 {
@@ -1928,23 +1935,43 @@ _ejs_string_new_ucs2_len (const jschar* str, int len)
     return STRING_TO_EJSVAL(rv);
 }
 
+static void flatten_dep (jschar **p, EJSPrimString *n, int* off, int* len);
+
 ejsval
 _ejs_string_new_substring (ejsval str, int off, int len)
 {
-    // XXX we should probably validate off/len here..
-
     EJSPrimString *prim_str = EJSVAL_TO_STRING(str);
-    EJSPrimString* rv = _ejs_gc_new_primstr(EJS_PRIMSTR_DEP_ALLOC_SIZE);
-    EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_DEPENDENT);
+    EJSPrimString* rv;
+
+    // XXX we should probably validate off/len here..
+    if (len < FLAT_DEP_THRESHOLD) {
+        rv = _ejs_gc_new_primstr(EJS_PRIMSTR_FLAT_ALLOC_SIZE + sizeof(jschar) * (len + 1));
+        EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_FLAT);
+
+        rv->data.flat = (jschar*)((char*)rv + EJS_PRIMSTR_FLAT_ALLOC_SIZE);
+
+        // reuse the flatten machinery by using a stack allocated dep string that we flatten into the rv
+        EJSPrimString dep = { 0 };
+        EJS_PRIMSTR_SET_TYPE(&dep, EJS_STRING_DEPENDENT);
+        dep.length = len;
+        dep.data.dependent.dep = prim_str;
+        dep.data.dependent.off = off;
+        jschar* p = rv->data.flat;
+        int tmp_off = 0;
+        int tmp_len = len;
+        flatten_dep (&p, &dep, &tmp_off, &tmp_len);
+        *p = 0;
+    }
+    else {
+        rv = _ejs_gc_new_primstr(EJS_PRIMSTR_DEP_ALLOC_SIZE);
+        EJS_PRIMSTR_SET_TYPE(rv, EJS_STRING_DEPENDENT);
+        rv->data.dependent.dep = prim_str;
+        rv->data.dependent.off = off;
+    }
     rv->length = len;
-    rv->data.dependent.dep = prim_str;
-    rv->data.dependent.off = off;
     return STRING_TO_EJSVAL(rv);
 }
 
-
-// length below which we eschew creating a rope and just create a flat string containing both primstrs
-#define FLAT_ROPE_THRESHOLD 32
 
 static void flatten_rope (jschar **p, EJSPrimString *n);
 

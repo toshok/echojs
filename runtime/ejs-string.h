@@ -52,8 +52,8 @@ typedef enum {
 #define EJS_PRIMSTR_TYPE_MASK 0x07
 #define EJS_PRIMSTR_TYPE_MASK_SHIFTED (EJS_PRIMSTR_TYPE_MASK << EJS_GC_USER_FLAGS_SHIFT)
 
-#define EJS_PRIMSTR_SET_TYPE(s,t) (((EJSObject*)(s))->gc_header |= (t) << EJS_GC_USER_FLAGS_SHIFT)
-#define EJS_PRIMSTR_CLEAR_TYPE(s) (((EJSObject*)(s))->gc_header &= ~EJS_PRIMSTR_TYPE_MASK_SHIFTED)
+#define EJS_PRIMSTR_SET_TYPE(s,t) ((s)->gc_header |= (t) << EJS_GC_USER_FLAGS_SHIFT)
+#define EJS_PRIMSTR_CLEAR_TYPE(s) ((s)->gc_header &= ~EJS_PRIMSTR_TYPE_MASK_SHIFTED)
 
 #define EJS_PRIMSTR_GET_TYPE(s)   ((EJSPrimStringType)((((EJSPrimString*)(s))->gc_header & EJS_PRIMSTR_TYPE_MASK_SHIFTED) >> EJS_GC_USER_FLAGS_SHIFT))
 
