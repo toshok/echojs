@@ -339,7 +339,7 @@ _ejs_propertydesc_free (EJSPropertyDesc* desc)
 }
 
 static int primes[] = {
-    17, 31, 67, 131, 257, 521, 1031, 2053, 4099
+    5, 17, 31, 67, 131, 257, 521, 1031, 2053, 4099
 };
 static int nprimes = sizeof(primes) / sizeof(primes[0]);
 
