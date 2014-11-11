@@ -317,7 +317,7 @@ DesugarClasses = class DesugarClasses extends TransformPass
                         if getter?
                                 accessors.push b.property(b.identifier("get"), getter.value)
                                 key = prop
-                        if prop.set?
+                        if setter?
                                 accessors.push b.property(b.identifier("set"), setter.value)
                                 key = prop
 
