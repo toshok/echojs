@@ -98,6 +98,7 @@ $(call testAgainstTraceur, promise2.js)
 NODE_COMPAT_TESTS=
 $(call nodeCompatTest, path-relative1.js)
 $(call nodeCompatTest, path-resolve1.js)
+$(call nodeCompatTest, path-resolve2.js)
 $(call nodeCompatTest, stat1.js)
 
 NODE_COMPAT_TESTS_EXES:=$(NODE_COMPAT_TESTS:%.js=%.js.exe)
