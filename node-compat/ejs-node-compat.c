@@ -69,8 +69,6 @@ _ejs_path_extname (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 static char*
 resolvev(char** paths, int num_paths)
 {
-    if (num_paths == 1) return strdup(paths[0]);
-
     char* stack[MAXPATHLEN];
     memset(stack, 0, sizeof(char*) * MAXPATHLEN);
     int sp = 0;
@@ -166,11 +164,8 @@ _ejs_path_resolve (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     for (int i = 0; i < argc; i ++) {
         ejsval arg = args[i];
 
-        if (!EJSVAL_IS_STRING(arg)) {
-            for (int j = 0; j < num_paths; j ++) free(paths_utf8[j]);
-            free (paths_utf8);
-            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Arguments to path.resolve must be strings");
-        }
+        if (!EJSVAL_IS_STRING(arg))
+            continue;
 
         paths_utf8[num_paths++] = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(arg));
     }
