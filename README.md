@@ -17,7 +17,7 @@ The following commands should get you from 0 to echo-js built:
 ```sh
 $ brew tap homebrew/versions  # so we can get the specific version of llvm below
 $ brew install node
-$ brew install llvm34
+$ brew install llvm34 --all-targets
 $ npm install -g coffee-script
 $ npm install -g node-gyp
 $ export LLVM_SUFFIX=3.4      # see below
