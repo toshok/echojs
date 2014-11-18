@@ -2558,7 +2558,7 @@ class ModuleInfo
 allModules = new Map()
 
 class GatherImports extends TreeVisitor
-        constructor: (@filename, @path, @toplevel_path) ->
+        constructor: (@filename, @path, @toplevel_path, @import_vars) ->
                 @importList = []
                 # remove our .js suffix since all imports are suffix-free
                 if @filename.lastIndexOf(".js") == @filename.length - 3
@@ -2592,11 +2592,13 @@ class GatherImports extends TreeVisitor
                                 n.source_path = b.literal(n.source.value.slice(1))
 
                         return n
-                
-                if n.source[0] is "/"
-                        source_path = n.source.value
-                else
-                        source_path = path.resolve @toplevel_path, "#{@path}/#{n.source.value}"
+                        
+                source_path = n.source.value
+                for v in @import_vars
+                        source_path = source_path.replace("$#{v.variable}", v.value);
+
+                if source_path[0] isnt "/"
+                        source_path = path.resolve @toplevel_path, @path, source_path
 
                 if source_path.indexOf(process.cwd()) is 0
                         source_path = path.relative(process.cwd(), source_path)
@@ -2656,8 +2658,8 @@ exports.dumpModules = ->
                         console.log "   slots:"
                         m.exports.forEach (v, k) -> console.log "      #{k}: #{v.slot_num}"
         
-gatherImports = (filename, path, top_path, tree) ->
-        visitor = new GatherImports(filename, path, top_path)
+gatherImports = (filename, path, top_path, tree, import_vars) ->
+        visitor = new GatherImports(filename, path, top_path, import_vars)
         visitor.visit(tree)
         visitor.importList
         
@@ -2696,7 +2698,7 @@ exports.gatherAllModules = (initial_file_list, options) ->
                 file_contents = fs.readFileSync(jsfile, 'utf-8')
                 file_ast = parseFile(jsfile, file_contents)
 
-                imports = gatherImports(file, path.dirname(jsfile), process.cwd(), file_ast, options.external_modules)
+                imports = gatherImports(file, path.dirname(jsfile), process.cwd(), file_ast, options.import_variables)
 
                 files.push({file_name: file, file_ast: file_ast})
 
