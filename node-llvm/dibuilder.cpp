@@ -47,12 +47,11 @@ namespace jsllvm {
   {
     HandleScope scope;
 
-    if (args.Length()) {
-      REQ_LLVM_MODULE_ARG(0, module);
+    REQ_LLVM_MODULE_ARG(0, module);
 
-      DIBuilder* dib = new DIBuilder(new llvm::DIBuilder (*module));
-      dib->Wrap(args.This());
-    }
+    DIBuilder* dib = new DIBuilder(new llvm::DIBuilder (*module));
+    dib->Wrap(args.This());
+
     return scope.Close(args.This());
   }
 
@@ -137,19 +136,20 @@ namespace jsllvm {
     HandleScope scope;
     DIBuilder* dib = ObjectWrap::Unwrap<DIBuilder>(args.This());
   
-    REQ_UTF8_ARG(0, name);
-    REQ_UTF8_ARG(1, linkageName);
-    REQ_LLVM_DIFILE_ARG(2, file);
-    REQ_INT_ARG(3, line_no);
-    REQ_BOOL_ARG(4, isLocalToUnit);
-    REQ_BOOL_ARG(5, isDefinition);
-    REQ_INT_ARG(6, scopeLine);
-    REQ_INT_ARG(7, flags);
-    REQ_BOOL_ARG(8, isOptimized);
-    REQ_LLVM_FUN_ARG(9, fn);
+    REQ_LLVM_DISCOPE_ARG(0, discope);
+    REQ_UTF8_ARG(1, name);
+    REQ_UTF8_ARG(2, linkageName);
+    REQ_LLVM_DIFILE_ARG(3, file);
+    REQ_INT_ARG(4, line_no);
+    REQ_BOOL_ARG(5, isLocalToUnit);
+    REQ_BOOL_ARG(6, isDefinition);
+    REQ_INT_ARG(7, scopeLine);
+    REQ_INT_ARG(8, flags);
+    REQ_BOOL_ARG(9, isOptimized);
+    REQ_LLVM_FUN_ARG(10, fn);
 
     
-    Handle<v8::Value> result = DISubprogram::New(dib->llvm_dibuilder->createFunction (file,
+    Handle<v8::Value> result = DISubprogram::New(dib->llvm_dibuilder->createFunction (discope,
 										      *name,
 										      *linkageName,
 										      file,
