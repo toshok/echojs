@@ -40,20 +40,20 @@ stage3: ejs-es6.js.exe.stage3
 
 ejs-es6.js.exe.stage1:
 	@echo Building stage 1
-	@time ./ejs --leave-temp --warn-on-undeclared $(LLVM_MODULE) $(NODE_COMPAT_MODULES) ejs-es6.js
+	@time ./ejs --leave-temp $(LLVM_MODULE) $(NODE_COMPAT_MODULES) ejs-es6.js
 	@mv ejs-es6.js.exe ejs-es6.js.exe.stage1
 
 ejs-es6.js.exe.stage2: ejs-es6.js.exe.stage1
 	@echo Building stage 2
-	@time ./ejs-es6.js.exe.stage1 --leave-temp --warn-on-undeclared $(LLVM_MODULE) $(NODE_COMPAT_MODULES) ejs-es6.js
+	@time ./ejs-es6.js.exe.stage1 --leave-temp $(LLVM_MODULE) $(NODE_COMPAT_MODULES) ejs-es6.js
 	@mv ejs-es6.js.exe ejs-es6.js.exe.stage2
 
 ejs-es6.js.exe.stage3: ejs-es6.js.exe.stage2
 	@echo Building stage 3
-	@time ./ejs-es6.js.exe.stage2 --leave-temp --warn-on-undeclared $(LLVM_MODULE) $(NODE_COMPAT_MODULES) ejs-es6.js
+	@time ./ejs-es6.js.exe.stage2 --leave-temp $(LLVM_MODULE) $(NODE_COMPAT_MODULES) ejs-es6.js
 	@mv ejs-es6.js.exe ejs-es6.js.exe.stage3
 
 echo-command-line:
-	@echo ./ejs.exe --leave-temp --warn-on-undeclared $(LLVM_MODULE) $(NODE_COMPAT_MODULES) ejs-es6.js
+	@echo ./ejs.exe --leave-temp $(LLVM_MODULE) $(NODE_COMPAT_MODULES) ejs-es6.js
 
 include $(TOP)/build/build.mk
