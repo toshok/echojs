@@ -47,7 +47,8 @@ let options = {
     extra_clang_args: "",
     ios_sdk: "7.1",
     ios_min: "7.0",
-    target_pointer_size: 64
+    target_pointer_size: 64,
+    import_variables: []
 };
 
 function add_external_module (modinfo) {
@@ -112,10 +113,23 @@ function add_debug_after_pass(passname) {
     options.debug_passes.add(passname);
 }
 
+function add_import_variable (arg) {
+    let equal_idx = arg.indexOf('=');
+    if (equal_idx == -1)
+        throw new Error("-I flag requires <name>=<value>");
+
+    options.import_variables.push({ variable: arg.substring(0, equal_idx), value: arg.substring(equal_idx+1) });
+}
+
 let args = {
     "-q": {
         flag:    "quiet",
         help:    "don't output anything during compilation except errors."
+    },
+    "-I": {
+        handler: add_import_variable,
+        handlerArgc: 1,
+        help:    "add a name=value mapping used to resolve module references."
     },
     "-d": {
         handler: increase_debug_level,
@@ -188,7 +202,7 @@ function output_usage() {
 
 function output_options() {
     console.warn('Options:');
-    for (let a of args.keys())
+    for (let a of Object.keys(args))
         console.warn(`   ${a}:  ${args[a].help}`);
 }
 
@@ -198,33 +212,26 @@ set_target(host_platform, host_arch);
 let file_args;
 
 if (argv.length > 0) {
-    let skipNext = 0;
     for (let ai = 0, ae = argv.length; ai < ae; ai ++) {
-        if (skipNext > 0) {
-            skipNext -= 1;
+        if (args[argv[ai]]) {
+            let o = args[argv[ai]];
+            if (o.flag) {
+                options[o.flag] = true;
+            }
+            else if (o.option) {
+                options[o.option] = argv[++ai];
+            }
+            else if (o.handler) {
+                let handler_args = [];
+                for (let i = 0, e = o.handlerArgc; i < e; i ++)
+                    handler_args.push(argv[++ai]);
+                o.handler.apply(null, handler_args);
+            }
         }
         else {
-            if (args[argv[ai]]) {
-                let o = args[argv[ai]];
-                if (o.flag) {
-                    options[o.flag] = true;
-                }
-                else if (o.option) {
-                    options[o.option] = argv[++ai];
-                    skipNext = 1;
-                }
-                else if (o.handler) {
-                    let handler_args = [];
-                    for (let i = 0, e = o.handlerArgc; i < e; i ++)
-                        handler_args.push(argv[++ai]);
-                    o.handler.apply(null, handler_args);
-                }
-            }
-            else {
-                // end of options signals the rest of the array is files
-                file_args = argv.slice(ai);
-                break;
-            }
+            // end of options signals the rest of the array is files
+            file_args = argv.slice(ai);
+            break;
         }
     }
 }

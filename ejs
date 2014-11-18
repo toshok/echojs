@@ -49,6 +49,7 @@ options =
         ios_sdk: "7.1"
         ios_min: "7.0"
         target_pointer_size: 64
+        import_variables: []
 
 add_external_module = (modinfo) ->
         [library,module_name,module_entrypoint,link_flags] = modinfo.split ','
@@ -103,11 +104,22 @@ increase_debug_level = ->
 
 add_debug_after_pass = (passname) ->
         options.debug_passes.add passname
+
+add_import_variable = (arg) ->
+        equal_idx = arg.indexOf('=')
+        if equal_idx == -1
+                throw new Error "-I flag requires <name>=<value>"
+
+        options.import_variables.push({ variable: arg.substring(0, equal_idx), value: arg.substring(equal_idx+1) })
         
 args =
         "-q":
                 flag:    "quiet"
                 help:    "don't output anything during compilation except errors."
+        "-I":
+                handler: add_import_variable
+                handlerArgc: 1
+                help:    "add a name=value mapping used to resolve module references."
         "-d":
                 handler: increase_debug_level
                 handlerArgc: 0
