@@ -1,22 +1,10 @@
-TOP=../..
+TOP=$(shell cd ../.. && pwd)
 
-EJS_DRIVER?=../../ejs
+EJS_DRIVER?=$(TOP)/ejs.exe
 
-#	make -C $(TOP)/pirouette/bindings
-#	cp $(TOP)/pirouette/bindings/generated/*.js .
-
-all: copy-pirouette
-	time $(EJS_DRIVER) --leave-temp helloosx.js
-	mkdir -p HelloOSX.app/Contents/MacOS/
-	cp helloosx.js.exe HelloOSX.app/Contents/MacOS/
-
-copy-pirouette:
-	@cp $(TOP)/pirouette/bindings/*.js .
-	@mkdir -p AppKit
-	@mkdir -p Foundation
-	@cp -r $(TOP)/pirouette/bindings/AppKit/ AppKit
-	@cp -r $(TOP)/pirouette/bindings/Foundation/ Foundation
-
+all:
+	@mkdir -p HelloOSX.app/Contents/MacOS/
+	@time $(EJS_DRIVER) --leave-temp -o HelloOSX.app/Contents/MacOS/helloosx.js.exe -I pirouette=$(TOP)/pirouette/bindings helloosx.js
 
 clean:
-	rm -rf helloosx.js.exe objc.js foundation.js appkit.js HelloOSX.app/Contents/MacOS/helloosx.js.exe AppKit Foundation
+	rm -rf HelloOSX.app/Contents/MacOS/helloosx.js.exe

@@ -1,6 +1,6 @@
-import { NSObject } from 'foundation';
-import { NSView, NSScrollView, NSTextField, NSTableView, NSTableColumn, NSButton, NSBezelStyle, NSWindow, NSApplicationDelegate, NSApplication } from 'appkit';
-import { chainCtor, override, instanceSelector, instanceProperty, outlet, sig } from 'objc';
+import { NSObject } from '$pirouette/foundation';
+import { NSView, NSScrollView, NSTextField, NSTableView, NSTableColumn, NSButton, NSBezelStyle, NSWindow, NSApplicationDelegate, NSApplication } from '$pirouette/appkit';
+import { chainCtor, override, instanceSelector, instanceProperty, outlet, sig } from '$pirouette/objc';
 
 let AppDelegate = NSObject.extendClass("AppDelegate", () => ({
 
