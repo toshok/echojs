@@ -368,6 +368,8 @@ SubstituteVariables = class SubstituteVariables extends TransformPass
                                 else
                                         return intrinsic(setLocal_id, [n.left, rhs])
                         else if ref.binding.type is 'global'
+                                if leftname is "undefined"
+                                        reportError(SyntaxError, "reassigning 'undefined' not permitted.", @filename, n.loc)
                                 return intrinsic(setGlobal_id, [n.left, rhs])
                         else if ref.binding.type is 'module'
                                 return ref.binding.getStoreIntrinsic(@visit(rhs))
