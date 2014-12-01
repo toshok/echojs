@@ -20,6 +20,7 @@
 #include "ejs-array.h"
 #include "ejs-function.h"
 #include "ejs-string.h"
+#include "ejs-symbol.h"
 #include "ejs-node-compat.h"
 #include "ejs-error.h"
 
@@ -433,11 +434,13 @@ _ejs_fs_readFileSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return rv;
 }
 
+static ejsval _ejs_internal_fd_sym EJSVAL_ALIGNMENT; 
+
 ejsval
 _ejs_stream_write (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     ejsval to_write = ToString(args[0]);
-    ejsval internal_fd = _ejs_object_getprop_utf8 (_this, "%internal_fd");
+    ejsval internal_fd = _ejs_object_getprop (_this, _ejs_internal_fd_sym);
     int fd = ToInteger(internal_fd);
 
     int remaining = EJSVAL_TO_STRLEN(to_write);
@@ -464,7 +467,7 @@ _ejs_stream_write (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 ejsval
 _ejs_stream_end (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
-    ejsval internal_fd = _ejs_object_getprop_utf8 (_this, "%internal_fd");
+    ejsval internal_fd = _ejs_object_getprop (_this, _ejs_internal_fd_sym);
     close (ToInteger(internal_fd));
     return _ejs_undefined;
 }
@@ -477,7 +480,7 @@ _ejs_wrapFdWithStream (int fd)
     EJS_INSTALL_FUNCTION (stream, "write", _ejs_stream_write);
     EJS_INSTALL_FUNCTION (stream, "end", _ejs_stream_end);
 
-    _ejs_object_setprop_utf8 (stream, "%internal_fd", NUMBER_TO_EJSVAL(fd));
+    _ejs_object_setprop (stream, _ejs_internal_fd_sym, NUMBER_TO_EJSVAL(fd));
 
     return stream;
 }
@@ -501,6 +504,10 @@ _ejs_fs_createWriteStream (ejsval env, ejsval _this, uint32_t argc, ejsval* args
 ejsval
 _ejs_fs_module_func (ejsval exports)
 {
+    ejsval internal_fd_descr = _ejs_string_new_utf8("%internal_fd");
+    _ejs_gc_add_root (&_ejs_internal_fd_sym);
+    _ejs_internal_fd_sym = _ejs_symbol_new(internal_fd_descr);
+
     EJS_INSTALL_FUNCTION(exports, "statSync", _ejs_fs_statSync);
     EJS_INSTALL_FUNCTION(exports, "readFileSync", _ejs_fs_readFileSync);
     EJS_INSTALL_FUNCTION(exports, "createWriteStream", _ejs_fs_createWriteStream);
