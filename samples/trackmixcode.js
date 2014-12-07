@@ -24,9 +24,13 @@ let AppDelegate = NSObject.extendClass("AppDelegate", () => ({
         button.clicked = () => this.mute();
 
         let slider = NSSlider.newWithFrame({ x:138, y: 62, width: 21, height: 321 });
+        slider.minValue = 0;
+        slider.maxValue = 11;
+        slider.valueChanged = () => this.takeValueForVolumeFrom(this.slider);
 
         let textField = NSTextField.newWithFrame({ x: 80, y: 398, width: 136, height: 22});
         textField.alignment = 2;
+        textField.textChanged = () => this.takeValueForVolumeFrom(this.textField);
 
         contentView.addSubview(button);
         contentView.addSubview(slider);
@@ -41,6 +45,11 @@ let AppDelegate = NSObject.extendClass("AppDelegate", () => ({
 
     mute: function () {
         this.track.volume = 0;
+        this.updateUserInterface();
+    },
+
+    takeValueForVolumeFrom: function(sender) {
+        this.track.volume = sender.intValue; // TODO - Should be floatValue instead.
         this.updateUserInterface();
     },
 
