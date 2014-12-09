@@ -853,6 +853,12 @@ invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     case _C_ULNG_LNG:
         rv = [CKValue numberValue:*(uint64_t*)return_buffer];
         break;
+    case _C_FLT:
+	rv = [CKValue numberValue:*(float*)return_buffer];
+	break;
+    case _C_DBL:
+	rv = [CKValue numberValue:*(double*)return_buffer];
+	break;
 
     default: {
         NSString* str = [NSString stringWithFormat:@"unhandled return type `%s'", return_type];
