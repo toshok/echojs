@@ -49,7 +49,7 @@ let AppDelegate = NSObject.extendClass("AppDelegate", () => ({
     },
 
     takeValueForVolumeFrom: function(sender) {
-        this.track.volume = sender.intValue; // TODO - Should be floatValue instead.
+        this.track.volume = sender.floatValue;
         this.updateUserInterface();
     },
 
