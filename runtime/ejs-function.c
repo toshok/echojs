@@ -315,7 +315,15 @@ _ejs_Function_prototype_bind (ejsval env, ejsval _this, uint32_t argc, ejsval *a
         EJS_BOUNDFUNC_ENV_SET_ARG(bound_env, i, args[i+1]);
     }
 
-    ejsval F = _ejs_function_new_anon (bound_env, bound_wrapper);
+    ejsval target_name = _ejs_object_getprop (Target, _ejs_atom_name);
+    ejsval bound_name;
+    if (EJSVAL_IS_STRING(target_name))
+        bound_name = _ejs_string_concat(_ejs_atom_bound_space, target_name);
+    else
+        bound_name = _ejs_atom_bound_space;
+    
+
+    ejsval F = _ejs_function_new (bound_env, bound_name, bound_wrapper);
     EJSFunction *F_ = (EJSFunction*)EJSVAL_TO_OBJECT(F);
 
     F_->bound = EJS_TRUE;

@@ -307,6 +307,8 @@ EJS_ATOM(apply)
 EJS_ATOM(call)
 EJS_ATOM(bind)
 
+// used to name bound functions
+EJS_ATOM2(bound ,bound_space)
 
 // ArrayBuffer functions
 //EJS_ATOM(slice)
