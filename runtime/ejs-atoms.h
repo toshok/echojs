@@ -314,6 +314,8 @@ EJS_ATOM(bind)
 // console functions
 //EJS_ATOM(log)
 EJS_ATOM(warn)
+EJS_ATOM(time)
+EJS_ATOM(timeEnd)
 
 // gc functions
 EJS_ATOM(collect)
