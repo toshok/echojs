@@ -69,6 +69,8 @@ $(call addExpectedFailure, number-toFixed1.js,      "not implemented fully yet")
 $(call addExpectedFailure, number-toPrecision1.js,  "not implemented fully yet")
 $(call addExpectedFailure, object7.js,              "we differ from node on property descriptor flags.  verify with spec")
 $(call addExpectedFailure, object9.js,              "we differ from node on property descriptor flags.  verify with spec")
+$(call addExpectedFailure, symbol-object.js,        "")
+
 
 TRACEUR_TESTS=
 $(call testAgainstTraceur, array-subclass1.js)
