@@ -9,6 +9,9 @@
 #include "ejs-value.h"
 #include "ejs-object.h"
 
+#define EJSVAL_IS_MAP(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Map_specops))
+#define EJSVAL_TO_MAP(v)     ((EJSMap*)EJSVAL_TO_OBJECT(v))
+
 typedef struct _EJSKeyValueEntry {
     // the next entry in insertion order
     struct _EJSKeyValueEntry *next_insert;
@@ -35,6 +38,11 @@ extern EJSSpecOps _ejs_Map_specops;
 void _ejs_map_init(ejsval global);
 
 ejsval _ejs_map_new ();
+
+ejsval _ejs_map_delete(ejsval map, ejsval key);
+ejsval _ejs_map_has(ejsval map, ejsval key);
+ejsval _ejs_map_get(ejsval map, ejsval key);
+ejsval _ejs_map_set(ejsval map, ejsval key, ejsval value);
 
 #define EJSVAL_IS_MAPITERATOR(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_MapIterator_specops))
 

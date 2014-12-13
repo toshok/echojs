@@ -366,6 +366,8 @@ EJS_ATOM(deleteProperty)
 EJS_ATOM(enumerate)
 EJS_ATOM(ownKeys)
 EJS_ATOM(size)
+EJS_ATOM(WeakMap)
+EJS_ATOM(WeakSet)
 
 // symbol stuff
 EJS_ATOM(Symbol)
@@ -387,6 +389,9 @@ EJS_ATOM2(Symbol.iterator,Symbol_iterator)
 EJS_ATOM2(Symbol.toPrimitive,Symbol_toPrimitive)
 EJS_ATOM2(Symbol.toStringTag,Symbol_toStringTag)
 EJS_ATOM2(Symbol.unscopables,Symbol_unscopables)
+// used for the inverted weak collection reps
+EJS_ATOM(WeakMapData)
+EJS_ATOM(WeakSetData)
 
 // promises
 EJS_ATOM(catch)

@@ -69,21 +69,32 @@ typedef struct _EJSDataView {
 } EJSDataView;
 
 #define EJSVAL_IS_TYPEDARRAY(v) (EJSVAL_IS_OBJECT(v) &&                 \
-                                 (EJSVAL_TO_OBJECT(v)->ops == &_ejs_int8array_specops || \
-                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_int16array_specops || \
-                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_int32array_specops || \
-                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_uint8array_specops || \
-                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_uint16array_specops || \
-                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_uint32array_specops || \
-                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_float32array_specops || \
-                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_float64array_specops \
+                                 (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Int8Array_specops || \
+                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_Int16Array_specops || \
+                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_Int32Array_specops || \
+                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_Uint8Array_specops || \
+                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_Uint8ClampedArray_specops || \
+                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_Uint16Array_specops || \
+                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_Uint32Array_specops || \
+                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_Float32Array_specops || \
+                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_Float64Array_specops \
                                   ))
 
 #define EJSVAL_TO_TYPEDARRAY(v) ((EJSTypedArray*)EJSVAL_TO_OBJECT(v))
 
 #define EJSVAL_IS_ARRAYBUFFER(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_ArrayBuffer_specops))
 
-#define EJSOBJECT_IS_TYPEDARRAY(v) (v->ops == &_ejs_int8array_specops || v->ops == &_ejs_uint16array_specops || v->ops == &_ejs_int32array_specops || v->ops == &_ejs_float32array_specops)
+#define EJSOBJECT_IS_TYPEDARRAY(v) ((v)->ops == &_ejs_Int8Array_specops || \
+                                    (v)->ops == &_ejs_Int16Array_specops || \
+                                    (v)->ops == &_ejs_Int32Array_specops || \
+                                    (v)->ops == &_ejs_Uint8Array_specops || \
+                                    (v)->ops == &_ejs_Uint8ClampedArray_specops || \
+                                    (v)->ops == &_ejs_Uint16Array_specops || \
+                                    (v)->ops == &_ejs_Uint32Array_specops || \
+                                    (v)->ops == &_ejs_Float32Array_specops || \
+                                    (v)->ops == &_ejs_Float64Array_specops \
+                                  )
+
 #define EJSOBJECT_IS_ARRAYBUFFER(v) (v->ops == &_ejs_ArrayBuffer_specops)
 #define EJSOBJECT_IS_DATAVIEW(v) (v->ops == &_ejs_DataView_specops)
 
@@ -107,35 +118,39 @@ extern EJSSpecOps _ejs_ArrayBuffer_specops;
 
 extern ejsval _ejs_Int8Array;
 extern ejsval _ejs_Int8Array_prototype;
-extern EJSSpecOps _ejs_int8array_specops;
+extern EJSSpecOps _ejs_Int8Array_specops;
 
 extern ejsval _ejs_Uint8Array;
 extern ejsval _ejs_Uint8Array_prototype;
-extern EJSSpecOps _ejs_uint8array_specops;
+extern EJSSpecOps _ejs_Uint8Array_specops;
+
+extern ejsval _ejs_Uint8ClampedArray;
+extern ejsval _ejs_Uint8ClampedArray_prototype;
+extern EJSSpecOps _ejs_Uint8ClampedArray_specops;
 
 extern ejsval _ejs_Int16Array;
 extern ejsval _ejs_Int16Array_prototype;
-extern EJSSpecOps _ejs_int16array_specops;
+extern EJSSpecOps _ejs_Int16Array_specops;
 
 extern ejsval _ejs_Uint16Array;
 extern ejsval _ejs_Uint16Array_prototype;
-extern EJSSpecOps _ejs_uint16array_specops;
+extern EJSSpecOps _ejs_Uint16Array_specops;
 
 extern ejsval _ejs_Int32Array;
 extern ejsval _ejs_Int32Array_prototype;
-extern EJSSpecOps _ejs_int32array_specops;
+extern EJSSpecOps _ejs_Int32Array_specops;
 
 extern ejsval _ejs_Uint32Array;
 extern ejsval _ejs_Uint32Array_prototype;
-extern EJSSpecOps _ejs_uint32array_specops;
+extern EJSSpecOps _ejs_Uint32Array_specops;
 
 extern ejsval _ejs_Float32Array;
 extern ejsval _ejs_Float32Array_prototype;
-extern EJSSpecOps _ejs_float32array_specops;
+extern EJSSpecOps _ejs_Float32Array_specops;
 
 extern ejsval _ejs_Float64Array;
 extern ejsval _ejs_Float64Array_prototype;
-extern EJSSpecOps _ejs_float64array_specops;
+extern EJSSpecOps _ejs_Float64Array_specops;
 
 extern ejsval _ejs_DataView;
 extern ejsval _ejs_DataView_prototype;
