@@ -7,6 +7,12 @@
 #include "ejs-object.h"
 #include <stddef.h> // for offsetof
 
+#define EJSVAL_IS_STRING_OBJ(v) (EJSVAL_IS_OBJECT(v) && EJSVAL_TO_OBJECT(v)->ops == &_ejs_String_specops)
+#define EJSVAL_TO_STRING_OBJ(v) ((EJSString*)EJSVAL_TO_OBJECT(v))
+
+// true if an ejsval is either a primitive string or a string object
+#define EJSVAL_IS_STRING_TYPE(v) (EJSVAL_IS_STRING(v) || EJSVAL_IS_STRING_OBJ(v))
+
 typedef struct {
     /* object header */
     EJSObject obj;
