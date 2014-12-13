@@ -26,6 +26,13 @@ ejsval _ejs_isFinite EJSVAL_ALIGNMENT;
 ejsval _ejs_parseInt EJSVAL_ALIGNMENT;
 ejsval _ejs_parseFloat EJSVAL_ALIGNMENT;
 
+typedef enum {
+    TO_PRIM_HINT_DEFAULT,
+    TO_PRIM_HINT_STRING,
+    TO_PRIM_HINT_NUMBER
+} ToPrimitiveHint;
+ejsval
+ToPrimitive(ejsval inputargument, ToPrimitiveHint PreferredType);
 
 static const size_t UINT32_CHAR_BUFFER_LENGTH = sizeof("4294967295") - 1;
 
@@ -186,13 +193,8 @@ ejsval ToString(ejsval exp)
     else if (EJSVAL_IS_STRING(exp))
         return exp;
     else if (EJSVAL_IS_OBJECT(exp)) {
-        ejsval toString = _ejs_object_getprop (exp, _ejs_atom_toString);
-        if (!EJSVAL_IS_FUNCTION(toString)) {
-            return _ejs_Object_prototype_toString(_ejs_null, exp, 0, NULL);
-        }
-
-        // should we be checking if this returns a string?  i'd assume so...
-        return _ejs_invoke_closure (toString, exp, 0, NULL);
+        ejsval prim = ToPrimitive(exp, TO_PRIM_HINT_STRING);
+        return ToString(prim);
     }
     else
         EJS_NOT_IMPLEMENTED();
@@ -329,11 +331,6 @@ ejsval ToBoolean(ejsval exp)
     return BOOLEAN_TO_EJSVAL(ToEJSBool(exp));
 }
 
-typedef enum {
-    TO_PRIM_HINT_DEFAULT,
-    TO_PRIM_HINT_STRING,
-    TO_PRIM_HINT_NUMBER
-} ToPrimitiveHint;
 static ejsval
 OrdinaryToPrimitive(ejsval O, ToPrimitiveHint hint)
 {
@@ -846,126 +843,79 @@ _ejs_op_div (ejsval lhs, ejsval rhs)
 ejsval
 _ejs_op_lt (ejsval lhs, ejsval rhs)
 {
-    if (EJSVAL_IS_NUMBER(lhs)) {
-        return BOOLEAN_TO_EJSVAL (EJSVAL_TO_NUMBER(lhs) < ToDouble (rhs));
-    }
-    else if (EJSVAL_IS_STRING(lhs)) {
-        ejsval rhs_string = ToString(rhs);
-        ejsval rhs_primStr;
-
-        if (EJSVAL_IS_STRING(rhs_string))
-            rhs_primStr = rhs_string;
-        else
-            rhs_primStr = ((EJSString*)EJSVAL_TO_STRING(rhs_string))->primStr;
-
-        return BOOLEAN_TO_EJSVAL (ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs_primStr)) < 0);
-    }
-    else {
-        // object+... how does js implement this anyway?
-        EJS_NOT_IMPLEMENTED();
-    }
-
-    return _ejs_nan;
+    return BOOLEAN_TO_EJSVAL(_ejs_op_lt_ejsbool(lhs, rhs));
 }
 
 EJSBool
 _ejs_op_lt_ejsbool (ejsval lhs, ejsval rhs)
 {
-    if (EJSVAL_IS_NUMBER(lhs)) {
-        return EJSVAL_TO_NUMBER(lhs) < ToDouble (rhs);
-    }
-    else if (EJSVAL_IS_STRING(lhs)) {
-        ejsval rhs_string = ToString(rhs);
-        ejsval rhs_primStr;
+    ejsval lprim, rprim;
 
-        if (EJSVAL_IS_STRING(rhs_string))
-            rhs_primStr = rhs_string;
-        else
-            rhs_primStr = ((EJSString*)EJSVAL_TO_STRING(rhs_string))->primStr;
+    lprim = ToPrimitive(lhs, TO_PRIM_HINT_NUMBER);
+    rprim = ToPrimitive(rhs, TO_PRIM_HINT_NUMBER);
 
-        return ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs_primStr)) < 0;
-    }
-    else {
-        // object+... how does js implement this anyway?
-        EJS_NOT_IMPLEMENTED();
+    if (EJSVAL_IS_STRING_TYPE(lprim) && EJSVAL_IS_STRING_TYPE(rprim)) {
+        ejsval lstr = ToString(lprim);
+        ejsval rstr = ToString(rprim);
+
+        return ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lstr), EJSVAL_TO_FLAT_STRING(rstr)) < 0;
     }
 
-    return EJS_FALSE;
+    return ToDouble(lprim) < ToDouble(rprim);
 }
 
 ejsval
 _ejs_op_le (ejsval lhs, ejsval rhs)
 {
-    if (EJSVAL_IS_NUMBER(lhs)) {
-        return BOOLEAN_TO_EJSVAL (EJSVAL_TO_NUMBER(lhs) <= ToDouble (rhs));
-    }
-    else if (EJSVAL_IS_STRING(lhs)) {
-        ejsval rhs_string = ToString(rhs);
-        ejsval rhs_primStr;
+    ejsval lprim, rprim;
 
-        if (EJSVAL_IS_STRING(rhs_string))
-            rhs_primStr = rhs_string;
-        else
-            rhs_primStr = ((EJSString*)EJSVAL_TO_OBJECT(rhs_string))->primStr;
+    lprim = ToPrimitive(lhs, TO_PRIM_HINT_NUMBER);
+    rprim = ToPrimitive(rhs, TO_PRIM_HINT_NUMBER);
 
-        return BOOLEAN_TO_EJSVAL (ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs_primStr)) <= 0);
-    }
-    else {
-        // object+... how does js implement this anyway?
-        EJS_NOT_IMPLEMENTED();
+    if (EJSVAL_IS_STRING_TYPE(lprim) && EJSVAL_IS_STRING_TYPE(rprim)) {
+        ejsval lstr = ToString(lprim);
+        ejsval rstr = ToString(rprim);
+
+        return BOOLEAN_TO_EJSVAL (ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lstr), EJSVAL_TO_FLAT_STRING(rstr)) <= 0);
     }
 
-    return _ejs_nan;
+    return BOOLEAN_TO_EJSVAL(ToDouble(lprim) <= ToDouble(rprim));
 }
 
 ejsval
 _ejs_op_gt (ejsval lhs, ejsval rhs)
 {
-    if (EJSVAL_IS_NUMBER(lhs)) {
-        return BOOLEAN_TO_EJSVAL (EJSVAL_TO_NUMBER(lhs) > ToDouble (rhs));
-    }
-    else if (EJSVAL_IS_STRING(lhs)) {
-        ejsval rhs_string = ToString(rhs);
-        ejsval rhs_primStr;
+    ejsval lprim, rprim;
 
-        if (EJSVAL_IS_STRING(rhs_string))
-            rhs_primStr = rhs_string;
-        else
-            rhs_primStr = ((EJSString*)EJSVAL_TO_OBJECT(rhs_string))->primStr;
+    lprim = ToPrimitive(lhs, TO_PRIM_HINT_NUMBER);
+    rprim = ToPrimitive(rhs, TO_PRIM_HINT_NUMBER);
 
-        return BOOLEAN_TO_EJSVAL (ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs_primStr)) > 0);
-    }
-    else {
-        // object+... how does js implement this anyway?
-        EJS_NOT_IMPLEMENTED();
+    if (EJSVAL_IS_STRING_TYPE(lprim) && EJSVAL_IS_STRING_TYPE(rprim)) {
+        ejsval lstr = ToString(lprim);
+        ejsval rstr = ToString(rprim);
+
+        return BOOLEAN_TO_EJSVAL (ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lstr), EJSVAL_TO_FLAT_STRING(rstr)) > 0);
     }
 
-    return _ejs_nan;
+    return BOOLEAN_TO_EJSVAL(ToDouble(lprim) > ToDouble(rprim));
 }
 
 ejsval
 _ejs_op_ge (ejsval lhs, ejsval rhs)
 {
-    if (EJSVAL_IS_NUMBER(lhs)) {
-        return BOOLEAN_TO_EJSVAL (EJSVAL_TO_NUMBER(lhs) >= ToDouble (rhs));
-    }
-    else if (EJSVAL_IS_STRING(lhs)) {
-        ejsval rhs_string = ToString(rhs);
-        ejsval rhs_primStr;
+    ejsval lprim, rprim;
 
-        if (EJSVAL_IS_STRING(rhs_string))
-            rhs_primStr = rhs_string;
-        else
-            rhs_primStr = ((EJSString*)EJSVAL_TO_OBJECT(rhs_string))->primStr;
+    lprim = ToPrimitive(lhs, TO_PRIM_HINT_NUMBER);
+    rprim = ToPrimitive(rhs, TO_PRIM_HINT_NUMBER);
 
-        return BOOLEAN_TO_EJSVAL (ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lhs), EJSVAL_TO_FLAT_STRING(rhs_primStr)) >= 0);
-    }
-    else {
-        // object+... how does js implement this anyway?
-        EJS_NOT_IMPLEMENTED();
+    if (EJSVAL_IS_STRING_TYPE(lprim) && EJSVAL_IS_STRING_TYPE(rprim)) {
+        ejsval lstr = ToString(lprim);
+        ejsval rstr = ToString(rprim);
+
+        return BOOLEAN_TO_EJSVAL (ucs2_strcmp (EJSVAL_TO_FLAT_STRING(lstr), EJSVAL_TO_FLAT_STRING(rstr)) >= 0);
     }
 
-    return _ejs_nan;
+    return BOOLEAN_TO_EJSVAL(ToDouble(lprim) >= ToDouble(rprim));
 }
 
 ejsval
@@ -1155,7 +1105,7 @@ _ejs_op_in (ejsval lhs, ejsval rhs)
     EJSObject *obj = EJSVAL_TO_OBJECT(rhs);
 
     /* 6. Return the result of calling the [[HasProperty]] internal method of rval with argument ToString(lval). */
-    return OP(obj,HasProperty) (rhs, lhs) ? _ejs_true : _ejs_false;
+    return OP(obj,HasProperty) (rhs, ToString(lhs)) ? _ejs_true : _ejs_false;
 }
 
 EJSBool
