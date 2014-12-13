@@ -11,9 +11,6 @@
 #include "ejs-ops.h"
 #include "ejs-symbol.h"
 
-#define EJSVAL_IS_SET(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Set_specops))
-#define EJSVAL_TO_SET(v)     ((EJSSet*)EJSVAL_TO_OBJECT(v))
-
 typedef EJSBool (*ComparatorFunc)(ejsval, ejsval);
 
 ejsval
@@ -54,6 +51,28 @@ _ejs_Set_prototype_clear (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return _ejs_undefined;
 }
 
+ejsval
+_ejs_set_delete(ejsval S, ejsval value)
+{
+    // our caller should have already validated and thrown appropriate TypeErrors
+    EJS_ASSERT(EJSVAL_IS_SET(S));
+
+    // 5. Let entries be the List that is the value of S’s [[SetData]] internal slot. 
+    EJSSetValueEntry* entries = EJSVAL_TO_SET(S)->head_insert;
+    // 6. Repeat for each e that is an element of entries, 
+    for (EJSSetValueEntry* e = entries; e; e = e->next_insert) {
+        //    a. If e is not empty and SameValueZero(e, value) is true, then 
+        if (SameValueZero(e->value, value)) {
+            // i. Replace the element of entries whose value is e with an element whose value is empty. 
+            e->value = MAGIC_TO_EJSVAL_IMPL(EJS_NO_ITER_VALUE);
+            // ii. Return true. 
+            return _ejs_true;
+        }
+    }
+    // 7. Return false. 
+    return _ejs_false;
+}
+
 // 23.2.3.4 Set.prototype.delete ( value ) 
 ejsval
 _ejs_Set_prototype_delete (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -79,20 +98,7 @@ _ejs_Set_prototype_delete (ejsval env, ejsval _this, uint32_t argc, ejsval *args
 
     // 4. If S’s [[SetData]] internal slot is undefined, then throw a TypeError exception. 
 
-    // 5. Let entries be the List that is the value of S’s [[SetData]] internal slot. 
-    EJSSetValueEntry* entries = EJSVAL_TO_SET(S)->head_insert;
-    // 6. Repeat for each e that is an element of entries, 
-    for (EJSSetValueEntry* e = entries; e; e = e->next_insert) {
-        //    a. If e is not empty and SameValueZero(e, value) is true, then 
-        if (SameValueZero(e->value, value)) {
-            // i. Replace the element of entries whose value is e with an element whose value is empty. 
-            e->value = MAGIC_TO_EJSVAL_IMPL(EJS_NO_ITER_VALUE);
-            // ii. Return true. 
-            return _ejs_true;
-        }
-    }
-    // 7. Return false. 
-    return _ejs_false;
+    return _ejs_set_delete(S, value);
 }
 
 // ES6: 23.2.3.5
@@ -163,6 +169,28 @@ _ejs_Set_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
     return _ejs_undefined;
 }
 
+ejsval
+_ejs_set_has(ejsval S, ejsval value)
+{
+    // our caller should have already validated and thrown appropriate TypeErrors
+    EJS_ASSERT(EJSVAL_IS_SET(S));
+
+
+    EJSSet* _set = EJSVAL_TO_SET(S);
+
+    // 5. Let entries be the List that is the value of S’s [[SetData]] internal slot. 
+    EJSSetValueEntry* entries = _set->head_insert;
+
+    // 6. Repeat for each e that is an element of entries, 
+    for (EJSSetValueEntry* e = entries; e; e = e->next_insert) {
+        // a. If e is not empty and SameValueZero(e, value) is true, then return true.
+        if (SameValueZero (e->value, value))
+            return _ejs_true;
+    }
+    // 7. Return false. 
+    return _ejs_false;
+}
+
 // ES6: 23.2.3.7
 // Set.prototype.has ( value )
 ejsval
@@ -184,39 +212,14 @@ _ejs_Set_prototype_has (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     // 4. If S’s [[SetData]] internal slot is undefined, then throw a TypeError exception. 
 
-    EJSSet* _set = EJSVAL_TO_SET(S);
-
-    // 5. Let entries be the List that is the value of S’s [[SetData]] internal slot. 
-    EJSSetValueEntry* entries = _set->head_insert;
-
-    // 6. Repeat for each e that is an element of entries, 
-    for (EJSSetValueEntry* e = entries; e; e = e->next_insert) {
-        // a. If e is not empty and SameValueZero(e, value) is true, then return true.
-        if (SameValueZero (e->value, value))
-            return _ejs_true;
-    }
-    // 7. Return false. 
-    return _ejs_false;
+    return _ejs_set_has(S, value);
 }
 
-// ES6: 23.2.3.1 Set.prototype.add ( value )
 ejsval
-_ejs_Set_prototype_add (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+_ejs_set_add(ejsval S, ejsval value)
 {
-    ejsval value = _ejs_undefined;
-    if (argc > 0) value = args[0];
-
-    // 1. Let S be the this value. 
-    ejsval S = _this;
-
-    // 2. If Type(S) is not Object, then throw a TypeError exception. 
-    if (!EJSVAL_IS_OBJECT(S)) {
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Set.prototype.add called with non-object this.");
-    }
-
-    // 3. If S does not have a [[SetData]] internal slot throw a TypeError exception. 
-    if (!EJSVAL_IS_SET(S))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Set.prototype.set called with non-Set this.");
+    // our caller should have already validated and thrown appropriate TypeErrors
+    EJS_ASSERT(EJSVAL_IS_SET(S));
 
     // 4. If S’s [[SetData]] internal slot is undefined, then throw a TypeError exception. 
     EJSSet* _set = EJSVAL_TO_SET(S);
@@ -252,6 +255,28 @@ _ejs_Set_prototype_add (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     // 9. Return S.
     return S;
+}
+
+// ES6: 23.2.3.1 Set.prototype.add ( value )
+ejsval
+_ejs_Set_prototype_add (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval value = _ejs_undefined;
+    if (argc > 0) value = args[0];
+
+    // 1. Let S be the this value. 
+    ejsval S = _this;
+
+    // 2. If Type(S) is not Object, then throw a TypeError exception. 
+    if (!EJSVAL_IS_OBJECT(S)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Set.prototype.add called with non-object this.");
+    }
+
+    // 3. If S does not have a [[SetData]] internal slot throw a TypeError exception. 
+    if (!EJSVAL_IS_SET(S))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Set.prototype.set called with non-Set this.");
+
+    return _ejs_set_add(S, value);
 }
 
 // ES6: 23.2.3.9

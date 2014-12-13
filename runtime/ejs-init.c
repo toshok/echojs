@@ -29,6 +29,8 @@
 #include "ejs-typedarrays.h"
 #include "ejs-uri.h"
 #include "ejs-value.h"
+#include "ejs-weakmap.h"
+#include "ejs-weakset.h"
 #if IOS || OSX
 #include "ejs-xhr.h"
 #endif
@@ -96,6 +98,8 @@ _ejs_init_classes()
     _ejs_Class_initialize (&_ejs_Function_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Map_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_MapIterator_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_WeakMap_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_WeakSet_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Module_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Proxy_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Promise_specops, &_ejs_Object_specops);
@@ -108,16 +112,18 @@ _ejs_init_classes()
     _ejs_Class_initialize (&_ejs_Symbol_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_ArrayBuffer_specops, &_ejs_Object_specops);
 
-    _ejs_Class_initialize (&_ejs_int8array_specops, &_ejs_Object_specops);
-    _ejs_Class_initialize (&_ejs_uint8array_specops, &_ejs_Object_specops);
-    _ejs_Class_initialize (&_ejs_int16array_specops, &_ejs_Object_specops);
-    _ejs_Class_initialize (&_ejs_uint16array_specops, &_ejs_Object_specops);
-    _ejs_Class_initialize (&_ejs_int32array_specops, &_ejs_Object_specops);
-    _ejs_Class_initialize (&_ejs_uint32array_specops, &_ejs_Object_specops);
-    _ejs_Class_initialize (&_ejs_float32array_specops, &_ejs_Object_specops);
-    _ejs_Class_initialize (&_ejs_float64array_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_Int8Array_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_Uint8Array_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_Uint8ClampedArray_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_Int16Array_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_Uint16Array_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_Int32Array_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_Uint32Array_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_Float32Array_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_Float64Array_specops, &_ejs_Object_specops);
 
     _ejs_Class_initialize (&_ejs_DataView_specops, &_ejs_Object_specops);
+
 #if IOS
     _ejs_Class_initialize (&_ejs_WebGLRenderingContext_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_WebGLBuffer_specops, &_ejs_Object_specops);
@@ -185,6 +191,8 @@ _ejs_init(int argc, char** argv)
     _ejs_proxy_init(_ejs_global);
     _ejs_map_init(_ejs_global);
     _ejs_set_init(_ejs_global);
+    _ejs_weakmap_init(_ejs_global);
+    _ejs_weakset_init(_ejs_global);
 
     _ejs_typedarrays_init(_ejs_global);
 #if IOS

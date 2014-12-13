@@ -432,7 +432,7 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
  }                                                                      \
                                                                         \
  static ejsval                                                          \
- _ejs_##arraytype##array_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)  \
+ _ejs_##ArrayType##array_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)  \
  {                                                                      \
      /* check if propertyName is an integer, or a string that we can convert to an int */ \
      EJSBool is_index = EJS_FALSE;                                      \
@@ -464,7 +464,7 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
  }                                                                      \
                                                                         \
  static EJSPropertyDesc*                                                \
- _ejs_##arraytype##array_specop_get_own_property (ejsval obj, ejsval propertyName, ejsval* exc) \
+ _ejs_##ArrayType##array_specop_get_own_property (ejsval obj, ejsval propertyName, ejsval* exc) \
  {                                                                      \
      if (EJSVAL_IS_NUMBER(propertyName)) {                              \
          double needle = EJSVAL_TO_NUMBER(propertyName);                \
@@ -478,7 +478,7 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
  }                                                                      \
                                                                         \
  static EJSBool                                                         \
- _ejs_##arraytype##array_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver) \
+ _ejs_##ArrayType##array_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver) \
  {                                                                      \
      /* check if propertyName is an integer, or a string that we can convert to an int */ \
      EJSBool is_index = EJS_FALSE;                                      \
@@ -503,18 +503,16 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
  }                                                                      \
                                                                         \
  static EJSBool                                                         \
- _ejs_##arraytype##array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag) \
+ _ejs_##ArrayType##array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag) \
  {                                                                      \
      return _ejs_Object_specops.DefineOwnProperty (obj, propertyName, propertyDescriptor, flag); \
  }                                                                      \
                                                                         \
  static EJSBool                                                         \
- _ejs_##arraytype##array_specop_has_property (ejsval obj, ejsval propertyName) \
+ _ejs_##ArrayType##array_specop_has_property (ejsval obj, ejsval propertyName) \
  {                                                                      \
      EJS_NOT_IMPLEMENTED();                                             \
  }                                                                      \
-                                                                        \
- EJSSpecOps _ejs_##arraytype##array_specops;                            \
                                                                         \
  static ejsval                                                          \
  _ejs_##ArrayType##Array_prototype_set_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
@@ -596,7 +594,7 @@ static ejsval                                                           \
 
 EJS_TYPED_ARRAY(INT8, Int8, int8, int8_t, 1);
 EJS_TYPED_ARRAY(UINT8, Uint8, uint8, uint8_t, 1);
-//EJS_TYPED_ARRAY(UINT8CLAMPED, Uint8Clamped, uint8clamped, uint8_t, 1);
+EJS_TYPED_ARRAY(UINT8CLAMPED, Uint8Clamped, uint8, uint8_t, 1);
 EJS_TYPED_ARRAY(INT16, Int16, int16, int16_t, 2);
 EJS_TYPED_ARRAY(UINT16, Uint16, uint16, uint16_t, 2);
 EJS_TYPED_ARRAY(INT32, Int32, int32, int32_t, 4);
@@ -750,7 +748,7 @@ _ejs_typedarrays_init(ejsval global)
                                                                         \
     _ejs_typed_array_elsizes[EJS_TYPEDARRAY_##EnumType] = elementSizeInBytes; \
     _ejs_typed_array_protos[EJS_TYPEDARRAY_##EnumType] = _ejs_##ArrayType##Array_prototype; \
-    _ejs_typed_array_specops[EJS_TYPEDARRAY_##EnumType] = &_ejs_##arraytype##array_specops; \
+    _ejs_typed_array_specops[EJS_TYPEDARRAY_##EnumType] = &_ejs_##ArrayType##Array_specops; \
                                                                         \
     PROTO_METHOD_IMPL(ArrayType##Array, get);                           \
     PROTO_METHOD_IMPL(ArrayType##Array, set);                           \
@@ -763,7 +761,7 @@ EJS_MACRO_END
 
     ADD_TYPEDARRAY(INT8, Int8, int8, 1);
     ADD_TYPEDARRAY(UINT8, Uint8, uint8, 1);
-    //ADD_TYPEDARRAY(UINT8CLAMPED, Uint8Clamped, uint8clamped, 1);
+    ADD_TYPEDARRAY(UINT8CLAMPED, Uint8Clamped, uint8, 1); // XXX
     ADD_TYPEDARRAY(INT16, Int16, int16, 2);
     ADD_TYPEDARRAY(UINT16, Uint16, uint16, 2);
     ADD_TYPEDARRAY(INT32, Int32, int32, 4);
@@ -1105,17 +1103,17 @@ EJS_DEFINE_CLASS(DataView,
                  )
 
 #define ADD_TYPEDARRAY_SPECOPS(ArrayType, arraytype)                   \
-    EJSSpecOps _ejs_##arraytype##array_specops = {                     \
+    EJSSpecOps _ejs_##ArrayType##Array_specops = {                     \
         #ArrayType "Array",                                            \
         OP_INHERIT, /* [[GetPrototypeOf]] */                           \
         OP_INHERIT, /* [[SetPrototypeOf]] */                           \
         OP_INHERIT, /* [[IsExtensible]] */                             \
         OP_INHERIT, /* [[PreventExtensions]] */                        \
-        _ejs_##arraytype##array_specop_get_own_property,               \
-        _ejs_##arraytype##array_specop_define_own_property,            \
-        _ejs_##arraytype##array_specop_has_property,                   \
-        _ejs_##arraytype##array_specop_get,                            \
-        _ejs_##arraytype##array_specop_set,                            \
+        _ejs_##ArrayType##array_specop_get_own_property,               \
+        _ejs_##ArrayType##array_specop_define_own_property,            \
+        _ejs_##ArrayType##array_specop_has_property,                   \
+        _ejs_##ArrayType##array_specop_get,                            \
+        _ejs_##ArrayType##array_specop_set,                            \
         OP_INHERIT, /* [[Delete]] */                                   \
         OP_INHERIT, /* [[Enumerate]] */                                \
         OP_INHERIT, /* [[OwnPropertyKeys]] */                          \
@@ -1127,7 +1125,7 @@ EJS_DEFINE_CLASS(DataView,
 
 ADD_TYPEDARRAY_SPECOPS(Int8, int8);
 ADD_TYPEDARRAY_SPECOPS(Uint8, uint8);
-//ADD_TYPEDARRAY_SPECOPS(Uint8Clamped, uint8clamped);
+ADD_TYPEDARRAY_SPECOPS(Uint8Clamped, uint8); // XXX
 ADD_TYPEDARRAY_SPECOPS(Int16, int16);
 ADD_TYPEDARRAY_SPECOPS(Uint16, uint16);
 ADD_TYPEDARRAY_SPECOPS(Int32, int32);

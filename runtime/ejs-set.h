@@ -9,6 +9,9 @@
 #include "ejs-value.h"
 #include "ejs-object.h"
 
+#define EJSVAL_IS_SET(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Set_specops))
+#define EJSVAL_TO_SET(v)     ((EJSSet*)EJSVAL_TO_OBJECT(v))
+
 typedef struct _EJSSetValueEntry {
     // the next entry in insertion order
     struct _EJSSetValueEntry *next_insert;
@@ -32,6 +35,10 @@ extern EJSSpecOps _ejs_Set_specops;
 void _ejs_set_init(ejsval global);
 
 ejsval _ejs_set_new ();
+
+ejsval _ejs_set_add(ejsval set, ejsval value);
+ejsval _ejs_set_delete(ejsval set, ejsval value);
+ejsval _ejs_set_has(ejsval set, ejsval value);
 
 #define EJSVAL_IS_SETITERATOR(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_SetIterator_specops))
 

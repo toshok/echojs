@@ -36,6 +36,8 @@ C_SOURCES= \
 	ejs-typedarrays.c \
 	ejs-types.c \
 	ejs-uri.c \
+	ejs-weakmap.c \
+	ejs-weakset.c \
 	parson.c
 
 VPATH=.:../parson

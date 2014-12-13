@@ -11,9 +11,6 @@
 #include "ejs-ops.h"
 #include "ejs-symbol.h"
 
-#define EJSVAL_IS_MAP(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Map_specops))
-#define EJSVAL_TO_MAP(v)     ((EJSMap*)EJSVAL_TO_OBJECT(v))
-
 typedef EJSBool (*ComparatorFunc)(ejsval, ejsval);
 
 ejsval
@@ -65,6 +62,25 @@ _ejs_Map_prototype_clear (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 // ES6: 23.1.3.3
 // Map.prototype.delete ( key )
 ejsval
+_ejs_map_delete (ejsval map, ejsval key)
+{
+    // our caller should have already validated and thrown appropriate TypeErrors
+    EJS_ASSERT(EJSVAL_IS_MAP(map));
+
+    // 5. If M’s [[MapComparator]] internal slot is undefined, then let same be the abstract operation SameValueZero.
+    // 6. Else, let same be the abstract operation SameValue.
+    // 7. Let entries be the List that is the value of M’s [[MapData]] internal slot.
+    // 8. Repeat for each Record {[[key]], [[value]]} p that is an element of entries,
+    //    a. If same(p.[[key]], key), then
+    //       i. Set p.[[key]] to empty.
+    //      ii. Set p.[[value]] to empty.
+    //     iii. Return true.
+    // 9. Return false.
+
+    return _ejs_false;
+}
+
+ejsval
 _ejs_Map_prototype_delete (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     // NOTE The value empty is used as a specification device to
@@ -87,17 +103,8 @@ _ejs_Map_prototype_delete (ejsval env, ejsval _this, uint32_t argc, ejsval *args
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Map.prototype.delete called with non-Map this.");
 
     // 4. If M’s [[MapData]] internal slot is undefined, then throw a TypeError exception.
-    // 5. If M’s [[MapComparator]] internal slot is undefined, then let same be the abstract operation SameValueZero.
-    // 6. Else, let same be the abstract operation SameValue.
-    // 7. Let entries be the List that is the value of M’s [[MapData]] internal slot.
-    // 8. Repeat for each Record {[[key]], [[value]]} p that is an element of entries,
-    //    a. If same(p.[[key]], key), then
-    //       i. Set p.[[key]] to empty.
-    //      ii. Set p.[[value]] to empty.
-    //     iii. Return true.
-    // 9. Return false.
 
-    return _ejs_false;
+    return _ejs_map_delete (M, key);
 }
 
 // ES6: 23.1.3.4
@@ -168,29 +175,13 @@ _ejs_Map_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
     return _ejs_undefined;
 }
 
-// ES6: 23.1.3.6
-// Map.prototype.get ( key )
 ejsval
-_ejs_Map_prototype_get (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+_ejs_map_get (ejsval map, ejsval key)
 {
-    ejsval key = _ejs_undefined;
-    if (argc > 0) key = args[0];
+    // our caller should have already validated and thrown appropriate TypeErrors
+    EJS_ASSERT(EJSVAL_IS_MAP(map));
 
-    // 1. Let M be the this value.
-    ejsval M = _this;
-
-    // 2. If Type(M) is not Object, then throw a TypeError exception.
-    if (!EJSVAL_IS_OBJECT(M))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Map.prototype.get called with non-object this.");
-        
-    // 3. If M does not have a [[MapData]] internal slot throw a TypeError exception.
-    if (!EJSVAL_IS_MAP(M))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Map.prototype.get called with non-Map this.");
-
-    // 4. If M’s [[MapData]] internal slot is undefined, then throw a TypeError exception.
-
-
-    EJSMap* _map = EJSVAL_TO_MAP(M);
+    EJSMap* _map = EJSVAL_TO_MAP(map);
 
     // 5. Let entries be the List that is the value of M’s [[MapData]] internal slot.
     EJSKeyValueEntry* entries = _map->head_insert;
@@ -215,10 +206,10 @@ _ejs_Map_prototype_get (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return _ejs_undefined;
 }
 
-// ES6: 23.1.3.7
-// Map.prototype.has ( key )
+// ES6: 23.1.3.6
+// Map.prototype.get ( key )
 ejsval
-_ejs_Map_prototype_has (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+_ejs_Map_prototype_get (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval key = _ejs_undefined;
     if (argc > 0) key = args[0];
@@ -228,15 +219,24 @@ _ejs_Map_prototype_has (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     // 2. If Type(M) is not Object, then throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(M))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Map.prototype.has called with non-object this.");
-
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Map.prototype.get called with non-object this.");
+        
     // 3. If M does not have a [[MapData]] internal slot throw a TypeError exception.
     if (!EJSVAL_IS_MAP(M))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Map.prototype.has called with non-Map this.");
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Map.prototype.get called with non-Map this.");
 
     // 4. If M’s [[MapData]] internal slot is undefined, then throw a TypeError exception.
 
-    EJSMap* _map = EJSVAL_TO_MAP(M);
+    return _ejs_map_get(M, key);
+}
+
+ejsval
+_ejs_map_has (ejsval map, ejsval key)
+{
+    // our caller should have already validated and thrown appropriate TypeErrors
+    EJS_ASSERT(EJSVAL_IS_MAP(map));
+
+    EJSMap* _map = EJSVAL_TO_MAP(map);
 
     // 5. Let entries be the List that is the value of M’s [[MapData]] internal slot.
     EJSKeyValueEntry* entries = _map->head_insert;
@@ -261,6 +261,29 @@ _ejs_Map_prototype_has (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return _ejs_false;
 }
 
+// ES6: 23.1.3.7
+// Map.prototype.has ( key )
+ejsval
+_ejs_Map_prototype_has (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval key = _ejs_undefined;
+    if (argc > 0) key = args[0];
+
+    // 1. Let M be the this value.
+    ejsval M = _this;
+
+    // 2. If Type(M) is not Object, then throw a TypeError exception.
+    if (!EJSVAL_IS_OBJECT(M))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Map.prototype.has called with non-object this.");
+
+    // 3. If M does not have a [[MapData]] internal slot throw a TypeError exception.
+    if (!EJSVAL_IS_MAP(M))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Map.prototype.has called with non-Map this.");
+
+    // 4. If M’s [[MapData]] internal slot is undefined, then throw a TypeError exception.
+    return _ejs_map_has(M, key);
+}
+
 // ES6: 23.1.3.8
 // Map.prototype.keys ( )
 ejsval
@@ -271,6 +294,58 @@ _ejs_Map_prototype_keys (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     // 2. Return the result of calling the CreateMapIterator abstract operation with arguments M and "key".
     return _ejs_map_iterator_new (M, EJS_MAP_ITER_KIND_KEY);
+}
+
+ejsval
+_ejs_map_set (ejsval map, ejsval key, ejsval value)
+{
+    // our caller should have already validated and thrown appropriate TypeErrors
+    EJS_ASSERT(EJSVAL_IS_MAP(map));
+
+    EJSMap* _map = EJSVAL_TO_MAP(map);
+
+    // 5. Let entries be the List that is the value of M’s [[MapData]] internal slot.
+    EJSKeyValueEntry* entries = _map->head_insert;
+
+    ComparatorFunc same;
+
+    // 6. If M’s [[MapComparator]] internal slot is undefined, then let same be the abstract operation SameValueZero.
+    if (EJSVAL_IS_UNDEFINED(_map->comparator))
+        same = SameValueZero;
+    // 7. Else, let same be the abstract operation SameValue.
+    else
+        same = SameValue;
+    
+    EJSKeyValueEntry* p;
+    // 8. Repeat for each Record {[[key]], [[value]]} p that is an element of entries,
+    for (p = entries; p; p = p->next_insert) {
+        //    a. If same(p.[[key]], key), then
+        if (same (p->key, key)) {
+            //       i. Set p.[[value]] to value.
+            p->value = value;
+            //       ii. Return M.
+            return map;
+        }
+    }
+    // 9. Let p be the Record {[[key]]: key, [[value]]: value}.
+    p = calloc (1, sizeof (EJSKeyValueEntry));
+    p->key = key;
+    p->value = value;
+
+    // 10. Append p as the last element of entries.
+    if (!_map->head_insert)
+        _map->head_insert = p;
+
+    if (_map->tail_insert) {
+        _map->tail_insert->next_insert = p;
+        _map->tail_insert = p;
+    }
+    else {
+        _map->tail_insert = p;
+    }
+
+    // 11. Return M.
+    return map;
 }
 
 // ES6: 23.1.3.9
@@ -297,50 +372,7 @@ _ejs_Map_prototype_set (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     // 4. If M’s [[MapData]] internal slot is undefined, then throw a TypeError exception.
 
-    EJSMap* _map = EJSVAL_TO_MAP(M);
-
-    // 5. Let entries be the List that is the value of M’s [[MapData]] internal slot.
-    EJSKeyValueEntry* entries = _map->head_insert;
-
-    ComparatorFunc same;
-
-    // 6. If M’s [[MapComparator]] internal slot is undefined, then let same be the abstract operation SameValueZero.
-    if (EJSVAL_IS_UNDEFINED(_map->comparator))
-        same = SameValueZero;
-    // 7. Else, let same be the abstract operation SameValue.
-    else
-        same = SameValue;
-    
-    EJSKeyValueEntry* p;
-    // 8. Repeat for each Record {[[key]], [[value]]} p that is an element of entries,
-    for (p = entries; p; p = p->next_insert) {
-        //    a. If same(p.[[key]], key), then
-        if (same (p->key, key)) {
-            //       i. Set p.[[value]] to value.
-            p->value = value;
-            //       ii. Return M.
-            return M;
-        }
-    }
-    // 9. Let p be the Record {[[key]]: key, [[value]]: value}.
-    p = calloc (1, sizeof (EJSKeyValueEntry));
-    p->key = key;
-    p->value = value;
-
-    // 10. Append p as the last element of entries.
-    if (!_map->head_insert)
-        _map->head_insert = p;
-
-    if (_map->tail_insert) {
-        _map->tail_insert->next_insert = p;
-        _map->tail_insert = p;
-    }
-    else {
-        _map->tail_insert = p;
-    }
-
-    // 11. Return M.
-    return M;
+    return _ejs_map_set (M, key, value);
 }
 
 // ES6: 23.1.3.10

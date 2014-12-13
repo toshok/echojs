@@ -28,6 +28,9 @@
 #include "ejs-types.h"
 #include "ejs-log.h"
 
+// causes weakmap/weakset to use the inverted representation (as opposed to ephemeron-based weak tables)
+#define WEAK_COLLECTIONS_USE_INVERTED_REP 1
+
 typedef int32_t EJSBool;
 
 #define EJS_TRUE 1
