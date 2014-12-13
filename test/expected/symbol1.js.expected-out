@@ -1,7 +1,7 @@
 Symbol(Symbol.create)
 Symbol(Symbol.hasInstance)
 Symbol(Symbol.isConcatSpreadable)
-Symbol(Symbol.isRegExp)
+Symbol(Symbol.species)
 Symbol(Symbol.iterator)
 Symbol(Symbol.toPrimitive)
 Symbol(Symbol.toStringTag)

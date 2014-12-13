@@ -2080,6 +2080,12 @@ _ejs_Array_isArray (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 }
 
 static ejsval
+_ejs_Array_get_species (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    return _ejs_Array;
+}
+
+static ejsval
 _ejs_Array_create(ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
     // 1. Let F be the this value. 
@@ -2250,6 +2256,7 @@ _ejs_array_init(ejsval global)
                                        EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
 
     EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Array, create, _ejs_Array_create, EJS_PROP_NOT_ENUMERABLE);
+    EJS_INSTALL_SYMBOL_GETTER(_ejs_Array, species, _ejs_Array_get_species);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Array, x, _ejs_Array_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Array_prototype, x, _ejs_Array_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)

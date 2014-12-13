@@ -122,7 +122,7 @@ ejsval _ejs_Symbol_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_Symbol_create EJSVAL_ALIGNMENT;
 ejsval _ejs_Symbol_hasInstance EJSVAL_ALIGNMENT;
 ejsval _ejs_Symbol_isConcatSpreadable EJSVAL_ALIGNMENT;
-ejsval _ejs_Symbol_isRegExp EJSVAL_ALIGNMENT;
+ejsval _ejs_Symbol_species EJSVAL_ALIGNMENT;
 ejsval _ejs_Symbol_iterator EJSVAL_ALIGNMENT;
 ejsval _ejs_Symbol_toPrimitive EJSVAL_ALIGNMENT;
 ejsval _ejs_Symbol_toStringTag EJSVAL_ALIGNMENT;
@@ -153,7 +153,7 @@ _ejs_symbol_init(ejsval global)
     WELL_KNOWN_SYMBOL(create);
     WELL_KNOWN_SYMBOL(hasInstance);
     WELL_KNOWN_SYMBOL(isConcatSpreadable);
-    WELL_KNOWN_SYMBOL(isRegExp);
+    WELL_KNOWN_SYMBOL(species);
     WELL_KNOWN_SYMBOL(iterator);
     WELL_KNOWN_SYMBOL(toPrimitive);
     WELL_KNOWN_SYMBOL(toStringTag);

@@ -29,7 +29,7 @@ extern EJSSpecOps _ejs_Symbol_specops;
 extern ejsval _ejs_Symbol_create;
 extern ejsval _ejs_Symbol_hasInstance;
 extern ejsval _ejs_Symbol_isConcatSpreadable;
-extern ejsval _ejs_Symbol_isRegExp;
+extern ejsval _ejs_Symbol_species;
 extern ejsval _ejs_Symbol_iterator;
 extern ejsval _ejs_Symbol_toPrimitive;
 extern ejsval _ejs_Symbol_toStringTag;

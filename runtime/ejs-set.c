@@ -407,6 +407,12 @@ _ejs_Set_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return set;
 }
 
+static ejsval
+_ejs_Set_get_species (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    return _ejs_Set;
+}
+
 // ECMA262: 23.2.2.2
 // Set[ @@create ] ( ) 
 static ejsval
@@ -591,6 +597,8 @@ _ejs_set_init(ejsval global)
     _ejs_object_define_value_property (_ejs_Set_prototype, _ejs_Symbol_toStringTag, _ejs_atom_Set, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
 
     EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Set, create, _ejs_Set_create, EJS_PROP_NOT_ENUMERABLE);
+
+    EJS_INSTALL_SYMBOL_GETTER(_ejs_Set, species, _ejs_Set_get_species);
 
 #undef OBJ_METHOD
 #undef PROTO_METHOD

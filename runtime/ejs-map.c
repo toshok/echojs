@@ -514,6 +514,12 @@ _ejs_Map_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 static ejsval
+_ejs_Map_get_species (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    return _ejs_Map;
+}
+
+static ejsval
 _ejs_Map_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     // 1. Let F be the this value. 
@@ -704,6 +710,7 @@ _ejs_map_init(ejsval global)
     _ejs_object_define_value_property (_ejs_Map_prototype, _ejs_Symbol_toStringTag, _ejs_atom_Map, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
 
     EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Map, create, _ejs_Map_create, EJS_PROP_NOT_ENUMERABLE);
+    EJS_INSTALL_SYMBOL_GETTER(_ejs_Map, species, _ejs_Map_get_species);
 
 #undef OBJ_METHOD
 #undef PROTO_METHOD
