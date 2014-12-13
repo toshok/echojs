@@ -4,7 +4,7 @@ EchoJS - an ahead of time compiler and runtime for EcmaScript
 Building EchoJS
 ---------------
 
-Right now things only build on OSX.  I have easy access to other platforms, I just haven't had the time/motivation to do it given OSX is what I have in front of me every hour of every day, and ios development is my biggest goal.  Patches welcome!
+Things only build reliably on OSX.  I have easy access to other platforms, I just haven't had the time/motivation to do it given OSX is what I have in front of me every hour of every day, and ios development is my biggest goal.  Patches welcome!
 
 You'll need a couple of external dependencies to get things running:
 
