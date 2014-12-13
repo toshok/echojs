@@ -35,7 +35,7 @@ As for `MIN_OSX_VERSION`: homebrew's formula for llvm34 doesn't specify a `-mmac
 both of these variable assignments can be placed in `echo-js/build/config-local.mk`.  I'm running mavericks locally, so my config-local.mk is as follows:
 
 ```
-LLVM_SUFFIX-3.4
+LLVM_SUFFIX=-3.4
 ```
 
 
