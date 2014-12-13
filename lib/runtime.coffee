@@ -266,7 +266,7 @@ exports.createAtomsInterface = (module) ->
                 "keyFor": { get: -> getGlobal "_ejs_atom_keyFor" }
                 "hasInstance": { get: -> getGlobal "_ejs_atom_hasInstance" }
                 "isConcatSpreadable": { get: -> getGlobal "_ejs_atom_isConcatSpreadable" }
-                "isRegExp": { get: -> getGlobal "_ejs_atom_isRegExp" }
+                "species": { get: -> getGlobal "_ejs_atom_species" }
                 "iterator": { get: -> getGlobal "_ejs_atom_iterator" }
                 "toPrimitive": { get: -> getGlobal "_ejs_atom_toPrimitive" }
                 "toStringTag": { get: -> getGlobal "_ejs_atom_toStringTag" }

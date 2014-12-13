@@ -129,6 +129,12 @@ _ejs_ArrayBuffer_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 static ejsval
+_ejs_ArrayBuffer_get_species (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    return _ejs_ArrayBuffer;
+}
+
+static ejsval
 _ejs_ArrayBuffer_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJSArrayBuffer* buffer = (EJSArrayBuffer*)EJSVAL_TO_OBJECT(_this);
@@ -557,6 +563,12 @@ _ejs_##ArrayType##Array_prototype_get_toStringTag (ejsval env, ejsval _this, uin
 }                                                                       \
                                                                         \
 static ejsval                                                           \
+_ejs_##ArrayType##Array_get_species (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+{                                                                       \
+    return _ejs_##ArrayType##Array;                                     \
+}                                                                       \
+                                                                        \
+static ejsval                                                           \
  _ejs_##ArrayType##Array_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
 {                                                                       \
     /* 1. Let F be the this value. */                                   \
@@ -708,6 +720,7 @@ _ejs_typedarrays_init(ejsval global)
 
         _ejs_object_define_value_property (_ejs_ArrayBuffer_prototype, _ejs_Symbol_toStringTag, _ejs_atom_ArrayBuffer, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
         EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_ArrayBuffer, create, _ejs_ArrayBuffer_create, EJS_PROP_NOT_ENUMERABLE);
+        EJS_INSTALL_SYMBOL_GETTER (_ejs_ArrayBuffer, species, _ejs_ArrayBuffer_get_species);
     }
 
     // DataView
@@ -756,6 +769,7 @@ _ejs_typedarrays_init(ejsval global)
     PROTO_GETTER(ArrayType##Array, toStringTag); /* XXX needs to be enumerable: false, configurable: true */ \
                                                                         \
     EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_##ArrayType##Array, create, _ejs_##ArrayType##Array_create, EJS_PROP_NOT_ENUMERABLE); \
+    EJS_INSTALL_SYMBOL_GETTER (_ejs_##ArrayType##Array, species, _ejs_##ArrayType##Array_get_species); \
                                                                         \
 EJS_MACRO_END
 

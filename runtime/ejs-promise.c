@@ -624,6 +624,12 @@ _ejs_Promise_prototype_then (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
 }
 
+static ejsval
+_ejs_Promise_get_species (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    return _ejs_Promise;
+}
+
 // ECMA262 25.4.4.6 Promise [ @@create ] ( )
 static ejsval
 _ejs_Promise_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -959,6 +965,7 @@ _ejs_promise_init(ejsval global)
 #undef PROTO_METHOD
 
     EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Promise, create, _ejs_Promise_create, EJS_PROP_NOT_ENUMERABLE);
+    EJS_INSTALL_SYMBOL_GETTER(_ejs_Promise, species, _ejs_Promise_get_species);
 
     _ejs_gc_add_root(&_ejs_identity_function);
     _ejs_identity_function = _ejs_function_new_anon(_ejs_undefined, identity);

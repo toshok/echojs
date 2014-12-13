@@ -277,6 +277,12 @@ _ejs_RegExp_prototype_get_source (ejsval env, ejsval _this, uint32_t argc, ejsva
 }
 
 static ejsval
+_ejs_RegExp_get_species (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    return _ejs_RegExp;
+}
+
+static ejsval
 _ejs_RegExp_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     // 1. Let F be the this value. 
@@ -341,6 +347,7 @@ _ejs_regexp_init(ejsval global)
 #undef PROTO_METHOD
 
     EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp, create, _ejs_RegExp_create, EJS_PROP_NOT_ENUMERABLE);
+    EJS_INSTALL_SYMBOL_GETTER(_ejs_RegExp, species, _ejs_RegExp_get_species);
 }
 
 static EJSObject*
