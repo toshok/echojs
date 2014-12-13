@@ -177,13 +177,63 @@ _ejs_WeakSet_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         set = OBJECT_TO_EJSVAL(obj);
     }
 
-    // 2. If Type(map) is not Object then, throw a TypeError exception.
+    // 2. If Type(set) is not Object then, throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(set))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "WeakSet constructor called with non-object this.");
     
-    // 3. If map does not have a [[MapData]] internal slot, then throw a TypeError exception.
+    // 3. If set does not have a [[WeakSetData]] internal slot, then throw a TypeError exception.
     if (!EJSVAL_IS_WEAKSET(set))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "WeakSet constructor called with non-WeakSet this.");
+
+    // 4. If set’s [[WeakSetData]] internal slot is not undefined, then throw a TypeError exception.
+
+    // 5. If iterable is not present, let iterable be undefined. 
+    ejsval iterable = _ejs_undefined;
+    if (argc > 0)
+        iterable = args[0];
+    ejsval iter = _ejs_undefined;
+    ejsval adder = _ejs_undefined;
+
+    // 6. If iterable is either undefined or null, then let iter be undefined.
+    // 7. Else, 
+    if (!EJSVAL_IS_UNDEFINED(iterable) && !EJSVAL_IS_NULL(iterable)) {
+        //    a. Let iter be the result of GetIterator(iterable). 
+        //    b. ReturnIfAbrupt(iter). 
+        iter = GetIterator (iterable, _ejs_undefined);
+        //    c. Let adder be the result of Get(set, "add").
+        //    d. ReturnIfAbrupt(adder). 
+        adder = Get (set, _ejs_atom_add);
+        //    e. If IsCallable(adder) is false, throw a TypeError Exception.
+        if (!EJSVAL_IS_CALLABLE(adder))
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Set.prototype.add is not a function");
+    }
+    // 8. If the value of sets’s [[WeakSetData]] internal slot is not undefined, then throw a TypeError exception. 
+    // 9. Assert: set has not been reentrantly initialized. 
+    // 10. Set set’s [[WeakSetData]] internal slot to a new empty List.
+
+    // 11. If iter is undefined, then return set. 
+    if (EJSVAL_IS_UNDEFINED(iter))
+        return set;
+
+    // 12. Repeat 
+    for (;;) {
+        //    a. Let next be the result of IteratorStep(iter).
+        //    b. ReturnIfAbrupt(next).
+        ejsval next = IteratorStep (iter);
+
+        //    c. If next is false, then return set.
+        if (!EJSVAL_TO_BOOLEAN(next))
+            return set;
+
+        //    d. Let nextValue be IteratorValue(next).
+        //    e. ReturnIfAbrupt(nextValue).
+        ejsval nextValue = IteratorValue (next);
+
+        //    f. Let status be the result of calling the [[Call]] internal method of adder with set as thisArgument
+        //       and a List whose sole element is nextValue as argumentsList.
+        //    g. ReturnIfAbrupt(status).
+        _ejs_invoke_closure (adder, set, 1, &nextValue);
+    }
 
     return set;
 }
