@@ -59,6 +59,10 @@ let AppDelegate = NSObject.extendClass("AppDelegate", () => ({
         this.slider.floatValue = volume;
     },
 
+    shouldTerminateAfterLastWindowClosed: function () {
+        return false;
+    },
+
     window: outlet(NSWindow)
 }), [
     NSApplicationDelegate 
