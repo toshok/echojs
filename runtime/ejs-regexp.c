@@ -4,6 +4,7 @@
 
 #include <string.h>
 
+#include "ejs-array.h"
 #include "ejs-ops.h"
 #include "ejs-value.h"
 #include "ejs-regexp.h"
@@ -165,17 +166,15 @@ _ejs_RegExp_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return _this;
 }
 
-// ECMA262: 15.10.6.2
-ejsval
-_ejs_RegExp_prototype_exec (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+static ejsval
+RegExpBuiltinExec(ejsval R, ejsval S)
 {
-    if (!EJSVAL_IS_REGEXP(_this))
-        EJS_NOT_IMPLEMENTED();
+    EJS_ASSERT(EJSVAL_IS_REGEXP(R));
+    EJS_ASSERT(EJSVAL_IS_STRING_TYPE(S));
 
-    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(R);
 
-    ejsval subject = _ejs_undefined;
-    if (argc > 0) subject = args[0];
+    ejsval subject = S;
 
     pcre16_extra extra;
     memset (&extra, 0, sizeof(extra));
@@ -189,7 +188,72 @@ _ejs_RegExp_prototype_exec (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
                          subject_chars, flat_subject->length, 0,
                          PCRE_NO_UTF16_CHECK, ovec, 3);
 
-    return rv == PCRE_ERROR_NOMATCH ? _ejs_false : _ejs_true;
+    if (rv == PCRE_ERROR_NOMATCH)
+        return _ejs_null;
+
+    // XXX we're supposed to return an object here...
+    EJS_NOT_IMPLEMENTED();
+}
+
+static ejsval
+RegExpExec(ejsval R, ejsval S)
+{
+    // 1. Assert: Type(R) is Object.
+    // 2. Assert: Type(S) is String.
+
+    // 3. Let exec be Get(R, "exec").
+    // 4. ReturnIfAbrupt(exec).
+    ejsval exec = Get(R, _ejs_atom_exec);
+
+    // 5. If IsCallable(exec) is true, then
+    if (EJSVAL_IS_FUNCTION(exec)) {
+        // a. Let result be Call(exec, R, «S»).
+        // b. ReturnIfAbrupt(result).
+        ejsval result = _ejs_invoke_closure(exec, R, 1, &S);
+
+        // c. If Type(result) is neither Object or Null, then throw a TypeError exception.
+        if (!EJSVAL_IS_OBJECT(result) && !EJSVAL_IS_NULL(result))
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'exec' returned non-object, non-null value");
+
+        // d. Return(result).
+        return result;
+    }
+
+    // 6. If R does not have a [[RegExpMatcher]] internal slot, then throw a TypeError exception.
+    // 7. If the value of R’s [[RegExpMatcher]] internal slot is undefined, then throw a TypeError exception.
+    if (!EJSVAL_IS_REGEXP(R))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' is not a RegExp");
+
+    // 8. Return RegExpBuiltinExec(R, S).
+    return RegExpBuiltinExec(R, S);
+}
+
+// ES6 21.2.5.2
+// RegExp.prototype.exec ( string )
+ejsval
+_ejs_RegExp_prototype_exec (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval string = _ejs_undefined;
+    if (argc > 0) string = args[0];
+
+    // 1. Let R be the this value.
+    ejsval R = _this;
+
+    // 2. If Type(R) is not Object, then throw a TypeError exception.
+    if (!EJSVAL_IS_OBJECT(R))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "non-object 'this' in RegExp.prototype.exec");
+
+    // 3. If R does not have a [[RegExpMatcher]] internal slot, then throw a TypeError exception.
+    // 4. If the value of R’s [[RegExpMatcher]] internal slot is undefined, then throw a TypeError exception.
+    if (!EJSVAL_IS_OBJECT(R))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "non-RegExp 'this' in RegExp.prototype.exec");
+
+    // 5. Let S be ToString(string)
+    // 6. ReturnIfAbrupt(S).
+    ejsval S = ToString(string);
+
+    // 7. Return RegExpBuiltinExec(R, S).
+    return RegExpBuiltinExec(R, S);
 }
 
 // ECMA262: 15.10.6.3
@@ -307,6 +371,95 @@ _ejs_RegExp_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return OBJECT_TO_EJSVAL((EJSObject*)re);
 }
 
+// ES6 21.2.5.6
+// RegExp.prototype [ @@match ] ( string )
+static ejsval
+_ejs_RegExp_prototype_match (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval string = _ejs_undefined;
+    if (argc > 0) string = args[0];
+
+    // 1. Let rx be the this value.
+    ejsval rx = _this;
+
+    // 2. If Type(rx) is not Object, then throw a TypeError exception.
+    if (!EJSVAL_IS_OBJECT(rx))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Regexp[Symbol.match] called with non-object 'this'");
+        
+    // 3. Let S be ToString(string)
+    // 4. ReturnIfAbrupt(S).
+    ejsval S = ToString(string);
+
+    // 5. Let global be ToBoolean(Get(rx, "global")).
+    // 6. ReturnIfAbrupt(global).
+    ejsval global = ToBoolean(Get(rx, _ejs_atom_global));
+
+    // 7. If global is not true, then
+    if (!EJSVAL_TO_BOOLEAN(global)) {
+        // a. Return the result of RegExpExec(rx, S).
+        return RegExpExec(rx, S);
+    }
+    // 8. Else global is true,
+    else {
+        // a. Let putStatus be Put(rx, "lastIndex", 0, true).
+        // b. ReturnIfAbrupt(putStatus).
+        Put(rx, _ejs_atom_lastIndex, NUMBER_TO_EJSVAL(0), EJS_TRUE);
+
+        // c. Let A be ArrayCreate(0).
+        ejsval A = _ejs_array_new(0, EJS_FALSE);
+
+        // d. Let previousLastIndex be 0.
+        int previousLastIndex = 0;
+
+        // e. Let n be 0.
+        int n = 0;
+
+        // f. Repeat,
+        while (EJS_TRUE) {
+            //   i. Let result be RegExpExec(rx, S).
+            //  ii. ReturnIfAbrupt(result).
+            ejsval result = RegExpExec(rx, S);
+            
+            // iii. If result is null, then
+            if (EJSVAL_IS_NULL(result)) {
+                // 1. If n=0, then return null.
+                if (n == 0)
+                    return _ejs_null;
+                else
+                // 2. Else, return A.
+                    return A;
+            }
+            // iv. Else result is not null,
+            else {
+                // 1. Let thisIndex be ToInteger(Get(rx, "lastIndex")).
+                // 2. ReturnIfAbrupt(thisIndex).
+                int thisIndex = ToInteger(Get(rx, _ejs_atom_lastIndex));
+
+                // 3. If thisIndex = previousLastIndex then
+                if (thisIndex == previousLastIndex) {
+                    // a. Let putStatus be Put(rx, "lastIndex", thisIndex+1, true).
+                    // b. ReturnIfAbrupt(putStatus).
+                    Put(rx, _ejs_atom_lastIndex, NUMBER_TO_EJSVAL(thisIndex+1), EJS_TRUE);
+                    // c. Set previousLastIndex to thisIndex+1.
+                    previousLastIndex = thisIndex + 1;
+                }
+                // 4. Else,
+                else {
+                    // a. Set previousLastIndex to thisIndex.
+                    previousLastIndex = thisIndex;
+                }
+                // 5. Let matchStr be Get(result, "0").
+                ejsval matchStr = Get(result, _ejs_atom_0);
+
+                // 6. Let status be CreateDataProperty(A, ToString(n), matchStr).
+                // 7. Assert: status is true.
+                _ejs_object_define_value_property (A, ToString(NUMBER_TO_EJSVAL(n)), matchStr, EJS_PROP_FLAGS_ENUMERABLE | EJS_PROP_FLAGS_CONFIGURABLE | EJS_PROP_FLAGS_WRITABLE);
+                // 8. Increment n.
+                n++;
+            }
+        }
+    }
+}
 
 void
 _ejs_regexp_init(ejsval global)
@@ -347,6 +500,7 @@ _ejs_regexp_init(ejsval global)
 #undef PROTO_METHOD
 
     EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp, create, _ejs_RegExp_create, EJS_PROP_NOT_ENUMERABLE);
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp_prototype, match, _ejs_RegExp_prototype_match, EJS_PROP_NOT_ENUMERABLE);
     EJS_INSTALL_SYMBOL_GETTER(_ejs_RegExp, species, _ejs_RegExp_get_species);
 }
 

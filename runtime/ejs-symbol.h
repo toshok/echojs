@@ -35,6 +35,8 @@ extern ejsval _ejs_Symbol_toPrimitive;
 extern ejsval _ejs_Symbol_toStringTag;
 extern ejsval _ejs_Symbol_unscopables;
 
+extern ejsval _ejs_Symbol_match;
+
 void _ejs_symbol_init(ejsval global);
 
 ejsval _ejs_symbol_new (ejsval description);

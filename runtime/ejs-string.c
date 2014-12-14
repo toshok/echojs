@@ -549,10 +549,34 @@ _ejs_String_prototype_localeCompare (ejsval env, ejsval _this, uint32_t argc, ej
 static ejsval
 _ejs_String_prototype_match (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    ejsval regexp;
+    ejsval regexp = _ejs_undefined;
+    if (argc > 0) regexp = args[0];
 
-    if (argc > 0)
-        regexp = args[0];
+#if !OLD_SPEC
+    // 1. Let O be RequireObjectCoercible(this value).
+    ejsval O = _this;
+
+    // 2. Let S be ToString(O).
+    // 3. ReturnIfAbrupt(S).
+    ejsval S = ToString(O);
+
+    // 4. Let matcher be GetMethod(O, @@match).
+    // 5. ReturnIfAbrupt(matcher).
+    ejsval matcher = GetMethod(O, _ejs_Symbol_match);
+
+    ejsval rx;
+
+    // 6. If matcher is not undefined, then let rx be regexp.
+    if (!EJSVAL_IS_UNDEFINED(matcher))
+        rx = regexp;
+    else
+        // 7. Else, let rx be the result of the abstract operation RegExpCreate (21.2.3.3) with arguments regexp and undefined.
+        // 8. ReturnIfAbrupt(rx).
+        rx = _ejs_regexp_new(regexp, _ejs_undefined);
+    
+    // 9. Return Call(matcher, rx, S).
+    return _ejs_invoke_closure (matcher, rx, 1, &S);
+#else
 
     /* 1. Call CheckObjectCoercible passing the this value as its argument. */
     /* 2. Let S be the result of calling ToString, giving it the this value as its argument. */
@@ -649,6 +673,7 @@ _ejs_String_prototype_match (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
         /*    h. Return A. */
         return A;
     }
+#endif
 }
 
 static ejsval
@@ -1442,9 +1467,10 @@ _ejs_String_prototype_repeat(ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     return T;
 }
 
-// ECMA262 21.1.3.6 String.prototype.contains ( searchString [ , position ] ) 
+// ES6 21.1.3.7
+// String.prototype.contains ( searchString [ , position ] ) 
 static ejsval
-_ejs_String_prototype_contains(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+_ejs_String_prototype_includes(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval searchString = _ejs_undefined;
     ejsval position = _ejs_undefined;
@@ -1669,7 +1695,7 @@ _ejs_string_init(ejsval global)
     PROTO_METHOD(charCodeAt);
     PROTO_METHOD(codePointAt);
     PROTO_METHOD(concat);
-    PROTO_METHOD_LEN(contains, 1);
+    PROTO_METHOD_LEN(includes, 1);
     PROTO_METHOD(endsWith);
     PROTO_METHOD(indexOf);
     PROTO_METHOD(lastIndexOf);
