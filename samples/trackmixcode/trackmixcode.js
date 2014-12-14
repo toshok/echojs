@@ -60,7 +60,7 @@ let AppDelegate = NSObject.extendClass("AppDelegate", () => ({
     },
 
     shouldTerminateAfterLastWindowClosed: function () {
-        return false;
+        return true;
     },
 
     window: outlet(NSWindow)
