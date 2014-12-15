@@ -470,7 +470,9 @@ SameValueZero(ejsval x, ejsval y)
     // 2. ReturnIfAbrupt(y).
 
     // 3. If Type(x) is different from Type(y), return false.
-    if (EJSVAL_TO_TAG(x) != EJSVAL_TO_TAG(y)) return EJS_FALSE;
+    if ((EJSVAL_IS_NUMBER(x) != EJSVAL_IS_NUMBER(y)) &&
+        (EJSVAL_TO_TAG(x) != EJSVAL_TO_TAG(y)))
+        return EJS_FALSE;
 
     // 4. If Type(x) is Undefined, return true.
     if (EJSVAL_IS_UNDEFINED(x)) return EJS_TRUE;
@@ -485,7 +487,7 @@ SameValueZero(ejsval x, ejsval y)
         //    b. If x is +0 and y is -0, return true.
         if (EJSVAL_TO_NUMBER(x) == 0.0 && EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(y))) return EJS_TRUE;
         //    c. If x is -0 and y is +0, return true.
-        if (EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(x)) == 0.0 && EJSVAL_TO_NUMBER(y) == 0) return EJS_TRUE;
+        if (EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(x)) && EJSVAL_TO_NUMBER(y) == 0) return EJS_TRUE;
         //    d. If x is the same Number value as y, return true.
         if (EJSVAL_TO_NUMBER(x) == EJSVAL_TO_NUMBER(y)) return EJS_TRUE;
         //    e. Return false.
