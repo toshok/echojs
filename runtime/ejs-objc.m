@@ -1019,7 +1019,7 @@ coffeekit_method_tramp (id obj, SEL sel, ...)
             return [rv isObject] ? get_objc_id([rv objectValue]) : NULL;
         }
         case _C_CHR: {
-            return [rv isBool] ? (void*)(NSInteger)[rv boolValue] : (void*)(NSInteger)0;
+            return [rv isBool] ? (void*)(NSInteger)[rv boolValue] : (void*)(NSInteger)[rv numberValue];
         }
         case _C_INT:
         case _C_LNG:
