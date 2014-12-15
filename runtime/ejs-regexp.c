@@ -616,6 +616,22 @@ _ejs_RegExp_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *
     //     of S (inclusive). 
 }
 
+// ES6 21.2.5.11
+// RegExp.prototype [ @@split ] ( string, limit )
+static ejsval
+_ejs_RegExp_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    EJS_NOT_IMPLEMENTED();
+}
+
+// ES6 21.2.5.9
+// RegExp.prototype [ @@search ] ( string )
+static ejsval
+_ejs_RegExp_prototype_search (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    EJS_NOT_IMPLEMENTED();
+}
+
 void
 _ejs_regexp_init(ejsval global)
 {
@@ -658,6 +674,8 @@ _ejs_regexp_init(ejsval global)
     EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp, create, _ejs_RegExp_create, EJS_PROP_NOT_ENUMERABLE);
     EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp_prototype, match, _ejs_RegExp_prototype_match, EJS_PROP_NOT_ENUMERABLE);
     EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp_prototype, replace, _ejs_RegExp_prototype_replace, EJS_PROP_NOT_ENUMERABLE);
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp_prototype, split, _ejs_RegExp_prototype_split, EJS_PROP_NOT_ENUMERABLE);
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp_prototype, search, _ejs_RegExp_prototype_search, EJS_PROP_NOT_ENUMERABLE);
     EJS_INSTALL_SYMBOL_GETTER(_ejs_RegExp, species, _ejs_RegExp_get_species);
 }
 

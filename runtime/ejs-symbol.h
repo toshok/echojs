@@ -37,6 +37,8 @@ extern ejsval _ejs_Symbol_unscopables;
 
 extern ejsval _ejs_Symbol_match;
 extern ejsval _ejs_Symbol_replace;
+extern ejsval _ejs_Symbol_split;
+extern ejsval _ejs_Symbol_search;
 
 void _ejs_symbol_init(ejsval global);
 

@@ -130,6 +130,8 @@ ejsval _ejs_Symbol_unscopables EJSVAL_ALIGNMENT;
 
 ejsval _ejs_Symbol_match EJSVAL_ALIGNMENT;
 ejsval _ejs_Symbol_replace EJSVAL_ALIGNMENT;
+ejsval _ejs_Symbol_split EJSVAL_ALIGNMENT;
+ejsval _ejs_Symbol_search EJSVAL_ALIGNMENT;
 
 void
 _ejs_Symbol_create_impl(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -163,6 +165,8 @@ _ejs_symbol_init(ejsval global)
     WELL_KNOWN_SYMBOL(unscopables);
     WELL_KNOWN_SYMBOL(match);
     WELL_KNOWN_SYMBOL(replace);
+    WELL_KNOWN_SYMBOL(split);
+    WELL_KNOWN_SYMBOL(search);
 
     _ejs_object_define_value_property (_ejs_Symbol_prototype, _ejs_Symbol_toStringTag, _ejs_atom_Symbol, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
 

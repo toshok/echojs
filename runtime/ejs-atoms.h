@@ -393,6 +393,8 @@ EJS_ATOM2(Symbol.toStringTag,Symbol_toStringTag)
 EJS_ATOM2(Symbol.unscopables,Symbol_unscopables)
 EJS_ATOM2(Symbol.match,Symbol_match)
 EJS_ATOM2(Symbol.replace,Symbol_replace)
+EJS_ATOM2(Symbol.split,Symbol_split)
+EJS_ATOM2(Symbol.search,Symbol_search)
 // used for the inverted weak collection reps
 EJS_ATOM(WeakMapData)
 EJS_ATOM(WeakSetData)
