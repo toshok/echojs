@@ -355,9 +355,138 @@ _ejs_String_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval 
     return str->primStr;
 }
 
+// ES6 21.1.3.14.1
+static ejsval
+GetReplaceSubstitution(ejsval matched, ejsval string, int position, ejsval captures, ejsval replacement)
+{
+    // 1. Assert: Type(matched) is String.
+    EJS_ASSERT(EJSVAL_IS_STRING_TYPE(matched));
+
+    // 2. Let matchLength be the number of code units in matched.
+    int matchLength = EJSVAL_TO_STRLEN(matched);
+
+    // 3. Assert: Type(string) is String.
+    EJS_ASSERT(EJSVAL_IS_STRING_TYPE(string));
+
+    // 4. Let stringLength be the number of code units in string.
+    int stringLength = EJSVAL_TO_STRLEN(string);
+
+    // 5. Assert: position is a nonnegative integer.
+    // 6. Assert: position ≤ stringLength.
+    EJS_ASSERT(position <= stringLength);
+
+    // 7. Assert: captures is a possibly empty List of Strings.
+    EJS_ASSERT(EJSVAL_IS_ARRAY(captures));
+
+    // 8. Assert:Type( replacement) is String
+    EJS_ASSERT(EJSVAL_IS_STRING_TYPE(replacement));
+
+    // 9. Let tailPos be position + matchLength.
+    int tailPos = position + matchLength;
+
+    // 10. Let m be the number of elements in captures.
+    int m = EJS_ARRAY_LEN(captures);
+
+    // 11. Let result be a String value derived from replacement by copying code unit elements from
+    //     replacement to result while performing replacements as specified in Table 42. These $ replacements
+    //     are done left-to-right, and, once such a replacement is performed, the new replacement text is not
+    //     subject to further replacements.
+
+    // XXX more here
+
+    ejsval result = replacement;
+
+    // 12. Return result.
+    return result;
+}
+
+// ES6 21.1.3.14
+// String.prototype.replace (searchValue, replaceValue )
 static ejsval
 _ejs_String_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
+    ejsval searchValue = _ejs_undefined;
+    if (argc > 0) searchValue = args[0];
+
+    ejsval replaceValue = _ejs_undefined;
+    if (argc > 1) replaceValue = args[1];
+#if !OLD_SPEC
+    // 1. Let O be RequireObjectCoercible(this value).
+    ejsval O = _this;
+
+    // 2. Let string be ToString(O).
+    // 3. ReturnIfAbrupt(string).
+    ejsval string = ToString(O);
+    
+    // 4. Let replacer be GetMethod(O, @@replace).
+    // 5. ReturnIfAbrupt(replacer).
+    ejsval replacer = GetMethod(O, _ejs_Symbol_replace);
+
+    // 6. If replacer is not undefined, then
+    if (!EJSVAL_IS_UNDEFINED(replacer)) {
+        //    a. Return Call(replacer, searchValue, «string, replaceValue»).
+        ejsval call_args[2];
+        call_args[0] = string;
+        call_args[1] = replaceValue;
+        return _ejs_invoke_closure(replacer, searchValue, 2, call_args);
+    }
+    // 7. Let searchString be ToString(searchValue).
+    // 8. ReturnIfAbrupt(searchString).
+    ejsval searchString = ToString(searchValue);
+
+    // 9. Let functionalReplace be IsCallable(replaceValue).
+    EJSBool functionalReplace = EJSVAL_IS_FUNCTION(replaceValue);
+
+    // 10. If functionReplace is false, then
+    if (!functionalReplace) {
+        // a. Let replaceValue be ToString(replaceValue).
+        // b. ReturnIfAbrupt(replaceValue).
+        replaceValue = ToString(replaceValue);
+    }
+    // 11. Search string for the first occurrence of searchString and let pos be the index position within string
+    //     of the first code unit of the matched substring and let matched be searchString. If no occurrences of
+    //     searchString were found, return string.
+    ejsval matched = _ejs_undefined;
+    int pos = 0;
+
+    // XXX more here.
+
+    ejsval replStr;
+
+    // 12. If functionalReplace is true, then
+    if (functionalReplace) {
+        // a. Let replValue be Call(replaceValue, undefined,«matched, pos, and string»).
+        ejsval call_args[3];
+        call_args[0] = matched;
+        call_args[1] = NUMBER_TO_EJSVAL(pos);
+        call_args[2] = string;
+        ejsval replValue = _ejs_invoke_closure(replaceValue, _ejs_undefined, 3, call_args);
+
+        // b. Let replStr be ToString(replValue).
+        // c. ReturnIfAbrupt(replStr).
+        replStr = ToString(replValue);
+    }
+    // 13. Else,
+    else {
+        // a. Let captures be an empty List.
+        ejsval captures = _ejs_array_new(0, EJS_FALSE);
+        // b. Let replStr be GetReplaceSubstitution(matched, string, pos, captures, replaceValue).
+        replStr = GetReplaceSubstitution(matched, string, pos, captures, replaceValue);
+    }
+    // 14. Let tailPos be pos + the number of code units in matched.
+
+    // XXX more here
+
+    // 15. Let newString be the String formed by concatenating the first pos code units of string, replStr, and
+    //     the trailing substring of string starting at index tailPos. If pos is 0, the first element of the
+    //     concatenation will be the empty String.
+    ejsval newString = _ejs_undefined;
+
+    // XXX more here
+
+    // 16. Return newString.
+    return newString;
+#else
     if (argc == 0)
         return _this;
 
@@ -397,6 +526,7 @@ _ejs_String_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *
             return rv;
         }
     }
+#endif
 }
 
 jschar

@@ -340,6 +340,64 @@ _ejs_RegExp_prototype_get_source (ejsval env, ejsval _this, uint32_t argc, ejsva
     return re->pattern;
 }
 
+// ES6 21.2.5.3
+// get RegExp.prototype.flags ( )
+static ejsval
+_ejs_RegExp_prototype_get_flags (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    // 1. Let R be the this value.
+    ejsval R = _this;
+
+    // 2. If Type(R) is not Object, then throw a TypeError exception.
+    if (!EJSVAL_IS_OBJECT(R))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "get Regexp.prototype.flags called with non-object 'this'");
+    
+    // 3. Let result be the empty String.
+    char result_buf[6];
+    memset (result_buf, 0, sizeof(result_buf));
+    char* p = result_buf;
+
+
+    // 4. Let global be ToBoolean(Get(R, "global")).
+    // 5. ReturnIfAbrupt(global).
+    EJSBool global = ToEJSBool(Get(R, _ejs_atom_global));
+
+
+    // 6. If global is true, then append "g" as the last code unit of result.
+    if (global) *p++ = 'g';
+
+    // 7. Let ignoreCase be ToBoolean(Get(R, "ignoreCase")).
+    // 8. ReturnIfAbrupt(ignoreCase).
+    EJSBool ignoreCase = ToEJSBool(Get(R, _ejs_atom_ignoreCase));
+
+    // 9. If ignoreCase is true, then append "i" as the last code unit of result.
+    if (ignoreCase) *p++ = 'i';
+
+    // 10. Let multiline be ToBoolean(Get(R, "multiline")).
+    // 11. ReturnIfAbrupt(multiline).
+    EJSBool multiline = ToEJSBool(Get(R, _ejs_atom_multiline));
+
+    // 12. If multiline is true, then append "m" as the last code unit of result.
+    if (multiline) *p++ = 'm';
+
+    // 13. Let sticky be ToBoolean(Get(R, "sticky")).
+    // 14. ReturnIfAbrupt(sticky).
+    EJSBool sticky = ToEJSBool(Get(R, _ejs_atom_sticky));
+
+    // 15. If sticky is true, then append "y" as the last code unit of result.
+    if (sticky) *p++ = 'y';
+
+    // 16. Let unicode be ToBoolean(Get(R, "unicode")).
+    // 17. ReturnIfAbrupt(unicode).
+    EJSBool unicode = ToEJSBool(Get(R, _ejs_atom_unicode));
+
+    // 18. If unicode is true, then append "u" as the last code unit of result.
+    if (unicode) *p++ = 'u';
+
+    // 19. Return result.
+    return _ejs_string_new_utf8(result_buf);
+}
+
 static ejsval
 _ejs_RegExp_get_species (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
@@ -461,6 +519,103 @@ _ejs_RegExp_prototype_match (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     }
 }
 
+// ES6 21.2.5.8
+//  RegExp.prototype [ @@replace ] ( string, replaceValue )
+static ejsval
+_ejs_RegExp_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval string = _ejs_undefined;
+    if (argc > 0) string = args[0];
+
+    ejsval replaceValue = _ejs_undefined;
+    if (argc > 1) replaceValue = args[1];
+
+    // 1. Let rx be the this value.
+    ejsval rx = _this;
+
+    // 2. If Type(rx) is not Object, then throw a TypeError exception.
+    if (!EJSVAL_IS_OBJECT(rx))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Regexp.prototype[Symbol.replace] called with non-object 'this'");
+
+    // 3. Let S be ToString(string).
+    // 4. ReturnIfAbrupt(S).
+    ejsval S = ToString(string);
+
+    EJS_NOT_IMPLEMENTED();
+
+    // 5. Let lengthS be the number of code unit elements in S.
+    // 6. Let functionalReplace be IsCallable(replaceValue).
+    // 7. If functionReplace is false, then
+    //    a. Let replaceValue be ToString(replaceValue).
+    //    b. ReturnIfAbrupt(replaceValue).
+    // 8. Let global be ToBoolean(Get(rx, "global")).
+    // 9. ReturnIfAbrupt(global).
+    // 10. If global is true, then
+    //     a. Let putStatus be Put(rx, "lastIndex", 0, true).
+    //     b. ReturnIfAbrupt(putStatus).
+    // 11. Let previousLastIndex be 0.
+    // 12. Let results be a new empty List.
+    // 13. Let done be false.
+    // 14. Repeat, while done is false
+    //     a. Let result be RegExpExec(rx, S).
+    //     b. ReturnIfAbrupt(result).
+    //     c. If result is null, then set done to true.
+    //     d. Else result is not null,
+    //        i. If global is false, then set done to true.
+    //        ii. Else,
+    //            1. Let thisIndex be ToInteger(Get(rx, "lastIndex")).
+    //            2. ReturnIfAbrupt(thisIndex).
+    //            3. If thisIndex = previousLastIndex then
+    //               a. Let putStatus be Put(rx, "lastIndex", thisIndex+1, true).
+    //               b. ReturnIfAbrupt(putStatus).
+    //               c. Set previousLastIndex to thisIndex+1.
+    //            4. Else,
+    //               a. Set previousLastIndex to thisIndex.
+    //     e. If result is not null, then append result to the end of results.
+    // 15. Let accumulatedResult be the empty String value.
+    // 16. Let nextSourcePosition be 0.
+    // 17. Repeat, for each result in results,
+    //     a. Let nCaptures be ToLength(Get(result, "length")).
+    //     b. ReturnIfAbrupt(nCaptures).
+    //     c. Let nCaptures be max(nCaptures − 1, 0).
+    //     d. Let matched be ToString(Get(result, "0")).
+    //     e. ReturnIfAbrupt(matched).
+    //     f. Let matchLength be the number of code units in matched.
+    //     g. Let position be ToInteger(Get(result, "index")).
+    //     h. ReturnIfAbrupt(position).
+    //     i. Let position be max(min(position, lengthS), 0).
+    //     j. Let n be 1.
+    //     k. Let captures be an empty List.
+    //     l. Repeat while n ≤ nCaptures
+    //        i. Let capN be Get(result, ToString(n)).
+    //        ii. If Type(capN) is not Undefined, then let capN be ToString(capN).
+    //        iii. ReturnIfAbrupt(capN).
+    //        iv. Append capN as the last element of captures.
+    //        v. Let n be n+1
+    //     m. If functionalReplace is true, then
+    //        i. Let replacerArgs be the List (matched).
+    //        ii. Append in list order the elements of captures to the end of the List replacerArgs.
+    //        iii. Append position and S as the last two elements of replacerArgs.
+    //        iv. Let replValue be Call(replaceValue, undefined, replacerArgs).
+    //        v. Let replacement be ToString(replValue).
+    //     n. Else,
+    //        i. Let replacement be GetReplaceSubstitution(matched, S, position, captures, replaceValue).
+    //     o. ReturnIfAbrupt(replacement).
+    //     p. If position ≥ nextSourcePosition, then
+    //        i. NOTE position should not normally move backwards. If it does, it is in indication of a ill-behaving
+    //           RegExp subclass or use of an access triggered side-effect to change the global flag or other
+    //           characteristics of rx. In such cases, the corresponding substitution is ignored.
+    //        ii. Let accumulatedResult be the String formed by concatenating the code units of the current
+    //           value of accumulatedResult with the substring of S consisting of the code units from
+    //           nextSourcePosition (inclusive) up to position (exclusive) and with the code units of
+    //           replacement.
+    //        iii. Let nextSourcePosition be position + matchLength.
+    // 18. If nextSourcePosition ≥ lengthS, then return accumulatedResult.
+    // 19. Return the String formed by concatenating the code units of accumulatedResult with the substring
+    //     of S consisting of the code units from nextSourcePosition (inclusive) up through the final code unit
+    //     of S (inclusive). 
+}
+
 void
 _ejs_regexp_init(ejsval global)
 {
@@ -495,12 +650,14 @@ _ejs_regexp_init(ejsval global)
     PROTO_GETTER(source);
     PROTO_GETTER(sticky);
     PROTO_GETTER(unicode);
+    PROTO_GETTER(flags);
 
 #undef OBJ_METHOD
 #undef PROTO_METHOD
 
     EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp, create, _ejs_RegExp_create, EJS_PROP_NOT_ENUMERABLE);
     EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp_prototype, match, _ejs_RegExp_prototype_match, EJS_PROP_NOT_ENUMERABLE);
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp_prototype, replace, _ejs_RegExp_prototype_replace, EJS_PROP_NOT_ENUMERABLE);
     EJS_INSTALL_SYMBOL_GETTER(_ejs_RegExp, species, _ejs_RegExp_get_species);
 }
 

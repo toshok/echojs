@@ -294,6 +294,7 @@ EJS_ATOM(multiline)
 EJS_ATOM(ignoreCase)
 EJS_ATOM(sticky)
 EJS_ATOM(unicode)
+EJS_ATOM(flags)
 
 // Date functions
 //EJS_ATOM(toString)
@@ -391,6 +392,7 @@ EJS_ATOM2(Symbol.toPrimitive,Symbol_toPrimitive)
 EJS_ATOM2(Symbol.toStringTag,Symbol_toStringTag)
 EJS_ATOM2(Symbol.unscopables,Symbol_unscopables)
 EJS_ATOM2(Symbol.match,Symbol_match)
+EJS_ATOM2(Symbol.replace,Symbol_replace)
 // used for the inverted weak collection reps
 EJS_ATOM(WeakMapData)
 EJS_ATOM(WeakSetData)
