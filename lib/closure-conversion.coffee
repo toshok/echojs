@@ -224,7 +224,7 @@ DesugarClasses = class DesugarClasses extends TransformPass
                 if not ctor?
                         ctor = @create_default_constructor n
                         @method_stack.push ctor
-                        class_element.value = @visit ctor.value
+                        ctor.value = @visit ctor.value
                         @method_stack.pop()
 
                         
