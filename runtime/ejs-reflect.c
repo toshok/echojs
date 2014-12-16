@@ -184,34 +184,30 @@ _ejs_Reflect_isExtensible (ejsval env, ejsval _this, uint32_t argc, ejsval *args
 static ejsval
 _ejs_Reflect_ownKeys (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-#if notyet
     ejsval target = _ejs_undefined;
     if (argc > 0) target = args[0];
 
     // 1. Let obj be ToObject(target). 
     // 2. ReturnIfAbrupt(obj). 
     ejsval obj = ToObject(target);
-#endif
 
     // 3. Return the result of calling the [[OwnPropertyKeys]] internal method of obj.
-    EJS_NOT_IMPLEMENTED();
+    return OP(EJSVAL_TO_OBJECT(obj),OwnPropertyKeys)(obj);
 }
 
 // ECMA262: 26.1.12 Reflect.preventExtensions ( target ) 
 static ejsval
 _ejs_Reflect_preventExtensions (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-#if notyet
     ejsval target = _ejs_undefined;
     if (argc > 0) target = args[0];
 
     // 1. Let obj be ToObject(target). 
     // 2. ReturnIfAbrupt(obj). 
     ejsval obj = ToObject(target);
-#endif
 
     // 3. Return the result of calling the [[PreventExtensions]] internal method of obj.
-    EJS_NOT_IMPLEMENTED();
+    return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(obj),PreventExtensions)(obj));
 }
 
 // ECMA262: 26.1.13 Reflect.set ( target, propertyKey, V [ , receiver ] ) 
