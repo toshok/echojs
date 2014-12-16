@@ -218,7 +218,7 @@ exports.createAtomsInterface = (module) ->
                 "charAt": { get: -> getGlobal "_ejs_atom_charAt" }
                 "charCodeAt": { get: -> getGlobal "_ejs_atom_charCodeAt" }
                 "codePointAt": { get: -> getGlobal "_ejs_atom_codePointAt" }
-                "contains": { get: -> getGlobal "_ejs_atom_contains" }
+                "includes": { get: -> getGlobal "_ejs_atom_includes" }
                 "endsWith": { get: -> getGlobal "_ejs_atom_endsWith" }
                 "lastIndexOf": { get: -> getGlobal "_ejs_atom_lastIndexOf" }
                 "localeCompare": { get: -> getGlobal "_ejs_atom_localeCompare" }
