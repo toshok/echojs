@@ -23,6 +23,7 @@
 // length below which we eschew creating a dependent string and just create a flat string containing the slice
 #define FLAT_DEP_THRESHOLD 32
 
+#define OLD_SPEC 1
 
 int32_t
 ucs2_strcmp (const jschar *s1, const jschar *s2)
@@ -491,8 +492,6 @@ _ejs_String_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *
         return _this;
 
     ejsval thisStr = ToString(_this);
-    ejsval searchValue = args[0];
-    ejsval replaceValue = argc > 1 ? args[1] : _ejs_undefined;
 
     if (EJSVAL_IS_REGEXP(searchValue)) {
         return _ejs_regexp_replace (thisStr, searchValue, replaceValue);
