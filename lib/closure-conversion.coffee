@@ -140,6 +140,9 @@ class TransformPass extends TreeVisitor
 # 
 # 
 DesugarClasses = class DesugarClasses extends TransformPass
+        classgen = startGenerator()
+        freshClassId = () -> b.identifier("%anonClass_#{classgen()}")
+        
         constructor: ->
                 super
                 @class_stack = new Stack
@@ -175,10 +178,14 @@ DesugarClasses = class DesugarClasses extends TransformPass
                 n
 
         visitClassDeclaration: (n) ->
+                n.id = freshClassId() if not n.id?
+                n.superClass = @visit n.superClass
                 iife = @generateClassIIFE(n);
                 b.letDeclaration(n.id, b.callExpression(iife, if n.superClass? then [n.superClass] else []))
                 
         visitClassExpression: (n) ->
+                n.id = freshClassId() if not n.id?
+                n.superClass = @visit n.superClass
                 iife = @generateClassIIFE(n);
                 b.callExpression(iife, if n.superClass? then [n.superClass] else [])
 
