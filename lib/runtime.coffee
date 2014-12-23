@@ -163,7 +163,6 @@ exports.createAtomsInterface = (module) ->
                 "TypeError": { get: -> getGlobal "_ejs_atom_TypeError" }
                 "URIError": { get: -> getGlobal "_ejs_atom_URIError" }
                 "console": { get: -> getGlobal "_ejs_atom_console" }
-                "require": { get: -> getGlobal "_ejs_atom_require" }
                 "exports": { get: -> getGlobal "_ejs_atom_exports" }
                 "assign": { get: -> getGlobal "_ejs_atom_assign" }
                 "getPrototypeOf": { get: -> getGlobal "_ejs_atom_getPrototypeOf" }

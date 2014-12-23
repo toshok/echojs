@@ -96,7 +96,6 @@ EJS_ATOM(TypeError)
 EJS_ATOM(URIError)
 
 EJS_ATOM(console)
-EJS_ATOM(require)
 EJS_ATOM(exports)
 
 // our ejs-specific stuff

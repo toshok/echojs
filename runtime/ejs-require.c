@@ -116,29 +116,9 @@ _ejs_module_get (ejsval arg)
     return _ejs_null;
 }
 
-static ejsval
-_ejs_require_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    if (argc < 1) {
-        return _ejs_undefined;
-    }
-
-    ejsval arg = args[0];
-
-    if (!EJSVAL_IS_STRING(arg)) {
-        _ejs_log ("required called with non-string\n");
-        return _ejs_null;
-    }
-
-    return _ejs_module_get(arg);
-}
-
 void
 _ejs_require_init(ejsval global)
 {
-    _ejs_require = _ejs_function_new_native (_ejs_null, _ejs_atom_require, _ejs_require_impl);
-    _ejs_object_setprop (global, _ejs_atom_require, _ejs_require);
-  
     int i;
     for (i = 0; i < num_builtin_modules; i ++) {
         builtin_modules[i].cached_module_obj = _ejs_null;
