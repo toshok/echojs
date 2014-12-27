@@ -269,6 +269,23 @@ int64_t ToInteger(ejsval exp)
     return (int64_t)(sign * floor(abs(d)));
 }
 
+// ECMA262 7.1.15
+// ToLength ( argument )
+int64_t ToLength(ejsval exp)
+{
+    // 1. ReturnIfAbrupt(argument).
+    // 2. Let len be ToInteger(argument).
+    // 3. ReturnIfAbrupt(len).
+    int64_t len = ToInteger(exp);
+
+    // 4. If len <= +0, then return +0.
+    if (len <= 0)
+        return 0;
+
+    // 5. Return min(len, 2^53-1)
+    return MIN(len, ((int64_t)2<<53)-1);
+}
+
 uint32_t ToUint32(ejsval exp)
 {
     // XXX sorely lacking
@@ -370,7 +387,8 @@ OrdinaryToPrimitive(ejsval O, ToPrimitiveHint hint)
     _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "couldn't convert object to primitive");
 }
 
-// ECMA262: 7.1.1 ToPrimitive
+// ECMA262 7.1.1
+// ToPrimitive ( input [, PreferredType] )
 ejsval
 ToPrimitive(ejsval inputargument, ToPrimitiveHint PreferredType)
 {
@@ -393,15 +411,15 @@ ToPrimitive(ejsval inputargument, ToPrimitiveHint PreferredType)
 
     // 6. If exoticToPrim is not undefined, then 
     if (!EJSVAL_IS_UNDEFINED(exoticToPrim)) {
-        //    a. Let result be the result of calling the [[Call]] internal method of exoticToPrim, with input argument as thisArgument and a List containing( hint) as argumentsList. 
-        //    b. ReturnIfAbrupt(result). 
+        // a. Let result be the result of calling the [[Call]] internal method of exoticToPrim, with input argument as thisArgument and a List containing( hint) as argumentsList. 
+        // b. ReturnIfAbrupt(result). 
         ejsval result = _ejs_invoke_closure (exoticToPrim, inputargument, 1, &hint);
-        //    c. If result is an ECMAScript language value and Type(result) is not Object, then return result. 
+        // c. If Type(result) is not Object, then return result.
         if (!EJSVAL_IS_OBJECT(result))
             return result;
-        else
-            //    d. Else, throw a TypeError exception. 
-            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "@@toPrimitive returned an object");
+
+        // d. Throw a TypeError exception. 
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "@@toPrimitive returned an object");
     }
     // 7. If hint is "default" then, let hint be "number". 
     if (PreferredType == TO_PRIM_HINT_DEFAULT)
