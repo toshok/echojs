@@ -429,6 +429,8 @@ ToPrimitive(ejsval inputargument, ToPrimitiveHint PreferredType)
     return OrdinaryToPrimitive(inputargument, PreferredType);
 }
 
+// ECMA262 7.2.9
+// SameValue(x, y)
 EJSBool
 SameValue(ejsval x, ejsval y)
 {
@@ -446,21 +448,21 @@ SameValue(ejsval x, ejsval y)
 
     // 6. If Type(x) is Number, then
     if (EJSVAL_IS_NUMBER(x)) {
-        //    a. If x is NaN and y is NaN, return true.
+        // a. If x is NaN and y is NaN, return true.
         if (isnan(EJSVAL_TO_NUMBER(x)) && isnan(EJSVAL_TO_NUMBER(y))) return EJS_TRUE;
-        //    b. If x is +0 and y is -0, return false.
+        // b. If x is +0 and y is -0, return false.
         if (EJSVAL_TO_NUMBER(x) == 0.0 && EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(y))) return EJS_FALSE;
-        //    c. If x is -0 and y is +0, return false.
+        // c. If x is -0 and y is +0, return false.
         if (EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(x)) == 0.0 && EJSVAL_TO_NUMBER(y) == 0) return EJS_FALSE;
-        //    d. If x is the same Number value as y, return true.
+        // d. If x is the same Number value as y, return true.
         if (EJSVAL_TO_NUMBER(x) == EJSVAL_TO_NUMBER(y)) return EJS_TRUE;
-        //    e. Return false.
+        // e. Return false.
         return EJS_FALSE;
     }
     // 7. If Type(x) is String, then
     if (EJSVAL_IS_STRING(x)) {
-        //    a. If x and y are exactly the same sequence of code units (same length and same code units in corresponding positions) return true;
-        //       otherwise, return false.
+        // a. If x and y are exactly the same sequence of code units (same length and same code units in corresponding positions) return true;
+        //    otherwise, return false.
         if (EJSVAL_TO_STRLEN(x) != EJSVAL_TO_STRLEN(y)) return EJS_FALSE;
 
         // XXX there is doubtless a more efficient way to compare two ropes, but we convert but to flat strings for now.
@@ -468,18 +470,21 @@ SameValue(ejsval x, ejsval y)
     }
     // 8. If Type(x) is Boolean, then
     if (EJSVAL_IS_BOOLEAN(x)) {
-        //    a. If x and y are both true or both false, then return true; otherwise, return false.
+        // a. If x and y are both true or both false, then return true; otherwise, return false.
         return EJSVAL_TO_BOOLEAN(x) == EJSVAL_TO_BOOLEAN(y) ? EJS_TRUE : EJS_FALSE;
     }
     // 9. If Type(x) is Symbol, then
     if (EJSVAL_IS_SYMBOL(x)) {
-        //    a. If x and y are both the same Symbol value, then return true; otherwise, return false.
+        // a. If x and y are both the same Symbol value, then return true; otherwise, return false.
         EJS_NOT_IMPLEMENTED();
     }
     // 10. Return true if x and y are the same Object value. Otherwise, return false.
     return EJSVAL_EQ(x, y);
 }
 
+
+// ECMA262 7.2.10
+// SameValueZero(x, y)
 // same as SameValue, except in its treatment of +/- 0
 EJSBool
 SameValueZero(ejsval x, ejsval y)
@@ -944,7 +949,8 @@ _ejs_op_sub (ejsval lhs, ejsval rhs)
     return NUMBER_TO_EJSVAL(ToDouble(lhs) - ToDouble(rhs));
 }
 
-// ECMA262: 7.2.11 Strict Equality Comparison 
+// ECMA262 7.2.13
+// Strict Equality Comparison 
 ejsval
 _ejs_op_strict_eq (ejsval x, ejsval y)
 {
@@ -991,6 +997,9 @@ _ejs_op_strict_eq (ejsval x, ejsval y)
         return BOOLEAN_TO_EJSVAL (EJSVAL_TO_BOOLEAN(x) == EJSVAL_TO_BOOLEAN(y));
     }
     // 7. If x and y are the same Symbol value, return true.
+    if (EJSVAL_IS_SYMBOL(x)) {
+        EJS_NOT_IMPLEMENTED();
+    }
     // 8. If x and y are the same Object value, return true.
     // 9. Return false.
     return BOOLEAN_TO_EJSVAL (EJSVAL_EQ(x, y));
@@ -1002,38 +1011,42 @@ _ejs_op_strict_neq (ejsval lhs, ejsval rhs)
     return BOOLEAN_TO_EJSVAL (!EJSVAL_TO_BOOLEAN (_ejs_op_strict_eq (lhs, rhs)));
 }
 
-// ECMA262: 7.2.10 Abstract Equality Comparison 
+// ECMA262 7.2.12
+// Abstract Equality Comparison 
 ejsval
 _ejs_op_eq (ejsval x, ejsval y)
 {
-    // 1. If Type(x) is the same as Type(y), then
+    // 1. ReturnIfAbrupt(x).
+    // 2. ReturnIfAbrupt(y).
+    // 3. If Type(x) is the same as Type(y), then
     if (EJSVAL_TO_TAG(x) == EJSVAL_TO_TAG(y))
-        //    a. Return the result of performing Strict Equality Comparison x === y.
+        // a. Return the result of performing Strict Equality Comparison x === y.
         return _ejs_op_strict_eq(x, y);
-    // 2. If x is null and y is undefined, return true.
+    // 4. If x is null and y is undefined, return true.
     if (EJSVAL_IS_NULL(x) && EJSVAL_IS_UNDEFINED(y)) return _ejs_true;
 
-    // 3. If x is undefined and y is null, return true.
+    // 5. If x is undefined and y is null, return true.
     if (EJSVAL_IS_UNDEFINED(x) && EJSVAL_IS_NULL(y)) return _ejs_true;
 
-    // 4. If Type(x) is Number and Type(y) is String, return the result of the comparison x == ToNumber(y).
+    // 6. If Type(x) is Number and Type(y) is String, return the result of the comparison x == ToNumber(y).
     if (EJSVAL_IS_NUMBER(x) && EJSVAL_IS_STRING(y)) return _ejs_op_eq(x, ToNumber(y));
 
-    // 5. If Type(x) is String and Type(y) is Number, return the result of the comparison ToNumber(x) == y.
+    // 7. If Type(x) is String and Type(y) is Number, return the result of the comparison ToNumber(x) == y.
     if (EJSVAL_IS_STRING(x) && EJSVAL_IS_NUMBER(y)) return _ejs_op_eq(ToNumber(x), y);
 
-    // 6. If Type(x) is Boolean, return the result of the comparison ToNumber(x) == y.
+    // 8. If Type(x) is Boolean, return the result of the comparison ToNumber(x) == y.
     if (EJSVAL_IS_BOOLEAN(x)) return _ejs_op_eq(ToNumber(x), y);
 
-    // 7. If Type(y) is Boolean, return the result of the comparison x == ToNumber(y).
+    // 9. If Type(y) is Boolean, return the result of the comparison x == ToNumber(y).
     if (EJSVAL_IS_BOOLEAN(y)) return _ejs_op_eq(x, ToNumber(y));
 
-    // 8. If Type(x) is either String or Number and Type(y) is Object, return the result of the comparison x == ToPrimitive(y).
+    // 10. If Type(x) is either String or Number and Type(y) is Object, return the result of the comparison x == ToPrimitive(y).
     if ((EJSVAL_IS_STRING(x) || EJSVAL_IS_NUMBER(x)) && EJSVAL_IS_OBJECT(y)) return _ejs_op_eq(x, ToPrimitive(y, TO_PRIM_HINT_DEFAULT));
 
-    // 9. If Type(x) is Object and Type(y) is either String or Number, return the result of the comparison ToPrimitive(x) == y.
+    // 11. If Type(x) is Object and Type(y) is either String or Number, return the result of the comparison ToPrimitive(x) == y.
     if (EJSVAL_IS_OBJECT(x) && (EJSVAL_IS_STRING(y) || EJSVAL_IS_NUMBER(y))) return _ejs_op_eq(ToPrimitive(x, TO_PRIM_HINT_DEFAULT), y);
-    // 10. Return false.
+
+    // 12. Return false.
     return _ejs_false;
 }
 
