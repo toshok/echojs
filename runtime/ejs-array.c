@@ -544,7 +544,7 @@ _ejs_Array_prototype_concat (ejsval env, ejsval _this, uint32_t argc, ejsval* ar
             
             //       iii. Let len be ToLength(lenVal). 
             //       iv. ReturnIfAbrupt(len).
-            int64_t len = ToInteger(lenVal);
+            int64_t len = ToLength(lenVal);
 
             //       v. Repeat, while k < len
             while (k < len) {
@@ -1492,7 +1492,7 @@ _ejs_Array_prototype_fill (ejsval env, ejsval _this, uint32_t argc, ejsval *args
     /* 3. Let lenVal be the result of Get(O, "length"). */
     ejsval lenVal = _ejs_object_getprop (O, _ejs_atom_length);
     /* 4. Let len be ToLength(lenVal). */
-    uint32_t len = ToUint32(lenVal);
+    uint32_t len = ToLength(lenVal);
 
     /* 6. Let relativeStart be ToInteger(start). */
     int32_t relativeStart = ToInteger(start);
@@ -1555,7 +1555,7 @@ _ejs_Array_prototype_filter (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     /* 3. Let lenValue be the result of Get(O, "length"). */
     ejsval lenValue = OP(Oobj,Get)(O, _ejs_atom_length, O);
     /* 4. Let len be ToLength(lenValue). */
-    uint32_t len = ToUint32(lenValue);
+    uint32_t len = ToLength(lenValue);
 
     /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
     if (!EJSVAL_IS_CALLABLE(callbackfn))
@@ -1648,7 +1648,7 @@ _ejs_Array_prototype_find (ejsval env, ejsval _this, uint32_t argc, ejsval *args
     /* 3. Let lenValue be the result of Get(O, "length"). */
     ejsval lenValue = OP(Oobj,Get)(O, _ejs_atom_length, O);
     /* 4. Let len be ToLength(lenValue). */
-    uint32_t len = ToUint32(lenValue);
+    uint32_t len = ToLength(lenValue);
 
     /* 6. If IsCallable(predicate) is false, throw a TypeError exception. */
     if (!EJSVAL_IS_CALLABLE(predicate))
@@ -1715,7 +1715,7 @@ _ejs_Array_prototype_findIndex (ejsval env, ejsval _this, uint32_t argc, ejsval 
     /* 3. Let lenValue be the result of Get(O, "length"). */
     ejsval lenValue = OP(Oobj,Get)(O, _ejs_atom_length, O);
     /* 4. Let len be ToLength(lenValue). */
-    uint32_t len = ToUint32(lenValue);
+    uint32_t len = ToLength(lenValue);
 
     /* 6. If IsCallable(predicate) is false, throw a TypeError exception. */
     if (!EJSVAL_IS_CALLABLE(predicate))
@@ -1786,7 +1786,7 @@ _ejs_Array_prototype_copyWithin (ejsval env, ejsval _this, int argc, ejsval *arg
 
     /* 4. Let len be ToLength(lenVal). */
     /* 5. ReturnIfAbrupt(len). */
-    uint32_t len = ToInteger(lenVal);
+    uint32_t len = ToLength(lenVal);
 
     /* 6. Let relativeTarget be ToInteger(target). */
     /* 7. ReturnIfAbrupt(relativeTarget). */
@@ -2019,7 +2019,7 @@ _ejs_Array_from (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     /* 10. Let lenValue be the result of Get(items, "length"). */
     ejsval lenValue = _ejs_object_getprop(items, _ejs_atom_length);
     /* 11. Let len be ToLength(lenValue). */
-    uint32_t len = ToUint32(lenValue);
+    uint32_t len = ToLength(lenValue);
 
     ejsval A = _ejs_undefined;
     /* 13. If IsConstructor(C) is true, then */
@@ -2193,7 +2193,7 @@ _ejs_ArrayIterator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsv
     ejsval lenValue = Get (a, _ejs_atom_length);
 
     /* 9. Let len be ToLength(lenValue). */
-    int len = ToUint32 (lenValue);
+    int len = ToLength(lenValue);
 
     /* 11. If index ≥ len, then */
     if (index >= len) {
