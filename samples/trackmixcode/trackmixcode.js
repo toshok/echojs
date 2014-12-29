@@ -16,7 +16,7 @@ let AppDelegate = NSObject.extendClass("AppDelegate", () => ({
         let contentView = window.contentView;
 
         window.title = "Track Mix";
-        window.frame = { x: 335, y: 390, width: 300, height: 480 };
+        window.frame = { x: 335, y: 390, width: 300, height: 460 };
 
         let button = NSButton.newWithFrame({ x: 107, y: 17, width: 82, height: 32 });
         button.title = "Mute";
