@@ -529,9 +529,7 @@ _ejs_String_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *
     
     // 4. Let replacer be GetMethod(searchValue, @@replace).
     // 5. ReturnIfAbrupt(replacer).
-    ejsval replacer = _ejs_undefined;
-    if (EJSVAL_IS_OBJECT(searchValue))
-        replacer = GetMethod(searchValue, _ejs_Symbol_replace);
+    ejsval replacer = GetMethod(searchValue, _ejs_Symbol_replace);
 
     // 6. If replacer is not undefined, then
     if (!EJSVAL_IS_UNDEFINED(replacer)) {
@@ -761,9 +759,7 @@ _ejs_String_prototype_match (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
 
     // 4. Let matcher be GetMethod(O, @@match).
     // 5. ReturnIfAbrupt(matcher).
-    ejsval matcher = _ejs_undefined;
-    if (EJSVAL_IS_OBJECT(regexp))
-        matcher = GetMethod(regexp, _ejs_Symbol_match);
+    ejsval matcher = GetMethod(regexp, _ejs_Symbol_match);
 
     // 6. If matcher is not undefined, then
     if (!EJSVAL_IS_UNDEFINED(matcher))
@@ -793,9 +789,7 @@ _ejs_String_prototype_search (ejsval env, ejsval _this, uint32_t argc, ejsval *a
 
     // 4. Let searcher be GetMethod(regexp, @@search).
     // 5. ReturnIfAbrupt(searcher).
-    ejsval searcher = _ejs_undefined;
-    if (EJSVAL_IS_OBJECT(regexp))
-        searcher = GetMethod(regexp, _ejs_Symbol_search);
+    ejsval searcher = GetMethod(regexp, _ejs_Symbol_search);
 
     // 6. If searcher is not undefined , then,
     if (!EJSVAL_IS_UNDEFINED(searcher))
@@ -1031,9 +1025,7 @@ _ejs_String_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
 
     // 3. Let splitter be GetMethod(separator, @@split).
     // 4. ReturnIfAbrupt(splitter).
-    ejsval splitter = _ejs_undefined;
-    if (EJSVAL_IS_OBJECT(separator))
-        splitter = GetMethod(separator, _ejs_Symbol_split);
+    ejsval splitter = GetMethod(separator, _ejs_Symbol_split);
 
     // 5. If splitter is not undefined, then,
     if (!EJSVAL_IS_UNDEFINED(splitter)) {
