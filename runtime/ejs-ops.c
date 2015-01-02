@@ -998,7 +998,7 @@ _ejs_op_strict_eq (ejsval x, ejsval y)
     }
     // 7. If x and y are the same Symbol value, return true.
     if (EJSVAL_IS_SYMBOL(x)) {
-        EJS_NOT_IMPLEMENTED();
+        return BOOLEAN_TO_EJSVAL(EJSVAL_EQ(x,y)); // XXX is this sufficient?
     }
     // 8. If x and y are the same Object value, return true.
     // 9. Return false.
