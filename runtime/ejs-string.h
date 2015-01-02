@@ -117,6 +117,8 @@ char* _ejs_string_to_utf8(EJSPrimString* primstr);
 
 void _ejs_string_init_literal (const char *name, ejsval *val, EJSPrimString* str, jschar* ucs2_data, int32_t length);
 
+ejsval GetReplaceSubstitution(ejsval matched, ejsval string, int position, ejsval captures, ejsval replacement);
+
 #define EJSVAL_IS_STRINGITERATOR(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_StringIterator_specops))
 
 typedef struct {

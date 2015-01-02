@@ -294,6 +294,8 @@ EJS_ATOM(ignoreCase)
 EJS_ATOM(sticky)
 EJS_ATOM(unicode)
 EJS_ATOM(flags)
+EJS_ATOM(index)
+EJS_ATOM(input)
 
 // Date functions
 //EJS_ATOM(toString)
