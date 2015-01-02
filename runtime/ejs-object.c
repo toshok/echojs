@@ -29,12 +29,16 @@
 #include "ejs-error.h"
 #include "ejs-xhr.h"
 
-// ECMA262: 7.3.1 Get (O, P) 
+// ES6 7.3.1
+// Get (O, P)
 ejsval
 Get (ejsval O, ejsval P)
 {
     // 1. Assert: Type(O) is Object. 
+    EJS_ASSERT(EJSVAL_IS_OBJECT(O));
+
     // 2. Assert: IsPropertyKey(P) is true. 
+
     // 3. Return the result of calling the [[Get]] internal method of O passing P and O as the arguments
     return OP(EJSVAL_TO_OBJECT(O),Get)(O, P, O);
 }
@@ -44,8 +48,11 @@ ejsval
 Put (ejsval O, ejsval P, ejsval V, EJSBool Throw)
 {
     // 1. Assert: Type(O) is Object. 
+    EJS_ASSERT(EJSVAL_IS_OBJECT(O));
+
     // 2. Assert: IsPropertyKey(P) is true. 
     // 3. Assert: Type(Throw) is Boolean. 
+
     // 4. Let success be the result of calling the [[Set]] internal method of O passing P, V, and O as the arguments. 
     // 5. ReturnIfAbrupt(success). 
     EJSBool success = OP(EJSVAL_TO_OBJECT(O),Set)(O, P, V, O);
@@ -57,23 +64,46 @@ Put (ejsval O, ejsval P, ejsval V, EJSBool Throw)
     return BOOLEAN_TO_EJSVAL(success);
 }
 
-// ECMA262: 7.3.7 GetMethod (O, P) 
+// ES6 7.3.2
+// GetV (V, P)
+ejsval
+GetV (ejsval V, ejsval P)
+{
+    // 1. If V is undefined or null, then throw a TypeError exception.
+    if (EJSVAL_IS_UNDEFINED(V) || EJSVAL_IS_NULL(V))
+        return _ejs_undefined;
+
+    // 2. If Type(V) is Object, then return Get(V, P).
+    if (EJSVAL_IS_OBJECT(V))
+        return Get(V, P);
+
+    // 3. Let box be ToObject(V).
+    // 4. ReturnIfAbrupt(box).
+    ejsval box = ToObject(V);
+
+    // 5. Return the result of calling the [[Get]] internal method of box passing P and V as the arguments.
+    return OP(EJSVAL_TO_OBJECT(box),Get)(box, P, V);
+}
+
+// ES6 7.3.8
+// GetMethod (O, P) 
 ejsval
 GetMethod (ejsval O, ejsval P)
 {
-    // 1. Assert: Type(O) is Object. 
-    // 2. Assert: IsPropertyKey(P) is true. 
-    // 3. Let func be the result of calling the [[Get]] internal method of O passing P and O as the arguments.
-    // 4. ReturnIfAbrupt(func). 
-    ejsval func = OP(EJSVAL_TO_OBJECT(O),Get)(O, P, O);
-    // 5. If func is undefined, then return undefined. 
-    if (EJSVAL_IS_UNDEFINED(func))
-        return func;
-    // 6. If IsCallable(func) is false, then throw a TypeError exception. 
+    // 1. Assert: IsPropertyKey(P) is true.
+    // 2. Let func be GetV(O, P).
+    // 3. ReturnIfAbrupt(func).
+    ejsval func = GetV(O, P);
+
+    // 4. If func is either undefined or null, then return undefined.
+    if (EJSVAL_IS_UNDEFINED(func) || EJSVAL_IS_NULL(func))
+        return _ejs_undefined;
+
+    // 5. If IsCallable(func) is false, then throw a TypeError exception.
     if (!EJSVAL_IS_CALLABLE(func))
         _ejs_throw_nativeerror (EJS_TYPE_ERROR, _ejs_string_concat(_ejs_atom_error_not_callable, ToString(P)));
 
-    // 7. Return func. 
+    // 6. Return func.
     return func;
 }
 
