@@ -76,6 +76,16 @@ isnullableast = (n) ->
         hasType(n) if n?
         n
 
+isastarray = (n) ->
+        throw new Error("value must be an array") if not Array.isArray(n) 
+        isast(el) for el in n
+        n
+
+isnullableastarray = (n) ->
+        throw new Error("value must be an array") if not Array.isArray(n) 
+        isnullableast(el) for el in n
+        n
+
 exports.arrayExpression = (els = []) -> type: ArrayExpression, elements: els
 exports.arrayPattern
 exports.arrowFunctionExpression
@@ -92,7 +102,7 @@ exports.classHeritage
 exports.comprehensionBlock
 exports.comprehensionExpression
 exports.conditionalExpression   = (test, consequent, alternate) -> type: ConditionalExpression, test: isast(test), consequent: isast(consequent), alternate: isast(alternate)
-exports.continueStatement       = (label)                       -> type: ContinueStatement, label: isast(label)
+exports.continueStatement       = (label)                       -> type: ContinueStatement, label: isnullableast(label)
 exports.computedPropertyKey
 exports.debuggerStatement
 exports.doWhileStatement
@@ -126,7 +136,7 @@ exports.property         = (key, value, kind = "init") -> type: Property, key: i
 exports.returnStatement  = (arg) -> type: ReturnStatement, argument: isast(arg)
 exports.sequenceExpression = (expressions) -> type: SequenceExpression, expressions: expressions.map(isast)
 exports.spreadElement    = (arg) -> type: SpreadElement, argument: arg
-exports.switchCase
+exports.switchCase       = (test, consequent) -> type: SwitchCase, test: isnullableast(test), consequent: isastarray(consequent)
 exports.switchStatement
 exports.taggedTemplateExpression
 exports.templateElement
