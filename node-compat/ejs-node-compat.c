@@ -75,8 +75,8 @@ resolvev(char** paths, int num_paths)
     int sp = 0;
 
     // we treat paths as a stack of path elements.  walk all the path
-    // elements of a given path, popping for '..', doing nothing for
-    // '.', and pushing for anything else.
+    // elements of a given path, popping for '..', skipping '.', and
+    // pushing for anything else.
     for (int i = 0; i < num_paths; i ++) {
         char* p = paths[i];
         if (*p == '/') {
@@ -87,7 +87,7 @@ resolvev(char** paths, int num_paths)
 
         while (*p) {
             if (*p == '.') {
-                if (*(p+1) == '.' && *(p+2) == '/') {
+                if (*(p+1) == '.' && (*(p+2) == '/' || *(p+2) == '\0')) {
                     if (sp) {
                         if (stack[sp])
                             free (stack[sp]);
@@ -96,8 +96,8 @@ resolvev(char** paths, int num_paths)
                     p += 3;
                     while (*p == '/') p++; // consume all adjacent /'s
                     continue;
-                }
-                else if (*(p+1) == '/') {
+                } 
+                else if (*(p+1) == '/' || *(p+1) == '\0') {
                     p += 2;
                     while (*p == '/') p++; // consume all adjacent /'s
                     continue;
