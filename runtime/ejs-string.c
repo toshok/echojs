@@ -1453,7 +1453,7 @@ _ejs_String_prototype_endsWith(ejsval env, ejsval _this, uint32_t argc, ejsval *
     uint32_t searchLength = EJSVAL_TO_STRLEN(searchStr);
 
     // 12. Let start be end - searchLength. 
-    int64_t start = end - searchLength;
+    int64_t start = (int64_t)end - (int64_t)searchLength;
 
     // 13. If start is less than 0, return false. 
     if (start < 0)
