@@ -158,6 +158,23 @@ DeletePropertyOrThrow(ejsval argument, ejsval property)
    return BOOLEAN_TO_EJSVAL(success);
 }
 
+// ES6 7.3.6
+// DefinePropertyOrThrow (O, P, desc)
+static EJSBool
+DefinePropertyOrThrow (ejsval O, ejsval P, EJSPropertyDesc* desc, ejsval *exc)
+{
+    // 1. Assert: Type(O) is Object. 
+    // 2. Assert: IsPropertyKey(P) is true. 
+    // 3. Let success be the result of calling the [[DefineOwnProperty]] internal method of O passing P and desc as arguments. 
+    // 4. ReturnIfAbrupt(success). 
+    EJSBool success = OP(EJSVAL_TO_OBJECT(O),DefineOwnProperty)(O, P, desc, EJS_FALSE);
+    // 5. If success is false, then throw a TypeError exception. 
+    if (!success)
+        *exc = _ejs_nativeerror_new_utf8 (EJS_TYPE_ERROR, "1"); // XXX
+    // 6. Return success. 
+    return success;
+}
+
 static uint32_t
 PropertyKeyHash (ejsval argument)
 {
@@ -1245,7 +1262,8 @@ _ejs_object_create (ejsval proto)
     return _ejs_Object_create(_ejs_undefined, _ejs_undefined, 1, args);
 }
 
-// ECMA262: 15.2.3.6
+// ES6 19.1.2.4
+// Object.defineProperty ( O, P, Attributes )
 static ejsval
 _ejs_Object_defineProperty (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
@@ -1267,19 +1285,22 @@ _ejs_Object_defineProperty (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
     }
     EJSObject *obj = EJSVAL_TO_OBJECT(O);
 
-    /* 2. Let name be ToString(P). */
-    // we skip this and handle it in object_specop_define_own_property
-    //ejsval name = ToString(P);
-    ejsval name = P;
+    // 2. Let key be ToPropertyKey(P).
+    // 3. ReturnIfAbrupt(key).
+    ejsval key = ToPropertyKey(P);
 
-    /* 3. Let desc be the result of calling ToPropertyDescriptor with Attributes as the argument. */
+    // 4. Let desc be the result of calling ToPropertyDescriptor(Attributes).
+    // 5. ReturnIfAbrupt(desc).
     EJSPropertyDesc desc;
     ToPropertyDescriptor(Attributes, &desc);
 
-    /* 4. Call the [[DefineOwnProperty]] internal method of O with arguments name, desc, and true. */
-    OP(obj,DefineOwnProperty)(O, name, &desc, EJS_TRUE);
+    // 6. Let success be the result of DefinePropertyOrThrow(O,key, desc).
+    // 7. ReturnIfAbrupt(success).
+    ejsval exc;
+    if (!DefinePropertyOrThrow(O, key, &desc, &exc))
+        _ejs_throw(exc);
 
-    /* 5. Return O. */
+    // 8. Return O.
     return O;
 }
 
@@ -1366,21 +1387,6 @@ _ejs_Object_defineProperties (ejsval env, ejsval _this, uint32_t argc, ejsval *a
     
     /* 7. Return O. */
     return O;
-}
-
-static EJSBool
-DefinePropertyOrThrow (ejsval O, ejsval P, EJSPropertyDesc* desc, ejsval *exc)
-{
-    // 1. Assert: Type(O) is Object. 
-    // 2. Assert: IsPropertyKey(P) is true. 
-    // 3. Let success be the result of calling the [[DefineOwnProperty]] internal method of O passing P and desc as arguments. 
-    // 4. ReturnIfAbrupt(success). 
-    EJSBool success = OP(EJSVAL_TO_OBJECT(O),DefineOwnProperty)(O, P, desc, EJS_FALSE);
-    // 5. If success is false, then throw a TypeError exception. 
-    if (!success)
-        *exc = _ejs_nativeerror_new_utf8 (EJS_TYPE_ERROR, "1"); // XXX
-    // 6. Return success. 
-    return success;
 }
 
 typedef enum {
