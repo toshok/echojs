@@ -1,2 +1,3 @@
 .deps/
 ejs-llvm-atoms-gen.c
+ejs-llvm.ejs

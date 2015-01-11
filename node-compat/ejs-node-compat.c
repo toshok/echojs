@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <dirent.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/param.h>
@@ -289,14 +290,21 @@ _ejs_path_module_func (ejsval exports)
 /// fs module
 ///
 
-// free's @path before throwing the exception
-static void
-throw_errno_error(int _errno, char* path)
+static ejsval
+create_errno_error(int _errno, char* path)
 {
     char buf[256];
     snprintf (buf, sizeof(buf), "%s: `%s`", strerror(_errno), path);
+    return _ejs_nativeerror_new_utf8(EJS_ERROR, buf);
+}
+
+// free's @path before returning the exception
+static void
+throw_errno_error(int _errno, char* path)
+{
+    ejsval error = create_errno_error(_errno, path);
     free(path);
-    _ejs_throw_nativeerror_utf8 (EJS_ERROR, buf);
+    _ejs_throw (error);
 }
 
 #define EJS_STAT_SET_IS_FILE(s, v) (*_ejs_closureenv_get_slot_ref((s), 0) = (v))
@@ -502,6 +510,35 @@ _ejs_fs_createWriteStream (ejsval env, ejsval _this, uint32_t argc, ejsval* args
 }
 
 ejsval
+_ejs_fs_readdirSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    ejsval path = _ejs_undefined;
+    if (argc > 0) path = args[0];
+
+    if (!EJSVAL_IS_STRING_TYPE(path)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "path must be a string");
+    }
+
+    char *utf8_path = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(ToString(path)));
+
+    DIR* dir = opendir(utf8_path);
+    if (dir == NULL)
+        throw_errno_error(errno, utf8_path);
+
+    ejsval array = _ejs_array_new(0, EJS_FALSE);
+    struct dirent* entry;
+
+    while ((entry = readdir(dir))) {
+        ejsval entry_name = _ejs_string_new_utf8_len(entry->d_name, entry->d_namlen);
+        _ejs_array_push_dense(array, 1, &entry_name);
+    }
+
+    free(utf8_path);
+    closedir(dir);
+    return array;
+}
+
+ejsval
 _ejs_fs_module_func (ejsval exports)
 {
     ejsval internal_fd_descr = _ejs_string_new_utf8("%internal_fd");
@@ -511,6 +548,7 @@ _ejs_fs_module_func (ejsval exports)
     EJS_INSTALL_FUNCTION(exports, "statSync", _ejs_fs_statSync);
     EJS_INSTALL_FUNCTION(exports, "readFileSync", _ejs_fs_readFileSync);
     EJS_INSTALL_FUNCTION(exports, "createWriteStream", _ejs_fs_createWriteStream);
+    EJS_INSTALL_FUNCTION(exports, "readdirSync", _ejs_fs_readdirSync);
 
     return _ejs_undefined;
 }

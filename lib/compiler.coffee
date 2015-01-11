@@ -4,8 +4,6 @@ debug = require 'debug'
 path = require 'path'
 fs = require 'fs'
 
-node_compat = require 'node-compat'
-
 { Map } = require 'map'
 
 { ArrayExpression,
@@ -343,7 +341,8 @@ class LLVMIRVisitor extends TreeVisitor
                 @import_module_globals = new Map()
                 for import_module_string in @this_module_info.importList
                         import_module_info = @allModules.get(import_module_string)
-                        @import_module_globals.set(import_module_string, new llvm.GlobalVariable(@module, types.EjsModule, import_module_info.module_name, null, true))
+                        if not import_module_info.isNative()
+                                @import_module_globals.set(import_module_string, new llvm.GlobalVariable(@module, types.EjsModule, import_module_info.module_name, null, true))
                 @this_module_initted = new llvm.GlobalVariable @module, types.bool, "#{@this_module_info.module_name}_initialized", consts.false(), false
                 return
 
@@ -384,7 +383,8 @@ class LLVMIRVisitor extends TreeVisitor
 
                 for import_module_string in @this_module_info.importList
                         import_module = @import_module_globals.get(import_module_string)
-                        @createCall @ejs_runtime.module_resolve, [import_module], "", !@ejs_runtime.module_resolve.doesNotThrow
+                        if import_module?
+                                @createCall @ejs_runtime.module_resolve, [import_module], "", !@ejs_runtime.module_resolve.doesNotThrow
 
                 ir.createBr @toplevel_body_bb
 
@@ -2512,13 +2512,11 @@ exports.compile = (tree, base_output_filename, source_filename, module_infos, op
 #
 
 class ModuleInfo
-        constructor: (@path) ->
+        constructor: (@is_native) ->
                 @slot_num = 0
                 @exports = new Map()
                 @importList = []
                 @has_default = false
-                @toplevel_function_name = "_ejs_toplevel_#{sanitize_with_regexp path}"
-                @module_name = "_ejs_module_#{sanitize_with_regexp path}"
 
         setHasDefaultExport: ->
                 @has_default = true
@@ -2530,6 +2528,19 @@ class ModuleInfo
                 @exports.set(ident, { constval: constval, slot_num: @slot_num })
                 @slot_num += 1
                 return
+
+        addImportSource: (source_path) ->
+                @importList.push(source_path) if @importList.indexOf(source_path) is -1
+                return
+
+        isNative: () -> @is_native
+                                
+class JSModuleInfo extends ModuleInfo
+        constructor: (@path) ->
+                super(false)
+                sanitized_path = sanitize_with_regexp(@path)
+                @toplevel_function_name = "_ejs_toplevel_#{sanitized_path}"
+                @module_name = "_ejs_module_#{sanitized_path}"
 
         getExportGetter: (ident) ->
                 export_info = @exports.get(ident)
@@ -2550,12 +2561,16 @@ class ModuleInfo
                 ###
                 b.functionExpression(function_id, [b.identifier("%env_unused"), b.identifier('value')], b.blockStatement([intrinsic(moduleSetSlot_id, [b.literal(@path), b.literal(ident), b.identifier('value')])]))
                                 
-        addImportSource: (source_path) ->
-                @importList.push(source_path) if @importList.indexOf(source_path) is -1
-                return
 
-        
+class NativeModuleInfo extends ModuleInfo
+    constructor: (name, @init_function, link_flags, @module_files) ->
+        super(true)
+        @path = name
+        @module_name = name
+        @link_flags = link_flags.join(" ")
+
 allModules = new Map()
+nativeModules = new Map()
 
 class GatherImports extends TreeVisitor
         constructor: (@filename, @path, @toplevel_path, @import_vars) ->
@@ -2564,39 +2579,30 @@ class GatherImports extends TreeVisitor
                 if @filename.lastIndexOf(".js") == @filename.length - 3
                         @filename = @filename.substring(0, @filename.length-3)
 
-                @moduleInfo = new ModuleInfo(@filename)
+                @moduleInfo = new JSModuleInfo(@filename)
                 
                 allModules.set(@filename, @moduleInfo)
                 
-        isInternalModule = (source) -> source[0] is "@"
+        isNativeModule = (source) -> source[0] is "@"
                 
         addSource: (n) ->
                 return n if not n.source?
                 
                 throw new Error("import sources must be strings") if not is_string_literal(n.source)
 
-                if isInternalModule(n.source.value)
-                        if n.source.value.indexOf('@node-compat/') is 0
-                                # add the exports here for node-compat modules
-                                module_name = n.source.value.slice('@node-compat/'.length)
-                                if not node_compat.modules[module_name]?
-                                        throw new Error("@node-compat module #{module_name} not found")
-                                if not allModules.has(n.source.value)
-                                        internal_module = new ModuleInfo(n.source.value)
-                                        node_compat.modules[module_name].forEach (v) ->
-                                                internal_module.addExport(v);
-                                n.source_path = b.literal(n.source.value)
-
-                        # otherwise we just strip off the @
-                        else
-                                n.source_path = b.literal(n.source.value.slice(1))
-
-                        return n
-                        
                 source_path = n.source.value
+                
                 for v in @import_vars
                         source_path = source_path.replace("$#{v.variable}", v.value);
 
+                if isNativeModule(n.source.value)
+                        if @importList.indexOf(source_path) is -1
+                                @importList.push(source_path)
+                        @moduleInfo.addImportSource(source_path)
+
+                        n.source_path = b.literal(source_path)
+                        return n
+                        
                 if source_path[0] isnt "/"
                         source_path = path.resolve @toplevel_path, @path, source_path
 
@@ -2673,9 +2679,55 @@ parseFile = (filename, content) ->
 
         return parse_tree
 
+
+registerNativeModuleInfo = (ejs_dir, module_name, link_flags, module_files, module_info) ->
+        link_flags = link_flags.concat(module_info.link_flags) if (module_info.link_flags)
+        module_files = module_files.concat(path.resolve(ejs_dir, module_info.module_file)) if (module_info.module_file)
+
+        if module_info.init_function?
+                # this module can be imported
+                m = new NativeModuleInfo(module_name, module_info.init_function, link_flags, module_files)
+                if module_info.exports
+                        module_info.exports.forEach (v) -> m.addExport(v)
+
+                console.log "adding nativeModule for #{module_name}"
+                nativeModules.set(module_name, m)
+
+        if module_info.submodules?
+                for sm in module_info.submodules
+                        if not sm.module_name?
+                                throw new Error("#{module_name} submodule missing module_name property");
+                        registerNativeModuleInfo(ejs_dir, "#{module_name}/#{sm.module_name}", link_flags, module_files, sm)
+
+gatherNativeModuleInfo = (ejs_file) ->
+        module_info = JSON.parse(fs.readFileSync(ejs_file, 'utf-8'))
+        module_name = module_info.module_name or path.basename(ejs_file, ".ejs")
+
+        registerNativeModuleInfo(path.dirname(ejs_file), module_name, [], [], module_info)
+
+gatherAllNativeModules = (module_dirs) ->
+        # gather a list of all native modules, flattening their submodule lists
+        for mdir in module_dirs
+                console.log mdir
+                try
+                        files = fs.readdirSync mdir
+                        files.forEach (f) ->
+                                if f.indexOf('.ejs') is f.length-4
+                                        try
+                                                console.log f
+                                                gatherNativeModuleInfo path.resolve mdir, f
+                                        catch e
+                                                console.warn "parsing of module file #{f} failed: #{e}"
+                catch e
+                        console.log e
+                        # nothing to do
+
 exports.gatherAllModules = (initial_file_list, options) ->
         work_list = initial_file_list.slice()
         files = []
+
+        gatherAllNativeModules(options.native_module_dirs.concat("/usr/local/lib/ejs")) # XXX
+        
         while work_list.length isnt 0
                 file = work_list.pop()
 
@@ -2685,26 +2737,37 @@ exports.gatherAllModules = (initial_file_list, options) ->
                         jsfile = jsfile + '.js' 
 
                 try
-                        is_file = fs.statSync(jsfile).isFile()
+                        found = fs.statSync(jsfile).isFile()
                 catch
-                        is_file = false
+                        found = false
 
-                if not is_file
-                        # we don't catch this exception
-                        if fs.statSync(file).isDirectory()
-                                jsfile = path.join(file, "index.js")
-                                is_file = fs.statSync(jsfile).isFile()
-        
-                file_contents = fs.readFileSync(jsfile, 'utf-8')
-                file_ast = parseFile(jsfile, file_contents)
+                if not found
+                        try
+                                if fs.statSync(file).isDirectory()
+                                        jsfile = path.join(file, "index.js")
+                                        is_file = fs.statSync(jsfile).isFile()
+                        catch
+                                found = false
 
-                imports = gatherImports(file, path.dirname(jsfile), process.cwd(), file_ast, options.import_variables)
+                if found
+                        file_contents = fs.readFileSync(jsfile, 'utf-8')
+                        file_ast = parseFile(jsfile, file_contents)
 
-                files.push({file_name: file, file_ast: file_ast})
+                        imports = gatherImports(file, path.dirname(jsfile), process.cwd(), file_ast, options.import_variables)
 
-                for i in imports
-                        if work_list.indexOf(i) is -1 and not files.some((el) -> el.file_name is i)
-                                work_list.push(i)
+                        files.push({file_name: file, file_ast: file_ast})
 
+                        for i in imports
+                                if work_list.indexOf(i) is -1 and not files.some((el) -> el.file_name is i)
+                                        work_list.push(i)
+                else
+                        # check if the file is a native module
+                        if not allModules.has(file)
+                                native_path = file.slice(1)
+                                if not nativeModules.has(native_path)
+                                        throw new Error "native module #{native_path} not found"
+
+                                allModules.set(file, nativeModules.get(native_path))
+                
         files
         

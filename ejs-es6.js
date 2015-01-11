@@ -43,7 +43,7 @@ let options = {
     leave_temp_files: false,
     target_arch: host_arch,
     target_platform: host_platform,
-    external_modules: [],
+    native_module_dirs: [],
     extra_clang_args: "",
     ios_sdk: "7.1",
     ios_min: "7.0",
@@ -51,9 +51,8 @@ let options = {
     import_variables: []
 };
 
-function add_external_module (modinfo) {
-    let [library,module_name,module_entrypoint,link_flags] = modinfo.split(',');
-    options.external_modules.push ({ library, module_name, module_entrypoint, link_flags });
+function add_native_module_dir (dir) {
+    options.native_module_dirs.push(dir);
 }
 
 let arch_info = {
@@ -149,10 +148,10 @@ let args = {
         flag:    "leave_temp_files",
         help:    "leave temporary files in $TMPDIR from compilation"
     },
-    "--module": {
-        handler: add_external_module,
+    "--moduledir": {
+        handler: add_native_module_dir,
         handlerArgc: 1,
-        help:    "--module library.a,module-name,module_init,link_flags"
+        help:    "--module path-to-search-for-modules"
     },
     "--help": {
         flag:    "show_help",
@@ -399,7 +398,7 @@ function relative_to_ejs_exe(n) {
 }
 
 
-function generate_import_map (modules) {
+function generate_import_map (js_modules, native_modules) {
     let sanitize = (filename, c_callable) => {
         let sfilename = filename.replace(/\.js$/, "");
         if (c_callable)
@@ -411,32 +410,31 @@ function generate_import_map (modules) {
     map.write (`#include "${relative_to_ejs_exe('runtime/ejs-module.h')}"\n`);
     map.write ('extern "C" {\n');
 
-    modules.forEach( (module) => {
+    js_modules.forEach( (module) => {
         map.write(`extern EJSModule ${module.module_name};\n`);
         map.write(`extern ejsval ${module.toplevel_function_name} (ejsval env, ejsval _this, uint32_t argc, ejsval *args);\n`);
     });
 
-
     map.write ("EJSModule* _ejs_modules[] = {\n");
-    modules.forEach ( (module) => {
+    js_modules.forEach ( (module) => {
         map.write(`  &${module.module_name},\n`);
     });
     map.write ("};\n");
 
     map.write('ejsval (*_ejs_module_toplevels[])(ejsval, ejsval, uint32_t, ejsval*) = {\n');
-    modules.forEach ( (module) => {
+    js_modules.forEach ( (module) => {
         map.write(`  ${module.toplevel_function_name},\n`);
     });
     map.write ("};\n");
     map.write('int _ejs_num_modules = sizeof(_ejs_modules) / sizeof(_ejs_modules[0]);\n\n');
 
-    options.external_modules.forEach ((module) => {
-        map.write(`extern ejsval ${module.module_entrypoint} (ejsval exports);\n`);
+    native_modules.forEach ((module) => {
+        map.write(`extern ejsval ${module.init_function} (ejsval exports);\n`);
     });
 
     map.write('EJSExternalModule _ejs_external_modules[] = {\n');
-    options.external_modules.forEach ( (module) => {
-        map.write(`  { \"${module.module_name}\", ${module.module_entrypoint}, 0 },\n`);
+    native_modules.forEach ( (module) => {
+        map.write(`  { \"@${module.module_name}\", ${module.init_function}, 0 },\n`);
     });
     map.write('};\n');
     map.write('int _ejs_num_external_modules = sizeof(_ejs_external_modules) / sizeof(_ejs_external_modules[0]);\n');
@@ -444,7 +442,7 @@ function generate_import_map (modules) {
     let entry_module = file_args[0];
     if (entry_module.lastIndexOf(".js") == entry_module.length - 3)
         entry_module = entry_module.substring(0, entry_module.length-3);
-    map.write(`const EJSModule* entry_module = &${modules.get(entry_module).module_name};\n`);
+    map.write(`const EJSModule* entry_module = &${js_modules.get(entry_module).module_name};\n`);
 
     map.write("};");
     map.end();
@@ -456,7 +454,16 @@ function generate_import_map (modules) {
 
 
 function do_final_link(main_file, modules) {
-    let map_filename = generate_import_map(modules);
+    let js_modules = new Map();
+    let native_modules = new Map();
+    modules.forEach ((m,k) => {
+        if (m.isNative())
+            native_modules.set(k, m);
+        else
+            js_modules.set(k, m);
+    });
+
+    let map_filename = generate_import_map(js_modules, native_modules);
 
     process.env.PATH = `${target_path_prepend(options.target_platform,options.target_arch)}:${process.env.PATH}`;
 
@@ -473,16 +480,19 @@ function do_final_link(main_file, modules) {
     clang_args.push(relative_to_ejs_exe(target_libecho(options.target_platform, options.target_arch)));
     clang_args.push(relative_to_ejs_exe(target_extra_libs(options.target_platform, options.target_arch)));
     
-    let seen_external_modules = new Set();
-    options.external_modules.forEach ((extern_module) => {
-        // don't include external modules more than once
-        if (seen_external_modules.has(extern_module.library)) return;
+    let seen_native_modules = new Set();
+    native_modules.forEach ((module, k) => {
+        // don't include native modules more than once
+        module.module_files.forEach( (mf) => {
+            if (seen_native_modules.has(mf)) return;
 
-        seen_external_modules.add(extern_module.library);
+            seen_native_modules.add(mf);
                 
-        clang_args.push(extern_module.library);
+            clang_args.push(mf);
+        });
+
         // very strange, not sure why we need this \n
-        clang_args = clang_args.concat(extern_module.link_flags.replace('\n', ' ').split(" "));
+        clang_args = clang_args.concat(module.link_flags.replace('\n', ' ').split(" "));
     });
 
     clang_args = clang_args.concat(target_libraries(options.target_platform, options.target_arch));

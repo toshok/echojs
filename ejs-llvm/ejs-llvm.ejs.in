@@ -1,0 +1,8 @@
+{
+    "module_name": "llvm",
+    "init_function":  "_ejs_llvm_init",
+    "link_flags": "@LLVM_LINK_FLAGS@",
+    "module_file": "libejsllvm-module.a",
+
+    "exports": [ "IRBuilder" ]
+}
