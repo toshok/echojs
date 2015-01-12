@@ -25,6 +25,23 @@ _ejs_date_unix_now ()
     return OBJECT_TO_EJSVAL(rv);
 }
 
+ejsval
+ejs_date_new (long tstamp) {
+    EJSDate* rv = _ejs_gc_new (EJSDate);
+
+    _ejs_init_object ((EJSObject*)rv, _ejs_Date_prototype, &_ejs_Date_specops);
+
+    /* recover timezone first */
+    gettimeofday (&rv->tv, &rv->tz);
+
+    /* convert and assign milliseconds afterwards */
+    rv->tv.tv_sec = tstamp / 1000;
+    rv->tv.tv_usec = (tstamp % 1000) * 1000;
+    rv->valid = EJS_TRUE;
+
+    return OBJECT_TO_EJSVAL(rv);
+}
+
 double
 _ejs_date_get_time (EJSDate *date)
 {

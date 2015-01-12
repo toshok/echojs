@@ -7,6 +7,7 @@
 #include "ejs-objc.h"
 #include "ejs-object.h"
 #include "ejs-array.h"
+#include "ejs-date.h"
 #include "ejs-string.h"
 
 #define SPEW(x)
@@ -242,6 +243,13 @@
 {
 	return [[[CKValue alloc] initWithJSValue:STRING_TO_EJSVAL([[CKString stringWithUTF8CString:str] jsString])] autorelease];
 }
+
++(id)nsDateValue:(NSDate*)date
+{
+    ejsval jsDate = ejs_date_new (floor(date.timeIntervalSince1970 * 1000.0));
+    return [[[CKValue alloc] initWithJSValue:jsDate] autorelease];
+}
+
 
 +(id)valueWithJSValue:(ejsval)val
 {
@@ -486,6 +494,11 @@
     return _obj->ops == &_ejs_Array_specops || _obj->ops == &_ejs_sparsearray_specops;
 }
 
+-(BOOL)isDate
+{
+    return _obj->ops == &_ejs_Date_specops;
+}
+
 -(jsuint)arrayLength
 {
     return ((EJSArray*)_obj)->array_length;
@@ -497,6 +510,12 @@
 #if notyet
 	return JS_GetFunctionArity((JSFunction*)_obj);
 #endif
+}
+
+-(jslong)dateTimestamp
+{
+    EJSDate *date = (EJSDate*)_obj;
+    return (date->tv.tv_sec * 1000) + (date->tv.tv_usec / 1000);
 }
 
 -(CKObject*)prototype

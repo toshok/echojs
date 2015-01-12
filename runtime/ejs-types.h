@@ -23,6 +23,7 @@ typedef unsigned long long uint64_t;
 
 typedef int32_t jsint;
 typedef uint32_t jsuint;
+typedef long jslong;
 typedef double jsdouble;
 
 typedef uint16_t jschar;
