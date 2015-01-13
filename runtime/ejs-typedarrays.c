@@ -135,6 +135,26 @@ _ejs_ArrayBuffer_get_species (ejsval env, ejsval _this, uint32_t argc, ejsval *a
 }
 
 static ejsval
+_ejs_ArrayBuffer_isView (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval arg = _ejs_undefined;
+
+    if (argc > 0)
+        arg = args[0];
+
+    /* 1. If Type(arg) is not Object, return false. */
+    if (!EJSVAL_IS_OBJECT(arg))
+        return BOOLEAN_TO_EJSVAL(EJS_FALSE);
+
+    /* 2. If arg has a [[ViewedArrayBuffer]] internal slot, then return true. */
+    if (EJSVAL_IS_DATAVIEW(arg) || EJSVAL_IS_TYPEDARRAY(arg))
+        return BOOLEAN_TO_EJSVAL(EJS_TRUE);
+
+    /* 3. Return false. */
+    return BOOLEAN_TO_EJSVAL(EJS_FALSE);
+}
+
+static ejsval
 _ejs_ArrayBuffer_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     EJSArrayBuffer* buffer = (EJSArrayBuffer*)EJSVAL_TO_OBJECT(_this);
@@ -717,6 +737,8 @@ _ejs_typedarrays_init(ejsval global)
         _ejs_object_setprop (_ejs_ArrayBuffer, _ejs_atom_prototype,   _ejs_ArrayBuffer_prototype);
 
         PROTO_METHOD(ArrayBuffer, slice);
+
+        OBJ_METHOD(ArrayBuffer, isView);
 
         _ejs_object_define_value_property (_ejs_ArrayBuffer_prototype, _ejs_Symbol_toStringTag, _ejs_atom_ArrayBuffer, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
         EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_ArrayBuffer, create, _ejs_ArrayBuffer_create, EJS_PROP_NOT_ENUMERABLE);
