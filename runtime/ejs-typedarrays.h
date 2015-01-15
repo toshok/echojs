@@ -81,6 +81,7 @@ typedef struct _EJSDataView {
                                   ))
 
 #define EJSVAL_TO_TYPEDARRAY(v) ((EJSTypedArray*)EJSVAL_TO_OBJECT(v))
+#define EJSVAL_TO_ARRAYBUFFER(v) ((EJSArrayBuffer*)EJSVAL_TO_OBJECT(v))
 
 #define EJSVAL_IS_ARRAYBUFFER(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_ArrayBuffer_specops))
 #define EJSVAL_IS_DATAVIEW(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_DataView_specops))
