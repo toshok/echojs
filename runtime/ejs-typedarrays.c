@@ -17,6 +17,18 @@
 
 #define EJS_TYPEDARRAY_LEN(arrobj)      (((EJSTypedArray*)EJSVAL_TO_OBJECT(arrobj))->length)
 
+static inline int
+max(int a, int b)
+{
+    if (a > b) return a; else return b;
+}
+
+static inline int
+min(int a, int b)
+{
+    if (a > b) return b; else return a;
+}
+
 ejsval _ejs_ArrayBuffer_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_ArrayBuffer EJSVAL_ALIGNMENT;
 
@@ -557,7 +569,95 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
  static ejsval                                                          \
  _ejs_##ArrayType##Array_prototype_subarray_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
  {                                                                      \
-     EJS_NOT_IMPLEMENTED();                                             \
+     ejsval begin = _ejs_undefined;                                     \
+     ejsval end = _ejs_undefined;                                       \
+                                                                        \
+     if (argc > 0)                                                      \
+        begin = args [0];                                               \
+     if (argc > 1)                                                      \
+        end = args [1];                                                 \
+                                                                        \
+     /* 1. Let O be the this value. */                                  \
+     ejsval O = _this;                                                  \
+                                                                        \
+     /* 2. If Type(O) is not Object, throw a TypeError exception. */    \
+     if (!EJSVAL_IS_OBJECT(O))                                          \
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not an Object"); \
+                                                                        \
+     /* 3. If O does not have a [[TypedArrayName]] internal slot, then throw a TypeError exception. */ \
+     if (!EJSVAL_IS_TYPEDARRAY(O))                                       \
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a typed array"); \
+                                                                        \
+     EJSTypedArray *Oobj = (EJSTypedArray*) EJSVAL_TO_OBJECT(O);       \
+                                                                        \
+     /* 4. Assert: O has a [[ViewedArrayBuffer]] internal slot. */      \
+     /* 5. Let buffer be the value of O’s [[ViewedArrayBuffer]] internal slot. */ \
+     ejsval buffer = Oobj->buffer;                                      \
+                                                                        \
+     /* 6. If buffer is undefined, then throw a TypeError exception. */ \
+     if (EJSVAL_IS_UNDEFINED(buffer))                                   \
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "typed arrray's buffer is undefined"); \
+                                                                        \
+     /* 7. Let srcLength be the value of O’s [[ArrayLength]] internal slot. */ \
+     uint32_t srcLength = Oobj->length;                                 \
+                                                                        \
+     /* 8. Let beginInt be ToInteger(begin) */                          \
+     /* 9. ReturnIfAbrupt(beginInt). */                                 \
+     int32_t beginInt = ToInteger(begin);                               \
+                                                                        \
+     /* 10. If beginInt < 0, then let beginInt be srcLength + beginInt. */  \
+     if (beginInt < 0)                                                  \
+        beginInt = srcLength + beginInt;                                \
+                                                                        \
+     /* 11. Let beginIndex be min(srcLength, max(0, beginInt)). */      \
+     uint32_t beginIndex = min(srcLength, max(0, beginInt));             \
+                                                                        \
+     /* 12. If end is undefined, then let end be srcLength. */          \
+     if (EJSVAL_IS_UNDEFINED(end))                                      \
+        end = NUMBER_TO_EJSVAL(srcLength);                              \
+                                                                        \
+     /* 13. Let endInt be ToInteger(end). */                            \
+     /* 14. ReturnIfAbrupt(endInt). */                                  \
+     int endInt = ToInteger(end);                                       \
+                                                                        \
+     /* 15. If endInt < 0, then let endInt be srcLength + endInt. */    \
+     if (endInt < 0)                                                    \
+        endInt = srcLength + endInt;                                    \
+                                                                        \
+     /* 16. Let endIndex be max(0,min(srcLength, endInt)). */           \
+     uint32_t endIndex = max(0, min(srcLength, endInt));                 \
+                                                                        \
+     /* 17. If endIndex < beginIndex, then let endIndex be beginIndex. */ \
+     if (endIndex < beginIndex)                                         \
+        endIndex = beginIndex;                                          \
+                                                                        \
+     /* 18. Let newLength be endIndex - beginIndex. */                  \
+     uint32_t newLength = endIndex - beginIndex;                        \
+                                                                        \
+     /* 19. Let constructorName be the string value of O’s [[TypedArrayName]] internal slot. */ \
+     /* 20. Let elementType be the string value of the Element Type value in Table 46 for constructorName. */ \
+     /* 21. Let elementSize be the Number value of the Element Size value specified in Table 46 for constructorName. */ \
+     uint32_t elementSize = elementSizeInBytes;                         \
+                                                                        \
+     /* 22. Let srcByteOffset be the value of O’s [[ByteOffset]] internal slot. */ \
+     uint32_t srcByteOffset = Oobj->byteOffset;                         \
+                                                                        \
+     /* 23. Let beginByteOffset be srcByteOffset + beginIndex × elementSize. */ \
+     uint32_t beginByteOffset = srcByteOffset + beginIndex * elementSize; \
+                                                                        \
+     /* 24. Let defaultConstructor be the intrinsic object listed in column one of Table 46 for constructorName. */ \
+     /* 25. Let constructor be SpeciesConstructor(O, defaultConstructor). */ \
+     /* 26. ReturnIfAbrupt(constructor). */                             \
+                                                                        \
+     /* 27. Let argumentsList be «buffer, beginByteOffset, newLength». */ \
+     ejsval argumentsList[3] = { buffer, NUMBER_TO_EJSVAL(beginByteOffset), NUMBER_TO_EJSVAL(newLength) }; \
+                                                                        \
+     EJSTypedArray *rv = _ejs_gc_new(EJSTypedArray);                    \
+     _ejs_init_object ((EJSObject*)rv, _ejs_##ArrayType##Array_prototype, _ejs_typed_array_specops[EJS_TYPEDARRAY_##EnumType]); \
+                                                                        \
+     /* 28. Return the result of calling the [[Construct]] internal method of constructor with argument argumentsList. */ \
+     ejsval ctor = _ejs_##ArrayType##Array;                             \
+     return _ejs_invoke_closure(ctor, OBJECT_TO_EJSVAL((EJSObject*)rv), 3, argumentsList); \
  }                                                                      \
                                                                         \
  /* this should be a single getter reused by all typed-arrays */        \
