@@ -1,12 +1,18 @@
 EchoJS @PRODUCT_VERSION@
 ------------------------
 
+OSX only test tarball
+
 you need llvm34 installed.
 
-  $ brew install llvm34
-  $ export LLVM_SUFFIX-3.4
+```sh
+$ brew install llvm34
+$ export LLVM_SUFFIX-3.4
+```
 
 as an example of XmlHTTPRequest + ES6 Promises:
 
-  $ bin/ejs samples/fetch.js
-  $ samples/fetch.js.exe http://www.google.com/
+```sh
+$ bin/ejs samples/fetch.js
+$ samples/fetch.js.exe http://www.google.com/
+```
