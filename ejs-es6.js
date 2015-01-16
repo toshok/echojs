@@ -16,12 +16,12 @@ import { dumpModules, getAllModules, gatherAllModules } from './lib/passes/gathe
 
 import { bold, reset, genFreshFileName } from './lib/echo-util';
 
-// if we're running under coffee/node, argv will be ["coffee", ".../ejs", ...]
-// if we're running the compiled ejs.exe, argv will be [".../ejs.js.exe", ...]
-let slice_count = typeof(__ejs) === "undefined" ? 2 : 1;
-let argv = process.argv.slice(slice_count);
+// argv is [".../ejs", ...], so get rid of the ejs
+let argv = process.argv.slice(1);
 
 let temp_files = [];
+
+let running_from_source_dir = path.basename(ejs_exe_dirname()) !== "bin";
 
 let host_arch = os.arch();
 if (host_arch === "x64")
@@ -316,27 +316,37 @@ function target_libraries(platform, arch) {
 
 
 function target_libecho(platform, arch) {
-    if (platform === "darwin") {
-        if (arch === "x86-64") return "runtime/libecho.a";
+    if (running_from_source_dir) {
+        if (platform === "darwin") {
+            if (arch === "x86-64") return "runtime/libecho.a";
 
-        return "runtime/libecho.a.ios";
+            return "runtime/libecho.a.ios";
+        }
+
+        return "runtime/libecho.a";
     }
-
-    return "runtime/libecho.a";
+    else {
+        return path.join(relative_to_ejs_exe(`../lib/${platform}-${arch}`), 'libecho.a');
+    }
 }
 
 
 function target_extra_libs(platform, arch) {
-    if (platform === "linux")   return "external-deps/pcre-linux/.libs/libpcre16.a";
+    if (running_from_source_dir) {
+        if (platform === "linux")   return "external-deps/pcre-linux/.libs/libpcre16.a";
 
-    if (platform === "darwin") {
-        if (arch === "x86-64")  return "external-deps/pcre-osx/.libs/libpcre16.a";
-        if (arch === "x86")     return "external-deps/pcre-iossim/.libs/libpcre16.a";
-        if (arch === "arm")     return "external-deps/pcre-iosdev/.libs/libpcre16.a";
-        if (arch === "aarch64") return "external-deps/pcre-iosdevaarch64/.libs/libpcre16.a";
+        if (platform === "darwin") {
+            if (arch === "x86-64")  return "external-deps/pcre-osx/.libs/libpcre16.a";
+            if (arch === "x86")     return "external-deps/pcre-iossim/.libs/libpcre16.a";
+            if (arch === "arm")     return "external-deps/pcre-iosdev/.libs/libpcre16.a";
+            if (arch === "aarch64") return "external-deps/pcre-iosdevaarch64/.libs/libpcre16.a";
+        }
+
+        throw new Error("no pcre for this platform");
     }
-
-    throw new Error("no pcre for this platform");
+    else {
+        return path.join(relative_to_ejs_exe(`../lib/${platform}-${arch}`), 'libpcre16.a');
+    }
 }
 
 function target_path_prepend (platform, arch) {
@@ -360,19 +370,22 @@ function compileFile(filename, parse_tree, modules) {
     }
 
     let compiled_module;
-//    try {
+    try {
         compiled_module = compile(parse_tree, base_filename, filename, modules, options);
-//    }
-//    catch (e) {
-//        console.warn(`${e}`);
-//        if (options.debug_level == 0) process.exit(-1);
-//        throw e;
-//    }
+    }
+    catch (e) {
+        console.warn(`${e}`);
+        if (options.debug_level == 0) process.exit(-1);
+        throw e;
+    }
 
-    let ll_filename     = `${os.tmpdir()}/${base_filename}-${options.target_platform}-${options.target_arch}.ll`;
-    let bc_filename     = `${os.tmpdir()}/${base_filename}-${options.target_platform}-${options.target_arch}.bc`;
-    let ll_opt_filename = `${os.tmpdir()}/${base_filename}-${options.target_platform}-${options.target_arch}.ll.opt`;
-    let o_filename      = `${os.tmpdir()}/${base_filename}-${options.target_platform}-${options.target_arch}.o`;
+    function tmpfile(suffix) {
+        return `${os.tmpdir()}/${base_filename}-${options.target_arch}-${options.target_platform}.${suffix}`;
+    }
+    let ll_filename     = tmpfile(".ll");
+    let bc_filename     = tmpfile(".bc");
+    let ll_opt_filename = tmpfile(".ll.opt");
+    let o_filename      = tmpfile(".o");
 
     temp_files.push(ll_filename, bc_filename, ll_opt_filename, o_filename);
     
@@ -393,8 +406,12 @@ function compileFile(filename, parse_tree, modules) {
     o_filenames.push(o_filename);
 }
 
+function ejs_exe_dirname() {
+    return path.dirname(path.resolve(process.argv[0]));
+}
+
 function relative_to_ejs_exe(n) {
-    return path.resolve(path.dirname(process.argv[typeof(__ejs) === 'undefined' ? 1 : 0]), n);
+    return path.resolve(ejs_exe_dirname(), n);
 }
 
 
@@ -407,7 +424,7 @@ function generate_import_map (js_modules, native_modules) {
     };
     let map_path = `${os.tmpdir()}/${genFreshFileName(path.basename(main_file))}-import-map.cpp`;
     let map = fs.createWriteStream(map_path);
-    map.write (`#include "${relative_to_ejs_exe('runtime/ejs-module.h')}"\n`);
+    map.write (`#include "runtime/ejs-module.h"\n`);
     map.write ('extern "C" {\n');
 
     js_modules.forEach( (module) => {
@@ -471,9 +488,8 @@ function do_final_link(main_file, modules) {
     let clang_args = target_link_args(options.target_platform, options.target_arch).concat([`-DEJS_BITS_PER_WORD=${options.target_pointer_size}`, "-o", output_filename].concat(o_filenames));
     if (arch_info[options.target_arch].little_endian)
         clang_args.unshift("-DIS_LITTLE_ENDIAN=1");
-    
-    // XXX we shouldn't need this, but build is failing while compiling the require map
-    clang_args.push("-I.");
+
+    clang_args.push(`-I${relative_to_ejs_exe(running_from_source_dir ? '.' : '../include')}`);
     
     clang_args.push(map_filename);
     
@@ -487,11 +503,12 @@ function do_final_link(main_file, modules) {
             if (seen_native_modules.has(mf)) return;
 
             seen_native_modules.add(mf);
-                
-            clang_args.push(mf);
+
+            clang_args.push(path.resolve(module.ejs_dir,
+                                         running_from_source_dir ? '.' : `${options.target_platform}-${options.target_arch}`,
+                                         mf));
         });
 
-        // very strange, not sure why we need this \n
         clang_args = clang_args.concat(module.link_flags.replace('\n', ' ').split(" "));
     });
 
@@ -501,22 +518,9 @@ function do_final_link(main_file, modules) {
     
     debug.log (1, `executing '${target_linker} ${clang_args.join(' ')}'`);
     
-    if (typeof(__ejs) != "undefined") {
-        spawn(target_linker, clang_args);
-        // we ignore leave_tmp_files here
-        if (!options.quiet) console.warn(`${bold()}done.${reset()}`);
-    }
-    else {
-        let clang = spawn(target_linker, clang_args);
-        clang.stderr.on("data", (data) => { console.warn(`${data}`); });
-        clang.on("exit", (code) => {
-            if (!options.leave_temp_files) {
-                cleanup ( () => {
-                    if (!options.quiet) console.warn(`${bold()}done.${reset()}`);
-                });
-            }
-        });
-    }
+    spawn(target_linker, clang_args);
+    // we ignore leave_tmp_files here
+    if (!options.quiet) console.warn(`${bold()}done.${reset()}`);
 }
 
 function cleanup(done) {
@@ -531,6 +535,8 @@ function cleanup(done) {
 
 let main_file = file_args[0];
 
+if (!running_from_source_dir)
+    options.native_module_dirs.push(relative_to_ejs_exe("../lib"));
 let files = gatherAllModules(file_args, options);
 debug.log (1, () => dumpModules());
 let allModules = getAllModules();

@@ -13,7 +13,7 @@ $(TOP)/build/host-config.mk:
 HOST_OS:=$(patsubst darwin%,darwin,$(HOST_OS))
 
 PRODUCT_NAME=EchoJS
-PRODUCT_VERSION=0.1
+PRODUCT_VERSION=0.0.1-alpha1
 
 PRODUCT_RELEASE_NOTES_URL=http://toshokelectric.com/echojs/release_notes
 PRODUCT_GITHUB_URL=https://github.com/toshok/echo-js

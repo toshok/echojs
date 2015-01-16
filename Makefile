@@ -51,4 +51,7 @@ ejs-es6.js.exe.stage3: ejs-es6.js.exe.stage2
 echo-command-line:
 	@echo ./ejs.exe --leave-temp $(MODULE_DIRS) ejs-es6.js
 
+osx-tarball:
+	$(MAKE) -C release osx-tarball
+
 include $(TOP)/build/build.mk

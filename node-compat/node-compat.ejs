@@ -1,19 +1,14 @@
 {
+    "ejs_version": "0.0.0-alpha1",
+
     "module_name": "node-compat",
     "submodules": [
-        { "module_name": "path", "init_function": "_ejs_path_module_func",
-          "exports": [ "dirname", "basename", "extname", "resolve", "relative", "join" ]
-        },
-        { "module_name": "os", "init_function": "_ejs_os_module_func",
-          "exports": [ "arch", "platform", "tmpdir" ]
-        },
-        { "module_name": "fs", "init_function": "_ejs_fs_module_func",
-          "exports": [ "statSync", "readFileSync", "createWriteStream", "readdirSync" ]
-        },
-        { "module_name": "child_process", "init_function": "_ejs_child_process_module_func",
-          "exports": [ "spawn", "stdout", "stderr" ]
-        }
+        { "module_name": "path", "init_function": "_ejs_path_module_func", "exports": [ "dirname", "basename", "extname", "resolve", "relative", "join" ] },
+        { "module_name": "os",   "init_function": "_ejs_os_module_func",   "exports": [ "arch", "platform", "tmpdir" ] },
+        { "module_name": "fs",   "init_function": "_ejs_fs_module_func",   "exports": [ "statSync", "readFileSync", "createWriteStream", "readdirSync" ] },
+        { "module_name": "child_process", "init_function": "_ejs_child_process_module_func", "exports": [ "spawn", "stdout", "stderr" ] }
     ],
     "link_flags": "",
+    "module_version": "0.0.0-alpha1",
     "module_file": "libejsnodecompat-module.a"
 }
