@@ -26,7 +26,7 @@ osx-tarball: osx-tarball-deps
 	cp $(TOP)/ejs-llvm/ejs-llvm.ejs $(libdir)
 	cp $(TOP)/ejs-llvm/libejsllvm-module.a $(archlibdir)
 	cp $(TOP)/test/fetch.js $(sampledir)
-	tar -cvjf $(TARBALL_DIR).tar.gz $(TARBALL_DIR)
+	tar -cvzf $(TARBALL_DIR).tar.gz $(TARBALL_DIR)
 
 osx-tarball-deps: release-readme.md
 	$(MAKE) -C .. all bootstrap
