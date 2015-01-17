@@ -969,8 +969,12 @@ _ejs_typedarrays_init(ejsval global)
     PROTO_METHOD_IMPL(ArrayType##Array, set);                           \
     PROTO_METHOD_IMPL(ArrayType##Array, subarray);                      \
     PROTO_METHOD_IMPL(ArrayType##Array, keys);                          \
-    PROTO_METHOD_IMPL(ArrayType##Array, values);                        \
     PROTO_GETTER(ArrayType##Array, toStringTag); /* XXX needs to be enumerable: false, configurable: true */ \
+                                                                        \
+    /* Manually expand values() so we can use it for the iterator */    \
+    ejsval _values = _ejs_function_new_native(_ejs_null, _ejs_atom_values, (EJSClosureFunc) _ejs_##ArrayType##Array_prototype_values_impl); \
+    _ejs_object_define_value_property(_ejs_##ArrayType##Array_prototype, _ejs_atom_values, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE); \
+    _ejs_object_define_value_property(_ejs_##ArrayType##Array_prototype, _ejs_Symbol_iterator, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE); \
                                                                         \
     EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_##ArrayType##Array, create, _ejs_##ArrayType##Array_create, EJS_PROP_NOT_ENUMERABLE); \
     EJS_INSTALL_SYMBOL_GETTER (_ejs_##ArrayType##Array, species, _ejs_##ArrayType##Array_get_species); \
