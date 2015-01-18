@@ -529,7 +529,7 @@ _ejs_fs_readdirSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     struct dirent* entry;
 
     while ((entry = readdir(dir))) {
-        ejsval entry_name = _ejs_string_new_utf8_len(entry->d_name, entry->d_namlen);
+        ejsval entry_name = _ejs_string_new_utf8(entry->d_name);
         _ejs_array_push_dense(array, 1, &entry_name);
     }
 
