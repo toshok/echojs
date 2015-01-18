@@ -2690,7 +2690,6 @@ registerNativeModuleInfo = (ejs_dir, module_name, link_flags, module_files, modu
                 if module_info.exports
                         module_info.exports.forEach (v) -> m.addExport(v)
 
-                console.log "adding nativeModule for #{module_name}"
                 nativeModules.set(module_name, m)
 
         if module_info.submodules?
@@ -2708,18 +2707,16 @@ gatherNativeModuleInfo = (ejs_file) ->
 gatherAllNativeModules = (module_dirs) ->
         # gather a list of all native modules, flattening their submodule lists
         for mdir in module_dirs
-                console.log mdir
                 try
                         files = fs.readdirSync mdir
                         files.forEach (f) ->
                                 if f.indexOf('.ejs') is f.length-4
                                         try
-                                                console.log f
                                                 gatherNativeModuleInfo path.resolve mdir, f
                                         catch e
                                                 console.warn "parsing of module file #{f} failed: #{e}"
                 catch e
-                        console.log e
+                        #console.log e
                         # nothing to do
 
 exports.gatherAllModules = (initial_file_list, options) ->
