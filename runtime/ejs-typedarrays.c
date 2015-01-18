@@ -845,7 +845,7 @@ static ejsval                                                           \
         /* a. Let Pk be ToString(k). */                                 \
         ejsval Pk = ToString (NUMBER_TO_EJSVAL(k));                     \
                                                                         \
-        /* TODO */
+        /* TODO */                                                      \
         /* b. Let kPresent be HasProperty(O, Pk). */                    \
         /*EJSBool kPresent = OP(EJSVAL_TO_OBJECT(O), HasProperty)(O, Pk);*/ \
                                                                         \
