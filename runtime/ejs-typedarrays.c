@@ -966,6 +966,20 @@ static ejsval                                                           \
 }                                                                       \
                                                                         \
 static ejsval                                                           \
+_ejs_##ArrayType##Array_prototype_toString_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+{                                                                       \
+    /* 1. Let array be the result of calling ToObject on the this value. */ \
+    ejsval array = ToObject(_this);                                     \
+                                                                        \
+    /* 3. Let func be Get(array, "join"). */                            \
+    ejsval func = Get(array, _ejs_atom_join);                           \
+                                                                        \
+    /* 6. Return Call(func, array). */                                  \
+    ejsval funcArgs[0];                                                 \
+    return _ejs_invoke_closure (func, array, 0, funcArgs);              \
+}                                                                       \
+                                                                        \
+static ejsval                                                           \
 _ejs_##ArrayType##Array_of_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
 {                                                                       \
     ejsval newObj;                                                      \
@@ -1179,6 +1193,7 @@ _ejs_typedarrays_init(ejsval global)
     PROTO_METHOD_IMPL(ArrayType##Array, join);                          \
     PROTO_METHOD_IMPL(ArrayType##Array, subarray);                      \
     PROTO_METHOD_IMPL(ArrayType##Array, keys);                          \
+    PROTO_METHOD_IMPL(ArrayType##Array, toString);                      \
     PROTO_GETTER(ArrayType##Array, toStringTag); /* XXX needs to be enumerable: false, configurable: true */ \
                                                                         \
     /* Manually expand values() so we can use it for the iterator */    \
