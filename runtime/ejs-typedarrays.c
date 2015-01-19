@@ -17,6 +17,18 @@
 
 #define EJS_TYPEDARRAY_LEN(arrobj)      (((EJSTypedArray*)EJSVAL_TO_OBJECT(arrobj))->length)
 
+static inline int
+max(int a, int b)
+{
+    if (a > b) return a; else return b;
+}
+
+static inline int
+min(int a, int b)
+{
+    if (a > b) return b; else return a;
+}
+
 ejsval _ejs_ArrayBuffer_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_ArrayBuffer EJSVAL_ALIGNMENT;
 
@@ -49,6 +61,23 @@ ejsval _ejs_Float64Array EJSVAL_ALIGNMENT;
 
 ejsval _ejs_DataView_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_DataView EJSVAL_ALIGNMENT;
+
+EJSBool
+IsDetachedBuffer (ejsval arrayBuffer)
+{
+    /* 1. Assert: Type(arrayBuffer) is Object and it has [[ArrayBufferData]] internal slot. */
+    if (!EJSVAL_IS_ARRAYBUFFER(arrayBuffer))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "value not an array buffer"); // assertion error?
+
+    EJSArrayBuffer *Obj = EJSVAL_TO_ARRAYBUFFER(arrayBuffer);
+
+    /* 2. If arrayBuffer’s [[ArrayBufferData]] internal slot is null, then return true. */
+    if (Obj->dependent)
+        return EJS_TRUE;
+
+    /* 3. Return false. */
+    return EJS_FALSE;
+}
 
 ejsval
 _ejs_arraybuffer_new (int size)
@@ -132,6 +161,26 @@ static ejsval
 _ejs_ArrayBuffer_get_species (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     return _ejs_ArrayBuffer;
+}
+
+static ejsval
+_ejs_ArrayBuffer_isView (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval arg = _ejs_undefined;
+
+    if (argc > 0)
+        arg = args[0];
+
+    /* 1. If Type(arg) is not Object, return false. */
+    if (!EJSVAL_IS_OBJECT(arg))
+        return BOOLEAN_TO_EJSVAL(EJS_FALSE);
+
+    /* 2. If arg has a [[ViewedArrayBuffer]] internal slot, then return true. */
+    if (EJSVAL_IS_DATAVIEW(arg) || EJSVAL_IS_TYPEDARRAY(arg))
+        return BOOLEAN_TO_EJSVAL(EJS_TRUE);
+
+    /* 3. Return false. */
+    return BOOLEAN_TO_EJSVAL(EJS_FALSE);
 }
 
 static ejsval
@@ -500,12 +549,12 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
                                                                         \
      if (is_index) {                                                    \
          if (idx < 0 || idx >= EJS_TYPEDARRAY_LEN(obj)) {               \
-             return EJS_TRUE;                                           \
+             return EJS_FALSE;                                          \
          }                                                              \
          void* data = _ejs_typedarray_get_data (EJSVAL_TO_OBJECT(obj)); \
          ((elementtype*)data)[idx] = (elementtype)EJSVAL_TO_NUMBER(val); \
      }                                                                  \
-     return EJS_FALSE; /* XXX */                                        \
+     return EJS_TRUE; /* XXX */                                         \
  }                                                                      \
                                                                         \
  static EJSBool                                                         \
@@ -537,7 +586,95 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
  static ejsval                                                          \
  _ejs_##ArrayType##Array_prototype_subarray_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
  {                                                                      \
-     EJS_NOT_IMPLEMENTED();                                             \
+     ejsval begin = _ejs_undefined;                                     \
+     ejsval end = _ejs_undefined;                                       \
+                                                                        \
+     if (argc > 0)                                                      \
+        begin = args [0];                                               \
+     if (argc > 1)                                                      \
+        end = args [1];                                                 \
+                                                                        \
+     /* 1. Let O be the this value. */                                  \
+     ejsval O = _this;                                                  \
+                                                                        \
+     /* 2. If Type(O) is not Object, throw a TypeError exception. */    \
+     if (!EJSVAL_IS_OBJECT(O))                                          \
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not an Object"); \
+                                                                        \
+     /* 3. If O does not have a [[TypedArrayName]] internal slot, then throw a TypeError exception. */ \
+     if (!EJSVAL_IS_TYPEDARRAY(O))                                       \
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a typed array"); \
+                                                                        \
+     EJSTypedArray *Oobj = (EJSTypedArray*) EJSVAL_TO_OBJECT(O);       \
+                                                                        \
+     /* 4. Assert: O has a [[ViewedArrayBuffer]] internal slot. */      \
+     /* 5. Let buffer be the value of O’s [[ViewedArrayBuffer]] internal slot. */ \
+     ejsval buffer = Oobj->buffer;                                      \
+                                                                        \
+     /* 6. If buffer is undefined, then throw a TypeError exception. */ \
+     if (EJSVAL_IS_UNDEFINED(buffer))                                   \
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "typed arrray's buffer is undefined"); \
+                                                                        \
+     /* 7. Let srcLength be the value of O’s [[ArrayLength]] internal slot. */ \
+     uint32_t srcLength = Oobj->length;                                 \
+                                                                        \
+     /* 8. Let beginInt be ToInteger(begin) */                          \
+     /* 9. ReturnIfAbrupt(beginInt). */                                 \
+     int32_t beginInt = ToInteger(begin);                               \
+                                                                        \
+     /* 10. If beginInt < 0, then let beginInt be srcLength + beginInt. */  \
+     if (beginInt < 0)                                                  \
+        beginInt = srcLength + beginInt;                                \
+                                                                        \
+     /* 11. Let beginIndex be min(srcLength, max(0, beginInt)). */      \
+     uint32_t beginIndex = min(srcLength, max(0, beginInt));             \
+                                                                        \
+     /* 12. If end is undefined, then let end be srcLength. */          \
+     if (EJSVAL_IS_UNDEFINED(end))                                      \
+        end = NUMBER_TO_EJSVAL(srcLength);                              \
+                                                                        \
+     /* 13. Let endInt be ToInteger(end). */                            \
+     /* 14. ReturnIfAbrupt(endInt). */                                  \
+     int endInt = ToInteger(end);                                       \
+                                                                        \
+     /* 15. If endInt < 0, then let endInt be srcLength + endInt. */    \
+     if (endInt < 0)                                                    \
+        endInt = srcLength + endInt;                                    \
+                                                                        \
+     /* 16. Let endIndex be max(0,min(srcLength, endInt)). */           \
+     uint32_t endIndex = max(0, min(srcLength, endInt));                 \
+                                                                        \
+     /* 17. If endIndex < beginIndex, then let endIndex be beginIndex. */ \
+     if (endIndex < beginIndex)                                         \
+        endIndex = beginIndex;                                          \
+                                                                        \
+     /* 18. Let newLength be endIndex - beginIndex. */                  \
+     uint32_t newLength = endIndex - beginIndex;                        \
+                                                                        \
+     /* 19. Let constructorName be the string value of O’s [[TypedArrayName]] internal slot. */ \
+     /* 20. Let elementType be the string value of the Element Type value in Table 46 for constructorName. */ \
+     /* 21. Let elementSize be the Number value of the Element Size value specified in Table 46 for constructorName. */ \
+     uint32_t elementSize = elementSizeInBytes;                         \
+                                                                        \
+     /* 22. Let srcByteOffset be the value of O’s [[ByteOffset]] internal slot. */ \
+     uint32_t srcByteOffset = Oobj->byteOffset;                         \
+                                                                        \
+     /* 23. Let beginByteOffset be srcByteOffset + beginIndex × elementSize. */ \
+     uint32_t beginByteOffset = srcByteOffset + beginIndex * elementSize; \
+                                                                        \
+     /* 24. Let defaultConstructor be the intrinsic object listed in column one of Table 46 for constructorName. */ \
+     /* 25. Let constructor be SpeciesConstructor(O, defaultConstructor). */ \
+     /* 26. ReturnIfAbrupt(constructor). */                             \
+                                                                        \
+     /* 27. Let argumentsList be «buffer, beginByteOffset, newLength». */ \
+     ejsval argumentsList[3] = { buffer, NUMBER_TO_EJSVAL(beginByteOffset), NUMBER_TO_EJSVAL(newLength) }; \
+                                                                        \
+     EJSTypedArray *rv = _ejs_gc_new(EJSTypedArray);                    \
+     _ejs_init_object ((EJSObject*)rv, _ejs_##ArrayType##Array_prototype, _ejs_typed_array_specops[EJS_TYPEDARRAY_##EnumType]); \
+                                                                        \
+     /* 28. Return the result of calling the [[Construct]] internal method of constructor with argument argumentsList. */ \
+     ejsval ctor = _ejs_##ArrayType##Array;                             \
+     return _ejs_invoke_closure(ctor, OBJECT_TO_EJSVAL((EJSObject*)rv), 3, argumentsList); \
  }                                                                      \
                                                                         \
  /* this should be a single getter reused by all typed-arrays */        \
@@ -601,7 +738,291 @@ static ejsval                                                           \
     obj->length = 0;                                                    \
     /* 11. Return obj. */                                               \
     return OBJECT_TO_EJSVAL((EJSObject*)obj);                           \
-}
+}                                                                       \
+                                                                        \
+static ejsval                                                           \
+ _ejs_##ArrayType##Array_prototype_join_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+{                                                                       \
+    ejsval separator = _ejs_undefined;                                  \
+    if (argc >= 1)                                                      \
+        separator = args[0];                                            \
+                                                                        \
+    /* This function is not generic. */                                 \
+    if (!EJSVAL_IS_TYPEDARRAY(_this))                                   \
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "##ArrayType##Array.prototype.join called on non typed-array object"); \
+                                                                        \
+    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */ \
+    ejsval O = ToObject(_this);                                         \
+                                                                        \
+    /* 3. Let lenVal be the result of Get(O, "length"). */              \
+    ejsval lenVal = Get(O, _ejs_atom_length);                           \
+                                                                        \
+    /* 4. Let len be ToLength(lenVal). */                               \
+    uint32_t len = ToLength(lenVal);                                    \
+                                                                        \
+    ejsval sep;                                                         \
+    const jschar *sep_str;                                              \
+    uint32_t sep_len;                                                   \
+                                                                        \
+    /* 6. If separator is undefined, let separator be the single-element String ",". */ \
+    /* 7. Let sep be ToString(separator). */                            \
+    if (EJSVAL_IS_UNDEFINED(separator)) {                               \
+        static jschar comma [] = {  (jschar)',' };                      \
+        sep_str = comma;                                                \
+        sep_len = 1;                                                    \
+    } else {                                                            \
+        sep = ToString(separator);                                      \
+        sep_str = EJSVAL_TO_FLAT_STRING(sep);                           \
+        sep_len = EJSVAL_TO_STRLEN(sep);                                \
+    }                                                                   \
+                                                                        \
+    /* 8. If len is zero, return the empty String. */                   \
+    if (len == 0)                                                       \
+        return _ejs_atom_empty;                                         \
+                                                                        \
+    /* (Prepare the internal buffer and pre calculate the length */     \
+    jschar *result;                                                     \
+    uint32_t result_len = 0;                                            \
+                                                                        \
+    ejsval *strings = (ejsval*)malloc (sizeof (ejsval) * len);          \
+    int i;                                                              \
+                                                                        \
+    for (i = 0; i < len; i++) {                                         \
+        strings[i] = ToString(Get(O, NUMBER_TO_EJSVAL(i)));             \
+        result_len += EJSVAL_TO_STRLEN(strings[i]);                     \
+    }                                                                   \
+                                                                        \
+    result_len += sep_len * (len - 1) + 1; /* \0 terminator */          \
+    result = (jschar*)malloc (sizeof(jschar) * result_len);             \
+    jschar *p = result; /* current position */                          \
+                                                                        \
+    /* 9. Let element0 be the result of Get(O, "0"). */                 \
+    /* 10. If element0 is undefined or null, let R be the empty String; otherwise, let R be ToString(element0). */ \
+    ejsval R = strings[0];                                              \
+                                                                        \
+    /* (Since R will be used as starting point, copy it now to the internal buffer */ \
+    jschar *R_str = EJSVAL_TO_FLAT_STRING(R);                           \
+    uint32_t R_len = EJSVAL_TO_STRLEN(R);                               \
+    memmove (p, R_str, R_len * sizeof(jschar));                         \
+    p += R_len;                                                         \
+                                                                        \
+    /* 12. Let k be 1. */                                               \
+    uint32_t k = 1;                                                     \
+                                                                        \
+    /* 13. Repeat, while k < len */                                     \
+    while (k < len) {                                                   \
+        /* a. Let S be the String value produced by concatenating R and sep. */ \
+        memmove (p, sep_str, sep_len * sizeof(jschar));                 \
+        p += sep_len;                                                   \
+                                                                        \
+        /* b. Let element be Get(O, ToString(k)). */                    \
+        /* c. If element is undefined or null, then let next be the empty String; otherwise, let next be ToString(element). */ \
+        ejsval next = strings[k];                                       \
+                                                                        \
+        /* e. Let R be a String value produced by concatenating S and next. */ \
+        jschar *next_str = EJSVAL_TO_FLAT_STRING(next);                 \
+        uint32_t next_len = EJSVAL_TO_STRLEN(next);                     \
+        memmove (p, next_str, next_len * sizeof(jschar));               \
+        p += next_len;                                                  \
+                                                                        \
+        /* f. Increase k by 1. */                                       \
+        k++;                                                            \
+    }                                                                   \
+    *p = 0;                                                             \
+                                                                        \
+    ejsval rv = _ejs_string_new_ucs2(result);                           \
+                                                                        \
+    free (result);                                                      \
+    free (strings);                                                     \
+                                                                        \
+    /* 14. Return R. */                                                 \
+    return rv;                                                          \
+}                                                                       \
+                                                                        \
+static ejsval                                                           \
+ _ejs_##ArrayType##Array_prototype_keys_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+{                                                                       \
+    /* 1. Let O be the this value. */                                   \
+    ejsval O = _this;                                                   \
+                                                                        \
+    /* 2. If Type(O) is not Object, throw a TypeError exception. */     \
+    if (!EJSVAL_IS_OBJECT(O))                                           \
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not an Object"); \
+                                                                        \
+    /* 3. If O does not have a [[ViewedArrayBuffer]] internal slot throw a TypeError exception. */ \
+    if (!EJSVAL_IS_TYPEDARRAY(O))                                       \
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a typed array"); \
+                                                                        \
+    EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);          \
+                                                                        \
+    /* 4. Let buffer be the value of O’s [[ViewedArrayBuffer]] internal slot. */ \
+    ejsval buffer = Oobj->buffer;                                       \
+                                                                        \
+    /* 5. If buffer is undefined, then throw a TypeError exception. */  \
+    if (EJSVAL_IS_UNDEFINED(buffer))                                    \
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "typed arrray's buffer is undefined"); \
+                                                                        \
+    /* 6. If IsDetachedBuffer(buffer) is true, throw a TypeError exception. */ \
+    if (IsDetachedBuffer(buffer))                                       \
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "typed array's buffer is detached"); \
+                                                                        \
+    /* 7. Return CreateArrayIterator(O, "key"). */                      \
+    return _ejs_array_iterator_new (O, EJS_ARRAYITER_KIND_KEY);         \
+}                                                                       \
+                                                                        \
+static ejsval                                                           \
+ _ejs_##ArrayType##Array_prototype_values_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+{                                                                       \
+    /* 1. Let O be the this value. */                                   \
+    ejsval O = _this;                                                   \
+                                                                        \
+    /* 2. If Type(O) is not Object, throw a TypeError exception. */     \
+    if (!EJSVAL_IS_OBJECT(O))                                           \
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not an Object"); \
+                                                                        \
+    /* 3. If O does not have a [[ViewedArrayBuffer]] internal slot throw a TypeError exception. */ \
+    if (!EJSVAL_IS_TYPEDARRAY(O))                                       \
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a typed array"); \
+                                                                        \
+    EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);          \
+                                                                        \
+    /* 4. Let buffer be the value of O’s [[ViewedArrayBuffer]] internal slot. */ \
+    ejsval buffer = Oobj->buffer;                                       \
+                                                                        \
+    /* 5. If buffer is undefined, then throw a TypeError exception. */  \
+    if (EJSVAL_IS_UNDEFINED(buffer))                                    \
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "typed arrray's buffer is undefined"); \
+                                                                        \
+    /* 6. If IsDetachedBuffer(buffer) is true, throw a TypeError exception. */ \
+    if (IsDetachedBuffer(buffer))                                       \
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "typed array's buffer is detached"); \
+                                                                        \
+    /* 7. Return CreateArrayIterator(O, "value"). */                    \
+    return _ejs_array_iterator_new (O, EJS_ARRAYITER_KIND_VALUE);       \
+}                                                                       \
+                                                                        \
+static ejsval                                                           \
+ _ejs_##ArrayType##Array_prototype_forEach_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+{                                                                       \
+    ejsval callbackfn = _ejs_undefined;                                 \
+    ejsval thisArg = _ejs_undefined;                                    \
+                                                                        \
+    if (argc >= 1)                                                      \
+        callbackfn = args[0];                                           \
+                                                                        \
+    if (argc >= 2)                                                      \
+        thisArg = args[1];                                              \
+                                                                        \
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))                             \
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "##ArrayType##Array.prototype.forEach called on null or undefined"); \
+                                                                        \
+    /* This function is not generic. */                                 \
+    if (!EJSVAL_IS_TYPEDARRAY(_this))                                   \
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "##ArrayType##Array.prototype.forEach called on non typed-array object"); \
+                                                                        \
+    /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */ \
+    ejsval O = ToObject(_this);                                         \
+                                                                        \
+    /* 3. Let lenValue be Get(O, "length"). */                          \
+    ejsval lenValue = Get(O, _ejs_atom_length);                         \
+                                                                        \
+    /* 4. Let len be ToLength(lenValue). */                             \
+    uint32_t len = ToLength(lenValue);                                  \
+                                                                        \
+    /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */   \
+    if (!EJSVAL_IS_CALLABLE(callbackfn))                                \
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function"); \
+                                                                        \
+    /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */ \
+    ejsval T = thisArg;                                                 \
+                                                                        \
+    /* 8. Let k be 0. */                                                \
+    uint32_t k = 0;                                                     \
+                                                                        \
+    /* 9. Repeat, while k < len */                                      \
+    while (k < len) {                                                   \
+        /* a. Let Pk be ToString(k). */                                 \
+        ejsval Pk = ToString (NUMBER_TO_EJSVAL(k));                     \
+                                                                        \
+        /* TODO */                                                      \
+        /* b. Let kPresent be HasProperty(O, Pk). */                    \
+        /*EJSBool kPresent = OP(EJSVAL_TO_OBJECT(O), HasProperty)(O, Pk);*/ \
+                                                                        \
+        /* d. If kPresent is true, then */                              \
+        if (EJS_TRUE) {                                                 \
+            /* i. Let kValue be the result of calling the [[Get]] internal method of O with argument Pk. */ \
+            ejsval kValue = Get(O, Pk);                                 \
+                                                                        \
+            /* ii. Call the [[Call]] internal method of callbackfn with T as the this value and argument list containing kValue, k, and O.  */ \
+            ejsval foreach_args[3] = { kValue, NUMBER_TO_EJSVAL(k), O };\
+            _ejs_invoke_closure (callbackfn, T, 3, foreach_args);       \
+        }                                                               \
+                                                                        \
+        /* d.  d. Increase k by 1.  */                                  \
+        k++;                                                            \
+    }                                                                   \
+                                                                        \
+    return _ejs_undefined;                                              \
+}                                                                       \
+                                                                        \
+static ejsval                                                           \
+_ejs_##ArrayType##Array_prototype_toString_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+{                                                                       \
+    /* 1. Let array be the result of calling ToObject on the this value. */ \
+    ejsval array = ToObject(_this);                                     \
+                                                                        \
+    /* 3. Let func be Get(array, "join"). */                            \
+    ejsval func = Get(array, _ejs_atom_join);                           \
+                                                                        \
+    /* 6. Return Call(func, array). */                                  \
+    ejsval funcArgs[0];                                                 \
+    return _ejs_invoke_closure (func, array, 0, funcArgs);              \
+}                                                                       \
+                                                                        \
+static ejsval                                                           \
+_ejs_##ArrayType##Array_of_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+{                                                                       \
+    ejsval newObj;                                                      \
+                                                                        \
+    /* 1. Let len be the actual number of arguments passed to this function. */ \
+    uint32_t len = argc;                                                \
+                                                                        \
+    /* 2. Let items be the List of arguments passed to this function. */\
+    ejsval *items = args;                                               \
+                                                                        \
+    /* 3. Let C be the this value. */                                   \
+    ejsval C = _this;                                                   \
+                                                                        \
+    /* 4. If IsConstructor(C) is true, then */                          \
+    if (EJSVAL_IS_CONSTRUCTOR(C)) {                                     \
+        /* a. Let newObj be the result of calling the [[Construct]] internal method of C with argument «len». */ \
+        newObj = _ejs_typedarray_new (EJS_TYPEDARRAY_##EnumType, len);  \
+    }                                                                   \
+    /* 5. Else, */                                                      \
+    else                                                                \
+        /* a. Throw a TypeError exception. */                           \
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Type is not a constructor"); \
+                                                                        \
+    /* 6. Let k be 0. */                                                \
+    uint32_t k = 0;                                                     \
+                                                                        \
+    /* 7. Repeat, while k < len */                                      \
+    while (k < len) {                                                   \
+        /* a. Let kValue be element k of items. */                      \
+        ejsval kValue = items[k];                                       \
+                                                                        \
+        /* b. Let Pk be ToString(k). */                                 \
+        ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));                      \
+                                                                        \
+        /* c. Let status be Put(newObj,Pk, kValue.[[value]], true). */  \
+        Put (newObj, Pk, kValue, EJS_TRUE);                             \
+                                                                        \
+        /* d. Increase k by 1. */                                       \
+        k++;                                                            \
+    }                                                                   \
+    /* . Return newObj. */                                              \
+    return newObj;                                                      \
+}                                                                       \
 
 
 EJS_TYPED_ARRAY(INT8, Int8, int8, int8_t, 1);
@@ -705,6 +1126,7 @@ _ejs_typedarrays_init(ejsval global)
 #define OBJ_METHOD(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t, x, _ejs_##t##_##x)
 #define PROTO_METHOD(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t##_prototype, x, _ejs_##t##_prototype_##x)
 #define PROTO_METHOD_IMPL(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t##_prototype, x, _ejs_##t##_prototype_##x##_impl)
+#define OBJ_METHOD_IMPL(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t, x, _ejs_##t##_##x##_impl)
 #define PROTO_GETTER(t,x) EJS_INSTALL_SYMBOL_GETTER(_ejs_##t##_prototype, x, _ejs_##t##_prototype_get_##x)
 
     // ArrayBuffer
@@ -717,6 +1139,8 @@ _ejs_typedarrays_init(ejsval global)
         _ejs_object_setprop (_ejs_ArrayBuffer, _ejs_atom_prototype,   _ejs_ArrayBuffer_prototype);
 
         PROTO_METHOD(ArrayBuffer, slice);
+
+        OBJ_METHOD(ArrayBuffer, isView);
 
         _ejs_object_define_value_property (_ejs_ArrayBuffer_prototype, _ejs_Symbol_toStringTag, _ejs_atom_ArrayBuffer, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
         EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_ArrayBuffer, create, _ejs_ArrayBuffer_create, EJS_PROP_NOT_ENUMERABLE);
@@ -765,8 +1189,19 @@ _ejs_typedarrays_init(ejsval global)
                                                                         \
     PROTO_METHOD_IMPL(ArrayType##Array, get);                           \
     PROTO_METHOD_IMPL(ArrayType##Array, set);                           \
+    PROTO_METHOD_IMPL(ArrayType##Array, forEach);                       \
+    PROTO_METHOD_IMPL(ArrayType##Array, join);                          \
     PROTO_METHOD_IMPL(ArrayType##Array, subarray);                      \
+    PROTO_METHOD_IMPL(ArrayType##Array, keys);                          \
+    PROTO_METHOD_IMPL(ArrayType##Array, toString);                      \
     PROTO_GETTER(ArrayType##Array, toStringTag); /* XXX needs to be enumerable: false, configurable: true */ \
+                                                                        \
+    /* Manually expand values() so we can use it for the iterator */    \
+    ejsval _values = _ejs_function_new_native(_ejs_null, _ejs_atom_values, (EJSClosureFunc) _ejs_##ArrayType##Array_prototype_values_impl); \
+    _ejs_object_define_value_property(_ejs_##ArrayType##Array_prototype, _ejs_atom_values, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE); \
+    _ejs_object_define_value_property(_ejs_##ArrayType##Array_prototype, _ejs_Symbol_iterator, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE); \
+                                                                        \
+    OBJ_METHOD_IMPL(ArrayType##Array, of);                              \
                                                                         \
     EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_##ArrayType##Array, create, _ejs_##ArrayType##Array_create, EJS_PROP_NOT_ENUMERABLE); \
     EJS_INSTALL_SYMBOL_GETTER (_ejs_##ArrayType##Array, species, _ejs_##ArrayType##Array_get_species); \
