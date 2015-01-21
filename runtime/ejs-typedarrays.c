@@ -822,7 +822,7 @@ _ejs_TypedArray_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsv
 
     /* This function is not generic. */
     if (!EJSVAL_IS_TYPEDARRAY(_this))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "##ArrayType##Array.prototype.forEach called on non typed-array object");
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.forEach called on non typed-array object");
 
     /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
     ejsval O = ToObject(_this);
