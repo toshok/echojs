@@ -19,6 +19,9 @@ install-local::
 	@$(MKDIR) $(bindir)
 	$(INSTALL) -c ejs.exe $(bindir)/ejs
 
+clean-local::
+	rm -f ejs-es6.js.exe.stage1 ejs-es6.js.exe.stage2 ejs-es6.js.exe.stage3 ejs.exe
+
 check:
 	$(MAKE) -C test check
 
