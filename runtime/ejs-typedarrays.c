@@ -662,6 +662,11 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
      /* 23. Let beginByteOffset be srcByteOffset + beginIndex × elementSize. */ \
      uint32_t beginByteOffset = srcByteOffset + beginIndex * elementSize; \
                                                                         \
+     /* TODO: From step 24, till the end of the method, */              \
+     /* %TypedArray%.prototype.subarray() doesn't create instances of */\
+     /* subclasses. Implement such support once we get species */       \
+     /* constructor stuff */                                            \
+                                                                        \
      /* 24. Let defaultConstructor be the intrinsic object listed in column one of Table 46 for constructorName. */ \
      /* 25. Let constructor be SpeciesConstructor(O, defaultConstructor). */ \
      /* 26. ReturnIfAbrupt(constructor). */                             \
