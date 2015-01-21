@@ -549,12 +549,12 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
                                                                         \
      if (is_index) {                                                    \
          if (idx < 0 || idx >= EJS_TYPEDARRAY_LEN(obj)) {               \
-             return EJS_TRUE;                                           \
+             return EJS_FALSE;                                          \
          }                                                              \
          void* data = _ejs_typedarray_get_data (EJSVAL_TO_OBJECT(obj)); \
          ((elementtype*)data)[idx] = (elementtype)EJSVAL_TO_NUMBER(val); \
      }                                                                  \
-     return EJS_FALSE; /* XXX */                                        \
+     return EJS_TRUE; /* XXX */                                         \
  }                                                                      \
                                                                         \
  static EJSBool                                                         \
@@ -738,6 +738,51 @@ static ejsval                                                           \
     obj->length = 0;                                                    \
     /* 11. Return obj. */                                               \
     return OBJECT_TO_EJSVAL((EJSObject*)obj);                           \
+}                                                                       \
+                                                                        \
+static ejsval                                                           \
+_ejs_##ArrayType##Array_of_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+{                                                                       \
+    ejsval newObj;                                                      \
+                                                                        \
+    /* 1. Let len be the actual number of arguments passed to this function. */ \
+    uint32_t len = argc;                                                \
+                                                                        \
+    /* 2. Let items be the List of arguments passed to this function. */\
+    ejsval *items = args;                                               \
+                                                                        \
+    /* 3. Let C be the this value. */                                   \
+    ejsval C = _this;                                                   \
+                                                                        \
+    /* 4. If IsConstructor(C) is true, then */                          \
+    if (EJSVAL_IS_CONSTRUCTOR(C))                                       \
+        /* a. Let newObj be the result of calling the [[Construct]] internal method of C with argument «len». */ \
+        newObj = _ejs_typedarray_new (EJS_TYPEDARRAY_##EnumType, len);  \
+                                                                        \
+    /* 5. Else, */                                                      \
+    else                                                                \
+        /* a. Throw a TypeError exception. */                           \
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Type is not a constructor"); \
+                                                                        \
+    /* 6. Let k be 0. */                                                \
+    uint32_t k = 0;                                                     \
+                                                                        \
+    /* 7. Repeat, while k < len */                                      \
+    while (k < len) {                                                   \
+        /* a. Let kValue be element k of items. */                      \
+        ejsval kValue = items[k];                                       \
+                                                                        \
+        /* b. Let Pk be ToString(k). */                                 \
+        ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));                      \
+                                                                        \
+        /* c. Let status be Put(newObj,Pk, kValue.[[value]], true). */  \
+        Put (newObj, Pk, kValue, EJS_TRUE);                             \
+                                                                        \
+        /* d. Increase k by 1. */                                       \
+        k++;                                                            \
+    }                                                                   \
+    /* . Return newObj. */                                              \
+    return newObj;                                                      \
 }
 
 
@@ -962,6 +1007,7 @@ void
 _ejs_typedarrays_init(ejsval global)
 {
 #define OBJ_METHOD(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t, x, _ejs_##t##_##x)
+#define OBJ_METHOD_IMPL(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t, x, _ejs_##t##_##x##_impl)
 #define PROTO_METHOD(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t##_prototype, x, _ejs_##t##_prototype_##x)
 #define PROTO_METHOD_IMPL_GENERIC(t, x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t##_prototype, x, _ejs_TypedArray_prototype_##x)
 #define PROTO_METHOD_IMPL(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t##_prototype, x, _ejs_##t##_prototype_##x##_impl)
@@ -1038,6 +1084,8 @@ _ejs_typedarrays_init(ejsval global)
     ejsval _values = _ejs_function_new_native(_ejs_null, _ejs_atom_values, (EJSClosureFunc) _ejs_TypedArray_prototype_values); \
     _ejs_object_define_value_property(_ejs_##ArrayType##Array_prototype, _ejs_atom_values, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE); \
     _ejs_object_define_value_property(_ejs_##ArrayType##Array_prototype, _ejs_Symbol_iterator, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE); \
+                                                                        \
+    OBJ_METHOD_IMPL(ArrayType##Array, of);                              \
                                                                         \
     EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_##ArrayType##Array, create, _ejs_##ArrayType##Array_create, EJS_PROP_NOT_ENUMERABLE); \
     EJS_INSTALL_SYMBOL_GETTER (_ejs_##ArrayType##Array, species, _ejs_##ArrayType##Array_get_species); \
