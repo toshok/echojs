@@ -17,7 +17,8 @@ COFFEE_SOURCES=				\
 	exitable-scope.coffee		\
 	runtime.coffee			\
 	terminal.coffee			\
-	module-resolver.coffee
+	module-resolver.coffee		\
+	host-config.coffee
 
 JS_SOURCES=				\
 	map.js				\
@@ -28,15 +29,21 @@ DESTDIR = generated
 
 GENERATED_FILES=$(COFFEE_SOURCES:%.coffee=$(DESTDIR)/%.js) $(JS_SOURCES:%.js=$(DESTDIR)/%.js)
 
-all-local:: $(GENERATED_FILES)
+all-local:: $(GENERATED_FILES) host-config-es6.js
 
 clean-local::
-	rm -f $(GENERATED_FILES)
+	rm -f $(GENERATED_FILES) host-config-es6.js host-config.coffee
 
 $(DESTDIR)/%.js: %.coffee
-	coffee -m -o $(DESTDIR) -c $<
+	@echo [coffee] $@ && coffee -m -o $(DESTDIR) -c $<
 
 $(DESTDIR)/%.js: %.js
-	cp $< $@
+	@echo [copy] $@ && cp $< $@
+
+%.coffee: %.coffee.in
+	@echo [gen] $@ && (cat $< | sed -e s,@LLVM_SUFFIX@,$(LLVM_SUFFIX),g > $@)
+
+%: %.in
+	@echo [gen] $@ && (cat $< | sed -e s,@LLVM_SUFFIX@,$(LLVM_SUFFIX),g > $@)
 
 include $(TOP)/build/build.mk

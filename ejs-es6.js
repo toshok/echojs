@@ -16,6 +16,8 @@ import { dumpModules, getAllModules, gatherAllModules } from './lib/passes/gathe
 
 import { bold, reset, genFreshFileName } from './lib/echo-util';
 
+import { LLVM_SUFFIX as DEFAULT_LLVM_SUFFIX} from './lib/host-config-es6';
+
 // argv is [".../ejs", ...], so get rid of the ejs
 let argv = process.argv.slice(1);
 
@@ -359,7 +361,7 @@ function target_path_prepend (platform, arch) {
 
 let llvm_commands = {};
 for (let x of ["opt", "llc", "llvm-as"])
-    llvm_commands[x]=`${x}${process.env.LLVM_SUFFIX || ''}`;
+    llvm_commands[x]=`${x}${process.env.LLVM_SUFFIX || DEFAULT_LLVM_SUFFIX}`;
 
 function compileFile(filename, parse_tree, modules) {
     let base_filename = genFreshFileName(path.basename(filename));

@@ -18,6 +18,7 @@ util = require 'echo-util'
 debug = require 'debug'
 { Set } = require 'set'
 { Map } = require 'map'
+{ LLVM_SUFFIX } = require 'host-config'
         
 # if we're running under coffee/node, argv will be ["coffee", ".../ejs", ...]
 # if we're running the compiled ejs.exe, argv will be [".../ejs.js.exe", ...]
@@ -304,7 +305,7 @@ target_path_prepend = (platform, arch) ->
         ""                
 
 llvm_commands = {}
-llvm_commands[x]="#{x}#{process.env.LLVM_SUFFIX || ''}" for x in ["opt", "llc", "llvm-as"]
+llvm_commands[x]="#{x}#{process.env.LLVM_SUFFIX || LLVM_SUFFIX}" for x in ["opt", "llc", "llvm-as"]
 
 compileFile = (filename, parse_tree, modules, compileCallback) ->
         base_filename = util.genFreshFileName path.basename filename
