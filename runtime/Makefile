@@ -225,11 +225,11 @@ all-local:: $(ALL_TARGETS)
 
 #XXX(toshok) same as node-compat's Makefile - we need to install all targets to their respective archlibdirs
 install-local::
-	@$(MKDIR) $(includedir)
+	@$(MKDIR) $(includedir)/runtime
 	@$(MKDIR) $(archlibdir)
 	$(INSTALL) -c $(ALL_LIBRARIES) $(archlibdir)
 	@for i in *.h; do \
-	  $(INSTALL) -c $$i $(includedir); \
+	  $(INSTALL) -c $$i $(includedir)/runtime; \
 	done
 
 clean-local::

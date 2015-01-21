@@ -27,7 +27,7 @@ let running_from_source_dir = path.basename(ejs_exe_dirname()) !== "bin";
 
 let host_arch = os.arch();
 if (host_arch === "x64")
-    host_arch = "x86-64"; // why didn't we just standardize on 'amd64'?  sigh
+    host_arch = "x86_64"; // why didn't we just standardize on 'amd64'?  sigh
 if (host_arch === "ia32")
     host_arch = "x86";
 
@@ -58,7 +58,7 @@ function add_native_module_dir (dir) {
 }
 
 let arch_info = {
-    "x86-64": { pointer_size: 64, little_endian: true, llc_arch: "x86-64",  clang_arch: "x86_64" },
+    "x86_64": { pointer_size: 64, little_endian: true, llc_arch: "x86-64",  clang_arch: "x86_64" },
     x86:      { pointer_size: 32, little_endian: true, llc_arch: "x86",     clang_arch: "i386" },
     arm:      { pointer_size: 32, little_endian: true, llc_arch: "arm",     clang_arch: "armv7" },
     aarch64:  { pointer_size: 64, little_endian: true, llc_arch: "aarch64", clang_arch: "aarch64" }
@@ -70,8 +70,7 @@ function set_target_arch(arch) {
 
     // we accept some arch aliases
 
-    if (arch === "amd64")  arch = "x86-64";
-    if (arch === "x86_64") arch = "x86-64";
+    if (arch === "amd64")  arch = "x86_64";
     if (arch === "i386")   arch = "x86";
 
     if (! (arch in arch_info))
@@ -89,8 +88,8 @@ function set_target(platform, arch) {
 
 function set_target_alias(alias) {
     const target_aliases = {
-        linux_amd64: { platform: "linux",  arch: "x86-64" },
-        osx:         { platform: "darwin", arch: "x86-64" },
+        linux_amd64: { platform: "linux",  arch: "x86_64" },
+        osx:         { platform: "darwin", arch: "x86_64" },
         sim:         { platform: "darwin", arch: "x86" },
         dev:         { platform: "darwin", arch: "arm" }
     };
@@ -179,7 +178,7 @@ let args = {
     "--arch": {
         handler: set_target_arch,
         handlerArgc: 1,
-        help:    "--arch x86-64|x86|arm|aarch64"
+        help:    "--arch x86_64|x86|arm|aarch64"
     },
     "--target": {
         handler: set_target_alias,
@@ -286,12 +285,12 @@ function target_link_args(platform, arch) {
 
     if (platform === "linux") {
         // on ubuntu 14.04, at least, clang spits out a warning about this flag being unused (presumably because there's no other arch)
-        if (arch === "x86-64") return [];
+        if (arch === "x86_64") return [];
         return args;
     }
 
     if (platform === "darwin") {
-        if (arch === "x86-64") return args;
+        if (arch === "x86_64") return args;
         if (arch === "x86")
             return args.concat([ "-isysroot", `${sim_base}/Developer/SDKs/iPhoneSimulator${options.ios_sdk}.sdk`, `-miphoneos-version-min=${options.ios_min}` ]);
         return args.concat(["-isysroot", `${dev_base}/Developer/SDKs/iPhoneOS${options.ios_sdk}.sdk`, `-miphoneos-version-min=${options.ios_min}` ]);
@@ -308,7 +307,7 @@ function target_libraries(platform, arch) {
         let rv = [ "-framework", "Foundation" ];
 
         // for osx we only need Foundation and AppKit
-        if (arch === "x86-64") return rv.concat([ "-framework" , "AppKit" ]);
+        if (arch === "x86_64") return rv.concat([ "-framework" , "AppKit" ]);
 
         // for any other darwin we're dealing with ios, so...
         return rv.concat([ "-framework", "UIKit", "-framework", "GLKit", "-framework", "OpenGLES", "-framework", "CoreGraphics" ]);
@@ -320,7 +319,7 @@ function target_libraries(platform, arch) {
 function target_libecho(platform, arch) {
     if (running_from_source_dir) {
         if (platform === "darwin") {
-            if (arch === "x86-64") return "runtime/libecho.a";
+            if (arch === "x86_64") return "runtime/libecho.a";
 
             return "runtime/libecho.a.ios";
         }
@@ -328,7 +327,7 @@ function target_libecho(platform, arch) {
         return "runtime/libecho.a";
     }
     else {
-        return path.join(relative_to_ejs_exe(`../lib/${platform}-${arch}`), 'libecho.a');
+        return path.join(relative_to_ejs_exe(`../lib/${arch}-${platform}`), 'libecho.a');
     }
 }
 
@@ -338,7 +337,7 @@ function target_extra_libs(platform, arch) {
         if (platform === "linux")   return "external-deps/pcre-linux/.libs/libpcre16.a";
 
         if (platform === "darwin") {
-            if (arch === "x86-64")  return "external-deps/pcre-osx/.libs/libpcre16.a";
+            if (arch === "x86_64")  return "external-deps/pcre-osx/.libs/libpcre16.a";
             if (arch === "x86")     return "external-deps/pcre-iossim/.libs/libpcre16.a";
             if (arch === "arm")     return "external-deps/pcre-iosdev/.libs/libpcre16.a";
             if (arch === "aarch64") return "external-deps/pcre-iosdevaarch64/.libs/libpcre16.a";
@@ -347,7 +346,7 @@ function target_extra_libs(platform, arch) {
         throw new Error("no pcre for this platform");
     }
     else {
-        return path.join(relative_to_ejs_exe(`../lib/${platform}-${arch}`), 'libpcre16.a');
+        return path.join(relative_to_ejs_exe(`../lib/${arch}-${platform}`), 'libpcre16.a');
     }
 }
 
@@ -507,14 +506,14 @@ function do_final_link(main_file, modules) {
             seen_native_modules.add(mf);
 
             clang_args.push(path.resolve(module.ejs_dir,
-                                         running_from_source_dir ? '.' : `${options.target_platform}-${options.target_arch}`,
+                                         running_from_source_dir ? '.' : `${options.target_arch}-${options.target_platform}`,
                                          mf));
         });
 
         clang_args = clang_args.concat(module.link_flags.replace('\n', ' ').split(" "));
     });
 
-    clang_args = clang_args.concat(target_libraries(options.target_platform, options.target_arch));
+    clang_args = clang_args.concat(target_libraries(options.target_platform, options.target_platform));
 
     if (!options.quiet) console.warn(`${bold()}LINK${reset()} ${output_filename}`);
     
