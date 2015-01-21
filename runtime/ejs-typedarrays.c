@@ -62,6 +62,23 @@ ejsval _ejs_Float64Array EJSVAL_ALIGNMENT;
 ejsval _ejs_DataView_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_DataView EJSVAL_ALIGNMENT;
 
+static EJSBool
+IsDetachedBuffer (ejsval arrayBuffer)
+{
+    /* 1. Assert: Type(arrayBuffer) is Object and it has [[ArrayBufferData]] internal slot. */
+    if (!EJSVAL_IS_ARRAYBUFFER(arrayBuffer))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "value not an array buffer"); // assertion error?
+
+    EJSArrayBuffer *Obj = EJSVAL_TO_ARRAYBUFFER(arrayBuffer);
+
+    /* 2. If arrayBuffer’s [[ArrayBufferData]] internal slot is null, then return true. */
+    if (Obj->dependent)
+        return EJS_TRUE;
+
+    /* 3. Return false. */
+    return EJS_FALSE;
+}
+
 ejsval
 _ejs_arraybuffer_new (int size)
 {
@@ -738,6 +755,68 @@ int _ejs_typed_array_elsizes[EJS_TYPEDARRAY_TYPE_COUNT];
 ejsval _ejs_typed_array_protos[EJS_TYPEDARRAY_TYPE_COUNT];
 EJSSpecOps* _ejs_typed_array_specops[EJS_TYPEDARRAY_TYPE_COUNT];
 
+static ejsval
+ _ejs_TypedArray_prototype_keys (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    /* 1. Let O be the this value. */
+    ejsval O = _this;
+
+    /* 2. If Type(O) is not Object, throw a TypeError exception. */
+    if (!EJSVAL_IS_OBJECT(O))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not an Object");
+
+    /* 3. If O does not have a [[ViewedArrayBuffer]] internal slot throw a TypeError exception. */
+    if (!EJSVAL_IS_TYPEDARRAY(O))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a typed array");
+
+    EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
+
+    /* 4. Let buffer be the value of O’s [[ViewedArrayBuffer]] internal slot. */
+    ejsval buffer = Oobj->buffer;
+
+    /* 5. If buffer is undefined, then throw a TypeError exception. */
+    if (EJSVAL_IS_UNDEFINED(buffer))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "typed arrray's buffer is undefined");
+
+    /* 6. If IsDetachedBuffer(buffer) is true, throw a TypeError exception. */
+    if (IsDetachedBuffer(buffer))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "typed array's buffer is detached");
+
+    /* 7. Return CreateArrayIterator(O, "key"). */
+    return _ejs_array_iterator_new (O, EJS_ARRAYITER_KIND_KEY);
+}
+ 
+static ejsval
+_ejs_TypedArray_prototype_values (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    /* 1. Let O be the this value. */
+    ejsval O = _this;
+
+    /* 2. If Type(O) is not Object, throw a TypeError exception. */
+    if (!EJSVAL_IS_OBJECT(O))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not an Object");
+
+    /* 3. If O does not have a [[ViewedArrayBuffer]] internal slot throw a TypeError exception. */
+    if (!EJSVAL_IS_TYPEDARRAY(O))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a typed array");
+
+    EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
+
+    /* 4. Let buffer be the value of O’s [[ViewedArrayBuffer]] internal slot. */
+    ejsval buffer = Oobj->buffer;
+
+    /* 5. If buffer is undefined, then throw a TypeError exception. */
+    if (EJSVAL_IS_UNDEFINED(buffer))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "typed arrray's buffer is undefined");
+
+    /* 6. If IsDetachedBuffer(buffer) is true, throw a TypeError exception. */
+    if (IsDetachedBuffer(buffer))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "typed array's buffer is detached");
+
+    /* 7. Return CreateArrayIterator(O, "value"). */
+    return _ejs_array_iterator_new (O, EJS_ARRAYITER_KIND_VALUE);
+}
+
 ejsval
 _ejs_typedarray_new (EJSTypedArrayType element_type, uint32_t length)
 {
@@ -824,6 +903,7 @@ _ejs_typedarrays_init(ejsval global)
 {
 #define OBJ_METHOD(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t, x, _ejs_##t##_##x)
 #define PROTO_METHOD(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t##_prototype, x, _ejs_##t##_prototype_##x)
+#define PROTO_METHOD_IMPL_GENERIC(t, x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t##_prototype, x, _ejs_TypedArray_prototype_##x)
 #define PROTO_METHOD_IMPL(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t##_prototype, x, _ejs_##t##_prototype_##x##_impl)
 #define PROTO_GETTER(t,x) EJS_INSTALL_SYMBOL_GETTER(_ejs_##t##_prototype, x, _ejs_##t##_prototype_get_##x)
 
@@ -888,7 +968,15 @@ _ejs_typedarrays_init(ejsval global)
     PROTO_METHOD_IMPL(ArrayType##Array, get);                           \
     PROTO_METHOD_IMPL(ArrayType##Array, set);                           \
     PROTO_METHOD_IMPL(ArrayType##Array, subarray);                      \
+                                                                        \
+    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, keys);                  \
+                                                                        \
     PROTO_GETTER(ArrayType##Array, toStringTag); /* XXX needs to be enumerable: false, configurable: true */ \
+                                                                        \
+    /* Manually expand values() so we can use it for the iterator */    \
+    ejsval _values = _ejs_function_new_native(_ejs_null, _ejs_atom_values, (EJSClosureFunc) _ejs_TypedArray_prototype_values); \
+    _ejs_object_define_value_property(_ejs_##ArrayType##Array_prototype, _ejs_atom_values, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE); \
+    _ejs_object_define_value_property(_ejs_##ArrayType##Array_prototype, _ejs_Symbol_iterator, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE); \
                                                                         \
     EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_##ArrayType##Array, create, _ejs_##ArrayType##Array_create, EJS_PROP_NOT_ENUMERABLE); \
     EJS_INSTALL_SYMBOL_GETTER (_ejs_##ArrayType##Array, species, _ejs_##ArrayType##Array_get_species); \
