@@ -861,6 +861,104 @@ _ejs_TypedArray_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsv
 }
 
 static ejsval
+_ejs_TypedArray_prototype_join (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval separator = _ejs_undefined;
+    if (argc >= 1)
+        separator = args[0];
+
+    /* This function is not generic. */
+    if (!EJSVAL_IS_TYPEDARRAY(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.join called on non typed-array object");
+
+    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
+    EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
+
+    /* 3. Let lenVal be the result of Get(O, "length"). */
+    /* 4. Let len be ToLength(lenVal). */
+    uint32_t len = Oobj->length;
+
+    ejsval sep;
+    const jschar *sep_str;
+    uint32_t sep_len;
+
+    /* 6. If separator is undefined, let separator be the single-element String ",". */
+    /* 7. Let sep be ToString(separator). */
+    if (EJSVAL_IS_UNDEFINED(separator)) {
+        static jschar comma [] = {  (jschar)',' };
+        sep_str = comma;
+        sep_len = 1;
+    } else {
+        sep = ToString(separator);
+        sep_str = EJSVAL_TO_FLAT_STRING(sep);
+        sep_len = EJSVAL_TO_STRLEN(sep);
+    }
+
+    /* 8. If len is zero, return the empty String. */
+    if (len == 0)
+        return _ejs_atom_empty;
+
+    /* (Prepare the internal buffer and pre calculate the length */
+    jschar *result;
+    uint32_t result_len = 0;
+
+    ejsval *strings = (ejsval*)malloc (sizeof (ejsval) * len);
+    int i;
+
+    for (i = 0; i < len; i++) {
+        strings[i] = ToString(Get(O, NUMBER_TO_EJSVAL(i)));
+        result_len += EJSVAL_TO_STRLEN(strings[i]);
+    }
+
+    result_len += sep_len * (len - 1) + 1; /* \0 terminator */
+    result = (jschar*)malloc (sizeof(jschar) * result_len);
+    jschar *p = result; /* current position */
+
+    /* 9. Let element0 be the result of Get(O, "0"). */
+    /* 10. If element0 is undefined or null, let R be the empty String; otherwise, let R be ToString(element0). */
+    ejsval R = strings[0];
+
+    /* (Since R will be used as starting point, copy it now to the internal buffer */
+    jschar *R_str = EJSVAL_TO_FLAT_STRING(R);
+    uint32_t R_len = EJSVAL_TO_STRLEN(R);
+    memmove (p, R_str, R_len * sizeof(jschar));
+    p += R_len;
+
+    /* 12. Let k be 1. */
+    uint32_t k = 1;
+
+    /* 13. Repeat, while k < len */
+    while (k < len) {
+        /* a. Let S be the String value produced by concatenating R and sep. */
+        memmove (p, sep_str, sep_len * sizeof(jschar));
+        p += sep_len;
+
+        /* b. Let element be Get(O, ToString(k)). */
+        /* c. If element is undefined or null, then let next be the empty String; otherwise, let next be ToString(element). */
+        ejsval next = strings[k];
+
+        /* e. Let R be a String value produced by concatenating S and next. */
+        jschar *next_str = EJSVAL_TO_FLAT_STRING(next);
+        uint32_t next_len = EJSVAL_TO_STRLEN(next);
+        memmove (p, next_str, next_len * sizeof(jschar));
+        p += next_len;
+
+        /* f. Increase k by 1. */
+        k++;
+    }
+    *p = 0;
+
+    ejsval rv = _ejs_string_new_ucs2(result);
+
+    free (result);
+    free (strings);
+
+    /* 14. Return R. */
+    return rv;
+}
+
+static ejsval
  _ejs_TypedArray_prototype_keys (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     /* 1. Let O be the this value. */
@@ -1076,6 +1174,7 @@ _ejs_typedarrays_init(ejsval global)
     PROTO_METHOD_IMPL(ArrayType##Array, subarray);                      \
                                                                         \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, forEach);               \
+    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, join);                  \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, keys);                  \
                                                                         \
     PROTO_GETTER(ArrayType##Array, toStringTag); /* XXX needs to be enumerable: false, configurable: true */ \
