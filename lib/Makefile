@@ -6,7 +6,6 @@ COFFEE_SOURCES=				\
 	ast-builder.coffee		\
 	nodevisitor.coffee		\
 	compiler.coffee			\
-	node-compat.coffee		\
 	debug.coffee			\
 	echo-util.coffee		\
 	errors.coffee			\

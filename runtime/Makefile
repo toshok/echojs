@@ -223,6 +223,15 @@ endif
 
 all-local:: $(ALL_TARGETS)
 
+#XXX(toshok) same as node-compat's Makefile - we need to install all targets to their respective archlibdirs
+install-local::
+	@$(MKDIR) $(includedir)
+	@$(MKDIR) $(archlibdir)
+	$(INSTALL) -c $(ALL_LIBRARIES) $(archlibdir)
+	@for i in *.h; do \
+	  $(INSTALL) -c $$i $(includedir); \
+	done
+
 clean-local::
 	rm -f test $(ALL_OBJECTS) $(ALL_LIBRARIES) ejs-atoms-gen.c $(analyze_plists_c) $(analyze_plists_objc)
 

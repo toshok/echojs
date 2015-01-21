@@ -55,6 +55,12 @@ $(OBJECTS): %.o: %.cpp
 ejs-llvm.ejs: ejs-llvm.ejs.in
 	@echo [gen] $< && sed -e "s,@LLVM_LINK_FLAGS@,$(LLVM_LINK_FLAGS)," $< > $@
 
+install-local::
+	@$(MKDIR) $(libdir)
+	@$(MKDIR) $(archlibdir)
+	$(INSTALL) -c ejs-llvm.ejs $(libdir)
+	$(INSTALL) -c $(MODULE) $(archlibdir)
+
 clean-local::
 	rm -f $(OBJECTS) $(MODULE) ejs-llvm-atoms-gen.c
 

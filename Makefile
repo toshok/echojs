@@ -11,6 +11,14 @@ all-local::
 	  git submodule update; \
 	fi
 
+NODE_PATH=$(TOP)/node-llvm/build/Release:$(TOP)/lib/generated:$(TOP)/esprima:$(TOP)/escodegen:$(TOP)/estraverse
+
+all-hook:: bootstrap
+
+install-local::
+	@$(MKDIR) $(bindir)
+	$(INSTALL) -c ejs.exe $(bindir)/ejs
+
 check:
 	$(MAKE) -C test check
 
@@ -35,7 +43,7 @@ stage3: ejs-es6.js.exe.stage3
 
 ejs-es6.js.exe.stage1:
 	@echo Building stage 1
-	@time ./ejs --leave-temp $(MODULE_DIRS) ejs-es6.js
+	@NODE_PATH="$(NODE_PATH)" time ./ejs --leave-temp $(MODULE_DIRS) ejs-es6.js
 	@mv ejs-es6.js.exe ejs-es6.js.exe.stage1
 
 ejs-es6.js.exe.stage2: ejs-es6.js.exe.stage1

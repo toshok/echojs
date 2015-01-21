@@ -164,4 +164,11 @@ all-local:: $(ALL_TARGETS)
 clean-local::
 	rm -f test $(ALL_OBJECTS) $(ALL_LIBRARIES) ejs-atoms-gen.c $(analyze_plists_c) $(analyze_plists_objc)
 
+#XXX(toshok) this doesn't work for osx where we want to install multiple libraries to different archlibdirs...
+install-local::
+	@$(MKDIR) $(libdir)
+	@$(MKDIR) $(archlibdir)
+	$(INSTALL) -c node-compat.ejs $(libdir)
+	$(INSTALL) -c $(LIBRARY) $(archlibdir)
+
 include $(TOP)/build/build.mk

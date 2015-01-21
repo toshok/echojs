@@ -15,6 +15,8 @@ all-local:: build-pcre
 
 clean-local:: clean-pcre
 
+install-local:: install-pcre
+
 ifeq ($(HOST_OS),linux)
 PCRE_TARGETS=linux
 else
@@ -32,18 +34,20 @@ build-pcre: $(PCRE_TARGETS:%=build-pcre-%)
 
 clean-pcre: $(PCRE_TARGETS:%=clean-pcre-%)
 
+install-pcre: $(PCRE_TARGETS:%=install-pcre-%)
+
 configure-pcre-linux:
-	@mkdir -p pcre-linux
+	@$(MKDIR) pcre-linux
 	(cd pcre-linux && \
 	../$(TOP)/pcre/configure $(PCRE_CONFIGURE_ARGS)) || rm -rf pcre-linux
 
 configure-pcre-osx:
-	@mkdir -p pcre-osx
+	@$(MKDIR) pcre-osx
 	(cd pcre-osx && \
 	../$(TOP)/pcre/configure $(PCRE_CONFIGURE_ARGS)) || rm -rf pcre-osx
 
 configure-pcre-iossim:
-	@mkdir -p pcre-iossim
+	@$(MKDIR) pcre-iossim
 	(cd pcre-iossim && \
 	PATH=$(IOSSIM_ROOT)/usr/bin:$$PATH \
 	CC="clang $(IOSSIM_ARCH) $(IOSSIM_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSSIM_SYSROOT)" \
@@ -53,7 +57,7 @@ configure-pcre-iossim:
 	../$(TOP)/pcre/configure --host=$(IOSSIM_TRIPLE) $(PCRE_CONFIGURE_ARGS)) || rm -rf pcre-iossim
 
 configure-pcre-iosdev:
-	@mkdir -p pcre-iosdev
+	@$(MKDIR) pcre-iosdev
 	(cd pcre-iosdev && \
 	PATH=$(IOSDEV_ROOT)/usr/bin:$$PATH \
 	CC="clang $(IOSDEV_ARCH) $(IOSDEV_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSDEV_SYSROOT)" \
@@ -73,6 +77,10 @@ build-pcre-iossim: configure-pcre-iossim
 
 build-pcre-iosdev: configure-pcre-iosdev
 	$(MAKE) -C pcre-iosdev pcre_chartables.c libpcre16.la
+
+install-pcre-linux:
+	@$(MKDIR) $(archlibdir)
+	$(INSTALL) -c pcre-linux/.libs/libpcre16.a $(archlibdir)
 
 clean-pcre-iossim:
 	-@test -d pcre-iossim && $(MAKE) -C pcre-iossim clean

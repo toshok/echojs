@@ -2,19 +2,19 @@ all: all-local all-recurse all-hook
 
 clean: clean-local clean-recurse clean-hook
 
-dist: dist-local dist-recurse dist-hook
+install: install-local install-recurse install-hook
 
 all-local::
 clean-local::
-dist-local::
+install-local::
 
 all-recurse::
 clean-recurse::
-dist-recurse::
+install-recurse::
 
 all-hook::
 clean-hook::
-dist-hook::
+install-hook::
 
 RECURSE_INTO_SUBDIRS= \
 	@target=`echo $@ | sed -e s/-recurse//`; \
@@ -30,10 +30,10 @@ all-recurse::
 clean-recurse::
 	$(RECURSE_INTO_SUBDIRS)
 
-dist-recurse::
+install-recurse::
 	$(RECURSE_INTO_SUBDIRS)
 endif
 
 .PHONY: all all-recurse all-hook
 .PHONY: clean clean-recurse clean-hook
-.PHONY: dist dist-recurse dist-hook
+.PHONY: install install-recurse install-hook

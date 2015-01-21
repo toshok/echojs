@@ -28,13 +28,6 @@ PRODUCT_UTI=$(ORGANIZATION).$(PRODUCT_NAME)
 # the place where we stuff everything
 PRODUCT_INSTALL_ROOT=/Library/Frameworks/$(PRODUCT_NAME).framework
 
-# in the future this should really be the value for DIST_ROOT, so we can build packages without trashing what's in PRODUCT_INSTALL_ROOT
-#
-#  DIST_ROOT=$(TOP)/dist
-#
-# but until then...
-DIST_ROOT=$(PRODUCT_INSTALL_ROOT)
-
 MKDIR=mkdir -p
 INSTALL=install
 CP=cp
@@ -81,5 +74,13 @@ IOSDEVS_SYSROOT=$(IOSDEV_ROOT)/SDKs/iPhoneOS$(IOS_SDK_VERSION).sdk
 IOSSIM_CFLAGS=$(IOSSIM_ARCH) $(IOSSIM_ARCH_FLAGS) $(CFLAGS) -DIOS=1 -isysroot $(IOSSIM_SYSROOT) -miphoneos-version-min=$(MIN_IOS_VERSION)
 IOSDEV_CFLAGS=$(IOSDEV_ARCH) $(IOSDEV_ARCH_FLAGS) $(CFLAGS) -DIOS=1 -isysroot $(IOSDEV_SYSROOT) -miphoneos-version-min=$(MIN_IOS_VERSION)
 IOSDEVS_CFLAGS=$(IOSDEVS_ARCH) $(IOSDEVS_ARCH_FLAGS) $(CFLAGS) -DIOS=1 -isysroot $(IOSDEVS_SYSROOT) -miphoneos-version-min=$(MIN_IOS_VERSION)
+
+# directories used during make install
+prefix?=/usr/local
+
+bindir:=$(DESTDIR)$(prefix)/bin
+includedir:=$(DESTDIR)$(prefix)/include
+libdir:=$(DESTDIR)$(prefix)/lib
+archlibdir:=$(libdir)/$(HOST_CPU)-$(HOST_OS)
 
 -include $(TOP)/build/config-local.mk
