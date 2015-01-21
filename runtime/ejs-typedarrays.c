@@ -756,6 +756,66 @@ ejsval _ejs_typed_array_protos[EJS_TYPEDARRAY_TYPE_COUNT];
 EJSSpecOps* _ejs_typed_array_specops[EJS_TYPEDARRAY_TYPE_COUNT];
 
 static ejsval
+_ejs_TypedArray_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval callbackfn = _ejs_undefined;
+    ejsval thisArg = _ejs_undefined;
+
+    if (argc >= 1)
+        callbackfn = args[0];
+
+    if (argc >= 2)
+        thisArg = args[1];
+
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.forEach called on null or undefined");
+
+    /* This function is not generic. */
+    if (!EJSVAL_IS_TYPEDARRAY(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "##ArrayType##Array.prototype.forEach called on non typed-array object");
+
+    /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
+    EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
+
+    /* 3. Let lenValue be Get(O, "length"). */
+    /* 4. Let len be ToLength(lenValue). */
+    uint32_t len = Oobj->length;
+
+    /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
+    if (!EJSVAL_IS_CALLABLE(callbackfn))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
+
+    /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
+    ejsval T = thisArg;
+
+    /* 8. Let k be 0. */
+    uint32_t k = 0;
+
+    /* 9. Repeat, while k < len */
+    while (k < len) {
+        /* a. Let Pk be ToString(k). */
+        ejsval Pk = ToString (NUMBER_TO_EJSVAL(k));
+
+        /* b. Let kPresent be HasProperty(O, Pk). */
+        /*EJSBool kPresent = OP(EJSVAL_TO_OBJECT(O), HasProperty)(O, Pk);*/
+
+        /* d. If kPresent is true, then */
+        /*  i. Let kValue be the result of calling the [[Get]] internal method of O with argument Pk. */
+        ejsval kValue = Get(O, Pk);
+
+        /*  ii. Call the [[Call]] internal method of callbackfn with T as the this value and argument list containing kValue, k, and O.  */
+        ejsval foreach_args[3] = { kValue, NUMBER_TO_EJSVAL(k), O };
+        _ejs_invoke_closure (callbackfn, T, 3, foreach_args);
+
+        /* d.  d. Increase k by 1.  */
+        k++;
+    }
+
+    return _ejs_undefined;
+}
+
+static ejsval
  _ejs_TypedArray_prototype_keys (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     /* 1. Let O be the this value. */
@@ -969,6 +1029,7 @@ _ejs_typedarrays_init(ejsval global)
     PROTO_METHOD_IMPL(ArrayType##Array, set);                           \
     PROTO_METHOD_IMPL(ArrayType##Array, subarray);                      \
                                                                         \
+    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, forEach);               \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, keys);                  \
                                                                         \
     PROTO_GETTER(ArrayType##Array, toStringTag); /* XXX needs to be enumerable: false, configurable: true */ \
