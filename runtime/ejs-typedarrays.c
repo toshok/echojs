@@ -1020,6 +1020,19 @@ _ejs_TypedArray_prototype_values (ejsval env, ejsval _this, uint32_t argc, ejsva
     return _ejs_array_iterator_new (O, EJS_ARRAYITER_KIND_VALUE);
 }
 
+static ejsval
+_ejs_TypedArray_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    /* 1. Let array be the result of calling ToObject on the this value. */
+    ejsval array = ToObject(_this);
+
+    /* 3. Let func be Get(array, "join"). */
+    ejsval func = Get(array, _ejs_atom_join);
+
+    /* 6. Return Call(func, array). */
+    return _ejs_invoke_closure (func, array, 0, NULL);
+}
+
 ejsval
 _ejs_typedarray_new (EJSTypedArrayType element_type, uint32_t length)
 {
@@ -1176,6 +1189,7 @@ _ejs_typedarrays_init(ejsval global)
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, forEach);               \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, join);                  \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, keys);                  \
+    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, toString);              \
                                                                         \
     PROTO_GETTER(ArrayType##Array, toStringTag); /* XXX needs to be enumerable: false, configurable: true */ \
                                                                         \
