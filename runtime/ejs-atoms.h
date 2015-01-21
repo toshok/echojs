@@ -314,6 +314,7 @@ EJS_ATOM2(bound ,bound_space)
 
 // ArrayBuffer functions
 //EJS_ATOM(slice)
+EJS_ATOM(isView)
 
 // console functions
 //EJS_ATOM(log)
