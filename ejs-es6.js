@@ -21,9 +21,50 @@ import { LLVM_SUFFIX as DEFAULT_LLVM_SUFFIX} from './lib/host-config-es6';
 // argv is [".../ejs", ...], so get rid of the ejs
 let argv = process.argv.slice(1);
 
-let temp_files = [];
+let ejs_dirname;
+function ejs_exe_dirname() {
+    if (ejs_dirname) return ejs_dirname;
+    let argv0 = process.argv[0];
+    let cwd = process.cwd();
 
-let running_from_source_dir = path.basename(ejs_exe_dirname()) !== "bin";
+    let full_path_to_exe;
+    if (argv0.indexOf('/') != -1) {
+        // either relative or absolute.  don't both searching path.
+        let ejs_path = path.resolve(cwd, argv0);
+        try {
+            if (fs.statSync(ejs_path).isFile()) {
+                full_path_to_exe = ejs_path;
+            }
+        }
+        catch (e) { }
+    }
+    else {
+        // not qualified at all, search over PATH
+        for (let p of process.env.PATH.split(":")) {
+            let ejs_path = path.resolve(cwd, p, argv0);
+            try {
+                if (fs.statSync(ejs_path).isFile()) {
+                    full_path_to_exe = ejs_path;
+                    break;
+                }
+            }
+            catch (e) { }
+        }
+    }
+    if (!full_path_to_exe) {
+        throw new Error("could not locate ejs executable");
+    }
+
+    ejs_dirname = path.dirname(full_path_to_exe);
+    return ejs_dirname;
+}
+
+function relative_to_ejs_exe(n) {
+    return path.resolve(ejs_exe_dirname(), n);
+}
+
+
+let temp_files = [];
 
 let host_arch = os.arch();
 if (host_arch === "x64")
@@ -50,7 +91,8 @@ let options = {
     ios_sdk: "7.1",
     ios_min: "7.0",
     target_pointer_size: 64,
-    import_variables: []
+    import_variables: [],
+    srcdir: false
 };
 
 function add_native_module_dir (dir) {
@@ -192,6 +234,10 @@ let args = {
     "--ios-min": {
         option:  "ios_min",
         help:    "the minimum version of ios to support.  Default is 7.0."
+    },
+    "--srcdir": {
+        flag:    "srcdir",
+        help:    "internal flag.  if set, will look for libecho/libpcre/etc from source directory locations."
     }
 };
 
@@ -317,7 +363,7 @@ function target_libraries(platform, arch) {
 
 
 function target_libecho(platform, arch) {
-    if (running_from_source_dir) {
+    if (options.srcdir) {
         if (platform === "darwin") {
             if (arch === "x86_64") return "runtime/libecho.a";
 
@@ -333,7 +379,7 @@ function target_libecho(platform, arch) {
 
 
 function target_extra_libs(platform, arch) {
-    if (running_from_source_dir) {
+    if (options.srcdir) {
         if (platform === "linux")   return "external-deps/pcre-linux/.libs/libpcre16.a";
 
         if (platform === "darwin") {
@@ -405,14 +451,6 @@ function compileFile(filename, parse_tree, modules) {
     spawn(llvm_commands["opt"], opt_args);
     spawn(llvm_commands["llc"], llc_args);
     o_filenames.push(o_filename);
-}
-
-function ejs_exe_dirname() {
-    return path.dirname(path.resolve(process.argv[0]));
-}
-
-function relative_to_ejs_exe(n) {
-    return path.resolve(ejs_exe_dirname(), n);
 }
 
 
@@ -490,7 +528,7 @@ function do_final_link(main_file, modules) {
     if (arch_info[options.target_arch].little_endian)
         clang_args.unshift("-DIS_LITTLE_ENDIAN=1");
 
-    clang_args.push(`-I${relative_to_ejs_exe(running_from_source_dir ? '.' : '../include')}`);
+    clang_args.push(`-I${relative_to_ejs_exe(options.srcdir ? '.' : '../include')}`);
     
     clang_args.push(map_filename);
     
@@ -506,7 +544,7 @@ function do_final_link(main_file, modules) {
             seen_native_modules.add(mf);
 
             clang_args.push(path.resolve(module.ejs_dir,
-                                         running_from_source_dir ? '.' : `${options.target_arch}-${options.target_platform}`,
+                                         options.srcdir ? '.' : `${options.target_arch}-${options.target_platform}`,
                                          mf));
         });
 
@@ -536,7 +574,7 @@ function cleanup(done) {
 
 let main_file = file_args[0];
 
-if (!running_from_source_dir)
+if (!options.srcdir)
     options.native_module_dirs.push(relative_to_ejs_exe("../lib"));
 let files = gatherAllModules(file_args, options);
 debug.log (1, () => dumpModules());

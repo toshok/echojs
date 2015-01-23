@@ -216,7 +216,7 @@ run-node:
 node-path:
 	echo $(NODE_PATH)
 
-clean: clean-results clean-esprima-roundtrip
+clean-local:: clean-results clean-esprima-roundtrip
 	rm -f *.o *.js.exe .*.diff .*-out .failures .successes .xfail .xsuccess
 	rm -rf *.dSYM
 

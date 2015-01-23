@@ -52,6 +52,7 @@ options =
         ios_min: "7.0"
         target_pointer_size: 64
         import_variables: []
+        srcdir: false
 
 add_native_module_dir = (dir) ->
         options.native_module_dirs.push(dir)
@@ -172,6 +173,10 @@ args =
         "--ios-min":
                 option:  "ios_min"
                 help:    "the minimum version of ios to support.  Default is 7.0."
+
+        "--srcdir":
+                flag:    "srcdir"
+                help:    "internal flag.  if set, will look for libecho/libpcre/etc from source directory locations."
 
 output_usage = ->
         console.warn 'Usage:';
