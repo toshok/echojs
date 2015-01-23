@@ -1,0 +1,12 @@
+Description: debian doesn't like things in /usr/local
+--- echo-js-0.0.0alpha2.orig/build/config.mk
++++ echo-js-0.0.0alpha2/build/config.mk
+@@ -78,7 +78,7 @@ IOSDEV_CFLAGS=$(IOSDEV_ARCH) $(IOSDEV_AR
+ IOSDEVS_CFLAGS=$(IOSDEVS_ARCH) $(IOSDEVS_ARCH_FLAGS) $(CFLAGS) -DIOS=1 -isysroot $(IOSDEVS_SYSROOT) -miphoneos-version-min=$(MIN_IOS_VERSION)
+ 
+ # directories used during make install
+-prefix?=/usr/local
++prefix?=/usr
+ 
+ bindir:=$(DESTDIR)$(prefix)/bin
+ includedir:=$(DESTDIR)$(prefix)/include

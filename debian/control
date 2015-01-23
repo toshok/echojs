@@ -1,0 +1,16 @@
+Source: echo-js
+Section: devel
+Priority: optional
+Maintainer: Chris Toshok <toshok@toshokelectric.com>
+Build-Depends: debhelper (>= 8.0.0), llvm-3.4-dev, nodejs-legacy
+Standards-Version: 3.9.4
+Homepage: https://github.com/toshok/echo-js
+#Vcs-Git: git://git.debian.org/collab-maint/echo-js.git
+#Vcs-Browser: http://git.debian.org/?p=collab-maint/echo-js.git;a=summary
+
+Package: echo-js
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, llvm-3.4, clang-3.4, libuv-dev
+Description: ES6 to native compiler
+ Ahead of time Javascript compiler supporting large subset of ES6 spec. Compiles directly
+ to statically linked executables containing all runtime code.

@@ -1,0 +1,5 @@
+echo-js (0.0.0alpha2-1) unstable; urgency=low
+
+  * Initial release
+
+ -- Chris Toshok <toshok@toshokelectric.com>  Thu, 22 Jan 2015 03:50:17 +0000
