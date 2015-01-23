@@ -363,7 +363,7 @@ arena_new()
     }
     if (insert_point == -1) insert_point = num_arenas;
     if (num_arenas-insert_point > 0)
-        memmove (&heap_arenas[insert_point + 1], &heap_arenas[insert_point], (num_arenas-insert_point-1)*sizeof(Arena*));
+        memmove (&heap_arenas[insert_point + 1], &heap_arenas[insert_point], (num_arenas-insert_point)*sizeof(Arena*));
     heap_arenas[insert_point] = new_arena;
     num_arenas++;
     UNLOCK_ARENAS();
@@ -822,6 +822,9 @@ sweep_heap()
     // sweep the entire heap, freeing white nodes
     for (int a = 0, e = num_arenas; a < e; a ++) {
         Arena* arena = heap_arenas[a];
+
+        if (!arena)
+            continue;
 
         for (int p = 0, pe = arena->num_pages; p < pe; p++) {
             PageInfo *info = arena->page_infos[p];
