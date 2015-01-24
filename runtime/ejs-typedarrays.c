@@ -1066,7 +1066,73 @@ static ejsval
     /* 7. Return CreateArrayIterator(O, "key"). */
     return _ejs_array_iterator_new (O, EJS_ARRAYITER_KIND_KEY);
 }
- 
+
+static ejsval
+_ejs_TypedArray_prototype_lastIndexOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval searchElement = _ejs_undefined;
+    ejsval fromIndex = _ejs_undefined;
+
+    if (argc >= 1)
+        searchElement = args[0];
+    if (argc >= 2)
+        fromIndex = args[1];
+
+    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
+
+    /* This function is not generic. */
+    if (!EJSVAL_IS_TYPEDARRAY(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.lastIndexOf called on non typed-array object");
+
+    EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
+
+    /* 3. Let lenValue be Get(O, "length") */
+    /* 4. Let len be ToLength(lenValue). */
+    /* (Make 'len' signed, so we can properly compare it to the unsigned 'n' */
+    int32_t len = Oobj->length;
+
+    /* 6. If len is 0, return -1. */
+    if (len == 0)
+        return NUMBER_TO_EJSVAL(-1);
+
+    /* 7. If argument fromIndex was passed let n be ToInteger(fromIndex); else let n be len-1. */
+    int32_t n = EJSVAL_IS_UNDEFINED(fromIndex) ? len - 1 : ToInteger(fromIndex);
+
+    int32_t k;
+
+    /* 9. If n ≥ 0, then let k be min(n, len – 1). */
+    if (n >= 0)
+        k = min (n, len - 1);
+    /* 10. Else n < 0, */
+    else
+        /* a. Let k be len - abs(n). */
+        k = len - abs (n);
+
+    /* 11. Repeat, while k≥ 0 */
+    while (k >= 0) {
+        /* a. Let kPresent be HasProperty(O, ToString(k)). */
+        /* b. ReturnIfAbrupt(kPresent). */
+        /* c. If kPresent is true, then */
+
+        /*  i. Let elementK be Get(O, ToString(k)). */
+        ejsval elementK = Get(O, ToString(NUMBER_TO_EJSVAL(k)));
+
+        /*  iii.  Let same be the result of performing Strict Equality Comparison searchElement === elementK. */
+        ejsval same = _ejs_op_strict_eq (searchElement, elementK);
+
+        /*  iv. If same is true, return k. */
+        if (EJSVAL_TO_BOOLEAN(same))
+            return NUMBER_TO_EJSVAL(k);
+
+        /*  v. Decrease k by 1. */
+        k--;
+    }
+
+    /* 12. Return -1. */
+    return NUMBER_TO_EJSVAL(-1);
+}
+
 static ejsval
 _ejs_TypedArray_prototype_values (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
@@ -1268,6 +1334,7 @@ _ejs_typedarrays_init(ejsval global)
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, indexOf);               \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, join);                  \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, keys);                  \
+    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, lastIndexOf);           \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, toString);              \
                                                                         \
     PROTO_GETTER(ArrayType##Array, toStringTag); /* XXX needs to be enumerable: false, configurable: true */ \
