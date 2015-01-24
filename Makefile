@@ -21,18 +21,19 @@ clean-local::
 TARNAME=$(PRODUCT_name)-$(PRODUCT_VERSION)
 TARFILE=$(TARNAME).tar.gz
 DISTROOT=$(TOP)
+TAR_EXCLUDES=--exclude .travis.yml --exclude .git --exclude .gitmodules --exclude .gitignore --exclude .deps --exclude host-config.mk --exclude $(TARFILE) --exclude $(TARNAME)
 dist-hook:: ensure-submodules
 	@echo creating $(DISTROOT)/$(TARNAME).tar.gz
 	@rm -rf $(DISTROOT)/$(TARNAME)
 	@$(MKDIR) $(DISTROOT)/$(TARNAME)
-	@tar -c --exclude .git --exclude .gitmodules --exclude .gitignore --exclude .deps --exclude host-config.mk --exclude $(TARFILE) --exclude $(TARNAME) * | tar -C $(DISTROOT)/$(TARNAME) -x
+	@COPYFILE_DISABLE=1 tar -c $(TAR_EXCLUDES) * | tar -C $(DISTROOT)/$(TARNAME) -xp
 	@(cd $(DISTROOT); \
-	  tar -czf $(TARFILE) $(TARNAME))
+	  COPYFILE_DISABLE=1 tar -czf $(TARFILE) $(TARNAME))
 	@rm -rf $(DISTROOT)/$(TARNAME)
 	@ls -l $(DISTROOT)/$(TARFILE)
 
 check:
-	EJS_DRIVER=$(TOP)/ejs.exe $(MAKE) -C test check
+	EJS_DRIVER="$(TOP)/ejs.exe -q --srcdir" $(MAKE) -C test check
 
 bootstrap: stage3
 

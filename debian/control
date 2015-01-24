@@ -1,14 +1,14 @@
-Source: echo-js
+Source: echojs
 Section: devel
 Priority: optional
 Maintainer: Chris Toshok <toshok@toshokelectric.com>
 Build-Depends: debhelper (>= 8.0.0), llvm-3.4-dev, nodejs-legacy, libunwind8-dev
 Standards-Version: 3.9.4
-Homepage: https://github.com/toshok/echo-js
-#Vcs-Git: git://git.debian.org/collab-maint/echo-js.git
-#Vcs-Browser: http://git.debian.org/?p=collab-maint/echo-js.git;a=summary
+Homepage: https://github.com/toshok/echojs
+#Vcs-Git: git://git.debian.org/collab-maint/echojs.git
+#Vcs-Browser: http://git.debian.org/?p=collab-maint/echojs.git;a=summary
 
-Package: echo-js
+Package: echojs
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, llvm-3.4, clang-3.4, libuv-dev
 Description: ES6 to native compiler
