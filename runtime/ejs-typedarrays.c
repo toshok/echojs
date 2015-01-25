@@ -869,6 +869,73 @@ _ejs_TypedArray_prototype_every (ejsval env, ejsval _this, uint32_t argc, ejsval
 }
 
 static ejsval
+_ejs_TypedArray_prototype_fill (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval value = _ejs_undefined;
+    ejsval start = _ejs_undefined;
+    ejsval end = _ejs_undefined;
+
+    if (argc >= 1)
+        value = args[0];
+
+    if (argc >= 2)
+        start = args[1];
+
+    if (argc >= 3)
+        end = args[2];
+
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.fill called on null or undefined");
+
+    /* This function is not generic. */
+    if (!EJSVAL_IS_TYPEDARRAY(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.fill called on non typed-array object");
+
+    /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
+    EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
+
+    /* 3. Let lenValue be Get(O, "length"). */
+    /* 4. Let len be ToLength(lenValue). */
+    uint32_t len = Oobj->length;
+
+    /* 6. Let relativeStart be ToInteger(start). */
+    int32_t relativeStart = ToInteger(start);
+
+    /* 8. If relativeStart < 0, let k be max((len + relativeStart),0); else let k be min(relativeStart, len). */
+    int32_t k;
+    if (relativeStart < 0)
+        k = max ((len + relativeStart), 0);
+    else
+        k = min (relativeStart, len);
+
+    /* 9. If end is undefined, let relativeEnd be len; else let relativeEnd be ToInteger(end). */
+    int32_t relativeEnd = EJSVAL_IS_UNDEFINED(end) ? len : ToInteger(end);
+
+    /* 11. If relativeEnd < 0, let final be max((len + relativeEnd),0); else let final be min(relativeEnd, len). */
+    int32_t final;
+    if (relativeEnd < 0)
+        final = max (len + relativeEnd, 0);
+    else
+        final = min (relativeEnd, len);
+
+    /* 12. Repeat, while k < final */
+    while (k < final) {
+        /* a. Let Pk be ToString(k). */
+        ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
+
+        /* b. Let putStatus be Put(O, Pk, value, true). */
+        Put(O, Pk, value, EJS_TRUE);
+
+        /* d. Increase k by 1. */
+        k++;
+    }
+
+    /* 13. Return O. */
+    return O;
+}
+
+static ejsval
 _ejs_TypedArray_prototype_find (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval predicate = _ejs_undefined;
@@ -1579,6 +1646,7 @@ _ejs_typedarrays_init(ejsval global)
     PROTO_METHOD_IMPL(ArrayType##Array, subarray);                      \
                                                                         \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, every);                 \
+    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, fill);                  \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, find);                  \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, findIndex);             \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, forEach);               \
