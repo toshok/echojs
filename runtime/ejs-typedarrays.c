@@ -806,6 +806,258 @@ ejsval _ejs_typed_array_protos[EJS_TYPEDARRAY_TYPE_COUNT];
 EJSSpecOps* _ejs_typed_array_specops[EJS_TYPEDARRAY_TYPE_COUNT];
 
 static ejsval
+_ejs_TypedArray_prototype_every (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval callbackfn = _ejs_undefined;
+    ejsval thisArg = _ejs_undefined;
+
+    if (argc >= 1)
+        callbackfn = args[0];
+
+    if (argc >= 2)
+        thisArg = args[1];
+
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.every called on null or undefined");
+
+    /* This function is not generic. */
+    if (!EJSVAL_IS_TYPEDARRAY(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.every called on non typed-array object");
+
+    /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
+    EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
+
+    /* 3. Let lenValue be Get(O, "length"). */
+    /* 4. Let len be ToLength(lenValue). */
+    uint32_t len = Oobj->length;
+
+    /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
+    if (!EJSVAL_IS_CALLABLE(callbackfn))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
+
+    /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
+    ejsval T = thisArg;
+
+    /* 8. Let k be 0. */
+    uint32_t k = 0;
+
+    /* 9. Repeat, while k < len */
+    while (k < len) {
+        /* a. Let Pk be ToString(k). */
+        ejsval Pk = ToString (NUMBER_TO_EJSVAL(k));
+
+        /* b. Let kPresent be HasProperty(O, Pk). */
+        /* d. If kPresent is true, then */
+        /*  i. Let kValue be the result of calling the [[Get]] internal method of O with argument Pk. */
+        ejsval kValue = Get(O, Pk);
+
+        /*  iii. Let testResult be Call(callbackfn, T, «kValue, k, O»). */
+        ejsval callbackfn_args[3] = { kValue, NUMBER_TO_EJSVAL(k), O };
+        ejsval testResult = _ejs_invoke_closure (callbackfn, T, 3, callbackfn_args);
+
+        /* v. If ToBoolean(testResult) is false, return false. */
+        if (!EJSVAL_TO_BOOLEAN(testResult))
+            return _ejs_false;
+
+        /* e.  d. Increase k by 1.  */
+        k++;
+    }
+
+    /* 10. Return true. */
+    return _ejs_true;
+}
+
+static ejsval
+_ejs_TypedArray_prototype_fill (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval value = _ejs_undefined;
+    ejsval start = _ejs_undefined;
+    ejsval end = _ejs_undefined;
+
+    if (argc >= 1)
+        value = args[0];
+
+    if (argc >= 2)
+        start = args[1];
+
+    if (argc >= 3)
+        end = args[2];
+
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.fill called on null or undefined");
+
+    /* This function is not generic. */
+    if (!EJSVAL_IS_TYPEDARRAY(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.fill called on non typed-array object");
+
+    /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
+    EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
+
+    /* 3. Let lenValue be Get(O, "length"). */
+    /* 4. Let len be ToLength(lenValue). */
+    uint32_t len = Oobj->length;
+
+    /* 6. Let relativeStart be ToInteger(start). */
+    int32_t relativeStart = ToInteger(start);
+
+    /* 8. If relativeStart < 0, let k be max((len + relativeStart),0); else let k be min(relativeStart, len). */
+    int32_t k;
+    if (relativeStart < 0)
+        k = max ((len + relativeStart), 0);
+    else
+        k = min (relativeStart, len);
+
+    /* 9. If end is undefined, let relativeEnd be len; else let relativeEnd be ToInteger(end). */
+    int32_t relativeEnd = EJSVAL_IS_UNDEFINED(end) ? len : ToInteger(end);
+
+    /* 11. If relativeEnd < 0, let final be max((len + relativeEnd),0); else let final be min(relativeEnd, len). */
+    int32_t final;
+    if (relativeEnd < 0)
+        final = max (len + relativeEnd, 0);
+    else
+        final = min (relativeEnd, len);
+
+    /* 12. Repeat, while k < final */
+    while (k < final) {
+        /* a. Let Pk be ToString(k). */
+        ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
+
+        /* b. Let putStatus be Put(O, Pk, value, true). */
+        Put(O, Pk, value, EJS_TRUE);
+
+        /* d. Increase k by 1. */
+        k++;
+    }
+
+    /* 13. Return O. */
+    return O;
+}
+
+static ejsval
+_ejs_TypedArray_prototype_find (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval predicate = _ejs_undefined;
+    ejsval thisArg = _ejs_undefined;
+
+    if (argc >= 1)
+        predicate = args[0];
+
+    if (argc >= 2)
+        thisArg = args[1];
+
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.find called on null or undefined");
+
+    /* This function is not generic. */
+    if (!EJSVAL_IS_TYPEDARRAY(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.find called on non typed-array object");
+
+    /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
+    EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
+
+    /* 3. Let lenValue be Get(O, "length"). */
+    /* 4. Let len be ToLength(lenValue). */
+    int32_t len = Oobj->length;
+
+    /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
+    if (!EJSVAL_IS_CALLABLE(predicate))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
+
+    /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
+    ejsval T = thisArg;
+
+    /* 8. Let k be 0. */
+    uint32_t k = 0;
+
+    /* 9. Repeat, while k < len */
+    while (k < len) {
+        /* a. Let Pk be ToString(k). */
+        ejsval Pk = ToString (NUMBER_TO_EJSVAL(k));
+
+        /* b. Let kValue be Get(O, Pk). */
+        ejsval kValue = Get(O, Pk);
+
+        /* d. Let testResult be Call(predicate, T, «kValue, k, O»). */
+        ejsval predicate_args[3] = { kValue, NUMBER_TO_EJSVAL(k), O };
+        ejsval testResult = _ejs_invoke_closure (predicate, T, 3, predicate_args);
+
+        /* f. If ToBoolean(testResult) is true, return kValue. */
+        if (EJSVAL_TO_BOOLEAN(testResult))
+            return kValue;
+
+        /* g.  d. Increase k by 1.  */
+        k++;
+    }
+
+    /* 10. Return undefined. */
+    return _ejs_undefined;
+}
+
+static ejsval
+_ejs_TypedArray_prototype_findIndex (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval predicate = _ejs_undefined;
+    ejsval thisArg = _ejs_undefined;
+
+    if (argc >= 1)
+        predicate = args[0];
+
+    if (argc >= 2)
+        thisArg = args[1];
+
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.findIndex called on null or undefined");
+
+    /* This function is not generic. */
+    if (!EJSVAL_IS_TYPEDARRAY(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.findIndex called on non typed-array object");
+
+    /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
+    EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
+
+    /* 3. Let lenValue be Get(O, "length"). */
+    /* 4. Let len be ToLength(lenValue). */
+    int32_t len = Oobj->length;
+
+    /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
+    if (!EJSVAL_IS_CALLABLE(predicate))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
+
+    /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
+    ejsval T = thisArg;
+
+    /* 8. Let k be 0. */
+    uint32_t k = 0;
+
+    /* 9. Repeat, while k < len */
+    while (k < len) {
+        /* a. Let Pk be ToString(k). */
+        ejsval Pk = ToString (NUMBER_TO_EJSVAL(k));
+
+        /* b. Let kValue be Get(O, Pk). */
+        ejsval kValue = Get(O, Pk);
+
+        /* d. Let testResult be Call(predicate, T, «kValue, k, O»). */
+        ejsval predicate_args[3] = { kValue, NUMBER_TO_EJSVAL(k), O };
+        ejsval testResult = _ejs_invoke_closure (predicate, T, 3, predicate_args);
+
+        /* f. If ToBoolean(testResult) is true, return k. */
+        if (EJSVAL_TO_BOOLEAN(testResult))
+            return NUMBER_TO_EJSVAL(k);
+
+        /* g.  d. Increase k by 1.  */
+        k++;
+    }
+
+    /* 10. Return -1. */
+    return NUMBER_TO_EJSVAL(-1);
+}
+
+static ejsval
 _ejs_TypedArray_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval callbackfn = _ejs_undefined;
@@ -876,13 +1128,15 @@ _ejs_TypedArray_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsv
     if (argc >= 2)
         fromIndex = args[1];
 
-    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
-    ejsval O = ToObject(_this);
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.indexOf called on null or undefined");
 
     /* This function is not generic. */
     if (!EJSVAL_IS_TYPEDARRAY(_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.indexOf called on non typed-array object");
 
+    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
     EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
 
     /* 3. Let lenValue be Get(O, "length") */
@@ -1066,7 +1320,138 @@ static ejsval
     /* 7. Return CreateArrayIterator(O, "key"). */
     return _ejs_array_iterator_new (O, EJS_ARRAYITER_KIND_KEY);
 }
- 
+
+static ejsval
+_ejs_TypedArray_prototype_lastIndexOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval searchElement = _ejs_undefined;
+    ejsval fromIndex = _ejs_undefined;
+
+    if (argc >= 1)
+        searchElement = args[0];
+    if (argc >= 2)
+        fromIndex = args[1];
+
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.lastIndexOf called on null or undefined");
+
+    /* This function is not generic. */
+    if (!EJSVAL_IS_TYPEDARRAY(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.lastIndexOf called on non typed-array object");
+
+    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
+    EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
+
+    /* 3. Let lenValue be Get(O, "length") */
+    /* 4. Let len be ToLength(lenValue). */
+    /* (Make 'len' signed, so we can properly compare it to the unsigned 'n' */
+    int32_t len = Oobj->length;
+
+    /* 6. If len is 0, return -1. */
+    if (len == 0)
+        return NUMBER_TO_EJSVAL(-1);
+
+    /* 7. If argument fromIndex was passed let n be ToInteger(fromIndex); else let n be len-1. */
+    int32_t n = EJSVAL_IS_UNDEFINED(fromIndex) ? len - 1 : ToInteger(fromIndex);
+
+    int32_t k;
+
+    /* 9. If n ≥ 0, then let k be min(n, len – 1). */
+    if (n >= 0)
+        k = min (n, len - 1);
+    /* 10. Else n < 0, */
+    else
+        /* a. Let k be len - abs(n). */
+        k = len - abs (n);
+
+    /* 11. Repeat, while k≥ 0 */
+    while (k >= 0) {
+        /* a. Let kPresent be HasProperty(O, ToString(k)). */
+        /* b. ReturnIfAbrupt(kPresent). */
+        /* c. If kPresent is true, then */
+
+        /*  i. Let elementK be Get(O, ToString(k)). */
+        ejsval elementK = Get(O, ToString(NUMBER_TO_EJSVAL(k)));
+
+        /*  iii.  Let same be the result of performing Strict Equality Comparison searchElement === elementK. */
+        ejsval same = _ejs_op_strict_eq (searchElement, elementK);
+
+        /*  iv. If same is true, return k. */
+        if (EJSVAL_TO_BOOLEAN(same))
+            return NUMBER_TO_EJSVAL(k);
+
+        /*  v. Decrease k by 1. */
+        k--;
+    }
+
+    /* 12. Return -1. */
+    return NUMBER_TO_EJSVAL(-1);
+}
+
+static ejsval
+_ejs_TypedArray_prototype_some (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval callbackfn = _ejs_undefined;
+    ejsval thisArg = _ejs_undefined;
+
+    if (argc >= 1)
+        callbackfn = args[0];
+
+    if (argc >= 2)
+        thisArg = args[1];
+
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.some called on null or undefined");
+
+    /* This function is not generic. */
+    if (!EJSVAL_IS_TYPEDARRAY(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.some called on non typed-array object");
+
+    /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
+    EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
+
+    /* 3. Let lenValue be Get(O, "length"). */
+    /* 4. Let len be ToLength(lenValue). */
+    uint32_t len = Oobj->length;
+
+    /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
+    if (!EJSVAL_IS_CALLABLE(callbackfn))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
+
+    /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
+    ejsval T = thisArg;
+
+    /* 8. Let k be 0. */
+    uint32_t k = 0;
+
+    /* 9. Repeat, while k < len */
+    while (k < len) {
+        /* a. Let Pk be ToString(k). */
+        ejsval Pk = ToString (NUMBER_TO_EJSVAL(k));
+
+        /* b. Let kPresent be HasProperty(O, Pk). */
+        /* d. If kPresent is true, then */
+        /*  i. Let kValue be the result of calling the [[Get]] internal method of O with argument Pk. */
+        ejsval kValue = Get(O, Pk);
+
+        /*  iii. Let testResult be Call(callbackfn, T, «kValue, k, O»). */
+        ejsval callbackfn_args[3] = { kValue, NUMBER_TO_EJSVAL(k), O };
+        ejsval testResult = _ejs_invoke_closure (callbackfn, T, 3, callbackfn_args);
+
+        /* v. If ToBoolean(testResult) is true, return true. */
+        if (EJSVAL_TO_BOOLEAN(testResult))
+            return _ejs_true;
+
+        /* e.  d. Increase k by 1.  */
+        k++;
+    }
+
+    /* 10. Return false. */
+    return _ejs_false;
+}
+
 static ejsval
 _ejs_TypedArray_prototype_values (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
@@ -1264,10 +1649,16 @@ _ejs_typedarrays_init(ejsval global)
     PROTO_METHOD_IMPL(ArrayType##Array, set);                           \
     PROTO_METHOD_IMPL(ArrayType##Array, subarray);                      \
                                                                         \
+    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, every);                 \
+    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, fill);                  \
+    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, find);                  \
+    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, findIndex);             \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, forEach);               \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, indexOf);               \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, join);                  \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, keys);                  \
+    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, lastIndexOf);           \
+    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, some);                  \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, toString);              \
                                                                         \
     PROTO_GETTER(ArrayType##Array, toStringTag); /* XXX needs to be enumerable: false, configurable: true */ \
