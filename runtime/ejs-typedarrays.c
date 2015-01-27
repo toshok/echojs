@@ -1128,13 +1128,15 @@ _ejs_TypedArray_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsv
     if (argc >= 2)
         fromIndex = args[1];
 
-    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
-    ejsval O = ToObject(_this);
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.indexOf called on null or undefined");
 
     /* This function is not generic. */
     if (!EJSVAL_IS_TYPEDARRAY(_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.indexOf called on non typed-array object");
 
+    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
     EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
 
     /* 3. Let lenValue be Get(O, "length") */
@@ -1330,13 +1332,15 @@ _ejs_TypedArray_prototype_lastIndexOf (ejsval env, ejsval _this, uint32_t argc, 
     if (argc >= 2)
         fromIndex = args[1];
 
-    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
-    ejsval O = ToObject(_this);
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.lastIndexOf called on null or undefined");
 
     /* This function is not generic. */
     if (!EJSVAL_IS_TYPEDARRAY(_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.lastIndexOf called on non typed-array object");
 
+    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
     EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
 
     /* 3. Let lenValue be Get(O, "length") */
