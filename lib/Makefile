@@ -18,7 +18,7 @@ COFFEE_SOURCES=				\
 	runtime.coffee			\
 	terminal.coffee			\
 	module-resolver.coffee		\
-	host-config.coffee
+	ejs.coffee
 
 JS_SOURCES=				\
 	map.js				\
@@ -29,10 +29,15 @@ DESTDIR = generated
 
 GENERATED_FILES=$(COFFEE_SOURCES:%.coffee=$(DESTDIR)/%.js) $(JS_SOURCES:%.js=$(DESTDIR)/%.js)
 
-all-local:: $(GENERATED_FILES) host-config-es6.js
+all-local:: $(GENERATED_FILES) $(DESTDIR)/host-config.js host-config-es6.js
+
+dist-local:: $(GENERATED_FILES)
 
 clean-local::
-	rm -f $(GENERATED_FILES) host-config-es6.js host-config.coffee
+	rm -f host-config-es6.js $(DESTDIR)/host-config.js
+
+$(DESTDIR)/host-config.js: host-config.js.in
+	@echo [gen] $@ && (cat $< | sed -e s,@LLVM_SUFFIX@,$(LLVM_SUFFIX),g > $@)
 
 $(DESTDIR)/%.js: %.coffee
 	@echo [coffee] $@ && coffee -m -o $(DESTDIR) -c $<
