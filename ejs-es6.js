@@ -551,7 +551,7 @@ function do_final_link(main_file, modules) {
         clang_args = clang_args.concat(module.link_flags.replace('\n', ' ').split(" "));
     });
 
-    clang_args = clang_args.concat(target_libraries(options.target_platform, options.target_platform));
+    clang_args = clang_args.concat(target_libraries(options.target_platform, options.target_arch));
 
     if (!options.quiet) console.warn(`${bold()}LINK${reset()} ${output_filename}`);
     
