@@ -91,9 +91,11 @@ $(call testAgainstTraceur, promise2.js)
 
 all-local:: check
 
-check: check-unit-tests run-tests
+#check: check-unit-tests run-tests
+#check-stage1: check-unit-tests run-tests-stage1
 
-check-stage1: check-unit-tests run-tests-stage1
+check: run-tests
+check-stage1: run-tests-stage1
 
 check-unit-tests: check-llvm check-set
 
