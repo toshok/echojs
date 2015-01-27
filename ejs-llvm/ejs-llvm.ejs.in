@@ -1,5 +1,5 @@
 {
-    "ejs_version": "0.0.0-alpha1",
+    "ejs_version": "@EJS_VERSION@",
 
     "module_name": "llvm",
     "init_function":  "_ejs_llvm_init",

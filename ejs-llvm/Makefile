@@ -53,7 +53,7 @@ $(OBJECTS): %.o: %.cpp
 	@echo [$(CXX)] $< && $(CXX) $(CXXFLAGS) -c $< -o $@
 
 ejs-llvm.ejs: ejs-llvm.ejs.in
-	@echo [gen] $< && sed -e "s,@LLVM_LINK_FLAGS@,$(LLVM_LINK_FLAGS)," $< > $@
+	@echo [gen] $@ && sed -e "s,@EJS_VERSION@,$(PRODUCT_VERSION)," -e "s,@LLVM_LINK_FLAGS@,$(LLVM_LINK_FLAGS)," $< > $@
 
 install-local::
 	@$(MKDIR) $(libdir)
