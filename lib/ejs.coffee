@@ -19,7 +19,7 @@ files = []
 temp_files = []
 
 host_arch = os.arch()
-host_arch = "x86-64" if host_arch is "x64" # why didn't we just standardize on 'amd64'?  sigh
+host_arch = "x86_64" if host_arch is "x64" # why didn't we just standardize on 'amd64'?  sigh
 host_arch = "x86"    if host_arch is "ia32"
 
 host_platform = os.platform()
@@ -48,7 +48,7 @@ add_native_module_dir = (dir) ->
         options.native_module_dirs.push(dir)
 
 arch_info = {
-        "x86-64": { pointer_size: 64, little_endian: true, llc_arch: "x86-64",  clang_arch: "x86_64" }
+        "x86_64": { pointer_size: 64, little_endian: true, llc_arch: "x86-64",  clang_arch: "x86_64" }
         x86:      { pointer_size: 32, little_endian: true, llc_arch: "x86",     clang_arch: "i386" }
         arm:      { pointer_size: 32, little_endian: true, llc_arch: "arm",     clang_arch: "armv7" }
         aarch64:  { pointer_size: 64, little_endian: true, llc_arch: "aarch64", clang_arch: "aarch64" }
@@ -60,8 +60,7 @@ set_target_arch = (arch) ->
 
         # we accept some arch aliases
 
-        arch = "x86-64" if arch is "amd64"
-        arch = "x86-64" if arch is "x86_64"
+        arch = "x86_64" if arch is "amd64"
         arch = "x86"    if arch is "i386"
 
         if not arch in arch_info
@@ -77,8 +76,8 @@ set_target = (platform, arch) ->
 
 set_target_alias = (alias) ->
         target_aliases = {
-                linux_amd64: { platform: "linux",  arch: "x86-64" },
-                osx:         { platform: "darwin", arch: "x86-64" },
+                linux_amd64: { platform: "linux",  arch: "x86_64" },
+                osx:         { platform: "darwin", arch: "x86_64" },
                 sim:         { platform: "darwin", arch: "x86" },
                 dev:         { platform: "darwin", arch: "arm" },
         }
@@ -150,7 +149,7 @@ args =
         "--arch":
                 handler: set_target_arch
                 handlerArgc: 1
-                help:    "--arch x86-64|x86|arm|aarch64"
+                help:    "--arch x86_64|x86|arm|aarch64"
 
         "--target":
                 handler: set_target_alias
@@ -249,11 +248,11 @@ target_link_args = (platform, arch) ->
 
         if platform is "linux"
                 # on ubuntu 14.04, at least, clang spits out a warning about this flag being unused (presumably because there's no other arch)
-                return [] if arch is "x86-64"
+                return [] if arch is "x86_64"
                 return args
 
         if platform is "darwin"
-                return args if arch is "x86-64"
+                return args if arch is "x86_64"
                 if arch is "x86"                
                         return args.concat [ "-isysroot", "#{sim_base}/Developer/SDKs/iPhoneSimulator#{options.ios_sdk}.sdk", "-miphoneos-version-min=#{options.ios_min}" ]
                 return args.concat [ "-isysroot", "#{dev_base}/Developer/SDKs/iPhoneOS#{options.ios_sdk}.sdk", "-miphoneos-version-min=#{options.ios_min}" ]
@@ -267,7 +266,7 @@ target_libraries = (platform, arch) ->
                 rv = [ "-framework", "Foundation" ]
 
                 # for osx we only need Foundation and AppKit
-                return rv.concat [ "-framework" , "AppKit" ] if arch is "x86-64"
+                return rv.concat [ "-framework" , "AppKit" ] if arch is "x86_64"
 
                 # for any other darwin we're dealing with ios, so...
                 return rv.concat [ "-framework", "UIKit", "-framework", "GLKit", "-framework", "OpenGLES", "-framework", "CoreGraphics" ]
@@ -277,7 +276,7 @@ target_libraries = (platform, arch) ->
 target_libecho = (platform, arch) ->
         return "../../runtime/libecho.a"    if platform is "linux"
         if platform is "darwin"
-                return "../../runtime/libecho.a" if arch is "x86-64"
+                return "../../runtime/libecho.a" if arch is "x86_64"
 
                 return "../../runtime/libecho.a.ios"
 
@@ -288,7 +287,7 @@ target_extra_libs = (platform, arch) ->
         return "../../external-deps/pcre-linux/.libs/libpcre16.a" if platform is "linux"
 
         if platform is "darwin"
-                return "../../external-deps/pcre-osx/.libs/libpcre16.a" if arch is "x86-64"
+                return "../../external-deps/pcre-osx/.libs/libpcre16.a" if arch is "x86_64"
                 return "../../external-deps/pcre-iossim/.libs/libpcre16.a" if arch is "x86"
                 return "../../external-deps/pcre-iosdev/.libs/libpcre16.a" if arch is "arm"
                 return "../../external-deps/pcre-iosdevaarch64/.libs/libpcre16.a" if arch is "aarch64"
