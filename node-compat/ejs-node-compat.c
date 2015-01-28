@@ -400,6 +400,24 @@ _ejs_fs_statSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 }
 
 static ejsval
+_ejs_fs_existsSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    ejsval path = _ejs_undefined;
+    if (argc > 0) path = args[0];
+
+    if (!EJSVAL_IS_STRING_TYPE(path)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "path must be a string");
+    }
+
+    char* utf8_path = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(ToString(args[0])));
+
+    int access_rv = access(utf8_path, F_OK);
+
+    free(utf8_path);
+    return BOOLEAN_TO_EJSVAL(access_rv != -1);
+}
+
+static ejsval
 _ejs_fs_readFileSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     // FIXME we currently ignore the encoding and just slam the entire thing into a buffer and return a utf8 string...
@@ -440,6 +458,57 @@ _ejs_fs_readFileSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     ejsval rv = _ejs_string_new_utf8_len(buf, amount_read);
     free(buf);
     return rv;
+}
+
+static ejsval
+_ejs_fs_writeFileSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    // XXX we ignore the options argument (third) entirely
+    ejsval path = _ejs_undefined;
+    if (argc > 0) path = args[0];
+
+    ejsval contents = _ejs_undefined;
+    if (argc > 1) contents = args[1];
+
+    if (!EJSVAL_IS_STRING_TYPE(path)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "path must be a string");
+    }
+
+    if (!EJSVAL_IS_STRING_TYPE(contents)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "contents must be a string");
+    }
+
+    char* utf8_path = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(ToString(path)));
+
+    int fd = open (utf8_path, O_CREAT | O_TRUNC | O_WRONLY, 0666);
+    if (fd == -1)
+        throw_errno_error(errno, utf8_path);
+
+    contents = ToString(contents);
+    int amount_to_write = EJSVAL_TO_STRLEN(contents);
+    int amount_written = 0;
+    char* utf8_contents = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(contents));
+    
+    printf ("need to write %d bytes\n", amount_to_write);
+    do {
+        int c = write(fd, utf8_contents + amount_written, amount_to_write);
+        if (c == -1) {
+            close(fd);
+            free(utf8_contents);
+            throw_errno_error(errno, utf8_path);
+        }
+        else {
+            printf ("wrote %d bytes\n", c);
+            amount_to_write -= c;
+            amount_written += c;
+        }
+    } while (amount_to_write > 0);
+
+    close(fd);
+
+    free(utf8_contents);
+    free(utf8_path);
+    return _ejs_undefined;
 }
 
 static ejsval _ejs_internal_fd_sym EJSVAL_ALIGNMENT; 
@@ -509,6 +578,75 @@ _ejs_fs_createWriteStream (ejsval env, ejsval _this, uint32_t argc, ejsval* args
     return _ejs_wrapFdWithStream(fd);  
 }
 
+static int
+string_to_mode(ejsval strmode)
+{
+    strmode = ToString(strmode);
+    char *utf8_mode = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(strmode));
+    int length = EJSVAL_TO_STRLEN(strmode);
+    int rv = 0;
+    char* p = utf8_mode + length;
+    while (p >= utf8_mode) {
+        if (*p >= '8') abort(); // XXX an exception of some sort?
+        rv = rv * 8 + *p - '0';
+        p--;
+    }
+    return rv;
+}
+
+ejsval
+_ejs_fs_mkdirSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    ejsval path = _ejs_undefined;
+    if (argc > 0) path = args[0];
+
+    ejsval mode = _ejs_undefined;
+    if (argc > 1) mode = args[1];
+
+    if (!EJSVAL_IS_STRING_TYPE(path)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "path must be a string");
+    }
+
+    char* utf8_path = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(ToString(path)));
+    int int_mode;
+    if (EJSVAL_IS_UNDEFINED(mode))
+        int_mode = 0777;
+    else if (EJSVAL_IS_STRING_TYPE(mode))
+        int_mode = string_to_mode(mode);
+    else
+        int_mode = ToInteger(mode);
+
+    int rv = mkdir(utf8_path, int_mode);
+
+    if (rv == -1)
+        throw_errno_error(errno, utf8_path);
+
+
+    free(utf8_path);
+    return _ejs_undefined;
+}
+
+ejsval
+_ejs_fs_rmdirSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    ejsval path = _ejs_undefined;
+    if (argc > 0) path = args[0];
+
+    if (!EJSVAL_IS_STRING_TYPE(path)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "path must be a string");
+    }
+
+    char* utf8_path = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(ToString(args[0])));
+
+    int rv = rmdir(utf8_path);
+
+    if (rv == -1)
+        throw_errno_error(errno, utf8_path);
+
+    free(utf8_path);
+    return _ejs_undefined;
+}
+
 ejsval
 _ejs_fs_readdirSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
@@ -546,8 +684,12 @@ _ejs_fs_module_func (ejsval exports)
     _ejs_internal_fd_sym = _ejs_symbol_new(internal_fd_descr);
 
     EJS_INSTALL_FUNCTION(exports, "statSync", _ejs_fs_statSync);
+    EJS_INSTALL_FUNCTION(exports, "existsSync", _ejs_fs_existsSync);
     EJS_INSTALL_FUNCTION(exports, "readFileSync", _ejs_fs_readFileSync);
+    EJS_INSTALL_FUNCTION(exports, "writeFileSync", _ejs_fs_writeFileSync);
     EJS_INSTALL_FUNCTION(exports, "createWriteStream", _ejs_fs_createWriteStream);
+    EJS_INSTALL_FUNCTION(exports, "mkdirSync", _ejs_fs_mkdirSync);
+    EJS_INSTALL_FUNCTION(exports, "rmdirSync", _ejs_fs_mkdirSync);
     EJS_INSTALL_FUNCTION(exports, "readdirSync", _ejs_fs_readdirSync);
 
     return _ejs_undefined;
