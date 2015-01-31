@@ -16,6 +16,7 @@
 #include "ejs-string.h"
 #include "ejs-error.h"
 #include "ejs-symbol.h"
+#include "ejs-number.h"
 
 // length below which we eschew creating a rope and just create a flat string containing both primstrs
 #define FLAT_ROPE_THRESHOLD 32
@@ -946,10 +947,89 @@ _ejs_String_prototype_toLocaleUpperCase (ejsval env, ejsval _this, uint32_t argc
     EJS_NOT_IMPLEMENTED();
 }
 
+static EJSBool
+IsWhitespace(jschar c) {
+
+    switch (c) {
+        // ES6 11.3: Line Terminators
+    case 0x000A: // U+000A Line Feed
+    case 0x000D: // U+000D Carriage Return
+    case 0x2028: // U+2028 Line separator
+    case 0x2029: // U+2029 Paragraph separator
+
+        // ES6 11.2: White Space
+    case 0x0009: // U+0009 Character Tabulation
+    case 0x000B: // U+000B LINE TABULATION
+    case 0x000C: // U+000C Form Feed (ff)
+    case 0x0020: // U+0020 Space
+    case 0x00A0: // U+00A0 No-break space
+    case 0xFEFF: // U+FEFF ZERO wIDTH nO-bREAK SPACE
+
+        // Unicode Category Zs
+    // up in 11.2 case 0x0020: // U+0020 SPACE
+    // up in 11.2 case 0x00A0: // U+00A0 NO-BREAK SPACE
+    case 0x1680: // U+1680 OGHAM SPACE MARK
+    case 0x2000: // U+2000 EN QUAD
+    case 0x2001: // U+2001 EM QUAD
+    case 0x2002: // U+2002 EN SPACE
+    case 0x2003: // U+2003 EM SPACE
+    case 0x2004: // U+2004 THREE-PER-EM SPACE
+    case 0x2005: // U+2005 FOUR-PER-EM SPACE
+    case 0x2006: // U+2006 SIX-PER-EM SPACE
+    case 0x2007: // U+2007 FIGURE SPACE
+    case 0x2008: // U+2008 PUNCTUATION SPACE
+    case 0x2009: // U+2009 THIN SPACE
+    case 0x200A: // U+200A HAIR SPACE
+    case 0x202F: // U+202F NARROW NO-BREAK SPACE
+    case 0x205F: // U+205F MEDIUM MATHEMATICAL SPACE
+    case 0x3000: // U+3000 IDEOGRAPHIC SPACE
+        return EJS_TRUE;
+    default:
+        return EJS_FALSE;
+    }
+}
+
+// ES6 21.1.3.25
+// String.prototype.trim ()
 static ejsval
 _ejs_String_prototype_trim (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    EJS_NOT_IMPLEMENTED();
+    // 1. Let O be RequireObjectCoercible(this value).
+    if (EJSVAL_IS_UNDEFINED(_this) || EJSVAL_IS_NULL(_this)) {
+    }
+    ejsval O = _this;
+
+    // 2. Let S be ToString(O).
+    // 3. ReturnIfAbrupt(S).
+    ejsval S = ToString(O);
+
+    // 4. Let T be a String value that is a copy of S with both
+    //    leading and trailing white space removed. The definition of
+    //    white space is the union of WhiteSpace and
+    //    LineTerminator. When determining whether a Unicode code
+    //    point is in Unicode general category “Zs”, code unit
+    //    sequences are interpreted as UTF-16 encoded code point
+    //    sequences as specified in 6.1.4.
+    EJSPrimString* flat = _ejs_string_flatten(S);
+
+    int leading = 0;
+    while (leading < flat->length && IsWhitespace(flat->data.flat[leading])) {
+        leading++;
+    }
+    if (leading == flat->length) return _ejs_atom_empty;
+
+    int trailing = 0;
+    while (IsWhitespace(flat->data.flat[flat->length - 1 - trailing])) {
+        trailing ++;
+    }
+
+    if (leading == 0 && trailing == 0)
+        return S;
+
+    ejsval T = _ejs_string_new_substring(S, leading, flat->length - leading - trailing);
+
+    // 5. Return T.
+    return T;
 }
 
 static ejsval
@@ -1044,12 +1124,8 @@ _ejs_String_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     int lengthA = 0;
 
 
-    int64_t lim;
     // 10. If limit is undefined, let lim = 2^53-1; else let lim = ToLength(limit).
-    if (EJSVAL_IS_UNDEFINED(limit)) 
-        lim = ((int64_t)2<<53)-1;
-    else
-        lim = ToLength(limit);
+    int64_t lim = EJSVAL_IS_UNDEFINED(limit) ? EJS_MAX_SAFE_INTEGER : ToLength(limit);
 
     // 11. Let s be the number of elements in S.
     int s = EJSVAL_TO_STRLEN(S);
