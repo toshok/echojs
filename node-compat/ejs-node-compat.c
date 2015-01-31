@@ -406,6 +406,7 @@ _ejs_fs_existsSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     if (argc > 0) path = args[0];
 
     if (!EJSVAL_IS_STRING_TYPE(path)) {
+        _ejs_dump_value(ToString(path));
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "path must be a string");
     }
 
@@ -489,7 +490,6 @@ _ejs_fs_writeFileSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     int amount_written = 0;
     char* utf8_contents = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(contents));
     
-    printf ("need to write %d bytes\n", amount_to_write);
     do {
         int c = write(fd, utf8_contents + amount_written, amount_to_write);
         if (c == -1) {
@@ -498,7 +498,6 @@ _ejs_fs_writeFileSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
             throw_errno_error(errno, utf8_path);
         }
         else {
-            printf ("wrote %d bytes\n", c);
             amount_to_write -= c;
             amount_written += c;
         }
@@ -508,6 +507,25 @@ _ejs_fs_writeFileSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 
     free(utf8_contents);
     free(utf8_path);
+    return _ejs_undefined;
+}
+
+static ejsval
+_ejs_fs_unlinkSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    ejsval path = _ejs_undefined;
+    if (argc > 0) path = args[0];
+
+    if (!EJSVAL_IS_STRING_TYPE(path)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "path must be a string");
+    }
+
+    char* utf8_path = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(ToString(path)));
+
+    int rv = unlink(utf8_path);
+    if (rv == -1)
+        throw_errno_error(errno, utf8_path);
+
     return _ejs_undefined;
 }
 
@@ -687,6 +705,7 @@ _ejs_fs_module_func (ejsval exports)
     EJS_INSTALL_FUNCTION(exports, "existsSync", _ejs_fs_existsSync);
     EJS_INSTALL_FUNCTION(exports, "readFileSync", _ejs_fs_readFileSync);
     EJS_INSTALL_FUNCTION(exports, "writeFileSync", _ejs_fs_writeFileSync);
+    EJS_INSTALL_FUNCTION(exports, "unlinkSync", _ejs_fs_unlinkSync);
     EJS_INSTALL_FUNCTION(exports, "createWriteStream", _ejs_fs_createWriteStream);
     EJS_INSTALL_FUNCTION(exports, "mkdirSync", _ejs_fs_mkdirSync);
     EJS_INSTALL_FUNCTION(exports, "rmdirSync", _ejs_fs_mkdirSync);
