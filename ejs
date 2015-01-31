@@ -1,4 +1,5 @@
 #!/bin/sh
 
-exec node --harmony lib/generated/ejs.js $@
+dir=$(cd `dirname $0`; pwd)
+exec node --harmony $dir/lib/generated/ejs.js $@
 
