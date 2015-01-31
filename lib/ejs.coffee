@@ -13,8 +13,6 @@ debug = require 'debug'
 slice_count = if __ejs? then 1 else 2
 argv = process.argv.slice slice_count
 
-console.log "argv = #{argv}"
-
 files = []
 temp_files = []
 
