@@ -13,6 +13,7 @@
 #include "ejs-error.h"
 #include "ejs-symbol.h"
 #include "ejs-proxy.h"
+#include "ejs-number.h"
 
 #include "pcre.h"
 
@@ -130,8 +131,15 @@ _ejs_RegExp_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     re->pattern = _ejs_undefined;
     re->flags = _ejs_undefined;
 
-    if (argc > 0) re->pattern = args[0];
+    ejsval pattern = _ejs_undefined;
+
+    if (argc > 0) pattern = args[0];
     if (argc > 1) re->flags = args[1];
+
+    if (EJSVAL_IS_OBJECT(pattern) && EJSVAL_IS_REGEXP(pattern))
+        re->pattern = ((EJSRegExp*)EJSVAL_TO_OBJECT(pattern))->pattern;
+    else
+        re->pattern = pattern;
 
     if (!EJSVAL_IS_STRING(re->pattern))
         EJS_NOT_IMPLEMENTED();
@@ -860,7 +868,178 @@ _ejs_RegExp_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *
 static ejsval
 _ejs_RegExp_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    EJS_NOT_IMPLEMENTED();
+    ejsval string = _ejs_undefined;
+    if (argc > 0) string = args[0];
+
+    ejsval limit = _ejs_undefined;
+    if (argc > 1) limit = args[1];
+
+    // 1. Let rx be the this value.
+    ejsval rx = _this;
+
+    // 2. If Type(rx) is not Object, throw a TypeError exception.
+    if (!EJSVAL_IS_OBJECT(rx))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Regexp.prototype[Symbol.split] called with non-object 'this'");
+
+    // 3. Let S be ToString(string).
+    // 4. ReturnIfAbrupt(S).
+    ejsval S = ToString(string);
+    jschar* S_chars = EJSVAL_TO_FLAT_STRING(S);
+
+    // 5. Let C be SpeciesConstructor(rx, %RegExp%).
+    // 6. ReturnIfAbrupt(C).
+    // XXX we don't supporrt the SpeciesConstructor stuff yet.  always construct a RegExp.  see #11 below
+
+    // 7. Let flags be ToString(Get(rx, "flags"))
+    // 8. ReturnIfAbrupt(flags).
+    ejsval flags = ToString(Get(rx, _ejs_atom_flags));
+
+    // 9. If flags contains "u",then let unicodeMatching be true else let unicodeMatching be false.
+    EJSBool unicodeMatching = EJS_FALSE;
+    // XXX
+
+    // 10. If flags contains "y", let newFlags be flags else let newFlags be the string that is the concatenation of flags and "y".
+    ejsval newFlags = flags;
+    // XXX
+
+    // 11. Let splitter be Construct(C, «rx, newFlags»).
+    // 12. ReturnIfAbrupt(splitter).
+    ejsval splitter = _ejs_regexp_new(rx, newFlags);
+
+    // 13. Let A be ArrayCreate(0).
+    ejsval A = _ejs_array_new(0, EJS_FALSE);
+    // 14. Let lengthA be 0.
+    int lengthA = 0;
+
+    // 15. If limit is undefined, let lim = 2^53–1; else let lim = ToLength(limit).
+    // 16. ReturnIfAbrupt(lim).
+    int64_t lim = EJSVAL_IS_UNDEFINED(limit) ?  EJS_MAX_SAFE_INTEGER : ToLength(limit);
+
+    // 17. Let size be the number of elements in S.
+    int size = EJSVAL_TO_STRLEN(S);
+
+    // 18. Let p = 0.
+    int p = 0;
+    // 19. If lim = 0, return A.
+    if (lim == 0) return A;
+
+    // 20. If size = 0, then
+    if (size == 0) {
+        // a. Let z be RegExpExec(splitter, S).
+        // b. ReturnIfAbrupt(z).
+        ejsval z = RegExpExec(splitter, S);
+
+        // c. If z is not null, return A.
+        if (!EJSVAL_IS_NULL(z)) return A;
+
+        // d. Assert: The following call will never result in an abrupt completion.
+        // e. Call CreateDataProperty(A, "0", S).
+        _ejs_array_push_dense(A, 1, &S);
+        // f. Return A.
+        return A;
+    }
+    // 21. Let q = p.
+    int q = p;
+    // 22. Repeat, while q < size
+    while (q < size) {
+        // a. Let putStatus be Put(splitter, "lastIndex", q, true).
+        // b. ReturnIfAbrupt(putStatus).
+        Put(splitter, _ejs_atom_lastIndex, NUMBER_TO_EJSVAL(q), EJS_TRUE);
+
+        // c. Let z be RegExpExec(splitter, S).
+        // d. ReturnIfAbrupt(z).
+        ejsval z = RegExpExec(splitter, S);
+
+        // e. If z is null, then
+        if (EJSVAL_IS_NULL(z)) {
+            // i. If unicodeMatching is true, then
+            if (unicodeMatching) {
+                // 1. Let first be the code unit value of the element at index q in the String S.
+                jschar first = S_chars[q];
+                // 2. If first ≥ 0xD800 and first ≤ 0xDBFF and q+1 ≠ size, then
+                if (first >= 0xD800 && first <= 0xDBFF && q < size-1) {
+                    // a. Let second be the code unit value of the element at index q+1 in the String S.
+                    jschar second = S_chars[q+1];
+                    // b. If second ≥ 0xDC00 and second ≤ 0xDFFF, then
+                    if (second >= 0xDC00 && second <= 0xDFFF)
+                        // i. Let q = q+1.
+                        q++;
+                }
+            }
+            // ii. Let q = q+1.
+            q++;
+        }
+        // f. Else z is not null,
+        else {
+            // i. Let e be ToLength(Get(splitter, "lastIndex")).
+            // ii. ReturnIfAbrupt(e).
+            int64_t e = ToLength(Get(splitter, _ejs_atom_lastIndex));
+            // iii. If e = p, then
+            if (e == p) {
+                // 1. If unicodeMatching is true, then
+                if (unicodeMatching) {
+                    // a. Let first be the code unit value of the element at index q in the String S.
+                    jschar first = S_chars[q];
+                    // b. If first ≥ 0xD800 and first ≤ 0xDBFF and q+1 ≠ size, then
+                    if (first >= 0xD800 && first <= 0xDBFF && q < size-1) {
+                        // i. Let second be the code unit value of the element at index q+1 in the String S.
+                        jschar second = S_chars[q+1];
+                        // ii. If second ≥ 0xDC00 and second ≤ 0xDFFF, then
+                        if (second >= 0xDC00 && second <= 0xDFFF)
+                            // 1. Let q = q+1.
+                            q++;
+                    }
+                }
+                // 2. Let q = q+1.
+                q++;
+            }
+            // iv. Else e ≠ p,
+            else {
+                // 1. Let T be a String value equal to the substring of S consisting of the elements at indices p (inclusive) through q (exclusive).
+                ejsval T = _ejs_string_new_substring(S, p, q-p);
+                // 2. Assert: The following call will never result in an abrupt completion.
+                // 3. Call CreateDataProperty(A, ToString(lengthA), T).
+                _ejs_array_push_dense(A, 1, &T);
+
+                // 4. Let lengthA be lengthA +1.
+                lengthA++;
+
+                // 5. If lengthA = lim, return A.
+                if (lengthA == lim) return A;
+
+                // 6. Let p = e.
+                p = e;
+
+                // 7. Let i = 0.
+                // 8. Let numberOfCaptures be ToLength(Get(z, "length")).
+                // 9. ReturnIfAbrupt(numberOfCaptures).
+                int64_t numberOfCaptures = ToLength(Get(z, _ejs_atom_length));
+                // 10. Let numberOfCaptures be max(numberOfCaptures-1, 0).
+                numberOfCaptures = MAX(numberOfCaptures-1, 0);
+                // 11. Let i be 1.
+                int i = 1;
+                // 12. Repeat, while i ≤ numberOfCaptures.
+                while (i <= numberOfCaptures) {
+                    EJS_NOT_IMPLEMENTED();
+                    // a. Let nextCapture be Get(z, ToString(i)).
+                    // b. ReturnIfAbrupt(nextCapture).
+                    // c. Call CreateDataProperty(A, ToString(lengthA), nextCapture).
+                    // d. Let i be i +1.
+                    // e. Let lengthA be lengthA +1.
+                    // f. If lengthA = lim, return A.
+                }
+                // 13. Let q = p.
+                q = p;
+            }
+        }
+    }
+    // 23. Let T be a String value equal to the substring of S consisting of the elements at indices p (inclusive) through size (exclusive).
+    ejsval T = _ejs_string_new_substring(S, p, size-p);
+    // 24. Assert: The following call will never result in an abrupt completion.
+    // 25. Call CreateDataProperty(A, ToString(lengthA), T ).
+    _ejs_array_push_dense(A, 1, &T);
+    // 26. Return A.
+    return A;
 }
 
 // ES6 21.2.5.9
