@@ -146,14 +146,14 @@ static const ejsval* builtin_numbers_atoms[] = {
     &_ejs_atom_198,&_ejs_atom_199,&_ejs_atom_200
 };
 
-ejsval NumberToString(double d)
+ejsval NumberToString(double d, int base)
 {
     int32_t i;
     if (EJSDOUBLE_IS_INT32(d, &i)) {
-        if (i >=0 && i <= 200)
+        if (i >=0 && i <= 200 && base == 10)
             return *builtin_numbers_atoms[i];
         jschar int_buf[UINT32_CHAR_BUFFER_LENGTH+1];
-        jschar *cp = IntToUCS2(int_buf, i, 10);
+        jschar *cp = IntToUCS2(int_buf, i, base);
         return _ejs_string_new_ucs2 (cp);
     }
 
@@ -168,8 +168,10 @@ ejsval NumberToString(double d)
     else if (classified == FP_NAN) {
         return _ejs_atom_NaN;
     }
-    else
+    else {
+        // XXX we need to take @base into account
         snprintf (num_buf, sizeof(num_buf), EJS_NUMBER_FORMAT, d);
+    }
     return _ejs_string_new_utf8 (num_buf);
 }
 
@@ -189,7 +191,7 @@ ejsval ToString(ejsval exp)
     else if (EJSVAL_IS_BOOLEAN(exp)) 
         return EJSVAL_TO_BOOLEAN(exp) ? _ejs_atom_true : _ejs_atom_false;
     else if (EJSVAL_IS_NUMBER(exp))
-        return NumberToString(EJSVAL_TO_NUMBER(exp));
+        return NumberToString(EJSVAL_TO_NUMBER(exp), 10);
     else if (EJSVAL_IS_STRING(exp))
         return exp;
     else if (EJSVAL_IS_OBJECT(exp)) {
@@ -255,18 +257,44 @@ int64_t ToInteger(ejsval exp)
 {
     // XXX sorely lacking
     /* 1. Let number be the result of calling ToNumber on the input argument. */
-    ejsval number = ToNumber(exp);
+    double number = ToDouble(exp);
     /* 2. If number is NaN, return +0. */
-    if (EJSVAL_EQ(number, _ejs_nan))
+    if (isnan(number))
         return 0;
-    /* 3. If number is +0, 0, +, or , return number. */
-    double d = ToDouble(number);
-    int classified = fpclassify(d);
+    /* 3. If number is +0, -0, +inf, or -inf, return number. */
+    int classified = fpclassify(number);
     if (classified == FP_ZERO || classified == FP_INFINITE)
-        return d;
-    /* 4. Return the result of computing sign(number)  floor(abs(number) */
-    int sign = d < 0 ? -1 : 1;
-    return (int64_t)(sign * floor(abs(d)));
+        return number;
+    /* 4. Return the result of computing sign(number) * floor(abs(number) */
+    int sign = number < 0 ? -1 : 1;
+    return (int64_t)(sign * floor(abs(number)));
+}
+
+// ES6: 7.1.5
+// ToInt32 ( argument ) 
+int32_t ToInt32(ejsval argument)
+{
+    // 1. Let number be ToNumber(argument).
+    // 2. ReturnIfAbrupt(number).
+    double number = ToDouble(argument);
+    // 3. If number is NaN, +0, −0, +∞, or −∞, return +0.
+    if (isnan(number)) return 0;
+    int classified = fpclassify(number);
+    if (classified == FP_ZERO || classified == FP_INFINITE)
+        return 0;
+
+    // 4. Let int be sign(number) * floor(abs(number)).
+    int sign = number < 0 ? -1 : 1;
+    int64_t i = (int64_t)(sign * floor(abs(number)));
+
+    // 5. Let int32bit be int modulo 2^32.
+    int64_t int32bit = i % (1LL<<32);
+
+    // 6. If int32bit ≥ 2^31, return int32bit − 2^32, otherwise return int32bit.
+    if (int32bit >= 1LL<<31)
+        return int32bit - (1LL<<32);
+    else
+        return int32bit;
 }
 
 // ECMA262 7.1.15
@@ -283,7 +311,7 @@ int64_t ToLength(ejsval exp)
         return 0;
 
     // 5. Return min(len, 2^53-1)
-    return MIN(len, ((int64_t)2<<53)-1);
+    return MIN(len, EJS_MAX_SAFE_INTEGER);
 }
 
 uint32_t ToUint32(ejsval exp)
@@ -688,8 +716,8 @@ _ejs_op_mod (ejsval lhs, ejsval rhs)
 ejsval
 _ejs_op_bitwise_xor (ejsval lhs, ejsval rhs)
 {
-    int lhs_int = ToInteger(lhs);
-    int rhs_int = ToInteger(rhs);
+    int lhs_int = ToInt32(lhs);
+    int rhs_int = ToInt32(rhs);
     return NUMBER_TO_EJSVAL (lhs_int ^ rhs_int);
 }
 

@@ -55,11 +55,38 @@ thisNumberValue(ejsval value)
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' is not a number");
 }
 
+// ES6 20.1.3.6
+// Number.prototype.toString ( [ radix ] )
 static ejsval
 _ejs_Number_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    EJSNumber *num = (EJSNumber*)EJSVAL_TO_OBJECT(_this);
-    return NumberToString(num->number);
+    ejsval radix = _ejs_undefined;
+    if (argc > 0) radix = args[0];
+
+    // 1. Let x be thisNumberValue(this value).
+    // 2. ReturnIfAbrupt(x).
+    double x = thisNumberValue(_this);
+
+    int64_t radixNumber;
+    // 3. If radix is not present, let radixNumber be 10.
+    // 4. Else if radix is undefined, let radixNumber be 10.
+    if (EJSVAL_IS_UNDEFINED(radix))
+        radixNumber = 10;
+    // 5. Else let radixNumber be ToInteger(radix).
+    // 6. ReturnIfAbrupt(radixNumber).
+    else
+        radixNumber = ToInteger(radix);
+    // 7. If radixNumber < 2 or radixNumber > 36, throw a RangeError exception.
+    if (radixNumber < 2 || radixNumber > 36)
+        _ejs_throw_nativeerror_utf8 (EJS_RANGE_ERROR, "radix must be >=2 and <=36");
+
+    // 8. If radixNumber = 10, return ToString(x).
+    // 9. Return the String representation of this Number value using
+    //    the radix specified by radixNumber. Letters a-z are used for
+    //    digits with values 10 through 35. The precise algorithm is
+    //    implementation-dependent, however the algorithm should be a
+    //    generalization of that specified in 7.1.12.1.
+    return NumberToString(x, (int)radixNumber);
 }
 
 static ejsval
@@ -348,8 +375,8 @@ _ejs_Number_isSafeInteger (ejsval env, ejsval _this, uint32_t argc, ejsval *args
     if (integer != number_)
         return _ejs_false;
 
-    // 5. If abs(integer) ≤ 253-1, then return true.
-    if (llabs(integer) <= ((int64_t)2<<53)-1)
+    // 5. If abs(integer) ≤ 2^53-1, then return true.
+    if (llabs(integer) <= EJS_MAX_SAFE_INTEGER)
         return _ejs_true;
 
     // 6. Otherwise, return false.

@@ -8,7 +8,7 @@
 EJS_BEGIN_DECLS
 
 /* returns an EJSPrimString* */
-ejsval NumberToString(double d);
+ejsval NumberToString(double d, int base);
 ejsval ToString(ejsval exp);
 ejsval ToNumber(ejsval exp);
 double ToDouble(ejsval exp);
