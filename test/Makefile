@@ -50,6 +50,7 @@ $(call addExpectedFailure, forin2.js,               "fails because we don't prop
 $(call addExpectedFailure, forin5.js,               "fails because we enumerate the entire range 0..length of an array, including the holes.")
 $(call addExpectedFailure, object6.js,              "fails because we don't define everything we should.")
 $(call addExpectedFailure, number1.js,              "fails because node outputs {} for console.log(new Number(5)), while SM and JSC output '5'.  we err on the SM/JSC side of things here.")
+$(call addExpectedFailure, number-tostring2.js,     "formatting floats with different bases just doesn't work.")
 $(call addExpectedFailure, typedarray0.js,          "we throw an exception when typed array constructors are called as functions.")
 $(call addExpectedFailure, typedarray3.js,          "we use %g to format floats/doubles, and differ when printing numbers.")
 $(call addExpectedFailure, typedarray6.js,          "we use %g to format floats/doubles, and differ when printing numbers.")
