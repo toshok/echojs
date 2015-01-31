@@ -13,6 +13,7 @@
 #include "ejs-string.h"
 #include "ejs-error.h"
 #include "ejs-symbol.h"
+#include "ejs-number.h"
 
 // num > SPARSE_ARRAY_CUTOFF in "Array($num)" or "new Array($num)" triggers a sparse array
 #define SPARSE_ARRAY_CUTOFF 50000
@@ -337,117 +338,151 @@ _ejs_Array_prototype_unshift (ejsval env, ejsval _this, uint32_t argc, ejsval* a
     return NUMBER_TO_EJSVAL(len+argCount);
 }
 
-// ECMA262: 15.4.4.9
+// ES6 Draft January 15, 2015
+// 22.1.3.20
+// Array.prototype.reverse ( )
 static ejsval
 _ejs_Array_prototype_reverse (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     // 1. Let O be the result of calling ToObject passing the this value as the argument.
+    // 2. ReturnIfAbrupt(O).
     ejsval O = ToObject(_this);
 
-    // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
-    ejsval lenVal = OP(EJSVAL_TO_OBJECT(O),Get)(O, _ejs_atom_length, O);
-    // 3. Let len be ToUint32(lenVal).
-    uint32_t len = ToUint32(lenVal);
+    // 3. Let len be ToLength(Get(O, "length")).
+    // 4. ReturnIfAbrupt(len).
+    int64_t len = ToLength(Get(O, _ejs_atom_length));
 
-    // 4. Let middle be floor(len/2). 
-    uint32_t middle = len / 2;
+    // 5. Let middle be floor(len/2). 
+    int64_t middle = len / 2;
 
-    // 5. Let lower be 0. 
-    uint32_t lower = 0;
+    // 6. Let lower be 0. 
+    int64_t lower = 0;
 
-    // 6. Repeat, while lower != middle 
+    // 7. Repeat, while lower != middle 
     while (lower != middle) {
-        //    a. Let upper be len - lower - 1. 
+        // a. Let upper be len - lower - 1. 
         uint32_t upper = len - lower - 1;
 
-        //    b. Let upperP be ToString(upper). 
+        // b. Let upperP be ToString(upper). 
         ejsval upperP = ToString(NUMBER_TO_EJSVAL(upper));
 
-        //    c. Let lowerP be ToString(lower). 
+        // c. Let lowerP be ToString(lower). 
         ejsval lowerP = ToString(NUMBER_TO_EJSVAL(lower));
 
-        //    d. Let lowerValue be the result of calling the [[Get]] internal method of O with argument lowerP. 
-        ejsval lowerValue = OP(EJSVAL_TO_OBJECT(O),Get)(O, lowerP, O);
+        ejsval lowerValue;
+        ejsval upperValue;
 
-        //    e. Let upperValue be the result of calling the [[Get]] internal method of O with argument upperP . 
-        ejsval upperValue = OP(EJSVAL_TO_OBJECT(O),Get)(O, upperP, O);
 
-        //    f. Let lowerExists be the result of calling the [[HasProperty]] internal method of O with argument lowerP. 
+        // d. Let lowerExists be HasProperty(O, lowerP).
+        // e. ReturnIfAbrupt(lowerExists).
         EJSBool lowerExists = OP(EJSVAL_TO_OBJECT(O),HasProperty)(O, lowerP);
+        // f. If lowerExists is true, then
+        if (lowerExists) {
+            // i. Let lowerValue be Get(O, lowerP).
+            // ii. ReturnIfAbrupt(lowerValue).
+            lowerValue = Get(O, lowerP);
+        }
 
-        //    g. Let upperExists be the result of calling the [[HasProperty]] internal method of O with argument upperP. 
+        // g. Let upperExists be HasProperty(O, upperP).
+        // h. ReturnIfAbrupt(upperExists).
         EJSBool upperExists = OP(EJSVAL_TO_OBJECT(O),HasProperty)(O, upperP);
+        // i. If upperExists is true, then
+        if (upperExists) {
+            // i. Let upperValue be Get(O, upperP).
+            // ii. ReturnIfAbrupt(upperValue).
+            upperValue = Get(O, upperP);
+        }
 
-        //    h. If lowerExists is true and upperExists is true, then 
+        // j. If lowerExists is true and upperExists is true, then
         if (lowerExists && upperExists) {
-            //       i. Call the [[Put]] internal method of O with arguments lowerP, upperValue, and true . 
+            // i.   Let putStatus be Put(O, lowerP, upperValue, true).
+            // ii.  ReturnIfAbrupt(putStatus).
             Put(O, lowerP, upperValue, EJS_TRUE);
-
-            //       ii. Call the [[Put]] internal method of O with arguments upperP, lowerValue, and true . 
+            // iii. Let putStatus be Put(O, upperP, lowerValue, true).
+            // iv.  ReturnIfAbrupt(putStatus).
             Put(O, upperP, lowerValue, EJS_TRUE);
         }
-        //    i. Else if lowerExists is false and upperExists is true, then 
+        // k. Else if lowerExists is false and upperExists is true, then
         else if (!lowerExists && upperExists) {
-            //       i. Call the [[Put]] internal method of O with arguments lowerP, upperValue, and true . 
+            // i.   Let putStatus be Put(O, lowerP, upperValue, true).
+            // ii.  ReturnIfAbrupt(putStatus).
             Put(O, lowerP, upperValue, EJS_TRUE);
-            //       ii. Call the [[Delete]] internal method of O, with arguments upperP and true. 
-            OP(EJSVAL_TO_OBJECT(O),Delete)(O, upperP, EJS_TRUE);
+            // iii. Let deleteStatus be DeletePropertyOrThrow (O, upperP).
+            // iv.  ReturnIfAbrupt(deleteStatus).
+            DeletePropertyOrThrow(O, upperP);
         }
-        //    j. Else if lowerExists is true and upperExists is false, then 
+        // l. Else if lowerExists is true and upperExists is false, then
         else if (lowerExists && !upperExists) {
-            //       i. Call the [[Delete]] internal method of O, with arguments lowerP and true . 
-            OP(EJSVAL_TO_OBJECT(O),Delete)(O, lowerP, EJS_TRUE);
-            //       ii. Call the [[Put]] internal method of O with arguments upperP, lowerValue, and true . 
+            // Let deleteStatus be DeletePropertyOrThrow (O, lowerP).
+            // ReturnIfAbrupt(deleteStatus).
+            DeletePropertyOrThrow(O, lowerP);
+            // Let putStatus be Put(O, upperP, lowerValue, true).
+            // ReturnIfAbrupt(putStatus).
             Put(O, upperP, lowerValue, EJS_TRUE);
         }
-        //    k. Else, both lowerExists and upperExists are false 
-        //       i. No action is required. 
-
-        //    l. Increase lower by 1. 
-        lower ++;
+        // m. Else both lowerExists and upperExists are false,
+        else {
+            // No action is required.
+        }
+        // n. Increase lower by 1.
+        lower++;
     }
-    // 7. Return O
+    // 8. return O.
     return O;
 }
 
-// ECMA262: 15.4.4.7
+// ES6 Draft January 15, 2015
+// 22.1.3.17
+// Array.prototype.push (...items)
 static ejsval
-_ejs_Array_prototype_push (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
+_ejs_Array_prototype_push (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     if (EJSVAL_IS_DENSE_ARRAY(_this)) {
         return NUMBER_TO_EJSVAL (_ejs_array_push_dense (_this, argc, args));
     }
 
+
     // 1. Let O be the result of calling ToObject passing the this value as the argument.
+    // 2. ReturnIfAbrupt(O).
     ejsval O = ToObject(_this);
 
-    // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
-    ejsval lenVal = OP(EJSVAL_TO_OBJECT(O),Get)(O, _ejs_atom_length, O);
-    // 3. Let n be ToUint32(lenVal).
-    uint32_t n = ToUint32(lenVal);
+    // 3. Let len be ToLength(Get(O, "length")).
+    // 4. ReturnIfAbrupt(len).
+    int64_t len = ToLength(Get(O, _ejs_atom_length));
 
-    // 4. Let items be an internal List whose elements are, in left to right order, the arguments that were passed to this 
-    //    function invocation.
+    // 5. Let items be a List whose elements are, in left to right
+    //    order, the arguments that were passed to this function
+    //    invocation.
     ejsval* items = args;
 
-    // 5. Repeat, while items is not empty
+    // 6. Let argCount be the number of elements in items.
+    int64_t argCount = argc;
+
+    // 7. If len + argCount ≥ 253-1, throw a TypeError exception.
+    if (len + argCount >= EJS_MAX_SAFE_INTEGER)
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Array.prototype.push would overflow max length");
+        
+    // 8. Repeat, while items is not empty
     for (int i = 0; i < argc; i ++) {
-        //    a. Remove the first element from items and let E be the value of the element.
+        // a. Remove the first element from items and let E be the value of the element.
         ejsval E = items[i];
-
-        //    b. Call the [[Put]] internal method of O with arguments ToString(n), E, and true.
-        Put(O, ToString(NUMBER_TO_EJSVAL(n)), E, EJS_TRUE);
-        //    c. Increase n by 1.
-        n++;
+        // b. Let putStatus be Put(O, ToString(len), E, true).
+        // c. ReturnIfAbrupt(putStatus).
+        Put(O, ToString(NUMBER_TO_EJSVAL(len)), E, EJS_TRUE);
+        // d. Let len be len+1.
+        len ++;
     }
-    // 6. Call the [[Put]] internal method of O with arguments "length", n, and true.
-    Put(O, _ejs_atom_length, NUMBER_TO_EJSVAL(n), EJS_TRUE);
+    // 9. Let putStatus be Put(O, "length", len, true).
+    // 10. ReturnIfAbrupt(putStatus).
+    Put(O, _ejs_atom_length, NUMBER_TO_EJSVAL(len), EJS_TRUE);
 
-    // 7. Return n.
-    return NUMBER_TO_EJSVAL(n);
+    // 11. Return len.
+    return NUMBER_TO_EJSVAL(len);
 }
 
-// ECMA262: 15.4.4.6
+// ES6 Draft January 15, 2015
+// 22.1.3.16
+// Array.prototype.pop ()
 static ejsval
 _ejs_Array_prototype_pop (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
@@ -456,39 +491,38 @@ _ejs_Array_prototype_pop (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
     }
 
     // 1. Let O be the result of calling ToObject passing the this value as the argument.
+    // 2. ReturnIfAbrupt(O).
     ejsval O = ToObject(_this);
 
-    // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
-    ejsval lenVal = OP(EJSVAL_TO_OBJECT(O),Get)(O, _ejs_atom_length, O);
-
-    // 3. Let len be ToUint32(lenVal).
-    uint32_t len = ToUint32(lenVal);
-
-    // 4. If len is zero, 
+    // 3. Let len be ToLength(Get(O, "length")).
+    // 4. ReturnIfAbrupt(len).
+    int64_t len = ToLength(Get(O, _ejs_atom_length));
+    // 5. If len is zero,
     if (len == 0) {
-        //    a. Call the [[Put]] internal method of O with arguments "length", 0, and true.
-        Put(O, _ejs_atom_length, _ejs_zero, EJS_TRUE);
-        // EJS: why is this done? to overwrite a accessor property?
-
-        //    b. Return undefined.
+        // a. Let putStatus be Put(O, "length", 0, true).
+        // b. ReturnIfAbrupt(putStatus).
+        Put(O, _ejs_atom_length, NUMBER_TO_EJSVAL(0), EJS_TRUE);
+        // c. Return undefined.
         return _ejs_undefined;
     }
-    // 5. Else, len > 0
+    // 6. Else len > 0,
     else {
-        //    a. Let indx be ToString(len–1).
-        ejsval indx = ToString(NUMBER_TO_EJSVAL(len-1));
+        // a. Let newLen be len–1.
+        int64_t newLen = len-1;
+        // b. Let indx be ToString(newLen).
+        ejsval indx = ToString(NUMBER_TO_EJSVAL(newLen));
+        // c. Let element be Get(O, indx).
+        // d. ReturnIfAbrupt(element).
+        ejsval element = Get(O, indx);
+    
+        // e. Let deleteStatus be DeletePropertyOrThrow(O, indx).
+        // f. ReturnIfAbrupt(deleteStatus).
+        DeletePropertyOrThrow(O, indx);
 
-        //    b. Let element be the result of calling the [[Get]] internal method of O with argument indx.
-        ejsval element = OP(EJSVAL_TO_OBJECT(O),Get)(O, indx, O);
-        
-        //    c. Call the [[Delete]] internal method of O with arguments indx and true.
-        OP(EJSVAL_TO_OBJECT(O),Delete)(O, indx, EJS_TRUE);
-
-        //    d. Call the [[Put]] internal method of O with arguments "length", indx, and true.
-        // EJS: both node 0.10.21 and firefox nightly change length to a number here, not 'index' which is a string.
-        Put(O, _ejs_atom_length, NUMBER_TO_EJSVAL(len-1), EJS_TRUE);
-
-        //    e. Return element.
+        // g. Let putStatus be Put(O, "length", newLen, true).
+        // h. ReturnIfAbrupt(putStatus).
+        Put(O, _ejs_atom_length, NUMBER_TO_EJSVAL(newLen), EJS_TRUE);
+        // i Return element.
         return element;
     }
 }
