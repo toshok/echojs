@@ -2107,43 +2107,100 @@ _ejs_Array_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
     return NUMBER_TO_EJSVAL(-1);
 }
 
+// ES6 Draft January 15, 2015
+// 22.1.3.13
+// Array.prototype.keys ()
 static ejsval
 _ejs_Array_prototype_keys (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    /* 1. Let O be the result of calling ToObject with the this value as its argument. */
-    /* 2. ReturnIfAbrupt(O). */
+    // 1. Let O be the result of calling ToObject with the this value as its argument.
+    // 2. ReturnIfAbrupt(O).
     ejsval O = ToObject(_this);
 
-    /* 3. Return CreateArrayIterator(O, "key"). */
+    // 3. Return CreateArrayIterator(O, "key").
     return _ejs_array_iterator_new (O, EJS_ARRAYITER_KIND_KEY);
 }
 
+// ES6 Draft January 15, 2015
+// 22.1.3.29
+// Array.prototype.values ()
 static ejsval
 _ejs_Array_prototype_values (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    /* 1. Let O be the result of calling ToObject with the this value as its argument. */
-    /* 2. ReturnIfAbrupt(O). */
+    // 1. Let O be the result of calling ToObject with the this value as its argument.
+    // 2. ReturnIfAbrupt(O).
     ejsval O = ToObject(_this);
 
-    /* 3. Return CreateArrayIterator(O, "value"). */
+    // 3. Return CreateArrayIterator(O, "value").
     return _ejs_array_iterator_new (O, EJS_ARRAYITER_KIND_VALUE);
 }
 
+// ES6 Draft January 15, 2015
+// 22.1.3.4
+// Array.prototype.entries ()
 static ejsval
 _ejs_Array_prototype_entries (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    /* 1. Let O be the result of calling ToObject with the this value as its argument. */
-    /* 2. ReturnIfAbrupt(O). */
+    // 1. Let O be the result of calling ToObject with the this value as its argument.
+    // 2. ReturnIfAbrupt(O).
     ejsval O = ToObject(_this);
 
-    /* 3. Return CreateArrayIterator(O, "key+value"). */
+    // 3. Return CreateArrayIterator(O, "key+value").
     return _ejs_array_iterator_new (O, EJS_ARRAYITER_KIND_KEYVALUE);
 }
 
+// ES6 Draft January 15, 2015
+// 22.1.2.3
+// Array.of (...items)
 static ejsval
 _ejs_Array_of (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    return _ejs_array_new_copy (argc, args);
+    // fast(er) path for arrays
+    if (EJSVAL_IS_ARRAY(_this))
+        return _ejs_array_new_copy (argc, args);
+
+    // 1. Let len be the actual number of arguments passed to this function.
+    int64_t len = argc;
+
+    // 2. Let items be the List of arguments passed to this function.
+    ejsval *items = args;
+
+    // 3. Let C be the this value.
+    ejsval C = _this;
+
+    ejsval A;
+    // 4. If IsConstructor(C) is true, then
+    if (IsConstructor(C)) {
+        // a. Let A be Construct(C, «len»).
+        EJS_NOT_IMPLEMENTED();
+    }
+    // 5. Else,
+    else {
+        // a. Let A be ArrayCreate(len).
+        A = _ejs_array_new(len, EJS_FALSE);
+    }
+    // 6. ReturnIfAbrupt(A).
+    // 7. Let k be 0.
+    int64_t k = 0;
+
+    // 8. Repeat, while k < len
+    while (k < len) {
+        // a. Let kValue be element k of items.
+        ejsval kValue = items[k];
+        // b. Let Pk be ToString(k).
+        ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
+        // c. Let defineStatus be CreateDataPropertyOrThrow(A,Pk, kValue.[[value]]).
+        // d. ReturnIfAbrupt(defineStatus).
+        _ejs_object_define_value_property (A, Pk, kValue, EJS_PROP_FLAGS_ENUMERABLE | EJS_PROP_FLAGS_CONFIGURABLE | EJS_PROP_FLAGS_WRITABLE);
+        
+        // e. Increase k by 1.
+        k++;
+    }
+    // 9. Let putStatus be Put(A, "length", len, true).
+    // 10. ReturnIfAbrupt(putStatus).
+    Put(A, _ejs_atom_length, NUMBER_TO_EJSVAL(len), EJS_TRUE);
+    // 11. Return A.
+    return A;
 }
 
 ejsval
