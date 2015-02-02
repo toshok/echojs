@@ -2334,16 +2334,38 @@ _ejs_Array_from (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return A;
 }
 
+// ES6 Draft January 15, 2015
+// 7.2.2
+// IsArray ( argument )
+static EJSBool
+IsArray (ejsval argument) {
+    // 1. If Type(argument) is not Object, return false.
+    if (!EJSVAL_IS_OBJECT(argument)) return EJS_FALSE;
+
+    // 2. If argument is an Array exotic object, return true.
+    if (EJSVAL_IS_ARRAY(argument)) return EJS_TRUE;
+
+    // 3. If argument is a Proxy exotic object, then
+    if (EJSVAL_IS_PROXY(argument)) {
+        // a. Let target be the value of the [[ProxyTarget]] internal slot of argument.
+        ejsval target = EJSVAL_TO_PROXY(argument)->target;
+        // b. Return IsArray(target).
+        return IsArray(target);
+    }
+    // 4. Return false.
+    return EJS_FALSE;
+}
+
+// ES6 Draft January 15, 2015
+// 22.1.2.2
+// Array.isArray(arg)
 static ejsval
 _ejs_Array_isArray (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
-    if (argc == 0 || EJSVAL_IS_NULL(args[0]) || !EJSVAL_IS_OBJECT(args[0]))
-        return _ejs_false;
-
-    EJSObject* obj = EJSVAL_TO_OBJECT(args[0]);
-    // spec says the following string compare on internal classname,
-    // but we can just directly compare pointers.
-    return BOOLEAN_TO_EJSVAL(obj->ops == &_ejs_Array_specops || obj->ops == &_ejs_sparsearray_specops);
+    ejsval arg = _ejs_undefined;
+    if (argc > 0) arg = args[0];
+    // 1. Return IsArray(arg).
+    return BOOLEAN_TO_EJSVAL(IsArray(arg));
 }
 
 static ejsval
