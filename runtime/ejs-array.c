@@ -1267,9 +1267,8 @@ _ejs_Array_prototype_reduce (ejsval env, ejsval _this, uint32_t argc, ejsval* ar
     int64_t len = ToLength(Get(O, _ejs_atom_length));
 
     // 5. If IsCallable(callbackfn) is false, throw a TypeError exception.
-    if (!IsCallable(callbackfn)) {
+    if (!IsCallable(callbackfn))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Array.prototype.reduce called with a non-function.");
-    }
 
     // 6. If len is 0 and initialValue is not present, throw a TypeError exception.
     // (use argc here instead of EJSVAL_IS_UNDEFINED(initialValue), as 'undefined' passed for initialValue passes)
@@ -1340,8 +1339,9 @@ _ejs_Array_prototype_reduce (ejsval env, ejsval _this, uint32_t argc, ejsval* ar
     return accumulator;
 }
 
-// ECMA262: 15.4.4.22
-// Array.prototype.reduceRight ( callbackfn [ , initialValue ] ) 
+// ES6 Draft January 15, 2015
+// 22.1.3.19
+// Array.prototype.reduceRight ( callbackfn [ , initialValue ] )
 static ejsval
 _ejs_Array_prototype_reduceRight (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
@@ -1350,74 +1350,74 @@ _ejs_Array_prototype_reduceRight (ejsval env, ejsval _this, uint32_t argc, ejsva
     if (argc > 0) callbackfn = args[0];
     if (argc > 1) initialValue = args[1];
 
-    /* 1. Let O be the result of calling ToObject passing the this value as the argument.  */
+
+    // 1. Let O be the result of calling ToObject passing the this value as the argument.
+    // 2. ReturnIfAbrupt(O).
     ejsval O = ToObject(_this);
-    EJSObject* Oobj = EJSVAL_TO_OBJECT(O);
 
-    /* 2. Let lenValue be the result of calling the [[Get]] internal method of O with the argument "length".  */
-    ejsval lenValue = OP(Oobj,Get)(O, _ejs_atom_length, O);
+    // 3. Let len be ToLength(Get(O, "length")).
+    // 4. ReturnIfAbrupt(len).
+    int64_t len = ToLength(Get(O, _ejs_atom_length));
 
-    /* 3. Let len be ToUint32(lenValue).  */
-    uint32_t len = ToUint32(lenValue);
-
-    /* 4. If IsCallable(callbackfn) is false, throw a TypeError exception.  */
+    // 5. If IsCallable(callbackfn) is false, throw a TypeError exception.
     if (!IsCallable(callbackfn))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "callback function is not a function");
-
-    /* 5. If len is 0 and initialValue is not present, throw a TypeError exception.  */
-    if (!len == 0 && argc > 1 /* don't use EJSVAL_IS_UNDEFINED(initialValue), as 'undefined' passed for initialValue passes */) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Array.prototype.reduce called with a non-function.");
+        
+    // 6. If len is 0 and initialValue is not present, throw a TypeError exception.
+    // (use argc here instead of EJSVAL_IS_UNDEFINED(initialValue), as 'undefined' passed for initialValue passes)
+    if (!len == 0 && argc <= 1) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Reduce right of empty array with no initial value");
     }
-
-    /* 6. Let k be len-1.  */
-    int k = len - 1;
+    // 7. Let k be len-1.
+    int64_t k = len-1;
 
     ejsval accumulator;
 
-    /* 7. If initialValue is present, then */
-    if (argc > 1 /* don't use EJSVAL_IS_UNDEFINED(initialValue), as 'undefined' passed for initialValue passes */) {
-        /*    a. Set accumulator to initialValue.  */
+    // 8. If initialValue is present, then
+    if (argc > 1) {
+        // a. Set accumulator to initialValue.
         accumulator = initialValue;
     }
-    /* 8. Else, initialValue is not present  */
+    // 9. Else initialValue is not present,
     else {
-        /*    a. Let kPresent be false.  */
+        // a. Let kPresent be false.
         EJSBool kPresent = EJS_FALSE;
 
-        /*    b. Repeat, while kPresent is false and k ≥ 0  */
+        // b. Repeat, while kPresent is false and k ≥ 0
         while (!kPresent && k >= 0) {
-            /*       i. Let Pk be ToString(k).  */
+            // i. Let Pk be ToString(k).
             ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
-
-            /*       ii. Let kPresent be the result of calling the [[HasProperty]] internal method of O with argument Pk.  */
+            // ii. Let kPresent be HasProperty(O, Pk).
+            // iii. ReturnIfAbrupt(kPresent).
             kPresent = OP(EJSVAL_TO_OBJECT(O), HasProperty)(O, Pk);
-            /*       iii. If kPresent is true, then  */
+            // iv. If kPresent is true, then
             if (kPresent) {
-                /*            1. Let accumulator be the result of calling the [[Get]] internal method of O with argument Pk.  */
-                accumulator = OP(Oobj,Get)(O, Pk, O);
+                // 1. Let accumulator be Get(O, Pk).
+                // 2. ReturnIfAbrupt(accumulator).
+                accumulator = Get(O, Pk);
             }
-            /*       iv. Decrease k by 1.  */
+            // v. Decrease k by 1.
             k--;
         }
-        /*    c. If kPresent is false, throw a TypeError exception.  */
-        if (!kPresent)
-            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Reduce right of empty array with no initial value");
+        // c. If kPresent is false, throw a TypeError exception.
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Reduce right of empty array with no initial value");
     }
-    /* 9. Repeat, while k ≥ 0  */
+    // 10. Repeat, while k ≥ 0
     while (k >= 0) {
-        /*    a. Let Pk be ToString(k).  */
+        // a. Let Pk be ToString(k).
         ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
+        // b. Let kPresent be HasProperty(O, Pk).
+        // c. ReturnIfAbrupt(kPresent).
+        EJSBool kPresent = OP(EJSVAL_TO_OBJECT(O), HasProperty)(O, Pk);
 
-        /*    b. Let kPresent be the result of calling the [[HasProperty]] internal method of O with argument Pk.  */
-        EJSBool kPresent = OP(Oobj, HasProperty)(O, Pk);
-
-        /*    c. If kPresent is true, then  */
+        // d. If kPresent is true, then
         if (kPresent) {
-            /*       i. Let kValue be the result of calling the [[Get]] internal method of O with argument Pk.  */
-            ejsval kValue = OP(Oobj,Get)(O, Pk, O);
+            // i. Let kValue be Get(O, Pk).
+            // ii. ReturnIfAbrupt(kValue).
+            ejsval kValue = Get(O, Pk);
 
-            /*       ii. Let accumulator be the result of calling the [[Call]] internal method of callbackfn with  */
-            /*           undefined as the this value and argument list containing accumulator, kValue, k, and O.  */
+            // iii. Let accumulator be Call(callbackfn, undefined, «accumulator, kValue, k, »).
+            // iv. ReturnIfAbrupt(accumulator).
             ejsval reduce_args[4] = {
                 accumulator,
                 kValue,
@@ -1426,166 +1426,208 @@ _ejs_Array_prototype_reduceRight (ejsval env, ejsval _this, uint32_t argc, ejsva
             };
             accumulator = _ejs_invoke_closure (callbackfn, _ejs_undefined, 4, reduce_args);
         }
-        /*    d. Decrease k by 1.  */
+        // e. Decrease k by 1.
         k--;
     }
-    /* 10. Return accumulator. */
+    // 11. Return accumulator.
     return accumulator;
 }
 
-// ECMA262: 15.4.4.12
+// ES6 Draft January 15, 2015
+// 22.1.3.25
+// Array.prototype.splice (start, deleteCount , ...items )
 static ejsval
 _ejs_Array_prototype_splice (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
-    // start, deleteCount [ , item1 [ , item2 [ , … ] ] ]
-
-    ejsval start;
+    ejsval start = _ejs_undefined;
     ejsval deleteCount = _ejs_undefined;
 
-    if (argc == 0)
-        return _ejs_array_new(0, EJS_FALSE);
+    if (argc > 0) start = args[0];
+    if (argc > 1) deleteCount = args[1];
 
-    start = args[0];
-    if (argc > 1)
-        deleteCount = args[1];
-
-    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    // 1. Let O be the result of calling ToObject passing the this value as the argument.
+    // 2. ReturnIfAbrupt(O).
     ejsval O = ToObject(_this);
-    /* 2. Let A be a new array created as if by the expression new Array() where Array is the standard built-in 
-          constructor with that name. */
-    ejsval A = _ejs_array_new(0, EJS_FALSE);
-    /* 3. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length". */
-    ejsval lenVal = _ejs_object_getprop (O, _ejs_atom_length);
-    /* 4. Let len be ToUint32(lenVal). */
-    uint32_t len = ToUint32(lenVal);
-    /* 5. Let relativeStart be ToInteger(start). */
-    int32_t relativeStart = ToInteger(start);
-    /* 6. If relativeStart is negative, let actualStart be max((len + relativeStart),0); else let actualStart be 
-          min(relativeStart, len). */
-    int32_t actualStart = relativeStart < 0 ? max((len + relativeStart),0) : min(relativeStart, len);
 
-    if (EJSVAL_IS_UNDEFINED(deleteCount)) {
-        deleteCount = NUMBER_TO_EJSVAL (len - actualStart);
+    // 3. Let len be ToLength(Get(O, "length")).
+    // 4. ReturnIfAbrupt(len).
+    int64_t len = ToLength(Get(O, _ejs_atom_length));
+
+    // 5. Let relativeStart be ToInteger(start).
+    // 6. ReturnIfAbrupt(relativeStart).
+    int64_t relativeStart = ToInteger(start);
+    
+    // 7. If relativeStart < 0, let actualStart be max((len +
+    //    relativeStart),0); else let actualStart be
+    //    min(relativeStart, len).
+    int64_t actualStart = relativeStart < 0 ? max(len + relativeStart, 0) : min(relativeStart, len);
+
+    int64_t insertCount;
+    int64_t actualDeleteCount;
+
+    // 8. If the number of actual arguments is 0, then
+    if (argc == 0) {
+        // a. Let insertCount be 0.
+        insertCount = 0;
+        // b. Let actualDeleteCount be 0.
+        actualDeleteCount = 0;
     }
+    // 9. Else if the number of actual arguments is 1, then
+    else if (argc == 1) {
+        // a. Let insertCount be 0.
+        insertCount = 0;
+        // b. Let actualDeleteCount be len - actualStart
+        actualDeleteCount = len - actualStart;
+    }
+    // 10. Else,
+    else {
+        // a. Let insertCount be the number of actual arguments minus 2.
+        insertCount = argc - 2;
+        // b. Let dc be ToInteger(deleteCount).
+        // c. ReturnIfAbrupt(dc).
+        int64_t dc = ToInteger(deleteCount);
+        // d. Let actualDeleteCount be min(max(dc,0), len – actualStart).
+        actualDeleteCount = min(max(dc, 0), len - actualStart);
+    }
+    // 11. If len+insertCount−actualDeleteCount > 253-1, throw a TypeError exception.
+    if (len + insertCount - actualDeleteCount > EJS_MAX_SAFE_INTEGER)
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "result too large");
 
-    /* 7. Let actualDeleteCount be min(max(ToInteger(deleteCount),0), len - actualStart). */
-    int32_t actualDeleteCount = min(max(ToInteger(deleteCount),0), len - actualStart);
-    /* 8. Let k be 0. */
-    int k = 0;
-    /* 9. Repeat, while k < actualDeleteCount */
+    // 12. Let A be ArraySpeciesCreate(O, actualDeleteCount).
+    // 13. ReturnIfAbrupt(A).
+    // XXX(toshok) missing ArraySpeciesCreate
+    ejsval A = _ejs_array_new(actualDeleteCount, EJS_FALSE);
+
+    // 14. Let k be 0.
+    int64_t k = 0;
+    // 15. Repeat, while k < actualDeleteCount
     while (k < actualDeleteCount) {
-        /*    a. Let from be ToString(actualStart+k). */
-        ejsval from = NUMBER_TO_EJSVAL(actualStart+k);
-        /*    b. Let fromPresent be the result of calling the [[HasProperty]] internal method of O with argument 
-              from. */
+        // a. Let from be ToString(actualStart+k).
+        ejsval from = ToString(NUMBER_TO_EJSVAL(actualStart+k));
+        // b. Let fromPresent be HasProperty(O, from).
+        // c. ReturnIfAbrupt(fromPresent).
         EJSBool fromPresent = OP(EJSVAL_TO_OBJECT(O), HasProperty)(O, from);
-        /*    c. If fromPresent is true, then */
+        // d. If fromPresent is true, then
         if (fromPresent) {
-            /*       i. Let fromValue be the result of calling the [[Get]] internal method of O with argument from. */
-            ejsval fromValue = _ejs_object_getprop (O, from);
-            /*       ii. Call the [[DefineOwnProperty]] internal method of A with arguments ToString(k), Property
-                         Descriptor {[[Value]]: fromValue, [[Writable]]: true, [[Enumerable]]: true, 
-                         [[Configurable]]: true}, and false. */
-#if false
-            EJSPropertyDesc desc = { .value = fromValue, .writable = EJS_TRUE, .enumerable = EJS_TRUE, .configurable = EJS_TRUE };
-            OP(EJSVAL_TO_OBJECT(A), define_own_property)(A, NumberToString(k), &desc, EJS_FALSE);
-#else
-            _ejs_object_setprop (A, NUMBER_TO_EJSVAL(k), fromValue);
-#endif
+            // i. Let fromValue be Get(O, from).
+            // ii. ReturnIfAbrupt(fromValue).
+            ejsval fromValue = Get(O, from);
+            // iii. Let status be CreateDataPropertyOrThrow(A, ToString(k), fromValue).
+            // iv. ReturnIfAbrupt(status).
+            _ejs_object_setprop(A, ToString(NUMBER_TO_EJSVAL(k)), fromValue);
         }
-        /*    d. Increment k by 1. */
-        ++k;
+        // e. Increment k by 1.
+        k++;
     }
-    /* 10. Let items be an internal List whose elements are, in left to right order, the portion of the actual argument list
-           starting with item1. The list will be empty if no such items are present. */
+    // 16. Let putStatus be Put(A, "length", actualDeleteCount, true).
+    // 17. ReturnIfAbrupt(putStatus).
+    Put(A, _ejs_atom_length, NUMBER_TO_EJSVAL(actualDeleteCount), EJS_TRUE);
+    
+    // 18. Let items be a List whose elements are, in left to right
+    //     order, the portion of the actual argument list starting
+    //     with the third argument. The list is empty if fewer than
+    //     three arguments were passed.
     ejsval *items = &args[2];
-    /* 11. Let itemCount be the number of elements in items. */
+
+    // 19. Let itemCount be the number of elements in items.
     int itemCount = argc > 2 ? argc - 2 : 0;
-    /* 12. If itemCount < actualDeleteCount, then */
+
+    // 20. If itemCount < actualDeleteCount, then
     if (itemCount < actualDeleteCount) {
-        /*     a. Let k be actualStart. */
+        // a. Let k be actualStart.
         k = actualStart;
-        /*     b. Repeat, while k < (len – actualDeleteCount) */
-        while (k < (len - actualDeleteCount)) {
-            /*        i. Let from be ToString(k+actualDeleteCount). */
-            ejsval from = NUMBER_TO_EJSVAL(k+actualDeleteCount);
-            /*        ii. Let to be ToString(k+itemCount). */
-            ejsval to = NUMBER_TO_EJSVAL(k+itemCount);
-            /*        iii. Let fromPresent be the result of calling the [[HasProperty]] internal method of O with 
-                           argument from. */
+        // b. Repeat, while k < (len – actualDeleteCount)
+        while (k < len - actualDeleteCount) {
+            // i. Let from be ToString(k+actualDeleteCount).
+            ejsval from = ToString(NUMBER_TO_EJSVAL(k + actualDeleteCount));
+            // ii. Let to be ToString(k+itemCount).
+            ejsval to = ToString(NUMBER_TO_EJSVAL(k + itemCount));
+
+            // iii. Let fromPresent be HasProperty(O, from).
+            // iv. ReturnIfAbrupt(fromPresent).
             EJSBool fromPresent = OP(EJSVAL_TO_OBJECT(O), HasProperty)(O, from);
-            /*        iv. If fromPresent is true, then */
+
+            // v. If fromPresent is true, then
             if (fromPresent) {
-                /*            1. Let fromValue be the result of calling the [[Get]] internal method of O with 
-                                 argument from. */
-                ejsval fromValue = _ejs_object_getprop (O, from);
-                /*            2. Call the [[Put]] internal method of O with arguments to, fromValue, and true. */
-                _ejs_object_setprop (O, to, fromValue);
+                // 1. Let fromValue be Get(O, from).
+                // 2. ReturnIfAbrupt(fromValue).
+                ejsval fromValue = Get(O, from);
+                // 3. Let putStatus be Put(O, to, fromValue, true).
+                // 4. ReturnIfAbrupt(putStatus).
+                Put(O, to, fromValue, EJS_TRUE);
             }
-            /*        v. Else, fromPresent is false */
+            // vi. Else fromPresent is false,
             else {
-                /*            1. Call the [[Delete]] internal method of O with arguments to and true. */
-                OP(EJSVAL_TO_OBJECT(O), Delete)(O, to, EJS_TRUE);
+                // 1. Let deleteStatus be DeletePropertyOrThrow(O, to).
+                // 2. ReturnIfAbrupt(deleteStatus).
+                DeletePropertyOrThrow(O, to);
             }
-            /*        vi. Increase k by 1. */
-            ++k;
+            // vii. Increase k by 1.
+            k++;
         }
-        /*     c. Let k be len. */
+        // c. Let k be len.
         k = len;
-        /*     d. Repeat, while k > (len - actualDeleteCount + itemCount)  */
-        while (k > (len - actualDeleteCount + itemCount)) {
-            /*        i. Call the [[Delete]] internal method of O with arguments ToString(k–1) and true. */
-            OP(EJSVAL_TO_OBJECT(O), Delete)(O, NUMBER_TO_EJSVAL(k-1), EJS_TRUE);
-            /*        ii. Decrease k by 1. */
-            --k;
+        // d. Repeat, while k > (len – actualDeleteCount + itemCount)
+        while (k > len - actualDeleteCount + itemCount) {
+            // i. Let deleteStatus be DeletePropertyOrThrow(O, ToString(k–1)).
+            // ii. ReturnIfAbrupt(deleteStatus).
+            DeletePropertyOrThrow(O, ToString(NUMBER_TO_EJSVAL(k-1)));
+            // iii. Decrease k by 1.
+            k--;
         }
     }
-    /* 13. Else if itemCount > actualDeleteCount, then */
-    else if (itemCount > actualDeleteCount) {
-        /*     a. Let k be (len – actualDeleteCount). */
-        k = (len - actualDeleteCount);
-        /*     b. Repeat, while k > actualStart */
+    // 21. Else if itemCount > actualDeleteCount, then
+    else {
+        // a. Let k be (len – actualDeleteCount).
+        k = len - actualDeleteCount;
+
+        // b. Repeat, while k > actualStart
         while (k > actualStart) {
-            /*        i. Let from be ToString(k + actualDeleteCount - 1). */
-            ejsval from = NUMBER_TO_EJSVAL(k + actualDeleteCount - 1);
-            /*        ii. Let to be ToString(k + itemCount - 1) */
-            ejsval to = NUMBER_TO_EJSVAL(k + itemCount - 1);
-            /*        iii. Let fromPresent be the result of calling the [[HasProperty]] internal method of O with 
-                           argument from. */
+            // i. Let from be ToString(k + actualDeleteCount – 1).
+            ejsval from = ToString(NUMBER_TO_EJSVAL(k + actualDeleteCount - 1));
+            // ii. Let to be ToString(k + itemCount – 1)
+            ejsval to = ToString(NUMBER_TO_EJSVAL(k + itemCount - 1));
+
+            // iii. Let fromPresent be HasProperty(O, from).
+            // iv. ReturnIfAbrupt(fromPresent).
             EJSBool fromPresent = OP(EJSVAL_TO_OBJECT(O), HasProperty)(O, from);
-            /*        iv. If fromPresent is true, then */
+
+            // v. If fromPresent is true, then
             if (fromPresent) {
-                /*            1. Let fromValue be the result of calling the [[Get]] internal method of O with 
-                                 argument from. */
-                ejsval fromValue = _ejs_object_getprop (O, from);
-                /*            2. Call the [[Put]] internal method of O with arguments to, fromValue, and true. */
-                _ejs_object_setprop (O, to, fromValue);
+                // 1. Let fromValue be Get(O, from).
+                // 2. ReturnIfAbrupt(fromValue).
+                ejsval fromValue = Get(O, from);
+                // 3. Let putStatus be Put(O, to, fromValue, true).
+                // 4. ReturnIfAbrupt(putStatus).
+                Put(O, to, fromValue, EJS_TRUE);
             }
-            /*        v. Else, fromPresent is false */
+            // vi. Else fromPresent is false,
             else {
-                /*           1. Call the [[Delete]] internal method of O with argument to and true */
-                OP(EJSVAL_TO_OBJECT(O), Delete)(O, to, EJS_TRUE);
+                // 1. Let deleteStatus be DeletePropertyOrThrow(O, to).
+                // 2. ReturnIfAbrupt(deleteStatus).
+                DeletePropertyOrThrow(O, to);
             }
-            /*        vi. Decrease k by 1. */
-            --k;
+            // vii. Decrease k by 1.
+            k--;
         }
     }
-    /* 14. Let k be actualStart. */
+    // 22. Let k be actualStart.
     k = actualStart;
-    int item_i = 0;
-    /* 15. Repeat, while items is not empty */
+    // 23. Repeat, while items is not empty
+    int64_t item_i = 0;
     while (item_i < itemCount) {
-        /*     a. Remove the first element from items and let E be the value of that element. */
+        // a. Remove the first element from items and let E be the value of that element.
         ejsval E = items[item_i++];
-        /*     b. Call the [[Put]] internal method of O with arguments ToString(k), E, and true. */
-        _ejs_object_setprop (O, NUMBER_TO_EJSVAL(k), E);
-        /*     c. Increase k by 1. */
-        ++k;
+        // b. Let putStatus be Put(O, ToString(k), E, true).
+        // c. ReturnIfAbrupt(putStatus).
+        Put(O, ToString(NUMBER_TO_EJSVAL(k)), E, EJS_TRUE);
+        // d. Increase k by 1.
+        k++;
     }
-    /* 16. Call the [[Put]] internal method of O with arguments "length", (len - actualDeleteCount + itemCount),  
-           and true. */
-    _ejs_object_setprop (O, _ejs_atom_length, NUMBER_TO_EJSVAL(len - actualDeleteCount + itemCount));
-    /* 17. Return A. */
+    // 24. Let putStatus be Put(O, "length", len – actualDeleteCount + itemCount, true).
+    // 25. ReturnIfAbrupt(putStatus).
+    Put(O, _ejs_atom_length, NUMBER_TO_EJSVAL(len - actualDeleteCount + itemCount), EJS_TRUE);
+    // 26. Return A.
     return A;
 }
 
@@ -2588,8 +2630,9 @@ _ejs_array_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
 {
     // check if propertyName is a uint32, or a string that we can convert to an uint32
     int idx = -1;
-    if (EJSVAL_IS_NUMBER(propertyName)) {
-        double n = EJSVAL_TO_NUMBER(propertyName);
+    ejsval idx_val = ToNumber(propertyName);
+    if (EJSVAL_IS_NUMBER(idx_val)) {
+        double n = EJSVAL_TO_NUMBER(idx_val);
         if (floor(n) == n) {
             idx = (int)n;
         }
