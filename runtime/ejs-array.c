@@ -201,62 +201,67 @@ _ejs_Array_prototype_shift (ejsval env, ejsval _this, uint32_t argc, ejsval*args
     }
 
     // 1. Let O be the result of calling ToObject passing the this value as the argument.
+    // 2. ReturnIfAbrupt(O).
     ejsval O = ToObject(_this);
-    EJSObject* Oobj = EJSVAL_TO_OBJECT(O);
 
-    // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
-    ejsval lenVal = OP(Oobj,Get) (O, _ejs_atom_length, O);
+    // 3. Let len be ToLength(Get(O, "length")).
+    // 4. ReturnIfAbrupt(len).
+    int64_t len = ToLength(Get(O, _ejs_atom_length));
 
-    // 3. Let len be ToUint32(lenVal).
-    int len = ToUint32(lenVal);
-
-    // 4. If len is zero, then
+    // 5. If len is zero, then
     if (len == 0) {
-        //   a. Call the [[Put]] internal method of O with arguments "length", 0, and true.
-        Put (O, _ejs_atom_length, NUMBER_TO_EJSVAL(0), EJS_TRUE);
-        //   b. Return undefined.
+        // a. Let putStatus be Put(O, "length", 0, true).
+        // b. ReturnIfAbrupt(putStatus).
+        Put(O, _ejs_atom_length, NUMBER_TO_EJSVAL(0), EJS_TRUE);
+        // c. Return undefined.
         return _ejs_undefined;
     }
 
-    // 5. Let first be the result of calling the [[Get]] internal method of O with argument "0".
-    ejsval first = OP(Oobj,Get) (O, _ejs_string_new_utf8 ("0"), O);
+    // 6. Let first be Get(O, "0").
+    // 7. ReturnIfAbrupt(first).
+    ejsval first = Get(O, _ejs_atom_0);
 
-    // 6. Let k be 1.
-    int k = 1;
-    // 7. Repeat, while k < len
+    // 8. Let k be 1.
+    int64_t k = 1;
+
+    // 9. Repeat, while k < len
     while (k < len) {
-        //   a. Let from be ToString(k).
+        // a. Let from be ToString(k).
         ejsval from = ToString(NUMBER_TO_EJSVAL(k));
-
-        //   b. Let to be ToString(k–1).
+        // b. Let to be ToString(k–1).
         ejsval to = ToString(NUMBER_TO_EJSVAL(k-1));
 
-        //   c. Let fromPresent be the result of calling the [[HasProperty]] internal method of O with argument from.
-        EJSBool fromPresent = OP(Oobj,HasProperty)(O, from);
+        // c. Let fromPresent be HasProperty(O, from).
+        // d. ReturnIfAbrupt(fromPresent).
+        EJSBool fromPresent = HasProperty(O, from);
 
-        //   d. If fromPresent is true, then
+        // e. If fromPresent is true, then
         if (fromPresent) {
-            //     i. Let fromVal be the result of calling the [[Get]] internal method of O with argument from.
-            ejsval fromVal = OP(Oobj,Get)(O, from, O);
+            // i. Let fromVal be Get(O, from).
+            // ii. ReturnIfAbrupt(fromVal).
+            ejsval fromVal = Get(O, from);
 
-            //     ii. Call the [[Put]] internal method of O with arguments to, fromVal, and true.
+            // iii. Let putStatus be Put(O, to, fromVal, true).
+            // iv. ReturnIfAbrupt(putStatus).
             Put(O, to, fromVal, EJS_TRUE);
         }
-        //   e. Else, fromPresent is false
+        // f. Else fromPresent is false,
         else {
-            //     i. Call the [[Delete]] internal method of O with arguments to and true.
-            OP(Oobj,Delete)(O, to, EJS_TRUE);
+            // i. Let deleteStatus be DeletePropertyOrThrow(O, to).
+            // ii. ReturnIfAbrupt(deleteStatus).
+            DeletePropertyOrThrow(O, to);
         }
-        //   f. Increase k by 1.
+        // g. Increase k by 1.
         k++;
     }
-    // 8. Call the [[Delete]] internal method of O with arguments ToString(len–1) and true.
-    OP(Oobj,Delete) (O, NUMBER_TO_EJSVAL(len-1), EJS_TRUE);
+    // 10. Let deleteStatus be DeletePropertyOrThrow(O, ToString(len–1)).
+    // 11. ReturnIfAbrupt(deleteStatus).
+    DeletePropertyOrThrow(O, ToString(NUMBER_TO_EJSVAL(len - 1)));
 
-    // 9. Call the [[Put]] internal method of O with arguments "length", (len–1) , and true.
+    // 12. Let putStatus be Put(O, "length", len–1, true).
+    // 13. ReturnIfAbrupt(putStatus).
     Put(O, _ejs_atom_length, NUMBER_TO_EJSVAL(len-1), EJS_TRUE);
-    
-    // 10. Return first.
+    // 14. Return first.
     return first;
 }
 
@@ -375,7 +380,7 @@ _ejs_Array_prototype_reverse (ejsval env, ejsval _this, uint32_t argc, ejsval* a
 
         // d. Let lowerExists be HasProperty(O, lowerP).
         // e. ReturnIfAbrupt(lowerExists).
-        EJSBool lowerExists = OP(EJSVAL_TO_OBJECT(O),HasProperty)(O, lowerP);
+        EJSBool lowerExists = HasProperty(O, lowerP);
         // f. If lowerExists is true, then
         if (lowerExists) {
             // i. Let lowerValue be Get(O, lowerP).
@@ -385,7 +390,7 @@ _ejs_Array_prototype_reverse (ejsval env, ejsval _this, uint32_t argc, ejsval* a
 
         // g. Let upperExists be HasProperty(O, upperP).
         // h. ReturnIfAbrupt(upperExists).
-        EJSBool upperExists = OP(EJSVAL_TO_OBJECT(O),HasProperty)(O, upperP);
+        EJSBool upperExists = HasProperty(O, upperP);
         // i. If upperExists is true, then
         if (upperExists) {
             // i. Let upperValue be Get(O, upperP).
@@ -579,7 +584,7 @@ _ejs_Array_prototype_concat (ejsval env, ejsval _this, uint32_t argc, ejsval* ar
                 ejsval P = ToString(NUMBER_TO_EJSVAL(k));
                 // 2. Let exists be HasProperty(E, P).
                 // 3. ReturnIfAbrupt(exists).
-                EJSBool exists = OP(EJSVAL_TO_OBJECT(E),HasProperty)(E, P);
+                EJSBool exists = HasProperty(E, P);
                 // 4. If exists is true, then
                 if (exists) {
                     // a. Let subElement be Get(E, P).
@@ -667,7 +672,7 @@ _ejs_Array_prototype_concat (ejsval env, ejsval _this, uint32_t argc, ejsval* ar
                 ejsval P = ToString(NUMBER_TO_EJSVAL(k));
                 //          2. Let exists be HasProperty(E, P).
                 //          3. ReturnIfAbrupt(exists).
-                EJSBool exists = OP(EJSVAL_TO_OBJECT(E),HasProperty)(E, P);
+                EJSBool exists = HasProperty(E, P);
                 //          4. If exists is true, then
                 if (exists) {
                     //             a. Let subElement be Get(E, P).
@@ -812,7 +817,7 @@ _ejs_Array_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval* arg
 
         // b. Let kPresent be HasProperty(O, Pk)
         // c. ReturnIfAbrupt(kPresent)
-        EJSBool kPresent = OP(EJSVAL_TO_OBJECT(O),HasProperty)(O, Pk);
+        EJSBool kPresent = HasProperty(O, Pk);
 
         // c. If kPresent is true, then
         if (kPresent) {
@@ -952,7 +957,7 @@ _ejs_Array_prototype_lastIndexOf (ejsval env, ejsval _this, uint32_t argc, ejsva
 
         // a. Let kPresent be HasProperty(O, ToString(k)).
         // b. ReturnIfAbrupt(kPresent).
-        EJSBool kPresent = OP(EJSVAL_TO_OBJECT(O),HasProperty)(O, kstr);
+        EJSBool kPresent = HasProperty(O, kstr);
 
         // c. If kPresent is true, then
         if (kPresent) {
@@ -1009,7 +1014,7 @@ _ejs_Array_prototype_every (ejsval env, ejsval _this, uint32_t argc, ejsval* arg
 
         // b. Let kPresent be HasProperty(O, Pk).
         // c. ReturnIfAbrupt(kPresent).
-        EJSBool kPresent = OP(EJSVAL_TO_OBJECT(O),HasProperty)(O, Pk);
+        EJSBool kPresent = HasProperty(O, Pk);
 
         // d. If kPresent is true, then
         if (kPresent) {
@@ -1054,7 +1059,6 @@ _ejs_Array_prototype_some (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
     // 1. Let O be the result of calling ToObject passing the this value as the argument.
     // 2. ReturnIfAbrupt(O).
     ejsval O = ToObject(_this);
-    EJSObject* Oobj = EJSVAL_TO_OBJECT(O);
 
     // 3. Let len be ToLength(Get(O, "length")).
     // 4. ReturnIfAbrupt(len).
@@ -1077,7 +1081,7 @@ _ejs_Array_prototype_some (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 
         // b. Let kPresent be HasProperty(O, Pk).
         // c. ReturnIfAbrupt(kPresent).
-        EJSBool kPresent = OP(Oobj,HasProperty)(O, Pk);
+        EJSBool kPresent = HasProperty(O, Pk);
 
         // d. If kPresent is true, then
         if (kPresent) {
@@ -1756,7 +1760,7 @@ _ejs_Array_prototype_filter (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
         /* a. Let Pk be ToString(k). */
         ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
         /* b. Let kPresent be the result of HasProperty(O, Pk). */
-        EJSBool kPresent = OP(Oobj,HasProperty)(O, Pk);
+        EJSBool kPresent = HasProperty(O, Pk);
 
         /* d. If kPresent is true, then */
         if (kPresent) {
@@ -1828,7 +1832,7 @@ _ejs_Array_prototype_find (ejsval env, ejsval _this, uint32_t argc, ejsval *args
         /* a. Let Pk be ToString(k). */
         ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
         /* b. Let kPresent be the result of HasProperty(O, Pk). */
-        EJSBool kPresent = OP(Oobj,HasProperty)(O, Pk);
+        EJSBool kPresent = HasProperty(O, Pk);
 
         /* d. If kPresent is true, then */
         if (kPresent) {
@@ -1895,7 +1899,7 @@ _ejs_Array_prototype_findIndex (ejsval env, ejsval _this, uint32_t argc, ejsval 
         /* a. Let Pk be ToString(k). */
         ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
         /* b. Let kPresent be the result of HasProperty(O, Pk). */
-        EJSBool kPresent = OP(Oobj,HasProperty)(O, Pk);
+        EJSBool kPresent = HasProperty(O, Pk);
 
         /* d. If kPresent is true, then */
         if (kPresent) {
@@ -2016,10 +2020,10 @@ _ejs_Array_prototype_copyWithin (ejsval env, ejsval _this, int argc, ejsval *arg
 
         /* c. Let fromPresent be HasProperty(O, fromKey). */
         /* d. ReturnIfAbrupt(fromPresent). */
-        ejsval fromPresent = HasProperty(O, fromKey);
+        EJSBool fromPresent = HasProperty(O, fromKey);
 
         /* e. If fromPresent is true, then */
-        if (EJSVAL_TO_BOOLEAN(fromPresent)) {
+        if (fromPresent) {
             /* i. Let fromVal be Get(O, fromKey). */
             /* ii. ReturnIfAbrupt(fromVal). */
             ejsval fromVal = Get(O, fromKey);
@@ -2152,7 +2156,6 @@ _ejs_Array_from (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     /* 2. Let items be ToObject(arrayLike). */
     ejsval items = ToObject(itemsArg);
-    EJSObject *itemsObj = EJSVAL_TO_OBJECT(items);
 
     if (EJSVAL_IS_UNDEFINED(mapfn))
         /* 3. If mapfn is undefined, then let mapping be false. */
@@ -2200,7 +2203,7 @@ _ejs_Array_from (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         /* a. Let Pk be ToString(k). */
         ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
         /* b. Let kPresent be the result of HasProperty(items, Pk). */
-        EJSBool kPresent = OP(itemsObj,HasProperty)(items, Pk);
+        EJSBool kPresent = HasProperty(items, Pk);
 
         /* d. If kPresent is true, then */
         if (kPresent) {

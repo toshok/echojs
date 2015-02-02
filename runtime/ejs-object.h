@@ -108,7 +108,7 @@ EJSBool IsAccessorDescriptor   (EJSPropertyDesc* Desc);
 ejsval Get (ejsval O, ejsval P);
 ejsval Put (ejsval O, ejsval P, ejsval V, EJSBool Throw);
 ejsval GetMethod (ejsval O, ejsval P);
-ejsval HasProperty (ejsval O, ejsval P);
+EJSBool HasProperty (ejsval O, ejsval P);
 ejsval DeletePropertyOrThrow (ejsval O, ejsval P);
     
 typedef struct _EJSPropertyMapEntry _EJSPropertyMapEntry;

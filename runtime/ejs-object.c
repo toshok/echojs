@@ -121,7 +121,7 @@ ToPropertyKey(ejsval argument)
     return ToString(argument);
 }
 
-ejsval
+EJSBool
 HasProperty(ejsval argument, ejsval property)
 {
     // 1. Assert: Type(O) is Object.
@@ -132,8 +132,7 @@ HasProperty(ejsval argument, ejsval property)
     property = ToPropertyKey(property);
 
     // 3. Return the result of calling the [[HasProperty]] internal method of O with argument P.
-    EJSBool retval = OP(EJSVAL_TO_OBJECT(argument),HasProperty)(argument, property);
-    return BOOLEAN_TO_EJSVAL(retval);
+    return OP(EJSVAL_TO_OBJECT(argument),HasProperty)(argument, property);
 }
 
 ejsval
