@@ -144,7 +144,7 @@ DeletePropertyOrThrow(ejsval argument, ejsval property)
         _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "O is not an Object");
 
     /* 2. Assert: IsPropertyKey(P) is true. */
-    argument = ToPropertyKey(argument);
+    property = ToPropertyKey(property);
 
     /* 3. Let success be the result of calling the [[Delete]] internal method of O passing P as the argument. */
     /* 4. ReturnIfAbrupt(success). */
