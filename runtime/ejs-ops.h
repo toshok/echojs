@@ -21,6 +21,11 @@ ejsval ToBoolean(ejsval exp);
 EJSBool ToEJSBool(ejsval exp);
 EJSBool IsConcatSpreadable (ejsval O);
 
+EJSBool IsCallable(ejsval argument);
+EJSBool IsConstructor(ejsval argument);
+
+ejsval SpeciesConstructor(ejsval O, ejsval defaultConstructor);
+
 EJSBool SameValue(ejsval x, ejsval y);
 EJSBool SameValueZero(ejsval x, ejsval y);
 

@@ -1512,3 +1512,59 @@ IsConcatSpreadable (ejsval O)
     return EJS_FALSE;
 }
 
+// ES6 Draft January 15, 2015
+// 7.2.3
+// IsCallable (argument)
+EJSBool
+IsCallable(ejsval argument)
+{
+    return EJSVAL_IS_FUNCTION(argument);
+}
+
+// ES6 Draft January 15, 2015
+// 7.2.3
+// IsCallable (argument)
+EJSBool
+IsConstructor(ejsval argument)
+{
+    // XXX(toshok) this is not always the case.
+    return EJSVAL_IS_FUNCTION(argument);
+}
+
+// ES6 Draft January 15, 2015
+// 7.3.19
+// SpeciesConstructor (O, defaultConstructor)
+ejsval
+SpeciesConstructor(ejsval O, ejsval defaultConstructor)
+{
+    // 1. Assert: Type(O) is Object.
+    EJS_ASSERT(EJSVAL_IS_OBJECT(O));
+
+    // 2. Let C be Get(O, "constructor").
+    // 3. ReturnIfAbrupt(C).
+    ejsval C = Get(O, _ejs_atom_constructor);
+
+    // 4. If C is undefined, return defaultConstructor.
+    if (EJSVAL_IS_UNDEFINED(C))
+        return defaultConstructor;
+
+    // 5. If Type(C) is not Object, throw a TypeError exception.
+    if (!EJSVAL_IS_OBJECT(C))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'constructor' is not an object");
+
+    // 6. Let S be Get(C, @@species).
+    // 7. ReturnIfAbrupt(S).
+    ejsval S = Get(C, _ejs_Symbol_species);
+
+    // 8. If S is either undefined or null, return defaultConstructor.
+    if (EJSVAL_IS_UNDEFINED(S) || EJSVAL_IS_NULL(S))
+        return defaultConstructor;
+
+    // 9. If IsConstructor(S) is true, return S.
+    if (IsConstructor(S)) {
+        return S;
+    }
+
+    // 10. Throw a TypeError exception.
+    _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "constructor[@@species] is not a constructor");
+}
