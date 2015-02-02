@@ -1130,7 +1130,7 @@ _ejs_Array_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval*ar
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
 
     // 6. If thisArg was supplied, let T be thisArg; else let T be undefined.
-    ejsval T = _this;
+    ejsval T = thisArg;
 
     ejsval foreach_args[3];
     if (EJSVAL_IS_DENSE_ARRAY(O)) {
