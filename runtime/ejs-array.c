@@ -2206,107 +2206,131 @@ _ejs_Array_of (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 ejsval
 _ejs_array_from_iterables (int argc, ejsval* args);
 
+// ES6 Draft January 15, 2015
+// 22.1.2.1
+// Array.from(items[,mapfn[,thisArg]])
 static ejsval
 _ejs_Array_from (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    ejsval itemsArg = _ejs_undefined;
+    ejsval items = _ejs_undefined;
     ejsval mapfn = _ejs_undefined;
-    /*
     ejsval thisArg = _ejs_undefined;
+
+    if (argc > 0) items = args[0];
+    if (argc > 1) items = args[1];
+    if (argc > 2) items = args[2];
+
+    // 1. Let C be the this value.
+    ejsval C = _this;
+
     ejsval T;
-    */
+
     EJSBool mapping;
-
-    if (argc >= 1)
-        itemsArg = args[0];
-
-    /*
-    if (argc >= 2)
-        mapfn = args[1];
-
-    if (argc >= 3)
-        thisArg = args[2];
-    */
-
-    /* 1. Let C be the this value. */
-    /*ejsval C = _this; */
-
-    /* 2. Let items be ToObject(arrayLike). */
-    ejsval items = ToObject(itemsArg);
-
-    if (EJSVAL_IS_UNDEFINED(mapfn))
-        /* 3. If mapfn is undefined, then let mapping be false. */
+    // 2. If mapfn is undefined, let mapping be false.
+    if (EJSVAL_IS_UNDEFINED(mapfn)) {
         mapping = EJS_FALSE;
+    }
+    // 3. else
     else {
-        /* 5. */
-
-        /*  a. If IsCallable(mapfn) is false, throw a TypeError exception. */
+        // a. If IsCallable(mapfn) is false, throw a TypeError exception.
         if (!IsCallable(mapfn))
             _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "map function is not a function");
 
-        /*  b.If thisArg was supplied, let T be thisArg; else let T be undefined. */
-        /*T = thisArg; */
-
-        /*  c. Let mapping be true */
+        // b. If thisArg was supplied, let T be thisArg; else let T be undefined.
+        T = thisArg;
+        // c. Let mapping be true
         mapping = EJS_TRUE;
     }
+    // 4. Let usingIterator be GetMethod(items, @@iterator).
+    // 5. ReturnIfAbrupt(usingIterator).
+    ejsval usingIterator = GetMethod(items, _ejs_Symbol_iterator);
 
-    /* 6. Let usingIterator be IsIterable(items). */
-    EJSBool usingIterator = EJS_FALSE;
-
-    /* 8. If usingIterator is true, then */
-    if (usingIterator) {
-        EJS_NOT_IMPLEMENTED(); // XXX
+    // 6. If usingIterator is not undefined, then
+    if (!EJSVAL_IS_UNDEFINED(usingIterator)) {
+        EJS_NOT_IMPLEMENTED();
+        // a. If IsConstructor(C) is true, then
+        // i. Let A be Construct(C).
+        // b. Else,
+        // i. Let A be ArrayCreate(0).
+        // c. ReturnIfAbrupt(A).
+        // d. Let iterator be GetIterator(items, usingIterator).
+        // e. ReturnIfAbrupt(iterator).
+        // f. Letkbe0.
+        // g. Repeat
+        // i. Let Pk be ToString(k).
+        // ii. Let next be IteratorStep(iterator).
+        // iii. ReturnIfAbrupt(next).
+        // iv. If next is false, then
+        // 1. Let putStatus be Put(A, "length", k, true).
+        // 2. ReturnIfAbrupt(putStatus).
+        // 3. Return A.
+        // v. Let nextValue be IteratorValue(next).
+        // vi. ReturnIfAbrupt(nextValue).
+        // vii. If mapping is true, then
+        // 1. Let mappedValue be Call(mapfn, T, «nextValue, k»).
+        // 2. ReturnIfAbrupt(mappedValue).
+        // viii.Else, let mappedValue be nextValue.
+        // ix. Let defineStatus be CreateDataPropertyOrThrow(A, Pk, mappedValue).
+        // x. ReturnIfAbrupt(defineStatus).
+        // xi. Increase k by 1.
     }
+    // 7. Assert: items is not an Iterable so assume it is an array-like object.
+    // 8. Let arrayLike be ToObject(items).
+    // 9. ReturnIfAbrupt(arrayLike).
+    ejsval arrayLike = ToObject(items);
+    // 10. Let len be ToLength(Get(arrayLike, "length")).
+    // 11. ReturnIfAbrupt(len).
+    int64_t len = ToLength(Get(arrayLike, _ejs_atom_length));
 
-    /* 10. Let lenValue be the result of Get(items, "length"). */
-    ejsval lenValue = _ejs_object_getprop(items, _ejs_atom_length);
-    /* 11. Let len be ToLength(lenValue). */
-    uint32_t len = ToLength(lenValue);
-
-    ejsval A = _ejs_undefined;
-    /* 13. If IsConstructor(C) is true, then */
-    if (EJS_FALSE) {
-    } else
-        /* 14. Else */
-        /*  a. Let A be the result of the abstract operation ArrayCreate with argument len. */
-        A = _ejs_array_new (len, EJS_FALSE);
-
-    /* 16. Let k be 0. */
-    uint32_t k = 0;
-
-    /* 17. Repeat, while k < len */
+    ejsval A;
+    // 12. If IsConstructor(C) is true, then
+    if (EJS_FALSE/*XXX(toshok)*/ && IsConstructor(C)) {
+        // a. Let A be Construct(C, «len»).
+        EJS_NOT_IMPLEMENTED();
+    }
+    // 13. Else,
+    else {
+        // a. Let A be ArrayCreate(len).
+        A = _ejs_array_new(len, EJS_FALSE);
+    }
+    // 14. ReturnIfAbrupt(A).
+    // 15. Let k be 0.
+    int64_t k = 0;
+    // 16. Repeat, while k < len
     while (k < len) {
-        /* a. Let Pk be ToString(k). */
+        // a. Let Pk be ToString(k).
         ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
-        /* b. Let kPresent be the result of HasProperty(items, Pk). */
-        EJSBool kPresent = HasProperty(items, Pk);
 
-        /* d. If kPresent is true, then */
-        if (kPresent) {
-            /* i. Let kValue be the result of Get(items, Pk). */
-            ejsval kValue = _ejs_object_getprop(items, Pk);
+        // b. Let kValue be Get(arrayLike, Pk).
+        // c. ReturnIfAbrupt(kValue).
+        ejsval kValue = Get(arrayLike, Pk);
 
-            ejsval mappedValue = _ejs_undefined;
-
-            /* iii. If mapping is true, then */
-            if (mapping) {
-            } else
-            /* iv. Else, let mappedValue be kValue. */
-                mappedValue = kValue;
-
-            /* v. Let defineStatus be the result of CreateDataPropertyOrThrow(A, Pk, mappedValue). */
-            _ejs_object_setprop (A, Pk, mappedValue);
+        ejsval mappedValue;
+        // d. If mapping is true, then
+        if (mapping) {
+            // i. Let mappedValue be Call(mapfn, T, «kValue, k»).
+            // ii. ReturnIfAbrupt(mappedValue).
+            ejsval mapfnArgs[3] = {
+                kValue,
+                NUMBER_TO_EJSVAL(k)
+            };
+            mappedValue = _ejs_invoke_closure (mapfn, T, 2, mapfnArgs);
         }
-
-        /* e. Increase k by 1. */
+        // e. Else, let mappedValue be kValue.
+        else {
+            mappedValue = kValue;
+        }
+        // f. Let defineStatus be CreateDataPropertyOrThrow(A, Pk, mappedValue).
+        // g. ReturnIfAbrupt(defineStatus).
+        _ejs_object_define_value_property (A, Pk, mappedValue, EJS_PROP_FLAGS_ENUMERABLE | EJS_PROP_FLAGS_CONFIGURABLE | EJS_PROP_FLAGS_WRITABLE);
+        // h. Increase k by 1.
         k++;
     }
-
-    /* 18. Let putStatus be the result of Put(A, "length", len, true). */
-    _ejs_object_setprop (A, _ejs_atom_length, NUMBER_TO_EJSVAL(len));
-
-    /* 20. Return A. */
+    
+    // 17. Let putStatus be Put(A, "length", len, true).
+    // 18. ReturnIfAbrupt(putStatus).
+    Put(A, _ejs_atom_length, NUMBER_TO_EJSVAL(len), EJS_TRUE);
+    // 19. Return A.
     return A;
 }
 
