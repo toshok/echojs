@@ -185,6 +185,9 @@ _ejs_Array_impl (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
     }
 }
 
+// ES6 Draft January 15, 2015
+// 22.1.3.21
+// Array.prototype.shift ()
 static ejsval
 _ejs_Array_prototype_shift (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
@@ -265,6 +268,9 @@ _ejs_Array_prototype_shift (ejsval env, ejsval _this, uint32_t argc, ejsval*args
     return first;
 }
 
+// ES6 Draft January 15, 2015
+// 22.1.3.28
+// Array.prototype.unshift ( ...items )
 static ejsval
 _ejs_Array_prototype_unshift (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
@@ -280,67 +286,85 @@ _ejs_Array_prototype_unshift (ejsval env, ejsval _this, uint32_t argc, ejsval* a
     }
 
     // 1. Let O be the result of calling ToObject passing the this value as the argument.
+    // 2. ReturnIfAbrupt(O).
     ejsval O = ToObject(_this);
-    EJSObject* Oobj = EJSVAL_TO_OBJECT(O);
 
-    // 2. Let lenVal be the result of calling the [[Get]] internal method of O with argument "length".
-    ejsval lenVal = OP(Oobj,Get)(O, _ejs_atom_length, O);
-
-    // 3. Let len be ToUint32(lenVal).
-    uint32_t len = ToUint32(lenVal);
+    // 3. Let len be ToLength(Get(O, "length")).
+    int64_t len = ToLength(Get(O, _ejs_atom_length));
 
     // 4. Let argCount be the number of actual arguments.
-    uint32_t argCount = argc;
+    int64_t argCount = argc;
 
-    // 5. Let k be len.
-    uint32_t k = len;
+    // 6. If argCount > 0, then
+    if (argCount > 0) {
+        // a. If len+ argCount > 253-1, throw a TypeError exception.
+        if (len + argCount > EJS_MAX_SAFE_INTEGER)
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "result too large");
+            
+        // b. Let k be len.
+        int64_t k = len;
 
-    // 6. Repeat, while k > 0,
-    while (k > 0) {
-        //   a. Let from be ToString(k–1).
-        ejsval from = ToString(NUMBER_TO_EJSVAL(k-1));
+        // c. Repeat, while k > 0,
+        while (k > 0) {
+            // i. Let from be ToString(k–1).
+            ejsval from = ToString(NUMBER_TO_EJSVAL(k-1));
 
-        //   b. Let to be ToString(k+argCount –1).
-        ejsval to = ToString(NUMBER_TO_EJSVAL(k+argCount - 1));
+            // ii. Let to be ToString(k+argCount –1).
+            ejsval to = ToString(NUMBER_TO_EJSVAL(k+argCount - 1));
 
-        //   c. Let fromPresent be the result of calling the [[HasProperty]] internal method of O with argument from.
-        EJSBool fromPresent = OP(Oobj,HasProperty)(O, from);
+            // iii. Let fromPresent be HasProperty(O, from).
+            // iv. ReturnIfAbrupt(fromPresent).
+            EJSBool fromPresent = HasProperty(O, from);
 
-        //   d. If fromPresent is true, then
-        if (fromPresent) {
-            //      i. Let fromValue be the result of calling the [[Get]] internal method of O with argument from.
-            ejsval fromValue = OP(Oobj,Get)(O, from, O);
+            // v. If fromPresent is true, then
+            if (fromPresent) {
+                // 1. Let fromValue be the result of Get(O, from).
+                // 2. ReturnIfAbrupt(fromValue).
+                ejsval fromValue = Get(O, from);
 
-            //      ii. Call the [[Put]] internal method of O with arguments to, fromValue, and true.
-            Put(O, to, fromValue, EJS_TRUE);
+                // 3. Let putStatus be Put(O, to, fromValue, true).
+                // 4. ReturnIfAbrupt(putStatus).
+                Put(O, to, fromValue, EJS_TRUE);
+            }
+            // vi. Else fromPresent is false,
+            else {
+                // 1. Let deleteStatus be DeletePropertyOrThrow(O, to).
+                // 2. ReturnIfAbrupt(deleteStatus).
+                DeletePropertyOrThrow(O, to);
+            }
+            // vii. Decrease k by 1.
+            k--;
         }
-        //   e. Else, fromPresent is false
-        else {
-            //      i. Call the [[Delete]] internal method of O with arguments to, and true.
-            OP(Oobj,Delete)(O, to, EJS_TRUE);
+
+
+        // d. Let j be 0.
+        int64_t j = 0;
+
+        // e. Let items be a List whose elements are, in left to right
+        //    order, the arguments that were passed to this function
+        //    invocation.
+        ejsval* items = args;
+
+        // f. Repeat, while items is not empty
+        for (int i = 0; i < argc; i ++) {
+            // i. Remove the first element from items and let E be the value of that element.
+            ejsval E = items[i];
+            // ii. Let putStatus be Put(O, ToString(j), E, true).
+            // iii. ReturnIfAbrupt(putStatus).
+            Put(O, ToString(NUMBER_TO_EJSVAL(j)), E, EJS_TRUE);
+            // iv. Increase j by 1.
+            j++;
         }
-        //   f. Decrease k by 1.
-        k--;
-    }
-    // 7. Let j be 0.
-    uint32_t j = 0;
-
-    // 8. Let items be an internal List whose elements are, in left to right order, the arguments that were passed to this function invocation.
-    // 9. Repeat, while items is not empty
-    for (int i = 0; i < argc; i ++) {
-        //   a. Remove the first element from items and let E be the value of that element.
-        ejsval E = args[i];
-
-        //   b. Call the [[Put]] internal method of O with arguments ToString(j), E, and true.
-        Put(O, ToString(NUMBER_TO_EJSVAL(j)), E, EJS_TRUE);
-        //   c. Increase j by 1.
-        j++;
     }
 
-    // 10. Call the [[Put]] internal method of O with arguments "length", len+argCount, and true.
-    Put(O, _ejs_atom_length, NUMBER_TO_EJSVAL(len+argCount), EJS_TRUE);
-    // 11. Return len+argCount.
-    return NUMBER_TO_EJSVAL(len+argCount);
+    ejsval new_len = NUMBER_TO_EJSVAL(len + argCount);
+
+    // 7. Let putStatus be Put(O, "length", len+argCount, true).
+    // 8. ReturnIfAbrupt(putStatus).
+    Put(O, _ejs_atom_length, new_len, EJS_TRUE);
+
+    // 9. Return len+argCount.
+    return new_len;
 }
 
 // ES6 Draft January 15, 2015
@@ -827,7 +851,7 @@ _ejs_Array_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval* arg
 
             // iii. Let status be CreateDataPropertyOrThrow(A, ToString(n), kValue ).
             // iv. ReturnIfAbrupt(status).
-            _ejs_object_setprop (A, NUMBER_TO_EJSVAL(n), kValue);
+            _ejs_object_define_value_property (A, ToString(NUMBER_TO_EJSVAL(n)), kValue, EJS_PROP_FLAGS_ENUMERABLE | EJS_PROP_FLAGS_CONFIGURABLE | EJS_PROP_FLAGS_WRITABLE);
         }
 
         // d. Increase k by 1.
@@ -1635,8 +1659,9 @@ _ejs_Array_prototype_splice (ejsval env, ejsval _this, uint32_t argc, ejsval* ar
     return A;
 }
 
-// ECMA 262 (6) 22.1.3.6
-// Array.prototype.fill (value, start = 0, end = this.length)
+// ES6 Draft January 15, 2015
+// 22.1.3.6
+// Array.prototype.fill(value[,start[,end]])
 static ejsval
 _ejs_Array_prototype_fill (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
@@ -1644,131 +1669,102 @@ _ejs_Array_prototype_fill (ejsval env, ejsval _this, uint32_t argc, ejsval *args
     ejsval start = _ejs_undefined;
     ejsval end = _ejs_undefined;
 
-    if (argc >= 1)
-        value = args[0];
+    if (argc > 0) value = args[0];
+    if (argc > 1) start = args[1];
+    if (argc > 2) end = args[2];
 
-    if (argc >= 2)
-        start = args[1];
 
-    if (argc >= 3)
-        end = args[2];
-
-    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    // 1. Let O be the result of calling ToObject passing the this value as the argument.
+    // 2. ReturnIfAbrupt(O).
     ejsval O = ToObject(_this);
 
-    /* 3. Let lenVal be the result of Get(O, "length"). */
-    ejsval lenVal = _ejs_object_getprop (O, _ejs_atom_length);
-    /* 4. Let len be ToLength(lenVal). */
-    uint32_t len = ToLength(lenVal);
+    // 3. Let len be ToLength(Get(O, "length")).
+    // 4. ReturnIfAbrupt(len).
+    int64_t len = ToLength(Get(O, _ejs_atom_length));
 
-    /* 6. Let relativeStart be ToInteger(start). */
-    int32_t relativeStart = ToInteger(start);
+    // 5. Let relativeStart be ToInteger(start).
+    // 6. ReturnIfAbrupt(relativeStart).
+    int64_t relativeStart = ToInteger(start);
 
-    /* 8. If relativeStart is negative, let k be max((len + relativeStart),0); else let k be min(relativeStart, len). */
-    int32_t k;
-    if (relativeStart < 0)
-        k = max (len + relativeStart, 0);
-    else
-        k = min (relativeStart, len);
+    // 7. If relativeStart < 0, let k be max((len + relativeStart),0); else let k be min(relativeStart, len).
+    int64_t k = (relativeStart < 0) ? max(len + relativeStart, 0) : min(relativeStart, len);
 
-    /* 9. If end is undefined, let relativeEnd be len; else let relativeEnd be ToInteger(end). */
-    int32_t relativeEnd;
-    if (EJSVAL_IS_UNDEFINED(end))
-        relativeEnd = len;
-    else
-        relativeEnd = ToInteger(end);
+    // 8. If end is undefined, let relativeEnd be len; else let relativeEnd be ToInteger(end).
+    // 9. ReturnIfAbrupt(relativeEnd).
+    int64_t relativeEnd = EJSVAL_IS_UNDEFINED(end) ? len : ToInteger(end);
 
-    /* 11. If relativeEnd is negative, let final be max((len + relativeEnd),0); else let final be min(relativeEnd, len). */
-    int32_t final;
-    if (relativeEnd < 0)
-        final = max(len + relativeEnd, 0);
-    else
-        final = min(relativeEnd, len);
+    // 10. If relativeEnd < 0, let final be max((len + relativeEnd),0); else let final be min(relativeEnd, len).
+    int64_t final = relativeEnd < 0 ? max(len + relativeEnd, 0) : min(relativeEnd, len);
 
-    /* 12. Repeat, while k < final */
+    // 11. Repeat, while k < final
     while (k < final) {
-        /*  a. Let Pk be ToString(k). */
-        ejsval Pk = NUMBER_TO_EJSVAL(k);
-
-        /*  b. Let putStatus be the result of Put(O, Pk, value, true). */
+        // a. Let Pk be ToString(k).
+        ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
+        // b. Let putStatus be Put(O, Pk, value, true).
+        // c. ReturnIfAbrupt(putStatus).
         Put(O, Pk, value, EJS_TRUE);
-
-        /*  d. Increase k by 1. */
+        // d. Increase k by 1.
         k++;
     }
-
-    /* 13. Return O. */
+    // 12. Return O.
     return O;
 }
 
-// ECMA 262 (6): 22.1.3.7
-// Array.prototype.filter ( callbackfn, thisArg = undefined )
+// ES6 Draft January 15, 2015
+// 22.1.3.7
+// Array.prototype.filter ( callbackfn [, thisArg] )
 static ejsval
 _ejs_Array_prototype_filter (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval callbackfn = _ejs_undefined;
     ejsval thisArg = _ejs_undefined;
 
-    if (argc >= 1) callbackfn = args[0];
-    if (argc >= 2) thisArg = args[1];
+    if (argc > 0) callbackfn = args[0];
+    if (argc > 1) thisArg = args[1];
 
-    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Array.find called on null or undefined");
-
-    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    // 1. Let O be the result of calling ToObject passing the this value as the argument.
+    // 2. ReturnIfAbrupt(O).
     ejsval O = ToObject(_this);
-    EJSObject* Oobj = EJSVAL_TO_OBJECT(O);
 
-    /* 3. Let lenValue be the result of Get(O, "length"). */
-    ejsval lenValue = OP(Oobj,Get)(O, _ejs_atom_length, O);
-    /* 4. Let len be ToLength(lenValue). */
-    uint32_t len = ToLength(lenValue);
+    // 3. Let len be ToLength(Get(O, "length")).
+    // 4. ReturnIfAbrupt(len).
+    int64_t len = ToLength(Get(O, _ejs_atom_length));
 
-    /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
+    // 5. If IsCallable(callbackfn) is false, throw a TypeError exception.
     if (!IsCallable(callbackfn))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "callback function is not a function");
 
-    /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
+    // 6. If thisArg was supplied, let T be thisArg; else let T be undefined.
     ejsval T = thisArg;
 
-    /* 8. Let A be undefined. */
-    ejsval A = _ejs_undefined;
+    // 7. Let A be ArraySpeciesCreate(O, 0).
+    // 8. ReturnIfAbrupt(A).
+    // XXX(toshok) missing ArraySpeciesCreate
+    ejsval A = _ejs_array_new(0, EJS_FALSE);
 
-    /* 9. If O is an exotic Array object, then
-          a. Let C be Get(O, "constructor").
-          b. ReturnIfAbrupt(C).
-          c. If IsConstructor(C) is true, then
-             i. Let thisRealm be the running execution context’s Realm.
-             ii. If thisRealm and the value of C’s [[Realm]] internal slot are the same value, then
-                 1. Let A be the result of calling the [[Construct]] internal method of C with an argument list containing the single item 0.
-    */
+    // 9. Let k be 0.
+    int64_t k = 0;
 
-    /* 10. If A is undefined, then */
-    if (EJSVAL_IS_UNDEFINED(A)) {
-        /* a. Let A be the result of the abstract operation ArrayCreate with argument 0. */
-        A = _ejs_array_new(0, EJS_FALSE);
-    }
+    // 10. Let to be 0.
+    int64_t to = 0;
 
-    /* 12. Let k be 0. */
-    int k = 0;
-
-    /* 13. Let to be 0. */
-    int to = 0;
-
-    /* 14. Repeat, while k < len */
+    // 11. Repeat, while k < len
     while (k < len) {
-        /* a. Let Pk be ToString(k). */
+        // a. Let Pk be ToString(k).
         ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
-        /* b. Let kPresent be the result of HasProperty(O, Pk). */
+
+        // b. Let kPresent be HasProperty(O, Pk).
+        // c. ReturnIfAbrupt(kPresent).
         EJSBool kPresent = HasProperty(O, Pk);
 
-        /* d. If kPresent is true, then */
+        // d. If kPresent is true, then
         if (kPresent) {
-            /* i. Let kValue be the result of Get(O, Pk). */
-            ejsval kValue = OP(Oobj,Get)(O, Pk, O);
+            // i. Let kValue be Get(O, Pk).
+            // ii. ReturnIfAbrupt(kValue).
+            ejsval kValue = Get(O, Pk);
 
-            /* iii. Let selected be the result of calling the [[Call]] internal method of callbackfn with T as
-               thisArgument and a List containing kValue, k, and O as argumentsList. */
+            // iii. Let selected be ToBoolean(Call(callbackfn, T, «kValue, k, O»)).
+            // iv. ReturnIfAbrupt(selected).
             ejsval argumentsList[3] = {
                 kValue,
                 NUMBER_TO_EJSVAL(k),
@@ -1776,158 +1772,144 @@ _ejs_Array_prototype_filter (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
             };
             ejsval selected = _ejs_invoke_closure (callbackfn, T, 3, argumentsList);
 
-            /* v. If ToBoolean(selected) is true, then */
-            if (EJSVAL_TO_BOOLEAN(ToBoolean(selected))) {
-                /* 1. Let status be the result of CreateDataPropertyOrThrow (A, ToString(to), kValue). */
-                
-                _ejs_object_define_value_property (A, NUMBER_TO_EJSVAL(to), kValue, EJS_PROP_FLAGS_ENUMERABLE | EJS_PROP_FLAGS_CONFIGURABLE | EJS_PROP_FLAGS_WRITABLE);
-                /* 3. Increase to by 1. */
-                to ++;
+            // v. If selected is true, then
+            if (EJSVAL_IS_BOOLEAN(selected) && EJSVAL_TO_BOOLEAN(selected)) {
+                // 1. Let status be CreateDataPropertyOrThrow (A, ToString(to), kValue).
+                // 2. ReturnIfAbrupt(status).
+                _ejs_object_define_value_property (A, ToString(NUMBER_TO_EJSVAL(to)), kValue, EJS_PROP_FLAGS_ENUMERABLE | EJS_PROP_FLAGS_CONFIGURABLE | EJS_PROP_FLAGS_WRITABLE);
+
+                // 3. Increase to by 1.
+                to++;
             }
         }
-
-        /* e. Increase k by 1. */
-        k ++;
+        // e. Increase k by 1.
+        k++;
     }
-
-    /* 15. Return A. */
+    // 12. Return A.
     return A;
 }
 
-// ECMA 262 (6): 22.1.3.8
-// Array.prototype.find ( predicate , thisArg = undefined )
+// ES6 Draft January 15, 2015
+// 22.1.3.8
+// Array.prototype.find ( predicate [, thisArg] )
 static ejsval
 _ejs_Array_prototype_find (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval predicate = _ejs_undefined;
     ejsval thisArg = _ejs_undefined;
 
-    if (argc >= 1) predicate = args[0];
-    if (argc >= 2) thisArg = args[1];
+    if (argc > 0) predicate = args[0];
+    if (argc > 1) thisArg = args[1];
 
-    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Array.find called on null or undefined");
-
-    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    // 1. Let O be the result of calling ToObject passing the this value as the argument.
+    // 2. ReturnIfAbrupt(O).
     ejsval O = ToObject(_this);
-    EJSObject* Oobj = EJSVAL_TO_OBJECT(O);
 
-    /* 3. Let lenValue be the result of Get(O, "length"). */
-    ejsval lenValue = OP(Oobj,Get)(O, _ejs_atom_length, O);
-    /* 4. Let len be ToLength(lenValue). */
-    uint32_t len = ToLength(lenValue);
+    // 3. Let len be ToLength(Get(O, "length")).
+    // 4. ReturnIfAbrupt(len).
+    int64_t len = ToLength(Get(O, _ejs_atom_length));
 
-    /* 6. If IsCallable(predicate) is false, throw a TypeError exception. */
+    // 5. If IsCallable(predicate) is false, throw a TypeError exception.
     if (!IsCallable(predicate))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "callback function is not a function");
 
-    /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
+    // 6. If thisArg was supplied, let T be thisArg; else let T be undefined.
     ejsval T = thisArg;
 
-    /* 8. Let k be 0. */
-    uint32_t k = 0;
+    // 7. Let k be 0.
+    int64_t k = 0;
 
-    /* 9. Repeat, while k < len */
+    // 8. Repeat, while k < len
     while (k < len) {
-        /* a. Let Pk be ToString(k). */
+        // a. Let Pk be ToString(k).
         ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
-        /* b. Let kPresent be the result of HasProperty(O, Pk). */
-        EJSBool kPresent = HasProperty(O, Pk);
+        // b. Let kValue be Get(O, Pk).
+        // c. ReturnIfAbrupt(kValue).
+        ejsval kValue = Get(O, Pk);
 
-        /* d. If kPresent is true, then */
-        if (kPresent) {
-            /* i. Let kValue be the result of Get(O, Pk). */
-            ejsval kValue = OP(Oobj,Get)(O, Pk, O);
+        // d. Let testResult be ToBoolean(Call(predicate, T, «kValue, k, O»)).
+        // e. ReturnIfAbrupt(testResult).
+        ejsval predicateargs[3] = {
+            kValue,
+            NUMBER_TO_EJSVAL(k),
+            O
+        };
 
-            ejsval predicateargs[3] = {
-                kValue,
-                NUMBER_TO_EJSVAL(k),
-                O
-            };
+        ejsval testResult = ToBoolean(_ejs_invoke_closure (predicate, T, 3, predicateargs));
+        
+        // f. If testResult is true, return kValue.
+        if (EJSVAL_TO_BOOLEAN(testResult))
+            return kValue;
 
-            /* iii. Let testResult be the result of calling the [[Call]] internal method of predicate... */
-            ejsval testResult = _ejs_invoke_closure (predicate, T, 3, predicateargs);
-
-            /* v. If ToBoolean(testResult) is true, return kValue. */
-            if (EJSVAL_TO_BOOLEAN(ToBoolean(testResult)))
-                return kValue;
-        }
-
-        /* e. Increase k by 1. */
+        // g. Increase k by 1.
         k++;
     }
-
-    /* 10. Return undefined. */
+    // 9. Return undefined.
     return _ejs_undefined;
 }
 
-// ECMA 262 (6): 22.1.3.9
-// Array.prototype.findIndex ( predicate , thisArg = undefined )
+// ES6 Draft January 15, 2015
+// 22.1.3.9
+// Array.prototype.findIndex ( predicate [, thisArg] )
 static ejsval
 _ejs_Array_prototype_findIndex (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval predicate = _ejs_undefined;
     ejsval thisArg = _ejs_undefined;
 
-    if (argc >= 1) predicate = args[0];
-    if (argc >= 2) thisArg = args[1];
+    if (argc > 0) predicate = args[0];
+    if (argc > 1) thisArg = args[1];
 
-    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Array.findIndex called on null or undefined");
-
-    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    // 1. Let O be the result of calling ToObject passing the this value as the argument.
+    // 2. ReturnIfAbrupt(O).
     ejsval O = ToObject(_this);
-    EJSObject* Oobj = EJSVAL_TO_OBJECT(O);
 
-    /* 3. Let lenValue be the result of Get(O, "length"). */
-    ejsval lenValue = OP(Oobj,Get)(O, _ejs_atom_length, O);
-    /* 4. Let len be ToLength(lenValue). */
-    uint32_t len = ToLength(lenValue);
+    // 3. Let len be ToLength(Get(O, "length")).
+    // 4. ReturnIfAbrupt(len).
+    int64_t len = ToLength(Get(O, _ejs_atom_length));
 
-    /* 6. If IsCallable(predicate) is false, throw a TypeError exception. */
+    // 5. If IsCallable(predicate) is false, throw a TypeError exception.
     if (!IsCallable(predicate))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "callback function is not a function");
 
-    /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
+    // 6. If thisArg was supplied, let T be thisArg; else let T be undefined.
     ejsval T = thisArg;
 
-    /* 8. Let k be 0. */
-    uint32_t k = 0;
+    // 7. Let k be 0.
+    int64_t k = 0;
 
-    /* 9. Repeat, while k < len */
+    // 8. Repeat, while k < len
     while (k < len) {
-        /* a. Let Pk be ToString(k). */
+        // a. Let Pk be ToString(k).
         ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
-        /* b. Let kPresent be the result of HasProperty(O, Pk). */
-        EJSBool kPresent = HasProperty(O, Pk);
+        // b. Let kValue be Get(O, Pk).
+        // c. ReturnIfAbrupt(kValue).
+        ejsval kValue = Get(O, Pk);
 
-        /* d. If kPresent is true, then */
-        if (kPresent) {
-            /* i. Let kValue be the result of Get(O, Pk). */
-            ejsval kValue = OP(Oobj,Get)(O, Pk, O);
+        // d. Let testResult be ToBoolean(Call(predicate, T, «kValue, k, O»)).
+        // e. ReturnIfAbrupt(testResult).
+        ejsval predicateargs[3] = {
+            kValue,
+            NUMBER_TO_EJSVAL(k),
+            O
+        };
 
-            ejsval predicateargs[3] = {
-                kValue,
-                NUMBER_TO_EJSVAL(k),
-                O
-            };
+        ejsval testResult = ToBoolean(_ejs_invoke_closure (predicate, T, 3, predicateargs));
+        
+        // f. If testResult is true, return k.
+        if (EJSVAL_TO_BOOLEAN(testResult))
+            return NUMBER_TO_EJSVAL(k);
 
-            /* iii. Let testResult be the result of calling the [[Call]] internal method of predicate... */
-            ejsval testResult = _ejs_invoke_closure (predicate, T, 3, predicateargs);
-
-            /* v. If ToBoolean(testResult) is true, return k. */
-            if (EJSVAL_TO_BOOLEAN(ToBoolean(testResult)))
-                return NUMBER_TO_EJSVAL(k);
-        }
-
-        /* e. Increase k by 1. */
+        // g. Increase k by 1.
         k++;
     }
-
-    /* 10. Return -1. */
+    // 9. Return -1.
     return NUMBER_TO_EJSVAL(-1);
 }
 
+// ES6 Draft January 15, 2015
+// 22.1.3.3
+// Array.prototype.copyWithin (target, start [, end])
 static ejsval
 _ejs_Array_prototype_copyWithin (ejsval env, ejsval _this, int argc, ejsval *argv)
 {
@@ -1935,121 +1917,102 @@ _ejs_Array_prototype_copyWithin (ejsval env, ejsval _this, int argc, ejsval *arg
     ejsval start = _ejs_undefined;
     ejsval end = _ejs_undefined;
 
-    if (argc >= 1)
-        target = argv[0];
+    if (argc > 0) target = argv[0];
+    if (argc > 1) start = argv[1];
+    if (argc > 2) end = argv[2];
 
-    if (argc >= 2)
-        start = argv[1];
-
-    if (argc >= 3)
-        end = argv[2];
-
-    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
-    /* 2. ReturnIfAbrupt(O). */
+    // 1. Let O be the result of calling ToObject passing the this value as the argument.
+    // 2. ReturnIfAbrupt(O).
     ejsval O = ToObject(_this);
 
-    /* 3. Let lenVal be Get(O, "length"). */
-    ejsval lenVal = Get(O, _ejs_atom_length);
+    // 3. Let len be ToLength(Get(O, "length")).
+    // 4. ReturnIfAbrupt(len).
+    int64_t len = ToLength(Get(O, _ejs_atom_length));
 
-    /* 4. Let len be ToLength(lenVal). */
-    /* 5. ReturnIfAbrupt(len). */
-    uint32_t len = ToLength(lenVal);
+    // 5. Let relativeTarget be ToInteger(target).
+    // 6. ReturnIfAbrupt(relativeTarget).
+    int64_t relativeTarget = ToInteger(target);
 
-    /* 6. Let relativeTarget be ToInteger(target). */
-    /* 7. ReturnIfAbrupt(relativeTarget). */
-    int32_t relativeTarget = ToInteger(target);
+    // 7. If relativeTarget < 0, let to be max((len +
+    //    relativeTarget),0); else let to be min(relativeTarget, len).
+    int64_t to = relativeTarget < 0 ? max((len + relativeTarget), 0) : min(relativeTarget, len);
 
-    /* 8. If relativeTarget is negative, let to be max((len + relativeTarget),0);
-     * else let to be min(relativeTarget, len). */
-    uint32_t to;
-    if (relativeTarget < 0)
-        to = max((len + relativeTarget), 0);
-    else
-        to = min(relativeTarget, len);
+    // 8. Let relativeStart be ToInteger(start).
+    // 9. ReturnIfAbrupt(relativeStart).
+    int64_t relativeStart = ToInteger(start);
 
-    /* 9. Let relativeStart be ToInteger(start). */
-    int32_t relativeStart = ToInteger(start);
+    // 10. If relativeStart < 0, let from be max((len +
+    //     relativeStart),0); else let from be min(relativeStart,
+    //     len).
+    int64_t from = relativeStart < 0 ? max((len + relativeStart), 0) : min(relativeStart, len);
 
-    /* 11. If relativeStart is negative, let from be max((len + relativeStart),0);
-     * else let from be min(relativeStart, len). */
-    uint32_t from;
-    if (relativeStart < 0)
-        from = max((len + relativeStart), 0);
-    else
-        from = min(relativeStart, len);
+    // 11. If end is undefined, let relativeEnd be len; else let relativeEnd be ToInteger(end).
+    // 12. ReturnIfAbrupt(relativeEnd).
+    int64_t relativeEnd = EJSVAL_IS_UNDEFINED(end) ? len : ToInteger(end);
 
-    /* 12. If end is undefined, let relativeEnd be len; else let relativeEnd be ToInteger(end). */
-    /* 13. ReturnIfAbrupt(relativeEnd). */
-    int32_t relativeEnd;
-    if (EJSVAL_IS_UNDEFINED(end))
-        relativeEnd = len;
-    else
-        relativeEnd = ToInteger(end);
+    // 13. If relativeEnd is negative, let final be max((len +
+    //     relativeEnd),0); else let final be min(relativeEnd, len).
+    int64_t final = relativeEnd < 0 ? max((len + relativeEnd), 0) : min(relativeEnd, len);
 
-    /* 14. If relativeEnd is negative, let final be max((len + relativeEnd),0);
-     * else let final be min(relativeEnd, len). */
-    uint32_t final;
-    if (relativeEnd < 0)
-        final = max((len + relativeEnd), 0);
-    else
-        final = min(relativeEnd, len);
-
-    /* 15. Let count be min(final-from, len-to). */
+    // 14. Let count be min(final-from, len-to).
     uint32_t count = min(final - from, len - to);
 
-    /* 16.If from<to and to<from+count */
-    uint8_t direction;
+    // 15. If from < to and to < from+count */
+    int direction;
     if (from < to && to < from + count) {
+        // a. Let direction = -1.
         direction = -1;
+        // b. Let from = from + count -1.
         from = from + count - 1;
+        // c. Letto=to+count-1.
         to = to + count - 1;
     }
-    /* 17. Else, */
+    // 16. Else,
     else {
-        /* a. Let direction = 1. */
+        // a. Let direction = 1.
         direction = 1;
     }
 
-    /* 18. Repeat, while count > 0 */
+    // 17. Repeat, while count > 0
     while (count > 0) {
-        /* a. Let fromKey be ToString(from). */
+        // a. Let fromKey be ToString(from).
         ejsval fromKey = ToString(NUMBER_TO_EJSVAL(from));
 
-        /* b. Let toKey be ToString(to). */
+        // b. Let toKey be ToString(to).
         ejsval toKey = ToString(NUMBER_TO_EJSVAL(to));
 
-        /* c. Let fromPresent be HasProperty(O, fromKey). */
-        /* d. ReturnIfAbrupt(fromPresent). */
+        // c. Let fromPresent be HasProperty(O, fromKey).
+        // d. ReturnIfAbrupt(fromPresent). */
         EJSBool fromPresent = HasProperty(O, fromKey);
 
-        /* e. If fromPresent is true, then */
+        // e. If fromPresent is true, then
         if (fromPresent) {
-            /* i. Let fromVal be Get(O, fromKey). */
-            /* ii. ReturnIfAbrupt(fromVal). */
+            // i. Let fromVal be Get(O, fromKey).
+            // ii. ReturnIfAbrupt(fromVal).
             ejsval fromVal = Get(O, fromKey);
 
-            /* iii.Let putStatus be Put(O, toKey, fromVal, true). */
-            /* ReturnIfAbrupt(putStatus). */
+            // iii. Let putStatus be Put(O, toKey, fromVal, true).
+            // iv. ReturnIfAbrupt(putStatus).
             Put(O, toKey, fromVal, EJS_TRUE);
         }
-        /* f. Else fromPresent is false, */
+        // f. Else fromPresent is false,
         else {
-            /* i. Let deleteStatus be DeletePropertyOrThrow(O, toKey). */
-            /* ii. ReturnIfAbrupt(deleteStatus). */
+            // i. Let deleteStatus be DeletePropertyOrThrow(O, toKey).
+            // ii. ReturnIfAbrupt(deleteStatus).
             DeletePropertyOrThrow(O, toKey);
         }
 
-        /* g. Let from be from + direction. */
+        // g. Let from be from + direction.
         from += direction;
 
-        /* h. Let to be to + direction. */
+        // h. Let to be to + direction.
         to += to + direction;
 
-        /* i. Let count be count − 1. */
+        // i. Let count be count − 1.
         count -= 1;
     }
 
-    /* 19. Return O. */
+    // 18. Return O. 
     return O;
 }
 
@@ -2077,14 +2040,71 @@ _ejs_array_indexof (EJSArray* haystack, ejsval needle)
     return rv;
 }
 
-// XXX toshok - isnt' this method supposed to be generic?
+
+// ES6 Draft January 15, 2015
+// 22.1.3.11
+// Array.prototype.indexOf ( searchElement [, fromIndex ])
 static ejsval
 _ejs_Array_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
 {
-    if (argc != 1)
-        return NUMBER_TO_EJSVAL (-1);
+    ejsval searchElement = _ejs_undefined;
+    ejsval fromIndex = _ejs_undefined;
 
-    return NUMBER_TO_EJSVAL(_ejs_array_indexof((EJSArray*)EJSVAL_TO_OBJECT(_this), args[0]));
+    if (argc > 0) searchElement = args[0];
+    if (argc > 1) fromIndex = args[1];
+
+    // 1. Let O be the result of calling ToObject passing the this value as the argument.
+    // 2. ReturnIfAbrupt(O).
+    ejsval O = ToObject(_this);
+
+    // 3. Let len be ToLength(Get(O, "length")).
+    // 4. ReturnIfAbrupt(len).
+    int64_t len = ToLength(Get(O, _ejs_atom_length));
+
+    // 5. If len is 0, return −1.
+    if (len == 0) return NUMBER_TO_EJSVAL(-1);
+
+    // 6. If argument fromIndex was passed let n be ToInteger(fromIndex); else let n be 0.
+    // 7. ReturnIfAbrupt(n).
+    int64_t n = (argc > 1) ? ToInteger(fromIndex) : 0;
+
+    // 8. If n ≥ len, return −1.
+    if (n >= len) return NUMBER_TO_EJSVAL(-1);
+
+    // 9. If n ≥ 0,then
+    int64_t k;
+    if (n >= 0)
+        // a. Let k be n.
+        k = n;
+    // 10. Else n<0,
+    else
+        // a. Let k be len - abs(n).
+        k = len - llabs(n);
+
+    // b. If k<0, let k be 0.
+    if (k < 0) k = 0;
+
+    // 11. Repeat, while k<len
+    while (k < len) {
+        // a. Let kPresent be HasProperty(O, ToString(k)).
+        // b. ReturnIfAbrupt(kPresent).
+        EJSBool kPresent = HasProperty(O, ToString(NUMBER_TO_EJSVAL(k)));
+        // c. If kPresent is true, then
+        if (kPresent) {
+            // i. Let elementK be the result of Get(O, ToString(k)).
+            // ii. ReturnIfAbrupt(elementK).
+            ejsval elementK = Get(O, ToString(NUMBER_TO_EJSVAL(k)));
+            // iii. Let same be the result of performing Strict Equality Comparison searchElement === elementK.
+            ejsval same = _ejs_op_strict_eq (searchElement, elementK);
+            // iv. If same is true, return k.
+            if (EJSVAL_TO_BOOLEAN(same))
+                return NUMBER_TO_EJSVAL(k);
+        }
+        // d. Increase k by 1.
+        k++;
+    }
+    // 12. Return -1.
+    return NUMBER_TO_EJSVAL(-1);
 }
 
 static ejsval
