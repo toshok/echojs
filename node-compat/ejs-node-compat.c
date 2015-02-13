@@ -743,6 +743,17 @@ _ejs_os_arch (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 }
 
 ejsval
+_ejs_os_hostname (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+{
+    const int buflen = 128;
+    char buff [buflen] = "unknown";
+
+    gethostname (buff, buflen);
+
+    return _ejs_string_new_utf8(buff);
+}
+
+ejsval
 _ejs_os_platform (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
 #if linux
@@ -773,6 +784,7 @@ _ejs_os_module_func (ejsval exports)
 {
     EJS_INSTALL_FUNCTION(exports, "tmpdir", _ejs_os_tmpdir);
     EJS_INSTALL_FUNCTION(exports, "arch", _ejs_os_arch);
+    EJS_INSTALL_FUNCTION(exports, "hostname", _ejs_os_hostname);
     EJS_INSTALL_FUNCTION(exports, "platform", _ejs_os_platform);
     EJS_INSTALL_FUNCTION(exports, "release", _ejs_os_release);
 
