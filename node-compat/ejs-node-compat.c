@@ -15,6 +15,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/param.h>
+#include <sys/utsname.h>
 
 #include "ejs-ops.h"
 #include "ejs-value.h"
@@ -756,11 +757,24 @@ _ejs_os_platform (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 }
 
 ejsval
+_ejs_os_release (ejsval exports)
+{
+    const char* release = "unknown";
+
+    struct utsname name;
+    if (!uname (&name))
+        release = name.release;
+
+    return _ejs_string_new_utf8(release);
+}
+
+ejsval
 _ejs_os_module_func (ejsval exports)
 {
     EJS_INSTALL_FUNCTION(exports, "tmpdir", _ejs_os_tmpdir);
     EJS_INSTALL_FUNCTION(exports, "arch", _ejs_os_arch);
     EJS_INSTALL_FUNCTION(exports, "platform", _ejs_os_platform);
+    EJS_INSTALL_FUNCTION(exports, "release", _ejs_os_release);
 
     return _ejs_undefined;
 }
