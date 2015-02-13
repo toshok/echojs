@@ -780,6 +780,20 @@ _ejs_os_platform (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 }
 
 ejsval
+_ejs_os_type (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+#if linux
+    const char* type = "Linux";
+#elif OSX || IOS
+    const char* type = "Darwin";
+#else
+    const char* type = "Unknown";
+#endif
+
+    return _ejs_string_new_utf8(type);
+}
+
+ejsval
 _ejs_os_release (ejsval exports)
 {
     const char* release = "unknown";
@@ -799,6 +813,7 @@ _ejs_os_module_func (ejsval exports)
     EJS_INSTALL_FUNCTION(exports, "endianness", _ejs_os_endianness);
     EJS_INSTALL_FUNCTION(exports, "hostname", _ejs_os_hostname);
     EJS_INSTALL_FUNCTION(exports, "platform", _ejs_os_platform);
+    EJS_INSTALL_FUNCTION(exports, "type", _ejs_os_type);
     EJS_INSTALL_FUNCTION(exports, "release", _ejs_os_release);
 
     return _ejs_undefined;
