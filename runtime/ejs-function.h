@@ -11,6 +11,10 @@
 
 typedef ejsval (*EJSClosureFunc) (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
 
+typedef enum {
+    CONSTRUCTOR_KIND_BASE,
+    CONSTRUCTOR_KIND_DERIVED
+} EJSConstructorKind;
 typedef struct {
     /* object header */
     EJSObject obj;
@@ -19,6 +23,10 @@ typedef struct {
     ejsval   env;
 
     EJSBool  bound;
+
+    EJSBool  is_constructor;
+    EJSConstructorKind constructor_kind;
+
 } EJSFunction;
 
 
@@ -94,6 +102,8 @@ EJS_MACRO_END
 ejsval  _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args);
 EJSBool _ejs_invoke_closure_catch (ejsval* retval, ejsval closure, ejsval _this, uint32_t argc, ejsval* args);
 EJSBool _ejs_decompose_closure (ejsval closure, EJSClosureFunc* func, ejsval* env, ejsval *_this);
+
+ejsval  _ejs_construct_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args);
 
 extern ejsval _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func);
 extern ejsval _ejs_function_new_native (ejsval env, ejsval name, EJSClosureFunc func);

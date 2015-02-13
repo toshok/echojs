@@ -1527,8 +1527,31 @@ IsCallable(ejsval argument)
 EJSBool
 IsConstructor(ejsval argument)
 {
-    // XXX(toshok) this is not always the case.
-    return EJSVAL_IS_FUNCTION(argument);
+    if (!EJSVAL_IS_FUNCTION(argument))
+        return EJS_FALSE;
+    return ((EJSFunction*)EJSVAL_TO_OBJECT(argument))->is_constructor;
+}
+
+// ES6 Draft rev32 Feb 2, 2015
+// 7.3.13
+// Construct (F, [argumentsList], [newTarget])
+ejsval
+Construct (ejsval F, ejsval newTarget, uint32_t argc, ejsval* args)
+{
+    // 1. If newTarget was not passed, let newTarget be F.
+    if (EJSVAL_IS_UNDEFINED(newTarget)) newTarget = F;
+
+    // 2. If argumentsList was not passed, let argumentsList be a new empty List.
+
+    // 3. Assert: IsConstructor (F) is true.
+    EJS_ASSERT(IsConstructor(F));
+
+    // 4. Assert: IsConstructor (newTarget) is true.
+    EJS_ASSERT(IsConstructor(newTarget));
+
+    // 5. Return the result of calling the [[Construct]] internal method of F passing argumentsList and newTarget as the arguments.
+
+    return _ejs_construct_closure(F, newTarget, argc, args);
 }
 
 // ES6 Draft January 15, 2015

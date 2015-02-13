@@ -24,6 +24,7 @@ EJSBool IsConcatSpreadable (ejsval O);
 EJSBool IsCallable(ejsval argument);
 EJSBool IsConstructor(ejsval argument);
 
+ejsval Construct(ejsval F, ejsval newTarget, uint32_t argc, ejsval* args);
 ejsval SpeciesConstructor(ejsval O, ejsval defaultConstructor);
 
 EJSBool SameValue(ejsval x, ejsval y);

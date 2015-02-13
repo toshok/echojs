@@ -37,6 +37,7 @@ _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func)
 
     rv->func = func;
     rv->env = env;
+    rv->is_constructor = EJS_TRUE;
 
     ejsval fun = OBJECT_TO_EJSVAL(rv);
 
@@ -64,6 +65,7 @@ _ejs_function_new_without_proto (ejsval env, ejsval name, EJSClosureFunc func)
 
     rv->func = func;
     rv->env = env;
+    rv->is_constructor = EJS_TRUE;
 
     ejsval fun = OBJECT_TO_EJSVAL(rv);
 
@@ -81,6 +83,7 @@ _ejs_function_new_utf8_with_proto (ejsval env, const char* name, EJSClosureFunc 
 
     rv->func = func;
     rv->env = env;
+    rv->is_constructor = EJS_TRUE;
 
     ejsval fun = OBJECT_TO_EJSVAL(rv);
 
@@ -100,6 +103,7 @@ _ejs_function_new_native (ejsval env, ejsval name, EJSClosureFunc func)
 
     rv->func = func;
     rv->env = env;
+    rv->is_constructor = EJS_TRUE;
 
     ejsval fun = OBJECT_TO_EJSVAL(rv);
 
@@ -462,6 +466,54 @@ _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args)
 
     EJSFunction *fun = (EJSFunction*)EJSVAL_TO_OBJECT(closure);
     return fun->func (fun->env, _this, argc, args);
+}
+
+// ES6 Draft rev32 Feb 2, 2015
+// 9.2.3
+// [[Construct]] ( argumentsList, newTarget)
+ejsval
+_ejs_construct_closure (ejsval _closure, ejsval newTarget, uint32_t argc, ejsval* args)
+{
+    // 1. Assert: F is an ECMAScript function object.
+    EJSFunction* F = (EJSFunction*)EJSVAL_TO_OBJECT(_closure);
+
+    // 2. Assert: Type(newTarget) is Object.
+    // 3. Let callerContext be the running execution context.
+
+    // 4. Let kind be F’s [[ConstructorKind]] internal slot.
+    EJSConstructorKind kind = F->constructor_kind;
+
+    ejsval thisArgument = _ejs_undefined;
+    // 5. If kind is "base", then
+    if (kind == CONSTRUCTOR_KIND_BASE) {
+        //    a. Let thisArgument be OrdinaryCreateFromConstructor(newTarget, "%ObjectPrototype%").
+        //    b. ReturnIfAbrupt(thisArgument).
+    }
+    // 6. Let calleeContext be PrepareForOrdinaryCall(F, newTarget).
+    // 7. ReturnIfAbrupt(calleeContext).
+    // 8. Assert: calleeContext is now the active execution context.
+    // 9. If kind is "base", then
+    if (kind == CONSTRUCTOR_KIND_BASE) {
+        //    a. Let status be OrdinaryCallBindThis(F, calleeContext, thisArgument).
+        //    b. If status is an abrupt completion, then
+        //       i. Remove calleeContext from the execution context stack and restore callerContext as the running execution context.
+        //       ii. Return status.
+    }
+    // 10. Let constructorEnv be the LexicalEnvironment of calleeContext.
+    // 11. Let envRec be constructorEnv’s environment record.
+    // 12. Let result be OrdinaryCallEvaluateBody(F, calleeContext, argumentsList).
+    ejsval result = _ejs_invoke_closure(_closure, thisArgument, argc, args);
+    // 13. Remove calleeContext from the execution context stack and restore callerContext as the running execution context.
+    // 14. If result.[[type]] is return, then
+    //     a. If Type(result.[[value]]) is Object, return NormalCompletion(result.[[value]]).
+    if (EJSVAL_IS_OBJECT(result)) return result;
+    //     b. If kind is "base", return NormalCompletion(thisArgument).
+    if (kind == CONSTRUCTOR_KIND_BASE) return thisArgument;
+    //     c. Throw a TypeError exception.
+    _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "9.2.3/14.c");
+    // 15. ReturnIfAbrupt(result).
+    // 16. Return the result of calling the GetThisBinding concrete method of envRec’s with no arguments
+    EJS_NOT_IMPLEMENTED();
 }
 
 // ECMA262: 15.3.5.3
