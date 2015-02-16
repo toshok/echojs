@@ -89,6 +89,12 @@ _ejs_Number_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval 
     return NumberToString(x, (int)radixNumber);
 }
 
+ejsval
+_ejs_number_to_string(ejsval num)
+{
+    return _ejs_Number_prototype_toString(_ejs_undefined, num, 0, NULL);
+}
+
 static ejsval
 _ejs_Number_prototype_valueOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {

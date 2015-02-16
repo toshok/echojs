@@ -13,6 +13,8 @@ extern ejsval _ejs_JSON;
 
 void _ejs_json_init(ejsval global);
 
+ejsval _ejs_json_stringify(ejsval arg);
+
 EJS_END_DECLS
 
 #endif /* _ejs_json_h */

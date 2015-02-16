@@ -643,6 +643,12 @@ _ejs_JSON_stringify (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return Str(&state, _ejs_atom_empty, wrapper);
 }
 
+ejsval
+_ejs_json_stringify (ejsval arg)
+{
+    return _ejs_JSON_stringify(_ejs_undefined, _ejs_undefined, 1, &arg);
+}
+
 void
 _ejs_json_init(ejsval global)
 {

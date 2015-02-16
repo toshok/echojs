@@ -28,6 +28,8 @@ extern EJSSpecOps _ejs_Number_specops;
 
 void _ejs_number_init(ejsval global);
 
+ejsval _ejs_number_to_string(ejsval num);
+
 EJS_END_DECLS
 
 #endif /* _ejs_number_h */

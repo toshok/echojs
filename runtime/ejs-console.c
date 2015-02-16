@@ -13,6 +13,9 @@
 #include "ejs-string.h"
 #include "ejs-error.h"
 #include "ejs-array.h"
+#include "ejs-number.h"
+#include "ejs-typedarrays.h"
+#include "ejs-json.h"
 
 #if IOS
 #import <Foundation/Foundation.h>
@@ -26,87 +29,96 @@
 #define OUTPUT(format, ...) fprintf (outfile, format, __VA_ARGS__)
 #endif
 
+ejsval console_toString(ejsval arg);
+
+ejsval
+console_toString(ejsval arg) {
+    if (EJSVAL_IS_NUMBER(arg) || EJSVAL_IS_NUMBER_OBJECT(arg)) {
+        return _ejs_number_to_string(arg);
+    }
+    else if (EJSVAL_IS_ARRAY(arg)) {
+        if (EJS_ARRAY_LEN(arg) == 0) {
+            return _ejs_string_new_utf8("[]");
+        }
+        else {
+            ejsval comma_space = _ejs_string_new_utf8(", ");
+            ejsval lbracket = _ejs_string_new_utf8("[ ");
+            ejsval rbracket = _ejs_string_new_utf8(" ]");
+             
+            ejsval content_strings = _ejs_array_new(EJS_ARRAY_LEN(arg), EJS_FALSE);
+            // XXX the loop below assumes arg is a dense array
+            EJS_ASSERT(EJSVAL_IS_DENSE_ARRAY(arg));
+            for (int i = 0; i < EJS_ARRAY_LEN(arg); i ++) {
+                EJS_DENSE_ARRAY_ELEMENTS(content_strings)[i] = console_toString(EJS_DENSE_ARRAY_ELEMENTS(arg)[i]);
+            }
+
+            ejsval contents = _ejs_array_join (content_strings, comma_space);
+             
+            return _ejs_string_concatv (lbracket, contents, rbracket, _ejs_null);
+        }
+    }
+    else if (EJSVAL_IS_TYPEDARRAY(arg)) {
+        if (EJS_TYPED_ARRAY_LEN(arg) == 0) {
+            return _ejs_string_new_utf8("[]");
+        }
+        else {
+            ejsval lbracket = _ejs_string_new_utf8("[ ");
+            ejsval rbracket = _ejs_string_new_utf8(" ]");
+            ejsval contents = ToString(arg);
+            return _ejs_string_concatv (lbracket, contents, rbracket, _ejs_null);
+        }
+    }
+    else if (EJSVAL_IS_ERROR(arg)) {
+        ejsval strval = ToString(arg);
+        ejsval lbracket = _ejs_string_new_utf8("[");
+        ejsval rbracket = _ejs_string_new_utf8("]");
+
+        return _ejs_string_concatv(lbracket, strval, rbracket, _ejs_null);
+    }
+    else if (EJSVAL_IS_FUNCTION(arg)) {
+        ejsval func_name = _ejs_object_getprop (arg, _ejs_atom_name);
+
+        if (EJSVAL_IS_NULL_OR_UNDEFINED(func_name) || EJSVAL_TO_STRLEN(func_name) == 0) {
+            return _ejs_string_new_utf8("[Function]");
+        }
+        else {
+            ejsval left = _ejs_string_new_utf8("[Function: ");
+            ejsval right = _ejs_string_new_utf8("]");
+
+            return _ejs_string_concatv(left, func_name, right, _ejs_null);
+        }
+    }
+    else if (EJSVAL_IS_OBJECT(arg)) {
+        ejsval ret = _ejs_json_stringify(arg);
+        if (EJSVAL_IS_NULL(ret))
+            return ToString(arg);
+        return ret;
+    }
+    else {
+        return ToString(arg);
+    }
+}
+
 static ejsval
 output (FILE *outfile, uint32_t argc, ejsval *args)
 {
     for (int i = 0; i < argc; i ++) {
-        if (EJSVAL_IS_NUMBER(args[i])) {
-            double d = EJSVAL_TO_NUMBER(args[i]);
-            int di;
-            if (EJSDOUBLE_IS_INT32(d, &di))
-                OUTPUT ("%d", di);
-            else {
-                int classified = fpclassify(d);
-                if (classified == FP_INFINITE) {
-                    if (d < 0)
-                        OUTPUT0 ("-Infinity");
-                    else
-                        OUTPUT0 ("Infinity");
-                }
-                else if (classified == FP_NAN) {
-                    OUTPUT0 ("NaN");
-                }
-                else
-                    OUTPUT (EJS_NUMBER_FORMAT, d);
-            }
-        }
-        else if (EJSVAL_IS_ARRAY(args[i])) {
-            char* strval_utf8;
-
-            if (EJS_ARRAY_LEN(args[i]) == 0) {
-                OUTPUT0 ("[]");
-            }
-            else {
-                ejsval comma_space = _ejs_string_new_utf8(", ");
-                ejsval lbracket = _ejs_string_new_utf8("[ ");
-                ejsval rbracket = _ejs_string_new_utf8(" ]");
-
-                ejsval contents = _ejs_array_join (args[i], comma_space);
-
-                strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(_ejs_string_concatv (lbracket, contents, rbracket, _ejs_null)));
-
-                OUTPUT ("%s", strval_utf8);
-                free (strval_utf8);
-            }
-        }
-        else if (EJSVAL_IS_ERROR(args[i])) {
-            ejsval strval = ToString(args[i]);
-
-            char* strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(strval));
-            OUTPUT ("[%s]", strval_utf8);
-            free (strval_utf8);
-        }
-        else if (EJSVAL_IS_FUNCTION(args[i])) {
-            ejsval func_name = _ejs_object_getprop (args[i], _ejs_atom_name);
-
-            if (EJSVAL_IS_NULL_OR_UNDEFINED(func_name) || EJSVAL_TO_STRLEN(func_name) == 0) {
-                OUTPUT0("[Function]");
-            }
-            else {
-                char* strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(func_name));
-                OUTPUT ("[Function: %s]", strval_utf8);
-                free (strval_utf8);
-            }
-        }
-        else {
-            ejsval strval = ToString(args[i]);
-
-            char* strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(strval));
-            OUTPUT ("%s", strval_utf8);
-            free (strval_utf8);
-        }
+        ejsval out_str = console_toString(args[i]);
+        char* strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(out_str));
+        OUTPUT ("%s", strval_utf8);
+        free (strval_utf8);
 #if !IOS
         if (i < argc - 1)
             fputc (' ', outfile);
 #endif
     }
-
 #if !IOS
     fputc ('\n', outfile);
 #endif
 
     return _ejs_undefined;
 }
+
 
 static ejsval
 _ejs_console_log (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
