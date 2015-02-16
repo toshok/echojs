@@ -3,15 +3,11 @@ machine:
   services:
     - docker
 
-## Customize checkout
-checkout:
-  post:
-    - git submodule sync
-    - git submodule update --init # use submodules
-
 dependencies:
   override:
     - docker pull ubuntu
     - docker info
-    - docker run -v ubuntu:14.04.1 cat /etc/issue
-
+    - docker create -v /echojs . ubuntu:14.04.1 --name ejs-ubuntu ubuntu
+    - docker start ejs-ubuntu
+    - docker run ejs-ubuntu sudo apt-get install clang-3.4 llvm-3.4 libunwind8-dev libuv-dev
+    - docker run ejs-ubuntu sh -c cd /echojs && make all bootstrap check
