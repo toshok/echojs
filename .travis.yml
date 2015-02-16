@@ -1,6 +1,4 @@
-language: cpp
-compiler:
-  - clang
+language: c
 
 os:
   - linux
@@ -8,12 +6,13 @@ os:
 install:
   - sudo add-apt-repository --yes ppa:chris-lea/node.js
   - sudo apt-get update
-  - sudo apt-get install -y llvm-3.4 clang-3.4 make nodejs libunwind7-dev libev-dev
+  - sudo apt-get install -y llvm-3.4 clang-3.4 g++ make nodejs libunwind7-dev libev-dev
   - sudo npm install -g coffee-script
   - sudo npm install -g mocha
   - sudo npm install -g node-gyp
 
 before_script:
+  - make -C node-llvm CC=g++
   - make
 
 script:
