@@ -8,23 +8,23 @@
 #include "ejs-object.h"
 
 typedef struct {
-    int     start_idx;
-    int     length;
-    int     alloc;
+    int64_t     start_idx;
+    int64_t     length;
+    int64_t     alloc;
     ejsval* elements;
 } Arraylet;
 
 typedef struct {
     /* dense array data */
-    int              array_alloc;
+    int64_t          array_alloc;
     EJSPropertyDesc* element_descs;
     ejsval*          elements;
 } EJSDenseArrayData;
 
 typedef struct {
     /* sparse array data */
-    int       arraylet_alloc;
-    int       arraylet_num;
+    int64_t   arraylet_alloc;
+    int64_t   arraylet_num;
     Arraylet *arraylets;
 } EJSSparseArrayData;
 
@@ -33,7 +33,7 @@ typedef struct {
     EJSObject obj;
 
     EJSPropertyDesc array_length_desc;
-    int             array_length;
+    int64_t         array_length;
     union {
         EJSDenseArrayData dense;
         EJSSparseArrayData sparse;
@@ -44,9 +44,9 @@ typedef struct {
     /* object header */
     EJSObject obj;
 
-    ejsval iterated;
+    ejsval  iterated;
     uint8_t kind;
-    int next_index;
+    int64_t next_index;
 } EJSArrayIterator;
 
 #define EJSARRAY_LEN(obj)  (((EJSArray*)(obj))->array_length)
@@ -76,7 +76,7 @@ extern ejsval _ejs_ArrayIterator_prototype;
 extern EJSSpecOps _ejs_ArrayIterator_specops;
 
 ejsval _ejs_array_create (ejsval length, ejsval proto);
-ejsval _ejs_array_new (int numElements, EJSBool fill);
+ejsval _ejs_array_new (int64_t numElements, EJSBool fill);
 
 typedef enum {
     EJS_ARRAYITER_KIND_KEY,
@@ -90,7 +90,6 @@ ejsval _ejs_array_iterator_new(ejsval array, EJSArrayIteratorKind kind);
 // the vector elements
 ejsval _ejs_array_new_copy (int numElements, ejsval *elements);
 
-void _ejs_array_foreach_element (EJSArray* arr, EJSValueFunc foreach_func);
 int _ejs_array_indexof (EJSArray* haystack, ejsval needle);
 
 void _ejs_array_init(ejsval global);
