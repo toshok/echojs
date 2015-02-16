@@ -15,8 +15,6 @@
 #include "ejs-symbol.h"
 #include "ejs-proxy.h"
 
-#define EJS_TYPEDARRAY_LEN(arrobj)      (((EJSTypedArray*)EJSVAL_TO_OBJECT(arrobj))->length)
-
 static inline int
 max(int a, int b)
 {
@@ -502,7 +500,7 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
      }                                                                  \
                                                                         \
      if (is_index) {                                                    \
-         if (idx < 0 || idx > EJS_TYPEDARRAY_LEN(obj)) {                \
+         if (idx < 0 || idx > EJS_TYPED_ARRAY_LEN(obj)) {               \
              return _ejs_undefined;                                     \
          }                                                              \
          void* data = _ejs_typedarray_get_data (EJSVAL_TO_OBJECT(obj)); \
@@ -511,7 +509,7 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
                                                                         \
      /* we also handle the length getter here */                        \
      if (EJSVAL_IS_STRING(propertyName) && !ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName))) { \
-         return NUMBER_TO_EJSVAL (EJS_TYPEDARRAY_LEN(obj));             \
+         return NUMBER_TO_EJSVAL (EJS_TYPED_ARRAY_LEN(obj));            \
      }                                                                  \
                                                                         \
      /* otherwise we fallback to the object implementation */           \
@@ -525,7 +523,7 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
          double needle = EJSVAL_TO_NUMBER(propertyName);                \
          int needle_int;                                                \
          if (EJSDOUBLE_IS_INT32(needle, &needle_int)) {                 \
-             if (needle_int >= 0 && needle_int < EJS_TYPEDARRAY_LEN(obj)) \
+             if (needle_int >= 0 && needle_int < EJS_TYPED_ARRAY_LEN(obj)) \
                  return NULL; /* XXX */                                 \
          }                                                              \
      }                                                                  \
@@ -548,7 +546,7 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
      }                                                                  \
                                                                         \
      if (is_index) {                                                    \
-         if (idx < 0 || idx >= EJS_TYPEDARRAY_LEN(obj)) {               \
+         if (idx < 0 || idx >= EJS_TYPED_ARRAY_LEN(obj)) {              \
              return EJS_FALSE;                                          \
          }                                                              \
          void* data = _ejs_typedarray_get_data (EJSVAL_TO_OBJECT(obj)); \
