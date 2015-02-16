@@ -6,9 +6,9 @@ os:
   - linux
 
 install:
-  - apt-get install -y llvm-3.4 clang-3.4 make nodejs-legacy node-gyp npm libunwind8-dev libuv-dev
-  - npm install -g coffee-script
-  - npm install -g mocha
+  - sudo apt-get install -y llvm-3.4 clang-3.4 make nodejs-legacy node-gyp npm libunwind8-dev libuv-dev
+  - sudo npm install -g coffee-script
+  - sudo npm install -g mocha
 
 before_script:
   - export LLVM_SUFFIX=-3.4
