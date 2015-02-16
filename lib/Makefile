@@ -36,8 +36,10 @@ dist-local:: $(GENERATED_FILES)
 clean-local::
 	rm -f host-config-es6.js $(DESTDIR)/host-config.js
 
+SED_REPLACEMENTS=-e s,@LLVM_SUFFIX@,$(LLVM_SUFFIX),g -e s,@RUNLOOP_IMPL@,$(RUNLOOP_IMPL),g
+
 $(DESTDIR)/host-config.js: host-config.js.in
-	@echo [gen] $@ && (cat $< | sed -e s,@LLVM_SUFFIX@,$(LLVM_SUFFIX),g > $@)
+	@echo [gen] $@ && (cat $< | sed $(SED_REPLACEMENTS) > $@)
 
 $(DESTDIR)/%.js: %.coffee
 	@echo [coffee] $@ && coffee -m -o $(DESTDIR) -c $<
@@ -46,9 +48,9 @@ $(DESTDIR)/%.js: %.js
 	@echo [copy] $@ && cp $< $@
 
 %.coffee: %.coffee.in
-	@echo [gen] $@ && (cat $< | sed -e s,@LLVM_SUFFIX@,$(LLVM_SUFFIX),g > $@)
+	@echo [gen] $@ && (cat $< | sed $(SED_REPLACEMENTS) > $@)
 
 %: %.in
-	@echo [gen] $@ && (cat $< | sed -e s,@LLVM_SUFFIX@,$(LLVM_SUFFIX),g > $@)
+	@echo [gen] $@ && (cat $< | sed $(SED_REPLACEMENTS) > $@)
 
 include $(TOP)/build/build.mk

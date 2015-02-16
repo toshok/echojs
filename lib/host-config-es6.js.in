@@ -1,1 +1,2 @@
 export let LLVM_SUFFIX = '@LLVM_SUFFIX@';
+export let RUNLOOP_IMPL = '@RUNLOOP_IMPL@';

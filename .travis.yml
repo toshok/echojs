@@ -6,16 +6,17 @@ os:
   - linux
 
 install:
-  - sudo apt-get install -y llvm-3.4 clang-3.4 make nodejs-legacy node-gyp npm libunwind8-dev libuv-dev
+  - sudo add-apt-repository --yes ppa:chris-lea/node.js
+  - sudo apt-get update
+  - sudo apt-get install -y llvm-3.4 clang-3.4 make nodejs libunwind7-dev libev-dev
   - sudo npm install -g coffee-script
   - sudo npm install -g mocha
+  - sudo npm install -g node-gyp
 
 before_script:
-  - export LLVM_SUFFIX=-3.4
   - make
 
 script:
   - env
-  - export LLVM_SUFFIX=-3.4
   - make check
   - if test -f test/.failures -o -f test/.xsuccess; then exit -1; fi

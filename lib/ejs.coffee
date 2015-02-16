@@ -6,7 +6,7 @@ util = require 'echo-util'
 debug = require 'debug'
 { Set } = require 'set'
 { Map } = require 'map'
-{ LLVM_SUFFIX } = require 'host-config'
+{ LLVM_SUFFIX, RUNLOOP_IMPL } = require 'host-config'
         
 # if we're running under coffee/node, argv will be ["coffee", ".../ejs", ...]
 # if we're running the compiled ejs.exe, argv will be [".../ejs.js.exe", ...]
@@ -258,7 +258,14 @@ target_link_args = (platform, arch) ->
         
 
 target_libraries = (platform, arch) ->
-        return [ "-lpthread", "-luv" ] if platform is "linux"
+        if platform is "linux"
+                switch RUNLOOP_IMPL
+                        when "libuv" then runloop_lib = "-luv"
+                        when "libev" then runloop_lib = "-lev"
+                        else
+                                throw new Error("unrecognized runloop implementation `#{RUNLOOP_IMPL}'")
+
+                return [ "-lpthread", runloop_lib ]
 
         if platform is "darwin"
                 rv = [ "-framework", "Foundation" ]

@@ -1,1 +1,2 @@
 exports.LLVM_SUFFIX = '@LLVM_SUFFIX@';
+exports.RUNLOOP_IMPL = '@RUNLOOP_IMPL@';
