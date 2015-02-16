@@ -5,5 +5,7 @@ machine:
 
 dependencies:
   override:
+    - docker pull ubuntu
     - docker info
+    - docker run ubuntu:trusty cat /etc/issue
 
