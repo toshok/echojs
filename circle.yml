@@ -3,9 +3,15 @@ machine:
   services:
     - docker
 
+## Customize checkout
+checkout:
+  post:
+    - git submodule sync
+    - git submodule update --init # use submodules
+
 dependencies:
   override:
     - docker pull ubuntu
     - docker info
-    - docker run ubuntu:14.04.1 cat /etc/issue
+    - docker run -v ubuntu:14.04.1 cat /etc/issue
 
