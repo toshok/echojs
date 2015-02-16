@@ -1,23 +1,21 @@
-language: objective-c
+language: cpp
+compiler:
+  - clang
 
-before_install:
-  - brew update
-  - brew tap homebrew/versions
+os:
+  - linux
 
 install:
-  - export PATH=$PATH:/usr/local/share/npm/bin
-  - sh ./ci/install-node.sh
-  - sh ./ci/install-coffeescript.sh
-  - sh ./ci/install-llvm.sh
+  - apt-get install -y llvm-3.4 clang-3.4 make nodejs-legacy node-gyp npm libunwind8-dev libuv-dev
+  - npm install -g coffee-script
+  - npm install -g mocha
 
 before_script:
   - export LLVM_SUFFIX=-3.4
-  - export PATH=$PATH:/usr/local/share/npm/bin
   - make
 
 script:
   - env
   - export LLVM_SUFFIX=-3.4
-  - export PATH=$PATH:/usr/local/share/npm/bin
   - make check
   - if test -f test/.failures -o -f test/.xsuccess; then exit -1; fi
