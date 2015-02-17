@@ -1,23 +1,22 @@
-language: objective-c
+buildimage: shippableimages/ubuntu1404_nodejs
+
+language: c++
 
 before_install:
-  - brew update
-  - brew tap homebrew/versions
+  - sudo apt-get update
+
 
 install:
-  - export PATH=$PATH:/usr/local/share/npm/bin
-  - sh ./ci/install-node.sh
-  - sh ./ci/install-coffeescript.sh
-  - sh ./ci/install-llvm.sh
+  - sudo apt-get install llvm-3.4 clang-3.4 nodejs-legacy libunwind8-dev libuv-dev
+  - sudo npm install -g coffee-script
+  - sudo npm install -g node-gyp
+  - sudo npm install -g mocha
 
 before_script:
-  - export LLVM_SUFFIX=-3.4
-  - export PATH=$PATH:/usr/local/share/npm/bin
   - make
 
 script:
   - env
-  - export LLVM_SUFFIX=-3.4
-  - export PATH=$PATH:/usr/local/share/npm/bin
+  - make bootstrap
   - make check
   - if test -f test/.failures -o -f test/.xsuccess; then exit -1; fi
