@@ -10,7 +10,7 @@ before_install:
 
 
 install:
-  - sudo apt-get install llvm-3.4 clang-3.4 libunwind8-dev libuv-dev make
+  - sudo apt-get install -y llvm-3.4 clang-3.4 libunwind8-dev libuv-dev make
   - sudo npm install -g coffee-script
   - sudo npm install -g node-gyp
   - sudo npm install -g mocha
