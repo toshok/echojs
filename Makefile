@@ -65,17 +65,17 @@ stage3: ejs-es6.js.exe.stage3
 
 ejs-es6.js.exe.stage1:
 	@echo Building stage 1
-	@NODE_PATH="$(NODE_PATH)" time ./ejs --srcdir --leave-temp $(MODULE_DIRS) ejs-es6.js
+	@NODE_PATH="$(NODE_PATH)" ./ejs --srcdir --leave-temp $(MODULE_DIRS) ejs-es6.js
 	@mv ejs-es6.js.exe ejs-es6.js.exe.stage1
 
 ejs-es6.js.exe.stage2: ejs-es6.js.exe.stage1
 	@echo Building stage 2
-	@time ./ejs-es6.js.exe.stage1 --srcdir --leave-temp $(MODULE_DIRS) ejs-es6.js
+	@./ejs-es6.js.exe.stage1 --srcdir --leave-temp $(MODULE_DIRS) ejs-es6.js
 	@mv ejs-es6.js.exe ejs-es6.js.exe.stage2
 
 ejs-es6.js.exe.stage3: ejs-es6.js.exe.stage2
 	@echo Building stage 3
-	@time ./ejs-es6.js.exe.stage2 --srcdir --leave-temp $(MODULE_DIRS) ejs-es6.js
+	@./ejs-es6.js.exe.stage2 --srcdir --leave-temp $(MODULE_DIRS) ejs-es6.js
 	@mv ejs-es6.js.exe ejs-es6.js.exe.stage3
 
 echo-command-line:
