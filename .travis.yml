@@ -1,13 +1,16 @@
 buildimage: shippableimages/ubuntu1404_nodejs
 
-language: c++
+language: node_js
+
+node_js:
+  - "0.10"
 
 before_install:
   - sudo apt-get update
 
 
 install:
-  - sudo apt-get install llvm-3.4 clang-3.4 nodejs-legacy libunwind8-dev libuv-dev
+  - sudo apt-get install llvm-3.4 clang-3.4 libunwind8-dev libuv-dev make
   - sudo npm install -g coffee-script
   - sudo npm install -g node-gyp
   - sudo npm install -g mocha
