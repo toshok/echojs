@@ -64,7 +64,7 @@ stage3: ejs-es6.js.exe.stage3
 	@echo DONE
 
 ejs-es6.js.exe.stage1:
-	@echo Building stage 1
+	@echo Building stage 1, node path is $(NODE_PATH)
 	@NODE_PATH="$(NODE_PATH)" ./ejs --srcdir --leave-temp $(MODULE_DIRS) ejs-es6.js
 	@mv ejs-es6.js.exe ejs-es6.js.exe.stage1
 
