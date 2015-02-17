@@ -7,4 +7,4 @@ dependencies:
   override:
     - docker pull ubuntu:14.04.1
     - docker info
-    - docker run -v /home/ubuntu:/echojs -d ubuntu:14.04.1 -a /echojs/ci/linux/circleci.sh
+    - docker run -v /home/ubuntu:/echojs -d ubuntu:14.04.1 -a -it sh -c /echojs/ci/linux/circleci.sh
