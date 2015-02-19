@@ -3,7 +3,7 @@ build_image: shippableimages/ubuntu1404_nodejs
 language: node_js
 
 node_js:
-  - "0.10.30"
+  - "0.10.32"
 
 before_install:
   - sudo apt-get update
