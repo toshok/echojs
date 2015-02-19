@@ -1,10 +1,21 @@
 
 machine:
-  services:
-    - docker
+  node:
+    version: 0.10.30
 
 dependencies:
+  post:
+    - add-apt-repository -y ppa:linuxjedi/ppa
+    - add-apt-repository -y ppa:chris-lea/node.js
+    - apt-get update
+    - apt-get install -y nodejs llvm-3.4 clang-3.4 libunwind7-dev libuv-dev make
+    - npm install -g coffee-script
+    - npm install -g node-gyp
+    - npm install -g mocha
+
+test:
   override:
-    - docker pull ubuntu:14.04.1
-    - docker info
-    - docker run -v /home/ubuntu:/echojs -d ubuntu:14.04.1 -a -it sh -c /echojs/ci/linux/circleci.sh
+    - make
+    - make bootstrap
+    - make check
+    - if test -f test/.failures -o -f test/.xsuccess; then exit -1; fi
