@@ -1,4 +1,4 @@
-build_image: shippableimages/ubuntu1404_nodejs
+build_image: shippableimages/ubuntu1204_nodejs
 
 language: node_js
 
@@ -6,11 +6,13 @@ node_js:
   - "0.10.32"
 
 before_install:
+  - sudo apt-add-repository ppa:linuxjedi/ppa
+  - sudo add-apt-repository ppa:chris-lea/node.js
   - sudo apt-get update
 
 
 install:
-  - sudo apt-get install -y llvm-3.4 clang-3.4 libunwind8-dev libuv-dev make
+  - sudo apt-get install -y nodejs llvm-3.4 clang-3.4 libunwind7-dev libuv-dev make
   - sudo npm install -g coffee-script
   - sudo npm install -g node-gyp
   - sudo npm install -g mocha
