@@ -6,13 +6,13 @@ node_js:
   - "0.10.32"
 
 install:
-  - sudo add-apt-repository -y ppa:linuxjedi/ppa
-  - sudo add-apt-repository -y ppa:chris-lea/node.js
-  - sudo apt-get update
-  - sudo apt-get install -y nodejs llvm-3.4 clang-3.4 libunwind7-dev libuv-dev make
-  - sudo npm install -g coffee-script
-  - sudo npm install -g node-gyp
-  - sudo npm install -g mocha
+  - add-apt-repository -y ppa:linuxjedi/ppa
+  - add-apt-repository -y ppa:chris-lea/node.js
+  - apt-get update
+  - apt-get install -y nodejs llvm-3.4 clang-3.4 libunwind7-dev libuv-dev make
+  - npm install -g coffee-script
+  - npm install -g node-gyp
+  - npm install -g mocha
 
 before_script:
   - make
