@@ -6,7 +6,7 @@ node_js:
   - "0.10.32"
 
 before_install:
-  - sudo apt-add-repository ppa:linuxjedi/ppa
+  - sudo add-apt-repository ppa:linuxjedi/ppa
   - sudo add-apt-repository ppa:chris-lea/node.js
   - sudo apt-get update
 
