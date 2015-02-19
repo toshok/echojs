@@ -306,12 +306,12 @@ compileFile = (filename, parse_tree, modules, compileCallback) ->
                 suffix = if options.debug_level > 0 then " -> #{base_filename}" else ''
                 console.warn "#{util.bold()}COMPILE#{util.reset()} #{filename}#{suffix}"
 
-        try
+        #try
                 compiled_module = compiler.compile parse_tree, base_filename, filename, modules, options
-        catch e
-                console.warn "#{e}"
-                process.exit(-1) if options.debug_level == 0
-                throw e
+        #catch e
+                #console.warn "#{e}"
+                #process.exit(-1) if options.debug_level == 0
+                #throw e
 
         base_output_name = "#{os.tmpdir()}/#{base_filename}-#{options.target_platform}-#{options.target_arch}"
         ll_filename      = "#{base_output_name}.ll"
