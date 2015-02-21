@@ -1179,7 +1179,7 @@ _ejs_truthy (ejsval val)
 void
 _ejs_throw (ejsval exp)
 {
-    _ejs_exception_throw (ToObject(exp));
+    _ejs_exception_throw (exp);
 }
 
 void
