@@ -16,6 +16,7 @@
 #include "ejs-number.h"
 #include "ejs-typedarrays.h"
 #include "ejs-json.h"
+#include "ejs-regexp.h"
 
 #if IOS
 #import <Foundation/Foundation.h>
@@ -33,7 +34,10 @@ ejsval console_toString(ejsval arg);
 
 ejsval
 console_toString(ejsval arg) {
-    if (EJSVAL_IS_NUMBER(arg) || EJSVAL_IS_NUMBER_OBJECT(arg)) {
+    if (EJSVAL_IS_STRING(arg)) {
+        return arg;
+    }
+    else if (EJSVAL_IS_NUMBER(arg) || EJSVAL_IS_NUMBER_OBJECT(arg)) {
         return _ejs_number_to_string(arg);
     }
     else if (EJSVAL_IS_ARRAY(arg)) {
@@ -87,6 +91,12 @@ console_toString(ejsval arg) {
 
             return _ejs_string_concatv(left, func_name, right, _ejs_null);
         }
+    }
+    else if (EJSVAL_IS_STRING_OBJECT(arg)) {
+        return ToString(arg);
+    }
+    else if (EJSVAL_IS_REGEXP(arg)) {
+        return ToString(arg);
     }
     else if (EJSVAL_IS_OBJECT(arg)) {
         ejsval ret = _ejs_json_stringify(arg);
