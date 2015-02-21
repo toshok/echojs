@@ -798,7 +798,10 @@ _ejs_Array_prototype_filter (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
             ejsval selected = _ejs_invoke_closure (callbackfn, T, 3, argumentsList);
 
             // v. If selected is true, then
-            if (EJSVAL_IS_BOOLEAN(selected) && EJSVAL_TO_BOOLEAN(selected)) {
+            // XXX(toshok) the above step seems to imply the code should be:
+            //      if (EJSVAL_IS_BOOLEAN(selected) && EJSVAL_TO_BOOLEAN(selected)) {
+            // but that doesn't work
+            if (EJSVAL_TO_BOOLEAN(ToBoolean(selected))) {
                 // 1. Let status be CreateDataPropertyOrThrow (A, ToString(to), kValue).
                 // 2. ReturnIfAbrupt(status).
                 _ejs_object_define_value_property (A, ToString(NUMBER_TO_EJSVAL(to)), kValue, EJS_PROP_FLAGS_ENUMERABLE | EJS_PROP_FLAGS_CONFIGURABLE | EJS_PROP_FLAGS_WRITABLE);
@@ -1869,7 +1872,9 @@ _ejs_Array_prototype_some (ejsval env, ejsval _this, uint32_t argc, ejsval*args)
             ejsval testResult = _ejs_invoke_closure (callbackfn, T, 3, callbackargs);
 
             // v. If testResult is true, return true.
-            if (EJSVAL_IS_BOOLEAN(testResult) && EJSVAL_TO_BOOLEAN(testResult))
+            // XXX(toshok) see _filter
+            //     if (EJSVAL_IS_BOOLEAN(testResult) && EJSVAL_TO_BOOLEAN(testResult))
+            if (EJSVAL_TO_BOOLEAN(ToBoolean(testResult)))
                 return _ejs_true;
         }
         // e. Increase k by 1.
