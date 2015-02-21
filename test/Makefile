@@ -208,10 +208,10 @@ EJS_DRIVER ?= NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --leave-temp -q
 EJS_STAGE ?= 0
 
 %.js.exe: %.js $(TOPDIR)/runtime/libecho.a
-	@$(EJS_DRIVER) $(MODULE_DIRS) $< 
+	@$(EJS_DRIVER) --srcdir $(MODULE_DIRS) $< 
 
 v8-%.js.exe: v8/%.js $(TOPDIR)/runtime/libecho.a
-	NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs $(MODULE_DIRS) $<
+	NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --srcdir $(MODULE_DIRS) $<
 
 run-node:
 	NODE_PATH=$(NODE_PATH) node
