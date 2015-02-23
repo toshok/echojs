@@ -235,7 +235,7 @@ utf16_to_utf8_char (const jschar* utf16, char* utf8, int *utf16_adv)
     EJS_NOT_IMPLEMENTED();
 }
 
-static int
+int
 ucs2_to_utf8_char (jschar ucs2, char *utf8)
 {
     if (ucs2 < 0x80) {

@@ -185,6 +185,7 @@ _ejs_init(int argc, char** argv)
     _ejs_date_init(_ejs_global);
     _ejs_json_init(_ejs_global);
     _ejs_math_init(_ejs_global);
+    _ejs_uri_init(_ejs_global);
 
     // ES6 bits
     _ejs_promise_init(_ejs_global);

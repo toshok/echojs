@@ -21,6 +21,8 @@ ejsval _ejs_decodeURIComponent_impl (ejsval env, ejsval _this, uint32_t argc, ej
 ejsval _ejs_encodeURI_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
 ejsval _ejs_encodeURIComponent_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
 
+void _ejs_uri_init (ejsval global);
+
 EJS_END_DECLS
 
 #endif
