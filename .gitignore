@@ -22,3 +22,5 @@ ejs-es6.js.exe.stage2
 ejs-es6.js.exe.stage3
 pcre-*
 echojs-*.tar.gz
+
+node_modules/
