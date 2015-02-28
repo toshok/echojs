@@ -113,6 +113,7 @@ jschar _ejs_string_ucs2_at (EJSPrimString* primstr, uint32_t offset);
 
 uint32_t _ejs_string_hash (ejsval str);
 
+int ucs2_to_utf8_char (jschar ucs2, char *utf8);
 char* _ejs_string_to_utf8(EJSPrimString* primstr);
 
 void _ejs_string_init_literal (const char *name, ejsval *val, EJSPrimString* str, jschar* ucs2_data, int32_t length);
