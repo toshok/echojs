@@ -1,6 +1,10 @@
-TOP=$(shell cd ../ && pwd)
+TOP=..
+
+-include $(TOP)/build/config.mk
 
 EJS_DRIVER?=$(TOP)/ejs
+
+SUBDIRS=fetch
 
 trackmix: trackmix/trackmix.js
 	@mkdir -p trackmix/TrackMix.app/Contents/MacOS/
@@ -13,3 +17,4 @@ trackmixcode: trackmixcode/trackmixcode.js
 
 all: trackmix trackmixcode
 
+-include $(TOP)/build/build.mk
