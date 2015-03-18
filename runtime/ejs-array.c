@@ -35,6 +35,14 @@ min(int a, int b)
     if (a > b) return b; else return a;
 }
 
+static inline void
+swap_dense (ejsval array, uint32_t xPos, uint32_t yPos)
+{
+    ejsval tmp = EJS_DENSE_ARRAY_ELEMENTS(array)[xPos];
+    EJS_DENSE_ARRAY_ELEMENTS(array)[xPos] = EJS_DENSE_ARRAY_ELEMENTS(array)[yPos];
+    EJS_DENSE_ARRAY_ELEMENTS(array)[yPos] = tmp;
+}
+
 // ES6 Draft January 15, 2015
 // 7.2.2
 // IsArray ( argument )
@@ -135,6 +143,59 @@ static ejsval ArraySpeciesCreate(ejsval originalArray, int64_t length) {
     return Construct(C, _ejs_undefined, 1, &length_);
 }
 
+// ES6 Draft January 15, 2015
+// 22.1.3.24.1
+// Runtime Semantics: SortCompare( x, y )
+static ejsval
+SortCompare (ejsval comparefn, ejsval x, ejsval y)
+{
+    /* 1. If x and y are both undefined, return +0. */
+    if (EJSVAL_IS_UNDEFINED(x) && EJSVAL_IS_UNDEFINED(y))
+        return NUMBER_TO_EJSVAL(0);
+
+    /* 2. If x is undefined, return 1. */
+    if (EJSVAL_IS_UNDEFINED(x))
+        return NUMBER_TO_EJSVAL(1);
+
+    /* 3. If y is undefined, return −1. */
+    if (EJSVAL_IS_UNDEFINED(y))
+        return NUMBER_TO_EJSVAL(-1);
+
+    /* 4. If the argument comparefn is not undefined, then */
+    if (!EJSVAL_IS_UNDEFINED(comparefn)) {
+        /* a. Let v be ToNumber(Call(comparefn, undefined, «x, y»)). */
+        /* b. ReturnIfAbrupt(v). */
+        ejsval args[2] = { x, y };
+        ejsval v = ToNumber(_ejs_invoke_closure(comparefn, _ejs_undefined, 2, args));
+
+        /* c. If v is NaN, return +0. */
+        if (isnan(ToDouble(v)))
+            return NUMBER_TO_EJSVAL(0);
+
+        /* d. Return v. */
+        return v;
+    }
+
+    /* 5. Let xString be ToString(x). */
+    /* 6. ReturnIfAbrupt(xString). */
+    ejsval xString = ToString(x);
+
+    /* 7. Let yString be ToString(y). */
+    /* 8. ReturnIfAbrupt(yString). */
+    ejsval yString = ToString(y);
+
+    /* 9. If xString < yString, return −1. */
+    if (EJSVAL_TO_BOOLEAN(_ejs_op_lt(xString, yString)))
+        return NUMBER_TO_EJSVAL(-1);
+
+    /* 10. If xString > yString, return 1. */
+    if (EJSVAL_TO_BOOLEAN(_ejs_op_gt(xString, yString)))
+        return NUMBER_TO_EJSVAL(1);
+
+    /* 11. Return +0. */
+    return NUMBER_TO_EJSVAL(0);
+}
+
 ejsval
 _ejs_array_new (int64_t numElements, EJSBool fill)
 {
@@ -233,6 +294,44 @@ _ejs_array_pop_dense(ejsval array)
     if (EJSARRAY_LEN(arr) == 0)
         return _ejs_undefined;
     return EJSDENSEARRAY_ELEMENTS(arr)[--EJSARRAY_LEN(arr)];
+}
+
+static int32_t
+partition (ejsval array, ejsval comparefn, int32_t low, int32_t high)
+{
+    /* Use the element in the middle for now */
+    int32_t pivotIndex = low + (high - low) /  2;
+
+    ejsval pivotValue = EJS_DENSE_ARRAY_ELEMENTS(array)[pivotIndex];
+    swap_dense (array, pivotIndex, high);
+
+    int32_t storeIndex = low;
+    ejsval one = NUMBER_TO_EJSVAL(1);
+
+    for (int i = low; i < high; i++) {
+        ejsval kValue = EJS_DENSE_ARRAY_ELEMENTS(array)[i];
+        ejsval cmp = SortCompare (comparefn, kValue, pivotValue);
+
+        /* swap if the current element is *less* than the pivot */
+        if (EJSVAL_TO_BOOLEAN(_ejs_op_lt(cmp, one))) {
+            swap_dense (array, i, storeIndex);
+            storeIndex++;
+        }
+    }
+
+    swap_dense (array, storeIndex, high);
+    return storeIndex;
+}
+
+void
+_ejs_array_quicksort_dense (ejsval array, ejsval comparefn, int32_t low, int32_t high)
+{
+    if (low >= high)
+        return;
+
+    int32_t p = partition (array, comparefn, low, high);
+    _ejs_array_quicksort_dense (array, comparefn, low, p - 1);
+    _ejs_array_quicksort_dense (array, comparefn, p + 1, high);
 }
 
 ejsval _ejs_Array_prototype EJSVAL_ALIGNMENT;
@@ -2506,6 +2605,44 @@ _ejs_Array_create(ejsval env, ejsval _this, uint32_t argc, ejsval*args)
     return obj;
 }
 
+// ES6 Draft January 15, 2015
+// 22.1.3.24
+// Array.prototype.sort (comparefn)
+static ejsval
+_ejs_Array_prototype_sort(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval comparefn = _ejs_undefined;
+
+    if (argc >= 1)
+        comparefn = args[0];
+
+    /* 1. Let obj be ToObject(this value). */
+    ejsval obj = ToObject(_this);
+    EJSObject *objO = EJSVAL_TO_OBJECT(obj);
+
+    /* 2. Let len be ToLength(Get(obj, "length")). */
+    /* 3. ReturnIfAbrupt(len). */
+    int32_t len = ToLength(Get(obj, _ejs_atom_length));
+
+    if (!EJSVAL_IS_UNDEFINED(comparefn) && !EJSVAL_IS_CALLABLE(comparefn))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "invalid comparefn argument");
+
+    if (EJSVAL_IS_DENSE_ARRAY(obj)) {
+        _ejs_array_quicksort_dense (obj, comparefn, 0, len - 1);
+        return obj;
+    }
+
+    /* SpiderMonkey/V8 won't sort if the object lacks the length property */
+    if (!HasProperty(obj, _ejs_atom_length))
+        return obj;
+
+    /* Since index reorganizations are possible for sparse/array-like objects, we need extensible objs */
+    if (!EJS_OBJECT_IS_EXTENSIBLE(objO))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "array argument is not extensible");
+
+    EJS_NOT_IMPLEMENTED();
+}
+
 ejsval
 _ejs_array_iterator_new(ejsval array, EJSArrayIteratorKind kind)
 {
@@ -2671,6 +2808,7 @@ _ejs_array_init(ejsval global)
     PROTO_METHOD(reduceRight);
     PROTO_METHOD(filter);
     PROTO_METHOD(reverse);
+    PROTO_METHOD(sort);
     // ECMA 6
     PROTO_METHOD(copyWithin);
     PROTO_METHOD(fill);
