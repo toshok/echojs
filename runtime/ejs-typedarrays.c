@@ -1387,6 +1387,180 @@ _ejs_TypedArray_prototype_lastIndexOf (ejsval env, ejsval _this, uint32_t argc, 
     return NUMBER_TO_EJSVAL(-1);
 }
 
+// ES6 Draft January 15, 2015
+// 22.2.3.19
+// %TypedArray%.prototype.reduce ( callbackfn [ , initialValue ] )
+static ejsval
+_ejs_TypedArray_prototype_reduce (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval callbackfn = _ejs_undefined;
+    ejsval initialValue = _ejs_undefined;
+    ejsval accumulator;
+
+    if (argc >= 1)
+        callbackfn = args[0];
+
+    if (argc >= 2)
+        initialValue = args[1];
+
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.reduce called on null or undefined");
+
+    /* This function is not generic. */
+    if (!EJSVAL_IS_TYPEDARRAY(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.reduce called on non typed-array object");
+
+    /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
+    EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
+
+    /* 3. Let lenValue be Get(O, "length"). */
+    /* 4. Let len be ToLength(lenValue). */
+    uint32_t len = Oobj->length;
+
+    /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
+    if (!EJSVAL_IS_CALLABLE(callbackfn))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
+
+    /* 7. If len is 0 and initialValue is not present, throw a TypeError exception. */
+    if (len == 0 && EJSVAL_IS_UNDEFINED(initialValue))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "array is empty and the initial value was not provided");
+
+    /* 8 Let k be 0. */
+    int32_t k = 0;
+
+    /* 9. If initialValue is present, then */
+    if (!EJSVAL_IS_UNDEFINED(initialValue))
+        /* a. Set accumulator to initialValue. */
+        accumulator = initialValue;
+    /* 10. Else initialValue is not present, */
+    else {
+        /* a. Let kPresent be false. */
+        /* b. Repeat, while kPresent is false and k < len. */
+        /*  i. Let Pk be ToString(k). */
+        ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
+
+        /*  ii. Let kPresent be HasProperty(O, Pk). */
+        /*  iii. ReturnIfAbrupt(kPresent). */
+        /*  iv. If kPresent is true, then */
+        /*      1. Let accumulator be Get(O, Pk). */
+        accumulator = Get(O, Pk);
+
+        /*  v. Increase k by 1. */
+        k++;
+    }
+
+    /* 11. Repeat, while k < len. */
+    while (k < len) {
+        /* a. Let Pk be ToString(k). */
+        ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
+
+        /* b. Let kPresent be HasProperty(O, Pk). */
+        /* c. ReturnIfAbrupt(kPresent). */
+        /* d. If kPresent is true, then */
+        /*  i. Let kValue be Get(O, Pk). */
+        /*  ii. ReturnIfAbrupt(kValue). */
+        ejsval kValue = Get(O, Pk);
+
+        /*  iii. Let accumulator be Call(callbackfn, undefined, «accumulator, kValue, k, O»). */
+        ejsval callbackfn_args [4] = { accumulator, kValue, NUMBER_TO_EJSVAL(k), O };
+        accumulator = _ejs_invoke_closure (callbackfn, _ejs_undefined, 4, callbackfn_args);
+
+        /* e. Increase k by 1. */
+        k++;
+    }
+
+    /* 12. Return accumulator. */
+    return accumulator;
+}
+
+// ES6 Draft January 15, 2015
+// 22.2.3.20
+// %TypedArray%.prototype.reduceRight ( callbackfn [ , initialValue ] )
+static ejsval
+_ejs_TypedArray_prototype_reduceRight (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    ejsval callbackfn = _ejs_undefined;
+    ejsval initialValue = _ejs_undefined;
+    ejsval accumulator;
+
+    if (argc >= 1)
+        callbackfn = args[0];
+
+    if (argc >= 2)
+        initialValue = args[1];
+
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.reduceRight called on null or undefined");
+
+    /* This function is not generic. */
+    if (!EJSVAL_IS_TYPEDARRAY(_this))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.reduceRight called on non typed-array object");
+
+    /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
+    ejsval O = ToObject(_this);
+    EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
+
+    /* 3. Let lenValue be Get(O, "length"). */
+    /* 4. Let len be ToLength(lenValue). */
+    uint32_t len = Oobj->length;
+
+    /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
+    if (!EJSVAL_IS_CALLABLE(callbackfn))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
+
+    /* 7. If len is 0 and initialValue is not present, throw a TypeError exception. */
+    if (len == 0 && EJSVAL_IS_UNDEFINED(initialValue))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "array is empty and the initial value was not provided");
+
+    /* 8 Let k be 0. */
+    int32_t k = len - 1;
+
+    /* 9. If initialValue is present, then */
+    if (!EJSVAL_IS_UNDEFINED(initialValue))
+        /* a. Set accumulator to initialValue. */
+        accumulator = initialValue;
+    /* 10. Else initialValue is not present, */
+    else {
+        /* a. Let kPresent be false. */
+        /* b. Repeat, while kPresent is false and k < len. */
+        /*  i. Let Pk be ToString(k). */
+        ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
+
+        /*  ii. Let kPresent be HasProperty(O, Pk). */
+        /*  iii. ReturnIfAbrupt(kPresent). */
+        /*  iv. If kPresent is true, then */
+        /*      1. Let accumulator be Get(O, Pk). */
+        accumulator = Get(O, Pk);
+
+        /*  v. Decrease k by 1. */
+        k--;
+    }
+
+    /* 11. Repeat, while k ≥ 0. */
+    while (k >= 0) {
+        /* a. Let Pk be ToString(k). */
+        ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
+
+        /* b. Let kPresent be HasProperty(O, Pk). */
+        /* c. ReturnIfAbrupt(kPresent). */
+        /* d. If kPresent is true, then */
+        /*  i. Let kValue be Get(O, Pk). */
+        /*  ii. ReturnIfAbrupt(kValue). */
+        ejsval kValue = Get(O, Pk);
+
+        /*  iii. Let accumulator be Call(callbackfn, undefined, «accumulator, kValue, k, O»). */
+        ejsval callbackfn_args [4] = { accumulator, kValue, NUMBER_TO_EJSVAL(k), O };
+        accumulator = _ejs_invoke_closure (callbackfn, _ejs_undefined, 4, callbackfn_args);
+
+        /* e. Decrease k by 1. */
+        k--;
+    }
+
+    /* 12. Return accumulator. */
+    return accumulator;
+}
+
 static ejsval
 _ejs_TypedArray_prototype_some (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
@@ -1656,6 +1830,8 @@ _ejs_typedarrays_init(ejsval global)
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, join);                  \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, keys);                  \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, lastIndexOf);           \
+    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, reduce);                \
+    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, reduceRight);           \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, some);                  \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, toString);              \
                                                                         \
