@@ -39,7 +39,7 @@ CFLAGS=-g -O2 -Wall -I. -Wno-unused-function
 MIN_IOS_VERSION=8.0
 
 DEVELOPER_ROOT?=/Applications/Xcode.app/Contents/Developer
-IOS_SDK_VERSION?=8.1
+IOS_SDK_VERSION?=8.2
 
 ifeq ($(HOST_CPU),x86_64)
 LINUX_ARCH=-arch x86_64
