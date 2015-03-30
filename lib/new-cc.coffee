@@ -429,7 +429,7 @@ SubstituteVariables = class SubstituteVariables extends TransformPass
 
                 module_info = @allModules.get(moduleString.value)
                 if not module_info.exports.has(moduleExport)
-                        throw new Error("doesn't export") # XXX
+                        throw new Error("doesn't export #{moduleExport}") # XXX
                 export_info = module_info.exports.get(moduleExport)
 
                 intrinsic(moduleGetSlot_id, [moduleString, b.literal(moduleExport)])
