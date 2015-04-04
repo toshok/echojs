@@ -2760,9 +2760,11 @@ exports.gatherAllModules = (initial_file_list, options) ->
                 else
                         # check if the file is a native module
                         if not allModules.has(file)
+                                if file[0] != '@'
+                                        throw new Error "module #{file} not found"
                                 native_path = file.slice(1)
                                 if not nativeModules.has(native_path)
-                                        throw new Error "native module #{native_path} not found"
+                                        throw new Error "native module #{file} not found"
 
                                 allModules.set(file, nativeModules.get(native_path))
                 
