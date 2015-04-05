@@ -267,7 +267,7 @@ class LLVMIRVisitor extends TreeVisitor
                         isNull:               value: @handleIsNull
                         setPrototypeOf:       value: @handleSetPrototypeOf
                         objectCreate:         value: @handleObjectCreate
-                        gatherRest:           value: @handleGatherRest
+                        arrayFromRest:        value: @handleArrayFromRest
                         arrayFromSpread:      value: @handleArrayFromSpread
                         argPresent:           value: @handleArgPresent
 
@@ -2255,7 +2255,7 @@ class LLVMIRVisitor extends TreeVisitor
                 @createCall @ejs_runtime.object_create, [proto], "object_create", true
                 # we should check the return value of object_create
 
-        handleGatherRest: (exp) ->
+        handleArrayFromRest: (exp) ->
                 rest_name = exp.arguments[0].value
                 formal_params_length = exp.arguments[1].value
                 

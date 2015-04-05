@@ -114,7 +114,7 @@ templateDefaultHandlerCall_id = b.identifier "%templateDefaultHandlerCall"
 createArgScratchArea_id       = b.identifier "%createArgScratchArea"
 setPrototypeOf_id       = b.identifier "%setPrototypeOf"
 objectCreate_id         = b.identifier "%objectCreate"
-gatherRest_id           = b.identifier "%gatherRest"
+arrayFromRest_id        = b.identifier "%arrayFromRest"
 arrayFromSpread_id      = b.identifier "%arrayFromSpread"
 argPresent_id           = b.identifier "%argPresent"
 
@@ -1246,7 +1246,7 @@ class DesugarImportExport extends TransformPass
 # to:
 #
 #   function name (arg1, arg2, arg3) {
-#     let rest = %gatherRest('rest', 3);
+#     let rest = %arrayFromRest('rest', 3);
 #     // body
 #   }
 # 
@@ -1254,7 +1254,7 @@ class DesugarRestParameters extends TransformPass
         visitFunction: (n) ->
                 n = super
                 if n.rest?
-                        rest_declaration = b.letDeclaration(n.rest, b.callExpression(gatherRest_id, [b.literal(n.rest.name), b.literal(n.params.length)]))
+                        rest_declaration = b.letDeclaration(n.rest, b.callExpression(arrayFromRest_id, [b.literal(n.rest.name), b.literal(n.params.length)]))
                         n.body.body.unshift rest_declaration
                         n.rest = undefined
                 n

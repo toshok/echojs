@@ -116,7 +116,7 @@ templateDefaultHandlerCall_id = b.identifier "%templateDefaultHandlerCall"
 createArgScratchArea_id       = b.identifier "%createArgScratchArea"
 setPrototypeOf_id       = b.identifier "%setPrototypeOf"
 objectCreate_id         = b.identifier "%objectCreate"
-gatherRest_id           = b.identifier "%gatherRest"
+arrayFromRest_id        = b.identifier "%arrayFromRest"
 arrayFromSpread_id      = b.identifier "%arrayFromSpread"
 argPresent_id           = b.identifier "%argPresent"
 
