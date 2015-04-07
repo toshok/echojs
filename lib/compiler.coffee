@@ -306,13 +306,13 @@ class LLVMIRVisitor extends TreeVisitor
                         isNull            : true
                 
                 @llvm_intrinsics =
-                        gcroot: -> module.getOrInsertIntrinsic "@llvm.gcroot"
+                        gcroot: => @module.getOrInsertIntrinsic "@llvm.gcroot"
 
-                @ejs_runtime = runtime.createInterface module, @abi
-                @ejs_binops = runtime.createBinopsInterface module, @abi
-                @ejs_atoms = runtime.createAtomsInterface module
-                @ejs_globals = runtime.createGlobalsInterface module
-                @ejs_symbols = runtime.createSymbolsInterface module
+                @ejs_runtime = runtime.createInterface @module, @abi
+                @ejs_binops = runtime.createBinopsInterface @module, @abi
+                @ejs_atoms = runtime.createAtomsInterface @module
+                @ejs_globals = runtime.createGlobalsInterface @module
+                @ejs_symbols = runtime.createSymbolsInterface @module
 
                 @module_atoms = Object.create null
                 @literalInitializationFunction = @module.getOrInsertFunction "_ejs_module_init_string_literals_#{@filename}", types.void, []
