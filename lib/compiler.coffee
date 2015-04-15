@@ -2591,9 +2591,12 @@ class GatherImports extends TreeVisitor
                 throw new Error("import sources must be strings") if not is_string_literal(n.source)
 
                 source_path = n.source.value
+                is_imported_ref = false
                 
                 for v in @import_vars
-                        source_path = source_path.replace("$#{v.variable}", v.value);
+                        if source_path.indexOf("$#{v.variable}") >= 0
+                                is_imported_ref = true
+                                source_path = source_path.replace("$#{v.variable}", v.value)
 
                 if isNativeModule(n.source.value)
                         if @importList.indexOf(source_path) is -1
@@ -2604,7 +2607,11 @@ class GatherImports extends TreeVisitor
                         return n
                         
                 if source_path[0] isnt "/"
-                        source_path = path.resolve @toplevel_path, @path, source_path
+                        # Imported references (i.e. "$pirouette/foundation" are always relative to the toplevel dir)
+                        if is_imported_ref
+                                source_path = path.resolve @toplevel_path, source_path
+                        else
+                                source_path = path.resolve @toplevel_path, @path, source_path
 
                 if source_path.indexOf(process.cwd()) is 0
                         source_path = path.relative(process.cwd(), source_path)
