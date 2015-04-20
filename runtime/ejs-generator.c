@@ -14,7 +14,10 @@
 static void
 _ejs_generator_start(EJSGenerator* gen)
 {
+    _ejs_gc_push_generator(gen);
     _ejs_invoke_closure(gen->body, _ejs_undefined, 0, NULL);
+    _ejs_gc_pop_generator();
+
     gen->yielded_value = _ejs_create_iter_result(_ejs_undefined, _ejs_true);
 }
 
@@ -29,8 +32,9 @@ _ejs_generator_new (ejsval generator_body)
     rv->yielded_value = _ejs_undefined;
     rv->sent_value = _ejs_undefined;
 
+    rv->stack = malloc(GENERATOR_STACK_SIZE);
     getcontext(&rv->generator_context);
-    rv->generator_context.uc_stack.ss_sp = malloc(GENERATOR_STACK_SIZE);
+    rv->generator_context.uc_stack.ss_sp = rv->stack;
     rv->generator_context.uc_stack.ss_size = GENERATOR_STACK_SIZE;
     rv->generator_context.uc_link = &rv->caller_context;
     makecontext(&rv->generator_context, _ejs_generator_start, 1, rv);
@@ -44,7 +48,10 @@ _ejs_generator_yield (ejsval generator, ejsval arg) {
     EJSGenerator* gen = (EJSGenerator*)EJSVAL_TO_OBJECT(generator);
     gen->yielded_value = _ejs_create_iter_result(arg, _ejs_false);
     gen->sent_value = _ejs_undefined;
+
+    _ejs_gc_pop_generator();
     swapcontext(&gen->generator_context, &gen->caller_context);
+    _ejs_gc_push_generator(gen);
 
     if (gen->throwing) {
         gen->throwing = EJS_FALSE;
@@ -122,13 +129,37 @@ _ejs_generator_init(ejsval global)
 }
 
 static void
+_ejs_generator_specop_finalize (EJSObject* obj)
+{
+    EJSGenerator* gen = (EJSGenerator*)obj;
+    free (gen->stack);
+}
+
+static void
 _ejs_generator_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSGenerator* gen = (EJSGenerator*)obj;
     scan_func(gen->body);
     scan_func(gen->yielded_value);
     scan_func(gen->sent_value);
-    //  XXX we need to conservatively scan the generator stack
+
+    _ejs_gc_mark_conservative_range(&gen->generator_context, &gen->generator_context + sizeof(ucontext_t));
+    _ejs_gc_mark_conservative_range(&gen->caller_context, &gen->caller_context + sizeof(ucontext_t));
+
+    _ejs_gc_mark_conservative_range(gen->stack,
+#if TARGET_CPU_AMD64
+                                    (void*)gen->generator_context.__mcontext_data.__ss.__rsp
+#elif TARGET_CPU_X86
+                                    (void*)gen->generator_context.__mcontext_data.__ss.__esp
+#elif TARGET_CPU_ARM
+                                    (void*)gen->generator_context.__mcontext_data.__ss.__sp
+#elif TARGET_CPU_ARM64
+                                    (void*)gen->generator_context.__mcontext_data.__ss.__sp
+#else
+#error "unimplemented"
+#endif
+                                    );
+
     _ejs_Object_specops.Scan (obj, scan_func);
 }
 
@@ -146,6 +177,6 @@ EJS_DEFINE_CLASS(Generator,
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
                  OP_INHERIT, // allocate.  shouldn't ever be used
-                 OP_INHERIT, // finalize.  also shouldn't ever be used
+                 _ejs_generator_specop_finalize,
                  _ejs_generator_specop_scan
                  )

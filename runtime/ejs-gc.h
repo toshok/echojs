@@ -39,6 +39,8 @@ extern GCObjectPtr _ejs_gc_alloc(size_t size, EJSScanType scan_type);
 extern void _ejs_gc_add_root(ejsval* val);
 extern void _ejs_gc_remove_root(ejsval* root);
 
+extern void _ejs_gc_mark_conservative_range(void* low, void* high);
+
 #define EJS_GC_MARK_THREAD_STACK_BOTTOM do {        \
         GCObjectPtr btm;                            \
         _ejs_gc_mark_thread_stack_bottom (&btm);    \

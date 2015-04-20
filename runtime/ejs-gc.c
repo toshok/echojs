@@ -14,6 +14,7 @@
 
 #include "ejs-gc.h"
 #include "ejs-function.h"
+#include "ejs-generator.h"
 #include "ejs-value.h"
 #include "ejs-string.h"
 #include "ejs-error.h"
@@ -954,6 +955,32 @@ mark_thread_stack()
     mark_ejsvals_in_range(((void*)&stack_top) + sizeof(GCObjectPtr), stack_bottom);
 }
 
+#define MAX_GENERATORS 256
+static int generator_count = 0;
+static EJSGenerator* generators[MAX_GENERATORS];
+
+void
+_ejs_gc_push_generator(EJSGenerator* gen)
+{
+    generators[generator_count++] = gen;
+}
+
+void
+_ejs_gc_pop_generator()
+{
+    generator_count--;
+}
+
+static void
+mark_generator_stacks()
+{
+    for (int i = 0; i < generator_count; i++) {
+        EJSGenerator* gen = generators[i];
+        
+        // XXX mark the actual stack
+    }
+}
+
 static void
 process_worklist()
 {
@@ -999,6 +1026,8 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
         mark_from_modules();
 
         mark_thread_stack();
+
+        mark_generator_stacks();
 
         process_worklist();
     }
@@ -1352,6 +1381,11 @@ _ejs_gc_remove_root(ejsval* root)
             return;
         }
     }
+}
+
+void
+_ejs_gc_mark_conservative_range(void* low, void* high) {
+    mark_ejsvals_in_range(low, high);
 }
 
 static int

@@ -625,6 +625,7 @@ class HoistVars extends TransformPass
 DesugarGeneratorFunctions = class DesugarGeneratorFunctions extends TransformPass
         constructor: ->
                 @genGen = startGenerator()
+                @yieldGen = startGenerator()
                 @mapping = []
                 
         visitFunction: (n) ->
@@ -639,7 +640,11 @@ DesugarGeneratorFunctions = class DesugarGeneratorFunctions extends TransformPas
                 n
 
         visitYield: (n) ->
-                intrinsic(generatorYield_id, [@mapping[0], n.argument])
+                if n.delegate
+                        yield_id = b.identifier("%_yield_#{@genGen()}")
+                        b.forOfStatement(b.letDeclaration(yield_id, null), n.argument, b.blockStatement([intrinsic(generatorYield_id, [@mapping[0], yield_id])]))
+                else
+                        intrinsic(generatorYield_id, [@mapping[0], n.argument])
                 
 
 # this pass converts all arrow functions to normal anonymous function
