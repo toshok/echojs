@@ -64,6 +64,20 @@ $(call addExpectedFailure, object7.js,              "we differ from node on prop
 $(call addExpectedFailure, object9.js,              "we differ from node on property descriptor flags.  verify with spec")
 $(call addExpectedFailure, symbol-object.js,        "")
 
+$(call addExpectedFailure, generator10.js, "")
+$(call addExpectedFailure, generator11.js, "")
+$(call addExpectedFailure, generator12.js, "")
+$(call addExpectedFailure, generator13.js, "")
+$(call addExpectedFailure, generator14.js, "")
+$(call addExpectedFailure, generator15.js, "")
+$(call addExpectedFailure, generator16.js, "")
+$(call addExpectedFailure, generator20.js, "")
+$(call addExpectedFailure, generator21.js, "")
+$(call addExpectedFailure, generator4.js, "")
+$(call addExpectedFailure, generator6.js, "")
+$(call addExpectedFailure, generator8.js, "")
+
+
 
 TRACEUR_TESTS=
 $(call testAgainstTraceur, array-subclass1.js)

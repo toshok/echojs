@@ -87,6 +87,13 @@ _ejs_Generator_prototype_throw (ejsval env, ejsval _this, uint32_t argc, ejsval 
 }
 
 static ejsval
+_ejs_Generator_prototype_return (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    printf ("generator .return not implemented\n");
+    abort();
+}
+
+static ejsval
 _ejs_Generator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval O = _this;
@@ -110,6 +117,7 @@ _ejs_generator_init(ejsval global)
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Generator_prototype, x, _ejs_Generator_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
 
     PROTO_METHOD(next);
+    PROTO_METHOD(return);
     PROTO_METHOD(throw);
 }
 
