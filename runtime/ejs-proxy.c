@@ -239,7 +239,7 @@ _ejs_proxy_specop_set_prototype_of (ejsval O, ejsval V)
 }
 
 // es6 rev 38 04-16-2015
-// 9.3.8
+// 9.5.3
 static EJSBool
 _ejs_proxy_specop_is_extensible(ejsval O)
 {
@@ -281,6 +281,54 @@ _ejs_proxy_specop_is_extensible(ejsval O)
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "return value mismatch in isExtensible");
 
     // 13. Return booleanTrapResult.
+    return booleanTrapResult;
+}
+
+// es6 rev 38 04-16-2015
+// 9.5.4
+static EJSBool
+_ejs_proxy_specop_prevent_extensions (ejsval O)
+{
+    EJSProxy* proxy = EJSVAL_TO_PROXY(O);
+
+    // 1. Let handler be the value of the [[ProxyHandler]] internal slot of O.
+    ejsval handler = proxy->handler;
+
+    // 2. If handler is null, throw a TypeError exception.
+    if (EJSVAL_IS_NULL(handler))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "null ProxyHandler in preventExtensions");
+
+    // 3. Assert: Type(handler) is Object.
+
+    // 4. Let target be the value of the [[ProxyTarget]] internal slot of O.
+    ejsval target = proxy->target;
+    EJSObject* _target = EJSVAL_TO_OBJECT(target);
+
+    // 5. Let trap be GetMethod(handler, "preventExtensions").
+    // 6. ReturnIfAbrupt(trap).
+    ejsval trap = GetMethod(handler, _ejs_atom_preventExtensions);
+
+    // 7. If trap is undefined, then
+    if (EJSVAL_IS_UNDEFINED(trap)) {
+        // a. Return target.[[PreventExtensions]]().
+        return OP(_target,PreventExtensions)(target);
+    }
+
+    // 8. Let booleanTrapResult be ToBoolean(Call(trap, handler, «target»)).
+    // 9. ReturnIfAbrupt(booleanTrapResult).
+    ejsval args[] = { target };
+    EJSBool booleanTrapResult = ToEJSBool(_ejs_invoke_closure(trap, handler, 2, args));
+
+    // 10. If booleanTrapResult is true, then
+    if (booleanTrapResult) {
+        // a. Let targetIsExtensible be target.[[IsExtensible]]().
+        // b. ReturnIfAbrupt(targetIsExtensible).
+        EJSBool targetIsExtensible = OP(_target,IsExtensible)(target);
+        // c. If targetIsExtensible is true, throw a TypeError exception.
+        if (targetIsExtensible)
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "extensible invariant mismatch in preventExtensions");
+    }
+    // 11. Return booleanTrapResult.
     return booleanTrapResult;
 }
 
@@ -722,7 +770,7 @@ EJS_DEFINE_CLASS(Proxy,
                  _ejs_proxy_specop_get_prototype_of,
                  _ejs_proxy_specop_set_prototype_of,
                  _ejs_proxy_specop_is_extensible,
-                 OP_INHERIT, // XXX [[PreventExtensions]]
+                 _ejs_proxy_specop_prevent_extensions,
                  _ejs_proxy_specop_get_own_property,
                  _ejs_proxy_specop_define_own_property,
                  _ejs_proxy_specop_has_property,
