@@ -57,7 +57,6 @@ $(call addExpectedFailure, typedarray6.js,          "we use %g to format floats/
 $(call addExpectedFailure, array19.js,              "we don't support property descriptors at all for array elements.  also needs more from ECMA262 15.4.5.1")
 $(call addExpectedFailure, fib1.js,                 "we don't output numbers correctly (integers with exponent <= 20 should print out normally)")
 $(call addExpectedFailure, const1.js,               "we permit assigning to const bindings")
-$(call addExpectedFailure, regexp5.js,              "we don't support for the y flag")
 $(call addExpectedFailure, number-toFixed1.js,      "not implemented fully yet")
 $(call addExpectedFailure, number-toPrecision1.js,  "not implemented fully yet")
 $(call addExpectedFailure, object7.js,              "we differ from node on property descriptor flags.  verify with spec")
