@@ -119,6 +119,11 @@ objectCreate_id         = b.identifier "%objectCreate"
 arrayFromRest_id        = b.identifier "%arrayFromRest"
 arrayFromSpread_id      = b.identifier "%arrayFromSpread"
 argPresent_id           = b.identifier "%argPresent"
+Object_id               = b.identifier "Object"
+defineProperty_id       = b.identifier "defineProperty"
+proto_id                = b.identifier "proto"
+value_id                = b.identifier "value"
+enumerable_id           = b.identifier "enumerable"
 
 class TransformPass extends TreeVisitor
         constructor: (@options) ->
@@ -299,16 +304,23 @@ DesugarClasses = class DesugarClasses extends TransformPass
                 b.methodDefinition(b.identifier('constructor'), b.functionExpression(null, [], functionBody, [], args_id));
                 
         create_proto_method: (ast_method, ast_class) ->
-                proto_member = b.memberExpression(b.identifier('proto'), (if ast_method.key.type is ComputedPropertyKey then ast_method.key.expression else ast_method.key), ast_method.key.type is ComputedPropertyKey)
-                
                 method = b.functionExpression(b.identifier("#{ast_class.id.name}:#{ast_method.key.name}"), ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest, ast_method.value.loc)
 
-                b.expressionStatement(b.assignmentExpression(proto_member, "=", method))
+                Object_defineProperty = b.memberExpression(Object_id, defineProperty_id)
+                method_key = if ast_method.key.type is ComputedPropertyKey then ast_method.key.expression else b.literal(ast_method.key.name)
+                defineProperty_args = b.objectExpression([b.property(value_id, method), b.property(enumerable_id, b.literal(false))])
+                
+                b.expressionStatement(b.callExpression(Object_defineProperty, [proto_id, method_key, defineProperty_args]))
 
         create_static_method: (ast_method, ast_class) ->
                 method = b.functionExpression(ast_method.key, ast_method.value.params, ast_method.value.body, ast_method.value.defaults, ast_method.value.rest, ast_method.value.loc)
 
-                b.expressionStatement(b.assignmentExpression(b.memberExpression(ast_class.id, (if ast_method.key.type is ComputedPropertyKey then ast_method.key.expression else ast_method.key), ast_method.key.type is ComputedPropertyKey), "=", method))
+                Object_defineProperty = b.memberExpression(Object_id, defineProperty_id)
+                method_key = if ast_method.key.type is ComputedPropertyKey then ast_method.key.expression else b.literal(ast_method.key.name)
+                defineProperty_args = b.objectExpression([b.property(value_id, method), b.property(enumerable_id, b.literal(false))])
+                
+                b.expressionStatement(b.callExpression(Object_defineProperty, [ast_class.id, method_key, defineProperty_args]))
+                
 
         create_properties: (properties, ast_class, are_static) ->
                 propdescs = []
