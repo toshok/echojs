@@ -203,6 +203,10 @@ EJS_ATOM(filter)
 EJS_ATOM(next)
 EJS_ATOM(done)
 
+// Generator methods
+EJS_ATOM(throw)
+EJS_ATOM(return)
+
 // Typed array method names
 EJS_ATOM(getInt8)
 EJS_ATOM(setInt8)

@@ -14,6 +14,7 @@ C_SOURCES= \
 	ejs-exception.c \
 	ejs-function.c \
 	ejs-gc.c \
+	ejs-generator.c \
 	ejs-init.c \
 	ejs-json.c \
 	ejs-map.c \

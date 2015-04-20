@@ -14,6 +14,7 @@
 #include "ejs-error.h"
 #include "ejs-exception.h"
 #include "ejs-function.h"
+#include "ejs-generator.h"
 #include "ejs-json.h"
 #include "ejs-math.h"
 #include "ejs-number.h"
@@ -124,6 +125,8 @@ _ejs_init_classes()
 
     _ejs_Class_initialize (&_ejs_DataView_specops, &_ejs_Object_specops);
 
+    _ejs_Class_initialize (&_ejs_Generator_specops, &_ejs_Object_specops);
+
 #if IOS
     _ejs_Class_initialize (&_ejs_WebGLRenderingContext_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_WebGLBuffer_specops, &_ejs_Object_specops);
@@ -188,6 +191,7 @@ _ejs_init(int argc, char** argv)
     _ejs_uri_init(_ejs_global);
 
     // ES6 bits
+    _ejs_generator_init(_ejs_global);
     _ejs_promise_init(_ejs_global);
     _ejs_proxy_init(_ejs_global);
     _ejs_map_init(_ejs_global);

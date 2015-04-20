@@ -253,6 +253,8 @@ class LLVMIRVisitor extends TreeVisitor
                         makeClosure:          value: @handleMakeClosure
                         makeClosureNoEnv:     value: @handleMakeClosureNoEnv
                         makeAnonClosure:      value: @handleMakeAnonClosure
+                        makeGenerator:        value: @handleMakeGenerator
+                        generatorYield:       value: @handleGeneratorYield
                         createArgScratchArea: value: @handleCreateArgScratchArea
                         makeClosureEnv:       value: @handleMakeClosureEnv
                         typeofIsObject:       value: @handleTypeofIsObject
@@ -2009,7 +2011,15 @@ class LLVMIRVisitor extends TreeVisitor
 
                 return ir.createSelect cmp, call_result, argv[@abi.this_param_index], "sel"
                         
-                        
+
+        handleMakeGenerator: (exp, opencode) ->
+                argv = @visitArgsForCall @ejs_runtime.make_generator, false, exp.arguments
+                @createCall @ejs_runtime.make_generator, argv, "generator"
+                
+        handleGeneratorYield: (exp, opencode) ->
+                argv = @visitArgsForCall @ejs_runtime.generator_yield, false, exp.arguments
+                @createCall @ejs_runtime.generator_yield, argv, "yield"
+                
         handleMakeClosure: (exp, opencode) ->
                 argv = @visitArgsForCall @ejs_runtime.make_closure, false, exp.arguments
                 @createCall @ejs_runtime.make_closure, argv, "closure_tmp"

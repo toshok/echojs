@@ -99,6 +99,8 @@ makeClosureEnv_id       = b.identifier "%makeClosureEnv"
 makeClosureNoEnv_id     = b.identifier "%makeClosureNoEnv"
 makeClosure_id          = b.identifier "%makeClosure"
 makeAnonClosure_id      = b.identifier "%makeAnonClosure"
+makeGenerator_id        = b.identifier "%makeGenerator"
+generatorYield_id       = b.identifier "%generatorYield"
 setSlot_id              = b.identifier "%setSlot"
 slot_id                 = b.identifier "%slot"
 invokeClosure_id        = b.identifier "%invokeClosure"
@@ -600,6 +602,45 @@ class HoistVars extends TransformPass
                 else
                         n = super
                 n
+
+# this pass converts all generator functions like this:
+#
+# function* foo() {
+#   yield 1;
+#   yield 2;
+#   yield 3;
+# }
+#
+# into this:
+#
+# function foo() {
+#   let %gen = %makeGenerator(function() {
+#     %generatorYield(%gen, 1);
+#     %generatorYield(%gen, 2);
+#     %generatorYield(%gen, 3);
+#   }
+#   return %gen;
+# }
+#
+DesugarGeneratorFunctions = class DesugarGeneratorFunctions extends TransformPass
+        constructor: ->
+                @genGen = startGenerator()
+                @mapping = []
+                
+        visitFunction: (n) ->
+                if n.generator
+                        @mapping.unshift b.identifier("%_gen_#{@genGen()}")
+                n = super n
+                if n.generator
+                        old_body = n.body
+                        n.body = b.blockStatement([b.letDeclaration(@mapping[0], intrinsic(makeGenerator_id, [b.arrowFunctionExpression([], old_body)])), b.returnStatement(@mapping[0])])
+                        n.generator = false
+                @mapping.shift()
+                n
+
+        visitYield: (n) ->
+                intrinsic(generatorYield_id, [@mapping[0], n.argument])
+                
 
 # this pass converts all arrow functions to normal anonymous function
 # expressions with a closed-over 'this'
@@ -1515,6 +1556,7 @@ passes = [
         DesugarDestructuring
         DesugarUpdateAssignments
         DesugarTemplates
+        DesugarGeneratorFunctions
         DesugarArrowFunctions
         DesugarDefaults
         DesugarRestParameters

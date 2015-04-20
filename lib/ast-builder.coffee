@@ -88,7 +88,7 @@ isnullableastarray = (n) ->
 
 exports.arrayExpression = (els = []) -> type: ArrayExpression, elements: els
 exports.arrayPattern
-exports.arrowFunctionExpression
+exports.arrowFunctionExpression = (params, body, defaults=[], rest=null, expression=false) -> type: ArrowFunctionExpression, params: params.map(isast), defaults: defaults.map(isast), rest: isnullableast(rest), body: isast(body), expression: expression
 exports.assignmentExpression = (l, op, r) -> type: AssignmentExpression, operator: op, left: isast(l), right: isast(r)
 exports.binaryExpression = (l, op, r) -> type: BinaryExpression, operator: op, left: isast(l), right: isast(r)
 exports.blockStatement = (stmts = []) -> type: BlockStatement, body: stmts.map(isast)
