@@ -238,6 +238,52 @@ _ejs_proxy_specop_set_prototype_of (ejsval O, ejsval V)
     return booleanTrapResult;
 }
 
+// es6 rev 38 04-16-2015
+// 9.3.8
+static EJSBool
+_ejs_proxy_specop_is_extensible(ejsval O)
+{
+    EJSProxy* proxy = EJSVAL_TO_PROXY(O);
+
+    // 1. Let handler be the value of the [[ProxyHandler]] internal slot of O.
+    ejsval handler = proxy->handler;
+
+    // 2. If handler is null, throw a TypeError exception.
+    if (EJSVAL_IS_NULL(handler))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "null ProxyHandler in isExtensible");
+
+    // 3. Assert: Type(handler) is Object.
+
+    // 4. Let target be the value of the [[ProxyTarget]] internal slot of O.
+    ejsval target = proxy->target;
+    EJSObject* _target = EJSVAL_TO_OBJECT(target);
+
+    // 5. Let trap be GetMethod(handler, "isExtensible").
+    // 6. ReturnIfAbrupt(trap).
+    ejsval trap = GetMethod(handler, _ejs_atom_isExtensible);
+
+    // 7. If trap is undefined, then
+    if (EJSVAL_IS_UNDEFINED(trap)) {
+        // a. Return target.[[IsExtensible]]().
+        return OP(_target,IsExtensible)(target);
+    }
+    // 8. Let booleanTrapResult be ToBoolean(Call(trap, handler, «target»)).
+    // 9. ReturnIfAbrupt(booleanTrapResult).
+    ejsval args[] = { target };
+    EJSBool booleanTrapResult = ToEJSBool(_ejs_invoke_closure(trap, handler, 2, args));
+
+    // 10. Let targetResult be target.[[IsExtensible]]().
+    // 11. ReturnIfAbrupt(targetResult).
+    EJSBool targetResult = EJS_OBJECT_IS_EXTENSIBLE(_target);
+
+    // 12. If SameValue(booleanTrapResult, targetResult) is false, throw a TypeError exception.
+    if (booleanTrapResult != targetResult)
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "return value mismatch in isExtensible");
+
+    // 13. Return booleanTrapResult.
+    return booleanTrapResult;
+}
+
 static ejsval
 _ejs_proxy_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
 {
@@ -675,7 +721,7 @@ _ejs_proxy_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 EJS_DEFINE_CLASS(Proxy,
                  _ejs_proxy_specop_get_prototype_of,
                  _ejs_proxy_specop_set_prototype_of,
-                 OP_INHERIT, // XXX [[IsExtensible]]
+                 _ejs_proxy_specop_is_extensible,
                  OP_INHERIT, // XXX [[PreventExtensions]]
                  _ejs_proxy_specop_get_own_property,
                  _ejs_proxy_specop_define_own_property,
