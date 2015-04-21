@@ -1910,6 +1910,9 @@ _ejs_string_init(ejsval global)
     ejsval _iterator = _ejs_function_new_native (_ejs_null, _ejs_Symbol_iterator, (EJSClosureFunc)_ejs_String_prototype_iterator);
     _ejs_object_define_value_property (_ejs_String_prototype, _ejs_Symbol_iterator, _iterator, EJS_PROP_NOT_ENUMERABLE);
 
+    _ejs_object_define_value_property (_ejs_String_prototype, _ejs_atom_constructor, _ejs_String,
+                                        EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
+
 #undef OBJ_METHOD
 #undef PROTO_METHOD
 
