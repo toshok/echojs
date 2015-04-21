@@ -77,6 +77,9 @@ $(call addExpectedFailure, array-subclassing2.js, "")
 $(call addExpectedFailure, array-subclassing3.js, "")
 $(call addExpectedFailure, array-subclassing4.js, "")
 
+$(call addExpectedFailure, number-subclassing1.js, "")
+$(call addExpectedFailure, set-subclassing1.js, "")
+$(call addExpectedFailure, string-subclassing1.js, "")
 
 $(call addExpectedFailure, object17.js, "")
 $(call addExpectedFailure, object18.js, "")
