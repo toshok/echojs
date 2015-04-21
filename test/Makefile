@@ -79,6 +79,8 @@ $(call addExpectedFailure, array-subclassing3.js, "")
 $(call addExpectedFailure, array-subclassing4.js, "")
 
 
+$(call addExpectedFailure, object17.js, "")
+
 TRACEUR_TESTS=
 $(call testAgainstTraceur, array-subclass1.js)
 $(call testAgainstTraceur, class3.js)
