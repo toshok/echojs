@@ -73,7 +73,6 @@ $(call addExpectedFailure, generator4.js, "")
 $(call addExpectedFailure, generator6.js, "")
 $(call addExpectedFailure, generator8.js, "")
 
-$(call addExpectedFailure, array-subclassing1.js, "")
 $(call addExpectedFailure, array-subclassing2.js, "")
 $(call addExpectedFailure, array-subclassing3.js, "")
 $(call addExpectedFailure, array-subclassing4.js, "")
