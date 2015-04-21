@@ -708,18 +708,40 @@ DesugarArrowFunctions = class DesugarArrowFunctions extends TransformPass
                                 # if we're already on top, just return the existing thisExpression
                                 return n if topfunc is m
 
-                                return b.identifier m.id if m.id?
+                                return b.identifier m.this_id if m.this_id?
 
-                                m.id = "_this_#{@thisGen()}"
+                                m.this_id = "_this_#{@thisGen()}"
 
-                                m.prepend = b.letDeclaration(b.identifier(m.id), b.thisExpression())
+                                m.prepend = b.letDeclaration(b.identifier(m.this_id), b.thisExpression())
                                 
-                                return b.identifier m.id
+                                return b.identifier m.this_id
 
                 reportError(SyntaxError, "no binding for 'this' available for arrow function", @filename, n.loc)
-        
+
+        visitIdentifier: (n) ->
+                return super(n) if n.name isnt "arguments"
+                
+                return b.undefined() if @mapping.length == 0
+
+                topfunc = @mapping[0].func
+
+                for m in @mapping
+                        if @definesThis m.func
+                                # if we're already on top, just return the existing thisExpression
+                                return n if topfunc is m
+
+                                return b.identifier m.arguments_id if m.arguments_id?
+
+                                m.arguments_id = "_arguments_#{@thisGen()}"
+
+                                m.prepend = b.letDeclaration(b.identifier(m.arguments_id), n)
+                                
+                                return b.identifier(m.arguments_id)
+
+                reportError(SyntaxError, "no binding for 'arguments' available for arrow function", @filename, n.loc)
+                                                
         visitFunction: (n) ->
-                @mapping.unshift { func: n, id: null }
+                @mapping.unshift { func: n, this_id: null, arguments_id: null }
                 n = super n
                 m = @mapping.shift()
                 if m.prepend?
@@ -1566,7 +1588,7 @@ class NewClosureConvert
 
         visit: (tree) ->
                 new_cc.Convert(@options, @filename, tree, @allModules)
-                
+
 passes = [
         DesugarImportExport
         DesugarClasses
