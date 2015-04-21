@@ -63,7 +63,6 @@ $(call addExpectedFailure, object7.js,              "we differ from node on prop
 $(call addExpectedFailure, object9.js,              "we differ from node on property descriptor flags.  verify with spec")
 $(call addExpectedFailure, symbol-object.js,        "")
 
-$(call addExpectedFailure, generator12.js, "")
 $(call addExpectedFailure, generator13.js, "")
 $(call addExpectedFailure, generator14.js, "")
 $(call addExpectedFailure, generator15.js, "")
