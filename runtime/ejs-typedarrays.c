@@ -1587,6 +1587,9 @@ _ejs_TypedArray_prototype_reduceRight (ejsval env, ejsval _this, uint32_t argc, 
     return accumulator;
 }
 
+// Rev 38 Final Draft, April 14, 2015
+// 22.1.3.20
+// Array.prototype.reverse ( )
 static ejsval
 _ejs_TypedArray_prototype_reverse (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
