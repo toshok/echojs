@@ -77,6 +77,32 @@ IsDetachedBuffer (ejsval arrayBuffer)
     return EJS_FALSE;
 }
 
+// Rev 38 Final Draft, April 14, 2015
+// 22.2.3.5.1
+// Runtime Semantics: ValidateTypedArray ( O )
+static ejsval
+ValidateTypedArray (ejsval O)
+{
+    /* 1. If Type(O) is not Object, throw a TypeError exception. */
+    if (!EJSVAL_IS_OBJECT(O))
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "Argument is not an Object");
+
+    /* 2. If O does not have a [[TypedArrayName]] internal slot, throw a TypeError exception. */
+    /* 3. If O does not have a [[ViewedArrayBuffer]] internal slot, throw a TypeError exception. */
+    if (!EJSVAL_IS_TYPEDARRAY(O))
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "Argument is not a typed array");
+
+    /* 4. Let buffer be the value of O’s [[ViewedArrayBuffer]] internal slot. */
+    EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
+    ejsval buffer = Oobj->buffer;
+
+    /* 5. If IsDetachedBuffer(buffer) is true, throw a TypeError exception. */
+    if (IsDetachedBuffer(buffer))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "typed array's buffer is detached");
+
+    return buffer;
+}
+
 ejsval
 _ejs_arraybuffer_new (int size)
 {
@@ -1562,6 +1588,68 @@ _ejs_TypedArray_prototype_reduceRight (ejsval env, ejsval _this, uint32_t argc, 
 }
 
 static ejsval
+_ejs_TypedArray_prototype_reverse (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    /*  ValidateTypedArray is applied to the this value prior to evaluating the algorithm. */
+    ValidateTypedArray(_this);
+
+    /* 1. Let O be ToObject(this value). */
+    /* 2. ReturnIfAbrupt(O). */
+    ejsval O = ToObject(_this);
+    EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
+
+    /* 3. Let len be ToLength(Get(O, "length")). */
+    /* 4. ReturnIfAbrupt(len). */
+    uint32_t len = Oobj->length;
+
+    /* 5. Let middle be floor(len/2). */
+    int32_t middle = (int) floor(len / 2);
+
+    /* 6. Let lower be 0. */
+    int32_t lower = 0;
+
+    /* 7. Repeat, while lower ≠ middle */
+    while (lower != middle) {
+        /* a. Let upper be len − lower − 1. */
+        int32_t upper = len - lower - 1;
+
+        /* b. Let upperP be ToString(upper). */
+        ejsval upperP = ToString(NUMBER_TO_EJSVAL(upper));
+
+        /* c. Let lowerP be ToString(lower). */
+        ejsval lowerP = ToString(NUMBER_TO_EJSVAL(lower));
+
+        /* d. Let lowerExists be HasProperty(O, lowerP). */
+        /* e. ReturnIfAbrupt(lowerExists). */
+        /* f. If lowerExists is true, then */
+        /*  i. Let lowerValue be Get(O, lowerP). */
+        /*  ii. ReturnIfAbrupt(lowerValue). */
+        ejsval lowerValue = Get(O, lowerP);
+
+        /* g. Let upperExists be HasProperty(O, upperP). */
+        /* h. ReturnIfAbrupt(upperExists). */
+        /* i. If upperExists is true, then */
+        /*  i. Let upperValue be Get(O, upper). */
+        /*  ii. ReturnIfAbrupt(upperValue). */
+        ejsval upperValue = Get(O, upperP);
+
+        /* j. If lowerExists is true and upperExists is true, then */
+        /*  i. Let setStatus be Set(O, lowerP, upperValue, true). */
+        /*  ii. ReturnIfAbrupt(setStatus). */
+        /*  iii. Let setStatus be Set(O, upperP, lowerValue, true). */
+        /*  iv. ReturnIfAbrupt(setStatus). */
+        Put(O, lowerP, upperValue, EJS_TRUE);
+        Put(O, upperP, lowerValue, EJS_TRUE);
+
+        /* n. Increase lower by 1. */
+        lower++;
+    }
+
+    /* 8. Return O . */
+    return O;
+}
+
+static ejsval
 _ejs_TypedArray_prototype_some (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval callbackfn = _ejs_undefined;
@@ -1832,6 +1920,7 @@ _ejs_typedarrays_init(ejsval global)
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, lastIndexOf);           \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, reduce);                \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, reduceRight);           \
+    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, reverse);               \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, some);                  \
     PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, toString);              \
                                                                         \
