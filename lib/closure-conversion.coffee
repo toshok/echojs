@@ -706,7 +706,7 @@ DesugarArrowFunctions = class DesugarArrowFunctions extends TransformPass
                 for m in @mapping
                         if @definesThis m.func
                                 # if we're already on top, just return the existing thisExpression
-                                return n if topfunc is m
+                                return n if topfunc is m.func
 
                                 return b.identifier m.this_id if m.this_id?
 
@@ -728,7 +728,7 @@ DesugarArrowFunctions = class DesugarArrowFunctions extends TransformPass
                 for m in @mapping
                         if @definesThis m.func
                                 # if we're already on top, just return the existing thisExpression
-                                return n if topfunc is m
+                                return n if topfunc is m.func
 
                                 return b.identifier m.arguments_id if m.arguments_id?
 
