@@ -119,13 +119,19 @@ void
 _ejs_generator_init(ejsval global)
 {
     _ejs_gc_add_root (&_ejs_Generator_prototype);
-    _ejs_Generator_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Generator_specops);
+    _ejs_Generator_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops); // XXX
 
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Generator_prototype, x, _ejs_Generator_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
 
     PROTO_METHOD(next);
     PROTO_METHOD(return);
     PROTO_METHOD(throw);
+}
+
+static EJSObject*
+_ejs_generator_specop_allocate()
+{
+    return (EJSObject*)_ejs_gc_new (EJSGenerator);
 }
 
 static void
@@ -176,7 +182,7 @@ EJS_DEFINE_CLASS(Generator,
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
-                 OP_INHERIT, // allocate.  shouldn't ever be used
+                 _ejs_generator_specop_allocate,
                  _ejs_generator_specop_finalize,
                  _ejs_generator_specop_scan
                  )
