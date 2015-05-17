@@ -164,6 +164,9 @@ void* _ejs_arraybuffer_get_data(EJSObject* arr);
 void* _ejs_typedarray_get_data(EJSObject* arr);
 void* _ejs_dataview_get_data(EJSObject* view);
 
+ejsval _ejs_typedarray_get_at(EJSObject* arr, int index);
+void _ejs_typedarray_set_at(EJSObject* arr, int index, ejsval value);
+
 ejsval _ejs_typedarray_new (EJSTypedArrayType element_type, uint32_t length);
 ejsval _ejs_typedarray_new_from_array (EJSTypedArrayType element_type, ejsval arrayObj);
 
