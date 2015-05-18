@@ -58,7 +58,7 @@ namespace ejsllvm {
     {
         std::string str;
         llvm::raw_string_ostream str_ostream(str);
-        ((Switch*)EJSVAL_TO_OBJECT(_this))->llvm_switch->print(str_ostream, NULL);
+        ((Switch*)EJSVAL_TO_OBJECT(_this))->llvm_switch->print(str_ostream);
 
         return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
     }

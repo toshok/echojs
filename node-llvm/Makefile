@@ -14,18 +14,12 @@ LLVM_DEFINES    := $(subst -D,,$(LLVM_DEFINES))
 
 LLVM_LINKFLAGS  := $(shell $(LLVM_CONFIG) --ldflags --libs)
 
-ifneq ($(TRAVIS_BUILD_NUMBER),)
-# travis-ci osx machines are 10.8.5, so fix our min version there
-MIN_OSX_VERSION=10.8
-else
-# otherwise use latest, but give the user the opportunity to override
 MIN_OSX_VERSION?=10.9
-endif
 
 all-local:: build
 
 build: configure
-	@LLVM_CXXFLAGS="$(LLVM_CXXFLAGS)" LLVM_INCLUDEDIR="$(LLVM_INCLUDEDIR)" LLVM_LINKFLAGS="$(LLVM_LINKFLAGS)" LLVM_DEFINES="$(LLVM_DEFINES)" MIN_OSX_VERSION="$(MIN_OSX_VERSION)" node-gyp build
+	@LLVM_CXXFLAGS="$(LLVM_CXXFLAGS)" LLVM_INCLUDEDIR="$(LLVM_INCLUDEDIR)" LLVM_LINKFLAGS="$(LLVM_LINKFLAGS)" LLVM_DEFINES="$(LLVM_DEFINES)" MIN_OSX_VERSION="$(MIN_OSX_VERSION)" V=1 node-gyp build
 
 configure:
 	@LLVM_CXXFLAGS="$(LLVM_CXXFLAGS)" LLVM_INCLUDEDIR="$(LLVM_INCLUDEDIR)" LLVM_LINKFLAGS="$(LLVM_LINKFLAGS)" LLVM_DEFINES="$(LLVM_DEFINES)" MIN_OSX_VERSION="$(MIN_OSX_VERSION)" node-gyp configure

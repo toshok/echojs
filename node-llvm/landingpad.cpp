@@ -90,7 +90,7 @@ namespace jsllvm {
     HandleScope scope;
     LandingPad* landing_pad = ObjectWrap::Unwrap<LandingPad>(args.This());
     REQ_LLVM_VAL_ARG(0, clause_val);
-    landing_pad->llvm_landing_pad->addClause(clause_val);
+    landing_pad->llvm_landing_pad->addClause(llvm::cast<llvm::Constant>(clause_val));
     return scope.Close(Undefined());
   }
 

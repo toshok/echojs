@@ -56,7 +56,7 @@ namespace ejsllvm {
     {
         std::string str;
         llvm::raw_string_ostream str_ostream(str);
-        ((Call*)EJSVAL_TO_OBJECT(_this))->llvm_call->print(str_ostream, NULL);
+        ((Call*)EJSVAL_TO_OBJECT(_this))->llvm_call->print(str_ostream);
 
         return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
     }
@@ -177,7 +177,7 @@ namespace ejsllvm {
     {
         std::string str;
         llvm::raw_string_ostream str_ostream(str);
-        ((Invoke*)EJSVAL_TO_OBJECT(_this))->llvm_invoke->print(str_ostream, NULL);
+        ((Invoke*)EJSVAL_TO_OBJECT(_this))->llvm_invoke->print(str_ostream);
 
         return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
     }

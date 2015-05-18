@@ -1,3 +1,5 @@
+#if notyet
+
 #include "node-llvm.h"
 #include "dibuilder.h"
 #include "function.h"
@@ -597,3 +599,5 @@ namespace jsllvm {
   Persistent<v8::Function> DebugLoc::s_func;
 
 };
+
+#endif

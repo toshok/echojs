@@ -234,8 +234,8 @@ namespace jsllvm {
 
     REQ_UTF8_ARG(0, path);
 
-    std::string error;
-    llvm::raw_fd_ostream OS(*path, error, llvm::sys::fs::F_Binary);
+    std::error_code error;
+    llvm::raw_fd_ostream OS(*path, error, llvm::sys::fs::OpenFlags::F_None);
     // check error
 
 

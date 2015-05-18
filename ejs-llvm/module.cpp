@@ -245,8 +245,8 @@ namespace ejsllvm {
 
         REQ_UTF8_ARG(0, path);
 
-        std::string error;
-        llvm::raw_fd_ostream OS(path.c_str(), error, llvm::sys::fs::F_Binary);
+        std::error_code error;
+        llvm::raw_fd_ostream OS(path.c_str(), error, llvm::sys::fs::OpenFlags::F_None);
         // check error
 
         llvm::WriteBitcodeToFile (module->llvm_module, OS);
