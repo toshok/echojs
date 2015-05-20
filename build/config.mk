@@ -9,7 +9,7 @@ $(TOP)/build/host-config.mk:
 
 -include $(TOP)/build/host-config.mk
 
-LLVM_SUFFIX?=-3.4
+LLVM_SUFFIX?=-3.6
 
 # we don't care about the version here
 HOST_OS:=$(patsubst darwin%,darwin,$(HOST_OS))
@@ -39,7 +39,7 @@ CFLAGS=-g -O2 -Wall -I. -Wno-unused-function
 MIN_IOS_VERSION=8.0
 
 DEVELOPER_ROOT?=/Applications/Xcode.app/Contents/Developer
-IOS_SDK_VERSION?=8.2
+IOS_SDK_VERSION?=8.3
 
 ifeq ($(HOST_CPU),x86_64)
 LINUX_ARCH=-arch x86_64

@@ -47,7 +47,7 @@ namespace ejsllvm {
     {
         std::string str;
         llvm::raw_string_ostream str_ostream(str);
-        ((AllocaInst*)EJSVAL_TO_OBJECT(_this))->llvm_alloca->print(str_ostream, NULL);
+        ((AllocaInst*)EJSVAL_TO_OBJECT(_this))->llvm_alloca->print(str_ostream);
 
         return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
     }

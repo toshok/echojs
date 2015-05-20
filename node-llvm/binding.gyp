@@ -9,7 +9,10 @@
 	    "libraries": ['<!@(echo $LLVM_LINKFLAGS)']
 	},
 	"xcode_settings": {
-	        'MACOSX_DEPLOYMENT_TARGET': "<!(echo $MIN_OSX_VERSION)"
+	        'MACOSX_DEPLOYMENT_TARGET': "<!(echo $MIN_OSX_VERSION)",
+		'OTHER_CFLAGS': [
+			'-std=c++11'
+		],
 	}
     }]
 } 

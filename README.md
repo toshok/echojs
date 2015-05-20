@@ -1,6 +1,7 @@
 EchoJS - an ahead of time compiler and runtime for EcmaScript
 =============================================================
 
+[![Build Status](https://travis-ci.org/toshok/echojs.svg?branch=master)](https://travis-ci.org/toshok/echojs)
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/toshok/echojs?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 Building EchoJS
@@ -11,7 +12,7 @@ Things only build reliably on OSX.  I have easy access to other platforms, I jus
 You'll need a couple of external dependencies to get things running:
 
 1. node.js
-2. llvm 3.4
+2. llvm 3.6
 3. coffeescript
 
 The following commands should get you from 0 to echo-js built:
@@ -19,10 +20,9 @@ The following commands should get you from 0 to echo-js built:
 ```sh
 $ brew tap homebrew/versions  # so we can get the specific version of llvm below
 $ brew install node
-$ brew install llvm34 --all-targets
+$ brew install llvm
 $ npm install -g coffee-script
 $ npm install -g node-gyp
-$ export LLVM_SUFFIX=3.4      # see below
 $ export MIN_OSX_VERSION=10.8 # only if you're running 10.8, see below
 $ cd echo-js
 $ git submodule init
@@ -30,15 +30,12 @@ $ git submodule update
 $ make
 ```
 
-The environment variable `LLVM_SUFFIX` is used since homebrew installs the llvm34 executables as, e.g. `llvm-config-3.4` instead of `llvm-config`.  If you're using llvm 3.4 built from source, you can leave the variable unset.
+The environment variable `LLVM_SUFFIX` can be set and its value will be appended to the names of all llvm executables (e.g. `llvm-config-3.6` instead of `llvm-config`.)  use this if you have a different build of
+llvm you want to use.  Homebrew installs llvm 3.6 executables without the suffix, so you can leave this blank.
 
-As for `MIN_OSX_VERSION`: homebrew's formula for llvm34 doesn't specify a `-mmacosx-version-min=` flag, so it builds to whatever you have on your machine.  Node.js's gyp support in node-gyp, however, *does* put a `-mmacosx-version-min=10.5` flag.  A mismatch here causes the node-llvm binding to allocate llvm types using incorrect size calculations, and causes all manner of memory corruption.  If you're either running 10.5 or 10.9, you can leave the variable unset.  Otherwise, set it to the version of OSX you're running.  Hopefully some discussion with the homebrew folks will get this fixed upstream.
+As for `MIN_OSX_VERSION`: homebrew's formula for llvm (3.4, at least.  haven't verified with 3.6) doesn't specify a `-mmacosx-version-min=` flag, so it builds to whatever you have on your machine.  Node.js's gyp support in node-gyp, however, *does* put a `-mmacosx-version-min=10.5` flag.  A mismatch here causes the node-llvm binding to allocate llvm types using incorrect size calculations, and causes all manner of memory corruption.  If you're either running 10.5 or 10.9, you can leave the variable unset.  Otherwise, set it to the version of OSX you're running.  Hopefully some discussion with the homebrew folks will get this fixed upstream.
 
-both of these variable assignments can be placed in `echo-js/build/config-local.mk`.  I'm running mavericks locally, so my config-local.mk is as follows:
-
-```
-LLVM_SUFFIX=-3.4
-```
+both of these variable assignments can be placed in `echo-js/build/config-local.mk`.
 
 
 But... Why?

@@ -9,7 +9,7 @@ all-local:: ensure-submodules
 
 NODE_PATH=$(TOP)/node-llvm/build/Release:$(TOP)/lib/generated:$(TOP)/esprima:$(TOP)/escodegen:$(TOP)/estraverse
 
-all-hook:: bootstrap
+all-hook:: stage1
 
 install-local::
 	@$(MKDIR) $(bindir)
@@ -42,7 +42,7 @@ dist-hook:: ensure-submodules
 	@ls -l $(DISTROOT)/$(TARFILE)
 
 check:
-	EJS_DRIVER="$(TOP)/ejs.exe -q --srcdir" $(MAKE) -C test check
+	EJS_STAGE=0 EJS_DRIVER="$(TOP)/ejs.exe -q --srcdir" $(MAKE) -C test check
 
 bootstrap: stage3
 

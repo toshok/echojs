@@ -36,6 +36,10 @@ LLVM_DEFINES    := $(subst -I$(LLVM_INCLUDEDIR),,$(LLVM_CPPFLAGS))
 
 LLVM_LINK_FLAGS := $(shell $(LLVM_CONFIG) --ldflags) $(shell $(LLVM_CONFIG) --libs)
 
+ifeq ($(HOST_OS),darwin)
+LLVM_LINK_FLAGS := $(LLVM_LINK_FLAGS) -lcurses
+endif
+
 CXXFLAGS=-I../runtime -I$(LLVM_INCLUDEDIR) $(LLVM_CXXFLAGS) $(OSX_CFLAGS)
 
 OBJECTS=$(SOURCES:%.cpp=%.o)
@@ -53,7 +57,7 @@ $(OBJECTS): %.o: %.cpp
 	@echo [$(CXX)] $< && $(CXX) $(CXXFLAGS) -c $< -o $@
 
 ejs-llvm.ejs: ejs-llvm.ejs.in
-	@echo [gen] $@ && sed -e "s,@EJS_VERSION@,$(PRODUCT_VERSION)," -e "s,@LLVM_LINK_FLAGS@,$(LLVM_LINK_FLAGS)," $< > $@
+	@echo [gen] $@ && sed -e "s%@EJS_VERSION@%$(PRODUCT_VERSION)%" -e "s%@LLVM_LINK_FLAGS@%$(LLVM_LINK_FLAGS)%" $< > $@
 
 install-local::
 	@$(MKDIR) $(libdir)

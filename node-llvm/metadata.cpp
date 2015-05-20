@@ -1,3 +1,5 @@
+#if notyet
+
 #include "node-llvm.h"
 #include "metadata.h"
 #include "function.h"
@@ -131,3 +133,5 @@ namespace jsllvm {
   Persistent<v8::Function> MDString::s_func;
 
 };
+
+#endif

@@ -84,6 +84,9 @@ $(call addExpectedFailure, string-subclassing1.js, "")
 $(call addExpectedFailure, object17.js, "")
 $(call addExpectedFailure, object18.js, "")
 
+$(call addExpectedFailure, math1.js, "")
+$(call addExpectedFailure, math2.js, "")
+
 TRACEUR_TESTS=
 $(call testAgainstTraceur, array-subclass1.js)
 $(call testAgainstTraceur, class3.js)
@@ -122,7 +125,7 @@ check-unit-tests: check-llvm check-set
 build-tests: $(patsubst %.js,%.js.exe,$(TESTS))
 
 build-tests-stage1:
-	@$(MAKE) EJS_DRIVER="$(TOPDIR)/ejs.js.exe" EJS_STAGE=1 build-tests
+	@$(MAKE) EJS_DRIVER="$(TOPDIR)/ejs.exe" EJS_STAGE=1 build-tests
 
 check-llvm:
 	mocha llvm-test.js
@@ -133,7 +136,7 @@ check-set:
 run-tests: clean-results generate-expected prepare-xfail $(patsubst %.js,test-%,$(TESTS)) format-results
 
 run-tests-stage1:
-	@$(MAKE) EJS_DRIVER="$(TOPDIR)/ejs.js.exe" EJS_STAGE=1 run-tests
+	@$(MAKE) EJS_DRIVER="$(TOPDIR)/ejs.exe" EJS_STAGE=1 run-tests
 
 clean-results:
 	@rm -f .successes .failures .xfail .xsuccess .expected-failures

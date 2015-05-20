@@ -2729,11 +2729,11 @@ gatherAllNativeModules = (module_dirs) ->
                         #console.log e
                         # nothing to do
 
-exports.gatherAllModules = (initial_file_list, options) ->
-        work_list = initial_file_list.slice()
+exports.gatherAllModules = (file_args, options) ->
+        work_list = file_args.slice()
         files = []
 
-        gatherAllNativeModules(options.native_module_dirs.concat("/usr/local/lib/ejs")) # XXX
+        gatherAllNativeModules(options.native_module_dirs)
         
         while work_list.length isnt 0
                 file = work_list.pop()
@@ -2752,7 +2752,7 @@ exports.gatherAllModules = (initial_file_list, options) ->
                         try
                                 if fs.statSync(file).isDirectory()
                                         jsfile = path.join(file, "index.js")
-                                        is_file = fs.statSync(jsfile).isFile()
+                                        found = fs.statSync(jsfile).isFile()
                         catch
                                 found = false
 
