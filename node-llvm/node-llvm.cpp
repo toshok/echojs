@@ -60,7 +60,7 @@ extern "C" {
 #if notyet
     jsllvm::MDNode::Init(target);
     jsllvm::MDString::Init(target);
-
+#endif
     jsllvm::DIBuilder::Init(target);
     jsllvm::DIDescriptor::Init(target);
     jsllvm::DIType::Init(target);
@@ -69,7 +69,6 @@ extern "C" {
     jsllvm::DIFile::Init(target);
     jsllvm::DILexicalBlock::Init(target);
     jsllvm::DebugLoc::Init(target);
-#endif
   }
 
   NODE_MODULE(llvm, init);
