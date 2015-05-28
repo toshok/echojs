@@ -89,6 +89,8 @@ let host_platform = os.platform();
 
 let options = {
     // our defaults:
+    opt_level: 2,
+    debug: false,
     debug_level: 0,
     debug_passes: new Set(),
     warn_on_undeclared: false,
@@ -177,6 +179,26 @@ function add_import_variable (arg) {
 }
 
 let args = {
+    "-O0": {
+        handler: () => options.opt_level = 0,
+        help:    "Optimization level 0."
+    },
+    "-O1": {
+        handler: () => options.opt_level = 1,
+        help:    "Optimization level 1. Similar to clang -O1"
+    },
+    "-O2": {
+        handler: () => options.opt_level = 2,
+        help:    "Optimization level 2. Similar to clang -O2 (default)"
+    },
+    "-O3": {
+        handler: () => options.opt_level = 3,
+        help:    "Optimization level 3. Similar to clang -O3"
+    },
+    "-g": {
+        flag:    "debug",
+        help:    "enable debugging of generated code"
+    },
     "-q": {
         flag:    "quiet",
         help:    "don't output anything during compilation except errors."
@@ -450,8 +472,11 @@ function compileFile(filename, parse_tree, modules, compileCallback) {
     temp_files.push(ll_filename, bc_filename, ll_opt_filename, o_filename);
     
     let llvm_as_args = [`-o=${bc_filename}`, ll_filename];
-    let opt_args     = ["-O2", "-strip-dead-prototypes", "-S", `-o=${ll_opt_filename}`, bc_filename];
+    let opt_args     = ["-strip-dead-prototypes", "-S", `-o=${ll_opt_filename}`, bc_filename];
     let llc_args     = target_llc_args(options.target_platform,options.target_arch).concat(["-filetype=obj", `-o=${o_filename}`, ll_opt_filename]);
+
+    if (options.opt_level > 0)
+        opt_args.unshift(`-O${options.opt_level}`);
 
     debug.log (1, `writing ${ll_filename}`);
     compiled_module.writeToFile(ll_filename);
