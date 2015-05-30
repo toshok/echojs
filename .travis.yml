@@ -26,5 +26,6 @@ script:
   - touch test/expected/*.expected-out
   - EJS_STAGE=0 EJS_DRIVER="`pwd`/ejs -q --srcdir" make -C test check
   - if test -f test/.failures -o -f test/.xsuccess; then exit -1; fi
+  - make -C test clean
   - EJS_STAGE=1 EJS_DRIVER="`pwd`/ejs.exe -q --srcdir" make -C test check
   - if test -f test/.failures -o -f test/.xsuccess; then exit -1; fi
