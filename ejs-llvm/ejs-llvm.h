@@ -14,6 +14,7 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/DIBuilder.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/raw_os_ostream.h"
 #include "llvm/Support/raw_ostream.h"
@@ -112,6 +113,26 @@
   if (argc <= (I) /* || !args[I]->IsObject() || !jsllvm::Function::HasInstance(args[I]) */) \
     abort();								\
   ::llvm::Function* VAR = Function_GetLLVMObj(args[I]);
+
+#define REQ_LLVM_DIFILE_ARG(I, VAR)					\
+  if (argc <= (I) /* || !args[I]->IsObject() || !jsllvm::DIFile::HasInstance(args[I]) */) \
+    abort();								\
+  ::llvm::DIFile VAR = DIFile_GetLLVMObj(args[I]);
+
+#define REQ_LLVM_DISCOPE_ARG(I, VAR)					\
+  if (argc <= (I) /* || !args[I]->IsObject() || !jsllvm::DIFile::HasInstance(args[I]) */) \
+    abort();								\
+  ::llvm::DIScope VAR = DIScope_GetLLVMObj(args[I]);
+
+#define REQ_LLVM_DEBUGLOC_ARG(I, VAR)					\
+  if (argc <= (I) /* || !args[I]->IsObject() || !jsllvm::DIFile::HasInstance(args[I]) */) \
+    abort();								\
+  ::llvm::DebugLoc VAR = DebugLoc_GetLLVMObj(args[I]);
+
+#define REQ_LLVM_MDNODE_ARG(I, VAR)					\
+  if (argc <= (I) /* || !args[I]->IsObject() || !jsllvm::DIFile::HasInstance(args[I]) */) \
+    abort();								\
+  ::llvm::MDNode* VAR = MDNode_GetLLVMObj(args[I]);
 
 extern std::string& trim(std::string& str);
 
