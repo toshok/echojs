@@ -21,6 +21,7 @@ The following commands should get you from 0 to echo-js built:
 $ brew tap homebrew/versions  # so we can get the specific version of llvm below
 $ brew install node
 $ brew install llvm
+$ export PATH=/usr/local/opt/llvm/bin:$PATH
 $ npm install -g coffee-script
 $ npm install -g node-gyp
 $ export MIN_OSX_VERSION=10.8 # only if you're running 10.8, see below
