@@ -178,7 +178,7 @@ compile-tests: $(patsubst %.js,%.js.exe,$(TESTS))
 
 test-%: .%.js.ejs-out expected/%.js.expected-out
 	-@test_js=`echo $@|sed -e s,test-,,`.js; \
-	if [ -z "$V" ]; then /bin/echo -n [stage$(EJS_STAGE)] $$test_js; else echo $(EJS_DRIVER) $$test_js; fi; \
+	if [ -z "$V" ]; then /bin/echo -n [stage$(EJS_STAGE)] $$test_js; else echo $(EJS_DRIVER) $(EJS_DRIVER_ARGS) $$test_js; fi; \
 	if cmp -s .$$test_js.ejs-out expected/$$test_js.expected-out ; then \
 		if grep -e ^$$test_js .expected-failures /dev/null 2>&1; then \
 			echo "   \033[33mXSUCCESS\033[0m"; \
@@ -221,16 +221,17 @@ $(ESPRIMA_TESTS): %.js.exe: %.js $(TOPDIR)/esprima/esprima-es6.js $(TOPDIR)/esco
 	@cp $(TOPDIR)/esprima/esprima-es6.js .
 	@cp $(TOPDIR)/escodegen/escodegen-es6.js .
 	@cp $(TOPDIR)/estraverse/estraverse-es6.js .
-	@echo [ejs stage$(EJS_STAGE)] $< && $(EJS_DRIVER) --leave-temp $<
+	@echo [ejs stage$(EJS_STAGE)] $< && $(EJS_DRIVER) $(EJS_DRIVER_ARGS)
 
 clean-esprima-roundtrip:
 	@rm -f esprima-es6.js escodegen-es6.js estraverse-es6.js
 
-EJS_DRIVER ?= NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --leave-temp -q
+EJS_DRIVER_ARGS ?= --leave-temp -q
+EJS_DRIVER ?= NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs
 EJS_STAGE ?= 0
 
 %.js.exe: %.js $(TOPDIR)/runtime/libecho.a
-	@$(EJS_DRIVER) --srcdir $(MODULE_DIRS) $< 
+	@$(EJS_DRIVER) $(EJS_DRIVER_ARGS) --srcdir $(MODULE_DIRS) $< 
 
 v8-%.js.exe: v8/%.js $(TOPDIR)/runtime/libecho.a
 	NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --srcdir $(MODULE_DIRS) $<
@@ -250,9 +251,9 @@ clean-local:: clean-results clean-esprima-roundtrip
 
 compare-%:
 	-@test_js=`echo $@|sed -e s,compare-,,`.js; \
-	$(TOPDIR)/ejs.js.exe.stage0 --leave-temp $$test_js; \
+	$(TOPDIR)/ejs.js.exe.stage0 $(EJS_DRIVER_ARGS) $$test_js; \
 	mv /tmp/$$test_js.1.ll $$test_js.ll.stage0; \
-	$(TOPDIR)/ejs.js.exe.stage1 --leave-temp $$test_js; \
+	$(TOPDIR)/ejs.js.exe.stage1 $(EJS_DRIVER_ARGS) $$test_js; \
 	mv /tmp/$$test_js.1.ll $$test_js.ll.stage1; \
 	diff -us $$test_js.ll.stage0 $$test_js.ll.stage1; \
 	rm $$test_js.ll.stage0 $$test_js.ll.stage1
