@@ -221,7 +221,7 @@ $(ESPRIMA_TESTS): %.js.exe: %.js $(TOPDIR)/esprima/esprima-es6.js $(TOPDIR)/esco
 	@cp $(TOPDIR)/esprima/esprima-es6.js .
 	@cp $(TOPDIR)/escodegen/escodegen-es6.js .
 	@cp $(TOPDIR)/estraverse/estraverse-es6.js .
-	@echo [ejs stage$(EJS_STAGE)] $< && $(EJS_DRIVER) $(EJS_DRIVER_ARGS)
+	@echo [ejs stage$(EJS_STAGE)] $< && $(EJS_DRIVER) $(EJS_DRIVER_ARGS) $<
 
 clean-esprima-roundtrip:
 	@rm -f esprima-es6.js escodegen-es6.js estraverse-es6.js
