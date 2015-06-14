@@ -1435,7 +1435,7 @@ JSMETHOD (texImage2D) {
 						       8, //CGImageGetBitsPerComponent(cgimage),
 						       width * 4, //CGImageGetBytesPerRow(cgimage),
 						       CGColorSpaceCreateDeviceRGB(),//CGImageGetColorSpace(cgimage),
-						       format == GL_RGBA ? kCGImageAlphaPremultipliedLast : kCGImageAlphaNoneSkipLast); //CGImageGetBitmapInfo(cgimage));
+                               format == GL_RGBA ? (CGBitmapInfo)kCGImageAlphaPremultipliedLast : (CGBitmapInfo)kCGImageAlphaNoneSkipLast); //CGImageGetBitmapInfo(cgimage));
         
         
 		if (unpack_flip_y) {

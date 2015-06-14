@@ -267,7 +267,7 @@ int64_t ToInteger(ejsval exp)
         return number;
     /* 4. Return the result of computing sign(number) * floor(abs(number) */
     int sign = number < 0 ? -1 : 1;
-    return (int64_t)(sign * floor(abs(number)));
+    return (int64_t)(sign * floor(fabs(number)));
 }
 
 // ES6: 7.1.5
@@ -285,7 +285,7 @@ int32_t ToInt32(ejsval argument)
 
     // 4. Let int be sign(number) * floor(abs(number)).
     int sign = number < 0 ? -1 : 1;
-    int64_t i = (int64_t)(sign * floor(abs(number)));
+    int64_t i = (int64_t)(sign * floor(fabs(number)));
 
     // 5. Let int32bit be int modulo 2^32.
     int64_t int32bit = i % (1LL<<32);

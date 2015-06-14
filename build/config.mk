@@ -34,7 +34,7 @@ MKDIR=mkdir -p
 INSTALL=install
 CP=cp
 
-CFLAGS=-g -O2 -Wall -I. -Wno-unused-function
+CFLAGS=-g -O2 -Wall -I. -Wno-unused-function -Wno-gnu-statement-expression -Wno-c99-extensions -Wno-unused-variable
 
 MIN_IOS_VERSION=8.0
 
