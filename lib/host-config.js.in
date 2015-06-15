@@ -1,1 +1,1 @@
-exports.LLVM_SUFFIX = '@LLVM_SUFFIX@';
+export let LLVM_SUFFIX = '@LLVM_SUFFIX@';

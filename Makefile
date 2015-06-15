@@ -5,9 +5,9 @@ include $(TOP)/build/config.mk
 SUBDIRS=external-deps node-compat node-llvm ejs-llvm lib runtime
 
 # run git submodule magic if somebody is antsy and doesn't type the magic incantation before typing make
-all-local:: ensure-submodules
+all-local:: ensure-npmmodules ensure-submodules
 
-NODE_PATH=$(TOP)/node-llvm/build/Release:$(TOP)/lib/generated:$(TOP)/esprima:$(TOP)/escodegen:$(TOP)/estraverse
+NODE_PATH?=$(shell $(MAKE) -C test node-path)
 
 all-hook:: stage1
 
@@ -48,6 +48,9 @@ bootstrap: stage3
 
 MODULE_DIRS = --moduledir $(TOP)/node-compat --moduledir $(TOP)/ejs-llvm
 
+make_in_lib:
+	@$(MAKE) -C lib
+
 stage1: ejs-es6.js.exe.stage1
 	@cp ejs-es6.js.exe.stage1 ejs.exe
 	@ls -l ejs.exe
@@ -63,7 +66,7 @@ stage3: ejs-es6.js.exe.stage3
 	@ls -l ejs.exe
 	@echo DONE
 
-ejs-es6.js.exe.stage1:
+ejs-es6.js.exe.stage1: make_in_lib
 	@echo Building stage 1
 	@NODE_PATH="$(NODE_PATH)" time ./ejs --srcdir --leave-temp $(MODULE_DIRS) ejs-es6.js
 	@mv ejs-es6.js.exe ejs-es6.js.exe.stage1
@@ -89,5 +92,8 @@ ensure-submodules:
 	  git submodule init; \
 	  git submodule update; \
 	fi
+
+ensure-npmmodules:
+	npm install
 
 include $(TOP)/build/build.mk

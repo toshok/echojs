@@ -6,3 +6,4 @@
 #brew unlink node
 #brew switch node 0.10.25
 npm install -g node-gyp
+npm install -g babel

@@ -16,15 +16,25 @@ import { dumpModules, getAllModules, gatherAllModules } from './lib/passes/gathe
 
 import { bold, reset, genFreshFileName } from './lib/echo-util';
 
-import { LLVM_SUFFIX as DEFAULT_LLVM_SUFFIX} from './lib/host-config-es6';
+import { LLVM_SUFFIX as DEFAULT_LLVM_SUFFIX} from './lib/host-config';
 
-// argv is [".../ejs", ...], so get rid of the ejs
-let argv = process.argv.slice(1);
+function isNode() {
+    return typeof __ejs == 'undefined';
+}
+
+let argv;
+if (!isNode()) {
+    // argv is [".../ejs", ...], get rid of the first arg
+    argv = process.argv.slice(1);
+} else {
+    // argv is ["node", ".../ejs-es6.js", ...], get rid of the first two args
+    argv = process.argv.slice(2);
+}
 
 let ejs_dirname;
 function ejs_exe_dirname() {
     if (ejs_dirname) return ejs_dirname;
-    let argv0 = process.argv[0];
+    let argv0 = process.argv[isNode() ? 1 : 0];
     let cwd = process.cwd();
 
     let full_path_to_exe;
@@ -60,6 +70,9 @@ function ejs_exe_dirname() {
 }
 
 function relative_to_ejs_exe(n) {
+    if (isNode()) {
+        return path.resolve(ejs_exe_dirname(), "../..", n);
+    }
     return path.resolve(ejs_exe_dirname(), n);
 }
 
@@ -408,7 +421,7 @@ let llvm_commands = {};
 for (let x of ["opt", "llc", "llvm-as"])
     llvm_commands[x]=`${x}${process.env.LLVM_SUFFIX || DEFAULT_LLVM_SUFFIX}`;
 
-function compileFile(filename, parse_tree, modules) {
+function compileFile(filename, parse_tree, modules, compileCallback) {
     let base_filename = genFreshFileName(path.basename(filename));
 
     if (!options.quiet) {
@@ -427,7 +440,7 @@ function compileFile(filename, parse_tree, modules) {
     }
 
     function tmpfile(suffix) {
-        return `${os.tmpdir()}/${base_filename}-${options.target_arch}-${options.target_platform}.${suffix}`;
+        return `${os.tmpdir()}/${base_filename}-${options.target_arch}-${options.target_platform}${suffix}`;
     }
     let ll_filename     = tmpfile(".ll");
     let bc_filename     = tmpfile(".bc");
@@ -446,11 +459,43 @@ function compileFile(filename, parse_tree, modules) {
 
     compiled_modules.push({ filename: options.basename ? path.basename(filename) : filename, module_toplevel: compiled_module.toplevel_name });
 
-    // in ejs spawn is synchronous.
-    spawn(llvm_commands["llvm-as"], llvm_as_args);
-    spawn(llvm_commands["opt"], opt_args);
-    spawn(llvm_commands["llc"], llc_args);
-    o_filenames.push(o_filename);
+    if (!isNode()) {
+        // in ejs spawn is synchronous.
+        spawn(llvm_commands["llvm-as"], llvm_as_args);
+        spawn(llvm_commands["opt"], opt_args);
+        spawn(llvm_commands["llc"], llc_args);
+        o_filenames.push(o_filename);
+        compileCallback();
+    } else {
+        let llvm_as = spawn(llvm_commands["llvm-as"], llvm_as_args);
+        llvm_as.stderr.on("data", (data) => console.warn(`${data}`));
+        llvm_as.on("error", (err) => {
+            console.warn(`error executing ${llvm_commands['llvm-as']}: ${err}`);
+            process.exit(-1);
+        });
+        llvm_as.on("exit", (code) => {
+                debug.log(1, `executing '${llvm_commands['opt']} ${opt_args.join(' ')}'`);
+            let opt = spawn(llvm_commands['opt'], opt_args);
+            opt.stderr.on("data", (data) => console.warn(`${data}`));
+            opt.on("error", (err) => {
+                console.warn(`error executing #{llvm_commands['opt']}: ${err}`);
+                process.exit(-1);
+            });
+            opt.on("exit", (code) => {
+                debug.log(1, `executing '${llvm_commands['llc']} ${llc_args.join(' ')}'`);
+                let llc = spawn(llvm_commands['llc'], llc_args);
+                llc.stderr.on("data", (data) => console.warn(`${data}`));
+                llc.on("error", (err) => {
+                    console.warn(`error executing ${llvm_commands['llc']}: ${err}`);
+                    process.exit(-1);
+                });
+                llc.on("exit", (code) => {
+                    o_filenames.push(o_filename);
+                    compileCallback();
+                });
+            });
+        });
+    }
 }
 
 
@@ -556,10 +601,24 @@ function do_final_link(main_file, modules) {
     if (!options.quiet) console.warn(`${bold()}LINK${reset()} ${output_filename}`);
     
     debug.log (1, `executing '${target_linker} ${clang_args.join(' ')}'`);
-    
-    spawn(target_linker, clang_args);
-    // we ignore leave_tmp_files here
-    if (!options.quiet) console.warn(`${bold()}done.${reset()}`);
+
+    if (typeof __ejs != 'undefined') {
+        spawn(target_linker, clang_args);
+        // we ignore leave_tmp_files here
+        if (!options.quiet) console.warn(`${bold()}done.${reset()}`);
+    }
+    else {
+        let clang = spawn(target_linker, clang_args);
+        clang.stderr.on("data", (data) => console.warn(`${data}`));
+        clang.on("exit", (code) => {
+            if (!options.leave_temp_files) {
+                cleanup( () => {
+                    if (!options.quiet)
+                        console.warn(`${bold()}done.${reset()}`);
+                });
+            }
+        });
+    }
 }
 
 function cleanup(done) {
@@ -582,6 +641,14 @@ let allModules = getAllModules();
 
 // now compile them
 //
-for (let f of files)
-    compileFile(f.file_name, f.file_ast, allModules);
-do_final_link(main_file, allModules);
+// reverse the list so the main program is the first thing we compile
+files.reverse();
+let compileNextFile = () => {
+        if (files.length === 0) {
+            do_final_link(main_file, allModules);
+            return;
+        }
+    let f = files.pop();
+    compileFile(f.file_name, f.file_ast, allModules, compileNextFile);
+}
+compileNextFile();

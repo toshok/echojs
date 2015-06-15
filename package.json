@@ -1,0 +1,50 @@
+{
+  "name": "echojs",
+  "version": "0.0.0",
+  "description": "Compile ES6 to native code",
+  "main": "ejs.js",
+  "bin": {
+    "ejs": "ejs-driver.js"
+  },
+  "files": [
+    "lib/closure-conversion.js",
+    "lib/compiler.js",
+    "lib/consts.js",
+    "lib/debug.js",
+    "lib/echo-util.js",
+    "lib/ejs.js",
+    "lib/escodegen.js",
+    "lib/esprima.js",
+    "lib/estraverse.js",
+    "lib/exitable-scope.js",
+    "lib/jscfa2.js",
+    "lib/map.js",
+    "lib/nodevisitor.js",
+    "lib/optimizations.js",
+    "lib/runtime.js",
+    "lib/set.js",
+    "lib/stack.js",
+    "lib/terminal.js",
+    "lib/types.js"
+  ],
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/toshok/echojs.git"
+  },
+  "author": "Chris Toshok <toshok@toshokelectic.com> (https://blog.toshokelectric.com/)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/toshok/echojs/issues"
+  },
+  "homepage": "https://github.com/toshok/echojs",
+  "private": true,
+  "dependencies": {
+    "mocha": "~1.21.3"
+  }
+}

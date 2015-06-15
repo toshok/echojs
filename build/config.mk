@@ -2,7 +2,6 @@
 do-make-all: all
 
 $(TOP)/build/host-config.mk:
-	@echo generating host config info
 	@(host_triple=`$(TOP)/build/config.guess`; \
 	  echo HOST_TRIPLE:=$$host_triple > $@; \
 	  echo $$host_triple | awk '{split($$0,a,"-"); print "HOST_CPU:=" a[1] "\nHOST_VENDOR:=" a[2] "\nHOST_OS:=" a[3] "\n"}' >> $@)
