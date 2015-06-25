@@ -593,13 +593,246 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
      EJS_NOT_IMPLEMENTED();                                             \
  }                                                                      \
                                                                         \
- static ejsval                                                          \
- _ejs_##ArrayType##Array_prototype_set_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
- {                                                                      \
-     /* XXX needs a lot of help here... */                              \
-     OP(EJSVAL_TO_OBJECT(_this), Set)(_this, args[0], args[1], _this); \
-     return args[1];                                                    \
- }                                                                      \
+/* Rev 38 Final Draft, April 14, 2015 */                                \
+/* 22.2.3.22.1 */                                                       \
+/* %TypedArray%.prototype.set (array [ , offset ] ) */                  \
+static ejsval                                                           \
+_ejs_##ArrayType##Array_prototype_set_array(ejsval env, ejsval _this, uint32_t argc, ejsval *args)  \
+{                                                                       \
+    ejsval array;                                                       \
+    ejsval offset = _ejs_undefined;                                     \
+                                                                        \
+    array = args[0];                                                    \
+                                                                        \
+    if (argc >= 2)                                                      \
+        offset = args[1];                                               \
+                                                                        \
+    /* 2. Let target be the this value. */                              \
+    /* 3. If Type(target) is not Object, throw a TypeError exception. */\
+    /* 4. If target does not have a [[TypedArrayName]] internal slot, throw a TypeError exception. */   \
+    /* 5. Assert: target has a [[ViewedArrayBuffer]] internal slot. */  \
+    ejsval target = _this;                                              \
+    EJSTypedArray *targetObj = (EJSTypedArray*) EJSVAL_TO_OBJECT(target);   \
+                                                                        \
+    /* 6. Let targetOffset be ToInteger (offset). */                    \
+    /* 7. ReturnIfAbrupt(targetOffset). */                              \
+    int32_t targetOffset = ToInteger(offset);                           \
+                                                                        \
+    /* 8. If targetOffset < 0, throw a RangeError exception. */         \
+    if (targetOffset < 0)                                               \
+        _ejs_throw_nativeerror_utf8(EJS_RANGE_ERROR, "targetOffset < 0");   \
+                                                                        \
+    /* 9. Let targetBuffer be the value of target’s [[ViewedArrayBuffer]] internal slot. */ \
+    ejsval targetBuffer = targetObj->buffer;                            \
+                                                                        \
+    /* 10. If IsDetachedBuffer(targetBuffer) is true, throw a TypeError exception. */   \
+    if (IsDetachedBuffer(targetBuffer))                                 \
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "typed array buffer is detached");  \
+                                                                        \
+    /* 11. Let targetLength be the value of target’s [[ArrayLength]] internal slot. */  \
+    int32_t targetLength = targetObj->length;                           \
+                                                                        \
+    /* 12. Let targetName be the string value of target’s [[TypedArrayName]] internal slot. */  \
+    /* 13. Let targetElementSize be the Number value of the Element Size value specified in Table 49 for targetName. */ \
+    /* 14. Let targetType be the string value of the Element Type value in Table 49 for targetName. */  \
+    /* 15. Let targetByteOffset be the value of target’s [[ByteOffset]] internal slot. */   \
+                                                                        \
+    /* 16. Let src be ToObject(array). */                               \
+    /* 17. ReturnIfAbrupt(src). */                                      \
+    ejsval src = ToObject(array);                                       \
+                                                                        \
+    /* 18. Let srcLength be ToLength(Get(src, "length")). */            \
+    /* 19. ReturnIfAbrupt(srcLength). */                                \
+    int32_t srcLength = ToLength(Get(src, _ejs_atom_length));           \
+                                                                        \
+    /* 20. If srcLength + targetOffset > targetLength, throw a RangeError exception. */ \
+    if (srcLength + targetOffset > targetLength)                        \
+        _ejs_throw_nativeerror_utf8(EJS_RANGE_ERROR, "srcLength + targetOffset > targetLength");    \
+                                                                        \
+    /* 21. Let targetByteIndex be targetOffset × targetElementSize + targetByteOffset. */   \
+    /* Impl note: the buffer data already comes adjusted for the typed array */ \
+    int32_t targetIndex = targetOffset;                                 \
+                                                                        \
+    /* 22. Let k be 0. */                                               \
+    int32_t k = 0;                                                      \
+                                                                        \
+    /* 23. Let limit be targetByteIndex + targetElementSize × srcLength. */ \
+    int32_t limit = targetIndex + srcLength;                            \
+                                                                        \
+    /* 24. Repeat, while targetByteIndex < limit */                     \
+    while (targetIndex < limit) {                                       \
+        /* a. Let Pk be ToString(k). */                                 \
+        ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));                      \
+                                                                        \
+        /* b. Let kNumber be ToNumber(Get(src, Pk)). */                 \
+        /* c. ReturnIfAbrupt(kNumber). */                               \
+        ejsval kNumber = ToNumber(Get(src, Pk));                        \
+                                                                        \
+        /* d. If IsDetachedBuffer(targetBuffer) is true, throw a TypeError exception. */    \
+        if (IsDetachedBuffer(targetBuffer))                             \
+            _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "typed array buffer is detached");  \
+                                                                        \
+        /* e. Perform SetValueInBuffer(targetBuffer, targetByteIndex, targetType, kNumber). */  \
+        void *data = _ejs_typedarray_get_data((EJSObject*)targetObj);   \
+        ((elementtype*)data)[targetIndex] = (elementtype) EJSVAL_TO_NUMBER(kNumber);  \
+                                                                        \
+        /* f. Set k to k + 1. */                                        \
+        k++;                                                            \
+                                                                        \
+        /* g. Set targetByteIndex to targetByteIndex + targetElementSize. */    \
+        targetIndex++;                                                  \
+    }                                                                   \
+                                                                        \
+    /* 25. Return undefined. */                                         \
+    return _ejs_undefined;                                              \
+}                                                                       \
+                                                                        \
+/* Rev 38 Final Draft, April 14, 2015 */                                \
+/* 22.2.3.22.2 */                                                       \
+/* %TypedArray%.prototype.set(typedArray [, offset ] ) */               \
+static ejsval                                                           \
+_ejs_##ArrayType##Array_prototype_set_typedarray(ejsval env, ejsval _this, uint32_t argc, ejsval *args)  \
+{                                                                       \
+    ejsval typedArray = args[0];                                        \
+    EJSTypedArray *typedArrayObj = (EJSTypedArray*) EJSVAL_TO_OBJECT(typedArray); \
+                                                                        \
+    ejsval offset = _ejs_undefined;                                     \
+    if (argc >= 2)                                                      \
+        offset = args[1];                                               \
+                                                                        \
+    /* 1. Assert: typedArray has a [[TypedArrayName]] internal slot. If it does not,
+     * the definition in 22.2.3.22.1 applies. */                        \
+    /* 2. Let target be the this value. */                              \
+    ejsval target = _this;                                              \
+    EJSTypedArray *targetObj = (EJSTypedArray*) EJSVAL_TO_OBJECT(target);   \
+                                                                        \
+    /* 3. If Type(target) is not Object, throw a TypeError exception. */\
+    /* 4. If target does not have a [[TypedArrayName]] internal slot, throw a TypeError exception. */ \
+    /* 5. Assert: target has a [[ViewedArrayBuffer]] internal slot. */  \
+                                                                        \
+    /* 6. Let targetOffset be ToInteger (offset). */                    \
+    /* 7. ReturnIfAbrupt(targetOffset). */                              \
+    int32_t targetOffset = ToInteger(offset);                           \
+                                                                        \
+    /* 8. If targetOffset < 0, throw a RangeError exception. */         \
+    if (targetOffset < 0)                                               \
+        _ejs_throw_nativeerror_utf8(EJS_RANGE_ERROR, "targetOffset < 0"); \
+                                                                        \
+    /* 9. Let targetBuffer be the value of target’s [[ViewedArrayBuffer]] internal slot. */ \
+    ejsval targetBuffer = targetObj->buffer;                            \
+                                                                        \
+    /* 10. If IsDetachedBuffer(targetBuffer) is true, throw a TypeError exception. */   \
+    if (IsDetachedBuffer(targetBuffer))                                 \
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "array buffer is detached");  \
+                                                                        \
+    /* 11. Let targetLength be the value of target’s [[ArrayLength]] internal slot. */  \
+    int32_t targetLength = targetObj->length;                           \
+                                                                        \
+    /* 12. Let srcBuffer be the value of typedArray’s [[ViewedArrayBuffer]] internal slot. */ \
+    ejsval srcBuffer = typedArrayObj->buffer;                           \
+                                                                        \
+    /* 13. If IsDetachedBuffer(srcBuffer) is true, throw a TypeError exception. */ \
+    if (IsDetachedBuffer(srcBuffer))                                    \
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "source array buffer is detached"); \
+                                                                        \
+    /* 14. Let targetName be the string value of target’s [[TypedArrayName]] internal slot. */ \
+    /* 15. Let targetType be the string value of the Element Type value in Table 49 for targetName. */ \
+    EJSTypedArrayType targetType = targetObj->element_type;             \
+                                                                        \
+    /* 16. Let targetElementSize be the Number value of the Element Size value specified in Table 49 for targetName. */ \
+    /* 17. Let targetByteOffset be the value of target’s [[ByteOffset]] internal slot. */   \
+                                                                        \
+    /* 18. Let srcName be the string value of typedArray’s [[TypedArrayName]] internal slot. */ \
+    /* 19. Let srcType be the string value of the Element Type value in Table 49 for srcName . */ \
+    EJSTypedArrayType srcType = typedArrayObj->element_type;            \
+                                                                        \
+    /* 20. Let srcElementSize be the Number value of the Element Size value specified in Table 49 for srcName. */ \
+                                                                        \
+    /* 21. Let srcLength be the value of typedArray’s [[ArrayLength]] internal slot. */ \
+    int32_t srcLength = typedArrayObj->length;                          \
+                                                                        \
+    /* 22. Let srcByteOffset be the value of typedArray’s [[ByteOffset]] internal slot. */ \
+                                                                        \
+    /* 23. If srcLength + targetOffset > targetLength, throw a RangeError exception. */ \
+    if (srcLength + targetOffset > targetLength)                        \
+        _ejs_throw_nativeerror_utf8(EJS_RANGE_ERROR, "srcLength + targetOffset > targetLength"); \
+                                                                        \
+    /* 24. If SameValue(srcBuffer, targetBuffer) is true, then */       \
+    if (SameValue(srcBuffer, targetBuffer)) {                           \
+        /* a. Let srcBuffer be CloneArrayBuffer(targetBuffer, srcByteOffset, %ArrayBuffer%). */ \
+        /* b. NOTE: %ArrayBuffer% is used to clone targetBuffer because is it known to not have any observable side-effects. */ \
+        /* c. ReturnIfAbrupt(srcBuffer). */                             \
+        /* d. Let srcByteIndex be 0. */                                 \
+        EJS_NOT_IMPLEMENTED();                                          \
+    }                                                                   \
+                                                                        \
+    /* 25. Else, let srcByteIndex be srcByteOffset. */                  \
+    /* Impl note: the buffer data already comes adjusted for the typed array */ \
+    int32_t srcIndex = 0;                                               \
+                                                                        \
+    /* 26. Let targetByteIndex be targetOffset × targetElementSize + targetByteOffset. */ \
+    int32_t targetIndex = targetOffset;                                 \
+                                                                        \
+    /* 27. Let limit be targetByteIndex + targetElementSize × srcLength. */ \
+    int32_t limit = targetIndex + srcLength;                            \
+                                                                        \
+    /* 28. If SameValue(srcType, targetType) is false, then */          \
+    if (srcType != targetType) {                                        \
+        /* a. Repeat, while targetByteIndex < limit */                  \
+        /*  i. Let value be GetValueFromBuffer(srcBuffer, srcByteIndex, srcType). */ \
+        /*  ii. Perfrom SetValueInBuffer (targetBuffer, targetByteIndex, targetType, value). */ \
+        /*  iii. Set srcByteIndex to srcByteIndex + srcElementSize. */ \
+        /*  iv. Set targetByteIndex to targetByteIndex + targetElementSize. */ \
+        EJS_NOT_IMPLEMENTED();                                          \
+    }                                                                   \
+    /* 29. Else, */                                                     \
+    else {                                                              \
+        /* a. NOTE: If srcType and targetType are the same the transfer must be performed */ \
+        /* in a manner that preserves the bit-level encoding of the source data. */ \
+        /* b. Repeat, while targetByteIndex < limit */                  \
+        while (targetIndex < limit) {                                   \
+            /* Impl note: since we have good enough direct access to the buffers
+             * and their respective types, we don't do the byte-by-byte read/write */ \
+                                                                        \
+            /* i. Let value be GetValueFromBuffer(srcBuffer, srcByteIndex, "Uint8"). */ \
+            ejsval value = _ejs_typedarray_get_at ((EJSObject*)typedArrayObj, srcIndex); \
+                                                                        \
+            /* ii. Perform SetValueInBuffer (targetBuffer, targetByteIndex, "Uint8", value). */ \
+            void *data = _ejs_typedarray_get_data((EJSObject*)targetObj); \
+            ((elementtype*)data)[targetIndex] = (elementtype) EJSVAL_TO_NUMBER(value); \
+                                                                        \
+            /* iii. Set srcByteIndex to srcByteIndex + 1. */            \
+            srcIndex++;                                                 \
+                                                                        \
+            /* iv. Set targetByteIndex to targetByteIndex + 1. */       \
+            targetIndex++;                                              \
+        }                                                               \
+    }                                                                   \
+                                                                        \
+    /* 30. Return undefined. */                                         \
+    return _ejs_undefined;                                              \
+}                                                                       \
+                                                                        \
+/* Rev 38 Final Draft, April 14, 2015 */                                \
+/* 22.2.3.22 */                                                         \
+/* %TypedArray%.prototype.set ( overloaded [ , offset ]) */             \
+static ejsval                                                           \
+_ejs_##ArrayType##Array_prototype_set_impl(ejsval env, ejsval _this, uint32_t argc, ejsval *args)    \
+{                                                                       \
+    ejsval overloaded = _ejs_undefined;                                 \
+                                                                        \
+    if (argc >= 1)                                                      \
+        overloaded = args[0];                                           \
+                                                                        \
+    /* 1. Assert: array is any ECMAScript language value other than an Object with a [[TypedArrayName]] internal slot.  \
+     * If it is such an Object, the definition in 22.2.3.22.2 applies. */   \
+    if (EJSVAL_IS_TYPEDARRAY(overloaded))                               \
+        return _ejs_##ArrayType##Array_prototype_set_typedarray(env, _this, argc, args);    \
+    else                                                                \
+        return _ejs_##ArrayType##Array_prototype_set_array(env, _this, argc, args); \
+                                                                        \
+    EJS_NOT_REACHED();                                                  \
+}                                                                       \
                                                                         \
  static ejsval                                                          \
  _ejs_##ArrayType##Array_prototype_get_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
@@ -1808,6 +2041,44 @@ _ejs_typedarray_new_from_array (EJSTypedArrayType element_type, ejsval arrayObj)
     }
 
     return typedarr;
+}
+
+ejsval
+_ejs_typedarray_get_at (EJSObject *array, int index)
+{
+    void* data = _ejs_typedarray_get_data(array);
+
+    switch (((EJSTypedArray*)array)->element_type) {
+    case EJS_TYPEDARRAY_INT8: return NUMBER_TO_EJSVAL(((int8_t*)data)[index]);
+    case EJS_TYPEDARRAY_UINT8: return NUMBER_TO_EJSVAL(((uint8_t*)data)[index]);
+    case EJS_TYPEDARRAY_UINT8CLAMPED: EJS_NOT_IMPLEMENTED();
+    case EJS_TYPEDARRAY_INT16: return NUMBER_TO_EJSVAL(((int16_t*)data)[index]);
+    case EJS_TYPEDARRAY_UINT16: return NUMBER_TO_EJSVAL(((uint16_t*)data)[index]);
+    case EJS_TYPEDARRAY_INT32: return NUMBER_TO_EJSVAL(((int32_t*)data)[index]);
+    case EJS_TYPEDARRAY_UINT32: return NUMBER_TO_EJSVAL(((uint32_t*)data)[index]);
+    case EJS_TYPEDARRAY_FLOAT32: return NUMBER_TO_EJSVAL(((float*)data)[index]);
+    case EJS_TYPEDARRAY_FLOAT64: return NUMBER_TO_EJSVAL(((double*)data)[index]);
+    default: EJS_NOT_REACHED();
+    }
+}
+
+void
+_ejs_typedarray_set_at (EJSObject *array, int index, ejsval value)
+{
+    void* data = _ejs_typedarray_get_data(array);
+
+    switch (((EJSTypedArray*)array)->element_type) {
+    case EJS_TYPEDARRAY_INT8: ((int8_t*)data)[index] = (int8_t)EJSVAL_TO_NUMBER(value); break;
+    case EJS_TYPEDARRAY_UINT8: ((uint8_t*)data)[index] = (uint8_t)EJSVAL_TO_NUMBER(value); break;
+    case EJS_TYPEDARRAY_UINT8CLAMPED: EJS_NOT_IMPLEMENTED();
+    case EJS_TYPEDARRAY_INT16: ((int16_t*)data)[index] = (int16_t)EJSVAL_TO_NUMBER(value); break;
+    case EJS_TYPEDARRAY_UINT16: ((uint16_t*)data)[index] = (uint16_t)EJSVAL_TO_NUMBER(value); break;
+    case EJS_TYPEDARRAY_INT32: ((int32_t*)data)[index] = (int32_t)EJSVAL_TO_NUMBER(value); break;
+    case EJS_TYPEDARRAY_UINT32: ((uint32_t*)data)[index] = (uint32_t)EJSVAL_TO_NUMBER(value); break;
+    case EJS_TYPEDARRAY_FLOAT32: ((float*)data)[index] = (float)EJSVAL_TO_NUMBER(value); break;
+    case EJS_TYPEDARRAY_FLOAT64: ((double*)data)[index] = (double)EJSVAL_TO_NUMBER(value); break;
+    default:  EJS_NOT_REACHED();
+    }
 }
 
 void*
