@@ -23,5 +23,8 @@ script:
   - EJS_STAGE=0 EJS_DRIVER="`pwd`/ejs" make -C test check
   - if test -f test/.failures -o -f test/.xsuccess; then exit -1; fi
   - make -C test clean
-  - EJS_STAGE=1 EJS_DRIVER="`pwd`/ejs.exe" make -C test check
+  - EJS_STAGE=1 EJS_DRIVER="`pwd`/ejs-es6.js.exe.stage1" make -C test check
+  - if test -f test/.failures -o -f test/.xsuccess; then exit -1; fi
+  - make -C test clean
+  - EJS_STAGE=2 EJS_DRIVER="`pwd`/ejs-es6.js.exe.stage2" make -C test check
   - if test -f test/.failures -o -f test/.xsuccess; then exit -1; fi
