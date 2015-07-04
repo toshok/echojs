@@ -258,7 +258,15 @@ JO(StringifyState *state, ejsval value)
     /* 4. Let indent be the concatenation of indent and gap. */
     state->indent = _ejs_string_concat (state->indent, state->gap);
 
-    ejsval K;
+    // XXX(toshok): we need this volatile because in the else case
+    // below(6), K is allocated, but then we never use the actual
+    // value of K again - we only access it via interior pointers.  so
+    // if the allocation of partial (7) happens to cause a GC (which
+    // happens during stage2 build), we free K and the loop at (8)
+    // crashes.  we need to switch to C++ to have some sort of stack
+    // rooting smart pointer-esque class.  There are probably lots of
+    // dragons of this sort around the code.
+    volatile ejsval K;
 
     /* 5. If PropertyList is not undefined, then */
     if (!EJSVAL_IS_UNDEFINED(state->PropertyList)) {
