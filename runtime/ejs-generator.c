@@ -119,7 +119,7 @@ void
 _ejs_generator_init(ejsval global)
 {
     _ejs_gc_add_root (&_ejs_Generator_prototype);
-    _ejs_Generator_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops); // XXX
+    _ejs_Generator_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Generator_specops);
 
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Generator_prototype, x, _ejs_Generator_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
 
@@ -149,22 +149,24 @@ _ejs_generator_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     scan_func(gen->yielded_value);
     scan_func(gen->sent_value);
 
-    _ejs_gc_mark_conservative_range(&gen->generator_context, &gen->generator_context + sizeof(ucontext_t));
-    _ejs_gc_mark_conservative_range(&gen->caller_context, &gen->caller_context + sizeof(ucontext_t));
+    _ejs_gc_mark_conservative_range(&gen->generator_context, (char*)&gen->generator_context + sizeof(ucontext_t));
+    _ejs_gc_mark_conservative_range(&gen->caller_context, (char*)&gen->caller_context + sizeof(ucontext_t));
 
-    _ejs_gc_mark_conservative_range(gen->stack,
+    if (gen->stack) {
+        _ejs_gc_mark_conservative_range(gen->stack,
 #if TARGET_CPU_AMD64
-                                    (void*)gen->generator_context.__mcontext_data.__ss.__rsp
+                                        (void*)gen->generator_context.__mcontext_data.__ss.__rsp
 #elif TARGET_CPU_X86
-                                    (void*)gen->generator_context.__mcontext_data.__ss.__esp
+                                        (void*)gen->generator_context.__mcontext_data.__ss.__esp
 #elif TARGET_CPU_ARM
-                                    (void*)gen->generator_context.__mcontext_data.__ss.__sp
+                                        (void*)gen->generator_context.__mcontext_data.__ss.__sp
 #elif TARGET_CPU_ARM64
-                                    (void*)gen->generator_context.__mcontext_data.__ss.__sp
+                                        (void*)gen->generator_context.__mcontext_data.__ss.__sp
 #else
 #error "unimplemented"
 #endif
                                     );
+    }
 
     _ejs_Object_specops.Scan (obj, scan_func);
 }
