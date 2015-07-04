@@ -9,7 +9,7 @@ all-local:: ensure-npmmodules ensure-submodules
 
 NODE_PATH?=$(shell $(MAKE) -C test node-path)
 
-all-hook:: stage1
+all-hook:: stage2
 
 install-local::
 	@$(MKDIR) $(bindir)
