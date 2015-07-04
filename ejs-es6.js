@@ -10,7 +10,7 @@ import * as child_process from '@node-compat/child_process';
 let spawn = child_process.spawn;
 
 import * as debug        from './lib/debug';
-import { Set }           from './lib/set-es6';
+import Set               from './lib/set-es6';
 import { compile }       from './lib/compiler';
 import { dumpModules, getAllModules, gatherAllModules } from './lib/passes/gather-imports';
 
