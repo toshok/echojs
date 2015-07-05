@@ -11,7 +11,7 @@ check-format:
 		if (clang-format $$i | diff -q $$i -)>/dev/null; then \
 			true; \
 		else \
-			echo "$$i format doesn't match"; \
+			(clang-format $$i | diff -u $$i -); \
 			exit 1; \
 		fi \
 	done
