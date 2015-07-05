@@ -18,6 +18,7 @@ install:
   - sh ./ci/install-llvm.sh
 
 before_script:
+  - make check-format
   - export LLVM_SUFFIX=
   - export PATH=$PATH:/usr/local/share/npm/bin:/usr/local/opt/llvm/bin:/usr/local/opt/llvm/share/llvm
   - export NODE_PATH=`make -C test node-path`

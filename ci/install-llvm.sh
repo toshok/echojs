@@ -5,3 +5,4 @@
 #brew switch llvm 3.5.1
 #ls -lR /usr/local/Cellar/llvm/3.5.1/include
 brew install llvm
+brew install clang-format
