@@ -230,6 +230,12 @@ EJS_ATOM(decodeURIComponent)
 EJS_ATOM(encodeURI)
 EJS_ATOM(encodeURIComponent)
 
+// timer functions
+EJS_ATOM(setInterval)
+EJS_ATOM(setTimeout)
+EJS_ATOM(clearInterval)
+EJS_ATOM(clearTimeout)
+
 // JSON functions
 EJS_ATOM(parse)
 EJS_ATOM(stringify)

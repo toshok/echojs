@@ -35,6 +35,17 @@ _ejs_runloop_add_task(Task task, void* data, TaskDataDtor dtor)
   uv_timer_start(&t->timer, invoke_task, 0, 0);
 }
 
+void*
+_ejs_runloop_add_task_timeout(Task task, void* data, TaskDataDtor dtor, int64_t timeout, EJSBool repeats)
+{
+    EJS_NOT_IMPLEMENTED();
+}
+
+_ejs_runloop_remove_task(void* handle)
+{
+    EJS_NOT_IMPLEMENTED();
+}
+
 void
 _ejs_runloop_start()
 {

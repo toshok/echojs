@@ -13,6 +13,8 @@ typedef void (*Task)(void* data);
 typedef void (*TaskDataDtor)(void* data);
 
 void _ejs_runloop_add_task(Task task, void* data, TaskDataDtor data_dtor);
+void* _ejs_runloop_add_task_timeout(Task task, void* data, TaskDataDtor data_dtor, int64_t timeout, EJSBool repeats);
+void _ejs_runloop_remove_task(void *handle);
 void _ejs_runloop_start();
 
 
