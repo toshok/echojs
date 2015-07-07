@@ -507,46 +507,47 @@ function generate_import_map (js_modules, native_modules) {
         return sfilename;
     };
     let map_path = `${os.tmpdir()}/${genFreshFileName(path.basename(main_file))}-import-map.cpp`;
-    let map = fs.createWriteStream(map_path);
-    map.write (`#include "runtime/ejs-module.h"\n`);
-    map.write ('extern "C" {\n');
+
+    let map_contents = '';
+    map_contents += `#include "runtime/ejs-module.h"\n`;
+    map_contents += 'extern "C" {\n';
 
     js_modules.forEach( (module) => {
-        map.write(`extern EJSModule ${module.module_name};\n`);
-        map.write(`extern ejsval ${module.toplevel_function_name} (ejsval env, ejsval _this, uint32_t argc, ejsval *args);\n`);
+        map_contents += `extern EJSModule ${module.module_name};\n`;
+        map_contents += `extern ejsval ${module.toplevel_function_name} (ejsval env, ejsval _this, uint32_t argc, ejsval *args);\n`;
     });
 
-    map.write ("EJSModule* _ejs_modules[] = {\n");
+    map_contents += "EJSModule* _ejs_modules[] = {\n";
     js_modules.forEach ( (module) => {
-        map.write(`  &${module.module_name},\n`);
+        map_contents += `  &${module.module_name},\n`;
     });
-    map.write ("};\n");
-
-    map.write('ejsval (*_ejs_module_toplevels[])(ejsval, ejsval, uint32_t, ejsval*) = {\n');
+    map_contents += "};\n";
+    
+    map_contents += 'ejsval (*_ejs_module_toplevels[])(ejsval, ejsval, uint32_t, ejsval*) = {\n';
     js_modules.forEach ( (module) => {
-        map.write(`  ${module.toplevel_function_name},\n`);
+        map_contents += `  ${module.toplevel_function_name},\n`;
     });
-    map.write ("};\n");
-    map.write('int _ejs_num_modules = sizeof(_ejs_modules) / sizeof(_ejs_modules[0]);\n\n');
+    map_contents += "};\n";
+    map_contents += 'int _ejs_num_modules = sizeof(_ejs_modules) / sizeof(_ejs_modules[0]);\n\n';
 
     native_modules.forEach ((module) => {
-        map.write(`extern ejsval ${module.init_function} (ejsval exports);\n`);
+        map_contents += `extern ejsval ${module.init_function} (ejsval exports);\n`;
     });
 
-    map.write('EJSExternalModule _ejs_external_modules[] = {\n');
+    map_contents += 'EJSExternalModule _ejs_external_modules[] = {\n';
     native_modules.forEach ( (module) => {
-        map.write(`  { \"@${module.module_name}\", ${module.init_function}, 0 },\n`);
+        map_contents += `  { \"@${module.module_name}\", ${module.init_function}, 0 },\n`;
     });
-    map.write('};\n');
-    map.write('int _ejs_num_external_modules = sizeof(_ejs_external_modules) / sizeof(_ejs_external_modules[0]);\n');
+    map_contents += '};\n';
+    map_contents += 'int _ejs_num_external_modules = sizeof(_ejs_external_modules) / sizeof(_ejs_external_modules[0]);\n';
 
     let entry_module = file_args[0];
     if (entry_module.lastIndexOf(".js") == entry_module.length - 3)
         entry_module = entry_module.substring(0, entry_module.length-3);
-    map.write(`const EJSModule* entry_module = &${js_modules.get(entry_module).module_name};\n`);
+    map_contents += `const EJSModule* entry_module = &${js_modules.get(entry_module).module_name};\n`;
 
-    map.write("};");
-    map.end();
+    map_contents += "};";
+    fs.writeFileSync(map_path, map_contents);
 
     temp_files.push(map_path);
     
