@@ -4,7 +4,7 @@
 #include "ejs-llvm.h"
 
 namespace ejsllvm {
-  extern void ConstantArray_init (ejsval exports);
+extern void ConstantArray_init(ejsval exports);
 };
 
 #endif /* EJS_LLVM_CONSTANTARRAY_H */

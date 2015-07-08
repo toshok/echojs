@@ -19,14 +19,13 @@ typedef struct {
     struct timezone tz;
 } EJSDate;
 
-
 EJS_BEGIN_DECLS
 
 extern ejsval _ejs_Date;
 extern ejsval _ejs_Date_prototype;
 extern EJSSpecOps _ejs_Date_specops;
 
-double _ejs_date_get_time (EJSDate* date);
+double _ejs_date_get_time(EJSDate *date);
 
 void _ejs_date_init(ejsval global);
 

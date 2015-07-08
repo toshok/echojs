@@ -4,18 +4,17 @@
 #include "ejs-llvm.h"
 
 namespace ejsllvm {
-  extern void Call_init (ejsval exports);
+extern void Call_init(ejsval exports);
 
-  ejsval Call_new(llvm::CallInst* llvm_call);
+ejsval Call_new(llvm::CallInst *llvm_call);
 
-  extern llvm::CallInst* Call_GetLLVMObj(ejsval val);
+extern llvm::CallInst *Call_GetLLVMObj(ejsval val);
 
+extern void Invoke_init(ejsval exports);
 
-  extern void Invoke_init (ejsval exports);
+ejsval Invoke_new(llvm::InvokeInst *llvm_invoke);
 
-  ejsval Invoke_new(llvm::InvokeInst* llvm_invoke);
-
-  extern llvm::InvokeInst* Invoke_GetLLVMObj(ejsval val);
+extern llvm::InvokeInst *Invoke_GetLLVMObj(ejsval val);
 };
 
 #endif /* EJS_LLVM_CALLINVOKE_H */

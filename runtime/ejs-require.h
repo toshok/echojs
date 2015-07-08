@@ -15,8 +15,8 @@ extern ejsval _ejs_require;
 
 extern void _ejs_require_init(ejsval global);
 
-void _ejs_module_resolve(EJSModule* mod);
-extern ejsval _ejs_module_get (ejsval name);
+void _ejs_module_resolve(EJSModule *mod);
+extern ejsval _ejs_module_get(ejsval name);
 
 EJS_END_DECLS
 

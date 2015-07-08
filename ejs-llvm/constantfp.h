@@ -4,7 +4,7 @@
 #include "ejs-llvm.h"
 
 namespace ejsllvm {
-  extern void ConstantFP_init (ejsval exports);
+extern void ConstantFP_init(ejsval exports);
 };
 
 #endif /* EJS_LLVM_CONSTANTFP_H */

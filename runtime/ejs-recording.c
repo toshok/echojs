@@ -5,9 +5,7 @@
 #include "ejs.h"
 #include "ejsval.h"
 
-static const char*
-type_name(ejsval exp)
-{
+static const char *type_name(ejsval exp) {
     if (EJSVAL_IS_NULL(exp))
         return "null";
     else if (EJSVAL_IS_BOOLEAN(exp))
@@ -24,21 +22,15 @@ type_name(ejsval exp)
         EJS_NOT_IMPLEMENTED();
 }
 
-void
-_ejs_record_binop (int id, const char *op, ejsval left, ejsval right)
-{
-    printf ("for id %d, binary operator %s: left=%s, right=%s\n", id, op, type_name(left), type_name(right));
+void _ejs_record_binop(int id, const char *op, ejsval left, ejsval right) {
+    printf("for id %d, binary operator %s: left=%s, right=%s\n", id, op,
+           type_name(left), type_name(right));
 }
 
-
-void
-_ejs_record_assignment (int id, ejsval val)
-{
-    printf ("for id %d, assignment: val=%s\n", id, type_name(val));
+void _ejs_record_assignment(int id, ejsval val) {
+    printf("for id %d, assignment: val=%s\n", id, type_name(val));
 }
 
-void
-_ejs_record_getprop (int id, ejsval obj, ejsval prop)
-{
-    printf ("for id %d, getprop\n", id);
+void _ejs_record_getprop(int id, ejsval obj, ejsval prop) {
+    printf("for id %d, getprop\n", id);
 }

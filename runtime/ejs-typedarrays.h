@@ -41,7 +41,7 @@ typedef enum {
 
 extern int _ejs_typed_array_elsizes[EJS_TYPEDARRAY_TYPE_COUNT];
 extern ejsval _ejs_typed_array_protos[EJS_TYPEDARRAY_TYPE_COUNT];
-extern EJSSpecOps* _ejs_typed_array_specops[EJS_TYPEDARRAY_TYPE_COUNT];
+extern EJSSpecOps *_ejs_typed_array_specops[EJS_TYPEDARRAY_TYPE_COUNT];
 
 typedef struct _EJSTypedArray {
     /* object header */
@@ -68,49 +68,56 @@ typedef struct _EJSDataView {
     uint32_t byteLength;
 } EJSDataView;
 
-#define EJSVAL_IS_TYPEDARRAY(v) (EJSVAL_IS_OBJECT(v) &&                 \
-                                 (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Int8Array_specops || \
-                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_Int16Array_specops || \
-                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_Int32Array_specops || \
-                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_Uint8Array_specops || \
-                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_Uint8ClampedArray_specops || \
-                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_Uint16Array_specops || \
-                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_Uint32Array_specops || \
-                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_Float32Array_specops || \
-                                  EJSVAL_TO_OBJECT(v)->ops == &_ejs_Float64Array_specops \
-                                  ))
+#define EJSVAL_IS_TYPEDARRAY(v)                                                \
+    (EJSVAL_IS_OBJECT(v) &&                                                    \
+     (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Int8Array_specops ||                   \
+      EJSVAL_TO_OBJECT(v)->ops == &_ejs_Int16Array_specops ||                  \
+      EJSVAL_TO_OBJECT(v)->ops == &_ejs_Int32Array_specops ||                  \
+      EJSVAL_TO_OBJECT(v)->ops == &_ejs_Uint8Array_specops ||                  \
+      EJSVAL_TO_OBJECT(v)->ops == &_ejs_Uint8ClampedArray_specops ||           \
+      EJSVAL_TO_OBJECT(v)->ops == &_ejs_Uint16Array_specops ||                 \
+      EJSVAL_TO_OBJECT(v)->ops == &_ejs_Uint32Array_specops ||                 \
+      EJSVAL_TO_OBJECT(v)->ops == &_ejs_Float32Array_specops ||                \
+      EJSVAL_TO_OBJECT(v)->ops == &_ejs_Float64Array_specops))
 
-#define EJSVAL_TO_TYPEDARRAY(v) ((EJSTypedArray*)EJSVAL_TO_OBJECT(v))
-#define EJSVAL_TO_ARRAYBUFFER(v) ((EJSArrayBuffer*)EJSVAL_TO_OBJECT(v))
+#define EJSVAL_TO_TYPEDARRAY(v) ((EJSTypedArray *)EJSVAL_TO_OBJECT(v))
+#define EJSVAL_TO_ARRAYBUFFER(v) ((EJSArrayBuffer *)EJSVAL_TO_OBJECT(v))
 
-#define EJSVAL_IS_ARRAYBUFFER(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_ArrayBuffer_specops))
-#define EJSVAL_IS_DATAVIEW(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_DataView_specops))
+#define EJSVAL_IS_ARRAYBUFFER(v)                                               \
+    (EJSVAL_IS_OBJECT(v) &&                                                    \
+     (EJSVAL_TO_OBJECT(v)->ops == &_ejs_ArrayBuffer_specops))
+#define EJSVAL_IS_DATAVIEW(v)                                                  \
+    (EJSVAL_IS_OBJECT(v) &&                                                    \
+     (EJSVAL_TO_OBJECT(v)->ops == &_ejs_DataView_specops))
 
-#define EJSOBJECT_IS_TYPEDARRAY(v) ((v)->ops == &_ejs_Int8Array_specops || \
-                                    (v)->ops == &_ejs_Int16Array_specops || \
-                                    (v)->ops == &_ejs_Int32Array_specops || \
-                                    (v)->ops == &_ejs_Uint8Array_specops || \
-                                    (v)->ops == &_ejs_Uint8ClampedArray_specops || \
-                                    (v)->ops == &_ejs_Uint16Array_specops || \
-                                    (v)->ops == &_ejs_Uint32Array_specops || \
-                                    (v)->ops == &_ejs_Float32Array_specops || \
-                                    (v)->ops == &_ejs_Float64Array_specops \
-                                  )
+#define EJSOBJECT_IS_TYPEDARRAY(v)                                             \
+    ((v)->ops == &_ejs_Int8Array_specops ||                                    \
+     (v)->ops == &_ejs_Int16Array_specops ||                                   \
+     (v)->ops == &_ejs_Int32Array_specops ||                                   \
+     (v)->ops == &_ejs_Uint8Array_specops ||                                   \
+     (v)->ops == &_ejs_Uint8ClampedArray_specops ||                            \
+     (v)->ops == &_ejs_Uint16Array_specops ||                                  \
+     (v)->ops == &_ejs_Uint32Array_specops ||                                  \
+     (v)->ops == &_ejs_Float32Array_specops ||                                 \
+     (v)->ops == &_ejs_Float64Array_specops)
 
 #define EJSOBJECT_IS_ARRAYBUFFER(v) (v->ops == &_ejs_ArrayBuffer_specops)
 #define EJSOBJECT_IS_DATAVIEW(v) (v->ops == &_ejs_DataView_specops)
 
+#define EJS_TYPED_ARRAY_LEN(obj)                                               \
+    (((EJSTypedArray *)EJSVAL_TO_OBJECT(obj))->length)
+#define EJS_TYPED_ARRAY_BYTE_LEN(obj)                                          \
+    (((EJSTypedArray *)EJSVAL_TO_OBJECT(obj))->byteLength)
+#define EJS_ARRAY_BUFFER_BYTE_LEN(obj)                                         \
+    (((EJSArrayBuffer *)EJSVAL_TO_OBJECT(obj))->size)
+#define EJS_DATA_VIEW_BYTE_LEN(obj)                                            \
+    (((EJSDataView *)EJSVAL_TO_OBJECT(obj))->byteLength)
 
-#define EJS_TYPED_ARRAY_LEN(obj) (((EJSTypedArray*)EJSVAL_TO_OBJECT(obj))->length)
-#define EJS_TYPED_ARRAY_BYTE_LEN(obj) (((EJSTypedArray*)EJSVAL_TO_OBJECT(obj))->byteLength)
-#define EJS_ARRAY_BUFFER_BYTE_LEN(obj) (((EJSArrayBuffer*)EJSVAL_TO_OBJECT(obj))->size)
-#define EJS_DATA_VIEW_BYTE_LEN(obj) (((EJSDataView*)EJSVAL_TO_OBJECT(obj))->byteLength)
-
-#define EJSTYPEDARRAY_LEN(obj) (((EJSTypedArray*)(obj))->length)
-#define EJSTYPEDARRAY_BYTE_LEN(obj) (((EJSTypedArray*)(obj))->byteLength)
-#define EJSTYPEDARRAY_ELEMENT_TYPE(obj) (((EJSTypedArray*)(obj))->element_type)
-#define EJSARRAYBUFFER_BYTE_LEN(obj) (((EJSArrayBuffer*)obj)->size)
-#define EJSDATAVIEW_BYTE_LEN(obj) (((EJSDataView*)obj)->bytLength)
+#define EJSTYPEDARRAY_LEN(obj) (((EJSTypedArray *)(obj))->length)
+#define EJSTYPEDARRAY_BYTE_LEN(obj) (((EJSTypedArray *)(obj))->byteLength)
+#define EJSTYPEDARRAY_ELEMENT_TYPE(obj) (((EJSTypedArray *)(obj))->element_type)
+#define EJSARRAYBUFFER_BYTE_LEN(obj) (((EJSArrayBuffer *)obj)->size)
+#define EJSDATAVIEW_BYTE_LEN(obj) (((EJSDataView *)obj)->bytLength)
 
 EJS_BEGIN_DECLS
 
@@ -160,15 +167,16 @@ extern EJSSpecOps _ejs_DataView_specops;
 
 void _ejs_typedarrays_init(ejsval global);
 
-void* _ejs_arraybuffer_get_data(EJSObject* arr);
-void* _ejs_typedarray_get_data(EJSObject* arr);
-void* _ejs_dataview_get_data(EJSObject* view);
+void *_ejs_arraybuffer_get_data(EJSObject *arr);
+void *_ejs_typedarray_get_data(EJSObject *arr);
+void *_ejs_dataview_get_data(EJSObject *view);
 
-ejsval _ejs_typedarray_get_at(EJSObject* arr, int index);
-void _ejs_typedarray_set_at(EJSObject* arr, int index, ejsval value);
+ejsval _ejs_typedarray_get_at(EJSObject *arr, int index);
+void _ejs_typedarray_set_at(EJSObject *arr, int index, ejsval value);
 
-ejsval _ejs_typedarray_new (EJSTypedArrayType element_type, uint32_t length);
-ejsval _ejs_typedarray_new_from_array (EJSTypedArrayType element_type, ejsval arrayObj);
+ejsval _ejs_typedarray_new(EJSTypedArrayType element_type, uint32_t length);
+ejsval _ejs_typedarray_new_from_array(EJSTypedArrayType element_type,
+                                      ejsval arrayObj);
 
 EJS_END_DECLS
 

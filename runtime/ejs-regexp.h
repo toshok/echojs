@@ -24,7 +24,7 @@ typedef struct {
 
     int lastIndex;
 
-    void* compiled_pattern;
+    void *compiled_pattern;
 } EJSRegExp;
 
 EJS_BEGIN_DECLS
@@ -33,16 +33,16 @@ extern ejsval _ejs_RegExp;
 extern ejsval _ejs_RegExp_prototype;
 extern EJSSpecOps _ejs_RegExp_specops;
 
-
 void _ejs_regexp_init(ejsval global);
 
-ejsval _ejs_regexp_new (ejsval pattern, ejsval flags);
+ejsval _ejs_regexp_new(ejsval pattern, ejsval flags);
 
 ejsval _ejs_regexp_new_utf8(const char *pattern, const char *flags);
 
 ejsval _ejs_regexp_replace(ejsval str, ejsval search, ejsval replace);
 
-/* we expose this publicly because String.prototype.match needs to call it directly */
+/* we expose this publicly because String.prototype.match needs to call it
+ * directly */
 ejsval _ejs_RegExp_prototype_exec_closure;
 
 EJS_END_DECLS

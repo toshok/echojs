@@ -42,9 +42,9 @@ extern ejsval _ejs_Symbol_search;
 
 void _ejs_symbol_init(ejsval global);
 
-ejsval _ejs_symbol_new (ejsval description);
+ejsval _ejs_symbol_new(ejsval description);
 
-uint32_t _ejs_symbol_hash (ejsval symbol);
+uint32_t _ejs_symbol_hash(ejsval symbol);
 
 EJS_END_DECLS
 

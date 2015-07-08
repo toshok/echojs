@@ -5,10 +5,9 @@
 
 namespace ejsllvm {
 
-  void Module_init (ejsval exports);
+void Module_init(ejsval exports);
 
-  llvm::Module* Module_GetLLVMObj(ejsval val);
-
+llvm::Module *Module_GetLLVMObj(ejsval val);
 };
 
 #endif /* EJS_LLVM_MODULE_H */

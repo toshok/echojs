@@ -15,13 +15,17 @@ extern ejsval _ejs_decodeURIComponent;
 extern ejsval _ejs_encodeURI;
 extern ejsval _ejs_encodeURIComponent;
 
-ejsval _ejs_decodeURI_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
-ejsval _ejs_decodeURIComponent_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
+ejsval _ejs_decodeURI_impl(ejsval env, ejsval _this, uint32_t argc,
+                           ejsval *args);
+ejsval _ejs_decodeURIComponent_impl(ejsval env, ejsval _this, uint32_t argc,
+                                    ejsval *args);
 
-ejsval _ejs_encodeURI_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
-ejsval _ejs_encodeURIComponent_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
+ejsval _ejs_encodeURI_impl(ejsval env, ejsval _this, uint32_t argc,
+                           ejsval *args);
+ejsval _ejs_encodeURIComponent_impl(ejsval env, ejsval _this, uint32_t argc,
+                                    ejsval *args);
 
-void _ejs_uri_init (ejsval global);
+void _ejs_uri_init(ejsval global);
 
 EJS_END_DECLS
 

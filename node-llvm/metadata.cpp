@@ -10,13 +10,11 @@
 using namespace node;
 using namespace v8;
 
-
 namespace jsllvm {
 
-  // MDNode
+// MDNode
 
-  void MDNode::Init(Handle<Object> target)
-  {
+void MDNode::Init(Handle<Object> target) {
     HandleScope scope;
 
     Local<FunctionTemplate> t = FunctionTemplate::New(New);
@@ -28,59 +26,49 @@ namespace jsllvm {
     NODE_SET_METHOD(s_ct, "get", MDNode::Get);
 
     s_func = Persistent<v8::Function>::New(s_ct->GetFunction());
-    target->Set(String::NewSymbol("MDNode"),
-		s_func);
-  }
+    target->Set(String::NewSymbol("MDNode"), s_func);
+}
 
-  v8::Handle<v8::Value> MDNode::New(llvm::MDNode* llvm_mdnode)
-  {
+v8::Handle<v8::Value> MDNode::New(llvm::MDNode *llvm_mdnode) {
     HandleScope scope;
     Local<Object> new_instance = MDNode::s_func->NewInstance();
-    MDNode* new_mdnode = new MDNode(llvm_mdnode);
+    MDNode *new_mdnode = new MDNode(llvm_mdnode);
     new_mdnode->Wrap(new_instance);
     return scope.Close(new_instance);
-  }
+}
 
-  Handle<v8::Value> MDNode::New(const Arguments& args)
-  {
+Handle<v8::Value> MDNode::New(const Arguments &args) {
     HandleScope scope;
     return scope.Close(args.This());
-  }
+}
 
-  MDNode::MDNode(llvm::MDNode* llvm_mdnode)
-    : llvm_mdnode(llvm_mdnode)
-  {
-  }
+MDNode::MDNode(llvm::MDNode *llvm_mdnode) : llvm_mdnode(llvm_mdnode) {}
 
-  MDNode::~MDNode()
-  {
-  }
+MDNode::~MDNode() {}
 
-  Handle<v8::Value> MDNode::Get(const Arguments& args)
-  {
+Handle<v8::Value> MDNode::Get(const Arguments &args) {
     HandleScope scope;
 
     REQ_ARRAY_ARG(0, vals);
 
-    std::vector<llvm::Value*> Vals;
+    std::vector<llvm::Value *> Vals;
     for (unsigned i = 0, e = vals->Length(); i != e; ++i) {
-      llvm::Value* val = Value::GetLLVMObj(vals->Get(i));
-      Vals.push_back(val);
-      if (Vals.back() == 0) abort(); // XXX throw an exception here
+        llvm::Value *val = Value::GetLLVMObj(vals->Get(i));
+        Vals.push_back(val);
+        if (Vals.back() == 0)
+            abort(); // XXX throw an exception here
     }
 
-    return scope.Close(MDNode::New(llvm::MDNode::get(llvm::getGlobalContext(), Vals)));
-  }
+    return scope.Close(
+        MDNode::New(llvm::MDNode::get(llvm::getGlobalContext(), Vals)));
+}
 
-  Persistent<FunctionTemplate> MDNode::s_ct;
-  Persistent<v8::Function> MDNode::s_func;
+Persistent<FunctionTemplate> MDNode::s_ct;
+Persistent<v8::Function> MDNode::s_func;
 
+// MDString
 
-  // MDString
-
-
-  void MDString::Init(Handle<Object> target)
-  {
+void MDString::Init(Handle<Object> target) {
     HandleScope scope;
 
     Local<FunctionTemplate> t = FunctionTemplate::New(New);
@@ -92,46 +80,38 @@ namespace jsllvm {
     NODE_SET_METHOD(s_ct, "get", MDString::Get);
 
     s_func = Persistent<v8::Function>::New(s_ct->GetFunction());
-    target->Set(String::NewSymbol("MDString"),
-		s_func);
-  }
+    target->Set(String::NewSymbol("MDString"), s_func);
+}
 
-  v8::Handle<v8::Value> MDString::New(llvm::MDString* llvm_mdstring)
-  {
+v8::Handle<v8::Value> MDString::New(llvm::MDString *llvm_mdstring) {
     HandleScope scope;
     Local<Object> new_instance = MDString::s_func->NewInstance();
-    MDString* new_mdstring = new MDString(llvm_mdstring);
+    MDString *new_mdstring = new MDString(llvm_mdstring);
     new_mdstring->Wrap(new_instance);
     return scope.Close(new_instance);
-  }
+}
 
-  Handle<v8::Value> MDString::New(const Arguments& args)
-  {
+Handle<v8::Value> MDString::New(const Arguments &args) {
     HandleScope scope;
     return scope.Close(args.This());
-  }
+}
 
-  MDString::MDString(llvm::MDString* llvm_mdstring)
-    : llvm_mdstring(llvm_mdstring)
-  {
-  }
+MDString::MDString(llvm::MDString *llvm_mdstring)
+    : llvm_mdstring(llvm_mdstring) {}
 
-  MDString::~MDString()
-  {
-  }
+MDString::~MDString() {}
 
-  Handle<v8::Value> MDString::Get(const Arguments& args)
-  {
+Handle<v8::Value> MDString::Get(const Arguments &args) {
     HandleScope scope;
 
-    REQ_UTF8_ARG(0,str);
+    REQ_UTF8_ARG(0, str);
 
-    return scope.Close(MDString::New(llvm::MDString::get(llvm::getGlobalContext(), *str)));
-  }
+    return scope.Close(
+        MDString::New(llvm::MDString::get(llvm::getGlobalContext(), *str)));
+}
 
-  Persistent<FunctionTemplate> MDString::s_ct;
-  Persistent<v8::Function> MDString::s_func;
-
+Persistent<FunctionTemplate> MDString::s_ct;
+Persistent<v8::Function> MDString::s_func;
 };
 
 #endif

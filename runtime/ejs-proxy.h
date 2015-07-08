@@ -9,9 +9,9 @@
 #include "ejs-value.h"
 #include "ejs-object.h"
 
-#define EJSVAL_IS_PROXY(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Proxy_specops))
-#define EJSVAL_TO_PROXY(v)     ((EJSProxy*)EJSVAL_TO_OBJECT(v))
-
+#define EJSVAL_IS_PROXY(v)                                                     \
+    (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Proxy_specops))
+#define EJSVAL_TO_PROXY(v) ((EJSProxy *)EJSVAL_TO_OBJECT(v))
 
 typedef struct {
     /* object header */
@@ -35,8 +35,9 @@ extern EJSSpecOps _ejs_Proxy_specops;
 
 void _ejs_proxy_init(ejsval global);
 
-void _ejs_proxy_new (ejsval handler, ejsval target);
-void _ejs_proxy_new_function (ejsval handler, ejsval target, ejsval callTrap, ejsval constructTrap);
+void _ejs_proxy_new(ejsval handler, ejsval target);
+void _ejs_proxy_new_function(ejsval handler, ejsval target, ejsval callTrap,
+                             ejsval constructTrap);
 
 EJS_END_DECLS
 

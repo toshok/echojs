@@ -20,7 +20,8 @@ typedef enum {
     EJS_URI_ERROR
 } EJSNativeErrorType;
 
-#define EJSVAL_IS_ERROR(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Error_specops))
+#define EJSVAL_IS_ERROR(v)                                                     \
+    (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Error_specops))
 
 extern EJSSpecOps _ejs_Error_specops;
 
@@ -32,11 +33,16 @@ extern ejsval _ejs_SyntaxError_prototype;
 extern ejsval _ejs_TypeError_prototype;
 extern ejsval _ejs_URIError_prototype;
 
-extern ejsval _ejs_nativeerror_new (EJSNativeErrorType error_type, ejsval message);
-extern ejsval _ejs_nativeerror_new_utf8 (EJSNativeErrorType error_type, const char* message);
+extern ejsval _ejs_nativeerror_new(EJSNativeErrorType error_type,
+                                   ejsval message);
+extern ejsval _ejs_nativeerror_new_utf8(EJSNativeErrorType error_type,
+                                        const char *message);
 
-extern void _ejs_throw_nativeerror (EJSNativeErrorType error_type, ejsval message) __attribute__ ((noreturn));
-extern void _ejs_throw_nativeerror_utf8 (EJSNativeErrorType error_type, const char *message) __attribute__ ((noreturn));
+extern void _ejs_throw_nativeerror(EJSNativeErrorType error_type,
+                                   ejsval message) __attribute__((noreturn));
+extern void _ejs_throw_nativeerror_utf8(EJSNativeErrorType error_type,
+                                        const char *message)
+    __attribute__((noreturn));
 
 extern void _ejs_error_init(ejsval global);
 

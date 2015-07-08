@@ -4,8 +4,7 @@
 #include "node-llvm.h"
 namespace jsllvm {
 
-
-  class Call : public node::ObjectWrap {
+class Call : public node::ObjectWrap {
   public:
     static void Init(v8::Handle<v8::Object> target);
 
@@ -18,20 +17,20 @@ namespace jsllvm {
     Call();
     virtual ~Call();
 
-    static v8::Handle<v8::Value> New(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Dump(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ToString(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetOnlyReadsMemory(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetDoesNotAccessMemory(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetDoesNotThrow(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetStructRet (const v8::Arguments& args);
+    static v8::Handle<v8::Value> New(const v8::Arguments &args);
+    static v8::Handle<v8::Value> Dump(const v8::Arguments &args);
+    static v8::Handle<v8::Value> ToString(const v8::Arguments &args);
+    static v8::Handle<v8::Value> SetOnlyReadsMemory(const v8::Arguments &args);
+    static v8::Handle<v8::Value>
+    SetDoesNotAccessMemory(const v8::Arguments &args);
+    static v8::Handle<v8::Value> SetDoesNotThrow(const v8::Arguments &args);
+    static v8::Handle<v8::Value> SetStructRet(const v8::Arguments &args);
 
     static v8::Persistent<v8::FunctionTemplate> s_ct;
     static v8::Persistent<v8::Function> s_func;
-  };
+};
 
-
-  class Invoke : public node::ObjectWrap {
+class Invoke : public node::ObjectWrap {
   public:
     static void Init(v8::Handle<v8::Object> target);
 
@@ -44,18 +43,18 @@ namespace jsllvm {
     Invoke();
     virtual ~Invoke();
 
-    static v8::Handle<v8::Value> New(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Dump(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ToString(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetOnlyReadsMemory(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetDoesNotAccessMemory(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetDoesNotThrow(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetStructRet (const v8::Arguments& args);
+    static v8::Handle<v8::Value> New(const v8::Arguments &args);
+    static v8::Handle<v8::Value> Dump(const v8::Arguments &args);
+    static v8::Handle<v8::Value> ToString(const v8::Arguments &args);
+    static v8::Handle<v8::Value> SetOnlyReadsMemory(const v8::Arguments &args);
+    static v8::Handle<v8::Value>
+    SetDoesNotAccessMemory(const v8::Arguments &args);
+    static v8::Handle<v8::Value> SetDoesNotThrow(const v8::Arguments &args);
+    static v8::Handle<v8::Value> SetStructRet(const v8::Arguments &args);
 
     static v8::Persistent<v8::FunctionTemplate> s_ct;
     static v8::Persistent<v8::Function> s_func;
-  };
-
+};
 };
 
 #endif /* NODE_LLVM_CALLINVOKE_H */

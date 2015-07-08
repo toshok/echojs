@@ -9,8 +9,8 @@
 
 EJS_BEGIN_DECLS
 
-void _ejs_log (const char* fmt, ... );
-void _ejs_logstr (const char* str);
+void _ejs_log(const char *fmt, ...);
+void _ejs_logstr(const char *str);
 
 EJS_END_DECLS
 

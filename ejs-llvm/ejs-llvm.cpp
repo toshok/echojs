@@ -23,13 +23,11 @@
 #include "landingpad.h"
 #include "dibuilder.h"
 
-std::string& trim(std::string& str)
-{
-    str.erase(0, str.find_first_not_of(" \n"));       //prefixing spaces
-    str.erase(str.find_last_not_of(" \n")+1);         //surfixing spaces
+std::string &trim(std::string &str) {
+    str.erase(0, str.find_first_not_of(" \n")); // prefixing spaces
+    str.erase(str.find_last_not_of(" \n") + 1); // surfixing spaces
     return str;
 }
-
 
 using namespace ejsllvm;
 
@@ -38,37 +36,35 @@ using namespace ejsllvm;
 
 extern "C" {
 
-void
-_ejs_llvm_init (ejsval global)
-{
+void _ejs_llvm_init(ejsval global) {
     // initialize our atoms before anything else
     _ejs_init_static_strings();
 
-    Type_init (global);
-    FunctionType_init (global);
-    StructType_init (global);
-    ArrayType_init (global);
+    Type_init(global);
+    FunctionType_init(global);
+    StructType_init(global);
+    ArrayType_init(global);
 
-    Function_init (global);
-    GlobalVariable_init (global);
-    Module_init (global);
-    Value_init (global);
-    BasicBlock_init (global);
-    IRBuilder_init (global);
-    Call_init (global);
-    Invoke_init (global);
-    Constant_init (global);
-    ConstantArray_init (global);
-    ConstantFP_init (global);
-    Switch_init (global);
-    LandingPad_init (global);
-    AllocaInst_init (global);
-    LoadInst_init (global);
+    Function_init(global);
+    GlobalVariable_init(global);
+    Module_init(global);
+    Value_init(global);
+    BasicBlock_init(global);
+    IRBuilder_init(global);
+    Call_init(global);
+    Invoke_init(global);
+    Constant_init(global);
+    ConstantArray_init(global);
+    ConstantFP_init(global);
+    Switch_init(global);
+    LandingPad_init(global);
+    AllocaInst_init(global);
+    LoadInst_init(global);
 #if notyet
-    PHINode_init (global);
+    PHINode_init(global);
 #endif
 
-    DIBuilder_init (global);
+    DIBuilder_init(global);
     DIDescriptor_init(global);
     DIType_init(global);
     DIScope_init(global);
@@ -77,6 +73,4 @@ _ejs_llvm_init (ejsval global)
     DILexicalBlock_init(global);
     DebugLoc_init(global);
 }
-
-
 };

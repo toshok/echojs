@@ -4,11 +4,11 @@
 #include "ejs-llvm.h"
 
 namespace ejsllvm {
-  void BasicBlock_init (ejsval exports);
+void BasicBlock_init(ejsval exports);
 
-  ejsval BasicBlock_new(llvm::BasicBlock* llvm_fun);
+ejsval BasicBlock_new(llvm::BasicBlock *llvm_fun);
 
-  llvm::BasicBlock* BasicBlock_GetLLVMObj(ejsval val);
+llvm::BasicBlock *BasicBlock_GetLLVMObj(ejsval val);
 };
 
 #endif /* EJS_LLVM_BASICBLOCK_H */

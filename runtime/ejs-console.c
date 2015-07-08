@@ -26,120 +26,105 @@
 #define OUTPUT0(str) NSLog(@str)
 #define OUTPUT(format, ...) NSLog(@format, __VA_ARGS__)
 #else
-#define OUTPUT0(str) fprintf (outfile, str)
-#define OUTPUT(format, ...) fprintf (outfile, format, __VA_ARGS__)
+#define OUTPUT0(str) fprintf(outfile, str)
+#define OUTPUT(format, ...) fprintf(outfile, format, __VA_ARGS__)
 #endif
 
 ejsval console_toString(ejsval arg);
 
-ejsval
-console_toString(ejsval arg) {
+ejsval console_toString(ejsval arg) {
     if (EJSVAL_IS_STRING(arg)) {
         return arg;
-    }
-    else if (EJSVAL_IS_NUMBER(arg) || EJSVAL_IS_NUMBER_OBJECT(arg)) {
+    } else if (EJSVAL_IS_NUMBER(arg) || EJSVAL_IS_NUMBER_OBJECT(arg)) {
         return _ejs_number_to_string(arg);
-    }
-    else if (EJSVAL_IS_ARRAY(arg)) {
+    } else if (EJSVAL_IS_ARRAY(arg)) {
         if (EJS_ARRAY_LEN(arg) == 0) {
             return _ejs_string_new_utf8("[]");
-        }
-        else {
+        } else {
             ejsval comma_space = _ejs_string_new_utf8(", ");
             ejsval lbracket = _ejs_string_new_utf8("[ ");
             ejsval rbracket = _ejs_string_new_utf8(" ]");
-             
-            ejsval content_strings = _ejs_array_new(EJS_ARRAY_LEN(arg), EJS_FALSE);
+
+            ejsval content_strings =
+                _ejs_array_new(EJS_ARRAY_LEN(arg), EJS_FALSE);
             // XXX the loop below assumes arg is a dense array
             EJS_ASSERT(EJSVAL_IS_DENSE_ARRAY(arg));
-            for (int i = 0; i < EJS_ARRAY_LEN(arg); i ++) {
-                EJS_DENSE_ARRAY_ELEMENTS(content_strings)[i] = console_toString(EJS_DENSE_ARRAY_ELEMENTS(arg)[i]);
+            for (int i = 0; i < EJS_ARRAY_LEN(arg); i++) {
+                EJS_DENSE_ARRAY_ELEMENTS(content_strings)
+                [i] = console_toString(EJS_DENSE_ARRAY_ELEMENTS(arg)[i]);
             }
 
-            ejsval contents = _ejs_array_join (content_strings, comma_space);
-             
-            return _ejs_string_concatv (lbracket, contents, rbracket, _ejs_null);
+            ejsval contents = _ejs_array_join(content_strings, comma_space);
+
+            return _ejs_string_concatv(lbracket, contents, rbracket, _ejs_null);
         }
-    }
-    else if (EJSVAL_IS_TYPEDARRAY(arg)) {
+    } else if (EJSVAL_IS_TYPEDARRAY(arg)) {
         if (EJS_TYPED_ARRAY_LEN(arg) == 0) {
             return _ejs_string_new_utf8("[]");
-        }
-        else {
+        } else {
             ejsval lbracket = _ejs_string_new_utf8("[ ");
             ejsval rbracket = _ejs_string_new_utf8(" ]");
             ejsval contents = ToString(arg);
-            return _ejs_string_concatv (lbracket, contents, rbracket, _ejs_null);
+            return _ejs_string_concatv(lbracket, contents, rbracket, _ejs_null);
         }
-    }
-    else if (EJSVAL_IS_ERROR(arg)) {
+    } else if (EJSVAL_IS_ERROR(arg)) {
         ejsval strval = ToString(arg);
         ejsval lbracket = _ejs_string_new_utf8("[");
         ejsval rbracket = _ejs_string_new_utf8("]");
 
         return _ejs_string_concatv(lbracket, strval, rbracket, _ejs_null);
-    }
-    else if (EJSVAL_IS_FUNCTION(arg)) {
-        ejsval func_name = _ejs_object_getprop (arg, _ejs_atom_name);
+    } else if (EJSVAL_IS_FUNCTION(arg)) {
+        ejsval func_name = _ejs_object_getprop(arg, _ejs_atom_name);
 
-        if (EJSVAL_IS_NULL_OR_UNDEFINED(func_name) || EJSVAL_TO_STRLEN(func_name) == 0) {
+        if (EJSVAL_IS_NULL_OR_UNDEFINED(func_name) ||
+            EJSVAL_TO_STRLEN(func_name) == 0) {
             return _ejs_string_new_utf8("[Function]");
-        }
-        else {
+        } else {
             ejsval left = _ejs_string_new_utf8("[Function: ");
             ejsval right = _ejs_string_new_utf8("]");
 
             return _ejs_string_concatv(left, func_name, right, _ejs_null);
         }
-    }
-    else if (EJSVAL_IS_STRING_OBJECT(arg)) {
+    } else if (EJSVAL_IS_STRING_OBJECT(arg)) {
         return ToString(arg);
-    }
-    else if (EJSVAL_IS_REGEXP(arg)) {
+    } else if (EJSVAL_IS_REGEXP(arg)) {
         return ToString(arg);
-    }
-    else if (EJSVAL_IS_OBJECT(arg)) {
+    } else if (EJSVAL_IS_OBJECT(arg)) {
         ejsval ret = _ejs_json_stringify(arg);
         if (EJSVAL_IS_NULL(ret))
             return ToString(arg);
         return ret;
-    }
-    else {
+    } else {
         return ToString(arg);
     }
 }
 
-static ejsval
-output (FILE *outfile, uint32_t argc, ejsval *args)
-{
-    for (int i = 0; i < argc; i ++) {
+static ejsval output(FILE *outfile, uint32_t argc, ejsval *args) {
+    for (int i = 0; i < argc; i++) {
         ejsval out_str = console_toString(args[i]);
-        char* strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(out_str));
-        OUTPUT ("%s", strval_utf8);
-        free (strval_utf8);
+        char *strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(out_str));
+        OUTPUT("%s", strval_utf8);
+        free(strval_utf8);
 #if !IOS
         if (i < argc - 1)
-            fputc (' ', outfile);
+            fputc(' ', outfile);
 #endif
     }
 #if !IOS
-    fputc ('\n', outfile);
+    fputc('\n', outfile);
 #endif
 
     return _ejs_undefined;
 }
 
-
-static ejsval
-_ejs_console_log (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    return output (stdout, argc, args);
+static ejsval _ejs_console_log(ejsval env, ejsval _this, uint32_t argc,
+                               ejsval *args) {
+    return output(stdout, argc, args);
 }
 
-static ejsval
-_ejs_console_warn (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    return output (stderr, argc, args);
+static ejsval _ejs_console_warn(ejsval env, ejsval _this, uint32_t argc,
+                                ejsval *args) {
+    return output(stderr, argc, args);
 }
 
 // terrible, use a linked list for the timeval slots.
@@ -147,18 +132,16 @@ typedef struct TimevalSlot {
     EJS_LIST_HEADER(struct TimevalSlot);
 
     int str_len;
-    char* str;
+    char *str;
     struct timeval tv;
 } TimevalSlot;
 
-static TimevalSlot* timevals;
+static TimevalSlot *timevals;
 
-static void
-add_timeval_slot(ejsval for_string, struct timeval** tv)
-{
+static void add_timeval_slot(ejsval for_string, struct timeval **tv) {
     // no checking here, we rely on callers having previously called
     // get_timeval_slot in order to check for duplicates
-    TimevalSlot* new_tvs = malloc(sizeof(TimevalSlot));
+    TimevalSlot *new_tvs = malloc(sizeof(TimevalSlot));
     EJS_LIST_INIT(new_tvs);
 
     new_tvs->str = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(for_string));
@@ -168,16 +151,17 @@ add_timeval_slot(ejsval for_string, struct timeval** tv)
     *tv = &new_tvs->tv;
 }
 
-static EJSBool
-get_timeval_slot(ejsval for_string, struct timeval** tv, char** str_out)
-{
-    char* str = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(for_string));
+static EJSBool get_timeval_slot(ejsval for_string, struct timeval **tv,
+                                char **str_out) {
+    char *str = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(for_string));
     int forstr_len = EJSVAL_TO_STRLEN(for_string);
 
-    for (TimevalSlot* tvs = timevals; tvs; tvs = tvs->next) {
+    for (TimevalSlot *tvs = timevals; tvs; tvs = tvs->next) {
         if (forstr_len == tvs->str_len && !strcmp(str, tvs->str)) {
-            if (tv)      *tv = &tvs->tv;
-            if (str_out) *str_out = tvs->str;
+            if (tv)
+                *tv = &tvs->tv;
+            if (str_out)
+                *str_out = tvs->str;
             free(str);
             return EJS_TRUE;
         }
@@ -186,13 +170,11 @@ get_timeval_slot(ejsval for_string, struct timeval** tv, char** str_out)
     return EJS_FALSE;
 }
 
-static void
-remove_timeval_slot(ejsval for_string)
-{
-    char* str = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(for_string));
+static void remove_timeval_slot(ejsval for_string) {
+    char *str = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(for_string));
     int forstr_len = EJSVAL_TO_STRLEN(for_string);
 
-    for (TimevalSlot* tvs = timevals; tvs; tvs = tvs->next) {
+    for (TimevalSlot *tvs = timevals; tvs; tvs = tvs->next) {
         if (forstr_len == tvs->str_len && !strcmp(str, tvs->str)) {
             EJS_LIST_DETACH(tvs, timevals);
             free(str);
@@ -201,58 +183,61 @@ remove_timeval_slot(ejsval for_string)
             return;
         }
     }
-    
+
     free(str);
     _ejs_log("timer wasn't present in list.");
 }
 
-static ejsval
-_ejs_console_time (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    if (argc == 0 || !EJSVAL_IS_STRING(args[0])) return _ejs_undefined;
+static ejsval _ejs_console_time(ejsval env, ejsval _this, uint32_t argc,
+                                ejsval *args) {
+    if (argc == 0 || !EJSVAL_IS_STRING(args[0]))
+        return _ejs_undefined;
 
-    char* str;
+    char *str;
     if (get_timeval_slot(args[0], NULL, &str)) {
         char buf[256];
-        snprintf (buf, sizeof(buf), "the timer %s is already active", str);
-        _ejs_throw_nativeerror_utf8 (EJS_ERROR, buf);
+        snprintf(buf, sizeof(buf), "the timer %s is already active", str);
+        _ejs_throw_nativeerror_utf8(EJS_ERROR, buf);
     }
 
     struct timeval *tv_before_slot;
 
     add_timeval_slot(args[0], &tv_before_slot);
 
-    // do the gettimeofday as last as possible here so we don't include our overhead
-    gettimeofday (tv_before_slot, NULL);
+    // do the gettimeofday as last as possible here so we don't include our
+    // overhead
+    gettimeofday(tv_before_slot, NULL);
 
     return _ejs_undefined;
 }
 
-static ejsval
-_ejs_console_timeEnd (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static ejsval _ejs_console_timeEnd(ejsval env, ejsval _this, uint32_t argc,
+                                   ejsval *args) {
     struct timeval tvafter;
 
-    // do the gettimeofday as early as possible here so we don't include our overhead
-    gettimeofday (&tvafter, NULL);
+    // do the gettimeofday as early as possible here so we don't include our
+    // overhead
+    gettimeofday(&tvafter, NULL);
 
-    if (argc == 0 || !EJSVAL_IS_STRING(args[0])) return _ejs_undefined;
+    if (argc == 0 || !EJSVAL_IS_STRING(args[0]))
+        return _ejs_undefined;
 
     struct timeval *tv_before_slot;
     char *str;
     if (!get_timeval_slot(args[0], &tv_before_slot, &str)) {
-        _ejs_throw_nativeerror_utf8 (EJS_ERROR, "the timer XXX was not active");
+        _ejs_throw_nativeerror_utf8(EJS_ERROR, "the timer XXX was not active");
     }
 
-    uint64_t usec_before = tv_before_slot->tv_sec * 1000000 + tv_before_slot->tv_usec;
+    uint64_t usec_before =
+        tv_before_slot->tv_sec * 1000000 + tv_before_slot->tv_usec;
     uint64_t usec_after = tvafter.tv_sec * 1000000 + tvafter.tv_usec;
 
 #if !IOS
-    FILE* outfile = stdout;
+    FILE *outfile = stdout;
 #endif
-    OUTPUT ("%s: %gms", str, (usec_after - usec_before) / 1000.0);
+    OUTPUT("%s: %gms", str, (usec_after - usec_before) / 1000.0);
 #if !IOS
-    fprintf (outfile, "\n");
+    fprintf(outfile, "\n");
 #endif
 
     remove_timeval_slot(args[0]);
@@ -262,13 +247,12 @@ _ejs_console_timeEnd (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
 ejsval _ejs_console EJSVAL_ALIGNMENT;
 
-void
-_ejs_console_init(ejsval global)
-{
-    _ejs_console = _ejs_object_new (_ejs_null, &_ejs_Object_specops);
-    _ejs_object_setprop (global, _ejs_atom_console, _ejs_console);
+void _ejs_console_init(ejsval global) {
+    _ejs_console = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
+    _ejs_object_setprop(global, _ejs_atom_console, _ejs_console);
 
-#define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_console, x, _ejs_console_##x)
+#define OBJ_METHOD(x)                                                          \
+    EJS_INSTALL_ATOM_FUNCTION(_ejs_console, x, _ejs_console_##x)
 
     OBJ_METHOD(log);
     OBJ_METHOD(warn);

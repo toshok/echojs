@@ -4,11 +4,11 @@
 #include "ejs-llvm.h"
 
 namespace ejsllvm {
-  void Value_init (ejsval exports);
+void Value_init(ejsval exports);
 
-  ejsval Value_new(llvm::Value* llvm_val);
+ejsval Value_new(llvm::Value *llvm_val);
 
-  llvm::Value* Value_GetLLVMObj(ejsval val);
+llvm::Value *Value_GetLLVMObj(ejsval val);
 };
 
 #endif /* EJS_LLVM_VALUE_H */

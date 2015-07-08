@@ -19,7 +19,7 @@ extern EJSSpecOps _ejs_WeakSet_specops;
 
 void _ejs_weakset_init(ejsval global);
 
-ejsval _ejs_weakset_new ();
+ejsval _ejs_weakset_new();
 
 EJS_END_DECLS
 

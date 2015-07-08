@@ -12,34 +12,31 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 
-
 #define GC_ON_SHUTDOWN 0
 
 extern const char *entry_filename;
 
-int
-main(int argc, char** argv)
-{
+int main(int argc, char **argv) {
     //@autoreleasepool {
 
-        EJS_GC_MARK_THREAD_STACK_BOTTOM;
+    EJS_GC_MARK_THREAD_STACK_BOTTOM;
 
-        _ejs_init(argc, argv);
+    _ejs_init(argc, argv);
 
-        START_SHADOW_STACK_FRAME;
+    START_SHADOW_STACK_FRAME;
 
-        ADD_STACK_ROOT(ejsval, entry_name, _ejs_string_new_utf8(entry_filename));
+    ADD_STACK_ROOT(ejsval, entry_name, _ejs_string_new_utf8(entry_filename));
 
-        _ejs_invoke_closure (_ejs_require, _ejs_null, 1, &entry_name);
+    _ejs_invoke_closure(_ejs_require, _ejs_null, 1, &entry_name);
 
-        END_SHADOW_STACK_FRAME;
+    END_SHADOW_STACK_FRAME;
 
-        UIApplicationMain (argc, argv, NULL, NULL);
+    UIApplicationMain(argc, argv, NULL, NULL);
 
 #if GC_ON_SHUTDOWN
-        _ejs_gc_shutdown();
+    _ejs_gc_shutdown();
 #endif
-        return 0;
+    return 0;
 
     //}
 }

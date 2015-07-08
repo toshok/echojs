@@ -5,8 +5,7 @@
 
 namespace ejsllvm {
 
-  extern void Constant_init (ejsval exports);
-
+extern void Constant_init(ejsval exports);
 };
 
 #endif /* EJS_LLVM_CONSTANT_H */

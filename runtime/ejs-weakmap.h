@@ -22,7 +22,7 @@ extern EJSSpecOps _ejs_WeakMap_specops;
 
 void _ejs_weakmap_init(ejsval global);
 
-ejsval _ejs_weakmap_new ();
+ejsval _ejs_weakmap_new();
 
 EJS_END_DECLS
 

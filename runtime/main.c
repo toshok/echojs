@@ -12,7 +12,7 @@
 
 #define GC_ON_SHUTDOWN 0
 
-extern EJSModule* entry_module;
+extern EJSModule *entry_module;
 
 #include <signal.h>
 #include <setjmp.h>
@@ -20,31 +20,25 @@ extern EJSModule* entry_module;
 
 sigjmp_buf segvbuf;
 
-static void
-segv_handler(int signum)
-{
-    siglongjmp (segvbuf, 1);
-}
+static void segv_handler(int signum) { siglongjmp(segvbuf, 1); }
 
-
-int
-main(int argc, char** argv)
-{
-    if (getenv ("EJS_WAIT_ON_SEGV")) {
+int main(int argc, char **argv) {
+    if (getenv("EJS_WAIT_ON_SEGV")) {
         if (sigsetjmp(segvbuf, 1)) {
-            printf ("attach to pid %d\n", getpid());
-            while (1) sleep (100);
+            printf("attach to pid %d\n", getpid());
+            while (1)
+                sleep(100);
             abort();
         }
 
-        signal (SIGSEGV, segv_handler);
+        signal(SIGSEGV, segv_handler);
     }
 
     EJS_GC_MARK_THREAD_STACK_BOTTOM;
 
     _ejs_init(argc, argv);
 
-    _ejs_module_resolve (entry_module);
+    _ejs_module_resolve(entry_module);
 
     _ejs_runloop_start();
 

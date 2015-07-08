@@ -4,11 +4,11 @@
 #include "ejs-llvm.h"
 
 namespace ejsllvm {
-  extern void AllocaInst_init (ejsval exports);
+extern void AllocaInst_init(ejsval exports);
 
-  ejsval AllocaInst_new(llvm::AllocaInst* llvm_alloca);
+ejsval AllocaInst_new(llvm::AllocaInst *llvm_alloca);
 
-  extern llvm::AllocaInst* AllocaInst_GetLLVMObj(ejsval val);
+extern llvm::AllocaInst *AllocaInst_GetLLVMObj(ejsval val);
 };
 
 #endif /* EJS_LLVM_ALLOCAINST_H */
