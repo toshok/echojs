@@ -10,6 +10,7 @@ SOURCES= \
 	constant.cpp \
 	constantarray.cpp \
 	constantfp.cpp \
+	dibuilder.cpp \
 	ejs-llvm.cpp \
 	function.cpp \
 	functiontype.cpp \
@@ -41,6 +42,8 @@ LLVM_LINK_FLAGS := $(LLVM_LINK_FLAGS) -lcurses
 endif
 
 CXXFLAGS=-I../runtime -I$(LLVM_INCLUDEDIR) $(LLVM_CXXFLAGS) $(OSX_CFLAGS)
+
+CFLAGS += -Wno-c99-extensions -Wno-gnu-statement-expression
 
 OBJECTS=$(SOURCES:%.cpp=%.o)
 

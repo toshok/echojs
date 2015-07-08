@@ -3,7 +3,7 @@ var a=[], i = 0;
 a[i++] += 5;
 console.log(i);
 
-var a = [];
+a = [];
 var b = {};
 i = 0;
 var j = 0;

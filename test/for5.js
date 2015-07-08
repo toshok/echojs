@@ -6,6 +6,6 @@ for (var i = 0; i < 5; i ++) {
     console.log ("hello world " + i_);
    };
 }
-for (var i = 0; i < 5; i ++) {
+for (i = 0; i < 5; i ++) {
   a[i]();
 }

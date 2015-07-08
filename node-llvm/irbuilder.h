@@ -61,6 +61,9 @@ namespace jsllvm {
     static v8::Handle<v8::Value> CreateLifetimeStart(const v8::Arguments& args);
     static v8::Handle<v8::Value> CreateLifetimeEnd(const v8::Arguments& args);
 
+    static v8::Handle<v8::Value> GetCurrentDebugLocation(const v8::Arguments& args);
+    static v8::Handle<v8::Value> SetCurrentDebugLocation(const v8::Arguments& args);
+
     static v8::Persistent<v8::FunctionTemplate> s_ct;
     static v8::Persistent<v8::Function> s_func;
   };

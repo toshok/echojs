@@ -67,7 +67,16 @@ namespace jsllvm {
     HandleScope scope;
     if (args.Length()) {
       REQ_UTF8_ARG(0, name);
-      Module* module = new Module(new llvm::Module(*name, llvm::getGlobalContext()));
+      llvm::Module* llvm_module = new llvm::Module(*name, llvm::getGlobalContext());
+      llvm_module->addModuleFlag(llvm::Module::Warning, "Debug Info Version", llvm::DEBUG_METADATA_VERSION);
+
+#if notyet
+      // Darwin only supports dwarf2.
+      if (llvm::Triple(llvm::sys::getProcessTriple()).isOSDarwin())
+#endif
+	llvm_module->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 2);
+
+      Module* module = new Module(llvm_module);
       module->Wrap(args.This());
     }
     return scope.Close(args.This());

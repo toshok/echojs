@@ -1,5 +1,5 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset:
- * 4 -*- vim: set ts=4 sw=4 et tw=99 ft=cpp:
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
 #include "ejs-llvm.h"
@@ -9,6 +9,7 @@
 #include "ejs-function.h"
 #include "ejs-string.h"
 #include "irbuilder.h"
+#include "dibuilder.h"
 #include "type.h"
 #include "value.h"
 #include "landingpad.h"
@@ -432,6 +433,20 @@ namespace ejsllvm {
         return Value_new (_llvm_builder.CreateResume(val));
     }
 
+    ejsval
+    IRBuilder_getCurrentDebugLocation(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        return DebugLoc_new(_llvm_builder.getCurrentDebugLocation());
+    }
+
+    ejsval
+    IRBuilder_setCurrentDebugLocation(ejsval env, ejsval _this, int argc, ejsval *args)
+    {
+        REQ_LLVM_DEBUGLOC_ARG(0, debugloc);
+        _llvm_builder.SetCurrentDebugLocation(debugloc);
+        return _ejs_undefined;
+    }
+
     void
     IRBuilder_init (ejsval exports)
     {
@@ -486,6 +501,8 @@ namespace ejsllvm {
     
         OBJ_METHOD(createLandingPad);
         OBJ_METHOD(createResume);
+
+        OBJ_METHOD(setCurrentDebugLocation);
 
 #undef OBJ_METHOD
     }

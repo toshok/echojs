@@ -152,7 +152,7 @@ namespace ejsllvm {
     Function_prototype_get_args(ejsval env, ejsval _this, int argc, ejsval *args)
     {
         Function* fun = ((Function*)EJSVAL_TO_OBJECT(_this));
-        unsigned size = fun->llvm_fun->arg_size();
+        unsigned int size = fun->llvm_fun->arg_size();
         ejsval result = _ejs_array_new(0, EJS_FALSE);
 
         unsigned Idx = 0;

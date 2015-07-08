@@ -1,5 +1,6 @@
 #include "node-llvm.h"
 #include "irbuilder.h"
+#include "dibuilder.h"
 #include "type.h"
 #include "value.h"
 #include "instruction.h"
@@ -73,6 +74,9 @@ namespace jsllvm {
 
     NODE_SET_METHOD(s_func, "createLifetimeStart", IRBuilder::CreateLifetimeStart);
     NODE_SET_METHOD(s_func, "createLifetimeEnd", IRBuilder::CreateLifetimeEnd);
+
+    NODE_SET_METHOD(s_func, "getCurrentDebugLocation", IRBuilder::GetCurrentDebugLocation);
+    NODE_SET_METHOD(s_func, "setCurrentDebugLocation", IRBuilder::SetCurrentDebugLocation);
 
     target->Set(String::NewSymbol("IRBuilder"),
 		s_func);
@@ -573,6 +577,22 @@ namespace jsllvm {
 
     Handle<v8::Value> result = Instruction::New(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateLifetimeEnd(val, size)));
     return scope.Close(result);
+  }
+
+  v8::Handle<v8::Value> IRBuilder::GetCurrentDebugLocation(const v8::Arguments& args)
+  {
+    HandleScope scope;
+
+    Handle<v8::Value> result = DebugLoc::New(IRBuilder::builder.getCurrentDebugLocation());
+    return scope.Close(result);
+  }
+
+  v8::Handle<v8::Value> IRBuilder::SetCurrentDebugLocation(const v8::Arguments& args)
+  {
+    HandleScope scope;
+    REQ_LLVM_DEBUGLOC_ARG(0, debugloc);
+    IRBuilder::builder.SetCurrentDebugLocation(debugloc);
+    return scope.Close(Undefined());
   }
 
   llvm::IRBuilder<> IRBuilder::builder(llvm::getGlobalContext());

@@ -1,5 +1,3 @@
-#if notyet
-
 #include "node-llvm.h"
 #include "dibuilder.h"
 #include "function.h"
@@ -109,6 +107,7 @@ namespace jsllvm {
 
     llvm::DIFile llvm_file = dib->llvm_dibuilder->createFile(*file, *dir);
 
+#if notyet
     std::vector<llvm::Value*> membertypes;
     membertypes.push_back (dib->llvm_dibuilder->createBasicType ("unsigned long long", 64, 64, llvm::dwarf::DW_ATE_unsigned));
 
@@ -117,6 +116,7 @@ namespace jsllvm {
 							       dib->llvm_dibuilder->getOrCreateArray(membertypes));
 
     dib->ejsValuePointerType = dib->llvm_dibuilder->createPointerType (dib->ejsValueType, sizeof(void*)*8);
+#endif
 
     Handle<v8::Value> result = DIFile::New(llvm_file);
     return scope.Close(result);
@@ -124,13 +124,9 @@ namespace jsllvm {
 
   llvm::DICompositeType DIBuilder::CreateDIFunctionType(llvm::DIFile file, llvm::FunctionType *fty)
   {
-    std::vector<llvm::Value*> args;
-    args.push_back (ejsValueType);
-    args.push_back (ejsValueType);
-    args.push_back (llvm_dibuilder->createBasicType ("unsigned int", 32, 32, llvm::dwarf::DW_ATE_unsigned));
-    args.push_back (ejsValuePointerType);
-
-    return llvm_dibuilder->createSubroutineType(file, llvm_dibuilder->getOrCreateArray(args));
+    // XXX add function parameter types
+    llvm::DITypeArray param_types = llvm_dibuilder->getOrCreateTypeArray(llvm::None);
+    return llvm_dibuilder->createSubroutineType(file, param_types);
   }
 
   Handle<v8::Value> DIBuilder::CreateFunction(const Arguments& args)
@@ -599,5 +595,3 @@ namespace jsllvm {
   Persistent<v8::Function> DebugLoc::s_func;
 
 };
-
-#endif
