@@ -1,3 +1,4 @@
+// clang-format off
 EJS_ATOM(setCurrentDebugLocation)
 EJS_ATOM(verify)
 EJS_ATOM(createCompileUnit)
@@ -93,3 +94,4 @@ EJS_ATOM(onlyReadsMemory)
 EJS_ATOM(doesNotAccessMemory)
 EJS_ATOM(setDataLayout)
 EJS_ATOM(setTriple)
+// clang-format on

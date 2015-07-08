@@ -1,3 +1,4 @@
+// clang-format off
 // pirouette specific things (move these to a separate compiler addon at some point)
 EJS_ATOM(ObjcHandle)
 EJS_ATOM(PirouetteObject)
@@ -654,3 +655,4 @@ EJS_ATOM2(000000000000000000000,zero_21)
 // some errors:
 
 EJS_ATOM2(property is not callable: ,error_not_callable)
+// clang-format on
