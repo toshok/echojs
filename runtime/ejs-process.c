@@ -23,21 +23,17 @@ _ejs_Process_get_env (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     char** p = environ;
 
     while (*p) {
-        char *env_entry = strdup(*p);
+        char *env_entry = *p;
         char *eq = strchr(env_entry, '=');
         if (!eq) {
-            free (env_entry);
             p++;
             continue;
         }
 
-        *eq = '\0';
-
-        ejsval k = _ejs_string_new_utf8(env_entry);
+        ejsval k = _ejs_string_new_utf8_len(env_entry, eq - env_entry);
         ejsval v = _ejs_string_new_utf8(eq+1);
 
         _ejs_object_define_value_property (env_obj, k, v, EJS_PROP_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
-        free (env_entry);
         p++;
     }
 
