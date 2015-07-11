@@ -8,6 +8,7 @@
 #include "ejs-function.h"
 #include "ejs-string.h"
 #include "ejs-error.h"
+#include "ejs-ops.h"
 
 #include <unistd.h>
 #include <string.h>
@@ -43,11 +44,11 @@ _ejs_Process_get_env (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 static ejsval
 _ejs_Process_exit (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
-    int exit_status = 0;
+    ejsval code = _ejs_undefined;
+    if (argc > 0)
+        code = args[0];
 
-    // FIXME ignore argc/args[0] for now
-
-    exit (exit_status);
+    exit(ToInt32(code));
 }
 
 static ejsval
