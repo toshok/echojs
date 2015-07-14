@@ -34,6 +34,7 @@ C_SOURCES= \
 	ejs-set.c \
 	ejs-string.c \
 	ejs-symbol.c \
+	ejs-timers.c \
 	ejs-typedarrays.c \
 	ejs-types.c \
 	ejs-uri.c \

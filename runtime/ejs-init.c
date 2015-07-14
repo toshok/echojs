@@ -27,6 +27,7 @@
 #include "ejs-require.h"
 #include "ejs-string.h"
 #include "ejs-symbol.h"
+#include "ejs-timers.h"
 #include "ejs-typedarrays.h"
 #include "ejs-uri.h"
 #include "ejs-value.h"
@@ -112,6 +113,7 @@ _ejs_init_classes()
     _ejs_Class_initialize (&_ejs_StringIterator_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Symbol_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_ArrayBuffer_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_Timer_specops, &_ejs_Object_specops);
 
     _ejs_Class_initialize (&_ejs_Int8Array_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_Uint8Array_specops, &_ejs_Object_specops);
@@ -189,6 +191,7 @@ _ejs_init(int argc, char** argv)
     _ejs_json_init(_ejs_global);
     _ejs_math_init(_ejs_global);
     _ejs_uri_init(_ejs_global);
+    _ejs_timers_init(_ejs_global);
 
     // ES6 bits
     _ejs_generator_init(_ejs_global);
