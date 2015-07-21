@@ -4,19 +4,23 @@ include $(TOP)/build/config.mk
 
 SUBDIRS=external-deps node-compat node-llvm ejs-llvm lib runtime
 
+STAGE1_EXE = ejs.exe.stage1
+STAGE2_EXE = ejs.exe.stage2
+STAGE3_EXE = ejs.exe.stage3
+
 # run git submodule magic if somebody is antsy and doesn't type the magic incantation before typing make
 all-local:: ensure-npmmodules ensure-submodules
 
 NODE_PATH?=$(shell $(MAKE) -C test node-path)
 
-all-hook:: stage2
+all-hook:: stage1
 
 install-local::
 	@$(MKDIR) $(bindir)
 	$(INSTALL) -c ejs.exe $(bindir)/ejs
 
 clean-local::
-	rm -f ejs-es6.js.exe.stage1 ejs-es6.js.exe.stage2 ejs-es6.js.exe.stage3 ejs.exe
+	@rm -f $(STAGE1_EXE) $(STAGE2_EXE) $(STAGE3_EXE) ejs.exe
 
 TARNAME=$(PRODUCT_name)-$(PRODUCT_VERSION)
 TARFILE=$(TARNAME).tar.gz
@@ -51,35 +55,35 @@ MODULE_DIRS = --moduledir $(TOP)/node-compat --moduledir $(TOP)/ejs-llvm
 make_in_lib:
 	@$(MAKE) -C lib
 
-stage1: ejs-es6.js.exe.stage1
-	@cp ejs-es6.js.exe.stage1 ejs.exe
+stage1: $(STAGE1_EXE)
+	@cp $(STAGE1_EXE) ejs.exe
 	@ls -l ejs.exe
 	@echo DONE
 
-stage2: ejs-es6.js.exe.stage2
-	@cp ejs-es6.js.exe.stage2 ejs.exe
+stage2: $(STAGE2_EXE)
+	@cp $(STAGE2_EXE) ejs.exe
 	@ls -l ejs.exe
 	@echo DONE
 
-stage3: ejs-es6.js.exe.stage3
-	@cp ejs-es6.js.exe.stage3 ejs.exe
+stage3: $(STAGE3_EXE)
+	@cp $(STAGE3_EXE) ejs.exe
 	@ls -l ejs.exe
 	@echo DONE
 
-ejs-es6.js.exe.stage1: make_in_lib
+$(STAGE1_EXE): lib/*.js lib/*.js.in
 	@echo Building stage 1
 	@NODE_PATH="$(NODE_PATH)" time ./ejs --srcdir --leave-temp $(MODULE_DIRS) ejs-es6.js
-	@mv ejs-es6.js.exe ejs-es6.js.exe.stage1
+	@mv ejs-es6.js.exe $@
 
-ejs-es6.js.exe.stage2: ejs-es6.js.exe.stage1
+$(STAGE2_EXE): $(STAGE1_EXE) lib/*.js lib/*.js.in
 	@echo Building stage 2
-	@time ./ejs-es6.js.exe.stage1 --srcdir --leave-temp $(MODULE_DIRS) ejs-es6.js
-	@mv ejs-es6.js.exe ejs-es6.js.exe.stage2
+	@time ./$(STAGE1_EXE) --srcdir --leave-temp $(MODULE_DIRS) ejs-es6.js
+	@mv ejs-es6.js.exe $@
 
-ejs-es6.js.exe.stage3: ejs-es6.js.exe.stage2
+$(STAGE3_EXE): $(STAGE2_EXE) lib/*.js lib/*.js.in
 	@echo Building stage 3
-	@time ./ejs-es6.js.exe.stage2 --srcdir --leave-temp $(MODULE_DIRS) ejs-es6.js
-	@mv ejs-es6.js.exe ejs-es6.js.exe.stage3
+	@time ./$(STAGE2_EXE) --srcdir --leave-temp $(MODULE_DIRS) ejs-es6.js
+	@mv ejs-es6.js.exe $@
 
 echo-command-line:
 	@echo ./ejs.exe --leave-temp $(MODULE_DIRS) ejs-es6.js

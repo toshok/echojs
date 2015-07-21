@@ -28,25 +28,21 @@ endif
 endif
 
 
-configure-pcre: $(PCRE_TARGETS:%=configure-pcre-%)
-
 build-pcre: $(PCRE_TARGETS:%=build-pcre-%)
 
 clean-pcre: $(PCRE_TARGETS:%=clean-pcre-%)
 
-install-pcre: $(PCRE_TARGETS:%=install-pcre-%)
-
-configure-pcre-linux:
+.stamp-configure-pcre-linux: $(TOP)/pcre/configure
 	@$(MKDIR) pcre-linux
 	(cd pcre-linux && \
-	../$(TOP)/pcre/configure $(PCRE_CONFIGURE_ARGS)) || rm -rf pcre-linux
+	../$(TOP)/pcre/configure $(PCRE_CONFIGURE_ARGS)) && touch $@
 
-configure-pcre-osx:
+.stamp-configure-pcre-osx: $(TOP)/pcre/configure
 	@$(MKDIR) pcre-osx
 	(cd pcre-osx && \
-	../$(TOP)/pcre/configure $(PCRE_CONFIGURE_ARGS)) || rm -rf pcre-osx
+	../$(TOP)/pcre/configure $(PCRE_CONFIGURE_ARGS)) && touch $@
 
-configure-pcre-iossim:
+.stamp-configure-pcre-iossim: $(TOP)/pcre/configure
 	@$(MKDIR) pcre-iossim
 	(cd pcre-iossim && \
 	PATH=$(IOSSIM_ROOT)/usr/bin:$$PATH \
@@ -54,9 +50,9 @@ configure-pcre-iossim:
 	CXX="clang++ $(IOSSIM_ARCH) $(IOSSIM_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSSIM_SYSROOT)" \
 	LD="clang" \
 	AS="$(IOSSIM_ROOT)/usr/bin/as" \
-	../$(TOP)/pcre/configure --host=$(IOSSIM_TRIPLE) $(PCRE_CONFIGURE_ARGS)) || rm -rf pcre-iossim
+	../$(TOP)/pcre/configure --host=$(IOSSIM_TRIPLE) $(PCRE_CONFIGURE_ARGS)) && touch $@
 
-configure-pcre-iosdev:
+.stamp-configure-pcre-iosdev: $(TOP)/pcre/configure
 	@$(MKDIR) pcre-iosdev
 	(cd pcre-iosdev && \
 	PATH=$(IOSDEV_ROOT)/usr/bin:$$PATH \
@@ -64,34 +60,46 @@ configure-pcre-iosdev:
 	CXX="clang++ $(IOSDEV_ARCH) $(IOSDEV_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSDEV_SYSROOT)" \
 	LD="clang" \
 	AS="$(IOSDEV_ROOT)/usr/bin/as" \
-	../$(TOP)/pcre/configure --host=$(IOSDEV_TRIPLE) $(PCRE_CONFIGURE_ARGS)) || rm -rf pcre-iosdev
+	../$(TOP)/pcre/configure --host=$(IOSDEV_TRIPLE) $(PCRE_CONFIGURE_ARGS)) && touch $@
 
-build-pcre-linux: configure-pcre-linux
-	$(MAKE) -C pcre-linux pcre_chartables.c libpcre16.la
+.stamp-build-pcre-linux: .stamp-configure-pcre-linux
+	$(MAKE) -C pcre-linux pcre_chartables.c libpcre16.la && touch $@
 
-build-pcre-osx: configure-pcre-osx
-	$(MAKE) -C pcre-osx pcre_chartables.c libpcre16.la
+.stamp-build-pcre-osx: .stamp-configure-pcre-osx
+	$(MAKE) -C pcre-osx pcre_chartables.c libpcre16.la && touch $@
 
-build-pcre-iossim: configure-pcre-iossim
-	$(MAKE) -C pcre-iossim pcre_chartables.c libpcre16.la
+.stamp-build-pcre-iossim: .stamp-configure-pcre-iossim
+	$(MAKE) -C pcre-iossim pcre_chartables.c libpcre16.la && touch $@
 
-build-pcre-iosdev: configure-pcre-iosdev
-	$(MAKE) -C pcre-iosdev pcre_chartables.c libpcre16.la
+.stamp-build-pcre-iosdev: .stamp-configure-pcre-iosdev
+	$(MAKE) -C pcre-iosdev pcre_chartables.c libpcre16.la && touch $@
 
-install-pcre-linux:
+
+
+build-pcre-linux: .stamp-build-pcre-linux
+build-pcre-osx: .stamp-build-pcre-osx
+build-pcre-iossim: .stamp-build-pcre-iossim
+build-pcre-iosdev: .stamp-build-pcre-iosdev
+
+
+install-pcre-linux: build-pcre-linux
 	@$(MKDIR) $(archlibdir)
 	$(INSTALL) -c pcre-linux/.libs/libpcre16.a $(archlibdir)
 
 clean-pcre-iossim:
 	-@test -d pcre-iossim && $(MAKE) -C pcre-iossim clean
+	@rm -f .stamp-build-pcre-iossim
 
 clean-pcre-iosdev:
 	-@test -d pcre-iosdev && $(MAKE) -C pcre-iosdev clean
+	@rm -f .stamp-build-pcre-iosdev
 
 clean-pcre-osx:
 	-@test -d pcre-osx    && $(MAKE) -C pcre-osx clean
+	@rm -f .stamp-build-pcre-osx
 
 clean-pcre-linux:
 	-@test -d pcre-linux  && $(MAKE) -C pcre-linux clean
+	@rm -f .stamp-build-pcre-linux
 
 include $(TOP)/build/build.mk
