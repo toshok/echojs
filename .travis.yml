@@ -21,7 +21,7 @@ before_script:
   - export LLVM_SUFFIX=
   - export PATH=$PATH:/usr/local/share/npm/bin:/usr/local/opt/llvm/bin:/usr/local/opt/llvm/share/llvm
   - export NODE_PATH=`make -C test node-path`
-  - make stage2
+  - make
 
 script:
   - export LLVM_SUFFIX=
