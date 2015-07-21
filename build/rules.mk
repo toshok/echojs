@@ -3,22 +3,20 @@ clean: clean-local clean-recurse clean-hook
 install: install-local install-recurse install-hook
 dist: dist-local dist-recurse dist-hook
 
-.NOTPARALLEL: all clean install dist
-
 all-local::
 clean-local::
 install-local::
 dist-local::
 
-all-recurse::
-clean-recurse::
-install-recurse::
-dist-recurse::
+all-recurse:: all-local
+clean-recurse:: clean-local
+install-recurse:: install-local
+dist-recurse:: dist-local
 
-all-hook::
-clean-hook::
-install-hook::
-dist-hook::
+all-hook:: all-local all-recurse
+clean-hook:: clean-local clean-recurse
+install-hook:: install-local install-recurse
+dist-hook:: dist-local dist-recurse
 
 RECURSE_INTO_SUBDIRS= \
 	@target=`echo $@ | sed -e s/-recurse//`; \
