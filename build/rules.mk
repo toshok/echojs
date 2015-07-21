@@ -3,6 +3,8 @@ clean: clean-local clean-recurse clean-hook
 install: install-local install-recurse install-hook
 dist: dist-local dist-recurse dist-hook
 
+.NOTPARALLEL: all clean install dist
+
 all-local::
 clean-local::
 install-local::
