@@ -57,7 +57,7 @@ all-local:: $(GENERATED_FILES) $(DESTDIR)/ejs-es6.js $(DESTDIR)/esprima/esprima-
 dist-local:: $(GENERATED_FILES)
 
 clean-local::
-	rm -rf $(DESTDIR)
+	rm -rf $(DESTDIR) host-config.js
 
 BABEL_SED_REPLACEMENTS= -e s,\"@llvm\",\"llvm\", \
 			-e s,\'@llvm\',\'llvm\', \

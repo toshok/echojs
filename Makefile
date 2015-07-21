@@ -52,7 +52,7 @@ bootstrap: stage3
 
 MODULE_DIRS = --moduledir $(TOP)/node-compat --moduledir $(TOP)/ejs-llvm
 
-make_in_lib:
+lib/generated:
 	@$(MAKE) -C lib
 
 stage1: $(STAGE1_EXE)
@@ -70,7 +70,7 @@ stage3: $(STAGE3_EXE)
 	@ls -l ejs.exe
 	@echo DONE
 
-$(STAGE1_EXE): lib/*.js lib/*.js.in
+$(STAGE1_EXE): lib/generated
 	@echo Building stage 1
 	@NODE_PATH="$(NODE_PATH)" time ./ejs --srcdir --leave-temp $(MODULE_DIRS) ejs-es6.js
 	@mv ejs-es6.js.exe $@
