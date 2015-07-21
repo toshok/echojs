@@ -17,9 +17,9 @@
 *.exe
 ejs.js
 ejs.exe
-ejs-es6.js.exe.stage1
-ejs-es6.js.exe.stage2
-ejs-es6.js.exe.stage3
+ejs.exe.stage1
+ejs.exe.stage2
+ejs.exe.stage3
 pcre-*
 echojs-*.tar.gz
 
