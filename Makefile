@@ -97,7 +97,9 @@ ensure-submodules:
 	  git submodule update; \
 	fi
 
-ensure-npmmodules:
-	npm install
+.stamp-npmmodules: package.json
+	@npm install && touch $@
+
+ensure-npmmodules: .stamp-npmmodules
 
 include $(TOP)/build/build.mk

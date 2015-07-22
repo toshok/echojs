@@ -24,3 +24,4 @@ pcre-*
 echojs-*.tar.gz
 
 node_modules/
+.stamp-*
