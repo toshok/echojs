@@ -1,7 +1,7 @@
 [submodule "esprima"]
 	path = esprima
 	url = https://github.com/toshok/esprima.git
-	branch = harmony
+	branch = es6
 [submodule "escodegen"]
 	path = escodegen
 	url = https://github.com/toshok/escodegen.git
