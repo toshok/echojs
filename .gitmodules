@@ -19,3 +19,6 @@
 [submodule "pirouette"]
 	path = pirouette
 	url = https://github.com/toshok/pirouette.git
+[submodule "esutils"]
+	path = esutils
+	url = https://github.com/toshok/esutils.git
