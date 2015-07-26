@@ -19,7 +19,6 @@ ES6_SOURCES=			 	\
 	exitable-scope.js		\
 	runtime.js			\
 	module-info.js			\
-	map-es6.js			\
 	set-es6.js			\
 	stack-es6.js			\
 	host-config.js			\
