@@ -212,7 +212,7 @@ utf16_to_utf8_char (const jschar* utf16, char* utf8, int *utf16_adv)
         utf8[1] = (ucs2 & 0x3F) | 0x80;
         return 2;
     }
-    if (ucs2 >= 0x800 && ucs2 < 0xFFFF) {
+    if (ucs2 >= 0x800 && ucs2 <= 0xFFFF) {
         if (ucs2 >= 0xD800 && ucs2 <= 0xDFFF) {
             // surrogate pair
             jschar ucs2_2 = *(utf16 + 1);

@@ -83,7 +83,6 @@ $(call addExpectedFailure, number-subclassing1.js, "")
 $(call addExpectedFailure, set-subclassing1.js, "")
 $(call addExpectedFailure, string-subclassing1.js, "")
 
-$(call addExpectedFailure, object17.js, "")
 $(call addExpectedFailure, object18.js, "")
 
 $(call addExpectedFailure, math1.js, "")
