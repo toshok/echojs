@@ -32,17 +32,17 @@ build-pcre: $(PCRE_TARGETS:%=build-pcre-%)
 
 clean-pcre: $(PCRE_TARGETS:%=clean-pcre-%)
 
-.stamp-configure-pcre-linux: $(TOP)/pcre/configure
+.stamp-configure-pcre-linux: pcre/configure
 	@$(MKDIR) pcre-linux
 	(cd pcre-linux && \
-	../$(TOP)/pcre/configure $(PCRE_CONFIGURE_ARGS)) && touch $@
+	../pcre/configure $(PCRE_CONFIGURE_ARGS)) && touch $@
 
-.stamp-configure-pcre-osx: $(TOP)/pcre/configure
+.stamp-configure-pcre-osx: pcre/configure
 	@$(MKDIR) pcre-osx
 	(cd pcre-osx && \
-	../$(TOP)/pcre/configure $(PCRE_CONFIGURE_ARGS)) && touch $@
+	../pcre/configure $(PCRE_CONFIGURE_ARGS)) && touch $@
 
-.stamp-configure-pcre-iossim: $(TOP)/pcre/configure
+.stamp-configure-pcre-iossim: pcre/configure
 	@$(MKDIR) pcre-iossim
 	(cd pcre-iossim && \
 	PATH=$(IOSSIM_ROOT)/usr/bin:$$PATH \
@@ -50,9 +50,9 @@ clean-pcre: $(PCRE_TARGETS:%=clean-pcre-%)
 	CXX="clang++ $(IOSSIM_ARCH) $(IOSSIM_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSSIM_SYSROOT)" \
 	LD="clang" \
 	AS="$(IOSSIM_ROOT)/usr/bin/as" \
-	../$(TOP)/pcre/configure --host=$(IOSSIM_TRIPLE) $(PCRE_CONFIGURE_ARGS)) && touch $@
+	../pcre/configure --host=$(IOSSIM_TRIPLE) $(PCRE_CONFIGURE_ARGS)) && touch $@
 
-.stamp-configure-pcre-iosdev: $(TOP)/pcre/configure
+.stamp-configure-pcre-iosdev: pcre/configure
 	@$(MKDIR) pcre-iosdev
 	(cd pcre-iosdev && \
 	PATH=$(IOSDEV_ROOT)/usr/bin:$$PATH \
@@ -60,7 +60,7 @@ clean-pcre: $(PCRE_TARGETS:%=clean-pcre-%)
 	CXX="clang++ $(IOSDEV_ARCH) $(IOSDEV_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSDEV_SYSROOT)" \
 	LD="clang" \
 	AS="$(IOSDEV_ROOT)/usr/bin/as" \
-	../$(TOP)/pcre/configure --host=$(IOSDEV_TRIPLE) $(PCRE_CONFIGURE_ARGS)) && touch $@
+	../pcre/configure --host=$(IOSDEV_TRIPLE) $(PCRE_CONFIGURE_ARGS)) && touch $@
 
 .stamp-build-pcre-linux: .stamp-configure-pcre-linux
 	$(MAKE) -C pcre-linux pcre_chartables.c libpcre16.la && touch $@

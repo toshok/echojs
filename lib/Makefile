@@ -51,13 +51,13 @@ DESTDIR = generated
 
 GENERATED_EXTERNAL_FILES = \
 	$(DESTDIR)/ejs-es6.js \
-	$(DESTDIR)/esprima/esprima-es6.js \
-	$(DESTDIR)/escodegen/escodegen-es6.js \
-	$(DESTDIR)/estraverse/estraverse-es6.js \
-	$(DESTDIR)/esutils/esutils-es6.js \
-	$(DESTDIR)/esutils/lib/code.js \
-	$(DESTDIR)/esutils/lib/ast.js \
-	$(DESTDIR)/esutils/lib/keyword.js
+	$(DESTDIR)/external-deps/esprima/esprima-es6.js \
+	$(DESTDIR)/external-deps/escodegen/escodegen-es6.js \
+	$(DESTDIR)/external-deps/estraverse/estraverse-es6.js \
+	$(DESTDIR)/external-deps/esutils/esutils-es6.js \
+	$(DESTDIR)/external-deps/esutils/lib/code.js \
+	$(DESTDIR)/external-deps/esutils/lib/ast.js \
+	$(DESTDIR)/external-deps/esutils/lib/keyword.js
 
 GENERATED_FILES=$(ES6_SOURCES:%.js=$(DESTDIR)/lib/%.js)
 
@@ -80,31 +80,31 @@ $(DESTDIR)/ejs-es6.js: ../ejs-es6.js
 	@echo "require('babel/polyfill');" > $@
 	@$(BABEL) $< | sed $(BABEL_SED_REPLACEMENTS) >> $@
 
-$(DESTDIR)/esprima/esprima-es6.js: ../esprima/esprima-es6.js
+$(DESTDIR)/external-deps/esprima/esprima-es6.js: ../external-deps/esprima/esprima-es6.js
 	@echo [babel] $<
 	@mkdir -p `dirname $@`
 	@echo "require('babel/polyfill');" > $@
 	@$(BABEL) $< | sed $(BABEL_SED_REPLACEMENTS) >> $@
 
-$(DESTDIR)/escodegen/escodegen-es6.js: ../escodegen/escodegen-es6.js
+$(DESTDIR)/external-deps/escodegen/escodegen-es6.js: ../external-deps/escodegen/escodegen-es6.js
 	@echo [babel] $<
 	@mkdir -p `dirname $@`
 	@echo "require('babel/polyfill');" > $@
 	@$(BABEL) $< | sed $(BABEL_SED_REPLACEMENTS) >> $@
 
-$(DESTDIR)/estraverse/estraverse-es6.js: ../estraverse/estraverse-es6.js
+$(DESTDIR)/external-deps/estraverse/estraverse-es6.js: ../external-deps/estraverse/estraverse-es6.js
 	@echo [babel] $<
 	@mkdir -p `dirname $@`
 	@echo "require('babel/polyfill');" > $@
 	@$(BABEL) $< | sed $(BABEL_SED_REPLACEMENTS) >> $@
 
-$(DESTDIR)/esutils/esutils-es6.js: ../esutils/esutils-es6.js
+$(DESTDIR)/external-deps/esutils/esutils-es6.js: ../external-deps/esutils/esutils-es6.js
 	@echo [babel] $<
 	@mkdir -p `dirname $@`
 	@echo "require('babel/polyfill');" > $@
 	@$(BABEL) $< | sed $(BABEL_SED_REPLACEMENTS) >> $@
 
-$(DESTDIR)/esutils/lib/%.js: ../esutils/lib/%.js
+$(DESTDIR)/external-deps/esutils/lib/%.js: ../external-deps/esutils/lib/%.js
 	@echo [babel] $<
 	@mkdir -p `dirname $@`
 	@echo "require('babel/polyfill');" > $@

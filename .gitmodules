@@ -1,24 +1,24 @@
 [submodule "esprima"]
-	path = esprima
+	path = external-deps/esprima
 	url = https://github.com/toshok/esprima.git
 	branch = es6
 [submodule "escodegen"]
-	path = escodegen
+	path = external-deps/escodegen
 	url = https://github.com/toshok/escodegen.git
 	branch = harmony
 [submodule "parson"]
-	path = parson
+	path = external-deps/parson
 	url = https://github.com/toshok/parson.git
 [submodule "estraverse"]
-	path = estraverse
+	path = external-deps/estraverse
 	url = https://github.com/toshok/estraverse.git
 	branch = harmony
 [submodule "pcre"]
-	path = pcre
+	path = external-deps/pcre
 	url = https://github.com/toshok/pcre.git
 [submodule "pirouette"]
 	path = pirouette
 	url = https://github.com/toshok/pirouette.git
 [submodule "esutils"]
-	path = esutils
+	path = external-deps/esutils
 	url = https://github.com/toshok/esutils.git
