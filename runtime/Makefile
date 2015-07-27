@@ -42,7 +42,7 @@ C_SOURCES= \
 	ejs-weakset.c \
 	parson.c
 
-VPATH=.:../parson
+VPATH=.:../external-deps/parson
 
 CC=clang
 
