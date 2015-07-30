@@ -11,7 +11,7 @@ STAGE3_EXE = ejs.exe.stage3
 # run git submodule magic if somebody is antsy and doesn't type the magic incantation before typing make
 all-local:: ensure-npmmodules ensure-submodules
 
-NODE_PATH?=$(shell $(MAKE) -C test node-path)
+NODE_PATH?=$(shell $(MAKE) --no-print-directory -C test node-path)
 
 all-hook:: stage2
 

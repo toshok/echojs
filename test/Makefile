@@ -6,7 +6,8 @@ TOP=..
 .SILENT:
 
 TOPDIR=$(shell pwd)/..
-NODE_PATH=$(TOPDIR)/node-llvm/build/Release:$(TOPDIR)/lib/generated:/usr/local/lib/node_modules
+NPM_PREFIX=$(shell npm prefix -g)
+NODE_PATH=$(TOPDIR)/node-llvm/build/Release:$(TOPDIR)/lib/generated:$(NPM_PREFIX)/lib/node_modules
 NODE_FLAGS=--harmony --harmony-typeof
 TRACEUR_FLAGS=--block-binding true
 

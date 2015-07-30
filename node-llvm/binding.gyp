@@ -2,6 +2,7 @@
     "targets": [{
         "target_name": "llvm",
 	"cxxflags": ['<!@(echo $LLVM_CXXFLAGS)'],
+	"cflags": ['<!@(echo $LLVM_CXXFLAGS)'],
 	"include_dirs": ['<!@(echo $LLVM_INCLUDEDIR)'],
 	"defines": ['<!@(echo $LLVM_DEFINES)'],
         "sources": ['<!@(ls -1 *.cpp)'],

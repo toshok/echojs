@@ -37,7 +37,7 @@ _ejs_generator_new (ejsval generator_body)
     rv->generator_context.uc_stack.ss_sp = rv->stack;
     rv->generator_context.uc_stack.ss_size = GENERATOR_STACK_SIZE;
     rv->generator_context.uc_link = &rv->caller_context;
-    makecontext(&rv->generator_context, _ejs_generator_start, 1, rv);
+    makecontext(&rv->generator_context, (void(*)(void))_ejs_generator_start, 1, rv);
     memset(&rv->caller_context, 0, sizeof(rv->caller_context));
 
     return OBJECT_TO_EJSVAL(rv);
@@ -154,16 +154,24 @@ _ejs_generator_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 
     if (gen->stack) {
         _ejs_gc_mark_conservative_range(gen->stack,
+#if __APPLE__
 #if TARGET_CPU_AMD64
                                         (void*)gen->generator_context.__mcontext_data.__ss.__rsp
 #elif TARGET_CPU_X86
                                         (void*)gen->generator_context.__mcontext_data.__ss.__esp
 #elif TARGET_CPU_ARM
                                         (void*)gen->generator_context.__mcontext_data.__ss.__sp
-#elif TARGET_CPU_ARM64
-                                        (void*)gen->generator_context.__mcontext_data.__ss.__sp
 #else
-#error "unimplemented"
+#error "unimplemented darwin cpu arch"
+#endif
+#elif linux
+#if TARGET_CPU_AMD64
+                                        (void*)gen->generator_context.uc_mcontext.gregs[REG_RSP]
+#else
+#error "unimplemented linux cpu arch"
+#endif
+#else
+#error "unimplemented platform"
 #endif
                                     );
     }
