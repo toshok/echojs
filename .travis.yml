@@ -2,7 +2,7 @@ os:
   - linux
   - osx
 
-language: objective-c
+language: c++
 
 notifications:
   webhooks:
