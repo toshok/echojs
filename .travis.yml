@@ -1,3 +1,7 @@
+os:
+  - linux
+  - osx
+
 language: objective-c
 
 notifications:
@@ -9,13 +13,12 @@ notifications:
     on_start: false     # default: false
 
 before_install:
-  - brew update
-  - brew tap homebrew/versions
+  - sh ./ci/setup-pkg-$TRAVIS_OS_NAME.sh
 
 install:
   - export PATH=$PATH:/usr/local/share/npm/bin
-  - sh ./ci/install-node.sh
-  - sh ./ci/install-llvm.sh
+  - sh ./ci/install-node-$TRAVIS_OS_NAME.sh
+  - sh ./ci/install-llvm-$TRAVIS_OS_NAME.sh
 
 before_script:
   - export LLVM_SUFFIX=
