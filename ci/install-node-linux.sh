@@ -1,4 +1,4 @@
-apt-get install nodejs nodejs-legacy
+sudo apt-get install nodejs nodejs-legacy
 
-npm install -g node-gyp
-npm install -g babel
+sudo npm install -g node-gyp
+sudo npm install -g babel
