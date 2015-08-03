@@ -59,7 +59,7 @@ else
 INVOKE_CATCH=ejs-invoke-closure-catch32.o.linux
 endif
 
-ifneq ($(TRAVIS_BUILD_NUMBER),)
+ifeq ($(TRAVIS_BUILD_NUMBER),)
 RUNLOOP_C_IMPL=ejs-runloop-libuv.c
 else
 RUNLOOP_C_IMPL=ejs-runloop-noop.c
