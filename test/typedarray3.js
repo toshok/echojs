@@ -1,3 +1,5 @@
+// xfail: we use %g to format floats/doubles, and differ when printing numbers.
+
 // various tests for range errors in ctor calls
 
 var buf = new ArrayBuffer(24);

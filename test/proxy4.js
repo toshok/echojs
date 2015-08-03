@@ -1,3 +1,5 @@
+// skip-if: true
+
 // from MDN
 let products = new Proxy([
   { name: 'Firefox', type: 'browser' },

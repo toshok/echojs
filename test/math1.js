@@ -1,3 +1,4 @@
+// xfail: XXX
 
 // new ES6 math functions
 console.log(Math.hypot(1,1))

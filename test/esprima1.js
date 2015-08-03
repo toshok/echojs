@@ -1,3 +1,6 @@
+// skip-if: true
+// revisit the esprima tests now that we have the es6 modules
+
 import esprima   from "esprima-es6";
 import escodegen from "escodegen-es6";
 

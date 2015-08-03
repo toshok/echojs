@@ -1,3 +1,5 @@
+// xfail: we differ from node on property descriptor flags.  verify with spec
+
 if (typeof(console) == "object") var print = console.log;
 
 var a = {};

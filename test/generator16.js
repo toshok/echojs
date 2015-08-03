@@ -1,3 +1,5 @@
+// xfail: generator support isn't 100%
+
 // "yield *, iterator closing via throw()" from kangax
 
 function __createIterableObject(a, b, c) {

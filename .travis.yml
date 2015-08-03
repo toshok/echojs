@@ -22,20 +22,15 @@ install:
 
 before_script:
   - export LLVM_SUFFIX=
-  - export PATH=$PATH:/usr/local/share/npm/bin:/usr/local/opt/llvm/bin:/usr/local/opt/llvm/share/llvm
-  - export NODE_PATH=`make -C test node-path`
+  - export PATH=$PATH:`npm prefix -g`/bin:/usr/local/opt/llvm/bin:/usr/local/opt/llvm/share/llvm
+  - export NODE_PATH=`make --no-print-directory -C test node-path`
   - make
 
 script:
   - export LLVM_SUFFIX=
-  - export PATH=$PATH:/usr/local/share/npm/bin:/usr/local/opt/llvm/bin:/usr/local/opt/llvm/share/llvm
+  - export PATH=$PATH:`npm prefix -g`/bin:/usr/local/opt/llvm/bin:/usr/local/opt/llvm/share/llvm
   - export NODE_PATH=`make -C test node-path`
   - touch test/expected/*.expected-out
-  - EJS_STAGE=0 EJS_DRIVER="`pwd`/ejs" make -C test check
-  - if test -f test/.failures -o -f test/.xsuccess; then exit -1; fi
-  - make -C test clean
-  - EJS_STAGE=1 EJS_DRIVER="`pwd`/ejs.exe.stage1" make -C test check
-  - if test -f test/.failures -o -f test/.xsuccess; then exit -1; fi
-  - make -C test clean
-  - EJS_STAGE=2 EJS_DRIVER="`pwd`/ejs.exe.stage2" make -C test check
-  - if test -f test/.failures -o -f test/.xsuccess; then exit -1; fi
+  - make -C test check-stage0
+  - make -C test check-stage1
+  - make -C test check-stage2

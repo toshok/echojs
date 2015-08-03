@@ -1,3 +1,5 @@
+// xfail: generator support isn't 100%
+
 // "yield *, generic iterables" from kangax
 
 function __createIterableObject(a, b, c) {

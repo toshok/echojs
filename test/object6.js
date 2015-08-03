@@ -1,3 +1,5 @@
+// xfail: we don't define everything we should.
+
 var a = {b:10};
 function c() {}
 

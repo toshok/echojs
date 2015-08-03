@@ -119,8 +119,16 @@ all-local:: check
 #check: check-unit-tests run-tests
 #check-stage1: check-unit-tests run-tests-stage1
 
-check: run-tests
-check-stage1: run-tests-stage1
+check: check-stage0
+
+check-stage0:
+	@NODE_PATH=$(NODE_PATH) node tester.js -s 0
+
+check-stage1:
+	@NODE_PATH=$(NODE_PATH) node tester.js -s 1
+
+check-stage2:
+	@NODE_PATH=$(NODE_PATH) node tester.js -s 2
 
 check-unit-tests: check-llvm check-set
 

@@ -1,3 +1,5 @@
+// xfail: subclassing builtins is broken
+
 // "Number is subclassable" from kangax
 function test() {
         class C extends Number {}
