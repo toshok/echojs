@@ -30,7 +30,6 @@ C_SOURCES= \
 	ejs-reflect.c \
 	ejs-regexp.c \
 	ejs-require.c \
-	ejs-runloop-libuv.c \
 	ejs-set.c \
 	ejs-string.c \
 	ejs-symbol.c \
@@ -60,7 +59,13 @@ else
 INVOKE_CATCH=ejs-invoke-closure-catch32.o.linux
 endif
 
-LINUX_OBJECTS=$(C_SOURCES:%.c=%.o.linux) $(OBJC_SOURCES:%.m=%.o.linux) ejs-log.o.linux main.o.linux $(INVOKE_CATCH)
+ifneq ($(TRAVIS_BUILD_NUMBER),)
+RUNLOOP_C_IMPL=ejs-runloop-libuv.c
+else
+RUNLOOP_C_IMPL=ejs-runloop-noop.c
+endif
+
+LINUX_OBJECTS=$(C_SOURCES:%.c=%.o.linux) $(OBJC_SOURCES:%.m=%.o.linux) ejs-log.o.linux main.o.linux $(INVOKE_CATCH) $(RUNLOOP_C_IMPL:%.c=%.o.linux)
 
 ALL_OBJECTS=$(LINUX_OBJECTS)
 

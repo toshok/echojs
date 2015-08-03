@@ -1,5 +1,3 @@
-#if HAVE_LIBUV
-
 #include "ejs-runloop.h"
 
 #include "uv.h"
@@ -71,5 +69,3 @@ _ejs_runloop_start()
 {
   uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 }
-
-#endif // HAVE_LIBUV
