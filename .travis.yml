@@ -2,6 +2,10 @@ os:
   - linux
   - osx
 
+matrix:
+  - os: linux
+    env: EJS_RUNLOOP_IMPL=noop
+
 language: c++
 
 notifications:

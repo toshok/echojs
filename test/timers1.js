@@ -1,3 +1,4 @@
+// skip-if: runloop_impl == 'noop'
 
 function log(message) {
     if (message == undefined)

@@ -24,6 +24,10 @@ var compilers = [
     "../ejs.exe.stage2"
 ];
 
+var runloop_impl = require('../lib/generated/lib/host-config.js').RUNLOOP_IMPL;
+
+var running_on_travis = process.env['TRAVIS_BUILD_NUMBER'] != null;
+
 var stage_to_run = 0;
 
 var test_threads = 4;
