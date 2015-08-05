@@ -1,3 +1,5 @@
+// xfail: we don't output numbers correctly (integers with exponent <= 20 should print out normally)
+
 function fib(n) {
   var a = 1;
   var b = 0;

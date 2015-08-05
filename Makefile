@@ -72,17 +72,17 @@ stage3: $(STAGE3_EXE)
 
 $(STAGE1_EXE): lib/generated
 	@echo Building stage 1
-	@NODE_PATH="$(NODE_PATH)" time ./ejs --srcdir --leave-temp $(MODULE_DIRS) ejs-es6.js
+	@NODE_PATH="$(NODE_PATH)" ./ejs --srcdir --leave-temp $(MODULE_DIRS) ejs-es6.js
 	@mv ejs-es6.js.exe $@
 
 $(STAGE2_EXE): $(STAGE1_EXE) lib/*.js lib/*.js.in
 	@echo Building stage 2
-	@time ./$(STAGE1_EXE) --srcdir --leave-temp $(MODULE_DIRS) ejs-es6.js
+	@./$(STAGE1_EXE) --srcdir --leave-temp $(MODULE_DIRS) ejs-es6.js
 	@mv ejs-es6.js.exe $@
 
 $(STAGE3_EXE): $(STAGE2_EXE) lib/*.js lib/*.js.in
 	@echo Building stage 3
-	@time ./$(STAGE2_EXE) --srcdir --leave-temp $(MODULE_DIRS) ejs-es6.js
+	@./$(STAGE2_EXE) --srcdir --leave-temp $(MODULE_DIRS) ejs-es6.js
 	@mv ejs-es6.js.exe $@
 
 echo-command-line:

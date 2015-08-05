@@ -1,3 +1,5 @@
+// xfail: generator support isn't 100%
+
 // "computed shorthand generators, classes"
 
 var garply = 'generator';

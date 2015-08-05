@@ -1,4 +1,12 @@
-language: objective-c
+os:
+  - linux
+  - osx
+
+matrix:
+  - os: linux
+    env: EJS_RUNLOOP_IMPL=noop
+
+language: c++
 
 notifications:
   webhooks:
@@ -9,30 +17,26 @@ notifications:
     on_start: false     # default: false
 
 before_install:
-  - brew update
-  - brew tap homebrew/versions
+  - bash ./ci/setup-pkg-$TRAVIS_OS_NAME.sh
 
 install:
-  - export PATH=$PATH:/usr/local/share/npm/bin
-  - sh ./ci/install-node.sh
-  - sh ./ci/install-llvm.sh
+  - echo $PATH
+  - export PATH=/usr/bin:$PATH:/usr/local/share/npm/bin
+  - bash ./ci/install-node-$TRAVIS_OS_NAME.sh
+  - bash ./ci/install-llvm-$TRAVIS_OS_NAME.sh
 
 before_script:
   - export LLVM_SUFFIX=
-  - export PATH=$PATH:/usr/local/share/npm/bin:/usr/local/opt/llvm/bin:/usr/local/opt/llvm/share/llvm
-  - export NODE_PATH=`make -C test node-path`
+  - export PATH=/usr/bin:$PATH:`npm prefix -g`/bin:/usr/local/opt/llvm/bin:/usr/local/opt/llvm/share/llvm
+  - export NODE_PATH=`make --no-print-directory -C test node-path`
+  - sudo make ensure-npmmodules
   - make
 
 script:
   - export LLVM_SUFFIX=
-  - export PATH=$PATH:/usr/local/share/npm/bin:/usr/local/opt/llvm/bin:/usr/local/opt/llvm/share/llvm
+  - export PATH=$PATH:`npm prefix -g`/bin:/usr/local/opt/llvm/bin:/usr/local/opt/llvm/share/llvm
   - export NODE_PATH=`make -C test node-path`
   - touch test/expected/*.expected-out
-  - EJS_STAGE=0 EJS_DRIVER="`pwd`/ejs" make -C test check
-  - if test -f test/.failures -o -f test/.xsuccess; then exit -1; fi
-  - make -C test clean
-  - EJS_STAGE=1 EJS_DRIVER="`pwd`/ejs.exe.stage1" make -C test check
-  - if test -f test/.failures -o -f test/.xsuccess; then exit -1; fi
-  - make -C test clean
-  - EJS_STAGE=2 EJS_DRIVER="`pwd`/ejs.exe.stage2" make -C test check
-  - if test -f test/.failures -o -f test/.xsuccess; then exit -1; fi
+  - make -C test check-stage0
+  - make -C test check-stage1
+  - make -C test check-stage2

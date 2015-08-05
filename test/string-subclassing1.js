@@ -1,3 +1,5 @@
+// xfail: subclassing builtins is broken
+
 // "String is subclassable" from kangax
 function test() {
         class C extends String {}

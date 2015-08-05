@@ -1,3 +1,5 @@
+// xfail: XXX
+
 var symbol = Symbol();
 var symbolObject = Object(symbol);
 

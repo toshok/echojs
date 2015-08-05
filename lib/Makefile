@@ -117,7 +117,7 @@ $(DESTDIR)/lib/%.js: %.js
 	@$(BABEL) $< | sed $(BABEL_SED_REPLACEMENTS) >> $@
 
 %.js: %.js.in
-	@echo [gen] $@ && (cat $< | sed -e s,@LLVM_SUFFIX@,$(LLVM_SUFFIX),g > $@)
+	@echo [gen] $@ && (cat $< | sed -e s,@LLVM_SUFFIX@,$(LLVM_SUFFIX),g -e s,@RUNLOOP_IMPL@,$(EJS_RUNLOOP_IMPL),g > $@)
 
 .PRECIOUS: host-config.js
 

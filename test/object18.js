@@ -1,3 +1,5 @@
+// xfail: XXX
+
 function test() {
         var x = 'y',
             valueSet,

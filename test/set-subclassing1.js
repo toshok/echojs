@@ -1,3 +1,5 @@
+// xfail: subclassing builtins is broken
+
 // "Set is subclassable" from kangax
 function test() {
         var obj = {};

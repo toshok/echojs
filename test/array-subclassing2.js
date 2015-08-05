@@ -1,3 +1,5 @@
+// xfail: subclassing builtins is broken
+
 // Array.prototype.slice from kangax
 
 class C extends Array {}

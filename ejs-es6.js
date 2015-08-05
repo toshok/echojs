@@ -16,7 +16,7 @@ import { dumpModules, getAllModules, gatherAllModules } from './lib/passes/gathe
 
 import { bold, reset, genFreshFileName } from './lib/echo-util';
 
-import { LLVM_SUFFIX as DEFAULT_LLVM_SUFFIX} from './lib/host-config';
+import { LLVM_SUFFIX as DEFAULT_LLVM_SUFFIX, RUNLOOP_IMPL as DEFAULT_RUNLOOP_IMPL } from './lib/host-config';
 
 function isNode() {
     return typeof __ejs == 'undefined';
@@ -382,7 +382,11 @@ function target_link_args(platform, arch) {
 
 
 function target_libraries(platform, arch) {
-    if (platform === "linux") return [ "-lpthread", "-luv" ];
+    if (platform === "linux") {
+        if (DEFAULT_RUNLOOP_IMPL == 'noop')
+            return [ "-lpthread"];
+        return [ "-lpthread", "-luv" ];
+    }
 
     if (platform === "darwin") {
         let rv = [ "-framework", "Foundation" ];

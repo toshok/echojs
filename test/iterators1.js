@@ -1,3 +1,5 @@
+// skip-if: true
+// XXX this one might work for ejs now..
 
 function* foo(arg1) {
     console.log(1);

@@ -1,3 +1,4 @@
+// skip-if: runloop_impl == 'noop'
 
 var sum = 0;
 

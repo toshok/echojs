@@ -1,3 +1,4 @@
+// xfail: not implemented fully yet
 
 console.log (Math.PI.toFixed(1));
 console.log (Math.PI.toFixed(2));

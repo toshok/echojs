@@ -30,7 +30,6 @@ C_SOURCES= \
 	ejs-reflect.c \
 	ejs-regexp.c \
 	ejs-require.c \
-	ejs-runloop-libuv.c \
 	ejs-set.c \
 	ejs-string.c \
 	ejs-symbol.c \
@@ -60,7 +59,17 @@ else
 INVOKE_CATCH=ejs-invoke-closure-catch32.o.linux
 endif
 
-LINUX_OBJECTS=$(C_SOURCES:%.c=%.o.linux) $(OBJC_SOURCES:%.m=%.o.linux) ejs-log.o.linux main.o.linux $(INVOKE_CATCH)
+# pretty terrible.. ubuntu 12.04 (travis-ci uses it) doesn't have a libuv that I can find, not even in ppas,
+# so we need an escape hatch.
+ifeq ($(EJS_RUNLOOP_IMPL),noop)
+RUNLOOP_DEF=-DNOOP_RUNLOOP=1
+RUNLOOP_C_SOURCE=ejs-runloop-noop.c
+else
+RUNLOOP_DEF=-DHAVE_LIBUV=1
+RUNLOOP_C_SOURCE=ejs-runloop-libuv.c
+endif
+
+LINUX_OBJECTS=$(C_SOURCES:%.c=%.o.linux) $(OBJC_SOURCES:%.m=%.o.linux) ejs-log.o.linux main.o.linux $(INVOKE_CATCH) $(RUNLOOP_C_SOURCE:%.c=%.o.linux)
 
 ALL_OBJECTS=$(LINUX_OBJECTS)
 

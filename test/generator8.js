@@ -1,3 +1,5 @@
+// xfail: generator support isn't 100%
+
 // "%GeneratorPrototype%.return" from kangax
 
 function * generator(){

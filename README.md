@@ -9,6 +9,8 @@ Building EchoJS
 
 Things only build reliably on OSX.  I have easy access to other platforms, I just haven't had the time/motivation to do it given OSX is what I have in front of me every hour of every day, and ios development is my biggest goal.  Patches welcome!
 
+On OSX
+
 You'll need a couple of external dependencies to get things running:
 
 1. node.js
@@ -37,6 +39,10 @@ llvm you want to use.  Homebrew installs llvm 3.6 executables without the suffix
 As for `MIN_OSX_VERSION`: homebrew's formula for llvm (3.4, at least.  haven't verified with 3.6) doesn't specify a `-mmacosx-version-min=` flag, so it builds to whatever you have on your machine.  Node.js's gyp support in node-gyp, however, *does* put a `-mmacosx-version-min=10.5` flag.  A mismatch here causes the node-llvm binding to allocate llvm types using incorrect size calculations, and causes all manner of memory corruption.  If you're either running 10.5 or 10.9, you can leave the variable unset.  Otherwise, set it to the version of OSX you're running.  Hopefully some discussion with the homebrew folks will get this fixed upstream.
 
 both of these variable assignments can be placed in `echo-js/build/config-local.mk`.
+
+
+On Linux
+
 
 
 But... Why?
