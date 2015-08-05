@@ -17,17 +17,19 @@ notifications:
     on_start: false     # default: false
 
 before_install:
-  - sh ./ci/setup-pkg-$TRAVIS_OS_NAME.sh
+  - bash ./ci/setup-pkg-$TRAVIS_OS_NAME.sh
 
 install:
-  - export PATH=$PATH:/usr/local/share/npm/bin
-  - sh ./ci/install-node-$TRAVIS_OS_NAME.sh
-  - sh ./ci/install-llvm-$TRAVIS_OS_NAME.sh
+  - echo $PATH
+  - export PATH=/usr/bin:$PATH:/usr/local/share/npm/bin
+  - bash ./ci/install-node-$TRAVIS_OS_NAME.sh
+  - bash ./ci/install-llvm-$TRAVIS_OS_NAME.sh
 
 before_script:
   - export LLVM_SUFFIX=
-  - export PATH=$PATH:`npm prefix -g`/bin:/usr/local/opt/llvm/bin:/usr/local/opt/llvm/share/llvm
+  - export PATH=/usr/bin:$PATH:`npm prefix -g`/bin:/usr/local/opt/llvm/bin:/usr/local/opt/llvm/share/llvm
   - export NODE_PATH=`make --no-print-directory -C test node-path`
+  - sudo make ensure-npmmodules
   - make
 
 script:
