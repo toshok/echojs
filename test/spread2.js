@@ -1,4 +1,4 @@
-// generator: traceur
+// generator: babel-node
 
 // this file should fail with a syntax error due to the arguments usage
 function foo(...args) {

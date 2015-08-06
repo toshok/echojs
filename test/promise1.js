@@ -1,4 +1,4 @@
-// generator: traceur
+// generator: babel-node
 // skip-if: runloop_impl == 'noop'
 
 Promise.resolve(5).then((value) => {

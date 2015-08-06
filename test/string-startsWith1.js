@@ -1,4 +1,4 @@
-// generator: traceur
+// generator: babel-node
 
 var str = "To be, or not to be, that is the question.";
 
