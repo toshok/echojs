@@ -1,3 +1,4 @@
+// generator: babel-node
 // "basic functionality" from kangax
 
 function * generator(){

@@ -1,3 +1,4 @@
+// generator: none
 // skip-if: true
 
 // from MDN

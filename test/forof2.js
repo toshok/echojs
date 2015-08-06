@@ -1,3 +1,4 @@
+// generator: traceur
 
 function foo() { }
 foo.prototype[Symbol.iterator] = function() {

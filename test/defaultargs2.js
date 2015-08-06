@@ -1,3 +1,4 @@
+// generator: traceur
 
 function foo(b, a = "hello") {
   console.log (a);

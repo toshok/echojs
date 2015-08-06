@@ -1,3 +1,4 @@
+// generator: none
 
 console.log(Int32Array.of().reverse())              // nothing
 console.log(Int32Array.of(1).reverse())             // 1

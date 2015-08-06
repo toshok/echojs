@@ -1,4 +1,4 @@
-[ this, is, a, dummy, array ]
+this,is,a,dummy,array
 0
 1
 2
@@ -9,8 +9,8 @@ is
 a
 dummy
 array
-[ 0, this ]
-[ 1, is ]
-[ 2, a ]
-[ 3, dummy ]
-[ 4, array ]
+0,this
+1,is
+2,a
+3,dummy
+4,array

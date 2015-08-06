@@ -1,5 +1,5 @@
-[TypeError: 2]
-[TypeError: 1]
+TypeError
+TypeError
 true
 false
 true

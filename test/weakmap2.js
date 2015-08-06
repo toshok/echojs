@@ -1,3 +1,4 @@
+// generator: babel-node
 // adapted from kangax's tests
 
 var key1 = {};

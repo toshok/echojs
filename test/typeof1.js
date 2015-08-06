@@ -1,3 +1,7 @@
+// generator: none
+// we can't generate using babel-node since typeof null is 'object'
+// under node (at least the versions we run against.)
+
 console.log (typeof undefined);
 console.log (typeof null);
 console.log (typeof "hi");

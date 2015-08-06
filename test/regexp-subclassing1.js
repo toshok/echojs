@@ -1,3 +1,5 @@
+// generator: none
+
 // "basic functionality" from kangax
 function test() {
         class R extends RegExp {}

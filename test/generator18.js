@@ -1,3 +1,4 @@
+// generator: babel-node
 // "string-keyed shorthand generator methods" from kangax
 
 var o = {

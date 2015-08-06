@@ -1,3 +1,4 @@
+// generator: none
 
 function isGreaterThanTen(value, index, arr) {
     return value > 10;

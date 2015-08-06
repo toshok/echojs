@@ -1,3 +1,4 @@
+// generator: babel-node
 // xfail: generator support isn't 100%
 
 // "shorthand generator methods, classes" from kangax

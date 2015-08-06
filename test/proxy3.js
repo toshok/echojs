@@ -1,3 +1,4 @@
+// generator: none
 // from MDN
 let validator = {
   set: function(obj, prop, value) {

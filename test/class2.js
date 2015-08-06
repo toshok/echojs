@@ -1,3 +1,4 @@
+// generator: babel-node
 
 class SuperClass {
   constructor () {
@@ -17,7 +18,7 @@ class TestClass extends SuperClass {
 
   sayHi() {
     console.log ("hi from TestClass");
-    super();
+    super.sayHi();
   }
 }
 

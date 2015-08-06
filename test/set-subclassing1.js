@@ -1,3 +1,4 @@
+// generator: traceur
 // xfail: subclassing builtins is broken
 
 // "Set is subclassable" from kangax

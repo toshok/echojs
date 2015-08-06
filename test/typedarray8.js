@@ -1,3 +1,4 @@
+// generator: babel-node
 
 var buffer = new ArrayBuffer(8);
 var uint8 = new Uint8Array(buffer);

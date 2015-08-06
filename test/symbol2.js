@@ -1,3 +1,5 @@
+// generator: babel-node
+
 // from kangax's table
 
 console.log(function () {

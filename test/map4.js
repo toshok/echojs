@@ -1,3 +1,4 @@
+// generator: babel-node
 
 var m = new Map ();
 m.set ("one", "uno");
@@ -17,8 +18,8 @@ while ((iter = values.next ()).done != true)
 
 var entries = m.entries();
 while ((iter = entries.next ()).done != true)
-    console.log (iter.value);
+    console.log (iter.value.toString());
 
 for (let e of m)
-    console.log (e);
+    console.log (e.toString());
 

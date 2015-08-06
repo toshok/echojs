@@ -1,3 +1,4 @@
+// generator: traceur
 
 class Supest {
   constructor(foo) {
@@ -7,6 +8,7 @@ class Supest {
 
 class Super extends Supest {
   constructor(foo) {
+    super();
     console.log("Super " + foo);
     this.foo = foo;
   }

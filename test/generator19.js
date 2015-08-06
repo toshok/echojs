@@ -1,3 +1,4 @@
+// generator: babel-node
 // "computed shorthand generators" from kangax
 
 var garply = "generator";

@@ -1,3 +1,4 @@
+// generator: traceur
 
 function foo(...args) {
   console.log(args.length);

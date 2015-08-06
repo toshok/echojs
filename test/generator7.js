@@ -1,3 +1,4 @@
+// generator: babel-node
 // "%GeneratorPrototype%.throw" from kangax
 
 var passed = false;

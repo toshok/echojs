@@ -1,3 +1,4 @@
+// generator: none
 // from MDN
 
 let products = new Proxy({

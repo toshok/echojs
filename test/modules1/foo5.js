@@ -1,1 +1,1 @@
-export { method as method2 } from "foo4"
+export { method as method2 } from "./foo4"

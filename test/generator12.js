@@ -1,3 +1,4 @@
+// generator: babel-node
 // skip-if: true
 // this test fails for stage1 but not for stage0.  we need to add a way to disable tests just for particular stages
 

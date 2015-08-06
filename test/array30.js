@@ -1,7 +1,8 @@
+// generator: babel-node
 
 var arr = ["this", "is", "a", "dummy", "array"];
 var iter;
-console.log (arr);
+console.log (arr.toString());
 
 // 1. Go for keys()
 
@@ -17,4 +18,4 @@ while (!(iter = values.next ()).done)
 // 3. Go for entries()
 var entries = arr.entries();
 while (!(iter = entries.next()).done)
-    console.log (iter.value);
+    console.log (iter.value.toString());

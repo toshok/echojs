@@ -1,3 +1,4 @@
+// generator: babel-node
 
 var a = Array(5);
 for (var i = 0; i < 5; i ++) {

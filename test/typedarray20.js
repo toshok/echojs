@@ -1,3 +1,4 @@
+// generator: none
 
 // int8
 let byteArr = Int8Array.of(1, 127, 66, 48);

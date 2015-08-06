@@ -1,3 +1,4 @@
+// generator: none
 // "Regexp.prototype.exec" from kangax
 function test() {
         class R extends RegExp {}

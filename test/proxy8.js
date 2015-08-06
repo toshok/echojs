@@ -1,3 +1,4 @@
+// generator: none
 // Proxy preventExtensions handler from kangax
 var proxied = {};
 var passed = false;

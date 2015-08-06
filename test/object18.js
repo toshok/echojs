@@ -1,3 +1,4 @@
+// generator: babel-node
 // xfail: XXX
 
 function test() {

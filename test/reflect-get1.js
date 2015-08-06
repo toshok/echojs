@@ -1,10 +1,11 @@
+// generator: babel-node
 
 var o = {a: 5};
 var fooReceiver = { foo : 10 };
 Object.defineProperty (o, "b", { get: function () { console.log (this.foo); return 5; } });
 
 function test(l) {
-    try { console.log(l()); } catch (e) { console.log(e); }
+    try { console.log(l()); } catch (e) { console.log(e.constructor.name); }
 }
 
 test( () => Reflect.get(o, "a") );   // 5

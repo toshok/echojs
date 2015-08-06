@@ -1,2 +1,3 @@
+// generator: babel-node
 
-import "modules1/foo1";
+import "./modules1/foo1";

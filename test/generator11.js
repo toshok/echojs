@@ -1,3 +1,5 @@
+// generator: babel-node
+
 // "yield *, strings" from kangax
 
 var iterator = (function * generator() {

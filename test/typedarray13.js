@@ -1,3 +1,4 @@
+// generator: none
 
 let arr = Int32Array.of(1, 7, 99, 12, 7, 67, 1);
 

@@ -1,3 +1,4 @@
+// generator: babel-node
 
 class Foo {
     get [Symbol.toStringTag] () {

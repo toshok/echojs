@@ -1,3 +1,4 @@
+// generator: none
 
 console.log (Number.toInteger(0));
 console.log (Number.toInteger(Infinity));

@@ -1,7 +1,8 @@
+// generator: babel-node
 
-import { methodInFoo1 } from "modules1/foo1"
-import { methodInFoo2 as mfoo2 } from "modules1/foo2"
-import foo3 from "modules1/foo3"
+import { methodInFoo1 } from "./modules1/foo1"
+import { methodInFoo2 as mfoo2 } from "./modules1/foo2"
+import foo3 from "./modules1/foo3"
 
 methodInFoo1();
 mfoo2();

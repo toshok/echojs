@@ -1,3 +1,4 @@
+// generator: traceur
 // xfail: subclassing builtins is broken
 
 // Array.from from kangax

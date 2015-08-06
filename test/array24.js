@@ -1,3 +1,4 @@
+// generator: traceur
 
 var arr = [1, 7, 11, 'hola', 13.69];
 var res = arr.find(function (element, index, array) {

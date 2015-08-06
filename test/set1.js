@@ -1,3 +1,5 @@
+// generator: babel-node
+
 var mySet = new Set();
 
 mySet.add(1);

@@ -1,3 +1,4 @@
+// generator: babel-node
 
 let from1 = Object.create(null);
 from1.prop = 5;

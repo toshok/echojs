@@ -1,4 +1,6 @@
-// xfail: generator support isn't 100%
+// generator: none
+// skip-if: true
+// babel/traceur don't throw an exception, and unfortunately neither do we
 
 // "can't use 'this' with 'new'" from kangax
 function * generator(){

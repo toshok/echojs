@@ -1,3 +1,5 @@
+// generator: babel-node
+
 // "generator function expressions" from kangax
 
 var generator = function * (){

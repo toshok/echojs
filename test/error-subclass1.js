@@ -1,3 +1,4 @@
+// generator: none
 
 class MyError extends Error {
     constructor() {

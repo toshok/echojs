@@ -1,3 +1,4 @@
+// generator: babel-node
 
 var s = new Set ();
 s.add ("lasagna");
@@ -11,9 +12,15 @@ function print_values (values) {
     while (!(iter = values.next()).done)
         console.log (iter.value);
 }
+// XXX this function shouldn't be here, but we need to workaround a bug in ejs
+function print_entries (values) {
+    var iter;
+    while (!(iter = values.next()).done)
+        console.log (iter.value.toString());
+}
 
 print_values (s.values());
-print_values (s.entries());
+print_entries (s.entries());
 print_values (s.keys());
 console.log ();
 

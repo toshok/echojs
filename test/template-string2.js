@@ -1,3 +1,4 @@
+// generator: none
 
 function msg(callsiteId, ...substitutions) {
   var strs = [];

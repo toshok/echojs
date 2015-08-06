@@ -1,3 +1,4 @@
+// generator: babel-node
 // xfail: generator support isn't 100%
 
 // "%GeneratorPrototype%" from kangax

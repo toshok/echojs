@@ -1,3 +1,5 @@
+// generator: babel-node
+
 function test() {
     var a = 0, b = {};
     b[Symbol.iterator] = function() {

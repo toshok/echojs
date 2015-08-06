@@ -1,8 +1,10 @@
+//generator: babel-node
+
 try {
     console.log("abc".repeat(-1));     // RangeError
 }
 catch (e) {
-    console.log(e);
+    console.log(e.constructor.name);
 }
 
 console.log ("abc".repeat(0));      // ""
@@ -13,7 +15,7 @@ try {
     console.log ("abc".repeat(1/0));    // RangeError
 }
 catch (e) {
-    console.log(e);
+    console.log(e.constructor.name);
 }
 
 console.log (({toString : () => "abc", repeat : String.prototype.repeat}).repeat(2)); // "abcabc" (repeat is a generic method)
