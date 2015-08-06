@@ -1,4 +1,4 @@
-// generator: traceur
+// generator: babel-node
 
 // implicit strict mode from kangax
 class C {

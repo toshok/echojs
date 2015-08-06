@@ -1,4 +1,4 @@
-// generator: traceur
+// generator: babel-node
 // xfail: subclassing builtins is broken
 
 // Array.from from kangax

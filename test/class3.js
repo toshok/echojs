@@ -1,4 +1,4 @@
-// generator: traceur
+// generator: babel-node
 
 class Supest {
   constructor(foo) {

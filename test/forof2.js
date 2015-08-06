@@ -1,4 +1,4 @@
-// generator: traceur
+// generator: babel-node
 
 function foo() { }
 foo.prototype[Symbol.iterator] = function() {

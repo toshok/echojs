@@ -1,4 +1,4 @@
-// generator: traceur
+// generator: babel-node
 // "Map is subclassable" from kangax
 function test() {
         var key = {};
