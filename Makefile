@@ -46,7 +46,10 @@ dist-hook:: ensure-submodules
 	@ls -l $(DISTROOT)/$(TARFILE)
 
 check:
-	EJS_STAGE=0 EJS_DRIVER="$(TOP)/ejs.exe -q --srcdir" $(MAKE) -C test check
+	@$(MAKE) -C test $@
+
+check-%:
+	@$(MAKE) -C test $@
 
 bootstrap: stage3
 
