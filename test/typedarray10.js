@@ -1,3 +1,5 @@
+// generator: none
+
 var arr = Int32Array.of(101, 99, 77, 67, 4);
 var iter;
 

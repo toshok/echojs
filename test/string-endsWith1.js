@@ -1,3 +1,5 @@
+// generator: babel-node
+
 var str = "To be, or not to be, that is the question.";
 
 console.log( str.endsWith("question.") );  // true

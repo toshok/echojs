@@ -1,3 +1,4 @@
+// generator: none
 // from MDN
 
 var target = {};

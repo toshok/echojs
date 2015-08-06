@@ -1,3 +1,4 @@
+// generator: babel-node
 
 function foo(a, b, c) {
   console.log(a);

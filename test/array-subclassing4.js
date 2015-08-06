@@ -1,3 +1,4 @@
+// generator: babel-node
 // xfail: subclassing builtins is broken
 
 // Array.of from kangax

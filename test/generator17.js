@@ -1,3 +1,5 @@
+// generator: babel-node
+
 // "shorthand generator methods" from kangax
 
 var o = {

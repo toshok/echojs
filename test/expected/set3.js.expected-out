@@ -2,10 +2,10 @@ lasagna
 pizza
 pasta
 salad
-[ lasagna, lasagna ]
-[ pizza, pizza ]
-[ pasta, pasta ]
-[ salad, salad ]
+lasagna,lasagna
+pizza,pizza
+pasta,pasta
+salad,salad
 lasagna
 pizza
 pasta

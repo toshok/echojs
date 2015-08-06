@@ -1,6 +1,7 @@
+// generator: none
 
 function test(l) {
-    try { console.log(l()); } catch (e) { console.log(e); }
+    try { console.log(l()); } catch (e) { console.log(e.constructor.name); }
 }
 
 test( () => Reflect.getPrototypeOf(null) );

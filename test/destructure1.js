@@ -1,3 +1,5 @@
+// generator: babel-node
+
 function foo({x, y}) {
   console.log(x + " + " + y);
 }

@@ -1,3 +1,4 @@
+// generator: none
 // kangax test for regexp y flag
 
 try {

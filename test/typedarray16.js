@@ -1,3 +1,4 @@
+// generator: none
 
 var arr = new Int16Array(5);
 console.log (arr);

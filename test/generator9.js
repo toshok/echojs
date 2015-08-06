@@ -1,3 +1,4 @@
+// generator: babel-node
 // "yield operator precedence" from kangax
 
 var passed;

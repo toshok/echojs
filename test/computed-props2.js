@@ -1,3 +1,4 @@
+// generator: none
 
 class Foo {
   get [Symbol.toStringTag]() {

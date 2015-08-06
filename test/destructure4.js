@@ -1,3 +1,4 @@
+// generator: babel-node
 
 let a, b, c, d;
 [a, b] = ["hello", "world"];

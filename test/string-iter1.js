@@ -1,3 +1,4 @@
+// generator: babel-node
 
 var s = "hallo dudes";
 

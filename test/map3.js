@@ -1,3 +1,4 @@
+// generator: babel-node
 
 var arr = [["usa", "hamburger"], ["mx", "taco"], ["it", "pizza"]];
 var map = new Map (arr);

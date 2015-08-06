@@ -1,3 +1,5 @@
+// generator: none
+
 let array = Int16Array.of(2, 5, 9);
 console.log(array.indexOf(2));     // 0
 console.log(array.indexOf(7));     // -1

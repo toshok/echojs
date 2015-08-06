@@ -1,3 +1,4 @@
+// generator: none
 // basic functionality from kangax
 class C extends Array {}
 var c = new C();

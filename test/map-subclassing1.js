@@ -1,3 +1,4 @@
+// generator: traceur
 // "Map is subclassable" from kangax
 function test() {
         var key = {};

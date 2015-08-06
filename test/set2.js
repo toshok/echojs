@@ -1,3 +1,4 @@
+// generator: babel-node
 
 var arr = [ 1, 4, 6 , "hallo", "there" ];
 var s = new Set (arr);

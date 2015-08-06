@@ -1,3 +1,5 @@
+// generator: babel-node
+
 // testing closing over rest parameters
 
 function double(...things) {

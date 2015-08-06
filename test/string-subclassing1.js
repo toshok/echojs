@@ -1,3 +1,4 @@
+// generator: none
 // xfail: subclassing builtins is broken
 
 // "String is subclassable" from kangax

@@ -1,6 +1,7 @@
+// generator: babel-node
 
 function test(l) {
-    try { console.log(l()); } catch (e) { console.log(e); }
+    try { console.log(l()); } catch (e) { console.log(e.constructor.name); }
 }
 
 

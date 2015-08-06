@@ -1,3 +1,4 @@
+// generator: babel-node
 // methods aren't enumerable from kangax
 class C {
   foo() {}

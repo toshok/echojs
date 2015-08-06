@@ -1,3 +1,5 @@
+// generator: none
+
 console.log(String.fromCodePoint(42));        // "*"
 console.log(String.fromCodePoint(65, 90));    // "AZ"
 console.log(String.fromCodePoint(0x404));     // "\u0404"

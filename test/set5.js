@@ -1,3 +1,4 @@
+// generator: babel-node
 
 var set = new Set();
 set.add(+0);

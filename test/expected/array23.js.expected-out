@@ -1,7 +1,7 @@
-[ 7 ]
-[ hola ]
-[ hola, world ]
-[ 13, 27, foo ]
-[ undefined ]
-[ null ]
-[]
+7
+hola
+hola,world
+13,27,foo
+
+
+

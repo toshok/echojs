@@ -1,3 +1,5 @@
+// generator: babel-node
+
 var m = new Map();
 m.set ("__proto__", 5);
 console.log (m.has ("__proto__"));

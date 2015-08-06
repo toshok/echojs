@@ -1,3 +1,4 @@
+// generator: babel-node
 
 function Multiplier(factor) {
   this.factor = factor;

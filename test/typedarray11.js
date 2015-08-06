@@ -1,3 +1,4 @@
+// generator: none
 
 let arr = Int32Array.of(44, 101, 34, 77, 1234);
 console.log ("{" + arr.join() + "}");

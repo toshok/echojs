@@ -1,3 +1,4 @@
+// generator: none
 
 function valuePredicate(value, index, arr) {
     return value % 13 == 0;

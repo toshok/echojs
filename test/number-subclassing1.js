@@ -1,3 +1,5 @@
+// need to figure out babel error here
+// generator: none
 // xfail: subclassing builtins is broken
 
 // "Number is subclassable" from kangax

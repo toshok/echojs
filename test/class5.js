@@ -1,3 +1,5 @@
+// generator: traceur
+
 // implicit strict mode from kangax
 class C {
   static method() { return this === undefined; }

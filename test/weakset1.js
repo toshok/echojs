@@ -1,3 +1,5 @@
+// generator: babel-node
+
 // adapted from kangax's tests
 
 var obj1 = {}, obj2 = {};

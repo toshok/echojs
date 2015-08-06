@@ -1,3 +1,4 @@
+// generator: babel-node
 
 var o = {};
 var fooReceiver = { foo : "hello" };

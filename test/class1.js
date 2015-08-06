@@ -1,3 +1,4 @@
+// generator: babel-node
 
 class TestClass {
   constructor () {

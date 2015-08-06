@@ -10,8 +10,11 @@ var exec = child_process.exec;
 var colors = require('colors/safe');
 var temp = require('temp');
 
-var skip_ifs = Object.create(null);
-var xfails = Object.create(null);
+// maps from test_name -> properties as defined in the test file
+var skip_ifs = Object.create(null);     // `// skip-if: ...` an expression, evaled.  if true, ignore the test
+var xfails = Object.create(null);       // `// xfail: ...`   test is expected to fail.  ... is the reason
+var generators = Object.create(null);   // `// generator: ...` ... is the executable used to generate expected output
+
 var expected_names = Object.create(null);
 var expected_stdouts = Object.create(null);
 var stdouts = Object.create(null);
@@ -125,15 +128,22 @@ function processOneTest(gen_expected, test, cb) {
 	    need_generate = true;
 	}
 
-	if (need_generate) {
-	    // need to re-run node/traceur and output the expected-out file
-	    throw new Error("not implemented yet - gathering node output for " + test);
-	}
-
 	expected_names[test_name] = expected_name;
-	expected_stdouts[test_name] = fs.readFileSync(expected_name).toString();
+	var generator = generators[test_name] || "node";
+	if (need_generate && generator !== "none") {
+	    console.log("generating expected output for " + test_name + " using " + generator);
 
-	setTimeout(cb, 0);
+	    exec(generator + " " + test + " > " + expected_name, function (err, stdout) {
+		if (err)
+		    throw new Error(err);
+		expected_stdouts[test_name] = fs.readFileSync(expected_name).toString();
+		cb();
+	    });
+	}
+	else {
+	    expected_stdouts[test_name] = fs.readFileSync(expected_name).toString();
+	    setTimeout(cb, 0);
+	}
 	return;
     }
     else {
@@ -216,21 +226,27 @@ function readTest(test) {
     // read the comments at the start, and pull out useful info
     for (var i = 0, e = lines.length; i < e; i ++) {
 	var line = lines[i];
-	if (line.indexOf("//") == -1)
+	if (line.indexOf("//") !== 0)
 	    return;
 
-	var skip_if = line.indexOf("skip-if:");
-	if (skip_if != -1) {
+	line = line.substr(2).trim();
+
+	if (line.indexOf("skip-if:") === 0) {
 	    if (skip_ifs[test_name])
 		throw new Error("test " + test + " already has a skip-if: directive");
-	    skip_ifs[test_name] = line.substr(skip_if + "skip-if:".length).trim();
+	    skip_ifs[test_name] = line.substr("skip-if:".length).trim();
 	}
 
-	var xfail = line.indexOf("xfail:");
-	if (xfail != -1) {
+	if (line.indexOf("xfail:") === 0) {
 	    if (xfails[test_name])
 		throw new Error("test " + test + " already has a xfail: directive");
-	    xfails[test_name] = line.substr(xfail + "xfail:".length).trim();
+	    xfails[test_name] = line.substr("xfail:".length).trim();
+	}
+
+	if (line.indexOf("generator:") === 0) {
+	    if (generators[test_name])
+		throw new Error("test " + test + " already has a generator: directive");
+	    generators[test_name] = line.substr("generator:".length).trim();
 	}
     }
 }

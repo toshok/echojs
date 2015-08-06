@@ -1,3 +1,5 @@
+// generator: babel-node
+
 function test() {
   var i, names =
     ["apply","construct","defineProperty","deleteProperty","getOwnPropertyDescriptor",

@@ -1,3 +1,4 @@
+// generator: babel-node
 
 var map = new Map();
 map.set(+0, "foo");

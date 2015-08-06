@@ -1,3 +1,4 @@
+// generator: babel-node
 
 let i = 0;
 let foo = {

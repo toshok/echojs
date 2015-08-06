@@ -1,3 +1,4 @@
+// generator: none
 
 // wrap in an iife so we get an arguments object
 (function() {

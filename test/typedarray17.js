@@ -1,3 +1,4 @@
+// generator: none
 
 let sum = (prevValue, currValue) => prevValue + currValue;
 let concat = (prevValue, currValue) => "" + prevValue + currValue;

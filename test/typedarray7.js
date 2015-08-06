@@ -1,3 +1,4 @@
+// generator: none
 // From the MDN samples.
 
 console.log(ArrayBuffer.isView());                      // false

@@ -1,7 +1,7 @@
-[RangeError: 3]
+RangeError
 
 abc
 abcabc
 abcabcabc
-[RangeError: 2]
+RangeError
 abcabc

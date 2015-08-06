@@ -1,3 +1,5 @@
+// generator: babel-node
+
 // "correct this binding" from kangax
 
 function * generator(){

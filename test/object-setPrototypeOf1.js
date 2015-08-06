@@ -1,3 +1,4 @@
+// generator: babel-node
 
 var myproto = {};
 var obj = Object.create(null);

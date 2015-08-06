@@ -1,3 +1,5 @@
+// generator: none
+
 console.log(Symbol.create.toString());
 console.log(Symbol.hasInstance.toString());
 console.log(Symbol.isConcatSpreadable.toString());

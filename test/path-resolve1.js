@@ -1,3 +1,5 @@
+// generator: none
+
 import * as path from '@node-compat/path';
 
 console.log(path.resolve ("/hi/there", "./bar"));

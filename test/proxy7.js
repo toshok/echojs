@@ -1,3 +1,4 @@
+// generator: none
 // proxy isExtensible handler test from kangax
 var proxied = {};
 var passed = false;

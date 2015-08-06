@@ -1,3 +1,4 @@
+// generator: none
 
 class MyArray extends Array {
     constructor() {

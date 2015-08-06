@@ -1,3 +1,4 @@
+// generator: babel-node
 // "computed shorthand methods" from kangax
 function test() {
   var x = 'y';

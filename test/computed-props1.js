@@ -1,3 +1,5 @@
+// generator: babel-node
+
 var x = 'y';
 console.log (({ [x]: 1 })['y'] === 1);
 

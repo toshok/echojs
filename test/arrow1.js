@@ -1,3 +1,4 @@
+// generator: babel-node
 
 let sq1 = (x) => { return x * x; }
 console.log (sq1(5));
