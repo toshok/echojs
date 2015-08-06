@@ -5,6 +5,10 @@ TOP=..
 .IGNORE: # ignore all errors during test compilation/run so we always get a full run.
 .SILENT:
 
+TESTS:=$(wildcard *[0-9].js)
+TEST_NAMES:= $(patsubst %.js,%,$(TESTS))
+CHECK_TESTS:= $(patsubst %.js,check-%,$(TESTS))
+
 TOPDIR=$(shell pwd)/..
 NPM_PREFIX=$(shell npm prefix -g)
 NODE_PATH=$(TOPDIR)/node-llvm/build/Release:$(TOPDIR)/lib/generated:$(NPM_PREFIX)/lib/node_modules
@@ -28,6 +32,10 @@ check-stage1:
 
 check-stage2:
 	@NODE_PATH=$(NODE_PATH) node tester.js -s 2
+
+
+$(CHECK_TESTS): check-%: %.js
+	@NODE_PATH=$(NODE_PATH) node tester.js -s 0 -t $<
 
 check-unit-tests: check-llvm check-set
 

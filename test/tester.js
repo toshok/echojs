@@ -253,28 +253,56 @@ function readTest(test) {
 
 var args = process.argv.slice(2);
 
+var test_to_run = null;
+
 if (args[0] == '-s') {
+    if (args.length < 2)
+	throw new Error("-s requires an argument between 0 and 2");
     stage_to_run = parseInt(args[1]);
     if (stage_to_run < 0 && stage_to_run > 2)
 	throw new Error("-s requires an argument between 0 and 2");
+    args.shift();
+    args.shift();
+}
+if (args[0] == '-t') {
+    if (args.length < 2)
+	throw new Error("-t requires an argument (the test file to run)");
+    test_to_run = args[1];
+    test_threads = 1; // XXX workaround for a bug, but we also only need 1 thread when we're running 1 test
+    args.shift();
+    args.shift();
 }
 
-console.log("running tests against stage " + stage_to_run + " (" + compilers[stage_to_run] + ")");
-
-glob("./*+([0-9]).js", function (err, tests) {
+function runTests(tests) {
     tests.forEach(readTest);
 
+    if (tests.length == 1)
+	console.log("running " + tests[0] + " against stage " + stage_to_run + " (" + compilers[stage_to_run] + ")");
+    else
+	console.log("running " + tests.length + " tests against stage " + stage_to_run + " (" + compilers[stage_to_run] + ")");
+	
     processTests(true, tests, function() {
 	processTests(false, tests, function() {
-            if (failed_tests.length > 0) {
+	    if (failed_tests.length > 0) {
                 console.log("failed tests:");
                 failed_tests.forEach(function (t) {
-                    console.log(" " + t);
+		    console.log(" " + t);
                 });
-            }
+	    }
 	    console.log("done");
-            process.exit(failed_tests.length > 0 ? 1 : 0);
+	    process.exit(failed_tests.length > 0 ? 1 : 0);
 	});
     });
-});
+}
+
+if (test_to_run) {
+    runTests([test_to_run]);
+}
+else {
+    // run all the tests
+
+    glob("./*+([0-9]).js", function (err, tests) {
+	runTests(tests);
+    });
+}
 
