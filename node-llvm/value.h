@@ -4,35 +4,28 @@
 #include "node-llvm.h"
 namespace jsllvm {
 
-  class Value : public node::ObjectWrap {
+  class Value : public LLVMObjectWrap< ::llvm::Value, Value> {
   public:
     static void Init(v8::Handle<v8::Object> target);
 
-    static v8::Handle<v8::Value> New(llvm::Value *llvm_val);
+    static Nan::Persistent<v8::Function> constructor_func;
+    static Nan::Persistent<v8::FunctionTemplate> constructor;
 
-    static llvm::Value* GetLLVMObj (v8::Local<v8::Value> value) {
-      if (value->IsNull())
-	return NULL;
-      return node::ObjectWrap::Unwrap<Value>(value->ToObject())->llvm_val;
-    }
-
-    static v8::Persistent<v8::FunctionTemplate> s_ct;
   private:
-    llvm::Value* llvm_val;
+    typedef LLVMObjectWrap< ::llvm::Value, Value> BaseType;
+    friend class LLVMObjectWrap< ::llvm::Value, Value>;
 
-    Value(llvm::Value *llvm_val);
-    Value();
-    virtual ~Value();
+    Value(llvm::Value *llvm_val) : BaseType(llvm_val) { }
+    Value() : BaseType(nullptr) { }
+    virtual ~Value() { }
 
-    static v8::Handle<v8::Value> New(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Dump(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetName(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ToString(const v8::Arguments& args);
-
-    static v8::Persistent<v8::Function> s_func;
+    static NAN_METHOD(New);
+    static NAN_METHOD(Dump);
+    static NAN_METHOD(SetName);
+    static NAN_METHOD(ToString);
   };
 
 };
 
-#endif /* NODE_LLVM_TYPE_H */
+#endif /* NODE_LLVM_VALUE_H */
 

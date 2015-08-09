@@ -4,33 +4,26 @@
 #include "node-llvm.h"
 namespace jsllvm {
 
-  class GlobalVariable : public node::ObjectWrap {
+  class GlobalVariable : public LLVMObjectWrap< ::llvm::GlobalVariable, GlobalVariable> {
   public:
     static void Init(v8::Handle<v8::Object> target);
 
-    static v8::Handle<v8::Value> New(llvm::GlobalVariable *llvm_global);
-
-    static llvm::GlobalVariable* GetLLVMObj (v8::Local<v8::Value> value) {
-      if (value->IsNull())
-	return NULL;
-      return node::ObjectWrap::Unwrap<GlobalVariable>(value->ToObject())->llvm_global;
-    }
-
   private:
-    llvm::GlobalVariable* llvm_global;
+    typedef LLVMObjectWrap< ::llvm::GlobalVariable, GlobalVariable> BaseType;
+    friend class LLVMObjectWrap< ::llvm::GlobalVariable, GlobalVariable>;
 
-    GlobalVariable(llvm::GlobalVariable *llvm_global);
-    GlobalVariable();
-    virtual ~GlobalVariable();
+    GlobalVariable(llvm::GlobalVariable *llvm_global) : BaseType(llvm_global) { }
+    GlobalVariable() : BaseType(nullptr) { }
+    virtual ~GlobalVariable() { }
 
-    static v8::Handle<v8::Value> New(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Dump(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetInitializer(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ToString(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetAlignment(const v8::Arguments& args);
+    static NAN_METHOD(New);
+    static NAN_METHOD(Dump);
+    static NAN_METHOD(SetInitializer);
+    static NAN_METHOD(ToString);
+    static NAN_METHOD(SetAlignment);
 
-    static v8::Persistent<v8::FunctionTemplate> s_ct;
-    static v8::Persistent<v8::Function> s_func;
+    static Nan::Persistent<v8::FunctionTemplate> constructor;
+    static Nan::Persistent<v8::Function> constructor_func;
   };
 
 };

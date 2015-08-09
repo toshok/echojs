@@ -4,27 +4,25 @@
 #include "node-llvm.h"
 namespace jsllvm {
 
-
-  class Switch : public node::ObjectWrap {
+  class Switch : public LLVMObjectWrap< ::llvm::SwitchInst, Switch> {
   public:
     static void Init(v8::Handle<v8::Object> target);
 
-    static v8::Handle<v8::Value> New(::llvm::SwitchInst *llvm_switch);
-
   private:
-    ::llvm::SwitchInst *llvm_switch;
+    typedef LLVMObjectWrap< ::llvm::SwitchInst, Switch> BaseType;
+    friend class LLVMObjectWrap< ::llvm::SwitchInst, Switch>;
 
-    Switch(::llvm::SwitchInst *llvm_switch);
-    Switch();
-    virtual ~Switch();
+    Switch(::llvm::SwitchInst *llvm_switch) : BaseType(llvm_switch) { }
+    Switch() : BaseType(nullptr) { }
+    virtual ~Switch() { }
 
-    static v8::Handle<v8::Value> New(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Dump(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ToString(const v8::Arguments& args);
-    static v8::Handle<v8::Value> AddCase(const v8::Arguments& args);
+    static NAN_METHOD(New);
+    static NAN_METHOD(Dump);
+    static NAN_METHOD(ToString);
+    static NAN_METHOD(AddCase);
 
-    static v8::Persistent<v8::FunctionTemplate> s_ct;
-    static v8::Persistent<v8::Function> s_func;
+    static Nan::Persistent<v8::FunctionTemplate> constructor;
+    static Nan::Persistent<v8::Function> constructor_func;
   };
 };
 

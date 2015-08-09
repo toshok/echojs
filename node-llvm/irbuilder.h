@@ -5,67 +5,67 @@
 namespace jsllvm {
 
 
-  class IRBuilder : public node::ObjectWrap {
+  class IRBuilder : public Nan::ObjectWrap {
   public:
     static void Init(v8::Handle<v8::Object> target);
 
-    static v8::Handle<v8::Value> New(llvm::IRBuilder<> *builder);
+    static v8::Local<v8::Value> Create(llvm::IRBuilder<> *builder);
 
   private:
     static ::llvm::IRBuilder<> builder;
 
-    static v8::Handle<v8::Value> New(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetInsertPoint(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetInsertPointStartBB(const v8::Arguments& args);
-    static v8::Handle<v8::Value> GetInsertBlock(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateRet(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateRetVoid(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreatePointerCast(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateFPCast(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateCall(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateInvoke(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateFAdd(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateAlloca(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateLoad(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateStore(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateExtractElement(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateExtractValue(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateGetElementPointer(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateInBoundsGetElementPointer(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateStructGetElementPointer(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateICmpEq(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateICmpSGt(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateICmpUGE(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateICmpUGt(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateICmpULt(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateBr(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateCondBr(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreatePhi(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateGlobalStringPtr(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateUnreachable(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateAnd(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateOr(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateZExt(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateIntToPtr(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreatePtrToInt(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateBitCast(const v8::Arguments& args);
+    static NAN_METHOD(New);
+    static NAN_METHOD(SetInsertPoint);
+    static NAN_METHOD(SetInsertPointStartBB);
+    static NAN_METHOD(GetInsertBlock);
+    static NAN_METHOD(CreateRet);
+    static NAN_METHOD(CreateRetVoid);
+    static NAN_METHOD(CreatePointerCast);
+    static NAN_METHOD(CreateFPCast);
+    static NAN_METHOD(CreateCall);
+    static NAN_METHOD(CreateInvoke);
+    static NAN_METHOD(CreateFAdd);
+    static NAN_METHOD(CreateAlloca);
+    static NAN_METHOD(CreateLoad);
+    static NAN_METHOD(CreateStore);
+    static NAN_METHOD(CreateExtractElement);
+    static NAN_METHOD(CreateExtractValue);
+    static NAN_METHOD(CreateGetElementPointer);
+    static NAN_METHOD(CreateInBoundsGetElementPointer);
+    static NAN_METHOD(CreateStructGetElementPointer);
+    static NAN_METHOD(CreateICmpEq);
+    static NAN_METHOD(CreateICmpSGt);
+    static NAN_METHOD(CreateICmpUGE);
+    static NAN_METHOD(CreateICmpUGt);
+    static NAN_METHOD(CreateICmpULt);
+    static NAN_METHOD(CreateBr);
+    static NAN_METHOD(CreateCondBr);
+    static NAN_METHOD(CreatePhi);
+    static NAN_METHOD(CreateGlobalStringPtr);
+    static NAN_METHOD(CreateUnreachable);
+    static NAN_METHOD(CreateAnd);
+    static NAN_METHOD(CreateOr);
+    static NAN_METHOD(CreateZExt);
+    static NAN_METHOD(CreateIntToPtr);
+    static NAN_METHOD(CreatePtrToInt);
+    static NAN_METHOD(CreateBitCast);
 
-    static v8::Handle<v8::Value> CreateSwitch(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateSelect(const v8::Arguments& args);
+    static NAN_METHOD(CreateSwitch);
+    static NAN_METHOD(CreateSelect);
 
-    static v8::Handle<v8::Value> CreateNswSub(const v8::Arguments& args);
+    static NAN_METHOD(CreateNswSub);
 
-    static v8::Handle<v8::Value> CreateLandingPad(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateResume(const v8::Arguments& args);
+    static NAN_METHOD(CreateLandingPad);
+    static NAN_METHOD(CreateResume);
 
-    static v8::Handle<v8::Value> CreateLifetimeStart(const v8::Arguments& args);
-    static v8::Handle<v8::Value> CreateLifetimeEnd(const v8::Arguments& args);
+    static NAN_METHOD(CreateLifetimeStart);
+    static NAN_METHOD(CreateLifetimeEnd);
 
-    static v8::Handle<v8::Value> GetCurrentDebugLocation(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetCurrentDebugLocation(const v8::Arguments& args);
+    static NAN_METHOD(GetCurrentDebugLocation);
+    static NAN_METHOD(SetCurrentDebugLocation);
 
-    static v8::Persistent<v8::FunctionTemplate> s_ct;
-    static v8::Persistent<v8::Function> s_func;
+    static Nan::Persistent<v8::FunctionTemplate> constructor;
+    static Nan::Persistent<v8::Function> constructor_func;
   };
 
 };

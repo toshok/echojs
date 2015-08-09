@@ -4,27 +4,27 @@
 #include "node-llvm.h"
 namespace jsllvm {
 
-
-  class PHINode : public node::ObjectWrap {
+  class PHINode : public LLVMObjectWrap< ::llvm::PHINode, PHINode> {
   public:
     static void Init(v8::Handle<v8::Object> target);
 
-    static v8::Handle<v8::Value> New(::llvm::PHINode *llvm_phi);
+    static v8::Local<v8::Value> Create(::llvm::PHINode *llvm_phi);
 
   private:
-    ::llvm::PHINode *llvm_phi;
+    typedef LLVMObjectWrap< ::llvm::PHINode, PHINode> BaseType;
+    friend class LLVMObjectWrap< ::llvm::PHINode, PHINode>;
 
-    PHINode(::llvm::PHINode *llvm_phi);
-    PHINode();
-    virtual ~PHINode();
+    PHINode(::llvm::PHINode *llvm_phi) : BaseType(llvm_phi) { }
+    PHINode() : BaseType(nullptr) { }
+    virtual ~PHINode() { }
 
-    static v8::Handle<v8::Value> New(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Dump(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ToString(const v8::Arguments& args);
-    static v8::Handle<v8::Value> AddIncoming(const v8::Arguments& args);
+    static NAN_METHOD(New);
+    static NAN_METHOD(Dump);
+    static NAN_METHOD(ToString);
+    static NAN_METHOD(AddIncoming);
 
-    static v8::Persistent<v8::FunctionTemplate> s_ct;
-    static v8::Persistent<v8::Function> s_func;
+    static Nan::Persistent<v8::FunctionTemplate> constructor;
+    static Nan::Persistent<v8::Function> constructor_func;
   };
 };
 

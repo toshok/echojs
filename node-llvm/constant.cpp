@@ -10,23 +10,23 @@ namespace jsllvm {
 
   void Constant::Init(Handle<Object> target)
   {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
-    Local<FunctionTemplate> t = FunctionTemplate::New(New);
+    Local<FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
+    constructor.Reset(ctor);
 
-    s_ct = Persistent<FunctionTemplate>::New(t);
-    s_ct->InstanceTemplate()->SetInternalFieldCount(1);
-    s_ct->SetClassName(String::NewSymbol("Constant"));
+    ctor->InstanceTemplate()->SetInternalFieldCount(1);
+    ctor->SetClassName(Nan::New("Constant").ToLocalChecked());
 
-    s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
+    Local<Function> ctor_func = ctor->GetFunction();
+    constructor_func.Reset(ctor_func);
 
-    NODE_SET_METHOD(s_func, "getNull", Constant::GetNull);
-    NODE_SET_METHOD(s_func, "getAggregateZero", Constant::GetAggregateZero);
-    NODE_SET_METHOD(s_func, "getBoolValue", Constant::GetBoolValue);
-    NODE_SET_METHOD(s_func, "getIntegerValue", Constant::GetIntegerValue);
+    Nan::SetMethod(ctor_func, "getNull", Constant::GetNull);
+    Nan::SetMethod(ctor_func, "getAggregateZero", Constant::GetAggregateZero);
+    Nan::SetMethod(ctor_func, "getBoolValue", Constant::GetBoolValue);
+    Nan::SetMethod(ctor_func, "getIntegerValue", Constant::GetIntegerValue);
 
-    target->Set(String::NewSymbol("Constant"),
-		s_func);
+    target->Set(Nan::New("Constant").ToLocalChecked(), ctor_func);
   }
 
   Constant::Constant()
@@ -37,58 +37,48 @@ namespace jsllvm {
   {
   }
 
-  Handle<v8::Value> Constant::New(const Arguments& args)
-  {
-    return ThrowException(Exception::Error(String::New("Constant is not meant to be instantiated.")));
+  NAN_METHOD(Constant::New) {
+    Nan::ThrowError("Constant is not meant to be instantiated.");
   }
 
-  Handle<v8::Value> Constant::GetNull (const Arguments& args)
-  {
-    HandleScope scope;
+  NAN_METHOD(Constant::GetNull) {
     REQ_LLVM_TYPE_ARG(0, ty);
-    Handle<v8::Value> result = Value::New(llvm::Constant::getNullValue(ty));
-    return scope.Close(result);
+    info.GetReturnValue().Set(Value::Create(llvm::Constant::getNullValue(ty)));
   }
 
-  Handle<v8::Value> Constant::GetAggregateZero (const Arguments& args)
-  {
-    HandleScope scope;
+  NAN_METHOD(Constant::GetAggregateZero) {
     REQ_LLVM_TYPE_ARG(0, ty);
-    Handle<v8::Value> result = Value::New(llvm::ConstantAggregateZero::get(ty));
-    return scope.Close(result);
+    info.GetReturnValue().Set(Value::Create(llvm::ConstantAggregateZero::get(ty)));
   }
 
-  Handle<v8::Value> Constant::GetBoolValue (const Arguments& args)
-  {
-    HandleScope scope;
+  NAN_METHOD(Constant::GetBoolValue) {
     REQ_BOOL_ARG(0, b);
-    Handle<v8::Value> result = Value::New(llvm::Constant::getIntegerValue(llvm::Type::getInt8Ty(llvm::getGlobalContext()), llvm::APInt(8, b?1:0)));
-    return scope.Close(result);
+    Local<v8::Value> result = Value::Create(llvm::Constant::getIntegerValue(llvm::Type::getInt8Ty(llvm::getGlobalContext()), llvm::APInt(8, b?1:0)));
+    info.GetReturnValue().Set(result);
   }
 
-  Handle<v8::Value> Constant::GetIntegerValue (const Arguments& args)
-  {
-    HandleScope scope;
+  NAN_METHOD(Constant::GetIntegerValue) {
     REQ_LLVM_TYPE_ARG(0, ty);
     REQ_INT_ARG(1, v);
 
-    Handle<v8::Value> result;
-    if (args.Length() == 2)
-      result = Value::New(llvm::Constant::getIntegerValue(ty, llvm::APInt(ty->getPrimitiveSizeInBits(), v)));
-    else if (args.Length() == 3 && args[2]->IsNumber() && ty->getPrimitiveSizeInBits() == 64) {
+    Local<v8::Value> result;
+    if (info.Length() == 2) {
+      result = Value::Create(llvm::Constant::getIntegerValue(ty, llvm::APInt(ty->getPrimitiveSizeInBits(), v)));
+    }
+    else if (info.Length() == 3 && info[2]->IsNumber() && ty->getPrimitiveSizeInBits() == 64) {
       // allow a 3 arg form for 64 bit ints:
       // constant = llvm.Constant.getIntegerValue types.int64, ch, cl
       uint64_t vhi = v;
-      uint32_t vlo = (uint32_t)args[2]->NumberValue();
-      result = Value::New (llvm::Constant::getIntegerValue(ty, llvm::APInt(ty->getPrimitiveSizeInBits(), (int64_t)((vhi << 32) | vlo))));
+      uint32_t vlo = (uint32_t)info[2]->NumberValue();
+      result = Value::Create (llvm::Constant::getIntegerValue(ty, llvm::APInt(ty->getPrimitiveSizeInBits(), (int64_t)((vhi << 32) | vlo))));
     }
     else {
-      return ThrowException(Exception::TypeError(String::New("Invalid parameters to Constant.getIntegerValue")));
+      Nan::ThrowTypeError("Invalid parameters to Constant.getIntegerValue");
     }
 
-    return scope.Close(result);
+    info.GetReturnValue().Set(result);
   }
 
-  Persistent<FunctionTemplate> Constant::s_ct;
-  Persistent< ::v8::Function> Constant::s_func;
+  Nan::Persistent<v8::FunctionTemplate> Constant::constructor;
+  Nan::Persistent<v8::Function> Constant::constructor_func;
 };

@@ -8,45 +8,33 @@ using namespace v8;
 
 namespace jsllvm {
 
-  void ConstantFP::Init(Handle<Object> target)
-  {
-    HandleScope scope;
+  void ConstantFP::Init(Handle<Object> target){
+    Nan::HandleScope scope;
 
-    Local<FunctionTemplate> t = FunctionTemplate::New(New);
+    Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
+    constructor.Reset(ctor);
 
-    s_ct = Persistent<FunctionTemplate>::New(t);
-    s_ct->InstanceTemplate()->SetInternalFieldCount(1);
-    s_ct->SetClassName(String::NewSymbol("ConstantFP"));
+    ctor->InstanceTemplate()->SetInternalFieldCount(1);
+    ctor->SetClassName(Nan::New("ConstantFP").ToLocalChecked());
 
-    s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
+    Local<v8::Function> ctor_func = ctor->GetFunction();
+    constructor_func.Reset(ctor_func);
 
-    NODE_SET_METHOD(s_func, "getDouble", ConstantFP::GetDouble);
+    Nan::SetMethod(ctor_func, "getDouble", ConstantFP::GetDouble);
 
-    target->Set(String::NewSymbol("ConstantFP"),
-		s_func);
+    target->Set(Nan::New("ConstantFP").ToLocalChecked(), ctor_func);
   }
 
-  ConstantFP::ConstantFP()
-  {
+  NAN_METHOD(ConstantFP::New) {
+    Nan::ThrowTypeError("ConstantFP is not meant to be instantiated.");
   }
 
-  ConstantFP::~ConstantFP()
-  {
-  }
-
-  Handle<v8::Value> ConstantFP::New(const Arguments& args)
-  {
-    return ThrowException(Exception::Error(String::New("ConstantFP is not meant to be instantiated.")));
-  }
-
-  Handle<v8::Value> ConstantFP::GetDouble (const Arguments& args)
-  {
-    HandleScope scope;
+  NAN_METHOD(ConstantFP::GetDouble) {
     REQ_DOUBLE_ARG(0, v);
-    Handle<v8::Value> result = Value::New(llvm::ConstantFP::get(llvm::getGlobalContext(), llvm::APFloat(v)));
-    return scope.Close(result);
+    Local<v8::Value> result = Value::Create(llvm::ConstantFP::get(llvm::getGlobalContext(), llvm::APFloat(v)));
+    info.GetReturnValue().Set(result);
   }
 
-  Persistent<FunctionTemplate> ConstantFP::s_ct;
-  Persistent< ::v8::Function> ConstantFP::s_func;
+  Nan::Persistent<v8::FunctionTemplate> ConstantFP::constructor;
+  Nan::Persistent<v8::Function> ConstantFP::constructor_func;
 };

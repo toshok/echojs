@@ -10,88 +10,55 @@ using namespace v8;
 
 namespace jsllvm {
 
-  void PHINode::Init(Handle<Object> target)
-  {
-    HandleScope scope;
+  void PHINode::Init(Handle<Object> target) {
+    Nan::HandleScope scope;
 
-    Local<FunctionTemplate> t = FunctionTemplate::New(New);
+    Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
+    constructor.Reset(ctor);
 
-    s_ct = Persistent<FunctionTemplate>::New(t);
-    s_ct->Inherit (Instruction::s_ct);
-    s_ct->InstanceTemplate()->SetInternalFieldCount(1);
-    s_ct->SetClassName(String::NewSymbol("PHINode"));
+    ctor->Inherit (Nan::New<v8::FunctionTemplate>(Instruction::constructor));
+    ctor->InstanceTemplate()->SetInternalFieldCount(1);
+    ctor->SetClassName(Nan::New("PHINode").ToLocalChecked());
 
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", PHINode::Dump);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", PHINode::ToString);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "addIncoming", PHINode::AddIncoming);
+    Nan::SetPrototypeMethod(ctor, "dump", PHINode::Dump);
+    Nan::SetPrototypeMethod(ctor, "toString", PHINode::ToString);
+    Nan::SetPrototypeMethod(ctor, "addIncoming", PHINode::AddIncoming);
 
-    s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
-    target->Set(String::NewSymbol("PHINode"),
-		s_func);
+    Local<v8::Function> ctor_func = ctor->GetFunction();
+    constructor_func.Reset(ctor_func);
+    target->Set(Nan::New("PHINode").ToLocalChecked(), ctor_func);
   }
 
-  PHINode::PHINode(llvm::PHINode *llvm_phi) : llvm_phi(llvm_phi)
-  {
+  NAN_METHOD(PHINode::New) {
+    auto phi = new PHINode();
+    phi->Wrap(info.This());
+    info.GetReturnValue().Set(info.This());
   }
 
-  PHINode::PHINode() : llvm_phi(NULL)
-  {
+  NAN_METHOD(PHINode::Dump) {
+    auto phi = Unwrap(info.This());
+    phi->llvm_obj->dump();
   }
 
-  PHINode::~PHINode()
-  {
-  }
-
-  Handle<v8::Value> PHINode::New(const Arguments& args)
-  {
-    HandleScope scope;
-    PHINode* phi = new PHINode();
-    phi->Wrap(args.This());
-    return args.This();
-  }
-
-
-  Handle<v8::Value> PHINode::New(llvm::PHINode *llvm_phi)
-  {
-    HandleScope scope;
-    Local<Object> new_instance = PHINode::s_func->NewInstance();
-    PHINode* new_phi = new PHINode(llvm_phi);
-    new_phi->Wrap(new_instance);
-    return scope.Close(new_instance);
-  }
-
-  Handle<v8::Value> PHINode::Dump (const Arguments& args)
-  {
-    HandleScope scope;
-    PHINode* phi = ObjectWrap::Unwrap<PHINode>(args.This());
-    phi->llvm_phi->dump();
-    return scope.Close(Undefined());
-  }
-
-  Handle<v8::Value> PHINode::ToString(const Arguments& args)
-  {
-    HandleScope scope;
-    PHINode* phi = ObjectWrap::Unwrap<PHINode>(args.This());
+  NAN_METHOD(PHINode::ToString) {
+    auto phi = Unwrap(info.This());
 
     std::string str;
     llvm::raw_string_ostream str_ostream(str);
-    phi->llvm_phi->print(str_ostream);
+    phi->llvm_obj->print(str_ostream);
 
-    return scope.Close(String::New(trim(str_ostream.str()).c_str()));
+    info.GetReturnValue().Set(Nan::New(trim(str_ostream.str()).c_str()).ToLocalChecked());
   }
 
-  Handle<v8::Value> PHINode::AddIncoming (const Arguments& args)
-  {
-    HandleScope scope;
-    PHINode* phi = ObjectWrap::Unwrap<PHINode>(args.This());
+  NAN_METHOD(PHINode::AddIncoming) {
+    auto phi = Unwrap(info.This());
     REQ_LLVM_VAL_ARG(0, incoming_val);
     REQ_LLVM_BB_ARG(1, incoming_bb);
-    phi->llvm_phi->addIncoming(incoming_val, incoming_bb);
-    return scope.Close(Undefined());
+    phi->llvm_obj->addIncoming(incoming_val, incoming_bb);
   }
 
-  Persistent<FunctionTemplate> PHINode::s_ct;
-  Persistent<Function> PHINode::s_func;
+  Nan::Persistent<v8::FunctionTemplate> PHINode::constructor;
+  Nan::Persistent<v8::Function> PHINode::constructor_func;
 };
 
 

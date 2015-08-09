@@ -11,85 +11,58 @@ namespace jsllvm {
 
   void ArrayType::Init(Handle<Object> target)
   {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
-    Local<FunctionTemplate> t = FunctionTemplate::New(New);
+    Local<FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
+    constructor.Reset(ctor);
 
-    s_ct = Persistent<FunctionTemplate>::New(t);
-    s_ct->Inherit(Type::s_ct);
-    s_ct->InstanceTemplate()->SetInternalFieldCount(1);
-    s_ct->SetClassName(String::NewSymbol("ArrayType"));
+    ctor->Inherit (Nan::New<v8::FunctionTemplate>(Type::constructor));
+    ctor->InstanceTemplate()->SetInternalFieldCount(1);
+    ctor->SetClassName(Nan::New("ArrayType").ToLocalChecked());
 
 
-    NODE_SET_METHOD(s_ct, "get", ArrayType::Get);
+    Nan::SetMethod(ctor, "get", ArrayType::Get);
 
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", ArrayType::Dump);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", ArrayType::ToString);
+    Nan::SetPrototypeMethod(ctor, "dump", ArrayType::Dump);
+    Nan::SetPrototypeMethod(ctor, "toString", ArrayType::ToString);
 
-    s_func = Persistent<Function>::New(s_ct->GetFunction());
-    target->Set(String::NewSymbol("ArrayType"),
-		s_func);
+    Local<v8::Function> ctor_func = ctor->GetFunction();
+    constructor_func.Reset(ctor_func);
+
+    target->Set(Nan::New("ArrayType").ToLocalChecked(), ctor_func);
   }
 
-  Handle<Value> ArrayType::Get(const Arguments& args)
-  {
-    HandleScope scope;
-
+  NAN_METHOD(ArrayType::Get) {
     REQ_LLVM_TYPE_ARG (0, elementType);
     REQ_INT_ARG (1, numElements);
 
-    return scope.Close(ArrayType::New(llvm::ArrayType::get(elementType, numElements)));
+    info.GetReturnValue().Set(ArrayType::Create(llvm::ArrayType::get(elementType, numElements)));
   }
 
-  Handle<Value> ArrayType::New(llvm::ArrayType *ty)
-  {
-    HandleScope scope;
-    Local<Object> new_instance = ArrayType::s_func->NewInstance();
-    ArrayType* new_type = new ArrayType(ty);
-    new_type->Wrap(new_instance);
-    return scope.Close(new_instance);
-  }
+  NAN_METHOD(ArrayType::New) {
+    if (info.This()->InternalFieldCount() == 0)
+      return Nan::ThrowTypeError("Cannot Instantiate without new");
 
-  Handle<Value> ArrayType::New(const Arguments& args)
-  {
-    HandleScope scope;
     ArrayType* type = new ArrayType();
-    type->Wrap(args.This());
-    return args.This();
+    type->Wrap(info.This());
+    info.GetReturnValue().Set(info.This());
   }
 
-  ArrayType::ArrayType(llvm::ArrayType *llvm_ty) : llvm_ty(llvm_ty)
-  {
-  }
-
-  ArrayType::ArrayType() : llvm_ty(NULL)
-  {
-  }
-
-  ArrayType::~ArrayType()
-  {
-  }
-
-  Handle<Value> ArrayType::ToString(const Arguments& args)
-  {
-    HandleScope scope;
-    ArrayType* type = ObjectWrap::Unwrap<ArrayType>(args.This());
+  NAN_METHOD(ArrayType::ToString) {
+    ArrayType* type = ObjectWrap::Unwrap<ArrayType>(info.This());
 
     std::string str;
     llvm::raw_string_ostream str_ostream(str);
-    type->llvm_ty->print(str_ostream);
+    type->llvm_obj->print(str_ostream);
 
-    return scope.Close(String::New(trim(str_ostream.str()).c_str()));
+    info.GetReturnValue().Set(Nan::New(trim(str_ostream.str()).c_str()).ToLocalChecked());
   }
 
-  Handle<Value> ArrayType::Dump(const Arguments& args)
-  {
-    HandleScope scope;
-    ArrayType* type = ObjectWrap::Unwrap<ArrayType>(args.This());
-    type->llvm_ty->dump();
-    return scope.Close(Undefined());
+  NAN_METHOD(ArrayType::Dump) {
+    ArrayType* type = ObjectWrap::Unwrap<ArrayType>(info.This());
+    type->llvm_obj->dump();
   }
 
-  v8::Persistent<v8::FunctionTemplate> ArrayType::s_ct;
-  v8::Persistent<v8::Function> ArrayType::s_func;
+  Nan::Persistent<v8::FunctionTemplate> ArrayType::constructor;
+  Nan::Persistent<v8::Function> ArrayType::constructor_func;
 };

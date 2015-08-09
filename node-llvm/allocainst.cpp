@@ -10,89 +10,62 @@ using namespace v8;
 
 namespace jsllvm {
 
-  void AllocaInst::Init(Handle<Object> target)
-  {
-    HandleScope scope;
 
-    Local<FunctionTemplate> t = FunctionTemplate::New(New);
+  
+  Nan::Persistent<v8::FunctionTemplate> AllocaInst::constructor;
+  Nan::Persistent<v8::Function> AllocaInst::constructor_func;
 
-    s_ct = Persistent<FunctionTemplate>::New(t);
-    s_ct->Inherit (Instruction::s_ct);
-    s_ct->InstanceTemplate()->SetInternalFieldCount(1);
-    s_ct->SetClassName(String::NewSymbol("AllocaInst"));
+  void AllocaInst::Init(Handle<Object> target) {
+    Nan::HandleScope scope;
 
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", AllocaInst::Dump);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", AllocaInst::ToString);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "setAlignment", AllocaInst::SetAlignment);
+    Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
+    constructor.Reset(ctor);
 
-    s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
-    target->Set(String::NewSymbol("AllocaInst"),
-		s_func);
+    ctor->Inherit (Nan::New<v8::FunctionTemplate>(Instruction::constructor));
+
+    ctor->InstanceTemplate()->SetInternalFieldCount(1);
+    ctor->SetClassName(Nan::New("AllocaInst").ToLocalChecked());
+
+    Nan::SetPrototypeMethod(ctor, "dump", AllocaInst::Dump);
+    Nan::SetPrototypeMethod(ctor, "toString", AllocaInst::ToString);
+    Nan::SetPrototypeMethod(ctor, "setAlignment", AllocaInst::SetAlignment);
+
+    Local<v8::Function> ctor_func = ctor->GetFunction();
+    constructor_func.Reset(ctor_func);
+    target->Set(Nan::New("AllocaInst").ToLocalChecked(), ctor_func);
   }
 
-  AllocaInst::AllocaInst(llvm::AllocaInst *llvm_alloca) : llvm_alloca(llvm_alloca)
-  {
+  NAN_METHOD(AllocaInst::New) {
+    if (info.This()->InternalFieldCount() == 0)
+      return Nan::ThrowTypeError("Cannot Instantiate without new");
+
+    auto ai = new AllocaInst();
+    ai->Wrap(info.This());
+    info.GetReturnValue().Set(info.This());
   }
 
-  AllocaInst::AllocaInst() : llvm_alloca(NULL)
-  {
+  NAN_METHOD(AllocaInst::Dump) {
+    auto ai = Unwrap(info.This());
+    ai->llvm_obj->dump();
   }
 
-  AllocaInst::~AllocaInst()
-  {
-  }
-
-  Handle<v8::Value> AllocaInst::New(const Arguments& args)
-  {
-    HandleScope scope;
-    AllocaInst* a = new AllocaInst();
-    a->Wrap(args.This());
-    return args.This();
-  }
-
-
-  Handle<v8::Value> AllocaInst::New(llvm::AllocaInst *llvm_alloca)
-  {
-    HandleScope scope;
-    Local<Object> new_instance = AllocaInst::s_func->NewInstance();
-    AllocaInst* new_a = new AllocaInst(llvm_alloca);
-    new_a->Wrap(new_instance);
-    return scope.Close(new_instance);
-  }
-
-  Handle<v8::Value> AllocaInst::Dump (const Arguments& args)
-  {
-    HandleScope scope;
-    AllocaInst* a = ObjectWrap::Unwrap<AllocaInst>(args.This());
-    a->llvm_alloca->dump();
-    return scope.Close(Undefined());
-  }
-
-  Handle<v8::Value> AllocaInst::ToString(const Arguments& args)
-  {
-    HandleScope scope;
-    AllocaInst* a = ObjectWrap::Unwrap<AllocaInst>(args.This());
+  NAN_METHOD(AllocaInst::ToString) {
+    auto ai = Unwrap(info.This());
 
     std::string str;
     llvm::raw_string_ostream str_ostream(str);
-    a->llvm_alloca->print(str_ostream);
+    ai->llvm_obj->print(str_ostream);
 
-    return scope.Close(String::New(trim(str_ostream.str()).c_str()));
+    info.GetReturnValue().Set(Nan::New(trim(str_ostream.str()).c_str()).ToLocalChecked());
   }
 
-  Handle< ::v8::Value> AllocaInst::SetAlignment(const Arguments& args)
-  {
-    HandleScope scope;
-    AllocaInst* val = ObjectWrap::Unwrap<AllocaInst>(args.This());
+  NAN_METHOD(AllocaInst::SetAlignment) {
+    auto ai = Unwrap(info.This());
 
     REQ_INT_ARG (0, alignment);
 
-    val->llvm_alloca->setAlignment(alignment);
-    return scope.Close(Undefined());
+    ai->llvm_obj->setAlignment(alignment);
   }
-
-  Persistent<FunctionTemplate> AllocaInst::s_ct;
-  Persistent<Function> AllocaInst::s_func;
 };
 
 

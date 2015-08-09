@@ -19,11 +19,11 @@ namespace jsllvm {
   {
     HandleScope scope;
 
-    Local<FunctionTemplate> t = FunctionTemplate::New(New);
+    Local<FunctionTemplate> ctor = FunctionTemplate::New(New);
 
-    s_ct = Persistent<FunctionTemplate>::New(t);
-    s_ct->InstanceTemplate()->SetInternalFieldCount(1);
-    s_ct->SetClassName(String::NewSymbol("MDNode"));
+    constructor.Reset(ctor);
+    constructor->InstanceTemplate()->SetInternalFieldCount(1);
+    constructor->SetClassName(String::NewSymbol("MDNode"));
 
     NODE_SET_METHOD(s_ct, "get", MDNode::Get);
 
@@ -129,8 +129,8 @@ namespace jsllvm {
     return scope.Close(MDString::New(llvm::MDString::get(llvm::getGlobalContext(), *str)));
   }
 
-  Persistent<FunctionTemplate> MDString::s_ct;
-  Persistent<v8::Function> MDString::s_func;
+  Persistent<FunctionTemplate> MDString::constructor;
+  Persistent<v8::Function> MDString::constructor_func;
 
 };
 

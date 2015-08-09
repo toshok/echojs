@@ -4,12 +4,12 @@
 #include "node-llvm.h"
 namespace jsllvm {
 
-  class MDString : public node::ObjectWrap {
+  class MDString : public Nan::ObjectWrap {
   public:
     static void Init(v8::Handle<v8::Object> target);
 
     static llvm::MDString* GetLLVMObj (v8::Local<v8::Value> value) {
-      return node::ObjectWrap::Unwrap<MDString>(value->ToObject())->llvm_mdstring;
+      return Nan::ObjectWrap::Unwrap<MDString>(value->ToObject())->llvm_mdstring;
     }
 
   private:
@@ -18,21 +18,21 @@ namespace jsllvm {
     MDString(llvm::MDString* llvm_mdstring);
     virtual ~MDString();
 
-    static v8::Handle<v8::Value> New (llvm::MDString* llvm_mdstring);
-    static v8::Handle<v8::Value> New (const v8::Arguments& args);
+    static v8::Local<v8::Value> Create(llvm::MDString* llvm_mdstring);
 
-    static v8::Handle<v8::Value> Get (const v8::Arguments& args);
+    static NAN_METHOD(New);
+    static NAN_METHOD(Get);
 
-    static v8::Persistent<v8::FunctionTemplate> s_ct;
-    static v8::Persistent<v8::Function> s_func;
+    static Nan::Persistent<v8::FunctionTemplate> constructor;
+    static Nan::Persistent<v8::Function> constructor_func;
   };
 
-  class MDNode : public node::ObjectWrap {
+  class MDNode : public Nan::ObjectWrap {
   public:
     static void Init(v8::Handle<v8::Object> target);
 
     static llvm::MDNode* GetLLVMObj (v8::Local<v8::Value> value) {
-      return node::ObjectWrap::Unwrap<MDNode>(value->ToObject())->llvm_mdnode;
+      return Nan::ObjectWrap::Unwrap<MDNode>(value->ToObject())->llvm_mdnode;
     }
 
   private:
@@ -41,13 +41,13 @@ namespace jsllvm {
     MDNode(llvm::MDNode* llvm_mdnode);
     virtual ~MDNode();
 
-    static v8::Handle<v8::Value> New (llvm::MDNode* llvm_mdnode);
-    static v8::Handle<v8::Value> New (const v8::Arguments& args);
+    static v8::Local<v8::Value> Create(llvm::MDNode* llvm_mdnode);
 
-    static v8::Handle<v8::Value> Get (const v8::Arguments& args);
+    static NAN_METHOD(New);
+    static NAN_METHOD(Get);
 
-    static v8::Persistent<v8::FunctionTemplate> s_ct;
-    static v8::Persistent<v8::Function> s_func;
+    static Nan::Persistent<v8::FunctionTemplate> constructor;
+    static Nan::Persistent<v8::Function> constructor_func;
   };
 
 };

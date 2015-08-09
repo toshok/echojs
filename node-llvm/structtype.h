@@ -4,34 +4,25 @@
 #include "node-llvm.h"
 namespace jsllvm {
 
-
-  class StructType : public node::ObjectWrap {
+  class StructType : public LLVMObjectWrap< ::llvm::StructType, StructType> {
   public:
     static void Init(v8::Handle<v8::Object> target);
 
-    static v8::Handle<v8::Value> New(llvm::StructType *ty);
-
-    static llvm::StructType* GetLLVMObj (v8::Local<v8::Value> value) {
-      if (value->IsNull())
-	return NULL;
-      return node::ObjectWrap::Unwrap<StructType>(value->ToObject())->llvm_ty;
-    }
-
   private:
-    llvm::StructType* llvm_ty;
+    typedef LLVMObjectWrap< ::llvm::StructType, StructType> BaseType;
+    friend class LLVMObjectWrap< ::llvm::StructType, StructType>;
 
-    StructType(llvm::StructType *llvm_ty);
-    StructType();
-    virtual ~StructType();
+    StructType(llvm::StructType *llvm_ty) : BaseType(llvm_ty) { }
+    StructType() : BaseType(nullptr) { }
+    virtual ~StructType() { }
 
-    static v8::Handle<v8::Value> New(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Create(const v8::Arguments& args);
+    static NAN_METHOD(New);
+    static NAN_METHOD(Create);
+    static NAN_METHOD(Dump);
+    static NAN_METHOD(ToString);
 
-    static v8::Handle<v8::Value> Dump(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ToString(const v8::Arguments& args);
-
-    static v8::Persistent<v8::FunctionTemplate> s_ct;
-    static v8::Persistent<v8::Function> s_func;
+    static Nan::Persistent<v8::FunctionTemplate> constructor;
+    static Nan::Persistent<v8::Function> constructor_func;
   };
 
 };

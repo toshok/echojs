@@ -5,55 +5,53 @@
 namespace jsllvm {
 
 
-  class Call : public node::ObjectWrap {
+  class Call : public LLVMObjectWrap < ::llvm::CallInst, Call> {
   public:
     static void Init(v8::Handle<v8::Object> target);
 
-    static v8::Handle<v8::Value> New(::llvm::CallInst *llvm_call);
-
   private:
-    ::llvm::CallInst *llvm_call;
+    typedef LLVMObjectWrap< ::llvm::CallInst, Call> BaseType;
+    friend class LLVMObjectWrap< ::llvm::CallInst, Call>;
 
-    Call(::llvm::CallInst *llvm_call);
-    Call();
-    virtual ~Call();
+    Call(::llvm::CallInst *llvm_call) : BaseType(llvm_call) { }
+    Call() : BaseType(nullptr) { }
+    virtual ~Call() { }
 
-    static v8::Handle<v8::Value> New(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Dump(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ToString(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetOnlyReadsMemory(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetDoesNotAccessMemory(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetDoesNotThrow(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetStructRet (const v8::Arguments& args);
+    static NAN_METHOD(New);
+    static NAN_METHOD(Dump);
+    static NAN_METHOD(ToString);
+    static NAN_METHOD(SetOnlyReadsMemory);
+    static NAN_METHOD(SetDoesNotAccessMemory);
+    static NAN_METHOD(SetDoesNotThrow);
+    static NAN_METHOD(SetStructRet);
 
-    static v8::Persistent<v8::FunctionTemplate> s_ct;
-    static v8::Persistent<v8::Function> s_func;
+    static Nan::Persistent<v8::FunctionTemplate> constructor;
+    static Nan::Persistent<v8::Function> constructor_func;
   };
 
 
-  class Invoke : public node::ObjectWrap {
+  class Invoke : public LLVMObjectWrap < ::llvm::InvokeInst, Invoke> {
   public:
     static void Init(v8::Handle<v8::Object> target);
 
-    static v8::Handle<v8::Value> New(::llvm::InvokeInst *llvm_invoke);
-
   private:
-    ::llvm::InvokeInst *llvm_invoke;
+    typedef LLVMObjectWrap< ::llvm::InvokeInst, Invoke> BaseType;
+    friend class LLVMObjectWrap< ::llvm::InvokeInst, Invoke>;
 
-    Invoke(::llvm::InvokeInst *llvm_invoke);
-    Invoke();
-    virtual ~Invoke();
+    Invoke(::llvm::InvokeInst *llvm_call) : BaseType(llvm_call) { }
+    Invoke() : BaseType(nullptr) { }
+    virtual ~Invoke() { }
 
-    static v8::Handle<v8::Value> New(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Dump(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ToString(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetOnlyReadsMemory(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetDoesNotAccessMemory(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetDoesNotThrow(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetStructRet (const v8::Arguments& args);
+    static NAN_METHOD(New);
+    static NAN_METHOD(Dump);
+    static NAN_METHOD(ToString);
+    static NAN_METHOD(SetOnlyReadsMemory);
+    static NAN_METHOD(SetDoesNotAccessMemory);
+    static NAN_METHOD(SetDoesNotThrow);
+    static NAN_METHOD(SetStructRet);
 
-    static v8::Persistent<v8::FunctionTemplate> s_ct;
-    static v8::Persistent<v8::Function> s_func;
+    static Nan::Persistent<v8::FunctionTemplate> constructor;
+    static Nan::Persistent<v8::Function> constructor_func;
   };
 
 };

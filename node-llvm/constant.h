@@ -5,7 +5,7 @@
 namespace jsllvm {
 
 
-  class Constant : public node::ObjectWrap {
+  class Constant : public Nan::ObjectWrap {
   public:
     static void Init(v8::Handle<v8::Object> target);
 
@@ -13,14 +13,14 @@ namespace jsllvm {
     Constant();
     virtual ~Constant();
 
-    static v8::Handle<v8::Value> New (const v8::Arguments& args);
-    static v8::Handle<v8::Value> GetNull (const v8::Arguments& args);
-    static v8::Handle<v8::Value> GetAggregateZero (const v8::Arguments& args);
-    static v8::Handle<v8::Value> GetBoolValue (const v8::Arguments& args);
-    static v8::Handle<v8::Value> GetIntegerValue (const v8::Arguments& args);
+    static NAN_METHOD(New);
+    static NAN_METHOD(GetNull);
+    static NAN_METHOD(GetAggregateZero);
+    static NAN_METHOD(GetBoolValue);
+    static NAN_METHOD(GetIntegerValue);
 
-    static v8::Persistent<v8::FunctionTemplate> s_ct;
-    static v8::Persistent<v8::Function> s_func;
+    static Nan::Persistent<v8::FunctionTemplate> constructor;
+    static Nan::Persistent<v8::Function> constructor_func;
   };
 
 };
