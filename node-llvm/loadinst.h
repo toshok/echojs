@@ -4,26 +4,25 @@
 #include "node-llvm.h"
 namespace jsllvm {
 
-  class LoadInst : public node::ObjectWrap {
+  class LoadInst : public LLVMObjectWrap< ::llvm::LoadInst, LoadInst> {
   public:
     static void Init(v8::Handle<v8::Object> target);
 
-    static v8::Handle<v8::Value> New(::llvm::LoadInst *llvm_load);
-
   private:
-    ::llvm::LoadInst *llvm_load;
+    typedef LLVMObjectWrap< ::llvm::LoadInst, LoadInst> BaseType;
+    friend class LLVMObjectWrap< ::llvm::LoadInst, LoadInst>;
 
-    LoadInst(::llvm::LoadInst *llvm_load);
-    LoadInst();
-    virtual ~LoadInst();
+    LoadInst(::llvm::LoadInst *llvm_load) : BaseType(llvm_load) { }
+    LoadInst() : BaseType(nullptr) { }
+    virtual ~LoadInst() { }
 
-    static v8::Handle<v8::Value> New(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Dump(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ToString(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetAlignment(const v8::Arguments& args);
+    static NAN_METHOD(New);
+    static NAN_METHOD(Dump);
+    static NAN_METHOD(ToString);
+    static NAN_METHOD(SetAlignment);
 
-    static v8::Persistent<v8::FunctionTemplate> s_ct;
-    static v8::Persistent<v8::Function> s_func;
+    static Nan::Persistent<v8::FunctionTemplate> constructor;
+    static Nan::Persistent<v8::Function> constructor_func;
   };
 };
 

@@ -4,26 +4,25 @@
 #include "node-llvm.h"
 namespace jsllvm {
 
-  class AllocaInst : public node::ObjectWrap {
+  class AllocaInst : public LLVMObjectWrap< ::llvm::AllocaInst, AllocaInst> {
   public:
     static void Init(v8::Handle<v8::Object> target);
 
-    static v8::Handle<v8::Value> New(::llvm::AllocaInst *llvm_alloca);
+    static Nan::Persistent<v8::FunctionTemplate> constructor;
+    static Nan::Persistent<v8::Function> constructor_func;
 
   private:
-    ::llvm::AllocaInst *llvm_alloca;
+    typedef LLVMObjectWrap< ::llvm::AllocaInst, AllocaInst> BaseType;
+    friend class LLVMObjectWrap< ::llvm::AllocaInst, AllocaInst>;
 
-    AllocaInst(::llvm::AllocaInst *llvm_alloca);
-    AllocaInst();
-    virtual ~AllocaInst();
+    AllocaInst(::llvm::AllocaInst *llvm_alloca) : BaseType(llvm_alloca) { }
+    AllocaInst() : BaseType(nullptr) { }
+    virtual ~AllocaInst() { }
 
-    static v8::Handle<v8::Value> New(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Dump(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ToString(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetAlignment(const v8::Arguments& args);
-
-    static v8::Persistent<v8::FunctionTemplate> s_ct;
-    static v8::Persistent<v8::Function> s_func;
+    static NAN_METHOD(New);
+    static NAN_METHOD(Dump);
+    static NAN_METHOD(ToString);
+    static NAN_METHOD(SetAlignment);
   };
 };
 

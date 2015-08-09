@@ -5,46 +5,35 @@
 namespace jsllvm {
 
 
-  class Type : public node::ObjectWrap {
+  class Type : public LLVMObjectWrap< ::llvm::Type, Type> {
   public:
     static void Init(v8::Handle<v8::Object> target);
 
-    static v8::Handle<v8::Value> New(llvm::Type *ty);
-
-    static llvm::Type* GetLLVMObj (v8::Local<v8::Value> value) {
-      if (value->IsNull())
-	return NULL;
-      return node::ObjectWrap::Unwrap<Type>(value->ToObject())->llvm_ty;
-    }
-
   private:
-    llvm::Type* llvm_ty;
+    typedef LLVMObjectWrap< ::llvm::Type, Type> BaseType;
+    friend class LLVMObjectWrap< ::llvm::Type, Type>;
 
-    Type(llvm::Type *llvm_ty);
-    Type();
-    virtual ~Type();
+    Type(llvm::Type *llvm_ty) : BaseType(llvm_ty) { }
+    Type() : BaseType(nullptr) { }
+    virtual ~Type() { }
 
-#define LLVM_TYPE_METHOD(name) static v8::Handle<v8::Value> name(const v8::Arguments& args)
+    static NAN_METHOD(getDoubleTy);
+    static NAN_METHOD(getInt64Ty);
+    static NAN_METHOD(getInt32Ty);
+    static NAN_METHOD(getInt16Ty);
+    static NAN_METHOD(getInt8Ty);
+    static NAN_METHOD(getInt1Ty);
+    static NAN_METHOD(getVoidTy);
 
-    LLVM_TYPE_METHOD(getDoubleTy);
-    LLVM_TYPE_METHOD(getInt64Ty);
-    LLVM_TYPE_METHOD(getInt32Ty);
-    LLVM_TYPE_METHOD(getInt16Ty);
-    LLVM_TYPE_METHOD(getInt8Ty);
-    LLVM_TYPE_METHOD(getInt1Ty);
-    LLVM_TYPE_METHOD(getVoidTy);
+    static NAN_METHOD(New);
+    static NAN_METHOD(isVoid);
+    static NAN_METHOD(dump);
+    static NAN_METHOD(ToString);
 
-#undef LLVM_TYPE_METHOD
+    static NAN_METHOD(pointerTo);
 
-    static v8::Handle<v8::Value> New(const v8::Arguments& args);
-    static v8::Handle<v8::Value> isVoid(const v8::Arguments& args);
-    static v8::Handle<v8::Value> dump(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ToString(const v8::Arguments& args);
-
-    static v8::Handle<v8::Value> pointerTo(const v8::Arguments& args);
-
-    static v8::Persistent<v8::FunctionTemplate> s_ct;
-    static v8::Persistent<v8::Function> s_func;
+    static Nan::Persistent<v8::FunctionTemplate> constructor;
+    static Nan::Persistent<v8::Function> constructor_func;
 
     friend class FunctionType;
     friend class StructType;

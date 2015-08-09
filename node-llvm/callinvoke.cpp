@@ -12,217 +12,139 @@ namespace jsllvm {
 
   void Call::Init(Handle<Object> target)
   {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
-    Local<FunctionTemplate> t = FunctionTemplate::New(New);
+    Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
+    constructor.Reset(ctor);
 
-    s_ct = Persistent<FunctionTemplate>::New(t);
-    s_ct->Inherit(Instruction::s_ct);
-    s_ct->InstanceTemplate()->SetInternalFieldCount(1);
-    s_ct->SetClassName(String::NewSymbol("CallInst"));
+    ctor->Inherit (Nan::New<v8::FunctionTemplate>(Instruction::constructor));
+    ctor->InstanceTemplate()->SetInternalFieldCount(1);
+    ctor->SetClassName(Nan::New("CallInst").ToLocalChecked());
 
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", Call::Dump);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", Call::ToString);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "setOnlyReadsMemory", Call::SetOnlyReadsMemory);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "setDoesNotAccessMemory", Call::SetDoesNotAccessMemory);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "setDoesNotThrow", Call::SetDoesNotThrow);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "setStructRet", Call::SetStructRet);
+    Nan::SetPrototypeMethod(ctor, "dump", Call::Dump);
+    Nan::SetPrototypeMethod(ctor, "toString", Call::ToString);
+    // XXX these should be setters
+    Nan::SetPrototypeMethod(ctor, "setOnlyReadsMemory", Call::SetOnlyReadsMemory);
+    Nan::SetPrototypeMethod(ctor, "setDoesNotAccessMemory", Call::SetDoesNotAccessMemory);
+    Nan::SetPrototypeMethod(ctor, "setDoesNotThrow", Call::SetDoesNotThrow);
+    Nan::SetPrototypeMethod(ctor, "setStructRet", Call::SetStructRet);
 
-    s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
-    target->Set(String::NewSymbol("CallInst"),
-		s_func);
+    Local<v8::Function> ctor_func = ctor->GetFunction();
+    constructor_func.Reset(ctor_func);
+    target->Set(Nan::New("CallInst").ToLocalChecked(), ctor_func);
   }
 
-  Call::Call(llvm::CallInst *llvm_call) : llvm_call(llvm_call)
-  {
+  NAN_METHOD(Call::New) {
+    info.GetReturnValue().Set(info.This());
   }
 
-  Call::Call() : llvm_call(NULL)
-  {
+  NAN_METHOD(Call::Dump) {
+    auto call = Unwrap(info.This());
+    call->llvm_obj->dump();
   }
 
-  Call::~Call()
-  {
-  }
-
-  Handle<v8::Value> Call::New(const Arguments& args)
-  {
-    HandleScope scope;
-    return args.This();
-  }
-
-  Handle<v8::Value> Call::New(llvm::CallInst *llvm_call)
-  {
-    HandleScope scope;
-    Local<Object> new_instance = Call::s_func->NewInstance();
-    Call* new_call = new Call(llvm_call);
-    new_call->Wrap(new_instance);
-    return scope.Close(new_instance);
-  }
-
-  Handle<v8::Value> Call::Dump (const Arguments& args)
-  {
-    HandleScope scope;
-    Call* _call = ObjectWrap::Unwrap<Call>(args.This());
-    _call->llvm_call->dump();
-    return scope.Close(Undefined());
-  }
-
-  Handle<v8::Value> Call::ToString(const Arguments& args)
-  {
-    HandleScope scope;
-    Call* _call = ObjectWrap::Unwrap<Call>(args.This());
+  NAN_METHOD(Call::ToString) {
+    auto call = Unwrap(info.This());
 
     std::string str;
     llvm::raw_string_ostream str_ostream(str);
-    _call->llvm_call->print(str_ostream);
+    call->llvm_obj->print(str_ostream);
 
-    return scope.Close(String::New(trim(str_ostream.str()).c_str()));
+    info.GetReturnValue().Set(Nan::New(trim(str_ostream.str()).c_str()).ToLocalChecked());
   }
 
-  Handle<v8::Value> Call::SetOnlyReadsMemory(const v8::Arguments& args)
-  {
-    HandleScope scope;
-    Call* _call = ObjectWrap::Unwrap<Call>(args.This());
-    _call->llvm_call->setOnlyReadsMemory();
-    return scope.Close(Undefined());
+  NAN_METHOD(Call::SetOnlyReadsMemory) {
+    auto call = Unwrap(info.This());
+    call->llvm_obj->setOnlyReadsMemory();
   }
 
-  Handle<v8::Value> Call::SetDoesNotAccessMemory(const v8::Arguments& args)
-  {
-    HandleScope scope;
-    Call* _call = ObjectWrap::Unwrap<Call>(args.This());
-    _call->llvm_call->setDoesNotAccessMemory();
-    return scope.Close(Undefined());
+  NAN_METHOD(Call::SetDoesNotAccessMemory) {
+    auto call = Unwrap(info.This());
+    call->llvm_obj->setDoesNotAccessMemory();
   }
 
-  Handle<v8::Value> Call::SetDoesNotThrow(const v8::Arguments& args)
-  {
-    HandleScope scope;
-    Call* _call = ObjectWrap::Unwrap<Call>(args.This());
-    _call->llvm_call->setDoesNotThrow();
-    return scope.Close(Undefined());
+  NAN_METHOD(Call::SetDoesNotThrow) {
+    auto call = Unwrap(info.This());
+    call->llvm_obj->setDoesNotThrow();
   }
 
-  Handle<v8::Value> Call::SetStructRet(const v8::Arguments& args)
-  {
-    HandleScope scope;
-    Call* _call = ObjectWrap::Unwrap<Call>(args.This());
-    _call->llvm_call->addAttribute(1 /* first arg */,
-				   llvm::Attribute::StructRet);
-    return scope.Close(Undefined());
+  NAN_METHOD(Call::SetStructRet) {
+    auto call = Unwrap(info.This());
+    call->llvm_obj->addAttribute(1 /* first arg */,
+				 llvm::Attribute::StructRet);
   }
 
-  Persistent<FunctionTemplate> Call::s_ct;
-  Persistent<Function> Call::s_func;
+  Nan::Persistent<v8::FunctionTemplate> Call::constructor;
+  Nan::Persistent<v8::Function> Call::constructor_func;
 
 
 
   void Invoke::Init(Handle<Object> target)
   {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
-    Local<FunctionTemplate> t = FunctionTemplate::New(New);
+    Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
+    constructor.Reset(ctor);
 
-    s_ct = Persistent<FunctionTemplate>::New(t);
-    s_ct->Inherit(Instruction::s_ct);
-    s_ct->InstanceTemplate()->SetInternalFieldCount(1);
-    s_ct->SetClassName(String::NewSymbol("InvokeInst"));
+    ctor->Inherit (Nan::New<v8::FunctionTemplate>(Instruction::constructor));
 
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", Invoke::Dump);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", Invoke::ToString);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "setOnlyReadsMemory", Invoke::SetOnlyReadsMemory);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "setDoesNotAccessMemory", Invoke::SetDoesNotAccessMemory);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "setDoesNotThrow", Invoke::SetDoesNotThrow);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "setStructRet", Invoke::SetStructRet);
+    ctor->InstanceTemplate()->SetInternalFieldCount(1);
+    ctor->SetClassName(Nan::New("InvokeInst").ToLocalChecked());
 
-    s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
-    target->Set(String::NewSymbol("InvokeInst"),
-		s_func);
+    Nan::SetPrototypeMethod(ctor, "dump", Invoke::Dump);
+    Nan::SetPrototypeMethod(ctor, "toString", Invoke::ToString);
+    Nan::SetPrototypeMethod(ctor, "setOnlyReadsMemory", Invoke::SetOnlyReadsMemory);
+    Nan::SetPrototypeMethod(ctor, "setDoesNotAccessMemory", Invoke::SetDoesNotAccessMemory);
+    Nan::SetPrototypeMethod(ctor, "setDoesNotThrow", Invoke::SetDoesNotThrow);
+    Nan::SetPrototypeMethod(ctor, "setStructRet", Invoke::SetStructRet);
+
+    Local<v8::Function> ctor_func = ctor->GetFunction();
+    constructor_func.Reset(ctor_func);
+    target->Set(Nan::New("InvokeInst").ToLocalChecked(), ctor_func);
   }
 
-  Invoke::Invoke(llvm::InvokeInst *llvm_invoke) : llvm_invoke(llvm_invoke)
-  {
+  NAN_METHOD(Invoke::New) {
+    info.GetReturnValue().Set(info.This());
   }
 
-  Invoke::Invoke() : llvm_invoke(NULL)
-  {
+  NAN_METHOD(Invoke::Dump) {
+    auto invoke = Unwrap(info.This());
+    invoke->llvm_obj->dump();
   }
 
-  Invoke::~Invoke()
-  {
-  }
-
-  Handle<v8::Value> Invoke::New(const Arguments& args)
-  {
-    HandleScope scope;
-    return args.This();
-  }
-
-  Handle<v8::Value> Invoke::New(llvm::InvokeInst *llvm_invoke)
-  {
-    HandleScope scope;
-    Local<Object> new_instance = Invoke::s_func->NewInstance();
-    Invoke* new_invoke = new Invoke(llvm_invoke);
-    new_invoke->Wrap(new_instance);
-    return scope.Close(new_instance);
-  }
-
-  Handle<v8::Value> Invoke::Dump (const Arguments& args)
-  {
-    HandleScope scope;
-    Invoke* _invoke = ObjectWrap::Unwrap<Invoke>(args.This());
-    _invoke->llvm_invoke->dump();
-    return scope.Close(Undefined());
-  }
-
-  Handle<v8::Value> Invoke::ToString(const Arguments& args)
-  {
-    HandleScope scope;
-    Invoke* _invoke = ObjectWrap::Unwrap<Invoke>(args.This());
+  NAN_METHOD(Invoke::ToString) {
+    auto invoke = Unwrap(info.This());
 
     std::string str;
     llvm::raw_string_ostream str_ostream(str);
-    _invoke->llvm_invoke->print(str_ostream);
+    invoke->llvm_obj->print(str_ostream);
 
-    return scope.Close(String::New(trim(str_ostream.str()).c_str()));
+    info.GetReturnValue().Set(Nan::New(trim(str_ostream.str()).c_str()).ToLocalChecked());
   }
 
-  Handle<v8::Value> Invoke::SetOnlyReadsMemory(const v8::Arguments& args)
-  {
-    HandleScope scope;
-    Invoke* _invoke = ObjectWrap::Unwrap<Invoke>(args.This());
-    _invoke->llvm_invoke->setOnlyReadsMemory();
-    return scope.Close(Undefined());
+  NAN_METHOD(Invoke::SetOnlyReadsMemory) {
+    auto invoke = Unwrap(info.This());
+    invoke->llvm_obj->setOnlyReadsMemory();
   }
 
-  Handle<v8::Value> Invoke::SetDoesNotAccessMemory(const v8::Arguments& args)
-  {
-    HandleScope scope;
-    Invoke* _invoke = ObjectWrap::Unwrap<Invoke>(args.This());
-    _invoke->llvm_invoke->setDoesNotAccessMemory();
-    return scope.Close(Undefined());
+  NAN_METHOD(Invoke::SetDoesNotAccessMemory) {
+    auto invoke = Unwrap(info.This());
+    invoke->llvm_obj->setDoesNotAccessMemory();
   }
 
-  Handle<v8::Value> Invoke::SetDoesNotThrow(const v8::Arguments& args)
-  {
-    HandleScope scope;
-    Invoke* _invoke = ObjectWrap::Unwrap<Invoke>(args.This());
-    _invoke->llvm_invoke->setDoesNotThrow();
-    return scope.Close(Undefined());
+  NAN_METHOD(Invoke::SetDoesNotThrow) {
+    auto invoke = Unwrap(info.This());
+    invoke->llvm_obj->setDoesNotThrow();
   }
 
-  Handle<v8::Value> Invoke::SetStructRet(const v8::Arguments& args)
-  {
-    HandleScope scope;
-    Invoke* _invoke = ObjectWrap::Unwrap<Invoke>(args.This());
-    _invoke->llvm_invoke->addAttribute(1 /* first arg */,
-				       llvm::Attribute::StructRet);
-    return scope.Close(Undefined());
+  NAN_METHOD(Invoke::SetStructRet) {
+    auto invoke = Unwrap(info.This());
+    invoke->llvm_obj->addAttribute(1 /* first arg */,
+				   llvm::Attribute::StructRet);
   }
 
-  Persistent<FunctionTemplate> Invoke::s_ct;
-  Persistent<Function> Invoke::s_func;
+  Nan::Persistent<v8::FunctionTemplate> Invoke::constructor;
+  Nan::Persistent<v8::Function> Invoke::constructor_func;
 };
 
 

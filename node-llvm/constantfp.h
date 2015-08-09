@@ -5,19 +5,19 @@
 namespace jsllvm {
 
 
-  class ConstantFP : public node::ObjectWrap {
+  class ConstantFP : public Nan::ObjectWrap {
   public:
     static void Init(v8::Handle<v8::Object> target);
 
   private:
-    ConstantFP();
-    virtual ~ConstantFP();
+    ConstantFP() { }
+    virtual ~ConstantFP() { }
 
-    static v8::Handle<v8::Value> New (const v8::Arguments& args);
-    static v8::Handle<v8::Value> GetDouble (const v8::Arguments& args);
+    static NAN_METHOD(New);
+    static NAN_METHOD(GetDouble);
 
-    static v8::Persistent<v8::FunctionTemplate> s_ct;
-    static v8::Persistent<v8::Function> s_func;
+    static Nan::Persistent<v8::FunctionTemplate> constructor;
+    static Nan::Persistent<v8::Function> constructor_func;
   };
 
 };

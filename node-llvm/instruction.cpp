@@ -8,65 +8,37 @@ using namespace v8;
 
 namespace jsllvm {
 
-  void Instruction::Init(Handle<Object> target)
-  {
-    HandleScope scope;
+  void Instruction::Init(Handle<Object> target) {
+    Nan::HandleScope scope;
 
-    Local<FunctionTemplate> t = FunctionTemplate::New(New);
+    Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
+    constructor.Reset(ctor);
 
-    s_ct = Persistent<FunctionTemplate>::New(t);
-    s_ct->Inherit(Value::s_ct);
-    s_ct->InstanceTemplate()->SetInternalFieldCount(1);
-    s_ct->SetClassName(String::NewSymbol("Instruction"));
+    ctor->Inherit (Nan::New<v8::FunctionTemplate>(Value::constructor));
 
-    NODE_SET_PROTOTYPE_METHOD (s_ct, "setDebugLoc", Instruction::SetDebugLoc);
+    ctor->InstanceTemplate()->SetInternalFieldCount(1);
+    ctor->SetClassName(Nan::New("Instruction").ToLocalChecked());
 
-    s_func = Persistent<Function>::New(s_ct->GetFunction());
-    target->Set(String::NewSymbol("Instruction"),
-		s_func);
+    Nan::SetPrototypeMethod (ctor, "setDebugLoc", Instruction::SetDebugLoc);
+
+    Local<v8::Function> ctor_func = ctor->GetFunction();
+    constructor_func.Reset(ctor_func);
+    target->Set(Nan::New("Instruction").ToLocalChecked(), ctor_func);
   }
 
-  Instruction::Instruction(llvm::Instruction *llvm_instr) : llvm_instr(llvm_instr)
-  {
+  NAN_METHOD(Instruction::New) {
+    auto instr = new Instruction();
+    instr->Wrap(info.This());
+    info.GetReturnValue().Set(info.This());
   }
 
-  Instruction::Instruction() : llvm_instr(NULL)
-  {
-  }
-
-  Instruction::~Instruction()
-  {
-  }
-
-  Handle<v8::Value> Instruction::New(llvm::Instruction *llvm_instr)
-  {
-    HandleScope scope;
-    Local<Object> new_instance = Instruction::s_func->NewInstance();
-    Instruction* new_instr = new Instruction(llvm_instr);
-    new_instr->Wrap(new_instance);
-    return scope.Close(new_instance);
-  }
-
-  Handle< ::v8::Value> Instruction::New(const Arguments& args)
-  {
-    HandleScope scope;
-    Instruction* instr = new Instruction();
-    instr->Wrap(args.This());
-    return args.This();
-  }
-
-  Handle< ::v8::Value> Instruction::SetDebugLoc(const Arguments& args)
-  {
-    HandleScope scope;
-    Instruction* instr = ObjectWrap::Unwrap<Instruction>(args.This());
-
+  NAN_METHOD(Instruction::SetDebugLoc) {
+    auto instr = Unwrap(info.This());
     REQ_LLVM_DEBUGLOC_ARG(0, debugloc);
-
-    instr->llvm_instr->setDebugLoc(debugloc);
-    return scope.Close(Undefined());
+    instr->llvm_obj->setDebugLoc(debugloc);
   }
 
-  Persistent<FunctionTemplate> Instruction::s_ct;
-  Persistent<Function> Instruction::s_func;
+  Nan::Persistent<v8::FunctionTemplate> Instruction::constructor;
+  Nan::Persistent<v8::Function> Instruction::constructor_func;
 
 };

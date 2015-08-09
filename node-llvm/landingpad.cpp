@@ -9,93 +9,58 @@ using namespace v8;
 
 namespace jsllvm {
 
-  void LandingPad::Init(Handle<Object> target)
-  {
-    HandleScope scope;
+  void LandingPad::Init(Handle<Object> target) {
+    Nan::HandleScope scope;
 
-    Local<FunctionTemplate> t = FunctionTemplate::New(New);
+    Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
+    constructor.Reset(ctor);
 
-    s_ct = Persistent<FunctionTemplate>::New(t);
-    s_ct->InstanceTemplate()->SetInternalFieldCount(1);
-    s_ct->SetClassName(String::NewSymbol("LandingPadInst"));
+    ctor->InstanceTemplate()->SetInternalFieldCount(1);
+    ctor->SetClassName(Nan::New("LandingPadInst").ToLocalChecked());
 
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", LandingPad::Dump);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", LandingPad::ToString);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "setCleanup", LandingPad::SetCleanup);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "addClause", LandingPad::AddClause);
+    Nan::SetPrototypeMethod(ctor, "dump", LandingPad::Dump);
+    Nan::SetPrototypeMethod(ctor, "toString", LandingPad::ToString);
+    Nan::SetPrototypeMethod(ctor, "setCleanup", LandingPad::SetCleanup);
+    Nan::SetPrototypeMethod(ctor, "addClause", LandingPad::AddClause);
 
-    s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
-    target->Set(String::NewSymbol("LandingPadInst"),
-		s_func);
+    Local<v8::Function> ctor_func = ctor->GetFunction();
+    constructor_func.Reset(ctor_func);
+    target->Set(Nan::New("LandingPadInst").ToLocalChecked(), ctor_func);
   }
 
-  LandingPad::LandingPad(llvm::LandingPadInst *llvm_landing_pad) : llvm_landing_pad(llvm_landing_pad)
-  {
+  NAN_METHOD(LandingPad::New) {
+    info.GetReturnValue().Set(info.This());
   }
 
-  LandingPad::LandingPad() : llvm_landing_pad(NULL)
-  {
+  NAN_METHOD(LandingPad::Dump) {
+    auto landing_pad = Unwrap(info.This());
+    landing_pad->llvm_obj->dump();
   }
 
-  LandingPad::~LandingPad()
-  {
-  }
-
-  Handle<v8::Value> LandingPad::New(const Arguments& args)
-  {
-    HandleScope scope;
-    return args.This();
-  }
-
-  Handle<v8::Value> LandingPad::New(llvm::LandingPadInst *llvm_landing_pad)
-  {
-    HandleScope scope;
-    Local<Object> new_instance = LandingPad::s_func->NewInstance();
-    LandingPad* new_landing_pad = new LandingPad(llvm_landing_pad);
-    new_landing_pad->Wrap(new_instance);
-    return scope.Close(new_instance);
-  }
-
-  Handle<v8::Value> LandingPad::Dump (const Arguments& args)
-  {
-    HandleScope scope;
-    LandingPad* landing_pad = ObjectWrap::Unwrap<LandingPad>(args.This());
-    landing_pad->llvm_landing_pad->dump();
-    return scope.Close(Undefined());
-  }
-
-  Handle<v8::Value> LandingPad::ToString(const Arguments& args)
-  {
-    HandleScope scope;
-    LandingPad* landing_pad = ObjectWrap::Unwrap<LandingPad>(args.This());
+  NAN_METHOD(LandingPad::ToString) {
+    auto landing_pad = Unwrap(info.This());
 
     std::string str;
     llvm::raw_string_ostream str_ostream(str);
-    landing_pad->llvm_landing_pad->print(str_ostream);
+    landing_pad->llvm_obj->print(str_ostream);
 
-    return scope.Close(String::New(trim(str_ostream.str()).c_str()));
+    info.GetReturnValue().Set(Nan::New(trim(str_ostream.str()).c_str()).ToLocalChecked());
   }
 
-  Handle<v8::Value> LandingPad::SetCleanup (const Arguments& args)
-  {
-    HandleScope scope;
-    LandingPad* landing_pad = ObjectWrap::Unwrap<LandingPad>(args.This());
+  NAN_METHOD(LandingPad::SetCleanup) {
+    auto landing_pad = Unwrap(info.This());
     REQ_BOOL_ARG(0, flag);
-    landing_pad->llvm_landing_pad->setCleanup(flag);
-    return scope.Close(Undefined());
+    landing_pad->llvm_obj->setCleanup(flag);
   }
 
-  Handle<v8::Value> LandingPad::AddClause (const Arguments& args)
-  {
-    HandleScope scope;
-    LandingPad* landing_pad = ObjectWrap::Unwrap<LandingPad>(args.This());
+  NAN_METHOD(LandingPad::AddClause) {
+    auto landing_pad = Unwrap(info.This());
     REQ_LLVM_VAL_ARG(0, clause_val);
-    landing_pad->llvm_landing_pad->addClause(llvm::cast<llvm::Constant>(clause_val));
-    return scope.Close(Undefined());
+    landing_pad->llvm_obj->addClause(llvm::cast<llvm::Constant>(clause_val));
   }
 
-  Persistent<FunctionTemplate> LandingPad::s_ct;
-  Persistent<Function> LandingPad::s_func;
+  Nan::Persistent<v8::FunctionTemplate> LandingPad::constructor;
+  Nan::Persistent<v8::Function> LandingPad::constructor_func;
 };
 
 

@@ -3,7 +3,7 @@
         "target_name": "llvm",
 	"cxxflags": ['<!@(echo $LLVM_CXXFLAGS)'],
 	"cflags": ['<!@(echo $LLVM_CXXFLAGS)'],
-	"include_dirs": ['<!@(echo $LLVM_INCLUDEDIR)'],
+	"include_dirs": ['<!@(echo $LLVM_INCLUDEDIR)', "<!(node -e \"require('nan')\")"],
 	"defines": ['<!@(echo $LLVM_DEFINES)'],
         "sources": ['<!@(ls -1 *.cpp)'],
 	"link_settings": {

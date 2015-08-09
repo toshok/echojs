@@ -45,9 +45,10 @@
   "homepage": "https://github.com/toshok/echojs",
   "private": true,
   "dependencies": {
-    "mocha": "~1.21.3",
-    "glob": "~5.0.14",
     "colors": "~1.1.2",
+    "glob": "~5.0.14",
+    "mocha": "~1.21.3",
+    "nan": "^2.0.4",
     "temp": "~0.8.3"
   }
 }

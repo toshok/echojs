@@ -9,32 +9,28 @@ using namespace v8;
 namespace jsllvm {
 
 
-  void StructType::Init(Handle<Object> target)
-  {
-    HandleScope scope;
+  void StructType::Init(Handle<Object> target) {
+    Nan::HandleScope scope;
 
-    Local<FunctionTemplate> t = FunctionTemplate::New(New);
+    Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
+    constructor.Reset(ctor);
 
-    s_ct = Persistent<FunctionTemplate>::New(t);
-    s_ct->Inherit(Type::s_ct);
-    s_ct->InstanceTemplate()->SetInternalFieldCount(1);
-    s_ct->SetClassName(String::NewSymbol("StructType"));
+    ctor->Inherit (Nan::New<v8::FunctionTemplate>(Type::constructor));
+    ctor->InstanceTemplate()->SetInternalFieldCount(1);
+    ctor->SetClassName(Nan::New("StructType").ToLocalChecked());
 
 
-    NODE_SET_METHOD(s_ct, "create", StructType::Create);
+    Nan::SetMethod(ctor, "create", StructType::Create);
 
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", StructType::Dump);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", StructType::ToString);
+    Nan::SetPrototypeMethod(ctor, "dump", StructType::Dump);
+    Nan::SetPrototypeMethod(ctor, "toString", StructType::ToString);
 
-    s_func = Persistent<Function>::New(s_ct->GetFunction());
-    target->Set(String::NewSymbol("StructType"),
-		s_func);
+    Local<v8::Function> ctor_func = ctor->GetFunction();
+    constructor_func.Reset(ctor_func);
+    target->Set(Nan::New("StructType").ToLocalChecked(), ctor_func);
   }
 
-  Handle<Value> StructType::Create(const Arguments& args)
-  {
-    HandleScope scope;
-
+  NAN_METHOD(StructType::Create) {
     REQ_UTF8_ARG (0, name);
     REQ_ARRAY_ARG (1, elementTypes)
 
@@ -43,58 +39,31 @@ namespace jsllvm {
       element_types.push_back (Type::GetLLVMObj(elementTypes->Get(i)));
     }
 
-    return scope.Close(StructType::New(llvm::StructType::create(llvm::getGlobalContext(), element_types, *name)));
+    // BaseType::Create, not StructType::Create, since the latter is ambiguous
+    info.GetReturnValue().Set(BaseType::Create(llvm::StructType::create(llvm::getGlobalContext(), element_types, *name)));
   }
 
-  Handle<Value> StructType::New(llvm::StructType *ty)
-  {
-    HandleScope scope;
-    Local<Object> new_instance = StructType::s_func->NewInstance();
-    StructType* new_type = new StructType(ty);
-    new_type->Wrap(new_instance);
-    return scope.Close(new_instance);
+  NAN_METHOD(StructType::New) {
+    auto type = new StructType();
+    type->Wrap(info.This());
+    info.GetReturnValue().Set(info.This());
   }
 
-  Handle<Value> StructType::New(const Arguments& args)
-  {
-    HandleScope scope;
-    StructType* type = new StructType();
-    type->Wrap(args.This());
-    return args.This();
-  }
-
-  StructType::StructType(llvm::StructType *llvm_ty) : llvm_ty(llvm_ty)
-  {
-  }
-
-  StructType::StructType() : llvm_ty(NULL)
-  {
-  }
-
-  StructType::~StructType()
-  {
-  }
-
-  Handle<Value> StructType::ToString(const Arguments& args)
-  {
-    HandleScope scope;
-    StructType* type = ObjectWrap::Unwrap<StructType>(args.This());
+  NAN_METHOD(StructType::ToString) {
+    auto type = new StructType();
 
     std::string str;
     llvm::raw_string_ostream str_ostream(str);
-    type->llvm_ty->print(str_ostream);
+    type->llvm_obj->print(str_ostream);
 
-    return scope.Close(String::New(trim(str_ostream.str()).c_str()));
+    info.GetReturnValue().Set(Nan::New(trim(str_ostream.str()).c_str()).ToLocalChecked());
   }
 
-  Handle<Value> StructType::Dump(const Arguments& args)
-  {
-    HandleScope scope;
-    StructType* type = ObjectWrap::Unwrap<StructType>(args.This());
-    type->llvm_ty->dump();
-    return scope.Close(Undefined());
+  NAN_METHOD(StructType::Dump) {
+    auto type = new StructType();
+    type->llvm_obj->dump();
   }
 
-  v8::Persistent<v8::FunctionTemplate> StructType::s_ct;
-  v8::Persistent<v8::Function> StructType::s_func;
+  Nan::Persistent<v8::FunctionTemplate> StructType::constructor;
+  Nan::Persistent<v8::Function> StructType::constructor_func;
 };

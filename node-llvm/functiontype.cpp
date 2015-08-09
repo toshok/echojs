@@ -9,35 +9,31 @@ using namespace v8;
 namespace jsllvm {
 
 
-  void FunctionType::Init(Handle<Object> target)
-  {
-    HandleScope scope;
+  void FunctionType::Init(Handle<Object> target) {
+    Nan::HandleScope scope;
 
-    Local<FunctionTemplate> t = FunctionTemplate::New(New);
+    Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
+    constructor.Reset(ctor);
 
-    s_ct = Persistent<FunctionTemplate>::New(t);
-    s_ct->Inherit(Type::s_ct);
-    s_ct->InstanceTemplate()->SetInternalFieldCount(1);
-    s_ct->SetClassName(String::NewSymbol("FunctionType"));
+    ctor->Inherit (Nan::New<v8::FunctionTemplate>(Type::constructor));
 
+    ctor->InstanceTemplate()->SetInternalFieldCount(1);
+    ctor->SetClassName(Nan::New("FunctionType").ToLocalChecked());
 
-    NODE_SET_METHOD(s_ct, "get", FunctionType::Get);
+    Nan::SetMethod(ctor, "get", FunctionType::Get);
 
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "getReturnType", FunctionType::GetReturnType);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "getParamType", FunctionType::GetParamType);
+    Nan::SetPrototypeMethod(ctor, "getReturnType", FunctionType::GetReturnType);
+    Nan::SetPrototypeMethod(ctor, "getParamType", FunctionType::GetParamType);
 
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", FunctionType::Dump);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", FunctionType::ToString);
+    Nan::SetPrototypeMethod(ctor, "dump", FunctionType::Dump);
+    Nan::SetPrototypeMethod(ctor, "toString", FunctionType::ToString);
 
-    s_func = Persistent<Function>::New(s_ct->GetFunction());
-    target->Set(String::NewSymbol("FunctionType"),
-		s_func);
+    Local<v8::Function> ctor_func = ctor->GetFunction();
+    constructor_func.Reset(ctor_func);
+    target->Set(Nan::New("FunctionType").ToLocalChecked(), ctor_func);
   }
 
-  Handle<Value> FunctionType::Get(const Arguments& args)
-  {
-    HandleScope scope;
-
+  NAN_METHOD(FunctionType::Get) {
     REQ_LLVM_TYPE_ARG(0, returnType);
     REQ_ARRAY_ARG(1, argTypes);
 
@@ -49,76 +45,42 @@ namespace jsllvm {
     ::llvm::FunctionType *FT = llvm::FunctionType::get(returnType,
 						       arg_types, false);
 
-    v8::Handle<v8::Value> result = FunctionType::New(FT);
-    return scope.Close(result);
+    v8::Local<v8::Value> result = FunctionType::Create(FT);
+    info.GetReturnValue().Set(result);
   }
 
-  Handle<Value> FunctionType::New(llvm::FunctionType *ty)
-  {
-    HandleScope scope;
-    Local<Object> new_instance = FunctionType::s_func->NewInstance();
-    FunctionType* new_type = new FunctionType(ty);
-    new_type->Wrap(new_instance);
-    return scope.Close(new_instance);
+  NAN_METHOD(FunctionType::New) {
+    auto type = new FunctionType();
+    type->Wrap(info.This());
+    info.GetReturnValue().Set(info.This());
   }
 
-  Handle<Value> FunctionType::New(const Arguments& args)
-  {
-    HandleScope scope;
-    FunctionType* type = new FunctionType();
-    type->Wrap(args.This());
-    return args.This();
+  NAN_METHOD(FunctionType::GetReturnType) {
+    auto type = Unwrap(info.This());
+    info.GetReturnValue().Set(Type::Create(type->llvm_obj->getReturnType()));
   }
 
-  FunctionType::FunctionType(llvm::FunctionType *llvm_ty) : llvm_ty(llvm_ty)
-  {
-  }
-
-  FunctionType::FunctionType() : llvm_ty(NULL)
-  {
-  }
-
-  FunctionType::~FunctionType()
-  {
-  }
-
-  Handle<Value> FunctionType::GetReturnType(const Arguments& args)
-  {
-    HandleScope scope;
-    FunctionType* type = ObjectWrap::Unwrap<FunctionType>(args.This());
-    return scope.Close(Type::New(type->llvm_ty->getReturnType()));
-  }
-
-  Handle<Value> FunctionType::GetParamType(const Arguments& args)
-  {
-    HandleScope scope;
-
+  NAN_METHOD(FunctionType::GetParamType) {
+    auto type = Unwrap(info.This());
     REQ_INT_ARG(0, i);
-
-    FunctionType* type = ObjectWrap::Unwrap<FunctionType>(args.This());
-    return scope.Close(Type::New(type->llvm_ty->getParamType(i)));
+    info.GetReturnValue().Set(Type::Create(type->llvm_obj->getParamType(i)));
   }
 
-  Handle<Value> FunctionType::ToString(const Arguments& args)
-  {
-    HandleScope scope;
-    FunctionType* type = ObjectWrap::Unwrap<FunctionType>(args.This());
+  NAN_METHOD(FunctionType::ToString) {
+    auto type = Unwrap(info.This());
 
     std::string str;
     llvm::raw_string_ostream str_ostream(str);
-    type->llvm_ty->print(str_ostream);
+    type->llvm_obj->print(str_ostream);
 
-    return scope.Close(String::New(trim(str_ostream.str()).c_str()));
+    info.GetReturnValue().Set(Nan::New(trim(str_ostream.str()).c_str()).ToLocalChecked());
   }
 
-  Handle<Value> FunctionType::Dump(const Arguments& args)
-  {
-    HandleScope scope;
-    FunctionType* type = ObjectWrap::Unwrap<FunctionType>(args.This());
-    type->llvm_ty->dump();
-    return scope.Close(Undefined());
+  NAN_METHOD(FunctionType::Dump) {
+    auto type = Unwrap(info.This());
+    type->llvm_obj->dump();
   }
 
-  v8::Persistent<v8::FunctionTemplate> FunctionType::s_ct;
-  v8::Persistent<v8::Function> FunctionType::s_func;
+  Nan::Persistent<v8::FunctionTemplate> FunctionType::constructor;
+  Nan::Persistent<v8::Function> FunctionType::constructor_func;
 };

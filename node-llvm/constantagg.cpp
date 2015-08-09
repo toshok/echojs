@@ -8,45 +8,33 @@ using namespace v8;
 
 namespace jsllvm {
 
-  void ConstantAggregateZero::Init(Handle<Object> target)
-  {
-    HandleScope scope;
+  void ConstantAggregateZero::Init(Handle<Object> target) {
+    Nan::HandleScope scope;
 
-    Local<FunctionTemplate> t = FunctionTemplate::New(New);
+    Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
+    constructor.Reset(ctor);
 
-    s_ct = Persistent<FunctionTemplate>::New(t);
-    s_ct->InstanceTemplate()->SetInternalFieldCount(1);
-    s_ct->SetClassName(String::NewSymbol("ConstantAggregateZero"));
+    ctor->InstanceTemplate()->SetInternalFieldCount(1);
+    ctor->SetClassName(Nan::New("ConstantAggregateZero").ToLocalChecked());
 
-    s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
+    Local<v8::Function> ctor_func = ctor->GetFunction();
+    constructor_func.Reset(ctor_func);
 
-    NODE_SET_METHOD(s_func, "get", ConstantAggregateZero::Get);
+    Nan::SetMethod(ctor_func, "get", ConstantAggregateZero::Get);
 
-    target->Set(String::NewSymbol("ConstantAggregateZero"),
-		s_func);
+    target->Set(Nan::New("ConstantAggregateZero").ToLocalChecked(), ctor_func);
   }
 
-  ConstantAggregateZero::ConstantAggregateZero()
-  {
+  NAN_METHOD(ConstantAggregateZero::New) {
+    Nan::ThrowTypeError("ConstantAggregateZero is not meant to be instantiated.");
   }
 
-  ConstantAggregateZero::~ConstantAggregateZero()
-  {
-  }
-
-  Handle<v8::Value> ConstantAggregateZero::New(const Arguments& args)
-  {
-    return ThrowException(Exception::Error(String::New("ConstantAggregateZero is not meant to be instantiated.")));
-  }
-
-  Handle<v8::Value> ConstantAggregateZero::Get (const Arguments& args)
-  {
-    HandleScope scope;
+  NAN_METHOD(ConstantAggregateZero::Get) {
     REQ_LLVM_TYPE_ARG(0, ty);
-    Handle<v8::Value> result = Value::New(llvm::ConstantAggregateZero::get(ty));
-    return scope.Close(result);
+    Local<v8::Value> result = Value::Create(llvm::ConstantAggregateZero::get(ty));
+    info.GetReturnValue().Set(result);
   }
 
-  Persistent<FunctionTemplate> ConstantAggregateZero::s_ct;
-  Persistent< ::v8::Function> ConstantAggregateZero::s_func;
+  Nan::Persistent<v8::FunctionTemplate> ConstantAggregateZero::constructor;
+  Nan::Persistent<v8::Function> ConstantAggregateZero::constructor_func;
 };

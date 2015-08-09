@@ -6,49 +6,42 @@ using namespace v8;
 
 namespace jsllvm {
 
+  void Type::Init(Handle<Object> target) {
+    Nan::HandleScope scope;
 
-  void Type::Init(Handle<Object> target)
-  {
-    HandleScope scope;
+    Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
+    constructor.Reset(ctor);
 
-    Local<FunctionTemplate> t = FunctionTemplate::New(New);
+    ctor->InstanceTemplate()->SetInternalFieldCount(1);
+    ctor->SetClassName(Nan::New("Type").ToLocalChecked());
 
-    s_ct = Persistent<FunctionTemplate>::New(t);
-    s_ct->InstanceTemplate()->SetInternalFieldCount(1);
-    s_ct->SetClassName(String::NewSymbol("Type"));
+#define LLVM_SET_METHOD(obj, name) Nan::SetMethod(obj, #name, Type::name)
+#define LLVM_SET_PROTOTYPE_METHOD(obj, name) Nan::SetPrototypeMethod(obj, #name, Type::name)
+    LLVM_SET_METHOD(ctor, getDoubleTy);
+    LLVM_SET_METHOD(ctor, getInt64Ty);
+    LLVM_SET_METHOD(ctor, getInt32Ty);
+    LLVM_SET_METHOD(ctor, getInt16Ty);
+    LLVM_SET_METHOD(ctor, getInt8Ty);
+    LLVM_SET_METHOD(ctor, getInt1Ty);
+    LLVM_SET_METHOD(ctor, getVoidTy);
 
-#define LLVM_SET_METHOD(obj, name) NODE_SET_METHOD(obj, #name, Type::name)
-#define LLVM_SET_PROTOTYPE_METHOD(obj, name) NODE_SET_PROTOTYPE_METHOD(obj, #name, Type::name)
-    LLVM_SET_METHOD(s_ct, getDoubleTy);
-    LLVM_SET_METHOD(s_ct, getInt64Ty);
-    LLVM_SET_METHOD(s_ct, getInt32Ty);
-    LLVM_SET_METHOD(s_ct, getInt16Ty);
-    LLVM_SET_METHOD(s_ct, getInt8Ty);
-    LLVM_SET_METHOD(s_ct, getInt1Ty);
-    LLVM_SET_METHOD(s_ct, getVoidTy);
-
-    LLVM_SET_PROTOTYPE_METHOD(s_ct, pointerTo);
-    LLVM_SET_PROTOTYPE_METHOD(s_ct, isVoid);
-    LLVM_SET_PROTOTYPE_METHOD(s_ct, dump);
+    LLVM_SET_PROTOTYPE_METHOD(ctor, pointerTo);
+    LLVM_SET_PROTOTYPE_METHOD(ctor, isVoid);
+    LLVM_SET_PROTOTYPE_METHOD(ctor, dump);
 #undef LLVM_SET_METHOD
 #undef LLVM_SET_PROTOTYPE_METHOD
 
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", Type::ToString);
+    Nan::SetPrototypeMethod(ctor, "toString", Type::ToString);
 
-    s_func = Persistent<Function>::New(s_ct->GetFunction());
-    target->Set(String::NewSymbol("Type"),
-		s_func);
+    Local<v8::Function> ctor_func = ctor->GetFunction();
+    constructor_func.Reset(ctor_func);
+    target->Set(Nan::New("Type").ToLocalChecked(), ctor_func);
   }
 
 #define LLVM_TYPE_METHOD_PROXY(name) LLVM_TYPE_METHOD(name,name)
 #define LLVM_TYPE_METHOD(name,llvm_ty)					\
-  Handle<Value> Type::name(const Arguments& args)			\
-  {									\
-    HandleScope scope;							\
-    Local<Object> result = s_func->NewInstance();			\
-    Type* result_type = new Type(llvm::Type::llvm_ty(llvm::getGlobalContext())); \
-    result_type->Wrap(result);						\
-    return scope.Close(result);						\
+  NAN_METHOD(Type::name) {						\
+    info.GetReturnValue().Set(Type::Create(llvm::Type::llvm_ty(llvm::getGlobalContext()))); \
   }
 
   LLVM_TYPE_METHOD_PROXY(getDoubleTy)
@@ -62,73 +55,37 @@ namespace jsllvm {
 #undef LLVM_TYPE_METHOD_PROXY
 #undef LLVM_TYPE_METHOD
 
-  Handle<Value> Type::New(llvm::Type *ty)
-  {
-    HandleScope scope;
-    Local<Object> new_instance = Type::s_func->NewInstance();
-    Type* new_type = new Type(ty);
-    new_type->Wrap(new_instance);
-    return scope.Close(new_instance);
+  NAN_METHOD(Type::New) {
+    auto type = new Type();
+    type->Wrap(info.This());
+    info.GetReturnValue().Set(info.This());
   }
 
-  Handle<Value> Type::New(const Arguments& args)
-  {
-    HandleScope scope;
-    Type* type = new Type();
-    type->Wrap(args.This());
-    return args.This();
+  NAN_METHOD(Type::pointerTo) {
+    auto type = Unwrap(info.This());
+    info.GetReturnValue().Set(Type::Create(type->llvm_obj->getPointerTo()));
   }
 
-  Handle<Value> Type::pointerTo(const Arguments& args)
-  {
-    HandleScope scope;
-    Type* type = ObjectWrap::Unwrap<Type>(args.This());
-    Local<Object> new_instance = s_func->NewInstance();
-    Type* new_type = new Type(type->llvm_ty->getPointerTo());
-    new_type->Wrap(new_instance);
-    return scope.Close(new_instance);
+  NAN_METHOD(Type::isVoid) {
+    auto type = Unwrap(info.This());
+    info.GetReturnValue().Set(type->llvm_obj->isVoidTy());
   }
 
-  Handle<Value> Type::isVoid(const Arguments& args)
-  {
-    HandleScope scope;
-    Type* type = ObjectWrap::Unwrap<Type>(args.This());
-    Handle<Boolean> result = v8::Boolean::New(type->llvm_ty->isVoidTy());
-    return scope.Close(result);
-  }
-
-  Handle<Value> Type::ToString(const Arguments& args)
-  {
-    HandleScope scope;
-    Type* type = ObjectWrap::Unwrap<Type>(args.This());
+  NAN_METHOD(Type::ToString) {
+    auto type = Unwrap(info.This());
 
     std::string str;
     llvm::raw_string_ostream str_ostream(str);
-    type->llvm_ty->print(str_ostream);
+    type->llvm_obj->print(str_ostream);
 
-    return scope.Close(String::New(trim(str_ostream.str()).c_str()));
+    info.GetReturnValue().Set(Nan::New(trim(str_ostream.str()).c_str()).ToLocalChecked());
   }
 
-  Handle<Value> Type::dump(const Arguments& args)
-  {
-    HandleScope scope;
-    Type* type = ObjectWrap::Unwrap<Type>(args.This());
-    type->llvm_ty->dump();
-    return scope.Close(Undefined());
+  NAN_METHOD(Type::dump) {
+    auto type = Unwrap(info.This());
+    type->llvm_obj->dump();
   }
 
-  Type::Type(llvm::Type *llvm_ty) : llvm_ty(llvm_ty)
-  {
-  }
-
-  Type::Type() : llvm_ty(NULL)
-  {
-  }
-
-  Type::~Type()
-  {
-  }
-
-  v8::Persistent<v8::FunctionTemplate> Type::s_ct;
-  v8::Persistent<v8::Function> Type::s_func;
+  Nan::Persistent<v8::FunctionTemplate> Type::constructor;
+  Nan::Persistent<v8::Function> Type::constructor_func;
 };

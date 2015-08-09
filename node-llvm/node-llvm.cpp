@@ -30,10 +30,7 @@ std::string& trim(std::string& str)
   return str;
 }
 
-
-extern "C" {
-  static void init (v8::Handle<v8::Object> target)
-  {
+NAN_MODULE_INIT(Init) {
     jsllvm::Type::Init(target);
     jsllvm::FunctionType::Init(target);
     jsllvm::StructType::Init(target);
@@ -69,7 +66,6 @@ extern "C" {
     jsllvm::DIFile::Init(target);
     jsllvm::DILexicalBlock::Init(target);
     jsllvm::DebugLoc::Init(target);
-  }
-
-  NODE_MODULE(llvm, init);
 }
+
+NODE_MODULE(llvm, Init)

@@ -7,99 +7,71 @@ using namespace v8;
 
 namespace jsllvm {
 
-  void BasicBlock::Init(Handle<Object> target)
+  void BasicBlock::Init(v8::Handle<Object> target)
   {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
-    Local<FunctionTemplate> t = FunctionTemplate::New(New);
+    Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
+    constructor.Reset(ctor);
 
-    s_ct = Persistent<FunctionTemplate>::New(t);
-    s_ct->InstanceTemplate()->SetInternalFieldCount(1);
-    s_ct->SetClassName(String::NewSymbol("BasicBlock"));
+    ctor->InstanceTemplate()->SetInternalFieldCount(1);
+    ctor->SetClassName(Nan::New("BasicBlock").ToLocalChecked());
 
-    s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("name"), BasicBlock::GetName);
-    s_ct->InstanceTemplate()->SetAccessor(String::NewSymbol("parent"), BasicBlock::GetParent);
+    Nan::SetAccessor(ctor->InstanceTemplate(),
+		     Nan::New("name").ToLocalChecked(),
+		     BasicBlock::GetName);
+    Nan::SetAccessor(ctor->InstanceTemplate(),
+		     Nan::New("parent").ToLocalChecked(),
+		     BasicBlock::GetParent);
 
-    NODE_SET_PROTOTYPE_METHOD (s_ct, "dump", BasicBlock::Dump);
-    NODE_SET_PROTOTYPE_METHOD (s_ct, "toString", BasicBlock::ToString);
+    Nan::SetPrototypeMethod(ctor, "dump", BasicBlock::Dump);
+    Nan::SetPrototypeMethod(ctor, "toString", BasicBlock::ToString);
 
-    s_func = Persistent<v8::Function>::New(s_ct->GetFunction());
-    target->Set(String::NewSymbol("BasicBlock"),
-		s_func);
+    Local<v8::Function> ctor_func = ctor->GetFunction();
+    constructor_func.Reset(ctor_func);
+    target->Set(Nan::New("BasicBlock").ToLocalChecked(), ctor_func);
   }
 
-  BasicBlock::BasicBlock(llvm::BasicBlock *llvm_bb) : llvm_bb(llvm_bb)
-  {
-  }
-
-  BasicBlock::BasicBlock() : llvm_bb(NULL)
-  {
-  }
-
-  BasicBlock::~BasicBlock()
-  {
-  }
-
-  Handle< ::v8::Value> BasicBlock::New(llvm::BasicBlock *llvm_bb)
-  {
-    HandleScope scope;
-    Local<Object> new_instance = BasicBlock::s_func->NewInstance();
-    BasicBlock* new_bb = new BasicBlock(llvm_bb);
-    new_bb->Wrap(new_instance);
-    return scope.Close(new_instance);
-  }
-
-
-  Handle< ::v8::Value> BasicBlock::New(const Arguments& args)
-  {
-    HandleScope scope;
-
-    if (args.Length()) {
+  NAN_METHOD(BasicBlock::New) {
+    if (info.Length()) {
       REQ_UTF8_ARG(0, blockname);
       REQ_LLVM_FUN_ARG(1, fun);
 
       BasicBlock* bb = new BasicBlock(llvm::BasicBlock::Create(llvm::getGlobalContext(), *blockname, fun));
-      bb->Wrap(args.This());
+      bb->Wrap(info.This());
     }
-    return scope.Close(args.This());
+    info.GetReturnValue().Set(info.This());
   }
 
-  Handle<v8::Value> BasicBlock::Dump(const Arguments& args)
-  {
-    HandleScope scope;
-    BasicBlock* bb = ObjectWrap::Unwrap<BasicBlock>(args.This());
-    bb->llvm_bb->dump();
-    return scope.Close(Undefined());
+  NAN_METHOD(BasicBlock::Dump) {
+    auto bb = Unwrap(info.This());
+    bb->llvm_obj->dump();
   }
 
-  Handle< ::v8::Value> BasicBlock::ToString(const Arguments& args)
-  {
-    HandleScope scope;
-    BasicBlock* bb = ObjectWrap::Unwrap<BasicBlock>(args.This());
+  NAN_METHOD(BasicBlock::ToString) {
+    auto bb = Unwrap(info.This());
 
     std::string str;
     llvm::raw_string_ostream str_ostream(str);
-    bb->llvm_bb->print(str_ostream);
+    bb->llvm_obj->print(str_ostream);
 
-    return scope.Close(String::New(trim(str_ostream.str()).c_str()));
+    info.GetReturnValue().Set(Nan::New(trim(str_ostream.str()).c_str()).ToLocalChecked());
   }
 
-  Handle<v8::Value> BasicBlock::GetParent(Local<String> property, const AccessorInfo& info)
-  {
-    HandleScope scope;
-    BasicBlock* bb = ObjectWrap::Unwrap<BasicBlock>(info.This());
-    Handle<v8::Value> result = Function::New(bb->llvm_bb->getParent());
-    return scope.Close(result);
+  NAN_GETTER(BasicBlock::GetParent) {
+    auto bb = Unwrap(info.This());
+
+    Local<v8::Value> result = Function::Create(bb->llvm_obj->getParent());
+    info.GetReturnValue().Set(result);
   }
 
-  Handle<v8::Value> BasicBlock::GetName(Local<String> property, const AccessorInfo& info)
-  {
-    HandleScope scope;
-    BasicBlock* bb = ObjectWrap::Unwrap<BasicBlock>(info.This());
-    Handle<v8::String> result = String::New(bb->llvm_bb->getName().data(), bb->llvm_bb->getName().size());
-    return scope.Close(result);
+  NAN_GETTER(BasicBlock::GetName) {
+    auto bb = Unwrap(info.This());
+
+    Local<v8::String> result = Nan::New(bb->llvm_obj->getName().data(), bb->llvm_obj->getName().size()).ToLocalChecked();
+    info.GetReturnValue().Set(result);
   }
 
-  Persistent<FunctionTemplate> BasicBlock::s_ct;
-  Persistent<v8::Function> BasicBlock::s_func;
+  Nan::Persistent<FunctionTemplate> BasicBlock::constructor;
+  Nan::Persistent<v8::Function> BasicBlock::constructor_func;
 };

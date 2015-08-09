@@ -10,89 +10,56 @@ using namespace v8;
 
 namespace jsllvm {
 
-  void LoadInst::Init(Handle<Object> target)
-  {
-    HandleScope scope;
+  void LoadInst::Init(Handle<Object> target) {
+    Nan::HandleScope scope;
 
-    Local<FunctionTemplate> t = FunctionTemplate::New(New);
+    Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
+    constructor.Reset(ctor);
 
-    s_ct = Persistent<FunctionTemplate>::New(t);
-    s_ct->Inherit (Instruction::s_ct);
-    s_ct->InstanceTemplate()->SetInternalFieldCount(1);
-    s_ct->SetClassName(String::NewSymbol("LoadInst"));
+    ctor->Inherit (Nan::New<v8::FunctionTemplate>(Instruction::constructor));
+    ctor->InstanceTemplate()->SetInternalFieldCount(1);
+    ctor->SetClassName(Nan::New("LoadInst").ToLocalChecked());
 
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "dump", LoadInst::Dump);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "toString", LoadInst::ToString);
-    NODE_SET_PROTOTYPE_METHOD(s_ct, "setAlignment", LoadInst::SetAlignment);
+    Nan::SetPrototypeMethod(ctor, "dump", LoadInst::Dump);
+    Nan::SetPrototypeMethod(ctor, "toString", LoadInst::ToString);
+    Nan::SetPrototypeMethod(ctor, "setAlignment", LoadInst::SetAlignment);
 
-    s_func = Persistent< ::v8::Function>::New(s_ct->GetFunction());
-    target->Set(String::NewSymbol("LoadInst"),
-		s_func);
+    Local<v8::Function> ctor_func = ctor->GetFunction();
+    constructor_func.Reset(ctor_func);
+    target->Set(Nan::New("LoadInst").ToLocalChecked(), ctor_func);
   }
 
-  LoadInst::LoadInst(llvm::LoadInst *llvm_load) : llvm_load(llvm_load)
-  {
+  NAN_METHOD(LoadInst::New) {
+    auto load = new LoadInst();
+    load->Wrap(info.This());
+    info.GetReturnValue().Set(info.This());
   }
 
-  LoadInst::LoadInst() : llvm_load(NULL)
-  {
+  NAN_METHOD(LoadInst::Dump) {
+    auto load = Unwrap(info.This());
+    load->llvm_obj->dump();
   }
 
-  LoadInst::~LoadInst()
-  {
-  }
-
-  Handle<v8::Value> LoadInst::New(const Arguments& args)
-  {
-    HandleScope scope;
-    LoadInst* a = new LoadInst();
-    a->Wrap(args.This());
-    return args.This();
-  }
-
-
-  Handle<v8::Value> LoadInst::New(llvm::LoadInst *llvm_load)
-  {
-    HandleScope scope;
-    Local<Object> new_instance = LoadInst::s_func->NewInstance();
-    LoadInst* new_a = new LoadInst(llvm_load);
-    new_a->Wrap(new_instance);
-    return scope.Close(new_instance);
-  }
-
-  Handle<v8::Value> LoadInst::Dump (const Arguments& args)
-  {
-    HandleScope scope;
-    LoadInst* a = ObjectWrap::Unwrap<LoadInst>(args.This());
-    a->llvm_load->dump();
-    return scope.Close(Undefined());
-  }
-
-  Handle<v8::Value> LoadInst::ToString(const Arguments& args)
-  {
-    HandleScope scope;
-    LoadInst* a = ObjectWrap::Unwrap<LoadInst>(args.This());
+  NAN_METHOD(LoadInst::ToString) {
+    auto load = Unwrap(info.This());
 
     std::string str;
     llvm::raw_string_ostream str_ostream(str);
-    a->llvm_load->print(str_ostream);
+    load->llvm_obj->print(str_ostream);
 
-    return scope.Close(String::New(trim(str_ostream.str()).c_str()));
+    info.GetReturnValue().Set(Nan::New(trim(str_ostream.str()).c_str()).ToLocalChecked());
   }
 
-  Handle< ::v8::Value> LoadInst::SetAlignment(const Arguments& args)
-  {
-    HandleScope scope;
-    LoadInst* val = ObjectWrap::Unwrap<LoadInst>(args.This());
+  NAN_METHOD(LoadInst::SetAlignment) {
+    auto load = Unwrap(info.This());
 
     REQ_INT_ARG (0, alignment);
 
-    val->llvm_load->setAlignment(alignment);
-    return scope.Close(Undefined());
+    load->llvm_obj->setAlignment(alignment);
   }
 
-  Persistent<FunctionTemplate> LoadInst::s_ct;
-  Persistent<Function> LoadInst::s_func;
+  Nan::Persistent<v8::FunctionTemplate> LoadInst::constructor;
+  Nan::Persistent<v8::Function> LoadInst::constructor_func;
 };
 
 

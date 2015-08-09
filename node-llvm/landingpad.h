@@ -4,28 +4,26 @@
 #include "node-llvm.h"
 namespace jsllvm {
 
-
-  class LandingPad : public node::ObjectWrap {
+  class LandingPad : public LLVMObjectWrap< ::llvm::LandingPadInst, LandingPad> {
   public:
     static void Init(v8::Handle<v8::Object> target);
 
-    static v8::Handle<v8::Value> New(::llvm::LandingPadInst *llvm_landing_pad);
-
   private:
-    ::llvm::LandingPadInst *llvm_landing_pad;
+    typedef LLVMObjectWrap< ::llvm::LandingPadInst, LandingPad> BaseType;
+    friend class LLVMObjectWrap< ::llvm::LandingPadInst, LandingPad>;
 
-    LandingPad(::llvm::LandingPadInst *llvm_landing_pad);
-    LandingPad();
-    virtual ~LandingPad();
+    LandingPad(::llvm::LandingPadInst *llvm_landing_pad) : BaseType(llvm_landing_pad) { }
+    LandingPad() : BaseType(nullptr) { }
+    virtual ~LandingPad() { }
 
-    static v8::Handle<v8::Value> New(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Dump(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ToString(const v8::Arguments& args);
-    static v8::Handle<v8::Value> SetCleanup(const v8::Arguments& args);
-    static v8::Handle<v8::Value> AddClause(const v8::Arguments& args);
+    static NAN_METHOD(New);
+    static NAN_METHOD(Dump);
+    static NAN_METHOD(ToString);
+    static NAN_METHOD(SetCleanup);
+    static NAN_METHOD(AddClause);
 
-    static v8::Persistent<v8::FunctionTemplate> s_ct;
-    static v8::Persistent<v8::Function> s_func;
+    static Nan::Persistent<v8::FunctionTemplate> constructor;
+    static Nan::Persistent<v8::Function> constructor_func;
   };
 };
 

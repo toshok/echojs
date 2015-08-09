@@ -6,85 +6,52 @@ using namespace v8;
 
 namespace jsllvm {
 
-  void Value::Init(Handle<Object> target)
-  {
-    HandleScope scope;
+  void Value::Init(Handle<Object> target) {
+    Nan::HandleScope scope;
 
-    Local<FunctionTemplate> t = FunctionTemplate::New(New);
+    Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
+    constructor.Reset(ctor);
 
-    s_ct = Persistent<FunctionTemplate>::New(t);
-    s_ct->InstanceTemplate()->SetInternalFieldCount(1);
-    s_ct->SetClassName(String::NewSymbol("Value"));
+    ctor->InstanceTemplate()->SetInternalFieldCount(1);
+    ctor->SetClassName(Nan::New("Value").ToLocalChecked());
 
-    NODE_SET_PROTOTYPE_METHOD (s_ct, "dump", Value::Dump);
-    NODE_SET_PROTOTYPE_METHOD (s_ct, "setName", Value::SetName);
-    NODE_SET_PROTOTYPE_METHOD (s_ct, "toString", Value::ToString);
+    Nan::SetPrototypeMethod(ctor, "dump", Value::Dump);
+    Nan::SetPrototypeMethod(ctor, "setName", Value::SetName);
+    Nan::SetPrototypeMethod(ctor, "toString", Value::ToString);
 
-    s_func = Persistent<Function>::New(s_ct->GetFunction());
-    target->Set(String::NewSymbol("Value"),
-		s_func);
+    Local<v8::Function> ctor_func = ctor->GetFunction();
+    constructor_func.Reset(ctor_func);
+    target->Set(Nan::New("Value").ToLocalChecked(), ctor_func);
   }
 
-  Value::Value(llvm::Value *llvm_val) : llvm_val(llvm_val)
-  {
-  }
-
-  Value::Value() : llvm_val(NULL)
-  {
-  }
-
-  Value::~Value()
-  {
-  }
-
-  Handle<v8::Value> Value::New(llvm::Value *llvm_val)
-  {
-    HandleScope scope;
-    Local<Object> new_instance = Value::s_func->NewInstance();
-    Value* new_val = new Value(llvm_val);
-    new_val->Wrap(new_instance);
-    return scope.Close(new_instance);
-  }
-
-  Handle< ::v8::Value> Value::New(const Arguments& args)
-  {
-    HandleScope scope;
+  NAN_METHOD(Value::New) {
     Value* val = new Value();
-    val->Wrap(args.This());
-    return args.This();
+    val->Wrap(info.This());
+    info.GetReturnValue().Set(info.This());
   }
 
-  Handle< ::v8::Value> Value::Dump(const Arguments& args)
-  {
-    HandleScope scope;
-    Value* val = ObjectWrap::Unwrap<Value>(args.This());
-    val->llvm_val->dump();
-    return scope.Close(Undefined());
+  NAN_METHOD(Value::Dump) {
+    auto val = Unwrap(info.This());
+    val->llvm_obj->dump();
   }
 
-  Handle< ::v8::Value> Value::SetName(const Arguments& args)
-  {
-    HandleScope scope;
-    Value* val = ObjectWrap::Unwrap<Value>(args.This());
-
+  NAN_METHOD(Value::SetName) {
+    auto val = Unwrap(info.This());
     REQ_UTF8_ARG (0, name);
-    val->llvm_val->setName(*name);
-    return scope.Close(Undefined());
+    val->llvm_obj->setName(*name);
   }
 
-  Handle< ::v8::Value> Value::ToString(const Arguments& args)
-  {
-    HandleScope scope;
-    Value* val = ObjectWrap::Unwrap<Value>(args.This());
+  NAN_METHOD(Value::ToString) {
+    auto val = Unwrap(info.This());
 
     std::string str;
     llvm::raw_string_ostream str_ostream(str);
-    val->llvm_val->print(str_ostream);
+    val->llvm_obj->print(str_ostream);
 
-    return scope.Close(String::New(trim(str_ostream.str()).c_str()));
+    info.GetReturnValue().Set(Nan::New(trim(str_ostream.str()).c_str()).ToLocalChecked());
   }
 
-  Persistent<FunctionTemplate> Value::s_ct;
-  Persistent<Function> Value::s_func;
+  Nan::Persistent<v8::FunctionTemplate> Value::constructor;
+  Nan::Persistent<v8::Function> Value::constructor_func;
 
 };

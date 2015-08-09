@@ -5,33 +5,26 @@
 namespace jsllvm {
 
 
-  class BasicBlock : public node::ObjectWrap {
+  class BasicBlock : public LLVMObjectWrap < ::llvm::BasicBlock, BasicBlock> {
   public:
     static void Init(v8::Handle<v8::Object> target);
 
-    static v8::Handle<v8::Value> New(llvm::BasicBlock *bb);
-
-    static llvm::BasicBlock* GetLLVMObj (v8::Local<v8::Value> value) {
-      if (value->IsNull())
-	return NULL;
-      return node::ObjectWrap::Unwrap<BasicBlock>(value->ToObject())->llvm_bb;
-    }
-
   private:
-    llvm::BasicBlock* llvm_bb;
+    typedef LLVMObjectWrap< ::llvm::BasicBlock, BasicBlock> BaseType;
+    friend class LLVMObjectWrap< ::llvm::BasicBlock, BasicBlock>;
 
-    BasicBlock(llvm::BasicBlock *llvm_bb);
-    BasicBlock();
-    virtual ~BasicBlock();
+    BasicBlock(llvm::BasicBlock *llvm_bb) : BaseType(llvm_bb) { }
+    BasicBlock() : BaseType(nullptr) { }
+    virtual ~BasicBlock() { }
 
-    static v8::Persistent<v8::FunctionTemplate> s_ct;
-    static v8::Persistent<v8::Function> s_func;
+    static Nan::Persistent<v8::FunctionTemplate> constructor;
+    static Nan::Persistent<v8::Function> constructor_func;
 
-    static v8::Handle<v8::Value> New(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Dump(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ToString(const v8::Arguments& args);
-    static v8::Handle<v8::Value> GetName(v8::Local<v8::String> property, const v8::AccessorInfo& info);
-    static v8::Handle<v8::Value> GetParent(v8::Local<v8::String> property, const v8::AccessorInfo& info);
+    static NAN_METHOD(New);
+    static NAN_METHOD(Dump);
+    static NAN_METHOD(ToString);
+    static NAN_GETTER(GetName);
+    static NAN_GETTER(GetParent);
   };
 };
 
