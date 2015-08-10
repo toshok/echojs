@@ -593,6 +593,116 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
      EJS_NOT_IMPLEMENTED();                                             \
  }                                                                      \
                                                                         \
+/* 6th Edition / June 2015 */                                           \
+/* 22.2.3.5 */                                                          \
+/* %TypedArray%.prototype.copyWithin (target, start [, end ] ) */       \
+static ejsval                                                           \
+_ejs_##ArrayType##Array_prototype_copyWithin_impl(ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+{                                                                       \
+    ejsval target = _ejs_undefined;                                     \
+    ejsval start = _ejs_undefined;                                      \
+    ejsval end = _ejs_undefined;                                        \
+                                                                        \
+    if (argc > 0) target = args[0];                                     \
+    if (argc > 1) start = args[1];                                      \
+    if (argc > 2) end = args[2];                                        \
+                                                                        \
+    /*  ValidateTypedArray is applied to the this value prior to evaluating the algorithm. */ \
+    ValidateTypedArray(_this);                                          \
+                                                                        \
+    /* 1. Let O be the result of calling ToObject passing the this value as the argument. */ \
+    /* 2. ReturnIfAbrupt(O). */                                         \
+    ejsval O = ToObject(_this);                                         \
+    EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);          \
+                                                                        \
+    /* 3. Let len be ToLength(Get(O, "length")). */                     \
+    /* 4. ReturnIfAbrupt(len). */                                       \
+    uint32_t len = Oobj->length;                                        \
+                                                                        \
+    /* 5. Let relativeTarget be ToInteger(target). */                   \
+    /* 6.  6. ReturnIfAbrupt(relativeTarget). */                        \
+    int32_t relativeTarget = ToInteger(target);                         \
+                                                                        \
+    /* 7. If relativeTarget < 0, let to be max((len +                   \
+     *    relativeTarget),0); else let to be min(relativeTarget, len). */ \
+    int32_t to;                                                         \
+    if (relativeTarget < 0)                                             \
+        to = max(len + relativeTarget, 0);                              \
+    else                                                                \
+        to = min(relativeTarget, len);                                  \
+                                                                        \
+    /* 8. Let relativeStart be ToInteger(start). */                     \
+    /* 9. ReturnIfAbrupt(relativeStart). */                             \
+    int32_t relativeStart = ToInteger(start);                           \
+                                                                        \
+    /* 10. If relativeStart < 0, let from be max((len + */              \
+    /*     relativeStart),0); else let from be min(relativeStart, len). */ \
+    int32_t from;                                                       \
+    if (relativeStart < 0)                                              \
+        from = max(len + relativeStart, 0);                             \
+    else                                                                \
+        from = min(relativeStart, len);                                 \
+                                                                        \
+    /* 11. If end is undefined, let relativeEnd be len; else let relativeEnd be ToInteger(end). */ \
+    /* 12. ReturnIfAbrupt(relativeEnd). */                              \
+    int32_t relativeEnd = EJSVAL_IS_UNDEFINED(end) ? len : ToInteger(end); \
+                                                                        \
+    /* 13. If relativeEnd is negative, let final be max((len + */       \
+    /*     relativeEnd),0); else let final be min(relativeEnd, len). */ \
+    int32_t final;                                                      \
+    if (relativeEnd < 0)                                                \
+        final = max(len + relativeEnd, 0);                              \
+    else                                                                \
+        final = min(relativeEnd, len);                                  \
+                                                                        \
+    /* 14. Let count be min(final-from, len-to). */                     \
+    int32_t count = min(final - from, len - to);                        \
+                                                                        \
+    /* 15. If from < to and to < from+count */                          \
+    int32_t direction;                                                  \
+    if (from < to && to < from + count) {                               \
+        /* a. Let direction = -1. */                                    \
+        direction = -1;                                                 \
+        /* b. Let from = from + count -1. */                            \
+        from = from + count - 1;                                        \
+        /* c. Let to=to+count-1. */                                     \
+        to = to + count - 1;                                            \
+    }                                                                   \
+    /* 16. Else */                                                      \
+    else {                                                              \
+        /* a. Let direction = 1. */                                     \
+        direction = 1;                                                  \
+    }                                                                   \
+                                                                        \
+    /* 17. Repeat, while count > 0 */                                   \
+    void* data = _ejs_typedarray_get_data (EJSVAL_TO_OBJECT(O));        \
+    while (count > 0) {                                                 \
+        /* a. Let fromKey be ToString(from). */                         \
+        /* b. Let toKey be ToString(to). */                             \
+        /* c. Let fromPresent be HasProperty(O, fromKey). */            \
+        /* d. ReturnIfAbrupt(fromPresent). */                           \
+        /* e. If fromPresent is true, then */                           \
+        /*  i. Let fromVal be Get(O, fromKey). */                       \
+        /*  ii. ReturnIfAbrupt(fromVal). */                             \
+        elementtype fromVal = ((elementtype*)data)[from];               \
+                                                                        \
+        /*  iii. iii. Let putStatus be Put(O, toKey, fromVal, true). */ \
+        ((elementtype*)data)[to] = fromVal;                             \
+                                                                        \
+        /* g. Let from be from + direction. */                          \
+        from += direction;                                              \
+                                                                        \
+        /* h. Let to be to + direction. */                              \
+        to += direction;                                                \
+                                                                        \
+        /* i. i. Let count be count − 1. */                             \
+        count -= 1;                                                     \
+    }                                                                   \
+                                                                        \
+    /* 18. Return O. */                                                 \
+    return O;                                                           \
+}                                                                       \
+                                                                        \
 /* Rev 38 Final Draft, April 14, 2015 */                                \
 /* 22.2.3.22.1 */                                                       \
 /* %TypedArray%.prototype.set (array [ , offset ] ) */                  \
@@ -2179,6 +2289,7 @@ _ejs_typedarrays_init(ejsval global)
     _ejs_typed_array_protos[EJS_TYPEDARRAY_##EnumType] = _ejs_##ArrayType##Array_prototype; \
     _ejs_typed_array_specops[EJS_TYPEDARRAY_##EnumType] = &_ejs_##ArrayType##Array_specops; \
                                                                         \
+    PROTO_METHOD_IMPL(ArrayType##Array, copyWithin);                    \
     PROTO_METHOD_IMPL(ArrayType##Array, get);                           \
     PROTO_METHOD_IMPL(ArrayType##Array, set);                           \
     PROTO_METHOD_IMPL(ArrayType##Array, subarray);                      \
