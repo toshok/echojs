@@ -440,6 +440,10 @@ marshal_id_as_jsvalue (id objc_id, BOOL protect)
         return [CKValue nsStringValue:(NSString*)objc_id];
     }
 
+    if ([objc_id isKindOfClass:[NSDate class]]) {
+        return [CKValue nsDateValue:(NSDate*)objc_id];
+    }
+
     CKObject* ctor_obj = NULL;
     Class return_class = object_getClass (objc_id);
 
@@ -521,6 +525,13 @@ marshal_jsarray_as_nsarray (CKObject *o)
         }
     
         return [NSArray arrayWithArray:nsarray];
+}
+
+static NSDate*
+marshal_jsdate_as_nsdate (CKObject *o)
+{
+    NSTimeInterval tstamp = [o dateTimestamp] / 1000.0;
+    return [NSDate dateWithTimeIntervalSince1970:tstamp];
 }
 
 static ejsval
@@ -619,7 +630,10 @@ invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
                         // let's assume we marshal this as an NSArray for now... XXX
                         arg_ptr = marshal_jsarray_as_nsarray (o);
                     }
+                    if ([o isDate])
+                        arg_ptr = marshal_jsdate_as_nsdate (o);
                 }
+
 				SPEW(NSLog (@"arg %d: object marshalling of %@", i, arg_ptr);)
             }
             else {

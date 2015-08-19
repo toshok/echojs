@@ -19,8 +19,9 @@ typedef struct {
     struct timezone tz;
 } EJSDate;
 
-
 EJS_BEGIN_DECLS
+
+ejsval ejs_date_new (long tstamp);
 
 extern ejsval _ejs_Date;
 extern ejsval _ejs_Date_prototype;

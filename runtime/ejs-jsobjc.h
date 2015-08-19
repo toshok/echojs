@@ -69,6 +69,8 @@
 +(CKValue*)nsStringValue:(NSString*)str;
 +(CKValue*)utf8StringValue:(const char*)str;
 
++(CKValue*)nsDateValue:(NSDate*)date;
+
 +(CKValue*)valueWithJSValue:(ejsval)val;
 
 -(ejsval)jsValue;
@@ -148,9 +150,11 @@
 -(BOOL)isFunction;
 -(BOOL)isConstructor;
 -(BOOL)isArray;
+-(BOOL)isDate;
 
 -(jsuint)arrayLength;
 -(uint16_t)functionArity;;
+-(jslong)dateTimestamp;
 
 -(CKObject*)prototype;
 
