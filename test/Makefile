@@ -50,7 +50,7 @@ check-llvm:
 check-set:
 	mocha set-test.js
 
-run-tests: clean-results generate-expected prepare-xfail $(patsubst %.js,test-%,$(TESTS)) format-results
+run-tests: generate-expected prepare-xfail $(patsubst %.js,test-%,$(TESTS)) format-results
 
 run-tests-stage1:
 	@$(MAKE) EJS_DRIVER="$(TOPDIR)/ejs.exe" EJS_STAGE=1 run-tests
@@ -80,7 +80,7 @@ run-node:
 node-path:
 	echo $(NODE_PATH)
 
-clean-local:: clean-results clean-esprima-roundtrip
+clean-local:: clean-esprima-roundtrip
 	rm -f *.o *.js.exe .*.diff .*-out .failures .successes .xfail .xsuccess
 	rm -rf *.dSYM
 
