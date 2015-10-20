@@ -391,6 +391,7 @@ swapBytes (void* value, int elementSizeInBytes)
 
 EJS_DATA_VIEW_METHOD_IMPL(Int8, int8_t, 1);
 EJS_DATA_VIEW_METHOD_IMPL(Int16, int16_t, 2);
+EJS_DATA_VIEW_METHOD_IMPL(Uint16, uint16_t, 2);
 EJS_DATA_VIEW_METHOD_IMPL(Int32, int32_t, 4);
 EJS_DATA_VIEW_METHOD_IMPL(Float32, float, 4);
 EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
@@ -2264,6 +2265,8 @@ _ejs_typedarrays_init(ejsval global)
         PROTO_METHOD_IMPL(DataView, setInt16);
         PROTO_METHOD_IMPL(DataView, getInt32);
         PROTO_METHOD_IMPL(DataView, setInt32);
+        PROTO_METHOD_IMPL(DataView, getUint16);
+        PROTO_METHOD_IMPL(DataView, setUint16);
         PROTO_METHOD_IMPL(DataView, getFloat32);
         PROTO_METHOD_IMPL(DataView, setFloat32);
         PROTO_METHOD_IMPL(DataView, getFloat64);
