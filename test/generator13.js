@@ -1,5 +1,4 @@
 // generator: babel-node
-// xfail: generator support isn't 100%
 
 // "yield *, generic iterables" from kangax
 
