@@ -77,7 +77,7 @@ namespace jsllvm {
       intrinsic_id = llvm::Intrinsic::gcroot;
     }
     else {
-      abort();
+      assert(0 && "shouldn't make it here");
     }
 
 #if false

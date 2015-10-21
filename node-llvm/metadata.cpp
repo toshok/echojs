@@ -66,7 +66,7 @@ namespace jsllvm {
     for (unsigned i = 0, e = vals->Length(); i != e; ++i) {
       llvm::Value* val = Value::GetLLVMObj(vals->Get(i));
       Vals.push_back(val);
-      if (Vals.back() == 0) abort(); // XXX throw an exception here
+      EJS_ASSERT(Vals.back() != 0); // XXX throw an exception here
     }
 
     return scope.Close(MDNode::New(llvm::MDNode::get(llvm::getGlobalContext(), Vals)));

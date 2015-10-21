@@ -226,7 +226,7 @@ namespace jsllvm {
     for (unsigned i = 0, e = argv->Length(); i != e; ++i) {
       llvm::Value* arg = Value::GetLLVMObj(argv->Get(i));
       ArgsV.push_back(arg);
-      if (ArgsV.back() == 0) abort(); // XXX throw an exception here
+      assert(ArgsV.back() != 0); // XXX throw an exception here
     }
 
     Local<v8::Value> result = Call::Create(IRBuilder::builder.CreateCall(callee, ArgsV, *name));
@@ -246,7 +246,7 @@ namespace jsllvm {
     for (unsigned i = 0, e = argv->Length(); i != e; ++i) {
       llvm::Value* arg = Value::GetLLVMObj(argv->Get(i));
       ArgsV.push_back(arg);
-      if (ArgsV.back() == 0) abort(); // XXX throw an exception here
+      assert(ArgsV.back() != 0); // XXX throw an exception here
     }
 
     Local<v8::Value> result = Invoke::Create(IRBuilder::builder.CreateInvoke(callee, normal_dest, unwind_dest, ArgsV, *name));
@@ -327,7 +327,7 @@ namespace jsllvm {
     for (unsigned i = 0, e = idxv->Length(); i != e; ++i) {
       llvm::Value* idx = Value::GetLLVMObj(idxv->Get(i));
       IdxV.push_back(idx);
-      if (IdxV.back() == 0) abort(); // XXX throw an exception here
+      assert(IdxV.back() != 0); // XXX throw an exception here
     }
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateGEP(val, IdxV, *name)));
@@ -345,7 +345,7 @@ namespace jsllvm {
     for (unsigned i = 0, e = idxv->Length(); i != e; ++i) {
       llvm::Value* idx = Value::GetLLVMObj(idxv->Get(i));
       IdxV.push_back(idx);
-      if (IdxV.back() == 0) abort(); // XXX throw an exception here
+      assert(IdxV.back() != 0); // XXX throw an exception here
     }
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateInBoundsGEP(val, IdxV, *name)));
