@@ -61,7 +61,7 @@ namespace ejsllvm {
             return Value_new (llvm::Constant::getIntegerValue(ty, llvm::APInt(ty->getPrimitiveSizeInBits(), (int64_t)((vhi << 32) | vlo))));
         }
         else
-            abort(); // FIXME throw an exception
+            EJS_ASSERT(0 && "unhandled argc"); // FIXME throw an exception
     }
 
     void

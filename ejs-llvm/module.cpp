@@ -101,7 +101,7 @@ namespace ejsllvm {
             intrinsic_id = llvm::Intrinsic::gcroot;
         }
         else {
-            abort();
+            EJS_NOT_REACHED();
         }
 
 #if false

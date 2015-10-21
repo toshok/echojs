@@ -108,7 +108,7 @@ namespace ejsllvm {
         std::vector<llvm::Value*> ArgsV;
         for (unsigned i = 0, e = EJSARRAY_LEN(argv); i != e; ++i) {
             ArgsV.push_back (Value_GetLLVMObj(EJSDENSEARRAY_ELEMENTS(argv)[i]));
-            if (ArgsV.back() == 0) abort(); // XXX throw an exception here
+            EJS_ASSERT(ArgsV.back() != 0); // XXX throw an exception here
         }
 
         return Call_new (_llvm_builder.CreateCall(callee, ArgsV, name));
@@ -126,7 +126,7 @@ namespace ejsllvm {
         std::vector<llvm::Value*> ArgsV;
         for (unsigned i = 0, e = EJSARRAY_LEN(argv); i != e; ++i) {
             ArgsV.push_back (Value_GetLLVMObj(EJSDENSEARRAY_ELEMENTS(argv)[i]));
-            if (ArgsV.back() == 0) abort(); // XXX throw an exception here
+            EJS_ASSERT(ArgsV.back() != 0); // XXX throw an exception here
         }
 
         return Invoke_new (_llvm_builder.CreateInvoke(callee, normal_dest, unwind_dest, ArgsV, name));
@@ -199,7 +199,7 @@ namespace ejsllvm {
         std::vector<llvm::Value*> IdxV;
         for (unsigned i = 0, e = EJSARRAY_LEN(idxv); i != e; ++i) {
             IdxV.push_back (Value_GetLLVMObj(EJSDENSEARRAY_ELEMENTS(idxv)[i]));
-            if (IdxV.back() == 0) abort(); // XXX throw an exception here
+            EJS_ASSERT(IdxV.back() != 0); // XXX throw an exception here
         }
 
         return Value_new (_llvm_builder.CreateGEP(val, IdxV, name));
@@ -215,7 +215,7 @@ namespace ejsllvm {
         std::vector<llvm::Value*> IdxV;
         for (unsigned i = 0, e = EJSARRAY_LEN(idxv); i != e; ++i) {
             IdxV.push_back (Value_GetLLVMObj(EJSDENSEARRAY_ELEMENTS(idxv)[i]));
-            if (IdxV.back() == 0) abort(); // XXX throw an exception here
+            EJS_ASSERT(IdxV.back() != 0); // XXX throw an exception here
         }
 
         return Value_new (_llvm_builder.CreateInBoundsGEP(val, IdxV, name));
@@ -302,7 +302,7 @@ namespace ejsllvm {
     ejsval
     IRBuilder_createPhi(ejsval env, ejsval _this, int argc, ejsval *args)
     {
-        abort();
+        EJS_NOT_IMPLEMENTED();
 #if notyet
         REQ_LLVM_TYPE_ARG(0, ty);
         REQ_INT_ARG(1, incoming_values);
