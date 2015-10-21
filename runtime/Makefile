@@ -144,10 +144,10 @@ $(SIM_LIBRARY): $(SIM_OBJECTS)
 	@echo [ar sim] $@ && /usr/bin/ar rc $@ $(SIM_OBJECTS)
 
 $(DEV_LIBRARY): $(DEV_OBJECTS)
-	@echo [ar armv7] $@ && $(IOSDEV_BIN)/ar rc $@ $(DEV_OBJECTS)
+	@echo [ar armv7] $@ && /usr/bin/ar rc $@ $(DEV_OBJECTS)
 
 $(DEVS_LIBRARY): $(DEVS_OBJECTS)
-	@echo [ar armv7s] $@ && $(IOSDEVS_BIN)/ar rc $@ $(DEVS_OBJECTS)
+	@echo [ar armv7s] $@ && /usr/bin/ar rc $@ $(DEVS_OBJECTS)
 
 $(LIPOD_IOS_LIBRARY): $(SIM_LIBRARY) $(DEV_LIBRARY) $(DEVS_LIBRARY)
 	@echo [lipo] $@ && lipo -create $(SIM_ARCH) $(SIM_LIBRARY) $(DEV_ARCH) $(DEV_LIBRARY) $(DEVS_ARCH) $(DEVS_LIBRARY) -output $@

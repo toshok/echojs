@@ -103,7 +103,7 @@ let options = {
     target_platform: host_platform,
     native_module_dirs: [],
     extra_clang_args: "",
-    ios_sdk: "7.1",
+    ios_sdk: "9.0",
     ios_min: "7.0",
     target_pointer_size: 64,
     import_variables: [],
