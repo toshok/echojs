@@ -141,8 +141,7 @@ static ejsval
 _ejs_ArrayBuffer_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     if (EJSVAL_IS_UNDEFINED(_this)) {
-        printf ("ArrayBuffer called as a function\n");
-        EJS_NOT_IMPLEMENTED();
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "Constructor ArrayBuffer requires 'new'");
     }
 
     uint32_t size = 0;
@@ -238,8 +237,7 @@ static ejsval
 _ejs_DataView_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     if (EJSVAL_IS_UNDEFINED(_this)) {
-        _ejs_log ("DataView called as a function\n");
-        EJS_NOT_IMPLEMENTED();
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "Constructor DataView requires 'new'");
     }
 
     if (argc == 0 || !EJSVAL_IS_ARRAYBUFFER(args[0])) {
@@ -393,6 +391,7 @@ EJS_DATA_VIEW_METHOD_IMPL(Int8, int8_t, 1);
 EJS_DATA_VIEW_METHOD_IMPL(Int16, int16_t, 2);
 EJS_DATA_VIEW_METHOD_IMPL(Uint16, uint16_t, 2);
 EJS_DATA_VIEW_METHOD_IMPL(Int32, int32_t, 4);
+EJS_DATA_VIEW_METHOD_IMPL(Uint32, uint32_t, 4);
 EJS_DATA_VIEW_METHOD_IMPL(Float32, float, 4);
 EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
 
@@ -2267,6 +2266,8 @@ _ejs_typedarrays_init(ejsval global)
         PROTO_METHOD_IMPL(DataView, setInt32);
         PROTO_METHOD_IMPL(DataView, getUint16);
         PROTO_METHOD_IMPL(DataView, setUint16);
+        PROTO_METHOD_IMPL(DataView, getUint32);
+        PROTO_METHOD_IMPL(DataView, setUint32);
         PROTO_METHOD_IMPL(DataView, getFloat32);
         PROTO_METHOD_IMPL(DataView, setFloat32);
         PROTO_METHOD_IMPL(DataView, getFloat64);
