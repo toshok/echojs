@@ -101,6 +101,8 @@ EJS_MACRO_END
 
 ejsval  _ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args);
 EJSBool _ejs_invoke_closure_catch (ejsval* retval, ejsval closure, ejsval _this, uint32_t argc, ejsval* args);
+EJSBool _ejs_invoke_func_catch (ejsval* retval, ejsval(*func)(void*), void* data);
+
 EJSBool _ejs_decompose_closure (ejsval closure, EJSClosureFunc* func, ejsval* env, ejsval *_this);
 
 ejsval  _ejs_construct_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args);
