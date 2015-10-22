@@ -336,12 +336,6 @@ _ejs_Set_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     // 1. Let set be the this value. 
     ejsval set = _this;
 
-    if (EJSVAL_IS_UNDEFINED(set)) {
-        EJSObject* obj = (EJSObject*)_ejs_gc_new(EJSSet);
-        _ejs_init_object (obj, _ejs_Set_prototype, &_ejs_Set_specops);
-        set = OBJECT_TO_EJSVAL(obj);
-    }
-
     // 2. If Type(set) is not Object then, throw a TypeError exception. 
     if (!EJSVAL_IS_OBJECT(set))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Set constructor called with non-object this.");
