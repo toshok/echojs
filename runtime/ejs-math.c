@@ -469,11 +469,33 @@ _ejs_Math_hypot (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     if (argc == 0) return NUMBER_TO_EJSVAL(0);
 
-    ejsval x = _ejs_undefined;
-    ejsval y = _ejs_undefined;
-    if (argc > 0) x = args[0];
-    if (argc > 1) y = args[1];
-    return NUMBER_TO_EJSVAL(hypot(ToDouble(x), ToDouble(y)));
+    double sum = 0;
+
+    EJSBool has_nan = EJS_FALSE;
+    EJSBool has_pos_inf = EJS_FALSE;
+    EJSBool has_neg_inf = EJS_FALSE;
+
+    for (int i = 0; i < argc; i ++) {
+        double arg = ToDouble(args[i]);
+        int classified = fpclassify(arg);
+        if (classified == FP_INFINITE)
+            if (arg > 0)
+                has_pos_inf = EJS_TRUE;
+            else
+                has_neg_inf = EJS_TRUE;
+        else if (isnan(arg))
+            has_nan = EJS_TRUE;
+        else
+            sum += arg * arg;
+    }
+    if (has_pos_inf)
+        return NUMBER_TO_EJSVAL(INFINITY);
+    if (has_neg_inf)
+        return NUMBER_TO_EJSVAL(-INFINITY);
+    if (has_nan)
+        return NUMBER_TO_EJSVAL(nan("7734")); // XXX this should be in ejs.h or something?
+
+    return NUMBER_TO_EJSVAL(sqrt(sum));
 }
 
 static ejsval
