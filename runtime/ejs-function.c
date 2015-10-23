@@ -327,8 +327,9 @@ _ejs_Function_prototype_bind (ejsval env, ejsval _this, uint32_t argc, ejsval *a
         bound_name = _ejs_atom_bound_space;
     
 
-    ejsval F = _ejs_function_new (bound_env, bound_name, bound_wrapper);
+    ejsval F = _ejs_function_new_without_proto (bound_env, bound_name, bound_wrapper);
     EJSFunction *F_ = (EJSFunction*)EJSVAL_TO_OBJECT(F);
+    ((EJSObject*)F_)->proto = EJSVAL_TO_OBJECT(Target)->proto;
 
     F_->bound = EJS_TRUE;
 
