@@ -559,9 +559,8 @@ _ejs_proxy_specop_has_property (ejsval O, ejsval P)
     ejsval handler = proxy->handler;
 
     // 3. If handler is null, then throw a TypeError exception. 
-    if (EJSVAL_IS_NULL(handler)) {
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1"); // XXX
-    }
+    if (EJSVAL_IS_NULL(handler))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "handler is null"); // XXX
     // 4. Let target be the value of the [[ProxyTarget]] internal slot of O. 
     ejsval target = proxy->target;
 
@@ -592,10 +591,10 @@ _ejs_proxy_specop_has_property (ejsval O, ejsval P)
         EJSPropertyDesc* targetDesc = OP(_target,GetOwnProperty)(target, P, NULL);
 
         //     c. If targetDesc is not undefined, then 
-        if (!targetDesc) {
+        if (targetDesc) {
             //        i. If targetDesc.[[Configurable]] is false, then throw a TypeError exception. 
             if (!_ejs_property_desc_is_configurable(targetDesc))
-                _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1"); // XXX
+                _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "not configurable"); // XXX
 
             //        ii. Let extensibleTarget be IsExtensible(target). 
             //        iii. ReturnIfAbrupt(extensibleTarget). 
@@ -604,7 +603,7 @@ _ejs_proxy_specop_has_property (ejsval O, ejsval P)
 
             //        iv. If extensibleTarget is false, then throw a TypeError exception. 
             if (!EJS_OBJECT_IS_EXTENSIBLE(_target))
-                _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "2"); // XXX
+                _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "target is not extensible"); // XXX
         }
     }
 
