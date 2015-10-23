@@ -7,6 +7,7 @@
 #include <ctype.h>
 #include <stdarg.h>
 
+#include "ejs-generator.h"
 #include "ejs-value.h"
 #include "ejs-array.h"
 #include "ejs-string.h"
@@ -1921,7 +1922,7 @@ _ejs_string_init(ejsval global)
 
     _ejs_gc_add_root (&_ejs_StringIterator_prototype);
     _ejs_StringIterator_prototype = _ejs_string_iterator_new(_ejs_String_prototype);
-    EJSVAL_TO_OBJECT(_ejs_StringIterator_prototype)->proto = _ejs_Object_prototype;
+    EJSVAL_TO_OBJECT(_ejs_StringIterator_prototype)->proto = _ejs_Iterator_prototype;
     _ejs_object_define_value_property (_ejs_StringIterator, _ejs_atom_prototype, _ejs_StringIterator_prototype,
                                         EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     _ejs_object_define_value_property (_ejs_StringIterator_prototype, _ejs_atom_constructor, _ejs_StringIterator,

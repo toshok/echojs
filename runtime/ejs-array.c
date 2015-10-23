@@ -6,6 +6,7 @@
 #include <math.h>
 
 #include "ejs.h"
+#include "ejs-generator.h"
 #include "ejs-ops.h"
 #include "ejs-array.h"
 #include "ejs-function.h"
@@ -2414,32 +2415,72 @@ _ejs_Array_from (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     // 6. If usingIterator is not undefined, then
     if (!EJSVAL_IS_UNDEFINED(usingIterator)) {
-        EJS_NOT_IMPLEMENTED();
+        ejsval A;
+
         // a. If IsConstructor(C) is true, then
-        // i. Let A be Construct(C).
+        if (IsConstructor(C)) {
+            // i. Let A be Construct(C).
+            if (EJSVAL_EQ(C, _ejs_Array))
+                A = _ejs_array_new (0, EJS_FALSE);
+            else
+                EJS_NOT_IMPLEMENTED();
+        }
         // b. Else,
-        // i. Let A be ArrayCreate(0).
+        else {
+            // i. Let A be ArrayCreate(0).
+            A = _ejs_array_new(0, EJS_FALSE);
+        }
         // c. ReturnIfAbrupt(A).
         // d. Let iterator be GetIterator(items, usingIterator).
         // e. ReturnIfAbrupt(iterator).
-        // f. Letkbe0.
+        ejsval iterator = GetIterator(items, usingIterator);
+
+        // f. Let k be 0.
+        int k = 0;
+
         // g. Repeat
-        // i. Let Pk be ToString(k).
-        // ii. Let next be IteratorStep(iterator).
-        // iii. ReturnIfAbrupt(next).
-        // iv. If next is false, then
-        // 1. Let putStatus be Put(A, "length", k, true).
-        // 2. ReturnIfAbrupt(putStatus).
-        // 3. Return A.
-        // v. Let nextValue be IteratorValue(next).
-        // vi. ReturnIfAbrupt(nextValue).
-        // vii. If mapping is true, then
-        // 1. Let mappedValue be Call(mapfn, T, «nextValue, k»).
-        // 2. ReturnIfAbrupt(mappedValue).
-        // viii.Else, let mappedValue be nextValue.
-        // ix. Let defineStatus be CreateDataPropertyOrThrow(A, Pk, mappedValue).
-        // x. ReturnIfAbrupt(defineStatus).
-        // xi. Increase k by 1.
+        do {
+            ejsval kval = NUMBER_TO_EJSVAL(k);
+            // i. Let Pk be ToString(k).
+            ejsval Pk = ToString(kval);
+
+            // ii. Let next be IteratorStep(iterator).
+            // iii. ReturnIfAbrupt(next).
+            ejsval next = IteratorStep(iterator);
+            // iv. If next is false, then
+            if (!EJSVAL_TO_BOOLEAN(next)) {
+                // 1. Let putStatus be Put(A, "length", k, true).
+                // 2. ReturnIfAbrupt(putStatus).
+                Put(A, _ejs_atom_length, kval, EJS_TRUE);
+                // 3. Return A.
+                return A;
+            }
+            // v. Let nextValue be IteratorValue(next).
+            // vi. ReturnIfAbrupt(nextValue).
+            ejsval nextValue = IteratorValue(next);
+
+            ejsval mappedValue;
+            // vii. If mapping is true, then
+            if (mapping) {
+                // 1. Let mappedValue be Call(mapfn, T, «nextValue, k»).
+                // 2. ReturnIfAbrupt(mappedValue).
+                ejsval mapfnArgs[2] = {
+                    nextValue,
+                    kval
+                };
+                mappedValue = _ejs_invoke_closure (mapfn, T, 2, mapfnArgs);
+            }
+            // viii.Else, let mappedValue be nextValue.
+            else {
+                mappedValue = nextValue;
+            }
+
+            // ix. Let defineStatus be CreateDataPropertyOrThrow(A, Pk, mappedValue).
+            // x. ReturnIfAbrupt(defineStatus).
+            _ejs_object_define_value_property (A, Pk, mappedValue, EJS_PROP_FLAGS_ENUMERABLE | EJS_PROP_FLAGS_CONFIGURABLE | EJS_PROP_FLAGS_WRITABLE);
+            // xi. Increase k by 1.
+            k += 1;
+        } while (EJS_TRUE);
     }
     // 7. Assert: items is not an Iterable so assume it is an array-like object.
     // 8. Let arrayLike be ToObject(items).
@@ -2477,7 +2518,7 @@ _ejs_Array_from (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         if (mapping) {
             // i. Let mappedValue be Call(mapfn, T, «kValue, k»).
             // ii. ReturnIfAbrupt(mappedValue).
-            ejsval mapfnArgs[3] = {
+            ejsval mapfnArgs[2] = {
                 kValue,
                 NUMBER_TO_EJSVAL(k)
             };
@@ -2835,7 +2876,7 @@ _ejs_array_init(ejsval global)
 
     _ejs_gc_add_root (&_ejs_ArrayIterator_prototype);
     _ejs_ArrayIterator_prototype = _ejs_array_iterator_new(_ejs_Array_prototype, EJS_ARRAYITER_KIND_VALUE);
-    EJSVAL_TO_OBJECT(_ejs_ArrayIterator_prototype)->proto = _ejs_Object_prototype;
+    EJSVAL_TO_OBJECT(_ejs_ArrayIterator_prototype)->proto = _ejs_Iterator_prototype;
     _ejs_object_define_value_property (_ejs_ArrayIterator, _ejs_atom_prototype, _ejs_ArrayIterator_prototype,
                                         EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     _ejs_object_define_value_property (_ejs_ArrayIterator_prototype, _ejs_atom_constructor, _ejs_ArrayIterator,

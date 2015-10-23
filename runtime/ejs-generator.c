@@ -8,6 +8,7 @@
 #include "ejs-error.h"
 #include "ejs-generator.h"
 #include "ejs-function.h"
+#include "ejs-symbol.h"
 
 #define GENERATOR_STACK_SIZE 64 * 1024
 
@@ -113,19 +114,39 @@ _ejs_Generator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsval *
     return _ejs_generator_send(O, argc > 0 ? args[0] : _ejs_undefined);
 }
 
+static ejsval
+_ejs_Iterator_prototype_iterator (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    return _this;
+}
+
+ejsval _ejs_Iterator_prototype EJSVAL_ALIGNMENT;
+void
+_ejs_iterator_init_proto()
+{
+    _ejs_gc_add_root (&_ejs_Generator_prototype);
+    _ejs_Iterator_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
+
+    ejsval _iterator = _ejs_function_new_native (_ejs_null, _ejs_Symbol_iterator, (EJSClosureFunc)_ejs_Iterator_prototype_iterator);
+    _ejs_object_define_value_property (_ejs_Iterator_prototype, _ejs_Symbol_iterator, _iterator, EJS_PROP_NOT_ENUMERABLE);
+}
+
+
 ejsval _ejs_Generator_prototype EJSVAL_ALIGNMENT;
 
 void
 _ejs_generator_init(ejsval global)
 {
     _ejs_gc_add_root (&_ejs_Generator_prototype);
-    _ejs_Generator_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Generator_specops);
+    _ejs_Generator_prototype = _ejs_object_new(_ejs_Iterator_prototype, &_ejs_Generator_specops);
 
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Generator_prototype, x, _ejs_Generator_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
 
     PROTO_METHOD(next);
     PROTO_METHOD(return);
     PROTO_METHOD(throw);
+
+#undef PROTO_METHOD
 }
 
 static EJSObject*
