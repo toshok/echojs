@@ -10,6 +10,7 @@
 #include <math.h>
 
 #include "ejs-value.h"
+#include "ejs-array.h"
 #include "ejs-ops.h"
 #include "ejs-object.h"
 #include "ejs-number.h"
@@ -1676,6 +1677,43 @@ _ejs_Object_isExtensible (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(O),IsExtensible)(O));
 }
 
+// ECMA262: 7.3.21 EnumerableOwnNames (O)
+static ejsval
+EnumerableOwnNames(ejsval O)
+{
+    // 1. Assert: Type(O) is Object.
+    EJS_ASSERT(EJSVAL_IS_OBJECT(O));
+
+    // 2. Let ownKeys be O.[[OwnPropertyKeys]]().
+    // 3. ReturnIfAbrupt(ownKeys).
+    ejsval ownKeys_ = OP(EJSVAL_TO_OBJECT(O),OwnPropertyKeys)(O);
+    EJSArray* ownKeys = (EJSArray*)EJSVAL_TO_OBJECT(ownKeys_);
+
+    // 4. Let names be a new empty List.
+    ejsval names = _ejs_array_new(0, EJS_FALSE);
+
+    // 5. Repeat, for each element key of ownKeys in List order
+    for (int i = 0; i < EJSARRAY_LEN(ownKeys); i ++) {
+        ejsval key = EJSDENSEARRAY_ELEMENTS(ownKeys)[i];
+        // a. If Type(key) is String, then
+        if (EJSVAL_IS_STRING(key)) {
+            // i. Let desc be O.[[GetOwnProperty]](key).
+            // ii. ReturnIfAbrupt(desc).
+            EJSPropertyDesc* desc = OP(EJSVAL_TO_OBJECT(O), GetOwnProperty)(O, key, NULL);
+            // iii. If desc is not undefined, then
+            if (desc) {
+                // 1. If desc.[[Enumerable]] is true, append key to names.
+                if (_ejs_property_desc_is_enumerable(desc))
+                    _ejs_array_push_dense(names, 1, &key);
+            }
+        }
+    }
+
+    // 6. Order the elements of names so they are in the same relative order as would be produced by the Iterator that would be returned if the [[Enumerate]] internal method was invoked on O.
+    // 7. Return names.
+    return names;
+}
+
 // ECMA262: 19.1.2.14
 static ejsval
 _ejs_Object_keys (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
@@ -1683,11 +1721,14 @@ _ejs_Object_keys (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
 
-    if (!EJSVAL_IS_OBJECT(O))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Object.keys called on non-object.");
+    // 1. Let obj be ToObject(O).
+    // 2. ReturnIfAbrupt(obj).
+    ejsval obj = ToObject(O);
 
-    // toshok - is this really not identical to Object.getOwnPropertyNames?
-    return _ejs_Object_getOwnPropertyNames(_ejs_undefined, _ejs_undefined, 1, &O);
+    // 3. Let nameList be EnumerableOwnNames(obj).
+    // 4. ReturnIfAbrupt(nameList).
+    // 5. Return CreateArrayFromList(nameList).
+    return EnumerableOwnNames(obj);
 }
 
 // ECMA262: 19.1.3.6
@@ -2446,6 +2487,14 @@ _ejs_object_specop_enumerate (ejsval O)
     EJS_NOT_IMPLEMENTED();
 }
 
+static int
+string_index_compare(const void* _a, const void* _b) {
+    ejsval a = *(ejsval*)_a;
+    ejsval b = *(ejsval*)_b;
+
+    return ToInt32(a) - ToInt32(b);
+}
+
 // ECMA262: 9.1.12 [[OwnPropertyKeys]] ( ) 
 static ejsval
 _ejs_object_specop_own_property_keys (ejsval O)
@@ -2464,9 +2513,11 @@ _ejs_object_specop_own_property_keys (ejsval O)
             ejsval idx_val = ToNumber(s->name);
             if (EJSVAL_IS_NUMBER(idx_val)) {
                 double n = EJSVAL_TO_NUMBER(idx_val);
-                if (floor(n) == n) {
+                if (n >= 0 && floor(n) == n) {
                     // 2. For each own property key P of O that is an integer index, in ascending numeric index order 
-                    //    a. Add P as the last element of keys. 
+                    //    a. Add P as the last element of keys.
+
+                    // we just append them as we do strings/symbols below.  we'll sort after our pass over the map
                     numberkeys[num_numberkeys++] = s->name;
                     continue;
                 }
@@ -2482,12 +2533,14 @@ _ejs_object_specop_own_property_keys (ejsval O)
         }
     }
 
+    qsort(numberkeys, num_numberkeys, sizeof(ejsval), string_index_compare);
+
     ejsval keys = _ejs_array_new (num_numberkeys + num_stringkeys + num_symbolkeys, EJS_FALSE);
     ejsval* elements = EJS_DENSE_ARRAY_ELEMENTS(keys);
 
     memmove (elements, numberkeys, num_numberkeys * sizeof(ejsval));
-    memmove (elements + num_numberkeys * sizeof(ejsval), stringkeys, num_stringkeys * sizeof(ejsval));
-    memmove (elements + (num_numberkeys + num_stringkeys) * sizeof(ejsval), symbolkeys, num_symbolkeys * sizeof(ejsval));
+    memmove (elements + num_numberkeys, stringkeys, num_stringkeys * sizeof(ejsval));
+    memmove (elements + num_numberkeys + num_stringkeys, symbolkeys, num_symbolkeys * sizeof(ejsval));
 
     free (numberkeys);
     free (stringkeys);
