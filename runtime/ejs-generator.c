@@ -4,11 +4,117 @@
 
 #include <string.h>
 
+#include "ejs-array.h"
 #include "ejs-ops.h"
 #include "ejs-error.h"
 #include "ejs-generator.h"
 #include "ejs-function.h"
 #include "ejs-symbol.h"
+
+// a simple type that allows us to both iterate and return next value
+typedef struct {
+    EJSObject obj;
+    ejsval iterator;
+    EJSBool done;
+} EJSIteratorWrapper;
+
+static ejsval
+_ejs_IteratorWrapper_prototype_getNextValue (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    EJSIteratorWrapper* iter = (EJSIteratorWrapper*)EJSVAL_TO_OBJECT(_this);
+    if (iter->done)
+        return _ejs_undefined;
+
+    ejsval iter_result;
+    EJSBool success = IteratorNext_internal(&iter_result, iter->iterator, _ejs_undefined);
+    if (!success) {
+        iter->done = EJS_TRUE;
+        return _ejs_undefined;
+    }
+    iter->done = IteratorComplete_internal (iter_result);
+    if (iter->done)
+        return _ejs_undefined;
+
+    ejsval iter_value;
+    success = IteratorValue_internal(&iter_value, iter_result);
+    if (!success) {
+        iter->done = EJS_TRUE;
+        return _ejs_undefined;
+    }
+    return iter_value;
+}
+
+static ejsval
+_ejs_IteratorWrapper_prototype_getRest (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
+{
+    EJSIteratorWrapper* iter = (EJSIteratorWrapper*)EJSVAL_TO_OBJECT(_this);
+    ejsval arr = _ejs_array_new(0, EJS_FALSE);
+
+    while (!iter->done) {
+        ejsval next_value = _ejs_IteratorWrapper_prototype_getNextValue(env, _this, 0, NULL);
+        if (!iter->done)
+            _ejs_array_push_dense(arr, 1, &next_value);
+    }
+
+    return arr;
+}
+
+static EJSObject*
+_ejs_iterator_wrapper_specop_allocate()
+{
+    return (EJSObject*)_ejs_gc_new (EJSIteratorWrapper);
+}
+
+static void
+_ejs_iterator_wrapper_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
+{
+    EJSIteratorWrapper* iter = (EJSIteratorWrapper*)obj;
+    scan_func(iter->iterator);
+    _ejs_Object_specops.Scan (obj, scan_func);
+}
+
+ejsval _ejs_IteratorWrapper_prototype EJSVAL_ALIGNMENT;
+
+EJS_DEFINE_CLASS(IteratorWrapper,
+                 OP_INHERIT, // [[GetPrototypeOf]]
+                 OP_INHERIT, // [[SetPrototypeOf]]
+                 OP_INHERIT, // [[IsExtensible]]
+                 OP_INHERIT, // [[PreventExtensions]]
+                 OP_INHERIT, // [[GetOwnProperty]]
+                 OP_INHERIT, // [[DefineOwnProperty]]
+                 OP_INHERIT, // [[HasProperty]]
+                 OP_INHERIT, // [[Get]]
+                 OP_INHERIT, // [[Set]]
+                 OP_INHERIT, // [[Delete]]
+                 OP_INHERIT, // [[Enumerate]]
+                 OP_INHERIT, // [[OwnPropertyKeys]]
+                 _ejs_iterator_wrapper_specop_allocate,
+                 OP_INHERIT, // [[Finalize]]
+                 _ejs_iterator_wrapper_specop_scan
+                 )
+
+void
+_ejs_iterator_wrapper_init (ejsval global)
+{
+    _ejs_gc_add_root (&_ejs_IteratorWrapper_prototype);
+    _ejs_IteratorWrapper_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
+
+#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_IteratorWrapper_prototype, x, _ejs_IteratorWrapper_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
+
+    PROTO_METHOD(getNextValue);
+    PROTO_METHOD(getRest);
+
+#undef PROTO_METHOD
+}
+
+ejsval
+_ejs_iterator_wrapper_new (ejsval iterator)
+{
+    EJSIteratorWrapper* rv = _ejs_gc_new (EJSIteratorWrapper);
+    _ejs_init_object ((EJSObject*)rv, _ejs_IteratorWrapper_prototype, &_ejs_IteratorWrapper_specops);
+    rv->iterator = iterator;
+    return OBJECT_TO_EJSVAL(rv);
+}
 
 #define GENERATOR_STACK_SIZE 64 * 1024
 

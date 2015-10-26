@@ -2374,9 +2374,8 @@ _ejs_array_indexof (EJSArray* haystack, ejsval needle)
 ejsval
 _ejs_array_from_iterables (int argc, ejsval* args);
 
-// ES6 Draft January 15, 2015
-// 22.1.2.1
-// Array.from(items[,mapfn[,thisArg]])
+// ES2015, June 2015
+// 22.1.2.1 Array.from ( items [ , mapfn [ , thisArg ] ] )
 static ejsval
 _ejs_Array_from (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {

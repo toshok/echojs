@@ -102,6 +102,8 @@ EJS_ATOM(exports)
 EJS_ATOM(__ejs)
 EJS_ATOM(GC)
 EJS_ATOM(unhandledException)
+EJS_ATOM(getNextValue)
+EJS_ATOM(getRest)
 
 EJS_ATOM(argv)
 EJS_ATOM(process)

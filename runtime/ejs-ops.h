@@ -24,6 +24,7 @@ EJSBool IsConcatSpreadable (ejsval O);
 
 EJSBool IsCallable(ejsval argument);
 EJSBool IsConstructor(ejsval argument);
+EJSBool IsExtensible(ejsval O);
 
 ejsval Construct(ejsval F, ejsval newTarget, uint32_t argc, ejsval* args);
 ejsval SpeciesConstructor(ejsval O, ejsval defaultConstructor);
@@ -92,6 +93,12 @@ ejsval IteratorComplete (ejsval iterResult);
 ejsval IteratorValue (ejsval iterResult);
 ejsval IteratorStep (ejsval iterator);
 ejsval _ejs_create_iter_result (ejsval value, ejsval done);
+
+EJSBool GetIterator_internal(ejsval* iterator, ejsval iterable);
+EJSBool IteratorStep_internal(ejsval* next, ejsval iterator);
+EJSBool IteratorNext_internal(ejsval* next, ejsval iterator, ejsval value);
+EJSBool IteratorValue_internal(ejsval* value, ejsval iterResult);
+EJSBool IteratorComplete_internal (ejsval iterResult);
 
 EJS_END_DECLS
 

@@ -166,7 +166,7 @@ _ejs_proxy_specop_get_prototype_of (ejsval O)
     EJSObject* _target = EJSVAL_TO_OBJECT(target); // XXX do we need to verify that it actually is an object here?
     // 10. Let extensibleTarget be IsExtensible(target). 
     // 11. ReturnIfAbrupt(extensibleTarget). 
-    EJSBool extensibleTarget = EJS_OBJECT_IS_EXTENSIBLE(_target);
+    EJSBool extensibleTarget = IsExtensible(target);
 
     // 12. If extensibleTarget is true, then return handlerProto.
     if (extensibleTarget)
@@ -221,7 +221,7 @@ _ejs_proxy_specop_set_prototype_of (ejsval O, ejsval V)
 
     // 11. Let extensibleTarget be IsExtensible(target). 
     // 12. ReturnIfAbrupt(extensibleTarget). 
-    EJSBool extensibleTarget = EJS_OBJECT_IS_EXTENSIBLE(_target);
+    EJSBool extensibleTarget = IsExtensible(target);
 
     // 13. If extensibleTarget is true, then return booleanTrapResult. 
     if (extensibleTarget)
@@ -239,7 +239,7 @@ _ejs_proxy_specop_set_prototype_of (ejsval O, ejsval V)
     return booleanTrapResult;
 }
 
-// es6 rev 38 04-16-2015
+// ES2015, June 2015
 // 9.5.3
 static EJSBool
 _ejs_proxy_specop_is_extensible(ejsval O)
@@ -254,6 +254,7 @@ _ejs_proxy_specop_is_extensible(ejsval O)
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "null ProxyHandler in isExtensible");
 
     // 3. Assert: Type(handler) is Object.
+    EJS_ASSERT(EJSVAL_IS_OBJECT(handler));
 
     // 4. Let target be the value of the [[ProxyTarget]] internal slot of O.
     ejsval target = proxy->target;
@@ -271,11 +272,11 @@ _ejs_proxy_specop_is_extensible(ejsval O)
     // 8. Let booleanTrapResult be ToBoolean(Call(trap, handler, «target»)).
     // 9. ReturnIfAbrupt(booleanTrapResult).
     ejsval args[] = { target };
-    EJSBool booleanTrapResult = ToEJSBool(_ejs_invoke_closure(trap, handler, 2, args));
+    EJSBool booleanTrapResult = ToEJSBool(_ejs_invoke_closure(trap, handler, 1, args));
 
     // 10. Let targetResult be target.[[IsExtensible]]().
     // 11. ReturnIfAbrupt(targetResult).
-    EJSBool targetResult = EJS_OBJECT_IS_EXTENSIBLE(_target);
+    EJSBool targetResult = OP(_target,IsExtensible)(target);
 
     // 12. If SameValue(booleanTrapResult, targetResult) is false, throw a TypeError exception.
     if (booleanTrapResult != targetResult)
@@ -791,8 +792,7 @@ _ejs_proxy_specop_own_property_keys (ejsval O)
 
     // 11. Let extensibleTarget be IsExtensible(target).
     // 12. ReturnIfAbrupt(extensibleTarget).
-
-    EJSBool extensibleTarget = EJS_TRUE; // XXX
+    EJSBool extensibleTarget = IsExtensible(target);
 
     // 13. Let targetKeys be target.[[OwnPropertyKeys]]().
     // 14. ReturnIfAbrupt(targetKeys).

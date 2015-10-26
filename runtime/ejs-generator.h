@@ -33,6 +33,9 @@ typedef struct {
     ucontext_t caller_context;
 } EJSGenerator;
 
+extern ejsval _ejs_IteratorWrapper_prototype;
+extern EJSSpecOps _ejs_IteratorWrapper_specops;
+
 extern ejsval _ejs_Iterator_prototype;
 
 extern ejsval _ejs_Generator_prototype;
@@ -41,6 +44,12 @@ extern EJSSpecOps _ejs_Generator_specops;
 extern ejsval _ejs_generator_new (ejsval generator_body);
 
 extern void _ejs_generator_init (ejsval global);
+
+extern void   _ejs_destructure_iterator_wrapper_init (ejsval global);
+extern ejsval _ejs_destructure_iterator_new(ejsval iterator);
+
+extern void _ejs_iterator_wrapper_init (ejsval global);
+
 extern void _ejs_iterator_init_proto ();
 
 /* these live in ejs-gc.c but it's easier on everything to have the decls here */
