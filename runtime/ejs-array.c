@@ -47,7 +47,7 @@ swap_dense (ejsval array, uint32_t xPos, uint32_t yPos)
 // ES6 Draft January 15, 2015
 // 7.2.2
 // IsArray ( argument )
-static EJSBool
+EJSBool
 IsArray (ejsval argument) {
     // 1. If Type(argument) is not Object, return false.
     if (!EJSVAL_IS_OBJECT(argument)) return EJS_FALSE;

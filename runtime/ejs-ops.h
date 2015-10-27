@@ -26,6 +26,8 @@ EJSBool IsCallable(ejsval argument);
 EJSBool IsConstructor(ejsval argument);
 EJSBool IsExtensible(ejsval O);
 
+ejsval EnumerableOwnNames(ejsval O);
+
 ejsval Construct(ejsval F, ejsval newTarget, uint32_t argc, ejsval* args);
 ejsval SpeciesConstructor(ejsval O, ejsval defaultConstructor);
 

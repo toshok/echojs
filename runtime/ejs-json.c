@@ -140,122 +140,111 @@ _ejs_JSON_parse (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 // all state for JSON.stringify that isn't pass as parameters.  stack allocated at the beginning of
 // _stringify;
 typedef struct {
-    // XXX stack goes here
+    ejsval stack;
     ejsval indent;
     ejsval gap;
     ejsval ReplacerFunction;
     ejsval PropertyList;
 } StringifyState;
 
-/* abstract operations JA from 15.12.3 */
-static ejsval JA(StringifyState *state, ejsval value);
-static ejsval JO(StringifyState *state, ejsval value);
-static ejsval Quote(StringifyState *state, ejsval value);
-static ejsval Str(StringifyState *state, ejsval key, ejsval holder);
+static ejsval SerializeJSONArray (StringifyState* state, ejsval value);
+static ejsval SerializeJSONObject (StringifyState* state, ejsval value);
+static ejsval SerializeJSONProperty (StringifyState* state, ejsval key, ejsval holder);
+static ejsval QuoteJSONString (StringifyState* state, ejsval value);
 
+// ES2015, June 2015
+// 24.3.2.2 abstract operation QuoteJSONString ( value )
 static ejsval
-JA(StringifyState *state, ejsval value)
-{
-    ejsval final;
+QuoteJSONString(StringifyState* state, ejsval value) {
+    int len = EJSVAL_TO_STRLEN(value);
+    jschar *product = malloc((len * 4 + 2) * sizeof(jschar));
+    EJSPrimString* prim_value = _ejs_primstring_flatten(EJSVAL_TO_STRING(value)); // this is pretty terrible.. we need a way to simply iterate over characters in a string
 
-    /* 1. If stack contains value then throw a TypeError exception because the structure is cyclical. */
-    /* 2. Append value to stack. */
-    /* 3. Let stepback be indent. */
-    ejsval stepback = state->indent;
-    /* 4. Let indent be the concatenation of indent and gap. */
-    state->indent = _ejs_string_concat (state->indent, state->gap);
-    /* 5. Let partial be an empty List. */
-    ejsval partial = _ejs_array_new (0, EJS_FALSE);
+    int pi = 0;
+    
+    // 1. Let product be code unit 0x0022 (QUOTATION MARK).
+    product[pi++] = '"';
 
-    /* 6. Let len be the result of calling the [[Get]] internal method of value with argument "length". */
-    int len = EJS_ARRAY_LEN(value);
-
-    /* 7. Let index be 0. */
-    int index = 0;
-
-    /* 8. Repeat while index < len */
-    while (index < len) {
-        /*    a. Let strP be the result of calling the abstract operation Str with arguments ToString(index) and value.  */
-        ejsval strP = Str (state, NUMBER_TO_EJSVAL(index), value);
-        /*    b. If strP is undefined */
-        if (EJSVAL_IS_UNDEFINED(strP)) {
-            /*       i. Append "null" to partial. */
-            _ejs_array_push_dense (partial, 1, &_ejs_atom_null);
-            
+    // 2. For each code unit C in value
+    for (int vi = 0; vi < len; vi++) {
+        jschar C = prim_value->data.flat[vi];
+        // a. If C is 0x0022 (QUOTATION MARK) or 0x005C (REVERSE SOLIDUS), then
+        if (C == '\"' || C == '\\') {
+            // i. Let product be the concatenation of product and code unit 0x005C (REVERSE SOLIDUS).
+            product[pi++] = '\\';
+            // ii. Let product be the concatenation of product and C.
+            product[pi++] = C;
         }
-        /*    c. Else */
+        // b. Else if C is 0x0008 (BACKSPACE), 0x000C (FORM FEED), 0x000A (LINE FEED), 0x000D(CARRIAGE RETURN), or 0x000B (LINE TABULATION), then
+        else if (C == '\b' ||
+                 C == '\f' ||
+                 C == '\n' ||
+                 C == '\r' ||
+                 C == '\t') {
+            // i. Let product be the concatenation of product and code unit 0x005C (REVERSE SOLIDUS).
+            product[pi++] = '\\';
+
+            // ii. Let abbrev be the String value corresponding to the value of C as follows:
+            jschar abbrev;
+            // BACKSPACE "b"
+            if (C == '\b') abbrev = 'b';
+            // FORM FEED (FF) "f"
+            if (C == '\f') abbrev = 'f';
+            // LINE FEED (LF) "n"
+            if (C == '\n') abbrev = 'n';
+            // CARRIAGE RETURN (CR) "r"
+            if (C == '\r') abbrev = 'r';
+            // LINE TABULATION "t"
+            if (C == '\t') abbrev = 't';
+            // iii. Let product be the concatenation of product and abbrev.
+            product[pi++] = abbrev;
+        }
+        // c. Else if C has a code unit value less than 0x0020 (SPACE), then
+        else if (C < ' ') {
+            // i. Let product be the concatenation of product and code unit 0x005C (REVERSE SOLIDUS).
+            product[pi++] = '\\';
+
+            // ii. Let product be the concatenation of product and "u".
+            product[pi++] = 'u';
+
+            // iii. Let hex be the string result of converting the numeric code unit value of C to a String of four hexadecimal digits. Alphabetic hexadecimal digits are presented as lowercase Latin letters.
+            static char* hexdigits = "012356789abcdef";
+
+            // iv. Let product be the concatenation of product and hex.
+            product[pi++] = '0';
+            product[pi++] = '0';
+            product[pi++] = hexdigits[(C & 0xf0) >> 4];
+            product[pi++] = hexdigits[C & 0xf];
+        }
+        // d. Else,
         else {
-            /*       i. Append  strP to partial. */
-            _ejs_array_push_dense (partial, 1, &strP);
-        }
-        /*    d. Increment index by 1. */
-        ++index;
-    }
-    /* 9. If partial is empty ,then */
-    if (EJS_ARRAY_LEN(partial) == 0) {
-        /*    a. Let final be "[]". */
-        final = _ejs_atom_empty_array;
-    }
-    /* 10. Else */
-    else {
-        /*     a. If gap is the empty String */
-        if (EJSVAL_EQ(state->gap, _ejs_atom_empty)) {
-            /*        i. Let properties be a String formed by concatenating all the element Strings of partial with
-                         each adjacent pair of Strings separated with the comma character. A comma is not inserted 
-                         either before the first String or after the last String. */
-            ejsval properties = EJS_DENSE_ARRAY_ELEMENTS(partial)[0];
-            ejsval comma_str = _ejs_string_new_utf8(",");
-            for (int i = 1; i < EJS_ARRAY_LEN(partial); i ++) {
-                properties = _ejs_string_concatv (properties, comma_str, EJS_DENSE_ARRAY_ELEMENTS(partial)[i], _ejs_null);
-            }
-
-            /*        ii. Let final be the result of concatenating "[", properties, and "]". */
-            final = _ejs_string_concatv (_ejs_string_new_utf8("["),
-                                         properties,
-                                         _ejs_string_new_utf8("]"),
-                                         _ejs_null);
-        }
-        /*     b. Else */
-        else {
-            /*        i. Let separator be the result of concatenating the comma character, the line feed character, 
-                      and indent. */
-            ejsval separator = _ejs_string_concat (_ejs_string_new_utf8(",\n"), state->indent);
-            /*        ii. Let properties be a String formed by concatenating all the element Strings of partial with 
-                          each adjacent pair of Strings separated with separator. The separator String is not inserted 
-                          either before the first String or after the last String. */
-            ejsval properties = EJS_DENSE_ARRAY_ELEMENTS(partial)[0];
-            for (int i = 1; i < EJS_ARRAY_LEN(partial); i ++) {
-                properties = _ejs_string_concatv (properties, separator, EJS_DENSE_ARRAY_ELEMENTS(partial)[i], _ejs_null);
-            }
-            /*        iii. Let final be the result of concatenating "[", the line feed character, indent, properties, the 
-                           line feed character, stepback, and "]". */
-            final = _ejs_string_concatv (_ejs_string_new_utf8("[\n"),
-                                         state->indent,
-                                         properties,
-                                         _ejs_string_new_utf8("\n"),
-                                         stepback,
-                                         _ejs_string_new_utf8("]"),
-                                         _ejs_null);
+            // i. Let product be the concatenation of product and C.
+            product[pi++] = C;
         }
     }
-    /* 11. Remove the last element of stack. */
-    /* 12. Let indent be stepback. */
-    state->indent = stepback;
-    /* 13. Return final. */
-    return final;
+    // 3. Let product be the concatenation of product and code unit 0x0022 (QUOTATION MARK).
+    product[pi++] = '\"';
+    /* 4. Return product. */
+    ejsval rv = _ejs_string_new_ucs2_len(product, pi);
+    free (product);
+    return rv;
 }
 
-/* abstract operation JO from 15.12.3 */
+// ES2015, June 2015
+// 24.3.2.3 abstract operation SerializeJSONObject ( value )
 static ejsval
-JO(StringifyState *state, ejsval value)
-{
-    ejsval final = _ejs_undefined;
+SerializeJSONObject (StringifyState* state, ejsval value) {
+    // 1. If stack contains value, throw a TypeError exception because the structure is cyclical.
 
-    /* 1. If stack contains value then throw a TypeError exception because the structure is cyclical. */
-    /* 2. Append value to stack. */
-    /* 3. Let stepback be indent. */
+    // XXX
+
+    // 2. Append value to stack.
+    _ejs_array_push_dense (state->stack, 1, &value);
+
+    // 3. Let stepback be indent.
     ejsval stepback = state->indent;
-    /* 4. Let indent be the concatenation of indent and gap. */
+
+    // 4. Let indent be the concatenation of indent and gap.
     state->indent = _ejs_string_concat (state->indent, state->gap);
 
     // XXX(toshok): we need this volatile because in the else case
@@ -268,90 +257,83 @@ JO(StringifyState *state, ejsval value)
     // dragons of this sort around the code.
     volatile ejsval K;
 
-    /* 5. If PropertyList is not undefined, then */
+    // 5. If PropertyList is not undefined, then
     if (!EJSVAL_IS_UNDEFINED(state->PropertyList)) {
-        /*    a. Let K be PropertyList. */
+        // a. Let K be PropertyList.
         K = state->PropertyList;
     }
-    /* 6. Else */
+    // 6. Else,
     else {
-        /*    a. Let K be an internal List of Strings consisting of the names of all the own properties of value whose 
-              [[Enumerable]] attribute is true. The ordering of the Strings should be the same as that used by the 
-              Object.keys standard built-in function. */
-        EJSObject* value_obj = EJSVAL_TO_OBJECT(value);
-        K = _ejs_array_new (0, EJS_FALSE);
-        for (_EJSPropertyMapEntry *s = value_obj->map->head_insert; s; s = s->next_insert) {
-            if (!_ejs_property_desc_is_enumerable(s->desc))
-                continue;
-
-            ejsval propname = s->name;
-            _ejs_array_push_dense(K, 1, &propname);
-        }
+        // a. Let K be EnumerableOwnNames(value).
+        K = EnumerableOwnNames(value);
     }
-    /* 7. Let partial be an empty List. */
+
+    // 7. Let partial be an empty List.
     ejsval partial = _ejs_array_new (0, EJS_FALSE);
 
-    /* 8. For each element P of K. */
+    // 8. For each element P of K,
     for (int kk = 0; kk < EJS_ARRAY_LEN(K); kk++) {
         ejsval P = EJS_DENSE_ARRAY_ELEMENTS(K)[kk];
+        // a. Let strP be SerializeJSONProperty(P, value).
+        // b. ReturnIfAbrupt(strP).
+        ejsval strP = SerializeJSONProperty(state, P, value);
 
-        /*    a. Let strP be the result of calling the abstract operation Str with arguments P and value. */
-        ejsval strP = Str(state, P, value);
-
-        /*    b. If strP is not undefined */
+        // c. If strP is not undefined, then
         if (!EJSVAL_IS_UNDEFINED(strP)) {
-            /*       i. Let member be the result of calling the abstract operation Quote with argument P. */
-            ejsval member = Quote (state, P);
-            /*       ii. Let member be the concatenation of member and the colon character. */
+            // i. Let member be QuoteJSONString(P).
+            ejsval member = QuoteJSONString (state, P);
+            // ii. Let member be the concatenation of member and the string ":".
             member = _ejs_string_concat (member, _ejs_string_new_utf8(":"));
-            /*       iii. If gap is not the empty String */
+            // iii. If gap is not the empty String, then
             if (!EJSVAL_EQ(state->gap, _ejs_atom_empty)) {
-                /*            1. Let member be the concatenation of member and the space character. */
+                // 1. Let member be the concatenation of member and code unit 0x0020 (SPACE).
                 member = _ejs_string_concat (member, _ejs_string_new_utf8(" "));
             }
-            /*       iv. Let member be the concatenation of member and strP. */
+            // iv. Let member be the concatenation of member and strP.
             member = _ejs_string_concat (member, strP);
-            /*       v. Append member to partial. */
+            // v. Append member to partial.
             _ejs_array_push_dense(partial, 1, &member);
         }
     }
-    /* 9. If partial is empty, then */
+
+    ejsval final;
+
+    // 9. If partial is empty, then
     if (EJS_ARRAY_LEN(partial) == 0) {
-        /*    a. Let final be "{}". */
+        // a. Let final be "{}".
         final = _ejs_atom_empty_object;
     }
-    /* 10. Else */
+    // 10. Else,
     else {
-        /*     a. If gap is the empty String */
+        // a. If gap is the empty String, then
         if (EJSVAL_EQ(state->gap, _ejs_atom_empty)) {
-            /*        i. Let properties be a String formed by concatenating all the element Strings of partial with 
-                         each adjacent pair of Strings separated with the comma character. A comma is not inserted 
-                         either before the first String or after the last String.  */
+            // i. Let properties be a String formed by concatenating all the element Strings of partial with each
+            // adjacent pair of Strings separated with code unit 0x002C (COMMA). A comma is not inserted
+            // either before the first String or after the last String.
             ejsval properties = EJS_DENSE_ARRAY_ELEMENTS(partial)[0];
             ejsval comma_str = _ejs_string_new_utf8(",");
             for (int i = 1; i < EJS_ARRAY_LEN(partial); i ++) {
                 properties = _ejs_string_concatv (properties, comma_str, EJS_DENSE_ARRAY_ELEMENTS(partial)[i], _ejs_null);
             }
-            /*        ii. Let final be the result of concatenating "{", properties, and "}". */
+
+            // ii. Let final be the result of concatenating "{", properties, and "}".
             final = _ejs_string_concatv (_ejs_string_new_utf8("{"),
                                          properties,
                                          _ejs_string_new_utf8("}"),
                                          _ejs_null);
         }
-        /*     b. Else gap is not the empty String */
+        // b. Else gap is not the empty String
         else {
-            /*        i. Let separator be the result of concatenating the comma character, the line feed character, 
-                         and indent. */
+            // i. Let separator be the result of concatenating code unit 0x002C (COMMA), code unit 0x000A (LINE FEED), and indent.
             ejsval separator = _ejs_string_concat (_ejs_string_new_utf8(",\n"), state->indent);
-            /*        ii. Let properties be a String formed by concatenating all the element Strings of partial with 
-                          each adjacent pair of Strings separated with separator. The separator String is not inserted 
-                          either before the first String or after the last String. */
+            // ii. Let properties be a String formed by concatenating all the element Strings of partial with each
+            // adjacent pair of Strings separated with separator. The separator String is not inserted either
+            // before the first String or after the last String.
             ejsval properties = EJS_DENSE_ARRAY_ELEMENTS(partial)[0];
             for (int i = 1; i < EJS_ARRAY_LEN(partial); i ++) {
                 properties = _ejs_string_concatv (properties, separator, EJS_DENSE_ARRAY_ELEMENTS(partial)[i], _ejs_null);
             }
-            /*        iii. Let final be the result of concatenating "{", the line feed character, indent, properties, the 
-                           line feed character, stepback, and "}". */
+            // iii. Let final be the result of concatenating "{", code unit 0x000A (LINE FEED), indent, properties, code unit 0x000A, stepback, and "}".
             final = _ejs_string_concatv (_ejs_string_new_utf8("{\n"),
                                          state->indent,
                                          properties,
@@ -361,178 +343,208 @@ JO(StringifyState *state, ejsval value)
                                          _ejs_null);
         }
     }
+    // 11. Remove the last element of stack.
+    _ejs_array_pop_dense(state->stack);
 
-    /* 11. Remove the last element of stack. */
-
-    /* 12. Let indent be stepback. */
+    // 12. Let indent be stepback.
     state->indent = stepback;
-    /* 13. Return final. */
+
+    // 13. Return final.
     return final;
 }
 
-/* abstract operation Quote from 15.12.3 */
+// ES2015, June 2015
+// 24.3.2.4 abstract operation SerializeJSONArray ( value )
 static ejsval
-Quote(StringifyState *state, ejsval value)
-{
-    int len = EJSVAL_TO_STRLEN(value);
-    jschar *product = malloc((len * 4 + 2) * sizeof(jschar));
-    EJSPrimString* prim_value = _ejs_primstring_flatten(EJSVAL_TO_STRING(value)); // this is pretty terrible.. we need a way to simply iterate over characters in a string
+SerializeJSONArray(StringifyState* state, ejsval value) {
+    // 1. If stack contains value, throw a TypeError exception because the structure is cyclical.
+    // XXX
 
-    int pi = 0;
-    /* 1. Let product be the double quote character. */
-    product[pi++] = '"';
+    // 2. Append value to stack.
+    _ejs_array_push_dense(state->stack, 1, &value);
 
-    /* 2. For each character C in value */
-    for (int vi = 0; vi < len; vi++) {
-        jschar C = prim_value->data.flat[vi];
-        /*    a. If C is the double quote character or the backslash character */
-        if (C == '\"' || C == '\\') {
-            /*       i. Let product be the concatenation of product and the backslash character. */
-            product[pi++] = '\\';
-            /*       ii. Let product be the concatenation of product and C. */
-            product[pi++] = C;
+    // 3. Let stepback be indent.
+    ejsval stepback = state->indent;
+
+    // 4. Let indent be the concatenation of indent and gap.
+    state->indent = _ejs_string_concat (state->indent, state->gap);
+    
+    // 5. Let partial be an empty List.
+    ejsval partial = _ejs_array_new (0, EJS_FALSE);
+
+    // 6. Let len be ToLength(Get(value, "length")).
+    // 7. ReturnIfAbrupt(len).
+    int len = ToLength(Get(value, _ejs_atom_length));
+
+    // 8. Let index be 0.
+    int index = 0;
+
+    // 9. Repeat while index < len
+    while (index < len) {
+        // a. Let strP be SerializeJSONProperty(ToString(index), value).
+        // b. ReturnIfAbrupt(strP).
+        ejsval strP = SerializeJSONProperty(state, ToString(NUMBER_TO_EJSVAL(index)), value);
+
+        // c. If strP is undefined, then
+        if (EJSVAL_IS_UNDEFINED(strP)) {
+            // i. Append "null" to partial.
+            _ejs_array_push_dense (partial, 1, &_ejs_atom_null);
         }
-        /*    b. Else if C is backspace, formfeed, newline, carriage return, or tab */
-        else if (C == '\b' ||
-                 C == '\f' ||
-                 C == '\n' ||
-                 C == '\r' ||
-                 C == '\t') {
-            /*       i. Let product be the concatenation of product and the backslash character. */
-            product[pi++] = '\\';
-            /*       ii. Let abbrev be the character corresponding to the value of C as follows: */
-            /*           backspace "b" */
-            jschar abbrev;
-            if (C == '\b') abbrev = 'b';
-            /*           formfeed "f" */
-            if (C == '\f') abbrev = 'f';
-            /*           newline "n" */
-            if (C == '\n') abbrev = 'n';
-            /*           carriage return "r" */
-            if (C == '\r') abbrev = 'r';
-            /*           tab "t" */
-            if (C == '\t') abbrev = 't';
-            /*       iii. Let product be the concatenation of product and abbrev. */
-            product[pi++] = abbrev;
-        }
-        /*    c. Else if C is a control character having a code unit value less than the space character */
-        else if (C < ' ') {
-            /*       i. Let product be the concatenation of product and the backslash character. */
-            product[pi++] = '\\';
-            /*       ii. Let product be the concatenation of product and "u". */
-            product[pi++] = 'u';
-            /*       iii. Let hex be the result of converting the numeric code unit value of C to a String of four 
-                     hexadecimal digits. */
-            static char* hexdigits = "012356789abcdef";
-            /*       iv. Let product be the concatenation of product and hex. */
-            product[pi++] = '0';
-            product[pi++] = '0';
-            product[pi++] = hexdigits[(C & 0xf0) >> 4];
-            product[pi++] = hexdigits[C & 0xf];
-        }
-        /*    d. Else */
+        // d. Else,
         else {
-            /*       i. Let product be the concatenation of product and C. */
-            product[pi++] = C;
+            // i. Append strP to partial.
+            _ejs_array_push_dense (partial, 1, &strP);
+        }
+        // e. Increment index by 1.
+        ++index;
+    }
+
+    ejsval final;
+
+    // 10. If partial is empty, then
+    if (EJS_ARRAY_LEN(partial) == 0) {
+        // a. Let final be "[]".
+        final = _ejs_atom_empty_array;
+    }
+    // 11. Else,
+    else {
+        // a. If gap is the empty String, then
+        if (EJSVAL_EQ(state->gap, _ejs_atom_empty)) {
+            // i. Let properties be a String formed by concatenating all the element Strings of partial with each
+            // adjacent pair of Strings separated with code unit 0x002C (COMMA). A comma is not inserted
+            // either before the first String or after the last String.
+            ejsval properties = EJS_DENSE_ARRAY_ELEMENTS(partial)[0];
+            ejsval comma_str = _ejs_string_new_utf8(",");
+            for (int i = 1; i < EJS_ARRAY_LEN(partial); i ++) {
+                properties = _ejs_string_concatv (properties, comma_str, EJS_DENSE_ARRAY_ELEMENTS(partial)[i], _ejs_null);
+            }
+
+            // ii. Let final be the result of concatenating "[", properties, and "]".
+            final = _ejs_string_concatv (_ejs_string_new_utf8("["),
+                                         properties,
+                                         _ejs_string_new_utf8("]"),
+                                         _ejs_null);
+        }
+        // b. Else,
+        else {
+            // i. Let separator be the result of concatenating code unit 0x002C (COMMA), code unit 0x000A
+            // (LINE FEED), and indent.
+            ejsval separator = _ejs_string_concat (_ejs_string_new_utf8(",\n"), state->indent);
+            // ii. Let properties be a String formed by concatenating all the element Strings of partial with each
+            // adjacent pair of Strings separated with separator. The separator String is not inserted either
+            // before the first String or after the last String.
+            ejsval properties = EJS_DENSE_ARRAY_ELEMENTS(partial)[0];
+            for (int i = 1; i < EJS_ARRAY_LEN(partial); i ++) {
+                properties = _ejs_string_concatv (properties, separator, EJS_DENSE_ARRAY_ELEMENTS(partial)[i], _ejs_null);
+            }
+            // iii. Let final be the result of concatenating "[", code unit 0x000A (LINE FEED), indent, properties,
+            // code unit 0x000A, stepback, and "]".
+            final = _ejs_string_concatv (_ejs_string_new_utf8("[\n"),
+                                         state->indent,
+                                         properties,
+                                         _ejs_string_new_utf8("\n"),
+                                         stepback,
+                                         _ejs_string_new_utf8("]"),
+                                         _ejs_null);
         }
     }
-    /* 3. Let product be the concatenation of product and the double quote character. */
-    product[pi++] = '\"';
-    /* 4. Return product. */
-    ejsval rv = _ejs_string_new_ucs2_len(product, pi);
-    free (product);
-    return rv;
+    // 12. Remove the last element of stack.
+    _ejs_array_pop_dense(state->stack);
+    // 13. Let indent be stepback.
+    state->indent = stepback;
+    // 14. Return final.
+    return final;
 }
 
-/* abstract operation Str from 15.12.3 */
+
+// ES2015, June 2015
+// 24.3.2.1 abstract operation SerializeJSONProperty ( key, holder )
 static ejsval
-Str(StringifyState *state, ejsval key, ejsval holder)
-{
-    /* 1. Let value be the result of calling the [[Get]] internal method of holder with argument key. */
-    ejsval value = OP(EJSVAL_TO_OBJECT(holder),Get)(holder, key, holder);
+SerializeJSONProperty(StringifyState* state, ejsval key, ejsval holder) {
+    // 1. Let value be Get(holder, key).
+    // 2. ReturnIfAbrupt(value).
+    ejsval value = Get(holder, key);
 
-    /* 2. If Type(value) is Object, then */
+    // 3. If Type(value) is Object, then
     if (EJSVAL_IS_OBJECT(value)) {
-        /*    a. Let toJSON be the result of calling the [[Get]] internal method of value with argument "toJSON". */
-        ejsval toJSON = OP(EJSVAL_TO_OBJECT(holder),Get)(holder, _ejs_atom_toJSON, holder);
-        /*    b. If IsCallable(toJSON) is true */
-        if (EJSVAL_IS_CALLABLE(toJSON)) {
-            /*       i. Let value be the result of calling the [[Call]] internal method of toJSON passing value as the 
-                     this value and with an argument list consisting of key. */
-            _ejs_invoke_closure (toJSON, value, 1, &key);
+        // a. Let toJSON be Get(value, "toJSON").
+        // b. ReturnIfAbrupt(toJSON).
+        ejsval toJSON = Get(value, _ejs_atom_toJSON);
+        // c. If IsCallable(toJSON) is true
+        if (IsCallable(toJSON)) {
+            // i. Let value be Call(toJSON, value, «key»).
+            // ii. ReturnIfAbrupt(value).
+            ejsval args[] = { key };
+            value = _ejs_invoke_closure(toJSON, value, 1, args);
         }
     }
-
-    /* 3. If ReplacerFunction is not undefined, then */
+    // 4. If ReplacerFunction is not undefined, then
     if (!EJSVAL_IS_UNDEFINED(state->ReplacerFunction)) {
-        /*    a. Let value be the result of calling the [[Call]] internal method of ReplacerFunction passing holder as 
-              the this value and with an argument list consisting of key and value. */
-        EJS_NOT_IMPLEMENTED();
+        // a. Let value be Call(ReplacerFunction, holder, «key, value»).
+        // b. ReturnIfAbrupt(value).
+        ejsval args[] = { key, value };
+        value = _ejs_invoke_closure(state->ReplacerFunction, holder, 2, args);
     }
-
-    /* 4. If Type(value) is Object then, */
+    // 5. If Type(value) is Object, then
     if (EJSVAL_IS_OBJECT(value)) {
-        /*    a. If the [[Class]] internal property of value is "Number" then, */
+        // a. If value has a [[NumberData]] internal slot, then
         if (EJSVAL_IS_NUMBER_OBJECT(value)) {
-            /*       i. Let value be ToNumber(value). */
-            value = NUMBER_TO_EJSVAL(ToDouble(value));
+            // i. Let value be ToNumber(value).
+            // ii. ReturnIfAbrupt(value).
+            value = ToNumber(value);
         }
-        /*    b. Else if the [[Class]] internal property of value is "String" then, */
+        // b. Else if value has a [[StringData]] internal slot, then
         else if (EJSVAL_IS_STRING_OBJECT(value)) {
-            /*       i. Let value be ToString(value). */
+            // i. Let value be ToString(value).
+            // ii. ReturnIfAbrupt(value).
             value = ToString(value);
         }
-        /*    c. Else if the [[Class]] internal property of value is "Boolean" then, */
+        // c. Else if value has a [[BooleanData]] internal slot, then
         else if (EJSVAL_IS_BOOLEAN_OBJECT(value)) {
-            /*       i. Let value be the value of the [[PrimitiveValue]] internal property of  value. */
+            // i. Let value be the value of the [[BooleanData]] internal slot of value.
             value = ToBoolean(value);
         }
     }
-
-    /* 5. If value is null then return "null". */
-    if (EJSVAL_IS_NULL(value)) {
-        return _ejs_atom_null;
-    }
+    // 6. If value is null, return "null".
+    if (EJSVAL_IS_NULL(value)) return _ejs_atom_null;
 
     if (EJSVAL_IS_BOOLEAN(value)) {
-        /* 6. If value is true then return "true". */
-        /* 7. If value is false then return "false". */
+        // 7. If value is true, return "true".
+        // 8. If value is false, return "false".
         return EJSVAL_TO_BOOLEAN(value) ? _ejs_atom_true : _ejs_atom_false;
     }
-
-    /* 8. If Type(value) is String, then return the result of calling the abstract operation Quote with argument value. */
+    // 9. If Type(value) is String, return QuoteJSONString(value).
     if (EJSVAL_IS_STRING(value)) {
-        return Quote(state, value);
+        return QuoteJSONString(state, value);
     }
-
-    /* 9. If Type(value) is Number */
+    // 10. If Type(value) is Number, then
     if (EJSVAL_IS_NUMBER(value)) {
-        /*    a. If value is finite then return ToString(value). */
+        // a. If value is finite, return ToString(value).
         if (isfinite (EJSVAL_TO_NUMBER(value)))
             return ToString(value);
-
-        /*    b. Else, return "null". */
-        return _ejs_null;
+        // b. Else, return "null".
+        else
+            return _ejs_atom_null;
     }
+    // 11. If Type(value) is Object, and IsCallable(value) is false, then
+    if (EJSVAL_IS_OBJECT(value) && !IsCallable(value)) {
+        // a. Let isArray be IsArray(value).
+        // b. ReturnIfAbrupt(isArray).
+        EJSBool isArray = IsArray(value);
 
-    /* 10. If Type(value) is Object, and IsCallable(value) is false */
-    if (EJSVAL_IS_OBJECT(value) && !EJSVAL_IS_CALLABLE(value)) {
-        /*     a. If the [[Class]] internal property of value is "Array" then */
-        if (EJSVAL_IS_ARRAY(value)) {
-            /*        i. Return the result of calling the abstract operation JA with argument value. */
-            return JA(state, value);
-        }
-        else {
-            /*     b. Else, return the result of calling the abstract operation JO with argument value. */
-            return JO(state, value);
-        }
+        // c. If isArray is true, return SerializeJSONArray(value).
+        if (isArray)
+            return SerializeJSONArray(state, value);
+        // d. Else, return SerializeJSONObject(value).
+        else
+            return SerializeJSONObject(state, value);
     }
-
-    /* 11. Return undefined. */
+    // 12. Return undefined.
     return _ejs_undefined;
 }
 
-/* 15.12.3 */
+// ES2015, June 2015
+// 24.3.2 JSON.stringify ( value [ , replacer [ , space ] ] )
 static ejsval
 _ejs_JSON_stringify (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
@@ -545,110 +557,123 @@ _ejs_JSON_stringify (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     if (argc > 1) replacer = args[1];
     if (argc > 2) space = args[2];
 
-    /* 1. Let stack be an empty List. */
-    
-    /* 2. Let indent be the empty String. */
+    // 1. Let stack be an empty List.
+    state.stack = _ejs_array_new(0, EJS_FALSE);
+
+    // 2. Let indent be the empty String.
     state.indent = _ejs_atom_empty;
 
-    /* 3. Let PropertyList and ReplacerFunction be undefined. */
+    // 3. Let PropertyList and ReplacerFunction be undefined.
     state.PropertyList = _ejs_undefined;
     state.ReplacerFunction = _ejs_undefined;
 
-    /* 4. If Type(replacer) is Object, then */
+    // 4. If Type(replacer) is Object, then
     if (EJSVAL_IS_OBJECT(replacer)) {
-        /*    a. If IsCallable(replacer) is true, then */
-        if (EJSVAL_IS_CALLABLE(replacer)) {
-            /*       i. Let ReplacerFunction be replacer. */
+        // a. If IsCallable(replacer) is true, then
+        if (IsCallable(replacer)) {
+            // i. Let ReplacerFunction be replacer.
             state.ReplacerFunction = replacer;
         }
-        /*    b. Else if the [[Class]] internal property of replacer is "Array", then */
-        else if (EJSVAL_IS_ARRAY(replacer)) {
-            /*       i. Let PropertyList  be an empty internal List */
-            state.PropertyList = _ejs_array_new(0, EJS_FALSE);
-            /*       ii. For each value v of a property of replacer that has an array index property name. The
-                         properties are enumerated in the ascending array index order of their names. */
-            for (int i = 0; i < EJS_ARRAY_LEN(replacer); i ++) {
-                ejsval v = EJS_DENSE_ARRAY_ELEMENTS(replacer)[i];
-                /*           1. Let item be undefined. */
-                ejsval item = _ejs_undefined;
-                /*           2. If Type(v) is String then let item be v. */
-                if (EJSVAL_IS_STRING(v))
-                    item = v;
-                /*           3. Else if Type(v) is Number then let item be ToString(v). */
-                else if (EJSVAL_IS_NUMBER(v))
-                    item = ToString(v);
-                /*           4. Else if Type(v) is Object then, */
-                else if (EJSVAL_IS_OBJECT(v)) {
-                    /*              a If the [[Class]] internal property of v is "String" or "Number" then let 
-                                    item be ToString(v). */
-                    if (EJSVAL_IS_STRING_OBJECT(v) || EJSVAL_IS_NUMBER_OBJECT(v))
+        // b. Else,
+        else {
+            // i. Let isArray be IsArray(replacer).
+            // ii. ReturnIfAbrupt(isArray).
+            EJSBool isArray = IsArray(replacer);
+            // iii. If isArray is true, then
+            if (isArray) {
+                // 1. Let PropertyList be an empty List
+                state.PropertyList = _ejs_array_new(0, EJS_FALSE);
+                // 2. Let len be ToLength(Get(replacer, "length")).
+                // 3. ReturnIfAbrupt(len).
+                int64_t len = ToLength(Get(replacer, _ejs_atom_length));
+
+                // 4. Let k be 0.
+                int64_t k = 0;
+                // 5. Repeat while k<len.
+                while (k < len) {
+                    // a. Let v be Get(replacer, ToString(k)).
+                    // b. ReturnIfAbrupt(v).
+                    ejsval v = Get(replacer, ToString(NUMBER_TO_EJSVAL(k)));
+                    // c. Let item be undefined.
+                    ejsval item = _ejs_undefined;
+                    // d. If Type(v) is String, let item be v.
+                    if (EJSVAL_IS_STRING(v))
+                        item = v;
+                    // e. Else if Type(v) is Number, let item be ToString(v).
+                    else if (EJSVAL_IS_NUMBER(v))
                         item = ToString(v);
-                }
-                /*           5. If item is not undefined and item is not currently an element of PropertyList then, */
-                if (!EJSVAL_IS_UNDEFINED(item) /* XXX && not currently in PropertyList */) {
-                    /*              a Append item to the end of PropertyList. */
-                    _ejs_array_push_dense (state.PropertyList, 1, &item);
+                    // f. Else if Type(v) is Object, then
+                    else if (EJSVAL_IS_OBJECT(v)) {
+                        // i. If v has a [[StringData]] or [[NumberData]] internal slot, let item be ToString(v).
+                        // ii. ReturnIfAbrupt(item).
+                        if (EJSVAL_IS_STRING_OBJECT(v) || EJSVAL_IS_NUMBER_OBJECT(v))
+                            item = ToString(v);
+                    }
+                    // g. If item is not undefined and item is not currently an element of PropertyList, then
+                    if (!EJSVAL_IS_UNDEFINED(item) /* XXX && not currently in PropertyList */) {
+                        // i. Append item to the end of PropertyList.
+                        _ejs_array_push_dense (state.PropertyList, 1, &item);
+                    }
+                    // h. Let k be k+1.
+                    k += 1;
                 }
             }
         }
     }
-
-    /* 5. If Type(space) is Object then, */
+    // 5. If Type(space) is Object, then
     if (EJSVAL_IS_OBJECT(space)) {
-        /*    a. If the [[Class]] internal property of space is "Number" then, */
+        // a. If space has a [[NumberData]] internal slot, then
         if (EJSVAL_IS_NUMBER_OBJECT(space)) {
-            /*       i. Let space be ToNumber(space). */
-            space = NUMBER_TO_EJSVAL(ToDouble(space));
+            // i. Let space be ToNumber(space).
+            // ii. ReturnIfAbrupt(space).
+            space = ToNumber(space);
         }
-        /*    b. Else if the [[Class]] internal property of space is "String" then, */
-        else if (EJSVAL_IS_STRING(space)) {
-            /*       i. Let space be ToString(space). */
+        // b. Else if space has a [[StringData]] internal slot, then
+        else if (EJSVAL_IS_STRING_OBJECT(space)) {
+            // i. Let space be ToString(space).
+            // ii. ReturnIfAbrupt(space).
             space = ToString(space);
         }
     }
 
-    state.gap = _ejs_atom_empty;
-
-    /* 6. If Type(space) is Number */
+    // 6. If Type(space) is Number, then
     if (EJSVAL_IS_NUMBER(space)) {
-        /*    a. Let space be min(10, ToInteger(space)). */
-        int space_int = MIN(10, ToInteger(space));
-
-        /*    b. Set gap to a String containing space space characters. This will be the empty String if space is less 
-              than 1. */
-        if (space_int < 1) {
+        static jschar spaces[10] = { 0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020 };
+        // a. Let space be min(10, ToInteger(space)).
+        int space_int = ToInteger(space);
+        int space_count = MIN(10, space_int);
+        // b. Set gap to a String containing space occurrences of code unit 0x0020 (SPACE). This will be the empty String if space is less than 1.
+        if (space_count < 1) {
             state.gap = _ejs_atom_empty;
         }
         else {
-            char *space_str = (char*)malloc (space_int + 1);
-            memset (space_str, ' ', space_int);
-            space_str[space_int] = 0;
-            state.gap = _ejs_string_new_utf8 (space_str);
-            free (space_str);
+            state.gap = _ejs_string_new_ucs2_len(spaces, space_count);
+        }
+
+    }
+    // 7. Else if Type(space) is String, then
+    else if (EJSVAL_IS_STRING(space)) {
+        // a. If the number of elements in space is 10 or less, set gap to space otherwise set gap to a String consisting of the first 10 elements of space.
+        if (EJSVAL_TO_STRLEN(space) <= 10) {
+            state.gap = space;
+        }
+        else {
+            state.gap = _ejs_string_new_substring(space, 0, 10);
         }
     }
-    /* 7. Else if Type(space) is String */
-    else if (EJSVAL_IS_STRING(space)) {
-        /*    a. If the number of characters in space is 10 or less, set gap to space otherwise set gap to a String
-              consisting of the first 10 characters of space. */
-        jschar *flattened = EJSVAL_TO_FLAT_STRING(space);
-        state.gap = _ejs_string_new_ucs2_len (flattened, 10);
-    }
-    /* 8. Else */
+    // 8. Else
     else {
-        /*    a. Set gap to the empty String. */
+        // a. Set gap to the empty String.
         state.gap = _ejs_atom_empty;
     }
-
-    /* 9. Let wrapper be a new object created as if by the expression new Object(), where Object is the 
-       standard built-in constructor with that name. */
+    // 9. Let wrapper be ObjectCreate(%ObjectPrototype%).
     ejsval wrapper = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
-    /* 10. Call the [[DefineOwnProperty]]  internal method of wrapper with arguments the empty String, the Property 
-       Descriptor {[[Value]]: value, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true}, and false. */
-    EJSPropertyDesc desc = { .value = value, .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE };
-    OP(EJSVAL_TO_OBJECT(wrapper), DefineOwnProperty)(wrapper, _ejs_atom_empty, &desc, EJS_FALSE);
-    /* 11. Return the result of calling the abstract operation Str with the empty String and wrapper. */
-    return Str(&state, _ejs_atom_empty, wrapper);
+
+    // 10. Let status be CreateDataProperty(wrapper, the empty String, value).
+    _ejs_object_setprop (wrapper, _ejs_atom_empty, value);
+    // 11. Assert: status is true.
+    // 12. Return SerializeJSONProperty(the empty String, wrapper).
+    return SerializeJSONProperty(&state, _ejs_atom_empty, wrapper);
 }
 
 ejsval

@@ -1678,7 +1678,7 @@ _ejs_Object_isExtensible (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 7.3.21 EnumerableOwnNames (O)
-static ejsval
+ejsval
 EnumerableOwnNames(ejsval O)
 {
     // 1. Assert: Type(O) is Object.
