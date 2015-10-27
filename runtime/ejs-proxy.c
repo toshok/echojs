@@ -66,7 +66,7 @@ _ejs_Proxy_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         //    b. If target has a [[Construct]] internal method, then 
         //       i. Set the [[Construct]] internal method of P as specified in 9.5.14. 
 
-        _ejs_log("proxies don't save off [[Call]]/[[Construct]] presence yet.");
+        _ejs_log("proxies don't save off [[Call]]/[[Construct]] presence yet.\n");
     }
     EJSProxy* P = EJSVAL_TO_PROXY(_this);
 
