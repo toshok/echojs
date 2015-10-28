@@ -100,6 +100,8 @@ ejsval   _ejs_array_pop_dense (ejsval array);
 ejsval _ejs_array_join (ejsval array, ejsval sep);
 ejsval _ejs_array_from_iterables (int argc, ejsval* args);
 
+EJSBool IsArray (ejsval argument);
+
 EJS_END_DECLS
 
 #endif /* _ejs_array_h */

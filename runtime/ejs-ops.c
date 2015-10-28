@@ -1401,6 +1401,18 @@ GetIterator (ejsval obj, ejsval method)
     return iterator;
 }
 
+/* a version of GetIterator that returns true/false instead of throwing an exception */
+static ejsval call_get_iterator(void* data) {
+    ejsval* arg = (ejsval*)data;
+    return GetIterator(*arg, _ejs_undefined);
+}
+
+EJSBool
+GetIterator_internal(ejsval* iterator, ejsval iterable)
+{
+    return _ejs_invoke_func_catch(iterator, call_get_iterator, &iterable);
+}
+
 /* 7.4.3 IteratorNext ( iterator, value ) */
 ejsval
 IteratorNext (ejsval iterator, ejsval value)
@@ -1424,6 +1436,25 @@ IteratorNext (ejsval iterator, ejsval value)
     return result;
 }
 
+/* a version of IteratorNext that returns true/false instead of throwing an exception */
+typedef struct {
+    ejsval iterator;
+    ejsval value;
+} call_next_data;
+
+static ejsval call_iterator_next(void* data) {
+    call_next_data* arg = (call_next_data*)data;
+    return IteratorNext(arg->iterator, arg->value);
+}
+EJSBool
+IteratorNext_internal(ejsval* next, ejsval iterator, ejsval value)
+{
+    call_next_data data;
+    data.iterator = iterator;
+    data.value = value;
+    return _ejs_invoke_func_catch(next, call_iterator_next, &data);
+}
+
 /* 7.4.4 IteratorComplete ( iterResult ) */
 ejsval
 IteratorComplete (ejsval iterResult)
@@ -1439,6 +1470,13 @@ IteratorComplete (ejsval iterResult)
     return ToBoolean(done);
 }
 
+/* a version of IteratorComplete that returns true/false instead of an ejsval */
+EJSBool
+IteratorComplete_internal (ejsval iterResult) {
+    return EJSVAL_TO_BOOLEAN(IteratorComplete(iterResult));
+}
+
+
 /* 7.4.5 IteratorValue ( iterResult ) */
 ejsval
 IteratorValue (ejsval iterResult)
@@ -1450,6 +1488,19 @@ IteratorValue (ejsval iterResult)
     /* 2. Return Get(iterResult, "value"). */
     return Get(iterResult, _ejs_atom_value);
 }
+
+
+/* a version of IteratorValue that returns true/false instead of throwing an exception */
+static ejsval call_iterator_value(void* data) {
+    ejsval* arg = (ejsval*)data;
+    return IteratorValue(*arg);
+}
+EJSBool
+IteratorValue_internal(ejsval* value, ejsval iterResult)
+{
+    return _ejs_invoke_func_catch(value, call_iterator_value, &iterResult);
+}
+
 
 /* 7.4.6 IteratorStep ( iterator ) */
 ejsval
@@ -1468,6 +1519,17 @@ IteratorStep (ejsval iterator)
 
     /* 6. Return result */
     return result;
+}
+
+/* a version of IteratorStep that returns true/false instead of throwing an exception */
+static ejsval call_iterator_step(void* data) {
+    ejsval* arg = (ejsval*)data;
+    return IteratorStep(*arg);
+}
+EJSBool
+IteratorStep_internal(ejsval* next, ejsval iterator)
+{
+    return _ejs_invoke_func_catch(next, call_iterator_step, &iterator);
 }
 
 /* 7.4.7 CreateIterResultObject (value, done) */
@@ -1530,6 +1592,17 @@ IsConstructor(ejsval argument)
     if (!EJSVAL_IS_FUNCTION(argument))
         return EJS_FALSE;
     return ((EJSFunction*)EJSVAL_TO_OBJECT(argument))->is_constructor;
+}
+
+// ES2015, June 2015
+// 7.2.5
+EJSBool
+IsExtensible(ejsval O)
+{
+    // 1. Assert: Type(O) is Object.
+    EJS_ASSERT(EJSVAL_IS_OBJECT(O));
+    // 2. Return O.[[IsExtensible]]().
+    return OP(EJSVAL_TO_OBJECT(O), IsExtensible)(O);
 }
 
 // ES6 Draft rev32 Feb 2, 2015

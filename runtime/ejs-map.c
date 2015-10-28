@@ -5,6 +5,7 @@
 #include "ejs-map.h"
 #include "ejs-array.h"
 #include "ejs-gc.h"
+#include "ejs-generator.h"
 #include "ejs-error.h"
 #include "ejs-function.h"
 #include "ejs-proxy.h"
@@ -713,7 +714,7 @@ _ejs_map_init(ejsval global)
 
     _ejs_gc_add_root (&_ejs_MapIterator_prototype);
     _ejs_MapIterator_prototype = _ejs_map_iterator_new (_ejs_Map_prototype, EJS_MAP_ITER_KIND_VALUE);
-    EJSVAL_TO_OBJECT(_ejs_MapIterator_prototype)->proto = _ejs_Object_prototype;
+    EJSVAL_TO_OBJECT(_ejs_MapIterator_prototype)->proto = _ejs_Iterator_prototype;
     _ejs_object_define_value_property (_ejs_MapIterator, _ejs_atom_prototype, _ejs_MapIterator_prototype,
             EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     _ejs_object_define_value_property (_ejs_MapIterator_prototype, _ejs_atom_constructor, _ejs_MapIterator,

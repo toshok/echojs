@@ -129,6 +129,8 @@ _ejs_init_classes()
 
     _ejs_Class_initialize (&_ejs_Generator_specops, &_ejs_Object_specops);
 
+    _ejs_Class_initialize (&_ejs_IteratorWrapper_specops, &_ejs_Object_specops);
+
 #if IOS
     _ejs_Class_initialize (&_ejs_WebGLRenderingContext_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_WebGLBuffer_specops, &_ejs_Object_specops);
@@ -178,6 +180,9 @@ _ejs_init(int argc, char** argv)
     _ejs_symbol_init(_ejs_global);
 
     _ejs_function_add_symbols();
+
+    _ejs_iterator_init_proto();
+    _ejs_iterator_wrapper_init(_ejs_global);
 
     _ejs_reflect_init(_ejs_global);
     _ejs_error_init(_ejs_global);

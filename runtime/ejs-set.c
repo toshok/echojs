@@ -5,6 +5,7 @@
 #include "ejs-set.h"
 #include "ejs-array.h"
 #include "ejs-gc.h"
+#include "ejs-generator.h"
 #include "ejs-error.h"
 #include "ejs-function.h"
 #include "ejs-proxy.h"
@@ -336,12 +337,6 @@ _ejs_Set_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     // 1. Let set be the this value. 
     ejsval set = _this;
 
-    if (EJSVAL_IS_UNDEFINED(set)) {
-        EJSObject* obj = (EJSObject*)_ejs_gc_new(EJSSet);
-        _ejs_init_object (obj, _ejs_Set_prototype, &_ejs_Set_specops);
-        set = OBJECT_TO_EJSVAL(obj);
-    }
-
     // 2. If Type(set) is not Object then, throw a TypeError exception. 
     if (!EJSVAL_IS_OBJECT(set))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Set constructor called with non-object this.");
@@ -607,7 +602,7 @@ _ejs_set_init(ejsval global)
 
     _ejs_gc_add_root (&_ejs_SetIterator_prototype);
     _ejs_SetIterator_prototype = _ejs_set_iterator_new(_ejs_Set_prototype, EJS_SET_ITER_KIND_VALUE);
-    EJSVAL_TO_OBJECT(_ejs_SetIterator_prototype)->proto = _ejs_Object_prototype;
+    EJSVAL_TO_OBJECT(_ejs_SetIterator_prototype)->proto = _ejs_Iterator_prototype;
     _ejs_object_define_value_property (_ejs_SetIterator, _ejs_atom_prototype, _ejs_SetIterator_prototype,
                                         EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     _ejs_object_define_value_property (_ejs_SetIterator_prototype, _ejs_atom_constructor, _ejs_SetIterator,

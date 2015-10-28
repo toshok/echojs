@@ -218,12 +218,6 @@ _ejs_WeakMap_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     // 1. Let map be the this value.
     ejsval map = _this;
 
-    if (EJSVAL_IS_UNDEFINED(map)) {
-        EJSObject* obj = (EJSObject*)_ejs_gc_new(EJSWeakMap);
-        _ejs_init_object (obj, _ejs_WeakMap_prototype, &_ejs_WeakMap_specops);
-        map = OBJECT_TO_EJSVAL(obj);
-    }
-
     // 2. If Type(map) is not Object then, throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(map))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "WeakMap constructor called with non-object this.");

@@ -2,6 +2,7 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
+#include "ejs-array.h"
 #include "ejs-proxy.h"
 #include "ejs-gc.h"
 #include "ejs-error.h"
@@ -65,7 +66,7 @@ _ejs_Proxy_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         //    b. If target has a [[Construct]] internal method, then 
         //       i. Set the [[Construct]] internal method of P as specified in 9.5.14. 
 
-        _ejs_log("proxies don't save off [[Call]]/[[Construct]] presence yet.");
+        _ejs_log("proxies don't save off [[Call]]/[[Construct]] presence yet.\n");
     }
     EJSProxy* P = EJSVAL_TO_PROXY(_this);
 
@@ -165,7 +166,7 @@ _ejs_proxy_specop_get_prototype_of (ejsval O)
     EJSObject* _target = EJSVAL_TO_OBJECT(target); // XXX do we need to verify that it actually is an object here?
     // 10. Let extensibleTarget be IsExtensible(target). 
     // 11. ReturnIfAbrupt(extensibleTarget). 
-    EJSBool extensibleTarget = EJS_OBJECT_IS_EXTENSIBLE(_target);
+    EJSBool extensibleTarget = IsExtensible(target);
 
     // 12. If extensibleTarget is true, then return handlerProto.
     if (extensibleTarget)
@@ -220,7 +221,7 @@ _ejs_proxy_specop_set_prototype_of (ejsval O, ejsval V)
 
     // 11. Let extensibleTarget be IsExtensible(target). 
     // 12. ReturnIfAbrupt(extensibleTarget). 
-    EJSBool extensibleTarget = EJS_OBJECT_IS_EXTENSIBLE(_target);
+    EJSBool extensibleTarget = IsExtensible(target);
 
     // 13. If extensibleTarget is true, then return booleanTrapResult. 
     if (extensibleTarget)
@@ -238,7 +239,7 @@ _ejs_proxy_specop_set_prototype_of (ejsval O, ejsval V)
     return booleanTrapResult;
 }
 
-// es6 rev 38 04-16-2015
+// ES2015, June 2015
 // 9.5.3
 static EJSBool
 _ejs_proxy_specop_is_extensible(ejsval O)
@@ -253,6 +254,7 @@ _ejs_proxy_specop_is_extensible(ejsval O)
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "null ProxyHandler in isExtensible");
 
     // 3. Assert: Type(handler) is Object.
+    EJS_ASSERT(EJSVAL_IS_OBJECT(handler));
 
     // 4. Let target be the value of the [[ProxyTarget]] internal slot of O.
     ejsval target = proxy->target;
@@ -270,11 +272,11 @@ _ejs_proxy_specop_is_extensible(ejsval O)
     // 8. Let booleanTrapResult be ToBoolean(Call(trap, handler, «target»)).
     // 9. ReturnIfAbrupt(booleanTrapResult).
     ejsval args[] = { target };
-    EJSBool booleanTrapResult = ToEJSBool(_ejs_invoke_closure(trap, handler, 2, args));
+    EJSBool booleanTrapResult = ToEJSBool(_ejs_invoke_closure(trap, handler, 1, args));
 
     // 10. Let targetResult be target.[[IsExtensible]]().
     // 11. ReturnIfAbrupt(targetResult).
-    EJSBool targetResult = EJS_OBJECT_IS_EXTENSIBLE(_target);
+    EJSBool targetResult = OP(_target,IsExtensible)(target);
 
     // 12. If SameValue(booleanTrapResult, targetResult) is false, throw a TypeError exception.
     if (booleanTrapResult != targetResult)
@@ -559,9 +561,8 @@ _ejs_proxy_specop_has_property (ejsval O, ejsval P)
     ejsval handler = proxy->handler;
 
     // 3. If handler is null, then throw a TypeError exception. 
-    if (EJSVAL_IS_NULL(handler)) {
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1"); // XXX
-    }
+    if (EJSVAL_IS_NULL(handler))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "handler is null"); // XXX
     // 4. Let target be the value of the [[ProxyTarget]] internal slot of O. 
     ejsval target = proxy->target;
 
@@ -592,10 +593,10 @@ _ejs_proxy_specop_has_property (ejsval O, ejsval P)
         EJSPropertyDesc* targetDesc = OP(_target,GetOwnProperty)(target, P, NULL);
 
         //     c. If targetDesc is not undefined, then 
-        if (!targetDesc) {
+        if (targetDesc) {
             //        i. If targetDesc.[[Configurable]] is false, then throw a TypeError exception. 
             if (!_ejs_property_desc_is_configurable(targetDesc))
-                _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1"); // XXX
+                _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "not configurable"); // XXX
 
             //        ii. Let extensibleTarget be IsExtensible(target). 
             //        iii. ReturnIfAbrupt(extensibleTarget). 
@@ -604,7 +605,7 @@ _ejs_proxy_specop_has_property (ejsval O, ejsval P)
 
             //        iv. If extensibleTarget is false, then throw a TypeError exception. 
             if (!EJS_OBJECT_IS_EXTENSIBLE(_target))
-                _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "2"); // XXX
+                _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "target is not extensible"); // XXX
         }
     }
 
@@ -751,6 +752,96 @@ _ejs_proxy_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Desc
     return EJS_TRUE;
 }
 
+// ECMA262: 9.5.12 [[OwnPropertyKeys]] ( ) 
+static ejsval
+_ejs_proxy_specop_own_property_keys (ejsval O)
+{
+    EJSProxy* proxy = EJSVAL_TO_PROXY(O);
+
+    // 1. Let handler be the value of the [[ProxyHandler]] internal slot of O
+    ejsval handler = proxy->handler;
+
+    // 2. If handler is null, throw a TypeError exception.
+    if (EJSVAL_IS_NULL(handler))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "handler is null"); // XXX
+
+    // 3. Assert: Type(handler) is Object.
+    EJS_ASSERT(EJSVAL_IS_OBJECT(handler));
+
+    // 4. Let target be the value of the [[ProxyTarget]] internal slot of O.
+    ejsval target = proxy->target;
+    EJSObject* _target = EJSVAL_TO_OBJECT(target);
+
+    // 5. Let trap be GetMethod(handler, "ownKeys").
+    // 6. ReturnIfAbrupt(trap).
+    ejsval trap = GetMethod(handler, _ejs_atom_ownKeys);
+
+    // 7. If trap is undefined, then
+    if (EJSVAL_IS_UNDEFINED(trap)) {
+        //    a. Return target.[[OwnPropertyKeys]]().
+        return OP(_target, OwnPropertyKeys)(target);
+    }
+
+    // 8. Let trapResultArray be Call(trap, handler, «target»).
+    ejsval args[] = { target };
+    ejsval trapResultArray = _ejs_invoke_closure(trap, handler, 1, args);
+
+    // 9. Let trapResult be CreateListFromArrayLike(trapResultArray, «String, Symbol»).
+    // 10. ReturnIfAbrupt(trapResult).
+    ejsval trapResult = trapResultArray;
+
+    // 11. Let extensibleTarget be IsExtensible(target).
+    // 12. ReturnIfAbrupt(extensibleTarget).
+    EJSBool extensibleTarget = IsExtensible(target);
+
+    // 13. Let targetKeys be target.[[OwnPropertyKeys]]().
+    // 14. ReturnIfAbrupt(targetKeys).
+    ejsval targetKeys = OP(_target, OwnPropertyKeys)(target);
+    EJSArray* _targetKeys = (EJSArray*)EJSVAL_TO_OBJECT(targetKeys);
+
+    // 15. Assert: targetKeys is a List containing only String and Symbol values.
+
+    // 16. Let targetConfigurableKeys be an empty List.
+    ejsval targetConfigurableKeys = _ejs_array_new(0, EJS_FALSE);
+
+    // 17. Let targetNonconfigurableKeys be an empty List.
+    ejsval targetNonconfigurableKeys = _ejs_array_new(0, EJS_FALSE);
+
+    // 18. Repeat, for each element key of targetKeys,
+    for (int i = 0; i < EJSARRAY_LEN(_targetKeys); i ++) {
+        ejsval key = EJSDENSEARRAY_ELEMENTS(_targetKeys)[i];
+        // a. Let desc be target.[[GetOwnProperty]](key).
+        // b. ReturnIfAbrupt(desc).
+        EJSPropertyDesc* desc = OP(_target,GetOwnProperty)(target, key, NULL);
+        // c. If desc is not undefined and desc.[[Configurable]] is false, then
+        if (desc && !_ejs_property_desc_is_configurable(desc)) {
+            // i. Append key as an element of targetNonconfigurableKeys.
+            _ejs_array_push_dense (targetNonconfigurableKeys, 1, &key);
+        }
+        // d. Else,
+        else {
+            // i. Append key as an element of targetConfigurableKeys.
+            _ejs_array_push_dense (targetConfigurableKeys, 1, &key);
+        }
+    }
+    // 19. If extensibleTarget is true and targetNonconfigurableKeys is empty, then
+    if (extensibleTarget && EJS_ARRAY_LEN(targetNonconfigurableKeys) == 0) {
+        //     a. Return trapResult.
+        return trapResult;
+    }
+    EJS_NOT_IMPLEMENTED();
+    // 20. Let uncheckedResultKeys be a new List which is a copy of trapResult.
+    // 21. Repeat, for each key that is an element of targetNonconfigurableKeys,
+    //     a. If key is not an element of uncheckedResultKeys, throw a TypeError exception.
+    //     b. Remove key from uncheckedResultKeys
+    // 22. If extensibleTarget is true, return trapResult.
+    // 23. Repeat, for each key that is an element of targetConfigurableKeys,
+    //     a. If key is not an element of uncheckedResultKeys, throw a TypeError exception.
+    //     b. Remove key from uncheckedResultKeys
+    // 24. If uncheckedResultKeys is not empty, throw a TypeError exception.
+    // 25. Return trapResult.
+}
+
 static EJSObject*
 _ejs_proxy_specop_allocate ()
 {
@@ -778,7 +869,7 @@ EJS_DEFINE_CLASS(Proxy,
                  _ejs_proxy_specop_set,
                  _ejs_proxy_specop_delete,
                  OP_INHERIT, // XXX [[Enumerate]]
-                 OP_INHERIT, // XXX [[OwnPropertyKeys]]
+                 _ejs_proxy_specop_own_property_keys,
                  _ejs_proxy_specop_allocate,
                  OP_INHERIT, // [[Finalize]]
                  _ejs_proxy_specop_scan
