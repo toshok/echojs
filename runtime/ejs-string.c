@@ -1992,6 +1992,8 @@ EJS_DEFINE_CLASS(String,
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  _ejs_string_specop_allocate,
                  OP_INHERIT, // [[Finalize]]
                  _ejs_string_specop_scan
@@ -2020,6 +2022,8 @@ EJS_DEFINE_CLASS(StringIterator,
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  OP_INHERIT, // allocate.  shouldn't ever be used
                  OP_INHERIT, // finalize.  also shouldn't ever be used
                  _ejs_string_iterator_specop_scan

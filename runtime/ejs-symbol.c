@@ -221,6 +221,8 @@ EJS_DEFINE_CLASS(Symbol,
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  _ejs_symbol_specop_allocate,
                  OP_INHERIT, // [[Finalize]]
                  _ejs_symbol_specop_scan

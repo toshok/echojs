@@ -88,6 +88,8 @@ EJS_DEFINE_CLASS(IteratorWrapper,
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  _ejs_iterator_wrapper_specop_allocate,
                  OP_INHERIT, // [[Finalize]]
                  _ejs_iterator_wrapper_specop_scan
@@ -319,6 +321,8 @@ EJS_DEFINE_CLASS(Generator,
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  _ejs_generator_specop_allocate,
                  _ejs_generator_specop_finalize,
                  _ejs_generator_specop_scan

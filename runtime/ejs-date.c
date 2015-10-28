@@ -213,6 +213,8 @@ EJS_DEFINE_CLASS(Date,
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  _ejs_date_specop_allocate,
                  OP_INHERIT, // [[Finalize]]
                  OP_INHERIT  // [[Scan]]

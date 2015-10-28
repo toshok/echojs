@@ -788,6 +788,7 @@ _ejs_proxy_specop_own_property_keys (ejsval O)
 
     // 9. Let trapResult be CreateListFromArrayLike(trapResultArray, «String, Symbol»).
     // 10. ReturnIfAbrupt(trapResult).
+    _ejs_log("we assume that trapResultArray is an array, not an 'array-like'\n");
     ejsval trapResult = trapResultArray;
 
     // 11. Let extensibleTarget be IsExtensible(target).
@@ -829,17 +830,27 @@ _ejs_proxy_specop_own_property_keys (ejsval O)
         //     a. Return trapResult.
         return trapResult;
     }
-    EJS_NOT_IMPLEMENTED();
     // 20. Let uncheckedResultKeys be a new List which is a copy of trapResult.
+    
     // 21. Repeat, for each key that is an element of targetNonconfigurableKeys,
     //     a. If key is not an element of uncheckedResultKeys, throw a TypeError exception.
     //     b. Remove key from uncheckedResultKeys
     // 22. If extensibleTarget is true, return trapResult.
+    if (extensibleTarget) return trapResult;
+
     // 23. Repeat, for each key that is an element of targetConfigurableKeys,
     //     a. If key is not an element of uncheckedResultKeys, throw a TypeError exception.
     //     b. Remove key from uncheckedResultKeys
+
     // 24. If uncheckedResultKeys is not empty, throw a TypeError exception.
+#if notyet
+    if (EJSARRAY_LEN(uncheckedResultKeys) != 0) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "uncheckedResultKeys non-empty");
+    }
+#endif
+
     // 25. Return trapResult.
+    return trapResult;
 }
 
 static EJSObject*
@@ -870,6 +881,8 @@ EJS_DEFINE_CLASS(Proxy,
                  _ejs_proxy_specop_delete,
                  OP_INHERIT, // XXX [[Enumerate]]
                  _ejs_proxy_specop_own_property_keys,
+                 OP_INHERIT, // XXX [[Call]]
+                 OP_INHERIT, // XXX [[Construct]]
                  _ejs_proxy_specop_allocate,
                  OP_INHERIT, // [[Finalize]]
                  _ejs_proxy_specop_scan

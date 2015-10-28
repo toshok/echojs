@@ -620,6 +620,8 @@ static EJS_DEFINE_CLASS(_EJSPropertyIterator,
                         OP_INHERIT, // [[Delete]]
                         OP_INHERIT, // [[Enumerate]]
                         OP_INHERIT, // [[OwnPropertyKeys]]
+                        OP_INHERIT, // [[Call]]
+                        OP_INHERIT, // [[Construct]]
                         _ejs_property_iterator_specop_allocate,
                         _ejs_property_iterator_specop_finalize,
                         _ejs_property_iterator_specop_scan)
@@ -795,6 +797,8 @@ _ejs_Class_initialize (EJSSpecOps *child, EJSSpecOps* parent)
     MAYBE_INHERIT_DISALLOW_NULL(Delete);
     MAYBE_INHERIT_DISALLOW_NULL(Enumerate);
     MAYBE_INHERIT_DISALLOW_NULL(OwnPropertyKeys);
+    MAYBE_INHERIT(Call);
+    MAYBE_INHERIT(Construct);
     MAYBE_INHERIT_DISALLOW_NULL(Allocate);
     MAYBE_INHERIT_DISALLOW_NULL(Finalize);
     MAYBE_INHERIT_DISALLOW_NULL(Scan);
@@ -1494,58 +1498,55 @@ SetIntegrityLevel (ejsval O, IntegrityLevel level)
     return BOOLEAN_TO_EJSVAL(OP(O_,PreventExtensions)(O));
 }
 
-// ECMA262: 7.3.12 TestIntegrityLevel (O, level) 
+// ES2015, June 2015
+// 7.3.15 TestIntegrityLevel (O, level) 
 static ejsval
-TestIntegrityLevel (ejsval O, IntegrityLevel level)
-{
-    // 1. Assert: Type(O) is Object. 
-    // 2. Assert: level is either "sealed" or "frozen". 
-    // 3. Let status be IsExtensible(O). 
-    // 4. ReturnIfAbrupt(status). 
-    EJSBool status = EJS_OBJECT_IS_EXTENSIBLE(EJSVAL_TO_OBJECT(O));
-    // 5. If status is true, then return false 
-    if (status)
-        return _ejs_false;
+TestIntegrityLevel (ejsval O, IntegrityLevel level) {
+    // 1. Assert: Type(O) is Object.
+    EJS_ASSERT(EJSVAL_IS_OBJECT(O));
+    EJSObject* O_ = EJSVAL_TO_OBJECT(O);
 
-    // 6. NOTE If the object is extensible, none of its properties are examined. 
+    // 2. Assert: level is either "sealed" or "frozen".
+    // 3. Let status be IsExtensible(O).
+    // 4. ReturnIfAbrupt(status).
+    EJSBool status = IsExtensible(O);
 
-    // 7. Let keysArray be the result of calling the [[OwnPropertyKeys]] internal method of O. 
-    // 8. Let keys be CreateListFromArrayLike(keysArray). 
-    // 9. ReturnIfAbrupt(keys). 
-    
-    // 20. Let pendingException be undefined. 
-    ejsval pendingException = _ejs_undefined;
+    // 5. If status is true, return false
+    if (status) return _ejs_false;
 
-    // 11. Let configurable be false. 
-    EJSBool configurable = EJS_FALSE;
+    // 6. NOTE If the object is extensible, none of its properties are examined.
 
-    // 12. Let writable be false. 
-    EJSBool writable = EJS_FALSE;
+    // 7. Let keys be O.[[OwnPropertyKeys]]().
+    // 8. ReturnIfAbrupt(keys).
+    ejsval keys = OP(O_,OwnPropertyKeys)(O);
 
-    // 13. Repeat for each element k of keys, 
-    //     a. Let status be the result of calling the [[GetOwnProperty]] internal method of O with k. 
-    //     b. If status is an abrupt completion, then 
-    //        i. If pendingException is undefined, then set pendingException to status. 
-    //        ii. Let configurable be true. 
-    //     c. Else, 
-    //        i. Let currentDesc be status.[[value]]. 
-    //        ii. If currentDesc is not undefined, then 
-    //            1. Set configurable to configurable logically ored with currentDesc.[[Configurable]]. 
-    //            2. If IsDataDescriptor(currentDesc) is true, then 
-    //               a. Set writable to writable logically ored with currentDesc.[[Writable]]. 
-    // 14. If pendingException is not undefined, then return pendingException. 
-    if (!EJSVAL_IS_UNDEFINED(pendingException))
-        return pendingException;
+    // 9. Repeat for each element k of keys,
+    int64_t len = ToLength(Get(keys, _ejs_atom_length));
+    int64_t i = 0;
 
-    // 15. If level is "frozen" and writable is true, then return false. 
-    if (level == INTEGRITY_FROZEN && writable)
-        return _ejs_false;
+    while (i < len) {
+        ejsval Pk = ToString (NUMBER_TO_EJSVAL(i));
+        ejsval k = Get(keys, Pk);
 
-    // 16. If configurable is true, then return false. 
-    if (configurable)
-        return _ejs_false;
+        // a. Let currentDesc be O.[[GetOwnProperty]](k).
+        // b. ReturnIfAbrupt(currentDesc).
+        ejsval exc;
+        EJSPropertyDesc* currentDesc = OP(O_,GetOwnProperty)(O, k, &exc);
 
-    // 17. Return true.
+        // c. If currentDesc is not undefined, then
+        if (currentDesc) {
+            // i. If currentDesc.[[Configurable]] is true, return false.
+            if (_ejs_property_desc_is_configurable(currentDesc)) return _ejs_false;
+
+            // ii. If level is "frozen" and IsDataDescriptor(currentDesc) is true, then
+            if (level == INTEGRITY_FROZEN && IsDataDescriptor(currentDesc)) {
+                // 1. If currentDesc.[[Writable]] is true, return false.
+                if (_ejs_property_desc_is_writable(currentDesc)) return _ejs_false;
+            }
+        }
+        i++;
+    }
+    // 10. Return true.
     return _ejs_true;
 }
 
@@ -2563,6 +2564,8 @@ EJS_DEFINE_CLASS(Object,
                  _ejs_object_specop_delete,
                  _ejs_object_specop_enumerate,
                  _ejs_object_specop_own_property_keys,
+                 NULL, // [[Call]]
+                 NULL, // [[Construct]]
                  _ejs_object_specop_allocate,
                  _ejs_object_specop_finalize,
                  _ejs_object_specop_scan

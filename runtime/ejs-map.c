@@ -774,6 +774,8 @@ EJS_DEFINE_CLASS(Map,
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  _ejs_map_specop_allocate,
                  _ejs_map_specop_finalize,
                  _ejs_map_specop_scan
@@ -800,6 +802,8 @@ EJS_DEFINE_CLASS(MapIterator,
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  OP_INHERIT, // allocate.  shouldn't ever be used
                  OP_INHERIT, // finalize.  also shouldn't ever be used
                  _ejs_map_iterator_specop_scan

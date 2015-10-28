@@ -2501,6 +2501,8 @@ EJS_DEFINE_CLASS(ArrayBuffer,
                  _ejs_arraybuffer_specop_delete,
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  _ejs_arraybuffer_specop_allocate,
                  _ejs_arraybuffer_specop_finalize,
                  _ejs_arraybuffer_specop_scan
@@ -2668,6 +2670,8 @@ EJS_DEFINE_CLASS(DataView,
                  _ejs_dataview_specop_delete,
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  _ejs_dataview_specop_allocate,
                  OP_INHERIT, // [[Finalize]]
                  _ejs_dataview_specop_scan
@@ -2688,6 +2692,8 @@ EJS_DEFINE_CLASS(DataView,
         OP_INHERIT, /* [[Delete]] */                                   \
         OP_INHERIT, /* [[Enumerate]] */                                \
         OP_INHERIT, /* [[OwnPropertyKeys]] */                          \
+        OP_INHERIT, /* [[Call]] */                                     \
+        OP_INHERIT, /* [[Construct]] */                                \
         _ejs_typedarray_specop_allocate,                               \
         _ejs_typedarray_specop_finalize,                               \
         _ejs_typedarray_specop_scan                                    \

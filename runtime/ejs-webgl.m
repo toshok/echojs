@@ -2171,7 +2171,7 @@ _ejs_objc_allocateWebGLRenderingContext (ejsval env, ejsval _this, uint32_t argc
 	return obj;
 }
 
-#define EJS_WEBGL_OBJ(n) EJS_DEFINE_CLASS(n, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, finalize_release_private_data, OP_INHERIT)
+#define EJS_WEBGL_OBJ(n) EJS_DEFINE_CLASS(n, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, finalize_release_private_data, OP_INHERIT)
 EJS_DEFINE_CLASS(WebGLRenderingContext,
                  OP_INHERIT, // [[GetPrototypeOf]]
                  OP_INHERIT, // [[SetPrototypeOf]]
@@ -2185,6 +2185,8 @@ EJS_DEFINE_CLASS(WebGLRenderingContext,
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  OP_INHERIT, // [[Allocate]]
                  finalize_release_private_data,
                  OP_INHERIT  // [[Scan]]

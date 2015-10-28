@@ -995,6 +995,8 @@ EJS_DEFINE_CLASS(Promise,
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  _ejs_promise_specop_allocate,
                  OP_INHERIT, // [[Finalize]]
                  _ejs_promise_specop_scan

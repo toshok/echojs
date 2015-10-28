@@ -135,6 +135,8 @@ EJS_DEFINE_CLASS(Arguments,
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  _ejs_arguments_specop_allocate,
                  _ejs_arguments_specop_finalize,
                  _ejs_arguments_specop_scan

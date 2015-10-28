@@ -566,6 +566,18 @@ _ejs_function_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     _ejs_Object_specops.Scan (obj, scan_func);
 }
 
+static ejsval
+_ejs_function_specop_call (ejsval target, ejsval _this, uint32_t argc, ejsval *args)
+{
+    return _ejs_invoke_closure(target, _this, argc, args);
+}
+
+static ejsval
+_ejs_function_specop_construct (ejsval newTarget, uint32_t argc, ejsval* argv)
+{
+    EJS_NOT_IMPLEMENTED();
+}
+
 EJS_DEFINE_CLASS(Function,
                  OP_INHERIT, // [[GetPrototypeOf]]
                  OP_INHERIT, // [[SetPrototypeOf]]
@@ -579,6 +591,8 @@ EJS_DEFINE_CLASS(Function,
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 _ejs_function_specop_call,      // [[Call]]
+                 _ejs_function_specop_construct, // [[Construct]]
                  _ejs_function_specop_allocate,
                  _ejs_function_specop_finalize,
                  _ejs_function_specop_scan

@@ -1574,24 +1574,36 @@ IsConcatSpreadable (ejsval O)
     return EJS_FALSE;
 }
 
-// ES6 Draft January 15, 2015
-// 7.2.3
-// IsCallable (argument)
+// ES2015, June 2015
+// 7.2.3 IsCallable (argument)
 EJSBool
-IsCallable(ejsval argument)
-{
-    return EJSVAL_IS_FUNCTION(argument);
+IsCallable(ejsval argument) {
+    // 1. ReturnIfAbrupt(argument).
+    // 2. If Type(argument) is not Object, return false.
+    if (!EJSVAL_IS_OBJECT(argument)) return EJS_FALSE;
+
+    // 3. If argument has a [[Call]] internal method, return true.
+    EJSObject* obj = EJSVAL_TO_OBJECT(argument);
+    if (OP(obj, Call) != NULL) return EJS_TRUE;
+
+    // 4. Return false.
+    return EJS_FALSE;
 }
 
-// ES6 Draft January 15, 2015
-// 7.2.3
-// IsCallable (argument)
+// ES2015, June 2015
+// 7.2.4 IsConstructor ( argument )
 EJSBool
-IsConstructor(ejsval argument)
-{
-    if (!EJSVAL_IS_FUNCTION(argument))
-        return EJS_FALSE;
-    return ((EJSFunction*)EJSVAL_TO_OBJECT(argument))->is_constructor;
+IsConstructor(ejsval argument) {
+    // 1. ReturnIfAbrupt(argument).
+    // 2. If Type(argument) is not Object, return false.
+    if (!EJSVAL_IS_OBJECT(argument)) return EJS_FALSE;
+
+    // 3. If argument has a [[Construct]] internal method, return true.
+    EJSObject* obj = EJSVAL_TO_OBJECT(argument);
+    if (OP(obj, Construct) != NULL) return EJS_TRUE;
+
+    // 4. Return false.
+    return EJS_FALSE;
 }
 
 // ES2015, June 2015
@@ -1623,8 +1635,7 @@ Construct (ejsval F, ejsval newTarget, uint32_t argc, ejsval* args)
     EJS_ASSERT(IsConstructor(newTarget));
 
     // 5. Return the result of calling the [[Construct]] internal method of F passing argumentsList and newTarget as the arguments.
-
-    return _ejs_construct_closure(F, newTarget, argc, args);
+    return OP(EJSVAL_TO_OBJECT(F),Construct) (newTarget, argc, args);
 }
 
 // ES6 Draft January 15, 2015

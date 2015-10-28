@@ -659,6 +659,8 @@ EJS_DEFINE_CLASS(Set,
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  _ejs_set_specop_allocate,
                  _ejs_set_specop_finalize,
                  _ejs_set_specop_scan
@@ -685,6 +687,8 @@ EJS_DEFINE_CLASS(SetIterator,
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  OP_INHERIT, // allocate.  shouldn't ever be used
                  OP_INHERIT, // finalize.  also shouldn't ever be used
                  _ejs_set_iterator_specop_scan
