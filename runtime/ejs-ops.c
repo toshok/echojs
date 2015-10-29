@@ -1551,27 +1551,24 @@ _ejs_create_iter_result (ejsval value, ejsval done)
     return obj;
 }
 
-// ECMA262: 22.1.3.1.1 IsConcatSpreadable ( O ) Abstract Operation
+// ES2015, June 2015
+// 22.1.3.1.1 IsConcatSpreadable ( O )
 EJSBool
 IsConcatSpreadable (ejsval O)
 {
-    // 1. If Type(O) is not Object, then return false.
+    // 1. If Type(O) is not Object, return false.
     if (!EJSVAL_IS_OBJECT(O)) return EJS_FALSE;
 
     // 2. Let spreadable be Get(O, @@isConcatSpreadable).
     // 3. ReturnIfAbrupt(spreadable).
     ejsval spreadable = Get(O, _ejs_Symbol_isConcatSpreadable);
 
-    // 4. If spreadable is not undefined, then return ToBoolean(spreadable).
+    // 4. If spreadable is not undefined, return ToBoolean(spreadable).
     if (!EJSVAL_IS_UNDEFINED(spreadable))
         return ToEJSBool(spreadable);
 
-    // 5. If O is an exotic Array object, then return true.
-    if (EJSVAL_IS_ARRAY(O))
-        return EJS_TRUE;
-
-    // 6. Return false.
-    return EJS_FALSE;
+    // 5. Return IsArray(O).
+    return IsArray(O);
 }
 
 // ES2015, June 2015
