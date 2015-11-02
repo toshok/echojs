@@ -198,7 +198,7 @@ _ejs_WeakSet_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         //    d. ReturnIfAbrupt(adder). 
         adder = Get (set, _ejs_atom_add);
         //    e. If IsCallable(adder) is false, throw a TypeError Exception.
-        if (!EJSVAL_IS_CALLABLE(adder))
+        if (!IsCallable(adder))
             _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Set.prototype.add is not a function");
     }
     // 8. If the value of sets’s [[WeakSetData]] internal slot is not undefined, then throw a TypeError exception. 
@@ -238,7 +238,7 @@ _ejs_WeakSet_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     // 1. Let F be the this value. 
     ejsval F = _this;
 
-    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+    if (!IsConstructor(F)) 
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in WeakSet[Symbol.create] is not a constructor");
 
     EJSObject* F_ = EJSVAL_TO_OBJECT(F);

@@ -161,7 +161,7 @@ _ejs_ArrayBuffer_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 {
     ejsval F = _this;
 
-    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+    if (!IsConstructor(F)) 
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in ArrayBuffer[Symbol.create] is not a constructor");
 
     EJSObject* F_ = EJSVAL_TO_OBJECT(F);
@@ -282,7 +282,7 @@ _ejs_DataView_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     // 1. Let F be the this value. 
     ejsval F = _this;
 
-    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+    if (!IsConstructor(F)) 
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in DataView[Symbol.create] is not a constructor");
 
     EJSObject* F_ = EJSVAL_TO_OBJECT(F);
@@ -1085,7 +1085,7 @@ static ejsval                                                           \
     /* 2. If Type(F) is not Object, then throw a TypeError exception. */ \
     ejsval F = _this;                                                   \
                                                                         \
-    if (!EJSVAL_IS_CONSTRUCTOR(F))                                      \
+    if (!IsConstructor(F))                                      \
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in "#ArrayType"Array[Symbol.create] is not a constructor"); \
                                                                         \
     EJSObject* F_ = EJSVAL_TO_OBJECT(F);                                \
@@ -1128,7 +1128,7 @@ _ejs_##ArrayType##Array_of_impl (ejsval env, ejsval _this, uint32_t argc, ejsval
     ejsval C = _this;                                                   \
                                                                         \
     /* 4. If IsConstructor(C) is true, then */                          \
-    if (EJSVAL_IS_CONSTRUCTOR(C))                                       \
+    if (IsConstructor(C))                                       \
         /* a. Let newObj be the result of calling the [[Construct]] internal method of C with argument «len». */ \
         newObj = _ejs_typedarray_new (EJS_TYPEDARRAY_##EnumType, len);  \
                                                                         \
@@ -1201,7 +1201,7 @@ _ejs_TypedArray_prototype_every (ejsval env, ejsval _this, uint32_t argc, ejsval
     uint32_t len = Oobj->length;
 
     /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_CALLABLE(callbackfn))
+    if (!IsCallable(callbackfn))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
 
     /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
@@ -1331,7 +1331,7 @@ _ejs_TypedArray_prototype_find (ejsval env, ejsval _this, uint32_t argc, ejsval 
     int32_t len = Oobj->length;
 
     /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_CALLABLE(predicate))
+    if (!IsCallable(predicate))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
 
     /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
@@ -1392,7 +1392,7 @@ _ejs_TypedArray_prototype_findIndex (ejsval env, ejsval _this, uint32_t argc, ej
     int32_t len = Oobj->length;
 
     /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_CALLABLE(predicate))
+    if (!IsCallable(predicate))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
 
     /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
@@ -1453,7 +1453,7 @@ _ejs_TypedArray_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsv
     uint32_t len = Oobj->length;
 
     /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_CALLABLE(callbackfn))
+    if (!IsCallable(callbackfn))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
 
     /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
@@ -1789,7 +1789,7 @@ _ejs_TypedArray_prototype_reduce (ejsval env, ejsval _this, uint32_t argc, ejsva
     uint32_t len = Oobj->length;
 
     /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_CALLABLE(callbackfn))
+    if (!IsCallable(callbackfn))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
 
     /* 7. If len is 0 and initialValue is not present, throw a TypeError exception. */
@@ -1876,7 +1876,7 @@ _ejs_TypedArray_prototype_reduceRight (ejsval env, ejsval _this, uint32_t argc, 
     uint32_t len = Oobj->length;
 
     /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_CALLABLE(callbackfn))
+    if (!IsCallable(callbackfn))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
 
     /* 7. If len is 0 and initialValue is not present, throw a TypeError exception. */
@@ -2024,7 +2024,7 @@ _ejs_TypedArray_prototype_some (ejsval env, ejsval _this, uint32_t argc, ejsval 
     uint32_t len = Oobj->length;
 
     /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_CALLABLE(callbackfn))
+    if (!IsCallable(callbackfn))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
 
     /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */

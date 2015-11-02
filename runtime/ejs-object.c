@@ -101,7 +101,7 @@ GetMethod (ejsval O, ejsval P)
         return _ejs_undefined;
 
     // 5. If IsCallable(func) is false, then throw a TypeError exception.
-    if (!EJSVAL_IS_CALLABLE(func))
+    if (!IsCallable(func))
         _ejs_throw_nativeerror (EJS_TYPE_ERROR, _ejs_string_concat(_ejs_atom_error_not_callable, ToString(P)));
 
     // 6. Return func.
@@ -344,7 +344,7 @@ ToPropertyDescriptor(ejsval Obj, EJSPropertyDesc *desc)
         ejsval getter = OP(obj,Get)(Obj, _ejs_atom_get, Obj);
 
         //    c. If IsCallable(getter) is false and getter is not undefined, then throw a TypeError exception. 
-        if (!EJSVAL_IS_CALLABLE(getter) && !EJSVAL_IS_UNDEFINED(getter)) {
+        if (!IsCallable(getter) && !EJSVAL_IS_UNDEFINED(getter)) {
             _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Getter must be callable");
         }
         //    d. Set the [[Get]] field of desc to getter. 
@@ -356,7 +356,7 @@ ToPropertyDescriptor(ejsval Obj, EJSPropertyDesc *desc)
         //    b. ReturnIfAbrupt(setter). 
         ejsval setter = OP(obj,Get)(Obj, _ejs_atom_set, Obj);
         //    c. If IsCallable(setter) is false and setter is not undefined, then throw a TypeError exception. 
-        if (!EJSVAL_IS_CALLABLE(setter) && !EJSVAL_IS_UNDEFINED(setter)) {
+        if (!IsCallable(setter) && !EJSVAL_IS_UNDEFINED(setter)) {
             _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Setter must be a function");
         }
         //    d. Set the [[Set]] field of desc to setter. 
@@ -1837,7 +1837,7 @@ _ejs_Object_prototype_toLocaleString (ejsval env, ejsval _this, uint32_t argc, e
     ejsval toString = OP(O_, Get)(O, _ejs_atom_toString, O);
 
     /* 3. If IsCallable(toString) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_CALLABLE(toString))
+    if (!IsCallable(toString))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "toString property is not callable");
 
     /* 4. Return the result of calling the [[Call]] internal method of toString passing O as the this value and no arguments. */

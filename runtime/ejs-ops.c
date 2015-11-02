@@ -402,7 +402,7 @@ OrdinaryToPrimitive(ejsval O, ToPrimitiveHint hint)
         //    b. ReturnIfAbrupt(method). 
         ejsval method = Get(O, name);
         //    c. If IsCallable(method) is true then, 
-        if (EJSVAL_IS_CALLABLE(method)) {
+        if (IsCallable(method)) {
             //       i. Let result be the result of calling the [[Call]] internal method of method, with O as thisArgument and an empty List as argumentsList. 
             //       ii. ReturnIfAbrupt(result). 
             ejsval result = _ejs_invoke_closure(method, O, 0, NULL);
@@ -1088,7 +1088,7 @@ static ejsval
 OrdinaryHasInstance(ejsval C, ejsval O)
 {
     // 1. If IsCallable(C) is false, return false. 
-    if (!EJSVAL_IS_CALLABLE(C))
+    if (!IsCallable(C))
         return _ejs_false;
 
     // 2. If C has a [[BoundTargetFunction]] internal slot, then 
@@ -1143,7 +1143,7 @@ _ejs_op_instanceof (ejsval O, ejsval C)
     }
 
     // 5. If IsCallable(C) is false, then throw a TypeError exception. 
-    if (!EJSVAL_IS_CALLABLE(C))
+    if (!IsCallable(C))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1"); // XXX
 
     // 6. Return OrdinaryHasInstance(C, O). 
@@ -1387,7 +1387,7 @@ GetIterator (ejsval obj, ejsval method)
         method = CheckIterable (obj);
 
     /* 2. If IsCallable(method) is false, then throw a TypeError exception. */
-    if (!EJSVAL_IS_CALLABLE(method))
+    if (!IsCallable(method))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "method is not a function");
 
     /* 3. Let iterator be the result of calling the [[Call]] internal method of method with
@@ -1614,7 +1614,7 @@ IsExtensible(ejsval O)
     return OP(EJSVAL_TO_OBJECT(O), IsExtensible)(O);
 }
 
-// ES6 Draft rev32 Feb 2, 2015
+// ES2015, June 2015
 // 7.3.13
 // Construct (F, [argumentsList], [newTarget])
 ejsval

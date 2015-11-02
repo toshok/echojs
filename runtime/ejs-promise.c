@@ -248,7 +248,7 @@ resolve(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     // 10. Let then be then.[[value]]. 
     // 11. If IsCallable(then) is false, then 
-    if (!EJSVAL_IS_CALLABLE(then)) {
+    if (!IsCallable(then)) {
         //     a. Return FulfillPromise(promise, resolution). 
         return FulfillPromise(promise, resolution);
     }
@@ -335,10 +335,10 @@ CreatePromiseCapabilityRecord (ejsval promise, ejsval constructor)
     ejsval constructorResult = _ejs_invoke_closure (constructor, promise, 1, &executor);
 
     // 8. If IsCallable(promiseCapability.[[Resolve]]) is false, then throw a TypeError exception. 
-    if (!EJSVAL_IS_CALLABLE(EJS_CAPABILITY_GET_RESOLVE(promiseCapability)))
+    if (!IsCallable(EJS_CAPABILITY_GET_RESOLVE(promiseCapability)))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, ""); // XXX
     // 9. If IsCallable(promiseCapability.[[Reject]]) is false, then throw a TypeError exception. 
-    if (!EJSVAL_IS_CALLABLE(EJS_CAPABILITY_GET_REJECT(promiseCapability)))
+    if (!IsCallable(EJS_CAPABILITY_GET_REJECT(promiseCapability)))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, ""); // XXX
     // 10. If Type(constructorResult) is Object and SameValue(promise, constructorResult) is false, then throw a TypeError exception. 
     if (EJSVAL_IS_OBJECT(constructorResult) && !SameValue(promise, constructorResult))
@@ -464,7 +464,7 @@ _ejs_Promise_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Promise constructor called on previously created object");
 
     // 5. If IsCallable(executor) is false, then throw a TypeError exception.
-    if (!EJSVAL_IS_CALLABLE(executor))
+    if (!IsCallable(executor))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "executor is not callable");
 
     // 6. Return InitializePromise(promise, executor).
@@ -544,18 +544,18 @@ _ejs_Promise_prototype_then (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     EJSPromise* _promise = EJSVAL_TO_PROMISE(promise);
 
     // 3. If IsCallable(onFulfilled) is undefined or nullfalse, then 
-    if (!EJSVAL_IS_CALLABLE(onFulfilled)) {
+    if (!IsCallable(onFulfilled)) {
         //    a. Let onFulfilled be "Identity" a new Identity Function (see 25.4.5.3.1).
         onFulfilled = _ejs_identity_function; // XXX does it really need to be a newly instantiated one? realm-specific?  we don't instantiate a new one
     }
 
     // 4. If IsCallable(onRejected) is undefined or nullfalse, then 
-    if (!EJSVAL_IS_CALLABLE(onRejected)) {
+    if (!IsCallable(onRejected)) {
         //    a. Let onRejected be "Thrower"a new Thrower Function (see 25.4.5.3.3). 
         onRejected = _ejs_thrower_function; // XXX does it really need to be a newly instantiated one?  realm-specific?  we don't instantiate a new one
     }
     // 5. If IsCallable(onFulfilled) is false or if IsCallable(onRejected) is false, then throw a TypeError exception. 
-    if (!EJSVAL_IS_CALLABLE(onFulfilled) || !EJSVAL_IS_CALLABLE(onRejected)) {
+    if (!IsCallable(onFulfilled) || !IsCallable(onRejected)) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1: shouldn't happen.  runtime error?");
     }
 
@@ -623,7 +623,7 @@ _ejs_Promise_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     //    1. Let obj be OrdinaryCreateFromConstructor(constructor, "%PromisePrototype%", ([[PromiseState]], [[PromiseConstructor]], [[PromiseResult]], [[PromiseFulfillReactions]], [[PromiseRejectReactions]]) ). 
     ejsval proto = _ejs_undefined;
     if (!EJSVAL_IS_UNDEFINED(F)) {
-        if (!EJSVAL_IS_CONSTRUCTOR(F))
+        if (!IsConstructor(F))
             _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Promise[Symbol.create] is not a constructor");
 
         EJSObject* F_ = EJSVAL_TO_OBJECT(F);

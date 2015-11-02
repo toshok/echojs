@@ -413,7 +413,7 @@ _ejs_Number_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     // 1. Let F be the this value. 
     ejsval F = _this;
 
-    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+    if (!IsConstructor(F)) 
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Number[Symbol.create] is not a constructor");
 
     EJSObject* F_ = EJSVAL_TO_OBJECT(F);

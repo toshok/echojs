@@ -2075,7 +2075,7 @@ _ejs_Array_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *
     ejsval func = Get(array, _ejs_atom_join);
 
     // 5. If IsCallable(func) is false, let func be the intrinsic function %ObjProto_toString% (19.1.3.6).
-    if (!EJSVAL_IS_CALLABLE(func)) {
+    if (!IsCallable(func)) {
         return _ejs_Object_prototype_toString(env, _this, 0, NULL);
     }
 
@@ -2507,7 +2507,7 @@ _ejs_Array_create(ejsval env, ejsval _this, uint32_t argc, ejsval*args)
     // 1. Let F be the this value. 
     ejsval F = _this;
 
-    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+    if (!IsConstructor(F)) 
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Array[Symbol.create] is not a constructor");
 
     EJSObject* F_ = EJSVAL_TO_OBJECT(F);
@@ -2543,7 +2543,7 @@ _ejs_Array_prototype_sort(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     /* 3. ReturnIfAbrupt(len). */
     int32_t len = ToLength(Get(obj, _ejs_atom_length));
 
-    if (!EJSVAL_IS_UNDEFINED(comparefn) && !EJSVAL_IS_CALLABLE(comparefn))
+    if (!EJSVAL_IS_UNDEFINED(comparefn) && !IsCallable(comparefn))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "invalid comparefn argument");
 
     if (EJSVAL_IS_DENSE_ARRAY(obj)) {

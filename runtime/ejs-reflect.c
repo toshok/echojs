@@ -31,7 +31,7 @@ _ejs_Reflect_apply (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     ejsval obj = ToObject(target);
 
     // 3. If IsCallable(obj) is false, then throw a TypeError exception. 
-    if (!EJSVAL_IS_CALLABLE(obj))
+    if (!IsCallable(obj))
         _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "target is not callable");
         
     // 4. Let args be CreateListFromArray (argumentsList). 

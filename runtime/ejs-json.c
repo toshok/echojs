@@ -119,7 +119,7 @@ _ejs_JSON_parse (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     json_value_free (root_val);
 
     /* 4. If IsCallable(reviver) is true, then */
-    if (EJSVAL_IS_CALLABLE(reviver)) {
+    if (IsCallable(reviver)) {
         printf ("no reviver support in JSON.parse yet\n");
         EJS_NOT_IMPLEMENTED();
         /*    a. Let root be a new object created as if by the expression new Object(), where Object is the

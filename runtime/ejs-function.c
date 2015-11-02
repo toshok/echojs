@@ -166,7 +166,7 @@ _ejs_Function_prototype_apply (ejsval env, ejsval _this, uint32_t argc, ejsval *
     ejsval func = _this;
 
     /* 1. If IsCallable(func) is false, then throw a TypeError exception. */
-    if (!EJSVAL_IS_CALLABLE(_this)) {
+    if (!IsCallable(_this)) {
         printf ("throw TypeError, func is not callable\n");
         EJS_NOT_IMPLEMENTED();
     }
@@ -298,7 +298,7 @@ _ejs_Function_prototype_bind (ejsval env, ejsval _this, uint32_t argc, ejsval *a
     ejsval Target = _this;
 
     /* 2. If IsCallable(Target) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_CALLABLE(Target)) {
+    if (!IsCallable(Target)) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "object not a function");
     }
 
@@ -353,7 +353,7 @@ _ejs_Function_prototype_create(ejsval env, ejsval _this, uint32_t argc, ejsval* 
 {
     ejsval F = _this;
 
-    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+    if (!IsConstructor(F)) 
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Function.prototype[Symbol.create] is not a constructor");
         
     EJSObject* F_ = EJSVAL_TO_OBJECT(F);

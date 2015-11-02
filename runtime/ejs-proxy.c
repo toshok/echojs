@@ -61,7 +61,7 @@ _ejs_Proxy_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     // 3. Let P be a newly created object. 
     // 4. Set P’s essential internal methods to the definitions specified in 9.5. 
     // 5. If IsCallable(target) is true, then 
-    if (EJSVAL_IS_CALLABLE(target)) {
+    if (IsCallable(target)) {
         //    a. Set the [[Call]] internal method of P as specified in 9.5.13. 
         //    b. If target has a [[Construct]] internal method, then 
         //       i. Set the [[Construct]] internal method of P as specified in 9.5.14. 
@@ -89,7 +89,7 @@ _ejs_Proxy_create_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     // 1. Let F be the this value. 
     ejsval F = _this;
 
-    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
+    if (!IsConstructor(F)) 
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Proxy[Symbol.create] is not a constructor");
 
     EJSObject* F_ = EJSVAL_TO_OBJECT(F);
