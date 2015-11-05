@@ -228,6 +228,11 @@ ejsval ToNumber(ejsval exp)
     else if (EJSVAL_IS_UNDEFINED(exp))
         return _ejs_nan;
     else if (EJSVAL_IS_OBJECT(exp)) {
+        // 1. Let primValue be ToPrimitive(argument, hint Number).
+        ejsval primValue = ToPrimitive(exp, TO_PRIM_HINT_NUMBER);
+        // 2. Return ToNumber(primValue).
+        return ToNumber(primValue);
+#if oldcode
         if (EJSVAL_IS_DATE(exp)) {
             return NUMBER_TO_EJSVAL(_ejs_date_get_time ((EJSDate*)EJSVAL_TO_OBJECT(exp)));
         }
@@ -243,6 +248,7 @@ ejsval ToNumber(ejsval exp)
         }
         else
             return _ejs_nan;
+#endif
     }
     else
         EJS_NOT_IMPLEMENTED();

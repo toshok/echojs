@@ -40,6 +40,8 @@ _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func)
 
     ejsval fun = OBJECT_TO_EJSVAL(rv);
 
+    _ejs_function_set_base_constructor(fun);
+
     // ECMA262: 15.3.2.1
     ejsval fun_proto = _ejs_object_new (_ejs_Object_prototype, &_ejs_Object_specops);
     _ejs_object_define_value_property (fun, _ejs_atom_prototype, fun_proto, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);

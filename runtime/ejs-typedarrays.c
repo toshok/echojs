@@ -136,20 +136,33 @@ _ejs_arraybuffer_new_slice (ejsval bufferval, int offset, int size)
     return OBJECT_TO_EJSVAL(rv);
 }
 
-
+// ES2015, June 2015
+// 24.1.2.1 ArrayBuffer( length )
 static EJS_NATIVE_FUNC(_ejs_ArrayBuffer_impl) {
-    if (EJSVAL_IS_UNDEFINED(*_this)) {
+    // 1. If NewTarget is undefined, throw a TypeError exception.
+    if (EJSVAL_IS_UNDEFINED(newTarget))
         _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "Constructor ArrayBuffer requires 'new'");
-    }
 
-    uint32_t size = 0;
-    if (argc > 0) size = ToUint32(args[0]);
+    ejsval length = _ejs_undefined;
+    if (argc > 0) length = args[0];
 
+    // 2. Let numberLength be ToNumber(length).
+    ejsval numberLength = ToNumber(length);
+
+    // 3. Let byteLength be ToLength(numberLength).
+    // 4. ReturnIfAbrupt(byteLength).
+    int64_t byteLength = ToLength(numberLength);
+
+    // 5. If SameValueZero(numberLength, byteLength) is false, throw a RangeError exception.
+    
+    // 6. Return AllocateArrayBuffer(NewTarget, byteLength).
+    *_this = OrdinaryCreateFromConstructor(newTarget, _ejs_ArrayBuffer_prototype, &_ejs_ArrayBuffer_specops);
     EJSArrayBuffer* buffer = (EJSArrayBuffer*)EJSVAL_TO_OBJECT(*_this);
+
     buffer->dependent = EJS_FALSE;
-    buffer->size = size;
-    if (size)
-        buffer->data.alloced_buf = calloc (1, size);
+    buffer->size = byteLength;
+    if (byteLength)
+        buffer->data.alloced_buf = calloc (1, byteLength);
 
     return *_this;
 }
@@ -202,17 +215,17 @@ static EJS_NATIVE_FUNC(_ejs_ArrayBuffer_prototype_slice) {
 }
 
 static EJS_NATIVE_FUNC(_ejs_DataView_impl) {
-    if (EJSVAL_IS_UNDEFINED(*_this)) {
+    if (EJSVAL_IS_UNDEFINED(newTarget))
         _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "Constructor DataView requires 'new'");
-    }
 
     if (argc == 0 || !EJSVAL_IS_ARRAYBUFFER(args[0])) {
         _ejs_log ("arg0 not an ArrayBuffer object\n");
         EJS_NOT_IMPLEMENTED();
     }
-
-    EJSDataView* view = (EJSDataView*)EJSVAL_TO_OBJECT(*_this);
     EJSArrayBuffer* buff = (EJSArrayBuffer*)EJSVAL_TO_OBJECT(args[0]);
+
+    *_this = OrdinaryCreateFromConstructor(newTarget, _ejs_DataView_prototype, &_ejs_DataView_specops);
+    EJSDataView* view = (EJSDataView*)EJSVAL_TO_OBJECT(*_this);
 
     uint32_t offset;
     uint32_t len;
@@ -341,6 +354,7 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
         if (EJSVAL_IS_UNDEFINED(newTarget))                             \
             _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Constructor cannot be called as a function"); \
                                                                         \
+        *_this = OrdinaryCreateFromConstructor(newTarget, _ejs_##ArrayType##Array_prototype, &_ejs_##ArrayType##Array_specops); \
         EJSTypedArray* arr = (EJSTypedArray*)EJSVAL_TO_OBJECT(*_this);   \
                                                                         \
         uint32_t array_len = 0;                                         \
@@ -968,19 +982,17 @@ static EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_prototype_subarray_impl) \
      /* constructor stuff */                                            \
                                                                         \
      /* 24. Let defaultConstructor be the intrinsic object listed in column one of Table 46 for constructorName. */ \
+     ejsval defaultConstructor = _ejs_##ArrayType##Array;               \
      /* 25. Let constructor be SpeciesConstructor(O, defaultConstructor). */ \
      /* 26. ReturnIfAbrupt(constructor). */                             \
+     ejsval constructor = SpeciesConstructor(O, defaultConstructor);    \
                                                                         \
      /* 27. Let argumentsList be «buffer, beginByteOffset, newLength». */ \
      ejsval argumentsList[3] = { buffer, NUMBER_TO_EJSVAL(beginByteOffset), NUMBER_TO_EJSVAL(newLength) }; \
                                                                         \
-     EJSTypedArray *rv = _ejs_gc_new(EJSTypedArray);                    \
-     _ejs_init_object ((EJSObject*)rv, _ejs_##ArrayType##Array_prototype, _ejs_typed_array_specops[EJS_TYPEDARRAY_##EnumType]); \
-                                                                        \
      /* 28. Return the result of calling the [[Construct]] internal method of constructor with argument argumentsList. */ \
-     ejsval ctor = _ejs_##ArrayType##Array;                             \
-     ejsval _thisArg = OBJECT_TO_EJSVAL((EJSObject*)rv);                \
-     return _ejs_invoke_closure(ctor, &_thisArg, 3, argumentsList, EJS_CALL_FLAGS_CALL, _ejs_undefined);     \
+     ejsval _thisArg = _ejs_undefined;                \
+     return _ejs_construct_closure(constructor, &_thisArg, 3, argumentsList, EJS_CALL_FLAGS_CONSTRUCT, constructor); \
  }                                                                      \
                                                                         \
  /* this should be a single getter reused by all typed-arrays */        \

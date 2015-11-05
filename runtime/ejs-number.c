@@ -96,9 +96,14 @@ _ejs_number_to_string(ejsval num)
     return _ejs_Number_prototype_toString(_ejs_undefined, &num, 0, NULL, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 }
 
+
+// ES2015, June 2015
+// 20.1.3.7 Number.prototype.valueOf ( )
 static EJS_NATIVE_FUNC(_ejs_Number_prototype_valueOf) {
-    EJSNumber *num = (EJSNumber*)EJSVAL_TO_OBJECT(*_this);
-    return NUMBER_TO_EJSVAL(num->number);
+    // 1. Let x be thisNumberValue(this value).
+    double x = thisNumberValue(*_this);
+    // 2. Return x.
+    return NUMBER_TO_EJSVAL(x);
 }
 
 // ECMA262: 20.1.3.3 Number.prototype.toFixed ( fractionDigits ) 
@@ -433,4 +438,28 @@ _ejs_number_init(ejsval global)
 #undef PROTO_METHOD
 }
 
-EJS_DEFINE_INHERIT_ALL_CLASS(Number)
+static EJSObject*
+_ejs_number_specop_allocate()
+{
+    return (EJSObject*)_ejs_gc_new (EJSNumber);
+}
+
+EJS_DEFINE_CLASS(Number,
+                 OP_INHERIT, // [[GetPrototypeOf]]
+                 OP_INHERIT, // [[SetPrototypeOf]]
+                 OP_INHERIT, // [[IsExtensible]]
+                 OP_INHERIT, // [[PreventExtensions]]
+                 OP_INHERIT, // [[GetOwnProperty]]
+                 OP_INHERIT, // [[DefineOwnProperty]]
+                 OP_INHERIT, // [[HasProperty]]
+                 OP_INHERIT, // [[Get]]
+                 OP_INHERIT, // [[Set]]
+                 OP_INHERIT, // [[Delete]]
+                 OP_INHERIT, // [[Enumerate]]
+                 OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
+                 _ejs_number_specop_allocate,
+                 OP_INHERIT, // [[Finalize]]
+                 OP_INHERIT  // [[Scan]]
+                 )

@@ -255,4 +255,28 @@ _ejs_weakset_init(ejsval global)
 #undef PROTO_METHOD
 }
 
-EJS_DEFINE_INHERIT_ALL_CLASS(WeakSet)
+static EJSObject*
+_ejs_weakset_specop_allocate()
+{
+    return (EJSObject*)_ejs_gc_new (EJSWeakSet);
+}
+
+EJS_DEFINE_CLASS(WeakSet,
+                 OP_INHERIT, // [[GetPrototypeOf]]
+                 OP_INHERIT, // [[SetPrototypeOf]]
+                 OP_INHERIT, // [[IsExtensible]]
+                 OP_INHERIT, // [[PreventExtensions]]
+                 OP_INHERIT, // [[GetOwnProperty]]
+                 OP_INHERIT, // [[DefineOwnProperty]]
+                 OP_INHERIT, // [[HasProperty]]
+                 OP_INHERIT, // [[Get]]
+                 OP_INHERIT, // [[Set]]
+                 OP_INHERIT, // [[Delete]]
+                 OP_INHERIT, // [[Enumerate]]
+                 OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
+                 _ejs_weakset_specop_allocate,
+                 OP_INHERIT, // [[Finalize]]
+                 OP_INHERIT  // [[Scan]] XXX?
+                 )

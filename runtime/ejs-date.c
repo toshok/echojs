@@ -35,19 +35,10 @@ ejsval _ejs_Date EJSVAL_ALIGNMENT;
 ejsval _ejs_Date_prototype EJSVAL_ALIGNMENT;
 
 static EJS_NATIVE_FUNC(_ejs_Date_impl) {
-    if (callFlags == EJS_CALL_FLAGS_CALL) {
-        // called as a function
-        if (argc == 0) {
-            // XXX we shouldn't be creating a date object here and immediately throwing it away.
-            // instead just refactor and create the string directly
-            return ToString(_ejs_date_unix_now());
-        }
-        else {
-            EJS_NOT_IMPLEMENTED();
-        }
-    }
-    else {
-        EJSDate* date = (EJSDate*) EJSVAL_TO_OBJECT(*_this);
+    if (!EJSVAL_IS_UNDEFINED(newTarget)) {
+        ejsval O = OrdinaryCreateFromConstructor(newTarget, _ejs_Date_prototype, &_ejs_Date_specops);
+        *_this = O;
+        EJSDate* date = (EJSDate*) EJSVAL_TO_OBJECT(O);
 
         // new Date (year, month [, date [, hours [, minutes [, seconds [, ms ] ] ] ] ] )
 
@@ -84,6 +75,17 @@ static EJS_NATIVE_FUNC(_ejs_Date_impl) {
         }
       
         return *_this;
+    }
+    else {
+        // called as a function
+        if (argc == 0) {
+            // XXX we shouldn't be creating a date object here and immediately throwing it away.
+            // instead just refactor and create the string directly
+            return ToString(_ejs_date_unix_now());
+        }
+        else {
+            EJS_NOT_IMPLEMENTED();
+        }
     }
 }
 

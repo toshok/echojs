@@ -313,4 +313,29 @@ _ejs_weakmap_init(ejsval global)
 #undef PROTO_METHOD
 }
 
-EJS_DEFINE_INHERIT_ALL_CLASS(WeakMap)
+
+static EJSObject*
+_ejs_weakmap_specop_allocate()
+{
+    return (EJSObject*)_ejs_gc_new (EJSWeakMap);
+}
+
+EJS_DEFINE_CLASS(WeakMap,
+                 OP_INHERIT, // [[GetPrototypeOf]]
+                 OP_INHERIT, // [[SetPrototypeOf]]
+                 OP_INHERIT, // [[IsExtensible]]
+                 OP_INHERIT, // [[PreventExtensions]]
+                 OP_INHERIT, // [[GetOwnProperty]]
+                 OP_INHERIT, // [[DefineOwnProperty]]
+                 OP_INHERIT, // [[HasProperty]]
+                 OP_INHERIT, // [[Get]]
+                 OP_INHERIT, // [[Set]]
+                 OP_INHERIT, // [[Delete]]
+                 OP_INHERIT, // [[Enumerate]]
+                 OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
+                 _ejs_weakmap_specop_allocate,
+                 OP_INHERIT, // [[Finalize]]
+                 OP_INHERIT  // [[Scan]] XXX?
+                 )
