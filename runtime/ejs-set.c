@@ -12,8 +12,6 @@
 #include "ejs-ops.h"
 #include "ejs-symbol.h"
 
-typedef EJSBool (*ComparatorFunc)(ejsval, ejsval);
-
 ejsval
 _ejs_set_new ()
 {
