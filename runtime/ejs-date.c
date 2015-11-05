@@ -34,10 +34,8 @@ _ejs_date_get_time (EJSDate *date)
 ejsval _ejs_Date EJSVAL_ALIGNMENT;
 ejsval _ejs_Date_prototype EJSVAL_ALIGNMENT;
 
-static ejsval
-_ejs_Date_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    if (EJSVAL_IS_UNDEFINED(_this)) {
+static EJS_NATIVE_FUNC(_ejs_Date_impl) {
+    if (callFlags == EJS_CALL_FLAGS_CALL) {
         // called as a function
         if (argc == 0) {
             // XXX we shouldn't be creating a date object here and immediately throwing it away.
@@ -49,7 +47,7 @@ _ejs_Date_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         }
     }
     else {
-        EJSDate* date = (EJSDate*) EJSVAL_TO_OBJECT(_this);
+        EJSDate* date = (EJSDate*) EJSVAL_TO_OBJECT(*_this);
 
         // new Date (year, month [, date [, hours [, minutes [, seconds [, ms ] ] ] ] ] )
 
@@ -85,17 +83,15 @@ _ejs_Date_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
             date->valid = EJS_TRUE;
         }
       
-        return _this;
+        return *_this;
     }
 }
 
-static ejsval
-_ejs_Date_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    if (!EJSVAL_IS_DATE(_this))
+static EJS_NATIVE_FUNC(_ejs_Date_prototype_toString) {
+    if (!EJSVAL_IS_DATE(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "this is not a Date object.");
 
-    EJSDate *date = (EJSDate*)EJSVAL_TO_OBJECT(_this);
+    EJSDate *date = (EJSDate*)EJSVAL_TO_OBJECT(*_this);
 
     if (!date->valid) {
         return _ejs_string_new_utf8 ("Invalid Date");
@@ -120,10 +116,8 @@ _ejs_Date_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *a
     return _ejs_string_new_utf8 (date_buf);
 }
 
-static ejsval
-_ejs_Date_prototype_getTimezoneOffset (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSDate *date = (EJSDate*)EJSVAL_TO_OBJECT(_this);
+static EJS_NATIVE_FUNC(_ejs_Date_prototype_getTimezoneOffset) {
+    EJSDate *date = (EJSDate*)EJSVAL_TO_OBJECT(*_this);
     struct tm tm;
 
     time_t time_in_sec = date->tv.tv_sec;
@@ -133,46 +127,21 @@ _ejs_Date_prototype_getTimezoneOffset (ejsval env, ejsval _this, uint32_t argc, 
     return NUMBER_TO_EJSVAL (tm.tm_gmtoff);
 }
 
-static ejsval
-_ejs_Date_prototype_getTime (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    return NUMBER_TO_EJSVAL(_ejs_date_get_time ((EJSDate*)EJSVAL_TO_OBJECT(_this)));
+static EJS_NATIVE_FUNC(_ejs_Date_prototype_getTime) {
+    return NUMBER_TO_EJSVAL(_ejs_date_get_time ((EJSDate*)EJSVAL_TO_OBJECT(*_this)));
 }
 
-static ejsval
-_ejs_Date_now (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Date_now) {
     struct timeval tv;
     struct timezone tz;
     gettimeofday (&tv, &tz);
     return NUMBER_TO_EJSVAL(tv.tv_sec * 1000 + tv.tv_usec / 1000);
 }
 
-static ejsval
-_ejs_Date_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    // 1. Let F be the this value. 
-    ejsval F = _this;
-
-    if (!IsConstructor(F)) 
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Date[Symbol.create] is not a constructor");
-
-    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
-
-    // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%DatePrototype%", ([[DateData]]) ). 
-    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
-    if (EJSVAL_IS_UNDEFINED(proto))
-        proto = _ejs_Date_prototype;
-
-    EJSObject* obj = (EJSObject*)_ejs_gc_new (EJSDate);
-    _ejs_init_object (obj, proto, &_ejs_Date_specops);
-    return OBJECT_TO_EJSVAL(obj);
-}
-
 void
 _ejs_date_init(ejsval global)
 {
-    _ejs_Date = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Date, (EJSClosureFunc)_ejs_Date_impl);
+    _ejs_Date = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Date, _ejs_Date_impl);
     _ejs_object_setprop (global, _ejs_atom_Date, _ejs_Date);
 
     _ejs_gc_add_root (&_ejs_Date_prototype);
@@ -190,8 +159,6 @@ _ejs_date_init(ejsval global)
     OBJ_METHOD(now);
 
 #undef PROTO_METHOD
-
-    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Date, create, _ejs_Date_create, EJS_PROP_NOT_ENUMERABLE);
 }
 
 static EJSObject*

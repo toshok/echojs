@@ -60,7 +60,8 @@ static void
 call_timeout_task (void* data)
 {
     TimerTaskArg *arg = (TimerTaskArg*)data;
-    _ejs_invoke_closure (arg->callbackfn, _ejs_undefined, arg->argc, arg->args);
+    ejsval undef_this = _ejs_undefined;
+    _ejs_invoke_closure (arg->callbackfn, &undef_this, arg->argc, arg->args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 }
 
 static void

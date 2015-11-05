@@ -96,4 +96,11 @@ extern ejsval _ejs_global;
 #define EJS_ATOM2(atom,atom_name) extern ejsval _ejs_atom_##atom_name; extern const jschar _ejs_ucs2_##atom_name[];
 #include "ejs-atoms.h"
 
+typedef int32_t EJSCallFlags;
+
+typedef ejsval (*EJSClosureFunc) (ejsval env, ejsval *_this, uint32_t argc, ejsval* args, EJSCallFlags callFlags, ejsval newTarget);
+
+#define EJS_NATIVE_FUNC(name) ejsval name (ejsval env, ejsval* _this, uint32_t argc, ejsval *args, EJSCallFlags callFlags, ejsval newTarget)
+
+
 #endif // _ejs_h_

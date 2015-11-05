@@ -1,5 +1,4 @@
 // generator: none
-// xfail: subclassing builtins is broken
 
 // Array.prototype.slice from kangax
 

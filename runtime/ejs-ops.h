@@ -28,6 +28,9 @@ EJSBool IsExtensible(ejsval O);
 
 ejsval EnumerableOwnNames(ejsval O);
 
+ejsval GetPrototypeFromConstructor(ejsval ctor, ejsval default_proto);
+ejsval OrdinaryCreateFromConstructor(ejsval ctor, ejsval default_proto, EJSSpecOps *ops);
+
 ejsval Construct(ejsval F, ejsval newTarget, uint32_t argc, ejsval* args);
 ejsval SpeciesConstructor(ejsval O, ejsval defaultConstructor);
 

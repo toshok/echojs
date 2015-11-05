@@ -153,7 +153,7 @@ typedef ejsval           (*SpecOpEnumerate) (ejsval obj);
 typedef ejsval           (*SpecOpOwnPropertyKeys) (ejsval obj);
 
 typedef ejsval           (*SpecOpCall) (ejsval target, ejsval _this, uint32_t argc, ejsval* args);
-typedef ejsval           (*SpecOpConstruct) (ejsval newTarget, uint32_t argc, ejsval* argv);
+typedef ejsval           (*SpecOpConstruct) (ejsval F, ejsval newTarget, uint32_t argc, ejsval* argv);
 
 typedef EJSObject*       (*SpecOpAllocate) ();
 typedef void             (*SpecOpFinalize) (EJSObject* obj);
@@ -278,7 +278,7 @@ void _ejs_object_finalize(EJSObject *obj);
 void _ejs_object_init(ejsval global);
 
 // we shouldn't expose this method, we should expose a helper method that calls this.
-ejsval _ejs_Object_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args);
+extern EJS_NATIVE_FUNC(_ejs_Object_prototype_toString);
 
 // exposed so we can call the native implementation during class creation
 ejsval _ejs_object_set_prototype_of (ejsval obj, ejsval proto);

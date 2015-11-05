@@ -319,8 +319,8 @@ function runTests(tests) {
 	    var run_failed = failed_tests.length > 0;
 	    if (run_failed > 0) {
 		console.log();
-                console.log(testColumn("failed tests"));
-		console.log(testColumn("============"));
+                console.log(testColumn(failed_tests.length + " failed tests"));
+		console.log(testColumn("================"));
                 failed_tests.forEach(function (t) {
 		    console.log(testColumn(t));
                 });

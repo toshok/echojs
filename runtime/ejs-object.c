@@ -942,7 +942,10 @@ _ejs_dump_value (ejsval val)
         free (val_utf8);
     }
     else if (EJSVAL_IS_OBJECT(val)) {
-        _ejs_log ("<object %s>\n", CLASSNAME(EJSVAL_TO_OBJECT(val)));
+        _ejs_log ("<object %s", CLASSNAME(EJSVAL_TO_OBJECT(val)));
+        if (EJSVAL_IS_FUNCTION(val))
+            _ejs_log(" '%s'", ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(ToString(Get(val, _ejs_atom_name)))));
+        _ejs_log(">\n");
     }
 }
 
@@ -950,10 +953,8 @@ ejsval _ejs_Object EJSVAL_ALIGNMENT;
 ejsval _ejs_Object__proto__ EJSVAL_ALIGNMENT;
 ejsval _ejs_Object_prototype EJSVAL_ALIGNMENT;
 
-static ejsval
-_ejs_Object_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    if (EJSVAL_IS_UNDEFINED(_this)) {
+static EJS_NATIVE_FUNC(_ejs_Object_impl) {
+    if (callFlags == EJS_CALL_FLAGS_CALL) {
         // ECMA262: 15.2.1.1
     
         _ejs_log ("called Object() as a function!\n");
@@ -968,9 +969,7 @@ _ejs_Object_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 19.1.2.9 Object.getPrototypeOf ( O ) 
-static ejsval
-_ejs_Object_getPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Object_getPrototypeOf) {
     ejsval O = _ejs_undefined;
     if (argc > 0)
         O = args[0];
@@ -985,9 +984,7 @@ _ejs_Object_getPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
 
 // ECMA262: 19.1.2.18
 // Object.setPrototypeOf ( O, proto )
-static ejsval
-_ejs_Object_setPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Object_setPrototypeOf) {
     // When the setPrototypeOf function is called with arguments O and proto, the following steps are taken:
 
     ejsval O = _ejs_undefined;
@@ -1029,13 +1026,12 @@ ejsval
 _ejs_object_set_prototype_of (ejsval obj, ejsval proto)
 {
     ejsval args[] = { obj, proto };
-    return _ejs_Object_setPrototypeOf(_ejs_undefined, _ejs_undefined, 2, args);
+    ejsval undef_this;
+    return _ejs_Object_setPrototypeOf(_ejs_undefined, &undef_this, 2, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 }
 
 // ECMA262: 19.1.2.6 Object.getOwnPropertyDescriptor ( O, P ) 
-static ejsval
-_ejs_Object_getOwnPropertyDescriptor (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Object_getOwnPropertyDescriptor) {
     ejsval O = _ejs_undefined;
     ejsval P = _ejs_undefined;
 
@@ -1059,9 +1055,7 @@ _ejs_Object_getOwnPropertyDescriptor (ejsval env, ejsval _this, uint32_t argc, e
 }
 
 // ECMA262: 19.1.2.7 Object.getOwnPropertyNames ( O ) 
-static ejsval
-_ejs_Object_getOwnPropertyNames (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Object_getOwnPropertyNames) {
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
 
@@ -1100,9 +1094,7 @@ _ejs_Object_getOwnPropertyNames (ejsval env, ejsval _this, uint32_t argc, ejsval
 }
 
 // ECMA262: 19.1.2.8
-static ejsval
-_ejs_Object_getOwnPropertySymbols (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Object_getOwnPropertySymbols) {
     ejsval O = _ejs_undefined;
     if (argc > 0)
         O = args[0];
@@ -1144,9 +1136,7 @@ _ejs_Object_getOwnPropertySymbols (ejsval env, ejsval _this, uint32_t argc, ejsv
 
 // ECMA262: 19.1.2.1
 /* Object.assign ( target, ...source ) */
-static ejsval
-_ejs_Object_assign (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Object_assign) {
     ejsval target = _ejs_undefined;
     if (argc > 0) target = args[0];
 
@@ -1221,14 +1211,12 @@ _ejs_Object_assign (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return to;
 }
 
-static ejsval _ejs_Object_defineProperties (ejsval env, ejsval _this, uint32_t argc, ejsval *args);
+static EJS_NATIVE_FUNC(_ejs_Object_defineProperties);
 
 
 // ECMA262: 15.2.3.5
 /* Object.create ( O [, Properties] ) */
-static ejsval
-_ejs_Object_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Object_create) {
     ejsval O = _ejs_undefined;
     ejsval Properties = _ejs_undefined;
     if (argc > 0) O = args[0];
@@ -1251,7 +1239,7 @@ _ejs_Object_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     /*    standard built-in function Object.defineProperties with arguments obj and Properties. */
     if (!EJSVAL_IS_UNDEFINED(Properties)) {
         ejsval definePropertyArgs[] = { obj, Properties };
-        _ejs_Object_defineProperties (env, _this, 2, definePropertyArgs);
+        _ejs_Object_defineProperties (env, _this, 2, definePropertyArgs, EJS_CALL_FLAGS_CALL, _ejs_undefined);
     }
 
     /* 5. Return obj. */
@@ -1263,14 +1251,13 @@ ejsval
 _ejs_object_create (ejsval proto)
 {
     ejsval args[] = { proto };
-    return _ejs_Object_create(_ejs_undefined, _ejs_undefined, 1, args);
+    ejsval undef_this = _ejs_undefined;
+    return _ejs_Object_create(_ejs_undefined, &undef_this, 1, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 }
 
 // ES6 19.1.2.4
 // Object.defineProperty ( O, P, Attributes )
-static ejsval
-_ejs_Object_defineProperty (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Object_defineProperty) {
     ejsval O = _ejs_undefined;
     ejsval P = _ejs_undefined;
     ejsval Attributes = _ejs_undefined;
@@ -1316,9 +1303,7 @@ typedef struct {
 } DefinePropertiesPair;
 
 /* Object.defineProperties ( O, Properties ) */
-static ejsval
-_ejs_Object_defineProperties (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Object_defineProperties) {
     ejsval O = _ejs_undefined;
     ejsval Properties = _ejs_undefined;
     if (argc > 0) O = args[0];
@@ -1551,9 +1536,7 @@ TestIntegrityLevel (ejsval O, IntegrityLevel level) {
 }
 
 // ECMA262: 19.1.2.17 Object.seal ( O ) 
-static ejsval
-_ejs_Object_seal (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Object_seal) {
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
 
@@ -1574,9 +1557,7 @@ _ejs_Object_seal (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 19.1.2.5 Object.freeze ( O ) 
-static ejsval
-_ejs_Object_freeze (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Object_freeze) {
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
 
@@ -1597,9 +1578,7 @@ _ejs_Object_freeze (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 19.1.2.15 Object.preventExtensions ( O ) 
-static ejsval
-_ejs_Object_preventExtensions (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Object_preventExtensions) {
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
 
@@ -1620,9 +1599,7 @@ _ejs_Object_preventExtensions (ejsval env, ejsval _this, uint32_t argc, ejsval *
 }
 
 // ECMA262: 19.1.2.10 Object.is ( value1, value2 )
-static ejsval
-_ejs_Object_is (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Object_is) {
     ejsval value1 = _ejs_undefined;
     ejsval value2 = _ejs_undefined;
 
@@ -1634,9 +1611,7 @@ _ejs_Object_is (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
 
 // ECMA262: 19.1.2.13 Object.isSealed ( O ) 
-static ejsval
-_ejs_Object_isSealed (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Object_isSealed) {
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
 
@@ -1649,9 +1624,7 @@ _ejs_Object_isSealed (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 19.1.2.12 Object.isFrozen ( O ) 
-static ejsval
-_ejs_Object_isFrozen (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Object_isFrozen) {
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
 
@@ -1664,9 +1637,7 @@ _ejs_Object_isFrozen (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 15.2.3.13
-static ejsval
-_ejs_Object_isExtensible (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Object_isExtensible) {
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
 
@@ -1716,9 +1687,7 @@ EnumerableOwnNames(ejsval O)
 }
 
 // ECMA262: 19.1.2.14
-static ejsval
-_ejs_Object_keys (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Object_keys) {
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
 
@@ -1733,20 +1702,18 @@ _ejs_Object_keys (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 19.1.3.6
-ejsval
-_ejs_Object_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+EJS_NATIVE_FUNC(_ejs_Object_prototype_toString) {
     // 1. If the this value is undefined, return "[object Undefined]". 
-    if (EJSVAL_IS_UNDEFINED(_this))
+    if (EJSVAL_IS_UNDEFINED(*_this))
         return _ejs_atom_undefined_toString;
     // 2. If the this value is null, return "[object Null]". 
-    if (EJSVAL_IS_NULL(_this))
+    if (EJSVAL_IS_NULL(*_this))
         return _ejs_atom_null_toString;
 
     ejsval builtinTag;
 
     // 3. Let O be the result of calling ToObject passing the this value as the argument. 
-    ejsval O = ToObject(_this);
+    ejsval O = ToObject(*_this);
     EJSBool check_for_subclasses = EJS_TRUE;
     // 4. If O is an exotic Array object, then let builtinTag be "Array". 
     if (EJSVAL_IS_ARRAY(O)) {
@@ -1826,11 +1793,9 @@ _ejs_Object_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval 
 }
 
 // ECMA262: 15.2.4.3
-static ejsval
-_ejs_Object_prototype_toLocaleString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+EJS_NATIVE_FUNC(_ejs_Object_prototype_toLocaleString) {
     /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
-    ejsval O = ToObject(_this);
+    ejsval O = ToObject(*_this);
     EJSObject* O_ = EJSVAL_TO_OBJECT(O);
 
     /* 2. Let toString be the result of calling the [[Get]] internal method of O passing "toString" as the argument. */
@@ -1841,31 +1806,25 @@ _ejs_Object_prototype_toLocaleString (ejsval env, ejsval _this, uint32_t argc, e
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "toString property is not callable");
 
     /* 4. Return the result of calling the [[Call]] internal method of toString passing O as the this value and no arguments. */
-    return _ejs_invoke_closure (toString, O, 0, NULL);
+    return _ejs_invoke_closure (toString, &O, 0, NULL, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 }
 
 // ECMA262: 19.1.3.7 Object.prototype.valueOf () 
-static ejsval
-_ejs_Object_prototype_valueOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    return ToObject(_this);
+static EJS_NATIVE_FUNC(_ejs_Object_prototype_valueOf) {
+    return ToObject(*_this);
 }
 
 // ECMA262: 15.2.4.5
-static ejsval
-_ejs_Object_prototype_hasOwnProperty (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Object_prototype_hasOwnProperty) {
     ejsval needle = _ejs_undefined;
     if (EJS_UNLIKELY(argc > 0))
         needle = args[0];
 
-    return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(_this),GetOwnProperty)(_this, needle, NULL) != NULL);
+    return BOOLEAN_TO_EJSVAL(OP(EJSVAL_TO_OBJECT(*_this),GetOwnProperty)(*_this, needle, NULL) != NULL);
 }
 
 // ECMA262: 15.2.4.6
-static ejsval
-_ejs_Object_prototype_isPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Object_prototype_isPrototypeOf) {
     ejsval V = _ejs_undefined;
     if (argc > 0) V = args[0];
 
@@ -1874,7 +1833,7 @@ _ejs_Object_prototype_isPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ej
         return _ejs_false;
 
     /* 2. Let O be the result of calling ToObject passing the this value as the argument. */
-    ejsval O = ToObject(_this);
+    ejsval O = ToObject(*_this);
 
     /* 3. Repeat */
     while (EJS_TRUE) {
@@ -1892,9 +1851,7 @@ _ejs_Object_prototype_isPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ej
 }
 
 // ECMA262: 15.2.4.7
-static ejsval
-_ejs_Object_prototype_propertyIsEnumerable (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Object_prototype_propertyIsEnumerable) {
     ejsval V = _ejs_undefined;
     if (argc > 0) V = args[0];
 
@@ -1902,7 +1859,7 @@ _ejs_Object_prototype_propertyIsEnumerable (ejsval env, ejsval _this, uint32_t a
     ejsval P = ToPropertyKey(V);
 
     /* 2. Let O be the result of calling ToObject passing the this value as the argument. */
-    ejsval O = ToObject(_this);
+    ejsval O = ToObject(*_this);
     EJSObject* O_ = EJSVAL_TO_OBJECT(O);
 
     /* 3. Let desc be the result of calling the [[GetOwnProperty]] internal method of O passing P as the argument. */
@@ -2094,7 +2051,7 @@ _ejs_object_specop_get (ejsval O, ejsval P, ejsval Receiver)
     }
 
     // 8. Return the result of calling the [[Call]] internal method of getter with Receiver as the thisArgument and an empty List as argumentsList. 
-    return _ejs_invoke_closure (getter, Receiver, 0, NULL);
+    return _ejs_invoke_closure (getter, &Receiver, 0, NULL, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 }
 
 // ECMA262: 8.12.1
@@ -2175,7 +2132,7 @@ _ejs_object_specop_set (ejsval O, ejsval P, ejsval V, ejsval Receiver)
         
         //    c. Let setterResult be the result of calling the [[Call]] internal method of setter providing Receiver as thisArgument and a new List containing V as argumentsList. 
         //    d. ReturnIfAbrupt(setterResult). 
-        /* unused ejsval setterResult = */ _ejs_invoke_closure(setter, Receiver, 1, &V);
+        /* unused ejsval setterResult = */ _ejs_invoke_closure(setter, &Receiver, 1, &V, EJS_CALL_FLAGS_CALL, _ejs_undefined);
     }
     // e. Return true.
     return EJS_TRUE;

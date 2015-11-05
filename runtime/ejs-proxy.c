@@ -10,9 +10,7 @@
 #include "ejs-ops.h"
 #include "ejs-symbol.h"
 
-ejsval
-_ejs_Proxy_create (ejsval env, ejsval this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_Proxy_create) {
     if (argc == 0)
         _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "create requires more than 0 arguments");
     if (!EJSVAL_IS_OBJECT(args[0]))
@@ -21,9 +19,7 @@ _ejs_Proxy_create (ejsval env, ejsval this, uint32_t argc, ejsval* args)
     EJS_NOT_IMPLEMENTED();
 }
 
-ejsval
-_ejs_Proxy_createFunction (ejsval env, ejsval this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_Proxy_createFunction) {
     if (argc <= 1)
         _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "create requires more than 1 arguments");
     if (!EJSVAL_IS_OBJECT(args[0]))
@@ -38,10 +34,8 @@ _ejs_Proxy_createFunction (ejsval env, ejsval this, uint32_t argc, ejsval* args)
 
 // ECMA262: 26.5.1 The Proxy Constructor Function
 // Proxy ( target, handler ) 
-static ejsval
-_ejs_Proxy_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    if (EJSVAL_IS_UNDEFINED(_this)) // not called as a constructor
+static EJS_NATIVE_FUNC(_ejs_Proxy_impl) {
+    if (callFlags == EJS_CALL_FLAGS_CALL)
         _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "Proxy cannot be called as a function");
 
     ejsval target = _ejs_undefined;
@@ -60,6 +54,9 @@ _ejs_Proxy_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     // 3. Let P be a newly created object. 
     // 4. Set P’s essential internal methods to the definitions specified in 9.5. 
+    EJSProxy* P = (EJSProxy*)_ejs_gc_new (EJSProxy);
+    _ejs_init_object ((EJSObject*)P, _ejs_Proxy_prototype, &_ejs_Proxy_specops);
+
     // 5. If IsCallable(target) is true, then 
     if (IsCallable(target)) {
         //    a. Set the [[Call]] internal method of P as specified in 9.5.13. 
@@ -68,7 +65,6 @@ _ejs_Proxy_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
         _ejs_log("proxies don't save off [[Call]]/[[Construct]] presence yet.\n");
     }
-    EJSProxy* P = EJSVAL_TO_PROXY(_this);
 
     // 6. Set the [[ProxyTarget]] internal slot of P to target. 
     P->target = target;
@@ -76,33 +72,12 @@ _ejs_Proxy_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     // 7. Set the [[ProxyHandler]] internal slot of P to handler. 
     P->handler = handler;
 
-    // 8. Return P. 
-    return _this;
+    // 8. Return P.
+    return OBJECT_TO_EJSVAL(P);
 }
 
 ejsval _ejs_Proxy EJSVAL_ALIGNMENT;
 ejsval _ejs_Proxy_prototype EJSVAL_ALIGNMENT;
-
-static ejsval
-_ejs_Proxy_create_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    // 1. Let F be the this value. 
-    ejsval F = _this;
-
-    if (!IsConstructor(F)) 
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Proxy[Symbol.create] is not a constructor");
-
-    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
-
-    // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%ObjectPrototype%", ([[ProxyTarget]], [[ProxyHandler]]) ). 
-    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
-    if (EJSVAL_IS_UNDEFINED(proto))
-        proto = _ejs_Object_prototype;
-
-    EJSObject* obj = (EJSObject*)_ejs_gc_new (EJSProxy);
-    _ejs_init_object (obj, proto, &_ejs_Proxy_specops);
-    return OBJECT_TO_EJSVAL(obj);
-}
 
 void
 _ejs_proxy_init(ejsval global)
@@ -123,8 +98,6 @@ _ejs_proxy_init(ejsval global)
     OBJ_METHOD(createFunction);
 
 #undef OBJ_METHOD
-
-    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Proxy, create, _ejs_Proxy_create_impl, EJS_PROP_NOT_ENUMERABLE);
 }
 
 
@@ -157,7 +130,7 @@ _ejs_proxy_specop_get_prototype_of (ejsval O)
     // 8. ReturnIfAbrupt(handlerProto). 
     ejsval args[] = { target };
 
-    ejsval handlerProto = _ejs_invoke_closure(trap, handler, 1, args);
+    ejsval handlerProto = _ejs_invoke_closure(trap, &handler, 1, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
     
     // 9. If Type(handlerProto) is neither Object nor Null, then throw a TypeError exception. 
     if (!EJSVAL_IS_OBJECT(handlerProto) && EJSVAL_IS_NULL(handlerProto))
@@ -213,7 +186,7 @@ _ejs_proxy_specop_set_prototype_of (ejsval O, ejsval V)
     }
     // 8. Let trapResult be the result of calling the [[Call]] internal method of trap with handler as the this value and a new List containing target and V. 
     ejsval args[] = { target, V };
-    ejsval trapResult = _ejs_invoke_closure(trap, handler, 2, args);
+    ejsval trapResult = _ejs_invoke_closure(trap, &handler, 2, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 
     // 9. Let booleanTrapResult be ToBoolean(trapResult). 
     // 10. ReturnIfAbrupt(booleanTrapResult). 
@@ -272,7 +245,7 @@ _ejs_proxy_specop_is_extensible(ejsval O)
     // 8. Let booleanTrapResult be ToBoolean(Call(trap, handler, «target»)).
     // 9. ReturnIfAbrupt(booleanTrapResult).
     ejsval args[] = { target };
-    EJSBool booleanTrapResult = ToEJSBool(_ejs_invoke_closure(trap, handler, 1, args));
+    EJSBool booleanTrapResult = ToEJSBool(_ejs_invoke_closure(trap, &handler, 1, args, EJS_CALL_FLAGS_CALL, _ejs_undefined));
 
     // 10. Let targetResult be target.[[IsExtensible]]().
     // 11. ReturnIfAbrupt(targetResult).
@@ -319,7 +292,7 @@ _ejs_proxy_specop_prevent_extensions (ejsval O)
     // 8. Let booleanTrapResult be ToBoolean(Call(trap, handler, «target»)).
     // 9. ReturnIfAbrupt(booleanTrapResult).
     ejsval args[] = { target };
-    EJSBool booleanTrapResult = ToEJSBool(_ejs_invoke_closure(trap, handler, 2, args));
+    EJSBool booleanTrapResult = ToEJSBool(_ejs_invoke_closure(trap, &handler, 2, args, EJS_CALL_FLAGS_CALL, _ejs_undefined));
 
     // 10. If booleanTrapResult is true, then
     if (booleanTrapResult) {
@@ -365,7 +338,7 @@ _ejs_proxy_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
     // 8. Let trapResult be the result of calling the [[Call]] internal method of trap with handler as the this value and a new List containing target, P, and Receiver. 
     // 9. ReturnIfAbrupt(trapResult). 
     ejsval args[] = { target, propertyName, receiver };
-    ejsval trapResult = _ejs_invoke_closure(trap, handler, 3, args);
+    ejsval trapResult = _ejs_invoke_closure(trap, &handler, 3, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 
     // 10. Let targetDesc be the result of calling the [[GetOwnProperty]] internal method of target with argument P.
     // 11. ReturnIfAbrupt(targetDesc). 
@@ -421,7 +394,7 @@ _ejs_proxy_specop_get_own_property (ejsval O, ejsval P, ejsval* exc)
     // 8. Let trapResultObj be the result of calling the [[Call]] internal method of trap with handler as the this value and a new List containing target and P. 
     // 9. ReturnIfAbrupt(trapResultObj). 
     ejsval args[] = { target, P };
-    ejsval trapResultObj = _ejs_invoke_closure(trap, handler, 2, args);
+    ejsval trapResultObj = _ejs_invoke_closure(trap, &handler, 2, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 
     // 10. If Type(trapResultObj) is neither Object nor Undefined, then throw a TypeError exception. 
     if (!EJSVAL_IS_OBJECT(trapResultObj) && !EJSVAL_IS_UNDEFINED(trapResultObj)) {
@@ -517,7 +490,7 @@ _ejs_proxy_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval recei
     }
     // 8. Let trapResult be the result of calling the [[Call]] internal method of trap with handler as the this value and a new List containing target, P, V, and Receiver. 
     ejsval args[] = { target, propertyName, val, receiver };
-    ejsval trapResult = _ejs_invoke_closure(trap, handler, 4, args);
+    ejsval trapResult = _ejs_invoke_closure(trap, &handler, 4, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 
     // 9. Let booleanTrapResult be ToBoolean(trapResult). 
     // 10. ReturnIfAbrupt(booleanTrapResult). 
@@ -580,7 +553,7 @@ _ejs_proxy_specop_has_property (ejsval O, ejsval P)
 
     // 8. Let trapResult be the result of calling the [[Call]] internal method of trap with handler as the this value and a new List containing target and P. 
     ejsval args[] = { target, P };
-    ejsval trapResult = _ejs_invoke_closure(trap, handler, 2, args);
+    ejsval trapResult = _ejs_invoke_closure(trap, &handler, 2, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 
     // 9. Let booleanTrapResult be ToBoolean(trapResult). 
     // 10. ReturnIfAbrupt(booleanTrapResult). 
@@ -645,7 +618,7 @@ _ejs_proxy_specop_delete (ejsval O, ejsval P, EJSBool unusedflag)
 
     // 8. Let trapResult be the result of calling the [[Call]] internal method of trap with handler as the this value and a new List containing target and P. 
     ejsval args[] = { target, P };
-    ejsval trapResult = _ejs_invoke_closure(trap, handler, 2, args);
+    ejsval trapResult = _ejs_invoke_closure(trap, &handler, 2, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 
     // 9. Let booleanTrapResult be ToBoolean(trapResult). 
     // 10. ReturnIfAbrupt(booleanTrapResult). 
@@ -703,7 +676,7 @@ _ejs_proxy_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Desc
 
     // 10. Let trapResult be the result of calling the [[Call]] internal method of trap with handler as the this value and a new List containing target, P, and descObj. 
     ejsval args[] = { target, P, descObj };
-    ejsval trapResult = _ejs_invoke_closure(trap, handler, 3, args);
+    ejsval trapResult = _ejs_invoke_closure(trap, &handler, 3, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 
     // 11. Let booleanTrapResult be ToBoolean(trapResult). 
     // 12. ReturnIfAbrupt(booleanTrapResult). 
@@ -784,7 +757,7 @@ _ejs_proxy_specop_own_property_keys (ejsval O)
 
     // 8. Let trapResultArray be Call(trap, handler, «target»).
     ejsval args[] = { target };
-    ejsval trapResultArray = _ejs_invoke_closure(trap, handler, 1, args);
+    ejsval trapResultArray = _ejs_invoke_closure(trap, &handler, 1, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 
     // 9. Let trapResult be CreateListFromArrayLike(trapResultArray, «String, Symbol»).
     // 10. ReturnIfAbrupt(trapResult).

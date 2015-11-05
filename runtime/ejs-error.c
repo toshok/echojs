@@ -38,17 +38,31 @@ ejsval _ejs_URIError EJSVAL_ALIGNMENT;
 ejsval _ejs_URIError_prototype EJSVAL_ALIGNMENT;
 
 #define NATIVE_ERROR_CTOR(err)                                          \
-    static ejsval                                                       \
-    _ejs_##err##_impl (ejsval env, ejsval _this, uint32_t argc, ejsval*args) \
-    {                                                                   \
-        if (EJSVAL_IS_UNDEFINED(_this))                                 \
-            _this = _ejs_object_new (_ejs_##err##_prototype, &_ejs_Error_specops); \
+    static EJS_NATIVE_FUNC(_ejs_##err##_impl) {                         \
+        ejsval message = _ejs_undefined;                                \
+        if (argc > 0)                                                   \
+            message = args[0];                                          \
                                                                         \
-        if (argc >= 1) {                                                \
-            _ejs_object_setprop (_this, _ejs_atom_message, ToString(args[0])); \
+        /* 1. If NewTarget is undefined, let newTarget be the active function object, else let newTarget be NewTarget. */ \
+        if (EJSVAL_IS_UNDEFINED(newTarget)) {                           \
+            newTarget = _ejs_##err;                                     \
         }                                                               \
+        /* 2. Let O be OrdinaryCreateFromConstructor(newTarget, "%NativeErrorPrototype%", «[[ErrorData]]»). */ \
+        /* 3. ReturnIfAbrupt(O). */                                     \
+        ejsval O = OrdinaryCreateFromConstructor(newTarget, _ejs_##err##_prototype, &_ejs_Error_specops); \
+        *_this = O;                                                     \
                                                                         \
-        return _this;                                                   \
+        /* 4. If message is not undefined, then */                      \
+        if (!EJSVAL_IS_UNDEFINED(message)) {                            \
+            /* a. Let msg be ToString(message). */                      \
+            ejsval msg = ToString(message);                             \
+            /* b. Let msgDesc be the PropertyDescriptor{[[Value]]: msg, [[Writable]]: true, [[Enumerable]]: false, [[Configurable]]: true}. */ \
+            /* c. Let status be DefinePropertyOrThrow(O, "message", msgDesc). */ \
+            /* d. Assert: status is not an abrupt completion. */        \
+            _ejs_object_setprop (*_this, _ejs_atom_message, ToString(args[0])); \
+        }                                                               \
+        /* 5. Return O. */                                              \
+        return O;                                                       \
     }
 
 NATIVE_ERROR_CTOR(Error);
@@ -59,45 +73,23 @@ NATIVE_ERROR_CTOR(SyntaxError);
 NATIVE_ERROR_CTOR(TypeError);
 NATIVE_ERROR_CTOR(URIError);
 
-static ejsval
-_ejs_Error_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    if (!EJSVAL_IS_OBJECT(_this)) {
+static EJS_NATIVE_FUNC(_ejs_Error_prototype_toString) {
+    ejsval O = *_this;
+    if (!EJSVAL_IS_OBJECT(O)) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Error.prototype.toString called on non-object");
     }
 
-    EJSObject *_thisobj = EJSVAL_TO_OBJECT(_this);
-    ejsval name = OP(_thisobj,Get)(_this, _ejs_atom_name, _this);
+    EJSObject *_thisobj = EJSVAL_TO_OBJECT(O);
+    ejsval name = OP(_thisobj,Get)(O, _ejs_atom_name, O);
     if (EJSVAL_IS_NULL_OR_UNDEFINED(name))
         name = _ejs_atom_Error;
 
-    ejsval message = OP(_thisobj,Get)(_this, _ejs_atom_message, _this);
+    ejsval message = OP(_thisobj,Get)(O, _ejs_atom_message, O);
     if (EJSVAL_IS_NULL_OR_UNDEFINED(message))
         return name;
 
     ejsval sep = _ejs_string_new_utf8(": ");
     return _ejs_string_concatv (name, sep, message, _ejs_null);
-}
-
-static ejsval
-_ejs_Error_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    // 1. Let F be the this value. 
-    ejsval F = _this;
-
-    if (!IsConstructor(F)) 
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Error[Symbol.create] is not a constructor");
-
-    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
-
-    // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%ErrorPrototype%", ([[ErrorData]]) ). 
-    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
-    if (EJSVAL_IS_UNDEFINED(proto))
-        proto = _ejs_Error_prototype;
-
-    EJSObject* obj = (EJSObject*)_ejs_gc_new (EJSObject);
-    _ejs_init_object (obj, proto, &_ejs_Error_specops);
-    return OBJECT_TO_EJSVAL(obj);
 }
 
 ejsval
@@ -121,13 +113,13 @@ _ejs_nativeerror_new (EJSNativeErrorType err_type, ejsval msg)
     ejsval exc = OBJECT_TO_EJSVAL(exc_obj);
 
     switch (err_type) {
-    case EJS_ERROR:           _ejs_Error_impl (_ejs_null, exc, 1, &msg); break;
-    case EJS_EVAL_ERROR:      _ejs_EvalError_impl (_ejs_null, exc, 1, &msg); break;
-    case EJS_RANGE_ERROR:     _ejs_RangeError_impl (_ejs_null, exc, 1, &msg); break;
-    case EJS_REFERENCE_ERROR: _ejs_ReferenceError_impl (_ejs_null, exc, 1, &msg); break;
-    case EJS_SYNTAX_ERROR:    _ejs_SyntaxError_impl (_ejs_null, exc, 1, &msg); break;
-    case EJS_TYPE_ERROR:      _ejs_TypeError_impl (_ejs_null, exc, 1, &msg); break;
-    case EJS_URI_ERROR:       _ejs_URIError_impl (_ejs_null, exc, 1, &msg); break;
+    case EJS_ERROR:           _ejs_Error_impl (_ejs_null, &exc, 1, &msg, EJS_CALL_FLAGS_CALL, _ejs_undefined); break;
+    case EJS_EVAL_ERROR:      _ejs_EvalError_impl (_ejs_null, &exc, 1, &msg, EJS_CALL_FLAGS_CALL, _ejs_undefined); break;
+    case EJS_RANGE_ERROR:     _ejs_RangeError_impl (_ejs_null, &exc, 1, &msg, EJS_CALL_FLAGS_CALL, _ejs_undefined); break;
+    case EJS_REFERENCE_ERROR: _ejs_ReferenceError_impl (_ejs_null, &exc, 1, &msg, EJS_CALL_FLAGS_CALL, _ejs_undefined); break;
+    case EJS_SYNTAX_ERROR:    _ejs_SyntaxError_impl (_ejs_null, &exc, 1, &msg, EJS_CALL_FLAGS_CALL, _ejs_undefined); break;
+    case EJS_TYPE_ERROR:      _ejs_TypeError_impl (_ejs_null, &exc, 1, &msg, EJS_CALL_FLAGS_CALL, _ejs_undefined); break;
+    case EJS_URI_ERROR:       _ejs_URIError_impl (_ejs_null, &exc, 1, &msg, EJS_CALL_FLAGS_CALL, _ejs_undefined); break;
     }
 
     return exc;
@@ -156,8 +148,6 @@ _ejs_error_init(ejsval global)
                                                                     \
     _ejs_object_setprop (_ejs_##err##_prototype, _ejs_atom_name, _ejs_atom_##err); \
     _ejs_object_setprop (_ejs_##err##_prototype, _ejs_atom_toString, toString); \
-                                                                        \
-    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_##err, create, _ejs_Error_create, EJS_PROP_NOT_ENUMERABLE); \
 EJS_MACRO_END
 
     EJS_ADD_NATIVE_ERROR_TYPE(Error);

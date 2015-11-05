@@ -130,15 +130,11 @@ output (FILE *outfile, uint32_t argc, ejsval *args)
 }
 
 
-static ejsval
-_ejs_console_log (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_console_log) {
     return output (stdout, argc, args);
 }
 
-static ejsval
-_ejs_console_warn (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_console_warn) {
     return output (stderr, argc, args);
 }
 
@@ -206,9 +202,7 @@ remove_timeval_slot(ejsval for_string)
     _ejs_log("timer wasn't present in list.");
 }
 
-static ejsval
-_ejs_console_time (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_console_time) {
     if (argc == 0 || !EJSVAL_IS_STRING(args[0])) return _ejs_undefined;
 
     char* str;
@@ -228,9 +222,7 @@ _ejs_console_time (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return _ejs_undefined;
 }
 
-static ejsval
-_ejs_console_timeEnd (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_console_timeEnd) {
     struct timeval tvafter;
 
     // do the gettimeofday as early as possible here so we don't include our overhead

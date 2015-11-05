@@ -26,7 +26,6 @@ extern ejsval _ejs_Symbol_prototype;
 extern EJSSpecOps _ejs_Symbol_specops;
 
 // our well known symbols
-extern ejsval _ejs_Symbol_create;
 extern ejsval _ejs_Symbol_hasInstance;
 extern ejsval _ejs_Symbol_isConcatSpreadable;
 extern ejsval _ejs_Symbol_species;

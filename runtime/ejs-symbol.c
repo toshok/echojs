@@ -13,9 +13,7 @@
 #define EJSVAL_TO_SYMBOL(v)     ((EJSSymbol*)EJSVAL_TO_OBJECT(v))
 
 // ECMA262: 19.4.2.2 Symbol.for ( key ) 
-static ejsval
-_ejs_Symbol_for (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Symbol_for) {
     ejsval key = _ejs_undefined;
     if (argc > 0) key = args[0];
 
@@ -35,9 +33,7 @@ _ejs_Symbol_for (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 19.4.2.7 Symbol.keyFor ( sym ) 
-static ejsval
-_ejs_Symbol_keyFor(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Symbol_keyFor) {
     ejsval sym = _ejs_undefined;
     if (argc > 0) sym = args[0];
 
@@ -56,11 +52,9 @@ _ejs_Symbol_keyFor(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 19.4.3.2 Symbol.prototype.toString ()
-static ejsval
-_ejs_Symbol_prototype_toString(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Symbol_prototype_toString) {
     // 1. Let s be the this value. 
-    ejsval s = _this;
+    ejsval s = *_this;
 
     EJSSymbol* sym;
 
@@ -92,10 +86,8 @@ _ejs_Symbol_prototype_toString(ejsval env, ejsval _this, uint32_t argc, ejsval *
 }
 
 // ECMA262: 19.4.1
-static ejsval
-_ejs_Symbol_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    if (EJSVAL_IS_NULL(_this) || EJSVAL_IS_UNDEFINED(_this)) {
+static EJS_NATIVE_FUNC(_ejs_Symbol_impl) {
+    if (callFlags == EJS_CALL_FLAGS_CALL) {
         // 19.4.1.1 Symbol ( [ description ] )
         ejsval description = _ejs_undefined;
         if (argc > 0) description = args[0];
@@ -134,12 +126,6 @@ ejsval _ejs_Symbol_split EJSVAL_ALIGNMENT;
 ejsval _ejs_Symbol_search EJSVAL_ALIGNMENT;
 
 void
-_ejs_Symbol_create_impl(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1"); // XXX
-}
-
-void
 _ejs_symbol_init(ejsval global)
 {
     _ejs_Symbol = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Symbol, (EJSClosureFunc)_ejs_Symbol_impl);
@@ -155,7 +141,6 @@ _ejs_symbol_init(ejsval global)
     OBJ_METHOD(for);
     OBJ_METHOD(keyFor);
 
-    WELL_KNOWN_SYMBOL(create);
     WELL_KNOWN_SYMBOL(hasInstance);
     WELL_KNOWN_SYMBOL(isConcatSpreadable);
     WELL_KNOWN_SYMBOL(species);
@@ -169,8 +154,6 @@ _ejs_symbol_init(ejsval global)
     WELL_KNOWN_SYMBOL(search);
 
     _ejs_object_define_value_property (_ejs_Symbol_prototype, _ejs_Symbol_toStringTag, _ejs_atom_Symbol, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
-
-    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Symbol, create, _ejs_Symbol_create_impl, EJS_PROP_NOT_ENUMERABLE);
 }
 
 ejsval

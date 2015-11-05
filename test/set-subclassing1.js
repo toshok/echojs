@@ -1,5 +1,4 @@
-// generator: babel-node
-// xfail: subclassing builtins is broken
+// generator: none
 
 // "Set is subclassable" from kangax
 function test() {

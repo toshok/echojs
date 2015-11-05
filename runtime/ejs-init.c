@@ -59,16 +59,12 @@ ejsval _ejs_global EJSVAL_ALIGNMENT;
 /* useful strings literals */
 #include "ejs-atoms-gen.c"
 
-ejsval
-_ejs_eval (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+EJS_NATIVE_FUNC(_ejs_eval) {
   _ejs_throw_nativeerror_utf8 (EJS_ERROR, "EJS doesn't support eval()");
   return _ejs_undefined;
 }
 
-ejsval
-_ejs_unhandledException(ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+EJS_NATIVE_FUNC(_ejs_unhandledException) {
     ejsval exc = _ejs_undefined;
 
     if (argc > 0)
@@ -178,8 +174,6 @@ _ejs_init(int argc, char** argv)
     _ejs_object_init(_ejs_global);
 
     _ejs_symbol_init(_ejs_global);
-
-    _ejs_function_add_symbols();
 
     _ejs_iterator_init_proto();
     _ejs_iterator_wrapper_init(_ejs_global);

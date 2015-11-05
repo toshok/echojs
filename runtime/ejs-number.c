@@ -18,30 +18,33 @@
 ejsval _ejs_Number EJSVAL_ALIGNMENT;
 ejsval _ejs_Number_prototype EJSVAL_ALIGNMENT;
 
-static ejsval
-_ejs_Number_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    if (EJSVAL_IS_UNDEFINED(_this)) {
-        // called as a function
-        double num = 0;
+// ES2015, June 2015
+// 20.1.1.1 Number ( [ value ] )
 
-        if (argc > 0) {
-            num = ToDouble(args[0]);
-        }
+static EJS_NATIVE_FUNC(_ejs_Number_impl) {
+    double n;
 
-        return NUMBER_TO_EJSVAL(num);
-    }
-    else {
-        EJSNumber* num = (EJSNumber*)EJSVAL_TO_OBJECT(_this);
+    // 1. If no arguments were passed to this function invocation, let n be +0.
+    if (argc == 0)
+        n = 0;
+    // 2. Else, let n be ToNumber(value).
+    // 3. ReturnIfAbrupt(n).
+    else
+        n = ToDouble(args[0]);
 
-        if (argc > 0) {
-            num->number = ToDouble(args[0]);
-        }
-        else {
-            num->number = 0;
-        }
-        return _this;
-    }
+    // 4. If NewTarget is undefined, return n.
+    if (EJSVAL_IS_UNDEFINED(newTarget)) return NUMBER_TO_EJSVAL(n);
+
+    // 5. Let O be OrdinaryCreateFromConstructor(NewTarget, "%NumberPrototype%", «[[NumberData]]» ).
+    // 6. ReturnIfAbrupt(O).
+    ejsval O = OrdinaryCreateFromConstructor(newTarget, _ejs_Number_prototype, &_ejs_Number_specops);
+    *_this = O;
+
+    // 7. Set the value of O’s [[NumberData]] internal slot to n.
+    ((EJSNumber*)EJSVAL_TO_OBJECT(O))->number = n;
+
+    // 8. Return O.
+    return O;
 }
 
 static double
@@ -57,15 +60,13 @@ thisNumberValue(ejsval value)
 
 // ES6 20.1.3.6
 // Number.prototype.toString ( [ radix ] )
-static ejsval
-_ejs_Number_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Number_prototype_toString) {
     ejsval radix = _ejs_undefined;
     if (argc > 0) radix = args[0];
 
     // 1. Let x be thisNumberValue(this value).
     // 2. ReturnIfAbrupt(x).
-    double x = thisNumberValue(_this);
+    double x = thisNumberValue(*_this);
 
     int64_t radixNumber;
     // 3. If radix is not present, let radixNumber be 10.
@@ -92,20 +93,16 @@ _ejs_Number_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval 
 ejsval
 _ejs_number_to_string(ejsval num)
 {
-    return _ejs_Number_prototype_toString(_ejs_undefined, num, 0, NULL);
+    return _ejs_Number_prototype_toString(_ejs_undefined, &num, 0, NULL, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 }
 
-static ejsval
-_ejs_Number_prototype_valueOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSNumber *num = (EJSNumber*)EJSVAL_TO_OBJECT(_this);
+static EJS_NATIVE_FUNC(_ejs_Number_prototype_valueOf) {
+    EJSNumber *num = (EJSNumber*)EJSVAL_TO_OBJECT(*_this);
     return NUMBER_TO_EJSVAL(num->number);
 }
 
 // ECMA262: 20.1.3.3 Number.prototype.toFixed ( fractionDigits ) 
-static ejsval
-_ejs_Number_prototype_toFixed (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Number_prototype_toFixed) {
     EJS_NOT_IMPLEMENTED();
 #if notyet
     ejsval fractionDigits = _ejs_undefined;
@@ -113,7 +110,7 @@ _ejs_Number_prototype_toFixed (ejsval env, ejsval _this, uint32_t argc, ejsval *
 
     // 1. Let x be thisNumberValue(this value). 
     // 2. ReturnIfAbrupt(x). 
-    double x = thisNumberValue(_this);
+    double x = thisNumberValue(*_this);
 
     // 3. Let f be ToInteger(fractionDigits). (If fractionDigits is undefined, this step produces the value 0). 
     // 4. ReturnIfAbrupt(f).
@@ -179,9 +176,7 @@ _ejs_Number_prototype_toFixed (ejsval env, ejsval _this, uint32_t argc, ejsval *
 }
 
 // ECMA262: 20.1.3.5 Number.prototype.toPrecision ( precision ) 
-static ejsval
-_ejs_Number_prototype_toPrecision (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Number_prototype_toPrecision) {
     EJS_NOT_IMPLEMENTED();
 #if notyet
     ejsval precision = _ejs_undefined;
@@ -189,7 +184,7 @@ _ejs_Number_prototype_toPrecision (ejsval env, ejsval _this, uint32_t argc, ejsv
 
     // 1. Let x be thisNumberValue(this value). 
     // 2. ReturnIfAbrupt(x). 
-    double x = thisNumberValue(_this);
+    double x = thisNumberValue(*_this);
 
     // 3. If precision is undefined, return ToString(x). 
     if (EJSVAL_IS_UNDEFINED(precision))
@@ -283,9 +278,7 @@ _ejs_Number_prototype_toPrecision (ejsval env, ejsval _this, uint32_t argc, ejsv
 #endif
 }
 
-static ejsval
-_ejs_Number_isFinite (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Number_isFinite) {
     ejsval number = _ejs_undefined;
     if (argc > 0)
         number = args[0];
@@ -307,9 +300,7 @@ _ejs_Number_isFinite (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return _ejs_true;
 }
 
-static ejsval
-_ejs_Number_toInteger (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Number_toInteger) {
     ejsval argument = _ejs_undefined;
     if (argc > 0) argument = args[0];
 
@@ -323,9 +314,7 @@ _ejs_Number_toInteger (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return NUMBER_TO_EJSVAL ((number < 0 ? -1 : 1) * floor(fabs(number)));
 }
 
-static ejsval
-_ejs_Number_isInteger (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Number_isInteger) {
     ejsval number = _ejs_undefined;
     if (argc > 0)
         number = args[0];
@@ -354,9 +343,7 @@ _ejs_Number_isInteger (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return _ejs_true;
 }
 
-static ejsval
-_ejs_Number_isSafeInteger (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Number_isSafeInteger) {
     ejsval number = _ejs_undefined;
     if (argc > 0)
         number = args[0];
@@ -388,9 +375,8 @@ _ejs_Number_isSafeInteger (ejsval env, ejsval _this, uint32_t argc, ejsval *args
     // 6. Otherwise, return false.
     return _ejs_false;
 }
-static ejsval
-_ejs_Number_isNaN (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+
+static EJS_NATIVE_FUNC(_ejs_Number_isNaN) {
     ejsval number = _ejs_undefined;
     if (argc > 0)
         number = args[0];
@@ -406,28 +392,6 @@ _ejs_Number_isNaN (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     // 3. Otherwise, return false.
     return _ejs_false;
 }
-
-static ejsval
-_ejs_Number_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    // 1. Let F be the this value. 
-    ejsval F = _this;
-
-    if (!IsConstructor(F)) 
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Number[Symbol.create] is not a constructor");
-
-    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
-
-    // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%NumberPrototype%", ([[NumberData]]) ). 
-    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
-    if (EJSVAL_IS_UNDEFINED(proto))
-        proto = _ejs_Number_prototype;
-
-    EJSObject* obj = (EJSObject*)_ejs_gc_new (EJSNumber);
-    _ejs_init_object (obj, proto, &_ejs_Number_specops);
-    return OBJECT_TO_EJSVAL(obj);
-}
-
 
 void
 _ejs_number_init(ejsval global)
@@ -465,9 +429,6 @@ _ejs_number_init(ejsval global)
     _ejs_object_setprop (_ejs_Number, _ejs_atom_NaN, NUMBER_TO_EJSVAL(nan("7734")));
     _ejs_object_setprop (_ejs_Number, _ejs_atom_NEGATIVE_INFINITY, NUMBER_TO_EJSVAL(-INFINITY));
     _ejs_object_setprop (_ejs_Number, _ejs_atom_POSITIVE_INFINITY, NUMBER_TO_EJSVAL(INFINITY));
-
-
-    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Number, create, _ejs_Number_create, EJS_PROP_NOT_ENUMERABLE);
 
 #undef PROTO_METHOD
 }

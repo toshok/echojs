@@ -73,9 +73,7 @@ ejsval _ejs_ObjcHandle;
 ejsval _ejs_ObjcHandle_proto;
 EJSSpecOps _ejs_objchandle_specops;
 
-static ejsval
-_ejs_ObjcHandle_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_ObjcHandle_impl) {
     EJS_NOT_IMPLEMENTED();
 }
 
@@ -112,16 +110,12 @@ ejsval _ejs_CoffeeKitObject;
 ejsval _ejs_CoffeeKitObject_proto;
 EJSSpecOps _ejs_coffeekitobject_specops;
 
-static ejsval
-_ejs_CoffeeKitObject_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_CoffeeKitObject_impl) {
     EJS_NOT_IMPLEMENTED();
 }
 
-static ejsval
-_ejs_CoffeeKitObject_setHandle (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
-	CKObject* thisObject = [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(_this)];
+static EJS_NATIVE_FUNC(_ejs_CoffeeKitObject_setHandle) {
+	CKObject* thisObject = [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(*_this)];
     
 	SPEW(NSLog (@"made it to coffeekit_object_set_handle, argumentCount = %u", argc);)
 
@@ -141,10 +135,8 @@ _ejs_CoffeeKitObject_setHandle (ejsval env, ejsval _this, uint32_t argc, ejsval*
 }
 
 
-static ejsval
-_ejs_CoffeeKitObject_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
-	CKObject* thisObject = [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(_this)];
+static EJS_NATIVE_FUNC(_ejs_CoffeeKitObject_prototype_toString) {
+	CKObject* thisObject = [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(*_this)];
     NSString* desc = [NSString stringWithFormat:@"%@",  get_objc_id(thisObject)];
     return STRING_TO_EJSVAL([[CKString stringWithNSString:desc] jsString]);
 }
@@ -185,16 +177,12 @@ _ejs_objc_init(ejsval global)
 
 
 
-static ejsval
-_ejs_objc_requireFramework (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_objc_requireFramework) {
     // this needs to go away, replaced by a pragma that the compiler can react to
     return _ejs_undefined;
 }
 
-static ejsval
-_ejs_objc_allocInstance (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_objc_allocInstance) {
     if (argc == 0)
         return _ejs_null;
 
@@ -216,9 +204,7 @@ _ejs_objc_allocInstance (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return rv;
 }
 
-static ejsval
-_ejs_objc_staticCall (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_objc_staticCall) {
     const char *clsname_cstr = [[CKString stringWithJSString:EJSVAL_TO_STRING(args[0])] UTF8String];
     const char *selector_cstr = [[CKString stringWithJSString:EJSVAL_TO_STRING(args[1])] UTF8String];
 
@@ -228,9 +214,7 @@ _ejs_objc_staticCall (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 	return OBJECT_TO_EJSVAL([create_objc_handle_object (objc_msgSend (cls, sel)) jsObject]);
 }
 
-static ejsval
-_ejs_objc_getInstanceVariable (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_objc_getInstanceVariable) {
 	SPEW(NSLog (@"in _icall_objc_getInstanceVariable");)
 	if (argc != 2) {
 		NSLog (@"getInstanceVariable requires 2 args");
@@ -261,9 +245,7 @@ _ejs_objc_getInstanceVariable (ejsval env, ejsval _this, uint32_t argc, ejsval* 
 		return _ejs_null;
 }
 
-static ejsval
-_ejs_objc_setInstanceVariable (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_objc_setInstanceVariable) {
 	SPEW(NSLog (@"in _icall_objc_setInstanceVariable");)
 	if (argc != 3) {
 		NSLog (@"setInstanceVariable requires 3 args");
@@ -289,11 +271,9 @@ _ejs_objc_setInstanceVariable (ejsval env, ejsval _this, uint32_t argc, ejsval* 
     return _ejs_undefined;
 }
 
-static ejsval invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
+static EJS_NATIVE_FUNC(invokeSelectorFromJS);
 
-static ejsval
-_ejs_objc_selectorInvoker (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_objc_selectorInvoker) {
     if (!EJSVAL_IS_STRING(args[0])) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "non-string passed to objc.selectorInvoker");
     }
@@ -313,9 +293,7 @@ _ejs_objc_selectorInvoker (ejsval env, ejsval _this, uint32_t argc, ejsval* args
     return OBJECT_TO_EJSVAL([func jsObject]);
 }
 
-static ejsval
-_ejs_objc_getTypeEncoding (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_objc_getTypeEncoding) {
     EJS_NOT_IMPLEMENTED();
 }
 
@@ -523,10 +501,8 @@ marshal_jsarray_as_nsarray (CKObject *o)
         return [NSArray arrayWithArray:nsarray];
 }
 
-static ejsval
-invokeSelectorFromJS (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
-    CKObject *thisObj = [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(_this)];
+static EJS_NATIVE_FUNC(invokeSelectorFromJS) {
+    CKObject *thisObj = [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(*_this)];
     
 #if old
     SEL sel = get_selector_from_function (func);
@@ -1242,9 +1218,7 @@ register_js_class (CKObject* proto,
 	return cls;
 }
 
-static ejsval
-_ejs_objc_registerJSClass (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_objc_registerJSClass) {
     // unused ejsval ctor = args[0]
     CKObject* proto = [[CKValue valueWithJSValue:args[1]] objectValue];
     char *register_cstr = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[2]));
@@ -1259,9 +1233,7 @@ _ejs_objc_registerJSClass (ejsval env, ejsval _this, uint32_t argc, ejsval* args
 }
 
 #if IOS
-static ejsval
-_ejs_objc_UIApplicationMain (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_objc_UIApplicationMain) {
     NSString* delegate_name = [[CKString stringWithJSString:EJSVAL_TO_STRING(args[2])] nsString];
     
     NSLog (@"About to call UIApplicationMain (..., %@)!", delegate_name);
@@ -1270,9 +1242,7 @@ _ejs_objc_UIApplicationMain (ejsval env, ejsval _this, uint32_t argc, ejsval* ar
 }
 
 #else
-static ejsval
-_ejs_objc_NSApplicationMain (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_objc_NSApplicationMain) {
     NSLog (@"About to call NSApplicationMain!");
     NSApplicationMain(0, NULL); // XXX populate from args
     exit(0);

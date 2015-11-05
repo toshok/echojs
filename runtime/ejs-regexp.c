@@ -17,7 +17,7 @@
 
 #include "pcre.h"
 
-static ejsval _ejs_RegExp_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args);
+static EJS_NATIVE_FUNC(_ejs_RegExp_impl);
 
 static const unsigned char* pcre16_tables;
 
@@ -30,7 +30,9 @@ _ejs_regexp_new (ejsval pattern, ejsval flags)
 
     ejsval args[2] = { pattern, flags };
 
-    return _ejs_RegExp_impl (_ejs_null, OBJECT_TO_EJSVAL(rv), 2, args);
+    // XXX this is wrong
+    ejsval thisarg = OBJECT_TO_EJSVAL(rv);
+    return _ejs_RegExp_impl (_ejs_null, &thisarg, 2, args, EJS_CALL_FLAGS_CONSTRUCT, _ejs_undefined);
 }
 
 ejsval
@@ -84,7 +86,9 @@ _ejs_regexp_replace(ejsval str, ejsval search_re, ejsval replace)
             args[1] = capture;
             args[2] = _ejs_undefined;
 
-            replaceval = ToString(_ejs_invoke_closure (replace, _ejs_undefined, argc, args));
+            ejsval undef_this = _ejs_undefined;
+
+            replaceval = ToString(_ejs_invoke_closure (replace, &undef_this, argc, args, EJS_CALL_FLAGS_CALL, _ejs_undefined));
         }
         else {
             replaceval = ToString(replace);
@@ -116,17 +120,15 @@ _ejs_regexp_replace(ejsval str, ejsval search_re, ejsval replace)
 ejsval _ejs_RegExp EJSVAL_ALIGNMENT;
 ejsval _ejs_RegExp_prototype EJSVAL_ALIGNMENT;
 
-static ejsval
-_ejs_RegExp_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_RegExp_impl) {
     EJSRegExp *re;
 
-    if (EJSVAL_IS_UNDEFINED(_this)) {
+    if (callFlags == EJS_CALL_FLAGS_CONSTRUCT) {
         // called as a function
-        _this = _ejs_object_new(_ejs_RegExp_prototype, &_ejs_RegExp_specops);
+        *_this = _ejs_object_new(_ejs_RegExp_prototype, &_ejs_RegExp_specops);
     }
 
-    re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+    re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
 
     re->pattern = _ejs_undefined;
     re->flags = _ejs_undefined;
@@ -155,8 +157,8 @@ _ejs_RegExp_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
                                           &pcre_error, &pcre_erroffset,
                                           pcre16_tables);
 
-    _ejs_object_define_value_property (_this, _ejs_atom_source, re->pattern, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
-    _ejs_object_define_value_property (_this, _ejs_atom_lastIndex, NUMBER_TO_EJSVAL(0), EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_WRITABLE);
+    _ejs_object_define_value_property (*_this, _ejs_atom_source, re->pattern, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (*_this, _ejs_atom_lastIndex, NUMBER_TO_EJSVAL(0), EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_WRITABLE);
     
     if (EJSVAL_IS_STRING(re->flags)) {
         EJSPrimString *flat_flags = _ejs_string_flatten(re->flags);
@@ -172,7 +174,7 @@ _ejs_RegExp_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         }
     }
 
-    return _this;
+    return *_this;
 }
 
 // ES6 21.2.5.2.2
@@ -357,7 +359,7 @@ RegExpExec(ejsval R, ejsval S)
     if (EJSVAL_IS_FUNCTION(exec)) {
         // a. Let result be Call(exec, R, «S»).
         // b. ReturnIfAbrupt(result).
-        ejsval result = _ejs_invoke_closure(exec, R, 1, &S);
+        ejsval result = _ejs_invoke_closure(exec, &R, 1, &S, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 
         // c. If Type(result) is neither Object or Null, then throw a TypeError exception.
         if (!EJSVAL_IS_OBJECT(result) && !EJSVAL_IS_NULL(result))
@@ -378,14 +380,12 @@ RegExpExec(ejsval R, ejsval S)
 
 // ES6 21.2.5.2
 // RegExp.prototype.exec ( string )
-ejsval
-_ejs_RegExp_prototype_exec (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_exec) {
     ejsval string = _ejs_undefined;
     if (argc > 0) string = args[0];
 
     // 1. Let R be the this value.
-    ejsval R = _this;
+    ejsval R = *_this;
 
     // 2. If Type(R) is not Object, then throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(R))
@@ -405,13 +405,11 @@ _ejs_RegExp_prototype_exec (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
 }
 
 // ECMA262: 15.10.6.3
-static ejsval
-_ejs_RegExp_prototype_test (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    if (!EJSVAL_IS_REGEXP(_this))
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_test) {
+    if (!EJSVAL_IS_REGEXP(*_this))
         EJS_NOT_IMPLEMENTED();
 
-    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
 
     ejsval subject = _ejs_undefined;
     if (argc > 0) subject = args[0];
@@ -431,70 +429,52 @@ _ejs_RegExp_prototype_test (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
     return rv == PCRE_ERROR_NOMATCH ? _ejs_false : _ejs_true;
 }
 
-static ejsval
-_ejs_RegExp_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_toString) {
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
 
     return _ejs_string_concatv (_ejs_atom_slash, re->pattern, _ejs_atom_slash, re->flags, _ejs_null);
 }
 
-static ejsval
-_ejs_RegExp_prototype_get_global (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_global) {
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
     return BOOLEAN_TO_EJSVAL(re->global);
 }
 
-static ejsval
-_ejs_RegExp_prototype_get_ignoreCase (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_ignoreCase) {
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
     return BOOLEAN_TO_EJSVAL(re->ignoreCase);
 }
 
-static ejsval
-_ejs_RegExp_prototype_get_lastIndex (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_lastIndex) {
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
     return NUMBER_TO_EJSVAL(re->lastIndex);
 }
 
-static ejsval
-_ejs_RegExp_prototype_get_multiline (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_multiline) {
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
     return BOOLEAN_TO_EJSVAL(re->multiline);
 }
 
-static ejsval
-_ejs_RegExp_prototype_get_sticky (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_sticky) {
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
     return BOOLEAN_TO_EJSVAL(re->sticky);
 }
 
-static ejsval
-_ejs_RegExp_prototype_get_unicode (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_unicode) {
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
     return BOOLEAN_TO_EJSVAL(re->unicode);
 }
 
-static ejsval
-_ejs_RegExp_prototype_get_source (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_source) {
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
     return re->pattern;
 }
 
 // ES6 21.2.5.3
 // get RegExp.prototype.flags ( )
-static ejsval
-_ejs_RegExp_prototype_get_flags (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_flags) {
     // 1. Let R be the this value.
-    ejsval R = _this;
+    ejsval R = *_this;
 
     // 2. If Type(R) is not Object, then throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(R))
@@ -546,47 +526,18 @@ _ejs_RegExp_prototype_get_flags (ejsval env, ejsval _this, uint32_t argc, ejsval
     return _ejs_string_new_utf8(result_buf);
 }
 
-static ejsval
-_ejs_RegExp_get_species (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_RegExp_get_species) {
     return _ejs_RegExp;
-}
-
-static ejsval
-_ejs_RegExp_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    // 1. Let F be the this value. 
-    ejsval F = _this;
-
-    if (!IsConstructor(F)) 
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in RegExp[Symbol.create] is not a constructor");
-
-    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
-
-    // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(constructor, "%RegExpPrototype%", ( [[RegExpMatcher]], [[OriginalSource]], [[OriginalFlags]])). 
-    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
-    if (EJSVAL_IS_UNDEFINED(proto))
-        proto = _ejs_RegExp_prototype;
-
-    EJSRegExp* re = (EJSRegExp*)_ejs_gc_new (EJSRegExp);
-    _ejs_init_object ((EJSObject*)re, proto, &_ejs_RegExp_specops);
-    
-    re->pattern = _ejs_undefined;
-    re->flags = _ejs_undefined;
-
-    return OBJECT_TO_EJSVAL((EJSObject*)re);
 }
 
 // ES6 21.2.5.6
 // RegExp.prototype [ @@match ] ( string )
-static ejsval
-_ejs_RegExp_prototype_match (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_match) {
     ejsval string = _ejs_undefined;
     if (argc > 0) string = args[0];
 
     // 1. Let rx be the this value.
-    ejsval rx = _this;
+    ejsval rx = *_this;
 
     // 2. If Type(rx) is not Object, then throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(rx))
@@ -669,9 +620,7 @@ _ejs_RegExp_prototype_match (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
 
 // ES6 21.2.5.8
 //  RegExp.prototype [ @@replace ] ( string, replaceValue )
-static ejsval
-_ejs_RegExp_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_replace) {
     ejsval string = _ejs_undefined;
     if (argc > 0) string = args[0];
 
@@ -679,7 +628,7 @@ _ejs_RegExp_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *
     if (argc > 1) replaceValue = args[1];
 
     // 1. Let rx be the this value.
-    ejsval rx = _this;
+    ejsval rx = *_this;
 
     // 2. If Type(rx) is not Object, then throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(rx))
@@ -824,7 +773,9 @@ _ejs_RegExp_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *
             replacerArgs[numReplacerArgs - 1] = S;
             
             //    iv. Let replValue be Call(replaceValue, undefined, replacerArgs).
-            ejsval replValue = _ejs_invoke_closure(replaceValue, _ejs_undefined, numReplacerArgs, replacerArgs);
+            ejsval undef_this = _ejs_undefined;
+
+            ejsval replValue = _ejs_invoke_closure(replaceValue, &undef_this, numReplacerArgs, replacerArgs, EJS_CALL_FLAGS_CALL, _ejs_undefined);
             //    v. Let replacement be ToString(replValue).
             replacement = ToString(replValue);
         }
@@ -865,9 +816,7 @@ _ejs_RegExp_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *
 
 // ES6 21.2.5.11
 // RegExp.prototype [ @@split ] ( string, limit )
-static ejsval
-_ejs_RegExp_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_split) {
     ejsval string = _ejs_undefined;
     if (argc > 0) string = args[0];
 
@@ -875,7 +824,7 @@ _ejs_RegExp_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     if (argc > 1) limit = args[1];
 
     // 1. Let rx be the this value.
-    ejsval rx = _this;
+    ejsval rx = *_this;
 
     // 2. If Type(rx) is not Object, throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(rx))
@@ -1044,9 +993,7 @@ _ejs_RegExp_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
 
 // ES6 21.2.5.9
 // RegExp.prototype [ @@search ] ( string )
-static ejsval
-_ejs_RegExp_prototype_search (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_search) {
     EJS_NOT_IMPLEMENTED();
 }
 
@@ -1089,7 +1036,6 @@ _ejs_regexp_init(ejsval global)
 #undef OBJ_METHOD
 #undef PROTO_METHOD
 
-    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp, create, _ejs_RegExp_create, EJS_PROP_NOT_ENUMERABLE);
     EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp_prototype, match, _ejs_RegExp_prototype_match, EJS_PROP_NOT_ENUMERABLE);
     EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp_prototype, replace, _ejs_RegExp_prototype_replace, EJS_PROP_NOT_ENUMERABLE);
     EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp_prototype, split, _ejs_RegExp_prototype_split, EJS_PROP_NOT_ENUMERABLE);

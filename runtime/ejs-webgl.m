@@ -169,26 +169,20 @@ finalize_release_private_data (EJSObject* obj)
 
 static ejsval WebGLActiveInfo__proto__ EJSVAL_ALIGNMENT;
 
-static ejsval
-webglactiveinfo_get_size (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
-	WebGLActiveInfo *info = (WebGLActiveInfo*)get_peer(_this);
+static EJS_NATIVE_FUNC(webglactiveinfo_get_size) {
+	WebGLActiveInfo *info = (WebGLActiveInfo*)get_peer(*_this);
 
 	return NUMBER_TO_EJSVAL ([info size]);
 }
 
-static ejsval
-webglactiveinfo_get_type (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
-	WebGLActiveInfo *info = (WebGLActiveInfo*)get_peer(_this);
+static EJS_NATIVE_FUNC(webglactiveinfo_get_type) {
+	WebGLActiveInfo *info = (WebGLActiveInfo*)get_peer(*_this);
 
 	return NUMBER_TO_EJSVAL ([info type]);
 }
 
-static ejsval
-webglactiveinfo_get_name (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
-	WebGLActiveInfo *info = (WebGLActiveInfo*)get_peer(_this);
+static EJS_NATIVE_FUNC(webglactiveinfo_get_name) {
+	WebGLActiveInfo *info = (WebGLActiveInfo*)get_peer(*_this);
 
 	return _ejs_string_new_utf8 ([info name]);
 }
@@ -215,7 +209,7 @@ static GLenum glerr;
 static BOOL unpack_flip_y = NO;
 
 #define JSMETHODNAME(meth) webglrenderingcontext_func_##meth
-#define JSMETHOD(meth) static ejsval JSMETHODNAME(meth) (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+#define JSMETHOD(meth) static EJS_NATIVE_FUNC(JSMETHODNAME(meth))
 #define THROW_ARG_COUNT_EXCEPTION(expected_count) _ejs_throw_nativeerror_utf8 (EJS_ERROR/*XXX*/, "argument count mismatch")
 
 
@@ -2035,9 +2029,7 @@ webglrenderingcontext_specop_get (ejsval O, ejsval P, ejsval receiver)
 	return NUMBER_TO_EJSVAL (constant_info->constant);
 }
 
-ejsval
-_ejs_objc_allocateWebGLRenderingContext (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+EJS_NATIVE_FUNC(_ejs_objc_allocateWebGLRenderingContext) {
 	EAGLContext* eagl_context = (EAGLContext*)get_objc_id ([[CKValue valueWithJSValue:args[0]] objectValue]);
     
 	SPEW(NSLog (@"EAGLContext = %p\n", eagl_context);)

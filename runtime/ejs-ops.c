@@ -330,17 +330,17 @@ ejsval ToObject(ejsval exp)
 {
     if (EJSVAL_IS_BOOLEAN(exp)) {
         ejsval new_boolean = _ejs_object_new (_ejs_Boolean_prototype, &_ejs_Boolean_specops);
-        _ejs_invoke_closure (_ejs_Boolean, new_boolean, 1, &exp);
+        _ejs_invoke_closure (_ejs_Boolean, &new_boolean, 1, &exp, EJS_CALL_FLAGS_CALL, _ejs_undefined);
         return new_boolean;
     }
     else if (EJSVAL_IS_NUMBER(exp)) {
         ejsval new_number = _ejs_object_new (_ejs_Number_prototype, &_ejs_Number_specops);
-        _ejs_invoke_closure (_ejs_Number, new_number, 1, &exp);
+        _ejs_invoke_closure (_ejs_Number, &new_number, 1, &exp, EJS_CALL_FLAGS_CALL, _ejs_undefined);
         return new_number;
     }
     else if (EJSVAL_IS_STRING(exp)) {
         ejsval new_str = _ejs_object_new (_ejs_String_prototype, &_ejs_String_specops);
-        _ejs_invoke_closure (_ejs_String, new_str, 1, &exp);
+        _ejs_invoke_closure (_ejs_String, &new_str, 1, &exp, EJS_CALL_FLAGS_CALL, _ejs_undefined);
         return new_str;
     }
     else if (EJSVAL_IS_UNDEFINED(exp)) {
@@ -405,7 +405,7 @@ OrdinaryToPrimitive(ejsval O, ToPrimitiveHint hint)
         if (IsCallable(method)) {
             //       i. Let result be the result of calling the [[Call]] internal method of method, with O as thisArgument and an empty List as argumentsList. 
             //       ii. ReturnIfAbrupt(result). 
-            ejsval result = _ejs_invoke_closure(method, O, 0, NULL);
+            ejsval result = _ejs_invoke_closure(method, &O, 0, NULL, EJS_CALL_FLAGS_CALL, _ejs_undefined);
             //       iii. If Type(result) is not Object, then return result. 
             if (!EJSVAL_IS_OBJECT(result))
                 return result;
@@ -441,7 +441,7 @@ ToPrimitive(ejsval inputargument, ToPrimitiveHint PreferredType)
     if (!EJSVAL_IS_UNDEFINED(exoticToPrim)) {
         // a. Let result be the result of calling the [[Call]] internal method of exoticToPrim, with input argument as thisArgument and a List containing( hint) as argumentsList. 
         // b. ReturnIfAbrupt(result). 
-        ejsval result = _ejs_invoke_closure (exoticToPrim, inputargument, 1, &hint);
+        ejsval result = _ejs_invoke_closure (exoticToPrim, &inputargument, 1, &hint, EJS_CALL_FLAGS_CALL, _ejs_undefined);
         // c. If Type(result) is not Object, then return result.
         if (!EJSVAL_IS_OBJECT(result))
             return result;
@@ -1137,7 +1137,7 @@ _ejs_op_instanceof (ejsval O, ejsval C)
     // 4. If instOfHandler is not undefined, then 
     if (!EJSVAL_IS_UNDEFINED(instOfHandler)) {
         //    a. Let result be the result of calling the [[Call]] internal method of instOfHandler passing C as thisArgument and a new List containing O as argumentsList. 
-        ejsval result = _ejs_invoke_closure(instOfHandler, C, 1, &O);
+        ejsval result = _ejs_invoke_closure(instOfHandler, &C, 1, &O, EJS_CALL_FLAGS_CALL, _ejs_undefined);
         //    b. Return ToBoolean(result). 
         return ToBoolean(result);
     }
@@ -1392,7 +1392,7 @@ GetIterator (ejsval obj, ejsval method)
 
     /* 3. Let iterator be the result of calling the [[Call]] internal method of method with
      * obj as thisArgument and an empty List as argumentsList. */
-    ejsval iterator = _ejs_invoke_closure (method, obj, 0, NULL);
+    ejsval iterator = _ejs_invoke_closure (method, &obj, 0, NULL, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 
     /* 4. If Type(iterator) is not Object, then throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(iterator))
@@ -1422,11 +1422,11 @@ IteratorNext (ejsval iterator, ejsval value)
     /* 1. If value was not passed, */
     if (EJSVAL_IS_UNDEFINED(value))
         /* Let result be Invoke(iterator, "next", ( )). */
-        result = _ejs_invoke_closure (Get(iterator, _ejs_atom_next), iterator, 0, NULL);
+        result = _ejs_invoke_closure (Get(iterator, _ejs_atom_next), &iterator, 0, NULL, EJS_CALL_FLAGS_CALL, _ejs_undefined);
     /* 2. Else, */
     else
         /* a. Let result be Invoke(iterator, "next", (value)). */
-        result = _ejs_invoke_closure (Get(iterator, _ejs_atom_next), iterator, 1, &value);
+        result = _ejs_invoke_closure (Get(iterator, _ejs_atom_next), &iterator, 1, &value, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 
     /* 3. If Type(result) is not Object, then throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(result))
@@ -1614,6 +1614,22 @@ IsExtensible(ejsval O)
     return OP(EJSVAL_TO_OBJECT(O), IsExtensible)(O);
 }
 
+ejsval GetPrototypeFromConstructor(ejsval ctor, ejsval default_proto) {
+    ejsval proto = OP(EJSVAL_TO_OBJECT(ctor),Get)(ctor, _ejs_atom_prototype, ctor);
+    if (EJSVAL_IS_UNDEFINED(proto))
+        return default_proto;
+    return proto;
+}
+
+ejsval OrdinaryCreateFromConstructor(ejsval ctor, ejsval default_proto, EJSSpecOps *ops) {
+    ejsval proto = GetPrototypeFromConstructor(ctor, default_proto);
+    EJSObject* O_ = ops->Allocate();
+    ejsval O = OBJECT_TO_EJSVAL(O_);
+    _ejs_init_object ((EJSObject*)O_, proto, ops);
+    return O;
+}
+
+
 // ES2015, June 2015
 // 7.3.13
 // Construct (F, [argumentsList], [newTarget])
@@ -1632,7 +1648,7 @@ Construct (ejsval F, ejsval newTarget, uint32_t argc, ejsval* args)
     EJS_ASSERT(IsConstructor(newTarget));
 
     // 5. Return the result of calling the [[Construct]] internal method of F passing argumentsList and newTarget as the arguments.
-    return OP(EJSVAL_TO_OBJECT(F),Construct) (newTarget, argc, args);
+    return OP(EJSVAL_TO_OBJECT(F),Construct) (F, newTarget, argc, args);
 }
 
 // ES6 Draft January 15, 2015

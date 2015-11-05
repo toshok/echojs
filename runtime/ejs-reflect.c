@@ -15,9 +15,7 @@
 ejsval _ejs_Reflect EJSVAL_ALIGNMENT;
 
 // ECMA262: 26.1.1 Reflect.apply ( target, thisArgument, argumentsList ) 
-static ejsval
-_ejs_Reflect_apply (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Reflect_apply) {
     ejsval target = _ejs_undefined;
     ejsval thisArgument = _ejs_undefined;
     ejsval argumentsList = _ejs_undefined;
@@ -47,37 +45,27 @@ _ejs_Reflect_apply (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     // 6. Perform the PrepareForTailCall abstract operation. 
 
     // 7. Return the result of calling the [[Call]] internal method of obj with arguments thisArgument and args.
-    return _ejs_invoke_closure(obj, thisArgument, EJS_ARRAY_LEN(argumentsList), EJS_DENSE_ARRAY_ELEMENTS(argumentsList));
+    return _ejs_invoke_closure(obj, &thisArgument, EJS_ARRAY_LEN(argumentsList), EJS_DENSE_ARRAY_ELEMENTS(argumentsList), EJS_CALL_FLAGS_CALL, _ejs_undefined);
 }
 
-static ejsval
-_ejs_Reflect_construct (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Reflect_construct) {
     EJS_NOT_IMPLEMENTED();
 }
 
-static ejsval
-_ejs_Reflect_defineProperty (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Reflect_defineProperty) {
     EJS_NOT_IMPLEMENTED();
 }
 
-static ejsval
-_ejs_Reflect_deleteProperty (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Reflect_deleteProperty) {
     EJS_NOT_IMPLEMENTED();
 }
 
-static ejsval
-_ejs_Reflect_enumerate (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Reflect_enumerate) {
     EJS_NOT_IMPLEMENTED();
 }
 
 // ECMA262: 26.1.6 Reflect.get ( target, propertyKey [ , receiver ]) 
-static ejsval
-_ejs_Reflect_get (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Reflect_get) {
     ejsval target = _ejs_undefined;
     ejsval propertyKey = _ejs_undefined;
     ejsval receiver = _ejs_undefined;
@@ -104,9 +92,7 @@ _ejs_Reflect_get (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 26.1.7 Reflect.getOwnPropertyDescriptor ( target, propertyKey )
-static ejsval
-_ejs_Reflect_getOwnPropertyDescriptor (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Reflect_getOwnPropertyDescriptor) {
     ejsval target = _ejs_undefined;
     ejsval propertyKey = _ejs_undefined;
     if (argc > 0) target = args[0];
@@ -129,9 +115,7 @@ _ejs_Reflect_getOwnPropertyDescriptor (ejsval env, ejsval _this, uint32_t argc, 
 }
 
 // ECMA262: 26.1.8 Reflect.getPrototypeOf ( target ) 
-static ejsval
-_ejs_Reflect_getPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Reflect_getPrototypeOf) {
     ejsval target = _ejs_undefined;
     if (argc > 0) target = args[0];
 
@@ -144,9 +128,7 @@ _ejs_Reflect_getPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
 }
 
 // ECMA262: 26.1.9 Reflect.has ( target, propertyKey ) 
-static ejsval
-_ejs_Reflect_has (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Reflect_has) {
     ejsval target = _ejs_undefined;
     ejsval propertyKey = _ejs_undefined;
 
@@ -166,9 +148,7 @@ _ejs_Reflect_has (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 26.1.10 Reflect.isExtensible (target) 
-static ejsval
-_ejs_Reflect_isExtensible (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Reflect_isExtensible) {
     ejsval target = _ejs_undefined;
     if (argc > 0) target = args[0];
 
@@ -181,9 +161,7 @@ _ejs_Reflect_isExtensible (ejsval env, ejsval _this, uint32_t argc, ejsval *args
 }
 
 // ECMA262: 26.1.11 Reflect.ownKeys ( target ) 
-static ejsval
-_ejs_Reflect_ownKeys (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Reflect_ownKeys) {
     ejsval target = _ejs_undefined;
     if (argc > 0) target = args[0];
 
@@ -196,9 +174,7 @@ _ejs_Reflect_ownKeys (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 26.1.12 Reflect.preventExtensions ( target ) 
-static ejsval
-_ejs_Reflect_preventExtensions (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Reflect_preventExtensions) {
     ejsval target = _ejs_undefined;
     if (argc > 0) target = args[0];
 
@@ -211,9 +187,7 @@ _ejs_Reflect_preventExtensions (ejsval env, ejsval _this, uint32_t argc, ejsval 
 }
 
 // ECMA262: 26.1.13 Reflect.set ( target, propertyKey, V [ , receiver ] ) 
-static ejsval
-_ejs_Reflect_set (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Reflect_set) {
     ejsval target      = _ejs_undefined;
     ejsval propertyKey = _ejs_undefined;
     ejsval V           = _ejs_undefined;
@@ -242,9 +216,7 @@ _ejs_Reflect_set (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 26.1.14 Reflect.setPrototypeOf ( target, proto ) 
-static ejsval
-_ejs_Reflect_setPrototypeOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Reflect_setPrototypeOf) {
     ejsval target = _ejs_undefined;
     ejsval proto = _ejs_undefined;
 

@@ -324,35 +324,42 @@ ejsval _ejs_String EJSVAL_ALIGNMENT;
 ejsval _ejs_String__proto__ EJSVAL_ALIGNMENT;
 ejsval _ejs_String_prototype EJSVAL_ALIGNMENT;
 
-static ejsval
-_ejs_String_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    if (EJSVAL_IS_NULL(_this) || EJSVAL_IS_UNDEFINED(_this)) {
-        if (argc > 0)
-            return ToString(args[0]);
-        else
-            return _ejs_atom_empty;
-    }
-    else {
-        // called as a constructor
-        EJSString* str = (EJSString*)EJSVAL_TO_OBJECT(_this);
-        ((EJSObject*)str)->ops = &_ejs_String_specops;
+// ES2015, June 2015
+// 21.1.1.1 String ( value )
 
-        if (argc > 0) {
-            str->primStr = ToString(args[0]);
-        }
-        else {
-            str->primStr = _ejs_atom_empty;
-        }
-        return _this;
+static EJS_NATIVE_FUNC(_ejs_String_impl) {
+    ejsval s;
+
+    // 1. If no arguments were passed to this function invocation, let s be "".
+    if (argc == 0)
+        s = _ejs_atom_empty;
+    // 2. Else,
+    else {
+        // a. If NewTarget is undefined and Type(value) is Symbol, return SymbolDescriptiveString(value).
+        if (EJSVAL_IS_UNDEFINED(newTarget) && EJSVAL_IS_SYMBOL(args[0]))
+            EJS_NOT_IMPLEMENTED();
+
+        // b. Let s be ToString(value).
+        s = ToString(args[0]);
     }
+    // 3. ReturnIfAbrupt(s).
+
+    // 4. If NewTarget is undefined, return s.
+    if (EJSVAL_IS_UNDEFINED(newTarget))
+        return s;
+
+    // 5. Return StringCreate(s, GetPrototypeFromConstructor(NewTarget, "%StringPrototype%")).
+    ejsval O = OrdinaryCreateFromConstructor(newTarget, _ejs_String_prototype, &_ejs_String_specops);
+    *_this = O;
+
+    EJSString* O_ = (EJSString*)EJSVAL_TO_OBJECT(O);
+    O_->primStr = s;
+
+    return O;
 }
 
-static ejsval
-_ejs_String_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSString *str = (EJSString*)EJSVAL_TO_OBJECT(_this);
-
+static EJS_NATIVE_FUNC(_ejs_String_prototype_toString) {
+    EJSString *str = (EJSString*)EJSVAL_TO_OBJECT(*_this);
     return str->primStr;
 }
 
@@ -513,9 +520,7 @@ GetReplaceSubstitution(ejsval matched, ejsval string, int position, ejsval captu
 
 // ES6 21.1.3.14
 // String.prototype.replace (searchValue, replaceValue )
-static ejsval
-_ejs_String_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_replace) {
     ejsval searchValue = _ejs_undefined;
     if (argc > 0) searchValue = args[0];
 
@@ -523,7 +528,7 @@ _ejs_String_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *
     if (argc > 1) replaceValue = args[1];
 
     // 1. Let O be RequireObjectCoercible(this value).
-    ejsval O = _this;
+    ejsval O = *_this;
 
     // 2. Let string be ToString(O).
     // 3. ReturnIfAbrupt(string).
@@ -537,7 +542,7 @@ _ejs_String_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *
     if (!EJSVAL_IS_UNDEFINED(replacer)) {
         //    a. Return Call(replacer, searchValue, «string, replaceValue»).
         ejsval call_args[2] = { string, replaceValue };
-        return _ejs_invoke_closure(replacer, searchValue, 2, call_args);
+        return _ejs_invoke_closure(replacer, &searchValue, 2, call_args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
     }
     // 7. Let searchString be ToString(searchValue).
     // 8. ReturnIfAbrupt(searchString).
@@ -571,7 +576,8 @@ _ejs_String_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *
     if (functionalReplace) {
         // a. Let replValue be Call(replaceValue, undefined,«matched, pos, and string»).
         ejsval call_args[3] = { matched, NUMBER_TO_EJSVAL(pos), string };
-        ejsval replValue = _ejs_invoke_closure(replaceValue, _ejs_undefined, 3, call_args);
+        ejsval undef_this = _ejs_undefined;
+        ejsval replValue = _ejs_invoke_closure(replaceValue, &undef_this, 3, call_args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 
         // b. Let replStr be ToString(replValue).
         // c. ReturnIfAbrupt(replStr).
@@ -621,16 +627,14 @@ _ejs_string_ucs2_at (EJSPrimString* primstr, uint32_t offset)
 }
 
 
-static ejsval
-_ejs_String_prototype_charAt (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_charAt) {
     ejsval primStr;
 
-    if (EJSVAL_IS_STRING(_this)) {
-        primStr = _this;
+    if (EJSVAL_IS_STRING(*_this)) {
+        primStr = *_this;
     }
     else {
-        EJSString *str = (EJSString*)EJSVAL_TO_OBJECT(_this);
+        EJSString *str = (EJSString*)EJSVAL_TO_OBJECT(*_this);
         primStr = str->primStr;
     }
 
@@ -646,16 +650,14 @@ _ejs_String_prototype_charAt (ejsval env, ejsval _this, uint32_t argc, ejsval *a
     return _ejs_string_new_ucs2_len (&c, 1);
 }
 
-static ejsval
-_ejs_String_prototype_charCodeAt (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_charCodeAt) {
     ejsval primStr;
 
-    if (EJSVAL_IS_STRING(_this)) {
-        primStr = _this;
+    if (EJSVAL_IS_STRING(*_this)) {
+        primStr = *_this;
     }
     else {
-        EJSString *str = (EJSString*)EJSVAL_TO_OBJECT(_this);
+        EJSString *str = (EJSString*)EJSVAL_TO_OBJECT(*_this);
         primStr = str->primStr;
     }
 
@@ -670,20 +672,16 @@ _ejs_String_prototype_charCodeAt (ejsval env, ejsval _this, uint32_t argc, ejsva
     return NUMBER_TO_EJSVAL (_ejs_string_ucs2_at(EJSVAL_TO_STRING(primStr), idx));
 }
 
-static ejsval
-_ejs_String_prototype_concat (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_concat) {
     EJS_NOT_IMPLEMENTED();
 }
 
-static ejsval
-_ejs_String_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_indexOf) {
     int idx = -1;
     if (argc == 0)
         return NUMBER_TO_EJSVAL(idx);
 
-    ejsval haystack = ToString(_this);
+    ejsval haystack = ToString(*_this);
     jschar* haystack_cstr;
     if (EJSVAL_IS_STRING(haystack)) {
         haystack_cstr = EJSVAL_TO_FLAT_STRING(haystack);
@@ -708,14 +706,12 @@ _ejs_String_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsval *
     return NUMBER_TO_EJSVAL (p - haystack_cstr);
 }
 
-static ejsval
-_ejs_String_prototype_lastIndexOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_lastIndexOf) {
     int idx = -1;
     if (argc == 0)
         return NUMBER_TO_EJSVAL(idx);
 
-    ejsval haystack = ToString(_this);
+    ejsval haystack = ToString(*_this);
     jschar* haystack_cstr;
     if (EJSVAL_IS_STRING(haystack)) {
         haystack_cstr = EJSVAL_TO_FLAT_STRING(haystack);
@@ -740,20 +736,16 @@ _ejs_String_prototype_lastIndexOf (ejsval env, ejsval _this, uint32_t argc, ejsv
     return NUMBER_TO_EJSVAL (p - haystack_cstr);
 }
 
-static ejsval
-_ejs_String_prototype_localeCompare (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_localeCompare) {
     EJS_NOT_IMPLEMENTED();
 }
 
-static ejsval
-_ejs_String_prototype_match (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_match) {
     ejsval regexp = _ejs_undefined;
     if (argc > 0) regexp = args[0];
 
     // 1. Let O be RequireObjectCoercible(this value).
-    ejsval O = _this;
+    ejsval O = *_this;
 
     // 2. Let S be ToString(O).
     // 3. ReturnIfAbrupt(S).
@@ -766,24 +758,22 @@ _ejs_String_prototype_match (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     // 6. If matcher is not undefined, then
     if (!EJSVAL_IS_UNDEFINED(matcher))
         // a. Return Call(matcher, regexp, «S»).
-        return _ejs_invoke_closure(matcher, regexp, 1, &S);
+        return _ejs_invoke_closure(matcher, &regexp, 1, &S, EJS_CALL_FLAGS_CALL, _ejs_undefined);
     
     // 7. Let rx be the result of the abstract operation RegExpCreate(regexp, undefined) (see 21.2.3.3)
     ejsval rx = _ejs_regexp_new(regexp, _ejs_undefined);
 
     // 8. Return Invoke(rx, @@match, «S»).
-    return _ejs_invoke_closure (Get(rx, _ejs_Symbol_match), rx, 1, &S);
+    return _ejs_invoke_closure (Get(rx, _ejs_Symbol_match), &rx, 1, &S, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 }
 
 // ECMA262: 21.1.3.15 String.prototype.search ( regexp )
-static ejsval
-_ejs_String_prototype_search (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_search) {
     ejsval regexp = _ejs_undefined;
     if (argc > 0) regexp = args[0];
 
     // 1. Let O be RequireObjectCoercible(this value).
-    ejsval O = _this;
+    ejsval O = *_this;
 
     // 2. Let string be ToString(O).
     // 3. ReturnIfAbrupt(string).
@@ -796,21 +786,19 @@ _ejs_String_prototype_search (ejsval env, ejsval _this, uint32_t argc, ejsval *a
     // 6. If searcher is not undefined , then,
     if (!EJSVAL_IS_UNDEFINED(searcher))
         //    a. Return Call(searcher, regexp, «string»)
-        return _ejs_invoke_closure(searcher, regexp, 1, &string);
+        return _ejs_invoke_closure(searcher, &regexp, 1, &string, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 
     // 7. Let rx be RegExpCreate(regexp, undefined) (see 21.2.3.3).
     // 8. ReturnIfAbrupt(rx).
     ejsval rx = _ejs_regexp_new(regexp, _ejs_undefined);
 
     // 9. Return Invoke(rx, @@search, «string»).
-    return _ejs_invoke_closure (Get(rx, _ejs_Symbol_search), rx, 1, &string);
+    return _ejs_invoke_closure (Get(rx, _ejs_Symbol_search), &rx, 1, &string, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 }
 
-static ejsval
-_ejs_String_prototype_substring (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_substring) {
     /* 1. Call CheckObjectCoercible passing the this value as its argument. */
-    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "String.prototype.subString called on null or undefined");
 
     ejsval start = _ejs_undefined;
@@ -820,7 +808,7 @@ _ejs_String_prototype_substring (ejsval env, ejsval _this, uint32_t argc, ejsval
     if (argc > 1) end = args[1];
 
     /* 2. Let S be the result of calling ToString, giving it the this value as its argument. */
-    ejsval S = ToString(_this);
+    ejsval S = ToString(*_this);
 
     /* 3. Let len be the number of characters in S. */
     int len = EJSVAL_TO_STRLEN(S);
@@ -849,9 +837,7 @@ _ejs_String_prototype_substring (ejsval env, ejsval _this, uint32_t argc, ejsval
 }
 
 // ECMA262: B.2.3
-static ejsval
-_ejs_String_prototype_substr (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_substr) {
     ejsval start = _ejs_undefined;
     ejsval length = _ejs_undefined;
 
@@ -859,7 +845,7 @@ _ejs_String_prototype_substr (ejsval env, ejsval _this, uint32_t argc, ejsval *a
     if (argc > 1) length = args[1];
 
     /* 1. Call ToString, giving it the this value as its argument. */
-    ejsval Result1 = ToString(_this);
+    ejsval Result1 = ToString(*_this);
 
     /* 2. Call ToInteger(start). */
     int32_t Result2 = ToInteger(start);
@@ -890,12 +876,10 @@ _ejs_String_prototype_substr (ejsval env, ejsval _this, uint32_t argc, ejsval *a
     return _ejs_string_new_substring (Result1, Result5, Result6);
 }
 
-static ejsval
-_ejs_String_prototype_toLowerCase (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_toLowerCase) {
     /* 1. Call CheckObjectCoercible passing the this value as its argument. */
     /* 2. Let S be the result of calling ToString, giving it the this value as its argument. */
-    ejsval S = ToString(_this);
+    ejsval S = ToString(*_this);
     char* sstr = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(S));
 
     /* 3. Let L be a String where each character of L is either the Unicode lowercase equivalent of the corresponding  */
@@ -913,18 +897,14 @@ _ejs_String_prototype_toLowerCase (ejsval env, ejsval _this, uint32_t argc, ejsv
     return L;
 }
 
-static ejsval
-_ejs_String_prototype_toLocaleLowerCase (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_toLocaleLowerCase) {
     EJS_NOT_IMPLEMENTED();
 }
 
-static ejsval
-_ejs_String_prototype_toUpperCase (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_toUpperCase) {
     /* 1. Call CheckObjectCoercible passing the this value as its argument. */
     /* 2. Let S be the result of calling ToString, giving it the this value as its argument. */
-    ejsval S = ToString(_this);
+    ejsval S = ToString(*_this);
     char* sstr = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(S));
 
     /* 3. Let L be a String where each character of L is either the Unicode lowercase equivalent of the corresponding  */
@@ -942,9 +922,7 @@ _ejs_String_prototype_toUpperCase (ejsval env, ejsval _this, uint32_t argc, ejsv
     return L;
 }
 
-static ejsval
-_ejs_String_prototype_toLocaleUpperCase (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_toLocaleUpperCase) {
     EJS_NOT_IMPLEMENTED();
 }
 
@@ -992,13 +970,11 @@ IsWhitespace(jschar c) {
 
 // ES6 21.1.3.25
 // String.prototype.trim ()
-static ejsval
-_ejs_String_prototype_trim (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_trim) {
     // 1. Let O be RequireObjectCoercible(this value).
-    if (EJSVAL_IS_UNDEFINED(_this) || EJSVAL_IS_NULL(_this)) {
+    if (EJSVAL_IS_UNDEFINED(*_this) || EJSVAL_IS_NULL(*_this)) {
     }
-    ejsval O = _this;
+    ejsval O = *_this;
 
     // 2. Let S be ToString(O).
     // 3. ReturnIfAbrupt(S).
@@ -1033,10 +1009,27 @@ _ejs_String_prototype_trim (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
     return T;
 }
 
-static ejsval
-_ejs_String_prototype_valueOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJS_NOT_IMPLEMENTED();
+static ejsval thisStringValue(ejsval value) {
+    // 1. If Type(value) is String, return value.
+    if (EJSVAL_IS_STRING(value)) return value;
+
+    // 2. If Type(value) is Object and value has a [[StringData]] internal slot, then
+    // a. Assert: value’s [[StringData]] internal slot is a String value.
+    // b. Return the value of value’s [[StringData]] internal slot.
+    if (EJSVAL_IS_STRING_OBJECT(value)) {
+        return ((EJSString*)EJSVAL_TO_OBJECT(value))->primStr;
+    }
+
+    // 3. Throw a TypeError exception.
+    _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "value is not a string");
+}
+
+static EJS_NATIVE_FUNC(_ejs_String_prototype_valueOf) {
+    // 1. Let s be thisStringValue(this value).
+    ejsval s = thisStringValue(*_this);
+
+    // 2. Return s.
+    return s;
 }
 
 // ECMA262: 15.5.4.14
@@ -1091,9 +1084,7 @@ SplitMatch(ejsval S, int q, ejsval R)
     return rv;
 }
 
-static ejsval
-_ejs_String_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_split) {
     ejsval separator = _ejs_undefined;
     if (argc > 0) separator = args[0];
 
@@ -1102,7 +1093,7 @@ _ejs_String_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
 
     // 1. Let O be RequireObjectCoercible(this value).
     // 2. ReturnIfAbrupt(O).
-    ejsval O = _this;
+    ejsval O = *_this;
 
     // 3. Let splitter be GetMethod(separator, @@split).
     // 4. ReturnIfAbrupt(splitter).
@@ -1112,7 +1103,7 @@ _ejs_String_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     if (!EJSVAL_IS_UNDEFINED(splitter)) {
         //    a. Return Call(splitter, separator, «O, limit»).
         ejsval args[2] = { O, limit };
-        return _ejs_invoke_closure(splitter, separator, 2, args);
+        return _ejs_invoke_closure(splitter, &separator, 2, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
     }
 
     // 6. Let S be ToString(O).
@@ -1207,9 +1198,7 @@ _ejs_String_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     return A;
 }
 
-static ejsval
-_ejs_String_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_slice) {
     // assert argc >= 1
 
     ejsval start = _ejs_undefined;
@@ -1220,7 +1209,7 @@ _ejs_String_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
 
     // Call CheckObjectCoercible passing the this value as its argument.
     // Let S be the result of calling ToString, giving it the this value as its argument.
-    ejsval S = ToString(_this);
+    ejsval S = ToString(*_this);
     // Let len be the number of characters in S.
     int len = EJSVAL_TO_STRLEN(S);
     // Let intStart be ToInteger(start).
@@ -1242,9 +1231,7 @@ _ejs_String_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     return _ejs_string_new_substring (S, from, span);
 }
 
-static ejsval
-_ejs_String_fromCharCode (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_fromCharCode) {
     int length = argc;
     jschar* buf = (jschar*)malloc(sizeof(jschar) * (length+1));
     for (int i = 0; i < argc; i ++) {
@@ -1278,9 +1265,7 @@ codepoint_to_codeunits(int64_t codepoint, jschar* units)
 }
   
 // ECMA262: 21.1.2.2 String.fromCodePoint ( ...codePoints ) 
-static ejsval
-_ejs_String_fromCodePoint (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_fromCodePoint) {
     if (argc == 0)
         return _ejs_atom_empty;
 
@@ -1329,9 +1314,7 @@ _ejs_String_fromCodePoint (ejsval env, ejsval _this, uint32_t argc, ejsval *args
 }
 
 // ECMA262: 21.1.2.4 String.raw ( callsite, ...substitutions )
-static ejsval
-_ejs_String_raw(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_raw) {
     ejsval callsite = _ejs_undefined;
     if (argc > 0) callsite = args[0];
 
@@ -1409,9 +1392,7 @@ _ejs_String_raw(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 21.1.3.18 String.prototype.startsWith ( searchString [, position ] ) 
-static ejsval
-_ejs_String_prototype_startsWith(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_startsWith) {
     ejsval searchString = _ejs_undefined;
     ejsval position = _ejs_undefined;
 
@@ -1420,15 +1401,16 @@ _ejs_String_prototype_startsWith(ejsval env, ejsval _this, uint32_t argc, ejsval
     if (argc > 1)
         position = args[1];
 
-    _this = ToObject(_this);
     // 1. Let O be CheckObjectCoercible(this value). 
-    if (!EJSVAL_IS_OBJECT(_this) && !EJSVAL_IS_NULL(_this)) {
+    ejsval O = ToObject(*_this);
+    if (!EJSVAL_IS_OBJECT(O) && !EJSVAL_IS_NULL(O)) {
         _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "1"); // XXX
     }
 
+
     // 2. Let S be ToString(O). 
     // 3. ReturnIfAbrupt(S). 
-    ejsval S = ToString(_this);
+    ejsval S = ToString(O);
 
     // 4. If Type(searchString) is Object, then 
     if (EJSVAL_IS_OBJECT(searchString)) {
@@ -1480,9 +1462,7 @@ _ejs_String_prototype_startsWith(ejsval env, ejsval _this, uint32_t argc, ejsval
 }
 
 // ECMA262: 21.1.3.7 String.prototype.endsWith ( searchString [, endPosition ] ) 
-static ejsval
-_ejs_String_prototype_endsWith(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_endsWith) {
     ejsval searchString = _ejs_undefined;
     ejsval endPosition = _ejs_undefined;
     if (argc > 0)
@@ -1490,15 +1470,15 @@ _ejs_String_prototype_endsWith(ejsval env, ejsval _this, uint32_t argc, ejsval *
     if (argc > 1)
         endPosition = args[1];
 
-    _this = ToObject(_this);
     // 1. Let O be CheckObjectCoercible(this value). 
-    if (!EJSVAL_IS_OBJECT(_this) && !EJSVAL_IS_NULL(_this)) {
+    ejsval O = ToObject(*_this);
+    if (!EJSVAL_IS_OBJECT(O) && !EJSVAL_IS_NULL(O)) {
         _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "1"); // XXX
     }
 
     // 2. Let S be ToString(O). 
     // 3. ReturnIfAbrupt(S). 
-    ejsval S = ToString(_this);
+    ejsval S = ToString(O);
 
     // 4. If Type(searchString) is Object, then 
     if (EJSVAL_IS_OBJECT(searchString)) {
@@ -1557,24 +1537,21 @@ _ejs_String_prototype_endsWith(ejsval env, ejsval _this, uint32_t argc, ejsval *
 // point value starting at the string element at position pos in the String resulting from converting this object to a String. If 
 // there is no element at that position, the result is undefined. If a valid UTF-16 surrogate pair does not begin at pos, the 
 // result is the code unit at pos.
-static ejsval
-_ejs_String_prototype_codePointAt(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_codePointAt) {
     // When the codePointAt method is called with one argument pos, the following steps are taken: 
     ejsval pos = _ejs_undefined;
     if (argc > 0)
         pos = args[0];
 
-    _this = ToObject(_this);
-
     // 1. Let O be CheckObjectCoercible(this value). 
-    if (!EJSVAL_IS_OBJECT(_this) && !EJSVAL_IS_NULL(_this)) {
+    ejsval O = ToObject(*_this);
+    if (!EJSVAL_IS_OBJECT(O) && !EJSVAL_IS_NULL(O)) {
         _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "1"); // XXX
     }
 
     // 2. Let S be ToString(O).
     // 3. ReturnIfAbrupt(S). 
-    ejsval S = ToString(_this);
+    ejsval S = ToString(O);
 
     // 4. Let position be ToInteger(pos). 
     int64_t position = ToInteger(pos);
@@ -1607,22 +1584,19 @@ _ejs_String_prototype_codePointAt(ejsval env, ejsval _this, uint32_t argc, ejsva
 }
 
 // ECMA262: 21.1.3.13 String.prototype.repeat ( count )
-static ejsval
-_ejs_String_prototype_repeat(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_repeat) {
     ejsval count = _ejs_undefined;
     if (argc > 0)
         count = args[0];
 
-    _this = ToObject(_this);
-
     // 1. Let O be CheckObjectCoercible(this value).
-    if (!EJSVAL_IS_OBJECT(_this) && !EJSVAL_IS_NULL(_this)) {
+    ejsval O = ToObject(*_this);
+    if (!EJSVAL_IS_OBJECT(O) && !EJSVAL_IS_NULL(O)) {
         _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "1"); // XXX
     }
 
     // 2. Let S be ToString(O).
-    ejsval S = ToString(_this);
+    ejsval S = ToString(O);
 
     // 3. ReturnIfAbrupt(S).
     // 4. Let n be the result of calling ToInteger(count).
@@ -1656,9 +1630,7 @@ _ejs_String_prototype_repeat(ejsval env, ejsval _this, uint32_t argc, ejsval *ar
 
 // ES6 21.1.3.7
 // String.prototype.contains ( searchString [ , position ] ) 
-static ejsval
-_ejs_String_prototype_includes(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_includes) {
     ejsval searchString = _ejs_undefined;
     ejsval position = _ejs_undefined;
     if (argc > 0)
@@ -1666,15 +1638,15 @@ _ejs_String_prototype_includes(ejsval env, ejsval _this, uint32_t argc, ejsval *
     if (argc > 1)
         position = args[1];
 
-    _this = ToObject(_this);
     // 1. Let O be CheckObjectCoercible(this value). 
-    if (!EJSVAL_IS_OBJECT(_this) && !EJSVAL_IS_NULL(_this)) {
+    ejsval O = ToObject(*_this);
+    if (!EJSVAL_IS_OBJECT(O) && !EJSVAL_IS_NULL(O)) {
         _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "1"); // XXX
     }
 
     // 2. Let S be ToString(O). 
     // 3. ReturnIfAbrupt(S). 
-    ejsval S = ToString(_this);
+    ejsval S = ToString(O);
 
     // 4. If Type(searchString) is Object, then 
     if (EJSVAL_IS_OBJECT(searchString)) {
@@ -1709,14 +1681,12 @@ _ejs_String_prototype_includes(ejsval env, ejsval _this, uint32_t argc, ejsval *
     //     as the character at position j of searchStr, return true; but if there is no such integer k, return false.
 }
 
-static ejsval
-_ejs_String_prototype_iterator (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_String_prototype_iterator) {
     /* 1. Let O be CheckObjectCoercible(this value). */
-    if (!EJSVAL_IS_STRING(_this) && !EJSVAL_IS_OBJECT(_this) && !EJSVAL_IS_NULL(_this))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1");
+    ejsval O = *_this;
 
-    ejsval O = _this;
+    if (!EJSVAL_IS_STRING(O) && !EJSVAL_IS_OBJECT(O) && !EJSVAL_IS_NULL(O))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1");
 
     /* 2. Let S be ToString(O). */
     /* 3. ReturnIfAbrupt(S). */
@@ -1753,18 +1723,14 @@ _ejs_string_iterator_new (ejsval string)
 ejsval _ejs_StringIterator_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_StringIterator EJSVAL_ALIGNMENT;
 
-static ejsval
-_ejs_StringIterator_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    return _this;
+static EJS_NATIVE_FUNC(_ejs_StringIterator_impl) {
+    return *_this;
 }
 
 /* 21.1.5.2.1 %StringIteratorPrototype%.next () */
-static ejsval
-_ejs_StringIterator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_StringIterator_prototype_next) {
     /* 1. Let O be the this value. */
-    ejsval O = _this;
+    ejsval O = *_this;
 
     /* 2. If Type(O) is not Object, throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O))
