@@ -2165,7 +2165,7 @@ _ejs_array_slice_dense (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     begin = MIN(begin, len);
     end = MIN(end, len);
 
-    ejsval rv = _ejs_array_new(end-begin, EJS_FALSE);
+    ejsval rv = ArraySpeciesCreate(_this, end-begin);
 
     memmove (&EJS_DENSE_ARRAY_ELEMENTS(rv)[0],
              &EJS_DENSE_ARRAY_ELEMENTS(_this)[begin],
