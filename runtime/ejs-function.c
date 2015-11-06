@@ -40,7 +40,7 @@ _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func)
 
     ejsval fun = OBJECT_TO_EJSVAL(rv);
 
-    _ejs_function_set_base_constructor(fun);
+    rv->constructor_kind = CONSTRUCTOR_KIND_BASE;
 
     // ECMA262: 15.3.2.1
     ejsval fun_proto = _ejs_object_new (_ejs_Object_prototype, &_ejs_Object_specops);
@@ -339,6 +339,7 @@ _ejs_function_set_derived_constructor (ejsval F)
     EJS_ASSERT(EJSVAL_IS_FUNCTION(F));
     EJSFunction *F_ = (EJSFunction*)EJSVAL_TO_OBJECT(F);
     F_->constructor_kind = CONSTRUCTOR_KIND_DERIVED;
+    F_->function_kind = FUNCTION_KIND_CLASS_CONSTRUCTOR;
 }
 
 void
@@ -347,6 +348,7 @@ _ejs_function_set_base_constructor (ejsval F)
     EJS_ASSERT(EJSVAL_IS_FUNCTION(F));
     EJSFunction *F_ = (EJSFunction*)EJSVAL_TO_OBJECT(F);
     F_->constructor_kind = CONSTRUCTOR_KIND_BASE;
+    F_->function_kind = FUNCTION_KIND_CLASS_CONSTRUCTOR;
 }
 
 static void
@@ -417,6 +419,11 @@ _ejs_invoke_closure (ejsval closure, ejsval* _this, uint32_t argc, ejsval* args,
 {
     if (!EJSVAL_IS_FUNCTION(closure)) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "object not a function");
+    }
+
+    EJSFunction* func = (EJSFunction*)EJSVAL_TO_OBJECT(closure);
+    if (func->function_kind == FUNCTION_KIND_CLASS_CONSTRUCTOR) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "class constructors are not callable as functions.  use 'new'");
     }
 
     return OP(EJSVAL_TO_OBJECT(closure),Call) (closure, *_this, argc, args);
