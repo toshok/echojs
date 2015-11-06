@@ -23,18 +23,14 @@ ejsval _ejs_identity_function EJSVAL_ALIGNMENT;
 ejsval _ejs_thrower_function EJSVAL_ALIGNMENT;
 
 // ECMA262 25.4.5.4.0 Identity Functions 
-static ejsval
-identity(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(identity) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
     return x;
 }
 
 // ECMA262 25.4.5.25.0 Thrower Functions 
-static ejsval
-thrower(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(thrower) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
     _ejs_throw(x);
@@ -185,9 +181,7 @@ static ejsval FulfillPromise (ejsval promise, ejsval resolutionValue)
 }
 
 // ECMA262 25.4.1.3.1 Promise Reject Functions 
-static ejsval
-reject(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(reject) {
     ejsval reason = _ejs_undefined;
     if (argc > 0) reason = args[0];
 
@@ -208,9 +202,7 @@ reject(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262 25.4.1.4 Promise Resolve Functions 
-static ejsval
-resolve(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(resolve) {
     ejsval resolution = _ejs_undefined;
     if (argc > 0) resolution = args[0];
 
@@ -260,9 +252,7 @@ resolve(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262 25.4.1.6.2 GetCapabilitiesExecutor Functions 
-static ejsval
-capabilitiesExecutor(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(capabilitiesExecutor) {
     ejsval resolve = _ejs_undefined;
     if (argc > 0) resolve = args[0];
     ejsval reject = _ejs_undefined;
@@ -443,14 +433,12 @@ PromiseResolveThenableTask (ejsval promiseToResolve, ejsval thenable, ejsval the
 }
 
 // 25.4.3.1 Promise ( executor ) 
-static ejsval
-_ejs_Promise_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Promise_impl) {
     ejsval executor = _ejs_undefined;
     if (argc > 0) executor = args[0];
 
     // 1. Let promise be the this value.
-    ejsval promise = _this;
+    ejsval promise = *_this;
 
     // 2. If Type(promise) is not Object, then throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(promise))
@@ -497,7 +485,8 @@ _ejs_Promise_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     if (!success) {
         //       a. Let status be the result of calling the [[Call]] internal method of resolvingFunctions.[[Reject]] with undefined as thisArgument and (completion.[[value]]) as argumentsList. 
         //       b. ReturnIfAbrupt(status). 
-        _ejs_invoke_closure(resolvingFunctions_reject, &_ejs_undefined, 1, &completion, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        ejsval undef_this = _ejs_undefined;
+        _ejs_invoke_closure(resolvingFunctions_reject, &undef_this, 1, &completion, EJS_CALL_FLAGS_CALL, _ejs_undefined);
     }
 
     //    9. Return promise.
@@ -505,14 +494,12 @@ _ejs_Promise_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262 25.4.5.1 Promise.prototype.catch ( onRejected ) 
-static ejsval
-_ejs_Promise_prototype_catch (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Promise_prototype_catch) {
     ejsval onRejected = _ejs_undefined;
     if (argc > 0) onRejected = args[0];
 
     // 1. Let promise be the this value. 
-    ejsval promise = _this;
+    ejsval promise = *_this;
 
     // 2. Return Invoke(promise, "then", (undefined, onRejected)). 
     ejsval thenargs[] = { _ejs_undefined, onRejected };
@@ -529,16 +516,14 @@ _ejs_promise_reaction_new (ejsval capability, ejsval handler)
 }
 
 // ECMA262 25.4.5.3 Promise.prototype.then ( onFulfilled , onRejected ) 
-static ejsval
-_ejs_Promise_prototype_then (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Promise_prototype_then) {
     ejsval onFulfilled = _ejs_undefined;
     ejsval onRejected = _ejs_undefined;
     if (argc > 0) onFulfilled = args[0];
     if (argc > 1) onRejected  = args[1];
 
     // 1. Let promise be the this value. 
-    ejsval promise = _this;
+    ejsval promise = *_this;
 
     // 2. If IsPromise(promise) is false, throw a TypeError exception. 
     if (!EJSVAL_IS_PROMISE(promise))
@@ -609,16 +594,12 @@ _ejs_Promise_prototype_then (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
 }
 
-static ejsval
-_ejs_Promise_get_species (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Promise_get_species) {
     return _ejs_Promise;
 }
 
 // ECMA262 25.4.4.1.1 Promise.all Resolve Element Functions
-static ejsval
-resolve_element (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(resolve_element) {
     // 1. If the value of F's [[AlreadyCalled]] internal slot is true, then return undefined. 
     if (EJSVAL_TO_BOOLEAN(EJS_RESOLVEELEMENT_GET_ALREADY_CALLED(env)))
         return _ejs_undefined;
@@ -650,16 +631,14 @@ resolve_element (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262 25.4.4.1 Promise.all ( iterable )
-static ejsval
-_ejs_Promise_all (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Promise_all) {
     EJSBool success;
 
     ejsval iterable = _ejs_undefined;
     if (argc > 0) iterable = args[0];
 
     // 1. Let C be the this value. 
-    ejsval C = _this;
+    ejsval C = *_this;
 
     // 2. Let promiseCapability be NewPromiseCapability(C). 
     // 3. ReturnIfAbrupt(promiseCapability). 
@@ -671,7 +650,8 @@ _ejs_Promise_all (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     // 5. IfAbruptRejectPromise(iterator, promiseCapability). 
     if (!success) {
-        _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &_ejs_undefined, 1, &iterator, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        ejsval undef_this = _ejs_undefined;
+        _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &iterator, EJS_CALL_FLAGS_CALL, _ejs_undefined);
         return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
     }
 
@@ -692,7 +672,8 @@ _ejs_Promise_all (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
         //    b. IfAbruptRejectPromise(next, promiseCapability). 
         if (!success) {
-            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &_ejs_undefined, 1, &next, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            ejsval undef_this = _ejs_undefined;
+            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &next, EJS_CALL_FLAGS_CALL, _ejs_undefined);
             return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
         }
         //    c. If next is false, 
@@ -706,7 +687,8 @@ _ejs_Promise_all (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
                 success = _ejs_invoke_closure_catch(&resolveResult, EJS_CAPABILITY_GET_RESOLVE(promiseCapability), _ejs_undefined, 1, &values);
                 //           2. ReturnIfAbrupt(resolveResult). 
                 if (!success) {
-                    _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &_ejs_undefined, 1, &resolveResult, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+                    ejsval undef_this = _ejs_undefined;
+                    _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &resolveResult, EJS_CALL_FLAGS_CALL, _ejs_undefined);
                     return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
                 }
             }
@@ -719,7 +701,8 @@ _ejs_Promise_all (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         success = IteratorValue_internal(&nextValue, next);
         //    e. IfAbruptRejectPromise(nextValue, promiseCapability). 
         if (!success) {
-            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &_ejs_undefined, 1, &nextValue, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            ejsval undef_this = _ejs_undefined;
+            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &nextValue, EJS_CALL_FLAGS_CALL, _ejs_undefined);
             return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
         }
         //    f. Let nextPromise be Invoke(C, "resolve", (nextValue)). 
@@ -728,7 +711,8 @@ _ejs_Promise_all (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         
         //    g. IfAbruptRejectPromise(nextPromise, promiseCapability).
         if (!success) {
-            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &_ejs_undefined, 1, &nextPromise, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            ejsval undef_this = _ejs_undefined;
+            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &nextPromise, EJS_CALL_FLAGS_CALL, _ejs_undefined);
             return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
         }
  
@@ -754,7 +738,8 @@ _ejs_Promise_all (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         success =  _ejs_invoke_closure_catch (&result, Get(nextPromise, _ejs_atom_then), nextPromise, 2, thenargs);
         //    p. IfAbruptRejectPromise(result, promiseCapability). 
         if (!success) {
-            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &_ejs_undefined, 1, &result, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            ejsval undef_this = _ejs_undefined;
+            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &result, EJS_CALL_FLAGS_CALL, _ejs_undefined);
             return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
         }
         //    q. Set index to index + 1.
@@ -763,16 +748,14 @@ _ejs_Promise_all (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262 25.4.4.3 Promise.race ( iterable ) 
-static ejsval
-_ejs_Promise_race (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Promise_race) {
     EJSBool success;
 
     ejsval iterable = _ejs_undefined;
     if (argc > 0) iterable = args[0];
 
     // 1. Let C be the this value. 
-    ejsval C = _this;
+    ejsval C = *_this;
 
     // 2. Let promiseCapability be NewPromiseCapability(C). 
     // 3. ReturnIfAbrupt(promiseCapability). 
@@ -784,7 +767,8 @@ _ejs_Promise_race (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     
     // 5. IfAbruptRejectPromise(iterator, promiseCapability).
     if (!success) {
-        _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &_ejs_undefined, 1, &iterator, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        ejsval undef_this = _ejs_undefined;
+        _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &iterator, EJS_CALL_FLAGS_CALL, _ejs_undefined);
         return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
     }
 
@@ -796,7 +780,8 @@ _ejs_Promise_race (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         EJSBool success = IteratorStep_internal(&next, iterator);
         //    b. IfAbruptRejectPromise(next, promiseCapability). 
         if (!success) {
-            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &_ejs_undefined, 1, &next, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            ejsval undef_this = _ejs_undefined;
+            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &next, EJS_CALL_FLAGS_CALL, _ejs_undefined);
             return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
         }
 
@@ -810,7 +795,8 @@ _ejs_Promise_race (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
         //    e. IfAbruptRejectPromise(nextValue, promiseCapability). 
         if (!success) {
-            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &_ejs_undefined, 1, &nextValue, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            ejsval undef_this = _ejs_undefined;
+            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &nextValue, EJS_CALL_FLAGS_CALL, _ejs_undefined);
             return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
         }
 
@@ -819,7 +805,8 @@ _ejs_Promise_race (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         success = _ejs_invoke_closure_catch(&nextPromise, C, _ejs_atom_resolve, 1, &nextValue);
         //    g. IfAbruptRejectPromise(nextPromise, promiseCapability). 
         if (!success) {
-            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &_ejs_undefined, 1, &nextPromise, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            ejsval undef_this = _ejs_undefined;
+            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &nextPromise, EJS_CALL_FLAGS_CALL, _ejs_undefined);
             return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
         }
 
@@ -830,21 +817,20 @@ _ejs_Promise_race (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
         //    i. IfAbruptRejectPromise(result, promiseCapability). 
         if (!success) {
-            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &_ejs_undefined, 1, &result, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            ejsval undef_this = _ejs_undefined;
+            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &result, EJS_CALL_FLAGS_CALL, _ejs_undefined);
             return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
         }
     }
 }
 
 // ECMA262 25.4.4.4 Promise.reject ( r )
-static ejsval
-_ejs_Promise_reject (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Promise_reject) {
     ejsval r = _ejs_undefined;
     if (argc > 0) r = args[0];
 
     // 1. Let C be the this value. 
-    ejsval C = _this;
+    ejsval C = *_this;
 
     // 2. Let promiseCapability be NewPromiseCapability(C). 
     // 3. ReturnIfAbrupt(promiseCapability). 
@@ -860,14 +846,12 @@ _ejs_Promise_reject (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262 25.4.4.5 Promise.resolve ( x )
-static ejsval
-_ejs_Promise_resolve (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Promise_resolve) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
 
     // 1. Let C be the this value. 
-    ejsval C = _this;
+    ejsval C = *_this;
     // 2. If IsPromise(x) is true, 
     if (EJSVAL_IS_PROMISE(x)) {
         EJSPromise* _x = EJSVAL_TO_PROMISE(x);
@@ -883,7 +867,8 @@ _ejs_Promise_resolve (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
     // 5. Let resolveResult be the result of calling the [[Call]] internal method of promiseCapability.[[Resolve]] with undefined as thisArgument and (x) as argumentsList. 
     // 6. ReturnIfAbrupt(resolveResult). 
-    _ejs_invoke_closure(EJS_CAPABILITY_GET_RESOLVE(promiseCapability), &_ejs_undefined, 1, &x, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+    ejsval undef_this = _ejs_undefined;
+    _ejs_invoke_closure(EJS_CAPABILITY_GET_RESOLVE(promiseCapability), &undef_this, 1, &x, EJS_CALL_FLAGS_CALL, _ejs_undefined);
 
     // 7. Return promiseCapability.[[Promise]]. 
     return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
@@ -892,7 +877,7 @@ _ejs_Promise_resolve (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 void
 _ejs_promise_init(ejsval global)
 {
-    _ejs_Promise = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Promise, (EJSClosureFunc)_ejs_Promise_impl);
+    _ejs_Promise = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Promise, _ejs_Promise_impl);
     _ejs_object_setprop (global, _ejs_atom_Promise, _ejs_Promise);
 
     _ejs_gc_add_root (&_ejs_Promise_prototype);
