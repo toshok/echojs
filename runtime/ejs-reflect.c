@@ -48,8 +48,37 @@ static EJS_NATIVE_FUNC(_ejs_Reflect_apply) {
     return _ejs_invoke_closure(obj, &thisArgument, EJS_ARRAY_LEN(argumentsList), EJS_DENSE_ARRAY_ELEMENTS(argumentsList), EJS_CALL_FLAGS_CALL, _ejs_undefined);
 }
 
+// ES2015, June 2015
+// 26.1.2 Reflect.construct ( target, argumentsList [, newTarget] )
 static EJS_NATIVE_FUNC(_ejs_Reflect_construct) {
-    EJS_NOT_IMPLEMENTED();
+    ejsval target = _ejs_undefined;
+    ejsval argumentsList = _ejs_undefined;
+    ejsval _newTarget = _ejs_undefined;
+
+    if (argc > 0) target = args[0];
+    if (argc > 1) argumentsList = args[1];
+    if (argc > 2) _newTarget = args[2];
+
+    // 1. If IsConstructor(target) is false, throw a TypeError exception.
+    if (!IsConstructor(target))
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "target is not a constructor in Reflect.construct");
+        
+    // 2. If newTarget is not present, let newTarget be target.
+    if (argc <= 2)
+        _newTarget = target;
+    // 3. Else, if IsConstructor(newTarget) is false, throw a TypeError exception.
+    else if (!IsConstructor(_newTarget))
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "newTarget is not a constructor in Reflect.construct");
+
+    // 4. Let args be CreateListFromArrayLike(argumentsList).
+    // 5. ReturnIfAbrupt(args).
+
+    if (!EJSVAL_IS_DENSE_ARRAY(argumentsList))
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "ejs bug - we assume argumentsList is a dense array in Reflect.construct");
+
+
+    // 6. Return Construct(target, args, newTarget).
+    return Construct(target, _newTarget, EJS_ARRAY_LEN(argumentsList), EJS_DENSE_ARRAY_ELEMENTS(argumentsList));
 }
 
 static EJS_NATIVE_FUNC(_ejs_Reflect_defineProperty) {
