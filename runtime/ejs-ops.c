@@ -335,18 +335,18 @@ uint16_t ToUint16(ejsval exp)
 ejsval ToObject(ejsval exp)
 {
     if (EJSVAL_IS_BOOLEAN(exp)) {
-        ejsval new_boolean = _ejs_object_new (_ejs_Boolean_prototype, &_ejs_Boolean_specops);
-        _ejs_invoke_closure (_ejs_Boolean, &new_boolean, 1, &exp, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        ejsval new_boolean;
+        _ejs_construct_closure (_ejs_Boolean, &new_boolean, 1, &exp, EJS_CALL_FLAGS_CONSTRUCT, _ejs_Boolean);
         return new_boolean;
     }
     else if (EJSVAL_IS_NUMBER(exp)) {
-        ejsval new_number = _ejs_object_new (_ejs_Number_prototype, &_ejs_Number_specops);
-        _ejs_invoke_closure (_ejs_Number, &new_number, 1, &exp, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        ejsval new_number;
+        _ejs_construct_closure (_ejs_Number, &new_number, 1, &exp, EJS_CALL_FLAGS_CONSTRUCT, _ejs_Number);
         return new_number;
     }
     else if (EJSVAL_IS_STRING(exp)) {
-        ejsval new_str = _ejs_object_new (_ejs_String_prototype, &_ejs_String_specops);
-        _ejs_invoke_closure (_ejs_String, &new_str, 1, &exp, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        ejsval new_str;
+        _ejs_construct_closure (_ejs_String, &new_str, 1, &exp, EJS_CALL_FLAGS_CONSTRUCT, _ejs_String);
         return new_str;
     }
     else if (EJSVAL_IS_UNDEFINED(exp)) {

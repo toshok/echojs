@@ -21,6 +21,27 @@ static EJS_NATIVE_FUNC(_ejs_RegExp_impl);
 
 static const unsigned char* pcre16_tables;
 
+EJSBool IsRegExp(ejsval argument) {
+    // 1. If Type(argument) is not Object, return false.
+    if (!EJSVAL_IS_OBJECT(argument))
+        return EJS_FALSE;
+
+    // 2. Let isRegExp be Get(argument, @@match).
+    // 3. ReturnIfAbrupt(isRegExp).
+    ejsval isRegExp = Get(argument, _ejs_Symbol_match);
+
+    // 4. If isRegExp is not undefined, return ToBoolean(isRegExp).
+    if (!EJSVAL_IS_UNDEFINED(isRegExp))
+        return ToEJSBool(isRegExp);
+    
+    // 5. If argument has a [[RegExpMatcher]] internal slot, return true.
+    if (EJSVAL_IS_REGEXP(argument))
+        return EJS_TRUE;
+
+    // 6. Return false.
+    return EJS_FALSE;
+}
+
 ejsval
 _ejs_regexp_new (ejsval pattern, ejsval flags)
 {

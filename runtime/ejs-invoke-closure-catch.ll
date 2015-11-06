@@ -5,13 +5,13 @@
 
 %EjsFuncType = type {  }
 
-define i32 @_ejs_invoke_closure_catch (%EjsValueType* nocapture %retval, %EjsValueType %closure, %EjsValueType %_this, i32 %argc, %EjsValueType* nocapture readnone %args) {
+define i32 @_ejs_invoke_closure_catch (%EjsValueType* nocapture %retval, %EjsValueType %closure, %EjsValueType* %_this, i32 %argc, %EjsValueType* nocapture readnone %args, i32 %callFlags, %EjsValueType %newTarget) {
 entry:
   %rv_alloc = alloca i32
 
   %ref = getelementptr inbounds %EjsValueType* %retval, i64 0, i32 0
 
-  %call = invoke i64 @_ejs_invoke_closure(%EjsValueType %closure, %EjsValueType %_this, i32 %argc, %EjsValueType* %args)
+  %call = invoke i64 @_ejs_invoke_closure(%EjsValueType %closure, %EjsValueType* %_this, i32 %argc, %EjsValueType* %args, i32 %callFlags, %EjsValueType %newTarget)
           to label %success unwind label %exception
 
 success:
@@ -75,7 +75,7 @@ try_merge:
   ret i32 %rvload
 }
 
-declare i64 @_ejs_invoke_closure(%EjsValueType, %EjsValueType, i32, %EjsValueType*)
+declare i64 @_ejs_invoke_closure(%EjsValueType, %EjsValueType*, i32, %EjsValueType*, i32, %EjsValueType)
 
 declare i32 @__ejs_personality_v0(i32, i32, i64, i8*, i8*)
 

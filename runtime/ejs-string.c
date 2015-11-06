@@ -324,9 +324,24 @@ ejsval _ejs_String EJSVAL_ALIGNMENT;
 ejsval _ejs_String__proto__ EJSVAL_ALIGNMENT;
 ejsval _ejs_String_prototype EJSVAL_ALIGNMENT;
 
+static ejsval thisStringValue(ejsval value) {
+    // 1. If Type(value) is String, return value.
+    if (EJSVAL_IS_STRING(value)) return value;
+
+    // 2. If Type(value) is Object and value has a [[StringData]] internal slot, then
+    // a. Assert: value’s [[StringData]] internal slot is a String value.
+    // b. Return the value of value’s [[StringData]] internal slot.
+    if (EJSVAL_IS_STRING_OBJECT(value)) {
+        return ((EJSString*)EJSVAL_TO_OBJECT(value))->primStr;
+    }
+
+    // 3. Throw a TypeError exception.
+    _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "value is not a string");
+}
+
+
 // ES2015, June 2015
 // 21.1.1.1 String ( value )
-
 static EJS_NATIVE_FUNC(_ejs_String_impl) {
     ejsval s;
 
@@ -359,8 +374,8 @@ static EJS_NATIVE_FUNC(_ejs_String_impl) {
 }
 
 static EJS_NATIVE_FUNC(_ejs_String_prototype_toString) {
-    EJSString *str = (EJSString*)EJSVAL_TO_OBJECT(*_this);
-    return str->primStr;
+    ejsval s = thisStringValue(*_this);
+    return s;
 }
 
 // ES6 21.1.3.14.1
@@ -1009,21 +1024,6 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_trim) {
     return T;
 }
 
-static ejsval thisStringValue(ejsval value) {
-    // 1. If Type(value) is String, return value.
-    if (EJSVAL_IS_STRING(value)) return value;
-
-    // 2. If Type(value) is Object and value has a [[StringData]] internal slot, then
-    // a. Assert: value’s [[StringData]] internal slot is a String value.
-    // b. Return the value of value’s [[StringData]] internal slot.
-    if (EJSVAL_IS_STRING_OBJECT(value)) {
-        return ((EJSString*)EJSVAL_TO_OBJECT(value))->primStr;
-    }
-
-    // 3. Throw a TypeError exception.
-    _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "value is not a string");
-}
-
 static EJS_NATIVE_FUNC(_ejs_String_prototype_valueOf) {
     // 1. Let s be thisStringValue(this value).
     ejsval s = thisStringValue(*_this);
@@ -1628,8 +1628,8 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_repeat) {
     return T;
 }
 
-// ES6 21.1.3.7
-// String.prototype.contains ( searchString [ , position ] ) 
+// ES2015, June 2015
+// 21.1.3.7 String.prototype.includes ( searchString [ , position ] )
 static EJS_NATIVE_FUNC(_ejs_String_prototype_includes) {
     ejsval searchString = _ejs_undefined;
     ejsval position = _ejs_undefined;
@@ -1638,7 +1638,7 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_includes) {
     if (argc > 1)
         position = args[1];
 
-    // 1. Let O be CheckObjectCoercible(this value). 
+    // 1. Let O be RequireObjectCoercible(this value).
     ejsval O = ToObject(*_this);
     if (!EJSVAL_IS_OBJECT(O) && !EJSVAL_IS_NULL(O)) {
         _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "1"); // XXX
@@ -1648,37 +1648,35 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_includes) {
     // 3. ReturnIfAbrupt(S). 
     ejsval S = ToString(O);
 
-    // 4. If Type(searchString) is Object, then 
-    if (EJSVAL_IS_OBJECT(searchString)) {
-        // a. Let isRegExp be HasProperty(searchString, @@isRegExp). 
-        // b. If isRegExp is true, then throw a TypeError exception. 
-        if (EJSVAL_IS_REGEXP(searchString)) {
-            _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "2"); // XXX
-        }
-    }
-    // 5. Let searchStr be ToString(searchString). 
-    // 6. ReturnIfAbrupt(searchStr). 
+    // 4. Let isRegExp be IsRegExp(searchString).
+    // 5. ReturnIfAbrupt(isRegExp).
+    EJSBool isRegExp = IsRegExp(searchString);
+    
+    // 6. If isRegExp is true, throw a TypeError exception.
+    if (isRegExp)
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "2"); // XXX
+
+    // 7. Let searchStr be ToString(searchString).
+    // 8. ReturnIfAbrupt(searchStr).
     ejsval searchStr = ToString(searchString);
 
-    // 7. Let pos be ToInteger(position). (If position is undefined, this step produces the value 0). 
-    // 8. ReturnIfAbrupt(pos). 
+    // 9. Let pos be ToInteger(position). (If position is undefined, this step produces the value 0).
+    // 10. ReturnIfAbrupt(pos).
     int64_t pos = ToInteger(position);
 
-    // 9. Let len be the number of elements in S. 
+    // 11. Let len be the number of elements in S.
     uint32_t len = EJSVAL_TO_STRLEN(S);
 
-    // 10. Let start be min(max(pos, 0), len). 
+    // 12. Let start be min(max(pos, 0), len).
     int64_t start = MIN(MAX(pos, 0), len);
+
+    // 13. Let searchLen be the number of elements in searchStr.
+    // 14. If there exists any integer k not smaller than start such that k + searchLen is not greater than len, and for all nonnegative integers j less than searchLen, the code unit at index k+j of S is the same as the code unit at index j of searchStr, return true; but if there is no such integer k, return false.
 
     EJSPrimString* prim_S = _ejs_string_flatten(S);
     EJSPrimString* prim_searchStr = _ejs_string_flatten(searchStr);
 
     return ucs2_strstr(prim_S->data.flat + start, prim_searchStr->data.flat) ? _ejs_true : _ejs_false;
-
-    // 11. Let searchLen be the number of elements in searchStr. 
-    // 12. If there exists any integer k not smaller than start such that k + searchLen is not greater than len, 
-    //     and for all nonnegative integers j less than searchLen, the character at position k+j of S is the same 
-    //     as the character at position j of searchStr, return true; but if there is no such integer k, return false.
 }
 
 static EJS_NATIVE_FUNC(_ejs_String_prototype_iterator) {

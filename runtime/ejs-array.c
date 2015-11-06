@@ -357,13 +357,9 @@ static EJS_NATIVE_FUNC(_ejs_Array_impl) {
         EJS_ASSERT(EJSVAL_IS_UNDEFINED(*_this));
 
         // called as a constructor
-        EJSArray* arr = _ejs_gc_new(EJSArray);
+        *_this = OrdinaryCreateFromConstructor(EJSVAL_IS_UNDEFINED(newTarget) ? _ejs_Array : newTarget, _ejs_Array_prototype, &_ejs_Array_specops);
 
-        ejsval proto = GetPrototypeFromConstructor(EJSVAL_IS_UNDEFINED(newTarget) ? _ejs_Array : newTarget, _ejs_Array_prototype);
-
-        _ejs_init_object ((EJSObject*)arr, proto, &_ejs_Array_specops);
-
-        *_this = OBJECT_TO_EJSVAL(arr);
+        EJSArray* arr = (EJSArray*)EJSVAL_TO_OBJECT(*_this);
 
         if (argc == 1 && EJSVAL_IS_NUMBER(args[0])) {
             int alloc = ToUint32(args[0]);
