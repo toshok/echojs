@@ -31,6 +31,7 @@ ES6_SOURCES=			 	\
 	passes/desugar-generator-functions.js \
 	passes/desugar-import-export.js	\
 	passes/desugar-let-loopvars.js	\
+	passes/desugar-metaproperties.js \
 	passes/desugar-rest-parameters.js \
 	passes/desugar-spread.js	\
 	passes/desugar-templates.js	\
