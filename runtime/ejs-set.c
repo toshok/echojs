@@ -513,11 +513,12 @@ static EJS_NATIVE_FUNC(_ejs_SetIterator_prototype_next) {
 void
 _ejs_set_init(ejsval global)
 {
-    _ejs_Set = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Set, (EJSClosureFunc)_ejs_Set_impl);
+    _ejs_gc_add_root (&_ejs_Set);
+    _ejs_Set = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Set, _ejs_Set_impl);
     _ejs_object_setprop (global, _ejs_atom_Set, _ejs_Set);
 
     _ejs_gc_add_root (&_ejs_Set_prototype);
-    _ejs_Set_prototype = _ejs_set_new ();
+    _ejs_Set_prototype = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
     _ejs_object_setprop (_ejs_Set,       _ejs_atom_prototype,  _ejs_Set_prototype);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Set, x, _ejs_Set_##x)
@@ -533,7 +534,7 @@ _ejs_set_init(ejsval global)
     PROTO_GETTER(size);
 
     // expand PROTO_METHOD(values) here so that we can install the function for both keys and @@iterator below
-    ejsval _values = _ejs_function_new_native (_ejs_null, _ejs_atom_values, (EJSClosureFunc)_ejs_Set_prototype_values);
+    ejsval _values = _ejs_function_new_native (_ejs_null, _ejs_atom_values, _ejs_Set_prototype_values);
     _ejs_object_define_value_property (_ejs_Set_prototype, _ejs_atom_values, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_FLAGS_WRITABLE | EJS_PROP_CONFIGURABLE);
     _ejs_object_define_value_property (_ejs_Set_prototype, _ejs_atom_keys, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
 
@@ -545,11 +546,10 @@ _ejs_set_init(ejsval global)
 #undef OBJ_METHOD
 #undef PROTO_METHOD
 
-    _ejs_SetIterator = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Set, (EJSClosureFunc)_ejs_SetIterator_impl);
+    _ejs_SetIterator = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Set, _ejs_SetIterator_impl);
 
     _ejs_gc_add_root (&_ejs_SetIterator_prototype);
-    _ejs_SetIterator_prototype = _ejs_set_iterator_new(_ejs_Set_prototype, EJS_SET_ITER_KIND_VALUE);
-    EJSVAL_TO_OBJECT(_ejs_SetIterator_prototype)->proto = _ejs_Iterator_prototype;
+    _ejs_SetIterator_prototype = _ejs_object_new(_ejs_Iterator_prototype, &_ejs_Object_specops);
     _ejs_object_define_value_property (_ejs_SetIterator, _ejs_atom_prototype, _ejs_SetIterator_prototype,
                                         EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     _ejs_object_define_value_property (_ejs_SetIterator_prototype, _ejs_atom_constructor, _ejs_SetIterator,
