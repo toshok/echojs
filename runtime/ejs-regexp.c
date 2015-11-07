@@ -137,11 +137,186 @@ _ejs_regexp_replace(ejsval str, ejsval search_re, ejsval replace)
     return str;
 }
 
+// ES2015, June 2015
+// 21.2.3.2.1 Runtime Semantics: RegExpAlloc ( newTarget )
+static ejsval
+RegExpAlloc(ejsval newTarget) {
+    // 1. Let obj be OrdinaryCreateFromConstructor(newTarget, "%RegExpPrototype%", «[[RegExpMatcher]], [[OriginalSource]], [[OriginalFlags]]»).
+    // 2. ReturnIfAbrupt(obj).
+    ejsval obj = OrdinaryCreateFromConstructor(newTarget, _ejs_RegExp_prototype, &_ejs_RegExp_specops);
+
+    // 3. Let status be DefinePropertyOrThrow(obj, "lastIndex", PropertyDescriptor {[[Writable]]: true, [[Enumerable]]: false, [[Configurable]]: false}).
+    EJSPropertyDesc* desc = _ejs_propertydesc_new();
+    _ejs_property_desc_set_writable(desc, EJS_TRUE);
+    _ejs_property_desc_set_enumerable(desc, EJS_FALSE);
+    _ejs_property_desc_set_configurable(desc, EJS_FALSE);
+
+    ejsval exc;
+    DefinePropertyOrThrow(obj, _ejs_atom_lastIndex, desc, &exc);
+
+    // 4. Assert: status is not an abrupt completion.
+    // XXX
+
+    // 5. Return obj.
+    return obj;
+}
+
+// ES2015, June 2015
+// 21.2.3.2.2 Runtime Semantics: RegExpInitialize ( obj, pattern, flags )
+static ejsval
+RegExpInitialize(ejsval obj, ejsval pattern, ejsval flags) {
+    ejsval P, F;
+
+    // 1. If pattern is undefined, let P be the empty String.
+    if (EJSVAL_IS_UNDEFINED(pattern))
+        P = _ejs_atom_empty;
+    // 2. Else, let P be ToString(pattern).
+    // 3. ReturnIfAbrupt(P).
+    else
+        P = ToString(pattern);
+
+    // 4. If flags is undefined, let F be the empty String.
+    if (EJSVAL_IS_UNDEFINED(flags))
+        F = _ejs_atom_empty;
+    // 5. Else, let F be ToString(flags).
+    // 6. ReturnIfAbrupt(F).
+    else
+        F = ToString(flags);
+
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(obj);
+
+    // 7. If F contains any code unit other than "g", "i", "m", "u", or "y" or if it contains the same code unit more than once, throw a SyntaxError exception.
+    // 8. If F contains "u", let BMP be false; else let BMP be true.
+
+    EJSPrimString *flat_flags = _ejs_string_flatten(F);
+    jschar* chars = flat_flags->data.flat;
+
+    for (int i = 0; i < flat_flags->length; i ++) {
+        if      (chars[i] == 'g' && !re->global)     { re->global     = EJS_TRUE; continue; }
+        else if (chars[i] == 'i' && !re->ignoreCase) { re->ignoreCase = EJS_TRUE; continue; }
+        else if (chars[i] == 'm' && !re->multiline)  { re->multiline  = EJS_TRUE; continue; }
+        else if (chars[i] == 'y' && !re->sticky)     { re->sticky     = EJS_TRUE; continue; }
+        else if (chars[i] == 'u' && !re->unicode)    { re->unicode    = EJS_TRUE; continue; }
+        _ejs_throw_nativeerror_utf8 (EJS_SYNTAX_ERROR, "Invalid flag supplied to RegExp constructor");
+    }
+
+    // 9. If BMP is true, then
+    // a. Parse P using the grammars in 21.2.1 and interpreting each
+    // of its 16-bit elements as a Unicode BMP code point. UTF-16
+    // decoding is not applied to the elements. The goal symbol for
+    // the parse is Pattern. Throw a SyntaxError exception if P did
+    // not conform to the grammar, if any elements of P were not
+    // matched by the parse, or if any Early Error conditions exist.
+    // b. Let patternCharacters be a List whose elements are the code unit elements of P.
+    // 10. Else
+    // a. Parse P using the grammars in 21.2.1 and interpreting P as UTF-16 encoded Unicode code points (6.1.4). The goal symbol for the parse is Pattern[U]. Throw a SyntaxError exception if P did not conform to the grammar, if any elements of P were not matched by the parse, or if any Early Error conditions exist.
+    // b. Let patternCharacters be a List whose elements are the code points resulting from applying UTF-16 decoding to P’s sequence of elements.
+    // 11. Set the value of obj’s [[OriginalSource]] internal slot to P.
+    re->pattern = P;
+
+    // 12. Set the value of obj’s [[OriginalFlags]] internal slot to F.
+    re->flags = F;
+
+    // 13. Set obj’s [[RegExpMatcher]] internal slot to the internal procedure that evaluates the above parse of P by applying the semantics provided in 21.2.2 using patternCharacters as the pattern’s List of SourceCharacter values and F as the flag parameters.
+
+    EJSPrimString *flat_pattern = _ejs_string_flatten(P);
+    chars = flat_pattern->data.flat;
+
+    const char *pcre_error;
+    int pcre_erroffset;
+
+    re->compiled_pattern = pcre16_compile(chars,
+                                          PCRE_UTF16 | PCRE_NO_UTF16_CHECK,
+                                          &pcre_error, &pcre_erroffset,
+                                          pcre16_tables);
+
+
+    // 14. Let setStatus be Set(obj, "lastIndex", 0, true).
+    // 15. ReturnIfAbrupt(setStatus).
+    Put(obj, _ejs_atom_lastIndex, NUMBER_TO_EJSVAL(0), EJS_TRUE);
+
+    // 16. Return obj.
+    return obj;
+}
+
 
 ejsval _ejs_RegExp EJSVAL_ALIGNMENT;
 ejsval _ejs_RegExp_prototype EJSVAL_ALIGNMENT;
 
+// ES2015, June 2015
+// 21.2.3.1 RegExp ( pattern, flags )
 static EJS_NATIVE_FUNC(_ejs_RegExp_impl) {
+    ejsval pattern = _ejs_undefined;
+    ejsval flags = _ejs_undefined;
+
+    if (argc > 0) pattern = args[0];
+    if (argc > 1) flags = args[1];
+
+    // 1. Let patternIsRegExp be IsRegExp(pattern).
+    // 2. ReturnIfAbrupt(patternIsRegExp).
+    EJSBool patternIsRegExp = IsRegExp(pattern);
+
+    // 3. If NewTarget is not undefined, let newTarget be NewTarget.
+    if (!EJSVAL_IS_UNDEFINED(newTarget))
+        ;
+    // 4. Else,
+    else {
+        // a. Let newTarget be the active function object.
+        newTarget = _ejs_RegExp;
+
+        // b. If patternIsRegExp is true and flags is undefined, then
+        if (patternIsRegExp && EJSVAL_IS_UNDEFINED(flags)) {
+            // i. Let patternConstructor be Get(pattern, "constructor").
+            // ii. ReturnIfAbrupt(patternConstructor).
+            ejsval patternConstructor = Get(pattern, _ejs_atom_constructor);
+
+            // iii. If SameValue(newTarget, patternConstructor) is true, return pattern.
+            if (SameValue(newTarget, patternConstructor))
+                return pattern;
+        }
+    }
+
+    ejsval P, F;
+
+    // 5. If Type(pattern) is Object and pattern has a [[RegExpMatcher]] internal slot, then
+    if (EJSVAL_IS_REGEXP(pattern)) {
+        EJS_NOT_IMPLEMENTED();
+        // a. Let P be the value of pattern’s [[OriginalSource]] internal slot.
+        // b. If flags is undefined, let F be the value of pattern’s [[OriginalFlags]] internal slot.
+        // c. Else, let F be flags.
+    }
+    // 6. Else if patternIsRegExp is true, then
+    else if (patternIsRegExp) {
+        // a. Let P be Get(pattern, "source").
+        // b. ReturnIfAbrupt(P).
+        P = Get(pattern, _ejs_atom_source);
+
+        // c. If flags is undefined, then
+        if (EJSVAL_IS_UNDEFINED(flags)) {
+            // i. Let F be Get(pattern, "flags").
+            // ii. ReturnIfAbrupt(F).
+            F = Get(pattern, _ejs_atom_flags);
+        }
+        // d. Else, let F be flags.
+        else
+            F = flags;
+    }
+    // 7. Else,
+    else {
+        // a. Let P be pattern.
+        P = pattern;
+
+        // b. Let F be flags.
+        F = flags;
+    }
+    // 8. Let O be RegExpAlloc(newTarget).
+    // 9. ReturnIfAbrupt(O).
+    ejsval O = RegExpAlloc(newTarget);
+
+    // 10. Return RegExpInitialize(O, P, F)
+    return RegExpInitialize(O, P, F);
+
+#if old_code
     EJSRegExp *re;
 
     if (callFlags == EJS_CALL_FLAGS_CONSTRUCT) {
@@ -196,6 +371,7 @@ static EJS_NATIVE_FUNC(_ejs_RegExp_impl) {
     }
 
     return *_this;
+#endif
 }
 
 // ES6 21.2.5.2.2

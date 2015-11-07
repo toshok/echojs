@@ -160,7 +160,7 @@ DeletePropertyOrThrow(ejsval argument, ejsval property)
 
 // ES6 7.3.6
 // DefinePropertyOrThrow (O, P, desc)
-static EJSBool
+EJSBool
 DefinePropertyOrThrow (ejsval O, ejsval P, EJSPropertyDesc* desc, ejsval *exc)
 {
     // 1. Assert: Type(O) is Object. 

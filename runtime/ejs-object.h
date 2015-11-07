@@ -110,6 +110,7 @@ ejsval Put (ejsval O, ejsval P, ejsval V, EJSBool Throw);
 ejsval GetMethod (ejsval O, ejsval P);
 EJSBool HasProperty (ejsval O, ejsval P);
 ejsval DeletePropertyOrThrow (ejsval O, ejsval P);
+EJSBool DefinePropertyOrThrow (ejsval O, ejsval P, EJSPropertyDesc* desc, ejsval *exc);
     
 typedef struct _EJSPropertyMapEntry _EJSPropertyMapEntry;
 struct _EJSPropertyMapEntry {
