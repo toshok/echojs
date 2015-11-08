@@ -953,19 +953,23 @@ ejsval _ejs_Object EJSVAL_ALIGNMENT;
 ejsval _ejs_Object__proto__ EJSVAL_ALIGNMENT;
 ejsval _ejs_Object_prototype EJSVAL_ALIGNMENT;
 
+// ES2015, June 2015
+// 19.1.1.1 Object ( [ value ] )
 static EJS_NATIVE_FUNC(_ejs_Object_impl) {
-    if (callFlags == EJS_CALL_FLAGS_CALL) {
-        // ECMA262: 15.2.1.1
-    
-        _ejs_log ("called Object() as a function!\n");
-        return _ejs_null;
-    }
-    else {
-        // ECMA262: 15.2.2
+    ejsval value = _ejs_undefined;
+    if (argc > 0) value = args[0];
 
-        _ejs_log ("called Object() as a constructor!\n");
-        return _ejs_null;
-    }
+    // 1. If NewTarget is neither undefined nor the active function, then
+    if (!EJSVAL_IS_UNDEFINED(newTarget) && !EJSVAL_EQ(newTarget, _ejs_Object))
+        // a. Return OrdinaryCreateFromConstructor(NewTarget, "%ObjectPrototype%").
+        return OrdinaryCreateFromConstructor(newTarget, _ejs_Object_prototype, &_ejs_Object_specops);
+
+    // 2. If value is null, undefined or not supplied, return ObjectCreate(%ObjectPrototype%).
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(value))
+        return _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
+    
+    // 3. Return ToObject(value).
+    return ToObject(value);
 }
 
 // ECMA262: 19.1.2.9 Object.getPrototypeOf ( O ) 
