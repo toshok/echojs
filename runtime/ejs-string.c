@@ -1084,6 +1084,8 @@ SplitMatch(ejsval S, int q, ejsval R)
     return rv;
 }
 
+// ES2015, June 2015
+// 21.1.3.17 String.prototype.split ( separator, limit )
 static EJS_NATIVE_FUNC(_ejs_String_prototype_split) {
     ejsval separator = _ejs_undefined;
     if (argc > 0) separator = args[0];
@@ -1095,45 +1097,49 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_split) {
     // 2. ReturnIfAbrupt(O).
     ejsval O = *_this;
 
-    // 3. Let splitter be GetMethod(separator, @@split).
-    // 4. ReturnIfAbrupt(splitter).
-    ejsval splitter = GetMethod(separator, _ejs_Symbol_split);
+    // 3. If separator is neither undefined nor null, then
+    if (!EJSVAL_IS_NULL_OR_UNDEFINED(separator)) {
+        // a. Let splitter be GetMethod(separator, @@split).
+        // b. ReturnIfAbrupt(splitter).
+        ejsval splitter = GetMethod(separator, _ejs_Symbol_split);
 
-    // 5. If splitter is not undefined, then,
-    if (!EJSVAL_IS_UNDEFINED(splitter)) {
-        //    a. Return Call(splitter, separator, «O, limit»).
-        ejsval args[2] = { O, limit };
-        return _ejs_invoke_closure(splitter, &separator, 2, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        // c. If splitter is not undefined, then,
+        if (!EJSVAL_IS_UNDEFINED(splitter)) {
+            //    i. Return Call(splitter, separator, «O, limit»).
+            ejsval args[2] = { O, limit };
+            return _ejs_invoke_closure(splitter, &separator, 2, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        }
     }
 
-    // 6. Let S be ToString(O).
-    // 7. ReturnIfAbrupt(S).
+    // 4. Let S be ToString(O).
+    // 5. ReturnIfAbrupt(S).
     ejsval S = ToString(O);
 
-    // 8. Let A be ArrayCreate(0).
+    // 6. Let A be ArrayCreate(0).
     ejsval A = _ejs_array_new(0, EJS_FALSE);
-    // 9. Let lengthA be 0.
+    // 7. Let lengthA be 0.
     int lengthA = 0;
 
 
-    // 10. If limit is undefined, let lim = 2^53-1; else let lim = ToLength(limit).
+    // 8. If limit is undefined, let lim = 2^53-1; else let lim = ToLength(limit).
+    // 9. ReturnIfAbrupt(lim)
     int64_t lim = EJSVAL_IS_UNDEFINED(limit) ? EJS_MAX_SAFE_INTEGER : ToLength(limit);
 
-    // 11. Let s be the number of elements in S.
+    // 10. Let s be the number of elements in S.
     int s = EJSVAL_TO_STRLEN(S);
 
-    // 12. Let p = 0.
+    // 11. Let p = 0.
     int p = 0;
 
-    // 13. Let R be ToString(separator).
-    // 14. ReturnIfAbrupt(R).
+    // 12. Let R be ToString(separator).
+    // 13. ReturnIfAbrupt(R).
     ejsval R = ToString(separator);
 
-    // 15. If lim = 0, return A.
+    // 14. If lim = 0, return A.
     if (lim == 0)
         return A;
 
-    // 16. If separator is undefined, then
+    // 15. If separator is undefined, then
     if (EJSVAL_IS_UNDEFINED(separator)) {
         //     a. Call CreateDataProperty(A, "0", S).
         //     b. Assert: The above call will never result in an abrupt completion.
@@ -1154,10 +1160,10 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_split) {
         //     e. Return A.
         return A;
     }
-    // 18. Let q = p.
+    // 17. Let q = p.
     int q = p;
 
-    // 19. Repeat, while q != s
+    // 18. Repeat, while q != s
     while (q != s) {
         // a. Let e be the result of SplitMatch(S, q, R).
         MatchResultState e = SplitMatch(S, q, R);
@@ -1189,12 +1195,12 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_split) {
         }
     }
 
-    // 20. Let T be a String value equal to the substring of S consisting of the code units at indices p (inclusive) through s (exclusive).
+    // 19. Let T be a String value equal to the substring of S consisting of the code units at indices p (inclusive) through s (exclusive).
     ejsval T = _ejs_string_new_substring (S, p, s-p);
-    // 21. Call CreateDataProperty(A, ToString(lengthA), T).
-    // 22. Assert: The above call will never result in an abrupt completion.
+    // 20. Call CreateDataProperty(A, ToString(lengthA), T).
+    // 21. Assert: The above call will never result in an abrupt completion.
     _ejs_array_push_dense(A, 1, &T);
-    // 23. Return A.
+    // 22. Return A.
     return A;
 }
 
