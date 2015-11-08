@@ -254,7 +254,7 @@ _ejs_array_from_iterables (int argc, ejsval* args)
 {
     ejsval rv = _ejs_array_new (0, EJS_FALSE);
     for (int i = 0; i < argc; i ++) {
-        ejsval iter = args[i];
+        ejsval iter = ToObject(args[i]);
         if (EJSVAL_IS_DENSE_ARRAY(iter)) {
             EJSArray *iter_arr = (EJSArray*)EJSVAL_TO_OBJECT(iter);
             _ejs_array_push_dense (rv, EJSARRAY_LEN(iter_arr), EJSDENSEARRAY_ELEMENTS(iter_arr));
