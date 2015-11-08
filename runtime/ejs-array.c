@@ -1508,11 +1508,10 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_reduceRight) {
     return accumulator;
 }
 
-// ES6 Draft January 15, 2015
-// 22.1.3.20
-// Array.prototype.reverse ( )
+// ES2015, June 2015
+// 22.1.3.20 Array.prototype.reverse ( )
 static EJS_NATIVE_FUNC(_ejs_Array_prototype_reverse) {
-    // 1. Let O be the result of calling ToObject passing the this value as the argument.
+    // 1. Let O be ToObject(this value).
     // 2. ReturnIfAbrupt(O).
     ejsval O = ToObject(*_this);
 
@@ -1520,26 +1519,25 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_reverse) {
     // 4. ReturnIfAbrupt(len).
     int64_t len = ToLength(Get(O, _ejs_atom_length));
 
-    // 5. Let middle be floor(len/2). 
+    // 5. Let middle be floor(len/2).
     int64_t middle = len / 2;
 
-    // 6. Let lower be 0. 
+    // 6. Let lower be 0.
     int64_t lower = 0;
 
-    // 7. Repeat, while lower != middle 
+    // 7. Repeat, while lower != middle
     while (lower != middle) {
-        // a. Let upper be len - lower - 1. 
+        // a. Let upper be len - lower - 1.
         uint32_t upper = len - lower - 1;
 
-        // b. Let upperP be ToString(upper). 
+        // b. Let upperP be ToString(upper).
         ejsval upperP = ToString(NUMBER_TO_EJSVAL(upper));
 
-        // c. Let lowerP be ToString(lower). 
+        // c. Let lowerP be ToString(lower).
         ejsval lowerP = ToString(NUMBER_TO_EJSVAL(lower));
 
         ejsval lowerValue;
         ejsval upperValue;
-
 
         // d. Let lowerExists be HasProperty(O, lowerP).
         // e. ReturnIfAbrupt(lowerExists).
@@ -1550,7 +1548,6 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_reverse) {
             // ii. ReturnIfAbrupt(lowerValue).
             lowerValue = Get(O, lowerP);
         }
-
         // g. Let upperExists be HasProperty(O, upperP).
         // h. ReturnIfAbrupt(upperExists).
         EJSBool upperExists = HasProperty(O, upperP);
@@ -1560,42 +1557,43 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_reverse) {
             // ii. ReturnIfAbrupt(upperValue).
             upperValue = Get(O, upperP);
         }
-
         // j. If lowerExists is true and upperExists is true, then
         if (lowerExists && upperExists) {
-            // i.   Let putStatus be Put(O, lowerP, upperValue, true).
-            // ii.  ReturnIfAbrupt(putStatus).
+            // i. Let setStatus be Set(O, lowerP, upperValue, true).
+            // ii. ReturnIfAbrupt(setStatus).
             Put(O, lowerP, upperValue, EJS_TRUE);
-            // iii. Let putStatus be Put(O, upperP, lowerValue, true).
-            // iv.  ReturnIfAbrupt(putStatus).
+
+            // iii. Let setStatus be Set(O, upperP, lowerValue, true).
+            // iv. ReturnIfAbrupt(setStatus).
             Put(O, upperP, lowerValue, EJS_TRUE);
         }
         // k. Else if lowerExists is false and upperExists is true, then
         else if (!lowerExists && upperExists) {
-            // i.   Let putStatus be Put(O, lowerP, upperValue, true).
-            // ii.  ReturnIfAbrupt(putStatus).
+            // i. Let setStatus be Set(O, lowerP, upperValue, true).
+            // ii. ReturnIfAbrupt(setStatus).
             Put(O, lowerP, upperValue, EJS_TRUE);
+
             // iii. Let deleteStatus be DeletePropertyOrThrow (O, upperP).
-            // iv.  ReturnIfAbrupt(deleteStatus).
+            // iv. ReturnIfAbrupt(deleteStatus).
             DeletePropertyOrThrow(O, upperP);
         }
         // l. Else if lowerExists is true and upperExists is false, then
         else if (lowerExists && !upperExists) {
-            // Let deleteStatus be DeletePropertyOrThrow (O, lowerP).
-            // ReturnIfAbrupt(deleteStatus).
+            // i. Let deleteStatus be DeletePropertyOrThrow (O, lowerP).
+            // ii. ReturnIfAbrupt(deleteStatus).
             DeletePropertyOrThrow(O, lowerP);
-            // Let putStatus be Put(O, upperP, lowerValue, true).
-            // ReturnIfAbrupt(putStatus).
+            // iii. Let setStatus be Set(O, upperP, lowerValue, true).
+            // iv. ReturnIfAbrupt(setStatus).
             Put(O, upperP, lowerValue, EJS_TRUE);
         }
         // m. Else both lowerExists and upperExists are false,
         else {
-            // No action is required.
+            // i. No action is required.
         }
         // n. Increase lower by 1.
         lower++;
     }
-    // 8. return O.
+    // 8. Return O .
     return O;
 }
 
