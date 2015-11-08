@@ -280,10 +280,14 @@ static EJS_NATIVE_FUNC(_ejs_RegExp_impl) {
 
     // 5. If Type(pattern) is Object and pattern has a [[RegExpMatcher]] internal slot, then
     if (EJSVAL_IS_REGEXP(pattern)) {
-        EJS_NOT_IMPLEMENTED();
         // a. Let P be the value of pattern’s [[OriginalSource]] internal slot.
+        P = ((EJSRegExp*)EJSVAL_TO_OBJECT(pattern))->pattern;
         // b. If flags is undefined, let F be the value of pattern’s [[OriginalFlags]] internal slot.
+        if (EJSVAL_IS_UNDEFINED(flags))
+            F = ((EJSRegExp*)EJSVAL_TO_OBJECT(pattern))->flags;
         // c. Else, let F be flags.
+        else
+            F = flags;
     }
     // 6. Else if patternIsRegExp is true, then
     else if (patternIsRegExp) {
@@ -1011,8 +1015,8 @@ static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_replace) {
                               _ejs_string_new_substring(S, nextSourcePosition, EJSVAL_TO_STRLEN(S) - nextSourcePosition));
 }
 
-// ES6 21.2.5.11
-// RegExp.prototype [ @@split ] ( string, limit )
+// ES2015, June 2015
+// 21.2.5.11 RegExp.prototype [ @@split ] ( string, limit )
 static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_split) {
     ejsval string = _ejs_undefined;
     if (argc > 0) string = args[0];
@@ -1034,42 +1038,45 @@ static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_split) {
 
     // 5. Let C be SpeciesConstructor(rx, %RegExp%).
     // 6. ReturnIfAbrupt(C).
-    // XXX we don't supporrt the SpeciesConstructor stuff yet.  always construct a RegExp.  see #11 below
+    ejsval C = SpeciesConstructor(rx, _ejs_RegExp);
 
     // 7. Let flags be ToString(Get(rx, "flags"))
     // 8. ReturnIfAbrupt(flags).
     ejsval flags = ToString(Get(rx, _ejs_atom_flags));
 
-    // 9. If flags contains "u",then let unicodeMatching be true else let unicodeMatching be false.
-    EJSBool unicodeMatching = EJS_FALSE;
+    // 9. If flags contains "u",then let unicodeMatching be true.
+    // 10. Else, let unicodeMatching be false.
     // XXX
+    EJSBool unicodeMatching = EJS_FALSE;
 
-    // 10. If flags contains "y", let newFlags be flags else let newFlags be the string that is the concatenation of flags and "y".
+    // 11. If flags contains "y", let newFlags be flags.
+    // 12. Else, let newFlags be the string that is the concatenation of flags and "y".
     ejsval newFlags = flags;
     // XXX
 
-    // 11. Let splitter be Construct(C, «rx, newFlags»).
-    // 12. ReturnIfAbrupt(splitter).
-    ejsval splitter = _ejs_regexp_new(rx, newFlags);
+    // 13. Let splitter be Construct(C, «rx, newFlags»).
+    // 14. ReturnIfAbrupt(splitter).
+    ejsval construct_args[] = { rx, newFlags };
+    ejsval splitter = Construct(C, C, 2, construct_args);
 
-    // 13. Let A be ArrayCreate(0).
+    // 15. Let A be ArrayCreate(0).
     ejsval A = _ejs_array_new(0, EJS_FALSE);
-    // 14. Let lengthA be 0.
+    // 16. Let lengthA be 0.
     int lengthA = 0;
 
-    // 15. If limit is undefined, let lim = 2^53–1; else let lim = ToLength(limit).
-    // 16. ReturnIfAbrupt(lim).
+    // 17. If limit is undefined, let lim = 2^53–1; else let lim = ToLength(limit).
+    // 18. ReturnIfAbrupt(lim).
     int64_t lim = EJSVAL_IS_UNDEFINED(limit) ?  EJS_MAX_SAFE_INTEGER : ToLength(limit);
 
-    // 17. Let size be the number of elements in S.
+    // 19. Let size be the number of elements in S.
     int size = EJSVAL_TO_STRLEN(S);
 
-    // 18. Let p = 0.
+    // 20. Let p = 0.
     int p = 0;
-    // 19. If lim = 0, return A.
+    // 21. If lim = 0, return A.
     if (lim == 0) return A;
 
-    // 20. If size = 0, then
+    // 22. If size = 0, then
     if (size == 0) {
         // a. Let z be RegExpExec(splitter, S).
         // b. ReturnIfAbrupt(z).
@@ -1079,14 +1086,14 @@ static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_split) {
         if (!EJSVAL_IS_NULL(z)) return A;
 
         // d. Assert: The following call will never result in an abrupt completion.
-        // e. Call CreateDataProperty(A, "0", S).
+        // e. Perform CreateDataProperty(A, "0", S).
         _ejs_array_push_dense(A, 1, &S);
         // f. Return A.
         return A;
     }
-    // 21. Let q = p.
+    // 23. Let q = p.
     int q = p;
-    // 22. Repeat, while q < size
+    // 24. Repeat, while q < size
     while (q < size) {
         // a. Let putStatus be Put(splitter, "lastIndex", q, true).
         // b. ReturnIfAbrupt(putStatus).
@@ -1096,7 +1103,8 @@ static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_split) {
         // d. ReturnIfAbrupt(z).
         ejsval z = RegExpExec(splitter, S);
 
-        // e. If z is null, then
+        // e. If z is null, let q be AdvanceStringIndex(S, q, unicodeMatching)
+        // XXX this branch of the if is from an older version
         if (EJSVAL_IS_NULL(z)) {
             // i. If unicodeMatching is true, then
             if (unicodeMatching) {
@@ -1120,7 +1128,8 @@ static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_split) {
             // i. Let e be ToLength(Get(splitter, "lastIndex")).
             // ii. ReturnIfAbrupt(e).
             int64_t e = ToLength(Get(splitter, _ejs_atom_lastIndex));
-            // iii. If e = p, then
+            // iii. If e = p, let q be AdvanceStringIndex(S, q, unicodeMatching).
+            // XXX this branch of the if is from an older version
             if (e == p) {
                 // 1. If unicodeMatching is true, then
                 if (unicodeMatching) {
@@ -1144,7 +1153,7 @@ static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_split) {
                 // 1. Let T be a String value equal to the substring of S consisting of the elements at indices p (inclusive) through q (exclusive).
                 ejsval T = _ejs_string_new_substring(S, p, q-p);
                 // 2. Assert: The following call will never result in an abrupt completion.
-                // 3. Call CreateDataProperty(A, ToString(lengthA), T).
+                // 3. Perform CreateDataProperty(A, ToString(lengthA), T).
                 _ejs_array_push_dense(A, 1, &T);
 
                 // 4. Let lengthA be lengthA +1.
@@ -1156,35 +1165,36 @@ static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_split) {
                 // 6. Let p = e.
                 p = e;
 
-                // 7. Let i = 0.
-                // 8. Let numberOfCaptures be ToLength(Get(z, "length")).
-                // 9. ReturnIfAbrupt(numberOfCaptures).
+                // 7. Let numberOfCaptures be ToLength(Get(z, "length")).
+                // 8. ReturnIfAbrupt(numberOfCaptures).
                 int64_t numberOfCaptures = ToLength(Get(z, _ejs_atom_length));
-                // 10. Let numberOfCaptures be max(numberOfCaptures-1, 0).
+
+                // 9. Let numberOfCaptures be max(numberOfCaptures-1, 0).
                 numberOfCaptures = MAX(numberOfCaptures-1, 0);
-                // 11. Let i be 1.
+
+                // 10. Let i be 1.
                 int i = 1;
-                // 12. Repeat, while i ≤ numberOfCaptures.
+                // 11. Repeat, while i ≤ numberOfCaptures.
                 while (i <= numberOfCaptures) {
                     EJS_NOT_IMPLEMENTED();
                     // a. Let nextCapture be Get(z, ToString(i)).
                     // b. ReturnIfAbrupt(nextCapture).
-                    // c. Call CreateDataProperty(A, ToString(lengthA), nextCapture).
+                    // c. Perform CreateDataProperty(A, ToString(lengthA), nextCapture).
                     // d. Let i be i +1.
                     // e. Let lengthA be lengthA +1.
                     // f. If lengthA = lim, return A.
                 }
-                // 13. Let q = p.
+                // 12. Let q = p.
                 q = p;
             }
         }
     }
-    // 23. Let T be a String value equal to the substring of S consisting of the elements at indices p (inclusive) through size (exclusive).
+    // 25. Let T be a String value equal to the substring of S consisting of the elements at indices p (inclusive) through size (exclusive).
     ejsval T = _ejs_string_new_substring(S, p, size-p);
-    // 24. Assert: The following call will never result in an abrupt completion.
-    // 25. Call CreateDataProperty(A, ToString(lengthA), T ).
+    // 26. Assert: The following call will never result in an abrupt completion.
+    // 27. Perform CreateDataProperty(A, ToString(lengthA), T ).
     _ejs_array_push_dense(A, 1, &T);
-    // 26. Return A.
+    // 28. Return A.
     return A;
 }
 
