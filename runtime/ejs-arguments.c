@@ -7,10 +7,21 @@
 
 #include "ejs.h"
 #include "ejs-ops.h"
+#include "ejs-array.h"
 #include "ejs-arguments.h"
+#include "ejs-error.h"
+#include "ejs-function.h"
 #include "ejs-string.h"
+#include "ejs-symbol.h"
 
 ejsval _ejs_Arguments__proto__ EJSVAL_ALIGNMENT;
+
+static ejsval
+ThrowTypeError(ejsval env, ejsval *_this, uint32_t argc, ejsval* args, EJSCallFlags callFlags, ejsval newTarget)
+{
+    // XXX should really list the property
+    _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "property not available in ejs");
+}
 
 ejsval
 _ejs_arguments_new (int numElements, ejsval* args)
@@ -25,6 +36,20 @@ _ejs_arguments_new (int numElements, ejsval* args)
 
     EJSArguments* arguments = _ejs_gc_new_obj(EJSArguments, value_size);
     _ejs_init_object ((EJSObject*)arguments, _ejs_Arguments__proto__, &_ejs_Arguments_specops);
+
+    ejsval O = OBJECT_TO_EJSVAL((EJSObject*)arguments);
+
+    // 7. Perform DefinePropertyOrThrow(obj, @@iterator, PropertyDescriptor {[[Value]]:%ArrayProto_values%, [[Writable]]: true, [[Enumerable]]: false, [[Configurable]]: true})
+    ejsval _values = _ejs_function_new_native (_ejs_null, _ejs_atom_values, _ejs_Array_prototype_values);
+    _ejs_object_define_value_property (O, _ejs_Symbol_iterator, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
+
+    ejsval thrower = _ejs_function_new_native (_ejs_null, _ejs_undefined, ThrowTypeError);
+
+    // 8. Perform DefinePropertyOrThrow(obj, "caller", PropertyDescriptor {[[Get]]: %ThrowTypeError%, [[Set]]: %ThrowTypeError%, [[Enumerable]]: false, [[Configurable]]: false}).
+    _ejs_object_define_accessor_property(O, _ejs_atom_caller, thrower, thrower, EJS_PROP_FLAGS_GETTER_SET | EJS_PROP_FLAGS_SETTER_SET | EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE);
+
+    // 9. Perform DefinePropertyOrThrow(obj, "callee", PropertyDescriptor {[[Get]]: %ThrowTypeError%, [[Set]]: %ThrowTypeError%, [[Enumerable]]: false, [[Configurable]]: false}).
+    _ejs_object_define_accessor_property(O, _ejs_atom_callee, thrower, thrower, EJS_PROP_FLAGS_GETTER_SET | EJS_PROP_FLAGS_SETTER_SET | EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE);
 
     arguments->argc = numElements;
     if (ool_buffer) {

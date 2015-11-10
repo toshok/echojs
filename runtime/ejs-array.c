@@ -2138,7 +2138,7 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_unshift) {
 // ES6 Draft January 15, 2015
 // 22.1.3.29
 // Array.prototype.values ()
-static EJS_NATIVE_FUNC(_ejs_Array_prototype_values) {
+EJS_NATIVE_FUNC(_ejs_Array_prototype_values) {
     // 1. Let O be the result of calling ToObject with the this value as its argument.
     // 2. ReturnIfAbrupt(O).
     ejsval O = ToObject(*_this);

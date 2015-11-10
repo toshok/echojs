@@ -55,6 +55,9 @@ EJS_ATOM(enumerable)
 EJS_ATOM(get)
 EJS_ATOM(set)
 
+EJS_ATOM(caller)
+EJS_ATOM(callee)
+
 // class names
 EJS_ATOM(Arguments)
 EJS_ATOM(Array)
