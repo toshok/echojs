@@ -1565,6 +1565,10 @@ static EJS_NATIVE_FUNC(_ejs_Object_freeze) {
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
 
+    return _ejs_object_freeze(O);
+}
+
+ejsval _ejs_object_freeze(ejsval O) {
     // 1. If Type(O) is not Object, return O. 
     if (!EJSVAL_IS_OBJECT(O))
         return O;

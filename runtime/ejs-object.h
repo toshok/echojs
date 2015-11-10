@@ -256,6 +256,8 @@ ejsval _ejs_object_getprop (ejsval obj, ejsval key);
 ejsval _ejs_global_setprop (ejsval key, ejsval value);
 ejsval _ejs_global_getprop (ejsval key);
 
+ejsval _ejs_object_freeze(ejsval O);
+
 ejsval _ejs_object_setprop_utf8 (ejsval obj, const char *key, ejsval value);
 ejsval _ejs_object_getprop_utf8 (ejsval obj, const char *key);
 
