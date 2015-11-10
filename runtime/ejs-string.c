@@ -1467,7 +1467,8 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_startsWith) {
     return _ejs_true;
 }
 
-// ECMA262: 21.1.3.7 String.prototype.endsWith ( searchString [, endPosition ] ) 
+// ES2015, June 2015
+// 21.1.3.6 String.prototype.endsWith ( searchString [ , endPosition] )
 static EJS_NATIVE_FUNC(_ejs_String_prototype_endsWith) {
     ejsval searchString = _ejs_undefined;
     ejsval endPosition = _ejs_undefined;
@@ -1476,59 +1477,57 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_endsWith) {
     if (argc > 1)
         endPosition = args[1];
 
-    // 1. Let O be CheckObjectCoercible(this value). 
+    // 1. Let O be RequireObjectCoercible(this value).
     ejsval O = ToObject(*_this);
     if (!EJSVAL_IS_OBJECT(O) && !EJSVAL_IS_NULL(O)) {
         _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "1"); // XXX
     }
-
-    // 2. Let S be ToString(O). 
-    // 3. ReturnIfAbrupt(S). 
+    // 2. Let S be ToString(O).
+    // 3. ReturnIfAbrupt(S).
     ejsval S = ToString(O);
 
-    // 4. If Type(searchString) is Object, then 
-    if (EJSVAL_IS_OBJECT(searchString)) {
-        //    a. Let isRegExp be HasProperty(searchString, @@isRegExp). 
-        //    b. If isRegExp is true, then throw a TypeError exception. 
-        if (EJSVAL_IS_REGEXP(searchString)) {
-            _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "2"); // XXX
-        }
-    }
-    // 5. Let searchStr be ToString(searchString). 
-    // 6. ReturnIfAbrupt(searchStr). 
+    // 4. Let isRegExp be IsRegExp(searchString).
+    // 5. ReturnIfAbrupt(isRegExp).
+    EJSBool isRegExp = IsRegExp(searchString);
+
+    // 6. If isRegExp is true, throw a TypeError exception.
+    if (isRegExp)
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "2"); // XXX
+
+    // 7. Let searchStr be ToString(searchString).
+    // 8. ReturnIfAbrupt(searchStr).
     ejsval searchStr = ToString(searchString);
 
-    // 7. Let len be the number of elements in S. 
+    // 9. Let len be the number of elements in S.
     uint32_t len = EJSVAL_TO_STRLEN(S);
 
-    // 8. If endPosition is undefined, let pos be len, else let pos be ToInteger(endPosition). 
-    // 9. ReturnIfAbrupt(pos). 
+    // 10. If endPosition is undefined, let pos be len, else let pos be ToInteger(endPosition).
+    // 11. ReturnIfAbrupt(pos).
     int64_t pos;
     if (EJSVAL_IS_UNDEFINED(endPosition))
         pos = len;
     else
         pos = ToInteger(endPosition);
-    
-    // 10. Let end be min(max(pos, 0), len). 
+
+    // 12. Let end be min(max(pos, 0), len).
     uint32_t end = MIN(MAX(pos, 0), len);
 
-    // 11. Let searchLength be the number of elements in searchStr. 
+    // 13. Let searchLength be the number of elements in searchStr.
     uint32_t searchLength = EJSVAL_TO_STRLEN(searchStr);
 
-    // 12. Let start be end - searchLength. 
+    // 14. Let start be end - searchLength.
     int64_t start = (int64_t)end - (int64_t)searchLength;
 
-    // 13. If start is less than 0, return false. 
+    // 15. If start is less than 0, return false.
     if (start < 0)
         return _ejs_false;
 
-    // 14. If the searchLength sequence of elements of S starting at start is the same as the full element sequence of searchStr, return true. 
-    // 15. Otherwise, return false
+    // 16. If the sequence of elements of S starting at start of length searchLength is the same as the full element sequence of searchStr, return true.
+    // 17. Otherwise, return false.
 
     // XXX toshok this would be nicer if we had a string iterator object or
     // something, which could contain traversal state across a rope.
     // as it is now, let's just flatten both strings (ugh) and walk
-
     EJSPrimString* prim_S = _ejs_string_flatten(S);
     EJSPrimString* prim_searchStr = _ejs_string_flatten(searchStr);
     for (int i = 0; i < searchLength; i ++) {
