@@ -85,6 +85,28 @@ static EJS_NATIVE_FUNC(_ejs_Symbol_prototype_toString) {
     return result;
 }
 
+// ES2015, June 2015
+// 19.4.3.3 Symbol.prototype.valueOf ( )
+static EJS_NATIVE_FUNC(_ejs_Symbol_prototype_valueOf) {
+    // 1. Let s be the this value.
+    ejsval s = *_this;
+
+    // 2. If Type(s) is Symbol, return s.
+    if (EJSVAL_IS_SYMBOL(s))
+        return s;
+
+    // 3. If Type(s) is not Object, throw a TypeError exception.
+    if (!EJSVAL_IS_OBJECT(s))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Symbol.prototype.valueOf called with non-object this");
+        
+    // 4. If s does not have a [[SymbolData]] internal slot, throw a TypeError exception.
+    if (!EJSVAL_IS_SYMBOL(s))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Symbol.prototype.valueOf called with non-symbol this");
+
+    // 5. Return the value of s’s [[SymbolData]] internal slot.
+    return s;
+}
+
 // ECMA262: 19.4.1
 static EJS_NATIVE_FUNC(_ejs_Symbol_impl) {
     if (callFlags == EJS_CALL_FLAGS_CALL) {
@@ -136,7 +158,7 @@ _ejs_symbol_init(ejsval global)
     _ejs_object_setprop (_ejs_Symbol,       _ejs_atom_prototype,  _ejs_Symbol_prototype);
 
     PROTO_METHOD(toString);
-    //PROTO_METHOD(valueOf);
+    PROTO_METHOD(valueOf);
 
     OBJ_METHOD(for);
     OBJ_METHOD(keyFor);
