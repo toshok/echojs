@@ -473,7 +473,7 @@ SerializeJSONProperty(StringifyState* state, ejsval key, ejsval holder) {
             // i. Let value be Call(toJSON, value, «key»).
             // ii. ReturnIfAbrupt(value).
             ejsval args[] = { key };
-            value = _ejs_invoke_closure(toJSON, &value, 1, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            value = _ejs_invoke_closure(toJSON, &value, 1, args, _ejs_undefined);
         }
     }
     // 4. If ReplacerFunction is not undefined, then
@@ -481,7 +481,7 @@ SerializeJSONProperty(StringifyState* state, ejsval key, ejsval holder) {
         // a. Let value be Call(ReplacerFunction, holder, «key, value»).
         // b. ReturnIfAbrupt(value).
         ejsval args[] = { key, value };
-        value = _ejs_invoke_closure(state->ReplacerFunction, &holder, 2, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        value = _ejs_invoke_closure(state->ReplacerFunction, &holder, 2, args, _ejs_undefined);
     }
     // 5. If Type(value) is Object, then
     if (EJSVAL_IS_OBJECT(value)) {
@@ -676,7 +676,7 @@ ejsval
 _ejs_json_stringify (ejsval arg)
 {
     ejsval undef_this = _ejs_undefined;
-    return _ejs_JSON_stringify(_ejs_undefined, &undef_this, 1, &arg, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+    return _ejs_JSON_stringify(_ejs_undefined, &undef_this, 1, &arg, _ejs_undefined);
 }
 
 void

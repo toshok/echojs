@@ -5,6 +5,7 @@
 #include "ejs-llvm.h"
 #include "ejs-error.h"
 #include "ejs-object.h"
+#include "ejs-ops.h"
 #include "ejs-value.h"
 #include "ejs-array.h"
 #include "ejs-function.h"
@@ -38,42 +39,24 @@ namespace ejsllvm {
         return (EJSObject*)_ejs_gc_new(DIBuilder);
     }
 
-    static ejsval
-    DIBuilder_create (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        ejsval F = _this;
-        if (!EJSVAL_IS_CONSTRUCTOR(F)) 
-            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in DIBuilder[Symbol.create] is not a constructor");
-        EJSObject* F_ = EJSVAL_TO_OBJECT(F);
-        // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%DatePrototype%", ([[DateData]]) ). 
-        ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
-        if (EJSVAL_IS_UNDEFINED(proto))
-            proto = _ejs_DIBuilder_prototype;
-
-        EJSObject* obj = (EJSObject*)_ejs_gc_new (DIBuilder);
-        _ejs_init_object (obj, proto, &_ejs_DIBuilder_specops);
-        return OBJECT_TO_EJSVAL(obj);
-    }
-
-    static ejsval
-    DIBuilder_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        if (EJSVAL_IS_UNDEFINED(_this)) {
+    static EJS_NATIVE_FUNC(DIBuilder_impl) {
+        if (EJSVAL_IS_UNDEFINED(newTarget)) {
             // called as a function
             EJS_NOT_IMPLEMENTED();
         }
         else {
-            DIBuilder* dib = ((DIBuilder*)EJSVAL_TO_OBJECT(_this));
+            ejsval O = OrdinaryCreateFromConstructor(newTarget, _ejs_DIBuilder_prototype, &_ejs_DIBuilder_specops);
+            *_this = O;
+
+            DIBuilder* O_ = (DIBuilder*)EJSVAL_TO_OBJECT(O);
             REQ_LLVM_MODULE_ARG(0, module);
 
-            dib->llvm_dibuilder = new llvm::DIBuilder (*module);
-            return _this;
+            O_->llvm_dibuilder = new llvm::DIBuilder (*module);
+            return *_this;
         }
     }
 
-    static ejsval
-    DIBuilder_prototype_createCompileUnit (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(DIBuilder_prototype_createCompileUnit) {
         REQ_UTF8_ARG(0, file);
         REQ_UTF8_ARG(1, dir);
         REQ_UTF8_ARG(2, producer);
@@ -81,7 +64,7 @@ namespace ejsllvm {
         REQ_UTF8_ARG(4, flags);
         REQ_INT_ARG(5, runtimeVersion);
 
-        DIBuilder* dib = ((DIBuilder*)EJSVAL_TO_OBJECT(_this));
+        DIBuilder* dib = ((DIBuilder*)EJSVAL_TO_OBJECT(*_this));
 
         return DIDescriptor_new(dib->llvm_dibuilder->createCompileUnit(llvm::dwarf::DW_LANG_C99,
                                                                        file, dir, producer,
@@ -89,13 +72,11 @@ namespace ejsllvm {
                                                                        runtimeVersion));
     }
 
-    static ejsval
-    DIBuilder_prototype_createFile (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(DIBuilder_prototype_createFile) {
         REQ_UTF8_ARG(0, file);
         REQ_UTF8_ARG(1, dir);
 
-        DIBuilder* dib = ((DIBuilder*)EJSVAL_TO_OBJECT(_this));
+        DIBuilder* dib = ((DIBuilder*)EJSVAL_TO_OBJECT(*_this));
 
         llvm::DIFile llvm_file = dib->llvm_dibuilder->createFile(file, dir);
 
@@ -110,9 +91,7 @@ namespace ejsllvm {
         return llvm_dibuilder->createSubroutineType(file, param_types);
     }
 
-    static ejsval
-    DIBuilder_prototype_createFunction (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(DIBuilder_prototype_createFunction) {
         REQ_LLVM_DISCOPE_ARG(0, discope);
         REQ_UTF8_ARG(1, name);
         REQ_UTF8_ARG(2, linkageName);
@@ -125,7 +104,7 @@ namespace ejsllvm {
         REQ_BOOL_ARG(9, isOptimized);
         REQ_LLVM_FUN_ARG(10, fn);
 
-        DIBuilder* dib = ((DIBuilder*)EJSVAL_TO_OBJECT(_this));
+        DIBuilder* dib = ((DIBuilder*)EJSVAL_TO_OBJECT(*_this));
 
         return DISubprogram_new(dib->llvm_dibuilder->createFunction (discope,
                                                                      name,
@@ -141,23 +120,19 @@ namespace ejsllvm {
                                                                      fn));
     }
 
-    static ejsval
-    DIBuilder_prototype_createLexicalBlock (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(DIBuilder_prototype_createLexicalBlock) {
         REQ_LLVM_DISCOPE_ARG(0, parentScope);
         REQ_LLVM_DIFILE_ARG(1, file);
         REQ_INT_ARG(2, line);
         REQ_INT_ARG(3, col);
 
-        DIBuilder* dib = ((DIBuilder*)EJSVAL_TO_OBJECT(_this));
+        DIBuilder* dib = ((DIBuilder*)EJSVAL_TO_OBJECT(*_this));
 
         return DILexicalBlock_new(dib->llvm_dibuilder->createLexicalBlock (parentScope, file, line, col));
     }
 
-    static ejsval
-    DIBuilder_prototype_finalize (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        DIBuilder* dib = ((DIBuilder*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(DIBuilder_prototype_finalize) {
+        DIBuilder* dib = ((DIBuilder*)EJSVAL_TO_OBJECT(*_this));
         dib->llvm_dibuilder->finalize();
         return _ejs_undefined;
     }
@@ -185,8 +160,6 @@ namespace ejsllvm {
         PROTO_METHOD(finalize);
 
 #undef PROTO_METHOD
-
-        EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_DIBuilder, create, DIBuilder_create, EJS_PROP_NOT_ENUMERABLE);
     }
 
 
@@ -215,16 +188,12 @@ namespace ejsllvm {
         return result;
     }
 
-    static ejsval
-    DIDescriptor_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(DIDescriptor_impl) {
         EJS_NOT_IMPLEMENTED();
     }
 
-    static ejsval
-    DIDescriptor_prototype_verify (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        DIDescriptor* did = (DIDescriptor*)EJSVAL_TO_OBJECT(_this);
+    static EJS_NATIVE_FUNC(DIDescriptor_prototype_verify) {
+        DIDescriptor* did = (DIDescriptor*)EJSVAL_TO_OBJECT(*_this);
 
         bool passed = did->llvm_didescriptor.Verify();
 
@@ -316,15 +285,11 @@ namespace ejsllvm {
         return ((DISubprogram*)EJSVAL_TO_OBJECT(val))->llvm_disubprogram;
     }
 
-    static ejsval
-    DISubprogram_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(DISubprogram_impl) {
         EJS_NOT_IMPLEMENTED();
     }
 
-    static ejsval
-    DISubprogram_prototype_verify (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(DISubprogram_prototype_verify) {
         EJS_NOT_IMPLEMENTED();
     }
 
@@ -378,16 +343,12 @@ namespace ejsllvm {
         return ((DIFile*)EJSVAL_TO_OBJECT(val))->llvm_difile;
     }
 
-    static ejsval
-    DIFile_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(DIFile_impl) {
         EJS_NOT_IMPLEMENTED();
     }
 
-    static ejsval
-    DIFile_prototype_verify (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        DIFile* dif = (DIFile*)EJSVAL_TO_OBJECT(_this);
+    static EJS_NATIVE_FUNC(DIFile_prototype_verify) {
+        DIFile* dif = (DIFile*)EJSVAL_TO_OBJECT(*_this);
 
         bool passed = dif->llvm_difile.Verify();
 
@@ -444,9 +405,7 @@ namespace ejsllvm {
         return ((DILexicalBlock*)EJSVAL_TO_OBJECT(val))->llvm_dilexicalblock;
     }
 
-    static ejsval
-    DILexicalBlock_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(DILexicalBlock_impl) {
         EJS_NOT_IMPLEMENTED();
     }
 
@@ -498,15 +457,11 @@ namespace ejsllvm {
         return (EJSObject*)_ejs_gc_new(DebugLoc);
     }
 
-    static ejsval
-    DebugLoc_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(DebugLoc_impl) {
         EJS_NOT_IMPLEMENTED();
     }
 
-    static ejsval
-    DebugLoc_get (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(DebugLoc_get) {
         REQ_INT_ARG(0, line);
         REQ_INT_ARG(1, column);
         REQ_LLVM_DISCOPE_ARG(2, discope);

@@ -155,7 +155,7 @@ static EJS_NATIVE_FUNC(_ejs_Map_prototype_forEach) {
         callback_args[0] = s->value;
         callback_args[1] = s->key;
         callback_args[2] = M;
-        _ejs_invoke_closure (callbackfn, &T, 3, callback_args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        _ejs_invoke_closure (callbackfn, &T, 3, callback_args, _ejs_undefined);
     }
 
     // 9. Return undefined.
@@ -422,7 +422,7 @@ static EJS_NATIVE_FUNC(_ejs_Map_impl) {
         ejsval adder_args[2];
         adder_args[0] = k;
         adder_args[1] = v;
-        _ejs_invoke_closure (adder, &map, 2, adder_args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        _ejs_invoke_closure (adder, &map, 2, adder_args, _ejs_undefined);
 
         // l. If status is an abrupt completion, return IteratorClose(iter, status).
 

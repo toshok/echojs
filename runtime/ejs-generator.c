@@ -47,7 +47,7 @@ static EJS_NATIVE_FUNC(_ejs_IteratorWrapper_prototype_getRest) {
     ejsval arr = _ejs_array_new(0, EJS_FALSE);
 
     while (!iter->done) {
-        ejsval next_value = _ejs_IteratorWrapper_prototype_getNextValue(env, _this, 0, NULL, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        ejsval next_value = _ejs_IteratorWrapper_prototype_getNextValue(env, _this, 0, NULL, _ejs_undefined);
         if (!iter->done)
             _ejs_array_push_dense(arr, 1, &next_value);
     }
@@ -121,7 +121,7 @@ _ejs_generator_start(EJSGenerator* gen)
 {
     _ejs_gc_push_generator(gen);
     ejsval undef_this = _ejs_undefined;
-    _ejs_invoke_closure(gen->body, &undef_this, 0, NULL, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+    _ejs_invoke_closure(gen->body, &undef_this, 0, NULL, _ejs_undefined);
     _ejs_gc_pop_generator();
 
     gen->yielded_value = _ejs_create_iter_result(_ejs_undefined, _ejs_true);

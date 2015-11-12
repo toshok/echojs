@@ -1031,7 +1031,7 @@ _ejs_object_set_prototype_of (ejsval obj, ejsval proto)
 {
     ejsval args[] = { obj, proto };
     ejsval undef_this;
-    return _ejs_Object_setPrototypeOf(_ejs_undefined, &undef_this, 2, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+    return _ejs_Object_setPrototypeOf(_ejs_undefined, &undef_this, 2, args, _ejs_undefined);
 }
 
 // ECMA262: 19.1.2.6 Object.getOwnPropertyDescriptor ( O, P ) 
@@ -1243,7 +1243,7 @@ static EJS_NATIVE_FUNC(_ejs_Object_create) {
     /*    standard built-in function Object.defineProperties with arguments obj and Properties. */
     if (!EJSVAL_IS_UNDEFINED(Properties)) {
         ejsval definePropertyArgs[] = { obj, Properties };
-        _ejs_Object_defineProperties (env, _this, 2, definePropertyArgs, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        _ejs_Object_defineProperties (env, _this, 2, definePropertyArgs, _ejs_undefined);
     }
 
     /* 5. Return obj. */
@@ -1256,7 +1256,7 @@ _ejs_object_create (ejsval proto)
 {
     ejsval args[] = { proto };
     ejsval undef_this = _ejs_undefined;
-    return _ejs_Object_create(_ejs_undefined, &undef_this, 1, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+    return _ejs_Object_create(_ejs_undefined, &undef_this, 1, args, _ejs_undefined);
 }
 
 // ES6 19.1.2.4
@@ -1814,7 +1814,7 @@ EJS_NATIVE_FUNC(_ejs_Object_prototype_toLocaleString) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "toString property is not callable");
 
     /* 4. Return the result of calling the [[Call]] internal method of toString passing O as the this value and no arguments. */
-    return _ejs_invoke_closure (toString, &O, 0, NULL, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+    return _ejs_invoke_closure (toString, &O, 0, NULL, _ejs_undefined);
 }
 
 // ECMA262: 19.1.3.7 Object.prototype.valueOf () 
@@ -2059,7 +2059,7 @@ _ejs_object_specop_get (ejsval O, ejsval P, ejsval Receiver)
     }
 
     // 8. Return the result of calling the [[Call]] internal method of getter with Receiver as the thisArgument and an empty List as argumentsList. 
-    return _ejs_invoke_closure (getter, &Receiver, 0, NULL, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+    return _ejs_invoke_closure (getter, &Receiver, 0, NULL, _ejs_undefined);
 }
 
 // ECMA262: 8.12.1
@@ -2140,7 +2140,7 @@ _ejs_object_specop_set (ejsval O, ejsval P, ejsval V, ejsval Receiver)
         
         //    c. Let setterResult be the result of calling the [[Call]] internal method of setter providing Receiver as thisArgument and a new List containing V as argumentsList. 
         //    d. ReturnIfAbrupt(setterResult). 
-        /* unused ejsval setterResult = */ _ejs_invoke_closure(setter, &Receiver, 1, &V, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        /* unused ejsval setterResult = */ _ejs_invoke_closure(setter, &Receiver, 1, &V, _ejs_undefined);
     }
     // e. Return true.
     return EJS_TRUE;

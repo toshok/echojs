@@ -17,7 +17,7 @@
 ejsval _ejs_Arguments__proto__ EJSVAL_ALIGNMENT;
 
 static ejsval
-ThrowTypeError(ejsval env, ejsval *_this, uint32_t argc, ejsval* args, EJSCallFlags callFlags, ejsval newTarget)
+ThrowTypeError(ejsval env, ejsval *_this, uint32_t argc, ejsval* args, ejsval newTarget)
 {
     // XXX should really list the property
     _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "property not available in ejs");

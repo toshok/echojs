@@ -30,9 +30,7 @@
 /// path module
 ///
 
-static ejsval
-_ejs_path_dirname (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_path_dirname) {
     ejsval path = args[0];
     // FIXME node's implementation allows a second arg to strip the extension, but the compiler doesn't use it.
     char *utf8_path = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(path));
@@ -41,9 +39,7 @@ _ejs_path_dirname (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return rv;
 }
 
-static ejsval
-_ejs_path_basename (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_path_basename) {
     ejsval path = args[0];
     // FIXME node's implementation allows a second arg to strip the extension, but the compiler doesn't use it.
     char *utf8_path = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(path));
@@ -52,9 +48,7 @@ _ejs_path_basename (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return rv;
 }
 
-static ejsval
-_ejs_path_extname (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_path_extname) {
     ejsval rv = _ejs_atom_empty;
     ejsval path = args[0];
     char *utf8_path = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(path));
@@ -153,9 +147,7 @@ make_absolute(char* path)
     return rv;
 }
 
-static ejsval
-_ejs_path_resolve (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_path_resolve) {
     char** paths_utf8 = (char**)calloc(argc + 1, sizeof(char*));
     int num_paths = 0;
 
@@ -194,9 +186,7 @@ _ejs_path_resolve (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return rv;
 }
 
-static ejsval
-_ejs_path_relative (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_path_relative) {
     ejsval from = _ejs_undefined;
     ejsval to   = _ejs_undefined;
 
@@ -256,9 +246,7 @@ _ejs_path_relative (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     }
 }
 
-static ejsval
-_ejs_path_join (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_path_join) {
     if (argc == 0)
         return _ejs_atom_empty;
 
@@ -322,39 +310,27 @@ throw_errno_error(int _errno, char* path)
 #define EJS_STAT_GET_IS_FIFO(s) (_ejs_closureenv_get_slot((s), 4))
 #define EJS_STAT_GET_IS_SOCKET(s) (_ejs_closureenv_get_slot((s), 5))
 
-static ejsval
-_ejs_fs_Stat_isFile(ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_fs_Stat_isFile) {
     return EJS_STAT_GET_IS_FILE(env);
 }
 
-static ejsval
-_ejs_fs_Stat_isDirectory(ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_fs_Stat_isDirectory) {
     return EJS_STAT_GET_IS_DIRECTORY(env);
 }
 
-static ejsval
-_ejs_fs_Stat_isCharacterDevice(ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_fs_Stat_isCharacterDevice) {
     return EJS_STAT_GET_IS_CHARDEV(env);
 }
 
-static ejsval
-_ejs_fs_Stat_isSymbolicLink(ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_fs_Stat_isSymbolicLink) {
     return EJS_STAT_GET_IS_SYMLINK(env);
 }
 
-static ejsval
-_ejs_fs_Stat_isFIFO(ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_fs_Stat_isFIFO) {
     return EJS_STAT_GET_IS_FIFO(env);
 }
 
-static ejsval
-_ejs_fs_Stat_isSocket(ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_fs_Stat_isSocket) {
     return EJS_STAT_GET_IS_SOCKET(env);
 }
 
@@ -386,9 +362,7 @@ _ejs_fs_Stat_new(struct stat* sb)
     return stat;
 }
 
-static ejsval
-_ejs_fs_statSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_fs_statSync) {
     char* utf8_path = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[0]));
     struct stat sb;
 
@@ -400,9 +374,7 @@ _ejs_fs_statSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return _ejs_fs_Stat_new(&sb);
 }
 
-static ejsval
-_ejs_fs_existsSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_fs_existsSync) {
     ejsval path = _ejs_undefined;
     if (argc > 0) path = args[0];
 
@@ -419,9 +391,7 @@ _ejs_fs_existsSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return BOOLEAN_TO_EJSVAL(access_rv != -1);
 }
 
-static ejsval
-_ejs_fs_readFileSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_fs_readFileSync) {
     // FIXME we currently ignore the encoding and just slam the entire thing into a buffer and return a utf8 string...
     char* utf8_path = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[0]));
 
@@ -462,9 +432,7 @@ _ejs_fs_readFileSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return rv;
 }
 
-static ejsval
-_ejs_fs_writeFileSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_fs_writeFileSync) {
     // XXX we ignore the options argument (third) entirely
     ejsval path = _ejs_undefined;
     if (argc > 0) path = args[0];
@@ -511,9 +479,7 @@ _ejs_fs_writeFileSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return _ejs_undefined;
 }
 
-static ejsval
-_ejs_fs_unlinkSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_fs_unlinkSync) {
     ejsval path = _ejs_undefined;
     if (argc > 0) path = args[0];
 
@@ -532,11 +498,9 @@ _ejs_fs_unlinkSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 
 static ejsval _ejs_internal_fd_sym EJSVAL_ALIGNMENT; 
 
-ejsval
-_ejs_stream_write (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_stream_write) {
     ejsval to_write = ToString(args[0]);
-    ejsval internal_fd = _ejs_object_getprop (_this, _ejs_internal_fd_sym);
+    ejsval internal_fd = _ejs_object_getprop (*_this, _ejs_internal_fd_sym);
     int fd = ToInteger(internal_fd);
 
     int remaining = EJSVAL_TO_STRLEN(to_write);
@@ -560,10 +524,8 @@ _ejs_stream_write (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return _ejs_true;
 }
 
-ejsval
-_ejs_stream_end (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
-    ejsval internal_fd = _ejs_object_getprop (_this, _ejs_internal_fd_sym);
+static EJS_NATIVE_FUNC(_ejs_stream_end) {
+    ejsval internal_fd = _ejs_object_getprop (*_this, _ejs_internal_fd_sym);
     close (ToInteger(internal_fd));
     return _ejs_undefined;
 }
@@ -581,9 +543,7 @@ _ejs_wrapFdWithStream (int fd)
     return stream;
 }
 
-ejsval
-_ejs_fs_createWriteStream (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_fs_createWriteStream) {
     char *utf8_path = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[0]));
 
     int fd = open (utf8_path, O_CREAT | O_TRUNC | O_WRONLY, 0777);
@@ -613,9 +573,7 @@ string_to_mode(ejsval strmode)
     return rv;
 }
 
-ejsval
-_ejs_fs_mkdirSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_fs_mkdirSync) {
     ejsval path = _ejs_undefined;
     if (argc > 0) path = args[0];
 
@@ -645,9 +603,7 @@ _ejs_fs_mkdirSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return _ejs_undefined;
 }
 
-ejsval
-_ejs_fs_rmdirSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_fs_rmdirSync) {
     ejsval path = _ejs_undefined;
     if (argc > 0) path = args[0];
 
@@ -666,9 +622,7 @@ _ejs_fs_rmdirSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return _ejs_undefined;
 }
 
-ejsval
-_ejs_fs_readdirSync (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_fs_readdirSync) {
     ejsval path = _ejs_undefined;
     if (argc > 0) path = args[0];
 
@@ -715,9 +669,7 @@ _ejs_fs_module_func (ejsval exports)
     return _ejs_undefined;
 }
 
-ejsval
-_ejs_os_tmpdir (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_os_tmpdir) {
     char *tmpdir = getenv("TMPDIR");
 
     // XXX i'm sure we need to worry about platform specific tmpdirs (ios?)
@@ -726,9 +678,7 @@ _ejs_os_tmpdir (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return _ejs_string_new_utf8(tmpdir);
 }
 
-ejsval
-_ejs_os_arch (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_os_arch) {
 #if TARGET_CPU_ARM
     const char* arch = "arm";
 #elif TARGET_CPU_AMD64
@@ -742,9 +692,7 @@ _ejs_os_arch (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return _ejs_string_new_utf8(arch);
 }
 
-ejsval
-_ejs_os_endianness (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_os_endianness) {
 #ifdef IS_LITTLE_ENDIAN
     const char* endianness= "LE";
 #else
@@ -754,9 +702,7 @@ _ejs_os_endianness (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return _ejs_string_new_utf8(endianness);
 }
 
-ejsval
-_ejs_os_hostname (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_os_hostname) {
     const int buflen = 128;
     char buff [buflen] = "unknown";
 
@@ -765,9 +711,7 @@ _ejs_os_hostname (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return _ejs_string_new_utf8(buff);
 }
 
-ejsval
-_ejs_os_platform (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_os_platform) {
 #if linux
     const char* platform = "linux";
 #elif OSX || IOS
@@ -779,9 +723,7 @@ _ejs_os_platform (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return _ejs_string_new_utf8(platform);
 }
 
-ejsval
-_ejs_os_type (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_os_type) {
 #if linux
     const char* type = "Linux";
 #elif OSX || IOS
@@ -793,9 +735,7 @@ _ejs_os_type (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return _ejs_string_new_utf8(type);
 }
 
-ejsval
-_ejs_os_release (ejsval exports)
-{
+static EJS_NATIVE_FUNC(_ejs_os_release) {
     const char* release = "unknown";
 
     struct utsname name;
@@ -820,9 +760,7 @@ _ejs_os_module_func (ejsval exports)
 }
 
 
-static ejsval
-_ejs_child_process_spawn (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_child_process_spawn) {
     char* argv0 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[0]));
     EJSArray* argv_rest = (EJSArray*)EJSVAL_TO_OBJECT(args[1]);
 

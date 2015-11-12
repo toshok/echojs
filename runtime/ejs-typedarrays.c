@@ -886,9 +886,9 @@ static EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_prototype_set_impl)    \
     /* 1. Assert: array is any ECMAScript language value other than an Object with a [[TypedArrayName]] internal slot.  \
      * If it is such an Object, the definition in 22.2.3.22.2 applies. */   \
     if (EJSVAL_IS_TYPEDARRAY(overloaded))                               \
-        return _ejs_##ArrayType##Array_prototype_set_typedarray(env, _this, argc, args, EJS_CALL_FLAGS_CALL, _ejs_undefined); \
+        return _ejs_##ArrayType##Array_prototype_set_typedarray(env, _this, argc, args, _ejs_undefined); \
     else                                                                \
-        return _ejs_##ArrayType##Array_prototype_set_array(env, _this, argc, args, EJS_CALL_FLAGS_CALL, _ejs_undefined); \
+        return _ejs_##ArrayType##Array_prototype_set_array(env, _this, argc, args, _ejs_undefined); \
                                                                         \
     EJS_NOT_REACHED();                                                  \
 }                                                                       \
@@ -992,7 +992,7 @@ static EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_prototype_subarray_impl) \
                                                                         \
      /* 28. Return the result of calling the [[Construct]] internal method of constructor with argument argumentsList. */ \
      ejsval _thisArg = _ejs_undefined;                \
-     return _ejs_construct_closure(constructor, &_thisArg, 3, argumentsList, EJS_CALL_FLAGS_CONSTRUCT, constructor); \
+     return _ejs_construct_closure(constructor, &_thisArg, 3, argumentsList, constructor); \
  }                                                                      \
                                                                         \
  /* this should be a single getter reused by all typed-arrays */        \
@@ -1127,7 +1127,7 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_every) {
 
         /*  iii. Let testResult be Call(callbackfn, T, «kValue, k, O»). */
         ejsval callbackfn_args[3] = { kValue, NUMBER_TO_EJSVAL(k), O };
-        ejsval testResult = _ejs_invoke_closure (callbackfn, &T, 3, callbackfn_args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        ejsval testResult = _ejs_invoke_closure (callbackfn, &T, 3, callbackfn_args, _ejs_undefined);
 
         /* v. If ToBoolean(testResult) is false, return false. */
         if (!EJSVAL_TO_BOOLEAN(testResult))
@@ -1251,7 +1251,7 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_find) {
 
         /* d. Let testResult be Call(predicate, T, «kValue, k, O»). */
         ejsval predicate_args[3] = { kValue, NUMBER_TO_EJSVAL(k), O };
-        ejsval testResult = _ejs_invoke_closure (predicate, &T, 3, predicate_args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        ejsval testResult = _ejs_invoke_closure (predicate, &T, 3, predicate_args, _ejs_undefined);
 
         /* f. If ToBoolean(testResult) is true, return kValue. */
         if (EJSVAL_TO_BOOLEAN(testResult))
@@ -1310,7 +1310,7 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_findIndex) {
 
         /* d. Let testResult be Call(predicate, T, «kValue, k, O»). */
         ejsval predicate_args[3] = { kValue, NUMBER_TO_EJSVAL(k), O };
-        ejsval testResult = _ejs_invoke_closure (predicate, &T, 3, predicate_args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        ejsval testResult = _ejs_invoke_closure (predicate, &T, 3, predicate_args, _ejs_undefined);
 
         /* f. If ToBoolean(testResult) is true, return k. */
         if (EJSVAL_TO_BOOLEAN(testResult))
@@ -1373,7 +1373,7 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_forEach) {
 
         /*  ii. Call the [[Call]] internal method of callbackfn with T as the this value and argument list containing kValue, k, and O.  */
         ejsval foreach_args[3] = { kValue, NUMBER_TO_EJSVAL(k), O };
-        _ejs_invoke_closure (callbackfn, &T, 3, foreach_args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        _ejs_invoke_closure (callbackfn, &T, 3, foreach_args, _ejs_undefined);
 
         /* d.  d. Increase k by 1.  */
         k++;
@@ -1722,7 +1722,7 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_reduce) {
         /*  iii. Let accumulator be Call(callbackfn, undefined, «accumulator, kValue, k, O»). */
         ejsval callbackfn_args [4] = { accumulator, kValue, NUMBER_TO_EJSVAL(k), O };
         ejsval undef_this = _ejs_undefined;
-        accumulator = _ejs_invoke_closure (callbackfn, &undef_this, 4, callbackfn_args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        accumulator = _ejs_invoke_closure (callbackfn, &undef_this, 4, callbackfn_args, _ejs_undefined);
 
         /* e. Increase k by 1. */
         k++;
@@ -1808,7 +1808,7 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_reduceRight) {
         /*  iii. Let accumulator be Call(callbackfn, undefined, «accumulator, kValue, k, O»). */
         ejsval callbackfn_args [4] = { accumulator, kValue, NUMBER_TO_EJSVAL(k), O };
         ejsval undef_this = _ejs_undefined;
-        accumulator = _ejs_invoke_closure (callbackfn, &undef_this, 4, callbackfn_args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        accumulator = _ejs_invoke_closure (callbackfn, &undef_this, 4, callbackfn_args, _ejs_undefined);
 
         /* e. Decrease k by 1. */
         k--;
@@ -1928,7 +1928,7 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_some) {
 
         /*  iii. Let testResult be Call(callbackfn, T, «kValue, k, O»). */
         ejsval callbackfn_args[3] = { kValue, NUMBER_TO_EJSVAL(k), O };
-        ejsval testResult = _ejs_invoke_closure (callbackfn, &T, 3, callbackfn_args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        ejsval testResult = _ejs_invoke_closure (callbackfn, &T, 3, callbackfn_args, _ejs_undefined);
 
         /* v. If ToBoolean(testResult) is true, return true. */
         if (EJSVAL_TO_BOOLEAN(testResult))
@@ -1979,7 +1979,7 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_toString) {
     ejsval func = Get(array, _ejs_atom_join);
 
     /* 6. Return Call(func, array). */
-    return _ejs_invoke_closure (func, &array, 0, NULL, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+    return _ejs_invoke_closure (func, &array, 0, NULL, _ejs_undefined);
 }
 
 ejsval

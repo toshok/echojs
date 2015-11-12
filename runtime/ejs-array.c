@@ -168,7 +168,7 @@ SortCompare (ejsval comparefn, ejsval x, ejsval y)
         /* b. ReturnIfAbrupt(v). */
         ejsval args[2] = { x, y };
         ejsval undef_this = _ejs_undefined;
-        ejsval v = ToNumber(_ejs_invoke_closure(comparefn, &undef_this, 2, args, EJS_CALL_FLAGS_CALL, _ejs_undefined));
+        ejsval v = ToNumber(_ejs_invoke_closure(comparefn, &undef_this, 2, args, _ejs_undefined));
 
         /* c. If v is NaN, return +0. */
         if (isnan(ToDouble(v)))
@@ -262,11 +262,11 @@ _ejs_array_from_iterables (int argc, ejsval* args)
         else {
             // general iterator stuff
             ejsval get_iterator = Get(iter, _ejs_Symbol_iterator);
-            ejsval iterator = _ejs_invoke_closure(get_iterator, &iter, 0, NULL, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            ejsval iterator = _ejs_invoke_closure(get_iterator, &iter, 0, NULL, _ejs_undefined);
             ejsval iterator_next = Get(iterator, _ejs_atom_next);
             EJSBool done = EJS_FALSE;
             while (!done) {
-                ejsval iterval = _ejs_invoke_closure(iterator_next, &iterator, 0, NULL, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+                ejsval iterval = _ejs_invoke_closure(iterator_next, &iterator, 0, NULL, _ejs_undefined);
                 done = ToEJSBool(Get(iterval, _ejs_atom_done));
                 if (!done) {
                     ejsval value = Get(iterval, _ejs_atom_value);
@@ -340,7 +340,7 @@ ejsval _ejs_Array_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_Array EJSVAL_ALIGNMENT;
 
 static EJS_NATIVE_FUNC(_ejs_Array_impl) {
-    if (callFlags == EJS_CALL_FLAGS_CALL) {
+    if (EJSVAL_IS_UNDEFINED(newTarget)) {
         // called as a function
         if (argc == 0) {
             return _ejs_array_new(0, EJS_FALSE);
@@ -644,7 +644,7 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_every) {
                 NUMBER_TO_EJSVAL(k),
                 O
             };
-            ejsval testResult = _ejs_invoke_closure (callbackfn, &T, 3, callbackargs, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            ejsval testResult = _ejs_invoke_closure (callbackfn, &T, 3, callbackargs, _ejs_undefined);
 
             // v. If testResult is false, return false.
             if (EJSVAL_IS_BOOLEAN(testResult) && !EJSVAL_TO_BOOLEAN(testResult))
@@ -765,7 +765,7 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_filter) {
                 NUMBER_TO_EJSVAL(k),
                 O
             };
-            ejsval selected = _ejs_invoke_closure (callbackfn, &T, 3, argumentsList, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            ejsval selected = _ejs_invoke_closure (callbackfn, &T, 3, argumentsList, _ejs_undefined);
 
             // v. If selected is true, then
             // XXX(toshok) the above step seems to imply the code should be:
@@ -831,7 +831,7 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_find) {
             O
         };
 
-        ejsval testResult = ToBoolean(_ejs_invoke_closure (predicate, &T, 3, predicateargs, EJS_CALL_FLAGS_CALL, _ejs_undefined));
+        ejsval testResult = ToBoolean(_ejs_invoke_closure (predicate, &T, 3, predicateargs, _ejs_undefined));
         
         // f. If testResult is true, return kValue.
         if (EJSVAL_TO_BOOLEAN(testResult))
@@ -888,7 +888,7 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_findIndex) {
             O
         };
 
-        ejsval testResult = ToBoolean(_ejs_invoke_closure (predicate, &T, 3, predicateargs, EJS_CALL_FLAGS_CALL, _ejs_undefined));
+        ejsval testResult = ToBoolean(_ejs_invoke_closure (predicate, &T, 3, predicateargs, _ejs_undefined));
         
         // f. If testResult is true, return k.
         if (EJSVAL_TO_BOOLEAN(testResult))
@@ -935,7 +935,7 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_forEach) {
                 continue;
             foreach_args[0] = EJS_DENSE_ARRAY_ELEMENTS(*_this)[i];
             foreach_args[1] = NUMBER_TO_EJSVAL(i);
-            _ejs_invoke_closure (callbackfn, &T, 3, foreach_args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            _ejs_invoke_closure (callbackfn, &T, 3, foreach_args, _ejs_undefined);
         }
     }
     else {
@@ -961,7 +961,7 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_forEach) {
                 foreach_args[0] = kValue;
                 foreach_args[1] = NUMBER_TO_EJSVAL(k);
                 foreach_args[2] = O;
-                _ejs_invoke_closure (callbackfn, &T, 3, foreach_args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+                _ejs_invoke_closure (callbackfn, &T, 3, foreach_args, _ejs_undefined);
             }
             // e. Increase k by 1.
             k++;
@@ -1218,7 +1218,7 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_map) {
             map_args[0] = kValue;
             map_args[1] = NUMBER_TO_EJSVAL(k);
             map_args[2] = O;
-            ejsval mappedValue = _ejs_invoke_closure (callbackfn, &T, 2, map_args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            ejsval mappedValue = _ejs_invoke_closure (callbackfn, &T, 2, map_args, _ejs_undefined);
 
             // v. Let status be CreateDataPropertyOrThrow (A, Pk, mappedValue).
             // vi. ReturnIfAbrupt(status).
@@ -1406,7 +1406,7 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_reduce) {
                 O
             };
             ejsval undef_this = _ejs_undefined;
-            accumulator = _ejs_invoke_closure (callbackfn, &undef_this, 4, reduce_args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            accumulator = _ejs_invoke_closure (callbackfn, &undef_this, 4, reduce_args, _ejs_undefined);
         }
         // e. Increase k by 1.
         k++;
@@ -1499,7 +1499,7 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_reduceRight) {
                 O
             };
             ejsval undef_this = _ejs_undefined;
-            accumulator = _ejs_invoke_closure (callbackfn, &undef_this, 4, reduce_args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            accumulator = _ejs_invoke_closure (callbackfn, &undef_this, 4, reduce_args, _ejs_undefined);
         }
         // e. Decrease k by 1.
         k--;
@@ -1807,7 +1807,7 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_some) {
                 NUMBER_TO_EJSVAL(k),
                 O
             };
-            ejsval testResult = _ejs_invoke_closure (callbackfn, &T, 3, callbackargs, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            ejsval testResult = _ejs_invoke_closure (callbackfn, &T, 3, callbackargs, _ejs_undefined);
 
             // v. If testResult is true, return true.
             // XXX(toshok) see _filter
@@ -2031,11 +2031,11 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_toString) {
 
     // 5. If IsCallable(func) is false, let func be the intrinsic function %ObjProto_toString% (19.1.3.6).
     if (!IsCallable(func)) {
-        return _ejs_Object_prototype_toString(env, _this, 0, NULL, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        return _ejs_Object_prototype_toString(env, _this, 0, NULL, _ejs_undefined);
     }
 
     // 6. Return Call(func, array).
-    return _ejs_invoke_closure(func, &array, 0, NULL, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+    return _ejs_invoke_closure(func, &array, 0, NULL, _ejs_undefined);
 }
 
 // ES6 Draft January 15, 2015
@@ -2173,7 +2173,7 @@ ejsval
 _ejs_array_join (ejsval array, ejsval sep)
 {
     ejsval _this = array;
-    return _ejs_Array_prototype_join (_ejs_null, &_this, 1, &sep, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+    return _ejs_Array_prototype_join (_ejs_null, &_this, 1, &sep, _ejs_undefined);
 }
 
 int
@@ -2296,7 +2296,7 @@ static EJS_NATIVE_FUNC(_ejs_Array_from) {
                     nextValue,
                     kval
                 };
-                mappedValue = _ejs_invoke_closure (mapfn, &T, 2, mapfnArgs, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+                mappedValue = _ejs_invoke_closure (mapfn, &T, 2, mapfnArgs, _ejs_undefined);
             }
             // viii.Else, let mappedValue be nextValue.
             else {
@@ -2355,7 +2355,7 @@ static EJS_NATIVE_FUNC(_ejs_Array_from) {
                 kValue,
                 NUMBER_TO_EJSVAL(k)
             };
-            mappedValue = _ejs_invoke_closure (mapfn, &T, 2, mapfnArgs, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            mappedValue = _ejs_invoke_closure (mapfn, &T, 2, mapfnArgs, _ejs_undefined);
         }
         // e. Else, let mappedValue be kValue.
         else {

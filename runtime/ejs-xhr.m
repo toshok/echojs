@@ -566,7 +566,7 @@ ejsval _ejs_XMLHttpRequest_prototype EJSVAL_ALIGNMENT;
 
 static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_impl) {
 
-    if (callFlags == EJS_CALL_FLAGS_CALL) {
+    if (EJSVAL_IS_UNDEFINED(newTarget)) {
         printf ("XMLHttpRequest called as a function\n");
         EJS_NOT_IMPLEMENTED();
     }

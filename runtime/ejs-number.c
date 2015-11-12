@@ -93,7 +93,7 @@ static EJS_NATIVE_FUNC(_ejs_Number_prototype_toString) {
 ejsval
 _ejs_number_to_string(ejsval num)
 {
-    return _ejs_Number_prototype_toString(_ejs_undefined, &num, 0, NULL, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+    return _ejs_Number_prototype_toString(_ejs_undefined, &num, 0, NULL, _ejs_undefined);
 }
 
 

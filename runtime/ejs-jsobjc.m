@@ -717,14 +717,14 @@
 
 	if (isFuncCtor) {
         ejsval o = _ejs_object_create (OBJECT_TO_EJSVAL([[_func prototype] jsObject]));
-        _ejs_invoke_closure (OBJECT_TO_EJSVAL([_func jsObject]), &o, _argCount, jsargs, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        _ejs_invoke_closure (OBJECT_TO_EJSVAL([_func jsObject]), &o, _argCount, jsargs, _ejs_undefined);
         rv = o;
 	}
 	else {
         ejsval thisArg = [[CKValue objectValue:_thisObj] jsValue];
         rv = _ejs_invoke_closure ([[CKValue objectValue:_func] jsValue],
                                   &thisArg,
-                                  _argCount, jsargs, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+                                  _argCount, jsargs, _ejs_undefined);
 	}
 
 	if (jsargs) {

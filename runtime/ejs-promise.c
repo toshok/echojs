@@ -244,7 +244,7 @@ static EJS_NATIVE_FUNC(resolve) {
         //     a. Return FulfillPromise(promise, resolution). 
         return FulfillPromise(promise, resolution);
     }
-    // 12. Perform EnqueueTask ("PromiseTasks", PromiseResolveThenableTask, (promise, resolution, then))
+    // 12. Perform EnqueueTask ("PromiseTasks", PromiseResolveThenableJob, (promise, resolution, then))
     EnqueuePromiseResolveThenableTask (promise, resolution, then);
 
     // 13. Return undefined. 
@@ -322,7 +322,7 @@ CreatePromiseCapabilityRecord (ejsval promise, ejsval constructor)
 
     // 6. Let constructorResult be the result of calling the [[Call]] internal method of constructor, passing promise and (executor) as the arguments.
     // 7. ReturnIfAbrupt(constructorResult).
-    ejsval constructorResult = _ejs_invoke_closure (constructor, &promise, 1, &executor, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+    ejsval constructorResult = _ejs_invoke_closure (constructor, &promise, 1, &executor, _ejs_undefined);
 
     // 8. If IsCallable(promiseCapability.[[Resolve]]) is false, then throw a TypeError exception. 
     if (!IsCallable(EJS_CAPABILITY_GET_RESOLVE(promiseCapability)))
@@ -419,7 +419,7 @@ PromiseReactionTask (EJSPromiseReaction* reaction, ejsval argument)
     // 6. Else, Let let handlerResult be the result of calling the [[Call]] internal method of handler passing undefined as thisArgument and (argument) as argumentsList. 
     else {
         ejsval undef_this = _ejs_undefined;
-        success = _ejs_invoke_closure_catch(&handlerResult, handler, &undef_this, 1, &argument, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        success = _ejs_invoke_closure_catch(&handlerResult, handler, &undef_this, 1, &argument, _ejs_undefined);
     }
 
     ejsval status;
@@ -428,7 +428,7 @@ PromiseReactionTask (EJSPromiseReaction* reaction, ejsval argument)
     if (!success) {
         ejsval undef_this = _ejs_undefined;
         //    a. Let status be the result of calling the [[Call]] internal method of promiseCapability.[[Reject]] passing undefined as thisArgument and (handlerResult.[[value]]) as argumentsList. 
-        success = _ejs_invoke_closure_catch(&status, EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &handlerResult, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        success = _ejs_invoke_closure_catch(&status, EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &handlerResult, _ejs_undefined);
 
         //    b. NextTask status. 
         return;//EJS_NOT_IMPLEMENTED();
@@ -436,12 +436,13 @@ PromiseReactionTask (EJSPromiseReaction* reaction, ejsval argument)
     // 8. Let handlerResult be handlerResult.[[value]]. 
     // 9. Let status be the result of calling the [[Call]] internal method of promiseCapability.[[Resolve]] passing undefined as thisArgument and (handlerResult) as argumentsList. 
     ejsval undef_this = _ejs_undefined;
-    success = _ejs_invoke_closure_catch(&status, EJS_CAPABILITY_GET_RESOLVE(promiseCapability), &undef_this, 1, &handlerResult, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+    success = _ejs_invoke_closure_catch(&status, EJS_CAPABILITY_GET_RESOLVE(promiseCapability), &undef_this, 1, &handlerResult, _ejs_undefined);
     
     // 10. NextTask status. 
 }
 
-// 25.4.2.2 PromiseResolveThenableTask ( promiseToResolve, thenable, then) 
+// ES2015, June 2015
+// 25.4.2.2 PromiseResolveThenableJob ( promiseToResolve, thenable, then)
 static void
 PromiseResolveThenableTask (ejsval promiseToResolve, ejsval thenable, ejsval then)
 {
@@ -450,23 +451,24 @@ PromiseResolveThenableTask (ejsval promiseToResolve, ejsval thenable, ejsval the
     ejsval resolvingFunctions_reject;
     CreateResolvingFunctions(promiseToResolve, &resolvingFunctions_resolve, &resolvingFunctions_reject);
 
-    // 2. Let thenCallResult be the result of calling the [[Call]] internal method of then passing thenable as the thisArgument and (resolvingFunctions.[[Resolve]], resolvingFunctions.[[Reject]]) as argumentsList. 
+    // 2. Let thenCallResult be Call(then, thenable, «resolvingFunctions.[[Resolve]], resolvingFunctions.[[Reject]]»).
     ejsval thenCallResult;
     ejsval args[] = { resolvingFunctions_resolve, resolvingFunctions_reject };
-    EJSBool success = _ejs_invoke_closure_catch(&thenCallResult, then, &thenable, 2, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+    EJSBool success = _ejs_invoke_closure_catch(&thenCallResult, then, &thenable, 2, args, _ejs_undefined);
 
     // 3. If thenCallResult is an abrupt completion, 
     if (!success) {
-        //    a. Let status be the result of calling the [[Call]] internal method of resolvingFunctions.[[Reject]] passing undefined as the thisArgument and (thenCallResult.[[value]]) as argumentsList. 
+        // a. Let status be Call(resolvingFunctions.[[Reject]], undefined, «thenCallResult.[[value]]»).
         ejsval status;
         ejsval undef_this = _ejs_undefined;
-        success = _ejs_invoke_closure_catch(&status, resolvingFunctions_reject, &undef_this, 1, &thenCallResult, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        success = _ejs_invoke_closure_catch(&status, resolvingFunctions_reject, &undef_this, 1, &thenCallResult, _ejs_undefined);
         
-        //    b. NextTask status. 
-        EJS_NOT_IMPLEMENTED();
+        // b. NextJob Completion(status).
+        return;
     }
-    // 4. NextTask thenCallResult. 
-    EJS_NOT_IMPLEMENTED();
+
+    // 4. NextJob Completion(thenCallResult)
+    return;
 }
 
 // ES2015, June 2015
@@ -509,14 +511,14 @@ static EJS_NATIVE_FUNC(_ejs_Promise_impl) {
     ejsval executor_args[] = { resolvingFunctions_resolve, resolvingFunctions_reject };
 
     ejsval undef_this = _ejs_undefined;
-    EJSBool success = _ejs_invoke_closure_catch(&completion, executor, &undef_this, 2, executor_args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+    EJSBool success = _ejs_invoke_closure_catch(&completion, executor, &undef_this, 2, executor_args, _ejs_undefined);
 
     // 10. If completion is an abrupt completion, then
     if (!success) {
         // a. Let status be Call(resolvingFunctions.[[Reject]], undefined, «completion.[[value]]»).
         // b. ReturnIfAbrupt(status).
         ejsval undef_this = _ejs_undefined;
-        _ejs_invoke_closure(resolvingFunctions_reject, &undef_this, 1, &completion, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        _ejs_invoke_closure(resolvingFunctions_reject, &undef_this, 1, &completion, _ejs_undefined);
     }
     // 11. Return promise.
     return promise;
@@ -532,7 +534,7 @@ static EJS_NATIVE_FUNC(_ejs_Promise_prototype_catch) {
 
     // 2. Return Invoke(promise, "then", (undefined, onRejected)). 
     ejsval thenargs[] = { _ejs_undefined, onRejected };
-    return _ejs_invoke_closure(Get(promise, _ejs_atom_then), &promise, 2, thenargs, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+    return _ejs_invoke_closure(Get(promise, _ejs_atom_then), &promise, 2, thenargs, _ejs_undefined);
 }
 
 static EJSPromiseReaction*
@@ -680,7 +682,7 @@ static EJS_NATIVE_FUNC(_ejs_Promise_all) {
     // 5. IfAbruptRejectPromise(iterator, promiseCapability). 
     if (!success) {
         ejsval undef_this = _ejs_undefined;
-        _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &iterator, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &iterator, _ejs_undefined);
         return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
     }
 
@@ -702,7 +704,7 @@ static EJS_NATIVE_FUNC(_ejs_Promise_all) {
         //    b. IfAbruptRejectPromise(next, promiseCapability). 
         if (!success) {
             ejsval undef_this = _ejs_undefined;
-            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &next, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &next, _ejs_undefined);
             return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
         }
         //    c. If next is false, 
@@ -714,11 +716,11 @@ static EJS_NATIVE_FUNC(_ejs_Promise_all) {
                 //           1. Let resolveResult be the result of calling the [[Call]] internal method of promiseCapability.[[Resolve]] with undefined as thisArgument and (values) as argumentsList. 
                 ejsval resolveResult;
                 ejsval undef_this = _ejs_undefined;
-                success = _ejs_invoke_closure_catch(&resolveResult, EJS_CAPABILITY_GET_RESOLVE(promiseCapability), &undef_this, 1, &values, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+                success = _ejs_invoke_closure_catch(&resolveResult, EJS_CAPABILITY_GET_RESOLVE(promiseCapability), &undef_this, 1, &values, _ejs_undefined);
                 //           2. ReturnIfAbrupt(resolveResult). 
                 if (!success) {
                     ejsval undef_this = _ejs_undefined;
-                    _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &resolveResult, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+                    _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &resolveResult, _ejs_undefined);
                     return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
                 }
             }
@@ -732,17 +734,17 @@ static EJS_NATIVE_FUNC(_ejs_Promise_all) {
         //    e. IfAbruptRejectPromise(nextValue, promiseCapability). 
         if (!success) {
             ejsval undef_this = _ejs_undefined;
-            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &nextValue, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &nextValue, _ejs_undefined);
             return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
         }
         //    f. Let nextPromise be Invoke(C, "resolve", (nextValue)). 
         ejsval nextPromise;
-        success =  _ejs_invoke_closure_catch (&nextPromise, Get(C, _ejs_atom_resolve), &C, 1, &nextValue, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        success =  _ejs_invoke_closure_catch (&nextPromise, Get(C, _ejs_atom_resolve), &C, 1, &nextValue, _ejs_undefined);
         
         //    g. IfAbruptRejectPromise(nextPromise, promiseCapability).
         if (!success) {
             ejsval undef_this = _ejs_undefined;
-            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &nextPromise, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &nextPromise, _ejs_undefined);
             return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
         }
  
@@ -765,11 +767,11 @@ static EJS_NATIVE_FUNC(_ejs_Promise_all) {
         //    o. Let result be Invoke(nextPromise, "then", (resolveElement, promiseCapability.[[Reject]])). 
         ejsval thenargs[] = { resolveElement, EJS_CAPABILITY_GET_REJECT(promiseCapability) };
         ejsval result;
-        success =  _ejs_invoke_closure_catch (&result, Get(nextPromise, _ejs_atom_then), &nextPromise, 2, thenargs, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        success =  _ejs_invoke_closure_catch (&result, Get(nextPromise, _ejs_atom_then), &nextPromise, 2, thenargs, _ejs_undefined);
         //    p. IfAbruptRejectPromise(result, promiseCapability). 
         if (!success) {
             ejsval undef_this = _ejs_undefined;
-            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &result, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &result, _ejs_undefined);
             return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
         }
         //    q. Set index to index + 1.
@@ -798,7 +800,7 @@ static EJS_NATIVE_FUNC(_ejs_Promise_race) {
     // 5. IfAbruptRejectPromise(iterator, promiseCapability).
     if (!success) {
         ejsval undef_this = _ejs_undefined;
-        _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &iterator, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &iterator, _ejs_undefined);
         return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
     }
 
@@ -811,7 +813,7 @@ static EJS_NATIVE_FUNC(_ejs_Promise_race) {
         //    b. IfAbruptRejectPromise(next, promiseCapability). 
         if (!success) {
             ejsval undef_this = _ejs_undefined;
-            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &next, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &next, _ejs_undefined);
             return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
         }
 
@@ -826,29 +828,29 @@ static EJS_NATIVE_FUNC(_ejs_Promise_race) {
         //    e. IfAbruptRejectPromise(nextValue, promiseCapability). 
         if (!success) {
             ejsval undef_this = _ejs_undefined;
-            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &nextValue, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &nextValue, _ejs_undefined);
             return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
         }
 
         //    f. Let nextPromise be Invoke(C, "resolve", (nextValue)). 
         ejsval nextPromise;
-        success = _ejs_invoke_closure_catch(&nextPromise, Get(C, _ejs_atom_resolve), &C, 1, &nextValue, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        success = _ejs_invoke_closure_catch(&nextPromise, Get(C, _ejs_atom_resolve), &C, 1, &nextValue, _ejs_undefined);
         //    g. IfAbruptRejectPromise(nextPromise, promiseCapability). 
         if (!success) {
             ejsval undef_this = _ejs_undefined;
-            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &nextPromise, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &nextPromise, _ejs_undefined);
             return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
         }
 
         //    h. Let result be Invoke(nextPromise, "then", (promiseCapability.[[Resolve]], promiseCapability.[[Reject]])). 
         ejsval result;
         ejsval args[] = { EJS_CAPABILITY_GET_RESOLVE(promiseCapability), EJS_CAPABILITY_GET_REJECT(promiseCapability) };
-        success = _ejs_invoke_closure_catch(&result, Get(nextPromise, _ejs_atom_then), &nextPromise, 2, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        success = _ejs_invoke_closure_catch(&result, Get(nextPromise, _ejs_atom_then), &nextPromise, 2, args, _ejs_undefined);
 
         //    i. IfAbruptRejectPromise(result, promiseCapability). 
         if (!success) {
             ejsval undef_this = _ejs_undefined;
-            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &result, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &result, _ejs_undefined);
             return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
         }
     }
@@ -869,7 +871,7 @@ static EJS_NATIVE_FUNC(_ejs_Promise_reject) {
     // 4. Let rejectResult be the result of calling the [[Call]] internal method of promiseCapability.[[Reject]] with undefined as thisArgument and (r) as argumentsList. 
     // 5. ReturnIfAbrupt(rejectResult). 
     ejsval undef_this = _ejs_undefined;
-    _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &r, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+    _ejs_invoke_closure(EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &r, _ejs_undefined);
 
     // 6. Return promiseCapability.[[Promise]]. 
     return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
@@ -898,7 +900,7 @@ static EJS_NATIVE_FUNC(_ejs_Promise_resolve) {
     // 5. Let resolveResult be the result of calling the [[Call]] internal method of promiseCapability.[[Resolve]] with undefined as thisArgument and (x) as argumentsList. 
     // 6. ReturnIfAbrupt(resolveResult). 
     ejsval undef_this = _ejs_undefined;
-    _ejs_invoke_closure(EJS_CAPABILITY_GET_RESOLVE(promiseCapability), &undef_this, 1, &x, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+    _ejs_invoke_closure(EJS_CAPABILITY_GET_RESOLVE(promiseCapability), &undef_this, 1, &x, _ejs_undefined);
 
     // 7. Return promiseCapability.[[Promise]]. 
     return EJS_CAPABILITY_GET_PROMISE(promiseCapability);

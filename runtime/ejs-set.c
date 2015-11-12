@@ -152,7 +152,7 @@ static EJS_NATIVE_FUNC(_ejs_Set_prototype_forEach) {
         callback_args[0] = e->value;
         callback_args[1] = e->value;
         callback_args[2] = S;
-        _ejs_invoke_closure (callbackfn, &T, 3, callback_args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        _ejs_invoke_closure (callbackfn, &T, 3, callback_args, _ejs_undefined);
 
     }
 
@@ -370,7 +370,7 @@ static EJS_NATIVE_FUNC(_ejs_Set_impl) {
         ejsval nextValue = IteratorValue (next);
 
         // f. Let status be Call(adder, set, «nextValue.[[value]]»).
-        _ejs_invoke_closure (adder, &set, 1, &nextValue, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        _ejs_invoke_closure (adder, &set, 1, &nextValue, _ejs_undefined);
 
         // g. If status is an abrupt completion, return IteratorClose(iter, status).
 

@@ -9,9 +9,6 @@
 #include "ejs-object.h"
 #include "ejs-closureenv.h"
 
-#define EJS_CALL_FLAGS_CALL         0
-#define EJS_CALL_FLAGS_CONSTRUCT    (1 << 0) // function being called as a constructor
-
 typedef enum {
     CONSTRUCTOR_KIND_BASE = 1,
     CONSTRUCTOR_KIND_DERIVED
@@ -107,14 +104,14 @@ EJS_MACRO_END
     _ejs_object_define_accessor_property (o, _ejs_atom_##n, tmpfunc1, tmpfunc2, EJS_PROP_FLAGS_GETTER_SET | EJS_PROP_FLAGS_SETTER_SET); \
     EJS_MACRO_END
 
-ejsval  _ejs_invoke_closure (ejsval closure, ejsval* _this, uint32_t argc, ejsval* args, EJSCallFlags callFlags, ejsval newTarget);
-EJSBool _ejs_invoke_closure_catch (ejsval* retval, ejsval closure, ejsval* _this, uint32_t argc, ejsval* args, EJSCallFlags callFlags, ejsval newTarget);
+ejsval  _ejs_invoke_closure (ejsval closure, ejsval* _this, uint32_t argc, ejsval* args, ejsval newTarget);
+EJSBool _ejs_invoke_closure_catch (ejsval* retval, ejsval closure, ejsval* _this, uint32_t argc, ejsval* args, ejsval newTarget);
 EJSBool _ejs_invoke_func_catch (ejsval* retval, ejsval(*func)(void*), void* data);
 
 EJSBool _ejs_decompose_closure (ejsval closure, EJSClosureFunc* func, ejsval* env, ejsval *_this);
 
-ejsval  _ejs_construct_closure (ejsval closure, ejsval* unused_this, uint32_t argc, ejsval* args, EJSCallFlags callFlags, ejsval newTarget);
-ejsval  _ejs_construct_closure_apply (ejsval closure, ejsval* unused_this, uint32_t argc, ejsval* args, EJSCallFlags callFlags, ejsval newTarget);
+ejsval  _ejs_construct_closure (ejsval closure, ejsval* unused_this, uint32_t argc, ejsval* args, ejsval newTarget);
+ejsval  _ejs_construct_closure_apply (ejsval closure, ejsval* unused_this, uint32_t argc, ejsval* args, ejsval newTarget);
 
 extern ejsval _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func);
 extern ejsval _ejs_function_new_native (ejsval env, ejsval name, EJSClosureFunc func);

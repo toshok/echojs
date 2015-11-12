@@ -113,13 +113,13 @@ _ejs_nativeerror_new (EJSNativeErrorType err_type, ejsval msg)
     ejsval exc = OBJECT_TO_EJSVAL(exc_obj);
 
     switch (err_type) {
-    case EJS_ERROR:           _ejs_Error_impl (_ejs_null, &exc, 1, &msg, EJS_CALL_FLAGS_CALL, _ejs_undefined); break;
-    case EJS_EVAL_ERROR:      _ejs_EvalError_impl (_ejs_null, &exc, 1, &msg, EJS_CALL_FLAGS_CALL, _ejs_undefined); break;
-    case EJS_RANGE_ERROR:     _ejs_RangeError_impl (_ejs_null, &exc, 1, &msg, EJS_CALL_FLAGS_CALL, _ejs_undefined); break;
-    case EJS_REFERENCE_ERROR: _ejs_ReferenceError_impl (_ejs_null, &exc, 1, &msg, EJS_CALL_FLAGS_CALL, _ejs_undefined); break;
-    case EJS_SYNTAX_ERROR:    _ejs_SyntaxError_impl (_ejs_null, &exc, 1, &msg, EJS_CALL_FLAGS_CALL, _ejs_undefined); break;
-    case EJS_TYPE_ERROR:      _ejs_TypeError_impl (_ejs_null, &exc, 1, &msg, EJS_CALL_FLAGS_CALL, _ejs_undefined); break;
-    case EJS_URI_ERROR:       _ejs_URIError_impl (_ejs_null, &exc, 1, &msg, EJS_CALL_FLAGS_CALL, _ejs_undefined); break;
+    case EJS_ERROR:           _ejs_Error_impl (_ejs_null, &exc, 1, &msg, _ejs_undefined); break;
+    case EJS_EVAL_ERROR:      _ejs_EvalError_impl (_ejs_null, &exc, 1, &msg, _ejs_undefined); break;
+    case EJS_RANGE_ERROR:     _ejs_RangeError_impl (_ejs_null, &exc, 1, &msg, _ejs_undefined); break;
+    case EJS_REFERENCE_ERROR: _ejs_ReferenceError_impl (_ejs_null, &exc, 1, &msg, _ejs_undefined); break;
+    case EJS_SYNTAX_ERROR:    _ejs_SyntaxError_impl (_ejs_null, &exc, 1, &msg, _ejs_undefined); break;
+    case EJS_TYPE_ERROR:      _ejs_TypeError_impl (_ejs_null, &exc, 1, &msg, _ejs_undefined); break;
+    case EJS_URI_ERROR:       _ejs_URIError_impl (_ejs_null, &exc, 1, &msg, _ejs_undefined); break;
     }
 
     return exc;

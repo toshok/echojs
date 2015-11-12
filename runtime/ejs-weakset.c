@@ -214,7 +214,7 @@ static EJS_NATIVE_FUNC(_ejs_WeakSet_impl) {
         ejsval nextValue = IteratorValue (next);
 
         // f. Let status be Call(adder, set, «nextValue »).
-        _ejs_invoke_closure (adder, &set, 1, &nextValue, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        _ejs_invoke_closure (adder, &set, 1, &nextValue, _ejs_undefined);
 
         // g. If status is an abrupt completion, return IteratorClose(iter, status).
 

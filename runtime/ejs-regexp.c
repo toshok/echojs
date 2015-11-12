@@ -53,7 +53,7 @@ _ejs_regexp_new (ejsval pattern, ejsval flags)
 
     // XXX this is wrong
     ejsval thisarg = OBJECT_TO_EJSVAL(rv);
-    return _ejs_RegExp_impl (_ejs_null, &thisarg, 2, args, EJS_CALL_FLAGS_CONSTRUCT, _ejs_undefined);
+    return _ejs_RegExp_impl (_ejs_null, &thisarg, 2, args, _ejs_undefined);
 }
 
 ejsval
@@ -109,7 +109,7 @@ _ejs_regexp_replace(ejsval str, ejsval search_re, ejsval replace)
 
             ejsval undef_this = _ejs_undefined;
 
-            replaceval = ToString(_ejs_invoke_closure (replace, &undef_this, argc, args, EJS_CALL_FLAGS_CALL, _ejs_undefined));
+            replaceval = ToString(_ejs_invoke_closure (replace, &undef_this, argc, args, _ejs_undefined));
         }
         else {
             replaceval = ToString(replace);
@@ -319,63 +319,6 @@ static EJS_NATIVE_FUNC(_ejs_RegExp_impl) {
 
     // 10. Return RegExpInitialize(O, P, F)
     return RegExpInitialize(O, P, F);
-
-#if old_code
-    EJSRegExp *re;
-
-    if (callFlags == EJS_CALL_FLAGS_CONSTRUCT) {
-        // called as a function
-        *_this = _ejs_object_new(_ejs_RegExp_prototype, &_ejs_RegExp_specops);
-    }
-
-    re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
-
-    re->pattern = _ejs_undefined;
-    re->flags = _ejs_undefined;
-
-    ejsval pattern = _ejs_undefined;
-
-    if (argc > 0) pattern = args[0];
-    if (argc > 1) re->flags = args[1];
-
-    if (EJSVAL_IS_OBJECT(pattern) && EJSVAL_IS_REGEXP(pattern))
-        re->pattern = ((EJSRegExp*)EJSVAL_TO_OBJECT(pattern))->pattern;
-    else
-        re->pattern = pattern;
-
-    if (!EJSVAL_IS_STRING(re->pattern))
-        EJS_NOT_IMPLEMENTED();
-
-    EJSPrimString *flat_pattern = _ejs_string_flatten (re->pattern);
-    jschar* chars = flat_pattern->data.flat;
-
-    const char *pcre_error;
-    int pcre_erroffset;
-
-    re->compiled_pattern = pcre16_compile(chars,
-                                          PCRE_UTF16 | PCRE_NO_UTF16_CHECK,
-                                          &pcre_error, &pcre_erroffset,
-                                          pcre16_tables);
-
-    _ejs_object_define_value_property (*_this, _ejs_atom_source, re->pattern, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
-    _ejs_object_define_value_property (*_this, _ejs_atom_lastIndex, NUMBER_TO_EJSVAL(0), EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_WRITABLE);
-    
-    if (EJSVAL_IS_STRING(re->flags)) {
-        EJSPrimString *flat_flags = _ejs_string_flatten(re->flags);
-        chars = flat_flags->data.flat;
-
-        for (int i = 0; i < flat_flags->length; i ++) {
-            if      (chars[i] == 'g' && !re->global)     { re->global     = EJS_TRUE; continue; }
-            else if (chars[i] == 'i' && !re->ignoreCase) { re->ignoreCase = EJS_TRUE; continue; }
-            else if (chars[i] == 'm' && !re->multiline)  { re->multiline  = EJS_TRUE; continue; }
-            else if (chars[i] == 'y' && !re->sticky)     { re->sticky     = EJS_TRUE; continue; }
-            else if (chars[i] == 'u' && !re->unicode)    { re->unicode    = EJS_TRUE; continue; }
-            _ejs_throw_nativeerror_utf8 (EJS_SYNTAX_ERROR, "Invalid flag supplied to RegExp constructor");
-        }
-    }
-
-    return *_this;
-#endif
 }
 
 // ES6 21.2.5.2.2
@@ -560,7 +503,7 @@ RegExpExec(ejsval R, ejsval S)
     if (EJSVAL_IS_FUNCTION(exec)) {
         // a. Let result be Call(exec, R, «S»).
         // b. ReturnIfAbrupt(result).
-        ejsval result = _ejs_invoke_closure(exec, &R, 1, &S, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        ejsval result = _ejs_invoke_closure(exec, &R, 1, &S, _ejs_undefined);
 
         // c. If Type(result) is neither Object or Null, then throw a TypeError exception.
         if (!EJSVAL_IS_OBJECT(result) && !EJSVAL_IS_NULL(result))
@@ -976,7 +919,7 @@ static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_replace) {
             //    iv. Let replValue be Call(replaceValue, undefined, replacerArgs).
             ejsval undef_this = _ejs_undefined;
 
-            ejsval replValue = _ejs_invoke_closure(replaceValue, &undef_this, numReplacerArgs, replacerArgs, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            ejsval replValue = _ejs_invoke_closure(replaceValue, &undef_this, numReplacerArgs, replacerArgs, _ejs_undefined);
             //    v. Let replacement be ToString(replValue).
             replacement = ToString(replValue);
         }

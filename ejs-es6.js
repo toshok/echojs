@@ -456,14 +456,14 @@ function compileFile(filename, parse_tree, modules, compileCallback) {
     }
 
     let compiled_module;
-    try {
+    //try {
         compiled_module = compile(parse_tree, base_filename, filename, modules, options);
-    }
-    catch (e) {
-        console.warn(`${e}`);
-        if (options.debug_level == 0) process.exit(-1);
-        throw e;
-    }
+    //}
+    //catch (e) {
+    //    console.warn(`${e}`);
+    //    if (options.debug_level == 0) process.exit(-1);
+    //    throw e;
+    //}
 
     function tmpfile(suffix) {
         return `${os.tmpdir()}/${base_filename}-${options.target_arch}-${options.target_platform}${suffix}`;

@@ -557,7 +557,7 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_replace) {
     if (!EJSVAL_IS_UNDEFINED(replacer)) {
         //    a. Return Call(replacer, searchValue, «string, replaceValue»).
         ejsval call_args[2] = { string, replaceValue };
-        return _ejs_invoke_closure(replacer, &searchValue, 2, call_args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        return _ejs_invoke_closure(replacer, &searchValue, 2, call_args, _ejs_undefined);
     }
     // 7. Let searchString be ToString(searchValue).
     // 8. ReturnIfAbrupt(searchString).
@@ -592,7 +592,7 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_replace) {
         // a. Let replValue be Call(replaceValue, undefined,«matched, pos, and string»).
         ejsval call_args[3] = { matched, NUMBER_TO_EJSVAL(pos), string };
         ejsval undef_this = _ejs_undefined;
-        ejsval replValue = _ejs_invoke_closure(replaceValue, &undef_this, 3, call_args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        ejsval replValue = _ejs_invoke_closure(replaceValue, &undef_this, 3, call_args, _ejs_undefined);
 
         // b. Let replStr be ToString(replValue).
         // c. ReturnIfAbrupt(replStr).
@@ -773,13 +773,13 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_match) {
     // 6. If matcher is not undefined, then
     if (!EJSVAL_IS_UNDEFINED(matcher))
         // a. Return Call(matcher, regexp, «S»).
-        return _ejs_invoke_closure(matcher, &regexp, 1, &S, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        return _ejs_invoke_closure(matcher, &regexp, 1, &S, _ejs_undefined);
     
     // 7. Let rx be the result of the abstract operation RegExpCreate(regexp, undefined) (see 21.2.3.3)
     ejsval rx = _ejs_regexp_new(regexp, _ejs_undefined);
 
     // 8. Return Invoke(rx, @@match, «S»).
-    return _ejs_invoke_closure (Get(rx, _ejs_Symbol_match), &rx, 1, &S, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+    return _ejs_invoke_closure (Get(rx, _ejs_Symbol_match), &rx, 1, &S, _ejs_undefined);
 }
 
 // ECMA262: 21.1.3.15 String.prototype.search ( regexp )
@@ -801,14 +801,14 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_search) {
     // 6. If searcher is not undefined , then,
     if (!EJSVAL_IS_UNDEFINED(searcher))
         //    a. Return Call(searcher, regexp, «string»)
-        return _ejs_invoke_closure(searcher, &regexp, 1, &string, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        return _ejs_invoke_closure(searcher, &regexp, 1, &string, _ejs_undefined);
 
     // 7. Let rx be RegExpCreate(regexp, undefined) (see 21.2.3.3).
     // 8. ReturnIfAbrupt(rx).
     ejsval rx = _ejs_regexp_new(regexp, _ejs_undefined);
 
     // 9. Return Invoke(rx, @@search, «string»).
-    return _ejs_invoke_closure (Get(rx, _ejs_Symbol_search), &rx, 1, &string, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+    return _ejs_invoke_closure (Get(rx, _ejs_Symbol_search), &rx, 1, &string, _ejs_undefined);
 }
 
 static EJS_NATIVE_FUNC(_ejs_String_prototype_substring) {
@@ -1107,7 +1107,7 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_split) {
         if (!EJSVAL_IS_UNDEFINED(splitter)) {
             //    i. Return Call(splitter, separator, «O, limit»).
             ejsval args[2] = { O, limit };
-            return _ejs_invoke_closure(splitter, &separator, 2, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+            return _ejs_invoke_closure(splitter, &separator, 2, args, _ejs_undefined);
         }
     }
 

@@ -45,7 +45,7 @@ static EJS_NATIVE_FUNC(_ejs_Reflect_apply) {
     // 6. Perform the PrepareForTailCall abstract operation. 
 
     // 7. Return the result of calling the [[Call]] internal method of obj with arguments thisArgument and args.
-    return _ejs_invoke_closure(obj, &thisArgument, EJS_ARRAY_LEN(argumentsList), EJS_DENSE_ARRAY_ELEMENTS(argumentsList), EJS_CALL_FLAGS_CALL, _ejs_undefined);
+    return _ejs_invoke_closure(obj, &thisArgument, EJS_ARRAY_LEN(argumentsList), EJS_DENSE_ARRAY_ELEMENTS(argumentsList), _ejs_undefined);
 }
 
 // ES2015, June 2015

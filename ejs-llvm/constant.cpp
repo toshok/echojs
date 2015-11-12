@@ -17,38 +17,29 @@ namespace ejsllvm {
 
     static ejsval _ejs_Constant_prototype EJSVAL_ALIGNMENT;
     static ejsval _ejs_Constant EJSVAL_ALIGNMENT;
-    static ejsval
-    Constant_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+
+    static EJS_NATIVE_FUNC(Constant_impl) {
         EJS_NOT_IMPLEMENTED();
     }
 
-    static ejsval
-    Constant_getNull (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(Constant_getNull) {
         REQ_LLVM_TYPE_ARG (0, ty);
         return Value_new (llvm::Constant::getNullValue(ty));
     }
 
-    static ejsval
-    Constant_getAggregateZero (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(Constant_getAggregateZero) {
         REQ_LLVM_TYPE_ARG (0, ty);
 
         return Value_new (llvm::ConstantAggregateZero::get(ty));
     }
 
-    static ejsval
-    Constant_getBoolValue (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(Constant_getBoolValue) {
         REQ_BOOL_ARG (0, b);
 
         return Value_new (llvm::Constant::getIntegerValue(llvm::Type::getInt8Ty(llvm::getGlobalContext()), llvm::APInt(8, b?1:0)));
     }
 
-    static ejsval
-    Constant_getIntegerValue (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(Constant_getIntegerValue) {
         REQ_LLVM_TYPE_ARG (0, ty);
         REQ_INT_ARG (1, v);
 

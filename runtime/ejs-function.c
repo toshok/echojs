@@ -172,7 +172,7 @@ static EJS_NATIVE_FUNC(_ejs_Function_prototype_apply) {
     if (EJSVAL_IS_UNDEFINED(argArray) || EJSVAL_IS_NULL(argArray)) {
         /*    a. Return the result of calling the [[Call]] internal method of func, providing thisArg as the this value */
         /*       and an empty list of arguments. */
-        return _ejs_invoke_closure (func, &thisArg, 0, NULL, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        return _ejs_invoke_closure (func, &thisArg, 0, NULL, _ejs_undefined);
     }
     /* 3. If Type(argArray) is not Object, then throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(argArray)) {
@@ -260,24 +260,24 @@ static EJS_NATIVE_FUNC(_ejs_Function_prototype_call) {
 #define EJS_BOUNDFUNC_ENV_SET_ARG(bf,a,v)  (*_ejs_closureenv_get_slot_ref((bf), EJS_BOUNDFUNC_FIRST_ARG_SLOT + (a)) = v)
 
 static EJS_NATIVE_FUNC(bound_wrapper) {
-    EJS_ASSERT(callFlags == EJS_CALL_FLAGS_CALL);
+    EJS_ASSERT(EJSVAL_IS_UNDEFINED(newTarget)); // we don't currently support 'new $boundfunc()'
 
     ejsval target = EJS_BOUNDFUNC_ENV_GET_TARGET(env);
     ejsval thisArg = EJS_BOUNDFUNC_ENV_GET_THIS(env);
     uint32_t bound_argc = ToUint32(EJS_BOUNDFUNC_ENV_GET_ARGC(env));
 
     if (bound_argc == 0) {
-        return _ejs_invoke_closure(target, &thisArg, argc, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        return _ejs_invoke_closure(target, &thisArg, argc, args, _ejs_undefined);
     }
     else if (argc == 0) {
-        return _ejs_invoke_closure(target, &thisArg, bound_argc, _ejs_closureenv_get_slot_ref(env, EJS_BOUNDFUNC_FIRST_ARG_SLOT), EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        return _ejs_invoke_closure(target, &thisArg, bound_argc, _ejs_closureenv_get_slot_ref(env, EJS_BOUNDFUNC_FIRST_ARG_SLOT), _ejs_undefined);
     }
     else {
         uint32_t call_argc = argc + bound_argc;
         ejsval* call_args = alloca(sizeof(ejsval) * call_argc);
         memcpy (call_args, _ejs_closureenv_get_slot_ref(env, EJS_BOUNDFUNC_FIRST_ARG_SLOT), sizeof(ejsval) * bound_argc);
         memcpy (call_args + bound_argc, args, sizeof(ejsval) * argc);
-        return _ejs_invoke_closure(target, &thisArg, call_argc, call_args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        return _ejs_invoke_closure(target, &thisArg, call_argc, call_args, _ejs_undefined);
     }
 }
 
@@ -415,7 +415,7 @@ _ejs_function_init(ejsval global)
     EJS_MACRO_END
 
 ejsval
-_ejs_invoke_closure (ejsval closure, ejsval* _this, uint32_t argc, ejsval* args, EJSCallFlags callFlags, ejsval newTarget)
+_ejs_invoke_closure (ejsval closure, ejsval* _this, uint32_t argc, ejsval* args, ejsval newTarget)
 {
     if (!EJSVAL_IS_FUNCTION(closure)) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "object not a function");
@@ -430,14 +430,14 @@ _ejs_invoke_closure (ejsval closure, ejsval* _this, uint32_t argc, ejsval* args,
 }
 
 ejsval
-_ejs_construct_closure (ejsval _closure, ejsval* _this, uint32_t argc, ejsval* args, EJSCallFlags callFlags, ejsval newTarget)
+_ejs_construct_closure (ejsval _closure, ejsval* _this, uint32_t argc, ejsval* args, ejsval newTarget)
 {
     *_this = Construct(_closure, newTarget, argc, args);
     return *_this;
 }
 
 ejsval
-_ejs_construct_closure_apply (ejsval _closure, ejsval* _this, uint32_t argc, ejsval* args, EJSCallFlags callFlags, ejsval newTarget)
+_ejs_construct_closure_apply (ejsval _closure, ejsval* _this, uint32_t argc, ejsval* args, ejsval newTarget)
 {
     EJS_ASSERT(argc == 1);
     ejsval args_array = args[0];
@@ -523,7 +523,7 @@ _ejs_function_specop_call (ejsval F, ejsval _this, uint32_t argc, ejsval *args)
     // 9. If result.[[type]] is return, return NormalCompletion(result.[[value]]).
     // 10. ReturnIfAbrupt(result).
     // 11. Return NormalCompletion(undefined)
-    return F_->func (F_->env, &_this, argc, args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+    return F_->func (F_->env, &_this, argc, args, _ejs_undefined);
 }
 
 // ES2015, June 2015
@@ -557,7 +557,7 @@ _ejs_function_specop_construct (ejsval F, ejsval newTarget, uint32_t argc, ejsva
     // 9. Let constructorEnv be the LexicalEnvironment of calleeContext.
     // 10. Let envRec be constructorEnv’s EnvironmentRecord.
     // 11. Let result be OrdinaryCallEvaluateBody(F, argumentsList).
-    ejsval result = F_->func (F_->env, &thisArgument, argc, args, EJS_CALL_FLAGS_CONSTRUCT, newTarget);
+    ejsval result = F_->func (F_->env, &thisArgument, argc, args, newTarget);
     // 12. Remove calleeContext from the execution context stack and restore callerContext as the running execution context.
     // 13. If result.[[type]] is return, then
     // a. If Type(result.[[value]]) is Object, return NormalCompletion(result.[[value]]).

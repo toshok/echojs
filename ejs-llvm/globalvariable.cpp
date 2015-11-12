@@ -7,6 +7,7 @@
 
 #include "ejs-llvm.h"
 #include "ejs-object.h"
+#include "ejs-ops.h"
 #include "ejs-array.h"
 #include "ejs-function.h"
 #include "ejs-string.h"
@@ -29,40 +30,25 @@ namespace ejsllvm {
         llvm::GlobalVariable *llvm_global;
     } GlobalVariable;
 
+    static EJSSpecOps _ejs_GlobalVariable_specops;
     static ejsval _ejs_GlobalVariable_prototype;
     static ejsval _ejs_GlobalVariable;
 
-    EJSObject* GlobalVariable_alloc_instance()
+    EJSObject* GlobalVariable_allocate()
     {
         return (EJSObject*)_ejs_gc_new(GlobalVariable);
     }
 
-    static ejsval
-    GlobalVariable_create (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        ejsval F = _this;
-        if (!EJSVAL_IS_CONSTRUCTOR(F)) 
-            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in GlobalVariable[Symbol.create] is not a constructor");
-        EJSObject* F_ = EJSVAL_TO_OBJECT(F);
-        // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%DatePrototype%", ([[DateData]]) ). 
-        ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
-        if (EJSVAL_IS_UNDEFINED(proto))
-            proto = _ejs_GlobalVariable_prototype;
-
-        EJSObject* obj = (EJSObject*)_ejs_gc_new (GlobalVariable);
-        _ejs_init_object (obj, proto, &_ejs_Object_specops);
-        return OBJECT_TO_EJSVAL(obj);
-    }
-
-    static ejsval
-    GlobalVariable_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        if (EJSVAL_IS_UNDEFINED(_this)) {
+    static EJS_NATIVE_FUNC(GlobalVariable_impl) {
+        if (EJSVAL_IS_UNDEFINED(newTarget)) {
             // called as a function
             EJS_NOT_IMPLEMENTED();
         }
         else {
-            GlobalVariable* gv = (GlobalVariable*)EJSVAL_TO_OBJECT(_this);
+            ejsval O = OrdinaryCreateFromConstructor(newTarget, _ejs_GlobalVariable_prototype, &_ejs_GlobalVariable_specops);
+            *_this = O;
+
+            GlobalVariable* gv = (GlobalVariable*)EJSVAL_TO_OBJECT(O);
 
             REQ_LLVM_MODULE_ARG(0, module);
             REQ_LLVM_TYPE_ARG(1, type);
@@ -71,40 +57,34 @@ namespace ejsllvm {
             REQ_BOOL_ARG(4, visible);
 
             gv->llvm_global = new ::llvm::GlobalVariable(*module, type, false, visible ? llvm::GlobalValue::ExternalLinkage : llvm::GlobalValue::InternalLinkage, init, name);
-            return _this;
+            return *_this;
         }
     }
 
     ejsval
     GlobalVariable_new(llvm::GlobalVariable* llvm_global)
     {
-        EJSObject* result = GlobalVariable_alloc_instance();
+        EJSObject* result = GlobalVariable_allocate();
         _ejs_init_object (result, _ejs_GlobalVariable_prototype, NULL);
         ((GlobalVariable*)result)->llvm_global = llvm_global;
         return OBJECT_TO_EJSVAL(result);
     }
 
-    ejsval
-    GlobalVariable_prototype_toString(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(GlobalVariable_prototype_toString) {
         std::string str;
         llvm::raw_string_ostream str_ostream(str);
-        ((GlobalVariable*)EJSVAL_TO_OBJECT(_this))->llvm_global->print(str_ostream);
+        ((GlobalVariable*)EJSVAL_TO_OBJECT(*_this))->llvm_global->print(str_ostream);
 
         return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
     }
 
-    ejsval
-    GlobalVariable_prototype_dump(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        ((GlobalVariable*)EJSVAL_TO_OBJECT(_this))->llvm_global->dump();
+    static EJS_NATIVE_FUNC(GlobalVariable_prototype_dump) {
+        ((GlobalVariable*)EJSVAL_TO_OBJECT(*_this))->llvm_global->dump();
         return _ejs_undefined;
     }
 
-    ejsval
-    GlobalVariable_prototype_setInitializer(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        GlobalVariable* global = (GlobalVariable*)EJSVAL_TO_OBJECT(_this);
+    static EJS_NATIVE_FUNC(GlobalVariable_prototype_setInitializer) {
+        GlobalVariable* global = (GlobalVariable*)EJSVAL_TO_OBJECT(*_this);
 
         REQ_LLVM_CONST_ARG (0, init);
 
@@ -113,10 +93,8 @@ namespace ejsllvm {
         return _ejs_undefined;
     }
 
-    ejsval
-    GlobalVariable_prototype_setAlignment(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        GlobalVariable* global = (GlobalVariable*)EJSVAL_TO_OBJECT(_this);
+    static EJS_NATIVE_FUNC(GlobalVariable_prototype_setAlignment) {
+        GlobalVariable* global = (GlobalVariable*)EJSVAL_TO_OBJECT(*_this);
 
         REQ_INT_ARG (0, alignment);
 
@@ -135,6 +113,10 @@ namespace ejsllvm {
     void
     GlobalVariable_init (ejsval exports)
     {
+        _ejs_GlobalVariable_specops = _ejs_Object_specops;
+        _ejs_GlobalVariable_specops.class_name = "LLVMGlobalVariable";
+        _ejs_GlobalVariable_specops.Allocate = GlobalVariable_allocate;
+
         _ejs_gc_add_root (&_ejs_GlobalVariable_prototype);
         _ejs_GlobalVariable_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
 
@@ -150,7 +132,5 @@ namespace ejsllvm {
         PROTO_METHOD(toString);
 
 #undef PROTO_METHOD
-
-        EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_GlobalVariable, create, GlobalVariable_create, EJS_PROP_NOT_ENUMERABLE);
     }
 };

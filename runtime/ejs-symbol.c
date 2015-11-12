@@ -109,7 +109,7 @@ static EJS_NATIVE_FUNC(_ejs_Symbol_prototype_valueOf) {
 
 // ECMA262: 19.4.1
 static EJS_NATIVE_FUNC(_ejs_Symbol_impl) {
-    if (callFlags == EJS_CALL_FLAGS_CALL) {
+    if (EJSVAL_IS_UNDEFINED(newTarget)) {
         // 19.4.1.1 Symbol ( [ description ] )
         ejsval description = _ejs_undefined;
         if (argc > 0) description = args[0];

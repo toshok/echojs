@@ -271,7 +271,7 @@ static EJS_NATIVE_FUNC(_ejs_WeakMap_impl) {
         ejsval adder_args[2];
         adder_args[0] = k;
         adder_args[1] = v;
-        _ejs_invoke_closure (adder, &map, 2, adder_args, EJS_CALL_FLAGS_CALL, _ejs_undefined);
+        _ejs_invoke_closure (adder, &map, 2, adder_args, _ejs_undefined);
 
         // l. If status is an abrupt completion, return IteratorClose(iter, status).
 
