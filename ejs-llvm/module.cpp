@@ -51,7 +51,7 @@ namespace ejsllvm {
     }
 
     static EJS_NATIVE_FUNC(Module_impl) {
-        if (EJSVAL_IS_UNDEFINED(*_this)) {
+        if (EJSVAL_IS_UNDEFINED(newTarget)) {
             // called as a function
             EJS_NOT_IMPLEMENTED();
         }
