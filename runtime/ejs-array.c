@@ -2291,12 +2291,17 @@ static EJS_NATIVE_FUNC(_ejs_Array_from) {
             // vii. If mapping is true, then
             if (mapping) {
                 // 1. Let mappedValue be Call(mapfn, T, «nextValue, k»).
-                // 2. ReturnIfAbrupt(mappedValue).
                 ejsval mapfnArgs[2] = {
                     nextValue,
                     kval
                 };
-                mappedValue = _ejs_invoke_closure (mapfn, &T, 2, mapfnArgs, _ejs_undefined);
+                EJSBool status = _ejs_invoke_closure_catch (&mappedValue, mapfn, &T, 2, mapfnArgs, _ejs_undefined);
+
+                // 2. If mappedValue is an abrupt completion, return IteratorClose(iterator, mappedValue).
+                if (!status)
+                    return IteratorClose(iterator, mappedValue, EJS_TRUE);
+
+                // 3. Let mappedValue be mappedValue.[[value]].
             }
             // viii.Else, let mappedValue be nextValue.
             else {
@@ -2304,8 +2309,11 @@ static EJS_NATIVE_FUNC(_ejs_Array_from) {
             }
 
             // ix. Let defineStatus be CreateDataPropertyOrThrow(A, Pk, mappedValue).
-            // x. ReturnIfAbrupt(defineStatus).
             _ejs_object_define_value_property (A, Pk, mappedValue, EJS_PROP_FLAGS_ENUMERABLE | EJS_PROP_FLAGS_CONFIGURABLE | EJS_PROP_FLAGS_WRITABLE);
+            // x. If defineStatus is an abrupt completion, return IteratorClose(iterator, defineStatus).
+
+            // XXX
+
             // xi. Increase k by 1.
             k += 1;
         } while (EJS_TRUE);
