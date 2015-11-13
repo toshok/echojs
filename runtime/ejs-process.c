@@ -16,9 +16,7 @@
 
 extern char** environ;
 
-static ejsval
-_ejs_Process_get_env (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Process_get_env) {
     ejsval env_obj = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
 
     char** p = environ;
@@ -41,9 +39,7 @@ _ejs_Process_get_env (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return env_obj;
 }
 
-static ejsval
-_ejs_Process_exit (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Process_exit) {
     ejsval code = _ejs_undefined;
     if (argc > 0)
         code = args[0];
@@ -51,9 +47,7 @@ _ejs_Process_exit (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     exit(ToInt32(code));
 }
 
-static ejsval
-_ejs_Process_chdir (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_Process_chdir) {
     ejsval dir = _ejs_undefined;
     if (argc > 0)
         dir = args[0];
@@ -68,9 +62,7 @@ _ejs_Process_chdir (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return _ejs_undefined;
 }
 
-static ejsval
-_ejs_Process_cwd (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_Process_cwd) {
     char cwd[MAXPATHLEN];
 
     getcwd(cwd, MAXPATHLEN);

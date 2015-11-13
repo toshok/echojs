@@ -16,15 +16,12 @@
 namespace ejsllvm {
     static ejsval _ejs_ConstantFP_prototype EJSVAL_ALIGNMENT;
     static ejsval _ejs_ConstantFP EJSVAL_ALIGNMENT;
-    static ejsval
-    ConstantFP_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+
+    static EJS_NATIVE_FUNC(ConstantFP_impl) {
         EJS_NOT_IMPLEMENTED();
     }
 
-    static ejsval
-    ConstantFP_getDouble (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(ConstantFP_getDouble) {
         REQ_DOUBLE_ARG(0, v);
         return Value_new (llvm::ConstantFP::get(llvm::getGlobalContext(), llvm::APFloat(v)));
     }

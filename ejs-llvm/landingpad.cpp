@@ -38,9 +38,7 @@ namespace ejsllvm {
     }
 
 
-    static ejsval
-    LandingPad_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(LandingPad_impl) {
         EJS_NOT_IMPLEMENTED();
     }
 
@@ -52,36 +50,28 @@ namespace ejsllvm {
         return result;
     }
 
-    ejsval
-    LandingPad_prototype_toString(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(LandingPad_prototype_toString) {
         std::string str;
         llvm::raw_string_ostream str_ostream(str);
-        ((LandingPad*)EJSVAL_TO_OBJECT(_this))->llvm_landing_pad->print(str_ostream);
+        ((LandingPad*)EJSVAL_TO_OBJECT(*_this))->llvm_landing_pad->print(str_ostream);
 
         return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
     }
 
-    ejsval
-    LandingPad_prototype_dump(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        ((LandingPad*)EJSVAL_TO_OBJECT(_this))->llvm_landing_pad->dump();
+    static EJS_NATIVE_FUNC(LandingPad_prototype_dump) {
+        ((LandingPad*)EJSVAL_TO_OBJECT(*_this))->llvm_landing_pad->dump();
         return _ejs_undefined;
     }
 
-    ejsval
-    LandingPad_prototype_setCleanup(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        LandingPad *landing_pad = ((LandingPad*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(LandingPad_prototype_setCleanup) {
+        LandingPad *landing_pad = ((LandingPad*)EJSVAL_TO_OBJECT(*_this));
         REQ_BOOL_ARG(0, flag);
         landing_pad->llvm_landing_pad->setCleanup(flag);
         return _ejs_undefined;
     }
 
-    ejsval
-    LandingPad_prototype_addClause(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        LandingPad *landing_pad = ((LandingPad*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(LandingPad_prototype_addClause) {
+        LandingPad *landing_pad = ((LandingPad*)EJSVAL_TO_OBJECT(*_this));
         REQ_LLVM_VAL_ARG(0, clause_val);
         landing_pad->llvm_landing_pad->addClause(llvm::cast<llvm::Constant>(clause_val));
         return _ejs_undefined;

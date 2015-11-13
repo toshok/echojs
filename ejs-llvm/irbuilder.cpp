@@ -25,9 +25,8 @@ namespace ejsllvm {
 
     static ejsval _ejs_IRBuilder_prototype EJSVAL_ALIGNMENT;
     static ejsval _ejs_IRBuilder EJSVAL_ALIGNMENT;
-    static ejsval
-    IRBuilder_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+
+    static EJS_NATIVE_FUNC(IRBuilder_impl) {
         EJS_NOT_IMPLEMENTED();
     }
 
@@ -38,49 +37,37 @@ namespace ejsllvm {
     }
 
 
-    ejsval
-    IRBuilder_setInsertPoint(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_setInsertPoint) {
         REQ_LLVM_BB_ARG(0, bb);
         if (bb != NULL)
             _llvm_builder.SetInsertPoint (bb);
         return _ejs_undefined;
     }
 
-    ejsval
-    IRBuilder_setInsertPointStartBB(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_setInsertPointStartBB) {
         REQ_LLVM_BB_ARG(0, bb);
         if (bb != NULL)
             _llvm_builder.SetInsertPoint (bb, bb->getFirstInsertionPt());
         return _ejs_undefined;
     }
 
-    ejsval
-    IRBuilder_getInsertBlock(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_getInsertBlock) {
         llvm::BasicBlock *llvm_bb = _llvm_builder.GetInsertBlock();
         if (llvm_bb)
             return BasicBlock_new (llvm_bb);
         return _ejs_null;
     }
 
-    ejsval
-    IRBuilder_createRet(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createRet) {
         REQ_LLVM_VAL_ARG(0,val);
         return Value_new(_llvm_builder.CreateRet(val));
     }
 
-    ejsval
-    IRBuilder_createRetVoid(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createRetVoid) {
         return Value_new(_llvm_builder.CreateRetVoid());
     }
 
-    ejsval
-    IRBuilder_createPointerCast(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createPointerCast) {
         REQ_LLVM_VAL_ARG(0,val);
         REQ_LLVM_TYPE_ARG(1,ty);
         FALLBACK_EMPTY_UTF8_ARG(2,name);
@@ -88,9 +75,7 @@ namespace ejsllvm {
         return Value_new(_llvm_builder.CreatePointerCast(val, ty, name));
     }
 
-    ejsval
-    IRBuilder_createFPCast(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createFPCast) {
         REQ_LLVM_VAL_ARG(0,val);
         REQ_LLVM_TYPE_ARG(1,ty);
         FALLBACK_EMPTY_UTF8_ARG(2,name);
@@ -98,9 +83,7 @@ namespace ejsllvm {
         return Value_new (_llvm_builder.CreateFPCast(val, ty, name));
     }
 
-    ejsval
-    IRBuilder_createCall(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createCall) {
         REQ_LLVM_VAL_ARG(0, callee);
         REQ_ARRAY_ARG(1, argv);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
@@ -114,9 +97,7 @@ namespace ejsllvm {
         return Call_new (_llvm_builder.CreateCall(callee, ArgsV, name));
     }
 
-    ejsval
-    IRBuilder_createInvoke(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createInvoke) {
         REQ_LLVM_VAL_ARG(0, callee);
         REQ_ARRAY_ARG(1, argv);
         REQ_LLVM_BB_ARG(2, normal_dest);
@@ -132,9 +113,7 @@ namespace ejsllvm {
         return Invoke_new (_llvm_builder.CreateInvoke(callee, normal_dest, unwind_dest, ArgsV, name));
     }
 
-    ejsval
-    IRBuilder_createFAdd(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createFAdd) {
         REQ_LLVM_VAL_ARG(0, left);
         REQ_LLVM_VAL_ARG(1, right);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
@@ -142,36 +121,28 @@ namespace ejsllvm {
         return Value_new (_llvm_builder.CreateFAdd(left, right, name));
     }
 
-    ejsval
-    IRBuilder_createAlloca(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createAlloca) {
         REQ_LLVM_TYPE_ARG(0, ty);
         FALLBACK_EMPTY_UTF8_ARG(1, name);
 
         return AllocaInst_new (_llvm_builder.CreateAlloca(ty, 0, name));
     }
 
-    ejsval
-    IRBuilder_createLoad(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createLoad) {
         REQ_LLVM_VAL_ARG(0, val);
         FALLBACK_EMPTY_UTF8_ARG(1, name);
 
         return LoadInst_new (_llvm_builder.CreateLoad(val, name));
     }
 
-    ejsval
-    IRBuilder_createStore(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createStore) {
         REQ_LLVM_VAL_ARG(0, val);
         REQ_LLVM_VAL_ARG(1, ptr);
 
         return Value_new (_llvm_builder.CreateStore(val, ptr));
     }
 
-    ejsval
-    IRBuilder_createExtractElement(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createExtractElement) {
         REQ_LLVM_VAL_ARG(0, val);
         REQ_LLVM_VAL_ARG(1, idx);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
@@ -179,9 +150,7 @@ namespace ejsllvm {
         return Value_new (_llvm_builder.CreateExtractElement(val, idx, name));
     }
 
-    ejsval
-    IRBuilder_createExtractValue(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createExtractValue) {
         REQ_LLVM_VAL_ARG(0, val);
         REQ_INT_ARG(1, idx);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
@@ -189,9 +158,7 @@ namespace ejsllvm {
         return Value_new (_llvm_builder.CreateExtractValue(val, idx, name));
     }
 
-    ejsval
-    IRBuilder_createGetElementPointer(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createGetElementPointer) {
         REQ_LLVM_VAL_ARG(0, val);
         REQ_ARRAY_ARG(1, idxv);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
@@ -205,9 +172,7 @@ namespace ejsllvm {
         return Value_new (_llvm_builder.CreateGEP(val, IdxV, name));
     }
 
-    ejsval
-    IRBuilder_createInBoundsGetElementPointer(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createInBoundsGetElementPointer) {
         REQ_LLVM_VAL_ARG(0, val);
         REQ_ARRAY_ARG(1, idxv);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
@@ -221,9 +186,7 @@ namespace ejsllvm {
         return Value_new (_llvm_builder.CreateInBoundsGEP(val, IdxV, name));
     }
 
-    ejsval
-    IRBuilder_createStructGetElementPointer(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createStructGetElementPointer) {
         REQ_LLVM_VAL_ARG(0, val);
         REQ_INT_ARG(1, idx);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
@@ -231,9 +194,7 @@ namespace ejsllvm {
         return Value_new (_llvm_builder.CreateStructGEP(val, idx, name));
     }
 
-    ejsval
-    IRBuilder_createICmpEq(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createICmpEq) {
         REQ_LLVM_VAL_ARG(0, left);
         REQ_LLVM_VAL_ARG(1, right);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
@@ -241,9 +202,7 @@ namespace ejsllvm {
         return Value_new (_llvm_builder.CreateICmpEQ(left, right, name));
     }
 
-    ejsval
-    IRBuilder_createICmpSGt(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createICmpSGt) {
         REQ_LLVM_VAL_ARG(0, left);
         REQ_LLVM_VAL_ARG(1, right);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
@@ -251,9 +210,7 @@ namespace ejsllvm {
         return Value_new (_llvm_builder.CreateICmpSGT(left, right, name));
     }
 
-    ejsval
-    IRBuilder_createICmpUGt(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createICmpUGt) {
         REQ_LLVM_VAL_ARG(0, left);
         REQ_LLVM_VAL_ARG(1, right);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
@@ -261,9 +218,7 @@ namespace ejsllvm {
         return Value_new (_llvm_builder.CreateICmpUGT(left, right, name));
     }
 
-    ejsval
-    IRBuilder_createICmpUGE(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createICmpUGE) {
         REQ_LLVM_VAL_ARG(0, left);
         REQ_LLVM_VAL_ARG(1, right);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
@@ -271,9 +226,7 @@ namespace ejsllvm {
         return Value_new (_llvm_builder.CreateICmpUGE(left, right, name));
     }
 
-    ejsval
-    IRBuilder_createICmpULt(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createICmpULt) {
         REQ_LLVM_VAL_ARG(0, left);
         REQ_LLVM_VAL_ARG(1, right);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
@@ -281,17 +234,13 @@ namespace ejsllvm {
         return Value_new (_llvm_builder.CreateICmpULT(left, right, name));
     }
 
-    ejsval
-    IRBuilder_createBr(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createBr) {
         REQ_LLVM_BB_ARG(0, dest);
 
         return Value_new (_llvm_builder.CreateBr(dest));
     }
 
-    ejsval
-    IRBuilder_createCondBr(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createCondBr) {
         REQ_LLVM_VAL_ARG(0, cond);
         REQ_LLVM_BB_ARG(1, thenPart);
         REQ_LLVM_BB_ARG(2, elsePart);
@@ -299,9 +248,7 @@ namespace ejsllvm {
         return Value_new (_llvm_builder.CreateCondBr(cond, thenPart, elsePart));
     }
 
-    ejsval
-    IRBuilder_createPhi(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createPhi) {
         EJS_NOT_IMPLEMENTED();
 #if notyet
         REQ_LLVM_TYPE_ARG(0, ty);
@@ -314,78 +261,60 @@ namespace ejsllvm {
 #endif
     }
 
-    ejsval
-    IRBuilder_createGlobalStringPtr(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createGlobalStringPtr) {
         REQ_UTF8_ARG(0, val);
         FALLBACK_EMPTY_UTF8_ARG(1, name);
 
         return Value_new (_llvm_builder.CreateGlobalStringPtr(val, name));
     }
 
-    ejsval
-    IRBuilder_createUnreachable(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createUnreachable) {
         return Value_new (_llvm_builder.CreateUnreachable());
     }
 
-    ejsval
-    IRBuilder_createAnd(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createAnd) {
         REQ_LLVM_VAL_ARG(0, lhs);
         REQ_LLVM_VAL_ARG(1, rhs);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
         return Value_new (_llvm_builder.CreateAnd(lhs, rhs, name));
     }
 
-    ejsval
-    IRBuilder_createOr(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createOr) {
         REQ_LLVM_VAL_ARG(0, lhs);
         REQ_LLVM_VAL_ARG(1, rhs);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
         return Value_new (_llvm_builder.CreateOr(lhs, rhs, name));
     }
 
-    ejsval
-    IRBuilder_createZExt(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createZExt) {
         REQ_LLVM_VAL_ARG(0, V);
         REQ_LLVM_TYPE_ARG(1, dest_ty);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
         return Value_new (_llvm_builder.CreateZExt(V, dest_ty, name));
     }
 
-    ejsval
-    IRBuilder_createIntToPtr(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createIntToPtr) {
         REQ_LLVM_VAL_ARG(0, V);
         REQ_LLVM_TYPE_ARG(1, dest_ty);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
         return Value_new (_llvm_builder.CreateIntToPtr(V, dest_ty, name));
     }
 
-    ejsval
-    IRBuilder_createPtrToInt(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createPtrToInt) {
         REQ_LLVM_VAL_ARG(0, V);
         REQ_LLVM_TYPE_ARG(1, dest_ty);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
         return Value_new (_llvm_builder.CreatePtrToInt(V, dest_ty, name));
     }
 
-    ejsval
-    IRBuilder_createBitCast(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createBitCast) {
         REQ_LLVM_VAL_ARG(0, V);
         REQ_LLVM_TYPE_ARG(1, dest_ty);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
         return Value_new (_llvm_builder.CreateBitCast(V, dest_ty, name));
     }
 
-    ejsval
-    IRBuilder_createSwitch(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createSwitch) {
         REQ_LLVM_VAL_ARG(0, V);
         REQ_LLVM_BB_ARG(1, Dest);
         REQ_INT_ARG(2, num_cases);
@@ -393,9 +322,7 @@ namespace ejsllvm {
         return Switch_new (_llvm_builder.CreateSwitch(V, Dest, num_cases));
     }
 
-    ejsval
-    IRBuilder_createSelect(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createSelect) {
         REQ_LLVM_VAL_ARG(0, C);
         REQ_LLVM_VAL_ARG(1, True);
         REQ_LLVM_VAL_ARG(2, False);
@@ -404,9 +331,7 @@ namespace ejsllvm {
         return Value_new(_llvm_builder.CreateSelect(C, True, False, name));
     }
 
-    ejsval
-    IRBuilder_createNswSub(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createNswSub) {
         REQ_LLVM_VAL_ARG(0, lhs);
         REQ_LLVM_VAL_ARG(1, rhs);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
@@ -414,9 +339,7 @@ namespace ejsllvm {
         return Value_new(_llvm_builder.CreateNSWSub(lhs, rhs, name));
     }
 
-    ejsval
-    IRBuilder_createLandingPad(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createLandingPad) {
         REQ_LLVM_TYPE_ARG(0, ty);
         REQ_LLVM_VAL_ARG(1, persFn);
         REQ_INT_ARG(2, num_clauses);
@@ -425,23 +348,17 @@ namespace ejsllvm {
         return LandingPad_new (_llvm_builder.CreateLandingPad(ty, persFn, num_clauses, name));
     }
 
-    ejsval
-    IRBuilder_createResume(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_createResume) {
         REQ_LLVM_VAL_ARG(0, val);
 
         return Value_new (_llvm_builder.CreateResume(val));
     }
 
-    ejsval
-    IRBuilder_getCurrentDebugLocation(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_getCurrentDebugLocation) {
         return DebugLoc_new(_llvm_builder.getCurrentDebugLocation());
     }
 
-    ejsval
-    IRBuilder_setCurrentDebugLocation(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(IRBuilder_setCurrentDebugLocation) {
         REQ_LLVM_DEBUGLOC_ARG(0, debugloc);
         _llvm_builder.SetCurrentDebugLocation(debugloc);
         return _ejs_undefined;

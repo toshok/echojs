@@ -12,8 +12,6 @@
 #include "ejs-ops.h"
 #include "ejs-symbol.h"
 
-typedef EJSBool (*ComparatorFunc)(ejsval, ejsval);
-
 ejsval
 _ejs_set_new ()
 {
@@ -25,11 +23,9 @@ _ejs_set_new ()
 
 // ES6: 23.1.3.1
 // Map.prototype.clear ()
-ejsval
-_ejs_Set_prototype_clear (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Set_prototype_clear) {
     // 1. Let S be this value. 
-    ejsval S = _this;
+    ejsval S = *_this;
 
     // 2. If Type(S) is not Object, then throw a TypeError exception. 
     if (!EJSVAL_IS_OBJECT(S))
@@ -75,9 +71,7 @@ _ejs_set_delete(ejsval S, ejsval value)
 }
 
 // 23.2.3.4 Set.prototype.delete ( value ) 
-ejsval
-_ejs_Set_prototype_delete (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Set_prototype_delete) {
     // NOTE The value empty is used as a specification device to
     // indicate that an entry has been deleted. Actual implementations
     // may take other actions such as physically removing the entry
@@ -87,7 +81,7 @@ _ejs_Set_prototype_delete (ejsval env, ejsval _this, uint32_t argc, ejsval *args
     if (argc > 0) value = args[0];
 
     // 1. Let S be the this value. 
-    ejsval S = _this;
+    ejsval S = *_this;
 
     // 2. If Type(S) is not Object, then throw a TypeError exception. 
     if (!EJSVAL_IS_OBJECT(S))
@@ -104,11 +98,9 @@ _ejs_Set_prototype_delete (ejsval env, ejsval _this, uint32_t argc, ejsval *args
 
 // ES6: 23.2.3.5
 // Set.prototype.entries ( )
-ejsval
-_ejs_Set_prototype_entries (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Set_prototype_entries) {
     // 1. Let S be the this value.
-    ejsval S = _this;
+    ejsval S = *_this;
 
     // 2. Return the result of calling the CreateSetIterator abstract operation with arguments S and "key+value".
     return _ejs_set_iterator_new (S, EJS_SET_ITER_KIND_KEYVALUE);
@@ -116,9 +108,7 @@ _ejs_Set_prototype_entries (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
 
 
 // ES6: 23.2.3.6 Set.prototype.forEach ( callbackfn , thisArg = undefined )
-ejsval
-_ejs_Set_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Set_prototype_forEach) {
     ejsval callbackfn = _ejs_undefined;
     ejsval thisArg = _ejs_undefined;
 
@@ -126,7 +116,7 @@ _ejs_Set_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
     if (argc > 1) thisArg = args[1];
 
     // 1. Let S be the this value. 
-    ejsval S = _this;
+    ejsval S = *_this;
 
     // 2. If Type(S) is not Object, then throw a TypeError exception. 
     if (!EJSVAL_IS_OBJECT(S))
@@ -139,7 +129,7 @@ _ejs_Set_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
     // 4. If S’s [[SetData]] internal slot is undefined, then throw a TypeError exception. 
 
     // 5. If IsCallable(callbackfn) is false, throw a TypeError exception. 
-    if (!EJSVAL_IS_CALLABLE(callbackfn))
+    if (!IsCallable(callbackfn))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Set.prototype.forEach callbackfn isn't a function.");
 
     // 6. If thisArg was supplied, let T be thisArg; else let T be undefined. 
@@ -162,7 +152,7 @@ _ejs_Set_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
         callback_args[0] = e->value;
         callback_args[1] = e->value;
         callback_args[2] = S;
-        _ejs_invoke_closure (callbackfn, T, 3, callback_args);
+        _ejs_invoke_closure (callbackfn, &T, 3, callback_args, _ejs_undefined);
 
     }
 
@@ -194,14 +184,12 @@ _ejs_set_has(ejsval S, ejsval value)
 
 // ES6: 23.2.3.7
 // Set.prototype.has ( value )
-ejsval
-_ejs_Set_prototype_has (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Set_prototype_has) {
     ejsval value = _ejs_undefined;
     if (argc > 0) value = args[0];
 
     // 1. Let S be the this value. 
-    ejsval S = _this;
+    ejsval S = *_this;
 
     // 2. If Type(S) is not Object, then throw a TypeError exception. 
     if (!EJSVAL_IS_OBJECT(S))
@@ -259,14 +247,12 @@ _ejs_set_add(ejsval S, ejsval value)
 }
 
 // ES6: 23.2.3.1 Set.prototype.add ( value )
-ejsval
-_ejs_Set_prototype_add (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Set_prototype_add) {
     ejsval value = _ejs_undefined;
     if (argc > 0) value = args[0];
 
     // 1. Let S be the this value. 
-    ejsval S = _this;
+    ejsval S = *_this;
 
     // 2. If Type(S) is not Object, then throw a TypeError exception. 
     if (!EJSVAL_IS_OBJECT(S)) {
@@ -282,11 +268,9 @@ _ejs_Set_prototype_add (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 
 // ES6: 23.2.3.9
 // get Set.prototype.size
-static ejsval
-_ejs_Set_prototype_get_size (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Set_prototype_get_size) {
     // 1. Let S be the this value.
-    ejsval S = _this;
+    ejsval S = *_this;
 
     // 2. If Type(S) is not Object, then throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(S)) {
@@ -320,115 +304,84 @@ _ejs_Set_prototype_get_size (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
 
 // ES6: 23.2.3.10
 // Set.prototype.values ( )
-ejsval
-_ejs_Set_prototype_values (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Set_prototype_values) {
     // 1. Let S be the this value. 
-    ejsval S = _this;
+    ejsval S = *_this;
 
     // 2. Return the result of calling the CreateSetIterator abstract operation with argument S and "value".
     return _ejs_set_iterator_new (S, EJS_SET_ITER_KIND_VALUE);
 }
 
-// ES6: 23.2.1.1 Set ( [ iterable ] )
-static ejsval
-_ejs_Set_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    // 1. Let set be the this value. 
-    ejsval set = _this;
-
-    // 2. If Type(set) is not Object then, throw a TypeError exception. 
-    if (!EJSVAL_IS_OBJECT(set))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Set constructor called with non-object this.");
-
-    // 3. If set does not have a [[SetData]] internal slot, then throw a TypeError exception. 
-    if (!EJSVAL_IS_SET(set))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Set constructor called with non-Set this.");
-
-    EJSSet* _set = EJSVAL_TO_SET(set);
-
-    // 4. If set’s [[SetData]] internal slot is not undefined, then throw a TypeError exception.
-    if (_set->head_insert)
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Set constructor called with an already initialized Set");
-
-    // 5. If iterable is not present, let iterable be undefined. 
+// ES2015, June 2015
+// 23.2.1.1 Set ( [ iterable ] )
+static EJS_NATIVE_FUNC(_ejs_Set_impl) {
     ejsval iterable = _ejs_undefined;
     if (argc > 0)
         iterable = args[0];
-    ejsval iter = _ejs_undefined;
-    ejsval adder = _ejs_undefined;
 
-    // 6. If iterable is either undefined or null, then let iter be undefined.
-    // 7. Else, 
-    if (!EJSVAL_IS_UNDEFINED(iterable) && !EJSVAL_IS_NULL(iterable)) {
-        //    a. Let iter be the result of GetIterator(iterable). 
-        //    b. ReturnIfAbrupt(iter). 
-        iter = GetIterator (iterable, _ejs_undefined);
-        //    c. Let adder be the result of Get(set, "add").
-        //    d. ReturnIfAbrupt(adder). 
-        adder = Get (set, _ejs_atom_add);
-        //    e. If IsCallable(adder) is false, throw a TypeError Exception.
-        if (!EJSVAL_IS_CALLABLE(adder))
-            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Set.prototype.add is not a function");
+    // 1. If NewTarget is undefined, throw a TypeError exception.
+    if (EJSVAL_IS_UNDEFINED(newTarget))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Set constructor must be called with new");
+
+    // 2. Let set be OrdinaryCreateFromConstructor(NewTarget, "%SetPrototype%", «[[SetData]]» ).
+    // 3. ReturnIfAbrupt(set).
+    // 4. Set set’s [[SetData]] internal slot to a new empty List.
+    ejsval set = OrdinaryCreateFromConstructor(newTarget, _ejs_Set_prototype, &_ejs_Set_specops);
+    *_this = set;
+
+    // 5. If iterable is not present, let iterable be undefined.
+    // 6. If iterable is either undefined or null, let iter be undefined.
+    ejsval iter;
+    ejsval adder;
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(iterable)) {
+        iter = _ejs_undefined;
     }
-    // 8. If the value of sets’s [[SetData]] internal slot is not undefined, then throw a TypeError exception. 
-    // 9. Assert: set has not been reentrantly initialized. 
-    // 10. Set set’s [[SetData]] internal slot to a new empty List.
+    // 7. Else,
+    else {
+        // a. Let adder be Get(set, "add").
+        // b. ReturnIfAbrupt(adder).
+        adder = Get (set, _ejs_atom_add);
 
-    // 11. If iter is undefined, then return set. 
+        // c. If IsCallable(adder) is false, throw a TypeError exception.
+        if (!IsCallable(adder))
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "WeakSet.prototype.add is not a function");
+
+        // d. Let iter be GetIterator(iterable).
+        // e. ReturnIfAbrupt(iter).
+        iter = GetIterator(iterable, _ejs_undefined);
+    }
+
+    // 8. If iter is undefined, return set.
     if (EJSVAL_IS_UNDEFINED(iter))
         return set;
 
-    // 12. Repeat 
+    // 9. Repeat
     for (;;) {
-        //    a. Let next be the result of IteratorStep(iter).
-        //    b. ReturnIfAbrupt(next).
+        // a. Let next be IteratorStep(iter).
+        // b. ReturnIfAbrupt(next).
         ejsval next = IteratorStep (iter);
 
-        //    c. If next is false, then return set.
+        // c. If next is false, return set.
         if (!EJSVAL_TO_BOOLEAN(next))
             return set;
 
-        //    d. Let nextValue be IteratorValue(next).
-        //    e. ReturnIfAbrupt(nextValue).
+        // d. Let nextValue be IteratorValue(next).
+        // e. ReturnIfAbrupt(nextValue).
         ejsval nextValue = IteratorValue (next);
 
-        //    f. Let status be the result of calling the [[Call]] internal method of adder with set as thisArgument
-        //       and a List whose sole element is nextValue as argumentsList.
-        //    g. ReturnIfAbrupt(status).
-        _ejs_invoke_closure (adder, set, 1, &nextValue);
+        // f. Let status be Call(adder, set, «nextValue.[[value]]»).
+        _ejs_invoke_closure (adder, &set, 1, &nextValue, _ejs_undefined);
+
+        // g. If status is an abrupt completion, return IteratorClose(iter, status).
+
+        // XXX we need to use invoke_closure_catch here, and call IteratorClose
     }
 
-    return set;
+    EJS_NOT_REACHED();
 }
 
-static ejsval
-_ejs_Set_get_species (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Set_get_species) {
     return _ejs_Set;
-}
-
-// ECMA262: 23.2.2.2
-// Set[ @@create ] ( ) 
-static ejsval
-_ejs_Set_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    // 1. Let F be the this value. 
-    ejsval F = _this;
-
-    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Set[Symbol.create] is not a constructor");
-
-    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
-
-    // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%SetPrototype%", ([[SetData]]) ). 
-    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
-    if (EJSVAL_IS_UNDEFINED(proto))
-        proto = _ejs_Set_prototype;
-
-    EJSObject* obj = (EJSObject*)_ejs_gc_new (EJSSet);
-    _ejs_init_object (obj, proto, &_ejs_Set_specops);
-    return OBJECT_TO_EJSVAL(obj);
 }
 
 ejsval _ejs_Set EJSVAL_ALIGNMENT;
@@ -468,17 +421,13 @@ _ejs_set_iterator_new (ejsval set, EJSSetIteratorKind kind)
 ejsval _ejs_SetIterator EJSVAL_ALIGNMENT;
 ejsval _ejs_SetIterator_prototype EJSVAL_ALIGNMENT;
 
-static ejsval
-_ejs_SetIterator_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    return _this;
+static EJS_NATIVE_FUNC(_ejs_SetIterator_impl) {
+    return *_this;
 }
 
-static ejsval
-_ejs_SetIterator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_SetIterator_prototype_next) {
     /* 1. Let O be the this value. */
-    ejsval O = _this;
+    ejsval O = *_this;
 
     /* 2. If Type(O) is not Object, throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O))
@@ -564,11 +513,12 @@ _ejs_SetIterator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsval
 void
 _ejs_set_init(ejsval global)
 {
-    _ejs_Set = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Set, (EJSClosureFunc)_ejs_Set_impl);
+    _ejs_gc_add_root (&_ejs_Set);
+    _ejs_Set = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Set, _ejs_Set_impl);
     _ejs_object_setprop (global, _ejs_atom_Set, _ejs_Set);
 
     _ejs_gc_add_root (&_ejs_Set_prototype);
-    _ejs_Set_prototype = _ejs_set_new ();
+    _ejs_Set_prototype = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
     _ejs_object_setprop (_ejs_Set,       _ejs_atom_prototype,  _ejs_Set_prototype);
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Set, x, _ejs_Set_##x)
@@ -584,25 +534,22 @@ _ejs_set_init(ejsval global)
     PROTO_GETTER(size);
 
     // expand PROTO_METHOD(values) here so that we can install the function for both keys and @@iterator below
-    ejsval _values = _ejs_function_new_native (_ejs_null, _ejs_atom_values, (EJSClosureFunc)_ejs_Set_prototype_values);
+    ejsval _values = _ejs_function_new_native (_ejs_null, _ejs_atom_values, _ejs_Set_prototype_values);
     _ejs_object_define_value_property (_ejs_Set_prototype, _ejs_atom_values, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_FLAGS_WRITABLE | EJS_PROP_CONFIGURABLE);
     _ejs_object_define_value_property (_ejs_Set_prototype, _ejs_atom_keys, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
 
     _ejs_object_define_value_property (_ejs_Set_prototype, _ejs_Symbol_iterator, _values, EJS_PROP_NOT_ENUMERABLE);
     _ejs_object_define_value_property (_ejs_Set_prototype, _ejs_Symbol_toStringTag, _ejs_atom_Set, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
 
-    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Set, create, _ejs_Set_create, EJS_PROP_NOT_ENUMERABLE);
-
     EJS_INSTALL_SYMBOL_GETTER(_ejs_Set, species, _ejs_Set_get_species);
 
 #undef OBJ_METHOD
 #undef PROTO_METHOD
 
-    _ejs_SetIterator = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Set, (EJSClosureFunc)_ejs_SetIterator_impl);
+    _ejs_SetIterator = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Set, _ejs_SetIterator_impl);
 
     _ejs_gc_add_root (&_ejs_SetIterator_prototype);
-    _ejs_SetIterator_prototype = _ejs_set_iterator_new(_ejs_Set_prototype, EJS_SET_ITER_KIND_VALUE);
-    EJSVAL_TO_OBJECT(_ejs_SetIterator_prototype)->proto = _ejs_Iterator_prototype;
+    _ejs_SetIterator_prototype = _ejs_object_new(_ejs_Iterator_prototype, &_ejs_Object_specops);
     _ejs_object_define_value_property (_ejs_SetIterator, _ejs_atom_prototype, _ejs_SetIterator_prototype,
                                         EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
     _ejs_object_define_value_property (_ejs_SetIterator_prototype, _ejs_atom_constructor, _ejs_SetIterator,
@@ -659,6 +606,8 @@ EJS_DEFINE_CLASS(Set,
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  _ejs_set_specop_allocate,
                  _ejs_set_specop_finalize,
                  _ejs_set_specop_scan
@@ -685,6 +634,8 @@ EJS_DEFINE_CLASS(SetIterator,
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  OP_INHERIT, // allocate.  shouldn't ever be used
                  OP_INHERIT, // finalize.  also shouldn't ever be used
                  _ejs_set_iterator_specop_scan

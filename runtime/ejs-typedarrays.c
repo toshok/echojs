@@ -136,59 +136,42 @@ _ejs_arraybuffer_new_slice (ejsval bufferval, int offset, int size)
     return OBJECT_TO_EJSVAL(rv);
 }
 
-
-static ejsval
-_ejs_ArrayBuffer_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    if (EJSVAL_IS_UNDEFINED(_this)) {
+// ES2015, June 2015
+// 24.1.2.1 ArrayBuffer( length )
+static EJS_NATIVE_FUNC(_ejs_ArrayBuffer_impl) {
+    // 1. If NewTarget is undefined, throw a TypeError exception.
+    if (EJSVAL_IS_UNDEFINED(newTarget))
         _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "Constructor ArrayBuffer requires 'new'");
-    }
 
-    uint32_t size = 0;
-    if (argc > 0) size = ToUint32(args[0]);
+    ejsval length = _ejs_undefined;
+    if (argc > 0) length = args[0];
 
-    EJSArrayBuffer* buffer = (EJSArrayBuffer*)EJSVAL_TO_OBJECT(_this);
-    buffer->dependent = EJS_FALSE;
-    buffer->size = size;
-    if (size)
-        buffer->data.alloced_buf = calloc (1, size);
+    // 2. Let numberLength be ToNumber(length).
+    ejsval numberLength = ToNumber(length);
 
-    return _this;
-}
+    // 3. Let byteLength be ToLength(numberLength).
+    // 4. ReturnIfAbrupt(byteLength).
+    int64_t byteLength = ToLength(numberLength);
 
-static ejsval
-_ejs_ArrayBuffer_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    ejsval F = _this;
-
-    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in ArrayBuffer[Symbol.create] is not a constructor");
-
-    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
-
-    // 1. Let obj be the result of calling OrdinaryCreateFromConstructor(constructor, "%ArrayBufferPrototype%", ( [[ArrayBufferData]], [[ArrayBufferByteLength]]) ). 
-    // 2. ReturnIfAbrupt(obj). 
-    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
-    if (EJSVAL_IS_UNDEFINED(proto))
-        proto = _ejs_ArrayBuffer_prototype;
-
-    EJSObject* obj = (EJSObject*)_ejs_gc_new (EJSArrayBuffer);
-    _ejs_init_object (obj, proto, &_ejs_ArrayBuffer_specops);
+    // 5. If SameValueZero(numberLength, byteLength) is false, throw a RangeError exception.
     
-    // 3. Set the [[ArrayBufferByteLength]] internal slot of obj to 0. 
-    // 4. Return obj. 
-    return OBJECT_TO_EJSVAL(obj);
+    // 6. Return AllocateArrayBuffer(NewTarget, byteLength).
+    *_this = OrdinaryCreateFromConstructor(newTarget, _ejs_ArrayBuffer_prototype, &_ejs_ArrayBuffer_specops);
+    EJSArrayBuffer* buffer = (EJSArrayBuffer*)EJSVAL_TO_OBJECT(*_this);
+
+    buffer->dependent = EJS_FALSE;
+    buffer->size = byteLength;
+    if (byteLength)
+        buffer->data.alloced_buf = calloc (1, byteLength);
+
+    return *_this;
 }
 
-static ejsval
-_ejs_ArrayBuffer_get_species (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_ArrayBuffer_get_species) {
     return _ejs_ArrayBuffer;
 }
 
-static ejsval
-_ejs_ArrayBuffer_isView (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_ArrayBuffer_isView) {
     ejsval arg = _ejs_undefined;
 
     if (argc > 0)
@@ -206,10 +189,8 @@ _ejs_ArrayBuffer_isView (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return BOOLEAN_TO_EJSVAL(EJS_FALSE);
 }
 
-static ejsval
-_ejs_ArrayBuffer_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSArrayBuffer* buffer = (EJSArrayBuffer*)EJSVAL_TO_OBJECT(_this);
+static EJS_NATIVE_FUNC(_ejs_ArrayBuffer_prototype_slice) {
+    EJSArrayBuffer* buffer = (EJSArrayBuffer*)EJSVAL_TO_OBJECT(*_this);
 
     uint32_t len;
     uint32_t offset;
@@ -230,23 +211,21 @@ _ejs_ArrayBuffer_prototype_slice (ejsval env, ejsval _this, uint32_t argc, ejsva
         break;
     }
 
-    return _ejs_arraybuffer_new_slice(_this, offset, len);
+    return _ejs_arraybuffer_new_slice(*_this, offset, len);
 }
 
-static ejsval
-_ejs_DataView_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    if (EJSVAL_IS_UNDEFINED(_this)) {
+static EJS_NATIVE_FUNC(_ejs_DataView_impl) {
+    if (EJSVAL_IS_UNDEFINED(newTarget))
         _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "Constructor DataView requires 'new'");
-    }
 
     if (argc == 0 || !EJSVAL_IS_ARRAYBUFFER(args[0])) {
         _ejs_log ("arg0 not an ArrayBuffer object\n");
         EJS_NOT_IMPLEMENTED();
     }
-
-    EJSDataView* view = (EJSDataView*)EJSVAL_TO_OBJECT(_this);
     EJSArrayBuffer* buff = (EJSArrayBuffer*)EJSVAL_TO_OBJECT(args[0]);
+
+    *_this = OrdinaryCreateFromConstructor(newTarget, _ejs_DataView_prototype, &_ejs_DataView_specops);
+    EJSDataView* view = (EJSDataView*)EJSVAL_TO_OBJECT(*_this);
 
     uint32_t offset;
     uint32_t len;
@@ -269,38 +248,12 @@ _ejs_DataView_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     view->byteOffset = offset;
     view->byteLength = len;
 
-    _ejs_object_define_value_property (_this, _ejs_atom_byteLength, DOUBLE_TO_EJSVAL_IMPL(view->byteLength), EJS_PROP_FLAGS_ENUMERABLE);
-    _ejs_object_define_value_property (_this, _ejs_atom_byteOffset, DOUBLE_TO_EJSVAL_IMPL(view->byteOffset), EJS_PROP_FLAGS_ENUMERABLE);
-    _ejs_object_define_value_property (_this, _ejs_atom_buffer, view->buffer, EJS_PROP_FLAGS_ENUMERABLE);
+    _ejs_object_define_value_property (*_this, _ejs_atom_byteLength, DOUBLE_TO_EJSVAL_IMPL(view->byteLength), EJS_PROP_FLAGS_ENUMERABLE);
+    _ejs_object_define_value_property (*_this, _ejs_atom_byteOffset, DOUBLE_TO_EJSVAL_IMPL(view->byteOffset), EJS_PROP_FLAGS_ENUMERABLE);
+    _ejs_object_define_value_property (*_this, _ejs_atom_buffer, view->buffer, EJS_PROP_FLAGS_ENUMERABLE);
 
-    return _this;
+    return *_this;
 }
-
-static ejsval
-_ejs_DataView_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    // 1. Let F be the this value. 
-    ejsval F = _this;
-
-    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in DataView[Symbol.create] is not a constructor");
-
-    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
-
-    // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%DataViewPrototype%", ([[DataView]], [[ViewedArrayBuffer]], [[ByteLength]], [[ByteOffset]]) ). 
-    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
-    if (EJSVAL_IS_UNDEFINED(proto))
-        proto = _ejs_DataView_prototype;
-
-    // 3. Set the value of obj’s [[DataView]] internal slot to true. 
-
-    EJSObject* obj = (EJSObject*)_ejs_gc_new (EJSDataView);
-    _ejs_init_object (obj, proto, &_ejs_DataView_specops);
-    
-    // 4. Return obj. 
-    return OBJECT_TO_EJSVAL(obj);
-}
-
 
 static inline EJSBool
 needToSwap(EJSBool littleEndian)
@@ -343,49 +296,46 @@ swapBytes (void* value, int elementSizeInBytes)
     }
 }
 
-#define EJS_DATA_VIEW_METHOD_IMPL(ElementType, elementtype, elementSizeInBytes)     \
-    static ejsval                                                   \
-    _ejs_DataView_prototype_get##ElementType##_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
-    {                                                               \
-        if (argc < 1) {                                             \
-            _ejs_log ("wrong number of arguments\n");               \
-            EJS_NOT_IMPLEMENTED();                                  \
-        }                                                           \
-                                                                    \
-        uint32_t idx = EJSVAL_TO_NUMBER(args[0]);                   \
-        EJSBool littleEndian = EJS_FALSE;                           \
-        if (argc > 1)                                               \
-            littleEndian = EJSVAL_TO_BOOLEAN(args[1]);              \
-                                                                    \
-        char* data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(_this)); \
-        elementtype val;                                            \
-        memcpy (&val, data + idx, elementSizeInBytes);              \
-        if (needToSwap(littleEndian))                               \
-            swapBytes(&val, elementSizeInBytes);                    \
-                                                                    \
-        return NUMBER_TO_EJSVAL(val);                               \
-    }                                                               \
-                                                                    \
-    static void                                                     \
-    _ejs_DataView_prototype_set##ElementType##_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
-    {                                                               \
-        if (argc < 2) {                                             \
-            _ejs_log ("wrong number of arguments\n");               \
-            EJS_NOT_IMPLEMENTED();                                  \
-        }                                                           \
-                                                                    \
-        uint32_t idx = EJSVAL_TO_NUMBER(args[0]);                   \
-        elementtype val = (elementtype)EJSVAL_TO_NUMBER(args[1]);   \
-        EJSBool littleEndian = EJS_FALSE;                           \
-        if (argc > 2)                                               \
-            littleEndian = EJSVAL_TO_BOOLEAN(args[2]);              \
-                                                                    \
-        if (needToSwap(littleEndian))                               \
-            swapBytes(&val, elementSizeInBytes);                    \
-                                                                    \
-        char* data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(_this)); \
-        memcpy (data+idx, &val, elementSizeInBytes);                \
-    }                                                               \
+#define EJS_DATA_VIEW_METHOD_IMPL(ElementType, elementtype, elementSizeInBytes) \
+    static EJS_NATIVE_FUNC(_ejs_DataView_prototype_get##ElementType##_impl) { \
+        if (argc < 1) {                                                 \
+            _ejs_log ("wrong number of arguments\n");                   \
+            EJS_NOT_IMPLEMENTED();                                      \
+        }                                                               \
+                                                                        \
+        uint32_t idx = EJSVAL_TO_NUMBER(args[0]);                       \
+        EJSBool littleEndian = EJS_FALSE;                               \
+        if (argc > 1)                                                   \
+            littleEndian = EJSVAL_TO_BOOLEAN(args[1]);                  \
+                                                                        \
+        char* data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(*_this));  \
+        elementtype val;                                                \
+        memcpy (&val, data + idx, elementSizeInBytes);                  \
+        if (needToSwap(littleEndian))                                   \
+            swapBytes(&val, elementSizeInBytes);                        \
+                                                                        \
+        return NUMBER_TO_EJSVAL(val);                                   \
+    }                                                                   \
+                                                                        \
+    static EJS_NATIVE_FUNC(_ejs_DataView_prototype_set##ElementType##_impl) { \
+        if (argc < 2) {                                                 \
+            _ejs_log ("wrong number of arguments\n");                   \
+            EJS_NOT_IMPLEMENTED();                                      \
+        }                                                               \
+                                                                        \
+        uint32_t idx = EJSVAL_TO_NUMBER(args[0]);                       \
+        elementtype val = (elementtype)EJSVAL_TO_NUMBER(args[1]);       \
+        EJSBool littleEndian = EJS_FALSE;                               \
+        if (argc > 2)                                                   \
+            littleEndian = EJSVAL_TO_BOOLEAN(args[2]);                  \
+                                                                        \
+        if (needToSwap(littleEndian))                                   \
+            swapBytes(&val, elementSizeInBytes);                        \
+                                                                        \
+        char* data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(*_this));  \
+        memcpy (data+idx, &val, elementSizeInBytes);                    \
+        return _ejs_undefined;                                          \
+    }                                                                   \
 
 EJS_DATA_VIEW_METHOD_IMPL(Int8, int8_t, 1);
 EJS_DATA_VIEW_METHOD_IMPL(Uint8, uint8_t, 1);
@@ -397,75 +347,77 @@ EJS_DATA_VIEW_METHOD_IMPL(Float32, float, 4);
 EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
 
 #define EJS_TYPED_ARRAY(EnumType, ArrayType, arraytype, elementtype, elementSizeInBytes) \
-    static ejsval                                                       \
-    _ejs_##ArrayType##Array_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
-    {                                                                   \
-     if (EJSVAL_IS_UNDEFINED(_this))                                    \
-         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Constructor cannot be called as a function"); \
+    /* ES2015, June 2015 */                                             \
+    /* 22.2.4.1 TypedArray( ... argumentsList) */                       \
+    static EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_impl) {              \
+        /* 1. If NewTarget is undefined, throw a TypeError exception. */ \
+        if (EJSVAL_IS_UNDEFINED(newTarget))                             \
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Constructor cannot be called as a function"); \
                                                                         \
-     EJSTypedArray* arr = (EJSTypedArray*)EJSVAL_TO_OBJECT(_this);      \
+        *_this = OrdinaryCreateFromConstructor(newTarget, _ejs_##ArrayType##Array_prototype, &_ejs_##ArrayType##Array_specops); \
+        EJSTypedArray* arr = (EJSTypedArray*)EJSVAL_TO_OBJECT(*_this);   \
                                                                         \
-     uint32_t array_len = 0;                                            \
+        uint32_t array_len = 0;                                         \
                                                                         \
-     arr->element_type = EJS_TYPEDARRAY_##EnumType;                     \
+        arr->element_type = EJS_TYPEDARRAY_##EnumType;                  \
                                                                         \
-     if (argc == 0)                                                     \
-         goto construct_from_array_len;                                 \
+            if (argc == 0)                                              \
+                goto construct_from_array_len;                          \
                                                                         \
-     /* TypedArray(TypedArray array) */                                 \
-     /* TypedArray(type[] array) */                                     \
-     /* TypedArray(ArrayBuffer buffer) */                               \
+            /* TypedArray(TypedArray array) */                          \
+            /* TypedArray(type[] array) */                              \
+            /* TypedArray(ArrayBuffer buffer) */                        \
                                                                         \
-     if (EJSVAL_IS_OBJECT(args[0])) {                                   \
-         if (EJSVAL_IS_TYPEDARRAY(args[0])) {                           \
-             /* TypedArray(TypedArray array) */                         \
-             EJSTypedArray* typed_array = (EJSTypedArray*)EJSVAL_TO_OBJECT(args[0]); \
+            if (EJSVAL_IS_OBJECT(args[0])) {                            \
+                if (EJSVAL_IS_TYPEDARRAY(args[0])) {                    \
+                    /* TypedArray(TypedArray array) */                  \
+                    EJSTypedArray* typed_array = (EJSTypedArray*)EJSVAL_TO_OBJECT(args[0]); \
                                                                         \
-             array_len = typed_array->length;                           \
-             arr->length = array_len;                                   \
-             arr->byteOffset = 0;                                       \
-             arr->byteLength = array_len * (elementSizeInBytes);        \
-             arr->buffer = _ejs_arraybuffer_new (arr->byteLength);      \
+                    array_len = typed_array->length;                    \
+                    arr->length = array_len;                            \
+                    arr->byteOffset = 0;                                \
+                    arr->byteLength = array_len * (elementSizeInBytes); \
+                    arr->buffer = _ejs_arraybuffer_new (arr->byteLength); \
                                                                         \
-             _ejs_log ("need to copy the existing data from the typed array to this array\n"); \
-             EJS_NOT_IMPLEMENTED();                                     \
-         }                                                              \
-         else if (EJSVAL_IS_ARRAY(args[0])) {                           \
-             /* TypedArray(type[] array) */                             \
+                    _ejs_log ("need to copy the existing data from the typed array to this array\n"); \
+                    EJS_NOT_IMPLEMENTED();                              \
+                }                                                       \
+                else if (EJSVAL_IS_ARRAY(args[0])) {                    \
+                    /* TypedArray(type[] array) */                      \
                                                                         \
-             array_len = EJS_ARRAY_LEN(args[0]);                        \
-             arr->length = array_len;                                   \
-             arr->byteOffset = 0;                                       \
-             arr->byteLength = array_len * (elementSizeInBytes);        \
-             arr->buffer = _ejs_arraybuffer_new (arr->byteLength);      \
+                    array_len = EJS_ARRAY_LEN(args[0]);                 \
+                    arr->length = array_len;                            \
+                    arr->byteOffset = 0;                                \
+                    arr->byteLength = array_len * (elementSizeInBytes); \
+                    arr->buffer = _ejs_arraybuffer_new (arr->byteLength); \
                                                                         \
-             void* buf_data = ((EJSArrayBuffer*)EJSVAL_TO_OBJECT(arr->buffer))->data.alloced_buf; \
-             if (EJSVAL_IS_DENSE_ARRAY(args[0])) {                      \
-                 EJSObject* arr = EJSVAL_TO_OBJECT(args[0]);            \
-                 int i;                                                 \
-                 for (i = 0; i < EJSARRAY_LEN (arr); i ++) {            \
-                     ((elementtype*)buf_data)[i] = (elementtype)EJSVAL_TO_NUMBER(EJSDENSEARRAY_ELEMENTS(arr)[i]); \
-                 }                                                      \
-             }                                                          \
-             else {                                                     \
-                 _ejs_log ("need to implement normal array object copying for sparse arrays.  or do we?\n"); \
-                 EJS_NOT_IMPLEMENTED();                                 \
-             }                                                          \
-         }                                                              \
-         else if (EJSVAL_IS_ARRAYBUFFER(args[0])) {                     \
-             EJSArrayBuffer* buffer = (EJSArrayBuffer*)EJSVAL_TO_OBJECT(args[0]); \
-             /* TypedArray(ArrayBuffer buffer) */                       \
-             /* TypedArray(ArrayBuffer buffer, unsigned long byteOffset) */ \
-             /* TypedArray(ArrayBuffer buffer, unsigned long byteOffset, unsigned long length) */ \
-             uint32_t byteOffset = 0;                                   \
-             uint32_t byteLength = buffer->size;                        \
-             EJSBool lengthSpecified = EJS_FALSE;                       \
+                    void* buf_data = ((EJSArrayBuffer*)EJSVAL_TO_OBJECT(arr->buffer))->data.alloced_buf; \
+                    if (EJSVAL_IS_DENSE_ARRAY(args[0])) {               \
+                        EJSObject* arr = EJSVAL_TO_OBJECT(args[0]);     \
+                        int i;                                          \
+                        for (i = 0; i < EJSARRAY_LEN (arr); i ++) {     \
+                            ((elementtype*)buf_data)[i] = (elementtype)EJSVAL_TO_NUMBER(EJSDENSEARRAY_ELEMENTS(arr)[i]); \
+                        }                                               \
+                    }                                                   \
+                    else {                                              \
+                        _ejs_log ("need to implement normal array object copying for sparse arrays.  or do we?\n"); \
+                        EJS_NOT_IMPLEMENTED();                          \
+                    }                                                   \
+                }                                                       \
+                else if (EJSVAL_IS_ARRAYBUFFER(args[0])) {              \
+                    EJSArrayBuffer* buffer = (EJSArrayBuffer*)EJSVAL_TO_OBJECT(args[0]); \
+                    /* TypedArray(ArrayBuffer buffer) */                \
+                    /* TypedArray(ArrayBuffer buffer, unsigned long byteOffset) */ \
+                    /* TypedArray(ArrayBuffer buffer, unsigned long byteOffset, unsigned long length) */ \
+                    uint32_t byteOffset = 0;                            \
+                    uint32_t byteLength = buffer->size;                 \
+                    EJSBool lengthSpecified = EJS_FALSE;                \
                                                                         \
-             if (argc > 1) byteOffset = ToUint32(args[1]);              \
-             if (argc > 2) {                                            \
-                 byteLength = ToUint32(args[2]) * elementSizeInBytes;   \
-                 lengthSpecified = EJS_TRUE;                            \
-             }                                                          \
+                    if (argc > 1) byteOffset = ToUint32(args[1]);       \
+                    if (argc > 2) {                                     \
+                        byteLength = ToUint32(args[2]) * elementSizeInBytes; \
+                        lengthSpecified = EJS_TRUE;                     \
+                    }                                                   \
                                                                         \
              if (byteOffset > buffer->size)              byteOffset = buffer->size; \
              if (byteOffset + byteLength > buffer->size) {              \
@@ -503,12 +455,12 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
          EJS_NOT_IMPLEMENTED();                                         \
      }                                                                  \
                                                                         \
-     _ejs_object_define_value_property (_this, _ejs_atom_length, DOUBLE_TO_EJSVAL_IMPL(arr->length), EJS_PROP_FLAGS_ENUMERABLE); \
-     _ejs_object_define_value_property (_this, _ejs_atom_byteOffset, DOUBLE_TO_EJSVAL_IMPL(arr->byteOffset), EJS_PROP_FLAGS_ENUMERABLE); \
-     _ejs_object_define_value_property (_this, _ejs_atom_byteLength, DOUBLE_TO_EJSVAL_IMPL(arr->byteLength), EJS_PROP_FLAGS_ENUMERABLE); \
-     _ejs_object_define_value_property (_this, _ejs_atom_buffer, arr->buffer, EJS_PROP_FLAGS_ENUMERABLE); \
+     _ejs_object_define_value_property (*_this, _ejs_atom_length, DOUBLE_TO_EJSVAL_IMPL(arr->length), EJS_PROP_FLAGS_ENUMERABLE); \
+     _ejs_object_define_value_property (*_this, _ejs_atom_byteOffset, DOUBLE_TO_EJSVAL_IMPL(arr->byteOffset), EJS_PROP_FLAGS_ENUMERABLE); \
+     _ejs_object_define_value_property (*_this, _ejs_atom_byteLength, DOUBLE_TO_EJSVAL_IMPL(arr->byteLength), EJS_PROP_FLAGS_ENUMERABLE); \
+     _ejs_object_define_value_property (*_this, _ejs_atom_buffer, arr->buffer, EJS_PROP_FLAGS_ENUMERABLE); \
                                                                         \
-     return _this;                                                      \
+     return *_this;                                                      \
  }                                                                      \
                                                                         \
  static ejsval                                                          \
@@ -597,8 +549,7 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
 /* 6th Edition / June 2015 */                                           \
 /* 22.2.3.5 */                                                          \
 /* %TypedArray%.prototype.copyWithin (target, start [, end ] ) */       \
-static ejsval                                                           \
-_ejs_##ArrayType##Array_prototype_copyWithin_impl(ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+static EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_prototype_copyWithin_impl) \
 {                                                                       \
     ejsval target = _ejs_undefined;                                     \
     ejsval start = _ejs_undefined;                                      \
@@ -609,11 +560,11 @@ _ejs_##ArrayType##Array_prototype_copyWithin_impl(ejsval env, ejsval _this, uint
     if (argc > 2) end = args[2];                                        \
                                                                         \
     /*  ValidateTypedArray is applied to the this value prior to evaluating the algorithm. */ \
-    ValidateTypedArray(_this);                                          \
+    ValidateTypedArray(*_this);                                          \
                                                                         \
     /* 1. Let O be the result of calling ToObject passing the this value as the argument. */ \
     /* 2. ReturnIfAbrupt(O). */                                         \
-    ejsval O = ToObject(_this);                                         \
+    ejsval O = ToObject(*_this);                                         \
     EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);          \
                                                                         \
     /* 3. Let len be ToLength(Get(O, "length")). */                     \
@@ -707,8 +658,7 @@ _ejs_##ArrayType##Array_prototype_copyWithin_impl(ejsval env, ejsval _this, uint
 /* Rev 38 Final Draft, April 14, 2015 */                                \
 /* 22.2.3.22.1 */                                                       \
 /* %TypedArray%.prototype.set (array [ , offset ] ) */                  \
-static ejsval                                                           \
-_ejs_##ArrayType##Array_prototype_set_array(ejsval env, ejsval _this, uint32_t argc, ejsval *args)  \
+static EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_prototype_set_array)     \
 {                                                                       \
     ejsval array;                                                       \
     ejsval offset = _ejs_undefined;                                     \
@@ -722,7 +672,7 @@ _ejs_##ArrayType##Array_prototype_set_array(ejsval env, ejsval _this, uint32_t a
     /* 3. If Type(target) is not Object, throw a TypeError exception. */\
     /* 4. If target does not have a [[TypedArrayName]] internal slot, throw a TypeError exception. */   \
     /* 5. Assert: target has a [[ViewedArrayBuffer]] internal slot. */  \
-    ejsval target = _this;                                              \
+    ejsval target = *_this;                                              \
     EJSTypedArray *targetObj = (EJSTypedArray*) EJSVAL_TO_OBJECT(target);   \
                                                                         \
     /* 6. Let targetOffset be ToInteger (offset). */                    \
@@ -801,8 +751,7 @@ _ejs_##ArrayType##Array_prototype_set_array(ejsval env, ejsval _this, uint32_t a
 /* Rev 38 Final Draft, April 14, 2015 */                                \
 /* 22.2.3.22.2 */                                                       \
 /* %TypedArray%.prototype.set(typedArray [, offset ] ) */               \
-static ejsval                                                           \
-_ejs_##ArrayType##Array_prototype_set_typedarray(ejsval env, ejsval _this, uint32_t argc, ejsval *args)  \
+static EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_prototype_set_typedarray)  \
 {                                                                       \
     ejsval typedArray = args[0];                                        \
     EJSTypedArray *typedArrayObj = (EJSTypedArray*) EJSVAL_TO_OBJECT(typedArray); \
@@ -814,7 +763,7 @@ _ejs_##ArrayType##Array_prototype_set_typedarray(ejsval env, ejsval _this, uint3
     /* 1. Assert: typedArray has a [[TypedArrayName]] internal slot. If it does not,
      * the definition in 22.2.3.22.1 applies. */                        \
     /* 2. Let target be the this value. */                              \
-    ejsval target = _this;                                              \
+    ejsval target = *_this;                                              \
     EJSTypedArray *targetObj = (EJSTypedArray*) EJSVAL_TO_OBJECT(target);   \
                                                                         \
     /* 3. If Type(target) is not Object, throw a TypeError exception. */\
@@ -927,8 +876,7 @@ _ejs_##ArrayType##Array_prototype_set_typedarray(ejsval env, ejsval _this, uint3
 /* Rev 38 Final Draft, April 14, 2015 */                                \
 /* 22.2.3.22 */                                                         \
 /* %TypedArray%.prototype.set ( overloaded [ , offset ]) */             \
-static ejsval                                                           \
-_ejs_##ArrayType##Array_prototype_set_impl(ejsval env, ejsval _this, uint32_t argc, ejsval *args)    \
+static EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_prototype_set_impl)    \
 {                                                                       \
     ejsval overloaded = _ejs_undefined;                                 \
                                                                         \
@@ -938,21 +886,19 @@ _ejs_##ArrayType##Array_prototype_set_impl(ejsval env, ejsval _this, uint32_t ar
     /* 1. Assert: array is any ECMAScript language value other than an Object with a [[TypedArrayName]] internal slot.  \
      * If it is such an Object, the definition in 22.2.3.22.2 applies. */   \
     if (EJSVAL_IS_TYPEDARRAY(overloaded))                               \
-        return _ejs_##ArrayType##Array_prototype_set_typedarray(env, _this, argc, args);    \
+        return _ejs_##ArrayType##Array_prototype_set_typedarray(env, _this, argc, args, _ejs_undefined); \
     else                                                                \
-        return _ejs_##ArrayType##Array_prototype_set_array(env, _this, argc, args); \
+        return _ejs_##ArrayType##Array_prototype_set_array(env, _this, argc, args, _ejs_undefined); \
                                                                         \
     EJS_NOT_REACHED();                                                  \
 }                                                                       \
                                                                         \
- static ejsval                                                          \
- _ejs_##ArrayType##Array_prototype_get_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+static EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_prototype_get_impl) \
  {                                                                      \
      EJS_NOT_IMPLEMENTED();                                             \
  }                                                                      \
                                                                         \
- static ejsval                                                          \
- _ejs_##ArrayType##Array_prototype_subarray_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+static EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_prototype_subarray_impl) \
  {                                                                      \
      ejsval begin = _ejs_undefined;                                     \
      ejsval end = _ejs_undefined;                                       \
@@ -963,7 +909,7 @@ _ejs_##ArrayType##Array_prototype_set_impl(ejsval env, ejsval _this, uint32_t ar
         end = args [1];                                                 \
                                                                         \
      /* 1. Let O be the this value. */                                  \
-     ejsval O = _this;                                                  \
+     ejsval O = *_this;                                                  \
                                                                         \
      /* 2. If Type(O) is not Object, throw a TypeError exception. */    \
      if (!EJSVAL_IS_OBJECT(O))                                          \
@@ -1036,28 +982,26 @@ _ejs_##ArrayType##Array_prototype_set_impl(ejsval env, ejsval _this, uint32_t ar
      /* constructor stuff */                                            \
                                                                         \
      /* 24. Let defaultConstructor be the intrinsic object listed in column one of Table 46 for constructorName. */ \
+     ejsval defaultConstructor = _ejs_##ArrayType##Array;               \
      /* 25. Let constructor be SpeciesConstructor(O, defaultConstructor). */ \
      /* 26. ReturnIfAbrupt(constructor). */                             \
+     ejsval constructor = SpeciesConstructor(O, defaultConstructor);    \
                                                                         \
      /* 27. Let argumentsList be «buffer, beginByteOffset, newLength». */ \
      ejsval argumentsList[3] = { buffer, NUMBER_TO_EJSVAL(beginByteOffset), NUMBER_TO_EJSVAL(newLength) }; \
                                                                         \
-     EJSTypedArray *rv = _ejs_gc_new(EJSTypedArray);                    \
-     _ejs_init_object ((EJSObject*)rv, _ejs_##ArrayType##Array_prototype, _ejs_typed_array_specops[EJS_TYPEDARRAY_##EnumType]); \
-                                                                        \
      /* 28. Return the result of calling the [[Construct]] internal method of constructor with argument argumentsList. */ \
-     ejsval ctor = _ejs_##ArrayType##Array;                             \
-     return _ejs_invoke_closure(ctor, OBJECT_TO_EJSVAL((EJSObject*)rv), 3, argumentsList); \
+     ejsval _thisArg = _ejs_undefined;                \
+     return _ejs_construct_closure(constructor, &_thisArg, 3, argumentsList, constructor); \
  }                                                                      \
                                                                         \
  /* this should be a single getter reused by all typed-arrays */        \
-static ejsval                                                           \
-_ejs_##ArrayType##Array_prototype_get_toStringTag (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+static EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_prototype_get_toStringTag) \
 {                                                                       \
-    if (!EJSVAL_IS_TYPEDARRAY(_this))                                   \
+    if (!EJSVAL_IS_TYPEDARRAY(*_this))                                   \
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "get toStringTag called on non-type array"); \
                                                                         \
-    EJSTypedArray* arr = EJSVAL_TO_TYPEDARRAY(_this);                   \
+    EJSTypedArray* arr = EJSVAL_TO_TYPEDARRAY(*_this);                   \
     switch (arr->element_type) {                                        \
     case EJS_TYPEDARRAY_INT8:          return _ejs_atom_Int8Array;      \
     case EJS_TYPEDARRAY_UINT8:         return _ejs_atom_Uint8Array;     \
@@ -1072,49 +1016,12 @@ _ejs_##ArrayType##Array_prototype_get_toStringTag (ejsval env, ejsval _this, uin
     }                                                                   \
 }                                                                       \
                                                                         \
-static ejsval                                                           \
-_ejs_##ArrayType##Array_get_species (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+static EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_get_species)             \
 {                                                                       \
     return _ejs_##ArrayType##Array;                                     \
 }                                                                       \
                                                                         \
-static ejsval                                                           \
- _ejs_##ArrayType##Array_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
-{                                                                       \
-    /* 1. Let F be the this value. */                                   \
-    /* 2. If Type(F) is not Object, then throw a TypeError exception. */ \
-    ejsval F = _this;                                                   \
-                                                                        \
-    if (!EJSVAL_IS_CONSTRUCTOR(F))                                      \
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in "#ArrayType"Array[Symbol.create] is not a constructor"); \
-                                                                        \
-    EJSObject* F_ = EJSVAL_TO_OBJECT(F);                                \
-                                                                        \
-    /* 3. Let proto be GetPrototypeFromConstructor(F, "%TypedArrayPrototype%").  */ \
-    /* 4. ReturnIfAbrupt(proto).  */                                    \
-    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);               \
-    if (EJSVAL_IS_UNDEFINED(proto)) {                                   \
-        proto = _ejs_##ArrayType##Array_prototype;                      \
-    }                                                                   \
-    /* 5. Let obj be IntegerIndexedObjectCreate (proto).  */            \
-    EJSTypedArray* obj = _ejs_gc_new (EJSTypedArray);           \
-    _ejs_init_object ((EJSObject*)obj, proto, _ejs_typed_array_specops[EJS_TYPEDARRAY_##EnumType]); \
-    /* 6. Add a [[ViewedArrayBuffer]] internal slot to obj and set its initial value to undefined.  */ \
-    obj->buffer = _ejs_undefined;                                       \
-    /* 7. Add a [[TypedArrayName]] internal slot to obj and set its initial value to undefined .  */ \
-    /* XXX element type? */                                             \
-    /* 8. Add a [[ByteLength]] internal slot to obj and set its initial value to 0. */ \
-    obj->byteLength = 0;                                                \
-    /* 9. Add a [[ByteOffset]] internal slot to obj and set its initial value to 0. */ \
-    obj->byteOffset = 0;                                                \
-    /* 10. Add an [[ArrayLength]] internal slot to obj and set its initial value to 0. */ \
-    obj->length = 0;                                                    \
-    /* 11. Return obj. */                                               \
-    return OBJECT_TO_EJSVAL((EJSObject*)obj);                           \
-}                                                                       \
-                                                                        \
-static ejsval                                                           \
-_ejs_##ArrayType##Array_of_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args) \
+static EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_of_impl)                 \
 {                                                                       \
     ejsval newObj;                                                      \
                                                                         \
@@ -1125,10 +1032,10 @@ _ejs_##ArrayType##Array_of_impl (ejsval env, ejsval _this, uint32_t argc, ejsval
     ejsval *items = args;                                               \
                                                                         \
     /* 3. Let C be the this value. */                                   \
-    ejsval C = _this;                                                   \
+    ejsval C = *_this;                                                   \
                                                                         \
     /* 4. If IsConstructor(C) is true, then */                          \
-    if (EJSVAL_IS_CONSTRUCTOR(C))                                       \
+    if (IsConstructor(C))                                       \
         /* a. Let newObj be the result of calling the [[Construct]] internal method of C with argument «len». */ \
         newObj = _ejs_typedarray_new (EJS_TYPEDARRAY_##EnumType, len);  \
                                                                         \
@@ -1173,9 +1080,7 @@ int _ejs_typed_array_elsizes[EJS_TYPEDARRAY_TYPE_COUNT];
 ejsval _ejs_typed_array_protos[EJS_TYPEDARRAY_TYPE_COUNT];
 EJSSpecOps* _ejs_typed_array_specops[EJS_TYPEDARRAY_TYPE_COUNT];
 
-static ejsval
-_ejs_TypedArray_prototype_every (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_every) {
     ejsval callbackfn = _ejs_undefined;
     ejsval thisArg = _ejs_undefined;
 
@@ -1185,15 +1090,15 @@ _ejs_TypedArray_prototype_every (ejsval env, ejsval _this, uint32_t argc, ejsval
     if (argc >= 2)
         thisArg = args[1];
 
-    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.every called on null or undefined");
 
     /* This function is not generic. */
-    if (!EJSVAL_IS_TYPEDARRAY(_this))
+    if (!EJSVAL_IS_TYPEDARRAY(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.every called on non typed-array object");
 
     /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
-    ejsval O = ToObject(_this);
+    ejsval O = ToObject(*_this);
     EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
 
     /* 3. Let lenValue be Get(O, "length"). */
@@ -1201,7 +1106,7 @@ _ejs_TypedArray_prototype_every (ejsval env, ejsval _this, uint32_t argc, ejsval
     uint32_t len = Oobj->length;
 
     /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_CALLABLE(callbackfn))
+    if (!IsCallable(callbackfn))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
 
     /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
@@ -1222,7 +1127,7 @@ _ejs_TypedArray_prototype_every (ejsval env, ejsval _this, uint32_t argc, ejsval
 
         /*  iii. Let testResult be Call(callbackfn, T, «kValue, k, O»). */
         ejsval callbackfn_args[3] = { kValue, NUMBER_TO_EJSVAL(k), O };
-        ejsval testResult = _ejs_invoke_closure (callbackfn, T, 3, callbackfn_args);
+        ejsval testResult = _ejs_invoke_closure (callbackfn, &T, 3, callbackfn_args, _ejs_undefined);
 
         /* v. If ToBoolean(testResult) is false, return false. */
         if (!EJSVAL_TO_BOOLEAN(testResult))
@@ -1236,9 +1141,7 @@ _ejs_TypedArray_prototype_every (ejsval env, ejsval _this, uint32_t argc, ejsval
     return _ejs_true;
 }
 
-static ejsval
-_ejs_TypedArray_prototype_fill (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_fill) {
     ejsval value = _ejs_undefined;
     ejsval start = _ejs_undefined;
     ejsval end = _ejs_undefined;
@@ -1252,15 +1155,15 @@ _ejs_TypedArray_prototype_fill (ejsval env, ejsval _this, uint32_t argc, ejsval 
     if (argc >= 3)
         end = args[2];
 
-    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.fill called on null or undefined");
 
     /* This function is not generic. */
-    if (!EJSVAL_IS_TYPEDARRAY(_this))
+    if (!EJSVAL_IS_TYPEDARRAY(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.fill called on non typed-array object");
 
     /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
-    ejsval O = ToObject(_this);
+    ejsval O = ToObject(*_this);
     EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
 
     /* 3. Let lenValue be Get(O, "length"). */
@@ -1303,9 +1206,7 @@ _ejs_TypedArray_prototype_fill (ejsval env, ejsval _this, uint32_t argc, ejsval 
     return O;
 }
 
-static ejsval
-_ejs_TypedArray_prototype_find (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_find) {
     ejsval predicate = _ejs_undefined;
     ejsval thisArg = _ejs_undefined;
 
@@ -1315,15 +1216,15 @@ _ejs_TypedArray_prototype_find (ejsval env, ejsval _this, uint32_t argc, ejsval 
     if (argc >= 2)
         thisArg = args[1];
 
-    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.find called on null or undefined");
 
     /* This function is not generic. */
-    if (!EJSVAL_IS_TYPEDARRAY(_this))
+    if (!EJSVAL_IS_TYPEDARRAY(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.find called on non typed-array object");
 
     /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
-    ejsval O = ToObject(_this);
+    ejsval O = ToObject(*_this);
     EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
 
     /* 3. Let lenValue be Get(O, "length"). */
@@ -1331,7 +1232,7 @@ _ejs_TypedArray_prototype_find (ejsval env, ejsval _this, uint32_t argc, ejsval 
     int32_t len = Oobj->length;
 
     /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_CALLABLE(predicate))
+    if (!IsCallable(predicate))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
 
     /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
@@ -1350,7 +1251,7 @@ _ejs_TypedArray_prototype_find (ejsval env, ejsval _this, uint32_t argc, ejsval 
 
         /* d. Let testResult be Call(predicate, T, «kValue, k, O»). */
         ejsval predicate_args[3] = { kValue, NUMBER_TO_EJSVAL(k), O };
-        ejsval testResult = _ejs_invoke_closure (predicate, T, 3, predicate_args);
+        ejsval testResult = _ejs_invoke_closure (predicate, &T, 3, predicate_args, _ejs_undefined);
 
         /* f. If ToBoolean(testResult) is true, return kValue. */
         if (EJSVAL_TO_BOOLEAN(testResult))
@@ -1364,9 +1265,7 @@ _ejs_TypedArray_prototype_find (ejsval env, ejsval _this, uint32_t argc, ejsval 
     return _ejs_undefined;
 }
 
-static ejsval
-_ejs_TypedArray_prototype_findIndex (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_findIndex) {
     ejsval predicate = _ejs_undefined;
     ejsval thisArg = _ejs_undefined;
 
@@ -1376,15 +1275,15 @@ _ejs_TypedArray_prototype_findIndex (ejsval env, ejsval _this, uint32_t argc, ej
     if (argc >= 2)
         thisArg = args[1];
 
-    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.findIndex called on null or undefined");
 
     /* This function is not generic. */
-    if (!EJSVAL_IS_TYPEDARRAY(_this))
+    if (!EJSVAL_IS_TYPEDARRAY(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.findIndex called on non typed-array object");
 
     /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
-    ejsval O = ToObject(_this);
+    ejsval O = ToObject(*_this);
     EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
 
     /* 3. Let lenValue be Get(O, "length"). */
@@ -1392,7 +1291,7 @@ _ejs_TypedArray_prototype_findIndex (ejsval env, ejsval _this, uint32_t argc, ej
     int32_t len = Oobj->length;
 
     /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_CALLABLE(predicate))
+    if (!IsCallable(predicate))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
 
     /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
@@ -1411,7 +1310,7 @@ _ejs_TypedArray_prototype_findIndex (ejsval env, ejsval _this, uint32_t argc, ej
 
         /* d. Let testResult be Call(predicate, T, «kValue, k, O»). */
         ejsval predicate_args[3] = { kValue, NUMBER_TO_EJSVAL(k), O };
-        ejsval testResult = _ejs_invoke_closure (predicate, T, 3, predicate_args);
+        ejsval testResult = _ejs_invoke_closure (predicate, &T, 3, predicate_args, _ejs_undefined);
 
         /* f. If ToBoolean(testResult) is true, return k. */
         if (EJSVAL_TO_BOOLEAN(testResult))
@@ -1425,9 +1324,7 @@ _ejs_TypedArray_prototype_findIndex (ejsval env, ejsval _this, uint32_t argc, ej
     return NUMBER_TO_EJSVAL(-1);
 }
 
-static ejsval
-_ejs_TypedArray_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_forEach) {
     ejsval callbackfn = _ejs_undefined;
     ejsval thisArg = _ejs_undefined;
 
@@ -1437,15 +1334,15 @@ _ejs_TypedArray_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsv
     if (argc >= 2)
         thisArg = args[1];
 
-    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.forEach called on null or undefined");
 
     /* This function is not generic. */
-    if (!EJSVAL_IS_TYPEDARRAY(_this))
+    if (!EJSVAL_IS_TYPEDARRAY(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.forEach called on non typed-array object");
 
     /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
-    ejsval O = ToObject(_this);
+    ejsval O = ToObject(*_this);
     EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
 
     /* 3. Let lenValue be Get(O, "length"). */
@@ -1453,7 +1350,7 @@ _ejs_TypedArray_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsv
     uint32_t len = Oobj->length;
 
     /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_CALLABLE(callbackfn))
+    if (!IsCallable(callbackfn))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
 
     /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
@@ -1476,7 +1373,7 @@ _ejs_TypedArray_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsv
 
         /*  ii. Call the [[Call]] internal method of callbackfn with T as the this value and argument list containing kValue, k, and O.  */
         ejsval foreach_args[3] = { kValue, NUMBER_TO_EJSVAL(k), O };
-        _ejs_invoke_closure (callbackfn, T, 3, foreach_args);
+        _ejs_invoke_closure (callbackfn, &T, 3, foreach_args, _ejs_undefined);
 
         /* d.  d. Increase k by 1.  */
         k++;
@@ -1485,9 +1382,7 @@ _ejs_TypedArray_prototype_forEach (ejsval env, ejsval _this, uint32_t argc, ejsv
     return _ejs_undefined;
 }
 
-static ejsval
-_ejs_TypedArray_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_indexOf) {
     ejsval searchElement = _ejs_undefined;
     ejsval fromIndex = _ejs_undefined;
 
@@ -1496,15 +1391,15 @@ _ejs_TypedArray_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsv
     if (argc >= 2)
         fromIndex = args[1];
 
-    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.indexOf called on null or undefined");
 
     /* This function is not generic. */
-    if (!EJSVAL_IS_TYPEDARRAY(_this))
+    if (!EJSVAL_IS_TYPEDARRAY(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.indexOf called on non typed-array object");
 
     /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
-    ejsval O = ToObject(_this);
+    ejsval O = ToObject(*_this);
     EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
 
     /* 3. Let lenValue be Get(O, "length") */
@@ -1560,19 +1455,17 @@ _ejs_TypedArray_prototype_indexOf (ejsval env, ejsval _this, uint32_t argc, ejsv
     return NUMBER_TO_EJSVAL(-1);
 }
 
-static ejsval
-_ejs_TypedArray_prototype_join (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_join) {
     ejsval separator = _ejs_undefined;
     if (argc >= 1)
         separator = args[0];
 
     /* This function is not generic. */
-    if (!EJSVAL_IS_TYPEDARRAY(_this))
+    if (!EJSVAL_IS_TYPEDARRAY(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.join called on non typed-array object");
 
     /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
-    ejsval O = ToObject(_this);
+    ejsval O = ToObject(*_this);
     EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
 
     /* 3. Let lenVal be the result of Get(O, "length"). */
@@ -1658,11 +1551,9 @@ _ejs_TypedArray_prototype_join (ejsval env, ejsval _this, uint32_t argc, ejsval 
     return rv;
 }
 
-static ejsval
- _ejs_TypedArray_prototype_keys (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_keys) {
     /* 1. Let O be the this value. */
-    ejsval O = _this;
+    ejsval O = *_this;
 
     /* 2. If Type(O) is not Object, throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O))
@@ -1689,9 +1580,7 @@ static ejsval
     return _ejs_array_iterator_new (O, EJS_ARRAYITER_KIND_KEY);
 }
 
-static ejsval
-_ejs_TypedArray_prototype_lastIndexOf (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_lastIndexOf) {
     ejsval searchElement = _ejs_undefined;
     ejsval fromIndex = _ejs_undefined;
 
@@ -1700,15 +1589,15 @@ _ejs_TypedArray_prototype_lastIndexOf (ejsval env, ejsval _this, uint32_t argc, 
     if (argc >= 2)
         fromIndex = args[1];
 
-    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.lastIndexOf called on null or undefined");
 
     /* This function is not generic. */
-    if (!EJSVAL_IS_TYPEDARRAY(_this))
+    if (!EJSVAL_IS_TYPEDARRAY(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.lastIndexOf called on non typed-array object");
 
     /* 1. Let O be the result of calling ToObject passing the this value as the argument. */
-    ejsval O = ToObject(_this);
+    ejsval O = ToObject(*_this);
     EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
 
     /* 3. Let lenValue be Get(O, "length") */
@@ -1760,9 +1649,7 @@ _ejs_TypedArray_prototype_lastIndexOf (ejsval env, ejsval _this, uint32_t argc, 
 // ES6 Draft January 15, 2015
 // 22.2.3.19
 // %TypedArray%.prototype.reduce ( callbackfn [ , initialValue ] )
-static ejsval
-_ejs_TypedArray_prototype_reduce (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_reduce) {
     ejsval callbackfn = _ejs_undefined;
     ejsval initialValue = _ejs_undefined;
     ejsval accumulator;
@@ -1773,15 +1660,15 @@ _ejs_TypedArray_prototype_reduce (ejsval env, ejsval _this, uint32_t argc, ejsva
     if (argc >= 2)
         initialValue = args[1];
 
-    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.reduce called on null or undefined");
 
     /* This function is not generic. */
-    if (!EJSVAL_IS_TYPEDARRAY(_this))
+    if (!EJSVAL_IS_TYPEDARRAY(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.reduce called on non typed-array object");
 
     /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
-    ejsval O = ToObject(_this);
+    ejsval O = ToObject(*_this);
     EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
 
     /* 3. Let lenValue be Get(O, "length"). */
@@ -1789,7 +1676,7 @@ _ejs_TypedArray_prototype_reduce (ejsval env, ejsval _this, uint32_t argc, ejsva
     uint32_t len = Oobj->length;
 
     /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_CALLABLE(callbackfn))
+    if (!IsCallable(callbackfn))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
 
     /* 7. If len is 0 and initialValue is not present, throw a TypeError exception. */
@@ -1834,7 +1721,8 @@ _ejs_TypedArray_prototype_reduce (ejsval env, ejsval _this, uint32_t argc, ejsva
 
         /*  iii. Let accumulator be Call(callbackfn, undefined, «accumulator, kValue, k, O»). */
         ejsval callbackfn_args [4] = { accumulator, kValue, NUMBER_TO_EJSVAL(k), O };
-        accumulator = _ejs_invoke_closure (callbackfn, _ejs_undefined, 4, callbackfn_args);
+        ejsval undef_this = _ejs_undefined;
+        accumulator = _ejs_invoke_closure (callbackfn, &undef_this, 4, callbackfn_args, _ejs_undefined);
 
         /* e. Increase k by 1. */
         k++;
@@ -1847,9 +1735,7 @@ _ejs_TypedArray_prototype_reduce (ejsval env, ejsval _this, uint32_t argc, ejsva
 // ES6 Draft January 15, 2015
 // 22.2.3.20
 // %TypedArray%.prototype.reduceRight ( callbackfn [ , initialValue ] )
-static ejsval
-_ejs_TypedArray_prototype_reduceRight (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_reduceRight) {
     ejsval callbackfn = _ejs_undefined;
     ejsval initialValue = _ejs_undefined;
     ejsval accumulator;
@@ -1860,15 +1746,15 @@ _ejs_TypedArray_prototype_reduceRight (ejsval env, ejsval _this, uint32_t argc, 
     if (argc >= 2)
         initialValue = args[1];
 
-    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.reduceRight called on null or undefined");
 
     /* This function is not generic. */
-    if (!EJSVAL_IS_TYPEDARRAY(_this))
+    if (!EJSVAL_IS_TYPEDARRAY(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.reduceRight called on non typed-array object");
 
     /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
-    ejsval O = ToObject(_this);
+    ejsval O = ToObject(*_this);
     EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
 
     /* 3. Let lenValue be Get(O, "length"). */
@@ -1876,7 +1762,7 @@ _ejs_TypedArray_prototype_reduceRight (ejsval env, ejsval _this, uint32_t argc, 
     uint32_t len = Oobj->length;
 
     /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_CALLABLE(callbackfn))
+    if (!IsCallable(callbackfn))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
 
     /* 7. If len is 0 and initialValue is not present, throw a TypeError exception. */
@@ -1921,7 +1807,8 @@ _ejs_TypedArray_prototype_reduceRight (ejsval env, ejsval _this, uint32_t argc, 
 
         /*  iii. Let accumulator be Call(callbackfn, undefined, «accumulator, kValue, k, O»). */
         ejsval callbackfn_args [4] = { accumulator, kValue, NUMBER_TO_EJSVAL(k), O };
-        accumulator = _ejs_invoke_closure (callbackfn, _ejs_undefined, 4, callbackfn_args);
+        ejsval undef_this = _ejs_undefined;
+        accumulator = _ejs_invoke_closure (callbackfn, &undef_this, 4, callbackfn_args, _ejs_undefined);
 
         /* e. Decrease k by 1. */
         k--;
@@ -1934,15 +1821,13 @@ _ejs_TypedArray_prototype_reduceRight (ejsval env, ejsval _this, uint32_t argc, 
 // Rev 38 Final Draft, April 14, 2015
 // 22.1.3.20
 // Array.prototype.reverse ( )
-static ejsval
-_ejs_TypedArray_prototype_reverse (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_reverse) {
     /*  ValidateTypedArray is applied to the this value prior to evaluating the algorithm. */
-    ValidateTypedArray(_this);
+    ValidateTypedArray(*_this);
 
     /* 1. Let O be ToObject(this value). */
     /* 2. ReturnIfAbrupt(O). */
-    ejsval O = ToObject(_this);
+    ejsval O = ToObject(*_this);
     EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
 
     /* 3. Let len be ToLength(Get(O, "length")). */
@@ -1996,9 +1881,7 @@ _ejs_TypedArray_prototype_reverse (ejsval env, ejsval _this, uint32_t argc, ejsv
     return O;
 }
 
-static ejsval
-_ejs_TypedArray_prototype_some (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_some) {
     ejsval callbackfn = _ejs_undefined;
     ejsval thisArg = _ejs_undefined;
 
@@ -2008,15 +1891,15 @@ _ejs_TypedArray_prototype_some (ejsval env, ejsval _this, uint32_t argc, ejsval 
     if (argc >= 2)
         thisArg = args[1];
 
-    if (EJSVAL_IS_NULL_OR_UNDEFINED(_this))
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.some called on null or undefined");
 
     /* This function is not generic. */
-    if (!EJSVAL_IS_TYPEDARRAY(_this))
+    if (!EJSVAL_IS_TYPEDARRAY(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "TypedArray.prototype.some called on non typed-array object");
 
     /* 1. 1. Let O be the result of calling ToObject passing the this value as the argument. */
-    ejsval O = ToObject(_this);
+    ejsval O = ToObject(*_this);
     EJSTypedArray *Oobj = (EJSTypedArray*)EJSVAL_TO_OBJECT(O);
 
     /* 3. Let lenValue be Get(O, "length"). */
@@ -2024,7 +1907,7 @@ _ejs_TypedArray_prototype_some (ejsval env, ejsval _this, uint32_t argc, ejsval 
     uint32_t len = Oobj->length;
 
     /* 6. If IsCallable(callbackfn) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_CALLABLE(callbackfn))
+    if (!IsCallable(callbackfn))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
 
     /* 7. If thisArg was supplied, let T be thisArg; else let T be undefined. */
@@ -2045,7 +1928,7 @@ _ejs_TypedArray_prototype_some (ejsval env, ejsval _this, uint32_t argc, ejsval 
 
         /*  iii. Let testResult be Call(callbackfn, T, «kValue, k, O»). */
         ejsval callbackfn_args[3] = { kValue, NUMBER_TO_EJSVAL(k), O };
-        ejsval testResult = _ejs_invoke_closure (callbackfn, T, 3, callbackfn_args);
+        ejsval testResult = _ejs_invoke_closure (callbackfn, &T, 3, callbackfn_args, _ejs_undefined);
 
         /* v. If ToBoolean(testResult) is true, return true. */
         if (EJSVAL_TO_BOOLEAN(testResult))
@@ -2059,11 +1942,9 @@ _ejs_TypedArray_prototype_some (ejsval env, ejsval _this, uint32_t argc, ejsval 
     return _ejs_false;
 }
 
-static ejsval
-_ejs_TypedArray_prototype_values (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_values) {
     /* 1. Let O be the this value. */
-    ejsval O = _this;
+    ejsval O = *_this;
 
     /* 2. If Type(O) is not Object, throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(O))
@@ -2090,17 +1971,15 @@ _ejs_TypedArray_prototype_values (ejsval env, ejsval _this, uint32_t argc, ejsva
     return _ejs_array_iterator_new (O, EJS_ARRAYITER_KIND_VALUE);
 }
 
-static ejsval
-_ejs_TypedArray_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_toString) {
     /* 1. Let array be the result of calling ToObject on the this value. */
-    ejsval array = ToObject(_this);
+    ejsval array = ToObject(*_this);
 
     /* 3. Let func be Get(array, "join"). */
     ejsval func = Get(array, _ejs_atom_join);
 
     /* 6. Return Call(func, array). */
-    return _ejs_invoke_closure (func, array, 0, NULL);
+    return _ejs_invoke_closure (func, &array, 0, NULL, _ejs_undefined);
 }
 
 ejsval
@@ -2246,7 +2125,6 @@ _ejs_typedarrays_init(ejsval global)
         OBJ_METHOD(ArrayBuffer, isView);
 
         _ejs_object_define_value_property (_ejs_ArrayBuffer_prototype, _ejs_Symbol_toStringTag, _ejs_atom_ArrayBuffer, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
-        EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_ArrayBuffer, create, _ejs_ArrayBuffer_create, EJS_PROP_NOT_ENUMERABLE);
         EJS_INSTALL_SYMBOL_GETTER (_ejs_ArrayBuffer, species, _ejs_ArrayBuffer_get_species);
     }
 
@@ -2277,8 +2155,6 @@ _ejs_typedarrays_init(ejsval global)
         PROTO_METHOD_IMPL(DataView, setFloat64);
 
         _ejs_object_define_value_property (_ejs_DataView_prototype, _ejs_Symbol_toStringTag, _ejs_atom_DataView, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
-
-        EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_DataView, create, _ejs_DataView_create, EJS_PROP_NOT_ENUMERABLE);
     }
 
 #define ADD_TYPEDARRAY(EnumType, ArrayType, arraytype, elementSizeInBytes) EJS_MACRO_START \
@@ -2325,7 +2201,6 @@ _ejs_typedarrays_init(ejsval global)
                                                                         \
     OBJ_METHOD_IMPL(ArrayType##Array, of);                              \
                                                                         \
-    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_##ArrayType##Array, create, _ejs_##ArrayType##Array_create, EJS_PROP_NOT_ENUMERABLE); \
     EJS_INSTALL_SYMBOL_GETTER (_ejs_##ArrayType##Array, species, _ejs_##ArrayType##Array_get_species); \
                                                                         \
 EJS_MACRO_END
@@ -2501,6 +2376,8 @@ EJS_DEFINE_CLASS(ArrayBuffer,
                  _ejs_arraybuffer_specop_delete,
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  _ejs_arraybuffer_specop_allocate,
                  _ejs_arraybuffer_specop_finalize,
                  _ejs_arraybuffer_specop_scan
@@ -2668,6 +2545,8 @@ EJS_DEFINE_CLASS(DataView,
                  _ejs_dataview_specop_delete,
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  _ejs_dataview_specop_allocate,
                  OP_INHERIT, // [[Finalize]]
                  _ejs_dataview_specop_scan
@@ -2688,6 +2567,8 @@ EJS_DEFINE_CLASS(DataView,
         OP_INHERIT, /* [[Delete]] */                                   \
         OP_INHERIT, /* [[Enumerate]] */                                \
         OP_INHERIT, /* [[OwnPropertyKeys]] */                          \
+        OP_INHERIT, /* [[Call]] */                                     \
+        OP_INHERIT, /* [[Construct]] */                                \
         _ejs_typedarray_specop_allocate,                               \
         _ejs_typedarray_specop_finalize,                               \
         _ejs_typedarray_specop_scan                                    \

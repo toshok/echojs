@@ -29,14 +29,12 @@ _ejs_weakset_new ()
 
 // ES6: 23.4.3.1
 // WeakSet.prototype.add ( value )
-ejsval
-_ejs_WeakSet_prototype_add(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_WeakSet_prototype_add) {
     ejsval value = _ejs_undefined;
     if (argc > 0) value = args[0];
 
     // 1. Let S be the this value.
-    ejsval S = _this;
+    ejsval S = *_this;
 
     // 2. If Type(S) is not Object, then throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(S))
@@ -76,14 +74,12 @@ _ejs_WeakSet_prototype_add(ejsval env, ejsval _this, uint32_t argc, ejsval *args
 
 // ES6: 23.4.3.3
 // WeakSet.prototype.delete ( value )
-ejsval
-_ejs_WeakSet_prototype_delete(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_WeakSet_prototype_delete) {
     ejsval value = _ejs_undefined;
     if (argc > 0) value = args[0];
 
     // 1. Let S be the this value.
-    ejsval S = _this;
+    ejsval S = *_this;
 
     // 2. If Type(S) is not Object, then throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(S))
@@ -122,14 +118,12 @@ _ejs_WeakSet_prototype_delete(ejsval env, ejsval _this, uint32_t argc, ejsval *a
 
 // ES6: 23.4.3.4
 // WeakSet.prototype.has ( value )
-ejsval
-_ejs_WeakSet_prototype_has(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_WeakSet_prototype_has) {
     ejsval value = _ejs_undefined;
     if (argc > 0) value = args[0];
 
     // 1. Let S be the this value.
-    ejsval S = _this;
+    ejsval S = *_this;
 
     // 2. If Type(S) is not Object, then throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(S))
@@ -163,94 +157,71 @@ _ejs_WeakSet_prototype_has(ejsval env, ejsval _this, uint32_t argc, ejsval *args
 #endif
 }
 
-// ES6: 23.1.1.1
-// WeakSet ()
-static ejsval
-_ejs_WeakSet_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    // 1. Let set be the this value.
-    ejsval set = _this;
-
-    // 2. If Type(set) is not Object then, throw a TypeError exception.
-    if (!EJSVAL_IS_OBJECT(set))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "WeakSet constructor called with non-object this.");
-    
-    // 3. If set does not have a [[WeakSetData]] internal slot, then throw a TypeError exception.
-    if (!EJSVAL_IS_WEAKSET(set))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "WeakSet constructor called with non-WeakSet this.");
-
-    // 4. If set’s [[WeakSetData]] internal slot is not undefined, then throw a TypeError exception.
-
-    // 5. If iterable is not present, let iterable be undefined. 
+// ES2015, June 2015
+// 23.4.1.1  WeakSet ( [ iterable ] )
+static EJS_NATIVE_FUNC(_ejs_WeakSet_impl) {
     ejsval iterable = _ejs_undefined;
     if (argc > 0)
         iterable = args[0];
-    ejsval iter = _ejs_undefined;
-    ejsval adder = _ejs_undefined;
 
-    // 6. If iterable is either undefined or null, then let iter be undefined.
-    // 7. Else, 
-    if (!EJSVAL_IS_UNDEFINED(iterable) && !EJSVAL_IS_NULL(iterable)) {
-        //    a. Let iter be the result of GetIterator(iterable). 
-        //    b. ReturnIfAbrupt(iter). 
-        iter = GetIterator (iterable, _ejs_undefined);
-        //    c. Let adder be the result of Get(set, "add").
-        //    d. ReturnIfAbrupt(adder). 
-        adder = Get (set, _ejs_atom_add);
-        //    e. If IsCallable(adder) is false, throw a TypeError Exception.
-        if (!EJSVAL_IS_CALLABLE(adder))
-            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Set.prototype.add is not a function");
+    // 1. If NewTarget is undefined, throw a TypeError exception.
+    if (EJSVAL_IS_UNDEFINED(newTarget))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "WeakSet constructor must be called with new");
+
+    // 2. Let set be OrdinaryCreateFromConstructor(NewTarget, "%WeakSetPrototype%", «[[WeakSetData]]»).
+    // 3. ReturnIfAbrupt(set).
+    // 4. Set set’s [[WeakSetData]] internal slot to a new empty List.
+    ejsval set = OrdinaryCreateFromConstructor(newTarget, _ejs_WeakSet_prototype, &_ejs_WeakSet_specops);
+    *_this = set;
+
+    // 5. If iterable is not present, let iterable be undefined.
+    // 6. If iterable is either undefined or null, let iter be undefined.
+    ejsval iter;
+    ejsval adder;
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(iterable)) {
+        iter = _ejs_undefined;
     }
-    // 8. If the value of sets’s [[WeakSetData]] internal slot is not undefined, then throw a TypeError exception. 
-    // 9. Assert: set has not been reentrantly initialized. 
-    // 10. Set set’s [[WeakSetData]] internal slot to a new empty List.
+    // 7. Else,
+    else {
+        // a. Let adder be Get(set, "add").
+        // b. ReturnIfAbrupt(adder).
+        adder = Get (set, _ejs_atom_add);
+        
+        // c. If IsCallable(adder) is false, throw a TypeError exception.
+        if (!IsCallable(adder))
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "WeakSet.prototype.add is not a function");
 
-    // 11. If iter is undefined, then return set. 
+        // d. Let iter be GetIterator(iterable).
+        // e. ReturnIfAbrupt(iter).
+        iter = GetIterator(iterable, _ejs_undefined);
+    }
+    // 8. If iter is undefined, return set.
     if (EJSVAL_IS_UNDEFINED(iter))
         return set;
 
-    // 12. Repeat 
+    // 9. Repeat
     for (;;) {
-        //    a. Let next be the result of IteratorStep(iter).
-        //    b. ReturnIfAbrupt(next).
+        // a. Let next be IteratorStep(iter).
+        // b. ReturnIfAbrupt(next).
         ejsval next = IteratorStep (iter);
 
-        //    c. If next is false, then return set.
+        // c. If next is false, return set.
         if (!EJSVAL_TO_BOOLEAN(next))
             return set;
 
-        //    d. Let nextValue be IteratorValue(next).
-        //    e. ReturnIfAbrupt(nextValue).
+        // d. Let nextValue be IteratorValue(next).
+        // e. ReturnIfAbrupt(nextValue).
         ejsval nextValue = IteratorValue (next);
 
-        //    f. Let status be the result of calling the [[Call]] internal method of adder with set as thisArgument
-        //       and a List whose sole element is nextValue as argumentsList.
-        //    g. ReturnIfAbrupt(status).
-        _ejs_invoke_closure (adder, set, 1, &nextValue);
+        // f. Let status be Call(adder, set, «nextValue »).
+        _ejs_invoke_closure (adder, &set, 1, &nextValue, _ejs_undefined);
+
+        // g. If status is an abrupt completion, return IteratorClose(iter, status).
+
+        // XXX we need to use invoke_closure_catch here, and call IteratorClose
     }
 
-    return set;
-}
-
-static ejsval
-_ejs_WeakSet_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    // 1. Let F be the this value. 
-    ejsval F = _this;
-
-    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in WeakSet[Symbol.create] is not a constructor");
-
-    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
-
-    // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%WeakSetPrototype%", ([[WeakSetData]]) ). 
-    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
-    if (EJSVAL_IS_UNDEFINED(proto))
-        proto = _ejs_WeakSet_prototype;
-
-    EJSObject* obj = (EJSObject*)_ejs_gc_new (EJSWeakSet);
-    _ejs_init_object (obj, proto, &_ejs_WeakSet_specops);
-    return OBJECT_TO_EJSVAL(obj);
+    EJS_NOT_REACHED();
 }
 
 ejsval _ejs_WeakSet EJSVAL_ALIGNMENT;
@@ -280,10 +251,32 @@ _ejs_weakset_init(ejsval global)
 
     _ejs_object_define_value_property (_ejs_WeakSet_prototype, _ejs_Symbol_toStringTag, _ejs_atom_WeakSet, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
 
-    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_WeakSet, create, _ejs_WeakSet_create, EJS_PROP_NOT_ENUMERABLE);
-
 #undef OBJ_METHOD
 #undef PROTO_METHOD
 }
 
-EJS_DEFINE_INHERIT_ALL_CLASS(WeakSet)
+static EJSObject*
+_ejs_weakset_specop_allocate()
+{
+    return (EJSObject*)_ejs_gc_new (EJSWeakSet);
+}
+
+EJS_DEFINE_CLASS(WeakSet,
+                 OP_INHERIT, // [[GetPrototypeOf]]
+                 OP_INHERIT, // [[SetPrototypeOf]]
+                 OP_INHERIT, // [[IsExtensible]]
+                 OP_INHERIT, // [[PreventExtensions]]
+                 OP_INHERIT, // [[GetOwnProperty]]
+                 OP_INHERIT, // [[DefineOwnProperty]]
+                 OP_INHERIT, // [[HasProperty]]
+                 OP_INHERIT, // [[Get]]
+                 OP_INHERIT, // [[Set]]
+                 OP_INHERIT, // [[Delete]]
+                 OP_INHERIT, // [[Enumerate]]
+                 OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
+                 _ejs_weakset_specop_allocate,
+                 OP_INHERIT, // [[Finalize]]
+                 OP_INHERIT  // [[Scan]] XXX?
+                 )

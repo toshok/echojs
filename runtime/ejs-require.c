@@ -73,7 +73,8 @@ require_user_module (const char* name, ejsval *module)
     for (int i = 0; i < _ejs_num_modules; i ++) {
         EJSModule* mod = _ejs_modules[i];
         if (mod->module_name && !strcmp (mod->module_name, name)) {
-            _ejs_module_toplevels[i](_ejs_null, OBJECT_TO_EJSVAL(mod), 0, NULL);
+            ejsval _mod_this = OBJECT_TO_EJSVAL(mod);
+            _ejs_module_toplevels[i](_ejs_null, &_mod_this, 0, NULL, _ejs_undefined);
             *module = OBJECT_TO_EJSVAL(mod);
             return EJS_TRUE;
         }
@@ -86,7 +87,8 @@ _ejs_module_resolve(EJSModule* mod)
 {
     for (int i = 0; i < _ejs_num_modules; i ++) {
         if (_ejs_modules[i] == mod) {
-            _ejs_module_toplevels[i](_ejs_null, OBJECT_TO_EJSVAL(mod), 0, NULL);
+            ejsval _mod_this = OBJECT_TO_EJSVAL(mod);
+            _ejs_module_toplevels[i](_ejs_null, &_mod_this, 0, NULL, _ejs_undefined);
             return;
         }
     }

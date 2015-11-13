@@ -37,9 +37,7 @@ namespace ejsllvm {
     }
 
 
-    static ejsval
-    Call_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(Call_impl) {
         EJS_NOT_IMPLEMENTED();
     }
 
@@ -51,51 +49,39 @@ namespace ejsllvm {
         return result;
     }
 
-    ejsval
-    Call_prototype_toString(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(Call_prototype_toString) {
         std::string str;
         llvm::raw_string_ostream str_ostream(str);
-        ((Call*)EJSVAL_TO_OBJECT(_this))->llvm_call->print(str_ostream);
+        ((Call*)EJSVAL_TO_OBJECT(*_this))->llvm_call->print(str_ostream);
 
         return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
     }
 
-    ejsval
-    Call_prototype_dump(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        ((Call*)EJSVAL_TO_OBJECT(_this))->llvm_call->dump();
+    static EJS_NATIVE_FUNC(Call_prototype_dump) {
+        ((Call*)EJSVAL_TO_OBJECT(*_this))->llvm_call->dump();
         return _ejs_undefined;
     }
 
-    ejsval
-    Call_prototype_setOnlyReadsMemory(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        Call* call = ((Call*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(Call_prototype_setOnlyReadsMemory) {
+        Call* call = ((Call*)EJSVAL_TO_OBJECT(*_this));
         call->llvm_call->setOnlyReadsMemory();
         return _ejs_undefined;
     }
 
-    ejsval
-    Call_prototype_setDoesNotAccessMemory(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        Call* call = ((Call*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(Call_prototype_setDoesNotAccessMemory) {
+        Call* call = ((Call*)EJSVAL_TO_OBJECT(*_this));
         call->llvm_call->setDoesNotAccessMemory();
         return _ejs_undefined;
     }
 
-    ejsval
-    Call_prototype_setDoesNotThrow(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        Call* call = ((Call*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(Call_prototype_setDoesNotThrow) {
+        Call* call = ((Call*)EJSVAL_TO_OBJECT(*_this));
         call->llvm_call->setDoesNotThrow();
         return _ejs_undefined;
     }
 
-    ejsval
-    Call_prototype_setStructRet(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        Call* call = ((Call*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(Call_prototype_setStructRet) {
+        Call* call = ((Call*)EJSVAL_TO_OBJECT(*_this));
         call->llvm_call->addAttribute(1 /* first arg */,
                                       llvm::Attribute::StructRet);
         return _ejs_undefined;
@@ -158,9 +144,7 @@ namespace ejsllvm {
     }
 
 
-    static ejsval
-    Invoke_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(Invoke_impl) {
         EJS_NOT_IMPLEMENTED();
     }
 
@@ -172,51 +156,39 @@ namespace ejsllvm {
         return result;
     }
 
-    ejsval
-    Invoke_prototype_toString(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(Invoke_prototype_toString) {
         std::string str;
         llvm::raw_string_ostream str_ostream(str);
-        ((Invoke*)EJSVAL_TO_OBJECT(_this))->llvm_invoke->print(str_ostream);
+        ((Invoke*)EJSVAL_TO_OBJECT(*_this))->llvm_invoke->print(str_ostream);
 
         return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
     }
 
-    ejsval
-    Invoke_prototype_dump(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        ((Invoke*)EJSVAL_TO_OBJECT(_this))->llvm_invoke->dump();
+    static EJS_NATIVE_FUNC(Invoke_prototype_dump) {
+        ((Invoke*)EJSVAL_TO_OBJECT(*_this))->llvm_invoke->dump();
         return _ejs_undefined;
     }
 
-    ejsval
-    Invoke_prototype_setOnlyReadsMemory(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        Invoke* invoke = ((Invoke*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(Invoke_prototype_setOnlyReadsMemory) {
+        Invoke* invoke = ((Invoke*)EJSVAL_TO_OBJECT(*_this));
         invoke->llvm_invoke->setOnlyReadsMemory();
         return _ejs_undefined;
     }
 
-    ejsval
-    Invoke_prototype_setDoesNotAccessMemory(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        Invoke* invoke = ((Invoke*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(Invoke_prototype_setDoesNotAccessMemory) {
+        Invoke* invoke = ((Invoke*)EJSVAL_TO_OBJECT(*_this));
         invoke->llvm_invoke->setDoesNotAccessMemory();
         return _ejs_undefined;
     }
 
-    ejsval
-    Invoke_prototype_setDoesNotThrow(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        Invoke* invoke = ((Invoke*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(Invoke_prototype_setDoesNotThrow) {
+        Invoke* invoke = ((Invoke*)EJSVAL_TO_OBJECT(*_this));
         invoke->llvm_invoke->setDoesNotThrow();
         return _ejs_undefined;
     }
 
-    ejsval
-    Invoke_prototype_setStructRet(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        Invoke* invoke = ((Invoke*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(Invoke_prototype_setStructRet) {
+        Invoke* invoke = ((Invoke*)EJSVAL_TO_OBJECT(*_this));
         invoke->llvm_invoke->addAttribute(1 /* first arg */,
                                           llvm::Attribute::StructRet);
         return _ejs_undefined;

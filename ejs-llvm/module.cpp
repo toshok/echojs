@@ -7,6 +7,7 @@
 
 #include "ejs-llvm.h"
 #include "ejs-object.h"
+#include "ejs-ops.h"
 #include "ejs-array.h"
 #include "ejs-error.h"
 #include "ejs-function.h"
@@ -49,42 +50,24 @@ namespace ejsllvm {
         _ejs_Object_specops.Finalize(obj);
     }
 
-    static ejsval
-    Module_create (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        ejsval F = _this;
-        if (!EJSVAL_IS_CONSTRUCTOR(F)) 
-            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Module[Symbol.create] is not a constructor");
-        EJSObject* F_ = EJSVAL_TO_OBJECT(F);
-        // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%DatePrototype%", ([[DateData]]) ). 
-        ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
-        if (EJSVAL_IS_UNDEFINED(proto))
-            proto = _ejs_Module_prototype;
-
-        EJSObject* obj = (EJSObject*)_ejs_gc_new (Module);
-        _ejs_init_object (obj, proto, &_ejs_Module_specops);
-        return OBJECT_TO_EJSVAL(obj);
-    }
-
-    static ejsval
-    Module_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        if (EJSVAL_IS_UNDEFINED(_this)) {
+    static EJS_NATIVE_FUNC(Module_impl) {
+        if (EJSVAL_IS_UNDEFINED(newTarget)) {
             // called as a function
             EJS_NOT_IMPLEMENTED();
         }
         else {
-            Module* module = ((Module*)EJSVAL_TO_OBJECT(_this));
+            ejsval O = OrdinaryCreateFromConstructor(newTarget, _ejs_Module_prototype, &_ejs_Module_specops);
+            *_this = O;
+
+            Module* module = (Module*)EJSVAL_TO_OBJECT(O);
             REQ_UTF8_ARG(0, name);
             module->llvm_module = new llvm::Module(name, llvm::getGlobalContext());
-            return _this;
+            return *_this;
         }
     }
 
-    ejsval
-    Module_prototype_getOrInsertIntrinsic(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        Module* module = ((Module*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(Module_prototype_getOrInsertIntrinsic) {
+        Module* module = ((Module*)EJSVAL_TO_OBJECT(*_this));
 
         REQ_UTF8_ARG(0, id);
 #if false
@@ -113,10 +96,8 @@ namespace ejsllvm {
         return Function_new (f);
     }
 
-    ejsval
-    Module_prototype_getOrInsertFunction(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        Module *module = ((Module*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(Module_prototype_getOrInsertFunction) {
+        Module *module = ((Module*)EJSVAL_TO_OBJECT(*_this));
 
         REQ_UTF8_ARG(0, name);
         REQ_LLVM_TYPE_ARG(1, returnType);
@@ -147,20 +128,16 @@ namespace ejsllvm {
         return Function_new (f);
     }
 
-    ejsval
-    Module_prototype_getOrInsertGlobal(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        Module *module = ((Module*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(Module_prototype_getOrInsertGlobal) {
+        Module *module = ((Module*)EJSVAL_TO_OBJECT(*_this));
         REQ_UTF8_ARG(0, name);
         REQ_LLVM_TYPE_ARG(1, type);
 
         return GlobalVariable_new (static_cast<llvm::GlobalVariable*>(module->llvm_module->getOrInsertGlobal(name, type)));
     }
 
-    ejsval
-    Module_prototype_getOrInsertExternalFunction(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        Module *module = ((Module*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(Module_prototype_getOrInsertExternalFunction) {
+        Module *module = ((Module*)EJSVAL_TO_OBJECT(*_this));
 
         REQ_UTF8_ARG(0, name);
         REQ_LLVM_TYPE_ARG(1, returnType);
@@ -179,10 +156,8 @@ namespace ejsllvm {
         return Function_new (f);
     }
 
-    ejsval
-    Module_prototype_getFunction(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        Module *module = ((Module*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(Module_prototype_getFunction) {
+        Module *module = ((Module*)EJSVAL_TO_OBJECT(*_this));
 
         REQ_UTF8_ARG(0, name);
 	
@@ -193,10 +168,8 @@ namespace ejsllvm {
         return _ejs_null;
     }
 
-    ejsval
-    Module_prototype_getGlobalVariable(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        Module *module = ((Module*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(Module_prototype_getGlobalVariable) {
+        Module *module = ((Module*)EJSVAL_TO_OBJECT(*_this));
 
         REQ_UTF8_ARG(0, name);
         REQ_BOOL_ARG(1, allowInternal);
@@ -206,27 +179,22 @@ namespace ejsllvm {
         return rv;
     }
 
-    ejsval
-    Module_prototype_toString(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+
+    static EJS_NATIVE_FUNC(Module_prototype_toString) {
         std::string str;
         llvm::raw_string_ostream str_ostream(str);
-        ((Module*)EJSVAL_TO_OBJECT(_this))->llvm_module->print(str_ostream, NULL);
+        ((Module*)EJSVAL_TO_OBJECT(*_this))->llvm_module->print(str_ostream, NULL);
 
         return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
     }
 
-    ejsval
-    Module_prototype_dump(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        ((Module*)EJSVAL_TO_OBJECT(_this))->llvm_module->dump();
+    static EJS_NATIVE_FUNC(Module_prototype_dump) {
+        ((Module*)EJSVAL_TO_OBJECT(*_this))->llvm_module->dump();
         return _ejs_undefined;
     }
 
-    ejsval
-    Module_prototype_writeToFile(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        Module *module = ((Module*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(Module_prototype_writeToFile) {
+        Module *module = ((Module*)EJSVAL_TO_OBJECT(*_this));
 
         REQ_UTF8_ARG(0, path);
 
@@ -238,10 +206,8 @@ namespace ejsllvm {
         return _ejs_undefined;
     }
 
-    ejsval
-    Module_prototype_writeBitcodeToFile(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        Module *module = ((Module*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(Module_prototype_writeBitcodeToFile) {
+        Module *module = ((Module*)EJSVAL_TO_OBJECT(*_this));
 
         REQ_UTF8_ARG(0, path);
 
@@ -254,10 +220,8 @@ namespace ejsllvm {
         return _ejs_undefined;
     }
 
-    ejsval
-    Module_prototype_setDataLayout(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        Module *module = ((Module*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(Module_prototype_setDataLayout) {
+        Module *module = ((Module*)EJSVAL_TO_OBJECT(*_this));
 
         REQ_UTF8_ARG(0, dataLayout);
 
@@ -265,10 +229,8 @@ namespace ejsllvm {
         return _ejs_undefined;
     }
 
-    ejsval
-    Module_prototype_setTriple(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        Module *module = ((Module*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(Module_prototype_setTriple) {
+        Module *module = ((Module*)EJSVAL_TO_OBJECT(*_this));
 
         REQ_UTF8_ARG(0, triple);
 
@@ -314,7 +276,5 @@ namespace ejsllvm {
         PROTO_METHOD(setTriple);
 
 #undef PROTO_METHOD
-
-        EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Module, create, Module_create, EJS_PROP_NOT_ENUMERABLE);
     }
 };

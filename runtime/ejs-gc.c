@@ -1447,16 +1447,12 @@ _ejs_gc_dump_heap_stats()
 /////////
 ejsval _ejs_GC;
 
-static ejsval
-_ejs_GC_collect (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_GC_collect) {
     _ejs_gc_collect();
     return _ejs_undefined;
 }
 
-static ejsval
-_ejs_GC_dumpAllocationStats (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_GC_dumpAllocationStats) {
     char* tag = NULL;
 
     if (argc > 0) {
@@ -1483,9 +1479,7 @@ _ejs_GC_dumpAllocationStats (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     return _ejs_undefined;
 }
 
-static ejsval
-_ejs_GC_dumpLiveStrings (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_GC_dumpLiveStrings) {
     _ejs_log ("strings:\n");
     for (int i = 0; i < HEAP_PAGELISTS_COUNT; i ++) {
         EJS_LIST_FOREACH (&heap_pages[i], PageInfo, page, {

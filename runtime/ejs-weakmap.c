@@ -30,14 +30,12 @@ _ejs_weakmap_new ()
 
 // ES6: 23.3.3.2
 // WeakMap.prototype.delete ( key )
-ejsval
-_ejs_WeakMap_prototype_delete(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_WeakMap_prototype_delete) {
     ejsval key = _ejs_undefined;
     if (argc > 0) key = args[0];
 
     // 1. Let M be the this value.
-    ejsval M = _this;
+    ejsval M = *_this;
 
     // 2. If Type(M) is not Object, then throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(M))
@@ -75,14 +73,12 @@ _ejs_WeakMap_prototype_delete(ejsval env, ejsval _this, uint32_t argc, ejsval *a
 
 // ES6: 23.3.3.3
 // WeakMap.prototype.get ( key )
-ejsval
-_ejs_WeakMap_prototype_get(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_WeakMap_prototype_get) {
     ejsval key = _ejs_undefined;
     if (argc > 0) key = args[0];
 
     // 1. Let M be the this value.
-    ejsval M = _this;
+    ejsval M = *_this;
 
     // 2. If Type(M) is not Object, then throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(M))
@@ -116,14 +112,12 @@ _ejs_WeakMap_prototype_get(ejsval env, ejsval _this, uint32_t argc, ejsval *args
 
 // ES6: 23.3.3.4
 // WeakMap.prototype.has ( key )
-ejsval
-_ejs_WeakMap_prototype_has(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_WeakMap_prototype_has) {
     ejsval key = _ejs_undefined;
     if (argc > 0) key = args[0];
 
     // 1. Let M be the this value.
-    ejsval M = _this;
+    ejsval M = *_this;
 
     // 2. If Type(M) is not Object, then throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(M))
@@ -157,9 +151,7 @@ _ejs_WeakMap_prototype_has(ejsval env, ejsval _this, uint32_t argc, ejsval *args
 
 // ES6: 23.3.3.4
 // WeakMap.prototype.set ( key, value )
-ejsval
-_ejs_WeakMap_prototype_set(ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_WeakMap_prototype_set) {
     ejsval key = _ejs_undefined;
     ejsval value = _ejs_undefined;
 
@@ -167,7 +159,7 @@ _ejs_WeakMap_prototype_set(ejsval env, ejsval _this, uint32_t argc, ejsval *args
     if (argc > 1) value = args[1];
 
     // 1. Let M be the this value.
-    ejsval M = _this;
+    ejsval M = *_this;
 
     // 2. If Type(M) is not Object, then throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(M))
@@ -207,114 +199,86 @@ _ejs_WeakMap_prototype_set(ejsval env, ejsval _this, uint32_t argc, ejsval *args
 #endif
 }
 
-// ES6: 23.1.1.1
-// Map (iterable = undefined , comparator = undefined )
-static ejsval
-_ejs_WeakMap_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+// ES2015, June 2015
+// 23.3.1.1 WeakMap ( [ iterable ] )
+static EJS_NATIVE_FUNC(_ejs_WeakMap_impl) {
     ejsval iterable = _ejs_undefined;
     if (argc > 0) iterable = args[0];
 
-    // 1. Let map be the this value.
-    ejsval map = _this;
+    // 1. If NewTarget is undefined, throw a TypeError exception.
+    if (EJSVAL_IS_UNDEFINED(newTarget))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "WeakMap constructor must be called with new");
 
-    // 2. If Type(map) is not Object then, throw a TypeError exception.
-    if (!EJSVAL_IS_OBJECT(map))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "WeakMap constructor called with non-object this.");
-    
-    // 3. If map does not have a [[MapData]] internal slot, then throw a TypeError exception.
-    if (!EJSVAL_IS_WEAKMAP(map))
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "WeakMap constructor called with non-Map this.");
-
-    // 4. If map’s [[MapData]] internal slot is not undefined, then throw a TypeError exception.
-
-    ejsval iter;
-    ejsval adder = _ejs_undefined;
+    // 2. Let map be OrdinaryCreateFromConstructor(NewTarget, "%WeakMapPrototype%", «[[WeakMapData]]» ).
+    // 3. ReturnIfAbrupt(map).
+    // 4. Set map’s [[WeakMapData]] internal slot to a new empty List.
+    ejsval map = OrdinaryCreateFromConstructor(newTarget, _ejs_WeakMap_prototype, &_ejs_WeakMap_specops);
+    *_this = map;
 
     // 5. If iterable is not present, let iterable be undefined.
-    // 6. If iterable is either undefined or null, then let iter be undefined.
-    if (EJSVAL_IS_NULL_OR_UNDEFINED(iterable))
+    // 6. If iterable is either undefined or null, let iter be undefined.
+    ejsval iter;
+    ejsval adder;
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(iterable)) {
         iter = _ejs_undefined;
+    }
     // 7. Else,
     else {
-        //    a. Let iter be the result of GetIterator(iterable).
-        //    b. ReturnIfAbrupt(iter).
+        // a. Let adder be Get(map, "set").
+        // b. ReturnIfAbrupt(adder).
+        adder = Get (map, _ejs_atom_set);
+        // c. If IsCallable(adder) is false, throw a TypeError exception.
+        if (!IsCallable(adder))
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "WeakMap.prototype.set is not a function");
+        // d. Let iter be GetIterator(iterable).
+        // e. ReturnIfAbrupt(iter).
         iter = GetIterator(iterable, _ejs_undefined);
-
-        //    c. Let adder be the result of Get(map, "set").
-        //    d. ReturnIfAbrupt(adder).
-        adder = Get(map, _ejs_atom_set);
-
-        //    e. If IsCallable(adder) is false, throw a TypeError Exception.
-        if (!EJSVAL_IS_CALLABLE(adder))
-            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "uncallable adder");
     }
-
-    // 8. If the value of map’s [[WeakMapData]] internal slot is not undefined, then throw a TypeError exception.
-
-    // 9. Assert: map has not been reentrantly initialized.
-
-    // 11. Set map’s [[WeakMapData]] internal slot to a new empty List.
-
-    // 13. If iter is undefined, then return map.
+    // 8. If iter is undefined, return map.
     if (EJSVAL_IS_UNDEFINED(iter))
         return map;
+    // 9. Repeat
+    for (;;) {
+        // a. Let next be IteratorStep(iter).
+        // b. ReturnIfAbrupt(next).
+        ejsval next = IteratorStep (iter);
 
-    // 12. Repeat
-    while (EJS_TRUE) {
-        //     a. Let next be the result of IteratorStep(iter).
-        //     b. ReturnIfAbrupt(next).
-        ejsval next = IteratorStep(iter);
-
-        //     c. If next is false, then return NormalCompletion(map).
-        if (EJSVAL_IS_BOOLEAN(next) && !EJSVAL_TO_BOOLEAN(next))
+        // c. If next is false, return map.
+        if (!EJSVAL_TO_BOOLEAN(next))
             return map;
 
-        //     d. Let nextItem be IteratorValue(next).
-        //     e. ReturnIfAbrupt(nextItem).
-        ejsval nextItem = IteratorValue(next);
+        // d. Let nextItem be IteratorValue(next).
+        // e. ReturnIfAbrupt(nextItem).
+        ejsval nextItem = IteratorValue (next);
 
-        //     f. If Type(nextItem) is not Object, then throw a TypeError exception.
-        if (!EJSVAL_IS_OBJECT(nextItem)) _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "non-object in iterable for WeakMap constructor");
+        // f. If Type(nextItem) is not Object,
+        // i. Let error be Completion{[[type]]: throw, [[value]]: a newly created TypeError object, [[target]]:empty}.
+        // ii. Return IteratorClose(iter, error).
+        if (!EJSVAL_IS_OBJECT(nextItem)) {
+            // XXX we need to call IteratorClose here
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "non-object in iterable for WeakMap constructor");
+        }
 
-        //     g. Let k be the result of Get(nextItem, "0").
-        //     h. ReturnIfAbrupt(k).
-        ejsval k = Get(nextItem, _ejs_atom_0);
+        // g. Let k be Get(nextItem, "0").
+        // h. If k is an abrupt completion, return IteratorClose(iter, k).
+        ejsval k = Get(nextItem, _ejs_atom_0); // XXX call IteratorClose here on exception
+        
+        // i. Let v be Get(nextItem, "1").
+        // j. If v is an abrupt completion, return IteratorClose(iter, v).
+        ejsval v = Get(nextItem, _ejs_atom_1);  // XXX call IteratorClose here on exception
 
-        //     i. Let v be the result of Get(nextItem, "1").
-        //     j. ReturnIfAbrupt(v).
-        ejsval v = Get(nextItem, _ejs_atom_1);
-
-        //     k. Let status be the result of calling the [[Call]] internal method of adder with map as thisArgument and a List whose elements are k and v as argumentsList.
-        //     l. ReturnIfAbrupt(status).
+        // k. Let status be Call(adder, map, «k.[[value]], v.[[value]]»).
         ejsval adder_args[2];
         adder_args[0] = k;
         adder_args[1] = v;
-        _ejs_invoke_closure (adder, map, 2, adder_args);
+        _ejs_invoke_closure (adder, &map, 2, adder_args, _ejs_undefined);
+
+        // l. If status is an abrupt completion, return IteratorClose(iter, status).
+
+        // XXX we need to use invoke_closure_catch here, and call IteratorClose
     }
 
-    return map;
-}
-
-static ejsval
-_ejs_WeakMap_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    // 1. Let F be the this value. 
-    ejsval F = _this;
-
-    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in WeakMap[Symbol.create] is not a constructor");
-
-    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
-
-    // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%WeakMapPrototype%", ([[WeakMapData]]) ). 
-    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
-    if (EJSVAL_IS_UNDEFINED(proto))
-        proto = _ejs_WeakMap_prototype;
-
-    EJSObject* obj = (EJSObject*)_ejs_gc_new (EJSWeakMap);
-    _ejs_init_object (obj, proto, &_ejs_WeakMap_specops);
-    return OBJECT_TO_EJSVAL(obj);
+    EJS_NOT_REACHED();
 }
 
 ejsval _ejs_WeakMap EJSVAL_ALIGNMENT;
@@ -345,10 +309,33 @@ _ejs_weakmap_init(ejsval global)
 
     _ejs_object_define_value_property (_ejs_WeakMap_prototype, _ejs_Symbol_toStringTag, _ejs_atom_WeakMap, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
 
-    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_WeakMap, create, _ejs_WeakMap_create, EJS_PROP_NOT_ENUMERABLE);
-
 #undef OBJ_METHOD
 #undef PROTO_METHOD
 }
 
-EJS_DEFINE_INHERIT_ALL_CLASS(WeakMap)
+
+static EJSObject*
+_ejs_weakmap_specop_allocate()
+{
+    return (EJSObject*)_ejs_gc_new (EJSWeakMap);
+}
+
+EJS_DEFINE_CLASS(WeakMap,
+                 OP_INHERIT, // [[GetPrototypeOf]]
+                 OP_INHERIT, // [[SetPrototypeOf]]
+                 OP_INHERIT, // [[IsExtensible]]
+                 OP_INHERIT, // [[PreventExtensions]]
+                 OP_INHERIT, // [[GetOwnProperty]]
+                 OP_INHERIT, // [[DefineOwnProperty]]
+                 OP_INHERIT, // [[HasProperty]]
+                 OP_INHERIT, // [[Get]]
+                 OP_INHERIT, // [[Set]]
+                 OP_INHERIT, // [[Delete]]
+                 OP_INHERIT, // [[Enumerate]]
+                 OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
+                 _ejs_weakmap_specop_allocate,
+                 OP_INHERIT, // [[Finalize]]
+                 OP_INHERIT  // [[Scan]] XXX?
+                 )

@@ -79,9 +79,7 @@ json_value_to_ejsval(JSON_Value *v, ejsval *rv)
 }
 
 /* 15.12.2 */
-static ejsval
-_ejs_JSON_parse (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_JSON_parse) {
     ejsval text = _ejs_undefined;
     ejsval reviver = _ejs_undefined;
 
@@ -119,7 +117,7 @@ _ejs_JSON_parse (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     json_value_free (root_val);
 
     /* 4. If IsCallable(reviver) is true, then */
-    if (EJSVAL_IS_CALLABLE(reviver)) {
+    if (IsCallable(reviver)) {
         printf ("no reviver support in JSON.parse yet\n");
         EJS_NOT_IMPLEMENTED();
         /*    a. Let root be a new object created as if by the expression new Object(), where Object is the
@@ -475,7 +473,7 @@ SerializeJSONProperty(StringifyState* state, ejsval key, ejsval holder) {
             // i. Let value be Call(toJSON, value, «key»).
             // ii. ReturnIfAbrupt(value).
             ejsval args[] = { key };
-            value = _ejs_invoke_closure(toJSON, value, 1, args);
+            value = _ejs_invoke_closure(toJSON, &value, 1, args, _ejs_undefined);
         }
     }
     // 4. If ReplacerFunction is not undefined, then
@@ -483,7 +481,7 @@ SerializeJSONProperty(StringifyState* state, ejsval key, ejsval holder) {
         // a. Let value be Call(ReplacerFunction, holder, «key, value»).
         // b. ReturnIfAbrupt(value).
         ejsval args[] = { key, value };
-        value = _ejs_invoke_closure(state->ReplacerFunction, holder, 2, args);
+        value = _ejs_invoke_closure(state->ReplacerFunction, &holder, 2, args, _ejs_undefined);
     }
     // 5. If Type(value) is Object, then
     if (EJSVAL_IS_OBJECT(value)) {
@@ -545,9 +543,7 @@ SerializeJSONProperty(StringifyState* state, ejsval key, ejsval holder) {
 
 // ES2015, June 2015
 // 24.3.2 JSON.stringify ( value [ , replacer [ , space ] ] )
-static ejsval
-_ejs_JSON_stringify (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_JSON_stringify) {
     ejsval value = _ejs_undefined;
     ejsval replacer = _ejs_undefined;
     ejsval space = _ejs_undefined;
@@ -679,7 +675,8 @@ _ejs_JSON_stringify (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 ejsval
 _ejs_json_stringify (ejsval arg)
 {
-    return _ejs_JSON_stringify(_ejs_undefined, _ejs_undefined, 1, &arg);
+    ejsval undef_this = _ejs_undefined;
+    return _ejs_JSON_stringify(_ejs_undefined, &undef_this, 1, &arg, _ejs_undefined);
 }
 
 void

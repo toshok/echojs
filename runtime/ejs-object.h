@@ -110,6 +110,7 @@ ejsval Put (ejsval O, ejsval P, ejsval V, EJSBool Throw);
 ejsval GetMethod (ejsval O, ejsval P);
 EJSBool HasProperty (ejsval O, ejsval P);
 ejsval DeletePropertyOrThrow (ejsval O, ejsval P);
+EJSBool DefinePropertyOrThrow (ejsval O, ejsval P, EJSPropertyDesc* desc, ejsval *exc);
     
 typedef struct _EJSPropertyMapEntry _EJSPropertyMapEntry;
 struct _EJSPropertyMapEntry {
@@ -147,14 +148,18 @@ typedef EJSBool          (*SpecOpDelete) (ejsval obj, ejsval propertyName, EJSBo
 typedef ejsval           (*SpecOpDefaultValue) (ejsval obj, const char *hint);
 typedef EJSBool          (*SpecOpDefineOwnProperty) (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool _throw);
 
-typedef EJSObject*       (*SpecOpAllocate) ();
-typedef void             (*SpecOpFinalize) (EJSObject* obj);
-typedef void             (*SpecOpScan) (EJSObject* obj, EJSValueFunc scan_func);
-
 typedef EJSBool          (*SpecOpIsExtensible) (ejsval obj);
 typedef EJSBool          (*SpecOpPreventExtensions) (ejsval obj);
 typedef ejsval           (*SpecOpEnumerate) (ejsval obj);
 typedef ejsval           (*SpecOpOwnPropertyKeys) (ejsval obj);
+
+typedef ejsval           (*SpecOpCall) (ejsval target, ejsval _this, uint32_t argc, ejsval* args);
+typedef ejsval           (*SpecOpConstruct) (ejsval F, ejsval newTarget, uint32_t argc, ejsval* argv);
+
+typedef EJSObject*       (*SpecOpAllocate) ();
+typedef void             (*SpecOpFinalize) (EJSObject* obj);
+typedef void             (*SpecOpScan) (EJSObject* obj, EJSValueFunc scan_func);
+
 
 typedef struct {
     // special ops defined in the standard
@@ -176,6 +181,9 @@ typedef struct {
     SpecOpEnumerate Enumerate;
     SpecOpOwnPropertyKeys OwnPropertyKeys;
 
+    SpecOpCall Call;
+    SpecOpConstruct Construct;
+
     // ejs-defined ops
     SpecOpAllocate Allocate;
     SpecOpFinalize Finalize; // called when there are no remaining references to this object
@@ -183,7 +191,7 @@ typedef struct {
 } EJSSpecOps;
 
 #define OP_INHERIT (void*)-1
-#define EJS_DEFINE_CLASS(n, get_prototype_of, set_prototype_of, is_extensible, prevent_extensions, get_own_property, define_own_property, has_property, get, set, _delete, enumerate, own_property_keys, allocate, finalize, scan) \
+#define EJS_DEFINE_CLASS(n, get_prototype_of, set_prototype_of, is_extensible, prevent_extensions, get_own_property, define_own_property, has_property, get, set, _delete, enumerate, own_property_keys, call, construct, allocate, finalize, scan) \
     EJSSpecOps _ejs_##n##_specops = {                                   \
         .class_name = #n,                                               \
         .GetPrototypeOf = (get_prototype_of),                           \
@@ -198,11 +206,13 @@ typedef struct {
         .Delete = (_delete),                                            \
         .Enumerate = (enumerate),                                       \
         .OwnPropertyKeys = (own_property_keys),                         \
+        .Call = (call),                                                 \
+        .Construct = (construct),                                       \
         .Allocate = (allocate),                                         \
         .Finalize = (finalize),                                         \
         .Scan = (scan)                                                  \
     };
-#define EJS_DEFINE_INHERIT_ALL_CLASS(n) EJS_DEFINE_CLASS(n, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT)
+#define EJS_DEFINE_INHERIT_ALL_CLASS(n) EJS_DEFINE_CLASS(n, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT, OP_INHERIT)
 
 
 void _ejs_Class_initialize (EJSSpecOps *child, EJSSpecOps* parent);
@@ -246,6 +256,8 @@ ejsval _ejs_object_getprop (ejsval obj, ejsval key);
 ejsval _ejs_global_setprop (ejsval key, ejsval value);
 ejsval _ejs_global_getprop (ejsval key);
 
+ejsval _ejs_object_freeze(ejsval O);
+
 ejsval _ejs_object_setprop_utf8 (ejsval obj, const char *key, ejsval value);
 ejsval _ejs_object_getprop_utf8 (ejsval obj, const char *key);
 
@@ -269,7 +281,7 @@ void _ejs_object_finalize(EJSObject *obj);
 void _ejs_object_init(ejsval global);
 
 // we shouldn't expose this method, we should expose a helper method that calls this.
-ejsval _ejs_Object_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args);
+extern EJS_NATIVE_FUNC(_ejs_Object_prototype_toString);
 
 // exposed so we can call the native implementation during class creation
 ejsval _ejs_object_set_prototype_of (ejsval obj, ejsval proto);

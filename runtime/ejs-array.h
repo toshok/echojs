@@ -102,6 +102,8 @@ ejsval _ejs_array_from_iterables (int argc, ejsval* args);
 
 EJSBool IsArray (ejsval argument);
 
+EJS_NATIVE_FUNC(_ejs_Array_prototype_values);
+
 EJS_END_DECLS
 
 #endif /* _ejs_array_h */

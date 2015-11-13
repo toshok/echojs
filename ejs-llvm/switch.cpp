@@ -39,9 +39,7 @@ namespace ejsllvm {
     }
 
 
-    static ejsval
-    Switch_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(Switch_impl) {
         EJS_NOT_IMPLEMENTED();
     }
 
@@ -53,27 +51,21 @@ namespace ejsllvm {
         return result;
     }
 
-    ejsval
-    Switch_prototype_toString(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(Switch_prototype_toString) {
         std::string str;
         llvm::raw_string_ostream str_ostream(str);
-        ((Switch*)EJSVAL_TO_OBJECT(_this))->llvm_switch->print(str_ostream);
+        ((Switch*)EJSVAL_TO_OBJECT(*_this))->llvm_switch->print(str_ostream);
 
         return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
     }
 
-    ejsval
-    Switch_prototype_dump(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        ((Switch*)EJSVAL_TO_OBJECT(_this))->llvm_switch->dump();
+    static EJS_NATIVE_FUNC(Switch_prototype_dump) {
+        ((Switch*)EJSVAL_TO_OBJECT(*_this))->llvm_switch->dump();
         return _ejs_undefined;
     }
 
-    ejsval
-    Switch_prototype_addCase(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        Switch *_switch = ((Switch*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(Switch_prototype_addCase) {
+        Switch *_switch = ((Switch*)EJSVAL_TO_OBJECT(*_this));
         REQ_LLVM_VAL_ARG(0, OnVal);
         REQ_LLVM_BB_ARG(1, Dest);
         _switch->llvm_switch->addCase(static_cast<llvm::ConstantInt*>(OnVal), Dest);

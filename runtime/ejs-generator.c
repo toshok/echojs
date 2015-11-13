@@ -18,10 +18,8 @@ typedef struct {
     EJSBool done;
 } EJSIteratorWrapper;
 
-static ejsval
-_ejs_IteratorWrapper_prototype_getNextValue (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSIteratorWrapper* iter = (EJSIteratorWrapper*)EJSVAL_TO_OBJECT(_this);
+static EJS_NATIVE_FUNC(_ejs_IteratorWrapper_prototype_getNextValue) {
+    EJSIteratorWrapper* iter = (EJSIteratorWrapper*)EJSVAL_TO_OBJECT(*_this);
     if (iter->done)
         return _ejs_undefined;
 
@@ -44,14 +42,12 @@ _ejs_IteratorWrapper_prototype_getNextValue (ejsval env, ejsval _this, uint32_t 
     return iter_value;
 }
 
-static ejsval
-_ejs_IteratorWrapper_prototype_getRest (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSIteratorWrapper* iter = (EJSIteratorWrapper*)EJSVAL_TO_OBJECT(_this);
+static EJS_NATIVE_FUNC(_ejs_IteratorWrapper_prototype_getRest) {
+    EJSIteratorWrapper* iter = (EJSIteratorWrapper*)EJSVAL_TO_OBJECT(*_this);
     ejsval arr = _ejs_array_new(0, EJS_FALSE);
 
     while (!iter->done) {
-        ejsval next_value = _ejs_IteratorWrapper_prototype_getNextValue(env, _this, 0, NULL);
+        ejsval next_value = _ejs_IteratorWrapper_prototype_getNextValue(env, _this, 0, NULL, _ejs_undefined);
         if (!iter->done)
             _ejs_array_push_dense(arr, 1, &next_value);
     }
@@ -88,6 +84,8 @@ EJS_DEFINE_CLASS(IteratorWrapper,
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  _ejs_iterator_wrapper_specop_allocate,
                  OP_INHERIT, // [[Finalize]]
                  _ejs_iterator_wrapper_specop_scan
@@ -122,7 +120,8 @@ static void
 _ejs_generator_start(EJSGenerator* gen)
 {
     _ejs_gc_push_generator(gen);
-    _ejs_invoke_closure(gen->body, _ejs_undefined, 0, NULL);
+    ejsval undef_this = _ejs_undefined;
+    _ejs_invoke_closure(gen->body, &undef_this, 0, NULL, _ejs_undefined);
     _ejs_gc_pop_generator();
 
     gen->yielded_value = _ejs_create_iter_result(_ejs_undefined, _ejs_true);
@@ -187,10 +186,8 @@ _ejs_generator_throw (ejsval generator, ejsval arg) {
     return gen->yielded_value;
 }
 
-static ejsval
-_ejs_Generator_prototype_throw (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    ejsval O = _this;
+static EJS_NATIVE_FUNC(_ejs_Generator_prototype_throw) {
+    ejsval O = *_this;
     if (!EJSVAL_IS_OBJECT(O))
         _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, ".throw called on non-object");
 
@@ -200,17 +197,13 @@ _ejs_Generator_prototype_throw (ejsval env, ejsval _this, uint32_t argc, ejsval 
     return _ejs_generator_throw(O, argc > 0 ? args[0] : _ejs_undefined);
 }
 
-static ejsval
-_ejs_Generator_prototype_return (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Generator_prototype_return) {
     printf ("generator .return not implemented\n");
     abort();
 }
 
-static ejsval
-_ejs_Generator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    ejsval O = _this;
+static EJS_NATIVE_FUNC(_ejs_Generator_prototype_next) {
+    ejsval O = *_this;
     if (!EJSVAL_IS_OBJECT(O))
         _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, ".next called on non-object");
 
@@ -220,10 +213,8 @@ _ejs_Generator_prototype_next (ejsval env, ejsval _this, uint32_t argc, ejsval *
     return _ejs_generator_send(O, argc > 0 ? args[0] : _ejs_undefined);
 }
 
-static ejsval
-_ejs_Iterator_prototype_iterator (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    return _this;
+static EJS_NATIVE_FUNC(_ejs_Iterator_prototype_iterator) {
+    return *_this;
 }
 
 ejsval _ejs_Iterator_prototype EJSVAL_ALIGNMENT;
@@ -319,6 +310,8 @@ EJS_DEFINE_CLASS(Generator,
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  _ejs_generator_specop_allocate,
                  _ejs_generator_specop_finalize,
                  _ejs_generator_specop_scan

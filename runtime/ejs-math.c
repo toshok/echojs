@@ -14,9 +14,7 @@
 ejsval _ejs_Math EJSVAL_ALIGNMENT;
 
 // ECMA262: 15.8.2.1
-static ejsval
-_ejs_Math_abs (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_abs) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
 
@@ -28,9 +26,7 @@ _ejs_Math_abs (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 15.8.2.2
-static ejsval
-_ejs_Math_acos (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_acos) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
 
@@ -42,9 +38,7 @@ _ejs_Math_acos (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 15.8.2.3
-static ejsval
-_ejs_Math_asin (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_asin) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
 
@@ -56,9 +50,7 @@ _ejs_Math_asin (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 15.8.2.4
-static ejsval
-_ejs_Math_atan (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_atan) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
 
@@ -70,9 +62,7 @@ _ejs_Math_atan (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 15.8.2.5
-static ejsval
-_ejs_Math_atan2 (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_atan2) {
     ejsval y = _ejs_undefined;
     ejsval x = _ejs_undefined;
     if (argc > 0) y = args[0];
@@ -88,9 +78,7 @@ _ejs_Math_atan2 (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 15.8.2.6
-static ejsval
-_ejs_Math_ceil (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_ceil) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
 
@@ -102,9 +90,7 @@ _ejs_Math_ceil (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 15.8.2.7
-static ejsval
-_ejs_Math_cos (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_cos) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
 
@@ -116,9 +102,7 @@ _ejs_Math_cos (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 15.8.2.8
-static ejsval
-_ejs_Math_exp (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_exp) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
 
@@ -130,9 +114,7 @@ _ejs_Math_exp (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 15.8.2.9
-static ejsval
-_ejs_Math_floor (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_floor) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
 
@@ -144,9 +126,7 @@ _ejs_Math_floor (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 15.8.2.10
-static ejsval
-_ejs_Math_log (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_log) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
 
@@ -158,9 +138,7 @@ _ejs_Math_log (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 15.8.2.11
-static ejsval
-_ejs_Math_max (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_max) {
     double current_max = -INFINITY;
     for (int i = 0; i < argc; i ++) {
         double d = ToDouble(args[i]);
@@ -175,9 +153,7 @@ _ejs_Math_max (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 15.8.2.12
-static ejsval
-_ejs_Math_min (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_min) {
     double current_min = INFINITY;
     for (int i = 0; i < argc; i ++) {
         double d = ToDouble(args[i]);
@@ -192,9 +168,7 @@ _ejs_Math_min (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 15.8.2.13
-static ejsval
-_ejs_Math_pow (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_pow) {
     ejsval x = _ejs_undefined;
     ejsval y = _ejs_undefined;
     if (argc > 0) x = args[0];
@@ -209,16 +183,12 @@ _ejs_Math_pow (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 15.8.2.14
-static ejsval
-_ejs_Math_random (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_random) {
     return NUMBER_TO_EJSVAL((double)rand() / RAND_MAX);
 }
 
 // ECMA262: 15.8.2.15
-static ejsval
-_ejs_Math_round (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_round) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
 
@@ -230,9 +200,7 @@ _ejs_Math_round (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 15.8.2.16
-static ejsval
-_ejs_Math_sin (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_sin) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
 
@@ -244,9 +212,7 @@ _ejs_Math_sin (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 15.8.2.17
-static ejsval
-_ejs_Math_sqrt (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_sqrt) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
 
@@ -258,9 +224,7 @@ _ejs_Math_sqrt (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // ECMA262: 15.8.2.18
-static ejsval
-_ejs_Math_tan (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_tan) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
 
@@ -272,9 +236,7 @@ _ejs_Math_tan (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 
-static ejsval
-_ejs_Math_clz32 (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_clz32) {
     ejsval v = _ejs_undefined;
     if (argc > 0) v = args[0];
 
@@ -316,9 +278,7 @@ _ejs_Math_clz32 (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 #endif
 }
 
-static ejsval
-_ejs_Math_imul (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_imul) {
     if (argc != 2)
         return NUMBER_TO_EJSVAL(0);
 
@@ -340,9 +300,7 @@ _ejs_Math_imul (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 }
 
 // Returns the sign of the x, indicating whether x is positive, negative or zero.
-static ejsval
-_ejs_Math_sign (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_sign) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
 
@@ -365,9 +323,7 @@ _ejs_Math_sign (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
         return x;
 }
 
-static ejsval
-_ejs_Math_log10 (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_log10) {
     // Returns an implementation-dependent approximation to the base 10 logarithm of x.
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
@@ -392,81 +348,61 @@ _ejs_Math_log10 (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return NUMBER_TO_EJSVAL(log10(x_));
 }
 
-static ejsval
-_ejs_Math_log2 (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_log2) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
     return NUMBER_TO_EJSVAL(log2(ToDouble(x)));
 }
 
-static ejsval
-_ejs_Math_log1p (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_log1p) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
     return NUMBER_TO_EJSVAL(log1p(ToDouble(x)));
 }
 
-static ejsval
-_ejs_Math_expm1 (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_expm1) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
     return NUMBER_TO_EJSVAL(expm1(ToDouble(x)));
 }
 
-static ejsval
-_ejs_Math_cosh (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_cosh) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
     return NUMBER_TO_EJSVAL(cosh(ToDouble(x)));
 }
 
-static ejsval
-_ejs_Math_sinh (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_sinh) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
     return NUMBER_TO_EJSVAL(sinh(ToDouble(x)));
 }
 
-static ejsval
-_ejs_Math_tanh (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_tanh) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
     return NUMBER_TO_EJSVAL(tanh(ToDouble(x)));
 }
 
-static ejsval
-_ejs_Math_acosh (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_acosh) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
     return NUMBER_TO_EJSVAL(acosh(ToDouble(x)));
 }
 
-static ejsval
-_ejs_Math_asinh (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_asinh) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
     return NUMBER_TO_EJSVAL(asinh(ToDouble(x)));
 }
 
-static ejsval
-_ejs_Math_atanh (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_atanh) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
     return NUMBER_TO_EJSVAL(atanh(ToDouble(x)));
 }
 
-static ejsval
-_ejs_Math_hypot (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_hypot) {
     if (argc == 0) return NUMBER_TO_EJSVAL(0);
 
     double sum = 0;
@@ -498,25 +434,19 @@ _ejs_Math_hypot (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
     return NUMBER_TO_EJSVAL(sqrt(sum));
 }
 
-static ejsval
-_ejs_Math_trunc (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_trunc) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
     return NUMBER_TO_EJSVAL(trunc(ToDouble(x)));
 }
 
-static ejsval
-_ejs_Math_fround (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_fround) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
     return NUMBER_TO_EJSVAL((float)ToDouble(x));
 }
 
-static ejsval
-_ejs_Math_cbrt (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Math_cbrt) {
     ejsval x = _ejs_undefined;
     if (argc > 0) x = args[0];
     return NUMBER_TO_EJSVAL(cbrt(ToDouble(x)));

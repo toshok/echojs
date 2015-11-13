@@ -37,9 +37,10 @@ _ejs_function_new (ejsval env, ejsval name, EJSClosureFunc func)
 
     rv->func = func;
     rv->env = env;
-    rv->is_constructor = EJS_TRUE;
 
     ejsval fun = OBJECT_TO_EJSVAL(rv);
+
+    rv->constructor_kind = CONSTRUCTOR_KIND_BASE;
 
     // ECMA262: 15.3.2.1
     ejsval fun_proto = _ejs_object_new (_ejs_Object_prototype, &_ejs_Object_specops);
@@ -65,7 +66,6 @@ _ejs_function_new_without_proto (ejsval env, ejsval name, EJSClosureFunc func)
 
     rv->func = func;
     rv->env = env;
-    rv->is_constructor = EJS_TRUE;
 
     ejsval fun = OBJECT_TO_EJSVAL(rv);
 
@@ -83,7 +83,6 @@ _ejs_function_new_utf8_with_proto (ejsval env, const char* name, EJSClosureFunc 
 
     rv->func = func;
     rv->env = env;
-    rv->is_constructor = EJS_TRUE;
 
     ejsval fun = OBJECT_TO_EJSVAL(rv);
 
@@ -103,7 +102,6 @@ _ejs_function_new_native (ejsval env, ejsval name, EJSClosureFunc func)
 
     rv->func = func;
     rv->env = env;
-    rv->is_constructor = EJS_TRUE;
 
     ejsval fun = OBJECT_TO_EJSVAL(rv);
 
@@ -131,24 +129,20 @@ _ejs_function_new_utf8 (ejsval env, const char *name, EJSClosureFunc func)
 ejsval _ejs_Function_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_Function EJSVAL_ALIGNMENT;
 
-static ejsval
-_ejs_Function_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Function_impl) {
     printf ("Function() called either as a function or a constructor is not supported in ejs\n");
     abort();
 }
 
 
 // ECMA262 15.3.4.2
-static ejsval
-_ejs_Function_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Function_prototype_toString) {
     char terrible_fixed_buffer[256];
 
-    if (!EJSVAL_IS_FUNCTION(_this))
+    if (!EJSVAL_IS_FUNCTION(*_this))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Function.prototype.toString is not generic.");
 
-    ejsval func_name = _ejs_object_getprop (_this, _ejs_atom_name);
+    ejsval func_name = _ejs_object_getprop (*_this, _ejs_atom_name);
 
     char *utf8_funcname = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(func_name));
     
@@ -160,13 +154,11 @@ _ejs_Function_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsva
 }
 
 // ECMA262 15.3.4.3
-static ejsval
-_ejs_Function_prototype_apply (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    ejsval func = _this;
+static EJS_NATIVE_FUNC(_ejs_Function_prototype_apply) {
+    ejsval func = *_this;
 
     /* 1. If IsCallable(func) is false, then throw a TypeError exception. */
-    if (!EJSVAL_IS_CALLABLE(_this)) {
+    if (!IsCallable(*_this)) {
         printf ("throw TypeError, func is not callable\n");
         EJS_NOT_IMPLEMENTED();
     }
@@ -180,7 +172,7 @@ _ejs_Function_prototype_apply (ejsval env, ejsval _this, uint32_t argc, ejsval *
     if (EJSVAL_IS_UNDEFINED(argArray) || EJSVAL_IS_NULL(argArray)) {
         /*    a. Return the result of calling the [[Call]] internal method of func, providing thisArg as the this value */
         /*       and an empty list of arguments. */
-        return _ejs_invoke_closure (func, thisArg, 0, NULL);
+        return _ejs_invoke_closure (func, &thisArg, 0, NULL, _ejs_undefined);
     }
     /* 3. If Type(argArray) is not Object, then throw a TypeError exception. */
     if (!EJSVAL_IS_OBJECT(argArray)) {
@@ -225,7 +217,7 @@ _ejs_Function_prototype_apply (ejsval env, ejsval _this, uint32_t argc, ejsval *
 
     /* 9. Return the result of calling the [[Call]] internal method of func, providing thisArg as the this value and */
     /*    argList as the list of arguments. */
-    ejsval rv = EJSVAL_TO_FUNC(func) (EJSVAL_TO_ENV(func), thisArg, n, argList);
+    ejsval rv = OP(EJSVAL_TO_OBJECT(func), Call)(func, thisArg, n, argList);
 
     if (argList_allocated)
         free (argList);
@@ -233,11 +225,10 @@ _ejs_Function_prototype_apply (ejsval env, ejsval _this, uint32_t argc, ejsval *
 }
 
 // ECMA262 15.3.4.4
-static ejsval
-_ejs_Function_prototype_call (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Function_prototype_call) {
     // XXX nanboxing breaks this EJS_ASSERT (EJSVAL_IS_FUNCTION(_this));
 
+    ejsval func = *_this;
     ejsval thisArg = _ejs_undefined;
   
     if (argc > 0) {
@@ -245,8 +236,8 @@ _ejs_Function_prototype_call (ejsval env, ejsval _this, uint32_t argc, ejsval *a
         args = &args[1];
         argc --;
     }
-
-    ejsval rv = EJSVAL_TO_FUNC(_this) (EJSVAL_TO_ENV(_this), thisArg, argc, argc == 0 ? NULL : args);
+    
+    ejsval rv = OP(EJSVAL_TO_OBJECT(func), Call)(func, thisArg, argc, argc == 0 ? NULL : args);
 
     return rv;
 }
@@ -268,37 +259,35 @@ _ejs_Function_prototype_call (ejsval env, ejsval _this, uint32_t argc, ejsval *a
 #define EJS_BOUNDFUNC_ENV_SET_ARGC(bf,v)   (*_ejs_closureenv_get_slot_ref((bf), EJS_BOUNDFUNC_ARGC_SLOT) = v)
 #define EJS_BOUNDFUNC_ENV_SET_ARG(bf,a,v)  (*_ejs_closureenv_get_slot_ref((bf), EJS_BOUNDFUNC_FIRST_ARG_SLOT + (a)) = v)
 
-static ejsval
-bound_wrapper (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(bound_wrapper) {
+    EJS_ASSERT(EJSVAL_IS_UNDEFINED(newTarget)); // we don't currently support 'new $boundfunc()'
+
     ejsval target = EJS_BOUNDFUNC_ENV_GET_TARGET(env);
     ejsval thisArg = EJS_BOUNDFUNC_ENV_GET_THIS(env);
     uint32_t bound_argc = ToUint32(EJS_BOUNDFUNC_ENV_GET_ARGC(env));
 
     if (bound_argc == 0) {
-        return _ejs_invoke_closure(target, thisArg, argc, args);
+        return _ejs_invoke_closure(target, &thisArg, argc, args, _ejs_undefined);
     }
     else if (argc == 0) {
-        return _ejs_invoke_closure(target, thisArg, bound_argc, _ejs_closureenv_get_slot_ref(env, EJS_BOUNDFUNC_FIRST_ARG_SLOT));
+        return _ejs_invoke_closure(target, &thisArg, bound_argc, _ejs_closureenv_get_slot_ref(env, EJS_BOUNDFUNC_FIRST_ARG_SLOT), _ejs_undefined);
     }
     else {
         uint32_t call_argc = argc + bound_argc;
         ejsval* call_args = alloca(sizeof(ejsval) * call_argc);
         memcpy (call_args, _ejs_closureenv_get_slot_ref(env, EJS_BOUNDFUNC_FIRST_ARG_SLOT), sizeof(ejsval) * bound_argc);
         memcpy (call_args + bound_argc, args, sizeof(ejsval) * argc);
-        return _ejs_invoke_closure(target, thisArg, call_argc, call_args);
+        return _ejs_invoke_closure(target, &thisArg, call_argc, call_args, _ejs_undefined);
     }
 }
 
 // ECMA262 15.3.4.5
-static ejsval
-_ejs_Function_prototype_bind (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_Function_prototype_bind) {
     /* 1. Let Target be the this value. */
-    ejsval Target = _this;
+    ejsval Target = *_this;
 
     /* 2. If IsCallable(Target) is false, throw a TypeError exception. */
-    if (!EJSVAL_IS_CALLABLE(Target)) {
+    if (!IsCallable(Target)) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "object not a function");
     }
 
@@ -336,40 +325,30 @@ _ejs_Function_prototype_bind (ejsval env, ejsval _this, uint32_t argc, ejsval *a
     return F;
 }
 
-ejsval
-_ejs_Function_empty (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+EJS_NATIVE_FUNC(_ejs_Function_empty) {
     return _ejs_undefined;
 }
 
-static ejsval
-_ejs_Function_create(ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_Function_create) {
     _ejs_throw_nativeerror_utf8 (EJS_ERROR, "ejs doesn't support dynamic creation of functions");
 }
 
-static ejsval
-_ejs_Function_prototype_create(ejsval env, ejsval _this, uint32_t argc, ejsval* args)
+void
+_ejs_function_set_derived_constructor (ejsval F)
 {
-    ejsval F = _this;
+    EJS_ASSERT(EJSVAL_IS_FUNCTION(F));
+    EJSFunction *F_ = (EJSFunction*)EJSVAL_TO_OBJECT(F);
+    F_->constructor_kind = CONSTRUCTOR_KIND_DERIVED;
+    F_->function_kind = FUNCTION_KIND_CLASS_CONSTRUCTOR;
+}
 
-    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in Function.prototype[Symbol.create] is not a constructor");
-        
-    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
-
-    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
-    if (EJSVAL_IS_UNDEFINED(proto)) {
-        proto = _ejs_Function_prototype;
-    }
-
-    if (!EJSVAL_IS_OBJECT(proto)) {
-        EJS_NOT_IMPLEMENTED(); // cross-realm doesn't exist in ejs yet
-    }
-
-    EJSObject* obj = (EJSObject*)_ejs_gc_new (EJSObject);
-    _ejs_init_object (obj, proto, &_ejs_Object_specops);
-    return OBJECT_TO_EJSVAL(obj);
+void
+_ejs_function_set_base_constructor (ejsval F)
+{
+    EJS_ASSERT(EJSVAL_IS_FUNCTION(F));
+    EJSFunction *F_ = (EJSFunction*)EJSVAL_TO_OBJECT(F);
+    F_->constructor_kind = CONSTRUCTOR_KIND_BASE;
+    F_->function_kind = FUNCTION_KIND_CLASS_CONSTRUCTOR;
 }
 
 static void
@@ -414,14 +393,6 @@ _ejs_function_init(ejsval global)
 
 }
 
-void
-_ejs_function_add_symbols()
-{
-    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Function, create, _ejs_Function_create, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
-
-    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_Function_prototype, create, _ejs_Function_prototype_create, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
-}
-
 #define DEBUG_FUNCTION_ENTER(x) EJS_MACRO_START                         \
     if (trace) {                                                        \
         ejsval closure_name = _ejs_Function_prototype_toString (_ejs_null, x, 0, NULL); \
@@ -444,77 +415,40 @@ _ejs_function_add_symbols()
     EJS_MACRO_END
 
 ejsval
-_ejs_invoke_closure (ejsval closure, ejsval _this, uint32_t argc, ejsval* args)
+_ejs_invoke_closure (ejsval closure, ejsval* _this, uint32_t argc, ejsval* args, ejsval newTarget)
 {
     if (!EJSVAL_IS_FUNCTION(closure)) {
-#if DEBUG_LAST_LOOKUP
-        extern jschar* last_lookup;
-        if (last_lookup) {
-            char *last_utf8 = ucs2_to_utf8(last_lookup);
-            _ejs_log ("last property lookup was for: %s\n", last_utf8);
-            free (last_utf8);
-        }
-#endif
-        
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "object not a function");
     }
 
-#if 0
-    if (!EJSVAL_IS_NULL_OR_UNDEFINED(_this) && EJSVAL_IS_PRIMITIVE(_this)) {
-        _this = ToObject(_this);
+    EJSFunction* func = (EJSFunction*)EJSVAL_TO_OBJECT(closure);
+    if (func->function_kind == FUNCTION_KIND_CLASS_CONSTRUCTOR) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "class constructors are not callable as functions.  use 'new'");
     }
-#endif
 
-    EJSFunction *fun = (EJSFunction*)EJSVAL_TO_OBJECT(closure);
-    return fun->func (fun->env, _this, argc, args);
+    return OP(EJSVAL_TO_OBJECT(closure),Call) (closure, *_this, argc, args);
 }
 
-// ES6 Draft rev32 Feb 2, 2015
-// 9.2.3
-// [[Construct]] ( argumentsList, newTarget)
 ejsval
-_ejs_construct_closure (ejsval _closure, ejsval newTarget, uint32_t argc, ejsval* args)
+_ejs_construct_closure (ejsval _closure, ejsval* _this, uint32_t argc, ejsval* args, ejsval newTarget)
 {
-    // 1. Assert: F is an ECMAScript function object.
-    EJSFunction* F = (EJSFunction*)EJSVAL_TO_OBJECT(_closure);
+    *_this = Construct(_closure, newTarget, argc, args);
+    return *_this;
+}
 
-    // 2. Assert: Type(newTarget) is Object.
-    // 3. Let callerContext be the running execution context.
+ejsval
+_ejs_construct_closure_apply (ejsval _closure, ejsval* _this, uint32_t argc, ejsval* args, ejsval newTarget)
+{
+    EJS_ASSERT(argc == 1);
+    ejsval args_array = args[0];
 
-    // 4. Let kind be F’s [[ConstructorKind]] internal slot.
-    EJSConstructorKind kind = F->constructor_kind;
+    EJS_ASSERT(EJSVAL_IS_ARRAY(args_array));
 
-    ejsval thisArgument = _ejs_undefined;
-    // 5. If kind is "base", then
-    if (kind == CONSTRUCTOR_KIND_BASE) {
-        //    a. Let thisArgument be OrdinaryCreateFromConstructor(newTarget, "%ObjectPrototype%").
-        //    b. ReturnIfAbrupt(thisArgument).
-    }
-    // 6. Let calleeContext be PrepareForOrdinaryCall(F, newTarget).
-    // 7. ReturnIfAbrupt(calleeContext).
-    // 8. Assert: calleeContext is now the active execution context.
-    // 9. If kind is "base", then
-    if (kind == CONSTRUCTOR_KIND_BASE) {
-        //    a. Let status be OrdinaryCallBindThis(F, calleeContext, thisArgument).
-        //    b. If status is an abrupt completion, then
-        //       i. Remove calleeContext from the execution context stack and restore callerContext as the running execution context.
-        //       ii. Return status.
-    }
-    // 10. Let constructorEnv be the LexicalEnvironment of calleeContext.
-    // 11. Let envRec be constructorEnv’s environment record.
-    // 12. Let result be OrdinaryCallEvaluateBody(F, calleeContext, argumentsList).
-    ejsval result = _ejs_invoke_closure(_closure, thisArgument, argc, args);
-    // 13. Remove calleeContext from the execution context stack and restore callerContext as the running execution context.
-    // 14. If result.[[type]] is return, then
-    //     a. If Type(result.[[value]]) is Object, return NormalCompletion(result.[[value]]).
-    if (EJSVAL_IS_OBJECT(result)) return result;
-    //     b. If kind is "base", return NormalCompletion(thisArgument).
-    if (kind == CONSTRUCTOR_KIND_BASE) return thisArgument;
-    //     c. Throw a TypeError exception.
-    _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "9.2.3/14.c");
-    // 15. ReturnIfAbrupt(result).
-    // 16. Return the result of calling the GetThisBinding concrete method of envRec’s with no arguments
-    EJS_NOT_IMPLEMENTED();
+    *_this = Construct(_closure, newTarget, EJS_ARRAY_LEN(args_array), EJS_DENSE_ARRAY_ELEMENTS(args_array));
+
+    EJS_ASSERT(!EJSVAL_IS_UNDEFINED(*_this));
+
+    return *_this;
 }
 
 // ECMA262: 15.3.5.3
@@ -566,6 +500,81 @@ _ejs_function_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     _ejs_Object_specops.Scan (obj, scan_func);
 }
 
+// ES2015, June 2015
+// 9.2.1
+static ejsval
+_ejs_function_specop_call (ejsval F, ejsval _this, uint32_t argc, ejsval *args)
+{
+    // 1. Assert: F is an ECMAScript function object.
+    EJS_ASSERT(EJSVAL_IS_FUNCTION(F));
+    EJSFunction* F_ = (EJSFunction*)EJSVAL_TO_OBJECT(F);
+
+    // 2. If F’s [[FunctionKind]] internal slot is "classConstructor", throw a TypeError exception.
+    if (F_->function_kind == FUNCTION_KIND_CLASS_CONSTRUCTOR) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "class constructors are not callable");
+    }
+
+    // 3. Let callerContext be the running execution context.
+    // 4. Let calleeContext be PrepareForOrdinaryCall(F, undefined).
+    // 5. Assert: calleeContext is now the running execution context.
+    // 6. Perform OrdinaryCallBindThis(F, calleeContext, thisArgument).
+    // 7. Let result be OrdinaryCallEvaluateBody(F, argumentsList).
+    // 8. Remove calleeContext from the execution context stack and restore callerContext as the running execution context.
+    // 9. If result.[[type]] is return, return NormalCompletion(result.[[value]]).
+    // 10. ReturnIfAbrupt(result).
+    // 11. Return NormalCompletion(undefined)
+    return F_->func (F_->env, &_this, argc, args, _ejs_undefined);
+}
+
+// ES2015, June 2015
+// 9.2.2
+static ejsval
+_ejs_function_specop_construct (ejsval F, ejsval newTarget, uint32_t argc, ejsval* args)
+{
+    // 1. Assert: F is an ECMAScript function object.
+    EJS_ASSERT(EJSVAL_IS_FUNCTION(F));
+    EJSFunction* F_ = (EJSFunction*)EJSVAL_TO_OBJECT(F);
+
+    // 2. Assert: Type(newTarget) is Object.
+    EJS_ASSERT(EJSVAL_IS_OBJECT(newTarget));
+
+    // 3. Let callerContext be the running execution context.
+    
+    // 4. Let kind be F’s [[ConstructorKind]] internal slot.
+    EJSConstructorKind kind = F_->constructor_kind;
+
+    ejsval thisArgument = _ejs_undefined;
+    // 5. If kind is "base", then
+    if (kind == CONSTRUCTOR_KIND_BASE) {
+        // a. Let thisArgument be OrdinaryCreateFromConstructor(newTarget, "%ObjectPrototype%").
+        // b. ReturnIfAbrupt(thisArgument).
+        thisArgument = OrdinaryCreateFromConstructor(newTarget, _ejs_Object_prototype, &_ejs_Object_specops);
+    }
+
+    // 6. Let calleeContext be PrepareForOrdinaryCall(F, newTarget).
+    // 7. Assert: calleeContext is now the running execution context.
+    // 8. If kind is "base", perform OrdinaryCallBindThis(F, calleeContext, thisArgument).
+    // 9. Let constructorEnv be the LexicalEnvironment of calleeContext.
+    // 10. Let envRec be constructorEnv’s EnvironmentRecord.
+    // 11. Let result be OrdinaryCallEvaluateBody(F, argumentsList).
+    ejsval result = F_->func (F_->env, &thisArgument, argc, args, newTarget);
+    // 12. Remove calleeContext from the execution context stack and restore callerContext as the running execution context.
+    // 13. If result.[[type]] is return, then
+    // a. If Type(result.[[value]]) is Object, return NormalCompletion(result.[[value]]).
+    if (EJSVAL_IS_OBJECT(result))
+        return result;
+    // b. If kind is "base", return NormalCompletion(thisArgument).
+    if (kind == CONSTRUCTOR_KIND_BASE)
+        return thisArgument;
+    // c. If result.[[value]] is not undefined, throw a TypeError exception.
+    if (!EJSVAL_IS_UNDEFINED(result)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "constructor returned non-object");
+    }
+    // 14. Else, ReturnIfAbrupt(result).
+    // 15. Return envRec.GetThisBinding().
+    return thisArgument;
+}
+
 EJS_DEFINE_CLASS(Function,
                  OP_INHERIT, // [[GetPrototypeOf]]
                  OP_INHERIT, // [[SetPrototypeOf]]
@@ -579,6 +588,8 @@ EJS_DEFINE_CLASS(Function,
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 _ejs_function_specop_call,      // [[Call]]
+                 _ejs_function_specop_construct, // [[Construct]]
                  _ejs_function_specop_allocate,
                  _ejs_function_specop_finalize,
                  _ejs_function_specop_scan

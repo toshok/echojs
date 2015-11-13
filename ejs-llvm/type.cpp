@@ -1,7 +1,6 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset:
- * 4 -*- vim: set ts=4 sw=4 et tw=99 ft=cpp:
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
-
 
 #include <stdio.h>
 
@@ -34,18 +33,14 @@ namespace ejsllvm {
         return _ejs_Type_prototype;
     }
 
-    static ejsval
-    Type_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(Type_impl) {
         EJS_NOT_IMPLEMENTED();
     }
 
 #define LLVM_TYPE_METHOD_PROXY(name) LLVM_TYPE_METHOD(name,name)
 #define LLVM_TYPE_METHOD(name,llvm_ty)                                  \
-    ejsval                                                              \
-    Type_##name(ejsval env, ejsval _this, int argc, ejsval *args) \
-    {                                                                   \
-        return Type_new(llvm::Type::llvm_ty(llvm::getGlobalContext())); \
+    static EJS_NATIVE_FUNC(Type_##name) {                               \
+        return Type_new(llvm::Type::llvm_ty(llvm::getGlobalContext()));	\
     }
 
     LLVM_TYPE_METHOD_PROXY(getDoubleTy)
@@ -59,32 +54,24 @@ namespace ejsllvm {
 #undef LLVM_TYPE_METHOD_PROXY
 #undef LLVM_TYPE_METHOD
 
-    ejsval
-    Type_prototype_pointerTo(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        return Type_new(((Type*)EJSVAL_TO_OBJECT(_this))->type->getPointerTo());
+    static EJS_NATIVE_FUNC(Type_prototype_pointerTo) {
+        return Type_new(((Type*)EJSVAL_TO_OBJECT(*_this))->type->getPointerTo());
     }
 
-    ejsval
-    Type_prototype_isVoid(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        return ((Type*)EJSVAL_TO_OBJECT(_this))->type->isVoidTy() ? _ejs_true : _ejs_false;
+    static EJS_NATIVE_FUNC(Type_prototype_isVoid) {
+        return ((Type*)EJSVAL_TO_OBJECT(*_this))->type->isVoidTy() ? _ejs_true : _ejs_false;
     }
 
-    ejsval
-    Type_prototype_toString(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(Type_prototype_toString) {
         std::string str;
         llvm::raw_string_ostream str_ostream(str);
-        ((Type*)EJSVAL_TO_OBJECT(_this))->type->print(str_ostream);
+        ((Type*)EJSVAL_TO_OBJECT(*_this))->type->print(str_ostream);
 
         return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
     }
 
-    ejsval
-    Type_prototype_dump(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        ((Type*)EJSVAL_TO_OBJECT(_this))->type->dump();
+    static EJS_NATIVE_FUNC(Type_prototype_dump) {
+        ((Type*)EJSVAL_TO_OBJECT(*_this))->type->dump();
         return _ejs_undefined;
     }
 

@@ -29,9 +29,7 @@ namespace ejsllvm {
         return (EJSObject*)_ejs_gc_new(StructType);
     }
 
-    static ejsval
-    StructType_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(StructType_impl) {
         EJS_NOT_IMPLEMENTED();
     }
 
@@ -44,9 +42,7 @@ namespace ejsllvm {
         return OBJECT_TO_EJSVAL(result);
     }
 
-    ejsval
-    StructType_create(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(StructType_create) {
         REQ_UTF8_ARG (0, name);
         REQ_ARRAY_ARG (1, elementTypes);
 
@@ -58,20 +54,16 @@ namespace ejsllvm {
         return StructType_new(llvm::StructType::create(llvm::getGlobalContext(), element_types, name));
     }
 
-    ejsval
-    StructType_prototype_toString(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(StructType_prototype_toString) {
         std::string str;
         llvm::raw_string_ostream str_ostream(str);
-        ((StructType*)EJSVAL_TO_OBJECT(_this))->type->print(str_ostream);
+        ((StructType*)EJSVAL_TO_OBJECT(*_this))->type->print(str_ostream);
 
         return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
     }
 
-    ejsval
-    StructType_prototype_dump(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        ((StructType*)EJSVAL_TO_OBJECT(_this))->type->dump();
+    static EJS_NATIVE_FUNC(StructType_prototype_dump) {
+        ((StructType*)EJSVAL_TO_OBJECT(*_this))->type->dump();
         return _ejs_undefined;
     }
 

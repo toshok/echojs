@@ -249,9 +249,7 @@ finalize_release_private_data (EJSObject* obj)
 	[peer release];
 }
 
-static ejsval
-_ejs_XMLHttpRequest_prototype_open (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_prototype_open) {
 	/* the forms the user can invoke this method using:
 	 * 
 	 * void open(DOMString method, DOMString url);
@@ -265,7 +263,7 @@ _ejs_XMLHttpRequest_prototype_open (ejsval env, ejsval _this, uint32_t argc, ejs
 	if (argc < 2)
 		THROW_ARG_COUNT_EXCEPTION(-1);
 
-	XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer (_this);
+	XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer (*_this);
     
 	NSString *method = [[CKValue valueWithJSValue:args[0]] nsStringValue];
 	NSString *url = [[CKValue valueWithJSValue:args[1]] nsStringValue];
@@ -275,9 +273,7 @@ _ejs_XMLHttpRequest_prototype_open (ejsval env, ejsval _this, uint32_t argc, ejs
     return _ejs_undefined;
 }
 
-static ejsval
-_ejs_XMLHttpRequest_prototype_send (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_prototype_send) {
 	/* the forms the user can invoke this method using:
 	 *
 	 * void send();
@@ -288,7 +284,7 @@ _ejs_XMLHttpRequest_prototype_send (ejsval env, ejsval _this, uint32_t argc, ejs
 	if (argc > 1)
 		THROW_ARG_COUNT_EXCEPTION(-1);
 
-	XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer (_this);
+	XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer (*_this);
 
 	@try {
 		if (argc == 0) {
@@ -313,9 +309,7 @@ _ejs_XMLHttpRequest_prototype_send (ejsval env, ejsval _this, uint32_t argc, ejs
     return _ejs_undefined;
 }
 
-static ejsval
-_ejs_XMLHttpRequest_prototype_setRequestHeader (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_prototype_setRequestHeader) {
 	/*
 	 * When the setRequestHeader(header, value) method is invoked, the user agent must run these steps:
 	 * 
@@ -363,9 +357,7 @@ _ejs_XMLHttpRequest_prototype_setRequestHeader (ejsval env, ejsval _this, uint32
     return _ejs_undefined;
 }
 
-static ejsval
-_ejs_XMLHttpRequest_prototype_abort (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_prototype_abort) {
 	/*
 	 * When the abort() method is invoked, the user agent must run these steps (unless otherwise noted):
 	 * 
@@ -401,16 +393,14 @@ _ejs_XMLHttpRequest_prototype_abort (ejsval env, ejsval _this, uint32_t argc, ej
 	if (argc != 0)
 		THROW_ARG_COUNT_EXCEPTION(-1);
     
-	XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer (_this);
+	XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer (*_this);
     
 	[xhr abort];
 
     return _ejs_undefined;
 }
 
-static ejsval
-_ejs_XMLHttpRequest_prototype_getResponseHeader (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_prototype_getResponseHeader) {
 	/*
 	 * When the getResponseHeader(header) is invoked, the user agent must run these steps:
 	 * 
@@ -435,7 +425,7 @@ _ejs_XMLHttpRequest_prototype_getResponseHeader (ejsval env, ejsval _this, uint3
 	if (argc != 1)
 		THROW_ARG_COUNT_EXCEPTION(-1);
 
-	XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer (_this);
+	XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer (*_this);
 
 	ReadyState state = [xhr state];
     
@@ -458,9 +448,7 @@ _ejs_XMLHttpRequest_prototype_getResponseHeader (ejsval env, ejsval _this, uint3
     return _ejs_null;
 }
 
-static ejsval
-_ejs_XMLHttpRequest_prototype_getAllResponseHeaders (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_prototype_getAllResponseHeaders) {
 	/*
 	 * When the getAllResponseHeaders() method is invoked, the user agent must run the following steps:
 	 * 
@@ -471,7 +459,7 @@ _ejs_XMLHttpRequest_prototype_getAllResponseHeaders (ejsval env, ejsval _this, u
 	 * Return all the HTTP headers, excluding headers that are a case-insensitive match for Set-Cookie or Set-Cookie2, inflated, as a single string, with each header line separated by a U+000D CR U+000A LF pair, excluding the status line, and with each header name and header value separated by a U+003A COLON U+0020 SPACE pair.
 	 */
 
-	XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer (_this);
+	XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer (*_this);
 	ReadyState state = [xhr state];
     ejsval rv;
     
@@ -485,16 +473,12 @@ _ejs_XMLHttpRequest_prototype_getAllResponseHeaders (ejsval env, ejsval _this, u
     return rv;
 }
 
-static ejsval
-_ejs_XMLHttpRequest_prototype_get_readyState (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
-	XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer(_this);
+static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_prototype_get_readyState) {
+	XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer(*_this);
 	return NUMBER_TO_EJSVAL ([xhr state]);
 }
 
-static ejsval
-_ejs_XMLHttpRequest_prototype_get_status (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_prototype_get_status) {
 	/*
 	 * The status attribute must return the result of running these steps:
 	 * 
@@ -504,7 +488,7 @@ _ejs_XMLHttpRequest_prototype_get_status (ejsval env, ejsval _this, uint32_t arg
 	 * 
 	 * Return the HTTP status code.
 	 */
-	XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer(_this);
+	XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer(*_this);
 	ReadyState state = [xhr state];
     
 	if (state == UNSENT || state == OPENED || [xhr error]) {
@@ -514,9 +498,7 @@ _ejs_XMLHttpRequest_prototype_get_status (ejsval env, ejsval _this, uint32_t arg
     return NUMBER_TO_EJSVAL ([xhr statusCode]);
 }
 
-static ejsval
-_ejs_XMLHttpRequest_prototype_get_statusText (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_prototype_get_statusText) {
 	/*
 	 * The statusText attribute must return the result of running these steps:
 	 * 
@@ -526,7 +508,7 @@ _ejs_XMLHttpRequest_prototype_get_statusText (ejsval env, ejsval _this, uint32_t
 	 * 
 	 * Return the HTTP status text.
 	 */
-	XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer(_this);
+	XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer(*_this);
 	ReadyState state = [xhr state];
 	ejsval rv;
     
@@ -540,9 +522,7 @@ _ejs_XMLHttpRequest_prototype_get_statusText (ejsval env, ejsval _this, uint32_t
     return rv;
 }
 
-static ejsval
-_ejs_XMLHttpRequest_prototype_get_responseText (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_prototype_get_responseText) {
 	/*
 	 * The responseText attribute must return the result of running these steps:
 	 * 
@@ -550,7 +530,7 @@ _ejs_XMLHttpRequest_prototype_get_responseText (ejsval env, ejsval _this, uint32
 	 *
 	 * Return the text response entity body.
 	 */
-	XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer(_this);
+	XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer(*_this);
 	ReadyState state = [xhr state];
     ejsval rv;
     
@@ -564,25 +544,19 @@ _ejs_XMLHttpRequest_prototype_get_responseText (ejsval env, ejsval _this, uint32
     return rv;
 }
 
-static ejsval
-_ejs_XMLHttpRequest_prototype_get_responseXML (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_prototype_get_responseXML) {
     EJS_NOT_IMPLEMENTED();
 }
 
-static ejsval
-_ejs_XMLHttpRequest_prototype_get_onreadystatechange (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
-    XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer(_this);
+static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_prototype_get_onreadystatechange) {
+    XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer(*_this);
 	CKObject* readystatechange = [xhr readystatechange];
 
     return readystatechange ? OBJECT_TO_EJSVAL([readystatechange jsObject]): _ejs_null;
 }
 
-static ejsval
-_ejs_XMLHttpRequest_prototype_set_onreadystatechange (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
-    XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer (_this);
+static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_prototype_set_onreadystatechange) {
+    XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer (*_this);
     xhr.readystatechange = [[CKValue valueWithJSValue:args[0]] objectValue];
     return _ejs_undefined;
 }
@@ -590,11 +564,9 @@ _ejs_XMLHttpRequest_prototype_set_onreadystatechange (ejsval env, ejsval _this, 
 ejsval _ejs_XMLHttpRequest EJSVAL_ALIGNMENT;
 ejsval _ejs_XMLHttpRequest_prototype EJSVAL_ALIGNMENT;
 
-static ejsval
-_ejs_XMLHttpRequest_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_impl) {
 
-    if (EJSVAL_IS_UNDEFINED(_this)) {
+    if (EJSVAL_IS_UNDEFINED(newTarget)) {
         printf ("XMLHttpRequest called as a function\n");
         EJS_NOT_IMPLEMENTED();
     }
@@ -602,33 +574,12 @@ _ejs_XMLHttpRequest_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
 	if (argc != 0)
 		THROW_ARG_COUNT_EXCEPTION(-1);
 
-    EJSXMLHttpRequest* xhr = (EJSXMLHttpRequest*)EJSVAL_TO_OBJECT(_this);
+    EJSXMLHttpRequest* xhr = (EJSXMLHttpRequest*)EJSVAL_TO_OBJECT(*_this);
 	id peer = [[XmlHttpRequest alloc] init];
 
     xhr->peer = peer;
 
-    return _this;
-}
-
-static ejsval
-_ejs_XMLHttpRequest_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    // 1. Let F be the this value. 
-    ejsval F = _this;
-
-    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in XMLHttpRequest[Symbol.create] is not a constructor");
-
-    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
-
-    // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(F, "%XMLHttpRequestPrototype%", ([[XHRData]]) ). 
-    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
-    if (EJSVAL_IS_UNDEFINED(proto))
-        proto = _ejs_XMLHttpRequest_prototype;
-
-    EJSObject* obj = (EJSObject*)_ejs_gc_new (EJSXMLHttpRequest);
-    _ejs_init_object (obj, proto, &_ejs_XMLHttpRequest_specops);
-    return OBJECT_TO_EJSVAL(obj);
+    return *_this;
 }
 
 void
@@ -662,8 +613,6 @@ _ejs_xmlhttprequest_init(ejsval global)
 #undef PROTO_METHOD
 #undef PROTO_GETTER
 #undef PROTO_ACCESSORS
-
-    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_XMLHttpRequest, create, _ejs_XMLHttpRequest_create, EJS_PROP_NOT_ENUMERABLE);
 }
 
 static EJSObject*
@@ -685,6 +634,8 @@ EJS_DEFINE_CLASS(XMLHttpRequest,
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  _ejs_xmlhttprequest_specop_allocate,
                  OP_INHERIT, // [[Finalize]]
                  OP_INHERIT  // [[Scan]]

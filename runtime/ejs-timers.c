@@ -60,7 +60,8 @@ static void
 call_timeout_task (void* data)
 {
     TimerTaskArg *arg = (TimerTaskArg*)data;
-    _ejs_invoke_closure (arg->callbackfn, _ejs_undefined, arg->argc, arg->args);
+    ejsval undef_this = _ejs_undefined;
+    _ejs_invoke_closure (arg->callbackfn, &undef_this, arg->argc, arg->args, _ejs_undefined);
 }
 
 static void
@@ -186,5 +187,29 @@ _ejs_timers_init(ejsval global)
 #undef GLOBAL_METHOD
 }
 
-EJS_DEFINE_INHERIT_ALL_CLASS(Timer)
+static EJSObject*
+_ejs_timer_specop_allocate()
+{
+    return (EJSObject*)_ejs_gc_new (EJSTimer);
+}
+
+EJS_DEFINE_CLASS(Timer,
+                 OP_INHERIT, // [[GetPrototypeOf]]
+                 OP_INHERIT, // [[SetPrototypeOf]]
+                 OP_INHERIT, // [[IsExtensible]]
+                 OP_INHERIT, // [[PreventExtensions]]
+                 OP_INHERIT, // [[GetOwnProperty]]
+                 OP_INHERIT, // [[DefineOwnProperty]]
+                 OP_INHERIT, // [[HasProperty]]
+                 OP_INHERIT, // [[Get]]
+                 OP_INHERIT, // [[Set]]
+                 OP_INHERIT, // [[Delete]]
+                 OP_INHERIT, // [[Enumerate]]
+                 OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
+                 _ejs_timer_specop_allocate,
+                 OP_INHERIT, // [[Finalize]]
+                 OP_INHERIT  // [[Scan]] XXX?
+                 )
 

@@ -55,6 +55,9 @@ EJS_ATOM(enumerable)
 EJS_ATOM(get)
 EJS_ATOM(set)
 
+EJS_ATOM(caller)
+EJS_ATOM(callee)
+
 // class names
 EJS_ATOM(Arguments)
 EJS_ATOM(Array)
@@ -404,7 +407,6 @@ EJS_ATOM(toPrimitive)
 EJS_ATOM(toStringTag)
 EJS_ATOM(unscopables)
 //EJS_ATOM(match)
-EJS_ATOM2(Symbol.create,Symbol_create)
 EJS_ATOM2(Symbol.hasInstance,Symbol_hasInstance)
 EJS_ATOM2(Symbol.isConcatSpreadable,Symbol_isConcatSpreadable)
 EJS_ATOM2(Symbol.species,Symbol_species)

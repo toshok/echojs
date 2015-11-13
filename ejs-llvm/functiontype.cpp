@@ -44,9 +44,7 @@ namespace ejsllvm {
         return OBJECT_TO_EJSVAL(result);
     }
 
-    static ejsval
-    FunctionType_get (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(FunctionType_get) {
         REQ_LLVM_TYPE_ARG(0, returnType);
         REQ_ARRAY_ARG(1, argTypes);
 
@@ -64,34 +62,26 @@ namespace ejsllvm {
         return OBJECT_TO_EJSVAL(result);
     }
 
-    static ejsval
-    FunctionType_prototype_getReturnType (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        return Type_new (((FunctionType*)EJSVAL_TO_OBJECT(_this))->type->getReturnType());
+    static EJS_NATIVE_FUNC(FunctionType_prototype_getReturnType) {
+        return Type_new (((FunctionType*)EJSVAL_TO_OBJECT(*_this))->type->getReturnType());
     }
 
-    static ejsval
-    FunctionType_prototype_getParamType (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(FunctionType_prototype_getParamType) {
         REQ_INT_ARG(0, i);
 
-        return Type_new (((FunctionType*)EJSVAL_TO_OBJECT(_this))->type->getParamType(i));
+        return Type_new (((FunctionType*)EJSVAL_TO_OBJECT(*_this))->type->getParamType(i));
     }
 
-    ejsval
-    FunctionType_prototype_toString(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(FunctionType_prototype_toString) {
         std::string str;
         llvm::raw_string_ostream str_ostream(str);
-        ((FunctionType*)EJSVAL_TO_OBJECT(_this))->type->print(str_ostream);
+        ((FunctionType*)EJSVAL_TO_OBJECT(*_this))->type->print(str_ostream);
 
         return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
     }
 
-    ejsval
-    FunctionType_prototype_dump(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        ((FunctionType*)EJSVAL_TO_OBJECT(_this))->type->dump();
+    static EJS_NATIVE_FUNC(FunctionType_prototype_dump) {
+        ((FunctionType*)EJSVAL_TO_OBJECT(*_this))->type->dump();
         return _ejs_undefined;
     }
 

@@ -9,10 +9,9 @@ class MyArray extends Array {
         this.push(x);
         this.push(x);
     }
-}
 
-// ejs doesn't support computed class properties yet, so we need to put this outside the class definition
-MyArray.prototype[Symbol.toStringTag] = "MyOwnArray";
+    get [Symbol.toStringTag]() { return "MyOwnArray"; }
+}
 
 var m = new MyArray();
 

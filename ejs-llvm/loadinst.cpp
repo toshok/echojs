@@ -28,9 +28,7 @@ namespace ejsllvm {
     }
 
 
-    static ejsval
-    LoadInst_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(LoadInst_impl) {
         EJS_NOT_IMPLEMENTED();
     }
 
@@ -42,29 +40,23 @@ namespace ejsllvm {
         return result;
     }
 
-    ejsval
-    LoadInst_prototype_toString(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(LoadInst_prototype_toString) {
         std::string str;
         llvm::raw_string_ostream str_ostream(str);
-        ((LoadInst*)EJSVAL_TO_OBJECT(_this))->llvm_load->print(str_ostream);
+        ((LoadInst*)EJSVAL_TO_OBJECT(*_this))->llvm_load->print(str_ostream);
 
         return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
     }
 
-    ejsval
-    LoadInst_prototype_dump(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        ((LoadInst*)EJSVAL_TO_OBJECT(_this))->llvm_load->dump();
+    static EJS_NATIVE_FUNC(LoadInst_prototype_dump) {
+        ((LoadInst*)EJSVAL_TO_OBJECT(*_this))->llvm_load->dump();
         return _ejs_undefined;
     }
 
-    ejsval
-    LoadInst_prototype_setAlignment(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        LoadInst *loadinst = ((LoadInst*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(LoadInst_prototype_setAlignment) {
+        LoadInst *loadinst = ((LoadInst*)EJSVAL_TO_OBJECT(*_this));
         REQ_INT_ARG(0, alignment);
-	loadinst->llvm_load->setAlignment(alignment);
+        loadinst->llvm_load->setAlignment(alignment);
         return _ejs_undefined;
     }
 

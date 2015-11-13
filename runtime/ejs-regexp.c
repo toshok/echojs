@@ -17,9 +17,30 @@
 
 #include "pcre.h"
 
-static ejsval _ejs_RegExp_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args);
+static EJS_NATIVE_FUNC(_ejs_RegExp_impl);
 
 static const unsigned char* pcre16_tables;
+
+EJSBool IsRegExp(ejsval argument) {
+    // 1. If Type(argument) is not Object, return false.
+    if (!EJSVAL_IS_OBJECT(argument))
+        return EJS_FALSE;
+
+    // 2. Let isRegExp be Get(argument, @@match).
+    // 3. ReturnIfAbrupt(isRegExp).
+    ejsval isRegExp = Get(argument, _ejs_Symbol_match);
+
+    // 4. If isRegExp is not undefined, return ToBoolean(isRegExp).
+    if (!EJSVAL_IS_UNDEFINED(isRegExp))
+        return ToEJSBool(isRegExp);
+    
+    // 5. If argument has a [[RegExpMatcher]] internal slot, return true.
+    if (EJSVAL_IS_REGEXP(argument))
+        return EJS_TRUE;
+
+    // 6. Return false.
+    return EJS_FALSE;
+}
 
 ejsval
 _ejs_regexp_new (ejsval pattern, ejsval flags)
@@ -30,7 +51,9 @@ _ejs_regexp_new (ejsval pattern, ejsval flags)
 
     ejsval args[2] = { pattern, flags };
 
-    return _ejs_RegExp_impl (_ejs_null, OBJECT_TO_EJSVAL(rv), 2, args);
+    // XXX this is wrong
+    ejsval thisarg = OBJECT_TO_EJSVAL(rv);
+    return _ejs_RegExp_impl (_ejs_null, &thisarg, 2, args, _ejs_undefined);
 }
 
 ejsval
@@ -84,7 +107,9 @@ _ejs_regexp_replace(ejsval str, ejsval search_re, ejsval replace)
             args[1] = capture;
             args[2] = _ejs_undefined;
 
-            replaceval = ToString(_ejs_invoke_closure (replace, _ejs_undefined, argc, args));
+            ejsval undef_this = _ejs_undefined;
+
+            replaceval = ToString(_ejs_invoke_closure (replace, &undef_this, argc, args, _ejs_undefined));
         }
         else {
             replaceval = ToString(replace);
@@ -112,40 +137,90 @@ _ejs_regexp_replace(ejsval str, ejsval search_re, ejsval replace)
     return str;
 }
 
-
-ejsval _ejs_RegExp EJSVAL_ALIGNMENT;
-ejsval _ejs_RegExp_prototype EJSVAL_ALIGNMENT;
-
+// ES2015, June 2015
+// 21.2.3.2.1 Runtime Semantics: RegExpAlloc ( newTarget )
 static ejsval
-_ejs_RegExp_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSRegExp *re;
+RegExpAlloc(ejsval newTarget) {
+    // 1. Let obj be OrdinaryCreateFromConstructor(newTarget, "%RegExpPrototype%", «[[RegExpMatcher]], [[OriginalSource]], [[OriginalFlags]]»).
+    // 2. ReturnIfAbrupt(obj).
+    ejsval obj = OrdinaryCreateFromConstructor(newTarget, _ejs_RegExp_prototype, &_ejs_RegExp_specops);
 
-    if (EJSVAL_IS_UNDEFINED(_this)) {
-        // called as a function
-        _this = _ejs_object_new(_ejs_RegExp_prototype, &_ejs_RegExp_specops);
+    // 3. Let status be DefinePropertyOrThrow(obj, "lastIndex", PropertyDescriptor {[[Writable]]: true, [[Enumerable]]: false, [[Configurable]]: false}).
+    EJSPropertyDesc* desc = _ejs_propertydesc_new();
+    _ejs_property_desc_set_writable(desc, EJS_TRUE);
+    _ejs_property_desc_set_enumerable(desc, EJS_FALSE);
+    _ejs_property_desc_set_configurable(desc, EJS_FALSE);
+
+    ejsval exc;
+    DefinePropertyOrThrow(obj, _ejs_atom_lastIndex, desc, &exc);
+
+    // 4. Assert: status is not an abrupt completion.
+    // XXX
+
+    // 5. Return obj.
+    return obj;
+}
+
+// ES2015, June 2015
+// 21.2.3.2.2 Runtime Semantics: RegExpInitialize ( obj, pattern, flags )
+static ejsval
+RegExpInitialize(ejsval obj, ejsval pattern, ejsval flags) {
+    ejsval P, F;
+
+    // 1. If pattern is undefined, let P be the empty String.
+    if (EJSVAL_IS_UNDEFINED(pattern))
+        P = _ejs_atom_empty;
+    // 2. Else, let P be ToString(pattern).
+    // 3. ReturnIfAbrupt(P).
+    else
+        P = ToString(pattern);
+
+    // 4. If flags is undefined, let F be the empty String.
+    if (EJSVAL_IS_UNDEFINED(flags))
+        F = _ejs_atom_empty;
+    // 5. Else, let F be ToString(flags).
+    // 6. ReturnIfAbrupt(F).
+    else
+        F = ToString(flags);
+
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(obj);
+
+    // 7. If F contains any code unit other than "g", "i", "m", "u", or "y" or if it contains the same code unit more than once, throw a SyntaxError exception.
+    // 8. If F contains "u", let BMP be false; else let BMP be true.
+
+    EJSPrimString *flat_flags = _ejs_string_flatten(F);
+    jschar* chars = flat_flags->data.flat;
+
+    for (int i = 0; i < flat_flags->length; i ++) {
+        if      (chars[i] == 'g' && !re->global)     { re->global     = EJS_TRUE; continue; }
+        else if (chars[i] == 'i' && !re->ignoreCase) { re->ignoreCase = EJS_TRUE; continue; }
+        else if (chars[i] == 'm' && !re->multiline)  { re->multiline  = EJS_TRUE; continue; }
+        else if (chars[i] == 'y' && !re->sticky)     { re->sticky     = EJS_TRUE; continue; }
+        else if (chars[i] == 'u' && !re->unicode)    { re->unicode    = EJS_TRUE; continue; }
+        _ejs_throw_nativeerror_utf8 (EJS_SYNTAX_ERROR, "Invalid flag supplied to RegExp constructor");
     }
 
-    re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+    // 9. If BMP is true, then
+    // a. Parse P using the grammars in 21.2.1 and interpreting each
+    // of its 16-bit elements as a Unicode BMP code point. UTF-16
+    // decoding is not applied to the elements. The goal symbol for
+    // the parse is Pattern. Throw a SyntaxError exception if P did
+    // not conform to the grammar, if any elements of P were not
+    // matched by the parse, or if any Early Error conditions exist.
+    // b. Let patternCharacters be a List whose elements are the code unit elements of P.
+    // 10. Else
+    // a. Parse P using the grammars in 21.2.1 and interpreting P as UTF-16 encoded Unicode code points (6.1.4). The goal symbol for the parse is Pattern[U]. Throw a SyntaxError exception if P did not conform to the grammar, if any elements of P were not matched by the parse, or if any Early Error conditions exist.
+    // b. Let patternCharacters be a List whose elements are the code points resulting from applying UTF-16 decoding to P’s sequence of elements.
+    // 11. Set the value of obj’s [[OriginalSource]] internal slot to P.
+    re->pattern = P;
 
-    re->pattern = _ejs_undefined;
-    re->flags = _ejs_undefined;
+    // 12. Set the value of obj’s [[OriginalFlags]] internal slot to F.
+    re->flags = F;
 
-    ejsval pattern = _ejs_undefined;
+    // 13. Set obj’s [[RegExpMatcher]] internal slot to the internal procedure that evaluates the above parse of P by applying the semantics provided in 21.2.2 using patternCharacters as the pattern’s List of SourceCharacter values and F as the flag parameters.
 
-    if (argc > 0) pattern = args[0];
-    if (argc > 1) re->flags = args[1];
-
-    if (EJSVAL_IS_OBJECT(pattern) && EJSVAL_IS_REGEXP(pattern))
-        re->pattern = ((EJSRegExp*)EJSVAL_TO_OBJECT(pattern))->pattern;
-    else
-        re->pattern = pattern;
-
-    if (!EJSVAL_IS_STRING(re->pattern))
-        EJS_NOT_IMPLEMENTED();
-
-    EJSPrimString *flat_pattern = _ejs_string_flatten (re->pattern);
-    jschar* chars = flat_pattern->data.flat;
+    EJSPrimString *flat_pattern = _ejs_string_flatten(P);
+    chars = flat_pattern->data.flat;
 
     const char *pcre_error;
     int pcre_erroffset;
@@ -155,24 +230,95 @@ _ejs_RegExp_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
                                           &pcre_error, &pcre_erroffset,
                                           pcre16_tables);
 
-    _ejs_object_define_value_property (_this, _ejs_atom_source, re->pattern, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
-    _ejs_object_define_value_property (_this, _ejs_atom_lastIndex, NUMBER_TO_EJSVAL(0), EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_WRITABLE);
-    
-    if (EJSVAL_IS_STRING(re->flags)) {
-        EJSPrimString *flat_flags = _ejs_string_flatten(re->flags);
-        chars = flat_flags->data.flat;
 
-        for (int i = 0; i < flat_flags->length; i ++) {
-            if      (chars[i] == 'g' && !re->global)     { re->global     = EJS_TRUE; continue; }
-            else if (chars[i] == 'i' && !re->ignoreCase) { re->ignoreCase = EJS_TRUE; continue; }
-            else if (chars[i] == 'm' && !re->multiline)  { re->multiline  = EJS_TRUE; continue; }
-            else if (chars[i] == 'y' && !re->sticky)     { re->sticky     = EJS_TRUE; continue; }
-            else if (chars[i] == 'u' && !re->unicode)    { re->unicode    = EJS_TRUE; continue; }
-            _ejs_throw_nativeerror_utf8 (EJS_SYNTAX_ERROR, "Invalid flag supplied to RegExp constructor");
+    // 14. Let setStatus be Set(obj, "lastIndex", 0, true).
+    // 15. ReturnIfAbrupt(setStatus).
+    Put(obj, _ejs_atom_lastIndex, NUMBER_TO_EJSVAL(0), EJS_TRUE);
+
+    // 16. Return obj.
+    return obj;
+}
+
+
+ejsval _ejs_RegExp EJSVAL_ALIGNMENT;
+ejsval _ejs_RegExp_prototype EJSVAL_ALIGNMENT;
+
+// ES2015, June 2015
+// 21.2.3.1 RegExp ( pattern, flags )
+static EJS_NATIVE_FUNC(_ejs_RegExp_impl) {
+    ejsval pattern = _ejs_undefined;
+    ejsval flags = _ejs_undefined;
+
+    if (argc > 0) pattern = args[0];
+    if (argc > 1) flags = args[1];
+
+    // 1. Let patternIsRegExp be IsRegExp(pattern).
+    // 2. ReturnIfAbrupt(patternIsRegExp).
+    EJSBool patternIsRegExp = IsRegExp(pattern);
+
+    // 3. If NewTarget is not undefined, let newTarget be NewTarget.
+    if (!EJSVAL_IS_UNDEFINED(newTarget))
+        ;
+    // 4. Else,
+    else {
+        // a. Let newTarget be the active function object.
+        newTarget = _ejs_RegExp;
+
+        // b. If patternIsRegExp is true and flags is undefined, then
+        if (patternIsRegExp && EJSVAL_IS_UNDEFINED(flags)) {
+            // i. Let patternConstructor be Get(pattern, "constructor").
+            // ii. ReturnIfAbrupt(patternConstructor).
+            ejsval patternConstructor = Get(pattern, _ejs_atom_constructor);
+
+            // iii. If SameValue(newTarget, patternConstructor) is true, return pattern.
+            if (SameValue(newTarget, patternConstructor))
+                return pattern;
         }
     }
 
-    return _this;
+    ejsval P, F;
+
+    // 5. If Type(pattern) is Object and pattern has a [[RegExpMatcher]] internal slot, then
+    if (EJSVAL_IS_REGEXP(pattern)) {
+        // a. Let P be the value of pattern’s [[OriginalSource]] internal slot.
+        P = ((EJSRegExp*)EJSVAL_TO_OBJECT(pattern))->pattern;
+        // b. If flags is undefined, let F be the value of pattern’s [[OriginalFlags]] internal slot.
+        if (EJSVAL_IS_UNDEFINED(flags))
+            F = ((EJSRegExp*)EJSVAL_TO_OBJECT(pattern))->flags;
+        // c. Else, let F be flags.
+        else
+            F = flags;
+    }
+    // 6. Else if patternIsRegExp is true, then
+    else if (patternIsRegExp) {
+        // a. Let P be Get(pattern, "source").
+        // b. ReturnIfAbrupt(P).
+        P = Get(pattern, _ejs_atom_source);
+
+        // c. If flags is undefined, then
+        if (EJSVAL_IS_UNDEFINED(flags)) {
+            // i. Let F be Get(pattern, "flags").
+            // ii. ReturnIfAbrupt(F).
+            F = Get(pattern, _ejs_atom_flags);
+        }
+        // d. Else, let F be flags.
+        else
+            F = flags;
+    }
+    // 7. Else,
+    else {
+        // a. Let P be pattern.
+        P = pattern;
+
+        // b. Let F be flags.
+        F = flags;
+    }
+    // 8. Let O be RegExpAlloc(newTarget).
+    // 9. ReturnIfAbrupt(O).
+    ejsval O = RegExpAlloc(newTarget);
+
+    // 10. Return RegExpInitialize(O, P, F)
+    return RegExpInitialize(O, P, F);
 }
 
 // ES6 21.2.5.2.2
@@ -357,7 +503,7 @@ RegExpExec(ejsval R, ejsval S)
     if (EJSVAL_IS_FUNCTION(exec)) {
         // a. Let result be Call(exec, R, «S»).
         // b. ReturnIfAbrupt(result).
-        ejsval result = _ejs_invoke_closure(exec, R, 1, &S);
+        ejsval result = _ejs_invoke_closure(exec, &R, 1, &S, _ejs_undefined);
 
         // c. If Type(result) is neither Object or Null, then throw a TypeError exception.
         if (!EJSVAL_IS_OBJECT(result) && !EJSVAL_IS_NULL(result))
@@ -378,14 +524,12 @@ RegExpExec(ejsval R, ejsval S)
 
 // ES6 21.2.5.2
 // RegExp.prototype.exec ( string )
-ejsval
-_ejs_RegExp_prototype_exec (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_exec) {
     ejsval string = _ejs_undefined;
     if (argc > 0) string = args[0];
 
     // 1. Let R be the this value.
-    ejsval R = _this;
+    ejsval R = *_this;
 
     // 2. If Type(R) is not Object, then throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(R))
@@ -405,13 +549,11 @@ _ejs_RegExp_prototype_exec (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
 }
 
 // ECMA262: 15.10.6.3
-static ejsval
-_ejs_RegExp_prototype_test (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    if (!EJSVAL_IS_REGEXP(_this))
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_test) {
+    if (!EJSVAL_IS_REGEXP(*_this))
         EJS_NOT_IMPLEMENTED();
 
-    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
 
     ejsval subject = _ejs_undefined;
     if (argc > 0) subject = args[0];
@@ -431,70 +573,52 @@ _ejs_RegExp_prototype_test (ejsval env, ejsval _this, uint32_t argc, ejsval *arg
     return rv == PCRE_ERROR_NOMATCH ? _ejs_false : _ejs_true;
 }
 
-static ejsval
-_ejs_RegExp_prototype_toString (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_toString) {
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
 
     return _ejs_string_concatv (_ejs_atom_slash, re->pattern, _ejs_atom_slash, re->flags, _ejs_null);
 }
 
-static ejsval
-_ejs_RegExp_prototype_get_global (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_global) {
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
     return BOOLEAN_TO_EJSVAL(re->global);
 }
 
-static ejsval
-_ejs_RegExp_prototype_get_ignoreCase (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_ignoreCase) {
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
     return BOOLEAN_TO_EJSVAL(re->ignoreCase);
 }
 
-static ejsval
-_ejs_RegExp_prototype_get_lastIndex (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_lastIndex) {
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
     return NUMBER_TO_EJSVAL(re->lastIndex);
 }
 
-static ejsval
-_ejs_RegExp_prototype_get_multiline (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_multiline) {
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
     return BOOLEAN_TO_EJSVAL(re->multiline);
 }
 
-static ejsval
-_ejs_RegExp_prototype_get_sticky (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_sticky) {
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
     return BOOLEAN_TO_EJSVAL(re->sticky);
 }
 
-static ejsval
-_ejs_RegExp_prototype_get_unicode (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_unicode) {
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
     return BOOLEAN_TO_EJSVAL(re->unicode);
 }
 
-static ejsval
-_ejs_RegExp_prototype_get_source (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(_this);
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_source) {
+    EJSRegExp* re = (EJSRegExp*)EJSVAL_TO_OBJECT(*_this);
     return re->pattern;
 }
 
 // ES6 21.2.5.3
 // get RegExp.prototype.flags ( )
-static ejsval
-_ejs_RegExp_prototype_get_flags (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_get_flags) {
     // 1. Let R be the this value.
-    ejsval R = _this;
+    ejsval R = *_this;
 
     // 2. If Type(R) is not Object, then throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(R))
@@ -546,47 +670,18 @@ _ejs_RegExp_prototype_get_flags (ejsval env, ejsval _this, uint32_t argc, ejsval
     return _ejs_string_new_utf8(result_buf);
 }
 
-static ejsval
-_ejs_RegExp_get_species (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_RegExp_get_species) {
     return _ejs_RegExp;
-}
-
-static ejsval
-_ejs_RegExp_create (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    // 1. Let F be the this value. 
-    ejsval F = _this;
-
-    if (!EJSVAL_IS_CONSTRUCTOR(F)) 
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "'this' in RegExp[Symbol.create] is not a constructor");
-
-    EJSObject* F_ = EJSVAL_TO_OBJECT(F);
-
-    // 2. Let obj be the result of calling OrdinaryCreateFromConstructor(constructor, "%RegExpPrototype%", ( [[RegExpMatcher]], [[OriginalSource]], [[OriginalFlags]])). 
-    ejsval proto = OP(F_,Get)(F, _ejs_atom_prototype, F);
-    if (EJSVAL_IS_UNDEFINED(proto))
-        proto = _ejs_RegExp_prototype;
-
-    EJSRegExp* re = (EJSRegExp*)_ejs_gc_new (EJSRegExp);
-    _ejs_init_object ((EJSObject*)re, proto, &_ejs_RegExp_specops);
-    
-    re->pattern = _ejs_undefined;
-    re->flags = _ejs_undefined;
-
-    return OBJECT_TO_EJSVAL((EJSObject*)re);
 }
 
 // ES6 21.2.5.6
 // RegExp.prototype [ @@match ] ( string )
-static ejsval
-_ejs_RegExp_prototype_match (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_match) {
     ejsval string = _ejs_undefined;
     if (argc > 0) string = args[0];
 
     // 1. Let rx be the this value.
-    ejsval rx = _this;
+    ejsval rx = *_this;
 
     // 2. If Type(rx) is not Object, then throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(rx))
@@ -669,9 +764,7 @@ _ejs_RegExp_prototype_match (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
 
 // ES6 21.2.5.8
 //  RegExp.prototype [ @@replace ] ( string, replaceValue )
-static ejsval
-_ejs_RegExp_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_replace) {
     ejsval string = _ejs_undefined;
     if (argc > 0) string = args[0];
 
@@ -679,7 +772,7 @@ _ejs_RegExp_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *
     if (argc > 1) replaceValue = args[1];
 
     // 1. Let rx be the this value.
-    ejsval rx = _this;
+    ejsval rx = *_this;
 
     // 2. If Type(rx) is not Object, then throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(rx))
@@ -824,7 +917,9 @@ _ejs_RegExp_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *
             replacerArgs[numReplacerArgs - 1] = S;
             
             //    iv. Let replValue be Call(replaceValue, undefined, replacerArgs).
-            ejsval replValue = _ejs_invoke_closure(replaceValue, _ejs_undefined, numReplacerArgs, replacerArgs);
+            ejsval undef_this = _ejs_undefined;
+
+            ejsval replValue = _ejs_invoke_closure(replaceValue, &undef_this, numReplacerArgs, replacerArgs, _ejs_undefined);
             //    v. Let replacement be ToString(replValue).
             replacement = ToString(replValue);
         }
@@ -863,11 +958,9 @@ _ejs_RegExp_prototype_replace (ejsval env, ejsval _this, uint32_t argc, ejsval *
                               _ejs_string_new_substring(S, nextSourcePosition, EJSVAL_TO_STRLEN(S) - nextSourcePosition));
 }
 
-// ES6 21.2.5.11
-// RegExp.prototype [ @@split ] ( string, limit )
-static ejsval
-_ejs_RegExp_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+// ES2015, June 2015
+// 21.2.5.11 RegExp.prototype [ @@split ] ( string, limit )
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_split) {
     ejsval string = _ejs_undefined;
     if (argc > 0) string = args[0];
 
@@ -875,7 +968,7 @@ _ejs_RegExp_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
     if (argc > 1) limit = args[1];
 
     // 1. Let rx be the this value.
-    ejsval rx = _this;
+    ejsval rx = *_this;
 
     // 2. If Type(rx) is not Object, throw a TypeError exception.
     if (!EJSVAL_IS_OBJECT(rx))
@@ -888,42 +981,45 @@ _ejs_RegExp_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
 
     // 5. Let C be SpeciesConstructor(rx, %RegExp%).
     // 6. ReturnIfAbrupt(C).
-    // XXX we don't supporrt the SpeciesConstructor stuff yet.  always construct a RegExp.  see #11 below
+    ejsval C = SpeciesConstructor(rx, _ejs_RegExp);
 
     // 7. Let flags be ToString(Get(rx, "flags"))
     // 8. ReturnIfAbrupt(flags).
     ejsval flags = ToString(Get(rx, _ejs_atom_flags));
 
-    // 9. If flags contains "u",then let unicodeMatching be true else let unicodeMatching be false.
-    EJSBool unicodeMatching = EJS_FALSE;
+    // 9. If flags contains "u",then let unicodeMatching be true.
+    // 10. Else, let unicodeMatching be false.
     // XXX
+    EJSBool unicodeMatching = EJS_FALSE;
 
-    // 10. If flags contains "y", let newFlags be flags else let newFlags be the string that is the concatenation of flags and "y".
+    // 11. If flags contains "y", let newFlags be flags.
+    // 12. Else, let newFlags be the string that is the concatenation of flags and "y".
     ejsval newFlags = flags;
     // XXX
 
-    // 11. Let splitter be Construct(C, «rx, newFlags»).
-    // 12. ReturnIfAbrupt(splitter).
-    ejsval splitter = _ejs_regexp_new(rx, newFlags);
+    // 13. Let splitter be Construct(C, «rx, newFlags»).
+    // 14. ReturnIfAbrupt(splitter).
+    ejsval construct_args[] = { rx, newFlags };
+    ejsval splitter = Construct(C, C, 2, construct_args);
 
-    // 13. Let A be ArrayCreate(0).
+    // 15. Let A be ArrayCreate(0).
     ejsval A = _ejs_array_new(0, EJS_FALSE);
-    // 14. Let lengthA be 0.
+    // 16. Let lengthA be 0.
     int lengthA = 0;
 
-    // 15. If limit is undefined, let lim = 2^53–1; else let lim = ToLength(limit).
-    // 16. ReturnIfAbrupt(lim).
+    // 17. If limit is undefined, let lim = 2^53–1; else let lim = ToLength(limit).
+    // 18. ReturnIfAbrupt(lim).
     int64_t lim = EJSVAL_IS_UNDEFINED(limit) ?  EJS_MAX_SAFE_INTEGER : ToLength(limit);
 
-    // 17. Let size be the number of elements in S.
+    // 19. Let size be the number of elements in S.
     int size = EJSVAL_TO_STRLEN(S);
 
-    // 18. Let p = 0.
+    // 20. Let p = 0.
     int p = 0;
-    // 19. If lim = 0, return A.
+    // 21. If lim = 0, return A.
     if (lim == 0) return A;
 
-    // 20. If size = 0, then
+    // 22. If size = 0, then
     if (size == 0) {
         // a. Let z be RegExpExec(splitter, S).
         // b. ReturnIfAbrupt(z).
@@ -933,14 +1029,14 @@ _ejs_RegExp_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
         if (!EJSVAL_IS_NULL(z)) return A;
 
         // d. Assert: The following call will never result in an abrupt completion.
-        // e. Call CreateDataProperty(A, "0", S).
+        // e. Perform CreateDataProperty(A, "0", S).
         _ejs_array_push_dense(A, 1, &S);
         // f. Return A.
         return A;
     }
-    // 21. Let q = p.
+    // 23. Let q = p.
     int q = p;
-    // 22. Repeat, while q < size
+    // 24. Repeat, while q < size
     while (q < size) {
         // a. Let putStatus be Put(splitter, "lastIndex", q, true).
         // b. ReturnIfAbrupt(putStatus).
@@ -950,7 +1046,8 @@ _ejs_RegExp_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
         // d. ReturnIfAbrupt(z).
         ejsval z = RegExpExec(splitter, S);
 
-        // e. If z is null, then
+        // e. If z is null, let q be AdvanceStringIndex(S, q, unicodeMatching)
+        // XXX this branch of the if is from an older version
         if (EJSVAL_IS_NULL(z)) {
             // i. If unicodeMatching is true, then
             if (unicodeMatching) {
@@ -974,7 +1071,8 @@ _ejs_RegExp_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
             // i. Let e be ToLength(Get(splitter, "lastIndex")).
             // ii. ReturnIfAbrupt(e).
             int64_t e = ToLength(Get(splitter, _ejs_atom_lastIndex));
-            // iii. If e = p, then
+            // iii. If e = p, let q be AdvanceStringIndex(S, q, unicodeMatching).
+            // XXX this branch of the if is from an older version
             if (e == p) {
                 // 1. If unicodeMatching is true, then
                 if (unicodeMatching) {
@@ -998,7 +1096,7 @@ _ejs_RegExp_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
                 // 1. Let T be a String value equal to the substring of S consisting of the elements at indices p (inclusive) through q (exclusive).
                 ejsval T = _ejs_string_new_substring(S, p, q-p);
                 // 2. Assert: The following call will never result in an abrupt completion.
-                // 3. Call CreateDataProperty(A, ToString(lengthA), T).
+                // 3. Perform CreateDataProperty(A, ToString(lengthA), T).
                 _ejs_array_push_dense(A, 1, &T);
 
                 // 4. Let lengthA be lengthA +1.
@@ -1010,43 +1108,42 @@ _ejs_RegExp_prototype_split (ejsval env, ejsval _this, uint32_t argc, ejsval *ar
                 // 6. Let p = e.
                 p = e;
 
-                // 7. Let i = 0.
-                // 8. Let numberOfCaptures be ToLength(Get(z, "length")).
-                // 9. ReturnIfAbrupt(numberOfCaptures).
+                // 7. Let numberOfCaptures be ToLength(Get(z, "length")).
+                // 8. ReturnIfAbrupt(numberOfCaptures).
                 int64_t numberOfCaptures = ToLength(Get(z, _ejs_atom_length));
-                // 10. Let numberOfCaptures be max(numberOfCaptures-1, 0).
+
+                // 9. Let numberOfCaptures be max(numberOfCaptures-1, 0).
                 numberOfCaptures = MAX(numberOfCaptures-1, 0);
-                // 11. Let i be 1.
+
+                // 10. Let i be 1.
                 int i = 1;
-                // 12. Repeat, while i ≤ numberOfCaptures.
+                // 11. Repeat, while i ≤ numberOfCaptures.
                 while (i <= numberOfCaptures) {
                     EJS_NOT_IMPLEMENTED();
                     // a. Let nextCapture be Get(z, ToString(i)).
                     // b. ReturnIfAbrupt(nextCapture).
-                    // c. Call CreateDataProperty(A, ToString(lengthA), nextCapture).
+                    // c. Perform CreateDataProperty(A, ToString(lengthA), nextCapture).
                     // d. Let i be i +1.
                     // e. Let lengthA be lengthA +1.
                     // f. If lengthA = lim, return A.
                 }
-                // 13. Let q = p.
+                // 12. Let q = p.
                 q = p;
             }
         }
     }
-    // 23. Let T be a String value equal to the substring of S consisting of the elements at indices p (inclusive) through size (exclusive).
+    // 25. Let T be a String value equal to the substring of S consisting of the elements at indices p (inclusive) through size (exclusive).
     ejsval T = _ejs_string_new_substring(S, p, size-p);
-    // 24. Assert: The following call will never result in an abrupt completion.
-    // 25. Call CreateDataProperty(A, ToString(lengthA), T ).
+    // 26. Assert: The following call will never result in an abrupt completion.
+    // 27. Perform CreateDataProperty(A, ToString(lengthA), T ).
     _ejs_array_push_dense(A, 1, &T);
-    // 26. Return A.
+    // 28. Return A.
     return A;
 }
 
 // ES6 21.2.5.9
 // RegExp.prototype [ @@search ] ( string )
-static ejsval
-_ejs_RegExp_prototype_search (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
+static EJS_NATIVE_FUNC(_ejs_RegExp_prototype_search) {
     EJS_NOT_IMPLEMENTED();
 }
 
@@ -1089,11 +1186,10 @@ _ejs_regexp_init(ejsval global)
 #undef OBJ_METHOD
 #undef PROTO_METHOD
 
-    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp, create, _ejs_RegExp_create, EJS_PROP_NOT_ENUMERABLE);
-    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp_prototype, match, _ejs_RegExp_prototype_match, EJS_PROP_NOT_ENUMERABLE);
-    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp_prototype, replace, _ejs_RegExp_prototype_replace, EJS_PROP_NOT_ENUMERABLE);
-    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp_prototype, split, _ejs_RegExp_prototype_split, EJS_PROP_NOT_ENUMERABLE);
-    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp_prototype, search, _ejs_RegExp_prototype_search, EJS_PROP_NOT_ENUMERABLE);
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp_prototype, match, _ejs_RegExp_prototype_match, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp_prototype, replace, _ejs_RegExp_prototype_replace, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp_prototype, split, _ejs_RegExp_prototype_split, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
+    EJS_INSTALL_SYMBOL_FUNCTION_FLAGS (_ejs_RegExp_prototype, search, _ejs_RegExp_prototype_search, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
     EJS_INSTALL_SYMBOL_GETTER(_ejs_RegExp, species, _ejs_RegExp_get_species);
 }
 
@@ -1126,6 +1222,8 @@ EJS_DEFINE_CLASS(RegExp,
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
+                 OP_INHERIT, // [[Call]]
+                 OP_INHERIT, // [[Construct]]
                  _ejs_regexp_specop_allocate,
                  OP_INHERIT, // [[Finalize]]
                  _ejs_regexp_specop_scan

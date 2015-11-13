@@ -31,11 +31,7 @@ namespace ejsllvm {
         return (EJSObject*)_ejs_gc_new(Value);
     }
 
-
-
-    static ejsval
-    Value_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(Value_impl) {
         EJS_NOT_IMPLEMENTED();
     }
 
@@ -48,27 +44,21 @@ namespace ejsllvm {
         return OBJECT_TO_EJSVAL(result);
     }
 
-    ejsval
-    Value_prototype_toString(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(Value_prototype_toString) {
         std::string str;
         llvm::raw_string_ostream str_ostream(str);
-        ((Value*)EJSVAL_TO_OBJECT(_this))->llvm_val->print(str_ostream);
+        ((Value*)EJSVAL_TO_OBJECT(*_this))->llvm_val->print(str_ostream);
 
         return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
     }
 
-    ejsval
-    Value_prototype_dump(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        ((Value*)EJSVAL_TO_OBJECT(_this))->llvm_val->dump();
+    static EJS_NATIVE_FUNC(Value_prototype_dump) {
+        ((Value*)EJSVAL_TO_OBJECT(*_this))->llvm_val->dump();
         return _ejs_undefined;
     }
 
-    ejsval
-    Value_prototype_setName(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        Value* val = ((Value*)EJSVAL_TO_OBJECT(_this));
+    static EJS_NATIVE_FUNC(Value_prototype_setName) {
+        Value* val = ((Value*)EJSVAL_TO_OBJECT(*_this));
         REQ_UTF8_ARG (0, name);
 
         val->llvm_val->setName(name);

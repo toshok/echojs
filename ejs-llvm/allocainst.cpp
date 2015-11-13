@@ -29,7 +29,7 @@ namespace ejsllvm {
 
 
     static ejsval
-    AllocaInst_impl (ejsval env, ejsval _this, int argc, ejsval *args)
+    AllocaInst_impl (ejsval env, ejsval *_this, uint32_t argc, ejsval *args, ejsval newTarget)
     {
         EJS_NOT_IMPLEMENTED();
     }
@@ -43,28 +43,28 @@ namespace ejsllvm {
     }
 
     ejsval
-    AllocaInst_prototype_toString(ejsval env, ejsval _this, int argc, ejsval *args)
+    AllocaInst_prototype_toString(ejsval env, ejsval *_this, uint32_t argc, ejsval *args, ejsval newTarget)
     {
         std::string str;
         llvm::raw_string_ostream str_ostream(str);
-        ((AllocaInst*)EJSVAL_TO_OBJECT(_this))->llvm_alloca->print(str_ostream);
+        ((AllocaInst*)EJSVAL_TO_OBJECT(*_this))->llvm_alloca->print(str_ostream);
 
         return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
     }
 
     ejsval
-    AllocaInst_prototype_dump(ejsval env, ejsval _this, int argc, ejsval *args)
+    AllocaInst_prototype_dump(ejsval env, ejsval *_this, uint32_t argc, ejsval *args, ejsval newTarget)
     {
-        ((AllocaInst*)EJSVAL_TO_OBJECT(_this))->llvm_alloca->dump();
+        ((AllocaInst*)EJSVAL_TO_OBJECT(*_this))->llvm_alloca->dump();
         return _ejs_undefined;
     }
 
     ejsval
-    AllocaInst_prototype_setAlignment(ejsval env, ejsval _this, int argc, ejsval *args)
+    AllocaInst_prototype_setAlignment(ejsval env, ejsval *_this, uint32_t argc, ejsval *args, ejsval newTarget)
     {
-        AllocaInst *allocainst = ((AllocaInst*)EJSVAL_TO_OBJECT(_this));
+        AllocaInst *allocainst = ((AllocaInst*)EJSVAL_TO_OBJECT(*_this));
         REQ_INT_ARG(0, alignment);
-	allocainst->llvm_alloca->setAlignment(alignment);
+        allocainst->llvm_alloca->setAlignment(alignment);
         return _ejs_undefined;
     }
 

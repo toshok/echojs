@@ -29,9 +29,7 @@ namespace ejsllvm {
         return (EJSObject*)_ejs_gc_new(ArrayType);
     }
 
-    static ejsval
-    ArrayType_impl (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(ArrayType_impl) {
         EJS_NOT_IMPLEMENTED();
     }
 
@@ -43,29 +41,23 @@ namespace ejsllvm {
         return result;
     }
 
-    static ejsval
-    ArrayType_get (ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(ArrayType_get) {
         REQ_LLVM_TYPE_ARG (0, elementType);
         REQ_INT_ARG (1, numElements);
 
         return ArrayType_new (llvm::ArrayType::get(elementType, numElements));
     }
 
-    ejsval
-    ArrayType_prototype_toString(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
+    static EJS_NATIVE_FUNC(ArrayType_prototype_toString) {
         std::string str;
         llvm::raw_string_ostream str_ostream(str);
-        ((ArrayType*)EJSVAL_TO_OBJECT(_this))->type->print(str_ostream);
+        ((ArrayType*)EJSVAL_TO_OBJECT(*_this))->type->print(str_ostream);
 
         return _ejs_string_new_utf8(trim(str_ostream.str()).c_str());
     }
 
-    ejsval
-    ArrayType_prototype_dump(ejsval env, ejsval _this, int argc, ejsval *args)
-    {
-        ((ArrayType*)EJSVAL_TO_OBJECT(_this))->type->dump();
+    static EJS_NATIVE_FUNC(ArrayType_prototype_dump) {
+        ((ArrayType*)EJSVAL_TO_OBJECT(*_this))->type->dump();
         return _ejs_undefined;
     }
 

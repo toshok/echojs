@@ -15,7 +15,7 @@ extern EJSSpecOps _ejs_WebGLTexture_specops;
 extern EJSSpecOps _ejs_WebGLActiveInfo_specops;
 extern EJSSpecOps _ejs_WebGLUniformLocation_specops;
 
-ejsval _ejs_objc_allocateWebGLRenderingContext (ejsval env, ejsval _this, uint32_t argc, ejsval *args);
+EJS_NATIVE_FUNC(_ejs_objc_allocateWebGLRenderingContext);
 
 void _ejs_webgl_init(ejsval global);
 
