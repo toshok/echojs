@@ -2213,8 +2213,8 @@ static EJS_NATIVE_FUNC(_ejs_Array_from) {
     ejsval thisArg = _ejs_undefined;
 
     if (argc > 0) items = args[0];
-    if (argc > 1) items = args[1];
-    if (argc > 2) items = args[2];
+    if (argc > 1) mapfn = args[1];
+    if (argc > 2) thisArg = args[2];
 
     // 1. Let C be the this value.
     ejsval C = *_this;
