@@ -370,14 +370,15 @@ static EJS_NATIVE_FUNC(_ejs_Set_impl) {
         ejsval nextValue = IteratorValue (next);
 
         // f. Let status be Call(adder, set, «nextValue.[[value]]»).
-        _ejs_invoke_closure (adder, &set, 1, &nextValue, _ejs_undefined);
+        // XXX _ejs_invoke_closure won't call proxy methods
+        ejsval rv;
+
+        EJSBool status = _ejs_invoke_closure_catch (&rv, adder, &set, 1, &nextValue, _ejs_undefined);
 
         // g. If status is an abrupt completion, return IteratorClose(iter, status).
-
-        // XXX we need to use invoke_closure_catch here, and call IteratorClose
+        if (!status)
+            return IteratorClose(iter, rv, EJS_TRUE);
     }
-
-    EJS_NOT_REACHED();
 }
 
 static EJS_NATIVE_FUNC(_ejs_Set_get_species) {

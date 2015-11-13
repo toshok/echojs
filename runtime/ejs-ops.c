@@ -1507,6 +1507,38 @@ IteratorValue_internal(ejsval* value, ejsval iterResult)
     return _ejs_invoke_func_catch(value, call_iterator_value, &iterResult);
 }
 
+// ES2015, June 2015
+// 7.4.6 IteratorClose ( iterator, completion )
+ejsval
+IteratorClose (ejsval iterator, ejsval completion, EJSBool completionIsThrow ) {
+    // 1. Assert: Type(iterator) is Object.
+    // 2. Assert: completion is a Completion Record.
+    // 3. Let return be GetMethod(iterator, "return").
+    // 4. ReturnIfAbrupt(return).
+    ejsval _return = GetMethod(iterator, _ejs_atom_return);
+
+    // 5. If return is undefined, return Completion(completion).
+    if (EJSVAL_IS_UNDEFINED(_return)) {
+        if (completionIsThrow) _ejs_throw(completion);
+        return completion;
+    }
+
+    // 6. Let innerResult be Call(return, iterator, « »).
+    // XXX _ejs_invoke_closure won't call proxy methods
+    ejsval innerResult = _ejs_invoke_closure(_return, &iterator, 0, NULL, _ejs_undefined);
+
+    // 7. If completion.[[type]] is throw, return Completion(completion).
+    if (completionIsThrow) _ejs_throw(completion);
+
+    // 8. If innerResult.[[type]] is throw, return Completion(innerResult).
+
+    // 9. If Type(innerResult.[[value]]) is not Object, throw a TypeError exception.
+    if (!EJSVAL_IS_OBJECT(innerResult)) _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, "1");
+
+    // 10. Return Completion(completion).
+    if (completionIsThrow) _ejs_throw(completion);
+    return completion;
+}
 
 /* 7.4.6 IteratorStep ( iterator ) */
 ejsval
