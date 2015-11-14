@@ -403,11 +403,12 @@ static EJS_NATIVE_FUNC(_ejs_Map_impl) {
         ejsval nextItem = IteratorValue (next);
 
         // f. If Type(nextItem) is not Object,
-        // i. Let error be Completion{[[type]]: throw, [[value]]: a newly created TypeError object, [[target]]:empty}.
-        // ii. Return IteratorClose(iter, error).
         if (!EJSVAL_IS_OBJECT(nextItem)) {
-            // XXX we need to call IteratorClose here
-            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "non-object in iterable for Map constructor");
+            // i. Let error be Completion{[[type]]: throw, [[value]]: a newly created TypeError object, [[target]]:empty}.
+            ejsval error = _ejs_nativeerror_new_utf8(EJS_TYPE_ERROR, "non-object in iterable for Map constructor");
+
+            // ii. Return IteratorClose(iter, error).
+            return IteratorClose(iter, error, EJS_TRUE);
         }
 
         // g. Let k be Get(nextItem, "0").
@@ -419,17 +420,18 @@ static EJS_NATIVE_FUNC(_ejs_Map_impl) {
         ejsval v = Get(nextItem, _ejs_atom_1);  // XXX call IteratorClose here on exception
 
         // k. Let status be Call(adder, map, «k.[[value]], v.[[value]]»).
+        // XXX _ejs_invoke_closure won't call proxy methods
+        ejsval rv;
+
         ejsval adder_args[2];
         adder_args[0] = k;
         adder_args[1] = v;
-        _ejs_invoke_closure (adder, &map, 2, adder_args, _ejs_undefined);
+        EJSBool status = _ejs_invoke_closure_catch (&rv, adder, &map, 2, adder_args, _ejs_undefined);
 
         // l. If status is an abrupt completion, return IteratorClose(iter, status).
-
-        // XXX we need to use invoke_closure_catch here, and call IteratorClose
+        if (!status)
+            return IteratorClose(iter, rv, EJS_TRUE);
     }
-
-    EJS_NOT_REACHED();
 }
 
 static EJS_NATIVE_FUNC(_ejs_Map_get_species) {

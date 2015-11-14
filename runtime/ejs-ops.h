@@ -96,6 +96,7 @@ ejsval GetIterator (ejsval obj, ejsval method);
 ejsval IteratorNext (ejsval iterator, ejsval value);
 ejsval IteratorComplete (ejsval iterResult);
 ejsval IteratorValue (ejsval iterResult);
+ejsval IteratorClose (ejsval iterator, ejsval completion, EJSBool completionIsThrow);
 ejsval IteratorStep (ejsval iterator);
 ejsval _ejs_create_iter_result (ejsval value, ejsval done);
 
