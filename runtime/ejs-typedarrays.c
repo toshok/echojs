@@ -510,31 +510,6 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
  }                                                                      \
                                                                         \
  static EJSBool                                                         \
- _ejs_##ArrayType##array_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver) \
- {                                                                      \
-     /* check if propertyName is an integer, or a string that we can convert to an int */ \
-     EJSBool is_index = EJS_FALSE;                                      \
-     ejsval idx_val = ToNumber(propertyName);                           \
-     int idx;                                                           \
-     if (EJSVAL_IS_NUMBER(idx_val)) {                                   \
-         double n = EJSVAL_TO_NUMBER(idx_val);                          \
-         if (floor(n) == n) {                                           \
-             idx = (int)n;                                              \
-             is_index = EJS_TRUE;                                       \
-         }                                                              \
-     }                                                                  \
-                                                                        \
-     if (is_index) {                                                    \
-         if (idx < 0 || idx >= EJS_TYPED_ARRAY_LEN(obj)) {              \
-             return EJS_FALSE;                                          \
-         }                                                              \
-         void* data = _ejs_typedarray_get_data (EJSVAL_TO_OBJECT(obj)); \
-         ((elementtype*)data)[idx] = (elementtype)EJSVAL_TO_NUMBER(val); \
-     }                                                                  \
-     return EJS_TRUE; /* XXX */                                         \
- }                                                                      \
-                                                                        \
- static EJSBool                                                         \
  _ejs_##ArrayType##array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag) \
  {                                                                      \
      return _ejs_Object_specops.DefineOwnProperty (obj, propertyName, propertyDescriptor, flag); \
@@ -1065,6 +1040,58 @@ static EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_of_impl)                 \
     return newObj;                                                      \
 }
 
+#define EJS_TYPED_ARRAY_SET(EnumType, ArrayType, arraytype, elementtype, elementSizeInBytes) \
+ static EJSBool                                                         \
+ _ejs_##ArrayType##array_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver) \
+ {                                                                      \
+     /* check if propertyName is an integer, or a string that we can convert to an int */ \
+     EJSBool is_index = EJS_FALSE;                                      \
+     ejsval idx_val = ToNumber(propertyName);                           \
+     int idx;                                                           \
+     if (EJSVAL_IS_NUMBER(idx_val)) {                                   \
+         double n = EJSVAL_TO_NUMBER(idx_val);                          \
+         if (floor(n) == n) {                                           \
+             idx = (int)n;                                              \
+             is_index = EJS_TRUE;                                       \
+         }                                                              \
+     }                                                                  \
+                                                                        \
+     if (is_index) {                                                    \
+         if (idx < 0 || idx >= EJS_TYPED_ARRAY_LEN(obj)) {              \
+             return EJS_FALSE;                                          \
+         }                                                              \
+         void* data = _ejs_typedarray_get_data (EJSVAL_TO_OBJECT(obj)); \
+         ((elementtype*)data)[idx] = (elementtype)EJSVAL_TO_NUMBER(val); \
+     }                                                                  \
+     return EJS_TRUE; /* XXX */                                         \
+ }                                                                      \
+                                                                        \
+
+// Uint8Clamped handles set differently
+static EJSBool
+_ejs_Uint8Clampedarray_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver) {
+    /* check if propertyName is an integer, or a string that we can convert to an int */
+    EJSBool is_index = EJS_FALSE;
+    ejsval idx_val = ToNumber(propertyName);
+    int idx;
+    if (EJSVAL_IS_NUMBER(idx_val)) {
+        double n = EJSVAL_TO_NUMBER(idx_val);
+        if (floor(n) == n) {
+            idx = (int)n;
+            is_index = EJS_TRUE;
+        }
+    }
+
+    if (is_index) {
+        if (idx < 0 || idx >= EJS_TYPED_ARRAY_LEN(obj)) {
+            return EJS_FALSE;
+        }
+        void* data = _ejs_typedarray_get_data (EJSVAL_TO_OBJECT(obj));
+        int64_t v = ((int64_t)EJSVAL_TO_NUMBER(val));
+        ((uint8_t*)data)[idx] = v > 0xFF ? 0xFF : (uint8_t)v;
+    }
+    return EJS_TRUE; /* XXX */
+}
 
 EJS_TYPED_ARRAY(INT8, Int8, int8, int8_t, 1);
 EJS_TYPED_ARRAY(UINT8, Uint8, uint8, uint8_t, 1);
@@ -1075,6 +1102,17 @@ EJS_TYPED_ARRAY(INT32, Int32, int32, int32_t, 4);
 EJS_TYPED_ARRAY(UINT32, Uint32, uint32, uint32_t, 4);
 EJS_TYPED_ARRAY(FLOAT32, Float32, float32, float, 4);
 EJS_TYPED_ARRAY(FLOAT64, Float64, float64, double, 8);
+
+EJS_TYPED_ARRAY_SET(INT8, Int8, int8, int8_t, 1);
+EJS_TYPED_ARRAY_SET(UINT8, Uint8, uint8, uint8_t, 1);
+// Uint8Clamped handles set differently than all the others, so its implementation is hardcoded above
+//EJS_TYPED_ARRAY_SET(UINT8CLAMPED, Uint8Clamped, uint8, uint8_t, 1);
+EJS_TYPED_ARRAY_SET(INT16, Int16, int16, int16_t, 2);
+EJS_TYPED_ARRAY_SET(UINT16, Uint16, uint16, uint16_t, 2);
+EJS_TYPED_ARRAY_SET(INT32, Int32, int32, int32_t, 4);
+EJS_TYPED_ARRAY_SET(UINT32, Uint32, uint32, uint32_t, 4);
+EJS_TYPED_ARRAY_SET(FLOAT32, Float32, float32, float, 4);
+EJS_TYPED_ARRAY_SET(FLOAT64, Float64, float64, double, 8);
 
 int _ejs_typed_array_elsizes[EJS_TYPEDARRAY_TYPE_COUNT];
 ejsval _ejs_typed_array_protos[EJS_TYPEDARRAY_TYPE_COUNT];
