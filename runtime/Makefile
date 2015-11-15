@@ -199,7 +199,7 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch -fno-objc
 	@echo [$(CC) armv7] $< && PATH=$(IOSDEV_BIN):$$PATH $(CC) $(IOSDEV_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
 
 %.o.armv7: %.ll
-	@echo [llc armv7] $< && llc$(LLVM_SUFFIX) -march=arm -filetype=obj -o=$@ -O2 $<
+	@echo [llc armv7] $< && llc$(LLVM_SUFFIX) -march=arm -mtriple=$(IOSDEV_MTRIPLE) -filetype=obj -o=$@ -O2 $<
 
 %.o.armv7s: %.c
 	@mkdir -p .deps
@@ -212,7 +212,7 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch -fno-objc
 	@echo [$(CC) armv7] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) $(IOSDEVS_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
 
 %.o.armv7s: %.ll
-	@echo [llc armv7s] $< && llc$(LLVM_SUFFIX) -march=arm -filetype=obj -o=$@ -O2 $<
+	@echo [llc armv7s] $< && llc$(LLVM_SUFFIX) -march=arm -mtriple=$(IOSDEVS_MTRIPLE) -filetype=obj -o=$@ -O2 $<
 
 $(analyze_plists_c): %.plist: %.c
 	@echo [$(CC) analyze] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) $(OSX_CFLAGS) --analyze $< -o $@
