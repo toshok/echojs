@@ -103,8 +103,8 @@ let options = {
     target_platform: host_platform,
     native_module_dirs: [],
     extra_clang_args: "",
-    ios_sdk: "9.0",
-    ios_min: "7.0",
+    ios_sdk: "9.1",
+    ios_min: "8.0",
     target_pointer_size: 64,
     import_variables: [],
     srcdir: false
@@ -268,7 +268,7 @@ let args = {
     },
     "--ios-min": {
         option:  "ios_min",
-        help:    "the minimum version of ios to support.  Default is 7.0."
+        help:    "the minimum version of ios to support.  Default is 8.0."
     },
     "--srcdir": {
         flag:    "srcdir",
