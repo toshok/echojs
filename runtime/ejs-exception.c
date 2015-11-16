@@ -2,7 +2,8 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
-#if IOS
+#if defined(IOS) && !defined(TARGET_CPU_X86)
+// ios device builds don't have zero cost exceptions.  simulator + osx builds do.
 #define NO_ZEROCOST_EXCEPTIONS 1
 #endif
 
