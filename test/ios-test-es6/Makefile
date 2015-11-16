@@ -1,0 +1,69 @@
+TOP=../..
+
+MODULES= --moduledir $(TOP)/modules/objc_internal
+
+J3D_DEMOS=	j3d/HelloCube.js \
+		j3d/HelloCubemap.js \
+		j3d/HelloHead.js \
+		j3d/HelloLights.js \
+		j3d/HelloPlasma.js \
+		j3d/HelloScene.js
+
+J3D_SOURCES= j3d/lib/glMatrix.js \
+	    j3d/src/J3D.js \
+	    j3d/src/util/Color.js \
+	    j3d/src/math/Vector2.js \
+	    j3d/src/math/Vector3.js \
+	    j3d/src/math/Matrix44.js \
+	    j3d/src/engine/Engine.js \
+	    j3d/src/engine/Camera.js \
+	    j3d/src/engine/Light.js \
+	    j3d/src/engine/Geometry.js \
+	    j3d/src/engine/Mesh.js \
+	    j3d/src/engine/Scene.js \
+	    j3d/src/engine/Loader.js \
+	    j3d/src/engine/ShaderAtlas.js \
+	    j3d/src/engine/Texture.js \
+	    j3d/src/engine/Cubemap.js \
+	    j3d/src/engine/Transform.js \
+	    j3d/src/engine/Postprocess.js \
+	    j3d/src/engine/Primitives.js \
+	    j3d/src/engine/FrameBuffer.js \
+	    j3d/src/engine/ShaderSource.js \
+	    j3d/src/engine/Shader.js \
+	    j3d/src/util/Time.js \
+	    j3d/src/util/ShaderUtil.js \
+	    j3d/src/util/Logger.js \
+	    j3d/src/engine/BuiltinShaders.js
+
+all: sim dev
+
+bindings: j3d/j3d-all.js
+	cp $(TOP)/pirouette/bindings/*.js .
+	@mkdir -p UIKit
+	cp -r $(TOP)/pirouette/bindings/UIKit/ UIKit/
+	@mkdir -p CoreAnimation
+	cp -r $(TOP)/pirouette/bindings/CoreAnimation/ CoreAnimation/
+	@mkdir -p Foundation
+	cp -r $(TOP)/pirouette/bindings/Foundation/ Foundation/
+	@mkdir -p OpenGLES
+	cp -r $(TOP)/pirouette/bindings/OpenGLES/ OpenGLES/
+	@mkdir -p GLKit
+	cp -r $(TOP)/pirouette/bindings/GLKit/ GLKit/
+
+sim: bindings
+	../../ejs --srcdir $(MODULES) --leave-temp --target sim helloiostableview.js # prime-worker.js $(J3D_DEMOS) j3d/j3d-all.js
+	mkdir -p HelloIOS.app/Contents/MacOS/
+	cp helloiostableview.js.exe "/Users/toshok/Library/Application Support/iPhone Simulator/6.1/Applications/F87FA5BE-1543-40E2-B8B6-2FA19728ADFC/MemTest.app/MemTest"
+	cp helloiostableview.js.exe "/Users/toshok/Library/Application Support/iPhone Simulator/7.0.3/Applications/F87FA5BE-1543-40E2-B8B6-2FA19728ADFC/MemTest.app/MemTest"
+
+dev: bindings
+	../../ejs --srcdir $(MODULES) --leave-temp --target dev helloiostableview.js # prime-worker.js $(J3D_DEMOS) j3d/j3d-all.js
+	cp helloiostableview.js.exe ipa-work/Payload/HelloIOS.app
+	cp -r j3d/demo ipa-work/Payload/HelloIOS.app
+	xcrun codesign -s SOMETHING_HERE ipa-work/Payload/HelloIOS.app/helloiostableview.js.exe
+	cp ipa-work/Payload/HelloIOS.app/helloiostableview.js.exe "/Users/toshok/Library/Developer/Xcode/iOS DeviceSupport/7.0.4 (11B554a)/Symbols/var/mobile/Applications/EBA2A179-EDF0-4BA7-A097-CAFF316F34C8/HelloIOS.app/"
+	xcrun dsymutil ipa-work/Payload/HelloIOS.app/helloiostableview.js.exe -o ipa-work/Payload/HelloIOS.app.dSYM
+
+j3d/j3d-all.js:  $(J3D_SOURCES) j3d/j3d-imports.js j3d/j3d-exports.js
+	cat j3d/j3d-imports.js $(J3D_SOURCES) j3d/j3d-exports.js > $@

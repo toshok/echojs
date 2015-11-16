@@ -1,0 +1,10 @@
+
+{
+    "projectName": "HelloIOS",
+    "bundleIdentifier": "org.pirouette.HelloIOS",
+    "delegate": "AppDelegate",
+    "frameworks": ["uikit", "foundation", "objc"],
+
+    "projectType": "sim",
+    "version": 0.01
+}

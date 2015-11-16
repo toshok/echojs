@@ -1,0 +1,3 @@
+*.dSYM/
+_CodeSignature
+Payload/HelloIOS.app/demo/
