@@ -186,7 +186,7 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch -fno-objc
 	@echo [$(CC) sim] $< && PATH=$(IOSSIM_BIN):$$PATH $(CC) $(IOSSIM_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
 
 %.o.sim: %.ll
-	@echo [llc sim] $< && llc$(LLVM_SUFFIX) -march=x86 -filetype=obj -o=$@ -O2 $<
+	@echo [llc sim] $< && llc$(LLVM_SUFFIX) -march=x86 -mtriple=$(IOSSIM_MTRIPLE) -filetype=obj -o=$@ -O2 $<
 
 %.o.armv7: %.c
 	@mkdir -p .deps
