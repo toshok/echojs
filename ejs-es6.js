@@ -352,10 +352,15 @@ let dev_bin=`${dev_base}/Developer/usr/bin`;
 
 function target_llc_args(platform, arch) {
     let args = [`-march=${arch_info[options.target_arch].llc_arch}`, "-disable-fp-elim" ];
-    if (arch === "arm")
-        args = args.concat(["-mtriple=thumbv7-apple-ios", "-mattr=+v6", "-relocation-model=pic", "-soft-float" ]);
-    if (arch === "aarch64")
-        args = args.concat(["-mtriple=thumbv7s-apple-ios", "-mattr=+fp-armv8", "-relocation-model=pic" ]);
+    if (platform === "darwin") {
+        if (arch === "arm")
+            args = args.concat([`-mtriple=thumbv7-apple-ios${options.ios_min}.0`, "-mattr=+v6", "-relocation-model=pic", "-soft-float" ]);
+        else if (arch === "aarch64")
+            args = args.concat([`-mtriple=thumbv7s-apple-ios${options.ios_min}.0`, "-mattr=+fp-armv8", "-relocation-model=pic" ]);
+        else if (arch === "x86")
+            args = args.concat([`-mtriple=i386-apple-ios${options.ios_min}.0`, "-relocation-model=pic"]);
+    }
+
     return args;
 }
 
