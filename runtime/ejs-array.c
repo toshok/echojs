@@ -2625,6 +2625,19 @@ _ejs_array_init(ejsval global)
     _ejs_object_define_value_property (_ejs_Array_prototype, _ejs_atom_constructor, _ejs_Array,
                                        EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
 
+    ejsval blockList = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
+
+    // XXX(toshok) need to verify the property flags (enumerable, configurable, writable) here:
+    _ejs_object_define_value_property (blockList, _ejs_atom_copyWithin, _ejs_true, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (blockList, _ejs_atom_entries, _ejs_true, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (blockList, _ejs_atom_fill, _ejs_true, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (blockList, _ejs_atom_find, _ejs_true, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (blockList, _ejs_atom_findIndex, _ejs_true, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (blockList, _ejs_atom_keys, _ejs_true, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+    _ejs_object_define_value_property (blockList, _ejs_atom_values, _ejs_true, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+
+    _ejs_object_define_value_property (_ejs_Array_prototype, _ejs_Symbol_unscopables, blockList, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_NOT_WRITABLE);
+
     // XXX(toshok) from 22.1.2.5:
     // 'The value of the name property of this function is "get [Symbol.species]".'
     EJS_INSTALL_SYMBOL_GETTER(_ejs_Array, species, _ejs_Array_get_species);
