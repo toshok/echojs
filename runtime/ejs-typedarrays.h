@@ -41,6 +41,7 @@ typedef enum {
 
 extern int _ejs_typed_array_elsizes[EJS_TYPEDARRAY_TYPE_COUNT];
 extern ejsval _ejs_typed_array_protos[EJS_TYPEDARRAY_TYPE_COUNT];
+extern ejsval _ejs_typed_array_ctors[EJS_TYPEDARRAY_TYPE_COUNT];
 extern EJSSpecOps* _ejs_typed_array_specops[EJS_TYPEDARRAY_TYPE_COUNT];
 
 typedef struct _EJSTypedArray {
@@ -117,6 +118,8 @@ EJS_BEGIN_DECLS
 extern ejsval _ejs_ArrayBuffer;
 extern ejsval _ejs_ArrayBuffer_prototype;
 extern EJSSpecOps _ejs_ArrayBuffer_specops;
+
+extern ejsval _ejs_TypedArray_prototype;
 
 extern ejsval _ejs_Int8Array;
 extern ejsval _ejs_Int8Array_prototype;
