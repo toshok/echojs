@@ -30,6 +30,8 @@ min(int a, int b)
 ejsval _ejs_ArrayBuffer_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_ArrayBuffer EJSVAL_ALIGNMENT;
 
+ejsval _ejs_TypedArray_prototype EJSVAL_ALIGNMENT;
+
 ejsval _ejs_Int8Array_prototype EJSVAL_ALIGNMENT;
 ejsval _ejs_Int8Array EJSVAL_ALIGNMENT;
 
@@ -1116,6 +1118,7 @@ EJS_TYPED_ARRAY_SET(FLOAT64, Float64, float64, double, 8);
 
 int _ejs_typed_array_elsizes[EJS_TYPEDARRAY_TYPE_COUNT];
 ejsval _ejs_typed_array_protos[EJS_TYPEDARRAY_TYPE_COUNT];
+ejsval _ejs_typed_array_ctors[EJS_TYPEDARRAY_TYPE_COUNT];
 EJSSpecOps* _ejs_typed_array_specops[EJS_TYPEDARRAY_TYPE_COUNT];
 
 static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_every) {
@@ -2009,6 +2012,76 @@ static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_values) {
     return _ejs_array_iterator_new (O, EJS_ARRAYITER_KIND_VALUE);
 }
 
+// ES2015, June 2015
+// 22.2.3.18 %TypedArray%.prototype.map ( callbackfn [ , thisArg ] )
+static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_map) {
+    ejsval callbackfn = _ejs_undefined;
+    ejsval thisArg = _ejs_undefined;
+
+    if (argc > 0)
+        callbackfn = args[0];
+    if (argc > 1)
+        thisArg = args[1];
+
+    // 1. Let O be the this value.
+    ejsval O = *_this;
+
+    // 2. Let valid be ValidateTypedArray(O).
+    // 3. ReturnIfAbrupt(valid).
+    ValidateTypedArray (O);
+
+    // 4. Let len be the value of O’s [[ArrayLength]] internal slot.
+    uint32_t len = EJS_TYPED_ARRAY_LEN(O);
+
+    // 5. If IsCallable(callbackfn) is false, throw a TypeError exception.
+    if (!IsCallable(callbackfn))
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "argument is not a function");
+        
+    // 6. If thisArg was supplied, let T be thisArg; else let T be undefined.
+    ejsval T = thisArg;
+
+    // 7. Let defaultConstructor be the intrinsic object listed in column one of Table 49 for the value of O’s [[TypedArrayName]] internal slot.
+    ejsval defaultConstructor = _ejs_typed_array_ctors[EJSVAL_TO_TYPEDARRAY(O)->element_type];
+
+    // 8. Let C be SpeciesConstructor(O, defaultConstructor).
+    // 9. ReturnIfAbrupt(C).
+    ejsval C = SpeciesConstructor(O, defaultConstructor);
+
+    // 10. Let A be AllocateTypedArray(C, len).
+    // 11. ReturnIfAbrupt(A).
+    if (!EJSVAL_EQ(C, defaultConstructor)) {
+        _ejs_log("ejs doesn't support subclassable typed arrays yet");
+    }
+    ejsval A = _ejs_typedarray_new(EJSVAL_TO_TYPEDARRAY(O)->element_type, len);
+
+    // 12. Let k be 0.
+    int64_t k = 0;
+
+    // 13. Repeat, while k < len
+    while (k < len) {
+        // a. Let Pk be ToString(k).
+        ejsval Pk = ToString(NUMBER_TO_EJSVAL(k));
+
+        // b. Let kValue be Get(O, Pk).
+        // c. ReturnIfAbrupt(kValue).
+        ejsval kValue = Get(O, Pk);
+
+        // d. Let mappedValue be Call(callbackfn, T, «kValue, k, O»).
+        // e. ReturnIfAbrupt(mappedValue).
+        ejsval callbackfn_args[3] = { kValue, NUMBER_TO_EJSVAL(k), O };
+        ejsval mappedValue = _ejs_invoke_closure (callbackfn, &T, 3, callbackfn_args, _ejs_undefined);
+
+        // f. Let status be Set(A, Pk, mappedValue, true ).
+        // g. ReturnIfAbrupt(status).
+        Put(A, Pk, mappedValue, EJS_TRUE);
+        
+        // h. Increase k by 1.
+        k += 1;
+    }
+    // 14. Return A.
+    return A;
+}
+
 static EJS_NATIVE_FUNC(_ejs_TypedArray_prototype_toString) {
     /* 1. Let array be the result of calling ToObject on the this value. */
     ejsval array = ToObject(*_this);
@@ -2145,7 +2218,7 @@ _ejs_typedarrays_init(ejsval global)
 #define OBJ_METHOD(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t, x, _ejs_##t##_##x)
 #define OBJ_METHOD_IMPL(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t, x, _ejs_##t##_##x##_impl)
 #define PROTO_METHOD(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t##_prototype, x, _ejs_##t##_prototype_##x)
-#define PROTO_METHOD_IMPL_GENERIC(t, x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t##_prototype, x, _ejs_TypedArray_prototype_##x)
+#define PROTO_METHOD_IMPL_GENERIC(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_TypedArray_prototype, x, _ejs_TypedArray_prototype_##x)
 #define PROTO_METHOD_IMPL(t,x) EJS_INSTALL_ATOM_FUNCTION(_ejs_##t##_prototype, x, _ejs_##t##_prototype_##x##_impl)
 #define PROTO_GETTER(t,x) EJS_INSTALL_SYMBOL_GETTER(_ejs_##t##_prototype, x, _ejs_##t##_prototype_get_##x)
 
@@ -2195,40 +2268,48 @@ _ejs_typedarrays_init(ejsval global)
         _ejs_object_define_value_property (_ejs_DataView_prototype, _ejs_Symbol_toStringTag, _ejs_atom_DataView, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_CONFIGURABLE);
     }
 
+    // %TypedArray%.prototype
+    _ejs_gc_add_root (&_ejs_TypedArray_prototype);
+    _ejs_TypedArray_prototype = _ejs_object_new (_ejs_null, &_ejs_Object_specops);
+
+    PROTO_METHOD_IMPL_GENERIC(every);
+    PROTO_METHOD_IMPL_GENERIC(fill);
+    PROTO_METHOD_IMPL_GENERIC(find);
+    PROTO_METHOD_IMPL_GENERIC(findIndex);
+    PROTO_METHOD_IMPL_GENERIC(forEach);
+    PROTO_METHOD_IMPL_GENERIC(indexOf);
+    PROTO_METHOD_IMPL_GENERIC(join);
+    PROTO_METHOD_IMPL_GENERIC(keys);
+    PROTO_METHOD_IMPL_GENERIC(lastIndexOf);
+    PROTO_METHOD_IMPL_GENERIC(map);
+    PROTO_METHOD_IMPL_GENERIC(reduce);
+    PROTO_METHOD_IMPL_GENERIC(reduceRight);
+    PROTO_METHOD_IMPL_GENERIC(reverse);
+    PROTO_METHOD_IMPL_GENERIC(some);
+    PROTO_METHOD_IMPL_GENERIC(toString);
+
 #define ADD_TYPEDARRAY(EnumType, ArrayType, arraytype, elementSizeInBytes) EJS_MACRO_START \
     _ejs_##ArrayType##Array = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_##ArrayType##Array, (EJSClosureFunc)_ejs_##ArrayType##Array_impl); \
     _ejs_object_setprop (global,         _ejs_atom_##ArrayType##Array,  _ejs_##ArrayType##Array); \
                                                                         \
-    _ejs_gc_add_root (&_ejs_##ArrayType##Array_prototype);                  \
-    _ejs_##ArrayType##Array_prototype = _ejs_object_new(_ejs_null, &_ejs_Object_specops); \
+    _ejs_gc_add_root (&_ejs_##ArrayType##Array_prototype);              \
+    _ejs_##ArrayType##Array_prototype = _ejs_object_new(_ejs_TypedArray_prototype, &_ejs_Object_specops); \
     _ejs_object_setprop (_ejs_##ArrayType##Array, _ejs_atom_prototype,  _ejs_##ArrayType##Array_prototype); \
+    _ejs_object_setprop (_ejs_##ArrayType##Array_prototype, _ejs_atom_constructor,  _ejs_##ArrayType##Array); \
                                                                         \
-    /* make sure ctor.BYTES_PER_ELEMENT is defined */                   \
-    _ejs_object_define_value_property (_ejs_##ArrayType##Array, _ejs_atom_BYTES_PER_ELEMENT, NUMBER_TO_EJSVAL(elementSizeInBytes), EJS_PROP_FLAGS_ENUMERABLE); \
+    /* make sure constructor.BYTES_PER_ELEMENT and prototype.BYTES_PER_ELEMENT are defined */              \
+    _ejs_object_define_value_property (_ejs_##ArrayType##Array, _ejs_atom_BYTES_PER_ELEMENT, NUMBER_TO_EJSVAL(elementSizeInBytes), EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE); \
+    _ejs_object_define_value_property (_ejs_##ArrayType##Array_prototype, _ejs_atom_BYTES_PER_ELEMENT, NUMBER_TO_EJSVAL(elementSizeInBytes), EJS_PROP_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE); \
                                                                         \
     _ejs_typed_array_elsizes[EJS_TYPEDARRAY_##EnumType] = elementSizeInBytes; \
     _ejs_typed_array_protos[EJS_TYPEDARRAY_##EnumType] = _ejs_##ArrayType##Array_prototype; \
+    _ejs_typed_array_ctors[EJS_TYPEDARRAY_##EnumType] = _ejs_##ArrayType##Array; \
     _ejs_typed_array_specops[EJS_TYPEDARRAY_##EnumType] = &_ejs_##ArrayType##Array_specops; \
                                                                         \
     PROTO_METHOD_IMPL(ArrayType##Array, copyWithin);                    \
     PROTO_METHOD_IMPL(ArrayType##Array, get);                           \
     PROTO_METHOD_IMPL(ArrayType##Array, set);                           \
     PROTO_METHOD_IMPL(ArrayType##Array, subarray);                      \
-                                                                        \
-    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, every);                 \
-    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, fill);                  \
-    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, find);                  \
-    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, findIndex);             \
-    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, forEach);               \
-    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, indexOf);               \
-    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, join);                  \
-    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, keys);                  \
-    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, lastIndexOf);           \
-    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, reduce);                \
-    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, reduceRight);           \
-    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, reverse);               \
-    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, some);                  \
-    PROTO_METHOD_IMPL_GENERIC(ArrayType##Array, toString);              \
                                                                         \
     PROTO_GETTER(ArrayType##Array, toStringTag); /* XXX needs to be enumerable: false, configurable: true */ \
                                                                         \
