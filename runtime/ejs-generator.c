@@ -114,6 +114,13 @@ _ejs_iterator_wrapper_new (ejsval iterator)
     return OBJECT_TO_EJSVAL(rv);
 }
 
+void
+_ejs_iterator_wrapper_close (ejsval iterator)
+{
+    EJSIteratorWrapper* wrapper = (EJSIteratorWrapper*)EJSVAL_TO_OBJECT(iterator);
+    IteratorClose(wrapper->iterator, _ejs_undefined, EJS_FALSE);
+}
+
 #define GENERATOR_STACK_SIZE 64 * 1024
 
 static void
