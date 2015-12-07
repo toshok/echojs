@@ -278,8 +278,8 @@ _ejs_map_set (ejsval map, ejsval key, ejsval value)
         }
     }
     // 6. If key is −0, let key be +0.
-
-    // XXX
+    if (EJSVAL_IS_NUMBER(key) && EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(key)))
+        key = NUMBER_TO_EJSVAL(0);
 
     // 7. Let p be the Record {[[key]]: key, [[value]]: value}.
     p = calloc (1, sizeof (EJSKeyValueEntry));
