@@ -41,10 +41,13 @@ C_SOURCES= \
 	ejs-weakset.c \
 	parson.c
 
+CPP_SOURCES= \
+	ejs-dtoa.cpp
+
 VPATH=.:../external-deps/parson
 
 CC=clang
-
+CXX=clang++
 
 ejs-atoms-gen.c: ejs-atoms.h gen-atoms.js
 	@echo [GEN] $@ && ./gen-atoms.js $< > .tmp-$@ && mv .tmp-$@ $@
@@ -69,11 +72,11 @@ RUNLOOP_DEF=-DHAVE_LIBUV=1
 RUNLOOP_C_SOURCE=ejs-runloop-libuv.c
 endif
 
-LINUX_OBJECTS=$(C_SOURCES:%.c=%.o.linux) $(OBJC_SOURCES:%.m=%.o.linux) ejs-log.o.linux main.o.linux $(INVOKE_CATCH) $(RUNLOOP_C_SOURCE:%.c=%.o.linux)
+LINUX_OBJECTS=$(C_SOURCES:%.c=%.o.linux) $(CPP_SOURCES:%.cpp=%.o.linux) $(OBJC_SOURCES:%.m=%.o.linux) ejs-log.o.linux main.o.linux $(INVOKE_CATCH) $(RUNLOOP_C_SOURCE:%.c=%.o.linux)
 
 ALL_OBJECTS=$(LINUX_OBJECTS)
 
-CFLAGS += -I../external-deps/pcre-linux
+CFLAGS += -I../external-deps/pcre-linux -I../external-deps/double-conversion
 
 ejs-init.o.linux: ejs-atoms-gen.c
 
@@ -86,6 +89,11 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch
 	@mkdir -p .deps
 	@$(CC) -MM $(LINUX_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.linux,,`/$@/ > .deps/$@-deps
 	@echo [$(CC) linux] $< && $(CC) -ObjC $(LINUX_CFLAGS)  -c -o $@ $<
+
+%.o.linux: %.cpp
+	@mkdir -p .deps
+	@$(CXX) -MM $(LINUX_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.linux,,`/$@/ > .deps/$@-deps
+	@echo [$(CXX) linux] $< && $(CXX) -std=c++11 $(LINUX_CFLAGS)  -c -o $@ $<
 
 %.o.linux: %.m
 	@mkdir -p .deps
@@ -108,10 +116,10 @@ OBJC_SOURCES= \
 	ejs-xhr.m \
 	ejs-runloop-darwin.m
 
-OSX_OBJECTS=$(C_SOURCES:%.c=%.o.osx) $(OBJC_SOURCES:%.m=%.o.osx) ejs-invoke-closure-catch.o.osx main.o.osx
-SIM_OBJECTS=$(C_SOURCES:%.c=%.o.sim) $(OBJC_SOURCES:%.m=%.o.sim) ejs-invoke-closure-catch32.o.sim main.o.sim
-DEV_OBJECTS=$(C_SOURCES:%.c=%.o.armv7) $(OBJC_SOURCES:%.m=%.o.armv7) ejs-invoke-closure-catch32.o.armv7 main.o.armv7
-DEVS_OBJECTS=$(C_SOURCES:%.c=%.o.armv7s) $(OBJC_SOURCES:%.m=%.o.armv7s) ejs-invoke-closure-catch.o.armv7s main.o.armv7s
+OSX_OBJECTS=$(C_SOURCES:%.c=%.o.osx) $(CPP_SOURCES:%.cpp=%.o.osx) $(OBJC_SOURCES:%.m=%.o.osx) ejs-invoke-closure-catch.o.osx main.o.osx
+SIM_OBJECTS=$(C_SOURCES:%.c=%.o.sim) $(CPP_SOURCES:%.cpp=%.o.sim) $(OBJC_SOURCES:%.m=%.o.sim) ejs-invoke-closure-catch32.o.sim main.o.sim
+DEV_OBJECTS=$(C_SOURCES:%.c=%.o.armv7) $(CPP_SOURCES:%.cpp=%.o.armv7) $(OBJC_SOURCES:%.m=%.o.armv7) ejs-invoke-closure-catch32.o.armv7 main.o.armv7
+DEVS_OBJECTS=$(C_SOURCES:%.c=%.o.armv7s) $(CPP_SOURCES:%.cpp=%.o.armv7s) $(OBJC_SOURCES:%.m=%.o.armv7s) ejs-invoke-closure-catch.o.armv7s main.o.armv7s
 
 analyze_plists_c = $(C_SOURCES:%.c=%.plist) main.plist
 analyze_plists_objc = $(OBJC_SOURCES:%.m=%.plist) 
@@ -132,9 +140,9 @@ endif
 
 ALL_OBJECTS=$(SIM_OBJECTS) $(DEV_OBJECTS) $(DEVS_OBJECTS) $(OSX_OBJECTS)
 
-CFLAGS += -I../external-deps/pcre-osx
-IOSSIM_CFLAGS += -I../external-deps/pcre-iossim
-IOSDEV_CFLAGS += -I../external-deps/pcre-iosdev
+CFLAGS += -I../external-deps/pcre-osx -I../external-deps/double-conversion
+IOSSIM_CFLAGS += -I../external-deps/pcre-iossim -I../external-deps/double-conversion
+IOSDEV_CFLAGS += -I../external-deps/pcre-iosdev -I../external-deps/double-conversion
 
 
 $(OSX_LIBRARY): $(OSX_OBJECTS)
@@ -167,6 +175,11 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch -fno-objc
 	@$(CC) -MM $(OSX_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.osx,,`/$@/ > .deps/$@-deps
 	@echo [$(CC) osx] $< && $(CC) -ObjC $(OSX_CFLAGS)  -c -o $@ $<
 
+%.o.osx: %.cpp
+	@mkdir -p .deps
+	@$(CXX) -MM $(OSX_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.osx,,`/$@/ > .deps/$@-deps
+	@echo [$(CXX) osx] $< && $(CXX) -std=c++11 $(OSX_CFLAGS)  -c -o $@ $<
+
 %.o.osx: %.m
 	@mkdir -p .deps
 	@$(CC) -MM $(OSX_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.osx,,`/$@/ > .deps/$@-deps
@@ -179,6 +192,11 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch -fno-objc
 	@mkdir -p .deps
 	@$(CC) -MM $(IOSSIM_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.sim,,`/$@/ > .deps/$@-deps
 	@echo [$(CC) sim] $< && PATH=$(IOSSIM_BIN):$$PATH $(CC) -ObjC $(IOSSIM_CFLAGS) -c -o $@ $<
+
+%.o.sim: %.cpp
+	@mkdir -p .deps
+	@$(CXX) -MM $(IOSSIM_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.sim,,`/$@/ > .deps/$@-deps
+	@echo [$(CXX) sim] $< && PATH=$(IOSSIM_BIN):$$PATH $(CXX) -std=c++11 $(IOSSIM_CFLAGS)  -c -o $@ $<
 
 %.o.sim: %.m
 	@mkdir -p .deps
@@ -193,6 +211,11 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch -fno-objc
 	@$(CC) -MM -ObjC $(IOSDEV_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7,,`/$@/ > .deps/$@-deps
 	@echo [$(CC) armv7] $< && PATH=$(IOSDEV_BIN):$$PATH $(CC) -ObjC $(IOSDEV_CFLAGS) -c -o $@ $<
 
+%.o.armv7: %.cpp
+	@mkdir -p .deps
+	@$(CXX) -MM $(IOSDEV_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7,,`/$@/ > .deps/$@-deps
+	@echo [$(CXX) armv7] $< && PATH=$(IOSDEV_BIN):$$PATH $(CXX) -std=c++11 $(IOSDEV_CFLAGS)  -c -o $@ $<
+
 %.o.armv7: %.m
 	@mkdir -p .deps
 	@$(CC) -MM -ObjC $(IOSDEV_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7,,`/$@/ > .deps/$@-deps
@@ -205,6 +228,11 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch -fno-objc
 	@mkdir -p .deps
 	@$(CC) -MM -ObjC $(IOSDEVS_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7s,,`/$@/ > .deps/$@-deps
 	@echo [$(CC) armv7s] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) -ObjC $(IOSDEVS_CFLAGS) -c -o $@ $<
+
+%.o.armv7s: %.cpp
+	@mkdir -p .deps
+	@$(CXX) -MM $(IOSDEVS_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7s,,`/$@/ > .deps/$@-deps
+	@echo [$(CXX) armv7s] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CXX) -std=c++11 $(IOSDEVS_CFLAGS)  -c -o $@ $<
 
 %.o.armv7s: %.m
 	@mkdir -p .deps

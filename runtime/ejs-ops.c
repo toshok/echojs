@@ -170,7 +170,7 @@ ejsval NumberToString(double d, int base)
     }
     else {
         // XXX we need to take @base into account
-        snprintf (num_buf, sizeof(num_buf), EJS_NUMBER_FORMAT, d);
+        _ejs_dtoa(d, num_buf, sizeof(num_buf));
     }
     return _ejs_string_new_utf8 (num_buf);
 }

@@ -106,6 +106,8 @@ EJSBool IteratorNext_internal(ejsval* next, ejsval iterator, ejsval value);
 EJSBool IteratorValue_internal(ejsval* value, ejsval iterResult);
 EJSBool IteratorComplete_internal (ejsval iterResult);
 
+void _ejs_dtoa(double d, char* buf, size_t buf_size);
+
 EJS_END_DECLS
 
 #endif // _ejs_ops_h
