@@ -70,10 +70,21 @@ function ejs_exe_dirname() {
 }
 
 function relative_to_ejs_exe(n) {
+
+    let was_array = Array.isArray(n);
+    if (!was_array)
+        n = [n];
+
+    let rv;
     if (isNode()) {
-        return path.resolve(ejs_exe_dirname(), "../..", n);
+        rv = n.map( (el) => path.resolve(ejs_exe_dirname(), "../..", el) );
     }
-    return path.resolve(ejs_exe_dirname(), n);
+    else {
+        rv = n.map( (el) => path.resolve(ejs_exe_dirname(), el) );
+    }
+
+    if (was_array) return rv;
+    return rv[0];
 }
 
 
@@ -424,13 +435,13 @@ function target_libecho(platform, arch) {
 
 function target_extra_libs(platform, arch) {
     if (options.srcdir) {
-        if (platform === "linux")   return "external-deps/pcre-linux/.libs/libpcre16.a";
+        if (platform === "linux")   return ["external-deps/double-conversion-linux/double-conversion/libdouble-conversion.a",  "external-deps/pcre-linux/.libs/libpcre16.a"];
 
         if (platform === "darwin") {
-            if (arch === "x86_64")  return "external-deps/pcre-osx/.libs/libpcre16.a";
-            if (arch === "x86")     return "external-deps/pcre-iossim/.libs/libpcre16.a";
-            if (arch === "arm")     return "external-deps/pcre-iosdev/.libs/libpcre16.a";
-            if (arch === "aarch64") return "external-deps/pcre-iosdevaarch64/.libs/libpcre16.a";
+            if (arch === "x86_64")  return ["external-deps/double-conversion-osx/double-conversion/libdouble-conversion.a", "external-deps/pcre-osx/.libs/libpcre16.a"];
+            if (arch === "x86")     return ["external-deps/double-conversion-iossim/double-conversion/libdouble-conversion.a", "external-deps/pcre-iossim/.libs/libpcre16.a"];
+            if (arch === "arm")     return ["external-deps/double-conversion-iosdev/double-conversion/libdouble-conversion.a", "external-deps/pcre-iosdev/.libs/libpcre16.a"];
+            if (arch === "aarch64") return ["external-deps/double-conversion-iosdevs/double-conversion/libdouble-conversion.a", "external-deps/pcre-iosdevaarch64/.libs/libpcre16.a"];
         }
 
         throw new Error("no pcre for this platform");
@@ -612,8 +623,8 @@ function do_final_link(main_file, modules) {
     
     clang_args.push(map_filename);
     
-    clang_args.push(relative_to_ejs_exe(target_libecho(options.target_platform, options.target_arch)));
-    clang_args.push(relative_to_ejs_exe(target_extra_libs(options.target_platform, options.target_arch)));
+    clang_args = clang_args.concat(relative_to_ejs_exe(target_libecho(options.target_platform, options.target_arch)));
+    clang_args = clang_args.concat(relative_to_ejs_exe(target_extra_libs(options.target_platform, options.target_arch)));
     
     let seen_native_modules = new Set();
     native_modules.forEach ((module, k) => {

@@ -1,5 +1,3 @@
-// xfail: we use %g to format floats/doubles, and differ when printing numbers.
-
 var buff = new ArrayBuffer (16);
 var view = new DataView (buff);
 
