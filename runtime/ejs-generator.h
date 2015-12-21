@@ -56,6 +56,10 @@ extern void _ejs_iterator_init_proto ();
 extern void _ejs_gc_push_generator(EJSGenerator *gen);
 extern void _ejs_gc_pop_generator();
 
+
+extern ejsval _ejs_iterator_wrapper_new (ejsval iterator);
+extern void _ejs_iterator_wrapper_close (ejsval iterator);
+
 EJS_END_DECLS
 
 #endif

@@ -37,6 +37,7 @@ ES6_SOURCES=			 	\
 	passes/desugar-templates.js	\
 	passes/desugar-update-assignments.js \
 	passes/eq-idioms.js		\
+	passes/flatten-decls.js		\
 	passes/func-decls-to-vars.js	\
 	passes/gather-imports.js	\
 	passes/hoist-func-decls.js	\
