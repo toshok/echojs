@@ -31,6 +31,8 @@ var runloop_impl = require('../lib/generated/lib/host-config.js').RUNLOOP_IMPL;
 
 var running_on_travis = process.env['TRAVIS_BUILD_NUMBER'] != null;
 
+var platform_to_test = null;
+
 var stage_to_run = 0;
 
 var test_threads = 4;
@@ -184,9 +186,17 @@ function processOneTest(gen_expected, test, cb) {
     else {
         try {
             var start = timerStart();
-            var ccomp = spawn(compilers[stage_to_run], ["--srcdir", "--moduledir", "../node-compat", "--moduledir", "../ejs-llvm", test]);
+	    var platform_target = platform_to_test ? ["--target", platform_to_test] : [];
+            var ccomp = spawn(compilers[stage_to_run],  platform_target.concat(["--srcdir", "--moduledir", "../node-compat", "--moduledir", "../ejs-llvm", test]));
             ccomp.on("exit", function(code, errstring) {
                 // XXX check code to make sure we were successful?
+		var env;
+		if (platform_to_test === 'sim') {
+		    process.env['EJS_FORCE_STDOUT'] = '1';
+		    process.env['DYLD_FRAMEWORK_PATH'] = '/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/System/Library/Frameworks:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/System/Library/PrivateFrameworks';
+		    process.env['DYLD_LIBRARY_PATH'] = '/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/usr/lib:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/usr/lib/system:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/System/Library/PrivateFrameworks/FontServices.framework:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/System/Library/Frameworks/Accelerate.framework/Frameworks/vecLib.framework:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk//System/Library/Frameworks/OpenGLES.framework';
+		}
+
                 var cexec = spawn("./" + test + ".exe");
                 var test_stdout = "";
                 var test_stderr = "";
@@ -289,6 +299,15 @@ function readTest(test) {
 var args = process.argv.slice(2);
 
 var test_to_run = null;
+
+if (args[0] == '-p') {
+    args.shift();
+    if (args.length < 1)
+        throw new Error("-p requires an argument [osx, sim]");
+    platform_to_test = args.shift();
+    if (platform_to_test !== 'osx' && platform_to_test !== 'sim')
+        throw new Error("-p requires an argument [osx, sim]");
+}
 
 if (args[0] == '-s') {
     args.shift();
