@@ -23,12 +23,12 @@
 #endif
 
 #if IOS
-#define OUTPUT0(str) NSLog(@str)
-#define OUTPUT(format, ...) NSLog(@format, __VA_ARGS__)
+#define OUTPUT(format, ...) if (force_stdout) fprintf (outfile, format, __VA_ARGS__); else NSLog(@format, __VA_ARGS__)
 #else
-#define OUTPUT0(str) fprintf (outfile, str)
 #define OUTPUT(format, ...) fprintf (outfile, format, __VA_ARGS__)
 #endif
+
+static EJSBool force_stdout;
 
 ejsval console_toString(ejsval arg);
 
@@ -117,14 +117,17 @@ output (FILE *outfile, uint32_t argc, ejsval *args)
         char* strval_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(out_str));
         OUTPUT ("%s", strval_utf8);
         free (strval_utf8);
-#if !IOS
-        if (i < argc - 1)
-            fputc (' ', outfile);
+#if IOS
+        if (force_stdout)
 #endif
+            if (i < argc - 1)
+                fputc (' ', outfile);
     }
-#if !IOS
-    fputc ('\n', outfile);
+
+#if IOS
+    if (force_stdout)
 #endif
+        fputc ('\n', outfile);
 
     return _ejs_undefined;
 }
@@ -239,13 +242,14 @@ static EJS_NATIVE_FUNC(_ejs_console_timeEnd) {
     uint64_t usec_before = tv_before_slot->tv_sec * 1000000 + tv_before_slot->tv_usec;
     uint64_t usec_after = tvafter.tv_sec * 1000000 + tvafter.tv_usec;
 
-#if !IOS
     FILE* outfile = stdout;
-#endif
+
     OUTPUT ("%s: %gms", str, (usec_after - usec_before) / 1000.0);
-#if !IOS
-    fprintf (outfile, "\n");
+
+#if IOS
+    if (force_stdout)
 #endif
+        fprintf (outfile, "\n");
 
     remove_timeval_slot(args[0]);
 
@@ -257,6 +261,8 @@ ejsval _ejs_console EJSVAL_ALIGNMENT;
 void
 _ejs_console_init(ejsval global)
 {
+    force_stdout = getenv("EJS_FORCE_STDOUT") != NULL;
+
     _ejs_console = _ejs_object_new (_ejs_null, &_ejs_Object_specops);
     _ejs_object_setprop (global, _ejs_atom_console, _ejs_console);
 
