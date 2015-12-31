@@ -56,12 +56,6 @@ ifeq ($(HOST_OS),linux)
 ALL_LIBRARIES=$(LIBRARY)
 ALL_TARGETS=$(ALL_LIBRARIES)
 
-ifeq ($(HOST_CPU),x86_64)
-INVOKE_CATCH=ejs-invoke-closure-catch.o.linux
-else
-INVOKE_CATCH=ejs-invoke-closure-catch32.o.linux
-endif
-
 # pretty terrible.. ubuntu 12.04 (travis-ci uses it) doesn't have a libuv that I can find, not even in ppas,
 # so we need an escape hatch.
 ifeq ($(EJS_RUNLOOP_IMPL),noop)
@@ -72,7 +66,7 @@ RUNLOOP_DEF=-DHAVE_LIBUV=1
 RUNLOOP_C_SOURCE=ejs-runloop-libuv.c
 endif
 
-LINUX_OBJECTS=$(C_SOURCES:%.c=%.o.linux) $(CPP_SOURCES:%.cpp=%.o.linux) $(OBJC_SOURCES:%.m=%.o.linux) ejs-log.o.linux main.o.linux $(INVOKE_CATCH) $(RUNLOOP_C_SOURCE:%.c=%.o.linux)
+LINUX_OBJECTS=$(C_SOURCES:%.c=%.o.linux) $(CPP_SOURCES:%.cpp=%.o.linux) $(OBJC_SOURCES:%.m=%.o.linux) ejs-log.o.linux main.o.linux ejs-invoke-closure-catch.o.linux $(RUNLOOP_C_SOURCE:%.c=%.o.linux)
 
 ALL_OBJECTS=$(LINUX_OBJECTS)
 
@@ -117,8 +111,8 @@ OBJC_SOURCES= \
 	ejs-runloop-darwin.m
 
 OSX_OBJECTS=$(C_SOURCES:%.c=%.o.osx) $(CPP_SOURCES:%.cpp=%.o.osx) $(OBJC_SOURCES:%.m=%.o.osx) ejs-invoke-closure-catch.o.osx main.o.osx
-SIM_OBJECTS=$(C_SOURCES:%.c=%.o.sim) $(CPP_SOURCES:%.cpp=%.o.sim) $(OBJC_SOURCES:%.m=%.o.sim) ejs-invoke-closure-catch32.o.sim main.o.sim
-DEV_OBJECTS=$(C_SOURCES:%.c=%.o.armv7) $(CPP_SOURCES:%.cpp=%.o.armv7) $(OBJC_SOURCES:%.m=%.o.armv7) ejs-invoke-closure-catch32.o.armv7 main.o.armv7
+SIM_OBJECTS=$(C_SOURCES:%.c=%.o.sim) $(CPP_SOURCES:%.cpp=%.o.sim) $(OBJC_SOURCES:%.m=%.o.sim) ejs-invoke-closure-catch.o.sim main.o.sim
+DEV_OBJECTS=$(C_SOURCES:%.c=%.o.armv7) $(CPP_SOURCES:%.cpp=%.o.armv7) $(OBJC_SOURCES:%.m=%.o.armv7) ejs-invoke-closure-catch-sret.o.armv7 main.o.armv7
 DEVS_OBJECTS=$(C_SOURCES:%.c=%.o.armv7s) $(CPP_SOURCES:%.cpp=%.o.armv7s) $(OBJC_SOURCES:%.m=%.o.armv7s) ejs-invoke-closure-catch.o.armv7s main.o.armv7s
 
 analyze_plists_c = $(C_SOURCES:%.c=%.plist) main.plist
