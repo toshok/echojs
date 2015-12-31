@@ -46,8 +46,13 @@ static ejsval page_allocation_failed_exc EJSVAL_ALIGNMENT;
 
 void _ejs_gc_dump_heap_stats();
 
-// 2GB heap.  deal with it, suckers
+#if EJS_BITS_PER_WORD == 64
+// 2GB
 #define MAX_HEAP_SIZE (2048LL * 1024LL * 1024LL)
+#else
+// 128MB
+#define MAX_HEAP_SIZE (128LL * 1024LL * 1024LL)
+#endif
 
 #ifndef PAGE_SIZE
 #define PAGE_SIZE 4096
