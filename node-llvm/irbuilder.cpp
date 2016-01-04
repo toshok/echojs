@@ -59,6 +59,7 @@ namespace jsllvm {
     Nan::SetMethod(ctor_func, "createUnreachable", IRBuilder::CreateUnreachable);
     Nan::SetMethod(ctor_func, "createAnd", IRBuilder::CreateAnd);
     Nan::SetMethod(ctor_func, "createOr", IRBuilder::CreateOr);
+    Nan::SetMethod(ctor_func, "createTrunc", IRBuilder::CreateTrunc);
     Nan::SetMethod(ctor_func, "createZExt", IRBuilder::CreateZExt);
     Nan::SetMethod(ctor_func, "createIntToPtr", IRBuilder::CreateIntToPtr);
     Nan::SetMethod(ctor_func, "createPtrToInt", IRBuilder::CreatePtrToInt);
@@ -168,6 +169,17 @@ namespace jsllvm {
     FALLBACK_EMPTY_UTF8_ARG(2, name);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(builder.CreateOr(lhs, rhs, *name)));
+    info.GetReturnValue().Set(result);
+  }
+
+  NAN_METHOD(IRBuilder::CreateTrunc) {
+    Nan::HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(0, V);
+    REQ_LLVM_TYPE_ARG(1, dest_ty);
+    FALLBACK_EMPTY_UTF8_ARG(2, name);
+
+    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(builder.CreateTrunc(V, dest_ty, *name)));
     info.GetReturnValue().Set(result);
   }
 

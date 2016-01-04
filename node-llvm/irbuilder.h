@@ -45,6 +45,7 @@ namespace jsllvm {
     static NAN_METHOD(CreateUnreachable);
     static NAN_METHOD(CreateAnd);
     static NAN_METHOD(CreateOr);
+    static NAN_METHOD(CreateTrunc);
     static NAN_METHOD(CreateZExt);
     static NAN_METHOD(CreateIntToPtr);
     static NAN_METHOD(CreatePtrToInt);
