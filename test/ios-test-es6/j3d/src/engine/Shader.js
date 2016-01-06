@@ -51,7 +51,7 @@ J3D.Shader.prototype.setup = function(shader, transform) {
 J3D.Shader.prototype.clone = function() {
 	var c = new J3D.Shader(this.name + Math.random(), this._vertSource, this._fragSource);
 
-	for(s in this) {
+	for(let s in this) {
 		if (typeof this[s] !== "function" && this.hasOwnProperty(s)) {
 			c[s] = this[s];
 		}
@@ -63,7 +63,7 @@ J3D.Shader.prototype.clone = function() {
 
 	c.su = {};
 
-	for(ss in this.su) {
+	for(let ss in this.su) {
 		if (typeof this.su[ss] !== "function" && this.su.hasOwnProperty(ss)) {
 			c.su[ss] = this.su[ss];
 		}

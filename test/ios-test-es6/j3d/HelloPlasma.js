@@ -1,9 +1,6 @@
-var fs = require('fs');
+import * as fs from   '@node-compat/fs';
 
-//XXX this should be var j3d_all = require("j3d/j3d-all");
-var j3d_all = require("j3d-all");
-var J3D = j3d_all.J3D;
-var gl = j3d_all.gl;
+import { J3D, gl } from './j3d-all';
 
 var plasmaShader =
 "   uniform sampler2D uTexture;	\n"+
@@ -28,36 +25,36 @@ var plasmaShader =
 
 var engine, ctex, textures, post;
 
-exports.run = function (canvas) {
+export function run(canvas) {
 
-	engine = new J3D.Engine(canvas);
+    engine = new J3D.Engine(canvas);
 
     textures = [
-	  new J3D.Texture("demo/models/textures/colorramp1.png"),
-	  new J3D.Texture("demo/models/textures/colorramp2.png"),
-	  new J3D.Texture("demo/models/textures/colorramp3.png")
+	new J3D.Texture("demo/models/textures/colorramp1.png"),
+	new J3D.Texture("demo/models/textures/colorramp2.png"),
+	new J3D.Texture("demo/models/textures/colorramp3.png")
     ];
 
-	ctex = 1;
+    ctex = 1;
 
-	post = new J3D.Postprocess(engine);
-	post.filter = new J3D.Shader("PlasmaFilter", J3D.ShaderSource.BasicFilterVertex, plasmaShader, {
-                                    fragmentIncludes: ["CommonFilterInclude"],
-                                    vertexIncludes: ["CommonInclude"]
-                                 });
-	post.render = function() {
-		J3D.Time.tick();
-		this.renderEffect(textures[ctex].tex);
-	};
-};
+    post = new J3D.Postprocess(engine);
+    post.filter = new J3D.Shader("PlasmaFilter", J3D.ShaderSource.BasicFilterVertex, plasmaShader, {
+        fragmentIncludes: ["CommonFilterInclude"],
+        vertexIncludes: ["CommonInclude"]
+    });
+    post.render = function() {
+	J3D.Time.tick();
+	this.renderEffect(textures[ctex].tex);
+    };
+}
 
-exports.draw = function () {
-	post.render();
-};
+export function draw() {
+    post.render();
+}
 
-exports.tap = function () {
+export function tap() {
     ctex = (ctex + 1) % 3;
     // XXX the first color ramp png is broken for some reason.. so let's just toggle between the other two for now.
     if (ctex == 0)
         ctex = 1;
-};
+}

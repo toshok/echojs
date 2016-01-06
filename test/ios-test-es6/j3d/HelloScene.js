@@ -1,9 +1,5 @@
-var fs = require('fs');
-
-//XXX this should be var j3d_all = require("j3d/j3d-all");
-var j3d_all = require("j3d-all");
-var J3D = j3d_all.J3D;
-var gl = j3d_all.gl;
+import * as fs from   '@node-compat/fs';
+import { J3D, gl } from './j3d-all';
 
 var mx = 2, my = 2;
 var jsonScene;
@@ -11,60 +7,60 @@ var root;
 var rings = [];
 var engine;
 
-exports.run = function (canvas) {
-  engine = new J3D.Engine(canvas);
+export function run(canvas) {
+    engine = new J3D.Engine(canvas);
 
-  J3D.Loader.loadJSON("demo/models/text.json", function(jsmeshes) {
-    J3D.Loader.loadJSON("demo/models/textScene.json", function(jsscene) {
-			  jsonScene = jsscene;
-			  J3D.Loader.parseJSONScene(jsscene, jsmeshes, engine);
+    J3D.Loader.loadJSON("demo/models/text.json", function(jsmeshes) {
+	J3D.Loader.loadJSON("demo/models/textScene.json", function(jsscene) {
+	    jsonScene = jsscene;
+	    J3D.Loader.parseJSONScene(jsscene, jsmeshes, engine);
 
-			  root = engine.scene.find("root");
+	    root = engine.scene.find("root");
 
-			  rings[0] = engine.scene.find("root/ring");
-			  rings[1] = engine.scene.find("root/ring/ring");
-			  rings[2] = engine.scene.find("root/ring/ring/ring");
-			  rings[3] = engine.scene.find("root/ring/ring/ring/ring");
-			  rings[4] = engine.scene.find("root/ring/ring/ring/ring/ring");
-			  rings[5] = engine.scene.find("root/ring/ring/ring/ring/ring/ring");
-			  rings[6] = engine.scene.find("root/ring/ring/ring/ring/ring/ring/ring");
-			});
-		});
+	    rings[0] = engine.scene.find("root/ring");
+	    rings[1] = engine.scene.find("root/ring/ring");
+	    rings[2] = engine.scene.find("root/ring/ring/ring");
+	    rings[3] = engine.scene.find("root/ring/ring/ring/ring");
+	    rings[4] = engine.scene.find("root/ring/ring/ring/ring/ring");
+	    rings[5] = engine.scene.find("root/ring/ring/ring/ring/ring/ring");
+	    rings[6] = engine.scene.find("root/ring/ring/ring/ring/ring/ring/ring");
+	});
+    });
 
     /*document.onmousemove = onMouseMove;*/
-};
-
-function onMouseMove(e) {
-  mx = ( e.clientX / window.innerWidth  ) * 2 - 1;
-  my = ( e.clientY / window.innerHeight ) * 2 - 1;
 }
 
-exports.draw = function () {
-//  requestAnimationFrame(draw);
+function onMouseMove(e) {
+    mx = ( e.clientX / window.innerWidth  ) * 2 - 1;
+    my = ( e.clientY / window.innerHeight ) * 2 - 1;
+}
 
-  if(!mx) mx = 0;
-  if(!my) my = 0;
+export function draw() {
+    //  requestAnimationFrame(draw);
 
-  var sx = mx * J3D.Time.deltaTime / 1000;
-  var sy = my * J3D.Time.deltaTime / 1000;
+    if(!mx) mx = 0;
+    if(!my) my = 0;
 
-  root.rotation.y += sx;
+    var sx = mx * J3D.Time.deltaTime / 1000;
+    var sy = my * J3D.Time.deltaTime / 1000;
 
-  rings[0].rotation.y += sx;
-  rings[1].rotation.y -= sx * 0.1;
-  rings[2].rotation.y -= sx * 0.12;
-  rings[3].rotation.y -= sx * 0.14;
-  rings[4].rotation.y -= sx * 0.16;
-  rings[5].rotation.y -= sx * 0.18;
-  rings[6].rotation.y -= sx * 0.2;
+    root.rotation.y += sx;
 
-  rings[0].rotation.x += sy;
-  rings[1].rotation.x -= sy * 0.1;
-  rings[2].rotation.x -= sy * 0.12;
-  rings[3].rotation.x -= sy * 0.14;
-  rings[4].rotation.x -= sy * 0.16;
-  rings[5].rotation.x -= sy * 0.18;
-  rings[6].rotation.x -= sy * 0.2;
+    rings[0].rotation.y += sx;
+    rings[1].rotation.y -= sx * 0.1;
+    rings[2].rotation.y -= sx * 0.12;
+    rings[3].rotation.y -= sx * 0.14;
+    rings[4].rotation.y -= sx * 0.16;
+    rings[5].rotation.y -= sx * 0.18;
+    rings[6].rotation.y -= sx * 0.2;
 
-  engine.render();
-};
+    rings[0].rotation.x += sy;
+    rings[1].rotation.x -= sy * 0.1;
+    rings[2].rotation.x -= sy * 0.12;
+    rings[3].rotation.x -= sy * 0.14;
+    rings[4].rotation.x -= sy * 0.16;
+    rings[5].rotation.x -= sy * 0.18;
+    rings[6].rotation.x -= sy * 0.2;
+
+    engine.render();
+}
