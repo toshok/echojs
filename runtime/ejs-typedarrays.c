@@ -2224,7 +2224,7 @@ _ejs_typedarrays_init(ejsval global)
 
     // ArrayBuffer
     {
-        _ejs_ArrayBuffer = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_ArrayBuffer, (EJSClosureFunc)_ejs_ArrayBuffer_impl);
+        _ejs_ArrayBuffer = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_ArrayBuffer, _ejs_ArrayBuffer_impl);
         _ejs_object_setprop (global,           _ejs_atom_ArrayBuffer, _ejs_ArrayBuffer);
 
         _ejs_gc_add_root (&_ejs_ArrayBuffer_prototype);
@@ -2241,7 +2241,7 @@ _ejs_typedarrays_init(ejsval global)
 
     // DataView
     {
-        _ejs_DataView = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_DataView, (EJSClosureFunc)_ejs_DataView_impl);
+        _ejs_DataView = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_DataView, _ejs_DataView_impl);
         _ejs_object_setprop (global,            _ejs_atom_DataView, _ejs_DataView);
 
         _ejs_gc_add_root (&_ejs_DataView_prototype);
@@ -2289,7 +2289,7 @@ _ejs_typedarrays_init(ejsval global)
     PROTO_METHOD_IMPL_GENERIC(toString);
 
 #define ADD_TYPEDARRAY(EnumType, ArrayType, arraytype, elementSizeInBytes) EJS_MACRO_START \
-    _ejs_##ArrayType##Array = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_##ArrayType##Array, (EJSClosureFunc)_ejs_##ArrayType##Array_impl); \
+    _ejs_##ArrayType##Array = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_##ArrayType##Array, _ejs_##ArrayType##Array_impl); \
     _ejs_object_setprop (global,         _ejs_atom_##ArrayType##Array,  _ejs_##ArrayType##Array); \
                                                                         \
     _ejs_gc_add_root (&_ejs_##ArrayType##Array_prototype);              \
@@ -2314,7 +2314,7 @@ _ejs_typedarrays_init(ejsval global)
     PROTO_GETTER(ArrayType##Array, toStringTag); /* XXX needs to be enumerable: false, configurable: true */ \
                                                                         \
     /* Manually expand values() so we can use it for the iterator */    \
-    ejsval _values = _ejs_function_new_native(_ejs_null, _ejs_atom_values, (EJSClosureFunc) _ejs_TypedArray_prototype_values); \
+    ejsval _values = _ejs_function_new_native(_ejs_null, _ejs_atom_values, _ejs_TypedArray_prototype_values); \
     _ejs_object_define_value_property(_ejs_##ArrayType##Array_prototype, _ejs_atom_values, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE); \
     _ejs_object_define_value_property(_ejs_##ArrayType##Array_prototype, _ejs_Symbol_iterator, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE); \
                                                                         \

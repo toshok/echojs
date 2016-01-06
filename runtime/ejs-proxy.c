@@ -82,7 +82,7 @@ ejsval _ejs_Proxy_prototype EJSVAL_ALIGNMENT;
 void
 _ejs_proxy_init(ejsval global)
 {
-    _ejs_Proxy = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Proxy, (EJSClosureFunc)_ejs_Proxy_impl);
+    _ejs_Proxy = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Proxy, _ejs_Proxy_impl);
     _ejs_object_setprop (global, _ejs_atom_Proxy, _ejs_Proxy);
 
     // the spec doesn't mention a prototype (and other implementations

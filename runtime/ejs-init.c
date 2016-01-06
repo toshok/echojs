@@ -207,7 +207,7 @@ _ejs_init(int argc, char** argv)
 #endif
 
 #define GLOBAL_METHOD(x) EJS_MACRO_START                                \
-    _ejs_##x = _ejs_function_new_native (_ejs_null, _ejs_atom_##x, (EJSClosureFunc)_ejs_##x##_impl); \
+    _ejs_##x = _ejs_function_new_native (_ejs_null, _ejs_atom_##x, _ejs_##x##_impl); \
     _ejs_object_setprop (_ejs_global, _ejs_atom_##x, _ejs_##x);         \
     EJS_MACRO_END
 

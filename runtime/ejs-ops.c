@@ -1194,9 +1194,7 @@ _ejs_rethrow ()
     _ejs_exception_rethrow ();
 }
 
-ejsval
-_ejs_isNaN_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+EJS_NATIVE_FUNC(_ejs_isNaN_impl) {
     ejsval num = _ejs_undefined;
     if (argc >= 1)
         num = args[0];
@@ -1204,9 +1202,7 @@ _ejs_isNaN_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return isnan(ToDouble(num)) ? _ejs_true : _ejs_false;
 }
 
-ejsval
-_ejs_isFinite_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+EJS_NATIVE_FUNC(_ejs_isFinite_impl) {
     if (argc < 1)
         return _ejs_false;
 
@@ -1217,9 +1213,7 @@ _ejs_isFinite_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 
 // ECMA262 15.1.2.2
 // parseInt (string , radix)
-ejsval
-_ejs_parseInt_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+EJS_NATIVE_FUNC(_ejs_parseInt_impl) {
     ejsval string = _ejs_undefined;
     ejsval radix = _ejs_undefined;
 
@@ -1352,9 +1346,7 @@ _ejs_parseInt_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return NUMBER_TO_EJSVAL(number);
 }
 
-ejsval
-_ejs_parseFloat_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+EJS_NATIVE_FUNC(_ejs_parseFloat_impl) {
     if (argc == 0)
         return _ejs_nan;
 

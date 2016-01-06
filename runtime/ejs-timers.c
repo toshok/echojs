@@ -70,9 +70,7 @@ dtor_timeout_task (void *data)
     destroy_task_arg((TimerTaskArg*)data);
 }
 
-static ejsval
-_ejs_clearTimer (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
+static EJS_NATIVE_FUNC(_ejs_clearTimer) {
     ejsval timer = _ejs_undefined;
 
     if (argc >= 1)
@@ -92,16 +90,12 @@ _ejs_clearTimer (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
     return _ejs_undefined;
 }
 
-ejsval
-_ejs_clearInterval_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
-    return _ejs_clearTimer (env, _this, argc, args);
+EJS_NATIVE_FUNC(_ejs_clearInterval_impl) {
+    return _ejs_clearTimer (env, _this, argc, args, _ejs_undefined);
 }
 
-ejsval
-_ejs_clearTimeout_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
-    return _ejs_clearTimer (env, _this, argc, args);
+EJS_NATIVE_FUNC(_ejs_clearTimeout_impl) {
+    return _ejs_clearTimer (env, _this, argc, args, _ejs_undefined);
 }
 
 static ejsval
@@ -116,8 +110,7 @@ create_timer_value(void *handle)
 }
 
 static ejsval
-_ejs_setTimer (ejsval env, ejsval _this, uint32_t argc, ejsval* args, EJSBool repeats)
-{
+_ejs_setTimer(uint32_t argc, ejsval* args, EJSBool repeats) {
     ejsval callbackfn = _ejs_undefined;
     ejsval interval = _ejs_undefined;
 
@@ -147,28 +140,23 @@ _ejs_setTimer (ejsval env, ejsval _this, uint32_t argc, ejsval* args, EJSBool re
     return create_timer_value (handle);
 }
 
-ejsval
-_ejs_setTimeout_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    return _ejs_setTimer(env, _this, argc, args, EJS_FALSE);
+static EJS_NATIVE_FUNC(_ejs_setTimeout_impl) {
+    return _ejs_setTimer(argc, args, EJS_FALSE);
 }
 
-ejsval
-_ejs_setInterval_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
-{
-    return _ejs_setTimer(env, _this, argc, args, EJS_TRUE);
+static EJS_NATIVE_FUNC(_ejs_setInterval_impl) {
+    return _ejs_setTimer(argc, args, EJS_TRUE);
 }
 
-static ejsval
-_ejs_Timer_impl (ejsval env, ejsval _this, uint32_t argc, ejsval *args)
-{
-    return _this;
+static EJS_NATIVE_FUNC(_ejs_Timer_impl) {
+    EJS_NOT_IMPLEMENTED();
+    //return _this;
 }
 
 void
 _ejs_timers_init(ejsval global)
 {
-    _ejs_Timer = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_empty, (EJSClosureFunc)_ejs_Timer_impl);
+    _ejs_Timer = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_empty, _ejs_Timer_impl);
 
     _ejs_gc_add_root (&_ejs_Timer_prototype);
     _ejs_Timer_prototype = _ejs_object_new (_ejs_null, &_ejs_Object_specops);
@@ -176,7 +164,7 @@ _ejs_timers_init(ejsval global)
     _ejs_object_define_value_property (_ejs_Timer_prototype, _ejs_atom_constructor, _ejs_Timer,
             EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
 #define GLOBAL_METHOD(x) EJS_MACRO_START                                \
-    _ejs_##x = _ejs_function_new_native (_ejs_null, _ejs_atom_##x, (EJSClosureFunc)_ejs_##x##_impl); \
+    _ejs_##x = _ejs_function_new_native (_ejs_null, _ejs_atom_##x, _ejs_##x##_impl); \
     _ejs_object_setprop (global, _ejs_atom_##x, _ejs_##x);         \
     EJS_MACRO_END
 

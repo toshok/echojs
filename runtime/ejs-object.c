@@ -1902,7 +1902,7 @@ _ejs_object_init_proto()
 void
 _ejs_object_init (ejsval global)
 {
-    _ejs_Object = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Object, (EJSClosureFunc)_ejs_Object_impl);
+    _ejs_Object = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Object, _ejs_Object_impl);
     _ejs_object_setprop (global, _ejs_atom_Object, _ejs_Object);
 
     // ECMA262 15.2.3.1

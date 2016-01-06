@@ -2613,7 +2613,7 @@ _ejs_array_init(ejsval global)
 {
     _ejs_sparsearray_specops =  _ejs_Array_specops;
 
-    _ejs_Array = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Array, (EJSClosureFunc)_ejs_Array_impl);
+    _ejs_Array = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Array, _ejs_Array_impl);
     ((EJSFunction*)EJSVAL_TO_OBJECT(_ejs_Array))->constructor_kind = 0;
 
     _ejs_object_setprop (global,           _ejs_atom_Array,      _ejs_Array);
@@ -2678,7 +2678,7 @@ _ejs_array_init(ejsval global)
     PROTO_METHOD(keys);
 
     // we expand PROTO_METHOD(values) here so that we can install the function as @@iterator below
-    ejsval _values = _ejs_function_new_native (_ejs_null, _ejs_atom_values, (EJSClosureFunc)_ejs_Array_prototype_values);
+    ejsval _values = _ejs_function_new_native (_ejs_null, _ejs_atom_values, _ejs_Array_prototype_values);
     _ejs_object_define_value_property (_ejs_Array_prototype, _ejs_atom_values, _values, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE);
 
     PROTO_METHOD(entries);
@@ -2692,7 +2692,7 @@ _ejs_array_init(ejsval global)
     // The initial value of the @@iterator property is the same function object as the initial value of the Array.prototype.values property.
     _ejs_object_define_value_property (_ejs_Array_prototype, _ejs_Symbol_iterator, _values, EJS_PROP_NOT_ENUMERABLE);
 
-    _ejs_ArrayIterator = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Array, (EJSClosureFunc)_ejs_ArrayIterator_impl);
+    _ejs_ArrayIterator = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Array, _ejs_ArrayIterator_impl);
 
     _ejs_gc_add_root (&_ejs_ArrayIterator_prototype);
     _ejs_ArrayIterator_prototype = _ejs_array_iterator_new(_ejs_Array_prototype, EJS_ARRAYITER_KIND_VALUE);

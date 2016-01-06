@@ -572,7 +572,7 @@ static EJS_NATIVE_FUNC(_ejs_MapIterator_prototype_next) {
 void
 _ejs_map_init(ejsval global)
 {
-    _ejs_Map = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Map, (EJSClosureFunc)_ejs_Map_impl);
+    _ejs_Map = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Map, _ejs_Map_impl);
     _ejs_object_setprop (global, _ejs_atom_Map, _ejs_Map);
 
     _ejs_gc_add_root (&_ejs_Map_prototype);
@@ -597,7 +597,7 @@ _ejs_map_init(ejsval global)
     PROTO_GETTER(size);
 
     // expand PROTO_METHOD(entries) here so we can install the function for @@iterator below
-    ejsval _entries = _ejs_function_new_native (_ejs_null, _ejs_atom_entries,  (EJSClosureFunc)_ejs_Map_prototype_entries);
+    ejsval _entries = _ejs_function_new_native (_ejs_null, _ejs_atom_entries,  _ejs_Map_prototype_entries);
     _ejs_object_define_value_property (_ejs_Map_prototype, _ejs_atom_entries, _entries, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_FLAGS_WRITABLE | EJS_PROP_FLAGS_CONFIGURABLE);
 
     _ejs_object_define_value_property (_ejs_Map_prototype, _ejs_Symbol_iterator, _entries, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_FLAGS_WRITABLE | EJS_PROP_FLAGS_CONFIGURABLE);
@@ -608,7 +608,7 @@ _ejs_map_init(ejsval global)
 #undef OBJ_METHOD
 #undef PROTO_METHOD
 
-    _ejs_MapIterator = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Map, (EJSClosureFunc)_ejs_MapIterator_impl);
+    _ejs_MapIterator = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Map, _ejs_MapIterator_impl);
 
     _ejs_gc_add_root (&_ejs_MapIterator_prototype);
     _ejs_MapIterator_prototype = _ejs_map_iterator_new (_ejs_Map_prototype, EJS_MAP_ITER_KIND_VALUE);

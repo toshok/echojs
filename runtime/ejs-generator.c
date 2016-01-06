@@ -224,7 +224,7 @@ _ejs_iterator_init_proto()
     _ejs_gc_add_root (&_ejs_Generator_prototype);
     _ejs_Iterator_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
 
-    ejsval _iterator = _ejs_function_new_native (_ejs_null, _ejs_Symbol_iterator, (EJSClosureFunc)_ejs_Iterator_prototype_iterator);
+    ejsval _iterator = _ejs_function_new_native (_ejs_null, _ejs_Symbol_iterator, _ejs_Iterator_prototype_iterator);
     _ejs_object_define_value_property (_ejs_Iterator_prototype, _ejs_Symbol_iterator, _iterator, EJS_PROP_NOT_ENUMERABLE);
 }
 
