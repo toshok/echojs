@@ -33,6 +33,8 @@ check-stage1:
 check-stage2:
 	@NODE_PATH=$(NODE_PATH) node tester.js -s 2
 
+check-sim-stage0:
+	@NODE_PATH=$(NODE_PATH) node tester.js -p sim -s 0
 
 $(CHECK_TESTS): check-%: %.js
 	@NODE_PATH=$(NODE_PATH) node tester.js -s 0 -t $<
