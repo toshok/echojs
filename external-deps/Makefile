@@ -45,22 +45,12 @@ clean-double-conversion: %(_TARGETS:%=clean-double-conversion-%)
 .stamp-configure-double-conversion-iossim: double-conversion/CMakeLists.txt
 	@$(MKDIR) double-conversion-iossim
 	(cd double-conversion-iossim && \
-	PATH=$(IOSSIM_ROOT)/usr/bin:$$PATH \
-	CC="clang $(IOSSIM_ARCH) $(IOSSIM_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSSIM_SYSROOT)" \
-	CXX="clang++ $(IOSSIM_ARCH) $(IOSSIM_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSSIM_SYSROOT)" \
-	LD="clang" \
-	AS="$(IOSSIM_ROOT)/usr/bin/as" \
-	cmake ../double-conversion) && touch $@
+	cmake ../double-conversion -DCMAKE_TOOLCHAIN_FILE=../../build/iOS.cmake -DIOS_PLATFORM=SIMULATOR -DMIN_IOS_VERSION=$(MIN_IOS_VERSION) -DIOS_SYSROOT=$(IOSSIM_SYSROOT)) && touch $@
 
 .stamp-configure-double-conversion-iosdev: double-conversion/CMakeLists.txt
 	@$(MKDIR) double-conversion-iosdev
-	(cd double-conversion-osx && \
-	PATH=$(IOSDEV_ROOT)/usr/bin:$$PATH \
-	CC="clang $(IOSDEV_ARCH) $(IOSDEV_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSDEV_SYSROOT)" \
-	CXX="clang++ $(IOSDEV_ARCH) $(IOSDEV_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSDEV_SYSROOT)" \
-	LD="clang" \
-	AS="$(IOSDEV_ROOT)/usr/bin/as" \
-	cmake ../double-conversion) && touch $@
+	(cd double-conversion-iosdev && \
+	cmake ../double-conversion -DCMAKE_TOOLCHAIN_FILE=../../build/iOS.cmake -DIOS_PLATFORM=OS -DMIN_IOS_VERSION=$(MIN_IOS_VERSION) -DIOS_SYSROOT=$(IOSDEV_SYSROOT)) && touch $@
 
 .stamp-build-double-conversion-osx: .stamp-configure-double-conversion-osx
 	$(MAKE) -C double-conversion-osx && touch $@

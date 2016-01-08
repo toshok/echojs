@@ -1,4 +1,4 @@
-J3D = {};
+export let J3D = {};
 
 J3D.debug = true;
 

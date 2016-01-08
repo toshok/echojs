@@ -1,9 +1,8 @@
-var ejsfs = require('fs'),
-    ejspath = require('path'),
-    uikit = require('uikit');
-var J3D;
+import * as ejsfs from   '@node-compat/fs';
+import * as ejspath from '@node-compat/path';
+import * as uikit from   '../uikit';
 // glMatrix v0.9.5
-var glMatrixArrayType=Float32Array;var vec3={};vec3.create=function(a){var b=new glMatrixArrayType(3);if(a){b[0]=a[0];b[1]=a[1];b[2]=a[2]}return b};vec3.set=function(a,b){b[0]=a[0];b[1]=a[1];b[2]=a[2];return b};vec3.add=function(a,b,c){if(!c||a==c){a[0]+=b[0];a[1]+=b[1];a[2]+=b[2];return a}c[0]=a[0]+b[0];c[1]=a[1]+b[1];c[2]=a[2]+b[2];return c};
+let glMatrixArrayType=Float32Array;var vec3={};vec3.create=function(a){var b=new glMatrixArrayType(3);if(a){b[0]=a[0];b[1]=a[1];b[2]=a[2]}return b};vec3.set=function(a,b){b[0]=a[0];b[1]=a[1];b[2]=a[2];return b};vec3.add=function(a,b,c){if(!c||a==c){a[0]+=b[0];a[1]+=b[1];a[2]+=b[2];return a}c[0]=a[0]+b[0];c[1]=a[1]+b[1];c[2]=a[2]+b[2];return c};
 vec3.subtract=function(a,b,c){if(!c||a==c){a[0]-=b[0];a[1]-=b[1];a[2]-=b[2];return a}c[0]=a[0]-b[0];c[1]=a[1]-b[1];c[2]=a[2]-b[2];return c};vec3.negate=function(a,b){b||(b=a);b[0]=-a[0];b[1]=-a[1];b[2]=-a[2];return b};vec3.scale=function(a,b,c){if(!c||a==c){a[0]*=b;a[1]*=b;a[2]*=b;return a}c[0]=a[0]*b;c[1]=a[1]*b;c[2]=a[2]*b;return c};
 vec3.normalize=function(a,b){b||(b=a);var c=a[0],d=a[1],e=a[2],g=Math.sqrt(c*c+d*d+e*e);if(g){if(g==1){b[0]=c;b[1]=d;b[2]=e;return b}}else{b[0]=0;b[1]=0;b[2]=0;return b}g=1/g;b[0]=c*g;b[1]=d*g;b[2]=e*g;return b};vec3.cross=function(a,b,c){c||(c=a);var d=a[0],e=a[1];a=a[2];var g=b[0],f=b[1];b=b[2];c[0]=e*b-a*f;c[1]=a*g-d*b;c[2]=d*f-e*g;return c};vec3.length=function(a){var b=a[0],c=a[1];a=a[2];return Math.sqrt(b*b+c*c+a*a)};vec3.dot=function(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]};
 vec3.direction=function(a,b,c){c||(c=a);var d=a[0]-b[0],e=a[1]-b[1];a=a[2]-b[2];b=Math.sqrt(d*d+e*e+a*a);if(!b){c[0]=0;c[1]=0;c[2]=0;return c}b=1/b;c[0]=d*b;c[1]=e*b;c[2]=a*b;return c};vec3.lerp=function(a,b,c,d){d||(d=a);d[0]=a[0]+c*(b[0]-a[0]);d[1]=a[1]+c*(b[1]-a[1]);d[2]=a[2]+c*(b[2]-a[2]);return d};vec3.str=function(a){return"["+a[0]+", "+a[1]+", "+a[2]+"]"};var mat3={};
@@ -28,12 +27,13 @@ mat4.rotateZ=function(a,b,c){var d=Math.sin(b);b=Math.cos(b);var e=a[0],g=a[1],f
 mat4.frustum=function(a,b,c,d,e,g,f){f||(f=mat4.create());var h=b-a,i=d-c,j=g-e;f[0]=e*2/h;f[1]=0;f[2]=0;f[3]=0;f[4]=0;f[5]=e*2/i;f[6]=0;f[7]=0;f[8]=(b+a)/h;f[9]=(d+c)/i;f[10]=-(g+e)/j;f[11]=-1;f[12]=0;f[13]=0;f[14]=-(g*e*2)/j;f[15]=0;return f};mat4.perspective=function(a,b,c,d,e){a=c*Math.tan(a*Math.PI/360);b=a*b;return mat4.frustum(-b,b,-a,a,c,d,e)};
 mat4.ortho=function(a,b,c,d,e,g,f){f||(f=mat4.create());var h=b-a,i=d-c,j=g-e;f[0]=2/h;f[1]=0;f[2]=0;f[3]=0;f[4]=0;f[5]=2/i;f[6]=0;f[7]=0;f[8]=0;f[9]=0;f[10]=-2/j;f[11]=0;f[12]=-(a+b)/h;f[13]=-(d+c)/i;f[14]=-(g+e)/j;f[15]=1;return f};
 mat4.lookAt=function(a,b,c,d){d||(d=mat4.create());var e=a[0],g=a[1];a=a[2];var f=c[0],h=c[1],i=c[2];c=b[1];var j=b[2];if(e==b[0]&&g==c&&a==j)return mat4.identity(d);var k,l,o,m;c=e-b[0];j=g-b[1];b=a-b[2];m=1/Math.sqrt(c*c+j*j+b*b);c*=m;j*=m;b*=m;k=h*b-i*j;i=i*c-f*b;f=f*j-h*c;if(m=Math.sqrt(k*k+i*i+f*f)){m=1/m;k*=m;i*=m;f*=m}else f=i=k=0;h=j*f-b*i;l=b*k-c*f;o=c*i-j*k;if(m=Math.sqrt(h*h+l*l+o*o)){m=1/m;h*=m;l*=m;o*=m}else o=l=h=0;d[0]=k;d[1]=h;d[2]=c;d[3]=0;d[4]=i;d[5]=l;d[6]=j;d[7]=0;d[8]=f;d[9]=
-o;d[10]=b;d[11]=0;d[12]=-(k*e+i*g+f*a);d[13]=-(h*e+l*g+o*a);d[14]=-(c*e+j*g+b*a);d[15]=1;return d};mat4.str=function(a){return"["+a[0]+", "+a[1]+", "+a[2]+", "+a[3]+", "+a[4]+", "+a[5]+", "+a[6]+", "+a[7]+", "+a[8]+", "+a[9]+", "+a[10]+", "+a[11]+", "+a[12]+", "+a[13]+", "+a[14]+", "+a[15]+"]"};var quat4={};quat4.create=function(a){var b=new glMatrixArrayType(4);if(a){b[0]=a[0];b[1]=a[1];b[2]=a[2];b[3]=a[3]}return b};quat4.set=function(a,b){b[0]=a[0];b[1]=a[1];b[2]=a[2];b[3]=a[3];return b};
+o;d[10]=b;d[11]=0;d[12]=-(k*e+i*g+f*a);d[13]=-(h*e+l*g+o*a);d[14]=-(c*e+j*g+b*a);d[15]=1;return d};mat4.str=function(a){return"["+a[0]+", "+a[1]+", "+a[2]+", "+a[3]+", "+a[4]+", "+a[5]+", "+a[6]+", "+a[7]+", "+a[8]+", "+a[9]+", "+a[10]+", "+a[11]+", "+a[12]+", "+a[13]+", "+a[14]+", "+a[15]+"]"};let quat4={};quat4.create=function(a){var b=new glMatrixArrayType(4);if(a){b[0]=a[0];b[1]=a[1];b[2]=a[2];b[3]=a[3]}return b};quat4.set=function(a,b){b[0]=a[0];b[1]=a[1];b[2]=a[2];b[3]=a[3];return b};
 quat4.calculateW=function(a,b){var c=a[0],d=a[1],e=a[2];if(!b||a==b){a[3]=-Math.sqrt(Math.abs(1-c*c-d*d-e*e));return a}b[0]=c;b[1]=d;b[2]=e;b[3]=-Math.sqrt(Math.abs(1-c*c-d*d-e*e));return b};quat4.inverse=function(a,b){if(!b||a==b){a[0]*=1;a[1]*=1;a[2]*=1;return a}b[0]=-a[0];b[1]=-a[1];b[2]=-a[2];b[3]=a[3];return b};quat4.length=function(a){var b=a[0],c=a[1],d=a[2];a=a[3];return Math.sqrt(b*b+c*c+d*d+a*a)};
 quat4.normalize=function(a,b){b||(b=a);var c=a[0],d=a[1],e=a[2],g=a[3],f=Math.sqrt(c*c+d*d+e*e+g*g);if(f==0){b[0]=0;b[1]=0;b[2]=0;b[3]=0;return b}f=1/f;b[0]=c*f;b[1]=d*f;b[2]=e*f;b[3]=g*f;return b};quat4.multiply=function(a,b,c){c||(c=a);var d=a[0],e=a[1],g=a[2];a=a[3];var f=b[0],h=b[1],i=b[2];b=b[3];c[0]=d*b+a*f+e*i-g*h;c[1]=e*b+a*h+g*f-d*i;c[2]=g*b+a*i+d*h-e*f;c[3]=a*b-d*f-e*h-g*i;return c};
 quat4.multiplyVec3=function(a,b,c){c||(c=b);var d=b[0],e=b[1],g=b[2];b=a[0];var f=a[1],h=a[2];a=a[3];var i=a*d+f*g-h*e,j=a*e+h*d-b*g,k=a*g+b*e-f*d;d=-b*d-f*e-h*g;c[0]=i*a+d*-b+j*-h-k*-f;c[1]=j*a+d*-f+k*-b-i*-h;c[2]=k*a+d*-h+i*-f-j*-b;return c};quat4.toMat3=function(a,b){b||(b=mat3.create());var c=a[0],d=a[1],e=a[2],g=a[3],f=c+c,h=d+d,i=e+e,j=c*f,k=c*h;c=c*i;var l=d*h;d=d*i;e=e*i;f=g*f;h=g*h;g=g*i;b[0]=1-(l+e);b[1]=k-g;b[2]=c+h;b[3]=k+g;b[4]=1-(j+e);b[5]=d-f;b[6]=c-h;b[7]=d+f;b[8]=1-(j+l);return b};
 quat4.toMat4=function(a,b){b||(b=mat4.create());var c=a[0],d=a[1],e=a[2],g=a[3],f=c+c,h=d+d,i=e+e,j=c*f,k=c*h;c=c*i;var l=d*h;d=d*i;e=e*i;f=g*f;h=g*h;g=g*i;b[0]=1-(l+e);b[1]=k-g;b[2]=c+h;b[3]=0;b[4]=k+g;b[5]=1-(j+e);b[6]=d-f;b[7]=0;b[8]=c-h;b[9]=d+f;b[10]=1-(j+l);b[11]=0;b[12]=0;b[13]=0;b[14]=0;b[15]=1;return b};quat4.slerp=function(a,b,c,d){d||(d=a);var e=c;if(a[0]*b[0]+a[1]*b[1]+a[2]*b[2]+a[3]*b[3]<0)e=-1*c;d[0]=1-c*a[0]+e*b[0];d[1]=1-c*a[1]+e*b[1];d[2]=1-c*a[2]+e*b[2];d[3]=1-c*a[3]+e*b[3];return d};
-quat4.str=function(a){return"["+a[0]+", "+a[1]+", "+a[2]+", "+a[3]+"]"};J3D = {};
+quat4.str=function(a){return"["+a[0]+", "+a[1]+", "+a[2]+", "+a[3]+"]"};
+export let J3D = {};
 
 J3D.debug = true;
 
@@ -42,21 +42,22 @@ J3D.LightmapAtlas = [];
 // Read only global settings
 J3D.SHADER_MAX_LIGHTS = 4;
 J3D.RENDER_AS_OPAQUE = 0;
-J3D.RENDER_AS_TRANSPARENT = 1;J3D.Color = function(r, g, b, a){
+J3D.RENDER_AS_TRANSPARENT = 1;
+J3D.Color = function(r, g, b, a){
 	var that = this;
 	this.r = r || 0;
 	this.g = g || 0;
 	this.b = b || 0;
 	this.a = a || 0;
-
+	
 	this.rgba = function() {
 		return [that.r, that.g, that.b, that.a];
 	}
-
+	
 	this.rgb = function() {
 		return [that.r, that.g, that.b];
 	}
-
+	
 	this.toUniform = function(type){
 		if(type == gl.FLOAT_VEC3) return this.rgb();
 		else return this.rgba();
@@ -95,7 +96,7 @@ v2.prototype.isZero = function() {
 v2.ZERO = function() { return new v2(0, 0); }
 v2.ONE = function() { return new v2(1, 1); }
 v2.random = function() { return new v2(Math.random() * 2 - 1, Math.random() * 2 - 1); }
-var v3 = function(x, y, z){
+export function v3(x, y, z){
 	this.x = x || 0;
 	this.y = y || 0;
 	this.z = z || 0;
@@ -181,7 +182,7 @@ v3.UP = function() { return new v3(0, 1, 0); }
 v3.FORWARD = function() { return new v3(0, 0, 1); }
 v3.random = function() { return new v3(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1); }
 var m44 = function(){
-	this.array = new Float32Array(16);
+	this.array = [];//new Float32Array(16);
 	this.identity();
 }
 
@@ -190,17 +191,17 @@ m44.prototype.identity = function(){
     this.n12 = 0;
     this.n13 = 0;
     this.n14 = 0;
-
+	
     this.n21 = 0;
     this.n22 = 1;
     this.n23 = 0;
     this.n24 = 0;
-
+	
     this.n31 = 0;
     this.n32 = 0;
     this.n33 = 1;
     this.n34 = 0;
-
+	
     this.n41 = 0;
     this.n42 = 0;
     this.n43 = 0;
@@ -221,13 +222,13 @@ m44.prototype.ortho = function(left, right, top, bottom, near, far) {
 
 	this.n11 = 2 / w;
 	this.n14 = -x;
-	this.n22 = -2 / h;
+	this.n22 = -2 / h; 
 	this.n24 = y;
-	this.n33 = 2 / p;
+	this.n33 = 2 / p; 
 	this.n34 = -z;
 
 	this.makeArray();
-
+	
 	//console.log(this.array.join(","));
 }
 
@@ -237,11 +238,11 @@ m44.prototype.perspective = function(fov, aspect, near, far){
 
 	this.n11 = near / (t * aspect);
 	this.n22 = near / t;
-	this.n33 = -(far + near) / n;
+	this.n33 = -(far + near) / n; 
 	this.n34 = -(2 * far * near) / n;
 	this.n43 = -1;
 	this.n44 = 0;
-
+	
 	this.makeArray();
 };
 
@@ -250,17 +251,17 @@ m44.prototype.makeArray = function(){
 	this.array[1] = this.n21;
 	this.array[2] = this.n31;
 	this.array[3] = this.n41;
-
+	
 	this.array[4] = this.n12;
 	this.array[5] = this.n22;
 	this.array[6] = this.n32;
 	this.array[7] = this.n42;
-
+	
 	this.array[8] = this.n13;
 	this.array[9] = this.n23;
 	this.array[10] = this.n33;
 	this.array[11] = this.n43;
-
+	
 	this.array[12] = this.n14;
 	this.array[13] = this.n24;
 	this.array[14] = this.n34;
@@ -270,13 +271,15 @@ m44.prototype.makeArray = function(){
 m44.prototype.toArray = function(){
 	return this.array;
 }
+export let gl = null;
 
-var gl;
-
-J3D.Engine = function(canvas, j3dSettings, webglSettings) {
+var i = 0;
+J3D.Engine = function(canvas, j3dSettings, webglSettings) {	
+console.log(i++);
 	var cv = (canvas) ? canvas : document.createElement("canvas");
-
+	
 	if (!canvas) {
+console.log(i++);
 		var resolution = (j3dSettings && j3dSettings.resolution) ? j3dSettings.resolution : 1;
 		cv.width = window.innerWidth / resolution;
 		cv.height = window.innerHeight / resolution;
@@ -286,31 +289,39 @@ J3D.Engine = function(canvas, j3dSettings, webglSettings) {
 	}
 
 	try {
+console.log(i++);
 		gl = cv.getContext("experimental-webgl", webglSettings);
 		gl.viewportWidth = cv.width;
 		gl.viewportHeight = cv.height;
-	}
+	} 
 	catch (e) {
+console.log(i++);
 		j3dlog("ERROR. Getting webgl context failed!");
 		return;
 	}
-
+	
+console.log(i++);
 	this.setClearColor(J3D.Color.black);
-	gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+	gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);	
 	gl.enable(gl.CULL_FACE);
 	gl.frontFace(gl.CW);
 
+console.log(i++);
 	this.shaderAtlas = new J3D.ShaderAtlas();
 	this.scene = new J3D.Scene();
 	this.camera; // it is a J3D.Transform
-
+	
+console.log(i++);
 	this.canvas = cv;
-
+	
+console.log(i++);
 	this._opaqueMeshes = [];
 	this._transparentMeshes = [];
 	this._lights = [];
-
+	
+console.log(i++);
 	this.gl = gl;
+console.log(i++);
 }
 
 J3D.Engine.prototype.setClearColor = function(c) {
@@ -319,15 +330,15 @@ J3D.Engine.prototype.setClearColor = function(c) {
 
 J3D.Engine.prototype.render = function(){
 	J3D.Time.tick();
-
+	
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
+	
 	if(this.scene.numChildren > 0) this.renderScene();
 }
 
 J3D.Engine.prototype.renderScene = function(){
 
-
+	
 
 	// 3. Clear collecions
 	this._opaqueMeshes.length = 0;
@@ -338,18 +349,18 @@ J3D.Engine.prototype.renderScene = function(){
 	for(var i = 0; i < this.scene.numChildren; i++) {
 		this.updateTransform(this.scene.childAt(i), null);
 	}
-
+	
 	// 5. Calculate camera inverse matrix and it's world position
 	this.camera.updateInverseMat();
-
+	
 	// 6. Render sky box (if any)
 	if(this.scene.skybox) {
 		gl.depthMask(false);
-		this.scene.skybox.renderer.mid = this.camera.camera.near + (this.camera.camera.far-this.camera.camera.near)/2;
+		this.scene.skybox.renderer.mid = this.camera.camera.near + (this.camera.camera.far-this.camera.camera.near)/2;	
 		this.renderObject(this.scene.skybox);
-		gl.depthMask(true);
+		gl.depthMask(true);	
 	}
-
+	
 	// 7. Calculate global positions for all lights
 	for (var i = 0; i < this._lights.length; i++) {
 		var t = this._lights[i];
@@ -384,50 +395,50 @@ J3D.Engine.prototype.renderObject = function(t) {
 	var s = this.shaderAtlas.getShader(t.renderer);
 
 	gl.useProgram(s);
-
+	
 	// Setup standard uniforms and attributes
-	if(s.uniforms.uTime)
-		gl.uniform1f(s.uniforms.uTime.location, J3D.Time.time);
-
+	if(s.uniforms.uTime) 
+		gl.uniform1f(s.uniforms.uTime.location, J3D.Time.time);	
+		
 	if(s.uniforms.pMatrix)
 		gl.uniformMatrix4fv(s.uniforms.pMatrix.location, false, this.camera.camera.projectionMat.toArray() );
-
-	if(s.uniforms.vMatrix)
+		
+	if(s.uniforms.vMatrix) 	
 		gl.uniformMatrix4fv(s.uniforms.vMatrix.location, false, this.camera.inverseMat);
-
-	if(s.uniforms.mMatrix)
+		
+	if(s.uniforms.mMatrix) 
 		gl.uniformMatrix4fv(s.uniforms.mMatrix.location, false, t.globalMatrix);
-
-	if(s.uniforms.nMatrix)
+		
+	if(s.uniforms.nMatrix) 
 		gl.uniformMatrix3fv(s.uniforms.nMatrix.location, false, t.normalMatrix);
-
-	if(s.uniforms.uAmbientColor)
+			
+	if(s.uniforms.uAmbientColor) 
 		gl.uniform3fv(s.uniforms.uAmbientColor.location, this.scene.ambient.rgb());
-
-	if(s.uniforms.uEyePosition)
+		
+	if(s.uniforms.uEyePosition) 
 		gl.uniform3fv(s.uniforms.uEyePosition.location, this.camera.worldPosition.xyz());
-
-	if(s.uniforms.uTileOffset)
+			
+	if(s.uniforms.uTileOffset) 
 		gl.uniform4fv(s.uniforms.uTileOffset.location, t.getTileOffset());
-
+	
 	J3D.ShaderUtil.setLights(s, this._lights);
 
 	for(var i = 0; i < t.geometry.arrays.length; i++) {
-		var vbo = t.geometry.arrays[i];
+		var vbo = t.geometry.arrays[i];	
 		if(s.attributes[vbo.name] != null) {
 			gl.bindBuffer(gl.ARRAY_BUFFER, vbo.buffer);
 			gl.vertexAttribPointer(s.attributes[vbo.name], vbo.itemSize, gl.FLOAT, false, 0, 0);
 		}
 	}
-
+		
 	// Setup renderers custom uniforms and attributes
 	t.renderer.setup(s, t);
 
-	var cull = t.renderer.cullFace || gl.BACK;
+	var cull = t.renderer.cullFace || gl.BACK;			
 	gl.cullFace(cull);
-
+	
 	var mode = (t.renderer.drawMode != null) ? t.renderer.drawMode : gl.TRIANGLES;
-
+	
 	if (t.geometry.hasElements) {
 		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, t.geometry.elements.buffer);
 		gl.drawElements(mode, t.geometry.elements.size, gl.UNSIGNED_SHORT, 0);
@@ -438,20 +449,20 @@ J3D.Engine.prototype.renderObject = function(t) {
 
 J3D.Engine.prototype.updateTransform = function(t, p){
 	t.updateWorld(p);
-
+	
 	for (var j = 0; j < t.numChildren; j++) {
 		this.updateTransform(t.childAt(j), t);
 	}
-
+	
 	if(!t.enabled) return;
-
-	if (t.renderer && t.geometry) {
-		if(t.geometry.renderMode == J3D.RENDER_AS_TRANSPARENT)
-			this._transparentMeshes.push(t);
-		else
+	
+	if (t.renderer && t.geometry) {	
+		if(t.geometry.renderMode == J3D.RENDER_AS_TRANSPARENT) 
+			this._transparentMeshes.push(t);	
+		else 
 			this._opaqueMeshes.push(t);
 	}
-
+	
 	if (t.light) {
 		this._lights.push(t);
 	}
@@ -476,12 +487,12 @@ J3D.ORTHO = 1;
 
 J3D.Camera = function(params){
 	if(!params) params = {};
-
+	
 	if(!params.type) params.type = J3D.PERSPECTIVE;
-
+	
 	if(!params.near) params.near = 1;
 	if(!params.far) params.far = 1000;
-
+	
 	if(params.type == J3D.PERSPECTIVE) {
 		if(!params.fov) params.fov = 45;
 		if(!params.aspect) params.aspect = gl.viewportWidth / gl.viewportHeight;
@@ -491,16 +502,16 @@ J3D.Camera = function(params){
 		if(params.top == null) params.top = 0;
 		if(params.bottom == null) params.bottom = 1;
 	}
-
+	
 	this.near = params.near;
 	this.far = params.far;
 
 	this.projectionMat = new m44();
-
-	if(params.type == J3D.PERSPECTIVE)
+	
+	if(params.type == J3D.PERSPECTIVE) 
 		this.projectionMat.perspective(params.fov, params.aspect, params.near, params.far);
-	else
-		this.projectionMat.ortho(params.left, params.right, params.top, params.bottom, params.near, params.far);
+	else 
+		this.projectionMat.ortho(params.left, params.right, params.top, params.bottom, params.near, params.far);	
 }
 
 
@@ -558,31 +569,31 @@ J3D.Geometry.prototype.addElement = function(data, type, usage) {
 J3D.Geometry.Attribute = function(name, data, itemSize, type, usage, target) {
 	this.name = name;
 	this.data = data;
-
+	
 	this.buffer = gl.createBuffer();
 	gl.bindBuffer(target, this.buffer);
 	gl.bufferData(target, data, usage);
-
+	
 	this.size = (itemSize > 0) ? data.length / itemSize : data.length;
 	this.itemSize = itemSize;
 	this.type = type;
 }
 /*
  *  A Mesh is a structured geometry coming from and external source (either a JSON file or generated with code)
- *
+ *  
  *  Typically a Mesh is designed to hold data about 3D objects. It has a primary set of attributes that will be interpreted by name:
  *  vertices (3 x float), colors (4 x float), normals (3 x float), uv1 (2 x float), uv2 (2 x float) - none is mandatory.
- *
+ * 
  *  If an attribute named "tris" is present it will be interpreted as the elements array.
- *
+ *  
  *  WARNING: Other attributes in the "source" will be ignored.
  *  Mesh extends Geometry, so more attributes can be added manually if necessary.
  */
 J3D.Mesh = function(source){
 	J3D.Geometry.call( this );
-
+	
 	this.hasUV1 = false;
-
+	
 	for(var attr in source) {
 		switch (attr) {
 			case "vertices":
@@ -592,9 +603,9 @@ J3D.Mesh = function(source){
 				if(source[attr].length > 0) this.addArray("aVertexColor", new Float32Array(source[attr]), 4);
 			break;
 			case "normals":
-				if(source[attr].length > 0)
+				if(source[attr].length > 0) 
 					this.vertexNormalBuffer = this.addArray("aVertexNormal", new Float32Array(source[attr]), 3);
-				else
+				else 
 					this.vertexNormalBuffer = this.addArray("aVertexNormal", new Float32Array(this.size * 3), 3);
 			break;
 			case "uv1":
@@ -621,7 +632,7 @@ J3D.Mesh = function(source){
 			tv.push(vertices[i], vertices[i + 2], vertices[i + 1]);
 		}
 		vertices = new Float32Array(tv);
-
+		
 		var tn = [];
 		var normals = this.vertexNormalBuffer.data;
 		for (var i = 0; i < normals.length; i += 3) {
@@ -630,10 +641,10 @@ J3D.Mesh = function(source){
 			tn = tn.concat(v.xyz());
 		}
 		normals = new Float32Array(tn);
-
+		
 		this.replaceArray(this.vertexPositionBuffer, vertices);
 		this.replaceArray(this.vertexNormalBuffer, normals);
-
+		
 		return this;
 	}
 }
@@ -645,11 +656,11 @@ J3D.Mesh.prototype.supr = J3D.Geometry.prototype;
 J3D.Scene = function() {
 	var that = this;
 	var children = [];
-
+	
 	this.ambient = J3D.Color.black;
 	this.numChildren;
 	this.skybox;
-
+	
 	this.add = function() {
 		var fa;
 		for (var i = 0; i < arguments.length; i++) {
@@ -661,7 +672,7 @@ J3D.Scene = function() {
 		}
 		return fa;
 	}
-
+	
 	this.childAt = function(i){
 		return children[i];
 	}
@@ -676,14 +687,14 @@ J3D.Scene = function() {
 
 J3D.Scene.prototype.find = function(path) {
 	var p = path.split("/");
-
+	
 	for(var i = 0; i < this.numChildren; i++) {
 		if(this.childAt(i).name == p[0]) {
 			if(p.length == 1) return this.childAt(i);
 			else return this.childAt(i).find(p.slice(1));
 		}
 	}
-
+	
 	return null;
 }
 J3D.Loader = {};
@@ -822,7 +833,7 @@ J3D.ShaderAtlas = function(){
 
 J3D.ShaderAtlas.prototype.compileShaderSource = function(name, src, type, meta){
 	var isrc;
-
+	
 	var ci = meta.common || "";
 	if(meta.includes && meta.includes.length > 0) {
 		for(var i = 0; i < meta.includes.length; i++) {
@@ -830,7 +841,7 @@ J3D.ShaderAtlas.prototype.compileShaderSource = function(name, src, type, meta){
 			ci += J3D.ShaderSource[meta.includes[i]];
 		}
 	}
-
+	
 	if (type == gl.VERTEX_SHADER) {
 		var vi = "";
 		if(meta.vertexIncludes && meta.vertexIncludes.length > 0) {
@@ -849,39 +860,39 @@ J3D.ShaderAtlas.prototype.compileShaderSource = function(name, src, type, meta){
 			}
 		}
 		isrc = ci + fi + src;
-	}
-
+	}	
+	
 	var shader = gl.createShader(type);
 	gl.shaderSource(shader, isrc);
     gl.compileShader(shader);
-
+ 
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
 		j3dlog("ERROR. Shader compile error: " + gl.getShaderInfoLog(shader));
     }
-
+	
 	this.programs[name] = shader;
 }
 
 J3D.ShaderAtlas.prototype.linkShader = function(renderer){
 	var name = renderer.name;
-
+	
 	var vertName = name + "Vert";
 	var fragName = name + "Frag";
-
+	
 	var vertexShader = this.programs[vertName];
 	var fragmentShader = this.programs[fragName];
-
+	
 	var program = gl.createProgram();
 	gl.attachShader(program, vertexShader);
 	gl.attachShader(program, fragmentShader);
 	gl.linkProgram(program);
-
+ 
 	if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
 		console.log("Error linking program " + name);
 	}
-
+	
 	gl.useProgram(program);
-
+	
 	var tid = 0;
 	program.uniforms = {};
 	var numUni = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
@@ -894,7 +905,7 @@ J3D.ShaderAtlas.prototype.linkShader = function(renderer){
 			tid++;
 		}
 	}
-
+	
 	program.attributes = {};
 	var numAttr = gl.getProgramParameter(program, gl.ACTIVE_ATTRIBUTES);
 	for(var i = 0; i < numAttr; i++) {
@@ -913,7 +924,7 @@ J3D.ShaderAtlas.prototype.getShader = function (r) {
 		this.compileShaderSource(r.name + "Frag", r.fragSource(), gl.FRAGMENT_SHADER, r.metaData);
 		this.linkShader(r);
 	}
-
+	
 	return this.shaders[r.name];
 }
 
@@ -985,8 +996,9 @@ J3D.Texture = function(source, params){ // <- use this to pass parameters of the
     	}
 		that.src.src = src;
 */
+	  console.log ("loading image from " + ejspath.resolve (process.cwd(), src));
 	  that.src = uikit.UIImage.imageWithContentsOfFile (ejspath.resolve (process.cwd(), src));
-	  that.src.src = src;
+	  console.log ("that.src = " + (that.src || "<null>"));
 	  setupTexture();
 	}
 
@@ -1085,7 +1097,9 @@ J3D.Cubemap = function(faces){
     	}
 		that.faceImages[name] .src = src;
 */
+	  console.log ("loading image from " + ejspath.resolve (process.cwd(), src));
 	  that.faceImages[name] = uikit.UIImage.imageWithContentsOfFile (ejspath.resolve (process.cwd(), src));
+	  console.log ("image = " + (that.faceImages[name] || "<null>"));
 	};
 
 
@@ -1103,21 +1117,21 @@ J3D.Cubemap.prototype.toUniform = function(){
 }
 J3D.Transform = function(n, u){
 	var that = this;
-
+	
 	this.uid = u || 0;
 	this.name = n;
-
+	
 	var children = [];
 	this.numChildren = 0;
-
+	
 	// All local
 	this.position = v3.ZERO();
 	this.rotation = v3.ZERO();
 	this.scale = v3.ONE();
-
+	
 	// This gets only updated for lights
 	this.worldPosition = v3.ZERO();
-
+	
 	// Local transformation matrix
 	this.matrix = mat4.create();
 	// World transformation matrix (concatenated local transforms of all parents and self)
@@ -1128,12 +1142,12 @@ J3D.Transform = function(n, u){
 	this.isStatic = false;
 	this._lockedMatrix = false;
 	this.enabled = true;
-
-	this.renderer;
+	
+	this.renderer;	
 	this.geometry;
 	this.camera;
 	this.light;
-
+	
 	// Texture tile and offset.
 	// Can also be specified in the renderer, but this will override
 	// the settings for this specific object unless tile = 1 and offset = 0
@@ -1145,10 +1159,10 @@ J3D.Transform = function(n, u){
 		that.numChildren = children.length;
 		return t;
 	}
-
+	
 	this.childAt = function(i){
 		return children[i];
-	}
+	}	
 }
 
 J3D.Transform.prototype.clone = function(){
@@ -1156,14 +1170,14 @@ J3D.Transform.prototype.clone = function(){
 	c.position = this.position.cp();
 	c.rotation = this.rotation.cp();
 	c.scale = this.scale.cp();
-
+	
 	c.isStatic = this.isStatic;
-
+	
 	c.renderer = this.renderer;
 	c.mesh = this.mesh;
 	c.camera = this.camera;
 	c.light = this.light;
-
+	
 	return c;
 }
 
@@ -1183,9 +1197,9 @@ J3D.Transform.prototype.left = function() {
 
 J3D.Transform.prototype.updateWorld = function(parent){
 	if(this._lockedMatrix) return;
-
+	
 	mat4.identity(this.matrix);
-
+	
 	mat4.translate(this.matrix, [this.position.x, this.position.y, this.position.z]);
 
 	mat4.rotateZ(this.matrix, this.rotation.z);
@@ -1196,15 +1210,15 @@ J3D.Transform.prototype.updateWorld = function(parent){
 
 	if(parent != null) mat4.multiply(parent.globalMatrix, this.matrix, this.globalMatrix);
 	else this.globalMatrix = this.matrix;
-
+	
 	mat4.toInverseMat3(this.globalMatrix, this.normalMatrix);
 	mat3.transpose(this.normalMatrix);
-
+	
 	if(this.isStatic) this._lockedMatrix = true;
 }
 
 J3D.Transform.prototype.updateWorldPosition = function() {
-	var tmp = [0,0,0];
+	var tmp = [0,0,0];	
 	mat4.multiplyVec3(this.globalMatrix, tmp);
 	this.worldPosition.x = tmp[0];
 	this.worldPosition.y = tmp[1];
@@ -1213,10 +1227,10 @@ J3D.Transform.prototype.updateWorldPosition = function() {
 
 J3D.Transform.prototype.getTileOffset = function() {
 	var t, o;
-
+	
 	if(this.renderer.textureTile && this.textureTile.isOne()) t = this.renderer.textureTile.xy();
 	else t = this.textureTile.xy();
-
+	
 	if(this.renderer.textureOffset && this.textureOffset.isZero()) o = this.renderer.textureOffset.xy();
 	else o = this.textureOffset.xy();
 
@@ -1224,14 +1238,14 @@ J3D.Transform.prototype.getTileOffset = function() {
 }
 
 J3D.Transform.prototype.find = function(p) {
-
+	
 	for(var i = 0; i < this.numChildren; i++) {
 		if(this.childAt(i).name == p[0]) {
 			if(p.length == 1) return this.childAt(i);
 			else return this.childAt(i).find(p.slice(1));
 		}
 	}
-
+	
 	return null;
 }
 
@@ -1246,7 +1260,7 @@ J3D.Postprocess = function(engine) {
 	this.drawMode = gl.TRIANGLES;
 	this.engine = engine;
 	this.fbo = new J3D.FrameBuffer();
-
+	
 	this.geometry = J3D.Primitive.FullScreenQuad();
 	this.filter = null;
 }
@@ -1257,20 +1271,20 @@ J3D.Postprocess.prototype.render = function() {
 	this.fbo.unbind();
 	this.renderEffect(this.fbo.texture);
 }
-
+	
 J3D.Postprocess.prototype.renderEffect = function(texture) {
 	this.program = this.engine.shaderAtlas.getShader(this.filter);
-
+	
 	this.filter.setup(this.program);
-
+	
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 	gl.useProgram(this.program);
-
+	
 	if(this.program.uniforms.uTime) gl.uniform1f(this.program.uniforms.uTime.location, J3D.Time.time);
 	J3D.ShaderUtil.setTexture(this.program, 0, "uTexture", texture);
 
 	for(var i = 0; i < this.geometry.arrays.length; i++) {
-		var vbo = this.geometry.arrays[i];
+		var vbo = this.geometry.arrays[i];	
 		if(this.program.attributes[vbo.name] != null) {
 			gl.bindBuffer(gl.ARRAY_BUFFER, vbo.buffer);
 			gl.vertexAttribPointer(this.program.attributes[vbo.name], vbo.itemSize, gl.FLOAT, false, 0, 0);
@@ -1288,13 +1302,13 @@ J3D.Primitive.Cube = function(w, h, d) {
 	w = w * 0.5;
 	h = h * 0.5;
 	d = d * 0.5;
-
+	
 	J3D.Primitive.addQuad(c, new v3(-w, h, d), new v3(w, h, d), new v3(w, -h, d), new v3(-w, -h, d));
 	J3D.Primitive.addQuad(c, new v3(w, h, -d), new v3(-w, h, -d), new v3(-w, -h, -d), new v3(w, -h, -d));
-
+	
 	J3D.Primitive.addQuad(c, new v3(-w, h, -d), new v3(-w, h, d), new v3(-w, -h, d), new v3(-w, -h, -d));
 	J3D.Primitive.addQuad(c, new v3(w, h, d), new v3(w, h, -d), new v3(w, -h, -d), new v3(w, -h, d));
-
+	
 	J3D.Primitive.addQuad(c, new v3(w, h, d), new v3(-w, h, d), new v3(-w, h, -d), new v3(w, h, -d));
 	J3D.Primitive.addQuad(c, new v3(w, -h, d), new v3(w, -h, -d), new v3(-w, -h, -d), new v3(-w, -h, d));
 
@@ -1310,16 +1324,16 @@ J3D.Primitive.FullScreenQuad = function() {
 
 J3D.Primitive.Plane = function(w, h, wd, hd, wo, ho) {
 	var c = J3D.Primitive.getEmpty();
-
+	
 	if(!wo) wo = 0;
 	if(!ho) ho = 0;
-
+ 	
 	w = w * 0.5;
 	h = h * 0.5;
-
+	
 	if(!wd) wd = 1;
 	if(!hd) hd = 1;
-
+	
 	var wStart = -w + wo;
 	var wEnd = w + wo;
 	var hStart = h + ho;
@@ -1328,28 +1342,28 @@ J3D.Primitive.Plane = function(w, h, wd, hd, wo, ho) {
 	var uEnd = 1;
 	var vStart = 1;
 	var vEnd = 0;
-
+	
 	var wb = (w * 2) / wd;
 	var hb = (h * 2) / hd;
-
+	
 	for(var i = 0; i < wd; i++) {
 		for(var j = 0; j < hd; j++) {
-
+			
 			var bvStart = wStart + i * wb;
 			var bvEnd = bvStart + wb;
 			var bhStart = hStart - j * hb;
 			var bhEnd = bhStart - hb;
-
+			
 			var va = new v3(bvStart, bhStart, 0);
 			var vb = new v3(bvEnd, bhStart, 0);
 			var vc = new v3(bvEnd, bhEnd, 0);
 			var vd = new v3(bvStart, bhEnd, 0);
-
+			
 			var us = 1 / wd * i;
 			var ue = 1 / wd * (i + 1);
 			var vs = 1 - (1 / hd * (j + 1));
 			var ve = 1 - (1 / hd * j);
-
+			
 			J3D.Primitive.addQuad(c, va, vb, vc, vd, us, ue, vs, ve);
 		}
 	}
@@ -1359,7 +1373,7 @@ J3D.Primitive.Plane = function(w, h, wd, hd, wo, ho) {
 
 J3D.Primitive.getEmpty = function(){
 	var g = {};
-	g.vertices = [];
+	g.vertices = [];	 
 	g.normals = [];
 	g.uv1 = [];
 	g.tris = [];
@@ -1369,43 +1383,43 @@ J3D.Primitive.getEmpty = function(){
 J3D.Primitive.addQuad = function(g, p1, p2, p3, p4, minU, maxU, minV, maxV) {
 	var n1 = v3.cross(p1.sub(p2), p2.sub(p3)).norm();
 	var p = g.vertices.length / 3;
-
+	
 	var nu = (minU) ? minU : 0;
 	var xu = (maxU) ? maxU : 1;
 	var nv = (minV) ? minV : 0;
 	var xv = (maxV) ? maxV : 1;
-
-
+	
+		
 	g.vertices.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z, p3.x, p3.y, p3.z, p4.x, p4.y, p4.z);
 	g.normals.push (n1.x, n1.y, n1.z, n1.x, n1.y, n1.z, n1.x, n1.y, n1.z, n1.x, n1.y, n1.z);
 	g.uv1.push(nu,xv, xu,xv, xu,nv, nu,nv);
-
+	
 	g.tris.push(p, p + 1, p + 2, p, p + 2, p + 3);
 }
 J3D.FrameBuffer = function(width, height){
-
+	
 	this.width = (width) ? width : gl.viewportWidth;
 	this.height = (height) ? height : gl.viewportHeight;
-
+	
 	this.fbo = gl.createFramebuffer();
 	gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
-
+	
 	this.texture = gl.createTexture();
 	gl.bindTexture(gl.TEXTURE_2D, this.texture);
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
+	
 	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.width, this.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-
+	
 	this.depthBuffer = gl.createRenderbuffer();
 	gl.bindRenderbuffer(gl.RENDERBUFFER, this.depthBuffer);
 	gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, this.width, this.height);
-
+	
 	gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.texture, 0);
 	gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, this.depthBuffer);
-
+	
 	gl.bindTexture(gl.TEXTURE_2D, null);
 	gl.bindRenderbuffer(gl.RENDERBUFFER, null);
 	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -1908,7 +1922,7 @@ J3D.Shader.prototype.setup = function(shader, transform) {
 J3D.Shader.prototype.clone = function() {
 	var c = new J3D.Shader(this.name + Math.random(), this._vertSource, this._fragSource);
 
-	for(var s in this) {
+	for(let s in this) {
 		if (typeof this[s] !== "function" && this.hasOwnProperty(s)) {
 			c[s] = this[s];
 		}
@@ -1920,7 +1934,7 @@ J3D.Shader.prototype.clone = function() {
 
 	c.su = {};
 
-	for(var ss in this.su) {
+	for(let ss in this.su) {
 		if (typeof this.su[ss] !== "function" && this.su.hasOwnProperty(ss)) {
 			c.su[ss] = this.su[ss];
 		}
@@ -1938,23 +1952,23 @@ J3D.Time.lastTime = 0;
 J3D.Time.deltaTime = 0;
 
 J3D.Time.tick = function() {
-    var tn = new Date().getTime();
-
-    if (J3D.Time.startTime == 0) J3D.Time.startTime = tn;
+	var tn = new Date().getTime();
+	
+	if (J3D.Time.startTime == 0) J3D.Time.startTime = tn;
     if (J3D.Time.lastTime != 0) J3D.Time.deltaTime = tn - J3D.Time.lastTime;
-
+	
     J3D.Time.lastTime = tn;
-    J3D.Time.time = (tn - J3D.Time.startTime) / 1000.0;
+	J3D.Time.time = (tn - J3D.Time.startTime) / 1000.0;
 };
 
 J3D.Time.formatTime = function() {
 	var mil = Math.floor((J3D.Time.time % 1) * 100);
 	var sec = Math.floor(J3D.Time.time) % 60;
 	var min = Math.floor(J3D.Time.time / 60);
-
+	
 	if(mil < 10) mil = "0" + mil;
 	if(mil == 100) mil = "00";
-
+	
 	if(sec < 10) sec = "0" + sec;
 	if(min < 10) min = "0" + min;
 
@@ -1981,7 +1995,7 @@ J3D.ShaderUtil.setLights = function(shader, lights) {
 			gl.uniform1i(shader.uniforms["uLight[" + i + "].type"].location, 		lights[i].light.type);
 			gl.uniform3fv(shader.uniforms["uLight[" + i + "].direction"].location, 	lights[i].light.direction.xyz());
 			gl.uniform3fv(shader.uniforms["uLight[" + i + "].color"].location, 		lights[i].light.color.rgb());
-			gl.uniform3fv(shader.uniforms["uLight[" + i + "].position"].location, 	lights[i].worldPosition.xyz());
+			gl.uniform3fv(shader.uniforms["uLight[" + i + "].position"].location, 	lights[i].worldPosition.xyz());			
 		} else if(shader.uniforms["uLight[" + i + "].type"]) {
 			gl.uniform1i(shader.uniforms["uLight[" + i + "].type"].location, J3D.NONE);
 		} else {
@@ -2104,7 +2118,7 @@ J3D.ShaderUtil.setUniform = function(name, dst, src) {
 
 J3D.ShaderUtil.parseGLSL = function(source){
 	var ls = source.split("\n");
-
+	
 	var vs = "";
 	var fs = "";
 
@@ -2114,41 +2128,41 @@ J3D.ShaderUtil.parseGLSL = function(source){
 	meta.vertexIncludes = [];
 	meta.fragmentIncludes = [];
 	var section = 0;
-
+	
 	var checkMetaData = function(tag, line) {
 		var p = line.indexOf(tag);
-
+		
 		if(p > -1) {
 			var d = line.substring(p + tag.length + 1);
 //			j3dlog("Tag: " + tag + " (" + section + ") Value: " + d);
 			return d;
 		}
-
+		
 		return null;
 	}
-
+	
 	for(var i = 0; i < ls.length; i++) {
 		if(ls[i].indexOf("//#") > -1) {
 			if (ls[i].indexOf("//#fragment") > -1) {
 				section++;
 			} else if (ls[i].indexOf("//#vertex") > -1) {
 				section++;
-			} else {
+			} else {	
 				meta.name = meta.name || checkMetaData("name", ls[i]);
 //				meta.author = meta.author || checkMetaData("author", ls[i]);
 //				meta.description = meta.description || checkMetaData("description", ls[i]);
-
+				
 				var inc = checkMetaData("include", ls[i]);
 				if(inc) {
 					switch(section){
 						case 0:
-							meta.includes.push(inc);
+							meta.includes.push(inc); 
 							break;
 						case 1:
-							meta.vertexIncludes.push(inc);
+							meta.vertexIncludes.push(inc); 
 							break;
 						case 2:
-							meta.fragmentIncludes.push(inc);
+							meta.fragmentIncludes.push(inc); 
 							break;
 					}
 				}
@@ -2169,11 +2183,11 @@ J3D.ShaderUtil.parseGLSL = function(source){
 			}
 		}
 	}
-
+	
 	var n = meta.name || "Shader" + Math.round(Math.random() * 1000);
 	return new J3D.Shader(n, vs, fs, meta);
 }
-var j3dlogIds = {};
+let j3dlogIds = {};
 
 function j3dlog(m){
 	if(J3D.debug) console.log(m);
@@ -2184,7 +2198,7 @@ function j3dlogOnce(m){
 	j3dlogIds[m] = true;
 }
 J3D.BuiltinShaders = (function() {
-
+	
 	var shaders = {};
 
 	var fetch = function(n) {
@@ -2195,21 +2209,21 @@ J3D.BuiltinShaders = (function() {
 			return shaders[n].clone();
 		}
 	}
-
+	
 	var p = J3D.ShaderUtil.parseGLSL(J3D.ShaderSource.Phong);
 	p.su.color = J3D.Color.white;
     //p.su.specularIntensity = 0;
     //p.su.shininess = 0;
 	p.hasColorTexture = false;
 	shaders.Phong = p;
-
+	
 	var g = J3D.ShaderUtil.parseGLSL(J3D.ShaderSource.Gouraud);
 	g.su.color = J3D.Color.white;
 	//g.su.specularIntensity = 0;
 	//g.su.shininess = 0;
 	g.hasColorTexture = false;
 	shaders.Gouraud = g;
-
+	
 	var l =  J3D.ShaderUtil.parseGLSL(J3D.ShaderSource.Lightmap);
 	l.setup = function(shader, transform) {
 	    for (var s in shader.uniforms) {
@@ -2219,20 +2233,16 @@ J3D.BuiltinShaders = (function() {
 				gl.uniform4fv(shader.uniforms.lightmapAtlas.location, transform.lightmapTileOffset);
 			}
 	    }
-
+		
 		J3D.Shader.prototype.setup.call(this, shader, transform);
-		  }
+	}
 	shaders.Lightmap = l;
-
+	
 	shaders.Toon =  J3D.ShaderUtil.parseGLSL(J3D.ShaderSource.Toon);
 	shaders.Reflective =  J3D.ShaderUtil.parseGLSL(J3D.ShaderSource.Reflective);
 	shaders.Skybox =  J3D.ShaderUtil.parseGLSL(J3D.ShaderSource.Skybox);
-
+	
 	shaders.Normal2Color = J3D.ShaderUtil.parseGLSL(J3D.ShaderSource.Normal2Color);
 
 	return { shaders:shaders, fetch:fetch };
 }());
-
-exports.J3D = J3D;
-exports.gl = gl;
-exports.v3 = v3;

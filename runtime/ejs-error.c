@@ -135,11 +135,11 @@ _ejs_nativeerror_new_utf8 (EJSNativeErrorType err_type, const char *message)
 void
 _ejs_error_init(ejsval global)
 {
-    ejsval toString = _ejs_function_new_native (_ejs_null, _ejs_atom_toString, (EJSClosureFunc)_ejs_Error_prototype_toString);
+    ejsval toString = _ejs_function_new_native (_ejs_null, _ejs_atom_toString, _ejs_Error_prototype_toString);
     _ejs_gc_add_root (&toString);
     
 #define EJS_ADD_NATIVE_ERROR_TYPE(err) EJS_MACRO_START                  \
-    _ejs_##err = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_##err, (EJSClosureFunc)_ejs_##err##_impl); \
+    _ejs_##err = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_##err, _ejs_##err##_impl); \
     _ejs_object_setprop (global, _ejs_atom_##err, _ejs_##err);          \
     _ejs_##err##_prototype = _ejs_object_new(_ejs_null, &_ejs_Object_specops); \
     _ejs_object_setprop (_ejs_##err,       _ejs_atom_prototype,  _ejs_##err##_prototype); \

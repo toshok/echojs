@@ -1,4 +1,4 @@
-j3dlogIds = {};
+let j3dlogIds = {};
 
 function j3dlog(m){
 	if(J3D.debug) console.log(m);

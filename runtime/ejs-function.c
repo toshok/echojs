@@ -374,7 +374,7 @@ _ejs_function_init(ejsval global)
 
     _ejs_function_init_proto();
 
-    _ejs_Function = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Function, (EJSClosureFunc)_ejs_Function_impl);
+    _ejs_Function = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_Function, _ejs_Function_impl);
     _ejs_object_setprop (global, _ejs_atom_Function, _ejs_Function);
 
     // ECMA262 15.3.3.1

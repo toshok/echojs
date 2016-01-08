@@ -1835,7 +1835,7 @@ _ejs_string_init(ejsval global)
 {
     _ejs_string_init_proto();
   
-    _ejs_String = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_String, (EJSClosureFunc)_ejs_String_impl);
+    _ejs_String = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_String, _ejs_String_impl);
     _ejs_object_setprop (global, _ejs_atom_String, _ejs_String);
 
     _ejs_object_setprop (_ejs_String,       _ejs_atom_prototype,  _ejs_String_prototype);
@@ -1874,7 +1874,7 @@ _ejs_string_init(ejsval global)
     OBJ_METHOD(fromCodePoint);
     OBJ_METHOD(raw);
 
-    ejsval _iterator = _ejs_function_new_native (_ejs_null, _ejs_Symbol_iterator, (EJSClosureFunc)_ejs_String_prototype_iterator);
+    ejsval _iterator = _ejs_function_new_native (_ejs_null, _ejs_Symbol_iterator, _ejs_String_prototype_iterator);
     _ejs_object_define_value_property (_ejs_String_prototype, _ejs_Symbol_iterator, _iterator, EJS_PROP_NOT_ENUMERABLE);
 
     _ejs_object_define_value_property (_ejs_String_prototype, _ejs_atom_constructor, _ejs_String,
@@ -1884,7 +1884,7 @@ _ejs_string_init(ejsval global)
 #undef PROTO_METHOD
 
 
-    _ejs_StringIterator = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_String, (EJSClosureFunc)_ejs_StringIterator_impl);
+    _ejs_StringIterator = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_String, _ejs_StringIterator_impl);
 
     _ejs_gc_add_root (&_ejs_StringIterator_prototype);
     _ejs_StringIterator_prototype = _ejs_string_iterator_new(_ejs_String_prototype);

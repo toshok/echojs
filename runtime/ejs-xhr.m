@@ -199,8 +199,9 @@ typedef enum {
 	[responseData appendData:data];
 }
 
--(void)connection:(NSURLConnection *)connection didFailWithError:(NSError *)error
+-(void)connection:(NSURLConnection *)connection didFailWithError:(NSError *)anError
 {
+    NSLog(@"didFailWithError:%@\n", anError);
 	abort (); // XXX
 }
 
@@ -570,16 +571,22 @@ static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_impl) {
         printf ("XMLHttpRequest called as a function\n");
         EJS_NOT_IMPLEMENTED();
     }
+    else {
+        // called as a constructor
+        if (argc != 0)
+            THROW_ARG_COUNT_EXCEPTION(-1);
 
-	if (argc != 0)
-		THROW_ARG_COUNT_EXCEPTION(-1);
+        EJS_ASSERT(EJSVAL_IS_UNDEFINED(*_this));
 
-    EJSXMLHttpRequest* xhr = (EJSXMLHttpRequest*)EJSVAL_TO_OBJECT(*_this);
-	id peer = [[XmlHttpRequest alloc] init];
+        *_this = OrdinaryCreateFromConstructor(EJSVAL_IS_UNDEFINED(newTarget) ? _ejs_XMLHttpRequest : newTarget, _ejs_XMLHttpRequest_prototype, &_ejs_Object_specops);
 
-    xhr->peer = peer;
+        EJSXMLHttpRequest* xhr = (EJSXMLHttpRequest*)EJSVAL_TO_OBJECT(*_this);
+        id peer = [[XmlHttpRequest alloc] init];
 
-    return *_this;
+        xhr->peer = peer;
+
+        return *_this;
+    }
 }
 
 void

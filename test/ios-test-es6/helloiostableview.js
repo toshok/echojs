@@ -4,6 +4,19 @@ import { NSBundle, NSObject, NSRect } from 'foundation';
 import { chainCtor, instanceSelector, sig } from 'objc';
 import { GLKViewController, GLKCanvasView, GLKViewDrawableDepthFormat } from 'glkit';
 
+// the mdn samples use importScripts (old functionality from coffeekit) which doesn't exist in pirouette.
+// import * as mdn_sample2 from './webgl-samples/sample2/sample';
+// import * as mdn_sample3 from './webgl-samples/sample3/sample';
+// import * as mdn_sample4 from './webgl-samples/sample4/sample';
+// import * as mdn_sample5 from './webgl-samples/sample5/sample';
+
+import * as j3d_cube    from './j3d/HelloCube';
+import * as j3d_lights  from './j3d/HelloLights';
+import * as j3d_scene   from './j3d/HelloScene';
+import * as j3d_head    from './j3d/HelloHead';
+import * as j3d_cubemap from './j3d/HelloCubemap';
+import * as j3d_plasma  from './j3d/HelloPlasma';
+
 import * as ui from 'uikit';
 
 let HelloIOSViewController = ui.UIViewController.extendClass("HelloIOSViewController", {});
@@ -38,52 +51,38 @@ let HelloIOSAppDelegate = NSObject.extendClass("HelloIOSAppDelegate", () => ({
       chainCtor(HelloIOSAppDelegate, this, arguments);
     },
 
-    runGLDemo: function(demoName, demoPath) {
-      function uiAlertOnException(f) {
-        try {
-          f();
-          return true;
-        } catch (e) {
-          new ui.UIAlertView().init("Exception in demo script", e, null, "Ok", null).show();
-          return false;
-        }
-      };
+    runGLDemo: function(demoName, demo) {
+	function uiAlertOnException(f) {
+            try {
+		f();
+		return true;
+            } catch (e) {
+		console.log(e);
+		new ui.UIAlertView().init("Exception in demo script", e, null, "Ok", null).show();
+		return false;
+            }
+	};
 
-      let demo;
-
-      let glkcontroller = new GLKCanvasViewController;
-      let canvas = glkcontroller.view;
-
-      let demoValid = uiAlertOnException(() => demo = require(demoPath));
-      if (demoValid) {
+	let glkcontroller = new GLKCanvasViewController;
+	let canvas = glkcontroller.view;
 
 	glkcontroller.delegate = {
-	  update: typeof(demo.update) === "function" ? demo.update : () => void 0
+	    update: typeof(demo.update) === "function" ? demo.update : () => void 0
 	};
 
 	canvas.delegate = {
-	  drawInRect: demo.draw
+	    drawInRect: demo.draw
 	};
 
 	if (demo.tap) {
-	  let tapProxy = new TargetActionProxy1(demo.tap);
-          canvas.addGestureRecognizer(new ui.UITapGestureRecognizer().initWithTarget(tapProxy, tapProxy.proxyAction));
+	    let tapProxy = new TargetActionProxy1(demo.tap);
+            canvas.addGestureRecognizer(new ui.UITapGestureRecognizer().initWithTarget(tapProxy, tapProxy.proxyAction));
 	}
 
 	demo.run(canvas);
-      }
 
-      glkcontroller.title = "" + demoName;
-      this.window.rootViewController.pushViewController(glkcontroller, true);
-    },
-
-    runJ3DDemo: function(demoName) {
-      // XXX this should be this.runGLDemo(demoName, "j3d/Hello" + demoName);
-      this.runGLDemo(demoName, "Hello" + demoName);
-    },
-
-    runMDNDemo: function(demoName) {
-      this.runGLDemo(demoName, "webgl-samples/" + demoName + "/sample");
+	glkcontroller.title = "" + demoName;
+	this.window.rootViewController.pushViewController(glkcontroller, true);
     },
 
     workerDemo: function() {
@@ -129,7 +128,7 @@ let HelloIOSAppDelegate = NSObject.extendClass("HelloIOSAppDelegate", () => ({
       newcontroller.title = "XMLHttpRequest";
 
       let xhrButton = ui.UIButton.buttonWithType(ui.UIButtonType.roundedRect);
-      xhrButton.title = "Click to fetch home.mcom.com";
+      xhrButton.title = "Click to fetch google.com";
       xhrButton.frame = new NSRect(screenBounds.width / 2 - 100, screenBounds.height / 2 - 50, 250, 50);
 
       let xhrTextView = new ui.UITextView().initWithFrame(new NSRect(0, screenBounds.height / 2 + 50, screenBounds.width, screenBounds.height - (screenBounds.height / 2 + 50)), null);
@@ -138,12 +137,13 @@ let HelloIOSAppDelegate = NSObject.extendClass("HelloIOSAppDelegate", () => ({
       xhrButton.clicked = () => {
 	console.log ("clicked!");
         let xhr = new XMLHttpRequest;
-        xhr.open("GET", "http://home.mcom.com/");
+        xhr.open("GET", "https://google.com/");
         xhr.onreadystatechange = () => {
 	  console.log ("onreadystatechange!");
           if (xhr.readyState === 4) {
 	      console.log ("response = " + xhr.responseText);
-            xhrTextView.text = "response = " + xhr.responseText;
+	      console.log ("status = " + xhr.statusText);
+              xhrTextView.text = "response = " + xhr.responseText;
 	  }
         };
 	  console.log ("sending!");
@@ -166,16 +166,18 @@ let HelloIOSAppDelegate = NSObject.extendClass("HelloIOSAppDelegate", () => ({
                         { title: "XMLHttpRequest",
                            rows: [ { title: "Simple fetch",        clicked: () => this.xhrDemo() } ] },
                         { title: "WebGL",
-                           rows: [ { title: "MDN sample 2", 	   clicked: () => this.runMDNDemo("sample2") },
-                                   { title: "MDN sample 3", 	   clicked: () => this.runMDNDemo("sample3") },
-                                   { title: "MDN sample 4", 	   clicked: () => this.runMDNDemo("sample4") },
-                                   { title: "MDN sample 5", 	   clicked: () => this.runMDNDemo("sample5") },
-                                   { title: "J3D Engine: Cube",    clicked: () => this.runJ3DDemo("Cube") },
-                                   { title: "J3D Engine: Lights",  clicked: () => this.runJ3DDemo("Lights") },
-                                   { title: "J3D Engine: Scene",   clicked: () => this.runJ3DDemo("Scene") },
-                                   { title: "J3D Engine: Head",    clicked: () => this.runJ3DDemo("Head") },
-                                   { title: "J3D Engine: Cubemap", clicked: () => this.runJ3DDemo("Cubemap") },
-                                   { title: "J3D Engine: Plasma",  clicked: () => this.runJ3DDemo("Plasma") } ] }
+                           rows: [
+			       // { title: "MDN sample 2", 	   clicked: () => this.runGLDemo("sample2", mdn_sample2) },
+                               // { title: "MDN sample 3", 	   clicked: () => this.runGLDemo("sample3", mdn_sample3) },
+                               // { title: "MDN sample 4", 	   clicked: () => this.runGLDemo("sample4", mdn_sample4) },
+                               // { title: "MDN sample 5", 	   clicked: () => this.runGLDemo("sample5", mdn_sample5) },
+                               { title: "J3D Engine: Cube",    clicked: () => this.runGLDemo("Cube",    j3d_cube) },
+                               { title: "J3D Engine: Lights",  clicked: () => this.runGLDemo("Lights",  j3d_lights) },
+                               { title: "J3D Engine: Scene",   clicked: () => this.runGLDemo("Scene",   j3d_scene) },
+                               { title: "J3D Engine: Head",    clicked: () => this.runGLDemo("Head",    j3d_head) },
+                               { title: "J3D Engine: Cubemap", clicked: () => this.runGLDemo("Cubemap", j3d_cubemap) },
+                               { title: "J3D Engine: Plasma",  clicked: () => this.runGLDemo("Plasma",  j3d_plasma) }
+			   ] }
                       ];
 
       let pathToItem = (arr, pos, path) => {

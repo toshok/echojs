@@ -1,6 +1,6 @@
 TOP=../..
 
-MODULES= --moduledir $(TOP)/modules/objc_internal
+MODULES= --moduledir $(TOP)/modules/objc_internal --moduledir $(TOP)/node-compat 
 
 J3D_DEMOS=	j3d/HelloCube.js \
 		j3d/HelloCubemap.js \
@@ -51,11 +51,12 @@ bindings: j3d/j3d-all.js
 	@mkdir -p GLKit
 	cp -r $(TOP)/pirouette/bindings/GLKit/ GLKit/
 
+SIM_DESTDIR=/Users/toshok/Library/Developer/CoreSimulator/Devices/D8AD0294-5589-48A4-A7F1-311B8A465E69/data/Containers/Bundle/Application/5A803BE1-CF8B-47DE-AEA6-E8A3652EBF2A/test.app
 sim: bindings
 	../../ejs --srcdir $(MODULES) --leave-temp --target sim helloiostableview.js # prime-worker.js $(J3D_DEMOS) j3d/j3d-all.js
-	mkdir -p HelloIOS.app/Contents/MacOS/
-	cp helloiostableview.js.exe "/Users/toshok/Library/Application Support/iPhone Simulator/6.1/Applications/F87FA5BE-1543-40E2-B8B6-2FA19728ADFC/MemTest.app/MemTest"
-	cp helloiostableview.js.exe "/Users/toshok/Library/Application Support/iPhone Simulator/7.0.3/Applications/F87FA5BE-1543-40E2-B8B6-2FA19728ADFC/MemTest.app/MemTest"
+	cp helloiostableview.js.exe $(SIM_DESTDIR)/test
+	mkdir -p $(SIM_DESTDIR)/demo
+	cp -r j3d/demo/* $(SIM_DESTDIR)/demo
 
 dev: bindings
 	../../ejs --srcdir $(MODULES) --leave-temp --target dev helloiostableview.js # prime-worker.js $(J3D_DEMOS) j3d/j3d-all.js
@@ -65,5 +66,5 @@ dev: bindings
 	cp ipa-work/Payload/HelloIOS.app/helloiostableview.js.exe "/Users/toshok/Library/Developer/Xcode/iOS DeviceSupport/7.0.4 (11B554a)/Symbols/var/mobile/Applications/EBA2A179-EDF0-4BA7-A097-CAFF316F34C8/HelloIOS.app/"
 	xcrun dsymutil ipa-work/Payload/HelloIOS.app/helloiostableview.js.exe -o ipa-work/Payload/HelloIOS.app.dSYM
 
-j3d/j3d-all.js:  $(J3D_SOURCES) j3d/j3d-imports.js j3d/j3d-exports.js
-	cat j3d/j3d-imports.js $(J3D_SOURCES) j3d/j3d-exports.js > $@
+j3d/j3d-all.js:  $(J3D_SOURCES) j3d/j3d-imports.js
+	cat j3d/j3d-imports.js $(J3D_SOURCES) > $@

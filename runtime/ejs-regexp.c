@@ -1152,7 +1152,7 @@ _ejs_regexp_init(ejsval global)
 {
     pcre16_tables = pcre16_maketables();
 
-    _ejs_RegExp = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_RegExp, (EJSClosureFunc)_ejs_RegExp_impl);
+    _ejs_RegExp = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_RegExp, _ejs_RegExp_impl);
     _ejs_object_setprop (global, _ejs_atom_RegExp, _ejs_RegExp);
 
     _ejs_gc_add_root (&_ejs_RegExp_prototype);

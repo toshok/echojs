@@ -1,4 +1,4 @@
-var gl;
+export let gl = null;
 
 var i = 0;
 J3D.Engine = function(canvas, j3dSettings, webglSettings) {	

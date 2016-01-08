@@ -3,14 +3,14 @@
 %EjsExceptionTypeInfoType = type { i8*, i8*, i8* }
 @EJS_EHTYPE_ejsvalue = external global %EjsExceptionTypeInfoType*
 
-define i32 @_ejs_invoke_closure_catch (%EjsValueType* nocapture %retval, %EjsValueType %closure, %EjsValueType %_this, i32 %argc, %EjsValueType* nocapture readnone %args) {
+define i32 @_ejs_invoke_closure_catch (%EjsValueType* nocapture %retval, %EjsValueType %closure, %EjsValueType %_this, i32 %argc, %EjsValueType* nocapture readnone %args, %EjsValueType %newTarget) {
 entry:
   %rv_alloc = alloca i32
   %call = alloca %EjsValueType
 
   %ref = getelementptr inbounds %EjsValueType* %retval, i64 0, i32 0
 
-  invoke void @_ejs_invoke_closure(i64* %ref, %EjsValueType %closure, %EjsValueType %_this, i32 %argc, %EjsValueType* %args)
+  invoke void @_ejs_invoke_closure(i64* %ref, %EjsValueType %closure, %EjsValueType %_this, i32 %argc, %EjsValueType* %args, %EjsValueType %newTarget)
           to label %success unwind label %exception
 
 success:
@@ -71,7 +71,7 @@ try_merge:
   ret i32 %rvload
 }
 
-declare void @_ejs_invoke_closure(i64*, %EjsValueType, %EjsValueType, i32, %EjsValueType*)
+declare void @_ejs_invoke_closure(i64*, %EjsValueType, %EjsValueType, i32, %EjsValueType*, %EjsValueType)
 
 declare i32 @__ejs_personality_v0(i32, i32, i64, i8*, i8*)
 

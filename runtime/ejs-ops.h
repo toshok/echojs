@@ -86,10 +86,10 @@ extern ejsval _ejs_isFinite;
 extern ejsval _ejs_parseInt;
 extern ejsval _ejs_parseFloat;
 
-ejsval _ejs_isNaN_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
-ejsval _ejs_isFinite_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
-ejsval _ejs_parseInt_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
-ejsval _ejs_parseFloat_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
+extern EJS_NATIVE_FUNC(_ejs_isNaN_impl);
+extern EJS_NATIVE_FUNC(_ejs_isFinite_impl);
+extern EJS_NATIVE_FUNC(_ejs_parseInt_impl);
+extern EJS_NATIVE_FUNC(_ejs_parseFloat_impl);
 
 ejsval CheckIterableObject (ejsval obj);
 ejsval GetIterator (ejsval obj, ejsval method);

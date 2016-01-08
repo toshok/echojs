@@ -31,11 +31,12 @@ extern ejsval _ejs_setTimeout;
 extern ejsval _ejs_clearInterval;
 extern ejsval _ejs_clearTimeout;
 
+/*
 ejsval _ejs_setInterval_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
 ejsval _ejs_setTimeout_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
 ejsval _ejs_clearInterval_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
 ejsval _ejs_clearTimeout_impl (ejsval env, ejsval _this, uint32_t argc, ejsval* args);
-
+*/
 void _ejs_timers_init(ejsval global);
 
 EJS_END_DECLS
