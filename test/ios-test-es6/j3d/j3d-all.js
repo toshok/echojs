@@ -712,11 +712,6 @@ J3D.Loader.loadJSON = function(path, onLoadedFunc){
 
 	request.send();
 */
-	console.log (ejsfs);
-	console.log (ejsfs.readFileSync);
-	console.log (JSON.parse);
-	console.log (onLoadedFunc.call);
-
 	onLoadedFunc.call (null, JSON.parse (ejsfs.readFileSync (path, 'utf-8')));
 }
 
