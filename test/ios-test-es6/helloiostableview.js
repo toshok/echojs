@@ -128,7 +128,7 @@ let HelloIOSAppDelegate = NSObject.extendClass("HelloIOSAppDelegate", () => ({
       newcontroller.title = "XMLHttpRequest";
 
       let xhrButton = ui.UIButton.buttonWithType(ui.UIButtonType.roundedRect);
-      xhrButton.title = "Click to fetch home.mcom.com";
+      xhrButton.title = "Click to fetch google.com";
       xhrButton.frame = new NSRect(screenBounds.width / 2 - 100, screenBounds.height / 2 - 50, 250, 50);
 
       let xhrTextView = new ui.UITextView().initWithFrame(new NSRect(0, screenBounds.height / 2 + 50, screenBounds.width, screenBounds.height - (screenBounds.height / 2 + 50)), null);
@@ -137,12 +137,13 @@ let HelloIOSAppDelegate = NSObject.extendClass("HelloIOSAppDelegate", () => ({
       xhrButton.clicked = () => {
 	console.log ("clicked!");
         let xhr = new XMLHttpRequest;
-        xhr.open("GET", "http://home.mcom.com/");
+        xhr.open("GET", "https://google.com/");
         xhr.onreadystatechange = () => {
 	  console.log ("onreadystatechange!");
           if (xhr.readyState === 4) {
 	      console.log ("response = " + xhr.responseText);
-            xhrTextView.text = "response = " + xhr.responseText;
+	      console.log ("status = " + xhr.statusText);
+              xhrTextView.text = "response = " + xhr.responseText;
 	  }
         };
 	  console.log ("sending!");
