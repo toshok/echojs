@@ -11,7 +11,7 @@
 
 #define SPEW(x)
 
-@implementation CKString
+@implementation EJSObjcString
 
 -(id)initWithJSString:(EJSPrimString*)str
 {
@@ -42,17 +42,17 @@
 
 +(id)stringWithJSString:(EJSPrimString*)str
 {
-	return [[[CKString alloc] initWithJSString:str] autorelease];
+	return [[[EJSObjcString alloc] initWithJSString:str] autorelease];
 }
 
 +(id)stringWithNSString:(NSString*)str
 {
-	return [[[CKString alloc] initWithNSString:str] autorelease];
+	return [[[EJSObjcString alloc] initWithNSString:str] autorelease];
 }
 
 +(id)stringWithUTF8CString:(const char*)str
 {
-	return [[[CKString alloc] initWithUTF8CString:str] autorelease];
+	return [[[EJSObjcString alloc] initWithUTF8CString:str] autorelease];
 }
 
 -(void)dealloc
@@ -111,14 +111,14 @@
 
 -(NSString*)description
 {
-    return [NSString stringWithFormat:@"<CKString(%@)>", [self nsString]];
+    return [NSString stringWithFormat:@"<EJSObjcString(%@)>", [self nsString]];
 }
 
 @end
 
 
 
-@implementation CKValue
+@implementation EJSObjcValue
 
 -(id)initWithJSValue:(ejsval)val
 {
@@ -179,7 +179,7 @@
 
 -(id)objectValue
 {
-	return [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(_val)];
+	return [EJSObjcObject objectWithJSObject:EJSVAL_TO_OBJECT(_val)];
 }
 
 -(double)numberValue
@@ -187,9 +187,9 @@
 	return ToDouble (_val);
 }
 
--(CKString*)stringValue
+-(EJSObjcString*)stringValue
 {
-    return [CKString stringWithJSString:EJSVAL_TO_STRING(ToString(_val))];
+    return [EJSObjcString stringWithJSString:EJSVAL_TO_STRING(ToString(_val))];
 }
 
 -(NSString*)nsStringValue
@@ -210,42 +210,42 @@
 
 +(id)undefinedValue
 {
-	return [[[CKValue alloc] initWithJSValue:_ejs_undefined] autorelease];
+	return [[[EJSObjcValue alloc] initWithJSValue:_ejs_undefined] autorelease];
 }
 
 +(id)nullValue
 {
-	return [[[CKValue alloc] initWithJSValue:_ejs_null] autorelease];
+	return [[[EJSObjcValue alloc] initWithJSValue:_ejs_null] autorelease];
 }
 
 +(id)numberValue:(double)num
 {
-	return [[[CKValue alloc] initWithJSValue:NUMBER_TO_EJSVAL(num)] autorelease];
+	return [[[EJSObjcValue alloc] initWithJSValue:NUMBER_TO_EJSVAL(num)] autorelease];
 }
 
-+(id)objectValue:(CKObject*)obj
++(id)objectValue:(EJSObjcObject*)obj
 {
-	return [[[CKValue alloc] initWithJSValue:(obj == NULL ? _ejs_null : OBJECT_TO_EJSVAL([obj jsObject]))] autorelease];    
+	return [[[EJSObjcValue alloc] initWithJSValue:(obj == NULL ? _ejs_null : OBJECT_TO_EJSVAL([obj jsObject]))] autorelease];    
 }
 
-+(id)jsStringValue:(CKString*)str
++(id)jsStringValue:(EJSObjcString*)str
 {
-	return [[[CKValue alloc] initWithJSValue:STRING_TO_EJSVAL([str jsString])] autorelease];
+	return [[[EJSObjcValue alloc] initWithJSValue:STRING_TO_EJSVAL([str jsString])] autorelease];
 }
 
 +(id)nsStringValue:(NSString*)str
 {
-	return [[[CKValue alloc] initWithJSValue:STRING_TO_EJSVAL([[CKString stringWithNSString:str] jsString])] autorelease];
+	return [[[EJSObjcValue alloc] initWithJSValue:STRING_TO_EJSVAL([[EJSObjcString stringWithNSString:str] jsString])] autorelease];
 }
 
 +(id)utf8StringValue:(const char*)str
 {
-	return [[[CKValue alloc] initWithJSValue:STRING_TO_EJSVAL([[CKString stringWithUTF8CString:str] jsString])] autorelease];
+	return [[[EJSObjcValue alloc] initWithJSValue:STRING_TO_EJSVAL([[EJSObjcString stringWithUTF8CString:str] jsString])] autorelease];
 }
 
 +(id)valueWithJSValue:(ejsval)val
 {
-	return [[[CKValue alloc] initWithJSValue:val] autorelease];
+	return [[[EJSObjcValue alloc] initWithJSValue:val] autorelease];
 }
 
 
@@ -258,13 +258,13 @@
 
 -(NSString*)description
 {
-	return [NSString stringWithFormat:@"<CKValue val=\"%@\">", [self nsStringValue]];
+	return [NSString stringWithFormat:@"<EJSObjcValue val=\"%@\">", [self nsStringValue]];
 }
 
 @end
 
 
-@implementation CKObject
+@implementation EJSObjcObject
 
 -(id)initWithJSObject:(EJSObject*)obj
 {
@@ -321,73 +321,73 @@
 
 +(id)objectWithJSObject:(EJSObject*)obj
 {
-	return [[[CKObject alloc] initWithJSObject:obj] autorelease];
+	return [[[EJSObjcObject alloc] initWithJSObject:obj] autorelease];
 }
 
-+(CKObject*)makeFunction:(CKString*)name withCallback:(EJSClosureFunc)callback argCount:(uint32_t)nargs
++(EJSObjcObject*)makeFunction:(EJSObjcString*)name withCallback:(EJSClosureFunc)callback argCount:(uint32_t)nargs
 {
 	return [self makeFunctionNS:[name nsString] withCallback:callback argCount:nargs];
 }
 
-+(CKObject*)makeFunctionNS:(NSString*)name withCallback:(EJSClosureFunc)callback argCount:(uint32_t)nargs
++(EJSObjcObject*)makeFunctionNS:(NSString*)name withCallback:(EJSClosureFunc)callback argCount:(uint32_t)nargs
 {
-	return [[[CKObject alloc] initWithJSObject:EJSVAL_TO_OBJECT(_ejs_function_new_utf8 (_ejs_null, [name UTF8String], callback))] autorelease];
+	return [[[EJSObjcObject alloc] initWithJSObject:EJSVAL_TO_OBJECT(_ejs_function_new_utf8 (_ejs_null, [name UTF8String], callback))] autorelease];
 }
 
--(CKPropertyNameArray*)propertyNames
+-(EJSObjcPropertyNameArray*)propertyNames
 {
-	return [CKPropertyNameArray arrayWithObjectProperties:self];
+	return [EJSObjcPropertyNameArray arrayWithObjectProperties:self];
 }
 
--(CKValue*)valueForProperty:(CKString*)name
+-(EJSObjcValue*)valueForProperty:(EJSObjcString*)name
 {
     ejsval objval = OBJECT_TO_EJSVAL(_obj);
-	return [CKValue valueWithJSValue:_ejs_object_getprop_utf8 (objval, [name UTF8String])];
+	return [EJSObjcValue valueWithJSValue:_ejs_object_getprop_utf8 (objval, [name UTF8String])];
 }
 
--(CKValue*)valueForPropertyNS:(NSString*)name
+-(EJSObjcValue*)valueForPropertyNS:(NSString*)name
 {
     ejsval objval = OBJECT_TO_EJSVAL(_obj);
-    return [CKValue valueWithJSValue:_ejs_object_getprop_utf8(objval, [name UTF8String])];
+    return [EJSObjcValue valueWithJSValue:_ejs_object_getprop_utf8(objval, [name UTF8String])];
 }
 
--(CKObject*)objectForProperty:(CKString*)name
+-(EJSObjcObject*)objectForProperty:(EJSObjcString*)name
 {
-	CKValue* val = [self valueForProperty:name];
+	EJSObjcValue* val = [self valueForProperty:name];
 	if (![val isObject])
 		return nil;
 
 	return [val objectValue];
 }
--(CKObject*)objectForPropertyNS:(NSString*)name
+-(EJSObjcObject*)objectForPropertyNS:(NSString*)name
 {
-	CKValue* val = [self valueForPropertyNS:name];
+	EJSObjcValue* val = [self valueForPropertyNS:name];
 	if (![val isObject])
 		return nil;
     
 	return [val objectValue];
 }
 
--(CKString*)jsStringForProperty:(CKString*)name
+-(EJSObjcString*)jsStringForProperty:(EJSObjcString*)name
 {
-	CKValue* val = [self valueForProperty:name];
+	EJSObjcValue* val = [self valueForProperty:name];
 	if (![val isString])
 		return nil;
 
 	return [val stringValue];
 }
--(CKString*)jsStringForPropertyNS:(NSString*)name
+-(EJSObjcString*)jsStringForPropertyNS:(NSString*)name
 {
-	CKValue* val = [self valueForPropertyNS:name];
+	EJSObjcValue* val = [self valueForPropertyNS:name];
 	if (![val isString])
 		return nil;
     
 	return [val stringValue];
 }
 
--(NSString*)nsStringForProperty:(CKString*)name
+-(NSString*)nsStringForProperty:(EJSObjcString*)name
 {
-	CKValue* val = [self valueForProperty:name];
+	EJSObjcValue* val = [self valueForProperty:name];
 	if (![val isString])
 		return nil;
     
@@ -395,16 +395,16 @@
 }
 -(NSString*)nsStringForPropertyNS:(NSString*)name
 {
-	CKValue* val = [self valueForPropertyNS:name];
+	EJSObjcValue* val = [self valueForPropertyNS:name];
 	if (![val isString])
 		return nil;
     
 	return [[val stringValue] nsString];
 }
 
--(const char*)utf8StringForProperty:(CKString*)name
+-(const char*)utf8StringForProperty:(EJSObjcString*)name
 {
-	CKValue* val = [self valueForProperty:name];
+	EJSObjcValue* val = [self valueForProperty:name];
 	if (![val isString])
 		return NULL;
     
@@ -412,54 +412,54 @@
 }
 -(const char*)utf8StringForPropertyNS:(NSString*)name
 {
-	CKValue* val = [self valueForPropertyNS:name];
+	EJSObjcValue* val = [self valueForPropertyNS:name];
 	if (![val isString])
 		return NULL;
 
 	return [[val stringValue] UTF8String];
 }
 
--(int)intForProperty:(CKString*)name
+-(int)intForProperty:(EJSObjcString*)name
 {
-	CKValue* val = [self valueForProperty:name];
+	EJSObjcValue* val = [self valueForProperty:name];
 	return [val isNumber] ? (int)[val numberValue] : 0;
 }
 -(int)intForPropertyNS:(NSString*)name
 {
-	CKValue* val = [self valueForPropertyNS:name];
+	EJSObjcValue* val = [self valueForPropertyNS:name];
 	return [val isNumber] ? (int)[val numberValue] : 0;
 }
 
--(float)floatForProperty:(CKString*)name
+-(float)floatForProperty:(EJSObjcString*)name
 {
-	CKValue* val = [self valueForProperty:name];
+	EJSObjcValue* val = [self valueForProperty:name];
 	return [val isNumber] ? (float)[val numberValue] : 0.0f;
 }
 -(float)floatForPropertyNS:(NSString*)name
 {
-	CKValue* val = [self valueForPropertyNS:name];
+	EJSObjcValue* val = [self valueForPropertyNS:name];
 	return [val isNumber] ? (float)[val numberValue] : 0.0f;
 }
 
 
--(void)defineProperty:(CKString*)name value:(CKValue*)val attributes:(uint32_t)attrs
+-(void)defineProperty:(EJSObjcString*)name value:(EJSObjcValue*)val attributes:(uint32_t)attrs
 {
     _ejs_object_define_value_property (OBJECT_TO_EJSVAL(_obj), STRING_TO_EJSVAL([name jsString]), [val jsValue], attrs);
 }
 
--(void)defineProperty:(CKString*)name object:(CKObject*)obj attributes:(uint32_t)attrs
+-(void)defineProperty:(EJSObjcString*)name object:(EJSObjcObject*)obj attributes:(uint32_t)attrs
 {
     _ejs_object_define_value_property (OBJECT_TO_EJSVAL(_obj), STRING_TO_EJSVAL([name jsString]), OBJECT_TO_EJSVAL([obj jsObject]), attrs);
 }
 
--(void)definePropertyNS:(NSString*)name value:(CKValue*)val attributes:(uint32_t)attrs
+-(void)definePropertyNS:(NSString*)name value:(EJSObjcValue*)val attributes:(uint32_t)attrs
 {
-    _ejs_object_define_value_property (OBJECT_TO_EJSVAL(_obj), STRING_TO_EJSVAL([[CKString stringWithNSString:name] jsString]), [val jsValue], attrs);
+    _ejs_object_define_value_property (OBJECT_TO_EJSVAL(_obj), STRING_TO_EJSVAL([[EJSObjcString stringWithNSString:name] jsString]), [val jsValue], attrs);
 }
 
--(void)definePropertyNS:(NSString*)name object:(CKObject*)obj attributes:(uint32_t)attrs
+-(void)definePropertyNS:(NSString*)name object:(EJSObjcObject*)obj attributes:(uint32_t)attrs
 {
-    _ejs_object_define_value_property (OBJECT_TO_EJSVAL(_obj), STRING_TO_EJSVAL([[CKString stringWithNSString:name] jsString]), OBJECT_TO_EJSVAL([obj jsObject]), attrs);
+    _ejs_object_define_value_property (OBJECT_TO_EJSVAL(_obj), STRING_TO_EJSVAL([[EJSObjcString stringWithNSString:name] jsString]), OBJECT_TO_EJSVAL([obj jsObject]), attrs);
 }
 
 
@@ -499,13 +499,13 @@
 #endif
 }
 
--(CKObject*)prototype
+-(EJSObjcObject*)prototype
 {
     ejsval p = _ejs_object_getprop (OBJECT_TO_EJSVAL(_obj), _ejs_atom_prototype);
     if (EJSVAL_IS_NULL_OR_UNDEFINED(p))
         return nil;
 
-    return [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(p)];
+    return [EJSObjcObject objectWithJSObject:EJSVAL_TO_OBJECT(p)];
 }
 
 -(void*)privateData
@@ -547,15 +547,15 @@
 -(NSString*)description
 {
     EJSPrimString* jsstr = EJSVAL_TO_STRING(ToString(OBJECT_TO_EJSVAL(_obj)));
-	NSString *valstr = [[CKString stringWithJSString:jsstr] nsString];
-	return [NSString stringWithFormat:@"<CKObject \"%@\">", valstr];
+	NSString *valstr = [[EJSObjcString stringWithJSString:jsstr] nsString];
+	return [NSString stringWithFormat:@"<EJSObjcObject \"%@\">", valstr];
 }
 
 @end
 
-@implementation CKPropertyNameArray
+@implementation EJSObjcPropertyNameArray
 
--(CKPropertyNameArray*)initWithObjectProperties:(CKObject*)obj
+-(EJSObjcPropertyNameArray*)initWithObjectProperties:(EJSObjcObject*)obj
 {
 	self = [super init];
 
@@ -566,13 +566,13 @@
         _names = NULL;
     }
     else {
-        _names = (CKString**)malloc(_count * sizeof(CKString*));
+        _names = (EJSObjcString**)malloc(_count * sizeof(EJSObjcString*));
         uint32_t i = 0;
         for (_EJSPropertyMapEntry* s = map->head_insert; s; s = s->next_insert) {
             ejsval name = s->name;
             char* utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(name));
 
-            _names[i++] = [[CKString alloc] initWithUTF8CString:utf8];
+            _names[i++] = [[EJSObjcString alloc] initWithUTF8CString:utf8];
             free (utf8);
         }
     }
@@ -580,9 +580,9 @@
     return self;
 }
 
-+(CKPropertyNameArray*)arrayWithObjectProperties:(CKObject*)obj
++(EJSObjcPropertyNameArray*)arrayWithObjectProperties:(EJSObjcObject*)obj
 {
-	return [[[CKPropertyNameArray alloc] initWithObjectProperties:obj] autorelease];
+	return [[[EJSObjcPropertyNameArray alloc] initWithObjectProperties:obj] autorelease];
 }
 
 -(void)dealloc
@@ -601,44 +601,44 @@
 	return _count;
 }
 
--(CKString*)nameAtIndex:(uint32_t)index
+-(EJSObjcString*)nameAtIndex:(uint32_t)index
 {
 	return _names[index]; // XXX we should clone+autorelease this...
 }
 @end
 
-@implementation CKInvocation
+@implementation EJSObjcInvocation
 
--(CKInvocation*)initWithFunction:(CKObject*)func argCount:(NSUInteger)argCount thisObject:(CKObject*)obj
+-(EJSObjcInvocation*)initWithFunction:(EJSObjcObject*)func argCount:(NSUInteger)argCount thisObject:(EJSObjcObject*)obj
 {
 	self = [super init];
 	_func = [func retain];
 	_thisObj = [obj retain];
 	isFuncCtor = NO;
 	_argCount = argCount;
-	_args = _argCount == 0 ? NULL : (CKValue**)calloc(_argCount, sizeof(CKValue*));
+	_args = _argCount == 0 ? NULL : (EJSObjcValue**)calloc(_argCount, sizeof(EJSObjcValue*));
 	return self;
 }
 
--(CKInvocation*)initWithConstructor:(CKObject*)ctor argCount:(NSUInteger)argCount
+-(EJSObjcInvocation*)initWithConstructor:(EJSObjcObject*)ctor argCount:(NSUInteger)argCount
 {
 	self = [super init];
 	_func = [ctor retain];
 	_thisObj = nil;
 	isFuncCtor = YES;
 	_argCount = argCount;
-	_args = _argCount == 0 ? NULL : (CKValue**)calloc(_argCount, sizeof(CKValue*));
+	_args = _argCount == 0 ? NULL : (EJSObjcValue**)calloc(_argCount, sizeof(EJSObjcValue*));
 	return self;    
 }
 
-+(CKInvocation*)invocationWithFunction:(CKObject*)func argCount:(NSUInteger)argCount thisObject:(CKObject*)obj
++(EJSObjcInvocation*)invocationWithFunction:(EJSObjcObject*)func argCount:(NSUInteger)argCount thisObject:(EJSObjcObject*)obj
 {
-	return [[[CKInvocation alloc] initWithFunction:func argCount:argCount thisObject:obj] autorelease];
+	return [[[EJSObjcInvocation alloc] initWithFunction:func argCount:argCount thisObject:obj] autorelease];
 }
 
-+(CKInvocation*)invocationWithConstructor:(CKObject*)ctor argCount:(NSUInteger)argCount
++(EJSObjcInvocation*)invocationWithConstructor:(EJSObjcObject*)ctor argCount:(NSUInteger)argCount
 {
-	return [[[CKInvocation alloc] initWithConstructor:ctor argCount:argCount] autorelease];    
+	return [[[EJSObjcInvocation alloc] initWithConstructor:ctor argCount:argCount] autorelease];    
 }
 
 -(void)dealloc
@@ -658,7 +658,7 @@
 }
 
 
--(void)setThisObject:(CKObject*)obj
+-(void)setThisObject:(EJSObjcObject*)obj
 {
 	if (_thisObj == obj)
 		return;
@@ -667,7 +667,7 @@
 	_thisObj = [obj retain];
 }
 
--(void)setFunction:(CKObject*)func
+-(void)setFunction:(EJSObjcObject*)func
 {
 	isFuncCtor = NO;
 	if (_func == func)
@@ -677,7 +677,7 @@
 	_func = [func retain];    
 }
 
--(void)setConstructor:(CKObject*)ctor
+-(void)setConstructor:(EJSObjcObject*)ctor
 {
 	isFuncCtor = YES;
 	if (_func == ctor)
@@ -687,7 +687,7 @@
 	_func = [ctor retain];    
 }
 
--(void)setArgument:(CKValue*)arg atIndex:(NSUInteger)index
+-(void)setArgument:(EJSObjcValue*)arg atIndex:(NSUInteger)index
 {
 	if (index > _argCount) {
 		NSLog(@"too many arguments..");
@@ -702,7 +702,7 @@
 	_args[index] = [arg retain];
 }
 
--(CKValue*)invoke
+-(EJSObjcValue*)invoke
 {
 	ejsval rv = _ejs_undefined;
 	ejsval* jsargs = _argCount == 0 ? NULL : (ejsval*)malloc(_argCount * sizeof(ejsval));
@@ -721,8 +721,8 @@
         rv = o;
 	}
 	else {
-        ejsval thisArg = [[CKValue objectValue:_thisObj] jsValue];
-        rv = _ejs_invoke_closure ([[CKValue objectValue:_func] jsValue],
+        ejsval thisArg = [[EJSObjcValue objectValue:_thisObj] jsValue];
+        rv = _ejs_invoke_closure ([[EJSObjcValue objectValue:_func] jsValue],
                                   &thisArg,
                                   _argCount, jsargs, _ejs_undefined);
 	}
@@ -745,15 +745,15 @@
 
 		NSString *exc_nsstr = jsvalue_to_nsstr ([_ctx jsContext], jsexc);
 		NSLog (@"there was an exception calling the JS %s:\n%@", isFuncCtor ? "constructor" : "function", exc_nsstr);
-		_exc = [[CKValue valueWithJSValue:jsexc context:_ctx] retain];
+		_exc = [[EJSObjcValue valueWithJSValue:jsexc context:_ctx] retain];
 		return NULL;
 	}
 #endif
 
-	return [CKValue valueWithJSValue:rv];
+	return [EJSObjcValue valueWithJSValue:rv];
 }
 
--(CKValue*)exception
+-(EJSObjcValue*)exception
 {
 	return _exc;
 }
