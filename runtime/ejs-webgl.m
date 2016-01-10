@@ -1410,7 +1410,7 @@ JSMETHOD (texImage2D) {
 		type = (GLenum)EJSVAL_TO_NUMBER(args[4]);
 		NSLog(@"1");
         _ejs_dump_value (args[5]);
-		UIImage* uiimage = (UIImage*)get_objc_id ([[CKValue valueWithJSValue:args[5]] objectValue]);
+		UIImage* uiimage = (UIImage*)get_objc_id ([[EJSObjcValue valueWithJSValue:args[5]] objectValue]);
 		NSLog(@"2, uiimage = %@", uiimage);
         
 		CGImageRef cgimage = [uiimage CGImage];
@@ -1826,7 +1826,7 @@ uniformMatrix_fv (size_t c, uint32_t argc, ejsval *args)
 		loc = EJSVAL_TO_NUMBER (args[0]);
 	}
 	else {
-        const char* arg_as_str = [[CKValue valueWithJSValue:args[0]] utf8StringValue];
+        const char* arg_as_str = [[EJSObjcValue valueWithJSValue:args[0]] utf8StringValue];
 		NSLog (@"need more rubusness 1, js arg0 = %s", arg_as_str);
 		abort();
 	}
@@ -1843,7 +1843,7 @@ uniformMatrix_fv (size_t c, uint32_t argc, ejsval *args)
 	}
 	else {
 		NSLog(@"non array-like object passed to uniform*fv");
-        const char* arg2_as_str = [[CKValue valueWithJSValue:args[2]] utf8StringValue];
+        const char* arg2_as_str = [[EJSObjcValue valueWithJSValue:args[2]] utf8StringValue];
         NSLog(@"arg2 = %s", arg2_as_str);
 		abort();
 	}
@@ -2030,7 +2030,7 @@ webglrenderingcontext_specop_get (ejsval O, ejsval P, ejsval receiver)
 }
 
 EJS_NATIVE_FUNC(_ejs_objc_allocateWebGLRenderingContext) {
-	EAGLContext* eagl_context = (EAGLContext*)get_objc_id ([[CKValue valueWithJSValue:args[0]] objectValue]);
+	EAGLContext* eagl_context = (EAGLContext*)get_objc_id ([[EJSObjcValue valueWithJSValue:args[0]] objectValue]);
     
 	SPEW(NSLog (@"EAGLContext = %p\n", eagl_context);)
 

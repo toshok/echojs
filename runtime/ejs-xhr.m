@@ -77,7 +77,7 @@ typedef enum {
 @property (assign) NSInteger statusCode;
 @property (retain) NSURL*    url;
 @property (copy)   NSString* method;
-@property (retain) CKObject* readystatechange;
+@property (retain) EJSObjcObject* readystatechange;
 @property (assign) BOOL error;
 
 -(id)init;
@@ -219,7 +219,7 @@ typedef enum {
 -(void)invokeReadyStateChange
 {
 	if (readystatechange) {
-		CKInvocation* inv = [CKInvocation invocationWithFunction:readystatechange argCount:0 thisObject:NULL];
+		EJSObjcInvocation* inv = [EJSObjcInvocation invocationWithFunction:readystatechange argCount:0 thisObject:NULL];
 
 		[inv invoke];
         _ejs_runloop_darwin_refcount--;
@@ -266,8 +266,8 @@ static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_prototype_open) {
 
 	XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer (*_this);
     
-	NSString *method = [[CKValue valueWithJSValue:args[0]] nsStringValue];
-	NSString *url = [[CKValue valueWithJSValue:args[1]] nsStringValue];
+	NSString *method = [[EJSObjcValue valueWithJSValue:args[0]] nsStringValue];
+	NSString *url = [[EJSObjcValue valueWithJSValue:args[1]] nsStringValue];
     
 	[xhr openURL:url withMethod:method];
     
@@ -517,7 +517,7 @@ static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_prototype_get_statusText) {
 		rv = _ejs_atom_empty;
 	else {
 		NSString *status = [[xhr statusText] autorelease];
-		rv = STRING_TO_EJSVAL([[CKString stringWithNSString:status] jsString]);
+		rv = STRING_TO_EJSVAL([[EJSObjcString stringWithNSString:status] jsString]);
 	}
     
     return rv;
@@ -539,7 +539,7 @@ static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_prototype_get_responseText) {
 		rv = _ejs_atom_empty;
 	else {
 		NSString *resp = [[xhr responseText] autorelease];
-		rv = STRING_TO_EJSVAL([[CKString stringWithNSString:resp] jsString]);
+		rv = STRING_TO_EJSVAL([[EJSObjcString stringWithNSString:resp] jsString]);
 	}
 
     return rv;
@@ -551,14 +551,14 @@ static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_prototype_get_responseXML) {
 
 static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_prototype_get_onreadystatechange) {
     XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer(*_this);
-	CKObject* readystatechange = [xhr readystatechange];
+	EJSObjcObject* readystatechange = [xhr readystatechange];
 
     return readystatechange ? OBJECT_TO_EJSVAL([readystatechange jsObject]): _ejs_null;
 }
 
 static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_prototype_set_onreadystatechange) {
     XmlHttpRequest *xhr = (XmlHttpRequest*)get_peer (*_this);
-    xhr.readystatechange = [[CKValue valueWithJSValue:args[0]] objectValue];
+    xhr.readystatechange = [[EJSObjcValue valueWithJSValue:args[0]] objectValue];
     return _ejs_undefined;
 }
 

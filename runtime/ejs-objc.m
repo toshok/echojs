@@ -37,9 +37,9 @@
 #define RO_DONT_ENUM_PERMANENT (EJS_PROP_NOT_ENUMERABLE | EJS_PROP_NOT_WRITABLE | EJS_PROP_NOT_CONFIGURABLE)
 
 id
-get_objc_id (CKObject* obj)
+get_objc_id (EJSObjcObject* obj)
 {
-	CKObject *handle = [obj objectForPropertyNS:@"_ck_handle"];
+	EJSObjcObject *handle = [obj objectForPropertyNS:@"_ck_handle"];
 	return handle ? ((EJSObjcHandle*)[handle jsObject])->handle : nil;
 }
 
@@ -91,12 +91,12 @@ _ejs_objc_handle_new (id handle)
     return OBJECT_TO_EJSVAL(rv);
 }
 
-CKObject*
+EJSObjcObject*
 create_objc_handle_object (id objc_id)
 {
     ejsval handle = _ejs_objc_handle_new(objc_id);
 
-    return [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(handle)];
+    return [EJSObjcObject objectWithJSObject:EJSVAL_TO_OBJECT(handle)];
 }
 
 id
@@ -115,7 +115,7 @@ static EJS_NATIVE_FUNC(_ejs_CoffeeKitObject_impl) {
 }
 
 static EJS_NATIVE_FUNC(_ejs_CoffeeKitObject_setHandle) {
-	CKObject* thisObject = [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(*_this)];
+	EJSObjcObject* thisObject = [EJSObjcObject objectWithJSObject:EJSVAL_TO_OBJECT(*_this)];
     
 	SPEW(NSLog (@"made it to coffeekit_object_set_handle, argumentCount = %u", argc);)
 
@@ -126,7 +126,7 @@ static EJS_NATIVE_FUNC(_ejs_CoffeeKitObject_setHandle) {
 	}
 
 	[thisObject definePropertyNS:@"_ck_handle"
-     object:[CKObject objectWithJSObject:(EJSObject*)handleArg]
+     object:[EJSObjcObject objectWithJSObject:(EJSObject*)handleArg]
 		    attributes:EJS_PROP_NOT_WRITABLE | EJS_PROP_NOT_CONFIGURABLE];
 
 	set_jspeer (handleArg->handle, thisObject);
@@ -136,9 +136,9 @@ static EJS_NATIVE_FUNC(_ejs_CoffeeKitObject_setHandle) {
 
 
 static EJS_NATIVE_FUNC(_ejs_CoffeeKitObject_prototype_toString) {
-	CKObject* thisObject = [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(*_this)];
+	EJSObjcObject* thisObject = [EJSObjcObject objectWithJSObject:EJSVAL_TO_OBJECT(*_this)];
     NSString* desc = [NSString stringWithFormat:@"%@",  get_objc_id(thisObject)];
-    return STRING_TO_EJSVAL([[CKString stringWithNSString:desc] jsString]);
+    return STRING_TO_EJSVAL([[EJSObjcString stringWithNSString:desc] jsString]);
 }
 
 void
@@ -205,8 +205,8 @@ static EJS_NATIVE_FUNC(_ejs_objc_allocInstance) {
 }
 
 static EJS_NATIVE_FUNC(_ejs_objc_staticCall) {
-    const char *clsname_cstr = [[CKString stringWithJSString:EJSVAL_TO_STRING(args[0])] UTF8String];
-    const char *selector_cstr = [[CKString stringWithJSString:EJSVAL_TO_STRING(args[1])] UTF8String];
+    const char *clsname_cstr = [[EJSObjcString stringWithJSString:EJSVAL_TO_STRING(args[0])] UTF8String];
+    const char *selector_cstr = [[EJSObjcString stringWithJSString:EJSVAL_TO_STRING(args[1])] UTF8String];
 
     Class cls = objc_getClass (clsname_cstr);
     SEL sel = sel_getUid (selector_cstr);
@@ -222,7 +222,7 @@ static EJS_NATIVE_FUNC(_ejs_objc_getInstanceVariable) {
 		abort();
 	}
 
-	id handle = get_objc_id ([CKObject objectWithJSObject:EJSVAL_TO_OBJECT(args[0])]);
+	id handle = get_objc_id ([EJSObjcObject objectWithJSObject:EJSVAL_TO_OBJECT(args[0])]);
 
 	if (!handle) {
 		NSLog (@"getInstanceVariable first parameter has no handle");
@@ -253,7 +253,7 @@ static EJS_NATIVE_FUNC(_ejs_objc_setInstanceVariable) {
 		abort();
 	}
 
-	id handle = get_objc_id ([[CKValue valueWithJSValue:args[0]] objectValue]);
+	id handle = get_objc_id ([[EJSObjcValue valueWithJSValue:args[0]] objectValue]);
 	if (!handle) {
 		NSLog (@"setInstanceVariable first parameter has no handle");
 		// XXX throw an exception here
@@ -261,7 +261,7 @@ static EJS_NATIVE_FUNC(_ejs_objc_setInstanceVariable) {
 	}
     char* ivar_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[1]));
 
-	id value_handle = get_objc_id ([[CKValue valueWithJSValue:args[2]] objectValue]);
+	id value_handle = get_objc_id ([[EJSObjcValue valueWithJSValue:args[2]] objectValue]);
 
 	SPEW(NSLog (@"  setting %s on %@ to %@ ", ivar_utf8, handle, value_handle);)
 
@@ -282,12 +282,12 @@ static EJS_NATIVE_FUNC(_ejs_objc_selectorInvoker) {
 
     //NSLog (@"in _ejs_objc_selectorInvoker (%s)", selname_utf8);
 
-    CKObject* func = [CKObject makeFunctionNS:[NSString stringWithFormat:@"__ejs_invoke_%s_from_js", selname_utf8] withCallback:(EJSClosureFunc)invokeSelectorFromJS argCount:0];
+    EJSObjcObject* func = [EJSObjcObject makeFunctionNS:[NSString stringWithFormat:@"__ejs_invoke_%s_from_js", selname_utf8] withCallback:(EJSClosureFunc)invokeSelectorFromJS argCount:0];
 
     free (selname_utf8);
 
     [func definePropertyNS:@"_ck_sel"
-          value:[CKValue valueWithJSValue:args[0]]
+          value:[EJSObjcValue valueWithJSValue:args[0]]
           attributes:RO_DONT_ENUM_PERMANENT];
 
     return OBJECT_TO_EJSVAL([func jsObject]);
@@ -365,60 +365,60 @@ static EJS_NATIVE_FUNC(_ejs_objc_getTypeEncoding) {
 @end
 
 static const char*
-get_selector_name_from_function (CKObject* function)
+get_selector_name_from_function (EJSObjcObject* function)
 {
     return [function utf8StringForPropertyNS:@"_ck_sel"];
 }
 
 static const char*
-get_type_sig_from_function (CKObject* function)
+get_type_sig_from_function (EJSObjcObject* function)
 {
     return [function utf8StringForPropertyNS:@"_ck_typeSig"];
 }
 
 static const char*
-get_type_encoding_from_function (CKObject* function)
+get_type_encoding_from_function (EJSObjcObject* function)
 {
     return [function utf8StringForPropertyNS:@"_ck_typeEncoding"];
 }
 
 static SEL
-get_selector_from_function (CKObject* function)
+get_selector_from_function (EJSObjcObject* function)
 {
     return sel_getUid(get_selector_name_from_function (function));
 }
 
 static bool
-is_function_exported (CKObject* func)
+is_function_exported (EJSObjcObject* func)
 {
-    CKValue* propval = [func valueForPropertyNS:@"_ck_exported"];
+    EJSObjcValue* propval = [func valueForPropertyNS:@"_ck_exported"];
     
     return [propval isBool] && [propval boolValue];
 }
 
-static CKObject*
+static EJSObjcObject*
 get_object_prototype_method ( NSString *name)
 {
     EJS_NOT_IMPLEMENTED();
 #if notyet
-	CKObject* object_proto = [[[ctx globalObject] objectForPropertyNS:@"Object"] prototype];
+	EJSObjcObject* object_proto = [[[ctx globalObject] objectForPropertyNS:@"Object"] prototype];
 	return [object_proto objectForPropertyNS:name];
 #endif
 }
 
-static CKValue*
+static EJSObjcValue*
 marshal_id_as_jsvalue (id objc_id, BOOL protect)
 {
     if (objc_id == nil) {
         SPEW(NSLog (@"returning null");)
-        return [CKValue nullValue];
+        return [EJSObjcValue nullValue];
     }
 
     if ([objc_id isKindOfClass:[NSString class]]) {
-        return [CKValue nsStringValue:(NSString*)objc_id];
+        return [EJSObjcValue nsStringValue:(NSString*)objc_id];
     }
 
-    CKObject* ctor_obj = NULL;
+    EJSObjcObject* ctor_obj = NULL;
     Class return_class = object_getClass (objc_id);
 
     do {
@@ -439,18 +439,18 @@ marshal_id_as_jsvalue (id objc_id, BOOL protect)
     } while (ctor_obj == NULL);
 
     // this will retain objc_id
-    CKObject* handle = create_objc_handle_object (objc_id);
-    CKValue* handle_val = [CKValue objectValue:handle];
+    EJSObjcObject* handle = create_objc_handle_object (objc_id);
+    EJSObjcValue* handle_val = [EJSObjcValue objectValue:handle];
     //        NSLog (@"handle = %p", handle);
 
-    CKInvocation *inv = [CKInvocation invocationWithConstructor:ctor_obj argCount:1];
+    EJSObjcInvocation *inv = [EJSObjcInvocation invocationWithConstructor:ctor_obj argCount:1];
     
     [inv setArgument:handle_val atIndex:0];
     
     // and this will create a ref to the handle_val so that the lifetime of the objc_id will be at least
     // as long as the lifetime of jspeer.
-    CKValue* rv = [inv invoke];
-    CKObject* jspeer = [rv objectValue];
+    EJSObjcValue* rv = [inv invoke];
+    EJSObjcObject* jspeer = [rv objectValue];
     if (jspeer == NULL)
         [NSException raise:@"Exception marshaling id as jsvalue" format:@"%@", [inv exception]];
 
@@ -460,33 +460,33 @@ marshal_id_as_jsvalue (id objc_id, BOOL protect)
     return rv;
 }
 
-static CKValue*
+static EJSObjcValue*
 marshal_cgrect_as_jsvalue (CGRect *rect)
 {
-	CKString* x_ = [CKString stringWithUTF8CString:"x"];
-	CKString* y_ = [CKString stringWithUTF8CString:"y"];
-	CKString* width_ = [CKString stringWithUTF8CString:"width"];
-	CKString* height_ = [CKString stringWithUTF8CString:"height"];
+	EJSObjcString* x_ = [EJSObjcString stringWithUTF8CString:"x"];
+	EJSObjcString* y_ = [EJSObjcString stringWithUTF8CString:"y"];
+	EJSObjcString* width_ = [EJSObjcString stringWithUTF8CString:"width"];
+	EJSObjcString* height_ = [EJSObjcString stringWithUTF8CString:"height"];
 
-    CKObject* peer = [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(_ejs_object_create(_ejs_null))];
+    EJSObjcObject* peer = [EJSObjcObject objectWithJSObject:EJSVAL_TO_OBJECT(_ejs_object_create(_ejs_null))];
     
-    [peer defineProperty:x_ value:[CKValue numberValue:rect->origin.x]
+    [peer defineProperty:x_ value:[EJSObjcValue numberValue:rect->origin.x]
           attributes:RO_DONT_ENUM_PERMANENT];
 
-    [peer defineProperty:y_ value:[CKValue numberValue:rect->origin.y]
+    [peer defineProperty:y_ value:[EJSObjcValue numberValue:rect->origin.y]
           attributes:RO_DONT_ENUM_PERMANENT];
 
-    [peer defineProperty:width_ value:[CKValue numberValue:rect->size.width]
+    [peer defineProperty:width_ value:[EJSObjcValue numberValue:rect->size.width]
           attributes:RO_DONT_ENUM_PERMANENT];
     
-    [peer defineProperty:height_ value:[CKValue numberValue:rect->size.height]
+    [peer defineProperty:height_ value:[EJSObjcValue numberValue:rect->size.height]
           attributes:RO_DONT_ENUM_PERMANENT];
 
-    return [CKValue objectValue:peer];
+    return [EJSObjcValue objectValue:peer];
 }
 
 static NSArray*
-marshal_jsarray_as_nsarray (CKObject *o)
+marshal_jsarray_as_nsarray (EJSObjcObject *o)
 {
 	int length = [o arrayLength];
         int i;
@@ -494,7 +494,7 @@ marshal_jsarray_as_nsarray (CKObject *o)
         NSMutableArray *nsarray = [NSMutableArray arrayWithCapacity:length];
     
         for (i = 0; i < length; i ++) {
-                CKObject* el = [o objectForPropertyNS:[NSString stringWithFormat:@"%d", i]];
+                EJSObjcObject* el = [o objectForPropertyNS:[NSString stringWithFormat:@"%d", i]];
                 [nsarray addObject:get_objc_id(el)];
         }
     
@@ -502,12 +502,12 @@ marshal_jsarray_as_nsarray (CKObject *o)
 }
 
 static EJS_NATIVE_FUNC(invokeSelectorFromJS) {
-    CKObject *thisObj = [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(*_this)];
+    EJSObjcObject *thisObj = [EJSObjcObject objectWithJSObject:EJSVAL_TO_OBJECT(*_this)];
     
 #if old
     SEL sel = get_selector_from_function (func);
 #else
-    SEL sel = sel_getUid([[CKValue valueWithJSValue:args[0]] utf8StringValue]);
+    SEL sel = sel_getUid([[EJSObjcValue valueWithJSValue:args[0]] utf8StringValue]);
 #endif
     id handle = get_objc_id (thisObj);
     Method meth;
@@ -569,7 +569,7 @@ static EJS_NATIVE_FUNC(invokeSelectorFromJS) {
     for (i = 0; i < argc-1; i ++) {
         int objc_arg_num = i+2;
         const char* arg_type = [sig getArgumentTypeAtIndex:objc_arg_num];
-        CKValue* val = [CKValue valueWithJSValue:args[i+1]];
+        EJSObjcValue* val = [EJSObjcValue valueWithJSValue:args[i+1]];
         
 		SPEW(NSLog(@"marshaling arg[%d], type %s", i, arg_type);)
 
@@ -588,7 +588,7 @@ static EJS_NATIVE_FUNC(invokeSelectorFromJS) {
             }
             else if ([val isObject]) {
                 // fetch the objc handle from this arg
-                CKObject* o = [val objectValue];
+                EJSObjcObject* o = [val objectValue];
                 arg_ptr = get_objc_id (o);
                 if (arg_ptr == NULL) {
                     if ([o isArray]) {
@@ -703,7 +703,7 @@ static EJS_NATIVE_FUNC(invokeSelectorFromJS) {
                 // FIXME: handle both x,y,width,height and position,size?
                 //JSValueRef* js_exc = NULL;
 
-                CKObject* rectobj = [val objectValue];
+                EJSObjcObject* rectobj = [val objectValue];
                 CGRect *rect = (CGRect*)malloc (sizeof (CGRect));
 
                 rect->origin.x = [rectobj floatForPropertyNS:@"x"];
@@ -720,7 +720,7 @@ static EJS_NATIVE_FUNC(invokeSelectorFromJS) {
 #if IOS
             else if (!strncmp (&arg_type[1], "UIEdgeInsets", strlen ("UIEdgeInsets"))) {
                     
-                CKObject* insetsobj = [val objectValue];
+                EJSObjcObject* insetsobj = [val objectValue];
 
                 UIEdgeInsets *insets = (UIEdgeInsets*)malloc (sizeof (UIEdgeInsets));
                 insets->top = [insetsobj floatForPropertyNS:@"top"];
@@ -734,7 +734,7 @@ static EJS_NATIVE_FUNC(invokeSelectorFromJS) {
             }
             else if (!strncmp (&arg_type[1], "UIOffset", strlen ("UIOffset"))) {
                     
-                CKObject* offsetobj = [val objectValue];
+                EJSObjcObject* offsetobj = [val objectValue];
 
                 UIOffset *offset = (UIOffset*)malloc (sizeof (UIOffset));
                 offset->horizontal = [offsetobj floatForPropertyNS:@"horizontal"];
@@ -778,7 +778,7 @@ static EJS_NATIVE_FUNC(invokeSelectorFromJS) {
     
     NSUInteger return_length = [sig methodReturnLength];
     void* return_buffer = (void *)malloc(return_length);
-    CKValue* rv;
+    EJSObjcValue* rv;
     
     [inv getReturnValue:return_buffer];
     
@@ -806,34 +806,34 @@ static EJS_NATIVE_FUNC(invokeSelectorFromJS) {
     }
             
     case _C_CHR:
-        rv = [CKValue numberValue:*(int8_t*)return_buffer];
+        rv = [EJSObjcValue numberValue:*(int8_t*)return_buffer];
         break;            
     case _C_UCHR:
-        rv = [CKValue numberValue:*(uint8_t*)return_buffer];
+        rv = [EJSObjcValue numberValue:*(uint8_t*)return_buffer];
         break;            
     case _C_SHT:
-        rv = [CKValue numberValue:*(int16_t*)return_buffer];
+        rv = [EJSObjcValue numberValue:*(int16_t*)return_buffer];
         break;            
     case _C_USHT:
-        rv = [CKValue numberValue:*(uint16_t*)return_buffer];
+        rv = [EJSObjcValue numberValue:*(uint16_t*)return_buffer];
         break;            
     case _C_INT:
-        rv = [CKValue numberValue:*(int32_t*)return_buffer];
+        rv = [EJSObjcValue numberValue:*(int32_t*)return_buffer];
         break;            
     case _C_UINT:
-        rv = [CKValue numberValue:*(uint32_t*)return_buffer];
+        rv = [EJSObjcValue numberValue:*(uint32_t*)return_buffer];
         break;
     case _C_LNG_LNG:
-        rv = [CKValue numberValue:*(int64_t*)return_buffer];
+        rv = [EJSObjcValue numberValue:*(int64_t*)return_buffer];
         break;
     case _C_ULNG_LNG:
-        rv = [CKValue numberValue:*(uint64_t*)return_buffer];
+        rv = [EJSObjcValue numberValue:*(uint64_t*)return_buffer];
         break;
     case _C_FLT:
-	rv = [CKValue numberValue:*(float*)return_buffer];
+	rv = [EJSObjcValue numberValue:*(float*)return_buffer];
 	break;
     case _C_DBL:
-	rv = [CKValue numberValue:*(double*)return_buffer];
+	rv = [EJSObjcValue numberValue:*(double*)return_buffer];
 	break;
 
     default: {
@@ -846,10 +846,10 @@ static EJS_NATIVE_FUNC(invokeSelectorFromJS) {
     return [rv jsValue];
 }
 
-static CKObject*
+static EJSObjcObject*
 get_js_peer (id obj, id *class_out, BOOL *static_method)
 {
-    CKObject* jspeer = get_jspeer (obj);
+    EJSObjcObject* jspeer = get_jspeer (obj);
     if (jspeer == NULL) {
         jspeer = get_jsctor (obj);
         if (jspeer == NULL) {
@@ -879,7 +879,7 @@ coffeekit_method_tramp (id obj, SEL sel, ...)
     
     SPEW(NSLog (@"coffeekit_method_tramp (%@, %s)", obj, sel_name);)
     
-    CKObject* jspeer = get_js_peer (obj, &cls, &static_method);
+    EJSObjcObject* jspeer = get_js_peer (obj, &cls, &static_method);
     
     NSString* sel_nsstr = [NSString stringWithUTF8String:sel_name];
     NSMutableDictionary *method_map = objc_getAssociatedObject (cls, JSMETHODMAP_KEY);
@@ -894,7 +894,7 @@ coffeekit_method_tramp (id obj, SEL sel, ...)
     
     SPEW(NSLog (@"method_map[%@] = %@, looking up on jspeer %@", sel_nsstr, name_nsstr, jspeer);)
     
-    CKObject* func = [jspeer objectForPropertyNS:name_nsstr];
+    EJSObjcObject* func = [jspeer objectForPropertyNS:name_nsstr];
     
     SPEW(NSLog (@"found it!");)
     
@@ -911,7 +911,7 @@ coffeekit_method_tramp (id obj, SEL sel, ...)
 #endif
     int jsarg_num;
     
-    CKInvocation* inv = [CKInvocation invocationWithFunction:func argCount:jsarg_count thisObject:jspeer];
+    EJSObjcInvocation* inv = [EJSObjcInvocation invocationWithFunction:func argCount:jsarg_count thisObject:jspeer];
 
     [inv setThisObject:jspeer];
     [inv setFunction:func];
@@ -939,29 +939,29 @@ coffeekit_method_tramp (id obj, SEL sel, ...)
             }
             case _C_INT: {
                 int32_t i = va_arg(ap, int32_t);
-                [inv setArgument:[CKValue numberValue:i] atIndex:jsarg_num];
+                [inv setArgument:[EJSObjcValue numberValue:i] atIndex:jsarg_num];
                 break;
             }
             case _C_UINT: {
                 uint32_t i = va_arg(ap, uint32_t);
-                [inv setArgument:[CKValue numberValue:i] atIndex:jsarg_num];
+                [inv setArgument:[EJSObjcValue numberValue:i] atIndex:jsarg_num];
                 break;
             }
             case _C_LNG_LNG: {
                 int64_t i = va_arg(ap, int64_t);
-                [inv setArgument:[CKValue numberValue:i] atIndex:jsarg_num];
+                [inv setArgument:[EJSObjcValue numberValue:i] atIndex:jsarg_num];
                 break;
             }
             case _C_ULNG_LNG: {
                 uint64_t i = va_arg(ap, uint64_t);
-                [inv setArgument:[CKValue numberValue:i] atIndex:jsarg_num];
+                [inv setArgument:[EJSObjcValue numberValue:i] atIndex:jsarg_num];
                 break;
             }
             default: {
                 /*id objc_id =*/ va_arg (ap, id);
 
                 NSLog (@"unhandled tramp arg marshaling for type %s", arg_type);
-                [inv setArgument:[CKValue undefinedValue] atIndex:jsarg_num];
+                [inv setArgument:[EJSObjcValue undefinedValue] atIndex:jsarg_num];
                 break;
             }
         }
@@ -969,7 +969,7 @@ coffeekit_method_tramp (id obj, SEL sel, ...)
     
     va_end(ap);
     
-    CKValue* rv = [inv invoke];
+    EJSObjcValue* rv = [inv invoke];
 
     if (rv == NULL) {
       NSLog(@"WTF");
@@ -1010,7 +1010,7 @@ coffeekit_method_tramp (id obj, SEL sel, ...)
         case _C_CLASS: {
             //    NSLog (@"_C_CLASS return value marshalling");
 
-            CKObject* o = [rv objectValue];
+            EJSObjcObject* o = [rv objectValue];
 
             const char* register_cstr = [o utf8StringForPropertyNS:@"_ck_register"];
             
@@ -1040,23 +1040,23 @@ coffeekit_ctor_tramp (id obj, SEL sel, ...)
 
     Class cls = [obj class];
 
-    CKObject* js_ctor = get_jsctor(cls);
+    EJSObjcObject* js_ctor = get_jsctor(cls);
 
-    CKInvocation* inv = [CKInvocation invocationWithConstructor:js_ctor argCount:1];
+    EJSObjcInvocation* inv = [EJSObjcInvocation invocationWithConstructor:js_ctor argCount:1];
 
-	CKObject* handle = create_objc_handle_object(obj);
-	CKValue* handle_val = [CKValue objectValue:handle];
+	EJSObjcObject* handle = create_objc_handle_object(obj);
+	EJSObjcValue* handle_val = [EJSObjcValue objectValue:handle];
 
     [inv setArgument:handle_val atIndex:0];
     
-    CKValue* rv = [inv invoke];
+    EJSObjcValue* rv = [inv invoke];
     if (rv == NULL)
         [NSException raise:@"Exception creating new JS wrapper" format:@"%@", [inv exception]];
 	if (![rv isObject])
         [NSException raise:@"Constructor returned something other than an object" format:@"%@", [inv exception]];
 	  
 
-    CKObject* peer = [rv objectValue];
+    EJSObjcObject* peer = [rv objectValue];
 
 	SPEW(NSLog (@"ctor created peer %@", peer);)
 
@@ -1065,10 +1065,10 @@ coffeekit_ctor_tramp (id obj, SEL sel, ...)
     return obj;
 }
 
-static CKObject*
-register_members (Class cls, CKObject* obj, NSMutableDictionary* method_map)
+static EJSObjcObject*
+register_members (Class cls, EJSObjcObject* obj, NSMutableDictionary* method_map)
 {
-	CKObject* ctor = NULL;
+	EJSObjcObject* ctor = NULL;
     EJSObject* _obj = [obj jsObject];
 
     for (_EJSPropertyMapEntry* s = _obj->map->head_insert; s; s = s->next_insert) {
@@ -1077,11 +1077,11 @@ register_members (Class cls, CKObject* obj, NSMutableDictionary* method_map)
 			if (_ejs_property_desc_has_getter(s->desc)) {
 
                 char *utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(s->name));
-                CKString* name = [CKString stringWithUTF8CString:utf8];
+                EJSObjcString* name = [EJSObjcString stringWithUTF8CString:utf8];
 
-                CKObject *getter = [CKObject objectWithJSObject:EJSVAL_TO_OBJECT(s->desc->getter)];
+                EJSObjcObject *getter = [EJSObjcObject objectWithJSObject:EJSVAL_TO_OBJECT(s->desc->getter)];
                 NSLog (@"there was a getter for %@", [name nsString]);
-				CKValue* ck_ivar = [getter valueForPropertyNS:@"_ck_ivar"];
+				EJSObjcValue* ck_ivar = [getter valueForPropertyNS:@"_ck_ivar"];
 
 				if ([ck_ivar isString]) {
                     const char *ivar_name = [[ck_ivar stringValue] UTF8String];
@@ -1094,11 +1094,11 @@ register_members (Class cls, CKObject* obj, NSMutableDictionary* method_map)
 		}
 		else {
             char *utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(s->name));
-            CKString* name = [CKString stringWithUTF8CString:utf8];
+            EJSObjcString* name = [EJSObjcString stringWithUTF8CString:utf8];
             free (utf8);
             NSString* name_nsstr = [name nsString];
         
-			CKObject* propobj = [obj objectForProperty:name];
+			EJSObjcObject* propobj = [obj objectForProperty:name];
             
 			if (!propobj || ![propobj isFunction]) {
                 SPEW (NSLog (@"property %@ isn't a function, skipping for now", name_nsstr);)
@@ -1138,7 +1138,7 @@ register_members (Class cls, CKObject* obj, NSMutableDictionary* method_map)
 }
 
 static Class
-register_js_class (CKObject* proto,
+register_js_class (EJSObjcObject* proto,
                    const char *register_name,
                    const char *super_register_name)
 {
@@ -1159,7 +1159,7 @@ register_js_class (CKObject* proto,
 		}
         
 		if (get_jsctor(cls) == NULL) {
-			CKObject* propobj = [proto objectForPropertyNS:@"constructor"];
+			EJSObjcObject* propobj = [proto objectForPropertyNS:@"constructor"];
 			if (!propobj || ![propobj isFunction]) {
 				NSLog (@"constructor is missing or is not a function");
 				return cls;
@@ -1191,7 +1191,7 @@ register_js_class (CKObject* proto,
 
     SPEW(NSLog (@"registering instance members");)
 	// register the instance methods and properties
-	CKObject* ctor = register_members (cls, proto, method_map);
+	EJSObjcObject* ctor = register_members (cls, proto, method_map);
     
     SPEW(NSLog (@"registering static members");)
 	// register the static methods and properties
@@ -1220,7 +1220,7 @@ register_js_class (CKObject* proto,
 
 static EJS_NATIVE_FUNC(_ejs_objc_registerJSClass) {
     // unused ejsval ctor = args[0]
-    CKObject* proto = [[CKValue valueWithJSValue:args[1]] objectValue];
+    EJSObjcObject* proto = [[EJSObjcValue valueWithJSValue:args[1]] objectValue];
     char *register_cstr = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[2]));
     char *super_register_cstr = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[3]));
 
@@ -1234,7 +1234,7 @@ static EJS_NATIVE_FUNC(_ejs_objc_registerJSClass) {
 
 #if IOS
 static EJS_NATIVE_FUNC(_ejs_objc_UIApplicationMain) {
-    NSString* delegate_name = [[CKString stringWithJSString:EJSVAL_TO_STRING(args[2])] nsString];
+    NSString* delegate_name = [[EJSObjcString stringWithJSString:EJSVAL_TO_STRING(args[2])] nsString];
     
     NSLog (@"About to call UIApplicationMain (..., %@)!", delegate_name);
     UIApplicationMain(0, NULL, nil, delegate_name); // XXX get argv/argc/principal from @args
