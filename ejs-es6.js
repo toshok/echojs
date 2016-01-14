@@ -463,12 +463,12 @@ let llvm_commands = {};
 for (let x of ["opt", "llc", "llvm-as"])
     llvm_commands[x]=`${x}${process.env.LLVM_SUFFIX || DEFAULT_LLVM_SUFFIX}`;
 
-function compileFile(filename, parse_tree, modules, compileCallback) {
+function compileFile(filename, parse_tree, modules, files_count, cur_file, compileCallback) {
     let base_filename = genFreshFileName(path.basename(filename));
 
     if (!options.quiet) {
         let suffix = options.debug_level > 0 ? ` -> ${base_filename}` : '';
-        options.stdout_writer.write(`${bold()}COMPILE${reset()} ${filename}${suffix}`);
+        options.stdout_writer.write(`[${cur_file}/${files_count}] ${bold()}COMPILE${reset()} ${filename}${suffix}`);
     }
 
     let compiled_module;
@@ -689,12 +689,13 @@ let allModules = getAllModules();
 //
 // reverse the list so the main program is the first thing we compile
 files.reverse();
+let files_count = files.length;
 let compileNextFile = () => {
         if (files.length === 0) {
             do_final_link(main_file, allModules);
             return;
         }
     let f = files.pop();
-    compileFile(f.file_name, f.file_ast, allModules, compileNextFile);
+    compileFile(f.file_name, f.file_ast, allModules, files_count, files_count - files.length, compileNextFile);
 }
 compileNextFile();
