@@ -6,6 +6,7 @@
 #include "ejs-array.h"
 #include "ejs-gc.h"
 #include "ejs-function.h"
+#include "ejs-stream.h"
 #include "ejs-string.h"
 #include "ejs-error.h"
 #include "ejs-ops.h"
@@ -83,6 +84,9 @@ _ejs_process_init(ejsval global, uint32_t argc, char **argv)
 
     for (int i = 0; i < argc; i ++)
         _ejs_object_setprop (_argv, NUMBER_TO_EJSVAL(i), _ejs_string_new_utf8(argv[i]));
+
+    _ejs_object_setprop (_ejs_Process, _ejs_atom_stdout, _ejs_stream_wrapSysOutput(1));
+    _ejs_object_setprop (_ejs_Process, _ejs_atom_stderr, _ejs_stream_wrapSysOutput(2));
 
 #define OBJ_PROP(x) EJS_INSTALL_ATOM_GETTER(_ejs_Process, x, _ejs_Process_get_##x)
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_Process, x, _ejs_Process_##x)
