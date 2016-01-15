@@ -21,6 +21,7 @@
 #include "ejs-value.h"
 #include "ejs-array.h"
 #include "ejs-function.h"
+#include "ejs-stream.h"
 #include "ejs-string.h"
 #include "ejs-symbol.h"
 #include "ejs-node-compat.h"
@@ -496,52 +497,6 @@ static EJS_NATIVE_FUNC(_ejs_fs_unlinkSync) {
     return _ejs_undefined;
 }
 
-static ejsval _ejs_internal_fd_sym EJSVAL_ALIGNMENT; 
-
-static EJS_NATIVE_FUNC(_ejs_stream_write) {
-    ejsval to_write = ToString(args[0]);
-    ejsval internal_fd = _ejs_object_getprop (*_this, _ejs_internal_fd_sym);
-    int fd = ToInteger(internal_fd);
-
-    int remaining = EJSVAL_TO_STRLEN(to_write);
-    int offset = 0;
-    char *buf = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(to_write));
-    
-    do {
-        int num_written = write (fd, buf + offset, remaining);
-        if (num_written == -1) {
-            if (errno == EINTR)
-                continue;
-            perror ("write");
-            free (buf);
-            return _ejs_false;
-        }
-        remaining -= num_written;
-        offset += num_written;
-    } while (remaining > 0);
-
-    free (buf);
-    return _ejs_true;
-}
-
-static EJS_NATIVE_FUNC(_ejs_stream_end) {
-    ejsval internal_fd = _ejs_object_getprop (*_this, _ejs_internal_fd_sym);
-    close (ToInteger(internal_fd));
-    return _ejs_undefined;
-}
-
-static ejsval
-_ejs_wrapFdWithStream (int fd)
-{
-    ejsval stream = _ejs_object_create(_ejs_null);
-
-    EJS_INSTALL_FUNCTION (stream, "write", _ejs_stream_write);
-    EJS_INSTALL_FUNCTION (stream, "end", _ejs_stream_end);
-
-    _ejs_object_setprop (stream, _ejs_internal_fd_sym, NUMBER_TO_EJSVAL(fd));
-
-    return stream;
-}
 
 static EJS_NATIVE_FUNC(_ejs_fs_createWriteStream) {
     char *utf8_path = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[0]));
@@ -554,7 +509,7 @@ static EJS_NATIVE_FUNC(_ejs_fs_createWriteStream) {
         return _ejs_undefined;
     }
 
-    return _ejs_wrapFdWithStream(fd);  
+    return _ejs_stream_wrapFd(fd, EJS_FALSE);
 }
 
 static int
@@ -652,10 +607,6 @@ static EJS_NATIVE_FUNC(_ejs_fs_readdirSync) {
 ejsval
 _ejs_fs_module_func (ejsval exports)
 {
-    ejsval internal_fd_descr = _ejs_string_new_utf8("%internal_fd");
-    _ejs_gc_add_root (&_ejs_internal_fd_sym);
-    _ejs_internal_fd_sym = _ejs_symbol_new(internal_fd_descr);
-
     EJS_INSTALL_FUNCTION(exports, "statSync", _ejs_fs_statSync);
     EJS_INSTALL_FUNCTION(exports, "existsSync", _ejs_fs_existsSync);
     EJS_INSTALL_FUNCTION(exports, "readFileSync", _ejs_fs_readFileSync);
@@ -804,9 +755,6 @@ ejsval
 _ejs_child_process_module_func (ejsval exports)
 {
     EJS_INSTALL_FUNCTION(exports, "spawn", _ejs_child_process_spawn);
-
-    _ejs_object_setprop_utf8 (exports, "stdout", _ejs_wrapFdWithStream(1));
-    _ejs_object_setprop_utf8 (exports, "stderr", _ejs_wrapFdWithStream(2));
 
     return _ejs_undefined;
 }

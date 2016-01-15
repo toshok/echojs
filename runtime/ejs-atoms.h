@@ -110,6 +110,12 @@ EJS_ATOM(getRest)
 
 EJS_ATOM(argv)
 EJS_ATOM(process)
+EJS_ATOM(stdout)
+EJS_ATOM(stderr)
+EJS_ATOM(write)
+EJS_ATOM(end)
+EJS_ATOM(isTTY)
+EJS_ATOM(columns)
 
 // Object method/property names
 EJS_ATOM(assign)

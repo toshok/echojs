@@ -25,6 +25,7 @@
 #include "ejs-promise.h"
 #include "ejs-regexp.h"
 #include "ejs-require.h"
+#include "ejs-stream.h"
 #include "ejs-string.h"
 #include "ejs-symbol.h"
 #include "ejs-timers.h"
@@ -227,6 +228,7 @@ _ejs_init(int argc, char** argv)
     // function.  this should really be a separate opt-in .a/.so.
     _ejs_require_init(_ejs_global);
     _ejs_console_init(_ejs_global);
+    _ejs_stream_init(_ejs_global);
     _ejs_process_init(_ejs_global, argc, argv);
 
 #if IOS || OSX

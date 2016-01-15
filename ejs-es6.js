@@ -14,7 +14,7 @@ import Set               from './lib/set-es6';
 import { compile }       from './lib/compiler';
 import { dumpModules, getAllModules, gatherAllModules } from './lib/passes/gather-imports';
 
-import { bold, reset, genFreshFileName } from './lib/echo-util';
+import { bold, reset, genFreshFileName, Writer } from './lib/echo-util';
 
 import { LLVM_SUFFIX as DEFAULT_LLVM_SUFFIX, RUNLOOP_IMPL as DEFAULT_RUNLOOP_IMPL } from './lib/host-config';
 
@@ -114,11 +114,12 @@ let options = {
     target_platform: host_platform,
     native_module_dirs: [],
     extra_clang_args: "",
-    ios_sdk: "9.1",
+    ios_sdk: "9.2",
     ios_min: "8.0",
     target_pointer_size: 64,
     import_variables: [],
-    srcdir: false
+    srcdir: false,
+    stdout_writer: new Writer(process.stdout)
 };
 
 function add_native_module_dir (dir) {
@@ -341,8 +342,7 @@ if (!file_args || file_args.length === 0) {
 }
 
 if (!options.quiet) {
-    console.log(`running on ${host_platform}-${host_arch}`);
-    console.log(`generating code for ${options.target_platform}-${options.target_arch}`);
+    console.log(`host: ${host_platform}-${host_arch}, target: ${options.target_platform}-${options.target_arch}`);
 }
 
 debug.setLevel(options.debug_level);
@@ -463,12 +463,12 @@ let llvm_commands = {};
 for (let x of ["opt", "llc", "llvm-as"])
     llvm_commands[x]=`${x}${process.env.LLVM_SUFFIX || DEFAULT_LLVM_SUFFIX}`;
 
-function compileFile(filename, parse_tree, modules, compileCallback) {
+function compileFile(filename, parse_tree, modules, files_count, cur_file, compileCallback) {
     let base_filename = genFreshFileName(path.basename(filename));
 
     if (!options.quiet) {
         let suffix = options.debug_level > 0 ? ` -> ${base_filename}` : '';
-        console.warn (`${bold()}COMPILE${reset()} ${filename}${suffix}`);
+        options.stdout_writer.write(`[${cur_file}/${files_count}] ${bold()}COMPILE${reset()} ${filename}${suffix}`);
     }
 
     let compiled_module;
@@ -644,7 +644,7 @@ function do_final_link(main_file, modules) {
 
     clang_args = clang_args.concat(target_libraries(options.target_platform, options.target_arch));
 
-    if (!options.quiet) console.warn(`${bold()}LINK${reset()} ${output_filename}`);
+    if (!options.quiet) options.stdout_writer.write(`${bold()}LINK${reset()} ${output_filename}`);
     
     debug.log (1, `executing '${target_linker} ${clang_args.join(' ')}'`);
 
@@ -689,12 +689,13 @@ let allModules = getAllModules();
 //
 // reverse the list so the main program is the first thing we compile
 files.reverse();
+let files_count = files.length;
 let compileNextFile = () => {
         if (files.length === 0) {
             do_final_link(main_file, allModules);
             return;
         }
     let f = files.pop();
-    compileFile(f.file_name, f.file_ast, allModules, compileNextFile);
+    compileFile(f.file_name, f.file_ast, allModules, files_count, files_count - files.length, compileNextFile);
 }
 compileNextFile();
