@@ -1,8 +1,9 @@
 console.log ("inside helloiostableview.js");
 
-import { NSBundle, NSObject, NSRect } from 'foundation';
-import { chainCtor, instanceSelector, sig } from 'objc';
-import { GLKViewController, GLKCanvasView, GLKViewDrawableDepthFormat } from 'glkit';
+import { NSBundle, NSObject, NSRect } from '$pirouette/foundation';
+import { chainCtor, instanceSelector, sig } from '$pirouette/objc';
+import { GLKViewController, GLKCanvasView, GLKViewDrawableDepthFormat } from '$pirouette/glkit';
+import * as ui from '$pirouette/uikit';
 
 // the mdn samples use importScripts (old functionality from coffeekit) which doesn't exist in pirouette.
 // import * as mdn_sample2 from './webgl-samples/sample2/sample';
@@ -17,7 +18,6 @@ import * as j3d_head    from './j3d/HelloHead';
 import * as j3d_cubemap from './j3d/HelloCubemap';
 import * as j3d_plasma  from './j3d/HelloPlasma';
 
-import * as ui from 'uikit';
 
 let HelloIOSViewController = ui.UIViewController.extendClass("HelloIOSViewController", {});
 

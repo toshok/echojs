@@ -1,6 +1,7 @@
 TOP=../..
 
 MODULES= --moduledir $(TOP)/modules/objc_internal --moduledir $(TOP)/node-compat 
+IMPORT_VARS= -I pirouette=$(shell pwd)/$(TOP)/pirouette/bindings
 
 J3D_DEMOS=	j3d/HelloCube.js \
 		j3d/HelloCubemap.js \
@@ -38,28 +39,15 @@ J3D_SOURCES= j3d/lib/glMatrix.js \
 
 all: sim dev
 
-bindings: j3d/j3d-all.js
-	cp $(TOP)/pirouette/bindings/*.js .
-	@mkdir -p UIKit
-	cp -r $(TOP)/pirouette/bindings/UIKit/ UIKit/
-	@mkdir -p CoreAnimation
-	cp -r $(TOP)/pirouette/bindings/CoreAnimation/ CoreAnimation/
-	@mkdir -p Foundation
-	cp -r $(TOP)/pirouette/bindings/Foundation/ Foundation/
-	@mkdir -p OpenGLES
-	cp -r $(TOP)/pirouette/bindings/OpenGLES/ OpenGLES/
-	@mkdir -p GLKit
-	cp -r $(TOP)/pirouette/bindings/GLKit/ GLKit/
-
 SIM_DESTDIR=/Users/toshok/Library/Developer/CoreSimulator/Devices/D8AD0294-5589-48A4-A7F1-311B8A465E69/data/Containers/Bundle/Application/5A803BE1-CF8B-47DE-AEA6-E8A3652EBF2A/test.app
-sim: bindings
-	../../ejs --srcdir $(MODULES) --leave-temp --target sim helloiostableview.js # prime-worker.js $(J3D_DEMOS) j3d/j3d-all.js
+sim: j3d/j3d-all.js
+	../../ejs --srcdir $(MODULES) $(IMPORT_VARS) --leave-temp --target sim helloiostableview.js
 	cp helloiostableview.js.exe $(SIM_DESTDIR)/test
 	mkdir -p $(SIM_DESTDIR)/demo
 	cp -r j3d/demo/* $(SIM_DESTDIR)/demo
 
-dev: bindings
-	../../ejs --srcdir $(MODULES) --leave-temp --target dev helloiostableview.js # prime-worker.js $(J3D_DEMOS) j3d/j3d-all.js
+dev: j3d/j3d-all.js
+	../../ejs --srcdir $(MODULES) $(IMPORT_VARS) --leave-temp --target dev helloiostableview.js
 	cp helloiostableview.js.exe ipa-work/Payload/HelloIOS.app
 	cp -r j3d/demo ipa-work/Payload/HelloIOS.app
 	xcrun codesign -s SOMETHING_HERE ipa-work/Payload/HelloIOS.app/helloiostableview.js.exe
