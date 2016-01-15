@@ -116,6 +116,7 @@ let options = {
     extra_clang_args: "",
     ios_sdk: "9.2",
     ios_min: "8.0",
+    osx_min: "10.10",
     target_pointer_size: 64,
     import_variables: [],
     srcdir: false,
@@ -280,7 +281,11 @@ let args = {
     },
     "--ios-min": {
         option:  "ios_min",
-        help:    "the minimum version of ios to support.  Default is 8.0."
+        help:    "the minimum version of iOS to support.  Default is 8.0."
+    },
+    "--osx-min": {
+        option:  "osx_min",
+        help:    "the minimum version of OSX to support.  Default is 10.10."
     },
     "--srcdir": {
         flag:    "srcdir",
@@ -370,6 +375,8 @@ function target_llc_args(platform, arch) {
             args = args.concat([`-mtriple=thumbv7s-apple-ios${options.ios_min}.0`, "-mattr=+fp-armv8", "-relocation-model=pic" ]);
         else if (arch === "x86")
             args = args.concat([`-mtriple=i386-apple-ios${options.ios_min}.0`, "-relocation-model=pic"]);
+        else if (arch === "x86_64")
+            args = args.concat([`-mtriple=x86_64-apple-macosx${options.osx_min}.0`]);
     }
 
     return args;

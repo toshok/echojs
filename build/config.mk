@@ -36,6 +36,7 @@ CP=cp
 CFLAGS=-g -O0 -Wall -I. -Wno-unused-function -Wno-gnu-statement-expression -Wno-c99-extensions -Wno-unused-variable
 
 MIN_IOS_VERSION=8.0
+MIN_OSX_VERSION=10.10
 
 DEVELOPER_ROOT?=/Applications/Xcode.app/Contents/Developer
 IOS_SDK_VERSION?=8.3
@@ -60,6 +61,7 @@ LINUX_CFLAGS=$(CFLAGS) -DTARGET_CPU_X86=1 -DEJS_BITS_PER_WORD=32 -DIS_LITTLE_END
 endif
 
 OSX_ARCH=-arch x86_64
+OSX_MTRIPLE="x86_64-apple-macosx(MIN_OSX_VERSION).0"
 OSX_CFLAGS=$(CFLAGS) -DOSX=1 -DTARGET_CPU_AMD64=1 -DEJS_BITS_PER_WORD=64 -DIS_LITTLE_ENDIAN=1 -D_XOPEN_SOURCE -Wno-deprecated-declarations
 
 IOSSIM_ARCH=-arch i386
