@@ -141,6 +141,10 @@ static EJS_NATIVE_FUNC(_ejs_console_warn) {
     return output (stderr, argc, args);
 }
 
+static EJS_NATIVE_FUNC(_ejs_console_error) {
+    return output (stderr, argc, args);
+}
+
 // terrible, use a linked list for the timeval slots.
 typedef struct TimevalSlot {
     EJS_LIST_HEADER(struct TimevalSlot);
@@ -270,6 +274,7 @@ _ejs_console_init(ejsval global)
 
     OBJ_METHOD(log);
     OBJ_METHOD(warn);
+    OBJ_METHOD(error);
     OBJ_METHOD(time);
     OBJ_METHOD(timeEnd);
 

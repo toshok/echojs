@@ -347,6 +347,7 @@ EJS_ATOM(isView)
 // console functions
 //EJS_ATOM(log)
 EJS_ATOM(warn)
+EJS_ATOM(error)
 EJS_ATOM(time)
 EJS_ATOM(timeEnd)
 
