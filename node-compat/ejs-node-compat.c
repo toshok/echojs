@@ -148,6 +148,22 @@ make_absolute(char* path)
     return rv;
 }
 
+static EJS_NATIVE_FUNC(_ejs_path_normalize) {
+    if (argc == 0 || !EJSVAL_IS_STRING(args[0])) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "path.normalize requires a string argument");
+    }
+
+    char* path_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(args[0]));
+    char* resolved = resolvev (&path_utf8, 1);
+
+    ejsval rv = _ejs_string_new_utf8(resolved);
+
+    free(path_utf8);
+    free(resolved);
+
+    return rv;
+}
+
 static EJS_NATIVE_FUNC(_ejs_path_resolve) {
     char** paths_utf8 = (char**)calloc(argc + 1, sizeof(char*));
     int num_paths = 0;
@@ -270,8 +286,11 @@ _ejs_path_module_func (ejsval exports)
     EJS_INSTALL_FUNCTION(exports, "basename", _ejs_path_basename);
     EJS_INSTALL_FUNCTION(exports, "extname", _ejs_path_extname);
     EJS_INSTALL_FUNCTION(exports, "resolve", _ejs_path_resolve);
+    EJS_INSTALL_FUNCTION(exports, "normalize", _ejs_path_normalize);
     EJS_INSTALL_FUNCTION(exports, "relative", _ejs_path_relative);
     EJS_INSTALL_FUNCTION(exports, "join", _ejs_path_join);
+
+    _ejs_object_setprop_utf8 (exports, "sep", _ejs_string_new_utf8("/")); // we don't care about windows
 
     return _ejs_undefined;
 }
