@@ -1,7 +1,7 @@
 console.log ("inside helloiostableview.js");
 
-import { NSBundle, NSObject, NSRect } from '$pirouette/foundation';
 import { chainCtor, instanceSelector, sig } from '$pirouette/objc';
+import { NSBundle, NSObject, NSRect } from '$pirouette/foundation';
 import { GLKViewController, GLKCanvasView, GLKViewDrawableDepthFormat } from '$pirouette/glkit';
 import * as ui from '$pirouette/uikit';
 
