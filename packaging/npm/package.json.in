@@ -1,0 +1,22 @@
+{
+  "name": "pirouette-toolchain-darwin-x64",
+  "version": "@@PRODUCT_VERSION@@",
+  "description": "Compile ES2015 to native code on OSX/iOS/linux",
+  "main": "index.js",
+  "files": [
+    "bin",
+    "include",
+    "lib"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "@PRODUCT_GITHUB_URL@"
+  },
+  "author": "Chris Toshok <@PRODUCT_EMAIL@> (https://blog.toshokelectric.com/)",
+  "license": "MIT",
+  "bugs": {
+    "url": "@PRODUCT_GITHUB_URL@/issues"
+  },
+  "homepage": "@PRODUCT_GITHUB_URL@",
+  "readme": "@PRODUCT_GITHUB_URL@#readme"
+}
