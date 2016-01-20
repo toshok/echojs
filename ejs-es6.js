@@ -454,7 +454,7 @@ function target_extra_libs(platform, arch) {
         throw new Error("no pcre for this platform");
     }
     else {
-        return path.join(relative_to_ejs_exe(`../lib/${arch}-${platform}`), 'libpcre16.a');
+        return ['libdouble-conversion.a', 'libpcre16.a'].map( (lib) => path.join(relative_to_ejs_exe(`../lib/${arch}-${platform}`), lib) );
     }
 }
 
@@ -561,7 +561,7 @@ function generate_import_map (js_modules, native_modules) {
     let map_path = `${os.tmpdir()}/${genFreshFileName(path.basename(main_file))}-import-map.cpp`;
 
     let map_contents = '';
-    map_contents += `#include "runtime/ejs-module.h"\n`;
+    map_contents += `#include "ejs-module.h"\n`;
     map_contents += 'extern "C" {\n';
 
     js_modules.forEach( (module) => {
@@ -626,7 +626,7 @@ function do_final_link(main_file, modules) {
     if (arch_info[options.target_arch].little_endian)
         clang_args.unshift("-DIS_LITTLE_ENDIAN=1");
 
-    clang_args.push(`-I${relative_to_ejs_exe(options.srcdir ? '.' : '../include')}`);
+    clang_args.push(`-I${relative_to_ejs_exe(options.srcdir ? './runtime' : '../include')}`);
     
     clang_args.push(map_filename);
     
