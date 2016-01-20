@@ -1,6 +1,6 @@
 {
   "name": "pirouette-toolchain-darwin-x64",
-  "version": "@@PRODUCT_VERSION@@",
+  "version": "@PRODUCT_VERSION@",
   "description": "Compile ES2015 to native code on OSX/iOS/linux",
   "main": "index.js",
   "files": [
