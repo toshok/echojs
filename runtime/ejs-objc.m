@@ -1173,7 +1173,7 @@ register_js_class (EJSObjcObject* proto,
     
 	cls = objc_getProtocol(register_name);
 	if (cls) {
-		NSLog (@"%s is not a class, it's a protocol", register_name);
+		SPEW(NSLog (@"%s is not a class, it's a protocol", register_name);)
 		// XXX we really need to throw an exception here...
 		return cls;
 	}
@@ -1236,14 +1236,14 @@ static EJS_NATIVE_FUNC(_ejs_objc_registerJSClass) {
 static EJS_NATIVE_FUNC(_ejs_objc_UIApplicationMain) {
     NSString* delegate_name = [[EJSObjcString stringWithJSString:EJSVAL_TO_STRING(args[2])] nsString];
     
-    NSLog (@"About to call UIApplicationMain (..., %@)!", delegate_name);
+    SPEW(NSLog (@"About to call UIApplicationMain (..., %@)!", delegate_name);)
     UIApplicationMain(0, NULL, nil, delegate_name); // XXX get argv/argc/principal from @args
     exit(0);
 }
 
 #else
 static EJS_NATIVE_FUNC(_ejs_objc_NSApplicationMain) {
-    NSLog (@"About to call NSApplicationMain!");
+    SPEW(NSLog (@"About to call NSApplicationMain!");)
     NSApplicationMain(0, NULL); // XXX populate from args
     exit(0);
 }
