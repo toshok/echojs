@@ -1,4 +1,4 @@
-replace=-e "s,@$1@,$($1),"
+replace=-e "s,@$1@,$($1),g"
 
 dosed=sed $(call replace,ORGANIZATION) \
 	  $(call replace,PRODUCT_RELEASE_NOTES_URL) \
