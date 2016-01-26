@@ -74,6 +74,12 @@ npm-release-dist:
 	@cp $(TOP)/external-deps/pcre-iosdev/.libs/libpcre16.a $(libarchdir_dev)
 	@cp $(TOP)/external-deps/double-conversion-iosdev/double-conversion/libdouble-conversion.a $(libarchdir_dev)
 	@cp $(TOP)/modules/objc_internal/objc_internal.ejs $(libdir)
+	@cp $(TOP)/node-compat/node-compat.ejs $(libdir)
+	@cp $(TOP)/node-compat/libejsnodecompat-module.a $(libarchdir_osx)
+	@cp $(TOP)/node-compat/libejsnodecompat-module.a.sim $(libarchdir_sim)
+	@cp $(TOP)/node-compat/libejsnodecompat-module.a.armv7 $(libarchdir_dev)
+
+
 
 
 # gross, but for now strip the .a's we've installed so that we aren't passing debug/local symbols around...
