@@ -41,7 +41,7 @@ all: sim dev
 
 SIM_DESTDIR=/Users/toshok/Library/Developer/CoreSimulator/Devices/D8AD0294-5589-48A4-A7F1-311B8A465E69/data/Containers/Bundle/Application/5A803BE1-CF8B-47DE-AEA6-E8A3652EBF2A/test.app
 sim: j3d/j3d-all.js
-	../../ejs --srcdir $(MODULES) $(IMPORT_VARS) --leave-temp --target sim helloiostableview.js
+	../../ejs.exe --srcdir $(MODULES) $(IMPORT_VARS) --leave-temp --target sim helloiostableview.js
 	cp helloiostableview.js.exe $(SIM_DESTDIR)/test
 	mkdir -p $(SIM_DESTDIR)/demo
 	cp -r j3d/demo/* $(SIM_DESTDIR)/demo
