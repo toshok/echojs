@@ -5,6 +5,10 @@
     "delegate": "AppDelegate",
     "frameworks": ["uikit", "foundation", "objc"],
 
-    "projectType": "sim",
-    "version": 0.01
+    "projectType": "ios",
+    "iosVersionMin": "9.1",
+    "deviceFamily": "iphone",
+
+    "version": 0.01,
+    "files": ["helloiostableview.js"]
 }
