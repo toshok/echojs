@@ -67,10 +67,10 @@ npm-release-dist:
 	@cp $(TOP)/runtime/libecho.a $(libarchdir_osx)
 	@cp $(TOP)/external-deps/pcre-osx/.libs/libpcre16.a $(libarchdir_osx)
 	@cp $(TOP)/external-deps/double-conversion-osx/double-conversion/libdouble-conversion.a $(libarchdir_osx)
-	@cp $(TOP)/runtime/libecho.a.ios $(libarchdir_sim)
+	@cp $(TOP)/runtime/libecho.a.sim $(libarchdir_sim)/libecho.a
 	@cp $(TOP)/external-deps/pcre-iossim/.libs/libpcre16.a $(libarchdir_sim)
 	@cp $(TOP)/external-deps/double-conversion-iossim/double-conversion/libdouble-conversion.a $(libarchdir_sim)
-	@cp $(TOP)/runtime/libecho.a.ios $(libarchdir_dev)
+	@cp $(TOP)/runtime/libecho.a.armv7 $(libarchdir_dev)/libecho.a
 	@cp $(TOP)/external-deps/pcre-iosdev/.libs/libpcre16.a $(libarchdir_dev)
 	@cp $(TOP)/external-deps/double-conversion-iosdev/double-conversion/libdouble-conversion.a $(libarchdir_dev)
 	@cp $(TOP)/modules/objc_internal/objc_internal.ejs $(libdir)

@@ -428,8 +428,10 @@ function target_libecho(platform, arch) {
     if (options.srcdir) {
         if (platform === "darwin") {
             if (arch === "x86_64") return "runtime/libecho.a";
+            if (arch === "x86") return "runtime/libecho.a.sim";
+            if (arch === "arm") return "runtime/libecho.a.armv7";
 
-            return "runtime/libecho.a.ios";
+            throw new Error("no libecho for this platform");
         }
 
         return "runtime/libecho.a";
