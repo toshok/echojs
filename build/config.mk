@@ -14,7 +14,7 @@ LLVM_SUFFIX?=-3.6
 HOST_OS:=$(patsubst darwin%,darwin,$(HOST_OS))
 
 PRODUCT_NAME=EchoJS
-PRODUCT_VERSION=0.1.0-alpha.5
+PRODUCT_VERSION=0.1.0-alpha.6
 
 PRODUCT_RELEASE_NOTES_URL=http://toshokelectric.com/echojs/release_notes
 PRODUCT_GITHUB_URL=https://github.com/toshok/echo-js
