@@ -578,7 +578,7 @@ static EJS_NATIVE_FUNC(_ejs_XMLHttpRequest_impl) {
 
         EJS_ASSERT(EJSVAL_IS_UNDEFINED(*_this));
 
-        *_this = OrdinaryCreateFromConstructor(EJSVAL_IS_UNDEFINED(newTarget) ? _ejs_XMLHttpRequest : newTarget, _ejs_XMLHttpRequest_prototype, &_ejs_Object_specops);
+        *_this = OrdinaryCreateFromConstructor(newTarget, _ejs_XMLHttpRequest_prototype, &_ejs_XMLHttpRequest_specops);
 
         EJSXMLHttpRequest* xhr = (EJSXMLHttpRequest*)EJSVAL_TO_OBJECT(*_this);
         id peer = [[XmlHttpRequest alloc] init];
