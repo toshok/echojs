@@ -55,7 +55,7 @@ let AppDelegate = NSObject.extendClass("AppDelegate", () => ({
 
         button.clicked = () => {
             this.xmlhttp = new XMLHttpRequest();
-            this.xmlhttp.open('GET', 'http://www.reddit.com/r/programming/top.json?limit=50', true);
+            this.xmlhttp.open('GET', 'https://www.reddit.com/r/programming/top.json?limit=50', true);
             this.xmlhttp.onreadystatechange = () => {
                 if (this.xmlhttp.readyState === 4) {
                     tabledata = JSON.parse(this.xmlhttp.responseText).data.children;
