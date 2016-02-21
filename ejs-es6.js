@@ -356,7 +356,7 @@ let files_remaining = 0;
 
 let o_filenames = [];
 
-let base_filenames = file_args.map(path.basename);
+let base_filenames = file_args.map((f) => path.basename(f));
 
 let compiled_modules = [];
 
