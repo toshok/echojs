@@ -1,0 +1,10 @@
+
+{
+    "projectName": "HelloOSX",
+    "bundleIdentifier": "io.pirouettejs.HelloOSX",
+    "mainXib": "Resources/en.lproj/MainMenu.xib",
+    "delegate": "HelloAppDelegate",
+
+    "projectType": "osx",
+    "version": "0.01"
+}

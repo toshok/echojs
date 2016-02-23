@@ -2,7 +2,7 @@ import { NSObject } from '$pirouette/foundation';
 import { NSScrollView, NSTextField, NSTableView, NSTableColumn, NSButton, NSBezelStyle, NSWindow, NSApplicationDelegate, NSApplication } from '$pirouette/appkit';
 import { instanceSelector, outlet, sig } from '$pirouette/objc';
 
-let AppDelegate = NSObject.extendClass("AppDelegate", () => ({
+let AppDelegate = NSObject.extendClass("HelloAppDelegate", () => ({
 
     didFinishLaunching: function() {
         let window        = this.window;
@@ -71,12 +71,6 @@ let AppDelegate = NSObject.extendClass("AppDelegate", () => ({
         contentView.addSubview(scrollView);
     },
 
-    /* XXX we shouldn't need this (the outlet below should be enough), but without the selector
-       explicitly registered the outlet doesn't get set for some reason... */
-    setWindow: instanceSelector("setWindow:")
-               .returns(sig.Void)
-               .params([ NSWindow ])
-               .impl(function (v) { this.window = v; }),
     window: outlet (NSWindow)
 }), [
     /* protocols this type conforms to */
