@@ -477,7 +477,14 @@ function compileFile(filename, parse_tree, modules, files_count, cur_file, compi
 
     if (!options.quiet) {
         let suffix = options.debug_level > 0 ? ` -> ${base_filename}` : '';
-        options.stdout_writer.write(`[${cur_file}/${files_count}] ${bold()}COMPILE${reset()} ${filename}${suffix}`);
+
+        // loop over import variables, replacing their values with
+        // their names for output
+        let output_name = filename;
+        for (let ivar of options.import_variables) {
+            output_name = output_name.replace(ivar.value, `$${ivar.variable}`);
+        }
+        options.stdout_writer.write(`[${cur_file}/${files_count}] ${bold()}COMPILE${reset()} ${output_name}${suffix}`);
     }
 
     let compiled_module;
