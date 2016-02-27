@@ -10,5 +10,8 @@
     "deviceFamily": "iphone",
 
     "version": 0.01,
-    "files": ["helloiostableview.js"]
+    "files": ["helloiostableview.js"],
+    "resources": {
+      "j3d/demo": "demo"
+    }
 }
