@@ -7,9 +7,9 @@
 
     "projectType": "ios",
     "iosVersionMin": "9.1",
-    "deviceFamily": "iphone",
+    "deviceFamilies": ["iphone", "ipad"],
 
-    "version": 0.01,
+    "version": "0.01",
     "files": ["helloiostableview.js"],
     "launchStoryboard": "Base.lproj/LaunchScreen.storyboard",
     "resources": {
