@@ -11,6 +11,7 @@
 
     "version": 0.01,
     "files": ["helloiostableview.js"],
+    "launchStoryboard": "Base.lproj/LaunchScreen.storyboard",
     "resources": {
       "j3d/demo": "demo"
     }
