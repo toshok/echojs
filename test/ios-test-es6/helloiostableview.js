@@ -161,8 +161,8 @@ let HelloIOSAppDelegate = NSObject.extendClass("HelloIOSAppDelegate", () => ({
       let tableviewcontroller = new ui.UITableViewController().initWithStyle(ui.UITableViewStyle.plain);
       tableviewcontroller.title = "Pirouette Demos";
 
-      let tableData = [ { title: "Web Workers",
-                           rows: [ { title: "Primes in a button",  clicked: () => this.workerDemo() } ] },
+      let tableData = [ /*{ title: "Web Workers",
+                           rows: [ { title: "Primes in a button",  clicked: () => this.workerDemo() } ] },*/
                         { title: "XMLHttpRequest",
                            rows: [ { title: "Simple fetch",        clicked: () => this.xhrDemo() } ] },
                         { title: "WebGL",
