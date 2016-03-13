@@ -16,9 +16,6 @@
 [submodule "pcre"]
 	path = external-deps/pcre
 	url = https://github.com/toshok/pcre.git
-[submodule "pirouette"]
-	path = pirouette
-	url = https://github.com/toshok/pirouette.git
 [submodule "esutils"]
 	path = external-deps/esutils
 	url = https://github.com/toshok/esutils.git
