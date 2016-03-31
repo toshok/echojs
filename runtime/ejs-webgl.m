@@ -1061,6 +1061,57 @@ JSMETHOD (getAttribLocation) {
     return NUMBER_TO_EJSVAL(rv);
 }
 
+JSMETHOD(getParameter) {
+	if (argc != 1)
+		THROW_ARG_COUNT_EXCEPTION(1);
+
+        GLenum pname = (GLenum)EJSVAL_TO_NUMBER(args[0]);
+        switch (pname) {
+            case GL_MAX_TEXTURE_IMAGE_UNITS:
+            case GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS:
+            case GL_MAX_VERTEX_ATTRIBS:
+            case GL_MAX_VERTEX_UNIFORM_VECTORS:
+            case GL_MAX_VARYING_VECTORS:
+            case GL_MAX_FRAGMENT_UNIFORM_VECTORS:
+            case GL_MAX_CUBE_MAP_TEXTURE_SIZE:
+            case GL_MAX_TEXTURE_SIZE: {
+                GLint intData = 0;
+                glGetIntegerv (pname, &intData);
+                CHECK_GL;
+                return NUMBER_TO_EJSVAL(intData);
+            }
+            case GL_IMPLEMENTATION_COLOR_READ_FORMAT:
+                /* GL_RGBA */
+                /* XXX(calberto) glGetIntegerv was failing here. Fix later. */
+                return NUMBER_TO_EJSVAL(0x1908);
+            case GL_IMPLEMENTATION_COLOR_READ_TYPE:
+                /* GL_UNSIGNED_BYTE */
+                /* XXX(calberto) glGetIntegerv was failing here. See above. */
+                return NUMBER_TO_EJSVAL(0x1401);
+            case GL_COMPRESSED_TEXTURE_FORMATS: {
+                GLint num_formats;
+                glGetIntegerv (GL_NUM_COMPRESSED_TEXTURE_FORMATS, &num_formats);
+                CHECK_GL;
+
+                GLint *formats = (GLint*) malloc (num_formats * sizeof(GLint));
+                glGetIntegerv (GL_COMPRESSED_TEXTURE_FORMATS, formats);
+                CHECK_GL;
+
+                ejsval *params = (ejsval*) malloc (num_formats * sizeof(ejsval));
+                for (int i = 0; i < num_formats; i++)
+                    params [i] = NUMBER_TO_EJSVAL(formats [i]);
+
+                ejsval rv = _ejs_Uint32Array_of_impl (_ejs_undefined, &_ejs_Uint32Array, num_formats, params, _ejs_undefined);
+                free(formats);
+                free(params);
+
+                return rv;
+            }
+        }
+
+        return _ejs_null;
+}
+
 /*
  any getParameter(GLenum pname);
  any getBufferParameter(GLenum target, GLenum pname);
@@ -2042,6 +2093,7 @@ EJS_NATIVE_FUNC(_ejs_objc_allocateWebGLRenderingContext) {
     ejsval obj = OBJECT_TO_EJSVAL(glContext);
 
 #define WEBGL_FUNC(name, nArgs)  EJS_INSTALL_FUNCTION_FLAGS(obj, #name, JSMETHODNAME(name), EJS_PROP_NOT_WRITABLE | EJS_PROP_NOT_CONFIGURABLE)
+	WEBGL_FUNC(getParameter, 1);
 	WEBGL_FUNC(activeTexture, 1);
 
 	WEBGL_FUNC(attachShader, 2);

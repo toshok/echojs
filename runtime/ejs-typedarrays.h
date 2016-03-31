@@ -173,6 +173,8 @@ void _ejs_typedarray_set_at(EJSObject* arr, int index, ejsval value);
 ejsval _ejs_typedarray_new (EJSTypedArrayType element_type, uint32_t length);
 ejsval _ejs_typedarray_new_from_array (EJSTypedArrayType element_type, ejsval arrayObj);
 
+ejsval _ejs_Uint32Array_of_impl(ejsval env, ejsval *_this, uint32_t argc, ejsval *args, ejsval new_target);
+
 EJS_END_DECLS
 
 #endif /* _ejs_array_h */
