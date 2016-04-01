@@ -998,7 +998,7 @@ static EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_get_species)             \
     return _ejs_##ArrayType##Array;                                     \
 }                                                                       \
                                                                         \
-static EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_of_impl)                 \
+EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_of_impl)                        \
 {                                                                       \
     ejsval newObj;                                                      \
                                                                         \
