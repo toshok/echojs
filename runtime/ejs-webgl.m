@@ -471,8 +471,20 @@ JSMETHOD (bufferData) {
  J3D    void bufferSubData(GLenum target, GLintptr offset, ArrayBufferView data);
  J3D    void bufferSubData(GLenum target, GLintptr offset, ArrayBuffer data);
  
- GLenum checkFramebufferStatus(GLenum target);
  */
+
+//  GLenum checkFramebufferStatus(GLenum target);
+JSMETHOD (checkFramebufferStatus) {
+    if (argc != 1)
+        THROW_ARG_COUNT_EXCEPTION(1);
+
+    GLenum target = (GLenum)EJSVAL_TO_NUMBER (args[0]);
+    GLenum status = glCheckFramebufferStatus (target);
+    CHECK_GL;
+
+    return NUMBER_TO_EJSVAL(status);
+}
+
 //    void clear(GLbitfield mask);
 JSMETHOD (clear) {
 	if (argc != 1)
@@ -1080,6 +1092,14 @@ JSMETHOD(getParameter) {
                 CHECK_GL;
                 return NUMBER_TO_EJSVAL(intData);
             }
+            case GL_POLYGON_OFFSET_FACTOR:
+            case GL_POLYGON_OFFSET_UNITS:
+            case GL_LINE_WIDTH: {
+                GLfloat fData = 0.0;
+                glGetFloatv (pname, &fData);
+                CHECK_GL;
+                return NUMBER_TO_EJSVAL(fData);
+            }
             case GL_IMPLEMENTATION_COLOR_READ_FORMAT:
                 /* GL_RGBA */
                 /* XXX(calberto) glGetIntegerv was failing here. Fix later. */
@@ -1115,9 +1135,18 @@ JSMETHOD(getParameter) {
 /*
  any getParameter(GLenum pname);
  any getBufferParameter(GLenum target, GLenum pname);
+ */
  
- GLenum getError();
+//  GLenum getError();
+JSMETHOD (getError) {
+    if (argc != 0)
+        THROW_ARG_COUNT_EXCEPTION(0);
+
+    GLenum error = glGetError ();
+    return NUMBER_TO_EJSVAL(error);
+}
  
+/*
  any getFramebufferAttachmentParameter(GLenum target, GLenum attachment, 
  GLenum pname);
  */
@@ -1320,8 +1349,20 @@ JSMETHOD (getUniformLocation) {
  GLboolean isRenderbuffer(WebGLRenderbuffer renderbuffer);
  GLboolean isShader(WebGLShader shader);
  GLboolean isTexture(WebGLTexture texture);
- void lineWidth(GLfloat width);
  */
+
+//  void lineWidth(GLfloat width);
+JSMETHOD(lineWidth) {
+    if (argc != 1)
+        THROW_ARG_COUNT_EXCEPTION(1);
+
+    GLfloat width = (GLfloat)EJSVAL_TO_NUMBER (args[0]);
+    glLineWidth(width);
+    CHECK_GL;
+
+    return _ejs_undefined;
+}
+
 //    void linkProgram(WebGLProgram program);
 JSMETHOD (linkProgram) {
 	if (argc != 1)
@@ -1365,8 +1406,21 @@ JSMETHOD (pixelStorei) {
 	return _ejs_undefined;
 }
 
+//  void polygonOffset(GLfloat factor, GLfloat units);
+JSMETHOD (polygonOffset) {
+    if (argc != 2)
+        THROW_ARG_COUNT_EXCEPTION(2);
+
+    GLfloat factor = (GLfloat)EJSVAL_TO_NUMBER (args[0]);
+    GLfloat units = (GLfloat)EJSVAL_TO_NUMBER (args[1]);
+
+    glPolygonOffset (factor, units);
+    CHECK_GL;
+
+    return _ejs_undefined;
+}
+
 /*
- void polygonOffset(GLfloat factor, GLfloat units);
  
  void readPixels(GLint x, GLint y, GLsizei width, GLsizei height, 
  GLenum format, GLenum type, ArrayBufferView pixels);
@@ -2121,6 +2175,7 @@ EJS_NATIVE_FUNC(_ejs_objc_allocateWebGLRenderingContext) {
     
 	WEBGL_FUNC(compileShader, 1);
     
+	WEBGL_FUNC(checkFramebufferStatus, 1);
 	WEBGL_FUNC(createBuffer, 0);
 	WEBGL_FUNC(createFramebuffer, 0);
 	WEBGL_FUNC(createRenderbuffer, 0);
@@ -2159,6 +2214,7 @@ EJS_NATIVE_FUNC(_ejs_objc_allocateWebGLRenderingContext) {
 	WEBGL_FUNC(getActiveAttrib, 2);
 	WEBGL_FUNC(getActiveUniform, 2);
 	WEBGL_FUNC(getAttribLocation, 2);
+        WEBGL_FUNC(getError, 0);
 	WEBGL_FUNC(getProgramInfoLog, 1);
 	WEBGL_FUNC(getProgramParameter, 2);
 	WEBGL_FUNC(getShaderInfoLog, 1);
@@ -2166,9 +2222,12 @@ EJS_NATIVE_FUNC(_ejs_objc_allocateWebGLRenderingContext) {
 	WEBGL_FUNC(getShaderSource, 1);
     
 	WEBGL_FUNC(getUniformLocation, 2);
+
+        WEBGL_FUNC(lineWidth, 1);
     
 	WEBGL_FUNC(linkProgram, 1);
 	WEBGL_FUNC(pixelStorei, 2);
+	WEBGL_FUNC(polygonOffset, 2);
     
 	WEBGL_FUNC(renderbufferStorage, 4);
     
