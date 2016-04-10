@@ -13,6 +13,7 @@ extern EJSSpecOps _ejs_WebGLProgram_specops;
 extern EJSSpecOps _ejs_WebGLShader_specops;
 extern EJSSpecOps _ejs_WebGLTexture_specops;
 extern EJSSpecOps _ejs_WebGLActiveInfo_specops;
+extern EJSSpecOps _ejs_WebGLShaderPrecisionFormat_specops;
 extern EJSSpecOps _ejs_WebGLUniformLocation_specops;
 
 EJS_NATIVE_FUNC(_ejs_objc_allocateWebGLRenderingContext);
@@ -79,6 +80,18 @@ void _ejs_webgl_init(ejsval global);
 -(GLint)size;
 -(GLenum)type;
 -(const char*)name;
+@end
+
+@interface WebGLShaderPrecisionFormat : NSObject {
+    GLint _rangeMin;
+    GLint _rangeMax;
+    GLint _precision;
+}
+-(id)initWithRangeMin:(GLint)min rangeMax:(GLint)max precision:(GLint)p;
+-(void)dealloc;
+-(GLint)rangeMin;
+-(GLint)rangeMax;
+-(GLint)precision;
 @end
 
 #endif /* __EJS_WEBGL_H__ */
