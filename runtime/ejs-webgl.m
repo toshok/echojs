@@ -946,8 +946,18 @@ JSMETHOD (enableVertexAttribArray) {
 	return _ejs_undefined;
 }
 
+//  void finish();
+JSMETHOD (finish) {
+    if (argc != 0)
+        THROW_ARG_COUNT_EXCEPTION(0);
+
+    glFinish ();
+    CHECK_GL;
+
+    return _ejs_undefined;
+}
+
 /*
- void finish();
  void flush();
  */
 
@@ -1514,8 +1524,23 @@ JSMETHOD (renderbufferStorage) {
 
 /*
  void sampleCoverage(GLclampf value, GLboolean invert);
- void scissor(GLint x, GLint y, GLsizei width, GLsizei height);
  */
+
+//  void scissor(GLint x, GLint y, GLsizei width, GLsizei height);
+JSMETHOD (scissor) {
+    if (argc != 4)
+        THROW_ARG_COUNT_EXCEPTION(4);
+
+    GLint x = ToInt32(args[0]);
+    GLint y = ToInt32(args[1]);
+    GLsizei width = ToUint32(args[2]);
+    GLsizei height = ToUint32(args[3]);
+
+    glScissor (x, y, width, height);
+    CHECK_GL;
+
+    return _ejs_undefined;
+}
 
 //    void shaderSource(WebGLShader shader, DOMString source);
 JSMETHOD (shaderSource) {
@@ -1537,12 +1562,58 @@ JSMETHOD (shaderSource) {
 	return _ejs_undefined;
 }
 
+//  void stencilFunc(GLenum func, GLint ref, GLuint mask);
+JSMETHOD (stencilFunc) {
+    if (argc != 3)
+        THROW_ARG_COUNT_EXCEPTION(3);
+
+    GLenum func = ToUint32(args[0]);
+    GLint ref = ToInt32(args[1]);
+    GLuint mask = ToUint32(args[2]);
+
+    glStencilFunc (func, ref, mask);
+    CHECK_GL;
+
+    return _ejs_undefined;
+}
+
 /*
- void stencilFunc(GLenum func, GLint ref, GLuint mask);
  void stencilFuncSeparate(GLenum face, GLenum func, GLint ref, GLuint mask);
- void stencilMask(GLuint mask);
+ */
+
+//  void stencilMask(GLuint mask);
+JSMETHOD (stencilMask) {
+    if (argc != 1)
+        THROW_ARG_COUNT_EXCEPTION(1);
+
+    GLuint mask = ToUint32(args[0]);
+
+    glStencilMask (mask);
+    CHECK_GL;
+
+    return _ejs_undefined;
+}
+
+/*
  void stencilMaskSeparate(GLenum face, GLuint mask);
- void stencilOp(GLenum fail, GLenum zfail, GLenum zpass);
+ */
+
+//  void stencilOp(GLenum fail, GLenum zfail, GLenum zpass);
+JSMETHOD (stencilOp) {
+    if (argc != 3)
+        THROW_ARG_COUNT_EXCEPTION(3);
+
+    GLenum fail = ToUint32(args[0]);
+    GLenum zfail = ToUint32(args[1]);
+    GLenum zpass = ToUint32(args[2]);
+
+    glStencilOp (fail, zfail, zpass);
+    CHECK_GL;
+
+    return _ejs_undefined;
+}
+
+/*
  void stencilOpSeparate(GLenum face, GLenum fail, GLenum zfail, GLenum zpass);
  */
 
@@ -2277,6 +2348,7 @@ EJS_NATIVE_FUNC(_ejs_objc_allocateWebGLRenderingContext) {
 	WEBGL_FUNC(framebufferRenderbuffer, 4);
 	WEBGL_FUNC(framebufferTexture2D, 5);
     
+	WEBGL_FUNC(finish, 0);
 	WEBGL_FUNC(frontFace, 1);
 	WEBGL_FUNC(generateMipmap, 1);
 	WEBGL_FUNC(getActiveAttrib, 2);
@@ -2300,7 +2372,13 @@ EJS_NATIVE_FUNC(_ejs_objc_allocateWebGLRenderingContext) {
     
 	WEBGL_FUNC(renderbufferStorage, 4);
     
+	WEBGL_FUNC(scissor, 4);
+
 	WEBGL_FUNC(shaderSource, 2);
+
+	WEBGL_FUNC(stencilFunc, 3);
+	WEBGL_FUNC(stencilMask, 1);
+	WEBGL_FUNC(stencilOp, 3);
     
 	WEBGL_FUNC(texImage2D, 9);
 	WEBGL_FUNC(texParameterf, 3);
