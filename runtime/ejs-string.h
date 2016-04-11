@@ -65,13 +65,13 @@ typedef enum {
 
 #define EJS_PRIMSTR_HAS_HASH_MASK 0x08
 #define EJS_PRIMSTR_HAS_HASH_MASK_SHIFTED (EJS_PRIMSTR_HAS_HASH_MASK << EJS_GC_USER_FLAGS_SHIFT)
-#define EJS_PRIMSTR_HAS_HASH(s) ((((EJSPrimString*)(s))->gc_header & EJS_PRIMSTR_HAS_HASH_MASK_SHIFTED) >> EJS_GC_USER_FLAGS_SHIFT) != 0
+#define EJS_PRIMSTR_HAS_HASH(s) (((((EJSPrimString*)(s))->gc_header & EJS_PRIMSTR_HAS_HASH_MASK_SHIFTED) >> EJS_GC_USER_FLAGS_SHIFT) != 0)
 #define EJS_PRIMSTR_SET_HAS_HASH(s) ((((EJSPrimString*)(s))->gc_header |= EJS_PRIMSTR_HAS_HASH_MASK_SHIFTED))
 
 // if a flat string has an out-of-line buffer (the char* doesn't point to just beyond the EjsPrimString)
 #define EJS_PRIMSTR_HAS_OOL_BUFFER_MASK 0x10
 #define EJS_PRIMSTR_HAS_OOL_BUFFER_MASK_SHIFTED (EJS_PRIMSTR_HAS_OOL_BUFFER_MASK << EJS_GC_USER_FLAGS_SHIFT)
-#define EJS_PRIMSTR_HAS_OOL_BUFFER(s) ((((EJSPrimString*)(s))->gc_header & EJS_PRIMSTR_HAS_OOL_BUFFER_MASK_SHIFTED) >> EJS_GC_USER_FLAGS_SHIFT) != 0
+#define EJS_PRIMSTR_HAS_OOL_BUFFER(s) (((((EJSPrimString*)(s))->gc_header & EJS_PRIMSTR_HAS_OOL_BUFFER_MASK_SHIFTED) >> EJS_GC_USER_FLAGS_SHIFT) != 0)
 #define EJS_PRIMSTR_SET_HAS_OOL_BUFFER(s) ((((EJSPrimString*)(s))->gc_header |= EJS_PRIMSTR_HAS_OOL_BUFFER_MASK_SHIFTED))
 
 struct _EJSPrimString {

@@ -1347,7 +1347,7 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_reduce) {
 
     // 6. If len is 0 and initialValue is not present, throw a TypeError exception.
     // (use argc here instead of EJSVAL_IS_UNDEFINED(initialValue), as 'undefined' passed for initialValue passes)
-    if (!len == 0 && argc <= 1) {
+    if (len == 0 && argc <= 1) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Reduce of empty array with no initial value");
     }
 
@@ -1439,7 +1439,7 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_reduceRight) {
         
     // 6. If len is 0 and initialValue is not present, throw a TypeError exception.
     // (use argc here instead of EJSVAL_IS_UNDEFINED(initialValue), as 'undefined' passed for initialValue passes)
-    if (!len == 0 && argc <= 1) {
+    if (len == 0 && argc <= 1) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Reduce right of empty array with no initial value");
     }
     // 7. Let k be len-1.
