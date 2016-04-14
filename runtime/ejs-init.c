@@ -135,6 +135,7 @@ _ejs_init_classes()
     _ejs_Class_initialize (&_ejs_WebGLRenderbuffer_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_WebGLProgram_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_WebGLShader_specops, &_ejs_Object_specops);
+    _ejs_Class_initialize (&_ejs_WebGLShaderPrecisionFormat_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_WebGLTexture_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_WebGLActiveInfo_specops, &_ejs_Object_specops);
     _ejs_Class_initialize (&_ejs_WebGLUniformLocation_specops, &_ejs_Object_specops);

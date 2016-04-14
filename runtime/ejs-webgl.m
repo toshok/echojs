@@ -149,6 +149,34 @@
 }
 @end
 
+@implementation WebGLShaderPrecisionFormat
+-(id)initWithRangeMin:(GLint)min rangeMax:(GLint)max precision:(GLint)p
+{
+    _rangeMin = min;
+    _rangeMax = max;
+    _precision = p;
+    return self;
+}
+
+-(void)dealloc
+{
+    [super dealloc];
+}
+
+-(GLint)rangeMin
+{
+    return _rangeMin;
+}
+-(GLint)rangeMax
+{
+    return _rangeMax;
+}
+-(GLint)precision
+{
+    return _precision;
+}
+@end
+
 typedef struct  {
     EJSObject obj;
     id peer;
@@ -185,6 +213,26 @@ static EJS_NATIVE_FUNC(webglactiveinfo_get_name) {
 	WebGLActiveInfo *info = (WebGLActiveInfo*)get_peer(*_this);
 
 	return _ejs_string_new_utf8 ([info name]);
+}
+
+static ejsval WebGLShaderPrecisionFormat__proto__ EJSVAL_ALIGNMENT;
+
+EJS_NATIVE_FUNC(webglshaderprecisionformat_get_range_min) {
+    WebGLShaderPrecisionFormat *pformat = (WebGLShaderPrecisionFormat*)get_peer(*_this);
+
+    return NUMBER_TO_EJSVAL([pformat rangeMin]);
+}
+
+EJS_NATIVE_FUNC(webglshaderprecisionformat_get_range_max) {
+    WebGLShaderPrecisionFormat *pformat = (WebGLShaderPrecisionFormat*)get_peer(*_this);
+
+    return NUMBER_TO_EJSVAL([pformat rangeMax]);
+}
+
+EJS_NATIVE_FUNC(webglshaderprecisionformat_get_precision) {
+    WebGLShaderPrecisionFormat *pformat = (WebGLShaderPrecisionFormat*)get_peer(*_this);
+
+    return NUMBER_TO_EJSVAL([pformat precision]);
 }
 
 #define SPEW(x)
@@ -898,8 +946,18 @@ JSMETHOD (enableVertexAttribArray) {
 	return _ejs_undefined;
 }
 
+//  void finish();
+JSMETHOD (finish) {
+    if (argc != 0)
+        THROW_ARG_COUNT_EXCEPTION(0);
+
+    glFinish ();
+    CHECK_GL;
+
+    return _ejs_undefined;
+}
+
 /*
- void finish();
  void flush();
  */
 
@@ -1305,6 +1363,26 @@ JSMETHOD (getShaderSource) {
 	return jsstr;
 }
 
+JSMETHOD (getShaderPrecisionFormat) {
+    if (argc != 2)
+        THROW_ARG_COUNT_EXCEPTION(2);
+
+    GLenum shaderType = (GLenum)EJSVAL_TO_NUMBER (args[0]);
+    GLenum precisionType = (GLenum)EJSVAL_TO_NUMBER (args[1]);
+    GLint range[2];
+    GLint precision;
+
+    glGetShaderPrecisionFormat(shaderType, precisionType, range, &precision);
+    CHECK_GL;
+
+    EJSWebGLObject *obj = _ejs_gc_new(EJSWebGLObject);
+    _ejs_init_object ((EJSObject*)obj, WebGLShaderPrecisionFormat__proto__, &_ejs_WebGLShaderPrecisionFormat_specops);
+
+    obj->peer = [[WebGLShaderPrecisionFormat alloc] initWithRangeMin:range[0] rangeMax:range[1] precision:precision];
+
+    return OBJECT_TO_EJSVAL(obj);
+}
+
 /*
  any getTexParameter(GLenum target, GLenum pname);
  
@@ -1446,8 +1524,23 @@ JSMETHOD (renderbufferStorage) {
 
 /*
  void sampleCoverage(GLclampf value, GLboolean invert);
- void scissor(GLint x, GLint y, GLsizei width, GLsizei height);
  */
+
+//  void scissor(GLint x, GLint y, GLsizei width, GLsizei height);
+JSMETHOD (scissor) {
+    if (argc != 4)
+        THROW_ARG_COUNT_EXCEPTION(4);
+
+    GLint x = ToInt32(args[0]);
+    GLint y = ToInt32(args[1]);
+    GLsizei width = ToUint32(args[2]);
+    GLsizei height = ToUint32(args[3]);
+
+    glScissor (x, y, width, height);
+    CHECK_GL;
+
+    return _ejs_undefined;
+}
 
 //    void shaderSource(WebGLShader shader, DOMString source);
 JSMETHOD (shaderSource) {
@@ -1469,12 +1562,58 @@ JSMETHOD (shaderSource) {
 	return _ejs_undefined;
 }
 
+//  void stencilFunc(GLenum func, GLint ref, GLuint mask);
+JSMETHOD (stencilFunc) {
+    if (argc != 3)
+        THROW_ARG_COUNT_EXCEPTION(3);
+
+    GLenum func = ToUint32(args[0]);
+    GLint ref = ToInt32(args[1]);
+    GLuint mask = ToUint32(args[2]);
+
+    glStencilFunc (func, ref, mask);
+    CHECK_GL;
+
+    return _ejs_undefined;
+}
+
 /*
- void stencilFunc(GLenum func, GLint ref, GLuint mask);
  void stencilFuncSeparate(GLenum face, GLenum func, GLint ref, GLuint mask);
- void stencilMask(GLuint mask);
+ */
+
+//  void stencilMask(GLuint mask);
+JSMETHOD (stencilMask) {
+    if (argc != 1)
+        THROW_ARG_COUNT_EXCEPTION(1);
+
+    GLuint mask = ToUint32(args[0]);
+
+    glStencilMask (mask);
+    CHECK_GL;
+
+    return _ejs_undefined;
+}
+
+/*
  void stencilMaskSeparate(GLenum face, GLuint mask);
- void stencilOp(GLenum fail, GLenum zfail, GLenum zpass);
+ */
+
+//  void stencilOp(GLenum fail, GLenum zfail, GLenum zpass);
+JSMETHOD (stencilOp) {
+    if (argc != 3)
+        THROW_ARG_COUNT_EXCEPTION(3);
+
+    GLenum fail = ToUint32(args[0]);
+    GLenum zfail = ToUint32(args[1]);
+    GLenum zpass = ToUint32(args[2]);
+
+    glStencilOp (fail, zfail, zpass);
+    CHECK_GL;
+
+    return _ejs_undefined;
+}
+
+/*
  void stencilOpSeparate(GLenum face, GLenum fail, GLenum zfail, GLenum zpass);
  */
 
@@ -2209,6 +2348,7 @@ EJS_NATIVE_FUNC(_ejs_objc_allocateWebGLRenderingContext) {
 	WEBGL_FUNC(framebufferRenderbuffer, 4);
 	WEBGL_FUNC(framebufferTexture2D, 5);
     
+	WEBGL_FUNC(finish, 0);
 	WEBGL_FUNC(frontFace, 1);
 	WEBGL_FUNC(generateMipmap, 1);
 	WEBGL_FUNC(getActiveAttrib, 2);
@@ -2219,6 +2359,7 @@ EJS_NATIVE_FUNC(_ejs_objc_allocateWebGLRenderingContext) {
 	WEBGL_FUNC(getProgramParameter, 2);
 	WEBGL_FUNC(getShaderInfoLog, 1);
 	WEBGL_FUNC(getShaderParameter, 2);
+	WEBGL_FUNC(getShaderPrecisionFormat, 2);
 	WEBGL_FUNC(getShaderSource, 1);
     
 	WEBGL_FUNC(getUniformLocation, 2);
@@ -2231,7 +2372,13 @@ EJS_NATIVE_FUNC(_ejs_objc_allocateWebGLRenderingContext) {
     
 	WEBGL_FUNC(renderbufferStorage, 4);
     
+	WEBGL_FUNC(scissor, 4);
+
 	WEBGL_FUNC(shaderSource, 2);
+
+	WEBGL_FUNC(stencilFunc, 3);
+	WEBGL_FUNC(stencilMask, 1);
+	WEBGL_FUNC(stencilOp, 3);
     
 	WEBGL_FUNC(texImage2D, 9);
 	WEBGL_FUNC(texParameterf, 3);
@@ -2302,6 +2449,7 @@ EJS_WEBGL_OBJ(WebGLProgram);
 EJS_WEBGL_OBJ(WebGLShader);
 EJS_WEBGL_OBJ(WebGLTexture);
 EJS_WEBGL_OBJ(WebGLActiveInfo);
+EJS_WEBGL_OBJ(WebGLShaderPrecisionFormat);
 
 EJS_DEFINE_INHERIT_ALL_CLASS(WebGLUniformLocation);
 
@@ -2315,6 +2463,11 @@ _ejs_webgl_init(ejsval global)
     EJS_INSTALL_GETTER (WebGLActiveInfo__proto__, "size", webglactiveinfo_get_size);
     EJS_INSTALL_GETTER (WebGLActiveInfo__proto__, "type", webglactiveinfo_get_type);
     EJS_INSTALL_GETTER (WebGLActiveInfo__proto__, "name", webglactiveinfo_get_name);
+
+    WebGLShaderPrecisionFormat__proto__ = _ejs_object_create (_ejs_Object_prototype);
+    EJS_INSTALL_GETTER (WebGLShaderPrecisionFormat__proto__, "rangeMin", webglshaderprecisionformat_get_range_min);
+    EJS_INSTALL_GETTER (WebGLShaderPrecisionFormat__proto__, "rangeMax", webglshaderprecisionformat_get_range_max);
+    EJS_INSTALL_GETTER (WebGLShaderPrecisionFormat__proto__, "precision", webglshaderprecisionformat_get_precision);
 }
 
 #endif
