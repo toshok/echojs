@@ -17,24 +17,24 @@ You'll need a couple of external dependencies to get things running:
 2. llvm 3.6
 3. coffeescript
 
-The following commands should get you from 0 to echo-js built:
+The following commands should get you from 0 (well, Homebrew and Xcode) to echo-js built:
 
 ```sh
-$ brew tap homebrew/versions  # so we can get the specific version of llvm below
 $ brew install node
 $ brew install llvm
 $ export PATH=/usr/local/opt/llvm/bin:$PATH
 $ npm install
-$ npm install -g node-gyp babel
+$ npm install -g node-gyp babel@5.8.8
 $ export MIN_OSX_VERSION=10.8 # only if you're running 10.8, see below
-$ cd echo-js
+$ export IOS_SDK_VERSION=9.3 # or whatever is installed
+$ export LLVM_SUFFIX= # if installed llvm via homebrew, see below
 $ git submodule init
 $ git submodule update
 $ make
 ```
 
-The environment variable `LLVM_SUFFIX` can be set and its value will be appended to the names of all llvm executables (e.g. `llvm-config-3.6` instead of `llvm-config`.)  use this if you have a different build of
-llvm you want to use.  Homebrew installs llvm 3.6 executables without the suffix, so you can leave this blank.
+The environment variable `LLVM_SUFFIX` can be set and its value will be appended to the names of all llvm executables (e.g. `llvm-config-3.6` instead of `llvm-config`.)  The default is `-3.6`.  Change this if you have a different build of
+llvm you want to use.  Homebrew installs llvm 3.6 executables without the suffix, thus `export LLVM_SUFFIX=`.
 
 As for `MIN_OSX_VERSION`: homebrew's formula for llvm (3.4, at least.  haven't verified with 3.6) doesn't specify a `-mmacosx-version-min=` flag, so it builds to whatever you have on your machine.  Node.js's gyp support in node-gyp, however, *does* put a `-mmacosx-version-min=10.5` flag.  A mismatch here causes the node-llvm binding to allocate llvm types using incorrect size calculations, and causes all manner of memory corruption.  If you're either running 10.5 or 10.9, you can leave the variable unset.  Otherwise, set it to the version of OSX you're running.  Hopefully some discussion with the homebrew folks will get this fixed upstream.
 
