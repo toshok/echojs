@@ -21,4 +21,4 @@
 	url = https://github.com/toshok/esutils.git
 [submodule "external-deps/double-conversion"]
 	path = external-deps/double-conversion
-	url = https://github.com/google/double-conversion/
+	url = https://github.com/google/double-conversion.git
