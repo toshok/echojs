@@ -117,11 +117,19 @@ namespace ejsllvm {
         ejsval result = _ejs_array_new(0, EJS_FALSE);
 
         unsigned Idx = 0;
+
+#if LLVM_VERSION < 300800
         for (llvm::Function::arg_iterator AI = fun->llvm_fun->arg_begin(); Idx != size;
              ++AI, ++Idx) {
             ejsval val = Value_new(AI);
             _ejs_array_push_dense (result, 1, &val);
         }
+#else
+        for (auto &arg : fun->llvm_fun->args()) {
+            ejsval val = Value_new(&arg);
+            _ejs_array_push_dense (result, 1, &val);
+        }
+#endif
         return result;
     }
 

@@ -57,7 +57,6 @@ NAN_MODULE_INIT(Init) {
 #if notyet
     jsllvm::MDNode::Init(target);
     jsllvm::MDString::Init(target);
-#endif
     jsllvm::DIBuilder::Init(target);
     jsllvm::DIDescriptor::Init(target);
     jsllvm::DIType::Init(target);
@@ -66,6 +65,7 @@ NAN_MODULE_INIT(Init) {
     jsllvm::DIFile::Init(target);
     jsllvm::DILexicalBlock::Init(target);
     jsllvm::DebugLoc::Init(target);
+#endif
 }
 
 NODE_MODULE(llvm, Init)

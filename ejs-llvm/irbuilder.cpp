@@ -186,6 +186,7 @@ namespace ejsllvm {
         return Value_new (_llvm_builder.CreateInBoundsGEP(val, IdxV, name));
     }
 
+    /*
     static EJS_NATIVE_FUNC(IRBuilder_createStructGetElementPointer) {
         REQ_LLVM_VAL_ARG(0, val);
         REQ_INT_ARG(1, idx);
@@ -193,6 +194,7 @@ namespace ejsllvm {
 
         return Value_new (_llvm_builder.CreateStructGEP(val, idx, name));
     }
+    */
 
     static EJS_NATIVE_FUNC(IRBuilder_createICmpEq) {
         REQ_LLVM_VAL_ARG(0, left);
@@ -352,7 +354,11 @@ namespace ejsllvm {
         REQ_INT_ARG(2, num_clauses);
         FALLBACK_EMPTY_UTF8_ARG(3, name);
 
-        return LandingPad_new (_llvm_builder.CreateLandingPad(ty, persFn, num_clauses, name));
+        return LandingPad_new (_llvm_builder.CreateLandingPad(ty,
+#if LLVM < 300800
+                                                              persFn,
+#endif
+                                                              num_clauses, name));
     }
 
     static EJS_NATIVE_FUNC(IRBuilder_createResume) {
@@ -362,12 +368,18 @@ namespace ejsllvm {
     }
 
     static EJS_NATIVE_FUNC(IRBuilder_getCurrentDebugLocation) {
+#if 0
         return DebugLoc_new(_llvm_builder.getCurrentDebugLocation());
+#else
+        return _ejs_undefined;
+#endif
     }
 
     static EJS_NATIVE_FUNC(IRBuilder_setCurrentDebugLocation) {
+#if 0
         REQ_LLVM_DEBUGLOC_ARG(0, debugloc);
         _llvm_builder.SetCurrentDebugLocation(debugloc);
+#endif
         return _ejs_undefined;
     }
 
@@ -400,7 +412,7 @@ namespace ejsllvm {
         OBJ_METHOD(createExtractValue);
         OBJ_METHOD(createGetElementPointer);
         OBJ_METHOD(createInBoundsGetElementPointer);
-        OBJ_METHOD(createStructGetElementPointer);
+        //OBJ_METHOD(createStructGetElementPointer);
         OBJ_METHOD(createICmpEq);
         OBJ_METHOD(createICmpSGt);
         OBJ_METHOD(createICmpUGE);

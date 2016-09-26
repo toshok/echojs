@@ -1,6 +1,8 @@
 #ifndef EJS_LLVM_DIBUILDER_H
 #define EJS_LLVM_DIBUILDER_H
 
+#if false
+
 #include "ejs-llvm.h"
 
 namespace ejsllvm {
@@ -33,5 +35,7 @@ namespace ejsllvm {
   ejsval DebugLoc_new(llvm::DebugLoc llvm_debugloc);
   llvm::DebugLoc DebugLoc_GetLLVMObj(ejsval val);
 };
+
+#endif
 
 #endif /* EJS_LLVM_DIBUILDER_H */

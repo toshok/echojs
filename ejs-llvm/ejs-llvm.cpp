@@ -68,6 +68,7 @@ _ejs_llvm_init (ejsval global)
     PHINode_init (global);
 #endif
 
+#if false
     DIBuilder_init (global);
     DIDescriptor_init(global);
     DIType_init(global);
@@ -76,6 +77,7 @@ _ejs_llvm_init (ejsval global)
     DIFile_init(global);
     DILexicalBlock_init(global);
     DebugLoc_init(global);
+#endif
 }
 
 

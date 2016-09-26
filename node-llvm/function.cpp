@@ -117,10 +117,16 @@ namespace jsllvm {
     Local<v8::Array> result = Nan::New<v8::Array>(size);
 
     uint32_t Idx = 0;
+#if LLVM_VERSION < 300800
     for (llvm::Function::arg_iterator AI = fun->llvm_obj->arg_begin(); Idx != size;
 	 ++AI, ++Idx) {
       result->Set(Idx, Value::Create(AI));
     }
+#else
+    for (auto &arg : fun->llvm_obj->args()) {
+      result->Set(Idx, Value::Create(&arg));
+    }
+#endif
 
     info.GetReturnValue().Set(result);
   }

@@ -1,3 +1,4 @@
+#if false
 #include "node-llvm.h"
 #include "dibuilder.h"
 #include "function.h"
@@ -462,3 +463,4 @@ namespace jsllvm {
   Nan::Persistent<v8::Function> DebugLoc::constructor_func;
 
 };
+#endif

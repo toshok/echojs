@@ -44,7 +44,7 @@ namespace jsllvm {
     Nan::SetMethod(ctor_func, "createExtractValue", IRBuilder::CreateExtractValue);
     Nan::SetMethod(ctor_func, "createGetElementPointer", IRBuilder::CreateGetElementPointer);
     Nan::SetMethod(ctor_func, "createInBoundsGetElementPointer", IRBuilder::CreateInBoundsGetElementPointer);
-    Nan::SetMethod(ctor_func, "createStructGetElementPointer", IRBuilder::CreateStructGetElementPointer);
+    //    Nan::SetMethod(ctor_func, "createStructGetElementPointer", IRBuilder::CreateStructGetElementPointer);
     Nan::SetMethod(ctor_func, "createICmpEq", IRBuilder::CreateICmpEq);
     Nan::SetMethod(ctor_func, "createICmpSGt", IRBuilder::CreateICmpSGt);
     Nan::SetMethod(ctor_func, "createICmpUGt", IRBuilder::CreateICmpUGt);
@@ -364,6 +364,7 @@ namespace jsllvm {
     info.GetReturnValue().Set(result);
   }
 
+  /*
   NAN_METHOD(IRBuilder::CreateStructGetElementPointer) {
     Nan::HandleScope scope;
 
@@ -374,7 +375,8 @@ namespace jsllvm {
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateStructGEP(val, idx, *name)));
     info.GetReturnValue().Set(result);
   }
-
+  */
+  
   NAN_METHOD(IRBuilder::CreateICmpEq) {
     Nan::HandleScope scope;
 
@@ -513,7 +515,11 @@ namespace jsllvm {
     REQ_INT_ARG(2, num_clauses);
     FALLBACK_EMPTY_UTF8_ARG(3, name);
 
-    Local<v8::Value> result = LandingPad::Create(IRBuilder::builder.CreateLandingPad(ty, persFn, num_clauses, *name));
+    Local<v8::Value> result = LandingPad::Create(IRBuilder::builder.CreateLandingPad(ty,
+#if LLVM_VERSION < 300800
+										     persFn,
+#endif
+										     num_clauses, *name));
     info.GetReturnValue().Set(result);
   }
 
@@ -547,16 +553,20 @@ namespace jsllvm {
   }
 
   NAN_METHOD(IRBuilder::GetCurrentDebugLocation) {
+#if false
     Nan::HandleScope scope;
 
     Local<v8::Value> result = DebugLoc::Create(IRBuilder::builder.getCurrentDebugLocation());
     info.GetReturnValue().Set(result);
+#endif
   }
 
   NAN_METHOD(IRBuilder::SetCurrentDebugLocation) {
+#if false
     Nan::HandleScope scope;
     REQ_LLVM_DEBUGLOC_ARG(0, debugloc);
     IRBuilder::builder.SetCurrentDebugLocation(debugloc);
+#endif
   }
 
   llvm::IRBuilder<> IRBuilder::builder(llvm::getGlobalContext());

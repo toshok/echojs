@@ -1,6 +1,8 @@
 #ifndef NODE_LLVM_DIBUILDER_H
 #define NODE_LLVM_DIBUILDER_H
 
+#if false
+
 #include "node-llvm.h"
 namespace jsllvm {
 
@@ -173,7 +175,6 @@ namespace jsllvm {
     static Nan::Persistent<v8::FunctionTemplate> constructor;
     static Nan::Persistent<v8::Function> constructor_func;
   };
-
   class DebugLoc : public Nan::ObjectWrap {
   public:
     static void Init(v8::Handle<v8::Object> target);
@@ -200,5 +201,7 @@ namespace jsllvm {
 
 };
 
+#endif
 
 #endif /* NODE_LLVM_DIBUILDER_H */
+

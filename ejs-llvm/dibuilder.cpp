@@ -2,6 +2,7 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
+#if false
 #include "ejs-llvm.h"
 #include "ejs-error.h"
 #include "ejs-object.h"
@@ -490,3 +491,4 @@ namespace ejsllvm {
 
 
 }
+#endif

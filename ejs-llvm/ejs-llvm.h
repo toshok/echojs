@@ -20,6 +20,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Bitcode/ReaderWriter.h"
 
+#define LLVM_VERSION LLVM_VERSION_PATCH + LLVM_VERSION_MINOR * 100 + LLVM_VERSION_MAJOR * 100000
+
 #define ADD_STACK_ROOT(t,v,i) t v = i
 
 #define REQ_FUN_ARG(I, VAR)                                             \

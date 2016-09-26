@@ -21,6 +21,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Bitcode/ReaderWriter.h"
 
+#define LLVM_VERSION LLVM_VERSION_PATCH + LLVM_VERSION_MINOR * 100 + LLVM_VERSION_MAJOR * 100000
+
 #define REQ_FUN_ARG(I, VAR)                                             \
   if (info.Length() <= (I) || !info[I]->IsFunction()) {			\
     char buf[256];							\
