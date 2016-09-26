@@ -5,11 +5,11 @@
 
 %EjsFuncType = type {  }
 
-define i32 @_ejs_invoke_closure_catch (%EjsValueType* nocapture %retval, %EjsValueType %closure, %EjsValueType* %_this, i32 %argc, %EjsValueType* nocapture readnone %args, %EjsValueType %newTarget) {
+define i32 @_ejs_invoke_closure_catch (%EjsValueType* nocapture %retval, %EjsValueType %closure, %EjsValueType* %_this, i32 %argc, %EjsValueType* nocapture readnone %args, %EjsValueType %newTarget) personality i8* bitcast (i32 (i32, i32, i64, i8*, i8*)* @__ejs_personality_v0 to i8*) {
 entry:
   %rv_alloc = alloca i32
 
-  %ref = getelementptr inbounds %EjsValueType* %retval, i64 0, i32 0
+  %ref = getelementptr inbounds %EjsValueType, %EjsValueType* %retval, i64 0, i32 0
 
   %call = invoke i64 @_ejs_invoke_closure(%EjsValueType %closure, %EjsValueType* %_this, i32 %argc, %EjsValueType* %args, %EjsValueType %newTarget)
           to label %success unwind label %exception
@@ -22,7 +22,7 @@ success:
   br label %try_merge
 
 exception:
-  %caught_result = landingpad %0 personality i8* bitcast (i32 (i32, i32, i64, i8*, i8*)* @__ejs_personality_v0 to i8*)
+  %caught_result = landingpad %0
           cleanup
           catch i8* bitcast (%EjsExceptionTypeInfoType** @EJS_EHTYPE_ejsvalue to i8*)
   %exception4 = extractvalue %0 %caught_result, 0
@@ -36,15 +36,15 @@ exception:
   br label %try_merge
 
 try_merge:
-  %rvload = load i32* %rv_alloc
+  %rvload = load i32, i32* %rv_alloc
   ret i32 %rvload
 }
 
-define i32 @_ejs_invoke_func_catch (%EjsValueType* nocapture %retval, i64 (i8*)* %func, i8* %data) {
+define i32 @_ejs_invoke_func_catch (%EjsValueType* nocapture %retval, i64 (i8*)* %func, i8* %data) personality i8* bitcast (i32 (i32, i32, i64, i8*, i8*)* @__ejs_personality_v0 to i8*) {
 entry:
   %rv_alloc = alloca i32
 
-  %ref = getelementptr inbounds %EjsValueType* %retval, i64 0, i32 0
+  %ref = getelementptr inbounds %EjsValueType, %EjsValueType* %retval, i64 0, i32 0
 
   %call = invoke i64 %func(i8* %data)
           to label %success unwind label %exception
@@ -57,7 +57,7 @@ success:
   br label %try_merge
 
 exception:
-  %caught_result = landingpad %0 personality i8* bitcast (i32 (i32, i32, i64, i8*, i8*)* @__ejs_personality_v0 to i8*)
+  %caught_result = landingpad %0
           cleanup
           catch i8* bitcast (%EjsExceptionTypeInfoType** @EJS_EHTYPE_ejsvalue to i8*)
   %exception4 = extractvalue %0 %caught_result, 0
@@ -71,7 +71,7 @@ exception:
   br label %try_merge
 
 try_merge:
-  %rvload = load i32* %rv_alloc
+  %rvload = load i32, i32* %rv_alloc
   ret i32 %rvload
 }
 
