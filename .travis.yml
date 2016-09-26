@@ -4,6 +4,7 @@ os:
 
 matrix:
   - os: linux
+    dist: trusty
     env: EJS_RUNLOOP_IMPL=noop
 
 language: c++
