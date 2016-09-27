@@ -1,5 +1,4 @@
 set -ex
-sudo apt-add-repository -y ppa:ubuntu-toolchain-r/test
 #wget -O - http://llvm.org/apt/llvm-snapshot.gpg.key|sudo apt-key add -
 sudo apt-get update
 sudo apt-get install libunwind7-dev make autoconf automake libedit-dev zlib1g-dev cmake
