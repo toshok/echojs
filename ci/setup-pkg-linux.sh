@@ -8,3 +8,7 @@ sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-3.8 10
 sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-3.8 10
 #sudo update-alternatives --install /usr/bin/gcc      gcc /usr/bin/gcc-4.9 10
 #sudo update-alternatives --install /usr/bin/g++      g++ /usr/bin/g++-4.9 10
+
+node --version
+clang --version
+llvm-config --version
