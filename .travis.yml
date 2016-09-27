@@ -9,6 +9,8 @@ matrix:
     node:
         - 6.1
     env: EJS_RUNLOOP_IMPL=noop
+  - os: osx
+    sudo: required
 
 language: c++
 
