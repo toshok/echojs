@@ -4,6 +4,7 @@ os:
 
 matrix:
   - os: linux
+    sudo: required
     dist: trusty
     node:
         - 6.1
