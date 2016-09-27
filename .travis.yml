@@ -14,7 +14,7 @@ matrix:
 language: c++
 
 node:
-    - 6.1
+    - 4.5
 
 notifications:
   webhooks:
