@@ -7,25 +7,14 @@ dist: trusty
 
 matrix:
   - os: linux
-    node:
-        - 6.1
     env: EJS_RUNLOOP_IMPL=noop
-    addons:
-        apt:
-            sources:
-            - r-packages-trusty
-            packages:
-            - libunwind7-dev
-            - make
-            - autoconf
-            - automake
-            - libedit-dev
-            - zlib1g-dev
-            - cmake
   - os: osx
     sudo: required
 
 language: c++
+
+node:
+    - 6.1
 
 notifications:
   webhooks:
