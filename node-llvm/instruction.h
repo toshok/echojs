@@ -25,7 +25,7 @@ namespace jsllvm {
 
   };
 
-};
+}
 
 #endif /* NODE_LLVM_TYPE_H */
 

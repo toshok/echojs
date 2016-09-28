@@ -40,6 +40,6 @@ namespace jsllvm {
     friend class ArrayType;
   };
 
-};
+}
 
 #endif /* NODE_LLVM_TYPE_H */

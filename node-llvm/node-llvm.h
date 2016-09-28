@@ -209,6 +209,6 @@ public:
   LLVMTy* llvm_obj;
 };
 
-};
+}
 
 #endif /* NODE_LLVM_H */

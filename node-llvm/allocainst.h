@@ -24,6 +24,6 @@ namespace jsllvm {
     static NAN_METHOD(ToString);
     static NAN_METHOD(SetAlignment);
   };
-};
+}
 
 #endif /* NODE_LLVM_ALLOCA_H */

@@ -26,6 +26,6 @@ namespace jsllvm {
     static NAN_GETTER(GetName);
     static NAN_GETTER(GetParent);
   };
-};
+}
 
 #endif /* NODE_LLVM_BASICBLOCK_H */
