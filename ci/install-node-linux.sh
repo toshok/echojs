@@ -1,4 +1,6 @@
 set -ex
 
-sudo npm install -g node-gyp
-sudo npm install -g babel
+NPM=`which npm`
+
+sudo $NPM install -g node-gyp
+sudo $NPM install -g babel

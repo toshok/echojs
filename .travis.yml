@@ -28,6 +28,7 @@ before_install:
   - bash ./ci/setup-pkg-$TRAVIS_OS_NAME.sh
   - npm --version
   - which npm
+  - env
 
 install:
   - echo $PATH
