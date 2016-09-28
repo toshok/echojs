@@ -40,7 +40,7 @@ before_script:
   - export LLVM_SUFFIX=
   - export PATH=/usr/bin:$PATH:`npm prefix -g`/bin:/usr/local/opt/llvm/bin:/usr/local/opt/llvm/share/llvm
   - export NODE_PATH=`make --no-print-directory -C test node-path`
-  - sudo make ensure-npmmodules
+  - make ensure-npmmodules
   - make
 
 script:
