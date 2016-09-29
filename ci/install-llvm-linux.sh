@@ -8,5 +8,5 @@ sudo update-alternatives --install /usr/bin/llvm-as  llvm-as  /usr/bin/llvm-as-3
 sudo update-alternatives --install /usr/bin/clang    clang    /usr/bin/clang-3.8 10 --force
 sudo update-alternatives --install /usr/bin/clang++  clang++  /usr/bin/clang++-3.8 10 --force
 llvm-config --version
-update-alternatives --list llvm-config
-type -all llvm-config
+clang++ --version
+clang --version
