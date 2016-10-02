@@ -16,8 +16,8 @@ LLVM_LINKFLAGS  := $(shell $(LLVM_CONFIG) --ldflags --libs)
 
 MIN_OSX_VERSION?=10.9
 
-CC=clang
-CXX=clang++
+CC=gcc
+CXX=g++
 
 all-local:: build
 
