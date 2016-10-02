@@ -34,7 +34,7 @@ install:
 
 before_script:
   - export LLVM_SUFFIX=
-  - export PATH=/usr/bin:$PATH:`npm prefix -g`/bin:/usr/local/opt/llvm/bin:/usr/local/opt/llvm/share/llvm
+  - export PATH=/usr/bin:$PATH:`npm prefix`/node_modules/.bin:/usr/local/opt/llvm/bin:/usr/local/opt/llvm/share/llvm
   - export NODE_PATH=`make --no-print-directory -C test node-path`
   - make ensure-npmmodules
   - make
