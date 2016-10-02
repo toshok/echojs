@@ -350,14 +350,10 @@ namespace ejsllvm {
 
     static EJS_NATIVE_FUNC(IRBuilder_createLandingPad) {
         REQ_LLVM_TYPE_ARG(0, ty);
-        REQ_LLVM_VAL_ARG(1, persFn);
-        REQ_INT_ARG(2, num_clauses);
-        FALLBACK_EMPTY_UTF8_ARG(3, name);
+        REQ_INT_ARG(1, num_clauses);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
 
         return LandingPad_new (_llvm_builder.CreateLandingPad(ty,
-#if LLVM < 300800
-                                                              persFn,
-#endif
                                                               num_clauses, name));
     }
 

@@ -511,14 +511,10 @@ namespace jsllvm {
     Nan::HandleScope scope;
 
     REQ_LLVM_TYPE_ARG(0, ty);
-    REQ_LLVM_VAL_ARG(1, persFn);
-    REQ_INT_ARG(2, num_clauses);
-    FALLBACK_EMPTY_UTF8_ARG(3, name);
+    REQ_INT_ARG(1, num_clauses);
+    FALLBACK_EMPTY_UTF8_ARG(2, name);
 
     Local<v8::Value> result = LandingPad::Create(IRBuilder::builder.CreateLandingPad(ty,
-#if LLVM_VERSION < 300800
-										     persFn,
-#endif
 										     num_clauses, *name));
     info.GetReturnValue().Set(result);
   }
