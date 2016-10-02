@@ -28,7 +28,7 @@ before_install:
   - bash ./ci/setup-pkg-$TRAVIS_OS_NAME.sh
 
 install:
-  - npm install -g babel
+  - npm install -g babel-cli
   - npm install -g node-gyp
   - bash ./ci/install-llvm-$TRAVIS_OS_NAME.sh
 
