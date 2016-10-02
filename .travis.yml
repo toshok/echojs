@@ -26,16 +26,10 @@ notifications:
 
 before_install:
   - bash ./ci/setup-pkg-$TRAVIS_OS_NAME.sh
-  - nvm ls
-  - nvm ls-remote
-  - npm --version
-  - which npm
-  - env
 
 install:
-  - echo $PATH
-  - export PATH=/usr/bin:$PATH:/usr/local/share/npm/bin
-  - bash ./ci/install-node-$TRAVIS_OS_NAME.sh
+  - npm install -g babel
+  - npm install -g node-gyp
   - bash ./ci/install-llvm-$TRAVIS_OS_NAME.sh
 
 before_script:
