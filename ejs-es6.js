@@ -493,7 +493,7 @@ function compileFile(filename, parse_tree, modules, files_count, cur_file, compi
     }
     catch (e) {
         console.warn(`${e}`);
-        if (options.debug_level == 0) process.exit(-1);
+        //XXX(toshok) if (options.debug_level == 0) process.exit(-1);
         throw e;
     }
 
