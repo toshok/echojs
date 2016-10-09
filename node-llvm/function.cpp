@@ -124,7 +124,7 @@ namespace jsllvm {
     }
 #else
     for (auto &arg : fun->llvm_obj->args()) {
-      result->Set(Idx, Value::Create(&arg));
+      result->Set(Idx++, Value::Create(&arg));
     }
 #endif
 
