@@ -2,6 +2,7 @@
 #include "type.h"
 #include "function.h"
 #include "functiontype.h"
+#include "constant.h"
 #include "value.h"
 
 using namespace node;
@@ -28,6 +29,8 @@ namespace jsllvm {
     Nan::SetAccessor(ctor->InstanceTemplate(), Nan::New("onlyReadsMemory").ToLocalChecked(), Function::GetOnlyReadsMemory);
     Nan::SetAccessor(ctor->InstanceTemplate(), Nan::New("doesNotAccessMemory").ToLocalChecked(), Function::GetDoesNotAccessMemory);
 
+    Nan::SetAccessor(ctor->InstanceTemplate(), Nan::New("personality").ToLocalChecked(), Function::GetPersonality);
+    
     Nan::SetPrototypeMethod(ctor, "dump", Function::Dump);
     Nan::SetPrototypeMethod(ctor, "setOnlyReadsMemory", Function::SetOnlyReadsMemory);
     Nan::SetPrototypeMethod(ctor, "setDoesNotAccessMemory", Function::SetDoesNotAccessMemory);
@@ -37,6 +40,8 @@ namespace jsllvm {
     Nan::SetPrototypeMethod(ctor, "setInternalLinkage", Function::SetInternalLinkage);
     Nan::SetPrototypeMethod(ctor, "setStructRet", Function::SetStructRet);
     Nan::SetPrototypeMethod(ctor, "hasStructRetAttr", Function::HasStructRetAttr);
+    Nan::SetPrototypeMethod(ctor, "setPersonality", Function::SetPersonality);
+    Nan::SetPrototypeMethod(ctor, "hasPersonality", Function::HasPersonality);
     Nan::SetPrototypeMethod(ctor, "toString", Function::ToString);
 
     Local<v8::Function> ctor_func = ctor->GetFunction();
@@ -106,6 +111,25 @@ namespace jsllvm {
     info.GetReturnValue().Set(fun->llvm_obj->hasStructRetAttr());
   }
 
+  NAN_METHOD(Function::SetPersonality) {
+    auto fun = Unwrap(info.This());
+    REQ_LLVM_CONST_ARG(0, pers);
+    fun->llvm_obj->setPersonalityFn(pers);
+  }
+  
+  NAN_METHOD(Function::HasPersonality) {
+    auto fun = Unwrap(info.This());
+    info.GetReturnValue().Set(fun->llvm_obj->hasPersonalityFn());
+  }
+  
+  NAN_GETTER(Function::GetPersonality) {
+    auto fun = Unwrap(info.This());
+
+    Local<v8::Value> result = Constant::Create(fun->llvm_obj->getPersonalityFn());
+      
+    info.GetReturnValue().Set(result);
+  }
+  
   NAN_GETTER(Function::GetArgSize) {
     auto fun = Unwrap(info.This());
     info.GetReturnValue().Set(static_cast<int32_t>(fun->llvm_obj->arg_size()));
