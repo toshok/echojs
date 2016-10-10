@@ -132,6 +132,6 @@ namespace jsllvm {
   Persistent<FunctionTemplate> MDString::constructor;
   Persistent<v8::Function> MDString::constructor_func;
 
-};
+}
 
 #endif

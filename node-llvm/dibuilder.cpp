@@ -462,5 +462,5 @@ namespace jsllvm {
   Nan::Persistent<v8::FunctionTemplate> DebugLoc::constructor;
   Nan::Persistent<v8::Function> DebugLoc::constructor_func;
 
-};
+}
 #endif

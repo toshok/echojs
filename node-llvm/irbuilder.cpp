@@ -568,5 +568,5 @@ namespace jsllvm {
   llvm::IRBuilder<> IRBuilder::builder(llvm::getGlobalContext());
   Nan::Persistent<v8::FunctionTemplate> IRBuilder::constructor;
   Nan::Persistent<v8::Function> IRBuilder::constructor_func;
-};
+}
 

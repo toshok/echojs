@@ -61,6 +61,6 @@ namespace jsllvm {
 
   Nan::Persistent<v8::FunctionTemplate> LandingPad::constructor;
   Nan::Persistent<v8::Function> LandingPad::constructor_func;
-};
+}
 
 

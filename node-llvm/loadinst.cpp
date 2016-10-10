@@ -60,6 +60,6 @@ namespace jsllvm {
 
   Nan::Persistent<v8::FunctionTemplate> LoadInst::constructor;
   Nan::Persistent<v8::Function> LoadInst::constructor_func;
-};
+}
 
 

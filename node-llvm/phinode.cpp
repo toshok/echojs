@@ -59,6 +59,6 @@ namespace jsllvm {
 
   Nan::Persistent<v8::FunctionTemplate> PHINode::constructor;
   Nan::Persistent<v8::Function> PHINode::constructor_func;
-};
+}
 
 

@@ -57,6 +57,6 @@ namespace jsllvm {
 
   Nan::Persistent<v8::FunctionTemplate> Switch::constructor;
   Nan::Persistent<v8::Function> Switch::constructor_func;
-};
+}
 
 

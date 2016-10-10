@@ -77,4 +77,4 @@ namespace jsllvm {
   Nan::Persistent<v8::FunctionTemplate> GlobalVariable::constructor;
   Nan::Persistent<v8::Function> GlobalVariable::constructor_func;
 
-};
+}
