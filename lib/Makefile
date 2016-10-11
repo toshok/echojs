@@ -79,37 +79,37 @@ BABEL=babel
 $(DESTDIR)/ejs-es6.js: ../ejs-es6.js
 	@echo [babel] $<
 	@mkdir -p `dirname $@`
-	@$(BABEL) $(BABEL_ARGS) -o "" $< | sed $(BABEL_SED_REPLACEMENTS) >> $@
+	@$(BABEL) $(BABEL_ARGS) -o "" $< | sed $(BABEL_SED_REPLACEMENTS) > $@
 
 $(DESTDIR)/external-deps/esprima/esprima-es6.js: ../external-deps/esprima/esprima-es6.js
 	@echo [babel] $<
 	@mkdir -p `dirname $@`
-	@$(BABEL) $(BABEL_ARGS) -o "" $< | sed $(BABEL_SED_REPLACEMENTS) >> $@
+	@$(BABEL) $(BABEL_ARGS) -o "" $< | sed $(BABEL_SED_REPLACEMENTS) > $@
 
 $(DESTDIR)/external-deps/escodegen/escodegen-es6.js: ../external-deps/escodegen/escodegen-es6.js
 	@echo [babel] $<
 	@mkdir -p `dirname $@`
-	@$(BABEL) $(BABEL_ARGS) -o "" $< | sed $(BABEL_SED_REPLACEMENTS) >> $@
+	@$(BABEL) $(BABEL_ARGS) -o "" $< | sed $(BABEL_SED_REPLACEMENTS) > $@
 
 $(DESTDIR)/external-deps/estraverse/estraverse-es6.js: ../external-deps/estraverse/estraverse-es6.js
 	@echo [babel] $<
 	@mkdir -p `dirname $@`
-	@$(BABEL) $(BABEL_ARGS) -o "" $< | sed $(BABEL_SED_REPLACEMENTS) >> $@
+	@$(BABEL) $(BABEL_ARGS) -o "" $< | sed $(BABEL_SED_REPLACEMENTS) > $@
 
 $(DESTDIR)/external-deps/esutils/esutils-es6.js: ../external-deps/esutils/esutils-es6.js
 	@echo [babel] $<
 	@mkdir -p `dirname $@`
-	@$(BABEL) $(BABEL_ARGS) -o "" $< | sed $(BABEL_SED_REPLACEMENTS) >> $@
+	@$(BABEL) $(BABEL_ARGS) -o "" $< | sed $(BABEL_SED_REPLACEMENTS) > $@
 
 $(DESTDIR)/external-deps/esutils/lib/%.js: ../external-deps/esutils/lib/%.js
 	@echo [babel] $<
 	@mkdir -p `dirname $@`
-	@$(BABEL) $(BABEL_ARGS) -o "" $< | sed $(BABEL_SED_REPLACEMENTS) >> $@
+	@$(BABEL) $(BABEL_ARGS) -o "" $< | sed $(BABEL_SED_REPLACEMENTS) > $@
 
 $(DESTDIR)/lib/%.js: %.js
 	@echo [babel] $<
 	@mkdir -p `dirname $@`
-	@$(BABEL) $(BABEL_ARGS) -o "" $< | sed $(BABEL_SED_REPLACEMENTS) >> $@
+	@$(BABEL) $(BABEL_ARGS) -o "" $< | sed $(BABEL_SED_REPLACEMENTS) > $@
 
 %.js: %.js.in
 	@echo [gen] $@ && (cat $< | sed -e s,@LLVM_SUFFIX@,$(LLVM_SUFFIX),g -e s,@RUNLOOP_IMPL@,$(EJS_RUNLOOP_IMPL),g > $@)
