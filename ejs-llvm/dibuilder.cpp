@@ -2,7 +2,6 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
-#if false
 #include "ejs-llvm.h"
 #include "ejs-error.h"
 #include "ejs-object.h"
@@ -67,10 +66,10 @@ namespace ejsllvm {
 
         DIBuilder* dib = ((DIBuilder*)EJSVAL_TO_OBJECT(*_this));
 
-        return DIDescriptor_new(dib->llvm_dibuilder->createCompileUnit(llvm::dwarf::DW_LANG_C99,
-                                                                       file, dir, producer,
-                                                                       isOptimized, flags,
-                                                                       runtimeVersion));
+        return DICompileUnit_new(dib->llvm_dibuilder->createCompileUnit(llvm::dwarf::DW_LANG_C99,
+                                                                        file, dir, producer,
+                                                                        isOptimized, flags,
+                                                                        runtimeVersion));
     }
 
     static EJS_NATIVE_FUNC(DIBuilder_prototype_createFile) {
@@ -79,17 +78,16 @@ namespace ejsllvm {
 
         DIBuilder* dib = ((DIBuilder*)EJSVAL_TO_OBJECT(*_this));
 
-        llvm::DIFile llvm_file = dib->llvm_dibuilder->createFile(file, dir);
+        llvm::DIFile* llvm_file = dib->llvm_dibuilder->createFile(file, dir);
 
         return DIFile_new(llvm_file);
     }
 
-    static llvm::DICompositeType createDIFunctionType(llvm::DIBuilder* llvm_dibuilder,
-                                                      llvm::DIFile file,
-                                                      llvm::FunctionType *fty) {
+    static llvm::DISubroutineType* createDIFunctionType(llvm::DIBuilder* llvm_dibuilder,
+                                                        llvm::FunctionType *fty) {
         // XXX add function parameter types
-        llvm::DITypeArray param_types = llvm_dibuilder->getOrCreateTypeArray(llvm::None);
-        return llvm_dibuilder->createSubroutineType(file, param_types);
+        llvm::DITypeRefArray param_types = llvm_dibuilder->getOrCreateTypeArray(llvm::None);
+        return llvm_dibuilder->createSubroutineType(param_types);
     }
 
     static EJS_NATIVE_FUNC(DIBuilder_prototype_createFunction) {
@@ -112,13 +110,12 @@ namespace ejsllvm {
                                                                      linkageName,
                                                                      file,
                                                                      line_no,
-                                                                     createDIFunctionType(dib->llvm_dibuilder, file, fn->getFunctionType()),
+                                                                     createDIFunctionType(dib->llvm_dibuilder, fn->getFunctionType()),
                                                                      isLocalToUnit,
                                                                      isDefinition,
                                                                      scopeLine,
                                                                      flags,
-                                                                     isOptimized,
-                                                                     fn));
+                                                                     isOptimized));
     }
 
     static EJS_NATIVE_FUNC(DIBuilder_prototype_createLexicalBlock) {
@@ -164,65 +161,6 @@ namespace ejsllvm {
     }
 
 
-    // DIDescriptor
-
-    typedef struct {
-        /* object header */
-        EJSObject obj;
-
-        /* load specific data */
-        llvm::DIDescriptor llvm_didescriptor;
-    } DIDescriptor;
-
-    static EJSSpecOps _ejs_DIDescriptor_specops;
-    static ejsval _ejs_DIDescriptor_prototype EJSVAL_ALIGNMENT;
-    static ejsval _ejs_DIDescriptor EJSVAL_ALIGNMENT;
-
-    static EJSObject* DIDescriptor_allocate()
-    {
-        return (EJSObject*)_ejs_gc_new(DIDescriptor);
-    }
-
-    ejsval DIDescriptor_new(llvm::DIDescriptor llvm_didescriptor) {
-        ejsval result = _ejs_object_new (_ejs_DIDescriptor_prototype, &_ejs_DIDescriptor_specops);
-        ((DIDescriptor*)EJSVAL_TO_OBJECT(result))->llvm_didescriptor = llvm_didescriptor;
-        return result;
-    }
-
-    static EJS_NATIVE_FUNC(DIDescriptor_impl) {
-        EJS_NOT_IMPLEMENTED();
-    }
-
-    static EJS_NATIVE_FUNC(DIDescriptor_prototype_verify) {
-        DIDescriptor* did = (DIDescriptor*)EJSVAL_TO_OBJECT(*_this);
-
-        bool passed = did->llvm_didescriptor.Verify();
-
-        return BOOLEAN_TO_EJSVAL(passed);
-    }
-
-    void
-    DIDescriptor_init (ejsval exports)
-    {
-        _ejs_DIDescriptor_specops = _ejs_Object_specops;
-        _ejs_DIDescriptor_specops.class_name = "LLVMDIDescriptor";
-        _ejs_DIDescriptor_specops.Allocate = DIDescriptor_allocate;
-
-        _ejs_gc_add_root (&_ejs_DIDescriptor_prototype);
-        _ejs_DIDescriptor_prototype = _ejs_object_create(_ejs_Object_prototype);
-
-        _ejs_DIDescriptor = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMDIDescriptor", (EJSClosureFunc)DIDescriptor_impl, _ejs_DIDescriptor_prototype);
-
-        _ejs_object_setprop_utf8 (exports,              "DIDescriptor", _ejs_DIDescriptor);
-
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_DIDescriptor_prototype, x, DIDescriptor_prototype_##x)
-
-        PROTO_METHOD(verify);
-
-#undef PROTO_METHOD
-    }
-
-
     // DIType
 
     static EJSSpecOps _ejs_DIType_specops;
@@ -241,20 +179,45 @@ namespace ejsllvm {
         EJSObject obj;
 
         /* load specific data */
-        llvm::DIScope llvm_discope;
+        llvm::DIScope* llvm_discope;
     } DIScope;
 
     static EJSSpecOps _ejs_DIScope_specops;
     static ejsval _ejs_DIScope_prototype EJSVAL_ALIGNMENT;
     static ejsval _ejs_DIScope EJSVAL_ALIGNMENT;
 
-    llvm::DIScope DIScope_GetLLVMObj(ejsval val) {
+    static EJSObject* DIScope_allocate()
+    {
+        return (EJSObject*)_ejs_gc_new(DIScope);
+    }
+
+    llvm::DIScope* DIScope_GetLLVMObj(ejsval val) {
         return ((DIScope*)EJSVAL_TO_OBJECT(val))->llvm_discope;
+    }
+
+    ejsval DIScope_new(llvm::DIScope* llvm_discope) {
+        ejsval result = _ejs_object_new (_ejs_DIScope_prototype, &_ejs_DIScope_specops);
+        ((DIScope*)EJSVAL_TO_OBJECT(result))->llvm_discope = llvm_discope;
+        return result;
+    }
+
+    static EJS_NATIVE_FUNC(DIScope_impl) {
+        EJS_NOT_IMPLEMENTED();
     }
 
     void
     DIScope_init (ejsval exports)
     {
+        _ejs_DIScope_specops = _ejs_Object_specops;
+        _ejs_DIScope_specops.class_name = "LLVMDIScope";
+        _ejs_DIScope_specops.Allocate = DIScope_allocate;
+
+        _ejs_gc_add_root (&_ejs_DIScope_prototype);
+        _ejs_DIScope_prototype = _ejs_object_create(_ejs_Object_prototype);
+
+        _ejs_DIScope = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMDIScope", (EJSClosureFunc)DIScope_impl, _ejs_DIScope_prototype);
+
+        _ejs_object_setprop_utf8 (exports,              "DIScope", _ejs_DIScope);
     }
 
     // DISubprogram
@@ -264,7 +227,7 @@ namespace ejsllvm {
         EJSObject obj;
 
         /* load specific data */
-        llvm::DISubprogram llvm_disubprogram;
+        llvm::DISubprogram* llvm_disubprogram;
     } DISubprogram;
 
     static EJSSpecOps _ejs_DISubprogram_specops;
@@ -276,13 +239,13 @@ namespace ejsllvm {
         return (EJSObject*)_ejs_gc_new(DISubprogram);
     }
 
-    ejsval DISubprogram_new(llvm::DISubprogram llvm_disubprogram) {
+    ejsval DISubprogram_new(llvm::DISubprogram* llvm_disubprogram) {
         ejsval result = _ejs_object_new (_ejs_DISubprogram_prototype, &_ejs_DISubprogram_specops);
         ((DISubprogram*)EJSVAL_TO_OBJECT(result))->llvm_disubprogram = llvm_disubprogram;
         return result;
     }
 
-    llvm::DISubprogram DISubprogram_GetLLVMObj(ejsval val) {
+    llvm::DISubprogram* DISubprogram_GetLLVMObj(ejsval val) {
         return ((DISubprogram*)EJSVAL_TO_OBJECT(val))->llvm_disubprogram;
     }
 
@@ -322,7 +285,7 @@ namespace ejsllvm {
         EJSObject obj;
 
         /* load specific data */
-        llvm::DIFile llvm_difile;
+        llvm::DIFile* llvm_difile;
     } DIFile;
 
     static EJSSpecOps _ejs_DIFile_specops;
@@ -334,26 +297,18 @@ namespace ejsllvm {
         return (EJSObject*)_ejs_gc_new(DIFile);
     }
 
-    ejsval DIFile_new(llvm::DIFile llvm_difile) {
+    ejsval DIFile_new(llvm::DIFile* llvm_difile) {
         ejsval result = _ejs_object_new (_ejs_DIFile_prototype, &_ejs_DIFile_specops);
         ((DIFile*)EJSVAL_TO_OBJECT(result))->llvm_difile = llvm_difile;
         return result;
     }
 
-    llvm::DIFile DIFile_GetLLVMObj(ejsval val) {
+    llvm::DIFile* DIFile_GetLLVMObj(ejsval val) {
         return ((DIFile*)EJSVAL_TO_OBJECT(val))->llvm_difile;
     }
 
     static EJS_NATIVE_FUNC(DIFile_impl) {
         EJS_NOT_IMPLEMENTED();
-    }
-
-    static EJS_NATIVE_FUNC(DIFile_prototype_verify) {
-        DIFile* dif = (DIFile*)EJSVAL_TO_OBJECT(*_this);
-
-        bool passed = dif->llvm_difile.Verify();
-
-        return BOOLEAN_TO_EJSVAL(passed);
     }
 
     void
@@ -369,14 +324,56 @@ namespace ejsllvm {
         _ejs_DIFile = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMDIFile", (EJSClosureFunc)DIFile_impl, _ejs_DIFile_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "DIFile", _ejs_DIFile);
-
-#define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_DIFile_prototype, x, DIFile_prototype_##x)
-
-        PROTO_METHOD(verify);
-
-#undef PROTO_METHOD
     }
 
+    // DICompileUnit
+
+    typedef struct {
+        /* object header */
+        EJSObject obj;
+
+        /* load specific data */
+        llvm::DICompileUnit* llvm_dicompileunit;
+    } DICompileUnit;
+
+    static EJSSpecOps _ejs_DICompileUnit_specops;
+    static ejsval _ejs_DICompileUnit_prototype EJSVAL_ALIGNMENT;
+    static ejsval _ejs_DICompileUnit EJSVAL_ALIGNMENT;
+
+    static EJSObject* DICompileUnit_allocate()
+    {
+        return (EJSObject*)_ejs_gc_new(DICompileUnit);
+    }
+
+    ejsval DICompileUnit_new(llvm::DICompileUnit* llvm_dicompileunit) {
+        ejsval result = _ejs_object_new (_ejs_DICompileUnit_prototype, &_ejs_DICompileUnit_specops);
+        ((DICompileUnit*)EJSVAL_TO_OBJECT(result))->llvm_dicompileunit = llvm_dicompileunit;
+        return result;
+    }
+
+    llvm::DICompileUnit* DICompileUnit_GetLLVMObj(ejsval val) {
+        return ((DICompileUnit*)EJSVAL_TO_OBJECT(val))->llvm_dicompileunit;
+    }
+
+    static EJS_NATIVE_FUNC(DICompileUnit_impl) {
+        EJS_NOT_IMPLEMENTED();
+    }
+
+    void
+    DICompileUnit_init (ejsval exports)
+    {
+        _ejs_DICompileUnit_specops = _ejs_Object_specops;
+        _ejs_DICompileUnit_specops.class_name = "LLVMDICompileUnit";
+        _ejs_DICompileUnit_specops.Allocate = DICompileUnit_allocate;
+
+        _ejs_gc_add_root (&_ejs_DICompileUnit_prototype);
+        _ejs_DICompileUnit_prototype = _ejs_object_create(_ejs_Object_prototype);
+
+        _ejs_DICompileUnit = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMDICompileUnit", (EJSClosureFunc)DICompileUnit_impl, _ejs_DICompileUnit_prototype);
+
+        _ejs_object_setprop_utf8 (exports,              "DICompileUnit", _ejs_DICompileUnit);
+    }
+    
     // DILexicalBlock
 
     typedef struct {
@@ -384,7 +381,7 @@ namespace ejsllvm {
         EJSObject obj;
 
         /* load specific data */
-        llvm::DILexicalBlock llvm_dilexicalblock;
+        llvm::DILexicalBlock* llvm_dilexicalblock;
     } DILexicalBlock;
 
     static EJSSpecOps _ejs_DILexicalBlock_specops;
@@ -396,13 +393,13 @@ namespace ejsllvm {
         return (EJSObject*)_ejs_gc_new(DILexicalBlock);
     }
 
-    ejsval DILexicalBlock_new(llvm::DILexicalBlock llvm_dilexicalblock) {
+    ejsval DILexicalBlock_new(llvm::DILexicalBlock* llvm_dilexicalblock) {
         ejsval result = _ejs_object_new (_ejs_DILexicalBlock_prototype, &_ejs_DILexicalBlock_specops);
         ((DILexicalBlock*)EJSVAL_TO_OBJECT(result))->llvm_dilexicalblock = llvm_dilexicalblock;
         return result;
     }
 
-    llvm::DILexicalBlock DILexicalBlock_GetLLVMObj(ejsval val) {
+    llvm::DILexicalBlock* DILexicalBlock_GetLLVMObj(ejsval val) {
         return ((DILexicalBlock*)EJSVAL_TO_OBJECT(val))->llvm_dilexicalblock;
     }
 
@@ -491,4 +488,3 @@ namespace ejsllvm {
 
 
 }
-#endif

@@ -116,15 +116,20 @@
     abort();								\
   ::llvm::Function* VAR = Function_GetLLVMObj(args[I]);
 
+#define REQ_LLVM_DICOMPILEUNIT_ARG(I, VAR)					\
+  if (argc <= (I) /* || !args[I]->IsObject() || !jsllvm::DIFile::HasInstance(args[I]) */) \
+    abort();								\
+  ::llvm::DICompileUnit* VAR = DICompileUnit_GetLLVMObj(args[I]);
+
 #define REQ_LLVM_DIFILE_ARG(I, VAR)					\
   if (argc <= (I) /* || !args[I]->IsObject() || !jsllvm::DIFile::HasInstance(args[I]) */) \
     abort();								\
-  ::llvm::DIFile VAR = DIFile_GetLLVMObj(args[I]);
+  ::llvm::DIFile* VAR = DIFile_GetLLVMObj(args[I]);
 
 #define REQ_LLVM_DISCOPE_ARG(I, VAR)					\
   if (argc <= (I) /* || !args[I]->IsObject() || !jsllvm::DIFile::HasInstance(args[I]) */) \
     abort();								\
-  ::llvm::DIScope VAR = DIScope_GetLLVMObj(args[I]);
+  ::llvm::DIScope* VAR = DIScope_GetLLVMObj(args[I]);
 
 #define REQ_LLVM_DEBUGLOC_ARG(I, VAR)					\
   if (argc <= (I) /* || !args[I]->IsObject() || !jsllvm::DIFile::HasInstance(args[I]) */) \

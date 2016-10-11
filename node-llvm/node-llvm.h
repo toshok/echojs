@@ -147,17 +147,23 @@
   }									\
   ::llvm::Function* VAR = jsllvm::Function::GetLLVMObj(info[I]);
 
+#define REQ_LLVM_DICOMPILEUNIT_ARG(I, VAR) \
+  if (info.Length() <= (I) || !info[I]->IsObject() /* XXX || !jsllvm::DICompileUnit::HasInstance(info[I]) */) {  \
+    Nan::ThrowTypeError("Argument " #I " must be an llvm DICompileUnit");	\
+  }									\
+  ::llvm::DICompileUnit* VAR = jsllvm::DICompileUnit::GetLLVMObj(info[I]);
+
 #define REQ_LLVM_DIFILE_ARG(I, VAR) \
   if (info.Length() <= (I) || !info[I]->IsObject() /* XXX || !jsllvm::DIFile::HasInstance(info[I]) */) {  \
     Nan::ThrowTypeError("Argument " #I " must be an llvm DIFile");	\
   }									\
-  ::llvm::DIFile VAR = jsllvm::DIFile::GetLLVMObj(info[I]);
+  ::llvm::DIFile* VAR = jsllvm::DIFile::GetLLVMObj(info[I]);
 
-#define REQ_LLVM_DISCOPE_ARG(I, VAR) \
+#define REQ_LLVM_DISCOPE_ARG(I, VAR)					\
   if (info.Length() <= (I) || !info[I]->IsObject() /* XXX || !jsllvm::DIScope::HasInstance(info[I]) */) {  \
     Nan::ThrowTypeError("Argument " #I " must be an llvm DIScope");	\
   }									\
-  ::llvm::DIScope VAR = jsllvm::DIScope::GetLLVMObj(info[I]);
+  ::llvm::DIScope* VAR = jsllvm::DIScope::GetLLVMObj(info[I]);
 
 #define REQ_LLVM_DEBUGLOC_ARG(I, VAR) \
   if (info.Length() <= (I) || !info[I]->IsObject() /* XXX || !jsllvm::DIScope::HasInstance(info[I]) */) {  \
