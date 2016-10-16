@@ -145,6 +145,6 @@ namespace jsllvm {
 
   Nan::Persistent<v8::FunctionTemplate> Invoke::constructor;
   Nan::Persistent<v8::Function> Invoke::constructor_func;
-};
+}
 
 

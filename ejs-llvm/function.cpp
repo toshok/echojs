@@ -15,6 +15,7 @@
 #include "functiontype.h"
 #include "type.h"
 #include "value.h"
+#include "constant.h"
 
 namespace ejsllvm {
 
@@ -111,17 +112,42 @@ namespace ejsllvm {
         return fun->llvm_fun->hasStructRetAttr() ? _ejs_true : _ejs_false;
     }
 
+    static EJS_NATIVE_FUNC(Function_prototype_setPersonality) {
+        Function* fun = ((Function*)EJSVAL_TO_OBJECT(*_this));
+        REQ_LLVM_CONST_ARG(0, pers);
+        fun->llvm_fun->setPersonalityFn (pers);
+        return _ejs_undefined;
+    }
+    
+    static EJS_NATIVE_FUNC(Function_prototype_get_personality) {
+        Function* fun = ((Function*)EJSVAL_TO_OBJECT(*_this));
+        return Constant_new (fun->llvm_fun->getPersonalityFn());
+    }
+
+    static EJS_NATIVE_FUNC(Function_prototype_hasPersonality) {
+        Function* fun = ((Function*)EJSVAL_TO_OBJECT(*_this));
+        return fun->llvm_fun->hasPersonalityFn() ? _ejs_true : _ejs_false;
+    }
+    
     static EJS_NATIVE_FUNC(Function_prototype_get_args) {
         Function* fun = ((Function*)EJSVAL_TO_OBJECT(*_this));
         unsigned int size = fun->llvm_fun->arg_size();
         ejsval result = _ejs_array_new(0, EJS_FALSE);
 
         unsigned Idx = 0;
+
+#if LLVM_VERSION < 300800
         for (llvm::Function::arg_iterator AI = fun->llvm_fun->arg_begin(); Idx != size;
              ++AI, ++Idx) {
             ejsval val = Value_new(AI);
             _ejs_array_push_dense (result, 1, &val);
         }
+#else
+        for (auto &arg : fun->llvm_fun->args()) {
+            ejsval val = Value_new(&arg);
+            _ejs_array_push_dense (result, 1, &val);
+        }
+#endif
         return result;
     }
 
@@ -193,6 +219,7 @@ namespace ejsllvm {
         PROTO_ACCESSOR(doesNotThrow);
         PROTO_ACCESSOR(onlyReadsMemory);
         PROTO_ACCESSOR(doesNotAccessMemory);
+        PROTO_ACCESSOR(personality);
 
         PROTO_METHOD(dump);
         PROTO_METHOD(setOnlyReadsMemory);
@@ -201,6 +228,8 @@ namespace ejsllvm {
         PROTO_METHOD(setGC);
         PROTO_METHOD(setExternalLinkage);
         PROTO_METHOD(setInternalLinkage);
+        PROTO_METHOD(setPersonality);
+        PROTO_METHOD(hasPersonality);
         PROTO_METHOD(toString);
 
         PROTO_METHOD(hasStructRetAttr);

@@ -53,12 +53,12 @@ namespace jsllvm {
     REQ_UTF8_ARG(4, flags);
     REQ_INT_ARG(5, runtimeVersion);
 
-    Local<v8::Value> result = DIDescriptor::Create(dib->llvm_obj->createCompileUnit(llvm::dwarf::DW_LANG_C99,
-										    *file, *dir,
-										    *producer,
-										    isOptimized,
-										    *flags,
-										    runtimeVersion));
+    Local<v8::Value> result = DICompileUnit::Create(dib->llvm_obj->createCompileUnit(llvm::dwarf::DW_LANG_C99,
+										     *file, *dir,
+										     *producer,
+										     isOptimized,
+										     *flags,
+										     runtimeVersion));
     info.GetReturnValue().Set(result);
   }
 
@@ -68,7 +68,7 @@ namespace jsllvm {
     REQ_UTF8_ARG(0, file);
     REQ_UTF8_ARG(1, dir);
 
-    llvm::DIFile llvm_file = dib->llvm_obj->createFile(*file, *dir);
+    llvm::DIFile* llvm_file = dib->llvm_obj->createFile(*file, *dir);
 
 #if notyet
     std::vector<llvm::Value*> membertypes;
@@ -85,11 +85,11 @@ namespace jsllvm {
     info.GetReturnValue().Set(result);
   }
 
-  llvm::DICompositeType DIBuilder::CreateDIFunctionType(llvm::DIFile file, llvm::FunctionType *fty)
+  llvm::DISubroutineType* DIBuilder::CreateDIFunctionType(llvm::FunctionType *fty)
   {
     // XXX add function parameter types
-    llvm::DITypeArray param_types = llvm_obj->getOrCreateTypeArray(llvm::None);
-    return llvm_obj->createSubroutineType(file, param_types);
+    llvm::DITypeRefArray param_types = llvm_obj->getOrCreateTypeArray(llvm::None);
+    return llvm_obj->createSubroutineType(param_types);
   }
 
   NAN_METHOD(DIBuilder::CreateFunction) {
@@ -113,13 +113,12 @@ namespace jsllvm {
 										  *linkageName,
 										  file,
 										  line_no,
-										  dib->CreateDIFunctionType(file, fn->getFunctionType()),
+										  dib->CreateDIFunctionType(fn->getFunctionType()),
 										  isLocalToUnit,
 										  isDefinition,
 										  scopeLine,
 										  flags,
-										  isOptimized,
-										  fn));
+										  isOptimized));
     info.GetReturnValue().Set(result);
   }
 
@@ -146,55 +145,6 @@ namespace jsllvm {
   Nan::Persistent<v8::Function> DIBuilder::constructor_func;
 
 
-  // DIDescriptor
-
-
-  void DIDescriptor::Init(Handle<Object> target) {
-    Nan::HandleScope scope;
-
-    Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
-    constructor.Reset(ctor);
-
-    ctor->InstanceTemplate()->SetInternalFieldCount(1);
-    ctor->SetClassName(Nan::New("DIDescriptor").ToLocalChecked());
-
-    Nan::SetPrototypeMethod(ctor, "verify", DIDescriptor::Verify);
-
-    Local<v8::Function> ctor_func = ctor->GetFunction();
-    constructor_func.Reset(ctor_func);
-    target->Set(Nan::New("DIDescriptor").ToLocalChecked(), ctor_func);
-  }
-
-  v8::Local<v8::Value> DIDescriptor::Create(llvm::DIDescriptor llvm_didescriptor) {
-    Nan::EscapableHandleScope scope;
-    Local<Object> new_instance = Nan::New(DIDescriptor::constructor_func)->NewInstance();
-    DIDescriptor* new_didescriptor = new DIDescriptor(llvm_didescriptor);
-    new_didescriptor->Wrap(new_instance);
-    return scope.Escape(new_instance);
-  }
-
-  NAN_METHOD(DIDescriptor::New) {
-    info.GetReturnValue().Set(info.This());
-  }
-
-  DIDescriptor::DIDescriptor(llvm::DIDescriptor llvm_didescriptor) : llvm_didescriptor(llvm_didescriptor) { }
-
-  DIDescriptor::DIDescriptor() { }
-
-  DIDescriptor::~DIDescriptor() { }
-
-  NAN_METHOD(DIDescriptor::Verify) {
-    DIDescriptor* did = ObjectWrap::Unwrap<DIDescriptor>(info.This());
-    bool passed = did->llvm_didescriptor.Verify();
-    info.GetReturnValue().Set(passed);
-  }
-
-  Nan::Persistent<v8::FunctionTemplate> DIDescriptor::constructor;
-  Nan::Persistent<v8::Function> DIDescriptor::constructor_func;
-
-
-
-
   // DIType
 
 
@@ -212,7 +162,7 @@ namespace jsllvm {
     target->Set(Nan::New("DIType").ToLocalChecked(), ctor_func);
   }
 
-  v8::Local<v8::Value> DIType::Create(llvm::DIType llvm_ditype)
+  v8::Local<v8::Value> DIType::Create(llvm::DIType* llvm_ditype)
   {
     Nan::EscapableHandleScope scope;
     Local<Object> new_instance = Nan::New(DIType::constructor_func)->NewInstance();
@@ -225,7 +175,7 @@ namespace jsllvm {
     info.GetReturnValue().Set(info.This());
   }
 
-  DIType::DIType(llvm::DIType llvm_ditype) : llvm_ditype(llvm_ditype) { }
+  DIType::DIType(llvm::DIType* llvm_ditype) : llvm_ditype(llvm_ditype) { }
 
   DIType::DIType() { }
 
@@ -243,17 +193,15 @@ namespace jsllvm {
     Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
     constructor.Reset(ctor);
 
-    ctor->Inherit (Nan::New<v8::FunctionTemplate>(DIDescriptor::constructor));
-
     ctor->InstanceTemplate()->SetInternalFieldCount(1);
-    ctor->SetClassName(Nan::New("DIType").ToLocalChecked());
+    ctor->SetClassName(Nan::New("DIScope").ToLocalChecked());
 
     Local<v8::Function> ctor_func = ctor->GetFunction();
     constructor_func.Reset(ctor_func);
     target->Set(Nan::New("DIScope").ToLocalChecked(), ctor_func);
   }
 
-  v8::Local<v8::Value> DIScope::Create(llvm::DIScope llvm_discope) {
+  v8::Local<v8::Value> DIScope::Create(llvm::DIScope* llvm_discope) {
     Nan::EscapableHandleScope scope;
     Local<Object> new_instance = Nan::New(DIScope::constructor_func)->NewInstance();
     DIScope* new_discope = new DIScope(llvm_discope);
@@ -265,7 +213,7 @@ namespace jsllvm {
     info.GetReturnValue().Set(info.This());
   }
 
-  DIScope::DIScope(llvm::DIScope llvm_discope) : llvm_discope(llvm_discope) { }
+  DIScope::DIScope(llvm::DIScope* llvm_discope) : llvm_discope(llvm_discope) { }
 
   DIScope::DIScope() { }
 
@@ -289,14 +237,12 @@ namespace jsllvm {
     ctor->InstanceTemplate()->SetInternalFieldCount(1);
     ctor->SetClassName(Nan::New("DISubprogram").ToLocalChecked());
 
-    Nan::SetPrototypeMethod(ctor, "verify", DISubprogram::Verify);
-
     Local<v8::Function> ctor_func = ctor->GetFunction();
     constructor_func.Reset(ctor_func);
     target->Set(Nan::New("DISubprogram").ToLocalChecked(), ctor_func);
   }
 
-  v8::Local<v8::Value> DISubprogram::Create(llvm::DISubprogram llvm_disubprogram) {
+  v8::Local<v8::Value> DISubprogram::Create(llvm::DISubprogram* llvm_disubprogram) {
     Nan::EscapableHandleScope scope;
     Local<Object> new_instance = Nan::New(DISubprogram::constructor_func)->NewInstance();
     DISubprogram* new_disubprogram = new DISubprogram(llvm_disubprogram);
@@ -308,17 +254,11 @@ namespace jsllvm {
     info.GetReturnValue().Set(info.This());
   }
 
-  DISubprogram::DISubprogram(llvm::DISubprogram llvm_disubprogram) : llvm_disubprogram(llvm_disubprogram) { }
+  DISubprogram::DISubprogram(llvm::DISubprogram* llvm_disubprogram) : llvm_disubprogram(llvm_disubprogram) { }
 
   DISubprogram::DISubprogram() { }
 
   DISubprogram::~DISubprogram() { }
-
-  NAN_METHOD(DISubprogram::Verify) {
-    DISubprogram* dis = ObjectWrap::Unwrap<DISubprogram>(info.This());
-    bool passed = dis->llvm_disubprogram.Verify();
-    info.GetReturnValue().Set(passed);
-  }
 
   Nan::Persistent<v8::FunctionTemplate> DISubprogram::constructor;
   Nan::Persistent<v8::Function> DISubprogram::constructor_func;
@@ -335,14 +275,12 @@ namespace jsllvm {
     ctor->InstanceTemplate()->SetInternalFieldCount(1);
     ctor->SetClassName(Nan::New("DIFile").ToLocalChecked());
 
-    Nan::SetPrototypeMethod(ctor, "verify", DIFile::Verify);
-
     Local<v8::Function> ctor_func = ctor->GetFunction();
     constructor_func.Reset(ctor_func);
     target->Set(Nan::New("DIFile").ToLocalChecked(), ctor_func);
   }
 
-  v8::Local<v8::Value> DIFile::Create(llvm::DIFile llvm_difile) {
+  v8::Local<v8::Value> DIFile::Create(llvm::DIFile* llvm_difile) {
     Nan::EscapableHandleScope scope;
     Local<Object> new_instance = Nan::New(DIFile::constructor_func)->NewInstance();
     DIFile* new_difile = new DIFile(llvm_difile);
@@ -354,21 +292,51 @@ namespace jsllvm {
     info.GetReturnValue().Set(info.This());
   }
 
-  DIFile::DIFile(llvm::DIFile llvm_difile) : llvm_difile(llvm_difile) { }
+  DIFile::DIFile(llvm::DIFile* llvm_difile) : llvm_difile(llvm_difile) { }
 
   DIFile::DIFile() { }
 
   DIFile::~DIFile() { }
 
-  NAN_METHOD(DIFile::Verify) {
-    DIFile* dif = ObjectWrap::Unwrap<DIFile>(info.This());
-    bool passed = dif->llvm_difile.Verify();
-    info.GetReturnValue().Set(passed);
-  }
-
   Nan::Persistent<v8::FunctionTemplate> DIFile::constructor;
   Nan::Persistent<v8::Function> DIFile::constructor_func;
 
+  // DICompileUnit
+
+  void DICompileUnit::Init(Handle<Object> target) {
+    Nan::HandleScope scope;
+
+    Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
+    constructor.Reset(ctor);
+
+    ctor->InstanceTemplate()->SetInternalFieldCount(1);
+    ctor->SetClassName(Nan::New("DICompileUnit").ToLocalChecked());
+
+    Local<v8::Function> ctor_func = ctor->GetFunction();
+    constructor_func.Reset(ctor_func);
+    target->Set(Nan::New("DICompileUnit").ToLocalChecked(), ctor_func);
+  }
+
+  v8::Local<v8::Value> DICompileUnit::Create(llvm::DICompileUnit* llvm_dicompileunit) {
+    Nan::EscapableHandleScope scope;
+    Local<Object> new_instance = Nan::New(DICompileUnit::constructor_func)->NewInstance();
+    DICompileUnit* new_dicompileunit = new DICompileUnit(llvm_dicompileunit);
+    new_dicompileunit->Wrap(new_instance);
+    return scope.Escape(new_instance);
+  }
+
+  NAN_METHOD(DICompileUnit::New) {
+    info.GetReturnValue().Set(info.This());
+  }
+
+  DICompileUnit::DICompileUnit(llvm::DICompileUnit* llvm_dicompileunit) : llvm_dicompileunit(llvm_dicompileunit) { }
+
+  DICompileUnit::DICompileUnit() { }
+
+  DICompileUnit::~DICompileUnit() { }
+
+  Nan::Persistent<v8::FunctionTemplate> DICompileUnit::constructor;
+  Nan::Persistent<v8::Function> DICompileUnit::constructor_func;
 
 
   // DILexicalBlock
@@ -390,7 +358,7 @@ namespace jsllvm {
     target->Set(Nan::New("DILexicalBlock").ToLocalChecked(), ctor_func);
   }
 
-  v8::Local<v8::Value> DILexicalBlock::Create(llvm::DILexicalBlock llvm_dilexicalblock) {
+  v8::Local<v8::Value> DILexicalBlock::Create(llvm::DILexicalBlock* llvm_dilexicalblock) {
     Nan::EscapableHandleScope scope;
     Local<Object> new_instance = Nan::New(DILexicalBlock::constructor_func)->NewInstance();
     DILexicalBlock* new_dilexicalblock = new DILexicalBlock(llvm_dilexicalblock);
@@ -402,7 +370,7 @@ namespace jsllvm {
     info.GetReturnValue().Set(info.This());
   }
 
-  DILexicalBlock::DILexicalBlock(llvm::DILexicalBlock llvm_dilexicalblock)
+  DILexicalBlock::DILexicalBlock(llvm::DILexicalBlock* llvm_dilexicalblock)
     : llvm_dilexicalblock(llvm_dilexicalblock) { }
 
   DILexicalBlock::DILexicalBlock() { }
@@ -461,4 +429,4 @@ namespace jsllvm {
   Nan::Persistent<v8::FunctionTemplate> DebugLoc::constructor;
   Nan::Persistent<v8::Function> DebugLoc::constructor_func;
 
-};
+}

@@ -20,6 +20,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Bitcode/ReaderWriter.h"
 
+#define LLVM_VERSION LLVM_VERSION_PATCH + LLVM_VERSION_MINOR * 100 + LLVM_VERSION_MAJOR * 100000
+
 #define ADD_STACK_ROOT(t,v,i) t v = i
 
 #define REQ_FUN_ARG(I, VAR)                                             \
@@ -114,15 +116,20 @@
     abort();								\
   ::llvm::Function* VAR = Function_GetLLVMObj(args[I]);
 
+#define REQ_LLVM_DICOMPILEUNIT_ARG(I, VAR)					\
+  if (argc <= (I) /* || !args[I]->IsObject() || !jsllvm::DIFile::HasInstance(args[I]) */) \
+    abort();								\
+  ::llvm::DICompileUnit* VAR = DICompileUnit_GetLLVMObj(args[I]);
+
 #define REQ_LLVM_DIFILE_ARG(I, VAR)					\
   if (argc <= (I) /* || !args[I]->IsObject() || !jsllvm::DIFile::HasInstance(args[I]) */) \
     abort();								\
-  ::llvm::DIFile VAR = DIFile_GetLLVMObj(args[I]);
+  ::llvm::DIFile* VAR = DIFile_GetLLVMObj(args[I]);
 
 #define REQ_LLVM_DISCOPE_ARG(I, VAR)					\
   if (argc <= (I) /* || !args[I]->IsObject() || !jsllvm::DIFile::HasInstance(args[I]) */) \
     abort();								\
-  ::llvm::DIScope VAR = DIScope_GetLLVMObj(args[I]);
+  ::llvm::DIScope* VAR = DIScope_GetLLVMObj(args[I]);
 
 #define REQ_LLVM_DEBUGLOC_ARG(I, VAR)					\
   if (argc <= (I) /* || !args[I]->IsObject() || !jsllvm::DIFile::HasInstance(args[I]) */) \

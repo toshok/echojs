@@ -54,4 +54,4 @@ namespace jsllvm {
   Nan::Persistent<v8::FunctionTemplate> Value::constructor;
   Nan::Persistent<v8::Function> Value::constructor_func;
 
-};
+}

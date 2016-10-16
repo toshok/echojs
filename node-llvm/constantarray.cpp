@@ -44,4 +44,4 @@ namespace jsllvm {
 
   Nan::Persistent<v8::FunctionTemplate> ConstantArray::constructor;
   Nan::Persistent<v8::Function> ConstantArray::constructor_func;
-};
+}

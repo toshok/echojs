@@ -29,14 +29,6 @@ namespace jsllvm {
     target->Set(Nan::New("Constant").ToLocalChecked(), ctor_func);
   }
 
-  Constant::Constant()
-  {
-  }
-
-  Constant::~Constant()
-  {
-  }
-
   NAN_METHOD(Constant::New) {
     Nan::ThrowError("Constant is not meant to be instantiated.");
   }
@@ -81,4 +73,4 @@ namespace jsllvm {
 
   Nan::Persistent<v8::FunctionTemplate> Constant::constructor;
   Nan::Persistent<v8::Function> Constant::constructor_func;
-};
+}

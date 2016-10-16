@@ -31,6 +31,10 @@ namespace jsllvm {
     static NAN_METHOD(SetStructRet);
     static NAN_METHOD(HasStructRetAttr);
 
+    static NAN_METHOD(SetPersonality);
+    static NAN_GETTER(GetPersonality);
+    static NAN_METHOD(HasPersonality);
+    
     static NAN_GETTER(GetName);
     static NAN_GETTER(GetReturnType);
     static NAN_GETTER(GetArgs);
@@ -44,6 +48,6 @@ namespace jsllvm {
     static Nan::Persistent<v8::Function> constructor_func;
   };
 
-};
+}
 
 #endif /* NODE_LLVM_FUNCTION_H */

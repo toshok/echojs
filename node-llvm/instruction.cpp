@@ -19,7 +19,9 @@ namespace jsllvm {
     ctor->InstanceTemplate()->SetInternalFieldCount(1);
     ctor->SetClassName(Nan::New("Instruction").ToLocalChecked());
 
+#if false
     Nan::SetPrototypeMethod (ctor, "setDebugLoc", Instruction::SetDebugLoc);
+#endif
 
     Local<v8::Function> ctor_func = ctor->GetFunction();
     constructor_func.Reset(ctor_func);
@@ -32,13 +34,15 @@ namespace jsllvm {
     info.GetReturnValue().Set(info.This());
   }
 
+#if false
   NAN_METHOD(Instruction::SetDebugLoc) {
     auto instr = Unwrap(info.This());
     REQ_LLVM_DEBUGLOC_ARG(0, debugloc);
     instr->llvm_obj->setDebugLoc(debugloc);
   }
+#endif
 
   Nan::Persistent<v8::FunctionTemplate> Instruction::constructor;
   Nan::Persistent<v8::Function> Instruction::constructor_func;
 
-};
+}

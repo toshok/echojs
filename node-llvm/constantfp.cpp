@@ -37,4 +37,4 @@ namespace jsllvm {
 
   Nan::Persistent<v8::FunctionTemplate> ConstantFP::constructor;
   Nan::Persistent<v8::Function> ConstantFP::constructor_func;
-};
+}

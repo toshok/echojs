@@ -25,7 +25,7 @@ namespace jsllvm {
     static NAN_METHOD(ToString);
   };
 
-};
+}
 
 #endif /* NODE_LLVM_VALUE_H */
 

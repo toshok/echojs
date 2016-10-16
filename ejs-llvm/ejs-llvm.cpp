@@ -69,10 +69,10 @@ _ejs_llvm_init (ejsval global)
 #endif
 
     DIBuilder_init (global);
-    DIDescriptor_init(global);
     DIType_init(global);
     DIScope_init(global);
     DISubprogram_init(global);
+    DICompileUnit_init(global);
     DIFile_init(global);
     DILexicalBlock_init(global);
     DebugLoc_init(global);

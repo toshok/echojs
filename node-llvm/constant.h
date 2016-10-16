@@ -5,13 +5,17 @@
 namespace jsllvm {
 
 
-  class Constant : public Nan::ObjectWrap {
+  class Constant : public LLVMObjectWrap< ::llvm::Constant, Constant> {
   public:
     static void Init(v8::Handle<v8::Object> target);
 
   private:
-    Constant();
-    virtual ~Constant();
+    typedef LLVMObjectWrap< ::llvm::Constant, Constant> BaseType;
+    friend class LLVMObjectWrap< ::llvm::Constant, Constant>;
+
+    Constant(llvm::Constant *llvm_val) : BaseType(llvm_val) { }
+    Constant() : BaseType(nullptr) { }
+    virtual ~Constant() {}
 
     static NAN_METHOD(New);
     static NAN_METHOD(GetNull);
@@ -23,6 +27,6 @@ namespace jsllvm {
     static Nan::Persistent<v8::Function> constructor_func;
   };
 
-};
+}
 
 #endif /* NODE_LLVM_CONSTANT_H */

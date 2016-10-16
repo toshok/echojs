@@ -66,6 +66,6 @@ namespace jsllvm {
 
     ai->llvm_obj->setAlignment(alignment);
   }
-};
+}
 
 

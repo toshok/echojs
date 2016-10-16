@@ -15,11 +15,40 @@
 
 namespace ejsllvm {
 
+    typedef struct {
+        /* object header */
+        EJSObject obj;
+
+        /* constant specific data */
+        llvm::Constant *llvm_const;
+    } Constant;
+
     static ejsval _ejs_Constant_prototype EJSVAL_ALIGNMENT;
     static ejsval _ejs_Constant EJSVAL_ALIGNMENT;
 
+    EJSObject* Constant_alloc_instance()
+    {
+        return (EJSObject*)_ejs_gc_new(Constant);
+    }
+
     static EJS_NATIVE_FUNC(Constant_impl) {
         EJS_NOT_IMPLEMENTED();
+    }
+
+    ejsval
+    Constant_new(llvm::Constant* llvm_const)
+    {
+        EJSObject* result = Constant_alloc_instance();
+        _ejs_init_object (result, _ejs_Constant_prototype, NULL);
+        ((Constant*)result)->llvm_const = llvm_const;
+        return OBJECT_TO_EJSVAL(result);
+    }
+
+    llvm::Constant*
+    Constant_GetLLVMObj(ejsval val)
+    {
+        if (EJSVAL_IS_NULL(val)) return NULL;
+        return ((Constant*)EJSVAL_TO_OBJECT(val))->llvm_const;
     }
 
     static EJS_NATIVE_FUNC(Constant_getNull) {

@@ -29,6 +29,6 @@ namespace jsllvm {
     static Nan::Persistent<v8::Function> constructor_func;
   };
 
-};
+}
 
 #endif /* NODE_LLVM_FUNCTIONTYPE_H */

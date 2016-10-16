@@ -74,4 +74,4 @@ namespace jsllvm {
 
   Nan::Persistent<FunctionTemplate> BasicBlock::constructor;
   Nan::Persistent<v8::Function> BasicBlock::constructor_func;
-};
+}

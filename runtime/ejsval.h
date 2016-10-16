@@ -150,7 +150,7 @@ EJS_ENUM_HEADER(EJSValueType, uint8_t)
     EJSVAL_TYPE_MISSING             = 0x21
 } EJS_ENUM_FOOTER(EJSValueType);
 
-EJS_STATIC_ASSERT(sizeof(EJSValueType) == 1);
+EJS_STATIC_ASSERT(sizeof(EJSValueType) == 1)
 
 #if EJS_BITS_PER_WORD == 32
 
@@ -168,7 +168,7 @@ EJS_ENUM_HEADER(EJSValueTag, uint32_t)
     EJSVAL_TAG_OBJECT               = EJSVAL_TAG_CLEAR | EJSVAL_TYPE_OBJECT
 } EJS_ENUM_FOOTER(EJSValueTag);
 
-EJS_STATIC_ASSERT(sizeof(EJSValueTag) == 4);
+EJS_STATIC_ASSERT(sizeof(EJSValueTag) == 4)
 
 #elif EJS_BITS_PER_WORD == 64
 
@@ -186,7 +186,7 @@ EJS_ENUM_HEADER(EJSValueTag, uint32_t)
     EJSVAL_TAG_OBJECT               = EJSVAL_TAG_MAX_DOUBLE | EJSVAL_TYPE_OBJECT
 } EJS_ENUM_FOOTER(EJSValueTag);
 
-EJS_STATIC_ASSERT(sizeof(EJSValueTag) == sizeof(uint32_t));
+EJS_STATIC_ASSERT(sizeof(EJSValueTag) == sizeof(uint32_t))
 
 EJS_ENUM_HEADER(EJSValueShiftedTag, uint64_t)
 {
@@ -201,7 +201,7 @@ EJS_ENUM_HEADER(EJSValueShiftedTag, uint64_t)
     EJSVAL_SHIFTED_TAG_OBJECT       = (((uint64_t)EJSVAL_TAG_OBJECT)     << EJSVAL_TAG_SHIFT)
 } EJS_ENUM_FOOTER(EJSValueShiftedTag);
 
-EJS_STATIC_ASSERT(sizeof(EJSValueShiftedTag) == sizeof(uint64_t));
+EJS_STATIC_ASSERT(sizeof(EJSValueShiftedTag) == sizeof(uint64_t))
 
 #endif
 
@@ -395,7 +395,7 @@ typedef union ejsval_layout
 # endif /* EJS_BITS_PER_WORD */
 #endif  /* defined(IS_LITTLE_ENDIAN) */
 
-EJS_STATIC_ASSERT(sizeof(ejsval_layout) == 8);
+EJS_STATIC_ASSERT(sizeof(ejsval_layout) == 8)
 
 #if EJS_BITS_PER_WORD == 32
 
