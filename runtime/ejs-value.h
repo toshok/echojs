@@ -22,7 +22,7 @@ typedef double EJSPrimNumber;
 #define EJSVAL_IS_BOOLEAN_OBJECT(v) (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Boolean_specops))
 #define EJSVAL_IS_NUMBER(v)    EJSVAL_IS_DOUBLE_IMPL(v)
 #define EJSVAL_IS_STRING(v)    EJSVAL_IS_STRING_IMPL(v)
-#define EJSVAL_IS_SYMBOL(v)    (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Symbol_specops))
+#define EJSVAL_IS_SYMBOL(v)    EJSVAL_IS_SYMBOL_IMPL(v)
 #define EJSVAL_IS_CLOSUREENV(v) EJSVAL_IS_CLOSUREENV_IMPL(v)
 #define EJSVAL_IS_BOOLEAN(v)   EJSVAL_IS_BOOLEAN_IMPL(v)
 #define EJSVAL_IS_UNDEFINED(v) EJSVAL_IS_UNDEFINED_IMPL(v)
@@ -37,6 +37,7 @@ typedef double EJSPrimNumber;
 #define EJSVAL_TO_OBJECT(v)       EJSVAL_TO_OBJECT_IMPL(v)
 #define EJSVAL_TO_NUMBER(v)       v.asDouble
 #define EJSVAL_TO_BOOLEAN(v)      EJSVAL_TO_BOOLEAN_IMPL(v)
+#define EJSVAL_TO_SYMBOL(v)       EJSVAL_TO_SYMBOL_IMPL(v)
 #define EJSVAL_TO_FUNC(v)         ((EJSFunction*)EJSVAL_TO_OBJECT_IMPL(v))->func
 #define EJSVAL_TO_ENV(v)          ((EJSFunction*)EJSVAL_TO_OBJECT_IMPL(v))->env
 

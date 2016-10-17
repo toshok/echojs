@@ -13,8 +13,9 @@ EJS_BEGIN_DECLS
 
 typedef enum {
     EJS_SCAN_TYPE_PRIMSTR    = 1 << 0,
-    EJS_SCAN_TYPE_OBJECT     = 1 << 1,
-    EJS_SCAN_TYPE_CLOSUREENV = 1 << 2
+    EJS_SCAN_TYPE_PRIMSYM    = 1 << 1,
+    EJS_SCAN_TYPE_OBJECT     = 1 << 2,
+    EJS_SCAN_TYPE_CLOSUREENV = 1 << 3
 } EJSScanType;
 
 #define EJS_GC_INTERNAL_FLAGS_MASK 0x0000ffff
@@ -34,6 +35,7 @@ extern GCObjectPtr _ejs_gc_alloc(size_t size, EJSScanType scan_type);
 #define _ejs_gc_new(T) (T*)_ejs_gc_alloc(sizeof(T), EJS_SCAN_TYPE_OBJECT)
 #define _ejs_gc_new_obj(T,sz) (T*)_ejs_gc_alloc(sz, EJS_SCAN_TYPE_OBJECT)
 #define _ejs_gc_new_primstr(sz) (EJSPrimString*)_ejs_gc_alloc(sz, EJS_SCAN_TYPE_PRIMSTR)
+#define _ejs_gc_new_primsym(sz) (EJSPrimSymbol*)_ejs_gc_alloc(sz, EJS_SCAN_TYPE_PRIMSYM)
 #define _ejs_gc_new_closureenv(sz) (EJSClosureEnv*)_ejs_gc_alloc(sz, EJS_SCAN_TYPE_CLOSUREENV)
 
 extern void _ejs_gc_add_root(ejsval* val);
