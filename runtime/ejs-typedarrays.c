@@ -470,13 +470,16 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
  {                                                                      \
      /* check if propertyName is an integer, or a string that we can convert to an int */ \
      EJSBool is_index = EJS_FALSE;                                      \
-     ejsval idx_val = ToNumber(propertyName);                           \
+     ejsval idx_val;                                                    \
      int idx;                                                           \
-     if (EJSVAL_IS_NUMBER(idx_val)) {                                   \
-         double n = EJSVAL_TO_NUMBER(idx_val);                          \
-         if (floor(n) == n) {                                           \
-             idx = (int)n;                                              \
-             is_index = EJS_TRUE;                                       \
+     if (!EJSVAL_IS_SYMBOL(propertyName)) {                             \
+         idx_val = ToNumber(propertyName);                              \
+         if (EJSVAL_IS_NUMBER(idx_val)) {                               \
+             double n = EJSVAL_TO_NUMBER(idx_val);                      \
+             if (floor(n) == n) {                                       \
+                 idx = (int)n;                                          \
+                 is_index = EJS_TRUE;                                   \
+             }                                                          \
          }                                                              \
      }                                                                  \
                                                                         \
@@ -1048,13 +1051,16 @@ EJS_NATIVE_FUNC(_ejs_##ArrayType##Array_of_impl)                        \
  {                                                                      \
      /* check if propertyName is an integer, or a string that we can convert to an int */ \
      EJSBool is_index = EJS_FALSE;                                      \
-     ejsval idx_val = ToNumber(propertyName);                           \
+     ejsval idx_val;                                                    \
      int idx;                                                           \
-     if (EJSVAL_IS_NUMBER(idx_val)) {                                   \
-         double n = EJSVAL_TO_NUMBER(idx_val);                          \
-         if (floor(n) == n) {                                           \
-             idx = (int)n;                                              \
-             is_index = EJS_TRUE;                                       \
+     if (!EJSVAL_IS_SYMBOL(propertyName)) {                             \
+         idx_val = ToNumber(propertyName);                              \
+         if (EJSVAL_IS_NUMBER(idx_val)) {                               \
+             double n = EJSVAL_TO_NUMBER(idx_val);                      \
+             if (floor(n) == n) {                                       \
+                 idx = (int)n;                                          \
+                 is_index = EJS_TRUE;                                   \
+             }                                                          \
          }                                                              \
      }                                                                  \
                                                                         \
@@ -1074,13 +1080,17 @@ static EJSBool
 _ejs_Uint8Clampedarray_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver) {
     /* check if propertyName is an integer, or a string that we can convert to an int */
     EJSBool is_index = EJS_FALSE;
-    ejsval idx_val = ToNumber(propertyName);
+    ejsval idx_val;
     int idx;
-    if (EJSVAL_IS_NUMBER(idx_val)) {
-        double n = EJSVAL_TO_NUMBER(idx_val);
-        if (floor(n) == n) {
-            idx = (int)n;
-            is_index = EJS_TRUE;
+
+    if (!EJSVAL_IS_SYMBOL(propertyName)) {
+        idx_val = ToNumber(propertyName);
+        if (EJSVAL_IS_NUMBER(idx_val)) {
+            double n = EJSVAL_TO_NUMBER(idx_val);
+            if (floor(n) == n) {
+                idx = (int)n;
+                is_index = EJS_TRUE;
+            }
         }
     }
 
@@ -2569,16 +2579,20 @@ static EJSBool
 _ejs_dataview_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver)
 {
      EJSBool is_index = EJS_FALSE;
-     ejsval idx_val = ToNumber(propertyName);
+     ejsval idx_val;
      int idx;
-     if (EJSVAL_IS_NUMBER(idx_val)) {
-         double n = EJSVAL_TO_NUMBER(idx_val);
-         if (floor(n) == n) {
-             idx = (int)n;
-             is_index = EJS_TRUE;
+     
+     if (!EJSVAL_IS_SYMBOL(propertyName)) {
+         idx_val = ToNumber(propertyName);
+         if (EJSVAL_IS_NUMBER(idx_val)) {
+             double n = EJSVAL_TO_NUMBER(idx_val);
+             if (floor(n) == n) {
+                 idx = (int)n;
+                 is_index = EJS_TRUE;
+             }
          }
      }
-
+     
      if (is_index) {
          if (idx < 0 || idx >= EJS_DATA_VIEW_BYTE_LEN(obj))
              return EJS_FALSE;

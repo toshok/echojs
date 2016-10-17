@@ -10,7 +10,7 @@
 
 typedef double EJSPrimNumber;
 
-#define EJSVAL_IS_PRIMITIVE(v) (EJSVAL_IS_NUMBER(v) || EJSVAL_IS_STRING(v) || EJSVAL_IS_BOOLEAN(v) || EJSVAL_IS_UNDEFINED(v))
+#define EJSVAL_IS_PRIMITIVE(v) (EJSVAL_IS_NUMBER(v) || EJSVAL_IS_STRING(v) || EJSVAL_IS_BOOLEAN(v) || EJSVAL_IS_UNDEFINED(v) || EJSVAL_IS_SYMBOL(v))
 
 #define EJSVAL_IS_OBJECT(v)    EJSVAL_IS_OBJECT_IMPL(v)
 #define EJSVAL_IS_ARRAY(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Array_specops || EJSVAL_TO_OBJECT(v)->ops == &_ejs_sparsearray_specops))
@@ -45,6 +45,7 @@ typedef double EJSPrimNumber;
 #define BOOLEAN_TO_EJSVAL(v)      BOOLEAN_TO_EJSVAL_IMPL(v)
 #define NUMBER_TO_EJSVAL(v)       DOUBLE_TO_EJSVAL_IMPL(v)
 #define STRING_TO_EJSVAL(v)       STRING_TO_EJSVAL_IMPL(v)
+#define SYMBOL_TO_EJSVAL(v)       SYMBOL_TO_EJSVAL_IMPL(v)
 
 #define EJSVAL_EQ(v1,v2)          ((v1).asBits == (v2).asBits)
 

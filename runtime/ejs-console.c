@@ -11,6 +11,7 @@
 #include "ejs-ops.h"
 #include "ejs-function.h"
 #include "ejs-string.h"
+#include "ejs-symbol.h"
 #include "ejs-error.h"
 #include "ejs-array.h"
 #include "ejs-number.h"
@@ -36,6 +37,9 @@ ejsval
 console_toString(ejsval arg) {
     if (EJSVAL_IS_STRING(arg)) {
         return arg;
+    }
+    else if (EJSVAL_IS_SYMBOL(arg)) {
+        return EJSVAL_TO_SYMBOL(arg)->description;
     }
     else if (EJSVAL_IS_NUMBER(arg) || EJSVAL_IS_NUMBER_OBJECT(arg)) {
         return _ejs_number_to_string(arg);
@@ -94,6 +98,9 @@ console_toString(ejsval arg) {
     }
     else if (EJSVAL_IS_STRING_OBJECT(arg)) {
         return ToString(arg);
+    }
+    else if (EJSVAL_IS_SYMBOL_OBJECT(arg)) {
+        EJS_NOT_IMPLEMENTED();
     }
     else if (EJSVAL_IS_REGEXP(arg)) {
         return ToString(arg);

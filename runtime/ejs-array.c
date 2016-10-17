@@ -2712,13 +2712,17 @@ _ejs_array_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
 {
     // check if propertyName is an integer, or a string that we can convert to an int
     EJSBool is_index = EJS_FALSE;
-    ejsval idx_val = ToNumber(propertyName);
+    ejsval idx_val;
     int idx;
-    if (EJSVAL_IS_NUMBER(idx_val)) {
-        double n = EJSVAL_TO_NUMBER(idx_val);
-        if (floor(n) == n) {
-            idx = (int)n;
-            is_index = EJS_TRUE;
+    
+    if (!EJSVAL_IS_SYMBOL(propertyName)) {
+        idx_val = ToNumber(propertyName);
+        if (EJSVAL_IS_NUMBER(idx_val)) {
+            double n = EJSVAL_TO_NUMBER(idx_val);
+            if (floor(n) == n) {
+                idx = (int)n;
+                is_index = EJS_TRUE;
+            }
         }
     }
 
@@ -2747,13 +2751,17 @@ _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName, ejsval *exc
 {
     // check if propertyName is an integer, or a string that we can convert to an int
     EJSBool is_index = EJS_FALSE;
-    ejsval idx_val = ToNumber(propertyName);
+    ejsval idx_val;
     int idx;
-    if (EJSVAL_IS_NUMBER(idx_val)) {
-        double n = EJSVAL_TO_NUMBER(idx_val);
-        if (floor(n) == n) {
-            idx = (int)n;
-            is_index = EJS_TRUE;
+
+    if (!EJSVAL_IS_SYMBOL(propertyName)) {
+        idx_val = ToNumber(propertyName);
+        if (EJSVAL_IS_NUMBER(idx_val)) {
+            double n = EJSVAL_TO_NUMBER(idx_val);
+            if (floor(n) == n) {
+                idx = (int)n;
+                is_index = EJS_TRUE;
+            }
         }
     }
 
@@ -2782,13 +2790,17 @@ _ejs_array_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval recei
 {
     // check if propertyName is a uint32, or a string that we can convert to an uint32
     EJSBool is_index = EJS_FALSE;
-    ejsval idx_val = ToNumber(propertyName);
+    ejsval idx_val;
     int idx;
-    if (EJSVAL_IS_NUMBER(idx_val)) {
-        double n = EJSVAL_TO_NUMBER(idx_val);
-        if (floor(n) == n) {
-            idx = (int)n;
-            is_index = EJS_TRUE;
+
+    if (!EJSVAL_IS_SYMBOL(propertyName)) {
+        idx_val = ToNumber(propertyName);
+        if (EJSVAL_IS_NUMBER(idx_val)) {
+            double n = EJSVAL_TO_NUMBER(idx_val);
+            if (floor(n) == n) {
+                idx = (int)n;
+                is_index = EJS_TRUE;
+            }
         }
     }
 
@@ -2853,17 +2865,21 @@ static EJSBool
 _ejs_array_specop_has_property (ejsval obj, ejsval propertyName)
 {
     // check if propertyName is an integer, or a string that we can convert to an int
-    ejsval idx_val = ToNumber(propertyName);
+    ejsval idx_val;
     int idx;
-    if (EJSVAL_IS_NUMBER(idx_val)) {
-        double n = EJSVAL_TO_NUMBER(idx_val);
-        if (floor(n) == n) {
-            idx = (int)n;
-            if (idx >= 0 && idx < EJS_ARRAY_LEN(obj)) {
-                ejsval element = EJS_DENSE_ARRAY_ELEMENTS(obj)[idx];
-                if (EJSVAL_IS_ARRAY_HOLE_MAGIC(element))
-                    return EJS_FALSE;
-                return EJS_TRUE;
+
+    if (!EJSVAL_IS_SYMBOL(propertyName)) {
+        idx_val = ToNumber(propertyName);
+        if (EJSVAL_IS_NUMBER(idx_val)) {
+            double n = EJSVAL_TO_NUMBER(idx_val);
+            if (floor(n) == n) {
+                idx = (int)n;
+                if (idx >= 0 && idx < EJS_ARRAY_LEN(obj)) {
+                    ejsval element = EJS_DENSE_ARRAY_ELEMENTS(obj)[idx];
+                    if (EJSVAL_IS_ARRAY_HOLE_MAGIC(element))
+                        return EJS_FALSE;
+                    return EJS_TRUE;
+                }
             }
         }
     }
@@ -2878,11 +2894,15 @@ _ejs_array_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
 {
     // check if propertyName is a uint32, or a string that we can convert to an uint32
     int idx = -1;
-    ejsval idx_val = ToNumber(propertyName);
-    if (EJSVAL_IS_NUMBER(idx_val)) {
-        double n = EJSVAL_TO_NUMBER(idx_val);
-        if (floor(n) == n) {
-            idx = (int)n;
+    ejsval idx_val;
+
+    if (!EJSVAL_IS_SYMBOL(propertyName)) {
+        idx_val = ToNumber(propertyName);
+        if (EJSVAL_IS_NUMBER(idx_val)) {
+            double n = EJSVAL_TO_NUMBER(idx_val);
+            if (floor(n) == n) {
+                idx = (int)n;
+            }
         }
     }
 
@@ -2900,14 +2920,18 @@ _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPrope
 {
     // check if propertyName is a uint32, or a string that we can convert to an uint32
     EJSBool is_index = EJS_FALSE;
-    ejsval idx_val = ToNumber(propertyName);
+    ejsval idx_val;
     int idx;
-    if (EJSVAL_IS_NUMBER(idx_val)) {
-        double n = EJSVAL_TO_NUMBER(idx_val);
-        if (floor(n) == n) {
-            idx = (int)n;
-            if (idx >= 0)
-                is_index = EJS_TRUE;
+
+    if (!EJSVAL_IS_SYMBOL(propertyName)) {
+        idx_val = ToNumber(propertyName);
+        if (EJSVAL_IS_NUMBER(idx_val)) {
+            double n = EJSVAL_TO_NUMBER(idx_val);
+            if (floor(n) == n) {
+                idx = (int)n;
+                if (idx >= 0)
+                    is_index = EJS_TRUE;
+            }
         }
     }
 

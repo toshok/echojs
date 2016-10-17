@@ -194,6 +194,9 @@ ejsval ToString(ejsval exp)
         return NumberToString(EJSVAL_TO_NUMBER(exp), 10);
     else if (EJSVAL_IS_STRING(exp))
         return exp;
+    else if (EJSVAL_IS_SYMBOL(exp)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Cannot convert a Symbol value to a string");
+    }
     else if (EJSVAL_IS_OBJECT(exp)) {
         ejsval prim = ToPrimitive(exp, TO_PRIM_HINT_STRING);
         return ToString(prim);
@@ -224,6 +227,9 @@ ejsval ToNumber(ejsval exp)
         ejsval rv = NUMBER_TO_EJSVAL(d); // XXX NaN
         if (num_utf8 != num_utf8_buf) free (num_utf8);
         return rv;
+    }
+    else if (EJSVAL_IS_SYMBOL(exp)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1"); // XXX
     }
     else if (EJSVAL_IS_UNDEFINED(exp))
         return _ejs_nan;
@@ -348,6 +354,9 @@ ejsval ToObject(ejsval exp)
         ejsval new_str;
         _ejs_construct_closure (_ejs_String, &new_str, 1, &exp, _ejs_String);
         return new_str;
+    }
+    else if (EJSVAL_IS_SYMBOL(exp)) {
+        return _ejs_symbol_new_object(exp);
     }
     else if (EJSVAL_IS_UNDEFINED(exp)) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1"); // XXX
@@ -1074,11 +1083,11 @@ _ejs_op_eq (ejsval x, ejsval y)
     // 9. If Type(y) is Boolean, return the result of the comparison x == ToNumber(y).
     if (EJSVAL_IS_BOOLEAN(y)) return _ejs_op_eq(x, ToNumber(y));
 
-    // 10. If Type(x) is either String or Number and Type(y) is Object, return the result of the comparison x == ToPrimitive(y).
-    if ((EJSVAL_IS_STRING(x) || EJSVAL_IS_NUMBER(x)) && EJSVAL_IS_OBJECT(y)) return _ejs_op_eq(x, ToPrimitive(y, TO_PRIM_HINT_DEFAULT));
+    // 10. If Type(x) is either String, Number, or Symbol and Type(y) is Object, return the result of the comparison x == ToPrimitive(y).
+    if ((EJSVAL_IS_STRING(x) || EJSVAL_IS_NUMBER(x) || EJSVAL_IS_SYMBOL(x)) && EJSVAL_IS_OBJECT(y)) return _ejs_op_eq(x, ToPrimitive(y, TO_PRIM_HINT_DEFAULT));
 
-    // 11. If Type(x) is Object and Type(y) is either String or Number, return the result of the comparison ToPrimitive(x) == y.
-    if (EJSVAL_IS_OBJECT(x) && (EJSVAL_IS_STRING(y) || EJSVAL_IS_NUMBER(y))) return _ejs_op_eq(ToPrimitive(x, TO_PRIM_HINT_DEFAULT), y);
+    // 11. If Type(x) is Object and Type(y) is either String, Number, or Symbol, return the result of the comparison ToPrimitive(x) == y.
+    if (EJSVAL_IS_OBJECT(x) && (EJSVAL_IS_STRING(y) || EJSVAL_IS_NUMBER(y) || EJSVAL_IS_SYMBOL(y))) return _ejs_op_eq(ToPrimitive(x, TO_PRIM_HINT_DEFAULT), y);
 
     // 12. Return false.
     return _ejs_false;
