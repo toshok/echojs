@@ -28,6 +28,7 @@
     char buf[256];							\
     snprintf(buf, 256, "Argument " #I " must be a function at %s:%d\n", __FILE__, __LINE__); \
     Nan::ThrowTypeError(buf);						\
+    abort();								\
   }									\
   Local<Function> VAR = Local<Function>::Cast(info[I]);
 
@@ -36,6 +37,7 @@
     char buf[256];							\
     snprintf(buf, 256, "Argument " #I " must be an array at %s:%d\n", __FILE__, __LINE__); \
     Nan::ThrowTypeError(buf);						\
+    abort();								\
   }									\
   Local<Array> VAR = Local<Array>::Cast(info[I]);
 
@@ -44,6 +46,7 @@
     char buf[256];							\
     snprintf(buf, 256, "Argument " #I " must be an integer at %s:%d\n", __FILE__, __LINE__); \
     Nan::ThrowTypeError(buf);						\
+    abort();								\
   }									\
   int64_t VAR = (int64_t)info[I]->NumberValue();
 
@@ -53,6 +56,7 @@
     char buf[256];							\
     snprintf(buf, 256, "Argument " #I " must be a number at %s:%d\n", __FILE__, __LINE__); \
     Nan::ThrowTypeError(buf);						\
+    abort();								\
   }									\
   double VAR = info[I]->NumberValue();
 
@@ -61,6 +65,7 @@
     char buf[256];							\
     snprintf(buf, 256, "Argument " #I " must be a bool at %s:%d\n", __FILE__, __LINE__); \
     Nan::ThrowTypeError(buf);						\
+    abort();								\
   }									\
   bool VAR = info[I]->BooleanValue();
 
@@ -69,6 +74,7 @@
     char buf[256];							\
     snprintf(buf, 256, "Argument " #I " must be a string at %s:%d\n", __FILE__, __LINE__); \
     Nan::ThrowTypeError(buf);						\
+    abort();								\
   }									\
   Local<String> VAR##_str = Local<String>::Cast(info[I]);		\
   Nan::Utf8String VAR(VAR##_str);
@@ -82,7 +88,8 @@
     if (!info[I]->IsString()) {						\
       char buf[256];							\
       snprintf(buf, 256, "Argument " #I " must be a string at %s:%d\n", __FILE__, __LINE__); \
-    Nan::ThrowTypeError(buf);						\
+      Nan::ThrowTypeError(buf);						\
+      abort();								\
     }									\
     VAR##_str = Local<String>::Cast(info[I]);				\
   }									\
@@ -94,6 +101,7 @@
   if (info.Length() <= (I) || !info[I]->IsObject() /* XXX || !jsllvm::Value::HasInstance(info[I]) */) {	\
     printf ("in function %s\n", __PRETTY_FUNCTION__);			\
     Nan::ThrowTypeError("Argument " #I " must be an llvm Value");	\
+    abort();								\
   }									\
   ::llvm::Value* VAR = jsllvm::Value::GetLLVMObj(info[I]);
 
@@ -101,6 +109,7 @@
   if (info.Length() <= (I) || !info[I]->IsObject() /* XXX || !jsllvm::Constant::HasInstance(info[I]) */) {	\
     printf ("in function %s\n", __PRETTY_FUNCTION__);			\
     Nan::ThrowTypeError("Argument " #I " must be an llvm Constant");	\
+    abort();								\
   }									\
   ::llvm::Constant* VAR = static_cast< ::llvm::Constant*>(jsllvm::Value::GetLLVMObj(info[I]));
 
@@ -111,6 +120,7 @@
   else if (info.Length() <= (I) || !info[I]->IsObject() /* XXX || !jsllvm::Constant::HasInstance(info[I]) */) { \
     printf ("in function %s\n", __PRETTY_FUNCTION__);			\
     Nan::ThrowTypeError("Argument " #I " must be an llvm Constant");	\
+    abort();								\
   }									\
   else									\
     VAR = static_cast< ::llvm::Constant*>(jsllvm::Value::GetLLVMObj(info[I]));
@@ -119,6 +129,7 @@
   if (info.Length() <= (I) || !info[I]->IsObject() /* XXX || !jsllvm::Constant::HasInstance(info[I]) */) {	\
     printf ("in function %s\n", __PRETTY_FUNCTION__);			\
     Nan::ThrowTypeError("Argument " #I " must be an llvm ConstantInt");	\
+    abort();								\
   }									\
   ::llvm::ConstantInt* VAR = static_cast< ::llvm::ConstantInt*>(jsllvm::Value::GetLLVMObj(info[I]));
 
@@ -126,17 +137,21 @@
   if (info.Length() <= (I) || !info[I]->IsObject() /* XXX || !jsllvm::Constant::HasInstance(info[I]) */) {	\
     printf ("in function %s\n", __PRETTY_FUNCTION__);			\
     Nan::ThrowTypeError("Argument " #I " must be an llvm Module");	\
+    abort();								\
   }									\
   ::llvm::Module* VAR = jsllvm::Module::GetLLVMObj(info[I]);
 
 #define REQ_LLVM_TYPE_ARG(I, VAR)					\
-  if (info.Length() <= (I) || !info[I]->IsObject() /* XXX || !jsllvm::Type::HasInstance(info[I]) */) \
-    Nan::ThrowTypeError("Argument " #I " must be an llvm Type"); \
+  if (info.Length() <= (I) || !info[I]->IsObject() /* XXX || !jsllvm::Type::HasInstance(info[I]) */) {  \
+    Nan::ThrowTypeError("Argument " #I " must be an llvm Type");	\
+    abort();								\
+  }									\
   ::llvm::Type* VAR = jsllvm::Type::GetLLVMObj(info[I]);
 
 #define REQ_LLVM_BB_ARG(I, VAR)						\
   if (info.Length() <= (I) || (!info[I]->IsNull() && !info[I]->IsObject() /* XXX && !jsllvm::BasicBlock::HasInstance(info[I]) */)) { \
     Nan::ThrowTypeError("Argument " #I " must be an llvm BasieBlock");	\
+    abort();								\
   }									\
   ::llvm::BasicBlock* VAR = jsllvm::BasicBlock::GetLLVMObj(info[I]);
 
@@ -144,30 +159,35 @@
   if (info.Length() <= (I) || !info[I]->IsObject() /* XXX || !jsllvm::Function::HasInstance(info[I]) */) {  \
     printf ("in function %s\n", __PRETTY_FUNCTION__);			\
     Nan::ThrowTypeError("Argument " #I " must be an llvm Function");	\
+    abort();								\
   }									\
   ::llvm::Function* VAR = jsllvm::Function::GetLLVMObj(info[I]);
 
 #define REQ_LLVM_DICOMPILEUNIT_ARG(I, VAR) \
   if (info.Length() <= (I) || !info[I]->IsObject() /* XXX || !jsllvm::DICompileUnit::HasInstance(info[I]) */) {  \
-    Nan::ThrowTypeError("Argument " #I " must be an llvm DICompileUnit");	\
+    Nan::ThrowTypeError("Argument " #I " must be an llvm DICompileUnit"); \
+    abort();								\
   }									\
   ::llvm::DICompileUnit* VAR = jsllvm::DICompileUnit::GetLLVMObj(info[I]);
 
 #define REQ_LLVM_DIFILE_ARG(I, VAR) \
-  if (info.Length() <= (I) || !info[I]->IsObject() /* XXX || !jsllvm::DIFile::HasInstance(info[I]) */) {  \
+  if (info.Length() <= (I) || !info[I]->IsObject() /* XXX || !jsllvm::DIFile::HasInstance(info[I]) */) { \
     Nan::ThrowTypeError("Argument " #I " must be an llvm DIFile");	\
+    abort();								\
   }									\
   ::llvm::DIFile* VAR = jsllvm::DIFile::GetLLVMObj(info[I]);
 
 #define REQ_LLVM_DISCOPE_ARG(I, VAR)					\
   if (info.Length() <= (I) || !info[I]->IsObject() /* XXX || !jsllvm::DIScope::HasInstance(info[I]) */) {  \
     Nan::ThrowTypeError("Argument " #I " must be an llvm DIScope");	\
+    abort();								\
   }									\
   ::llvm::DIScope* VAR = jsllvm::DIScope::GetLLVMObj(info[I]);
 
 #define REQ_LLVM_DEBUGLOC_ARG(I, VAR) \
   if (info.Length() <= (I) || !info[I]->IsObject() /* XXX || !jsllvm::DIScope::HasInstance(info[I]) */) {  \
     Nan::ThrowTypeError("Argument " #I " must be an llvm DebugLoc");	\
+    abort();								\
   }									\
   ::llvm::DebugLoc VAR = jsllvm::DebugLoc::GetLLVMObj(info[I]);
 
@@ -175,6 +195,7 @@
   if (info.Length() <= (I) || !info[I]->IsObject() /* XXX || !jsllvm::MDNode::HasInstance(info[I]) */) {	\
     printf ("in function %s\n", __PRETTY_FUNCTION__);			\
     Nan::ThrowTypeError("Argument " #I " must be an llvm MDNode");	\
+    abort();								\
   }									\
   ::llvm::MDNode* VAR = jsllvm::MDNode::GetLLVMObj(info[I]);
 
@@ -195,7 +216,7 @@ public:
   LLVMObjectWrap(LLVMTy* llvm_obj) : llvm_obj(llvm_obj) { }
   static v8::Local<v8::Value> Create(LLVMTy* llvm_obj) {
     Nan::EscapableHandleScope scope;
-    v8::Local<v8::Object> new_instance = Nan::New(JSLLVMTy::constructor_func)->NewInstance();
+    v8::Local<v8::Object> new_instance = Nan::NewInstance(Nan::New(JSLLVMTy::constructor_func)).ToLocalChecked();
     JSLLVMTy* new_a = new JSLLVMTy(llvm_obj);
     new_a->Wrap(new_instance);
     return scope.Escape(new_instance);
