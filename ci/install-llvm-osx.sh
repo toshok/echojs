@@ -1,2 +1,2 @@
 set -ex
-brew install llvm
+brew install homebrew/versions/llvm38 --all-targets

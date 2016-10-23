@@ -11,9 +11,13 @@ osx_image: xcode8
 
 matrix:
   - os: linux
-    env: EJS_RUNLOOP_IMPL=noop
+    env:
+      - LLVM_SUFFIX=
+      - EJS_RUNLOOP_IMPL=noop
   - os: osx
     sudo: required
+    env:
+      - LLVM_SUFFIX=-3.8
 
 language: c++
 
@@ -36,14 +40,12 @@ install:
   - bash ./ci/install-llvm-$TRAVIS_OS_NAME.sh
 
 before_script:
-  - export LLVM_SUFFIX=
   - export PATH=/usr/bin:$PATH:`npm prefix`/node_modules/.bin:/usr/local/opt/llvm/bin:/usr/local/opt/llvm/share/llvm
   - export NODE_PATH=`make --no-print-directory -C test node-path`
   - make ensure-npmmodules
   - make
 
 script:
-  - export LLVM_SUFFIX=
   - export PATH=$PATH:`npm prefix -g`/bin:/usr/local/opt/llvm/bin:/usr/local/opt/llvm/share/llvm
   - export NODE_PATH=`make -C test node-path`
   - touch test/expected/*.expected-out
