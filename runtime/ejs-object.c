@@ -847,7 +847,7 @@ _ejs_object_getprop (ejsval obj, ejsval key)
     }
 
     if (EJSVAL_IS_PRIMITIVE(obj)) {
-        if (EJSVAL_IS_STRING(obj)) {
+        if (EJSVAL_IS_STRING(obj) && !EJSVAL_IS_SYMBOL(key)) {
             if (!ucs2_strcmp(EJSVAL_TO_FLAT_STRING(ToString(key)), _ejs_ucs2_length))
                 return NUMBER_TO_EJSVAL(EJSVAL_TO_STRING(obj)->length);
         }

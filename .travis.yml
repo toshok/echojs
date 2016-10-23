@@ -2,8 +2,12 @@ os:
   - linux
   - osx
 
+# for linux pick trusty
 sudo: required
 dist: trusty
+
+# for osx use xcode 8
+osx_image: xcode8
 
 matrix:
   - os: linux
@@ -25,21 +29,19 @@ notifications:
     on_start: false     # default: false
 
 before_install:
-  - bash ./ci/setup-pkg-$TRAVIS_OS_NAME.sh
+  - source ./ci/setup-pkg-$TRAVIS_OS_NAME.sh
 
 install:
   - npm install -g node-gyp
-  - bash ./ci/install-llvm-$TRAVIS_OS_NAME.sh
+  - source ./ci/install-llvm-$TRAVIS_OS_NAME.sh
 
 before_script:
-  - export LLVM_SUFFIX=
   - export PATH=/usr/bin:$PATH:`npm prefix`/node_modules/.bin:/usr/local/opt/llvm/bin:/usr/local/opt/llvm/share/llvm
   - export NODE_PATH=`make --no-print-directory -C test node-path`
   - make ensure-npmmodules
   - make
 
 script:
-  - export LLVM_SUFFIX=
   - export PATH=$PATH:`npm prefix -g`/bin:/usr/local/opt/llvm/bin:/usr/local/opt/llvm/share/llvm
   - export NODE_PATH=`make -C test node-path`
   - touch test/expected/*.expected-out

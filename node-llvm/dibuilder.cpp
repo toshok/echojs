@@ -165,7 +165,7 @@ namespace jsllvm {
   v8::Local<v8::Value> DIType::Create(llvm::DIType* llvm_ditype)
   {
     Nan::EscapableHandleScope scope;
-    Local<Object> new_instance = Nan::New(DIType::constructor_func)->NewInstance();
+    Local<Object> new_instance = Nan::NewInstance(Nan::New(DIType::constructor_func)).ToLocalChecked();
     DIType* new_ditype = new DIType(llvm_ditype);
     new_ditype->Wrap(new_instance);
     return scope.Escape(new_instance);
@@ -203,7 +203,7 @@ namespace jsllvm {
 
   v8::Local<v8::Value> DIScope::Create(llvm::DIScope* llvm_discope) {
     Nan::EscapableHandleScope scope;
-    Local<Object> new_instance = Nan::New(DIScope::constructor_func)->NewInstance();
+    Local<Object> new_instance = Nan::NewInstance(Nan::New(DIScope::constructor_func)).ToLocalChecked();
     DIScope* new_discope = new DIScope(llvm_discope);
     new_discope->Wrap(new_instance);
     return scope.Escape(new_instance);
@@ -244,7 +244,7 @@ namespace jsllvm {
 
   v8::Local<v8::Value> DISubprogram::Create(llvm::DISubprogram* llvm_disubprogram) {
     Nan::EscapableHandleScope scope;
-    Local<Object> new_instance = Nan::New(DISubprogram::constructor_func)->NewInstance();
+    Local<Object> new_instance = Nan::NewInstance(Nan::New(DISubprogram::constructor_func)).ToLocalChecked();
     DISubprogram* new_disubprogram = new DISubprogram(llvm_disubprogram);
     new_disubprogram->Wrap(new_instance);
     return scope.Escape(new_instance);
@@ -282,7 +282,7 @@ namespace jsllvm {
 
   v8::Local<v8::Value> DIFile::Create(llvm::DIFile* llvm_difile) {
     Nan::EscapableHandleScope scope;
-    Local<Object> new_instance = Nan::New(DIFile::constructor_func)->NewInstance();
+    Local<Object> new_instance = Nan::NewInstance(Nan::New(DIFile::constructor_func)).ToLocalChecked();
     DIFile* new_difile = new DIFile(llvm_difile);
     new_difile->Wrap(new_instance);
     return scope.Escape(new_instance);
@@ -319,7 +319,7 @@ namespace jsllvm {
 
   v8::Local<v8::Value> DICompileUnit::Create(llvm::DICompileUnit* llvm_dicompileunit) {
     Nan::EscapableHandleScope scope;
-    Local<Object> new_instance = Nan::New(DICompileUnit::constructor_func)->NewInstance();
+    Local<Object> new_instance = Nan::NewInstance(Nan::New(DICompileUnit::constructor_func)).ToLocalChecked();
     DICompileUnit* new_dicompileunit = new DICompileUnit(llvm_dicompileunit);
     new_dicompileunit->Wrap(new_instance);
     return scope.Escape(new_instance);
@@ -360,7 +360,7 @@ namespace jsllvm {
 
   v8::Local<v8::Value> DILexicalBlock::Create(llvm::DILexicalBlock* llvm_dilexicalblock) {
     Nan::EscapableHandleScope scope;
-    Local<Object> new_instance = Nan::New(DILexicalBlock::constructor_func)->NewInstance();
+    Local<Object> new_instance = Nan::NewInstance(Nan::New(DILexicalBlock::constructor_func)).ToLocalChecked();
     DILexicalBlock* new_dilexicalblock = new DILexicalBlock(llvm_dilexicalblock);
     new_dilexicalblock->Wrap(new_instance);
     return scope.Escape(new_instance);
@@ -401,7 +401,7 @@ namespace jsllvm {
 
   v8::Local<v8::Value> DebugLoc::Create(llvm::DebugLoc llvm_debugloc) {
     Nan::EscapableHandleScope scope;
-    Local<Object> new_instance = Nan::New(DebugLoc::constructor_func)->NewInstance();
+    Local<Object> new_instance = Nan::NewInstance(Nan::New(DebugLoc::constructor_func)).ToLocalChecked();
     DebugLoc* new_debugloc = new DebugLoc(llvm_debugloc);
     new_debugloc->Wrap(new_instance);
     return scope.Escape(new_instance);

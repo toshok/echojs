@@ -17,6 +17,7 @@ extern EJSModule* entry_module;
 #include <signal.h>
 #include <setjmp.h>
 #include <unistd.h>
+#include <execinfo.h>
 
 sigjmp_buf segvbuf;
 
@@ -24,6 +25,16 @@ static void
 segv_handler(int signum)
 {
     siglongjmp (segvbuf, 1);
+}
+
+static void backtrace_and_exit(int sig) {
+    static void *array[10];
+    size_t size;
+
+    size = backtrace(array, 10);
+    fprintf(stderr, "Error: signal %d:\n", sig);
+    backtrace_symbols_fd(array, size, STDERR_FILENO);
+    exit(1);
 }
 
 
@@ -38,6 +49,8 @@ main(int argc, char** argv)
         }
 
         signal (SIGSEGV, segv_handler);
+    } else {
+        signal (SIGSEGV, backtrace_and_exit);
     }
 
     EJS_GC_MARK_THREAD_STACK_BOTTOM;

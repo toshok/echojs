@@ -9,15 +9,27 @@
 #include "ejs-value.h"
 #include "ejs-object.h"
 
+#define EJSVAL_IS_SYMBOL_OBJECT(v) (EJSVAL_IS_OBJECT(v) && EJSVAL_TO_OBJECT(v)->ops == &_ejs_Symbol_specops)
+#define EJSVAL_TO_SYMBOL_OBJECT(v) ((EJSSymbol*)EJSVAL_TO_OBJECT(v))
+
+// true if an ejsval is either a primitive symbol or a symbol object
+#define EJSVAL_IS_SYMBOL_TYPE(v) (EJSVAL_IS_SYMBOL(v) || EJSVAL_IS_SYMBOL_OBJ(v))
+
 typedef struct {
     /* object header */
     EJSObject obj;
 
-    ejsval description;
+    ejsval primSymbol;
+} EJSSymbol;
 
+struct _EJSPrimSymbol {
+    GCObjectHeader gc_header;
+
+    ejsval description;
+    
     // if lsb is 0 we haven't calculated it yet
     uint32_t hashcode;
-} EJSSymbol;
+};
 
 EJS_BEGIN_DECLS
 
@@ -42,6 +54,7 @@ extern ejsval _ejs_Symbol_search;
 void _ejs_symbol_init(ejsval global);
 
 ejsval _ejs_symbol_new (ejsval description);
+ejsval _ejs_symbol_new_object(ejsval symbol_data);
 
 uint32_t _ejs_symbol_hash (ejsval symbol);
 

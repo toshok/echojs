@@ -17,6 +17,7 @@
 #include "ejs-generator.h"
 #include "ejs-value.h"
 #include "ejs-string.h"
+#include "ejs-symbol.h"
 #include "ejs-error.h"
 #include "ejs-ops.h"
 #include "ejsval.h"
@@ -608,6 +609,9 @@ finalize_object(GCObjectPtr p)
             SPEW(2, _ejs_log ("finalizing primitive string %p\n", p));
         }
     }
+    else if ((*headerp & EJS_SCAN_TYPE_PRIMSYM) != 0) {
+        SPEW(2, _ejs_log ("finalizing primitive symbol %p\n", p));
+    }
 }
 
 static void
@@ -724,6 +728,12 @@ _scan_from_ejsprimstr(EJSPrimString *primStr)
 }
 
 static void
+_scan_from_ejsprimsym(EJSPrimSymbol *primSymbol)
+{
+    _scan_ejsvalue (primSymbol->description);
+}
+
+static void
 _scan_from_ejsclosureenv(EJSClosureEnv *env)
 {
     for (uint32_t i = 0; i < env->length; i ++) {
@@ -817,6 +827,7 @@ static int total_objs = 0;
 static int num_object_allocs = 0;
 static int num_closureenv_allocs = 0;
 static int num_primstr_allocs = 0;
+static int num_primsym_allocs = 0;
 
 
 static void
@@ -997,6 +1008,8 @@ process_worklist()
             _scan_from_ejsobject((EJSObject*)p);
         else if ((*headerp & EJS_SCAN_TYPE_PRIMSTR) != 0)
             _scan_from_ejsprimstr((EJSPrimString*)p);
+        else if ((*headerp & EJS_SCAN_TYPE_PRIMSYM) != 0)
+            _scan_from_ejsprimsym((EJSPrimSymbol*)p);
         else if ((*headerp & EJS_SCAN_TYPE_CLOSUREENV) != 0)
             _scan_from_ejsclosureenv((EJSClosureEnv*)p);
     }
@@ -1171,6 +1184,7 @@ _ejs_gc_shutdown()
     _ejs_log ("  objects: %d\n", num_object_allocs);
     _ejs_log ("  closureenv: %d\n", num_closureenv_allocs);
     _ejs_log ("  primstr: %d\n", num_primstr_allocs);
+    _ejs_log ("  primsym: %d\n", num_primsym_allocs);
 }
 
 /* Compute the smallest power of 2 that is >= x. */
@@ -1287,6 +1301,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
 
     switch (scan_type) {
     case EJS_SCAN_TYPE_PRIMSTR: num_primstr_allocs ++; break;
+    case EJS_SCAN_TYPE_PRIMSYM: num_primsym_allocs ++; break;
     case EJS_SCAN_TYPE_OBJECT: num_object_allocs ++; break;
     case EJS_SCAN_TYPE_CLOSUREENV: num_closureenv_allocs ++; break;
     }
@@ -1427,6 +1442,7 @@ _ejs_gc_dump_heap_stats()
                 if ((*headerp & EJS_SCAN_TYPE_OBJECT) != 0)          _ejs_log ("O");
                 else if ((*headerp & EJS_SCAN_TYPE_CLOSUREENV) != 0) _ejs_log ("C");
                 else if ((*headerp & EJS_SCAN_TYPE_PRIMSTR) != 0)    _ejs_log (((*headerp >> EJS_GC_USER_FLAGS_SHIFT) & 0x10) != 0 ? "s" : "S");
+                else if ((*headerp & EJS_SCAN_TYPE_PRIMSYM) != 0)    _ejs_log ("X");
                 printed_something = EJS_TRUE;
             }
         })
@@ -1444,6 +1460,7 @@ _ejs_gc_dump_heap_stats()
             if ((*headerp & EJS_SCAN_TYPE_OBJECT) != 0)          _ejs_log ("O");
             else if ((*headerp & EJS_SCAN_TYPE_CLOSUREENV) != 0) _ejs_log ("C");
             else if ((*headerp & EJS_SCAN_TYPE_PRIMSTR) != 0)    _ejs_log ("S");
+            else if ((*headerp & EJS_SCAN_TYPE_PRIMSYM) != 0)    _ejs_log ("X");
         }
         _ejs_log ("\n");
     }

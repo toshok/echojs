@@ -9,9 +9,6 @@
 #include "ejs-string.h"
 #include "ejs-ops.h"
 
-#define EJSVAL_IS_SYMBOL(v)     (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Symbol_specops))
-#define EJSVAL_TO_SYMBOL(v)     ((EJSSymbol*)EJSVAL_TO_OBJECT(v))
-
 // ECMA262: 19.4.2.2 Symbol.for ( key ) 
 static EJS_NATIVE_FUNC(_ejs_Symbol_for) {
     ejsval key = _ejs_undefined;
@@ -56,16 +53,22 @@ static EJS_NATIVE_FUNC(_ejs_Symbol_prototype_toString) {
     // 1. Let s be the this value. 
     ejsval s = *_this;
 
-    EJSSymbol* sym;
+    EJSPrimSymbol* sym;
 
     // 2. If Type(s) is Symbol, then let sym be s. 
-    if (EJSVAL_IS_SYMBOL(s))
+    if (EJSVAL_IS_SYMBOL(s)) {
         sym = EJSVAL_TO_SYMBOL(s);
-    // 3. Else, 
-    //    a. If s does not have a [[SymbolData]] internal slot, then throw a TypeError exception. 
-    //    b. Let sym be the value of s’s [[SymbolData]] internal slot. 
-    else
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Symbol.prototype.toString called with non-symbol this");
+    }
+    // 3. Else,
+    else {
+        // a. If s does not have a [[SymbolData]] internal slot, then throw a TypeError exception.
+        if (!EJSVAL_IS_SYMBOL_OBJECT(s)) {
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Symbol.prototype.toString called with non-symbol this");
+        }
+        // b. Let sym be the value of s’s [[SymbolData]] internal slot.
+        sym = EJSVAL_TO_SYMBOL(EJSVAL_TO_SYMBOL_OBJECT(s)->primSymbol);
+    }
+        
 
     // 4. Let desc be the value of sym’s [[Description]] attribute. 
     ejsval desc = sym->description;
@@ -100,25 +103,22 @@ static EJS_NATIVE_FUNC(_ejs_Symbol_prototype_valueOf) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Symbol.prototype.valueOf called with non-object this");
         
     // 4. If s does not have a [[SymbolData]] internal slot, throw a TypeError exception.
-    if (!EJSVAL_IS_SYMBOL(s))
+    if (!EJSVAL_IS_SYMBOL_OBJECT(s))
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Symbol.prototype.valueOf called with non-symbol this");
 
     // 5. Return the value of s’s [[SymbolData]] internal slot.
-    return s;
+    return EJSVAL_TO_SYMBOL_OBJECT(s)->primSymbol;
 }
 
 // ECMA262: 19.4.1
 static EJS_NATIVE_FUNC(_ejs_Symbol_impl) {
-    if (EJSVAL_IS_UNDEFINED(newTarget)) {
-        // 19.4.1.1 Symbol ( [ description ] )
-        ejsval description = _ejs_undefined;
-        if (argc > 0) description = args[0];
-        return _ejs_symbol_new(description);
+    if (!EJSVAL_IS_UNDEFINED(newTarget)) {
+        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Symbol cannot be called as a constructor");
     }
-    else {
-        // 19.4.1.2 new Symbol ( ...argumentsList ) 
-        EJS_NOT_IMPLEMENTED();
-    }
+
+    ejsval description = _ejs_undefined;
+    if (argc > 0) description = args[0];
+    return _ejs_symbol_new(description);
 }
 
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs_Symbol, x, _ejs_Symbol_##x, EJS_PROP_NOT_ENUMERABLE)
@@ -181,19 +181,28 @@ _ejs_symbol_init(ejsval global)
 ejsval
 _ejs_symbol_new (ejsval description)
 {
-    EJSSymbol* rv = _ejs_gc_new (EJSSymbol);
-
-    _ejs_init_object((EJSObject*)rv, _ejs_Symbol_prototype, &_ejs_Symbol_specops);
-
+    EJSPrimSymbol* rv = _ejs_gc_new_primsym (sizeof(EJSPrimSymbol));
     rv->description = EJSVAL_IS_UNDEFINED(description) ? description : ToString(description);
+    return SYMBOL_TO_EJSVAL(rv);
+}
+
+ejsval
+_ejs_symbol_new_object(ejsval symbol_data)
+{
+    EJSSymbol *rv = _ejs_gc_new(EJSSymbol);
+    
+    _ejs_init_object ((EJSObject*)rv, _ejs_Symbol_prototype, &_ejs_Symbol_specops);
+
+    rv->primSymbol = symbol_data;
 
     return OBJECT_TO_EJSVAL(rv);
 }
 
+    
 uint32_t
 _ejs_symbol_hash (ejsval obj)
 {
-    EJSSymbol* sym = EJSVAL_TO_SYMBOL(obj);
+    EJSPrimSymbol* sym = EJSVAL_TO_SYMBOL(obj);
     if ((sym->hashcode & 1) == 0) {
         // just use the symbol's pointer
         sym->hashcode = ((uint32_t)(uintptr_t)sym) | 1;
@@ -210,7 +219,7 @@ _ejs_symbol_specop_allocate ()
 static void
 _ejs_symbol_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
-    scan_func(((EJSSymbol*)obj)->description);
+    scan_func(((EJSSymbol*)obj)->primSymbol);
 }
 
 EJS_DEFINE_CLASS(Symbol,
