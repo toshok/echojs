@@ -10,3 +10,4 @@ sudo update-alternatives --install /usr/bin/clang++  clang++  /usr/bin/clang++-3
 llvm-config --version
 clang++ --version
 clang --version
+export LLVM_SUFFIX=

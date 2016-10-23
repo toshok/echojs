@@ -11,13 +11,9 @@ osx_image: xcode8
 
 matrix:
   - os: linux
-    env:
-      - LLVM_SUFFIX=
-      - EJS_RUNLOOP_IMPL=noop
+    env: EJS_RUNLOOP_IMPL=noop
   - os: osx
     sudo: required
-    env:
-      - LLVM_SUFFIX=-3.8
 
 language: c++
 
@@ -33,11 +29,11 @@ notifications:
     on_start: false     # default: false
 
 before_install:
-  - bash ./ci/setup-pkg-$TRAVIS_OS_NAME.sh
+  - source ./ci/setup-pkg-$TRAVIS_OS_NAME.sh
 
 install:
   - npm install -g node-gyp
-  - bash ./ci/install-llvm-$TRAVIS_OS_NAME.sh
+  - source ./ci/install-llvm-$TRAVIS_OS_NAME.sh
 
 before_script:
   - export PATH=/usr/bin:$PATH:`npm prefix`/node_modules/.bin:/usr/local/opt/llvm/bin:/usr/local/opt/llvm/share/llvm
