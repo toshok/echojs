@@ -29,7 +29,7 @@ endif
 
 build-double-conversion: $(_TARGETS:%=build-double-conversion-%)
 
-clean-double-conversion: %(_TARGETS:%=clean-double-conversion-%)
+clean-double-conversion: $(_TARGETS:%=clean-double-conversion-%)
 
 .stamp-configure-double-conversion-linux: double-conversion/CMakeLists.txt
 	@$(MKDIR) double-conversion-linux
