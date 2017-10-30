@@ -31,7 +31,9 @@
     "test": "test"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "format": "prettier --config ./.prettierrc --write \"lib/**/*.js\"",
+    "check-format": "prettier --config ./.prettierrc -l \"lib/**/*.js\""
   },
   "repository": {
     "type": "git",
@@ -51,6 +53,7 @@
     "glob": "~5.0.14",
     "mocha": "~1.21.3",
     "nan": "^2.0.4",
+    "prettier": "^1.7.4",
     "temp": "~0.8.3"
   }
 }
