@@ -19,10 +19,7 @@ MODULE_DIRS=--moduledir $(TOP)/node-compat --moduledir $(TOP)/ejs-llvm
 
 all-local:: check
 
-#check: check-unit-tests run-tests
-#check-stage1: check-unit-tests run-tests-stage1
-
-check: check-stage0
+check: check-unit-tests check-stage0
 
 check-stage0:
 	@NODE_PATH=$(NODE_PATH) node tester.js -s 0
@@ -42,7 +39,7 @@ check-sim-stage1:
 $(CHECK_TESTS): check-%: %.js
 	@NODE_PATH=$(NODE_PATH) node tester.js -s 0 -t $<
 
-check-unit-tests: check-llvm check-set
+check-unit-tests: check-llvm
 
 build-tests: $(patsubst %.js,%.js.exe,$(TESTS))
 
@@ -50,10 +47,7 @@ build-tests-stage1:
 	@$(MAKE) EJS_DRIVER="$(TOPDIR)/ejs.exe" EJS_STAGE=1 build-tests
 
 check-llvm:
-	mocha llvm-test.js
-
-check-set:
-	mocha set-test.js
+	NODE_PATH=$(NODE_PATH) mocha llvm-test.js
 
 run-tests: generate-expected prepare-xfail $(patsubst %.js,test-%,$(TESTS)) format-results
 
