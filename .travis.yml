@@ -44,4 +44,3 @@ script:
   - touch test/expected/*.expected-out
   - make -C test check-stage0
   - make -C test check-stage1
-  - make -C test check-stage2
