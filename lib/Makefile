@@ -19,7 +19,6 @@ ES6_SOURCES=			 	\
 	exitable-scope.js		\
 	runtime.js			\
 	module-info.js			\
-	set-es6.js			\
 	stack-es6.js			\
 	host-config.js			\
 	passes/desugar-arguments.js	\

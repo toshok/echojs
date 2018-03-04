@@ -1,5 +1,5 @@
 
-var Set = require('set').Set;
+var Set = require('../lib/set-es6').Set;
 var assert = require('assert');
 
 describe ('Set', function() {
