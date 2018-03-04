@@ -73,8 +73,8 @@ BABEL_SED_REPLACEMENTS= -e s,\"@llvm\",\"llvm\", \
 			-e s,\'@llvm\',\'llvm\', \
 			-e s,@node-compat/,,
 
-BABEL_ARGS= --presets es2015
-BABEL=babel
+BABEL_ARGS=
+BABEL=../node_modules/.bin/babel
 
 $(DESTDIR)/ejs-es6.js: ../ejs-es6.js
 	@echo [babel] $<
