@@ -2,18 +2,15 @@ os:
   - linux
   - osx
 
-# for linux pick trusty
 sudo: required
-dist: trusty
-
-# for osx use xcode 8
-osx_image: xcode9.2
 
 matrix:
   - os: linux
+    dist: trusty
     env: EJS_RUNLOOP_IMPL=noop
   - os: osx
     sudo: required
+    osx_image: xcode9.2
 
 language: c++
 
