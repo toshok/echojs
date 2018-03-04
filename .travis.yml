@@ -7,7 +7,7 @@ sudo: required
 dist: trusty
 
 # for osx use xcode 8
-osx_image: xcode8
+osx_image: xcode9.2
 
 matrix:
   - os: linux
@@ -18,7 +18,7 @@ matrix:
 language: c++
 
 node:
-    - 4.1
+    - "8"
 
 notifications:
   webhooks:
