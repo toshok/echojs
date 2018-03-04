@@ -8,7 +8,7 @@ $(TOP)/build/host-config.mk:
 
 -include $(TOP)/build/host-config.mk
 
-LLVM_SUFFIX?=-3.6
+LLVM_SUFFIX?=-3.8
 
 # we don't care about the version here
 HOST_OS:=$(patsubst darwin%,darwin,$(HOST_OS))
