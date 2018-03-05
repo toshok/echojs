@@ -72,7 +72,7 @@ void _ejs_gc_dump_heap_stats();
 
 // turn a random pointer into an arena pointer
 #define PTR_TO_ARENA(ptr) ((void*)((uintptr_t)(ptr) & PTR_TO_ARENA_MASK))
-#define PTR_TO_ARENA_PAGE_BASE(ptr) ((void*)ALIGN(PTR_TO_ARENA(ptr) + sizeof(Arena), PAGE_SIZE))
+#define PTR_TO_ARENA_PAGE_BASE(ptr) ((void*)EJS_ALIGN(PTR_TO_ARENA(ptr) + sizeof(Arena), PAGE_SIZE))
 #define PTR_TO_ARENA_PAGE_INDEX(ptr) ((((uintptr_t)(ptr) & ~PTR_TO_ARENA_MASK) - ((uintptr_t)PTR_TO_ARENA_PAGE_BASE(ptr) & ~PTR_TO_ARENA_MASK)) / PAGE_SIZE)
 
 #define PTR_TO_CELL(ptr,info) (((char*)(ptr) - (char*)(info)->page_start) / (info)->cell_size)
@@ -81,7 +81,7 @@ void _ejs_gc_dump_heap_stats();
 
 #define IS_ALIGNED_TO(v,a) (((uintptr_t)(v) & ((a)-1)) == 0)
 #define ALLOC_ALIGN 8
-#define ALIGN(v,a) (((uintptr_t)(v) + (a)-1) & ~((a)-1))
+#define EJS_ALIGN(v,a) (((uintptr_t)(v) + (a)-1) & ~((a)-1))
 #define IS_ALLOC_ALIGNED(v) IS_ALIGNED_TO(v, ALLOC_ALIGN)
 
 #if IOS || OSX
@@ -214,7 +214,7 @@ alloc_from_os(size_t size, size_t align)
     else {
         SPEW(2, _ejs_log ("not aligned\n"));
         // align res, and unmap the areas before/after the new mapping
-        void *aligned_res = (void*)ALIGN(res, align);
+        void *aligned_res = (void*)EJS_ALIGN(res, align);
         // the area before
         munmap (res, (uintptr_t)aligned_res - (uintptr_t)res);
         // the area after
@@ -358,7 +358,7 @@ arena_new()
     memset (new_arena, 0, sizeof(Arena));
 
     new_arena->end = arena_start + ARENA_SIZE;
-    new_arena->pos = (void*)ALIGN(arena_start + sizeof(Arena), PAGE_SIZE);
+    new_arena->pos = (void*)EJS_ALIGN(arena_start + sizeof(Arena), PAGE_SIZE);
 
     LOCK_ARENAS();
     int insert_point = -1;
@@ -406,7 +406,7 @@ alloc_page_info_from_arena(Arena *arena, void *page_data, size_t cell_size)
 static PageInfo*
 alloc_page_from_arena(Arena *arena, size_t cell_size)
 {
-    void *page_data = (void*)ALIGN(arena->pos, PAGE_SIZE);
+    void *page_data = (void*)EJS_ALIGN(arena->pos, PAGE_SIZE);
     if (arena->free_pages) {
         PageInfo* info = arena->free_pages;
         EJS_LIST_DETACH(info, arena->free_pages);
@@ -1218,7 +1218,7 @@ alloc_from_page(PageInfo *info)
     SPEW(2, _ejs_log ("allocating object from page %p (cell size %zd)\n", info, info->cell_size));
 
     if (info->bump_ptr) {
-        rv = (GCObjectPtr)ALIGN(info->bump_ptr, 8);
+        rv = (GCObjectPtr)EJS_ALIGN(info->bump_ptr, 8);
         cell = PTR_TO_CELL(info->bump_ptr, info);
         info->bump_ptr += info->cell_size;
         // check if we can service the next alloc request from the bump_ptr.  if we can't, switch
@@ -1261,7 +1261,7 @@ alloc_from_los(size_t size, EJSScanType scan_type)
         return NULL;
 
     rv->page_info.page_bitmap = (char*)((void*)rv + sizeof(LargeObjectInfo)); // our bitmap comes right after the header
-    rv->page_info.page_start = (void*)ALIGN((void*)rv + sizeof(LargeObjectInfo) + 8, 8);
+    rv->page_info.page_start = (void*)EJS_ALIGN((void*)rv + sizeof(LargeObjectInfo) + 8, 8);
     rv->page_info.cell_size = size;
     rv->page_info.num_cells = 1;
     rv->page_info.num_free_cells = 0;
