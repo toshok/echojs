@@ -1,4 +1,4 @@
-set -ex
+set -e
 sudo apt-get install llvm-3.8-dev clang-3.8
 sudo update-alternatives --install /usr/bin/llc      llc /usr/bin/llc-3.8 10 --force
 sudo update-alternatives --install /usr/bin/opt      opt /usr/bin/opt-3.8 10 --force

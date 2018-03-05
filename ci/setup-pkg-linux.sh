@@ -1,4 +1,4 @@
-set -ex
+set -e
 wget -O - http://llvm.org/apt/llvm-snapshot.gpg.key|sudo apt-key add -
 sudo apt-add-repository -y 'deb http://llvm.org/apt/trusty/ llvm-toolchain-trusty-3.8 main'
 curl -sL https://deb.nodesource.com/setup_6.x | sudo -E bash -

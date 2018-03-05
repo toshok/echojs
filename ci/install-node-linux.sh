@@ -1,4 +1,4 @@
-set -ex
+set -e
 
 NPM=`which npm`
 
