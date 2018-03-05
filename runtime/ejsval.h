@@ -556,12 +556,12 @@ EJSVAL_IS_SYMBOL_IMPL(ejsval_layout l)
 }
 
 static EJS_ALWAYS_INLINE ejsval_layout
-SYMBOL_TO_EJSVAL_IMPL(EJSPrimSymbol *str)
+SYMBOL_TO_EJSVAL_IMPL(EJSPrimSymbol *sym)
 {
     ejsval_layout l;
-    EJS_ASSERT(str);
+    EJS_ASSERT(sym);
     l.s.tag = EJSVAL_TAG_SYMBOL;
-    l.s.payload.str = str;
+    l.s.payload.sym = sym;
     return l;
 }
 
