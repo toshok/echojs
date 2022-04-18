@@ -64,7 +64,7 @@ namespace ejsllvm {
     {
         AllocaInst *allocainst = ((AllocaInst*)EJSVAL_TO_OBJECT(*_this));
         REQ_INT_ARG(0, alignment);
-        allocainst->llvm_alloca->setAlignment(alignment);
+        allocainst->llvm_alloca->setAlignment(static_cast<llvm::Align>(alignment));
         return _ejs_undefined;
     }
 

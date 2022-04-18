@@ -61,7 +61,7 @@ namespace ejsllvm {
 
             Module* module = (Module*)EJSVAL_TO_OBJECT(O);
             REQ_UTF8_ARG(0, name);
-            module->llvm_module = new llvm::Module(name, llvm::getGlobalContext());
+            module->llvm_module = new llvm::Module(name, TheContext);
             return *_this;
         }
     }
@@ -110,7 +110,7 @@ namespace ejsllvm {
 
         llvm::FunctionType *FT = llvm::FunctionType::get(returnType, param_types, false);
 
-        llvm::Function* f = static_cast< llvm::Function*>(module->llvm_module->getOrInsertFunction(name, FT));
+        llvm::Function* f = static_cast< llvm::Function*>(module->llvm_module->getOrInsertFunction(name, FT).getCallee());
 
         // XXX this needs to come from the js call, since when we hoist anonymous methods we'll need to give them a private linkage.
         f->setLinkage (llvm::Function::ExternalLinkage);
@@ -150,7 +150,7 @@ namespace ejsllvm {
 
         llvm::FunctionType *FT = llvm::FunctionType::get(returnType, param_types, false);
 
-        llvm::Function* f = static_cast< llvm::Function*>(module->llvm_module->getOrInsertFunction(name, FT));
+        llvm::Function* f = static_cast< llvm::Function*>(module->llvm_module->getOrInsertFunction(name, FT).getCallee());
         f->setLinkage (llvm::Function::ExternalLinkage);
 
         return Function_new (f);
@@ -212,10 +212,10 @@ namespace ejsllvm {
         REQ_UTF8_ARG(0, path);
 
         std::error_code error;
-        llvm::raw_fd_ostream OS(path.c_str(), error, llvm::sys::fs::OpenFlags::F_None);
+        llvm::raw_fd_ostream OS(path.c_str(), error, llvm::sys::fs::OpenFlags::OF_None);
         // check error
 
-        llvm::WriteBitcodeToFile (module->llvm_module, OS);
+        llvm::WriteBitcodeToFile (*module->llvm_module, OS);
 
         return _ejs_undefined;
     }

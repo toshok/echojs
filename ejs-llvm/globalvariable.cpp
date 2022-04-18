@@ -98,7 +98,7 @@ namespace ejsllvm {
 
         REQ_INT_ARG (0, alignment);
 
-        global->llvm_global->setAlignment (alignment);
+        global->llvm_global->setAlignment (llvm::Align(alignment));
 
         return _ejs_undefined;
     }

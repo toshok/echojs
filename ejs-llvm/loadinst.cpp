@@ -56,7 +56,7 @@ namespace ejsllvm {
     static EJS_NATIVE_FUNC(LoadInst_prototype_setAlignment) {
         LoadInst *loadinst = ((LoadInst*)EJSVAL_TO_OBJECT(*_this));
         REQ_INT_ARG(0, alignment);
-        loadinst->llvm_load->setAlignment(alignment);
+        loadinst->llvm_load->setAlignment(llvm::Align(alignment));
         return _ejs_undefined;
     }
 

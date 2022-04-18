@@ -40,7 +40,7 @@ namespace ejsllvm {
 #define LLVM_TYPE_METHOD_PROXY(name) LLVM_TYPE_METHOD(name,name)
 #define LLVM_TYPE_METHOD(name,llvm_ty)                                  \
     static EJS_NATIVE_FUNC(Type_##name) {                               \
-        return Type_new(llvm::Type::llvm_ty(llvm::getGlobalContext()));	\
+        return Type_new(llvm::Type::llvm_ty(TheContext));	\
     }
 
     LLVM_TYPE_METHOD_PROXY(getDoubleTy)
