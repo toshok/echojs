@@ -10,7 +10,7 @@ using namespace v8;
 
 namespace jsllvm {
 
-  void PHINode::Init(Handle<Object> target) {
+  NAN_MODULE_INIT(PHINode::Init) {
     Nan::HandleScope scope;
 
     Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
@@ -24,9 +24,12 @@ namespace jsllvm {
     Nan::SetPrototypeMethod(ctor, "toString", PHINode::ToString);
     Nan::SetPrototypeMethod(ctor, "addIncoming", PHINode::AddIncoming);
 
-    Local<v8::Function> ctor_func = ctor->GetFunction();
+    v8::Isolate *isolate = target->GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    Local<v8::Function> ctor_func = ctor->GetFunction(context).ToLocalChecked();
     constructor_func.Reset(ctor_func);
-    target->Set(Nan::New("PHINode").ToLocalChecked(), ctor_func);
+    target->Set(context, Nan::New("PHINode").ToLocalChecked(), ctor_func).Check();
   }
 
   NAN_METHOD(PHINode::New) {
@@ -51,9 +54,12 @@ namespace jsllvm {
   }
 
   NAN_METHOD(PHINode::AddIncoming) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     auto phi = Unwrap(info.This());
-    REQ_LLVM_VAL_ARG(0, incoming_val);
-    REQ_LLVM_BB_ARG(1, incoming_bb);
+
+    REQ_LLVM_VAL_ARG(context, 0, incoming_val);
+    REQ_LLVM_BB_ARG(context, 1, incoming_bb);
     phi->llvm_obj->addIncoming(incoming_val, incoming_bb);
   }
 

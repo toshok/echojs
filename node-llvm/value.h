@@ -6,7 +6,7 @@ namespace jsllvm {
 
   class Value : public LLVMObjectWrap< ::llvm::Value, Value> {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
     static Nan::Persistent<v8::Function> constructor_func;
     static Nan::Persistent<v8::FunctionTemplate> constructor;

@@ -13,7 +13,7 @@ namespace jsllvm {
 
   // DIBuilder
 
-  void DIBuilder::Init(Handle<Object> target) {
+  NAN_MODULE_INIT(DIBuilder::Init) {
     Nan::HandleScope scope;
 
     Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
@@ -28,14 +28,20 @@ namespace jsllvm {
     Nan::SetPrototypeMethod(ctor, "createLexicalBlock", DIBuilder::CreateLexicalBlock);
     Nan::SetPrototypeMethod(ctor, "finalize", DIBuilder::Finalize);
 
-    Local<v8::Function> ctor_func = ctor->GetFunction();
+    v8::Isolate *isolate = target->GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    Local<v8::Function> ctor_func = ctor->GetFunction(context).ToLocalChecked();
     constructor_func.Reset(ctor_func);
-    target->Set(Nan::New("DIBuilder").ToLocalChecked(), ctor_func);
+    target->Set(context, Nan::New("DIBuilder").ToLocalChecked(), ctor_func).Check();
   }
 
 
   NAN_METHOD(DIBuilder::New) {
-    REQ_LLVM_MODULE_ARG(0, module);
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    REQ_LLVM_MODULE_ARG(context, 0, module);
 
     DIBuilder* dib = new DIBuilder(new llvm::DIBuilder (*module));
     dib->Wrap(info.This());
@@ -44,15 +50,19 @@ namespace jsllvm {
   }
 
   NAN_METHOD(DIBuilder::CreateCompileUnit) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
     auto dib = Unwrap(info.This());
   
-    REQ_UTF8_ARG(0, file);
-    REQ_UTF8_ARG(1, dir);
-    REQ_UTF8_ARG(2, producer);
-    REQ_BOOL_ARG(3, isOptimized);
-    REQ_UTF8_ARG(4, flags);
-    REQ_INT_ARG(5, runtimeVersion);
+    REQ_UTF8_ARG(context, 0, file);
+    REQ_UTF8_ARG(context, 1, dir);
+    REQ_UTF8_ARG(context, 2, producer);
+    REQ_BOOL_ARG(isolate, 3, isOptimized);
+    REQ_UTF8_ARG(context, 4, flags);
+    REQ_INT_ARG(context, 5, runtimeVersion);
 
+#if new_llvm
     Local<v8::Value> result = DICompileUnit::Create(dib->llvm_obj->createCompileUnit(llvm::dwarf::DW_LANG_C99,
 										     *file, *dir,
 										     *producer,
@@ -60,13 +70,16 @@ namespace jsllvm {
 										     *flags,
 										     runtimeVersion));
     info.GetReturnValue().Set(result);
+#endif
   }
 
   NAN_METHOD(DIBuilder::CreateFile) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     auto dib = Unwrap(info.This());
   
-    REQ_UTF8_ARG(0, file);
-    REQ_UTF8_ARG(1, dir);
+    REQ_UTF8_ARG(context, 0, file);
+    REQ_UTF8_ARG(context, 1, dir);
 
     llvm::DIFile* llvm_file = dib->llvm_obj->createFile(*file, *dir);
 
@@ -93,21 +106,25 @@ namespace jsllvm {
   }
 
   NAN_METHOD(DIBuilder::CreateFunction) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
     auto dib = Unwrap(info.This());
   
-    REQ_LLVM_DISCOPE_ARG(0, discope);
-    REQ_UTF8_ARG(1, name);
-    REQ_UTF8_ARG(2, linkageName);
-    REQ_LLVM_DIFILE_ARG(3, file);
-    REQ_INT_ARG(4, line_no);
-    REQ_BOOL_ARG(5, isLocalToUnit);
-    REQ_BOOL_ARG(6, isDefinition);
-    REQ_INT_ARG(7, scopeLine);
-    REQ_INT_ARG(8, flags);
-    REQ_BOOL_ARG(9, isOptimized);
-    REQ_LLVM_FUN_ARG(10, fn);
+    REQ_LLVM_DISCOPE_ARG(context, 0, discope);
+    REQ_UTF8_ARG(context,1, name);
+    REQ_UTF8_ARG(context,2, linkageName);
+    REQ_LLVM_DIFILE_ARG(context, 3, file);
+    REQ_INT_ARG(context, 4, line_no);
+    REQ_BOOL_ARG(isolate, 5, isLocalToUnit);
+    REQ_BOOL_ARG(isolate, 6, isDefinition);
+    REQ_INT_ARG(context, 7, scopeLine);
+    REQ_INT_ARG(context, 8, flags);
+    REQ_BOOL_ARG(isolate, 9, isOptimized);
+    REQ_LLVM_FUN_ARG(context, 10, fn);
 
-    
+
+#if new_llvm    
     Local<v8::Value> result = DISubprogram::Create(dib->llvm_obj->createFunction (discope,
 										  *name,
 										  *linkageName,
@@ -120,15 +137,19 @@ namespace jsllvm {
 										  flags,
 										  isOptimized));
     info.GetReturnValue().Set(result);
+#endif
   }
 
   NAN_METHOD(DIBuilder::CreateLexicalBlock) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
     auto dib = Unwrap(info.This());
 
-    REQ_LLVM_DISCOPE_ARG(0, parentScope);
-    REQ_LLVM_DIFILE_ARG(1, file);
-    REQ_INT_ARG(2, line);
-    REQ_INT_ARG(3, col);
+    REQ_LLVM_DISCOPE_ARG(context, 0, parentScope);
+    REQ_LLVM_DIFILE_ARG(context, 1, file);
+    REQ_INT_ARG(context, 2, line);
+    REQ_INT_ARG(context, 3, col);
 
     Local<v8::Value> result = DILexicalBlock::Create(dib->llvm_obj->createLexicalBlock (parentScope, file, line, col));
 
@@ -148,7 +169,7 @@ namespace jsllvm {
   // DIType
 
 
-  void DIType::Init(Handle<Object> target) {
+  NAN_MODULE_INIT(DIType::Init) {
     Nan::HandleScope scope;
 
     Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
@@ -157,9 +178,12 @@ namespace jsllvm {
     ctor->InstanceTemplate()->SetInternalFieldCount(1);
     ctor->SetClassName(Nan::New("DIType").ToLocalChecked());
 
-    Local<v8::Function> ctor_func = ctor->GetFunction();
+    v8::Isolate *isolate = target->GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    Local<v8::Function> ctor_func = ctor->GetFunction(context).ToLocalChecked();
     constructor_func.Reset(ctor_func);
-    target->Set(Nan::New("DIType").ToLocalChecked(), ctor_func);
+    target->Set(context, Nan::New("DIType").ToLocalChecked(), ctor_func).Check();
   }
 
   v8::Local<v8::Value> DIType::Create(llvm::DIType* llvm_ditype)
@@ -187,7 +211,7 @@ namespace jsllvm {
   // DIScope
 
 
-  void DIScope::Init(Handle<Object> target) {
+  NAN_MODULE_INIT(DIScope::Init) {
     Nan::HandleScope scope;
 
     Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
@@ -196,9 +220,12 @@ namespace jsllvm {
     ctor->InstanceTemplate()->SetInternalFieldCount(1);
     ctor->SetClassName(Nan::New("DIScope").ToLocalChecked());
 
-    Local<v8::Function> ctor_func = ctor->GetFunction();
+    v8::Isolate *isolate = target->GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    Local<v8::Function> ctor_func = ctor->GetFunction(context).ToLocalChecked();
     constructor_func.Reset(ctor_func);
-    target->Set(Nan::New("DIScope").ToLocalChecked(), ctor_func);
+    target->Set(context, Nan::New("DIScope").ToLocalChecked(), ctor_func).Check();
   }
 
   v8::Local<v8::Value> DIScope::Create(llvm::DIScope* llvm_discope) {
@@ -226,7 +253,7 @@ namespace jsllvm {
   // DISubprogram
 
 
-  void DISubprogram::Init(Handle<Object> target) {
+  NAN_MODULE_INIT(DISubprogram::Init) {
     Nan::HandleScope scope;
 
     Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
@@ -237,9 +264,12 @@ namespace jsllvm {
     ctor->InstanceTemplate()->SetInternalFieldCount(1);
     ctor->SetClassName(Nan::New("DISubprogram").ToLocalChecked());
 
-    Local<v8::Function> ctor_func = ctor->GetFunction();
+    v8::Isolate *isolate = target->GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    Local<v8::Function> ctor_func = ctor->GetFunction(context).ToLocalChecked();
     constructor_func.Reset(ctor_func);
-    target->Set(Nan::New("DISubprogram").ToLocalChecked(), ctor_func);
+    target->Set(context, Nan::New("DISubprogram").ToLocalChecked(), ctor_func).Check();
   }
 
   v8::Local<v8::Value> DISubprogram::Create(llvm::DISubprogram* llvm_disubprogram) {
@@ -266,7 +296,7 @@ namespace jsllvm {
 
   // DIFile
 
-  void DIFile::Init(Handle<Object> target) {
+  NAN_MODULE_INIT(DIFile::Init) {
     Nan::HandleScope scope;
 
     Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
@@ -275,9 +305,12 @@ namespace jsllvm {
     ctor->InstanceTemplate()->SetInternalFieldCount(1);
     ctor->SetClassName(Nan::New("DIFile").ToLocalChecked());
 
-    Local<v8::Function> ctor_func = ctor->GetFunction();
+    v8::Isolate *isolate = target->GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    Local<v8::Function> ctor_func = ctor->GetFunction(context).ToLocalChecked();
     constructor_func.Reset(ctor_func);
-    target->Set(Nan::New("DIFile").ToLocalChecked(), ctor_func);
+    target->Set(context, Nan::New("DIFile").ToLocalChecked(), ctor_func).Check();
   }
 
   v8::Local<v8::Value> DIFile::Create(llvm::DIFile* llvm_difile) {
@@ -303,7 +336,7 @@ namespace jsllvm {
 
   // DICompileUnit
 
-  void DICompileUnit::Init(Handle<Object> target) {
+  NAN_MODULE_INIT(DICompileUnit::Init) {
     Nan::HandleScope scope;
 
     Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
@@ -312,9 +345,12 @@ namespace jsllvm {
     ctor->InstanceTemplate()->SetInternalFieldCount(1);
     ctor->SetClassName(Nan::New("DICompileUnit").ToLocalChecked());
 
-    Local<v8::Function> ctor_func = ctor->GetFunction();
+    v8::Isolate *isolate = target->GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    Local<v8::Function> ctor_func = ctor->GetFunction(context).ToLocalChecked();
     constructor_func.Reset(ctor_func);
-    target->Set(Nan::New("DICompileUnit").ToLocalChecked(), ctor_func);
+    target->Set(context, Nan::New("DICompileUnit").ToLocalChecked(), ctor_func).Check();
   }
 
   v8::Local<v8::Value> DICompileUnit::Create(llvm::DICompileUnit* llvm_dicompileunit) {
@@ -342,7 +378,7 @@ namespace jsllvm {
   // DILexicalBlock
 
 
-  void DILexicalBlock::Init(Handle<Object> target) {
+  NAN_MODULE_INIT(DILexicalBlock::Init) {
     Nan::HandleScope scope;
 
     Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
@@ -353,9 +389,12 @@ namespace jsllvm {
     ctor->InstanceTemplate()->SetInternalFieldCount(1);
     ctor->SetClassName(Nan::New("DILexicalBlock").ToLocalChecked());
 
-    Local<v8::Function> ctor_func = ctor->GetFunction();
+    v8::Isolate *isolate = target->GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    Local<v8::Function> ctor_func = ctor->GetFunction(context).ToLocalChecked();
     constructor_func.Reset(ctor_func);
-    target->Set(Nan::New("DILexicalBlock").ToLocalChecked(), ctor_func);
+    target->Set(context, Nan::New("DILexicalBlock").ToLocalChecked(), ctor_func).Check();
   }
 
   v8::Local<v8::Value> DILexicalBlock::Create(llvm::DILexicalBlock* llvm_dilexicalblock) {
@@ -383,7 +422,7 @@ namespace jsllvm {
   // DebugLoc
 
 
-  void DebugLoc::Init(Handle<Object> target) {
+  NAN_MODULE_INIT(DebugLoc::Init) {
     Nan::HandleScope scope;
 
     Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
@@ -394,9 +433,12 @@ namespace jsllvm {
 
     Nan::SetMethod(ctor, "get", DebugLoc::Get);
 
-    Local<v8::Function> ctor_func = ctor->GetFunction();
+    v8::Isolate *isolate = target->GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    Local<v8::Function> ctor_func = ctor->GetFunction(context).ToLocalChecked();
     constructor_func.Reset(ctor_func);
-    target->Set(Nan::New("DebugLoc").ToLocalChecked(), ctor_func);
+    target->Set(context, Nan::New("DebugLoc").ToLocalChecked(), ctor_func).Check();
   }
 
   v8::Local<v8::Value> DebugLoc::Create(llvm::DebugLoc llvm_debugloc) {
@@ -419,11 +461,16 @@ namespace jsllvm {
   DebugLoc::~DebugLoc() { }
 
   NAN_METHOD(DebugLoc::Get) {
-    REQ_INT_ARG(0, line);
-    REQ_INT_ARG(1, column);
-    REQ_LLVM_DISCOPE_ARG(2, discope);
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
 
+    REQ_INT_ARG(context, 0, line);
+    REQ_INT_ARG(context, 1, column);
+    REQ_LLVM_DISCOPE_ARG(context, 2, discope);
+
+#if new_llvm
     info.GetReturnValue().Set(DebugLoc::Create(llvm::DebugLoc::get(line, column, discope, NULL)));
+#endif
   }
 
   Nan::Persistent<v8::FunctionTemplate> DebugLoc::constructor;

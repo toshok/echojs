@@ -15,7 +15,7 @@ namespace jsllvm {
   Nan::Persistent<v8::FunctionTemplate> AllocaInst::constructor;
   Nan::Persistent<v8::Function> AllocaInst::constructor_func;
 
-  void AllocaInst::Init(Handle<Object> target) {
+  NAN_MODULE_INIT(AllocaInst::Init) {
     Nan::HandleScope scope;
 
     Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
@@ -30,9 +30,12 @@ namespace jsllvm {
     Nan::SetPrototypeMethod(ctor, "toString", AllocaInst::ToString);
     Nan::SetPrototypeMethod(ctor, "setAlignment", AllocaInst::SetAlignment);
 
-    Local<v8::Function> ctor_func = ctor->GetFunction();
+    v8::Isolate *isolate = target->GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    Local<v8::Function> ctor_func = ctor->GetFunction(context).ToLocalChecked();
     constructor_func.Reset(ctor_func);
-    target->Set(Nan::New("AllocaInst").ToLocalChecked(), ctor_func);
+    target->Set(context, Nan::New("AllocaInst").ToLocalChecked(), ctor_func).Check();
   }
 
   NAN_METHOD(AllocaInst::New) {
@@ -60,11 +63,14 @@ namespace jsllvm {
   }
 
   NAN_METHOD(AllocaInst::SetAlignment) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
     auto ai = Unwrap(info.This());
 
-    REQ_INT_ARG (0, alignment);
+    REQ_INT_ARG (context, 0, alignment);
 
-    ai->llvm_obj->setAlignment(alignment);
+    ai->llvm_obj->setAlignment(static_cast<llvm::Align>(alignment));
   }
 }
 

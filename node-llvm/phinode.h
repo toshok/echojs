@@ -6,7 +6,7 @@ namespace jsllvm {
 
   class PHINode : public LLVMObjectWrap< ::llvm::PHINode, PHINode> {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
     static v8::Local<v8::Value> Create(::llvm::PHINode *llvm_phi);
 

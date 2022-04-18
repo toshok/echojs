@@ -7,7 +7,7 @@ namespace jsllvm {
 
   class Call : public LLVMObjectWrap < ::llvm::CallInst, Call> {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
   private:
     typedef LLVMObjectWrap< ::llvm::CallInst, Call> BaseType;
@@ -32,7 +32,7 @@ namespace jsllvm {
 
   class Invoke : public LLVMObjectWrap < ::llvm::InvokeInst, Invoke> {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
   private:
     typedef LLVMObjectWrap< ::llvm::InvokeInst, Invoke> BaseType;

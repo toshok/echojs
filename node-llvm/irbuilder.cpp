@@ -17,7 +17,7 @@ using namespace v8;
 
 namespace jsllvm {
 
-  void IRBuilder::Init(Handle<Object> target) {
+  NAN_MODULE_INIT(IRBuilder::Init) {
     Nan::HandleScope scope;
 
     Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
@@ -26,7 +26,10 @@ namespace jsllvm {
     ctor->InstanceTemplate()->SetInternalFieldCount(1);
     ctor->SetClassName(Nan::New("IRBuilder").ToLocalChecked());
 
-    Local<v8::Function> ctor_func = ctor->GetFunction();
+    v8::Isolate *isolate = target->GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    Local<v8::Function> ctor_func = ctor->GetFunction(context).ToLocalChecked();
     constructor_func.Reset(ctor_func);
 
     Nan::SetMethod(ctor_func, "setInsertPoint", IRBuilder::SetInsertPoint);
@@ -79,7 +82,7 @@ namespace jsllvm {
     Nan::SetMethod(ctor_func, "getCurrentDebugLocation", IRBuilder::GetCurrentDebugLocation);
     Nan::SetMethod(ctor_func, "setCurrentDebugLocation", IRBuilder::SetCurrentDebugLocation);
 
-    target->Set(Nan::New("IRBuilder").ToLocalChecked(), ctor_func);
+    target->Set(context, Nan::New("IRBuilder").ToLocalChecked(), ctor_func).Check();
   }
 
   NAN_METHOD(IRBuilder::New) {
@@ -87,17 +90,25 @@ namespace jsllvm {
   }
 
   NAN_METHOD(IRBuilder::SetInsertPoint) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
     Nan::HandleScope scope;
-    REQ_LLVM_BB_ARG(0, bb);
-    if (bb != NULL)
+    REQ_LLVM_BB_ARG(context, 0, bb);
+    if (bb != NULL) {
       IRBuilder::builder.SetInsertPoint (bb);
+    }
   }
 
   NAN_METHOD(IRBuilder::SetInsertPointStartBB) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
     Nan::HandleScope scope;
-    REQ_LLVM_BB_ARG(0, bb);
-    if (bb != NULL)
+    REQ_LLVM_BB_ARG(context, 0, bb);
+    if (bb != NULL) {
       IRBuilder::builder.SetInsertPoint (bb, bb->getFirstInsertionPt());
+    }
   }
 
   NAN_METHOD(IRBuilder::GetInsertBlock) {
@@ -112,8 +123,10 @@ namespace jsllvm {
   }
 
   NAN_METHOD(IRBuilder::CreateRet) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
-    REQ_LLVM_VAL_ARG(0,val);
+    REQ_LLVM_VAL_ARG(context, 0,val);
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(builder.CreateRet(val)));
     info.GetReturnValue().Set(result);
   }
@@ -125,20 +138,24 @@ namespace jsllvm {
   }
 
   NAN_METHOD(IRBuilder::CreatePointerCast) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
-    REQ_LLVM_VAL_ARG(0,val);
-    REQ_LLVM_TYPE_ARG(1,ty);
-    FALLBACK_EMPTY_UTF8_ARG(2,name);
+    REQ_LLVM_VAL_ARG(context, 0,val);
+    REQ_LLVM_TYPE_ARG(context, 1,ty);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2,name);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(builder.CreatePointerCast(val, ty, *name)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateFPCast) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
-    REQ_LLVM_VAL_ARG(0,val);
-    REQ_LLVM_TYPE_ARG(1,ty);
-    FALLBACK_EMPTY_UTF8_ARG(2,name);
+    REQ_LLVM_VAL_ARG(context, 0,val);
+    REQ_LLVM_TYPE_ARG(context, 1,ty);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2,name);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(builder.CreateFPCast(val, ty, *name)));
     info.GetReturnValue().Set(result);
@@ -151,193 +168,231 @@ namespace jsllvm {
   }
 
   NAN_METHOD(IRBuilder::CreateAnd) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, lhs);
-    REQ_LLVM_VAL_ARG(1, rhs);
-    FALLBACK_EMPTY_UTF8_ARG(2, name);
+    REQ_LLVM_VAL_ARG(context, 0, lhs);
+    REQ_LLVM_VAL_ARG(context, 1, rhs);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(builder.CreateAnd(lhs, rhs, *name)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateOr) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, lhs);
-    REQ_LLVM_VAL_ARG(1, rhs);
-    FALLBACK_EMPTY_UTF8_ARG(2, name);
+    REQ_LLVM_VAL_ARG(context, 0, lhs);
+    REQ_LLVM_VAL_ARG(context, 1, rhs);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(builder.CreateOr(lhs, rhs, *name)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateTrunc) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, V);
-    REQ_LLVM_TYPE_ARG(1, dest_ty);
-    FALLBACK_EMPTY_UTF8_ARG(2, name);
+    REQ_LLVM_VAL_ARG(context, 0, V);
+    REQ_LLVM_TYPE_ARG(context, 1, dest_ty);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(builder.CreateTrunc(V, dest_ty, *name)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateZExt) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, V);
-    REQ_LLVM_TYPE_ARG(1, dest_ty);
-    FALLBACK_EMPTY_UTF8_ARG(2, name);
+    REQ_LLVM_VAL_ARG(context, 0, V);
+    REQ_LLVM_TYPE_ARG(context, 1, dest_ty);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(builder.CreateZExt(V, dest_ty, *name)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateIntToPtr) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, V);
-    REQ_LLVM_TYPE_ARG(1, dest_ty);
-    FALLBACK_EMPTY_UTF8_ARG(2, name);
+    REQ_LLVM_VAL_ARG(context, 0, V);
+    REQ_LLVM_TYPE_ARG(context, 1, dest_ty);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(builder.CreateIntToPtr(V, dest_ty, *name)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreatePtrToInt) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, V);
-    REQ_LLVM_TYPE_ARG(1, dest_ty);
-    FALLBACK_EMPTY_UTF8_ARG(2, name);
+    REQ_LLVM_VAL_ARG(context, 0, V);
+    REQ_LLVM_TYPE_ARG(context, 1, dest_ty);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(builder.CreatePtrToInt(V, dest_ty, *name)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateBitCast) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, V);
-    REQ_LLVM_TYPE_ARG(1, dest_ty);
-    FALLBACK_EMPTY_UTF8_ARG(2, name);
+    REQ_LLVM_VAL_ARG(context, 0, V);
+    REQ_LLVM_TYPE_ARG(context, 1, dest_ty);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(builder.CreateBitCast(V, dest_ty, *name)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateCall) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, callee);
-    REQ_ARRAY_ARG(1, argv);
-    FALLBACK_EMPTY_UTF8_ARG(2, name);
+    REQ_LLVM_TYPE_ARG(context, 0, type);
+    REQ_LLVM_VAL_ARG(context, 1, callee);
+    REQ_ARRAY_ARG(context, 2, argv);
+    FALLBACK_EMPTY_UTF8_ARG(context, 3, name);
 
     std::vector<llvm::Value*> ArgsV;
     for (unsigned i = 0, e = argv->Length(); i != e; ++i) {
-      llvm::Value* arg = Value::GetLLVMObj(argv->Get(i));
+      llvm::Value* arg = Value::GetLLVMObj(context, argv->Get(context, i).ToLocalChecked());
       ArgsV.push_back(arg);
       assert(ArgsV.back() != 0); // XXX throw an exception here
     }
 
-    Local<v8::Value> result = Call::Create(IRBuilder::builder.CreateCall(callee, ArgsV, *name));
+    auto FT = static_cast<llvm::FunctionType*>(type); // XXX need to make this safe...
+    Local<v8::Value> result = Call::Create(IRBuilder::builder.CreateCall(FT, callee, ArgsV, *name));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateInvoke) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, callee);
-    REQ_ARRAY_ARG(1, argv);
-    REQ_LLVM_BB_ARG(2, normal_dest);
-    REQ_LLVM_BB_ARG(3, unwind_dest);
-    FALLBACK_EMPTY_UTF8_ARG(4, name);
+    REQ_LLVM_TYPE_ARG(context, 0, type);
+    REQ_LLVM_VAL_ARG(context, 1, callee);
+    REQ_ARRAY_ARG(context, 2, argv);
+    REQ_LLVM_BB_ARG(context, 3, normal_dest);
+    REQ_LLVM_BB_ARG(context, 4, unwind_dest);
+    FALLBACK_EMPTY_UTF8_ARG(context, 5, name);
 
     std::vector<llvm::Value*> ArgsV;
     for (unsigned i = 0, e = argv->Length(); i != e; ++i) {
-      llvm::Value* arg = Value::GetLLVMObj(argv->Get(i));
+      llvm::Value* arg = Value::GetLLVMObj(context, argv->Get(context, i).ToLocalChecked());
       ArgsV.push_back(arg);
       assert(ArgsV.back() != 0); // XXX throw an exception here
     }
 
-    Local<v8::Value> result = Invoke::Create(IRBuilder::builder.CreateInvoke(callee, normal_dest, unwind_dest, ArgsV, *name));
+    auto FT = static_cast<llvm::FunctionType*>(type); // XXX need to make this safe...
+    Local<v8::Value> result = Invoke::Create(IRBuilder::builder.CreateInvoke(FT, callee, normal_dest, unwind_dest, ArgsV, *name));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateFAdd) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, left);
-    REQ_LLVM_VAL_ARG(1, right);
-    FALLBACK_EMPTY_UTF8_ARG(2, name);
+    REQ_LLVM_VAL_ARG(context, 0, left);
+    REQ_LLVM_VAL_ARG(context, 1, right);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
     
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateFAdd(left, right, *name)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateAlloca) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_TYPE_ARG(0, ty);
-    FALLBACK_EMPTY_UTF8_ARG(1, name);
+    REQ_LLVM_TYPE_ARG(context, 0, ty);
+    FALLBACK_EMPTY_UTF8_ARG(context, 1, name);
     
     Local<v8::Value> result = AllocaInst::Create(IRBuilder::builder.CreateAlloca(ty, 0, *name));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateLoad) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, val);
-    FALLBACK_EMPTY_UTF8_ARG(1, name);
+    REQ_LLVM_VAL_ARG(context, 0, val);
+    FALLBACK_EMPTY_UTF8_ARG(context, 1, name);
     
     Local<v8::Value> result = LoadInst::Create(IRBuilder::builder.CreateLoad(val, *name));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateStore) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, val);
-    REQ_LLVM_VAL_ARG(1, ptr);
+    REQ_LLVM_VAL_ARG(context, 0, val);
+    REQ_LLVM_VAL_ARG(context, 1, ptr);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateStore(val,ptr)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateExtractElement) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, val);
-    REQ_LLVM_VAL_ARG(1, idx);
-    FALLBACK_EMPTY_UTF8_ARG(2, name);
+    REQ_LLVM_VAL_ARG(context, 0, val);
+    REQ_LLVM_VAL_ARG(context, 1, idx);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateExtractElement(val,idx, *name)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateExtractValue) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, val);
-    REQ_INT_ARG(1, idx);
-    FALLBACK_EMPTY_UTF8_ARG(2, name);
+    REQ_LLVM_VAL_ARG(context, 0, val);
+    REQ_INT_ARG(context, 1, idx);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateExtractValue(val,idx, *name)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateGetElementPointer) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, val);
-    REQ_ARRAY_ARG(1, idxv);
-    FALLBACK_EMPTY_UTF8_ARG(2, name);
+    REQ_LLVM_VAL_ARG(context, 0, val);
+    REQ_ARRAY_ARG(context, 1, idxv);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
 
     std::vector<llvm::Value*> IdxV;
     for (unsigned i = 0, e = idxv->Length(); i != e; ++i) {
-      llvm::Value* idx = Value::GetLLVMObj(idxv->Get(i));
+      llvm::Value* idx = Value::GetLLVMObj(context, idxv->Get(context, i).ToLocalChecked());
       IdxV.push_back(idx);
       assert(IdxV.back() != 0); // XXX throw an exception here
     }
@@ -347,15 +402,17 @@ namespace jsllvm {
   }
 
   NAN_METHOD(IRBuilder::CreateInBoundsGetElementPointer) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, val);
-    REQ_ARRAY_ARG(1, idxv);
-    FALLBACK_EMPTY_UTF8_ARG(2, name);
+    REQ_LLVM_VAL_ARG(context, 0, val);
+    REQ_ARRAY_ARG(context, 1, idxv);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
 
     std::vector<llvm::Value*> IdxV;
     for (unsigned i = 0, e = idxv->Length(); i != e; ++i) {
-      llvm::Value* idx = Value::GetLLVMObj(idxv->Get(i));
+      llvm::Value* idx = Value::GetLLVMObj(context, idxv->Get(context, i).ToLocalChecked());
       IdxV.push_back(idx);
       assert(IdxV.back() != 0); // XXX throw an exception here
     }
@@ -366,11 +423,14 @@ namespace jsllvm {
 
   /*
   NAN_METHOD(IRBuilder::CreateStructGetElementPointer) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, val);
-    REQ_INT_ARG(1, idx);
-    FALLBACK_EMPTY_UTF8_ARG(2, name);
+    REQ_LLVM_VAL_ARG(context, 0, val);
+    REQ_INT_ARG(context, 1, idx);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateStructGEP(val, idx, *name)));
     info.GetReturnValue().Set(result);
@@ -378,141 +438,172 @@ namespace jsllvm {
   */
   
   NAN_METHOD(IRBuilder::CreateICmpEq) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, left);
-    REQ_LLVM_VAL_ARG(1, right);
-    FALLBACK_EMPTY_UTF8_ARG(2, name);
+    REQ_LLVM_VAL_ARG(context, 0, left);
+    REQ_LLVM_VAL_ARG(context, 1, right);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateICmpEQ(left, right, *name)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateICmpSGt) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, left);
-    REQ_LLVM_VAL_ARG(1, right);
-    FALLBACK_EMPTY_UTF8_ARG(2, name);
+    REQ_LLVM_VAL_ARG(context, 0, left);
+    REQ_LLVM_VAL_ARG(context, 1, right);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateICmpSGT(left, right, *name)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateICmpUGt) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, left);
-    REQ_LLVM_VAL_ARG(1, right);
-    FALLBACK_EMPTY_UTF8_ARG(2, name);
+    REQ_LLVM_VAL_ARG(context, 0, left);
+    REQ_LLVM_VAL_ARG(context, 1, right);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateICmpUGT(left, right, *name)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateICmpUGE) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, left);
-    REQ_LLVM_VAL_ARG(1, right);
-    FALLBACK_EMPTY_UTF8_ARG(2, name);
+    REQ_LLVM_VAL_ARG(context, 0, left);
+    REQ_LLVM_VAL_ARG(context, 1, right);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateICmpUGE(left, right, *name)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateICmpULt) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, left);
-    REQ_LLVM_VAL_ARG(1, right);
-    FALLBACK_EMPTY_UTF8_ARG(2, name);
+    REQ_LLVM_VAL_ARG(context, 0, left);
+    REQ_LLVM_VAL_ARG(context, 1, right);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateICmpULT(left, right, *name)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateBr) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_BB_ARG(0, dest);
+    REQ_LLVM_BB_ARG(context, 0, dest);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateBr(dest)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateCondBr) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, cond);
-    REQ_LLVM_BB_ARG(1, thenPart);
-    REQ_LLVM_BB_ARG(2, elsePart);
+    REQ_LLVM_VAL_ARG(context, 0, cond);
+    REQ_LLVM_BB_ARG(context, 1, thenPart);
+    REQ_LLVM_BB_ARG(context, 2, elsePart);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateCondBr(cond, thenPart, elsePart)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreatePhi) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
     Nan::HandleScope scope;
 
-    REQ_LLVM_TYPE_ARG(0, ty);
-    REQ_INT_ARG(1, incoming_values);
-    FALLBACK_EMPTY_UTF8_ARG(2, name);
+    REQ_LLVM_TYPE_ARG(context, 0, ty);
+    REQ_INT_ARG(context, 1, incoming_values);
+    FALLBACK_EMPTY_UTF8_ARG(context,  2, name);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreatePHI(ty, incoming_values, *name)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateGlobalStringPtr) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();
     Nan::HandleScope scope;
 
-    FALLBACK_EMPTY_UTF8_ARG(0, val);
-    FALLBACK_EMPTY_UTF8_ARG(1, name);
+    FALLBACK_EMPTY_UTF8_ARG(context, 0, val);
+    FALLBACK_EMPTY_UTF8_ARG(context, 1, name);
 
+#if new_llvm
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateGlobalStringPtr(*val, *name)));
     info.GetReturnValue().Set(result);
+#endif
   }
 
   NAN_METHOD(IRBuilder::CreateSwitch) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, V);
-    REQ_LLVM_BB_ARG(1, Dest);
-    REQ_INT_ARG(2, num_cases);
+    REQ_LLVM_VAL_ARG(context, 0, V);
+    REQ_LLVM_BB_ARG(context, 1, Dest);
+    REQ_INT_ARG(context, 2, num_cases);
 
     Local<v8::Value> result = Switch::Create(IRBuilder::builder.CreateSwitch(V, Dest, num_cases));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateSelect) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, C);
-    REQ_LLVM_VAL_ARG(1, True);
-    REQ_LLVM_VAL_ARG(2, False);
-    FALLBACK_EMPTY_UTF8_ARG(3, name);
+    REQ_LLVM_VAL_ARG(context, 0, C);
+    REQ_LLVM_VAL_ARG(context, 1, True);
+    REQ_LLVM_VAL_ARG(context, 2, False);
+    FALLBACK_EMPTY_UTF8_ARG(context, 3, name);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateSelect(C, True, False, *name)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateNswSub) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, lhs);
-    REQ_LLVM_VAL_ARG(1, rhs);
-    FALLBACK_EMPTY_UTF8_ARG(2, name);
+    REQ_LLVM_VAL_ARG(context, 0, lhs);
+    REQ_LLVM_VAL_ARG(context, 1, rhs);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateNSWSub(lhs, rhs, *name)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateLandingPad) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
     Nan::HandleScope scope;
 
-    REQ_LLVM_TYPE_ARG(0, ty);
-    REQ_INT_ARG(1, num_clauses);
-    FALLBACK_EMPTY_UTF8_ARG(2, name);
+    REQ_LLVM_TYPE_ARG(context, 0, ty);
+    REQ_INT_ARG(context, 1, num_clauses);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
 
     Local<v8::Value> result = LandingPad::Create(IRBuilder::builder.CreateLandingPad(ty,
 										     num_clauses, *name));
@@ -520,29 +611,35 @@ namespace jsllvm {
   }
 
   NAN_METHOD(IRBuilder::CreateResume) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, val);
+    REQ_LLVM_VAL_ARG(context, 0, val);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateResume(val)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateLifetimeStart) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, val);
-    REQ_LLVM_CONST_INT_ARG(1, size);
+    REQ_LLVM_VAL_ARG(context, 0, val);
+    REQ_LLVM_CONST_INT_ARG(context, 1, size);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateLifetimeStart(val, size)));
     info.GetReturnValue().Set(result);
   }
 
   NAN_METHOD(IRBuilder::CreateLifetimeEnd) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(0, val);
-    REQ_LLVM_CONST_INT_ARG(1, size);
+    REQ_LLVM_VAL_ARG(context, 0, val);
+    REQ_LLVM_CONST_INT_ARG(context, 1, size);
 
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateLifetimeEnd(val, size)));
     info.GetReturnValue().Set(result);
@@ -559,13 +656,15 @@ namespace jsllvm {
 
   NAN_METHOD(IRBuilder::SetCurrentDebugLocation) {
 #if false
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
-    REQ_LLVM_DEBUGLOC_ARG(0, debugloc);
+    REQ_LLVM_DEBUGLOC_ARG(context, 0, debugloc);
     IRBuilder::builder.SetCurrentDebugLocation(debugloc);
 #endif
   }
 
-  llvm::IRBuilder<> IRBuilder::builder(llvm::getGlobalContext());
+  llvm::IRBuilder<> IRBuilder::builder(TheContext);
   Nan::Persistent<v8::FunctionTemplate> IRBuilder::constructor;
   Nan::Persistent<v8::Function> IRBuilder::constructor_func;
 }

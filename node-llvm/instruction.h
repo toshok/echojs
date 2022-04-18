@@ -7,7 +7,7 @@ namespace jsllvm {
 
   class Instruction : public LLVMObjectWrap< ::llvm::Instruction, Instruction> {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
     static Nan::Persistent<v8::FunctionTemplate> constructor;
     static Nan::Persistent<v8::Function> constructor_func;

@@ -10,7 +10,7 @@ using namespace v8;
 
 namespace jsllvm {
 
-  void Function::Init(Handle<Object> target) {
+  NAN_MODULE_INIT(Function::Init) {
     Nan::HandleScope scope;
 
     Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
@@ -44,9 +44,12 @@ namespace jsllvm {
     Nan::SetPrototypeMethod(ctor, "hasPersonality", Function::HasPersonality);
     Nan::SetPrototypeMethod(ctor, "toString", Function::ToString);
 
-    Local<v8::Function> ctor_func = ctor->GetFunction();
+    v8::Isolate *isolate = target->GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    Local<v8::Function> ctor_func = ctor->GetFunction(context).ToLocalChecked();
     constructor_func.Reset(ctor_func);
-    target->Set(Nan::New("LLVMFunction").ToLocalChecked(), ctor_func);
+    target->Set(context, Nan::New("LLVMFunction").ToLocalChecked(), ctor_func).Check();
   }
 
   NAN_METHOD(Function::New) {
@@ -74,8 +77,11 @@ namespace jsllvm {
   }
 
   NAN_METHOD(Function::SetGC) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
     auto fun = Unwrap(info.This());
-    REQ_UTF8_ARG(0, name);
+    REQ_UTF8_ARG(context, 0, name);
     fun->llvm_obj->setGC(*name);
   }
 
@@ -112,8 +118,11 @@ namespace jsllvm {
   }
 
   NAN_METHOD(Function::SetPersonality) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
     auto fun = Unwrap(info.This());
-    REQ_LLVM_CONST_ARG(0, pers);
+    REQ_LLVM_CONST_ARG(context, 0, pers);
     fun->llvm_obj->setPersonalityFn(pers);
   }
   
@@ -136,6 +145,9 @@ namespace jsllvm {
   }
 
   NAN_GETTER(Function::GetArgs) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
     auto fun = Unwrap(info.This());
     uint32_t size = fun->llvm_obj->arg_size();
     Local<v8::Array> result = Nan::New<v8::Array>(size);
@@ -148,7 +160,7 @@ namespace jsllvm {
     }
 #else
     for (auto &arg : fun->llvm_obj->args()) {
-      result->Set(Idx++, Value::Create(&arg));
+      result->Set(context, Idx++, Value::Create(&arg)).Check();
     }
 #endif
 
@@ -157,7 +169,7 @@ namespace jsllvm {
 
   NAN_GETTER(Function::GetName) {
     auto fun = Unwrap(info.This());
-    std::string name = fun->llvm_obj->getName();
+    std::string name = fun->llvm_obj->getName().str();
     info.GetReturnValue().Set(Nan::New(name.c_str()).ToLocalChecked());
   }
 

@@ -7,7 +7,7 @@ namespace jsllvm {
 
   class ConstantFP : public Nan::ObjectWrap {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
   private:
     ConstantFP() { }

@@ -7,8 +7,7 @@ using namespace v8;
 
 namespace jsllvm {
 
-  void BasicBlock::Init(v8::Handle<Object> target)
-  {
+  NAN_MODULE_INIT(BasicBlock::Init) {
     Nan::HandleScope scope;
 
     Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
@@ -27,17 +26,23 @@ namespace jsllvm {
     Nan::SetPrototypeMethod(ctor, "dump", BasicBlock::Dump);
     Nan::SetPrototypeMethod(ctor, "toString", BasicBlock::ToString);
 
-    Local<v8::Function> ctor_func = ctor->GetFunction();
+    v8::Isolate *isolate = target->GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    Local<v8::Function> ctor_func = ctor->GetFunction(context).ToLocalChecked();
     constructor_func.Reset(ctor_func);
-    target->Set(Nan::New("BasicBlock").ToLocalChecked(), ctor_func);
+    target->Set(context, Nan::New("BasicBlock").ToLocalChecked(), ctor_func).Check();
   }
 
   NAN_METHOD(BasicBlock::New) {
     if (info.Length()) {
-      REQ_UTF8_ARG(0, blockname);
-      REQ_LLVM_FUN_ARG(1, fun);
+      v8::Isolate *isolate = info.GetIsolate();
+      v8::Local<v8::Context> context = isolate->GetCurrentContext();    
 
-      BasicBlock* bb = new BasicBlock(llvm::BasicBlock::Create(llvm::getGlobalContext(), *blockname, fun));
+      REQ_UTF8_ARG(context, 0, blockname);
+      REQ_LLVM_FUN_ARG(context, 1, fun);
+
+      BasicBlock* bb = new BasicBlock(llvm::BasicBlock::Create(TheContext, *blockname, fun));
       bb->Wrap(info.This());
     }
     info.GetReturnValue().Set(info.This());

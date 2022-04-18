@@ -7,7 +7,7 @@ namespace jsllvm {
 
   class IRBuilder : public Nan::ObjectWrap {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
     static v8::Local<v8::Value> Create(llvm::IRBuilder<> *builder);
 
