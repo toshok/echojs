@@ -7,7 +7,7 @@ namespace jsllvm {
 
   class Constant : public LLVMObjectWrap< ::llvm::Constant, Constant> {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
   private:
     typedef LLVMObjectWrap< ::llvm::Constant, Constant> BaseType;

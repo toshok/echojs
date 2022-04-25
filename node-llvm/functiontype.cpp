@@ -9,7 +9,7 @@ using namespace v8;
 namespace jsllvm {
 
 
-  void FunctionType::Init(Handle<Object> target) {
+  NAN_MODULE_INIT(FunctionType::Init) {
     Nan::HandleScope scope;
 
     Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
@@ -28,18 +28,24 @@ namespace jsllvm {
     Nan::SetPrototypeMethod(ctor, "dump", FunctionType::Dump);
     Nan::SetPrototypeMethod(ctor, "toString", FunctionType::ToString);
 
-    Local<v8::Function> ctor_func = ctor->GetFunction();
+    v8::Isolate *isolate = target->GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    Local<v8::Function> ctor_func = ctor->GetFunction(context).ToLocalChecked();
     constructor_func.Reset(ctor_func);
-    target->Set(Nan::New("FunctionType").ToLocalChecked(), ctor_func);
+    target->Set(context, Nan::New("FunctionType").ToLocalChecked(), ctor_func).Check();
   }
 
   NAN_METHOD(FunctionType::Get) {
-    REQ_LLVM_TYPE_ARG(0, returnType);
-    REQ_ARRAY_ARG(1, argTypes);
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    REQ_LLVM_TYPE_ARG(context, 0, returnType);
+    REQ_ARRAY_ARG(context, 1, argTypes);
 
     std::vector< llvm::Type*> arg_types;
     for (uint32_t i = 0; i < argTypes->Length(); i ++) {
-      arg_types.push_back (Type::GetLLVMObj(argTypes->Get(i)));
+      arg_types.push_back (Type::GetLLVMObj(context, argTypes->Get(context, i).ToLocalChecked()));
     }
 
     ::llvm::FunctionType *FT = llvm::FunctionType::get(returnType,
@@ -61,8 +67,11 @@ namespace jsllvm {
   }
 
   NAN_METHOD(FunctionType::GetParamType) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
     auto type = Unwrap(info.This());
-    REQ_INT_ARG(0, i);
+    REQ_INT_ARG(context, 0, i);
     info.GetReturnValue().Set(Type::Create(type->llvm_obj->getParamType(i)));
   }
 

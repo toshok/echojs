@@ -65,7 +65,7 @@ namespace ejsllvm {
     static EJS_NATIVE_FUNC(Constant_getBoolValue) {
         REQ_BOOL_ARG (0, b);
 
-        return Value_new (llvm::Constant::getIntegerValue(llvm::Type::getInt8Ty(llvm::getGlobalContext()), llvm::APInt(8, b?1:0)));
+        return Value_new (llvm::Constant::getIntegerValue(llvm::Type::getInt8Ty(TheContext), llvm::APInt(8, b?1:0)));
     }
 
     static EJS_NATIVE_FUNC(Constant_getIntegerValue) {

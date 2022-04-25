@@ -9,7 +9,7 @@ using namespace v8;
 
 namespace jsllvm {
 
-  void LandingPad::Init(Handle<Object> target) {
+  NAN_MODULE_INIT(LandingPad::Init) {
     Nan::HandleScope scope;
 
     Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
@@ -23,9 +23,12 @@ namespace jsllvm {
     Nan::SetPrototypeMethod(ctor, "setCleanup", LandingPad::SetCleanup);
     Nan::SetPrototypeMethod(ctor, "addClause", LandingPad::AddClause);
 
-    Local<v8::Function> ctor_func = ctor->GetFunction();
+    v8::Isolate *isolate = target->GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    Local<v8::Function> ctor_func = ctor->GetFunction(context).ToLocalChecked();
     constructor_func.Reset(ctor_func);
-    target->Set(Nan::New("LandingPadInst").ToLocalChecked(), ctor_func);
+    target->Set(context, Nan::New("LandingPadInst").ToLocalChecked(), ctor_func).Check();
   }
 
   NAN_METHOD(LandingPad::New) {
@@ -48,14 +51,17 @@ namespace jsllvm {
   }
 
   NAN_METHOD(LandingPad::SetCleanup) {
+    v8::Isolate *isolate = info.GetIsolate();
     auto landing_pad = Unwrap(info.This());
-    REQ_BOOL_ARG(0, flag);
+    REQ_BOOL_ARG(isolate, 0, flag);
     landing_pad->llvm_obj->setCleanup(flag);
   }
 
   NAN_METHOD(LandingPad::AddClause) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     auto landing_pad = Unwrap(info.This());
-    REQ_LLVM_VAL_ARG(0, clause_val);
+    REQ_LLVM_VAL_ARG(context, 0, clause_val);
     landing_pad->llvm_obj->addClause(llvm::cast<llvm::Constant>(clause_val));
   }
 

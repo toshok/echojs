@@ -9,7 +9,7 @@ using namespace v8;
 
 namespace jsllvm {
 
-  void GlobalVariable::Init(Handle<Object> target) {
+  NAN_MODULE_INIT(GlobalVariable::Init) {
     Nan::HandleScope scope;
 
     Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
@@ -23,18 +23,24 @@ namespace jsllvm {
     Nan::SetPrototypeMethod (ctor, "setAlignment", GlobalVariable::SetAlignment);
     Nan::SetPrototypeMethod (ctor, "toString", GlobalVariable::ToString);
 
-    Local<v8::Function> ctor_func = ctor->GetFunction();
+    v8::Isolate *isolate = target->GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    Local<v8::Function> ctor_func = ctor->GetFunction(context).ToLocalChecked();
     constructor_func.Reset(ctor_func);
-    target->Set(Nan::New("GlobalVariable").ToLocalChecked(), ctor_func);
+    target->Set(context, Nan::New("GlobalVariable").ToLocalChecked(), ctor_func).Check();
   }
 
   NAN_METHOD(GlobalVariable::New) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
     if (info.Length()) {
-      REQ_LLVM_MODULE_ARG(0, module);
-      REQ_LLVM_TYPE_ARG(1, type);
-      REQ_UTF8_ARG(2, name);
-      REQ_NULLABLE_LLVM_CONST_ARG(3, init);
-      REQ_BOOL_ARG(4, visible);
+      REQ_LLVM_MODULE_ARG(context, 0, module);
+      REQ_LLVM_TYPE_ARG(context, 1, type);
+      REQ_UTF8_ARG(context, 2, name);
+      REQ_NULLABLE_LLVM_CONST_ARG(context, 3, init);
+      REQ_BOOL_ARG(isolate, 4, visible);
 
       GlobalVariable* val = new GlobalVariable(new ::llvm::GlobalVariable(*module, type, false, visible ? llvm::GlobalValue::ExternalLinkage : llvm::GlobalValue::InternalLinkage, init, *name));
 
@@ -49,19 +55,25 @@ namespace jsllvm {
   }
 
   NAN_METHOD(GlobalVariable::SetInitializer) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
     auto val = Unwrap(info.This());
 
-    REQ_LLVM_CONST_ARG (0, init);
+    REQ_LLVM_CONST_ARG (context, 0, init);
 
     val->llvm_obj->setInitializer(init);
   }
 
   NAN_METHOD(GlobalVariable::SetAlignment) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
     auto val = Unwrap(info.This());
 
-    REQ_INT_ARG (0, alignment);
+    REQ_INT_ARG (context, 0, alignment);
 
-    val->llvm_obj->setAlignment(alignment);
+    val->llvm_obj->setAlignment(llvm::MaybeAlign(alignment));
   }
 
   NAN_METHOD(GlobalVariable::ToString) {

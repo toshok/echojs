@@ -49,7 +49,7 @@ void _ejs_gc_dump_heap_stats();
 
 #if EJS_BITS_PER_WORD == 64
 // 2GB
-#define MAX_HEAP_SIZE (2048LL * 1024LL * 1024LL)
+#define MAX_HEAP_SIZE (2LL * 1024LL * 1024LL * 1024LL)
 #else
 // 128MB
 #define MAX_HEAP_SIZE (128LL * 1024LL * 1024LL)
@@ -64,8 +64,8 @@ void _ejs_gc_dump_heap_stats();
 #define CELLS_OF_SIZE(size) (USABLE_PAGE_SIZE / (size))
 #define CELLS_IN_PAGE(page) CELLS_OF_SIZE((page)->cell_size)
 
-// arenas are reserved in ARENA_PAGES * PAGE_SIZE chunks.  ARENA_PAGES=2048 gives us an arena size of 8MB
-#define ARENA_PAGES 2048
+// arenas are reserved in ARENA_PAGES * PAGE_SIZE chunks.  ARENA_PAGES=4096 gives us an arena size of 32MB
+#define ARENA_PAGES 8192
 #define ARENA_SIZE (PAGE_SIZE*ARENA_PAGES)
 
 #define PTR_TO_ARENA_MASK (uintptr_t)(~(ARENA_SIZE-1))
@@ -94,15 +94,19 @@ void _ejs_gc_dump_heap_stats();
 EJSBool gc_disabled;
 int collect_every_alloc = 0;
 
+#if CONCURRENT
+#error "not implemented"
+#else
 #define LOCK_PAGE(info)
 #define UNLOCK_PAGE(info)
 #define LOCK_GC()
 #define UNLOCK_GC()
 #define LOCK_ARENAS()
 #define UNLOCK_ARENAS()
+#endif
 
 
-#define MAX_WORKLIST_SEGMENT_SIZE 128
+#define MAX_WORKLIST_SEGMENT_SIZE 512
 typedef struct _WorkListSegmnt {
     EJS_SLIST_HEADER(struct _WorkListSegmnt);
     int size;
@@ -259,6 +263,7 @@ typedef char BitmapCell;
 static unsigned int black_mask = CELL_BLACK_MASK_START;
 static unsigned int white_mask = CELL_WHITE_MASK_START;
 
+#if CONCURRENT
 #define SET_GRAY(cell) EJS_MACRO_START                                  \
     BitmapCell _bc;                                                     \
     do {                                                                \
@@ -293,6 +298,13 @@ static unsigned int white_mask = CELL_WHITE_MASK_START;
         _bc = (cell);                                                   \
     } while (!__sync_bool_compare_and_swap (&cell, _bc, (_bc & ~CELL_FREE))); \
     EJS_MACRO_END
+#else
+#define SET_GRAY(cell) (cell) = (((cell) & ~CELL_COLOR_MASK) | CELL_GRAY_MASK)
+#define SET_WHITE(cell) (cell) = (((cell) & ~CELL_COLOR_MASK) | white_mask)
+#define SET_BLACK(cell) (cell) = (((cell) & ~CELL_COLOR_MASK) | black_mask)
+#define SET_FREE(cell) (cell) = CELL_FREE
+#define SET_ALLOCATED(cell) (cell) = ((cell) & ~CELL_FREE)
+#endif
 
 #define IS_FREE(cell) (((cell) & CELL_FREE) == CELL_FREE)
 #define IS_GRAY(cell) (((cell) & CELL_COLOR_MASK) == CELL_GRAY_MASK)
@@ -317,10 +329,10 @@ struct _LargeObjectInfo {
     PageInfo page_info;
 };
 
-#define OBJECT_SIZE_LOW_LIMIT_BITS 4   // smallest object we'll allocate (1<<4 = 16)
-#define OBJECT_SIZE_HIGH_LIMIT_BITS 11 // max object size for the non-LOS allocator = 2048
+#define OBJECT_SIZE_LOW_LIMIT_BITS 4  // smallest object we'll allocate (1<<4 = 16)
+#define OBJECT_SIZE_HIGH_LIMIT_BITS 8 // max object size for the non-LOS allocator = 256
 
-#define HEAP_PAGELISTS_COUNT (OBJECT_SIZE_HIGH_LIMIT_BITS - OBJECT_SIZE_LOW_LIMIT_BITS) + 1 // +1 because we're inclusive on 11
+#define HEAP_PAGELISTS_COUNT (OBJECT_SIZE_HIGH_LIMIT_BITS - OBJECT_SIZE_LOW_LIMIT_BITS) + 1 // +1 because we're inclusive on OBJECT_SIZE_HIGH_LIMIT_BITS
 
 static EJSList heap_pages[HEAP_PAGELISTS_COUNT];
 static LargeObjectInfo *los_list;
@@ -1146,8 +1158,9 @@ calc_heap_size()
 }
 
 void
-_ejs_gc_collect()
+_ejs_gc_collect(const char *reason)
 {
+    _ejs_log ("_ejs_gc_collect(%s)\n", reason);
 #if gc_timings
     struct timeval tvbefore, tvafter;
 
@@ -1306,12 +1319,18 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     case EJS_SCAN_TYPE_CLOSUREENV: num_closureenv_allocs ++; break;
     }
 
-    if (!gc_disabled && ((num_allocs == 400000 || (alloc_size - alloc_size_at_last_gc) >= 60*1024*1024) || (collect_every_alloc && collect_every_alloc == num_allocs))) {
-        //        if (num_allocs == 400000) _ejs_log ("collecting due to num_allocs == %d, alloc_size = %d, alloc_size size last gc = %d\n", num_allocs, alloc_size, alloc_size - alloc_size_at_last_gc);
-        //        if (alloc_size - alloc_size_at_last_gc >= 40*1024*1024) _ejs_log ("collecting due to allocs since last gc\n");
-        _ejs_gc_collect();
-        alloc_size_at_last_gc = alloc_size;
-        num_allocs = 0;
+    if (!gc_disabled) {
+        char *gc_reason = NULL;
+        if (alloc_size - alloc_size_at_last_gc >= 60 * 1024 * 1024) {
+            gc_reason = "alloc_size";
+        } else if (collect_every_alloc && collect_every_alloc == num_allocs) {
+            gc_reason = "every_n_alloc";
+        }
+        if (gc_reason) {
+            _ejs_gc_collect(gc_reason);
+            alloc_size_at_last_gc = alloc_size;
+            num_allocs = 0;
+        }
     }
 
     int bucket;
@@ -1332,7 +1351,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
             else {
                 _ejs_log ("los allocation (size = %d) failed, trying to collect", size);
                 UNLOCK_GC();
-                _ejs_gc_collect ();
+                _ejs_gc_collect ("los allocation fail");
                 alloc_size_at_last_gc = alloc_size;
                 num_allocs = 0;
                 goto retry_allocation;
@@ -1355,7 +1374,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
             else {
                 _ejs_log ("page allocation failed, trying to collect");
                 UNLOCK_GC();
-                _ejs_gc_collect ();
+                _ejs_gc_collect ("page allocation fail");
                 alloc_size_at_last_gc = alloc_size;
                 num_allocs = 0;
                 goto retry_allocation;
@@ -1470,7 +1489,7 @@ _ejs_gc_dump_heap_stats()
 ejsval _ejs_GC;
 
 static EJS_NATIVE_FUNC(_ejs_GC_collect) {
-    _ejs_gc_collect();
+    _ejs_gc_collect("GC.collect called");
     return _ejs_undefined;
 }
 

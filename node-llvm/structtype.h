@@ -6,7 +6,7 @@ namespace jsllvm {
 
   class StructType : public LLVMObjectWrap< ::llvm::StructType, StructType> {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
   private:
     typedef LLVMObjectWrap< ::llvm::StructType, StructType> BaseType;

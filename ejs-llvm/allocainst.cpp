@@ -55,7 +55,7 @@ namespace ejsllvm {
     ejsval
     AllocaInst_prototype_dump(ejsval env, ejsval *_this, uint32_t argc, ejsval *args, ejsval newTarget)
     {
-        ((AllocaInst*)EJSVAL_TO_OBJECT(*_this))->llvm_alloca->dump();
+        // ((AllocaInst*)EJSVAL_TO_OBJECT(*_this))->llvm_alloca->dump();
         return _ejs_undefined;
     }
 
@@ -64,7 +64,7 @@ namespace ejsllvm {
     {
         AllocaInst *allocainst = ((AllocaInst*)EJSVAL_TO_OBJECT(*_this));
         REQ_INT_ARG(0, alignment);
-        allocainst->llvm_alloca->setAlignment(alignment);
+        allocainst->llvm_alloca->setAlignment(static_cast<llvm::Align>(alignment));
         return _ejs_undefined;
     }
 

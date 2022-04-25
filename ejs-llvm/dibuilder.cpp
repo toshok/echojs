@@ -66,10 +66,12 @@ namespace ejsllvm {
 
         DIBuilder* dib = ((DIBuilder*)EJSVAL_TO_OBJECT(*_this));
 
+#if new_llvm
         return DICompileUnit_new(dib->llvm_dibuilder->createCompileUnit(llvm::dwarf::DW_LANG_C99,
                                                                         file, dir, producer,
                                                                         isOptimized, flags,
                                                                         runtimeVersion));
+#endif
     }
 
     static EJS_NATIVE_FUNC(DIBuilder_prototype_createFile) {
@@ -105,6 +107,7 @@ namespace ejsllvm {
 
         DIBuilder* dib = ((DIBuilder*)EJSVAL_TO_OBJECT(*_this));
 
+#if new_llvm
         return DISubprogram_new(dib->llvm_dibuilder->createFunction (discope,
                                                                      name,
                                                                      linkageName,
@@ -116,6 +119,7 @@ namespace ejsllvm {
                                                                      scopeLine,
                                                                      flags,
                                                                      isOptimized));
+#endif
     }
 
     static EJS_NATIVE_FUNC(DIBuilder_prototype_createLexicalBlock) {
@@ -464,7 +468,9 @@ namespace ejsllvm {
         REQ_INT_ARG(1, column);
         REQ_LLVM_DISCOPE_ARG(2, discope);
 
+#if new_llvm
         return DebugLoc_new(llvm::DebugLoc::get(line, column, discope, NULL));
+#endif
     }
 
     void

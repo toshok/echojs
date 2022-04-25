@@ -6,7 +6,7 @@ namespace jsllvm {
 
   class LoadInst : public LLVMObjectWrap< ::llvm::LoadInst, LoadInst> {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
   private:
     typedef LLVMObjectWrap< ::llvm::LoadInst, LoadInst> BaseType;

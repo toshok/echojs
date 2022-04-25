@@ -6,7 +6,7 @@ namespace jsllvm {
 
   class LandingPad : public LLVMObjectWrap< ::llvm::LandingPadInst, LandingPad> {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
   private:
     typedef LLVMObjectWrap< ::llvm::LandingPadInst, LandingPad> BaseType;

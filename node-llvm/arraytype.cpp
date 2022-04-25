@@ -9,8 +9,7 @@ using namespace v8;
 namespace jsllvm {
 
 
-  void ArrayType::Init(Handle<Object> target)
-  {
+  NAN_MODULE_INIT(ArrayType::Init) {
     Nan::HandleScope scope;
 
     Local<FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
@@ -26,15 +25,21 @@ namespace jsllvm {
     Nan::SetPrototypeMethod(ctor, "dump", ArrayType::Dump);
     Nan::SetPrototypeMethod(ctor, "toString", ArrayType::ToString);
 
-    Local<v8::Function> ctor_func = ctor->GetFunction();
+    v8::Isolate *isolate = target->GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    Local<v8::Function> ctor_func = ctor->GetFunction(context).ToLocalChecked();
     constructor_func.Reset(ctor_func);
 
-    target->Set(Nan::New("ArrayType").ToLocalChecked(), ctor_func);
+    target->Set(context, Nan::New("ArrayType").ToLocalChecked(), ctor_func).Check();
   }
 
   NAN_METHOD(ArrayType::Get) {
-    REQ_LLVM_TYPE_ARG (0, elementType);
-    REQ_INT_ARG (1, numElements);
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    REQ_LLVM_TYPE_ARG (context, 0, elementType);
+    REQ_INT_ARG (context, 1, numElements);
 
     info.GetReturnValue().Set(ArrayType::Create(llvm::ArrayType::get(elementType, numElements)));
   }
@@ -60,7 +65,7 @@ namespace jsllvm {
 
   NAN_METHOD(ArrayType::Dump) {
     ArrayType* type = ObjectWrap::Unwrap<ArrayType>(info.This());
-    type->llvm_obj->dump();
+    // type->llvm_obj->dump();
   }
 
   Nan::Persistent<v8::FunctionTemplate> ArrayType::constructor;

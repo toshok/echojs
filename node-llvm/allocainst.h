@@ -6,7 +6,7 @@ namespace jsllvm {
 
   class AllocaInst : public LLVMObjectWrap< ::llvm::AllocaInst, AllocaInst> {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
     static Nan::Persistent<v8::FunctionTemplate> constructor;
     static Nan::Persistent<v8::Function> constructor_func;

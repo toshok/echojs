@@ -7,7 +7,7 @@ namespace jsllvm {
 
   class FunctionType : public LLVMObjectWrap< ::llvm::FunctionType, FunctionType> {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
   private:
     typedef LLVMObjectWrap< ::llvm::FunctionType, FunctionType> BaseType;

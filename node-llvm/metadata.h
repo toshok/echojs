@@ -6,10 +6,10 @@ namespace jsllvm {
 
   class MDString : public Nan::ObjectWrap {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
-    static llvm::MDString* GetLLVMObj (v8::Local<v8::Value> value) {
-      return Nan::ObjectWrap::Unwrap<MDString>(value->ToObject())->llvm_mdstring;
+    static llvm::MDString* GetLLVMObj (v8::Local<v8::Context> context, v8::Local<v8::Value> value) {
+      return Nan::ObjectWrap::Unwrap<MDString>(value->ToObject(context).ToLocalChecked())->llvm_mdstring;
     }
 
   private:
@@ -29,10 +29,10 @@ namespace jsllvm {
 
   class MDNode : public Nan::ObjectWrap {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
-    static llvm::MDNode* GetLLVMObj (v8::Local<v8::Value> value) {
-      return Nan::ObjectWrap::Unwrap<MDNode>(value->ToObject())->llvm_mdnode;
+    static llvm::MDNode* GetLLVMObj (v8::Local<v8::Context> context, v8::Local<v8::Value> value) {
+      return Nan::ObjectWrap::Unwrap<MDNode>(value->ToObject(context).ToLocalChecked())->llvm_mdnode;
     }
 
   private:

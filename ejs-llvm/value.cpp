@@ -53,7 +53,7 @@ namespace ejsllvm {
     }
 
     static EJS_NATIVE_FUNC(Value_prototype_dump) {
-        ((Value*)EJSVAL_TO_OBJECT(*_this))->llvm_val->dump();
+        // ((Value*)EJSVAL_TO_OBJECT(*_this))->llvm_val->dump();
         return _ejs_undefined;
     }
 

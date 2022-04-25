@@ -10,7 +10,7 @@ using namespace v8;
 
 namespace jsllvm {
 
-  void Switch::Init(Handle<Object> target) {
+  NAN_MODULE_INIT(Switch::Init) {
     Nan::HandleScope scope;
 
     Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
@@ -24,9 +24,12 @@ namespace jsllvm {
     Nan::SetPrototypeMethod(ctor, "toString", Switch::ToString);
     Nan::SetPrototypeMethod(ctor, "addCase", Switch::AddCase);
 
-    Local<v8::Function> ctor_func = ctor->GetFunction();
+    v8::Isolate *isolate = target->GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    Local<v8::Function> ctor_func = ctor->GetFunction(context).ToLocalChecked();
     constructor_func.Reset(ctor_func);
-    target->Set(Nan::New("SwitchInst").ToLocalChecked(), ctor_func);
+    target->Set(context, Nan::New("SwitchInst").ToLocalChecked(), ctor_func).Check();
   }
 
   NAN_METHOD(Switch::New) {
@@ -49,9 +52,11 @@ namespace jsllvm {
   }
 
   NAN_METHOD(Switch::AddCase) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     auto _switch = Unwrap(info.This());
-    REQ_LLVM_VAL_ARG(0, OnVal);
-    REQ_LLVM_BB_ARG(1, Dest);
+    REQ_LLVM_VAL_ARG(context, 0, OnVal);
+    REQ_LLVM_BB_ARG(context, 1, Dest);
     _switch->llvm_obj->addCase(static_cast<llvm::ConstantInt*>(OnVal), Dest);
   }
 

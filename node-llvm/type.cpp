@@ -6,7 +6,7 @@ using namespace v8;
 
 namespace jsllvm {
 
-  void Type::Init(Handle<Object> target) {
+  NAN_MODULE_INIT(Type::Init) {
     Nan::HandleScope scope;
 
     Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
@@ -33,15 +33,18 @@ namespace jsllvm {
 
     Nan::SetPrototypeMethod(ctor, "toString", Type::ToString);
 
-    Local<v8::Function> ctor_func = ctor->GetFunction();
+    v8::Isolate *isolate = target->GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    Local<v8::Function> ctor_func = ctor->GetFunction(context).ToLocalChecked();
     constructor_func.Reset(ctor_func);
-    target->Set(Nan::New("Type").ToLocalChecked(), ctor_func);
+    target->Set(context, Nan::New("Type").ToLocalChecked(), ctor_func).Check();
   }
 
 #define LLVM_TYPE_METHOD_PROXY(name) LLVM_TYPE_METHOD(name,name)
 #define LLVM_TYPE_METHOD(name,llvm_ty)					\
   NAN_METHOD(Type::name) {						\
-    info.GetReturnValue().Set(Type::Create(llvm::Type::llvm_ty(llvm::getGlobalContext()))); \
+    info.GetReturnValue().Set(Type::Create(llvm::Type::llvm_ty(TheContext))); \
   }
 
   LLVM_TYPE_METHOD_PROXY(getDoubleTy)

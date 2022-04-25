@@ -59,7 +59,7 @@ namespace ejsllvm {
     }
 
     static EJS_NATIVE_FUNC(LandingPad_prototype_dump) {
-        ((LandingPad*)EJSVAL_TO_OBJECT(*_this))->llvm_landing_pad->dump();
+        // ((LandingPad*)EJSVAL_TO_OBJECT(*_this))->llvm_landing_pad->dump();
         return _ejs_undefined;
     }
 

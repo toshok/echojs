@@ -204,6 +204,8 @@ static EJS_NATIVE_FUNC(_ejs_objc_allocInstance) {
     return rv;
 }
 
+static id (*PerformReturningId)(id performOn, SEL selector) = (id (*)(id, SEL))objc_msgSend;
+
 static EJS_NATIVE_FUNC(_ejs_objc_staticCall) {
     const char *clsname_cstr = [[EJSObjcString stringWithJSString:EJSVAL_TO_STRING(args[0])] UTF8String];
     const char *selector_cstr = [[EJSObjcString stringWithJSString:EJSVAL_TO_STRING(args[1])] UTF8String];
@@ -211,7 +213,7 @@ static EJS_NATIVE_FUNC(_ejs_objc_staticCall) {
     Class cls = objc_getClass (clsname_cstr);
     SEL sel = sel_getUid (selector_cstr);
 
-	return OBJECT_TO_EJSVAL([create_objc_handle_object (objc_msgSend (cls, sel)) jsObject]);
+	return OBJECT_TO_EJSVAL([create_objc_handle_object (PerformReturningId(cls, sel)) jsObject]);
 }
 
 static EJS_NATIVE_FUNC(_ejs_objc_getInstanceVariable) {
@@ -510,7 +512,7 @@ static EJS_NATIVE_FUNC(invokeSelectorFromJS) {
     SEL sel = sel_getUid([[EJSObjcValue valueWithJSValue:args[0]] utf8StringValue]);
 #endif
     id handle = get_objc_id (thisObj);
-    Method meth;
+    Method meth = NULL;
     const char *typeEncoding = NULL;
     void** free_ptrs = NULL;
 
@@ -526,6 +528,10 @@ static EJS_NATIVE_FUNC(invokeSelectorFromJS) {
     }
     else {
         meth = class_getInstanceMethod (object_getClass (handle), sel);
+    }
+
+    if (!meth) {
+        abort();
     }
 
     SPEW(NSLog (@"invoking %s on %@\n", sel_getName (sel), handle);)
@@ -1050,10 +1056,12 @@ coffeekit_ctor_tramp (id obj, SEL sel, ...)
     [inv setArgument:handle_val atIndex:0];
     
     EJSObjcValue* rv = [inv invoke];
-    if (rv == NULL)
+    if (rv == NULL) {
         [NSException raise:@"Exception creating new JS wrapper" format:@"%@", [inv exception]];
-	if (![rv isObject])
+    }
+	if (![rv isObject]) {
         [NSException raise:@"Constructor returned something other than an object" format:@"%@", [inv exception]];
+    }
 	  
 
     EJSObjcObject* peer = [rv objectValue];
@@ -1237,14 +1245,18 @@ static EJS_NATIVE_FUNC(_ejs_objc_UIApplicationMain) {
     NSString* delegate_name = [[EJSObjcString stringWithJSString:EJSVAL_TO_STRING(args[2])] nsString];
     
     SPEW(NSLog (@"About to call UIApplicationMain (..., %@)!", delegate_name);)
-    UIApplicationMain(0, NULL, nil, delegate_name); // XXX get argv/argc/principal from @args
+     // XXX get argv/argc/principal from @args
+    static char *argv[] = { "ejs", NULL };
+    UIApplicationMain(0, argv, nil, delegate_name);
     exit(0);
 }
 
 #else
 static EJS_NATIVE_FUNC(_ejs_objc_NSApplicationMain) {
     SPEW(NSLog (@"About to call NSApplicationMain!");)
-    NSApplicationMain(0, NULL); // XXX populate from args
+    // XXX get argv from args
+    static char *argv[] = { "ejs", NULL };
+    NSApplicationMain(0, argv);
     exit(0);
 }
 #endif

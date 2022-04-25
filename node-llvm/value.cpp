@@ -6,7 +6,7 @@ using namespace v8;
 
 namespace jsllvm {
 
-  void Value::Init(Handle<Object> target) {
+  NAN_MODULE_INIT(Value::Init) {
     Nan::HandleScope scope;
 
     Local<v8::FunctionTemplate> ctor = Nan::New<v8::FunctionTemplate>(New);
@@ -19,9 +19,12 @@ namespace jsllvm {
     Nan::SetPrototypeMethod(ctor, "setName", Value::SetName);
     Nan::SetPrototypeMethod(ctor, "toString", Value::ToString);
 
-    Local<v8::Function> ctor_func = ctor->GetFunction();
+    v8::Isolate *isolate = target->GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+
+    Local<v8::Function> ctor_func = ctor->GetFunction(context).ToLocalChecked();
     constructor_func.Reset(ctor_func);
-    target->Set(Nan::New("Value").ToLocalChecked(), ctor_func);
+    target->Set(context, Nan::New("Value").ToLocalChecked(), ctor_func).Check();
   }
 
   NAN_METHOD(Value::New) {
@@ -36,12 +39,18 @@ namespace jsllvm {
   }
 
   NAN_METHOD(Value::SetName) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();
+
     auto val = Unwrap(info.This());
-    REQ_UTF8_ARG (0, name);
+    REQ_UTF8_ARG (context, 0, name);
     val->llvm_obj->setName(*name);
   }
 
   NAN_METHOD(Value::ToString) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();
+
     auto val = Unwrap(info.This());
 
     std::string str;

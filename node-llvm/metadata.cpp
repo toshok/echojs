@@ -15,8 +15,7 @@ namespace jsllvm {
 
   // MDNode
 
-  void MDNode::Init(Handle<Object> target)
-  {
+  NAN_MODULE_INIT(MDNode::Init) {
     HandleScope scope;
 
     Local<FunctionTemplate> ctor = FunctionTemplate::New(New);
@@ -79,8 +78,7 @@ namespace jsllvm {
   // MDString
 
 
-  void MDString::Init(Handle<Object> target)
-  {
+  NAN_MODULE_INIT(MDString::Init) {
     HandleScope scope;
 
     Local<FunctionTemplate> t = FunctionTemplate::New(New);

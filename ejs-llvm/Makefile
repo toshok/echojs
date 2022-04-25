@@ -35,7 +35,7 @@ LLVM_INCLUDEDIR := $(shell $(LLVM_CONFIG) --includedir)
 LLVM_CXXFLAGS   := $(subst $(LLVM_CPPFLAGS),,$(LLVM_CXXFLAGS))
 LLVM_DEFINES    := $(subst -I$(LLVM_INCLUDEDIR),,$(LLVM_CPPFLAGS))
 
-LLVM_LINK_FLAGS := $(shell $(LLVM_CONFIG) --ldflags) $(shell $(LLVM_CONFIG) --libs --system-libs)
+LLVM_LINK_FLAGS := $(shell $(LLVM_CONFIG) --ldflags --libs)
 
 ifeq ($(HOST_OS),darwin)
 LLVM_LINK_FLAGS := $(LLVM_LINK_FLAGS) -lcurses

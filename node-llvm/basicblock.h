@@ -7,7 +7,7 @@ namespace jsllvm {
 
   class BasicBlock : public LLVMObjectWrap < ::llvm::BasicBlock, BasicBlock> {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
   private:
     typedef LLVMObjectWrap< ::llvm::BasicBlock, BasicBlock> BaseType;

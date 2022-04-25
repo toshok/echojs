@@ -23,7 +23,7 @@ namespace ejsllvm {
 
     static EJS_NATIVE_FUNC(ConstantFP_getDouble) {
         REQ_DOUBLE_ARG(0, v);
-        return Value_new (llvm::ConstantFP::get(llvm::getGlobalContext(), llvm::APFloat(v)));
+        return Value_new (llvm::ConstantFP::get(TheContext, llvm::APFloat(v)));
     }
 
     void

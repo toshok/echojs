@@ -51,7 +51,7 @@ namespace ejsllvm {
             element_types.push_back (Type_GetLLVMObj(EJSDENSEARRAY_ELEMENTS(elementTypes)[i]));
         }
 
-        return StructType_new(llvm::StructType::create(llvm::getGlobalContext(), element_types, name));
+        return StructType_new(llvm::StructType::create(TheContext, element_types, name));
     }
 
     static EJS_NATIVE_FUNC(StructType_prototype_toString) {
@@ -63,7 +63,7 @@ namespace ejsllvm {
     }
 
     static EJS_NATIVE_FUNC(StructType_prototype_dump) {
-        ((StructType*)EJSVAL_TO_OBJECT(*_this))->type->dump();
+        // ((StructType*)EJSVAL_TO_OBJECT(*_this))->type->dump();
         return _ejs_undefined;
     }
 

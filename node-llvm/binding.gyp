@@ -12,7 +12,7 @@
 	"xcode_settings": {
 	        'MACOSX_DEPLOYMENT_TARGET': "<!(echo $MIN_OSX_VERSION)",
 		'OTHER_CFLAGS': [
-			'-std=c++11'
+			'-std=c++14', "-g"
 		],
 	}
     }]

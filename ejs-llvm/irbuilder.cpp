@@ -21,7 +21,7 @@
 
 namespace ejsllvm {
 
-    static llvm::IRBuilder<> _llvm_builder(llvm::getGlobalContext());
+    static llvm::IRBuilder<> _llvm_builder(TheContext);
 
     static ejsval _ejs_IRBuilder_prototype EJSVAL_ALIGNMENT;
     static ejsval _ejs_IRBuilder EJSVAL_ALIGNMENT;
@@ -84,9 +84,10 @@ namespace ejsllvm {
     }
 
     static EJS_NATIVE_FUNC(IRBuilder_createCall) {
-        REQ_LLVM_VAL_ARG(0, callee);
-        REQ_ARRAY_ARG(1, argv);
-        FALLBACK_EMPTY_UTF8_ARG(2, name);
+        REQ_LLVM_TYPE_ARG(0, type);
+        REQ_LLVM_VAL_ARG(1, callee);
+        REQ_ARRAY_ARG(2, argv);
+        FALLBACK_EMPTY_UTF8_ARG(3, name);
 
         std::vector<llvm::Value*> ArgsV;
         for (unsigned i = 0, e = EJSARRAY_LEN(argv); i != e; ++i) {
@@ -94,15 +95,17 @@ namespace ejsllvm {
             EJS_ASSERT(ArgsV.back() != 0); // XXX throw an exception here
         }
 
-        return Call_new (_llvm_builder.CreateCall(callee, ArgsV, name));
+        auto FT = static_cast<llvm::FunctionType*>(type); // XXX need to make this safe...
+        return Call_new (_llvm_builder.CreateCall(FT, callee, ArgsV, name));
     }
 
     static EJS_NATIVE_FUNC(IRBuilder_createInvoke) {
-        REQ_LLVM_VAL_ARG(0, callee);
-        REQ_ARRAY_ARG(1, argv);
-        REQ_LLVM_BB_ARG(2, normal_dest);
-        REQ_LLVM_BB_ARG(3, unwind_dest);
-        FALLBACK_EMPTY_UTF8_ARG(4, name);
+        REQ_LLVM_TYPE_ARG(0, type);
+        REQ_LLVM_VAL_ARG(1, callee);
+        REQ_ARRAY_ARG(2, argv);
+        REQ_LLVM_BB_ARG(3, normal_dest);
+        REQ_LLVM_BB_ARG(4, unwind_dest);
+        FALLBACK_EMPTY_UTF8_ARG(5, name);
 
         std::vector<llvm::Value*> ArgsV;
         for (unsigned i = 0, e = EJSARRAY_LEN(argv); i != e; ++i) {
@@ -110,7 +113,8 @@ namespace ejsllvm {
             EJS_ASSERT(ArgsV.back() != 0); // XXX throw an exception here
         }
 
-        return Invoke_new (_llvm_builder.CreateInvoke(callee, normal_dest, unwind_dest, ArgsV, name));
+        auto FT = static_cast<llvm::FunctionType*>(type); // XXX need to make this safe...
+        return Invoke_new (_llvm_builder.CreateInvoke(FT, callee, normal_dest, unwind_dest, ArgsV, name));
     }
 
     static EJS_NATIVE_FUNC(IRBuilder_createFAdd) {

@@ -7,7 +7,7 @@ namespace jsllvm {
 
   class DIBuilder : public LLVMObjectWrap< ::llvm::DIBuilder, DIBuilder> {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
     static v8::Local<v8::Value> Create(llvm::DIBuilder *builder);
 
@@ -38,13 +38,13 @@ namespace jsllvm {
 
   class DIType : public Nan::ObjectWrap {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
     static v8::Local<v8::Value> Create(llvm::DIType* type);
     static NAN_METHOD(New);
 
-    static llvm::DIType* GetLLVMObj (v8::Local<v8::Value> value) {
-      return Nan::ObjectWrap::Unwrap<DIType>(value->ToObject())->llvm_ditype;
+    static llvm::DIType* GetLLVMObj (v8::Local<v8::Context> context, v8::Local<v8::Value> value) {
+      return Nan::ObjectWrap::Unwrap<DIType>(value->ToObject(context).ToLocalChecked())->llvm_ditype;
     }
 
   private:
@@ -60,13 +60,13 @@ namespace jsllvm {
 
   class DIScope : public Nan::ObjectWrap {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
     static v8::Local<v8::Value> Create(llvm::DIScope* scope);
     static NAN_METHOD(New);
 
-    static llvm::DIScope* GetLLVMObj (v8::Local<v8::Value> value) {
-      return Nan::ObjectWrap::Unwrap<DIScope>(value->ToObject())->llvm_discope;
+    static llvm::DIScope* GetLLVMObj (v8::Local<v8::Context> context, v8::Local<v8::Value> value) {
+      return Nan::ObjectWrap::Unwrap<DIScope>(value->ToObject(context).ToLocalChecked())->llvm_discope;
     }
 
     static Nan::Persistent<v8::FunctionTemplate> constructor;
@@ -82,14 +82,14 @@ namespace jsllvm {
 
   class DISubprogram : public Nan::ObjectWrap {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
     static v8::Local<v8::Value> Create(llvm::DISubprogram* subprogram);
 
     static NAN_METHOD(New);
 
-    static llvm::DISubprogram* GetLLVMObj (v8::Local<v8::Value> value) {
-      return Nan::ObjectWrap::Unwrap<DISubprogram>(value->ToObject())->llvm_disubprogram;
+    static llvm::DISubprogram* GetLLVMObj (v8::Local<v8::Context> context, v8::Local<v8::Value> value) {
+      return Nan::ObjectWrap::Unwrap<DISubprogram>(value->ToObject(context).ToLocalChecked())->llvm_disubprogram;
     }
 
   private:
@@ -105,15 +105,15 @@ namespace jsllvm {
 
   class DICompileUnit : public Nan::ObjectWrap {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
     static v8::Local<v8::Value> Create(llvm::DICompileUnit* file);
 
     static NAN_METHOD(New);
     static NAN_METHOD(Verify);
 
-    static llvm::DICompileUnit* GetLLVMObj (v8::Local<v8::Value> value) {
-      return Nan::ObjectWrap::Unwrap<DICompileUnit>(value->ToObject())->llvm_dicompileunit;
+    static llvm::DICompileUnit* GetLLVMObj (v8::Local<v8::Context> context, v8::Local<v8::Value> value) {
+      return Nan::ObjectWrap::Unwrap<DICompileUnit>(value->ToObject(context).ToLocalChecked())->llvm_dicompileunit;
     }
 
   private:
@@ -129,14 +129,14 @@ namespace jsllvm {
 
   class DIFile : public Nan::ObjectWrap {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
     static v8::Local<v8::Value> Create(llvm::DIFile* file);
 
     static NAN_METHOD(New);
 
-    static llvm::DIFile* GetLLVMObj (v8::Local<v8::Value> value) {
-      return Nan::ObjectWrap::Unwrap<DIFile>(value->ToObject())->llvm_difile;
+    static llvm::DIFile* GetLLVMObj (v8::Local<v8::Context> context, v8::Local<v8::Value> value) {
+      return Nan::ObjectWrap::Unwrap<DIFile>(value->ToObject(context).ToLocalChecked())->llvm_difile;
     }
 
   private:
@@ -152,13 +152,13 @@ namespace jsllvm {
 
   class DILexicalBlock : public Nan::ObjectWrap {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
     static v8::Local<v8::Value> Create(llvm::DILexicalBlock* lexical_block);
     static NAN_METHOD(New);
 
-    static llvm::DILexicalBlock* GetLLVMObj (v8::Local<v8::Value> value) {
-      return Nan::ObjectWrap::Unwrap<DILexicalBlock>(value->ToObject())->llvm_dilexicalblock;
+    static llvm::DILexicalBlock* GetLLVMObj (v8::Local<v8::Context> context, v8::Local<v8::Value> value) {
+      return Nan::ObjectWrap::Unwrap<DILexicalBlock>(value->ToObject(context).ToLocalChecked())->llvm_dilexicalblock;
     }
 
   private:
@@ -173,13 +173,13 @@ namespace jsllvm {
   };
   class DebugLoc : public Nan::ObjectWrap {
   public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
     static v8::Local<v8::Value> Create(llvm::DebugLoc debugLoc);
     static NAN_METHOD(New);
 
-    static llvm::DebugLoc GetLLVMObj (v8::Local<v8::Value> value) {
-      return Nan::ObjectWrap::Unwrap<DebugLoc>(value->ToObject())->llvm_debugloc;
+    static llvm::DebugLoc GetLLVMObj (v8::Local<v8::Context> context, v8::Local<v8::Value> value) {
+      return Nan::ObjectWrap::Unwrap<DebugLoc>(value->ToObject(context).ToLocalChecked())->llvm_debugloc;
     }
 
   private:

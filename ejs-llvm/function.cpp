@@ -59,7 +59,7 @@ namespace ejsllvm {
     }
 
     static EJS_NATIVE_FUNC(Function_prototype_dump) {
-        ((Function*)EJSVAL_TO_OBJECT(*_this))->llvm_fun->dump();
+        // ((Function*)EJSVAL_TO_OBJECT(*_this))->llvm_fun->dump();
         return _ejs_undefined;
     }
 
@@ -163,7 +163,7 @@ namespace ejsllvm {
 
     static EJS_NATIVE_FUNC(Function_prototype_get_name) {
         Function* fun = ((Function*)EJSVAL_TO_OBJECT(*_this));
-        std::string fun_name = fun->llvm_fun->getName();
+        std::string fun_name = fun->llvm_fun->getName().str();
         return _ejs_string_new_utf8(fun_name.c_str());
     }
 
