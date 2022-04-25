@@ -49,7 +49,7 @@ namespace ejsllvm {
     }
 
     static EJS_NATIVE_FUNC(LoadInst_prototype_dump) {
-        ((LoadInst*)EJSVAL_TO_OBJECT(*_this))->llvm_load->dump();
+        // ((LoadInst*)EJSVAL_TO_OBJECT(*_this))->llvm_load->dump();
         return _ejs_undefined;
     }
 

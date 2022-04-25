@@ -220,7 +220,7 @@ public:
   LLVMObjectWrap(LLVMTy* llvm_obj) : llvm_obj(llvm_obj) { }
   static v8::Local<v8::Value> Create(LLVMTy* llvm_obj) {
     Nan::EscapableHandleScope scope;
-    v8::Local<v8::Object> new_instance = Nan::NewInstance(Nan::New(JSLLVMTy::constructor_func)).ToLocalChecked();
+    auto new_instance = Nan::NewInstance(Nan::New(JSLLVMTy::constructor_func)).ToLocalChecked();
     JSLLVMTy* new_a = new JSLLVMTy(llvm_obj);
     new_a->Wrap(new_instance);
     return scope.Escape(new_instance);

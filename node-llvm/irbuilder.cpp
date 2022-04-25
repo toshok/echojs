@@ -1,5 +1,6 @@
 #include "node-llvm.h"
 #include "irbuilder.h"
+#include "constant.h"
 #include "dibuilder.h"
 #include "type.h"
 #include "value.h"
@@ -548,10 +549,8 @@ namespace jsllvm {
     FALLBACK_EMPTY_UTF8_ARG(context, 0, val);
     FALLBACK_EMPTY_UTF8_ARG(context, 1, name);
 
-#if new_llvm
-    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateGlobalStringPtr(*val, *name)));
+    Local<v8::Value> result = Constant::Create(IRBuilder::builder.CreateGlobalStringPtr(*val, *name));
     info.GetReturnValue().Set(result);
-#endif
   }
 
   NAN_METHOD(IRBuilder::CreateSwitch) {

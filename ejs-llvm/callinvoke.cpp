@@ -58,7 +58,7 @@ namespace ejsllvm {
     }
 
     static EJS_NATIVE_FUNC(Call_prototype_dump) {
-        ((Call*)EJSVAL_TO_OBJECT(*_this))->llvm_call->dump();
+        // ((Call*)EJSVAL_TO_OBJECT(*_this))->llvm_call->dump();
         return _ejs_undefined;
     }
 
@@ -165,7 +165,7 @@ namespace ejsllvm {
     }
 
     static EJS_NATIVE_FUNC(Invoke_prototype_dump) {
-        ((Invoke*)EJSVAL_TO_OBJECT(*_this))->llvm_invoke->dump();
+        // ((Invoke*)EJSVAL_TO_OBJECT(*_this))->llvm_invoke->dump();
         return _ejs_undefined;
     }
 

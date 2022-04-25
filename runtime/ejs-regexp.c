@@ -17,6 +17,8 @@
 
 #include "pcre.h"
 
+ejsval _ejs_RegExp_prototype_exec_closure;
+
 static EJS_NATIVE_FUNC(_ejs_RegExp_impl);
 
 static const unsigned char* pcre16_tables;

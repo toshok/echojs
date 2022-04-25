@@ -71,7 +71,7 @@ namespace ejsllvm {
     }
 
     static EJS_NATIVE_FUNC(BasicBlock_prototype_dump) {
-        ((BasicBlock*)EJSVAL_TO_OBJECT(*_this))->llvm_bb->dump();
+        // ((BasicBlock*)EJSVAL_TO_OBJECT(*_this))->llvm_bb->dump();
         return _ejs_undefined;
     }
 

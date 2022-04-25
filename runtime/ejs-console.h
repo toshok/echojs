@@ -10,7 +10,7 @@
 
 EJS_BEGIN_DECLS
 
-ejsval _ejs_console;
+extern ejsval _ejs_console;
 
 void _ejs_console_init(ejsval global);
 

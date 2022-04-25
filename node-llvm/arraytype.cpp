@@ -65,7 +65,7 @@ namespace jsllvm {
 
   NAN_METHOD(ArrayType::Dump) {
     ArrayType* type = ObjectWrap::Unwrap<ArrayType>(info.This());
-    type->llvm_obj->dump();
+    // type->llvm_obj->dump();
   }
 
   Nan::Persistent<v8::FunctionTemplate> ArrayType::constructor;

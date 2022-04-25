@@ -63,7 +63,7 @@ namespace ejsllvm {
     }
 
     static EJS_NATIVE_FUNC(StructType_prototype_dump) {
-        ((StructType*)EJSVAL_TO_OBJECT(*_this))->type->dump();
+        // ((StructType*)EJSVAL_TO_OBJECT(*_this))->type->dump();
         return _ejs_undefined;
     }
 

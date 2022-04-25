@@ -32,7 +32,7 @@ namespace jsllvm {
   }
 
   NAN_METHOD(Constant::New) {
-    Nan::ThrowError("Constant is not meant to be instantiated.");
+    info.GetReturnValue().Set(info.This());
   }
 
   NAN_METHOD(Constant::GetNull) {

@@ -119,7 +119,7 @@ let options = {
     extra_clang_args: '',
     ios_sdk: '9.2',
     ios_min: '8.0',
-    osx_min: '10.10',
+    osx_min: '11.0',
     target_pointer_size: 64,
     import_variables: [],
     srcdir: false,
@@ -288,7 +288,7 @@ let args = {
     },
     '--osx-min': {
         option:  'osx_min',
-        help:    'the minimum version of OSX to support.  Default is 10.10.'
+        help:    'the minimum version of OSX to support.  Default is 11.0.'
     },
     '--srcdir': {
         flag:    'srcdir',
@@ -366,7 +366,9 @@ let sim_bin=`${sim_base}/Developer/usr/bin`;
 let dev_bin=`${dev_base}/Developer/usr/bin`;
 
 function target_llc_args(platform, arch) {
-    let args = [`-march=${arch_info[options.target_arch].llc_arch}`, '-disable-fp-elim' ];
+    let args = [
+        `-march=${arch_info[options.target_arch].llc_arch}`,
+    ];
     if (platform === 'darwin') {
         if (arch === 'arm')
             args = args.concat([`-mtriple=thumbv7-apple-ios${options.ios_min}.0`, '-mattr=+v6', '-relocation-model=pic', '-soft-float' ]);
@@ -517,6 +519,10 @@ function compileFile(filename, parse_tree, modules, files_count, cur_file, compi
     compiled_module.writeToFile(ll_filename);
     debug.log (1, `done writing ${ll_filename}`);
 
+    // debug.log (1, `writing ${bc_filename}`);
+    // compiled_module.writeBitcodeToFile(bc_filename);
+    // debug.log (1, `done writing ${bc_filename}`);
+
     compiled_modules.push({ filename: options.basename ? path.basename(filename) : filename, module_toplevel: compiled_module.toplevel_name });
 
     if (!isNode()) {
@@ -655,7 +661,7 @@ function do_final_link(main_file, modules) {
 
     if (!options.quiet) options.stdout_writer.write(`${bold()}LINK${reset()} ${output_filename}`);
     
-    debug.log (1, `executing '${target_linker} ${clang_args.join(' ')}'`);
+    debug.log (0, `executing '${target_linker} ${clang_args.join(' ')}'`);
 
     if (typeof __ejs != 'undefined') {
         spawn(target_linker, clang_args);

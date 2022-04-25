@@ -79,7 +79,7 @@ namespace ejsllvm {
     }
 
     static EJS_NATIVE_FUNC(GlobalVariable_prototype_dump) {
-        ((GlobalVariable*)EJSVAL_TO_OBJECT(*_this))->llvm_global->dump();
+        // ((GlobalVariable*)EJSVAL_TO_OBJECT(*_this))->llvm_global->dump();
         return _ejs_undefined;
     }
 

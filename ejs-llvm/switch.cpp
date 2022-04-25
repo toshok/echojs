@@ -60,7 +60,7 @@ namespace ejsllvm {
     }
 
     static EJS_NATIVE_FUNC(Switch_prototype_dump) {
-        ((Switch*)EJSVAL_TO_OBJECT(*_this))->llvm_switch->dump();
+        // ((Switch*)EJSVAL_TO_OBJECT(*_this))->llvm_switch->dump();
         return _ejs_undefined;
     }
 
