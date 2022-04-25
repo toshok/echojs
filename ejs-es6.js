@@ -1,13 +1,7 @@
-/* -*- Mode: js2; indent-tabs-mode: nil; tab-width: 4; js2-indent-offset: 4; js2-basic-offset: 4; -*-
- * vim: set ts=4 sw=4 et tw=99 ft=js:
- */
-
 import * as os from            '@node-compat/os';
 import * as path from          '@node-compat/path';
 import * as fs from            '@node-compat/fs';
 import * as child_process from '@node-compat/child_process';
-
-let spawn = child_process.spawn;
 
 import * as debug        from './lib/debug';
 import { compile }       from './lib/compiler';
@@ -16,6 +10,8 @@ import { dumpModules, getAllModules, gatherAllModules } from './lib/passes/gathe
 import { bold, reset, genFreshFileName, Writer } from './lib/echo-util';
 
 import { LLVM_SUFFIX as DEFAULT_LLVM_SUFFIX, RUNLOOP_IMPL as DEFAULT_RUNLOOP_IMPL } from './lib/host-config';
+
+let spawn = child_process.spawn;
 
 function isNode() {
     return typeof __ejs == 'undefined';
