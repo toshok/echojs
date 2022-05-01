@@ -23,6 +23,10 @@
 #include "loadinst.h"
 #include "metadata.h"
 
+namespace jsllvm {
+  llvm::LLVMContext TheContext;
+}
+
 std::string& trim(std::string& str)
 {
   str.erase(0, str.find_first_not_of(" \n"));       //prefixing spaces

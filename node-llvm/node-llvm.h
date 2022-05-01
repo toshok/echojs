@@ -205,7 +205,7 @@ extern std::string& trim(std::string& str);
 
 
 namespace jsllvm {
-  static llvm::LLVMContext TheContext;
+  extern llvm::LLVMContext TheContext;
 
 #if NODE_MODULE_VERSION > NODE_0_10_MODULE_VERSION
 #define PERSISTENT_TO_LOCAL(T, v) ::v8::Local<T>::New(::v8::Isolate::GetCurrent(), v);

@@ -44,9 +44,6 @@ namespace jsllvm {
   }
 
   NAN_METHOD(Module::New) {
-    v8::Isolate *isolate = info.GetIsolate();
-    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
-
     if (info.Length()) {
       REQ_UTF8_ARG(context, 0, name);
       llvm::Module* llvm_module = new llvm::Module(*name, TheContext);
@@ -65,8 +62,6 @@ namespace jsllvm {
   }
 
   NAN_METHOD(Module::GetOrInsertIntrinsic) {
-    v8::Isolate *isolate = info.GetIsolate();
-    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     auto module = Unwrap(info.This());
 
     REQ_UTF8_ARG(context, 0, id);
@@ -137,7 +132,6 @@ namespace jsllvm {
 
   NAN_METHOD(Module::GetGlobalVariable) {
     v8::Isolate *isolate = info.GetIsolate();
-    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     auto module = Unwrap(info.This());
 
     REQ_UTF8_ARG(context, 0, name);
@@ -181,8 +175,6 @@ namespace jsllvm {
   }
 
   NAN_METHOD(Module::GetFunction) {
-    v8::Isolate *isolate = info.GetIsolate();
-    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     auto module = Unwrap(info.This());
 
     REQ_UTF8_ARG(context, 0, name);
@@ -212,8 +204,6 @@ namespace jsllvm {
   }
 
   NAN_METHOD(Module::WriteBitcodeToFile) {
-    v8::Isolate *isolate = info.GetIsolate();
-    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     auto module = Unwrap(info.This());
 
     REQ_UTF8_ARG(context, 0, path);
@@ -226,8 +216,6 @@ namespace jsllvm {
   }
 
   NAN_METHOD(Module::WriteToFile) {
-    v8::Isolate *isolate = info.GetIsolate();
-    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     auto module = Unwrap(info.This());
 
     REQ_UTF8_ARG(context, 0, path);
@@ -249,8 +237,6 @@ namespace jsllvm {
   }
   
   NAN_METHOD(Module::SetDataLayout) {
-    v8::Isolate *isolate = info.GetIsolate();
-    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     auto module = Unwrap(info.This());
 
     REQ_UTF8_ARG(context, 0, dataLayout);
@@ -259,8 +245,6 @@ namespace jsllvm {
   }
 
   NAN_METHOD(Module::SetTriple) {
-    v8::Isolate *isolate = info.GetIsolate();
-    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     auto module = Unwrap(info.This());
 
     REQ_UTF8_ARG(context, 0, triple);
