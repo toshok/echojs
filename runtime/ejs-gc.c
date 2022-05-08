@@ -1160,8 +1160,8 @@ calc_heap_size()
 void
 _ejs_gc_collect(const char *reason)
 {
-    _ejs_log ("_ejs_gc_collect(%s)\n", reason);
-#if gc_timings
+    SPEW(1, _ejs_log ("_ejs_gc_collect(%s)\n", reason));
+#if gc_timings > 0
     struct timeval tvbefore, tvafter;
 
     gettimeofday (&tvbefore, NULL);
@@ -1171,7 +1171,7 @@ _ejs_gc_collect(const char *reason)
 
     _ejs_gc_collect_inner(EJS_FALSE);
 
-#if gc_timings
+#if gc_timings > 0
     gettimeofday (&tvafter, NULL);
 
     uint64_t usec_before = tvbefore.tv_sec * 1000000 + tvbefore.tv_usec;
@@ -1472,6 +1472,7 @@ _ejs_gc_dump_heap_stats()
 
     _ejs_log ("\n");
 
+#if spew >= 2
     if (los_list) {
         _ejs_log ("large object store: ");
         for (LargeObjectInfo* lobj = los_list; lobj; lobj = lobj->next) {
@@ -1483,6 +1484,7 @@ _ejs_gc_dump_heap_stats()
         }
         _ejs_log ("\n");
     }
+#endif
 }
 
 /////////
