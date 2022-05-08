@@ -657,7 +657,7 @@ function do_final_link(main_file, modules) {
 
     if (!options.quiet) options.stdout_writer.write(`${bold()}LINK${reset()} ${output_filename}`);
     
-    debug.log (0, `executing '${target_linker} ${clang_args.join(' ')}'`);
+    debug.log (1, `executing '${target_linker} ${clang_args.join(' ')}'`);
 
     if (typeof __ejs != 'undefined') {
         spawn(target_linker, clang_args);
