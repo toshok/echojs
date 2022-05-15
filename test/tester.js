@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-var path = require('path'),
+const path = require('path'),
     os = require('os'),
     fs = require('fs'),
     glob = require('glob'),
@@ -11,58 +11,58 @@ var path = require('path'),
     temp = require('temp');
 
 // maps from test_name -> properties as defined in the test file
-var skip_ifs   = Object.create(null);   // `// skip-if: ...` an expression, evaled.  if true, ignore the test
-var xfails     = Object.create(null);   // `// xfail: ...`   test is expected to fail.  ... is the reason
-var generators = Object.create(null);   // `// generator: ...` ... is the executable used to generate expected output
+const skip_ifs   = Object.create(null);   // `// skip-if: ...` an expression, evaled.  if true, ignore the test
+const xfails     = Object.create(null);   // `// xfail: ...`   test is expected to fail.  ... is the reason
+const generators = Object.create(null);   // `// generator: ...` ... is the executable used to generate expected output
 
-var expected_names   = Object.create(null);
-var expected_stdouts = Object.create(null);
-var stdouts          = Object.create(null);
+const expected_names   = Object.create(null);
+const expected_stdouts = Object.create(null);
+const stdouts          = Object.create(null);
 
-var failed_tests = [];
+const failed_tests = [];
 
-var compilers = [
+const compilers = [
     "../ejs",
     "../ejs.exe.stage1",
     "../ejs.exe.stage2"
 ];
 
-var runloop_impl = require('../lib/generated/lib/host-config.js').RUNLOOP_IMPL;
+let runloop_impl = require('../lib/generated/lib/host-config.js').RUNLOOP_IMPL;
 
-var running_on_travis = process.env['TRAVIS_BUILD_NUMBER'] != null;
+const running_on_travis = process.env['TRAVIS_BUILD_NUMBER'] != null;
 
-var platform_to_test = null;
+let platform_to_test = null;
 
-var stage_to_run = 0;
+let stage_to_run = 0;
 
-var test_threads = 4;
+let test_threads = 4;
 
-var result_types = {
+const result_types = {
     fail:  { str: "FAIL",  colorizer: colors.red.bold },
     xfail: { str: "xfail", colorizer: colors.yellow },
     xpass: { str: "ERROR", colorizer: colors.red.bold },
     pass:  { str: "pass",  colorizer: colors.green }
 };
 
-var fail_str = 'fail';
-var xfail_str = 'xfail';
-var xpass_str = 'xpass';
-var pass_str  = 'pass';
+const fail_str = 'fail';
+const xfail_str = 'xfail';
+const xpass_str = 'xpass';
+const pass_str  = 'pass';
 
 function timerStart() {
   return process.hrtime();
 }
 // from http://stackoverflow.com/questions/10617070/how-to-measure-execution-time-of-javascript-code-with-callbacks
 function getElapsed(start_time) {
-    var elapsed = process.hrtime(start_time);
-    var elapsed_ms = elapsed[0] * 1000 + elapsed[1] / 1000000;
+    let elapsed = process.hrtime(start_time);
+    let elapsed_ms = elapsed[0] * 1000 + elapsed[1] / 1000000;
     return elapsed_ms.toFixed(2); // 2 decimal places
 }
 
 function makeJustifierColumn(columns, leftJustify) {
-    var spaces = Array(columns).join(" ");
+    let spaces = Array(columns).join(" ");
     return function(str, transformer) {
-        var padding = spaces.substr(0, columns - str.length);
+        let padding = spaces.substr(0, columns - str.length);
         if (transformer)
             str = transformer(str);
         if (leftJustify)
@@ -76,13 +76,13 @@ function makeNoopColumn() {
     return function (x) { return x; };
 }
 
-var testColumn      = makeJustifierColumn(40, false);
-var resultColumn    = makeJustifierColumn(5, true);    // maximum length of fail/xfail/xpass/pass
-var timeColumn      = makeJustifierColumn(11, false);  // enough to hold "XXXXX.XX ms".
-var errStringColumn = makeNoopColumn();
+const testColumn      = makeJustifierColumn(40, false);
+const resultColumn    = makeJustifierColumn(5, true);    // maximum length of fail/xfail/xpass/pass
+const timeColumn      = makeJustifierColumn(11, false);  // enough to hold "XXXXX.XX ms".
+const errStringColumn = makeNoopColumn();
 
 function writeOutput(test_name, result_type, elapsed, err_string) {
-    var elapsed_str = elapsed == null ? "?" : elapsed;
+    let elapsed_str = elapsed == null ? "?" : elapsed;
 
     console.log(
         testColumn(test_name),
@@ -137,9 +137,9 @@ function checkStdout(test_name, elapsed, cb) {
 }
 
 function shouldGenerateExpectedOutput(test_file, expected_file) {
-    var test_stat = fs.statSync(test_file);
+    let test_stat = fs.statSync(test_file);
     try {
-        var expected_stat = fs.statSync(expected_file);
+        let expected_stat = fs.statSync(expected_file);
         return test_stat.mtime.getTime() > expected_stat.mtime.getTime();
     }
     catch (e) {
@@ -149,7 +149,7 @@ function shouldGenerateExpectedOutput(test_file, expected_file) {
 }
 
 function processOneTest(gen_expected, test, cb) {
-    var test_name = path.basename(test);
+    let test_name = path.basename(test);
 
     //if (!gen_expected) console.log("processOneTest(" + gen_expected + ", " + test_name + ")");
     if (skip_ifs[test_name]) {
@@ -161,18 +161,19 @@ function processOneTest(gen_expected, test, cb) {
     }
 
     if (gen_expected) {
-        var expected_name = "./expected/" + test_name + ".expected-out";
+        const expected_name = "./expected/" + test_name + ".expected-out";
 
-        var should_generate = shouldGenerateExpectedOutput(test, expected_name);
+        const should_generate = shouldGenerateExpectedOutput(test, expected_name);
 
         expected_names[test_name] = expected_name;
-        var generator = generators[test_name] || "node";
+        const generator = generators[test_name] || "node";
         if (should_generate && generator !== "none") {
             console.log("generating expected output for " + test_name + " using " + generator);
 
             exec(generator + " " + test + " > " + expected_name, function (err, stdout) {
-                if (err)
+                if (err) {
                     throw new Error(err);
+                }
                 expected_stdouts[test_name] = fs.readFileSync(expected_name).toString();
                 cb();
             });
@@ -185,21 +186,21 @@ function processOneTest(gen_expected, test, cb) {
     }
     else {
         try {
-            var start = timerStart();
-	    var platform_target = platform_to_test ? ["--target", platform_to_test] : [];
-            var ccomp = spawn(compilers[stage_to_run],  platform_target.concat(["--srcdir", "--moduledir", "../node-compat", "--moduledir", "../ejs-llvm", test]));
+            const start = timerStart();
+            const platform_target = platform_to_test ? ["--target", platform_to_test] : [];
+            const ccomp = spawn(compilers[stage_to_run],  platform_target.concat(["--srcdir", "--moduledir", "../node-compat", "--moduledir", "../ejs-llvm", test]));
             ccomp.on("exit", function(code, errstring) {
                 // XXX check code to make sure we were successful?
-		var env;
-		if (platform_to_test === 'sim') {
-		    process.env['EJS_FORCE_STDOUT'] = '1';
-		    process.env['DYLD_FRAMEWORK_PATH'] = '/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/System/Library/Frameworks:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/System/Library/PrivateFrameworks';
-		    process.env['DYLD_LIBRARY_PATH'] = '/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/usr/lib:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/usr/lib/system:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/System/Library/PrivateFrameworks/FontServices.framework:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/System/Library/Frameworks/Accelerate.framework/Frameworks/vecLib.framework:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk//System/Library/Frameworks/OpenGLES.framework';
-		}
+                let env;
+                if (platform_to_test === 'sim') {
+                    process.env['EJS_FORCE_STDOUT'] = '1';
+                    process.env['DYLD_FRAMEWORK_PATH'] = '/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/System/Library/Frameworks:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/System/Library/PrivateFrameworks';
+                    process.env['DYLD_LIBRARY_PATH'] = '/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/usr/lib:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/usr/lib/system:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/System/Library/PrivateFrameworks/FontServices.framework:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/System/Library/Frameworks/Accelerate.framework/Frameworks/vecLib.framework:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk//System/Library/Frameworks/OpenGLES.framework';
+                }
 
-                var cexec = spawn("./" + test + ".exe");
-                var test_stdout = "";
-                var test_stderr = "";
+                const cexec = spawn("./" + test + ".exe");
+                let test_stdout = "";
+                let test_stderr = "";
                 cexec.on("close", function(code, errstring) {
                     stdouts[test_name] = test_stdout;
 
@@ -221,7 +222,7 @@ function processOneTest(gen_expected, test, cb) {
                 });
             });
             ccomp.on("error", function(err) {
-                var elapsed = getElapsed(start);
+                const elapsed = getElapsed(start);
                 testFailed(test_name, err.toString(), elapsed);
                 cb();
                 return;
@@ -236,19 +237,20 @@ function processOneTest(gen_expected, test, cb) {
 }
 
 function processTests(gen_expected, tests, cb) {
-    var i = 0;
-    var e = tests.length;
+    let i = 0;
+    const e = tests.length;
 
-    var num_outstanding = 0;
+    let num_outstanding = 0;
 
-    var processTestCb = function() {
+    const processTestCb = function() {
         //console.log("processTestCb");
         i ++;
         num_outstanding --;
         if (i >= e) {
             //console.log("doing setTimeout");
-            if (num_outstanding == 0)
+            if (num_outstanding == 0) {
                 setTimeout(cb, 0);
+            }
             return;
         }
 
@@ -256,7 +258,7 @@ function processTests(gen_expected, tests, cb) {
         processOneTest(gen_expected, tests[i], processTestCb);
     };
 
-    for (var j = 0; j < test_threads; j ++) {
+    for (let j = 0; j < test_threads; j ++) {
         processOneTest(gen_expected, tests[i++], processTestCb);
 
         num_outstanding++;
@@ -264,15 +266,16 @@ function processTests(gen_expected, tests, cb) {
 }
 
 function readTest(test) {
-    var test_name = path.basename(test);
-    var contents = fs.readFileSync(test).toString();
-    var lines = contents.split('\n');
+    const test_name = path.basename(test);
+    const contents = fs.readFileSync(test).toString();
+    const lines = contents.split('\n');
 
     // read the comments at the start, and pull out useful info
-    for (var i = 0, e = lines.length; i < e; i ++) {
-        var line = lines[i];
-        if (line.indexOf("//") !== 0)
+    for (let i = 0, e = lines.length; i < e; i ++) {
+        let line = lines[i];
+        if (line.indexOf("//") !== 0) {
             return;
+        }
 
         line = line.substr(2).trim();
 
@@ -296,17 +299,19 @@ function readTest(test) {
     }
 }
 
-var args = process.argv.slice(2);
+const args = process.argv.slice(2);
 
-var test_to_run = null;
+let test_to_run = null;
 
 if (args[0] == '-p') {
     args.shift();
-    if (args.length < 1)
+    if (args.length < 1) {
         throw new Error("-p requires an argument [osx, sim]");
+    }
     platform_to_test = args.shift();
-    if (platform_to_test !== 'osx' && platform_to_test !== 'sim')
+    if (platform_to_test !== 'osx' && platform_to_test !== 'sim') {
         throw new Error("-p requires an argument [osx, sim]");
+    }
 }
 
 if (args[0] == '-s') {
@@ -335,7 +340,7 @@ function runTests(tests) {
         
     processTests(true, tests, function() {
         processTests(false, tests, function() {
-            var run_failed = failed_tests.length > 0;
+            const run_failed = failed_tests.length > 0;
             if (run_failed > 0) {
                 console.log();
                 console.log(testColumn(failed_tests.length + " failed tests"));
