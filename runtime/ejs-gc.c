@@ -946,18 +946,18 @@ mark_from_modules()
 
 #if TARGET_CPU_ARM
 #define MARK_REGISTERS EJS_MACRO_START \
-    GCObjectPtr __r0, __r1, __r2, __r3, __r4, __r5, __r6, __r7, __r8, __r9, __r10, __r11, __r12; \
+    GCObjectPtr __r0, __r1, __r2, __r3, __r4, __r5, __r6, __r7, __r8, __r9, __r10, __r11, __r12, __end; \
     __asm ("str r0, %0; str r1, %1; str r2, %2; str r3, %3; str r4, %4; str r5, %5; str r6, %6;" \
            "str r7, %7; str r8, %8; str r9, %9; str r10, %10; str r11, %11; str r12, %12;" \
           : "=m"(__r0), "=m"(__r1), "=m"(__r2), "=m"(__r3), "=m"(__r4),  \
             "=m"(__r5), "=m"(__r6), "=m"(__r7), "=m"(__r8),  "=m"(__r9), \
             "=m"(__r10), "=m"(__r11), "=m"(__r12));                      \
                                                                          \
-    mark_pointers_in_range(&__r12, &__r0);                               \
+    mark_pointers_in_range(&__end, &__r0);                               \
     EJS_MACRO_END
 #elif TARGET_CPU_AMD64
 #define MARK_REGISTERS EJS_MACRO_START \
-    GCObjectPtr __rax, __rbx, __rcx, __rdx, __rsi, __rdi, __rbp, __rsp, __r8, __r9, __r10, __r11, __r12, __r13, __r14, __r15; \
+    GCObjectPtr __rax, __rbx, __rcx, __rdx, __rsi, __rdi, __rbp, __rsp, __r8, __r9, __r10, __r11, __r12, __r13, __r14, __r15, __end; \
     __asm ("movq %%rax, %0; movq %%rbx, %1; movq %%rcx, %2; movq %%rdx, %3; movq %%rsi, %4;" \
            "movq %%rdi, %5; movq %%rbp, %6; movq %%rsp, %7; movq %%r8, %8;  movq %%r9, %9;" \
            "movq %%r10, %10; movq %%r11, %11; movq %%r12, %12; movq %%r13, %13; movq %%r14, %14; movq %%r15, %15;" \
@@ -965,7 +965,7 @@ mark_from_modules()
             "=m"(__rdi), "=m"(__rbp), "=m"(__rsp), "=m"(__r8),  "=m"(__r9), \
             "=m"(__r10), "=m"(__r11), "=m"(__r12), "=m"(__r13), "=m"(__r14), "=m"(__r15)); \
                                                                         \
-    mark_pointers_in_range(&__r15, &__rax);                             \
+    mark_pointers_in_range(&__end, &__rax);                             \
     EJS_MACRO_END
 #elif TARGET_CPU_X86
 #define MARK_REGISTERS // just keep the build limping along
