@@ -955,6 +955,8 @@ mark_from_modules()
                                                                          \
     mark_pointers_in_range(&__end, &__r0);                               \
     EJS_MACRO_END
+#elif TARGET_CPU_AARCH64
+#define MARK_REGISTERS
 #elif TARGET_CPU_AMD64
 #define MARK_REGISTERS EJS_MACRO_START \
     GCObjectPtr __rax, __rbx, __rcx, __rdx, __rsi, __rdi, __rbp, __rsp, __r8, __r9, __r10, __r11, __r12, __r13, __r14, __r15, __end; \
