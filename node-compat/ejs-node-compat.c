@@ -651,6 +651,8 @@ static EJS_NATIVE_FUNC(_ejs_os_tmpdir) {
 static EJS_NATIVE_FUNC(_ejs_os_arch) {
 #if TARGET_CPU_ARM
     const char* arch = "arm";
+#elif TARGET_CPU_AARCH64
+    const char* arch = "arm64";
 #elif TARGET_CPU_AMD64
     const char* arch = "x64";
 #elif TARGET_CPU_X86
