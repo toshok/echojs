@@ -130,7 +130,8 @@ let arch_info = {
     'x86_64': { pointer_size: 64, little_endian: true, llc_arch: 'x86-64',  clang_arch: 'x86_64' },
     x86:      { pointer_size: 32, little_endian: true, llc_arch: 'x86',     clang_arch: 'i386' },
     arm:      { pointer_size: 32, little_endian: true, llc_arch: 'arm',     clang_arch: 'armv7' },
-    aarch64:  { pointer_size: 64, little_endian: true, llc_arch: 'aarch64', clang_arch: 'aarch64' }
+    aarch64:  { pointer_size: 64, little_endian: true, llc_arch: 'aarch64', clang_arch: 'aarch64' },
+    arm64:    { pointer_size: 64, little_endian: true, llc_arch: 'arm64',   clang_arch: 'arm64' }
 };
 
 function set_target_arch(arch) {
@@ -158,7 +159,7 @@ function set_target(platform, arch) {
 function set_target_alias(alias) {
     const target_aliases = {
         linux_amd64: { platform: 'linux',  arch: 'x86_64' },
-        osx:         { platform: 'darwin', arch: 'x86_64' },
+        osx:         { platform: 'darwin', arch: 'arm64' },
         sim:         { platform: 'darwin', arch: 'x86' },
         dev:         { platform: 'darwin', arch: 'arm' }
     };
@@ -391,7 +392,7 @@ function target_link_args(platform, arch) {
     }
 
     if (platform === 'darwin') {
-        if (arch === 'x86_64') return args;
+        if (arch === 'x86_64' || arch === 'arm64') return args;
         if (arch === 'x86')
             return args.concat([ '-isysroot', `${sim_base}/Developer/SDKs/iPhoneSimulator${options.ios_sdk}.sdk`, `-miphoneos-version-min=${options.ios_min}` ]);
         return args.concat(['-isysroot', `${dev_base}/Developer/SDKs/iPhoneOS${options.ios_sdk}.sdk`, `-miphoneos-version-min=${options.ios_min}` ]);
@@ -412,7 +413,7 @@ function target_libraries(platform, arch) {
         let rv = [ '-framework', 'Foundation' ];
 
         // for osx we only need Foundation and AppKit
-        if (arch === 'x86_64') return rv.concat([ '-framework' , 'AppKit' ]);
+        if (arch === 'x86_64' || arch === 'arm64') return rv.concat([ '-framework' , 'AppKit' ]);
 
         // for any other darwin we're dealing with ios, so...
         return rv.concat([ '-framework', 'UIKit', '-framework', 'GLKit', '-framework', 'OpenGLES', '-framework', 'CoreGraphics' ]);
@@ -424,7 +425,7 @@ function target_libraries(platform, arch) {
 function target_libecho(platform, arch) {
     if (options.srcdir) {
         if (platform === 'darwin') {
-            if (arch === 'x86_64') return 'runtime/libecho.a';
+            if (arch === 'x86_64' || arch === 'arm64') return 'runtime/libecho.a';
             if (arch === 'x86') return 'runtime/libecho.a.sim';
             if (arch === 'arm') return 'runtime/libecho.a.armv7';
 
@@ -447,7 +448,7 @@ function target_extra_libs(platform, arch) {
             if (arch === 'x86_64')  return ['external-deps/double-conversion-osx/double-conversion/libdouble-conversion.a', 'external-deps/pcre-osx/.libs/libpcre16.a'];
             if (arch === 'x86')     return ['external-deps/double-conversion-iossim/double-conversion/libdouble-conversion.a', 'external-deps/pcre-iossim/.libs/libpcre16.a'];
             if (arch === 'arm')     return ['external-deps/double-conversion-iosdev/double-conversion/libdouble-conversion.a', 'external-deps/pcre-iosdev/.libs/libpcre16.a'];
-            if (arch === 'aarch64') return ['external-deps/double-conversion-iosdevs/double-conversion/libdouble-conversion.a', 'external-deps/pcre-iosdevaarch64/.libs/libpcre16.a'];
+            if (arch === 'aarch64' || arch === 'arm64') return ['external-deps/double-conversion-osx/double-conversion/libdouble-conversion.a', 'external-deps/pcre-osx/.libs/libpcre16.a'];
         }
 
         throw new Error('no pcre for this platform');
@@ -503,13 +504,12 @@ function compileFile(filename, parse_tree, modules, files_count, cur_file, compi
     let o_filename      = tmpfile('.o');
 
     temp_files.push(ll_filename, bc_filename, ll_opt_filename, o_filename);
-    
-    let llvm_as_args = [`-o=${bc_filename}`, ll_filename];
-    let opt_args     = ['-strip-dead-prototypes', '-S', `-o=${ll_opt_filename}`, bc_filename];
-    let llc_args     = target_llc_args(options.target_platform,options.target_arch).concat(['-filetype=obj', `-o=${o_filename}`, ll_opt_filename]);
 
-    if (options.opt_level > 0)
-        opt_args.unshift(`-O${options.opt_level}`);
+    let opt_level = options.opt_level > 0 ? `default<O${options.opt_level}>,` : "";
+
+    let llvm_as_args = [`-o=${bc_filename}`, ll_filename];
+    let opt_args     = [`-passes=${opt_level}strip-dead-prototypes`, '-S', `-o=${ll_opt_filename}`, bc_filename];
+    let llc_args     = target_llc_args(options.target_platform,options.target_arch).concat(['-filetype=obj', `-o=${o_filename}`, ll_opt_filename]);
 
     debug.log (1, `writing ${ll_filename}`);
     compiled_module.writeToFile(ll_filename);
