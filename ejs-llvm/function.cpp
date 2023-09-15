@@ -102,7 +102,7 @@ namespace ejsllvm {
 
     static EJS_NATIVE_FUNC(Function_prototype_setStructRet) {
         Function* fun = ((Function*)EJSVAL_TO_OBJECT(*_this));
-        fun->llvm_fun->addAttribute(1 /* first arg */,
+        fun->llvm_fun->addParamAttr(1 /* first arg */,
                                     llvm::Attribute::StructRet);
         return _ejs_undefined;
     }

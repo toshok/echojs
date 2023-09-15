@@ -88,8 +88,8 @@ namespace ejsllvm {
     static llvm::DISubroutineType* createDIFunctionType(llvm::DIBuilder* llvm_dibuilder,
                                                         llvm::FunctionType *fty) {
         // XXX add function parameter types
-        llvm::DITypeRefArray param_types = llvm_dibuilder->getOrCreateTypeArray(llvm::None);
-        return llvm_dibuilder->createSubroutineType(param_types);
+        // llvm::DITypeRefArray param_types = llvm_dibuilder->getOrCreateTypeArray(llvm::None);
+        // return llvm_dibuilder->createSubroutineType(param_types);
     }
 
     static EJS_NATIVE_FUNC(DIBuilder_prototype_createFunction) {

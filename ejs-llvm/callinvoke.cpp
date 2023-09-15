@@ -82,8 +82,8 @@ namespace ejsllvm {
 
     static EJS_NATIVE_FUNC(Call_prototype_setStructRet) {
         Call* call = ((Call*)EJSVAL_TO_OBJECT(*_this));
-        call->llvm_call->addAttribute(1 /* first arg */,
-                                      llvm::Attribute::StructRet);
+        call->llvm_call->addAttributeAtIndex(1 /* first arg */,
+                                             llvm::Attribute::StructRet);
         return _ejs_undefined;
     }
 
@@ -189,8 +189,8 @@ namespace ejsllvm {
 
     static EJS_NATIVE_FUNC(Invoke_prototype_setStructRet) {
         Invoke* invoke = ((Invoke*)EJSVAL_TO_OBJECT(*_this));
-        invoke->llvm_invoke->addAttribute(1 /* first arg */,
-                                          llvm::Attribute::StructRet);
+        invoke->llvm_invoke->addAttributeAtIndex(1 /* first arg */,
+                                                 llvm::Attribute::StructRet);
         return _ejs_undefined;
     }
 

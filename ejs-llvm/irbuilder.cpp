@@ -133,10 +133,11 @@ namespace ejsllvm {
     }
 
     static EJS_NATIVE_FUNC(IRBuilder_createLoad) {
-        REQ_LLVM_VAL_ARG(0, val);
-        FALLBACK_EMPTY_UTF8_ARG(1, name);
+        REQ_LLVM_TYPE_ARG(0, ty);
+        REQ_LLVM_VAL_ARG(1, val);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
 
-        return LoadInst_new (_llvm_builder.CreateLoad(val, name));
+        return LoadInst_new (_llvm_builder.CreateLoad(ty, val, name));
     }
 
     static EJS_NATIVE_FUNC(IRBuilder_createStore) {
@@ -163,9 +164,10 @@ namespace ejsllvm {
     }
 
     static EJS_NATIVE_FUNC(IRBuilder_createGetElementPointer) {
-        REQ_LLVM_VAL_ARG(0, val);
-        REQ_ARRAY_ARG(1, idxv);
-        FALLBACK_EMPTY_UTF8_ARG(2, name);
+        REQ_LLVM_TYPE_ARG(0, ty);
+        REQ_LLVM_VAL_ARG(1, val);
+        REQ_ARRAY_ARG(2, idxv);
+        FALLBACK_EMPTY_UTF8_ARG(3, name);
 
         std::vector<llvm::Value*> IdxV;
         for (unsigned i = 0, e = EJSARRAY_LEN(idxv); i != e; ++i) {
@@ -173,13 +175,14 @@ namespace ejsllvm {
             EJS_ASSERT(IdxV.back() != 0); // XXX throw an exception here
         }
 
-        return Value_new (_llvm_builder.CreateGEP(val, IdxV, name));
+        return Value_new (_llvm_builder.CreateGEP(ty, val, IdxV, name));
     }
 
     static EJS_NATIVE_FUNC(IRBuilder_createInBoundsGetElementPointer) {
-        REQ_LLVM_VAL_ARG(0, val);
-        REQ_ARRAY_ARG(1, idxv);
-        FALLBACK_EMPTY_UTF8_ARG(2, name);
+        REQ_LLVM_TYPE_ARG(0, ty);
+        REQ_LLVM_VAL_ARG(1, val);
+        REQ_ARRAY_ARG(2, idxv);
+        FALLBACK_EMPTY_UTF8_ARG(3, name);
 
         std::vector<llvm::Value*> IdxV;
         for (unsigned i = 0, e = EJSARRAY_LEN(idxv); i != e; ++i) {
@@ -187,7 +190,7 @@ namespace ejsllvm {
             EJS_ASSERT(IdxV.back() != 0); // XXX throw an exception here
         }
 
-        return Value_new (_llvm_builder.CreateInBoundsGEP(val, IdxV, name));
+        return Value_new (_llvm_builder.CreateInBoundsGEP(ty, val, IdxV, name));
     }
 
     /*
