@@ -45,7 +45,7 @@ clean-double-conversion: $(_TARGETS:%=clean-double-conversion-%)
 .stamp-configure-double-conversion-iossim: double-conversion/CMakeLists.txt
 	@$(MKDIR) double-conversion-iossim
 	(cd double-conversion-iossim && \
-	cmake ../double-conversion -DCMAKE_TOOLCHAIN_FILE=../../build/iOS.cmake -DIOS_PLATFORM=SIMULATOR -DMIN_IOS_VERSION=$(MIN_IOS_VERSION) -DIOS_SYSROOT=$(IOSSIM_SYSROOT)) && touch $@
+	cmake ../double-conversion -DCMAKE_TOOLCHAIN_FILE=../../build/iOS.cmake -DIOS_PLATFORM=SIMULATOR64 -DMIN_IOS_VERSION=$(MIN_IOS_VERSION) -DIOS_SYSROOT=$(IOSSIM_SYSROOT)) && touch $@
 
 .stamp-configure-double-conversion-iosdev: double-conversion/CMakeLists.txt
 	@$(MKDIR) double-conversion-iosdev
