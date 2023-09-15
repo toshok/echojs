@@ -72,7 +72,7 @@ namespace jsllvm {
 
   NAN_METHOD(Call::SetStructRet) {
     auto call = Unwrap(info.This());
-    call->llvm_obj->addAttribute(1 /* first arg */,
+    call->llvm_obj->addAttributeAtIndex(1 /* first arg */,
 				 llvm::Attribute::StructRet);
   }
 
@@ -143,7 +143,7 @@ namespace jsllvm {
 
   NAN_METHOD(Invoke::SetStructRet) {
     auto invoke = Unwrap(info.This());
-    invoke->llvm_obj->addAttribute(1 /* first arg */,
+    invoke->llvm_obj->addAttributeAtIndex(1 /* first arg */,
 				   llvm::Attribute::StructRet);
   }
 

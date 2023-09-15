@@ -107,7 +107,7 @@ namespace jsllvm {
 
   NAN_METHOD(Function::SetStructRet) {
     auto fun = Unwrap(info.This());
-    fun->llvm_obj->addAttribute(1 /* first arg */,
+    fun->llvm_obj->addParamAttr(1 /* first arg */,
 				llvm::Attribute::StructRet);
 
   }

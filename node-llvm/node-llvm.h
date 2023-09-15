@@ -1,8 +1,6 @@
 #ifndef NODE_LLVM_H
 #define NODE_LLVM_H
 
-#include "nan.h"
-
 #include <sstream>
 #include <string>
 
@@ -22,6 +20,9 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/Bitcode/BitcodeWriter.h"
+
+#include "nan.h"
+
 
 #define LLVM_VERSION LLVM_VERSION_PATCH + LLVM_VERSION_MINOR * 100 + LLVM_VERSION_MAJOR * 100000
 

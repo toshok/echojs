@@ -101,8 +101,8 @@ namespace jsllvm {
   llvm::DISubroutineType* DIBuilder::CreateDIFunctionType(llvm::FunctionType *fty)
   {
     // XXX add function parameter types
-    llvm::DITypeRefArray param_types = llvm_obj->getOrCreateTypeArray(llvm::None);
-    return llvm_obj->createSubroutineType(param_types);
+    // llvm::DITypeRefArray param_types = llvm_obj->getOrCreateTypeArray(llvm::None);
+    // return llvm_obj->createSubroutineType(param_types);
   }
 
   NAN_METHOD(DIBuilder::CreateFunction) {

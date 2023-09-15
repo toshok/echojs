@@ -335,10 +335,11 @@ namespace jsllvm {
     v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(context, 0, val);
-    FALLBACK_EMPTY_UTF8_ARG(context, 1, name);
+    REQ_LLVM_TYPE_ARG(context, 0, ty);
+    REQ_LLVM_VAL_ARG(context, 1, val);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
     
-    Local<v8::Value> result = LoadInst::Create(IRBuilder::builder.CreateLoad(val, *name));
+    Local<v8::Value> result = LoadInst::Create(IRBuilder::builder.CreateLoad(ty, val, *name));
     info.GetReturnValue().Set(result);
   }
 
@@ -387,9 +388,10 @@ namespace jsllvm {
 
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(context, 0, val);
-    REQ_ARRAY_ARG(context, 1, idxv);
-    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
+    REQ_LLVM_TYPE_ARG(context, 0, ty);
+    REQ_LLVM_VAL_ARG(context, 1, val);
+    REQ_ARRAY_ARG(context, 2, idxv);
+    FALLBACK_EMPTY_UTF8_ARG(context, 3, name);
 
     std::vector<llvm::Value*> IdxV;
     for (unsigned i = 0, e = idxv->Length(); i != e; ++i) {
@@ -398,7 +400,7 @@ namespace jsllvm {
       assert(IdxV.back() != 0); // XXX throw an exception here
     }
 
-    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateGEP(val, IdxV, *name)));
+    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateGEP(ty, val, IdxV, *name)));
     info.GetReturnValue().Set(result);
   }
 
@@ -407,9 +409,10 @@ namespace jsllvm {
     v8::Local<v8::Context> context = isolate->GetCurrentContext();    
     Nan::HandleScope scope;
 
-    REQ_LLVM_VAL_ARG(context, 0, val);
-    REQ_ARRAY_ARG(context, 1, idxv);
-    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
+    REQ_LLVM_TYPE_ARG(context, 0, ty);
+    REQ_LLVM_VAL_ARG(context, 1, val);
+    REQ_ARRAY_ARG(context, 2, idxv);
+    FALLBACK_EMPTY_UTF8_ARG(context, 3, name);
 
     std::vector<llvm::Value*> IdxV;
     for (unsigned i = 0, e = idxv->Length(); i != e; ++i) {
@@ -418,7 +421,7 @@ namespace jsllvm {
       assert(IdxV.back() != 0); // XXX throw an exception here
     }
 
-    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateInBoundsGEP(val, IdxV, *name)));
+    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateInBoundsGEP(ty, val, IdxV, *name)));
     info.GetReturnValue().Set(result);
   }
 
