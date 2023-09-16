@@ -64,7 +64,7 @@ function sc_alert() {
        s += sc_toDisplayString(arguments[ i ]);
    }
 
-   return alert( s );
+   return console.error( s );
 }
 
 /*** META ((export #t)) */

@@ -65,10 +65,13 @@ BenchmarkResult.prototype.valueOf = function() {
 // on. This way, all scores are relative to a reference run and higher
 // scores implies better performance.
 function BenchmarkSuite(name, reference, benchmarks) {
+  console.log(1);
   this.name = name;
   this.reference = reference;
   this.benchmarks = benchmarks;
+  console.log(2);
   BenchmarkSuite.suites.push(this);
+  console.log(3);
 }
 
 

@@ -10,14 +10,16 @@ TESTS = crypto.js        \
 	richards.js      \
 	splay.js
 
-TEST_EXES=$(TESTS:%.js=%.js.exe)
+TEST_EXES=$(TESTS:%.js=%-test.js.exe)
 
 all: $(TEST_EXES)
 clean:
 	rm -f $(TEST_EXES)
 
-$(TEST_EXES):%.js.exe: %.js base.js run.js $(TOPDIR)/runtime/libecho.a
-	@rm -f base.js.exe
-	NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs -s base.js $< run.js
-	@mv base.js.exe $@
+$(TEST_EXES):%-test.js.exe: %-test.js $(TOPDIR)/runtime/libecho.a
+	NODE_PATH=$(NODE_PATH) $(TOPDIR)/ejs --srcdir $<
 
+.INTERMEDIATE: $(TESTS:%.js=%-test.js)
+
+%-test.js: %.js run.js base.js
+	cat $^ > $@

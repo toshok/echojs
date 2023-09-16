@@ -29,7 +29,7 @@
 var success = true;
 
 function PrintResult(name, result) {
-  print(name + ': ' + result);
+  console.log(name + ': ' + result);
 }
 
 
@@ -41,8 +41,8 @@ function PrintError(name, error) {
 
 function PrintScore(score) {
   if (success) {
-    print('----');
-    print('Score (version ' + BenchmarkSuite.version + '): ' + score);
+    console.log('----');
+    console.log('Score (version ' + BenchmarkSuite.version + '): ' + score);
   }
 }
 

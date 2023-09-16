@@ -173,7 +173,7 @@ Constraint.prototype.satisfy = function (mark) {
   this.chooseMethod(mark);
   if (!this.isSatisfied()) {
     if (this.strength == Strength.REQUIRED)
-      alert("Could not satisfy a required constraint!");
+      console.error("Could not satisfy a required constraint!");
     return null;
   }
   this.markInputs(mark);
@@ -182,7 +182,7 @@ Constraint.prototype.satisfy = function (mark) {
   if (overridden != null) overridden.markUnsatisfied();
   out.determinedBy = this;
   if (!planner.addPropagate(this, mark))
-    alert("Cycle encountered");
+    console.error("Cycle encountered");
   out.mark = mark;
   return overridden;
 }
@@ -818,7 +818,7 @@ function chainTest(n) {
     first.value = i;
     plan.execute();
     if (last.value != i)
-      alert("Chain test failed.");
+      console.error("Chain test failed.");
   }
 }
 
@@ -844,18 +844,18 @@ function projectionTest(n) {
   }
 
   change(src, 17);
-  if (dst.value != 1170) alert("Projection 1 failed");
+  if (dst.value != 1170) console.error("Projection 1 failed");
   change(dst, 1050);
-  if (src.value != 5) alert("Projection 2 failed");
+  if (src.value != 5) console.error("Projection 2 failed");
   change(scale, 5);
   for (var i = 0; i < n - 1; i++) {
     if (dests.at(i).value != i * 5 + 1000)
-      alert("Projection 3 failed");
+      console.error("Projection 3 failed");
   }
   change(offset, 2000);
   for (var i = 0; i < n - 1; i++) {
     if (dests.at(i).value != i * 5 + 2000)
-      alert("Projection 4 failed");
+      console.error("Projection 4 failed");
   }
 }
 

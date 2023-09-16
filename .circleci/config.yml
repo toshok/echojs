@@ -6,8 +6,8 @@ jobs:
       - image: cimg/node:20.6.1
     steps:
       - checkout
-      - make
-      - make check-stage1
+      - run: make
+      - run: make check-stage1
 
 workflows:
   build-test:
