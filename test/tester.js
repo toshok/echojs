@@ -3,7 +3,7 @@
 const path = require("path"),
     os = require("os"),
     fs = require("fs"),
-    glob = require("glob"),
+    { globSync } = require("glob"),
     child_process = require("child_process"),
     spawn = child_process.spawn,
     exec = child_process.exec,
@@ -380,7 +380,6 @@ if (test_to_run) {
 } else {
     // run all the tests
 
-    glob("./*+([0-9]).js", function (err, tests) {
-        runTests(tests);
-    });
+    let tests = globSync("./*+([0-9]).js");
+    runTests(tests);
 }

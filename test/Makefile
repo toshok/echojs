@@ -22,22 +22,22 @@ all-local:: check
 check: check-unit-tests check-stage0
 
 check-stage0:
-	@NODE_PATH=$(NODE_PATH) node tester.js -s 0
+	@NODE_PATH=$(NODE_PATH) PATH=$(PATH):$(TOPDIR)/node_modules/.bin node tester.js -s 0
 
 check-stage1:
-	@NODE_PATH=$(NODE_PATH) node tester.js -s 1
+	@NODE_PATH=$(NODE_PATH) PATH=$(PATH):$(TOPDIR)/node_modules/.bin node tester.js -s 1
 
 check-stage2:
-	@NODE_PATH=$(NODE_PATH) node tester.js -s 2
+	@NODE_PATH=$(NODE_PATH) PATH=$(PATH):$(TOPDIR)/node_modules/.bin node tester.js -s 2
 
 check-sim-stage0:
-	@NODE_PATH=$(NODE_PATH) node tester.js -p sim -s 0
+	@NODE_PATH=$(NODE_PATH) PATH=$(PATH):$(TOPDIR)/node_modules/.bin node tester.js -p sim -s 0
 
 check-sim-stage1:
-	NODE_PATH=$(NODE_PATH) node tester.js -p sim -s 1
+	NODE_PATH=$(NODE_PATH) PATH=$(PATH):$(TOPDIR)/node_modules/.bin node tester.js -p sim -s 1
 
 $(CHECK_TESTS): check-%: %.js
-	@NODE_PATH=$(NODE_PATH) node tester.js -s 0 -t $<
+	@NODE_PATH=$(NODE_PATH) PATH=$(PATH):$(TOPDIR)/node_modules/.bin node tester.js -s 0 -t $<
 
 check-unit-tests: check-llvm
 
