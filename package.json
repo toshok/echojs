@@ -36,8 +36,8 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "format": "prettier --config ./.prettierrc --write \"lib/**/*.js\"",
-    "check-format": "prettier --config ./.prettierrc -l \"lib/**/*.js\""
+    "format": "prettier --config ./.prettierrc --write \"lib/**/*.js\" ./ejs-es6.js",
+    "check-format": "prettier --config ./.prettierrc -l \"lib/**/*.js\" ./ejs-es6.js"
   },
   "repository": {
     "type": "git",
@@ -57,7 +57,7 @@
     "glob": "~5.0.14",
     "mocha": "^9.2.2",
     "nan": "^2.18.0",
-    "prettier": "^1.7.4",
+    "prettier": "^3.0.3",
     "temp": "~0.8.3"
   }
 }
