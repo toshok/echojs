@@ -1,2 +1,1 @@
-
-console.log (typeof (Date()));
+console.log(typeof Date());

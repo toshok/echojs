@@ -1,3 +1,3 @@
 // generator: babel-node
 
-import './modules6-dep';
+import "./modules6-dep";

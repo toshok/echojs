@@ -1,7 +1,5 @@
+function foo() {}
 
-function foo() {
-}
-
-if (typeof foo === 'function') {
-  console.log ("hello world");
+if (typeof foo === "function") {
+    console.log("hello world");
 }

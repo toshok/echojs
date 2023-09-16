@@ -1,8 +1,8 @@
 // generator: babel-node
 
 class Foo {
-    get [Symbol.toStringTag] () {
-	return "Fooooo";
+    get [Symbol.toStringTag]() {
+        return "Fooooo";
     }
 }
 

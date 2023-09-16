@@ -1,6 +1,5 @@
-
 var foo = (function (a, b) {
-  return a * 10;
+    return a * 10;
 })(10);
 
-console.log (foo);
+console.log(foo);

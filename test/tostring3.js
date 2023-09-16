@@ -1,4 +1,7 @@
+var a = {
+    toString: function () {
+        return "yo";
+    },
+};
 
-var a = { toString: function () { return "yo"; } };
-
-console.log (a.toString());
+console.log(a.toString());

@@ -1,18 +1,17 @@
-
 var a = "hello ";
 a += "world";
 
-console.log (a);
+console.log(a);
 
 var b = 10;
 b += 5;
 
-console.log (b);
+console.log(b);
 
 var c = 2;
 
-(function() {
-  c+= 2;
+(function () {
+    c += 2;
 })();
 
-console.log (c);
+console.log(c);

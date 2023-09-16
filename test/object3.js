@@ -1,5 +1,5 @@
 var obj = {
-  str: "hello world"
+    str: "hello world",
 };
 
-console.log (obj.hasOwnProperty("str"));
+console.log(obj.hasOwnProperty("str"));

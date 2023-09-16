@@ -1,2 +1,1 @@
-
-console.log ("hi".charCodeAt(0));
+console.log("hi".charCodeAt(0));

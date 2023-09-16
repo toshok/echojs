@@ -1,8 +1,7 @@
 // skip-if: runloop_impl == 'noop'
 
 function log(message) {
-    if (message == undefined)
-        message = "none";
+    if (message == undefined) message = "none";
 
     console.log(message);
 }
@@ -23,5 +22,6 @@ clearTimeout(t2);
 
 // A late-canceled one.
 var t3 = setTimeout(log, 40, "40");
-setTimeout(function() { clearTimeout(t3); });
-
+setTimeout(function () {
+    clearTimeout(t3);
+});

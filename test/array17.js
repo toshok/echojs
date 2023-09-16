@@ -1,1 +1,1 @@
-console.log (typeof Array(1,2));
+console.log(typeof Array(1, 2));

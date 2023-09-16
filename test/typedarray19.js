@@ -7,16 +7,16 @@ console.log(byteArr);
 byteArr.set([]);
 console.log(byteArr);
 
-byteArr.set([ 13 ]);
+byteArr.set([13]);
 console.log(byteArr);
 
-byteArr.set([ 21, 39, 43, 66 ]);
+byteArr.set([21, 39, 43, 66]);
 console.log(byteArr);
 
-byteArr.set([ 68, 69 ], 1);
+byteArr.set([68, 69], 1);
 console.log(byteArr);
 
-byteArr.set([ '', '5', undefined ]);
+byteArr.set(["", "5", undefined]);
 console.log(byteArr);
 
 console.log();
@@ -28,16 +28,16 @@ console.log(arr);
 arr.set([]);
 console.log(arr);
 
-arr.set([ 314 ]);
+arr.set([314]);
 console.log(arr);
 
-arr.set([ 1024, 2056, 3069, 4044 ]);
+arr.set([1024, 2056, 3069, 4044]);
 console.log(arr);
 
-arr.set([ 666, 69 ], 1);
+arr.set([666, 69], 1);
 console.log(arr);
 
-arr.set([ '', '2099' ]);
+arr.set(["", "2099"]);
 console.log(arr);
 
 console.log();
@@ -49,17 +49,16 @@ console.log(floatArr);
 floatArr.set([]);
 console.log(floatArr);
 
-floatArr.set([ 314.16 ]);
+floatArr.set([314.16]);
 console.log(floatArr);
 
-floatArr.set([ 1024.2, 2056.3, 3069.17, 6666.69 ]);
+floatArr.set([1024.2, 2056.3, 3069.17, 6666.69]);
 console.log(floatArr);
 
-floatArr.set([ 5024.97 ], 2);
+floatArr.set([5024.97], 2);
 console.log(floatArr);
 
-floatArr.set([ '', '1099.13' ]);
+floatArr.set(["", "1099.13"]);
 console.log(floatArr);
 
 console.log();
-

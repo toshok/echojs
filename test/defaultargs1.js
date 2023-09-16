@@ -1,7 +1,7 @@
 // generator: babel-node
 
 function foo(a = "hello") {
-  console.log (a);
+    console.log(a);
 }
 
 foo();

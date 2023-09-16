@@ -1,6 +1,7 @@
-
 let X = class {
-  bar() { console.log("bar!"); }
+    bar() {
+        console.log("bar!");
+    }
 };
 
 let x = new X();

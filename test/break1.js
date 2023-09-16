@@ -1,6 +1,5 @@
-
 while (true) {
-  console.log ("hi");
-  break;
-  console.log ("bye");
+    console.log("hi");
+    break;
+    console.log("bye");
 }

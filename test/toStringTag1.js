@@ -1,7 +1,7 @@
 // generator: none
 
 // wrap in an iife so we get an arguments object
-(function() {
+(function () {
     console.log(Object.getPrototypeOf(arguments)[Symbol.toStringTag]);
     console.log(Array.prototype[Symbol.toStringTag]);
     console.log(Boolean.prototype[Symbol.toStringTag]);

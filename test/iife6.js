@@ -1,6 +1,6 @@
 var i = 10;
 var total;
-total = (function() {
-     return i;
+total = (function () {
+    return i;
 })();
-console.log (total);
+console.log(total);

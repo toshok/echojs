@@ -1,30 +1,30 @@
 // babel-node doesn't hoist blocked scope functions
 // generator: none
 
-if (typeof console !== "undefined") var print = console.log
+if (typeof console !== "undefined") var print = console.log;
 
 function tryInvoke(f) {
-  try {
-    f();
-  }
-  catch (e) { print ("f = null"); }
+    try {
+        f();
+    } catch (e) {
+        print("f = null");
+    }
 }
 
 function foo(x) {
-  f();
+    f();
 
-  if (x < 5) {
-    function f() {
-      print ("hello world");
+    if (x < 5) {
+        function f() {
+            print("hello world");
+        }
+    } else {
+        function f() {
+            print("hello world2");
+        }
     }
-  }
-  else {
-    function f() {
-      print ("hello world2");
-    }
-  }
 
-  f();
+    f();
 }
 
 foo(1);

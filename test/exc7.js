@@ -1,7 +1,5 @@
-
 try {
-  console.log ("hello");
-}
-finally {
-  console.log ("goodbye");
+    console.log("hello");
+} finally {
+    console.log("goodbye");
 }

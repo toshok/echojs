@@ -1,12 +1,10 @@
-
-console.log([1,2,3].indexOf(1));
-console.log([1,2,3,1].indexOf(5));
+console.log([1, 2, 3].indexOf(1));
+console.log([1, 2, 3, 1].indexOf(5));
 console.log([].indexOf(5));
 
-
-console.log([1,2,3].lastIndexOf(1));
-console.log([1,2,3,1].lastIndexOf(1));
-console.log([1,2,3].lastIndexOf(5));
+console.log([1, 2, 3].lastIndexOf(1));
+console.log([1, 2, 3, 1].lastIndexOf(1));
+console.log([1, 2, 3].lastIndexOf(5));
 console.log([].lastIndexOf(5));
 
 var indexOf = Array.prototype.indexOf;

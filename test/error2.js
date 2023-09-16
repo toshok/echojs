@@ -1,4 +1,3 @@
-
-var a = new Error()
+var a = new Error();
 a.__proto__.name = "YoloError";
-console.log (a);
+console.log(a);

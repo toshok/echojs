@@ -1,2 +1,1 @@
-
-console.log (["hello world", "goodbye world"]["0"]);
+console.log(["hello world", "goodbye world"]["0"]);

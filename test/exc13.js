@@ -1,11 +1,9 @@
-function f () {
-  throw "hello world"
+function f() {
+    throw "hello world";
 }
 
 try {
-  f();
+    f();
+} catch (e) {
+    console.log(e);
 }
-catch (e) {
-  console.log (e);
-}
-

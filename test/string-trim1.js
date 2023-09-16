@@ -1,1 +1,1 @@
-console.log("  hello world      ".trim() + '.');
+console.log("  hello world      ".trim() + ".");

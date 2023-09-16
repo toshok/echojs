@@ -1,8 +1,8 @@
-function hello_outer (x) {
-  return function () {
-      console.log (x);
-  };
+function hello_outer(x) {
+    return function () {
+        console.log(x);
+    };
 }
 
-var hello_inner = hello_outer('hello world');
+var hello_inner = hello_outer("hello world");
 hello_inner();

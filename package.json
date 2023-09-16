@@ -36,8 +36,8 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "format": "prettier --config ./.prettierrc --write \"lib/**/*.js\" ./ejs-es6.js",
-    "check-format": "prettier --config ./.prettierrc -l \"lib/**/*.js\" ./ejs-es6.js"
+    "format": "prettier --config ./.prettierrc --write \"lib/**/*.js\" \"test/*.js\" ./ejs-es6.js",
+    "check-format": "prettier --config ./.prettierrc -l \"lib/**/*.js\" \"test/*.js\" ./ejs-es6.js"
   },
   "repository": {
     "type": "git",

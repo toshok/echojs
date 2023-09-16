@@ -1,17 +1,17 @@
 // generator: babel-node
 
-function a () {
+function a() {
     let x = 5;
 
     function b() {
-	let y = 6;
+        let y = 6;
 
-	function c() {
-	    return x;
-	}
+        function c() {
+            return x;
+        }
 
-	function f() {
-	    return y;
-	}
+        function f() {
+            return y;
+        }
     }
 }

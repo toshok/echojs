@@ -1,3 +1,3 @@
-function f() { }
+function f() {}
 
-for (var k in f) console.log (k);
+for (var k in f) console.log(k);

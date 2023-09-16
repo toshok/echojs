@@ -1,4 +1,3 @@
-
 console.log(Object.is());
 console.log(Object.is(undefined, undefined));
 console.log(Object.is(undefined, null));

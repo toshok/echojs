@@ -1,30 +1,29 @@
-
 function tryInvoke(f) {
-  try {
-    f();
-  }
-  catch (e) { console.log ("f = null"); }
+    try {
+        f();
+    } catch (e) {
+        console.log("f = null");
+    }
 }
 
 function foo() {
+    tryInvoke(f);
 
-  tryInvoke(f);
+    function f() {
+        console.log("hello world1");
+    }
 
-  function f() {
-    console.log ("hello world1");
-  }
+    tryInvoke(f);
 
-  tryInvoke(f);
+    f = null;
 
-  f = null;
+    tryInvoke(f);
 
-  tryInvoke(f);
+    function f() {
+        console.log("hello world2");
+    }
 
-  function f() {
-    console.log ("hello world2");
-  }
-
-  tryInvoke(f);
+    tryInvoke(f);
 }
 
 foo();

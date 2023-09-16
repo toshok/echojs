@@ -53,4 +53,3 @@ floatArr.set(Float64Array.of(5024.97), 2);
 console.log(floatArr);
 
 console.log();
-

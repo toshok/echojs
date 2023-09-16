@@ -1,7 +1,7 @@
 var obj = {
-  str: "hello world"
+    str: "hello world",
 };
 
 var __hasProp = Object.prototype.hasOwnProperty;
 
-console.log (__hasProp.call(obj, "str"));
+console.log(__hasProp.call(obj, "str"));

@@ -7,28 +7,38 @@ if (typeof(console) === "undefined") {
 */
 
 function foodecl(a) {
-    function bar () { console.log ("whu"); };
+    function bar() {
+        console.log("whu");
+    }
     bar();
 
     if (a) {
-	function bar () { console.log ("hi"); };
-    }
-    else {
-	function bar () { console.log ("bye"); };
+        function bar() {
+            console.log("hi");
+        }
+    } else {
+        function bar() {
+            console.log("bye");
+        }
     }
 
     bar();
 }
 
 function fooexp(a) {
-    var bar = function () { console.log ("whu"); };
+    var bar = function () {
+        console.log("whu");
+    };
     bar();
 
     if (a) {
-	var bar = function () { console.log ("hi"); };
-    }
-    else {
-	var bar = function () { console.log ("bye"); };
+        var bar = function () {
+            console.log("hi");
+        };
+    } else {
+        var bar = function () {
+            console.log("bye");
+        };
     }
 
     bar();

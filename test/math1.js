@@ -2,9 +2,9 @@
 // xfail: XXX
 
 // new ES6 math functions
-console.log(Math.hypot(1,1))
-console.log(Math.hypot(-1,-1))
-console.log(Math.hypot(NaN,NaN))
+console.log(Math.hypot(1, 1));
+console.log(Math.hypot(-1, -1));
+console.log(Math.hypot(NaN, NaN));
 
 console.log(Math.imul());
 console.log(Math.imul(5));
@@ -33,7 +33,7 @@ console.log(Math.log2(Infinity));
 console.log(Math.log2(-1024));
 console.log(Math.log2(NaN));
 
-console.log(Math.log1p(Math.E-1));
+console.log(Math.log1p(Math.E - 1));
 
 console.log(Math.expm1(-1));
 console.log(Math.expm1(0));
@@ -67,14 +67,14 @@ console.log(Math.atanh(0.5));
 console.log(Math.atanh(1));
 console.log(Math.atanh(2));
 
-console.log(Math.trunc(13.37));   // 13
-console.log(Math.trunc(42.84));   // 42
-console.log(Math.trunc(0.123));   //  0
-console.log(Math.trunc(-0.123));  // -0
-console.log(Math.trunc("-1.123"));// -1
-console.log(Math.trunc(NaN));     // NaN
-console.log(Math.trunc("foo"));   // NaN
-console.log(Math.trunc());        // NaN
+console.log(Math.trunc(13.37)); // 13
+console.log(Math.trunc(42.84)); // 42
+console.log(Math.trunc(0.123)); //  0
+console.log(Math.trunc(-0.123)); // -0
+console.log(Math.trunc("-1.123")); // -1
+console.log(Math.trunc(NaN)); // NaN
+console.log(Math.trunc("foo")); // NaN
+console.log(Math.trunc()); // NaN
 
 //console.log(Math.fround(0));     // 0
 //console.log(Math.fround(1));     // 1
@@ -83,9 +83,9 @@ console.log(Math.trunc());        // NaN
 //console.log(Math.fround(NaN));   // NaN
 
 console.log(Math.cbrt(-1)); // -1
-console.log(Math.cbrt(0));  // 0
-console.log(Math.cbrt(1));  // 1
-console.log(Math.cbrt(2));  // 1.2599210498948734
+console.log(Math.cbrt(0)); // 0
+console.log(Math.cbrt(1)); // 1
+console.log(Math.cbrt(2)); // 1.2599210498948734
 
 console.log(Math.clz32(0x111110));
 console.log(Math.clz32(0));

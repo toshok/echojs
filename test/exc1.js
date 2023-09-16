@@ -1,9 +1,8 @@
 try {
-  throw "hello world"
+    throw "hello world";
+} catch (e) {
+    console.log("caught exception");
+    console.log(typeof e);
+    console.log(e);
 }
-catch (e) {
-  console.log ("caught exception");
-  console.log (typeof e);
-  console.log (e);
-}
-console.log ("done");
+console.log("done");

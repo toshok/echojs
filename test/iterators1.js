@@ -15,7 +15,7 @@ function* foo(arg1) {
 
 let f = foo(5);
 
-console.log (f.next().value);
-console.log (f.next().value);
-console.log (f.next().value);
-console.log (f.next().value);
+console.log(f.next().value);
+console.log(f.next().value);
+console.log(f.next().value);
+console.log(f.next().value);

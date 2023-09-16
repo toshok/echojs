@@ -1,4 +1,3 @@
-
 var o = { a: 15 };
 
-console.log (o.toLocaleString());
+console.log(o.toLocaleString());

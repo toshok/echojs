@@ -2,7 +2,8 @@
 
 // adapted from kangax's tests
 
-var obj1 = {}, obj2 = {};
+var obj1 = {},
+    obj2 = {};
 var weakset = new WeakSet();
 
 weakset.add(obj1);

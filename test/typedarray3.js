@@ -10,8 +10,8 @@ var barray = new Uint8Array(buf);
 
 darray[0] = 3.1415926535;
 
-console.log (darray[0]);
-console.log (farray[0]);
-console.log (iarray[0]);
-console.log (sarray[0]);
-console.log (barray[0]);
+console.log(darray[0]);
+console.log(farray[0]);
+console.log(iarray[0]);
+console.log(sarray[0]);
+console.log(barray[0]);

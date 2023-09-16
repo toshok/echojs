@@ -1,8 +1,9 @@
-
-var debug = function () { console.log ("hi"); }
+var debug = function () {
+    console.log("hi");
+};
 
 function bar() {
-  return debug;
+    return debug;
 }
 
 bar()();

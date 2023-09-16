@@ -2,6 +2,8 @@
 
 // implicit strict mode from kangax
 class C {
-  static method() { return this === undefined; }
+    static method() {
+        return this === undefined;
+    }
 }
-console.log((0,C.method)());
+console.log((0, C.method)());

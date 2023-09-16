@@ -1,7 +1,7 @@
 // generator: babel-node
 // methods aren't enumerable from kangax
 class C {
-  foo() {}
-  static bar() {}
+    foo() {}
+    static bar() {}
 }
-console.log( !C.prototype.propertyIsEnumerable("foo") && !C.propertyIsEnumerable("bar") );
+console.log(!C.prototype.propertyIsEnumerable("foo") && !C.propertyIsEnumerable("bar"));

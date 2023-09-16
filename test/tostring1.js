@@ -1,2 +1,2 @@
 var b = {};
-console.log (b.toString());
+console.log(b.toString());

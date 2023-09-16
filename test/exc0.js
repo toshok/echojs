@@ -1,9 +1,7 @@
-
 var a = 0;
 try {
-  throw 5;
+    throw 5;
+} catch (e) {
+    a = e;
 }
-catch (e) {
-  a = e;
-}
-console.log (a);
+console.log(a);

@@ -2,5 +2,4 @@
 
 var mundo = "world";
 
-console.log (`Hello, ${mundo}!`);
-
+console.log(`Hello, ${mundo}!`);

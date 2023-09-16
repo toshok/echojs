@@ -1,10 +1,11 @@
-
-var debug = function () { console.log ("hi"); }
+var debug = function () {
+    console.log("hi");
+};
 
 function bar() {
-  return function inner () {
-    debug();
-  }
+    return function inner() {
+        debug();
+    };
 }
 
 bar()();

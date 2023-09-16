@@ -1,15 +1,13 @@
-function foo () {
-  try {
+function foo() {
     try {
-      return 40;
+        try {
+            return 40;
+        } finally {
+            return 42;
+        }
+    } finally {
+        return 44;
     }
-    finally {
-      return 42;
-    }
-  }
-  finally {
-    return 44;
-  }
 }
 
 console.log(foo());

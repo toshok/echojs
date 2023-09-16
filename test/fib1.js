@@ -1,15 +1,15 @@
 function fib(n) {
-  var a = 1;
-  var b = 0;
-  var SZ = Math.pow(2,64);
+    var a = 1;
+    var b = 0;
+    var SZ = Math.pow(2, 64);
 
-  for(var i = 0; i < n; i++) {
-      var t = b;
-      b = (a+b)%SZ;
-      a = t;
-  }
+    for (var i = 0; i < n; i++) {
+        var t = b;
+        b = (a + b) % SZ;
+        a = t;
+    }
 
-  return b;
+    return b;
 }
 
-console.log (fib (50));
+console.log(fib(50));

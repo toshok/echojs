@@ -1,2 +1,2 @@
-console.log(/./igm.flags);
+console.log(/./gim.flags);
 console.log(/./.flags);

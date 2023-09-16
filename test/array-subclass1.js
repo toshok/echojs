@@ -10,7 +10,9 @@ class MyArray extends Array {
         this.push(x);
     }
 
-    get [Symbol.toStringTag]() { return "MyOwnArray"; }
+    get [Symbol.toStringTag]() {
+        return "MyOwnArray";
+    }
 }
 
 var m = new MyArray();

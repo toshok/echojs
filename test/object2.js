@@ -1,5 +1,5 @@
 var obj = {
-  str: "hello world"
+    str: "hello world",
 };
 
-console.log (obj.str);
+console.log(obj.str);

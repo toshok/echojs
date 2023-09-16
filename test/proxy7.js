@@ -5,8 +5,9 @@ var passed = false;
 Object.isExtensible(
     new Proxy(proxied, {
         isExtensible: function (t) {
-            passed = t === proxied; return true;
-        }
+            passed = t === proxied;
+            return true;
+        },
     })
 );
 console.log(passed);

@@ -25,4 +25,3 @@ arr2.forEach(logArrayElements);
 // a[0] = 7
 // a[1] = 0
 // a[2] = 120
-

@@ -1,10 +1,13 @@
+function f() {}
 
-
-function f() { }
-
-Object.defineProperty (f.prototype, "foo", { get: function() { console.log ("returning foo"); return this._foo; } });
+Object.defineProperty(f.prototype, "foo", {
+    get: function () {
+        console.log("returning foo");
+        return this._foo;
+    },
+});
 
 var a = new f();
 a._foo = 10;
 
-console.log (a.foo);
+console.log(a.foo);

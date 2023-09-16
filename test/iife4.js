@@ -1,9 +1,9 @@
 var x = "hello world";
 
-console.log (x);
-var bye = (function() {
-     var x = "goodbye world";
-     return x;
+console.log(x);
+var bye = (function () {
+    var x = "goodbye world";
+    return x;
 })();
-console.log (bye);
-console.log (x);
+console.log(bye);
+console.log(x);
