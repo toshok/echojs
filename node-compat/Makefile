@@ -8,9 +8,6 @@ C_SOURCES= \
 
 CFLAGS += -I../runtime
 
-CC=clang
-
-
 ejs-atoms-gen.c: ejs-atoms.h gen-atoms.js
 	@echo [GEN] $@ && ./gen-atoms.js $< > .tmp-$@ && mv .tmp-$@ $@
 

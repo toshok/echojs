@@ -32,6 +32,8 @@ PRODUCT_INSTALL_ROOT=/Library/Frameworks/$(PRODUCT_NAME).framework
 MKDIR=mkdir -p
 INSTALL=install
 CP=cp
+CC?=clang
+CXX?=clang++
 
 CFLAGS=-g -O0 -Wall -I. -Wno-unused-function -Wno-gnu-statement-expression -Wno-c99-extensions -Wno-unused-variable
 

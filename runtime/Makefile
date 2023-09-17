@@ -47,9 +47,6 @@ CPP_SOURCES= \
 
 VPATH=.:../external-deps/parson
 
-CC=clang
-CXX=clang++
-
 ejs-atoms-gen.c: ejs-atoms.h gen-atoms.js
 	@echo [GEN] $@ && ./gen-atoms.js $< > .tmp-$@ && mv .tmp-$@ $@
 
