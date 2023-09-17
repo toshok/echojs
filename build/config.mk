@@ -35,7 +35,7 @@ CP=cp
 CC?=clang
 CXX?=clang++
 
-CFLAGS=-g -O0 -Wall -I. -Wno-unused-function -Wno-gnu-statement-expression -Wno-c99-extensions -Wno-unused-variable
+CFLAGS=-g -O0 -Wall -I. -Wno-unused-function -Wno-unused-variable
 
 MIN_IOS_VERSION=8.0
 MIN_OSX_VERSION=10.10
@@ -43,13 +43,8 @@ MIN_OSX_VERSION=10.10
 DEVELOPER_ROOT?=/Applications/Xcode.app/Contents/Developer
 IOS_SDK_VERSION?=8.3
 
-# pretty terrible.. ubuntu 12.04 (travis-ci uses it) doesn't have a libuv that I can find, not even in ppas
 ifeq ($(HOST_OS),linux)
-ifneq ($(TRAVIS_BUILD_NUMBER),)
-EJS_RUNLOOP_IMPL=noop
-else
 EJS_RUNLOOP_IMPL?=libuv
-endif
 else
 EJS_RUNLOOP_IMPL=darwin
 endif

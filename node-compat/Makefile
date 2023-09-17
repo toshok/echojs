@@ -15,26 +15,17 @@ ifeq ($(HOST_OS),linux)
 ALL_LIBRARIES=$(LIBRARY)
 ALL_TARGETS=$(ALL_LIBRARIES)
 
-LINUX_OBJECTS=$(C_SOURCES:%.c=%.o.linux) $(OBJC_SOURCES:%.m=%.o.linux)
+LINUX_OBJECTS=$(C_SOURCES:%.c=%.o.linux)
 
 ALL_OBJECTS=$(LINUX_OBJECTS)
-
-#ejs-init.o.linux: ejs-atoms-gen.c
 
 $(LIBRARY): $(LINUX_OBJECTS)
 	@echo [ar linux] $@ && /usr/bin/ar rc $@ $(LINUX_OBJECTS)
 
-OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch
-
 %.o.linux: %.c
 	@mkdir -p .deps
 	@$(CC) -MM $(LINUX_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.linux,,`/$@/ > .deps/$@-deps
-	@echo [$(CC) linux] $< && $(CC) -ObjC $(LINUX_CFLAGS)  -c -o $@ $<
-
-%.o.linux: %.m
-	@mkdir -p .deps
-	@$(CC) -MM $(LINUX_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.linux,,`/$@/ > .deps/$@-deps
-	@echo [$(CC) linux] $< && $(CC) $(LINUX_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
+	@echo [$(CC) linux] $< && $(CC) $(LINUX_CFLAGS)  -c -o $@ $<
 
 -include $(patsubst %.o.linux,.deps/%.o.linux-deps,$(LINUX_OBJECTS))
 endif
@@ -78,19 +69,10 @@ $(DEV_LIBRARY): $(DEV_OBJECTS)
 $(DEVS_LIBRARY): $(DEVS_OBJECTS)
 	@echo [ar armv7s] $@ && /usr/bin/ar rc $@ $(DEVS_OBJECTS)
 
-#ejs-init.o.osx ejs-init.o.sim ejs-init.o.armv7 ejs-init.o.armv7s: ejs-atoms-gen.c
-
-OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch -fno-objc-arc
-
 %.o.osx: %.c
 	@mkdir -p .deps
 	@$(CC) -MM $(OSX_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.osx,,`/$@/ > .deps/$@-deps
 	@echo [$(CC) osx] $< && $(CC) -ObjC $(OSX_CFLAGS)  -c -o $@ $<
-
-%.o.osx: %.m
-	@mkdir -p .deps
-	@$(CC) -MM $(OSX_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.osx,,`/$@/ > .deps/$@-deps
-	@echo [$(CC) osx] $< && $(CC) $(OSX_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
 
 %.o.osx: %.ll
 	@echo [llc osx] $< && llc$(LLVM_SUFFIX) -filetype=obj -o=$@ -O2 $<
@@ -100,11 +82,6 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch -fno-objc
 	@$(CC) -MM $(IOSSIM_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.sim,,`/$@/ > .deps/$@-deps
 	@echo [$(CC) sim] $< && PATH=$(IOSSIM_BIN):$$PATH $(CC) -ObjC $(IOSSIM_CFLAGS) -c -o $@ $<
 
-%.o.sim: %.m
-	@mkdir -p .deps
-	@$(CC) -MM -ObjC $(IOSSIM_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.sim,,`/$@/ > .deps/$@-deps
-	@echo [$(CC) sim] $< && PATH=$(IOSSIM_BIN):$$PATH $(CC) $(IOSSIM_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
-
 %.o.sim: %.ll
 	@echo [llc sim] $< && llc$(LLVM_SUFFIX) -march=x86 -filetype=obj -o=$@ -O2 $<
 
@@ -112,11 +89,6 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch -fno-objc
 	@mkdir -p .deps
 	@$(CC) -MM -ObjC $(IOSDEV_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7,,`/$@/ > .deps/$@-deps
 	@echo [$(CC) armv7] $< && PATH=$(IOSDEV_BIN):$$PATH $(CC) -ObjC $(IOSDEV_CFLAGS) -c -o $@ $<
-
-%.o.armv7: %.m
-	@mkdir -p .deps
-	@$(CC) -MM -ObjC $(IOSDEV_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7,,`/$@/ > .deps/$@-deps
-	@echo [$(CC) armv7] $< && PATH=$(IOSDEV_BIN):$$PATH $(CC) $(IOSDEV_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
 
 %.o.armv7: %.ll
 	@echo [llc armv7] $< && llc$(LLVM_SUFFIX) -march=arm -filetype=obj -o=$@ -O2 $<
@@ -126,25 +98,11 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch -fno-objc
 	@$(CC) -MM -ObjC $(IOSDEVS_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7s,,`/$@/ > .deps/$@-deps
 	@echo [$(CC) armv7s] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) -ObjC $(IOSDEVS_CFLAGS) -c -o $@ $<
 
-%.o.armv7s: %.m
-	@mkdir -p .deps
-	@$(CC) -MM -ObjC $(IOSDEVS_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7s,,`/$@/ > .deps/$@-deps
-	@echo [$(CC) armv7] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) $(IOSDEVS_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
-
 %.o.armv7s: %.ll
 	@echo [llc armv7s] $< && llc$(LLVM_SUFFIX) -march=aarch64 -filetype=obj -o=$@ -O2 $<
 
 $(analyze_plists_c): %.plist: %.c
 	@echo [$(CC) analyze] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) $(OSX_CFLAGS) --analyze $< -o $@
-
-$(analyze_plists_objc): %.plist: %.m
-	@echo [$(CC) analyze] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) $(OSX_CFLAGS) --analyze $< -o $@
-
-
-class-test: $(C_SOURCES:%.c=%.o.osx) $(OBJC_SOURCES:%.m=%.o.osx) class-test.o.osx
-	@echo [$(CC) osx] $< 
-	$(CC) -ObjC $(OSX_CFLAGS) -o $@ $(C_SOURCES:%.c=%.o.osx) $(OBJC_SOURCES:%.m=%.o.osx) class-test.o.osx ../external-deps/pcre-osx/.libs/libpcre16.a -framework Foundation -framework AppKit -lstdc++
-
 
 -include $(patsubst %.o.osx,.deps/%.o.osx-deps,$(OSX_OBJECTS))
 -include $(patsubst %.o.sim,.deps/%.o.sim-deps,$(SIM_OBJECTS))

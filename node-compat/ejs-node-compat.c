@@ -676,7 +676,9 @@ static EJS_NATIVE_FUNC(_ejs_os_endianness) {
 
 static EJS_NATIVE_FUNC(_ejs_os_hostname) {
     const int buflen = 128;
-    char buff [buflen] = "unknown";
+    char buff [buflen];
+    
+    strcpy(buff, "unknown");
 
     gethostname (buff, buflen);
 
@@ -689,7 +691,7 @@ static EJS_NATIVE_FUNC(_ejs_os_platform) {
 #elif OSX || IOS
     const char* platform = "darwin";
 #else
-    const char* arch = "unknown";
+    const char* platform = "unknown";
 #endif
 
     return _ejs_string_new_utf8(platform);
