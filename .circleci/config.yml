@@ -6,7 +6,7 @@ jobs:
       - image: cimg/node:20.6.1
     steps:
       - checkout
-      - run: sudo apt install clang++ llvm
+      - run: sudo apt update && sudo apt install clang-15 llvm-15-dev
       - run: make
       - run: make check-stage1
 
