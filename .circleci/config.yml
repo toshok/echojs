@@ -10,8 +10,9 @@ jobs:
       - run: sh ci/install-llvm-linux.sh
       - run: sudo npm install -g node-gyp
       - run: npm ci
-      - run: LLVM_SUFFIX= make -j 8
-      - run: LLVM_SUFFIX= make check-stage1
+      - run: export LLVM_SUFFIX=
+      - run: make -j 8
+      - run: make check-stage1
 
 workflows:
   build-test:

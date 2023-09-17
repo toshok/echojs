@@ -68,7 +68,7 @@ LINUX_OBJECTS=$(C_SOURCES:%.c=%.o.linux) $(CPP_SOURCES:%.cpp=%.o.linux) $(OBJC_S
 
 ALL_OBJECTS=$(LINUX_OBJECTS)
 
-CFLAGS += -I../external-deps/pcre-linux -I../external-deps/double-conversion
+CFLAGS += -I/usr/include/libunwind -I../external-deps/pcre-linux -I../external-deps/double-conversion
 
 ejs-init.o.linux: ejs-atoms-gen.c
 
@@ -80,7 +80,7 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch
 %.o.linux: %.c
 	@mkdir -p .deps
 	@$(CC) -MM $(LINUX_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.linux,,`/$@/ > .deps/$@-deps
-	@echo [$(CC) linux] $< && $(CC) -ObjC $(LINUX_CFLAGS)  -c -o $@ $<
+	@echo [$(CC) linux] $< && $(CC) $(LINUX_CFLAGS)  -c -o $@ $<
 
 %.o.linux: %.cpp
 	@mkdir -p .deps
