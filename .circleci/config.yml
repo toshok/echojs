@@ -6,8 +6,8 @@ jobs:
       - image: cimg/node:20.6.1
     steps:
       - checkout
-      - run: ci/setup-pkg-linux.sh
-      - run: ci/install-llvm-linux.sh
+      - run: sh ci/setup-pkg-linux.sh
+      - run: sh ci/install-llvm-linux.sh
       - run: sudo npm install -g node-gyp
       - run: npm ci
       - run: make
