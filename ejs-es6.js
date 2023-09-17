@@ -380,7 +380,7 @@ function target_llc_args(platform, arch) {
     return args;
 }
 
-let target_linker = "clang++";
+let target_linker = process.env.CXX || "clang++";
 
 function target_link_args(platform, arch) {
     let args = ["-arch", arch_info[options.target_arch].clang_arch];

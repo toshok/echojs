@@ -7,8 +7,8 @@ jobs:
     steps:
       - checkout
       - run: sudo apt update && sudo apt install clang-15 llvm-15-dev
-      - run: make
-      - run: make check-stage1
+      - run: LLVM_SUFFIX=-15 CC=clang-15 CXX=clang++-15 make
+      - run: LLVM_SUFFIX=-15 CC=clang-15 CXX=clang++-15 make check-stage1
 
 workflows:
   build-test:
