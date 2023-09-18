@@ -21,6 +21,7 @@ ES6_SOURCES=			 	\
 	module-info.js			\
 	stack-es6.js			\
 	host-config.js			\
+	triple.js				\
 	passes/desugar-arguments.js	\
 	passes/desugar-arrow-functions.js \
 	passes/desugar-classes.js	\

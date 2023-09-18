@@ -93,7 +93,7 @@ OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch
 	@echo [$(CC) linux] $< && $(CC) $(LINUX_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
 
 %.o.linux: %.ll
-	@echo [llc linux] $< && llc$(LLVM_SUFFIX) -filetype=obj -o=$@ -O2 $<
+	@echo [llc linux] $< && llc$(LLVM_SUFFIX) --relocation-model=pic -filetype=obj -o=$@ -O2 $<
 
 -include $(patsubst %.o.linux,.deps/%.o.linux-deps,$(LINUX_OBJECTS))
 endif

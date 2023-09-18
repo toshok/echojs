@@ -8,6 +8,7 @@ import { compile } from "./lib/compiler";
 import { dumpModules, getAllModules, gatherAllModules } from "./lib/passes/gather-imports";
 
 import { bold, reset, genFreshFileName, Writer } from "./lib/echo-util";
+import { Triple } from "./lib/triple";
 
 import {
     LLVM_SUFFIX as DEFAULT_LLVM_SUFFIX,
@@ -85,11 +86,8 @@ function relative_to_ejs_exe(n) {
 
 let temp_files = [];
 
-let host_arch = os.arch();
-if (host_arch === "x64") host_arch = "x86_64"; // why didn't we just standardize on 'amd64'?  sigh
-if (host_arch === "ia32") host_arch = "x86";
-
-let host_platform = os.platform();
+let host_triple = Triple.fromProcess();
+let target_triple = host_triple; // a reasonable default. we're compiling for _this_ triple.
 
 let options = {
     // our defaults:
@@ -103,14 +101,11 @@ let options = {
     output_filename: null,
     show_help: false,
     leave_temp_files: false,
-    target_arch: host_arch,
-    target_platform: host_platform,
     native_module_dirs: [],
     extra_clang_args: "",
     ios_sdk: "9.2",
     ios_min: "8.0",
     osx_min: "11.0",
-    target_pointer_size: 64,
     import_variables: [],
     srcdir: false,
     stdout_writer: new Writer(process.stdout),
@@ -120,46 +115,18 @@ function add_native_module_dir(dir) {
     options.native_module_dirs.push(dir);
 }
 
-let arch_info = {
-    x86_64: { pointer_size: 64, little_endian: true, llc_arch: "x86-64", clang_arch: "x86_64" },
-    x86: { pointer_size: 32, little_endian: true, llc_arch: "x86", clang_arch: "i386" },
-    arm: { pointer_size: 32, little_endian: true, llc_arch: "arm", clang_arch: "armv7" },
-    aarch64: { pointer_size: 64, little_endian: true, llc_arch: "aarch64", clang_arch: "aarch64" },
-    arm64: { pointer_size: 64, little_endian: true, llc_arch: "arm64", clang_arch: "arm64" },
-};
-
-function set_target_arch(arch) {
-    if (options.target) throw new Error("--arch and --target cannot be specified at the same time");
-
-    // we accept some arch aliases
-
-    if (arch === "amd64") arch = "x86_64";
-    if (arch === "i386") arch = "x86";
-
-    if (!(arch in arch_info)) throw new Error(`invalid arch '${arch}'.`);
-
-    options.target_arch = arch;
-    options.target_pointer_size = arch_info[arch].pointer_size;
-}
-
-function set_target(platform, arch) {
-    options.target_platform = platform;
-    options.target_arch = arch;
-    options.target_pointer_size = arch_info[arch].pointer_size;
-}
-
-function set_target_alias(alias) {
-    const target_aliases = {
-        linux_amd64: { platform: "linux", arch: "x86_64" },
-        osx: { platform: "darwin", arch: "arm64" },
-        sim: { platform: "darwin", arch: "x86" },
-        dev: { platform: "darwin", arch: "arm" },
-    };
-
-    if (!(alias in target_aliases)) throw new Error(`invalid target alias '${alias}'.`);
-
-    options.target = alias;
-    set_target(target_aliases[alias].platform, target_aliases[alias].arch);
+function set_target(str) {
+    let triple;
+    switch(str) {
+        case "linux_x86_64": triple = new Triple("x86_64", "unknown", "linux"); break;
+        case "macos": triple = new Triple("arm64", "apple", "darwin"); break;
+        case "iossim": triple = new Triple("arm64", "apple", "darwin"); break;
+        case "iosdev": triple = new Triple("arm64", "apple", "darwin"); break;
+        default:
+            triple = Triple.fromString(str);
+            break;
+    }
+    target_triple = triple;
 }
 
 function set_extra_clang_args(arginfo) {
@@ -258,15 +225,10 @@ let args = {
         flag: "warn_on_undeclared",
         help: "accesses to undeclared identifiers result in warnings (and global accesses).  By default they're an error.",
     },
-    "--arch": {
-        handler: set_target_arch,
-        handlerArgc: 1,
-        help: "--arch x86_64|x86|arm|aarch64",
-    },
     "--target": {
-        handler: set_target_alias,
+        handler: set_target,
         handlerArgc: 1,
-        help: "--target linux_amd64|osx|sim|dev",
+        help: "--target linux_x86_64|macos|iossim|iosdev",
     },
     "--ios-sdk": {
         option: "ios_sdk",
@@ -293,11 +255,10 @@ function output_usage() {
 
 function output_options() {
     console.warn("Options:");
-    for (let a of Object.keys(args)) console.warn(`   ${a}:  ${args[a].help}`);
+    for (let a of Object.keys(args)) {
+        console.warn(`   ${a}:  ${args[a].help}`);
+    }
 }
-
-// default to the host platform/arch
-set_target(host_platform, host_arch);
 
 let file_args;
 
@@ -336,7 +297,7 @@ if (!file_args || file_args.length === 0) {
 
 if (!options.quiet) {
     console.log(
-        `host: ${host_platform}-${host_arch}, target: ${options.target_platform}-${options.target_arch}`
+        `host: ${host_triple}, target: ${target_triple}`
     );
 }
 
@@ -352,29 +313,33 @@ let dev_base = "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.pl
 let sim_bin = `${sim_base}/Developer/usr/bin`;
 let dev_bin = `${dev_base}/Developer/usr/bin`;
 
-function target_llc_args(platform, arch) {
-    let args = [`-march=${arch_info[options.target_arch].llc_arch}`];
-    if (platform === "darwin") {
-        if (arch === "arm")
+function target_llc_args(triple) {
+    let args = [`-march=${triple.llcArch()}`];
+    if (triple.platform === "darwin") {
+        if (triple.arch === "arm")
             args = args.concat([
                 `-mtriple=thumbv7-apple-ios${options.ios_min}.0`,
                 "-mattr=+v6",
                 "-relocation-model=pic",
                 "-soft-float",
             ]);
-        else if (arch === "aarch64")
+        else if (triple.arch === "arm64")
             args = args.concat([
                 `-mtriple=thumbv7s-apple-ios${options.ios_min}.0`,
                 "-mattr=+fp-armv8",
                 "-relocation-model=pic",
             ]);
-        else if (arch === "x86")
+        else if (triple.arch === "x86")
             args = args.concat([
                 `-mtriple=i386-apple-ios${options.ios_min}.0`,
                 "-relocation-model=pic",
             ]);
-        else if (arch === "x86_64")
+        else if (triple.arch === "x86_64")
             args = args.concat([`-mtriple=x86_64-apple-macosx${options.osx_min}.0`]);
+    } else if (triple.platform === "linux") {
+        args = args.concat([
+            "--relocation-model=pic"
+        ])
     }
 
     return args;
@@ -382,18 +347,19 @@ function target_llc_args(platform, arch) {
 
 let target_linker = process.env.CXX || "clang++";
 
-function target_link_args(platform, arch) {
-    let args = ["-arch", arch_info[options.target_arch].clang_arch];
+function target_link_args(triple) {
+    let args = ["-arch", triple.clangArch()];
 
-    if (platform === "linux") {
+    if (triple.os === "linux") {
         // on ubuntu 14.04, at least, clang spits out a warning about this flag being unused (presumably because there's no other arch)
-        if (arch === "x86_64") return [];
+        if (triple.arch === "x86_64") return [];
         return args;
     }
 
-    if (platform === "darwin") {
-        if (arch === "x86_64" || arch === "arm64") return args;
-        if (arch === "x86")
+    if (triple.os === "darwin") {
+        // we need more here now that everything is apple silicon
+        if (triple.arch === "x86_64" || triple.arch === "arm64") return args;
+        if (triple.arch === "x86")
             return args.concat([
                 "-isysroot",
                 `${sim_base}/Developer/SDKs/iPhoneSimulator${options.ios_sdk}.sdk`,
@@ -409,17 +375,17 @@ function target_link_args(platform, arch) {
     return [];
 }
 
-function target_libraries(platform, arch) {
-    if (platform === "linux") {
-        if (DEFAULT_RUNLOOP_IMPL == "noop") return ["-lpthread"];
-        return ["-lpthread", "-luv"];
+function target_libraries(triple) {
+    if (triple.os === "linux") {
+        if (DEFAULT_RUNLOOP_IMPL == "noop") return ["-lunwind", "-lpthread"];
+        return ["-lunwind", "-lpthread", "-luv"];
     }
 
-    if (platform === "darwin") {
+    if (triple.os === "darwin") {
         let rv = ["-framework", "Foundation"];
 
-        // for osx we only need Foundation and AppKit
-        if (arch === "x86_64" || arch === "arm64") return rv.concat(["-framework", "AppKit"]);
+        // for macos we only need Foundation and AppKit
+        if (triple.arch === "x86_64" || triple.arch === "arm64") return rv.concat(["-framework", "AppKit"]);
 
         // for any other darwin we're dealing with ios, so...
         return rv.concat([
@@ -436,47 +402,47 @@ function target_libraries(platform, arch) {
     return [];
 }
 
-function target_libecho(platform, arch) {
+function target_libecho(triple) {
     if (options.srcdir) {
-        if (platform === "darwin") {
-            if (arch === "x86_64" || arch === "arm64") return "runtime/libecho.a";
-            if (arch === "x86") return "runtime/libecho.a.sim";
-            if (arch === "arm") return "runtime/libecho.a.armv7";
+        if (triple.os === "darwin") {
+            if (triple.arch === "x86_64" || triple.arch === "arm64") return "runtime/libecho.a";
+            if (triple.arch === "x86") return "runtime/libecho.a.sim";
+            if (triple.arch === "arm") return "runtime/libecho.a.armv7";
 
             throw new Error("no libecho for this platform");
         }
 
         return "runtime/libecho.a";
     } else {
-        return path.join(relative_to_ejs_exe(`../lib/${arch}-${platform}`), "libecho.a");
+        return path.join(relative_to_ejs_exe(`../lib/${triple.arch}-${triple.os}`), "libecho.a");
     }
 }
 
-function target_extra_libs(platform, arch) {
+function target_extra_libs(triple) {
     if (options.srcdir) {
-        if (platform === "linux")
+        if (triple.os === "linux")
             return [
                 "external-deps/double-conversion-linux/double-conversion/libdouble-conversion.a",
                 "external-deps/pcre-linux/.libs/libpcre16.a",
             ];
 
-        if (platform === "darwin") {
-            if (arch === "x86_64")
+        if (triple.os === "darwin") {
+            if (triple.arch === "x86_64")
                 return [
                     "external-deps/double-conversion-osx/double-conversion/libdouble-conversion.a",
                     "external-deps/pcre-osx/.libs/libpcre16.a",
                 ];
-            if (arch === "x86")
+            if (triple.arch === "x86")
                 return [
                     "external-deps/double-conversion-iossim/double-conversion/libdouble-conversion.a",
                     "external-deps/pcre-iossim/.libs/libpcre16.a",
                 ];
-            if (arch === "arm")
+            if (triple.arch === "arm")
                 return [
                     "external-deps/double-conversion-iosdev/double-conversion/libdouble-conversion.a",
                     "external-deps/pcre-iosdev/.libs/libpcre16.a",
                 ];
-            if (arch === "aarch64" || arch === "arm64")
+            if (triple.arch === "arm64")
                 return [
                     "external-deps/double-conversion-osx/double-conversion/libdouble-conversion.a",
                     "external-deps/pcre-osx/.libs/libpcre16.a",
@@ -486,15 +452,15 @@ function target_extra_libs(platform, arch) {
         throw new Error("no pcre for this platform");
     } else {
         return ["libdouble-conversion.a", "libpcre16.a"].map((lib) =>
-            path.join(relative_to_ejs_exe(`../lib/${arch}-${platform}`), lib)
+            path.join(relative_to_ejs_exe(`../lib/${triple.arch}-${triple.os}`), lib)
         );
     }
 }
 
-function target_path_prepend(platform, arch) {
-    if (platform === "darwin") {
-        if (arch === "x86") return sim_bin;
-        if (arch === "arm" || arch === "aarch64") return dev_bin;
+function target_path_prepend(triple) {
+    if (triple.os === "darwin") {
+        if (triple.arch === "x86") return sim_bin;
+        if (triple.arch === "arm64") return dev_bin;
     }
     return "";
 }
@@ -522,7 +488,7 @@ function compileFile(filename, parse_tree, modules, files_count, cur_file, compi
 
     let compiled_module;
     try {
-        compiled_module = compile(parse_tree, base_filename, filename, modules, options);
+        compiled_module = compile(parse_tree, base_filename, filename, modules, options, target_triple);
     } catch (e) {
         console.warn(`${e}`);
         if (options.debug_level == 0) process.exit(-1);
@@ -530,8 +496,8 @@ function compileFile(filename, parse_tree, modules, files_count, cur_file, compi
     }
 
     function tmpfile(suffix) {
-        return `${os.tmpdir()}/${base_filename}-${options.target_arch}-${
-            options.target_platform
+        return `${os.tmpdir()}/${base_filename}-${target_triple.arch}-${
+            target_triple.os
         }${suffix}`;
     }
     let ll_filename = tmpfile(".ll");
@@ -550,7 +516,7 @@ function compileFile(filename, parse_tree, modules, files_count, cur_file, compi
         `-o=${ll_opt_filename}`,
         bc_filename,
     ];
-    let llc_args = target_llc_args(options.target_platform, options.target_arch).concat([
+    let llc_args = target_llc_args(target_triple).concat([
         "-filetype=obj",
         `-o=${o_filename}`,
         ll_opt_filename,
@@ -664,33 +630,36 @@ function do_final_link(main_file, modules) {
     let js_modules = new Map();
     let native_modules = new Map();
     modules.forEach((m, k) => {
-        if (m.isNative()) native_modules.set(k, m);
-        else js_modules.set(k, m);
+        if (m.isNative()) {
+            native_modules.set(k, m);
+        } else {
+            js_modules.set(k, m);
+        }
     });
 
     let map_filename = generate_import_map(js_modules, native_modules);
 
-    process.env.PATH = `${target_path_prepend(options.target_platform, options.target_arch)}:${
+    process.env.PATH = `${target_path_prepend(target_triple)}:${
         process.env.PATH
     }`;
 
     let output_filename = options.output_filename || `${main_file}.exe`;
-    let clang_args = target_link_args(options.target_platform, options.target_arch).concat(
-        [`-DEJS_BITS_PER_WORD=${options.target_pointer_size}`, "-o", output_filename].concat(
+    let clang_args = target_link_args(target_triple).concat(
+        [`-DEJS_BITS_PER_WORD=${target_triple.pointerSize()}`, "-o", output_filename].concat(
             o_filenames
         )
     );
-    if (arch_info[options.target_arch].little_endian) clang_args.unshift("-DIS_LITTLE_ENDIAN=1");
+    if (target_triple.isLittleEndian()) clang_args.unshift("-DIS_LITTLE_ENDIAN=1");
 
     clang_args.push(`-I${relative_to_ejs_exe(options.srcdir ? "./runtime" : "../include")}`);
 
     clang_args.push(map_filename);
 
     clang_args = clang_args.concat(
-        relative_to_ejs_exe(target_libecho(options.target_platform, options.target_arch))
+        relative_to_ejs_exe(target_libecho(target_triple))
     );
     clang_args = clang_args.concat(
-        relative_to_ejs_exe(target_extra_libs(options.target_platform, options.target_arch))
+        relative_to_ejs_exe(target_extra_libs(target_triple))
     );
 
     let seen_native_modules = new Set();
@@ -704,7 +673,7 @@ function do_final_link(main_file, modules) {
             clang_args.push(
                 path.resolve(
                     module.ejs_dir,
-                    options.srcdir ? "." : `${options.target_arch}-${options.target_platform}`,
+                    options.srcdir ? "." : `${target_triple.arch}-${target_triple.os}`,
                     mf
                 )
             );
@@ -713,7 +682,7 @@ function do_final_link(main_file, modules) {
         clang_args = clang_args.concat(module.link_flags.replace("\n", " ").split(" "));
     });
 
-    clang_args = clang_args.concat(target_libraries(options.target_platform, options.target_arch));
+    clang_args = clang_args.concat(target_libraries(target_triple));
 
     if (!options.quiet) options.stdout_writer.write(`${bold()}LINK${reset()} ${output_filename}`);
 
@@ -749,7 +718,7 @@ function cleanup(done) {
 let main_file = file_args[0];
 
 if (!options.srcdir) options.native_module_dirs.push(relative_to_ejs_exe("../lib"));
-let files = gatherAllModules(file_args, options);
+let files = gatherAllModules(file_args, options, target_triple);
 debug.log(1, () => dumpModules());
 let allModules = getAllModules();
 
