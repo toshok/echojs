@@ -15,7 +15,7 @@
 #include <execinfo.h>
 
 
-#define spew 0
+#define spew 1
 #if spew
 #define SPEW(x) x
 #else

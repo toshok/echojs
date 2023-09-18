@@ -945,6 +945,8 @@ _ejs_dump_value (ejsval val)
         _ejs_log ("<object %s", CLASSNAME(EJSVAL_TO_OBJECT(val)));
         if (EJSVAL_IS_FUNCTION(val))
             _ejs_log(" '%s'", ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(ToString(Get(val, _ejs_atom_name)))));
+        else if (EJSVAL_IS_ERROR(val))
+            _ejs_log(" '%s'", ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(ToString(Get(val, _ejs_atom_message)))));
         _ejs_log(">\n");
     }
 }

@@ -315,31 +315,40 @@ let dev_bin = `${dev_base}/Developer/usr/bin`;
 
 function target_llc_args(triple) {
     let args = [`-march=${triple.llcArch()}`];
-    if (triple.os === "darwin") {
-        if (triple.arch === "arm")
+    switch (triple.os) {
+    case "darwin":
+        switch (triple.arch) {
+        case "arm":
             args = args.concat([
                 `-mtriple=thumbv7-apple-ios${options.ios_min}.0`,
                 "-mattr=+v6",
-                "-relocation-model=pic",
+                "--relocation-model=pic",
                 "-soft-float",
             ]);
-        else if (triple.arch === "arm64")
+            break;
+        case "arm64":
             args = args.concat([
                 `-mtriple=arm64-apple-macosx${options.osx_min}.0`,
                 "-mattr=+fp-armv8",
-                "-relocation-model=pic",
+                "--relocation-model=pic",
             ]);
-        else if (triple.arch === "x86")
+            break;
+        case "x86":
             args = args.concat([
                 `-mtriple=i386-apple-ios${options.ios_min}.0`,
-                "-relocation-model=pic",
+                "--relocation-model=pic",
             ]);
-        else if (triple.arch === "x86_64")
+            break;
+        case "x86_64":
             args = args.concat([`-mtriple=x86_64-apple-macosx${options.osx_min}.0`]);
-    } else if (triple.os === "linux") {
+            break;
+        }
+        break;
+    case "linux":
         args = args.concat([
             "--relocation-model=pic"
         ])
+        break;
     }
 
     return args;
