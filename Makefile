@@ -76,7 +76,7 @@ stage3: $(STAGE3_EXE)
 
 $(STAGE1_EXE): lib/generated
 	@echo Building stage 1
-	@NODE_PATH="$(NODE_PATH)" ./ejs -d --srcdir --leave-temp $(MODULE_DIRS) ejs-es6.js
+	@NODE_PATH="$(NODE_PATH)" ./ejs --srcdir --leave-temp $(MODULE_DIRS) ejs-es6.js
 	@mv ejs-es6.js.exe $@
 
 $(STAGE2_EXE): $(STAGE1_EXE) lib/*.js lib/*.js.in

@@ -315,7 +315,7 @@ let dev_bin = `${dev_base}/Developer/usr/bin`;
 
 function target_llc_args(triple) {
     let args = [`-march=${triple.llcArch()}`];
-    if (triple.platform === "darwin") {
+    if (triple.os === "darwin") {
         if (triple.arch === "arm")
             args = args.concat([
                 `-mtriple=thumbv7-apple-ios${options.ios_min}.0`,
@@ -325,7 +325,7 @@ function target_llc_args(triple) {
             ]);
         else if (triple.arch === "arm64")
             args = args.concat([
-                `-mtriple=thumbv7s-apple-ios${options.ios_min}.0`,
+                `-mtriple=arm64-apple-macosx${options.osx_min}.0`,
                 "-mattr=+fp-armv8",
                 "-relocation-model=pic",
             ]);
@@ -336,7 +336,7 @@ function target_llc_args(triple) {
             ]);
         else if (triple.arch === "x86_64")
             args = args.concat([`-mtriple=x86_64-apple-macosx${options.osx_min}.0`]);
-    } else if (triple.platform === "linux") {
+    } else if (triple.os === "linux") {
         args = args.concat([
             "--relocation-model=pic"
         ])
