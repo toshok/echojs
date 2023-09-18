@@ -25,15 +25,16 @@ clean-local::
 TARNAME=$(PRODUCT_name)-$(PRODUCT_VERSION)
 TARFILE=$(TARNAME).tar.gz
 DISTROOT=$(TOP)
-TAR_EXCLUDES=	--exclude .travis.yml \
-		--exclude .git \
-		--exclude .gitmodules \
-		--exclude .gitignore \
-		--exclude .deps \
-		--exclude host-config.mk \
-		--exclude host-config.js \
+TAR_EXCLUDES=						 \
+		--exclude .circleci			 \
+		--exclude .git				 \
+		--exclude .gitmodules		 \
+		--exclude .gitignore		 \
+		--exclude .deps				 \
+		--exclude host-config.mk	 \
+		--exclude host-config.js	 \
 		--exclude host-config-es6.js \
-		--exclude $(TARFILE) \
+		--exclude $(TARFILE)		 \
 		--exclude $(TARNAME)
 dist-hook:: ensure-submodules
 	@echo creating $(DISTROOT)/$(TARNAME).tar.gz
