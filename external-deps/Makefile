@@ -20,7 +20,7 @@ install-local:: install-pcre install-double-conversion
 ifeq ($(HOST_OS),linux)
 _TARGETS=linux
 else
-ifneq ($(TRAVIS_BUILD_NUMBER),)
+ifneq ($(CIRCLE_BUILD_NUM),)
 _TARGETS=osx
 else
 _TARGETS=iossim iosdev osx

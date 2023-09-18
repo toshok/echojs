@@ -47,10 +47,12 @@ SIM_LIBRARY=$(LIBRARY).sim
 DEV_LIBRARY=$(LIBRARY).armv7
 DEVS_LIBRARY=$(LIBRARY).armv7s
 
-ifneq ($(TRAVIS_BUILD_NUMBER),)
+ifneq ($(CIRCLE_BUILD_NUM),)
+# on circleci we only build the osx library
 ALL_LIBRARIES=$(OSX_LIBRARY)
 ALL_TARGETS=$(ALL_LIBRARIES)
 else
+# on local builds we build all the libraries (XXX need to figure out how to accurately target those platforms first)
 ALL_LIBRARIES=$(OSX_LIBRARY) $(SIM_LIBRARY) $(DEV_LIBRARY) $(DEVS_LIBRARY)
 ALL_TARGETS=$(ALL_LIBRARIES) $(analyze_plists_c) $(analyze_plists_objc)
 endif

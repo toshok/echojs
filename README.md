@@ -1,8 +1,7 @@
 EchoJS - an ahead of time compiler and runtime for EcmaScript
 =============================================================
 
-[![Build Status](https://travis-ci.org/toshok/echojs.svg?branch=master)](https://travis-ci.org/toshok/echojs)
-[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/toshok/echojs?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Build Status](https://dl.circleci.com/status-badge/img/gh/toshok/echojs/tree/main.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/toshok/echojs/tree/main)
 
 Building EchoJS
 ---------------

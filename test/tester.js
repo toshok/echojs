@@ -25,7 +25,7 @@ const compilers = ["../ejs", "../ejs.exe.stage1", "../ejs.exe.stage2"];
 
 let runloop_impl = require("../lib/generated/lib/host-config.js").RUNLOOP_IMPL;
 
-const running_on_travis = process.env["TRAVIS_BUILD_NUMBER"] != null;
+const running_in_ci = process.env["CIRCLE_BUILD_NUM"] != null;
 
 let platform_to_test = null;
 
