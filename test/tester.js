@@ -387,7 +387,7 @@ function runTests(tests) {
                 testColumn(" "),
                 resultColumn("done", result_types[run_failed ? "fail" : "pass"].colorizer)
             );
-            process.exit(run_failed ? 1 : 0);
+            process.exit(run_failed ? -1 : 0);
         });
     });
 }
