@@ -11,7 +11,7 @@ jobs:
       - run: sudo npm install -g node-gyp
       - run: npm ci
       - run: export LLVM_SUFFIX=
-      - run: make -j 8
+      - run: make -j 4
       - run: make check-stage1
 
 workflows:
