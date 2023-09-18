@@ -21,6 +21,7 @@ const stdouts = Object.create(null);
 
 const failed_tests = [];
 
+// index here is the stage #.  0 = run it under node, 1 = run it with stage1, 2 = run it with stage2
 const compilers = ["../ejs", "../ejs.exe.stage1", "../ejs.exe.stage2"];
 
 let runloop_impl = require("../lib/generated/lib/host-config.js").RUNLOOP_IMPL;
@@ -166,13 +167,19 @@ function processOneTest(gen_expected, test, cb) {
 
             exec(generator + " " + test + " > " + expected_name, function (err, stdout) {
                 if (err) {
-                    throw new Error(err);
+                    cb(err);
+                    return;
                 }
                 expected_stdouts[test_name] = fs.readFileSync(expected_name).toString();
                 cb();
             });
         } else {
-            expected_stdouts[test_name] = fs.readFileSync(expected_name).toString();
+            try {
+                expected_stdouts[test_name] = fs.readFileSync(expected_name).toString();
+            } catch (e) {
+                setTimeout(() => cb(e), 0);
+                return;
+            }
             setTimeout(cb, 0);
         }
         return;
@@ -192,6 +199,12 @@ function processOneTest(gen_expected, test, cb) {
                 ])
             );
             ccomp.on("exit", function (code, errstring) {
+                if (code !== 0) {
+                    const elapsed = getElapsed(start);
+                    testFailed(test_name, `compiler failed (exit code = ${code})`, elapsed);
+                    cb();
+                    return;
+                }
                 // XXX check code to make sure we were successful?
                 let env;
                 if (platform_to_test === "sim") {
@@ -355,7 +368,11 @@ function runTests(tests) {
                 ")"
         );
 
-    processTests(true, tests, function () {
+    processTests(true, tests, function (err) {
+        if (err) {
+            console.log(err);
+            process.exit(1);
+        }
         processTests(false, tests, function () {
             const run_failed = failed_tests.length > 0;
             if (run_failed > 0) {
