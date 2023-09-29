@@ -11,6 +11,10 @@ commands:
           root: /home/circleci
           paths:
             - project
+  install_native_deps:
+    steps:
+      - run: sh ci/setup-pkg-linux.sh
+      - run: sh ci/install-llvm-linux.sh
 
 jobs:
   setup:
@@ -20,8 +24,7 @@ jobs:
       LLVM_SUFFIX: ""
     steps:
       - checkout
-      - run: sh ci/setup-pkg-linux.sh
-      - run: sh ci/install-llvm-linux.sh
+      - install_native_deps
       - run: sudo npm install -g node-gyp
       - run: npm ci
       - run: make all-recurse
@@ -39,6 +42,7 @@ jobs:
       - image: cimg/node:20.6.1
     steps:
       - attach_ejs_workspace
+      - install_native_deps
       - run: make stage0
 
   check-stage0:
@@ -46,6 +50,7 @@ jobs:
       - image: cimg/node:20.6.1
     steps:
       - attach_ejs_workspace
+      - install_native_deps
       - run: make check-stage0
 
   build-stage1:
@@ -53,6 +58,7 @@ jobs:
       - image: cimg/node:20.6.1
     steps:
       - attach_ejs_workspace
+      - install_native_deps
       - run: make stage1
       - persist_to_workspace:
           root: .
@@ -64,6 +70,7 @@ jobs:
       - image: cimg/node:20.6.1
     steps:
       - attach_ejs_workspace
+      - install_native_deps
       - run: make check-stage1
 
   build-stage2:
@@ -71,6 +78,7 @@ jobs:
       - image: cimg/node:20.6.1
     steps:
       - attach_ejs_workspace
+      - install_native_deps
       - run: make stage2
       - persist_to_workspace:
           root: .
@@ -82,6 +90,7 @@ jobs:
       - image: cimg/node:20.6.1
     steps:
       - attach_ejs_workspace
+      - install_native_deps
       - run: make check-stage2
 
   build-stage3:
@@ -89,6 +98,7 @@ jobs:
       - image: cimg/node:20.6.1
     steps:
       - attach_ejs_workspace
+      - install_native_deps
       - run: make stage3
       - persist_to_workspace:
           root: .
@@ -100,6 +110,7 @@ jobs:
       - image: cimg/node:20.6.1
     steps:
       - attach_ejs_workspace
+      - install_native_deps
       - run: make check-stage3
       
 workflows:
