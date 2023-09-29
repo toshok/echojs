@@ -59,6 +59,9 @@ MODULE_DIRS = --moduledir $(TOP)/node-compat --moduledir $(TOP)/ejs-llvm
 lib/generated:
 	@$(MAKE) -C lib
 
+stage0:
+	@echo DONE
+
 stage1: $(STAGE1_EXE)
 	@cp $(STAGE1_EXE) ejs.exe
 	@ls -l ejs.exe
@@ -100,10 +103,5 @@ ensure-submodules:
 	  git submodule init; \
 	  git submodule update; \
 	fi
-
-.stamp-npmmodules: package.json
-	@npm install && touch $@
-
-ensure-npmmodules: .stamp-npmmodules
 
 include $(TOP)/build/build.mk

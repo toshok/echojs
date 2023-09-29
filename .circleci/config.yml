@@ -1,7 +1,7 @@
 version: 2.1
 
 jobs:
-  build:
+  setup:
     docker:
       - image: cimg/node:20.6.1
     environment:
@@ -12,10 +12,73 @@ jobs:
       - run: sh ci/install-llvm-linux.sh
       - run: sudo npm install -g node-gyp
       - run: npm ci
-      - run: make
+      - run: make ensure-submodules
+
+  package:
+    docker:
+      - image: cimg/node:20.6.1
+    steps:
+      - run: echo hi
+
+  build-stage0:
+    docker:
+      - image: cimg/node:20.6.1
+    steps:
+      - run: make stage0
+
+  check-stage0:
+    docker:
+      - image: cimg/node:20.6.1
+    steps:
+      - run: make check-stage0
+
+  build-stage1:
+    docker:
+      - image: cimg/node:20.6.1
+    steps:
+      - run: make stage1
+
+  check-stage1:
+    docker:
+      - image: cimg/node:20.6.1
+    steps:
       - run: make check-stage1
 
+  build-stage2:
+    docker:
+      - image: cimg/node:20.6.1
+    steps:
+      - run: make stage-2
+
+  check-stage2:
+    docker:
+      - image: cimg/node:20.6.1
+    steps:
+      - run: make check-stage2
+
 workflows:
-  build-test:
+  build:
     jobs:
-      - build
+      - setup
+      - build-stage0:
+          requires:
+            - setup
+      - check-stage0:
+          requires:
+            - build-stage0
+      - build-stage1:
+          requires:
+            - build-stage0
+      - check-stage1:
+          requires:
+            - build-stage1
+      - build-stage2:
+          requires:
+            - build-stage1
+      - check-stage2:
+          requires:
+            - build-stage2
+      - package:
+          requires:
+            - build-stage2
+            - check-stage2
