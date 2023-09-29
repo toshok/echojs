@@ -12,7 +12,7 @@ jobs:
       - run: sh ci/install-llvm-linux.sh
       - run: sudo npm install -g node-gyp
       - run: npm ci
-      - run: make all-local
+      - run: make all-recurse
       - persist_to_workspace:
           root: .
           paths:
