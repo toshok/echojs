@@ -40,10 +40,6 @@ jobs:
     steps:
       - attach_ejs_workspace
       - run: make stage0
-      - persist_to_workspace:
-          root: .
-          paths:
-            - ejs.exe.stage0
 
   check-stage0:
     docker:
@@ -113,9 +109,9 @@ workflows:
       - build-stage0:
           requires:
             - setup
-      # - check-stage0:
-      #     requires:
-      #       - build-stage0
+      - check-stage0:
+          requires:
+            - build-stage0
       - build-stage1:
           requires:
             - build-stage0
