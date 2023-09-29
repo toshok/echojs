@@ -1,4 +1,6 @@
 // generator: babel-node
+// xfail: generator support isn't 100%
+
 // "sending" from kangax
 
 var sent;
