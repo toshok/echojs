@@ -1,5 +1,17 @@
 version: 2.1
 
+commands:
+  attach_ejs_workspace:
+    steps:
+      - attach_workspace:
+          at: /home/circleci
+  persist_ejs_workspace:
+    steps:
+      - persist_to_workspace:
+          root: /home/circleci
+          paths:
+            - project
+
 jobs:
   setup:
     docker:
@@ -13,26 +25,20 @@ jobs:
       - run: sudo npm install -g node-gyp
       - run: npm ci
       - run: make all-recurse
-      - persist_to_workspace:
-          root: .
-          paths:
-            - node_modules
-            - external_deps
+      - persist_ejs_workspace
 
   package:
     docker:
       - image: cimg/node:20.6.1
     steps:
-      - attach_workspace:
-          at: .
+      - attach_ejs_workspace
       - run: echo hi
 
   build-stage0:
     docker:
       - image: cimg/node:20.6.1
     steps:
-      - attach_workspace:
-          at: .
+      - attach_ejs_workspace
       - run: make stage0
       - persist_to_workspace:
           root: .
@@ -43,16 +49,14 @@ jobs:
     docker:
       - image: cimg/node:20.6.1
     steps:
-      - attach_workspace:
-          at: .
+      - attach_ejs_workspace
       - run: make check-stage0
 
   build-stage1:
     docker:
       - image: cimg/node:20.6.1
     steps:
-      - attach_workspace:
-          at: .
+      - attach_ejs_workspace
       - run: make stage1
       - persist_to_workspace:
           root: .
@@ -63,16 +67,14 @@ jobs:
     docker:
       - image: cimg/node:20.6.1
     steps:
-      - attach_workspace:
-          at: .
+      - attach_ejs_workspace
       - run: make check-stage1
 
   build-stage2:
     docker:
       - image: cimg/node:20.6.1
     steps:
-      - attach_workspace:
-          at: .
+      - attach_ejs_workspace
       - run: make stage2
       - persist_to_workspace:
           root: .
@@ -83,16 +85,14 @@ jobs:
     docker:
       - image: cimg/node:20.6.1
     steps:
-      - attach_workspace:
-          at: .
+      - attach_ejs_workspace
       - run: make check-stage2
 
   build-stage3:
     docker:
       - image: cimg/node:20.6.1
     steps:
-      - attach_workspace:
-          at: .
+      - attach_ejs_workspace
       - run: make stage3
       - persist_to_workspace:
           root: .
@@ -103,8 +103,7 @@ jobs:
     docker:
       - image: cimg/node:20.6.1
     steps:
-      - attach_workspace:
-          at: .
+      - attach_ejs_workspace
       - run: make check-stage3
       
 workflows:
