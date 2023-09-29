@@ -7,6 +7,7 @@ jobs:
     environment:
       LLVM_SUFFIX: ""
     steps:
+      - attach_workspace
       - checkout
       - run: sh ci/setup-pkg-linux.sh
       - run: sh ci/install-llvm-linux.sh
@@ -18,42 +19,49 @@ jobs:
     docker:
       - image: cimg/node:20.6.1
     steps:
+      - attach_workspace
       - run: echo hi
 
   build-stage0:
     docker:
       - image: cimg/node:20.6.1
     steps:
+      - attach_workspace
       - run: make stage0
 
   check-stage0:
     docker:
       - image: cimg/node:20.6.1
     steps:
+      - attach_workspace
       - run: make check-stage0
 
   build-stage1:
     docker:
       - image: cimg/node:20.6.1
     steps:
+      - attach_workspace
       - run: make stage1
 
   check-stage1:
     docker:
       - image: cimg/node:20.6.1
     steps:
+      - attach_workspace
       - run: make check-stage1
 
   build-stage2:
     docker:
       - image: cimg/node:20.6.1
     steps:
+      - attach_workspace
       - run: make stage-2
 
   check-stage2:
     docker:
       - image: cimg/node:20.6.1
     steps:
+      - attach_workspace
       - run: make check-stage2
 
 workflows:
@@ -80,5 +88,6 @@ workflows:
             - build-stage2
       - package:
           requires:
-            - build-stage2
+            - check-stage0
+            - check-stage1
             - check-stage2
