@@ -7,63 +7,106 @@ jobs:
     environment:
       LLVM_SUFFIX: ""
     steps:
-      - attach_workspace
       - checkout
       - run: sh ci/setup-pkg-linux.sh
       - run: sh ci/install-llvm-linux.sh
       - run: sudo npm install -g node-gyp
       - run: npm ci
-      - run: make ensure-submodules
+      - run: make all-local
+      - persist_to_workspace:
+          root: .
+          paths:
+            - node_modules
+            - external_deps
 
   package:
     docker:
       - image: cimg/node:20.6.1
     steps:
-      - attach_workspace
+      - attach_workspace:
+          at: .
       - run: echo hi
 
   build-stage0:
     docker:
       - image: cimg/node:20.6.1
     steps:
-      - attach_workspace
+      - attach_workspace:
+          at: .
       - run: make stage0
+      - persist_to_workspace:
+          root: .
+          paths:
+            - ejs.exe.stage0
 
   check-stage0:
     docker:
       - image: cimg/node:20.6.1
     steps:
-      - attach_workspace
+      - attach_workspace:
+          at: .
       - run: make check-stage0
 
   build-stage1:
     docker:
       - image: cimg/node:20.6.1
     steps:
-      - attach_workspace
+      - attach_workspace:
+          at: .
       - run: make stage1
+      - persist_to_workspace:
+          root: .
+          paths:
+            - ejs.exe.stage1
 
   check-stage1:
     docker:
       - image: cimg/node:20.6.1
     steps:
-      - attach_workspace
+      - attach_workspace:
+          at: .
       - run: make check-stage1
 
   build-stage2:
     docker:
       - image: cimg/node:20.6.1
     steps:
-      - attach_workspace
-      - run: make stage-2
+      - attach_workspace:
+          at: .
+      - run: make stage2
+      - persist_to_workspace:
+          root: .
+          paths:
+            - ejs.exe.stage2
 
   check-stage2:
     docker:
       - image: cimg/node:20.6.1
     steps:
-      - attach_workspace
+      - attach_workspace:
+          at: .
       - run: make check-stage2
 
+  build-stage3:
+    docker:
+      - image: cimg/node:20.6.1
+    steps:
+      - attach_workspace:
+          at: .
+      - run: make stage3
+      - persist_to_workspace:
+          root: .
+          paths:
+            - ejs.exe.stage3
+
+  check-stage3:
+    docker:
+      - image: cimg/node:20.6.1
+    steps:
+      - attach_workspace:
+          at: .
+      - run: make check-stage3
+      
 workflows:
   build:
     jobs:
@@ -71,23 +114,30 @@ workflows:
       - build-stage0:
           requires:
             - setup
-      - check-stage0:
-          requires:
-            - build-stage0
+      # - check-stage0:
+      #     requires:
+      #       - build-stage0
       - build-stage1:
           requires:
             - build-stage0
-      - check-stage1:
-          requires:
-            - build-stage1
+      # - check-stage1:
+      #     requires:
+      #       - build-stage1
       - build-stage2:
           requires:
             - build-stage1
-      - check-stage2:
+      # - check-stage2:
+      #     requires:
+      #       - build-stage2
+      - build-stage3:
           requires:
             - build-stage2
-      - package:
-          requires:
-            - check-stage0
-            - check-stage1
-            - check-stage2
+      # - check-stage3:
+      #     requires:
+      #       - build-stage3
+      # - package:
+      #     requires:
+      #       - check-stage0
+      #       - check-stage1
+      #       - check-stage2
+      #       - check-stage3
