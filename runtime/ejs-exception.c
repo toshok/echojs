@@ -367,7 +367,7 @@ static intptr_t read_sleb(uintptr_t *pp)
         shift += 7;
     } while (byte & 0x80);
     if ((shift < 8*sizeof(intptr_t))  &&  (byte & 0x40)) {
-        result |= ((intptr_t)-1) << shift;
+        result |= ((uintptr_t)-1) << shift;
     }
     return result;
 }

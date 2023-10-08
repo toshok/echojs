@@ -1150,8 +1150,6 @@ static EJS_NATIVE_FUNC(_ejs_Object_assign) {
     // 2. ReturnIfAbrupt(to). 
     ejsval to = ToObject(target);
 
-    EJSObject* to_ = EJSVAL_TO_OBJECT(to);
-
     // 3. If fewer than two arguments were passed,then return to. 
     if (argc < 2)
         return to;
@@ -1280,7 +1278,6 @@ static EJS_NATIVE_FUNC(_ejs_Object_defineProperty) {
         free (utf8_name);
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, msg);
     }
-    EJSObject *obj = EJSVAL_TO_OBJECT(O);
 
     // 2. Let key be ToPropertyKey(P).
     // 3. ReturnIfAbrupt(key).

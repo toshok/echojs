@@ -428,7 +428,9 @@ _ejs_proxy_specop_get_own_property (ejsval O, ejsval P, ejsval* exc)
 
     // 14. Let extensibleTarget be IsExtensible(target). 
     // 15. ReturnIfAbrupt(extensibleTarget). 
+#if notyet
     EJSBool extensibleTarget = EJS_OBJECT_IS_EXTENSIBLE(_target);
+#endif
 
     // 16. Let resultDesc be ToPropertyDescriptor(trapResultObj).
     // 17. ReturnIfAbrupt(resultDesc). 

@@ -412,14 +412,14 @@ PromiseReactionTask (EJSPromiseReaction* reaction, ejsval argument)
         handlerResult = argument;
     }
     // 5. Else If handler is "Thrower", then let handlerResult be Completion{[[type]]: throw, [[value]]: argument, [[target]]: empty}. 
-    if (SameValue(handler, _ejs_thrower_function)) {
+    else if (SameValue(handler, _ejs_thrower_function)) {
         success = EJS_FALSE;
         handlerResult = argument;
     }
     // 6. Else, Let let handlerResult be the result of calling the [[Call]] internal method of handler passing undefined as thisArgument and (argument) as argumentsList. 
     else {
         ejsval undef_this = _ejs_undefined;
-        success = _ejs_invoke_closure_catch(&handlerResult, handler, &undef_this, 1, &argument, _ejs_undefined);
+        success =  _ejs_invoke_closure_catch(&handlerResult, handler, &undef_this, 1, &argument, _ejs_undefined);
     }
 
     ejsval status;
@@ -428,7 +428,7 @@ PromiseReactionTask (EJSPromiseReaction* reaction, ejsval argument)
     if (!success) {
         ejsval undef_this = _ejs_undefined;
         //    a. Let status be the result of calling the [[Call]] internal method of promiseCapability.[[Reject]] passing undefined as thisArgument and (handlerResult.[[value]]) as argumentsList. 
-        success = _ejs_invoke_closure_catch(&status, EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &handlerResult, _ejs_undefined);
+        /* notyet success = */ _ejs_invoke_closure_catch(&status, EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &handlerResult, _ejs_undefined);
 
         //    b. NextTask status. 
         return;//EJS_NOT_IMPLEMENTED();
@@ -436,7 +436,7 @@ PromiseReactionTask (EJSPromiseReaction* reaction, ejsval argument)
     // 8. Let handlerResult be handlerResult.[[value]]. 
     // 9. Let status be the result of calling the [[Call]] internal method of promiseCapability.[[Resolve]] passing undefined as thisArgument and (handlerResult) as argumentsList. 
     ejsval undef_this = _ejs_undefined;
-    success = _ejs_invoke_closure_catch(&status, EJS_CAPABILITY_GET_RESOLVE(promiseCapability), &undef_this, 1, &handlerResult, _ejs_undefined);
+    /* notyet success = */ _ejs_invoke_closure_catch(&status, EJS_CAPABILITY_GET_RESOLVE(promiseCapability), &undef_this, 1, &handlerResult, _ejs_undefined);
     
     // 10. NextTask status. 
 }
@@ -638,6 +638,7 @@ static EJS_NATIVE_FUNC(resolve_element) {
     // 2. Set the value of F's [[AlreadyCalled]] internal slot to true. 
     EJS_RESOLVEELEMENT_SET_ALREADY_CALLED(env, _ejs_true);
 
+#if notyet
     // 3. Let index be the value of F's [[Index]] internal slot. 
     ejsval index = EJS_RESOLVEELEMENT_GET_INDEX(env);
 
@@ -646,6 +647,7 @@ static EJS_NATIVE_FUNC(resolve_element) {
 
     // 5. Let promiseCapability be the value of F's [[Capabilities]] internal slot. 
     ejsval promiseCapability = EJS_RESOLVEELEMENT_GET_CAPABILITIES(env);
+#endif
 
     // 6. Let remainingElementsCount be the value of F's [[RemainingElements]] internal slot. 
 

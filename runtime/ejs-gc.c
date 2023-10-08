@@ -845,8 +845,10 @@ static int num_primsym_allocs = 0;
 static void
 sweep_heap()
 {
+#if spew
     int pages_visited = 0;
     int pages_skipped = 0;
+#endif
 
     // sweep the entire heap, freeing white nodes
     for (int a = 0, e = num_arenas; a < e; a ++) {
@@ -859,10 +861,14 @@ sweep_heap()
             PageInfo *info = arena->page_infos[p];
 
             if (info->num_free_cells == info->num_cells) {
+#if spew
                 pages_skipped++;
+#endif
             }
             else {
+#if spew
                 pages_visited ++;
+#endif
 
                 for (int c = 0, ce = info->num_cells; c < ce; c ++) {
                     BitmapCell cell = info->page_bitmap[c];
@@ -1005,7 +1011,7 @@ static void
 mark_generator_stacks()
 {
     for (int i = 0; i < generator_count; i++) {
-        EJSGenerator* gen = generators[i];
+        // EJSGenerator* gen = generators[i];
         
         // XXX mark the actual stack
     }

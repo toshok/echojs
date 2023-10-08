@@ -11,12 +11,14 @@
 
 // ECMA262: 19.4.2.2 Symbol.for ( key ) 
 static EJS_NATIVE_FUNC(_ejs_Symbol_for) {
+#if notyet
     ejsval key = _ejs_undefined;
     if (argc > 0) key = args[0];
 
     // 1. Let stringKey be ToString(key). 
     // 2. ReturnIfAbrupt(stringKey). 
     ejsval stringKey = ToString(key);
+#endif
     
     // 3. For each element e of the GlobalSymbolRegistry List, 
     // a. If SameValue(e.[[key]], stringKey) is true, then return e.[[symbol]]. 

@@ -1474,7 +1474,9 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_reduceRight) {
             k--;
         }
         // c. If kPresent is false, throw a TypeError exception.
-        _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Reduce right of empty array with no initial value");
+        if (!kPresent) {
+            _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "Reduce right of empty array with no initial value");
+        }
     }
     // 10. Repeat, while k ≥ 0
     while (k >= 0) {
