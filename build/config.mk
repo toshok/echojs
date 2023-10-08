@@ -1,7 +1,7 @@
 # we need this line or else default 'make' behavior will only generate host-config.mk
 do-make-all: all
 
-$(TOP)/build/host-config.mk:
+$(TOP)/build/host-config.mk: $(TOP)/build/config.guess
 	@(host_triple=`$(TOP)/build/config.guess`; \
 	  echo HOST_TRIPLE:=$$host_triple > $@; \
 	  echo $$host_triple | awk '{split($$0,a,"-"); print "HOST_CPU:=" a[1] "\nHOST_VENDOR:=" a[2] "\nHOST_OS:=" a[3] "\n"}' >> $@)
