@@ -53,8 +53,10 @@ ALL_LIBRARIES=$(OSX_LIBRARY)
 ALL_TARGETS=$(ALL_LIBRARIES)
 else
 # on local builds we build all the libraries (XXX need to figure out how to accurately target those platforms first)
-ALL_LIBRARIES=$(OSX_LIBRARY) $(SIM_LIBRARY) $(DEV_LIBRARY) $(DEVS_LIBRARY)
-ALL_TARGETS=$(ALL_LIBRARIES) $(analyze_plists_c) $(analyze_plists_objc)
+#ALL_LIBRARIES=$(OSX_LIBRARY) $(SIM_LIBRARY) $(DEV_LIBRARY) $(DEVS_LIBRARY)
+#ALL_TARGETS=$(ALL_LIBRARIES) $(analyze_plists_c) $(analyze_plists_objc)
+ALL_LIBRARIES=$(OSX_LIBRARY)
+ALL_TARGETS=$(ALL_LIBRARIES)
 endif
 
 ALL_OBJECTS=$(SIM_OBJECTS) $(DEV_OBJECTS) $(DEVS_OBJECTS) $(OSX_OBJECTS)

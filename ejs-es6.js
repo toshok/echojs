@@ -117,11 +117,19 @@ function add_native_module_dir(dir) {
 
 function set_target(str) {
     let triple;
-    switch(str) {
-        case "linux_x86_64": triple = new Triple("x86_64", "unknown", "linux"); break;
-        case "macos": triple = new Triple("arm64", "apple", "darwin"); break;
-        case "iossim": triple = new Triple("arm64", "apple", "darwin"); break;
-        case "iosdev": triple = new Triple("arm64", "apple", "darwin"); break;
+    switch (str) {
+        case "linux_x86_64":
+            triple = new Triple("x86_64", "unknown", "linux");
+            break;
+        case "macos":
+            triple = new Triple("arm64", "apple", "darwin");
+            break;
+        case "iossim":
+            triple = new Triple("arm64", "apple", "darwin");
+            break;
+        case "iosdev":
+            triple = new Triple("arm64", "apple", "darwin");
+            break;
         default:
             triple = Triple.fromString(str);
             break;
@@ -296,9 +304,7 @@ if (!file_args || file_args.length === 0) {
 }
 
 if (!options.quiet) {
-    console.log(
-        `host: ${host_triple}, target: ${target_triple}`
-    );
+    console.log(`host: ${host_triple}, target: ${target_triple}`);
 }
 
 debug.setLevel(options.debug_level);
@@ -316,39 +322,37 @@ let dev_bin = `${dev_base}/Developer/usr/bin`;
 function target_llc_args(triple) {
     let args = [`-march=${triple.llcArch()}`];
     switch (triple.os) {
-    case "darwin":
-        switch (triple.arch) {
-        case "arm":
-            args = args.concat([
-                `-mtriple=thumbv7-apple-ios${options.ios_min}.0`,
-                "-mattr=+v6",
-                "--relocation-model=pic",
-                "-soft-float",
-            ]);
+        case "darwin":
+            switch (triple.arch) {
+                case "arm":
+                    args = args.concat([
+                        `-mtriple=thumbv7-apple-ios${options.ios_min}.0`,
+                        "-mattr=+v6",
+                        "--relocation-model=pic",
+                        "-soft-float",
+                    ]);
+                    break;
+                case "arm64":
+                    args = args.concat([
+                        `-mtriple=arm64-apple-macosx${options.osx_min}.0`,
+                        "-mattr=+fp-armv8",
+                        "--relocation-model=pic",
+                    ]);
+                    break;
+                case "x86":
+                    args = args.concat([
+                        `-mtriple=i386-apple-ios${options.ios_min}.0`,
+                        "--relocation-model=pic",
+                    ]);
+                    break;
+                case "x86_64":
+                    args = args.concat([`-mtriple=x86_64-apple-macosx${options.osx_min}.0`]);
+                    break;
+            }
             break;
-        case "arm64":
-            args = args.concat([
-                `-mtriple=arm64-apple-macosx${options.osx_min}.0`,
-                "-mattr=+fp-armv8",
-                "--relocation-model=pic",
-            ]);
+        case "linux":
+            args = args.concat(["--relocation-model=pic"]);
             break;
-        case "x86":
-            args = args.concat([
-                `-mtriple=i386-apple-ios${options.ios_min}.0`,
-                "--relocation-model=pic",
-            ]);
-            break;
-        case "x86_64":
-            args = args.concat([`-mtriple=x86_64-apple-macosx${options.osx_min}.0`]);
-            break;
-        }
-        break;
-    case "linux":
-        args = args.concat([
-            "--relocation-model=pic"
-        ])
-        break;
     }
 
     return args;
@@ -394,7 +398,8 @@ function target_libraries(triple) {
         let rv = ["-framework", "Foundation"];
 
         // for macos we only need Foundation and AppKit
-        if (triple.arch === "x86_64" || triple.arch === "arm64") return rv.concat(["-framework", "AppKit"]);
+        if (triple.arch === "x86_64" || triple.arch === "arm64")
+            return rv.concat(["-framework", "AppKit"]);
 
         // for any other darwin we're dealing with ios, so...
         return rv.concat([
@@ -413,15 +418,7 @@ function target_libraries(triple) {
 
 function target_libecho(triple) {
     if (options.srcdir) {
-        if (triple.os === "darwin") {
-            if (triple.arch === "x86_64" || triple.arch === "arm64") return "runtime/libecho.a";
-            if (triple.arch === "x86") return "runtime/libecho.a.sim";
-            if (triple.arch === "arm") return "runtime/libecho.a.armv7";
-
-            throw new Error("no libecho for this platform");
-        }
-
-        return "runtime/libecho.a";
+        return path.join("runtime", "out", `${triple}`, "libecho.a");
     } else {
         return path.join(relative_to_ejs_exe(`../lib/${triple.arch}-${triple.os}`), "libecho.a");
     }
@@ -497,7 +494,14 @@ function compileFile(filename, parse_tree, modules, files_count, cur_file, compi
 
     let compiled_module;
     try {
-        compiled_module = compile(parse_tree, base_filename, filename, modules, options, target_triple);
+        compiled_module = compile(
+            parse_tree,
+            base_filename,
+            filename,
+            modules,
+            options,
+            target_triple
+        );
     } catch (e) {
         console.warn(`${e}`);
         if (options.debug_level == 0) process.exit(-1);
@@ -505,9 +509,7 @@ function compileFile(filename, parse_tree, modules, files_count, cur_file, compi
     }
 
     function tmpfile(suffix) {
-        return `${os.tmpdir()}/${base_filename}-${target_triple.arch}-${
-            target_triple.os
-        }${suffix}`;
+        return `${os.tmpdir()}/${base_filename}-${target_triple.arch}-${target_triple.os}${suffix}`;
     }
     let ll_filename = tmpfile(".ll");
     let bc_filename = tmpfile(".bc");
@@ -648,9 +650,7 @@ function do_final_link(main_file, modules) {
 
     let map_filename = generate_import_map(js_modules, native_modules);
 
-    process.env.PATH = `${target_path_prepend(target_triple)}:${
-        process.env.PATH
-    }`;
+    process.env.PATH = `${target_path_prepend(target_triple)}:${process.env.PATH}`;
 
     let output_filename = options.output_filename || `${main_file}.exe`;
     let clang_args = target_link_args(target_triple).concat(
@@ -664,12 +664,8 @@ function do_final_link(main_file, modules) {
 
     clang_args.push(map_filename);
 
-    clang_args = clang_args.concat(
-        relative_to_ejs_exe(target_libecho(target_triple))
-    );
-    clang_args = clang_args.concat(
-        relative_to_ejs_exe(target_extra_libs(target_triple))
-    );
+    clang_args = clang_args.concat(relative_to_ejs_exe(target_libecho(target_triple)));
+    clang_args = clang_args.concat(relative_to_ejs_exe(target_extra_libs(target_triple)));
 
     let seen_native_modules = new Set();
     native_modules.forEach((module) => {
