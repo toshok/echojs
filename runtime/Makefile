@@ -57,17 +57,17 @@ ALL_TARGETS=$(ALL_LIBRARIES)
 
 ifeq ($(EJS_RUNLOOP_IMPL),noop)
 RUNLOOP_DEF=-DNOOP_RUNLOOP=1
-RUNLOOP_C_SOURCE=ejs-runloop-noop.c
+C_SOURCES += ejs-runloop-noop.c
 else
 RUNLOOP_DEF=-DHAVE_LIBUV=1
-RUNLOOP_C_SOURCE=ejs-runloop-libuv.c
+C_SOURCES += =ejs-runloop-libuv.c
 endif
 
-LINUX_OBJECTS=$(C_SOURCES:%.c=%.o.linux) $(CPP_SOURCES:%.cpp=%.o.linux) $(OBJC_SOURCES:%.m=%.o.linux) ejs-log.o.linux ejs-invoke-closure-catch.o.linux $(RUNLOOP_C_SOURCE:%.c=%.o.linux)
+LINUX_OBJECTS=$(C_SOURCES:%.c=%.o.linux) $(CPP_SOURCES:%.cpp=%.o.linux) $(OBJC_SOURCES:%.m=%.o.linux) ejs-log.o.linux ejs-invoke-closure-catch.o.linux
 
 ALL_OBJECTS=$(LINUX_OBJECTS)
 
-CFLAGS += -I/usr/include/libunwind -I../external-deps/pcre-linux -I../external-deps/double-conversion
+LINUX_CFLAGS += -I/usr/include/libunwind -I../external-deps/pcre-linux -I../external-deps/double-conversion
 
 ejs-init.o.linux: ejs-atoms-gen.c
 
@@ -107,155 +107,92 @@ OBJC_SOURCES= \
 	ejs-xhr.m \
 	ejs-runloop-darwin.m
 
-OSX_OBJECTS=$(C_SOURCES:%.c=out/$(OSX_TRIPLE)/%.o) $(CPP_SOURCES:%.cpp=out/$(OSX_TRIPLE)/%.o) $(OBJC_SOURCES:%.m=out/$(OSX_TRIPLE)/%.o) out/$(OSX_TRIPLE)/ejs-invoke-closure-catch.o
-SIM_OBJECTS=$(C_SOURCES:%.c=out/$(IOSSIM_TRIPLE)/%.o) $(CPP_SOURCES:%.cpp=out/$(IOSSIM_TRIPLE)/%.o) $(OBJC_SOURCES:%.m=out/$(IOSSIM_TRIPLE)/%.o) out/$(IOSSIM_TRIPLE)/ejs-invoke-closure-catch.o
-DEV_OBJECTS=$(C_SOURCES:%.c=out/$(IOSDEV_TRIPLE)%.o) $(CPP_SOURCES:%.cpp=out/$(IOSDEV_TRIPLE)%.o) $(OBJC_SOURCES:%.m=out/$(IOSDEV_TRIPLE)%.o) out/$(IOSDEV_TRIPLE)/ejs-invoke-closure-catch.o
-
-analyze_plists_c = $(C_SOURCES:%.c=%.plist)
-analyze_plists_objc = $(OBJC_SOURCES:%.m=%.plist) 
-
-OSX_LIBRARY=out/$(OSX_TRIPLE)/$(LIBRARY)
-SIM_LIBRARY=out/$(IOSSIM_TRIPLE)/$(LIBRARY)
-DEV_LIBRARY=$(LIBRARY).armv7
-DEVS_LIBRARY=$(LIBRARY).armv7s
-
-ifneq ($(CIRCLE_BUILD_NUM),)
-# on circleci we only build the osx library
-ALL_LIBRARIES=$(OSX_LIBRARY)
-ALL_TARGETS=$(ALL_LIBRARIES)
-else
-# on local builds we build all the libraries (XXX need to figure out how to accurately target those platforms first)
-ALL_LIBRARIES=$(OSX_LIBRARY) $(SIM_LIBRARY)
-ALL_TARGETS=$(ALL_LIBRARIES) $(analyze_plists_c) $(analyze_plists_objc)
-endif
-
-ALL_OBJECTS=$(SIM_OBJECTS) $(DEV_OBJECTS) $(DEVS_OBJECTS) $(OSX_OBJECTS)
-
-CFLAGS += -I../external-deps/pcre-osx -I../external-deps/double-conversion
+MACOS_CFLAGS  += -I../external-deps/pcre-macos  -I../external-deps/double-conversion
 IOSSIM_CFLAGS += -I../external-deps/pcre-iossim -I../external-deps/double-conversion
 IOSDEV_CFLAGS += -I../external-deps/pcre-iosdev -I../external-deps/double-conversion
 
 
-$(OSX_LIBRARY): $(OSX_OBJECTS)
-	@echo [ar osx] `basename $@` && /usr/bin/ar rc $@ $(OSX_OBJECTS)
-
-$(SIM_LIBRARY): $(SIM_OBJECTS)
-	@echo [ar sim] `basename $@` && /usr/bin/ar rc $@ $(SIM_OBJECTS)
-
-$(DEV_LIBRARY): $(DEV_OBJECTS)
-	@echo [ar armv7] $@ && /usr/bin/ar rc $@ $(DEV_OBJECTS)
-
-$(DEVS_LIBRARY): $(DEVS_OBJECTS)
-	@echo [ar armv7s] $@ && /usr/bin/ar rc $@ $(DEVS_OBJECTS)
-
-out/$(OSX_TRIPLE)/ejs-init.o ejs-init.o.sim ejs-init.o.armv7 ejs-init.o.armv7s: ejs-atoms-gen.c
-
 ejs-webgl-constants-sorted.h: ejs-webgl-constants.h
 	@echo [GEN] $@ && (grep WEBGL_CONSTANT $< | sort > $@)
 
-out/$(OSX_TRIPLE)/ejs-webgl.o ejs-webgl.o.sim ejs-webgl.o.armv7 ejs-webgl.o.armv7s: ejs-webgl-constants-sorted.h
+DARWIN_OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch -fno-objc-arc
+MACOS_OBJC_FLAGS=  $(DARWIN_OBJC_FLAGS)
+IOSSIM_OBJC_FLAGS= $(DARWIN_OBJC_FLAGS)
+IOSDEV_OBJC_FLAGS= $(DARWIN_OBJC_FLAGS)
 
+PREFIXES=MACOS IOSSIM IOSDEV
 
-OBJC_FLAGS= -ObjC -DOBJC=1 -fobjc-abi-version=2 -fobjc-legacy-dispatch -fno-objc-arc
+INCLUDE=-include
 
-out/$(OSX_TRIPLE)/%.o: %.c
-	@mkdir -p .deps/out/$(OSX_TRIPLE)
-	@mkdir -p out/$(OSX_TRIPLE)
-	@$(CC) -MM $(OSX_CFLAGS) $< | sed -e s,`basename $@`,$@, > .deps/$@-deps
-	@echo [$(CC) osx] $< && $(CC) -ObjC $(OSX_CFLAGS)  -c -o $@ $<
+ALL_OBJECTS=
 
-out/$(OSX_TRIPLE)/%.o: %.cpp
-	@mkdir -p .deps/out/$(OSX_TRIPLE)
-	@mkdir -p out/$(OSX_TRIPLE)
-	@$(CXX) -MM $(OSX_CFLAGS) $< | sed -e s,`basename $@`,$@, > .deps/$@-deps
-	@echo [$(CXX) osx] $< && $(CXX) -std=c++11 $(OSX_CFLAGS)  -c -o $@ $<
+define PREFIX_rules
+$(1)_lowered=$(shell echo $(1) | tr '[:upper:]' '[:lower:]')
+$(1)_LIBRARY=out/$($(1)_SHORT_TRIPLE)/$(LIBRARY)
+$(1)_OBJECTS=$(C_SOURCES:%.c=out/$($(1)_SHORT_TRIPLE)/%.o) $(CPP_SOURCES:%.cpp=out/$($(1)_SHORT_TRIPLE)/%.o) $(OBJC_SOURCES:%.m=out/$($(1)_SHORT_TRIPLE)/%.o) out/$($(1)_SHORT_TRIPLE)/ejs-invoke-closure-catch.o
 
-out/$(OSX_TRIPLE)/%.o: %.m
-	@mkdir -p .deps/out/$(OSX_TRIPLE)
-	@mkdir -p out/$(OSX_TRIPLE)
-	@$(CC) -MM $(OSX_CFLAGS) $< | sed -e s,`basename $@`,$@, > .deps/$@-deps
-	@echo [$(CC) osx] $< && $(CC) $(OSX_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
+ALL_OBJECTS += $$($(1)_OBJECTS)
 
-out/$(OSX_TRIPLE)/%.o: %.ll
-	@mkdir -p .deps/out/$(OSX_TRIPLE)
-	@mkdir -p out/$(OSX_TRIPLE)
-	@echo [llc osx] $< && llc$(LLVM_SUFFIX) -mtriple=$(OSX_MTRIPLE) -filetype=obj -o=$@ -O2 $<
+$$($(1)_LIBRARY): $$($(1)_OBJECTS)
+	@echo [ar $(shell echo $(1) | tr '[:upper:]' '[:lower:]')] `basename $$@` && /usr/bin/ar rc $$@ $$($(1)_OBJECTS)
 
-out/$(IOSSIM_TRIPLE)/%.o: %.c
-	@mkdir -p .deps/out/$(IOSSIM_TRIPLE)
-	@mkdir -p out/$(IOSSIM_TRIPLE)
-	@$(CC) -MM $(IOSSIM_CFLAGS) $< | sed -e s,`basename $@`,$@, > .deps/$@-deps
-	@echo [$(CC) sim] $< && PATH=$(IOSSIM_BIN):$$PATH $(CC) -ObjC $(IOSSIM_CFLAGS) -c -o $@ $<
+out/$($(1)_SHORT_TRIPLE)/%.o: %.ll
+	@mkdir -p .deps/out/$$($(1)_SHORT_TRIPLE)
+	@mkdir -p out/$$($(1)_SHORT_TRIPLE)
+	@echo [llc $$($(1)_lowered)] $$< && llc$$(LLVM_SUFFIX) -march=$($(1)_MARCH) -mtriple=$($(1)_MTRIPLE) -filetype=obj -o=$$@ -O2 $$<
 
-out/$(IOSSIM_TRIPLE)/%.o: %.cpp
-	@mkdir -p .deps/out/$(IOSSIM_TRIPLE)
-	@mkdir -p out/$(IOSSIM_TRIPLE)
-	@$(CXX) -MM $(IOSSIM_CFLAGS) $< | sed -e s,`basename $@`,$@, > .deps/$@-deps
-	@echo [$(CXX) sim] $< && PATH=$(IOSSIM_BIN):$$PATH $(CXX) -std=c++11 $(IOSSIM_CFLAGS)  -c -o $@ $<
+out/$($(1)_SHORT_TRIPLE)/%.o: %.c
+	@mkdir -p .deps/out/$($(1)_SHORT_TRIPLE)
+	@mkdir -p out/$($(1)_SHORT_TRIPLE)
+	@$(CC) -MM $($(1)_CFLAGS) $$< | sed -e s,`basename $$@`,$$@, > .deps/$$@-deps
+	@echo [$(CC) $$($(1)_lowered)] $$< && $(CC) -ObjC $($(1)_CFLAGS)  -c -o $$@ $$<
 
-out/$(IOSSIM_TRIPLE)/%.o: %.m
-	@mkdir -p .deps/out/$(IOSSIM_TRIPLE)
-	@mkdir -p out/$(IOSSIM_TRIPLE)
-	@$(CC) -MM -ObjC $(IOSSIM_CFLAGS) $< | sed -e s,`basename $@`,$@, > .deps/$@-deps
-	@echo [$(CC) sim] $< && PATH=$(IOSSIM_BIN):$$PATH $(CC) $(IOSSIM_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
+out/$($(1)_SHORT_TRIPLE)/%.o: %.cpp
+	@mkdir -p .deps/out/$($(1)_SHORT_TRIPLE)
+	@mkdir -p out/$($(1)_SHORT_TRIPLE)
+	@$(CXX) -MM $($(1)_CFLAGS) $$< | sed -e s,`basename $$@`,$$@, > .deps/$$@-deps
+	@echo [$(CXX) $$($(1)_lowered)] $$< && $(CXX) -std=c++11 $($(1)_CFLAGS)  -c -o $$@ $$<
 
-out/$(IOSSIM_TRIPLE)/%.o: %.ll
-	@mkdir -p .deps/out/$(IOSSIM_TRIPLE)
-	@mkdir -p out/$(IOSSIM_TRIPLE)
-	@echo [llc sim] $< && llc$(LLVM_SUFFIX) -march=x86 -mtriple=$(IOSSIM_MTRIPLE) -filetype=obj -o=$@ -O2 $<
+out/$($(1)_SHORT_TRIPLE)/%.o: %.m
+	@mkdir -p .deps/out/$($(1)_SHORT_TRIPLE)
+	@mkdir -p out/$($(1)_SHORT_TRIPLE)
+	$(CC) -MM $($(1)_OBJC_FLAGS) $($(1)_CFLAGS) $$< | sed -e s,`basename $$@`,$$@, > .deps/$$@-deps
+	@echo [$(CC) $$($(1)_lowered)] $$< && $(CC) $($(1)_OBJC_FLAGS) $($(1)_CFLAGS) -c -o $$@ $$<
 
-%.o.armv7: %.c
-	@mkdir -p .deps
-	@$(CC) -MM -ObjC $(IOSDEV_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7,,`/$@/ > .deps/$@-deps
-	@echo [$(CC) armv7] $< && PATH=$(IOSDEV_BIN):$$PATH $(CC) -ObjC $(IOSDEV_CFLAGS) -c -o $@ $<
+out/$($(1)_SHORT_TRIPLE)/ejs-webgl.o: ejs-webgl-constants-sorted.h
 
-%.o.armv7: %.cpp
-	@mkdir -p .deps
-	@$(CXX) -MM $(IOSDEV_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7,,`/$@/ > .deps/$@-deps
-	@echo [$(CXX) armv7] $< && PATH=$(IOSDEV_BIN):$$PATH $(CXX) -std=c++11 $(IOSDEV_CFLAGS)  -c -o $@ $<
+out/$($(1)_SHORT_TRIPLE)/ejs-init.o: ejs-atoms-gen.c
+endef
 
-%.o.armv7: %.m
-	@mkdir -p .deps
-	@$(CC) -MM -ObjC $(IOSDEV_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7,,`/$@/ > .deps/$@-deps
-	@echo [$(CC) armv7] $< && PATH=$(IOSDEV_BIN):$$PATH $(CC) $(IOSDEV_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
+$(foreach prefix,$(PREFIXES),$(eval $(call PREFIX_rules,$(prefix))))
 
-%.o.armv7: %.ll
-	@echo [llc armv7] $< && llc$(LLVM_SUFFIX) -march=arm -mtriple=$(IOSDEV_MTRIPLE) -filetype=obj -o=$@ -O2 $<
+-include $(patsubst out/$(MACOS_SHORT_TRIPLE)/%.o,.deps/out/$(MACOS_SHORT_TRIPLE)/%.o-deps,$(MACOS_OBJECTS))
+-include $(patsubst out/$(IOSSIM_SHORT_TRIPLE)/%.o,.deps/out/$(IOSSIM_SHORT_TRIPLE)/%.o-deps,$(IOSSIM_OBJECTS))
+-include $(patsubst out/$(IOSDEV_SHORT_TRIPLE)/%.o,.deps/out/$(IOSDEV_SHORT_TRIPLE)/%.o-deps,$(IOSDEV_OBJECTS))
 
-%.o.armv7s: %.c
-	@mkdir -p .deps
-	@$(CC) -MM -ObjC $(IOSDEVS_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7s,,`/$@/ > .deps/$@-deps
-	@echo [$(CC) armv7s] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) -ObjC $(IOSDEVS_CFLAGS) -c -o $@ $<
+ifneq ($(CIRCLE_BUILD_NUM),)
+# on circleci we only build the macos library
+ALL_LIBRARIES=$(MACOS_LIBRARY)
+else
+ALL_LIBRARIES=$(MACOS_LIBRARY) $(IOSSIM_LIBRARY) $(IOSDEV_LIBRARY)
+endif
 
-%.o.armv7s: %.cpp
-	@mkdir -p .deps
-	@$(CXX) -MM $(IOSDEVS_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7s,,`/$@/ > .deps/$@-deps
-	@echo [$(CXX) armv7s] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CXX) -std=c++11 $(IOSDEVS_CFLAGS)  -c -o $@ $<
+ALL_TARGETS=$(ALL_LIBRARIES)
 
-%.o.armv7s: %.m
-	@mkdir -p .deps
-	@$(CC) -MM -ObjC $(IOSDEVS_CFLAGS) $< | sed -e s/`echo $@ | sed -e s,.armv7s,,`/$@/ > .deps/$@-deps
-	@echo [$(CC) armv7] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) $(IOSDEVS_CFLAGS) $(OBJC_FLAGS) -c -o $@ $<
+analyze_plists = $(C_SOURCES:%.c=out/analysis/%.plist) $(CPP_SOURCES:%.cpp=out/analysis/%.plist) $(OBJC_SOURCES:%.m=out/analysis/%.plist)
+analyze:: $(analyze_plists)
 
-%.o.armv7s: %.ll
-	@echo [llc armv7s] $< && llc$(LLVM_SUFFIX) -march=arm -mtriple=$(IOSDEVS_MTRIPLE) -filetype=obj -o=$@ -O2 $<
+out/analysis/%.plist: %.c
+	@mkdir -p out/analysis
+	@echo [$(CC) analyze] $< && $(CC) $(MACOS_CFLAGS) --analyze $< -o $@
 
-$(analyze_plists_c): %.plist: %.c
-	@echo [$(CC) analyze] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) $(OSX_CFLAGS) --analyze $< -o $@
+out/analysis/%.plist: %.cpp
+	@mkdir -p out/analysis
+	@echo [$(CXX) analyze] $< && $(CXX) $(MACOS_CFLAGS) --analyze $< -o $@
 
-$(analyze_plists_objc): %.plist: %.m
-	@echo [$(CC) analyze] $< && PATH=$(IOSDEVS_BIN):$$PATH $(CC) $(OSX_CFLAGS) --analyze $< -o $@
-
-
-class-test: $(C_SOURCES:%.c=%.o.osx) $(OBJC_SOURCES:%.m=%.o.osx) class-test.o.osx
-	@echo [$(CC) osx] $< 
-	$(CC) -ObjC $(OSX_CFLAGS) -o $@ $(C_SOURCES:%.c=%.o.osx) $(OBJC_SOURCES:%.m=%.o.osx) class-test.o.osx ../external-deps/pcre-osx/.libs/libpcre16.a -framework Foundation -framework AppKit -lstdc++
-
-
--include $(patsubst out/$(OSX_TRIPLE)/%.o,.deps/$(OSX_TRIPLE)/%.o-deps,$(OSX_OBJECTS))
--include $(patsubst out/$(IOSSIM_TRIPLE)/%.o,.deps/$(IOSSIM_TRIPLE)/%.o-deps,$(IOSSIM_TRIPLE))
--include $(patsubst %.o.armv7,.deps/%.o.armv7-deps,$(DEV_OBJECTS))
--include $(patsubst %.o.armv7s,.deps/%.o.armv7s-deps,$(DEVS_OBJECTS))
+out/analysis/%.plist: %.m
+	@mkdir -p out/analysis
+	@echo [$(CC) analyze] $< && $(CC) $(MACOS_CFLAGS) --analyze $< -o $@
 endif
 
 all-local:: $(ALL_TARGETS)
@@ -270,6 +207,6 @@ install-local::
 	done
 
 clean-local::
-	rm -f test $(ALL_OBJECTS) $(ALL_LIBRARIES) ejs-atoms-gen.c $(analyze_plists_c) $(analyze_plists_objc)
+	rm -f test $(ALL_OBJECTS) $(ALL_LIBRARIES) ejs-atoms-gen.c $(analyze_plists)
 
 include $(TOP)/build/build.mk

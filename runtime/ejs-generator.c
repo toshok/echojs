@@ -279,7 +279,7 @@ _ejs_generator_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
                                         (void*)gen->generator_context.__mcontext_data.__ss.__esp
 #elif TARGET_CPU_ARM
                                         (void*)gen->generator_context.__mcontext_data.__ss.__sp
-#elif TARGET_CPU_AARCH64
+#elif TARGET_CPU_ARM64
                                         (void*)gen->generator_context.__mcontext_data.__ss.__sp
 #else
 #error "unimplemented darwin cpu arch"

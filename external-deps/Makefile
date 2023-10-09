@@ -21,9 +21,9 @@ ifeq ($(HOST_OS),linux)
 _TARGETS=linux
 else
 ifneq ($(CIRCLE_BUILD_NUM),)
-_TARGETS=osx
+_TARGETS=macos
 else
-_TARGETS=iossim iosdev osx
+_TARGETS=iossim iosdev macos
 endif
 endif
 
@@ -38,9 +38,9 @@ clean-double-conversion: $(_TARGETS:%=clean-double-conversion-%)
 .stamp-build-double-conversion-linux: .stamp-configure-double-conversion-linux
 	$(MAKE) -C double-conversion-linux && touch $@
 
-.stamp-configure-double-conversion-osx: double-conversion/CMakeLists.txt
-	@$(MKDIR) double-conversion-osx
-	(cd double-conversion-osx && cmake ../double-conversion) && touch $@
+.stamp-configure-double-conversion-macos: double-conversion/CMakeLists.txt
+	@$(MKDIR) double-conversion-macos
+	(cd double-conversion-macos && cmake ../double-conversion) && touch $@
 
 .stamp-configure-double-conversion-iossim: double-conversion/CMakeLists.txt
 	@$(MKDIR) double-conversion-iossim
@@ -52,8 +52,8 @@ clean-double-conversion: $(_TARGETS:%=clean-double-conversion-%)
 	(cd double-conversion-iosdev && \
 	cmake ../double-conversion -DCMAKE_TOOLCHAIN_FILE=../../build/iOS.cmake -DIOS_PLATFORM=OS -DMIN_IOS_VERSION=$(MIN_IOS_VERSION) -DIOS_SYSROOT=$(IOSDEV_SYSROOT)) && touch $@
 
-.stamp-build-double-conversion-osx: .stamp-configure-double-conversion-osx
-	$(MAKE) -C double-conversion-osx && touch $@
+.stamp-build-double-conversion-macos: .stamp-configure-double-conversion-macos
+	$(MAKE) -C double-conversion-macos && touch $@
 
 .stamp-build-double-conversion-iossim: .stamp-configure-double-conversion-iossim
 	$(MAKE) -C double-conversion-iossim && touch $@
@@ -63,7 +63,7 @@ clean-double-conversion: $(_TARGETS:%=clean-double-conversion-%)
 
 
 build-double-conversion-linux: .stamp-build-double-conversion-linux
-build-double-conversion-osx: .stamp-build-double-conversion-osx
+build-double-conversion-macos: .stamp-build-double-conversion-macos
 build-double-conversion-iossim: .stamp-build-double-conversion-iossim
 build-double-conversion-iosdev: .stamp-build-double-conversion-iosdev
 
@@ -76,9 +76,9 @@ clean-double-conversion-iosdev:
 	-@test -d double-conversion-iosdev && $(MAKE) -C double-conversion-iosdev clean
 	@rm -f .stamp-build-double-conversion-iosdev
 
-clean-double-conversion-osx:
-	-@test -d double-conversion-osx    && $(MAKE) -C double-conversion-osx clean
-	@rm -f .stamp-build-double-conversion-osx
+clean-double-conversion-macos:
+	-@test -d double-conversion-macos    && $(MAKE) -C double-conversion-macos clean
+	@rm -f .stamp-build-double-conversion-macos
 
 clean-double-conversion-linux:
 	-@test -d double-conversion-linux  && $(MAKE) -C double-conversion-linux clean
@@ -93,36 +93,36 @@ clean-pcre: $(_TARGETS:%=clean-pcre-%)
 	(cd pcre-linux && \
 	../pcre/configure $(PCRE_CONFIGURE_ARGS)) && touch $@
 
-.stamp-configure-pcre-osx: pcre/configure
-	@$(MKDIR) pcre-osx
-	(cd pcre-osx && \
+.stamp-configure-pcre-macos: pcre/configure
+	@$(MKDIR) pcre-macos
+	(cd pcre-macos && \
 	../pcre/configure $(PCRE_CONFIGURE_ARGS)) && touch $@
 
 .stamp-configure-pcre-iossim: pcre/configure
 	@$(MKDIR) pcre-iossim
 	(cd pcre-iossim && \
 	PATH=$(IOSSIM_ROOT)/usr/bin:$$PATH \
-	CC="clang $(IOSSIM_ARCH) $(IOSSIM_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSSIM_SYSROOT)" \
-	CXX="clang++ $(IOSSIM_ARCH) $(IOSSIM_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSSIM_SYSROOT)" \
+	CC="clang $(IOSSIM_ARCH) $(IOSSIM_ARCH_FLAGS) -isysroot $(IOSSIM_SYSROOT) -target $(IOSSIM_CLANG_TRIPLE)" \
+	CXX="clang++ $(IOSSIM_ARCH) $(IOSSIM_ARCH_FLAGS) -isysroot $(IOSSIM_SYSROOT) -target $(IOSSIM_CLANG_TRIPLE)" \
 	LD="clang" \
 	AS="$(IOSSIM_ROOT)/usr/bin/as" \
-	../pcre/configure --host=$(IOSSIM_TRIPLE) $(PCRE_CONFIGURE_ARGS)) && touch $@
+	../pcre/configure --host=$(IOSSIM_GNU_TRIPLE) $(PCRE_CONFIGURE_ARGS)) && touch $@
 
 .stamp-configure-pcre-iosdev: pcre/configure
 	@$(MKDIR) pcre-iosdev
 	(cd pcre-iosdev && \
 	PATH=$(IOSDEV_ROOT)/usr/bin:$$PATH \
-	CC="clang $(IOSDEV_ARCH) $(IOSDEV_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSDEV_SYSROOT)" \
-	CXX="clang++ $(IOSDEV_ARCH) $(IOSDEV_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSDEV_SYSROOT)" \
+	CC="clang $(IOSDEV_ARCH) $(IOSDEV_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSDEV_SYSROOT) -target $(IOSDEV_CLANG_TRIPLE)" \
+	CXX="clang++ $(IOSDEV_ARCH) $(IOSDEV_ARCH_FLAGS) -miphoneos-version-min=$(MIN_IOS_VERSION) -isysroot $(IOSDEV_SYSROOT) -target $(IOSDEV_CLANG_TRIPLE)" \
 	LD="clang" \
 	AS="$(IOSDEV_ROOT)/usr/bin/as" \
-	../pcre/configure --host=$(IOSDEV_TRIPLE) $(PCRE_CONFIGURE_ARGS)) && touch $@
+	../pcre/configure --host=$(IOSDEV_GNU_TRIPLE) $(PCRE_CONFIGURE_ARGS)) && touch $@
 
 .stamp-build-pcre-linux: .stamp-configure-pcre-linux
 	$(MAKE) -C pcre-linux pcre_chartables.c libpcre16.la && touch $@
 
-.stamp-build-pcre-osx: .stamp-configure-pcre-osx
-	$(MAKE) -C pcre-osx pcre_chartables.c libpcre16.la && touch $@
+.stamp-build-pcre-macos: .stamp-configure-pcre-macos
+	$(MAKE) -C pcre-macos pcre_chartables.c libpcre16.la && touch $@
 
 .stamp-build-pcre-iossim: .stamp-configure-pcre-iossim
 	$(MAKE) -C pcre-iossim pcre_chartables.c libpcre16.la && touch $@
@@ -133,7 +133,7 @@ clean-pcre: $(_TARGETS:%=clean-pcre-%)
 
 
 build-pcre-linux: .stamp-build-pcre-linux
-build-pcre-osx: .stamp-build-pcre-osx
+build-pcre-macos: .stamp-build-pcre-macos
 build-pcre-iossim: .stamp-build-pcre-iossim
 build-pcre-iosdev: .stamp-build-pcre-iosdev
 
@@ -150,9 +150,9 @@ clean-pcre-iosdev:
 	-@test -d pcre-iosdev && $(MAKE) -C pcre-iosdev clean
 	@rm -f .stamp-build-pcre-iosdev
 
-clean-pcre-osx:
-	-@test -d pcre-osx    && $(MAKE) -C pcre-osx clean
-	@rm -f .stamp-build-pcre-osx
+clean-pcre-macos:
+	-@test -d pcre-macos    && $(MAKE) -C pcre-macos clean
+	@rm -f .stamp-build-pcre-macos
 
 clean-pcre-linux:
 	-@test -d pcre-linux  && $(MAKE) -C pcre-linux clean

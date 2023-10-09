@@ -961,7 +961,7 @@ mark_from_modules()
                                                                          \
     mark_pointers_in_range(&__end, &__r0);                               \
     EJS_MACRO_END
-#elif TARGET_CPU_AARCH64
+#elif TARGET_CPU_ARM64
 #define MARK_REGISTERS
 #elif TARGET_CPU_AMD64
 #define MARK_REGISTERS EJS_MACRO_START \

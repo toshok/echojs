@@ -122,13 +122,13 @@ function set_target(str) {
             triple = new Triple("x86_64", "unknown", "linux");
             break;
         case "macos":
-            triple = new Triple("arm64", "apple", "darwin");
+            triple = new Triple("arm64", "apple", "macos");
             break;
         case "iossim":
-            triple = new Triple("arm64", "apple", "darwin");
+            triple = new Triple("arm64", "apple", "ios", "simulator");
             break;
         case "iosdev":
-            triple = new Triple("arm64", "apple", "darwin");
+            triple = new Triple("arm64", "apple", "ios");
             break;
         default:
             triple = Triple.fromString(str);
@@ -304,7 +304,7 @@ if (!file_args || file_args.length === 0) {
 }
 
 if (!options.quiet) {
-    console.log(`host: ${host_triple}, target: ${target_triple}`);
+    console.log(`host: ${host_triple.toShortString()}, target: ${target_triple.toShortString()}`);
 }
 
 debug.setLevel(options.debug_level);
@@ -322,33 +322,15 @@ let dev_bin = `${dev_base}/Developer/usr/bin`;
 function target_llc_args(triple) {
     let args = [`-march=${triple.llcArch()}`];
     switch (triple.os) {
-        case "darwin":
-            switch (triple.arch) {
-                case "arm":
-                    args = args.concat([
-                        `-mtriple=thumbv7-apple-ios${options.ios_min}.0`,
-                        "-mattr=+v6",
-                        "--relocation-model=pic",
-                        "-soft-float",
-                    ]);
-                    break;
-                case "arm64":
-                    args = args.concat([
-                        `-mtriple=arm64-apple-macosx${options.osx_min}.0`,
-                        "-mattr=+fp-armv8",
-                        "--relocation-model=pic",
-                    ]);
-                    break;
-                case "x86":
-                    args = args.concat([
-                        `-mtriple=i386-apple-ios${options.ios_min}.0`,
-                        "--relocation-model=pic",
-                    ]);
-                    break;
-                case "x86_64":
-                    args = args.concat([`-mtriple=x86_64-apple-macosx${options.osx_min}.0`]);
-                    break;
-            }
+        case "macos":
+            args = args.concat([
+                `-mtriple=arm64-apple-macosx${options.osx_min}.0`,
+                "-mattr=+fp-armv8",
+                "--relocation-model=pic",
+            ]);
+            break;
+        case "ios":
+            args = args.concat([`-mtriple=arm64-apple-ios${options.ios_min}.0`]);
             break;
         case "linux":
             args = args.concat(["--relocation-model=pic"]);
@@ -369,15 +351,19 @@ function target_link_args(triple) {
         return args;
     }
 
-    if (triple.os === "darwin") {
-        // we need more here now that everything is apple silicon
-        if (triple.arch === "x86_64" || triple.arch === "arm64") return args;
-        if (triple.arch === "x86")
+    if (triple.os === "macos") {
+        return args;
+    }
+
+    if (triple.os === "ios") {
+        if (triple.env === "simulator") {
             return args.concat([
                 "-isysroot",
                 `${sim_base}/Developer/SDKs/iPhoneSimulator${options.ios_sdk}.sdk`,
                 `-miphoneos-version-min=${options.ios_min}`,
             ]);
+        }
+
         return args.concat([
             "-isysroot",
             `${dev_base}/Developer/SDKs/iPhoneOS${options.ios_sdk}.sdk`,
@@ -394,15 +380,15 @@ function target_libraries(triple) {
         return ["-lunwind", "-lpthread", "-luv"];
     }
 
-    if (triple.os === "darwin") {
-        let rv = ["-framework", "Foundation"];
-
+    if (triple.os === "macos") {
         // for macos we only need Foundation and AppKit
-        if (triple.arch === "x86_64" || triple.arch === "arm64")
-            return rv.concat(["-framework", "AppKit"]);
+        return ["-framework", "Foundation", "-framework", "AppKit"];
+    }
 
-        // for any other darwin we're dealing with ios, so...
-        return rv.concat([
+    if (triple.os === "ios") {
+        return [
+            "-framework",
+            "Foundation",
             "-framework",
             "UIKit",
             "-framework",
@@ -411,7 +397,7 @@ function target_libraries(triple) {
             "OpenGLES",
             "-framework",
             "CoreGraphics",
-        ]);
+        ];
     }
     return [];
 }
@@ -420,7 +406,7 @@ function target_libecho(triple) {
     if (options.srcdir) {
         return path.join("runtime", "out", `${triple}`, "libecho.a");
     } else {
-        return path.join(relative_to_ejs_exe(`../lib/${triple.arch}-${triple.os}`), "libecho.a");
+        return path.join(relative_to_ejs_exe(`../lib/${triple}`), "libecho.a");
     }
 }
 
@@ -432,41 +418,41 @@ function target_extra_libs(triple) {
                 "external-deps/pcre-linux/.libs/libpcre16.a",
             ];
 
-        if (triple.os === "darwin") {
-            if (triple.arch === "x86_64")
-                return [
-                    "external-deps/double-conversion-osx/double-conversion/libdouble-conversion.a",
-                    "external-deps/pcre-osx/.libs/libpcre16.a",
-                ];
-            if (triple.arch === "x86")
+        if (triple.os === "macos") {
+            return [
+                "external-deps/double-conversion-macos/double-conversion/libdouble-conversion.a",
+                "external-deps/pcre-macos/.libs/libpcre16.a",
+            ];
+        }
+
+        if (triple.os === "ios") {
+            if (triple.env === "simulator") {
                 return [
                     "external-deps/double-conversion-iossim/double-conversion/libdouble-conversion.a",
                     "external-deps/pcre-iossim/.libs/libpcre16.a",
                 ];
-            if (triple.arch === "arm")
-                return [
-                    "external-deps/double-conversion-iosdev/double-conversion/libdouble-conversion.a",
-                    "external-deps/pcre-iosdev/.libs/libpcre16.a",
-                ];
-            if (triple.arch === "arm64")
-                return [
-                    "external-deps/double-conversion-osx/double-conversion/libdouble-conversion.a",
-                    "external-deps/pcre-osx/.libs/libpcre16.a",
-                ];
+            }
+
+            return [
+                "external-deps/double-conversion-iosdev/double-conversion/libdouble-conversion.a",
+                "external-deps/pcre-iosdev/.libs/libpcre16.a",
+            ];
         }
 
         throw new Error("no pcre for this platform");
     } else {
         return ["libdouble-conversion.a", "libpcre16.a"].map((lib) =>
-            path.join(relative_to_ejs_exe(`../lib/${triple.arch}-${triple.os}`), lib)
+            path.join(relative_to_ejs_exe(`../lib/${triple}`), lib)
         );
     }
 }
 
 function target_path_prepend(triple) {
-    if (triple.os === "darwin") {
-        if (triple.arch === "x86") return sim_bin;
-        if (triple.arch === "arm64") return dev_bin;
+    if (triple.os === "ios") {
+        if (triple.env === "simulator") {
+            return sim_bin;
+        }
+        return dev_bin;
     }
     return "";
 }
