@@ -259,6 +259,7 @@ static BOOL unpack_flip_y = NO;
 #define JSMETHODNAME(meth) webglrenderingcontext_func_##meth
 #define JSMETHOD(meth) static EJS_NATIVE_FUNC(JSMETHODNAME(meth))
 #define THROW_ARG_COUNT_EXCEPTION(expected_count) _ejs_throw_nativeerror_utf8 (EJS_ERROR/*XXX*/, "argument count mismatch")
+#define THROW_ARG_TYPE_EXCEPTION() _ejs_throw_nativeerror_utf8 (EJS_ERROR/*XXX*/, "argument type mismatch")
 
 
 /*
@@ -2130,17 +2131,96 @@ JSMETHOD (uniformMatrix4fv) { return uniformMatrix_fv (4, argc, args); }
 /*
  void vertexAttrib1f(GLuint indx, GLfloat x);
  void vertexAttrib1fv(GLuint indx, Float32Array values);
- void vertexAttrib1fv(GLuint indx, float[] values);
  void vertexAttrib2f(GLuint indx, GLfloat x, GLfloat y);
  void vertexAttrib2fv(GLuint indx, Float32Array values);
- void vertexAttrib2fv(GLuint indx, float[] values);
  void vertexAttrib3f(GLuint indx, GLfloat x, GLfloat y, GLfloat z);
  void vertexAttrib3fv(GLuint indx, Float32Array values);
- void vertexAttrib3fv(GLuint indx, float[] values);
  void vertexAttrib4f(GLuint indx, GLfloat x, GLfloat y, GLfloat z, GLfloat w);
  void vertexAttrib4fv(GLuint indx, Float32Array values);
- void vertexAttrib4fv(GLuint indx, float[] values);
  */
+
+static void
+vertexAttribf_arr (ejsval *args, int32_t n)
+{
+    GLuint index = (GLuint)EJSVAL_TO_NUMBER (args[0]);
+    EJSObject *arrObj = EJSVAL_TO_OBJECT(args[1]);
+
+    /* XXX(calberto) we need to report a warning here (not an exception) */
+    if (EJSARRAY_LEN(arrObj) < n)
+        return;
+
+    ejsval *arr_elements = EJSDENSEARRAY_ELEMENTS(arrObj);
+    GLfloat values[] = { 0.0, 0.0, 0.0, 0.0 };
+
+    for (int i = 0; i < n; i++)
+        values[i] = EJSVAL_TO_NUMBER(arr_elements[i]);
+
+    switch (n) {
+        case 1:
+            glVertexAttrib1fv (index, values);
+            break;
+        case 2:
+            glVertexAttrib2fv (index, values);
+            break;
+        case 3:
+            glVertexAttrib3fv (index, values);
+            break;
+        case 4:
+            glVertexAttrib4fv (index, values);
+            break;
+    }
+
+    CHECK_GL;
+}
+
+/* XXX(calberto): Handle Float32Array instances */
+JSMETHOD (vertexAttrib1fv) {
+    if (argc != 2)
+        THROW_ARG_COUNT_EXCEPTION(-1);
+
+    if (!IsArray (args[1]))
+        THROW_ARG_TYPE_EXCEPTION();
+
+    vertexAttribf_arr (args, 1);
+
+    return _ejs_undefined;
+}
+
+JSMETHOD (vertexAttrib2fv) {
+    if (argc != 2)
+        THROW_ARG_COUNT_EXCEPTION(-1);
+
+    if (!IsArray (args[1]))
+        THROW_ARG_TYPE_EXCEPTION();
+
+    vertexAttribf_arr (args, 2);
+
+    return _ejs_undefined;
+}
+
+JSMETHOD (vertexAttrib3fv) {
+    if (argc != 2)
+        THROW_ARG_COUNT_EXCEPTION(-1);
+
+    if (!IsArray (args[1]))
+        THROW_ARG_TYPE_EXCEPTION();
+
+    vertexAttribf_arr (args, 3);
+
+    return _ejs_undefined;
+}
+
+JSMETHOD (vertexAttrib4fv) {
+    if (argc != 2)
+        THROW_ARG_COUNT_EXCEPTION(-1);
+
+    if (!IsArray (args[1]))
+        THROW_ARG_TYPE_EXCEPTION();
+
+    vertexAttribf_arr (args, 4);
+
+    return _ejs_undefined;
+}
 
 //    void vertexAttribPointer(GLuint indx, GLint size, GLenum type, 
 //                             GLboolean normalized, GLsizei stride, GLintptr offset);
@@ -2408,6 +2488,10 @@ EJS_NATIVE_FUNC(_ejs_objc_allocateWebGLRenderingContext) {
 	WEBGL_FUNC(uniform3iv, 2);
 	WEBGL_FUNC(uniform4iv, 2);
     
+	WEBGL_FUNC(vertexAttrib1fv, 2);
+	WEBGL_FUNC(vertexAttrib2fv, 2);
+	WEBGL_FUNC(vertexAttrib3fv, 2);
+	WEBGL_FUNC(vertexAttrib4fv, 2);
 	WEBGL_FUNC(vertexAttribPointer, 6);
 	WEBGL_FUNC(useProgram, 1);
 	WEBGL_FUNC(validateProgram, 1);
