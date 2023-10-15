@@ -1,6 +1,6 @@
 TOP=$(shell pwd)
 
-include $(TOP)/build/config.mk
+include $(TOP)/mk/config.mk
 
 SUBDIRS=external-deps node-compat node-llvm ejs-llvm lib runtime
 
@@ -104,4 +104,4 @@ ensure-submodules:
 	  git submodule update; \
 	fi
 
-include $(TOP)/build/build.mk
+include $(TOP)/mk/build.mk

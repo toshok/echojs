@@ -1,5 +1,5 @@
 TOP=..
-include $(TOP)/build/config.mk
+include $(TOP)/mk/config.mk
 
 LLVM_CXXFLAGS="`$LLVM_CONFIG --cxxflags` -fno-rtti"
 LLVM_LDFLAGS=`$LLVM_CONFIG --ldflags`
@@ -45,12 +45,12 @@ clean-double-conversion: $(_TARGETS:%=clean-double-conversion-%)
 .stamp-configure-double-conversion-iossim: double-conversion/CMakeLists.txt
 	@$(MKDIR) double-conversion-iossim
 	(cd double-conversion-iossim && \
-	cmake ../double-conversion -DCMAKE_TOOLCHAIN_FILE=../../build/iOS.cmake -DIOS_PLATFORM=SIMULATOR64 -DMIN_IOS_VERSION=$(MIN_IOS_VERSION) -DIOS_SYSROOT=$(IOSSIM_SYSROOT)) && touch $@
+	cmake ../double-conversion -DCMAKE_TOOLCHAIN_FILE=../../mk/iOS.cmake -DIOS_PLATFORM=SIMULATOR64 -DMIN_IOS_VERSION=$(MIN_IOS_VERSION) -DIOS_SYSROOT=$(IOSSIM_SYSROOT)) && touch $@
 
 .stamp-configure-double-conversion-iosdev: double-conversion/CMakeLists.txt
 	@$(MKDIR) double-conversion-iosdev
 	(cd double-conversion-iosdev && \
-	cmake ../double-conversion -DCMAKE_TOOLCHAIN_FILE=../../build/iOS.cmake -DIOS_PLATFORM=OS -DMIN_IOS_VERSION=$(MIN_IOS_VERSION) -DIOS_SYSROOT=$(IOSDEV_SYSROOT)) && touch $@
+	cmake ../double-conversion -DCMAKE_TOOLCHAIN_FILE=../../mk/iOS.cmake -DIOS_PLATFORM=OS -DMIN_IOS_VERSION=$(MIN_IOS_VERSION) -DIOS_SYSROOT=$(IOSDEV_SYSROOT)) && touch $@
 
 .stamp-build-double-conversion-macos: .stamp-configure-double-conversion-macos
 	$(MAKE) -C double-conversion-macos && touch $@
@@ -158,4 +158,4 @@ clean-pcre-linux:
 	-@test -d pcre-linux  && $(MAKE) -C pcre-linux clean
 	@rm -f .stamp-build-pcre-linux
 
-include $(TOP)/build/build.mk
+include $(TOP)/mk/build.mk

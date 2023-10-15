@@ -1,6 +1,6 @@
 TOP=..
 
-include $(TOP)/build/config.mk
+include $(TOP)/mk/config.mk
 
 LIBRARY=libejsnodecompat-module.a
 C_SOURCES= \
@@ -126,4 +126,4 @@ install-local::
 	$(INSTALL) -c node-compat.ejs $(libdir)
 	$(INSTALL) -c $(LIBRARY) $(archlibdir)
 
-include $(TOP)/build/build.mk
+include $(TOP)/mk/build.mk

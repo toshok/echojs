@@ -1,6 +1,6 @@
 TOP=..
 
--include $(TOP)/build/config.mk
+-include $(TOP)/mk/config.mk
 
 .SILENT:
 
@@ -94,4 +94,4 @@ compare-%:
 	diff -us $$test_js.ll.stage0 $$test_js.ll.stage1; \
 	rm $$test_js.ll.stage0 $$test_js.ll.stage1
 
--include $(TOP)/build/build.mk
+-include $(TOP)/mk/build.mk

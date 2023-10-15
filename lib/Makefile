@@ -1,6 +1,6 @@
 TOP=..
 
-include $(TOP)/build/config.mk
+include $(TOP)/mk/config.mk
 
 ES6_SOURCES=			 	\
 	abi.js				\
@@ -116,4 +116,4 @@ $(DESTDIR)/lib/%.js: %.js
 
 .PRECIOUS: host-config.js
 
-include $(TOP)/build/build.mk
+include $(TOP)/mk/build.mk

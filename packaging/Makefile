@@ -1,5 +1,5 @@
 TOP=..
-include $(TOP)/build/config.mk
+include $(TOP)/mk/config.mk
 
 PWD:=$(shell pwd)
 
@@ -90,4 +90,4 @@ dist-local::
 clean-local::
 	@rm -rf pkgtmp Scripts
 
-include $(TOP)/build/build.mk
+include $(TOP)/mk/build.mk

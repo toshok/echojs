@@ -1,6 +1,6 @@
 TOP=..
 
--include $(TOP)/build/config.mk
+-include $(TOP)/mk/config.mk
 
 EJS_DRIVER?=$(TOP)/ejs
 
@@ -17,4 +17,4 @@ trackmixcode: trackmixcode/trackmixcode.js
 
 all: trackmix trackmixcode
 
--include $(TOP)/build/build.mk
+-include $(TOP)/mk/build.mk

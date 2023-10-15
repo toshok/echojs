@@ -1,6 +1,6 @@
 TOP=../..
 
--include $(TOP)/build/config.mk
+-include $(TOP)/mk/config.mk
 
 EJS_DRIVER?=$(TOP)/ejs
 
@@ -9,4 +9,4 @@ fetch: fetch.js
 
 all-local:: fetch
 
--include $(TOP)/build/build.mk
+-include $(TOP)/mk/build.mk

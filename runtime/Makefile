@@ -1,6 +1,6 @@
 TOP=..
 
-include $(TOP)/build/config.mk
+include $(TOP)/mk/config.mk
 
 LIBRARY=libecho.a
 C_SOURCES= \
@@ -209,4 +209,4 @@ install-local::
 clean-local::
 	rm -f test $(ALL_OBJECTS) $(ALL_LIBRARIES) ejs-atoms-gen.c $(analyze_plists)
 
-include $(TOP)/build/build.mk
+include $(TOP)/mk/build.mk

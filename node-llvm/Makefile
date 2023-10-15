@@ -1,6 +1,6 @@
 TOP=..
 
--include $(TOP)/build/config.mk
+-include $(TOP)/mk/config.mk
 
 LLVM_CONFIG=llvm-config$(LLVM_SUFFIX)
 
@@ -30,4 +30,4 @@ configure:
 clean-local::
 	node-gyp clean
 
--include $(TOP)/build/build.mk
+-include $(TOP)/mk/build.mk

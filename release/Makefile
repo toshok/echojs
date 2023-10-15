@@ -1,6 +1,6 @@
 TOP=..
 
-include $(TOP)/build/config.mk
+include $(TOP)/mk/config.mk
 
 TARBALL_DIR=$(PRODUCT_name)-$(PRODUCT_VERSION)
 libdir=$(TARBALL_DIR)/lib
@@ -34,4 +34,4 @@ osx-tarball-deps: release-readme.md
 release-readme.md: release-readme.md.in
 	@echo [gen] $< && sed -e "s,@PRODUCT_VERSION@,$(PRODUCT_VERSION)," $< > $@
 
-include $(TOP)/build/build.mk
+include $(TOP)/mk/build.mk

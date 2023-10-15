@@ -1,6 +1,6 @@
 TOP=..
 
-include $(TOP)/build/config.mk
+include $(TOP)/mk/config.mk
 
 SOURCES= \
 	allocainst.cpp \
@@ -78,4 +78,4 @@ ejs-llvm.o: ejs-llvm-atoms-gen.c
 
 -include $(patsubst %.o,.deps/%.o-deps,$(OBJECTS))
 
-include $(TOP)/build/build.mk
+include $(TOP)/mk/build.mk
