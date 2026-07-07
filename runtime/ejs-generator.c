@@ -114,7 +114,7 @@ _ejs_iterator_wrapper_new (ejsval iterator)
     return OBJECT_TO_EJSVAL(rv);
 }
 
-#define GENERATOR_STACK_SIZE 64 * 1024
+#define GENERATOR_STACK_SIZE 512 * 1024
 
 static void
 _ejs_generator_start(EJSGenerator* gen)
@@ -125,6 +125,17 @@ _ejs_generator_start(EJSGenerator* gen)
     _ejs_gc_pop_generator();
 
     gen->yielded_value = _ejs_create_iter_result(_ejs_undefined, _ejs_true);
+}
+
+// makecontext's variadic arguments are ints, so a 64-bit pointer passed
+// directly gets truncated (which is how generators crashed on arm64
+// macos: heap pointers there don't fit in 32 bits).  split the pointer
+// across two int args, posix-style.
+static void
+_ejs_generator_trampoline(unsigned int gen_lo, unsigned int gen_hi)
+{
+    EJSGenerator* gen = (EJSGenerator*)(((uint64_t)gen_hi << 32) | gen_lo);
+    _ejs_generator_start(gen);
 }
 
 ejsval
@@ -143,7 +154,9 @@ _ejs_generator_new (ejsval generator_body)
     rv->generator_context.uc_stack.ss_sp = rv->stack;
     rv->generator_context.uc_stack.ss_size = GENERATOR_STACK_SIZE;
     rv->generator_context.uc_link = &rv->caller_context;
-    makecontext(&rv->generator_context, (void(*)(void))_ejs_generator_start, 1, rv);
+    makecontext(&rv->generator_context, (void(*)(void))_ejs_generator_trampoline, 2,
+                (unsigned int)(uint64_t)(uintptr_t)rv,
+                (unsigned int)(((uint64_t)(uintptr_t)rv) >> 32));
     memset(&rv->caller_context, 0, sizeof(rv->caller_context));
 
     return OBJECT_TO_EJSVAL(rv);
