@@ -87,6 +87,15 @@ alias(
     actual = ":ejs.exe.stage1",
 )
 
+# EIR unit tests (run under node against the babel'd tree):
+# buck2 build //:test-eir
+genrule(
+    name = "test-eir",
+    out = "test-eir.log",
+    cmd = '(node "$(location //lib:generated)/lib/eir/tests.js" > $OUT 2>&1) || ' +
+          "{ cat $OUT >&2; exit 1; }; tail -1 $OUT",
+)
+
 # run the test suite against a stage: buck2 build //:test-stage3
 # the output artifact is the full test log; the build fails if any test
 # fails.

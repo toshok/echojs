@@ -28,7 +28,7 @@ run_babel() {
 
 cd "$SRCDIR"
 
-for f in *.js passes/*.js; do
+for f in *.js passes/*.js eir/*.js; do
     case "$f" in
         ejs-es6.js) continue ;;
     esac

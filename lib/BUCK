@@ -19,6 +19,7 @@ filegroup(
         [
             "*.js",
             "passes/*.js",
+            "eir/*.js",
         ],
         exclude = ["host-config.js"],
     ),
@@ -34,6 +35,7 @@ genrule(
         [
             "*.js",
             "passes/*.js",
+            "eir/*.js",
         ],
         exclude = ["host-config.js"],
     ) + [
