@@ -1,2 +1,2 @@
-include $(TOP)/build/utils.mk
-include $(TOP)/build/rules.mk
+include $(TOP)/mk/utils.mk
+include $(TOP)/mk/rules.mk

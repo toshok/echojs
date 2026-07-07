@@ -1,0 +1,17 @@
+load("//:defs.bzl", "EJS_COMPILER_FLAGS")
+
+export_file(
+    name = "node-compat.ejs",
+    visibility = ["PUBLIC"],
+)
+
+cxx_library(
+    name = "node-compat",
+    srcs = ["ejs-node-compat.c"],
+    header_namespace = "",
+    exported_headers = glob(["*.h"]),
+    compiler_flags = EJS_COMPILER_FLAGS,
+    preferred_linkage = "static",
+    deps = ["//runtime:echo"],
+    visibility = ["PUBLIC"],
+)

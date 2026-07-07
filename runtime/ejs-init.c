@@ -45,6 +45,9 @@
 #include "ejs-proxy.h"
 #include "ejs-reflect.h"
 
+// lives in ejs-atoms-gen.c
+extern void _ejs_init_static_strings();
+
 const ejsval _ejs_undefined EJSVAL_ALIGNMENT = STATIC_BUILD_EJSVAL(EJSVAL_TAG_UNDEFINED, 0);
 ejsval _ejs_nan;
 const ejsval _ejs_Infinity EJSVAL_ALIGNMENT = STATIC_BUILD_DOUBLE_EJSVAL(HUGE_VAL);
@@ -57,8 +60,6 @@ const ejsval _ejs_one EJSVAL_ALIGNMENT = STATIC_BUILD_DOUBLE_EJSVAL(1);
 ejsval _ejs__ejs EJSVAL_ALIGNMENT;
 ejsval _ejs_global EJSVAL_ALIGNMENT;
 
-/* useful strings literals */
-#include "ejs-atoms-gen.c"
 
 EJS_NATIVE_FUNC(_ejs_eval) {
   _ejs_throw_nativeerror_utf8 (EJS_ERROR, "EJS doesn't support eval()");

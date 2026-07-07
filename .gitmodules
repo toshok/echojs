@@ -22,3 +22,6 @@
 [submodule "external-deps/double-conversion"]
 	path = external-deps/double-conversion
 	url = https://github.com/google/double-conversion.git
+[submodule "prelude"]
+	path = prelude
+	url = https://github.com/facebook/buck2-prelude.git

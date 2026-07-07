@@ -15,7 +15,7 @@
 #include "ejs-proxy.h"
 #include "ejs-number.h"
 
-#include "pcre.h"
+#include "external-deps/pcre/pcre.h"
 
 ejsval _ejs_RegExp_prototype_exec_closure;
 

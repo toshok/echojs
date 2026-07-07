@@ -15,7 +15,7 @@
 #include "ejs-string.h"
 #include "ejs-boolean.h"
 #include "ejs-symbol.h"
-#include "../parson/parson.h"
+#include "external-deps/parson/parson.h"
 
 ejsval _ejs_JSON EJSVAL_ALIGNMENT;
 

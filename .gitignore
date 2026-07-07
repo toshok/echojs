@@ -1,3 +1,5 @@
+/buck-out
+.vscode/
 **/.DS_Store
 *.slo
 *.lo

@@ -1,0 +1,101 @@
+load("//:defs.bzl", "GNU_TRIPLE")
+
+# ---------------------------------------------------------------------------
+# parson: compiled directly into libecho (see //runtime:echo), we just
+# export the source and a header mapped to the repo-relative include path
+# the runtime sources use.
+# ---------------------------------------------------------------------------
+
+export_file(
+    name = "parson.c",
+    src = "parson/parson.c",
+    visibility = ["PUBLIC"],
+)
+
+cxx_library(
+    name = "parson-headers",
+    header_namespace = "",
+    exported_headers = {
+        "external-deps/parson/parson.h": "parson/parson.h",
+        # parson.c itself includes it unqualified
+        "parson.h": "parson/parson.h",
+    },
+    visibility = ["PUBLIC"],
+)
+
+# ---------------------------------------------------------------------------
+# pcre: autotools build.  Produces libpcre16.a plus the configure-generated
+# pcre.h that runtime/ejs-regexp.c includes as "external-deps/pcre/pcre.h".
+# ---------------------------------------------------------------------------
+
+genrule(
+    name = "pcre-build",
+    srcs = glob(["pcre/**"]),
+    outs = {
+        "lib": ["libpcre16.a"],
+        "header": ["pcre.h"],
+    },
+    default_outs = ["libpcre16.a"],
+    cmd = 'set -e; BUILD="$TMP/pcre-build"; mkdir -p "$BUILD"; ' +
+          'SRC="$PWD/$SRCDIR/pcre"; ' +
+          '(cd "$BUILD" && "$SRC/configure" --build=' + GNU_TRIPLE +
+          ' --enable-pcre16 --enable-utf --disable-cpp >configure.log 2>&1 && ' +
+          'make pcre_chartables.c libpcre16.la >build.log 2>&1) || { cat "$BUILD"/*.log; exit 1; }; ' +
+          'cp "$BUILD/.libs/libpcre16.a" "$OUT/libpcre16.a"; ' +
+          'cp "$BUILD/pcre.h" "$OUT/pcre.h"',
+    visibility = ["PUBLIC"],
+)
+
+cxx_library(
+    name = "pcre-headers",
+    header_namespace = "",
+    exported_headers = {
+        "external-deps/pcre/pcre.h": ":pcre-build[header]",
+    },
+    visibility = ["PUBLIC"],
+)
+
+# ---------------------------------------------------------------------------
+# double-conversion: cmake build for the static lib; headers come straight
+# from the source tree, remapped to the repo-relative include path
+# runtime/ejs-dtoa.cpp uses.
+# ---------------------------------------------------------------------------
+
+genrule(
+    name = "double-conversion-build",
+    srcs = glob(["double-conversion/**"]),
+    out = "libdouble-conversion.a",
+    cmd = 'set -e; BUILD="$TMP/dc-build"; mkdir -p "$BUILD"; ' +
+          'SRC="$PWD/$SRCDIR/double-conversion"; ' +
+          '(cd "$BUILD" && cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release "$SRC" >cmake.log 2>&1 && ' +
+          'make >build.log 2>&1) || { cat "$BUILD"/*.log; exit 1; }; ' +
+          'cp "$BUILD/double-conversion/libdouble-conversion.a" "$OUT"',
+    visibility = ["PUBLIC"],
+)
+
+cxx_library(
+    name = "double-conversion-headers",
+    header_namespace = "",
+    exported_headers = {
+        "external-deps/double-conversion/" + h.removeprefix("double-conversion/double-conversion/"): h
+        for h in glob(["double-conversion/double-conversion/*.h"])
+    },
+    visibility = ["PUBLIC"],
+)
+
+# ---------------------------------------------------------------------------
+# JS sources for the compiler itself (esprima & friends), staged into the
+# --srcdir tree and fed through babel for the stage0 (node-hosted) compiler.
+# ---------------------------------------------------------------------------
+
+filegroup(
+    name = "compiler-js",
+    srcs = glob([
+        "esprima/esprima-es6.js",
+        "escodegen/escodegen-es6.js",
+        "estraverse/estraverse-es6.js",
+        "esutils/esutils-es6.js",
+        "esutils/lib/*.js",
+    ]),
+    visibility = ["PUBLIC"],
+)

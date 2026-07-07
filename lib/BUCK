@@ -1,0 +1,48 @@
+load("//:defs.bzl", "EJS_RUNLOOP_IMPL", "llvm_suffix")
+
+genrule(
+    name = "host-config.js",
+    srcs = ["host-config.js.in"],
+    out = "host-config.js",
+    cmd = 'sed -e "s,@LLVM_SUFFIX@,' + llvm_suffix() + ',g" ' +
+          '-e "s,@RUNLOOP_IMPL@,' + EJS_RUNLOOP_IMPL + ',g" ' +
+          "$SRCDIR/host-config.js.in > $OUT",
+    visibility = ["PUBLIC"],
+)
+
+# The ES6 compiler sources as they are staged into the --srcdir tree for
+# self-compilation (host-config.js is added there separately since it is
+# generated).
+filegroup(
+    name = "es6-srcs",
+    srcs = glob(
+        [
+            "*.js",
+            "passes/*.js",
+        ],
+        exclude = ["host-config.js"],
+    ),
+    visibility = ["PUBLIC"],
+)
+
+# The node-runnable (stage0) compiler: babel-compiled equivalents of
+# ejs-es6.js, lib/*.js and the esprima/escodegen/... support modules.
+# Layout matches lib/generated/ from the Makefile build.
+genrule(
+    name = "generated",
+    srcs = glob(
+        [
+            "*.js",
+            "passes/*.js",
+        ],
+        exclude = ["host-config.js"],
+    ) + [
+        "buck-gen-js.sh",
+        ":host-config.js",
+        "//:ejs-es6.js",
+        "//external-deps:compiler-js",
+    ],
+    out = "generated",
+    cmd = "bash $SRCDIR/buck-gen-js.sh",
+    visibility = ["PUBLIC"],
+)

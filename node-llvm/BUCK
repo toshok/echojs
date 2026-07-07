@@ -1,0 +1,10 @@
+# The node native addon that gives the node-hosted (stage0) compiler access
+# to LLVM.  Built out-of-band with node-gyp (`make -C node-llvm`); buck just
+# picks up the built addon.
+#
+# TODO(buck2): drive node-gyp from a genrule so this is built hermetically.
+export_file(
+    name = "llvm.node",
+    src = "build/Release/llvm.node",
+    visibility = ["PUBLIC"],
+)
