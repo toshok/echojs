@@ -1329,7 +1329,12 @@ EJS_NATIVE_FUNC(_ejs_parseInt_impl) {
     /*     implementation; and if  R is not 2, 4, 8, 10, 16, or 32, then  mathInt may be an implementation-dependent */
     /*     approximation to the mathematical integer value that is represented by Z in radix-R notation.) */
 
-    int mathInt = 0;
+    // the accumulator must be a double: js numbers aren't int32, and e.g.
+    // parseInt("ffffffff", 16) must be 4294967295, not -1.  (esprima uses
+    // parseInt for hex literals, so this int32 overflow made the compiled
+    // compiler read 0xffffffff literals as -1 and emit corrupt nanboxing
+    // masks.)
+    double mathInt = 0;
     int32_t Zlen = i;
     for (i = 0; i < Zlen; i ++) {
         jschar needle[2];
@@ -1349,7 +1354,7 @@ EJS_NATIVE_FUNC(_ejs_parseInt_impl) {
     }
 
     /* 14. Let number be the Number value for mathInt. */
-    int32_t number = mathInt * sign;
+    double number = mathInt * sign;
 
     /* 15. Return sign * number */
     return NUMBER_TO_EJSVAL(number);
