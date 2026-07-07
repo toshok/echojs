@@ -497,15 +497,18 @@ find_page_and_cell_from_arena(GCObjectPtr ptr, uint32_t *cell_idx, Arena *arena)
 
         int page_index = PTR_TO_ARENA_PAGE_INDEX(ptr);
 
-        if (page_index < 0 || page_index > arena->num_pages) {
+        if (page_index < 0 || page_index >= arena->num_pages) {
             return NULL;
         }
 
         PageInfo *page = arena->page_infos[page_index];
 
-        if (!IS_ALIGNED_TO(ptr, page->cell_size)) {
-            return NULL; // can't possibly point to allocated cells.
-        }
+        // note: interior pointers are accepted (PTR_TO_CELL divides by the
+        // cell size, so any pointer into a cell resolves to that cell).
+        // optimized code compiled by ejs keeps addresses of closure env
+        // slots live across calls with the env base pointer dead, so the
+        // conservative scan must treat interior pointers as referencing
+        // the containing object.
 
         if (cell_idx) {
             *cell_idx = PTR_TO_CELL(ptr, page);
@@ -714,6 +717,11 @@ _scan_ejsvalue (ejsval val)
 static void
 _scan_from_ejsobject(EJSObject* obj)
 {
+    // freshly allocated objects are zeroed but not yet initialized (their
+    // constructor may trigger a collection before _ejs_init_object runs);
+    // there's nothing to scan in them yet.
+    if (obj->ops == NULL)
+        return;
     OP(obj,Scan)(obj, _scan_ejsvalue);
 }
 
@@ -790,6 +798,10 @@ mark_pointers_in_range(GCObjectPtr* low, GCObjectPtr* high)
         if (IS_FREE(cell))   continue; // skip free cells
         if (!IS_WHITE(cell)) continue; // skip pointers to gray/black cells
 
+        // canonicalize interior pointers to the start of their cell; the
+        // worklist processing reads the object header from the pointer.
+        gcptr = page->page_start + (cell_idx * page->cell_size);
+
         WORKLIST_PUSH_AND_GRAY_CELL(gcptr, page->page_bitmap[cell_idx]);
     }
 }
@@ -805,28 +817,33 @@ mark_ejsvals_in_range(void* low, void* high)
 #endif
     for (; p < high - sizeof(ejsval); p += sizeof(ejsval)) {
         ejsval candidate_val = *((ejsval*)p);
+        GCObjectPtr gcptr;
         if (EJSVAL_IS_GCTHING_IMPL(candidate_val)) {
-            GCObjectPtr gcptr = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(candidate_val);
+            gcptr = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(candidate_val);
+        }
+        else {
+            // also treat the slot as a raw, untagged pointer: optimized
+            // (opt -O2) code compiled by ejs unboxes closure envs and
+            // objects once and keeps/spills the raw pointer, with the
+            // tagged ejsval potentially dead.
+            gcptr = *(GCObjectPtr*)p;
+        }
 
-            if (gcptr == NULL)            continue; // skip nulls.
+        if (gcptr == NULL)            continue; // skip nulls.
 
-            uint32_t cell_idx;
-            PageInfo *page = find_page_and_cell(gcptr, &cell_idx);
-            if (page) {
-                // XXX more checks before we start treating the pointer like a GCObjectPtr?
-                BitmapCell cell = page->page_bitmap[cell_idx];
-                if (IS_FREE(cell)) continue; // skip free cells
-                if (!IS_WHITE(cell)) continue; // skip pointers to gray/black cells
+        uint32_t cell_idx;
+        PageInfo *page = find_page_and_cell(gcptr, &cell_idx);
+        if (page) {
+            // XXX more checks before we start treating the pointer like a GCObjectPtr?
+            BitmapCell cell = page->page_bitmap[cell_idx];
+            if (IS_FREE(cell)) continue; // skip free cells
+            if (!IS_WHITE(cell)) continue; // skip pointers to gray/black cells
 
-                if (EJSVAL_IS_STRING(candidate_val)) {
-                    SPEW(4, _ejs_log ("found ptr to %p(PrimString) on stack\n", EJSVAL_TO_STRING(candidate_val)));
-                    WORKLIST_PUSH_AND_GRAY_CELL(gcptr, page->page_bitmap[cell_idx]);
-                }
-                else {
-                    //SPEW(_ejs_log ("found ptr to %p(%s) on stack\n", EJSVAL_TO_OBJECT(candidate_val), CLASSNAME(EJSVAL_TO_OBJECT(candidate_val))));
-                    WORKLIST_PUSH_AND_GRAY_CELL(gcptr, page->page_bitmap[cell_idx]);
-                }
-            }
+            // canonicalize interior pointers to the start of their cell; the
+            // worklist processing reads the object header from the pointer.
+            gcptr = page->page_start + (cell_idx * page->cell_size);
+
+            WORKLIST_PUSH_AND_GRAY_CELL(gcptr, page->page_bitmap[cell_idx]);
         }
     }
 }
@@ -946,8 +963,16 @@ mark_from_modules()
 {
     SPEW(2, _ejs_log ("marking from module exotics"));
 
-    for (int i = 0; i < _ejs_num_modules; i ++)
-        _scan_from_ejsobject((EJSObject*)_ejs_modules[i]);
+    for (int i = 0; i < _ejs_num_modules; i ++) {
+        EJSObject* mod = (EJSObject*)_ejs_modules[i];
+        // modules are static globals whose object headers aren't set up
+        // until _ejs_require_init; if a collection happens before that
+        // (e.g. EJS_GC_EVERY_N_ALLOC during _ejs_init) there's nothing to
+        // scan yet.
+        if (mod->ops == NULL)
+            continue;
+        _scan_from_ejsobject(mod);
+    }
 }
 
 #if TARGET_CPU_ARM
@@ -962,7 +987,31 @@ mark_from_modules()
     mark_pointers_in_range(&__end, &__r0);                               \
     EJS_MACRO_END
 #elif TARGET_CPU_ARM64
-#define MARK_REGISTERS
+// spill the callee-saved registers (x19-x28, plus fp) and treat them as
+// roots.  code compiled by ejs (opt -O2) keeps live ejsvals in callee-saved
+// registers across calls, and the mostly -O0 runtime doesn't reliably save
+// all of them anywhere the stack scan would see.  (an empty MARK_REGISTERS
+// here let live objects be collected and their cells reused -> heap
+// corruption.)
+#define MARK_REGISTERS EJS_MACRO_START                                  \
+    GCObjectPtr __regs[21];                                             \
+    __asm volatile ("stp x19, x20, [%0, #0]\n\t"                        \
+                    "stp x21, x22, [%0, #16]\n\t"                       \
+                    "stp x23, x24, [%0, #32]\n\t"                       \
+                    "stp x25, x26, [%0, #48]\n\t"                       \
+                    "stp x27, x28, [%0, #64]\n\t"                       \
+                    "str x29, [%0, #80]\n\t"                            \
+                    /* llvm will spill gprs into the callee-saved simd   \
+                       registers under pressure, so scan those too */    \
+                    "stp d8, d9,   [%0, #88]\n\t"                        \
+                    "stp d10, d11, [%0, #104]\n\t"                       \
+                    "stp d12, d13, [%0, #120]\n\t"                       \
+                    "stp d14, d15, [%0, #136]"                          \
+                    : : "r"(__regs) : "memory");                        \
+    __regs[19] = __regs[20] = NULL;                                     \
+    /* mark_pointers_in_range scans [low, high-1) */                    \
+    mark_pointers_in_range(__regs, __regs + 21);                        \
+    EJS_MACRO_END
 #elif TARGET_CPU_AMD64
 #define MARK_REGISTERS EJS_MACRO_START \
     GCObjectPtr __rax, __rbx, __rcx, __rdx, __rsi, __rdi, __rbp, __rsp, __r8, __r9, __r10, __r11, __r12, __r13, __r14, __r15, __end; \
@@ -1392,6 +1441,11 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     }
 
     rv = alloc_from_page(info);
+    // zero the cell: recycled cells are filled with 0xaf on finalize, and a
+    // collection can scan this object before its constructor initializes it
+    // (any allocation between _ejs_gc_alloc and _ejs_init_object can
+    // trigger one).  zeroed contents are inert to the scanner.
+    memset (rv, 0, info->cell_size);
     *((GCObjectHeader*)rv) = scan_type;
 
     if (info->num_free_cells == 0) {

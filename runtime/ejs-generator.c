@@ -221,7 +221,12 @@ ejsval _ejs_Iterator_prototype EJSVAL_ALIGNMENT;
 void
 _ejs_iterator_init_proto()
 {
-    _ejs_gc_add_root (&_ejs_Generator_prototype);
+    // used to (erroneously) root _ejs_Generator_prototype here, which
+    // _ejs_generator_init roots itself.  nothing reachable references the
+    // iterator prototype until the other iterator protos are created, so
+    // without this root the first collection after this function freed it
+    // out from under everything that later used it as [[Prototype]].
+    _ejs_gc_add_root (&_ejs_Iterator_prototype);
     _ejs_Iterator_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
 
     ejsval _iterator = _ejs_function_new_native (_ejs_null, _ejs_Symbol_iterator, _ejs_Iterator_prototype_iterator);
