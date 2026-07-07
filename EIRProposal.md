@@ -214,6 +214,26 @@ after the abstract interpreter proves `%x: number` at all call sites:
         return %v
     }
 
+### Block-argument-driven specialization (basic block versioning)
+
+Block arguments make one further strategy available that phi-form SSA
+makes awkward: **specializing blocks on the types of their arguments**.
+A block is a small function of its parameters; if analysis (or profiling)
+shows a block is entered with `(number, string)` on one edge and
+`(any, any)` on another, the lowering can *version* the block — clone it
+per distinct argument-type tuple, wiring each predecessor edge to the
+version matching the types it can prove it passes.  Inside a version,
+the parameter types are facts, so guards disappear and unboxing floats
+to the block entry.  This is Chevalier-Boisvert & Feeley's basic block
+versioning (ECOOP'15), which gets most of the benefit of interprocedural
+type inference at a fraction of the implementation cost, and it consumes
+exactly the interface EIR already has: types attached to block
+parameters, edges that pass arguments.  The static analysis can treat a
+block as its unit of work — a lattice tuple in through the parameters,
+facts out through the terminator's edges — and versioning is then a
+lowering decision, not an analysis one.  (A version cap per block, ~4 in
+the literature, bounds code growth.)
+
 ### SSA construction
 
 Build SSA *during* AST→EIR lowering with the Braun/Buchwald/Hack
