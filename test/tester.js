@@ -22,7 +22,7 @@ const stdouts = Object.create(null);
 const failed_tests = [];
 
 // index here is the stage #.  0 = run it under node, 1 = run it with stage1, 2 = run it with stage2
-const compilers = ["../ejs", "../ejs.exe.stage1", "../ejs.exe.stage2"];
+const compilers = ["../ejs", "../ejs.exe.stage1", "../ejs.exe.stage2", "../ejs.exe.stage3"];
 
 let runloop_impl = require("../lib/generated/lib/host-config.js").RUNLOOP_IMPL;
 

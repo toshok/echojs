@@ -1,0 +1,14 @@
+# the test suite sources, staged into the tree //:test-stage{1,2,3} builds
+filegroup(
+    name = "files",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            "**/*.exe",
+            "**/*.o",
+            "**/.deps/**",
+            "BUCK",
+        ],
+    ),
+    visibility = ["PUBLIC"],
+)

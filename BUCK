@@ -86,3 +86,18 @@ alias(
     name = "ejs.exe",
     actual = ":ejs.exe.stage1",
 )
+
+# run the test suite against a stage: buck2 build //:test-stage3
+# the output artifact is the full test log; the build fails if any test
+# fails.
+[
+    genrule(
+        name = "test-stage" + stage,
+        srcs = ["buck-test-stage.sh"],
+        out = "test-stage" + stage + ".log",
+        cmd = 'bash $SRCDIR/buck-test-stage.sh "$(location :srcdir-tree)" ' +
+              '"$(location //lib:generated)" "$(location :ejs.exe.stage' + stage + ')" ' +
+              stage + ' "$(location //test:files)" ' + llvm_bindir(),
+    )
+    for stage in ["1", "2", "3"]
+]
