@@ -552,7 +552,9 @@ namespace jsllvm {
     FALLBACK_EMPTY_UTF8_ARG(context, 0, val);
     FALLBACK_EMPTY_UTF8_ARG(context, 1, name);
 
-    Local<v8::Value> result = Constant::Create(IRBuilder::builder.CreateGlobalStringPtr(*val, *name));
+    // CreateGlobalStringPtr was removed in llvm 20; CreateGlobalString is
+    // identical under opaque pointers
+    Local<v8::Value> result = Constant::Create(IRBuilder::builder.CreateGlobalString(*val, *name));
     info.GetReturnValue().Set(result);
   }
 
@@ -631,7 +633,9 @@ namespace jsllvm {
     REQ_LLVM_VAL_ARG(context, 0, val);
     REQ_LLVM_CONST_INT_ARG(context, 1, size);
 
-    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateLifetimeStart(val, size)));
+    // llvm 22 lifetime intrinsics are size-less; the size arg is ignored
+    (void)size;
+    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateLifetimeStart(val)));
     info.GetReturnValue().Set(result);
   }
 
@@ -643,7 +647,9 @@ namespace jsllvm {
     REQ_LLVM_VAL_ARG(context, 0, val);
     REQ_LLVM_CONST_INT_ARG(context, 1, size);
 
-    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateLifetimeEnd(val, size)));
+    // llvm 22 lifetime intrinsics are size-less; the size arg is ignored
+    (void)size;
+    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateLifetimeEnd(val)));
     info.GetReturnValue().Set(result);
   }
 

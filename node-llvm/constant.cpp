@@ -68,7 +68,9 @@ namespace jsllvm {
 
     Local<v8::Value> result;
     if (info.Length() == 2) {
-      result = Value::Create(llvm::Constant::getIntegerValue(ty, llvm::APInt(ty->getPrimitiveSizeInBits(), v)));
+      // llvm 20+ asserts on implicit truncation; keep the old truncating
+      // behavior for negative/oversized js numbers
+      result = Value::Create(llvm::Constant::getIntegerValue(ty, llvm::APInt(ty->getPrimitiveSizeInBits(), v, /*isSigned*/ true, /*implicitTrunc*/ true)));
     }
     else if (info.Length() == 3 && info[2]->IsNumber() && ty->getPrimitiveSizeInBits() == 64) {
       // allow a 3 arg form for 64 bit ints:

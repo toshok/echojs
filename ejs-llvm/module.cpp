@@ -88,9 +88,10 @@ namespace ejsllvm {
         }
 
 #if false
-        llvm::Function* f = llvm::Intrinsic::getDeclaration (module->llvm_module, intrinsic_id, param_types);
+        llvm::Function* f = llvm::Intrinsic::getOrInsertDeclaration (module->llvm_module, intrinsic_id, param_types);
 #else
-        llvm::Function* f = llvm::Intrinsic::getDeclaration (module->llvm_module, intrinsic_id);
+        // renamed from getDeclaration in llvm 20
+        llvm::Function* f = llvm::Intrinsic::getOrInsertDeclaration (module->llvm_module, intrinsic_id);
 #endif
 
         return Function_new (f);
@@ -234,7 +235,8 @@ namespace ejsllvm {
 
         REQ_UTF8_ARG(0, triple);
 
-        module->llvm_module->setTargetTriple (triple);
+        // setTargetTriple takes an llvm::Triple as of llvm 21
+        module->llvm_module->setTargetTriple (llvm::Triple(triple));
         return _ejs_undefined;
     }
 

@@ -84,9 +84,10 @@ namespace jsllvm {
     }
 
 #if false
-    llvm::Function* f = llvm::Intrinsic::getDeclaration (module->llvm_obj, intrinsic_id, param_types);
+    llvm::Function* f = llvm::Intrinsic::getOrInsertDeclaration (module->llvm_obj, intrinsic_id, param_types);
 #else
-    llvm::Function* f = llvm::Intrinsic::getDeclaration (module->llvm_obj, intrinsic_id);
+    // renamed from getDeclaration in llvm 20
+    llvm::Function* f = llvm::Intrinsic::getOrInsertDeclaration (module->llvm_obj, intrinsic_id);
 #endif
 
     Local<v8::Value> result = Function::Create(f);
@@ -249,7 +250,8 @@ namespace jsllvm {
 
     REQ_UTF8_ARG(context, 0, triple);
 
-    module->llvm_obj->setTargetTriple (*triple);
+    // setTargetTriple takes an llvm::Triple as of llvm 21
+    module->llvm_obj->setTargetTriple (llvm::Triple(*triple));
   }
 
   Nan::Persistent<v8::FunctionTemplate> Module::constructor;

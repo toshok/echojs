@@ -8,7 +8,8 @@ $(TOP)/build/host-config.mk: $(TOP)/build/config.guess
 
 -include $(TOP)/build/host-config.mk
 
-LLVM_SUFFIX?=-16.0.6
+# empty suffix: use the llvm tools on PATH (homebrew llvm, currently 22.x)
+LLVM_SUFFIX?=
 
 # we don't care about the version here
 HOST_OS:=$(patsubst darwin%,darwin,$(HOST_OS))

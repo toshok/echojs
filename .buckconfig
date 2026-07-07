@@ -19,5 +19,5 @@ target_platform_detector_spec = target:root//...->prelude//platforms:default
 ignore = .git
 
 [llvm]
-prefix = /opt/homebrew/opt/llvm@16
+prefix = /opt/homebrew/opt/llvm
 suffix =

@@ -274,7 +274,9 @@ namespace ejsllvm {
         REQ_UTF8_ARG(0, val);
         FALLBACK_EMPTY_UTF8_ARG(1, name);
 
-        return Value_new (_llvm_builder.CreateGlobalStringPtr(val, name));
+        // CreateGlobalStringPtr was removed in llvm 20; CreateGlobalString
+        // is identical under opaque pointers
+        return Value_new (_llvm_builder.CreateGlobalString(val, name));
     }
 
     static EJS_NATIVE_FUNC(IRBuilder_createUnreachable) {

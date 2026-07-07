@@ -73,7 +73,9 @@ namespace ejsllvm {
         REQ_INT_ARG (1, v);
 
         if (argc == 2) {
-            return Value_new (llvm::Constant::getIntegerValue(ty, llvm::APInt(ty->getPrimitiveSizeInBits(), v)));
+            // llvm 20+ asserts on implicit truncation; keep the old
+            // truncating behavior for negative/oversized js numbers
+            return Value_new (llvm::Constant::getIntegerValue(ty, llvm::APInt(ty->getPrimitiveSizeInBits(), v, /*isSigned*/ true, /*implicitTrunc*/ true)));
         }
         else if (argc == 3 && EJSVAL_IS_NUMBER(args[2]) && ty->getPrimitiveSizeInBits() == 64) {
             uint64_t vhi = v;
