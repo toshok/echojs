@@ -108,6 +108,7 @@ let options = {
     osx_min: "11.0",
     import_variables: [],
     srcdir: false,
+    ir: false,
     stdout_writer: new Writer(process.stdout),
 };
 
@@ -183,6 +184,10 @@ let args = {
     "-q": {
         flag: "quiet",
         help: "don't output anything during compilation except errors.",
+    },
+    "--ir": {
+        flag: "ir",
+        help: "use the EIR (SSA) pipeline for eligible functions, falling back per function.",
     },
     "-I": {
         handler: add_import_variable,

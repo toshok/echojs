@@ -8,7 +8,10 @@ namespace jsllvm {
   public:
     static NAN_MODULE_INIT(Init);
 
-    static v8::Local<v8::Value> Create(::llvm::PHINode *llvm_phi);
+    // the base template's Create() is what we want; redeclaring it here
+    // (without a definition) shadowed it, and -undefined dynamic_lookup
+    // deferred the missing symbol to a null pointer at runtime.
+    using LLVMObjectWrap< ::llvm::PHINode, PHINode>::Create;
 
   private:
     typedef LLVMObjectWrap< ::llvm::PHINode, PHINode> BaseType;

@@ -187,9 +187,12 @@ function processOneTest(gen_expected, test, cb) {
         try {
             const start = timerStart();
             const platform_target = platform_to_test ? ["--target", platform_to_test] : [];
+            const extra_flags = process.env.EJS_EXTRA_FLAGS
+                ? process.env.EJS_EXTRA_FLAGS.split(" ")
+                : [];
             const ccomp = spawn(
                 compilers[stage_to_run],
-                platform_target.concat([
+                platform_target.concat(extra_flags).concat([
                     "--srcdir",
                     "--moduledir",
                     "../node-compat",

@@ -6,6 +6,7 @@
 #include "value.h"
 #include "instruction.h"
 #include "landingpad.h"
+#include "phinode.h"
 #include "switch.h"
 #include "callinvoke.h"
 #include "basicblock.h"
@@ -540,7 +541,9 @@ namespace jsllvm {
     REQ_INT_ARG(context, 1, incoming_values);
     FALLBACK_EMPTY_UTF8_ARG(context,  2, name);
 
-    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreatePHI(ty, incoming_values, *name)));
+    // return the PHINode wrapper (not the generic Instruction one) so
+    // callers can use addIncoming
+    Local<v8::Value> result = PHINode::Create(IRBuilder::builder.CreatePHI(ty, incoming_values, *name));
     info.GetReturnValue().Set(result);
   }
 

@@ -99,6 +99,23 @@ genrule(
 # run the test suite against a stage: buck2 build //:test-stage3
 # the output artifact is the full test log; the build fails if any test
 # fails.
+genrule(
+    name = "test-stage0",
+    srcs = ["buck-test-stage.sh"],
+    out = "test-stage0.log",
+    cmd = 'bash $SRCDIR/buck-test-stage.sh "$(location :srcdir-tree)" ' +
+          '"$(location //lib:generated)" - 0 "$(location //test:files)" ' + llvm_bindir(),
+)
+
+genrule(
+    name = "test-stage0-ir",
+    srcs = ["buck-test-stage.sh"],
+    out = "test-stage0-ir.log",
+    cmd = 'bash $SRCDIR/buck-test-stage.sh "$(location :srcdir-tree)" ' +
+          '"$(location //lib:generated)" - 0 "$(location //test:files)" ' + llvm_bindir() +
+          " --ir",
+)
+
 [
     genrule(
         name = "test-stage" + stage,

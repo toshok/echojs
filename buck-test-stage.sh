@@ -7,10 +7,11 @@ set -euo pipefail
 
 TREE="$1"       # //:srcdir-tree
 GENERATED="$2"  # //lib:generated (tester requires ../lib/generated/.../host-config.js)
-STAGE_EXE="$3"  # //:ejs.exe.stageN
+STAGE_EXE="$3"  # //:ejs.exe.stageN, or "-" for stage 0 (node-hosted)
 STAGE_NUM="$4"  # N
 TEST_FILES="$5" # //test:files
 LLVM_BIN="$6"   # directory holding llc/opt
+EXTRA_FLAGS="${7:-}"  # extra compiler flags, e.g. --ir
 
 # node_modules (glob/colors/temp for the tester) come from the repo, same
 # as the babel step in //lib:generated.
@@ -25,8 +26,14 @@ cp -RL "$TREE"/. "$WORK/"
 chmod -R u+w "$WORK"
 mkdir -p "$WORK/lib/generated"
 cp -RL "$GENERATED"/. "$WORK/lib/generated/"
-cp "$STAGE_EXE" "$WORK/ejs.exe.stage$STAGE_NUM"
-chmod +x "$WORK/ejs.exe.stage$STAGE_NUM"
+if [ "$STAGE_NUM" = "0" ]; then
+    # stage 0 runs the babel'd compiler under node via the ../ejs driver
+    printf '#!/bin/sh\ndir=$(cd `dirname $0`; pwd)\nexec node $dir/lib/generated/ejs-es6.js "$@"\n' > "$WORK/ejs"
+    chmod +x "$WORK/ejs"
+else
+    cp "$STAGE_EXE" "$WORK/ejs.exe.stage$STAGE_NUM"
+    chmod +x "$WORK/ejs.exe.stage$STAGE_NUM"
+fi
 mkdir -p "$WORK/test"
 cp -RL "$TEST_FILES"/. "$WORK/test/"
 chmod -R u+w "$WORK/test"
@@ -38,7 +45,10 @@ find "$WORK/test" -name '*.js' -exec touch {} +
 find "$WORK/test/expected" -type f -exec touch {} +
 
 export PATH="$LLVM_BIN:$PATH"
-export NODE_PATH="$REPO/node_modules"
+export NODE_PATH="$REPO/node_modules:$REPO/node-llvm/build/Release"
+if [ -n "$EXTRA_FLAGS" ]; then
+    export EJS_EXTRA_FLAGS="$EXTRA_FLAGS"
+fi
 if [ "$(uname -s)" = "Darwin" ]; then
     export SDKROOT="${SDKROOT:-$(/usr/bin/xcrun --show-sdk-path)}"
 fi
