@@ -2155,17 +2155,22 @@ static ejsval
 _ejs_array_slice_dense (ejsval env, ejsval _this, uint32_t argc, ejsval* args)
 {
     int len = EJS_ARRAY_LEN(_this);
-    int begin = argc > 0 ? (int)EJSVAL_TO_NUMBER(args[0]) : 0;
-    int end = argc > 1 ? (int)EJSVAL_TO_NUMBER(args[1]) : len;
+    int begin = argc > 0 && !EJSVAL_IS_UNDEFINED(args[0]) ? (int)EJSVAL_TO_NUMBER(args[0]) : 0;
+    int end   = argc > 1 && !EJSVAL_IS_UNDEFINED(args[1]) ? (int)EJSVAL_TO_NUMBER(args[1]) : len;
 
-    begin = MIN(begin, len);
-    end = MIN(end, len);
+    // negative indices count from the end (ES6 22.1.3.22 steps 5/7)
+    if (begin < 0) begin = MAX(len + begin, 0);
+    else           begin = MIN(begin, len);
+    if (end < 0) end = MAX(len + end, 0);
+    else         end = MIN(end, len);
 
-    ejsval rv = ArraySpeciesCreate(_this, end-begin);
+    int count = MAX(end - begin, 0);
+
+    ejsval rv = ArraySpeciesCreate(_this, count);
 
     memmove (&EJS_DENSE_ARRAY_ELEMENTS(rv)[0],
              &EJS_DENSE_ARRAY_ELEMENTS(_this)[begin],
-             (end-begin) * sizeof(ejsval));
+             count * sizeof(ejsval));
 
     return rv;
 }
