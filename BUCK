@@ -127,3 +127,15 @@ genrule(
     )
     for stage in ["1", "2", "3"]
 ]
+
+[
+    genrule(
+        name = "test-stage" + stage + "-ir",
+        srcs = ["buck-test-stage.sh"],
+        out = "test-stage" + stage + "-ir.log",
+        cmd = 'bash $SRCDIR/buck-test-stage.sh "$(location :srcdir-tree)" ' +
+              '"$(location //lib:generated)" "$(location :ejs.exe.stage' + stage + ')" ' +
+              stage + ' "$(location //test:files)" ' + llvm_bindir() + " --ir",
+    )
+    for stage in ["1", "2", "3"]
+]

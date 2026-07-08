@@ -21,6 +21,7 @@
 #include "allocainst.h"
 #include "loadinst.h"
 #include "landingpad.h"
+#include "phinode.h"
 #include "dibuilder.h"
 
 namespace ejsllvm {
@@ -66,6 +67,7 @@ _ejs_llvm_init (ejsval global)
     ConstantFP_init (global);
     Switch_init (global);
     LandingPad_init (global);
+    PhiNode_init (global);
     AllocaInst_init (global);
     LoadInst_init (global);
 #if notyet

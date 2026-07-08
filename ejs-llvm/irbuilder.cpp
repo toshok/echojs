@@ -13,6 +13,7 @@
 #include "type.h"
 #include "value.h"
 #include "landingpad.h"
+#include "phinode.h"
 #include "switch.h"
 #include "callinvoke.h"
 #include "basicblock.h"
@@ -258,16 +259,11 @@ namespace ejsllvm {
     }
 
     static EJS_NATIVE_FUNC(IRBuilder_createPhi) {
-        EJS_NOT_IMPLEMENTED();
-#if notyet
         REQ_LLVM_TYPE_ARG(0, ty);
         REQ_INT_ARG(1, incoming_values);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
 
-        ejsval rv = Value_new (_llvm_builder.CreatePHI(ty, incoming_values, name));
-        free (name);
-        return rv;
-#endif
+        return PhiNode_new (_llvm_builder.CreatePHI(ty, incoming_values, name));
     }
 
     static EJS_NATIVE_FUNC(IRBuilder_createGlobalStringPtr) {

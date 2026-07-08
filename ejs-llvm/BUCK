@@ -40,6 +40,7 @@ sources = [
     "globalvariable.cpp",
     "irbuilder.cpp",
     "landingpad.cpp",
+    "phinode.cpp",
     "loadinst.cpp",
     "module.cpp",
     "structtype.cpp",
