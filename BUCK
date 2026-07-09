@@ -128,6 +128,28 @@ genrule(
     for stage in ["1", "2", "3"]
 ]
 
+# the --ir bootstrap: stage1 compiles the compiler WITH --ir, and the
+# resulting binary must pass the full suite (with --ir).  this is the
+# check that catches --ir miscompiles of the compiler itself, which the
+# plain stage2/stage3 fixed point (built without --ir) never exercises.
+genrule(
+    name = "ejs.exe.stage2-ir",
+    srcs = ["buck-stage.sh"],
+    out = "ejs.exe.stage2-ir",
+    cmd = 'bash $SRCDIR/buck-stage.sh "$(location :srcdir-tree)" exe ' +
+          '"$(location :ejs.exe.stage1)" - ' + llvm_bindir() + " --ir",
+)
+
+genrule(
+    name = "test-bootstrap-ir",
+    srcs = ["buck-test-stage.sh"],
+    out = "test-bootstrap-ir.log",
+    cmd = 'bash $SRCDIR/buck-test-stage.sh "$(location :srcdir-tree)" ' +
+          '"$(location //lib:generated)" "$(location :ejs.exe.stage2-ir)" ' +
+          '2 "$(location //test:files)" ' + llvm_bindir() +
+          " --ir",
+)
+
 [
     genrule(
         name = "test-stage" + stage + "-ir",

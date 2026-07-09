@@ -109,6 +109,8 @@ let options = {
     import_variables: [],
     srcdir: false,
     ir: false,
+    ir_exclude: [],
+    ir_exclude_fn: [],
     stdout_writer: new Writer(process.stdout),
 };
 
@@ -188,6 +190,20 @@ let args = {
     "--ir": {
         flag: "ir",
         help: "use the EIR (SSA) pipeline for eligible functions, falling back per function.",
+    },
+    "--ir-exclude": {
+        handler: (arg) => {
+            options.ir_exclude = options.ir_exclude.concat(arg.split(","));
+        },
+        handlerArgc: 1,
+        help: "comma-separated filename substrings to exclude from the EIR pipeline (debugging).",
+    },
+    "--ir-exclude-fn": {
+        handler: (arg) => {
+            options.ir_exclude_fn = options.ir_exclude_fn.concat(arg.split(","));
+        },
+        handlerArgc: 1,
+        help: "comma-separated function-name substrings to exclude from the EIR pipeline (debugging).",
     },
     "-I": {
         handler: add_import_variable,

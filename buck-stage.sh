@@ -9,6 +9,7 @@ MODE="$2"       # "node" (stage0 compiler) or "exe" (previous stage binary)
 COMPILER="$3"   # node: //lib:generated dir; exe: previous ejs.exe.stageN
 LLVM_NODE="$4"  # node: //node-llvm:llvm.node; exe: "-"
 LLVM_BIN="$5"   # directory holding llc/opt (and llvm-config)
+EXTRA_FLAGS="${6:-}"  # extra compiler flags for the self-compile, e.g. --ir
 
 abspath() {
     if [ -d "$1" ]; then
@@ -40,7 +41,11 @@ if [ "$(uname -s)" = "Darwin" ]; then
     export SDKROOT="${SDKROOT:-$(/usr/bin/xcrun --show-sdk-path)}"
 fi
 
-EJS_ARGS=(--srcdir --leave-temp --moduledir node-compat --moduledir ejs-llvm ejs-es6.js)
+EJS_ARGS=(--srcdir --leave-temp --moduledir node-compat --moduledir ejs-llvm)
+if [ -n "$EXTRA_FLAGS" ]; then
+    EJS_ARGS+=($EXTRA_FLAGS)
+fi
+EJS_ARGS+=(ejs-es6.js)
 
 if [ "$MODE" = "node" ]; then
     mkdir -p lib/generated
