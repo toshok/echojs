@@ -1,5 +1,5 @@
-/* -*- Mode: js2; indent-tabs-mode: nil; tab-width: 4; js2-indent-offset: 4; js2-basic-offset: 4; -*-
- * vim: set ts=4 sw=4 et tw=99 ft=js:
+/* -*- Mode: typescript; indent-tabs-mode: nil; tab-width: 4 -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=typescript:
  */
 
 import { identifier } from "./ast-builder";
