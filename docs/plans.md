@@ -104,6 +104,14 @@ maintains test262, which is far larger. The effort:
   object methods parse but silently miscompile). A test262 subset
   probe should follow for exhaustiveness.
 - Implement in payoff order; wire probes into CI as they green.
+- **Un-fork the JS external-deps**: esprima/escodegen/estraverse/esutils
+  live in `external-deps/` as lightly-patched copies (build-system
+  compatibility). Move to published npm packages where possible — and
+  note that published esprima is unmaintained and still lacks the
+  parser-gap features above, so the parser slot likely wants a
+  maintained ESTree-compatible parser (acorn) behind the same
+  interface; escodegen/estraverse/esutils can come from npm as-is if
+  the local patches prove to be build-glue only (diff them first).
 
 Sequenced after the TypeScript port — new-feature work is safer with
 types underneath it.

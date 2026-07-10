@@ -121,10 +121,13 @@ _ejs_generator_start(EJSGenerator* gen)
 {
     _ejs_gc_push_generator(gen);
     ejsval undef_this = _ejs_undefined;
-    _ejs_invoke_closure(gen->body, &undef_this, 0, NULL, _ejs_undefined);
+    ejsval rv = _ejs_invoke_closure(gen->body, &undef_this, 0, NULL, _ejs_undefined);
     _ejs_gc_pop_generator();
 
-    gen->yielded_value = _ejs_create_iter_result(_ejs_undefined, _ejs_true);
+    // the body's return value is the final iteration result's value
+    // (`function* g() { return 5; }` -> { value: 5, done: true })
+    gen->completed = EJS_TRUE;
+    gen->yielded_value = _ejs_create_iter_result(rv, _ejs_true);
 }
 
 // makecontext's variadic arguments are ints, so a 64-bit pointer passed
@@ -146,6 +149,9 @@ _ejs_generator_new (ejsval generator_body)
 
     rv->body = generator_body;
     rv->started = EJS_FALSE;
+    rv->completed = EJS_FALSE;
+    rv->throwing = EJS_FALSE;
+    rv->returning = EJS_FALSE;
     rv->yielded_value = _ejs_undefined;
     rv->sent_value = _ejs_undefined;
 
@@ -177,12 +183,21 @@ _ejs_generator_yield (ejsval generator, ejsval arg) {
         _ejs_throw (gen->sent_value);
     }
 
+    if (gen->returning) {
+        gen->returning = EJS_FALSE;
+        // unwind the generator body: finally blocks run; the desugared
+        // body's outer catch recognizes the sentinel and returns
+        // gen->sent_value (see DesugarGeneratorFunctions)
+        _ejs_throw (_ejs_generator_return_sentinel);
+    }
+
     return gen->sent_value;
 }
 
 static ejsval
 _ejs_generator_send (ejsval generator, ejsval arg) {
     EJSGenerator* gen = (EJSGenerator*)EJSVAL_TO_OBJECT(generator);
+    gen->started = EJS_TRUE;
     gen->yielded_value = _ejs_undefined;
     gen->sent_value = arg;
     swapcontext(&gen->caller_context, &gen->generator_context);
@@ -199,6 +214,24 @@ _ejs_generator_throw (ejsval generator, ejsval arg) {
     return gen->yielded_value;
 }
 
+// the unforgeable value .return() throws through the generator body to
+// unwind it (running finally blocks); the desugared body's outermost
+// catch converts it into a normal return
+ejsval _ejs_generator_return_sentinel EJSVAL_ALIGNMENT;
+
+ejsval
+_ejs_generator_is_return_sentinel (ejsval exc)
+{
+    return BOOLEAN_TO_EJSVAL(EJSVAL_EQ(exc, _ejs_generator_return_sentinel));
+}
+
+ejsval
+_ejs_generator_return_value (ejsval generator)
+{
+    EJSGenerator* gen = (EJSGenerator*)EJSVAL_TO_OBJECT(generator);
+    return gen->sent_value;
+}
+
 static EJS_NATIVE_FUNC(_ejs_Generator_prototype_throw) {
     ejsval O = *_this;
     if (!EJSVAL_IS_OBJECT(O))
@@ -207,12 +240,40 @@ static EJS_NATIVE_FUNC(_ejs_Generator_prototype_throw) {
     if (!EJSVAL_IS_GENERATOR(O))
         _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, ".throw called on non-generator");
 
+    EJSGenerator* gen = (EJSGenerator*)EJSVAL_TO_OBJECT(O);
+    // 25.3.3.4: throwing at a completed (or never-started) generator
+    // just throws the exception in the caller
+    if (gen->completed || !gen->started)
+        _ejs_throw (argc > 0 ? args[0] : _ejs_undefined);
+
     return _ejs_generator_throw(O, argc > 0 ? args[0] : _ejs_undefined);
 }
 
 static EJS_NATIVE_FUNC(_ejs_Generator_prototype_return) {
-    printf ("generator .return not implemented\n");
-    abort();
+    ejsval O = *_this;
+    if (!EJSVAL_IS_OBJECT(O))
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, ".return called on non-object");
+
+    if (!EJSVAL_IS_GENERATOR(O))
+        _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, ".return called on non-generator");
+
+    EJSGenerator* gen = (EJSGenerator*)EJSVAL_TO_OBJECT(O);
+    ejsval arg = argc > 0 ? args[0] : _ejs_undefined;
+
+    // not yet started, or already done: complete without running the body
+    if (!gen->started || gen->completed) {
+        gen->completed = EJS_TRUE;
+        return _ejs_create_iter_result(arg, _ejs_true);
+    }
+
+    // suspended at a yield: resume with the return sentinel.  finally
+    // blocks run; unless one of them yields or overrides the completion,
+    // the body's outer catch returns `arg` and the generator completes.
+    gen->returning = EJS_TRUE;
+    gen->yielded_value = _ejs_undefined;
+    gen->sent_value = arg;
+    swapcontext(&gen->caller_context, &gen->generator_context);
+    return gen->yielded_value;
 }
 
 static EJS_NATIVE_FUNC(_ejs_Generator_prototype_next) {
@@ -222,6 +283,12 @@ static EJS_NATIVE_FUNC(_ejs_Generator_prototype_next) {
 
     if (!EJSVAL_IS_GENERATOR(O))
         _ejs_throw_nativeerror_utf8(EJS_TYPE_ERROR, ".next called on non-generator");
+
+    EJSGenerator* gen = (EJSGenerator*)EJSVAL_TO_OBJECT(O);
+    // 25.3.3.3: a completed generator keeps answering { undefined, true }
+    // (resuming the dead context would be undefined behavior)
+    if (gen->completed)
+        return _ejs_create_iter_result(_ejs_undefined, _ejs_true);
 
     return _ejs_generator_send(O, argc > 0 ? args[0] : _ejs_undefined);
 }
@@ -254,6 +321,9 @@ _ejs_generator_init(ejsval global)
 {
     _ejs_gc_add_root (&_ejs_Generator_prototype);
     _ejs_Generator_prototype = _ejs_object_new(_ejs_Iterator_prototype, &_ejs_Generator_specops);
+
+    _ejs_gc_add_root (&_ejs_generator_return_sentinel);
+    _ejs_generator_return_sentinel = _ejs_object_new(_ejs_null, &_ejs_Object_specops);
 
 #define PROTO_METHOD(x) EJS_INSTALL_ATOM_FUNCTION_FLAGS (_ejs_Generator_prototype, x, _ejs_Generator_prototype_##x, EJS_PROP_NOT_ENUMERABLE | EJS_PROP_WRITABLE | EJS_PROP_CONFIGURABLE)
 

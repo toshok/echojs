@@ -27,11 +27,24 @@ typedef struct {
     // when true, we throw from the yield point.  when false we simply return
     EJSBool throwing;
 
+    // when true, the resume is a .return(): the yield point throws the
+    // return sentinel (sent_value holds the return value)
+    EJSBool returning;
+
+    // the body ran to completion (normally, or via the return sentinel);
+    // next/throw/return on a completed generator must not resume the
+    // dead context
+    EJSBool completed;
+
     void* stack;
 
     ucontext_t generator_context;
     ucontext_t caller_context;
 } EJSGenerator;
+
+extern ejsval _ejs_generator_return_sentinel;
+ejsval _ejs_generator_is_return_sentinel (ejsval exc);
+ejsval _ejs_generator_return_value (ejsval generator);
 
 extern ejsval _ejs_IteratorWrapper_prototype;
 extern EJSSpecOps _ejs_IteratorWrapper_specops;

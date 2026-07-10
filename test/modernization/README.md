@@ -25,6 +25,7 @@ Census as of 2026-07-10 (post legacy-pipeline deletion):
 | f22 | trailing comma in function params |
 | f23 | optional catch binding `catch {}` |
 | f31 | logical assignment `??=` `\|\|=` `&&=` |
+| f34 | `async` object methods (was a silent miscompile; now a loud parse error) |
 
 ## Runtime/stdlib gaps — 4
 
@@ -35,14 +36,14 @@ Census as of 2026-07-10 (post legacy-pipeline deletion):
 | f14 | `Object.entries` / `values` / `fromEntries` |
 | f32 | `globalThis` |
 
-## Behavioral divergences (bugs) — 4
+## Behavioral divergences — ALL FIXED (2026-07-10)
 
-| probe | divergence |
-|---|---|
-| f20 | `__proto__:` in an object literal doesn't set the prototype |
-| f24 | `"aAa".replace(/a/gi, "x")` → `"xAx"` (ignoreCase lost when combined with global) |
-| f26 | `generator.return()` not implemented in the runtime |
-| f34 | **HAZARD**: `async m() {}` object method PARSES but silently miscompiles (no parse error, wrong behavior) — should be rejected until async lands |
+| probe | divergence | fix |
+|---|---|---|
+| f20 | `__proto__:` literal didn't set the prototype | lowered as SetPrototypeOf (`_ejs_object_literal_set_proto`); suite test object19.js |
+| f24 | regex `i`/`m` flags parsed but never passed to PCRE | `PCRE_CASELESS`/`PCRE_MULTILINE` wired through (and the compiler no longer drops `y`/`u`); suite test regexp-flags1.js |
+| f26 | `generator.return()` unimplemented (and `return x` in a generator body lost its value; next/throw on a completed generator resumed a dead context) | return-sentinel unwind through the body (finally runs), completed-state tracking; suite test generator22.js |
+| f34 | `async m() {}` parsed and silently miscompiled | root cause was `tolerant: true` parsing — partial ASTs from ANY syntax error were silently compiled; tolerant mode removed, parse errors are loud now (this moves f34 to the parser-gap column) |
 
 ## Already working (17)
 

@@ -227,8 +227,11 @@ RegExpInitialize(ejsval obj, ejsval pattern, ejsval flags) {
     const char *pcre_error;
     int pcre_erroffset;
 
+    int pcre_options = PCRE_UTF16 | PCRE_NO_UTF16_CHECK;
+    if (re->ignoreCase) pcre_options |= PCRE_CASELESS;
+    if (re->multiline)  pcre_options |= PCRE_MULTILINE;
     re->compiled_pattern = pcre16_compile(chars,
-                                          PCRE_UTF16 | PCRE_NO_UTF16_CHECK,
+                                          pcre_options,
                                           &pcre_error, &pcre_erroffset,
                                           pcre16_tables);
 

@@ -1048,6 +1048,16 @@ _ejs_object_set_prototype_of (ejsval obj, ejsval proto)
     return _ejs_Object_setPrototypeOf(_ejs_undefined, &undef_this, 2, args, _ejs_undefined);
 }
 
+// `__proto__: value` in an object literal: set the prototype when value
+// is an object or null, silently ignore anything else
+// (PropertyDefinitionEvaluation / B.3.1)
+ejsval
+_ejs_object_literal_set_proto (ejsval obj, ejsval proto)
+{
+    if (!EJSVAL_IS_OBJECT(proto) && !EJSVAL_IS_NULL(proto)) return obj;
+    return _ejs_object_set_prototype_of (obj, proto);
+}
+
 // ECMA262: 19.1.2.6 Object.getOwnPropertyDescriptor ( O, P ) 
 static EJS_NATIVE_FUNC(_ejs_Object_getOwnPropertyDescriptor) {
     ejsval O = _ejs_undefined;

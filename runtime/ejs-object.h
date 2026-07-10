@@ -286,6 +286,7 @@ extern EJS_NATIVE_FUNC(_ejs_Object_prototype_toString);
 
 // exposed so we can call the native implementation during class creation
 ejsval _ejs_object_set_prototype_of (ejsval obj, ejsval proto);
+ejsval _ejs_object_literal_set_proto (ejsval obj, ejsval proto);
 
 ejsval _ejs_object_create (ejsval proto);
 
