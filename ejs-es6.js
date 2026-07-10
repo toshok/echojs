@@ -220,10 +220,15 @@ let args = {
         handlerArgc: 0,
         help: "debug output.  more instances of this flag increase the amount of spew.",
     },
+    "--dump-after": {
+        handler: add_debug_after_pass,
+        handlerArgc: 1,
+        help: "dump the AST after the named pass; `--dump-after eir` dumps the lowered EIR module(s)",
+    },
     "--debug-after": {
         handler: add_debug_after_pass,
         handlerArgc: 1,
-        help: "dump the IR tree after the named pass",
+        help: "deprecated alias for --dump-after",
     },
     "-o": {
         option: "output_filename",
