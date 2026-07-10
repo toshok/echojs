@@ -109,6 +109,7 @@ let options = {
     import_variables: [],
     srcdir: false,
     ir: false,
+    ir_toplevel: false,
     ir_exclude: [],
     ir_exclude_fn: [],
     stdout_writer: new Writer(process.stdout),
@@ -190,6 +191,10 @@ let args = {
     "--ir": {
         flag: "ir",
         help: "use the EIR (SSA) pipeline for eligible functions, falling back per function.",
+    },
+    "--ir-toplevel": {
+        flag: "ir_toplevel",
+        help: "(bring-up) with --ir, lower whole modules — toplevel included — as one EIR unit, falling back per module.",
     },
     "--ir-exclude": {
         handler: (arg) => {
