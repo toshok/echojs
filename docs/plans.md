@@ -87,6 +87,27 @@ preserved** — destructuring returns, options objects, tuple-ish arrays.
    parser layer (type-stripping or a parser swap). If it happens, TS
    type annotations are a natural seed for the EIR type lattice above.
 
+## JS Modernization (after the TypeScript port)
+
+JavaScript hasn't stood still while this project was on hiatus: there
+are new language features to catch up on (optional chaining, nullish
+coalescing, class fields, async/await, BigInt, ...), and the kangax
+conformance suite this repo tests against has been superseded — tc39
+maintains test262, which is far larger. The effort:
+
+- Inventory the gap: an initial 34-probe census lives in
+  `test/modernization/` (see its README). Headline: 13 parser gaps
+  (optional chaining, `??`, class fields, async/await, `**`, object
+  spread/rest, BigInt, ...), 4 stdlib gaps (padStart/flat/
+  Object.entries/globalThis), 4 behavioral bugs (`__proto__:` literal,
+  `/gi` replace, `generator.return()`, and a hazard: `async m()`
+  object methods parse but silently miscompile). A test262 subset
+  probe should follow for exhaustiveness.
+- Implement in payoff order; wire probes into CI as they green.
+
+Sequenced after the TypeScript port — new-feature work is safer with
+types underneath it.
+
 ## Modules and linking
 
 Static linking remains the regime (no dynamic loading planned).
@@ -104,5 +125,3 @@ Static linking remains the regime (no dynamic loading planned).
 - The stage ladder (`//:test-eir`, `//:test-stage0..3`) IS the EIR
   matrix now; the `-ir`/`-legacy` target duplicates are gone.
 - Broader coverage generally, as a prerequisite for the TS port.
-- Computed accessor keys (`{ get [k]() {} }`) need an ejsval-key
-  variant of the define-accessor runtime call to un-xfail object18.js.
