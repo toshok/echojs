@@ -8,11 +8,21 @@
 
 import { TransformPass, VisitResult } from "../node-visitor";
 import type * as e from "../estree";
+import type { CompilerOptions } from "../options";
 
 export class HoistFuncDecls extends TransformPass {
     // the current function's hoisted declarations; a stack because
     // functions nest (visitFunction saves/restores around the recursion)
     private decls: Map<string, e.FunctionDeclaration> | null = null;
+
+    // explicit, so tsc doesn't synthesize `constructor() {
+    // super(...arguments); }` — spreading `arguments` used to trip a
+    // runtime bug (the arguments object's specops ToNumber'd Symbol
+    // keys, so the @@iterator lookup threw; fixed in ejs-arguments.c,
+    // but the compiler shouldn't gratuitously depend on it either)
+    constructor(options: CompilerOptions) {
+        super(options);
+    }
 
     override visitFunction(n: e.Function): VisitResult {
         const saved = this.decls;

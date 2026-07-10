@@ -75,6 +75,10 @@ _ejs_arguments_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
 {
     EJSArguments* arguments = EJSVAL_TO_ARGUMENTS(obj);
 
+    // symbol keys (@@iterator in particular — spreading `arguments`
+    // looks it up) can never be indices, and ToNumber on a symbol
+    // throws; they live in the ordinary property map
+    if (!EJSVAL_IS_SYMBOL(propertyName)) {
     // check if propertyName is an integer, or a string that we can convert to an int
     EJSBool is_index = EJS_FALSE;
     ejsval idx_val = ToNumber(propertyName);
@@ -88,11 +92,11 @@ _ejs_arguments_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
     }
 
     if (is_index) {
-        if (idx < 0 || idx > arguments->argc) {
-            printf ("getprop(%d) on an arguments, returning undefined\n", idx);
+        if (idx < 0 || idx >= arguments->argc) {
             return _ejs_undefined;
         }
         return arguments->args[idx];
+    }
     }
 
     // we also handle the length getter here
@@ -108,6 +112,8 @@ static EJSBool
 _ejs_arguments_specop_has_property (ejsval obj, ejsval propertyName)
 {
     EJSArguments* arguments = (EJSArguments*)EJSVAL_TO_OBJECT(obj);
+    if (EJSVAL_IS_SYMBOL(propertyName))
+        return _ejs_Object_specops.HasProperty (obj, propertyName);
     // check if propertyName is an integer, or a string that we can convert to an int
     ejsval idx_val = ToNumber(propertyName);
     int idx;
