@@ -20,21 +20,22 @@ half of LLVMIRVisitor). The plan, most of which has landed:
    `lib/eir/intrinsics.js`. Defaults/rest deliberately stay legacy-only:
    EIR's native handling is strictly better, and the passes die with the
    legacy pipeline.
-3. **Toplevel-as-EIR** (`--ir-toplevel`, in progress) — whole modules
-   (toplevel statements, import/export init, every nested function)
-   lower as one EIR unit; the legacy side keeps only module scaffolding.
-   The full test suite passes under the flag, and the compiler
-   self-compiles with all 60 of its modules lowering whole. Open: the
-   toplevel-built compiler must itself bootstrap (currently red in
-   `--ir` mode), and the remaining per-module fallbacks — labeled
-   statements, object-literal accessors, tagged templates,
-   new-with-spread — become native EIR features. Fallback then becomes
-   a compile error and the forwarding thunks die.
-4. **Flip the default** — `--ir` becomes the pipeline, `--legacy` sticks
-   around for one release, then new-cc/lambda-lift and the visitor
-   middle-end (~7k lines) are deleted. LLVMIRVisitor keeps only the
-   module scaffolding the EIR emitter borrows (module info/resolution,
-   accessors, atom and literal infrastructure).
+3. **Toplevel-as-EIR** — done. Whole modules (toplevel statements,
+   import/export init, every nested function) lower as one EIR unit;
+   the legacy side keeps only module scaffolding. The toplevel-built
+   compiler bootstraps and passes the full suite; labeled statements,
+   object-literal accessors, tagged templates and new-with-spread all
+   lower natively. Per-function candidate mode and its forwarding
+   thunks are gone: a module the toplevel can't own falls back to the
+   legacy pipeline whole, with a warning.
+4. **Flip the default** — done. EIR is the pipeline; `--legacy` selects
+   the old one for one release (CI keeps a `-legacy` target matrix
+   honest, including its own bootstrap). The stage2/stage3
+   byte-identity fixed point now runs under EIR self-compiles. After
+   the release window: delete new-cc/lambda-lift and the visitor
+   middle-end (~7k lines), keeping only the module scaffolding the EIR
+   emitter borrows (module info/resolution, accessors, atom and
+   literal infrastructure).
 
 A pleasant side effect so far: the EIR work has surfaced 21 latent
 compiler and runtime bugs, most with regression tests.

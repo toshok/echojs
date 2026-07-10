@@ -161,3 +161,46 @@ genrule(
     )
     for stage in ["1", "2", "3"]
 ]
+
+# the legacy pipeline sticks around for one release behind --legacy;
+# these targets keep it honest until it's deleted.  the plain stage
+# targets above now exercise the EIR default (including the
+# stage2/stage3 byte-identity fixed point under EIR self-compiles).
+genrule(
+    name = "test-stage0-legacy",
+    srcs = ["buck-test-stage.sh"],
+    out = "test-stage0-legacy.log",
+    cmd = 'bash $SRCDIR/buck-test-stage.sh "$(location :srcdir-tree)" ' +
+          '"$(location //lib:generated)" - 0 "$(location //test:files)" ' + llvm_bindir() +
+          " --legacy",
+)
+
+genrule(
+    name = "ejs.exe.stage2-legacy",
+    srcs = ["buck-stage.sh"],
+    out = "ejs.exe.stage2-legacy",
+    cmd = 'bash $SRCDIR/buck-stage.sh "$(location :srcdir-tree)" exe ' +
+          '"$(location :ejs.exe.stage1)" - ' + llvm_bindir() + " --legacy",
+)
+
+genrule(
+    name = "test-bootstrap-legacy",
+    srcs = ["buck-test-stage.sh"],
+    out = "test-bootstrap-legacy.log",
+    cmd = 'bash $SRCDIR/buck-test-stage.sh "$(location :srcdir-tree)" ' +
+          '"$(location //lib:generated)" "$(location :ejs.exe.stage2-legacy)" ' +
+          '2 "$(location //test:files)" ' + llvm_bindir() +
+          " --legacy",
+)
+
+[
+    genrule(
+        name = "test-stage" + stage + "-legacy",
+        srcs = ["buck-test-stage.sh"],
+        out = "test-stage" + stage + "-legacy.log",
+        cmd = 'bash $SRCDIR/buck-test-stage.sh "$(location :srcdir-tree)" ' +
+              '"$(location //lib:generated)" "$(location :ejs.exe.stage' + stage + ')" ' +
+              stage + ' "$(location //test:files)" ' + llvm_bindir() + " --legacy",
+    )
+    for stage in ["1", "2", "3"]
+]

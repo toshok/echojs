@@ -108,8 +108,11 @@ let options = {
     osx_min: "11.0",
     import_variables: [],
     srcdir: false,
-    ir: false,
-    ir_toplevel: false,
+    // the EIR (SSA) pipeline is the default: whole modules lower as one
+    // EIR unit, falling back to the legacy pipeline per module (with a
+    // warning) for anything it can't own yet.  --legacy turns it off.
+    ir: true,
+    ir_toplevel: true,
     ir_exclude: [],
     ir_exclude_fn: [],
     stdout_writer: new Writer(process.stdout),
@@ -188,13 +191,29 @@ let args = {
         flag: "quiet",
         help: "don't output anything during compilation except errors.",
     },
+    "--legacy": {
+        handler: () => {
+            options.ir = false;
+            options.ir_toplevel = false;
+        },
+        handlerArgc: 0,
+        help: "use the legacy (AST) compilation pipeline instead of EIR.  deprecated; one release only.",
+    },
     "--ir": {
-        flag: "ir",
-        help: "use the EIR (SSA) pipeline for eligible functions, falling back per function.",
+        handler: () => {
+            options.ir = true;
+            options.ir_toplevel = true;
+        },
+        handlerArgc: 0,
+        help: "use the EIR (SSA) pipeline (the default; undoes an earlier --legacy).",
     },
     "--ir-toplevel": {
-        flag: "ir_toplevel",
-        help: "(bring-up) with --ir, lower whole modules — toplevel included — as one EIR unit, falling back per module.",
+        handler: () => {
+            options.ir = true;
+            options.ir_toplevel = true;
+        },
+        handlerArgc: 0,
+        help: "alias for --ir (whole-module lowering is the only EIR mode).",
     },
     "--ir-exclude": {
         handler: (arg) => {
