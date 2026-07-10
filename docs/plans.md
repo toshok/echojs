@@ -3,11 +3,12 @@
 A living document; ordering within a section is roughly priority. See
 `EIRProposal.md` for the IR design itself.
 
-## Kill the legacy pipeline (in progress)
+## Kill the legacy pipeline (done)
 
-EIR (the block-argument SSA middle-end in `lib/eir/`) replaces the
+EIR (the block-argument SSA middle-end in `lib/eir/`) replaced the
 AST+intrinsics pipeline (new-cc, LambdaLift, the statement/expression
-half of LLVMIRVisitor). The plan, most of which has landed:
+half of LLVMIRVisitor). All four phases landed, and the legacy
+middle-end has been deleted outright:
 
 1. **Close the per-function gaps** — done. The self-hosted compiler
    lowers 424/424 candidate functions with zero fallbacks (try/finally,
@@ -28,17 +29,21 @@ half of LLVMIRVisitor). The plan, most of which has landed:
    lower natively. Per-function candidate mode and its forwarding
    thunks are gone: a module the toplevel can't own falls back to the
    legacy pipeline whole, with a warning.
-4. **Flip the default** — done. EIR is the pipeline; `--legacy` selects
-   the old one for one release (CI keeps a `-legacy` target matrix
-   honest, including its own bootstrap). The stage2/stage3
-   byte-identity fixed point now runs under EIR self-compiles. After
-   the release window: delete new-cc/lambda-lift and the visitor
-   middle-end (~7k lines), keeping only the module scaffolding the EIR
-   emitter borrows (module info/resolution, accessors, atom and
-   literal infrastructure).
+4. **Flip the default, then delete** — done. EIR is the only pipeline.
+   A module that doesn't lower is a compile error; the remaining
+   source-reachable unsupported constructs (`with`, delete-of-a-
+   variable, computed accessor keys — which no pipeline ever compiled)
+   are each asserted by a unit test, and everything else is guarded
+   defensively behind the parser or the pre-EIR desugars. new-cc,
+   LambdaLift, exitable-scope, the visitor middle-end and eleven
+   legacy-only desugar passes are gone (~9k lines); LLVMIRVisitor keeps
+   only the module scaffolding the EIR emitter borrows (module
+   info/resolution, atoms, literal infrastructure). Export accessors
+   are built directly as EIR. The stage2/stage3 byte-identity fixed
+   point runs under EIR self-compiles.
 
-A pleasant side effect so far: the EIR work has surfaced 21 latent
-compiler and runtime bugs, most with regression tests.
+A pleasant side effect: the EIR work surfaced 27 latent compiler and
+runtime bugs, most with regression tests.
 
 ## Optimization phase (after the legacy kill)
 
@@ -96,6 +101,8 @@ Static linking remains the regime (no dynamic loading planned).
 
 ## Testing / CI
 
-- Dedicated CI steps for the `--ir-toplevel` configuration (the
-  buck-stage machinery already takes extra flags).
+- The stage ladder (`//:test-eir`, `//:test-stage0..3`) IS the EIR
+  matrix now; the `-ir`/`-legacy` target duplicates are gone.
 - Broader coverage generally, as a prerequisite for the TS port.
+- Computed accessor keys (`{ get [k]() {} }`) need an ejsval-key
+  variant of the define-accessor runtime call to un-xfail object18.js.
