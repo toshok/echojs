@@ -1,27 +1,43 @@
+/* -*- Mode: typescript; indent-tabs-mode: nil; tab-width: 4 -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=typescript:
+ */
+
 import * as os from "@node-compat/os";
 import { ABI } from "./abi";
 import { SRetABI } from "./sret-abi";
 
+export interface TripleParts {
+    arch: string;
+    vendor: string;
+    os: string;
+    env?: string | undefined;
+}
+
 export class Triple {
-    constructor({ arch, vendor, os, env }) {
+    arch: string;
+    vendor: string;
+    os: string;
+    env: string | undefined;
+
+    constructor({ arch, vendor, os, env }: TripleParts) {
         this.arch = arch;
         this.vendor = vendor;
         this.os = os;
         this.env = env;
     }
 
-    toString() {
+    toString(): string {
         const envSuffix = this.env ? `-${this.env}` : "";
         return `${this.arch}-${this.vendor}-${this.os}${envSuffix}`;
     }
 
     // same as toString but we drop the vendor
-    toShortString() {
+    toShortString(): string {
         const envSuffix = this.env ? `-${this.env}` : "";
         return `${this.arch}-${this.os}${envSuffix}`;
     }
 
-    isLittleEndian() {
+    isLittleEndian(): boolean {
         switch (this.arch) {
             case "x86_64":
             case "x86":
@@ -34,7 +50,7 @@ export class Triple {
         }
     }
 
-    pointerSize() {
+    pointerSize(): number {
         switch (this.arch) {
             case "x86_64":
             case "arm64":
@@ -54,7 +70,7 @@ export class Triple {
     // computes different field offsets than the C compiler does for the
     // runtime (e.g. EJSModule.exports), corrupting every module slot
     // access and blinding the GC to module-referenced objects.
-    llvmTriple() {
+    llvmTriple(): string {
         switch (this.os) {
             case "macos":
                 return `${this.arch}-apple-macosx`;
@@ -69,7 +85,7 @@ export class Triple {
 
     // must match what clang uses for the runtime's target (see llvmTriple
     // above for why).
-    dataLayout() {
+    dataLayout(): string {
         if (this.os === "macos" || this.os === "ios") {
             if (this.arch === "arm64" || this.arch === "aarch64")
                 return "e-m:o-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-n32:64-S128-Fn32";
@@ -80,7 +96,7 @@ export class Triple {
         return "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128";
     }
 
-    llcArch() {
+    llcArch(): string {
         switch (this.arch) {
             case "x86_64":
                 return "x86-64";
@@ -97,7 +113,7 @@ export class Triple {
         }
     }
 
-    clangArch() {
+    clangArch(): string {
         switch (this.arch) {
             case "x86_64":
                 return "x86_64";
@@ -114,7 +130,7 @@ export class Triple {
         }
     }
 
-    abi() {
+    abi(): ABI {
         switch (this.arch) {
             case "x86_64":
             case "aarch64":
@@ -128,14 +144,14 @@ export class Triple {
         }
     }
 
-    static fromProcess() {
+    static fromProcess(): Triple {
         let vendor = "unknown";
 
-        let arch = os.arch();
+        let arch: string = os.arch();
         if (arch === "x64") arch = "x86_64";
         if (arch === "ia32") arch = "x86";
 
-        let _os = os.platform();
+        let _os: string = os.platform();
         if (_os === "darwin") {
             vendor = "apple";
             _os = "macos";
@@ -144,38 +160,36 @@ export class Triple {
         return new Triple({ arch, vendor, os: _os });
     }
 
-    static fromString(str) {
-        let split = str.split("-");
-        let arch, vendor, os, env;
-        if (split.length == 2) {
-            arch = "unknown";
-            [vendor, os] = split;
-        } else if (split.length == 3) {
-            [arch, vendor, os] = split;
-        } else if (split.length == 4) {
-            [arch, vendor, os, env] = split;
-        } else {
-            throw new Error(`invalid triple: ${str}`);
+    static fromString(str: string): Triple {
+        const split = str.split("-");
+        if (split.length === 2) {
+            const [vendor, os] = split;
+            return new Triple({ arch: "unknown", vendor: vendor!, os: os! });
+        } else if (split.length === 3) {
+            const [arch, vendor, os] = split;
+            return new Triple({ arch: arch!, vendor: vendor!, os: os! });
+        } else if (split.length === 4) {
+            const [arch, vendor, os, env] = split;
+            return new Triple({ arch: arch!, vendor: vendor!, os: os!, env });
         }
-        return new Triple({ arch, vendor, os, env });
+        throw new Error(`invalid triple: ${str}`);
     }
 
-    static fromShortString(str) {
-        let split = str.split("-");
-        let arch, vendor, os, env;
-        if (split.length == 2) {
-            [arch, os] = split;
-        } else if (split.length == 3) {
-            [arch, os, env] = split;
+    static fromShortString(str: string): Triple {
+        const split = str.split("-");
+        let arch: string, os: string, env: string | undefined;
+        if (split.length === 2) {
+            [arch, os] = split as [string, string];
+        } else if (split.length === 3) {
+            [arch, os, env] = split as [string, string, string];
         } else {
             throw new Error(`invalid triple short string: ${str}`);
         }
         // try and fill in the vendor
-        if (os === "macos" || os === "ios" || os === "tvos" || os === "watchos") {
-            vendor = "apple";
-        } /* if (os === "linux") */ else {
-            vendor = "unknown";
-        }
+        const vendor =
+            os === "macos" || os === "ios" || os === "tvos" || os === "watchos"
+                ? "apple"
+                : "unknown";
         return new Triple({ arch, vendor, os, env });
     }
 }

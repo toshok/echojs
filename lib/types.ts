@@ -1,35 +1,42 @@
-/* -*- Mode: js2; tab-width: 4; indent-tabs-mode: nil; -*-
- * vim: set ts=4 sw=4 et tw=99 ft=js:
+/* -*- Mode: typescript; indent-tabs-mode: nil; tab-width: 4 -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=typescript:
  */
+
 import * as llvm from "@llvm";
 
-export let String = llvm.Type.getInt8Ty().pointerTo();
-export let Int8Pointer = String;
-export let Bool = llvm.Type.getInt8Ty();
-export let Void = llvm.Type.getVoidTy();
-export let JSChar = llvm.Type.getInt16Ty();
-export let Int1 = llvm.Type.getInt1Ty();
-export let Int32 = llvm.Type.getInt32Ty();
-export let Int64 = llvm.Type.getInt64Ty();
-export let Double = llvm.Type.getDoubleTy();
+export const String = llvm.Type.getInt8Ty().pointerTo();
+export const Int8Pointer = String;
+export const Bool = llvm.Type.getInt8Ty();
+export const Void = llvm.Type.getVoidTy();
+export const JSChar = llvm.Type.getInt16Ty();
+export const Int1 = llvm.Type.getInt1Ty();
+export const Int32 = llvm.Type.getInt32Ty();
+export const Int64 = llvm.Type.getInt64Ty();
+export const Double = llvm.Type.getDoubleTy();
 
-export let EjsLandingPad = llvm.StructType.create("EjsLandingPad", [Int8Pointer, Int32]);
-export let EjsValueLayout = llvm.StructType.create("EjsValueType", [Int64]);
-export let EjsValue = EjsValueLayout;
+export const EjsLandingPad = llvm.StructType.create("EjsLandingPad", [Int8Pointer, Int32]);
+export const EjsValueLayout = llvm.StructType.create("EjsValueType", [Int64]);
+export const EjsValue: llvm.Type = EjsValueLayout;
 
-export let EjsClosureEnv = llvm.StructType.create("struct.EJSClosureEnv", [
+export const EjsClosureEnv = llvm.StructType.create("struct.EJSClosureEnv", [
     Int32,
     Int32,
     llvm.ArrayType.get(EjsValueLayout, 1),
 ]);
-export let EjsPropIterator = EjsValue;
-//export let EjsClosureFunc  = llvm.FunctionType.get(EjsValue, [EjsValue, EjsValue, Int32, EjsValue.pointerTo()]).pointerTo();
-export let EjsClosureFunc = llvm.FunctionType.get(
+export const EjsPropIterator = EjsValue;
+export const EjsClosureFunc = llvm.FunctionType.get(
     Void,
     [EjsValue.pointerTo(), EjsValue, EjsValue.pointerTo(), Int32, EjsValue.pointerTo(), Int32],
     EjsValue
 ).pointerTo();
-export let getEjsClosureFunc = (abi) =>
+
+// the piece of the ABI interface this module needs (abi.ts imports this
+// module, so the full type would be a cycle)
+export interface FunctionTypeMaker {
+    createFunctionType(ret: llvm.Type, params: llvm.Type[]): llvm.FunctionType;
+}
+
+export const getEjsClosureFunc = (abi: FunctionTypeMaker): llvm.Type =>
     abi
         .createFunctionType(EjsValue, [
             EjsValue,
@@ -40,11 +47,11 @@ export let getEjsClosureFunc = (abi) =>
         ])
         .pointerTo();
 
-export let EjsPrimString = llvm.StructType.create("EjsPrimString", [Int32, Int32, Int64, Int64]); // XXX not the real structure but it should be good
+export const EjsPrimString = llvm.StructType.create("EjsPrimString", [Int32, Int32, Int64, Int64]); // XXX not the real structure but it should be good
 
-export let EjsSpecops = llvm.StructType.create("struct.EJSSpecOps", []); // XXX
+export const EjsSpecops = llvm.StructType.create("struct.EJSSpecOps", []); // XXX
 
-export let EjsPropertyMap = llvm.StructType.create("struct.EJSPropertyMap", [
+export const EjsPropertyMap = llvm.StructType.create("struct.EJSPropertyMap", [
     JSChar.pointerTo(), // _EJSPropertyMapSlot** slots
     JSChar.pointerTo(), // _EJSPropertyMapSlot* first_insert
     JSChar.pointerTo(), // _EJSPropertyMapSlot* last_insert
@@ -52,11 +59,13 @@ export let EjsPropertyMap = llvm.StructType.create("struct.EJSPropertyMap", [
     Int32, // int inuse;
 ]);
 
-export let EjsObject = null;
-export let EjsFunction = null;
-export let EjsModule = null;
+// initialized by initTypes() once the target's pointer size is known;
+// reading them before that is a bug (they trap as undefined at runtime)
+export let EjsObject: llvm.StructType;
+export let EjsFunction: llvm.StructType;
+export let EjsModule: llvm.StructType;
 
-function CreateModuleTy(suffix, num_exports) {
+function CreateModuleTy(suffix: string, num_exports: number): llvm.StructType {
     return llvm.StructType.create(`struct.EJSModule${suffix}`, [
         EjsObject, // EJSObject obj;
         String, // const char* module_name
@@ -65,12 +74,12 @@ function CreateModuleTy(suffix, num_exports) {
     ]);
 }
 
-export function getModuleSpecificType(module_name, num_exports) {
+export function getModuleSpecificType(module_name: string, num_exports: number): llvm.StructType {
     return CreateModuleTy(`_${module_name}`, num_exports);
 }
 
-export function initTypes(is32bit) {
-    // EJSObject's struct type depends no the pointer size of the
+export function initTypes(is32bit: boolean): void {
+    // EJSObject's struct type depends on the pointer size of the
     // architecture.  on 32 bit platforms (XXX or maybe just x86?)
     // clang inserts 4 bytes of padding at the end.  we therefore need
     // to delay initialization of EJSObject (and therefore its uses)
@@ -107,33 +116,33 @@ export function initTypes(is32bit) {
 // exception types
 
 // the c++ typeinfo for our exceptions
-export let EjsExceptionTypeInfo = llvm.StructType.create("EjsExceptionTypeInfoType", [
+export const EjsExceptionTypeInfo = llvm.StructType.create("EjsExceptionTypeInfoType", [
     Int8Pointer,
     Int8Pointer,
     Int8Pointer,
 ]).pointerTo();
 
-export function takes_builtins(n) {
+export function takes_builtins(n: llvm.EjsFunction): llvm.EjsFunction {
     n.takes_builtins = true;
     return n;
 }
 
-export function only_reads_memory(n) {
+export function only_reads_memory(n: llvm.EjsFunction): llvm.EjsFunction {
     n.setOnlyReadsMemory();
     return n;
 }
 
-export function does_not_access_memory(n) {
+export function does_not_access_memory(n: llvm.EjsFunction): llvm.EjsFunction {
     n.setDoesNotAccessMemory();
     return n;
 }
 
-export function does_not_throw(n) {
+export function does_not_throw(n: llvm.EjsFunction): llvm.EjsFunction {
     n.setDoesNotThrow();
     return n;
 }
 
-export function returns_ejsval_bool(n) {
+export function returns_ejsval_bool(n: llvm.EjsFunction): llvm.EjsFunction {
     n.returns_ejsval_bool = true;
     return n;
 }

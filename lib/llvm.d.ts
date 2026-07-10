@@ -66,7 +66,9 @@ declare module "@llvm" {
     };
 
     const FunctionType: {
-        get(ret: Type, params: Type[]): FunctionType;
+        // the 3-arg form is jsllvm's sret shape: the real return value
+        // is written through an sret pointer while `ret` is void
+        get(ret: Type, params: Type[], sret?: Type): FunctionType;
     };
 
     const ArrayType: {
@@ -93,8 +95,11 @@ declare module "@llvm" {
         setPersonality(fn: EjsFunction): void;
         // compiler bookkeeping
         doesNotThrow?: boolean;
+        doesNotAccessMemory?: boolean;
         onlyReadsMemory?: boolean;
         returns_ejsval_bool?: boolean;
+        takes_builtins?: boolean;
+        entry_bb?: BasicBlock;
     }
 
     interface BasicBlock {
@@ -142,6 +147,8 @@ declare module "@llvm" {
         setDoesNotAccessMemory(): void;
         setDoesNotThrow(): void;
         setStructRet(): void;
+        // compiler bookkeeping (see ABI.forwardCalleeAttributes)
+        _ejs_returns_ejsval_bool?: boolean;
     }
 
     interface InvokeInst extends CallInst {}
