@@ -1,0 +1,16 @@
+{
+    // Editor/IDE configuration.  The build's tsc invocation lives in
+    // lib/buck-gen-tsjs.sh with the SAME flags — keep them in sync.
+    "compilerOptions": {
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "noImplicitOverride": true,
+        "noEmitOnError": true,
+        "target": "es2016",
+        "module": "esnext",
+        "moduleResolution": "bundler",
+        "types": ["node"],
+        "noEmit": true
+    },
+    "include": ["ejs-es6.ts", "lib/**/*.ts"]
+}

@@ -112,6 +112,20 @@ maintains test262, which is far larger. The effort:
   maintained ESTree-compatible parser (acorn) behind the same
   interface; escodegen/estraverse/esutils can come from npm as-is if
   the local patches prove to be build-glue only (diff them first).
+  Parser choice: keep the slot interface-shaped (the compiler consumes
+  ESTree; parser behind one module) with **@babel/parser + its estree
+  plugin as the default** — it's where stage proposals land first
+  (decorators, pipeline, pattern matching as enableable plugins), which
+  we want access to; it's zero-dependency and bundles flat for
+  vendoring. Acorn remains the cheap-swap alternative. The MAAM
+  analysis framework consumes ESTree and has no dependency on any
+  particular parser (it happens to use acorn today only as an ESTree
+  producer) — so the compiler/analysis contract is the ESTree shape of
+  the post-desugar tree, and the parser choice is free on both sides.
+  Self-hosting wrinkle: either
+  parser's own source is newer JS than echojs parses, so vendor a
+  mechanically-regenerable transpiled build (babel to the supported
+  subset), shrinking the transpile step as modernization features land.
 
 Sequenced after the TypeScript port — new-feature work is safer with
 types underneath it.

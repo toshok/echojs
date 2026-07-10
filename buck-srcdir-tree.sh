@@ -22,9 +22,9 @@ ICC_O="$6"         # //runtime:platform-icc-o
 PCRE_A="$7"        # //external-deps:pcre-build[lib]
 DC_A="$8"          # //external-deps:double-conversion-build
 EXT_JS="$9"        # //external-deps:compiler-js
-LIB_JS="${10}"     # //lib:es6-srcs
+LIB_JS="${10}"     # //lib:tsjs (compiled+passed-through compiler JS)
 HOST_CONFIG="${11}" # //lib:host-config.js
-EJS_MAIN="${12}"   # //:ejs-es6.js
+EJS_MAIN="${12}"   # //lib:tsjs (again; driver at its root)
 NC_EJS="${13}"     # //node-compat:node-compat.ejs
 NC_A="${14}"       # //node-compat:node-compat[static]
 LLVM_EJS="${15}"   # //ejs-llvm:ejs-llvm.ejs
@@ -68,11 +68,11 @@ mkdir -p "$ROOT/external-deps/double-conversion-$OSNAME/double-conversion"
 cp "$DC_A" "$ROOT/external-deps/double-conversion-$OSNAME/double-conversion/libdouble-conversion.a"
 cp -RL "$EXT_JS"/. "$ROOT/external-deps/"
 
-# compiler sources
+# compiler sources (the tsjs tree: tsc output + passed-through JS)
 mkdir -p "$ROOT/lib"
-cp -RL "$LIB_JS"/. "$ROOT/lib/"
+cp -RL "$LIB_JS/lib"/. "$ROOT/lib/"
 cp "$HOST_CONFIG" "$ROOT/lib/host-config.js"
-cp "$EJS_MAIN" "$ROOT/ejs-es6.js"
+cp "$EJS_MAIN/ejs-es6.js" "$ROOT/ejs-es6.js"
 
 # native modules
 mkdir -p "$ROOT/node-compat"

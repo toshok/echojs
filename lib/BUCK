@@ -10,19 +10,29 @@ genrule(
     visibility = ["PUBLIC"],
 )
 
-# The ES6 compiler sources as they are staged into the --srcdir tree for
-# self-compilation (host-config.js is added there separately since it is
-# generated).
-filegroup(
-    name = "es6-srcs",
+# The compiler as plain ES-module JS: .ts sources compiled through tsc
+# (strict), .js sources copied through unchanged during the incremental
+# TypeScript port.  Layout: $OUT/ejs-es6.js + $OUT/lib/**.js.  This is
+# what stage1+ self-compiles (via //:srcdir-tree) and what the babel
+# step below consumes for the node-hosted stage0.
+genrule(
+    name = "tsjs",
     srcs = glob(
         [
             "*.js",
+            "*.ts",
             "passes/*.js",
+            "passes/*.ts",
             "eir/*.js",
+            "eir/*.ts",
         ],
         exclude = ["host-config.js"],
-    ),
+    ) + [
+        "buck-gen-tsjs.sh",
+        "//:ejs-es6.js",
+    ],
+    out = "tsjs",
+    cmd = "bash $SRCDIR/buck-gen-tsjs.sh",
     visibility = ["PUBLIC"],
 )
 
@@ -31,20 +41,13 @@ filegroup(
 # Layout matches lib/generated/ from the Makefile build.
 genrule(
     name = "generated",
-    srcs = glob(
-        [
-            "*.js",
-            "passes/*.js",
-            "eir/*.js",
-        ],
-        exclude = ["host-config.js"],
-    ) + [
+    srcs = [
         "buck-gen-js.sh",
         ":host-config.js",
-        "//:ejs-es6.js",
+        ":tsjs",
         "//external-deps:compiler-js",
     ],
     out = "generated",
-    cmd = "bash $SRCDIR/buck-gen-js.sh",
+    cmd = "bash $SRCDIR/buck-gen-js.sh $(location :tsjs)",
     visibility = ["PUBLIC"],
 )

@@ -37,9 +37,9 @@ genrule(
           ' "$(location //external-deps:pcre-build[lib])"' +
           ' "$(location //external-deps:double-conversion-build)"' +
           ' "$(location //external-deps:compiler-js)"' +
-          ' "$(location //lib:es6-srcs)"' +
+          ' "$(location //lib:tsjs)"' +
           ' "$(location //lib:host-config.js)"' +
-          ' "$(location :ejs-es6.js)"' +
+          ' "$(location //lib:tsjs)"' +
           ' "$(location //node-compat:node-compat.ejs)"' +
           ' "$(location //node-compat:node-compat[static])"' +
           ' "$(location //ejs-llvm:ejs-llvm.ejs)"' +
