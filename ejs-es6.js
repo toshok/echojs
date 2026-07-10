@@ -184,11 +184,6 @@ let args = {
         flag: "quiet",
         help: "don't output anything during compilation except errors.",
     },
-    "--ir": {
-        handler: () => {},
-        handlerArgc: 0,
-        help: "no-op; EIR (SSA) is the only pipeline.  accepted for one release.",
-    },
     "-I": {
         handler: add_import_variable,
         handlerArgc: 1,

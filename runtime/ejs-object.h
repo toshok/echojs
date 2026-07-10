@@ -249,6 +249,7 @@ void _ejs_propertymap_foreach_property (EJSPropertyMap *map, EJSPropertyDescFunc
 
 EJSBool _ejs_object_define_value_property (ejsval obj, ejsval key, ejsval value, uint32_t flags);
 EJSBool _ejs_object_define_accessor_property (ejsval obj, ejsval key, ejsval get, ejsval set, uint32_t flags);
+EJSBool _ejs_object_define_accessor_property_desc (ejsval obj, ejsval key, ejsval get, ejsval set, uint32_t flags);
 
 ejsval _ejs_object_setprop (ejsval obj, ejsval key, ejsval value);
 ejsval _ejs_object_getprop (ejsval obj, ejsval key);

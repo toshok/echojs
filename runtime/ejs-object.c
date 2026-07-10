@@ -890,6 +890,18 @@ _ejs_object_define_accessor_property (ejsval obj, ejsval key, ejsval get, ejsval
     return OP(_obj,DefineOwnProperty)(obj, key, &desc, EJS_FALSE);
 }
 
+// like _ejs_object_define_accessor_property, but the caller's flags say
+// which of get/set are present — a partial descriptor merges into an
+// existing accessor property (`{ get [k]() {}, set [k](v) {} }` defines
+// the getter and setter in two separate evaluations)
+EJSBool
+_ejs_object_define_accessor_property_desc (ejsval obj, ejsval key, ejsval get, ejsval set, uint32_t flags)
+{
+    EJSObject *_obj = EJSVAL_TO_OBJECT(obj);
+    EJSPropertyDesc desc = { .getter = get, .setter = set, .flags = flags };
+    return OP(_obj,DefineOwnProperty)(obj, key, &desc, EJS_FALSE);
+}
+
 
 ejsval
 _ejs_object_setprop_utf8 (ejsval val, const char *key, ejsval value)

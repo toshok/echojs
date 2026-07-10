@@ -1,5 +1,4 @@
 // generator: babel-node
-// xfail: XXX
 
 function test() {
     var x = "y",
