@@ -108,13 +108,6 @@ let options = {
     osx_min: "11.0",
     import_variables: [],
     srcdir: false,
-    // the EIR (SSA) pipeline is the default: whole modules lower as one
-    // EIR unit, falling back to the legacy pipeline per module (with a
-    // warning) for anything it can't own yet.  --legacy turns it off.
-    ir: true,
-    ir_toplevel: true,
-    ir_exclude: [],
-    ir_exclude_fn: [],
     stdout_writer: new Writer(process.stdout),
 };
 
@@ -191,43 +184,10 @@ let args = {
         flag: "quiet",
         help: "don't output anything during compilation except errors.",
     },
-    "--legacy": {
-        handler: () => {
-            options.ir = false;
-            options.ir_toplevel = false;
-        },
-        handlerArgc: 0,
-        help: "use the legacy (AST) compilation pipeline instead of EIR.  deprecated; one release only.",
-    },
     "--ir": {
-        handler: () => {
-            options.ir = true;
-            options.ir_toplevel = true;
-        },
+        handler: () => {},
         handlerArgc: 0,
-        help: "use the EIR (SSA) pipeline (the default; undoes an earlier --legacy).",
-    },
-    "--ir-toplevel": {
-        handler: () => {
-            options.ir = true;
-            options.ir_toplevel = true;
-        },
-        handlerArgc: 0,
-        help: "alias for --ir (whole-module lowering is the only EIR mode).",
-    },
-    "--ir-exclude": {
-        handler: (arg) => {
-            options.ir_exclude = options.ir_exclude.concat(arg.split(","));
-        },
-        handlerArgc: 1,
-        help: "comma-separated filename substrings to exclude from the EIR pipeline (debugging).",
-    },
-    "--ir-exclude-fn": {
-        handler: (arg) => {
-            options.ir_exclude_fn = options.ir_exclude_fn.concat(arg.split(","));
-        },
-        handlerArgc: 1,
-        help: "comma-separated function-name substrings to exclude from the EIR pipeline (debugging).",
+        help: "no-op; EIR (SSA) is the only pipeline.  accepted for one release.",
     },
     "-I": {
         handler: add_import_variable,
