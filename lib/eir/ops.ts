@@ -1,5 +1,5 @@
-/* -*- Mode: js2; indent-tabs-mode: nil; tab-width: 4; js2-indent-offset: 4; js2-basic-offset: 4; -*-
- * vim: set ts=4 sw=4 et tw=99 ft=js:
+/* -*- Mode: typescript; indent-tabs-mode: nil; tab-width: 4 -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=typescript:
  */
 
 // The EIR opcode set and its effect table.  See EIRProposal.md.
@@ -16,7 +16,19 @@ export const Effect = {
     THROW: 1 << 2, // may throw
     GC: 1 << 3, // may allocate / trigger a collection
     CALL: 1 << 4, // may reenter arbitrary JS
-};
+} as const;
+
+export interface OpInfo {
+    // fixed operand count, or -1 for variadic
+    arity: number;
+    effects: number;
+    // names of immediate (non-value) attributes the instruction carries
+    imms?: readonly string[];
+    // ends a block unconditionally
+    terminator?: boolean;
+    // terminates its block when it carries explicit normal/unwind targets
+    may_terminate?: boolean;
+}
 
 const E = Effect;
 
@@ -173,15 +185,27 @@ export const OPS = {
 
     // block parameter (not written by user code; created by the builder)
     blockparam: { arity: 0, effects: E.NONE },
-};
+} as const satisfies Record<string, OpInfo>;
 
-export function opInfo(op) {
-    let info = OPS[op];
-    if (!info) throw new Error(`unknown EIR opcode '${op}'`);
-    return info;
+export type OpName = keyof typeof OPS;
+
+export function isOpName(op: string): op is OpName {
+    return Object.prototype.hasOwnProperty.call(OPS, op);
 }
 
-export function isTerminator(inst) {
+export function opInfo(op: string): OpInfo {
+    if (!isOpName(op)) throw new Error(`unknown EIR opcode '${op}'`);
+    return OPS[op];
+}
+
+// the structural slice of Inst that terminator-ness depends on (ir.ts
+// imports from here, so this module can't import Inst without a cycle)
+export interface InstLike {
+    op: string;
+    targets?: readonly object[] | null;
+}
+
+export function isTerminator(inst: InstLike): boolean {
     let info = opInfo(inst.op);
     if (info.terminator) return true;
     // any may-throw instruction with explicit control-flow targets (a
@@ -190,10 +214,10 @@ export function isTerminator(inst) {
     return false;
 }
 
-export function mayThrow(op) {
+export function mayThrow(op: string): boolean {
     return (opInfo(op).effects & Effect.THROW) !== 0;
 }
 
-export function isPure(op) {
+export function isPure(op: string): boolean {
     return opInfo(op).effects === Effect.NONE && !opInfo(op).terminator;
 }

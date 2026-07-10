@@ -1,67 +1,66 @@
-/* -*- Mode: js2; indent-tabs-mode: nil; tab-width: 4; js2-indent-offset: 4; js2-basic-offset: 4; -*-
- * vim: set ts=4 sw=4 et tw=99 ft=js:
+/* -*- Mode: typescript; indent-tabs-mode: nil; tab-width: 4 -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=typescript:
  */
 
-// EIR function builder with on-the-fly SSA construction.
-//
-// This implements Braun, Buchwald, Hack et al., "Simple and Efficient
-// Construction of Static Single Assignment Form" (CC 2013), adapted to
-// basic-block arguments instead of phis:
-//
-//   - writeVariable/readVariable give the AST lowering a mutable-variable
-//     view; the builder inserts block parameters at join points on demand.
-//   - blocks start unsealed; sealing a block promises no further
-//     predecessors will be added, at which point pending ("incomplete")
+// SSA construction (Braun et al., "Simple and Efficient Construction of
+// Static Single Assignment Form"):
+//   - readVariable/writeVariable give the AST lowering a mutable-variable
+//     view; block parameters materialize on demand at joins.
+//   - blocks are sealed once all predecessors are known; incomplete
 //     parameters get their per-edge arguments filled in.
 //   - trivial parameters (all incoming arguments equal, or only the
 //     parameter itself) are removed recursively.
 
 import { Func, Block, Inst, replaceAllUses, usersOf } from "./ir";
+import type { Imms } from "./ir";
 import { opInfo, Effect } from "./ops";
 
 export class FunctionBuilder {
-    constructor(name, paramNames) {
-        this.fn = new Func(name, paramNames);
-        // varname -> (block -> value)
-        this.defs = new Map();
-        this.cur = null;
-        // stack of catch blocks; when non-empty, may-throw instructions get
-        // explicit normal/unwind edges (invoke style)
-        this.handlers = [];
+    fn: Func;
+    // varname -> (block -> value)
+    defs = new Map<string, Map<Block, Inst>>();
+    cur!: Block;
+    // stack of catch blocks; when non-empty, may-throw instructions get
+    // explicit normal/unwind edges (invoke style)
+    handlers: Block[] = [];
 
-        let entry = this.newBlock("entry");
+    constructor(name: string, paramNames: string[]) {
+        this.fn = new Func(name, paramNames);
+
+        const entry = this.newBlock("entry");
         this.setInsertPoint(entry);
         // function parameters are the entry block's parameters
-        for (let pname of this.fn.paramNames) {
-            let p = entry.addParam(pname);
+        for (const pname of this.fn.paramNames) {
+            const p = entry.addParam(pname);
             this.writeVariable(pname, entry, p);
         }
         this.sealBlock(entry);
     }
 
-    newBlock(name) {
+    newBlock(name?: string): Block {
         return this.fn.addBlock(new Block(this.fn, name));
     }
 
-    setInsertPoint(block) {
+    setInsertPoint(block: Block): void {
         this.cur = block;
     }
 
     // --- instruction emission ------------------------------------------------
 
-    emit(op, operands, imms) {
-        if (this.cur.terminated) throw new Error(`emitting '${op}' into terminated block ${this.cur.name}`);
-        let inst = new Inst(this.fn, op, operands, imms);
+    emit(op: string, operands: Inst[], imms: Imms): Inst {
+        if (this.cur.terminated)
+            throw new Error(`emitting '${op}' into terminated block ${this.cur.name}`);
+        const inst = new Inst(this.fn, op, operands, imms);
         inst.block = this.cur;
         this.cur.insts.push(inst);
 
         // inside a protected region, a may-throw instruction terminates its
         // block with an explicit normal/unwind pair, and insertion continues
         // in the normal successor.
-        let info = opInfo(op);
+        const info = opInfo(op);
         if (this.handlers.length > 0 && (info.effects & Effect.THROW) !== 0 && !info.terminator) {
-            let handler = this.handlers[this.handlers.length - 1];
-            let cont = this.newBlock("cont");
+            const handler = this.handlers[this.handlers.length - 1]!;
+            const cont = this.newBlock("cont");
             inst.addTarget(cont, [], "normal");
             inst.addTarget(handler, [], "unwind");
             this.sealBlock(cont);
@@ -72,68 +71,68 @@ export class FunctionBuilder {
 
     // --- exception handling -----------------------------------------------------
 
-    newCatchBlock(name) {
-        let block = this.newBlock(name || "catch");
+    newCatchBlock(name?: string): Block {
+        const block = this.newBlock(name || "catch");
         block.isCatch = true;
-        let exc = block.addParam("%exception");
+        const exc = block.addParam("%exception");
         exc.isException = true;
         exc.type = "exception";
         return block;
     }
 
-    pushHandler(catchBlock) {
+    pushHandler(catchBlock: Block): void {
         this.handlers.push(catchBlock);
     }
 
-    popHandler() {
+    popHandler(): Block | undefined {
         return this.handlers.pop();
     }
 
     // a `throw` statement: unwinds to the active handler if there is one,
     // otherwise out of the function.
-    throwValue(v) {
-        let inst = this.emit("throw", [v], {});
+    throwValue(v: Inst): Inst {
+        const inst = this.emit("throw", [v], {});
         if (this.handlers.length > 0)
-            inst.addTarget(this.handlers[this.handlers.length - 1], [], "unwind");
+            inst.addTarget(this.handlers[this.handlers.length - 1]!, [], "unwind");
         return inst;
     }
 
-    constNumber(v) {
+    constNumber(v: number): Inst {
         return this.emit("const", [], { kind: "number", value: v });
     }
-    constAtom(s) {
+    constAtom(s: string): Inst {
         return this.emit("const", [], { kind: "atom", value: s });
     }
-    constBool(v) {
+    constBool(v: boolean): Inst {
         return this.emit("const", [], { kind: "boolean", value: v });
     }
-    constUndefined() {
+    constUndefined(): Inst {
         return this.emit("const", [], { kind: "undefined" });
     }
-    constNull() {
+    constNull(): Inst {
         return this.emit("const", [], { kind: "null" });
     }
 
-    br(block, args) {
-        let inst = this.emit("br", [], {});
+    br(block: Block, args?: Inst[]): Inst {
+        const inst = this.emit("br", [], {});
         inst.addTarget(block, args || []);
         return inst;
     }
 
-    condBr(cond, tblock, targs, fblock, fargs) {
-        let inst = this.emit("cond_br", [cond], {});
+    condBr(cond: Inst, tblock: Block, targs: Inst[], fblock: Block, fargs: Inst[]): Inst {
+        const inst = this.emit("cond_br", [cond], {});
         inst.addTarget(tblock, targs || []);
         inst.addTarget(fblock, fargs || []);
         return inst;
     }
 
-    ret(value) {
+    ret(value: Inst): Inst {
         return this.emit("return", [value], {});
     }
 
     // --- Braun SSA -------------------------------------------------------------
 
-    writeVariable(name, block, value) {
+    writeVariable(name: string, block: Block, value: Inst): void {
         let m = this.defs.get(name);
         if (!m) {
             m = new Map();
@@ -142,31 +141,32 @@ export class FunctionBuilder {
         m.set(block, value);
     }
 
-    hasVariable(name) {
+    hasVariable(name: string): boolean {
         return this.defs.has(name);
     }
 
-    readVariable(name, block) {
-        let m = this.defs.get(name);
-        if (m && m.has(block)) return m.get(block);
+    readVariable(name: string, block: Block): Inst {
+        const m = this.defs.get(name);
+        const v = m && m.get(block);
+        if (v) return v;
         return this.readVariableRecursive(name, block);
     }
 
-    readVariableRecursive(name, block) {
-        let val;
+    readVariableRecursive(name: string, block: Block): Inst {
+        let val: Inst;
         if (!block.sealed) {
             // incomplete CFG: leave a parameter to be filled at seal time
-            let param = block.addParam(name);
+            const param = block.addParam(name);
             block.incompleteParams.set(name, param);
             val = param;
         } else if (block.predEdges.length === 1) {
-            val = this.readVariable(name, block.predEdges[0].inst.block);
+            val = this.readVariable(name, block.predEdges[0]!.inst.block!);
         } else if (block.predEdges.length === 0) {
             if (block !== this.fn.entry) {
                 // an unreachable block (code after `while (true)`, after a
                 // switch whose every case returns, ...): any value will do.
                 // the emitter drops unreachable blocks entirely.
-                let c = new Inst(this.fn, "const", [], { kind: "undefined" });
+                const c = new Inst(this.fn, "const", [], { kind: "undefined" });
                 c.block = block;
                 block.insts.unshift(c);
                 val = c;
@@ -175,7 +175,7 @@ export class FunctionBuilder {
             }
         } else {
             // break potential cycles with a parameter before recursing
-            let param = block.addParam(name);
+            const param = block.addParam(name);
             this.writeVariable(name, block, param);
             val = this.addParamOperands(name, param);
         }
@@ -183,60 +183,60 @@ export class FunctionBuilder {
         return val;
     }
 
-    addParamOperands(name, param) {
-        let block = param.block;
-        let argIdx = block.argIndexOfParam(param);
-        for (let e of block.predEdges) {
-            let predBlock = e.inst.block;
-            let v = this.readVariable(name, predBlock);
-            e.inst.targets[e.targetIndex].args[argIdx] = v;
+    addParamOperands(name: string, param: Inst): Inst {
+        const block = param.block!;
+        const argIdx = block.argIndexOfParam(param);
+        for (const e of block.predEdges) {
+            const predBlock = e.inst.block!;
+            const v = this.readVariable(name, predBlock);
+            e.inst.targets![e.targetIndex]!.args[argIdx] = v;
         }
         return this.tryRemoveTrivialParam(param);
     }
 
-    tryRemoveTrivialParam(param) {
+    tryRemoveTrivialParam(param: Inst): Inst {
         if (param.isException) return param; // produced by unwinding, never trivial
-        let block = param.block;
-        let argIdx = block.argIndexOfParam(param);
-        let same = null;
-        for (let e of block.predEdges) {
-            let arg = e.inst.targets[e.targetIndex].args[argIdx];
+        const block = param.block!;
+        const argIdx = block.argIndexOfParam(param);
+        let same: Inst | null = null;
+        for (const e of block.predEdges) {
+            const arg = e.inst.targets![e.targetIndex]!.args[argIdx];
             if (arg === same || arg === param) continue;
             if (same !== null) return param; // merges at least two distinct values: keep it
-            same = arg;
+            same = arg ?? null;
         }
         // unreachable block or self-reference only
         if (same === null) return param;
 
         // collect users before rewriting so we can recheck dependent params
-        let users = usersOf(this.fn, param).filter((u) => u !== param);
+        const users = usersOf(this.fn, param).filter((u) => u !== param);
 
         replaceAllUses(this.fn, param, same);
         // fix stale variable definitions that still point at the removed param
-        for (let m of this.defs.values()) {
-            for (let entry of m.entries()) {
+        for (const m of this.defs.values()) {
+            for (const entry of m.entries()) {
                 if (entry[1] === param) m.set(entry[0], same);
             }
         }
         block.removeParam(param);
 
-        for (let u of users) {
+        for (const u of users) {
             if (u.op === "blockparam" && !u.removed) this.tryRemoveTrivialParam(u);
         }
         return same;
     }
 
-    sealBlock(block) {
+    sealBlock(block: Block): void {
         if (block.sealed) throw new Error(`sealing already-sealed block ${block.name}`);
         block.sealed = true;
-        for (let entry of block.incompleteParams.entries()) {
+        for (const entry of block.incompleteParams.entries()) {
             this.addParamOperands(entry[0], entry[1]);
         }
         block.incompleteParams.clear();
     }
 
-    finish() {
-        for (let b of this.fn.blocks) {
+    finish(): Func {
+        for (const b of this.fn.blocks) {
             if (!b.sealed) throw new Error(`EIR: ${this.fn.name}: block ${b.name} never sealed`);
         }
         return this.fn;

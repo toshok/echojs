@@ -13,12 +13,7 @@
 //     eir_main / ir_func and friends.
 
 import type { EjsFunction, DISubprogram } from "@llvm";
-
-// placeholder until eir/ir.ts lands; replaced by
-//   import type { Module as EIRModule } from "./eir/ir";
-export interface EIRModule {
-    name: string;
-}
+import type { Module as EIRModule } from "./eir/ir";
 
 export interface Position {
     line: number;
