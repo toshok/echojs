@@ -1,0 +1,68 @@
+# EchoJS CI: the full buck2 bootstrap matrix on macOS arm64 (the
+# configuration the compiler is developed against).
+#
+# One job, sequential targets: buck2 shares artifacts between them, so
+# the stage ladder (stage1 builds feed stage2/3) costs one traversal.
+#
+#   test-eir     EIR unit tests (node-hosted)
+#   test-stage0  full suite against the node-hosted compiler
+#   test-stage1  suite against the self-compiled compiler
+#   test-stage2  suite against stage1's self-compile
+#   test-stage3  suite + the stage2/stage3 byte-identity fixed point
+name: CI
+
+on:
+  push:
+    branches: [main, eir]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bootstrap-matrix:
+    runs-on: macos-15 # arm64
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install llvm + buck2
+        run: |
+          brew install llvm buck2
+          "$(brew --prefix llvm)/bin/llvm-config" --version
+          buck2 --version
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: npm ci
+        run: npm ci
+
+      # the node-hosted (stage0) compiler drives llvm through this
+      # node-gyp native addon; buck picks up the built artifact
+      - name: Build the node-llvm addon
+        run: ./node-llvm/build-addon.sh "$(brew --prefix llvm)"
+
+      - name: TypeScript typecheck
+        run: node node_modules/typescript/bin/tsc -p tsconfig.json
+
+      - name: buck2 bootstrap matrix
+        run: |
+          buck2 build \
+            //:test-eir \
+            //:test-stage0 \
+            //:test-stage1 \
+            //:test-stage2 \
+            //:test-stage3
+
+      - name: Surface test logs on failure
+        if: failure()
+        run: |
+          find buck-out/v2 -name "test-*.log" -newer package.json 2>/dev/null | while read -r f; do
+            echo "=== $f ==="
+            tail -60 "$f"
+          done || true
