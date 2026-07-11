@@ -21,7 +21,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  bootstrap-matrix:
+  bootstrap-macos-arm64:
+    name: bootstrap-macos-arm64
     runs-on: macos-15 # arm64
     timeout-minutes: 120
     steps:
@@ -70,9 +71,20 @@ jobs:
             tail -60 "$f"
           done || true
 
-  bootstrap-matrix-linux:
-    runs-on: ubuntu-24.04-arm
+  bootstrap-linux:
+    name: bootstrap-linux-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            buck2_triple: aarch64-unknown-linux-gnu
+          - arch: x86_64
+            runner: ubuntu-24.04
+            buck2_triple: x86_64-unknown-linux-gnu
     steps:
       - uses: actions/checkout@v4
         with:
@@ -94,9 +106,8 @@ jobs:
 
       - name: Install buck2
         run: |
-          curl -sL https://github.com/facebook/buck2/releases/download/latest/buck2-aarch64-unknown-linux-gnu.zst -o /tmp/buck2.zst
-          zstd -qd /tmp/buck2.zst -o /usr/local/bin/buck2 || sudo sh -c 'zstd -qd /tmp/buck2.zst -o /usr/local/bin/buck2'
-          sudo chmod +x /usr/local/bin/buck2
+          curl -sL "https://github.com/facebook/buck2/releases/download/latest/buck2-${{ matrix.buck2_triple }}.zst" -o /tmp/buck2.zst
+          sudo sh -c 'zstd -qd /tmp/buck2.zst -o /usr/local/bin/buck2 && chmod +x /usr/local/bin/buck2'
           buck2 --version
 
       # pinned exactly — see the macOS job's note
