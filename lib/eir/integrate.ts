@@ -394,6 +394,9 @@ export function collectEIRToplevel(
         lowerAnalyzedFunction(info, analysis, eir_module, mod_ctx);
         let accessors = buildModuleAccessors(eir_module, this_module_info);
         verifyModule(eir_module);
+        // the as-lowered dump must precede optimization (which mutates
+        // the module in place)
+        if (dumpRequested(options)) dumpModule(filename, "toplevel-as-EIR", eir_module);
 
         if (options.opt_level > 0) {
             const stats = optimizeModule(eir_module);
@@ -412,7 +415,6 @@ export function collectEIRToplevel(
         toplevel.eir_main = info.name;
         toplevel.body = { type: "BlockStatement", body: [], loc: toplevel.loc };
         debug.log(1, `EIR: ${filename}: whole module lowered (toplevel-as-EIR)`);
-        if (dumpRequested(options)) dumpModule(filename, "toplevel-as-EIR", eir_module);
         return { eir_module: eir_module, accessors: accessors };
     } catch (e) {
         if (!isLowerNotSupported(e)) throw e;
