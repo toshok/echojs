@@ -462,7 +462,7 @@ export interface ExportNamedDeclaration extends BaseNode {
 
 export interface ExportDefaultDeclaration extends BaseNode {
     type: "ExportDefaultDeclaration";
-    declaration: Expression | FunctionDeclaration | VariableDeclaration;
+    declaration: Expression | FunctionDeclaration | ClassDeclaration | VariableDeclaration;
 }
 
 export interface ExportAllDeclaration extends BaseNode {
