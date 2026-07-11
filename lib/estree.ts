@@ -230,7 +230,9 @@ export interface ObjectPattern extends BaseNode {
 
 export interface ArrayPattern extends BaseNode {
     type: "ArrayPattern";
-    elements: (Pattern | null)[];
+    // dialect: declaration-position rests parse as SpreadElement,
+    // assignment-position ones as RestElement
+    elements: (Pattern | SpreadElement | null)[];
 }
 
 export interface RestElement extends BaseNode {
