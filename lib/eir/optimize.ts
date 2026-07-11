@@ -26,7 +26,12 @@ import { Effect, opInfo } from "./ops";
 export interface OptStats {
     allocs_sunk: number;
     reads_folded: number;
+    calls_inlined: number;
     dead_removed: number;
+}
+
+function newStats(): OptStats {
+    return { allocs_sunk: 0, reads_folded: 0, calls_inlined: 0, dead_removed: 0 };
 }
 
 // uses of `value` within fn, with enough position info to classify
@@ -226,6 +231,171 @@ function sinkAllocations(fn: Func, stats: OptStats): boolean {
     return changed;
 }
 
+// --- direct IIFE inlining ------------------------------------------------------
+
+// the desugars (destructuring especially) wrap expression-position work
+// in immediately-called closures: make_env / env_store / make_closure /
+// call.  inlining the call is what exposes the env and the literals
+// inside it to the sinking passes above.
+//
+// conservatively inlinable callee: a single block ending in `return`,
+// no frame-dependent ops (arguments/rest/new.target/super), and an
+// unused %this param (the IIFE arrows never touch it — lexical `this`
+// rides in the env).  the call itself must carry no unwind targets.
+
+const FRAME_OPS = new Set([
+    "args_obj",
+    "rest_args",
+    "new_target",
+    "construct_super",
+    "construct_super_apply",
+]);
+
+const INLINE_MAX_INSTS = 40;
+
+function inlinableCallee(m: Module, caller: Func, closure: Inst): Func | null {
+    const name = closure.imms.fn as string;
+    const callee = m.functions.find((f) => f.name === name);
+    if (!callee || callee === caller) return null;
+    if (callee.blocks.length !== 1) return null;
+    const entry = callee.entry!;
+    if (entry.insts.length > INLINE_MAX_INSTS) return null;
+    const term = entry.terminator;
+    if (!term || term.op !== "return") return null;
+    for (const inst of entry.insts) {
+        if (FRAME_OPS.has(inst.op)) return null;
+        if (inst.targets && inst !== term) return null;
+    }
+    // %this must be unused (we'd otherwise have to reason about the
+    // runtime's this-coercion on the call path we're deleting)
+    const thisParam = entry.params[1];
+    if (thisParam) {
+        for (const inst of entry.insts) {
+            for (const o of inst.operands) if (o === thisParam) return null;
+        }
+    }
+    return callee;
+}
+
+function constUndefinedBefore(fn: Func, before: Inst): Inst {
+    const c = new Inst(fn, "const", [], { kind: "undefined" });
+    const b = before.block!;
+    c.block = b;
+    b.insts.splice(b.insts.indexOf(before), 0, c);
+    return c;
+}
+
+// inline `call` (operands [closure, this, ...args]) by cloning the
+// callee's single block in front of it
+function inlineCall(fn: Func, call: Inst, closure: Inst, callee: Func): void {
+    const entry = callee.entry!;
+    const subst = new Map<Inst, Inst>();
+
+    // params: [%env, %this, ...declared] -> [closure env, call this, args]
+    for (let i = 0; i < entry.params.length; i++) {
+        const p = entry.params[i]!;
+        let v: Inst;
+        if (i === 0) v = closure.operands[0]!;
+        else if (i < call.operands.length) v = call.operands[i]!;
+        else v = constUndefinedBefore(fn, call);
+        subst.set(p, v);
+    }
+
+    const map = (v: Inst): Inst => subst.get(v) || v;
+    const block = call.block!;
+    let at = block.insts.indexOf(call);
+    let result: Inst | null = null;
+    for (const inst of entry.insts) {
+        if (inst === entry.terminator) {
+            result = map(inst.operands[0]!);
+            break;
+        }
+        const clone = new Inst(fn, inst.op, inst.operands.map(map), { ...inst.imms });
+        clone.block = block;
+        block.insts.splice(at++, 0, clone);
+        subst.set(inst, clone);
+    }
+    replaceAllUses(fn, call, result!);
+    removeInst(call);
+}
+
+function inlineDirectCalls(m: Module, fn: Func, stats: OptStats): boolean {
+    const candidates: { call: Inst; closure: Inst; callee: Func }[] = [];
+    fn.forEachInst((inst) => {
+        if (inst.op !== "call" || inst.imms.direct || (inst.targets && inst.targets.length > 0))
+            return;
+        const closure = inst.operands[0]!;
+        if (closure.op !== "make_closure" || closure.block === null) return;
+        const callee = inlinableCallee(m, fn, closure);
+        if (callee) candidates.push({ call: inst, closure, callee });
+    });
+    for (const c of candidates) {
+        inlineCall(fn, c.call, c.closure, c.callee);
+        stats.calls_inlined++;
+    }
+    return candidates.length > 0;
+}
+
+// --- env scalar replacement -----------------------------------------------------
+
+// a make_env whose only uses are base-position env_load/env_store, all
+// in the block that allocated it, resolves by a linear walk: each load
+// sees the most recent store to its slot (or undefined — env slots
+// start undefined, echojs has no TDZ).  parent-env chaining stores the
+// env in a VALUE position, which classifies as an escape below.
+function scalarReplaceEnvs(fn: Func, stats: OptStats): boolean {
+    let changed = false;
+    const candidates: Inst[] = [];
+    fn.forEachInst((inst) => {
+        if (inst.op === "make_env") candidates.push(inst);
+    });
+
+    for (const env of candidates) {
+        if (!env.block) continue;
+        let ok = true;
+        for (const use of usesOf(fn, env)) {
+            const { inst, index } = use;
+            const local =
+                index === 0 &&
+                (inst.op === "env_load" || inst.op === "env_store") &&
+                inst.block === env.block;
+            if (!local) {
+                ok = false;
+                break;
+            }
+        }
+        if (!ok) continue;
+
+        // linear walk of the defining block.  replacements materialize
+        // after the walk — inserting into insts mid-iteration would
+        // shift the very array being walked.
+        const slotValues = new Map<number, Inst>();
+        const loads: [Inst, Inst | null][] = []; // load -> replacement (null = undefined)
+        const stores: Inst[] = [];
+        let started = false;
+        for (const inst of env.block.insts) {
+            if (inst === env) {
+                started = true;
+                continue;
+            }
+            if (!started || inst.operands[0] !== env) continue;
+            if (inst.op === "env_store") {
+                slotValues.set(inst.imms.slot as number, inst.operands[1]!);
+                stores.push(inst);
+            } else if (inst.op === "env_load") {
+                loads.push([inst, slotValues.get(inst.imms.slot as number) || null]);
+            }
+        }
+        for (const [load, v] of loads) foldRead(fn, load, v || constUndefinedBefore(fn, load));
+        for (const s of stores) removeInst(s);
+        removeInst(env);
+        stats.allocs_sunk++;
+        stats.reads_folded += loads.length;
+        changed = true;
+    }
+    return changed;
+}
+
 // --- dead instruction elimination --------------------------------------------
 
 // dead-removable: unused results whose computation is unobservable.
@@ -275,13 +445,17 @@ function eliminateDead(fn: Func, stats: OptStats): boolean {
 
 // --- driver -------------------------------------------------------------------
 
-export function optimizeFunction(fn: Func, stats?: OptStats): OptStats {
-    const s = stats || { allocs_sunk: 0, reads_folded: 0, dead_removed: 0 };
-    // to fixpoint: sinking an outer literal can un-escape one nested
-    // inside it (its only use was as the outer's operand)
+export function optimizeFunction(fn: Func, module?: Module, stats?: OptStats): OptStats {
+    const s = stats || newStats();
+    // to fixpoint: inlining an IIFE exposes its env and literals;
+    // sinking an outer literal can un-escape one nested inside it (its
+    // only use was as the outer's operand)
     let rounds = 0;
     for (;;) {
-        let changed = sinkAllocations(fn, s);
+        let changed = module ? inlineDirectCalls(module, fn, s) : false;
+        if (eliminateDead(fn, s)) changed = true; // kill the closure before judging its env
+        if (scalarReplaceEnvs(fn, s)) changed = true;
+        if (sinkAllocations(fn, s)) changed = true;
         if (eliminateDead(fn, s)) changed = true;
         if (!changed || ++rounds > 10) break;
     }
@@ -289,7 +463,7 @@ export function optimizeFunction(fn: Func, stats?: OptStats): OptStats {
 }
 
 export function optimizeModule(m: Module): OptStats {
-    const stats: OptStats = { allocs_sunk: 0, reads_folded: 0, dead_removed: 0 };
-    for (const fn of m.functions) optimizeFunction(fn, stats);
+    const stats = newStats();
+    for (const fn of m.functions) optimizeFunction(fn, m, stats);
     return stats;
 }

@@ -912,6 +912,61 @@ test("optimize: reads inside try (unwind targets) are left alone", () => {
     assertContains(printed, "get_prop_atom");
 });
 
+test("optimize: single-block IIFE inlines and its env scalar-replaces", () => {
+    let { module, fn } = lowerOne(
+        "function f(x) { let r = ((a) => a + 1)(x); return r; }"
+    );
+    optimizeFunction(fn, module);
+    verifyFunction(fn);
+    let printed = printFunction(fn);
+    assertNotContains(printed, "make_closure");
+    assertNotContains(printed, "call");
+    assertContains(printed, "add");
+});
+
+test("optimize: escaping closure is not inlined", () => {
+    let { module, fn } = lowerOne(
+        "function f(g) { let h = (a) => a + 1; g(h); return h(2); }"
+    );
+    optimizeFunction(fn, module);
+    verifyFunction(fn);
+    assertContains(printFunction(fn), "make_closure");
+});
+
+test("optimize: same-block env with loads and stores scalar-replaces", () => {
+    // the arrow captures x, forcing x into an env; after inlining, the
+    // env ops are all in one block and dissolve
+    let { module, fn } = lowerOne(
+        "function f(x) { let get = () => x; return get(); }"
+    );
+    optimizeFunction(fn, module);
+    verifyFunction(fn);
+    let printed = printFunction(fn);
+    assertNotContains(printed, "make_env");
+    assertNotContains(printed, "env_load");
+    assertNotContains(printed, "call");
+});
+
+test("optimize: destructuring swap dissolves to pure SSA", () => {
+    let r = lowerFunctionNode(
+        parseFnPreEIR("function f(a, b) { [a, b] = [b, a]; return a - b; }")
+    );
+    optimizeFunction(r.fn, r.module);
+    verifyFunction(r.fn);
+    let printed = printFunction(r.fn);
+    assertNotContains(printed, "make_env");
+    assertNotContains(printed, "make_closure");
+});
+
+test("optimize: env read from a later block is left alone", () => {
+    // the loop body reads the env across blocks: not same-block, no sink
+    let { module, fn } = lowerOne(
+        "function f(x, n) { let get = () => x; while (n) { n = n - get(); } return n; }"
+    );
+    optimizeFunction(fn, module);
+    verifyFunction(fn);
+});
+
 test("optimize: DCE removes unused pure chains but keeps effects", () => {
     let { printed } = lowerAndOptimize(
         "function f(x) { let unused = { a: 1 }; let kept = x.y; return 5; }"
