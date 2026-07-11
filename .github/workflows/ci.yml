@@ -30,10 +30,17 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install llvm + buck2
+      - name: Install llvm
         run: |
-          brew install llvm buck2
+          brew install llvm zstd
           "$(brew --prefix llvm)/bin/llvm-config" --version
+
+      # buck2 isn't in homebrew core (locally it comes from the
+      # facebook/fb tap); use the release binary like the linux jobs
+      - name: Install buck2
+        run: |
+          curl -sL "https://github.com/facebook/buck2/releases/download/latest/buck2-aarch64-apple-darwin.zst" -o /tmp/buck2.zst
+          sudo sh -c 'zstd -qd /tmp/buck2.zst -o /usr/local/bin/buck2 && chmod +x /usr/local/bin/buck2'
           buck2 --version
 
       # pinned exactly: most test baselines are generated live by
