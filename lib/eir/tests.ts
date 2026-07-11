@@ -1,8 +1,8 @@
-/* -*- Mode: js2; indent-tabs-mode: nil; tab-width: 4; js2-indent-offset: 4; js2-basic-offset: 4; -*-
- * vim: set ts=4 sw=4 et tw=99 ft=js:
+/* -*- Mode: typescript; indent-tabs-mode: nil; tab-width: 4 -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=typescript:
  */
 
-// EIR unit tests.  run (via the babel'd tree) with:
+// EIR unit tests.  run (via the tsjs+babel tree) with:
 //   node lib/generated/lib/eir/tests.js
 // or through buck:
 //   buck2 build //:test-eir
@@ -12,53 +12,56 @@ import { printFunction, printModule } from "./printer";
 import { verifyFunction, verifyModule } from "./verifier";
 import { lowerFunctionNode, lowerProgram } from "./lower";
 import { isLowerNotSupported } from "./errors";
-import { Func, Block, Inst } from "./ir";
+import { Func, Block, Inst, Module } from "./ir";
 import { DesugarSpread } from "../passes/desugar-spread";
 import { DesugarClasses } from "../passes/desugar-classes";
 import { DesugarDestructuring } from "../passes/desugar-destructuring";
 import { DesugarGeneratorFunctions } from "../passes/desugar-generator-functions";
 import { DesugarMetaProperties } from "../passes/desugar-metaproperties";
 import * as esprima from "../../external-deps/esprima/esprima-es6";
+import type * as e from "../estree";
+import type { CompilerOptions } from "../options";
 
 let failures = 0;
 
-function test(name, fn) {
+function test(name: string, fn: () => void): void {
     try {
         fn();
         console.log(`pass: ${name}`);
-    } catch (e) {
+    } catch (err) {
         failures++;
-        console.log(`FAIL: ${name}: ${e.message}`);
-        if (e.stack) console.log(e.stack.split("\n").slice(1, 4).join("\n"));
+        const failure = err as Error;
+        console.log(`FAIL: ${name}: ${failure.message}`);
+        if (failure.stack) console.log(failure.stack.split("\n").slice(1, 4).join("\n"));
     }
 }
 
-function assert(cond, msg) {
+function assert(cond: boolean, msg?: string): void {
     if (!cond) throw new Error(`assertion failed: ${msg || ""}`);
 }
 
-function assertContains(haystack, needle) {
+function assertContains(haystack: string, needle: string): void {
     if (haystack.indexOf(needle) === -1)
         throw new Error(`expected output to contain '${needle}'\n---\n${haystack}\n---`);
 }
 
-function findBlock(fn, prefix) {
+function findBlock(fn: Func, prefix: string): Block {
     for (let b of fn.blocks) if (b.name.indexOf(prefix) === 0) return b;
     throw new Error(`no block named ${prefix}* in @${fn.name}`);
 }
 
-function findFn(mod, name) {
+function findFn(mod: Module, name: string): Func {
     for (let f of mod.functions) if (f.name === name) return f;
     throw new Error(`no function @${name} in module`);
 }
 
-function parseFn(src) {
+function parseFn(src: string): e.FunctionDeclaration {
     let ast = esprima.parse(src, { loc: true, raw: true });
     for (let s of ast.body) if (s.type === "FunctionDeclaration") return s;
     throw new Error("no function declaration in source");
 }
 
-function lowerOne(src) {
+function lowerOne(src: string): { module: Module; fn: Func } {
     let r = lowerFunctionNode(parseFn(src));
     verifyModule(r.module);
     return r;
@@ -264,7 +267,7 @@ test("lower: try/catch produces unwind edges into a catch block", () => {
 
     let catch_bb = findBlock(fn, "catch");
     assert(catch_bb.isCatch, "catch block should be marked");
-    assert(catch_bb.params[0].isException, "first catch param is the exception");
+    assert(catch_bb.params[0]!.isException, "first catch param is the exception");
 });
 
 test("lower: throw inside try unwinds to the local handler", () => {
@@ -385,7 +388,7 @@ test("lower: for-of RHS closure capturing the loop var sees the loop env", () =>
         "function f(mk) { let fns = []; for (let x of mk(function () { return x; })) { fns.push(function () { return x; }); } return fns; }"
     );
     // an initial env exists before the RHS call
-    let entry = fn.blocks[0];
+    const entry = fn.blocks[0]!;
     assert(
         entry.insts.some((i) => i.op === "make_env"),
         "entry should create the initial loop env before the RHS evaluates"
@@ -403,15 +406,15 @@ test("lower: nested captured loops chain their envs", () => {
 // --- lowering: %-intrinsics ------------------------------------------------
 
 // parse + the pre-EIR desugar passes, like preEIRConvert in compile()
-function parseFnPreEIR(src) {
+function parseFnPreEIR(src: string): e.FunctionDeclaration {
     let ast = esprima.parse(src, { loc: true, raw: true });
-    let opts = { debug_passes: new Set() };
-    ast = new DesugarClasses(opts).visit(ast);
-    ast = new DesugarDestructuring(opts).visit(ast);
-    ast = new DesugarGeneratorFunctions(opts).visit(ast);
-    ast = new DesugarSpread(opts).visit(ast);
-    ast = new DesugarMetaProperties(opts).visit(ast);
-    for (let s of ast.body) if (s.type === "FunctionDeclaration") return s;
+    const opts = { debug_passes: new Set<string>() } as CompilerOptions;
+    ast = new DesugarClasses(opts).visit(ast) as e.Program;
+    ast = new DesugarDestructuring(opts).visit(ast) as e.Program;
+    ast = new DesugarGeneratorFunctions(opts).visit(ast) as e.Program;
+    ast = new DesugarSpread(opts).visit(ast) as e.Program;
+    ast = new DesugarMetaProperties(opts).visit(ast) as e.Program;
+    for (const s of ast.body) if (s.type === "FunctionDeclaration") return s;
     throw new Error("no function declaration in source");
 }
 let parseFnSpreadDesugared = parseFnPreEIR;
@@ -481,7 +484,8 @@ test("lower: debugger statement is a no-op", () => {
 test("lower: unknown %-intrinsics raise LowerNotSupported", () => {
     let fnNode = parseFnSpreadDesugared("function t(a) { return dummy(a); }");
     // synthesize a call to an intrinsic lowering doesn't know
-    fnNode.body.body[0].argument.callee.name = "%noSuchIntrinsic";
+    const retstmt = fnNode.body.body[0] as e.ReturnStatement;
+    ((retstmt.argument as e.CallExpression).callee as e.Identifier).name = "%noSuchIntrinsic";
     let threw = false;
     try {
         lowerFunctionNode(fnNode);
@@ -498,10 +502,10 @@ test("lower: derived class ctor lowers construct_super and rebinds this", () => 
         )
     );
     verifyModule(r.module);
-    let ctor = null;
-    for (let fn of r.module.functions) if (/\.B$/.test(fn.name)) ctor = fn;
-    assert(ctor, "expected the B constructor in the module");
-    let printed = printFunction(ctor);
+    let ctor: Func | null = null;
+    for (const fn of r.module.functions) if (/\.B$/.test(fn.name)) ctor = fn;
+    assert(!!ctor, "expected the B constructor in the module");
+    let printed = printFunction(ctor!);
     assertContains(printed, "construct_super");
     // this.v = v must store into construct_super's result, not the entry
     // this param (%1)
@@ -569,19 +573,20 @@ test("lower: arrow lexical this reads the owner's captured this", () => {
     );
     verifyModule(module);
     // the method stores its this into an env; the arrow env_loads it
-    let method = null;
-    for (let g of module.functions) if (/anon0$/.test(g.name)) method = g;
-    assert(method, "expected the method in the module");
-    assertContains(printFunction(method), "env_store");
-    let arrow = null;
-    for (let g of module.functions) if (/arrow1$/.test(g.name)) arrow = g;
-    assert(arrow, "expected the arrow in the module");
-    assertContains(printFunction(arrow), "env_load");
+    let method: Func | null = null;
+    for (const g of module.functions) if (/anon0$/.test(g.name)) method = g;
+    assert(!!method, "expected the method in the module");
+    assertContains(printFunction(method!), "env_store");
+    let arrow: Func | null = null;
+    for (const g of module.functions) if (/arrow1$/.test(g.name)) arrow = g;
+    assert(!!arrow, "expected the arrow in the module");
+    assertContains(printFunction(arrow!), "env_load");
 });
 
 test("lower: toplevel-arrow candidates using this still fall back", () => {
-    let ast = esprima.parse("var f = () => this.x;", { loc: true, raw: true });
-    let arrow = ast.body[0].declarations[0].init;
+    const ast = esprima.parse("var f = () => this.x;", { loc: true, raw: true });
+    const decl = ast.body[0] as e.VariableDeclaration;
+    const arrow = decl.declarations[0]!.init as e.ArrowFunctionExpression;
     let threw = false;
     try {
         lowerFunctionNode(arrow, "f");
@@ -638,9 +643,9 @@ test("lower: labeled non-loop statement with break", () => {
         "function f(x) { let r = 0; done: { r = 1; if (x) break done; r = 2; } return r; }"
     );
     verifyModule(module);
-    let labelBlock = null;
-    for (let b of fn.blocks) if (b.name.indexOf("label_done") === 0) labelBlock = b;
-    assert(labelBlock, "expected the label exit block");
+    let labelBlock: Block | null = null;
+    for (const blk of fn.blocks) if (blk.name.indexOf("label_done") === 0) labelBlock = blk;
+    assert(!!labelBlock, "expected the label exit block");
 });
 
 test("lower: labeled continue through a finally runs the finalizer", () => {
@@ -679,7 +684,7 @@ test("lower: tagged templates lower via template_callsite", () => {
     fn.forEachInst((inst) => {
         if (inst.op === "template_callsite") {
             sites++;
-            assert(inst.imms.cooked.length === 2, "two cooked strings");
+            assert((inst.imms["cooked"] as readonly string[]).length === 2, "two cooked strings");
         }
     });
     assert(sites === 1, `expected one callsite, saw ${sites}`);
@@ -753,7 +758,7 @@ test("verifier: rejects use that is not dominated by its def", () => {
     try {
         verifyFunction(fn);
     } catch (e) {
-        threw = /does not dominate/.test(e.message);
+        threw = /does not dominate/.test((e as Error).message);
     }
     assert(threw, "expected a dominance violation");
 });
@@ -770,7 +775,7 @@ test("verifier: rejects unterminated blocks", () => {
     try {
         verifyFunction(fn);
     } catch (e) {
-        threw = /no terminator/.test(e.message);
+        threw = /no terminator/.test((e as Error).message);
     }
     assert(threw, "expected a no-terminator error");
 });
@@ -801,7 +806,7 @@ test("verifier: rejects normal edges into catch blocks", () => {
     try {
         verifyFunction(fn);
     } catch (e) {
-        threw = /non-unwind edge into catch/.test(e.message);
+        threw = /non-unwind edge into catch/.test((e as Error).message);
     }
     assert(threw, "expected a catch-edge violation");
 });
