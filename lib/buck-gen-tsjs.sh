@@ -37,17 +37,15 @@ for f in ejs-es6.js ejs-es6.ts; do
     if [ -e "$f" ]; then cp "$f" "$STAGE/$f"; fi
 done
 
-# hand-written surface declarations for the vendored external-deps JS
+# hand-written surface declarations for the vendored external-deps JS,
+# committed in the esprima/escodegen submodules next to their .js
 # (relative imports like ../../external-deps/escodegen/escodegen-es6
-# typecheck against these; the .js resolves at runtime).  the canonical
-# copies live in external-deps/typings (the vendored dirs are git
-# submodules); each <name>-es6.d.ts stages next to <name>/<name>-es6.js
-if [ -d compiler-js/typings ]; then
-    for f in compiler-js/typings/*-es6.d.ts; do
-        base=$(basename "$f" -es6.d.ts)
-        mkdir -p "$STAGE/external-deps/$base"
-        cp "$f" "$STAGE/external-deps/$base/$base-es6.d.ts"
-    done
+# typecheck against these; the .js resolves at runtime)
+if [ -d compiler-js ]; then
+    (cd compiler-js && find . -name "*.d.ts" | while read -r f; do
+        mkdir -p "$STAGE/external-deps/$(dirname "$f")"
+        cp "$f" "$STAGE/external-deps/$f"
+    done)
 fi
 
 # copy the .js files through
