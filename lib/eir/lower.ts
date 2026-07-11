@@ -1,41 +1,78 @@
-/* -*- Mode: js2; indent-tabs-mode: nil; tab-width: 4; js2-indent-offset: 4; js2-basic-offset: 4; -*-
- * vim: set ts=4 sw=4 et tw=99 ft=js:
+/* -*- Mode: typescript; indent-tabs-mode: nil; tab-width: 4 -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=typescript:
  */
 
 // AST -> EIR lowering.
 //
 // Covers a whitelisted subset of the (desugared) AST; anything else throws
-// LowerNotSupported so callers can fall back to the legacy LLVMIRVisitor
-// per-function.  The subset grows until nothing falls back.
+// LowerNotSupported, which compile() reports as a compile error.
 //
-// Scope resolution (lib/eir/scopes.js) runs first and decides, per binding:
+// Scope resolution (lib/eir/scopes.ts) runs first and decides, per binding:
 // SSA local vs. environment slot.  Lowering then emits make_env /
-// env_load / env_store / make_closure directly — this replaces new-cc for
-// the EIR path.
+// env_load / env_store / make_closure directly.
 //
 // Calling convention mirrors the runtime: every function takes
 // (%env, %this, ...params).
-//
-// Handled: literals (incl. regex), identifiers (locals/captured/globals),
-// var/let/const, assignment (= and compound), update (++/--),
-// binary/logical/unary operators, member access, calls, new, this,
-// sequence/array/object literals, untagged template literals, function
-// declarations and expressions, arrow functions (full closure support,
-// lexical `this` via the owner's captured this binding), default/rest
-// parameters, `arguments`, if/else, while, do-while, for, for-of,
-// for-in, switch, break/continue, return, throw, try/catch (unwind
-// edges), try/finally (finalizer duplication), per-iteration loop
-// environments, and the %-intrinsic calls listed in intrinsics.js
-// (produced by the pre-EIR desugar passes, e.g. %arrayFromSpread).
 
-import * as b from "../ast-builder";
 import { FunctionBuilder } from "./builder";
-import { Module } from "./ir";
-import { ScopeAnalysis, compound_assign_ops } from "./scopes";
-import { LowerNotSupported, isLowerNotSupported } from "./errors";
+import { Module, Func, Block, Inst } from "./ir";
+import { ScopeAnalysis, compound_assign_ops, Binding, FnInfo, LoopEnv } from "./scopes";
+import { LowerNotSupported } from "./errors";
 import { eir_intrinsics } from "./intrinsics";
+import type * as e from "../estree";
+import type { ModuleInfo } from "../module-info";
 
-const binops = {
+// --- module-scope interop types (integrate.ts imports these) -----------------
+
+// a module-slot-backed (or const-folded) reference
+export interface SlotRef {
+    module: string | null; // "%self", a module path, or null for fold-only
+    slot: number;
+    constval?: e.Literal;
+    writable: boolean;
+    exotic?: undefined;
+    module_info?: undefined;
+}
+
+// a namespace import: the module object itself (module_get_exotic);
+// member accesses resolve to slot loads at compile time
+export interface ExoticRef {
+    exotic: string;
+    module_info: ModuleInfo;
+    writable: boolean;
+    module?: undefined;
+    slot?: undefined;
+    constval?: undefined;
+}
+
+export type ModuleRef = SlotRef | ExoticRef;
+
+export interface ModCtx {
+    refs: Map<string, ModuleRef>;
+    this_module_info?: ModuleInfo | null;
+    module_infos?: Map<string, ModuleInfo> | null;
+}
+
+// an environment-descriptor chain node: a per-iteration loop env or a
+// function env (see envForBinding)
+type EnvDesc = LoopEnv | FnInfo;
+
+interface ActiveLabel {
+    name: string;
+    breakBlock: Block;
+    continueBlock: Block | null;
+    ctxLen: number;
+}
+
+interface FinallyCtx {
+    // the finalizer block; fresh copies lower at each crossing exit
+    node: e.BlockStatement;
+    breakDepth: number;
+    continueDepth: number;
+    handlerDepth: number;
+}
+
+const binops: Record<string, string | undefined> = {
     "+": "add",
     "-": "sub",
     "*": "mul",
@@ -60,59 +97,67 @@ const binops = {
 };
 
 // the source-level name a closure should carry (Function.prototype.name):
-// the function's own id, or "" for anonymous functions — never the
+// the function\'s own id, or "" for anonymous functions — never the
 // scope-qualified EIR name
-function displayNameOf(childInfo) {
+function displayNameOf(childInfo: FnInfo): string {
     return (childInfo.node.id && childInfo.node.id.name) || "";
 }
 
 class LowerFunction {
-    constructor(info, analysis, module, mod_ctx) {
-        this.info = info; // FnInfo from scope analysis
+    info: FnInfo; // FnInfo from scope analysis
+    analysis: ScopeAnalysis;
+    module: Module;
+    // toplevel-as-EIR: this function IS the module toplevel; import/
+    // export statements lower here, and slot-backed declarations store
+    // through module slots instead of local bindings
+    isToplevel: boolean;
+    // module-scope interop: module-slot references (imports and this
+    // module's exports)
+    mod_ctx: ModCtx;
+    b: FunctionBuilder;
+    envParam: Inst;
+    thisParam: Inst;
+    // break/continue targets.  loops push onto both stacks; switch
+    // statements only onto breakTargets (continue passes through a
+    // switch to the enclosing loop).
+    breakTargets: Block[] = [];
+    continueTargets: Block[] = [];
+    // labeled targets: LabeledStatement pushes loop labels onto
+    // pendingLabels; the loop lowering claims them (activeLabels)
+    // against its own exit/continue blocks.  non-loop labels get a
+    // synthetic exit block.  ctxLen = finallyCtx.length at label
+    // entry, so a labeled exit runs exactly the finalizers entered
+    // since the label.
+    pendingLabels: string[] = [];
+    activeLabels: ActiveLabel[] = [];
+    // materialized per-iteration loop envs lexically active at the
+    // current lowering position (innermost last).  the current env
+    // value of each is tracked as a builder variable ("%loopenv#id"),
+    // so per-iteration refreshes flow through SSA/block params like
+    // any other variable (envs are ejsvals).
+    activeLoopEnvs: LoopEnv[] = [];
+    // active try/finally contexts.  abrupt exits (return, break,
+    // continue) crossing a finally boundary lower a fresh copy of each
+    // crossed finalizer at the exit site (finalizer duplication).
+    finallyCtx: FinallyCtx[] = [];
+    curEnv: Inst;
+
+    constructor(info: FnInfo, analysis: ScopeAnalysis, module: Module, mod_ctx?: ModCtx) {
+        this.info = info;
         this.analysis = analysis;
         this.module = module;
-        // toplevel-as-EIR: this function IS the module toplevel; import/
-        // export statements lower here, and slot-backed declarations store
-        // through module slots instead of local bindings
         this.isToplevel = !!info.isToplevel;
-        // module-scope interop: module-slot references (imports and this
-        // module's exports: name -> {module, slot, constval?, writable})
-        // and sibling top-level EIR functions callable directly
         this.mod_ctx = mod_ctx || { refs: new Map() };
 
-        let paramNames = info.params.map((p) => p.uid);
+        const paramNames = info.params.map((p) => p.uid);
         this.b = new FunctionBuilder(info.name, ["%env", "%this"].concat(paramNames));
-        this.envParam = this.b.fn.entry.params[0];
-        this.thisParam = this.b.fn.entry.params[1];
+        this.envParam = this.b.fn.entry!.params[0]!;
+        this.thisParam = this.b.fn.entry!.params[1]!;
         // `this` reads go through the builder variable "%this" (seeded to
         // the entry param by the builder): a derived constructor's super()
         // call rebinds it (the runtime constructs the object and returns
         // it), and SSA carries the update.  for every other function it
         // collapses to the entry param.
-
-        // break/continue targets.  loops push onto both stacks; switch
-        // statements only onto breakTargets (continue passes through a
-        // switch to the enclosing loop).
-        this.breakTargets = [];
-        this.continueTargets = [];
-        // labeled targets: LabeledStatement pushes loop labels onto
-        // pendingLabels; the loop lowering claims them (activeLabels)
-        // against its own exit/continue blocks.  non-loop labels get a
-        // synthetic exit block.  ctxLen = finallyCtx.length at label
-        // entry, so a labeled exit runs exactly the finalizers entered
-        // since the label.
-        this.pendingLabels = [];
-        this.activeLabels = [];
-        // materialized per-iteration loop envs lexically active at the
-        // current lowering position (innermost last).  the current env
-        // value of each is tracked as a builder variable ("%loopenv#id"),
-        // so per-iteration refreshes flow through SSA/block params like
-        // any other variable (envs are ejsvals).
-        this.activeLoopEnvs = [];
-        // active try/finally contexts.  abrupt exits (return, break,
-        // continue) crossing a finally boundary lower a fresh copy of each
-        // crossed finalizer at the exit site (finalizer duplication).
-        this.finallyCtx = [];
 
         // environment setup
         this.curEnv = this.envParam;
@@ -146,7 +191,7 @@ class LowerFunction {
         // the arguments object, if referenced anywhere in this function
         if (info.usesArguments) {
             let a = this.b.emit("args_obj", [], {});
-            this.writeBinding(info.argumentsBinding, a);
+            this.writeBinding(info.argumentsBinding!, a);
         }
 
         // an arrow below captures our `this`: store it in the env (kept
@@ -167,9 +212,10 @@ class LowerFunction {
         let defaults = info.defaults || [];
         let ndefaults = Math.min(defaults.length, info.params.length);
         for (let i = 0; i < ndefaults; i++) {
-            if (!defaults[i]) continue;
-            let pb = info.params[i];
-            let cur = this.readBinding(pb);
+            const dflt = defaults[i];
+            if (!dflt) continue;
+            const pb = info.params[i]!;
+            const cur = this.readBinding(pb);
             let isundef = this.b.emit("strict_eq", [cur, this.b.constUndefined()], {});
             let ubool = this.b.emit("to_boolean", [isundef], {});
             let dflt_bb = this.b.newBlock(`default_${pb.name}`);
@@ -177,7 +223,7 @@ class LowerFunction {
             this.b.condBr(ubool, dflt_bb, [], join_bb, []);
             this.b.sealBlock(dflt_bb);
             this.b.setInsertPoint(dflt_bb);
-            let dv = this.expr(defaults[i]);
+            const dv = this.expr(dflt);
             this.writeBinding(pb, dv);
             this.b.br(join_bb, []);
             this.b.sealBlock(join_bb);
@@ -197,7 +243,7 @@ class LowerFunction {
         }
     }
 
-    findChildFn(binding) {
+    findChildFn(binding: Binding): FnInfo {
         for (let c of this.info.children) {
             if (c.node.id && c.node.id.name === binding.name) return c;
         }
@@ -213,21 +259,21 @@ class LowerFunction {
     // from the current lowering position to the descriptor holding the
     // binding, emitting one env_load per hop.
 
-    levar(le) {
+    levar(le: LoopEnv): string {
         return `%loopenv#${le.id}`;
     }
 
     // the env value make_closure should capture at the current position
-    curEnvValue() {
+    curEnvValue(): Inst {
         if (this.activeLoopEnvs.length > 0) {
-            let le = this.activeLoopEnvs[this.activeLoopEnvs.length - 1];
+            const le = this.activeLoopEnvs[this.activeLoopEnvs.length - 1]!;
             return this.b.readVariable(this.levar(le), this.b.cur);
         }
         return this.curEnv;
     }
 
     // the innermost materialized descriptor at f's definition site
-    descAtCreation(f) {
+    descAtCreation(f: FnInfo): EnvDesc | null {
         let le = f.creationLoopEnv;
         while (le && !le.materialized) le = le.parentCandidate;
         if (le) return le;
@@ -238,7 +284,7 @@ class LowerFunction {
     }
 
     // the descriptor whose env value lives in desc's parent slot
-    parentDescOf(desc) {
+    parentDescOf(desc: EnvDesc): EnvDesc | null {
         if (desc.isLoopEnv) {
             // slot 0 holds curEnv at loop entry: the nearest enclosing
             // materialized loop env, else the function env, else the
@@ -246,8 +292,8 @@ class LowerFunction {
             let le = desc.parentCandidate;
             while (le && !le.materialized) le = le.parentCandidate;
             if (le) return le;
-            if (desc.fnInfo.envSize > 0) return desc.fnInfo;
-            return this.descAtCreation(desc.fnInfo);
+            if (desc.fnInfo!.envSize > 0) return desc.fnInfo!;
+            return this.descAtCreation(desc.fnInfo!);
         }
         // a function env's parent slot holds its incoming env
         return this.descAtCreation(desc);
@@ -256,7 +302,7 @@ class LowerFunction {
     // fresh per-iteration env for captured let/const declared in the loop
     // BODY: emitted at the top of the body block each iteration.  their
     // declarations re-execute per pass, so nothing copies forward.
-    enterLoopBody(n) {
+    enterLoopBody(n: e.Node): LoopEnv | null {
         let ble = this.analysis.loopBodyEnvOf(n);
         if (!ble) return null;
         let outer = this.curEnvValue();
@@ -267,13 +313,13 @@ class LowerFunction {
         return ble;
     }
 
-    leaveLoopBody(ble) {
+    leaveLoopBody(ble: LoopEnv | null): void {
         if (ble) this.activeLoopEnvs.pop();
     }
 
     // a loop lowering claims any labels the enclosing LabeledStatement(s)
     // queued, binding them to its own break/continue blocks
-    claimPendingLabels(breakBlock, continueBlock) {
+    claimPendingLabels(breakBlock: Block, continueBlock: Block | null): number {
         let n = this.pendingLabels.length;
         for (let name of this.pendingLabels)
             this.activeLabels.push({
@@ -286,25 +332,27 @@ class LowerFunction {
         return n;
     }
 
-    releaseLabels(n) {
+    releaseLabels(n: number): void {
         while (n-- > 0) this.activeLabels.pop();
     }
 
-    findLabel(name, loc) {
+    findLabel(name: string, loc: e.SourceLocation | null | undefined): ActiveLabel {
         for (let i = this.activeLabels.length - 1; i >= 0; i--)
-            if (this.activeLabels[i].name === name) return this.activeLabels[i];
+            if (this.activeLabels[i]!.name === name) return this.activeLabels[i]!;
         throw LowerNotSupported(`unknown label '${name}'`, loc);
     }
 
     // the environment holding `binding`, from the current position
-    envForBinding(binding) {
+    envForBinding(binding: Binding): Inst {
         let target =
             binding.loopEnv && binding.loopEnv.materialized ? binding.loopEnv : binding.fnInfo;
 
-        let desc, env;
+        let desc: EnvDesc | null;
+        let env: Inst;
         if (this.activeLoopEnvs.length > 0) {
-            desc = this.activeLoopEnvs[this.activeLoopEnvs.length - 1];
-            env = this.b.readVariable(this.levar(desc), this.b.cur);
+            const top = this.activeLoopEnvs[this.activeLoopEnvs.length - 1]!;
+            desc = top;
+            env = this.b.readVariable(this.levar(top), this.b.cur);
         } else if (this.info.envSize > 0) {
             desc = this.info;
             env = this.curEnv;
@@ -316,7 +364,9 @@ class LowerFunction {
         while (desc && desc !== target) {
             let slot = desc.isLoopEnv ? 0 : desc.parentSlot;
             if (slot < 0)
-                throw new Error(`EIR lowering: broken env chain through ${desc.name}`);
+                throw new Error(
+                    `EIR lowering: broken env chain through ${desc.isLoopEnv ? `loopenv#${desc.id}` : desc.name}`
+                );
             env = this.b.emit("env_load", [env], { slot: slot });
             desc = this.parentDescOf(desc);
         }
@@ -324,13 +374,13 @@ class LowerFunction {
         return env;
     }
 
-    readBinding(binding) {
+    readBinding(binding: Binding): Inst {
         if (!binding.captured) return this.b.readVariable(binding.uid, this.b.cur);
         let env = this.envForBinding(binding);
         return this.b.emit("env_load", [env], { slot: binding.slot });
     }
 
-    writeBinding(binding, value) {
+    writeBinding(binding: Binding, value: Inst): void {
         if (!binding.captured) {
             this.b.writeVariable(binding.uid, this.b.cur, value);
             return;
@@ -341,50 +391,50 @@ class LowerFunction {
 
     // --- expressions ----------------------------------------------------------
 
-    expr(n) {
+    expr(n: e.Expression | e.SpreadElement): Inst {
         switch (n.type) {
-            case b.Literal:
+            case "Literal":
                 return this.literal(n);
-            case b.Identifier:
+            case "Identifier":
                 return this.identifier(n);
-            case b.ThisExpression: {
+            case "ThisExpression": {
                 // resolved to a binding = an arrow's lexical this (the
                 // owner's captured this, read through the env chain)
                 let binding = this.analysis.resolve(n);
                 if (binding) return this.readBinding(binding);
                 return this.b.readVariable("%this", this.b.cur);
             }
-            case b.BinaryExpression:
+            case "BinaryExpression":
                 return this.binary(n);
-            case b.LogicalExpression:
+            case "LogicalExpression":
                 return this.logical(n);
-            case b.UnaryExpression:
+            case "UnaryExpression":
                 return this.unary(n);
-            case b.AssignmentExpression:
+            case "AssignmentExpression":
                 return this.assignment(n);
-            case b.UpdateExpression:
+            case "UpdateExpression":
                 return this.update(n);
-            case b.TemplateLiteral:
+            case "TemplateLiteral":
                 return this.template(n);
-            case b.TaggedTemplateExpression:
+            case "TaggedTemplateExpression":
                 return this.taggedTemplate(n);
-            case b.CallExpression:
+            case "CallExpression":
                 return this.call(n);
-            case b.NewExpression:
+            case "NewExpression":
                 return this.newExpr(n);
-            case b.MemberExpression:
+            case "MemberExpression":
                 return this.member(n);
-            case b.ConditionalExpression:
+            case "ConditionalExpression":
                 return this.conditional(n);
-            case b.FunctionExpression:
-            case b.ArrowFunctionExpression:
+            case "FunctionExpression":
+            case "ArrowFunctionExpression":
                 return this.functionExpr(n);
-            case b.SequenceExpression: {
-                let v;
-                for (let e of n.expressions) v = this.expr(e);
-                return v;
+            case "SequenceExpression": {
+                let v: Inst | undefined;
+                for (const sub of n.expressions) v = this.expr(sub);
+                return v!;
             }
-            case b.ArrayExpression: {
+            case "ArrayExpression": {
                 // holes must stay holes (forEach etc. skip them; undefined
                 // wouldn't be skipped).  written with plain loops: the
                 // arrow-based form of this case miscompiled under the
@@ -392,8 +442,8 @@ class LowerFunction {
                 let holes = false;
                 for (let el of n.elements) if (!el) holes = true;
                 if (!holes) {
-                    let elems = [];
-                    for (let el of n.elements) elems.push(this.expr(el));
+                    const elems: Inst[] = [];
+                    for (const el of n.elements) elems.push(this.expr(el!));
                     return this.b.emit("make_array", elems, {});
                 }
                 let vals = [];
@@ -409,19 +459,23 @@ class LowerFunction {
                     indices: indices,
                 });
             }
-            case b.ObjectExpression: {
+            case "ObjectExpression": {
                 let hasAccessors = n.properties.some((p) => p.kind && p.kind !== "init");
                 if (hasAccessors) return this.objectWithAccessors(n);
                 let hasComputed = n.properties.some(
-                    (p) => p.computed || (p.key.type !== b.Identifier && p.key.type !== b.Literal)
+                    (p) => p.computed || (p.key.type !== "Identifier" && p.key.type !== "Literal")
                 );
                 let hasProto = n.properties.some((p) => this.isProtoProp(p));
                 if (!hasComputed && !hasProto) {
-                    let keys = [];
-                    let values = [];
-                    for (let p of n.properties) {
-                        keys.push(p.key.type === b.Identifier ? p.key.name : String(p.key.value));
-                        values.push(this.expr(p.value));
+                    const keys: string[] = [];
+                    const values: Inst[] = [];
+                    for (const p of n.properties) {
+                        keys.push(
+                            p.key.type === "Identifier"
+                                ? p.key.name
+                                : String((p.key as e.Literal).value)
+                        );
+                        values.push(this.expr(p.value as e.Expression));
                     }
                     return this.b.emit("make_object", values, { keys: keys });
                 }
@@ -431,18 +485,18 @@ class LowerFunction {
                 let obj = this.b.emit("make_object", [], { keys: [] });
                 for (let p of n.properties) {
                     if (this.isProtoProp(p)) {
-                        let v = this.expr(p.value);
+                        const v = this.expr(p.value as e.Expression);
                         this.b.emit("call_runtime", [obj, v], {
                             name: "object_literal_set_proto",
                         });
-                    } else if (!p.computed && (p.key.type === b.Identifier || p.key.type === b.Literal)) {
-                        let v = this.expr(p.value);
+                    } else if (!p.computed && (p.key.type === "Identifier" || p.key.type === "Literal")) {
+                        const v = this.expr(p.value as e.Expression);
                         this.b.emit("set_prop_atom", [obj, v], {
-                            atom: p.key.type === b.Identifier ? p.key.name : String(p.key.value),
+                            atom: p.key.type === "Identifier" ? p.key.name : String((p.key as e.Literal).value),
                         });
                     } else {
                         let k = this.expr(p.key);
-                        let v = this.expr(p.value);
+                        const v = this.expr(p.value as e.Expression);
                         this.b.emit("set_prop", [obj, k, v], {});
                     }
                 }
@@ -456,11 +510,11 @@ class LowerFunction {
     // `__proto__: expr` in an object literal (non-computed, non-method,
     // non-shorthand, string or identifier key) is a prototype definition,
     // not an own property (B.3.1 / PropertyDefinitionEvaluation)
-    isProtoProp(p) {
+    isProtoProp(p: e.Property): boolean {
         if (p.computed || p.method || p.shorthand) return false;
         if (p.kind && p.kind !== "init") return false;
-        if (p.key.type === b.Identifier) return p.key.name === "__proto__";
-        return p.key.type === b.Literal && p.key.value === "__proto__";
+        if (p.key.type === "Identifier") return p.key.name === "__proto__";
+        return p.key.type === "Literal" && p.key.value === "__proto__";
     }
 
     // an object literal containing get/set accessors: empty object, then
@@ -470,44 +524,44 @@ class LowerFunction {
     // #14).  computed-key accessors each define separately in source
     // order (their keys are distinct evaluations); the runtime merges
     // the partial descriptors.
-    objectWithAccessors(n) {
+    objectWithAccessors(n: e.ObjectExpression): Inst {
         let obj = this.b.emit("make_object", [], { keys: [] });
-        let done = new Set();
+        const done = new Set<string>();
         for (let i = 0; i < n.properties.length; i++) {
-            let p = n.properties[i];
+            const p = n.properties[i]!;
             if (p.computed) {
                 let key = this.expr(p.key);
                 if (p.kind && p.kind !== "init") {
-                    let accessor = this.expr(p.value);
+                    const accessor = this.expr(p.value as e.Expression);
                     this.b.emit("define_accessor_computed", [obj, key, accessor], {
                         kind: p.kind,
                     });
                 } else {
-                    let v = this.expr(p.value);
+                    const v = this.expr(p.value as e.Expression);
                     this.b.emit("set_prop", [obj, key, v], {});
                 }
                 continue;
             }
-            if (p.key.type !== b.Identifier && p.key.type !== b.Literal)
+            if (p.key.type !== "Identifier" && p.key.type !== "Literal")
                 throw LowerNotSupported(`accessor object literal key ${p.key.type}`, n.loc);
             if (this.isProtoProp(p)) {
-                let v = this.expr(p.value);
+                const v = this.expr(p.value as e.Expression);
                 this.b.emit("call_runtime", [obj, v], { name: "object_literal_set_proto" });
                 continue;
             }
-            let name = p.key.type === b.Identifier ? p.key.name : String(p.key.value);
+            const name = p.key.type === "Identifier" ? p.key.name : String((p.key as e.Literal).value);
             if (p.kind && p.kind !== "init") {
                 if (done.has(name)) continue; // the pair lowered together
                 done.add(name);
-                let getter = null;
-                let setter = null;
+                let getter: Inst | null = null;
+                let setter: Inst | null = null;
                 for (let j = i; j < n.properties.length; j++) {
-                    let q = n.properties[j];
+                    const q = n.properties[j]!;
                     if (q.kind === "init" || q.computed) continue;
-                    let qname = q.key.type === b.Identifier ? q.key.name : String(q.key.value);
+                    const qname = q.key.type === "Identifier" ? q.key.name : String((q.key as e.Literal).value);
                     if (qname !== name) continue;
-                    if (q.kind === "get") getter = this.expr(q.value);
-                    else if (q.kind === "set") setter = this.expr(q.value);
+                    if (q.kind === "get") getter = this.expr(q.value as e.Expression);
+                    else if (q.kind === "set") setter = this.expr(q.value as e.Expression);
                 }
                 this.b.emit(
                     "define_accessor",
@@ -515,14 +569,14 @@ class LowerFunction {
                     { atom: name }
                 );
             } else {
-                let v = this.expr(p.value);
+                const v = this.expr(p.value as e.Expression);
                 this.b.emit("set_prop_atom", [obj, v], { atom: name });
             }
         }
         return obj;
     }
 
-    literal(n) {
+    literal(n: e.Literal): Inst {
         if (n.value === null) return this.b.constNull();
         switch (typeof n.value) {
             case "number":
@@ -552,7 +606,7 @@ class LowerFunction {
         }
     }
 
-    identifier(n) {
+    identifier(n: e.Identifier): Inst {
         if (n.name === "undefined") return this.b.constUndefined();
         let binding = this.analysis.resolve(n);
         if (binding === null || binding === undefined) {
@@ -573,7 +627,7 @@ class LowerFunction {
         return this.readBinding(binding);
     }
 
-    functionExpr(n) {
+    functionExpr(n: e.FunctionExpression | e.ArrowFunctionExpression): Inst {
         let childInfo = this.analysis.infoFor(n);
         if (!childInfo) throw new Error("EIR lowering: unanalyzed function expression");
         lowerOneFunction(childInfo, this.analysis, this.module, this.mod_ctx);
@@ -585,7 +639,7 @@ class LowerFunction {
         });
     }
 
-    binary(n) {
+    binary(n: e.BinaryExpression): Inst {
         let op = binops[n.operator];
         if (!op) throw LowerNotSupported(`binary operator ${n.operator}`, n.loc);
         let l = this.expr(n.left);
@@ -593,7 +647,7 @@ class LowerFunction {
         return this.b.emit(op, [l, r], {});
     }
 
-    logical(n) {
+    logical(n: e.LogicalExpression): Inst {
         let l = this.expr(n.left);
         let lbool = this.b.emit("to_boolean", [l], {});
 
@@ -615,7 +669,7 @@ class LowerFunction {
         return result;
     }
 
-    unary(n) {
+    unary(n: e.UnaryExpression): Inst {
         let arg;
         switch (n.operator) {
             case "!":
@@ -639,13 +693,13 @@ class LowerFunction {
                 this.expr(n.argument);
                 return this.b.constUndefined();
             case "delete": {
-                // only member expressions (matching the legacy visitUnary)
-                let m = n.argument;
-                let obj = this.expr(m.object);
-                let key;
-                if (!m.computed && m.property.type === b.Identifier)
-                    key = this.b.constAtom(m.property.name);
-                else key = this.expr(m.property);
+                // only member expressions (scopes rejected everything else)
+                const m = n.argument as e.MemberExpression;
+                const obj = this.expr(m.object as e.Expression);
+                const key =
+                    !m.computed && m.property.type === "Identifier"
+                        ? this.b.constAtom(m.property.name)
+                        : this.expr(m.property);
                 return this.b.emit("delete_prop", [obj, key], {});
             }
             default:
@@ -656,7 +710,7 @@ class LowerFunction {
     // the one-time declaration store for a slot-backed toplevel binding:
     // unlike writeIdentifier this may store to read-only refs (an exported
     // const's initializer is a legitimate store)
-    writeModuleSlotInit(idNode, value) {
+    writeModuleSlotInit(idNode: e.Identifier, value: Inst): void {
         let ref = this.mod_ctx.refs.get(idNode.name);
         if (!ref || ref.module === undefined || ref.slot === undefined || ref.slot < 0)
             throw LowerNotSupported(
@@ -667,7 +721,7 @@ class LowerFunction {
     }
 
     // store `value` into this module's export slot named `exportName`
-    storeExportSlot(exportName, value, loc) {
+    storeExportSlot(exportName: string, value: Inst, loc: e.SourceLocation | null | undefined): void {
         let tmi = this.mod_ctx.this_module_info;
         let export_info = tmi && tmi.exports.get(exportName);
         if (!export_info)
@@ -680,7 +734,7 @@ class LowerFunction {
 
     // store `value` into the identifier `idNode` (local binding, writable
     // module slot, or global)
-    writeIdentifier(idNode, value) {
+    writeIdentifier(idNode: e.Identifier, value: Inst): void {
         let binding = this.analysis.resolve(idNode);
         if (binding === null || binding === undefined) {
             let ref = this.mod_ctx.refs.get(idNode.name);
@@ -702,11 +756,12 @@ class LowerFunction {
         this.writeBinding(binding, value);
     }
 
-    assignment(n) {
-        let binop = n.operator === "=" ? null : binops[compound_assign_ops[n.operator]];
+    assignment(n: e.AssignmentExpression): Inst {
+        const desugared = compound_assign_ops[n.operator];
+        const binop = n.operator === "=" || !desugared ? null : binops[desugared];
         if (n.operator !== "=" && !binop)
             throw LowerNotSupported(`assignment operator ${n.operator}`, n.loc);
-        if (n.left.type === b.Identifier) {
+        if (n.left.type === "Identifier") {
             let v;
             if (binop) {
                 let cur = this.identifier(n.left);
@@ -718,58 +773,58 @@ class LowerFunction {
             this.writeIdentifier(n.left, v);
             return v;
         }
-        if (n.left.type === b.MemberExpression) {
+        if (n.left.type === "MemberExpression") {
             // evaluate the object (and computed key) exactly once
-            let obj = this.expr(n.left.object);
-            let atom = null;
-            let key = null;
-            if (!n.left.computed && n.left.property.type === b.Identifier)
+            const obj = this.expr(n.left.object as e.Expression);
+            let atom: string | null = null;
+            let key: Inst | null = null;
+            if (!n.left.computed && n.left.property.type === "Identifier")
                 atom = n.left.property.name;
             else key = this.expr(n.left.property);
-            let v;
+            let v: Inst;
             if (binop) {
-                let cur =
+                const cur =
                     atom !== null
                         ? this.b.emit("get_prop_atom", [obj], { atom: atom })
-                        : this.b.emit("get_prop", [obj, key], {});
-                let rhs = this.expr(n.right);
+                        : this.b.emit("get_prop", [obj, key!], {});
+                const rhs = this.expr(n.right);
                 v = this.b.emit(binop, [cur, rhs], {});
             } else {
                 v = this.expr(n.right);
             }
             if (atom !== null) this.b.emit("set_prop_atom", [obj, v], { atom: atom });
-            else this.b.emit("set_prop", [obj, key, v], {});
+            else this.b.emit("set_prop", [obj, key!, v], {});
             return v;
         }
         throw LowerNotSupported(`assignment target ${n.left.type}`, n.loc);
     }
 
     // ++/--: ToNumber(old value) via unary_plus, then add/sub 1
-    update(n) {
+    update(n: e.UpdateExpression): Inst {
         let one = this.b.constNumber(1);
         let op = n.operator === "++" ? "add" : "sub";
-        if (n.argument.type === b.Identifier) {
+        if (n.argument.type === "Identifier") {
             let cur = this.identifier(n.argument);
             let old = this.b.emit("unary_plus", [cur], {});
             let nv = this.b.emit(op, [old, one], {});
             this.writeIdentifier(n.argument, nv);
             return n.prefix ? nv : old;
         }
-        if (n.argument.type === b.MemberExpression) {
-            let m = n.argument;
-            let obj = this.expr(m.object);
-            let atom = null;
-            let key = null;
-            if (!m.computed && m.property.type === b.Identifier) atom = m.property.name;
+        if (n.argument.type === "MemberExpression") {
+            const m = n.argument;
+            const obj = this.expr(m.object as e.Expression);
+            let atom: string | null = null;
+            let key: Inst | null = null;
+            if (!m.computed && m.property.type === "Identifier") atom = m.property.name;
             else key = this.expr(m.property);
-            let cur =
+            const cur =
                 atom !== null
                     ? this.b.emit("get_prop_atom", [obj], { atom: atom })
-                    : this.b.emit("get_prop", [obj, key], {});
-            let old = this.b.emit("unary_plus", [cur], {});
-            let nv = this.b.emit(op, [old, one], {});
+                    : this.b.emit("get_prop", [obj, key!], {});
+            const old = this.b.emit("unary_plus", [cur], {});
+            const nv = this.b.emit(op, [old, one], {});
             if (atom !== null) this.b.emit("set_prop_atom", [obj, nv], { atom: atom });
-            else this.b.emit("set_prop", [obj, key, nv], {});
+            else this.b.emit("set_prop", [obj, key!, nv], {});
             return n.prefix ? nv : old;
         }
         throw LowerNotSupported(`update of ${n.argument.type}`, n.loc);
@@ -778,17 +833,17 @@ class LowerFunction {
     // untagged template literal: the inlined default handler — zip cooked
     // strings and ToString'ed substitutions with string_concat (matching
     // the legacy handleTemplateDefaultHandlerCall)
-    template(n) {
-        let strval = null;
-        let concat = (s) => {
+    template(n: e.TemplateLiteral): Inst {
+        let strval: Inst | null = null;
+        const concat = (s: Inst) => {
             if (!strval) strval = s;
             else strval = this.b.emit("call_runtime", [strval, s], { name: "string_concat" });
         };
         for (let i = 0; i < n.quasis.length; i++) {
-            let cooked = n.quasis[i].value.cooked;
+            const cooked = n.quasis[i]!.value.cooked;
             if (cooked.length !== 0) concat(this.b.constAtom(cooked));
             if (i < n.expressions.length) {
-                let sub = this.expr(n.expressions[i]);
+                const sub = this.expr(n.expressions[i]!);
                 concat(this.b.emit("call_runtime", [sub], { name: "ToString" }));
             }
         }
@@ -798,17 +853,17 @@ class LowerFunction {
     // tag`lit ${x}` -> tag(callsite, x): the callsite object is a
     // per-site cached frozen array (template_callsite); member tags keep
     // their receiver as `this`, like any method call
-    taggedTemplate(n) {
+    taggedTemplate(n: e.TaggedTemplateExpression): Inst {
         let callsite = this.b.emit("template_callsite", [], {
             cooked: n.quasi.quasis.map((q) => q.value.cooked),
             raw: n.quasi.quasis.map((q) => q.value.raw),
         });
-        let subs = n.quasi.expressions.map((e) => this.expr(e));
+        const subs = n.quasi.expressions.map((sub) => this.expr(sub));
 
-        let callee, thisArg;
-        if (n.tag.type === b.MemberExpression) {
-            thisArg = this.expr(n.tag.object);
-            if (!n.tag.computed && n.tag.property.type === b.Identifier)
+        let callee: Inst, thisArg: Inst;
+        if (n.tag.type === "MemberExpression") {
+            thisArg = this.expr(n.tag.object as e.Expression);
+            if (!n.tag.computed && n.tag.property.type === "Identifier")
                 callee = this.b.emit("get_prop_atom", [thisArg], { atom: n.tag.property.name });
             else {
                 let key = this.expr(n.tag.property);
@@ -826,22 +881,22 @@ class LowerFunction {
     // module object doesn't answer runtime property lookups for its
     // exports.  native ("@...") modules DO — they keep the runtime path.
     // returns the loaded value, or null if this isn't such an access.
-    exoticMemberLoad(n) {
-        if (n.object.type !== b.Identifier) return null;
+    exoticMemberLoad(n: e.MemberExpression): Inst | null {
+        if (n.object.type !== "Identifier") return null;
         let binding = this.analysis.resolve(n.object);
         if (binding !== null && binding !== undefined) return null; // shadowed
         let ref = this.mod_ctx.refs.get(n.object.name);
         if (!ref || ref.exotic === undefined || !ref.module_info) return null;
         if (ref.exotic[0] === "@") return null; // native: runtime lookup works
         let name = null;
-        if (!n.computed && n.property.type === b.Identifier) name = n.property.name;
-        else if (n.property.type === b.Literal && typeof n.property.value === "string")
+        if (!n.computed && n.property.type === "Identifier") name = n.property.name;
+        else if (n.property.type === "Literal" && typeof n.property.value === "string")
             name = n.property.value;
         if (name === null) return null;
         let export_info = ref.module_info.exports.get(name);
         if (!export_info || export_info.promoted) return null; // promoted slots are private
         let cv = export_info.constval;
-        if (cv && cv.type === b.Literal && (cv.value === null || typeof cv.value !== "object"))
+        if (cv && cv.type === "Literal" && (cv.value === null || typeof cv.value !== "object"))
             return this.literal(cv);
         return this.b.emit("module_slot_load", [], {
             module: ref.exotic,
@@ -849,23 +904,23 @@ class LowerFunction {
         });
     }
 
-    member(n) {
+    member(n: e.MemberExpression): Inst {
         let slotv = this.exoticMemberLoad(n);
         if (slotv) return slotv;
         let obj = this.expr(n.object);
-        if (!n.computed && n.property.type === b.Identifier)
+        if (!n.computed && n.property.type === "Identifier")
             return this.b.emit("get_prop_atom", [obj], { atom: n.property.name });
         let key = this.expr(n.property);
         return this.b.emit("get_prop", [obj, key], {});
     }
 
-    call(n) {
+    call(n: e.CallExpression): Inst {
         // %-intrinsic calls from the pre-EIR desugar passes lower through
         // the table in intrinsics.js (scopes.js already rejected unknowns)
-        if (n.callee.type === b.Identifier && n.callee.name[0] === "%")
+        if (n.callee.type === "Identifier" && n.callee.name[0] === "%")
             return this.intrinsicCall(n);
         let callee, thisArg;
-        if (n.callee.type === b.MemberExpression) {
+        if (n.callee.type === "MemberExpression") {
             // ns.member(...) on a JS namespace import: the callee resolves
             // to a slot load and `this` is undefined (the legacy rewrite
             // turns the member expression into %moduleGetSlot before call
@@ -880,7 +935,7 @@ class LowerFunction {
                 );
             }
             thisArg = this.expr(n.callee.object);
-            if (!n.callee.computed && n.callee.property.type === b.Identifier)
+            if (!n.callee.computed && n.callee.property.type === "Identifier")
                 callee = this.b.emit("get_prop_atom", [thisArg], {
                     atom: n.callee.property.name,
                 });
@@ -891,7 +946,7 @@ class LowerFunction {
         } else {
             // direct calls: recursion through the self binding skips
             // closure dispatch
-            if (n.callee.type === b.Identifier) {
+            if (n.callee.type === "Identifier") {
                 let binding = this.analysis.resolve(n.callee);
                 if (binding && binding.kind === "self" && binding.fnInfo === this.info) {
                     let dthis = this.b.constUndefined();
@@ -908,9 +963,10 @@ class LowerFunction {
         return this.b.emit("call", [callee, thisArg].concat(args), {});
     }
 
-    intrinsicCall(n) {
-        let intr = eir_intrinsics[n.callee.name];
-        if (!intr) throw LowerNotSupported(`intrinsic ${n.callee.name}`, n.loc);
+    intrinsicCall(n: e.CallExpression): Inst {
+        const calleeName = (n.callee as e.Identifier).name;
+        const intr = eir_intrinsics[calleeName];
+        if (!intr) throw LowerNotSupported(`intrinsic ${calleeName}`, n.loc);
         let args = n.arguments.map((a) => this.expr(a));
         let v;
         if (intr.op) v = this.b.emit(intr.op, args, {});
@@ -926,13 +982,13 @@ class LowerFunction {
         return v;
     }
 
-    newExpr(n) {
+    newExpr(n: e.NewExpression): Inst {
         let callee = this.expr(n.callee);
         let args = n.arguments.map((a) => this.expr(a));
         return this.b.emit("construct", [callee].concat(args), {});
     }
 
-    conditional(n) {
+    conditional(n: e.ConditionalExpression): Inst {
         let cond = this.expr(n.test);
         let cbool = this.b.emit("to_boolean", [cond], {});
 
@@ -960,21 +1016,21 @@ class LowerFunction {
 
     // --- statements ---------------------------------------------------------------
 
-    stmt(n) {
+    stmt(n: e.Statement): void {
         switch (n.type) {
-            case b.BlockStatement:
+            case "BlockStatement":
                 for (let s of n.body) {
                     this.stmt(s);
                     if (this.b.cur.terminated) return;
                 }
                 return;
-            case b.VariableDeclaration:
+            case "VariableDeclaration":
                 for (let d of n.declarations) {
-                    if (d.id.type === b.ObjectPattern) {
+                    if (d.id.type === "ObjectPattern") {
                         this.lowerObjectPatternDecl(d);
                         continue;
                     }
-                    if (d.id.type !== b.Identifier)
+                    if (d.id.type !== "Identifier")
                         throw LowerNotSupported(`declaration pattern ${d.id.type}`, n.loc);
                     let binding = this.analysis.resolve(d.id);
                     if (!binding && this.isToplevel) {
@@ -993,19 +1049,19 @@ class LowerFunction {
                     // in the init captures the (env) binding the real value
                     // is stored into below.  free for uncaptured bindings
                     // (SSA map write only).
-                    this.writeBinding(binding, this.b.constUndefined());
-                    let init = d.init ? this.expr(d.init) : this.b.constUndefined();
-                    this.writeBinding(binding, init);
+                    this.writeBinding(binding!, this.b.constUndefined());
+                    const init = d.init ? this.expr(d.init) : this.b.constUndefined();
+                    this.writeBinding(binding!, init);
                 }
                 return;
-            case b.FunctionDeclaration: {
+            case "FunctionDeclaration": {
                 let binding = this.analysis.resolve(n.id);
                 if (!binding && this.isToplevel) {
                     // a slot-backed module function: lower it, then store
                     // its closure to the slot at this statement's source
                     // position (same hoisting caveat as the legacy
                     // %moduleSetSlot rewrite)
-                    let childInfo = this.analysis.infoFor(n);
+                    const childInfo = this.analysis.infoFor(n)!;
                     lowerOneFunction(childInfo, this.analysis, this.module, this.mod_ctx);
                     let closure = this.b.emit("make_closure", [this.curEnvValue()], {
                         fn: childInfo.name,
@@ -1015,18 +1071,18 @@ class LowerFunction {
                     return;
                 }
                 // closure was created (hoisted) at entry; lower the body now
-                lowerOneFunction(this.analysis.infoFor(n), this.analysis, this.module, this.mod_ctx);
+                lowerOneFunction(this.analysis.infoFor(n)!, this.analysis, this.module, this.mod_ctx);
                 return;
             }
-            case b.ImportDeclaration:
+            case "ImportDeclaration":
                 if (!this.isToplevel) throw LowerNotSupported("import declaration", n.loc);
                 // module resolution happens in the toplevel scaffolding;
                 // a bare `import "m"` also touches the module object for
                 // parity with the legacy %moduleGetExotic rewrite
                 if (n.specifiers.length === 0)
-                    this.b.emit("module_get_exotic", [], { module: n.source_path.value });
+                    this.b.emit("module_get_exotic", [], { module: n.source_path!.value });
                 return;
-            case b.ExportNamedDeclaration: {
+            case "ExportNamedDeclaration": {
                 if (!this.isToplevel) throw LowerNotSupported("export declaration", n.loc);
                 if (n.declaration && !Array.isArray(n.declaration)) return this.stmt(n.declaration);
                 // export { a as b } from "m": copy the source module's
@@ -1034,7 +1090,7 @@ class LowerFunction {
                 // moduleGetSlot/moduleSetSlot rewrite — a snapshot, not a
                 // live binding)
                 if (n.source) {
-                    let source = n.source_path.value;
+                    const source = n.source_path!.value;
                     let source_info =
                         this.mod_ctx.module_infos && this.mod_ctx.module_infos.get(source);
                     if (!source_info || source_info.isNative())
@@ -1062,30 +1118,30 @@ class LowerFunction {
                 }
                 return;
             }
-            case b.ExportDefaultDeclaration: {
+            case "ExportDefaultDeclaration": {
                 if (!this.isToplevel) throw LowerNotSupported("export default", n.loc);
-                let v = this.expr(n.declaration);
+                const v = this.expr(n.declaration as e.Expression);
                 this.storeExportSlot("default", v, n.loc);
                 return;
             }
-            case b.ExpressionStatement:
+            case "ExpressionStatement":
                 this.expr(n.expression);
                 return;
-            case b.IfStatement:
+            case "IfStatement":
                 return this.ifStmt(n);
-            case b.WhileStatement:
+            case "WhileStatement":
                 return this.whileStmt(n);
-            case b.DoWhileStatement:
+            case "DoWhileStatement":
                 return this.doWhileStmt(n);
-            case b.ForStatement:
+            case "ForStatement":
                 return this.forStmt(n);
-            case b.ForOfStatement:
+            case "ForOfStatement":
                 return this.forOfStmt(n);
-            case b.ForInStatement:
+            case "ForInStatement":
                 return this.forInStmt(n);
-            case b.SwitchStatement:
+            case "SwitchStatement":
                 return this.switchStmt(n);
-            case b.ReturnStatement: {
+            case "ReturnStatement": {
                 let rv = n.argument ? this.expr(n.argument) : this.b.constUndefined();
                 if (this.finallyCtx.length > 0) {
                     if (this.runFinalizers(0)) return; // a finalizer overrode control
@@ -1093,23 +1149,23 @@ class LowerFunction {
                 this.b.ret(rv);
                 return;
             }
-            case b.ThrowStatement:
+            case "ThrowStatement":
                 this.b.throwValue(this.expr(n.argument));
                 return;
-            case b.TryStatement:
+            case "TryStatement":
                 return this.tryStmt(n);
-            case b.LabeledStatement: {
+            case "LabeledStatement": {
                 // labels on loops bind to the loop's own blocks (the loop
                 // lowering claims them); labels on anything else get a
                 // synthetic exit block for labeled breaks
                 let body = n.body;
-                while (body.type === b.LabeledStatement) body = body.body;
+                while (body.type === "LabeledStatement") body = body.body;
                 let isLoop =
-                    body.type === b.WhileStatement ||
-                    body.type === b.DoWhileStatement ||
-                    body.type === b.ForStatement ||
-                    body.type === b.ForInStatement ||
-                    body.type === b.ForOfStatement;
+                    body.type === "WhileStatement" ||
+                    body.type === "DoWhileStatement" ||
+                    body.type === "ForStatement" ||
+                    body.type === "ForInStatement" ||
+                    body.type === "ForOfStatement";
                 if (isLoop) {
                     this.pendingLabels.push(n.label.name);
                     this.stmt(n.body);
@@ -1129,7 +1185,7 @@ class LowerFunction {
                 this.b.setInsertPoint(exit);
                 return;
             }
-            case b.BreakStatement: {
+            case "BreakStatement": {
                 if (n.label) {
                     let l = this.findLabel(n.label.name, n.loc);
                     if (this.finallyCtx.length > l.ctxLen) {
@@ -1145,10 +1201,10 @@ class LowerFunction {
                 if (firstCrossed !== -1) {
                     if (this.runFinalizers(firstCrossed)) return;
                 }
-                this.b.br(this.breakTargets[targetLen - 1], []);
+                this.b.br(this.breakTargets[targetLen - 1]!, []);
                 return;
             }
-            case b.ContinueStatement: {
+            case "ContinueStatement": {
                 if (n.label) {
                     let l = this.findLabel(n.label.name, n.loc);
                     if (!l.continueBlock)
@@ -1166,18 +1222,18 @@ class LowerFunction {
                 if (firstCrossed !== -1) {
                     if (this.runFinalizers(firstCrossed)) return;
                 }
-                this.b.br(this.continueTargets[targetLen - 1], []);
+                this.b.br(this.continueTargets[targetLen - 1]!, []);
                 return;
             }
-            case b.EmptyStatement:
-            case b.DebuggerStatement: // a no-op in compiled code
+            case "EmptyStatement":
+            case "DebuggerStatement": // a no-op in compiled code
                 return;
             default:
                 throw LowerNotSupported(`statement type ${n.type}`, n.loc);
         }
     }
 
-    ifStmt(n) {
+    ifStmt(n: e.IfStatement): void {
         let cond = this.expr(n.test);
         let cbool = this.b.emit("to_boolean", [cond], {});
 
@@ -1195,14 +1251,14 @@ class LowerFunction {
 
         if (else_bb) {
             this.b.setInsertPoint(else_bb);
-            this.stmt(n.alternate);
+            this.stmt(n.alternate!);
             if (!this.b.cur.terminated) this.b.br(join_bb, []);
         }
         this.b.sealBlock(join_bb);
         this.b.setInsertPoint(join_bb);
     }
 
-    whileStmt(n) {
+    whileStmt(n: e.WhileStatement): void {
         let header = this.b.newBlock("while_header");
         let body = this.b.newBlock("while_body");
         let exit = this.b.newBlock("while_exit");
@@ -1232,7 +1288,7 @@ class LowerFunction {
         this.b.setInsertPoint(exit);
     }
 
-    doWhileStmt(n) {
+    doWhileStmt(n: e.DoWhileStatement): void {
         let body = this.b.newBlock("do_body");
         let cond_bb = this.b.newBlock("do_cond");
         let exit = this.b.newBlock("do_exit");
@@ -1261,24 +1317,24 @@ class LowerFunction {
         this.b.setInsertPoint(exit);
     }
 
-    forStmt(n) {
+    forStmt(n: e.ForStatement): void {
         // captured let/const loop vars live in a fresh env per iteration:
         // the initial env is created before the init declaration runs, and
         // each pass through the update block makes a new env, copying the
         // loop vars forward (so the update and next test see the copies,
         // and closures made in earlier iterations keep their own)
         let le = this.analysis.loopEnvOf(n);
-        let outerEnvVal = null;
+        let outerEnvVal: Inst | null = null;
         if (le) {
             outerEnvVal = this.curEnvValue();
             let e = this.b.emit("make_env", [], { size: le.envSize });
-            this.b.emit("env_store", [e, outerEnvVal], { slot: 0 });
+            this.b.emit("env_store", [e, outerEnvVal!], { slot: 0 });
             this.b.writeVariable(this.levar(le), this.b.cur, e);
             this.activeLoopEnvs.push(le);
         }
 
         if (n.init) {
-            if (n.init.type === b.VariableDeclaration) this.stmt(n.init);
+            if (n.init.type === "VariableDeclaration") this.stmt(n.init);
             else this.expr(n.init);
         }
 
@@ -1316,7 +1372,7 @@ class LowerFunction {
         if (le) {
             let eold = this.b.readVariable(this.levar(le), this.b.cur);
             let enew = this.b.emit("make_env", [], { size: le.envSize });
-            this.b.emit("env_store", [enew, outerEnvVal], { slot: 0 });
+            this.b.emit("env_store", [enew, outerEnvVal!], { slot: 0 });
             for (let bd of le.bindings) {
                 let v = this.b.emit("env_load", [eold], { slot: bd.slot });
                 this.b.emit("env_store", [enew, v], { slot: bd.slot });
@@ -1331,19 +1387,21 @@ class LowerFunction {
         this.b.setInsertPoint(exit);
     }
 
-    lowerObjectPatternDecl(d) {
-        let src = d.init ? this.expr(d.init) : this.b.constUndefined();
-        for (let prop of d.id.properties) {
-            let keyName =
-                prop.key.type === b.Identifier ? prop.key.name : String(prop.key.value);
-            let target = prop.value;
-            let dflt = null;
-            if (target.type === b.AssignmentPattern) {
+    lowerObjectPatternDecl(d: e.VariableDeclarator): void {
+        const src = d.init ? this.expr(d.init) : this.b.constUndefined();
+        for (const prop of (d.id as e.ObjectPattern).properties) {
+            const keyName =
+                prop.key.type === "Identifier"
+                    ? prop.key.name
+                    : String((prop.key as e.Literal).value);
+            let target = prop.value as e.Pattern;
+            let dflt: e.Expression | null = null;
+            if (target.type === "AssignmentPattern") {
                 dflt = target.right;
                 target = target.left;
             }
-            let binding = this.analysis.resolve(target);
-            let v = this.b.emit("get_prop_atom", [src], { atom: keyName });
+            const binding = this.analysis.resolve(target)!;
+            const v = this.b.emit("get_prop_atom", [src], { atom: keyName });
             this.writeBinding(binding, v);
             if (dflt) {
                 let isundef = this.b.emit("strict_eq", [v, this.b.constUndefined()], {});
@@ -1353,7 +1411,7 @@ class LowerFunction {
                 this.b.condBr(ubool, dflt_bb, [], join_bb, []);
                 this.b.sealBlock(dflt_bb);
                 this.b.setInsertPoint(dflt_bb);
-                let dv = this.expr(dflt);
+                const dv = this.expr(dflt);
                 this.writeBinding(binding, dv);
                 this.b.br(join_bb, []);
                 this.b.sealBlock(join_bb);
@@ -1364,7 +1422,7 @@ class LowerFunction {
 
     // mirrors the legacy DesugarForOf expansion: iterable[Symbol.iterator]()
     // once, then `next()` per iteration, testing `.done` and binding `.value`
-    forOfStmt(n) {
+    forOfStmt(n: e.ForOfStatement): void {
         // a captured let/const loop var gets a fresh env each iteration
         // (created at the top of the body, right before the var is bound);
         // no copying between iterations — the binding is (re)assigned from
@@ -1373,7 +1431,7 @@ class LowerFunction {
         // walking the RHS, so a closure there may already capture it
         // (reading undefined, matching the legacy alloca behavior).
         let le = this.analysis.loopEnvOf(n);
-        let outerEnvVal = null;
+        let outerEnvVal: Inst | null = null;
         if (le) {
             outerEnvVal = this.curEnvValue();
             let e0 = this.b.emit("make_env", [], { size: le.envSize });
@@ -1405,15 +1463,15 @@ class LowerFunction {
         this.b.setInsertPoint(body);
         if (le) {
             let e = this.b.emit("make_env", [], { size: le.envSize });
-            this.b.emit("env_store", [e, outerEnvVal], { slot: 0 });
+            this.b.emit("env_store", [e, outerEnvVal!], { slot: 0 });
             this.b.writeVariable(this.levar(le), this.b.cur, e);
         }
-        let v = this.b.emit("get_prop_atom", [res], { atom: "value" });
-        if (n.left.type === b.VariableDeclaration) {
-            let binding = this.analysis.resolve(n.left.declarations[0].id);
+        const v = this.b.emit("get_prop_atom", [res], { atom: "value" });
+        if (n.left.type === "VariableDeclaration") {
+            const binding = this.analysis.resolve(n.left.declarations[0]!.id)!;
             this.writeBinding(binding, v);
         } else {
-            this.writeIdentifier(n.left, v);
+            this.writeIdentifier(n.left as e.Identifier, v);
         }
         let ble = this.enterLoopBody(n);
         this.breakTargets.push(exit);
@@ -1436,11 +1494,11 @@ class LowerFunction {
     // prop_iterator_next / prop_iterator_current per iteration.  the
     // iterator value is opaque (not an ejsval) and must stay a direct
     // instruction reference — never a block argument.
-    forInStmt(n) {
+    forInStmt(n: e.ForInStatement): void {
         // fresh env per iteration for a captured let/const binding, with
         // an initial env before the RHS evaluates — as in forOfStmt
         let le = this.analysis.loopEnvOf(n);
-        let outerEnvVal = null;
+        let outerEnvVal: Inst | null = null;
         if (le) {
             outerEnvVal = this.curEnvValue();
             let e0 = this.b.emit("make_env", [], { size: le.envSize });
@@ -1466,15 +1524,15 @@ class LowerFunction {
         this.b.setInsertPoint(body);
         if (le) {
             let e = this.b.emit("make_env", [], { size: le.envSize });
-            this.b.emit("env_store", [e, outerEnvVal], { slot: 0 });
+            this.b.emit("env_store", [e, outerEnvVal!], { slot: 0 });
             this.b.writeVariable(this.levar(le), this.b.cur, e);
         }
-        let v = this.b.emit("prop_iter_current", [iter], {});
-        if (n.left.type === b.VariableDeclaration) {
-            let binding = this.analysis.resolve(n.left.declarations[0].id);
+        const v = this.b.emit("prop_iter_current", [iter], {});
+        if (n.left.type === "VariableDeclaration") {
+            const binding = this.analysis.resolve(n.left.declarations[0]!.id)!;
             this.writeBinding(binding, v);
         } else {
-            this.writeIdentifier(n.left, v);
+            this.writeIdentifier(n.left as e.Identifier, v);
         }
         let ble = this.enterLoopBody(n);
         this.breakTargets.push(exit);
@@ -1493,7 +1551,7 @@ class LowerFunction {
         this.b.setInsertPoint(exit);
     }
 
-    switchStmt(n) {
+    switchStmt(n: e.SwitchStatement): void {
         let disc = this.expr(n.discriminant);
         let exit = this.b.newBlock("switch_exit");
         let bodies = n.cases.map((c, i) => this.b.newBlock(`case_body${i}`));
@@ -1501,31 +1559,32 @@ class LowerFunction {
 
         // test chain, in document order, skipping default
         for (let i = 0; i < n.cases.length; i++) {
-            if (!n.cases[i].test) continue;
-            let tv = this.expr(n.cases[i].test);
-            let cmp = this.b.emit("strict_eq", [disc, tv], {});
-            let cbool = this.b.emit("to_boolean", [cmp], {});
-            let next_test = this.b.newBlock(`case_test${i}`);
-            this.b.condBr(cbool, bodies[i], [], next_test, []);
+            const test = n.cases[i]!.test;
+            if (!test) continue;
+            const tv = this.expr(test);
+            const cmp = this.b.emit("strict_eq", [disc, tv], {});
+            const cbool = this.b.emit("to_boolean", [cmp], {});
+            const next_test = this.b.newBlock(`case_test${i}`);
+            this.b.condBr(cbool, bodies[i]!, [], next_test, []);
             this.b.sealBlock(next_test);
             this.b.setInsertPoint(next_test);
         }
         // no test matched: default body, or out
-        this.b.br(defaultIdx >= 0 ? bodies[defaultIdx] : exit, []);
+        this.b.br(defaultIdx >= 0 ? bodies[defaultIdx]! : exit, []);
 
         // bodies, in document order, falling through to the next
         this.breakTargets.push(exit);
         for (let i = 0; i < n.cases.length; i++) {
             // all of bodies[i]'s preds exist now: its test edge (above) and
             // the fallthrough branch emitted for bodies[i-1] last iteration
-            this.b.sealBlock(bodies[i]);
-            this.b.setInsertPoint(bodies[i]);
-            for (let s of n.cases[i].consequent) {
+            this.b.sealBlock(bodies[i]!);
+            this.b.setInsertPoint(bodies[i]!);
+            for (const s of n.cases[i]!.consequent) {
                 this.stmt(s);
                 if (this.b.cur.terminated) break;
             }
             if (!this.b.cur.terminated)
-                this.b.br(i + 1 < n.cases.length ? bodies[i + 1] : exit, []);
+                this.b.br(i + 1 < n.cases.length ? bodies[i + 1]! : exit, []);
         }
         this.breakTargets.pop();
         this.b.sealBlock(exit);
@@ -1539,13 +1598,13 @@ class LowerFunction {
     // return/break inside a finalizer overrides control per spec, and an
     // exception during the copy propagates without re-running it.
     // returns true if a finalizer terminated the current block.
-    runFinalizers(from) {
+    runFinalizers(from: number): boolean {
         let savedCtx = this.finallyCtx;
         let savedHandlers = this.b.handlers;
         for (let i = savedCtx.length - 1; i >= from; i--) {
             this.finallyCtx = savedCtx.slice(0, i);
-            this.b.handlers = savedHandlers.slice(0, savedCtx[i].handlerDepth);
-            this.stmt(savedCtx[i].node);
+            this.b.handlers = savedHandlers.slice(0, savedCtx[i]!.handlerDepth);
+            this.stmt(savedCtx[i]!.node);
             if (this.b.cur.terminated) {
                 this.finallyCtx = savedCtx;
                 this.b.handlers = savedHandlers;
@@ -1557,7 +1616,7 @@ class LowerFunction {
         return false;
     }
 
-    tryStmt(n) {
+    tryStmt(n: e.TryStatement): void {
         if (n.finalizer) return this.tryFinallyStmt(n);
         let handler = n.handlers[0];
         let catch_bb = this.b.newCatchBlock("catch");
@@ -1570,11 +1629,11 @@ class LowerFunction {
         this.b.sealBlock(catch_bb);
 
         this.b.setInsertPoint(catch_bb);
-        if (handler.param) {
-            let binding = this.analysis.resolve(handler.param);
-            this.writeBinding(binding, catch_bb.params[0]);
+        if (handler!.param) {
+            const binding = this.analysis.resolve(handler!.param)!;
+            this.writeBinding(binding, catch_bb.params[0]!);
         }
-        this.stmt(handler.body);
+        this.stmt(handler!.body);
         if (!this.b.cur.terminated) this.b.br(join_bb, []);
         this.b.sealBlock(join_bb);
         this.b.setInsertPoint(join_bb);
@@ -1583,13 +1642,13 @@ class LowerFunction {
     // try/finally via finalizer duplication: one copy on the normal path,
     // one in a synthetic catch that rethrows, and copies at each abrupt
     // exit site (see runFinalizers).
-    tryFinallyStmt(n) {
+    tryFinallyStmt(n: e.TryStatement): void {
         let handler = n.handlers && n.handlers.length > 0 ? n.handlers[0] : null;
         let fin_catch = this.b.newCatchBlock("finally_catch");
         let join_bb = this.b.newBlock("finally_join");
 
         this.finallyCtx.push({
-            node: n.finalizer,
+            node: n.finalizer!,
             breakDepth: this.breakTargets.length,
             continueDepth: this.continueTargets.length,
             handlerDepth: this.b.handlers.length,
@@ -1606,8 +1665,8 @@ class LowerFunction {
             this.b.sealBlock(catch_bb);
             this.b.setInsertPoint(catch_bb);
             if (handler.param) {
-                let binding = this.analysis.resolve(handler.param);
-                this.writeBinding(binding, catch_bb.params[0]);
+                const binding = this.analysis.resolve(handler.param)!;
+                this.writeBinding(binding, catch_bb.params[0]!);
             }
             this.stmt(handler.body);
             if (!this.b.cur.terminated) this.b.br(inner_join, []);
@@ -1622,22 +1681,22 @@ class LowerFunction {
 
         // normal-completion copy
         if (!this.b.cur.terminated) {
-            this.stmt(n.finalizer);
+            this.stmt(n.finalizer!);
             if (!this.b.cur.terminated) this.b.br(join_bb, []);
         }
 
         // exceptional copy: finalizer, then rethrow
         this.b.sealBlock(fin_catch);
         this.b.setInsertPoint(fin_catch);
-        let exc = fin_catch.params[0];
-        this.stmt(n.finalizer);
+        const exc = fin_catch.params[0]!;
+        this.stmt(n.finalizer!);
         if (!this.b.cur.terminated) this.b.throwValue(exc);
 
         this.b.sealBlock(join_bb);
         this.b.setInsertPoint(join_bb);
     }
 
-    finish() {
+    finish(): Func {
         if (!this.b.cur.terminated) this.b.ret(this.b.constUndefined());
         return this.b.finish();
     }
@@ -1645,15 +1704,15 @@ class LowerFunction {
 
 // lower one analyzed function (and, transitively, function declarations /
 // expressions inside it) into `module`.
-export function lowerAnalyzedFunction(info, analysis, module, mod_ctx) {
+export function lowerAnalyzedFunction(info: FnInfo, analysis: ScopeAnalysis, module: Module, mod_ctx?: ModCtx): Func {
     return lowerOneFunction(info, analysis, module, mod_ctx);
 }
 
-function lowerOneFunction(info, analysis, module, mod_ctx) {
-    if (info.lowered) return info.fn;
+function lowerOneFunction(info: FnInfo, analysis: ScopeAnalysis, module: Module, mod_ctx?: ModCtx): Func {
+    if (info.lowered) return info.fn!;
     info.lowered = true;
     let lf = new LowerFunction(info, analysis, module, mod_ctx);
-    if (info.node.body.type === b.BlockStatement) lf.stmt(info.node.body);
+    if (info.node.body.type === "BlockStatement") lf.stmt(info.node.body);
     else lf.b.ret(lf.expr(info.node.body)); // expression-bodied arrow
     info.fn = lf.finish();
     module.addFunction(info.fn);
@@ -1666,7 +1725,7 @@ function lowerOneFunction(info, analysis, module, mod_ctx) {
 
 // lower a FunctionDeclaration/FunctionExpression AST node into a fresh
 // module; returns { module, fn }
-export function lowerFunctionNode(n, name) {
+export function lowerFunctionNode(n: e.Function, name?: string): { module: Module; fn: Func } {
     let analysis = new ScopeAnalysis();
     let info = analysis.analyzeFunction(n, name);
     let module = new Module(info.name);
@@ -1675,10 +1734,10 @@ export function lowerFunctionNode(n, name) {
 }
 
 // lower every top-level function declaration in a parsed program
-export function lowerProgram(ast, moduleName) {
+export function lowerProgram(ast: e.Program, moduleName?: string): Module {
     let module = new Module(moduleName || "module");
     for (let s of ast.body) {
-        if (s.type === b.FunctionDeclaration) {
+        if (s.type === "FunctionDeclaration") {
             let analysis = new ScopeAnalysis();
             let info = analysis.analyzeFunction(s);
             lowerOneFunction(info, analysis, module);

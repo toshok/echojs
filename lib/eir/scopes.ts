@@ -61,6 +61,11 @@ export class Binding {
 }
 
 export class FnInfo {
+    // discriminant against LoopEnv in env-descriptor chains (lower.ts)
+    readonly isLoopEnv = false as const;
+    // set by lowering (lower.ts lowerOneFunction)
+    lowered = false;
+    fn: import("./ir").Func | null = null;
     node: e.Function;
     name: string;
     parent: FnInfo | null;
@@ -98,7 +103,7 @@ let loopenv_id_gen = 0;
 
 export class LoopEnv {
     id: number;
-    isLoopEnv = true;
+    readonly isLoopEnv = true as const;
     fnInfo: FnInfo | null; // the function containing the loop
     node: e.Node; // the loop AST node
     parentCandidate: LoopEnv | null; // enclosing LoopEnv in the same fn, or null
