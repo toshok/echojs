@@ -18,6 +18,7 @@ import { SRetABI } from "./sret-abi";
 import { collectEIRToplevel } from "./eir/integrate";
 import type { ModuleAccessor } from "./eir/integrate";
 import { EIREmitter, VisitorSurface } from "./eir/emit";
+import { runTypeAnalysisProbe } from "./eir/oracle";
 import type * as e from "./estree";
 import type { CompilerOptions } from "./options";
 import type { ModuleInfo, JSModuleInfo } from "./module-info";
@@ -685,6 +686,12 @@ export function compile(
     // pipeline-agnostic desugars run before EIR collection so both
     // pipelines see their %-intrinsic output
     tree = pre_eir_convert(tree, module_filename, module_infos, options);
+
+    // --types (MAAM phase 0, docs/maam-plan.md): probe-only type
+    // analysis over the desugared toplevel.  Must run before
+    // collectEIRToplevel, which consumes (and then empties) the toplevel
+    // body.  Logs stats; consumes nothing; never fails the compile.
+    if (options.types) runTypeAnalysisProbe(tree, source_filename);
 
     // EIR is the only pipeline: a module that can't lower is a compile
     // error, not a fallback

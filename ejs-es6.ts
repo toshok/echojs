@@ -108,6 +108,7 @@ const options: CompilerOptions = {
     warn_on_undeclared: false,
     frozen_global: false,
     record_types: false,
+    types: false,
     output_filename: null,
     show_help: false,
     leave_temp_files: false,
@@ -249,6 +250,10 @@ const args: Record<string, ArgSpec | undefined> = {
     "--record-types": {
         flag: "record_types",
         help: "generates an executable which records types in a format later used for optimizations.",
+    },
+    "--types": {
+        flag: "types",
+        help: "run the MAAM type-analysis probe over each module and log its stats (phase 0: consumes nothing).",
     },
     "--frozen-global": {
         flag: "frozen_global",
