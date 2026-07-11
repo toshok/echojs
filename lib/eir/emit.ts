@@ -1,5 +1,5 @@
-/* -*- Mode: js2; indent-tabs-mode: nil; tab-width: 4; js2-indent-offset: 4; js2-basic-offset: 4; -*-
- * vim: set ts=4 sw=4 et tw=99 ft=js:
+/* -*- Mode: typescript; indent-tabs-mode: nil; tab-width: 4 -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=typescript:
  */
 
 // EIR -> LLVM emission.
@@ -11,20 +11,38 @@
 // requires -- locals never touch memory, and mem2reg has nothing to do.
 //
 // The emitter borrows the active LLVMIRVisitor's infrastructure (llvm
-// module, abi, runtime interface, atom/string-literal machinery), so EIR
-// functions and legacy functions coexist in one compilation unit.  The
-// legacy path calls into EIR functions through a small forwarding thunk
-// (see compiler.js visitFunction), which keeps closure creation and env
-// plumbing entirely on the legacy side for now.
+// module, abi, runtime interface, atom/string-literal machinery) through
+// the VisitorSurface interface below.
 
 import * as llvm from "@llvm";
 import * as types from "../types";
 import * as consts from "../consts";
+import type { ABI } from "../abi";
+import type { RuntimeInterface } from "../runtime";
+import type { Module as EIRModule, Func, Block, Inst, Target } from "./ir";
 
-let ir = llvm.IRBuilder;
+const ir = llvm.IRBuilder;
 
-// EIR opcode -> the operator key used by runtime.js's binop interface
-const binop_for_op = {
+// the slice of LLVMIRVisitor the emitter uses (compiler.ts implements it)
+export interface VisitorSurface {
+    currentFunction: llvm.EjsFunction | null;
+    ejs_runtime: RuntimeInterface;
+    ejs_binops: Record<string, llvm.EjsFunction>;
+    ejs_globals: Record<string, llvm.GlobalVariable>;
+    import_module_globals: Map<string, llvm.GlobalVariable>;
+    this_module_global: llvm.GlobalVariable;
+    getAtom(str: string): llvm.Value;
+    createEjsValueLoad(value: llvm.Value, name: string): llvm.Value;
+    emitEjsvalFromPtr(ptr: llvm.Value, prefix: string): llvm.Value;
+    isNumber(val: llvm.Value): llvm.Value;
+    loadBoolEjsValue(n: boolean): llvm.Value;
+    loadDoubleEjsValue(n: number): llvm.Value;
+    loadNullEjsValue(): llvm.Value;
+    loadUndefinedEjsValue(): llvm.Value;
+}
+
+// EIR opcode -> the operator key used by runtime.ts's binop interface
+const binop_for_op: Record<string, string | undefined> = {
     add: "+",
     sub: "-",
     mul: "*",
@@ -48,7 +66,7 @@ const binop_for_op = {
     in: "in",
 };
 
-const unop_for_op = {
+const unop_for_op: Record<string, string | undefined> = {
     logical_not: "!",
     neg: "-",
     unary_plus: "+",
@@ -60,16 +78,17 @@ let mangle_gen = 0;
 
 // reachable blocks of `fn` in reverse postorder (entry first).  iterative
 // DFS: block counts are small, but the self-hosted stack isn't deep.
-function rpoBlocks(fn) {
-    let visited = new Set([fn.entry]);
-    let post = [];
-    let stack = [{ block: fn.entry, next: 0 }];
+function rpoBlocks(fn: Func): Block[] {
+    const entry = fn.entry!;
+    const visited = new Set<Block>([entry]);
+    const post: Block[] = [];
+    const stack = [{ block: entry, next: 0 }];
     while (stack.length > 0) {
-        let frame = stack[stack.length - 1];
-        let last = frame.block.insts[frame.block.insts.length - 1];
-        let targets = (last && last.targets) || [];
+        const frame = stack[stack.length - 1]!;
+        const last = frame.block.insts[frame.block.insts.length - 1];
+        const targets = (last && last.targets) || [];
         if (frame.next < targets.length) {
-            let succ = targets[frame.next++].block;
+            const succ = targets[frame.next++]!.block;
             if (!visited.has(succ)) {
                 visited.add(succ);
                 stack.push({ block: succ, next: 0 });
@@ -84,9 +103,28 @@ function rpoBlocks(fn) {
 }
 
 export class EIREmitter {
-    // visitor: the active LLVMIRVisitor; we use its module, abi,
-    // ejs_runtime/ejs_binops interfaces, getAtom, and ejs_globals.
-    constructor(visitor) {
+    // the active LLVMIRVisitor: its module, abi, runtime/binop
+    // interfaces, getAtom, and globals
+    v: VisitorSurface;
+    abi: ABI;
+    module: llvm.Module;
+    // per-module state
+    llvm_fns!: Map<string, llvm.EjsFunction>;
+    // per-function state (reset in emitFunction)
+    eirFn!: Func;
+    llvmFn!: llvm.EjsFunction;
+    values!: Map<Inst, llvm.Value>;
+    blocks!: Map<Block, llvm.BasicBlock>;
+    phis!: Map<Inst, llvm.PhiNode>;
+    fn_argc!: llvm.Value;
+    fn_args_ptr!: llvm.Value;
+    fn_this_ptr!: llvm.Value;
+    fn_new_target!: llvm.Value;
+    scratch: llvm.AllocaInst | null = null;
+    scratch_type: llvm.Type | null = null;
+    this_slot!: llvm.AllocaInst;
+
+    constructor(visitor: VisitorSurface & { abi: ABI; module: llvm.Module }) {
         this.v = visitor;
         this.abi = visitor.abi;
         this.module = visitor.module;
@@ -94,7 +132,7 @@ export class EIREmitter {
 
     // declare + define every function in an EIR module; returns a Map of
     // eir function name -> llvm.Function
-    emitModule(eirModule) {
+    emitModule(eirModule: EIRModule): Map<string, llvm.EjsFunction> {
         let saved_insert = ir.getInsertBlock();
 
         let fns = new Map();
@@ -115,13 +153,13 @@ export class EIREmitter {
         }
         this.llvm_fns = fns;
 
-        for (let fn of eirModule.functions) this.emitFunction(fn, fns.get(fn.name));
+        for (let fn of eirModule.functions) this.emitFunction(fn, fns.get(fn.name)!);
 
         if (saved_insert) ir.setInsertPoint(saved_insert);
         return fns;
     }
 
-    emitFunction(eirFn, llvmFn) {
+    emitFunction(eirFn: Func, llvmFn: llvm.EjsFunction): llvm.EjsFunction {
         this.eirFn = eirFn;
         this.llvmFn = llvmFn;
         this.values = new Map(); // eir Inst -> llvm value
@@ -138,17 +176,17 @@ export class EIREmitter {
         llvmFn.entry_bb = entry_bb; // literal allocas / legacy helpers want this
         llvmFn.literalAllocas = Object.create(null);
 
-        let args = llvmFn.args;
-        let env = args[0];
-        let this_ptr = args[1];
-        let argc = args[2];
-        let args_ptr = args[3];
+        const args = llvmFn.args;
+        const env = args[0]!;
+        const this_ptr = args[1]!;
+        const argc = args[2]!;
+        const args_ptr = args[3]!;
         // rest_args / args_obj / construct_super / new_target need the raw
         // calling-convention values
         this.fn_argc = argc;
         this.fn_args_ptr = args_ptr;
         this.fn_this_ptr = this_ptr;
-        this.fn_new_target = args[4];
+        this.fn_new_target = args[4]!;
 
         // scratch space for outgoing call arguments, and a slot for passing
         // &this to the runtime's calling convention
@@ -180,7 +218,7 @@ export class EIREmitter {
         }
         for (let b of order) {
             if (b === eirFn.entry) continue;
-            ir.setInsertPoint(this.blocks.get(b));
+            ir.setInsertPoint(this.blocks.get(b)!);
             for (let p of b.params) {
                 if (p.isException) continue; // materialized by the landingpad below
                 let phi = ir.createPhi(types.EjsValue, b.predEdges.length, `p_${p.id}`);
@@ -196,15 +234,15 @@ export class EIREmitter {
         // initializing stores to it whenever a literal is first used.
         let prologue_bb = new llvm.BasicBlock("prologue", llvmFn);
         ir.setInsertPoint(prologue_bb);
-        let entry_params = eirFn.entry.params;
+        const entry_params = eirFn.entry!.params;
         // params[0] = %env, params[1] = %this, rest are JS formals
-        if (entry_params.length > 0) this.values.set(entry_params[0], env);
+        if (entry_params.length > 0) this.values.set(entry_params[0]!, env);
         if (entry_params.length > 1) {
             let this_val = ir.createLoad(types.EjsValue, this_ptr, "this");
-            this.values.set(entry_params[1], this_val);
+            this.values.set(entry_params[1]!, this_val);
         }
         for (let i = 2; i < entry_params.length; i++)
-            this.values.set(entry_params[i], this.emitArgLoad(argc, args_ptr, i - 2));
+            this.values.set(entry_params[i]!, this.emitArgLoad(argc, args_ptr, i - 2));
         // remember where the prologue ended; the branch into the eir entry
         // block is emitted *after* the body, because the legacy cached-
         // literal helpers append their initializing stores to the end of
@@ -213,12 +251,12 @@ export class EIREmitter {
 
         // emit every block's instructions
         for (let b of order) {
-            ir.setInsertPoint(this.blocks.get(b));
+            ir.setInsertPoint(this.blocks.get(b)!);
             for (let inst of b.insts) this.emitInst(inst);
         }
 
         ir.setInsertPoint(prologue_end);
-        ir.createBr(this.blocks.get(eirFn.entry));
+        ir.createBr(this.blocks.get(eirFn.entry!)!);
         ir.setInsertPoint(entry_bb);
         ir.createBr(prologue_bb);
 
@@ -227,10 +265,10 @@ export class EIREmitter {
     }
 
     // args[i] if i < argc, else undefined -- guarded load with a phi join
-    emitArgLoad(argc, args_ptr, i) {
+    emitArgLoad(argc: llvm.Value, args_ptr: llvm.Value, i: number): llvm.Value {
         let load_bb = new llvm.BasicBlock(`arg${i}_load`, this.llvmFn);
         let join_bb = new llvm.BasicBlock(`arg${i}_join`, this.llvmFn);
-        let from_bb = ir.getInsertBlock();
+        const from_bb = ir.getInsertBlock()!;
 
         // materialize the fallback in the predecessor so it dominates the phi
         let undef_val = this.undef();
@@ -249,7 +287,7 @@ export class EIREmitter {
         return phi;
     }
 
-    emitCatchPrologue(eirBlock) {
+    emitCatchPrologue(eirBlock: Block): void {
         // landingpad; extract the exception; begin/end catch to fetch the
         // thrown ejsval.  end_catch releases the C++ exception object; the
         // value itself is safe (conservatively scanned like any other).
@@ -267,11 +305,11 @@ export class EIREmitter {
         let val = this.call(this.v.ejs_runtime.begin_catch, [exc], "caughtval");
         this.call(this.v.ejs_runtime.end_catch, [], "");
 
-        let exc_param = eirBlock.params[0];
+        const exc_param = eirBlock.params[0]!;
         this.values.set(exc_param, val);
     }
 
-    maxOutgoingArgs(eirFn) {
+    maxOutgoingArgs(eirFn: Func): number {
         let max = 0;
         eirFn.forEachInst((inst) => {
             if (inst.op === "call") max = Math.max(max, inst.operands.length - 2);
@@ -282,32 +320,38 @@ export class EIREmitter {
             else if (inst.op === "make_array" || inst.op === "array_from_spread")
                 max = Math.max(max, inst.operands.length);
             else if (inst.op === "template_callsite")
-                max = Math.max(max, inst.imms.cooked.length, inst.imms.raw.length);
+                max = Math.max(
+                    max,
+                    (inst.imms["cooked"] as readonly string[]).length,
+                    (inst.imms["raw"] as readonly string[]).length
+                );
         });
         return max;
     }
 
     // --- helpers -------------------------------------------------------------------
 
-    val(operand) {
-        let v = this.values.get(operand);
+    val(operand: Inst | null | undefined): llvm.Value {
+        const v = operand ? this.values.get(operand) : undefined;
         if (v === undefined)
-            throw new Error(`EIR emit: no llvm value for %v${operand.id} (${operand.op})`);
+            throw new Error(
+                `EIR emit: no llvm value for %v${operand ? operand.id : "<null>"} (${operand ? operand.op : "?"})`
+            );
         return v;
     }
 
-    undef() {
+    undef(): llvm.Value {
         return this.v.loadUndefinedEjsValue();
     }
 
-    call(callee, argv, name) {
+    call(callee: llvm.EjsFunction, argv: llvm.Value[], name?: string): llvm.Value {
         return this.abi.createCall(this.llvmFn, callee.type, callee, argv, name || "");
     }
 
     // same shape as the legacy opencoded module slot access: a non-inbounds
     // GEP into the module global (see handleModuleSlotRef in compiler.js).
     // "%self" refers to the module being compiled.
-    moduleSlotRef(moduleString, slot) {
+    moduleSlotRef(moduleString: string, slot: number): llvm.Value {
         let module_global;
         if (moduleString === "%self") module_global = this.v.this_module_global;
         else module_global = this.v.import_module_globals.get(moduleString);
@@ -323,19 +367,19 @@ export class EIREmitter {
     }
 
     // spill values into the scratch area, returning an EjsValue* to its start
-    spillArgs(values) {
+    spillArgs(values: llvm.Value[]): llvm.Value {
         for (let i = 0; i < values.length; i++) {
-            let gep = ir.createGetElementPointer(
-                this.scratch_type,
-                this.scratch,
+            const gep = ir.createGetElementPointer(
+                this.scratch_type!,
+                this.scratch!,
                 [consts.int32(0), consts.int64(i)],
                 `sp${i}`
             );
-            ir.createStore(values[i], gep);
+            ir.createStore(values[i]!, gep);
         }
         return ir.createGetElementPointer(
-            this.scratch_type,
-            this.scratch,
+            this.scratch_type!,
+            this.scratch!,
             [consts.int32(0), consts.int64(0)],
             "spargs"
         );
@@ -343,7 +387,7 @@ export class EIREmitter {
 
     // emit a call to `callee` that respects this instruction's normal/unwind
     // targets (invoke) or is a plain call
-    emitCallLike(inst, callee, argv, name) {
+    emitCallLike(inst: Inst, callee: llvm.EjsFunction, argv: llvm.Value[], name?: string): llvm.Value {
         if (inst.targets && inst.targets.length > 0) {
             let normal = null;
             let unwind = null;
@@ -353,8 +397,8 @@ export class EIREmitter {
             }
             this.addEdgeIncomings(inst, unwind);
             this.addEdgeIncomings(inst, normal);
-            let normal_bb = this.blocks.get(normal.block);
-            let unwind_bb = this.blocks.get(unwind.block);
+            const normal_bb = this.blocks.get(normal!.block)!;
+            const unwind_bb = this.blocks.get(unwind!.block)!;
             let rv = this.abi.createInvoke(
                 this.llvmFn,
                 callee.type,
@@ -373,14 +417,14 @@ export class EIREmitter {
     }
 
     // fill in phi incomings for the arguments this edge passes
-    addEdgeIncomings(inst, target) {
+    addEdgeIncomings(inst: Inst, target: Target | null | undefined): void {
         if (!target) return;
-        let src_bb = ir.getInsertBlock();
+        const src_bb = ir.getInsertBlock()!;
         let params = target.block.params;
         let arg_base = target.block.isCatch ? 1 : 0;
         for (let i = 0; i < target.args.length; i++) {
-            let param = params[arg_base + i];
-            let phi = this.phis.get(param);
+            const param = params[arg_base + i]!;
+            const phi = this.phis.get(param);
             if (!phi) throw new Error("EIR emit: edge argument for missing phi");
             phi.addIncoming(this.val(target.args[i]), src_bb);
         }
@@ -388,21 +432,21 @@ export class EIREmitter {
 
     // --- instruction emission -----------------------------------------------------------
 
-    emitInst(inst) {
+    emitInst(inst: Inst): llvm.Value | void {
         let rt = this.v.ejs_runtime;
 
         switch (inst.op) {
             case "const": {
                 let v;
-                switch (inst.imms.kind) {
+                switch ((inst.imms["kind"] as string)) {
                     case "number":
-                        v = this.v.loadDoubleEjsValue(inst.imms.value);
+                        v = this.v.loadDoubleEjsValue(inst.imms["value"] as number);
                         break;
                     case "atom":
                         v = this.v.getAtom(String(inst.imms.value));
                         break;
                     case "boolean":
-                        v = this.v.loadBoolEjsValue(inst.imms.value);
+                        v = this.v.loadBoolEjsValue(inst.imms["value"] as boolean);
                         break;
                     case "undefined":
                         v = this.undef();
@@ -411,7 +455,7 @@ export class EIREmitter {
                         v = this.v.loadNullEjsValue();
                         break;
                     default:
-                        throw new Error(`EIR emit: const kind ${inst.imms.kind}`);
+                        throw new Error(`EIR emit: const kind ${(inst.imms["kind"] as string)}`);
                 }
                 this.values.set(inst, v);
                 return;
@@ -435,7 +479,7 @@ export class EIREmitter {
                 );
             }
             case "get_prop_atom": {
-                let key = this.v.getAtom(String(inst.imms.atom));
+                let key = this.v.getAtom(String(inst.imms["atom"]));
                 return this.emitCallLike(
                     inst,
                     rt.object_getprop,
@@ -456,7 +500,7 @@ export class EIREmitter {
                 );
             }
             case "set_prop_atom": {
-                let key = this.v.getAtom(String(inst.imms.atom));
+                let key = this.v.getAtom(String(inst.imms["atom"]));
                 return this.emitCallLike(
                     inst,
                     rt.object_setprop,
@@ -479,8 +523,8 @@ export class EIREmitter {
                 // JS modules have a link-time global (matches the opencoded
                 // legacy handleModuleGetExotic); native modules only exist
                 // at runtime, resolved by name through module_get.
-                let moduleString = inst.imms.module;
-                let module_global;
+                const moduleString = String(inst.imms["module"]);
+                let module_global: import("@llvm").GlobalVariable | undefined;
                 if (moduleString === "%self") module_global = this.v.this_module_global;
                 else module_global = this.v.import_module_globals.get(moduleString);
                 if (module_global) {
@@ -493,23 +537,23 @@ export class EIREmitter {
             }
 
             case "module_slot_load": {
-                let slot_ref = this.moduleSlotRef(inst.imms.module, inst.imms.slot);
+                const slot_ref = this.moduleSlotRef(String(inst.imms["module"]), inst.imms["slot"] as number);
                 this.values.set(inst, ir.createLoad(types.EjsValue, slot_ref, "module_slot"));
                 return;
             }
             case "module_slot_store": {
-                let slot_ref = this.moduleSlotRef(inst.imms.module, inst.imms.slot);
+                const slot_ref = this.moduleSlotRef(String(inst.imms["module"]), inst.imms["slot"] as number);
                 ir.createStore(this.val(inst.operands[0]), slot_ref);
                 this.values.set(inst, this.val(inst.operands[0]));
                 return;
             }
 
             case "get_global": {
-                let key = this.v.getAtom(String(inst.imms.atom));
+                let key = this.v.getAtom(String(inst.imms["atom"]));
                 return this.emitCallLike(inst, rt.global_getprop, [key], "getglobal");
             }
             case "set_global": {
-                let key = this.v.getAtom(String(inst.imms.atom));
+                let key = this.v.getAtom(String(inst.imms["atom"]));
                 return this.emitCallLike(
                     inst,
                     rt.global_setprop,
@@ -519,14 +563,14 @@ export class EIREmitter {
             }
 
             case "make_env": {
-                let rv = this.call(rt.make_closure_env, [consts.int32(inst.imms.size)], "env");
+                let rv = this.call(rt.make_closure_env, [consts.int32((inst.imms["size"] as number))], "env");
                 this.values.set(inst, rv);
                 return;
             }
             case "env_load": {
                 let ref = this.call(
                     rt.get_env_slot_ref,
-                    [this.val(inst.operands[0]), consts.int32(inst.imms.slot)],
+                    [this.val(inst.operands[0]), consts.int32((inst.imms["slot"] as number))],
                     "slotref"
                 );
                 this.values.set(inst, ir.createLoad(types.EjsValue, ref, "slot"));
@@ -535,7 +579,7 @@ export class EIREmitter {
             case "env_store": {
                 let ref = this.call(
                     rt.get_env_slot_ref,
-                    [this.val(inst.operands[0]), consts.int32(inst.imms.slot)],
+                    [this.val(inst.operands[0]), consts.int32((inst.imms["slot"] as number))],
                     "slotref"
                 );
                 ir.createStore(this.val(inst.operands[1]), ref);
@@ -543,10 +587,10 @@ export class EIREmitter {
                 return;
             }
             case "make_closure": {
-                let target = this.llvm_fns.get(inst.imms.fn);
-                if (!target) throw new Error(`EIR emit: unknown closure target ${inst.imms.fn}`);
+                let target = this.llvm_fns.get((inst.imms["fn"] as string));
+                if (!target) throw new Error(`EIR emit: unknown closure target ${(inst.imms["fn"] as string)}`);
                 let name = this.v.getAtom(
-                    String(inst.imms.name !== undefined ? inst.imms.name : inst.imms.fn)
+                    String(inst.imms.name !== undefined ? inst.imms.name : (inst.imms["fn"] as string))
                 );
                 let rv = this.call(
                     rt.make_closure,
@@ -558,10 +602,11 @@ export class EIREmitter {
             }
 
             case "call": {
-                if (inst.imms.direct) {
-                    let target = this.llvm_fns.get(inst.imms.direct);
+                const direct = inst.imms["direct"] as string | undefined;
+                if (direct) {
+                    const target = this.llvm_fns.get(direct);
                     if (!target)
-                        throw new Error(`EIR emit: unknown direct callee ${inst.imms.direct}`);
+                        throw new Error(`EIR emit: unknown direct callee ${direct}`);
                     let env_val = this.val(inst.operands[0]);
                     let this_val = this.val(inst.operands[1]);
                     let dargs = inst.operands.slice(2).map((o) => this.val(o));
@@ -653,7 +698,7 @@ export class EIREmitter {
 
             case "make_array": {
                 let elems = inst.operands.map((o) => this.val(o));
-                if (inst.imms.indices === undefined) {
+                if ((inst.imms["indices"] as readonly number[]) === undefined) {
                     let argv;
                     if (elems.length > 0) argv = this.spillArgs(elems);
                     else argv = ir.createPointerCast(this.this_slot, types.EjsValue.pointerTo(), "noargs");
@@ -669,13 +714,13 @@ export class EIREmitter {
                 // visitArrayExpression)
                 let arr = this.call(
                     rt.array_new,
-                    [consts.int64(inst.imms.len), consts.bool(true)],
+                    [consts.int64((inst.imms["len"] as number)), consts.bool(true)],
                     "arr"
                 );
                 this.values.set(inst, arr);
                 for (let i = 0; i < elems.length; i++) {
-                    let key = this.v.loadDoubleEjsValue(inst.imms.indices[i]);
-                    this.call(rt.object_setprop, [arr, key, elems[i]], "");
+                    const key = this.v.loadDoubleEjsValue((inst.imms["indices"] as readonly number[])[i]!);
+                    this.call(rt.object_setprop, [arr, key, elems[i]!], "");
                 }
                 return arr;
             }
@@ -684,7 +729,7 @@ export class EIREmitter {
                 // the setter is present; the runtime merges into any
                 // existing accessor property.  enumerable+configurable,
                 // like the atom-keyed case.
-                let isGet = inst.imms.kind === "get";
+                let isGet = (inst.imms["kind"] as string) === "get";
                 let flags = 0x33 | (isGet ? 0x100 : 0x200);
                 let accessor = this.val(inst.operands[2]);
                 let undef = this.v.loadUndefinedEjsValue();
@@ -704,7 +749,7 @@ export class EIREmitter {
             case "define_accessor": {
                 // flags 0x19 = enumerable | configurable, matching the
                 // legacy visitObjectExpression
-                let key = this.v.getAtom(String(inst.imms.atom));
+                let key = this.v.getAtom(String(inst.imms["atom"]));
                 return this.emitCallLike(
                     inst,
                     rt.object_define_accessor_prop,
@@ -735,13 +780,13 @@ export class EIREmitter {
             case "make_object": {
                 let proto = ir.createLoad(
                     types.EjsValue,
-                    this.v.ejs_globals.Object_prototype,
+                    this.v.ejs_globals["Object_prototype"]!,
                     "objproto"
                 );
                 let obj = this.call(rt.object_create, [proto], "obj");
                 this.values.set(inst, obj);
                 for (let i = 0; i < inst.operands.length; i++) {
-                    let key = this.v.getAtom(String(inst.imms.keys[i]));
+                    let key = this.v.getAtom(String((inst.imms["keys"] as readonly string[])[i]));
                     this.call(rt.object_setprop, [obj, key, this.val(inst.operands[i])], "");
                 }
                 return;
@@ -750,23 +795,23 @@ export class EIREmitter {
             // --- control flow ---------------------------------------------------
 
             case "br": {
-                let t = inst.targets[0];
+                const t = inst.targets![0]!;
                 this.addEdgeIncomings(inst, t);
-                ir.createBr(this.blocks.get(t.block));
+                ir.createBr(this.blocks.get(t.block)!);
                 return;
             }
             case "cond_br": {
                 let cond = this.val(inst.operands[0]);
                 // prop_iter_next produces the runtime's i8 EJSBool; every
                 // other condition source (to_boolean) is already an i1
-                if (inst.operands[0].op === "prop_iter_next")
+                if (inst.operands[0]!.op === "prop_iter_next")
                     cond = ir.createICmpEq(cond, consts.True(), "moreleft_i1");
-                this.addEdgeIncomings(inst, inst.targets[0]);
-                this.addEdgeIncomings(inst, inst.targets[1]);
+                this.addEdgeIncomings(inst, inst.targets![0]);
+                this.addEdgeIncomings(inst, inst.targets![1]);
                 ir.createCondBr(
                     cond,
-                    this.blocks.get(inst.targets[0].block),
-                    this.blocks.get(inst.targets[1].block)
+                    this.blocks.get(inst.targets![0]!.block)!,
+                    this.blocks.get(inst.targets![1]!.block)!
                 );
                 return;
             }
@@ -787,7 +832,7 @@ export class EIREmitter {
                         throw_fn,
                         [this.val(inst.operands[0])],
                         cont,
-                        this.blocks.get(unwind.block),
+                        this.blocks.get(unwind!.block)!,
                         ""
                     );
                     ir.setInsertPoint(cont);
@@ -808,8 +853,8 @@ export class EIREmitter {
                 // per-site global, built lazily (a zeroed ejsval reads as
                 // number 0.0 — the is-number check doubles as
                 // "uninitialized"), arrays frozen, cooked.raw = raw
-                let cooked_strs = inst.imms.cooked;
-                let raw_strs = inst.imms.raw;
+                let cooked_strs = (inst.imms["cooked"] as readonly string[]);
+                let raw_strs = (inst.imms["raw"] as readonly string[]);
                 let g = new llvm.GlobalVariable(
                     this.module,
                     types.EjsValue,
@@ -820,15 +865,15 @@ export class EIREmitter {
                 let loaded = this.v.createEjsValueLoad(g, "callsite_load");
                 let then_bb = new llvm.BasicBlock("callsite_build", this.llvmFn);
                 let merge_bb = new llvm.BasicBlock("callsite_merge", this.llvmFn);
-                let from_bb = ir.getInsertBlock();
+                const from_bb = ir.getInsertBlock()!;
                 let isnum = this.v.isNumber(loaded);
                 ir.createCondBr(isnum, then_bb, merge_bb);
 
                 ir.setInsertPoint(then_bb);
                 this.call(rt.gc_add_root, [g], "");
-                let mkarr = (strs, name) => {
-                    let vals = strs.map((s) => this.v.getAtom(String(s)));
-                    let argv;
+                const mkarr = (strs: readonly string[], name: string) => {
+                    const vals = strs.map((s) => this.v.getAtom(String(s)));
+                    let argv: import("@llvm").Value;
                     if (vals.length > 0) argv = this.spillArgs(vals);
                     else argv = ir.createPointerCast(this.this_slot, types.EjsValue.pointerTo(), "noargs");
                     return this.call(rt.array_new_copy, [consts.int64(vals.length), argv], name);
@@ -839,7 +884,7 @@ export class EIREmitter {
                 this.call(rt.object_setprop, [cooked, this.v.getAtom("raw"), frozen_raw], "");
                 let frozen = this.call(rt.object_freeze, [cooked], "frozen_cooked");
                 ir.createStore(frozen, g);
-                let built_bb = ir.getInsertBlock();
+                const built_bb = ir.getInsertBlock()!;
                 ir.createBr(merge_bb);
 
                 ir.setInsertPoint(merge_bb);
@@ -850,8 +895,8 @@ export class EIREmitter {
                 return;
             }
             case "make_regexp": {
-                let source = consts.string(ir, inst.imms.source);
-                let flags = consts.string(ir, inst.imms.flags);
+                let source = consts.string(ir, (inst.imms["source"] as string));
+                let flags = consts.string(ir, (inst.imms["flags"] as string));
                 return this.emitCallLike(inst, rt.regexp_new_utf8, [source, flags], "regexp");
             }
 
@@ -860,7 +905,7 @@ export class EIREmitter {
                 //                     : array_new_copy(0, args)
                 // (count of zero never dereferences the pointer, so the
                 // select keeps this branch-free)
-                let index = inst.imms.index;
+                let index = (inst.imms["index"] as number);
                 let has_rest = ir.createICmpSGt(this.fn_argc, consts.int32(index), "has_rest");
                 let count = ir.createNswSub(this.fn_argc, consts.int32(index), "rest_count");
                 count = ir.createSelect(has_rest, count, consts.int32(0), "rest_count_sel");
@@ -914,11 +959,11 @@ export class EIREmitter {
 
             case "call_runtime": {
                 // a direct call to a named entry in the runtime method table
-                let callee = rt[inst.imms.name];
-                if (!callee)
-                    throw new Error(`EIR emit: no runtime function '${inst.imms.name}'`);
+                const rtName = String(inst.imms["name"]);
+                const callee = (rt as unknown as Record<string, import("@llvm").EjsFunction | undefined>)[rtName];
+                if (!callee) throw new Error(`EIR emit: no runtime function '${rtName}'`);
                 let argv = inst.operands.map((o) => this.val(o));
-                if (inst.imms.void) {
+                if ((inst.imms["void"] as boolean | undefined)) {
                     // void results can't be named (LLVM) or read as values.
                     // materialize the placeholder BEFORE the call: an
                     // invoke (in a protected region) terminates the block.
@@ -943,9 +988,9 @@ export class EIREmitter {
                         "binres"
                     );
                 }
-                let unop = unop_for_op[inst.op];
+                const unop = unop_for_op[inst.op];
                 if (unop) {
-                    let callee = this.v.ejs_runtime[`unop${unop}`];
+                    const callee = (this.v.ejs_runtime as unknown as Record<string, import("@llvm").EjsFunction | undefined>)[`unop${unop}`];
                     if (!callee) throw new Error(`EIR emit: no unop interface for ${unop}`);
                     return this.emitCallLike(inst, callee, [this.val(inst.operands[0])], "unres");
                 }

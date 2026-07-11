@@ -92,7 +92,7 @@ declare module "@llvm" {
         setStructRet(): void;
         hasStructRetAttr(): boolean;
         setGC(name: string): void;
-        setPersonality(fn: EjsFunction): void;
+        setPersonality(fn: Value): void;
         // compiler bookkeeping
         doesNotThrow?: boolean;
         doesNotAccessMemory?: boolean;
@@ -100,6 +100,11 @@ declare module "@llvm" {
         returns_ejsval_bool?: boolean;
         takes_builtins?: boolean;
         entry_bb?: BasicBlock;
+        literalAllocas?: Record<string, AllocaInst>;
+        topScope?: Map<string, Value>;
+        bits_alloca?: AllocaInst;
+        debug_info?: DISubprogram;
+        hasPersonality(): boolean;
     }
 
     interface BasicBlock {
@@ -203,7 +208,7 @@ declare module "@llvm" {
         createICmpSGt(l: Value, r: Value, name: string): Value;
         createICmpUGt(l: Value, r: Value, name: string): Value;
         createICmpULt(l: Value, r: Value, name: string): Value;
-        createLandingPad(type: Type, personality: Value, numClauses: number, name: string): LandingPad;
+        createLandingPad(type: Type, numClauses: number, name: string): LandingPad;
         createLoad(type: Type, ptr: Value, name: string): Value;
         createNswSub(l: Value, r: Value, name: string): Value;
         createOr(l: Value, r: Value, name: string): Value;
