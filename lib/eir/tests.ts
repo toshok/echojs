@@ -947,7 +947,7 @@ test("optimize: same-block env with loads and stores scalar-replaces", () => {
     assertNotContains(printed, "call");
 });
 
-test("optimize: destructuring swap sheds its IIFE, env, and closure", () => {
+test("optimize: destructuring swap dissolves to pure SSA", () => {
     let r = lowerFunctionNode(
         parseFnPreEIR("function f(a, b) { [a, b] = [b, a]; return a - b; }")
     );
@@ -956,11 +956,47 @@ test("optimize: destructuring swap sheds its IIFE, env, and closure", () => {
     let printed = printFunction(r.fn);
     assertNotContains(printed, "make_env");
     assertNotContains(printed, "make_closure");
-    // the array itself still escapes into the iterator protocol
-    // (Symbol.iterator lookup + iterator_wrapper_new); folding that is
-    // the %createIteratorWrapper-over-make_array peephole, future work
-    assertContains(printed, "make_array");
-    assertContains(printed, 'name="iterator_wrapper_new"');
+    assertNotContains(printed, "make_array");
+    assertNotContains(printed, "iterator_wrapper_new");
+    assertNotContains(printed, "call");
+});
+
+test("optimize: iterator walk over a literal folds, short RHS pads undefined", () => {
+    let r = lowerFunctionNode(
+        parseFnPreEIR("function f(x) { let [a, b, c] = [x, 2]; return [a, b, c].length && a + b + (c === undefined); }")
+    );
+    optimizeFunction(r.fn, r.module);
+    verifyFunction(r.fn);
+    let printed = printFunction(r.fn);
+    assertNotContains(printed, "iterator_wrapper_new");
+    assertNotContains(printed, 'atom="getNextValue"');
+});
+
+test("optimize: iterator walk over a non-literal keeps the runtime protocol", () => {
+    let r = lowerFunctionNode(
+        parseFnPreEIR("function f(xs) { let [a, b] = xs; return a + b; }")
+    );
+    optimizeFunction(r.fn, r.module);
+    verifyFunction(r.fn);
+    assertContains(printFunction(r.fn), 'name="iterator_wrapper_new"');
+});
+
+test("optimize: rest pattern (getRest) keeps the runtime protocol", () => {
+    let r = lowerFunctionNode(
+        parseFnPreEIR("function f(x, y) { let [a, ...rest] = [x, y, 3]; return a + rest.length; }")
+    );
+    optimizeFunction(r.fn, r.module);
+    verifyFunction(r.fn);
+    assertContains(printFunction(r.fn), 'name="iterator_wrapper_new"');
+});
+
+test("optimize: array with another use keeps the iterator walk", () => {
+    let r = lowerFunctionNode(
+        parseFnPreEIR("function f(x, y) { let arr = [x, y]; let [a] = arr; return a + arr.length; }")
+    );
+    optimizeFunction(r.fn, r.module);
+    verifyFunction(r.fn);
+    assertContains(printFunction(r.fn), 'name="iterator_wrapper_new"');
 });
 
 test("optimize: env read from a later block is left alone", () => {

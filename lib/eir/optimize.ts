@@ -27,11 +27,12 @@ export interface OptStats {
     allocs_sunk: number;
     reads_folded: number;
     calls_inlined: number;
+    iters_folded: number;
     dead_removed: number;
 }
 
 function newStats(): OptStats {
-    return { allocs_sunk: 0, reads_folded: 0, calls_inlined: 0, dead_removed: 0 };
+    return { allocs_sunk: 0, reads_folded: 0, calls_inlined: 0, iters_folded: 0, dead_removed: 0 };
 }
 
 // uses of `value` within fn, with enough position info to classify
@@ -396,6 +397,115 @@ function scalarReplaceEnvs(fn: Func, stats: OptStats): boolean {
     return changed;
 }
 
+// --- iterator-protocol peephole -------------------------------------------------
+
+// array destructuring desugars to an iterator walk; over a dense array
+// literal the whole chain is compile-time constant:
+//
+//     %a = make_array e0, e1, ...
+//     %s = get_global atom="Symbol"
+//     %i = get_prop_atom %s, atom="iterator"
+//     %f = get_prop %a, %i
+//     %t = call %f, %a
+//     %w = call_runtime %t, name="iterator_wrapper_new"
+//     %g = get_prop_atom %w, atom="getNextValue"
+//     %v = call %g, %w                          ; k-th call = element k
+//
+// the k-th getNextValue call folds to the k-th element (undefined past
+// the end — the array iterator yields undefined there).  the fold
+// assumes the built-in Symbol global and Array.prototype[Symbol.iterator]
+// (the desugar already bakes in the former by emitting get_global).
+// dense literals only: a hole would read through the prototype chain.
+//
+// use discipline is strict — every link is consumed only by the next
+// (a getRest, an extra array use, a cross-block call, or anything
+// carrying unwind targets fails the match), so rest patterns and
+// escaping arrays keep the runtime walk.
+function foldIteratorWrappers(fn: Func, stats: OptStats): boolean {
+    let changed = false;
+    const wrappers: Inst[] = [];
+    fn.forEachInst((inst) => {
+        if (inst.op === "call_runtime" && inst.imms.name === "iterator_wrapper_new")
+            wrappers.push(inst);
+    });
+
+    const hasTargets = (i: Inst) => i.targets !== null && i.targets.length > 0;
+    const soleUse = (v: Inst, user: Inst) => {
+        const u = usesOf(fn, v);
+        return u.length === 1 && u[0]!.inst === user;
+    };
+
+    for (const w of wrappers) {
+        if (!w.block || hasTargets(w)) continue;
+
+        // match the creation chain backwards
+        const it = w.operands[0]!;
+        if (it.op !== "call" || it.operands.length !== 2 || it.imms.direct || hasTargets(it))
+            continue;
+        const itfn = it.operands[0]!;
+        const arr = it.operands[1]!;
+        if (itfn.op !== "get_prop" || itfn.operands[0] !== arr || hasTargets(itfn)) continue;
+        const symprop = itfn.operands[1]!;
+        if (symprop.op !== "get_prop_atom" || symprop.imms.atom !== "iterator" || hasTargets(symprop))
+            continue;
+        const symGlobal = symprop.operands[0]!;
+        if (symGlobal.op !== "get_global" || symGlobal.imms.atom !== "Symbol") continue;
+        if (arr.op !== "make_array" || arr.imms.len !== undefined) continue;
+        if (!soleUse(it, w) || !soleUse(itfn, it) || !soleUse(symprop, itfn)) continue;
+        if (!usesOf(fn, arr).every((u) => (u.inst === itfn && u.index === 0) || (u.inst === it && u.index === 1)))
+            continue;
+
+        // wrapper uses: getNextValue getters + their calls, nothing else
+        const getters = new Set<Inst>();
+        const calls: Inst[] = [];
+        let ok = true;
+        for (const u of usesOf(fn, w)) {
+            const i = u.inst;
+            if (
+                i.op === "get_prop_atom" &&
+                i.imms.atom === "getNextValue" &&
+                u.index === 0 &&
+                !hasTargets(i)
+            ) {
+                getters.add(i);
+            } else if (
+                i.op === "call" &&
+                i.operands.length === 2 &&
+                u.index === 1 &&
+                !i.imms.direct &&
+                !hasTargets(i) &&
+                i.block === w.block
+            ) {
+                calls.push(i);
+            } else {
+                ok = false;
+                break;
+            }
+        }
+        if (!ok || calls.length !== getters.size) continue;
+        for (const c of calls) if (!getters.has(c.operands[0]!) || !soleUse(c.operands[0]!, c)) ok = false;
+        if (!ok) continue;
+
+        // k-th call in block order sees element k
+        calls.sort((a, b) => w.block!.insts.indexOf(a) - w.block!.insts.indexOf(b));
+        for (let k = 0; k < calls.length; k++) {
+            const el = k < arr.operands.length ? arr.operands[k]! : constUndefinedBefore(fn, calls[k]!);
+            foldRead(fn, calls[k]!, el);
+        }
+        for (const g of getters) removeInst(g);
+        removeInst(w);
+        removeInst(it);
+        removeInst(itfn);
+        if (soleUse(symGlobal, symprop)) removeInst(symGlobal);
+        removeInst(symprop);
+        // the array itself is now unused (or write-only) — the sinking
+        // pass and DCE finish it off
+        stats.iters_folded++;
+        changed = true;
+    }
+    return changed;
+}
+
 // --- dead instruction elimination --------------------------------------------
 
 // dead-removable: unused results whose computation is unobservable.
@@ -455,6 +565,7 @@ export function optimizeFunction(fn: Func, module?: Module, stats?: OptStats): O
         let changed = module ? inlineDirectCalls(module, fn, s) : false;
         if (eliminateDead(fn, s)) changed = true; // kill the closure before judging its env
         if (scalarReplaceEnvs(fn, s)) changed = true;
+        if (foldIteratorWrappers(fn, s)) changed = true;
         if (sinkAllocations(fn, s)) changed = true;
         if (eliminateDead(fn, s)) changed = true;
         if (!changed || ++rounds > 10) break;

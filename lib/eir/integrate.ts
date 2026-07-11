@@ -400,11 +400,18 @@ export function collectEIRToplevel(
 
         if (options.opt_level > 0) {
             const stats = optimizeModule(eir_module);
-            if (stats.allocs_sunk || stats.reads_folded || stats.calls_inlined || stats.dead_removed)
+            if (
+                stats.allocs_sunk ||
+                stats.reads_folded ||
+                stats.calls_inlined ||
+                stats.iters_folded ||
+                stats.dead_removed
+            )
                 debug.log(
                     1,
                     `EIR-opt: ${filename}: ${stats.calls_inlined} call(s) inlined, ` +
                         `${stats.allocs_sunk} alloc(s) sunk, ${stats.reads_folded} read(s) folded, ` +
+                        `${stats.iters_folded} iterator walk(s) folded, ` +
                         `${stats.dead_removed} dead inst(s) removed`
                 );
             verifyModule(eir_module);
