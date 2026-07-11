@@ -192,18 +192,45 @@ typedef struct _RootSetEntry {
 
 static RootSetEntry *root_set;
 
+// GC-heap pointers get NaN-boxed into a 47-bit ejsval payload, so every
+// page must map below 2^47.  macOS hands out low addresses naturally;
+// linux (48-bit VA, top-down mmap) does not — ask for a hinted region
+// and bump the hint as regions fill.
+static void*
+mmap_boxable(size_t size)
+{
+#ifdef TARGET_LINUX
+    static uintptr_t hint = 0x280000000000UL; // well below 2^47
+    for (int tries = 0; tries < 64; tries++) {
+        void* res = mmap((void*)hint, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, MAP_FD, 0);
+        if (res == MAP_FAILED) return NULL;
+        if (((uintptr_t)res + size) < (1UL << 47)) {
+            hint = (uintptr_t)res + size;
+            return res;
+        }
+        // unboxable address: drop it and try a fresh hint
+        munmap(res, size);
+        hint += 0x100000000UL; // 4GB stride
+    }
+    return NULL;
+#else
+    void* res = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, MAP_FD, 0);
+    return res == MAP_FAILED ? NULL : res;
+#endif
+}
+
 static void*
 alloc_from_os(size_t size, size_t align)
 {
     if (align == 0) {
         size = MAX(size, PAGE_SIZE);
-        void* res = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, MAP_FD, 0);
+        void* res = mmap_boxable(size);
         SPEW(2, _ejs_log ("mmap for 0 alignment = %p\n", res));
-        return res == MAP_FAILED ? NULL : res;
+        return res;
     }
 
-    void* res = mmap(NULL, size*2, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, MAP_FD, 0);
-    if (res == MAP_FAILED) {
+    void* res = mmap_boxable(size*2);
+    if (res == NULL) {
         return NULL;
     }
 

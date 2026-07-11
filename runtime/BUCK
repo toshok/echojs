@@ -102,8 +102,10 @@ cxx_library(
         ":atoms",
         "//external-deps:parson.c",
     ] + select({
-        "DEFAULT": ["ejs-runloop-noop.c"],
-        "config//os:linux": ["ejs-runloop-libuv.c"],
+        # non-darwin platforms use the plain-C log impl (darwin's
+        # ejs-log.m lives in :echo-objc)
+        "DEFAULT": ["ejs-runloop-noop.c", "ejs-log.c"],
+        "config//os:linux": ["ejs-runloop-libuv.c", "ejs-log.c"],
         # the darwin (objc) sources live in :echo-objc; the system cxx
         # toolchain has no objc compiler
         "config//os:macos": [],

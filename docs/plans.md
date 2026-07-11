@@ -144,6 +144,12 @@ Static linking remains the regime (no dynamic loading planned).
 
 ## Testing / CI
 
+- Test baselines are mostly generated live by running `node <test>`,
+  which makes them sensitive to node's console.log inspect-format
+  drift (22.4 -> 22.23 changed array formatting); CI pins node 22.4.0.
+  The durable fix is a harness that asserts on values rather than
+  inspect output.
+
 - The stage ladder (`//:test-eir`, `//:test-stage0..3`) IS the EIR
   matrix now; the `-ir`/`-legacy` target duplicates are gone.
 - Broader coverage generally, as a prerequisite for the TS port.

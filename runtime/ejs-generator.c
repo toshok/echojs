@@ -375,6 +375,8 @@ _ejs_generator_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 #elif linux
 #if TARGET_CPU_AMD64
                                         (void*)gen->generator_context.uc_mcontext.gregs[REG_RSP]
+#elif TARGET_CPU_ARM64
+                                        (void*)gen->generator_context.uc_mcontext.sp
 #else
 #error "unimplemented linux cpu arch"
 #endif

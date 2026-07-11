@@ -372,9 +372,11 @@ function target_link_args(triple: TripleT): string[] {
     let args = ["-arch", triple.clangArch()];
 
     if (triple.os === "linux") {
-        // on ubuntu 14.04, at least, clang spits out a warning about this flag being unused (presumably because there's no other arch)
-        if (triple.arch === "x86_64") return [];
-        return args;
+        // -arch is a Darwin-only clang flag.  -no-pie keeps the data
+        // segment (static atom strings get NaN-boxed by address) below
+        // the 47-bit ejsval payload limit; PIE ASLR on aarch64 maps it
+        // above 2^47.
+        return ["-no-pie"];
     }
 
     if (triple.os === "macos") {

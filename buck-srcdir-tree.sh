@@ -53,7 +53,10 @@ else
     rm -rf "$MERGE"
     mkdir -p "$MERGE"
     for a in "${ARCHIVES[@]}"; do
-        (cd "$MERGE" && ar x "$(cd "$(dirname "$a")" && pwd)/$(basename "$a")")
+        # absolutize BEFORE cd'ing: inside the subshell the relative
+        # archive path would resolve against $MERGE
+        abs="$(cd "$(dirname "$a")" && pwd)/$(basename "$a")"
+        (cd "$MERGE" && ar x "$abs")
     done
     ar rs "$LIB" "$MERGE"/*.o "$TMP/ejs-invoke-closure-catch.o"
 fi
