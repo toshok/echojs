@@ -947,7 +947,7 @@ test("optimize: same-block env with loads and stores scalar-replaces", () => {
     assertNotContains(printed, "call");
 });
 
-test("optimize: destructuring swap dissolves to pure SSA", () => {
+test("optimize: destructuring swap sheds its IIFE, env, and closure", () => {
     let r = lowerFunctionNode(
         parseFnPreEIR("function f(a, b) { [a, b] = [b, a]; return a - b; }")
     );
@@ -956,6 +956,11 @@ test("optimize: destructuring swap dissolves to pure SSA", () => {
     let printed = printFunction(r.fn);
     assertNotContains(printed, "make_env");
     assertNotContains(printed, "make_closure");
+    // the array itself still escapes into the iterator protocol
+    // (Symbol.iterator lookup + iterator_wrapper_new); folding that is
+    // the %createIteratorWrapper-over-make_array peephole, future work
+    assertContains(printed, "make_array");
+    assertContains(printed, 'name="iterator_wrapper_new"');
 });
 
 test("optimize: env read from a later block is left alone", () => {
