@@ -398,7 +398,10 @@ export function collectEIRToplevel(
         // the module in place)
         if (dumpRequested(options)) dumpModule(filename, "toplevel-as-EIR", eir_module);
 
-        if (options.opt_level > 0) {
+        // debugging/measurement: EJS_NO_EIR_OPT=1 disables the EIR
+        // optimizer without touching the LLVM pass pipeline (-O0 changes
+        // both), mirroring the EJS_NO_PROMOTE bisect hook
+        if (options.opt_level > 0 && !process.env["EJS_NO_EIR_OPT"]) {
             const stats = optimizeModule(eir_module);
             if (
                 stats.allocs_sunk ||

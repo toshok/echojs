@@ -42,28 +42,46 @@ interface Use {
     index: number;
 }
 
-function usesOf(fn: Func, value: Inst): Use[] {
-    const uses: Use[] = [];
+// one full-function scan per fixpoint round, shared by every pass in
+// the round; the mutation helpers below keep it accurate.  storage is a
+// plain array indexed by inst.id (dense per-function) — this code runs
+// under the echojs runtime during self-compiles, where Map traffic and
+// allocation churn are far more expensive than under V8.
+const EMPTY_USES: Use[] = [];
+
+type UseMap = (Use[] | undefined)[];
+
+function buildUseMap(fn: Func): UseMap {
+    const map: UseMap = new Array(fn.next_value_id);
+    const add = (v: Inst, inst: Inst, index: number) => {
+        const list = map[v.id];
+        if (list) list.push({ inst, index });
+        else map[v.id] = [{ inst, index }];
+    };
     fn.forEachInst((inst) => {
-        for (let i = 0; i < inst.operands.length; i++) {
-            if (inst.operands[i] === value) uses.push({ inst, index: i });
-        }
+        for (let i = 0; i < inst.operands.length; i++) add(inst.operands[i]!, inst, i);
         if (inst.targets) {
-            for (const t of inst.targets) {
-                for (const a of t.args) {
-                    if (a === value) uses.push({ inst, index: -1 });
-                }
-            }
+            for (const t of inst.targets) for (const a of t.args) if (a) add(a, inst, -1);
         }
     });
-    return uses;
+    return map;
 }
 
-function removeInst(inst: Inst): void {
+function usesOf(uses: UseMap, value: Inst): Use[] {
+    return uses[value.id] || EMPTY_USES;
+}
+
+function removeInst(uses: UseMap, inst: Inst): void {
     const b = inst.block!;
     const idx = b.insts.indexOf(inst);
     if (idx >= 0) b.insts.splice(idx, 1);
     inst.block = null;
+    // inst no longer uses its operands
+    for (const o of inst.operands) {
+        const list = uses[o.id];
+        if (list) uses[o.id] = list.filter((u) => u.inst !== inst);
+    }
+    uses[inst.id] = undefined;
 }
 
 // --- allocation sinking ----------------------------------------------------
@@ -84,9 +102,9 @@ interface AllocUses {
 // (call/return/throw operands, edge arguments, value or key positions,
 // computed sets — whose key evaluation we must not disturb — accessor
 // defines, deletes) escapes.
-function classifyUses(fn: Func, alloc: Inst): AllocUses {
+function classifyUses(uses: UseMap, alloc: Inst): AllocUses {
     const r: AllocUses = { atomReads: [], atomWrites: [], computedReads: [], escapes: false };
-    for (const use of usesOf(fn, alloc)) {
+    for (const use of usesOf(uses, alloc)) {
         const { inst, index } = use;
         if (index === -1) {
             r.escapes = true; // flows into a block param
@@ -136,9 +154,16 @@ function arrayLength(alloc: Inst): number {
 // fold a read to `value`: all the read's uses see the value directly,
 // and the read disappears.  only for target-less reads — a read with
 // unwind targets terminates its block and can't simply vanish.
-function foldRead(fn: Func, read: Inst, value: Inst): void {
+function foldRead(uses: UseMap, fn: Func, read: Inst, value: Inst): void {
     replaceAllUses(fn, read, value);
-    removeInst(read);
+    const inherited = uses[read.id];
+    if (inherited && inherited.length > 0) {
+        const list = uses[value.id];
+        if (list) list.push(...inherited);
+        else uses[value.id] = inherited.slice();
+    }
+    uses[read.id] = undefined;
+    removeInst(uses, read);
 }
 
 // materialize a `const` number in front of `before` (for .length folds)
@@ -151,9 +176,9 @@ function constNumberBefore(fn: Func, before: Inst, value: number): Inst {
 }
 
 // try to scalar-replace one allocation.  returns true if anything changed.
-function sinkAlloc(fn: Func, alloc: Inst, stats: OptStats): boolean {
+function sinkAlloc(useMap: UseMap, fn: Func, alloc: Inst, stats: OptStats): boolean {
     const isArray = alloc.op === "make_array";
-    const uses = classifyUses(fn, alloc);
+    const uses = classifyUses(useMap, alloc);
     if (uses.escapes) return false;
 
     let changed = false;
@@ -167,7 +192,7 @@ function sinkAlloc(fn: Func, alloc: Inst, stats: OptStats): boolean {
             for (const read of uses.atomReads) {
                 if (read.targets) continue;
                 if ((read.imms.atom as string) !== "length") continue; // prototype read
-                foldRead(fn, read, constNumberBefore(fn, read, arrayLength(alloc)));
+                foldRead(useMap, fn, read, constNumberBefore(fn, read, arrayLength(alloc)));
                 stats.reads_folded++;
                 changed = true;
             }
@@ -177,7 +202,7 @@ function sinkAlloc(fn: Func, alloc: Inst, stats: OptStats): boolean {
                 if (key.op !== "const" || key.imms.kind !== "number") continue;
                 const el = ownArrayElement(alloc, key.imms.value as number);
                 if (!el) continue; // hole or out of range: prototype read
-                foldRead(fn, read, el);
+                foldRead(useMap, fn, read, el);
                 stats.reads_folded++;
                 changed = true;
             }
@@ -189,7 +214,7 @@ function sinkAlloc(fn: Func, alloc: Inst, stats: OptStats): boolean {
             if (writtenAtoms.has(atom)) continue; // flow-sensitive: not yet
             const v = ownObjectValue(alloc, atom);
             if (!v) continue; // not an own key: prototype read
-            foldRead(fn, read, v);
+            foldRead(useMap, fn, read, v);
             stats.reads_folded++;
             changed = true;
         }
@@ -204,22 +229,22 @@ function sinkAlloc(fn: Func, alloc: Inst, stats: OptStats): boolean {
         isArray
             ? (w.imms.atom as string) === "length"
             : ownObjectValue(alloc, w.imms.atom as string) !== null;
-    const remaining = classifyUses(fn, alloc);
+    const remaining = classifyUses(useMap, alloc);
     if (
         !remaining.escapes &&
         remaining.atomReads.length === 0 &&
         remaining.computedReads.length === 0 &&
         remaining.atomWrites.every((w) => !w.targets && ownWrite(w))
     ) {
-        for (const w of remaining.atomWrites) removeInst(w);
-        removeInst(alloc);
+        for (const w of remaining.atomWrites) removeInst(useMap, w);
+        removeInst(useMap, alloc);
         stats.allocs_sunk++;
         changed = true;
     }
     return changed;
 }
 
-function sinkAllocations(fn: Func, stats: OptStats): boolean {
+function sinkAllocations(useMap: UseMap, fn: Func, stats: OptStats): boolean {
     const candidates: Inst[] = [];
     fn.forEachInst((inst) => {
         if (inst.op === "make_object" || inst.op === "make_array") candidates.push(inst);
@@ -227,7 +252,7 @@ function sinkAllocations(fn: Func, stats: OptStats): boolean {
     let changed = false;
     for (const c of candidates) {
         if (!c.block) continue; // removed by an earlier candidate's fold
-        if (sinkAlloc(fn, c, stats)) changed = true;
+        if (sinkAlloc(useMap, fn, c, stats)) changed = true;
     }
     return changed;
 }
@@ -317,7 +342,12 @@ function inlineCall(fn: Func, call: Inst, closure: Inst, callee: Func): void {
         subst.set(inst, clone);
     }
     replaceAllUses(fn, call, result!);
-    removeInst(call);
+    // no live use map here — inlineDirectCalls rebuilds nothing; the
+    // subsequent passes each build their own
+    const b = call.block!;
+    const idx = b.insts.indexOf(call);
+    if (idx >= 0) b.insts.splice(idx, 1);
+    call.block = null;
 }
 
 function inlineDirectCalls(m: Module, fn: Func, stats: OptStats): boolean {
@@ -344,7 +374,7 @@ function inlineDirectCalls(m: Module, fn: Func, stats: OptStats): boolean {
 // sees the most recent store to its slot (or undefined — env slots
 // start undefined, echojs has no TDZ).  parent-env chaining stores the
 // env in a VALUE position, which classifies as an escape below.
-function scalarReplaceEnvs(fn: Func, stats: OptStats): boolean {
+function scalarReplaceEnvs(useMap: UseMap, fn: Func, stats: OptStats): boolean {
     let changed = false;
     const candidates: Inst[] = [];
     fn.forEachInst((inst) => {
@@ -354,7 +384,7 @@ function scalarReplaceEnvs(fn: Func, stats: OptStats): boolean {
     for (const env of candidates) {
         if (!env.block) continue;
         let ok = true;
-        for (const use of usesOf(fn, env)) {
+        for (const use of usesOf(useMap, env)) {
             const { inst, index } = use;
             const local =
                 index === 0 &&
@@ -387,9 +417,9 @@ function scalarReplaceEnvs(fn: Func, stats: OptStats): boolean {
                 loads.push([inst, slotValues.get(inst.imms.slot as number) || null]);
             }
         }
-        for (const [load, v] of loads) foldRead(fn, load, v || constUndefinedBefore(fn, load));
-        for (const s of stores) removeInst(s);
-        removeInst(env);
+        for (const [load, v] of loads) foldRead(useMap, fn, load, v || constUndefinedBefore(fn, load));
+        for (const s of stores) removeInst(useMap, s);
+        removeInst(useMap, env);
         stats.allocs_sunk++;
         stats.reads_folded += loads.length;
         changed = true;
@@ -421,7 +451,7 @@ function scalarReplaceEnvs(fn: Func, stats: OptStats): boolean {
 // (a getRest, an extra array use, a cross-block call, or anything
 // carrying unwind targets fails the match), so rest patterns and
 // escaping arrays keep the runtime walk.
-function foldIteratorWrappers(fn: Func, stats: OptStats): boolean {
+function foldIteratorWrappers(useMap: UseMap, fn: Func, stats: OptStats): boolean {
     let changed = false;
     const wrappers: Inst[] = [];
     fn.forEachInst((inst) => {
@@ -431,7 +461,7 @@ function foldIteratorWrappers(fn: Func, stats: OptStats): boolean {
 
     const hasTargets = (i: Inst) => i.targets !== null && i.targets.length > 0;
     const soleUse = (v: Inst, user: Inst) => {
-        const u = usesOf(fn, v);
+        const u = usesOf(useMap, v);
         return u.length === 1 && u[0]!.inst === user;
     };
 
@@ -452,14 +482,14 @@ function foldIteratorWrappers(fn: Func, stats: OptStats): boolean {
         if (symGlobal.op !== "get_global" || symGlobal.imms.atom !== "Symbol") continue;
         if (arr.op !== "make_array" || arr.imms.len !== undefined) continue;
         if (!soleUse(it, w) || !soleUse(itfn, it) || !soleUse(symprop, itfn)) continue;
-        if (!usesOf(fn, arr).every((u) => (u.inst === itfn && u.index === 0) || (u.inst === it && u.index === 1)))
+        if (!usesOf(useMap, arr).every((u) => (u.inst === itfn && u.index === 0) || (u.inst === it && u.index === 1)))
             continue;
 
         // wrapper uses: getNextValue getters + their calls, nothing else
         const getters = new Set<Inst>();
         const calls: Inst[] = [];
         let ok = true;
-        for (const u of usesOf(fn, w)) {
+        for (const u of usesOf(useMap, w)) {
             const i = u.inst;
             if (
                 i.op === "get_prop_atom" &&
@@ -490,14 +520,14 @@ function foldIteratorWrappers(fn: Func, stats: OptStats): boolean {
         calls.sort((a, b) => w.block!.insts.indexOf(a) - w.block!.insts.indexOf(b));
         for (let k = 0; k < calls.length; k++) {
             const el = k < arr.operands.length ? arr.operands[k]! : constUndefinedBefore(fn, calls[k]!);
-            foldRead(fn, calls[k]!, el);
+            foldRead(useMap, fn, calls[k]!, el);
         }
-        for (const g of getters) removeInst(g);
-        removeInst(w);
-        removeInst(it);
-        removeInst(itfn);
-        if (soleUse(symGlobal, symprop)) removeInst(symGlobal);
-        removeInst(symprop);
+        for (const g of getters) removeInst(useMap, g);
+        removeInst(useMap, w);
+        removeInst(useMap, it);
+        removeInst(useMap, itfn);
+        removeInst(useMap, symprop);
+        if (usesOf(useMap, symGlobal).length === 0) removeInst(useMap, symGlobal);
         // the array itself is now unused (or write-only) — the sinking
         // pass and DCE finish it off
         stats.iters_folded++;
@@ -522,9 +552,11 @@ function removableWhenDead(inst: Inst): boolean {
 }
 
 function eliminateDead(fn: Func, stats: OptStats): boolean {
-    // use counts over operands and edge arguments
-    const counts = new Map<Inst, number>();
-    const bump = (v: Inst) => counts.set(v, (counts.get(v) || 0) + 1);
+    // use counts over operands and edge arguments, indexed by inst.id
+    const counts = new Array<number>(fn.next_value_id).fill(0);
+    const bump = (v: Inst) => {
+        counts[v.id] = (counts[v.id] ?? 0) + 1;
+    };
     fn.forEachInst((inst) => {
         for (const o of inst.operands) bump(o);
         if (inst.targets) {
@@ -534,19 +566,21 @@ function eliminateDead(fn: Func, stats: OptStats): boolean {
 
     const worklist: Inst[] = [];
     fn.forEachInst((inst) => {
-        if (!counts.get(inst) && removableWhenDead(inst)) worklist.push(inst);
+        if (!counts[inst.id] && removableWhenDead(inst)) worklist.push(inst);
     });
 
     let changed = false;
     while (worklist.length > 0) {
         const inst = worklist.pop()!;
         if (!inst.block) continue;
-        removeInst(inst);
+        const b = inst.block;
+        const idx = b.insts.indexOf(inst);
+        if (idx >= 0) b.insts.splice(idx, 1);
+        inst.block = null;
         stats.dead_removed++;
         changed = true;
         for (const o of inst.operands) {
-            const n = counts.get(o)! - 1;
-            counts.set(o, n);
+            const n = --counts[o.id]!;
             if (n === 0 && o.block && removableWhenDead(o)) worklist.push(o);
         }
     }
@@ -564,9 +598,11 @@ export function optimizeFunction(fn: Func, module?: Module, stats?: OptStats): O
     for (;;) {
         let changed = module ? inlineDirectCalls(module, fn, s) : false;
         if (eliminateDead(fn, s)) changed = true; // kill the closure before judging its env
-        if (scalarReplaceEnvs(fn, s)) changed = true;
-        if (foldIteratorWrappers(fn, s)) changed = true;
-        if (sinkAllocations(fn, s)) changed = true;
+        // one use scan per round, kept accurate by the mutation helpers
+        const useMap = buildUseMap(fn);
+        if (scalarReplaceEnvs(useMap, fn, s)) changed = true;
+        if (foldIteratorWrappers(useMap, fn, s)) changed = true;
+        if (sinkAllocations(useMap, fn, s)) changed = true;
         if (eliminateDead(fn, s)) changed = true;
         if (!changed || ++rounds > 10) break;
     }
