@@ -217,7 +217,7 @@ const args: Record<string, ArgSpec | undefined> = {
     "--dump-after": {
         handler: add_debug_after_pass,
         handlerArgc: 1,
-        help: "dump the AST after the named pass; `--dump-after eir` dumps the lowered EIR module(s)",
+        help: "dump the AST after the named pass; `--dump-after eir` dumps the lowered EIR module(s), `--dump-after eir-opt` the optimized EIR",
     },
     "--debug-after": {
         handler: add_debug_after_pass,

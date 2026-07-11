@@ -11,6 +11,7 @@ import { FunctionBuilder } from "./builder";
 import { printFunction, printModule } from "./printer";
 import { verifyFunction, verifyModule } from "./verifier";
 import { lowerFunctionNode, lowerProgram } from "./lower";
+import { optimizeFunction } from "./optimize";
 import { isLowerNotSupported } from "./errors";
 import { Func, Block, Inst, Module } from "./ir";
 import { DesugarSpread } from "../passes/desugar-spread";
@@ -809,6 +810,115 @@ test("verifier: rejects normal edges into catch blocks", () => {
         threw = /non-unwind edge into catch/.test((e as Error).message);
     }
     assert(threw, "expected a catch-edge violation");
+});
+
+// --- optimize: allocation sinking ----------------------------------------------
+
+function assertNotContains(haystack: string, needle: string): void {
+    if (haystack.indexOf(needle) !== -1)
+        throw new Error(`expected output to NOT contain '${needle}'\n---\n${haystack}\n---`);
+}
+
+function lowerAndOptimize(src: string): { fn: Func; printed: string } {
+    let { fn } = lowerOne(src);
+    optimizeFunction(fn);
+    verifyFunction(fn);
+    return { fn, printed: printFunction(fn) };
+}
+
+test("optimize: non-escaping object literal reads fold and the alloc dies", () => {
+    let { printed } = lowerAndOptimize("function f() { let o = { a: 1, b: 2 }; return o.a + o.b; }");
+    assertNotContains(printed, "make_object");
+    assertNotContains(printed, "get_prop_atom");
+});
+
+test("optimize: duplicate literal keys fold to the last definition", () => {
+    let { fn, printed } = lowerAndOptimize("function f() { let o = { a: 1, a: 2 }; return o.a; }");
+    assertNotContains(printed, "make_object");
+    // the surviving return operand should be the const 2
+    let ret: Inst | null = null;
+    fn.forEachInst((i) => { if (i.op === "return") ret = i; });
+    assert(ret!.operands[0]!.imms.value === 2, "expected the second definition's value");
+});
+
+test("optimize: escaping object literal is untouched", () => {
+    let { printed } = lowerAndOptimize("function f(g) { let o = { a: 1 }; g(o); return o.a; }");
+    assertContains(printed, "make_object");
+    assertContains(printed, 'get_prop_atom');
+});
+
+test("optimize: write-only object literal dies with its stores", () => {
+    let { printed } = lowerAndOptimize("function f(x) { let o = { a: 1 }; o.a = x; return x; }");
+    assertNotContains(printed, "make_object");
+    assertNotContains(printed, "set_prop_atom");
+});
+
+test("optimize: a written key blocks folding its reads", () => {
+    let { printed } = lowerAndOptimize("function f(x) { let o = { a: 1 }; o.a = x; return o.a; }");
+    assertContains(printed, "make_object");
+    assertContains(printed, "get_prop_atom");
+});
+
+test("optimize: non-own-key read keeps the object (prototype chain)", () => {
+    let { printed } = lowerAndOptimize("function f() { let o = { a: 1 }; return o.toString; }");
+    assertContains(printed, "make_object");
+});
+
+test("optimize: array literal const-index and length reads fold", () => {
+    let { printed } = lowerAndOptimize("function f() { let a = [10, 20, 30]; return a[0] + a.length; }");
+    assertNotContains(printed, "make_array");
+    assertNotContains(printed, "get_prop");
+});
+
+test("optimize: array hole reads keep the array", () => {
+    let { printed } = lowerAndOptimize("function f() { let a = [1, , 3]; return a[1]; }");
+    assertContains(printed, "make_array");
+});
+
+test("optimize: out-of-range array read keeps the array", () => {
+    let { printed } = lowerAndOptimize("function f() { let a = [1]; return a[5]; }");
+    assertContains(printed, "make_array");
+});
+
+test("optimize: computed non-const array read keeps the array", () => {
+    let { printed } = lowerAndOptimize("function f(i) { let a = [1, 2]; return a[i]; }");
+    assertContains(printed, "make_array");
+});
+
+test("optimize: array method call keeps the array", () => {
+    let { printed } = lowerAndOptimize("function f() { let a = [1, 2]; return a.join(','); }");
+    assertContains(printed, "make_array");
+});
+
+test("optimize: nested literal sinks once the outer one dies", () => {
+    let { printed } = lowerAndOptimize(
+        "function f() { let o = { inner: { x: 7 } }; return o.inner.x; }"
+    );
+    assertNotContains(printed, "make_object");
+});
+
+test("optimize: object flowing into a block param is an escape", () => {
+    let { printed } = lowerAndOptimize(
+        "function f(c) { let o = c ? { a: 1 } : { a: 2 }; return o.a; }"
+    );
+    assertContains(printed, "make_object");
+});
+
+test("optimize: reads inside try (unwind targets) are left alone", () => {
+    let { printed } = lowerAndOptimize(
+        "function f() { let o = { a: 1 }; try { return o.a; } catch (e) { return 0; } }"
+    );
+    assertContains(printed, "make_object");
+    assertContains(printed, "get_prop_atom");
+});
+
+test("optimize: DCE removes unused pure chains but keeps effects", () => {
+    let { printed } = lowerAndOptimize(
+        "function f(x) { let unused = { a: 1 }; let kept = x.y; return 5; }"
+    );
+    assertNotContains(printed, "make_object");
+    // x.y may have observable effects (getter) and must survive
+    assertContains(printed, "get_prop_atom");
 });
 
 // --------------------------------------------------------------------------------

@@ -28,6 +28,7 @@ import { isLowerNotSupported } from "./errors";
 import { Module } from "./ir";
 import { FunctionBuilder } from "./builder";
 import { verifyModule } from "./verifier";
+import { optimizeModule } from "./optimize";
 import { printModule } from "./printer";
 import type * as e from "../estree";
 import type { ModuleInfo } from "../module-info";
@@ -48,6 +49,11 @@ export type CollectResult =
 // --dump-after eir: print the lowered (verified) EIR module
 function dumpRequested(options: CompilerOptions | undefined): boolean {
     return !!(options && options.debug_passes && options.debug_passes.has("eir"));
+}
+
+// --dump-after eir-opt: print the module again after optimization
+function dumpOptRequested(options: CompilerOptions | undefined): boolean {
+    return !!(options && options.debug_passes && options.debug_passes.has("eir-opt"));
 }
 
 function dumpModule(filename: string, mode: string, eir_module: Module): void {
@@ -388,6 +394,18 @@ export function collectEIRToplevel(
         lowerAnalyzedFunction(info, analysis, eir_module, mod_ctx);
         let accessors = buildModuleAccessors(eir_module, this_module_info);
         verifyModule(eir_module);
+
+        if (options.opt_level > 0) {
+            const stats = optimizeModule(eir_module);
+            if (stats.allocs_sunk || stats.reads_folded || stats.dead_removed)
+                debug.log(
+                    1,
+                    `EIR-opt: ${filename}: ${stats.allocs_sunk} alloc(s) sunk, ` +
+                        `${stats.reads_folded} read(s) folded, ${stats.dead_removed} dead inst(s) removed`
+                );
+            verifyModule(eir_module);
+            if (dumpOptRequested(options)) dumpModule(filename, "optimized", eir_module);
+        }
 
         toplevel.eir_module = eir_module;
         toplevel.eir_main = info.name;
