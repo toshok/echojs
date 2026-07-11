@@ -92,7 +92,9 @@ filegroup(
     name = "compiler-js",
     srcs = glob([
         "esprima/esprima-es6.js",
+        "esprima/esprima-es6.d.ts",
         "escodegen/escodegen-es6.js",
+        "escodegen/escodegen-es6.d.ts",
         "estraverse/estraverse-es6.js",
         "esutils/esutils-es6.js",
         "esutils/lib/*.js",

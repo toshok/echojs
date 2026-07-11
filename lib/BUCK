@@ -30,6 +30,7 @@ genrule(
     ) + [
         "buck-gen-tsjs.sh",
         "//:ejs-es6.js",
+        "//external-deps:compiler-js",
     ],
     out = "tsjs",
     cmd = "bash $SRCDIR/buck-gen-tsjs.sh",

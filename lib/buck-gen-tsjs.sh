@@ -37,6 +37,16 @@ for f in ejs-es6.js ejs-es6.ts; do
     if [ -e "$f" ]; then cp "$f" "$STAGE/$f"; fi
 done
 
+# hand-written surface declarations for the vendored external-deps JS
+# (relative imports like ../../external-deps/escodegen/escodegen-es6
+# typecheck against these; the .js resolves at runtime)
+if [ -d compiler-js ]; then
+    (cd compiler-js && find . -name "*.d.ts" | while read -r f; do
+        mkdir -p "$STAGE/external-deps/$(dirname "$f")"
+        cp "$f" "$STAGE/external-deps/$f"
+    done)
+fi
+
 # copy the .js files through
 (cd "$STAGE" && find . -name "*.js" | while read -r f; do
     mkdir -p "$OUTABS/$(dirname "$f")"
