@@ -1,5 +1,5 @@
-/* -*- Mode: js2; indent-tabs-mode: nil; tab-width: 4; js2-indent-offset: 4; js2-basic-offset: 4; -*-
- * vim: set ts=4 sw=4 et tw=99 ft=js:
+/* -*- Mode: typescript; indent-tabs-mode: nil; tab-width: 4 -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=typescript:
  */
 
 // EIR integration: lower the whole module — toplevel statements,
@@ -11,9 +11,7 @@
 //   - named imports from non-native modules: lowered as module_slot_load
 //     (or folded, when the export is a const literal);
 //   - this module's own exported bindings: module_slot_load/store against
-//     the "%self" module global (const-literal exports fold; exported
-//     functions/classes read in value position load the slot, so closure
-//     identity is preserved);
+//     the "%self" module global;
 //   - non-exported module-level bindings with literal initializers that
 //     are never reassigned: folded to the literal;
 //   - non-exported module-level vars promoted to hidden slots by
@@ -25,32 +23,52 @@ import * as b from "../ast-builder";
 import * as debug from "../debug";
 import { ScopeAnalysis } from "./scopes";
 import { lowerAnalyzedFunction } from "./lower";
-import { LowerNotSupported, isLowerNotSupported } from "./errors";
+import type { ModuleRef, ModCtx } from "./lower";
+import { isLowerNotSupported } from "./errors";
 import { Module } from "./ir";
 import { FunctionBuilder } from "./builder";
 import { verifyModule } from "./verifier";
 import { printModule } from "./printer";
+import type * as e from "../estree";
+import type { ModuleInfo } from "../module-info";
+import type { CompilerOptions } from "../options";
 
-// --dump-after eir: print the lowered (verified) EIR module
-function dumpRequested(options) {
-    return options && options.debug_passes && options.debug_passes.has("eir");
+// one export's accessor pair, by EIR function name (compiler.ts resolves
+// them against the emitted module in emitModuleResolution)
+export interface ModuleAccessor {
+    key: string;
+    getter: string;
+    setter: string;
 }
 
-function dumpModule(filename, mode, eir_module) {
+export type CollectResult =
+    | { eir_module: Module; accessors: ModuleAccessor[]; error?: undefined }
+    | { error: string; eir_module?: undefined; accessors?: undefined };
+
+// --dump-after eir: print the lowered (verified) EIR module
+function dumpRequested(options: CompilerOptions | undefined): boolean {
+    return !!(options && options.debug_passes && options.debug_passes.has("eir"));
+}
+
+function dumpModule(filename: string, mode: string, eir_module: Module): void {
     console.log(`// EIR module for ${filename} (${mode})`);
     console.log(printModule(eir_module));
 }
 
 // only primitive literals fold; regex literals are objects and need
 // runtime construction
-function isFoldableLiteral(n) {
-    return n && n.type === b.Literal && (n.value === null || typeof n.value !== "object");
+function isFoldableLiteral(n: e.Expression | null | undefined): n is e.Literal {
+    return !!n && n.type === "Literal" && (n.value === null || typeof n.value !== "object");
 }
 
 // the module-slot reference map: local name -> { module, slot, constval?,
 // writable }.  covers named imports and this module's own exported
 // bindings.
-function collectModuleRefs(toplevelBody, module_infos, this_module_info) {
+function collectModuleRefs(
+    toplevelBody: e.Statement[],
+    module_infos: Map<string, ModuleInfo> | null,
+    this_module_info: ModuleInfo | null
+): Map<string, ModuleRef> {
     let refs = new Map();
 
     // imports.  native modules ("@llvm" etc) share the ModuleInfo slot
@@ -60,13 +78,13 @@ function collectModuleRefs(toplevelBody, module_infos, this_module_info) {
     // accesses on it are ordinary property gets.
     if (module_infos) {
         for (let stmt of toplevelBody) {
-            if (stmt.type !== b.ImportDeclaration) continue;
+            if (stmt.type !== "ImportDeclaration") continue;
             if (!stmt.source_path) continue;
             let moduleString = stmt.source_path.value;
             let module_info = module_infos.get(moduleString);
             if (!module_info) continue;
             for (let spec of stmt.specifiers) {
-                if (spec.type === b.ImportNamespaceSpecifier) {
+                if (spec.type === "ImportNamespaceSpecifier") {
                     // module_info rides along so lowering can resolve
                     // ns.member accesses to slot loads at compile time
                     // (mirroring new-cc's visitMemberExpression rewrite —
@@ -84,12 +102,12 @@ function collectModuleRefs(toplevelBody, module_infos, this_module_info) {
                 // one (their module object only exists at runtime)
                 if (module_info.isNative()) continue;
                 let imported_name;
-                if (spec.type === b.ImportSpecifier) imported_name = spec.imported.name;
-                else if (spec.type === b.ImportDefaultSpecifier) imported_name = "default";
+                if (spec.type === "ImportSpecifier") imported_name = spec.imported.name;
+                else if (spec.type === "ImportDefaultSpecifier") imported_name = "default";
                 else continue;
                 let export_info = module_info.exports.get(imported_name);
                 if (!export_info || export_info.promoted) continue;
-                let entry = {
+                const entry: import("./lower").SlotRef = {
                     module: moduleString,
                     slot: export_info.slot_num,
                     writable: false,
@@ -110,16 +128,16 @@ function collectModuleRefs(toplevelBody, module_infos, this_module_info) {
     // so these are set second.
     if (this_module_info) {
         for (let wrapped of toplevelBody) {
-            if (wrapped.type !== b.ExportNamedDeclaration) continue;
+            if (wrapped.type !== "ExportNamedDeclaration") continue;
             let decl = wrapped.declaration;
             if (!decl || Array.isArray(decl)) continue;
-            if (decl.type === b.VariableDeclaration) {
+            if (decl.type === "VariableDeclaration") {
                 let is_const = decl.kind === "const";
                 for (let d of decl.declarations) {
-                    if (d.id.type !== b.Identifier) continue;
+                    if (d.id.type !== "Identifier") continue;
                     if (!this_module_info.exports.has(d.id.name)) continue;
-                    let export_info = this_module_info.exports.get(d.id.name);
-                    let entry = {
+                    const export_info = this_module_info.exports.get(d.id.name)!;
+                    const entry: import("./lower").SlotRef = {
                         module: "%self",
                         slot: export_info.slot_num,
                         writable: !is_const,
@@ -131,7 +149,7 @@ function collectModuleRefs(toplevelBody, module_infos, this_module_info) {
                     refs.set(d.id.name, entry);
                 }
             } else if (
-                (decl.type === b.FunctionDeclaration || decl.type === b.ClassDeclaration) &&
+                (decl.type === "FunctionDeclaration" || decl.type === "ClassDeclaration") &&
                 decl.id
             ) {
                 // an exported function/class read in value position loads
@@ -139,7 +157,7 @@ function collectModuleRefs(toplevelBody, module_infos, this_module_info) {
                 // in — identity-correct, unlike minting a new closure per
                 // reference.  writes fall back (writable: false).
                 if (!this_module_info.exports.has(decl.id.name)) continue;
-                let export_info = this_module_info.exports.get(decl.id.name);
+                const export_info = this_module_info.exports.get(decl.id.name)!;
                 refs.set(decl.id.name, {
                     module: "%self",
                     slot: export_info.slot_num,
@@ -156,9 +174,9 @@ function collectModuleRefs(toplevelBody, module_infos, this_module_info) {
     // read-only.
     if (this_module_info) {
         for (let stmt of toplevelBody) {
-            if (stmt.type === b.VariableDeclaration) {
+            if (stmt.type === "VariableDeclaration") {
                 for (let d of stmt.declarations) {
-                    if (d.id.type !== b.Identifier) continue;
+                    if (d.id.type !== "Identifier") continue;
                     if (refs.has(d.id.name)) continue;
                     let export_info = this_module_info.exports.get(d.id.name);
                     if (!export_info || !export_info.promoted) continue;
@@ -169,7 +187,7 @@ function collectModuleRefs(toplevelBody, module_infos, this_module_info) {
                     });
                 }
             } else if (
-                (stmt.type === b.FunctionDeclaration || stmt.type === b.ClassDeclaration) &&
+                (stmt.type === "FunctionDeclaration" || stmt.type === "ClassDeclaration") &&
                 stmt.id
             ) {
                 if (refs.has(stmt.id.name)) continue;
@@ -189,11 +207,15 @@ function collectModuleRefs(toplevelBody, module_infos, this_module_info) {
 
 // non-exported module-level bindings with literal initializers that are
 // never reassigned: fold-only refs (no slot)
-function addModuleConstLiterals(toplevelBody, assigned, refs) {
+function addModuleConstLiterals(
+    toplevelBody: e.Statement[],
+    assigned: Set<string>,
+    refs: Map<string, ModuleRef>
+): void {
     for (let stmt of toplevelBody) {
-        if (stmt.type !== b.VariableDeclaration) continue; // exported ones already in refs
+        if (stmt.type !== "VariableDeclaration") continue; // exported ones already in refs
         for (let d of stmt.declarations) {
-            if (d.id.type !== b.Identifier) continue;
+            if (d.id.type !== "Identifier") continue;
             if (!isFoldableLiteral(d.init)) continue;
             if (assigned.has(d.id.name)) continue;
             if (refs.has(d.id.name)) continue;
@@ -204,24 +226,27 @@ function addModuleConstLiterals(toplevelBody, assigned, refs) {
 
 // module-scope names that are ever assigned at the top level; calls into
 // those can't be made direct and their literals can't fold
-function collectAssignedNames(toplevelBody) {
-    let assigned = new Set();
-    let walk = (n) => {
+function collectAssignedNames(toplevelBody: e.Statement[]): Set<string> {
+    const assigned = new Set<string>();
+    // reflective object-graph walk (the same legitimate-unknown seam as
+    // gather-imports' var scanner)
+    const walk = (n: unknown): void => {
         if (!n || typeof n !== "object") return;
         if (Array.isArray(n)) {
-            for (let el of n) walk(el);
+            for (const el of n) walk(el);
             return;
         }
+        const node = n as e.Node;
         // conservatively descend everywhere, including into nested
         // functions: a nested assignment to a module-scope name still
         // invalidates direct calls / const folding.
-        if (n.type === b.AssignmentExpression && n.left && n.left.type === b.Identifier)
-            assigned.add(n.left.name);
-        if (n.type === b.UpdateExpression && n.argument && n.argument.type === b.Identifier)
-            assigned.add(n.argument.name);
-        for (let k of Object.keys(n)) {
+        if (node.type === "AssignmentExpression" && node.left && node.left.type === "Identifier")
+            assigned.add(node.left.name);
+        if (node.type === "UpdateExpression" && node.argument && node.argument.type === "Identifier")
+            assigned.add(node.argument.name);
+        for (const k of Object.keys(node)) {
             if (k === "loc") continue;
-            walk(n[k]);
+            walk((node as unknown as Record<string, unknown>)[k]);
         }
     };
     walk(toplevelBody);
@@ -234,15 +259,15 @@ function collectAssignedNames(toplevelBody) {
 // thing it compiled; they're built directly as EIR now.  getters fold
 // primitive const exports (matching the legacy getExportGetter);
 // everything else loads the export's slot on "%self".
-function uniqueFnName(eir_module, base) {
+function uniqueFnName(eir_module: Module, base: string): string {
     let names = new Set(eir_module.functions.map((f) => f.name));
     let name = base;
     for (let i = 1; names.has(name); i++) name = `${base}$${i}`;
     return name;
 }
 
-function buildModuleAccessors(eir_module, this_module_info) {
-    let accessors = [];
+function buildModuleAccessors(eir_module: Module, this_module_info: ModuleInfo): ModuleAccessor[] {
+    const accessors: ModuleAccessor[] = [];
     this_module_info.exports.forEach((export_info, key) => {
         if (export_info.promoted) return; // hidden slot: no accessors
 
@@ -251,12 +276,12 @@ function buildModuleAccessors(eir_module, this_module_info) {
             let fb = new FunctionBuilder(getter_name, ["%env", "%this"]);
             let cv = export_info.constval;
             let v;
-            if (cv && cv.type === b.Literal && cv.value === null) v = fb.constNull();
-            else if (cv && cv.type === b.Literal && typeof cv.value === "number")
+            if (cv && cv.type === "Literal" && cv.value === null) v = fb.constNull();
+            else if (cv && cv.type === "Literal" && typeof cv.value === "number")
                 v = fb.constNumber(cv.value);
-            else if (cv && cv.type === b.Literal && typeof cv.value === "string")
+            else if (cv && cv.type === "Literal" && typeof cv.value === "string")
                 v = fb.constAtom(cv.value);
-            else if (cv && cv.type === b.Literal && typeof cv.value === "boolean")
+            else if (cv && cv.type === "Literal" && typeof cv.value === "boolean")
                 v = fb.constBool(cv.value);
             else
                 v = fb.emit("module_slot_load", [], {
@@ -297,37 +322,45 @@ function buildModuleAccessors(eir_module, this_module_info) {
 // stores the default-export slot.  normalize to the two statements that
 // say exactly that; unnamed `export default function () {}` is just an
 // expression-form default export.
-function normalizeDefaultExports(body) {
+function normalizeDefaultExports(body: e.Statement[]): void {
     for (let i = 0; i < body.length; i++) {
-        let stmt = body[i];
-        if (stmt.type !== b.ExportDefaultDeclaration) continue;
+        const stmt = body[i]!;
+        if (stmt.type !== "ExportDefaultDeclaration") continue;
         let decl = stmt.declaration;
         if (!decl) continue;
-        if (decl.type === b.FunctionDeclaration) {
+        if (decl.type === "FunctionDeclaration") {
             if (decl.id) {
                 stmt.declaration = b.identifier(decl.id.name);
                 body.splice(i, 0, decl);
                 i++;
             } else {
-                decl.type = b.FunctionExpression;
+                // an unnamed default function is just an expression-form
+                // default export (in-place retype)
+                (decl as { type: string }).type = "FunctionExpression";
             }
         } else if (
-            decl.type === b.VariableDeclaration &&
+            decl.type === "VariableDeclaration" &&
             decl.declarations.length === 1 &&
-            decl.declarations[0].id.type === b.Identifier
+            decl.declarations[0]!.id.type === "Identifier"
         ) {
             // `export default class Foo {}` arrives here post-DesugarClasses
             // as `let Foo = <class expr>`
-            stmt.declaration = b.identifier(decl.declarations[0].id.name);
+            stmt.declaration = b.identifier((decl.declarations[0]!.id as e.Identifier).name);
             body.splice(i, 0, decl);
             i++;
         }
     }
 }
 
-export function collectEIRToplevel(tree, filename, module_infos, this_module_info, options) {
-    let toplevel = tree.body[0];
-    let body = toplevel.body.body;
+export function collectEIRToplevel(
+    tree: e.Program,
+    filename: string,
+    module_infos: Map<string, ModuleInfo> | null,
+    this_module_info: ModuleInfo,
+    options: CompilerOptions
+): CollectResult {
+    const toplevel = tree.body[0] as e.FunctionDeclaration;
+    const body = toplevel.body.body;
     normalizeDefaultExports(body);
 
     let assigned = collectAssignedNames(body);
@@ -358,7 +391,7 @@ export function collectEIRToplevel(tree, filename, module_infos, this_module_inf
 
         toplevel.eir_module = eir_module;
         toplevel.eir_main = info.name;
-        toplevel.body = { type: b.BlockStatement, body: [], loc: toplevel.loc };
+        toplevel.body = { type: "BlockStatement", body: [], loc: toplevel.loc };
         debug.log(1, `EIR: ${filename}: whole module lowered (toplevel-as-EIR)`);
         if (dumpRequested(options)) dumpModule(filename, "toplevel-as-EIR", eir_module);
         return { eir_module: eir_module, accessors: accessors };
