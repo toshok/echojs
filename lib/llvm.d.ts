@@ -18,6 +18,9 @@ declare module "@llvm" {
     interface Value {
         setName(name: string): void;
         dump(): void;
+        // compiler bookkeeping: values that hold the runtime's boxed-bool
+        // encoding (see loadBoolEjsValue / forwardCalleeAttributes)
+        _ejs_returns_ejsval_bool?: boolean;
         // compiler bookkeeping: constant tracking (see consts.ts)
         is_constant?: boolean;
         constant_val?: string | number | boolean | number[] | null;
@@ -152,8 +155,6 @@ declare module "@llvm" {
         setDoesNotAccessMemory(): void;
         setDoesNotThrow(): void;
         setStructRet(): void;
-        // compiler bookkeeping (see ABI.forwardCalleeAttributes)
-        _ejs_returns_ejsval_bool?: boolean;
     }
 
     interface InvokeInst extends CallInst {}

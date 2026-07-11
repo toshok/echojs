@@ -1,9 +1,8 @@
-/* -*- Mode: js2; indent-tabs-mode: nil; tab-width: 4; js2-indent-offset: 4; js2-basic-offset: 4; -*-
- * vim: set ts=4 sw=4 et tw=99 ft=js:
+/* -*- Mode: typescript; indent-tabs-mode: nil; tab-width: 4 -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=typescript:
  */
 
 import * as llvm from "@llvm";
-
 
 import { preEIRConvert as pre_eir_convert } from "./desugar";
 import * as types from "./types";
@@ -17,14 +16,66 @@ import { startGenerator } from "./echo-util";
 import { ABI } from "./abi";
 import { SRetABI } from "./sret-abi";
 import { collectEIRToplevel } from "./eir/integrate";
-import { EIREmitter } from "./eir/emit";
+import type { ModuleAccessor } from "./eir/integrate";
+import { EIREmitter, VisitorSurface } from "./eir/emit";
+import type * as e from "./estree";
+import type { CompilerOptions } from "./options";
+import type { ModuleInfo, JSModuleInfo } from "./module-info";
+import type { Triple } from "./triple";
+import type { RuntimeInterface } from "./runtime";
 
-let ir = llvm.IRBuilder;
+const ir = llvm.IRBuilder;
 
-let hasOwn = Object.prototype.hasOwnProperty;
+const hasOwn = Object.prototype.hasOwnProperty;
 
-class LLVMIRVisitor {
-    constructor(module, filename, triple, options, abi, allModules, this_module_info, dibuilder, difile) {
+// the state emitModuleInfo/emitModuleResolution thread between them
+class LLVMIRVisitor implements VisitorSurface {
+    module: llvm.Module;
+    filename: string;
+    triple: Triple;
+    options: CompilerOptions;
+    abi: ABI;
+    allModules: Map<string, ModuleInfo>;
+    this_module_info: JSModuleInfo;
+    dibuilder: llvm.DIBuilder | undefined;
+    difile: llvm.DIFile | undefined;
+    idgen: () => number;
+    genRecordId?: () => number;
+    llvm_intrinsics: { gcroot: () => llvm.EjsFunction };
+    ejs_runtime: RuntimeInterface;
+    ejs_binops: Record<string, llvm.EjsFunction>;
+    ejs_atoms: Record<string, llvm.GlobalVariable>;
+    ejs_globals: Record<string, llvm.GlobalVariable>;
+    ejs_symbols: Record<string, llvm.GlobalVariable>;
+    module_atoms: Map<string, llvm.GlobalVariable>;
+    literalInitializationFunction: llvm.EjsFunction;
+    literalInitializationDebugInfo: llvm.DISubprogram | undefined;
+    literalInitializationBB: llvm.BasicBlock;
+    currentFunction: llvm.EjsFunction | null = null;
+    // module scaffolding state (set by emitModuleInfo / emitEIRToplevel)
+    this_module_global!: llvm.GlobalVariable;
+    this_module_type!: llvm.StructType;
+    this_module_initted!: llvm.GlobalVariable;
+    import_module_globals!: Map<string, llvm.GlobalVariable>;
+    resolve_modules_bb!: llvm.BasicBlock;
+    toplevel_body_bb!: llvm.BasicBlock;
+    toplevel_function!: llvm.EjsFunction;
+    eir_toplevel_entry_bb: llvm.BasicBlock | null = null;
+    eir_emitter?: EIREmitter;
+    eir_emitted?: Map<import("./eir/ir").Module, Map<string, llvm.EjsFunction>>;
+    eir_toplevel_fns!: Map<string, llvm.EjsFunction>;
+
+    constructor(
+        module: llvm.Module,
+        filename: string,
+        triple: Triple,
+        options: CompilerOptions,
+        abi: ABI,
+        allModules: Map<string, ModuleInfo>,
+        this_module_info: JSModuleInfo,
+        dibuilder: llvm.DIBuilder | undefined,
+        difile: llvm.DIFile | undefined
+    ) {
         this.module = module;
         this.filename = filename;
         this.triple = triple;
@@ -51,7 +102,7 @@ class LLVMIRVisitor {
 
         this.module_atoms = new Map();
 
-        let init_function_name = `_ejs_module_init_string_literals_${this.filename}`;
+        const init_function_name = `_ejs_module_init_string_literals_${this.filename}`;
         this.literalInitializationFunction = this.module.getOrInsertFunction(
             init_function_name,
             types.Void,
@@ -59,11 +110,11 @@ class LLVMIRVisitor {
         );
 
         if (this.options.debug)
-            this.literalInitializationDebugInfo = this.dibuilder.createFunction(
-                this.difile,
+            this.literalInitializationDebugInfo = this.dibuilder!.createFunction(
+                this.difile!,
                 init_function_name,
                 init_function_name,
-                this.difile,
+                this.difile!,
                 0,
                 false,
                 true,
@@ -82,7 +133,7 @@ class LLVMIRVisitor {
 
         if (this.options.debug)
             ir.setCurrentDebugLocation(
-                llvm.DebugLoc.get(0, 0, this.literalInitializationDebugInfo)
+                llvm.DebugLoc.get(0, 0, this.literalInitializationDebugInfo!)
             );
 
         this.doInsideBBlock(entry_bb, () => {
@@ -98,7 +149,7 @@ class LLVMIRVisitor {
 
     // lots of helper methods
 
-    emitModuleInfo() {
+    emitModuleInfo(): void {
         this.this_module_type = types.getModuleSpecificType(
             this.this_module_info.module_name,
             this.this_module_info.slot_num
@@ -113,7 +164,7 @@ class LLVMIRVisitor {
         );
         this.import_module_globals = new Map();
         for (let import_module_string of this.this_module_info.importList) {
-            let import_module_info = this.allModules.get(import_module_string);
+            const import_module_info = this.allModules.get(import_module_string)!;
             if (!import_module_info.isNative())
                 this.import_module_globals.set(
                     import_module_string,
@@ -135,13 +186,13 @@ class LLVMIRVisitor {
         );
     }
 
-    emitModuleResolution(module_accessors) {
+    emitModuleResolution(module_accessors: ModuleAccessor[]): llvm.Value {
         // this.loadUndefinedEjsValue depends on this
         this.currentFunction = this.toplevel_function;
 
         ir.setInsertPoint(this.resolve_modules_bb);
         if (this.options.debug)
-            ir.setCurrentDebugLocation(llvm.DebugLoc.get(0, 0, this.currentFunction.debug_info));
+            ir.setCurrentDebugLocation(llvm.DebugLoc.get(0, 0, this.currentFunction!.debug_info!));
 
         let uninitialized_bb = new llvm.BasicBlock("module_uninitialized", this.toplevel_function);
         let initialized_bb = new llvm.BasicBlock("module_initialized", this.toplevel_function);
@@ -205,12 +256,7 @@ class LLVMIRVisitor {
         for (let import_module_string of this.this_module_info.importList) {
             let import_module = this.import_module_globals.get(import_module_string);
             if (import_module) {
-                this.createCall(
-                    this.ejs_runtime.module_resolve,
-                    [import_module],
-                    "",
-                    !this.ejs_runtime.module_resolve.doesNotThrow
-                );
+                this.createCall(this.ejs_runtime.module_resolve, [import_module], "");
             }
         }
 
@@ -231,38 +277,40 @@ class LLVMIRVisitor {
     }
 
     // result should be the landingpad's value
-    doInsideBBlock(b, f) {
-        let saved = ir.getInsertBlock();
-        ir.setInsertPoint(b);
+    doInsideBBlock(bb: llvm.BasicBlock, f: () => void): void {
+        const saved = ir.getInsertBlock();
+        ir.setInsertPoint(bb);
         f();
         ir.setInsertPoint(saved);
-        return b;
     }
 
-    createEjsValueLoad(value, name) {
-        let rv = ir.createLoad(types.EjsValue, value, name);
+    createEjsValueLoad(value: llvm.Value, name: string): llvm.Value {
+        const rv = ir.createLoad(types.EjsValue, value, name) as llvm.AllocaInst;
         rv.setAlignment(8);
         return rv;
     }
 
-    loadCachedEjsValue(name, init) {
+    loadCachedEjsValue(name: string, init: (alloca: llvm.AllocaInst) => void): llvm.Value {
         let alloca_name = `${name}_alloca`;
         let load_name = `${name}_load`;
 
-        let alloca;
-        if (this.currentFunction[alloca_name]) {
-            alloca = this.currentFunction[alloca_name];
-        } else {
-            alloca = this.createAlloca(this.currentFunction, types.EjsValue, alloca_name);
-            this.currentFunction[alloca_name] = alloca;
-            this.doInsideBBlock(this.currentFunction.entry_bb, () => init(alloca));
+        // per-function alloca cache, dynamic-keyed on the llvm function
+        // (matching the historical direct-property scheme)
+        const fn = this.currentFunction!;
+        const cache = fn as unknown as Record<string, llvm.AllocaInst | undefined>;
+        let alloca = cache[alloca_name];
+        if (!alloca) {
+            const fresh = this.createAlloca(fn, types.EjsValue, alloca_name);
+            cache[alloca_name] = fresh;
+            this.doInsideBBlock(fn.entry_bb!, () => init(fresh));
+            alloca = fresh;
         }
 
         return ir.createLoad(types.EjsValue, alloca, load_name);
     }
 
-    loadBoolEjsValue(n) {
-        let rv = this.loadCachedEjsValue(n, (alloca) => {
+    loadBoolEjsValue(n: boolean): llvm.Value {
+        const rv = this.loadCachedEjsValue(String(n), (alloca) => {
             let alloca_as_int64 = ir.createBitCast(
                 alloca,
                 types.Int64.pointerTo(),
@@ -283,17 +331,17 @@ class LLVMIRVisitor {
         return rv;
     }
 
-    loadDoubleEjsValue(n) {
+    loadDoubleEjsValue(n: number): llvm.Value {
         return this.loadCachedEjsValue(`num_${n}`, (alloca) => this.storeDouble(alloca, n));
     }
-    loadNullEjsValue() {
+    loadNullEjsValue(): llvm.Value {
         return this.loadCachedEjsValue("null", (alloca) => this.storeNull(alloca));
     }
-    loadUndefinedEjsValue() {
+    loadUndefinedEjsValue(): llvm.Value {
         return this.loadCachedEjsValue("undef", (alloca) => this.storeUndefined(alloca));
     }
 
-    storeUndefined(alloca, name) {
+    storeUndefined(alloca: llvm.AllocaInst, name?: string): llvm.Value {
         let alloca_as_int64 = ir.createBitCast(
             alloca,
             types.Int64.pointerTo(),
@@ -314,7 +362,7 @@ class LLVMIRVisitor {
             );
     }
 
-    storeNull(alloca, name) {
+    storeNull(alloca: llvm.AllocaInst, name?: string): llvm.Value {
         let alloca_as_int64 = ir.createBitCast(
             alloca,
             types.Int64.pointerTo(),
@@ -335,7 +383,7 @@ class LLVMIRVisitor {
             );
     }
 
-    storeDouble(alloca, jsnum, name) {
+    storeDouble(alloca: llvm.AllocaInst, jsnum: number, name?: string): llvm.Value {
         let c = llvm.ConstantFP.getDouble(jsnum);
         let alloca_as_double = ir.createBitCast(
             alloca,
@@ -345,9 +393,9 @@ class LLVMIRVisitor {
         return ir.createStore(c, alloca_as_double, name);
     }
 
-    createAlloca(func, type, name) {
+    createAlloca(func: llvm.EjsFunction, type: llvm.Type, name: string): llvm.AllocaInst {
         let saved_insert_point = ir.getInsertBlock();
-        ir.setInsertPointStartBB(func.entry_bb);
+        ir.setInsertPointStartBB(func.entry_bb!);
         let alloca = ir.createAlloca(type, name);
 
         // if EjsValue was a pointer value we would be able to use an the llvm gcroot intrinsic here.  but with the nan boxing
@@ -360,22 +408,22 @@ class LLVMIRVisitor {
         return alloca;
     }
 
-    emitEIRToplevel(n) {
+    emitEIRToplevel(n: e.FunctionDeclaration): llvm.EjsFunction {
         let insertBlock = ir.getInsertBlock();
 
         if (!this.eir_emitter) this.eir_emitter = new EIREmitter(this);
         if (!this.eir_emitted) this.eir_emitted = new Map();
-        let eir_fns = this.eir_emitted.get(n.eir_module);
+        let eir_fns = this.eir_emitted.get(n.eir_module!);
         if (!eir_fns) {
-            eir_fns = this.eir_emitter.emitModule(n.eir_module);
-            this.eir_emitted.set(n.eir_module, eir_fns);
+            eir_fns = this.eir_emitter.emitModule(n.eir_module!);
+            this.eir_emitted.set(n.eir_module!, eir_fns);
         }
         // export accessors resolve by name against this map (see
         // emitModuleResolution)
         this.eir_toplevel_fns = eir_fns;
-        let target = eir_fns.get(n.eir_main);
+        const target = eir_fns.get(n.eir_main!)!;
 
-        let ir_func = n.ir_func;
+        const ir_func = n.ir_func!;
         this.currentFunction = ir_func;
         let entry_bb = new llvm.BasicBlock("entry", ir_func);
         ir_func.entry_bb = entry_bb; // cached-literal helpers want this
@@ -389,7 +437,7 @@ class LLVMIRVisitor {
             ir_func,
             target.type,
             target,
-            [args[0], args[1], args[2], args[3], args[4]],
+            [args[0]!, args[1]!, args[2]!, args[3]!, args[4]!],
             "eir_toplevel_result"
         );
         this.abi.createRet(ir_func, rv);
@@ -412,12 +460,12 @@ class LLVMIRVisitor {
     // function's body with a forwarding call.  closure creation and env
     // plumbing stay entirely on the legacy side; the thunk just hands the
     // builtin arguments through.
-    createRet(x) {
+    createRet(x: llvm.Value): llvm.Value {
         //this.createCall this.ejs_runtime.log, [consts.string(ir, `leaving ${this.currentFunction.name}`)], ''
-        return this.abi.createRet(this.currentFunction, x);
+        return this.abi.createRet(this.currentFunction!, x);
     }
 
-    generateUCS2(id, jsstr) {
+    generateUCS2(id: number, jsstr: string): llvm.GlobalVariable {
         let ucsArrayType = llvm.ArrayType.get(types.JSChar, jsstr.length + 1);
         let array_data = [];
         for (let i = 0, e = jsstr.length; i < e; i++)
@@ -435,7 +483,7 @@ class LLVMIRVisitor {
         return arrayglobal;
     }
 
-    generateEJSPrimString(id) {
+    generateEJSPrimString(id: number, _len?: number): llvm.GlobalVariable {
         let strglobal = new llvm.GlobalVariable(
             this.module,
             types.EjsPrimString,
@@ -447,7 +495,7 @@ class LLVMIRVisitor {
         return strglobal;
     }
 
-    generateEJSValueForString(id) {
+    generateEJSValueForString(id: number | string): llvm.GlobalVariable {
         let name = `ejsval-${id}`;
         let strglobal = new llvm.GlobalVariable(
             this.module,
@@ -462,7 +510,13 @@ class LLVMIRVisitor {
         return val;
     }
 
-    addStringLiteralInitialization(name, ucs2, primstr, val, len) {
+    addStringLiteralInitialization(
+        name: string,
+        ucs2: llvm.GlobalVariable,
+        primstr: llvm.GlobalVariable,
+        val: llvm.GlobalVariable,
+        len: number
+    ): void {
         let saved_insert_point = ir.getInsertBlock();
 
         ir.setInsertPointStartBB(this.literalInitializationBB);
@@ -471,7 +525,7 @@ class LLVMIRVisitor {
         if (this.options.debug) {
             saved_debug_loc = ir.getCurrentDebugLocation();
             ir.setCurrentDebugLocation(
-                llvm.DebugLoc.get(0, 0, this.literalInitializationDebugInfo)
+                llvm.DebugLoc.get(0, 0, this.literalInitializationDebugInfo!)
             );
         }
 
@@ -494,13 +548,13 @@ class LLVMIRVisitor {
             ""
         );
         ir.setInsertPoint(saved_insert_point);
-        if (this.options.debug) ir.setCurrentDebugLocation(saved_debug_loc);
+        if (this.options.debug) ir.setCurrentDebugLocation(saved_debug_loc!);
     }
 
-    getAtom(str) {
+    getAtom(str: string): llvm.Value {
         // check if it's an atom (a runtime library constant) first of all
         if (hasOwn.call(this.ejs_atoms, str))
-            return this.createEjsValueLoad(this.ejs_atoms[str], `${str}_atom_load`);
+            return this.createEjsValueLoad(this.ejs_atoms[str]!, `${str}_atom_load`);
 
         // if it's not, we create a constant and embed it in this module
         if (!this.module_atoms.has(str)) {
@@ -512,20 +566,20 @@ class LLVMIRVisitor {
             this.addStringLiteralInitialization(str, ucs2_data, primstring, ejsval, str.length);
         }
 
-        return this.createEjsValueLoad(this.module_atoms.get(str), "literal_load");
+        return this.createEjsValueLoad(this.module_atoms.get(str)!, "literal_load");
     }
 
-    createCall(callee, argv, callname) {
+    createCall(callee: llvm.EjsFunction, argv: llvm.Value[], callname: string): llvm.Value {
         // the module scaffolding this visitor still emits never runs
         // inside a protected region; EIR-emitted code manages its own
         // invoke/landingpad pairs (see eir/emit.js)
-        return this.abi.createCall(this.currentFunction, callee.type, callee, argv, callname);
+        return this.abi.createCall(this.currentFunction!, callee.type, callee, argv, callname);
     }
 
-    emitEjsvalFromPtr(ptr, prefix) {
+    emitEjsvalFromPtr(ptr: llvm.Value, prefix: string): llvm.Value {
         if (this.triple.pointerSize() === 64) {
             let fromptr_alloca = this.createAlloca(
-                this.currentFunction,
+                this.currentFunction!,
                 types.EjsValue,
                 `${prefix}_ejsval`
             );
@@ -547,22 +601,20 @@ class LLVMIRVisitor {
         }
     }
 
-    getEjsvalBits(arg) {
-        let bits_alloca;
-
-        if (this.currentFunction.bits_alloca) bits_alloca = this.currentFunction.bits_alloca;
-        else bits_alloca = this.createAlloca(this.currentFunction, types.EjsValue, "bits_alloca");
+    getEjsvalBits(arg: llvm.Value): llvm.Value {
+        const fn = this.currentFunction!;
+        const bits_alloca = fn.bits_alloca ?? this.createAlloca(fn, types.EjsValue, "bits_alloca");
 
         ir.createStore(arg, bits_alloca);
-        let bits_ptr = ir.createBitCast(bits_alloca, types.Int64.pointerTo(), "bits_ptr");
-        if (!this.currentFunction.bits_alloca) this.currentFunction.bits_alloca = bits_alloca;
+        const bits_ptr = ir.createBitCast(bits_alloca, types.Int64.pointerTo(), "bits_ptr");
+        if (!fn.bits_alloca) fn.bits_alloca = bits_alloca;
         return ir.createLoad(types.Int64, bits_ptr, "bits_load");
     }
 
-    createEjsvalICmpULt(arg, i64_const, name) {
+    createEjsvalICmpULt(arg: llvm.Value, i64_const: llvm.Constant, name: string): llvm.Value {
         return ir.createICmpULt(this.getEjsvalBits(arg), i64_const, name);
     }
-    isNumber(val) {
+    isNumber(val: llvm.Value): llvm.Value {
         if (this.triple.pointerSize() === 64) {
             return this.createEjsvalICmpULt(
                 val,
@@ -576,7 +628,7 @@ class LLVMIRVisitor {
     }
 }
 
-function insert_toplevel_func(tree, moduleInfo) {
+function insert_toplevel_func(tree: e.Program, moduleInfo: JSModuleInfo): e.Program {
     let toplevel = {
         type: b.FunctionDeclaration,
         id: b.identifier(moduleInfo.toplevel_function_name),
@@ -594,6 +646,8 @@ function insert_toplevel_func(tree, moduleInfo) {
             },
         },
         toplevel: true,
+        generator: false,
+        expression: false,
         loc: {
             start: {
                 line: 0,
@@ -606,7 +660,14 @@ function insert_toplevel_func(tree, moduleInfo) {
     return tree;
 }
 
-export function compile(tree, base_output_filename, source_filename, module_infos, options, triple) {
+export function compile(
+    tree: e.Program,
+    base_output_filename: string,
+    source_filename: string,
+    module_infos: Map<string, ModuleInfo>,
+    options: CompilerOptions,
+    triple: Triple
+): llvm.Module {
     let abi = triple.abi();
 
     types.initTypes(triple.pointerSize() === 32);
@@ -617,7 +678,7 @@ export function compile(tree, base_output_filename, source_filename, module_info
         module_filename = module_filename.substring(0, module_filename.length - 3);
     }
 
-    let this_module_info = module_infos.get(module_filename);
+    const this_module_info = module_infos.get(module_filename) as JSModuleInfo;
 
     tree = insert_toplevel_func(tree, this_module_info);
 
@@ -630,17 +691,17 @@ export function compile(tree, base_output_filename, source_filename, module_info
     let lowered = collectEIRToplevel(tree, source_filename, module_infos, this_module_info, options);
     if (lowered.error) throw new Error(`${source_filename}: ${lowered.error}`);
 
-    let toplevel_node = tree.body[0];
-    let toplevel_name = toplevel_node.id.name;
+    const toplevel_node = tree.body[0] as e.FunctionDeclaration;
+    const toplevel_name = toplevel_node.id.name;
 
     let module = new llvm.Module(base_output_filename);
     module.setTriple(triple.llvmTriple());
     module.setDataLayout(triple.dataLayout());
 
-    module.toplevel_name = toplevel_name;
+    (module as unknown as { toplevel_name: string }).toplevel_name = toplevel_name;
 
-    let dibuilder;
-    let difile;
+    let dibuilder: llvm.DIBuilder | undefined;
+    let difile: llvm.DIFile | undefined;
 
     if (options.debug) {
         dibuilder = new llvm.DIBuilder(module);
@@ -687,13 +748,13 @@ export function compile(tree, base_output_filename, source_filename, module_info
         difile
     );
 
-    if (options.debug) dibuilder.finalize();
+    if (options.debug) dibuilder!.finalize();
 
     visitor.emitModuleInfo();
 
     visitor.emitEIRToplevel(toplevel_node);
 
-    visitor.emitModuleResolution(lowered.accessors);
+    visitor.emitModuleResolution(lowered.accessors!);
 
     return module;
 }
