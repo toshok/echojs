@@ -17,7 +17,7 @@ platform(
 )
 
 export_file(
-    name = "ejs-es6.js",
+    name = "ejs-es6.ts",
     visibility = ["PUBLIC"],
 )
 

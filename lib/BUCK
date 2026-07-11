@@ -29,7 +29,7 @@ genrule(
         exclude = ["host-config.js"],
     ) + [
         "buck-gen-tsjs.sh",
-        "//:ejs-es6.js",
+        "//:ejs-es6.ts",
         "//external-deps:compiler-js",
     ],
     out = "tsjs",

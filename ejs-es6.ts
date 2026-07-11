@@ -1,7 +1,15 @@
+/* -*- Mode: typescript; indent-tabs-mode: nil; tab-width: 4 -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=typescript:
+ */
+
 import * as os from "@node-compat/os";
 import * as path from "@node-compat/path";
 import * as fs from "@node-compat/fs";
 import * as child_process from "@node-compat/child_process";
+import type { CompilerOptions } from "./lib/options";
+import type { Triple as TripleT } from "./lib/triple";
+import type { ModuleInfo, JSModuleInfo, NativeModuleInfo } from "./lib/module-info";
+import type { Program } from "./lib/estree";
 
 import * as debug from "./lib/debug";
 import { compile } from "./lib/compiler";
@@ -15,13 +23,16 @@ import {
     RUNLOOP_IMPL as DEFAULT_RUNLOOP_IMPL,
 } from "./lib/host-config";
 
-let spawn = child_process.spawn;
+const spawn = child_process.spawn;
 
-function isNode() {
+// the self-hosted runtime exposes a global marker object
+declare const __ejs: object | undefined;
+
+function isNode(): boolean {
     return typeof __ejs == "undefined";
 }
 
-let argv;
+let argv: string[];
 if (!isNode()) {
     // argv is ['.../ejs', ...], get rid of the first arg
     argv = process.argv.slice(1);
@@ -30,13 +41,13 @@ if (!isNode()) {
     argv = process.argv.slice(2);
 }
 
-let ejs_dirname;
-function ejs_exe_dirname() {
+let ejs_dirname: string | undefined;
+function ejs_exe_dirname(): string {
     if (ejs_dirname) return ejs_dirname;
-    let argv0 = process.argv[isNode() ? 1 : 0];
+    const argv0 = process.argv[isNode() ? 1 : 0]!;
     let cwd = process.cwd();
 
-    let full_path_to_exe;
+    let full_path_to_exe: string | undefined;
     if (argv0.indexOf("/") != -1) {
         // either relative or absolute.  don't both searching path.
         let ejs_path = path.resolve(cwd, argv0);
@@ -49,7 +60,7 @@ function ejs_exe_dirname() {
         }
     } else {
         // not qualified at all, search over PATH
-        for (let p of process.env.PATH.split(":")) {
+        for (const p of (process.env["PATH"] || "").split(":")) {
             let ejs_path = path.resolve(cwd, p, argv0);
             try {
                 if (fs.statSync(ejs_path).isFile()) {
@@ -69,27 +80,26 @@ function ejs_exe_dirname() {
     return ejs_dirname;
 }
 
-function relative_to_ejs_exe(n) {
-    let was_array = Array.isArray(n);
-    if (!was_array) n = [n];
+function relative_to_ejs_exe(n: string): string;
+function relative_to_ejs_exe(n: string[]): string[];
+function relative_to_ejs_exe(n: string | string[]): string | string[] {
+    const was_array = Array.isArray(n);
+    const list = was_array ? n : [n];
 
-    let rv;
-    if (isNode()) {
-        rv = n.map((el) => path.resolve(ejs_exe_dirname(), "../..", el));
-    } else {
-        rv = n.map((el) => path.resolve(ejs_exe_dirname(), el));
-    }
+    const rv = isNode()
+        ? list.map((el) => path.resolve(ejs_exe_dirname(), "../..", el))
+        : list.map((el) => path.resolve(ejs_exe_dirname(), el));
 
     if (was_array) return rv;
-    return rv[0];
+    return rv[0]!;
 }
 
-let temp_files = [];
+const temp_files: string[] = [];
 
-let host_triple = Triple.fromProcess();
+const host_triple = Triple.fromProcess();
 let target_triple = host_triple; // a reasonable default. we're compiling for _this_ triple.
 
-let options = {
+const options: CompilerOptions = {
     // our defaults:
     opt_level: 2,
     debug: false,
@@ -111,24 +121,24 @@ let options = {
     stdout_writer: new Writer(process.stdout),
 };
 
-function add_native_module_dir(dir) {
+function add_native_module_dir(dir: string): void {
     options.native_module_dirs.push(dir);
 }
 
-function set_target(str) {
-    let triple;
+function set_target(str: string): void {
+    let triple: TripleT;
     switch (str) {
         case "linux_x86_64":
-            triple = new Triple("x86_64", "unknown", "linux");
+            triple = new Triple({ arch: "x86_64", vendor: "unknown", os: "linux" });
             break;
         case "macos":
-            triple = new Triple("arm64", "apple", "macos");
+            triple = new Triple({ arch: "arm64", vendor: "apple", os: "macos" });
             break;
         case "iossim":
-            triple = new Triple("arm64", "apple", "ios", "simulator");
+            triple = new Triple({ arch: "arm64", vendor: "apple", os: "ios", env: "simulator" });
             break;
         case "iosdev":
-            triple = new Triple("arm64", "apple", "ios");
+            triple = new Triple({ arch: "arm64", vendor: "apple", os: "ios" });
             break;
         default:
             triple = Triple.fromString(str);
@@ -137,19 +147,19 @@ function set_target(str) {
     target_triple = triple;
 }
 
-function set_extra_clang_args(arginfo) {
+function set_extra_clang_args(arginfo: string): void {
     options.extra_clang_args = arginfo;
 }
 
-function increase_debug_level() {
+function increase_debug_level(): void {
     options.debug_level += 1;
 }
 
-function add_debug_after_pass(passname) {
+function add_debug_after_pass(passname: string): void {
     options.debug_passes.add(passname);
 }
 
-function add_import_variable(arg) {
+function add_import_variable(arg: string): void {
     let equal_idx = arg.indexOf("=");
     if (equal_idx == -1) throw new Error("-I flag requires <name>=<value>");
 
@@ -159,7 +169,17 @@ function add_import_variable(arg) {
     });
 }
 
-let args = {
+interface ArgSpec {
+    // sets options[flag] = true
+    flag?: keyof CompilerOptions & string;
+    // consumes one argument into options[option]
+    option?: keyof CompilerOptions & string;
+    handler?: (...args: string[]) => void;
+    handlerArgc?: number;
+    help: string;
+}
+
+const args: Record<string, ArgSpec | undefined> = {
     "-O0": {
         handler: () => (options.opt_level = 0),
         help: "Optimization level 0.",
@@ -268,24 +288,25 @@ function output_usage() {
 
 function output_options() {
     console.warn("Options:");
-    for (let a of Object.keys(args)) {
-        console.warn(`   ${a}:  ${args[a].help}`);
+    for (const a of Object.keys(args)) {
+        console.warn(`   ${a}:  ${args[a]!.help}`);
     }
 }
 
-let file_args;
+let file_args: string[] | undefined;
 
 if (argv.length > 0) {
     for (let ai = 0, ae = argv.length; ai < ae; ai++) {
-        if (args[argv[ai]]) {
-            let o = args[argv[ai]];
+        const o = args[argv[ai]!];
+        if (o) {
+            const opts = options as unknown as Record<string, string | boolean>;
             if (o.flag) {
-                options[o.flag] = true;
+                opts[o.flag] = true;
             } else if (o.option) {
-                options[o.option] = argv[++ai];
+                opts[o.option] = argv[++ai]!;
             } else if (o.handler) {
-                let handler_args = [];
-                for (let i = 0, e = o.handlerArgc; i < e; i++) handler_args.push(argv[++ai]);
+                const handler_args: string[] = [];
+                for (let i = 0, e = o.handlerArgc ?? 0; i < e; i++) handler_args.push(argv[++ai]!);
                 o.handler.apply(null, handler_args);
             }
         } else {
@@ -314,9 +335,9 @@ if (!options.quiet) {
 
 debug.setLevel(options.debug_level);
 
-let o_filenames = [];
+const o_filenames: string[] = [];
 
-let compiled_modules = [];
+const compiled_modules: { filename: string; module_toplevel: string }[] = [];
 
 let sim_base = "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform";
 let dev_base = "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform";
@@ -324,7 +345,7 @@ let dev_base = "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.pl
 let sim_bin = `${sim_base}/Developer/usr/bin`;
 let dev_bin = `${dev_base}/Developer/usr/bin`;
 
-function target_llc_args(triple) {
+function target_llc_args(triple: TripleT): string[] {
     let args = [`-march=${triple.llcArch()}`];
     switch (triple.os) {
         case "macos":
@@ -345,9 +366,9 @@ function target_llc_args(triple) {
     return args;
 }
 
-let target_linker = process.env.CXX || "clang++";
+const target_linker = process.env["CXX"] || "clang++";
 
-function target_link_args(triple) {
+function target_link_args(triple: TripleT): string[] {
     let args = ["-arch", triple.clangArch()];
 
     if (triple.os === "linux") {
@@ -379,7 +400,7 @@ function target_link_args(triple) {
     return [];
 }
 
-function target_libraries(triple) {
+function target_libraries(triple: TripleT): string[] {
     if (triple.os === "linux") {
         if (DEFAULT_RUNLOOP_IMPL == "noop") return ["-lunwind", "-lpthread"];
         return ["-lunwind", "-lpthread", "-luv"];
@@ -407,7 +428,7 @@ function target_libraries(triple) {
     return [];
 }
 
-function target_libecho(triple) {
+function target_libecho(triple: TripleT): string {
     if (options.srcdir) {
         return path.join("runtime", "out", `${triple}`, "libecho.a");
     } else {
@@ -415,7 +436,7 @@ function target_libecho(triple) {
     }
 }
 
-function target_extra_libs(triple) {
+function target_extra_libs(triple: TripleT): string[] {
     if (options.srcdir) {
         if (triple.os === "linux")
             return [
@@ -452,7 +473,7 @@ function target_extra_libs(triple) {
     }
 }
 
-function target_path_prepend(triple) {
+function target_path_prepend(triple: TripleT): string {
     if (triple.os === "ios") {
         if (triple.env === "simulator") {
             return sim_bin;
@@ -462,11 +483,21 @@ function target_path_prepend(triple) {
     return "";
 }
 
-let llvm_commands = {};
-for (let x of ["opt", "llc", "llvm-as"])
-    llvm_commands[x] = `${x}${process.env.LLVM_SUFFIX || DEFAULT_LLVM_SUFFIX}`;
+const llvm_suffix = process.env["LLVM_SUFFIX"] || DEFAULT_LLVM_SUFFIX;
+const llvm_commands = {
+    opt: `opt${llvm_suffix}`,
+    llc: `llc${llvm_suffix}`,
+    "llvm-as": `llvm-as${llvm_suffix}`,
+} as const;
 
-function compileFile(filename, parse_tree, modules, files_count, cur_file, compileCallback) {
+function compileFile(
+    filename: string,
+    parse_tree: Program,
+    modules: Map<string, ModuleInfo>,
+    files_count: number,
+    cur_file: number,
+    compileCallback: () => void
+): void {
     let base_filename = genFreshFileName(path.basename(filename));
 
     if (!options.quiet) {
@@ -483,7 +514,7 @@ function compileFile(filename, parse_tree, modules, files_count, cur_file, compi
         );
     }
 
-    let compiled_module;
+    let compiled_module: import("@llvm").Module;
     try {
         compiled_module = compile(
             parse_tree,
@@ -499,7 +530,7 @@ function compileFile(filename, parse_tree, modules, files_count, cur_file, compi
         throw e;
     }
 
-    function tmpfile(suffix) {
+    function tmpfile(suffix: string): string {
         return `${os.tmpdir()}/${base_filename}-${target_triple.arch}-${target_triple.os}${suffix}`;
     }
     let ll_filename = tmpfile(".ll");
@@ -533,8 +564,8 @@ function compileFile(filename, parse_tree, modules, files_count, cur_file, compi
     // debug.log (1, `done writing ${bc_filename}`);
 
     compiled_modules.push({
-        filename: options.basename ? path.basename(filename) : filename,
-        module_toplevel: compiled_module.toplevel_name,
+        filename: filename,
+        module_toplevel: (compiled_module as unknown as { toplevel_name: string }).toplevel_name,
     });
 
     if (!isNode()) {
@@ -576,7 +607,10 @@ function compileFile(filename, parse_tree, modules, files_count, cur_file, compi
     }
 }
 
-function generate_import_map(js_modules, native_modules) {
+function generate_import_map(
+    js_modules: Map<string, JSModuleInfo>,
+    native_modules: Map<string, NativeModuleInfo>
+): string {
     let map_path = `${os.tmpdir()}/${genFreshFileName(path.basename(main_file))}-import-map.cpp`;
 
     let map_contents = "";
@@ -613,11 +647,11 @@ function generate_import_map(js_modules, native_modules) {
     map_contents +=
         "int _ejs_num_external_modules = sizeof(_ejs_external_modules) / sizeof(_ejs_external_modules[0]);\n";
 
-    let entry_module = file_args[0];
+    let entry_module = file_args![0]!;
     if (entry_module.lastIndexOf(".js") == entry_module.length - 3)
         entry_module = entry_module.substring(0, entry_module.length - 3);
     map_contents += `const EJSModule* entry_module = &${
-        js_modules.get(entry_module).module_name
+        js_modules.get(entry_module)!.module_name
     };\n`;
 
     map_contents += "};";
@@ -628,20 +662,20 @@ function generate_import_map(js_modules, native_modules) {
     return map_path;
 }
 
-function do_final_link(main_file, modules) {
-    let js_modules = new Map();
-    let native_modules = new Map();
+function do_final_link(main_file: string, modules: Map<string, ModuleInfo>): void {
+    const js_modules = new Map<string, JSModuleInfo>();
+    const native_modules = new Map<string, NativeModuleInfo>();
     modules.forEach((m, k) => {
         if (m.isNative()) {
-            native_modules.set(k, m);
+            native_modules.set(k, m as NativeModuleInfo);
         } else {
-            js_modules.set(k, m);
+            js_modules.set(k, m as JSModuleInfo);
         }
     });
 
     let map_filename = generate_import_map(js_modules, native_modules);
 
-    process.env.PATH = `${target_path_prepend(target_triple)}:${process.env.PATH}`;
+    process.env["PATH"] = `${target_path_prepend(target_triple)}:${process.env["PATH"]}`;
 
     let output_filename = options.output_filename || `${main_file}.exe`;
     let clang_args = target_link_args(target_triple).concat(
@@ -658,7 +692,7 @@ function do_final_link(main_file, modules) {
     clang_args = clang_args.concat(relative_to_ejs_exe(target_libecho(target_triple)));
     clang_args = clang_args.concat(relative_to_ejs_exe(target_extra_libs(target_triple)));
 
-    let seen_native_modules = new Set();
+    const seen_native_modules = new Set<string>();
     native_modules.forEach((module) => {
         // don't include native modules more than once
         module.module_files.forEach((mf) => {
@@ -701,7 +735,7 @@ function do_final_link(main_file, modules) {
     }
 }
 
-function cleanup(done) {
+function cleanup(done: () => void): void {
     let files_to_delete = temp_files.length;
     temp_files.forEach((filename) => {
         fs.unlink(filename, (/* XXX err*/) => {
@@ -711,11 +745,14 @@ function cleanup(done) {
     });
 }
 
-let main_file = file_args[0];
+const main_file = file_args[0]!;
 
 if (!options.srcdir) options.native_module_dirs.push(relative_to_ejs_exe("../lib"));
 let files = gatherAllModules(file_args, options, target_triple);
-debug.log(1, () => dumpModules());
+debug.log(1, () => {
+    dumpModules();
+    return "";
+});
 let allModules = getAllModules();
 
 // now compile them
@@ -723,12 +760,12 @@ let allModules = getAllModules();
 // reverse the list so the main program is the first thing we compile
 files.reverse();
 let files_count = files.length;
-let compileNextFile = () => {
+const compileNextFile = (): void => {
     if (files.length === 0) {
         do_final_link(main_file, allModules);
         return;
     }
-    let f = files.pop();
+    const f = files.pop()!;
     compileFile(
         f.file_name,
         f.file_ast,
