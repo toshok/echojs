@@ -215,8 +215,10 @@ export interface Super extends BaseNode {
 
 export interface MetaProperty extends BaseNode {
     type: "MetaProperty";
-    meta: Identifier;
-    property: Identifier;
+    // dialect: the esprima fork stores the raw NAMES here, not
+    // Identifier nodes
+    meta: string;
+    property: string;
 }
 
 // --- patterns ---------------------------------------------------------------

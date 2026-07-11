@@ -261,7 +261,7 @@ export function memberExpression(
     return { type: MemberExpression, object: obj, property: prop, computed };
 }
 
-export function metaProperty(meta: e.Identifier, property: e.Identifier): e.MetaProperty {
+export function metaProperty(meta: string, property: string): e.MetaProperty {
     return { type: MetaProperty, meta, property };
 }
 

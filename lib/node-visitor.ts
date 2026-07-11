@@ -622,9 +622,11 @@ export class TreeVisitor {
 
 export class TransformPass extends TreeVisitor {
     options: CompilerOptions;
+    filename: string;
 
-    constructor(options: CompilerOptions) {
+    constructor(options: CompilerOptions, filename?: string) {
         super();
         this.options = options;
+        this.filename = filename ?? "<unknown>";
     }
 }
