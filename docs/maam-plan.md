@@ -343,15 +343,27 @@ Smaller forward items surfaced by the Chunk A integration review:
 
 ## Phase checklist (for /goal sessions)
 
-- [ ] **P0** `--types` flag + `lib/eir/oracle.ts` adapter + maam dialect shims
+- [x] **P0** `--types` flag + `lib/eir/oracle.ts` adapter + maam dialect shims
       (`handlers`, `defaults`/`rest`, unknown-intrinsic tolerance, toplevel
       unwrap); stats logging only.
+      *Done 2026-07-19* (maam 1bea5de; echojs d3e3fd1): all gates green,
+      numbers in docs/maam-p0-results.md. Headline finding: convergence on
+      compiler-sized modules is STILL OPEN — blocked on maam normalizer
+      coverage (TemplateLiteral/ForOfStatement/destructuring params = 100%
+      of the compiler-module rejects), not on the engine; where analysis
+      runs, it converges with zero timeouts and analysis cost is noise next
+      to codegen.
       *Gate:* full matrix green (flag off); `--types` runs over `test/*.js`
       without crashing (node-hosted dev tree — buck work trees have no
       `external-deps/`, so `--types` there warns-and-skips by design);
       convergence/timing numbers recorded in the PR.
 - [ ] **P1** maam: ⊤-degradation + `nodeTypes()`/`typeOfNode()` (node-identity
-      keyed); echojs: `TypeOracle` + `--types-dump`.
+      keyed); echojs: `TypeOracle` + `--types-dump`. Per the P0 results, P1
+      should FRONT-LOAD maam normalizer coverage for TemplateLiteral,
+      ForOfStatement, and destructuring/defaults/rest params (these block
+      every compiler-sized module), surface cap-hit counters in `metrics`
+      (saturation is currently unobservable), then re-run the P0 measurement
+      to close the convergence question.
       *Gate:* maam suite green (incl. new node-identity tests); matrix green;
       hand-checked oracle dump for `test/eir-toplevel1.js`.
 - [ ] **P2** emit + verify `has_tag`/`unbox_f64`/`box_f64`/`f64_*`;
