@@ -168,3 +168,124 @@ widenings) in `metrics`.**
 - `unknownCalls` is dominated by stdlib/console usage; per the plan's Future
   work note, these numbers are not comparable to the maam repo's pre-
   broadening paper tables.
+
+---
+
+# Phase 1 re-measurement (Chunk E)
+
+Date: 2026-07-19 (runs) / 2026-07-21 (aggregation).  Same protocol,
+environment, and command shapes as the Phase 0 measurement above; the only
+change is the analyzer: submodule @ 1e09ffd (⊤-degradation; TemplateLiteral /
+ForOfStatement / pattern coverage; cap-hit counters; S1 closure-fingerprint
+iteration degrade).  echojs @ 3e71ad4 (no compiler changes since d3e3fd1).
+Raw logs: `~/.cache/maam-p0-logs/` (`B2/`, `A2-on/`, alongside the Phase 0
+`B/`, `A-on/` for diffing).
+
+## Corpus B — compiler self-compile (the headline)
+
+**38 of 45 modules analyzed (was 15), exit 0, executable linked, no
+timeouts.**  Every compiler-sized module now reaches the engine and
+converges:
+
+| module | wall | states | iterations | caps |
+|---|---|---|---|---|
+| ejs-es6.js (driver) | 4007 ms | 1050 | 29 615 | none |
+| esprima-es6 | 4609 ms | 106 | 210 | none |
+| lib/passes/desugar-classes | 120 ms | 68 | 68 | shapeCap 1 |
+| escodegen-es6 | 68 ms | 166 | 231 | shapeCap 1 |
+| lib/eir/ops | 66 ms | 212 | 212 | none |
+| lib/eir/optimize | 39 ms | 14 | 14 | none |
+| lib/eir/lower | 29 ms | 115 | 115 | shapeCap 1 |
+| lib/compiler | 10 ms | 74 | 74 | shapeCap 1 |
+
+Aggregates (n=38 modules): analysis wall median 3 ms / p90 68 ms / max
+4609 ms / **total 9.1 s**.  Real time 15.28 s flag-on vs 5.73 s flag-off
+(+9.6 s; esprima-es6 + the ejs-es6 driver account for 8.6 s of it).  Max
+RSS 575 MB (was 287 MB) — well under the 6 GB watch line (raised from
+Phase 0's 4 GB for this run).  Totals:
+unknownCalls 202, degradedBindings 136.
+
+**Cap behavior (now observable):** stateCap (512): **0 hits anywhere** —
+including the 29 615-iteration driver analysis.  shapeCap (64): exactly
+**1 hit in each of 10 modules** (triple, abi, compiler, eir/emit,
+eir/builder, eir/lower, eir/scopes, escodegen, estraverse, desugar-classes)
+— one megamorphic collapse per module, consistent with a single object
+built up field-by-field under weak updates.  Convergence is natural, not
+cap-forced, everywhere it matters.
+
+**Remaining rejects (7, was 30):** 6 × "only plain identifier or
+destructuring-pattern parameters" + 1 × `Object.defineProperty` non-literal
+key (lib/runtime).  Root cause of the 6, identified by inspection: echojs's
+`DesugarDestructuring` keeps a trailing **`RestElement` in `params`** ("a
+trailing ...rest stays in place — EIR handles it natively",
+lib/passes/desugar-destructuring.ts:244) — maam's `compileFunction` accepts
+the old-esprima `.rest` *field* but not a RestElement param.  A one-line
+coverage item (treat a trailing RestElement param exactly like the dialect
+`rest` field); affected: ast-builder, node-visitor, consts,
+desugar-metaproperties, desugar-spread, desugar-destructuring.
+
+## Corpus A — test/*.js (457 files, full rerun)
+
+| class | Phase 0 | now | Δ |
+|---|---|---|---|
+| analyzed, degraded-with-warning | 362 | 391 | +29 |
+| analysis-failed (warn-wrapped) | 84 | 55 | −29 |
+| analyzed, clean | 10 | 10 | — |
+| TIMEOUT | 0 | 0 | — |
+| compile-N/A (tester.js, flag-independent) | 1 | 1 | — |
+
+Zero `--types`-caused compile failures again (only tester.js exits
+non-zero, identically flag-off).  Remaining reject histogram: param-kind 28
+(the same RestElement gap as Corpus B), LabeledStatement 8, defineProperty
+non-literal key 5, computed object keys 5, getters/setters 3, misc 6.
+TemplateLiteral, ForOfStatement, TaggedTemplate, and
+destructuring-declaration rejects are **gone** (22 + 7 + 3 + the pattern
+share of the old 26-count bucket in the Phase 0 histogram).
+
+Wall time is unchanged: analysis per module (n=442) median 6 ms / p90
+13 ms / max 5105 ms (esprima again) / total 21.0 s; per-file compile wall
+median 334 ms (was 333), p90 362, max 7.2 s.  Cap hits: shapeCap 1 in 6
+modules across the 3 esprima-importing files; stateCap 0 everywhere.
+
+## unknownCalls / degradedBindings deltas (S1 caveat quantified)
+
+- Corpus A total unknownCalls 2694 → 2935 (+241).  Decomposition: **+218
+  from the 29 newly-analyzed files** (code the engine never saw before —
+  console/stdlib externals plus iterator-protocol degradations; not
+  separable per-kind in current metrics); **+36 across 9 of the 372
+  previously-analyzed files — all increases** (set3 +17, array30 +7,
+  typedarray10 +4, … — none containing for-of; this is ⊤-propagation
+  reaching branches a false `undefined` used to kill).  The **−13 is a
+  double-count correction**, not a decrease on any file: eir-promo1.js was
+  analysis-failed in Phase 0 but had emitted partial stats (13 unknownCalls
+  already inside the 2694 total), and its full re-count now sits inside the
+  +218 bucket.  2694 + 218 + 36 − 13 = 2935.
+- Corpus B: the 15 previously-analyzed modules are **stable — zero changed
+  unknownCalls**; the +128 rides on the 23 newly-analyzed modules (driver
+  98, lib/types 26, everything else ≤2).
+- **S1 (closure-fingerprint iteration degrade): no measurable inflation on
+  previously-analyzed code in either corpus.**  The feared
+  for-of-over-function-arrays cost did not surface at corpus scale; if
+  per-kind attribution is ever needed, a degradation-kind counter is the
+  follow-up.
+- degradedBindings: 0 → 66 (Corpus A) / 136 (Corpus B) — now counting
+  unmodeled imports and rest parameters as designed; an imports-only module
+  no longer masquerades as a closed world.
+
+## Reading against the decision rule
+
+- **The Phase 0 open question is closed: outcome (a) — ship as-is behind
+  `--types`.**  Compiler-sized modules reach the engine and converge
+  naturally: 0 stateCap hits corpus-wide, shapeCap touched exactly once in
+  each of 10 of the 38 modules, the largest analysis (29 615 iterations)
+  finishes in 4 s, total
+  self-compile overhead +9.6 s on an opt-in flag, RSS 575 MB.  No evidence
+  for (b) heavy-widening or (c) non-convergence anywhere in either corpus.
+- Where time goes is unchanged in kind: esprima-es6 (wall-heavy,
+  state-light — store-join cost hypothesis stands) plus, now, the ejs-es6
+  driver (iteration-heavy, converges clean).  Everything else ≤120 ms.
+- The binding constraint has shrunk from "three constructs blocking every
+  big module" to **one one-line gap (RestElement params) plus a small
+  tail** (labels, non-literal defineProperty keys, computed keys,
+  accessors-in-literals) — with only the RestElement gap blocking any
+  module of consequence.
