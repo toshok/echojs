@@ -357,13 +357,30 @@ Smaller forward items surfaced by the Chunk A integration review:
       without crashing (node-hosted dev tree — buck work trees have no
       `external-deps/`, so `--types` there warns-and-skips by design);
       convergence/timing numbers recorded in the PR.
-- [ ] **P1** maam: ⊤-degradation + `nodeTypes()`/`typeOfNode()` (node-identity
+- [x] **P1** maam: ⊤-degradation + `nodeTypes()`/`typeOfNode()` (node-identity
       keyed); echojs: `TypeOracle` + `--types-dump`. Per the P0 results, P1
       should FRONT-LOAD maam normalizer coverage for TemplateLiteral,
       ForOfStatement, and destructuring/defaults/rest params (these block
       every compiler-sized module), surface cap-hit counters in `metrics`
       (saturation is currently unobservable), then re-run the P0 measurement
       to close the convergence question.
+      *Done 2026-07-21* (maam 8d6a157; echojs this commit). Convergence
+      question CLOSED: outcome (a) — compiler-sized modules converge
+      naturally (0 stateCap hits; self-compile analyzes 44/45 modules, sole
+      remainder lib/runtime's non-literal defineProperty key); numbers in
+      docs/maam-p0-results.md. Oracle contract notes: `typeOfNode` on a
+      node mapped to a declared variable reports the join over the
+      variable's whole lifetime (reassignment-widening — sound, not
+      value-at-site); spliced/shared node objects are poisoned to
+      `undefined` (consumer degrades to ⊤); `closedWorld()` requires BOTH
+      `unknownCalls` and `degradedBindings` zero. Known ⊤ classes on real
+      trees: unmodeled imports, unknown intrinsics/method calls
+      (intrinsics=false), unreached code, and array patterns in ALL
+      positions (declaration, param, assignment) — DesugarDestructuring
+      routes every array pattern through `%createIteratorWrapper` before
+      the probe, so maam's native pattern paths are exercised only by its
+      own tests; modeling that intrinsic (or reordering the desugar) is the
+      obvious next precision win for P2/P3.
       *Gate:* maam suite green (incl. new node-identity tests); matrix green;
       hand-checked oracle dump for `test/eir-toplevel1.js`.
 - [ ] **P2** emit + verify `has_tag`/`unbox_f64`/`box_f64`/`f64_*`;

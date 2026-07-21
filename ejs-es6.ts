@@ -109,6 +109,7 @@ const options: CompilerOptions = {
     frozen_global: false,
     record_types: false,
     types: false,
+    types_dump: false,
     output_filename: null,
     show_help: false,
     leave_temp_files: false,
@@ -253,7 +254,11 @@ const args: Record<string, ArgSpec | undefined> = {
     },
     "--types": {
         flag: "types",
-        help: "run the MAAM type-analysis probe over each module and log its stats (phase 0: consumes nothing).",
+        help: "run the MAAM type-analysis probe over each module and log its stats (consumes nothing yet).",
+    },
+    "--types-dump": {
+        flag: "types_dump",
+        help: "with the MAAM analysis, print each binding's inferred type (implies --types).",
     },
     "--frozen-global": {
         flag: "frozen_global",

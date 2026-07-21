@@ -22,10 +22,12 @@ export interface CompilerOptions {
     warn_on_undeclared: boolean;
     frozen_global: boolean;
     record_types: boolean;
-    // MAAM phase-0 probe (docs/maam-plan.md): run the type analysis and
-    // log stats; consumes nothing.  Distinct from record_types (the
-    // runtime type-recording instrumentation).
+    // MAAM type-analysis probe (docs/maam-plan.md): run the analysis and
+    // log stats; codegen consumes nothing yet.  Distinct from record_types
+    // (the runtime type-recording instrumentation).
     types: boolean;
+    // --types plus a per-binding type dump (implies types).
+    types_dump: boolean;
     output_filename: string | null;
     show_help: boolean;
     leave_temp_files: boolean;

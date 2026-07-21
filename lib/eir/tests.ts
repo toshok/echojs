@@ -15,6 +15,7 @@ import { optimizeFunction } from "./optimize";
 import { isLowerNotSupported } from "./errors";
 import { Func, Block, Inst, Module } from "./ir";
 import { DesugarSpread } from "../passes/desugar-spread";
+import { typeSigToEirType } from "./oracle";
 import { DesugarClasses } from "../passes/desugar-classes";
 import { DesugarDestructuring } from "../passes/desugar-destructuring";
 import { DesugarGeneratorFunctions } from "../passes/desugar-generator-functions";
@@ -1015,6 +1016,29 @@ test("optimize: DCE removes unused pure chains but keeps effects", () => {
     assertNotContains(printed, "make_object");
     // x.y may have observable effects (getter) and must survive
     assertContains(printed, "get_prop_atom");
+});
+
+// --- oracle: TypeSig -> EirType mapping -----------------------------------------
+
+test("oracle: TypeSig constituents map to EirType tags", () => {
+    const t = typeSigToEirType("num|str");
+    assert(t.tags !== "top");
+    const tags = t.tags as ReadonlySet<string>;
+    assert(tags.size === 2 && tags.has("number") && tags.has("string"));
+    const all = typeSigToEirType("num|str|bool|null|undefined|fn|obj").tags as ReadonlySet<string>;
+    assert(all.size === 7 && all.has("closure") && all.has("object") && all.has("null"));
+});
+
+test("oracle: top, never, and missing sigs are all top", () => {
+    assert(typeSigToEirType("\u22a4").tags === "top");
+    assert(typeSigToEirType("never").tags === "top");
+    assert(typeSigToEirType(undefined).tags === "top");
+});
+
+test("oracle: an unrecognized constituent is top, never a guess", () => {
+    assert(typeSigToEirType("num|widget").tags === "top");
+    assert(typeSigToEirType("bigint").tags === "top");
+    assert(typeSigToEirType("").tags === "top");
 });
 
 // --------------------------------------------------------------------------------

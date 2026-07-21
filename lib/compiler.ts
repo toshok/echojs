@@ -687,11 +687,13 @@ export function compile(
     // pipelines see their %-intrinsic output
     tree = pre_eir_convert(tree, module_filename, module_infos, options);
 
-    // --types (MAAM phase 0, docs/maam-plan.md): probe-only type
-    // analysis over the desugared toplevel.  Must run before
-    // collectEIRToplevel, which consumes (and then empties) the toplevel
-    // body.  Logs stats; consumes nothing; never fails the compile.
-    if (options.types) runTypeAnalysisProbe(tree, source_filename);
+    // --types (MAAM, docs/maam-plan.md): type analysis over the desugared
+    // toplevel.  Must run before collectEIRToplevel, which consumes (and
+    // then empties) the toplevel body.  Logs stats (and, for --types-dump,
+    // per-binding types); the returned TypeOracle is not consumed by
+    // codegen yet (Phase 3); never fails the compile.
+    if (options.types || options.types_dump)
+        runTypeAnalysisProbe(tree, source_filename, options.types_dump);
 
     // EIR is the only pipeline: a module that can't lower is a compile
     // error, not a fallback
