@@ -403,12 +403,25 @@ Smaller forward items surfaced by the Chunk A integration review:
       cond_br accepts i1 or legacy "any" conditions. Runtime backlog item
       found: `_ejs_op_div` aborts EJS_NOT_IMPLEMENTED on non-number LHS
       (ejs-ops.c ~901) — sub/mul coerce, div doesn't.
-- [ ] **P3** oracle-guided guarded arithmetic in `LowerFunction.binary`,
+- [x] **P3** oracle-guided guarded arithmetic in `LowerFunction.binary`,
       `--types`-gated.
       *Gate:* matrix green + stage2≡stage3 functional gate (flag off);
       full-suite `--types`
       diff lane byte-identical; EIR-shape unit tests; microbenchmark delta
       recorded.
+      *Done 2026-07-22* (lowering 568efc7; gates this commit). Diamonds for
+      `+ - * / <` on exact-{number} operands (literals special-cased;
+      widened unions decline); correctness is guard-borne — proven at
+      runtime with a wrong oracle (cross-module valueOf-throw → slow path
+      → caught). Gates: diff lane 458 files, 457 identical, 0 divergent
+      (independently reproduced 514/514 on a superset), 67 diamonds
+      suite-wide; test/types/ probe dir documents firing and declining
+      shapes incl. the wrong-oracle keystone; microbenchmark 10.3× median
+      on a pure-numeric kernel (3.19s → 0.31s, diamonds=9) — best-case
+      ceiling, not suite expectation; full matrix + functional stage2≡stage3
+      green. Numbers in docs/maam-p0-results.md "Phase 3 gates". The lane
+      script fails on zero-files-compared and zero-diamonds (vacuous-pass
+      guards from review).
 - [ ] **P3.5** differential harness in maam repo (`concreteEval` vs node vs
       ejs on closed-world tests) wired into its CI.
       *Gate:* zero divergences on the curated corpus.

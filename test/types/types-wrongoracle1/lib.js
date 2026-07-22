@@ -1,0 +1,3 @@
+// module-local call sites type n as {number} -> inc's body diamonds...
+export function inc(n) { return n + 1; }
+console.log(inc(41)); // ...because the oracle only sees THIS call

@@ -46,6 +46,11 @@ find "$WORK/test/expected" -type f -exec touch {} +
 
 export PATH="$LLVM_BIN:$PATH"
 export NODE_PATH="$REPO/node_modules:$REPO/node-llvm/build/Release"
+# the tester regenerates missing expected-outs by RUNNING node: keep that
+# color-free even when the buck daemon inherited a colored dev shell
+# (FORCE_COLOR writes ANSI into the expected files and poisons the diffs)
+export NO_COLOR=1
+unset FORCE_COLOR
 if [ -n "$EXTRA_FLAGS" ]; then
     export EJS_EXTRA_FLAGS="$EXTRA_FLAGS"
 fi

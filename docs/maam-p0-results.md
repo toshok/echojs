@@ -289,3 +289,92 @@ modules across the 3 esprima-importing files; stateCap 0 everywhere.
   tail** (labels, non-literal defineProperty keys, computed keys,
   accessors-in-literals) — with only the RestElement gap blocking any
   module of consequence.
+
+---
+
+# Phase 3 gates (Chunk J)
+
+Date: 2026-07-22.  echojs @ 568efc7 (oracle-guided guarded arithmetic in
+lowering), maam @ 8d6a157.  Same environment as the earlier measurements
+(node v22.4.0, macOS arm64, llvm @ /opt/homebrew/opt/llvm); everything runs
+color-free (`NO_COLOR=1`, `FORCE_COLOR` unset — a colored-env buck daemon
+poisons regenerated expected files; lesson institutionalized in the lane
+script).  Raw logs: `~/.cache/maam-p0-logs/J*` (diff-lane per-file logs +
+results.jsonl; the microbenchmark timings below are recorded here only —
+the timing runs left no separate artifact).
+
+## The --types diff lane (the behavioral gate)
+
+`./buck-test-types-diff.sh <work-tree> <log-dir> [conc]` — every test/*.js
+compiled flag-off AND with `--types`, both executables run, RUN STDOUT
+byte-compared (stderr excluded by design: `--types` stats lines, and the
+debug runtime's `EXCEPTIONS:` traces on normally-handled exceptions).
+Per-file 120 s timeouts, concurrency 4, per-worker TMPDIRs (concurrent
+compiles never share temp space).
+
+| files | identical | divergent | N/A | timeouts |
+|---|---|---|---|---|
+| 458 | 457 | **0** | 1 (tester.js, esprima parse gap — fails flag-off too) | 0 |
+
+Aggregates from the `--types` stats lines: **diamonds 67**, oracleQueries
+1319, oracleUnknown 1035.  The high unknown share is expected on this
+corpus: operands inside functions the per-module analysis never reaches
+(exported-only / callback-only bodies, dead branches) query as unknown →
+top → no diamond — the guard-shaped degradation working as designed.  The
+suite is string/object-heavy; 67 diamonds concentrate in the numeric
+files.
+
+## test/types/ probes
+
+Seven standalone probes (see test/types/README.md for the per-file table):
+diamond-eligible shapes fire (locals 6, params 4, literals 5, loops 6,
+bench kernel 9); reassignment-widened bindings do NOT diamond (0, by
+design — only exact {number} qualifies); and the wrong-oracle case — a
+cross-module call handing a string to a parameter the callee's module
+analysis typed {number} — routes through the has_tag guard to the slow
+path and prints the correct "x1" with flag-off/--types outputs identical.
+
+## Microbenchmark
+
+test/types/types-bench1.js: 40 × 1 M-iteration kernel of
+`s = s + i*i - i/2; i = i + 1` under a `<` loop guard — all module-local,
+everything oracle-typed {number}; diamonds=9, oracleUnknown=0.  Compiled
+flag-off vs `--types`, run 7× each interleaved (`/usr/bin/time -p`, same
+machine, no other load; distributions were tight — no GC-outlier rerun
+needed):
+
+| build | median | min | max |
+|---|---|---|---|
+| flag-off | 3.19 s | 3.18 s | 3.20 s |
+| --types | 0.31 s | 0.31 s | 0.32 s |
+
+**10.3× median speedup**, identical program output (13333303333341514000).
+Honest caveats: this kernel is the best case — per-iteration generic
+runtime binop calls dominate the flag-off build, and the typed build
+replaces essentially all of them (9 diamonds cover the kernel's every
+operator).  Real modules keep their surrounding generic ops; the suite-wide
+effect is bounded by the 67-diamond density above, and unbox/box round
+trips still go through memory (the bits_alloca idiom), so further headroom
+remains for a Phase 4-era register-level cleanup.
+
+## Matrix + stage2 ≡ stage3 (flag off)
+
+Full serial matrix green: //:test-eir (incl. the typed-arith EIR-shape
+tests), //:test-eir-lowtier (the injected low-tier e2e), //:test-stage0..3.
+Functional stage2 ≡ stage3 gate, per the reading this document establishes
+(raw binary byte-identity does not hold on macOS for linker-metadata
+reasons): stage2 and stage3 each compile and run the ENTIRE test corpus in
+identical buck-assembled work dirs with per-test expected-output
+comparison — both green constitutes the corpus-level functional-identity
+check.  Flag-off byte-purity of the Phase 3 lowering itself was
+additionally proven at Chunk I review time (pre- vs post-chunk flag-off
+executables byte-identical).
+
+## Reading
+
+Every P3 gate item holds: zero behavioral divergence across the suite with
+the flag on; the probe dir documents exactly which shapes fire and which
+degrade (widening, wrong oracle — both by design); the mechanism-level
+proof (//:test-eir-lowtier) is now backed by a magnitude measurement (10×
+on a pure-numeric kernel, a ceiling not a promise); matrix unaffected flag
+off.  Phase 3 is complete pending sign-off.
