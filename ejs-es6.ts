@@ -545,35 +545,39 @@ function compileFile(
     function tmpfile(suffix: string): string {
         return `${os.tmpdir()}/${base_filename}-${target_triple.arch}-${target_triple.os}${suffix}`;
     }
-    let ll_filename = tmpfile(".ll");
     let bc_filename = tmpfile(".bc");
-    let ll_opt_filename = tmpfile(".ll.opt");
+    let bc_opt_filename = tmpfile(".bc.opt");
     let o_filename = tmpfile(".o");
 
-    temp_files.push(ll_filename, bc_filename, ll_opt_filename, o_filename);
+    temp_files.push(bc_filename, bc_opt_filename, o_filename);
 
     let opt_level = options.opt_level > 0 ? `default<O${options.opt_level}>,` : "";
 
-    let llvm_as_args = [`-o=${bc_filename}`, ll_filename];
-    let opt_args = [
-        `-passes=${opt_level}strip-dead-prototypes`,
-        "-S",
-        `-o=${ll_opt_filename}`,
-        bc_filename,
-    ];
+    // bitcode end to end: the module serializes straight to .bc (no
+    // llvm-as spawn, no textual round trip), opt reads and emits bitcode
+    // (no -S), and llc consumes the optimized bitcode.  Both binding sets
+    // (node-llvm and the self-hosted ejs-llvm) expose writeBitcodeToFile,
+    // so stage0 and stage1+ run the identical pipeline.
+    let opt_args = [`-passes=${opt_level}strip-dead-prototypes`, `-o=${bc_opt_filename}`, bc_filename];
     let llc_args = target_llc_args(target_triple).concat([
         "-filetype=obj",
         `-o=${o_filename}`,
-        ll_opt_filename,
+        bc_opt_filename,
     ]);
 
-    debug.log(1, `writing ${ll_filename}`);
-    compiled_module.writeToFile(ll_filename);
-    debug.log(1, `done writing ${ll_filename}`);
+    debug.log(1, `writing ${bc_filename}`);
+    compiled_module.writeBitcodeToFile(bc_filename);
+    debug.log(1, `done writing ${bc_filename}`);
 
-    // debug.log (1, `writing ${bc_filename}`);
-    // compiled_module.writeBitcodeToFile(bc_filename);
-    // debug.log (1, `done writing ${bc_filename}`);
+    // textual IR is a debug artifact now: written only under --leave-temp
+    // (buck-test-lowtier.sh greps it for the low-tier float ops — the same
+    // pre-opt module dump the old pipeline fed to llvm-as)
+    if (options.leave_temp_files) {
+        let ll_filename = tmpfile(".ll");
+        temp_files.push(ll_filename);
+        debug.log(1, `writing ${ll_filename}`);
+        compiled_module.writeToFile(ll_filename);
+    }
 
     compiled_modules.push({
         filename: filename,
@@ -582,38 +586,29 @@ function compileFile(
 
     if (!isNode()) {
         // in ejs spawn is synchronous.
-        spawn(llvm_commands["llvm-as"], llvm_as_args);
         spawn(llvm_commands["opt"], opt_args);
         spawn(llvm_commands["llc"], llc_args);
         o_filenames.push(o_filename);
         compileCallback();
     } else {
-        let llvm_as = spawn(llvm_commands["llvm-as"], llvm_as_args);
-        llvm_as.stderr.on("data", (data) => console.warn(`${data}`));
-        llvm_as.on("error", (err) => {
-            console.warn(`error executing ${llvm_commands["llvm-as"]}: ${err}`);
+        debug.log(1, `executing '${llvm_commands["opt"]} ${opt_args.join(" ")}'`);
+        let opt = spawn(llvm_commands["opt"], opt_args);
+        opt.stderr.on("data", (data) => console.warn(`${data}`));
+        opt.on("error", (err) => {
+            console.warn(`error executing ${llvm_commands["opt"]}: ${err}`);
             process.exit(-1);
         });
-        llvm_as.on("exit", (/* XXX code*/) => {
-            debug.log(1, `executing '${llvm_commands["opt"]} ${opt_args.join(" ")}'`);
-            let opt = spawn(llvm_commands["opt"], opt_args);
-            opt.stderr.on("data", (data) => console.warn(`${data}`));
-            opt.on("error", (err) => {
-                console.warn(`error executing #{llvm_commands['opt']}: ${err}`);
+        opt.on("exit", (/* XXX code*/) => {
+            debug.log(1, `executing '${llvm_commands["llc"]} ${llc_args.join(" ")}'`);
+            let llc = spawn(llvm_commands["llc"], llc_args);
+            llc.stderr.on("data", (data) => console.warn(`${data}`));
+            llc.on("error", (err) => {
+                console.warn(`error executing ${llvm_commands["llc"]}: ${err}`);
                 process.exit(-1);
             });
-            opt.on("exit", (/* XXX code*/) => {
-                debug.log(1, `executing '${llvm_commands["llc"]} ${llc_args.join(" ")}'`);
-                let llc = spawn(llvm_commands["llc"], llc_args);
-                llc.stderr.on("data", (data) => console.warn(`${data}`));
-                llc.on("error", (err) => {
-                    console.warn(`error executing ${llvm_commands["llc"]}: ${err}`);
-                    process.exit(-1);
-                });
-                llc.on("exit", (/* XXX code*/) => {
-                    o_filenames.push(o_filename);
-                    compileCallback();
-                });
+            llc.on("exit", (/* XXX code*/) => {
+                o_filenames.push(o_filename);
+                compileCallback();
             });
         });
     }
