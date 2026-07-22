@@ -42,6 +42,10 @@ namespace jsllvm {
     Nan::SetMethod(ctor_func, "createCall", IRBuilder::CreateCall);
     Nan::SetMethod(ctor_func, "createInvoke", IRBuilder::CreateInvoke);
     Nan::SetMethod(ctor_func, "createFAdd", IRBuilder::CreateFAdd);
+    Nan::SetMethod(ctor_func, "createFSub", IRBuilder::CreateFSub);
+    Nan::SetMethod(ctor_func, "createFMul", IRBuilder::CreateFMul);
+    Nan::SetMethod(ctor_func, "createFDiv", IRBuilder::CreateFDiv);
+    Nan::SetMethod(ctor_func, "createFCmpOLT", IRBuilder::CreateFCmpOLT);
     Nan::SetMethod(ctor_func, "createAlloca", IRBuilder::CreateAlloca);
     Nan::SetMethod(ctor_func, "createLoad", IRBuilder::CreateLoad);
     Nan::SetMethod(ctor_func, "createStore", IRBuilder::CreateStore);
@@ -316,6 +320,58 @@ namespace jsllvm {
     FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
     
     Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateFAdd(left, right, *name)));
+    info.GetReturnValue().Set(result);
+  }
+
+  NAN_METHOD(IRBuilder::CreateFSub) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+    Nan::HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(context, 0, left);
+    REQ_LLVM_VAL_ARG(context, 1, right);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
+    
+    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateFSub(left, right, *name)));
+    info.GetReturnValue().Set(result);
+  }
+
+  NAN_METHOD(IRBuilder::CreateFMul) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+    Nan::HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(context, 0, left);
+    REQ_LLVM_VAL_ARG(context, 1, right);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
+    
+    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateFMul(left, right, *name)));
+    info.GetReturnValue().Set(result);
+  }
+
+  NAN_METHOD(IRBuilder::CreateFDiv) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+    Nan::HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(context, 0, left);
+    REQ_LLVM_VAL_ARG(context, 1, right);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
+    
+    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateFDiv(left, right, *name)));
+    info.GetReturnValue().Set(result);
+  }
+
+  NAN_METHOD(IRBuilder::CreateFCmpOLT) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+    Nan::HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(context, 0, left);
+    REQ_LLVM_VAL_ARG(context, 1, right);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
+    
+    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateFCmpOLT(left, right, *name)));
     info.GetReturnValue().Set(result);
   }
 

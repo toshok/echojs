@@ -189,6 +189,7 @@ export class Inst {
             throw new Error(
                 `EIR: '${op}' expects ${info.arity} operands, got ${this.operands.length}`
             );
+        if (info.sig) this.type = info.sig.result; // the low tier's typed results
     }
 
     addTarget(block: Block, args?: (Inst | null)[], kind?: TargetKind): void {

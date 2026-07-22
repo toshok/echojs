@@ -88,7 +88,12 @@ export function printInst(inst: Inst, nameOf: NameOf): string {
         text += " -> " + inst.targets.map((t) => printTarget(t, nameOf)).join(", ");
     }
 
-    if (producesValue) return `${nameOf(inst)} = ${text}`;
+    // typed defs (the low tier) print their type; "any" stays bare so all
+    // existing output is byte-identical
+    if (producesValue)
+        return inst.type === "any"
+            ? `${nameOf(inst)} = ${text}`
+            : `${nameOf(inst)}: ${inst.type} = ${text}`;
     return text;
 }
 

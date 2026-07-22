@@ -28,6 +28,11 @@ export interface OpInfo {
     terminator?: boolean;
     // terminates its block when it carries explicit normal/unwind targets
     may_terminate?: boolean;
+    // typed signature (the low tier).  params: what each operand slot
+    // accepts — "ejsval" (any boxed value; rejects f64/i1) or "f64".
+    // result: the Inst.type this op produces.  Ops without a sig take and
+    // produce boxed ejsvals ("any"); the verifier enforces the flow rules.
+    sig?: { readonly params: readonly ("ejsval" | "f64")[]; readonly result: "any" | "f64" | "i1" };
 }
 
 const E = Effect;
@@ -166,14 +171,16 @@ export const OPS = {
     prop_iter_current: { arity: 1, effects: E.READ | E.GC },
 
     // --- low tier ---------------------------------------------------------------
-    has_tag: { arity: 1, effects: E.NONE, imms: ["tag"] },
-    unbox_f64: { arity: 1, effects: E.NONE },
-    box_f64: { arity: 1, effects: E.GC },
-    f64_add: { arity: 2, effects: E.NONE },
-    f64_sub: { arity: 2, effects: E.NONE },
-    f64_mul: { arity: 2, effects: E.NONE },
-    f64_div: { arity: 2, effects: E.NONE },
-    f64_lt: { arity: 2, effects: E.NONE },
+    // imms.tag: the runtime tag tested; only "number" is emitted today
+    // (mirrors LLVMIRVisitor.isNumber, inheriting its per-target check)
+    has_tag: { arity: 1, effects: E.NONE, imms: ["tag"], sig: { params: ["ejsval"], result: "i1" } },
+    unbox_f64: { arity: 1, effects: E.NONE, sig: { params: ["ejsval"], result: "f64" } },
+    box_f64: { arity: 1, effects: E.GC, sig: { params: ["f64"], result: "any" } },
+    f64_add: { arity: 2, effects: E.NONE, sig: { params: ["f64", "f64"], result: "f64" } },
+    f64_sub: { arity: 2, effects: E.NONE, sig: { params: ["f64", "f64"], result: "f64" } },
+    f64_mul: { arity: 2, effects: E.NONE, sig: { params: ["f64", "f64"], result: "f64" } },
+    f64_div: { arity: 2, effects: E.NONE, sig: { params: ["f64", "f64"], result: "f64" } },
+    f64_lt: { arity: 2, effects: E.NONE, sig: { params: ["f64", "f64"], result: "i1" } },
     call_runtime: { arity: -1, effects: GENERIC_OP, imms: ["name"] },
 
     // --- control flow --------------------------------------------------------------

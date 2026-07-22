@@ -35,6 +35,10 @@ export interface VisitorSurface {
     createEjsValueLoad(value: llvm.Value, name: string): llvm.Value;
     emitEjsvalFromPtr(ptr: llvm.Value, prefix: string): llvm.Value;
     isNumber(val: llvm.Value): llvm.Value;
+    // the low tier's NaN-box transfers (implemented beside isNumber in
+    // compiler.ts so all target-layout knowledge stays in one place)
+    unboxDouble(val: llvm.Value): llvm.Value;
+    boxDouble(dbl: llvm.Value): llvm.Value;
     loadBoolEjsValue(n: boolean): llvm.Value;
     loadDoubleEjsValue(n: number): llvm.Value;
     loadNullEjsValue(): llvm.Value;
@@ -468,6 +472,56 @@ export class EIREmitter {
                 this.values.set(inst, b);
                 return;
             }
+
+            // --- the typed low tier (Phase 2) ---------------------------
+            // has_tag/unbox/box mirror LLVMIRVisitor's NaN-boxing helpers;
+            // the f64_* ops are plain LLVM float arithmetic.  has_tag and
+            // f64_lt produce machine i1 (consumed by cond_br, like
+            // to_boolean); unbox produces a raw double; box re-enters the
+            // boxed world.
+            case "has_tag": {
+                const tag = inst.imms["tag"];
+                if (tag !== "number")
+                    throw new Error(`EIR emit: has_tag tag '${String(tag)}' is not supported`);
+                this.values.set(inst, this.v.isNumber(this.val(inst.operands[0])));
+                return;
+            }
+            case "unbox_f64":
+                this.values.set(inst, this.v.unboxDouble(this.val(inst.operands[0])));
+                return;
+            case "box_f64":
+                this.values.set(inst, this.v.boxDouble(this.val(inst.operands[0])));
+                return;
+            case "f64_add":
+                this.values.set(
+                    inst,
+                    ir.createFAdd(this.val(inst.operands[0]), this.val(inst.operands[1]), "f64_add")
+                );
+                return;
+            case "f64_sub":
+                this.values.set(
+                    inst,
+                    ir.createFSub(this.val(inst.operands[0]), this.val(inst.operands[1]), "f64_sub")
+                );
+                return;
+            case "f64_mul":
+                this.values.set(
+                    inst,
+                    ir.createFMul(this.val(inst.operands[0]), this.val(inst.operands[1]), "f64_mul")
+                );
+                return;
+            case "f64_div":
+                this.values.set(
+                    inst,
+                    ir.createFDiv(this.val(inst.operands[0]), this.val(inst.operands[1]), "f64_div")
+                );
+                return;
+            case "f64_lt":
+                this.values.set(
+                    inst,
+                    ir.createFCmpOLT(this.val(inst.operands[0]), this.val(inst.operands[1]), "f64_lt")
+                );
+                return;
 
             case "get_prop": {
                 let callee = rt.object_getprop;

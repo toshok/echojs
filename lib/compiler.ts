@@ -615,6 +615,26 @@ class LLVMIRVisitor implements VisitorSurface {
     createEjsvalICmpULt(arg: llvm.Value, i64_const: llvm.Constant, name: string): llvm.Value {
         return ir.createICmpULt(this.getEjsvalBits(arg), i64_const, name);
     }
+    // The low tier's NaN-box transfers.  Doubles are stored RAW in the
+    // ejsval (see storeDouble): unbox/box are pure bit reinterpretations
+    // through the same cached alloca getEjsvalBits uses.  Target layout
+    // knowledge stays here, beside isNumber.
+    unboxDouble(val: llvm.Value): llvm.Value {
+        const fn = this.currentFunction!;
+        const alloca = fn.bits_alloca ?? this.createAlloca(fn, types.EjsValue, "bits_alloca");
+        ir.createStore(val, alloca);
+        const dbl_ptr = ir.createBitCast(alloca, types.Double.pointerTo(), "dbl_ptr");
+        if (!fn.bits_alloca) fn.bits_alloca = alloca;
+        return ir.createLoad(types.Double, dbl_ptr, "unboxed_f64");
+    }
+    boxDouble(dbl: llvm.Value): llvm.Value {
+        const fn = this.currentFunction!;
+        const alloca = fn.bits_alloca ?? this.createAlloca(fn, types.EjsValue, "bits_alloca");
+        const dbl_ptr = ir.createBitCast(alloca, types.Double.pointerTo(), "dbl_ptr");
+        ir.createStore(dbl, dbl_ptr);
+        if (!fn.bits_alloca) fn.bits_alloca = alloca;
+        return ir.createLoad(types.EjsValue, alloca, "boxed_f64");
+    }
     isNumber(val: llvm.Value): llvm.Value {
         if (this.triple.pointerSize() === 64) {
             return this.createEjsvalICmpULt(

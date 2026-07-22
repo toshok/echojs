@@ -206,6 +206,11 @@ declare module "@llvm" {
         ): Value;
         createGlobalStringPtr(value: string, name: string): Constant;
         createICmpEq(l: Value, r: Value, name: string): Value;
+        createFAdd(l: Value, r: Value, name: string): Value;
+        createFSub(l: Value, r: Value, name: string): Value;
+        createFMul(l: Value, r: Value, name: string): Value;
+        createFDiv(l: Value, r: Value, name: string): Value;
+        createFCmpOLT(l: Value, r: Value, name: string): Value;
         createICmpSGt(l: Value, r: Value, name: string): Value;
         createICmpUGt(l: Value, r: Value, name: string): Value;
         createICmpULt(l: Value, r: Value, name: string): Value;

@@ -96,6 +96,17 @@ genrule(
           "{ cat $OUT >&2; exit 1; }; tail -1 $OUT",
 )
 
+# the Phase 2 low-tier end-to-end probe: stage0-compile test/eir-lowtier1.js
+# with EJS_EIR_LOWTIER=1 (hand-built low-tier bodies) and check output +
+# emitted IR: buck2 build //:test-eir-lowtier
+genrule(
+    name = "test-eir-lowtier",
+    srcs = ["buck-test-lowtier.sh"],
+    out = "test-eir-lowtier.log",
+    cmd = 'bash $SRCDIR/buck-test-lowtier.sh "$(location :srcdir-tree)" ' +
+          '"$(location //lib:generated)" "$(location //test:files)" ' + llvm_bindir(),
+)
+
 # run the test suite against a stage: buck2 build //:test-stage3
 # the output artifact is the full test log; the build fails if any test
 # fails.

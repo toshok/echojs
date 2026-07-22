@@ -16,6 +16,7 @@ import { isLowerNotSupported } from "./errors";
 import { Func, Block, Inst, Module } from "./ir";
 import { DesugarSpread } from "../passes/desugar-spread";
 import { typeSigToEirType } from "./oracle";
+import { buildArithDiamond, buildLowTierAdd, buildLowTierLt } from "./lowtier-probe";
 import { DesugarClasses } from "../passes/desugar-classes";
 import { DesugarDestructuring } from "../passes/desugar-destructuring";
 import { DesugarGeneratorFunctions } from "../passes/desugar-generator-functions";
@@ -1016,6 +1017,133 @@ test("optimize: DCE removes unused pure chains but keeps effects", () => {
     assertNotContains(printed, "make_object");
     // x.y may have observable effects (getter) and must survive
     assertContains(printed, "get_prop_atom");
+});
+
+// --- the typed low tier (Phase 2) ------------------------------------------------
+
+function assertVerifyFails(fn: Func, needle: string): void {
+    try {
+        verifyFunction(fn);
+    } catch (err) {
+        const msg = (err as Error).message;
+        if (msg.indexOf(needle) === -1)
+            throw new Error(`verifier failed, but with '${msg}' (wanted '${needle}')`);
+        return;
+    }
+    throw new Error(`verifier accepted an ill-typed function (wanted '${needle}')`);
+}
+
+test("lowtier: printer shows typed defs; untyped stay bare", () => {
+    const printed = printFunction(buildLowTierAdd("probe"));
+    assertContains(printed, ': i1 = has_tag');
+    assertContains(printed, 'tag="number"');
+    assertContains(printed, ": f64 = unbox_f64");
+    assertContains(printed, ": f64 = f64_add");
+    assertNotContains(printed, ": any ="); // "any" defs print bare
+    // box_f64 produces a boxed value again: no type annotation
+    const boxline = printed.split("\n").filter((l) => l.indexOf("box_f64") !== -1 && l.indexOf("unbox") === -1)[0]!;
+    assert(boxline.indexOf(": f64") === -1 && boxline.indexOf(": i1") === -1, "box_f64 def must be untyped");
+});
+
+test("lowtier: the parameterized diamond covers sub/mul/div", () => {
+    for (const [f64op, generic] of [["f64_sub", "sub"], ["f64_mul", "mul"], ["f64_div", "div"]] as const) {
+        const fn = buildArithDiamond("probe_" + generic, f64op, generic);
+        verifyFunction(fn);
+        const printed = printFunction(fn);
+        assertContains(printed, ": f64 = " + f64op);
+        assertContains(printed, generic + " ");
+    }
+});
+
+test("lowtier: f64_lt prints as i1 and feeds cond_br", () => {
+    const printed = printFunction(buildLowTierLt("probe"));
+    assertContains(printed, ": i1 = f64_lt");
+    assertContains(printed, ": f64 = unbox_f64");
+});
+
+test("lowtier: verifier accepts the guarded diamonds", () => {
+    verifyFunction(buildLowTierAdd("ok_add")); // builders verify internally too
+    verifyFunction(buildLowTierLt("ok_lt"));
+});
+
+test("lowtier: verifier rejects f64 flowing into a generic op", () => {
+    const fb = new FunctionBuilder("bad", ["%env", "%this", "a"]);
+    const a = fb.readVariable("a", fb.cur);
+    const ua = fb.emit("unbox_f64", [a], {});
+    fb.ret(fb.emit("add", [ua, a], {}));
+    assertVerifyFails(fb.finish(), "may not be f64");
+});
+
+test("lowtier: verifier rejects a boxed value in an f64 operand slot", () => {
+    const fb = new FunctionBuilder("bad", ["%env", "%this", "a"]);
+    const a = fb.readVariable("a", fb.cur);
+    const sum = fb.emit("f64_add", [a, a], {});
+    fb.ret(fb.emit("box_f64", [sum], {}));
+    assertVerifyFails(fb.finish(), "wants f64, got any");
+});
+
+test("lowtier: verifier rejects i1 where a boxed value is expected", () => {
+    const fb = new FunctionBuilder("bad", ["%env", "%this", "a"]);
+    const a = fb.readVariable("a", fb.cur);
+    const t = fb.emit("has_tag", [a], { tag: "number" });
+    fb.ret(t);
+    assertVerifyFails(fb.finish(), "may not be i1");
+});
+
+test("lowtier: verifier rejects an i1 operand to an f64-typed op", () => {
+    const fb = new FunctionBuilder("bad", ["%env", "%this", "a"]);
+    const a = fb.readVariable("a", fb.cur);
+    const t = fb.emit("has_tag", [a], { tag: "number" });
+    fb.ret(fb.emit("box_f64", [t], {}));
+    assertVerifyFails(fb.finish(), "wants f64, got i1");
+});
+
+test("lowtier: verifier rejects raw f64/i1 block arguments", () => {
+    const fb = new FunctionBuilder("bad", ["%env", "%this", "a"]);
+    const a = fb.readVariable("a", fb.cur);
+    const ua = fb.emit("unbox_f64", [a], {});
+    const join = fb.newBlock("join");
+    const jp = join.addParam("jp");
+    fb.br(join, [ua]);
+    fb.sealBlock(join);
+    fb.setInsertPoint(join);
+    fb.ret(jp);
+    assertVerifyFails(fb.finish(), "block arguments must be boxed");
+});
+
+test("lowtier: cond_br accepts i1 and legacy any conditions, rejects f64", () => {
+    const fb = new FunctionBuilder("bad", ["%env", "%this", "a"]);
+    const a = fb.readVariable("a", fb.cur);
+    const ua = fb.emit("unbox_f64", [a], {});
+    const t = fb.newBlock("t");
+    const f = fb.newBlock("f");
+    fb.condBr(ua, t, [], f, []);
+    fb.sealBlock(t);
+    fb.sealBlock(f);
+    fb.setInsertPoint(t);
+    fb.ret(fb.constUndefined());
+    fb.setInsertPoint(f);
+    fb.ret(fb.constUndefined());
+    assertVerifyFails(fb.finish(), "cond_br condition may not be f64");
+});
+
+test("lowtier: DCE removes dead pure low-tier chains", () => {
+    const fb = new FunctionBuilder("deadchain", ["%env", "%this", "a"]);
+    const a = fb.readVariable("a", fb.cur);
+    const ua = fb.emit("unbox_f64", [a], {});
+    const s = fb.emit("f64_add", [ua, ua], {});
+    fb.emit("box_f64", [s], {}); // dead: result unused (GC effect is removable)
+    fb.ret(a);
+    const fn = fb.finish();
+    verifyFunction(fn);
+    const module = new Module("m");
+    module.functions.push(fn);
+    optimizeFunction(fn, module);
+    verifyFunction(fn);
+    const printed = printFunction(fn);
+    assertNotContains(printed, "f64_add");
+    assertNotContains(printed, "box_f64");
+    assertNotContains(printed, "unbox_f64");
 });
 
 // --- oracle: TypeSig -> EirType mapping -----------------------------------------

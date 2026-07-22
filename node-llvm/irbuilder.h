@@ -25,6 +25,10 @@ namespace jsllvm {
     static NAN_METHOD(CreateCall);
     static NAN_METHOD(CreateInvoke);
     static NAN_METHOD(CreateFAdd);
+    static NAN_METHOD(CreateFSub);
+    static NAN_METHOD(CreateFMul);
+    static NAN_METHOD(CreateFDiv);
+    static NAN_METHOD(CreateFCmpOLT);
     static NAN_METHOD(CreateAlloca);
     static NAN_METHOD(CreateLoad);
     static NAN_METHOD(CreateStore);

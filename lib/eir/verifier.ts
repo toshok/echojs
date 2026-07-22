@@ -192,6 +192,47 @@ export function verifyFunction(fn: Func): boolean {
         });
     }
 
+    // typed-flow rules (the low tier).  f64/i1 values are raw machine values:
+    //   - an op with a sig gets exactly what the sig says per slot ("f64"
+    //     slots take only f64 values; "ejsval" slots take any boxed value,
+    //     which excludes f64/i1);
+    //   - an op without a sig takes only boxed values — with one exception:
+    //     cond_br's condition may additionally be i1 (has_tag / f64_lt; the
+    //     legacy "any"-typed condition sources to_boolean / prop_iter_next
+    //     already emit their own machine i1);
+    //   - branch-edge arguments must be boxed: block params are EjsValue
+    //     phis in the emitter, so f64/i1 may NOT cross block boundaries.
+    //     (Phase 3's guarded diamonds carry values across joins boxed.)
+    const isRaw = (t: string) => t === "f64" || t === "i1";
+    for (const b of fn.blocks) {
+        if (!reachable.has(b)) continue;
+        for (const inst of b.insts) {
+            const info = opInfo(inst.op);
+            inst.operands.forEach((o, idx) => {
+                const want = info.sig ? info.sig.params[idx] : undefined;
+                if (want === "f64") {
+                    if (o.type !== "f64")
+                        fail(`'${inst.op}' operand ${idx} wants f64, got ${o.type}`, inst);
+                } else if (want === "ejsval") {
+                    if (isRaw(o.type))
+                        fail(`'${inst.op}' operand ${idx} wants a boxed value, got ${o.type}`, inst);
+                } else if (inst.op === "cond_br" && idx === 0) {
+                    if (o.type === "f64") fail("cond_br condition may not be f64", inst);
+                } else if (isRaw(o.type)) {
+                    fail(`'${inst.op}' operand ${idx} may not be ${o.type}`, inst);
+                }
+            });
+            if (inst.targets)
+                for (const t of inst.targets)
+                    for (const a of t.args)
+                        if (a && isRaw(a.type))
+                            fail(
+                                `edge to ^${t.block.name} passes a raw ${a.type} value; block arguments must be boxed`,
+                                inst
+                            );
+        }
+    }
+
     return true;
 }
 

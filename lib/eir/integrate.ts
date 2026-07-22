@@ -28,6 +28,7 @@ import { isLowerNotSupported } from "./errors";
 import { Module } from "./ir";
 import { FunctionBuilder } from "./builder";
 import { verifyModule } from "./verifier";
+import { injectLowTierProbes } from "./lowtier-probe";
 import { optimizeModule } from "./optimize";
 import { printModule } from "./printer";
 import type * as e from "../estree";
@@ -397,6 +398,15 @@ export function collectEIRToplevel(
         // the as-lowered dump must precede optimization (which mutates
         // the module in place)
         if (dumpRequested(options)) dumpModule(filename, "toplevel-as-EIR", eir_module);
+
+        // testing: EJS_EIR_LOWTIER=1 swaps the bodies of the lowtier_*
+        // probe functions (test/eir-lowtier1.js) for hand-built low-tier
+        // EIR, so the Phase 2 ops can be executed end to end before
+        // lowering emits them (Phase 3).  Same mold as EJS_NO_EIR_OPT.
+        if (process.env["EJS_EIR_LOWTIER"]) {
+            const n = injectLowTierProbes(eir_module);
+            if (n > 0) verifyModule(eir_module);
+        }
 
         // debugging/measurement: EJS_NO_EIR_OPT=1 disables the EIR
         // optimizer without touching the LLVM pass pipeline (-O0 changes

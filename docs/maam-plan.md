@@ -211,7 +211,9 @@ Until promotion, `--types` in a stage1+ compiler is a no-op with a warning.
 
 ## Validation strategy
 
-- **Bootstrap matrix, every phase:** `//:test-eir`, `//:test-stage0..3`.
+- **Bootstrap matrix, every phase:** `//:test-eir`, `//:test-eir-lowtier`
+  (standalone — must be named explicitly; stage-green does not imply it
+  ran), `//:test-stage0..3`.
   stage2≡stage3 is a *functional* gate, not raw byte-identity (which fails on
   pristine HEAD from link metadata alone): stage2 and stage3 binaries, run in
   identical work dirs over a fixed corpus, must produce byte-identical
@@ -383,9 +385,24 @@ Smaller forward items surfaced by the Chunk A integration review:
       obvious next precision win for P2/P3.
       *Gate:* maam suite green (incl. new node-identity tests); matrix green;
       hand-checked oracle dump for `test/eir-toplevel1.js`.
-- [ ] **P2** emit + verify `has_tag`/`unbox_f64`/`box_f64`/`f64_*`;
+- [x] **P2** emit + verify `has_tag`/`unbox_f64`/`box_f64`/`f64_*`;
       `Inst.type` carries `"f64"`/`"i1"`.
-      *Gate:* `//:test-eir` green with new low-tier tests; matrix green.
+      *Gate:* `//:test-eir` green with new low-tier tests; matrix green —
+      the matrix line now includes `//:test-eir-lowtier` (standalone
+      target; it does NOT ride the stage targets), which compiles
+      test/eir-lowtier1.js plain + under `EJS_EIR_LOWTIER=1` injection and
+      asserts output parity, binary divergence, and per-op IR presence
+      (fadd/fsub/fmul/fdiv/fcmp olt) — also a stale-llvm.node detector.
+      *Done 2026-07-21.* Notes: node-llvm needed new FP bindings
+      (createFSub/FMul/FDiv/FCmpOLT — only FAdd existed); `has_tag
+      "number"` delegates to LLVMIRVisitor.isNumber (icmp ult against
+      EJSVAL_SHIFTED_TAG_INT32 — the int32 tag exists in the ejsval layout
+      but is never minted, and the threshold excludes it, so
+      unbox-as-raw-double is safe by construction); raw f64/i1 may NOT
+      cross block boundaries as edge args (Phase 3 diamonds rejoin boxed);
+      cond_br accepts i1 or legacy "any" conditions. Runtime backlog item
+      found: `_ejs_op_div` aborts EJS_NOT_IMPLEMENTED on non-number LHS
+      (ejs-ops.c ~901) — sub/mul coerce, div doesn't.
 - [ ] **P3** oracle-guided guarded arithmetic in `LowerFunction.binary`,
       `--types`-gated.
       *Gate:* matrix green + stage2≡stage3 functional gate (flag off);
