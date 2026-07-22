@@ -176,6 +176,21 @@ and diff every output against the flag-off baselines (byte-identical stdout);
 (each file diffed against `node <file>`); an arithmetic microbenchmark
 demonstrating the fast path fires.
 
+**Phase 3.4 — diamond pre-work (trust-free optimizer passes).**
+Two passes that pay off on the Phase 3 diamonds immediately and change
+nothing about the trust story (guard-borne correctness holds; a wrong
+oracle still only costs speed), visible in the Phase 3 demo dumps:
+(a) **dominated-guard elimination** — `hypot2`'s first diamond tests
+`has_tag %2` twice, and later diamonds re-test values already proven
+number on the fast edge; merging dominated guards turns three diamonds
+into one guard region with one slow path; (b) **f64 block params for
+optimizer-created joins** — a controlled lift of the P2
+raw-values-cannot-cross-blocks rule, scoped to joins the optimizer
+itself builds, so fast regions compute unboxed end-to-end and box once
+at the region exit — kills the bits_alloca round-trips the Phase 3
+benchmark flagged as headroom. Sequenced before P3.5 because it needs
+none of it.
+
 **Phase 3.6 — typed calling convention / function specialization.**
 The Phase 3 diamonds keep every call boxed and re-box at every join; the
 remaining order of magnitude lives here. For a function with a **local
@@ -186,11 +201,18 @@ argument types proven at each (`specializations()` already computes the
 per-function `(param types) → return type` tables; so far unconsumed) —
 emit a specialized clone with an unboxed signature (`f64(f64, f64)`-class),
 rewrite known call sites to direct calls that unbox at the caller, and
-drop the slow path from the clone. Exported/escaping functions keep the
-generic boxed form, which becomes a guard-then-call-clone wrapper — the
-natural hybrid. This is the point where LLVM finally gets to inline and
-do real scalar optimization (the demo's `hypot2` inlines into its
-caller's loop and the box/unbox pairs annihilate).
+drop the slow path from the clone. **Module-level exports are never
+specialization candidates** — not even with whole-program analysis:
+the slot-based module ABI exposes boxed ejsvals to both JS and native
+consumers, and specializing an export's signature would break that
+contract. Instead the export's generic boxed entry is *conservatively
+typed* and carries Phase-3-style guards at the boundary — exactly the
+hypot2-shape diamonds — dispatching to the specialized clone when they
+pass and keeping the generic path otherwise. The same wrapper shape
+serves any function that escapes locally. This is the point where LLVM
+finally gets to inline and do real scalar optimization (the demo's
+`hypot2` inlines into its caller's loop and the box/unbox pairs
+annihilate) — with the boxed world intact at every ABI boundary.
 
 This crosses the unguarded-consumption line the plan drew: oracle claims
 become facts, so **P3.5 (the differential harness) is a hard
@@ -204,17 +226,12 @@ checks (no `arguments`/rest/defaults/`this` in the clone). GC is
 indifferent (conservative scan tolerates raw doubles; false retention
 only).
 
-**Trust-free pre-work, can land before or alongside P3.5** (visible in
-the Phase 3 demo dumps): (a) dominated-guard elimination — `hypot2`'s
-first diamond tests `has_tag %2` twice and later diamonds re-test values
-already proven number on the fast edge; merging dominated guards turns
-three diamonds into one guard region with one slow path, guard-safe, no
-new trust; (b) f64 block params for optimizer-created joins, so fast
-regions compute unboxed end-to-end and box once — kills the bits_alloca
-round-trips the Phase 3 benchmark flagged as headroom. Longer-term this
-phase dovetails with the IR-in-manifest direction (2026-07-08):
-cross-module specialization is the same machinery with a bigger closed
-world.
+Pre-work lives in Phase 3.4 (trust-free, sequenced first). Longer-term
+this phase dovetails with the IR-in-manifest direction (2026-07-08):
+cross-module ANALYSIS through manifests can widen which internal calls
+are provably typed — but the export-boundary rule above stands
+regardless; manifests inform the guards, they don't remove the boxed
+ABI.
 
 **Phase 4 (outline only) — shapes.**
 `result.layouts()`/`constructors()` give monomorphic allocation sites with
@@ -462,15 +479,22 @@ Smaller forward items surfaced by the Chunk A integration review:
       green. Numbers in docs/maam-p0-results.md "Phase 3 gates". The lane
       script fails on zero-files-compared and zero-diamonds (vacuous-pass
       guards from review).
+- [ ] **P3.4** diamond pre-work, trust-free (see the Phase 3.4 section):
+      dominated-guard elimination + f64 block params for
+      optimizer-created joins.
+      *Gate:* matrix green; --types diff lane still byte-identical;
+      EIR-shape unit tests (merged guard region; unboxed fast region
+      boxing once); types-bench1 + the hypot2 demo re-measured, deltas
+      vs the Phase 3 baselines recorded.
 - [ ] **P3.5** differential harness in maam repo (`concreteEval` vs node vs
       ejs on closed-world tests) wired into its CI.
       *Gate:* zero divergences on the curated corpus.
 - [ ] **P3.6** typed calling convention / function specialization
-      (see the Phase 3.6 section). Pre-work (trust-free, may land first):
-      dominated-guard elimination + f64 block params for
-      optimizer-created joins. Main work (HARD PRECONDITION: P3.5 green):
+      (see the Phase 3.6 section; HARD PRECONDITION: P3.5 green):
       local-closed-world escape analysis, specialized unboxed clones +
-      direct calls, generic wrapper for escaping/exported functions.
+      direct calls; exports are NEVER specialized (boxed slot ABI is a
+      contract with JS and native consumers) — their generic entries get
+      conservatively-typed boundary guards dispatching to the clone.
       *Gate:* matrix green; --types diff lane still byte-identical;
       wrong-oracle probes extended to the specialization path (a
       function that LOOKS closed-world but isn't must be provably
