@@ -139,6 +139,20 @@ export interface TypeOracle {
     describe(): string; // stats line for --types logging
 }
 
+// what the probe actually returns: the oracle plus query telemetry.  The
+// `unknown` counter is the node-identity canary — a query for a node maam
+// never saw (dead code, unmapped glue, or a node MINTED AFTER the probe,
+// e.g. by normalizeDefaultExports' splicing) reads as "top"; if identity
+// ever silently breaks at scale, this number says so.
+export interface ProbeOracleStats {
+    queries: number;
+    unknown: number;
+}
+
+export interface ProbeOracle extends TypeOracle {
+    readonly stats: ProbeOracleStats;
+}
+
 const TAG_BY_SIG: Record<string, TypeTag> = {
     num: "number",
     str: "string",
@@ -297,7 +311,7 @@ export function runTypeAnalysisProbe(
     tree: e.Program,
     source_filename: string,
     dump = false
-): TypeOracle | null {
+): ProbeOracle | null {
     const maam = loadMaam(source_filename);
     if (!maam) return null;
 
@@ -331,8 +345,15 @@ export function runTypeAnalysisProbe(
         console.warn(result.describe());
         if (dump) dumpBindingTypes(result, program as { body: e.Statement[] }, source_filename);
 
+        const stats: ProbeOracleStats = { queries: 0, unknown: 0 };
         return {
-            typeOfNode: (n) => typeSigToEirType(result.typeOfNode(n)),
+            stats,
+            typeOfNode: (n) => {
+                stats.queries++;
+                const sig = result.typeOfNode(n);
+                if (sig === undefined) stats.unknown++;
+                return typeSigToEirType(sig);
+            },
             // The plan text gates closedWorld() on unknownCalls alone because it
             // predates the degradedBindings counter (unmodeled imports, rest
             // params — Chunks A/D).  Both must be zero: either one means some

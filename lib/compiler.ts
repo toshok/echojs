@@ -712,13 +712,28 @@ export function compile(
     // then empties) the toplevel body.  Logs stats (and, for --types-dump,
     // per-binding types); the returned TypeOracle is not consumed by
     // codegen yet (Phase 3); never fails the compile.
+    let type_oracle = null;
     if (options.types || options.types_dump)
-        runTypeAnalysisProbe(tree, source_filename, options.types_dump);
+        type_oracle = runTypeAnalysisProbe(tree, source_filename, options.types_dump);
 
     // EIR is the only pipeline: a module that can't lower is a compile
     // error, not a fallback
-    let lowered = collectEIRToplevel(tree, source_filename, module_infos, this_module_info, options);
+    let lowered = collectEIRToplevel(
+        tree,
+        source_filename,
+        module_infos,
+        this_module_info,
+        options,
+        type_oracle
+    );
     if (lowered.error) throw new Error(`${source_filename}: ${lowered.error}`);
+    // Phase 3 telemetry: how many guarded diamonds lowering emitted, and
+    // whether any oracle query missed (the node-identity canary)
+    if (type_oracle)
+        console.warn(
+            `--types: ${source_filename}: diamonds=${lowered.diamonds ?? 0} ` +
+                `oracleQueries=${type_oracle.stats.queries} oracleUnknown=${type_oracle.stats.unknown}`
+        );
 
     const toplevel_node = tree.body[0] as e.FunctionDeclaration;
     const toplevel_name = toplevel_node.id.name;

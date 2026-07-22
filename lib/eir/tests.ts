@@ -16,6 +16,7 @@ import { isLowerNotSupported } from "./errors";
 import { Func, Block, Inst, Module } from "./ir";
 import { DesugarSpread } from "../passes/desugar-spread";
 import { typeSigToEirType } from "./oracle";
+import type { TypeOracle, TypeTag } from "./oracle";
 import { buildArithDiamond, buildLowTierAdd, buildLowTierLt } from "./lowtier-probe";
 import { DesugarClasses } from "../passes/desugar-classes";
 import { DesugarDestructuring } from "../passes/desugar-destructuring";
@@ -1144,6 +1145,120 @@ test("lowtier: DCE removes dead pure low-tier chains", () => {
     assertNotContains(printed, "f64_add");
     assertNotContains(printed, "box_f64");
     assertNotContains(printed, "unbox_f64");
+});
+
+// --- Phase 3: oracle-guided guarded arithmetic ------------------------------------
+
+// a hand-built TypeOracle: types Identifier nodes by name, everything else
+// (and unknown names) is top.  The TypeOracle interface from Chunk G is
+// all lowering may consume, so this is a faithful stand-in for maam.
+function stubOracle(types: Record<string, TypeTag[] | undefined>): TypeOracle {
+    return {
+        typeOfNode: (n) => {
+            const id = n as { type?: string; name?: string };
+            const tags = id.type === "Identifier" && id.name !== undefined ? types[id.name] : undefined;
+            return tags ? { tags: new Set(tags) } : { tags: "top" };
+        },
+        closedWorld: () => false,
+        describe: () => "stub",
+    };
+}
+
+function lowerWithOracle(src: string, oracle: TypeOracle | null) {
+    let r = lowerFunctionNode(parseFn(src), undefined, oracle);
+    verifyModule(r.module); // (g) every lowered output must verify
+    return { printed: printFunction(r.fn), diamonds: r.diamonds };
+}
+
+const DIAMOND_MARKS = ["has_tag", "unbox_f64", "box_f64", "num_join"];
+
+test("typed-arith: {number}x{number} + emits the guarded diamond", () => {
+    const { printed, diamonds } = lowerWithOracle(
+        "function f(x, y) { return x + y; }",
+        stubOracle({ x: ["number"], y: ["number"] })
+    );
+    assert(diamonds === 1, `diamonds=${diamonds}`);
+    for (const m of DIAMOND_MARKS) assertContains(printed, m);
+    assertContains(printed, 'tag="number"');
+    assertContains(printed, ": f64 = f64_add");
+    assertContains(printed, ": f64 = unbox_f64");
+    assertContains(printed, ": i1 = has_tag");
+});
+
+test("typed-arith: null oracle lowers exactly as before (no diamond)", () => {
+    const { printed, diamonds } = lowerWithOracle("function f(x, y) { return x + y; }", null);
+    assert(diamonds === 0, `diamonds=${diamonds}`);
+    for (const m of DIAMOND_MARKS) assertNotContains(printed, m);
+    assertContains(printed, "add ");
+});
+
+test("typed-arith: string operands take no diamond", () => {
+    const { printed, diamonds } = lowerWithOracle(
+        "function f(x, y) { return x + y; }",
+        stubOracle({ x: ["string"], y: ["string"] })
+    );
+    assert(diamonds === 0, `diamonds=${diamonds}`);
+    assertNotContains(printed, "has_tag");
+});
+
+test("typed-arith: mixed, top, and widened number|undefined take no diamond", () => {
+    for (const types of [
+        { x: ["number"] as TypeTag[], y: ["string"] as TypeTag[] }, // mixed
+        { x: ["number"] as TypeTag[], y: undefined }, // top
+        { x: ["number", "undefined"] as TypeTag[], y: ["number"] as TypeTag[] }, // widened
+    ]) {
+        const { printed, diamonds } = lowerWithOracle(
+            "function f(x, y) { return x + y; }",
+            stubOracle(types)
+        );
+        assert(diamonds === 0, `diamonds=${diamonds} for ${JSON.stringify(types)}`);
+        assertNotContains(printed, "has_tag");
+    }
+});
+
+test("typed-arith: numeric literals type directly — `x + 1` diamonds", () => {
+    const { printed, diamonds } = lowerWithOracle(
+        "function f(x) { return x + 1; }",
+        stubOracle({ x: ["number"] })
+    );
+    assert(diamonds === 1, `diamonds=${diamonds}`);
+    assertContains(printed, ": f64 = f64_add");
+    // and a negated literal too (parsed as unary minus over a literal)
+    const neg = lowerWithOracle("function f(x) { return x - -2; }", stubOracle({ x: ["number"] }));
+    assert(neg.diamonds === 1, `diamonds=${neg.diamonds}`);
+    assertContains(neg.printed, ": f64 = f64_sub");
+});
+
+test("typed-arith: literals alone do not diamond without an oracle", () => {
+    const { printed, diamonds } = lowerWithOracle("function f() { return 1 + 2; }", null);
+    assert(diamonds === 0, `diamonds=${diamonds}`);
+    assertNotContains(printed, "has_tag");
+});
+
+test("typed-arith: `<` diamonds through boolean-constant join edges", () => {
+    const { printed, diamonds } = lowerWithOracle(
+        "function f(x, y) { return x < y; }",
+        stubOracle({ x: ["number"], y: ["number"] })
+    );
+    assert(diamonds === 1, `diamonds=${diamonds}`);
+    assertContains(printed, ": i1 = f64_lt");
+    assertContains(printed, "num_lt_true");
+    assertContains(printed, "num_lt_false");
+    // the i1 never reaches the join: its edges carry boolean constants
+    assertContains(printed, 'kind="boolean", value=true');
+    assertContains(printed, 'kind="boolean", value=false');
+    assertNotContains(printed, "= box_f64"); // no f64 result to box for `<` (unbox_f64 remains)
+});
+
+test("typed-arith: mul/div diamonds carry their ops", () => {
+    for (const [src, op] of [
+        ["function f(x, y) { return x * y; }", "f64_mul"],
+        ["function f(x, y) { return x / y; }", "f64_div"],
+    ] as const) {
+        const { printed, diamonds } = lowerWithOracle(src, stubOracle({ x: ["number"], y: ["number"] }));
+        assert(diamonds === 1, `diamonds=${diamonds}`);
+        assertContains(printed, ": f64 = " + op);
+    }
 });
 
 // --- oracle: TypeSig -> EirType mapping -----------------------------------------

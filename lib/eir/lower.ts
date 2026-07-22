@@ -21,6 +21,7 @@ import { LowerNotSupported } from "./errors";
 import { eir_intrinsics } from "./intrinsics";
 import type * as e from "../estree";
 import type { ModuleInfo } from "../module-info";
+import type { TypeOracle } from "./oracle";
 
 // --- module-scope interop types (integrate.ts imports these) -----------------
 
@@ -51,6 +52,11 @@ export interface ModCtx {
     refs: Map<string, ModuleRef>;
     this_module_info?: ModuleInfo | null;
     module_infos?: Map<string, ModuleInfo> | null;
+    // Phase 3: the per-module type oracle (null/absent = no typed fast
+    // paths, today's lowering exactly) and the module-wide stats the
+    // lowered functions accumulate into
+    oracle?: TypeOracle | null;
+    typed_stats?: { diamonds: number };
 }
 
 // an environment-descriptor chain node: a per-iteration loop env or a
@@ -71,6 +77,15 @@ interface FinallyCtx {
     continueDepth: number;
     handlerDepth: number;
 }
+
+// the Phase 3 typed fast path: source operator -> low-tier f64 op
+const f64ops: Record<string, string | undefined> = {
+    "+": "f64_add",
+    "-": "f64_sub",
+    "*": "f64_mul",
+    "/": "f64_div",
+    "<": "f64_lt",
+};
 
 const binops: Record<string, string | undefined> = {
     "+": "add",
@@ -141,6 +156,8 @@ class LowerFunction {
     // crossed finalizer at the exit site (finalizer duplication).
     finallyCtx: FinallyCtx[] = [];
     curEnv: Inst;
+    // Phase 3: the module's type oracle (null = no typed fast paths)
+    oracle: TypeOracle | null;
 
     constructor(info: FnInfo, analysis: ScopeAnalysis, module: Module, mod_ctx?: ModCtx) {
         this.info = info;
@@ -148,6 +165,7 @@ class LowerFunction {
         this.module = module;
         this.isToplevel = !!info.isToplevel;
         this.mod_ctx = mod_ctx || { refs: new Map() };
+        this.oracle = this.mod_ctx.oracle ?? null;
 
         const paramNames = info.params.map((p) => p.uid);
         this.b = new FunctionBuilder(info.name, ["%env", "%this"].concat(paramNames));
@@ -644,7 +662,89 @@ class LowerFunction {
         if (!op) throw LowerNotSupported(`binary operator ${n.operator}`, n.loc);
         let l = this.expr(n.left);
         let r = this.expr(n.right);
+        // Phase 3: born-typed guarded arithmetic.  When the oracle types
+        // BOTH operands as exactly {number}, split the same diamond shape
+        // logical() uses: has_tag guards -> fast unbox/f64 op/box vs the
+        // generic slow op, rejoining in a boxed block param.  Guarded
+        // consumption is correct even when the oracle is wrong — the
+        // has_tag guards decide at runtime; only code size/speed change.
+        const f64op = f64ops[n.operator];
+        if (f64op && this.operandIsNumber(n.left) && this.operandIsNumber(n.right))
+            return this.numericDiamond(f64op, op, l, r);
         return this.b.emit(op, [l, r], {});
+    }
+
+    // Does this operand node type as exactly {number}?  Numeric literals
+    // qualify directly: the oracle's mapping policy leaves literals
+    // unmapped (glue), so `x + 1` would otherwise never take the fast
+    // path.  (A unary +/- on a numeric literal is the parsed form of a
+    // signed literal — pre-EIR desugar does not fold it.)  Everything
+    // else asks the oracle, and only a pure {number} answer qualifies —
+    // not top, and not reassignment-widened unions like number|undefined.
+    operandIsNumber(node: e.Expression): boolean {
+        if (!this.oracle) return false; // no oracle, no diamonds — today's lowering
+        if (node.type === "Literal") return typeof node.value === "number";
+        if (
+            node.type === "UnaryExpression" &&
+            (node.operator === "-" || node.operator === "+") &&
+            node.argument.type === "Literal" &&
+            typeof (node.argument as e.Literal).value === "number"
+        )
+            return true;
+        const t = this.oracle.typeOfNode(node);
+        return t.tags !== "top" && t.tags.size === 1 && t.tags.has("number");
+    }
+
+    // has_tag(l) -> has_tag(r) -> fast: unbox both, f64 op, rejoin boxed;
+    // any guard failure -> slow: the generic op.  The join param is an
+    // ejsval: raw f64/i1 never crosses a block boundary (P2 verifier
+    // rule), so f64 results re-box in the fast block and f64_lt's i1
+    // branches to boolean-constant edges into the join.
+    numericDiamond(f64op: string, genericOp: string, l: Inst, r: Inst): Inst {
+        if (this.mod_ctx.typed_stats) this.mod_ctx.typed_stats.diamonds++;
+
+        const guard2_bb = this.b.newBlock("num_guard2");
+        const fast_bb = this.b.newBlock("num_fast");
+        const slow_bb = this.b.newBlock("num_slow");
+        const join_bb = this.b.newBlock("num_join");
+        const result = join_bb.addParam("num");
+
+        const t1 = this.b.emit("has_tag", [l], { tag: "number" });
+        this.b.condBr(t1, guard2_bb, [], slow_bb, []);
+        this.b.sealBlock(guard2_bb);
+
+        this.b.setInsertPoint(guard2_bb);
+        const t2 = this.b.emit("has_tag", [r], { tag: "number" });
+        this.b.condBr(t2, fast_bb, [], slow_bb, []);
+        this.b.sealBlock(fast_bb);
+        this.b.sealBlock(slow_bb);
+
+        this.b.setInsertPoint(fast_bb);
+        const ua = this.b.emit("unbox_f64", [l], {});
+        const ub = this.b.emit("unbox_f64", [r], {});
+        const v = this.b.emit(f64op, [ua, ub], {});
+        if (f64op === "f64_lt") {
+            const t_bb = this.b.newBlock("num_lt_true");
+            const f_bb = this.b.newBlock("num_lt_false");
+            this.b.condBr(v, t_bb, [], f_bb, []);
+            this.b.sealBlock(t_bb);
+            this.b.sealBlock(f_bb);
+            this.b.setInsertPoint(t_bb);
+            this.b.br(join_bb, [this.b.constBool(true)]);
+            this.b.setInsertPoint(f_bb);
+            this.b.br(join_bb, [this.b.constBool(false)]);
+        } else {
+            const boxed = this.b.emit("box_f64", [v], {});
+            this.b.br(join_bb, [boxed]);
+        }
+
+        this.b.setInsertPoint(slow_bb);
+        const g = this.b.emit(genericOp, [l, r], {});
+        this.b.br(join_bb, [g]);
+        this.b.sealBlock(join_bb);
+
+        this.b.setInsertPoint(join_bb);
+        return result;
     }
 
     logical(n: e.LogicalExpression): Inst {
@@ -1725,12 +1825,21 @@ function lowerOneFunction(info: FnInfo, analysis: ScopeAnalysis, module: Module,
 
 // lower a FunctionDeclaration/FunctionExpression AST node into a fresh
 // module; returns { module, fn }
-export function lowerFunctionNode(n: e.Function, name?: string): { module: Module; fn: Func } {
+export function lowerFunctionNode(
+    n: e.Function,
+    name?: string,
+    oracle?: TypeOracle | null
+): { module: Module; fn: Func; diamonds: number } {
     let analysis = new ScopeAnalysis();
     let info = analysis.analyzeFunction(n, name);
     let module = new Module(info.name);
-    let fn = lowerOneFunction(info, analysis, module);
-    return { module: module, fn: fn };
+    let typed_stats = { diamonds: 0 };
+    let fn = lowerOneFunction(info, analysis, module, {
+        refs: new Map(),
+        oracle: oracle ?? null,
+        typed_stats,
+    });
+    return { module: module, fn: fn, diamonds: typed_stats.diamonds };
 }
 
 // lower every top-level function declaration in a parsed program

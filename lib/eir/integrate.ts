@@ -23,6 +23,7 @@ import * as b from "../ast-builder";
 import * as debug from "../debug";
 import { ScopeAnalysis } from "./scopes";
 import { lowerAnalyzedFunction } from "./lower";
+import type { TypeOracle } from "./oracle";
 import type { ModuleRef, ModCtx } from "./lower";
 import { isLowerNotSupported } from "./errors";
 import { Module } from "./ir";
@@ -44,8 +45,8 @@ export interface ModuleAccessor {
 }
 
 export type CollectResult =
-    | { eir_module: Module; accessors: ModuleAccessor[]; error?: undefined }
-    | { error: string; eir_module?: undefined; accessors?: undefined };
+    | { eir_module: Module; accessors: ModuleAccessor[]; diamonds: number; error?: undefined }
+    | { error: string; eir_module?: undefined; accessors?: undefined; diamonds?: undefined };
 
 // --dump-after eir: print the lowered (verified) EIR module
 function dumpRequested(options: CompilerOptions | undefined): boolean {
@@ -364,7 +365,13 @@ export function collectEIRToplevel(
     filename: string,
     module_infos: Map<string, ModuleInfo> | null,
     this_module_info: ModuleInfo,
-    options: CompilerOptions
+    options: CompilerOptions,
+    // Phase 3: the module's type oracle (null = no typed fast paths).
+    // NB: normalizeDefaultExports below splices/retypes a few toplevel
+    // statements AFTER the probe analyzed the tree — surviving nodes keep
+    // their identity; nodes minted here read as oracle-unknown (-> top,
+    // no diamond), visible in the probe's oracleUnknown counter.
+    oracle: TypeOracle | null = null
 ): CollectResult {
     const toplevel = tree.body[0] as e.FunctionDeclaration;
     const body = toplevel.body.body;
@@ -385,10 +392,13 @@ export function collectEIRToplevel(
         // the toplevel environment, which a direct caller's envParam
         // wouldn't carry.  direct calls stay a devirtualization
         // opportunity for the optimizer, which can prove capture shapes.
+        let typed_stats = { diamonds: 0 };
         let mod_ctx = {
             refs: refs,
             this_module_info: this_module_info,
             module_infos: module_infos,
+            oracle: oracle,
+            typed_stats: typed_stats,
         };
 
         let eir_module = new Module(filename);
@@ -434,8 +444,12 @@ export function collectEIRToplevel(
         toplevel.eir_module = eir_module;
         toplevel.eir_main = info.name;
         toplevel.body = { type: "BlockStatement", body: [], loc: toplevel.loc };
-        debug.log(1, `EIR: ${filename}: whole module lowered (toplevel-as-EIR)`);
-        return { eir_module: eir_module, accessors: accessors };
+        debug.log(
+            1,
+            `EIR: ${filename}: whole module lowered (toplevel-as-EIR)` +
+                (typed_stats.diamonds > 0 ? `, ${typed_stats.diamonds} typed diamond(s)` : "")
+        );
+        return { eir_module: eir_module, accessors: accessors, diamonds: typed_stats.diamonds };
     } catch (e) {
         if (!isLowerNotSupported(e)) throw e;
         // there is no legacy pipeline to fall back to anymore: surface
