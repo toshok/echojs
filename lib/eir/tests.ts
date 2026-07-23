@@ -1261,6 +1261,188 @@ test("typed-arith: mul/div diamonds carry their ops", () => {
     }
 });
 
+// --- Phase 3.4: guard-region merging + raw f64 joins ------------------------------
+
+// like the real maam oracle, this types the named identifiers as
+// {number} AND any arithmetic expression whose operands are typed —
+// hypot2's `a*a + b*b` is three diamonds only because the outer add's
+// BinaryExpression operands type as {number} too
+function numericStubOracle(names: string[]): TypeOracle {
+    const numeric = (n: unknown): boolean => {
+        const node = n as {
+            type?: string;
+            name?: string;
+            operator?: string;
+            value?: unknown;
+            left?: unknown;
+            right?: unknown;
+        };
+        if (node.type === "Identifier") return names.indexOf(node.name!) !== -1;
+        if (node.type === "Literal") return typeof node.value === "number";
+        if (
+            node.type === "BinaryExpression" &&
+            (node.operator === "+" || node.operator === "-" || node.operator === "*" || node.operator === "/")
+        )
+            return numeric(node.left) && numeric(node.right);
+        return false;
+    };
+    return {
+        typeOfNode: (n) => (numeric(n) ? { tags: new Set<TypeTag>(["number"]) } : { tags: "top" }),
+        closedWorld: () => false,
+        describe: () => "numeric-stub",
+    };
+}
+
+function lowerOptWithOracle(src: string, oracle: TypeOracle | null): { fn: Func; printed: string } {
+    let r = lowerFunctionNode(parseFn(src), undefined, oracle);
+    verifyModule(r.module);
+    optimizeFunction(r.fn, r.module);
+    verifyFunction(r.fn);
+    return { fn: r.fn, printed: printFunction(r.fn) };
+}
+
+function countOps(fn: Func, op: string): number {
+    let n = 0;
+    fn.forEachInst((i) => {
+        if (i.op === op) n++;
+    });
+    return n;
+}
+
+function guardFalseTargets(fn: Func): Set<Block> {
+    const targets = new Set<Block>();
+    fn.forEachInst((i) => {
+        if (i.op === "cond_br" && i.operands[0]!.op === "has_tag") targets.add(i.targets![1]!.block);
+    });
+    return targets;
+}
+
+test("guard-fold: x * x re-tests x only once", () => {
+    const { fn } = lowerOptWithOracle("function f(x) { return x * x; }", numericStubOracle(["x"]));
+    assert(countOps(fn, "has_tag") === 1, `has_tag = ${countOps(fn, "has_tag")}`);
+});
+
+test("guard-merge: hypot2 becomes one guard region with one slow path", () => {
+    // as lowered this is three diamonds / six has_tags (see the Phase 3
+    // dump); merged: one has_tag per distinct value, one slow path
+    const { fn } = lowerOptWithOracle(
+        "function hypot2(a, b) { return a * a + b * b; }",
+        numericStubOracle(["a", "b"])
+    );
+    assert(countOps(fn, "has_tag") === 2, `has_tag = ${countOps(fn, "has_tag")}`);
+    const ft = guardFalseTargets(fn);
+    assert(ft.size === 1, `guard-failure targets = ${ft.size}`);
+    // the full generic computation survives on the (single) slow path
+    assert(countOps(fn, "mul") === 2 && countOps(fn, "add") === 1, "generic ops must survive");
+});
+
+test("guard-merge: merged fast region is unboxed end-to-end, boxing once", () => {
+    const { fn, printed } = lowerOptWithOracle(
+        "function hypot2(a, b) { return a * a + b * b; }",
+        numericStubOracle(["a", "b"])
+    );
+    // exactly one box at the region exit; only the region INPUTS unbox
+    assert(countOps(fn, "box_f64") === 1, `box_f64 = ${countOps(fn, "box_f64")}`);
+    assert(countOps(fn, "unbox_f64") === 4, `unbox_f64 = ${countOps(fn, "unbox_f64")}`);
+    // intermediate joins carry raw f64 params (the optimizer-scoped lift
+    // of the P2 boxed-edges rule), all marked for the verifier
+    let rawParams = 0;
+    fn.forEachInst((i) => {
+        if (i.op === "blockparam" && i.type === "f64") {
+            assert(i.rawJoin, "f64 param must carry the rawJoin marker");
+            rawParams++;
+        }
+    });
+    assert(rawParams >= 2, `expected f64 join params, got ${rawParams}`);
+    assertContains(printed, ": f64):"); // an intermediate join's param list
+});
+
+test("guard-merge: statement chains merge across pure prefixes (bench kernel)", () => {
+    // i*i, s+_, i/2 (const-operand diamond), -, i+1, s+i: six diamonds,
+    // two distinct guarded values, const guards fold, one slow path
+    const { fn } = lowerOptWithOracle(
+        "function k(s, i) { s = s + i * i - i / 2; i = i + 1; return s + i; }",
+        numericStubOracle(["s", "i"])
+    );
+    assert(countOps(fn, "has_tag") === 2, `has_tag = ${countOps(fn, "has_tag")}`);
+    const ft = guardFalseTargets(fn);
+    assert(ft.size === 1, `guard-failure targets = ${ft.size}`);
+    assert(countOps(fn, "box_f64") === 1, `box_f64 = ${countOps(fn, "box_f64")}`);
+});
+
+test("guard-merge: a non-dominating guard is neither folded nor merged", () => {
+    // D1 lives in the then-branch: its guards do NOT dominate the second
+    // x+y after the if-join, so nothing may fold or merge
+    const { fn } = lowerOptWithOracle(
+        "function f(c, x, y) { var t = 0; if (c) { t = x + y; } var w = x + y; return t + w; }",
+        numericStubOracle(["x", "y"])
+    );
+    assert(countOps(fn, "has_tag") === 4, `has_tag = ${countOps(fn, "has_tag")}`);
+    const ft = guardFalseTargets(fn);
+    assert(ft.size === 2, `guard-failure targets = ${ft.size}`);
+    // both regions still rejoin boxed: no raw params anywhere
+    let rawParams = 0;
+    fn.forEachInst((i) => {
+        if (i.op === "blockparam" && i.type === "f64") rawParams++;
+    });
+    assert(rawParams === 0, `expected no f64 params, got ${rawParams}`);
+    assert(countOps(fn, "box_f64") === 2, `box_f64 = ${countOps(fn, "box_f64")}`);
+});
+
+test("guard-merge: `<` diamonds still verify and keep their shape through opt", () => {
+    const { fn } = lowerOptWithOracle(
+        "function f(x, y) { return x < y; }",
+        stubOracle({ x: ["number"], y: ["number"] })
+    );
+    assert(countOps(fn, "f64_lt") === 1, "lt fast path survives");
+    assert(countOps(fn, "lt") === 1, "lt slow path survives");
+});
+
+test("verifier: rawJoin marker admits f64 edge args into f64 params", () => {
+    const fb = new FunctionBuilder("rawjoin", ["%env", "%this", "a"]);
+    const a = fb.readVariable("a", fb.cur);
+    const ua = fb.emit("unbox_f64", [a], {});
+    const join = fb.newBlock("join");
+    const jp = join.addParam("jp");
+    jp.type = "f64";
+    jp.rawJoin = true;
+    fb.br(join, [ua]);
+    fb.sealBlock(join);
+    fb.setInsertPoint(join);
+    fb.ret(fb.emit("box_f64", [jp], {}));
+    verifyFunction(fb.finish()); // accepted
+});
+
+test("verifier: an f64 param without the rawJoin marker is rejected", () => {
+    const fb = new FunctionBuilder("norawjoin", ["%env", "%this", "a"]);
+    const a = fb.readVariable("a", fb.cur);
+    const ua = fb.emit("unbox_f64", [a], {});
+    const join = fb.newBlock("join");
+    const jp = join.addParam("jp");
+    jp.type = "f64"; // marker NOT set: the strict P2 rule stays in force
+    fb.br(join, [ua]);
+    fb.sealBlock(join);
+    fb.setInsertPoint(join);
+    fb.ret(fb.emit("box_f64", [jp], {}));
+    // the edge-side strict rule fires first: without the marker the raw
+    // f64 argument itself is rejected
+    assertVerifyFails(fb.finish(), "must be boxed");
+});
+
+test("verifier: a boxed arg into a rawJoin f64 param is rejected", () => {
+    const fb = new FunctionBuilder("boxedarg", ["%env", "%this", "a"]);
+    const a = fb.readVariable("a", fb.cur);
+    const join = fb.newBlock("join");
+    const jp = join.addParam("jp");
+    jp.type = "f64";
+    jp.rawJoin = true;
+    fb.br(join, [a]); // boxed value into the f64 param
+    fb.sealBlock(join);
+    fb.setInsertPoint(join);
+    fb.ret(fb.emit("box_f64", [jp], {}));
+    assertVerifyFails(fb.finish(), "f64 param");
+});
+
 // --- oracle: TypeSig -> EirType mapping -----------------------------------------
 
 test("oracle: TypeSig constituents map to EirType tags", () => {

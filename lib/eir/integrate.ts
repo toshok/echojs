@@ -428,14 +428,20 @@ export function collectEIRToplevel(
                 stats.reads_folded ||
                 stats.calls_inlined ||
                 stats.iters_folded ||
-                stats.dead_removed
+                stats.dead_removed ||
+                stats.guards_folded ||
+                stats.regions_merged ||
+                stats.raw_join_params
             )
                 debug.log(
                     1,
                     `EIR-opt: ${filename}: ${stats.calls_inlined} call(s) inlined, ` +
                         `${stats.allocs_sunk} alloc(s) sunk, ${stats.reads_folded} read(s) folded, ` +
                         `${stats.iters_folded} iterator walk(s) folded, ` +
-                        `${stats.dead_removed} dead inst(s) removed`
+                        `${stats.dead_removed} dead inst(s) removed, ` +
+                        `${stats.guards_folded} guard(s) folded, ` +
+                        `${stats.regions_merged} region(s) merged, ` +
+                        `${stats.raw_join_params} raw f64 join param(s)`
                 );
             verifyModule(eir_module);
             if (dumpOptRequested(options)) dumpModule(filename, "optimized", eir_module);

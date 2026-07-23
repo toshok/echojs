@@ -225,7 +225,10 @@ export class EIREmitter {
             ir.setInsertPoint(this.blocks.get(b)!);
             for (let p of b.params) {
                 if (p.isException) continue; // materialized by the landingpad below
-                let phi = ir.createPhi(types.EjsValue, b.predEdges.length, `p_${p.id}`);
+                // rawJoin params (Phase 3.4 pass (b)) carry raw doubles;
+                // everything else is an EjsValue phi (the P2 boxed rule)
+                let phi_type = p.type === "f64" ? types.Double : types.EjsValue;
+                let phi = ir.createPhi(phi_type, b.predEdges.length, `p_${p.id}`);
                 this.phis.set(p, phi);
                 this.values.set(p, phi);
             }

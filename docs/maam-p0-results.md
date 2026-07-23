@@ -378,3 +378,128 @@ degrade (widening, wrong oracle — both by design); the mechanism-level
 proof (//:test-eir-lowtier) is now backed by a magnitude measurement (10×
 on a pure-numeric kernel, a ceiling not a promise); matrix unaffected flag
 off.  Phase 3 is complete pending sign-off.
+
+# Phase 3.4 gates (diamond pre-work)
+
+Date: 2026-07-22.  echojs @ eir (this commit; passes in
+lib/eir/optimize-guards.ts), maam @ 8d6a157.  Same environment and
+color-free protocol as the Phase 3 measurements.
+
+## The passes (what changed)
+
+Two trust-free optimizer passes over the Phase 3 diamonds — nothing here
+consumes an oracle claim; every fact is proven from the IR, so a wrong
+oracle still only costs speed:
+
+- **(a) dominated-guard elimination + guard-region merging.**  Dominance
+  reasoning: the CHK dominator tree (shared with the verifier) plus the
+  sole-predecessor-TRUE-edge condition — entering such a successor is
+  equivalent to its guard having held, and SSA number-ness is immutable —
+  combined with value-intrinsic proofs (const number, box_f64, and
+  generic mul/div/sub results, which are always numbers in both ES and
+  runtime/ejs-ops.c).  Region merging structurally VERIFIES (never
+  assumes) the diamond shape — effect-free fast side, whitelisted
+  {add,sub,mul,div,lt} slow chain — then fuses adjacent regions into one
+  guard region with ONE slow path (the full generic computation in
+  program order).  Guard failures after partial fast execution re-enter
+  the slow chain from the top; the merge first proves that re-execution
+  is pure and value-identical (operands guard-proven numbers), else it
+  refuses.
+- **(b) raw f64 block params for optimizer-rewired joins.**  A param
+  whose every incoming argument is a strippable box_f64 / f64 value /
+  converted param becomes an f64 phi (double in the emitter), killing
+  the bits_alloca box/unbox round-trips between merged diamonds; any
+  remaining boxed use re-boxes exactly once at the region exit.  The
+  verifier's P2 rule is lifted ONLY for params carrying the new
+  `rawJoin` marker, and the marker is provenance rather than trust: the
+  verifier independently re-checks type-f64, all-args-f64, non-catch,
+  no-unwind-edge — an f64 param WITHOUT the marker is rejected, so every
+  lowering-created edge keeps the strict boxed rule.
+
+hypot2 acceptance shape (see the regenerated
+`~/src/echojs/hypot2-types-before-after.txt`): three diamonds / six
+has_tags as lowered → ONE region with one has_tag per distinct value
+(2), one slow chain (mul/mul/add), fast side unboxed end-to-end through
+`phi double` joins, one box_f64 at the region exit.
+
+## The --types diff lane (behavioral gate)
+
+Clean re-assembled work tree, identical protocol:
+
+| files | identical | divergent | N/A | timeouts |
+|---|---|---|---|---|
+| 458 | 457 | **0** | 1 (tester.js, unchanged) | 0 |
+
+Aggregates: **diamonds 67**, oracleQueries 1319, oracleUnknown 1035 —
+byte-for-byte the Phase 3 numbers.  The lane counts LOWERING's diamonds
+and the passes run post-hoc, so the count is unchanged by design; the
+lane's expectations needed no touch.  Both vacuous-pass guards
+re-verified to trip: an empty work tree exits 1 ("zero files compared"),
+and an outside-the-repo tree (dead oracle) exits 1 ("diamonds total is
+0").  An additional superset run (467 files: the 458 plus probe/demo
+copies) was also 0-divergent.
+
+## EIR-shape unit tests
+
+//:test-eir green, 114 tests, including the new Phase 3.4 shapes:
+merged hypot2 (exactly 2 has_tags, a single guard-failure target, the
+generic mul/mul/add surviving on the one slow path, box_f64 exactly
+once, f64 rawJoin params on the intermediate joins); the bench-kernel
+statement chain merging across pure const prefixes (six diamonds → 2
+has_tags, 1 slow path, 1 box); a negative shape (guards in an if-branch
+do not dominate a later re-test: nothing folds, nothing merges, no raw
+params); and the verifier triple (rawJoin accepted; f64 param without
+the marker rejected; boxed arg into a rawJoin param rejected).
+
+## Microbenchmark (types-bench1, deltas vs Phase 3)
+
+Same kernel, same protocol (7× interleaved, /usr/bin/time -p):
+
+| build | P3 median | P3.4 median | note |
+|---|---|---|---|
+| flag-off | 3.19 s | 3.21 s | unchanged (five runs 3.17–3.37; two hit background-load noise at 4.96/5.70 — kept in, the median absorbs them) |
+| --types | 0.31 s | **0.23 s** | −26% typed runtime |
+
+**Speedup 14.0× median (was 10.3×)**; diamonds=9, oracleUnknown=0,
+output identical (13333303333341514000).  Remaining headroom is the
+region BOUNDARIES: loop-carried params and call arguments still box
+(entry args are consts/params, not box_f64 — deliberately outside pass
+(b)'s proof), which is P3.6's typed-calling-convention territory.
+
+## hypot2 demo (deltas vs Phase 3)
+
+diamonds=7 (unchanged — lowering's count).  Wall time unchanged within
+noise (flag-off 2.71/2.51/2.60 s, --types 0.51/0.34/0.35 s, ~7×): the
+demo is dominated by the boxed call/closure/loop overhead around
+hypot2, which P3.4 does not touch.  What changed is the emitted shape —
+2 NaN-box checks instead of 6, `phi double` fast pipeline, one generic
+chain, one box — recorded with before/after EIR and LLVM excerpts in
+the regenerated dump file.
+
+## test/types probes
+
+All seven probes still match (`node` diff / flag-off≡--types for the
+wrong-oracle case), per-file diamond counts identical to the census
+(6/4/5/0/6/9; wrongoracle lib=1).  The wrong-oracle keystone still
+routes the cross-module string through the guard to the slow path and
+prints "x1" with identical flag-off/--types output.
+
+## Matrix + stage2 ≡ stage3 (flag off)
+
+Full serial matrix re-run on the final code: //:test-eir,
+//:test-eir-lowtier, //:test-stage0..3 — six of six BUILD SUCCEEDED
+(grep-verified in the buck logs, never tail exit).  stage2 ≡ stage3
+functional gate (both stages compile and run the entire corpus with
+per-test expected-output comparison) green.  Flag-off the new passes
+bail before touching anything: optimizeGuardRegions scans for number
+guards and returns (none exist without --types), so flag-off output is
+untouched by construction and the stage gates confirm it.
+
+## Reading
+
+Both P3.4 items hold with zero behavioral divergence: dominated guards
+fold and adjacent diamonds merge into single-slow-path regions on real
+dominance reasoning; the raw-f64-join lift is scoped by a
+verifier-re-checked marker rather than a global weakening; the
+microbenchmark ceiling moves 10.3× → 14.0×, and the remaining box/unbox
+traffic sits exactly where P3.6 (typed calling convention) picks up.

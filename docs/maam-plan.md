@@ -479,13 +479,20 @@ Smaller forward items surfaced by the Chunk A integration review:
       green. Numbers in docs/maam-p0-results.md "Phase 3 gates". The lane
       script fails on zero-files-compared and zero-diamonds (vacuous-pass
       guards from review).
-- [ ] **P3.4** diamond pre-work, trust-free (see the Phase 3.4 section):
+- [x] **P3.4** diamond pre-work, trust-free (see the Phase 3.4 section):
       dominated-guard elimination + f64 block params for
-      optimizer-created joins.
+      optimizer-created joins.  Landed as lib/eir/optimize-guards.ts:
+      proven-number guard folding (dominator-tree facts + value-intrinsic
+      proofs), structural guard-region merging (hypot2's three diamonds →
+      one region, one slow path), and rawJoin f64 params — an explicit
+      per-param marker the verifier re-checks in full (f64 params REQUIRE
+      it; every incoming arg must be f64; catch/unwind excluded), so
+      lowering-created edges keep the strict P2 boxed rule.
       *Gate:* matrix green; --types diff lane still byte-identical;
       EIR-shape unit tests (merged guard region; unboxed fast region
       boxing once); types-bench1 + the hypot2 demo re-measured, deltas
-      vs the Phase 3 baselines recorded.
+      vs the Phase 3 baselines recorded in docs/maam-p0-results.md
+      "Phase 3.4 gates".
 - [ ] **P3.5** differential harness in maam repo (`concreteEval` vs node vs
       ejs on closed-world tests) wired into its CI.
       *Gate:* zero divergences on the curated corpus.

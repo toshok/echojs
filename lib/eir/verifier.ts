@@ -16,7 +16,7 @@ import { opInfo, isTerminator } from "./ops";
 import { printInst } from "./printer";
 import type { Func, Block, Inst, Module } from "./ir";
 
-function computeRPO(fn: Func): { rpo: Block[]; reachable: Set<Block> } {
+export function computeRPO(fn: Func): { rpo: Block[]; reachable: Set<Block> } {
     const entry = fn.entry!;
     const visited = new Set<Block>();
     const postorder: Block[] = [];
@@ -41,7 +41,7 @@ function computeRPO(fn: Func): { rpo: Block[]; reachable: Set<Block> } {
 }
 
 // Cooper/Harvey/Kennedy "A Simple, Fast Dominance Algorithm"
-function computeDominators(fn: Func, rpo: Block[]): Map<Block, Block> {
+export function computeDominators(fn: Func, rpo: Block[]): Map<Block, Block> {
     const entry = fn.entry!;
     const index = new Map<Block, number>();
     rpo.forEach((b, i) => index.set(b, i));
@@ -77,7 +77,7 @@ function computeDominators(fn: Func, rpo: Block[]): Map<Block, Block> {
     return idom;
 }
 
-function dominates(idom: Map<Block, Block>, a: Block, b: Block): boolean {
+export function dominates(idom: Map<Block, Block>, a: Block, b: Block): boolean {
     // does block a dominate block b?
     let runner = b;
     for (;;) {
@@ -203,9 +203,39 @@ export function verifyFunction(fn: Func): boolean {
     //   - branch-edge arguments must be boxed: block params are EjsValue
     //     phis in the emitter, so f64/i1 may NOT cross block boundaries.
     //     (Phase 3's guarded diamonds carry values across joins boxed.)
+    //     Phase 3.4's ONE controlled exception: a param carrying the
+    //     optimizer's rawJoin marker (Inst.rawJoin) is an f64-typed phi
+    //     (double in the emitter) and takes exactly f64 arguments.  The
+    //     marker is provenance, not trust — the full safety conditions
+    //     are re-checked here, so the strict rule stays in force for
+    //     every lowering-created edge: lowering never sets the marker,
+    //     and an f64 param WITHOUT it is rejected outright.  i1 never
+    //     crosses a block boundary under any rule.
+    //     Exception-safety: a rawJoin param can never materialize an f64
+    //     in a handler entry — catch blocks and unwind edges are
+    //     rejected below — and an f64 value can never be *treated as* an
+    //     ejsval in a handler (or anywhere), because every ejsval-taking
+    //     slot and every boxed param rejects f64-typed operands/args.
     const isRaw = (t: string) => t === "f64" || t === "i1";
     for (const b of fn.blocks) {
         if (!reachable.has(b)) continue;
+        for (const p of b.params) {
+            if (p.type === "f64") {
+                if (!p.rawJoin)
+                    fail(`f64 block param without the optimizer's rawJoin marker`, p);
+                if (b.isCatch || p.isException)
+                    fail(`rawJoin f64 param on a catch block / exception param`, p);
+                for (const e of b.predEdges) {
+                    const t = e.inst.targets![e.targetIndex]!;
+                    if (t.kind === "unwind") fail(`rawJoin f64 param fed by an unwind edge`, p);
+                    const a = t.args[b.argIndexOfParam(p)];
+                    if (a && a.type !== "f64")
+                        fail(`rawJoin f64 param receives a ${a.type} argument`, e.inst);
+                }
+            } else if (p.rawJoin) {
+                fail(`rawJoin marker on a non-f64 block param`, p);
+            }
+        }
         for (const inst of b.insts) {
             const info = opInfo(inst.op);
             inst.operands.forEach((o, idx) => {
@@ -224,12 +254,27 @@ export function verifyFunction(fn: Func): boolean {
             });
             if (inst.targets)
                 for (const t of inst.targets)
-                    for (const a of t.args)
-                        if (a && isRaw(a.type))
+                    t.args.forEach((a, i) => {
+                        if (!a) return;
+                        const param = t.block.params[i + (t.block.isCatch ? 1 : 0)];
+                        if (a.type === "f64") {
+                            if (!param || !param.rawJoin || param.type !== "f64")
+                                fail(
+                                    `edge to ^${t.block.name} passes a raw ${a.type} value; block arguments must be boxed`,
+                                    inst
+                                );
+                        } else if (a.type === "i1") {
                             fail(
                                 `edge to ^${t.block.name} passes a raw ${a.type} value; block arguments must be boxed`,
                                 inst
                             );
+                        } else if (param && param.type === "f64") {
+                            fail(
+                                `edge to ^${t.block.name} passes a boxed value to an f64 param`,
+                                inst
+                            );
+                        }
+                    });
         }
     }
 

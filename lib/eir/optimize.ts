@@ -22,6 +22,7 @@
 
 import { Func, Inst, Module, replaceAllUses } from "./ir";
 import { Effect, opInfo } from "./ops";
+import { optimizeGuardRegions, rawJoinParams } from "./optimize-guards";
 
 export interface OptStats {
     allocs_sunk: number;
@@ -29,10 +30,23 @@ export interface OptStats {
     calls_inlined: number;
     iters_folded: number;
     dead_removed: number;
+    // Phase 3.4 guard-region passes (optimize-guards.ts)
+    guards_folded: number;
+    regions_merged: number;
+    raw_join_params: number;
 }
 
 function newStats(): OptStats {
-    return { allocs_sunk: 0, reads_folded: 0, calls_inlined: 0, iters_folded: 0, dead_removed: 0 };
+    return {
+        allocs_sunk: 0,
+        reads_folded: 0,
+        calls_inlined: 0,
+        iters_folded: 0,
+        dead_removed: 0,
+        guards_folded: 0,
+        regions_merged: 0,
+        raw_join_params: 0,
+    };
 }
 
 // uses of `value` within fn, with enough position info to classify
@@ -606,6 +620,12 @@ export function optimizeFunction(fn: Func, module?: Module, stats?: OptStats): O
         if (eliminateDead(fn, s)) changed = true;
         if (!changed || ++rounds > 10) break;
     }
+    // Phase 3.4: guard-region passes over the --types diamonds.  They run
+    // after the general fixpoint (env scalarization has exposed the SSA
+    // values the diamonds guard) and bail immediately when lowering
+    // emitted no number guards — every flag-off compile.
+    if (optimizeGuardRegions(fn, s)) eliminateDead(fn, s);
+    if (rawJoinParams(fn, s)) eliminateDead(fn, s);
     return s;
 }
 
