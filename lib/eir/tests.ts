@@ -1489,6 +1489,64 @@ test("guard-merge: a non-twin slow arm refuses the merge (attack F)", () => {
     assert(stats.regions_merged === 0, `merge must be refused, got ${stats.regions_merged}`);
 });
 
+test("guard-merge: a non-twin REGION1 slow arm refuses the merge (attack G)", () => {
+    // the mirror of attack F: region1's fast arm computes a*a but its
+    // slow arm computes mul(a, b) with BOTH operands guard-proven (so
+    // the re-execution purity check alone would pass); region2 is an
+    // honest twin on an unrelated c.  Post-merge, a c-guard failure
+    // after region1's fast arm would reroute through region1's non-twin
+    // slow arm: (a*b)^2 instead of (a*a)^2.  Must refuse.
+    const fb = new FunctionBuilder("attack_g", ["%env", "%this", "a", "b", "c"]);
+    const a = fb.readVariable("a", fb.cur);
+    const b = fb.readVariable("b", fb.cur);
+    const c = fb.readVariable("c", fb.cur);
+    const g2 = fb.newBlock("g2");
+    const fast1 = fb.newBlock("fast1");
+    const slow1 = fb.newBlock("slow1");
+    const j1 = fb.newBlock("j1");
+    const p = j1.addParam("p");
+    const t1 = fb.emit("has_tag", [a], { tag: "number" });
+    fb.condBr(t1, g2, [], slow1, []);
+    fb.sealBlock(g2);
+    fb.setInsertPoint(g2);
+    const t1b = fb.emit("has_tag", [b], { tag: "number" });
+    fb.condBr(t1b, fast1, [], slow1, []);
+    fb.sealBlock(fast1);
+    fb.sealBlock(slow1);
+    fb.setInsertPoint(fast1);
+    const ua = fb.emit("unbox_f64", [a], {});
+    fb.br(j1, [fb.emit("box_f64", [fb.emit("f64_mul", [ua, ua], {})], {})]); // a*a
+    fb.setInsertPoint(slow1);
+    const m = fb.emit("mul", [a, b], {}); // NOT the twin; operands both guard-proven
+    fb.br(j1, [m]);
+    fb.sealBlock(j1);
+    fb.setInsertPoint(j1);
+    // region2: guard the unrelated c, both arms honestly compute p*p
+    const fast2 = fb.newBlock("fast2");
+    const slow2 = fb.newBlock("slow2");
+    const j2 = fb.newBlock("j2");
+    const q = j2.addParam("q");
+    const t2 = fb.emit("has_tag", [c], { tag: "number" });
+    fb.condBr(t2, fast2, [], slow2, []);
+    fb.sealBlock(fast2);
+    fb.sealBlock(slow2);
+    fb.setInsertPoint(fast2);
+    const up = fb.emit("unbox_f64", [p], {});
+    fb.br(j2, [fb.emit("box_f64", [fb.emit("f64_mul", [up, up], {})], {})]);
+    fb.setInsertPoint(slow2);
+    const n = fb.emit("mul", [p, p], {});
+    fb.br(j2, [n]);
+    fb.sealBlock(j2);
+    fb.setInsertPoint(j2);
+    fb.ret(q);
+    const fn = fb.finish();
+    verifyFunction(fn);
+    const stats = optimizeFunction(fn);
+    verifyFunction(fn);
+    assert(stats.regions_merged === 0, `merge must be refused, got ${stats.regions_merged}`);
+    assert(n.operands[0] === p && n.operands[1] === p, "slow operands untouched");
+});
+
 test("guard-merge: the twin shape it refuses in attack F merges when honest", () => {
     // identical CFG to attack F but with the real generic twin
     // (slow: mul(p, p)) — the merge must fire.  Guards the twin check

@@ -76,12 +76,17 @@
 //   - J1's predecessors must be EXACTLY R1's exits and J2's exactly
 //     R2's: a foreign edge into either join would make the substituted
 //     slow values wrong (J1) or undominated (J2) on the foreign path.
-//   - R2's slow chain must be the GENERIC TWIN of its fast side
-//     (verifyGenericTwin): same arithmetic ops in the same order with
-//     corresponding operands and corresponding join-exit arguments.
-//     The reroute sends executions whose R2 guards would have PASSED
-//     (e.g. a guard on a mul result) through the slow chain instead of
-//     the fast arm; twin-ness is what makes that value-identical.
+//   - BOTH regions' slow chains must be the GENERIC TWIN of their fast
+//     sides (verifyGenericTwin, applied symmetrically): same arithmetic
+//     ops in the same order with corresponding operands and
+//     corresponding join-exit arguments.  R2's twin-ness covers the
+//     R1-slow route that would have taken R2's fast arm; R1's twin-ness
+//     covers the mirrored route — R2 guard failures after R1's fast arm
+//     ran, rerouted through R1's slow chain (whose exit values then
+//     substitute into R2's slow ops).  The re-execution purity check
+//     proves those detours unobservable; twin-ness is what proves their
+//     VALUES agree with the fast side.  Nothing about either arm is
+//     assumed anymore — both are verified.
 //   - values defined at J1 (params + the pure instruction prefix ahead
 //     of R2's guard) that are still used beyond R2 are routed through
 //     R2's join as new params — fast edges pass the J1 value, the slow
@@ -449,9 +454,10 @@ const F64_TO_GENERIC: Record<string, string | undefined> = {
 //   j1 params / anything else         -> x itself (the slow chain sees
 //     the same SSA value; the merge's sigma rewrites j1 params later)
 //
-// f64_lt (and hence const-boolean split arms) is refused as region2 —
-// its boolean twin adds checking surface for shapes with no measured
-// benefit; lt regions still merge fine as region1.
+// f64_lt (and hence const-boolean split arms) is refused — the check
+// runs on BOTH sides of a merge, so lt regions simply do not merge at
+// all; the boolean-twin correspondence would add checking surface for
+// shapes with no measured benefit (hypot2/bench stats unaffected).
 function verifyGenericTwin(r2: GuardRegion): boolean {
     if (r2.fastExitEdges.length !== 1) return false; // lt splits etc.
 
@@ -460,6 +466,22 @@ function verifyGenericTwin(r2: GuardRegion): boolean {
         for (const inst of sb.insts) if (SLOW_OPS.has(inst.op)) slowOps.push(inst);
 
     const pair = new Map<Inst, Inst>(); // fast f64 op -> slow twin
+
+    // correspondence is SSA identity, with one extension: two const
+    // instructions with the same kind/value are the same value on every
+    // path (the merge clones pure prefix consts into the slow chain, so
+    // an earlier merge's region legitimately references the clone where
+    // the fast side references the original)
+    const corresponds = (want: Inst, actual: Inst | null | undefined): boolean => {
+        if (!actual) return false;
+        if (want === actual) return true;
+        return (
+            want.op === "const" &&
+            actual.op === "const" &&
+            want.imms["kind"] === actual.imms["kind"] &&
+            want.imms["value"] === actual.imms["value"]
+        );
+    };
 
     const slowOfBoxed = (x: Inst, d: number): Inst | null => {
         if (d <= 0) return null;
@@ -499,7 +521,7 @@ function verifyGenericTwin(r2: GuardRegion): boolean {
             if (tw.op !== gop) return false;
             for (let i = 0; i < inst.operands.length; i++) {
                 const want = slowOfF64(inst.operands[i]!, 32);
-                if (!want || want !== tw.operands[i]) return false;
+                if (!want || !corresponds(want, tw.operands[i])) return false;
             }
             pair.set(inst, tw);
         }
@@ -526,7 +548,7 @@ function verifyGenericTwin(r2: GuardRegion): boolean {
         const sa = slowExitArgs[i];
         if (!fa || !sa) return false;
         const want = slowOfBoxed(fa, 32);
-        if (!want || want !== sa) return false;
+        if (!want || !corresponds(want, sa)) return false;
     }
     return true;
 }
@@ -563,15 +585,20 @@ function tryMergeAt(fn: Func, r1: GuardRegion, idom: Map<Block, Block>, stats: O
         if (!r2.fastBlocks.has(src) && !r2.slowSet.has(src)) return false;
     }
 
-    // region2's slow chain must be the GENERIC TWIN of its fast side.
-    // The merge reroutes region1's slow exit straight into region2's
-    // slow chain — including executions where region2's guards would
-    // have PASSED pre-merge (e.g. a guard on a mul result, which is
-    // always a number) and run the fast arm.  That reroute is only
-    // sound if the slow chain computes exactly what the fast arm
-    // computes on number inputs, i.e. it is the same op sequence in
-    // generic form with corresponding operands (review attack F).
+    // BOTH regions' slow chains must be the GENERIC TWIN of their fast
+    // sides.  Region2: the merge reroutes region1's slow exit straight
+    // into region2's slow chain — including executions where region2's
+    // guards would have PASSED pre-merge (e.g. a guard on a mul result,
+    // which is always a number) and run the fast arm (review attack F).
+    // Region1, the exact mirror (review attack G): region2's guard
+    // failures — which happen after region1's FAST side ran — are
+    // rerouted through region1's slow chain, and region2's slow chain
+    // is rewritten against region1's SLOW values; the purity
+    // (re-execution) check below proves that detour unobservable, but
+    // only twin-ness makes its VALUES identical to what the fast side
+    // already produced.
     if (!verifyGenericTwin(r2)) return false;
+    if (!verifyGenericTwin(r1)) return false;
 
     // j1's instruction shape: [effect-free prefix..., guard, cond_br]
     const term = j1.terminator!;
