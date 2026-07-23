@@ -540,9 +540,9 @@ provenance-linked).
 # Phase 3.5 — differential harness (concreteEval vs node vs ejs)
 
 Date: 2026-07-23.  echojs @ eir (P3.4 head), maam @ c69fc81, revised same
-day to maam @ 3e64ca1 after adversarial review (the "Review round 2"
-subsection below records what changed; numbers in this section are the
-FINAL 3e64ca1 figures).  Deliverable
+day to maam @ 3e64ca1 (review round 2) and maam @ c3d1aed (round-3 nits
+R1/R2; the review subsections below record what changed — numbers in this
+section are the FINAL c3d1aed figures).  Deliverable
 lives in the maam repo: `test/differential/harness.ts` + a 40-file
 closed-world corpus, run by `npm run diff-harness` and wired into the new
 maam CI workflow (`.github/workflows/ci.yml`, node pinned 22.4.0).  The
@@ -570,11 +570,12 @@ worker subprocess under a 30 s budget: genuine concrete-machine divergence
 
 ## Gate results
 
-- Corpus 45 files.  node lane: **37 exact, 3 membership, 0 divergences**;
-  5 skips, all deliberate and printed with reasons (Math.random
+- Corpus 46 files.  node lane: **37 exact, 3 membership, 0 divergences**;
+  6 skips, all deliberate and printed with reasons (Math.random
   nondeterminism; array prototype methods degrade under the concrete
   domain; two files that prove the for-of/for-in divergence timeout path;
-  one that proves the nested-block-var visible degradation).  The
+  one each proving the nested-block-var and pattern-leaf-capture visible
+  degradations).  The
   differential lane exercises **zero iteration-protocol semantics** —
   for-of/for-in are exactly the skip files, because their nondet iteration
   never converges under unbounded concrete time.
@@ -661,9 +662,12 @@ the gate as stale, so the list can only shrink by fixing echojs):
 - Nested-block `var` hoisting is not modeled; when such a var is captured
   by a function in the enclosing scope the normalizer now COUNTS it as a
   degraded binding (review F2), so the harness precondition trips and the
-  file skips visibly instead of computing on ⊥.  Captured
-  destructuring-pattern leaves and re-declared (`var x` twice) captures
-  remain unmodeled and keep the old behavior.
+  file skips visibly instead of computing on ⊥.  Destructuring-pattern
+  LEAVES captured at-or-before their declaration are likewise unmodeled
+  and, without the round-3 accounting, were SILENTLY WRONG (writes
+  dropped, zero counters) — they now count as degraded bindings too
+  (review R1).  Re-declared (`var x` twice) captures ARE modeled: both
+  declarations assign the one pre-minted binding.
 - Captured-by-closure vars now (correctly) include `undefined` in their
   nodeTypes join from the hoisted pre-binding; non-captured and
   declare-then-capture vars are unaffected.  Oracle-fact impact measured
@@ -714,6 +718,30 @@ Final harness numbers at 3e64ca1 (all lanes): corpus 45 — node 37 exact +
 3 membership + 5 visible skips, 0 divergences; containment 1935 checks, 0
 violations; ejs 32 ok / 1 N/A / 7 known / 0 new / 0 stale.
 
+## Review round 3 (nits R1/R2, maam c3d1aed)
+
+- **R1**: destructuring-pattern leaves captured at-or-before their
+  declaration were still silently wrong with zero counters
+  (`var f = function () { a = 9; }; var [a, b] = [1, 2]; f(); a;` →
+  concrete 1, real JS 9).  Same remedy as F2: the normalizer records a
+  degradedBinding (harness precondition trips; skip-pattern-leaf-capture.js
+  proves the visible skip; declare-then-capture leaves pinned as
+  non-degrading; identifier-declared names excluded — the modeled path
+  owns them).  Suite 266 → 268; corpus 45 → 46.
+- **R2**: the capture scan early-returned after params + body, missing
+  closures inside old-esprima/echojs-dialect `defaults` expressions —
+  unreachable via acorn but reachable through echojs post-desugar trees.
+  The scan now covers `defaults`, treats dialect `rest` as a parameter,
+  and collects param BINDING names via pattern leaves (an ES6 default's
+  right-hand side is an expression, not a binding).  Pinned with a
+  hand-built dialect tree (a default-closure writing a later var now
+  computes, instead of silently dropping the write).
+
+Final harness numbers at c3d1aed (all lanes): corpus 46 — node 37 exact
++ 3 membership + 6 visible skips, 0 divergences; containment 1935
+checks, 0 violations; ejs 32 ok / 1 N/A (arith-basic.js, esprima `**`) /
+7 known / 0 new / 0 stale.  Suite 268.
+
 ## The `--types` diff lane re-run (oracle facts changed ⇒ re-measured)
 
 The P3.5 normalizer/machine fixes change what the oracle reports, so the
@@ -733,3 +761,10 @@ exact string `.length` give the oracle MORE precise facts (unknown down
 ~16%, two extra diamonds); the hoisted-capture `undefined` widening on
 captured vars did not cost a diamond on this corpus.  The behavioral gate
 is unchanged: zero divergence, flag-off untouched.
+
+Re-run once more on the round-3 pin (maam c3d1aed, logs
+`~/.cache/maam-p0-logs/P35-types-diff-r3/`): **458 files, 457 identical,
+0 divergent, 1 N/A (tester.js), 0 timeouts — LANE PASS**, aggregates
+byte-for-byte the same (diamonds 69 / queries 1320 / unknown 866): the
+R1 accounting and R2 defaults-scan changed no oracle facts on this
+corpus.

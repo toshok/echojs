@@ -497,8 +497,8 @@ Smaller forward items surfaced by the Chunk A integration review:
       ejs on closed-world tests) wired into its CI.
       *Gate:* zero divergences on the curated corpus.
       Landed as maam test/differential/ (`npm run diff-harness`, in maam CI):
-      45-file corpus, node lane 37 exact + 3 membership (documented machine
-      over-approximations) + 5 visible skips, 0 divergences; containment
+      46-file corpus, node lane 37 exact + 3 membership (documented machine
+      over-approximations) + 6 visible skips, 0 divergences; containment
       lane 1935 node checks against the oracle spec and its intrinsics twin,
       0 violations; ejs lane 32 ok / 1 N/A / 7 known-divergent — seven
       root-caused PRE-EXISTING echojs bugs (typeof null, -0===0,
