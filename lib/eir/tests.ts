@@ -12,6 +12,7 @@ import { printFunction, printModule } from "./printer";
 import { verifyFunction, verifyModule } from "./verifier";
 import { lowerFunctionNode, lowerProgram } from "./lower";
 import { optimizeFunction } from "./optimize";
+import type { OptStats } from "./optimize";
 import { isLowerNotSupported } from "./errors";
 import { Func, Block, Inst, Module } from "./ir";
 import { DesugarSpread } from "../passes/desugar-spread";
@@ -1545,6 +1546,58 @@ test("guard-merge: a non-twin REGION1 slow arm refuses the merge (attack G)", ()
     verifyFunction(fn);
     assert(stats.regions_merged === 0, `merge must be refused, got ${stats.regions_merged}`);
     assert(n.operands[0] === p && n.operands[1] === p, "slow operands untouched");
+});
+
+// attack-H family: region1 an honest twin on `a`; region2 guards its
+// param p and multiplies p by a const materialized SEPARATELY in each
+// arm.  With corresponding consts the merge must fire; with +0 vs -0 it
+// must refuse (sign of zero is observable via 1/x).
+function buildConstPairShape(
+    fastConst: number,
+    slowConst: number
+): { fn: Func; stats: OptStats } {
+    const fb = new FunctionBuilder("constpair", ["%env", "%this", "a"]);
+    const a = fb.readVariable("a", fb.cur);
+    const r1 = buildDiamond(fb, a, a, a, "r1");
+    const p = r1.param;
+    const fast2 = fb.newBlock("fast2");
+    const slow2 = fb.newBlock("slow2");
+    const j2 = fb.newBlock("j2");
+    const q = j2.addParam("q");
+    const t2 = fb.emit("has_tag", [p], { tag: "number" });
+    fb.condBr(t2, fast2, [], slow2, []);
+    fb.sealBlock(fast2);
+    fb.sealBlock(slow2);
+    fb.setInsertPoint(fast2);
+    const cf = fb.emit("const", [], { kind: "number", value: fastConst });
+    const uc = fb.emit("unbox_f64", [cf], {});
+    const up = fb.emit("unbox_f64", [p], {});
+    fb.br(j2, [fb.emit("box_f64", [fb.emit("f64_mul", [uc, up], {})], {})]);
+    fb.setInsertPoint(slow2);
+    const cs = fb.emit("const", [], { kind: "number", value: slowConst });
+    fb.br(j2, [fb.emit("mul", [cs, p], {})]);
+    fb.sealBlock(j2);
+    fb.setInsertPoint(j2);
+    fb.ret(q);
+    const fn = fb.finish();
+    verifyFunction(fn);
+    const stats = optimizeFunction(fn);
+    verifyFunction(fn);
+    return { fn: fn, stats: stats };
+}
+
+test("guard-merge: const +0 does not correspond to const -0 (attack H)", () => {
+    // === would conflate the zeros; the rerouted slow path would flip
+    // the sign of zero (1/x: Infinity vs -Infinity).  Must refuse.
+    const { stats } = buildConstPairShape(0, -0);
+    assert(stats.regions_merged === 0, `merge must be refused, got ${stats.regions_merged}`);
+});
+
+test("guard-merge: distinct NaN consts correspond (one JS NaN)", () => {
+    // the flip side of Object.is: two const-NaN instructions denote the
+    // same value on every path, so the honest twin merges
+    const { stats } = buildConstPairShape(NaN, NaN);
+    assert(stats.regions_merged === 1, `expected the merge, got ${stats.regions_merged}`);
 });
 
 test("guard-merge: the twin shape it refuses in attack F merges when honest", () => {

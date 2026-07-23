@@ -471,7 +471,11 @@ function verifyGenericTwin(r2: GuardRegion): boolean {
     // instructions with the same kind/value are the same value on every
     // path (the merge clones pure prefix consts into the slow chain, so
     // an earlier merge's region legitimately references the clone where
-    // the fast side references the original)
+    // the fast side references the original).  Value equality must be
+    // Object.is, not ===: `0 === -0` would conflate the two zeros (a
+    // sign flip observable via 1/x — review attack H), while NaN
+    // consts — which === would needlessly refuse — all denote the one
+    // JS NaN and correspond.
     const corresponds = (want: Inst, actual: Inst | null | undefined): boolean => {
         if (!actual) return false;
         if (want === actual) return true;
@@ -479,7 +483,7 @@ function verifyGenericTwin(r2: GuardRegion): boolean {
             want.op === "const" &&
             actual.op === "const" &&
             want.imms["kind"] === actual.imms["kind"] &&
-            want.imms["value"] === actual.imms["value"]
+            Object.is(want.imms["value"], actual.imms["value"])
         );
     };
 
