@@ -503,3 +503,36 @@ dominance reasoning; the raw-f64-join lift is scoped by a
 verifier-re-checked marker rather than a global weakening; the
 microbenchmark ceiling moves 10.3× → 14.0×, and the remaining box/unbox
 traffic sits exactly where P3.6 (typed calling convention) picks up.
+
+## Review fixes (adversarial pass over the merge)
+
+Two latent unsoundnesses were found by adversarial review on
+verifier-valid IR (neither constructible from JS through today's
+lowering, both violations of the "structurally verified, never assumed"
+contract) and are fixed with localized pre-checks in `tryMergeAt`, each
+with a refusal unit test:
+
+- **J1 predecessor exhaustiveness**: j1's predecessors must be exactly
+  region1's exits (mirroring the existing j2 check).  A foreign edge
+  into j1 made region2's guards reachable without region1 having run,
+  while the merge substituted region2's slow operands with region1's
+  slow-side values — wrong on the foreign path.
+- **Generic-twin verification** (`verifyGenericTwin`): region2's slow
+  chain must be the generic rendition of its fast side — same
+  arithmetic ops in the same order, operands corresponding under the
+  box/unbox mapping, join-exit args corresponding slot for slot.  The
+  reroute sends executions whose region2 guards would have passed
+  (e.g. a guard on a mul result) through the slow chain; twin-ness is
+  what makes that value-identical.  One deliberate narrowing: a region2
+  containing `f64_lt` now declines to merge (the boolean-twin
+  correspondence buys nothing measurable; lt regions still merge as
+  region1) — hypot2/bench shapes and stats are unaffected
+  (regions_merged and all measured numbers unchanged; bench re-verified
+  at 0.23 s).
+
+Also from review: routing explicitly refuses raw-typed (i1/f64)
+j1-values live past region2 (fail-closed, now documented + enforced up
+front); the loop-carried rawJoin conversion (a fully-proven f64 loop
+param) gained a dedicated unit test; ir.ts's rawJoin comment now states
+the actual contract (structural qualification, verifier-checked — not
+provenance-linked).

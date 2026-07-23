@@ -1398,6 +1398,148 @@ test("guard-merge: `<` diamonds still verify and keep their shape through opt", 
     assert(countOps(fn, "lt") === 1, "lt slow path survives");
 });
 
+// hand-build one guarded diamond: head cond_br(has_tag v) -> fast|slow,
+// fast unbox/f64_mul/box, slow mul(sl, sr), join(param).  Returns the
+// pieces the attacks need to vary.
+function buildDiamond(
+    fb: FunctionBuilder,
+    v: Inst,
+    slowL: Inst,
+    slowR: Inst,
+    name: string
+): { join: Block; param: Inst; slowOp: Inst } {
+    const fast = fb.newBlock(name + "_fast");
+    const slow = fb.newBlock(name + "_slow");
+    const join = fb.newBlock(name + "_join");
+    const param = join.addParam(name + "_p");
+    const t = fb.emit("has_tag", [v], { tag: "number" });
+    fb.condBr(t, fast, [], slow, []);
+    fb.sealBlock(fast);
+    fb.sealBlock(slow);
+    fb.setInsertPoint(fast);
+    const u = fb.emit("unbox_f64", [v], {});
+    fb.br(join, [fb.emit("box_f64", [fb.emit("f64_mul", [u, u], {})], {})]);
+    fb.setInsertPoint(slow);
+    const slowOp = fb.emit("mul", [slowL, slowR], {});
+    fb.br(join, [slowOp]);
+    fb.sealBlock(join);
+    fb.setInsertPoint(join);
+    return { join: join, param: param, slowOp: slowOp };
+}
+
+test("guard-merge: a foreign edge into region1's join refuses the merge (attack A)", () => {
+    // entry picks region1 or a FOREIGN edge handing j1 the unrelated
+    // value c.  Merging would substitute region2's slow operands with
+    // region1's slow values — wrong on the foreign path.  Must refuse.
+    const fb = new FunctionBuilder("attack_a", ["%env", "%this", "a", "c", "d"]);
+    const a = fb.readVariable("a", fb.cur);
+    const c = fb.readVariable("c", fb.cur);
+    const d = fb.readVariable("d", fb.cur);
+    const head1 = fb.newBlock("head1");
+    const jfor = fb.newBlock("jfor");
+    const td = fb.emit("has_tag", [d], { tag: "number" });
+    fb.condBr(td, head1, [], jfor, []);
+    fb.sealBlock(head1);
+    fb.sealBlock(jfor);
+    fb.setInsertPoint(head1);
+    const fast1 = fb.newBlock("fast1");
+    const slow1 = fb.newBlock("slow1");
+    const j1 = fb.newBlock("j1");
+    const p = j1.addParam("p");
+    const t1 = fb.emit("has_tag", [a], { tag: "number" });
+    fb.condBr(t1, fast1, [], slow1, []);
+    fb.sealBlock(fast1);
+    fb.sealBlock(slow1);
+    fb.setInsertPoint(fast1);
+    const ua = fb.emit("unbox_f64", [a], {});
+    fb.br(j1, [fb.emit("box_f64", [fb.emit("f64_mul", [ua, ua], {})], {})]);
+    fb.setInsertPoint(slow1);
+    const m = fb.emit("mul", [a, a], {});
+    fb.br(j1, [m]);
+    // the foreign edge, bypassing region1 entirely
+    fb.setInsertPoint(jfor);
+    fb.br(j1, [c]);
+    fb.sealBlock(j1);
+    fb.setInsertPoint(j1);
+    const r2 = buildDiamond(fb, p, p, p, "r2");
+    fb.ret(r2.param);
+    const fn = fb.finish();
+    verifyFunction(fn);
+    const stats = optimizeFunction(fn);
+    verifyFunction(fn);
+    assert(stats.regions_merged === 0, `merge must be refused, got ${stats.regions_merged}`);
+    assert(r2.slowOp.operands[0] === p && r2.slowOp.operands[1] === p, "slow operands untouched");
+});
+
+test("guard-merge: a non-twin slow arm refuses the merge (attack F)", () => {
+    // region2's fast arm computes p*p but its slow arm computes
+    // mul(p, e).  Pre-merge the region1-slow route passes region2's
+    // guard (mul results are numbers) and takes the FAST arm; the merge
+    // would reroute it through the non-twin slow arm.  Must refuse.
+    const fb = new FunctionBuilder("attack_f", ["%env", "%this", "a", "e"]);
+    const a = fb.readVariable("a", fb.cur);
+    const e = fb.readVariable("e", fb.cur);
+    const r1 = buildDiamond(fb, a, a, a, "r1");
+    const r2 = buildDiamond(fb, r1.param, r1.param, e, "r2"); // slow: mul(p, e) — NOT the twin
+    fb.ret(r2.param);
+    const fn = fb.finish();
+    verifyFunction(fn);
+    const stats = optimizeFunction(fn);
+    verifyFunction(fn);
+    assert(stats.regions_merged === 0, `merge must be refused, got ${stats.regions_merged}`);
+});
+
+test("guard-merge: the twin shape it refuses in attack F merges when honest", () => {
+    // identical CFG to attack F but with the real generic twin
+    // (slow: mul(p, p)) — the merge must fire.  Guards the twin check
+    // against being accidentally over-strict.
+    const fb = new FunctionBuilder("twin_ok", ["%env", "%this", "a"]);
+    const a = fb.readVariable("a", fb.cur);
+    const r1 = buildDiamond(fb, a, a, a, "r1");
+    const r2 = buildDiamond(fb, r1.param, r1.param, r1.param, "r2");
+    fb.ret(r2.param);
+    const fn = fb.finish();
+    verifyFunction(fn);
+    const stats = optimizeFunction(fn);
+    verifyFunction(fn);
+    assert(stats.regions_merged === 1, `expected the merge, got ${stats.regions_merged}`);
+});
+
+test("rawJoin: a fully-proven loop-carried param converts to f64", () => {
+    // loop header param fed box_f64 on BOTH the entry and back edges:
+    // structurally qualified (f64-rooted), converts, and stays sound —
+    // the dedicated test for the loop-carried conversion path.
+    const fb = new FunctionBuilder("loopraw", ["%env", "%this", "a"]);
+    const a = fb.readVariable("a", fb.cur);
+    const ua = fb.emit("unbox_f64", [a], {});
+    const ba = fb.emit("box_f64", [ua], {});
+    const header = fb.newBlock("H");
+    const hp = header.addParam("s");
+    const body = fb.newBlock("body");
+    const out = fb.newBlock("out");
+    fb.br(header, [ba]);
+    fb.setInsertPoint(header);
+    const u = fb.emit("unbox_f64", [hp], {});
+    const s = fb.emit("f64_add", [u, u], {});
+    const bs = fb.emit("box_f64", [s], {});
+    const lt = fb.emit("f64_lt", [s, s], {});
+    fb.condBr(lt, body, [], out, []);
+    fb.sealBlock(body);
+    fb.setInsertPoint(body);
+    fb.br(header, [bs]);
+    fb.sealBlock(header);
+    fb.sealBlock(out);
+    fb.setInsertPoint(out);
+    fb.ret(fb.emit("box_f64", [s], {}));
+    const fn = fb.finish();
+    verifyFunction(fn);
+    const stats = optimizeFunction(fn);
+    verifyFunction(fn);
+    assert(stats.raw_join_params === 1, `raw_join_params = ${stats.raw_join_params}`);
+    assert(hp.type === "f64" && hp.rawJoin, "loop param must be a marked f64 phi");
+    assert(countOps(fn, "unbox_f64") === 1, "the loop-carried unbox collapses");
+});
+
 test("verifier: rawJoin marker admits f64 edge args into f64 params", () => {
     const fb = new FunctionBuilder("rawjoin", ["%env", "%this", "a"]);
     const a = fb.readVariable("a", fb.cur);

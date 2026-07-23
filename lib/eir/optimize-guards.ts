@@ -73,11 +73,22 @@
 //     numbers at R1's fast exits: a generic op on numbers is pure, non-
 //     throwing (its unwind edge stays untaken), and returns bit-for-bit
 //     the f64 result the fast side already computed.
+//   - J1's predecessors must be EXACTLY R1's exits and J2's exactly
+//     R2's: a foreign edge into either join would make the substituted
+//     slow values wrong (J1) or undominated (J2) on the foreign path.
+//   - R2's slow chain must be the GENERIC TWIN of its fast side
+//     (verifyGenericTwin): same arithmetic ops in the same order with
+//     corresponding operands and corresponding join-exit arguments.
+//     The reroute sends executions whose R2 guards would have PASSED
+//     (e.g. a guard on a mul result) through the slow chain instead of
+//     the fast arm; twin-ness is what makes that value-identical.
 //   - values defined at J1 (params + the pure instruction prefix ahead
 //     of R2's guard) that are still used beyond R2 are routed through
 //     R2's join as new params — fast edges pass the J1 value, the slow
 //     edge passes its slow-side substitute — after checking that every
-//     such use IS dominated by that join (else the merge is refused).
+//     such use IS dominated by that join (else the merge is refused);
+//     raw-typed (i1/f64) values are never routed — merge refused
+//     (fail-closed).
 //
 // Raw f64 joins (pass b): a param is converted only when every incoming
 // argument is a box_f64 result (whose only consumers are edges feeding
@@ -412,6 +423,114 @@ function matchRegionAt(head: Block): GuardRegion | null {
     };
 }
 
+// EIR f64 op -> its generic twin
+const F64_TO_GENERIC: Record<string, string | undefined> = {
+    f64_add: "add",
+    f64_sub: "sub",
+    f64_mul: "mul",
+    f64_div: "div",
+    f64_lt: "lt",
+};
+
+// Verify that region2's slow chain is the generic rendition of its fast
+// side: the same arithmetic ops in the same order, with operands that
+// correspond under the box/unbox mapping, and join-exit arguments that
+// correspond slot for slot.  On number inputs a generic op is pure and
+// bit-identical to its f64 twin, so this is exactly the condition under
+// which rerouting a would-have-taken-the-fast-arm execution through the
+// slow chain preserves behavior.  Anything unrecognized refuses.
+//
+// Correspondence rules (fast value -> the slow value it must equal):
+//   unbox_f64(x)              -> slowOf(x)
+//   earlier paired f64 op     -> that op's slow twin's result
+// where slowOf(x):
+//   box_f64(f)                        -> f's rule above
+//   param of an interior fast block   -> slowOf(its single incoming arg)
+//   j1 params / anything else         -> x itself (the slow chain sees
+//     the same SSA value; the merge's sigma rewrites j1 params later)
+//
+// f64_lt (and hence const-boolean split arms) is refused as region2 —
+// its boolean twin adds checking surface for shapes with no measured
+// benefit; lt regions still merge fine as region1.
+function verifyGenericTwin(r2: GuardRegion): boolean {
+    if (r2.fastExitEdges.length !== 1) return false; // lt splits etc.
+
+    const slowOps: Inst[] = [];
+    for (const sb of r2.slowChain)
+        for (const inst of sb.insts) if (SLOW_OPS.has(inst.op)) slowOps.push(inst);
+
+    const pair = new Map<Inst, Inst>(); // fast f64 op -> slow twin
+
+    const slowOfBoxed = (x: Inst, d: number): Inst | null => {
+        if (d <= 0) return null;
+        if (x.op === "box_f64") return slowOfF64(x.operands[0]!, d - 1);
+        if (x.op === "blockparam" && x.block && r2.fastBlocks.has(x.block)) {
+            const b = x.block;
+            if (b.predEdges.length !== 1) return null;
+            const e = b.predEdges[0]!;
+            const arg = e.inst.targets![e.targetIndex]!.args[b.argIndexOfParam(x)];
+            return arg ? slowOfBoxed(arg, d - 1) : null;
+        }
+        return x;
+    };
+    const slowOfF64 = (f: Inst, d: number): Inst | null => {
+        if (d <= 0) return null;
+        if (f.op === "unbox_f64") return slowOfBoxed(f.operands[0]!, d - 1);
+        return pair.get(f) ?? null; // must be an already-paired f64 op
+    };
+
+    // linear walk of the fast side (single path: guards have one fast
+    // arm, lt splits are refused above), pairing arithmetic in order
+    let k = 0;
+    const seen = new Set<Block>();
+    let b: Block | null = r2.head.terminator!.targets![0]!.block;
+    let exitArgs: (Inst | null)[] | null = null;
+    while (b) {
+        if (b === r2.join || seen.has(b) || !r2.fastBlocks.has(b)) return false;
+        seen.add(b);
+        const t: Inst = b.terminator!;
+        for (const inst of b.insts) {
+            if (inst === t) break;
+            const gop = F64_TO_GENERIC[inst.op];
+            if (!gop) continue; // unbox/box/const/has_tag: no twin needed
+            if (inst.op === "f64_lt") return false;
+            if (k >= slowOps.length) return false;
+            const tw = slowOps[k++]!;
+            if (tw.op !== gop) return false;
+            for (let i = 0; i < inst.operands.length; i++) {
+                const want = slowOfF64(inst.operands[i]!, 32);
+                if (!want || want !== tw.operands[i]) return false;
+            }
+            pair.set(inst, tw);
+        }
+        if (t.op === "br") {
+            const tg: Target = t.targets![0]!;
+            if (tg.block === r2.join) {
+                exitArgs = tg.args;
+                b = null;
+            } else b = tg.block;
+        } else if (t.op === "cond_br" && isNumberGuard(t.operands[0]!)) {
+            b = t.targets![0]!.block;
+        } else {
+            return false;
+        }
+    }
+    if (!exitArgs || k !== slowOps.length) return false;
+
+    // join-exit correspondence: what flows out of the fast arm must be
+    // what flows out of the slow chain, slot for slot
+    const slowExitArgs = r2.slowExitEdge.inst.targets![r2.slowExitEdge.targetIndex]!.args;
+    if (exitArgs.length !== slowExitArgs.length) return false;
+    for (let i = 0; i < exitArgs.length; i++) {
+        const fa = exitArgs[i];
+        const sa = slowExitArgs[i];
+        if (!fa || !sa) return false;
+        const want = slowOfBoxed(fa, 32);
+        if (!want || want !== sa) return false;
+    }
+    return true;
+}
+
 // merge the region headed at r1.join (if any) into r1.  Returns true if
 // the CFG changed.  All checks precede all mutations.
 function tryMergeAt(fn: Func, r1: GuardRegion, idom: Map<Block, Block>, stats: OptStats): boolean {
@@ -428,12 +547,31 @@ function tryMergeAt(fn: Func, r1: GuardRegion, idom: Map<Block, Block>, stats: O
     for (const b of r2.slowChain)
         if (r1.fastBlocks.has(b) || r1.slowSet.has(b) || b === r1.head) return false;
 
+    // j1's predecessors must be exactly region1's exits.  A foreign edge
+    // into j1 means region2's guards are reachable WITHOUT region1
+    // having run; the slow-side substitution below would then hand
+    // region2's slow chain region1's slow values, which hold garbage on
+    // the foreign path (review attack A).
+    for (const e of j1.predEdges) {
+        const src = e.inst.block!;
+        if (!r1.fastBlocks.has(src) && !r1.slowSet.has(src)) return false;
+    }
     // j2's predecessors must be exactly region2's exits (routing fills
     // every edge; a foreign edge would get an undominated value)
     for (const e of j2.predEdges) {
         const src = e.inst.block!;
         if (!r2.fastBlocks.has(src) && !r2.slowSet.has(src)) return false;
     }
+
+    // region2's slow chain must be the GENERIC TWIN of its fast side.
+    // The merge reroutes region1's slow exit straight into region2's
+    // slow chain — including executions where region2's guards would
+    // have PASSED pre-merge (e.g. a guard on a mul result, which is
+    // always a number) and run the fast arm.  That reroute is only
+    // sound if the slow chain computes exactly what the fast arm
+    // computes on number inputs, i.e. it is the same op sequence in
+    // generic form with corresponding operands (review attack F).
+    if (!verifyGenericTwin(r2)) return false;
 
     // j1's instruction shape: [effect-free prefix..., guard, cond_br]
     const term = j1.terminator!;
@@ -514,7 +652,15 @@ function tryMergeAt(fn: Func, r1: GuardRegion, idom: Map<Block, Block>, stats: O
             outs.push(inst);
         });
         if (!ok) return false;
-        if (outs.length > 0) outsideUses.set(v, outs);
+        if (outs.length > 0) {
+            // routed params are ordinary boxed joins; a RAW-typed j1
+            // value (an i1/f64 prefix inst) live past j2 would need a
+            // raw param this pass has no business minting — refuse the
+            // merge (fail-closed by design: the verifier would reject
+            // the result anyway, we just decline up front)
+            if (v.type !== "any") return false;
+            outsideUses.set(v, outs);
+        }
     }
 
     // ---- all checks passed; mutate ----

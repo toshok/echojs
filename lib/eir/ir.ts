@@ -179,14 +179,19 @@ export class Inst {
     removed = false;
     // Phase 3.4 pass (b): a block parameter that carries a RAW f64 across
     // its incoming edges — the controlled lift of the Phase 2
-    // raw-values-cannot-cross-blocks rule.  Set ONLY by the optimizer's
-    // guard-region merge (optimize-guards.ts) on joins it builds/rewires;
-    // lowering must never set it, so every lowering-created edge keeps
-    // the strict boxed rule.  The marker is not trusted on its own: the
-    // verifier independently checks the full safety conditions (type is
-    // f64, every incoming argument is f64, non-catch block, no unwind
-    // edges), so a stray marker can only ever *tighten* checking, never
-    // admit an ill-typed edge.  The emitter types the phi as double.
+    // raw-values-cannot-cross-blocks rule.  Set only by the optimizer
+    // (optimize-guards.ts rawJoinParams); lowering must never set it, so
+    // every lowering-created edge keeps the strict boxed rule.  The
+    // qualification is STRUCTURAL, not provenance-linked: any param
+    // whose every incoming argument provably carries an f64 (strippable
+    // box_f64 / f64 value / another converted param, rooted in a real
+    // f64 producer) may convert — guard-region merges create most such
+    // shapes, but e.g. a fully-proven loop-carried param qualifies too.
+    // The marker is not trusted on its own: the verifier independently
+    // checks the full safety conditions (type is f64, every incoming
+    // argument is f64, non-catch block, no unwind edges), so a stray
+    // marker can only ever *tighten* checking, never admit an ill-typed
+    // edge.  The emitter types the phi as double.
     rawJoin = false;
 
     constructor(fn: Func, op: string, operands?: Inst[], imms?: Imms) {
