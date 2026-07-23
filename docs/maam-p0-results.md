@@ -539,7 +539,10 @@ provenance-linked).
 
 # Phase 3.5 — differential harness (concreteEval vs node vs ejs)
 
-Date: 2026-07-23.  echojs @ eir (P3.4 head), maam @ c69fc81.  Deliverable
+Date: 2026-07-23.  echojs @ eir (P3.4 head), maam @ c69fc81, revised same
+day to maam @ 3e64ca1 after adversarial review (the "Review round 2"
+subsection below records what changed; numbers in this section are the
+FINAL 3e64ca1 figures).  Deliverable
 lives in the maam repo: `test/differential/harness.ts` + a 40-file
 closed-world corpus, run by `npm run diff-harness` and wired into the new
 maam CI workflow (`.github/workflows/ci.yml`, node pinned 22.4.0).  The
@@ -567,32 +570,53 @@ worker subprocess under a 30 s budget: genuine concrete-machine divergence
 
 ## Gate results
 
-- Corpus 40 files.  node lane: **33 exact, 3 membership, 0 divergences**;
-  4 skips, all deliberate and printed with reasons (Math.random
+- Corpus 45 files.  node lane: **37 exact, 3 membership, 0 divergences**;
+  5 skips, all deliberate and printed with reasons (Math.random
   nondeterminism; array prototype methods degrade under the concrete
-  domain; two files that prove the for-of/for-in divergence timeout path).
-- Containment lane: **1799 node checks, 0 violations** across two abstract
+  domain; two files that prove the for-of/for-in divergence timeout path;
+  one that proves the nested-block-var visible degradation).  The
+  differential lane exercises **zero iteration-protocol semantics** —
+  for-of/for-in are exactly the skip files, because their nondet iteration
+  never converges under unbounded concrete time.
+- Containment lane: **1935 node checks, 0 violations** across two abstract
   configs — the echojs oracle spec verbatim
   (`kCFA(1, flow-sensitive, call-site, shapeCap=64, stateCap=512)`) and the
   same + `intrinsics: true`.  Checked-node set: every source node BOTH the
   concrete and the abstract run map (the concrete entries are exactly what
-  a real execution produced).  57 concrete-mapped nodes were unmapped
-  abstractly (dead-path degradation), counted, not failures.
+  a real execution produced).  **Census of the exempt remainder** (57
+  concrete-mapped nodes unmapped abstractly, summed over both configs; the
+  harness prints the count so growth is visible): these are NOT all dead
+  code — under config A (intrinsics off) they include LIVE coercion
+  arithmetic whose receiver/operand chain passes through an unbound global
+  (`Math.PI * 2 * 2`, `Number.MAX_VALUE * 2`) plus coercion forms the
+  normalizer maps but config A's ⊥-receiver paths kill (`true+1`, `""-1`,
+  `-"3"`, `+true` in the coercion files).  Honest reading: the oracle
+  currently produces NO facts for such nodes (fail-soft ⊤ at the
+  consumer), so containment there is vacuous — they are exempt, not
+  verified.
 - ejs lane (dev tree only; `MAAM_DIFF_EJS_TREE` = a stage0 work tree —
   `//:srcdir-tree` copy + `lib/generated`; the lane skips loudly when
-  unset, e.g. in maam CI): **28 ok, 1 N/A, 7 known-divergent, 0 new**.
+  unset, e.g. in maam CI): **32 ok, 1 N/A (esprima `**` family), 7
+  known-divergent, 0 new, 0 stale**.
 
 ## What the harness found (the product)
 
 Fixed in maam (each with a pinned test; suite 241 → 258):
 
-1. **Hoisted-function capture unsoundness** — a hoisted function's body
-   referencing a `var` declared later in the same statement list left the
-   name un-renamed; closure writes silently missed the binding
-   (`var n = 0; function s(){ n = "x"; } s(); n` reported `num` — a
-   ⊑-violation an unguarded consumer would miscompile on).  normStmts now
-   pre-mints captured names, pre-binds them to `undefined` above the
-   letrec, and turns their declarations into `setVar` writes.
+1. **Closure-capture unsoundness** — a closure created textually at or
+   before a variable's declaration in the same statement list (a hoisted
+   function declaration — and, per review round 2, equally a function
+   expression, arrow, or object-literal method) referencing that variable
+   left the name un-renamed; closure writes silently missed the binding
+   (`var f = function () { n = "x"; }; var n = 0; f(); n` reported `num`
+   with zero degradation — a mapped-and-wrong oracle fact an unguarded
+   consumer would miscompile on).  normStmts now detects capture with a
+   syntactic over-approximate scan over ALL function-creating subtrees,
+   positionally (capture at statement i ≤ declaration j), pre-binds
+   captured names to `undefined` above everything, and turns their
+   declarations into `setVar` writes.  Declare-then-capture shapes keep
+   the precise fresh-binding path (no `undefined` widening), pinned by a
+   typeOfNode unit test.
 2. **⊥-receiver property reads fabricated `undefined`** — with intrinsics
    off, `Math.PI` read as a *confident* undefined (the containment lane
    caught this as `num ⋢ undefined`).  ⊥ receivers now propagate ⊥.
@@ -634,10 +658,78 @@ the gate as stale, so the list can only shrink by fixing echojs):
   `Object.setPrototypeOf`, which is modeled.
 - for-of/for-in accumulation diverges under concrete time (nondet
   iteration); the harness's worker timeout makes it a visible skip.
-- Nested-block `var` hoisting and hoisted-function capture of
-  destructuring-pattern leaves are not modeled by the P3.5 normalizer fix.
-- Captured-by-hoisted-function vars now (correctly) include `undefined`
-  in their nodeTypes join from the hoisted pre-binding; non-captured vars
-  are unaffected.  The `--types` diff lane was not re-run for this bump
-  (flag-off behavior is untouched); diamond counts on captured-var
-  arithmetic may shift in the sound (declining) direction.
+- Nested-block `var` hoisting is not modeled; when such a var is captured
+  by a function in the enclosing scope the normalizer now COUNTS it as a
+  degraded binding (review F2), so the harness precondition trips and the
+  file skips visibly instead of computing on ⊥.  Captured
+  destructuring-pattern leaves and re-declared (`var x` twice) captures
+  remain unmodeled and keep the old behavior.
+- Captured-by-closure vars now (correctly) include `undefined` in their
+  nodeTypes join from the hoisted pre-binding; non-captured and
+  declare-then-capture vars are unaffected.  Oracle-fact impact measured
+  by the `--types` diff lane re-run below.
+
+## Review round 2 (adversarial pass over the harness commit)
+
+The review confirmed the harness mechanics (wrap seam, gate teeth under
+perturbation, sigLeq, ejs-lane authenticity, CI viability) and rejected on
+one confirmed HIGH finding plus process items; all addressed at maam
+3e64ca1:
+
+- **F1 (the blocker): capture fix was FunctionDeclaration-only.** A
+  closure created textually at-or-before a later same-scope `var` via a
+  function expression / arrow / object-literal method still dropped its
+  writes silently — concrete `{num 0}` with zero degradation for
+  `var f = function () { n = "x"; }; var n = 0; f(); n;` while node says
+  "x", and the oracle reported a mapped-and-wrong `num`.  Fixed by
+  replacing the compiled-freeVars detection with a syntactic
+  over-approximate scan over ALL function-creating subtrees (positional:
+  capture at statement i ≤ declaration j; declarations count as i = −1).
+  Three corpus probes (capture-fnexpr/arrow/objmethod.js) now PASS
+  exactly — the fix computes, it does not degrade.
+- **F2: nested-block `var` capture now counts.**  Previously concrete ⊥
+  with zero accounting; the normalizer pushes a degradedBinding so the
+  harness skip precondition trips (skip-nested-var-capture.js proves it).
+- **F3: unit pins independent of the harness** (review showed reverting
+  normalize.ts kept all 258 then-tests green): hoisted/expression/arrow/
+  method capture, declare-then-capture precision (typeOfNode stays exact
+  `num`), nested-var visible degradation, bare NaN / Infinity literals,
+  and the ⊥-receiver read, each flipping if its fix is reverted.  Suite
+  258 → 266.
+- **F4: known-divergence entries participate in staleness even when
+  unvalidatable** — a listed file that goes compile-N/A, is skipped, or
+  leaves the corpus is warned about by name (warning, not hard failure:
+  N/A means the run-behavior claim cannot be tested in either direction,
+  and hard-failing would let an esprima parse gap flip a semantics gate).
+  Entries are now structured ({symptom, rootCause}, enforced).
+- **F5: the containment-exempt census is documented above** (the
+  57-node remainder includes live coercion arithmetic under config A —
+  exempt, not verified — with the count printed every run).
+- **F6: compound assignments corpus file added** (esprima-clean, so it
+  has full three-lane coverage; the `**` family lives in the expected-N/A
+  arith-basic.js); the zero-iteration-protocol statement is in the gate
+  results above.
+
+Final harness numbers at 3e64ca1 (all lanes): corpus 45 — node 37 exact +
+3 membership + 5 visible skips, 0 divergences; containment 1935 checks, 0
+violations; ejs 32 ok / 1 N/A / 7 known / 0 new / 0 stale.
+
+## The `--types` diff lane re-run (oracle facts changed ⇒ re-measured)
+
+The P3.5 normalizer/machine fixes change what the oracle reports, so the
+lane was re-run on the final pin (maam 3e64ca1; work tree assembled from
+`//:srcdir-tree` + `//lib:generated` + repo `test/`, conc 4, logs
+`~/.cache/maam-p0-logs/P35-types-diff/`).  These numbers SUPERSEDE the
+Phase 3 figures (67 diamonds / 1319 queries / 1035 unknown) and the
+review's interim c69fc81 run (66 / 1306 / 866):
+
+| files | identical | divergent | N/A | timeouts |
+|---|---|---|---|---|
+| 458 | 454 (+3 serial re-verifies = 457) | **0** | 1 (tester.js, standing esprima gap) | 3 transient (closure2/4/7, concurrency artifact — each re-verified IDENTICAL serially, same as the review run's 4) |
+
+Aggregates: **diamonds 69** (baseline 67, interim 66), oracleQueries 1320,
+**oracleUnknown 866** (baseline 1035).  Reading: the ⊥-receiver fix and
+exact string `.length` give the oracle MORE precise facts (unknown down
+~16%, two extra diamonds); the hoisted-capture `undefined` widening on
+captured vars did not cost a diamond on this corpus.  The behavioral gate
+is unchanged: zero divergence, flag-off untouched.

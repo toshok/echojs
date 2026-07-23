@@ -497,18 +497,20 @@ Smaller forward items surfaced by the Chunk A integration review:
       ejs on closed-world tests) wired into its CI.
       *Gate:* zero divergences on the curated corpus.
       Landed as maam test/differential/ (`npm run diff-harness`, in maam CI):
-      40-file corpus, node lane 33 exact + 3 membership (documented machine
-      over-approximations) + 4 visible skips, 0 divergences; containment
-      lane 1799 node checks against the oracle spec and its intrinsics twin,
-      0 violations; ejs lane 28 ok / 7 known-divergent — seven root-caused
-      PRE-EXISTING echojs bugs (typeof null, -0===0, Math.round(-2.5),
-      Number whitespace, negative >>>, `1+null` runtime abort, esprima `**`)
-      pinned in ejs-known-divergences.json with a stale-entry gate.
-      Building the harness required making `intrinsics: true` actually exact
-      under the concrete domain (it silently degraded before) and fixed
-      five machine/normalizer bugs the diff surfaced, incl. a hoisted-
-      function capture unsoundness that dropped closure writes — details in
-      docs/maam-p0-results.md "Phase 3.5".
+      45-file corpus, node lane 37 exact + 3 membership (documented machine
+      over-approximations) + 5 visible skips, 0 divergences; containment
+      lane 1935 node checks against the oracle spec and its intrinsics twin,
+      0 violations; ejs lane 32 ok / 1 N/A / 7 known-divergent — seven
+      root-caused PRE-EXISTING echojs bugs (typeof null, -0===0,
+      Math.round(-2.5), Number whitespace, negative >>>, `1+null` runtime
+      abort, esprima `**`) pinned in ejs-known-divergences.json with
+      stale/unvalidatable-entry accounting.  Building the harness required
+      making `intrinsics: true` actually exact under the concrete domain
+      (it silently degraded before) and fixed the machine/normalizer bugs
+      the diff surfaced — chiefly a closure-capture unsoundness (writes to
+      later-declared same-scope vars silently dropped; generalized to
+      function expressions/arrows/methods after adversarial review) —
+      details in docs/maam-p0-results.md "Phase 3.5".
 - [ ] **P3.6** typed calling convention / function specialization
       (see the Phase 3.6 section; HARD PRECONDITION: P3.5 green):
       local-closed-world escape analysis, specialized unboxed clones +
