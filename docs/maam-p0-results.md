@@ -742,6 +742,26 @@ Final harness numbers at c3d1aed (all lanes): corpus 46 — node 37 exact
 checks, 0 violations; ejs 32 ok / 1 N/A (arith-basic.js, esprima `**`) /
 7 known / 0 new / 0 stale.  Suite 268.
 
+## Review round 4 (residual: binding-split re-declarations, maam dfa8eb1)
+
+The R1 identifier-declared exclusion assumed the modeled path owned such
+names, but a later PATTERN re-declaration of a hoisted-captured name
+fresh-binds while the closure writes the pre-minted address — a binding
+SPLIT, silently wrong with zero counters (reviewer repro
+`var f = function () { a = 5; }; var a = 0; var [a] = [1]; f(); a;` →
+{undefined, 1}, real JS 5).  Fixed ACCOUNTING-ONLY (the modeled
+`captured` rule is unchanged — asserted, and the harness node+containment
+numbers are byte-identical): the scan records per-name identifier and
+pattern-leaf declaration index lists plus the earliest closure-reference
+position, and degrades every split shape — the reviewer repro, the
+identifier-only sibling (re-declaration after a non-hoisted capture,
+found while generalizing), and pattern-only re-declaration after capture
+(the R1 rule now keys on the LAST pattern index).  Hoisted-captured
+identifier re-declaration stays modeled (pinned: computes, db=0);
+all-refs-after-all-declarations shapes stay clean.  Suite 269.  The
+`--types` lane was not re-run: the change adds counters only, no
+typeOfNode fact can differ by construction.
+
 ## The `--types` diff lane re-run (oracle facts changed ⇒ re-measured)
 
 The P3.5 normalizer/machine fixes change what the oracle reports, so the
