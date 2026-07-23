@@ -536,3 +536,108 @@ front); the loop-carried rawJoin conversion (a fully-proven f64 loop
 param) gained a dedicated unit test; ir.ts's rawJoin comment now states
 the actual contract (structural qualification, verifier-checked — not
 provenance-linked).
+
+# Phase 3.5 — differential harness (concreteEval vs node vs ejs)
+
+Date: 2026-07-23.  echojs @ eir (P3.4 head), maam @ c69fc81.  Deliverable
+lives in the maam repo: `test/differential/harness.ts` + a 40-file
+closed-world corpus, run by `npm run diff-harness` and wired into the new
+maam CI workflow (`.github/workflows/ci.yml`, node pinned 22.4.0).  The
+concrete interpreter — `analyze(prog, concreteEval() + intrinsics)` — is the
+reference semantics; the harness diffs it against node, against
+ejs-compiled output, and against the abstract oracle configs.
+
+## Comparison semantics (the deliberate choices)
+
+The corpus convention is that a file's last top-level statement is an
+ExpressionStatement; its value is the file's *final value* (for that shape
+it coincides with the completion value).  Comparison is **value-level**,
+not host-stringification: the harness wraps that expression in an injected
+ES5 renderer (−0 renders `"-0"`, NaN `"NaN"`, strings escaped by hand) and
+the same renderer is applied to the concrete CVals, so number→string is
+the identical algorithm on both sides.  node's printed value must be a
+MEMBER of the concrete result set; singletons must match exactly.
+Documented blind spots: object/function finals compare by type only
+(corpus files project structure into primitives), and non-singleton sets —
+from the machine's two deliberate over-approximations, the smashed array
+`elements` bucket and the always-reachable nondet catch handler — are
+reported as PASS-CONTAINS, never silently.  Analysis runs per file in a
+worker subprocess under a 30 s budget: genuine concrete-machine divergence
+(nondet for-of/for-in × unbounded concrete time) becomes a *visible* skip.
+
+## Gate results
+
+- Corpus 40 files.  node lane: **33 exact, 3 membership, 0 divergences**;
+  4 skips, all deliberate and printed with reasons (Math.random
+  nondeterminism; array prototype methods degrade under the concrete
+  domain; two files that prove the for-of/for-in divergence timeout path).
+- Containment lane: **1799 node checks, 0 violations** across two abstract
+  configs — the echojs oracle spec verbatim
+  (`kCFA(1, flow-sensitive, call-site, shapeCap=64, stateCap=512)`) and the
+  same + `intrinsics: true`.  Checked-node set: every source node BOTH the
+  concrete and the abstract run map (the concrete entries are exactly what
+  a real execution produced).  57 concrete-mapped nodes were unmapped
+  abstractly (dead-path degradation), counted, not failures.
+- ejs lane (dev tree only; `MAAM_DIFF_EJS_TREE` = a stage0 work tree —
+  `//:srcdir-tree` copy + `lib/generated`; the lane skips loudly when
+  unset, e.g. in maam CI): **28 ok, 1 N/A, 7 known-divergent, 0 new**.
+
+## What the harness found (the product)
+
+Fixed in maam (each with a pinned test; suite 241 → 258):
+
+1. **Hoisted-function capture unsoundness** — a hoisted function's body
+   referencing a `var` declared later in the same statement list left the
+   name un-renamed; closure writes silently missed the binding
+   (`var n = 0; function s(){ n = "x"; } s(); n` reported `num` — a
+   ⊑-violation an unguarded consumer would miscompile on).  normStmts now
+   pre-mints captured names, pre-binds them to `undefined` above the
+   letrec, and turns their declarations into `setVar` writes.
+2. **⊥-receiver property reads fabricated `undefined`** — with intrinsics
+   off, `Math.PI` read as a *confident* undefined (the containment lane
+   caught this as `num ⋢ undefined`).  ⊥ receivers now propagate ⊥.
+3. **String relational comparison was numeric** — `"a" < "b"` was false.
+4. **ToNumber(null) was NaN in binops** — `1 + null` computed NaN, JS says 1.
+5. **`s.length` read as confident undefined in both domains** — now exact
+   under the concrete domain, `anyNum` abstractly, ungated from the
+   intrinsics knob (the echojs oracle runs intrinsics-off).
+   Plus: `Infinity`/`NaN` identifiers were unbound (path-killing ⊥); they
+   are dialect literals now.
+
+Also built: exact concrete intrinsics — the plan's `intrinsics: true`
+silently degraded under the concrete domain (seeded globals were ⊥).  The
+domain gained an optional `concretize` capability whose presence is the
+exactness contract: pure-primitive intrinsics compute their real JS result
+or the call degrades visibly through `unknownCalls`; summary models never
+run concretely.
+
+Found in echojs, root-caused by minimal probes, recorded in
+`ejs-known-divergences.json` (a listed file that *stops* diverging fails
+the gate as stale, so the list can only shrink by fixing echojs):
+
+1. `typeof null` → `"null"` (spec: `"object"`).
+2. `-0 === 0` → false (NaN-boxed bit comparison; `1/-0` is correct).
+3. `Math.round(-2.5)` → −3 (C `round()` half-away-from-zero; JS: −2).
+4. `Number("  7  ")` → NaN (ToNumber(string) does not trim whitespace).
+5. `-8 >>> 28` → 0 (ToUint32 on negative shift operands).
+6. `1 + null` → runtime abort (`ejsval ToNumber(ejsval)`,
+   runtime/ejs-ops.c:260 "not implemented", exit 134).
+7. esprima cannot parse `**` (arith-basic.js is the lane's one N/A).
+
+## Known model limits (documented, visible, tracked)
+
+- try/catch: handler modeled as always-reachable nondet with a ⊤ caught
+  value (sound over-approximation; membership-checked).  `return` through
+  `finally` skips the finalizer in the model — corpus avoids the shape.
+- `F.prototype = Object.create(...)` (prototype REASSIGNMENT) is
+  unmodeled and degrades visibly; the dialect shape is
+  `Object.setPrototypeOf`, which is modeled.
+- for-of/for-in accumulation diverges under concrete time (nondet
+  iteration); the harness's worker timeout makes it a visible skip.
+- Nested-block `var` hoisting and hoisted-function capture of
+  destructuring-pattern leaves are not modeled by the P3.5 normalizer fix.
+- Captured-by-hoisted-function vars now (correctly) include `undefined`
+  in their nodeTypes join from the hoisted pre-binding; non-captured vars
+  are unaffected.  The `--types` diff lane was not re-run for this bump
+  (flag-off behavior is untouched); diamond counts on captured-var
+  arithmetic may shift in the sound (declining) direction.
