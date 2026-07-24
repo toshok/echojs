@@ -1241,6 +1241,16 @@ calc_heap_size()
     return size;
 }
 
+// heap footprint measured after the last collection's sweep.  The
+// collection trigger scales with this: a fixed allocation budget on a
+// growing live set makes total GC work quadratic in heap size (shapes
+// P4.2 moved per-object property storage into the GC heap, which pushed
+// stage2's self-compile off that cliff — hours of back-to-back full
+// marks of a ~900MB heap).  Letting the heap grow ~50% between full
+// collections keeps total mark work linear; programs whose footprint
+// stays under 120MB see the old 60MB cadence exactly.
+static size_t heap_size_at_last_gc = 0;
+
 void
 _ejs_gc_collect(const char *reason)
 {
@@ -1254,6 +1264,10 @@ _ejs_gc_collect(const char *reason)
 #endif
 
     _ejs_gc_collect_inner(EJS_FALSE);
+
+    // post-sweep footprint drives the proportional collection trigger
+    // (see heap_size_at_last_gc)
+    heap_size_at_last_gc = calc_heap_size();
 
 #if gc_timings > 0
     gettimeofday (&tvafter, NULL);
@@ -1405,7 +1419,10 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
 
     if (!gc_disabled) {
         char *gc_reason = NULL;
-        if (alloc_size - alloc_size_at_last_gc >= 60 * 1024 * 1024) {
+        size_t gc_trigger = 60 * 1024 * 1024;
+        if (heap_size_at_last_gc / 2 > gc_trigger)
+            gc_trigger = heap_size_at_last_gc / 2;
+        if (alloc_size - alloc_size_at_last_gc >= gc_trigger) {
             gc_reason = "alloc_size";
         } else if (collect_every_alloc && collect_every_alloc == num_allocs) {
             gc_reason = "every_n_alloc";

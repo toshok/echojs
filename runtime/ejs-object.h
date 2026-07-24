@@ -230,7 +230,15 @@ struct _EJSObject {
     GCObjectHeader   gc_header;
     EJSSpecOps*      ops;
     ejsval           proto; // [[Prototype]]
-    EJSPropertyMap*  map;
+    // shapes-plan P4.2: property storage is mode-switched on the
+    // header's shape index.  Dictionary mode (shape 0) keeps the map;
+    // shaped mode stores plain data property values in a closureenv
+    // slot array (an ejsval so the GC scan traces it; _ejs_null until
+    // the first property arrives) at shape-determined indices.
+    union {
+        EJSPropertyMap*  map;   // dictionary mode
+        ejsval           slots; // shaped mode
+    };
 };
 
 

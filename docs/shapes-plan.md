@@ -432,16 +432,71 @@ revertable, runtime phases A/B-able against the old path.
       collection to fire (finalize-driven), so short probes report 0
       deaths — the shapes analog of gc-P0's numbers lands with real
       workloads in the P4.2 gate.
-- [ ] **P4.2 — Slot storage for shaped objects.**  The union flip: slot
-      arrays in the GC heap replace the map for shaped-mode objects;
-      dictionary migration; specops mode-switch (get/set/define/delete/
-      enumerate/scan/finalize); map code untouched for dictionary mode.
-      *Gate:* full suite + kangax under both modes byte-identical;
-      transition-storm + collect-every-N stress green; property get/set
-      microbench vs map recorded (this is the first raw win: no hash, no
-      strict-eq chain, no descriptor chasing); object allocation is ONE
-      GC allocation + one slot array (map calloc gone on the shaped
-      path).
+- [x] **P4.2 — Slot storage for shaped objects.**  DONE 2026-07-24.
+      The union flip landed: `EJSObject`'s fourth word is now
+      `union { EJSPropertyMap* map; ejsval slots; }` — shaped-mode
+      objects store plain data property values in a **closureenv** slot
+      array (already GC-allocated, ejsval-range-scanned, and traceable
+      via its ejsval tag: zero GC changes, `lib/types.ts` untouched
+      since the word stays pointer-sized and compiled code never
+      dereferences it).  Slot storage is lazy (`_ejs_null` until the
+      first property; grow-by-doubling from 4), so ordinary-object
+      allocation lost the map calloc entirely.  ejs-shapes.c became a
+      pure transition/query API (`_ejs_shape_lookup` / `_fields` /
+      `_transition_add(+memo fast path)` / `_transition_set`); the
+      storage engine and the one-way `_ejs_object_to_dictionary`
+      (materialize map from shape+slots, malloc-only, no GC points)
+      live in ejs-object.c.  Specops mode-switched: get (fast-path slot
+      load), set (fast-path store on the receiver incl. repr-flip
+      transition), define (shaped routing for plain default-attr data
+      props; everything else migrates then falls into the untouched
+      generic algorithm), delete (migrate then map-remove),
+      GetOwnProperty (synthesizes the default data descriptor into a
+      32-entry gc-rooted static ring — safe because every
+      descriptor-mutating path migrates first), scan/finalize, plus the
+      map-walking sites: collect_keys (for-in), OwnPropertyKeys (shared
+      classification loop keeps the two modes byte-identical),
+      getOwnPropertyNames/Symbols, Object.assign, defineProperties.
+      **The stage2 lesson (found at this gate, the hard way):** the
+      first cut hung stage2's self-compile for hours at 100% CPU inside
+      GC marks.  Two causes, both fixed here: (1) slot arrays of
+      capacity 32+ exceed the page allocator's largest cell — which is
+      **128 bytes**, not the 256 its comment claims (`ffs(256)=9 > 8`
+      LOS-routes exact-256 allocations) — so every wide object's storage
+      landed in the LOS, whose **per-reference linear lookup** made
+      marking quadratic (multi-minute marks of a 183MB heap; lldb kept
+      landing on the los_list walk at ejs-gc.c:550).  Fix:
+      `EJS_SHAPE_FIELD_CAP_MAX = 14` (16B env header + 14×8 = exactly
+      128B; growth 4→8→14); 15+-field objects drop to dictionary mode.
+      Revisit when gc-plan gives the LOS an O(log n) lookup or a 256B
+      size class.  (2) the collection trigger was a **fixed 60MB of
+      allocation** — quadratic total GC work on a growing live set now
+      that property storage lives in the GC heap.  Fix in ejs-gc.c: the
+      trigger scales to max(60MB, post-sweep-footprint/2); programs
+      under 120MB footprint keep the old cadence exactly.  With both
+      fixes stage2's self-compile completes normally (ejs-process CPU:
+      92s shapes-on vs 62s off on the same binary — the ~1.5× is env
+      alloc churn plus wide-object migrate-through; the raw win arrives
+      with P4.3's guarded fast paths, and P4.5/gc-P5 own the layout
+      end-state).
+      *Gate results:* matrix green — test-eir, lowtier, stages 0-3, and
+      the `//:test-stage1-shapes-off` A/B lane (no kangax runner exists
+      in-repo; the stage suite + the new probe stand in).  New
+      `test/shapes-storm1.js` transition-storm probe (adds, repr flips,
+      deletes, attrs/accessor/symbol/index migrations, freeze/seal,
+      enumeration order, assign/defineProperties/JSON): node-identical,
+      byte-identical across EJS_SHAPES on/off, and green under
+      EJS_GC_EVERY_N_ALLOC=7 in both modes.  Microbench (300k objects ×
+      8 atom-keyed fields, 20 passes, interleaved runs, post-fix):
+      **set 3.2× faster** than the map (6.35s vs 19.9s — no hash, no
+      strict-eq chain, no descriptor churn), **get 1.09×** (5.95s vs
+      6.47s; the generic-call overhead still dominates — the raw win is
+      P4.3's guarded fast paths), insert 8×N **~3% slower** (1.93s vs
+      1.88s: one closureenv alloc + one grow-copy per 8-field object —
+      within the P4.1 <5% bar, and the shaped path now does real work
+      instead of dual bookkeeping).  Census on the storm probe: 383
+      born tracked, 315 shapes, 1365 transitions (48% memo fast hits),
+      210 repr flips, migrations correctly attributed.
 - [ ] **P4.3 — Guarded fast paths under --types.**  The compiler phase:
       `has_shape`/`slot_load`/`slot_store` ops, verifier rules incl. the
       effect-kill inventory, emitter (header-index compare; slot-array
@@ -575,9 +630,14 @@ layout change whichever lands first.
       recorded.  DONE 2026-07-23 — see the phased-plan entry above for
       the numbers (2.1% insert overhead via the inlined transition
       memo).
-- [ ] **P4.2** slot storage + dictionary migration, specops mode-switch.
+- [x] **P4.2** slot storage + dictionary migration, specops mode-switch.
       Gate: both-modes byte-identical suite+kangax, stress green,
-      microbench recorded.
+      microbench recorded.  DONE 2026-07-24 — see the phased-plan entry
+      above (set 3.2×, get 1.09×, insert -3%; storm probe + gc-stress
+      green both modes; no in-repo kangax, suite+probe stand in; NOTE
+      the stage2 GC lesson recorded there: shaped field cap 14 keeps
+      slot arrays out of the LOS, and the gc trigger now scales with
+      heap footprint).
 - [ ] **P4.3** EIR ops + verifier inventory + emitter + maam
       node-identity queries + guarded diamonds + shape facts in
       optimize-guards.  Gate: matrix, lane 0-divergent, wrong-oracle

@@ -30,6 +30,7 @@
 #include "ejs-error.h"
 #include "ejs-xhr.h"
 #include "ejs-shapes.h"
+#include "ejs-closureenv.h"
 
 // ES6 7.3.1
 // Get (O, P)
@@ -572,6 +573,112 @@ _ejs_propertymap_insert (EJSPropertyMap* map, ejsval name, EJSPropertyDesc* desc
     }
 }
 
+// ------------------------------------------------------------------------
+// shaped-mode slot storage (shapes-plan P4.2).  Ordinary objects with a
+// nonzero shape index keep their plain data property values in a
+// closureenv slot array at shape-determined indices; the map only exists
+// in dictionary mode.  EJS_SHAPE_CAP is clamped to 256, so fixed
+// 256-entry name buffers cover any shape.
+
+static EJSClosureEnv*
+shaped_env (EJSObject* obj)
+{
+    return EJSVAL_TO_CLOSUREENV_IMPL(obj->slots);
+}
+
+static ejsval*
+shaped_slots (EJSObject* obj)
+{
+    return shaped_env(obj)->slots;
+}
+
+// grow slot storage to hold at least `needed` values.  May allocate from
+// the GC heap: obj->slots stays attached (and scanned) until the copy is
+// done, so a collection triggered by the new array is safe.  Growth is
+// 4 -> 8 -> EJS_SHAPE_FIELD_CAP_MAX (=14): the final step lands exactly
+// on the page allocator's largest (128-byte) cell so a slot array never
+// reaches the LOS (whose linear lookup makes marking quadratic).
+static void
+shaped_ensure_capacity (EJSObject* obj, uint32_t needed)
+{
+    EJS_ASSERT(needed <= EJS_SHAPE_FIELD_CAP_MAX);
+    uint32_t cap = EJSVAL_IS_NULL(obj->slots) ? 0 : shaped_env(obj)->length;
+    if (needed <= cap)
+        return;
+    uint32_t newcap = cap ? cap * 2 : 4;
+    while (newcap < needed)
+        newcap *= 2;
+    if (newcap > EJS_SHAPE_FIELD_CAP_MAX)
+        newcap = EJS_SHAPE_FIELD_CAP_MAX;
+    ejsval newslots = _ejs_closureenv_new (newcap);
+    if (cap)
+        memcpy (EJSVAL_TO_CLOSUREENV_IMPL(newslots)->slots, shaped_slots(obj),
+                cap * sizeof(ejsval));
+    obj->slots = newslots;
+}
+
+// one-way migration to dictionary mode: materialize the map from the
+// shape's fields + the slot array, then flip the header index.  Nothing
+// here allocates from the GC heap, so the union flip is atomic as far as
+// the collector is concerned.
+static void
+_ejs_object_to_dictionary (EJSObject* obj, EJSShapeMigrateReason reason)
+{
+    uint32_t shape = EJS_OBJECT_SHAPE(obj);
+    EJS_ASSERT(shape != EJS_SHAPE_DICT);
+
+    uint32_t nfields = _ejs_shape_field_count(shape);
+    ejsval names[256];
+    EJS_ASSERT(nfields <= 256);
+    _ejs_shape_fields (shape, names);
+
+    ejsval slotsval = obj->slots;
+    EJSPropertyMap* map = (EJSPropertyMap*)calloc (sizeof(EJSPropertyMap), 1);
+    _ejs_propertymap_init (map);
+    for (uint32_t i = 0; i < nfields; i ++) {
+        EJSPropertyDesc* desc = _ejs_propertydesc_new();
+        _ejs_property_desc_set_value (desc, EJSVAL_TO_CLOSUREENV_IMPL(slotsval)->slots[i]);
+        _ejs_property_desc_set_writable (desc, EJS_TRUE);
+        _ejs_property_desc_set_enumerable (desc, EJS_TRUE);
+        _ejs_property_desc_set_configurable (desc, EJS_TRUE);
+        _ejs_propertymap_insert (map, names[i], desc);
+    }
+    obj->map = map;
+    _ejs_shape_object_migrate (obj, reason);
+}
+
+// shaped GetOwnProperty synthesizes the default data descriptor for a
+// slot into a static ring.  Entries are transient — valid until
+// SYNTH_DESC_RING subsequent shaped GetOwnProperty hits — which the
+// spec-algorithm callers respect (none holds a descriptor across more
+// than a couple of lookups).  Every path that would MUTATE a property
+// through its descriptor migrates the object to dictionary mode first,
+// so writes through synthesized descriptors cannot happen.  The ring's
+// ejsvals are registered as gc roots: callers may hold a descriptor
+// across an allocating call.
+#define SYNTH_DESC_RING 32
+static EJSPropertyDesc synth_descs[SYNTH_DESC_RING];
+static int synth_desc_next = -1;
+
+static EJSPropertyDesc*
+shaped_synthesize_desc (ejsval value)
+{
+    if (synth_desc_next < 0) {
+        for (int i = 0; i < SYNTH_DESC_RING; i ++) {
+            synth_descs[i].value = _ejs_undefined;
+            synth_descs[i].setter = _ejs_undefined;
+            _ejs_gc_add_root (&synth_descs[i].value);
+            _ejs_gc_add_root (&synth_descs[i].setter);
+        }
+        synth_desc_next = 0;
+    }
+    EJSPropertyDesc* desc = &synth_descs[synth_desc_next];
+    synth_desc_next = (synth_desc_next + 1) % SYNTH_DESC_RING;
+    desc->flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE;
+    desc->value = value;
+    return desc;
+}
+
 /* property iterators */
 struct _EJSPropertyIterator {
     EJSObject obj;
@@ -645,6 +752,26 @@ collect_keys (ejsval objval, int *num, int *alloc, ejsval **keys)
 
     EJSObject *obj = EJSVAL_TO_OBJECT(objval);
     EJS_ASSERT(obj);
+
+    // shapes P4.2: shaped objects enumerate the shape chain (all fields
+    // are enumerable by construction; the chain is insertion order)
+    uint32_t shape = EJS_OBJECT_SHAPE(obj);
+    if (shape != EJS_SHAPE_DICT) {
+        uint32_t nfields = _ejs_shape_field_count(shape);
+        ejsval names[256];
+        _ejs_shape_fields (shape, names);
+        for (uint32_t i = 0; i < nfields; i ++) {
+            if (!name_in_keys (names[i], *keys, *num)) {
+                if (*num == *alloc-1) {
+                    (*alloc) += 10;
+                    *keys = (ejsval*)realloc (*keys, (*alloc) * sizeof(ejsval));
+                }
+                (*keys)[(*num)++] = names[i];
+            }
+        }
+        collect_keys (obj->proto, num, alloc, keys);
+        return;
+    }
 
     for (_EJSPropertyMapEntry *s = obj->map->head_insert; s; s = s->next_insert) {
         if (_ejs_property_desc_is_enumerable (s->desc) && !name_in_keys (s->name, *keys, *num)) {
@@ -755,14 +882,19 @@ _ejs_init_object (EJSObject* obj, ejsval proto, EJSSpecOps *ops)
 {
     obj->proto = proto;
     obj->ops = ops ? ops : &_ejs_Object_specops;
-    obj->map = calloc (sizeof(EJSPropertyMap), 1);
-    _ejs_propertymap_init (obj->map);
-    //printf ("obj->map = %p\n", obj->map);
-    EJS_OBJECT_SET_EXTENSIBLE(obj);
-    // shapes P4.1: ordinary objects are born with the root shape and get
-    // dual-bookkept shape indices; everything else stays shape 0
-    if (obj->ops == &_ejs_Object_specops)
+    // shapes P4.2: ordinary objects are born with the root shape and
+    // lazily-allocated slot storage — no map calloc on this path;
+    // everything else (and every object under EJS_SHAPES=off) is
+    // dictionary-mode from birth
+    if (obj->ops == &_ejs_Object_specops && _ejs_shapes_tracking) {
+        obj->slots = _ejs_null;
         _ejs_shape_object_born (obj);
+    }
+    else {
+        obj->map = calloc (sizeof(EJSPropertyMap), 1);
+        _ejs_propertymap_init (obj->map);
+    }
+    EJS_OBJECT_SET_EXTENSIBLE(obj);
 #if notyet
     ((GCObjectPtr)obj)->gc_data = 0x01; // HAS_FINALIZE
 #endif
@@ -1104,6 +1236,18 @@ static EJS_NATIVE_FUNC(_ejs_Object_getOwnPropertyNames) {
 
     /* 3. Let n be 0. */
 
+    // shapes P4.2: shaped objects report their (all-enumerable,
+    // string-keyed) shape fields in insertion order
+    uint32_t O_shape = EJS_OBJECT_SHAPE(O_);
+    if (O_shape != EJS_SHAPE_DICT) {
+        uint32_t nfields = _ejs_shape_field_count(O_shape);
+        ejsval names[256];
+        _ejs_shape_fields (O_shape, names);
+        for (uint32_t i = 0; i < nfields; i ++)
+            _ejs_array_push_dense(arr, 1, &names[i]);
+        return arr;
+    }
+
     /* 4. For each named own property P of O */
     for (_EJSPropertyMapEntry* s = O_->map->head_insert; s; s = s->next_insert) {
         if (!_ejs_property_desc_is_enumerable(s->desc))
@@ -1114,7 +1258,7 @@ static EJS_NATIVE_FUNC(_ejs_Object_getOwnPropertyNames) {
 
         if (!EJSVAL_IS_SYMBOL(name)) {
             /*    b. Call the [[DefineOwnProperty]] internal method of array with arguments ToString(n), the
-                  PropertyDescriptor {[[Value]]: name, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: 
+                  PropertyDescriptor {[[Value]]: name, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]:
                   true}, and false. */
             _ejs_array_push_dense(arr, 1, &name);
         }
@@ -1139,11 +1283,15 @@ static EJS_NATIVE_FUNC(_ejs_Object_getOwnPropertySymbols) {
     }
     EJSObject* O_ = EJSVAL_TO_OBJECT(O);
 
-    /* 2. Let array be the result of creating a new object as if by the expression new Array () where Array is the 
+    /* 2. Let array be the result of creating a new object as if by the expression new Array () where Array is the
           standard built-in constructor with that name. */
     ejsval arr = _ejs_array_new(0, EJS_FALSE);
 
     /* 3. Let n be 0. */
+
+    // shapes P4.2: shaped objects never carry symbol-keyed properties
+    if (EJS_OBJECT_SHAPE(O_) != EJS_SHAPE_DICT)
+        return arr;
 
     /* 4. For each named own property P of O */
     for (_EJSPropertyMapEntry* s = O_->map->head_insert; s; s = s->next_insert) {
@@ -1206,10 +1354,24 @@ static EJS_NATIVE_FUNC(_ejs_Object_assign) {
         //    i. Let gotAllNames be false. 
         //EJSBool gotAllNames = EJS_FALSE;  XXX this is unused
 
-        //    j. Let pendingException be undefined. 
+        //    j. Let pendingException be undefined.
         ejsval pendingException = _ejs_undefined;
 
-        //    k. Repeat while nextIndex < len, 
+        // shapes P4.2: a shaped source enumerates its shape fields (all
+        // enumerable plain data properties, in insertion order)
+        uint32_t from_shape = EJS_OBJECT_SHAPE(from_);
+        if (from_shape != EJS_SHAPE_DICT) {
+            uint32_t nfields = _ejs_shape_field_count(from_shape);
+            ejsval names[256];
+            _ejs_shape_fields (from_shape, names);
+            for (uint32_t i = 0; i < nfields; i ++) {
+                ejsval propValue = OP(from_,Get)(from, names[i], from);
+                Put(to, names[i], propValue, EJS_TRUE);
+            }
+            continue;
+        }
+
+        //    k. Repeat while nextIndex < len,
         for (_EJSPropertyMapEntry* s = from_->map->head_insert; s; s = s->next_insert) {
             //       i. Let nextKey be Get(keysArray, ToString(nextIndex)). 
             //       ii. ReturnIfAbrupt(nextKey). 
@@ -1355,21 +1517,35 @@ static EJS_NATIVE_FUNC(_ejs_Object_defineProperties) {
 
     /* 3. Let names be an internal list containing the names of each enumerable own property of props. */
     int names_len = 0;
-    for (_EJSPropertyMapEntry *s = props_obj->map->head_insert; s; s = s->next_insert) {
-        if (_ejs_property_desc_is_enumerable (s->desc))
-            names_len ++;
+    ejsval* names;
+    // shapes P4.2: a shaped props object enumerates its shape fields
+    uint32_t props_shape = EJS_OBJECT_SHAPE(props_obj);
+    if (props_shape != EJS_SHAPE_DICT) {
+        names_len = (int)_ejs_shape_field_count(props_shape);
+        if (names_len == 0) {
+            /* no enumerable properties, bail early */
+            return O;
+        }
+        names = malloc(names_len * sizeof(ejsval));
+        _ejs_shape_fields (props_shape, names);
     }
+    else {
+        for (_EJSPropertyMapEntry *s = props_obj->map->head_insert; s; s = s->next_insert) {
+            if (_ejs_property_desc_is_enumerable (s->desc))
+                names_len ++;
+        }
 
-    if (names_len == 0) {
-        /* no enumerable properties, bail early */
-        return O;
-    }
+        if (names_len == 0) {
+            /* no enumerable properties, bail early */
+            return O;
+        }
 
-    ejsval* names = malloc(names_len * sizeof(ejsval));
-    int n = 0;
-    for (_EJSPropertyMapEntry *s = props_obj->map->head_insert; s; s = s->next_insert) {
-        if (_ejs_property_desc_is_enumerable(s->desc))
-            names[n++] = s->name;
+        names = malloc(names_len * sizeof(ejsval));
+        int n = 0;
+        for (_EJSPropertyMapEntry *s = props_obj->map->head_insert; s; s = s->next_insert) {
+            if (_ejs_property_desc_is_enumerable(s->desc))
+                names[n++] = s->name;
+        }
     }
 
     /* 4. Let descriptors be an empty internal List. */
@@ -2049,9 +2225,23 @@ _ejs_object_specop_get (ejsval O, ejsval P, ejsval Receiver)
     if (EJSVAL_IS_STRING(pname) && !ucs2_strcmp(_ejs_ucs2___proto__, EJSVAL_TO_FLAT_STRING(pname)))
         return OP(EJSVAL_TO_OBJECT(O),GetPrototypeOf) (O);
 
-    // 2. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with argument P. 
-    // 3. ReturnIfAbrupt(desc). 
-    EJSPropertyDesc* desc = OP(EJSVAL_TO_OBJECT(O),GetOwnProperty) (O, P, NULL);
+    // 2. Let desc be the result of calling the [[GetOwnProperty]] internal method of O with argument P.
+    // 3. ReturnIfAbrupt(desc).
+    EJSPropertyDesc* desc;
+    EJSObject* O_ = EJSVAL_TO_OBJECT(O);
+    uint32_t O_shape = EJS_OBJECT_SHAPE(O_);
+    if (O_shape != EJS_SHAPE_DICT) {
+        // shapes P4.2 fast path: a hit is a fixed-index slot load; a
+        // miss (including symbol keys, which shaped objects never
+        // carry) falls to the proto walk below
+        uint32_t slot;
+        if (EJSVAL_IS_STRING(pname) && _ejs_shape_lookup (O_shape, pname, &slot))
+            return shaped_slots(O_)[slot];
+        desc = NULL;
+    }
+    else {
+        desc = OP(O_,GetOwnProperty) (O, P, NULL);
+    }
 
     // 4. If desc is undefined, then 
     if (desc == NULL) {
@@ -2095,6 +2285,18 @@ _ejs_object_specop_get_own_property (ejsval obj, ejsval propertyName, ejsval* ex
     ejsval property_str = ToPropertyKey(propertyName);
     EJSObject* obj_ = EJSVAL_TO_OBJECT(obj);
 
+    // shapes P4.2: shaped objects synthesize the default data
+    // descriptor from the slot (their fields are always plain
+    // writable/enumerable/configurable string-keyed data properties)
+    uint32_t shape = EJS_OBJECT_SHAPE(obj_);
+    if (shape != EJS_SHAPE_DICT) {
+        uint32_t slot;
+        if (EJSVAL_IS_STRING(property_str) &&
+            _ejs_shape_lookup (shape, property_str, &slot))
+            return shaped_synthesize_desc (shaped_slots(obj_)[slot]);
+        return NULL;
+    }
+
     return _ejs_propertymap_lookup (obj_->map, property_str);
 }
 
@@ -2104,10 +2306,33 @@ _ejs_object_specop_set (ejsval O, ejsval P, ejsval V, ejsval Receiver)
 {
     EJSPropertyDesc undefined_desc = { .value = _ejs_undefined, .flags = EJS_PROP_FLAGS_VALUE_SET | EJS_PROP_WRITABLE | EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE };
 
-    // 1. Assert: IsPropertyKey(P) is true. 
+    // 1. Assert: IsPropertyKey(P) is true.
     P = ToPropertyKey(P); // XXX this shouldn't be necessary, but ejs passes numbers here
-    
-    // 2. Let ownDesc be the result of calling the [[GetOwnProperty]] internal method of O with argument P. 
+
+    // shapes P4.2 fast path: a store to an existing shaped field on the
+    // receiver itself is a repr check + slot store (shaped fields are
+    // always plain writable data properties).  Absent fields take the
+    // generic path below — its proto walk and CreateDataProperty
+    // ending land back in the shaped DefineOwnProperty.
+    if (EJSVAL_EQ(O, Receiver)) {
+        EJSObject* O_ = EJSVAL_TO_OBJECT(O);
+        uint32_t O_shape = EJS_OBJECT_SHAPE(O_);
+        uint32_t slot;
+        if (O_shape != EJS_SHAPE_DICT && EJSVAL_IS_STRING(P) &&
+            _ejs_shape_lookup (O_shape, P, &slot)) {
+            uint32_t next_shape = _ejs_shape_transition_set (O_shape, slot, V);
+            if (next_shape != EJS_SHAPE_DICT) {
+                EJS_OBJECT_SET_SHAPE(O_, next_shape);
+                shaped_slots(O_)[slot] = V;
+                return EJS_TRUE;
+            }
+            // shape-table overflow: drop to dictionary mode and let the
+            // generic path store through the map
+            _ejs_object_to_dictionary (O_, EJS_SHAPE_MIGRATE_TABLE_FULL);
+        }
+    }
+
+    // 2. Let ownDesc be the result of calling the [[GetOwnProperty]] internal method of O with argument P.
     // 3. ReturnIfAbrupt(ownDesc). 
     EJSPropertyDesc* ownDesc = OP(EJSVAL_TO_OBJECT(O),GetOwnProperty)(O, P, NULL);
 
@@ -2212,9 +2437,10 @@ _ejs_object_specop_delete (ejsval O, ejsval P, EJSBool Throw)
     /* 3. If desc.[[Configurable]] is true, then */
     if (_ejs_property_desc_is_configurable(desc)) {
         /*    a. Remove the own property with name P from O. */
+        // shapes P4.2: deletes are a dictionary-mode affair
+        if (EJS_OBJECT_SHAPE(obj) != EJS_SHAPE_DICT)
+            _ejs_object_to_dictionary (obj, EJS_SHAPE_MIGRATE_DELETE);
         _ejs_propertymap_remove (obj->map, P);
-        // shapes P4.1: delete of a tracked field drops to dictionary
-        _ejs_shape_object_migrate (obj, EJS_SHAPE_MIGRATE_DELETE);
         /*    b. Return true. */
         return EJS_TRUE;
     }
@@ -2238,6 +2464,69 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
     EJS_MACRO_END
 
     EJSObject* obj = EJSVAL_TO_OBJECT(O);
+
+    // shapes P4.2: route shaped objects up front.  Plain default-
+    // attribute data properties live in slot storage; anything the
+    // shaped world can't express migrates to dictionary mode and falls
+    // into the generic algorithm below.  (Absent property on a
+    // non-extensible object also falls through: the generic step 3
+    // rejects without touching storage.)
+    uint32_t obj_shape = EJS_OBJECT_SHAPE(obj);
+    if (obj_shape != EJS_SHAPE_DICT) {
+        if (_ejs_property_desc_has_getter(Desc) || _ejs_property_desc_has_setter(Desc))
+            _ejs_object_to_dictionary (obj, EJS_SHAPE_MIGRATE_ACCESSOR);
+        else if (!EJSVAL_IS_STRING(P))
+            _ejs_object_to_dictionary (obj, EJS_SHAPE_MIGRATE_SYMBOL_KEY);
+        else {
+            uint32_t slot;
+            if (_ejs_shape_lookup (obj_shape, P, &slot)) {
+                // existing field: attribute-lowering migrates; a value
+                // update is a repr check + slot store (attributes are
+                // all true already, so re-asserting them is a no-op)
+                if ((_ejs_property_desc_has_writable(Desc) && !_ejs_property_desc_is_writable(Desc)) ||
+                    (_ejs_property_desc_has_enumerable(Desc) && !_ejs_property_desc_is_enumerable(Desc)) ||
+                    (_ejs_property_desc_has_configurable(Desc) && !_ejs_property_desc_is_configurable(Desc)))
+                    _ejs_object_to_dictionary (obj, EJS_SHAPE_MIGRATE_ATTRS);
+                else if (_ejs_property_desc_has_value(Desc)) {
+                    ejsval value = _ejs_property_desc_get_value(Desc);
+                    uint32_t next_shape = _ejs_shape_transition_set (obj_shape, slot, value);
+                    if (next_shape == EJS_SHAPE_DICT)
+                        _ejs_object_to_dictionary (obj, EJS_SHAPE_MIGRATE_TABLE_FULL);
+                    else {
+                        EJS_OBJECT_SET_SHAPE(obj, next_shape);
+                        shaped_slots(obj)[slot] = value;
+                        return EJS_TRUE;
+                    }
+                }
+                else
+                    return EJS_TRUE;
+            }
+            else if (EJS_OBJECT_IS_EXTENSIBLE(obj)) {
+                // absent field: only a creation with all-default
+                // attributes stays shaped (absent attribute fields
+                // default to false per the spec's step 4a)
+                if (!_ejs_property_desc_is_writable(Desc) ||
+                    !_ejs_property_desc_is_enumerable(Desc) ||
+                    !_ejs_property_desc_is_configurable(Desc))
+                    _ejs_object_to_dictionary (obj, EJS_SHAPE_MIGRATE_ATTRS);
+                else {
+                    ejsval value = _ejs_property_desc_get_value(Desc);
+                    EJSShapeMigrateReason reason;
+                    uint32_t next_shape = _ejs_shape_transition_add_fast (obj_shape, P, value, &reason);
+                    if (next_shape == EJS_SHAPE_DICT)
+                        _ejs_object_to_dictionary (obj, reason);
+                    else {
+                        uint32_t nfields = _ejs_shape_field_count(next_shape);
+                        shaped_ensure_capacity (obj, nfields);
+                        EJS_OBJECT_SET_SHAPE(obj, next_shape);
+                        shaped_slots(obj)[nfields - 1] = value;
+                        return EJS_TRUE;
+                    }
+                }
+            }
+        }
+    }
+
     /* 1. Let current be the result of calling the [[GetOwnProperty]] internal method of O with property name P. */
     EJSPropertyDesc* current = OP(obj, GetOwnProperty)(O, P, NULL);
 
@@ -2283,19 +2572,6 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
                 _ejs_property_desc_set_enumerable (dest, _ejs_property_desc_is_enumerable (Desc));
         }
         _ejs_propertymap_insert (obj->map, P, dest);
-
-        // shapes P4.1: a plain writable/enumerable/configurable data
-        // property extends the shape; anything else drops to dictionary
-        if (EJS_OBJECT_SHAPE(obj) != EJS_SHAPE_DICT) {
-            if (_ejs_property_desc_has_getter(dest) || _ejs_property_desc_has_setter(dest))
-                _ejs_shape_object_migrate (obj, EJS_SHAPE_MIGRATE_ACCESSOR);
-            else if (!_ejs_property_desc_is_writable(dest) ||
-                     !_ejs_property_desc_is_enumerable(dest) ||
-                     !_ejs_property_desc_is_configurable(dest))
-                _ejs_shape_object_migrate (obj, EJS_SHAPE_MIGRATE_ATTRS);
-            else
-                _ejs_shape_object_add_fast (obj, P, _ejs_property_desc_get_value(dest));
-        }
 
         /*    c. Return true. */
         return EJS_TRUE;
@@ -2412,20 +2688,6 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
     if (_ejs_property_desc_has_writable (Desc))
         _ejs_property_desc_set_writable (dest, _ejs_property_desc_is_writable (Desc));
 
-    // shapes P4.1: accessor conversion and non-default attributes drop to
-    // dictionary (freeze/seal land here via SetIntegrityLevel); a plain
-    // value update gets the repr-flip check
-    if (EJS_OBJECT_SHAPE(obj) != EJS_SHAPE_DICT) {
-        if (_ejs_property_desc_has_getter(Desc) || _ejs_property_desc_has_setter(Desc))
-            _ejs_shape_object_migrate (obj, EJS_SHAPE_MIGRATE_ACCESSOR);
-        else if ((_ejs_property_desc_has_writable(Desc) && !_ejs_property_desc_is_writable(Desc)) ||
-                 (_ejs_property_desc_has_enumerable(Desc) && !_ejs_property_desc_is_enumerable(Desc)) ||
-                 (_ejs_property_desc_has_configurable(Desc) && !_ejs_property_desc_is_configurable(Desc)))
-            _ejs_shape_object_migrate (obj, EJS_SHAPE_MIGRATE_ATTRS);
-        else if (_ejs_property_desc_has_value(Desc))
-            _ejs_shape_object_set (obj, P, _ejs_property_desc_get_value(Desc));
-    }
-
     /* 13. Return true. */
     return EJS_TRUE;
 }
@@ -2440,8 +2702,10 @@ void
 _ejs_object_specop_finalize(EJSObject* obj)
 {
     _ejs_shape_object_died (obj);
-    //printf ("_ejs_propertymap_free(obj->map = %p)\n", obj->map);
-    _ejs_propertymap_free (obj->map);
+    // shapes P4.2: shaped objects have no map; their slot array is GC
+    // memory and needs no finalization
+    if (EJS_OBJECT_SHAPE(obj) == EJS_SHAPE_DICT && obj->map)
+        _ejs_propertymap_free (obj->map);
     obj->map = NULL;
 }
 
@@ -2464,6 +2728,15 @@ scan_property (ejsval name, EJSPropertyDesc *desc, EJSValueFunc scan_func)
 static void
 _ejs_object_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
+    // shapes P4.2: shaped objects trace their slot array (a closureenv,
+    // which scans its own ejsval range); field names are rooted by the
+    // global shape table
+    if (EJS_OBJECT_SHAPE(obj) != EJS_SHAPE_DICT) {
+        if (!EJSVAL_IS_NULL(obj->slots))
+            scan_func (obj->slots);
+        scan_func (obj->proto);
+        return;
+    }
     _ejs_propertymap_foreach_property (obj->map, (EJSPropertyDescFunc)scan_property, scan_func);
     scan_func (obj->proto);
 }
@@ -2523,16 +2796,43 @@ _ejs_object_specop_own_property_keys (ejsval O)
 {
     EJSObject* O_ = EJSVAL_TO_OBJECT(O);
 
-    ejsval* numberkeys = malloc(sizeof(ejsval) *O_->map->inuse);
+    // shapes P4.2: snapshot the own property names from whichever store
+    // this object uses; the classification below is shared so the two
+    // modes stay byte-identical
+    uint32_t O_shape = EJS_OBJECT_SHAPE(O_);
+    int nprops;
+    ejsval shaped_names[256];
+    if (O_shape != EJS_SHAPE_DICT) {
+        nprops = (int)_ejs_shape_field_count(O_shape);
+        _ejs_shape_fields (O_shape, shaped_names);
+    }
+    else {
+        nprops = O_->map->inuse;
+    }
+
+    ejsval* numberkeys = malloc(sizeof(ejsval) * nprops);
     int num_numberkeys = 0;
-    ejsval* stringkeys = malloc(sizeof(ejsval) *O_->map->inuse);
+    ejsval* stringkeys = malloc(sizeof(ejsval) * nprops);
     int num_stringkeys = 0;
-    ejsval* symbolkeys = malloc(sizeof(ejsval) *O_->map->inuse);
+    ejsval* symbolkeys = malloc(sizeof(ejsval) * nprops);
     int num_symbolkeys = 0;
-    // 1. Let keys be a new empty List. 
-    for (_EJSPropertyMapEntry *s = O_->map->head_insert; s; s = s->next_insert) {
-        if (EJSVAL_IS_STRING(s->name)) {
-            ejsval idx_val = ToNumber(s->name);
+    // 1. Let keys be a new empty List.
+    _EJSPropertyMapEntry *s = O_shape == EJS_SHAPE_DICT ? O_->map->head_insert : NULL;
+    for (int i = 0; ; i ++) {
+        ejsval name;
+        if (O_shape != EJS_SHAPE_DICT) {
+            if (i >= nprops)
+                break;
+            name = shaped_names[i];
+        }
+        else {
+            if (!s)
+                break;
+            name = s->name;
+            s = s->next_insert;
+        }
+        if (EJSVAL_IS_STRING(name)) {
+            ejsval idx_val = ToNumber(name);
             if (EJSVAL_IS_NUMBER(idx_val)) {
                 double n = EJSVAL_TO_NUMBER(idx_val);
                 if (n >= 0 && floor(n) == n) {
@@ -2540,18 +2840,18 @@ _ejs_object_specop_own_property_keys (ejsval O)
                     //    a. Add P as the last element of keys.
 
                     // we just append them as we do strings/symbols below.  we'll sort after our pass over the map
-                    numberkeys[num_numberkeys++] = s->name;
+                    numberkeys[num_numberkeys++] = name;
                     continue;
                 }
             }
-            // 3. For each own property key P of O that is a String but is not an integer index, in property creation order 
-            //    a. Add P as the last element of keys. 
-            stringkeys[num_stringkeys++] = s->name;
+            // 3. For each own property key P of O that is a String but is not an integer index, in property creation order
+            //    a. Add P as the last element of keys.
+            stringkeys[num_stringkeys++] = name;
         }
         else {
             // 4. For each own property key P of O that is a Symbol, in property creation order
-            //    a. Add P as the last element of keys. 
-            symbolkeys[num_symbolkeys++] = s->name;
+            //    a. Add P as the last element of keys.
+            symbolkeys[num_symbolkeys++] = name;
         }
     }
 

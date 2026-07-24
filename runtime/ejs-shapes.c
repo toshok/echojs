@@ -1,10 +1,12 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  *
- * Runtime shape tracking (shapes-plan P4.1).  Pure bookkeeping in this
- * phase: the property map remains the store; ordinary objects carry a
- * shape index maintained by the hooks below, and the census (dumped at
- * exit under EJS_SHAPES_CENSUS) records what real programs do with it.
+ * Runtime shape tracking (shapes-plan P4.1/P4.2).  This module owns the
+ * global interned shape table and the transition cache; since P4.2 the
+ * object layer (ejs-object.c) stores shaped objects' property values in
+ * slot arrays at the indices this table dictates, via the transition /
+ * lookup API below.  The census (dumped at exit under EJS_SHAPES_CENSUS)
+ * records what real programs do with it.
  */
 
 #include <stdlib.h>
@@ -29,8 +31,10 @@ static uint32_t shape_count; /* next unallocated index; starts at 2 (0 =
 
 EJSBool _ejs_shapes_tracking = EJS_FALSE;
 static EJSBool census_enabled = EJS_FALSE;
-static uint32_t shape_field_cap = 64; /* runtime twin of maam's shapeCap;
-                                         EJS_SHAPE_CAP overrides */
+/* runtime twin of maam's shapeCap; EJS_SHAPE_CAP overrides (clamped to
+   EJS_SHAPE_FIELD_CAP_MAX — see its comment in ejs-shapes.h for why the
+   ceiling is a page-allocator cell, not a semantic choice) */
+static uint32_t shape_field_cap = EJS_SHAPE_FIELD_CAP_MAX;
 
 /* transition cache: open-addressed (parent, name, repr) -> child.
    child == 0 marks an empty slot (shape 0 is never a transition target) */
@@ -208,17 +212,12 @@ _ejs_shape_object_migrate(EJSObject *obj, EJSShapeMigrateReason reason)
     stat_migrations[reason]++;
 }
 
-void
-_ejs_shape_object_add(EJSObject *obj, ejsval name, ejsval value)
+uint32_t
+_ejs_shape_transition_add(uint32_t shape, ejsval name, ejsval value,
+                          EJSShapeMigrateReason *reason)
 {
-    uint32_t shape = EJS_OBJECT_SHAPE(obj);
-    if (shape == EJS_SHAPE_DICT)
-        return;
-
-    if (!EJSVAL_IS_STRING(name)) {
-        _ejs_shape_object_migrate(obj, EJS_SHAPE_MIGRATE_SYMBOL_KEY);
-        return;
-    }
+    EJS_ASSERT(shape != EJS_SHAPE_DICT);
+    EJS_ASSERT(EJSVAL_IS_STRING(name));
 
     /* numeric/index-looking keys stay in the map (arrays own indexed
        storage; indexed access on plain objects is rare enough to eat it) */
@@ -228,28 +227,56 @@ _ejs_shape_object_add(EJSObject *obj, ejsval name, ejsval value)
                         ? namestr->data.flat[0]
                         : _ejs_string_ucs2_at(namestr, 0);
         if (c0 >= '0' && c0 <= '9') {
-            _ejs_shape_object_migrate(obj, EJS_SHAPE_MIGRATE_INDEX_KEY);
-            return;
+            *reason = EJS_SHAPE_MIGRATE_INDEX_KEY;
+            return EJS_SHAPE_DICT;
         }
     }
 
     EJSShape *cur = shape_get(shape);
     if (cur->field_count >= shape_field_cap) {
-        _ejs_shape_object_migrate(obj, EJS_SHAPE_MIGRATE_CAP);
-        return;
+        *reason = EJS_SHAPE_MIGRATE_CAP;
+        return EJS_SHAPE_DICT;
     }
 
     uint32_t child = transition_find_or_add(shape, name, classify_repr(value));
     if (child == EJS_SHAPE_DICT) {
-        _ejs_shape_object_migrate(obj, EJS_SHAPE_MIGRATE_TABLE_FULL);
-        return;
+        *reason = EJS_SHAPE_MIGRATE_TABLE_FULL;
+        return EJS_SHAPE_DICT;
     }
 
-    EJS_OBJECT_SET_SHAPE(obj, child);
     _ejs_shape_stat_transitions++;
     uint32_t depth = shape_get(child)->field_count;
     if (depth > stat_max_depth)
         stat_max_depth = depth;
+    return child;
+}
+
+EJSBool
+_ejs_shape_lookup(uint32_t shape, ejsval name, uint32_t *slot)
+{
+    uint32_t s = shape;
+    while (s != EJS_SHAPE_DICT) {
+        EJSShape *cur = shape_get(s);
+        if (cur->field_count == 0)
+            break;
+        if (shape_name_eq(cur->name, name)) {
+            *slot = cur->field_count - 1;
+            return EJS_TRUE;
+        }
+        s = cur->parent;
+    }
+    return EJS_FALSE;
+}
+
+void
+_ejs_shape_fields(uint32_t shape, ejsval *names)
+{
+    uint32_t s = shape;
+    for (uint32_t i = shape_get(shape)->field_count; i > 0; i--) {
+        EJSShape *cur = shape_get(s);
+        names[i - 1] = cur->name;
+        s = cur->parent;
+    }
 }
 
 /* rebuild the chain with `field_index`'s repr changed: the sibling shape a
@@ -282,45 +309,26 @@ shape_flip_repr(uint32_t shape, uint32_t field_index, uint8_t new_repr)
     return rebuilt;
 }
 
-void
-_ejs_shape_object_set(EJSObject *obj, ejsval name, ejsval value)
+uint32_t
+_ejs_shape_transition_set(uint32_t shape, uint32_t slot_index, ejsval value)
 {
-    uint32_t shape = EJS_OBJECT_SHAPE(obj);
-    if (shape == EJS_SHAPE_DICT)
-        return;
-
-    if (!EJSVAL_IS_STRING(name))
-        return; /* symbol props never enter a shape; nothing to flip */
-
-    /* find the field on the chain (leaf->root; index counts from the root) */
+    /* find the chain node owning this slot (its field_count is the
+       1-based insertion index) */
     uint32_t s = shape;
-    int32_t field_index = -1;
-    uint8_t old_repr = EJS_SHAPE_REPR_BOXED;
-    while (s != EJS_SHAPE_DICT) {
-        EJSShape *cur = shape_get(s);
-        if (cur->field_count == 0)
-            break;
-        if (shape_name_eq(cur->name, name)) {
-            field_index = (int32_t)cur->field_count - 1;
-            old_repr = cur->repr;
-            break;
-        }
+    EJSShape *cur = shape_get(s);
+    while (cur->field_count != slot_index + 1) {
         s = cur->parent;
+        cur = shape_get(s);
     }
-    if (field_index < 0)
-        return; /* not a tracked field (e.g. index-looking key kept in the map) */
 
     uint8_t new_repr = classify_repr(value);
-    if (new_repr == old_repr)
-        return;
+    if (new_repr == cur->repr)
+        return shape;
 
-    uint32_t flipped = shape_flip_repr(shape, (uint32_t)field_index, new_repr);
-    if (flipped == EJS_SHAPE_DICT) {
-        _ejs_shape_object_migrate(obj, EJS_SHAPE_MIGRATE_TABLE_FULL);
-        return;
-    }
-    EJS_OBJECT_SET_SHAPE(obj, flipped);
-    stat_repr_flips++;
+    uint32_t flipped = shape_flip_repr(shape, slot_index, new_repr);
+    if (flipped != EJS_SHAPE_DICT)
+        stat_repr_flips++;
+    return flipped;
 }
 
 void
@@ -437,7 +445,7 @@ _ejs_shapes_init(void)
     const char *cap_env = getenv("EJS_SHAPE_CAP");
     if (cap_env) {
         int cap = atoi(cap_env);
-        if (cap > 0 && cap <= 256)
+        if (cap > 0 && cap <= EJS_SHAPE_FIELD_CAP_MAX)
             shape_field_cap = (uint32_t)cap;
     }
 
