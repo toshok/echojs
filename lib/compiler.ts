@@ -49,6 +49,14 @@ class LLVMIRVisitor implements VisitorSurface {
     ejs_globals: Record<string, llvm.GlobalVariable>;
     ejs_symbols: Record<string, llvm.GlobalVariable>;
     module_atoms: Map<string, llvm.GlobalVariable>;
+    // shapes-plan P4.3: the module's interned guard shapes (imms.shape key
+    // -> the i32 shape-index global + its ordered fields), filled by the
+    // EIR emitter's has_shape lowering and flushed into the literal-init
+    // function by emitShapeInterns (the atom-table precedent)
+    module_shapes: Map<
+        string,
+        { global: llvm.GlobalVariable; fields: { name: string; repr: string }[] }
+    >;
     literalInitializationFunction: llvm.EjsFunction;
     literalInitializationDebugInfo: llvm.DISubprogram | undefined;
     literalInitializationBB: llvm.BasicBlock;
@@ -65,6 +73,10 @@ class LLVMIRVisitor implements VisitorSurface {
     eir_emitter?: EIREmitter;
     eir_emitted?: Map<import("./eir/ir").Module, Map<string, llvm.EjsFunction>>;
     eir_toplevel_fns!: Map<string, llvm.EjsFunction>;
+    // shapes-plan P4.3: the shape-intern init function (null when the
+    // module guards no shapes), built by emitShapeInterns and called by
+    // emitModuleResolution after literal initialization
+    shape_init_function: llvm.EjsFunction | null = null;
 
     constructor(
         module: llvm.Module,
@@ -102,6 +114,7 @@ class LLVMIRVisitor implements VisitorSurface {
         this.ejs_symbols = runtime.createSymbolsInterface(module);
 
         this.module_atoms = new Map();
+        this.module_shapes = new Map();
 
         const init_function_name = `_ejs_module_init_string_literals_${this.filename}`;
         this.literalInitializationFunction = this.module.getOrInsertFunction(
@@ -212,6 +225,11 @@ class LLVMIRVisitor implements VisitorSurface {
             [],
             ""
         );
+
+        // shapes-plan P4.3: intern this module's guard shapes right after
+        // the atoms they name are initialized
+        if (this.shape_init_function)
+            ir.createCall(this.shape_init_function.type, this.shape_init_function, [], "");
 
         // fill in the information we know about this module
         //  our name
@@ -647,6 +665,118 @@ class LLVMIRVisitor implements VisitorSurface {
             return ir.createICmpEq(trunc, consts.int32(-127), "cmpresult");
         }
     }
+
+    // shapes-plan P4.3 target-layout helpers (beside isNumber so all
+    // NaN-box knowledge stays in one place)
+
+    // EJSVAL_IS_OBJECT: object is the topmost shifted tag, so on 64-bit a
+    // single unsigned compare suffices (mirrors EJSVAL_IS_OBJECT_IMPL)
+    isObject(val: llvm.Value): llvm.Value {
+        if (this.triple.pointerSize() === 64) {
+            return ir.createICmpUGE(
+                this.getEjsvalBits(val),
+                consts.int64_lowhi(0xfffc8000, 0x00000000),
+                "isobj"
+            );
+        } else {
+            // 32-bit: tag compare, the isNumber trunc convention
+            let trunc = ir.createTrunc(this.getEjsvalBits(val), types.Int32, "trunc.i");
+            return ir.createICmpEq(trunc, consts.int32(-119) /* 0xFFFFFF89 */, "isobj");
+        }
+    }
+
+    // EJSVAL_TO_OBJECT: payload-mask the bits and reinterpret as EJSObject*.
+    // Only valid under a passed isObject check.
+    objectPointer(val: llvm.Value): llvm.Value {
+        if (this.triple.pointerSize() !== 64)
+            throw new Error("objectPointer not implemented for 32-bit targets");
+        const payload = ir.createAnd(
+            this.getEjsvalBits(val),
+            consts.int64_lowhi(0x00007fff, 0xffffffff),
+            "obj_payload"
+        );
+        return ir.createIntToPtr(payload, types.EjsObject.pointerTo(), "objptr");
+    }
+
+    // the module's i32 shape-index global for `key`, minted on first use
+    // (initialized to EJS_SHAPE_NOMATCH so a guard can never pass before
+    // module init interns the real index)
+    moduleShapeGlobal(
+        key: string,
+        fields: { name: string; repr: string }[]
+    ): llvm.GlobalVariable {
+        let entry = this.module_shapes.get(key);
+        if (!entry) {
+            const g = new llvm.GlobalVariable(
+                this.module,
+                types.Int32,
+                `ejs_shape-${this.idgen()}`,
+                consts.int32(0xffffff) /* EJS_SHAPE_NOMATCH */,
+                false
+            );
+            entry = { global: g, fields: fields.slice() };
+            this.module_shapes.set(key, entry);
+        }
+        return entry.global;
+    }
+
+    // flush the pending shape interns into their own init function (one
+    // _ejs_shape_intern call per shape), called by emitModuleResolution
+    // right after the literal-initialization call — so every atom the
+    // shapes name is initialized first.  A separate function rather than
+    // the literal-init one: getAtom on a not-yet-interned name restores
+    // the builder to the END of the current block, which inside an
+    // already-terminated block would emit past the terminator; here the
+    // body block stays unterminated until the very end.  Called once,
+    // after all EIR emission.
+    emitShapeInterns(): llvm.EjsFunction | null {
+        if (this.module_shapes.size === 0) return null;
+        const saved_insert = ir.getInsertBlock();
+        const saved_function = this.currentFunction;
+
+        const fname = `_ejs_module_init_shapes_${this.filename}`;
+        const fn = this.module.getOrInsertFunction(fname, types.Void, []);
+        fn.setInternalLinkage();
+        this.currentFunction = fn;
+        const body_bb = new llvm.BasicBlock("entry", fn);
+        ir.setInsertPoint(body_bb);
+
+        for (const entry of this.module_shapes.values()) {
+            const fields = entry.fields;
+            const arr_ty = llvm.ArrayType.get(types.EjsValue, fields.length);
+            const arr = ir.createAlloca(arr_ty, "shape_names");
+            arr.setAlignment(8);
+            let f64_mask = 0;
+            for (let i = 0; i < fields.length; i++) {
+                if (fields[i]!.repr === "f64") f64_mask |= 1 << i;
+                const atom = this.getAtom(fields[i]!.name);
+                const gep = ir.createGetElementPointer(
+                    arr_ty,
+                    arr,
+                    [consts.int32(0), consts.int64(i)],
+                    "shape_name_slot"
+                );
+                ir.createStore(atom, gep);
+            }
+            const base = ir.createGetElementPointer(
+                arr_ty,
+                arr,
+                [consts.int32(0), consts.int64(0)],
+                "shape_names_base"
+            );
+            const idx = this.createCall(
+                this.ejs_runtime.shape_intern,
+                [consts.int32(fields.length), base, consts.int32(f64_mask)],
+                "shape_idx"
+            );
+            ir.createStore(idx, entry.global);
+        }
+        ir.createRetVoid();
+
+        this.currentFunction = saved_function;
+        if (saved_insert) ir.setInsertPoint(saved_insert);
+        return fn;
+    }
 }
 
 function insert_toplevel_func(tree: e.Program, moduleInfo: JSModuleInfo): e.Program {
@@ -729,7 +859,14 @@ export function compile(
     if (lowered.error) throw new Error(`${source_filename}: ${lowered.error}`);
     // Phase 3 telemetry: how many guarded diamonds lowering emitted, and
     // whether any oracle query missed (the node-identity canary)
-    if (type_oracle)
+    if (type_oracle) {
+        // shapes-plan P4.3 telemetry (criterion 5, visible degradation):
+        // counted decline reasons, additive-only on the scraped line
+        const declined = lowered.shape_declined ?? {};
+        const declineStr = Object.keys(declined)
+            .sort()
+            .map((k) => `${k}:${declined[k]}`)
+            .join(",");
         console.warn(
             `--types: ${source_filename}: diamonds=${lowered.diamonds ?? 0} ` +
                 `oracleQueries=${type_oracle.stats.queries} oracleUnknown=${type_oracle.stats.unknown}` +
@@ -737,8 +874,14 @@ export function compile(
                 (lowered.spec
                     ? ` specialized=${lowered.spec.specialized} specSites=${lowered.spec.sites}` +
                       ` specRejected=${lowered.spec.rejected}`
+                    : "") +
+                // shape telemetry, present only when sites were consulted
+                ((lowered.shape_sites ?? 0) > 0
+                    ? ` shapeSites=${lowered.shape_sites} shapeGuards=${lowered.shape_guards ?? 0}` +
+                      ` shapeDeclined=${declineStr || "none"}`
                     : "")
         );
+    }
 
     const toplevel_node = tree.body[0] as e.FunctionDeclaration;
     const toplevel_name = toplevel_node.id.name;
@@ -802,6 +945,11 @@ export function compile(
     visitor.emitModuleInfo();
 
     visitor.emitEIRToplevel(toplevel_node);
+
+    // every has_shape has been emitted by now; flush the module's shape
+    // interns into their init function (shapes-plan P4.3) —
+    // emitModuleResolution calls it after literal initialization
+    visitor.shape_init_function = visitor.emitShapeInterns();
 
     visitor.emitModuleResolution(lowered.accessors!);
 

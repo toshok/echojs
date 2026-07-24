@@ -389,6 +389,18 @@ const runtime_interface = {
             ty.EjsValue,
         ]);
     },
+    // shapes-plan P4.3: module-init interning of guard shapes (names are
+    // this module's atoms; f64_mask bit i = field i has repr f64).
+    // Returns the interned shape index, or EJS_SHAPE_NOMATCH.
+    shape_intern: function (this: RuntimeContext) {
+        return does_not_throw(
+            this.abi.createExternalFunction(this.module, "_ejs_shape_intern", ty.Int32, [
+                ty.Int32,
+                ty.EjsValue.pointerTo(),
+                ty.Int32,
+            ])
+        );
+    },
     init_string_literal: function (this: RuntimeContext) {
         return this.abi.createExternalFunction(this.module, "_ejs_string_init_literal", ty.Void, [
             ty.String,

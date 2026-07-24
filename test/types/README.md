@@ -29,6 +29,14 @@ Census as of 2026-07-22 (echojs @ 568efc7, maam @ 8d6a157):
 | types-spec2 | Phase 3.6 cross-function specialization (the hypot2-demo shape): hypot2 called only inside sum, prefix-safe toplevel slot stores → both clone, all four sites rewrite incl. the one inside sum$typed (`specialized=2 specSites=4`) | 7 | match |
 | types-specescape1 | Phase 3.6 escape rejection: f LOOKS numeric-closed but its closure is passed as a call argument → NOT specialized (no `specialized=` in stats); the escaped call feeds a string through the generic path | 2 | match |
 
+Shapes probes (shapes-plan P4.3; `shapeGuards=N` from the stats line
+counts has_shape diamonds the way `diamonds=N` counts has_tag ones):
+
+| probe | shape | shapeGuards | vs node |
+|---|---|---|---|
+| types-bench2 | the object-model microbenchmark: monomorphic constructor + p.x/p.y kernel; guarded fast paths + shape-region merging (`shapeGuards=10`, 2 shape regions merged); 2026-07-24 numbers: --types 3.06s vs flag-off 6.56s (2.1×), vs EJS_SHAPES=off 5.82s (~1.9× shapes-attributable) | 10 | match |
+| types-shapeswrong1 | the wrong-oracle shape guard: lib types sumxy's receiver {x: num, y: num} from its one local call; main hands it a repr-mismatched object ("ab"), an extra-field object, and a dictionary-mode (post-delete) object → all route slow with node-identical values; the matching Point goes fast | 4 (in lib) | n/a¹ |
+
 ¹ node cannot execute this file's bare-ESM import layout from test/;
 the check here is flag-off vs `--types` executables producing identical
 output (verified — and the slow-path routing is the probe's point).
@@ -38,3 +46,10 @@ Wider context (the `--types` diff lane over all of `test/`, 2026-07-22):
 (tester.js, esprima parse gap), 67 diamonds total across the suite.
 Suite files are string/object-heavy by design — the diamond count is
 expected to be modest outside numeric kernels.
+
+P4.3 re-run (2026-07-24, shapes guards live): 459 files, 458 identical,
+0 divergent, 1 N/A (tester.js), 78 diamonds.  Shape telemetry across
+the suite: 13,154 access sites consulted, 809 guarded; declines:
+unmapped 7,575 / capped 4,287 / empty 269 / no-field 194 /
+polymorphic 12 / union-repr 8 — same story: guards fire in kernels,
+the string-heavy suite mostly declines (visibly, per reason).

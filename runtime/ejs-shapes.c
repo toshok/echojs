@@ -60,11 +60,14 @@ static uint32_t stat_max_depth;
 
 #define shape_get _ejs_shape_get
 
-/* returns the new shape's index, or EJS_SHAPE_DICT if the table is full */
+/* returns the new shape's index, or EJS_SHAPE_DICT if the table is full.
+   stops one short of EJS_SHAPE_NOMATCH: that index must never be
+   allocatable, so a compiled guard against the sentinel is statically
+   false (shapes-plan P4.3) */
 static uint32_t
 shape_alloc(uint32_t parent, ejsval name, uint8_t repr, uint32_t field_count)
 {
-    if (shape_count >= SHAPE_MAX_SHAPES)
+    if (shape_count >= EJS_SHAPE_NOMATCH)
         return EJS_SHAPE_DICT;
 
     uint32_t index = shape_count++;
@@ -329,6 +332,48 @@ _ejs_shape_transition_set(uint32_t shape, uint32_t slot_index, ejsval value)
     if (flipped != EJS_SHAPE_DICT)
         stat_repr_flips++;
     return flipped;
+}
+
+uint32_t
+_ejs_shape_intern(uint32_t nfields, const ejsval *names, uint32_t f64_mask)
+{
+    if (!_ejs_shapes_tracking)
+        return EJS_SHAPE_NOMATCH;
+    if (nfields == 0 || nfields > shape_field_cap || nfields > 32)
+        return EJS_SHAPE_NOMATCH;
+
+    uint32_t shape = EJS_SHAPE_ROOT;
+    for (uint32_t i = 0; i < nfields; i++) {
+        ejsval name = names[i];
+        if (!EJSVAL_IS_STRING(name))
+            return EJS_SHAPE_NOMATCH;
+
+        /* mirror _ejs_shape_transition_add's shapeability screen: an
+           index-looking key never enters the shaped world, so a shape
+           containing one can never match any object */
+        EJSPrimString *namestr = EJSVAL_TO_STRING(name);
+        if (namestr->length > 0) {
+            jschar c0 = EJS_PRIMSTR_GET_TYPE(namestr) == EJS_STRING_FLAT
+                            ? namestr->data.flat[0]
+                            : _ejs_string_ucs2_at(namestr, 0);
+            if (c0 >= '0' && c0 <= '9')
+                return EJS_SHAPE_NOMATCH;
+        }
+
+        /* a duplicate name would intern a corrupt chain (transition_find_
+           or_add appends unconditionally; only the object layer's absent-
+           field discipline keeps runtime chains duplicate-free) */
+        for (uint32_t j = 0; j < i; j++)
+            if (shape_name_eq(names[j], name))
+                return EJS_SHAPE_NOMATCH;
+
+        uint8_t repr = (f64_mask & (1u << i)) ? EJS_SHAPE_REPR_F64
+                                              : EJS_SHAPE_REPR_BOXED;
+        shape = transition_find_or_add(shape, name, repr);
+        if (shape == EJS_SHAPE_DICT)
+            return EJS_SHAPE_NOMATCH;
+    }
+    return shape;
 }
 
 void

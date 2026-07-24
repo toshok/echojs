@@ -183,6 +183,31 @@ export const OPS = {
     // imms.tag: the runtime tag tested; only "number" is emitted today
     // (mirrors LLVMIRVisitor.isNumber, inheriting its per-target check)
     has_tag: { arity: 1, effects: E.NONE, imms: ["tag"], sig: { params: ["ejsval"], result: "i1" } },
+
+    // --- shapes (shapes-plan P4.3) ----------------------------------------------
+    // i1: does the operand's header shape index equal the module-interned
+    // shape?  imms.shape keys Module.shapes (the ordered field list the
+    // module interns at init, like atoms); the emitter folds the NaN-box
+    // object check in exactly as isNumber backs has_tag.  Effect NONE — a
+    // pure header compare.
+    has_shape: { arity: 1, effects: E.NONE, imms: ["shape"], sig: { params: ["ejsval"], result: "i1" } },
+    // fixed-slot access on a shape-guarded receiver.  imms.shape/imms.slot
+    // name the guarded shape and the field index within it (the shape imm
+    // repeats the guard's so the verifier compares instead of infers);
+    // imms.repr is the FIELD's shape repr ("boxed" | "f64").  Round one is
+    // boxed storage access for both reprs (result/operand are ejsvals); a
+    // future phase (P4.5) makes repr:"f64" produce/consume raw f64 under
+    // the P2 typed-flow rules.  The verifier requires every slot op to be
+    // dominated by an un-killed has_shape fact on the same value for the
+    // same shape (see the effect-kill inventory in verifier.ts) — without
+    // it a stale shape would make the slot addressing itself unsafe (the
+    // storage word is a MAP pointer in dictionary mode).  slot_store
+    // additionally requires a dominating has_tag fact on the stored value
+    // matching the field repr, so the store provably never needs a repr
+    // transition (the shaped-world invariant "shape reprs describe slot
+    // contents" survives compiled stores).
+    slot_load: { arity: 1, effects: E.READ, imms: ["shape", "slot", "repr"] },
+    slot_store: { arity: 2, effects: E.WRITE, imms: ["shape", "slot", "repr"] },
     // a raw f64 constant (imms.value).  minted only by the optimizer
     // (rawJoinParams' const-number edge roots) and the specialization
     // pass; lowering itself always emits boxed `const` numbers.

@@ -104,9 +104,15 @@
 // verifier re-checks all of it (see verifier.ts rawJoin rules).
 
 import { Func, Block, Inst } from "./ir";
-import type { Target } from "./ir";
+import type { Module, Target } from "./ir";
 import { Effect, opInfo } from "./ops";
-import { computeRPO, computeDominators, dominates } from "./verifier";
+import {
+    computeRPO,
+    computeDominators,
+    dominates,
+    computeShapeFacts,
+    shapeFactKey,
+} from "./verifier";
 import type { OptStats } from "./optimize";
 
 // generic ops that (1) lowering pairs with f64 fast ops, and (2) are
@@ -1035,6 +1041,499 @@ export function threadBooleanJoins(fn: Func, stats: OptStats): boolean {
     }
     if (changed) sweepUnreachableBlocks(fn);
     return changed;
+}
+
+// --- shapes-plan P4.3: shape-guard regions ------------------------------------
+//
+// The shape twins of pass (a): consecutive GET diamonds on the same
+// receiver and shape merge into one guard region with one slow path, and
+// guards proven by an un-killed dominating shape fact fold.  All facts
+// come from verifier.ts's computeShapeFacts — the same engine the
+// verifier re-checks the result with, so a fold or merge this pass gets
+// wrong is IR the verifier rejects (trust-free, the P3.4 discipline).
+//
+// ---- Soundness inventory (the shape additions) ----
+//
+//   - Fact folding: a cond_br on has_shape(v, S) rewrites to br(true)
+//     when the fact (v, S) holds at the branch.  Facts only enter blocks
+//     on guard edges and die at WRITE|CALL instructions (the effect-kill
+//     rule — see verifier.ts), so a held fact means the header compare
+//     provably answers true.  Folding removes CFG edges only; a stale
+//     (pre-fold) fact analysis is conservative, and the fact continues to
+//     reach the true target THROUGH the folded block (its instructions
+//     are kill-free on that path, or the fact would not have held).
+//   - Region shape (matchShapeRegionAt): head ends in cond_br on
+//     has_shape(recv, S); the fast side is a LINEAR br chain whose
+//     instructions are effect-free-or-GC plus slot_loads on exactly
+//     (recv, S); the slow side is the numeric matcher's linear chain with
+//     get_prop_atom(recv) as the one effectful op.  Anything else — a
+//     store diamond's has_tag split, an interior guard, a foreign edge —
+//     refuses the match (fail-closed).
+//   - Merging (tryMergeShapeAt, the numeric merge transplanted):
+//     region2's guard failures reroute to region1's slow entry, which
+//     RE-EXECUTES region1's slow chain after region1's fast side already
+//     ran.  That is sound because (a) the fast side and j1 prefix are
+//     kill-free, so the receiver still has shape S there, and (b) every
+//     re-executed get_prop_atom names a field OF S — a get of an own
+//     plain data property: no getter, no proto walk, no effects, and
+//     bit-identical to the slot_load the fast side already did.  The
+//     TWIN check (verifyShapeTwin) is what proves (b) plus the pairing:
+//     fast slot_loads and slow gets correspond op for op (atom == the
+//     shape's field name at that slot, receiver == recv on both sides)
+//     and join-exit args correspond slot for slot — both regions are
+//     checked, exactly like the numeric merge's symmetric twin rule.
+//   - Everything else (j1/j2 pred exactness, pure-prefix cloning, routing
+//     of j1-defined values through j2 with raw-type refusal) is the
+//     numeric merge's argument verbatim.
+
+interface ShapeRegion {
+    head: Block;
+    recv: Inst; // the guarded receiver value
+    shapeKey: string; // imms.shape of the head guard
+    fastBlocks: Set<Block>;
+    fastChain: Block[]; // linear br chain, entry..exit
+    fastLoads: Inst[]; // slot_loads in chain order
+    fastExitEdge: EdgeRef;
+    slowEntry: Block;
+    slowChain: Block[];
+    slowSet: Set<Block>;
+    slowGets: Inst[]; // get_prop_atom in chain order
+    slowExitEdge: EdgeRef;
+    join: Block;
+}
+
+// structurally verify the shape-get region headed at `head`; null on any
+// deviation.  Strictly linear on both sides (see the inventory above).
+function matchShapeRegionAt(head: Block): ShapeRegion | null {
+    const term = head.terminator;
+    if (!term || term.op !== "cond_br") return null;
+    const cond = term.operands[0]!;
+    if (cond.op !== "has_shape") return null;
+    const recv = cond.operands[0]!;
+    const shapeKey = String(cond.imms["shape"]);
+    const t0 = term.targets![0]!;
+    const t1 = term.targets![1]!;
+    if (t0.args.length !== 0 || t1.args.length !== 0) return null;
+    const slowEntry = t1.block;
+    if (slowEntry.isCatch || t0.block.isCatch) return null;
+    if (slowEntry.params.length !== 0) return null;
+    if (t0.block === slowEntry) return null;
+
+    // --- slow side: the numeric matcher's linear chain, with
+    // get_prop_atom(recv) as the whitelisted effectful op
+    const slowChain: Block[] = [];
+    const slowSet = new Set<Block>();
+    const slowGets: Inst[] = [];
+    let join: Block | null = null;
+    let slowExitEdge: EdgeRef | null = null;
+    let sb = slowEntry;
+    for (;;) {
+        if (slowChain.length > MAX_REGION_BLOCKS) return null;
+        if (slowSet.has(sb) || sb === head) return null;
+        slowChain.push(sb);
+        slowSet.add(sb);
+        const bt = sb.terminator;
+        if (!bt) return null;
+        for (const inst of sb.insts) {
+            if (inst === bt) continue;
+            if (inst.targets && inst.targets.length > 0) return null;
+            if (inst.op === "get_prop_atom") {
+                if (inst.operands[0] !== recv) return null;
+                slowGets.push(inst);
+            } else if (opInfo(inst.op).effects !== Effect.NONE) {
+                return null;
+            }
+        }
+        let exit: EdgeRef;
+        if (bt.op === "br") {
+            exit = { inst: bt, targetIndex: 0 };
+        } else if (
+            bt.op === "get_prop_atom" &&
+            bt.targets &&
+            bt.targets.length === 2 &&
+            bt.targets[0]!.kind === "normal"
+        ) {
+            // a get inside a protected region: [normal, unwind]
+            if (bt.operands[0] !== recv) return null;
+            slowGets.push(bt);
+            exit = { inst: bt, targetIndex: 0 };
+        } else {
+            return null;
+        }
+        const next = exit.inst.targets![exit.targetIndex]!.block;
+        if (next.isCatch) return null;
+        if (next.predEdges.every((e) => slowSet.has(e.inst.block!))) {
+            sb = next;
+            continue;
+        }
+        join = next;
+        slowExitEdge = exit;
+        break;
+    }
+    if (!join || join.isCatch || join === head) return null;
+
+    // --- fast side: a linear br chain of effect-free-or-GC instructions
+    // plus slot_loads on exactly (recv, shapeKey)
+    const fastBlocks = new Set<Block>();
+    const fastChain: Block[] = [];
+    const fastLoads: Inst[] = [];
+    let fastExitEdge: EdgeRef | null = null;
+    let fb: Block | null = t0.block;
+    while (fb) {
+        if (fastBlocks.has(fb)) return null;
+        if (fastBlocks.size > MAX_REGION_BLOCKS) return null;
+        if (fb === join || fb === head || slowSet.has(fb) || fb.isCatch) return null;
+        fastBlocks.add(fb);
+        fastChain.push(fb);
+        const ft = fb.terminator;
+        if (!ft || ft.op !== "br") return null; // strictly linear
+        for (const inst of fb.insts) {
+            if (inst === ft) continue;
+            if (inst.targets && inst.targets.length > 0) return null;
+            if (inst.op === "slot_load") {
+                if (inst.operands[0] !== recv) return null;
+                if (String(inst.imms["shape"]) !== shapeKey) return null;
+                fastLoads.push(inst);
+            } else if ((opInfo(inst.op).effects & ~Effect.GC) !== 0) {
+                return null;
+            }
+        }
+        const tg: Target = ft.targets![0]!;
+        if (tg.block === join) {
+            fastExitEdge = { inst: ft, targetIndex: 0 };
+            fb = null;
+        } else {
+            if (tg.args.length !== 0 && tg.block.params.length === 0) return null;
+            fb = tg.block;
+        }
+    }
+    if (!fastExitEdge) return null;
+    // the fast side is entered only through the head's guard
+    for (const b of fastBlocks) {
+        for (const e of b.predEdges) {
+            const src = e.inst.block!;
+            if (src !== head && !fastBlocks.has(src)) return null;
+        }
+    }
+
+    return {
+        head,
+        recv,
+        shapeKey,
+        fastBlocks,
+        fastChain,
+        fastLoads,
+        fastExitEdge,
+        slowEntry,
+        slowChain,
+        slowSet,
+        slowGets,
+        slowExitEdge: slowExitEdge!,
+        join,
+    };
+}
+
+// the slow chain is the generic rendition of the fast side: slot_loads and
+// gets pair op for op (atom == the shape's field at that slot), and the
+// join-exit arguments correspond slot for slot.
+function verifyShapeTwin(r: ShapeRegion, shapes: Map<string, { name: string }[]>): boolean {
+    const fields = shapes.get(r.shapeKey);
+    if (!fields) return false;
+    if (r.fastLoads.length !== r.slowGets.length) return false;
+    const pair = new Map<Inst, Inst>();
+    for (let i = 0; i < r.fastLoads.length; i++) {
+        const load = r.fastLoads[i]!;
+        const get = r.slowGets[i]!;
+        const slot = load.imms["slot"] as number;
+        if (typeof slot !== "number" || slot < 0 || slot >= fields.length) return false;
+        if (fields[slot]!.name !== get.imms["atom"]) return false;
+        pair.set(load, get);
+    }
+
+    // fast value -> the slow value it must equal at the join
+    const slowOf = (x: Inst, d: number): Inst | null => {
+        if (d <= 0) return null;
+        const p = pair.get(x);
+        if (p) return p;
+        if (x.op === "blockparam" && x.block && r.fastBlocks.has(x.block)) {
+            const b = x.block;
+            if (b.predEdges.length !== 1) return null;
+            const e = b.predEdges[0]!;
+            const arg = e.inst.targets![e.targetIndex]!.args[b.argIndexOfParam(x)];
+            return arg ? slowOf(arg, d - 1) : null;
+        }
+        return x; // defined above the head: the same SSA value on both sides
+    };
+
+    const fastArgs = r.fastExitEdge.inst.targets![r.fastExitEdge.targetIndex]!.args;
+    const slowArgs = r.slowExitEdge.inst.targets![r.slowExitEdge.targetIndex]!.args;
+    if (fastArgs.length !== slowArgs.length) return false;
+    for (let i = 0; i < fastArgs.length; i++) {
+        const fa = fastArgs[i];
+        const sa = slowArgs[i];
+        if (!fa || !sa) return false;
+        const want = slowOf(fa, 32);
+        if (!want) return false;
+        if (want !== sa) {
+            // const-correspondence, the numeric merge's Object.is rule
+            if (
+                !(
+                    want.op === "const" &&
+                    sa.op === "const" &&
+                    want.imms["kind"] === sa.imms["kind"] &&
+                    Object.is(want.imms["value"], sa.imms["value"])
+                )
+            )
+                return false;
+        }
+    }
+    return true;
+}
+
+// merge the shape region headed at r1.join (if any) into r1.  All checks
+// precede all mutations — the numeric tryMergeAt transplanted.
+function tryMergeShapeAt(
+    fn: Func,
+    shapes: Map<string, { name: string }[]>,
+    r1: ShapeRegion,
+    idom: Map<Block, Block>,
+    stats: OptStats
+): boolean {
+    const j1 = r1.join;
+    const r2 = matchShapeRegionAt(j1);
+    if (!r2) return false;
+    if (r2.recv !== r1.recv || r2.shapeKey !== r1.shapeKey) return false;
+    const j2 = r2.join;
+
+    // region2 strictly below region1 (no sharing, no cycles)
+    if (j2 === r1.head || j2 === j1 || r1.fastBlocks.has(j2) || r1.slowSet.has(j2)) return false;
+    if (r2.slowEntry === r1.slowEntry) return false;
+    for (const b of r2.fastBlocks)
+        if (r1.fastBlocks.has(b) || r1.slowSet.has(b) || b === r1.head) return false;
+    for (const b of r2.slowChain)
+        if (r1.fastBlocks.has(b) || r1.slowSet.has(b) || b === r1.head) return false;
+
+    // j1's predecessors must be exactly region1's exits, j2's exactly
+    // region2's (the numeric merge's review attack A)
+    for (const e of j1.predEdges) {
+        const src = e.inst.block!;
+        if (!r1.fastBlocks.has(src) && !r1.slowSet.has(src)) return false;
+    }
+    for (const e of j2.predEdges) {
+        const src = e.inst.block!;
+        if (!r2.fastBlocks.has(src) && !r2.slowSet.has(src)) return false;
+    }
+
+    // both regions' slow chains must be their fast sides' generic twins
+    if (!verifyShapeTwin(r2, shapes)) return false;
+    if (!verifyShapeTwin(r1, shapes)) return false;
+
+    // j1's instruction shape: [effect-free prefix..., guard, cond_br]
+    const term = j1.terminator!;
+    const guard = term.operands[0]!;
+    let prefixEnd = j1.insts.length - 1;
+    if (guard.block === j1) {
+        if (j1.insts[j1.insts.length - 2] !== guard) return false;
+        prefixEnd = j1.insts.length - 2;
+        let extraUse = false;
+        fn.forEachInst((inst) => {
+            if (inst === term) return;
+            for (const o of inst.operands) if (o === guard) extraUse = true;
+            if (inst.targets)
+                for (const t of inst.targets) for (const a of t.args) if (a === guard) extraUse = true;
+        });
+        if (extraUse) return false;
+    } else {
+        return false; // the guard must be j1's own fresh compare
+    }
+    const prefix: Inst[] = [];
+    for (let i = 0; i < prefixEnd; i++) {
+        const q = j1.insts[i]!;
+        if (q.targets && q.targets.length > 0) return false;
+        if (opInfo(q.op).effects !== Effect.NONE) return false;
+        prefix.push(q);
+    }
+
+    // re-execution check: region2's guard failures re-run r1's slow chain
+    // after r1's fast side ran.  Sound iff every re-executed instruction is
+    // effect-free or a get of an OWN field of the guarded shape (pure and
+    // value-identical while the receiver still has shape S — which it does:
+    // the fast side and prefix are kill-free by the region match).
+    const fields = shapes.get(r1.shapeKey)!;
+    for (const sb of r1.slowChain) {
+        for (const inst of sb.insts) {
+            if (inst.op === "br") continue;
+            if (inst.op === "get_prop_atom") {
+                if (inst.operands[0] !== r1.recv) return false;
+                if (!fields.some((f) => f.name === inst.imms["atom"])) return false;
+            } else if (opInfo(inst.op).effects !== Effect.NONE) {
+                return false;
+            }
+        }
+    }
+
+    // what the slow path knows each j1-defined value to be
+    const slowMap = new Map<Inst, Inst>();
+    const exitTarget = r1.slowExitEdge.inst.targets![r1.slowExitEdge.targetIndex]!;
+    for (const p of j1.params) {
+        const arg = exitTarget.args[j1.argIndexOfParam(p)];
+        if (!arg) return false;
+        slowMap.set(p, arg);
+    }
+
+    // routing pre-check (numeric merge verbatim): every use of a
+    // j1-defined value outside region2 must be dominated by j2
+    const routed: Inst[] = [...j1.params, ...prefix];
+    const outsideUses = new Map<Inst, Inst[]>();
+    for (const v of routed) {
+        const outs: Inst[] = [];
+        let ok = true;
+        fn.forEachInst((inst, blk) => {
+            if (!ok) return;
+            let uses = false;
+            for (const o of inst.operands) if (o === v) uses = true;
+            if (inst.targets)
+                for (const t of inst.targets) for (const a of t.args) if (a === v) uses = true;
+            if (!uses) return;
+            if (blk === j1 || r2.fastBlocks.has(blk)) return;
+            if (r2.slowSet.has(blk)) return; // substituted below
+            if (!dominates(idom, j2, blk)) {
+                ok = false;
+                return;
+            }
+            outs.push(inst);
+        });
+        if (!ok) return false;
+        if (outs.length > 0) {
+            if (v.type !== "any") return false; // no raw-typed routing
+            outsideUses.set(v, outs);
+        }
+    }
+
+    // ---- all checks passed; mutate ----
+    const mapSlow = (v: Inst): Inst => slowMap.get(v) ?? v;
+
+    const slowExitBlock = r1.slowChain[r1.slowChain.length - 1]!;
+    const exitInst = r1.slowExitEdge.inst;
+    for (const q of prefix) {
+        const clone = new Inst(fn, q.op, q.operands.map(mapSlow), { ...q.imms });
+        clone.block = slowExitBlock;
+        slowExitBlock.insts.splice(slowExitBlock.insts.indexOf(exitInst), 0, clone);
+        slowMap.set(q, clone);
+    }
+
+    retargetEdge(exitInst, r1.slowExitEdge.targetIndex, r2.slowEntry, []);
+    retargetEdge(r2.head.terminator!, 1, r1.slowEntry, []);
+    for (const sb of r2.slowChain) {
+        for (const inst of sb.insts) {
+            for (let i = 0; i < inst.operands.length; i++)
+                inst.operands[i] = mapSlow(inst.operands[i]!);
+            if (inst.targets)
+                for (const t of inst.targets)
+                    for (let i = 0; i < t.args.length; i++)
+                        if (t.args[i]) t.args[i] = mapSlow(t.args[i]!);
+        }
+    }
+
+    for (const entry of outsideUses.entries()) {
+        const v = entry[0];
+        const users = entry[1];
+        const vr = j2.addParam(v.nameHint);
+        vr.type = v.type;
+        const slot = j2.argIndexOfParam(vr);
+        for (const e of j2.predEdges) {
+            const t = e.inst.targets![e.targetIndex]!;
+            t.args[slot] = r2.slowSet.has(e.inst.block!) ? mapSlow(v) : v;
+        }
+        for (const u of users) {
+            for (let i = 0; i < u.operands.length; i++) if (u.operands[i] === v) u.operands[i] = vr;
+            if (u.targets)
+                for (const t of u.targets)
+                    for (let i = 0; i < t.args.length; i++) if (t.args[i] === v) t.args[i] = vr;
+        }
+    }
+
+    stats.shape_regions_merged++;
+    return true;
+}
+
+// fold cond_brs on has_shape guards proven by an un-killed dominating
+// shape fact (post-merge, region2's guard is exactly this)
+function foldProvenShapeGuards(fn: Func, stats: OptStats): boolean {
+    const analysis = computeShapeFacts(fn);
+    if (!analysis) return false;
+    let changed = false;
+    for (const b of fn.blocks) {
+        const term = b.terminator;
+        if (!term || term.op !== "cond_br") continue;
+        const cond = term.operands[0]!;
+        if (cond.op !== "has_shape") continue;
+        // the compare must be b's own: a fact at the BRANCH only proves a
+        // FRESH compare true.  A has_shape computed in an earlier block can
+        // be stale-false (the receiver transitioned into the shape after
+        // it ran), and folding a stale-false branch to true would take the
+        // wrong arm of arbitrary (attack) IR.  Same-block suffices: facts
+        // never appear mid-block, so fact-at-branch implies fact-at-compare.
+        if (cond.block !== b) continue;
+        const facts = analysis.factsAt(b, b.insts.length - 1);
+        if (!facts.has(shapeFactKey(cond.operands[0]!.id, String(cond.imms["shape"])))) continue;
+        // facts were computed pre-fold; folding only removes edges, so the
+        // stale analysis is conservative for the remaining candidates
+        condBrToBr(fn, b, 0);
+        stats.shape_guards_folded++;
+        changed = true;
+    }
+    if (changed) sweepUnreachableBlocks(fn);
+    return changed;
+}
+
+// run shape-region merging + fact folding to a fixpoint.  Cheap bail when
+// the function has no shape guards (every flag-off compile).  Merging
+// needs the module's shape table for the twin check; without one only
+// folding runs (fail-closed).
+export function optimizeShapeRegions(
+    fn: Func,
+    module: Module | undefined,
+    stats: OptStats
+): boolean {
+    let hasGuard = false;
+    for (const b of fn.blocks) {
+        const t = b.terminator;
+        if (t && t.op === "cond_br" && t.operands[0]!.op === "has_shape") {
+            hasGuard = true;
+            break;
+        }
+    }
+    if (!hasGuard) return false;
+
+    sweepUnreachableBlocks(fn);
+
+    let changedAny = false;
+    for (let round = 0; round < 50; round++) {
+        let changed = false;
+        if (module) {
+            for (let merges = 0; merges < 50; merges++) {
+                const { rpo } = computeRPO(fn);
+                const idom = computeDominators(fn, rpo);
+                let merged = false;
+                for (const b of rpo) {
+                    const r1 = matchShapeRegionAt(b);
+                    if (!r1) continue;
+                    if (tryMergeShapeAt(fn, module.shapes, r1, idom, stats)) {
+                        merged = true;
+                        changed = true;
+                        break; // mutations invalidate matches; re-match
+                    }
+                }
+                if (!merged) break;
+            }
+        }
+        if (foldProvenShapeGuards(fn, stats)) changed = true;
+        if (!changed) break;
+        sweepUnreachableBlocks(fn);
+        changedAny = true;
+    }
+    return changedAny;
 }
 
 // --- driver -----------------------------------------------------------------

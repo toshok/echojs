@@ -497,20 +497,100 @@ revertable, runtime phases A/B-able against the old path.
       instead of dual bookkeeping).  Census on the storm probe: 383
       born tracked, 315 shapes, 1365 transitions (48% memo fast hits),
       210 repr flips, migrations correctly attributed.
-- [ ] **P4.3 — Guarded fast paths under --types.**  The compiler phase:
-      `has_shape`/`slot_load`/`slot_store` ops, verifier rules incl. the
-      effect-kill inventory, emitter (header-index compare; slot-array
-      addressing behind one seam), maam node-identity queries +
-      `receiverShapesOfNode`, lowering diamonds at
-      `get_prop_atom`/`set_prop_atom` for exact receivers,
-      optimize-guards shape facts + region merging, `--types-dump` shape
-      census.  Boxed slots only in round one; `repr:"f64"` slots ride
-      the SAME phase only if the P3.4 machinery truly needs no changes,
-      else round two.
-      *Gate:* matrix green flag-off (lowering untouched without oracle);
-      --types diff lane 0-divergent; wrong-oracle probe routes slow with
-      identical output; EIR-shape unit tests; types-bench2 guarded delta
-      recorded; stats-line shape telemetry additive.
+- [x] **P4.3 — Guarded fast paths under --types.**  DONE 2026-07-24
+      (gate results below).  As built:
+      - **Ops** (`lib/eir/ops.ts`): `has_shape` (NONE, i1),
+        `slot_load` (READ) / `slot_store` (WRITE) with imms
+        `shape`/`slot`/`repr` — the ops carry the shape KEY too (a small
+        deviation from this doc's sketch) so the verifier compares
+        against the guard instead of inferring, and `Module.shapes`
+        (ir.ts) holds each module's interned field lists (`internShape`,
+        key = `name:repr,...` in insertion order — printed IR is
+        self-describing).
+      - **Verifier** (`verifier.ts`): the effect-kill soundness inventory
+        lives at the top of the file with the engine itself —
+        `computeShapeFacts`, a forward must-dataflow (facts born on TRUE
+        edges of same-block-fresh has_shape cond_brs, killed by every
+        WRITE|CALL, intersected at joins, dead across unwind edges).
+        Every slot op must sit under an un-killed fact for its exact
+        (value, shape); `slot_store` additionally needs a dominating
+        has_tag fact matching the field repr (true-edge for f64,
+        false-edge for boxed) OR — f64 only — a value-intrinsic number
+        proof (const/box_f64/mul-div-sub), because foldProvenGuards
+        legitimately deletes a has_tag on a proven number (found by the
+        wrong-oracle probe at this gate, fixed by mirroring the
+        optimizer's intrinsic proofs — dominance-fact folds never delete
+        the edge the store rule needs).  Slot bounds + repr are checked
+        against Module.shapes.
+      - **Runtime** (`ejs-shapes.{h,c}`): `_ejs_shape_intern(nfields,
+        names, f64_mask)` walks/interns the ordered shape at module init
+        (the atom precedent); `EJS_SHAPE_NOMATCH` (0xFFFFFF) is reserved
+        (shape_alloc stops one short) so an unfilled/off-mode shape
+        global can never match any header — under `EJS_SHAPES=off` every
+        guard is false and the slow paths serve everything.
+      - **Emitter** (`emit.ts` + compiler.ts): has_shape folds the
+        NaN-box object check into the header-high-half compare against a
+        per-shape i32 module global (`isObject`/`objectPointer` live
+        beside isNumber in compiler.ts); `slotRef` is THE addressing
+        seam (P4.2 closureenv slot arrays today, gc-P5 inline slots
+        later); interns flush into the literal-init function's return
+        block after all atom inits (`emitShapeInterns`).
+      - **maam**: `receiverShapesOfNode` (terminal-filtered, node-
+        identity, fail-soft) + `fieldOrderOfShape` (the ordered witness =
+        first-interning insertion order; a runtime object built in
+        another order just misses the guard).  `layoutOfNode`/
+        `constructorReportOfNode` are P4.4 consumers and wait there.
+      - **Lowering** (`lower.ts` propGet/propSet): diamonds at every
+        atom-keyed member get/set incl. compound assign, ++/--, method
+        loads, and destructuring reads.  Exact facts only (criterion 2):
+        monomorphic, non-⊤, shapeCapHits==0, all reprs single-tag,
+        ordered witness, field present — every miss a counted decline.
+        Stores guard has_shape AND has_tag oriented by the field repr
+        (a repr-flipping store owes a transition, so it routes generic).
+        `EJS_NO_SHAPE_GUARDS=1` is the compile-time bisect hook.
+      - **optimize-guards**: `optimizeShapeRegions` — strict linear
+        get-region matching, twin verification against Module.shapes
+        (fast slot_load ↔ slow get_prop_atom, atom==field-at-slot,
+        receiver identity, exit args slot-for-slot), the numeric merge's
+        mutation mechanics, then fact-based folding (same-block-fresh
+        compares only — a stale earlier-block compare can be FALSE where
+        the fact holds, pinned by a unit attack).  Consecutive gets on
+        one receiver become one guard + one slow path (`p.x + p.x` ⇒ 1
+        guard, 2 slot_loads).  Module-toplevel receivers reload their
+        slot per access (distinct SSA values), so merging fires inside
+        functions — fine: kernels are functions; revisit with slot-load
+        CSE if telemetry ever says otherwise.
+      - **Telemetry**: stats line grows `shapeSites/shapeGuards/
+        shapeDeclined=reason:n,...` (additive; the diff-lane scrape
+        regex untouched); `--types-dump` prints a per-site census line
+        (`.atom @line:col: guarded shape=... slot=N | declined reason`);
+        EIR-opt debug line grows shape guard/region counts.
+      Boxed slot ACCESS only in round one, as planned — but repr stays
+      part of guard identity and the imms, so P4.5 flips only the
+      emitter seam + typed-flow rules.
+      *Gate results (2026-07-24):* matrix green (test-eir + new shape
+      unit tests incl. hand-built attack IR for every verifier rule and
+      merge refusal, lowtier, stages 0-3, `//:test-stage1-shapes-off`);
+      --types diff lane **0-divergent** (459 files, 458 identical, 1 N/A
+      = tester.js standing esprima gap; suite-wide telemetry: 13,154
+      sites consulted, 809 guarded, declines unmapped 7,575 / capped
+      4,287 / empty 269 / no-field 194 / poly 12 / union-repr 8 — the
+      suite is string-heavy by design, kernels are where guards fire);
+      wrong-oracle probe `types-shapeswrong1` (repr-mismatched,
+      extra-field, and dictionary-mode receivers cross-module) routes
+      slow with node-identical output, incl. under EJS_SHAPES=off and
+      EJS_GC_EVERY_N_ALLOC=7; **types-bench2 guarded delta: 2.1×**
+      (--types 3.06s vs flag-off 6.56s; vs 5.82s with every guard
+      failing under EJS_SHAPES=off ⇒ ~1.9× attributable to the slot
+      fast paths, the rest to P3 arithmetic + P3.6); telemetry additive
+      (the lane's scrape regex untouched).  Notables found at the gate:
+      (1) foldProvenGuards deleting a has_tag on a const stored value
+      exposed the verifier/optimizer proof-mismatch fixed via
+      provenNumberIntrinsic; (2) the shape-intern emitter originally
+      reused the literal-init function and could emit past its
+      terminator when a shape named an atom no access ever interned —
+      shapes now get their own init function, called right after
+      literal init.
 - [ ] **P4.4 — Born with their shape.**  `make_object_shaped` for static
       literals (unconditional) and for fenced monomorphic constructors
       (structural no-escape-before-last-store check, lying-oracle unit
@@ -596,12 +676,14 @@ layout change whichever lands first.
 
 ## Open questions (tracked, not blocking P4.1/P4.2)
 
-1. **Ordered-shape witnesses from maam for constructors.**  Literals
-   order themselves; constructor field order needs either a maam-side
-   first-write-order report or a compiler-side derivation from the
-   fenced straight-line store prefix (the fence already requires
-   straight-line stores, which *is* an order — likely sufficient, in
-   which case maam needs nothing).  Decide during P4.3 design review.
+1. **Ordered-shape witnesses from maam for constructors.**  RESOLVED at
+   P4.3: maam's ShapeTable records each class's first-interning
+   insertion order (`fieldOrderOfShape`) — first-write program order
+   along the first analyzed path, for literals AND constructors alike.
+   A runtime object built in a different order interns a different
+   runtime shape and simply misses the guard (slow path, never wrong).
+   P4.4's born-with-shape constructors may still prefer the fence's
+   straight-line store prefix as the witness; decide there.
 2. **Slot-array growth policy** (size classes vs exact +
    copy-on-transition) — informed by the P4.1 census.
 3. **How much of `Array`/`Function`/module exotics join shaped mode
@@ -638,10 +720,12 @@ layout change whichever lands first.
       the stage2 GC lesson recorded there: shaped field cap 14 keeps
       slot arrays out of the LOS, and the gc trigger now scales with
       heap footprint).
-- [ ] **P4.3** EIR ops + verifier inventory + emitter + maam
+- [x] **P4.3** EIR ops + verifier inventory + emitter + maam
       node-identity queries + guarded diamonds + shape facts in
       optimize-guards.  Gate: matrix, lane 0-divergent, wrong-oracle
-      probes, unit tests, types-bench2 delta.
+      probes, unit tests, types-bench2 delta.  DONE 2026-07-24 — see the
+      phased-plan entry above (types-bench2 2.1×, lane 459 files
+      0-divergent, all attack IR pinned at unit level).
 - [ ] **P4.4** born-with-shape (literals unconditional; constructors
       fenced).  HARD PRECONDITION: harness shapes lane.  Gate: harness +
       lane + probes + delta.

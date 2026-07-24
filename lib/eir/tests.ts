@@ -18,8 +18,9 @@ import { ScopeAnalysis } from "./scopes";
 import { isLowerNotSupported } from "./errors";
 import { Func, Block, Inst, Module } from "./ir";
 import { DesugarSpread } from "../passes/desugar-spread";
-import { typeSigToEirType } from "./oracle";
-import type { TypeOracle, TypeTag } from "./oracle";
+import { typeSigToEirType, typeSigToShapeRepr } from "./oracle";
+import type { OracleShapeField, TypeOracle, TypeTag } from "./oracle";
+import { optimizeShapeRegions } from "./optimize-guards";
 import { buildArithDiamond, buildLowTierAdd, buildLowTierLt } from "./lowtier-probe";
 import { DesugarClasses } from "../passes/desugar-classes";
 import { DesugarDestructuring } from "../passes/desugar-destructuring";
@@ -1969,6 +1970,444 @@ test("oracle: an unrecognized constituent is top, never a guess", () => {
     assert(typeSigToEirType("num|widget").tags === "top");
     assert(typeSigToEirType("bigint").tags === "top");
     assert(typeSigToEirType("").tags === "top");
+});
+
+// --- shapes-plan P4.3: shape-guarded property access ----------------------------
+
+test("shape-oracle: TypeSig -> repr (num=f64, non-num unions=boxed, straddles decline)", () => {
+    assert(typeSigToShapeRepr("num") === "f64");
+    assert(typeSigToShapeRepr("str") === "boxed");
+    assert(typeSigToShapeRepr("str|bool|undefined|null|obj|fn") === "boxed");
+    assert(typeSigToShapeRepr("num|str") === null);
+    assert(typeSigToShapeRepr("⊤") === null);
+    assert(typeSigToShapeRepr("never") === null);
+    assert(typeSigToShapeRepr("num|widget") === null);
+});
+
+// a stub oracle with receiver-shape facts: types Identifier receivers by
+// name; everything else declines as unmapped (the real oracle's fail-soft)
+function stubShapeOracle(
+    shapes: Record<string, OracleShapeField[] | undefined>,
+    types?: Record<string, TypeTag[] | undefined>
+): TypeOracle {
+    const base = stubOracle(types || {});
+    return {
+        ...base,
+        receiverShapeOfNode: (n) => {
+            const id = n as { type?: string; name?: string };
+            const fields =
+                id.type === "Identifier" && id.name !== undefined ? shapes[id.name] : undefined;
+            return fields ? { fields } : { declined: "unmapped" };
+        },
+    };
+}
+
+const PXY: OracleShapeField[] = [
+    { name: "x", repr: "f64" },
+    { name: "y", repr: "f64" },
+    { name: "s", repr: "boxed" },
+];
+
+test("shapes: exact receiver fact lowers a get to the has_shape diamond", () => {
+    const { printed } = lowerWithOracle(
+        "function f(p) { return p.y; }",
+        stubShapeOracle({ p: PXY })
+    );
+    assertContains(printed, 'has_shape');
+    assertContains(printed, 'shape="x:f64,y:f64,s:boxed"');
+    assertContains(printed, 'slot_load');
+    assertContains(printed, 'slot=1');
+    assertContains(printed, 'repr="f64"');
+    assertContains(printed, 'get_prop_atom'); // the slow arm survives
+    assertContains(printed, "shape_join");
+});
+
+test("shapes: no shape query support means today's lowering exactly", () => {
+    const { printed } = lowerWithOracle(
+        "function f(p) { return p.y; }",
+        stubOracle({ p: undefined })
+    );
+    assertNotContains(printed, "has_shape");
+    assertNotContains(printed, "slot_load");
+});
+
+test("shapes: a field outside the shape declines (proto/method access)", () => {
+    const { printed } = lowerWithOracle(
+        "function f(p) { return p.z; }",
+        stubShapeOracle({ p: PXY })
+    );
+    assertNotContains(printed, "has_shape");
+    assertContains(printed, 'get_prop_atom');
+});
+
+test("shapes: an f64-field store guards has_shape AND has_tag, numbers fast", () => {
+    const { printed } = lowerWithOracle(
+        "function f(p, v) { p.x = v; }",
+        stubShapeOracle({ p: PXY })
+    );
+    assertContains(printed, "has_shape");
+    assertContains(printed, "has_tag");
+    assertContains(printed, "slot_store");
+    assertContains(printed, "set_prop_atom");
+    // f64 field: the tag-true edge is the fast arm
+    assert(
+        /cond_br %\d+ -> \^shape_setfast\d+\(\), \^shape_setslow\d+\(\)/.test(printed),
+        "expected tag-true -> fast for an f64 field"
+    );
+});
+
+test("shapes: a boxed-field store takes non-numbers fast (swapped tag arms)", () => {
+    const { printed } = lowerWithOracle(
+        "function f(p, v) { p.s = v; }",
+        stubShapeOracle({ p: PXY })
+    );
+    assertContains(printed, 'repr="boxed"');
+    // boxed field: the tag-true edge is the SLOW arm
+    assert(
+        /cond_br %\d+ -> \^shape_setslow\d+\(\), \^shape_setfast\d+\(\)/.test(printed),
+        "expected tag-true -> slow for a boxed field"
+    );
+});
+
+test("shapes: EJS_NO_SHAPE_GUARDS disables the diamonds", () => {
+    process.env["EJS_NO_SHAPE_GUARDS"] = "1";
+    try {
+        const { printed } = lowerWithOracle(
+            "function f(p) { return p.y; }",
+            stubShapeOracle({ p: PXY })
+        );
+        assertNotContains(printed, "has_shape");
+    } finally {
+        delete process.env["EJS_NO_SHAPE_GUARDS"];
+    }
+});
+
+// --- shapes: verifier rules (hand-built attack IR) -------------------------------
+
+function assertThrows(fn: () => void, needle: string): void {
+    let threw: string | null = null;
+    try {
+        fn();
+    } catch (e) {
+        threw = (e as Error).message;
+    }
+    assert(threw !== null, `expected a verifier rejection containing '${needle}'`);
+    assert(
+        threw!.includes(needle),
+        `expected rejection containing '${needle}', got: ${threw}`
+    );
+}
+
+interface SlotAttackOpts {
+    guarded?: boolean; // guard the slot op with has_shape (default true)
+    killInFast?: boolean; // a call between the guard and the slot op
+    store?: boolean; // slot_store instead of slot_load
+    tagGuard?: "none" | "true" | "false"; // has_tag fact for the stored value
+    slot?: number;
+    repr?: string;
+    shapeImm?: string; // override the op's shape imm
+}
+
+// head: guard (or an unrelated to_boolean test) -> fast/slow -> join
+function buildSlotAttack(o: SlotAttackOpts): { mod: Module; fn: Func } {
+    const guarded = o.guarded !== false;
+    const fb = new FunctionBuilder("attack", ["%env", "%this", "p", "v"]);
+    const p = fb.fn.entry!.params[2]!;
+    const v = fb.fn.entry!.params[3]!;
+    const shapeKey = "x:f64,y:f64";
+    const opShape = o.shapeImm ?? shapeKey;
+
+    const fast = fb.newBlock("fast");
+    const slow = fb.newBlock("slow");
+    const join = fb.newBlock("join");
+    const res = join.addParam("res");
+    const cond = guarded
+        ? fb.emit("has_shape", [p], { shape: shapeKey })
+        : fb.emit("to_boolean", [p], {});
+    fb.condBr(cond, fast, [], slow, []);
+    fb.sealBlock(fast);
+    fb.sealBlock(slow);
+
+    fb.setInsertPoint(fast);
+    if (o.killInFast) fb.emit("call_runtime", [], { name: "ToString" });
+    let stored = v;
+    if (o.store && o.tagGuard && o.tagGuard !== "none") {
+        // establish the tag fact: a nested has_tag diamond whose surviving
+        // arm continues to the store
+        const tagok = fb.newBlock("tagok");
+        const tagbail = fb.newBlock("tagbail");
+        const t = fb.emit("has_tag", [stored], { tag: "number" });
+        if (o.tagGuard === "true") fb.condBr(t, tagok, [], tagbail, []);
+        else fb.condBr(t, tagbail, [], tagok, []);
+        fb.sealBlock(tagok);
+        fb.sealBlock(tagbail);
+        fb.setInsertPoint(tagbail);
+        fb.br(join, [fb.constUndefined()]);
+        fb.setInsertPoint(tagok);
+    }
+    let fastv: Inst;
+    if (o.store)
+        fastv = fb.emit("slot_store", [p, stored], {
+            shape: opShape,
+            slot: o.slot ?? 0,
+            repr: o.repr ?? "f64",
+        });
+    else
+        fastv = fb.emit("slot_load", [p], {
+            shape: opShape,
+            slot: o.slot ?? 0,
+            repr: o.repr ?? "f64",
+        });
+    fb.br(join, [fastv]);
+
+    fb.setInsertPoint(slow);
+    const g = fb.emit("get_prop_atom", [p], { atom: "x" });
+    fb.br(join, [g]);
+
+    fb.sealBlock(join);
+    fb.setInsertPoint(join);
+    fb.ret(res);
+
+    const fn = fb.finish();
+    const mod = new Module("attack_mod");
+    mod.addFunction(fn);
+    mod.internShape([
+        { name: "x", repr: "f64" },
+        { name: "y", repr: "f64" },
+    ]);
+    return { mod, fn };
+}
+
+test("shapes-verify: a guarded slot_load in the guard's true arm verifies", () => {
+    const { mod } = buildSlotAttack({});
+    verifyModule(mod);
+});
+
+test("shapes-verify: a slot op without a has_shape fact is rejected", () => {
+    const { mod } = buildSlotAttack({ guarded: false });
+    assertThrows(() => verifyModule(mod), "un-killed has_shape fact");
+});
+
+test("shapes-verify: a WRITE|CALL between guard and slot op kills the fact", () => {
+    const { mod } = buildSlotAttack({ killInFast: true });
+    assertThrows(() => verifyModule(mod), "un-killed has_shape fact");
+});
+
+test("shapes-verify: slot out of bounds / repr mismatch / unknown shape reject", () => {
+    assertThrows(() => verifyModule(buildSlotAttack({ slot: 2 }).mod), "out of bounds");
+    assertThrows(() => verifyModule(buildSlotAttack({ repr: "boxed" }).mod), "shape field repr");
+    assertThrows(
+        () => verifyModule(buildSlotAttack({ shapeImm: "a:boxed" }).mod),
+        "unknown module shape"
+    );
+});
+
+test("shapes-verify: slot_store requires the matching has_tag fact", () => {
+    // no tag fact at all
+    assertThrows(
+        () => verifyModule(buildSlotAttack({ store: true, tagGuard: "none" }).mod),
+        "has_tag"
+    );
+    // the right fact verifies
+    verifyModule(buildSlotAttack({ store: true, tagGuard: "true" }).mod);
+    // the WRONG edge's fact (value proven NON-number, field repr f64) rejects
+    assertThrows(
+        () => verifyModule(buildSlotAttack({ store: true, tagGuard: "false" }).mod),
+        "has_tag"
+    );
+});
+
+// --- shapes: optimizer (merging + fact folding) ----------------------------------
+
+function shapeOptStats(): OptStats {
+    return {
+        allocs_sunk: 0,
+        reads_folded: 0,
+        calls_inlined: 0,
+        iters_folded: 0,
+        dead_removed: 0,
+        guards_folded: 0,
+        regions_merged: 0,
+        raw_join_params: 0,
+        shape_guards_folded: 0,
+        shape_regions_merged: 0,
+        unbox_folds: 0,
+        joins_threaded: 0,
+    };
+}
+
+function lowerShapeOpt(src: string): { printed: string; stats: OptStats } {
+    const r = lowerFunctionNode(parseFn(src), undefined, stubShapeOracle({ p: PXY }));
+    verifyModule(r.module);
+    const stats = optimizeFunction(r.fn, r.module);
+    verifyModule(r.module);
+    return { printed: printFunction(r.fn), stats };
+}
+
+test("shapes-opt: consecutive gets on one receiver merge to one guard region", () => {
+    const { printed, stats } = lowerShapeOpt("function f(p) { return p.x + p.x; }");
+    assert(stats.shape_regions_merged === 1, `merged=${stats.shape_regions_merged}`);
+    assert(stats.shape_guards_folded === 1, `folded=${stats.shape_guards_folded}`);
+    const guards = (printed.match(/has_shape/g) || []).length;
+    assert(guards === 1, `expected 1 surviving has_shape, got ${guards}`);
+    const loads = (printed.match(/slot_load/g) || []).length;
+    assert(loads === 2, `expected 2 slot_loads, got ${loads}`);
+});
+
+test("shapes-opt: a call between accesses kills the facts and refuses the merge", () => {
+    const { printed, stats } = lowerShapeOpt(
+        "function f(p, g) { var a = p.x; g(); return a + p.x; }"
+    );
+    assert(stats.shape_regions_merged === 0, `merged=${stats.shape_regions_merged}`);
+    assert(stats.shape_guards_folded === 0, `folded=${stats.shape_guards_folded}`);
+    const guards = (printed.match(/has_shape/g) || []).length;
+    assert(guards === 2, `expected both has_shape guards to survive, got ${guards}`);
+});
+
+test("shapes-opt: store diamonds do not match the get-region shape", () => {
+    const { stats } = lowerShapeOpt("function f(p) { p.x = p.x + 1; return p.x; }");
+    // the has_tag split in the store's fast side refuses region matching;
+    // nothing may merge across a slot_store (it is a WRITE kill)
+    assert(stats.shape_regions_merged === 0, `merged=${stats.shape_regions_merged}`);
+});
+
+// hand-built twin-mismatch attack: two adjacent get regions whose slow
+// arms LIE (region2's generic get names a different field than its fast
+// slot_load) — the merge must refuse on the twin check
+function buildTwinAttack(lieAtom: string): { mod: Module; fn: Func; stats: OptStats } {
+    const fb = new FunctionBuilder("twin", ["%env", "%this", "p"]);
+    const p = fb.fn.entry!.params[2]!;
+    const shapeKey = "x:f64,y:f64";
+
+    const fast1 = fb.newBlock("fast1");
+    const slow1 = fb.newBlock("slow1");
+    const j1 = fb.newBlock("j1");
+    const p1 = j1.addParam("v1");
+    const g1 = fb.emit("has_shape", [p], { shape: shapeKey });
+    fb.condBr(g1, fast1, [], slow1, []);
+    fb.sealBlock(fast1);
+    fb.sealBlock(slow1);
+    fb.setInsertPoint(fast1);
+    const l1 = fb.emit("slot_load", [p], { shape: shapeKey, slot: 0, repr: "f64" });
+    fb.br(j1, [l1]);
+    fb.setInsertPoint(slow1);
+    const gp1 = fb.emit("get_prop_atom", [p], { atom: "x" });
+    fb.br(j1, [gp1]);
+    fb.sealBlock(j1);
+    fb.setInsertPoint(j1);
+
+    const fast2 = fb.newBlock("fast2");
+    const slow2 = fb.newBlock("slow2");
+    const j2 = fb.newBlock("j2");
+    const p2 = j2.addParam("v2");
+    const g2 = fb.emit("has_shape", [p], { shape: shapeKey });
+    fb.condBr(g2, fast2, [], slow2, []);
+    fb.sealBlock(fast2);
+    fb.sealBlock(slow2);
+    fb.setInsertPoint(fast2);
+    const l2 = fb.emit("slot_load", [p], { shape: shapeKey, slot: 0, repr: "f64" });
+    fb.br(j2, [l2]);
+    fb.setInsertPoint(slow2);
+    const gp2 = fb.emit("get_prop_atom", [p], { atom: lieAtom });
+    fb.br(j2, [gp2]);
+    fb.sealBlock(j2);
+    fb.setInsertPoint(j2);
+    const sum = fb.emit("add", [p1, p2], {});
+    fb.ret(sum);
+
+    const fn = fb.finish();
+    const mod = new Module("twin_mod");
+    mod.addFunction(fn);
+    mod.internShape([
+        { name: "x", repr: "f64" },
+        { name: "y", repr: "f64" },
+    ]);
+    const stats = shapeOptStats();
+    optimizeShapeRegions(fn, mod, stats);
+    verifyModule(mod);
+    return { mod, fn, stats };
+}
+
+test("shapes-opt: a lying slow twin refuses the merge; the honest one merges", () => {
+    const lying = buildTwinAttack("y");
+    assert(lying.stats.shape_regions_merged === 0, "lying twin must not merge");
+    const honest = buildTwinAttack("x");
+    assert(honest.stats.shape_regions_merged === 1, "honest twin must merge");
+    assert(honest.stats.shape_guards_folded === 1, "post-merge guard must fold");
+});
+
+// stale-compare attack: the fact holds at the branch, but the compare was
+// computed BEFORE the region that establishes it — folding it to true
+// would take the wrong arm when the compare was false at its own site
+test("shapes-opt: a stale (earlier-block) has_shape compare never folds", () => {
+    const fb = new FunctionBuilder("stale", ["%env", "%this", "p"]);
+    const p = fb.fn.entry!.params[2]!;
+    const shapeKey = "x:f64,y:f64";
+    const t1 = fb.newBlock("t1");
+    const out = fb.newBlock("out");
+    const a = fb.newBlock("a");
+    const bb = fb.newBlock("b");
+    const stale = fb.emit("has_shape", [p], { shape: shapeKey });
+    const g1 = fb.emit("has_shape", [p], { shape: shapeKey });
+    fb.condBr(g1, t1, [], out, []);
+    fb.sealBlock(t1);
+    fb.setInsertPoint(t1);
+    fb.condBr(stale, a, [], bb, []);
+    fb.sealBlock(a);
+    fb.sealBlock(bb);
+    fb.setInsertPoint(a);
+    fb.br(out, []);
+    fb.setInsertPoint(bb);
+    fb.br(out, []);
+    fb.sealBlock(out);
+    fb.setInsertPoint(out);
+    fb.ret(fb.constUndefined());
+
+    const fn = fb.finish();
+    const mod = new Module("stale_mod");
+    mod.addFunction(fn);
+    mod.internShape([
+        { name: "x", repr: "f64" },
+        { name: "y", repr: "f64" },
+    ]);
+    verifyModule(mod);
+    const stats = shapeOptStats();
+    optimizeShapeRegions(fn, mod, stats);
+    assert(stats.shape_guards_folded === 0, "stale compare must not fold");
+
+    // the same CFG with the compare minted fresh in t1 DOES fold
+    const fb2 = new FunctionBuilder("fresh", ["%env", "%this", "p"]);
+    const q = fb2.fn.entry!.params[2]!;
+    const t1b = fb2.newBlock("t1");
+    const outb = fb2.newBlock("out");
+    const ab = fb2.newBlock("a");
+    const bbb = fb2.newBlock("b");
+    const g = fb2.emit("has_shape", [q], { shape: shapeKey });
+    fb2.condBr(g, t1b, [], outb, []);
+    fb2.sealBlock(t1b);
+    fb2.setInsertPoint(t1b);
+    const fresh = fb2.emit("has_shape", [q], { shape: shapeKey });
+    fb2.condBr(fresh, ab, [], bbb, []);
+    fb2.sealBlock(ab);
+    fb2.sealBlock(bbb);
+    fb2.setInsertPoint(ab);
+    fb2.br(outb, []);
+    fb2.setInsertPoint(bbb);
+    fb2.br(outb, []);
+    fb2.sealBlock(outb);
+    fb2.setInsertPoint(outb);
+    fb2.ret(fb2.constUndefined());
+    const fn2 = fb2.finish();
+    const mod2 = new Module("fresh_mod");
+    mod2.addFunction(fn2);
+    mod2.internShape([
+        { name: "x", repr: "f64" },
+        { name: "y", repr: "f64" },
+    ]);
+    const stats2 = shapeOptStats();
+    optimizeShapeRegions(fn2, mod2, stats2);
+    assert(stats2.shape_guards_folded === 1, "fresh dominated compare must fold");
+    verifyModule(mod2);
 });
 
 // --------------------------------------------------------------------------------

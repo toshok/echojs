@@ -22,7 +22,12 @@
 
 import { Func, Inst, Module, replaceAllUses } from "./ir";
 import { Effect, opInfo } from "./ops";
-import { optimizeGuardRegions, rawJoinParams, threadBooleanJoins } from "./optimize-guards";
+import {
+    optimizeGuardRegions,
+    optimizeShapeRegions,
+    rawJoinParams,
+    threadBooleanJoins,
+} from "./optimize-guards";
 
 export interface OptStats {
     allocs_sunk: number;
@@ -34,6 +39,9 @@ export interface OptStats {
     guards_folded: number;
     regions_merged: number;
     raw_join_params: number;
+    // shapes-plan P4.3: shape-guard region passes
+    shape_guards_folded: number;
+    shape_regions_merged: number;
     // Phase 3.6: unbox_f64(box_f64(x)) round-trips annihilated
     unbox_folds: number;
     // Phase 3.6: constant edges threaded past boxed-boolean re-tests
@@ -50,6 +58,8 @@ function newStats(): OptStats {
         guards_folded: 0,
         regions_merged: 0,
         raw_join_params: 0,
+        shape_guards_folded: 0,
+        shape_regions_merged: 0,
         unbox_folds: 0,
         joins_threaded: 0,
     };
@@ -667,6 +677,9 @@ export function optimizeFunction(fn: Func, module?: Module, stats?: OptStats): O
     // values the diamonds guard) and bail immediately when lowering
     // emitted no number guards — every flag-off compile.
     if (optimizeGuardRegions(fn, s)) eliminateDead(fn, s);
+    // shapes-plan P4.3: shape-guard region merging + fact folding (bails
+    // immediately without has_shape guards — every flag-off compile)
+    if (optimizeShapeRegions(fn, module, s)) eliminateDead(fn, s);
     if (rawJoinParams(fn, s)) eliminateDead(fn, s);
     // Phase 3.6 cleanups.  These run AFTER the guard-region passes: the
     // merge machinery pattern-matches diamond fast arms (unbox of the

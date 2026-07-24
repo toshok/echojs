@@ -54,9 +54,20 @@ export interface ModCtx {
     module_infos?: Map<string, ModuleInfo> | null;
     // Phase 3: the per-module type oracle (null/absent = no typed fast
     // paths, today's lowering exactly) and the module-wide stats the
-    // lowered functions accumulate into
+    // lowered functions accumulate into.  shapes-plan P4.3 adds the shape
+    // telemetry: sites = atom property accesses that consulted the oracle,
+    // guards = shape diamonds emitted, declined = counted reasons
+    // (promotion criterion 5 — visible degradation).
     oracle?: TypeOracle | null;
-    typed_stats?: { diamonds: number; trusted?: number };
+    typed_stats?: {
+        diamonds: number;
+        trusted?: number;
+        shape_sites?: number;
+        shape_guards?: number;
+        shape_declined?: Record<string, number>;
+    };
+    // --types-dump: per-site shape census lines (shapes-plan P4.3)
+    shape_dump?: boolean;
 }
 
 // Phase 3.6: clone-lowering mode (specialize.ts).  The clone gets an
@@ -825,6 +836,132 @@ class LowerFunction {
         return result;
     }
 
+    // --- shapes-plan P4.3: shape-guarded property access ---------------------
+    //
+    // The promotion policy (criteria 1/2 of the plan): a diamond is emitted
+    // only for an EXACT receiver-shape fact — monomorphic, non-megamorphic,
+    // uncapped, ordered witness present, every field's repr a single tag,
+    // and the accessed field actually in the shape.  Anything less is a
+    // counted decline and today's generic op.  Guarded consumption is
+    // correct even when the oracle is wrong: the has_shape compare decides
+    // at runtime, and a failed guard costs speed, never behavior.
+    // EJS_NO_SHAPE_GUARDS=1 is the compile-time bisect hook (the
+    // EJS_NO_EIR_OPT mold); runtime EJS_SHAPES=off makes every guard fail.
+
+    shapeDecline(reason: string): null {
+        const stats = this.mod_ctx.typed_stats;
+        if (stats) {
+            const d = (stats.shape_declined ??= {});
+            d[reason] = (d[reason] ?? 0) + 1;
+        }
+        return null;
+    }
+
+    // --types-dump: one census line per consulted access site
+    shapeDumpSite(objNode: e.Expression, atom: string, what: string): void {
+        if (!this.mod_ctx.shape_dump) return;
+        const loc = (objNode as { loc?: { start?: { line: number; column: number } } }).loc;
+        const where = loc && loc.start ? `${loc.start.line}:${loc.start.column + 1}` : "synthetic";
+        console.warn(`--types-dump: shapes: .${atom} @${where}: ${what}`);
+    }
+
+    // the exact shape fact for accessing `atom` on the value of `objNode`,
+    // or null (with the decline counted) when anything is short of exact
+    shapeFactFor(
+        objNode: e.Expression | null,
+        atom: string
+    ): { key: string; slot: number; repr: "boxed" | "f64" } | null {
+        if (!objNode || !this.oracle || !this.oracle.receiverShapeOfNode) return null;
+        if (process.env["EJS_NO_SHAPE_GUARDS"]) return null;
+        const stats = this.mod_ctx.typed_stats;
+        if (stats) stats.shape_sites = (stats.shape_sites ?? 0) + 1;
+        const q = this.oracle.receiverShapeOfNode(objNode);
+        if (q.declined !== undefined) {
+            this.shapeDumpSite(objNode, atom, `declined ${q.declined}`);
+            return this.shapeDecline(q.declined);
+        }
+        const slot = q.fields.findIndex((f) => f.name === atom);
+        if (slot < 0) {
+            this.shapeDumpSite(objNode, atom, "declined no-field");
+            return this.shapeDecline("no-field"); // proto/method access
+        }
+        const key = this.module.internShape(q.fields);
+        if (stats) stats.shape_guards = (stats.shape_guards ?? 0) + 1;
+        this.shapeDumpSite(objNode, atom, `guarded shape="${key}" slot=${slot}`);
+        return { key, slot, repr: q.fields[slot]!.repr };
+    }
+
+    // obj.atom: has_shape diamond whose fast arm is a fixed-slot load and
+    // whose slow arm is today's generic get — the numericDiamond skeleton
+    // with a shape guard at the head
+    propGet(objNode: e.Expression | null, obj: Inst, atom: string): Inst {
+        const f = this.shapeFactFor(objNode, atom);
+        if (!f) return this.b.emit("get_prop_atom", [obj], { atom: atom });
+
+        const fast_bb = this.b.newBlock("shape_fast");
+        const slow_bb = this.b.newBlock("shape_slow");
+        const join_bb = this.b.newBlock("shape_join");
+        const result = join_bb.addParam("prop");
+
+        const t = this.b.emit("has_shape", [obj], { shape: f.key });
+        this.b.condBr(t, fast_bb, [], slow_bb, []);
+        this.b.sealBlock(fast_bb);
+        this.b.sealBlock(slow_bb);
+
+        this.b.setInsertPoint(fast_bb);
+        const v = this.b.emit("slot_load", [obj], { shape: f.key, slot: f.slot, repr: f.repr });
+        this.b.br(join_bb, [v]);
+
+        this.b.setInsertPoint(slow_bb);
+        const g = this.b.emit("get_prop_atom", [obj], { atom: atom });
+        this.b.br(join_bb, [g]);
+        this.b.sealBlock(join_bb);
+
+        this.b.setInsertPoint(join_bb);
+        return result;
+    }
+
+    // obj.atom = v: the store dual.  The fast arm must prove the stored
+    // value's runtime repr matches the field's shape repr (a mismatched
+    // store owes a shape TRANSITION, which only the generic path performs),
+    // so the guard is has_shape AND a has_tag(number) check oriented by the
+    // field repr — f64 fields take numbers fast, boxed fields take
+    // non-numbers fast, everything else goes generic.
+    propSet(objNode: e.Expression | null, obj: Inst, atom: string, v: Inst): void {
+        const f = this.shapeFactFor(objNode, atom);
+        if (!f) {
+            this.b.emit("set_prop_atom", [obj, v], { atom: atom });
+            return;
+        }
+
+        const tag_bb = this.b.newBlock("shape_settag");
+        const fast_bb = this.b.newBlock("shape_setfast");
+        const slow_bb = this.b.newBlock("shape_setslow");
+        const join_bb = this.b.newBlock("shape_setjoin");
+
+        const t = this.b.emit("has_shape", [obj], { shape: f.key });
+        this.b.condBr(t, tag_bb, [], slow_bb, []);
+        this.b.sealBlock(tag_bb);
+
+        this.b.setInsertPoint(tag_bb);
+        const isnum = this.b.emit("has_tag", [v], { tag: "number" });
+        if (f.repr === "f64") this.b.condBr(isnum, fast_bb, [], slow_bb, []);
+        else this.b.condBr(isnum, slow_bb, [], fast_bb, []);
+        this.b.sealBlock(fast_bb);
+        this.b.sealBlock(slow_bb);
+
+        this.b.setInsertPoint(fast_bb);
+        this.b.emit("slot_store", [obj, v], { shape: f.key, slot: f.slot, repr: f.repr });
+        this.b.br(join_bb, []);
+
+        this.b.setInsertPoint(slow_bb);
+        this.b.emit("set_prop_atom", [obj, v], { atom: atom });
+        this.b.br(join_bb, []);
+        this.b.sealBlock(join_bb);
+
+        this.b.setInsertPoint(join_bb);
+    }
+
     logical(n: e.LogicalExpression): Inst {
         let l = this.expr(n.left);
         let lbool = this.b.emit("to_boolean", [l], {});
@@ -953,7 +1090,8 @@ class LowerFunction {
         }
         if (n.left.type === "MemberExpression") {
             // evaluate the object (and computed key) exactly once
-            const obj = this.expr(n.left.object as e.Expression);
+            const objNode = n.left.object as e.Expression;
+            const obj = this.expr(objNode);
             let atom: string | null = null;
             let key: Inst | null = null;
             if (!n.left.computed && n.left.property.type === "Identifier")
@@ -963,14 +1101,14 @@ class LowerFunction {
             if (binop) {
                 const cur =
                     atom !== null
-                        ? this.b.emit("get_prop_atom", [obj], { atom: atom })
+                        ? this.propGet(objNode, obj, atom)
                         : this.b.emit("get_prop", [obj, key!], {});
                 const rhs = this.expr(n.right);
                 v = this.b.emit(binop, [cur, rhs], {});
             } else {
                 v = this.expr(n.right);
             }
-            if (atom !== null) this.b.emit("set_prop_atom", [obj, v], { atom: atom });
+            if (atom !== null) this.propSet(objNode, obj, atom, v);
             else this.b.emit("set_prop", [obj, key!, v], {});
             return v;
         }
@@ -990,18 +1128,19 @@ class LowerFunction {
         }
         if (n.argument.type === "MemberExpression") {
             const m = n.argument;
-            const obj = this.expr(m.object as e.Expression);
+            const objNode = m.object as e.Expression;
+            const obj = this.expr(objNode);
             let atom: string | null = null;
             let key: Inst | null = null;
             if (!m.computed && m.property.type === "Identifier") atom = m.property.name;
             else key = this.expr(m.property);
             const cur =
                 atom !== null
-                    ? this.b.emit("get_prop_atom", [obj], { atom: atom })
+                    ? this.propGet(objNode, obj, atom)
                     : this.b.emit("get_prop", [obj, key!], {});
             const old = this.b.emit("unary_plus", [cur], {});
             const nv = this.b.emit(op, [old, one], {});
-            if (atom !== null) this.b.emit("set_prop_atom", [obj, nv], { atom: atom });
+            if (atom !== null) this.propSet(objNode, obj, atom, nv);
             else this.b.emit("set_prop", [obj, key!, nv], {});
             return n.prefix ? nv : old;
         }
@@ -1087,7 +1226,7 @@ class LowerFunction {
         if (slotv) return slotv;
         let obj = this.expr(n.object);
         if (!n.computed && n.property.type === "Identifier")
-            return this.b.emit("get_prop_atom", [obj], { atom: n.property.name });
+            return this.propGet(n.object as e.Expression, obj, n.property.name);
         let key = this.expr(n.property);
         return this.b.emit("get_prop", [obj, key], {});
     }
@@ -1114,9 +1253,11 @@ class LowerFunction {
             }
             thisArg = this.expr(n.callee.object);
             if (!n.callee.computed && n.callee.property.type === "Identifier")
-                callee = this.b.emit("get_prop_atom", [thisArg], {
-                    atom: n.callee.property.name,
-                });
+                callee = this.propGet(
+                    n.callee.object as e.Expression,
+                    thisArg,
+                    n.callee.property.name
+                );
             else {
                 let key = this.expr(n.callee.property);
                 callee = this.b.emit("get_prop", [thisArg, key], {});
@@ -1587,7 +1728,7 @@ class LowerFunction {
                 target = target.left;
             }
             const binding = this.analysis.resolve(target)!;
-            const v = this.b.emit("get_prop_atom", [src], { atom: keyName });
+            const v = this.propGet(d.init ?? null, src, keyName);
             this.writeBinding(binding, v);
             if (dflt) {
                 let isundef = this.b.emit("strict_eq", [v, this.b.constUndefined()], {});
@@ -1942,17 +2083,22 @@ export function lowerFunctionNode(
     n: e.Function,
     name?: string,
     oracle?: TypeOracle | null
-): { module: Module; fn: Func; diamonds: number } {
+): { module: Module; fn: Func; diamonds: number; shape_guards: number } {
     let analysis = new ScopeAnalysis();
     let info = analysis.analyzeFunction(n, name);
     let module = new Module(info.name);
-    let typed_stats = { diamonds: 0 };
+    let typed_stats: NonNullable<ModCtx["typed_stats"]> = { diamonds: 0 };
     let fn = lowerOneFunction(info, analysis, module, {
         refs: new Map(),
         oracle: oracle ?? null,
         typed_stats,
     });
-    return { module: module, fn: fn, diamonds: typed_stats.diamonds };
+    return {
+        module: module,
+        fn: fn,
+        diamonds: typed_stats.diamonds,
+        shape_guards: typed_stats.shape_guards ?? 0,
+    };
 }
 
 // lower every top-level function declaration in a parsed program

@@ -39,6 +39,14 @@ typedef enum {
 #define EJS_SHAPE_DICT 0
 #define EJS_SHAPE_ROOT 1
 
+/* the never-matches sentinel compiled shape guards compare against when a
+   module's shape could not be interned (EJS_SHAPES=off, index-looking key,
+   cap, table full).  The table never allocates this index (shape_alloc
+   stops one short), so no object header can ever carry it — a guard
+   against it is statically false, and the guarded slow path serves every
+   access.  shapes-plan P4.3. */
+#define EJS_SHAPE_NOMATCH 0xFFFFFFu
+
 /* hard ceiling on shaped field count (and EJS_SHAPE_CAP): a full slot
    array must fit the page allocator's largest cell — 128 bytes: despite
    the "= 256" comment on OBJECT_SIZE_HIGH_LIMIT_BITS, `ffs(256) = 9 > 8`
@@ -187,6 +195,16 @@ _ejs_shape_transition_add_fast(uint32_t shape, ejsval name, ejsval value,
    overflow */
 uint32_t _ejs_shape_transition_set(uint32_t shape, uint32_t slot_index,
                                    ejsval value);
+
+/* module-init interning for compiled shape guards (shapes-plan P4.3, the
+   atom-table precedent): walk/intern the ordered shape whose fields are
+   names[0..nfields) with reprs from f64_mask (bit i set = field i is
+   EJS_SHAPE_REPR_F64), returning its index for the module's shape global.
+   Returns EJS_SHAPE_NOMATCH when the shape can't exist (tracking off,
+   index-looking key, over the field cap, table full) — guards against
+   NOMATCH are simply always false. */
+uint32_t _ejs_shape_intern(uint32_t nfields, const ejsval *names,
+                           uint32_t f64_mask);
 
 EJS_END_DECLS
 

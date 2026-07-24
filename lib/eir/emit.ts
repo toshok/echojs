@@ -39,6 +39,15 @@ export interface VisitorSurface {
     // compiler.ts so all target-layout knowledge stays in one place)
     unboxDouble(val: llvm.Value): llvm.Value;
     boxDouble(dbl: llvm.Value): llvm.Value;
+    // shapes-plan P4.3 (beside isNumber for the same reason): the object
+    // tag test, the payload->EJSObject* reinterpretation (valid only under
+    // a passed isObject), and the module's interned shape-index global
+    isObject(val: llvm.Value): llvm.Value;
+    objectPointer(val: llvm.Value): llvm.Value;
+    moduleShapeGlobal(
+        key: string,
+        fields: { name: string; repr: string }[]
+    ): llvm.GlobalVariable;
     loadBoolEjsValue(n: boolean): llvm.Value;
     loadDoubleEjsValue(n: number): llvm.Value;
     loadNullEjsValue(): llvm.Value;
@@ -114,6 +123,7 @@ export class EIREmitter {
     module: llvm.Module;
     // per-module state
     llvm_fns!: Map<string, llvm.EjsFunction>;
+    eirModule!: EIRModule;
     // per-function state (reset in emitFunction)
     eirFn!: Func;
     llvmFn!: llvm.EjsFunction;
@@ -137,6 +147,7 @@ export class EIREmitter {
     // declare + define every function in an EIR module; returns a Map of
     // eir function name -> llvm.Function
     emitModule(eirModule: EIRModule): Map<string, llvm.EjsFunction> {
+        this.eirModule = eirModule;
         let saved_insert = ir.getInsertBlock();
 
         let fns = new Map();
@@ -389,6 +400,46 @@ export class EIREmitter {
         return this.abi.createCall(this.llvmFn, callee.type, callee, argv, name || "");
     }
 
+    // shapes-plan P4.3: THE slot-addressing seam.  A shaped object's
+    // property storage is a closureenv slot array hanging off the
+    // map/slots union word (P4.2 layout); when gc-P5 moves slots inline,
+    // only this method changes (the ops carry slot indices, not
+    // addresses).  Only valid downstream of a passed has_shape on `objval`
+    // for a shape with more than `slot` fields — which the EIR verifier
+    // enforces — so the union word is a non-null slot-array ejsval here.
+    slotRef(objval: llvm.Value, slot: number): llvm.Value {
+        const objptr = this.v.objectPointer(objval);
+        // field 4 of types.EjsObject is the map/slots union word; load it
+        // as an ejsval (the slot-array reference)
+        const union_ptr = ir.createInBoundsGetElementPointer(
+            types.EjsObject,
+            objptr,
+            [consts.int64(0), consts.int32(4)],
+            "slots_union_ptr"
+        );
+        const slots_ptr = ir.createBitCast(
+            union_ptr,
+            types.EjsValue.pointerTo(),
+            "slots_ejsval_ptr"
+        );
+        const slotsval = ir.createLoad(types.EjsValue, slots_ptr, "slots_ejsval");
+        // payload-mask the closureenv ejsval to its EJSClosureEnv*
+        const envptr = ir.createPointerCast(
+            this.v.objectPointer(slotsval),
+            types.EjsClosureEnv.pointerTo(),
+            "slots_env"
+        );
+        // field 4 of types.EjsClosureEnv is the trailing slots array; the
+        // GEP is deliberately non-inbounds (the array is declared [1 x
+        // ejsval], the moduleSlotRef precedent for trailing arrays)
+        return ir.createGetElementPointer(
+            types.EjsClosureEnv,
+            envptr,
+            [consts.int64(0), consts.int32(4), consts.int64(slot)],
+            "slot_ref"
+        );
+    }
+
     // same shape as the legacy opencoded module slot access: a non-inbounds
     // GEP into the module global (see handleModuleSlotRef in compiler.js).
     // "%self" refers to the module being compiled.
@@ -521,6 +572,61 @@ export class EIREmitter {
                 if (tag !== "number")
                     throw new Error(`EIR emit: has_tag tag '${String(tag)}' is not supported`);
                 this.values.set(inst, this.v.isNumber(this.val(inst.operands[0])));
+                return;
+            }
+
+            // --- shapes (shapes-plan P4.3) -------------------------------
+            // has_shape folds the NaN-box object check into the header
+            // shape-index compare, the way isNumber backs has_tag: a
+            // non-object is simply false.  The shape-index global holds
+            // EJS_SHAPE_NOMATCH until module init interns the real index
+            // (and forever, under EJS_SHAPES=off) — an index no object
+            // header can carry, so the guard is false rather than wrong.
+            case "has_shape": {
+                const key = String(inst.imms["shape"]);
+                const fields = this.eirModule.shapes.get(key);
+                if (!fields)
+                    throw new Error(`EIR emit: has_shape names unknown module shape '${key}'`);
+                const g = this.v.moduleShapeGlobal(key, fields);
+                const val = this.val(inst.operands[0]);
+
+                const check_bb = new llvm.BasicBlock("shape_check", this.llvmFn);
+                const merge_bb = new llvm.BasicBlock("shape_merge", this.llvmFn);
+                const from_bb = ir.getInsertBlock()!;
+                ir.createCondBr(this.v.isObject(val), check_bb, merge_bb);
+
+                ir.setInsertPoint(check_bb);
+                const objptr = this.v.objectPointer(val);
+                // GCObjectHeader is two i32 halves in types.EjsObject; the
+                // shape index is the low 24 bits of the high half
+                const hdr_hi_ptr = ir.createInBoundsGetElementPointer(
+                    types.EjsObject,
+                    objptr,
+                    [consts.int64(0), consts.int32(1)],
+                    "hdr_hi_ptr"
+                );
+                const hdr_hi = ir.createLoad(types.Int32, hdr_hi_ptr, "hdr_hi");
+                const shape_idx = ir.createAnd(hdr_hi, consts.int32(0xffffff), "shape_idx");
+                const want = ir.createLoad(types.Int32, g, "shape_want");
+                const eq = ir.createICmpEq(shape_idx, want, "shape_eq");
+                ir.createBr(merge_bb);
+
+                ir.setInsertPoint(merge_bb);
+                const phi = ir.createPhi(types.Int1, 2, "has_shape");
+                phi.addIncoming(eq, check_bb);
+                phi.addIncoming(consts.int1(0), from_bb);
+                this.values.set(inst, phi);
+                return;
+            }
+            case "slot_load": {
+                const ref = this.slotRef(this.val(inst.operands[0]), inst.imms["slot"] as number);
+                this.values.set(inst, ir.createLoad(types.EjsValue, ref, "slot_val"));
+                return;
+            }
+            case "slot_store": {
+                const ref = this.slotRef(this.val(inst.operands[0]), inst.imms["slot"] as number);
+                ir.createStore(this.val(inst.operands[1]), ref);
+                this.values.set(inst, this.val(inst.operands[1]));
                 return;
             }
             case "unbox_f64":

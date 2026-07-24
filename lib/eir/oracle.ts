@@ -40,6 +40,13 @@ interface MaamMetrics {
     shapeCapHits?: number;
 }
 
+// the slice of maam's Shape the shape queries consume (structural)
+interface MaamShape {
+    id: number;
+    fields: ReadonlyArray<{ name: string; type: string }>;
+    megamorphic?: boolean;
+}
+
 interface MaamResult {
     metrics: MaamMetrics;
     describe(): string;
@@ -47,6 +54,10 @@ interface MaamResult {
     // Phase 1 node-identity oracle: joined TypeSig ("num", "num|str", "⊤", …)
     // for the exact node object, undefined for unreached/unmapped nodes.
     typeOfNode(n: unknown): string | undefined;
+    // shapes-plan P4.3 node-identity shape queries; absent in older maam
+    // builds (the oracle degrades to "no shape facts", never errors)
+    receiverShapesOfNode?(n: unknown): MaamShape[] | undefined;
+    fieldOrderOfShape?(s: MaamShape): readonly string[] | undefined;
 }
 
 interface MaamModule {
@@ -129,10 +140,40 @@ export interface EirType {
     tags: ReadonlySet<TypeTag> | "top";
 }
 
+// shapes-plan P4.3: one field of a receiver's shape, in insertion order.
+// repr mirrors the runtime's EJSShapeRepr: "f64" iff the field's TypeSig is
+// exactly "num" (the runtime classifies stored values the same way), else
+// "boxed" — and a sig whose union straddles the num/non-num line has no
+// determined repr, so the whole query declines (guard identity needs every
+// field's repr, not just the accessed one).
+export interface OracleShapeField {
+    name: string;
+    repr: "boxed" | "f64";
+}
+
+export type ShapeDeclineReason =
+    | "unmapped" // node unknown to the analysis (or maam predates the query)
+    | "polymorphic" // more than one terminal shape
+    | "megamorphic" // the ⊤ shape
+    | "capped" // shapeCapHits > 0: some shape set was widened this module
+    | "union-repr" // a field's TypeSig straddles num/non-num
+    | "no-order" // no ordered witness for the shape
+    | "empty"; // the empty shape (nothing to access)
+
+export type ShapeQuery =
+    | { fields: OracleShapeField[]; declined?: undefined }
+    | { declined: ShapeDeclineReason; fields?: undefined };
+
 export interface TypeOracle {
     // type of the value an expression node evaluates to (join over all
     // reached contexts); "top" when unknown/unanalyzed
     typeOfNode(n: e.Node): EirType;
+    // shapes-plan P4.3: the receiver-shape fact for a property access's
+    // object node — exact facts only (monomorphic, non-megamorphic,
+    // uncapped, all reprs single-tag, ordered witness present), everything
+    // else a counted decline.  Optional so stub oracles predating shapes
+    // keep working; absent = no shape facts.
+    receiverShapeOfNode?(n: e.Node): ShapeQuery;
     // required before any UNguarded consumption (guarded fast paths don't
     // need it)
     closedWorld(): boolean;
@@ -176,6 +217,20 @@ export function typeSigToEirType(sig: string | undefined): EirType {
         tags.add(tag);
     }
     return { tags };
+}
+
+// Map a maam field TypeSig to a runtime shape repr, or null when the sig
+// straddles the num/non-num line (no single runtime repr exists — the
+// object flips shapes at runtime and no one guard can be monomorphic).
+// The runtime's classify_repr is EJSVAL_IS_NUMBER ? F64 : BOXED, so any
+// union of non-num tags is uniformly BOXED.  Exported for unit tests.
+export function typeSigToShapeRepr(sig: string): "boxed" | "f64" | null {
+    if (sig === "num") return "f64";
+    const parts = sig.split("|");
+    for (const part of parts) {
+        if (part === "num" || TAG_BY_SIG[part] === undefined) return null;
+    }
+    return "boxed";
 }
 
 // The common-ids singleton identifier nodes (ONE object each, spliced into
@@ -353,6 +408,33 @@ export function runTypeAnalysisProbe(
                 const sig = result.typeOfNode(n);
                 if (sig === undefined) stats.unknown++;
                 return typeSigToEirType(sig);
+            },
+            // shapes-plan P4.3: exact receiver-shape facts, every near-miss
+            // a counted decline (promotion criterion 2 — no near-misses)
+            receiverShapeOfNode: (n): ShapeQuery => {
+                if (!result.receiverShapesOfNode || !result.fieldOrderOfShape)
+                    return { declined: "unmapped" }; // older maam build
+                if ((m.shapeCapHits ?? 0) > 0) return { declined: "capped" };
+                const shapes = result.receiverShapesOfNode(n);
+                if (shapes === undefined || shapes.length === 0)
+                    return { declined: "unmapped" };
+                if (shapes.length > 1) return { declined: "polymorphic" };
+                const s = shapes[0]!;
+                if (s.megamorphic) return { declined: "megamorphic" };
+                if (s.fields.length === 0) return { declined: "empty" };
+                const order = result.fieldOrderOfShape(s);
+                if (!order || order.length !== s.fields.length)
+                    return { declined: "no-order" };
+                const typeByName = new Map(s.fields.map((f) => [f.name, f.type]));
+                const fields: OracleShapeField[] = [];
+                for (const name of order) {
+                    const sig = typeByName.get(name);
+                    if (sig === undefined) return { declined: "no-order" };
+                    const repr = typeSigToShapeRepr(sig);
+                    if (repr === null) return { declined: "union-repr" };
+                    fields.push({ name, repr });
+                }
+                return { fields };
             },
             // The plan text gates closedWorld() on unknownCalls alone because it
             // predates the degradedBindings counter (unmodeled imports, rest

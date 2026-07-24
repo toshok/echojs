@@ -51,6 +51,10 @@ export type CollectResult =
           eir_module: Module;
           accessors: ModuleAccessor[];
           diamonds: number;
+          // shapes-plan P4.3 telemetry (all zero/empty when --types is off)
+          shape_sites: number;
+          shape_guards: number;
+          shape_declined: Record<string, number>;
           // Phase 3.6 (null when --types is off or nothing qualified)
           spec: SpecStats | null;
           error?: undefined;
@@ -60,6 +64,9 @@ export type CollectResult =
           eir_module?: undefined;
           accessors?: undefined;
           diamonds?: undefined;
+          shape_sites?: undefined;
+          shape_guards?: undefined;
+          shape_declined?: undefined;
           spec?: undefined;
       };
 
@@ -407,13 +414,18 @@ export function collectEIRToplevel(
         // the toplevel environment, which a direct caller's envParam
         // wouldn't carry.  direct calls stay a devirtualization
         // opportunity for the optimizer, which can prove capture shapes.
-        let typed_stats = { diamonds: 0, trusted: 0 };
+        let typed_stats: NonNullable<import("./lower").ModCtx["typed_stats"]> = {
+            diamonds: 0,
+            trusted: 0,
+        };
         let mod_ctx = {
             refs: refs,
             this_module_info: this_module_info,
             module_infos: module_infos,
             oracle: oracle,
             typed_stats: typed_stats,
+            // --types-dump grows the per-site shape census (P4.3)
+            shape_dump: !!options.types_dump,
         };
 
         let eir_module = new Module(filename);
@@ -447,7 +459,9 @@ export function collectEIRToplevel(
                 stats.dead_removed ||
                 stats.guards_folded ||
                 stats.regions_merged ||
-                stats.raw_join_params
+                stats.raw_join_params ||
+                stats.shape_guards_folded ||
+                stats.shape_regions_merged
             )
                 debug.log(
                     1,
@@ -457,7 +471,9 @@ export function collectEIRToplevel(
                         `${stats.dead_removed} dead inst(s) removed, ` +
                         `${stats.guards_folded} guard(s) folded, ` +
                         `${stats.regions_merged} region(s) merged, ` +
-                        `${stats.raw_join_params} raw f64 join param(s)`
+                        `${stats.raw_join_params} raw f64 join param(s), ` +
+                        `${stats.shape_guards_folded} shape guard(s) folded, ` +
+                        `${stats.shape_regions_merged} shape region(s) merged`
                 );
             verifyModule(eir_module);
 
@@ -507,6 +523,9 @@ export function collectEIRToplevel(
             eir_module: eir_module,
             accessors: accessors,
             diamonds: typed_stats.diamonds,
+            shape_sites: typed_stats.shape_sites ?? 0,
+            shape_guards: typed_stats.shape_guards ?? 0,
+            shape_declined: typed_stats.shape_declined ?? {},
             spec: spec_stats,
         };
     } catch (e) {

@@ -212,8 +212,11 @@ declare module "@llvm" {
         createFDiv(l: Value, r: Value, name: string): Value;
         createFCmpOLT(l: Value, r: Value, name: string): Value;
         createICmpSGt(l: Value, r: Value, name: string): Value;
+        createICmpUGE(l: Value, r: Value, name: string): Value;
         createICmpUGt(l: Value, r: Value, name: string): Value;
         createICmpULt(l: Value, r: Value, name: string): Value;
+        createAnd(l: Value, r: Value, name: string): Value;
+        createIntToPtr(value: Value, type: Type, name: string): Value;
         createLandingPad(type: Type, numClauses: number, name: string): LandingPad;
         createLoad(type: Type, ptr: Value, name: string): Value;
         createNswSub(l: Value, r: Value, name: string): Value;

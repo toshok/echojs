@@ -36,9 +36,28 @@ export interface PredEdge {
     targetIndex: number;
 }
 
+// shapes-plan P4.3: one field of a module-interned guard shape, in
+// insertion (transition-chain) order.  repr mirrors the runtime's
+// EJSShapeRepr and is part of shape identity.
+export interface ShapeField {
+    name: string;
+    repr: "boxed" | "f64";
+}
+
+// the canonical Module.shapes key for a field list — also what has_shape/
+// slot_* carry in imms.shape, so printed IR is self-describing
+export function shapeKeyOf(fields: readonly ShapeField[]): string {
+    return fields.map((f) => `${f.name}:${f.repr}`).join(",");
+}
+
 export class Module {
     name: string;
     functions: Func[] = [];
+    // shapes-plan P4.3: the guard shapes this module interns at init
+    // (imms.shape key -> ordered fields).  The verifier checks slot
+    // bounds/reprs against this; the emitter mints one global + one
+    // _ejs_shape_intern call per entry (the atom-table precedent).
+    shapes = new Map<string, ShapeField[]>();
 
     constructor(name: string) {
         this.name = name;
@@ -47,6 +66,14 @@ export class Module {
     addFunction(fn: Func): Func {
         this.functions.push(fn);
         return fn;
+    }
+
+    // intern a field list into the module's shape table, returning the
+    // imms.shape key ops should carry
+    internShape(fields: readonly ShapeField[]): string {
+        const key = shapeKeyOf(fields);
+        if (!this.shapes.has(key)) this.shapes.set(key, fields.slice());
+        return key;
     }
 }
 
