@@ -647,6 +647,97 @@ _ejs_object_to_dictionary (EJSObject* obj, EJSShapeMigrateReason reason)
     _ejs_shape_object_migrate (obj, reason);
 }
 
+// ------------------------------------------------------------------------
+// born-with-shape allocation (shapes-plan P4.4).  Compiled --types code
+// batches an object literal's (or a fenced constructor prefix's) stores
+// into one call carrying the field names (interned atoms) and values in
+// source order.  The TRUE shape is re-derived from the actual values via
+// the transition memo (~one compare per field on the monomorphic path),
+// so a wrong static repr claim can never mint a lying shape; whenever
+// anything is off-script the call falls back to today's sequential
+// generic sets, byte-for-byte.
+
+// would assigning any of names[0..nfields) run something other than a
+// plain data-property creation on the receiver?  Assignment is [[Set]]:
+// a proto-chain accessor intercepts, and a non-writable proto data
+// property silently swallows the write (sloppy mode) — both must take
+// the sequential path.  Shaped-mode protos hold only default writable
+// data fields, so only dictionary-mode protos need their maps probed;
+// any exotic proto bails conservatively.
+static EJSBool
+shaped_proto_intercepts (ejsval proto, uint32_t nfields, const ejsval* names)
+{
+    for (ejsval p = proto; EJSVAL_IS_OBJECT(p); p = EJSVAL_TO_OBJECT(p)->proto) {
+        EJSObject* po = EJSVAL_TO_OBJECT(p);
+        if (po->ops != &_ejs_Object_specops)
+            return EJS_TRUE;
+        if (EJS_OBJECT_SHAPE(po) != EJS_SHAPE_DICT)
+            continue;
+        for (uint32_t i = 0; i < nfields; i ++) {
+            EJSPropertyDesc* d = _ejs_propertymap_lookup (po->map, names[i]);
+            if (d && (IsAccessorDescriptor(d) || !_ejs_property_desc_is_writable(d)))
+                return EJS_TRUE;
+        }
+    }
+    return EJS_FALSE;
+}
+
+// try to install names/values wholesale on an empty root-shaped ordinary
+// object.  EJS_FALSE (object untouched) means the caller must run the
+// sequential generic path.
+static EJSBool
+try_fill_shaped (ejsval objval, uint32_t argc, const ejsval* names, ejsval* values)
+{
+    if (!_ejs_shapes_tracking || argc == 0 || argc > EJS_SHAPE_FIELD_CAP_MAX)
+        return EJS_FALSE;
+    EJSObject* obj = EJSVAL_TO_OBJECT(objval);
+    if (obj->ops != &_ejs_Object_specops)
+        return EJS_FALSE;
+    // only an empty, extensible, shaped object qualifies: anything else
+    // (dictionary mode, existing fields, freeze) owes the generic
+    // algorithm.  The compiled fast arm is guarded on exactly this, but
+    // the check is one compare and makes the call safe under any caller.
+    if (EJS_OBJECT_SHAPE(obj) != EJS_SHAPE_ROOT || !EJS_OBJECT_IS_EXTENSIBLE(obj))
+        return EJS_FALSE;
+    if (shaped_proto_intercepts (obj->proto, argc, names))
+        return EJS_FALSE;
+    uint32_t shape = EJS_SHAPE_ROOT;
+    for (uint32_t i = 0; i < argc; i ++) {
+        EJSShapeMigrateReason reason;
+        shape = _ejs_shape_transition_add_fast (shape, names[i], values[i], &reason);
+        if (shape == EJS_SHAPE_DICT)
+            return EJS_FALSE; // index-looking key / cap / table full
+    }
+    shaped_ensure_capacity (obj, argc);
+    memcpy (shaped_slots(obj), values, argc * sizeof(ejsval));
+    EJS_OBJECT_SET_SHAPE(obj, shape);
+    return EJS_TRUE;
+}
+
+// a statically-keyed object literal: allocate + install in one call
+ejsval
+_ejs_object_new_shaped (uint32_t argc, ejsval* names, ejsval* values)
+{
+    ejsval obj = _ejs_object_create (_ejs_Object_prototype);
+    if (!try_fill_shaped (obj, argc, names, values)) {
+        for (uint32_t i = 0; i < argc; i ++)
+            _ejs_object_setprop (obj, names[i], values[i]);
+    }
+    return obj;
+}
+
+// a fenced constructor's straight-line store prefix, batched onto the
+// construct-allocated `this` (whose proto is F.prototype)
+ejsval
+_ejs_object_fill_shaped (ejsval objval, uint32_t argc, ejsval* names, ejsval* values)
+{
+    if (!EJSVAL_IS_OBJECT(objval) || !try_fill_shaped (objval, argc, names, values)) {
+        for (uint32_t i = 0; i < argc; i ++)
+            _ejs_object_setprop (objval, names[i], values[i]);
+    }
+    return objval;
+}
+
 // shaped GetOwnProperty synthesizes the default data descriptor for a
 // slot into a static ring.  Entries are transient — valid until
 // SYNTH_DESC_RING subsequent shaped GetOwnProperty hits — which the

@@ -2410,6 +2410,277 @@ test("shapes-opt: a stale (earlier-block) has_shape compare never folds", () => 
     verifyModule(mod2);
 });
 
+// --- shapes-plan P4.4: born with their shape -----------------------------------
+
+test("born-shaped: a static literal lowers to make_object_shaped under --types", () => {
+    const { printed } = lowerWithOracle(
+        "function f(a) { return { x: 1, y: a }; }",
+        stubOracle({ a: ["number"] })
+    );
+    assertContains(printed, "make_object_shaped");
+    assertContains(printed, 'shape="x:f64,y:f64"');
+    assertNotContains(printed, "make_object ");
+});
+
+test("born-shaped: flag-off (null oracle) keeps today's make_object exactly", () => {
+    const { printed } = lowerWithOracle("function f(a) { return { x: 1, y: a }; }", null);
+    assertNotContains(printed, "make_object_shaped");
+    assertContains(printed, "make_object");
+});
+
+test("born-shaped: EJS_NO_BORN_SHAPED restores make_object", () => {
+    process.env["EJS_NO_BORN_SHAPED"] = "1";
+    try {
+        const { printed } = lowerWithOracle(
+            "function f() { return { x: 1, y: 2 }; }",
+            stubOracle({})
+        );
+        assertNotContains(printed, "make_object_shaped");
+    } finally {
+        delete process.env["EJS_NO_BORN_SHAPED"];
+    }
+});
+
+test("born-shaped: index-looking and duplicate keys decline to make_object", () => {
+    const dup = lowerWithOracle('function f() { return { x: 1, x: 2 }; }', stubOracle({}));
+    assertNotContains(dup.printed, "make_object_shaped");
+    const idx = lowerWithOracle('function f() { return { "0": 1, y: 2 }; }', stubOracle({}));
+    assertNotContains(idx.printed, "make_object_shaped");
+});
+
+test("born-shaped: computed keys / accessors / __proto__ keep the store path", () => {
+    const comp = lowerWithOracle("function f(k) { return { [k]: 1, y: 2 }; }", stubOracle({}));
+    assertNotContains(comp.printed, "make_object_shaped");
+    const acc = lowerWithOracle(
+        "function f() { return { get x() { return 1; } }; }",
+        stubOracle({})
+    );
+    assertNotContains(acc.printed, "make_object_shaped");
+    const proto = lowerWithOracle(
+        "function f(p) { return { __proto__: p, y: 2 }; }",
+        stubOracle({})
+    );
+    assertNotContains(proto.printed, "make_object_shaped");
+});
+
+test("ctor-fill: a straight-line this-store prefix lowers to the guarded fill", () => {
+    const { printed } = lowerWithOracle(
+        "function Pt(x, y) { this.x = x; this.y = y; }",
+        stubOracle({ x: ["number"], y: ["number"] })
+    );
+    assertContains(printed, 'has_shape');
+    assertContains(printed, 'shape=""'); // the empty-shape guard
+    assertContains(printed, "fill_object_shaped");
+    assertContains(printed, 'shape="x:f64,y:f64"');
+    assertContains(printed, "ctor_fill_slow");
+    assertContains(printed, "set_prop_atom"); // the sequential slow arm survives
+});
+
+test("ctor-fill: flag-off keeps the sequential stores exactly", () => {
+    const { printed } = lowerWithOracle("function Pt(x, y) { this.x = x; this.y = y; }", null);
+    assertNotContains(printed, "fill_object_shaped");
+    assertNotContains(printed, "has_shape");
+    assertContains(printed, "set_prop_atom");
+});
+
+test("ctor-fill: a call-valued store cuts the prefix (fence, oracle-free)", () => {
+    // `this.y = g()` could observe the receiver via g — the prefix must
+    // stop before it even though a lying oracle calls everything a number
+    const { printed } = lowerWithOracle(
+        "function Pt(x, g) { this.x = x; this.y = g(); }",
+        stubOracle({ x: ["number"], y: ["number"], g: ["number"] })
+    );
+    assertNotContains(printed, "fill_object_shaped");
+});
+
+test("ctor-fill: `in` mid-prefix cuts the batch (the P4.4 observable)", () => {
+    const { printed } = lowerWithOracle(
+        'function Pt(x, y) { this.x = x; this.t = "y" in this; this.y = y; }',
+        stubOracle({ x: ["number"], y: ["number"] })
+    );
+    assertNotContains(printed, "fill_object_shaped");
+});
+
+test("ctor-fill: an escaping receiver before the stores declines", () => {
+    const { printed } = lowerWithOracle(
+        "function Pt(x, g) { g(this); this.x = x; this.y = x; }",
+        stubOracle({ x: ["number"] })
+    );
+    assertNotContains(printed, "fill_object_shaped");
+});
+
+test("ctor-fill: a single-store prefix stays sequential (threshold)", () => {
+    const { printed } = lowerWithOracle(
+        "function Pt(x) { this.x = x; }",
+        stubOracle({ x: ["number"] })
+    );
+    assertNotContains(printed, "fill_object_shaped");
+});
+
+test("ctor-fill: EJS_NO_BORN_SHAPED disables the fill diamond", () => {
+    process.env["EJS_NO_BORN_SHAPED"] = "1";
+    try {
+        const { printed } = lowerWithOracle(
+            "function Pt(x, y) { this.x = x; this.y = y; }",
+            stubOracle({})
+        );
+        assertNotContains(printed, "fill_object_shaped");
+    } finally {
+        delete process.env["EJS_NO_BORN_SHAPED"];
+    }
+});
+
+// --- born-shaped verifier rules (hand-built attack IR) --------------------------
+
+interface FillAttackOpts {
+    guarded?: boolean; // guard the fill with has_shape(recv, "") (default true)
+    killInFast?: boolean; // a call between the guard and the fill
+    wrongCount?: boolean; // operand count != shape field count
+    guardShape?: string; // guard against this shape instead of ""
+}
+
+function buildFillAttack(o: FillAttackOpts): Module {
+    const guarded = o.guarded !== false;
+    const fb = new FunctionBuilder("fillattack", ["%env", "%this", "a", "b"]);
+    const recv = fb.fn.entry!.params[1]!;
+    const a = fb.fn.entry!.params[2]!;
+    const bV = fb.fn.entry!.params[3]!;
+    const shapeKey = "x:boxed,y:boxed";
+
+    const fast = fb.newBlock("fast");
+    const slow = fb.newBlock("slow");
+    const join = fb.newBlock("join");
+    const cond = guarded
+        ? fb.emit("has_shape", [recv], { shape: o.guardShape ?? "" })
+        : fb.emit("to_boolean", [recv], {});
+    fb.condBr(cond, fast, [], slow, []);
+    fb.sealBlock(fast);
+    fb.sealBlock(slow);
+
+    fb.setInsertPoint(fast);
+    if (o.killInFast) fb.emit("call_runtime", [], { name: "ToString" });
+    const vals = o.wrongCount ? [a] : [a, bV];
+    fb.emit("fill_object_shaped", [recv, ...vals], { shape: shapeKey });
+    fb.br(join, []);
+
+    fb.setInsertPoint(slow);
+    fb.emit("set_prop_atom", [recv, a], { atom: "x" });
+    fb.emit("set_prop_atom", [recv, bV], { atom: "y" });
+    fb.br(join, []);
+
+    fb.sealBlock(join);
+    fb.setInsertPoint(join);
+    fb.ret(fb.constUndefined());
+
+    const mod = new Module("fillattack_mod");
+    mod.addFunction(fb.finish());
+    mod.internShape([]);
+    mod.internShape([
+        { name: "x", repr: "boxed" },
+        { name: "y", repr: "boxed" },
+    ]);
+    return mod;
+}
+
+test("born-verify: a guarded fill in the empty-guard's true arm verifies", () => {
+    verifyModule(buildFillAttack({}));
+});
+
+test("born-verify: a fill without the empty-shape fact is rejected", () => {
+    assertThrows(() => verifyModule(buildFillAttack({ guarded: false })), "empty shape");
+});
+
+test("born-verify: a WRITE|CALL between guard and fill kills the fact", () => {
+    assertThrows(() => verifyModule(buildFillAttack({ killInFast: true })), "empty shape");
+});
+
+test("born-verify: a non-empty guard shape does not license the fill", () => {
+    // guarding has_shape(recv, "x:boxed,y:boxed") proves the receiver is
+    // FULL, not empty — batching stores onto it would double-install
+    assertThrows(
+        () => verifyModule(buildFillAttack({ guardShape: "x:boxed,y:boxed" })),
+        "empty shape"
+    );
+});
+
+test("born-verify: operand count must match the shape's field count", () => {
+    assertThrows(() => verifyModule(buildFillAttack({ wrongCount: true })), "values for shape");
+});
+
+test("born-verify: make_object_shaped checks field count and known shape", () => {
+    const fb = new FunctionBuilder("mkattack", ["%env", "%this", "a"]);
+    const a = fb.fn.entry!.params[2]!;
+    fb.emit("make_object_shaped", [a], { shape: "x:boxed,y:boxed" });
+    fb.ret(fb.constUndefined());
+    const mod = new Module("mkattack_mod");
+    mod.addFunction(fb.finish());
+    mod.internShape([
+        { name: "x", repr: "boxed" },
+        { name: "y", repr: "boxed" },
+    ]);
+    assertThrows(() => verifyModule(mod), "values for shape");
+
+    const fb2 = new FunctionBuilder("mkattack2", ["%env", "%this", "a"]);
+    const a2 = fb2.fn.entry!.params[2]!;
+    fb2.emit("make_object_shaped", [a2], { shape: "nope:boxed" });
+    fb2.ret(fb2.constUndefined());
+    const mod2 = new Module("mkattack2_mod");
+    mod2.addFunction(fb2.finish());
+    assertThrows(() => verifyModule(mod2), "unknown module shape");
+});
+
+// the optimizer/verifier proof-strength pin (found by
+// types-bornshapewrong1): foldProvenGuards deletes a has_tag over a
+// const-number join (`c ? 1 : 0`), so the verifier's intrinsic proof must
+// accept the join param for the slot_store it uncovers
+function buildConstJoinStore(nonNumberEdge: boolean): Module {
+    const fb = new FunctionBuilder("cjstore", ["%env", "%this", "p", "c"]);
+    const p = fb.fn.entry!.params[2]!;
+    const c = fb.fn.entry!.params[3]!;
+    const shapeKey = "x:f64,y:f64";
+    const then_bb = fb.newBlock("then");
+    const else_bb = fb.newBlock("else");
+    const vjoin = fb.newBlock("vjoin");
+    const v = vjoin.addParam("v");
+    const fast = fb.newBlock("fast");
+    const out = fb.newBlock("out");
+    const cb = fb.emit("to_boolean", [c], {});
+    fb.condBr(cb, then_bb, [], else_bb, []);
+    fb.sealBlock(then_bb);
+    fb.sealBlock(else_bb);
+    fb.setInsertPoint(then_bb);
+    fb.br(vjoin, [fb.constNumber(1)]);
+    fb.setInsertPoint(else_bb);
+    fb.br(vjoin, [nonNumberEdge ? fb.constUndefined() : fb.constNumber(0)]);
+    fb.sealBlock(vjoin);
+    fb.setInsertPoint(vjoin);
+    const g = fb.emit("has_shape", [p], { shape: shapeKey });
+    fb.condBr(g, fast, [], out, []);
+    fb.sealBlock(fast);
+    fb.setInsertPoint(fast);
+    // no has_tag: the store's number proof is the const join itself
+    fb.emit("slot_store", [p, v], { shape: shapeKey, slot: 0, repr: "f64" });
+    fb.br(out, []);
+    fb.sealBlock(out);
+    fb.setInsertPoint(out);
+    fb.ret(fb.constUndefined());
+    const mod = new Module("cjstore_mod");
+    mod.addFunction(fb.finish());
+    mod.internShape([
+        { name: "x", repr: "f64" },
+        { name: "y", repr: "f64" },
+    ]);
+    return mod;
+}
+
+test("born-verify: a const-number join proves an f64 store without has_tag", () => {
+    verifyModule(buildConstJoinStore(false));
+});
+
+test("born-verify: a join with a non-number edge still requires has_tag", () => {
+    assertThrows(() => verifyModule(buildConstJoinStore(true)), "has_tag");
+});
+
 // --------------------------------------------------------------------------------
 
 if (failures > 0) {

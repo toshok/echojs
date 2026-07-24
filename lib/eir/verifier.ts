@@ -171,6 +171,27 @@ export function provenNumberIntrinsic(v: Inst, depth = 6): boolean {
             provenNumberIntrinsic(v.operands[0]!, depth - 1) &&
             provenNumberIntrinsic(v.operands[1]!, depth - 1)
         );
+    // a join whose every incoming is itself intrinsically a number (e.g.
+    // `c ? 1 : 0` — const-number edges) is immutably a number.  This
+    // mirrors provenNumberAt's blockparam case in optimize-guards: the
+    // optimizer folds a has_tag over such a join, so the verifier must
+    // accept the same proof for the slot_store it uncovers (the P4.2
+    // proof-mismatch lesson, replayed — found by types-bornshapewrong1's
+    // ternary-valued constructor store).
+    if (v.op === "blockparam" && !v.isException && v.block && !v.block.isCatch) {
+        const b = v.block;
+        if (b.predEdges.length === 0) return false;
+        const argIdx = b.argIndexOfParam(v);
+        let anyProven = false;
+        for (const e of b.predEdges) {
+            const arg = e.inst.targets![e.targetIndex]!.args[argIdx];
+            if (!arg) return false;
+            if (arg === v) continue; // self-edge: vacuous
+            if (!provenNumberIntrinsic(arg, depth - 1)) return false;
+            anyProven = true;
+        }
+        return anyProven;
+    }
     return false;
 }
 
@@ -544,11 +565,42 @@ export function verifyFunction(fn: Func, mod?: Module): boolean {
         if (!reachable.has(b)) continue;
         b.insts.forEach((inst, i) => {
             const isSlotOp = inst.op === "slot_load" || inst.op === "slot_store";
-            if (!isSlotOp && inst.op !== "has_shape") return;
+            const isBornOp = inst.op === "make_object_shaped" || inst.op === "fill_object_shaped";
+            if (!isSlotOp && !isBornOp && inst.op !== "has_shape") return;
             const shapeImm = String(inst.imms["shape"]);
             const fields = mod ? mod.shapes.get(shapeImm) : undefined;
             if (mod && !fields)
                 fail(`'${inst.op}' names unknown module shape '${shapeImm}'`, inst);
+            if (isBornOp) {
+                // shapes-plan P4.4: operand count must equal the shape's
+                // field count (+1 receiver for fill), at least one field —
+                // an empty born shape is a plain make_object, not this op.
+                const nvals =
+                    inst.op === "make_object_shaped"
+                        ? inst.operands.length
+                        : inst.operands.length - 1;
+                if (fields && nvals !== fields.length)
+                    fail(
+                        `'${inst.op}' has ${nvals} values for shape '${shapeImm}' (${fields.length} fields)`,
+                        inst
+                    );
+                if (nvals < 1) fail(`'${inst.op}' must install at least one field`, inst);
+                if (inst.op === "fill_object_shaped") {
+                    // the receiver must be proven EMPTY-shaped here: the
+                    // batched prefix is only equivalent to the sequential
+                    // stores on an object with no fields yet (an un-killed
+                    // has_shape(recv, "") fact — same engine as slot ops)
+                    if (shapeFacts === undefined) shapeFacts = computeShapeFacts(fn);
+                    const facts = shapeFacts ? shapeFacts.factsAt(b, i) : new Set<string>();
+                    if (!facts.has(shapeFactKey(inst.operands[0]!.id, "")))
+                        fail(
+                            `'fill_object_shaped' is not covered by an un-killed has_shape fact ` +
+                                `for the empty shape on its receiver`,
+                            inst
+                        );
+                }
+                return;
+            }
             if (!isSlotOp) return;
 
             const slot = inst.imms["slot"];

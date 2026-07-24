@@ -339,7 +339,12 @@ _ejs_shape_intern(uint32_t nfields, const ejsval *names, uint32_t f64_mask)
 {
     if (!_ejs_shapes_tracking)
         return EJS_SHAPE_NOMATCH;
-    if (nfields == 0 || nfields > shape_field_cap || nfields > 32)
+    /* the empty shape IS the root: P4.4's fill_object_shaped guard
+       (has_shape(this, "")) interns zero fields and must match the
+       construct-allocated empty receiver */
+    if (nfields == 0)
+        return EJS_SHAPE_ROOT;
+    if (nfields > shape_field_cap || nfields > 32)
         return EJS_SHAPE_NOMATCH;
 
     uint32_t shape = EJS_SHAPE_ROOT;

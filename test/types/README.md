@@ -34,8 +34,10 @@ counts has_shape diamonds the way `diamonds=N` counts has_tag ones):
 
 | probe | shape | shapeGuards | vs node |
 |---|---|---|---|
-| types-bench2 | the object-model microbenchmark: monomorphic constructor + p.x/p.y kernel; guarded fast paths + shape-region merging (`shapeGuards=10`, 2 shape regions merged); 2026-07-24 numbers: --types 3.06s vs flag-off 6.56s (2.1×), vs EJS_SHAPES=off 5.82s (~1.9× shapes-attributable) | 10 | match |
+| types-bench2 | the object-model microbenchmark: monomorphic constructor + p.x/p.y kernel; guarded fast paths + shape-region merging (`shapeGuards=10`, 2 shape regions merged); 2026-07-24 numbers: --types 3.06s vs flag-off 6.56s (2.1×), vs EJS_SHAPES=off 5.82s (~1.9× shapes-attributable); P4.4 born-with-shape (`ctorFills=1`) takes it to **2.03s** vs flag-off 6.76s (3.3×) | 10 | match |
 | types-shapeswrong1 | the wrong-oracle shape guard: lib types sumxy's receiver {x: num, y: num} from its one local call; main hands it a repr-mismatched object ("ab"), an extra-field object, and a dictionary-mode (post-delete) object → all route slow with node-identical values; the matching Point goes fast | 4 (in lib) | n/a¹ |
+| types-bornshape1 | born-with-shape (P4.4): a static literal is make_object_shaped, the Pt ctor prefix is the empty-shape-guarded fill (`bornShaped=1 ctorFills=1`); keys order, `in`, growth past the born shape, and a repr-differing construction all match node | 0 | match |
+| types-bornshapewrong1 | P4.4 edge cases: a reused non-empty receiver (guard fails), an `in`-cut fence, a frozen receiver (runtime re-check), a proto-chain SETTER intercepting the batched store, and a non-writable proto data prop — every one routes sequential with node-identical output (`bornShaped=3 ctorFills=3 fenceDeclined=short-prefix:1`); also found the provenNumberIntrinsic const-join gap (see verifier.ts) | 0 | match |
 
 ¹ node cannot execute this file's bare-ESM import layout from test/;
 the check here is flag-off vs `--types` executables producing identical

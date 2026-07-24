@@ -55,6 +55,10 @@ export type CollectResult =
           shape_sites: number;
           shape_guards: number;
           shape_declined: Record<string, number>;
+          // shapes-plan P4.4: born-with-shape telemetry
+          born_shaped: number;
+          ctor_fills: number;
+          fence_declined: Record<string, number>;
           // Phase 3.6 (null when --types is off or nothing qualified)
           spec: SpecStats | null;
           error?: undefined;
@@ -67,6 +71,9 @@ export type CollectResult =
           shape_sites?: undefined;
           shape_guards?: undefined;
           shape_declined?: undefined;
+          born_shaped?: undefined;
+          ctor_fills?: undefined;
+          fence_declined?: undefined;
           spec?: undefined;
       };
 
@@ -526,6 +533,9 @@ export function collectEIRToplevel(
             shape_sites: typed_stats.shape_sites ?? 0,
             shape_guards: typed_stats.shape_guards ?? 0,
             shape_declined: typed_stats.shape_declined ?? {},
+            born_shaped: typed_stats.born_shaped ?? 0,
+            ctor_fills: typed_stats.ctor_fills ?? 0,
+            fence_declined: typed_stats.fence_declined ?? {},
             spec: spec_stats,
         };
     } catch (e) {

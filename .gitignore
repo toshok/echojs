@@ -23,3 +23,6 @@ echojs-*.tar.gz
 
 node_modules/
 .stamp-*
+
+# assembled stage0-style work trees (maam diff harness / --types diff lane)
+maam-difftree/

@@ -16,6 +16,7 @@
 
 import { FunctionBuilder } from "./builder";
 import { Module, Func, Block, Inst } from "./ir";
+import type { ShapeField } from "./ir";
 import { ScopeAnalysis, compound_assign_ops, Binding, FnInfo, LoopEnv } from "./scopes";
 import { LowerNotSupported } from "./errors";
 import { eir_intrinsics } from "./intrinsics";
@@ -65,6 +66,12 @@ export interface ModCtx {
         shape_sites?: number;
         shape_guards?: number;
         shape_declined?: Record<string, number>;
+        // shapes-plan P4.4: born-with-shape telemetry — literal sites
+        // batched into make_object_shaped, constructor prefixes batched
+        // into fill_object_shaped diamonds, and counted fence declines
+        born_shaped?: number;
+        ctor_fills?: number;
+        fence_declined?: Record<string, number>;
     };
     // --types-dump: per-site shape census lines (shapes-plan P4.3)
     shape_dump?: boolean;
@@ -86,6 +93,12 @@ export interface SpecMode {
     // the structural post-check in specialize.ts, which discards the clone
     result: "any" | "f64";
 }
+
+// shapes-plan P4.4: the runtime's shaped field-count ceiling
+// (EJS_SHAPE_FIELD_CAP_MAX in runtime/ejs-shapes.h) — born-shaped sites
+// beyond it would only ever take the runtime's sequential fallback, so
+// they keep today's lowering
+const EJS_SHAPE_FIELD_CAP_MAX = 14;
 
 // an environment-descriptor chain node: a per-iteration loop env or a
 // function env (see envForBinding)
@@ -552,6 +565,31 @@ class LowerFunction {
                         );
                         values.push(this.expr(p.value as e.Expression));
                     }
+                    // shapes-plan P4.4: a statically-keyed literal is born
+                    // with its shape — key order and count are the site's
+                    // static truth, no oracle fact needed (the runtime
+                    // derives true reprs from the actual values and falls
+                    // back to sequential sets off the shaped fast path).
+                    // Still --types-gated: flag-off lowering is untouched.
+                    if (
+                        this.oracle &&
+                        !process.env["EJS_NO_BORN_SHAPED"] &&
+                        keys.length >= 1 &&
+                        keys.length <= EJS_SHAPE_FIELD_CAP_MAX &&
+                        new Set(keys).size === keys.length &&
+                        keys.every((k) => !/^[0-9]/.test(k))
+                    ) {
+                        const fields: ShapeField[] = n.properties.map((p, i) => ({
+                            name: keys[i]!,
+                            repr: this.operandIsNumber(p.value as e.Expression)
+                                ? ("f64" as const)
+                                : ("boxed" as const),
+                        }));
+                        const key = this.module.internShape(fields);
+                        const stats = this.mod_ctx.typed_stats;
+                        if (stats) stats.born_shaped = (stats.born_shaped ?? 0) + 1;
+                        return this.b.emit("make_object_shaped", values, { shape: key });
+                    }
                     return this.b.emit("make_object", values, { keys: keys });
                 }
                 // computed keys or a `__proto__:` definition: empty object
@@ -960,6 +998,122 @@ class LowerFunction {
         this.b.sealBlock(join_bb);
 
         this.b.setInsertPoint(join_bb);
+    }
+
+    // --- shapes-plan P4.4: the fenced constructor prefix ---------------------
+    //
+    // Detect the maximal leading run of `this.<name> = <literal-or-local>`
+    // statements in a plain function body and batch it into ONE guarded
+    // fill_object_shaped diamond.  The fence is structural and oracle-free
+    // (the P3.6 discipline — a lying oracle cannot make this wrong):
+    //
+    //   - plain function, not an arrow (whose `this` is lexical), not the
+    //     toplevel, not a specialization clone;
+    //   - every stored value is a Literal or an Identifier resolving to a
+    //     local binding — evaluating it cannot run user code, so hoisting
+    //     the evaluations above the batched stores is observably identical;
+    //   - nothing else appears between the stores (they are consecutive
+    //     statements), so no code can observe the receiver mid-prefix —
+    //     `"y" in this` between stores, an escaping call, a getter-running
+    //     value all CUT the prefix at that statement;
+    //   - names distinct, non-index-looking, not __proto__, count within
+    //     the runtime's shaped field cap.
+    //
+    // The batching is additionally guarded at runtime by has_shape(this, "")
+    // — only a construct-fresh EMPTY receiver takes the fast arm; a reused
+    // this (F.call(o)), a dictionary-mode object, or EJS_SHAPES=off all
+    // fail the one-compare guard and run the original sequential stores.
+    // The runtime call re-checks everything again (incl. proto-chain
+    // accessor interception) and falls back to sequential [[Set]]s, so a
+    // wrong guard can cost speed, never behavior.  EJS_NO_BORN_SHAPED is
+    // the bisect hook.  Returns how many leading statements were consumed.
+
+    fenceDecline(reason: string): void {
+        const stats = this.mod_ctx.typed_stats;
+        if (stats) {
+            const d = (stats.fence_declined ??= {});
+            d[reason] = (d[reason] ?? 0) + 1;
+        }
+    }
+
+    lowerBornShapedCtorPrefix(body: e.BlockStatement): number {
+        if (!this.oracle || process.env["EJS_NO_BORN_SHAPED"]) return 0;
+        if (this.isToplevel || this.spec) return 0;
+        if (this.info.node.type === "ArrowFunctionExpression") return 0;
+
+        const names: string[] = [];
+        const valueNodes: e.Expression[] = [];
+        let cutReason: string | null = null;
+        for (const s of body.body) {
+            const cut = (why: string): true => ((cutReason = why), true);
+            if (s.type !== "ExpressionStatement") break;
+            const a = s.expression;
+            if (a.type !== "AssignmentExpression" || a.operator !== "=") break;
+            const m = a.left;
+            if (m.type !== "MemberExpression" || m.computed) break;
+            if (m.object.type !== "ThisExpression") break;
+            if (m.property.type !== "Identifier") break;
+            const name = m.property.name;
+            if (name === "__proto__" || /^[0-9]/.test(name)) {
+                cut("unshapeable-name");
+                break;
+            }
+            if (names.includes(name)) {
+                cut("duplicate-name");
+                break;
+            }
+            const v = a.right;
+            if (v.type !== "Literal" && !(v.type === "Identifier" && this.analysis.resolve(v))) {
+                cut("value-not-local");
+                break;
+            }
+            names.push(name);
+            valueNodes.push(v);
+        }
+        if (names.length < 2) {
+            // a ctor-looking body (at least one conforming this-store) that
+            // did not reach the batching threshold is a counted decline;
+            // everything else simply is not a constructor prefix
+            if (names.length === 1) this.fenceDecline(cutReason ?? "short-prefix");
+            return 0;
+        }
+        if (names.length > EJS_SHAPE_FIELD_CAP_MAX) {
+            this.fenceDecline("capped");
+            return 0;
+        }
+
+        // values first (locals/literals — effect-free), then the guard
+        const values = valueNodes.map((v) => this.expr(v));
+        const fields: ShapeField[] = names.map((name, i) => ({
+            name,
+            repr: this.operandIsNumber(valueNodes[i]!) ? ("f64" as const) : ("boxed" as const),
+        }));
+        const key = this.module.internShape(fields);
+        this.module.internShape([]); // the guard's empty shape
+        const thisVal = this.b.readVariable("%this", this.b.cur);
+
+        const fast_bb = this.b.newBlock("ctor_fill_fast");
+        const slow_bb = this.b.newBlock("ctor_fill_slow");
+        const join_bb = this.b.newBlock("ctor_fill_join");
+        const t = this.b.emit("has_shape", [thisVal], { shape: "" });
+        this.b.condBr(t, fast_bb, [], slow_bb, []);
+        this.b.sealBlock(fast_bb);
+        this.b.sealBlock(slow_bb);
+
+        this.b.setInsertPoint(fast_bb);
+        this.b.emit("fill_object_shaped", [thisVal, ...values], { shape: key });
+        this.b.br(join_bb, []);
+
+        this.b.setInsertPoint(slow_bb);
+        for (let i = 0; i < names.length; i++)
+            this.b.emit("set_prop_atom", [thisVal, values[i]!], { atom: names[i]! });
+        this.b.br(join_bb, []);
+        this.b.sealBlock(join_bb);
+        this.b.setInsertPoint(join_bb);
+
+        const stats = this.mod_ctx.typed_stats;
+        if (stats) stats.ctor_fills = (stats.ctor_fills ?? 0) + 1;
+        return names.length;
     }
 
     logical(n: e.LogicalExpression): Inst {
@@ -2039,8 +2193,16 @@ function lowerOneFunction(info: FnInfo, analysis: ScopeAnalysis, module: Module,
     if (info.lowered) return info.fn!;
     info.lowered = true;
     let lf = new LowerFunction(info, analysis, module, mod_ctx);
-    if (info.node.body.type === "BlockStatement") lf.stmt(info.node.body);
-    else lf.b.ret(lf.expr(info.node.body)); // expression-bodied arrow
+    if (info.node.body.type === "BlockStatement") {
+        // shapes-plan P4.4: a fenced constructor's leading this-store run
+        // batches into one guarded fill; the remaining statements lower
+        // exactly as the BlockStatement case would have
+        const skip = lf.lowerBornShapedCtorPrefix(info.node.body);
+        for (let i = skip; i < info.node.body.body.length; i++) {
+            lf.stmt(info.node.body.body[i]!);
+            if (lf.b.cur.terminated) break;
+        }
+    } else lf.b.ret(lf.expr(info.node.body)); // expression-bodied arrow
     info.fn = lf.finish();
     module.addFunction(info.fn);
     // hoisted closures may reference children whose declaration statement

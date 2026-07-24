@@ -879,6 +879,16 @@ export function compile(
                 ((lowered.shape_sites ?? 0) > 0
                     ? ` shapeSites=${lowered.shape_sites} shapeGuards=${lowered.shape_guards ?? 0}` +
                       ` shapeDeclined=${declineStr || "none"}`
+                    : "") +
+                // shapes-plan P4.4: born-with-shape telemetry (additive)
+                ((lowered.born_shaped ?? 0) > 0 || (lowered.ctor_fills ?? 0) > 0
+                    ? ` bornShaped=${lowered.born_shaped ?? 0} ctorFills=${lowered.ctor_fills ?? 0}`
+                    : "") +
+                (Object.keys(lowered.fence_declined ?? {}).length > 0
+                    ? ` fenceDeclined=${Object.keys(lowered.fence_declined!)
+                          .sort()
+                          .map((k) => `${k}:${lowered.fence_declined![k]}`)
+                          .join(",")}`
                     : "")
         );
     }

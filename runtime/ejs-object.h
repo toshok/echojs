@@ -298,6 +298,15 @@ ejsval _ejs_object_literal_set_proto (ejsval obj, ejsval proto);
 
 ejsval _ejs_object_create (ejsval proto);
 
+// born-with-shape (shapes-plan P4.4): batch a statically-keyed literal's
+// (new_shaped) or a fenced constructor prefix's (fill_shaped) field
+// installs into one call.  names are interned atoms and values the
+// initial field values, in source order; both fall back to sequential
+// generic sets whenever the shaped fast path doesn't apply, so behavior
+// is identical to the unbatched lowering (incl. EJS_SHAPES=off).
+ejsval _ejs_object_new_shaped  (uint32_t argc, ejsval* names, ejsval* values);
+ejsval _ejs_object_fill_shaped (ejsval obj, uint32_t argc, ejsval* names, ejsval* values);
+
 void _ejs_Object_init (ejsval ejs_global);
 EJS_END_DECLS
 

@@ -208,6 +208,22 @@ export const OPS = {
     // contents" survives compiled stores).
     slot_load: { arity: 1, effects: E.READ, imms: ["shape", "slot", "repr"] },
     slot_store: { arity: 2, effects: E.WRITE, imms: ["shape", "slot", "repr"] },
+    // --- born with their shape (shapes-plan P4.4) -----------------------------
+    // a statically-keyed object literal, allocated + installed in one
+    // runtime call: operands are the initial field values in imms.shape's
+    // field order.  The runtime re-derives the true shape from the actual
+    // values (a wrong static repr can never mint a lying shape) and falls
+    // back to today's sequential generic sets whenever the shaped fast
+    // path doesn't apply — same GC|WRITE effect envelope as make_object.
+    make_object_shaped: { arity: -1, effects: E.GC | E.WRITE, imms: ["shape"] },
+    // a fenced constructor's straight-line this-store prefix, batched onto
+    // the construct-allocated receiver: operands are [this, values...].
+    // Only valid behind a passed has_shape(this, "") — the empty-shape
+    // guard — which the verifier enforces via the same un-killed-fact
+    // discipline as slot ops (a non-empty or dictionary-mode receiver
+    // must take the sequential slow arm, where mid-construction
+    // observables behave identically).
+    fill_object_shaped: { arity: -1, effects: E.GC | E.WRITE, imms: ["shape"] },
     // a raw f64 constant (imms.value).  minted only by the optimizer
     // (rawJoinParams' const-number edge roots) and the specialization
     // pass; lowering itself always emits boxed `const` numbers.

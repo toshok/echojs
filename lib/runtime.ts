@@ -273,6 +273,23 @@ const runtime_interface = {
             ])
         );
     },
+    // born-with-shape (shapes-plan P4.4): batched literal allocation and
+    // fenced-constructor prefix fill.  argc, names*, values*.
+    object_new_shaped: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_object_new_shaped", ty.EjsValue, [
+            ty.Int32,
+            ty.EjsValue.pointerTo(),
+            ty.EjsValue.pointerTo(),
+        ]);
+    },
+    object_fill_shaped: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(
+            this.module,
+            "_ejs_object_fill_shaped",
+            ty.EjsValue,
+            [ty.EjsValue, ty.Int32, ty.EjsValue.pointerTo(), ty.EjsValue.pointerTo()]
+        );
+    },
     global_setprop: function (this: RuntimeContext) {
         return this.abi.createExternalFunction(this.module, "_ejs_global_setprop", ty.EjsValue, [
             ty.EjsValue,

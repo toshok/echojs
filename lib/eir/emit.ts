@@ -371,6 +371,11 @@ export class EIREmitter {
                 max = Math.max(max, 1);
             else if (inst.op === "make_array" || inst.op === "array_from_spread")
                 max = Math.max(max, inst.operands.length);
+            // names + values, spilled contiguously (see the emit case)
+            else if (inst.op === "make_object_shaped")
+                max = Math.max(max, inst.operands.length * 2);
+            else if (inst.op === "fill_object_shaped")
+                max = Math.max(max, (inst.operands.length - 1) * 2);
             else if (inst.op === "template_callsite")
                 max = Math.max(
                     max,
@@ -627,6 +632,40 @@ export class EIREmitter {
                 const ref = this.slotRef(this.val(inst.operands[0]), inst.imms["slot"] as number);
                 ir.createStore(this.val(inst.operands[1]), ref);
                 this.values.set(inst, this.val(inst.operands[1]));
+                return;
+            }
+            // born with their shape (shapes-plan P4.4): spill the field
+            // names (atom loads) and initial values contiguously into the
+            // scratch area — names at [0..n), values at [n..2n) — and make
+            // one runtime call.  The runtime re-derives the true shape from
+            // the actual values and falls back to sequential generic sets
+            // whenever the shaped fast path doesn't apply, so no shape
+            // global is consulted here (unlike has_shape).
+            case "make_object_shaped":
+            case "fill_object_shaped": {
+                const key = String(inst.imms["shape"]);
+                const fields = this.eirModule.shapes.get(key);
+                if (!fields)
+                    throw new Error(`EIR emit: ${inst.op} names unknown module shape '${key}'`);
+                const isFill = inst.op === "fill_object_shaped";
+                const vals = inst.operands.slice(isFill ? 1 : 0).map((o) => this.val(o));
+                const names = fields.map((f) => this.v.getAtom(f.name));
+                const base = this.spillArgs([...names, ...vals]);
+                const vbase = ir.createGetElementPointer(
+                    this.scratch_type!,
+                    this.scratch!,
+                    [consts.int32(0), consts.int64(fields.length)],
+                    "shaped_vals"
+                );
+                const argv = isFill
+                    ? [this.val(inst.operands[0]), consts.int32(fields.length), base, vbase]
+                    : [consts.int32(fields.length), base, vbase];
+                this.emitCallLike(
+                    inst,
+                    isFill ? rt.object_fill_shaped : rt.object_new_shaped,
+                    argv,
+                    isFill ? "fillshaped" : "newshaped"
+                );
                 return;
             }
             case "unbox_f64":

@@ -591,15 +591,86 @@ revertable, runtime phases A/B-able against the old path.
       terminator when a shape named an atom no access ever interned —
       shapes now get their own init function, called right after
       literal init.
-- [ ] **P4.4 — Born with their shape.**  `make_object_shaped` for static
-      literals (unconditional) and for fenced monomorphic constructors
-      (structural no-escape-before-last-store check, lying-oracle unit
-      pins); `_ejs_object_new_shaped`; initializing slot stores.
-      HARD PRECONDITION: the differential harness shapes lane is green
-      (the P3.5→P3.6 sequencing, replayed).
-      *Gate:* harness shapes lane green incl. `in`-during-construction
-      probes; diff lane 0-divergent; types-bench2 allocation delta
-      recorded; declined-fence telemetry visible.
+- [x] **P4.4 — Born with their shape.**  DONE 2026-07-24.
+      PRECONDITION FIRST: the differential harness grew its shapes lane
+      (maam submodule @d8610d3) — (a) per-allocation-site shape
+      containment in the analysis worker (every concrete hidden class
+      needs an abstract witness at its site: ⊤, or same field-name set
+      with pointwise ⊒ field types; order-insensitive interning on both
+      sides makes write order a non-issue; 350 witness checks across 2
+      abstract configs, 0 violations), and (b) `shapes-obs-*.js`
+      observable probes run node+ejs ONLY (maam models `delete` as a
+      no-op and doesn't model Object.keys/freeze/defineProperty):
+      Object.keys order, `in` during construction, delete-then-readd,
+      freeze/seal, accessor conversion — each compiled BOTH default and
+      `--types`, both byte-matching node.  Gated + vacuous-pass-guarded.
+      IMPLEMENTATION (design settled here, deviating from the sketch
+      above where the runtime's construct path forced it):
+      - **Literals**: statically-keyed literals lower to
+        `make_object_shaped` (operands = values in key order, imms.shape
+        = the interned ordered field list; static reprs from
+        operandIsNumber).  Computed keys, accessors, `__proto__:`,
+        duplicate keys, index-looking keys, and >cap field counts keep
+        today's lowering.
+      - **Constructors are a body-side FILL, not an allocation**: the
+        runtime's construct path allocates `this` before the body runs,
+        so the batched prefix lowers to a diamond guarded by
+        `has_shape(this, "")` — the EMPTY shape (one compare; interning
+        zero fields now returns EJS_SHAPE_ROOT) — whose fast arm is
+        `fill_object_shaped [this, values...]` and whose slow arm is the
+        original sequential set_prop_atom run.  The guard makes
+        correctness oracle-INDEPENDENT (no maam constructor query is
+        needed at all — constructorReportOfNode never got built);
+        monomorphism affects only speed.  The structural fence
+        (oracle-free, unit-pinned): plain non-arrow function, prefix =
+        maximal leading run of `this.<name> = <Literal | local
+        Identifier>` statements (effect-free values ⇒ nothing can
+        observe the receiver mid-batch), distinct non-index names, count
+        in [2, cap].  `in` mid-prefix, call-valued stores, escaping
+        receivers, computed keys all CUT the prefix (fence_declined
+        counted by reason).
+      - **The runtime re-derives the true shape from the ACTUAL values**
+        (`_ejs_object_new_shaped` / `_ejs_object_fill_shaped` in
+        ejs-object.c take argc + names[] + values[] and walk the
+        transition memo, ~one compare per field when monomorphic) — a
+        wrong static repr can never mint a lying shape.  Off-script
+        cases fall back to today's sequential `_ejs_object_setprop`
+        loop byte-for-byte: EJS_SHAPES=off, non-empty/dictionary/
+        non-extensible receivers, index keys, cap — and
+        `shaped_proto_intercepts`: a proto-chain ACCESSOR or
+        non-writable data property must run assignment ([[Set]])
+        semantics, so the batch declines (shaped-mode protos can't
+        carry either, so only dictionary-mode protos probe their maps).
+      - **Verifier**: operand count == shape field count (+receiver for
+        fill); fill requires an un-killed EMPTY-shape fact on its
+        receiver through the same computeShapeFacts engine as slot ops
+        (attack IR pins: unguarded, killed-fact, wrong-shape guard,
+        wrong arity).  The optimizer's region/fold machinery structurally
+        ignores the new ops (WRITE effects fail its purity screens).
+      - `EJS_NO_BORN_SHAPED` is the bisect hook; telemetry:
+        `bornShaped=N ctorFills=N fenceDeclined=reason:n,...`
+        (additive).
+      FOUND AT THE GATE: a pre-existing P4.3 proof-strength mismatch —
+      optimize-guards' provenNumberAt proves const-number JOINS
+      (`c ? 1 : 0`) and folds the has_tag over one, but the verifier's
+      provenNumberIntrinsic didn't accept blockparams, so the uncovered
+      slot_store rejected a VALID optimized module (compile failure, not
+      a miscompile; exposed by types-bornshapewrong1's ternary-valued
+      ctor store, pinned by born-verify unit tests both directions).
+      provenNumberIntrinsic now mirrors the blockparam case.
+      *Gate results (2026-07-24):* harness shapes lane green (see
+      above) incl. the `in`-during-construction probe under `--types`;
+      probes types-bornshape1 / types-bornshapewrong1 node-identical
+      (the latter exercises guard-fail reuse, frozen receivers,
+      proto-setter interception, non-writable proto swallowing —
+      `bornShaped=3 ctorFills=3 fenceDeclined=short-prefix:1`); full
+      matrix ×7 green; --types diff lane 0-divergent (459 files, 458
+      identical, 1 N/A tester.js; suite-wide **bornShaped=417
+      ctorFills=9**, fence declines all short-prefix/value-not-local —
+      visible); **types-bench2 3.06s → 2.03s** (--types, median of 3;
+      flag-off 6.76s ⇒ **3.3×** total, the new 1.5× step being the
+      allocation batching: `ctorFills=1` covers the ctor in both the
+      kern and alloc loops).
 - [ ] **P4.5 — Typed slots × specialization × GC.**  `repr:"f64"` slots
       unboxed end-to-end inside guard regions and P3.6 clones (shape
       facts feeding the raw-value machinery); clone-internal unguarded
@@ -726,9 +797,12 @@ layout change whichever lands first.
       probes, unit tests, types-bench2 delta.  DONE 2026-07-24 — see the
       phased-plan entry above (types-bench2 2.1×, lane 459 files
       0-divergent, all attack IR pinned at unit level).
-- [ ] **P4.4** born-with-shape (literals unconditional; constructors
+- [x] **P4.4** born-with-shape (literals unconditional; constructors
       fenced).  HARD PRECONDITION: harness shapes lane.  Gate: harness +
-      lane + probes + delta.
+      lane + probes + delta.  DONE 2026-07-24 — see the phased-plan
+      entry (harness shapes lane green, types-bench2 3.06s → 2.03s,
+      ctor batching = the empty-shape-guarded body-side fill; no maam
+      constructor query needed).
 - [ ] **P4.5** typed slots × clones × gc-P5 consumption.  Gate: typed
       delta, all lanes green.
 - [ ] **P4.6** measured extensions (poly guards, accessor inlining,
