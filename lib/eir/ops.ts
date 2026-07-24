@@ -117,6 +117,15 @@ export const OPS = {
     // call: [callee, this, ...args], or with imms.direct set (a direct
     // call to a known EIR function): [env, this, ...args]
     call: { arity: -1, effects: GENERIC_OP, may_terminate: true, imms: ["direct"] },
+    // Phase 3.6: imms.direct's typed sibling — a direct call to a
+    // specialized clone (imms.fn) with an unboxed signature.  operands =
+    // [env, ...args] where each arg slot's type must match the callee
+    // Func.sig's formal ("f64" formals take raw f64 values); no `this`
+    // (static callee checks exclude this/arguments/rest/defaults).  The
+    // result type is the callee sig's result, stamped on the Inst by the
+    // specialization pass and re-checked against the callee by
+    // verifyModule (per-op sigs can't express callee-dependent typing).
+    call_typed: { arity: -1, effects: GENERIC_OP, may_terminate: true, imms: ["fn"] },
     construct: { arity: -1, effects: GENERIC_OP, may_terminate: true },
     // super(...) in a derived constructor: [super_ctor, ...args] (or
     // [super_ctor, args_array] for the _apply form).  calls the super
@@ -174,6 +183,10 @@ export const OPS = {
     // imms.tag: the runtime tag tested; only "number" is emitted today
     // (mirrors LLVMIRVisitor.isNumber, inheriting its per-target check)
     has_tag: { arity: 1, effects: E.NONE, imms: ["tag"], sig: { params: ["ejsval"], result: "i1" } },
+    // a raw f64 constant (imms.value).  minted only by the optimizer
+    // (rawJoinParams' const-number edge roots) and the specialization
+    // pass; lowering itself always emits boxed `const` numbers.
+    f64_const: { arity: 0, effects: E.NONE, imms: ["value"], sig: { params: [], result: "f64" } },
     unbox_f64: { arity: 1, effects: E.NONE, sig: { params: ["ejsval"], result: "f64" } },
     box_f64: { arity: 1, effects: E.GC, sig: { params: ["f64"], result: "any" } },
     f64_add: { arity: 2, effects: E.NONE, sig: { params: ["f64", "f64"], result: "f64" } },

@@ -88,7 +88,7 @@ export function dominates(idom: Map<Block, Block>, a: Block, b: Block): boolean 
     }
 }
 
-export function verifyFunction(fn: Func): boolean {
+export function verifyFunction(fn: Func, mod?: Module): boolean {
     const vname = (v: Inst | null | undefined) => (v ? `%v${v.id}` : "<null>");
     const fail = (msg: string, inst?: Inst): never => {
         let where = "";
@@ -216,10 +216,23 @@ export function verifyFunction(fn: Func): boolean {
     //     rejected below — and an f64 value can never be *treated as* an
     //     ejsval in a handler (or anywhere), because every ejsval-taking
     //     slot and every boxed param rejects f64-typed operands/args.
+    //     Phase 3.6's SECOND controlled exception: a specialized clone's
+    //     ENTRY blockparam is f64 exactly when the function's sig types
+    //     the matching formal f64 (env/this stay boxed); its `return`
+    //     operand type must equal the sig's result; and every call_typed
+    //     is re-checked against the callee Func's sig below (module-level,
+    //     when the module is available).
     const isRaw = (t: string) => t === "f64" || t === "i1";
+    const sigParamType = (b: Block, p: Inst): "any" | "f64" | null => {
+        if (b !== fn.entry || !fn.sig) return null;
+        const formalIdx = p.paramIndex - 2; // entry params: [%env, %this, ...formals]
+        if (formalIdx < 0 || formalIdx >= fn.sig.formals.length) return null;
+        return fn.sig.formals[formalIdx]!;
+    };
     for (const b of fn.blocks) {
         if (!reachable.has(b)) continue;
         for (const p of b.params) {
+            if (p.type === "f64" && sigParamType(b, p) === "f64") continue; // typed formal
             if (p.type === "f64") {
                 if (!p.rawJoin)
                     fail(`f64 block param without the optimizer's rawJoin marker`, p);
@@ -238,20 +251,9 @@ export function verifyFunction(fn: Func): boolean {
         }
         for (const inst of b.insts) {
             const info = opInfo(inst.op);
-            inst.operands.forEach((o, idx) => {
-                const want = info.sig ? info.sig.params[idx] : undefined;
-                if (want === "f64") {
-                    if (o.type !== "f64")
-                        fail(`'${inst.op}' operand ${idx} wants f64, got ${o.type}`, inst);
-                } else if (want === "ejsval") {
-                    if (isRaw(o.type))
-                        fail(`'${inst.op}' operand ${idx} wants a boxed value, got ${o.type}`, inst);
-                } else if (inst.op === "cond_br" && idx === 0) {
-                    if (o.type === "f64") fail("cond_br condition may not be f64", inst);
-                } else if (isRaw(o.type)) {
-                    fail(`'${inst.op}' operand ${idx} may not be ${o.type}`, inst);
-                }
-            });
+
+            // branch-edge arguments (checked FIRST: the op-specific cases
+            // below `continue` past the operand rules)
             if (inst.targets)
                 for (const t of inst.targets)
                     t.args.forEach((a, i) => {
@@ -275,6 +277,72 @@ export function verifyFunction(fn: Func): boolean {
                             );
                         }
                     });
+
+            // Phase 3.6: call_typed is typed by its CALLEE's sig, which a
+            // per-op table can't express.  operand 0 (env) stays boxed;
+            // the argument slots must match the callee's formals exactly,
+            // and the instruction's stamped result type must equal the
+            // callee sig's result.  Without a module (standalone
+            // verifyFunction) the callee can't be resolved; the boxed-env
+            // and no-i1 rules still hold.
+            if (inst.op === "call_typed") {
+                const calleeName = inst.imms["fn"] as string;
+                const callee = mod ? mod.functions.find((f) => f.name === calleeName) : undefined;
+                if (mod) {
+                    if (!callee) fail(`call_typed to unknown function '${calleeName}'`, inst);
+                    if (!callee!.sig) fail(`call_typed to un-sigged function '${calleeName}'`, inst);
+                    const formals = callee!.sig!.formals;
+                    if (inst.operands.length - 1 !== formals.length)
+                        fail(
+                            `call_typed passes ${inst.operands.length - 1} args, ` +
+                                `callee sig wants ${formals.length}`,
+                            inst
+                        );
+                    const wantResult = callee!.sig!.result === "f64" ? "f64" : "any";
+                    if (inst.type !== wantResult)
+                        fail(`call_typed result type ${inst.type} != callee sig ${wantResult}`, inst);
+                }
+                inst.operands.forEach((o, idx) => {
+                    if (idx === 0) {
+                        if (isRaw(o.type))
+                            fail(`call_typed env operand must be boxed, got ${o.type}`, inst);
+                        return;
+                    }
+                    if (o.type === "i1") fail(`call_typed operand ${idx} may not be i1`, inst);
+                    if (callee && callee.sig) {
+                        const want = callee.sig.formals[idx - 1]!;
+                        if (want === "f64" ? o.type !== "f64" : isRaw(o.type))
+                            fail(
+                                `call_typed operand ${idx} wants ${want}, got ${o.type}`,
+                                inst
+                            );
+                    }
+                });
+                continue;
+            }
+            // Phase 3.6: a sigged function's `return` must produce exactly
+            // the sig's result type (f64 result -> raw f64 operand)
+            if (inst.op === "return" && fn.sig && fn.sig.result === "f64") {
+                const o = inst.operands[0]!;
+                if (o.type !== "f64")
+                    fail(`return in an f64-result function got ${o.type}`, inst);
+                continue;
+            }
+
+            inst.operands.forEach((o, idx) => {
+                const want = info.sig ? info.sig.params[idx] : undefined;
+                if (want === "f64") {
+                    if (o.type !== "f64")
+                        fail(`'${inst.op}' operand ${idx} wants f64, got ${o.type}`, inst);
+                } else if (want === "ejsval") {
+                    if (isRaw(o.type))
+                        fail(`'${inst.op}' operand ${idx} wants a boxed value, got ${o.type}`, inst);
+                } else if (inst.op === "cond_br" && idx === 0) {
+                    if (o.type === "f64") fail("cond_br condition may not be f64", inst);
+                } else if (isRaw(o.type)) {
+                    fail(`'${inst.op}' operand ${idx} may not be ${o.type}`, inst);
+                }
+            });
         }
     }
 
@@ -282,6 +350,6 @@ export function verifyFunction(fn: Func): boolean {
 }
 
 export function verifyModule(mod: Module): boolean {
-    for (const fn of mod.functions) verifyFunction(fn);
+    for (const fn of mod.functions) verifyFunction(fn, mod);
     return true;
 }

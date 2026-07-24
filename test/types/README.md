@@ -1,7 +1,8 @@
-# --types probe census (Phase 3)
+# --types probe census (Phase 3 / Phase 3.6)
 
 Probe files for the oracle-guided typed-arithmetic fast path
-(docs/maam-plan.md, Phase 3).  Like `test/modernization/`, these live
+(docs/maam-plan.md, Phase 3) and for function specialization
+(Phase 3.6).  Like `test/modernization/`, these live
 OUTSIDE the tester's `*<digit>.js` discovery glob in `test/` itself
 (subdirectories are not scanned) and are runnable standalone: compile one
 with the node-hosted compiler and `--types`, run it, and diff stdout
@@ -24,6 +25,9 @@ Census as of 2026-07-22 (echojs @ 568efc7, maam @ 8d6a157):
 | types-loops1 | for/while counters, `<` in loop conditions | 6 | match |
 | types-wrongoracle1 | the wrong-oracle guard: lib.js types `inc`'s param {number} from its only local call, main calls `inc("x")` cross-module → slow path, "x1" | 1 (in lib) | n/a¹ |
 | types-bench1 | the Phase 3 microbenchmark kernel (adds/muls/divs/compares over typed locals) | 9 | match |
+| types-spec1 | Phase 3.6 specialization: module-local looping kernel → f64(f64) clone, exact-arity sites rewritten to call_typed (`specialized=1 specSites=2`); the extra-arg site stays generic | 6 | match |
+| types-spec2 | Phase 3.6 cross-function specialization (the hypot2-demo shape): hypot2 called only inside sum, prefix-safe toplevel slot stores → both clone, all four sites rewrite incl. the one inside sum$typed (`specialized=2 specSites=4`) | 7 | match |
+| types-specescape1 | Phase 3.6 escape rejection: f LOOKS numeric-closed but its closure is passed as a call argument → NOT specialized (no `specialized=` in stats); the escaped call feeds a string through the generic path | 2 | match |
 
 ¹ node cannot execute this file's bare-ESM import layout from test/;
 the check here is flag-off vs `--types` executables producing identical

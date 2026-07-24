@@ -37,7 +37,10 @@ export function printFunction(fn: Func): string {
 
     const lines: string[] = [];
     const header_params = fn.entry ? fn.entry.params.map((p) => `${nameOf(p)}: ${p.type}`) : [];
-    lines.push(`fn @${fn.name}(${header_params.join(", ")}) {`);
+    // sigged clones (Phase 3.6) print their result type; un-sigged
+    // functions keep the existing byte-identical header
+    const result = fn.sig && fn.sig.result !== "any" ? `: ${fn.sig.result}` : "";
+    lines.push(`fn @${fn.name}(${header_params.join(", ")})${result} {`);
 
     const paramStr = (p: Inst) => `${nameOf(p)}: ${p.type}`;
 

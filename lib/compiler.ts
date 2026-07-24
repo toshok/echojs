@@ -732,7 +732,12 @@ export function compile(
     if (type_oracle)
         console.warn(
             `--types: ${source_filename}: diamonds=${lowered.diamonds ?? 0} ` +
-                `oracleQueries=${type_oracle.stats.queries} oracleUnknown=${type_oracle.stats.unknown}`
+                `oracleQueries=${type_oracle.stats.queries} oracleUnknown=${type_oracle.stats.unknown}` +
+                // Phase 3.6 telemetry, present only when specialization ran
+                (lowered.spec
+                    ? ` specialized=${lowered.spec.specialized} specSites=${lowered.spec.sites}` +
+                      ` specRejected=${lowered.spec.rejected}`
+                    : "")
         );
 
     const toplevel_node = tree.body[0] as e.FunctionDeclaration;

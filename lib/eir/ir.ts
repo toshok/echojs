@@ -50,6 +50,18 @@ export class Module {
     }
 }
 
+// Phase 3.6: a specialized clone's typed signature.  `formals` types the
+// JS formal parameters only (entry params [0]=%env and [1]=%this stay
+// boxed/implicit; a clone's %this is required-unused by the static callee
+// checks).  This is the second controlled lift of the P2
+// raw-values-cannot-cross-blocks rule: an entry blockparam may be f64
+// exactly when the sig's matching formal says so, and the verifier
+// re-checks every call_typed against the callee's sig.
+export interface FuncSig {
+    formals: ("any" | "f64")[];
+    result: "any" | "f64";
+}
+
 export class Func {
     name: string;
     paramNames: string[];
@@ -57,6 +69,8 @@ export class Func {
     next_value_id = 0;
     next_block_id = 0;
     entry: Block | null = null;
+    // non-null only on specialized clones (specialize.ts)
+    sig: FuncSig | null = null;
 
     constructor(name: string, paramNames?: string[]) {
         this.name = name;

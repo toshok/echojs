@@ -1,0 +1,474 @@
+/* -*- Mode: typescript; indent-tabs-mode: nil; tab-width: 4 -*-
+ * vim: set ts=4 sw=4 et tw=99 ft=typescript:
+ */
+
+// Phase 3.6: typed calling convention / function specialization
+// (docs/maam-plan.md).  For a function with a LOCAL CLOSED WORLD — its
+// closure value never escapes and every call site is enumerated
+// in-module — emit a specialized clone with an unboxed signature
+// (f64 formals, f64 result), rewrite the provably-known call sites to
+// direct calls that unbox at the caller, and never emit the slow paths
+// in the clone at all (SpecMode lowering).
+//
+// The trust story crosses the Phase 3 guarded line ON PURPOSE: oracle
+// claims become facts inside the clone and at rewritten call sites.
+// What keeps that honest:
+//   - the P3.5 differential harness (hard precondition) validates the
+//     oracle's abstraction against concrete execution;
+//   - the escape analysis here is COMPILER-side and structural (operand
+//     flow over lowered EIR) — it does not consult the oracle, so a
+//     wrong oracle can never widen the set of functions we specialize;
+//     a function that LOOKS closed-world but isn't is rejected by
+//     construction (any non-callee use of the closure value, or any
+//     slot flow we can't fully enumerate, kills the candidate);
+//   - structural post-checks on the lowered clone (env/this unused, no
+//     frame ops, every return actually f64) discard any clone whose body
+//     could not honor the signature — trust-free, independent of why.
+//
+// Two closure-flow shapes are recognized (v1):
+//   - SSA-visible: every use of the make_closure value is the callee
+//     of a plain call in the same function;
+//   - promoted-slot: the single store of the closure into a promoted
+//     (non-exported, module-private) "%self" slot, where every load of
+//     that slot is used only as a plain-call callee.  Loads in the
+//     storing function are rewritten when the store dominates the load;
+//     loads elsewhere keep the generic path (still enumerated — they
+//     call the generic function, never the clone).
+//
+// Module-level EXPORTS are never candidates: the slot-based module ABI
+// exposes boxed ejsvals to JS and native consumers (non-promoted slots
+// are readable through importer slot loads and accessor functions), so
+// only promoted slots — invisible outside the module — qualify.
+
+import { Module, Func, Inst, Block } from "./ir";
+import { Effect, opInfo } from "./ops";
+import { computeRPO, computeDominators, dominates } from "./verifier";
+import { lowerSpecializedClone } from "./lower";
+import type { ModCtx, SpecMode } from "./lower";
+import type { ScopeAnalysis, FnInfo } from "./scopes";
+import type { TypeOracle } from "./oracle";
+import type * as e from "../estree";
+
+export interface SpecStats {
+    // clones emitted
+    specialized: number;
+    // call sites rewritten to call_typed
+    sites: number;
+    // candidates whose lowered clone failed the structural post-checks
+    rejected: number;
+}
+
+// one use of a value: the using instruction and where the value appears
+interface Use {
+    fn: Func;
+    user: Inst;
+    // operand index, or -1 when the value is a branch-edge argument
+    operandIndex: number;
+}
+
+function usesInModule(m: Module): Map<Inst, Use[]> {
+    const uses = new Map<Inst, Use[]>();
+    const add = (v: Inst, u: Use) => {
+        let list = uses.get(v);
+        if (!list) uses.set(v, (list = []));
+        list.push(u);
+    };
+    for (const fn of m.functions) {
+        fn.forEachInst((inst) => {
+            inst.operands.forEach((o, i) => add(o, { fn, user: inst, operandIndex: i }));
+            if (inst.targets)
+                for (const t of inst.targets)
+                    for (const a of t.args) if (a) add(a, { fn, user: inst, operandIndex: -1 });
+        });
+    }
+    return uses;
+}
+
+// does the oracle type this node as exactly {number}?  numeric literals
+// qualify directly (the oracle's mapping policy leaves literals
+// unmapped), mirroring LowerFunction.operandIsNumber.
+function nodeIsNumber(oracle: TypeOracle, node: e.Node): boolean {
+    const lit = node as { type?: string; value?: unknown };
+    if (lit.type === "Literal") return typeof lit.value === "number";
+    if (lit.type === "UnaryExpression") {
+        const u = node as e.UnaryExpression;
+        if (
+            (u.operator === "-" || u.operator === "+") &&
+            u.argument.type === "Literal" &&
+            typeof (u.argument as e.Literal).value === "number"
+        )
+            return true;
+    }
+    const t = oracle.typeOfNode(node);
+    return t.tags !== "top" && t.tags.size === 1 && t.tags.has("number");
+}
+
+// the ReturnStatement nodes of fn's own body (nested functions excluded)
+function ownReturns(fnNode: e.Function): e.ReturnStatement[] {
+    const out: e.ReturnStatement[] = [];
+    const walk = (n: unknown): void => {
+        if (!n || typeof n !== "object") return;
+        if (Array.isArray(n)) {
+            for (const x of n) walk(x);
+            return;
+        }
+        const node = n as { type?: string } & Record<string, unknown>;
+        if (typeof node.type !== "string") return;
+        if (
+            node.type === "FunctionDeclaration" ||
+            node.type === "FunctionExpression" ||
+            node.type === "ArrowFunctionExpression"
+        )
+            return;
+        if (node.type === "ReturnStatement") out.push(node as unknown as e.ReturnStatement);
+        for (const k of Object.keys(node)) {
+            if (k === "loc" || k === "range") continue;
+            walk(node[k]);
+        }
+    };
+    walk(fnNode.body);
+    return out;
+}
+
+// ops a specialized clone must not contain (they need the generic
+// calling convention's argc/args/newTarget/this machinery)
+const CLONE_FRAME_OPS = new Set([
+    "args_obj",
+    "rest_args",
+    "new_target",
+    "construct_super",
+    "construct_super_apply",
+]);
+
+interface CallSite {
+    call: Inst;
+    fn: Func;
+    rewritable: boolean;
+}
+
+// find the Func containing an instruction's block (blocks know their fn)
+function fnOf(inst: Inst): Func {
+    return inst.block!.fn;
+}
+
+function uniqueCloneName(m: Module, base: string): string {
+    const names = new Set(m.functions.map((f) => f.name));
+    let name = base;
+    for (let i = 1; names.has(name); i++) name = `${base}$${i}`;
+    return name;
+}
+
+// is `a` (in block ba at index ia) before `b` (in bb at ib) under dom?
+function comesBefore(
+    idom: Map<Block, Block>,
+    a: Inst,
+    b: Inst
+): boolean {
+    const ba = a.block!;
+    const bb = b.block!;
+    if (ba === bb) return ba.insts.indexOf(a) < bb.insts.indexOf(b);
+    return dominates(idom, ba, bb);
+}
+
+export function specializeModule(
+    m: Module,
+    analysis: ScopeAnalysis,
+    oracle: TypeOracle,
+    this_module_info: { exports: Map<string, { slot_num: number; promoted?: boolean }> } | null,
+    mod_ctx: ModCtx,
+    stats: SpecStats
+): boolean {
+    // to a fixpoint: a freshly-lowered clone's body contains generic call
+    // sites of OTHER specializable functions (sum$typed still calls
+    // hypot2 through its slot) — each round re-enumerates over the module
+    // as it now stands and rewrites what became visible.  `cloned`
+    // remembers per-function outcomes (SpecMode = clone shipped, null =
+    // clone rejected) so later rounds only add rewrites.
+    const cloned = new Map<FnInfo, SpecMode | null>();
+    let changedAny = false;
+    for (let round = 0; round < 5; round++) {
+        if (!specializeRound(m, analysis, oracle, this_module_info, mod_ctx, stats, cloned))
+            break;
+        changedAny = true;
+    }
+    return changedAny;
+}
+
+function specializeRound(
+    m: Module,
+    analysis: ScopeAnalysis,
+    oracle: TypeOracle,
+    this_module_info: { exports: Map<string, { slot_num: number; promoted?: boolean }> } | null,
+    mod_ctx: ModCtx,
+    stats: SpecStats,
+    cloned: Map<FnInfo, SpecMode | null>
+): boolean {
+    const uses = usesInModule(m);
+    let toplevelFn: Func | null = null;
+    for (const info of analysis.fnInfos.values())
+        if (info.isToplevel && info.fn) toplevelFn = info.fn;
+
+    // %self slot -> stores/loads, and slot -> promoted?
+    const selfStores = new Map<number, Inst[]>();
+    const selfLoads = new Map<number, Inst[]>();
+    for (const fn of m.functions) {
+        fn.forEachInst((inst) => {
+            if (inst.imms["module"] !== "%self") return;
+            const slot = inst.imms["slot"] as number;
+            if (inst.op === "module_slot_store") {
+                let l = selfStores.get(slot);
+                if (!l) selfStores.set(slot, (l = []));
+                l.push(inst);
+            } else if (inst.op === "module_slot_load") {
+                let l = selfLoads.get(slot);
+                if (!l) selfLoads.set(slot, (l = []));
+                l.push(inst);
+            }
+        });
+    }
+    const promotedSlots = new Set<number>();
+    if (this_module_info)
+        this_module_info.exports.forEach((info) => {
+            if (info.promoted) promotedSlots.add(info.slot_num);
+        });
+
+    // per-function dominator trees, built lazily (only for functions that
+    // actually host slot-load rewrites)
+    const idoms = new Map<Func, Map<Block, Block>>();
+    const idomOf = (fn: Func): Map<Block, Block> => {
+        let d = idoms.get(fn);
+        if (!d) {
+            const { rpo } = computeRPO(fn);
+            idoms.set(fn, (d = computeDominators(fn, rpo)));
+        }
+        return d;
+    };
+
+    // a plain closure-dispatch call using `v` as its callee?
+    const calleeUse = (u: Use): boolean =>
+        u.user.op === "call" && u.operandIndex === 0 && !u.user.imms["direct"];
+
+    let changed = false;
+
+    for (const info of analysis.fnInfos.values()) {
+        if (info.isToplevel || !info.lowered || !info.fn) continue;
+        const node = info.node;
+
+        // a candidate this call already judged: null = clone was rejected
+        // (don't re-lower it every round); a SpecMode = clone exists, only
+        // NEW call sites (in later-lowered clone bodies) need rewriting
+        const priorSpec = cloned.get(info);
+        if (priorSpec === null) continue;
+
+        if (priorSpec === undefined) {
+            // --- static callee checks (AST side) -----------------------------
+            if (info.restBinding || info.usesArguments) continue;
+            if ((info.defaults || []).some((d) => d != null)) continue;
+            if (!node.params.every((p) => p.type === "Identifier")) continue;
+
+            // --- type profile: every formal and return exactly {number} ------
+            if (!node.params.every((p) => nodeIsNumber(oracle, p))) continue;
+            const returns = ownReturns(node);
+            if (returns.length === 0) continue;
+            if (!returns.every((r) => r.argument && nodeIsNumber(oracle, r.argument))) continue;
+        }
+
+        // --- escape analysis (structural, oracle-free) ----------------------
+        // every flow of the closure value must end in a plain-call callee
+        const closures: Inst[] = [];
+        for (const fn of m.functions) {
+            fn.forEachInst((inst) => {
+                if (inst.op === "make_closure" && inst.imms["fn"] === info.name)
+                    closures.push(inst);
+            });
+        }
+        if (closures.length === 0) continue; // unreferenced (or already gone)
+
+        const sites: CallSite[] = [];
+        let escapes = false;
+        for (const c of closures) {
+            for (const u of uses.get(c) || []) {
+                if (u.operandIndex === -1) {
+                    escapes = true; // crosses a block boundary as an edge arg
+                    break;
+                }
+                if (calleeUse(u)) {
+                    sites.push({
+                        call: u.user,
+                        fn: u.fn,
+                        rewritable: !(u.user.targets && u.user.targets.length > 0),
+                    });
+                    continue;
+                }
+                // the one non-callee flow we can fully enumerate: the
+                // single store into a promoted module-private slot
+                if (
+                    u.user.op === "module_slot_store" &&
+                    u.user.imms["module"] === "%self" &&
+                    u.operandIndex === 0
+                ) {
+                    const slot = u.user.imms["slot"] as number;
+                    const stores = selfStores.get(slot) || [];
+                    if (!promotedSlots.has(slot) || stores.length !== 1 || stores[0] !== u.user) {
+                        escapes = true;
+                        break;
+                    }
+                    const store = u.user;
+                    const storeFn = u.fn;
+                    // a store in the toplevel ENTRY block with no
+                    // CALL-effect instruction before it is
+                    // cross-function-safe: no user code can run before
+                    // the slot is initialized, so no load anywhere can
+                    // observe the pre-store state — except a load
+                    // TEXTUALLY earlier in the entry block itself, which
+                    // reads the uninitialized slot (the documented
+                    // hoisting-lost semantics) and must stay generic.
+                    let prefixSafe = false;
+                    if (toplevelFn && storeFn === toplevelFn && store.block === toplevelFn.entry) {
+                        prefixSafe = true;
+                        for (const inst of toplevelFn.entry!.insts) {
+                            if (inst === store) break;
+                            if ((opInfo(inst.op).effects & Effect.CALL) !== 0) {
+                                prefixSafe = false;
+                                break;
+                            }
+                        }
+                    }
+                    let slotOk = true;
+                    for (const load of selfLoads.get(slot) || []) {
+                        for (const lu of uses.get(load) || []) {
+                            if (lu.operandIndex === -1 || !calleeUse(lu)) {
+                                slotOk = false;
+                                break;
+                            }
+                            // rewrite where the load provably yields this
+                            // closure: after a prefix-safe store, any load
+                            // except one earlier in the same entry block;
+                            // otherwise same-function store-dominated only
+                            // (elsewhere the generic slot path stands)
+                            const loadFn = fnOf(load);
+                            const orderOk = prefixSafe
+                                ? !(
+                                      load.block === store.block &&
+                                      store.block!.insts.indexOf(load) <
+                                          store.block!.insts.indexOf(store)
+                                  )
+                                : loadFn === storeFn &&
+                                  comesBefore(idomOf(storeFn), store, load);
+                            const rewritable =
+                                orderOk && !(lu.user.targets && lu.user.targets.length > 0);
+                            sites.push({ call: lu.user, fn: lu.fn, rewritable });
+                        }
+                        if (!slotOk) break;
+                    }
+                    if (!slotOk) {
+                        escapes = true;
+                        break;
+                    }
+                    continue;
+                }
+                escapes = true;
+                break;
+            }
+            if (escapes) break;
+        }
+        if (escapes || sites.length === 0) continue;
+
+        let spec: SpecMode;
+        if (priorSpec) {
+            spec = priorSpec; // clone already shipped in an earlier round
+        } else {
+            // --- lower the clone (unguarded body, typed sig) ----------------
+            spec = {
+                cloneName: uniqueCloneName(m, `${info.name}$typed`),
+                formals: node.params.map(() => "f64" as const),
+                result: "f64",
+            };
+            const clone = lowerSpecializedClone(info, analysis, m, mod_ctx, spec);
+
+            // --- structural post-checks (trust-free backstop) ---------------
+            // the clone must actually honor the signature: env/this unused,
+            // no frame ops, every return raw f64.  anything else discards it.
+            const cloneUses = new Map<Inst, number>();
+            let ok = true;
+            clone.forEachInst((inst) => {
+                if (CLONE_FRAME_OPS.has(inst.op)) ok = false;
+                if (inst.op === "return" && inst.operands[0]!.type !== "f64") ok = false;
+                for (const o of inst.operands) cloneUses.set(o, (cloneUses.get(o) || 0) + 1);
+                if (inst.targets)
+                    for (const t of inst.targets)
+                        for (const a of t.args)
+                            if (a) cloneUses.set(a, (cloneUses.get(a) || 0) + 1);
+            });
+            const envParam = clone.entry!.params[0]!;
+            const thisParam = clone.entry!.params[1]!;
+            // the entry box_f64 of each formal is the formal's ONLY allowed
+            // use shape; env/this must be entirely unused
+            if ((cloneUses.get(envParam) || 0) > 0) ok = false;
+            if ((cloneUses.get(thisParam) || 0) > 0) ok = false;
+            if (!ok) {
+                stats.rejected++;
+                cloned.set(info, null);
+                continue;
+            }
+            m.addFunction(clone);
+            cloned.set(info, spec);
+            stats.specialized++;
+            changed = true;
+        }
+
+        // --- rewrite the provably-known call sites --------------------------
+        for (const site of sites) {
+            if (!site.rewritable) continue;
+            const call = site.call;
+            const g = site.fn;
+            const args = call.operands.slice(2);
+            if (args.length !== spec.formals.length) continue;
+            const block = call.block!;
+            const at = block.insts.indexOf(call);
+            if (at < 0) continue;
+
+            const insts: Inst[] = [];
+            const envArg = new Inst(g, "const", [], { kind: "undefined" });
+            insts.push(envArg);
+            const unboxed = args.map((a) => {
+                const u = new Inst(g, "unbox_f64", [a], {});
+                insts.push(u);
+                return u;
+            });
+            const direct = new Inst(g, "call_typed", [envArg, ...unboxed], {
+                fn: spec.cloneName,
+            });
+            direct.type = "f64";
+            insts.push(direct);
+            const boxed = new Inst(g, "box_f64", [direct], {});
+            insts.push(boxed);
+            for (const i of insts) i.block = block;
+            block.insts.splice(at, 0, ...insts);
+
+            // point every consumer at the re-boxed result, then drop the
+            // generic call (its callee/`this` operands lose their last use
+            // and fall to DCE where possible)
+            replaceCallWith(g, call, boxed);
+            stats.sites++;
+            changed = true;
+        }
+    }
+    return changed;
+}
+
+function replaceCallWith(fn: Func, call: Inst, replacement: Inst): void {
+    fn.forEachInst((inst) => {
+        if (inst === replacement) return;
+        for (let i = 0; i < inst.operands.length; i++)
+            if (inst.operands[i] === call) inst.operands[i] = replacement;
+        if (inst.targets)
+            for (const t of inst.targets)
+                for (let i = 0; i < t.args.length; i++)
+                    if (t.args[i] === call) t.args[i] = replacement;
+    });
+    const b = call.block!;
+    const idx = b.insts.indexOf(call);
+    if (idx >= 0) b.insts.splice(idx, 1);
+    call.block = null;
+}

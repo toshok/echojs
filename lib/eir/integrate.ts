@@ -23,6 +23,8 @@ import * as b from "../ast-builder";
 import * as debug from "../debug";
 import { ScopeAnalysis } from "./scopes";
 import { lowerAnalyzedFunction } from "./lower";
+import { specializeModule } from "./specialize";
+import type { SpecStats } from "./specialize";
 import type { TypeOracle } from "./oracle";
 import type { ModuleRef, ModCtx } from "./lower";
 import { isLowerNotSupported } from "./errors";
@@ -45,8 +47,21 @@ export interface ModuleAccessor {
 }
 
 export type CollectResult =
-    | { eir_module: Module; accessors: ModuleAccessor[]; diamonds: number; error?: undefined }
-    | { error: string; eir_module?: undefined; accessors?: undefined; diamonds?: undefined };
+    | {
+          eir_module: Module;
+          accessors: ModuleAccessor[];
+          diamonds: number;
+          // Phase 3.6 (null when --types is off or nothing qualified)
+          spec: SpecStats | null;
+          error?: undefined;
+      }
+    | {
+          error: string;
+          eir_module?: undefined;
+          accessors?: undefined;
+          diamonds?: undefined;
+          spec?: undefined;
+      };
 
 // --dump-after eir: print the lowered (verified) EIR module
 function dumpRequested(options: CompilerOptions | undefined): boolean {
@@ -392,7 +407,7 @@ export function collectEIRToplevel(
         // the toplevel environment, which a direct caller's envParam
         // wouldn't carry.  direct calls stay a devirtualization
         // opportunity for the optimizer, which can prove capture shapes.
-        let typed_stats = { diamonds: 0 };
+        let typed_stats = { diamonds: 0, trusted: 0 };
         let mod_ctx = {
             refs: refs,
             this_module_info: this_module_info,
@@ -421,6 +436,7 @@ export function collectEIRToplevel(
         // debugging/measurement: EJS_NO_EIR_OPT=1 disables the EIR
         // optimizer without touching the LLVM pass pipeline (-O0 changes
         // both), mirroring the EJS_NO_PROMOTE bisect hook
+        let spec_stats: SpecStats | null = null;
         if (options.opt_level > 0 && !process.env["EJS_NO_EIR_OPT"]) {
             const stats = optimizeModule(eir_module);
             if (
@@ -444,6 +460,38 @@ export function collectEIRToplevel(
                         `${stats.raw_join_params} raw f64 join param(s)`
                 );
             verifyModule(eir_module);
+
+            // Phase 3.6: function specialization.  Runs AFTER the first
+            // optimizer pass (EIR inlining has already taken the
+            // single-block calls it can — a make_closure with no remaining
+            // call uses is no longer a candidate) and only with an oracle
+            // (never on flag-off compiles).  A second optimizer pass then
+            // cleans the clones (entry boxes prove numbers; residual
+            // guards fold; loop joins go raw; dead closures/loads drop).
+            // EJS_NO_EIR_SPEC=1 bisects specialization alone.
+            if (oracle && !process.env["EJS_NO_EIR_SPEC"]) {
+                spec_stats = { specialized: 0, sites: 0, rejected: 0 };
+                const changed = specializeModule(
+                    eir_module,
+                    analysis,
+                    oracle,
+                    this_module_info,
+                    mod_ctx,
+                    spec_stats
+                );
+                if (changed) {
+                    verifyModule(eir_module);
+                    optimizeModule(eir_module);
+                    verifyModule(eir_module);
+                    debug.log(
+                        1,
+                        `EIR-spec: ${filename}: ${spec_stats.specialized} fn(s) specialized, ` +
+                            `${spec_stats.sites} call site(s) rewritten, ` +
+                            `${spec_stats.rejected} clone(s) rejected`
+                    );
+                }
+                if (spec_stats.specialized === 0 && spec_stats.rejected === 0) spec_stats = null;
+            }
             if (dumpOptRequested(options)) dumpModule(filename, "optimized", eir_module);
         }
 
@@ -455,7 +503,12 @@ export function collectEIRToplevel(
             `EIR: ${filename}: whole module lowered (toplevel-as-EIR)` +
                 (typed_stats.diamonds > 0 ? `, ${typed_stats.diamonds} typed diamond(s)` : "")
         );
-        return { eir_module: eir_module, accessors: accessors, diamonds: typed_stats.diamonds };
+        return {
+            eir_module: eir_module,
+            accessors: accessors,
+            diamonds: typed_stats.diamonds,
+            spec: spec_stats,
+        };
     } catch (e) {
         if (!isLowerNotSupported(e)) throw e;
         // there is no legacy pipeline to fall back to anymore: surface

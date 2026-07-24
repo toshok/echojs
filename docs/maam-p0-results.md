@@ -788,3 +788,213 @@ Re-run once more on the round-3 pin (maam c3d1aed, logs
 byte-for-byte the same (diamonds 69 / queries 1320 / unknown 866): the
 R1 accounting and R2 defaults-scan changed no oracle facts on this
 corpus.
+
+# Phase 3.6 gates (typed calling convention / function specialization)
+
+Date: 2026-07-23.  echojs @ eir (this commit), maam @ dfa8eb1 (unchanged
+— P3.6 is entirely compiler-side; the oracle interface needed nothing
+new: param/return facts come from the existing node-identity
+`typeOfNode` over declaration ids and return-argument expressions).
+Same environment and color-free protocol as Phases 3–3.5.
+
+## What landed
+
+The first deliberate crossing of the unguarded-consumption line — P3.5
+(the differential harness) is the precondition that makes the oracle's
+claims trustworthy enough to become facts, and everything that TRUSTS a
+claim is fenced by structural, oracle-free machinery:
+
+- **Local-closed-world escape analysis** (lib/eir/specialize.ts) —
+  operand flow over the OPTIMIZED lowered EIR, consulting the oracle for
+  nothing.  Two closure-flow shapes qualify: every use of a
+  make_closure value is a plain call's callee (SSA-visible), or the
+  closure's single store lands in a promoted, never-exported `%self`
+  slot whose every load is a plain call's callee (the shape every
+  toplevel `function` declaration lowers to).  ANY other use — edge
+  arg, object/array member, call argument, construct, return, a
+  non-promoted (exported) slot, a second store — rejects the function.
+  A wrong oracle can therefore never widen what specializes.
+  Slot-load rewrites come in two strengths: same-function loads
+  dominated by the store, and — when the store sits in the toplevel
+  ENTRY block with no CALL-effect instruction before it — loads in ANY
+  function (no user code can run before such a store, so no load can
+  observe the uninitialized slot; a load textually earlier in the
+  entry block stays generic, preserving the documented hoisting-lost
+  throw).  The pass runs to a small fixpoint so call sites inside
+  freshly-lowered clone bodies rewrite too (sum$typed's call of
+  hypot2 lands on hypot2$typed).
+- **Specialized clones, born unguarded** (SpecMode in lib/eir/lower.ts)
+  — a qualifying function is RE-LOWERED from its AST with an unboxed
+  signature (`Func.sig`, f64 formals + f64 result): formals arrive raw
+  and box exactly once at entry, oracle-number arithmetic emits
+  unbox/f64-op/box straight-line (no diamond, no slow path — "drop the
+  slow path from the clone" by construction), and `return <number>`
+  returns the raw f64.  Guards never exist in the clone rather than
+  being folded out of it.
+- **Trust-free post-checks** — the lowered clone is DISCARDED (clone
+  count telemetry `specRejected`) unless it structurally honors its
+  sig: env param unused, `this` unused, no frame ops
+  (arguments/rest/new.target/super), every return operand f64.  A lying
+  oracle that sneaks a capture/`this`/bare-return shape past the type
+  gate loses the clone, never correctness.
+- **Typed direct calls** — new `call_typed` op (imms.direct's typed
+  sibling): operands `[env, ...raw f64 args]`, callee resolved by name,
+  re-checked against the callee's sig by the (now module-aware)
+  verifier: arg types, arity, and the stamped result type must all
+  match.  Exact-arity, non-protected call sites rewrite to
+  caller-unboxed direct calls (`specSites`); everything else stays on
+  the generic path (still enumerated — correctness never depends on
+  rewriting).  The emitter gives sigged clones a NATIVE signature —
+  `double(EjsValue env, double...)`, internal linkage, no
+  closure-dispatch interop — which is what finally lets LLVM inline and
+  scalar-optimize through the call.
+- **Three trust-free optimizer additions** (they fire wherever their
+  structural proofs hold, oracle or not): `unbox_f64(box_f64(x)) → x`
+  and `unbox_f64(const n) → f64_const n` annihilation; const-number
+  edge args admitted into rawJoin conversion as `f64_const` roots-once-
+  rooted (a loop accumulator seeded `s = 0` finally goes raw — but a
+  const-ONLY join stays boxed, so flag-off code never grows boxes); and
+  boolean-join threading (constant true/false edges into a
+  `to_boolean`+cond_br re-test jump straight to the branch target,
+  removing the per-iteration `_ejs_truthy` call from typed loop
+  headers).  The threading pass requires the join's param and boolean
+  to die inside the block — the stage1 matrix caught exactly that
+  dominance hazard on first run (compiling specialize.js itself), and
+  the locality check is the fix.
+- **Exports are never specialized** in this round, per the plan's ABI
+  rule; the conservatively-guarded boundary WRAPPER that would dispatch
+  an escaping/exported function's generic entry to its clone is
+  deliberate follow-on work (nothing in the P3.6 gate needs it).
+
+`EJS_NO_EIR_SPEC=1` bisects specialization alone (same mold as
+EJS_NO_EIR_OPT).  Telemetry rides the `--types` stats line:
+`specialized=N specSites=M specRejected=K` (absent when nothing
+qualified).
+
+## EIR-shape unit tests
+
+//:test-eir green — 130 tests, including the new Phase 3.6 set: the
+closed-world clone (sig f64(f64), zero has_tags, zero generic ops, both
+sites call_typed, dead closure swept); the wrong-oracle escape trio (a
+lying stub oracle types everything {number} while the closure escapes
+as a return value / into a LIVE object literal / as a call argument —
+zero clones, and the object-literal case documents that a DEAD escape
+sunk by the optimizer is correctly no escape); env-capture and
+`this`-use clones discarded by the post-checks (specRejected=1 each);
+early disqualifiers (bare `return;`, top param, arguments-object);
+arity-mismatch sites keeping the generic path while the exact site
+rewrites (closure survives for the generic site); the verifier
+quartet (f64 entry param without a sig rejected, sigged param
+accepted, f64-result function must return raw f64, call_typed checked
+against the callee sig: boxed arg / wrong result stamp / unknown callee
+all rejected); and the two cleanup passes (unbox-of-const folds to
+f64_const; `<`-diamond constant edges thread while the slow arm's
+re-test survives).
+
+## test/types probes
+
+All ten probes match `node` (the wrongoracle exception unchanged), the
+pre-existing five keep their census diamond counts (6/4/5/0/6); census
+updated in test/types/README.md:
+
+- **types-spec1** (new): looping module-local kernel →
+  `specialized=1 specSites=2`, the extra-arg call site stays generic,
+  output identical to node and to flag-off.
+- **types-spec2** (new): the hypot2-demo shape — hypot2 called only
+  inside sum, prefix-safe toplevel stores → `specialized=2 specSites=4`
+  including the site inside sum$typed (the fixpoint round), output
+  identical to node and to flag-off.
+- **types-specescape1** (new): numerically-typed function whose closure
+  ALSO travels as a call argument → no specialization telemetry (both
+  the num|str param join and the structural escape reject it), and the
+  escaped path feeds a string through the generic call — output
+  identical to node and to flag-off.
+- types-wrongoracle1 unchanged: flag-off ≡ --types ("42"), the
+  cross-module string still routes through the guard.
+
+## Microbenchmark (types-bench1, deltas vs Phase 3 / 3.4)
+
+Same kernel, same protocol (7× interleaved, /usr/bin/time -p).  The
+kernel now compiles to: a specialized `double kernel$typed(env, double)`
+clone whose loop is raw f64 end-to-end (f64 loop-carried params via the
+const-root extension, f64_consts, comparison threaded straight to the
+branch — no box, no guard, no runtime call in the body), LLVM-inlined
+into the toplevel loop (verified in the .bc.opt disassembly: no call
+remains, only `.i`-suffixed inlined blocks).
+
+| build | P3 | P3.4 | P3.6 |
+|---|---|---|---|
+| flag-off median | 3.19 s | 3.21 s | 3.24 s (3.20–3.29; a concurrent-load re-run read 3.33–3.40 with --types unchanged) |
+| --types median | 0.31 s | 0.23 s | **0.07 s** |
+
+**Speedup ~46× median (was 14.0×)** — the typed runtime dropped another
+70%, and at ~1.75 ns per iteration the loop is at fdiv-throughput
+territory; the remaining wall time is the boxed outer loop's slot
+traffic, which is shapes-and-layouts (P4) territory, not calls.
+diamonds=9, oracleUnknown=0, `specialized=1 specSites=1`, output
+identical (13333303333341514000).
+
+## hypot2 demo (deltas vs Phase 3.4 — the P3.6 flagship shape)
+
+The demo Phase 3.4 could not move (dominated by the boxed
+call/closure/loop overhead around hypot2) is exactly what P3.6 exists
+for.  `--types` stats: diamonds=7 oracleQueries=31 oracleUnknown=0
+**specialized=2 specSites=3** — hypot2 AND sum clone; the toplevel
+`sum(20000000)` call, hypot2's call inside generic sum, and hypot2's
+call inside sum$typed (fixpoint round) all rewrite to call_typed.
+hypot2$typed is three raw float ops and a raw return; sum$typed is a
+raw-f64 loop calling it directly.  At the LLVM level NO definition or
+call of either clone survives — hypot2$typed inlined into sum$typed
+inlined into the toplevel, the hot loop is five raw float ops with
+`phi double` accumulators, boxing once at the console.log boundary
+("the demo's hypot2 inlines into its caller's loop and the box/unbox
+pairs annihilate", as the plan wrote it).
+
+| build | P3/P3.4 (3 runs) | P3.6 (7× interleaved) |
+|---|---|---|
+| flag-off | 2.5–2.7 s | median 2.69 s |
+| --types | 0.33–0.51 s (~7×) | **median 0.03 s (~90×)** |
+
+Output identical to node and flag-off (5.333333333333098e+21, n=20M).
+Full before/after EIR and LLVM excerpts regenerated in
+`~/src/echojs/hypot2-types-before-after.txt` (Phase 3.4 and Phase 3
+records preserved below the new section).
+
+## The --types diff lane (behavioral gate)
+
+Re-assembled work tree (srcdir-tree + lib/generated + repo test/, plus
+the hypot2 demo.js), conc 4, logs `~/.cache/maam-p0-logs/p36-lane-final/`:
+
+| files | identical | divergent | N/A | timeouts |
+|---|---|---|---|---|
+| 459 (458-file corpus + demo.js) | 458 | **0** | 1 (tester.js, unchanged) | 0 |
+
+Aggregates: **diamonds 76** = the P3.5 baseline 69 + demo.js's 7;
+oracleQueries 2997, oracleUnknown 2191 (up from 1320/866 because the
+specialization pass now queries per-candidate param/return nodes —
+telemetry, not a behavior change).  An earlier run of the same corpus
+WITHOUT demo.js, before the cross-function extension, read 458/457/0/1
+with diamonds 69 byte-identical to the P3.5 baseline.
+
+## Matrix + stage2 ≡ stage3 (flag off)
+
+Full matrix on the final code: //:test-eir, //:test-eir-lowtier,
+//:test-stage0..3 in one build — BUILD SUCCEEDED (exit 0).  The FIRST
+matrix run of this phase FAILED, by design of the gate: stage1
+(compiling lib/eir/specialize.js itself, flag-off) hit an EIR verifier
+dominance error — boolean-join threading had bypassed a join whose
+param was still consumed downstream.  The fix (the join's param and
+boolean must die in-block) is pinned by the re-run; flag-off behavior
+is covered by the stage corpus gates, and the only new flag-off-capable
+pass (threading) is semantics-preserving constant-edge routing.
+
+## Reading
+
+P3.6 holds the phase's core promise: oracle claims become facts ONLY
+inside a fence of structural evidence (escape analysis, post-checks,
+sig-aware verification) that a wrong oracle cannot cross, and the first
+matrix run proving the fence catches real hazards (the threading
+dominance bug) is exactly the discipline paying off.  The demo kernel's
+call boundary is gone — specialized, direct, native-signature, inlined
+— and the ~46× ceiling now sits where the plan predicted the next wall:
+boxed heap traffic (shapes, Phase 4) rather than calls or arithmetic.

@@ -10,9 +10,11 @@
 import { FunctionBuilder } from "./builder";
 import { printFunction, printModule } from "./printer";
 import { verifyFunction, verifyModule } from "./verifier";
-import { lowerFunctionNode, lowerProgram } from "./lower";
-import { optimizeFunction } from "./optimize";
+import { lowerFunctionNode, lowerProgram, lowerAnalyzedFunction } from "./lower";
+import { optimizeFunction, optimizeModule } from "./optimize";
 import type { OptStats } from "./optimize";
+import { specializeModule } from "./specialize";
+import { ScopeAnalysis } from "./scopes";
 import { isLowerNotSupported } from "./errors";
 import { Func, Block, Inst, Module } from "./ir";
 import { DesugarSpread } from "../passes/desugar-spread";
@@ -1694,6 +1696,256 @@ test("verifier: a boxed arg into a rawJoin f64 param is rejected", () => {
     fb.setInsertPoint(join);
     fb.ret(fb.emit("box_f64", [jp], {}));
     assertVerifyFails(fb.finish(), "f64 param");
+});
+
+// --- Phase 3.6: typed calling convention / function specialization ---------------
+
+// mirror integrate.ts's ordering: lower, optimize, specialize, re-optimize
+function specHarness(src: string, oracle: TypeOracle) {
+    const analysis = new ScopeAnalysis();
+    const info = analysis.analyzeFunction(parseFn(src));
+    const module = new Module("m");
+    const mod_ctx = {
+        refs: new Map<string, never>(),
+        oracle: oracle,
+        typed_stats: { diamonds: 0, trusted: 0 },
+    };
+    const fn = lowerAnalyzedFunction(info, analysis, module, mod_ctx);
+    verifyModule(module);
+    optimizeModule(module);
+    verifyModule(module);
+    const stats = { specialized: 0, sites: 0, rejected: 0 };
+    const changed = specializeModule(module, analysis, oracle, null, mod_ctx, stats);
+    verifyModule(module);
+    if (changed) {
+        optimizeModule(module);
+        verifyModule(module);
+    }
+    return { module: module, outer: fn, stats: stats };
+}
+
+// a loop keeps the callee out of the EIR inliner's single-block reach, so
+// specialization (not inlining) must claim the call sites
+const SPEC_KERNEL =
+    "function k(n) { var s = 0; var i = 0; while (i < n) { s = s + i; i = i + 1; } return s; }";
+
+test("specialize: local closed world clones and rewrites call sites", () => {
+    const { module, outer, stats } = specHarness(
+        `function outer() { ${SPEC_KERNEL} var r = k(10) + k(20); return r; }`,
+        numericStubOracle(["n", "s", "i", "r"])
+    );
+    assert(stats.specialized === 1, `specialized=${stats.specialized}`);
+    assert(stats.sites === 2, `sites=${stats.sites}`);
+    assert(stats.rejected === 0, `rejected=${stats.rejected}`);
+    const clone = module.functions.find((f) => f.name.indexOf("$typed") !== -1);
+    assert(clone !== undefined, "clone emitted");
+    assert(clone!.sig !== null && clone!.sig.result === "f64", "clone sig is f64-result");
+    assert(clone!.sig!.formals.length === 1 && clone!.sig!.formals[0] === "f64", "f64 formal");
+    // unguarded, slow-path-free body: no tag checks, no generic arithmetic
+    assert(countOps(clone!, "has_tag") === 0, "clone carries no guards");
+    assert(countOps(clone!, "add") === 0, "clone carries no generic ops");
+    assert(countOps(clone!, "f64_add") >= 1, "clone computes raw");
+    // every return is the raw f64 (printer shows the typed header)
+    assertContains(printFunction(clone!), "): f64 {");
+    // callers: both sites direct, generic dispatch and dead closure gone
+    assert(countOps(outer, "call_typed") === 2, `call_typed=${countOps(outer, "call_typed")}`);
+    assert(countOps(outer, "call") === 0, "no generic calls remain");
+    assert(countOps(outer, "make_closure") === 0, "dead closure swept");
+});
+
+test("specialize: escaping closures are rejected even when the oracle lies", () => {
+    // three escapes: as a return value, into an object literal, as a call
+    // argument.  The (stub) oracle types everything {number} — a wrong
+    // oracle must not widen what specializes; the STRUCTURAL escape
+    // analysis rejects each one.
+    for (const src of [
+        `function outer() { ${SPEC_KERNEL} var r = k(1); return k; }`,
+        // NB: the object must stay LIVE — a dead `{ m: k }` is sunk by the
+        // optimizer before specialization runs, and an eliminated escape
+        // is correctly no escape at all
+        `function outer() { ${SPEC_KERNEL} var o = { m: k }; var r = k(1); return o; }`,
+        `function outer(h) { ${SPEC_KERNEL} var r = h(k) + k(1); return r; }`,
+    ]) {
+        const { stats } = specHarness(src, numericStubOracle(["n", "s", "i", "r"]));
+        assert(stats.specialized === 0, `specialized=${stats.specialized} for ${src}`);
+        assert(stats.rejected === 0, `rejected=${stats.rejected} for ${src}`);
+    }
+});
+
+test("specialize: env capture and `this` are structurally rejected post-lowering", () => {
+    // k reads the enclosing c: its clone must load the env it was never
+    // given — discarded by the envParam post-check, not by the oracle
+    const cap = specHarness(
+        `function outer(c) { function k(n) { var s = 0; while (s < n) { s = s + c; } return s; } var r = k(10); return r; }`,
+        numericStubOracle(["n", "s", "c", "r"])
+    );
+    assert(cap.stats.specialized === 0, `specialized=${cap.stats.specialized}`);
+    assert(cap.stats.rejected === 1, `rejected=${cap.stats.rejected}`);
+    // `this` use survives the (lying) type gate; the thisParam post-check
+    // discards the clone
+    const ths = specHarness(
+        `function outer() { function k(n) { var s = this.z; while (s < n) { s = s + 1; } return s; } var r = k(10); return r; }`,
+        numericStubOracle(["n", "s", "r"])
+    );
+    assert(ths.stats.specialized === 0, `specialized=${ths.stats.specialized}`);
+    assert(ths.stats.rejected === 1, `rejected=${ths.stats.rejected}`);
+});
+
+test("specialize: non-numeric profiles and non-value returns disqualify early", () => {
+    for (const [src, names] of [
+        // a bare `return;` — no f64 result to promise
+        [
+            `function outer() { function k(n) { var s = 0; while (s < n) { s = s + 1; } if (s < 0) return; return s; } var r = k(5); return r; }`,
+            ["n", "s", "r"],
+        ],
+        // params not provably {number}
+        [
+            `function outer() { ${SPEC_KERNEL} var r = k(10); return r; }`,
+            ["s", "i", "r"], // n missing: top
+        ],
+        // arguments-object use
+        [
+            `function outer() { function k(n) { var s = arguments.length; while (s < n) { s = s + 1; } return s; } var r = k(5); return r; }`,
+            ["n", "s", "r"],
+        ],
+    ] as [string, string[]][]) {
+        const { stats } = specHarness(src, numericStubOracle(names));
+        assert(stats.specialized === 0, `specialized=${stats.specialized} for ${src}`);
+    }
+});
+
+test("specialize: arity-mismatched sites keep the generic path", () => {
+    // k(10, 99) passes an extra arg: still an enumerated site (correct to
+    // leave generic), so the clone ships and only the exact-arity site
+    // rewrites — the closure must SURVIVE for the generic site
+    const { module, outer, stats } = specHarness(
+        `function outer() { ${SPEC_KERNEL} var r = k(10) + k(20, 99); return r; }`,
+        numericStubOracle(["n", "s", "i", "r"])
+    );
+    assert(stats.specialized === 1, `specialized=${stats.specialized}`);
+    assert(stats.sites === 1, `sites=${stats.sites}`);
+    assert(countOps(outer, "call_typed") === 1, "one direct site");
+    assert(countOps(outer, "call") === 1, "one generic site survives");
+    assert(countOps(outer, "make_closure") === 1, "closure still needed");
+    assert(module.functions.some((f) => f.sig !== null), "clone present");
+});
+
+test("verifier: an f64 entry param requires a matching sig", () => {
+    const fb = new FunctionBuilder("sigless", ["%env", "%this", "x"]);
+    const x = fb.fn.entry!.params[2]!;
+    x.type = "f64";
+    fb.ret(fb.constUndefined());
+    assertVerifyFails(fb.finish(), "rawJoin");
+
+    const fb2 = new FunctionBuilder("sigged", ["%env", "%this", "x"]);
+    fb2.fn.sig = { formals: ["f64"], result: "any" };
+    const x2 = fb2.fn.entry!.params[2]!;
+    x2.type = "f64";
+    fb2.ret(fb2.emit("box_f64", [x2], {}));
+    verifyFunction(fb2.finish());
+});
+
+test("verifier: an f64-result function must return raw f64", () => {
+    const fb = new FunctionBuilder("f64ret", ["%env", "%this", "x"]);
+    fb.fn.sig = { formals: ["f64"], result: "f64" };
+    fb.fn.entry!.params[2]!.type = "f64";
+    fb.ret(fb.constUndefined());
+    assertVerifyFails(fb.finish(), "f64-result");
+});
+
+test("verifier: call_typed is checked against the callee sig", () => {
+    const mkCallee = (): Func => {
+        const fb = new FunctionBuilder("callee$typed", ["%env", "%this", "x"]);
+        fb.fn.sig = { formals: ["f64"], result: "f64" };
+        const x = fb.fn.entry!.params[2]!;
+        x.type = "f64";
+        fb.ret(fb.emit("f64_add", [x, x], {}));
+        return fb.finish();
+    };
+    const mkCaller = (argIsRaw: boolean, resultType: string, calleeName: string): Func => {
+        const fb = new FunctionBuilder("caller", ["%env", "%this", "a"]);
+        const a = fb.readVariable("a", fb.cur);
+        const env = fb.constUndefined();
+        const arg = argIsRaw ? fb.emit("unbox_f64", [a], {}) : a;
+        const ct = fb.emit("call_typed", [env, arg], { fn: calleeName });
+        ct.type = resultType;
+        fb.ret(fb.emit("box_f64", [ct], {}));
+        return fb.finish();
+    };
+    const assertModuleFails = (m: Module, needle: string): void => {
+        try {
+            verifyModule(m);
+        } catch (err) {
+            const msg = (err as Error).message;
+            if (msg.indexOf(needle) === -1)
+                throw new Error(`verifier failed, but with '${msg}' (wanted '${needle}')`);
+            return;
+        }
+        throw new Error(`verifier accepted a bad call_typed (wanted '${needle}')`);
+    };
+
+    // well-typed: passes
+    const ok = new Module("ok");
+    ok.addFunction(mkCallee());
+    ok.addFunction(mkCaller(true, "f64", "callee$typed"));
+    verifyModule(ok);
+
+    // boxed arg into an f64 formal
+    const bad1 = new Module("bad1");
+    bad1.addFunction(mkCallee());
+    bad1.addFunction(mkCaller(false, "f64", "callee$typed"));
+    assertModuleFails(bad1, "wants f64");
+
+    // stamped result type contradicts the callee sig
+    const bad2 = new Module("bad2");
+    bad2.addFunction(mkCallee());
+    const wrongResult = (() => {
+        const fb = new FunctionBuilder("caller2", ["%env", "%this", "a"]);
+        const a = fb.readVariable("a", fb.cur);
+        const arg = fb.emit("unbox_f64", [a], {});
+        const ct = fb.emit("call_typed", [fb.constUndefined(), arg], { fn: "callee$typed" });
+        // ct.type left "any": lies about the f64 result
+        fb.ret(ct);
+        return fb.finish();
+    })();
+    bad2.addFunction(wrongResult);
+    assertModuleFails(bad2, "result type");
+
+    // unknown callee
+    const bad3 = new Module("bad3");
+    bad3.addFunction(mkCaller(true, "f64", "nowhere$typed"));
+    assertModuleFails(bad3, "unknown function");
+});
+
+test("opt: unbox_f64 of a number const folds to f64_const", () => {
+    const fb = new FunctionBuilder("cfold", ["%env", "%this"]);
+    const c = fb.constNumber(2);
+    const u = fb.emit("unbox_f64", [c], {});
+    const v = fb.emit("f64_add", [u, u], {});
+    fb.ret(fb.emit("box_f64", [v], {}));
+    const fn = fb.finish();
+    verifyFunction(fn);
+    const s = optimizeFunction(fn);
+    verifyFunction(fn);
+    assert(s.unbox_folds === 1, `unbox_folds=${s.unbox_folds}`);
+    assert(countOps(fn, "f64_const") === 1, "raw const minted");
+    assert(countOps(fn, "unbox_f64") === 0, "unbox gone");
+});
+
+test("opt: constant boolean edges thread past to_boolean re-tests", () => {
+    // the `<` diamond's fast arm: after threading, its constant edges
+    // branch directly and only the slow (generic) edge still re-tests
+    const r = lowerFunctionNode(
+        parseFn("function f(x, y) { if (x < y) { return 1; } return 2; }"),
+        undefined,
+        numericStubOracle(["x", "y"])
+    );
+    verifyModule(r.module);
+    const s = optimizeFunction(r.fn, r.module);
+    verifyFunction(r.fn);
+    assert(s.joins_threaded === 2, `joins_threaded=${s.joins_threaded}`);
+    // the join survives for the slow arm's boxed value, still re-tested
+    assert(countOps(r.fn, "to_boolean") === 1, "slow-arm re-test survives");
 });
 
 // --- oracle: TypeSig -> EirType mapping -----------------------------------------

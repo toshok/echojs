@@ -56,7 +56,24 @@ export interface ModCtx {
     // paths, today's lowering exactly) and the module-wide stats the
     // lowered functions accumulate into
     oracle?: TypeOracle | null;
-    typed_stats?: { diamonds: number };
+    typed_stats?: { diamonds: number; trusted?: number };
+}
+
+// Phase 3.6: clone-lowering mode (specialize.ts).  The clone gets an
+// unboxed signature (f64 formals, boxed once at entry) and lowers
+// oracle-number arithmetic UNGUARDED — no diamonds, no slow paths.
+// This is the phase's deliberate unguarded-consumption line: oracle
+// claims become facts, backed by the P3.5 differential harness and by
+// the escape analysis that gates which functions are cloned at all.
+export interface SpecMode {
+    cloneName: string;
+    // formal parameter types; "f64" formals arrive raw and are boxed once
+    // at entry
+    formals: ("any" | "f64")[];
+    // when "f64", `return <expr>` with an oracle-number argument returns
+    // the raw f64 (unguarded unbox); any other return shape survives to
+    // the structural post-check in specialize.ts, which discards the clone
+    result: "any" | "f64";
 }
 
 // an environment-descriptor chain node: a per-iteration loop env or a
@@ -158,19 +175,48 @@ class LowerFunction {
     curEnv: Inst;
     // Phase 3: the module's type oracle (null = no typed fast paths)
     oracle: TypeOracle | null;
+    // Phase 3.6: non-null when lowering a specialized clone
+    spec: SpecMode | null;
 
-    constructor(info: FnInfo, analysis: ScopeAnalysis, module: Module, mod_ctx?: ModCtx) {
+    constructor(
+        info: FnInfo,
+        analysis: ScopeAnalysis,
+        module: Module,
+        mod_ctx?: ModCtx,
+        spec?: SpecMode | null
+    ) {
         this.info = info;
         this.analysis = analysis;
         this.module = module;
         this.isToplevel = !!info.isToplevel;
         this.mod_ctx = mod_ctx || { refs: new Map() };
         this.oracle = this.mod_ctx.oracle ?? null;
+        this.spec = spec ?? null;
 
         const paramNames = info.params.map((p) => p.uid);
-        this.b = new FunctionBuilder(info.name, ["%env", "%this"].concat(paramNames));
+        this.b = new FunctionBuilder(
+            this.spec ? this.spec.cloneName : info.name,
+            ["%env", "%this"].concat(paramNames)
+        );
         this.envParam = this.b.fn.entry!.params[0]!;
         this.thisParam = this.b.fn.entry!.params[1]!;
+
+        // Phase 3.6 clone entry: f64 formals arrive raw and re-enter the
+        // boxed world exactly once, right here; the body then lowers
+        // against the boxed value like any other binding.  (box_f64 is
+        // also the optimizer's value-intrinsic number proof, so any
+        // residual guarded diamond over a formal folds.)
+        if (this.spec) {
+            const entry = this.b.fn.entry!;
+            this.b.fn.sig = { formals: this.spec.formals.slice(), result: this.spec.result };
+            for (let i = 0; i < info.params.length; i++) {
+                if (this.spec.formals[i] !== "f64") continue;
+                const p = entry.params[i + 2]!;
+                p.type = "f64";
+                const boxed = this.b.emit("box_f64", [p], {});
+                this.b.writeVariable(info.params[i]!.uid, entry, boxed);
+            }
+        }
         // `this` reads go through the builder variable "%this" (seeded to
         // the entry param by the builder): a derived constructor's super()
         // call rebinds it (the runtime constructs the object and returns
@@ -669,9 +715,41 @@ class LowerFunction {
         // consumption is correct even when the oracle is wrong — the
         // has_tag guards decide at runtime; only code size/speed change.
         const f64op = f64ops[n.operator];
-        if (f64op && this.operandIsNumber(n.left) && this.operandIsNumber(n.right))
+        if (f64op && this.operandIsNumber(n.left) && this.operandIsNumber(n.right)) {
+            // Phase 3.6 clone bodies consume the oracle UNGUARDED: no
+            // diamond, no slow path — unbox, compute, re-box.  Everywhere
+            // else the Phase 3 guarded diamond stands.
+            if (this.spec) return this.trustedNumeric(f64op, l, r);
             return this.numericDiamond(f64op, op, l, r);
+        }
         return this.b.emit(op, [l, r], {});
+    }
+
+    // unguarded typed arithmetic (clone lowering only): unbox both
+    // operands, apply the f64 op, and re-enter the boxed world.  f64_lt's
+    // i1 rejoins as boxed booleans through the same constant-edge shape
+    // the diamond's fast arm uses (i1 never crosses a block boundary).
+    trustedNumeric(f64op: string, l: Inst, r: Inst): Inst {
+        if (this.mod_ctx.typed_stats)
+            this.mod_ctx.typed_stats.trusted = (this.mod_ctx.typed_stats.trusted ?? 0) + 1;
+        const ua = this.b.emit("unbox_f64", [l], {});
+        const ub = this.b.emit("unbox_f64", [r], {});
+        const v = this.b.emit(f64op, [ua, ub], {});
+        if (f64op !== "f64_lt") return this.b.emit("box_f64", [v], {});
+        const t_bb = this.b.newBlock("trust_lt_true");
+        const f_bb = this.b.newBlock("trust_lt_false");
+        const join_bb = this.b.newBlock("trust_lt_join");
+        const result = join_bb.addParam("lt");
+        this.b.condBr(v, t_bb, [], f_bb, []);
+        this.b.sealBlock(t_bb);
+        this.b.sealBlock(f_bb);
+        this.b.setInsertPoint(t_bb);
+        this.b.br(join_bb, [this.b.constBool(true)]);
+        this.b.setInsertPoint(f_bb);
+        this.b.br(join_bb, [this.b.constBool(false)]);
+        this.b.sealBlock(join_bb);
+        this.b.setInsertPoint(join_bb);
+        return result;
     }
 
     // Does this operand node type as exactly {number}?  Numeric literals
@@ -1246,6 +1324,14 @@ class LowerFunction {
                 if (this.finallyCtx.length > 0) {
                     if (this.runFinalizers(0)) return; // a finalizer overrode control
                 }
+                // Phase 3.6 clone with an f64 result: return the raw f64
+                // (unguarded unbox — the same trust as trustedNumeric).
+                // A return this can't prove leaves a boxed return that the
+                // structural post-check in specialize.ts rejects, so a
+                // clone never ships with a sig its returns don't honor.
+                if (this.spec && this.spec.result === "f64" && n.argument &&
+                    this.operandIsNumber(n.argument))
+                    rv = this.b.emit("unbox_f64", [rv], {});
                 this.b.ret(rv);
                 return;
             }
@@ -1821,6 +1907,33 @@ function lowerOneFunction(info: FnInfo, analysis: ScopeAnalysis, module: Module,
     // needs a body in the module.
     for (let child of info.children) lowerOneFunction(child, analysis, module, mod_ctx);
     return info.fn;
+}
+
+// Phase 3.6: lower a specialized clone of an already-lowered function.
+// Unlike lowerOneFunction this ignores info.lowered/info.fn (the generic
+// lowering stands), gives the Func the clone's name and typed sig, and
+// lowers oracle-number arithmetic unguarded (SpecMode).  Children were
+// lowered with the generic pass and are shared by name (make_closure in
+// the clone body resolves to the same child Funcs).  The caller
+// (specialize.ts) owns the structural post-checks and adds the Func to
+// the module only when they pass.
+export function lowerSpecializedClone(
+    info: FnInfo,
+    analysis: ScopeAnalysis,
+    module: Module,
+    mod_ctx: ModCtx,
+    spec: SpecMode
+): Func {
+    const lf = new LowerFunction(info, analysis, module, mod_ctx, spec);
+    if (info.node.body.type === "BlockStatement") lf.stmt(info.node.body);
+    else {
+        // expression-bodied arrow: same typed-return rule as ReturnStatement
+        let rv = lf.expr(info.node.body);
+        if (spec.result === "f64" && lf.operandIsNumber(info.node.body as e.Expression))
+            rv = lf.b.emit("unbox_f64", [rv], {});
+        lf.b.ret(rv);
+    }
+    return lf.finish();
 }
 
 // lower a FunctionDeclaration/FunctionExpression AST node into a fresh

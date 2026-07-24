@@ -752,7 +752,10 @@ function tryMergeAt(fn: Func, r1: GuardRegion, idom: Map<Block, Block>, stats: O
 
 export function rawJoinParams(fn: Func, stats: OptStats): boolean {
     // candidates: non-entry, non-catch params whose every incoming arg is
-    // a box_f64, an f64 value, itself, or another candidate param
+    // a box_f64, an f64 value, a number constant (Phase 3.6: converted to
+    // a raw f64_const on the edge — a loop accumulator seeded `x = 0`
+    // now qualifies), itself, or another candidate param
+    const isNumConst = (v: Inst) => v.op === "const" && v.imms["kind"] === "number";
     const cands = new Set<Inst>();
     for (const b of fn.blocks) {
         if (b.isCatch || b === fn.entry) continue;
@@ -772,6 +775,7 @@ export function rawJoinParams(fn: Func, stats: OptStats): boolean {
                     break;
                 }
                 if (arg === p || arg.op === "box_f64" || arg.type === "f64") continue;
+                if (isNumConst(arg)) continue;
                 if (arg.op === "blockparam" && !arg.isException) continue; // resolved in pruning
                 ok = false;
                 break;
@@ -828,7 +832,7 @@ export function rawJoinParams(fn: Func, stats: OptStats): boolean {
             let keep = true;
             for (const e of b.predEdges) {
                 const arg = e.inst.targets![e.targetIndex]!.args[argIdx]!;
-                if (arg === p || arg.type === "f64") continue;
+                if (arg === p || arg.type === "f64" || isNumConst(arg)) continue;
                 if (arg.op === "blockparam") {
                     if (!cands.has(arg)) keep = false;
                 } else if (arg.op === "box_f64") {
@@ -857,6 +861,10 @@ export function rawJoinParams(fn: Func, stats: OptStats): boolean {
                 const argIdx = b.argIndexOfParam(p);
                 for (const e of b.predEdges) {
                     const arg = e.inst.targets![e.targetIndex]!.args[argIdx]!;
+                    // NB: a number const is admissible but NOT a root — a
+                    // const-only join must stay boxed (flag-off code would
+                    // otherwise grow boxes for no typed-region payoff);
+                    // only a real f64/box_f64 producer roots the graph.
                     if (
                         arg.op === "box_f64" ||
                         arg.type === "f64" ||
@@ -889,6 +897,15 @@ export function rawJoinParams(fn: Func, stats: OptStats): boolean {
             const t = e.inst.targets![e.targetIndex]!;
             const arg = t.args[argIdx]!;
             if (arg.op === "box_f64") t.args[argIdx] = arg.operands[0]!;
+            else if (isNumConst(arg)) {
+                // mint the raw producer on the edge; the boxed const keeps
+                // its other users and falls to DCE when this was the last
+                const fc = new Inst(fn, "f64_const", [], { value: arg.imms["value"] });
+                const eb = e.inst.block!;
+                fc.block = eb;
+                eb.insts.splice(eb.insts.indexOf(e.inst), 0, fc);
+                t.args[argIdx] = fc;
+            }
         }
     }
 
@@ -959,6 +976,65 @@ export function rawJoinParams(fn: Func, stats: OptStats): boolean {
         }
     }
     return true;
+}
+
+// --- boolean-join threading ---------------------------------------------------
+
+// A comparison that rejoins as boxed booleans and immediately re-tests:
+//
+//     ^t: br -> ^join(const true)      ^f: br -> ^join(const false)
+//     ^join(%p): %b = to_boolean %p; cond_br %b -> ^then, ^else
+//
+// threads each constant edge straight to the cond_br successor it would
+// pick (to_boolean(const true/false) is exact), so the fast arm of an
+// f64_lt diamond — and a Phase 3.6 clone's trusted compare — branches on
+// the raw i1 with no boxed-boolean round-trip (and no _ejs_truthy call)
+// left in the loop.  Trust-free: constants only.  Non-constant edges (a
+// diamond's generic slow arm) keep the join and the re-test.
+export function threadBooleanJoins(fn: Func, stats: OptStats): boolean {
+    // uses of every value (operands + outgoing edge args), for the
+    // locality check below
+    const useCount = new Map<Inst, number>();
+    const bump = (v: Inst) => useCount.set(v, (useCount.get(v) || 0) + 1);
+    fn.forEachInst((inst) => {
+        for (const o of inst.operands) bump(o);
+        if (inst.targets) for (const t of inst.targets) for (const a of t.args) if (a) bump(a);
+    });
+
+    let changed = false;
+    for (const b of fn.blocks) {
+        if (b.isCatch || b === fn.entry) continue;
+        if (b.params.length !== 1 || b.insts.length !== 2) continue;
+        const p = b.params[0]!;
+        if (p.isException || p.removed) continue;
+        const tob = b.insts[0]!;
+        const br = b.insts[1]!;
+        if (tob.op !== "to_boolean" || tob.operands[0] !== p) continue;
+        if (br.op !== "cond_br" || br.operands[0] !== tob) continue;
+        // the join's OWN definitions must die inside it: a use of the
+        // param (or the boolean) downstream would lose def-dominates-use
+        // the moment an edge bypasses the block
+        if (useCount.get(p) !== 1 || useCount.get(tob) !== 1) continue;
+        if (!br.targets || br.targets.length !== 2) continue;
+        const tTrue = br.targets[0]!;
+        const tFalse = br.targets[1]!;
+        if (tTrue.block === b || tFalse.block === b) continue;
+        if (tTrue.args.length !== 0 || tFalse.args.length !== 0) continue;
+
+        // predEdges mutate as edges retarget: snapshot first
+        for (const e of b.predEdges.slice()) {
+            const t = e.inst.targets![e.targetIndex]!;
+            if (t.kind === "unwind") continue;
+            const arg = t.args[0];
+            if (!arg || arg.op !== "const" || arg.imms["kind"] !== "boolean") continue;
+            const dest = arg.imms["value"] ? tTrue.block : tFalse.block;
+            retargetEdge(e.inst, e.targetIndex, dest, []);
+            stats.joins_threaded++;
+            changed = true;
+        }
+    }
+    if (changed) sweepUnreachableBlocks(fn);
+    return changed;
 }
 
 // --- driver -----------------------------------------------------------------

@@ -511,7 +511,7 @@ Smaller forward items surfaced by the Chunk A integration review:
       later-declared same-scope vars silently dropped; generalized to
       function expressions/arrows/methods after adversarial review) —
       details in docs/maam-p0-results.md "Phase 3.5".
-- [ ] **P3.6** typed calling convention / function specialization
+- [x] **P3.6** typed calling convention / function specialization
       (see the Phase 3.6 section; HARD PRECONDITION: P3.5 green):
       local-closed-world escape analysis, specialized unboxed clones +
       direct calls; exports are NEVER specialized (boxed slot ABI is a
@@ -523,5 +523,34 @@ Smaller forward items surfaced by the Chunk A integration review:
       rejected by the escape analysis, not miscompiled); demo-class
       benchmark showing the clone inlines (delta vs the Phase 3 10.3×
       ceiling recorded).
+      Landed as lib/eir/specialize.ts (+ SpecMode clone lowering in
+      lower.ts, Func.sig/call_typed/f64_const in the IR, sig-aware
+      verifier + native-signature emission): structural, oracle-free
+      escape analysis over lowered EIR (SSA-visible closures and
+      single-store promoted %self slot cells; ANY other flow rejects),
+      trusted-mode clone lowering (no diamonds, no slow paths, f64
+      formals boxed once at entry, raw f64 returns), trust-free
+      post-checks discarding any clone that can't honor its sig
+      (env/this use, frame ops, non-f64 returns), exact-arity call
+      sites rewritten to call_typed with caller-side unboxing —
+      same-function store-dominated slot loads, plus cross-function
+      loads when the store sits in the toplevel entry prefix (no
+      CALL-effect inst before it), to a fixpoint so sites inside
+      freshly-lowered clones rewrite too.  Three trust-free optimizer
+      additions let clones go raw end-to-end: unbox(box)/unbox(const)
+      annihilation, const-number rawJoin edge roots (f64_const), and
+      boolean-join threading.  Exports/escaping functions are simply
+      never specialized in this round — the boundary-guard wrapper
+      dispatching escaping entries to the clone remains OPEN follow-on
+      work (nothing needs it for the gate).
+      Gates: matrix green; diff lane 0-divergent; wrong-oracle
+      specialization probes at unit level (lying stub oracle vs
+      escaping shapes → 0 clones) and probe level
+      (test/types/types-spec1/2.js, types-specescape1.js); types-bench1
+      0.23 s → 0.07 s (14.0× → ~46× vs flag-off); the hypot2 demo goes
+      ~7× → ~90×, both clones verified LLVM-inlined into the toplevel
+      loop (before/after regenerated in
+      ~/src/echojs/hypot2-types-before-after.txt).  Details in
+      docs/maam-p0-results.md "Phase 3.6 gates".
 - [ ] **P4** (design doc only) shape-guarded property access: guard op,
       runtime layout, promotion criteria from Phase 3 experience.

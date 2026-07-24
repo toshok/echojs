@@ -22,7 +22,7 @@
 
 import { Func, Inst, Module, replaceAllUses } from "./ir";
 import { Effect, opInfo } from "./ops";
-import { optimizeGuardRegions, rawJoinParams } from "./optimize-guards";
+import { optimizeGuardRegions, rawJoinParams, threadBooleanJoins } from "./optimize-guards";
 
 export interface OptStats {
     allocs_sunk: number;
@@ -34,6 +34,10 @@ export interface OptStats {
     guards_folded: number;
     regions_merged: number;
     raw_join_params: number;
+    // Phase 3.6: unbox_f64(box_f64(x)) round-trips annihilated
+    unbox_folds: number;
+    // Phase 3.6: constant edges threaded past boxed-boolean re-tests
+    joins_threaded: number;
 }
 
 function newStats(): OptStats {
@@ -46,6 +50,8 @@ function newStats(): OptStats {
         guards_folded: 0,
         regions_merged: 0,
         raw_join_params: 0,
+        unbox_folds: 0,
+        joins_threaded: 0,
     };
 }
 
@@ -550,6 +556,42 @@ function foldIteratorWrappers(useMap: UseMap, fn: Func, stats: OptStats): boolea
     return changed;
 }
 
+// --- unbox/box annihilation ---------------------------------------------------
+
+// unbox_f64(box_f64(x)) is x: box_f64 always produces a genuinely boxed
+// number, so the round-trip is the identity (modulo NaN canonicalization,
+// which JS semantics cannot observe — a non-canonical NaN payload only
+// ever flows into f64 ops, where any NaN behaves alike, or into a later
+// box_f64, which canonicalizes).  Phase 3.6 clones lean on this: formals
+// are boxed once at entry and trusted arithmetic re-unboxes them.
+function foldUnboxOfBox(fn: Func, stats: OptStats): boolean {
+    const boxFolds: Inst[] = [];
+    const constFolds: Inst[] = [];
+    fn.forEachInst((inst) => {
+        if (inst.op !== "unbox_f64") return;
+        const src = inst.operands[0]!;
+        if (src.op === "box_f64") boxFolds.push(inst);
+        else if (src.op === "const" && src.imms["kind"] === "number") constFolds.push(inst);
+    });
+    for (const u of boxFolds) {
+        replaceAllUses(fn, u, u.operands[0]!.operands[0]!);
+        const b = u.block!;
+        const idx = b.insts.indexOf(u);
+        if (idx >= 0) b.insts.splice(idx, 1);
+        u.block = null;
+        stats.unbox_folds++;
+    }
+    // unbox_f64(const number) is just the raw constant — rewrite the
+    // unbox in place to f64_const (same Inst object keeps every use)
+    for (const u of constFolds) {
+        u.imms = { value: u.operands[0]!.imms["value"] };
+        u.op = "f64_const";
+        u.operands.length = 0;
+        stats.unbox_folds++;
+    }
+    return boxFolds.length > 0 || constFolds.length > 0;
+}
+
 // --- dead instruction elimination --------------------------------------------
 
 // dead-removable: unused results whose computation is unobservable.
@@ -626,6 +668,12 @@ export function optimizeFunction(fn: Func, module?: Module, stats?: OptStats): O
     // emitted no number guards — every flag-off compile.
     if (optimizeGuardRegions(fn, s)) eliminateDead(fn, s);
     if (rawJoinParams(fn, s)) eliminateDead(fn, s);
+    // Phase 3.6 cleanups.  These run AFTER the guard-region passes: the
+    // merge machinery pattern-matches diamond fast arms (unbox of the
+    // guarded value / of a literal const), so annihilating round-trips
+    // or rewriting const unboxes earlier would refuse valid merges.
+    if (foldUnboxOfBox(fn, s)) eliminateDead(fn, s);
+    if (threadBooleanJoins(fn, s)) eliminateDead(fn, s);
     return s;
 }
 

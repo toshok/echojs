@@ -144,14 +144,30 @@ export class EIREmitter {
             if (fns.has(fn.name))
                 throw new Error(`EIR emit: duplicate function name '${fn.name}' in module`);
             let llvm_name = `_ejs_eir_${fn.name.replace(/[^A-Za-z0-9_]/g, "_")}_${mangle_gen++}`;
-            let llvm_fn = types.takes_builtins(
-                this.abi.createFunction(
-                    this.module,
-                    llvm_name,
-                    this.abi.ejs_return_type,
-                    this.abi.ejs_params.map((p) => p.llvm_type)
-                )
-            );
+            let llvm_fn;
+            if (fn.sig) {
+                // Phase 3.6 specialized clone: a native unboxed signature
+                // — (env, double...) -> double — instead of the runtime's
+                // boxed (env, this*, argc, argv*, newTarget) convention.
+                // Internal-linkage, direct-call-only (call_typed), so no
+                // takes_builtins and no closure-dispatch interop; this is
+                // what finally lets LLVM inline and scalar-optimize
+                // through the call.
+                const param_types = [this.abi.ejs_params[0]!.llvm_type].concat(
+                    fn.sig.formals.map((f) => (f === "f64" ? types.Double : types.EjsValue))
+                );
+                const ret_type = fn.sig.result === "f64" ? types.Double : types.EjsValue;
+                llvm_fn = this.abi.createFunction(this.module, llvm_name, ret_type, param_types);
+            } else {
+                llvm_fn = types.takes_builtins(
+                    this.abi.createFunction(
+                        this.module,
+                        llvm_name,
+                        this.abi.ejs_return_type,
+                        this.abi.ejs_params.map((p) => p.llvm_type)
+                    )
+                );
+            }
             llvm_fn.setInternalLinkage();
             fns.set(fn.name, llvm_fn);
         }
@@ -182,15 +198,18 @@ export class EIREmitter {
 
         const args = llvmFn.args;
         const env = args[0]!;
-        const this_ptr = args[1]!;
-        const argc = args[2]!;
-        const args_ptr = args[3]!;
+        // Phase 3.6 clones have no this*/argc/argv*/newTarget — the
+        // specialization pass guarantees no op that needs them survives
+        // (frame ops, this-uses, and generic returns all discard a clone)
+        const this_ptr = eirFn.sig ? undefined! : args[1]!;
+        const argc = eirFn.sig ? undefined! : args[2]!;
+        const args_ptr = eirFn.sig ? undefined! : args[3]!;
         // rest_args / args_obj / construct_super / new_target need the raw
         // calling-convention values
         this.fn_argc = argc;
         this.fn_args_ptr = args_ptr;
         this.fn_this_ptr = this_ptr;
-        this.fn_new_target = args[4]!;
+        this.fn_new_target = eirFn.sig ? undefined! : args[4]!;
 
         // scratch space for outgoing call arguments, and a slot for passing
         // &this to the runtime's calling convention
@@ -244,12 +263,21 @@ export class EIREmitter {
         const entry_params = eirFn.entry!.params;
         // params[0] = %env, params[1] = %this, rest are JS formals
         if (entry_params.length > 0) this.values.set(entry_params[0]!, env);
-        if (entry_params.length > 1) {
-            let this_val = ir.createLoad(types.EjsValue, this_ptr, "this");
-            this.values.set(entry_params[1]!, this_val);
+        if (eirFn.sig) {
+            // typed convention: formals arrive directly (raw doubles for
+            // f64 formals) at llvm args [1..]; %this is required-unused —
+            // bind undefined so a stray use fails loudly downstream
+            if (entry_params.length > 1) this.values.set(entry_params[1]!, this.undef());
+            for (let i = 2; i < entry_params.length; i++)
+                this.values.set(entry_params[i]!, args[i - 1]!);
+        } else {
+            if (entry_params.length > 1) {
+                let this_val = ir.createLoad(types.EjsValue, this_ptr, "this");
+                this.values.set(entry_params[1]!, this_val);
+            }
+            for (let i = 2; i < entry_params.length; i++)
+                this.values.set(entry_params[i]!, this.emitArgLoad(argc, args_ptr, i - 2));
         }
-        for (let i = 2; i < entry_params.length; i++)
-            this.values.set(entry_params[i]!, this.emitArgLoad(argc, args_ptr, i - 2));
         // remember where the prologue ended; the branch into the eir entry
         // block is emitted *after* the body, because the legacy cached-
         // literal helpers append their initializing stores to the end of
@@ -492,6 +520,9 @@ export class EIREmitter {
             case "unbox_f64":
                 this.values.set(inst, this.v.unboxDouble(this.val(inst.operands[0])));
                 return;
+            case "f64_const":
+                this.values.set(inst, llvm.ConstantFP.getDouble(inst.imms["value"] as number));
+                return;
             case "box_f64":
                 this.values.set(inst, this.v.boxDouble(this.val(inst.operands[0])));
                 return;
@@ -692,6 +723,16 @@ export class EIREmitter {
                     "callres"
                 );
             }
+            case "call_typed": {
+                // Phase 3.6: direct call to a specialized clone — args are
+                // raw machine values in registers, no scratch spill, no
+                // closure dispatch
+                const target = this.llvm_fns.get(inst.imms["fn"] as string);
+                if (!target)
+                    throw new Error(`EIR emit: unknown call_typed callee ${String(inst.imms["fn"])}`);
+                const argv = inst.operands.map((o) => this.val(o));
+                return this.emitCallLike(inst, target, argv, "tcall");
+            }
             case "construct": {
                 let callee = this.val(inst.operands[0]);
                 let args = inst.operands.slice(1).map((o) => this.val(o));
@@ -873,7 +914,12 @@ export class EIREmitter {
                 return;
             }
             case "return": {
-                this.abi.createRet(this.llvmFn, this.val(inst.operands[0]));
+                // an f64-result clone returns the raw double directly (a
+                // plain scalar return needs none of the ABI's ejsval
+                // struct-return handling)
+                if (this.eirFn.sig && this.eirFn.sig.result === "f64")
+                    ir.createRet(this.val(inst.operands[0]));
+                else this.abi.createRet(this.llvmFn, this.val(inst.operands[0]));
                 return;
             }
             case "throw": {
