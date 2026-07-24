@@ -845,9 +845,13 @@ claim is fenced by structural, oracle-free machinery:
   caller-unboxed direct calls (`specSites`); everything else stays on
   the generic path (still enumerated — correctness never depends on
   rewriting).  The emitter gives sigged clones a NATIVE signature —
-  `double(EjsValue env, double...)`, internal linkage, no
-  closure-dispatch interop — which is what finally lets LLVM inline and
-  scalar-optimize through the call.
+  `double(double...)`: the formals ALONE, since the post-checks
+  guarantee env and `this` are unused, neither gets an argument slot
+  (call_typed's EIR-level env operand is simply not emitted; LLVM's O2
+  pipeline demonstrably does not dead-arg-eliminate internal functions,
+  so we do it) — internal linkage, no closure-dispatch interop — which
+  is what finally lets LLVM inline and scalar-optimize through the
+  call.
 - **Three trust-free optimizer additions** (they fire wherever their
   structural proofs hold, oracle or not): `unbox_f64(box_f64(x)) → x`
   and `unbox_f64(const n) → f64_const n` annihilation; const-number
@@ -915,7 +919,7 @@ updated in test/types/README.md:
 ## Microbenchmark (types-bench1, deltas vs Phase 3 / 3.4)
 
 Same kernel, same protocol (7× interleaved, /usr/bin/time -p).  The
-kernel now compiles to: a specialized `double kernel$typed(env, double)`
+kernel now compiles to: a specialized `double kernel$typed(double)`
 clone whose loop is raw f64 end-to-end (f64 loop-carried params via the
 const-root extension, f64_consts, comparison threaded straight to the
 branch — no box, no guard, no runtime call in the body), LLVM-inlined

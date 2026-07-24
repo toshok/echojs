@@ -147,14 +147,19 @@ export class EIREmitter {
             let llvm_fn;
             if (fn.sig) {
                 // Phase 3.6 specialized clone: a native unboxed signature
-                // — (env, double...) -> double — instead of the runtime's
-                // boxed (env, this*, argc, argv*, newTarget) convention.
-                // Internal-linkage, direct-call-only (call_typed), so no
-                // takes_builtins and no closure-dispatch interop; this is
-                // what finally lets LLVM inline and scalar-optimize
-                // through the call.
-                const param_types = [this.abi.ejs_params[0]!.llvm_type].concat(
-                    fn.sig.formals.map((f) => (f === "f64" ? types.Double : types.EjsValue))
+                // — (double...) -> double — instead of the runtime's boxed
+                // (env, this*, argc, argv*, newTarget) convention.  The
+                // specialization post-checks guarantee the clone touches
+                // neither env nor `this`, so NEITHER gets an argument slot
+                // (the EIR-level %env operand of call_typed is simply not
+                // emitted) — one less register at every out-of-line call
+                // site, and LLVM's O2 pipeline demonstrably does not
+                // dead-arg-eliminate it for us.  Internal-linkage,
+                // direct-call-only (call_typed), so no takes_builtins and
+                // no closure-dispatch interop; this is what finally lets
+                // LLVM inline and scalar-optimize through the call.
+                const param_types = fn.sig.formals.map((f) =>
+                    f === "f64" ? types.Double : types.EjsValue
                 );
                 const ret_type = fn.sig.result === "f64" ? types.Double : types.EjsValue;
                 llvm_fn = this.abi.createFunction(this.module, llvm_name, ret_type, param_types);
@@ -197,10 +202,11 @@ export class EIREmitter {
         llvmFn.literalAllocas = Object.create(null);
 
         const args = llvmFn.args;
-        const env = args[0]!;
-        // Phase 3.6 clones have no this*/argc/argv*/newTarget — the
-        // specialization pass guarantees no op that needs them survives
-        // (frame ops, this-uses, and generic returns all discard a clone)
+        // Phase 3.6 clones have no env/this*/argc/argv*/newTarget — their
+        // llvm args are the formals alone; the specialization pass
+        // guarantees no op that needs the frame values survives (frame
+        // ops, env/this uses, and generic returns all discard a clone)
+        const env = eirFn.sig ? undefined! : args[0]!;
         const this_ptr = eirFn.sig ? undefined! : args[1]!;
         const argc = eirFn.sig ? undefined! : args[2]!;
         const args_ptr = eirFn.sig ? undefined! : args[3]!;
@@ -262,15 +268,15 @@ export class EIREmitter {
         ir.setInsertPoint(prologue_bb);
         const entry_params = eirFn.entry!.params;
         // params[0] = %env, params[1] = %this, rest are JS formals
-        if (entry_params.length > 0) this.values.set(entry_params[0]!, env);
         if (eirFn.sig) {
             // typed convention: formals arrive directly (raw doubles for
-            // f64 formals) at llvm args [1..]; %this is required-unused —
-            // bind undefined so a stray use fails loudly downstream
-            if (entry_params.length > 1) this.values.set(entry_params[1]!, this.undef());
+            // f64 formals) at llvm args [0..].  %env and %this have NO
+            // argument slots and are required-unused — left unbound, so a
+            // stray use fails loudly at val()
             for (let i = 2; i < entry_params.length; i++)
-                this.values.set(entry_params[i]!, args[i - 1]!);
+                this.values.set(entry_params[i]!, args[i - 2]!);
         } else {
+            if (entry_params.length > 0) this.values.set(entry_params[0]!, env);
             if (entry_params.length > 1) {
                 let this_val = ir.createLoad(types.EjsValue, this_ptr, "this");
                 this.values.set(entry_params[1]!, this_val);
@@ -726,11 +732,13 @@ export class EIREmitter {
             case "call_typed": {
                 // Phase 3.6: direct call to a specialized clone — args are
                 // raw machine values in registers, no scratch spill, no
-                // closure dispatch
+                // closure dispatch.  Operand 0 (the EIR-level env slot) is
+                // NOT passed: clone signatures carry the formals alone
+                // (env is required-unused by the specialization checks)
                 const target = this.llvm_fns.get(inst.imms["fn"] as string);
                 if (!target)
                     throw new Error(`EIR emit: unknown call_typed callee ${String(inst.imms["fn"])}`);
-                const argv = inst.operands.map((o) => this.val(o));
+                const argv = inst.operands.slice(1).map((o) => this.val(o));
                 return this.emitCallLike(inst, target, argv, "tcall");
             }
             case "construct": {
