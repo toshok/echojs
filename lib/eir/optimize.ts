@@ -42,6 +42,8 @@ export interface OptStats {
     // shapes-plan P4.3: shape-guard region passes
     shape_guards_folded: number;
     shape_regions_merged: number;
+    // shapes-plan P4.5: heterogeneous (shape + numeric) region merges
+    shape_numeric_merged: number;
     // Phase 3.6: unbox_f64(box_f64(x)) round-trips annihilated
     unbox_folds: number;
     // Phase 3.6: constant edges threaded past boxed-boolean re-tests
@@ -60,6 +62,7 @@ function newStats(): OptStats {
         raw_join_params: 0,
         shape_guards_folded: 0,
         shape_regions_merged: 0,
+        shape_numeric_merged: 0,
         unbox_folds: 0,
         joins_threaded: 0,
     };
@@ -678,9 +681,22 @@ export function optimizeFunction(fn: Func, module?: Module, stats?: OptStats): O
     // emitted no number guards — every flag-off compile.
     if (optimizeGuardRegions(fn, s)) eliminateDead(fn, s);
     // shapes-plan P4.3: shape-guard region merging + fact folding (bails
-    // immediately without has_shape guards — every flag-off compile)
-    if (optimizeShapeRegions(fn, module, s)) eliminateDead(fn, s);
-    if (rawJoinParams(fn, s)) eliminateDead(fn, s);
+    // immediately without has_shape guards — every flag-off compile).
+    // P4.5: a short fixpoint with rawJoinParams — heterogeneous merges
+    // expose raw joins, and a raw join linearizes a fast side the next
+    // shape-region match can grow through.
+    for (let i = 0; i < 8; i++) {
+        let ch = false;
+        if (optimizeShapeRegions(fn, module, s)) {
+            eliminateDead(fn, s);
+            ch = true;
+        }
+        if (rawJoinParams(fn, s)) {
+            eliminateDead(fn, s);
+            ch = true;
+        }
+        if (!ch) break;
+    }
     // Phase 3.6 cleanups.  These run AFTER the guard-region passes: the
     // merge machinery pattern-matches diamond fast arms (unbox of the
     // guarded value / of a literal const), so annihilating round-trips

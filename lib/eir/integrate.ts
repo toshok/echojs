@@ -59,6 +59,9 @@ export type CollectResult =
           born_shaped: number;
           ctor_fills: number;
           fence_declined: Record<string, number>;
+          // shapes-plan P4.5: typed (raw f64) slot accesses emitted
+          typed_loads: number;
+          typed_stores: number;
           // Phase 3.6 (null when --types is off or nothing qualified)
           spec: SpecStats | null;
           error?: undefined;
@@ -74,6 +77,8 @@ export type CollectResult =
           born_shaped?: undefined;
           ctor_fills?: undefined;
           fence_declined?: undefined;
+          typed_loads?: undefined;
+          typed_stores?: undefined;
           spec?: undefined;
       };
 
@@ -468,7 +473,8 @@ export function collectEIRToplevel(
                 stats.regions_merged ||
                 stats.raw_join_params ||
                 stats.shape_guards_folded ||
-                stats.shape_regions_merged
+                stats.shape_regions_merged ||
+                stats.shape_numeric_merged
             )
                 debug.log(
                     1,
@@ -480,7 +486,8 @@ export function collectEIRToplevel(
                         `${stats.regions_merged} region(s) merged, ` +
                         `${stats.raw_join_params} raw f64 join param(s), ` +
                         `${stats.shape_guards_folded} shape guard(s) folded, ` +
-                        `${stats.shape_regions_merged} shape region(s) merged`
+                        `${stats.shape_regions_merged} shape region(s) merged, ` +
+                        `${stats.shape_numeric_merged} shape+numeric region(s) merged`
                 );
             verifyModule(eir_module);
 
@@ -536,6 +543,8 @@ export function collectEIRToplevel(
             born_shaped: typed_stats.born_shaped ?? 0,
             ctor_fills: typed_stats.ctor_fills ?? 0,
             fence_declined: typed_stats.fence_declined ?? {},
+            typed_loads: typed_stats.typed_loads ?? 0,
+            typed_stores: typed_stats.typed_stores ?? 0,
             spec: spec_stats,
         };
     } catch (e) {

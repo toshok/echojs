@@ -194,18 +194,25 @@ export const OPS = {
     // fixed-slot access on a shape-guarded receiver.  imms.shape/imms.slot
     // name the guarded shape and the field index within it (the shape imm
     // repeats the guard's so the verifier compares instead of infers);
-    // imms.repr is the FIELD's shape repr ("boxed" | "f64").  Round one is
-    // boxed storage access for both reprs (result/operand are ejsvals); a
-    // future phase (P4.5) makes repr:"f64" produce/consume raw f64 under
-    // the P2 typed-flow rules.  The verifier requires every slot op to be
+    // imms.repr is the FIELD's shape repr ("boxed" | "f64").  P4.5 typed
+    // slots: repr:"f64" produces (slot_load) / consumes (slot_store) a RAW
+    // f64 under the P2 typed-flow rules — sound because the guard proved
+    // the field's repr, the shaped-world invariant "shape reprs describe
+    // slot contents" says an f64 slot holds a number, and the NaN-box
+    // stores doubles raw, so the 8 bytes at the slot ARE the double.
+    // slot_load's result type is repr-dependent (f64 for "f64", boxed
+    // otherwise) — stamped by lowering and re-checked by the verifier,
+    // the call_typed precedent for typing a per-op table can't express.
+    // The verifier requires every slot op to be
     // dominated by an un-killed has_shape fact on the same value for the
     // same shape (see the effect-kill inventory in verifier.ts) — without
     // it a stale shape would make the slot addressing itself unsafe (the
     // storage word is a MAP pointer in dictionary mode).  slot_store
-    // additionally requires a dominating has_tag fact on the stored value
-    // matching the field repr, so the store provably never needs a repr
-    // transition (the shaped-world invariant "shape reprs describe slot
-    // contents" survives compiled stores).
+    // proves the stored value's repr matches the field: an f64 store takes
+    // a raw f64 operand (a number by construction — the type system IS the
+    // proof); a boxed store still requires a dominating has_tag=false fact
+    // on the stored value, so the store provably never needs a repr
+    // transition.
     slot_load: { arity: 1, effects: E.READ, imms: ["shape", "slot", "repr"] },
     slot_store: { arity: 2, effects: E.WRITE, imms: ["shape", "slot", "repr"] },
     // --- born with their shape (shapes-plan P4.4) -----------------------------

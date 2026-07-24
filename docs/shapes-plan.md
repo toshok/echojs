@@ -671,16 +671,84 @@ revertable, runtime phases A/B-able against the old path.
       flag-off 6.76s ⇒ **3.3×** total, the new 1.5× step being the
       allocation batching: `ctorFills=1` covers the ctor in both the
       kern and alloc loops).
-- [ ] **P4.5 — Typed slots × specialization × GC.**  `repr:"f64"` slots
-      unboxed end-to-end inside guard regions and P3.6 clones (shape
-      facts feeding the raw-value machinery); clone-internal unguarded
-      slot access behind the P3.6 escape fences; gc-P5 consumption when
-      the mover lands (trace bitmaps, inline slots, memcpy evacuation,
-      barrier/trace elision for f64 slots) — sequenced by gc-plan, the
-      compiler contract here is already shaped for it (slot-index
-      immediates, one addressing seam).
-      *Gate:* types-bench2 typed delta; harness + lane green; gc stress
-      modes when applicable.
+- [x] **P4.5 — Typed slots × specialization × GC (compiler half).**
+      DONE 2026-07-24.  The gc-P5 half (trace bitmaps, inline slots,
+      memcpy evacuation, barrier/trace elision) stays sequenced behind
+      the mover per gc-plan; the compiler contract it needs was finished
+      here.  As built:
+      - **The seam flip** (the P4.3 plan, executed): `slot_load
+        repr:"f64"` produces a RAW f64 (lowering stamps `Inst.type`,
+        boxes once at the fast exit — the join stays boxed since its slow
+        edge is the generic get); `slot_store repr:"f64"` consumes a raw
+        f64 (lowering unboxes under the existing has_tag guard).  The
+        emitter loads/stores the slot as a machine double — same address,
+        same 8 bytes (the NaN-box stores doubles raw), so the flip is
+        pure type-flow, zero runtime change.  slot ops are typed by their
+        repr immediate the way call_typed is typed by its callee (a
+        per-op sig can't express either) — the verifier checks the
+        result stamp against the repr and requires an f64-typed operand
+        for f64 stores.  **The typed store dissolves P4.3's
+        proof-strength hazard class**: the store's repr proof is now the
+        operand TYPE, which no guard-folding can strip —
+        provenNumberIntrinsic (the P4.4 escape hatch that mirrored
+        optimizer folds) is deleted; boxed-repr stores keep the
+        has_tag=false dominance rule.  No off switch for the seam: it is
+        a contract change the verifier owns.
+      - **Fusion** (`shape facts feeding the raw-value machinery`): the
+        shape-region machinery generalizes to MIXED regions — the slow
+        chain admits the numeric whitelist ops, the twin check pairs
+        loads↔gets AND f64-ops↔generic-ops (a box_f64 of an f64
+        slot_load corresponds to the load's paired get: doubles are
+        stored raw, so the get returns bit-for-bit the boxed rendition),
+        and `tryMergeShapeNumericAt` merges the NUMERIC region at a
+        shape region's join into it (the heterogeneous merge).  After a
+        het merge r2's has_tag params are fed only by fast-side box_f64
+        values, so foldProvenGuards (now run inside the shape fixpoint)
+        deletes them, rawJoinParams turns the joins raw, and the next
+        round's matcher grows the region — the cascade ends at ONE
+        has_shape guard, raw loads, raw arithmetic, one generic slow
+        path (`p.x*p.x + p.y*p.y` ⇒ 1 guard, 4 raw loads, 0 has_tag —
+        pinned at unit level).  Re-executing r1's slow chain may now
+        re-run generic arithmetic: sound when each operand is
+        proven-number at the fast exit OR is one of r1's own paired gets
+        naming an f64-REPR field (an f64 slot holds a number by the
+        shaped-world invariant; the boxed-field version of that attack
+        is unit-pinned to refuse).  `EJS_NO_SHAPE_FUSION` is the bisect
+        hook (criterion 6).
+      - **Clones**: typed slots reach P3.6 clone interiors through the
+        existing machinery with no new code — clone bodies lower against
+        `box_f64(formal)`, so the typed store's `unbox(box(p))`
+        annihilates into a raw store and slot loads are raw everywhere.
+        Clone-internal UNGUARDED slot access (dropping has_shape via the
+        escape fence) is NOT built: criterion 3 says later-measured-
+        never-first, and the measurements below show the guarded typed
+        path already at parity with the trusted clone — there is
+        currently nothing for unguardedness to win.  Revisit only on
+        benchmark evidence (P4.6 discipline).
+      - **Telemetry**: stats line grows `shapeTyped=loads:N,stores:M`
+        (additive); EIR-opt debug line grows the het-merge count.
+      *Gate results (2026-07-24):* matrix ×7 green (test-eir + new
+      typed/fusion/re-exec attack unit tests, lowtier, stages 0-3,
+      `//:test-stage1-shapes-off`); --types diff lane 0-divergent (460
+      files incl. the new probe); probe `types-typedslots1` (fused
+      kernel on matching + repr-mismatched + extra-field + dictionary
+      receivers; -0/NaN/Infinity bit-survival through raw slot traffic;
+      repr-flip transition mid-kernel; boxed-field stores) node-identical
+      in all modes incl. EJS_SHAPES=off and EJS_GC_EVERY_N_ALLOC=7.
+      **Measured honestly**: types-bench2 total is UNCHANGED (2.04s vs
+      P4.4's 2.03s) because 1.71s of it is the allocation loop — the
+      gc-P5 half owns that.  The kernel itself: a variable-receiver
+      20M-iteration kernel runs 0.31s under --types vs 3.28s flag-off
+      (10.6×), IDENTICAL between P4.4-boxed, P4.5-typed, fused, unfused,
+      and specialized — Apple-Silicon OoO + LLVM already hid the boxed
+      round-trips, so the typed/fusion wall-time delta on this hardware
+      is ~0.  What the seam DOES buy today: an invariant-receiver kernel
+      (types-bench2's literal `kern(new Point(3,4), 1e6)` shape) now
+      CONSTANT-FOLDS COMPLETELY (0.31s → 0.00s; the boxed form never
+      could — LLVM can finally see the loads are pure doubles), the
+      guarded path reaches parity with the trusted P3.6 clone, and the
+      IR meets gc-P5 with one addressing seam, slot-index immediates,
+      and straight-line raw regions to point inline-slot addressing at.
 - [ ] **P4.6 — Measured extensions.**  2-way polymorphic guards;
       accessor inlining from monomorphic `accessorSites()`; pretenuring
       hooks (gc-plan's oracle pretenuring); array element shapes.  Each
@@ -803,7 +871,12 @@ layout change whichever lands first.
       entry (harness shapes lane green, types-bench2 3.06s → 2.03s,
       ctor batching = the empty-shape-guarded body-side fill; no maam
       constructor query needed).
-- [ ] **P4.5** typed slots × clones × gc-P5 consumption.  Gate: typed
-      delta, all lanes green.
+- [x] **P4.5** typed slots × clones × gc-P5 consumption (compiler half;
+      gc-P5 consumption waits on the mover).  Gate: typed delta measured
+      and recorded, all lanes green.  DONE 2026-07-24 — see the
+      phased-plan entry above (raw f64 slot ops + heterogeneous region
+      fusion; bench2 total unchanged at 2.04s because the residual is
+      the alloc loop; invariant-receiver kernels now constant-fold;
+      guarded path at parity with trusted clones).
 - [ ] **P4.6** measured extensions (poly guards, accessor inlining,
       pretenuring, arrays) — evidence-gated.

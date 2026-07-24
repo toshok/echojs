@@ -2102,9 +2102,12 @@ interface SlotAttackOpts {
     guarded?: boolean; // guard the slot op with has_shape (default true)
     killInFast?: boolean; // a call between the guard and the slot op
     store?: boolean; // slot_store instead of slot_load
+    storeRaw?: boolean; // unbox the stored value (the P4.5 typed store form)
     tagGuard?: "none" | "true" | "false"; // has_tag fact for the stored value
     slot?: number;
     repr?: string;
+    boxedField?: boolean; // shape's x field is boxed (for boxed-store rules)
+    loadType?: string; // override the slot_load result stamp (attack)
     shapeImm?: string; // override the op's shape imm
 }
 
@@ -2114,8 +2117,9 @@ function buildSlotAttack(o: SlotAttackOpts): { mod: Module; fn: Func } {
     const fb = new FunctionBuilder("attack", ["%env", "%this", "p", "v"]);
     const p = fb.fn.entry!.params[2]!;
     const v = fb.fn.entry!.params[3]!;
-    const shapeKey = "x:f64,y:f64";
+    const shapeKey = o.boxedField ? "x:boxed,y:f64" : "x:f64,y:f64";
     const opShape = o.shapeImm ?? shapeKey;
+    const repr = o.repr ?? (o.boxedField ? "boxed" : "f64");
 
     const fast = fb.newBlock("fast");
     const slow = fb.newBlock("slow");
@@ -2145,20 +2149,27 @@ function buildSlotAttack(o: SlotAttackOpts): { mod: Module; fn: Func } {
         fb.br(join, [fb.constUndefined()]);
         fb.setInsertPoint(tagok);
     }
+    if (o.storeRaw) stored = fb.emit("unbox_f64", [stored], {});
     let fastv: Inst;
-    if (o.store)
+    if (o.store) {
         fastv = fb.emit("slot_store", [p, stored], {
             shape: opShape,
             slot: o.slot ?? 0,
-            repr: o.repr ?? "f64",
+            repr: repr,
         });
-    else
+        fb.br(join, [fb.constUndefined()]);
+    } else {
         fastv = fb.emit("slot_load", [p], {
             shape: opShape,
             slot: o.slot ?? 0,
-            repr: o.repr ?? "f64",
+            repr: repr,
         });
-    fb.br(join, [fastv]);
+        // P4.5: an f64-repr load produces a raw f64 (stamped by lowering)
+        // and boxes at the fast exit; loadType overrides for attack IR
+        fastv.type = o.loadType ?? (repr === "f64" ? "f64" : "any");
+        if (fastv.type === "f64") fastv = fb.emit("box_f64", [fastv], {});
+        fb.br(join, [fastv]);
+    }
 
     fb.setInsertPoint(slow);
     const g = fb.emit("get_prop_atom", [p], { atom: "x" });
@@ -2172,7 +2183,7 @@ function buildSlotAttack(o: SlotAttackOpts): { mod: Module; fn: Func } {
     const mod = new Module("attack_mod");
     mod.addFunction(fn);
     mod.internShape([
-        { name: "x", repr: "f64" },
+        { name: "x", repr: o.boxedField ? "boxed" : "f64" },
         { name: "y", repr: "f64" },
     ]);
     return { mod, fn };
@@ -2202,18 +2213,51 @@ test("shapes-verify: slot out of bounds / repr mismatch / unknown shape reject",
     );
 });
 
-test("shapes-verify: slot_store requires the matching has_tag fact", () => {
-    // no tag fact at all
+test("shapes-verify: slot_store repr proofs — typed f64, tagged boxed", () => {
+    // P4.5: an f64 store takes a raw f64 — the type system IS the proof;
+    // no has_tag fact anywhere and it still verifies
+    verifyModule(buildSlotAttack({ store: true, storeRaw: true }).mod);
+    // a BOXED value into an f64 slot is a type error, has_tag fact or not
     assertThrows(
-        () => verifyModule(buildSlotAttack({ store: true, tagGuard: "none" }).mod),
+        () => verifyModule(buildSlotAttack({ store: true }).mod),
+        "raw f64"
+    );
+    assertThrows(
+        () => verifyModule(buildSlotAttack({ store: true, tagGuard: "true" }).mod),
+        "raw f64"
+    );
+    // a boxed-repr store still requires the has_tag=false fact
+    verifyModule(buildSlotAttack({ store: true, boxedField: true, tagGuard: "false" }).mod);
+    assertThrows(
+        () => verifyModule(buildSlotAttack({ store: true, boxedField: true, tagGuard: "none" }).mod),
         "has_tag"
     );
-    // the right fact verifies
-    verifyModule(buildSlotAttack({ store: true, tagGuard: "true" }).mod);
-    // the WRONG edge's fact (value proven NON-number, field repr f64) rejects
+    // the WRONG edge's fact (value proven number, field repr boxed) rejects
     assertThrows(
-        () => verifyModule(buildSlotAttack({ store: true, tagGuard: "false" }).mod),
+        () => verifyModule(buildSlotAttack({ store: true, boxedField: true, tagGuard: "true" }).mod),
         "has_tag"
+    );
+    // a raw f64 into a BOXED slot is a type error
+    assertThrows(
+        () =>
+            verifyModule(
+                buildSlotAttack({ store: true, boxedField: true, storeRaw: true }).mod
+            ),
+        "boxed value"
+    );
+});
+
+test("shapes-verify: slot_load result stamp must match its repr", () => {
+    // an f64-repr load left stamped "any" is rejected (the P4.3 boxed
+    // form no longer verifies)...
+    assertThrows(
+        () => verifyModule(buildSlotAttack({ loadType: "any" }).mod),
+        "must have type f64"
+    );
+    // ...and a boxed-repr load stamped f64 likewise
+    assertThrows(
+        () => verifyModule(buildSlotAttack({ boxedField: true, loadType: "f64" }).mod),
+        "must have type any"
     );
 });
 
@@ -2231,6 +2275,7 @@ function shapeOptStats(): OptStats {
         raw_join_params: 0,
         shape_guards_folded: 0,
         shape_regions_merged: 0,
+        shape_numeric_merged: 0,
         unbox_folds: 0,
         joins_threaded: 0,
     };
@@ -2289,7 +2334,8 @@ function buildTwinAttack(lieAtom: string): { mod: Module; fn: Func; stats: OptSt
     fb.sealBlock(slow1);
     fb.setInsertPoint(fast1);
     const l1 = fb.emit("slot_load", [p], { shape: shapeKey, slot: 0, repr: "f64" });
-    fb.br(j1, [l1]);
+    l1.type = "f64";
+    fb.br(j1, [fb.emit("box_f64", [l1], {})]);
     fb.setInsertPoint(slow1);
     const gp1 = fb.emit("get_prop_atom", [p], { atom: "x" });
     fb.br(j1, [gp1]);
@@ -2306,7 +2352,8 @@ function buildTwinAttack(lieAtom: string): { mod: Module; fn: Func; stats: OptSt
     fb.sealBlock(slow2);
     fb.setInsertPoint(fast2);
     const l2 = fb.emit("slot_load", [p], { shape: shapeKey, slot: 0, repr: "f64" });
-    fb.br(j2, [l2]);
+    l2.type = "f64";
+    fb.br(j2, [fb.emit("box_f64", [l2], {})]);
     fb.setInsertPoint(slow2);
     const gp2 = fb.emit("get_prop_atom", [p], { atom: lieAtom });
     fb.br(j2, [gp2]);
@@ -2408,6 +2455,132 @@ test("shapes-opt: a stale (earlier-block) has_shape compare never folds", () => 
     optimizeShapeRegions(fn2, mod2, stats2);
     assert(stats2.shape_guards_folded === 1, "fresh dominated compare must fold");
     verifyModule(mod2);
+});
+
+// --- shapes-plan P4.5: typed slots + heterogeneous fusion ------------------------
+
+test("shapes-typed: f64 loads are raw + boxed at the exit; stores unbox", () => {
+    const g = lowerWithOracle("function f(p) { return p.x; }", stubShapeOracle({ p: PXY }));
+    assertContains(g.printed, ": f64 = slot_load");
+    assertContains(g.printed, "box_f64");
+    const s = lowerWithOracle("function f(p, v) { p.x = v; }", stubShapeOracle({ p: PXY }));
+    assertContains(s.printed, "unbox_f64");
+    // boxed fields keep boxed access — no raw traffic anywhere
+    const b = lowerWithOracle("function f(p) { return p.s; }", stubShapeOracle({ p: PXY }));
+    assertNotContains(b.printed, "box_f64");
+    assertNotContains(b.printed, ": f64 = slot_load");
+});
+
+test("shapes-typed: shape and numeric regions fuse unboxed end-to-end", () => {
+    // the real oracle types f64-field member reads as {number}, which is
+    // what makes lowering wrap the arithmetic in numeric diamonds — the
+    // stub must too, or there is no numeric region to fuse
+    const oracle: TypeOracle = {
+        ...stubShapeOracle({ p: PXY }),
+        typeOfNode: (n) => {
+            const t = (n as { type?: string }).type;
+            return t === "MemberExpression" ? { tags: new Set(["number"]) } : { tags: "top" };
+        },
+    };
+    const r = lowerFunctionNode(
+        parseFn("function f(p) { return p.x * p.x + p.y * p.y; }"),
+        undefined,
+        oracle
+    );
+    verifyModule(r.module);
+    const stats = optimizeFunction(r.fn, r.module);
+    verifyModule(r.module);
+    const printed = printFunction(r.fn);
+    assert(stats.shape_numeric_merged >= 2, `het merges=${stats.shape_numeric_merged}`);
+    assert(stats.shape_regions_merged >= 2, `shape merges=${stats.shape_regions_merged}`);
+    const guards = (printed.match(/has_shape/g) || []).length;
+    assert(guards === 1, `expected 1 surviving has_shape, got ${guards}`);
+    const tags = (printed.match(/has_tag/g) || []).length;
+    assert(tags === 0, `expected every has_tag folded, got ${tags}`);
+    const rawLoads = (printed.match(/: f64 = slot_load/g) || []).length;
+    assert(rawLoads === 4, `expected 4 raw slot_loads, got ${rawLoads}`);
+    assert(stats.raw_join_params >= 2, `raw join params=${stats.raw_join_params}`);
+});
+
+// re-execution attack: region1's slow chain holds a generic mul fed by a
+// get of a BOXED-repr field — re-running it after the fast side is not
+// provably pure, so any merge below must refuse.  The identical CFG with
+// the field repr'd f64 is the control: it must merge.
+function buildReexecAttack(sRepr: "boxed" | "f64"): OptStats {
+    const shapeKey = `x:f64,s:${sRepr}`;
+    const fb = new FunctionBuilder("reexec", ["%env", "%this", "p"]);
+    const p = fb.fn.entry!.params[2]!;
+
+    const fast1 = fb.newBlock("fast1");
+    const slow1 = fb.newBlock("slow1");
+    const j1 = fb.newBlock("j1");
+    const v1 = j1.addParam("v1");
+    const g1 = fb.emit("has_shape", [p], { shape: shapeKey });
+    fb.condBr(g1, fast1, [], slow1, []);
+    fb.sealBlock(fast1);
+    fb.sealBlock(slow1);
+    fb.setInsertPoint(fast1);
+    const lx = fb.emit("slot_load", [p], { shape: shapeKey, slot: 0, repr: "f64" });
+    lx.type = "f64";
+    const ls = fb.emit("slot_load", [p], { shape: shapeKey, slot: 1, repr: sRepr });
+    let sraw: Inst;
+    if (sRepr === "boxed") {
+        sraw = fb.emit("unbox_f64", [ls], {});
+    } else {
+        ls.type = "f64";
+        sraw = ls;
+    }
+    const m = fb.emit("f64_mul", [lx, sraw], {});
+    fb.br(j1, [fb.emit("box_f64", [m], {})]);
+    fb.setInsertPoint(slow1);
+    const gx = fb.emit("get_prop_atom", [p], { atom: "x" });
+    const gs = fb.emit("get_prop_atom", [p], { atom: "s" });
+    const mslow = fb.emit("mul", [gx, gs], {});
+    fb.br(j1, [mslow]);
+    fb.sealBlock(j1);
+    fb.setInsertPoint(j1);
+
+    const fast2 = fb.newBlock("fast2");
+    const slow2 = fb.newBlock("slow2");
+    const j2 = fb.newBlock("j2");
+    const v2 = j2.addParam("v2");
+    const g2 = fb.emit("has_shape", [p], { shape: shapeKey });
+    fb.condBr(g2, fast2, [], slow2, []);
+    fb.sealBlock(fast2);
+    fb.sealBlock(slow2);
+    fb.setInsertPoint(fast2);
+    const l2 = fb.emit("slot_load", [p], { shape: shapeKey, slot: 0, repr: "f64" });
+    l2.type = "f64";
+    fb.br(j2, [fb.emit("box_f64", [l2], {})]);
+    fb.setInsertPoint(slow2);
+    const g2x = fb.emit("get_prop_atom", [p], { atom: "x" });
+    fb.br(j2, [g2x]);
+    fb.sealBlock(j2);
+    fb.setInsertPoint(j2);
+    fb.ret(fb.emit("add", [v1, v2], {}));
+
+    const fn = fb.finish();
+    const mod = new Module("reexec_mod");
+    mod.addFunction(fn);
+    mod.internShape([
+        { name: "x", repr: "f64" },
+        { name: "s", repr: sRepr },
+    ]);
+    verifyModule(mod);
+    const stats = shapeOptStats();
+    optimizeShapeRegions(fn, mod, stats);
+    verifyModule(mod);
+    return stats;
+}
+
+test("shapes-typed: a boxed-field get feeding slow arithmetic refuses re-execution", () => {
+    const refused = buildReexecAttack("boxed");
+    assert(
+        refused.shape_regions_merged === 0 && refused.shape_numeric_merged === 0,
+        "boxed-fed slow arithmetic must refuse the merge"
+    );
+    const control = buildReexecAttack("f64");
+    assert(control.shape_regions_merged === 1, "the f64-repr control must merge");
 });
 
 // --- shapes-plan P4.4: born with their shape -----------------------------------
@@ -2629,11 +2802,15 @@ test("born-verify: make_object_shaped checks field count and known shape", () =>
     assertThrows(() => verifyModule(mod2), "unknown module shape");
 });
 
-// the optimizer/verifier proof-strength pin (found by
+// the P4.3-era optimizer/verifier proof-strength hazard (found by
 // types-bornshapewrong1): foldProvenGuards deletes a has_tag over a
-// const-number join (`c ? 1 : 0`), so the verifier's intrinsic proof must
-// accept the join param for the slot_store it uncovers
-function buildConstJoinStore(nonNumberEdge: boolean): Module {
+// const-number join (`c ? 1 : 0`), uncovering the slot_store.  P4.5's
+// typed store dissolves the hazard class: the store takes a raw f64
+// (unbox under whatever proof lowering had), so no guard deletion can
+// ever strip the proof — the TYPE is the proof.  Pin both directions:
+// the raw form verifies with no has_tag anywhere, the boxed form is
+// rejected by type no matter what the join's edges carry.
+function buildConstJoinStore(nonNumberEdge: boolean, raw = false): Module {
     const fb = new FunctionBuilder("cjstore", ["%env", "%this", "p", "c"]);
     const p = fb.fn.entry!.params[2]!;
     const c = fb.fn.entry!.params[3]!;
@@ -2658,8 +2835,9 @@ function buildConstJoinStore(nonNumberEdge: boolean): Module {
     fb.condBr(g, fast, [], out, []);
     fb.sealBlock(fast);
     fb.setInsertPoint(fast);
-    // no has_tag: the store's number proof is the const join itself
-    fb.emit("slot_store", [p, v], { shape: shapeKey, slot: 0, repr: "f64" });
+    // no has_tag anywhere: the raw form's proof is the operand type
+    const stored = raw ? fb.emit("unbox_f64", [v], {}) : v;
+    fb.emit("slot_store", [p, stored], { shape: shapeKey, slot: 0, repr: "f64" });
     fb.br(out, []);
     fb.sealBlock(out);
     fb.setInsertPoint(out);
@@ -2673,12 +2851,14 @@ function buildConstJoinStore(nonNumberEdge: boolean): Module {
     return mod;
 }
 
-test("born-verify: a const-number join proves an f64 store without has_tag", () => {
-    verifyModule(buildConstJoinStore(false));
+test("born-verify: a typed f64 store needs no has_tag, whatever the join", () => {
+    verifyModule(buildConstJoinStore(false, true));
+    verifyModule(buildConstJoinStore(true, true));
 });
 
-test("born-verify: a join with a non-number edge still requires has_tag", () => {
-    assertThrows(() => verifyModule(buildConstJoinStore(true)), "has_tag");
+test("born-verify: a boxed value into an f64 slot rejects by type", () => {
+    assertThrows(() => verifyModule(buildConstJoinStore(false)), "raw f64");
+    assertThrows(() => verifyModule(buildConstJoinStore(true)), "raw f64");
 });
 
 // --------------------------------------------------------------------------------

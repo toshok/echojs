@@ -104,7 +104,7 @@
 // verifier re-checks all of it (see verifier.ts rawJoin rules).
 
 import { Func, Block, Inst } from "./ir";
-import type { Module, Target } from "./ir";
+import type { Module, ShapeField, Target } from "./ir";
 import { Effect, opInfo } from "./ops";
 import {
     computeRPO,
@@ -1085,6 +1085,35 @@ export function threadBooleanJoins(fn: Func, stats: OptStats): boolean {
 //   - Everything else (j1/j2 pred exactness, pure-prefix cloning, routing
 //     of j1-defined values through j2 with raw-type refusal) is the
 //     numeric merge's argument verbatim.
+//
+// ---- P4.5 typed slots: the mixed region and the heterogeneous merge ----
+//
+//   - An f64-repr slot_load produces a raw f64 and lowering boxes it at
+//     the fast exit, so a shape region's fast side now also carries
+//     box_f64/unbox_f64 and — after a merge — the f64 arithmetic the
+//     numeric machinery moved in.  The shape matcher therefore admits the
+//     numeric whitelist in its SLOW chain too (the generic ops are the
+//     slow rendition of that arithmetic), and the twin check pairs BOTH
+//     populations: slot_loads with gets (atom == field-at-slot, the P4.3
+//     rule) and f64 ops with generic ops (operand correspondence through
+//     the box/unbox mapping, the numeric rule verbatim).  A box_f64 of an
+//     f64 slot_load corresponds to that load's paired get: the NaN-box
+//     stores doubles raw, so the get returns bit-for-bit the boxed form
+//     of the double the load produced.
+//   - tryMergeShapeNumericAt (the heterogeneous merge): a NUMERIC region
+//     headed at a shape region's join merges into it — r2's has_tag
+//     failures reroute to r1's slow entry exactly like a second shape
+//     region's guard failures would.  After the merge r2's head params are
+//     fed only by r1's fast exits (all box_f64), so foldProvenGuards
+//     deletes the has_tag and rawJoinParams turns the join raw: the
+//     region computes unboxed end-to-end, which is the entire point.
+//   - Re-executing r1's slow chain may now re-run generic arithmetic.
+//     Sound when each operand is either proven-number at r1's fast exit
+//     (the numeric merge's rule) or the result of one of r1's own paired
+//     gets naming an f64-REPR field of the guarded shape: the receiver
+//     still has shape S (kill-free fast side), an f64-repr slot holds a
+//     number by the shaped-world invariant, so the get returns a number
+//     and the generic op is pure and bit-identical to its f64 twin.
 
 interface ShapeRegion {
     head: Block;
@@ -1093,11 +1122,13 @@ interface ShapeRegion {
     fastBlocks: Set<Block>;
     fastChain: Block[]; // linear br chain, entry..exit
     fastLoads: Inst[]; // slot_loads in chain order
+    fastArith: Inst[]; // P4.5: f64 arithmetic in chain order (post-merge)
     fastExitEdge: EdgeRef;
     slowEntry: Block;
     slowChain: Block[];
     slowSet: Set<Block>;
     slowGets: Inst[]; // get_prop_atom in chain order
+    slowArith: Inst[]; // P4.5: whitelisted generic ops in chain order
     slowExitEdge: EdgeRef;
     join: Block;
 }
@@ -1120,10 +1151,13 @@ function matchShapeRegionAt(head: Block): ShapeRegion | null {
     if (t0.block === slowEntry) return null;
 
     // --- slow side: the numeric matcher's linear chain, with
-    // get_prop_atom(recv) as the whitelisted effectful op
+    // get_prop_atom(recv) — and, P4.5, the numeric whitelist ops (the
+    // generic rendition of merged-in f64 arithmetic) — as the admitted
+    // effectful ops
     const slowChain: Block[] = [];
     const slowSet = new Set<Block>();
     const slowGets: Inst[] = [];
+    const slowArith: Inst[] = [];
     let join: Block | null = null;
     let slowExitEdge: EdgeRef | null = null;
     let sb = slowEntry;
@@ -1140,6 +1174,8 @@ function matchShapeRegionAt(head: Block): ShapeRegion | null {
             if (inst.op === "get_prop_atom") {
                 if (inst.operands[0] !== recv) return null;
                 slowGets.push(inst);
+            } else if (SLOW_OPS.has(inst.op)) {
+                slowArith.push(inst);
             } else if (opInfo(inst.op).effects !== Effect.NONE) {
                 return null;
             }
@@ -1157,6 +1193,15 @@ function matchShapeRegionAt(head: Block): ShapeRegion | null {
             if (bt.operands[0] !== recv) return null;
             slowGets.push(bt);
             exit = { inst: bt, targetIndex: 0 };
+        } else if (
+            SLOW_OPS.has(bt.op) &&
+            bt.targets &&
+            bt.targets.length === 2 &&
+            bt.targets[0]!.kind === "normal"
+        ) {
+            // a generic op inside a protected region: [normal, unwind]
+            slowArith.push(bt);
+            exit = { inst: bt, targetIndex: 0 };
         } else {
             return null;
         }
@@ -1173,10 +1218,12 @@ function matchShapeRegionAt(head: Block): ShapeRegion | null {
     if (!join || join.isCatch || join === head) return null;
 
     // --- fast side: a linear br chain of effect-free-or-GC instructions
-    // plus slot_loads on exactly (recv, shapeKey)
+    // plus slot_loads on exactly (recv, shapeKey); f64 arithmetic (an
+    // earlier heterogeneous merge's residue) is collected for the twin
     const fastBlocks = new Set<Block>();
     const fastChain: Block[] = [];
     const fastLoads: Inst[] = [];
+    const fastArith: Inst[] = [];
     let fastExitEdge: EdgeRef | null = null;
     let fb: Block | null = t0.block;
     while (fb) {
@@ -1194,6 +1241,8 @@ function matchShapeRegionAt(head: Block): ShapeRegion | null {
                 if (inst.operands[0] !== recv) return null;
                 if (String(inst.imms["shape"]) !== shapeKey) return null;
                 fastLoads.push(inst);
+            } else if (F64_TO_GENERIC[inst.op]) {
+                fastArith.push(inst);
             } else if ((opInfo(inst.op).effects & ~Effect.GC) !== 0) {
                 return null;
             }
@@ -1223,24 +1272,31 @@ function matchShapeRegionAt(head: Block): ShapeRegion | null {
         fastBlocks,
         fastChain,
         fastLoads,
+        fastArith,
         fastExitEdge,
         slowEntry,
         slowChain,
         slowSet,
         slowGets,
+        slowArith,
         slowExitEdge: slowExitEdge!,
         join,
     };
 }
 
 // the slow chain is the generic rendition of the fast side: slot_loads and
-// gets pair op for op (atom == the shape's field at that slot), and the
-// join-exit arguments correspond slot for slot.
-function verifyShapeTwin(r: ShapeRegion, shapes: Map<string, { name: string }[]>): boolean {
+// gets pair op for op (atom == the shape's field at that slot), f64
+// arithmetic and generic ops pair op for op with corresponding operands
+// (P4.5, the numeric twin rule), and the join-exit arguments correspond
+// slot for slot.  A box_f64 of an f64 slot_load corresponds to the load's
+// paired get: doubles are stored raw in the NaN-box, so the get returns
+// exactly the boxed rendition of the load's raw double.
+function verifyShapeTwin(r: ShapeRegion, shapes: Map<string, ShapeField[]>): boolean {
     const fields = shapes.get(r.shapeKey);
     if (!fields) return false;
     if (r.fastLoads.length !== r.slowGets.length) return false;
-    const pair = new Map<Inst, Inst>();
+    if (r.fastArith.length !== r.slowArith.length) return false;
+    const pair = new Map<Inst, Inst>(); // fast load/arith -> slow twin
     for (let i = 0; i < r.fastLoads.length; i++) {
         const load = r.fastLoads[i]!;
         const get = r.slowGets[i]!;
@@ -1250,11 +1306,34 @@ function verifyShapeTwin(r: ShapeRegion, shapes: Map<string, { name: string }[]>
         pair.set(load, get);
     }
 
-    // fast value -> the slow value it must equal at the join
+    // const-correspondence, the numeric merge's Object.is rule, extended
+    // to the raw form a prior rawJoin conversion mints on fast edges
+    const corresponds = (want: Inst, actual: Inst): boolean => {
+        if (want === actual) return true;
+        if (
+            want.op === "const" &&
+            actual.op === "const" &&
+            want.imms["kind"] === actual.imms["kind"] &&
+            Object.is(want.imms["value"], actual.imms["value"])
+        )
+            return true;
+        return (
+            want.op === "f64_const" &&
+            actual.op === "const" &&
+            actual.imms["kind"] === "number" &&
+            Object.is(want.imms["value"], actual.imms["value"])
+        );
+    };
+
+    // fast value -> the slow value it must equal at the join.  Boxed and
+    // raw views recurse into each other through box/unbox exactly as the
+    // numeric twin's slowOfBoxed/slowOfF64 do, with slot_loads bottoming
+    // out at their paired gets.
     const slowOf = (x: Inst, d: number): Inst | null => {
         if (d <= 0) return null;
         const p = pair.get(x);
         if (p) return p;
+        if (x.op === "box_f64" || x.op === "unbox_f64") return slowOf(x.operands[0]!, d - 1);
         if (x.op === "blockparam" && x.block && r.fastBlocks.has(x.block)) {
             const b = x.block;
             if (b.predEdges.length !== 1) return null;
@@ -1265,6 +1344,21 @@ function verifyShapeTwin(r: ShapeRegion, shapes: Map<string, { name: string }[]>
         return x; // defined above the head: the same SSA value on both sides
     };
 
+    // pair the arithmetic in chain order with corresponding operands.
+    // f64_lt is refused exactly as the numeric twin refuses it (the check
+    // runs on both sides of a merge, so lt regions simply do not merge).
+    for (let i = 0; i < r.fastArith.length; i++) {
+        const fa = r.fastArith[i]!;
+        const sa = r.slowArith[i]!;
+        if (fa.op === "f64_lt") return false;
+        if (F64_TO_GENERIC[fa.op] !== sa.op) return false;
+        for (let k = 0; k < fa.operands.length; k++) {
+            const want = slowOf(fa.operands[k]!, 32);
+            if (!want || !corresponds(want, sa.operands[k]!)) return false;
+        }
+        pair.set(fa, sa);
+    }
+
     const fastArgs = r.fastExitEdge.inst.targets![r.fastExitEdge.targetIndex]!.args;
     const slowArgs = r.slowExitEdge.inst.targets![r.slowExitEdge.targetIndex]!.args;
     if (fastArgs.length !== slowArgs.length) return false;
@@ -1274,17 +1368,42 @@ function verifyShapeTwin(r: ShapeRegion, shapes: Map<string, { name: string }[]>
         if (!fa || !sa) return false;
         const want = slowOf(fa, 32);
         if (!want) return false;
-        if (want !== sa) {
-            // const-correspondence, the numeric merge's Object.is rule
-            if (
-                !(
-                    want.op === "const" &&
-                    sa.op === "const" &&
-                    want.imms["kind"] === sa.imms["kind"] &&
-                    Object.is(want.imms["value"], sa.imms["value"])
-                )
-            )
+        if (!corresponds(want, sa)) return false;
+    }
+    return true;
+}
+
+// Re-executing r1's slow chain (a merged region's guard failures reroute
+// through it) is sound when every instruction is effect-free, a get of an
+// own field of the guarded shape (pure and bit-identical while the
+// receiver still has shape S — the fast side is kill-free), or (P4.5) a
+// whitelisted generic op each of whose operands is proven-number at r1's
+// fast exit or is one of r1's own paired gets naming an f64-REPR field —
+// an f64 slot holds a number by the shaped-world invariant, so the
+// re-executed generic op is pure and bit-identical to its f64 twin.
+function checkShapeSlowReexec(
+    r1: ShapeRegion,
+    fields: ShapeField[],
+    idom: Map<Block, Block>
+): boolean {
+    const fastExitBlock = r1.fastExitEdge.inst.block!;
+    const numberOk = (o: Inst): boolean => {
+        if (provenNumberAt(o, fastExitBlock, idom)) return true;
+        if (o.op !== "get_prop_atom" || !r1.slowGets.includes(o)) return false;
+        const f = fields.find((f) => f.name === o.imms["atom"]);
+        return f !== undefined && f.repr === "f64";
+    };
+    for (const sb of r1.slowChain) {
+        for (const inst of sb.insts) {
+            if (inst.op === "br") continue;
+            if (inst.op === "get_prop_atom") {
+                if (inst.operands[0] !== r1.recv) return false;
+                if (!fields.some((f) => f.name === inst.imms["atom"])) return false;
+            } else if (SLOW_OPS.has(inst.op)) {
+                for (const o of inst.operands) if (!numberOk(o)) return false;
+            } else if (opInfo(inst.op).effects !== Effect.NONE) {
                 return false;
+            }
         }
     }
     return true;
@@ -1294,7 +1413,7 @@ function verifyShapeTwin(r: ShapeRegion, shapes: Map<string, { name: string }[]>
 // precede all mutations — the numeric tryMergeAt transplanted.
 function tryMergeShapeAt(
     fn: Func,
-    shapes: Map<string, { name: string }[]>,
+    shapes: Map<string, ShapeField[]>,
     r1: ShapeRegion,
     idom: Map<Block, Block>,
     stats: OptStats
@@ -1355,22 +1474,9 @@ function tryMergeShapeAt(
     }
 
     // re-execution check: region2's guard failures re-run r1's slow chain
-    // after r1's fast side ran.  Sound iff every re-executed instruction is
-    // effect-free or a get of an OWN field of the guarded shape (pure and
-    // value-identical while the receiver still has shape S — which it does:
-    // the fast side and prefix are kill-free by the region match).
+    // after r1's fast side ran (see checkShapeSlowReexec's argument)
     const fields = shapes.get(r1.shapeKey)!;
-    for (const sb of r1.slowChain) {
-        for (const inst of sb.insts) {
-            if (inst.op === "br") continue;
-            if (inst.op === "get_prop_atom") {
-                if (inst.operands[0] !== r1.recv) return false;
-                if (!fields.some((f) => f.name === inst.imms["atom"])) return false;
-            } else if (opInfo(inst.op).effects !== Effect.NONE) {
-                return false;
-            }
-        }
-    }
+    if (!checkShapeSlowReexec(r1, fields, idom)) return false;
 
     // what the slow path knows each j1-defined value to be
     const slowMap = new Map<Inst, Inst>();
@@ -1457,6 +1563,170 @@ function tryMergeShapeAt(
     return true;
 }
 
+// P4.5: the heterogeneous merge — a NUMERIC guard region headed at a
+// shape region's join merges into the shape region, exactly as a second
+// shape region would: r2's has_tag failures reroute to r1's slow entry
+// (r1's slow chain re-executes — checkShapeSlowReexec — then falls
+// through into r2's slow chain, the full generic computation in program
+// order).  After the merge r2's head params are fed only by r1's fast
+// exits, so foldProvenGuards deletes the has_tag and rawJoinParams turns
+// the join raw — the region computes unboxed end-to-end.  All checks
+// precede all mutations; the check set is tryMergeAt's with r1's side
+// verified by the mixed shape twin.
+function tryMergeShapeNumericAt(
+    fn: Func,
+    shapes: Map<string, ShapeField[]>,
+    r1: ShapeRegion,
+    idom: Map<Block, Block>,
+    stats: OptStats
+): boolean {
+    const j1 = r1.join;
+    const r2 = matchRegionAt(j1);
+    if (!r2) return false;
+    const j2 = r2.join;
+
+    // region2 strictly below region1 (no sharing, no cycles)
+    if (j2 === r1.head || j2 === j1 || r1.fastBlocks.has(j2) || r1.slowSet.has(j2)) return false;
+    if (r2.slowEntry === r1.slowEntry) return false;
+    for (const b of r2.fastBlocks)
+        if (r1.fastBlocks.has(b) || r1.slowSet.has(b) || b === r1.head) return false;
+    for (const b of r2.slowChain)
+        if (r1.fastBlocks.has(b) || r1.slowSet.has(b) || b === r1.head) return false;
+
+    // j1's predecessors must be exactly region1's exits, j2's exactly
+    // region2's (the numeric merge's review attack A)
+    for (const e of j1.predEdges) {
+        const src = e.inst.block!;
+        if (!r1.fastBlocks.has(src) && !r1.slowSet.has(src)) return false;
+    }
+    for (const e of j2.predEdges) {
+        const src = e.inst.block!;
+        if (!r2.fastBlocks.has(src) && !r2.slowSet.has(src)) return false;
+    }
+
+    // both slow chains must be their fast sides' generic twins: r2 by the
+    // numeric rule, r1 by the mixed shape rule
+    if (!verifyGenericTwin(r2)) return false;
+    if (!verifyShapeTwin(r1, shapes)) return false;
+
+    // j1's instruction shape: [effect-free prefix..., (guard,) cond_br].
+    // The numeric prefix logic verbatim — a has_tag guard is a fact about
+    // an immutable SSA value, so unlike has_shape it need not be j1's own
+    // fresh compare.
+    const term = j1.terminator!;
+    const guard = term.operands[0]!;
+    let prefixEnd = j1.insts.length - 1;
+    if (guard.block === j1) {
+        if (j1.insts[j1.insts.length - 2] !== guard) return false;
+        prefixEnd = j1.insts.length - 2;
+        let extraUse = false;
+        fn.forEachInst((inst) => {
+            if (inst === term) return;
+            for (const o of inst.operands) if (o === guard) extraUse = true;
+            if (inst.targets)
+                for (const t of inst.targets) for (const a of t.args) if (a === guard) extraUse = true;
+        });
+        if (extraUse) return false;
+    }
+    const prefix: Inst[] = [];
+    for (let i = 0; i < prefixEnd; i++) {
+        const q = j1.insts[i]!;
+        if (q.targets && q.targets.length > 0) return false;
+        if (opInfo(q.op).effects !== Effect.NONE) return false;
+        prefix.push(q);
+    }
+
+    // re-execution check: r2's guard failures re-run r1's slow chain
+    // after r1's fast side ran (see checkShapeSlowReexec's argument)
+    const fields = shapes.get(r1.shapeKey);
+    if (!fields) return false;
+    if (!checkShapeSlowReexec(r1, fields, idom)) return false;
+
+    // what the slow path knows each j1-defined value to be
+    const slowMap = new Map<Inst, Inst>();
+    const exitTarget = r1.slowExitEdge.inst.targets![r1.slowExitEdge.targetIndex]!;
+    for (const p of j1.params) {
+        const arg = exitTarget.args[j1.argIndexOfParam(p)];
+        if (!arg) return false;
+        slowMap.set(p, arg);
+    }
+
+    // routing pre-check (numeric merge verbatim): every use of a
+    // j1-defined value outside region2 must be dominated by j2
+    const routed: Inst[] = [...j1.params, ...prefix];
+    const outsideUses = new Map<Inst, Inst[]>();
+    for (const v of routed) {
+        const outs: Inst[] = [];
+        let ok = true;
+        fn.forEachInst((inst, blk) => {
+            if (!ok) return;
+            let uses = false;
+            for (const o of inst.operands) if (o === v) uses = true;
+            if (inst.targets)
+                for (const t of inst.targets) for (const a of t.args) if (a === v) uses = true;
+            if (!uses) return;
+            if (blk === j1 || r2.fastBlocks.has(blk)) return;
+            if (r2.slowSet.has(blk)) return; // substituted below
+            if (!dominates(idom, j2, blk)) {
+                ok = false;
+                return;
+            }
+            outs.push(inst);
+        });
+        if (!ok) return false;
+        if (outs.length > 0) {
+            if (v.type !== "any") return false; // no raw-typed routing
+            outsideUses.set(v, outs);
+        }
+    }
+
+    // ---- all checks passed; mutate ----
+    const mapSlow = (v: Inst): Inst => slowMap.get(v) ?? v;
+
+    const slowExitBlock = r1.slowChain[r1.slowChain.length - 1]!;
+    const exitInst = r1.slowExitEdge.inst;
+    for (const q of prefix) {
+        const clone = new Inst(fn, q.op, q.operands.map(mapSlow), { ...q.imms });
+        clone.block = slowExitBlock;
+        slowExitBlock.insts.splice(slowExitBlock.insts.indexOf(exitInst), 0, clone);
+        slowMap.set(q, clone);
+    }
+
+    retargetEdge(exitInst, r1.slowExitEdge.targetIndex, r2.slowEntry, []);
+    for (const ge of r2.guardFalseEdges) retargetEdge(ge.inst, ge.targetIndex, r1.slowEntry, []);
+    for (const sb of r2.slowChain) {
+        for (const inst of sb.insts) {
+            for (let i = 0; i < inst.operands.length; i++)
+                inst.operands[i] = mapSlow(inst.operands[i]!);
+            if (inst.targets)
+                for (const t of inst.targets)
+                    for (let i = 0; i < t.args.length; i++)
+                        if (t.args[i]) t.args[i] = mapSlow(t.args[i]!);
+        }
+    }
+
+    for (const entry of outsideUses.entries()) {
+        const v = entry[0];
+        const users = entry[1];
+        const vr = j2.addParam(v.nameHint);
+        vr.type = v.type;
+        const slot = j2.argIndexOfParam(vr);
+        for (const e of j2.predEdges) {
+            const t = e.inst.targets![e.targetIndex]!;
+            t.args[slot] = r2.slowSet.has(e.inst.block!) ? mapSlow(v) : v;
+        }
+        for (const u of users) {
+            for (let i = 0; i < u.operands.length; i++) if (u.operands[i] === v) u.operands[i] = vr;
+            if (u.targets)
+                for (const t of u.targets)
+                    for (let i = 0; i < t.args.length; i++) if (t.args[i] === v) t.args[i] = vr;
+        }
+    }
+
+    stats.shape_numeric_merged++;
+    return true;
+}
+
 // fold cond_brs on has_shape guards proven by an un-killed dominating
 // shape fact (post-merge, region2's guard is exactly this)
 function foldProvenShapeGuards(fn: Func, stats: OptStats): boolean {
@@ -1508,6 +1778,11 @@ export function optimizeShapeRegions(
 
     sweepUnreachableBlocks(fn);
 
+    // P4.5 bisect hook (criterion 6): EJS_NO_SHAPE_FUSION disables the
+    // heterogeneous merge + the in-loop numeric folding, leaving exactly
+    // the P4.3 shape-region behavior (typed slot ACCESS is a contract
+    // change and has no off switch — the verifier owns it).
+    const noFusion = !!process.env["EJS_NO_SHAPE_FUSION"];
     let changedAny = false;
     for (let round = 0; round < 50; round++) {
         let changed = false;
@@ -1519,7 +1794,10 @@ export function optimizeShapeRegions(
                 for (const b of rpo) {
                     const r1 = matchShapeRegionAt(b);
                     if (!r1) continue;
-                    if (tryMergeShapeAt(fn, module.shapes, r1, idom, stats)) {
+                    if (
+                        tryMergeShapeAt(fn, module.shapes, r1, idom, stats) ||
+                        (!noFusion && tryMergeShapeNumericAt(fn, module.shapes, r1, idom, stats))
+                    ) {
                         merged = true;
                         changed = true;
                         break; // mutations invalidate matches; re-match
@@ -1529,6 +1807,11 @@ export function optimizeShapeRegions(
             }
         }
         if (foldProvenShapeGuards(fn, stats)) changed = true;
+        // P4.5: a heterogeneous merge leaves r2's has_tag guards fed only
+        // by fast-side box_f64 values — provably numbers.  Folding them
+        // here linearizes the fast side so the NEXT round's matcher can
+        // grow the region further (the fusion cascade).
+        if (!noFusion && foldProvenGuards(fn, stats)) changed = true;
         if (!changed) break;
         sweepUnreachableBlocks(fn);
         changedAny = true;

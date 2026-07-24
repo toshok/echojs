@@ -46,10 +46,14 @@ import type { Func, Block, Inst, Module } from "./ir";
 //     heap side (the object's header) can move, which is exactly what the
 //     kill rule tracks.
 //
-// Number-tag facts (slot_store's repr proof) need no kill rule: has_tag
-// tests the VALUE's own tag, and SSA values are immutable — dominance
-// alone suffices (tagFactDominates below, the guardFactAt shape from
-// optimize-guards generalized to either edge).
+// Number-tag facts (the BOXED slot_store's repr proof) need no kill rule:
+// has_tag tests the VALUE's own tag, and SSA values are immutable —
+// dominance alone suffices (tagFactDominates below, the guardFactAt shape
+// from optimize-guards generalized to either edge).  P4.5 typed slots: an
+// f64-repr store takes a raw f64 operand, so its repr proof is the type
+// system itself (a raw f64 is a number by construction) — the has_tag
+// dominance requirement, and the provenNumberIntrinsic escape hatch that
+// mirrored optimizer folds over it, are gone with the boxed f64 store.
 //
 // The engine is shared with optimize-guards' shape-fact folding: the
 // optimizer folds on the same facts the verifier re-derives, so a fold the
@@ -151,48 +155,6 @@ export function computeShapeFacts(fn: Func): ShapeFactAnalysis | null {
         factsAt: (block, uptoIndex) =>
             transfer(block, blockIn.get(block) ?? new Set(), uptoIndex),
     };
-}
-
-// value-intrinsic number proof: numbers by construction, no position
-// involved.  The optimizer's foldProvenGuards legitimately deletes a
-// has_tag whose value is proven this way (const numbers, box_f64, the
-// always-number generic ops — optimize-guards' soundness inventory), so
-// the slot_store rule must accept the same proofs or reject valid folds.
-// Deliberately the INTRINSIC subset only: the optimizer's dominance-fact
-// proofs never justify deleting a guard the store rule needs (a fold on a
-// dominance fact leaves that dominating guard edge in place).
-export function provenNumberIntrinsic(v: Inst, depth = 6): boolean {
-    if (v.op === "const") return v.imms["kind"] === "number";
-    if (v.op === "box_f64") return true;
-    if (v.op === "mul" || v.op === "div" || v.op === "sub") return true;
-    if (depth <= 0) return false;
-    if (v.op === "add")
-        return (
-            provenNumberIntrinsic(v.operands[0]!, depth - 1) &&
-            provenNumberIntrinsic(v.operands[1]!, depth - 1)
-        );
-    // a join whose every incoming is itself intrinsically a number (e.g.
-    // `c ? 1 : 0` — const-number edges) is immutably a number.  This
-    // mirrors provenNumberAt's blockparam case in optimize-guards: the
-    // optimizer folds a has_tag over such a join, so the verifier must
-    // accept the same proof for the slot_store it uncovers (the P4.2
-    // proof-mismatch lesson, replayed — found by types-bornshapewrong1's
-    // ternary-valued constructor store).
-    if (v.op === "blockparam" && !v.isException && v.block && !v.block.isCatch) {
-        const b = v.block;
-        if (b.predEdges.length === 0) return false;
-        const argIdx = b.argIndexOfParam(v);
-        let anyProven = false;
-        for (const e of b.predEdges) {
-            const arg = e.inst.targets![e.targetIndex]!.args[argIdx];
-            if (!arg) return false;
-            if (arg === v) continue; // self-edge: vacuous
-            if (!provenNumberIntrinsic(arg, depth - 1)) return false;
-            anyProven = true;
-        }
-        return anyProven;
-    }
-    return false;
 }
 
 // is there a dominating (wantTrue ? true : false)-edge fact of
@@ -527,6 +489,24 @@ export function verifyFunction(fn: Func, mod?: Module): boolean {
                 });
                 continue;
             }
+            // P4.5 typed slots: slot ops are typed by their repr immediate,
+            // which a per-op table can't express (the call_typed precedent).
+            // The receiver is always boxed; an f64-repr store takes exactly
+            // a raw f64 (the type system IS the repr proof), a boxed-repr
+            // store takes a boxed value.  slot_load's result stamp is
+            // checked against the repr in the shape section below.
+            if (inst.op === "slot_store") {
+                if (isRaw(inst.operands[0]!.type))
+                    fail(`slot_store receiver must be boxed, got ${inst.operands[0]!.type}`, inst);
+                const v = inst.operands[1]!;
+                if (inst.imms["repr"] === "f64") {
+                    if (v.type !== "f64")
+                        fail(`slot_store repr "f64" wants a raw f64 value, got ${v.type}`, inst);
+                } else if (isRaw(v.type)) {
+                    fail(`slot_store repr "boxed" wants a boxed value, got ${v.type}`, inst);
+                }
+                continue;
+            }
             // Phase 3.6: a sigged function's `return` must produce exactly
             // the sig's result type (f64 result -> raw f64 operand)
             if (inst.op === "return" && fn.sig && fn.sig.result === "f64") {
@@ -556,8 +536,11 @@ export function verifyFunction(fn: Func, mod?: Module): boolean {
     // --- shapes-plan P4.3: shape-guarded slot access -----------------------
     // Every slot op must sit under an un-killed dominating has_shape fact on
     // the same value for the same shape (see the effect-kill inventory at the
-    // top of this file); stores additionally prove the stored value's tag
-    // matches the field repr, so compiled stores never owe a transition.
+    // top of this file); stores additionally prove the stored value's repr
+    // matches the field's — by TYPE for f64 (the typed-flow rule above), by
+    // a has_tag=false dominance fact for boxed — so compiled stores never
+    // owe a transition.  P4.5: slot_load's result stamp must agree with its
+    // repr (raw f64 loads are only meaningful under the guard's repr proof).
     // With a module in hand, imms are checked against the module shape table
     // (bounds, repr identity, known key).
     let shapeFacts: ShapeFactAnalysis | null | undefined;
@@ -609,6 +592,11 @@ export function verifyFunction(fn: Func, mod?: Module): boolean {
                 fail(`'${inst.op}' has a malformed slot immediate`, inst);
             if (repr !== "boxed" && repr !== "f64")
                 fail(`'${inst.op}' has a malformed repr immediate`, inst);
+            if (inst.op === "slot_load") {
+                const want = repr === "f64" ? "f64" : "any";
+                if (inst.type !== want)
+                    fail(`slot_load repr "${String(repr)}" must have type ${want}, got ${inst.type}`, inst);
+            }
             if (fields) {
                 if ((slot as number) >= fields.length)
                     fail(
@@ -630,16 +618,14 @@ export function verifyFunction(fn: Func, mod?: Module): boolean {
                     inst
                 );
 
-            if (inst.op === "slot_store") {
+            if (inst.op === "slot_store" && repr === "boxed") {
+                // the f64 case is the typed-flow rule above (raw f64
+                // operand); boxed still needs the not-a-number proof
                 const val = inst.operands[1]!;
-                const proven =
-                    repr === "f64"
-                        ? tagFactDominates(val, true, b, idom) || provenNumberIntrinsic(val)
-                        : tagFactDominates(val, false, b, idom);
-                if (!proven)
+                if (!tagFactDominates(val, false, b, idom))
                     fail(
-                        `slot_store lacks a dominating has_tag(number)=${repr === "f64"} fact ` +
-                            `on its value for repr "${String(repr)}"`,
+                        `slot_store lacks a dominating has_tag(number)=false fact ` +
+                            `on its value for repr "boxed"`,
                         inst
                     );
             }

@@ -880,6 +880,10 @@ export function compile(
                     ? ` shapeSites=${lowered.shape_sites} shapeGuards=${lowered.shape_guards ?? 0}` +
                       ` shapeDeclined=${declineStr || "none"}`
                     : "") +
+                // shapes-plan P4.5: typed slot telemetry (additive)
+                ((lowered.typed_loads ?? 0) > 0 || (lowered.typed_stores ?? 0) > 0
+                    ? ` shapeTyped=loads:${lowered.typed_loads ?? 0},stores:${lowered.typed_stores ?? 0}`
+                    : "") +
                 // shapes-plan P4.4: born-with-shape telemetry (additive)
                 ((lowered.born_shaped ?? 0) > 0 || (lowered.ctor_fills ?? 0) > 0
                     ? ` bornShaped=${lowered.born_shaped ?? 0} ctorFills=${lowered.ctor_fills ?? 0}`

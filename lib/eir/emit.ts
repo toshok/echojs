@@ -623,14 +623,28 @@ export class EIREmitter {
                 this.values.set(inst, phi);
                 return;
             }
+            // P4.5 typed slots: an f64-repr slot is accessed as a raw
+            // double — same address, same 8 bytes (the NaN-box stores
+            // doubles raw), just loaded/stored as the machine type the
+            // guard's repr proof licenses.
             case "slot_load": {
                 const ref = this.slotRef(this.val(inst.operands[0]), inst.imms["slot"] as number);
-                this.values.set(inst, ir.createLoad(types.EjsValue, ref, "slot_val"));
+                if (inst.imms["repr"] === "f64") {
+                    const dref = ir.createBitCast(ref, types.Double.pointerTo(), "slot_f64_ptr");
+                    this.values.set(inst, ir.createLoad(types.Double, dref, "slot_f64"));
+                } else {
+                    this.values.set(inst, ir.createLoad(types.EjsValue, ref, "slot_val"));
+                }
                 return;
             }
             case "slot_store": {
                 const ref = this.slotRef(this.val(inst.operands[0]), inst.imms["slot"] as number);
-                ir.createStore(this.val(inst.operands[1]), ref);
+                if (inst.imms["repr"] === "f64") {
+                    const dref = ir.createBitCast(ref, types.Double.pointerTo(), "slot_f64_ptr");
+                    ir.createStore(this.val(inst.operands[1]), dref);
+                } else {
+                    ir.createStore(this.val(inst.operands[1]), ref);
+                }
                 this.values.set(inst, this.val(inst.operands[1]));
                 return;
             }

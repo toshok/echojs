@@ -72,6 +72,9 @@ export interface ModCtx {
         born_shaped?: number;
         ctor_fills?: number;
         fence_declined?: Record<string, number>;
+        // shapes-plan P4.5: typed (raw f64) slot accesses emitted
+        typed_loads?: number;
+        typed_stores?: number;
     };
     // --types-dump: per-site shape census lines (shapes-plan P4.3)
     shape_dump?: boolean;
@@ -948,7 +951,20 @@ class LowerFunction {
 
         this.b.setInsertPoint(fast_bb);
         const v = this.b.emit("slot_load", [obj], { shape: f.key, slot: f.slot, repr: f.repr });
-        this.b.br(join_bb, [v]);
+        if (f.repr === "f64") {
+            // P4.5 typed slots: the load produces a raw f64 (the guard
+            // proved the repr; the slot bytes ARE the double).  Box once at
+            // the fast exit — the join stays boxed (its slow edge is the
+            // generic get), and the optimizer's region fusion + rawJoin
+            // machinery strips the box wherever the consumer is raw.
+            v.type = "f64";
+            const stats = this.mod_ctx.typed_stats;
+            if (stats) stats.typed_loads = (stats.typed_loads ?? 0) + 1;
+            const boxed = this.b.emit("box_f64", [v], {});
+            this.b.br(join_bb, [boxed]);
+        } else {
+            this.b.br(join_bb, [v]);
+        }
 
         this.b.setInsertPoint(slow_bb);
         const g = this.b.emit("get_prop_atom", [obj], { atom: atom });
@@ -989,7 +1005,18 @@ class LowerFunction {
         this.b.sealBlock(slow_bb);
 
         this.b.setInsertPoint(fast_bb);
-        this.b.emit("slot_store", [obj, v], { shape: f.key, slot: f.slot, repr: f.repr });
+        if (f.repr === "f64") {
+            // P4.5 typed slots: unbox under the has_tag guard (the true
+            // edge into this block proved v is a number, so the bits are
+            // the double) and store raw — the type system carries the
+            // repr proof the verifier's store rule now requires.
+            const raw = this.b.emit("unbox_f64", [v], {});
+            this.b.emit("slot_store", [obj, raw], { shape: f.key, slot: f.slot, repr: f.repr });
+            const stats = this.mod_ctx.typed_stats;
+            if (stats) stats.typed_stores = (stats.typed_stores ?? 0) + 1;
+        } else {
+            this.b.emit("slot_store", [obj, v], { shape: f.key, slot: f.slot, repr: f.repr });
+        }
         this.b.br(join_bb, []);
 
         this.b.setInsertPoint(slow_bb);
