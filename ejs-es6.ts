@@ -20,6 +20,7 @@ import { Triple } from "./lib/triple";
 
 import {
     LLVM_SUFFIX as DEFAULT_LLVM_SUFFIX,
+    LLVM_BINDIR as DEFAULT_LLVM_BINDIR,
     RUNLOOP_IMPL as DEFAULT_RUNLOOP_IMPL,
 } from "./lib/host-config";
 
@@ -496,11 +497,32 @@ function target_path_prepend(triple: TripleT): string {
 }
 
 const llvm_suffix = process.env["LLVM_SUFFIX"] || DEFAULT_LLVM_SUFFIX;
+// spawn the llvm tools from the bindir this compiler was BUILT against
+// (baked into host-config from the buck llvm.prefix config) rather than
+// whatever PATH resolves: a different-major `opt` reading our bitcode
+// doesn't fail loudly — llvm@16 turned llvm-22 module-init stores into
+// `unreachable` traps with exit code 0.  LLVM_BINDIR in the environment
+// overrides the baked path; setting it to "" restores plain PATH lookup.
+const llvm_bindir = process.env["LLVM_BINDIR"] ?? DEFAULT_LLVM_BINDIR;
+const llvm_tool = (tool: string): string =>
+    llvm_bindir ? path.join(llvm_bindir, tool + llvm_suffix) : tool + llvm_suffix;
 const llvm_commands = {
-    opt: `opt${llvm_suffix}`,
-    llc: `llc${llvm_suffix}`,
-    "llvm-as": `llvm-as${llvm_suffix}`,
+    opt: llvm_tool("opt"),
+    llc: llvm_tool("llc"),
+    "llvm-as": llvm_tool("llvm-as"),
 } as const;
+
+// the self-hosted runtime's spawn is synchronous and returns the child's
+// exit status (a number); node's returns a ChildProcess.  This helper is
+// for the self-hosted branches: run the tool, fail the build loudly on a
+// non-zero exit instead of continuing to link stale objects.
+function spawnSyncChecked(command: string, cmd_args: string[]): void {
+    const rv = spawn(command, cmd_args) as unknown as number;
+    if (rv !== 0) {
+        console.warn(`${command} failed (exit status ${rv})`);
+        process.exit(-1);
+    }
+}
 
 function compileFile(
     filename: string,
@@ -586,8 +608,8 @@ function compileFile(
 
     if (!isNode()) {
         // in ejs spawn is synchronous.
-        spawn(llvm_commands["opt"], opt_args);
-        spawn(llvm_commands["llc"], llc_args);
+        spawnSyncChecked(llvm_commands["opt"], opt_args);
+        spawnSyncChecked(llvm_commands["llc"], llc_args);
         o_filenames.push(o_filename);
         compileCallback();
     } else {
@@ -598,7 +620,11 @@ function compileFile(
             console.warn(`error executing ${llvm_commands["opt"]}: ${err}`);
             process.exit(-1);
         });
-        opt.on("exit", (/* XXX code*/) => {
+        opt.on("exit", (code) => {
+            if (code !== 0) {
+                console.warn(`${llvm_commands["opt"]} failed (exit status ${code})`);
+                process.exit(-1);
+            }
             debug.log(1, `executing '${llvm_commands["llc"]} ${llc_args.join(" ")}'`);
             let llc = spawn(llvm_commands["llc"], llc_args);
             llc.stderr.on("data", (data) => console.warn(`${data}`));
@@ -606,7 +632,11 @@ function compileFile(
                 console.warn(`error executing ${llvm_commands["llc"]}: ${err}`);
                 process.exit(-1);
             });
-            llc.on("exit", (/* XXX code*/) => {
+            llc.on("exit", (code) => {
+                if (code !== 0) {
+                    console.warn(`${llvm_commands["llc"]} failed (exit status ${code})`);
+                    process.exit(-1);
+                }
                 o_filenames.push(o_filename);
                 compileCallback();
             });
@@ -726,13 +756,21 @@ function do_final_link(main_file: string, modules: Map<string, ModuleInfo>): voi
     debug.log(1, `executing '${target_linker} ${clang_args.join(" ")}'`);
 
     if (typeof __ejs != "undefined") {
-        spawn(target_linker, clang_args);
+        spawnSyncChecked(target_linker, clang_args);
         // we ignore leave_tmp_files here
         if (!options.quiet) console.warn(`${bold()}done.${reset()}`);
     } else {
         let clang = spawn(target_linker, clang_args);
         clang.stderr.on("data", (data) => console.warn(`${data}`));
-        clang.on("exit", (/* XXX code*/) => {
+        clang.on("error", (err) => {
+            console.warn(`error executing ${target_linker}: ${err}`);
+            process.exit(-1);
+        });
+        clang.on("exit", (code) => {
+            if (code !== 0) {
+                console.warn(`${target_linker} failed (exit status ${code})`);
+                process.exit(-1);
+            }
             if (!options.leave_temp_files) {
                 cleanup(() => {
                     if (!options.quiet) console.warn(`${bold()}done.${reset()}`);
