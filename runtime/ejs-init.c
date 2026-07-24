@@ -44,6 +44,7 @@
 #endif
 #include "ejs-proxy.h"
 #include "ejs-reflect.h"
+#include "ejs-shapes.h"
 
 // lives in ejs-atoms-gen.c
 extern void _ejs_init_static_strings();
@@ -330,6 +331,9 @@ _ejs_root_builtin_globals(void)
 void
 _ejs_init(int argc, char** argv)
 {
+    // shape tracking must be configured before the first object is created
+    _ejs_shapes_init();
+
     // process class inheritance
     _ejs_init_classes();
 

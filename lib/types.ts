@@ -19,8 +19,10 @@ export const EjsValueLayout = llvm.StructType.create("EjsValueType", [Int64]);
 export const EjsValue: llvm.Type = EjsValueLayout;
 
 export const EjsClosureEnv = llvm.StructType.create("struct.EJSClosureEnv", [
-    Int32,
-    Int32,
+    Int32, // GCObjectHeader gc_header (low half)
+    Int32, // GCObjectHeader shape/gc bits (high half)
+    Int32, // uint32_t length
+    Int32, // padding (slots are 8-aligned)
     llvm.ArrayType.get(EjsValueLayout, 1),
 ]);
 export const EjsPropIterator = EjsValue;
@@ -47,7 +49,16 @@ export const getEjsClosureFunc = (abi: FunctionTypeMaker): llvm.Type =>
         ])
         .pointerTo();
 
-export const EjsPrimString = llvm.StructType.create("EjsPrimString", [Int32, Int32, Int64, Int64]); // XXX not the real structure but it should be good
+// {u64 gc_header, u32 length, i32 hash, 8-byte data union} — matches the
+// runtime's 24-byte _EJSPrimString; only the size matters here (globals of
+// this type are zero-initialized and filled by _ejs_string_init_literal)
+export const EjsPrimString = llvm.StructType.create("EjsPrimString", [
+    Int32,
+    Int32,
+    Int32,
+    Int32,
+    Int64,
+]);
 
 export const EjsSpecops = llvm.StructType.create("struct.EJSSpecOps", []); // XXX
 
@@ -85,9 +96,13 @@ export function initTypes(is32bit: boolean): void {
     // to delay initialization of EJSObject (and therefore its uses)
     // until after we've determined pointer size.
 
+    // the 64-bit GCObjectHeader is represented as two i32s (little-endian
+    // halves) so the P4.3 shape-guard emitter can load the shape/gc half
+    // (field 1) without masking a 64-bit load; byte layout is identical
     if (is32bit) {
         EjsObject = llvm.StructType.create("struct.EJSObject", [
-            Int32, // GCObjectHeader gc_header;
+            Int32, // GCObjectHeader gc_header (low half: scan type, user flags)
+            Int32, // GCObjectHeader shape index / gc bits (high half)
             EjsSpecops.pointerTo(), // EJSSpecOps*    ops;
             EjsValue, // ejsval         proto; // the __proto__ property
             EjsPropertyMap.pointerTo(), // EJSPropertyMap map;
@@ -95,7 +110,8 @@ export function initTypes(is32bit: boolean): void {
         ]);
     } else {
         EjsObject = llvm.StructType.create("struct.EJSObject", [
-            Int32, // GCObjectHeader gc_header;
+            Int32, // GCObjectHeader gc_header (low half: scan type, user flags)
+            Int32, // GCObjectHeader shape index / gc bits (high half)
             EjsSpecops.pointerTo(), // EJSSpecOps*    ops;
             EjsValue, // ejsval         proto; // the __proto__ property
             EjsPropertyMap.pointerTo(), // EJSPropertyMap map;

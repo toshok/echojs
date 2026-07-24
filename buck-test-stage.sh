@@ -12,6 +12,8 @@ STAGE_NUM="$4"  # N
 TEST_FILES="$5" # //test:files
 LLVM_BIN="$6"   # directory holding llc/opt
 EXTRA_FLAGS="${7:-}"  # extra compiler flags, e.g. --ir
+TEST_ENV="${8:-}"     # extra env for the tester run, e.g. EJS_SHAPES=off
+                      # (the runtime A/B lanes: shapes-plan P4.1)
 
 # node_modules (glob/colors/temp for the tester) come from the repo, same
 # as the babel step in //lib:generated.
@@ -53,6 +55,9 @@ export NO_COLOR=1
 unset FORCE_COLOR
 if [ -n "$EXTRA_FLAGS" ]; then
     export EJS_EXTRA_FLAGS="$EXTRA_FLAGS"
+fi
+if [ -n "$TEST_ENV" ]; then
+    export $TEST_ENV
 fi
 if [ "$(uname -s)" = "Darwin" ]; then
     export SDKROOT="${SDKROOT:-$(/usr/bin/xcrun --show-sdk-path)}"

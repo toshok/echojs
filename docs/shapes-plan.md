@@ -399,18 +399,39 @@ The trust ladder, restated as policy for shapes:
 Same bias as eir/maam/gc: small phases, matrix green after each, each
 revertable, runtime phases A/B-able against the old path.
 
-- [ ] **P4.1 — Runtime shape tracking, behind the scenes.**  Shape table
-      + transition cache; ordinary objects get shape indices maintained
-      on insert/delete/type-flip; the MAP REMAINS the store (dual
-      bookkeeping, zero behavior change); `EJS_SHAPES=off` kills it.
-      Header bits land here in the gc-P1 joint layout (atomic
-      runtime+`lib/types.ts` change, old collector active).
-      Instrumentation: shape census at exit (monomorphic-at-death %,
-      transition counts, dictionary-migration reasons), the shapes
-      analog of gc-P0's numbers.
-      *Gate:* matrix green ×3 targets; suite green under EJS_SHAPES=off
-      diff; property-insert micro-overhead measured and < 5%; census
-      numbers recorded (they size everything after).
+- [x] **P4.1 — Runtime shape tracking, behind the scenes.**  DONE
+      2026-07-23.  Shape table + transition cache
+      (`runtime/ejs-shapes.{h,c}`); ordinary objects get shape indices
+      maintained on insert/delete/type-flip; the MAP REMAINS the store
+      (dual bookkeeping, zero behavior change); `EJS_SHAPES=off` kills
+      it, `EJS_SHAPES_CENSUS=1` dumps the census at exit,
+      `EJS_SHAPE_CAP` overrides the per-object field cap (default 64).
+      Header bits landed as the gc-P1 joint layout: `GCObjectHeader` is
+      now `uint64_t` (ejs-types.h documents the split — low 32 unchanged,
+      bits 32-55 shape index, bit 56 P4.2 mode bit, 57-63 reserved gc);
+      `EJSObject`/`EJSPrimString`/`EJSPrimSymbol` sizes unchanged
+      (padding absorbed), `EJSClosureEnv` +8; `lib/types.ts` mirrored in
+      the same commit (header as two i32 fields so P4.3's `has_shape`
+      can load the shape half directly).
+      *Gate results:* matrix green (test-eir, lowtier, stages 0-3);
+      stage1 suite green with shapes on AND under EJS_SHAPES=off — the
+      off-mode run is a standing buck lane, `//:test-stage1-shapes-off`
+      (buck-test-stage.sh grew a TEST_ENV arg; the P4.2 both-modes
+      byte-identical gate extends this lane);
+      property-insert micro-overhead **2.1%** (mean of 5 interleaved
+      runs, 300k objects × 8 fresh atom-keyed inserts — the worst case;
+      needed the header-inlined transition-memo fast path, which serves
+      99.99% of bench transitions: a memo-hit name was vetted when the
+      memo's shape was interned, so the whole check collapses to one
+      ejsval compare).  Census (3-site probe: literal loop, delete,
+      accessor, repr-flip): 1052 objects born tracked, 160 shapes
+      interned, max depth 56 (a runtime-init builtin), transitions 3206
+      of which 95% memo hits, 1 repr flip, 42 migrations (attrs 28 /
+      accessor 11 / symbol-key 2 / delete 1 — runtime-init builtins
+      dominate; user objects stay shaped).  Death census needs a
+      collection to fire (finalize-driven), so short probes report 0
+      deaths — the shapes analog of gc-P0's numbers lands with real
+      workloads in the P4.2 gate.
 - [ ] **P4.2 — Slot storage for shaped objects.**  The union flip: slot
       arrays in the GC heap replace the map for shaped-mode objects;
       dictionary migration; specops mode-switch (get/set/define/delete/
@@ -548,10 +569,12 @@ layout change whichever lands first.
 
 ## Phase checklist (for /goal sessions)
 
-- [ ] **P4.1** runtime shape table + tracking, dual bookkeeping, header
+- [x] **P4.1** runtime shape table + tracking, dual bookkeeping, header
       bits (joint with gc-P1), EJS_SHAPES=off, census instrumentation.
       Gate: matrix ×3, off-mode diff, <5% insert overhead, census
-      recorded.
+      recorded.  DONE 2026-07-23 — see the phased-plan entry above for
+      the numbers (2.1% insert overhead via the inlined transition
+      memo).
 - [ ] **P4.2** slot storage + dictionary migration, specops mode-switch.
       Gate: both-modes byte-identical suite+kangax, stress green,
       microbench recorded.

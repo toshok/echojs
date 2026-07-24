@@ -29,6 +29,7 @@
 #include "ejs-symbol.h"
 #include "ejs-error.h"
 #include "ejs-xhr.h"
+#include "ejs-shapes.h"
 
 // ES6 7.3.1
 // Get (O, P)
@@ -758,6 +759,10 @@ _ejs_init_object (EJSObject* obj, ejsval proto, EJSSpecOps *ops)
     _ejs_propertymap_init (obj->map);
     //printf ("obj->map = %p\n", obj->map);
     EJS_OBJECT_SET_EXTENSIBLE(obj);
+    // shapes P4.1: ordinary objects are born with the root shape and get
+    // dual-bookkept shape indices; everything else stays shape 0
+    if (obj->ops == &_ejs_Object_specops)
+        _ejs_shape_object_born (obj);
 #if notyet
     ((GCObjectPtr)obj)->gc_data = 0x01; // HAS_FINALIZE
 #endif
@@ -2208,6 +2213,8 @@ _ejs_object_specop_delete (ejsval O, ejsval P, EJSBool Throw)
     if (_ejs_property_desc_is_configurable(desc)) {
         /*    a. Remove the own property with name P from O. */
         _ejs_propertymap_remove (obj->map, P);
+        // shapes P4.1: delete of a tracked field drops to dictionary
+        _ejs_shape_object_migrate (obj, EJS_SHAPE_MIGRATE_DELETE);
         /*    b. Return true. */
         return EJS_TRUE;
     }
@@ -2276,6 +2283,19 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
                 _ejs_property_desc_set_enumerable (dest, _ejs_property_desc_is_enumerable (Desc));
         }
         _ejs_propertymap_insert (obj->map, P, dest);
+
+        // shapes P4.1: a plain writable/enumerable/configurable data
+        // property extends the shape; anything else drops to dictionary
+        if (EJS_OBJECT_SHAPE(obj) != EJS_SHAPE_DICT) {
+            if (_ejs_property_desc_has_getter(dest) || _ejs_property_desc_has_setter(dest))
+                _ejs_shape_object_migrate (obj, EJS_SHAPE_MIGRATE_ACCESSOR);
+            else if (!_ejs_property_desc_is_writable(dest) ||
+                     !_ejs_property_desc_is_enumerable(dest) ||
+                     !_ejs_property_desc_is_configurable(dest))
+                _ejs_shape_object_migrate (obj, EJS_SHAPE_MIGRATE_ATTRS);
+            else
+                _ejs_shape_object_add_fast (obj, P, _ejs_property_desc_get_value(dest));
+        }
 
         /*    c. Return true. */
         return EJS_TRUE;
@@ -2392,6 +2412,20 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
     if (_ejs_property_desc_has_writable (Desc))
         _ejs_property_desc_set_writable (dest, _ejs_property_desc_is_writable (Desc));
 
+    // shapes P4.1: accessor conversion and non-default attributes drop to
+    // dictionary (freeze/seal land here via SetIntegrityLevel); a plain
+    // value update gets the repr-flip check
+    if (EJS_OBJECT_SHAPE(obj) != EJS_SHAPE_DICT) {
+        if (_ejs_property_desc_has_getter(Desc) || _ejs_property_desc_has_setter(Desc))
+            _ejs_shape_object_migrate (obj, EJS_SHAPE_MIGRATE_ACCESSOR);
+        else if ((_ejs_property_desc_has_writable(Desc) && !_ejs_property_desc_is_writable(Desc)) ||
+                 (_ejs_property_desc_has_enumerable(Desc) && !_ejs_property_desc_is_enumerable(Desc)) ||
+                 (_ejs_property_desc_has_configurable(Desc) && !_ejs_property_desc_is_configurable(Desc)))
+            _ejs_shape_object_migrate (obj, EJS_SHAPE_MIGRATE_ATTRS);
+        else if (_ejs_property_desc_has_value(Desc))
+            _ejs_shape_object_set (obj, P, _ejs_property_desc_get_value(Desc));
+    }
+
     /* 13. Return true. */
     return EJS_TRUE;
 }
@@ -2402,9 +2436,10 @@ _ejs_object_specop_allocate ()
     return _ejs_gc_new(EJSObject);
 }
 
-void 
+void
 _ejs_object_specop_finalize(EJSObject* obj)
 {
+    _ejs_shape_object_died (obj);
     //printf ("_ejs_propertymap_free(obj->map = %p)\n", obj->map);
     _ejs_propertymap_free (obj->map);
     obj->map = NULL;

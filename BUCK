@@ -129,3 +129,14 @@ genrule(
     )
     for stage in ["1", "2", "3"]
 ]
+
+# the runtime shapes A/B lane (shapes-plan P4.1): the full stage1 suite
+# with shape tracking disabled must be just as green as the default run
+genrule(
+    name = "test-stage1-shapes-off",
+    srcs = ["buck-test-stage.sh"],
+    out = "test-stage1-shapes-off.log",
+    cmd = 'bash $SRCDIR/buck-test-stage.sh "$(location :srcdir-tree)" ' +
+          '"$(location //lib:generated)" "$(location :ejs.exe.stage1)" ' +
+          '1 "$(location //test:files)" ' + llvm_bindir() + ' "" "EJS_SHAPES=off"',
+)

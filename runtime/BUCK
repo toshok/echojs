@@ -75,6 +75,7 @@ shared_sources = [
     "ejs-regexp.c",
     "ejs-require.c",
     "ejs-set.c",
+    "ejs-shapes.c",
     "ejs-stream.c",
     "ejs-string.c",
     "ejs-symbol.c",
