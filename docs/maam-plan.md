@@ -552,5 +552,20 @@ Smaller forward items surfaced by the Chunk A integration review:
       loop (before/after regenerated in
       ~/src/echojs/hypot2-types-before-after.txt).  Details in
       docs/maam-p0-results.md "Phase 3.6 gates".
-- [ ] **P4** (design doc only) shape-guarded property access: guard op,
+- [x] **P4** (design doc only) shape-guarded property access: guard op,
       runtime layout, promotion criteria from Phase 3 experience.
+      Delivered as **docs/shapes-plan.md** (2026-07-23): type-aware
+      runtime shape tree mirroring maam's classes 1:1 (representation in
+      the class identity — a passed guard proves offset AND repr, feeding
+      the P3 raw-f64 machinery), slot-array object layout with
+      dictionary-mode fallback for every exotic path, has_shape/
+      slot_load/slot_store/make_object_shaped EIR ops with the verifier's
+      new effect-kill soundness class, node-identity oracle queries
+      (layoutOfNode/constructorReportOfNode/receiverShapesOfNode) as the
+      maam-side prerequisite, promotion criteria distilled from the P3
+      trust ladder (guarded by default; exact facts only; unguarded only
+      behind P3.6-style structural fences with the differential
+      harness's shapes lane as hard precondition), joint header layout
+      with gc-plan P1, and the P4.1–P4.6 implementation checklist with
+      gates — that checklist lives in shapes-plan.md, which owns the
+      phase from here.

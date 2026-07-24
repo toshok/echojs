@@ -317,7 +317,10 @@ and the GC's object layout are **one design, written once**:
 
 This plan's P1 header change reserves the bits; the shapes design doc (maam
 P4) fills them in. The GC must not ship a header layout that shapes then has
-to break.
+to break.  [Update 2026-07-23: that design now exists — **docs/shapes-plan.md**
+— written against this section's layout; its Step A claims 24 bits + a mode
+bit of the widened header for the shape index, and its P4.1 lands jointly
+with this plan's P1 as the one atomic layout change, whichever starts first.]
 
 Per-kind moving notes: `EJSObject` copies as a struct (the property map, while
 it still exists, is malloc'd and stays put); envs copy header+slots with each
