@@ -35,8 +35,15 @@ typedef uint16_t jschar;
 //   bits  0-31  the pre-existing 32-bit header: EJSScanType in the low
 //               bits, user flags at EJS_GC_USER_FLAGS_SHIFT (unchanged)
 //   bits 32-55  shape index (0 = dictionary mode / untracked)
-//   bit  56     shaped-storage mode bit (reserved for shapes P4.2)
-//   bits 57-63  reserved for the GC (forwarding/age/mark/card, gc-P1)
+//   bit  56     shaped-storage mode bit (shapes P4.2)
+//   bit  57     YOUNG — allocated since the last collection (gc-P0
+//               profiling; a nursery age bit in waiting)
+//   bit  58     PINNED — conservatively referenced this cycle (gc-P0
+//               profiling, cleared each cycle)
+//   bit  59     FORWARDED — the word is a forwarding record, not a
+//               header: target address in bits 0-46 (gc-P1; see
+//               ejs-gc.h _ejs_gc_forward)
+//   bits 60-63  reserved for the GC (mark/card, gc-P2+)
 //
 // EJSObject absorbs the widening into what was padding (sizeof
 // unchanged); EJSPrimString/EJSPrimSymbol keep their sizes; EJSClosureEnv

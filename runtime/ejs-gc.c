@@ -731,6 +731,20 @@ _ejs_gc_init()
     if (gc_profile)
         atexit (profile_report_shutdown);
 
+    // gc-plan P1: the forwarding helpers are inert until the mover, so
+    // exercise them here on a scratch buffer when asked — a build whose
+    // header layout breaks the forwarding contract fails loudly instead
+    // of waiting for gc-P2 to discover it.
+    if (getenv("EJS_GC_SELFTEST")) {
+        uint64_t scratch[2] = { EJS_SCAN_TYPE_OBJECT, 0 };
+        uint64_t target[2] = { 0, 0 };
+        EJS_ASSERT(!_ejs_gc_is_forwarded(&scratch));
+        _ejs_gc_forward(&scratch, &target);
+        EJS_ASSERT(_ejs_gc_is_forwarded(&scratch));
+        EJS_ASSERT(_ejs_gc_forwarding_addr(&scratch) == (GCObjectPtr)&target);
+        _ejs_log ("EJS_GC_SELFTEST: forwarding helpers ok\n");
+    }
+
     // allocate an initial arenas
     for (int i = 0; i < 10; i ++)
         arena_new();

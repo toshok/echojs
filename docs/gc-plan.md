@@ -604,9 +604,21 @@ bounds as needed.
       objects/cycle (KBs — conservative pinning is a non-issue, so P2
       proceeds WITHOUT P3); runtime `-O2` landed: self-compile 127s→42s
       (3.06×), types-bench2 2.00s→0.68s.
-- [ ] **P1** 64-bit header (+ reserved shape/trace bits) + `lib/types.ts`
+- [x] **P1** 64-bit header (+ reserved shape/trace bits) + `lib/types.ts`
       lockstep; forwarding helpers.
       *Gate:* matrix green, all three bootstrap targets.
+      DONE 2026-07-24.  The header half landed 2026-07-23 as the joint
+      shapes-P4.1 atomic change (u64 header, shape bits 32-55, mode bit
+      56, lib/types.ts as two i32 halves); this phase added the
+      remainder: bit 59 = FORWARDED + first-word-overwrite forwarding
+      record (target address in bits 0-46 — the sub-2^47 NaN-box rule
+      makes the discriminator unambiguous), read/write helpers in
+      ejs-gc.h (`_ejs_gc_is_forwarded` / `_ejs_gc_forwarding_addr` /
+      `_ejs_gc_forward`), inert until gc-P2 and exercised by
+      EJS_GC_SELFTEST=1 at init; ejs-types.h now documents the complete
+      bit inventory (57 YOUNG / 58 PINNED from P0 profiling, 60-63
+      still free for mark/card).  Local matrix ×7 green; linux targets
+      ride the standing CI bootstrap matrix on push.
 - [ ] **P2** nursery + inline `make_env` allocation + card/SATB barrier (with
       initializing-store elision) + evacuating minor GC w/ cell pinning; old
       collector behind a flag, differential + stress lanes; heap-context
