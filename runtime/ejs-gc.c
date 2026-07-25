@@ -274,7 +274,7 @@ typedef struct _Arena {
     void*     pages[ARENA_PAGES];
     PageInfo* page_infos[ARENA_PAGES];
     int       num_pages;
-    // gc-plan P2: the nursery is a dedicated arena so "is young" is a
+    // the nursery is a dedicated arena so "is young" is a
     // range check; old-gen page allocation skips nursery arenas
     EJSBool   is_nursery;
 } Arena;
@@ -367,7 +367,7 @@ struct _PageInfo {
     int32_t     cell_size;
     int16_t     num_cells;
     int16_t     num_free_cells;
-    // gc-plan P2: 0 = old gen; 1 = active young page (bump-allocated,
+    // 0 = old gen; 1 = active young page (bump-allocated,
     // allocated-ness = below bump); 2 = young survivor page (holds
     // pinned young objects, bitmap-authoritative, no further bumping)
     uint8_t     young;
@@ -387,14 +387,14 @@ struct _LargeObjectInfo {
 static EJSList heap_pages[HEAP_PAGELISTS_COUNT];
 static LargeObjectInfo *los_list;
 
-// gc-plan P0 instrumentation state (definitions live with the profile
+// GC profiling instrumentation state (definitions live with the profile
 // block further down, before the mark helpers use them)
 static EJSBool gc_profile;
 static struct timeval prof_start_tv;
 static void profile_note_pin(PageInfo* page, uint32_t cell_idx, GCObjectPtr raw);
 static void profile_report_shutdown(void);
 
-// gc-plan P2 nursery state + hooks (definitions in the nursery block
+// nursery state + hooks (definitions in the nursery block
 // below; declared here because the shared mark helpers dispatch on
 // minor-collection mode)
 static EJSBool nursery_enabled;
@@ -609,7 +609,7 @@ find_page_and_cell_from_arena(GCObjectPtr ptr, uint32_t *cell_idx, Arena *arena)
         return page;
     }
 
-    // check if it's in the LOS.  Interior pointers match too (gc-plan
+    // check if it's in the LOS.  Interior pointers match too (a
     // P0): a conservative reference may be a derived pointer whose base
     // value the optimizer discarded — with an exact-base match a large
     // object referenced ONLY through an interior pointer (e.g. a flat
@@ -682,7 +682,7 @@ alloc_new_page(size_t cell_size)
     SPEW(2, _ejs_log ("allocating new page for cell size %zd\n", cell_size));
     PageInfo *rv = NULL;
     for (int i = 0; i < num_arenas; i ++) {
-        // gc-P2: nursery arenas serve young allocation only
+        // nursery arenas serve young allocation only
         if (heap_arenas[i]->is_nursery)
             continue;
         rv = alloc_page_from_arena(heap_arenas[i], cell_size);
@@ -789,7 +789,7 @@ _ejs_gc_init()
     if (n_allocs)
         collect_every_alloc = atoi(n_allocs);
 
-    // gc-plan P0: allocation/survival/pin instrumentation.  The summary
+    // allocation/survival/pin instrumentation.  The summary
     // goes through atexit because _ejs_gc_shutdown is compiled out by
     // default (GC_ON_SHUTDOWN in main.c).
     gc_profile = getenv("EJS_GC_PROFILE") != NULL;
@@ -797,10 +797,10 @@ _ejs_gc_init()
     if (gc_profile)
         atexit (profile_report_shutdown);
 
-    // gc-plan P1: the forwarding helpers are inert until the mover, so
+    // the forwarding helpers are inert until the mover, so
     // exercise them here on a scratch buffer when asked — a build whose
     // header layout breaks the forwarding contract fails loudly instead
-    // of waiting for gc-P2 to discover it.
+    // of waiting for the collector to discover it.
     if (getenv("EJS_GC_SELFTEST")) {
         uint64_t scratch[2] = { EJS_SCAN_TYPE_OBJECT, 0 };
         uint64_t target[2] = { 0, 0 };
@@ -819,7 +819,7 @@ _ejs_gc_init()
 
     root_set = NULL;
 
-    // gc-plan P2: the generational nursery (EJS_GC_NURSERY=off selects
+    // the generational nursery (EJS_GC_NURSERY=off selects
     // the old single-generation collector for A/B and differential runs)
     nursery_init();
 }
@@ -834,7 +834,7 @@ _ejs_gc_allocate_oom_exceptions()
     page_allocation_failed_exc = _ejs_nativeerror_new_utf8 (EJS_ERROR, "page allocation failed");
 }
 
-// gc-plan P2: the mark-path scan callback.  Slot-based per the new
+// the mark-path scan callback.  Slot-based per the new
 // EJSValueFunc contract — this non-moving path only reads through the
 // slot; the mover's evacuation callback is what rewrites it.
 static void
@@ -903,7 +903,7 @@ void
 _ejs_gc_mark_thread_stack_bottom(GCObjectPtr* btm)
 {
     stack_bottom = btm;
-    // gc-P2: the write barrier's transient-slot upper bound starts at
+    // the write barrier's transient-slot upper bound starts at
     // the main stack's bottom (generator push/pop moves it)
     _ejs_heap.current_stack_end = (void*)btm;
 }
@@ -938,11 +938,11 @@ mark_pointers_in_range(GCObjectPtr* low, GCObjectPtr* high)
         BitmapCell cell = page->page_bitmap[cell_idx];
         if (!cell_is_allocated(page, cell_idx, cell)) continue;
 
-        // gc-P2: during a minor collection conservative hits PIN young
+        // during a minor collection conservative hits PIN young
         // cells in place; nothing else is this collection's business
         if (in_minor_gc) { minor_conservative_hit(page, cell_idx); continue; }
 
-        // gc-P0: a conservative hit pins under the mover — recorded even
+        // a conservative hit pins under the mover — recorded even
         // when the target is already marked (the white check below is a
         // marking optimization, not a pin filter)
         if (gc_profile) profile_note_pin(page, cell_idx, gcptr);
@@ -957,9 +957,48 @@ mark_pointers_in_range(GCObjectPtr* low, GCObjectPtr* high)
     }
 }
 
+// gc-frame slots are stack memory, so the conservative
+// stack scan would see every precisely-rooted value a second time and
+// pin it through its own slot — precision would never move anything.
+// During a minor, the scan skips the frame records of the stack being
+// scanned (their slots are walked precisely and rewritten).  Full GC
+// never skips: it relies on the conservative scan seeing the slots.
+typedef struct { char* lo; char* hi; } FrameSkipRange;
+#define MAX_FRAME_SKIP 1024
+static FrameSkipRange frame_skip[MAX_FRAME_SKIP];
+static int frame_skip_count;
+
+static void
+set_frame_skip_chain(void* chain_head)
+{
+    frame_skip_count = 0;
+    for (EJSGCFrame* f = (EJSGCFrame*)chain_head; f; f = f->prev) {
+        if (frame_skip_count == MAX_FRAME_SKIP) break; // partial skip = extra pins only
+        char* lo = (char*)f;
+        char* hi = lo + 16 + 8 * f->count;
+        // insertion sort by lo; chains are short and near-sorted
+        int i = frame_skip_count++;
+        while (i > 0 && frame_skip[i - 1].lo > lo) {
+            frame_skip[i] = frame_skip[i - 1];
+            i--;
+        }
+        frame_skip[i].lo = lo;
+        frame_skip[i].hi = hi;
+    }
+}
+
+static void
+clear_frame_skip(void)
+{
+    frame_skip_count = 0;
+}
+
 static void
 mark_ejsvals_in_range(void* low, void* high)
 {
+    // per-call skip cursor: ranges below `low` are behind us
+    int fr = 0;
+    while (fr < frame_skip_count && frame_skip[fr].hi <= (char*)low) fr++;
     void* p = low;
 #if IOS
     while (((uintptr_t)p) & 0x7) {
@@ -967,6 +1006,9 @@ mark_ejsvals_in_range(void* low, void* high)
     }
 #endif
     for (; p < high - sizeof(ejsval); p += sizeof(ejsval)) {
+        // inside a gc-frame record?  its slots are precise roots
+        while (fr < frame_skip_count && frame_skip[fr].hi <= (char*)p) fr++;
+        if (fr < frame_skip_count && (char*)p >= frame_skip[fr].lo) continue;
         ejsval candidate_val = *((ejsval*)p);
         GCObjectPtr gcptr;
         if (EJSVAL_IS_GCTHING_IMPL(candidate_val)) {
@@ -991,10 +1033,10 @@ mark_ejsvals_in_range(void* low, void* high)
             BitmapCell cell = page->page_bitmap[cell_idx];
             if (!cell_is_allocated(page, cell_idx, cell)) continue;
 
-            // gc-P2: minor collections only pin young cells here
+            // minor collections only pin young cells here
             if (in_minor_gc) { minor_conservative_hit(page, cell_idx); continue; }
 
-            // gc-P0: a conservative hit pins under the mover — recorded
+            // a conservative hit pins under the mover — recorded
             // even when the target is already marked
             if (gc_profile) profile_note_pin(page, cell_idx, gcptr);
 
@@ -1019,7 +1061,7 @@ static int num_closureenv_allocs = 0;
 static int num_primstr_allocs = 0;
 static int num_primsym_allocs = 0;
 
-// ---- gc-plan P0: measurement instrumentation (EJS_GC_PROFILE=1) -----------
+// ---- measurement instrumentation (EJS_GC_PROFILE=1) -----------
 //
 // Two header bits from the gc-reserved range (57-63; see ejs-types.h — the
 // shapes machinery masks its 24-bit index, so these are invisible to it):
@@ -1027,13 +1069,13 @@ static int num_primsym_allocs = 0;
 //   YOUNG:  set at allocation, cleared on the first collection the object
 //           survives.  "young" therefore means "allocated since the last
 //           collection" — exactly the population a generational nursery
-//           (gc-P2) would manage, so per-cycle young-survival is THE
+//           would manage, so per-cycle young-survival is THE
 //           number that sizes the nursery payoff.
 //   PINNED: set (once per cycle) when a CONSERVATIVE reference — C stack,
 //           spilled registers, generator stacks/contexts — hits the
 //           object.  Under the mover these are the objects that cannot
 //           be evacuated this cycle; their count/bytes/sources size the
-//           payoff of precise JS frames (gc-P3) and decide its ordering.
+//           payoff of precise JS frames and decide its ordering.
 //
 // The YOUNG bit is set unconditionally (an OR folded into the header
 // store the allocator already does); everything else is gated on
@@ -1232,14 +1274,14 @@ profile_report_shutdown(void)
                   prof_alloc_bytes[0] / (1024.0 * 1024.0));
 }
 
-// ======================= gc-plan P2: the nursery ============================
+// ======================= the nursery ============================
 //
 // One dedicated arena; size-class pages inside it are bump-allocated
 // (the seam's per-class bump/limit cursors ARE the allocation state —
-// emitted code will bump them inline in P2c).  Minor GC is mostly-
+// emitted code bumps them inline).  Minor GC is mostly-
 // copying: conservative hits pin young cells in place (established
 // FIRST), then every precise slot — root list, module exports,
-// remembered-set entries, and the transitive scan through the P2a
+// remembered-set entries, and the transitive scan through the
 // slot-based Scan protocol — evacuates its young referent into the old
 // gen, installs a P1 forwarding record, and is rewritten.  Young pages
 // end the cycle reset (no survivors) or as survivor pages (pins only —
@@ -1379,7 +1421,7 @@ rewrite_slot_payload(ejsval* slot, GCObjectPtr to)
 // pointed at poison after promotion).  The two classes in the runtime:
 // flat strings without an out-of-line buffer (data.flat = self+hdr) and
 // small EJSArguments (args = self+sizeof).  Anything new that embeds a
-// self-pointer must be added here — the gc-P5 trace-bitmap redesign
+// self-pointer must be added here — the planned trace-bitmap redesign
 // subsumes this with offset-based addressing.
 static void
 minor_fixup_evacuated(GCObjectPtr from, GCObjectPtr to, size_t cell_size)
@@ -1445,7 +1487,39 @@ minor_conservative_hit(PageInfo* page, uint32_t cell_idx)
     minor_wl_push(base);
 }
 
-// the minor collection's slot callback (the P2a payoff: every precise
+#define MAX_GENERATORS 256
+static int generator_count = 0;
+static EJSGenerator* generators[MAX_GENERATORS];
+
+// walk every gc-frame chain — the running stack's (the
+// seam head) plus every suspended generator's saved chain and every
+// ACTIVE generator's parked caller segment.  Chains are per-stack and
+// disjoint; records live in stack frames that stay mapped for exactly
+// as long as they are linked (returns unlink, catches re-link their
+// own frame past unwound callees, the generator hooks swap heads at
+// every stack switch).
+// how many young referents the current minor's precise frame walk
+// EVACUATED (as opposed to found pinned/forwarded/old) — the direct
+// measure that precision is actually moving things (EJS_GC_PROFILE)
+static uint64_t gc_frame_moves;
+
+static void
+walk_gc_frames(void (*slot_fn)(ejsval*))
+{
+    for (EJSGCFrame* f = (EJSGCFrame*)_ejs_heap.gc_frame_head; f; f = f->prev)
+        for (uintptr_t i = 0; i < f->count; i++)
+            slot_fn(&f->slots[i]);
+    for (EJSGenerator* g = _ejs_generator_registry; g; g = g->reg_next)
+        for (EJSGCFrame* f = (EJSGCFrame*)g->gc_frame_head; f; f = f->prev)
+            for (uintptr_t i = 0; i < f->count; i++)
+                slot_fn(&f->slots[i]);
+    for (int gi = 0; gi < generator_count; gi++)
+        for (EJSGCFrame* f = (EJSGCFrame*)generators[gi]->caller_gc_frame_head; f; f = f->prev)
+            for (uintptr_t i = 0; i < f->count; i++)
+                slot_fn(&f->slots[i]);
+}
+
+// the minor collection's slot callback (the slot-protocol payoff: every precise
 // scan — roots, modules, remset, transitive object scan — goes through
 // here).  Young referents evacuate (or stay pinned); the slot is
 // rewritten to the object's final address.
@@ -1890,13 +1964,34 @@ _ejs_gc_minor_collect(const char* reason)
     struct timeval ph0, ph1, ph2, ph3, ph4, ph5;
     int gen_count = 0;
     gettimeofday (&ph0, NULL);
+    // each conservative range scan skips the gc-frame records of
+    // the stack it is scanning — those slots are precise roots, and
+    // seeing them conservatively would pin every frame-held value
+    // through its own slot (precision would never move anything)
+    set_frame_skip_chain(_ejs_heap.gc_frame_head);
     mark_thread_stack();
     mark_generator_stacks();
     for (EJSGenerator* g = _ejs_generator_registry; g; g = g->reg_next) {
+        set_frame_skip_chain(g->gc_frame_head);
         _ejs_generator_scan_conservative(g);
         gen_count++;
     }
+    clear_frame_skip();
     gettimeofday (&ph1, NULL);
+
+    // 1.5 the emitted gc-frame chains — precise, relocatable
+    //     JS-frame roots.  Runs AFTER the conservative pins on purpose:
+    //     an object visible to both a gc-frame slot and a C frame (an
+    //     ejsval argument into the very runtime call that triggered this
+    //     minor, say) is pinned, and minor_process_slot leaves pinned
+    //     targets in place — the pin must win or the C frame's copy
+    //     dangles.  Everything frame-held and NOT C-visible evacuates
+    //     and gets its slot rewritten.
+    {
+        uint64_t promoted_before_frames = heap_priv.promoted_objs;
+        walk_gc_frames(minor_process_slot);
+        gc_frame_moves = heap_priv.promoted_objs - promoted_before_frames;
+    }
 
     // 2. precise roots: the root list and module exports evacuate
     for (RootSetEntry *entry = root_set; entry; entry = entry->next) {
@@ -2057,11 +2152,12 @@ _ejs_gc_minor_collect(const char* reason)
         paranoid_sweep_check();
     if (gc_profile) {
 #define PHUS(a,b) (((b).tv_sec - (a).tv_sec) * 1000000LL + ((b).tv_usec - (a).tv_usec))
-        _ejs_log ("EJS_GC_PROFILE: minor#%llu reason=%s pause=%.3fms promoted=%llu/%lluKB pins=%llu remset=%d gens=%d phases[pins=%lld roots=%lld dirty=%lld wl=%lld sweep=%lld]us%s\n",
+        _ejs_log ("EJS_GC_PROFILE: minor#%llu reason=%s pause=%.3fms promoted=%llu/%lluKB pins=%llu gcframe_moves=%llu remset=%d gens=%d phases[pins=%lld roots=%lld dirty=%lld wl=%lld sweep=%lld]us%s\n",
                   (unsigned long long)heap_priv.minors, reason, usec / 1000.0,
                   (unsigned long long)(heap_priv.promoted_objs - promoted_objs_before),
                   (unsigned long long)((heap_priv.promoted_bytes - promoted_bytes_before) / 1024),
                   (unsigned long long)(heap_priv.minor_pins - pins_before),
+                  (unsigned long long)gc_frame_moves,
                   remset_used, gen_count,
                   (long long)PHUS(ph0,ph1), (long long)PHUS(ph1,ph2), (long long)PHUS(ph2,ph3),
                   (long long)PHUS(ph3,ph4), (long long)PHUS(ph4,ph5),
@@ -2141,7 +2237,7 @@ young_normalize_for_full_gc(void)
 static void
 nursery_init(void)
 {
-    // gc-P2 gate decision (2026-07-25): nursery ON by default;
+    // nursery ON by default (gate decision 2026-07-25);
     // EJS_GC_NURSERY=off (or =0) selects the old collector for A/B.
     {
         char* e = getenv("EJS_GC_NURSERY");
@@ -2174,7 +2270,7 @@ nursery_init(void)
     _ejs_heap.remset_capacity = NURSERY_REMSET_CAPACITY;
     heap_priv.remset_other = malloc (NURSERY_REMSET_CAPACITY * sizeof(ejsval*));
 }
-// ===================== end gc-plan P2 nursery ==============================
+// ===================== end nursery =========================================
 
 static void
 sweep_heap()
@@ -2347,9 +2443,9 @@ mark_from_modules()
 #error "put code here to mark registers"
 #endif
 
-#define MAX_GENERATORS 256
-static int generator_count = 0;
-static EJSGenerator* generators[MAX_GENERATORS];
+// (MAX_GENERATORS / generators[] / generator_count moved above
+// walk_gc_frames, which walks the active chain's parked caller
+// segments)
 
 void
 _ejs_gc_push_generator(EJSGenerator* gen)
@@ -2359,17 +2455,28 @@ _ejs_gc_push_generator(EJSGenerator* gen)
         abort();
     }
     generators[generator_count++] = gen;
-    // gc-P2: keep the barrier's transient-slot bound on the CURRENT stack
+    // keep the barrier's transient-slot bound on the CURRENT stack
     _ejs_heap.current_stack_end = gen->stack + gen->stack_size;
+    // swap in this stack's gc-frame chain; the caller's segment
+    // parks on the generator until the matching pop
+    gen->caller_gc_frame_head = _ejs_heap.gc_frame_head;
+    _ejs_heap.gc_frame_head = gen->gc_frame_head;
+    gen->gc_frame_head = NULL; // the live chain is the seam head now
 }
 
 void
 _ejs_gc_pop_generator()
 {
     generator_count--;
+    EJSGenerator* gen = generators[generator_count];
     _ejs_heap.current_stack_end = generator_count > 0
         ? generators[generator_count - 1]->stack + generators[generator_count - 1]->stack_size
         : (void*)stack_bottom;
+    // park this stack's chain on the generator (walked while
+    // suspended), restore the caller's segment
+    gen->gc_frame_head = _ejs_heap.gc_frame_head;
+    _ejs_heap.gc_frame_head = gen->caller_gc_frame_head;
+    gen->caller_gc_frame_head = NULL;
 }
 
 static void
@@ -2387,7 +2494,7 @@ mark_thread_stack()
     // stack_bottom) is NOT a stack range — it spans from the malloc heap
     // to the main stack across unmapped memory.  Scan only up to the
     // running generator's stack end; mark_generator_stacks covers the
-    // suspended caller segments (gc-plan P0).
+    // suspended caller segments.
     void* high = (void*)stack_bottom;
     if (generator_count > 0) {
         EJSGenerator* running = generators[generator_count - 1];
@@ -2411,7 +2518,7 @@ mark_object_root(GCObjectPtr ptr)
     if (!cell_is_allocated(page, cell_idx, cell))
         return;
     if (in_minor_gc) {
-        // gc-P2 minor: a young root pins; an old root's slots may hold
+        // minor collections: a young root pins; an old root's slots may hold
         // young references, so queue it for the precise minor scan
         // (duplicates are harmless — evacuation is idempotent)
         if (page->young) minor_conservative_hit(page, cell_idx);
@@ -2450,8 +2557,13 @@ mark_generator_stacks()
 
         void* seg_high = (i == 0) ? (void*)stack_bottom
                                   : generators[i - 1]->stack + generators[i - 1]->stack_size;
-        if (gen->caller_stack_top)
+        if (gen->caller_stack_top) {
+            // this caller segment's frames are the chain parked
+            // at push time (minor only; a full GC leaves skips empty)
+            if (in_minor_gc) set_frame_skip_chain(gen->caller_gc_frame_head);
             mark_ejsvals_in_range(gen->caller_stack_top, seg_high);
+            if (in_minor_gc) clear_frame_skip();
+        }
     }
 }
 
@@ -2490,7 +2602,7 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
     large_objs = 0;
     total_objs = 0;
 
-    // gc-P2: full collections need young pages in bitmap-authoritative
+    // full collections need young pages in bitmap-authoritative
     // form (active bump pages have no valid FREE bits or counts)
     young_normalize_for_full_gc();
 
@@ -2517,7 +2629,7 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
         mark_generator_stacks();
         gettimeofday (&fg[2], NULL);
 
-        // gc-P2: dirty objects await their deferred minor scan and may
+        // dirty objects await their deferred minor scan and may
         // hold the only reference to young data — root them
         for (int i = 0; i < _ejs_heap.remset_count; i++)
             mark_object_root((GCObjectPtr)_ejs_heap.remset[i]);
@@ -2526,7 +2638,7 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
         process_worklist();
         gettimeofday (&fg[4], NULL);
 
-        // gc-P0: survival + pin census must walk the heap BEFORE the
+        // survival + pin census must walk the heap BEFORE the
         // sweep frees the white cells
         if (gc_profile)
             profile_pre_sweep();
@@ -2559,7 +2671,7 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
 
     sweep_heap();
 
-    // gc-P2: the remembered state may dangle into cells this sweep just
+    // the remembered state may dangle into cells this sweep just
     // freed — rebuild it from the live old gen
     if (!shutting_down)
         remset_rebuild_after_full_gc();
@@ -2650,7 +2762,7 @@ calc_heap_size()
 // heap footprint measured after the last collection's sweep.  The
 // collection trigger scales with this: a fixed allocation budget on a
 // growing live set makes total GC work quadratic in heap size (shapes
-// P4.2 moved per-object property storage into the GC heap, which pushed
+// shapes moved per-object property storage into the GC heap, which pushed
 // stage2's self-compile off that cliff — hours of back-to-back full
 // marks of a ~900MB heap).  Letting the heap grow ~50% between full
 // collections keeps total mark work linear; programs whose footprint
@@ -2834,7 +2946,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     if (gc_profile)
         profile_note_alloc(size, bucket, scan_type);
 
-    // gc-P2: nursery-eligible allocations bump-allocate in the young
+    // nursery-eligible allocations bump-allocate in the young
     // arena and do NOT feed alloc_size (the full-GC trigger tracks
     // OLD-gen growth: promotions and direct old allocations).  The
     // every-N stress knob triggers MINOR collections here — the full-GC
@@ -2977,7 +3089,7 @@ _ejs_gc_remove_root(ejsval* root)
     }
 }
 
-// gc-plan P2 (object-remembering): mark `owner` dirty and queue it for
+// object-remembering barrier: mark `owner` dirty and queue it for
 // the next minor's rescan.  The inline half (ejs-gc.h) already filtered
 // non-young values, young owners, and already-dirty owners.
 void

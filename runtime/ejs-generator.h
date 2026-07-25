@@ -39,7 +39,7 @@ typedef struct _EJSGenerator {
     void* stack;
     size_t stack_size;
 
-    // gc-plan P2: all live generators sit on a registry so a minor
+    // all live generators sit on a registry so a minor
     // collection can scan every suspended stack CONSERVATIVELY before
     // any evacuation — a generator discovered mid-trace would pin its
     // stack referents too late (they may already have moved)
@@ -50,8 +50,18 @@ typedef struct _EJSGenerator {
     // this generator (the address of a local in the resuming frame).  While
     // the generator runs, its caller's frames live ABOVE this address (the
     // stack grows down) — the GC scans [caller_stack_top, caller's stack
-    // end) to cover the suspended segment (gc-plan P0).
+    // end) to cover the suspended segment.
     void* caller_stack_top;
+
+    // each machine stack owns a disjoint gc-frame chain.
+    // The push hook parks the caller's chain head here and installs
+    // this generator's saved head (NULL on first entry); the pop hook
+    // does the reverse.  While suspended, gc_frame_head is the walk
+    // root for this stack's precise frames; while running it is NULL
+    // (the live chain is _ejs_heap.gc_frame_head) and the caller's
+    // segment is reachable via caller_gc_frame_head.
+    void* gc_frame_head;
+    void* caller_gc_frame_head;
 
     ucontext_t generator_context;
     ucontext_t caller_context;
@@ -84,7 +94,7 @@ extern void _ejs_iterator_init_proto ();
 extern void _ejs_gc_push_generator(EJSGenerator *gen);
 extern void _ejs_gc_pop_generator();
 
-/* gc-plan P2: the live-generator registry (ejs-generator.c) + the
+/* the live-generator registry (ejs-generator.c) + the
    conservative half of the generator scan, shared by the specop and the
    minor collection's pre-evacuation pass */
 extern EJSGenerator* _ejs_generator_registry;

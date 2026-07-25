@@ -41,9 +41,9 @@ extern GCObjectPtr _ejs_gc_alloc(size_t size, EJSScanType scan_type);
 #define _ejs_gc_new_closureenv(sz)                                             \
   (EJSClosureEnv *)_ejs_gc_alloc(sz, EJS_SCAN_TYPE_CLOSUREENV)
 
-// ---- gc-plan P1: forwarding plumbing ---------------------------------------
+// ---- forwarding plumbing ---------------------------------------
 //
-// Inert until the mover (gc-P2 evacuation / gc-P4 compaction) consumes it;
+// Inert until a mover (minor evacuation / major compaction) consumes it;
 // landed now so the header bit inventory is complete and the helpers are
 // exercised (EJS_GC_SELFTEST=1) with the old collector still active.
 //
@@ -84,12 +84,12 @@ _ejs_gc_forward(GCObjectPtr from, GCObjectPtr to)
         | EJS_GC_HEADER_FORWARDED;
 }
 
-// ---- gc-plan P2: the heap context + generational write barrier -------------
+// ---- the heap context + generational write barrier -------------
 //
 // ALL new collector state lives in the heap context (the Concurrency-II
 // discipline: an isolate is "one more context", never "another pile of
 // file statics").  The leading fields are THE emitted-code seam — the
-// emitter (P2c) reads bump/limit/nursery bounds through this struct's
+// emitter reads bump/limit/nursery bounds through this struct's
 // exported symbol, so their order and offsets are part of the emitter
 // contract: append, never reorder.
 //
@@ -109,7 +109,7 @@ typedef struct {
     void* nursery_end;
     // -- the dirty-OBJECT buffer (object-remembering): OLD objects
     //    whose owned storage received a YOUNG reference; deduped by the
-    //    DIRTY header bit.  (The SATB log of gc-P6 rides the same
+    //    DIRTY header bit.  (The future concurrent-marking SATB log rides the same
     //    structure.) --
     void** remset;
     int32_t remset_count;
@@ -121,7 +121,30 @@ typedef struct {
     void* current_stack_end;
     // -- runtime-private state (an opaque struct in ejs-gc.c) --
     void* priv;
+    // -- head of the CURRENT stack's gc-frame chain (word 17
+    //    of the emitted seam).  Emitted prologues link an EJSGCFrame
+    //    here, epilogues unlink, catch handlers re-link their own frame
+    //    (unwound callees' records die with their stack).  Each machine
+    //    stack owns a disjoint chain: the generator push/pop hooks swap
+    //    this head alongside current_stack_end, and suspended
+    //    generators' chains are walked via their saved heads.  Minor
+    //    collections process every chain slot PRECISELY (evacuate +
+    //    rewrite) BEFORE the conservative pin pass — a frame-held young
+    //    object therefore MOVES every minor, and the conservative
+    //    scanner's stale copies of it skip via the forwarding check.
+    void* gc_frame_head;
 } EJSHeapContext;
+
+// an emitted function's precise-root record, alloca'd in
+// its own frame.  `slots` hold BOXED ejsvals only (raw f64/i1 values
+// are invisible to GC by construction); the emitter initializes every
+// slot to undefined at entry — a stale slot must still parse as a
+// valid ejsval, never as stack garbage.
+typedef struct _EJSGCFrame {
+    struct _EJSGCFrame* prev;
+    uintptr_t count;
+    ejsval slots[1]; // really `count` of them
+} EJSGCFrame;
 
 extern EJSHeapContext _ejs_heap;
 
@@ -132,7 +155,7 @@ _ejs_gc_is_young(void* p)
         && (char*)p < (char*)_ejs_heap.nursery_end;
 }
 
-// The generational write barrier — OBJECT-REMEMBERING (gc-P2, second
+// The generational write barrier — OBJECT-REMEMBERING (the second
 // design).  The first design recorded raw slot addresses; slots inside
 // malloc'd satellites (element buffers, descriptors, map entries) kept
 // dangling into freed memory — a structural hazard, not a bug tail.

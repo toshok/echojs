@@ -127,7 +127,7 @@ _ejs_generator_start(EJSGenerator* gen)
     // (`function* g() { return 5; }` -> { value: 5, done: true }).
     // The iter result is allocated BEFORE the generator leaves the active
     // chain: we are still executing on the generator's stack here, and a
-    // collection triggered by this allocation must know that (gc-plan P0 —
+    // collection triggered by this allocation must know that (found the hard way —
     // mark_thread_stack's range depends on the chain).
     gen->completed = EJS_TRUE;
     gen->yielded_value = _ejs_create_iter_result(rv, _ejs_true);
@@ -163,6 +163,8 @@ _ejs_generator_new (ejsval generator_body)
     rv->stack = malloc(GENERATOR_STACK_SIZE);
     rv->stack_size = GENERATOR_STACK_SIZE;
     rv->caller_stack_top = NULL;
+    rv->gc_frame_head = NULL;        // this stack's parked chain
+    rv->caller_gc_frame_head = NULL;
     rv->reg_prev = NULL;
     rv->reg_next = _ejs_generator_registry;
     if (_ejs_generator_registry) _ejs_generator_registry->reg_prev = rv;
@@ -357,7 +359,7 @@ _ejs_generator_specop_allocate()
     return (EJSObject*)_ejs_gc_new (EJSGenerator);
 }
 
-// gc-plan P2: the live-generator registry — every generator's suspended
+// the live-generator registry — every generator's suspended
 // stack must be conservatively scanned BEFORE a minor collection starts
 // evacuating (see ejs-gc.c minor step 1)
 EJSGenerator* _ejs_generator_registry;
@@ -375,7 +377,7 @@ _ejs_generator_specop_finalize (EJSObject* obj)
 // the conservative half of the generator scan: both saved register
 // files (the ucontexts) and the live suspended stack segment.  Shared
 // by the specop scan and the minor collection's pre-evacuation registry
-// walk (gc-plan P2: conservative ranges must all be seen before any
+// walk (conservative ranges must all be seen before any
 // object moves).
 void
 _ejs_generator_scan_conservative (EJSGenerator* gen)
@@ -413,7 +415,7 @@ _ejs_generator_scan_conservative (EJSGenerator* gen)
         // The stack grows DOWN: the live suspended frames sit between the
         // suspension SP and the stack's END.  (This scan used to cover
         // [stack, sp) — the dead region — and so missed every live frame;
-        // gc-plan P0.)  An SP outside the range (never-started context,
+        // found the hard way.)  An SP outside the range (never-started context,
         // garbage) degrades to scanning the whole stack, which is merely
         // conservative.
         if (saved_sp < gen->stack || saved_sp > stack_end)

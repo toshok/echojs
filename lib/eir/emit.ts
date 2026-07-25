@@ -20,6 +20,7 @@ import * as consts from "../consts";
 import type { ABI } from "../abi";
 import type { RuntimeInterface } from "../runtime";
 import type { Module as EIRModule, Func, Block, Inst, Target } from "./ir";
+import { computeSpilledValues } from "./liveness";
 
 const ir = llvm.IRBuilder;
 
@@ -39,17 +40,24 @@ export interface VisitorSurface {
     // compiler.ts so all target-layout knowledge stays in one place)
     unboxDouble(val: llvm.Value): llvm.Value;
     boxDouble(dbl: llvm.Value): llvm.Value;
-    // shapes-plan P4.3 (beside isNumber for the same reason): the object
+    // shape-guard NaN-box tests (beside isNumber for the same reason): the object
     // tag test, the payload->EJSObject* reinterpretation (valid only under
     // a passed isObject), and the module's interned shape-index global
     isObject(val: llvm.Value): llvm.Value;
     objectPointer(val: llvm.Value): llvm.Value;
-    // gc-plan P2: the inline half of the write barrier — "is this
+    // the inline half of the write barrier — "is this
     // value's payload in the nursery range" (layout knowledge lives in
     // compiler.ts with the other NaN-box tests)
     emitYoungCheck(val: llvm.Value): llvm.Value;
-    // gc-plan P2c: inline nursery bump allocation for closure envs
+    // inline nursery bump allocation for closure envs
     emitEnvAllocInline(n: number, slowCall: () => llvm.Value): llvm.Value;
+    // the gc-frame record (precise relocatable JS roots) and
+    // inline env slot addressing (all layout knowledge in compiler.ts)
+    emitGCFrameLink(frame: llvm.Value, nslots: number, undef: llvm.Value): void;
+    emitGCFrameUnlink(frame: llvm.Value): void;
+    emitGCFrameRelink(frame: llvm.Value): void;
+    gcFrameSlotPtr(frame: llvm.Value, i: number): llvm.Value;
+    emitEnvSlotRef(env: llvm.Value, slot: number): llvm.Value;
     moduleShapeGlobal(
         key: string,
         fields: { name: string; repr: string }[]
@@ -141,12 +149,20 @@ export class EIREmitter {
     fn_this_ptr!: llvm.Value;
     fn_new_target!: llvm.Value;
     scratch: llvm.AllocaInst | null = null;
-    // gc-P2: the slot-array env loaded by the most recent slotRef —
+    // the slot-array env loaded by the most recent slotRef —
     // shaped stores must remember the ENV (the storage owner), not the
     // object whose Scan only holds the env reference
     last_slots_val: llvm.Value | null = null;
     scratch_type: llvm.Type | null = null;
     this_slot!: llvm.AllocaInst;
+    // values live across a safepoint are DEMOTED to
+    // gc-frame slots — stored once where they're defined, LOADED at
+    // every use (val() intercepts).  Every load is dominated by its
+    // def's store; LLVM CSEs redundant loads between safepoints but
+    // cannot forward across one (the frame escapes via the chain), so a
+    // collector rewrite is always observed.
+    gc_frame: llvm.AllocaInst | null = null;
+    gc_frame_slots: Map<Inst, number> | null = null;
 
     constructor(visitor: VisitorSurface & { abi: ABI; module: llvm.Module }) {
         this.v = visitor;
@@ -167,7 +183,7 @@ export class EIREmitter {
             let llvm_name = `_ejs_eir_${fn.name.replace(/[^A-Za-z0-9_]/g, "_")}_${mangle_gen++}`;
             let llvm_fn;
             if (fn.sig) {
-                // Phase 3.6 specialized clone: a native unboxed signature
+                // specialized clone: a native unboxed signature
                 // — (double...) -> double — instead of the runtime's boxed
                 // (env, this*, argc, argv*, newTarget) convention.  The
                 // specialization post-checks guarantee the clone touches
@@ -223,7 +239,7 @@ export class EIREmitter {
         llvmFn.literalAllocas = Object.create(null);
 
         const args = llvmFn.args;
-        // Phase 3.6 clones have no env/this*/argc/argv*/newTarget — their
+        // specialized clones have no env/this*/argc/argv*/newTarget — their
         // llvm args are the formals alone; the specialization pass
         // guarantees no op that needs the frame values survives (frame
         // ops, env/this uses, and generic returns all discard a clone)
@@ -251,6 +267,24 @@ export class EIREmitter {
         this.this_slot = ir.createAlloca(types.EjsValue, "this_slot");
         this.this_slot.setAlignment(8);
 
+        // values live across safepoints get frame slots
+        this.gc_frame = null;
+        this.gc_frame_slots = null;
+        if (!process.env["EJS_NO_GC_FRAMES"]) {
+            const spilled = computeSpilledValues(eirFn);
+            if (spilled) {
+                const slots = new Map<Inst, number>();
+                let i = 0;
+                for (const v of spilled) slots.set(v, i++);
+                this.gc_frame_slots = slots;
+                this.gc_frame = ir.createAlloca(
+                    llvm.ArrayType.get(types.Int64, 2 + slots.size),
+                    "gc_frame"
+                );
+                this.gc_frame.setAlignment(8);
+            }
+        }
+
         // emit blocks in reverse postorder: a def's block always precedes
         // its uses' blocks (dominators come first in any RPO), so the
         // values map is filled before it's read.  block *creation* order in
@@ -271,7 +305,7 @@ export class EIREmitter {
             ir.setInsertPoint(this.blocks.get(b)!);
             for (let p of b.params) {
                 if (p.isException) continue; // materialized by the landingpad below
-                // rawJoin params (Phase 3.4 pass (b)) carry raw doubles;
+                // rawJoin params (the raw-join pass) carry raw doubles;
                 // everything else is an EjsValue phi (the P2 boxed rule)
                 let phi_type = p.type === "f64" ? types.Double : types.EjsValue;
                 let phi = ir.createPhi(phi_type, b.predEdges.length, `p_${p.id}`);
@@ -287,6 +321,10 @@ export class EIREmitter {
         // initializing stores to it whenever a literal is first used.
         let prologue_bb = new llvm.BasicBlock("prologue", llvmFn);
         ir.setInsertPoint(prologue_bb);
+        // link the frame before anything can allocate; slots
+        // start as undefined so a pre-def walk sees valid ejsvals
+        if (this.gc_frame)
+            this.v.emitGCFrameLink(this.gc_frame, this.gc_frame_slots!.size, this.undef());
         const entry_params = eirFn.entry!.params;
         // params[0] = %env, params[1] = %this, rest are JS formals
         if (eirFn.sig) {
@@ -305,6 +343,10 @@ export class EIREmitter {
             for (let i = 2; i < entry_params.length; i++)
                 this.values.set(entry_params[i]!, this.emitArgLoad(argc, args_ptr, i - 2));
         }
+        // demote slotted entry params (their canonical home is
+        // the frame slot from here on; val() loads it per use)
+        if (this.gc_frame_slots)
+            for (const p of entry_params) this.demoteToSlot(p);
         // remember where the prologue ended; the branch into the eir entry
         // block is emitted *after* the body, because the legacy cached-
         // literal helpers append their initializing stores to the end of
@@ -314,7 +356,19 @@ export class EIREmitter {
         // emit every block's instructions
         for (let b of order) {
             ir.setInsertPoint(this.blocks.get(b)!);
-            for (let inst of b.insts) this.emitInst(inst);
+            // slotted block params store to their frame slot at
+            // block entry (after the phis, which the block-creation pass
+            // already registered)
+            if (this.gc_frame_slots && b !== eirFn.entry)
+                for (const p of b.params) this.demoteToSlot(p);
+            for (let inst of b.insts) {
+                this.emitInst(inst);
+                // a slotted def's store follows immediately
+                // (slotted values are never targets-carrying, so the
+                // block is not yet terminated here)
+                if (this.gc_frame_slots && this.gc_frame_slots.has(inst))
+                    this.demoteToSlot(inst);
+            }
         }
 
         ir.setInsertPoint(prologue_end);
@@ -369,6 +423,20 @@ export class EIREmitter {
 
         const exc_param = eirBlock.params[0]!;
         this.values.set(exc_param, val);
+
+        // the unwind discarded every callee frame below this one —
+        // re-link our record as the chain head
+        if (this.gc_frame) this.v.emitGCFrameRelink(this.gc_frame);
+    }
+
+    // if `v` has a frame slot, store its current llvm value there
+    // (its canonical home; val() loads it per use from now on)
+    demoteToSlot(v: Inst): void {
+        const slot = this.gc_frame_slots ? this.gc_frame_slots.get(v) : undefined;
+        if (slot === undefined) return;
+        const cur = this.values.get(v);
+        if (cur === undefined) return; // unbound (e.g. clone %env/%this)
+        ir.createStore(cur, this.v.gcFrameSlotPtr(this.gc_frame!, slot));
     }
 
     maxOutgoingArgs(eirFn: Func): number {
@@ -399,6 +467,19 @@ export class EIREmitter {
     // --- helpers -------------------------------------------------------------------
 
     val(operand: Inst | null | undefined): llvm.Value {
+        // a slotted value's canonical home is its gc-frame slot —
+        // load per use, so a post-safepoint use observes any collector
+        // rewrite.  Loads between safepoints CSE under LLVM; loads
+        // across one cannot (the frame escapes via the chain).
+        if (operand && this.gc_frame_slots) {
+            const slot = this.gc_frame_slots.get(operand);
+            if (slot !== undefined)
+                return ir.createLoad(
+                    types.EjsValue,
+                    this.v.gcFrameSlotPtr(this.gc_frame!, slot),
+                    `gcf_v${operand.id}`
+                );
+        }
         const v = operand ? this.values.get(operand) : undefined;
         if (v === undefined)
             throw new Error(
@@ -415,7 +496,7 @@ export class EIREmitter {
         return this.abi.createCall(this.llvmFn, callee.type, callee, argv, name || "");
     }
 
-    // gc-plan P2: the emitted generational write barrier (object-
+    // the emitted generational write barrier (object-
     // remembering).  Inline: one range check on the stored VALUE; slow:
     // _ejs_gc_remember_val(owner, value) marks the owner dirty.  With
     // the nursery disabled the bounds are zero and the branch is never
@@ -432,9 +513,9 @@ export class EIREmitter {
         ir.setInsertPoint(cont_bb);
     }
 
-    // shapes-plan P4.3: THE slot-addressing seam.  A shaped object's
+    // THE slot-addressing seam.  A shaped object's
     // property storage is a closureenv slot array hanging off the
-    // map/slots union word (P4.2 layout); when gc-P5 moves slots inline,
+    // map/slots union word; when the GC work moves slots inline,
     // only this method changes (the ops carry slot indices, not
     // addresses).  Only valid downstream of a passed has_shape on `objval`
     // for a shape with more than `slot` fields — which the EIR verifier
@@ -455,7 +536,7 @@ export class EIREmitter {
             "slots_ejsval_ptr"
         );
         const slotsval = ir.createLoad(types.EjsValue, slots_ptr, "slots_ejsval");
-        this.last_slots_val = slotsval; // gc-P2: the barrier's true owner
+        this.last_slots_val = slotsval; // the barrier's true owner
         // payload-mask the closureenv ejsval to its EJSClosureEnv*
         const envptr = ir.createPointerCast(
             this.v.objectPointer(slotsval),
@@ -594,7 +675,7 @@ export class EIREmitter {
                 return;
             }
 
-            // --- the typed low tier (Phase 2) ---------------------------
+            // --- the typed low tier ---------------------------
             // has_tag/unbox/box mirror LLVMIRVisitor's NaN-boxing helpers;
             // the f64_* ops are plain LLVM float arithmetic.  has_tag and
             // f64_lt produce machine i1 (consumed by cond_br, like
@@ -608,7 +689,7 @@ export class EIREmitter {
                 return;
             }
 
-            // --- shapes (shapes-plan P4.3) -------------------------------
+            // --- shapes -------------------------------
             // has_shape folds the NaN-box object check into the header
             // shape-index compare, the way isNumber backs has_tag: a
             // non-object is simply false.  The shape-index global holds
@@ -651,7 +732,7 @@ export class EIREmitter {
                 this.values.set(inst, phi);
                 return;
             }
-            // P4.5 typed slots: an f64-repr slot is accessed as a raw
+            // typed slots: an f64-repr slot is accessed as a raw
             // double — same address, same 8 bytes (the NaN-box stores
             // doubles raw), just loaded/stored as the machine type the
             // guard's repr proof licenses.
@@ -668,7 +749,7 @@ export class EIREmitter {
             case "slot_store": {
                 const ref = this.slotRef(this.val(inst.operands[0]), inst.imms["slot"] as number);
                 if (inst.imms["repr"] === "f64") {
-                    // raw doubles are not references: no barrier (gc-P2)
+                    // raw doubles are not references: no barrier
                     const dref = ir.createBitCast(ref, types.Double.pointerTo(), "slot_f64_ptr");
                     ir.createStore(this.val(inst.operands[1]), dref);
                 } else {
@@ -678,7 +759,7 @@ export class EIREmitter {
                 this.values.set(inst, this.val(inst.operands[1]));
                 return;
             }
-            // born with their shape (shapes-plan P4.4): spill the field
+            // born with their shape: spill the field
             // names (atom loads) and initial values contiguously into the
             // scratch area — names at [0..n), values at [n..2n) — and make
             // one runtime call.  The runtime re-derives the true shape from
@@ -847,7 +928,7 @@ export class EIREmitter {
 
             case "make_env": {
                 const n = inst.imms["size"] as number;
-                // gc-plan P2c: envs are 39% of all allocations (the P0
+                // envs are 39% of all allocations (the P0
                 // census) — bump-allocate inline; the runtime call is
                 // the slow path/safepoint.  EJS_NO_INLINE_ALLOC=1 is
                 // the compile-time bisect hook.
@@ -859,20 +940,34 @@ export class EIREmitter {
                 return;
             }
             case "env_load": {
-                let ref = this.call(
-                    rt.get_env_slot_ref,
-                    [this.val(inst.operands[0]), consts.int32((inst.imms["slot"] as number))],
-                    "slotref"
-                );
+                // inline slot addressing, recomputed per use
+                // from the boxed env (a relocated env re-derives) —
+                // deletes a runtime call per access.  EJS_NO_INLINE_ENV_SLOTS
+                // restores the runtime-call path.
+                let ref = process.env["EJS_NO_INLINE_ENV_SLOTS"]
+                    ? this.call(
+                          rt.get_env_slot_ref,
+                          [this.val(inst.operands[0]), consts.int32((inst.imms["slot"] as number))],
+                          "slotref"
+                      )
+                    : this.v.emitEnvSlotRef(
+                          this.val(inst.operands[0]),
+                          inst.imms["slot"] as number
+                      );
                 this.values.set(inst, ir.createLoad(types.EjsValue, ref, "slot"));
                 return;
             }
             case "env_store": {
-                let ref = this.call(
-                    rt.get_env_slot_ref,
-                    [this.val(inst.operands[0]), consts.int32((inst.imms["slot"] as number))],
-                    "slotref"
-                );
+                let ref = process.env["EJS_NO_INLINE_ENV_SLOTS"]
+                    ? this.call(
+                          rt.get_env_slot_ref,
+                          [this.val(inst.operands[0]), consts.int32((inst.imms["slot"] as number))],
+                          "slotref"
+                      )
+                    : this.v.emitEnvSlotRef(
+                          this.val(inst.operands[0]),
+                          inst.imms["slot"] as number
+                      );
                 ir.createStore(this.val(inst.operands[1]), ref);
                 this.emitStoreBarrier(this.val(inst.operands[0]), this.val(inst.operands[1]));
                 this.values.set(inst, this.val(inst.operands[1]));
@@ -928,7 +1023,7 @@ export class EIREmitter {
                 );
             }
             case "call_typed": {
-                // Phase 3.6: direct call to a specialized clone — args are
+                // direct call to a specialized clone — args are
                 // raw machine values in registers, no scratch spill, no
                 // closure dispatch.  Operand 0 (the EIR-level env slot) is
                 // NOT passed: clone signatures carry the formals alone
@@ -1120,12 +1215,15 @@ export class EIREmitter {
                 return;
             }
             case "return": {
+                // the return value is read BEFORE the unlink (it
+                // may itself load from a frame slot); then pop the frame
+                const rv = this.val(inst.operands[0]);
+                if (this.gc_frame) this.v.emitGCFrameUnlink(this.gc_frame);
                 // an f64-result clone returns the raw double directly (a
                 // plain scalar return needs none of the ABI's ejsval
                 // struct-return handling)
-                if (this.eirFn.sig && this.eirFn.sig.result === "f64")
-                    ir.createRet(this.val(inst.operands[0]));
-                else this.abi.createRet(this.llvmFn, this.val(inst.operands[0]));
+                if (this.eirFn.sig && this.eirFn.sig.result === "f64") ir.createRet(rv);
+                else this.abi.createRet(this.llvmFn, rv);
                 return;
             }
             case "throw": {

@@ -49,7 +49,7 @@ class LLVMIRVisitor implements VisitorSurface {
     ejs_globals: Record<string, llvm.GlobalVariable>;
     ejs_symbols: Record<string, llvm.GlobalVariable>;
     module_atoms: Map<string, llvm.GlobalVariable>;
-    // shapes-plan P4.3: the module's interned guard shapes (imms.shape key
+    // the module's interned guard shapes (imms.shape key
     // -> the i32 shape-index global + its ordered fields), filled by the
     // EIR emitter's has_shape lowering and flushed into the literal-init
     // function by emitShapeInterns (the atom-table precedent)
@@ -73,7 +73,7 @@ class LLVMIRVisitor implements VisitorSurface {
     eir_emitter?: EIREmitter;
     eir_emitted?: Map<import("./eir/ir").Module, Map<string, llvm.EjsFunction>>;
     eir_toplevel_fns!: Map<string, llvm.EjsFunction>;
-    // shapes-plan P4.3: the shape-intern init function (null when the
+    // the shape-intern init function (null when the
     // module guards no shapes), built by emitShapeInterns and called by
     // emitModuleResolution after literal initialization
     shape_init_function: llvm.EjsFunction | null = null;
@@ -226,7 +226,7 @@ class LLVMIRVisitor implements VisitorSurface {
             ""
         );
 
-        // shapes-plan P4.3: intern this module's guard shapes right after
+        // intern this module's guard shapes right after
         // the atoms they name are initialized
         if (this.shape_init_function)
             ir.createCall(this.shape_init_function.type, this.shape_init_function, [], "");
@@ -666,7 +666,7 @@ class LLVMIRVisitor implements VisitorSurface {
         }
     }
 
-    // shapes-plan P4.3 target-layout helpers (beside isNumber so all
+    // shape-guard target-layout helpers (beside isNumber so all
     // NaN-box knowledge stays in one place)
 
     // EJSVAL_IS_OBJECT: object is the topmost shifted tag, so on 64-bit a
@@ -698,8 +698,8 @@ class LLVMIRVisitor implements VisitorSurface {
         return ir.createIntToPtr(payload, types.EjsObject.pointerTo(), "objptr");
     }
 
-    // gc-plan P2: is this value's payload inside the nursery?  The seam
-    // contract (ejs-gc.h EJSHeapContext) fixes the layout: 12 i64 words —
+    // is this value's payload inside the nursery?  The seam
+    // contract (ejs-gc.h EJSHeapContext) fixes the layout: 18 i64 words —
     // bump[5], limit[5], nursery_base (word 10), nursery_end (word 11).
     // A double's payload can false-positive into the range; the out-of-
     // line barrier re-filters, so the inline check only needs to be
@@ -710,14 +710,14 @@ class LLVMIRVisitor implements VisitorSurface {
         if (!this.heap_ctx_global)
             this.heap_ctx_global = new llvm.GlobalVariable(
                 this.module,
-                llvm.ArrayType.get(types.Int64, 12),
+                llvm.ArrayType.get(types.Int64, 18),
                 "_ejs_heap",
                 null,
                 true
             );
         return this.heap_ctx_global;
     }
-    // gc-plan P2c: the inline nursery allocation for closure
+    // the inline nursery allocation for closure
     // environments — bump, compare, init header/length/slots, box with
     // the CLOSUREENV tag; the slow thunk (the existing runtime call) is
     // the safepoint.  With the nursery off, bump/limit are NULL and the
@@ -733,7 +733,7 @@ class LLVMIRVisitor implements VisitorSurface {
         const idx = Math.log2(cell_size) - 4;   // seam word: bump[idx], limit[5+idx]
 
         const g = this.heapContextGlobal();
-        const arr_ty = llvm.ArrayType.get(types.Int64, 12);
+        const arr_ty = llvm.ArrayType.get(types.Int64, 18);
         const bump_p = ir.createInBoundsGetElementPointer(
             arr_ty, g, [consts.int64(0), consts.int32(idx)], "env_bump_p");
         const limit_p = ir.createInBoundsGetElementPointer(
@@ -800,7 +800,7 @@ class LLVMIRVisitor implements VisitorSurface {
         if (this.triple.pointerSize() !== 64)
             throw new Error("emitYoungCheck not implemented for 32-bit targets");
         const g = this.heapContextGlobal();
-        const arr_ty = llvm.ArrayType.get(types.Int64, 12);
+        const arr_ty = llvm.ArrayType.get(types.Int64, 18);
         const base_p = ir.createInBoundsGetElementPointer(
             arr_ty, g, [consts.int64(0), consts.int32(10)], "nursery_base_p");
         const base = ir.createLoad(types.Int64, base_p, "nursery_base");
@@ -815,6 +815,94 @@ class LLVMIRVisitor implements VisitorSurface {
         const ge = ir.createICmpUGE(payload, base, "wb_ge_base");
         const lt = ir.createICmpULt(payload, end, "wb_lt_end");
         return ir.createAnd(ge, lt, "wb_young");
+    }
+
+    // the gc-frame chain head is word 17 of the seam
+    // (EJSHeapContext.gc_frame_head — bump[5], limit[5], nursery
+    // bounds, remset words, current_stack_end, priv precede it)
+    gcFrameHeadPtr(): llvm.Value {
+        const g = this.heapContextGlobal();
+        const arr_ty = llvm.ArrayType.get(types.Int64, 18);
+        return ir.createInBoundsGetElementPointer(
+            arr_ty, g, [consts.int64(0), consts.int32(17)], "gc_frame_head_p");
+    }
+
+    // link an emitted function's gc-frame record: { prev, count,
+    // slots[count] } laid out as i64 words in `frame` (an alloca).
+    // Every slot is initialized to undefined — a stale slot must still
+    // parse as a valid ejsval when the collector walks it.  Linking the
+    // frame's address into the exported seam is also what makes the
+    // alloca ESCAPE: LLVM can no longer forward pre-call slot stores to
+    // post-call reloads across any external call (the
+    // store-to-load-forwarding hazard the gc plan names).
+    emitGCFrameLink(frame: llvm.Value, nslots: number, undef: llvm.Value): void {
+        const i8 = llvm.Type.getInt8Ty();
+        const base = ir.createBitCast(frame, i8.pointerTo(), "gcf_base");
+        const headp = this.gcFrameHeadPtr();
+        const prev = ir.createLoad(types.Int64, headp, "gcf_prev");
+        const prev_p = ir.createBitCast(base, types.Int64.pointerTo(), "gcf_prev_p");
+        ir.createStore(prev, prev_p);
+        const count_p = ir.createBitCast(
+            ir.createInBoundsGetElementPointer(i8, base, [consts.int64(8)], "gcf_count_addr"),
+            types.Int64.pointerTo(), "gcf_count_p");
+        ir.createStore(consts.int64(nslots), count_p);
+        for (let i = 0; i < nslots; i++) {
+            const slot_p = ir.createBitCast(
+                ir.createInBoundsGetElementPointer(
+                    i8, base, [consts.int64(16 + 8 * i)], `gcf_slot${i}_addr`),
+                types.EjsValue.pointerTo(), `gcf_slot${i}_p`);
+            ir.createStore(undef, slot_p);
+        }
+        ir.createStore(ir.createPtrToInt(base, types.Int64, "gcf_addr"), headp);
+    }
+
+    // epilogue: pop this frame off the chain
+    emitGCFrameUnlink(frame: llvm.Value): void {
+        const i8 = llvm.Type.getInt8Ty();
+        const base = ir.createBitCast(frame, i8.pointerTo(), "gcf_base");
+        const prev_p = ir.createBitCast(base, types.Int64.pointerTo(), "gcf_prev_p");
+        const prev = ir.createLoad(types.Int64, prev_p, "gcf_prev");
+        ir.createStore(prev, this.gcFrameHeadPtr());
+    }
+
+    // catch handler: the unwind discarded every callee frame below us —
+    // re-link our own record as the head
+    emitGCFrameRelink(frame: llvm.Value): void {
+        const i8 = llvm.Type.getInt8Ty();
+        const base = ir.createBitCast(frame, i8.pointerTo(), "gcf_base");
+        ir.createStore(
+            ir.createPtrToInt(base, types.Int64, "gcf_addr"), this.gcFrameHeadPtr());
+    }
+
+    // the address of gc-frame slot i, as an EjsValue*
+    gcFrameSlotPtr(frame: llvm.Value, i: number): llvm.Value {
+        const i8 = llvm.Type.getInt8Ty();
+        const base = ir.createBitCast(frame, i8.pointerTo(), "gcf_base");
+        return ir.createBitCast(
+            ir.createInBoundsGetElementPointer(
+                i8, base, [consts.int64(16 + 8 * i)], `gcf_slot${i}_addr`),
+            types.EjsValue.pointerTo(), `gcf_slot${i}_p`);
+    }
+
+    // inline closure-env slot addressing — payload mask +
+    // byte offset (EJSClosureEnv: u64 header, u32 length(+pad), slots
+    // at +16).  Recomputed PER USE from the boxed env value, never
+    // cached across a safepoint: when the env value itself lives in a
+    // gc-frame slot, the post-safepoint reload feeds a fresh address
+    // computation, so a relocated env re-derives correctly.  Replaces a
+    // runtime call per env access.
+    emitEnvSlotRef(env: llvm.Value, slot: number): llvm.Value {
+        const i8 = llvm.Type.getInt8Ty();
+        const payload = ir.createAnd(
+            this.getEjsvalBits(env),
+            consts.int64_lowhi(0x00007fff, 0xffffffff),
+            "env_payload"
+        );
+        const base = ir.createIntToPtr(payload, i8.pointerTo(), "env_base");
+        return ir.createBitCast(
+            ir.createInBoundsGetElementPointer(
+                i8, base, [consts.int64(16 + 8 * slot)], "env_slot_addr"),
+            types.EjsValue.pointerTo(), "env_slot_p");
     }
 
     // the module's i32 shape-index global for `key`, minted on first use
@@ -956,11 +1044,11 @@ export function compile(
     // pipelines see their %-intrinsic output
     tree = pre_eir_convert(tree, module_filename, module_infos, options);
 
-    // --types (MAAM, docs/maam-plan.md): type analysis over the desugared
+    // --types (the MAAM oracle): type analysis over the desugared
     // toplevel.  Must run before collectEIRToplevel, which consumes (and
     // then empties) the toplevel body.  Logs stats (and, for --types-dump,
     // per-binding types); the returned TypeOracle is not consumed by
-    // codegen yet (Phase 3); never fails the compile.
+    // codegen unless --types feeds the oracle onward; never fails the compile.
     let type_oracle = null;
     if (options.types || options.types_dump)
         type_oracle = runTypeAnalysisProbe(tree, source_filename, options.types_dump);
@@ -976,10 +1064,10 @@ export function compile(
         type_oracle
     );
     if (lowered.error) throw new Error(`${source_filename}: ${lowered.error}`);
-    // Phase 3 telemetry: how many guarded diamonds lowering emitted, and
+    // telemetry: how many guarded diamonds lowering emitted, and
     // whether any oracle query missed (the node-identity canary)
     if (type_oracle) {
-        // shapes-plan P4.3 telemetry (criterion 5, visible degradation):
+        // shape-guard telemetry (visible degradation):
         // counted decline reasons, additive-only on the scraped line
         const declined = lowered.shape_declined ?? {};
         const declineStr = Object.keys(declined)
@@ -989,7 +1077,7 @@ export function compile(
         console.warn(
             `--types: ${source_filename}: diamonds=${lowered.diamonds ?? 0} ` +
                 `oracleQueries=${type_oracle.stats.queries} oracleUnknown=${type_oracle.stats.unknown}` +
-                // Phase 3.6 telemetry, present only when specialization ran
+                // specialization telemetry, present only when it ran
                 (lowered.spec
                     ? ` specialized=${lowered.spec.specialized} specSites=${lowered.spec.sites}` +
                       ` specRejected=${lowered.spec.rejected}`
@@ -997,17 +1085,17 @@ export function compile(
                 // shape telemetry, present only when sites were consulted
                 ((lowered.shape_sites ?? 0) > 0
                     ? ` shapeSites=${lowered.shape_sites} shapeGuards=${lowered.shape_guards ?? 0}` +
-                      // shapes-plan P4.6: poly-chain telemetry (additive)
+                      // poly-chain telemetry (additive)
                       ((lowered.shape_poly_guards ?? 0) > 0
                           ? ` shapePolyGuards=${lowered.shape_poly_guards}`
                           : "") +
                       ` shapeDeclined=${declineStr || "none"}`
                     : "") +
-                // shapes-plan P4.5: typed slot telemetry (additive)
+                // typed slot telemetry (additive)
                 ((lowered.typed_loads ?? 0) > 0 || (lowered.typed_stores ?? 0) > 0
                     ? ` shapeTyped=loads:${lowered.typed_loads ?? 0},stores:${lowered.typed_stores ?? 0}`
                     : "") +
-                // shapes-plan P4.4: born-with-shape telemetry (additive)
+                // born-with-shape telemetry (additive)
                 ((lowered.born_shaped ?? 0) > 0 || (lowered.ctor_fills ?? 0) > 0
                     ? ` bornShaped=${lowered.born_shaped ?? 0} ctorFills=${lowered.ctor_fills ?? 0}`
                     : "") +
@@ -1084,7 +1172,7 @@ export function compile(
     visitor.emitEIRToplevel(toplevel_node);
 
     // every has_shape has been emitted by now; flush the module's shape
-    // interns into their init function (shapes-plan P4.3) —
+    // interns into their init function —
     // emitModuleResolution calls it after literal initialization
     visitor.shape_init_function = visitor.emitShapeInterns();
 
