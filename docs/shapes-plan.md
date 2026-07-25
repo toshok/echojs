@@ -321,8 +321,10 @@ The trust ladder, restated as policy for shapes:
    *exact* — monomorphic, non-megamorphic, `shapeCapHits==0` for the
    site, every guarded field's repr a single tag.  Wrong oracle = slow
    path taken = speed lost, never correctness — the P3 contract.
-2. **Exact facts only, no near-misses.**  Two terminal shapes ⇒ no
-   diamond (a 2-way guard is a P4.6 *measured* extension, not a default);
+2. **Exact facts only, no near-misses.**  Three or more terminal shapes
+   ⇒ no diamond; exactly two lower to the P4.6 2-way chain (measured and
+   landed — see the P4.6 entry), and only when EVERY shape in the answer
+   passes the same exactness screen and carries the accessed field;
    union-repr fields load boxed; anything the oracle degraded
    (`degradedBindings`, unknown calls touching the receiver) declines.
    This is `operandIsNumber`'s "exactly {number}" rule transplanted.
@@ -749,10 +751,81 @@ revertable, runtime phases A/B-able against the old path.
       guarded path reaches parity with the trusted P3.6 clone, and the
       IR meets gc-P5 with one addressing seam, slot-index immediates,
       and straight-line raw regions to point inline-slot addressing at.
-- [ ] **P4.6 — Measured extensions.**  2-way polymorphic guards;
-      accessor inlining from monomorphic `accessorSites()`; pretenuring
-      hooks (gc-plan's oracle pretenuring); array element shapes.  Each
-      only on benchmark evidence, each behind its own flag.
+- [x] **P4.6 — Measured extensions.**  DONE 2026-07-24.  The phase ran
+      as its own discipline dictates: an evidence probe per candidate
+      FIRST, implementation only where the numbers and a sound design
+      both existed.  Verdicts:
+      - **2-way polymorphic guards: LANDED.**  The evidence probe (two
+        Point classes {x,y} / {z,x,y} alternating through one kernel
+        site) first exposed a maam precision bug: `receiverShapesOfNode`
+        ran the `terminalShapes` subsumption filter over the JOINED
+        shape list, so one class's terminal ({x,y}) was absorbed by
+        another class's superset ({x,y,z}) exactly as if it were a
+        construction intermediate — 2-shape sites reported as
+        MONOMORPHIC on the bigger shape (sound only because the runtime
+        guard made the {x,y} half run generic; the suite's
+        "polymorphic 12" decline census was a large undercount).  Fix
+        in maam (`analysis.ts` + pinned test): terminal-filter PER
+        OBJECT ADDRESS, then union — an object's own intermediates are
+        still subsumed, distinct classes both survive.  Compiler side:
+        `ShapeQuery` carries 1-2 exact shapes (>2 declines
+        "polymorphic"; every shape must pass the full exactness screen
+        AND carry the accessed field — criterion 2, no near-misses;
+        structural duplicates dedupe to mono), and propGet/propSet
+        lower a guard CHAIN — the second has_shape tests on the first's
+        miss edge, so each fast arm sits under its own same-block-fresh
+        fact and the verifier's P4.3/P4.5 rules apply per arm unchanged
+        (typed f64 arms box at their own exits; stores split has_tag
+        per arm, oriented by that arm's field repr).  The mono path
+        emits byte-identical IR to P4.5.  The optimizer's region/fold
+        machinery is mono-strict and refuses chains wholesale (pinned:
+        4 guards survive `p.x + p.x` un-merged, module re-verifies) —
+        chain-aware merging is future measured work, and wall time
+        says it can wait.  `EJS_NO_POLY_SHAPE_GUARDS=1` is the bisect
+        hook (2-shape sites decline "polymorphic" exactly as before);
+        telemetry grows `shapePolyGuards=N` (additive).  **Measured**
+        (M-series, types-bench3 = the bench2 kernel with alternating
+        receivers): chain **0.31s — parity with the monomorphic twin
+        (0.32s)** — vs 1.67s declined (the bisect flag) and 3.64s
+        flag-off: **5.4×** for the chain over the decline, and the
+        pre-P4.6 false-mono world's 0.99s (half the receivers missing
+        the guard) is beaten 3.2×.  Probe types-poly1 (both arms fast,
+        typed stores per arm; cross-module repr-mismatched / third-
+        shape / dictionary receivers all through the shared slow path)
+        is identical across --types/flag-off/EJS_SHAPES=off/gc-stress.
+      - **Accessor inlining: DECLINED, evidence recorded.**  The probe
+        (defineProperty proto getter, 20M dispatches — getter LITERALS
+        are still a maam NormalizeError) measures 2.31s under --types
+        vs 5.44s flag-off; the same arithmetic through P4.3 guarded
+        slots runs 0.32s, so ~7× headroom exists.  But a receiver
+        has_shape proves NOTHING about the proto that carries the
+        getter (accessor-bearing protos are dictionary-mode by P4.2
+        design — mutable maps), so sound inlining needs proto-identity
+        /proto-shape guard machinery plus maam-side accessor modeling
+        that does not exist.  That is new soundness surface, not a
+        measured extension; revisit as its own designed phase.
+      - **Pretenuring hooks: DEFERRED — no consumer.**  The
+        generational mover (gc-P2+) is not built; there is no nursery/
+        tenured split for an oracle hint to steer.  gc-plan owns it.
+      - **Array element shapes: DEFERRED, evidence recorded.**  The
+        element-kernel probe (64-element dense f64 array, 20M reads):
+        0.57s under --types vs 1.38s flag-off vs node 0.06s.  Real
+        headroom, but arrays are exotics outside shaped mode by scope
+        (P4.x is plain objects), maam smashes element types, and typed
+        element storage is its own runtime subsystem — routed to a
+        future phase alongside the gc-plan storage work.
+      *Gate results (2026-07-24):* matrix ×7 green (test-eir + 7 new
+      poly unit tests incl. the optimizer-refusal pin, lowtier, stages
+      0-3, `//:test-stage1-shapes-off`); --types diff lane
+      **0-divergent** (476 files, 475 identical, 1 N/A = tester.js;
+      suite telemetry: 13,323 sites, 865 guarded of which
+      **shapePolyGuards=25** — poly chains fire in real suite files
+      (eir-syntax4, shapes-storm1), not just the probes; declines:
+      unmapped 7,705 / capped 4,263 / empty 272 / no-field 199 /
+      union-repr 16 / polymorphic **3** — down from 12: the survivors
+      are genuine >2-shape sites, and the old count was an undercount
+      built on the false-mono maam reports).  types-bench2 (mono world)
+      regression-checked bit-identical stats/output/wall-time.
 
 P4.1/P4.2 are pure runtime and can proceed independently of maam; P4.3+
 are compiler phases in the P3 mold.  gc-P1 and P4.1 share one atomic
@@ -878,5 +951,11 @@ layout change whichever lands first.
       fusion; bench2 total unchanged at 2.04s because the residual is
       the alloc loop; invariant-receiver kernels now constant-fold;
       guarded path at parity with trusted clones).
-- [ ] **P4.6** measured extensions (poly guards, accessor inlining,
-      pretenuring, arrays) — evidence-gated.
+- [x] **P4.6** measured extensions — evidence-gated, all four candidates
+      probed and measured.  DONE 2026-07-24: 2-way poly guard chains
+      LANDED (kernel 5.4× vs decline, mono parity; required the maam
+      per-object terminal-filter fix — the false-mono finding); accessor
+      inlining declined (7× headroom recorded, blocked on proto-guard
+      soundness machinery); pretenuring deferred (no mover yet — gc-plan
+      owns it); array element shapes deferred (numbers recorded; arrays
+      are outside shaped mode by scope).  See the phased-plan entry.

@@ -878,6 +878,10 @@ export function compile(
                 // shape telemetry, present only when sites were consulted
                 ((lowered.shape_sites ?? 0) > 0
                     ? ` shapeSites=${lowered.shape_sites} shapeGuards=${lowered.shape_guards ?? 0}` +
+                      // shapes-plan P4.6: poly-chain telemetry (additive)
+                      ((lowered.shape_poly_guards ?? 0) > 0
+                          ? ` shapePolyGuards=${lowered.shape_poly_guards}`
+                          : "") +
                       ` shapeDeclined=${declineStr || "none"}`
                     : "") +
                 // shapes-plan P4.5: typed slot telemetry (additive)

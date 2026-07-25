@@ -54,6 +54,8 @@ export type CollectResult =
           // shapes-plan P4.3 telemetry (all zero/empty when --types is off)
           shape_sites: number;
           shape_guards: number;
+          // shapes-plan P4.6: 2-way polymorphic chains (subset of guards)
+          shape_poly_guards: number;
           shape_declined: Record<string, number>;
           // shapes-plan P4.4: born-with-shape telemetry
           born_shaped: number;
@@ -73,6 +75,7 @@ export type CollectResult =
           diamonds?: undefined;
           shape_sites?: undefined;
           shape_guards?: undefined;
+          shape_poly_guards?: undefined;
           shape_declined?: undefined;
           born_shaped?: undefined;
           ctor_fills?: undefined;
@@ -539,6 +542,7 @@ export function collectEIRToplevel(
             diamonds: typed_stats.diamonds,
             shape_sites: typed_stats.shape_sites ?? 0,
             shape_guards: typed_stats.shape_guards ?? 0,
+            shape_poly_guards: typed_stats.shape_poly_guards ?? 0,
             shape_declined: typed_stats.shape_declined ?? {},
             born_shaped: typed_stats.born_shaped ?? 0,
             ctor_fills: typed_stats.ctor_fills ?? 0,

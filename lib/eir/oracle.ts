@@ -153,26 +153,33 @@ export interface OracleShapeField {
 
 export type ShapeDeclineReason =
     | "unmapped" // node unknown to the analysis (or maam predates the query)
-    | "polymorphic" // more than one terminal shape
+    | "polymorphic" // more terminal shapes than the guard budget (>2)
     | "megamorphic" // the ⊤ shape
     | "capped" // shapeCapHits > 0: some shape set was widened this module
     | "union-repr" // a field's TypeSig straddles num/non-num
     | "no-order" // no ordered witness for the shape
     | "empty"; // the empty shape (nothing to access)
 
+// shapes-plan P4.6: a query answer carries ONE OR TWO exact shapes.  Two
+// shapes is the measured 2-way polymorphic extension — every shape in the
+// answer independently passes the full exactness screen (non-megamorphic,
+// non-empty, ordered witness, single-tag reprs); a set where ANY member
+// falls short declines the whole site (criterion 2 — no near-misses),
+// and >2 declines "polymorphic" as before.
 export type ShapeQuery =
-    | { fields: OracleShapeField[]; declined?: undefined }
-    | { declined: ShapeDeclineReason; fields?: undefined };
+    | { shapes: OracleShapeField[][]; declined?: undefined }
+    | { declined: ShapeDeclineReason; shapes?: undefined };
 
 export interface TypeOracle {
     // type of the value an expression node evaluates to (join over all
     // reached contexts); "top" when unknown/unanalyzed
     typeOfNode(n: e.Node): EirType;
-    // shapes-plan P4.3: the receiver-shape fact for a property access's
-    // object node — exact facts only (monomorphic, non-megamorphic,
-    // uncapped, all reprs single-tag, ordered witness present), everything
-    // else a counted decline.  Optional so stub oracles predating shapes
-    // keep working; absent = no shape facts.
+    // shapes-plan P4.3/P4.6: the receiver-shape facts for a property
+    // access's object node — exact facts only (non-megamorphic, uncapped,
+    // all reprs single-tag, ordered witness present), at most two shapes
+    // (the P4.6 poly budget), everything else a counted decline.
+    // Optional so stub oracles predating shapes keep working; absent =
+    // no shape facts.
     receiverShapeOfNode?(n: e.Node): ShapeQuery;
     // required before any UNguarded consumption (guarded fast paths don't
     // need it)
@@ -409,8 +416,10 @@ export function runTypeAnalysisProbe(
                 if (sig === undefined) stats.unknown++;
                 return typeSigToEirType(sig);
             },
-            // shapes-plan P4.3: exact receiver-shape facts, every near-miss
-            // a counted decline (promotion criterion 2 — no near-misses)
+            // shapes-plan P4.3/P4.6: exact receiver-shape facts, every
+            // near-miss a counted decline (promotion criterion 2 — no
+            // near-misses).  Up to TWO shapes survive (the P4.6 poly
+            // budget); each must pass the full screen independently.
             receiverShapeOfNode: (n): ShapeQuery => {
                 if (!result.receiverShapesOfNode || !result.fieldOrderOfShape)
                     return { declined: "unmapped" }; // older maam build
@@ -418,23 +427,26 @@ export function runTypeAnalysisProbe(
                 const shapes = result.receiverShapesOfNode(n);
                 if (shapes === undefined || shapes.length === 0)
                     return { declined: "unmapped" };
-                if (shapes.length > 1) return { declined: "polymorphic" };
-                const s = shapes[0]!;
-                if (s.megamorphic) return { declined: "megamorphic" };
-                if (s.fields.length === 0) return { declined: "empty" };
-                const order = result.fieldOrderOfShape(s);
-                if (!order || order.length !== s.fields.length)
-                    return { declined: "no-order" };
-                const typeByName = new Map(s.fields.map((f) => [f.name, f.type]));
-                const fields: OracleShapeField[] = [];
-                for (const name of order) {
-                    const sig = typeByName.get(name);
-                    if (sig === undefined) return { declined: "no-order" };
-                    const repr = typeSigToShapeRepr(sig);
-                    if (repr === null) return { declined: "union-repr" };
-                    fields.push({ name, repr });
+                if (shapes.length > 2) return { declined: "polymorphic" };
+                const out: OracleShapeField[][] = [];
+                for (const s of shapes) {
+                    if (s.megamorphic) return { declined: "megamorphic" };
+                    if (s.fields.length === 0) return { declined: "empty" };
+                    const order = result.fieldOrderOfShape(s);
+                    if (!order || order.length !== s.fields.length)
+                        return { declined: "no-order" };
+                    const typeByName = new Map(s.fields.map((f) => [f.name, f.type]));
+                    const fields: OracleShapeField[] = [];
+                    for (const name of order) {
+                        const sig = typeByName.get(name);
+                        if (sig === undefined) return { declined: "no-order" };
+                        const repr = typeSigToShapeRepr(sig);
+                        if (repr === null) return { declined: "union-repr" };
+                        fields.push({ name, repr });
+                    }
+                    out.push(fields);
                 }
-                return { fields };
+                return { shapes: out };
             },
             // The plan text gates closedWorld() on unknownCalls alone because it
             // predates the degradedBindings counter (unmodeled imports, rest

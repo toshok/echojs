@@ -65,6 +65,9 @@ export interface ModCtx {
         trusted?: number;
         shape_sites?: number;
         shape_guards?: number;
+        // shapes-plan P4.6: sites guarded with the 2-way polymorphic
+        // chain (a subset of shape_guards)
+        shape_poly_guards?: number;
         shape_declined?: Record<string, number>;
         // shapes-plan P4.4: born-with-shape telemetry — literal sites
         // batched into make_object_shaped, constructor prefixes batched
@@ -906,12 +909,18 @@ class LowerFunction {
         console.warn(`--types-dump: shapes: .${atom} @${where}: ${what}`);
     }
 
-    // the exact shape fact for accessing `atom` on the value of `objNode`,
-    // or null (with the decline counted) when anything is short of exact
+    // the exact shape facts for accessing `atom` on the value of `objNode`
+    // — one fact per oracle shape (two = the P4.6 polymorphic chain), or
+    // null (with the decline counted) when anything is short of exact.
+    // Every shape in a multi-shape answer must carry the field: a shape
+    // that lacks it would need the fast arm to run proto-lookup semantics,
+    // which only the generic path performs (criterion 2 — no near-misses).
+    // EJS_NO_POLY_SHAPE_GUARDS=1 is the P4.6 bisect hook: 2-shape sites
+    // decline "polymorphic" exactly as they did before the extension.
     shapeFactFor(
         objNode: e.Expression | null,
         atom: string
-    ): { key: string; slot: number; repr: "boxed" | "f64" } | null {
+    ): { key: string; slot: number; repr: "boxed" | "f64" }[] | null {
         if (!objNode || !this.oracle || !this.oracle.receiverShapeOfNode) return null;
         if (process.env["EJS_NO_SHAPE_GUARDS"]) return null;
         const stats = this.mod_ctx.typed_stats;
@@ -921,49 +930,81 @@ class LowerFunction {
             this.shapeDumpSite(objNode, atom, `declined ${q.declined}`);
             return this.shapeDecline(q.declined);
         }
-        const slot = q.fields.findIndex((f) => f.name === atom);
-        if (slot < 0) {
-            this.shapeDumpSite(objNode, atom, "declined no-field");
-            return this.shapeDecline("no-field"); // proto/method access
+        if (q.shapes.length > 1 && process.env["EJS_NO_POLY_SHAPE_GUARDS"]) {
+            this.shapeDumpSite(objNode, atom, "declined polymorphic");
+            return this.shapeDecline("polymorphic");
         }
-        const key = this.module.internShape(q.fields);
-        if (stats) stats.shape_guards = (stats.shape_guards ?? 0) + 1;
-        this.shapeDumpSite(objNode, atom, `guarded shape="${key}" slot=${slot}`);
-        return { key, slot, repr: q.fields[slot]!.repr };
+        const facts: { key: string; slot: number; repr: "boxed" | "f64" }[] = [];
+        for (const fields of q.shapes) {
+            const slot = fields.findIndex((f) => f.name === atom);
+            if (slot < 0) {
+                this.shapeDumpSite(objNode, atom, "declined no-field");
+                return this.shapeDecline("no-field"); // proto/method access
+            }
+            const key = this.module.internShape(fields);
+            // structurally-equal shapes reported twice guard once
+            if (!facts.some((f) => f.key === key))
+                facts.push({ key, slot, repr: fields[slot]!.repr });
+        }
+        if (facts.length === 0) return this.shapeDecline("unmapped");
+        if (stats) {
+            stats.shape_guards = (stats.shape_guards ?? 0) + 1;
+            if (facts.length > 1)
+                stats.shape_poly_guards = (stats.shape_poly_guards ?? 0) + 1;
+        }
+        this.shapeDumpSite(
+            objNode,
+            atom,
+            facts.map((f) => `guarded shape="${f.key}" slot=${f.slot}`).join(" | ")
+        );
+        return facts;
     }
 
-    // obj.atom: has_shape diamond whose fast arm is a fixed-slot load and
-    // whose slow arm is today's generic get — the numericDiamond skeleton
-    // with a shape guard at the head
+    // obj.atom: a has_shape chain whose fast arms are fixed-slot loads and
+    // whose shared slow arm is today's generic get — the numericDiamond
+    // skeleton with one guard per exact fact.  One fact is the P4.3 mono
+    // diamond exactly; two facts (the P4.6 polymorphic extension) test the
+    // second shape on the first guard's miss edge, so each fast arm sits
+    // under its own same-block-fresh has_shape fact and the verifier's
+    // rules apply per arm unchanged.
     propGet(objNode: e.Expression | null, obj: Inst, atom: string): Inst {
-        const f = this.shapeFactFor(objNode, atom);
-        if (!f) return this.b.emit("get_prop_atom", [obj], { atom: atom });
+        const facts = this.shapeFactFor(objNode, atom);
+        if (!facts) return this.b.emit("get_prop_atom", [obj], { atom: atom });
 
-        const fast_bb = this.b.newBlock("shape_fast");
+        const fast_bbs = facts.map(() => this.b.newBlock("shape_fast"));
+        const chk_bbs = facts.slice(1).map(() => this.b.newBlock("shape_chk"));
         const slow_bb = this.b.newBlock("shape_slow");
         const join_bb = this.b.newBlock("shape_join");
         const result = join_bb.addParam("prop");
 
-        const t = this.b.emit("has_shape", [obj], { shape: f.key });
-        this.b.condBr(t, fast_bb, [], slow_bb, []);
-        this.b.sealBlock(fast_bb);
-        this.b.sealBlock(slow_bb);
+        for (let i = 0; i < facts.length; i++) {
+            const f = facts[i]!;
+            const miss = i + 1 < facts.length ? chk_bbs[i]! : slow_bb;
+            const t = this.b.emit("has_shape", [obj], { shape: f.key });
+            this.b.condBr(t, fast_bbs[i]!, [], miss, []);
+            this.b.sealBlock(fast_bbs[i]!);
+            this.b.sealBlock(miss);
+            if (miss !== slow_bb) this.b.setInsertPoint(miss);
+        }
 
-        this.b.setInsertPoint(fast_bb);
-        const v = this.b.emit("slot_load", [obj], { shape: f.key, slot: f.slot, repr: f.repr });
-        if (f.repr === "f64") {
-            // P4.5 typed slots: the load produces a raw f64 (the guard
-            // proved the repr; the slot bytes ARE the double).  Box once at
-            // the fast exit — the join stays boxed (its slow edge is the
-            // generic get), and the optimizer's region fusion + rawJoin
-            // machinery strips the box wherever the consumer is raw.
-            v.type = "f64";
-            const stats = this.mod_ctx.typed_stats;
-            if (stats) stats.typed_loads = (stats.typed_loads ?? 0) + 1;
-            const boxed = this.b.emit("box_f64", [v], {});
-            this.b.br(join_bb, [boxed]);
-        } else {
-            this.b.br(join_bb, [v]);
+        for (let i = 0; i < facts.length; i++) {
+            const f = facts[i]!;
+            this.b.setInsertPoint(fast_bbs[i]!);
+            const v = this.b.emit("slot_load", [obj], { shape: f.key, slot: f.slot, repr: f.repr });
+            if (f.repr === "f64") {
+                // P4.5 typed slots: the load produces a raw f64 (the guard
+                // proved the repr; the slot bytes ARE the double).  Box once at
+                // the fast exit — the join stays boxed (its slow edge is the
+                // generic get), and the optimizer's region fusion + rawJoin
+                // machinery strips the box wherever the consumer is raw.
+                v.type = "f64";
+                const stats = this.mod_ctx.typed_stats;
+                if (stats) stats.typed_loads = (stats.typed_loads ?? 0) + 1;
+                const boxed = this.b.emit("box_f64", [v], {});
+                this.b.br(join_bb, [boxed]);
+            } else {
+                this.b.br(join_bb, [v]);
+            }
         }
 
         this.b.setInsertPoint(slow_bb);
@@ -982,42 +1023,55 @@ class LowerFunction {
     // field repr — f64 fields take numbers fast, boxed fields take
     // non-numbers fast, everything else goes generic.
     propSet(objNode: e.Expression | null, obj: Inst, atom: string, v: Inst): void {
-        const f = this.shapeFactFor(objNode, atom);
-        if (!f) {
+        const facts = this.shapeFactFor(objNode, atom);
+        if (!facts) {
             this.b.emit("set_prop_atom", [obj, v], { atom: atom });
             return;
         }
 
-        const tag_bb = this.b.newBlock("shape_settag");
-        const fast_bb = this.b.newBlock("shape_setfast");
+        // per-fact tag+fast pair (mono creation order preserved: tag,
+        // fast, slow, join), then the P4.6 chain blocks
+        const tag_bbs = facts.map(() => this.b.newBlock("shape_settag"));
+        const fast_bbs = facts.map(() => this.b.newBlock("shape_setfast"));
+        const chk_bbs = facts.slice(1).map(() => this.b.newBlock("shape_setchk"));
         const slow_bb = this.b.newBlock("shape_setslow");
         const join_bb = this.b.newBlock("shape_setjoin");
 
-        const t = this.b.emit("has_shape", [obj], { shape: f.key });
-        this.b.condBr(t, tag_bb, [], slow_bb, []);
-        this.b.sealBlock(tag_bb);
+        for (let i = 0; i < facts.length; i++) {
+            const f = facts[i]!;
+            const miss = i + 1 < facts.length ? chk_bbs[i]! : slow_bb;
+            const t = this.b.emit("has_shape", [obj], { shape: f.key });
+            this.b.condBr(t, tag_bbs[i]!, [], miss, []);
+            this.b.sealBlock(tag_bbs[i]!);
+            if (miss !== slow_bb) this.b.sealBlock(miss);
 
-        this.b.setInsertPoint(tag_bb);
-        const isnum = this.b.emit("has_tag", [v], { tag: "number" });
-        if (f.repr === "f64") this.b.condBr(isnum, fast_bb, [], slow_bb, []);
-        else this.b.condBr(isnum, slow_bb, [], fast_bb, []);
-        this.b.sealBlock(fast_bb);
-        this.b.sealBlock(slow_bb);
-
-        this.b.setInsertPoint(fast_bb);
-        if (f.repr === "f64") {
-            // P4.5 typed slots: unbox under the has_tag guard (the true
-            // edge into this block proved v is a number, so the bits are
-            // the double) and store raw — the type system carries the
-            // repr proof the verifier's store rule now requires.
-            const raw = this.b.emit("unbox_f64", [v], {});
-            this.b.emit("slot_store", [obj, raw], { shape: f.key, slot: f.slot, repr: f.repr });
-            const stats = this.mod_ctx.typed_stats;
-            if (stats) stats.typed_stores = (stats.typed_stores ?? 0) + 1;
-        } else {
-            this.b.emit("slot_store", [obj, v], { shape: f.key, slot: f.slot, repr: f.repr });
+            this.b.setInsertPoint(tag_bbs[i]!);
+            const isnum = this.b.emit("has_tag", [v], { tag: "number" });
+            if (f.repr === "f64") this.b.condBr(isnum, fast_bbs[i]!, [], slow_bb, []);
+            else this.b.condBr(isnum, slow_bb, [], fast_bbs[i]!, []);
+            this.b.sealBlock(fast_bbs[i]!);
+            // slow's predecessors: every tag block plus the last miss edge
+            if (i === facts.length - 1) this.b.sealBlock(slow_bb);
+            if (i + 1 < facts.length) this.b.setInsertPoint(chk_bbs[i]!);
         }
-        this.b.br(join_bb, []);
+
+        for (let i = 0; i < facts.length; i++) {
+            const f = facts[i]!;
+            this.b.setInsertPoint(fast_bbs[i]!);
+            if (f.repr === "f64") {
+                // P4.5 typed slots: unbox under the has_tag guard (the true
+                // edge into this block proved v is a number, so the bits are
+                // the double) and store raw — the type system carries the
+                // repr proof the verifier's store rule now requires.
+                const raw = this.b.emit("unbox_f64", [v], {});
+                this.b.emit("slot_store", [obj, raw], { shape: f.key, slot: f.slot, repr: f.repr });
+                const stats = this.mod_ctx.typed_stats;
+                if (stats) stats.typed_stores = (stats.typed_stores ?? 0) + 1;
+            } else {
+                this.b.emit("slot_store", [obj, v], { shape: f.key, slot: f.slot, repr: f.repr });
+            }
+            this.b.br(join_bb, []);
+        }
 
         this.b.setInsertPoint(slow_bb);
         this.b.emit("set_prop_atom", [obj, v], { atom: atom });

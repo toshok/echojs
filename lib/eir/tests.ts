@@ -1985,9 +1985,10 @@ test("shape-oracle: TypeSig -> repr (num=f64, non-num unions=boxed, straddles de
 });
 
 // a stub oracle with receiver-shape facts: types Identifier receivers by
-// name; everything else declines as unmapped (the real oracle's fail-soft)
+// name; everything else declines as unmapped (the real oracle's fail-soft).
+// A receiver may carry one shape (mono) or two (the P4.6 poly chain).
 function stubShapeOracle(
-    shapes: Record<string, OracleShapeField[] | undefined>,
+    shapes: Record<string, OracleShapeField[] | OracleShapeField[][] | undefined>,
     types?: Record<string, TypeTag[] | undefined>
 ): TypeOracle {
     const base = stubOracle(types || {});
@@ -1995,9 +1996,11 @@ function stubShapeOracle(
         ...base,
         receiverShapeOfNode: (n) => {
             const id = n as { type?: string; name?: string };
-            const fields =
+            const entry =
                 id.type === "Identifier" && id.name !== undefined ? shapes[id.name] : undefined;
-            return fields ? { fields } : { declined: "unmapped" };
+            if (!entry) return { declined: "unmapped" };
+            const list = Array.isArray(entry[0]) ? (entry as OracleShapeField[][]) : [entry as OracleShapeField[]];
+            return { shapes: list };
         },
     };
 }
@@ -2080,6 +2083,111 @@ test("shapes: EJS_NO_SHAPE_GUARDS disables the diamonds", () => {
     } finally {
         delete process.env["EJS_NO_SHAPE_GUARDS"];
     }
+});
+
+// --- shapes-plan P4.6: 2-way polymorphic guard chains ----------------------------
+
+// the second class of the poly pair: same fields x/y at DIFFERENT slots
+// (plus its own z), so per-arm slot immediates are observable
+const PZXY: OracleShapeField[] = [
+    { name: "z", repr: "f64" },
+    { name: "x", repr: "f64" },
+    { name: "y", repr: "f64" },
+];
+
+test("shapes-poly: two exact shapes lower a get to a guard chain, one slow path", () => {
+    const { printed } = lowerWithOracle(
+        "function f(p) { return p.y; }",
+        stubShapeOracle({ p: [PXY, PZXY] })
+    );
+    const guards = (printed.match(/has_shape/g) || []).length;
+    assert(guards === 2, `expected 2 chained guards, got ${guards}`);
+    assertContains(printed, 'shape="x:f64,y:f64,s:boxed"');
+    assertContains(printed, 'shape="z:f64,x:f64,y:f64"');
+    assertContains(printed, "shape_chk"); // the second guard tests on the first's miss edge
+    assertContains(printed, "slot=1"); // y in {x,y,s}
+    assertContains(printed, "slot=2"); // y in {z,x,y}
+    const slows = (printed.match(/get_prop_atom/g) || []).length;
+    assert(slows === 1, `the chain shares ONE generic slow path, got ${slows}`);
+});
+
+test("shapes-poly: a field absent from either shape declines the whole site", () => {
+    // s lives only in PXY: the PZXY arm would need proto-lookup semantics,
+    // which only the generic path has (criterion 2 — no near-misses)
+    const { printed } = lowerWithOracle(
+        "function f(p) { return p.s; }",
+        stubShapeOracle({ p: [PXY, PZXY] })
+    );
+    assertNotContains(printed, "has_shape");
+    assertContains(printed, "get_prop_atom");
+});
+
+test("shapes-poly: stores chain with a tag split per arm, one generic path", () => {
+    const { printed } = lowerWithOracle(
+        "function f(p, v) { p.x = v; }",
+        stubShapeOracle({ p: [PXY, PZXY] })
+    );
+    assert((printed.match(/has_shape/g) || []).length === 2, "2 chained guards");
+    assert((printed.match(/has_tag/g) || []).length === 2, "a tag split per arm");
+    assert((printed.match(/slot_store/g) || []).length === 2, "a typed store per arm");
+    assert((printed.match(/set_prop_atom/g) || []).length === 1, "one generic path");
+    assertContains(printed, "shape_setchk");
+});
+
+test("shapes-poly: mixed reprs orient each arm by its own field repr", () => {
+    const A: OracleShapeField[] = [{ name: "x", repr: "f64" }];
+    const B: OracleShapeField[] = [
+        { name: "x", repr: "boxed" },
+        { name: "w", repr: "boxed" },
+    ];
+    const get = lowerWithOracle(
+        "function f(p) { return p.x; }",
+        stubShapeOracle({ p: [A, B] })
+    ).printed;
+    // only the f64 arm boxes its raw load
+    assert((get.match(/box_f64/g) || []).length === 1, "exactly one arm boxes");
+    assertContains(get, 'repr="f64"');
+    assertContains(get, 'repr="boxed"');
+    const set = lowerWithOracle(
+        "function f(p, v) { p.x = v; }",
+        stubShapeOracle({ p: [A, B] })
+    ).printed;
+    // one arm takes numbers fast (tag-true -> fast), the other non-numbers
+    assert(
+        /cond_br %\d+ -> \^shape_setfast\d+\(\), \^shape_setslow\d+\(\)/.test(set),
+        "f64 arm: tag-true -> fast"
+    );
+    assert(
+        /cond_br %\d+ -> \^shape_setslow\d+\(\), \^shape_setfast\d+\(\)/.test(set),
+        "boxed arm: tag-true -> slow"
+    );
+});
+
+test("shapes-poly: EJS_NO_POLY_SHAPE_GUARDS declines 2-shape sites, keeps mono", () => {
+    process.env["EJS_NO_POLY_SHAPE_GUARDS"] = "1";
+    try {
+        const poly = lowerWithOracle(
+            "function f(p) { return p.y; }",
+            stubShapeOracle({ p: [PXY, PZXY] })
+        ).printed;
+        assertNotContains(poly, "has_shape");
+        const mono = lowerWithOracle(
+            "function f(p) { return p.y; }",
+            stubShapeOracle({ p: PXY })
+        ).printed;
+        assertContains(mono, "has_shape");
+    } finally {
+        delete process.env["EJS_NO_POLY_SHAPE_GUARDS"];
+    }
+});
+
+test("shapes-poly: structurally equal shapes reported twice guard once", () => {
+    const { printed } = lowerWithOracle(
+        "function f(p) { return p.y; }",
+        stubShapeOracle({ p: [PXY, PXY] })
+    );
+    const guards = (printed.match(/has_shape/g) || []).length;
+    assert(guards === 1, `duplicate shapes must dedupe to a mono diamond, got ${guards}`);
 });
 
 // --- shapes: verifier rules (hand-built attack IR) -------------------------------
@@ -2297,6 +2405,29 @@ test("shapes-opt: consecutive gets on one receiver merge to one guard region", (
     assert(guards === 1, `expected 1 surviving has_shape, got ${guards}`);
     const loads = (printed.match(/slot_load/g) || []).length;
     assert(loads === 2, `expected 2 slot_loads, got ${loads}`);
+});
+
+test("shapes-poly-opt: chains pass the optimizer un-merged and re-verify", () => {
+    // The region matcher and fact folder are mono-strict by construction:
+    // a P4.6 chain's first guard has the second CHECK block as its miss
+    // edge (not a generic slow arm) and its join has three predecessors,
+    // so both machineries must refuse — everything survives verbatim and
+    // the module re-verifies.  (Chain-aware merging is future measured
+    // work; kernel wall time is at mono parity without it.)
+    const r = lowerFunctionNode(
+        parseFn("function f(p) { return p.x + p.x; }"),
+        undefined,
+        stubShapeOracle({ p: [PXY, PZXY] })
+    );
+    verifyModule(r.module);
+    const stats = optimizeFunction(r.fn, r.module);
+    verifyModule(r.module);
+    const printed = printFunction(r.fn);
+    assert(stats.shape_regions_merged === 0, `merged=${stats.shape_regions_merged}`);
+    assert(stats.shape_guards_folded === 0, `folded=${stats.shape_guards_folded}`);
+    assert(stats.shape_numeric_merged === 0, `het-merged=${stats.shape_numeric_merged}`);
+    const guards = (printed.match(/has_shape/g) || []).length;
+    assert(guards === 4, `2 sites x 2 chained guards must survive, got ${guards}`);
 });
 
 test("shapes-opt: a call between accesses kills the facts and refuses the merge", () => {
