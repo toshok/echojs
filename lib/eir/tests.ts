@@ -2386,6 +2386,8 @@ function shapeOptStats(): OptStats {
         shape_numeric_merged: 0,
         unbox_folds: 0,
         joins_threaded: 0,
+        shape_allocs_sunk: 0,
+        shape_guards_sunk: 0,
     };
 }
 
@@ -2990,6 +2992,143 @@ test("born-verify: a typed f64 store needs no has_tag, whatever the join", () =>
 test("born-verify: a boxed value into an f64 slot rejects by type", () => {
     assertThrows(() => verifyModule(buildConstJoinStore(false)), "raw f64");
     assertThrows(() => verifyModule(buildConstJoinStore(true)), "raw f64");
+});
+
+// --- sinking-plan S1: shaped-literal sinking -----------------------------------
+
+function lowerShapedSink(src: string): { printed: string; stats: OptStats } {
+    const r = lowerFunctionNode(
+        parseFn(src),
+        undefined,
+        stubShapeOracle({ o: PXY }, { a: ["number"] })
+    );
+    verifyModule(r.module);
+    const stats = optimizeFunction(r.fn, r.module);
+    verifyModule(r.module);
+    return { printed: printFunction(r.fn), stats };
+}
+
+test("sink-shaped: a non-escaping guarded literal scalar-replaces completely", () => {
+    // o's literal is born with PXY's exact shape (a types as number, b is
+    // boxed); every read folds to an operand, every guard resolves, the
+    // allocation drains away
+    const { printed, stats } = lowerShapedSink(
+        "function f(a, b) { var o = { x: 1, y: a, s: b }; return o.x + o.y + o.s; }"
+    );
+    assert(stats.shape_allocs_sunk === 1, `sunk=${stats.shape_allocs_sunk}`);
+    assert(stats.shape_guards_sunk >= 1, `guards=${stats.shape_guards_sunk}`);
+    assertNotContains(printed, "make_object_shaped");
+    assertNotContains(printed, "has_shape");
+    assertNotContains(printed, "slot_load");
+    assertNotContains(printed, "get_prop_atom");
+});
+
+test("sink-shaped: an escaping literal is untouched", () => {
+    const { printed, stats } = lowerShapedSink(
+        "function f(a, b) { var o = { x: 1, y: a, s: b }; return o; }"
+    );
+    assert(stats.shape_allocs_sunk === 0, `sunk=${stats.shape_allocs_sunk}`);
+    assertContains(printed, "make_object_shaped");
+});
+
+test("sink-shaped: a call-operand use escapes", () => {
+    const { printed, stats } = lowerShapedSink(
+        "function f(a, b, g) { var o = { x: 1, y: a, s: b }; g(o); return o.x; }"
+    );
+    assert(stats.shape_allocs_sunk === 0, `sunk=${stats.shape_allocs_sunk}`);
+    assertContains(printed, "make_object_shaped");
+});
+
+test("sink-shaped: a written literal declines wholesale", () => {
+    // the store lowers to a slot_store/set_prop_atom use of o — v1 treats
+    // every write as an escape (a write would also invalidate the static
+    // guard resolution)
+    const { printed, stats } = lowerShapedSink(
+        "function f(a, b) { var o = { x: 1, y: a, s: b }; o.x = 2; return o.x; }"
+    );
+    assert(stats.shape_allocs_sunk === 0, `sunk=${stats.shape_allocs_sunk}`);
+    assertContains(printed, "make_object_shaped");
+});
+
+test("sink-shaped: a non-own read blocks removal but own reads still fold", () => {
+    const { printed, stats } = lowerShapedSink(
+        "function f(a, b) { var o = { x: 1, y: a, s: b }; return o.x + o.zzz; }"
+    );
+    assert(stats.shape_allocs_sunk === 0, `sunk=${stats.shape_allocs_sunk}`);
+    assert(stats.reads_folded >= 1, `folded=${stats.reads_folded}`);
+    assertContains(printed, "make_object_shaped");
+    assertContains(printed, 'atom="zzz"'); // the prototype read survives
+});
+
+test("sink-shaped: shape mismatch resolves guards to the generic arm and still sinks", () => {
+    // b is untyped, so the literal's y field is born boxed — its interned
+    // shape differs from PXY, every has_shape(o, PXY) is statically false,
+    // and the reads fold through the generic arm
+    const { printed, stats } = lowerShapedSink(
+        "function f(b, c) { var o = { x: 1, y: b, s: c }; return o.x + o.y; }"
+    );
+    assert(stats.shape_allocs_sunk === 1, `sunk=${stats.shape_allocs_sunk}`);
+    assertNotContains(printed, "make_object_shaped");
+    assertNotContains(printed, "has_shape");
+    assertNotContains(printed, "slot_load");
+});
+
+// unprovable-repr attack: the shape KEY matches but an f64 field's operand
+// is not provably a number (only buildable by hand — lowering derives repr
+// and provability from the same predicate).  the guard must fold FALSE:
+// folding true would feed a raw slot_load from a possibly-non-number.
+test("sink-shaped: an unprovable f64 operand folds the guard to the generic arm", () => {
+    const fb = new FunctionBuilder("unprovable", ["%env", "%this", "v"]);
+    const v = fb.fn.entry!.params[2]!;
+    const shapeKey = "x:f64,y:f64";
+    const alloc = fb.emit("make_object_shaped", [v, v], { shape: shapeKey });
+    const fast = fb.newBlock("fast");
+    const slow = fb.newBlock("slow");
+    const j = fb.newBlock("j");
+    const jp = j.addParam("r");
+    const g = fb.emit("has_shape", [alloc], { shape: shapeKey });
+    fb.condBr(g, fast, [], slow, []);
+    fb.sealBlock(fast);
+    fb.sealBlock(slow);
+    fb.setInsertPoint(fast);
+    const l = fb.emit("slot_load", [alloc], { shape: shapeKey, slot: 0, repr: "f64" });
+    l.type = "f64";
+    fb.br(j, [fb.emit("box_f64", [l], {})]);
+    fb.setInsertPoint(slow);
+    fb.br(j, [fb.emit("get_prop_atom", [alloc], { atom: "x" })]);
+    fb.sealBlock(j);
+    fb.setInsertPoint(j);
+    fb.ret(jp);
+    const fn = fb.finish();
+    const mod = new Module("unprovable_mod");
+    mod.addFunction(fn);
+    mod.internShape([
+        { name: "x", repr: "f64" },
+        { name: "y", repr: "f64" },
+    ]);
+    verifyModule(mod);
+    const stats = optimizeFunction(fn, mod);
+    verifyModule(mod);
+    const printed = printFunction(fn);
+    assert(stats.shape_guards_sunk === 1, `guards=${stats.shape_guards_sunk}`);
+    assert(stats.shape_allocs_sunk === 1, `sunk=${stats.shape_allocs_sunk}`);
+    // the raw fast arm must be gone (folding true would have kept it)
+    assertNotContains(printed, "slot_load");
+    assertNotContains(printed, "make_object_shaped");
+    assertNotContains(printed, "get_prop_atom"); // generic arm folded to v
+});
+
+test("sink-shaped: EJS_NO_SHAPED_SINK leaves the allocation alone", () => {
+    process.env["EJS_NO_SHAPED_SINK"] = "1";
+    try {
+        const { printed, stats } = lowerShapedSink(
+            "function f(a, b) { var o = { x: 1, y: a, s: b }; return o.x + o.y; }"
+        );
+        assert(stats.shape_allocs_sunk === 0, `sunk=${stats.shape_allocs_sunk}`);
+        assertContains(printed, "make_object_shaped");
+    } finally {
+        delete process.env["EJS_NO_SHAPED_SINK"];
+    }
 });
 
 // --------------------------------------------------------------------------------

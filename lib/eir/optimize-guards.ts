@@ -147,7 +147,7 @@ function retargetEdge(inst: Inst, targetIndex: number, newBlock: Block, newArgs:
 // replace a block's cond_br terminator with an unconditional br to
 // targets[keepIndex] (edge args preserved); the condition goes dead and
 // DCE sweeps it later
-function condBrToBr(fn: Func, block: Block, keepIndex: number): void {
+export function condBrToBr(fn: Func, block: Block, keepIndex: number): void {
     const cbr = block.terminator!;
     const keep = cbr.targets![keepIndex]!;
     removePredEdge(keep.block, cbr, keepIndex);
@@ -162,7 +162,7 @@ function condBrToBr(fn: Func, block: Block, keepIndex: number): void {
 
 // drop blocks no longer reachable from entry and rebuild predEdges so
 // no stale edges (from deleted blocks) survive
-function sweepUnreachableBlocks(fn: Func): boolean {
+export function sweepUnreachableBlocks(fn: Func): boolean {
     const reachable = new Set<Block>([fn.entry!]);
     const stack: Block[] = [fn.entry!];
     while (stack.length > 0) {

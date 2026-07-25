@@ -20,12 +20,14 @@
 // explicit normal/unwind targets (may-throw ops inside protected
 // regions) are block terminators; we neither fold nor remove them.
 
-import { Func, Inst, Module, replaceAllUses } from "./ir";
+import { Func, Inst, Module, ShapeField, replaceAllUses } from "./ir";
 import { Effect, opInfo } from "./ops";
 import {
+    condBrToBr,
     optimizeGuardRegions,
     optimizeShapeRegions,
     rawJoinParams,
+    sweepUnreachableBlocks,
     threadBooleanJoins,
 } from "./optimize-guards";
 
@@ -48,6 +50,10 @@ export interface OptStats {
     unbox_folds: number;
     // Phase 3.6: constant edges threaded past boxed-boolean re-tests
     joins_threaded: number;
+    // sinking-plan S1: non-escaping make_object_shaped scalar-replaced,
+    // and the shape guards on them resolved statically
+    shape_allocs_sunk: number;
+    shape_guards_sunk: number;
 }
 
 function newStats(): OptStats {
@@ -65,6 +71,8 @@ function newStats(): OptStats {
         shape_numeric_merged: 0,
         unbox_folds: 0,
         joins_threaded: 0,
+        shape_allocs_sunk: 0,
+        shape_guards_sunk: 0,
     };
 }
 
@@ -277,15 +285,191 @@ function sinkAlloc(useMap: UseMap, fn: Func, alloc: Inst, stats: OptStats): bool
     return changed;
 }
 
-function sinkAllocations(useMap: UseMap, fn: Func, stats: OptStats): boolean {
+// --- shaped-literal sinking (sinking-plan S1) ------------------------------
+//
+// make_object_shaped carries its field values as operands (shape field
+// order, boxed) and its shape as an immediate — there are no
+// initializing stores.  For a non-escaping, never-written shaped
+// allocation the birth shape is invariant for the object's whole
+// lifetime (nothing else can transition it), so its has_shape guards
+// resolve statically and its slot/get reads fold to the operands.
+// Guards fold TRUE only when every f64-repr field's operand is provably
+// a number (box_f64 or number const) — folding true exposes raw
+// slot_loads, and feeding those from a non-number would manufacture
+// garbage bits.  Folding FALSE is always sound: the diamond's arms are
+// twins, and the generic arm's reads fold to the same operands.
+
+// how a shaped allocation's use participates
+interface ShapedAllocUses {
+    // has_shape guards whose result feeds only their block's cond_br
+    guards: Inst[];
+    // slot_load reads against the birth shape
+    slotReads: Inst[];
+    // get_prop_atom reads (own-field ones fold; others block removal)
+    atomReads: Inst[];
+    // has_shape whose result ALSO flows somewhere else — leaves the
+    // alloc alive but doesn't escape it
+    unfoldableGuards: Inst[];
+    escapes: boolean;
+}
+
+function classifyShapedUses(useMap: UseMap, alloc: Inst): ShapedAllocUses {
+    const r: ShapedAllocUses = {
+        guards: [],
+        slotReads: [],
+        atomReads: [],
+        unfoldableGuards: [],
+        escapes: false,
+    };
+    for (const use of usesOf(useMap, alloc)) {
+        const { inst, index } = use;
+        if (index === -1) {
+            r.escapes = true;
+        } else if (inst.op === "has_shape" && index === 0) {
+            const guardUses = usesOf(useMap, inst);
+            if (
+                guardUses.length === 1 &&
+                guardUses[0]!.inst.op === "cond_br" &&
+                guardUses[0]!.index === 0 &&
+                guardUses[0]!.inst.block === inst.block
+            )
+                r.guards.push(inst);
+            else r.unfoldableGuards.push(inst);
+        } else if (inst.op === "slot_load" && index === 0) {
+            r.slotReads.push(inst);
+        } else if (inst.op === "get_prop_atom" && index === 0) {
+            r.atomReads.push(inst);
+        } else {
+            // every write (slot_store, set_prop_atom), computed access,
+            // call/return/throw operand, value position: escape.  v1
+            // keeps writes out entirely — a write would also invalidate
+            // the static guard resolution above.
+            r.escapes = true;
+        }
+    }
+    return r;
+}
+
+// is this operand provably a number (safe to feed a raw f64 slot)?
+function provablyNumberOperand(v: Inst): boolean {
+    return v.op === "box_f64" || (v.op === "const" && v.imms.kind === "number");
+}
+
+// the raw-f64 replacement for a slot_load of field value `v`, inserted
+// before `read` when a fresh const is needed
+function rawF64ValueBefore(fn: Func, read: Inst, v: Inst): Inst | null {
+    if (v.op === "box_f64") return v.operands[0]!;
+    if (v.op === "const" && v.imms.kind === "number") {
+        const c = new Inst(fn, "f64_const", [], { value: v.imms.value });
+        c.type = "f64";
+        const b = read.block!;
+        c.block = b;
+        b.insts.splice(b.insts.indexOf(read), 0, c);
+        return c;
+    }
+    return null;
+}
+
+function shapedFieldIndex(fields: readonly ShapeField[], name: string): number {
+    for (let i = 0; i < fields.length; i++) if (fields[i]!.name === name) return i;
+    return -1;
+}
+
+// try to scalar-replace one shaped allocation.  reads fold immediately;
+// guard branches rewrite to their resolved edge (the dead arm and the
+// then-unused has_shape are reclaimed by the caller's unreachable-block
+// sweep + DCE, and the alloc itself is removed in a later round once
+// its use list has drained).
+function sinkShapedAlloc(
+    useMap: UseMap,
+    fn: Func,
+    m: Module,
+    alloc: Inst,
+    stats: OptStats
+): boolean {
+    const shape = alloc.imms.shape as string;
+    const fields = m.shapes.get(shape);
+    if (!fields || fields.length !== alloc.operands.length) return false;
+
+    const uses = classifyShapedUses(useMap, alloc);
+    if (uses.escapes) return false;
+
+    // guards fold true only when every f64 field's operand is provably
+    // a number; otherwise the generic arm is the (equally correct) route
+    const reprsProven = fields.every(
+        (f, i) => f.repr !== "f64" || provablyNumberOperand(alloc.operands[i]!)
+    );
+
+    let changed = false;
+
+    for (const read of uses.slotReads) {
+        if (read.targets) continue;
+        if ((read.imms.shape as string) !== shape) continue; // other-shape arm: dies with it
+        const k = read.imms.slot as number;
+        if (k < 0 || k >= fields.length) continue;
+        const v = alloc.operands[k]!;
+        if ((read.imms.repr as string) === "f64") {
+            const raw = rawF64ValueBefore(fn, read, v);
+            if (!raw) continue; // unprovable: the false-folded guard keeps this arm dead
+            foldRead(useMap, fn, read, raw);
+        } else {
+            foldRead(useMap, fn, read, v);
+        }
+        stats.reads_folded++;
+        changed = true;
+    }
+
+    for (const read of uses.atomReads) {
+        if (read.targets) continue;
+        const k = shapedFieldIndex(fields, read.imms.atom as string);
+        if (k < 0) continue; // prototype read: unfoldable, blocks removal
+        foldRead(useMap, fn, read, alloc.operands[k]!);
+        stats.reads_folded++;
+        changed = true;
+    }
+
+    for (const guard of uses.guards) {
+        const block = guard.block!;
+        const cbr = block.terminator!;
+        if (cbr.op !== "cond_br") continue; // already rewritten this round
+        const takeTrue = (guard.imms.shape as string) === shape && reprsProven;
+        condBrToBr(fn, block, takeTrue ? 0 : 1);
+        // the cond_br is gone; keep the round's use map accurate
+        const guardUses = useMap[guard.id];
+        if (guardUses) useMap[guard.id] = guardUses.filter((u) => u.inst !== cbr);
+        stats.shape_guards_sunk++;
+        changed = true;
+    }
+
+    // when nothing uses the alloc anymore, it goes now; otherwise the
+    // next fixpoint round (fresh use map, dead arms swept) finishes
+    const remaining = usesOf(useMap, alloc).filter((u) => u.inst.block !== null);
+    if (remaining.length === 0) {
+        removeInst(useMap, alloc);
+        stats.shape_allocs_sunk++;
+        changed = true;
+    }
+    return changed;
+}
+
+function sinkAllocations(useMap: UseMap, fn: Func, m: Module | undefined, stats: OptStats): boolean {
     const candidates: Inst[] = [];
+    const shaped: Inst[] = [];
+    const noShaped = !!process.env["EJS_NO_SHAPED_SINK"];
     fn.forEachInst((inst) => {
         if (inst.op === "make_object" || inst.op === "make_array") candidates.push(inst);
+        else if (inst.op === "make_object_shaped" && !noShaped) shaped.push(inst);
     });
     let changed = false;
     for (const c of candidates) {
         if (!c.block) continue; // removed by an earlier candidate's fold
         if (sinkAlloc(useMap, fn, c, stats)) changed = true;
+    }
+    if (m) {
+        for (const c of shaped) {
+            if (!c.block) continue;
+            if (sinkShapedAlloc(useMap, fn, m, c, stats)) changed = true;
+        }
     }
     return changed;
 }
@@ -614,7 +798,8 @@ function foldUnboxOfBox(fn: Func, stats: OptStats): boolean {
 function removableWhenDead(inst: Inst): boolean {
     if (inst.op === "blockparam") return false;
     if (inst.targets && inst.targets.length > 0) return false;
-    if (inst.op === "make_object" || inst.op === "make_array") return true;
+    if (inst.op === "make_object" || inst.op === "make_array" || inst.op === "make_object_shaped")
+        return true;
     const info = opInfo(inst.op);
     if (info.terminator) return false;
     return (info.effects & ~(Effect.READ | Effect.GC)) === 0;
@@ -647,6 +832,9 @@ function eliminateDead(fn: Func, stats: OptStats): boolean {
         if (idx >= 0) b.insts.splice(idx, 1);
         inst.block = null;
         stats.dead_removed++;
+        // a shaped alloc reaching DCE means its reads/guards all folded
+        // (or it was never consumed) — that IS the sink completing
+        if (inst.op === "make_object_shaped") stats.shape_allocs_sunk++;
         changed = true;
         for (const o of inst.operands) {
             const n = --counts[o.id]!;
@@ -671,7 +859,10 @@ export function optimizeFunction(fn: Func, module?: Module, stats?: OptStats): O
         const useMap = buildUseMap(fn);
         if (scalarReplaceEnvs(useMap, fn, s)) changed = true;
         if (foldIteratorWrappers(useMap, fn, s)) changed = true;
-        if (sinkAllocations(useMap, fn, s)) changed = true;
+        if (sinkAllocations(useMap, fn, module, s)) changed = true;
+        // shaped sinking folds guard branches; reclaim the dead arms so
+        // the next round's use map lets the alloc itself drain
+        if (sweepUnreachableBlocks(fn)) changed = true;
         if (eliminateDead(fn, s)) changed = true;
         if (!changed || ++rounds > 10) break;
     }

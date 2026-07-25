@@ -477,7 +477,9 @@ export function collectEIRToplevel(
                 stats.raw_join_params ||
                 stats.shape_guards_folded ||
                 stats.shape_regions_merged ||
-                stats.shape_numeric_merged
+                stats.shape_numeric_merged ||
+                stats.shape_allocs_sunk ||
+                stats.shape_guards_sunk
             )
                 debug.log(
                     1,
@@ -490,7 +492,9 @@ export function collectEIRToplevel(
                         `${stats.raw_join_params} raw f64 join param(s), ` +
                         `${stats.shape_guards_folded} shape guard(s) folded, ` +
                         `${stats.shape_regions_merged} shape region(s) merged, ` +
-                        `${stats.shape_numeric_merged} shape+numeric region(s) merged`
+                        `${stats.shape_numeric_merged} shape+numeric region(s) merged, ` +
+                        `${stats.shape_allocs_sunk} shaped alloc(s) sunk, ` +
+                        `${stats.shape_guards_sunk} shape guard branch(es) resolved`
                 );
             verifyModule(eir_module);
 
