@@ -122,12 +122,16 @@ _ejs_generator_start(EJSGenerator* gen)
     _ejs_gc_push_generator(gen);
     ejsval undef_this = _ejs_undefined;
     ejsval rv = _ejs_invoke_closure(gen->body, &undef_this, 0, NULL, _ejs_undefined);
-    _ejs_gc_pop_generator();
 
     // the body's return value is the final iteration result's value
-    // (`function* g() { return 5; }` -> { value: 5, done: true })
+    // (`function* g() { return 5; }` -> { value: 5, done: true }).
+    // The iter result is allocated BEFORE the generator leaves the active
+    // chain: we are still executing on the generator's stack here, and a
+    // collection triggered by this allocation must know that (gc-plan P0 —
+    // mark_thread_stack's range depends on the chain).
     gen->completed = EJS_TRUE;
     gen->yielded_value = _ejs_create_iter_result(rv, _ejs_true);
+    _ejs_gc_pop_generator();
 }
 
 // makecontext's variadic arguments are ints, so a 64-bit pointer passed
@@ -156,6 +160,8 @@ _ejs_generator_new (ejsval generator_body)
     rv->sent_value = _ejs_undefined;
 
     rv->stack = malloc(GENERATOR_STACK_SIZE);
+    rv->stack_size = GENERATOR_STACK_SIZE;
+    rv->caller_stack_top = NULL;
     getcontext(&rv->generator_context);
     rv->generator_context.uc_stack.ss_sp = rv->stack;
     rv->generator_context.uc_stack.ss_size = GENERATOR_STACK_SIZE;
@@ -200,6 +206,7 @@ _ejs_generator_send (ejsval generator, ejsval arg) {
     gen->started = EJS_TRUE;
     gen->yielded_value = _ejs_undefined;
     gen->sent_value = arg;
+    gen->caller_stack_top = (void*)&gen; // GC: the suspended segment starts here
     swapcontext(&gen->caller_context, &gen->generator_context);
     return gen->yielded_value;
 }
@@ -210,6 +217,7 @@ _ejs_generator_throw (ejsval generator, ejsval arg) {
     gen->yielded_value = _ejs_undefined;
     gen->sent_value = arg;
     gen->throwing = EJS_TRUE;
+    gen->caller_stack_top = (void*)&gen; // GC: the suspended segment starts here
     swapcontext(&gen->caller_context, &gen->generator_context);
     return gen->yielded_value;
 }
@@ -272,6 +280,7 @@ static EJS_NATIVE_FUNC(_ejs_Generator_prototype_return) {
     gen->returning = EJS_TRUE;
     gen->yielded_value = _ejs_undefined;
     gen->sent_value = arg;
+    gen->caller_stack_top = (void*)&gen; // GC: the suspended segment starts here
     swapcontext(&gen->caller_context, &gen->generator_context);
     return gen->yielded_value;
 }
@@ -359,31 +368,41 @@ _ejs_generator_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     _ejs_gc_mark_conservative_range(&gen->caller_context, (char*)&gen->caller_context + sizeof(ucontext_t));
 
     if (gen->stack) {
-        _ejs_gc_mark_conservative_range(gen->stack,
+        void* stack_end = gen->stack + gen->stack_size;
+        void* saved_sp =
 #if __APPLE__
 #if TARGET_CPU_AMD64
-                                        (void*)gen->generator_context.__mcontext_data.__ss.__rsp
+                         (void*)gen->generator_context.__mcontext_data.__ss.__rsp
 #elif TARGET_CPU_X86
-                                        (void*)gen->generator_context.__mcontext_data.__ss.__esp
+                         (void*)gen->generator_context.__mcontext_data.__ss.__esp
 #elif TARGET_CPU_ARM
-                                        (void*)gen->generator_context.__mcontext_data.__ss.__sp
+                         (void*)gen->generator_context.__mcontext_data.__ss.__sp
 #elif TARGET_CPU_ARM64
-                                        (void*)gen->generator_context.__mcontext_data.__ss.__sp
+                         (void*)gen->generator_context.__mcontext_data.__ss.__sp
 #else
 #error "unimplemented darwin cpu arch"
 #endif
 #elif linux
 #if TARGET_CPU_AMD64
-                                        (void*)gen->generator_context.uc_mcontext.gregs[REG_RSP]
+                         (void*)gen->generator_context.uc_mcontext.gregs[REG_RSP]
 #elif TARGET_CPU_ARM64
-                                        (void*)gen->generator_context.uc_mcontext.sp
+                         (void*)gen->generator_context.uc_mcontext.sp
 #else
 #error "unimplemented linux cpu arch"
 #endif
 #else
 #error "unimplemented platform"
 #endif
-                                    );
+                         ;
+        // The stack grows DOWN: the live suspended frames sit between the
+        // suspension SP and the stack's END.  (This scan used to cover
+        // [stack, sp) — the dead region — and so missed every live frame;
+        // gc-plan P0.)  An SP outside the range (never-started context,
+        // garbage) degrades to scanning the whole stack, which is merely
+        // conservative.
+        if (saved_sp < gen->stack || saved_sp > stack_end)
+            saved_sp = gen->stack;
+        _ejs_gc_mark_conservative_range(saved_sp, stack_end);
     }
 
     _ejs_Object_specops.Scan (obj, scan_func);

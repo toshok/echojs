@@ -37,6 +37,14 @@ typedef struct {
     EJSBool completed;
 
     void* stack;
+    size_t stack_size;
+
+    // the caller-side stack position recorded just before each swap INTO
+    // this generator (the address of a local in the resuming frame).  While
+    // the generator runs, its caller's frames live ABOVE this address (the
+    // stack grows down) — the GC scans [caller_stack_top, caller's stack
+    // end) to cover the suspended segment (gc-plan P0).
+    void* caller_stack_top;
 
     ucontext_t generator_context;
     ucontext_t caller_context;

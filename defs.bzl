@@ -77,10 +77,15 @@ EJS_RUNLOOP_IMPL = select({
     "config//os:macos": "darwin",
 })
 
-# Mirrors CFLAGS + per-target defines from mk/config.mk.
+# Mirrors CFLAGS + per-target defines from mk/config.mk — except the
+# optimization level: the runtime moved -O0 -> -O2 at gc-plan P0 (the
+# plan's "single cheapest runtime speedup"; scanner assumptions
+# re-verified there — MARK_REGISTERS spills callee-saved registers, the
+# ABI pins live-across-call values to stack/callee-saved, and interior
+# pointers canonicalize in both the page and (since P0) LOS lookups).
 EJS_COMPILER_FLAGS = [
     "-g",
-    "-O0",
+    "-O2",
     "-Wall",
     "-Wno-unused-function",
     "-Wno-unused-variable",

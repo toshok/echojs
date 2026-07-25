@@ -431,7 +431,9 @@ GC, and these are cheap:
   collector itself. The conservative scanner's assumptions (register spills,
   no hidden pointer representations) must be re-verified under `-O2` — do it
   in Phase 0 while instrumentation is fresh. LTO across runtime/user-code is a
-  further step with the same caveat.
+  further step with the same caveat.  *(DONE at P0: `-O2` landed after
+  verification — self-compile 3.06× faster, types-bench2 2.9×; see
+  gc-p0-results.md.  LTO remains open.)*
 - **`env_load`/`env_store` runtime-call round-trip** — inline the slot address
   computation (also required for precise roots; see above). Can land early and
   alone.
@@ -454,6 +456,15 @@ through Phase 3 for A/B and differential testing.
   for what would be young vs. old. Run the `-O2`-runtime experiment and
   re-verify scanner assumptions. **Gate: the numbers.** They size the payoff of
   every later phase and decide how early precise JS frames need to land.
+  **DONE 2026-07-24 — docs/gc-p0-results.md.**  The generator work found
+  FOUR bugs (crash on collect-during-generator-execution; unscanned
+  suspended main segment; alloc-after-pop on completion; and the
+  suspended-stack scan bounds INVERTED — it scanned the dead region and
+  missed every live frame), pinned by generator23-25 under gc-stress;
+  LOS lookups made interior-tolerant.  The numbers: 2.4-3.4% steady
+  young survival, 39% closureenv allocation share, pins in the hundreds
+  of objects/KBs per cycle (⇒ P2 ships on conservative roots; P3 stays
+  behind it), and the `-O2` runtime landed at 3.06× on the self-compile.
 
 - **Phase 1 — Header widening + forwarding plumbing.** 64-bit header, bits
   reserved per the shapes tie-in; coordinated `runtime/` + `lib/types.ts`
@@ -581,9 +592,18 @@ bounds as needed.
 
 ## Phase checklist (for /goal sessions)
 
-- [ ] **P0** generator-stack fix; alloc/survival/pin instrumentation (optimizer
+- [x] **P0** generator-stack fix; alloc/survival/pin instrumentation (optimizer
       on); `-O2`-runtime experiment + scanner re-verification.
       *Gate:* matrix green; numbers recorded in this doc or a results doc.
+      DONE 2026-07-24 — docs/gc-p0-results.md has the numbers.  Headlines:
+      four latent generator-scan bugs fixed (collection-on-generator-stack
+      segfaulted; the suspended-stack scan was INVERTED — dead region
+      scanned, live frames missed) + LOS interior-pointer tolerance;
+      profile: self-compile = 79.5M allocs/3.4GB, 39% closureenv,
+      steady-state young survival 2.4-3.4% of bytes, pins 380-650
+      objects/cycle (KBs — conservative pinning is a non-issue, so P2
+      proceeds WITHOUT P3); runtime `-O2` landed: self-compile 127s→42s
+      (3.06×), types-bench2 2.00s→0.68s.
 - [ ] **P1** 64-bit header (+ reserved shape/trace bits) + `lib/types.ts`
       lockstep; forwarding helpers.
       *Gate:* matrix green, all three bootstrap targets.

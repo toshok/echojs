@@ -364,6 +364,13 @@ struct _LargeObjectInfo {
 static EJSList heap_pages[HEAP_PAGELISTS_COUNT];
 static LargeObjectInfo *los_list;
 
+// gc-plan P0 instrumentation state (definitions live with the profile
+// block further down, before the mark helpers use them)
+static EJSBool gc_profile;
+static struct timeval prof_start_tv;
+static void profile_note_pin(PageInfo* page, uint32_t cell_idx, GCObjectPtr raw);
+static void profile_report_shutdown(void);
+
 void* ptr_to_arena(void* ptr) { return PTR_TO_ARENA(ptr); }
 void* ptr_to_arena_page_base(void* ptr) { return PTR_TO_ARENA_PAGE_BASE(ptr); }
 uintptr_t ptr_to_arena_page_index(void* ptr) { return PTR_TO_ARENA_PAGE_INDEX(ptr); }
@@ -545,10 +552,16 @@ find_page_and_cell_from_arena(GCObjectPtr ptr, uint32_t *cell_idx, Arena *arena)
         return page;
     }
 
-    // check if it's in the LOS
+    // check if it's in the LOS.  Interior pointers match too (gc-plan
+    // P0): a conservative reference may be a derived pointer whose base
+    // value the optimizer discarded — with an exact-base match a large
+    // object referenced ONLY through an interior pointer (e.g. a flat
+    // string's data) would be collected out from under it.  Callers
+    // canonicalize through cell_idx 0, so an interior hit marks the base.
     LOCK_GC();
     for (LargeObjectInfo *lobj = los_list; lobj; lobj = lobj->next) {
-        if (lobj->page_info.page_start == ptr) {
+        void* start = lobj->page_info.page_start;
+        if (ptr >= start && ptr < start + lobj->page_info.cell_size) {
             UNLOCK_GC();
             if (cell_idx)
                 *cell_idx = 0;
@@ -710,6 +723,14 @@ _ejs_gc_init()
     if (n_allocs)
         collect_every_alloc = atoi(n_allocs);
 
+    // gc-plan P0: allocation/survival/pin instrumentation.  The summary
+    // goes through atexit because _ejs_gc_shutdown is compiled out by
+    // default (GC_ON_SHUTDOWN in main.c).
+    gc_profile = getenv("EJS_GC_PROFILE") != NULL;
+    gettimeofday (&prof_start_tv, NULL);
+    if (gc_profile)
+        atexit (profile_report_shutdown);
+
     // allocate an initial arenas
     for (int i = 0; i < 10; i ++)
         arena_new();
@@ -823,6 +844,12 @@ mark_pointers_in_range(GCObjectPtr* low, GCObjectPtr* high)
         // XXX more checks before we start treating the pointer like a GCObjectPtr?
         BitmapCell cell = page->page_bitmap[cell_idx];
         if (IS_FREE(cell))   continue; // skip free cells
+
+        // gc-P0: a conservative hit pins under the mover — recorded even
+        // when the target is already marked (the white check below is a
+        // marking optimization, not a pin filter)
+        if (gc_profile) profile_note_pin(page, cell_idx, gcptr);
+
         if (!IS_WHITE(cell)) continue; // skip pointers to gray/black cells
 
         // canonicalize interior pointers to the start of their cell; the
@@ -864,6 +891,11 @@ mark_ejsvals_in_range(void* low, void* high)
             // XXX more checks before we start treating the pointer like a GCObjectPtr?
             BitmapCell cell = page->page_bitmap[cell_idx];
             if (IS_FREE(cell)) continue; // skip free cells
+
+            // gc-P0: a conservative hit pins under the mover — recorded
+            // even when the target is already marked
+            if (gc_profile) profile_note_pin(page, cell_idx, gcptr);
+
             if (!IS_WHITE(cell)) continue; // skip pointers to gray/black cells
 
             // canonicalize interior pointers to the start of their cell; the
@@ -884,6 +916,219 @@ static int num_object_allocs = 0;
 static int num_closureenv_allocs = 0;
 static int num_primstr_allocs = 0;
 static int num_primsym_allocs = 0;
+
+// ---- gc-plan P0: measurement instrumentation (EJS_GC_PROFILE=1) -----------
+//
+// Two header bits from the gc-reserved range (57-63; see ejs-types.h — the
+// shapes machinery masks its 24-bit index, so these are invisible to it):
+//
+//   YOUNG:  set at allocation, cleared on the first collection the object
+//           survives.  "young" therefore means "allocated since the last
+//           collection" — exactly the population a generational nursery
+//           (gc-P2) would manage, so per-cycle young-survival is THE
+//           number that sizes the nursery payoff.
+//   PINNED: set (once per cycle) when a CONSERVATIVE reference — C stack,
+//           spilled registers, generator stacks/contexts — hits the
+//           object.  Under the mover these are the objects that cannot
+//           be evacuated this cycle; their count/bytes/sources size the
+//           payoff of precise JS frames (gc-P3) and decide its ordering.
+//
+// The YOUNG bit is set unconditionally (an OR folded into the header
+// store the allocator already does); everything else is gated on
+// gc_profile so the measured path stays clean when profiling is off.
+#define EJS_GC_HEADER_YOUNG  (1ULL << 57)
+#define EJS_GC_HEADER_PINNED (1ULL << 58)
+
+enum {
+    PROF_SRC_CSTACK = 0,   // conservative C-stack ranges (incl. suspended segments)
+    PROF_SRC_REGS = 1,     // spilled register file
+    PROF_SRC_GENSTACK = 2, // suspended generator stacks + saved ucontexts
+    PROF_SRC_COUNT
+};
+static const char* prof_src_names[PROF_SRC_COUNT] = { "cstack", "regs", "genstack" };
+static int prof_pin_source = PROF_SRC_CSTACK;
+
+#define PROF_NBUCKETS 12 // ffs buckets 16B.. + [0] = LOS
+static uint64_t prof_alloc_count[PROF_NBUCKETS];
+static uint64_t prof_alloc_bytes[PROF_NBUCKETS];
+static uint64_t prof_kind_count[4]; // primstr, primsym, object, closureenv
+static uint64_t prof_alloc_total_count = 0;
+static uint64_t prof_alloc_total_bytes = 0;
+// the young population: allocations since the last collection
+static uint64_t prof_young_count = 0;
+static uint64_t prof_young_bytes = 0;
+// per-cycle pin accounting (reset after each report)
+static uint64_t prof_pin_count[PROF_SRC_COUNT];
+static uint64_t prof_pin_bytes[PROF_SRC_COUNT];
+static uint64_t prof_pin_young = 0, prof_pin_old = 0;
+static uint64_t prof_pin_env_interior = 0, prof_pin_los = 0;
+static uint64_t prof_collections = 0;
+static uint64_t prof_total_pause_usec = 0;
+static const char* prof_gc_reason = "?";
+
+static void
+profile_note_alloc(size_t size, int ffs_bucket, EJSScanType scan_type)
+{
+    int idx;
+    if (ffs_bucket > OBJECT_SIZE_HIGH_LIMIT_BITS)
+        idx = 0; // LOS
+    else {
+        idx = ffs_bucket - OBJECT_SIZE_LOW_LIMIT_BITS;
+        if (idx < 1) idx = 1;
+        if (idx >= PROF_NBUCKETS) idx = PROF_NBUCKETS - 1;
+    }
+    prof_alloc_count[idx]++;
+    prof_alloc_bytes[idx] += size;
+    prof_alloc_total_count++;
+    prof_alloc_total_bytes += size;
+    switch (scan_type) {
+    case EJS_SCAN_TYPE_PRIMSTR:    prof_kind_count[0]++; break;
+    case EJS_SCAN_TYPE_PRIMSYM:    prof_kind_count[1]++; break;
+    case EJS_SCAN_TYPE_OBJECT:     prof_kind_count[2]++; break;
+    case EJS_SCAN_TYPE_CLOSUREENV: prof_kind_count[3]++; break;
+    }
+    prof_young_count++;
+    prof_young_bytes += size;
+}
+
+// a conservative reference hit an allocated cell: under the mover this
+// object is pinned for the cycle.  counted once per cycle per object
+// (dedupe via the PINNED header bit), attributed to the scan source that
+// found it first, split young/old, with env-interior-pointer and LOS
+// sub-counts.  runs BEFORE the white-check filter: a hit on an
+// already-marked object still pins it.
+static void
+profile_note_pin(PageInfo* page, uint32_t cell_idx, GCObjectPtr raw)
+{
+    GCObjectPtr base = page->page_start + (cell_idx * page->cell_size);
+    GCObjectHeader* h = (GCObjectHeader*)base;
+    if (*h & EJS_GC_HEADER_PINNED)
+        return;
+    *h |= EJS_GC_HEADER_PINNED;
+    prof_pin_count[prof_pin_source]++;
+    prof_pin_bytes[prof_pin_source] += page->cell_size;
+    if (*h & EJS_GC_HEADER_YOUNG) prof_pin_young++; else prof_pin_old++;
+    if (raw != base && (*h & EJS_SCAN_TYPE_CLOSUREENV)) prof_pin_env_interior++;
+    if (page->los_info) prof_pin_los++;
+}
+
+// per-cycle results filled by profile_pre_sweep (which must run after
+// marking and BEFORE the sweep frees the dead cells), printed with the
+// pause by profile_report_cycle_end
+static uint64_t prof_cycle_live_count, prof_cycle_live_bytes;
+static uint64_t prof_cycle_ysurv_count, prof_cycle_ysurv_bytes;
+
+static void
+profile_visit_live_cell(GCObjectHeader* h, size_t bytes)
+{
+    prof_cycle_live_count++;
+    prof_cycle_live_bytes += bytes;
+    if (*h & EJS_GC_HEADER_YOUNG) {
+        prof_cycle_ysurv_count++;
+        prof_cycle_ysurv_bytes += bytes;
+        *h &= ~EJS_GC_HEADER_YOUNG; // survived one collection: no longer young
+    }
+    *h &= ~EJS_GC_HEADER_PINNED; // reset for the next cycle
+}
+
+static void
+profile_pre_sweep(void)
+{
+    prof_cycle_live_count = prof_cycle_live_bytes = 0;
+    prof_cycle_ysurv_count = prof_cycle_ysurv_bytes = 0;
+    for (int i = 0; i < HEAP_PAGELISTS_COUNT; i++) {
+        EJS_LIST_FOREACH (&heap_pages[i], PageInfo, page, {
+            GCObjectPtr p = page->page_start;
+            for (int c = 0; c < CELLS_IN_PAGE(page); c++, p += page->cell_size) {
+                BitmapCell cell = page->page_bitmap[c];
+                if (IS_FREE(cell) || IS_WHITE(cell)) continue;
+                profile_visit_live_cell((GCObjectHeader*)p, page->cell_size);
+            }
+        });
+    }
+    for (LargeObjectInfo* lobj = los_list; lobj; lobj = lobj->next) {
+        BitmapCell cell = lobj->page_info.page_bitmap[0];
+        if (IS_FREE(cell) || IS_WHITE(cell)) continue;
+        profile_visit_live_cell((GCObjectHeader*)lobj->page_info.page_start,
+                                lobj->page_info.cell_size);
+    }
+}
+
+static void
+profile_report_cycle_end(uint64_t pause_usec)
+{
+    prof_collections++;
+    prof_total_pause_usec += pause_usec;
+    double surv_pct = prof_young_bytes
+        ? 100.0 * (double)prof_cycle_ysurv_bytes / (double)prof_young_bytes : 0.0;
+    _ejs_log ("EJS_GC_PROFILE: gc#%llu reason=%s pause=%.2fms "
+              "live=%llu objs/%.2fMB | young allocd=%llu/%.2fMB "
+              "survived=%llu/%.2fMB (%.1f%% of bytes) | pins: "
+              "cstack=%llu/%lluKB regs=%llu/%lluKB genstack=%llu/%lluKB "
+              "envint=%llu los=%llu young=%llu old=%llu\n",
+              (unsigned long long)prof_collections, prof_gc_reason,
+              pause_usec / 1000.0,
+              (unsigned long long)prof_cycle_live_count,
+              prof_cycle_live_bytes / (1024.0 * 1024.0),
+              (unsigned long long)prof_young_count,
+              prof_young_bytes / (1024.0 * 1024.0),
+              (unsigned long long)prof_cycle_ysurv_count,
+              prof_cycle_ysurv_bytes / (1024.0 * 1024.0),
+              surv_pct,
+              (unsigned long long)prof_pin_count[PROF_SRC_CSTACK],
+              (unsigned long long)(prof_pin_bytes[PROF_SRC_CSTACK] / 1024),
+              (unsigned long long)prof_pin_count[PROF_SRC_REGS],
+              (unsigned long long)(prof_pin_bytes[PROF_SRC_REGS] / 1024),
+              (unsigned long long)prof_pin_count[PROF_SRC_GENSTACK],
+              (unsigned long long)(prof_pin_bytes[PROF_SRC_GENSTACK] / 1024),
+              (unsigned long long)prof_pin_env_interior,
+              (unsigned long long)prof_pin_los,
+              (unsigned long long)prof_pin_young,
+              (unsigned long long)prof_pin_old);
+    prof_young_count = prof_young_bytes = 0;
+    memset (prof_pin_count, 0, sizeof (prof_pin_count));
+    memset (prof_pin_bytes, 0, sizeof (prof_pin_bytes));
+    prof_pin_young = prof_pin_old = 0;
+    prof_pin_env_interior = prof_pin_los = 0;
+}
+
+static void
+profile_report_shutdown(void)
+{
+    static EJSBool reported = EJS_FALSE; // atexit + GC_ON_SHUTDOWN may both fire
+    if (reported) return;
+    reported = EJS_TRUE;
+
+    struct timeval now;
+    gettimeofday (&now, NULL);
+    double wall = (now.tv_sec - prof_start_tv.tv_sec)
+        + (now.tv_usec - prof_start_tv.tv_usec) / 1e6;
+    _ejs_log ("EJS_GC_PROFILE: totals: allocs=%llu bytes=%.2fMB wall=%.2fs "
+              "(%.1fMB/s, %.0f allocs/s) collections=%llu total-pause=%.2fms\n",
+              (unsigned long long)prof_alloc_total_count,
+              prof_alloc_total_bytes / (1024.0 * 1024.0), wall,
+              prof_alloc_total_bytes / (1024.0 * 1024.0) / (wall > 0 ? wall : 1),
+              prof_alloc_total_count / (wall > 0 ? wall : 1),
+              (unsigned long long)prof_collections,
+              prof_total_pause_usec / 1000.0);
+    _ejs_log ("EJS_GC_PROFILE: kinds: primstr=%llu primsym=%llu object=%llu "
+              "closureenv=%llu\n",
+              (unsigned long long)prof_kind_count[0],
+              (unsigned long long)prof_kind_count[1],
+              (unsigned long long)prof_kind_count[2],
+              (unsigned long long)prof_kind_count[3]);
+    for (int i = 1; i < PROF_NBUCKETS; i++) {
+        if (!prof_alloc_count[i]) continue;
+        _ejs_log ("EJS_GC_PROFILE: size<=%4d: %llu allocs, %.2fMB requested\n",
+                  1 << (OBJECT_SIZE_LOW_LIMIT_BITS + i - 1),
+                  (unsigned long long)prof_alloc_count[i],
+                  prof_alloc_bytes[i] / (1024.0 * 1024.0));
+    }
+    if (prof_alloc_count[0])
+        _ejs_log ("EJS_GC_PROFILE: LOS:       %llu allocs, %.2fMB requested\n",
+                  (unsigned long long)prof_alloc_count[0],
+                  prof_alloc_bytes[0] / (1024.0 * 1024.0));
+}
 
 
 static void
@@ -1057,16 +1302,6 @@ mark_from_modules()
 #error "put code here to mark registers"
 #endif
 
-static void
-mark_thread_stack()
-{
-    MARK_REGISTERS;
-
-    GCObjectPtr stack_top = NULL;
-
-    mark_ejsvals_in_range(((void*)&stack_top) + sizeof(GCObjectPtr), stack_bottom);
-}
-
 #define MAX_GENERATORS 256
 static int generator_count = 0;
 static EJSGenerator* generators[MAX_GENERATORS];
@@ -1074,6 +1309,10 @@ static EJSGenerator* generators[MAX_GENERATORS];
 void
 _ejs_gc_push_generator(EJSGenerator* gen)
 {
+    if (generator_count >= MAX_GENERATORS) {
+        _ejs_log ("too many nested generators (max %d)\n", MAX_GENERATORS);
+        abort();
+    }
     generators[generator_count++] = gen;
 }
 
@@ -1084,12 +1323,74 @@ _ejs_gc_pop_generator()
 }
 
 static void
+mark_thread_stack()
+{
+    prof_pin_source = PROF_SRC_REGS;
+    MARK_REGISTERS;
+    prof_pin_source = PROF_SRC_CSTACK;
+
+    GCObjectPtr stack_top = NULL;
+
+    // The CURRENT machine stack.  When the mutator is running on a
+    // generator's malloc'd stack (collections happen inside
+    // _ejs_gc_alloc, which generator bodies call), [&stack_top,
+    // stack_bottom) is NOT a stack range — it spans from the malloc heap
+    // to the main stack across unmapped memory.  Scan only up to the
+    // running generator's stack end; mark_generator_stacks covers the
+    // suspended caller segments (gc-plan P0).
+    void* high = (void*)stack_bottom;
+    if (generator_count > 0) {
+        EJSGenerator* running = generators[generator_count - 1];
+        high = running->stack + running->stack_size;
+    }
+
+    mark_ejsvals_in_range(((void*)&stack_top) + sizeof(GCObjectPtr), high);
+}
+
+// mark a known heap object as a root (page cell or LOS both resolve
+// through find_page_and_cell; the pointer must be an object base)
+static void
+mark_object_root(GCObjectPtr ptr)
+{
+    uint32_t cell_idx;
+    PageInfo* page = find_page_and_cell(ptr, &cell_idx);
+    if (!page)
+        return;
+    BitmapCell cell = page->page_bitmap[cell_idx];
+    if (IS_FREE(cell) || !IS_WHITE(cell))
+        return;
+    WORKLIST_PUSH_AND_GRAY_CELL(ptr, page->page_bitmap[cell_idx]);
+}
+
+// The chain of ACTIVE generators (generators whose bodies are on the
+// current stack chain; push on start/resume, pop on yield/completion —
+// generators[generator_count-1] owns the stack we are executing on).
+// mark_thread_stack scans the running stack; this covers the rest:
+//
+//   - each active generator OBJECT is a root for the cycle (its specop
+//     scan conservatively marks its own suspended frames and both saved
+//     ucontexts, i.e. the register files);
+//   - the SUSPENDED CALLER segment behind each swap-in: frames from the
+//     caller_stack_top recorded at the resume site up to that caller's
+//     stack end — the main stack (stack_bottom) for the outermost
+//     generator, the parent generator's stack end for nested ones.
+//
+// Suspended generators NOT in the chain need nothing here: if their
+// object is reachable its scan covers their stack; if it is not, nothing
+// on that stack is reachable either.
+static void
 mark_generator_stacks()
 {
+    prof_pin_source = PROF_SRC_CSTACK; // the suspended segments ARE C stack
     for (int i = 0; i < generator_count; i++) {
-        // EJSGenerator* gen = generators[i];
-        
-        // XXX mark the actual stack
+        EJSGenerator* gen = generators[i];
+
+        mark_object_root((GCObjectPtr)gen);
+
+        void* seg_high = (i == 0) ? (void*)stack_bottom
+                                  : generators[i - 1]->stack + generators[i - 1]->stack_size;
+        if (gen->caller_stack_top)
+            mark_ejsvals_in_range(gen->caller_stack_top, seg_high);
     }
 }
 
@@ -1132,6 +1433,10 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
     gettimeofday (&tvbefore, NULL);
 #endif
 
+    struct timeval prof_tv_begin, prof_tv_end;
+    if (gc_profile)
+        gettimeofday (&prof_tv_begin, NULL);
+
     if (!shutting_down) {
         mark_from_roots();
 
@@ -1144,6 +1449,11 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
         mark_generator_stacks();
 
         process_worklist();
+
+        // gc-P0: survival + pin census must walk the heap BEFORE the
+        // sweep frees the white cells
+        if (gc_profile)
+            profile_pre_sweep();
     }
 
 #if gc_timings > 1
@@ -1164,6 +1474,13 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
 #endif
 
     sweep_heap();
+
+    if (gc_profile && !shutting_down) {
+        gettimeofday (&prof_tv_end, NULL);
+        uint64_t usec = (prof_tv_end.tv_sec - prof_tv_begin.tv_sec) * 1000000ULL
+            + (prof_tv_end.tv_usec - prof_tv_begin.tv_usec);
+        profile_report_cycle_end (usec);
+    }
 
 #if gc_timings > 1
     {
@@ -1255,6 +1572,7 @@ void
 _ejs_gc_collect(const char *reason)
 {
     SPEW(1, _ejs_log ("_ejs_gc_collect(%s)\n", reason));
+    prof_gc_reason = reason;
 #if gc_timings > 0
     struct timeval tvbefore, tvafter;
 
@@ -1290,6 +1608,9 @@ _ejs_gc_shutdown()
 {
     _ejs_gc_collect_inner(EJS_TRUE);
     SPEW(1, _ejs_log ("total allocs = %d\n", total_allocs));
+
+    if (gc_profile)
+        profile_report_shutdown();
 
     _ejs_log ("gc allocation stats (_ejs_gc_shutdown):\n");
     _ejs_log ("  objects: %d\n", num_object_allocs);
@@ -1381,7 +1702,7 @@ alloc_from_los(size_t size, EJSScanType scan_type)
     SET_WHITE(rv->page_info.page_bitmap[0]);
     SET_ALLOCATED(rv->page_info.page_bitmap[0]);
 
-    *((GCObjectHeader*)rv->page_info.page_start) = scan_type;
+    *((GCObjectHeader*)rv->page_info.page_start) = scan_type | EJS_GC_HEADER_YOUNG;
 
     rv->alloc_size = size;
 
@@ -1439,6 +1760,9 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
 
     bucket = ffs(bucket_size);
 
+    if (gc_profile)
+        profile_note_alloc(size, bucket, scan_type);
+
     retry_allocation:
     {
     if (bucket > OBJECT_SIZE_HIGH_LIMIT_BITS) {
@@ -1490,7 +1814,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     // (any allocation between _ejs_gc_alloc and _ejs_init_object can
     // trigger one).  zeroed contents are inert to the scanner.
     memset (rv, 0, info->cell_size);
-    *((GCObjectHeader*)rv) = scan_type;
+    *((GCObjectHeader*)rv) = scan_type | EJS_GC_HEADER_YOUNG;
 
     if (info->num_free_cells == 0) {
         // if the page is full, bump it to the end of the list (if there's more than 1 page in the list)
@@ -1530,7 +1854,12 @@ _ejs_gc_remove_root(ejsval* root)
 
 void
 _ejs_gc_mark_conservative_range(void* low, void* high) {
+    // only the generator scan uses this entry point (suspended stacks +
+    // saved ucontexts) — attribute its pins accordingly
+    int prev_src = prof_pin_source;
+    prof_pin_source = PROF_SRC_GENSTACK;
     mark_ejsvals_in_range(low, high);
+    prof_pin_source = prev_src;
 }
 
 static int
