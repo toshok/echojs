@@ -166,6 +166,17 @@ const runtime_interface = {
         );
     },
 
+    // gc-plan P2: the out-of-line half of the emitted write barrier
+    // (object-remembering: the OWNER ejsval, not the slot)
+    gc_write_barrier: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(
+            this.module,
+            "_ejs_gc_remember_val",
+            ty.Void,
+            [ty.EjsValue, ty.EjsValue]
+        );
+    },
+
     make_generator: function (this: RuntimeContext) {
         return this.abi.createExternalFunction(this.module, "_ejs_generator_new", ty.EjsValue, [
             ty.EjsValue,

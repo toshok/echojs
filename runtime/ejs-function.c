@@ -496,7 +496,7 @@ static void
 _ejs_function_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSFunction* f = (EJSFunction*)obj;
-    scan_func (f->env);
+    scan_func (&(f->env));
     _ejs_Object_specops.Scan (obj, scan_func);
 }
 

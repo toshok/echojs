@@ -15,6 +15,7 @@
 #include "ejs-gc.h"
 #include "ejs-function.h"
 #include "ejs-generator.h"
+#include "ejs-arguments.h"
 #include "ejs-value.h"
 #include "ejs-string.h"
 #include "ejs-symbol.h"
@@ -273,11 +274,29 @@ typedef struct _Arena {
     void*     pages[ARENA_PAGES];
     PageInfo* page_infos[ARENA_PAGES];
     int       num_pages;
+    // gc-plan P2: the nursery is a dedicated arena so "is young" is a
+    // range check; old-gen page allocation skips nursery arenas
+    EJSBool   is_nursery;
 } Arena;
 
 #define MAX_ARENAS (MAX_HEAP_SIZE / ARENA_SIZE)
 static Arena *heap_arenas[MAX_ARENAS];
 static int num_arenas;
+
+// conservative-scan prefilter: [conservative_lo, conservative_hi) bounds
+// every GC-managed address (arenas + LOS blocks).  The stack scanners
+// reject candidate words with two compares instead of a bsearch + linear
+// LOS walk per word (which made minor pauses grow with heap size).
+// Bounds only ever widen — stale coverage of freed blocks is merely
+// conservative.
+static char *conservative_lo = (char*)UINTPTR_MAX;
+static char *conservative_hi = NULL;
+static inline void
+conservative_bounds_add(void* start, size_t size)
+{
+    if ((char*)start < conservative_lo) conservative_lo = (char*)start;
+    if ((char*)start + size > conservative_hi) conservative_hi = (char*)start + size;
+}
 
 typedef char BitmapCell;
 
@@ -348,6 +367,10 @@ struct _PageInfo {
     int32_t     cell_size;
     int16_t     num_cells;
     int16_t     num_free_cells;
+    // gc-plan P2: 0 = old gen; 1 = active young page (bump-allocated,
+    // allocated-ness = below bump); 2 = young survivor page (holds
+    // pinned young objects, bitmap-authoritative, no further bumping)
+    uint8_t     young;
 };
 
 struct _LargeObjectInfo {
@@ -370,6 +393,39 @@ static EJSBool gc_profile;
 static struct timeval prof_start_tv;
 static void profile_note_pin(PageInfo* page, uint32_t cell_idx, GCObjectPtr raw);
 static void profile_report_shutdown(void);
+
+// gc-plan P2 nursery state + hooks (definitions in the nursery block
+// below; declared here because the shared mark helpers dispatch on
+// minor-collection mode)
+static EJSBool nursery_enabled;
+static EJSBool in_minor_gc;
+static void minor_conservative_hit(PageInfo* page, uint32_t cell_idx);
+static EJSBool young_cell_is_allocated(PageInfo* page, uint32_t cell_idx);
+static void mark_thread_stack(void);
+static void mark_generator_stacks(void);
+static PageInfo* alloc_new_page(size_t cell_size);
+static GCObjectPtr alloc_from_page(PageInfo* info);
+static void finalize_object(GCObjectPtr p);
+static void nursery_init(void);
+static void young_normalize_for_full_gc(void);
+static void _ejs_gc_minor_collect(const char* reason);
+static GCObjectPtr young_alloc_slow(int idx, size_t cell_size, EJSScanType scan_type);
+// allocator accounting, defined with the allocator further down
+extern size_t alloc_size;
+extern size_t alloc_size_at_last_gc;
+static size_t heap_size_at_last_gc;
+
+// allocated-ness of a cell: old pages answer from the bitmap; ACTIVE
+// young pages (young==1) answer from the bump rule — everything below
+// the bump cursor is an object, the bitmap holds only collection
+// colors; SURVIVOR young pages (young==2) are bitmap-authoritative
+// again (their pinned cells were re-marked at minor sweep)
+static inline EJSBool
+cell_is_allocated(PageInfo* page, uint32_t cell_idx, BitmapCell cell)
+{
+    if (page->young == 1) return young_cell_is_allocated(page, cell_idx);
+    return !IS_FREE(cell);
+}
 
 void* ptr_to_arena(void* ptr) { return PTR_TO_ARENA(ptr); }
 void* ptr_to_arena_page_base(void* ptr) { return PTR_TO_ARENA_PAGE_BASE(ptr); }
@@ -403,6 +459,7 @@ arena_new()
 
     memset (new_arena, 0, sizeof(Arena));
 
+    conservative_bounds_add (arena_start, ARENA_SIZE);
     new_arena->end = arena_start + ARENA_SIZE;
     new_arena->pos = (void*)EJS_ALIGN(arena_start + sizeof(Arena), PAGE_SIZE);
 
@@ -575,6 +632,12 @@ find_page_and_cell_from_arena(GCObjectPtr ptr, uint32_t *cell_idx, Arena *arena)
 static PageInfo*
 find_page_and_cell(GCObjectPtr ptr, uint32_t *cell_idx)
 {
+    // bounds prefilter: static data (atoms, module structs) and foreign
+    // pointers reject in two compares instead of an arena bsearch + a
+    // locked linear LOS walk — the latter made full-GC marking cost
+    // ~13us per object once the (uncollected) LOS list grew
+    if ((char*)ptr < conservative_lo || (char*)ptr >= conservative_hi)
+        return NULL;
     Arena* arena = find_arena_in_array(ptr, heap_arenas, num_arenas);
     return find_page_and_cell_from_arena(ptr, cell_idx, arena);
 }
@@ -619,6 +682,9 @@ alloc_new_page(size_t cell_size)
     SPEW(2, _ejs_log ("allocating new page for cell size %zd\n", cell_size));
     PageInfo *rv = NULL;
     for (int i = 0; i < num_arenas; i ++) {
+        // gc-P2: nursery arenas serve young allocation only
+        if (heap_arenas[i]->is_nursery)
+            continue;
         rv = alloc_page_from_arena(heap_arenas[i], cell_size);
         if (rv) {
             SPEW(2, _ejs_log ("  => %p", rv));
@@ -752,6 +818,10 @@ _ejs_gc_init()
     _ejs_gc_worklist_init();
 
     root_set = NULL;
+
+    // gc-plan P2: the generational nursery (EJS_GC_NURSERY=off selects
+    // the old single-generation collector for A/B and differential runs)
+    nursery_init();
 }
 
 void
@@ -764,9 +834,13 @@ _ejs_gc_allocate_oom_exceptions()
     page_allocation_failed_exc = _ejs_nativeerror_new_utf8 (EJS_ERROR, "page allocation failed");
 }
 
+// gc-plan P2: the mark-path scan callback.  Slot-based per the new
+// EJSValueFunc contract — this non-moving path only reads through the
+// slot; the mover's evacuation callback is what rewrites it.
 static void
-_scan_ejsvalue (ejsval val)
+_scan_ejsvalue (ejsval* slot)
 {
+    ejsval val = *slot;
     if (!EJSVAL_IS_TRACEABLE_IMPL(val)) return;
 
     GCObjectPtr gcptr = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(val);
@@ -812,14 +886,14 @@ _scan_from_ejsprimstr(EJSPrimString *primStr)
 static void
 _scan_from_ejsprimsym(EJSPrimSymbol *primSymbol)
 {
-    _scan_ejsvalue (primSymbol->description);
+    _scan_ejsvalue (&primSymbol->description);
 }
 
 static void
 _scan_from_ejsclosureenv(EJSClosureEnv *env)
 {
     for (uint32_t i = 0; i < env->length; i ++) {
-        _scan_ejsvalue (env->slots[i]);
+        _scan_ejsvalue (&env->slots[i]);
     }
 }
 
@@ -829,6 +903,9 @@ void
 _ejs_gc_mark_thread_stack_bottom(GCObjectPtr* btm)
 {
     stack_bottom = btm;
+    // gc-P2: the write barrier's transient-slot upper bound starts at
+    // the main stack's bottom (generator push/pop moves it)
+    _ejs_heap.current_stack_end = (void*)btm;
 }
 
 static void
@@ -849,6 +926,8 @@ mark_pointers_in_range(GCObjectPtr* low, GCObjectPtr* high)
             gcptr = *p;
 
         if (gcptr == NULL)            continue; // skip nulls.
+        if ((char*)gcptr < conservative_lo || (char*)gcptr >= conservative_hi)
+            continue; // cheap prefilter: outside every arena/LOS block
 
         uint32_t cell_idx;
 
@@ -857,7 +936,11 @@ mark_pointers_in_range(GCObjectPtr* low, GCObjectPtr* high)
 
         // XXX more checks before we start treating the pointer like a GCObjectPtr?
         BitmapCell cell = page->page_bitmap[cell_idx];
-        if (IS_FREE(cell))   continue; // skip free cells
+        if (!cell_is_allocated(page, cell_idx, cell)) continue;
+
+        // gc-P2: during a minor collection conservative hits PIN young
+        // cells in place; nothing else is this collection's business
+        if (in_minor_gc) { minor_conservative_hit(page, cell_idx); continue; }
 
         // gc-P0: a conservative hit pins under the mover — recorded even
         // when the target is already marked (the white check below is a
@@ -898,13 +981,18 @@ mark_ejsvals_in_range(void* low, void* high)
         }
 
         if (gcptr == NULL)            continue; // skip nulls.
+        if ((char*)gcptr < conservative_lo || (char*)gcptr >= conservative_hi)
+            continue; // cheap prefilter: outside every arena/LOS block
 
         uint32_t cell_idx;
         PageInfo *page = find_page_and_cell(gcptr, &cell_idx);
         if (page) {
             // XXX more checks before we start treating the pointer like a GCObjectPtr?
             BitmapCell cell = page->page_bitmap[cell_idx];
-            if (IS_FREE(cell)) continue; // skip free cells
+            if (!cell_is_allocated(page, cell_idx, cell)) continue;
+
+            // gc-P2: minor collections only pin young cells here
+            if (in_minor_gc) { minor_conservative_hit(page, cell_idx); continue; }
 
             // gc-P0: a conservative hit pins under the mover — recorded
             // even when the target is already marked
@@ -1144,6 +1232,949 @@ profile_report_shutdown(void)
                   prof_alloc_bytes[0] / (1024.0 * 1024.0));
 }
 
+// ======================= gc-plan P2: the nursery ============================
+//
+// One dedicated arena; size-class pages inside it are bump-allocated
+// (the seam's per-class bump/limit cursors ARE the allocation state —
+// emitted code will bump them inline in P2c).  Minor GC is mostly-
+// copying: conservative hits pin young cells in place (established
+// FIRST), then every precise slot — root list, module exports,
+// remembered-set entries, and the transitive scan through the P2a
+// slot-based Scan protocol — evacuates its young referent into the old
+// gen, installs a P1 forwarding record, and is rewritten.  Young pages
+// end the cycle reset (no survivors) or as survivor pages (pins only —
+// pins merely delay promotion).  The old gen stays mark-sweep.
+
+EJSHeapContext _ejs_heap; // exported: the per-isolate context (the emitter seam)
+
+typedef struct {
+    Arena* nursery_arena;
+    PageInfo* young_current[EJS_GC_NUM_SIZE_CLASSES];
+    EJSList young_pages; // all young pages not currently being bumped
+    EJSBool verify;      // EJS_GC_VERIFY: old-gen barrier-coverage check per minor
+    size_t young_alloced;  // bytes of young pages handed out this cycle
+    size_t young_budget;   // minor-collection trigger (EJS_GC_NURSERY_BUDGET)
+    // minor worklist (objects whose slots still need processing)
+    GCObjectPtr* wl;
+    int wl_count, wl_cap;
+    // the remset's second buffer.  A minor collection SWAPS buffers up
+    // front and processes the snapshot; slots whose referent stays young
+    // (pinned) re-append into the live buffer — old→young edges CARRY
+    // across cycles for as long as the target remains in the nursery.
+    ejsval** remset_other;
+    // stats (reported under EJS_GC_PROFILE)
+    uint64_t minors, minor_usec_total, minor_usec_max;
+    uint64_t promoted_objs, promoted_bytes, minor_pins, remset_peak, overflow_minors;
+} EJSHeapPriv;
+static EJSHeapPriv heap_priv; // the private half of the (single) isolate's context
+
+#define NURSERY_REMSET_CAPACITY (64 * 1024)
+
+// EJS_GC_MINOR_SPEW=1: per-event tracing for nursery debugging
+static EJSBool minor_spew;
+#define MINOR_SPEW(...) EJS_MACRO_START if (minor_spew) _ejs_log (__VA_ARGS__); EJS_MACRO_END
+
+// EJS_GC_WATCH=<hex addr>: log every lifecycle event touching the cell
+// containing that address, with a C backtrace (debugging aid for the
+// deterministic single-cell corruption hunt)
+#include <execinfo.h>
+static uintptr_t gc_watch_addr;
+static void
+gc_watch_hit(const char* what, void* p)
+{
+    if (EJS_LIKELY(gc_watch_addr == 0)) return;
+    if ((uintptr_t)p > gc_watch_addr || gc_watch_addr - (uintptr_t)p >= 256) return;
+    _ejs_log ("EJS_GC_WATCH: %s cell=%p (minor#%llu, in_minor=%d)\n",
+              what, p, (unsigned long long)heap_priv.minors, (int)in_minor_gc);
+    void* frames[24];
+    int n = backtrace (frames, 24);
+    backtrace_symbols_fd (frames, n, 2);
+}
+
+static EJSBool
+young_cell_is_allocated(PageInfo* page, uint32_t cell_idx)
+{
+    return page->page_start + (size_t)cell_idx * page->cell_size < page->bump_ptr;
+}
+
+// the seam cursors are authoritative while a page is being bumped; fold
+// them back into the page before any collection looks at bump_ptr
+static void
+young_flush_bumps(void)
+{
+    for (int i = 0; i < EJS_GC_NUM_SIZE_CLASSES; i++) {
+        if (heap_priv.young_current[i])
+            heap_priv.young_current[i]->bump_ptr = _ejs_heap.bump[i];
+    }
+}
+
+static void
+young_page_retire_current(int idx)
+{
+    PageInfo* page = heap_priv.young_current[idx];
+    if (!page) return;
+    page->bump_ptr = _ejs_heap.bump[idx];
+    _ejs_list_append_node (&heap_priv.young_pages, (EJSListNode*)page);
+    heap_priv.young_current[idx] = NULL;
+    _ejs_heap.bump[idx] = _ejs_heap.limit[idx] = NULL;
+}
+
+// grab a fresh page from the nursery arena for class idx, or NULL when
+// the nursery is exhausted (the caller runs a minor collection)
+static PageInfo*
+young_page_install(int idx, size_t cell_size)
+{
+    Arena* arena = heap_priv.nursery_arena;
+    PageInfo* info = NULL;
+    if (in_minor_gc) {
+        _ejs_log ("GC BUG: young_page_install during a minor collection\n");
+        abort();
+    }
+    if (arena->free_pages) {
+        info = arena->free_pages;
+        EJS_LIST_DETACH(info, arena->free_pages);
+        info->cell_size = cell_size;
+        info->num_cells = CELLS_OF_SIZE(cell_size);
+        info->num_free_cells = info->num_cells;
+    } else {
+        info = alloc_page_from_arena(arena, cell_size);
+        if (!info) return NULL;
+    }
+    info->young = 1;
+    info->bump_ptr = info->page_start;
+    heap_priv.young_alloced += PAGE_SIZE;
+    // colors start at the CURRENT white (a young cell must never read
+    // as black mid-cycle); allocated-ness comes from the bump rule
+    memset (info->page_bitmap, white_mask, info->num_cells * sizeof(BitmapCell));
+    heap_priv.young_current[idx] = info;
+    _ejs_heap.bump[idx] = info->page_start;
+    _ejs_heap.limit[idx] = info->page_end;
+    return info;
+}
+
+// set when a scan leaves a still-young (pinned) referent behind — the
+// dirty owner carries to the next cycle
+static EJSBool minor_scan_saw_young;
+
+static void
+minor_wl_push(GCObjectPtr p)
+{
+    if (heap_priv.wl_count == heap_priv.wl_cap) {
+        heap_priv.wl_cap = heap_priv.wl_cap ? heap_priv.wl_cap * 2 : 4096;
+        heap_priv.wl = realloc (heap_priv.wl, heap_priv.wl_cap * sizeof(GCObjectPtr));
+    }
+    heap_priv.wl[heap_priv.wl_count++] = p;
+}
+
+// rewrite an ejsval's payload in place, preserving its NaN-box tag
+static inline void
+rewrite_slot_payload(ejsval* slot, GCObjectPtr to)
+{
+    slot->asBits = (slot->asBits & ~EJSVAL_PAYLOAD_MASK)
+        | ((uint64_t)(uintptr_t)to & EJSVAL_PAYLOAD_MASK);
+}
+
+// After memcpy'ing a cell, SELF-INTERIOR pointers still aim at the old
+// cell (found the hard way: every inline-buffer flat string's data
+// pointed at poison after promotion).  The two classes in the runtime:
+// flat strings without an out-of-line buffer (data.flat = self+hdr) and
+// small EJSArguments (args = self+sizeof).  Anything new that embeds a
+// self-pointer must be added here — the gc-P5 trace-bitmap redesign
+// subsumes this with offset-based addressing.
+static void
+minor_fixup_evacuated(GCObjectPtr from, GCObjectPtr to, size_t cell_size)
+{
+    GCObjectHeader h = *(GCObjectHeader*)to;
+    if (h & EJS_SCAN_TYPE_PRIMSTR) {
+        EJSPrimString* s = (EJSPrimString*)to;
+        if (EJS_PRIMSTR_GET_TYPE(s) == EJS_STRING_FLAT) {
+            char* d = (char*)s->data.flat;
+            if (d >= (char*)from && d < (char*)from + cell_size)
+                s->data.flat = (jschar*)((char*)to + (d - (char*)from));
+        }
+    }
+    else if (h & EJS_SCAN_TYPE_OBJECT) {
+        EJSObject* o = (EJSObject*)to;
+        if (o->ops == &_ejs_Arguments_specops) {
+            EJSArguments* a = (EJSArguments*)o;
+            char* d = (char*)a->args;
+            if (d >= (char*)from && d < (char*)from + cell_size)
+                a->args = (ejsval*)((char*)to + (d - (char*)from));
+        }
+    }
+}
+
+// allocate an old-gen cell for a promotion.  Never triggers collection
+// (we are inside one); grows a new arena if need be, aborts loudly on
+// genuine OOM.
+static GCObjectPtr
+old_alloc_cell_for_promotion(size_t cell_size)
+{
+    int bucket = ffs((int)cell_size) - OBJECT_SIZE_LOW_LIMIT_BITS;
+    PageInfo* info = (PageInfo*)heap_pages[bucket].head;
+    while (info && !info->num_free_cells) info = info->next;
+    if (!info) {
+        info = alloc_new_page(cell_size);
+        if (info == NULL) {
+            _ejs_log ("gc: promotion allocation failed (size %zd)\n", cell_size);
+            abort();
+        }
+        _ejs_list_prepend_node (&heap_pages[bucket], (EJSListNode*)info);
+    }
+    GCObjectPtr rv = alloc_from_page(info);
+    return rv;
+}
+
+// conservative hit during a minor collection: young targets pin in
+// place (never move this cycle) and join the scan worklist once; old
+// targets are not this collection's problem
+static void
+minor_conservative_hit(PageInfo* page, uint32_t cell_idx)
+{
+    if (!page->young) return;
+    if (page->young == 1 && !young_cell_is_allocated(page, cell_idx)) return;
+    if (page->young == 2 && IS_FREE(page->page_bitmap[cell_idx])) return;
+    BitmapCell cell = page->page_bitmap[cell_idx];
+    if (IS_BLACK(cell)) return; // already pinned this minor
+    GCObjectPtr base = page->page_start + ((size_t)cell_idx * page->cell_size);
+    if (_ejs_gc_is_forwarded(base)) return; // pins precede evacuation; stale hit
+    SET_BLACK(page->page_bitmap[cell_idx]);
+    heap_priv.minor_pins++;
+    MINOR_SPEW("minor: pin %p\n", base);
+    gc_watch_hit ("pin", base);
+    minor_wl_push(base);
+}
+
+// the minor collection's slot callback (the P2a payoff: every precise
+// scan — roots, modules, remset, transitive object scan — goes through
+// here).  Young referents evacuate (or stay pinned); the slot is
+// rewritten to the object's final address.
+static void
+minor_process_slot(ejsval* slot)
+{
+    ejsval v = *slot;
+    if (!EJSVAL_IS_TRACEABLE_IMPL(v)) return;
+    GCObjectPtr p = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(v);
+    if (p == NULL || !_ejs_gc_is_young(p)) return;
+
+    uint32_t cell_idx;
+    PageInfo* page = find_page_and_cell(p, &cell_idx);
+    EJS_ASSERT(page && page->young);
+    GCObjectPtr base = page->page_start + ((size_t)cell_idx * page->cell_size);
+
+    if (_ejs_gc_is_forwarded(base)) {
+        rewrite_slot_payload(slot, _ejs_gc_forwarding_addr(base));
+        return;
+    }
+    if (IS_BLACK(page->page_bitmap[cell_idx])) {
+        // pinned: stays put, already queued for scanning.  The current
+        // owner must stay dirty so the edge is revisited next cycle.
+        minor_scan_saw_young = EJS_TRUE;
+        return;
+    }
+
+    // evacuate: copy the whole cell, clear YOUNG on the copy (it is
+    // promoted), forward the old cell, rewrite this slot
+    GCObjectPtr to = old_alloc_cell_for_promotion(page->cell_size);
+    memcpy (to, base, page->cell_size);
+    // promoted: not young; and not DIRTY — the memcpy'd bit would make
+    // the carry logic think the copy is already queued (it is not)
+    *(GCObjectHeader*)to &= ~(EJS_GC_HEADER_YOUNG | EJS_GC_HEADER_DIRTY);
+    minor_fixup_evacuated(base, to, page->cell_size);
+    _ejs_gc_forward(base, to);
+    rewrite_slot_payload(slot, to);
+    gc_watch_hit ("evacuate-from", base);
+    MINOR_SPEW("minor: evac %p -> %p (hdr %llx)\n", base, to, (unsigned long long)*(GCObjectHeader*)to);
+    heap_priv.promoted_objs++;
+    heap_priv.promoted_bytes += page->cell_size;
+    minor_wl_push(to);
+}
+
+// evacuate/pin-resolve a RAW GC pointer field (rope/dependent string
+// children — the only raw object->object pointers in the heap)
+static void
+minor_process_primstr_child(EJSPrimString** childp)
+{
+    GCObjectPtr p = (GCObjectPtr)*childp;
+    if (p == NULL || !_ejs_gc_is_young(p)) return;
+    uint32_t cell_idx;
+    PageInfo* page = find_page_and_cell(p, &cell_idx);
+    EJS_ASSERT(page && page->young);
+    GCObjectPtr base = page->page_start + ((size_t)cell_idx * page->cell_size);
+    if (_ejs_gc_is_forwarded(base)) {
+        *childp = (EJSPrimString*)_ejs_gc_forwarding_addr(base);
+        return;
+    }
+    if (IS_BLACK(page->page_bitmap[cell_idx])) { minor_scan_saw_young = EJS_TRUE; return; }
+    GCObjectPtr to = old_alloc_cell_for_promotion(page->cell_size);
+    memcpy (to, base, page->cell_size);
+    // promoted: not young; and not DIRTY — the memcpy'd bit would make
+    // the carry logic think the copy is already queued (it is not)
+    *(GCObjectHeader*)to &= ~(EJS_GC_HEADER_YOUNG | EJS_GC_HEADER_DIRTY);
+    minor_fixup_evacuated(base, to, page->cell_size);
+    _ejs_gc_forward(base, to);
+    *childp = (EJSPrimString*)to;
+    MINOR_SPEW("minor: evac-child %p -> %p\n", base, to);
+    heap_priv.promoted_objs++;
+    heap_priv.promoted_bytes += page->cell_size;
+    minor_wl_push(to);
+}
+
+// scan one object's outgoing edges with minor_process_slot — the exact
+// shape of process_worklist's dispatch, on the slot-based protocol
+static void
+minor_scan_object(GCObjectPtr p)
+{
+    GCObjectHeader header = *(GCObjectHeader*)p;
+    if ((header & EJS_SCAN_TYPE_OBJECT) != 0) {
+        EJSObject* obj = (EJSObject*)p;
+        if (obj->ops != NULL)
+            OP(obj,Scan)(obj, minor_process_slot);
+    }
+    else if ((header & EJS_SCAN_TYPE_PRIMSTR) != 0) {
+        EJSPrimString* primStr = (EJSPrimString*)p;
+        EJSBool child_still_young = EJS_FALSE;
+        switch (EJS_PRIMSTR_GET_TYPE(primStr)) {
+        case EJS_STRING_ROPE:
+            minor_process_primstr_child(&primStr->data.rope.left);
+            minor_process_primstr_child(&primStr->data.rope.right);
+            child_still_young = _ejs_gc_is_young(primStr->data.rope.left)
+                || _ejs_gc_is_young(primStr->data.rope.right);
+            break;
+        case EJS_STRING_DEPENDENT:
+            minor_process_primstr_child(&primStr->data.dependent.dep);
+            child_still_young = _ejs_gc_is_young(primStr->data.dependent.dep);
+            break;
+        case EJS_STRING_FLAT:
+            break;
+        }
+        if (child_still_young)
+            minor_scan_saw_young = EJS_TRUE;
+    }
+    else if ((header & EJS_SCAN_TYPE_PRIMSYM) != 0) {
+        minor_process_slot(&((EJSPrimSymbol*)p)->description);
+    }
+    else if ((header & EJS_SCAN_TYPE_CLOSUREENV) != 0) {
+        EJSClosureEnv* env = (EJSClosureEnv*)p;
+        for (uint32_t i = 0; i < env->length; i++)
+            minor_process_slot(&env->slots[i]);
+    }
+}
+
+// walk every live OLD cell (arena pages + LOS), calling `fn` on the
+// object — the remset-overflow fallback and the EJS_GC_VERIFY check
+static void
+old_gen_walk(void (*fn)(GCObjectPtr))
+{
+    for (int a = 0; a < num_arenas; a++) {
+        Arena* arena = heap_arenas[a];
+        if (!arena || arena->is_nursery) continue;
+        for (int pg = 0; pg < arena->num_pages; pg++) {
+            PageInfo* info = arena->page_infos[pg];
+            if (!info || info->young) continue;
+            GCObjectPtr p = info->page_start;
+            for (int c = 0; c < CELLS_IN_PAGE(info); c++, p += info->cell_size) {
+                if (IS_FREE(info->page_bitmap[c])) continue;
+                fn (p);
+            }
+        }
+    }
+    for (LargeObjectInfo* lobj = los_list; lobj; lobj = lobj->next) {
+        if (IS_FREE(lobj->page_info.page_bitmap[0])) continue;
+        fn (lobj->page_info.page_start);
+    }
+}
+
+// EJS_GC_PARANOID: reverse-lookup for the sweep's death detector — when
+// a young cell dies, name everything that still references it (old gen,
+// LOS, roots, modules, the C stack).  A hit is a missed barrier/scan of
+// that owner; zero hits means the pointer was in-flight in mutator
+// state the conservative scan cannot see.
+static GCObjectPtr referrer_target;
+static const char* referrer_ctx;
+static GCObjectPtr referrer_owner;
+static int referrer_hits;
+static void
+referrer_check_slot(ejsval* slot)
+{
+    ejsval v = *slot;
+    if (!EJSVAL_IS_TRACEABLE_IMPL(v)) return;
+    if ((GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(v) == referrer_target) {
+        GCObjectHeader oh = referrer_owner ? *(GCObjectHeader*)referrer_owner : 0;
+        _ejs_log ("EJS_GC_PARANOID: dying young %p still referenced: ctx=%s owner=%p (hdr %llx) slot=%p\n",
+                  referrer_target, referrer_ctx, (void*)referrer_owner,
+                  (unsigned long long)oh, (void*)slot);
+        referrer_hits++;
+    }
+}
+static void
+referrer_check_object(GCObjectPtr p)
+{
+    GCObjectHeader header = *(GCObjectHeader*)p;
+    referrer_owner = p;
+    if ((header & EJS_SCAN_TYPE_OBJECT) != 0) {
+        EJSObject* obj = (EJSObject*)p;
+        if (obj->ops != NULL) OP(obj,Scan)(obj, referrer_check_slot);
+    } else if ((header & EJS_SCAN_TYPE_CLOSUREENV) != 0) {
+        EJSClosureEnv* env = (EJSClosureEnv*)p;
+        for (uint32_t i = 0; i < env->length; i++)
+            referrer_check_slot(&env->slots[i]);
+    } else if ((header & EJS_SCAN_TYPE_PRIMSYM) != 0) {
+        referrer_check_slot(&((EJSPrimSymbol*)p)->description);
+    }
+}
+static int
+paranoid_report_referrers(GCObjectPtr p)
+{
+    referrer_target = p;
+    referrer_hits = 0;
+    referrer_ctx = "oldgen";
+    old_gen_walk (referrer_check_object);
+    referrer_ctx = "roots";
+    referrer_owner = NULL;
+    for (RootSetEntry *entry = root_set; entry; entry = entry->next)
+        if (entry->root) referrer_check_slot(entry->root);
+    referrer_ctx = "modules";
+    for (int i = 0; i < _ejs_num_modules; i++) {
+        EJSObject* mod = (EJSObject*)_ejs_modules[i];
+        referrer_owner = (GCObjectPtr)mod;
+        if (mod->ops) OP(mod,Scan)(mod, referrer_check_slot);
+    }
+    // raw C-stack sweep: any word whose payload lands inside the dying
+    // cell counts (boxed or raw, base or interior)
+    referrer_ctx = "stack";
+    referrer_owner = NULL;
+    void* volatile probe;
+    for (void** w = (void**)&probe; w < (void**)stack_bottom; w++) {
+        uintptr_t masked = (uintptr_t)*w & 0x00007fffffffffffULL;
+        if ((char*)masked >= (char*)p && (char*)masked < (char*)p + 16) {
+            _ejs_log ("EJS_GC_PARANOID: dying young %p: raw stack word at %p = %p\n",
+                      p, (void*)w, *w);
+            referrer_hits++;
+        }
+    }
+    return referrer_hits;
+}
+
+// EJS_GC_VERIFY: after the remset has been processed, no live old slot
+// may still reference an unforwarded, unpinned young object — such an
+// edge is a missed write barrier.  Report and abort.
+static ejsval* verify_bad_slot;
+static void
+verify_check_slot(ejsval* slot)
+{
+    ejsval v = *slot;
+    if (!EJSVAL_IS_TRACEABLE_IMPL(v)) return;
+    GCObjectPtr p = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(v);
+    if (p == NULL || !_ejs_gc_is_young(p)) return;
+    uint32_t cell_idx;
+    PageInfo* page = find_page_and_cell(p, &cell_idx);
+    if (!page) return;
+    GCObjectPtr base = page->page_start + ((size_t)cell_idx * page->cell_size);
+    if (_ejs_gc_is_forwarded(base)) return;      // will be rewritten by its recorder
+    if (IS_BLACK(page->page_bitmap[cell_idx])) { minor_scan_saw_young = EJS_TRUE; return; } // pinned in place
+    verify_bad_slot = slot;
+}
+static void
+verify_check_object(GCObjectPtr p)
+{
+    GCObjectHeader header = *(GCObjectHeader*)p;
+    if ((header & EJS_SCAN_TYPE_OBJECT) != 0) {
+        EJSObject* obj = (EJSObject*)p;
+        if (obj->ops != NULL)
+            OP(obj,Scan)(obj, verify_check_slot);
+        if (verify_bad_slot) {
+            _ejs_log ("EJS_GC_VERIFY: missed write barrier: old object %p (class %s) slot %p holds unpromoted young ref (bits %llx)\n",
+                      p, obj->ops ? obj->ops->class_name : "<uninit>",
+                      (void*)verify_bad_slot,
+                      (unsigned long long)verify_bad_slot->asBits);
+            abort();
+        }
+    }
+    else if ((header & EJS_SCAN_TYPE_CLOSUREENV) != 0) {
+        EJSClosureEnv* env = (EJSClosureEnv*)p;
+        for (uint32_t i = 0; i < env->length; i++) {
+            verify_check_slot(&env->slots[i]);
+            if (verify_bad_slot) {
+                _ejs_log ("EJS_GC_VERIFY: missed write barrier: old env %p slot %u holds unpromoted young ref\n", p, i);
+                abort();
+            }
+        }
+    }
+    else if ((header & EJS_SCAN_TYPE_PRIMSTR) != 0) {
+        EJSPrimString* ps = (EJSPrimString*)p;
+        EJSPrimString* kids[2] = { NULL, NULL };
+        switch (EJS_PRIMSTR_GET_TYPE(ps)) {
+        case EJS_STRING_ROPE: kids[0] = ps->data.rope.left; kids[1] = ps->data.rope.right; break;
+        case EJS_STRING_DEPENDENT: kids[0] = ps->data.dependent.dep; break;
+        default: break;
+        }
+        for (int k = 0; k < 2; k++) {
+            if (!kids[k] || !_ejs_gc_is_young(kids[k])) continue;
+            uint32_t ci;
+            PageInfo* pg = find_page_and_cell(kids[k], &ci);
+            if (!pg) continue;
+            if (_ejs_gc_is_forwarded(pg->page_start + (size_t)ci * pg->cell_size)) continue;
+            if (IS_BLACK(pg->page_bitmap[ci])) continue;
+            _ejs_log ("EJS_GC_VERIFY: old primstr %p (type %d) child %d -> unpromoted young %p\n",
+                      p, EJS_PRIMSTR_GET_TYPE(ps), k, (void*)kids[k]);
+            abort();
+        }
+    }
+}
+
+// the overflow fallback scans every live old object — it must maintain
+// the same DIRTY-bit discipline as normal processing (clear, scan,
+// re-dirty on remaining pinned-young refs), or bits desync from the
+// swapped-away buffer and later stores skip re-queuing forever
+static void
+minor_scan_object_if_live(GCObjectPtr p)
+{
+    *(GCObjectHeader*)p &= ~EJS_GC_HEADER_DIRTY;
+    minor_scan_saw_young = EJS_FALSE;
+    minor_scan_object(p);
+    if (minor_scan_saw_young)
+        _ejs_gc_remember_slow(p);
+}
+
+// EJS_GC_PARANOID: after every minor, walk roots + modules + all live
+// heap cells and validate every traceable value: it must resolve to an
+// allocated cell whose header carries exactly one scan-type bit.
+// Catches corruption at the collection that minted it.
+static EJSBool gc_paranoid;
+static const char* paranoid_ctx;
+static GCObjectPtr paranoid_owner;
+static void
+paranoid_check_slot(ejsval* slot)
+{
+    ejsval v = *slot;
+    if (!EJSVAL_IS_TRACEABLE_IMPL(v)) return;
+    GCObjectPtr p = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(v);
+    if (p == NULL) return;
+    uint32_t ci;
+    PageInfo* pg = find_page_and_cell(p, &ci);
+    const char* why = NULL;
+    if (!pg) return; // static atoms/primstrings live outside the heap
+    if (0) why = "";
+    else if (!cell_is_allocated(pg, ci, pg->page_bitmap[ci])) why = "target cell free";
+    else {
+        GCObjectHeader h = *(GCObjectHeader*)(pg->page_start + (size_t)ci * pg->cell_size);
+        uint32_t st = (uint32_t)(h & 0xf);
+        if (st != 1 && st != 2 && st != 4 && st != 8) why = "bad scan type";
+        else if (_ejs_gc_is_forwarded(pg->page_start + (size_t)ci * pg->cell_size)) why = "target forwarded";
+    }
+    if (why) {
+        GCObjectHeader oh = paranoid_owner ? *(GCObjectHeader*)paranoid_owner : 0;
+        const char* ocls = "?";
+        if (paranoid_owner && (oh & EJS_SCAN_TYPE_OBJECT) && ((EJSObject*)paranoid_owner)->ops)
+            ocls = ((EJSObject*)paranoid_owner)->ops->class_name;
+        else if (paranoid_owner && (oh & EJS_SCAN_TYPE_CLOSUREENV)) ocls = "<closureenv>";
+        else if (paranoid_owner && (oh & EJS_SCAN_TYPE_PRIMSTR)) ocls = "<primstr>";
+        _ejs_log ("EJS_GC_PARANOID [%s]: owner %p (class %s, hdr %llx) slot %p value %llx: %s\n",
+                  paranoid_ctx, (void*)paranoid_owner, ocls, (unsigned long long)oh,
+                  (void*)slot, (unsigned long long)v.asBits, why);
+        abort();
+    }
+}
+static void
+paranoid_check_object(GCObjectPtr p)
+{
+    paranoid_owner = p;
+    GCObjectHeader header = *(GCObjectHeader*)p;
+    if ((header & EJS_SCAN_TYPE_OBJECT) != 0) {
+        EJSObject* obj = (EJSObject*)p;
+        if (obj->ops != NULL) OP(obj,Scan)(obj, paranoid_check_slot);
+    }
+    else if ((header & EJS_SCAN_TYPE_CLOSUREENV) != 0) {
+        EJSClosureEnv* env = (EJSClosureEnv*)p;
+        for (uint32_t i = 0; i < env->length; i++)
+            paranoid_check_slot(&env->slots[i]);
+    }
+    else if ((header & EJS_SCAN_TYPE_PRIMSYM) != 0)
+        paranoid_check_slot(&((EJSPrimSymbol*)p)->description);
+}
+static void
+paranoid_sweep_check(void)
+{
+    paranoid_ctx = "roots";
+    for (RootSetEntry* e = root_set; e; e = e->next)
+        if (e->root) paranoid_check_slot(e->root);
+    paranoid_ctx = "modules";
+    for (int i = 0; i < _ejs_num_modules; i++) {
+        EJSObject* mod = (EJSObject*)_ejs_modules[i];
+        if (mod->ops) OP(mod,Scan)(mod, paranoid_check_slot);
+    }
+    paranoid_ctx = "oldgen";
+    old_gen_walk (paranoid_check_object);
+    paranoid_ctx = "young";
+    for (PageInfo* page = (PageInfo*)heap_priv.young_pages.head; page; page = page->next) {
+        GCObjectPtr p = page->page_start;
+        for (int c = 0; c < CELLS_IN_PAGE(page); c++, p += page->cell_size) {
+            EJSBool allocated = (page->young == 1)
+                ? young_cell_is_allocated(page, (uint32_t)c)
+                : !IS_FREE(page->page_bitmap[c]);
+            if (allocated && !_ejs_gc_is_forwarded(p))
+                paranoid_check_object(p);
+        }
+    }
+}
+
+// A FULL collection frees dead old objects, so every remset/rescan
+// entry — slots INTERIOR to old cells — may now dangle into poisoned
+// memory (found as 0xfffc_afaf… "object-tagged poison" values read by
+// the next minor).  Rebuild the whole remembered state from a live
+// old-gen walk instead: record every live old→young ejsval slot, re-add
+// old strings with young raw children, and drop the LOS-pending list
+// (the walk covers LOS objects).  Full collections are rare; one extra
+// old-gen walk apiece is cheap insurance.
+static void
+remset_rebuild_after_full_gc(void)
+{
+    if (!nursery_enabled) return;
+    // entries are heap OBJECTS: drop the ones the sweep freed, keep the
+    // rest (their DIRTY bits are still set)
+    int kept = 0;
+    for (int i = 0; i < _ejs_heap.remset_count; i++) {
+        GCObjectPtr o = (GCObjectPtr)_ejs_heap.remset[i];
+        uint32_t ci;
+        PageInfo* pg = find_page_and_cell(o, &ci);
+        if (!pg || !cell_is_allocated(pg, ci, pg->page_bitmap[ci]))
+            continue;
+        _ejs_heap.remset[kept++] = _ejs_heap.remset[i];
+    }
+    _ejs_heap.remset_count = kept;
+}
+
+static void
+_ejs_gc_minor_collect(const char* reason)
+{
+    struct timeval tv0, tv1;
+    gettimeofday (&tv0, NULL);
+
+    if (in_minor_gc) {
+        _ejs_log ("GC BUG: reentrant minor collection (reason=%s)\n", reason);
+        abort();
+    }
+
+    young_flush_bumps();
+
+    in_minor_gc = EJS_TRUE;
+    heap_priv.minors++;
+    MINOR_SPEW("minor: begin %llu\n", (unsigned long long)heap_priv.minors);
+    uint64_t promoted_objs_before = heap_priv.promoted_objs;
+    uint64_t promoted_bytes_before = heap_priv.promoted_bytes;
+    uint64_t pins_before = heap_priv.minor_pins;
+    int remset_used = _ejs_heap.remset_count;
+    EJSBool overflowed = _ejs_heap.remset_overflowed != 0;
+    if ((uint64_t)_ejs_heap.remset_count > heap_priv.remset_peak)
+        heap_priv.remset_peak = _ejs_heap.remset_count;
+
+    // 0. swap the remset buffers up front: EVERY minor_process_slot call
+    //    from here on (roots, modules, remset snapshot, transitive scan)
+    //    may carry an old→pinned-young edge into the LIVE buffer for the
+    //    next cycle — the snapshot is what this cycle processes
+    void** snapshot = _ejs_heap.remset;
+    int snapshot_count = _ejs_heap.remset_count;
+    EJSBool snapshot_overflowed = _ejs_heap.remset_overflowed != 0;
+    _ejs_heap.remset = heap_priv.remset_other;
+    heap_priv.remset_other = snapshot;
+    _ejs_heap.remset_count = 0;
+    _ejs_heap.remset_overflowed = 0;
+
+    // 1. conservative pins FIRST: C stacks, registers, and EVERY live
+    //    generator's suspended stack + saved contexts (the registry
+    //    walk) — all ambiguous references must pin before any object
+    //    moves; a generator discovered mid-trace would pin too late.
+    //    The shared mark helpers dispatch to minor_conservative_hit
+    //    while in_minor_gc is set.
+    struct timeval ph0, ph1, ph2, ph3, ph4, ph5;
+    int gen_count = 0;
+    gettimeofday (&ph0, NULL);
+    mark_thread_stack();
+    mark_generator_stacks();
+    for (EJSGenerator* g = _ejs_generator_registry; g; g = g->reg_next) {
+        _ejs_generator_scan_conservative(g);
+        gen_count++;
+    }
+    gettimeofday (&ph1, NULL);
+
+    // 2. precise roots: the root list and module exports evacuate
+    for (RootSetEntry *entry = root_set; entry; entry = entry->next) {
+        if (entry->root)
+            minor_process_slot(entry->root);
+    }
+    for (int i = 0; i < _ejs_num_modules; i++) {
+        EJSObject* mod = (EJSObject*)_ejs_modules[i];
+        if (mod->ops == NULL) continue;
+        OP(mod,Scan)(mod, minor_process_slot);
+    }
+    gettimeofday (&ph2, NULL);
+
+    // 3. the remembered set snapshot (or, after overflow, every live
+    //    old object)
+    if (snapshot_overflowed) {
+        heap_priv.overflow_minors++;
+        old_gen_walk (minor_scan_object_if_live);
+    } else {
+        for (int i = 0; i < snapshot_count; i++) {
+            GCObjectPtr owner = (GCObjectPtr)snapshot[i];
+            // the object may have died and been swept by an interleaved
+            // FULL collection; its cell reads FREE then — skip.  (A
+            // reused cell scans as whatever lives there now: merely
+            // conservative.)
+            uint32_t ci;
+            PageInfo* pg = find_page_and_cell(owner, &ci);
+            if (!pg || !cell_is_allocated(pg, ci, pg->page_bitmap[ci]))
+                continue;
+            *(GCObjectHeader*)owner &= ~EJS_GC_HEADER_DIRTY;
+            minor_scan_saw_young = EJS_FALSE;
+            minor_scan_object(owner);
+            // still holds pinned-young references: stay dirty
+            if (minor_scan_saw_young)
+                _ejs_gc_remember_slow(owner);
+        }
+    }
+
+    // 4. transitive closure.  Objects scanned here (promoted copies,
+    //    pinned young, generator roots) that still reference pinned-
+    //    young data must carry a dirty mark so the next cycle revisits
+    //    them (young owners filter out inside remember).
+    gettimeofday (&ph3, NULL);
+    while (heap_priv.wl_count > 0) {
+        GCObjectPtr o = heap_priv.wl[--heap_priv.wl_count];
+        minor_scan_saw_young = EJS_FALSE;
+        minor_scan_object (o);
+        if (minor_scan_saw_young && !_ejs_gc_is_young(o)
+            && !(*(GCObjectHeader*)o & EJS_GC_HEADER_DIRTY))
+            _ejs_gc_remember_slow(o);
+    }
+    gettimeofday (&ph4, NULL);
+
+    // 5. optional barrier-coverage verification
+    if (heap_priv.verify && !snapshot_overflowed) {
+        verify_bad_slot = NULL;
+        old_gen_walk (verify_check_object);
+        // generator specops re-run their conservative scans inside the
+        // verify walk (side effect: fresh pins pushed on the worklist);
+        // drain them before the sweep decides survivor pages
+        while (heap_priv.wl_count > 0)
+            minor_scan_object (heap_priv.wl[--heap_priv.wl_count]);
+    }
+
+    // 6. sweep the young pages: dead cells finalize; forwarded cells are
+    //    just space; pages with pins become survivor pages, the rest reset
+    for (int i = 0; i < EJS_GC_NUM_SIZE_CLASSES; i++)
+        young_page_retire_current(i);
+
+    EJSList survivor_pages;
+    memset (&survivor_pages, 0, sizeof(survivor_pages));
+    PageInfo* page;
+    while ((page = (PageInfo*)heap_priv.young_pages.head) != NULL) {
+        for (int sc = 0; sc < EJS_GC_NUM_SIZE_CLASSES; sc++) {
+            if (heap_priv.young_current[sc] == page
+                || ((char*)_ejs_heap.bump[sc] > (char*)page->page_start
+                    && (char*)_ejs_heap.bump[sc] <= (char*)page->page_end)) {
+                _ejs_log ("GC BUG: sweeping page %p that is still active for class %d (bump=%p)\n",
+                          page->page_start, sc, _ejs_heap.bump[sc]);
+                abort();
+            }
+        }
+        int survivors = 0;
+        GCObjectPtr p = page->page_start;
+        for (int c = 0; c < CELLS_IN_PAGE(page); c++, p += page->cell_size) {
+            EJSBool allocated = (page->young == 1)
+                ? young_cell_is_allocated(page, (uint32_t)c)
+                : !IS_FREE(page->page_bitmap[c]);
+            if (!allocated) { SET_FREE(page->page_bitmap[c]); continue; }
+            if (_ejs_gc_is_forwarded(p)) {
+                // evacuated: the space is reusable; poison it now that
+                // every slot has been processed
+                gc_watch_hit ("sweep-poison-forwarded", p);
+                memset (p, 0xa7, page->cell_size); // NOT 0xaf: bit 59 (FORWARDED) must stay clear in poison
+                SET_FREE(page->page_bitmap[c]);
+                continue;
+            }
+            if (IS_BLACK(page->page_bitmap[c])) {
+                // pinned survivor: stays young, stays put; back to white
+                // so the next cycle (minor or full) sees it fresh
+                SET_WHITE(page->page_bitmap[c]);
+                SET_ALLOCATED(page->page_bitmap[c]);
+                survivors++;
+                continue;
+            }
+            MINOR_SPEW("minor: free %p (hdr %llx)\n", p, (unsigned long long)*(GCObjectHeader*)p);
+            if (gc_paranoid) {
+                // who still references this about-to-die young object?
+                // (reverse lookup across every location the minor is
+                // supposed to have processed)
+                if (paranoid_report_referrers(p) > 0)
+                    abort();
+            }
+            gc_watch_hit ("sweep-poison-dead", p);
+            finalize_object(p);
+            memset (p, 0xa7, page->cell_size); // NOT 0xaf: bit 59 (FORWARDED) must stay clear in poison
+            SET_FREE(page->page_bitmap[c]);
+        }
+        _ejs_list_detach_node (&heap_priv.young_pages, (EJSListNode*)page);
+        if (survivors == 0) {
+            page->young = 0;
+            page->bump_ptr = page->page_start;
+            page->num_free_cells = page->num_cells;
+            EJS_LIST_PREPEND(page, heap_priv.nursery_arena->free_pages);
+        } else {
+            page->young = 2;
+            page->num_free_cells = page->num_cells - survivors;
+            _ejs_list_append_node (&survivor_pages, (EJSListNode*)page);
+        }
+    }
+    heap_priv.young_pages = survivor_pages;
+    gettimeofday (&ph5, NULL);
+
+    // 7. cycle accounting (the remset swapped/reset in step 0; carried
+    //    edges are already in the live buffer); promoted bytes feed the
+    //    FULL collection trigger (they are old-gen growth)
+    heap_priv.young_alloced = 0;
+    alloc_size += heap_priv.promoted_bytes - promoted_bytes_before;
+
+    // seam/private-state consistency: every class was retired in step 6;
+    // nothing may have reinstalled a bump cursor mid-minor
+    for (int sc = 0; sc < EJS_GC_NUM_SIZE_CLASSES; sc++) {
+        if (_ejs_heap.bump[sc] != NULL || heap_priv.young_current[sc] != NULL) {
+            _ejs_log ("GC BUG: minor end: class %d seam desync (bump=%p current=%p)\n",
+                      sc, _ejs_heap.bump[sc], (void*)heap_priv.young_current[sc]);
+            abort();
+        }
+    }
+
+    MINOR_SPEW("minor: end %llu\n", (unsigned long long)heap_priv.minors);
+    in_minor_gc = EJS_FALSE;
+
+    gettimeofday (&tv1, NULL);
+    uint64_t usec = (tv1.tv_sec - tv0.tv_sec) * 1000000ULL + (tv1.tv_usec - tv0.tv_usec);
+    heap_priv.minor_usec_total += usec;
+    if (usec > heap_priv.minor_usec_max) heap_priv.minor_usec_max = usec;
+    if (gc_paranoid)
+        paranoid_sweep_check();
+    if (gc_profile) {
+#define PHUS(a,b) (((b).tv_sec - (a).tv_sec) * 1000000LL + ((b).tv_usec - (a).tv_usec))
+        _ejs_log ("EJS_GC_PROFILE: minor#%llu reason=%s pause=%.3fms promoted=%llu/%lluKB pins=%llu remset=%d gens=%d phases[pins=%lld roots=%lld dirty=%lld wl=%lld sweep=%lld]us%s\n",
+                  (unsigned long long)heap_priv.minors, reason, usec / 1000.0,
+                  (unsigned long long)(heap_priv.promoted_objs - promoted_objs_before),
+                  (unsigned long long)((heap_priv.promoted_bytes - promoted_bytes_before) / 1024),
+                  (unsigned long long)(heap_priv.minor_pins - pins_before),
+                  remset_used, gen_count,
+                  (long long)PHUS(ph0,ph1), (long long)PHUS(ph1,ph2), (long long)PHUS(ph2,ph3),
+                  (long long)PHUS(ph3,ph4), (long long)PHUS(ph4,ph5),
+                  overflowed ? " OVERFLOW" : "");
+#undef PHUS
+    }
+
+    // promotions grow the old gen; when nearly every allocation is
+    // young, this is the only place the full-collection trigger can fire
+    if (!gc_disabled) {
+        size_t gc_trigger = 60 * 1024 * 1024;
+        if (heap_size_at_last_gc / 2 > gc_trigger)
+            gc_trigger = heap_size_at_last_gc / 2;
+        if (alloc_size - alloc_size_at_last_gc >= gc_trigger) {
+            _ejs_gc_collect("promotion growth");
+            alloc_size_at_last_gc = alloc_size;
+        }
+    }
+}
+
+// the young allocation slow path: refill the class's bump page, running
+// a minor collection when the nursery is exhausted
+static GCObjectPtr
+young_alloc_slow(int idx, size_t cell_size, EJSScanType scan_type)
+{
+    young_page_retire_current(idx);
+    // the budget bounds the per-minor sweep (pause target <1ms) — the
+    // arena is the hard capacity, the budget the soft trigger
+    if (heap_priv.young_alloced >= heap_priv.young_budget)
+        _ejs_gc_minor_collect("nursery budget");
+    if (!young_page_install(idx, cell_size)) {
+        _ejs_gc_minor_collect("nursery exhausted");
+        if (!young_page_install(idx, cell_size)) {
+            // nursery still full (all survivor pages): give up on the
+            // nursery for this allocation and take the old path
+            return NULL;
+        }
+    }
+    void* p = _ejs_heap.bump[idx];
+    _ejs_heap.bump[idx] = (char*)p + cell_size;
+    memset (p, 0, cell_size);
+    *(GCObjectHeader*)p = scan_type | EJS_GC_HEADER_YOUNG;
+    return p;
+}
+
+// Full collections see young pages too.  Active (bump-rule) pages have
+// no valid FREE bits or num_free_cells, so normalize them to
+// bitmap-authoritative survivor form first: cells below the bump are
+// allocated, the rest free, and the page leaves bump service.  After
+// this the existing mark/sweep machinery handles them verbatim (their
+// objects remain YOUNG by address range; the next minor collection
+// evacuates or re-pins whatever survives the full GC).
+static void
+young_normalize_for_full_gc(void)
+{
+    if (!nursery_enabled) return;
+    young_flush_bumps();
+    for (int i = 0; i < EJS_GC_NUM_SIZE_CLASSES; i++)
+        young_page_retire_current(i);
+    for (PageInfo* page = (PageInfo*)heap_priv.young_pages.head; page; page = page->next) {
+        if (page->young != 1) continue;
+        int allocated = 0;
+        for (int c = 0; c < CELLS_IN_PAGE(page); c++) {
+            if (young_cell_is_allocated(page, (uint32_t)c)) {
+                SET_ALLOCATED(page->page_bitmap[c]);
+                allocated++;
+            } else {
+                SET_FREE(page->page_bitmap[c]);
+            }
+        }
+        page->num_free_cells = page->num_cells - allocated;
+        page->young = 2;
+    }
+    heap_priv.young_alloced = 0;
+}
+
+static void
+nursery_init(void)
+{
+    // gc-P2 gate decision (2026-07-25): nursery ON by default;
+    // EJS_GC_NURSERY=off (or =0) selects the old collector for A/B.
+    {
+        char* e = getenv("EJS_GC_NURSERY");
+        nursery_enabled = !(e && (strcmp(e, "off") == 0 || strcmp(e, "0") == 0));
+    }
+    heap_priv.verify = getenv("EJS_GC_VERIFY") != NULL;
+    minor_spew = getenv("EJS_GC_MINOR_SPEW") != NULL;
+    gc_paranoid = getenv("EJS_GC_PARANOID") != NULL;
+    if (getenv("EJS_GC_WATCH"))
+        gc_watch_addr = (uintptr_t)strtoull(getenv("EJS_GC_WATCH"), NULL, 16);
+    // 1MB balances pause and throughput (measured 2026-07-25): minor p99
+    // ~1.3ms on the bench corpus (512KB reaches 0.68ms at ~10% self-
+    // compile cost; 4MB buys self-compile ~3% at ~5ms p99)
+    heap_priv.young_budget = 1024 * 1024;
+    char* budget_env = getenv("EJS_GC_NURSERY_BUDGET");
+    if (budget_env) heap_priv.young_budget = (size_t)atoll(budget_env);
+    if (!nursery_enabled) return;
+
+    Arena* arena = arena_new();
+    if (!arena) {
+        _ejs_log ("gc: could not allocate the nursery arena; nursery disabled\n");
+        nursery_enabled = EJS_FALSE;
+        return;
+    }
+    arena->is_nursery = EJS_TRUE;
+    heap_priv.nursery_arena = arena;
+    _ejs_heap.nursery_base = (void*)arena;
+    _ejs_heap.nursery_end = arena->end;
+    _ejs_heap.remset = malloc (NURSERY_REMSET_CAPACITY * sizeof(ejsval*));
+    _ejs_heap.remset_capacity = NURSERY_REMSET_CAPACITY;
+    heap_priv.remset_other = malloc (NURSERY_REMSET_CAPACITY * sizeof(ejsval*));
+}
+// ===================== end gc-plan P2 nursery ==============================
 
 static void
 sweep_heap()
@@ -1328,12 +2359,17 @@ _ejs_gc_push_generator(EJSGenerator* gen)
         abort();
     }
     generators[generator_count++] = gen;
+    // gc-P2: keep the barrier's transient-slot bound on the CURRENT stack
+    _ejs_heap.current_stack_end = gen->stack + gen->stack_size;
 }
 
 void
 _ejs_gc_pop_generator()
 {
     generator_count--;
+    _ejs_heap.current_stack_end = generator_count > 0
+        ? generators[generator_count - 1]->stack + generators[generator_count - 1]->stack_size
+        : (void*)stack_bottom;
 }
 
 static void
@@ -1363,6 +2399,7 @@ mark_thread_stack()
 
 // mark a known heap object as a root (page cell or LOS both resolve
 // through find_page_and_cell; the pointer must be an object base)
+static void minor_wl_push(GCObjectPtr p);
 static void
 mark_object_root(GCObjectPtr ptr)
 {
@@ -1371,7 +2408,17 @@ mark_object_root(GCObjectPtr ptr)
     if (!page)
         return;
     BitmapCell cell = page->page_bitmap[cell_idx];
-    if (IS_FREE(cell) || !IS_WHITE(cell))
+    if (!cell_is_allocated(page, cell_idx, cell))
+        return;
+    if (in_minor_gc) {
+        // gc-P2 minor: a young root pins; an old root's slots may hold
+        // young references, so queue it for the precise minor scan
+        // (duplicates are harmless — evacuation is idempotent)
+        if (page->young) minor_conservative_hit(page, cell_idx);
+        else minor_wl_push(ptr);
+        return;
+    }
+    if (!IS_WHITE(cell))
         return;
     WORKLIST_PUSH_AND_GRAY_CELL(ptr, page->page_bitmap[cell_idx]);
 }
@@ -1443,6 +2490,10 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
     large_objs = 0;
     total_objs = 0;
 
+    // gc-P2: full collections need young pages in bitmap-authoritative
+    // form (active bump pages have no valid FREE bits or counts)
+    young_normalize_for_full_gc();
+
 #if gc_timings > 1
     gettimeofday (&tvbefore, NULL);
 #endif
@@ -1451,23 +2502,42 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
     if (gc_profile)
         gettimeofday (&prof_tv_begin, NULL);
 
+    struct timeval fg[8];
     if (!shutting_down) {
+        gettimeofday (&fg[0], NULL);
         mark_from_roots();
 
         total_objs = num_roots;
 
         mark_from_modules();
+        gettimeofday (&fg[1], NULL);
 
         mark_thread_stack();
 
         mark_generator_stacks();
+        gettimeofday (&fg[2], NULL);
+
+        // gc-P2: dirty objects await their deferred minor scan and may
+        // hold the only reference to young data — root them
+        for (int i = 0; i < _ejs_heap.remset_count; i++)
+            mark_object_root((GCObjectPtr)_ejs_heap.remset[i]);
+        gettimeofday (&fg[3], NULL);
 
         process_worklist();
+        gettimeofday (&fg[4], NULL);
 
         // gc-P0: survival + pin census must walk the heap BEFORE the
         // sweep frees the white cells
         if (gc_profile)
             profile_pre_sweep();
+        gettimeofday (&fg[5], NULL);
+        if (gc_profile) {
+#define FGUS(a,b) ((long long)(((b).tv_sec - (a).tv_sec) * 1000000LL + ((b).tv_usec - (a).tv_usec)))
+            _ejs_log ("EJS_GC_PROFILE: full-gc phases: roots+modules=%lldus stacks=%lldus remset-roots=%lldus (remset=%d) worklist=%lldus census=%lldus\n",
+                      FGUS(fg[0],fg[1]), FGUS(fg[1],fg[2]), FGUS(fg[2],fg[3]),
+                      _ejs_heap.remset_count, FGUS(fg[3],fg[4]), FGUS(fg[4],fg[5]));
+#undef FGUS
+        }
     }
 
 #if gc_timings > 1
@@ -1488,6 +2558,11 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
 #endif
 
     sweep_heap();
+
+    // gc-P2: the remembered state may dangle into cells this sweep just
+    // freed — rebuild it from the live old gen
+    if (!shutting_down)
+        remset_rebuild_after_full_gc();
 
     if (gc_profile && !shutting_down) {
         gettimeofday (&prof_tv_end, NULL);
@@ -1720,6 +2795,7 @@ alloc_from_los(size_t size, EJSScanType scan_type)
 
     rv->alloc_size = size;
 
+    conservative_bounds_add (rv, size + sizeof(LargeObjectInfo) + 16);
     EJS_LIST_PREPEND (rv, los_list);
     //_ejs_log ("alloc_from_los returning %p\n, los_list = %p\n", rv->page_info.page_start, los_list);
     return rv->page_info.page_start;
@@ -1740,8 +2816,6 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
 {
     GCObjectPtr rv = NULL;
 
-    alloc_size += size;
-
     num_allocs ++;
     total_allocs ++;
 
@@ -1752,6 +2826,45 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     case EJS_SCAN_TYPE_CLOSUREENV: num_closureenv_allocs ++; break;
     }
 
+    int bucket;
+    int bucket_size = MAX(pow2_ceil(size), 1<<OBJECT_SIZE_LOW_LIMIT_BITS);
+
+    bucket = ffs(bucket_size);
+
+    if (gc_profile)
+        profile_note_alloc(size, bucket, scan_type);
+
+    // gc-P2: nursery-eligible allocations bump-allocate in the young
+    // arena and do NOT feed alloc_size (the full-GC trigger tracks
+    // OLD-gen growth: promotions and direct old allocations).  The
+    // every-N stress knob triggers MINOR collections here — the full-GC
+    // stress semantics of old mode are unchanged (below).
+    if (nursery_enabled && !gc_disabled && bucket <= OBJECT_SIZE_HIGH_LIMIT_BITS) {
+        if (in_minor_gc) {
+            _ejs_log ("GC BUG: young allocation during a minor collection\n");
+            abort();
+        }
+        if (collect_every_alloc && collect_every_alloc == num_allocs) {
+            num_allocs = 0;
+            _ejs_gc_minor_collect("every_n_alloc");
+        }
+        int idx = bucket - OBJECT_SIZE_LOW_LIMIT_BITS - 1; // 16B -> 0
+        void* p = _ejs_heap.bump[idx];
+        if (EJS_LIKELY((char*)p + bucket_size <= (char*)_ejs_heap.limit[idx])) {
+            _ejs_heap.bump[idx] = (char*)p + bucket_size;
+            memset (p, 0, bucket_size);
+            *(GCObjectHeader*)p = scan_type | EJS_GC_HEADER_YOUNG;
+            gc_watch_hit ("young-alloc-fast", p);
+            return p;
+        }
+        rv = young_alloc_slow(idx, bucket_size, scan_type);
+        if (rv) { gc_watch_hit ("young-alloc-slow", rv); return rv; }
+        // nursery unusable (pathologically pinned): fall through to the
+        // old allocator
+    }
+
+    alloc_size += size;
+
     if (!gc_disabled) {
         char *gc_reason = NULL;
         size_t gc_trigger = 60 * 1024 * 1024;
@@ -1759,7 +2872,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
             gc_trigger = heap_size_at_last_gc / 2;
         if (alloc_size - alloc_size_at_last_gc >= gc_trigger) {
             gc_reason = "alloc_size";
-        } else if (collect_every_alloc && collect_every_alloc == num_allocs) {
+        } else if (!nursery_enabled && collect_every_alloc && collect_every_alloc == num_allocs) {
             gc_reason = "every_n_alloc";
         }
         if (gc_reason) {
@@ -1769,19 +2882,17 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
         }
     }
 
-    int bucket;
-    int bucket_size = MAX(pow2_ceil(size), 1<<OBJECT_SIZE_LOW_LIMIT_BITS);
-
-    bucket = ffs(bucket_size);
-
-    if (gc_profile)
-        profile_note_alloc(size, bucket, scan_type);
-
     retry_allocation:
     {
     if (bucket > OBJECT_SIZE_HIGH_LIMIT_BITS) {
         SPEW(2, _ejs_log ("need to alloc %zd from los!!!\n", size));
         rv = alloc_from_los(size, scan_type);
+        if (rv && nursery_enabled) {
+            // LOS objects are old at birth: their construction stores
+            // bypass the barrier, so they start DIRTY and get a precise
+            // scan at the next minor
+            _ejs_gc_remember_slow(rv);
+        }
         if (rv == NULL) {
             if (num_allocs == 0) {
                 _ejs_log ("los allocation (size = %d) failed twice, throwing", size);
@@ -1864,6 +2975,31 @@ _ejs_gc_remove_root(ejsval* root)
             return;
         }
     }
+}
+
+// gc-plan P2 (object-remembering): mark `owner` dirty and queue it for
+// the next minor's rescan.  The inline half (ejs-gc.h) already filtered
+// non-young values, young owners, and already-dirty owners.
+void
+_ejs_gc_remember_slow(void* owner)
+{
+    GCObjectHeader* h = (GCObjectHeader*)owner;
+    *h |= EJS_GC_HEADER_DIRTY;
+    EJSHeapContext* c = &_ejs_heap;
+    if (EJS_LIKELY(c->remset_count < c->remset_capacity))
+        c->remset[c->remset_count++] = owner;
+    else
+        c->remset_overflowed = 1;
+}
+
+// the emitted barrier's out-of-line half: emit.ts inlines only the
+// value-is-young range check (double payloads may false-positive; the
+// full filter reruns here)
+void
+_ejs_gc_remember_val(ejsval owner, ejsval val)
+{
+    void* p = (void*)EJSVAL_TO_GCTHING_IMPL(owner);
+    if (p) _ejs_gc_remember(p, val);
 }
 
 void

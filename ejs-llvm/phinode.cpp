@@ -84,6 +84,8 @@ namespace ejsllvm {
         _ejs_gc_add_root (&_ejs_PhiNode_prototype);
         _ejs_PhiNode_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_PhiNode_specops);
 
+        _ejs_gc_add_root (&_ejs_PhiNode);
+
         _ejs_PhiNode = _ejs_function_new_utf8_with_proto  (_ejs_null, "LLVMPhiNode", (EJSClosureFunc)PhiNode_impl, _ejs_PhiNode_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "PhiNode", _ejs_PhiNode);

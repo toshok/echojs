@@ -127,6 +127,7 @@ static ejsval RejectPromise (ejsval promise, ejsval reason)
 
     // 3. Set the value of promise's [[PromiseResult]] internal slot to reason. 
     _promise->result = reason;
+    _ejs_gc_remember(_promise, _promise->result);
 
     // 4. Set the value of promise's [[PromiseFulfillReactions]] internal slot to undefined. 
     // XXX we need to free our listnodes
@@ -158,6 +159,7 @@ static ejsval FulfillPromise (ejsval promise, ejsval resolutionValue)
     EJSPromiseReaction* reactions = _promise->fulfillReactions;
     // 3. Set the value of promise's [[PromiseResult]] internal slot to resolutionvalue. 
     _promise->result = resolutionValue;
+    _ejs_gc_remember(_promise, _promise->result);
 
     // 4. Set the value of promise's [[PromiseFulfullReactions]] internal slot to undefined. 
     // XXX we need to free our listnodes
@@ -288,6 +290,7 @@ CreateResolvingFunctions(ejsval promise, ejsval* out_resolve, ejsval* out_reject
     ejsval resolvingFunctions_env = _ejs_closureenv_new(2);
     *_ejs_closureenv_get_slot_ref(resolvingFunctions_env, 0) = _ejs_false;
     *_ejs_closureenv_get_slot_ref(resolvingFunctions_env, 1) = promise;
+    EJS_GC_REMEMBER(resolvingFunctions_env, promise);
 
     // 2. Let resolve be a new built-in function object as defined in Promise Resolve Functions (25.4.1.4). 
     // 3. Set the [[Promise]] internal slot of resolve to promise. 
@@ -957,17 +960,17 @@ _ejs_promise_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSPromise* promise = (EJSPromise*)obj;
 
-    scan_func(promise->result);
-    scan_func(promise->constructor);
+    scan_func(&(promise->result));
+    scan_func(&(promise->constructor));
 
     for (EJSPromiseReaction* reaction = promise->fulfillReactions; reaction; reaction = reaction->next) {
-        scan_func(reaction->capabilities);
-        scan_func(reaction->handler);
+        scan_func(&(reaction->capabilities));
+        scan_func(&(reaction->handler));
     }
 
     for (EJSPromiseReaction* reaction = promise->rejectReactions; reaction; reaction = reaction->next) {
-        scan_func(reaction->capabilities);
-        scan_func(reaction->handler);
+        scan_func(&(reaction->capabilities));
+        scan_func(&(reaction->handler));
     }
 
     _ejs_Object_specops.Scan (obj, scan_func);

@@ -140,7 +140,7 @@ _ejs_arguments_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSArguments* args = (EJSArguments*)obj;
     for (int i = 0; i < args->argc; i ++)
-        scan_func (args->args[i]);
+        scan_func (&(args->args[i]));
     _ejs_Object_specops.Scan (obj, scan_func);
 }
 

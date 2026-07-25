@@ -619,12 +619,25 @@ bounds as needed.
       bit inventory (57 YOUNG / 58 PINNED from P0 profiling, 60-63
       still free for mark/card).  Local matrix ×7 green; linux targets
       ride the standing CI bootstrap matrix on push.
-- [ ] **P2** nursery + inline `make_env` allocation + card/SATB barrier (with
-      initializing-store elision) + evacuating minor GC w/ cell pinning; old
-      collector behind a flag, differential + stress lanes; heap-context
+- [x] **P2** nursery + inline `make_env` allocation + write barrier +
+      evacuating minor GC w/ cell pinning; old collector behind a flag
+      (`EJS_GC_NURSERY=off`), differential + stress lanes; heap-context
       struct + context-accessor seam from the first line of new code.
       *Gate:* alloc throughput ↑; minor p99 < 1 ms; differential green; pin
       report; zero new file-static collector state.
+      DONE 2026-07-25 — docs/gc-p2-results.md has the numbers.  Headlines:
+      object-remembering barrier (slot-address remset abandoned — dangling
+      recorded slots in freed malloc storage); nursery ON by default;
+      bench2 0.69→0.64s, envbench 1.82→1.48s, self-compile parity at 39s;
+      minor p99 0.68ms @512KB budget (1MB default = 1.27ms); the
+      conservative-lookup bounds prefilter that fixed two lookup
+      pathologies also sped the OLD collector's full marks (43.4→39.3s
+      self-compile).  The war story: unrooted ejsval C statics in
+      ejs-llvm bindings — under a mover, roots exist to REWRITE
+      locations, not just keep referents alive.  Deviation from the plan
+      line: no card table and no initializing-store elision — the
+      object-remembering DIRTY bit dedups repeat stores and modules/LOS
+      are handled by unconditional scan / born-dirty instead.
 - [ ] **P3** gc-frame precise JS roots (chained variant) + env slot-address
       inlining; move-everything stress mode.
       *Gate:* stress green; pin-rate delta + spill-cost numbers recorded.

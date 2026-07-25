@@ -221,7 +221,7 @@ _ejs_symbol_specop_allocate ()
 static void
 _ejs_symbol_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
-    scan_func(((EJSSymbol*)obj)->primSymbol);
+    scan_func(&(((EJSSymbol*)obj)->primSymbol));
 }
 
 EJS_DEFINE_CLASS(Symbol,

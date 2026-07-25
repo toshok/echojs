@@ -1941,7 +1941,7 @@ static void
 _ejs_string_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSString* ejss = (EJSString*)obj;
-    scan_func (ejss->primStr);
+    scan_func (&(ejss->primStr));
     _ejs_Object_specops.Scan (obj, scan_func);
 }
 
@@ -1971,7 +1971,7 @@ static void
 _ejs_string_iterator_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSStringIterator* iter = (EJSStringIterator*)obj;
-    scan_func(iter->iterated);
+    scan_func(&(iter->iterated));
     _ejs_Object_specops.Scan (obj, scan_func);
 }
 
@@ -2211,6 +2211,10 @@ static void flatten_dep (jschar **p, EJSPrimString *n, int* off, int* len);
 static void
 flatten_rope (jschar **p, EJSPrimString *n)
 {
+    if ((n->gc_header & 0xffffffff) == 0xafafafaf) {
+        _ejs_log ("flatten_rope: POISONED node %p\n", (void*)n);
+        abort();
+    }
     switch (EJS_PRIMSTR_GET_TYPE(n)) {
     case EJS_STRING_FLAT:
         memmove (*p, n->data.flat, n->length * sizeof(jschar));

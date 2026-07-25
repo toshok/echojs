@@ -698,6 +698,125 @@ class LLVMIRVisitor implements VisitorSurface {
         return ir.createIntToPtr(payload, types.EjsObject.pointerTo(), "objptr");
     }
 
+    // gc-plan P2: is this value's payload inside the nursery?  The seam
+    // contract (ejs-gc.h EJSHeapContext) fixes the layout: 12 i64 words —
+    // bump[5], limit[5], nursery_base (word 10), nursery_end (word 11).
+    // A double's payload can false-positive into the range; the out-of-
+    // line barrier re-filters, so the inline check only needs to be
+    // sound-when-true-called.  With the nursery off both bounds are 0
+    // and the check is constant-false.
+    heap_ctx_global: llvm.GlobalVariable | null = null;
+    heapContextGlobal(): llvm.GlobalVariable {
+        if (!this.heap_ctx_global)
+            this.heap_ctx_global = new llvm.GlobalVariable(
+                this.module,
+                llvm.ArrayType.get(types.Int64, 12),
+                "_ejs_heap",
+                null,
+                true
+            );
+        return this.heap_ctx_global;
+    }
+    // gc-plan P2c: the inline nursery allocation for closure
+    // environments — bump, compare, init header/length/slots, box with
+    // the CLOSUREENV tag; the slow thunk (the existing runtime call) is
+    // the safepoint.  With the nursery off, bump/limit are NULL and the
+    // compare always routes slow.  All layout knowledge (cell classes,
+    // header bits, NaN-box tags, struct offsets) stays here with the
+    // other NaN-box helpers.
+    emitEnvAllocInline(n: number, slowCall: () => llvm.Value): llvm.Value {
+        if (this.triple.pointerSize() !== 64) return slowCall();
+        const value_size = 16 + 8 * n; // EJSClosureEnv: u64 header, u32 length(+pad), slots
+        let cell_size = 16;
+        while (cell_size < value_size) cell_size *= 2;
+        if (cell_size > 128) return slowCall(); // LOS-routed sizes take the runtime path
+        const idx = Math.log2(cell_size) - 4;   // seam word: bump[idx], limit[5+idx]
+
+        const g = this.heapContextGlobal();
+        const arr_ty = llvm.ArrayType.get(types.Int64, 12);
+        const bump_p = ir.createInBoundsGetElementPointer(
+            arr_ty, g, [consts.int64(0), consts.int32(idx)], "env_bump_p");
+        const limit_p = ir.createInBoundsGetElementPointer(
+            arr_ty, g, [consts.int64(0), consts.int32(5 + idx)], "env_limit_p");
+        const bump = ir.createLoad(types.Int64, bump_p, "env_bump");
+        const limit = ir.createLoad(types.Int64, limit_p, "env_limit");
+        // the bindings carry no integer add: pointer arithmetic happens
+        // through i8 GEPs off the bump address
+        const i8 = llvm.Type.getInt8Ty();
+        const bump_ptr = ir.createIntToPtr(bump, i8.pointerTo(), "env_bump_ptr");
+        const byteOffset = (k: number, name: string): llvm.Value =>
+            ir.createInBoundsGetElementPointer(i8, bump_ptr, [consts.int64(k)], name);
+        const newbump = ir.createPtrToInt(
+            byteOffset(cell_size, "env_newbump_ptr"), types.Int64, "env_newbump");
+        // newbump <= limit, spelled with the comparison the bindings have
+        const fits = ir.createICmpUGE(limit, newbump, "env_fits");
+
+        const fast_bb = new llvm.BasicBlock("env_alloc_fast", this.currentFunction!);
+        const slow_bb = new llvm.BasicBlock("env_alloc_slow", this.currentFunction!);
+        const join_bb = new llvm.BasicBlock("env_alloc_join", this.currentFunction!);
+        const from_bb = ir.getInsertBlock()!;
+        ir.createCondBr(fits, fast_bb, slow_bb);
+
+        ir.setInsertPoint(fast_bb);
+        ir.createStore(newbump, bump_p);
+        // header: EJS_SCAN_TYPE_CLOSUREENV | YOUNG (bit 57)
+        const hdr_ptr = ir.createBitCast(bump_ptr, types.Int64.pointerTo(), "env_hdr_p");
+        ir.createStore(consts.int64_lowhi(0x02000000, 0x00000008), hdr_ptr);
+        // length at +8 (u32)
+        const len_ptr = ir.createBitCast(
+            byteOffset(8, "env_len_addr"), types.Int32.pointerTo(), "env_len_p");
+        ir.createStore(consts.int32(n), len_ptr);
+        // slots at +16: undefined-filled, exactly what _ejs_closure_init does
+        const undef = this.loadUndefinedEjsValue();
+        for (let i = 0; i < n; i++) {
+            const s_ptr = ir.createBitCast(
+                byteOffset(16 + 8 * i, `env_slot${i}_addr`),
+                types.EjsValue.pointerTo(), `env_slot${i}_p`);
+            ir.createStore(undef, s_ptr);
+        }
+        // box: CLOSUREENV shifted tag (0x1FFF6 << 47)
+        const boxed_bits = ir.createOr(
+            bump, consts.int64_lowhi(0xfffb0000, 0x00000000), "env_boxed_bits");
+        const box_alloca = this.createAlloca(this.currentFunction!, types.EjsValue, "env_box");
+        const box_i64p = ir.createBitCast(box_alloca, types.Int64.pointerTo(), "env_box_i64p");
+        ir.createStore(boxed_bits, box_i64p);
+        const fast_env = ir.createLoad(types.EjsValue, box_alloca, "env_fast");
+        const fast_end_bb = ir.getInsertBlock()!;
+        ir.createBr(join_bb);
+
+        ir.setInsertPoint(slow_bb);
+        const slow_env = slowCall();
+        const slow_end_bb = ir.getInsertBlock()!;
+        ir.createBr(join_bb);
+
+        ir.setInsertPoint(join_bb);
+        const phi = ir.createPhi(types.EjsValue, 2, "env_alloc");
+        phi.addIncoming(fast_env, fast_end_bb);
+        phi.addIncoming(slow_env, slow_end_bb);
+        return phi;
+    }
+
+    emitYoungCheck(val: llvm.Value): llvm.Value {
+        if (this.triple.pointerSize() !== 64)
+            throw new Error("emitYoungCheck not implemented for 32-bit targets");
+        const g = this.heapContextGlobal();
+        const arr_ty = llvm.ArrayType.get(types.Int64, 12);
+        const base_p = ir.createInBoundsGetElementPointer(
+            arr_ty, g, [consts.int64(0), consts.int32(10)], "nursery_base_p");
+        const base = ir.createLoad(types.Int64, base_p, "nursery_base");
+        const end_p = ir.createInBoundsGetElementPointer(
+            arr_ty, g, [consts.int64(0), consts.int32(11)], "nursery_end_p");
+        const end = ir.createLoad(types.Int64, end_p, "nursery_end");
+        const payload = ir.createAnd(
+            this.getEjsvalBits(val),
+            consts.int64_lowhi(0x00007fff, 0xffffffff),
+            "wb_payload"
+        );
+        const ge = ir.createICmpUGE(payload, base, "wb_ge_base");
+        const lt = ir.createICmpULt(payload, end, "wb_lt_end");
+        return ir.createAnd(ge, lt, "wb_young");
+    }
+
     // the module's i32 shape-index global for `key`, minted on first use
     // (initialized to EJS_SHAPE_NOMATCH so a guard can never pass before
     // module init interns the real index)

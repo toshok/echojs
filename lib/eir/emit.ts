@@ -44,6 +44,12 @@ export interface VisitorSurface {
     // a passed isObject), and the module's interned shape-index global
     isObject(val: llvm.Value): llvm.Value;
     objectPointer(val: llvm.Value): llvm.Value;
+    // gc-plan P2: the inline half of the write barrier — "is this
+    // value's payload in the nursery range" (layout knowledge lives in
+    // compiler.ts with the other NaN-box tests)
+    emitYoungCheck(val: llvm.Value): llvm.Value;
+    // gc-plan P2c: inline nursery bump allocation for closure envs
+    emitEnvAllocInline(n: number, slowCall: () => llvm.Value): llvm.Value;
     moduleShapeGlobal(
         key: string,
         fields: { name: string; repr: string }[]
@@ -135,6 +141,10 @@ export class EIREmitter {
     fn_this_ptr!: llvm.Value;
     fn_new_target!: llvm.Value;
     scratch: llvm.AllocaInst | null = null;
+    // gc-P2: the slot-array env loaded by the most recent slotRef —
+    // shaped stores must remember the ENV (the storage owner), not the
+    // object whose Scan only holds the env reference
+    last_slots_val: llvm.Value | null = null;
     scratch_type: llvm.Type | null = null;
     this_slot!: llvm.AllocaInst;
 
@@ -405,6 +415,23 @@ export class EIREmitter {
         return this.abi.createCall(this.llvmFn, callee.type, callee, argv, name || "");
     }
 
+    // gc-plan P2: the emitted generational write barrier (object-
+    // remembering).  Inline: one range check on the stored VALUE; slow:
+    // _ejs_gc_remember_val(owner, value) marks the owner dirty.  With
+    // the nursery disabled the bounds are zero and the branch is never
+    // taken.
+    emitStoreBarrier(owner: llvm.Value, v: llvm.Value): void {
+        const rt = this.v.ejs_runtime;
+        const young = this.v.emitYoungCheck(v);
+        const bar_bb = new llvm.BasicBlock("wb_slow", this.llvmFn);
+        const cont_bb = new llvm.BasicBlock("wb_cont", this.llvmFn);
+        ir.createCondBr(young, bar_bb, cont_bb);
+        ir.setInsertPoint(bar_bb);
+        this.call(rt.gc_write_barrier, [owner, v]);
+        ir.createBr(cont_bb);
+        ir.setInsertPoint(cont_bb);
+    }
+
     // shapes-plan P4.3: THE slot-addressing seam.  A shaped object's
     // property storage is a closureenv slot array hanging off the
     // map/slots union word (P4.2 layout); when gc-P5 moves slots inline,
@@ -428,6 +455,7 @@ export class EIREmitter {
             "slots_ejsval_ptr"
         );
         const slotsval = ir.createLoad(types.EjsValue, slots_ptr, "slots_ejsval");
+        this.last_slots_val = slotsval; // gc-P2: the barrier's true owner
         // payload-mask the closureenv ejsval to its EJSClosureEnv*
         const envptr = ir.createPointerCast(
             this.v.objectPointer(slotsval),
@@ -640,10 +668,12 @@ export class EIREmitter {
             case "slot_store": {
                 const ref = this.slotRef(this.val(inst.operands[0]), inst.imms["slot"] as number);
                 if (inst.imms["repr"] === "f64") {
+                    // raw doubles are not references: no barrier (gc-P2)
                     const dref = ir.createBitCast(ref, types.Double.pointerTo(), "slot_f64_ptr");
                     ir.createStore(this.val(inst.operands[1]), dref);
                 } else {
                     ir.createStore(this.val(inst.operands[1]), ref);
+                    this.emitStoreBarrier(this.last_slots_val!, this.val(inst.operands[1]));
                 }
                 this.values.set(inst, this.val(inst.operands[1]));
                 return;
@@ -816,7 +846,15 @@ export class EIREmitter {
             }
 
             case "make_env": {
-                let rv = this.call(rt.make_closure_env, [consts.int32((inst.imms["size"] as number))], "env");
+                const n = inst.imms["size"] as number;
+                // gc-plan P2c: envs are 39% of all allocations (the P0
+                // census) — bump-allocate inline; the runtime call is
+                // the slow path/safepoint.  EJS_NO_INLINE_ALLOC=1 is
+                // the compile-time bisect hook.
+                const slow = () => this.call(rt.make_closure_env, [consts.int32(n)], "env");
+                const rv = process.env["EJS_NO_INLINE_ALLOC"]
+                    ? slow()
+                    : this.v.emitEnvAllocInline(n, slow);
                 this.values.set(inst, rv);
                 return;
             }
@@ -836,6 +874,7 @@ export class EIREmitter {
                     "slotref"
                 );
                 ir.createStore(this.val(inst.operands[1]), ref);
+                this.emitStoreBarrier(this.val(inst.operands[0]), this.val(inst.operands[1]));
                 this.values.set(inst, this.val(inst.operands[1]));
                 return;
             }

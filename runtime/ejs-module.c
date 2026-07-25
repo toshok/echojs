@@ -40,7 +40,7 @@ _ejs_module_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     EJSModule *module = (EJSModule*)obj;
 
     for (int i = 0; i < module->num_exports; i ++)
-        scan_func(module->exports[i]);
+        scan_func(&(module->exports[i]));
 
     _ejs_Object_specops.Scan (obj, scan_func);
 }

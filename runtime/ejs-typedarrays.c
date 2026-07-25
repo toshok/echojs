@@ -2487,7 +2487,7 @@ _ejs_arraybuffer_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSArrayBuffer *arraybuf = (EJSArrayBuffer*)obj;
     if (arraybuf->dependent) {
-        scan_func (arraybuf->data.dependent.buf);
+        scan_func (&(arraybuf->data.dependent.buf));
     }
     _ejs_Object_specops.Scan (obj, scan_func);
 }
@@ -2529,7 +2529,7 @@ static void
 _ejs_typedarray_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSTypedArray *arr = (EJSTypedArray*)obj;
-    scan_func(arr->buffer);
+    scan_func(&(arr->buffer));
     _ejs_Object_specops.Scan (obj, scan_func);
 }
 
@@ -2661,7 +2661,7 @@ static void
 _ejs_dataview_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSDataView *view = (EJSDataView*)obj;
-    scan_func (view->buffer);
+    scan_func (&(view->buffer));
     _ejs_Object_specops.Scan (obj, scan_func);
 }
 

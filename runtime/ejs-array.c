@@ -285,6 +285,7 @@ _ejs_array_push_dense(ejsval array, int argc, ejsval *args)
     EJSArray *arr = (EJSArray*)EJSVAL_TO_OBJECT(array);
     maybe_realloc_dense (arr, arr->array_length + argc);
     memmove (&EJSDENSEARRAY_ELEMENTS(arr)[EJSARRAY_LEN(arr)], args, argc * sizeof(ejsval));
+    for (uint32_t _wb = 0; _wb < (uint32_t)argc; _wb++) _ejs_gc_remember(arr, args[_wb]);
     EJSARRAY_LEN(arr) += argc;
     return EJSARRAY_LEN(arr);
 }
@@ -382,6 +383,7 @@ static EJS_NATIVE_FUNC(_ejs_Array_impl) {
             arr->dense.elements = (ejsval*)malloc(arr->dense.array_alloc * sizeof (ejsval));
 
             memmove (arr->dense.elements, args, argc * sizeof(ejsval));
+            for (uint32_t _wb = 0; _wb < (uint32_t)argc; _wb++) _ejs_gc_remember(arr, args[_wb]);
         }
 
 
@@ -2051,6 +2053,7 @@ static EJS_NATIVE_FUNC(_ejs_Array_prototype_unshift) {
         int len = EJS_ARRAY_LEN(*_this);
         memmove (EJS_DENSE_ARRAY_ELEMENTS(*_this) + argc, EJS_DENSE_ARRAY_ELEMENTS(*_this), sizeof(ejsval) * len);
         memmove (EJS_DENSE_ARRAY_ELEMENTS(*_this), args, sizeof(ejsval) * argc);
+        for (uint32_t _wb = 0; _wb < (uint32_t)argc; _wb++) _ejs_gc_remember(EJSVAL_TO_OBJECT(*_this), args[_wb]);
         EJS_ARRAY_LEN(*_this) += argc;
         return NUMBER_TO_EJSVAL(len + argc);
     }
@@ -2829,6 +2832,7 @@ _ejs_array_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval recei
             }
 
             EJS_DENSE_ARRAY_ELEMENTS(obj)[idx] = val;
+            EJS_GC_REMEMBER(obj, val);
         }
         else {
             // we're already sparse, just give up as none of this is implemented yet.
@@ -2964,6 +2968,7 @@ _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPrope
             }
 
             EJS_DENSE_ARRAY_ELEMENTS(obj)[idx] = propertyDescriptor->value;
+            EJS_GC_REMEMBER(obj, propertyDescriptor->value);
         }
         else {
             // we're already sparse, just give up as none of this is implemented yet.
@@ -3034,12 +3039,12 @@ _ejs_array_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
         for (int i = 0; i < arr->sparse.arraylet_num; i ++) {
             Arraylet al = arr->sparse.arraylets[i];
             for (int j = 0; j < al.length; j ++)
-                scan_func (al.elements[j]);
+                scan_func (&(al.elements[j]));
         }
     }
     else {
         for (int i = 0; i < EJSARRAY_LEN(obj); i ++)
-            scan_func (EJSDENSEARRAY_ELEMENTS(obj)[i]);
+            scan_func (&(EJSDENSEARRAY_ELEMENTS(obj)[i]));
     }
     _ejs_Object_specops.Scan (obj, scan_func);
 }
@@ -3070,7 +3075,7 @@ static void
 _ejs_array_iterator_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSArrayIterator* iter = (EJSArrayIterator*)obj;
-    scan_func(iter->iterated);
+    scan_func(&(iter->iterated));
     _ejs_Object_specops.Scan (obj, scan_func);
 }
 

@@ -13,7 +13,7 @@ EJS_BEGIN_DECLS
 
 #define EJSVAL_IS_GENERATOR(v)  (EJSVAL_IS_OBJECT(v) && (EJSVAL_TO_OBJECT(v)->ops == &_ejs_Generator_specops))
 
-typedef struct {
+typedef struct _EJSGenerator {
     /* object header */
     EJSObject obj;
 
@@ -38,6 +38,13 @@ typedef struct {
 
     void* stack;
     size_t stack_size;
+
+    // gc-plan P2: all live generators sit on a registry so a minor
+    // collection can scan every suspended stack CONSERVATIVELY before
+    // any evacuation — a generator discovered mid-trace would pin its
+    // stack referents too late (they may already have moved)
+    struct _EJSGenerator* reg_next;
+    struct _EJSGenerator* reg_prev;
 
     // the caller-side stack position recorded just before each swap INTO
     // this generator (the address of a local in the resuming frame).  While
@@ -76,6 +83,12 @@ extern void _ejs_iterator_init_proto ();
 /* these live in ejs-gc.c but it's easier on everything to have the decls here */
 extern void _ejs_gc_push_generator(EJSGenerator *gen);
 extern void _ejs_gc_pop_generator();
+
+/* gc-plan P2: the live-generator registry (ejs-generator.c) + the
+   conservative half of the generator scan, shared by the specop and the
+   minor collection's pre-evacuation pass */
+extern EJSGenerator* _ejs_generator_registry;
+extern void _ejs_generator_scan_conservative(EJSGenerator* gen);
 
 EJS_END_DECLS
 

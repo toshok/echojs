@@ -65,7 +65,7 @@ static void
 _ejs_iterator_wrapper_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSIteratorWrapper* iter = (EJSIteratorWrapper*)obj;
-    scan_func(iter->iterator);
+    scan_func(&(iter->iterator));
     _ejs_Object_specops.Scan (obj, scan_func);
 }
 
@@ -131,6 +131,7 @@ _ejs_generator_start(EJSGenerator* gen)
     // mark_thread_stack's range depends on the chain).
     gen->completed = EJS_TRUE;
     gen->yielded_value = _ejs_create_iter_result(rv, _ejs_true);
+    _ejs_gc_remember(gen, gen->yielded_value);
     _ejs_gc_pop_generator();
 }
 
@@ -162,6 +163,10 @@ _ejs_generator_new (ejsval generator_body)
     rv->stack = malloc(GENERATOR_STACK_SIZE);
     rv->stack_size = GENERATOR_STACK_SIZE;
     rv->caller_stack_top = NULL;
+    rv->reg_prev = NULL;
+    rv->reg_next = _ejs_generator_registry;
+    if (_ejs_generator_registry) _ejs_generator_registry->reg_prev = rv;
+    _ejs_generator_registry = rv;
     getcontext(&rv->generator_context);
     rv->generator_context.uc_stack.ss_sp = rv->stack;
     rv->generator_context.uc_stack.ss_size = GENERATOR_STACK_SIZE;
@@ -178,6 +183,7 @@ ejsval
 _ejs_generator_yield (ejsval generator, ejsval arg) {
     EJSGenerator* gen = (EJSGenerator*)EJSVAL_TO_OBJECT(generator);
     gen->yielded_value = _ejs_create_iter_result(arg, _ejs_false);
+    _ejs_gc_remember(gen, gen->yielded_value);
     gen->sent_value = _ejs_undefined;
 
     _ejs_gc_pop_generator();
@@ -206,6 +212,7 @@ _ejs_generator_send (ejsval generator, ejsval arg) {
     gen->started = EJS_TRUE;
     gen->yielded_value = _ejs_undefined;
     gen->sent_value = arg;
+    _ejs_gc_remember(gen, gen->sent_value);
     gen->caller_stack_top = (void*)&gen; // GC: the suspended segment starts here
     swapcontext(&gen->caller_context, &gen->generator_context);
     return gen->yielded_value;
@@ -280,6 +287,7 @@ static EJS_NATIVE_FUNC(_ejs_Generator_prototype_return) {
     gen->returning = EJS_TRUE;
     gen->yielded_value = _ejs_undefined;
     gen->sent_value = arg;
+    _ejs_gc_remember(gen, gen->sent_value);
     gen->caller_stack_top = (void*)&gen; // GC: the suspended segment starts here
     swapcontext(&gen->caller_context, &gen->generator_context);
     return gen->yielded_value;
@@ -349,21 +357,29 @@ _ejs_generator_specop_allocate()
     return (EJSObject*)_ejs_gc_new (EJSGenerator);
 }
 
+// gc-plan P2: the live-generator registry — every generator's suspended
+// stack must be conservatively scanned BEFORE a minor collection starts
+// evacuating (see ejs-gc.c minor step 1)
+EJSGenerator* _ejs_generator_registry;
+
 static void
 _ejs_generator_specop_finalize (EJSObject* obj)
 {
     EJSGenerator* gen = (EJSGenerator*)obj;
+    if (gen->reg_next) gen->reg_next->reg_prev = gen->reg_prev;
+    if (gen->reg_prev) gen->reg_prev->reg_next = gen->reg_next;
+    if (_ejs_generator_registry == gen) _ejs_generator_registry = gen->reg_next;
     free (gen->stack);
 }
 
-static void
-_ejs_generator_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
+// the conservative half of the generator scan: both saved register
+// files (the ucontexts) and the live suspended stack segment.  Shared
+// by the specop scan and the minor collection's pre-evacuation registry
+// walk (gc-plan P2: conservative ranges must all be seen before any
+// object moves).
+void
+_ejs_generator_scan_conservative (EJSGenerator* gen)
 {
-    EJSGenerator* gen = (EJSGenerator*)obj;
-    scan_func(gen->body);
-    scan_func(gen->yielded_value);
-    scan_func(gen->sent_value);
-
     _ejs_gc_mark_conservative_range(&gen->generator_context, (char*)&gen->generator_context + sizeof(ucontext_t));
     _ejs_gc_mark_conservative_range(&gen->caller_context, (char*)&gen->caller_context + sizeof(ucontext_t));
 
@@ -404,6 +420,17 @@ _ejs_generator_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
             saved_sp = gen->stack;
         _ejs_gc_mark_conservative_range(saved_sp, stack_end);
     }
+}
+
+static void
+_ejs_generator_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
+{
+    EJSGenerator* gen = (EJSGenerator*)obj;
+    scan_func(&(gen->body));
+    scan_func(&(gen->yielded_value));
+    scan_func(&(gen->sent_value));
+
+    _ejs_generator_scan_conservative (gen);
 
     _ejs_Object_specops.Scan (obj, scan_func);
 }

@@ -1208,8 +1208,8 @@ static void
 _ejs_regexp_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSRegExp *re = (EJSRegExp*)obj;
-    scan_func (re->pattern);
-    scan_func (re->flags);
+    scan_func (&(re->pattern));
+    scan_func (&(re->flags));
 
     _ejs_Object_specops.Scan (obj, scan_func);
 }

@@ -89,6 +89,8 @@ namespace ejsllvm {
         _ejs_gc_add_root (&_ejs_Switch_prototype);
         _ejs_Switch_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Switch_specops);
 
+        _ejs_gc_add_root (&_ejs_Switch);
+
         _ejs_Switch = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMSwitch", (EJSClosureFunc)Switch_impl, _ejs_Switch_prototype);
         _ejs_object_setprop_utf8 (exports,              "Switch", _ejs_Switch);
 

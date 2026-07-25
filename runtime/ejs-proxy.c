@@ -838,8 +838,8 @@ static void
 _ejs_proxy_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSProxy* proxy = (EJSProxy*)obj;
-    scan_func(proxy->target);
-    scan_func(proxy->handler);
+    scan_func(&(proxy->target));
+    scan_func(&(proxy->handler));
     _ejs_Object_specops.Scan (obj, scan_func);
 }
 

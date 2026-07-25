@@ -422,7 +422,7 @@ _ejs_propertymap_foreach_value (EJSPropertyMap* map, EJSValueFunc foreach_func)
 {
     for (_EJSPropertyMapEntry *s = map->head_insert; s; s = s->next_insert) {
         if (_ejs_property_desc_has_value (s->desc))
-            foreach_func(s->desc->value);
+            foreach_func(&(s->desc->value));
     }
 }
 
@@ -615,6 +615,7 @@ shaped_ensure_capacity (EJSObject* obj, uint32_t needed)
         memcpy (EJSVAL_TO_CLOSUREENV_IMPL(newslots)->slots, shaped_slots(obj),
                 cap * sizeof(ejsval));
     obj->slots = newslots;
+    _ejs_gc_remember(obj, newslots);
 }
 
 // one-way migration to dictionary mode: materialize the map from the
@@ -710,6 +711,8 @@ try_fill_shaped (ejsval objval, uint32_t argc, const ejsval* names, ejsval* valu
     }
     shaped_ensure_capacity (obj, argc);
     memcpy (shaped_slots(obj), values, argc * sizeof(ejsval));
+    for (uint32_t _wb = 0; _wb < (uint32_t)argc; _wb++)
+        _ejs_gc_remember(shaped_env(obj), values[_wb]);
     EJS_OBJECT_SET_SHAPE(obj, shape);
     return EJS_TRUE;
 }
@@ -799,10 +802,10 @@ _ejs_property_iterator_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSPropertyIterator *iter = (EJSPropertyIterator*)obj;
 
-    scan_func (iter->forObj);
+    scan_func (&(iter->forObj));
 
     for (int i = 0; i < iter->num; i ++) {
-        scan_func (iter->keys[i]);
+        scan_func (&(iter->keys[i]));
     }
 }
 
@@ -1518,6 +1521,7 @@ static EJS_NATIVE_FUNC(_ejs_Object_create) {
 
     /* 3. Set the [[Prototype]] internal property of obj to O. */
     EJSVAL_TO_OBJECT(obj)->proto = O;
+    _ejs_gc_remember(EJSVAL_TO_OBJECT(obj), O);
 
     /* 4. If the argument Properties is present and not undefined, add own properties to obj as if by calling the  */
     /*    standard built-in function Object.defineProperties with arguments obj and Properties. */
@@ -2301,6 +2305,7 @@ _ejs_object_specop_set_prototype_of (ejsval O, ejsval V)
 
     // 9. Set the value of the [[Prototype]] internal slot of O to V.
     O_->proto = V;
+    _ejs_gc_remember(O_, V);
 
     // 10. Return true.
     return EJS_TRUE;
@@ -2415,6 +2420,7 @@ _ejs_object_specop_set (ejsval O, ejsval P, ejsval V, ejsval Receiver)
             if (next_shape != EJS_SHAPE_DICT) {
                 EJS_OBJECT_SET_SHAPE(O_, next_shape);
                 shaped_slots(O_)[slot] = V;
+                _ejs_gc_remember(shaped_env(O_), V);
                 return EJS_TRUE;
             }
             // shape-table overflow: drop to dictionary mode and let the
@@ -2556,6 +2562,16 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
 
     EJSObject* obj = EJSVAL_TO_OBJECT(O);
 
+    // gc-plan P2 (object-remembering): every storage path below —
+    // shaped slot, map insert, in-place descriptor update — installs
+    // these values somewhere in obj's owned storage.  Marking up front
+    // is at worst conservative (a rejected define dirties one object
+    // for one cycle).
+    _ejs_gc_remember(obj, P);
+    if (_ejs_property_desc_has_value(Desc))  _ejs_gc_remember(obj, Desc->value);
+    if (_ejs_property_desc_has_getter(Desc)) _ejs_gc_remember(obj, Desc->getter);
+    if (_ejs_property_desc_has_setter(Desc)) _ejs_gc_remember(obj, Desc->setter);
+
     // shapes P4.2: route shaped objects up front.  Plain default-
     // attribute data properties live in slot storage; anything the
     // shaped world can't express migrates to dictionary mode and falls
@@ -2586,6 +2602,7 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
                     else {
                         EJS_OBJECT_SET_SHAPE(obj, next_shape);
                         shaped_slots(obj)[slot] = value;
+                        _ejs_gc_remember(shaped_env(obj), value);
                         return EJS_TRUE;
                     }
                 }
@@ -2611,6 +2628,7 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
                         shaped_ensure_capacity (obj, nfields);
                         EJS_OBJECT_SET_SHAPE(obj, next_shape);
                         shaped_slots(obj)[nfields - 1] = value;
+                        _ejs_gc_remember(shaped_env(obj), value);
                         return EJS_TRUE;
                     }
                 }
@@ -2800,19 +2818,26 @@ _ejs_object_specop_finalize(EJSObject* obj)
     obj->map = NULL;
 }
 
+// gc-plan P2: walk the entries directly so every scanned slot is the
+// REAL storage location (the old foreach_property shim passed the name
+// by value — a moved name's rewrite would have landed in a local copy).
+// Property names are content-hashed, so a moving name never invalidates
+// the buckets; descs are malloc'd and stay put.
 static void
-scan_property (ejsval name, EJSPropertyDesc *desc, EJSValueFunc scan_func)
+scan_property_entries (EJSPropertyMap* map, EJSValueFunc scan_func)
 {
-    scan_func (name);
+    for (_EJSPropertyMapEntry *s = map->head_insert; s; s = s->next_insert) {
+        scan_func (&s->name);
 
-    if (_ejs_property_desc_has_value (desc)) {
-        scan_func (desc->value);
-    }
-    if (_ejs_property_desc_has_getter (desc)) {
-        scan_func (desc->getter); 
-    }
-    if (_ejs_property_desc_has_setter (desc)) {
-        scan_func (desc->setter);
+        if (_ejs_property_desc_has_value (s->desc)) {
+            scan_func (&s->desc->value);
+        }
+        if (_ejs_property_desc_has_getter (s->desc)) {
+            scan_func (&s->desc->getter);
+        }
+        if (_ejs_property_desc_has_setter (s->desc)) {
+            scan_func (&s->desc->setter);
+        }
     }
 }
 
@@ -2824,12 +2849,12 @@ _ejs_object_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     // global shape table
     if (EJS_OBJECT_SHAPE(obj) != EJS_SHAPE_DICT) {
         if (!EJSVAL_IS_NULL(obj->slots))
-            scan_func (obj->slots);
-        scan_func (obj->proto);
+            scan_func (&(obj->slots));
+        scan_func (&(obj->proto));
         return;
     }
-    _ejs_propertymap_foreach_property (obj->map, (EJSPropertyDescFunc)scan_property, scan_func);
-    scan_func (obj->proto);
+    scan_property_entries (obj->map, scan_func);
+    scan_func (&(obj->proto));
 }
 
 // ECMA262: 9.1.3 [[IsExtensible]] ( ) 

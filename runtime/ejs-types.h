@@ -43,7 +43,9 @@ typedef uint16_t jschar;
 //   bit  59     FORWARDED — the word is a forwarding record, not a
 //               header: target address in bits 0-46 (gc-P1; see
 //               ejs-gc.h _ejs_gc_forward)
-//   bits 60-63  reserved for the GC (mark/card, gc-P2+)
+//   bit  60     DIRTY — the object is in the generational remembered
+//               buffer (gc-P2 object-remembering write barrier)
+//   bits 61-63  reserved for the GC (mark/card, gc-P4+)
 //
 // EJSObject absorbs the widening into what was padding (sizeof
 // unchanged); EJSPrimString/EJSPrimSymbol keep their sizes; EJSClosureEnv

@@ -99,6 +99,8 @@ namespace ejsllvm {
         _ejs_gc_add_root (&_ejs_Type_prototype);
         _ejs_Type_prototype = _ejs_object_create(_ejs_Object_prototype);
 
+        _ejs_gc_add_root (&_ejs_Type);
+
         _ejs_Type = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMType", (EJSClosureFunc)Type_impl, _ejs_Type_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "Type", _ejs_Type);

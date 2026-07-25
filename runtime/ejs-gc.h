@@ -84,6 +84,91 @@ _ejs_gc_forward(GCObjectPtr from, GCObjectPtr to)
         | EJS_GC_HEADER_FORWARDED;
 }
 
+// ---- gc-plan P2: the heap context + generational write barrier -------------
+//
+// ALL new collector state lives in the heap context (the Concurrency-II
+// discipline: an isolate is "one more context", never "another pile of
+// file statics").  The leading fields are THE emitted-code seam — the
+// emitter (P2c) reads bump/limit/nursery bounds through this struct's
+// exported symbol, so their order and offsets are part of the emitter
+// contract: append, never reorder.
+//
+// The nursery is one dedicated arena, so "is young" is a raw range
+// check — cheap enough for the inline write barrier and the emitted
+// fast paths.  With the nursery disabled (EJS_GC_NURSERY=off) the
+// bounds are NULL and every check below degrades to a no-op / the
+// old allocator path.
+
+#define EJS_GC_NUM_SIZE_CLASSES 5 // ffs buckets: 16/32/64/128/256 cells
+
+typedef struct {
+    // -- emitted-code seam (offsets fixed; append only) --
+    void* bump[EJS_GC_NUM_SIZE_CLASSES];  // current young page cursor, per class
+    void* limit[EJS_GC_NUM_SIZE_CLASSES]; // current young page end, per class
+    void* nursery_base;                   // [base, end) = the nursery arena
+    void* nursery_end;
+    // -- the dirty-OBJECT buffer (object-remembering): OLD objects
+    //    whose owned storage received a YOUNG reference; deduped by the
+    //    DIRTY header bit.  (The SATB log of gc-P6 rides the same
+    //    structure.) --
+    void** remset;
+    int32_t remset_count;
+    int32_t remset_capacity;
+    int32_t remset_overflowed; // fall back to a full old-gen scan this minor
+    // the top of the CURRENT machine stack (main stack bottom, or the
+    // running generator's stack end) — maintained by the generator
+    // push/pop hooks so the barrier can reject transient stack slots
+    void* current_stack_end;
+    // -- runtime-private state (an opaque struct in ejs-gc.c) --
+    void* priv;
+} EJSHeapContext;
+
+extern EJSHeapContext _ejs_heap;
+
+static inline EJSBool
+_ejs_gc_is_young(void* p)
+{
+    return (char*)p >= (char*)_ejs_heap.nursery_base
+        && (char*)p < (char*)_ejs_heap.nursery_end;
+}
+
+// The generational write barrier — OBJECT-REMEMBERING (gc-P2, second
+// design).  The first design recorded raw slot addresses; slots inside
+// malloc'd satellites (element buffers, descriptors, map entries) kept
+// dangling into freed memory — a structural hazard, not a bug tail.
+// This design records the OWNING heap object instead: the minor rescans
+// a dirty object through its Scan specop, which walks whatever storage
+// the object owns AT SCAN TIME.  No captured interior pointers, no
+// lifetime coupling.  Dedup is the DIRTY header bit; the buffer gets
+// each old object at most once per cycle.
+//
+// Contract: after storing a traceable value anywhere in `owner`'s
+// transitive OWNED storage (inline slots, element vector, property map,
+// descriptors), call _ejs_gc_remember(owner_ptr, value).  Young owners
+// and non-young values filter out.
+#define EJS_GC_HEADER_DIRTY (1ULL << 60)
+
+extern void _ejs_gc_remember_slow(void* owner);
+
+static inline void
+_ejs_gc_remember(void* owner, ejsval newval)
+{
+    if (!EJSVAL_IS_TRACEABLE_IMPL(newval)) return;
+    void* target = (void*)EJSVAL_TO_GCTHING_IMPL(newval);
+    if (!_ejs_gc_is_young(target)) return;
+    if (_ejs_gc_is_young(owner)) return;
+    GCObjectHeaderWord* h = (GCObjectHeaderWord*)owner;
+    if (*h & EJS_GC_HEADER_DIRTY) return;
+    _ejs_gc_remember_slow(owner);
+}
+
+// object-flavored convenience (most call sites hold the ejsval)
+#define EJS_GC_REMEMBER(ownerval, v) \
+    _ejs_gc_remember((void*)EJSVAL_TO_OBJECT_IMPL(ownerval), (v))
+
+// object-flavored emitted entry (emit.ts passes the owner ejsval)
+extern void _ejs_gc_remember_val(ejsval owner, ejsval val);
+
 extern void _ejs_gc_add_root(ejsval *val);
 extern void _ejs_gc_remove_root(ejsval *root);
 

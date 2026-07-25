@@ -77,6 +77,8 @@ namespace ejsllvm {
         _ejs_gc_add_root (&_ejs_LoadInst_prototype);
         _ejs_LoadInst_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_LoadInst_specops);
 
+        _ejs_gc_add_root (&_ejs_LoadInst);
+
         _ejs_LoadInst = _ejs_function_new_utf8_with_proto  (_ejs_null, "LLVMLoadInst", (EJSClosureFunc)LoadInst_impl, _ejs_LoadInst_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "LoadInst", _ejs_LoadInst);

@@ -273,6 +273,7 @@ _ejs_map_set (ejsval map, ejsval key, ejsval value)
         if (!EJSVAL_IS_NO_ITER_VALUE_MAGIC(p->key) && SameValueZero (p->key, key)) {
             // i. Set p.[[value]] to value.
             p->value = value;
+            _ejs_gc_remember(_map, p->value);
             // ii. Return M.
             return map;
         }
@@ -284,7 +285,9 @@ _ejs_map_set (ejsval map, ejsval key, ejsval value)
     // 7. Let p be the Record {[[key]]: key, [[value]]: value}.
     p = calloc (1, sizeof (EJSKeyValueEntry));
     p->key = key;
+    _ejs_gc_remember(_map, p->key);
     p->value = value;
+    _ejs_gc_remember(_map, p->value);
 
     // 8. Append p as the last element of entries.
     if (!_map->head_insert)
@@ -651,8 +654,8 @@ _ejs_map_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     EJSMap* map = (EJSMap*)obj;
 
     for (EJSKeyValueEntry *s = map->head_insert; s; s = s->next_insert) {
-        scan_func (s->key);
-        scan_func (s->value);
+        scan_func (&(s->key));
+        scan_func (&(s->value));
     }
 
     _ejs_Object_specops.Scan (obj, scan_func);
@@ -682,7 +685,7 @@ static void
 _ejs_map_iterator_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSMapIterator* iter = (EJSMapIterator*)obj;
-    scan_func(iter->iterated);
+    scan_func(&(iter->iterated));
     _ejs_Object_specops.Scan (obj, scan_func);
 }
 
