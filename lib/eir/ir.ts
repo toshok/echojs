@@ -36,7 +36,7 @@ export interface PredEdge {
     targetIndex: number;
 }
 
-// shapes-plan P4.3: one field of a module-interned guard shape, in
+// one field of a module-interned guard shape, in
 // insertion (transition-chain) order.  repr mirrors the runtime's
 // EJSShapeRepr and is part of shape identity.
 export interface ShapeField {
@@ -53,7 +53,7 @@ export function shapeKeyOf(fields: readonly ShapeField[]): string {
 export class Module {
     name: string;
     functions: Func[] = [];
-    // shapes-plan P4.3: the guard shapes this module interns at init
+    // the guard shapes this module interns at init
     // (imms.shape key -> ordered fields).  The verifier checks slot
     // bounds/reprs against this; the emitter mints one global + one
     // _ejs_shape_intern call per entry (the atom-table precedent).
@@ -77,7 +77,7 @@ export class Module {
     }
 }
 
-// Phase 3.6: a specialized clone's typed signature.  `formals` types the
+// a specialized clone's typed signature.  `formals` types the
 // JS formal parameters only (entry params [0]=%env and [1]=%this stay
 // boxed/implicit; a clone's %this is required-unused by the static callee
 // checks).  This is the second controlled lift of the P2
@@ -218,8 +218,8 @@ export class Inst {
     // catch blocks' first param is the caught exception
     isException = false;
     removed = false;
-    // Phase 3.4 pass (b): a block parameter that carries a RAW f64 across
-    // its incoming edges — the controlled lift of the Phase 2
+    // the raw-join pass: a block parameter that carries a RAW f64 across
+    // its incoming edges — the controlled lift of the
     // raw-values-cannot-cross-blocks rule.  Set only by the optimizer
     // (optimize-guards.ts rawJoinParams); lowering must never set it, so
     // every lowering-created edge keeps the strict boxed rule.  The

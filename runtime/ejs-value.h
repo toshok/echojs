@@ -59,7 +59,7 @@ ejsval _ejs_number_new (double value);
 
 void _ejs_value_finalize(ejsval val);
 
-// gc-plan P2: scan callbacks take the SLOT, not the value — the mover
+// scan callbacks take the SLOT, not the value — the mover
 // rewrites *slot when the referent is evacuated.  Non-moving consumers
 // (the old mark path) simply read through it.
 typedef void (*EJSValueFunc)(ejsval* slot);

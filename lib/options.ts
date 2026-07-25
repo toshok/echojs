@@ -22,7 +22,7 @@ export interface CompilerOptions {
     warn_on_undeclared: boolean;
     frozen_global: boolean;
     record_types: boolean;
-    // MAAM type-analysis probe (docs/maam-plan.md): run the analysis and
+    // MAAM type-analysis probe: run the analysis and
     // log stats; codegen consumes nothing yet.  Distinct from record_types
     // (the runtime type-recording instrumentation).
     types: boolean;

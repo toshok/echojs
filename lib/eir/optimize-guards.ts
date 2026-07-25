@@ -2,7 +2,7 @@
  * vim: set ts=4 sw=4 et tw=99 ft=typescript:
  */
 
-// Phase 3.4: trust-free optimizer passes over the Phase 3 guarded
+// trust-free optimizer passes over the guarded
 // arithmetic diamonds (lower.ts numericDiamond).
 //
 //   (a) dominated-guard elimination + guard-region merging: a has_tag
@@ -758,7 +758,7 @@ function tryMergeAt(fn: Func, r1: GuardRegion, idom: Map<Block, Block>, stats: O
 
 export function rawJoinParams(fn: Func, stats: OptStats): boolean {
     // candidates: non-entry, non-catch params whose every incoming arg is
-    // a box_f64, an f64 value, a number constant (Phase 3.6: converted to
+    // a box_f64, an f64 value, a number constant (converted to
     // a raw f64_const on the edge — a loop accumulator seeded `x = 0`
     // now qualifies), itself, or another candidate param
     const isNumConst = (v: Inst) => v.op === "const" && v.imms["kind"] === "number";
@@ -993,7 +993,7 @@ export function rawJoinParams(fn: Func, stats: OptStats): boolean {
 //
 // threads each constant edge straight to the cond_br successor it would
 // pick (to_boolean(const true/false) is exact), so the fast arm of an
-// f64_lt diamond — and a Phase 3.6 clone's trusted compare — branches on
+// f64_lt diamond — and a specialized clone's trusted compare — branches on
 // the raw i1 with no boxed-boolean round-trip (and no _ejs_truthy call)
 // left in the loop.  Trust-free: constants only.  Non-constant edges (a
 // diamond's generic slow arm) keep the join and the re-test.
@@ -1043,14 +1043,14 @@ export function threadBooleanJoins(fn: Func, stats: OptStats): boolean {
     return changed;
 }
 
-// --- shapes-plan P4.3: shape-guard regions ------------------------------------
+// --- shape-guard regions ------------------------------------
 //
 // The shape twins of pass (a): consecutive GET diamonds on the same
 // receiver and shape merge into one guard region with one slow path, and
 // guards proven by an un-killed dominating shape fact fold.  All facts
 // come from verifier.ts's computeShapeFacts — the same engine the
 // verifier re-checks the result with, so a fold or merge this pass gets
-// wrong is IR the verifier rejects (trust-free, the P3.4 discipline).
+// wrong is IR the verifier rejects (trust-free, the raw-join discipline).
 //
 // ---- Soundness inventory (the shape additions) ----
 //
@@ -1086,7 +1086,7 @@ export function threadBooleanJoins(fn: Func, stats: OptStats): boolean {
 //     of j1-defined values through j2 with raw-type refusal) is the
 //     numeric merge's argument verbatim.
 //
-// ---- P4.5 typed slots: the mixed region and the heterogeneous merge ----
+// ---- typed slots: the mixed region and the heterogeneous merge ----
 //
 //   - An f64-repr slot_load produces a raw f64 and lowering boxes it at
 //     the fast exit, so a shape region's fast side now also carries
@@ -1094,7 +1094,7 @@ export function threadBooleanJoins(fn: Func, stats: OptStats): boolean {
 //     numeric machinery moved in.  The shape matcher therefore admits the
 //     numeric whitelist in its SLOW chain too (the generic ops are the
 //     slow rendition of that arithmetic), and the twin check pairs BOTH
-//     populations: slot_loads with gets (atom == field-at-slot, the P4.3
+//     populations: slot_loads with gets (atom == field-at-slot, the twin
 //     rule) and f64 ops with generic ops (operand correspondence through
 //     the box/unbox mapping, the numeric rule verbatim).  A box_f64 of an
 //     f64 slot_load corresponds to that load's paired get: the NaN-box
@@ -1122,13 +1122,13 @@ interface ShapeRegion {
     fastBlocks: Set<Block>;
     fastChain: Block[]; // linear br chain, entry..exit
     fastLoads: Inst[]; // slot_loads in chain order
-    fastArith: Inst[]; // P4.5: f64 arithmetic in chain order (post-merge)
+    fastArith: Inst[]; // f64 arithmetic in chain order (post-merge)
     fastExitEdge: EdgeRef;
     slowEntry: Block;
     slowChain: Block[];
     slowSet: Set<Block>;
     slowGets: Inst[]; // get_prop_atom in chain order
-    slowArith: Inst[]; // P4.5: whitelisted generic ops in chain order
+    slowArith: Inst[]; // whitelisted generic ops in chain order
     slowExitEdge: EdgeRef;
     join: Block;
 }
@@ -1151,7 +1151,7 @@ function matchShapeRegionAt(head: Block): ShapeRegion | null {
     if (t0.block === slowEntry) return null;
 
     // --- slow side: the numeric matcher's linear chain, with
-    // get_prop_atom(recv) — and, P4.5, the numeric whitelist ops (the
+    // get_prop_atom(recv) — and the numeric whitelist ops (the
     // generic rendition of merged-in f64 arithmetic) — as the admitted
     // effectful ops
     const slowChain: Block[] = [];
@@ -1287,7 +1287,7 @@ function matchShapeRegionAt(head: Block): ShapeRegion | null {
 // the slow chain is the generic rendition of the fast side: slot_loads and
 // gets pair op for op (atom == the shape's field at that slot), f64
 // arithmetic and generic ops pair op for op with corresponding operands
-// (P4.5, the numeric twin rule), and the join-exit arguments correspond
+// (the numeric twin rule), and the join-exit arguments correspond
 // slot for slot.  A box_f64 of an f64 slot_load corresponds to the load's
 // paired get: doubles are stored raw in the NaN-box, so the get returns
 // exactly the boxed rendition of the load's raw double.
@@ -1376,7 +1376,7 @@ function verifyShapeTwin(r: ShapeRegion, shapes: Map<string, ShapeField[]>): boo
 // Re-executing r1's slow chain (a merged region's guard failures reroute
 // through it) is sound when every instruction is effect-free, a get of an
 // own field of the guarded shape (pure and bit-identical while the
-// receiver still has shape S — the fast side is kill-free), or (P4.5) a
+// receiver still has shape S — the fast side is kill-free), or a
 // whitelisted generic op each of whose operands is proven-number at r1's
 // fast exit or is one of r1's own paired gets naming an f64-REPR field —
 // an f64 slot holds a number by the shaped-world invariant, so the
@@ -1563,7 +1563,7 @@ function tryMergeShapeAt(
     return true;
 }
 
-// P4.5: the heterogeneous merge — a NUMERIC guard region headed at a
+// the heterogeneous merge — a NUMERIC guard region headed at a
 // shape region's join merges into the shape region, exactly as a second
 // shape region would: r2's has_tag failures reroute to r1's slow entry
 // (r1's slow chain re-executes — checkShapeSlowReexec — then falls
@@ -1778,9 +1778,9 @@ export function optimizeShapeRegions(
 
     sweepUnreachableBlocks(fn);
 
-    // P4.5 bisect hook (criterion 6): EJS_NO_SHAPE_FUSION disables the
+    // EJS_NO_SHAPE_FUSION disables the
     // heterogeneous merge + the in-loop numeric folding, leaving exactly
-    // the P4.3 shape-region behavior (typed slot ACCESS is a contract
+    // the plain shape-region behavior (typed slot ACCESS is a contract
     // change and has no off switch — the verifier owns it).
     const noFusion = !!process.env["EJS_NO_SHAPE_FUSION"];
     let changedAny = false;
@@ -1807,7 +1807,7 @@ export function optimizeShapeRegions(
             }
         }
         if (foldProvenShapeGuards(fn, stats)) changed = true;
-        // P4.5: a heterogeneous merge leaves r2's has_tag guards fed only
+        // a heterogeneous merge leaves r2's has_tag guards fed only
         // by fast-side box_f64 values — provably numbers.  Folding them
         // here linearizes the fast side so the NEXT round's matcher can
         // grow the region further (the fusion cascade).

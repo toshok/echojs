@@ -166,7 +166,7 @@ const runtime_interface = {
         );
     },
 
-    // gc-plan P2: the out-of-line half of the emitted write barrier
+    // the out-of-line half of the emitted write barrier
     // (object-remembering: the OWNER ejsval, not the slot)
     gc_write_barrier: function (this: RuntimeContext) {
         return this.abi.createExternalFunction(
@@ -284,7 +284,7 @@ const runtime_interface = {
             ])
         );
     },
-    // born-with-shape (shapes-plan P4.4): batched literal allocation and
+    // born-with-shape: batched literal allocation and
     // fenced-constructor prefix fill.  argc, names*, values*.
     object_new_shaped: function (this: RuntimeContext) {
         return this.abi.createExternalFunction(this.module, "_ejs_object_new_shaped", ty.EjsValue, [
@@ -417,7 +417,7 @@ const runtime_interface = {
             ty.EjsValue,
         ]);
     },
-    // shapes-plan P4.3: module-init interning of guard shapes (names are
+    // module-init interning of guard shapes (names are
     // this module's atoms; f64_mask bit i = field i has repr f64).
     // Returns the interned shape index, or EJS_SHAPE_NOMATCH.
     shape_intern: function (this: RuntimeContext) {

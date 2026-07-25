@@ -16,10 +16,10 @@ import { opInfo, isTerminator, Effect } from "./ops";
 import { printInst } from "./printer";
 import type { Func, Block, Inst, Module } from "./ir";
 
-// --- shape guard facts (shapes-plan P4.3) -----------------------------------
+// --- shape guard facts -----------------------------------
 //
 // The effect-kill soundness inventory for shape facts, in one place (this
-// is THE new hazard class this phase adds — see docs/shapes-plan.md):
+// is THE hazard class shape facts add):
 //
 //   - A fact "(value v, shape S)" means: on every path to here, a
 //     has_shape(v, S) compare executed, answered true, and NO instruction
@@ -49,7 +49,7 @@ import type { Func, Block, Inst, Module } from "./ir";
 // Number-tag facts (the BOXED slot_store's repr proof) need no kill rule:
 // has_tag tests the VALUE's own tag, and SSA values are immutable —
 // dominance alone suffices (tagFactDominates below, the guardFactAt shape
-// from optimize-guards generalized to either edge).  P4.5 typed slots: an
+// from optimize-guards generalized to either edge).  Typed slots: an
 // f64-repr store takes a raw f64 operand, so its repr proof is the type
 // system itself (a raw f64 is a number by construction) — the has_tag
 // dominance requirement, and the provenNumberIntrinsic escape hatch that
@@ -58,7 +58,7 @@ import type { Func, Block, Inst, Module } from "./ir";
 // The engine is shared with optimize-guards' shape-fact folding: the
 // optimizer folds on the same facts the verifier re-derives, so a fold the
 // optimizer gets wrong is a fold the verifier rejects (trust-free, the
-// P3.4 discipline).
+// raw-join discipline).
 
 const SHAPE_KILL = Effect.WRITE | Effect.CALL;
 
@@ -371,8 +371,8 @@ export function verifyFunction(fn: Func, mod?: Module): boolean {
     //     already emit their own machine i1);
     //   - branch-edge arguments must be boxed: block params are EjsValue
     //     phis in the emitter, so f64/i1 may NOT cross block boundaries.
-    //     (Phase 3's guarded diamonds carry values across joins boxed.)
-    //     Phase 3.4's ONE controlled exception: a param carrying the
+    //     (guarded diamonds carry values across joins boxed.)
+    //     The FIRST controlled exception: a param carrying the
     //     optimizer's rawJoin marker (Inst.rawJoin) is an f64-typed phi
     //     (double in the emitter) and takes exactly f64 arguments.  The
     //     marker is provenance, not trust — the full safety conditions
@@ -385,7 +385,7 @@ export function verifyFunction(fn: Func, mod?: Module): boolean {
     //     rejected below — and an f64 value can never be *treated as* an
     //     ejsval in a handler (or anywhere), because every ejsval-taking
     //     slot and every boxed param rejects f64-typed operands/args.
-    //     Phase 3.6's SECOND controlled exception: a specialized clone's
+    //     The SECOND controlled exception: a specialized clone's
     //     ENTRY blockparam is f64 exactly when the function's sig types
     //     the matching formal f64 (env/this stay boxed); its `return`
     //     operand type must equal the sig's result; and every call_typed
@@ -447,7 +447,7 @@ export function verifyFunction(fn: Func, mod?: Module): boolean {
                         }
                     });
 
-            // Phase 3.6: call_typed is typed by its CALLEE's sig, which a
+            // call_typed is typed by its CALLEE's sig, which a
             // per-op table can't express.  operand 0 (env) stays boxed;
             // the argument slots must match the callee's formals exactly,
             // and the instruction's stamped result type must equal the
@@ -489,7 +489,7 @@ export function verifyFunction(fn: Func, mod?: Module): boolean {
                 });
                 continue;
             }
-            // P4.5 typed slots: slot ops are typed by their repr immediate,
+            // typed slots: slot ops are typed by their repr immediate,
             // which a per-op table can't express (the call_typed precedent).
             // The receiver is always boxed; an f64-repr store takes exactly
             // a raw f64 (the type system IS the repr proof), a boxed-repr
@@ -507,7 +507,7 @@ export function verifyFunction(fn: Func, mod?: Module): boolean {
                 }
                 continue;
             }
-            // Phase 3.6: a sigged function's `return` must produce exactly
+            // a sigged function's `return` must produce exactly
             // the sig's result type (f64 result -> raw f64 operand)
             if (inst.op === "return" && fn.sig && fn.sig.result === "f64") {
                 const o = inst.operands[0]!;
@@ -533,13 +533,13 @@ export function verifyFunction(fn: Func, mod?: Module): boolean {
         }
     }
 
-    // --- shapes-plan P4.3: shape-guarded slot access -----------------------
+    // --- shape-guarded slot access -----------------------
     // Every slot op must sit under an un-killed dominating has_shape fact on
     // the same value for the same shape (see the effect-kill inventory at the
     // top of this file); stores additionally prove the stored value's repr
     // matches the field's — by TYPE for f64 (the typed-flow rule above), by
     // a has_tag=false dominance fact for boxed — so compiled stores never
-    // owe a transition.  P4.5: slot_load's result stamp must agree with its
+    // owe a transition.  slot_load's result stamp must agree with its
     // repr (raw f64 loads are only meaningful under the guard's repr proof).
     // With a module in hand, imms are checked against the module shape table
     // (bounds, repr identity, known key).
@@ -555,7 +555,7 @@ export function verifyFunction(fn: Func, mod?: Module): boolean {
             if (mod && !fields)
                 fail(`'${inst.op}' names unknown module shape '${shapeImm}'`, inst);
             if (isBornOp) {
-                // shapes-plan P4.4: operand count must equal the shape's
+                // operand count must equal the shape's
                 // field count (+1 receiver for fill), at least one field —
                 // an empty born shape is a plain make_object, not this op.
                 const nvals =

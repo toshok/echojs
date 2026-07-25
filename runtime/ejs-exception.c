@@ -214,7 +214,7 @@ ejsval _ejs_begin_catch(void *exc_gen)
 #else
     struct ejs_exception *exc = (struct ejs_exception*)__cxa_begin_catch(exc_gen);
 #endif
-    // NOTE (gc-P2): &exc->val is rooted at throw and unrooted by the
+    // NOTE: &exc->val is rooted at throw and unrooted by the
     // __cxa_throw destructor when the exception is released — the
     // pairing is sound, and removing it here instead would race a
     // same-address reallocation of the cxa buffer (found the hard way).

@@ -230,7 +230,7 @@ struct _EJSObject {
     GCObjectHeader   gc_header;
     EJSSpecOps*      ops;
     ejsval           proto; // [[Prototype]]
-    // shapes-plan P4.2: property storage is mode-switched on the
+    // property storage is mode-switched on the
     // header's shape index.  Dictionary mode (shape 0) keeps the map;
     // shaped mode stores plain data property values in a closureenv
     // slot array (an ejsval so the GC scan traces it; _ejs_null until
@@ -298,7 +298,7 @@ ejsval _ejs_object_literal_set_proto (ejsval obj, ejsval proto);
 
 ejsval _ejs_object_create (ejsval proto);
 
-// born-with-shape (shapes-plan P4.4): batch a statically-keyed literal's
+// born-with-shape: batch a statically-keyed literal's
 // (new_shaped) or a fenced constructor prefix's (fill_shaped) field
 // installs into one call.  names are interned atoms and values the
 // initial field values, in source order; both fall back to sequential

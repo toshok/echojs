@@ -1,6 +1,10 @@
-# Allocation sinking: the shaped world (plans.md "the big one", continued)
+# sinking-plan: escape analysis + allocation sinking
 
-Status: S1 LANDED (2026-07-25) — see "S1 results" at the bottom.  Owner doc for extending escape analysis +
+Bucket plan; the ordering spine lives in `docs/plans.md`.  Phase ids
+here are `sinking-P#` (formerly S1/S2/S3 in this doc's first
+revision).
+
+Status: sinking-P1 LANDED (2026-07-25) — see "sinking-P1 results" at the bottom.  Owner doc for extending escape analysis +
 allocation sinking (docs/plans.md, optimization phase, first bullet)
 past what already exists.  Written 2026-07-25, after gc-P2.
 
@@ -38,7 +42,7 @@ the shaped world.
 
 ## Design
 
-### S1 — shaped-literal sinking (statically sound)
+### sinking-P1 — shaped-literal sinking (statically sound)
 
 Extend `sinkAllocations` to `make_object_shaped` candidates.  A shaped
 allocation's shape is an immediate (`imms.shape` keyed into
@@ -106,7 +110,7 @@ P3.6 specialization get their shot in the post-specialize
 `EJS_NO_EIR_OPT` mold).  Telemetry: `shape_allocs_sunk` +
 `shape_guards_sunk` on the `EIR-opt:` line.
 
-### S2 — constructor-result sinking (needs a runtime contract; NOT static)
+### sinking-P2 — constructor-result sinking (needs a runtime contract; NOT static)
 
 The bench2 alloc loop is `new Point(i, i+1)` — a `construct` of a
 module-local born-shaped ctor.  The tempting rewrite (virtualize the
@@ -120,9 +124,9 @@ static transform**, and the reason deserves recording:
 > exactly why P4.4's born-with-shape kept the stores and guarded the
 > batched fill with a runtime `shaped_proto_intercepts` check rather
 > than eliding anything.  Object literals don't have this problem
-> (define semantics), which is why S1 is static and S2 is not.
+> (define semantics), which is why sinking-P1 is static and sinking-P2 is not.
 
-Sound path (designed here, sequenced after S1): **epoch-guarded
+Sound path (designed here, sequenced after sinking-P1): **epoch-guarded
 sinking** — the deopt-free analogue of V8's speculative escape
 analysis.  The runtime maintains a global accessor epoch
 (`_ejs_accessor_epoch`, bumped whenever an accessor property is
@@ -139,7 +143,7 @@ The guard is one load + compare against the epoch observed at module
 init; the sunk arm saves two allocations, the fill, and the field-read
 dispatch.  Accessor installation is rare in the corpus (P4.1 census:
 builtin-init dominated) but *not absent* — the epoch must be sampled
-after builtin/module init, or kept per-shape-lineage.  Additional S2
+after builtin/module init, or kept per-shape-lineage.  Additional sinking-P2
 conditions, all fail-closed:
 
 - ctor resolves through the P3.6 promoted-`%self`-slot machinery to a
@@ -150,19 +154,19 @@ conditions, all fail-closed:
   values would require real inlining — decline in v1);
 - construct-site argument count equals formal count (missing-argument
   `undefined` would change the runtime-derived shape);
-- result non-escaping under the S1 classifier;
+- result non-escaping under the sinking-P1 classifier;
 - all-or-nothing per site: partial folding with a surviving construct
   is unsound (the surviving execution may be intercepted, diverging
   from folded reads).
 
-S2 touches runtime (epoch maintenance), lowering (epoch_check op or a
+sinking-P2 touches runtime (epoch maintenance), lowering (epoch_check op or a
 call_runtime), and the optimizer; it is its own gated step with its
 own differential evidence.  Until then `new`-heavy loops keep their
 allocations — gc-P2's nursery makes that a bump-pointer + minor-GC
 cost rather than a free-list cost, which is the composition the two
 plans always intended.
 
-### S3 — recorded, not scheduled
+### sinking-P3 — recorded, not scheduled
 
 - Flow-sensitive field writes on sunk objects (SSA renaming per field;
   today any write declines the candidate).
@@ -172,13 +176,13 @@ plans always intended.
 - `rest_args`/`args_obj` when only indexed or `.length`'d (plans.md
   rung 4).
 - Cross-function sinking via inlining heuristics beyond the current
-  single-block IIFE inliner (a multi-block inliner would let S2's
+  single-block IIFE inliner (a multi-block inliner would let sinking-P2's
   "fill operands are formals" restriction relax to arbitrary ctor
   prefixes).
 
 ## Gates
 
-S1: unit tests (fold + refusal attacks: escaping uses, written
+sinking-P1: unit tests (fold + refusal attacks: escaping uses, written
 fields, wrong-shape guards, non-number f64 operands folding false,
 prototype reads blocking removal, `===` identity, typeof); the
 existing suite byte-identical under `EJS_NO_SHAPED_SINK` vs default
@@ -189,12 +193,12 @@ and gc-stress.  Perf: a shaped-literal kernel (sink-probe2-style)
 should reduce to pure arithmetic — verify via `--dump-after eir-opt`
 and wall time.
 
-S2 (when built): everything above plus epoch-bump coverage tests
+sinking-P2 (when built): everything above plus epoch-bump coverage tests
 (accessor installed mid-loop → slow arm taken from that iteration on),
 and types-bench2 as the phase bench — target is the alloc() loop at
 kern parity (~0.3 s total, from 0.64 s).
 
-## S1 results (2026-07-25)
+## sinking-P1 results (2026-07-25)
 
 Implementation: `sinkShapedAlloc` in lib/eir/optimize.ts, wired into
 the existing `sinkAllocations` under the main fixpoint; guard branches
@@ -226,6 +230,6 @@ lowering unchanged (shaped ops only exist under --types; the
 unreachable-block sweep now also prunes builder-era dead blocks in
 flag-off compiles — semantically inert, LLVM dropped them anyway).
 types-bench2 unchanged at 0.65 s as predicted (its allocations are the
-S2 constructor case); the S1 payoff lands on non-escaping literal
+sinking-P2 constructor case); the sinking-P1 payoff lands on non-escaping literal
 patterns — destructuring returns, options objects — throughout the
 suite and the compiler itself.

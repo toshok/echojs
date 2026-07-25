@@ -51,20 +51,20 @@ export type CollectResult =
           eir_module: Module;
           accessors: ModuleAccessor[];
           diamonds: number;
-          // shapes-plan P4.3 telemetry (all zero/empty when --types is off)
+          // shape-guard telemetry (all zero/empty when --types is off)
           shape_sites: number;
           shape_guards: number;
-          // shapes-plan P4.6: 2-way polymorphic chains (subset of guards)
+          // 2-way polymorphic chains (subset of guards)
           shape_poly_guards: number;
           shape_declined: Record<string, number>;
-          // shapes-plan P4.4: born-with-shape telemetry
+          // born-with-shape telemetry
           born_shaped: number;
           ctor_fills: number;
           fence_declined: Record<string, number>;
-          // shapes-plan P4.5: typed (raw f64) slot accesses emitted
+          // typed (raw f64) slot accesses emitted
           typed_loads: number;
           typed_stores: number;
-          // Phase 3.6 (null when --types is off or nothing qualified)
+          // specialization stats (null when --types is off or nothing qualified)
           spec: SpecStats | null;
           error?: undefined;
       }
@@ -403,7 +403,7 @@ export function collectEIRToplevel(
     module_infos: Map<string, ModuleInfo> | null,
     this_module_info: ModuleInfo,
     options: CompilerOptions,
-    // Phase 3: the module's type oracle (null = no typed fast paths).
+    // the module's type oracle (null = no typed fast paths).
     // NB: normalizeDefaultExports below splices/retypes a few toplevel
     // statements AFTER the probe analyzed the tree — surviving nodes keep
     // their identity; nodes minted here read as oracle-unknown (-> top,
@@ -439,7 +439,7 @@ export function collectEIRToplevel(
             module_infos: module_infos,
             oracle: oracle,
             typed_stats: typed_stats,
-            // --types-dump grows the per-site shape census (P4.3)
+            // --types-dump grows the per-site shape census
             shape_dump: !!options.types_dump,
         };
 
@@ -453,8 +453,8 @@ export function collectEIRToplevel(
 
         // testing: EJS_EIR_LOWTIER=1 swaps the bodies of the lowtier_*
         // probe functions (test/eir-lowtier1.js) for hand-built low-tier
-        // EIR, so the Phase 2 ops can be executed end to end before
-        // lowering emits them (Phase 3).  Same mold as EJS_NO_EIR_OPT.
+        // EIR, so the low-tier ops can be executed end to end before
+        // lowering emits them.  Same mold as EJS_NO_EIR_OPT.
         if (process.env["EJS_EIR_LOWTIER"]) {
             const n = injectLowTierProbes(eir_module);
             if (n > 0) verifyModule(eir_module);
@@ -498,7 +498,7 @@ export function collectEIRToplevel(
                 );
             verifyModule(eir_module);
 
-            // Phase 3.6: function specialization.  Runs AFTER the first
+            // function specialization.  Runs AFTER the first
             // optimizer pass (EIR inlining has already taken the
             // single-block calls it can — a make_closure with no remaining
             // call uses is no longer a candidate) and only with an oracle

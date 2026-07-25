@@ -37,20 +37,20 @@ export interface OptStats {
     calls_inlined: number;
     iters_folded: number;
     dead_removed: number;
-    // Phase 3.4 guard-region passes (optimize-guards.ts)
+    // guard-region passes (optimize-guards.ts)
     guards_folded: number;
     regions_merged: number;
     raw_join_params: number;
-    // shapes-plan P4.3: shape-guard region passes
+    // shape-guard region passes
     shape_guards_folded: number;
     shape_regions_merged: number;
-    // shapes-plan P4.5: heterogeneous (shape + numeric) region merges
+    // heterogeneous (shape + numeric) region merges
     shape_numeric_merged: number;
-    // Phase 3.6: unbox_f64(box_f64(x)) round-trips annihilated
+    // unbox_f64(box_f64(x)) round-trips annihilated
     unbox_folds: number;
-    // Phase 3.6: constant edges threaded past boxed-boolean re-tests
+    // constant edges threaded past boxed-boolean re-tests
     joins_threaded: number;
-    // sinking-plan S1: non-escaping make_object_shaped scalar-replaced,
+    // non-escaping make_object_shaped scalar-replaced,
     // and the shape guards on them resolved statically
     shape_allocs_sunk: number;
     shape_guards_sunk: number;
@@ -285,7 +285,7 @@ function sinkAlloc(useMap: UseMap, fn: Func, alloc: Inst, stats: OptStats): bool
     return changed;
 }
 
-// --- shaped-literal sinking (sinking-plan S1) ------------------------------
+// --- shaped-literal sinking ------------------------------
 //
 // make_object_shaped carries its field values as operands (shape field
 // order, boxed) and its shape as an immediate — there are no
@@ -759,7 +759,7 @@ function foldIteratorWrappers(useMap: UseMap, fn: Func, stats: OptStats): boolea
 // number, so the round-trip is the identity (modulo NaN canonicalization,
 // which JS semantics cannot observe — a non-canonical NaN payload only
 // ever flows into f64 ops, where any NaN behaves alike, or into a later
-// box_f64, which canonicalizes).  Phase 3.6 clones lean on this: formals
+// box_f64, which canonicalizes).  specialized clones lean on this: formals
 // are boxed once at entry and trusted arithmetic re-unboxes them.
 function foldUnboxOfBox(fn: Func, stats: OptStats): boolean {
     const boxFolds: Inst[] = [];
@@ -866,14 +866,14 @@ export function optimizeFunction(fn: Func, module?: Module, stats?: OptStats): O
         if (eliminateDead(fn, s)) changed = true;
         if (!changed || ++rounds > 10) break;
     }
-    // Phase 3.4: guard-region passes over the --types diamonds.  They run
+    // guard-region passes over the --types diamonds.  They run
     // after the general fixpoint (env scalarization has exposed the SSA
     // values the diamonds guard) and bail immediately when lowering
     // emitted no number guards — every flag-off compile.
     if (optimizeGuardRegions(fn, s)) eliminateDead(fn, s);
-    // shapes-plan P4.3: shape-guard region merging + fact folding (bails
+    // shape-guard region merging + fact folding (bails
     // immediately without has_shape guards — every flag-off compile).
-    // P4.5: a short fixpoint with rawJoinParams — heterogeneous merges
+    // a short fixpoint with rawJoinParams — heterogeneous merges
     // expose raw joins, and a raw join linearizes a fast side the next
     // shape-region match can grow through.
     for (let i = 0; i < 8; i++) {
@@ -888,7 +888,7 @@ export function optimizeFunction(fn: Func, module?: Module, stats?: OptStats): O
         }
         if (!ch) break;
     }
-    // Phase 3.6 cleanups.  These run AFTER the guard-region passes: the
+    // unbox/boolean-join cleanups.  These run AFTER the guard-region passes: the
     // merge machinery pattern-matches diamond fast arms (unbox of the
     // guarded value / of a literal const), so annihilating round-trips
     // or rewriting const unboxes earlier would refuse valid merges.

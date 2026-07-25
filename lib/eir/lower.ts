@@ -53,9 +53,9 @@ export interface ModCtx {
     refs: Map<string, ModuleRef>;
     this_module_info?: ModuleInfo | null;
     module_infos?: Map<string, ModuleInfo> | null;
-    // Phase 3: the per-module type oracle (null/absent = no typed fast
+    // the per-module type oracle (null/absent = no typed fast
     // paths, today's lowering exactly) and the module-wide stats the
-    // lowered functions accumulate into.  shapes-plan P4.3 adds the shape
+    // lowered functions accumulate into.  the shape-guard lowering adds the shape
     // telemetry: sites = atom property accesses that consulted the oracle,
     // guards = shape diamonds emitted, declined = counted reasons
     // (promotion criterion 5 — visible degradation).
@@ -65,29 +65,29 @@ export interface ModCtx {
         trusted?: number;
         shape_sites?: number;
         shape_guards?: number;
-        // shapes-plan P4.6: sites guarded with the 2-way polymorphic
+        // sites guarded with the 2-way polymorphic
         // chain (a subset of shape_guards)
         shape_poly_guards?: number;
         shape_declined?: Record<string, number>;
-        // shapes-plan P4.4: born-with-shape telemetry — literal sites
+        // born-with-shape telemetry — literal sites
         // batched into make_object_shaped, constructor prefixes batched
         // into fill_object_shaped diamonds, and counted fence declines
         born_shaped?: number;
         ctor_fills?: number;
         fence_declined?: Record<string, number>;
-        // shapes-plan P4.5: typed (raw f64) slot accesses emitted
+        // typed (raw f64) slot accesses emitted
         typed_loads?: number;
         typed_stores?: number;
     };
-    // --types-dump: per-site shape census lines (shapes-plan P4.3)
+    // --types-dump: per-site shape census lines
     shape_dump?: boolean;
 }
 
-// Phase 3.6: clone-lowering mode (specialize.ts).  The clone gets an
+// clone-lowering mode (specialize.ts).  The clone gets an
 // unboxed signature (f64 formals, boxed once at entry) and lowers
 // oracle-number arithmetic UNGUARDED — no diamonds, no slow paths.
 // This is the phase's deliberate unguarded-consumption line: oracle
-// claims become facts, backed by the P3.5 differential harness and by
+// claims become facts, backed by the differential harness and by
 // the escape analysis that gates which functions are cloned at all.
 export interface SpecMode {
     cloneName: string;
@@ -100,7 +100,7 @@ export interface SpecMode {
     result: "any" | "f64";
 }
 
-// shapes-plan P4.4: the runtime's shaped field-count ceiling
+// the runtime's shaped field-count ceiling
 // (EJS_SHAPE_FIELD_CAP_MAX in runtime/ejs-shapes.h) — born-shaped sites
 // beyond it would only ever take the runtime's sequential fallback, so
 // they keep today's lowering
@@ -125,7 +125,7 @@ interface FinallyCtx {
     handlerDepth: number;
 }
 
-// the Phase 3 typed fast path: source operator -> low-tier f64 op
+// the typed fast path: source operator -> low-tier f64 op
 const f64ops: Record<string, string | undefined> = {
     "+": "f64_add",
     "-": "f64_sub",
@@ -203,9 +203,9 @@ class LowerFunction {
     // crossed finalizer at the exit site (finalizer duplication).
     finallyCtx: FinallyCtx[] = [];
     curEnv: Inst;
-    // Phase 3: the module's type oracle (null = no typed fast paths)
+    // the module's type oracle (null = no typed fast paths)
     oracle: TypeOracle | null;
-    // Phase 3.6: non-null when lowering a specialized clone
+    // non-null when lowering a specialized clone
     spec: SpecMode | null;
 
     constructor(
@@ -231,7 +231,7 @@ class LowerFunction {
         this.envParam = this.b.fn.entry!.params[0]!;
         this.thisParam = this.b.fn.entry!.params[1]!;
 
-        // Phase 3.6 clone entry: f64 formals arrive raw and re-enter the
+        // specialized-clone entry: f64 formals arrive raw and re-enter the
         // boxed world exactly once, right here; the body then lowers
         // against the boxed value like any other binding.  (box_f64 is
         // also the optimizer's value-intrinsic number proof, so any
@@ -571,7 +571,7 @@ class LowerFunction {
                         );
                         values.push(this.expr(p.value as e.Expression));
                     }
-                    // shapes-plan P4.4: a statically-keyed literal is born
+                    // a statically-keyed literal is born
                     // with its shape — key order and count are the site's
                     // static truth, no oracle fact needed (the runtime
                     // derives true reprs from the actual values and falls
@@ -763,7 +763,7 @@ class LowerFunction {
         if (!op) throw LowerNotSupported(`binary operator ${n.operator}`, n.loc);
         let l = this.expr(n.left);
         let r = this.expr(n.right);
-        // Phase 3: born-typed guarded arithmetic.  When the oracle types
+        // born-typed guarded arithmetic.  When the oracle types
         // BOTH operands as exactly {number}, split the same diamond shape
         // logical() uses: has_tag guards -> fast unbox/f64 op/box vs the
         // generic slow op, rejoining in a boxed block param.  Guarded
@@ -771,9 +771,9 @@ class LowerFunction {
         // has_tag guards decide at runtime; only code size/speed change.
         const f64op = f64ops[n.operator];
         if (f64op && this.operandIsNumber(n.left) && this.operandIsNumber(n.right)) {
-            // Phase 3.6 clone bodies consume the oracle UNGUARDED: no
+            // specialized-clone bodies consume the oracle UNGUARDED: no
             // diamond, no slow path — unbox, compute, re-box.  Everywhere
-            // else the Phase 3 guarded diamond stands.
+            // else the guarded diamond stands.
             if (this.spec) return this.trustedNumeric(f64op, l, r);
             return this.numericDiamond(f64op, op, l, r);
         }
@@ -880,7 +880,7 @@ class LowerFunction {
         return result;
     }
 
-    // --- shapes-plan P4.3: shape-guarded property access ---------------------
+    // --- shape-guarded property access ---------------------
     //
     // The promotion policy (criteria 1/2 of the plan): a diamond is emitted
     // only for an EXACT receiver-shape fact — monomorphic, non-megamorphic,
@@ -910,12 +910,12 @@ class LowerFunction {
     }
 
     // the exact shape facts for accessing `atom` on the value of `objNode`
-    // — one fact per oracle shape (two = the P4.6 polymorphic chain), or
+    // — one fact per oracle shape (two = the polymorphic chain), or
     // null (with the decline counted) when anything is short of exact.
     // Every shape in a multi-shape answer must carry the field: a shape
     // that lacks it would need the fast arm to run proto-lookup semantics,
     // which only the generic path performs (criterion 2 — no near-misses).
-    // EJS_NO_POLY_SHAPE_GUARDS=1 is the P4.6 bisect hook: 2-shape sites
+    // EJS_NO_POLY_SHAPE_GUARDS=1 bisects polymorphic chains: 2-shape sites
     // decline "polymorphic" exactly as they did before the extension.
     shapeFactFor(
         objNode: e.Expression | null,
@@ -962,8 +962,8 @@ class LowerFunction {
 
     // obj.atom: a has_shape chain whose fast arms are fixed-slot loads and
     // whose shared slow arm is today's generic get — the numericDiamond
-    // skeleton with one guard per exact fact.  One fact is the P4.3 mono
-    // diamond exactly; two facts (the P4.6 polymorphic extension) test the
+    // skeleton with one guard per exact fact.  One fact is the mono
+    // diamond exactly; two facts (the polymorphic extension) test the
     // second shape on the first guard's miss edge, so each fast arm sits
     // under its own same-block-fresh has_shape fact and the verifier's
     // rules apply per arm unchanged.
@@ -992,7 +992,7 @@ class LowerFunction {
             this.b.setInsertPoint(fast_bbs[i]!);
             const v = this.b.emit("slot_load", [obj], { shape: f.key, slot: f.slot, repr: f.repr });
             if (f.repr === "f64") {
-                // P4.5 typed slots: the load produces a raw f64 (the guard
+                // typed slots: the load produces a raw f64 (the guard
                 // proved the repr; the slot bytes ARE the double).  Box once at
                 // the fast exit — the join stays boxed (its slow edge is the
                 // generic get), and the optimizer's region fusion + rawJoin
@@ -1030,7 +1030,7 @@ class LowerFunction {
         }
 
         // per-fact tag+fast pair (mono creation order preserved: tag,
-        // fast, slow, join), then the P4.6 chain blocks
+        // fast, slow, join), then the chain blocks
         const tag_bbs = facts.map(() => this.b.newBlock("shape_settag"));
         const fast_bbs = facts.map(() => this.b.newBlock("shape_setfast"));
         const chk_bbs = facts.slice(1).map(() => this.b.newBlock("shape_setchk"));
@@ -1059,7 +1059,7 @@ class LowerFunction {
             const f = facts[i]!;
             this.b.setInsertPoint(fast_bbs[i]!);
             if (f.repr === "f64") {
-                // P4.5 typed slots: unbox under the has_tag guard (the true
+                // typed slots: unbox under the has_tag guard (the true
                 // edge into this block proved v is a number, so the bits are
                 // the double) and store raw — the type system carries the
                 // repr proof the verifier's store rule now requires.
@@ -1081,12 +1081,12 @@ class LowerFunction {
         this.b.setInsertPoint(join_bb);
     }
 
-    // --- shapes-plan P4.4: the fenced constructor prefix ---------------------
+    // --- the fenced constructor prefix ---------------------
     //
     // Detect the maximal leading run of `this.<name> = <literal-or-local>`
     // statements in a plain function body and batch it into ONE guarded
     // fill_object_shaped diamond.  The fence is structural and oracle-free
-    // (the P3.6 discipline — a lying oracle cannot make this wrong):
+    // (the specialization discipline — a lying oracle cannot make this wrong):
     //
     //   - plain function, not an arrow (whose `this` is lexical), not the
     //     toplevel, not a specialization clone;
@@ -1700,7 +1700,7 @@ class LowerFunction {
                 if (this.finallyCtx.length > 0) {
                     if (this.runFinalizers(0)) return; // a finalizer overrode control
                 }
-                // Phase 3.6 clone with an f64 result: return the raw f64
+                // specialized clone with an f64 result: return the raw f64
                 // (unguarded unbox — the same trust as trustedNumeric).
                 // A return this can't prove leaves a boxed return that the
                 // structural post-check in specialize.ts rejects, so a
@@ -2275,7 +2275,7 @@ function lowerOneFunction(info: FnInfo, analysis: ScopeAnalysis, module: Module,
     info.lowered = true;
     let lf = new LowerFunction(info, analysis, module, mod_ctx);
     if (info.node.body.type === "BlockStatement") {
-        // shapes-plan P4.4: a fenced constructor's leading this-store run
+        // a fenced constructor's leading this-store run
         // batches into one guarded fill; the remaining statements lower
         // exactly as the BlockStatement case would have
         const skip = lf.lowerBornShapedCtorPrefix(info.node.body);
@@ -2293,7 +2293,7 @@ function lowerOneFunction(info: FnInfo, analysis: ScopeAnalysis, module: Module,
     return info.fn;
 }
 
-// Phase 3.6: lower a specialized clone of an already-lowered function.
+// lower a specialized clone of an already-lowered function.
 // Unlike lowerOneFunction this ignores info.lowered/info.fn (the generic
 // lowering stands), gives the Func the clone's name and typed sig, and
 // lowers oracle-number arithmetic unguarded (SpecMode).  Children were

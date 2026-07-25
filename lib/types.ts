@@ -97,7 +97,7 @@ export function initTypes(is32bit: boolean): void {
     // until after we've determined pointer size.
 
     // the 64-bit GCObjectHeader is represented as two i32s (little-endian
-    // halves) so the P4.3 shape-guard emitter can load the shape/gc half
+    // halves) so the shape-guard emitter can load the shape/gc half
     // (field 1) without masking a 64-bit load; byte layout is identical
     if (is32bit) {
         EjsObject = llvm.StructType.create("struct.EJSObject", [

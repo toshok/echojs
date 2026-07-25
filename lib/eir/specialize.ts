@@ -2,18 +2,17 @@
  * vim: set ts=4 sw=4 et tw=99 ft=typescript:
  */
 
-// Phase 3.6: typed calling convention / function specialization
-// (docs/maam-plan.md).  For a function with a LOCAL CLOSED WORLD — its
+// typed calling convention / function specialization.  For a function with a LOCAL CLOSED WORLD — its
 // closure value never escapes and every call site is enumerated
 // in-module — emit a specialized clone with an unboxed signature
 // (f64 formals, f64 result), rewrite the provably-known call sites to
 // direct calls that unbox at the caller, and never emit the slow paths
 // in the clone at all (SpecMode lowering).
 //
-// The trust story crosses the Phase 3 guarded line ON PURPOSE: oracle
+// The trust story crosses the guarded line ON PURPOSE: oracle
 // claims become facts inside the clone and at rewritten call sites.
 // What keeps that honest:
-//   - the P3.5 differential harness (hard precondition) validates the
+//   - the differential harness (hard precondition) validates the
 //     oracle's abstraction against concrete execution;
 //   - the escape analysis here is COMPILER-side and structural (operand
 //     flow over lowered EIR) — it does not consult the oracle, so a

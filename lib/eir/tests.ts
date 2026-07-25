@@ -1024,7 +1024,7 @@ test("optimize: DCE removes unused pure chains but keeps effects", () => {
     assertContains(printed, "get_prop_atom");
 });
 
-// --- the typed low tier (Phase 2) ------------------------------------------------
+// --- the typed low tier ------------------------------------------------
 
 function assertVerifyFails(fn: Func, needle: string): void {
     try {
@@ -1151,7 +1151,7 @@ test("lowtier: DCE removes dead pure low-tier chains", () => {
     assertNotContains(printed, "unbox_f64");
 });
 
-// --- Phase 3: oracle-guided guarded arithmetic ------------------------------------
+// --- oracle-guided guarded arithmetic ------------------------------------
 
 // a hand-built TypeOracle: types Identifier nodes by name, everything else
 // (and unknown names) is top.  The TypeOracle interface from Chunk G is
@@ -1265,7 +1265,7 @@ test("typed-arith: mul/div diamonds carry their ops", () => {
     }
 });
 
-// --- Phase 3.4: guard-region merging + raw f64 joins ------------------------------
+// --- guard-region merging + raw f64 joins ------------------------------
 
 // like the real maam oracle, this types the named identifiers as
 // {number} AND any arithmetic expression whose operands are typed —
@@ -1327,7 +1327,7 @@ test("guard-fold: x * x re-tests x only once", () => {
 });
 
 test("guard-merge: hypot2 becomes one guard region with one slow path", () => {
-    // as lowered this is three diamonds / six has_tags (see the Phase 3
+    // as lowered this is three diamonds / six has_tags (see the guarded-arithmetic
     // dump); merged: one has_tag per distinct value, one slow path
     const { fn } = lowerOptWithOracle(
         "function hypot2(a, b) { return a * a + b * b; }",
@@ -1699,7 +1699,7 @@ test("verifier: a boxed arg into a rawJoin f64 param is rejected", () => {
     assertVerifyFails(fb.finish(), "f64 param");
 });
 
-// --- Phase 3.6: typed calling convention / function specialization ---------------
+// --- typed calling convention / function specialization ---------------
 
 // mirror integrate.ts's ordering: lower, optimize, specialize, re-optimize
 function specHarness(src: string, oracle: TypeOracle) {
@@ -1972,7 +1972,7 @@ test("oracle: an unrecognized constituent is top, never a guess", () => {
     assert(typeSigToEirType("").tags === "top");
 });
 
-// --- shapes-plan P4.3: shape-guarded property access ----------------------------
+// --- shape-guarded property access ----------------------------
 
 test("shape-oracle: TypeSig -> repr (num=f64, non-num unions=boxed, straddles decline)", () => {
     assert(typeSigToShapeRepr("num") === "f64");
@@ -1986,7 +1986,7 @@ test("shape-oracle: TypeSig -> repr (num=f64, non-num unions=boxed, straddles de
 
 // a stub oracle with receiver-shape facts: types Identifier receivers by
 // name; everything else declines as unmapped (the real oracle's fail-soft).
-// A receiver may carry one shape (mono) or two (the P4.6 poly chain).
+// A receiver may carry one shape (mono) or two (the poly chain).
 function stubShapeOracle(
     shapes: Record<string, OracleShapeField[] | OracleShapeField[][] | undefined>,
     types?: Record<string, TypeTag[] | undefined>
@@ -2085,7 +2085,7 @@ test("shapes: EJS_NO_SHAPE_GUARDS disables the diamonds", () => {
     }
 });
 
-// --- shapes-plan P4.6: 2-way polymorphic guard chains ----------------------------
+// --- 2-way polymorphic guard chains ----------------------------
 
 // the second class of the poly pair: same fields x/y at DIFFERENT slots
 // (plus its own z), so per-arm slot immediates are observable
@@ -2210,7 +2210,7 @@ interface SlotAttackOpts {
     guarded?: boolean; // guard the slot op with has_shape (default true)
     killInFast?: boolean; // a call between the guard and the slot op
     store?: boolean; // slot_store instead of slot_load
-    storeRaw?: boolean; // unbox the stored value (the P4.5 typed store form)
+    storeRaw?: boolean; // unbox the stored value (the typed store form)
     tagGuard?: "none" | "true" | "false"; // has_tag fact for the stored value
     slot?: number;
     repr?: string;
@@ -2272,7 +2272,7 @@ function buildSlotAttack(o: SlotAttackOpts): { mod: Module; fn: Func } {
             slot: o.slot ?? 0,
             repr: repr,
         });
-        // P4.5: an f64-repr load produces a raw f64 (stamped by lowering)
+        // an f64-repr load produces a raw f64 (stamped by lowering)
         // and boxes at the fast exit; loadType overrides for attack IR
         fastv.type = o.loadType ?? (repr === "f64" ? "f64" : "any");
         if (fastv.type === "f64") fastv = fb.emit("box_f64", [fastv], {});
@@ -2322,7 +2322,7 @@ test("shapes-verify: slot out of bounds / repr mismatch / unknown shape reject",
 });
 
 test("shapes-verify: slot_store repr proofs — typed f64, tagged boxed", () => {
-    // P4.5: an f64 store takes a raw f64 — the type system IS the proof;
+    // an f64 store takes a raw f64 — the type system IS the proof;
     // no has_tag fact anywhere and it still verifies
     verifyModule(buildSlotAttack({ store: true, storeRaw: true }).mod);
     // a BOXED value into an f64 slot is a type error, has_tag fact or not
@@ -2356,7 +2356,7 @@ test("shapes-verify: slot_store repr proofs — typed f64, tagged boxed", () => 
 });
 
 test("shapes-verify: slot_load result stamp must match its repr", () => {
-    // an f64-repr load left stamped "any" is rejected (the P4.3 boxed
+    // an f64-repr load left stamped "any" is rejected (the boxed
     // form no longer verifies)...
     assertThrows(
         () => verifyModule(buildSlotAttack({ loadType: "any" }).mod),
@@ -2411,7 +2411,7 @@ test("shapes-opt: consecutive gets on one receiver merge to one guard region", (
 
 test("shapes-poly-opt: chains pass the optimizer un-merged and re-verify", () => {
     // The region matcher and fact folder are mono-strict by construction:
-    // a P4.6 chain's first guard has the second CHECK block as its miss
+    // a poly chain's first guard has the second CHECK block as its miss
     // edge (not a generic slow arm) and its join has three predecessors,
     // so both machineries must refuse — everything survives verbatim and
     // the module re-verifies.  (Chain-aware merging is future measured
@@ -2590,7 +2590,7 @@ test("shapes-opt: a stale (earlier-block) has_shape compare never folds", () => 
     verifyModule(mod2);
 });
 
-// --- shapes-plan P4.5: typed slots + heterogeneous fusion ------------------------
+// --- typed slots + heterogeneous fusion ------------------------
 
 test("shapes-typed: f64 loads are raw + boxed at the exit; stores unbox", () => {
     const g = lowerWithOracle("function f(p) { return p.x; }", stubShapeOracle({ p: PXY }));
@@ -2716,7 +2716,7 @@ test("shapes-typed: a boxed-field get feeding slow arithmetic refuses re-executi
     assert(control.shape_regions_merged === 1, "the f64-repr control must merge");
 });
 
-// --- shapes-plan P4.4: born with their shape -----------------------------------
+// --- born with their shape -----------------------------------
 
 test("born-shaped: a static literal lowers to make_object_shaped under --types", () => {
     const { printed } = lowerWithOracle(
@@ -2799,7 +2799,7 @@ test("ctor-fill: a call-valued store cuts the prefix (fence, oracle-free)", () =
     assertNotContains(printed, "fill_object_shaped");
 });
 
-test("ctor-fill: `in` mid-prefix cuts the batch (the P4.4 observable)", () => {
+test("ctor-fill: `in` mid-prefix cuts the batch (the mid-construction observable)", () => {
     const { printed } = lowerWithOracle(
         'function Pt(x, y) { this.x = x; this.t = "y" in this; this.y = y; }',
         stubOracle({ x: ["number"], y: ["number"] })
@@ -2935,9 +2935,9 @@ test("born-verify: make_object_shaped checks field count and known shape", () =>
     assertThrows(() => verifyModule(mod2), "unknown module shape");
 });
 
-// the P4.3-era optimizer/verifier proof-strength hazard (found by
+// the optimizer/verifier proof-strength hazard (found by
 // types-bornshapewrong1): foldProvenGuards deletes a has_tag over a
-// const-number join (`c ? 1 : 0`), uncovering the slot_store.  P4.5's
+// const-number join (`c ? 1 : 0`), uncovering the slot_store.  The typed-store form's
 // typed store dissolves the hazard class: the store takes a raw f64
 // (unbox under whatever proof lowering had), so no guard deletion can
 // ever strip the proof — the TYPE is the proof.  Pin both directions:
@@ -2994,7 +2994,7 @@ test("born-verify: a boxed value into an f64 slot rejects by type", () => {
     assertThrows(() => verifyModule(buildConstJoinStore(true)), "raw f64");
 });
 
-// --- sinking-plan S1: shaped-literal sinking -----------------------------------
+// --- shaped-literal sinking -----------------------------------
 
 function lowerShapedSink(src: string): { printed: string; stats: OptStats } {
     const r = lowerFunctionNode(

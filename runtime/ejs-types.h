@@ -27,25 +27,24 @@ typedef double jsdouble;
 
 typedef uint16_t jschar;
 
-// The object header, widened to 64 bits as the joint gc-plan P1 /
-// shapes-plan P4.1 layout (one layout, written once — see
-// docs/gc-plan.md "Object header, forwarding, and shapes" and
-// docs/shapes-plan.md "Object layout, in two steps"):
+// The object header, widened to 64 bits as one joint GC/shapes layout
+// (written once — see docs/gc-plan.md "Object header, forwarding, and
+// shapes" and docs/shapes-plan.md "Object layout, in two steps"):
 //
 //   bits  0-31  the pre-existing 32-bit header: EJSScanType in the low
 //               bits, user flags at EJS_GC_USER_FLAGS_SHIFT (unchanged)
 //   bits 32-55  shape index (0 = dictionary mode / untracked)
-//   bit  56     shaped-storage mode bit (shapes P4.2)
-//   bit  57     YOUNG — allocated since the last collection (gc-P0
+//   bit  56     shaped-storage mode bit
+//   bit  57     YOUNG — allocated since the last collection (profiling
 //               profiling; a nursery age bit in waiting)
-//   bit  58     PINNED — conservatively referenced this cycle (gc-P0
+//   bit  58     PINNED — conservatively referenced this cycle (profiling
 //               profiling, cleared each cycle)
 //   bit  59     FORWARDED — the word is a forwarding record, not a
-//               header: target address in bits 0-46 (gc-P1; see
+//               header: target address in bits 0-46 (see
 //               ejs-gc.h _ejs_gc_forward)
 //   bit  60     DIRTY — the object is in the generational remembered
-//               buffer (gc-P2 object-remembering write barrier)
-//   bits 61-63  reserved for the GC (mark/card, gc-P4+)
+//               buffer (object-remembering write barrier)
+//   bits 61-63  reserved for the GC (future mark/card bits)
 //
 // EJSObject absorbs the widening into what was padding (sizeof
 // unchanged); EJSPrimString/EJSPrimSymbol keep their sizes; EJSClosureEnv

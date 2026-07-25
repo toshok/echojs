@@ -1,12 +1,12 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  *
- * Runtime shape tracking (shapes-plan P4.1/P4.2).
+ * Runtime shape tracking.
  *
  * A shape is a transition edge (parent, name, repr) appended to a parent
  * shape; the global table is interned and append-only, mirroring maam's
  * type-aware hidden classes one-for-one (repr is part of shape identity).
- * Since P4.2 the shape IS the property structure for shaped-mode ordinary
+ * The shape IS the property structure for shaped-mode ordinary
  * objects: their values live in a slot array at shape-determined indices
  * (the storage engine is in ejs-object.c; this module owns the shape
  * table and answers name->slot / transition queries).  Anything the
@@ -44,7 +44,7 @@ typedef enum {
    cap, table full).  The table never allocates this index (shape_alloc
    stops one short), so no object header can ever carry it — a guard
    against it is statically false, and the guarded slow path serves every
-   access.  shapes-plan P4.3. */
+   access. */
 #define EJS_SHAPE_NOMATCH 0xFFFFFFu
 
 /* hard ceiling on shaped field count (and EJS_SHAPE_CAP): a full slot
@@ -54,12 +54,12 @@ typedef enum {
    lookup makes marking quadratic on big heaps (the stage2 self-compile
    went from minutes to hours before this cap).  16-byte EJSClosureEnv
    header + 14 * 8-byte slots = 128.  Objects with more fields drop to
-   dictionary mode — the pre-P4.2 map world.  Revisit when the gc plan
+   dictionary mode — the original map world.  Revisit when the gc plan
    gives the LOS an O(log n) lookup or a 256-byte size class. */
 #define EJS_SHAPE_FIELD_CAP_MAX 14
 
 /* the shape index lives in bits 32-55 of the 64-bit GCObjectHeader (bit
-   56 is the P4.2 storage-mode bit; 57-63 belong to the GC) — see the
+   56 is the storage-mode bit; 57-63 belong to the GC) — see the
    layout comment in ejs-types.h */
 #define EJS_GC_HEADER_SHAPE_SHIFT 32
 #define EJS_GC_HEADER_SHAPE_MASK 0xFFFFFFULL
@@ -141,7 +141,7 @@ void _ejs_shape_object_migrate(EJSObject *obj, EJSShapeMigrateReason reason);
 /* finalizer hook, census only */
 void _ejs_shape_object_died(EJSObject *obj);
 
-/* shape-table queries for the object layer's storage engine (P4.2).
+/* shape-table queries for the object layer's storage engine.
    None of these touch any object. */
 
 /* number of own fields of `shape` */
@@ -196,7 +196,7 @@ _ejs_shape_transition_add_fast(uint32_t shape, ejsval name, ejsval value,
 uint32_t _ejs_shape_transition_set(uint32_t shape, uint32_t slot_index,
                                    ejsval value);
 
-/* module-init interning for compiled shape guards (shapes-plan P4.3, the
+/* module-init interning for compiled shape guards (the
    atom-table precedent): walk/intern the ordered shape whose fields are
    names[0..nfields) with reprs from f64_mask (bit i set = field i is
    EJS_SHAPE_REPR_F64), returning its index for the module's shape global.

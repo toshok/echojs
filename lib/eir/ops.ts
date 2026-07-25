@@ -117,7 +117,7 @@ export const OPS = {
     // call: [callee, this, ...args], or with imms.direct set (a direct
     // call to a known EIR function): [env, this, ...args]
     call: { arity: -1, effects: GENERIC_OP, may_terminate: true, imms: ["direct"] },
-    // Phase 3.6: imms.direct's typed sibling — a direct call to a
+    // imms.direct's typed sibling — a direct call to a
     // specialized clone (imms.fn) with an unboxed signature.  operands =
     // [env, ...args] where each arg slot's type must match the callee
     // Func.sig's formal ("f64" formals take raw f64 values); no `this`
@@ -184,7 +184,7 @@ export const OPS = {
     // (mirrors LLVMIRVisitor.isNumber, inheriting its per-target check)
     has_tag: { arity: 1, effects: E.NONE, imms: ["tag"], sig: { params: ["ejsval"], result: "i1" } },
 
-    // --- shapes (shapes-plan P4.3) ----------------------------------------------
+    // --- shapes ----------------------------------------------
     // i1: does the operand's header shape index equal the module-interned
     // shape?  imms.shape keys Module.shapes (the ordered field list the
     // module interns at init, like atoms); the emitter folds the NaN-box
@@ -194,7 +194,7 @@ export const OPS = {
     // fixed-slot access on a shape-guarded receiver.  imms.shape/imms.slot
     // name the guarded shape and the field index within it (the shape imm
     // repeats the guard's so the verifier compares instead of infers);
-    // imms.repr is the FIELD's shape repr ("boxed" | "f64").  P4.5 typed
+    // imms.repr is the FIELD's shape repr ("boxed" | "f64").  Typed
     // slots: repr:"f64" produces (slot_load) / consumes (slot_store) a RAW
     // f64 under the P2 typed-flow rules — sound because the guard proved
     // the field's repr, the shaped-world invariant "shape reprs describe
@@ -215,7 +215,7 @@ export const OPS = {
     // transition.
     slot_load: { arity: 1, effects: E.READ, imms: ["shape", "slot", "repr"] },
     slot_store: { arity: 2, effects: E.WRITE, imms: ["shape", "slot", "repr"] },
-    // --- born with their shape (shapes-plan P4.4) -----------------------------
+    // --- born with their shape -----------------------------
     // a statically-keyed object literal, allocated + installed in one
     // runtime call: operands are the initial field values in imms.shape's
     // field order.  The runtime re-derives the true shape from the actual

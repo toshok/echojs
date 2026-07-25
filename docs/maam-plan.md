@@ -402,7 +402,10 @@ Smaller forward items surfaced by the Chunk A integration review:
 
 ## Phase checklist (for /goal sessions)
 
-- [x] **P0** `--types` flag + `lib/eir/oracle.ts` adapter + maam dialect shims
+Ids are `maam-P#` (formerly bare P0..P4 in this doc and in commit
+messages/results docs).
+
+- [x] **maam-P0** `--types` flag + `lib/eir/oracle.ts` adapter + maam dialect shims
       (`handlers`, `defaults`/`rest`, unknown-intrinsic tolerance, toplevel
       unwrap); stats logging only.
       *Done 2026-07-19* (maam 1bea5de; echojs d3e3fd1): all gates green,
@@ -416,7 +419,7 @@ Smaller forward items surfaced by the Chunk A integration review:
       without crashing (node-hosted dev tree — buck work trees have no
       `external-deps/`, so `--types` there warns-and-skips by design);
       convergence/timing numbers recorded in the PR.
-- [x] **P1** maam: ⊤-degradation + `nodeTypes()`/`typeOfNode()` (node-identity
+- [x] **maam-P1** maam: ⊤-degradation + `nodeTypes()`/`typeOfNode()` (node-identity
       keyed); echojs: `TypeOracle` + `--types-dump`. Per the P0 results, P1
       should FRONT-LOAD maam normalizer coverage for TemplateLiteral,
       ForOfStatement, and destructuring/defaults/rest params (these block
@@ -442,7 +445,7 @@ Smaller forward items surfaced by the Chunk A integration review:
       obvious next precision win for P2/P3.
       *Gate:* maam suite green (incl. new node-identity tests); matrix green;
       hand-checked oracle dump for `test/eir-toplevel1.js`.
-- [x] **P2** emit + verify `has_tag`/`unbox_f64`/`box_f64`/`f64_*`;
+- [x] **maam-P2** emit + verify `has_tag`/`unbox_f64`/`box_f64`/`f64_*`;
       `Inst.type` carries `"f64"`/`"i1"`.
       *Gate:* `//:test-eir` green with new low-tier tests; matrix green —
       the matrix line now includes `//:test-eir-lowtier` (standalone
@@ -460,7 +463,7 @@ Smaller forward items surfaced by the Chunk A integration review:
       cond_br accepts i1 or legacy "any" conditions. Runtime backlog item
       found: `_ejs_op_div` aborts EJS_NOT_IMPLEMENTED on non-number LHS
       (ejs-ops.c ~901) — sub/mul coerce, div doesn't.
-- [x] **P3** oracle-guided guarded arithmetic in `LowerFunction.binary`,
+- [x] **maam-P3** oracle-guided guarded arithmetic in `LowerFunction.binary`,
       `--types`-gated.
       *Gate:* matrix green + stage2≡stage3 functional gate (flag off);
       full-suite `--types`
@@ -479,7 +482,7 @@ Smaller forward items surfaced by the Chunk A integration review:
       green. Numbers in docs/maam-p0-results.md "Phase 3 gates". The lane
       script fails on zero-files-compared and zero-diamonds (vacuous-pass
       guards from review).
-- [x] **P3.4** diamond pre-work, trust-free (see the Phase 3.4 section):
+- [x] **maam-P3.4** diamond pre-work, trust-free (see the Phase 3.4 section):
       dominated-guard elimination + f64 block params for
       optimizer-created joins.  Landed as lib/eir/optimize-guards.ts:
       proven-number guard folding (dominator-tree facts + value-intrinsic
@@ -493,7 +496,7 @@ Smaller forward items surfaced by the Chunk A integration review:
       boxing once); types-bench1 + the hypot2 demo re-measured, deltas
       vs the Phase 3 baselines recorded in docs/maam-p0-results.md
       "Phase 3.4 gates".
-- [x] **P3.5** differential harness in maam repo (`concreteEval` vs node vs
+- [x] **maam-P3.5** differential harness in maam repo (`concreteEval` vs node vs
       ejs on closed-world tests) wired into its CI.
       *Gate:* zero divergences on the curated corpus.
       Landed as maam test/differential/ (`npm run diff-harness`, in maam CI):
@@ -511,7 +514,7 @@ Smaller forward items surfaced by the Chunk A integration review:
       later-declared same-scope vars silently dropped; generalized to
       function expressions/arrows/methods after adversarial review) —
       details in docs/maam-p0-results.md "Phase 3.5".
-- [x] **P3.6** typed calling convention / function specialization
+- [x] **maam-P3.6** typed calling convention / function specialization
       (see the Phase 3.6 section; HARD PRECONDITION: P3.5 green):
       local-closed-world escape analysis, specialized unboxed clones +
       direct calls; exports are NEVER specialized (boxed slot ABI is a
@@ -552,7 +555,7 @@ Smaller forward items surfaced by the Chunk A integration review:
       loop (before/after regenerated in
       ~/src/echojs/hypot2-types-before-after.txt).  Details in
       docs/maam-p0-results.md "Phase 3.6 gates".
-- [x] **P4** (design doc only) shape-guarded property access: guard op,
+- [x] **maam-P4** (design doc only) shape-guarded property access: guard op,
       runtime layout, promotion criteria from Phase 3 experience.
       Delivered as **docs/shapes-plan.md** (2026-07-23): type-aware
       runtime shape tree mirroring maam's classes 1:1 (representation in

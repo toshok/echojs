@@ -2,12 +2,12 @@
  * vim: set ts=4 sw=4 et tw=99 ft=typescript:
  */
 
-// The MAAM type oracle (docs/maam-plan.md).  With --types on, compile()
+// The MAAM type oracle.  With --types on, compile()
 // hands us the desugared toplevel BEFORE collectEIRToplevel consumes it;
 // we wrap its body as a Program (preserving node identity — the oracle
 // is keyed on the exact node objects), run the echojs-maam abstract
-// interpreter over it, log its stats, and (Phase 1) return a TypeOracle
-// over the result.  Nothing in codegen consumes it yet (Phase 3);
+// interpreter over it, log its stats, and return a TypeOracle
+// over the result.  Lowering consumes it only under --types;
 // --types-dump prints per-binding types for hand-checking.
 //
 // Two hard rules, both load-bearing:
@@ -51,10 +51,10 @@ interface MaamResult {
     metrics: MaamMetrics;
     describe(): string;
     warnings(): Array<{ kind: string }>;
-    // Phase 1 node-identity oracle: joined TypeSig ("num", "num|str", "⊤", …)
+    // node-identity oracle: joined TypeSig ("num", "num|str", "⊤", …)
     // for the exact node object, undefined for unreached/unmapped nodes.
     typeOfNode(n: unknown): string | undefined;
-    // shapes-plan P4.3 node-identity shape queries; absent in older maam
+    // node-identity shape queries; absent in older maam
     // builds (the oracle degrades to "no shape facts", never errors)
     receiverShapesOfNode?(n: unknown): MaamShape[] | undefined;
     fieldOrderOfShape?(s: MaamShape): readonly string[] | undefined;
@@ -131,7 +131,7 @@ function warningSummary(warnings: Array<{ kind: string }>): string {
     return [...counts.entries()].map(([kind, n]) => `${kind}:${n}`).join(",");
 }
 
-// --- the TypeOracle contract (docs/maam-plan.md, "The interface contract") --
+// --- the TypeOracle contract --
 
 export type TypeTag = "number" | "string" | "boolean" | "undefined" | "null" | "object" | "closure";
 
@@ -140,7 +140,7 @@ export interface EirType {
     tags: ReadonlySet<TypeTag> | "top";
 }
 
-// shapes-plan P4.3: one field of a receiver's shape, in insertion order.
+// one field of a receiver's shape, in insertion order.
 // repr mirrors the runtime's EJSShapeRepr: "f64" iff the field's TypeSig is
 // exactly "num" (the runtime classifies stored values the same way), else
 // "boxed" — and a sig whose union straddles the num/non-num line has no
@@ -160,7 +160,7 @@ export type ShapeDeclineReason =
     | "no-order" // no ordered witness for the shape
     | "empty"; // the empty shape (nothing to access)
 
-// shapes-plan P4.6: a query answer carries ONE OR TWO exact shapes.  Two
+// a query answer carries ONE OR TWO exact shapes.  Two
 // shapes is the measured 2-way polymorphic extension — every shape in the
 // answer independently passes the full exactness screen (non-megamorphic,
 // non-empty, ordered witness, single-tag reprs); a set where ANY member
@@ -174,10 +174,10 @@ export interface TypeOracle {
     // type of the value an expression node evaluates to (join over all
     // reached contexts); "top" when unknown/unanalyzed
     typeOfNode(n: e.Node): EirType;
-    // shapes-plan P4.3/P4.6: the receiver-shape facts for a property
+    // the receiver-shape facts for a property
     // access's object node — exact facts only (non-megamorphic, uncapped,
     // all reprs single-tag, ordered witness present), at most two shapes
-    // (the P4.6 poly budget), everything else a counted decline.
+    // (the polymorphic-chain budget), everything else a counted decline.
     // Optional so stub oracles predating shapes keep working; absent =
     // no shape facts.
     receiverShapeOfNode?(n: e.Node): ShapeQuery;
@@ -367,7 +367,7 @@ function dumpBindingTypes(
 // post-pre_eir_convert Program whose body[0] is the synthetic toplevel
 // FunctionDeclaration (insert_toplevel_func) holding the module's
 // statements.  Returns a TypeOracle over the analysis (so compile() can
-// thread it onward — Phase 3), or null when anything degraded; callers
+// thread it onward), or null when anything degraded; callers
 // must treat null as "no type information", never as an error.
 export function runTypeAnalysisProbe(
     tree: e.Program,
@@ -416,9 +416,9 @@ export function runTypeAnalysisProbe(
                 if (sig === undefined) stats.unknown++;
                 return typeSigToEirType(sig);
             },
-            // shapes-plan P4.3/P4.6: exact receiver-shape facts, every
+            // exact receiver-shape facts, every
             // near-miss a counted decline (promotion criterion 2 — no
-            // near-misses).  Up to TWO shapes survive (the P4.6 poly
+            // near-misses).  Up to TWO shapes survive (the poly
             // budget); each must pass the full screen independently.
             receiverShapeOfNode: (n): ShapeQuery => {
                 if (!result.receiverShapesOfNode || !result.fieldOrderOfShape)

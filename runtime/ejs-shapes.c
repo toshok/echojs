@@ -1,8 +1,8 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  *
- * Runtime shape tracking (shapes-plan P4.1/P4.2).  This module owns the
- * global interned shape table and the transition cache; since P4.2 the
+ * Runtime shape tracking.  This module owns the
+ * global interned shape table and the transition cache; the
  * object layer (ejs-object.c) stores shaped objects' property values in
  * slot arrays at the indices this table dictates, via the transition /
  * lookup API below.  The census (dumped at exit under EJS_SHAPES_CENSUS)
@@ -63,7 +63,7 @@ static uint32_t stat_max_depth;
 /* returns the new shape's index, or EJS_SHAPE_DICT if the table is full.
    stops one short of EJS_SHAPE_NOMATCH: that index must never be
    allocatable, so a compiled guard against the sentinel is statically
-   false (shapes-plan P4.3) */
+   false */
 static uint32_t
 shape_alloc(uint32_t parent, ejsval name, uint8_t repr, uint32_t field_count)
 {
@@ -339,7 +339,7 @@ _ejs_shape_intern(uint32_t nfields, const ejsval *names, uint32_t f64_mask)
 {
     if (!_ejs_shapes_tracking)
         return EJS_SHAPE_NOMATCH;
-    /* the empty shape IS the root: P4.4's fill_object_shaped guard
+    /* the empty shape IS the root: fill_object_shaped's guard
        (has_shape(this, "")) interns zero fields and must match the
        construct-allocated empty receiver */
     if (nfields == 0)

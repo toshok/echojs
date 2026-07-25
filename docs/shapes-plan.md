@@ -1,5 +1,10 @@
 # Shapes: shape-guarded property access, co-designed with the GC (maam P4)
 
+Phase ids here are `shapes-P1`..`shapes-P6` (formerly maam-P4.1..P4.6 —
+the bucket was born as maam's fourth phase; commit messages and results
+docs use the old ids).  The ordering spine lives in `docs/plans.md`.
+
+
 This is the maam-plan **P4 design document** — the phase the plan scoped as
 "design doc only" and deferred "until Phase 3 has proven the pipeline."
 Phase 3 has: typed arithmetic (P3), trust-free guard-region optimization
@@ -311,7 +316,7 @@ The compiler-side `TypeOracle` (lib/eir/oracle.ts) grows the same three
 queries plus pass-through of `shapeCapHits`/megamorphic flags for the
 promotion gates.  `--types-dump` grows a per-site shape census
 (diagnostics first — the plan's original P4 note — which doubles as the
-instrumentation the P4.1 gate needs).
+instrumentation the shapes-P1 gate needs).
 
 ## Promotion criteria — what Phase 3 taught us
 
@@ -322,8 +327,8 @@ The trust ladder, restated as policy for shapes:
    site, every guarded field's repr a single tag.  Wrong oracle = slow
    path taken = speed lost, never correctness — the P3 contract.
 2. **Exact facts only, no near-misses.**  Three or more terminal shapes
-   ⇒ no diamond; exactly two lower to the P4.6 2-way chain (measured and
-   landed — see the P4.6 entry), and only when EVERY shape in the answer
+   ⇒ no diamond; exactly two lower to the shapes-P6 2-way chain (measured and
+   landed — see the shapes-P6 entry), and only when EVERY shape in the answer
    passes the same exactness screen and carries the accessed field;
    union-repr fields load boxed; anything the oracle degraded
    (`degradedBindings`, unknown calls touching the receiver) declines.
@@ -365,10 +370,10 @@ The trust ladder, restated as policy for shapes:
   shape sets (`abstract ⊒ concrete`, the containment-lane pattern), and
   `ejs` runs must agree with node on shape-sensitive observables
   (`Object.keys` order, `in` during construction, delete-then-readd,
-  freeze/seal, accessor conversion).  Guarded-phase work (P4.3) does not
-  wait for this; born-with-shape (P4.4) hard-requires it — the P3.5/P3.6
+  freeze/seal, accessor conversion).  Guarded-phase work (shapes-P3) does not
+  wait for this; born-with-shape (shapes-P4) hard-requires it — the P3.5/P3.6
   sequencing, replayed.
-- **Runtime differential mode.**  P4.1/P4.2 land behind `EJS_SHAPES=off`;
+- **Runtime differential mode.**  shapes-P1/shapes-P2 land behind `EJS_SHAPES=off`;
   the whole test suite runs both modes and byte-compares (the old-
   collector A/B discipline from gc-plan).  A transition-storm stress test
   (add/delete/type-flip churn) and the collect-every-N stress compose.
@@ -392,7 +397,7 @@ The trust ladder, restated as policy for shapes:
   types-bench1; measured at every phase gate (guarded, born-shaped,
   typed-slots deltas recorded like 10.3×→14.0×→46× was).
 - **splay** (the shape-stress classic; maam's own shape work was tuned on
-  it) as the polymorphism/transition stress once P4.2 lands.
+  it) as the polymorphism/transition stress once shapes-P2 lands.
 - The gc-plan Phase 0 allocation profile doubles as the object-size/
   field-count census that sizes slot-array classes.
 
@@ -401,7 +406,7 @@ The trust ladder, restated as policy for shapes:
 Same bias as eir/maam/gc: small phases, matrix green after each, each
 revertable, runtime phases A/B-able against the old path.
 
-- [x] **P4.1 — Runtime shape tracking, behind the scenes.**  DONE
+- [x] **shapes-P1 — Runtime shape tracking, behind the scenes.**  DONE
       2026-07-23.  Shape table + transition cache
       (`runtime/ejs-shapes.{h,c}`); ordinary objects get shape indices
       maintained on insert/delete/type-flip; the MAP REMAINS the store
@@ -410,15 +415,15 @@ revertable, runtime phases A/B-able against the old path.
       `EJS_SHAPE_CAP` overrides the per-object field cap (default 64).
       Header bits landed as the gc-P1 joint layout: `GCObjectHeader` is
       now `uint64_t` (ejs-types.h documents the split — low 32 unchanged,
-      bits 32-55 shape index, bit 56 P4.2 mode bit, 57-63 reserved gc);
+      bits 32-55 shape index, bit 56 shapes-P2 mode bit, 57-63 reserved gc);
       `EJSObject`/`EJSPrimString`/`EJSPrimSymbol` sizes unchanged
       (padding absorbed), `EJSClosureEnv` +8; `lib/types.ts` mirrored in
-      the same commit (header as two i32 fields so P4.3's `has_shape`
+      the same commit (header as two i32 fields so shapes-P3's `has_shape`
       can load the shape half directly).
       *Gate results:* matrix green (test-eir, lowtier, stages 0-3);
       stage1 suite green with shapes on AND under EJS_SHAPES=off — the
       off-mode run is a standing buck lane, `//:test-stage1-shapes-off`
-      (buck-test-stage.sh grew a TEST_ENV arg; the P4.2 both-modes
+      (buck-test-stage.sh grew a TEST_ENV arg; the shapes-P2 both-modes
       byte-identical gate extends this lane);
       property-insert micro-overhead **2.1%** (mean of 5 interleaved
       runs, 300k objects × 8 fresh atom-keyed inserts — the worst case;
@@ -433,8 +438,8 @@ revertable, runtime phases A/B-able against the old path.
       dominate; user objects stay shaped).  Death census needs a
       collection to fire (finalize-driven), so short probes report 0
       deaths — the shapes analog of gc-P0's numbers lands with real
-      workloads in the P4.2 gate.
-- [x] **P4.2 — Slot storage for shaped objects.**  DONE 2026-07-24.
+      workloads in the shapes-P2 gate.
+- [x] **shapes-P2 — Slot storage for shaped objects.**  DONE 2026-07-24.
       The union flip landed: `EJSObject`'s fourth word is now
       `union { EJSPropertyMap* map; ejsval slots; }` — shaped-mode
       objects store plain data property values in a **closureenv** slot
@@ -479,7 +484,7 @@ revertable, runtime phases A/B-able against the old path.
       fixes stage2's self-compile completes normally (ejs-process CPU:
       92s shapes-on vs 62s off on the same binary — the ~1.5× is env
       alloc churn plus wide-object migrate-through; the raw win arrives
-      with P4.3's guarded fast paths, and P4.5/gc-P5 own the layout
+      with shapes-P3's guarded fast paths, and shapes-P5/gc-P5 own the layout
       end-state).
       *Gate results:* matrix green — test-eir, lowtier, stages 0-3, and
       the `//:test-stage1-shapes-off` A/B lane (no kangax runner exists
@@ -493,13 +498,13 @@ revertable, runtime phases A/B-able against the old path.
       **set 3.2× faster** than the map (6.35s vs 19.9s — no hash, no
       strict-eq chain, no descriptor churn), **get 1.09×** (5.95s vs
       6.47s; the generic-call overhead still dominates — the raw win is
-      P4.3's guarded fast paths), insert 8×N **~3% slower** (1.93s vs
+      shapes-P3's guarded fast paths), insert 8×N **~3% slower** (1.93s vs
       1.88s: one closureenv alloc + one grow-copy per 8-field object —
-      within the P4.1 <5% bar, and the shaped path now does real work
+      within the shapes-P1 <5% bar, and the shaped path now does real work
       instead of dual bookkeeping).  Census on the storm probe: 383
       born tracked, 315 shapes, 1365 transitions (48% memo fast hits),
       210 repr flips, migrations correctly attributed.
-- [x] **P4.3 — Guarded fast paths under --types.**  DONE 2026-07-24
+- [x] **shapes-P3 — Guarded fast paths under --types.**  DONE 2026-07-24
       (gate results below).  As built:
       - **Ops** (`lib/eir/ops.ts`): `has_shape` (NONE, i1),
         `slot_load` (READ) / `slot_store` (WRITE) with imms
@@ -534,14 +539,14 @@ revertable, runtime phases A/B-able against the old path.
         NaN-box object check into the header-high-half compare against a
         per-shape i32 module global (`isObject`/`objectPointer` live
         beside isNumber in compiler.ts); `slotRef` is THE addressing
-        seam (P4.2 closureenv slot arrays today, gc-P5 inline slots
+        seam (shapes-P2 closureenv slot arrays today, gc-P5 inline slots
         later); interns flush into the literal-init function's return
         block after all atom inits (`emitShapeInterns`).
       - **maam**: `receiverShapesOfNode` (terminal-filtered, node-
         identity, fail-soft) + `fieldOrderOfShape` (the ordered witness =
         first-interning insertion order; a runtime object built in
         another order just misses the guard).  `layoutOfNode`/
-        `constructorReportOfNode` are P4.4 consumers and wait there.
+        `constructorReportOfNode` are shapes-P4 consumers and wait there.
       - **Lowering** (`lower.ts` propGet/propSet): diamonds at every
         atom-keyed member get/set incl. compound assign, ++/--, method
         loads, and destructuring reads.  Exact facts only (criterion 2):
@@ -568,7 +573,7 @@ revertable, runtime phases A/B-able against the old path.
         (`.atom @line:col: guarded shape=... slot=N | declined reason`);
         EIR-opt debug line grows shape guard/region counts.
       Boxed slot ACCESS only in round one, as planned — but repr stays
-      part of guard identity and the imms, so P4.5 flips only the
+      part of guard identity and the imms, so shapes-P5 flips only the
       emitter seam + typed-flow rules.
       *Gate results (2026-07-24):* matrix green (test-eir + new shape
       unit tests incl. hand-built attack IR for every verifier rule and
@@ -593,7 +598,7 @@ revertable, runtime phases A/B-able against the old path.
       terminator when a shape named an atom no access ever interned —
       shapes now get their own init function, called right after
       literal init.
-- [x] **P4.4 — Born with their shape.**  DONE 2026-07-24.
+- [x] **shapes-P4 — Born with their shape.**  DONE 2026-07-24.
       PRECONDITION FIRST: the differential harness grew its shapes lane
       (maam submodule @d8610d3) — (a) per-allocation-site shape
       containment in the analysis worker (every concrete hidden class
@@ -652,7 +657,7 @@ revertable, runtime phases A/B-able against the old path.
       - `EJS_NO_BORN_SHAPED` is the bisect hook; telemetry:
         `bornShaped=N ctorFills=N fenceDeclined=reason:n,...`
         (additive).
-      FOUND AT THE GATE: a pre-existing P4.3 proof-strength mismatch —
+      FOUND AT THE GATE: a pre-existing shapes-P3 proof-strength mismatch —
       optimize-guards' provenNumberAt proves const-number JOINS
       (`c ? 1 : 0`) and folds the has_tag over one, but the verifier's
       provenNumberIntrinsic didn't accept blockparams, so the uncovered
@@ -673,12 +678,12 @@ revertable, runtime phases A/B-able against the old path.
       flag-off 6.76s ⇒ **3.3×** total, the new 1.5× step being the
       allocation batching: `ctorFills=1` covers the ctor in both the
       kern and alloc loops).
-- [x] **P4.5 — Typed slots × specialization × GC (compiler half).**
+- [x] **shapes-P5 — Typed slots × specialization × GC (compiler half).**
       DONE 2026-07-24.  The gc-P5 half (trace bitmaps, inline slots,
       memcpy evacuation, barrier/trace elision) stays sequenced behind
       the mover per gc-plan; the compiler contract it needs was finished
       here.  As built:
-      - **The seam flip** (the P4.3 plan, executed): `slot_load
+      - **The seam flip** (the shapes-P3 plan, executed): `slot_load
         repr:"f64"` produces a RAW f64 (lowering stamps `Inst.type`,
         boxes once at the fast exit — the join stays boxed since its slow
         edge is the generic get); `slot_store repr:"f64"` consumes a raw
@@ -689,10 +694,10 @@ revertable, runtime phases A/B-able against the old path.
         repr immediate the way call_typed is typed by its callee (a
         per-op sig can't express either) — the verifier checks the
         result stamp against the repr and requires an f64-typed operand
-        for f64 stores.  **The typed store dissolves P4.3's
+        for f64 stores.  **The typed store dissolves shapes-P3's
         proof-strength hazard class**: the store's repr proof is now the
         operand TYPE, which no guard-folding can strip —
-        provenNumberIntrinsic (the P4.4 escape hatch that mirrored
+        provenNumberIntrinsic (the shapes-P4 escape hatch that mirrored
         optimizer folds) is deleted; boxed-repr stores keep the
         has_tag=false dominance rule.  No off switch for the seam: it is
         a contract change the verifier owns.
@@ -726,7 +731,7 @@ revertable, runtime phases A/B-able against the old path.
         never-first, and the measurements below show the guarded typed
         path already at parity with the trusted clone — there is
         currently nothing for unguardedness to win.  Revisit only on
-        benchmark evidence (P4.6 discipline).
+        benchmark evidence (shapes-P6 discipline).
       - **Telemetry**: stats line grows `shapeTyped=loads:N,stores:M`
         (additive); EIR-opt debug line grows the het-merge count.
       *Gate results (2026-07-24):* matrix ×7 green (test-eir + new
@@ -738,10 +743,10 @@ revertable, runtime phases A/B-able against the old path.
       repr-flip transition mid-kernel; boxed-field stores) node-identical
       in all modes incl. EJS_SHAPES=off and EJS_GC_EVERY_N_ALLOC=7.
       **Measured honestly**: types-bench2 total is UNCHANGED (2.04s vs
-      P4.4's 2.03s) because 1.71s of it is the allocation loop — the
+      shapes-P4's 2.03s) because 1.71s of it is the allocation loop — the
       gc-P5 half owns that.  The kernel itself: a variable-receiver
       20M-iteration kernel runs 0.31s under --types vs 3.28s flag-off
-      (10.6×), IDENTICAL between P4.4-boxed, P4.5-typed, fused, unfused,
+      (10.6×), IDENTICAL between shapes-P4-boxed, shapes-P5-typed, fused, unfused,
       and specialized — Apple-Silicon OoO + LLVM already hid the boxed
       round-trips, so the typed/fusion wall-time delta on this hardware
       is ~0.  What the seam DOES buy today: an invariant-receiver kernel
@@ -751,7 +756,7 @@ revertable, runtime phases A/B-able against the old path.
       guarded path reaches parity with the trusted P3.6 clone, and the
       IR meets gc-P5 with one addressing seam, slot-index immediates,
       and straight-line raw regions to point inline-slot addressing at.
-- [x] **P4.6 — Measured extensions.**  DONE 2026-07-24.  The phase ran
+- [x] **shapes-P6 — Measured extensions.**  DONE 2026-07-24.  The phase ran
       as its own discipline dictates: an evidence probe per candidate
       FIRST, implementation only where the numbers and a sound design
       both existed.  Verdicts:
@@ -774,10 +779,10 @@ revertable, runtime phases A/B-able against the old path.
         structural duplicates dedupe to mono), and propGet/propSet
         lower a guard CHAIN — the second has_shape tests on the first's
         miss edge, so each fast arm sits under its own same-block-fresh
-        fact and the verifier's P4.3/P4.5 rules apply per arm unchanged
+        fact and the verifier's shapes-P3/shapes-P5 rules apply per arm unchanged
         (typed f64 arms box at their own exits; stores split has_tag
         per arm, oriented by that arm's field repr).  The mono path
-        emits byte-identical IR to P4.5.  The optimizer's region/fold
+        emits byte-identical IR to shapes-P5.  The optimizer's region/fold
         machinery is mono-strict and refuses chains wholesale (pinned:
         4 guards survive `p.x + p.x` un-merged, module re-verifies) —
         chain-aware merging is future measured work, and wall time
@@ -788,7 +793,7 @@ revertable, runtime phases A/B-able against the old path.
         receivers): chain **0.31s — parity with the monomorphic twin
         (0.32s)** — vs 1.67s declined (the bisect flag) and 3.64s
         flag-off: **5.4×** for the chain over the decline, and the
-        pre-P4.6 false-mono world's 0.99s (half the receivers missing
+        pre-shapes-P6 false-mono world's 0.99s (half the receivers missing
         the guard) is beaten 3.2×.  Probe types-poly1 (both arms fast,
         typed stores per arm; cross-module repr-mismatched / third-
         shape / dictionary receivers all through the shared slow path)
@@ -796,10 +801,10 @@ revertable, runtime phases A/B-able against the old path.
       - **Accessor inlining: DECLINED, evidence recorded.**  The probe
         (defineProperty proto getter, 20M dispatches — getter LITERALS
         are still a maam NormalizeError) measures 2.31s under --types
-        vs 5.44s flag-off; the same arithmetic through P4.3 guarded
+        vs 5.44s flag-off; the same arithmetic through shapes-P3 guarded
         slots runs 0.32s, so ~7× headroom exists.  But a receiver
         has_shape proves NOTHING about the proto that carries the
-        getter (accessor-bearing protos are dictionary-mode by P4.2
+        getter (accessor-bearing protos are dictionary-mode by shapes-P2
         design — mutable maps), so sound inlining needs proto-identity
         /proto-shape guard machinery plus maam-side accessor modeling
         that does not exist.  That is new soundness surface, not a
@@ -827,25 +832,25 @@ revertable, runtime phases A/B-able against the old path.
       built on the false-mono maam reports).  types-bench2 (mono world)
       regression-checked bit-identical stats/output/wall-time.
 
-P4.1/P4.2 are pure runtime and can proceed independently of maam; P4.3+
-are compiler phases in the P3 mold.  gc-P1 and P4.1 share one atomic
+shapes-P1/shapes-P2 are pure runtime and can proceed independently of maam; shapes-P3+
+are compiler phases in the P3 mold.  gc-P1 and shapes-P1 share one atomic
 layout change whichever lands first.
 
 ## Risks, named
 
-- **Dual-bookkeeping overhead (P4.1)** on shape-oblivious programs: one
+- **Dual-bookkeeping overhead (shapes-P1)** on shape-oblivious programs: one
   transition-cache hit per property add, on every program.  Measured at
-  the P4.1 gate with a hard <5% bar; the mitigation is that the
+  the shapes-P1 gate with a hard <5% bar; the mitigation is that the
   transition cache is one hash hit against an interned table vs the
-  map's existing hash+chain work, and P4.2 deletes the duplication.
+  map's existing hash+chain work, and shapes-P2 deletes the duplication.
 - **Shape explosion from type-aware transitions.**  maam's answer (caps
   → megamorphic ⊤) transplants: per-object transition caps → dictionary,
   global table growth monitored; splay is the canary.  Order-sensitive
   runtime shapes intern more than maam's order-insensitive ones — the
   order-canonicalization trick is NOT available at runtime (enumeration
-  order is semantics); the census (P4.1 gate) tells us the real fanout
+  order is semantics); the census (shapes-P1 gate) tells us the real fanout
   before any compiler work depends on it.
-- **The effect-kill soundness class (P4.3).**  Shape facts die at
+- **The effect-kill soundness class (shapes-P3).**  Shape facts die at
   WRITE|CALL effects; a missed kill is a silent miscompile of exactly the
   kind P3.4's adversarial review kept finding.  It gets the same
   treatment: a written soundness inventory in optimize-guards, hand-built
@@ -871,8 +876,8 @@ layout change whichever lands first.
   access.**  Cheaper transitions, but every typed load keeps a
   `has_tag`+unbox and every guard proves less; maam already pays for
   type-aware classes and P3 built the raw-f64 world this feeds.  The
-  premium of type-aware transitions is measured at P4.1 (census) before
-  P4.3 commits — if type-flip churn is pathological in real code, reprs
+  premium of type-aware transitions is measured at shapes-P1 (census) before
+  shapes-P3 commits — if type-flip churn is pathological in real code, reprs
   can degrade to `boxed` per-field without changing the design.
 - **Inline caches / PICs without static shapes.**  A JIT's answer; AOT
   echojs has no code patching and DOES have an oracle.  Module-init-
@@ -886,18 +891,18 @@ layout change whichever lands first.
   patching compiled offsets; AOT has no second chance — this is why
   reprs are in the class identity, per maam's own design note.
 
-## Open questions (tracked, not blocking P4.1/P4.2)
+## Open questions (tracked, not blocking shapes-P1/shapes-P2)
 
 1. **Ordered-shape witnesses from maam for constructors.**  RESOLVED at
-   P4.3: maam's ShapeTable records each class's first-interning
+   shapes-P3: maam's ShapeTable records each class's first-interning
    insertion order (`fieldOrderOfShape`) — first-write program order
    along the first analyzed path, for literals AND constructors alike.
    A runtime object built in a different order interns a different
    runtime shape and simply misses the guard (slow path, never wrong).
-   P4.4's born-with-shape constructors may still prefer the fence's
+   shapes-P4's born-with-shape constructors may still prefer the fence's
    straight-line store prefix as the witness; decide there.
 2. **Slot-array growth policy** (size classes vs exact +
-   copy-on-transition) — informed by the P4.1 census.
+   copy-on-transition) — informed by the shapes-P1 census.
 3. **How much of `Array`/`Function`/module exotics join shaped mode
    later** — out of scope for P4.x entirely; plain objects first.
 4. **`repr` lattice granularity** (`f64`/`boxed` vs finer `bool`/`str`
@@ -909,22 +914,22 @@ layout change whichever lands first.
   allocation (born-shaped literals become bump-alloc clients), Phase 5
   (consumes shapes for tracing/evacuation; this doc's Step B).
 - **maam-plan.md**: P4 checklist ticks "design doc" with this document;
-  P4.1+ items live HERE (this doc is the phase's checklist owner, the
+  shapes-P1+ items live HERE (this doc is the phase's checklist owner, the
   gc-plan pattern).  The differential-harness shapes lane extends the
   P3.5 asset in the maam repo.
 - **plans.md escape analysis / allocation sinking**: sinking deletes
-  allocations shapes would otherwise accelerate — run the P4.1 census
+  allocations shapes would otherwise accelerate — run the shapes-P1 census
   with the optimizer ON (the gc-P0 lesson).
 
 ## Phase checklist (for /goal sessions)
 
-- [x] **P4.1** runtime shape table + tracking, dual bookkeeping, header
+- [x] **shapes-P1** runtime shape table + tracking, dual bookkeeping, header
       bits (joint with gc-P1), EJS_SHAPES=off, census instrumentation.
       Gate: matrix ×3, off-mode diff, <5% insert overhead, census
       recorded.  DONE 2026-07-23 — see the phased-plan entry above for
       the numbers (2.1% insert overhead via the inlined transition
       memo).
-- [x] **P4.2** slot storage + dictionary migration, specops mode-switch.
+- [x] **shapes-P2** slot storage + dictionary migration, specops mode-switch.
       Gate: both-modes byte-identical suite+kangax, stress green,
       microbench recorded.  DONE 2026-07-24 — see the phased-plan entry
       above (set 3.2×, get 1.09×, insert -3%; storm probe + gc-stress
@@ -932,26 +937,26 @@ layout change whichever lands first.
       the stage2 GC lesson recorded there: shaped field cap 14 keeps
       slot arrays out of the LOS, and the gc trigger now scales with
       heap footprint).
-- [x] **P4.3** EIR ops + verifier inventory + emitter + maam
+- [x] **shapes-P3** EIR ops + verifier inventory + emitter + maam
       node-identity queries + guarded diamonds + shape facts in
       optimize-guards.  Gate: matrix, lane 0-divergent, wrong-oracle
       probes, unit tests, types-bench2 delta.  DONE 2026-07-24 — see the
       phased-plan entry above (types-bench2 2.1×, lane 459 files
       0-divergent, all attack IR pinned at unit level).
-- [x] **P4.4** born-with-shape (literals unconditional; constructors
+- [x] **shapes-P4** born-with-shape (literals unconditional; constructors
       fenced).  HARD PRECONDITION: harness shapes lane.  Gate: harness +
       lane + probes + delta.  DONE 2026-07-24 — see the phased-plan
       entry (harness shapes lane green, types-bench2 3.06s → 2.03s,
       ctor batching = the empty-shape-guarded body-side fill; no maam
       constructor query needed).
-- [x] **P4.5** typed slots × clones × gc-P5 consumption (compiler half;
+- [x] **shapes-P5** typed slots × clones × gc-P5 consumption (compiler half;
       gc-P5 consumption waits on the mover).  Gate: typed delta measured
       and recorded, all lanes green.  DONE 2026-07-24 — see the
       phased-plan entry above (raw f64 slot ops + heterogeneous region
       fusion; bench2 total unchanged at 2.04s because the residual is
       the alloc loop; invariant-receiver kernels now constant-fold;
       guarded path at parity with trusted clones).
-- [x] **P4.6** measured extensions — evidence-gated, all four candidates
+- [x] **shapes-P6** measured extensions — evidence-gated, all four candidates
       probed and measured.  DONE 2026-07-24: 2-way poly guard chains
       LANDED (kernel 5.4× vs decline, mono parity; required the maam
       per-object terminal-filter fix — the false-mono finding); accessor

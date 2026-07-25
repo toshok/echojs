@@ -1,5 +1,9 @@
 # GC plan: an industrial generational moving collector, co-designed with the compiler
 
+Phase ids here are `gc-P0`..`gc-P7` (formerly bare P0..P7 in this
+doc).  The ordering spine lives in `docs/plans.md`.
+
+
 A plan for replacing echojs's stop-the-world conservative mark-and-sweep
 collector (`runtime/ejs-gc.c`) with a generational, moving, eventually-
 concurrent collector — in independently-landable phases, each of which leaves
@@ -447,7 +451,7 @@ Bias, as with the eir/maam plans: small phases, matrix green after each
 each independently revertable. The old collector stays behind a build flag
 through Phase 3 for A/B and differential testing.
 
-- **Phase 0 — Correctness prerequisites + measurement.** Fix generator stack
+- **gc-P0 — Correctness prerequisites + measurement.** Fix generator stack
   scanning (`ejs-gc.c:1087` stub) — a real bug today, a corruption source under
   any mover. Add instrumentation: allocation rate and size/kind profile (with
   the optimizer on), survival rates, and a **pin-rate estimator** — walk
@@ -466,13 +470,13 @@ through Phase 3 for A/B and differential testing.
   of objects/KBs per cycle (⇒ P2 ships on conservative roots; P3 stays
   behind it), and the `-O2` runtime landed at 3.06× on the self-compile.
 
-- **Phase 1 — Header widening + forwarding plumbing.** 64-bit header, bits
+- **gc-P1 — Header widening + forwarding plumbing.** 64-bit header, bits
   reserved per the shapes tie-in; coordinated `runtime/` + `lib/types.ts`
   layout change, landed atomically with the old collector active; forwarding
   read/write helpers. No behavior change. **Gate: matrix green on all three
   bootstrap targets.**
 
-- **Phase 2 — Generational nursery: the payoff phase.** Block-structured
+- **gc-P2 — Generational nursery: the payoff phase.** Block-structured
   spaces; all new collector state in an instantiable heap-context struct and
   all emitted heap-state access through the context-accessor seam
   (§"Concurrency II" — this is when the discipline starts, because this is
@@ -488,7 +492,7 @@ through Phase 3 for A/B and differential testing.
   differential vs. old collector across the whole suite plus a
   collect-every-N-allocations stress mode; pin-rate report from real runs.**
 
-- **Phase 3 — Precise JS-frame roots.** Emitter-owned gc-frame slots at `E.GC`
+- **gc-P3 — Precise JS-frame roots.** Emitter-owned gc-frame slots at `E.GC`
   safepoints with SSA-use rewriting; chained-frame variant first; env slot
   address inlining (interior pointers die); allocation-free functions carry no
   frame. Nursery pins drop to C-frame-referenced objects only. **Gate:
@@ -496,13 +500,13 @@ through Phase 3 for A/B and differential testing.
   vs. Phase 2 recorded; mutator regression from spills measured and
   acceptable; matrix green.**
 
-- **Phase 4 — Mostly-copying major collection.** Evacuate/compact unpinned
+- **gc-P4 — Mostly-copying major collection.** Evacuate/compact unpinned
   old-gen blocks; pinned cells swept in place; heap actually shrinks. This is
   where fragmentation dies. **Gate: identical output vs. Phase 3 under stress;
   demonstrated heap shrink on a fragmenting benchmark; auto-tuned growth
   target replaces the 60 MB constant, knob census = 1.**
 
-- **Phase 5 — Shapes intersection (floats with maam P4).** When the shapes
+- **gc-P5 — Shapes intersection (floats with maam P4).** When the shapes
   design lands, the collector consumes it: per-shape trace bitmaps replace
   `scan_type` + virtual `Scan`; inline-slot objects copy as memcpy + bitmap
   walk; property storage moves into the GC heap; inline allocation extends to
@@ -510,12 +514,12 @@ through Phase 3 for A/B and differential testing.
   maam-plan; the GC-side work is deliberately small because P1 reserved the
   header bits.
 
-- **Phase 6 — Concurrent marking + STW survivor evacuation.** Collector
+- **gc-P6 — Concurrent marking + STW survivor evacuation.** Collector
   thread, single-mutator handshake, SATB log becomes live. **Gate: marking off
   the mutator; STW time independent of live-set size; stress-differential
   green.**
 
-- **Phase 7 — Fully concurrent evacuation (optional).** Brooks forwarding +
+- **gc-P7 — Fully concurrent evacuation (optional).** Brooks forwarding +
   load barrier, only if Phase 6's pause numbers say so.
 
 Phases 0–4 deliver the generational mover with no threads and no value-rep
@@ -592,7 +596,7 @@ bounds as needed.
 
 ## Phase checklist (for /goal sessions)
 
-- [x] **P0** generator-stack fix; alloc/survival/pin instrumentation (optimizer
+- [x] **gc-P0** generator-stack fix; alloc/survival/pin instrumentation (optimizer
       on); `-O2`-runtime experiment + scanner re-verification.
       *Gate:* matrix green; numbers recorded in this doc or a results doc.
       DONE 2026-07-24 — docs/gc-p0-results.md has the numbers.  Headlines:
@@ -604,7 +608,7 @@ bounds as needed.
       objects/cycle (KBs — conservative pinning is a non-issue, so P2
       proceeds WITHOUT P3); runtime `-O2` landed: self-compile 127s→42s
       (3.06×), types-bench2 2.00s→0.68s.
-- [x] **P1** 64-bit header (+ reserved shape/trace bits) + `lib/types.ts`
+- [x] **gc-P1** 64-bit header (+ reserved shape/trace bits) + `lib/types.ts`
       lockstep; forwarding helpers.
       *Gate:* matrix green, all three bootstrap targets.
       DONE 2026-07-24.  The header half landed 2026-07-23 as the joint
@@ -619,7 +623,7 @@ bounds as needed.
       bit inventory (57 YOUNG / 58 PINNED from P0 profiling, 60-63
       still free for mark/card).  Local matrix ×7 green; linux targets
       ride the standing CI bootstrap matrix on push.
-- [x] **P2** nursery + inline `make_env` allocation + write barrier +
+- [x] **gc-P2** nursery + inline `make_env` allocation + write barrier +
       evacuating minor GC w/ cell pinning; old collector behind a flag
       (`EJS_GC_NURSERY=off`), differential + stress lanes; heap-context
       struct + context-accessor seam from the first line of new code.
@@ -638,15 +642,27 @@ bounds as needed.
       line: no card table and no initializing-store elision — the
       object-remembering DIRTY bit dedups repeat stores and modules/LOS
       are handled by unconditional scan / born-dirty instead.
-- [ ] **P3** gc-frame precise JS roots (chained variant) + env slot-address
+- [x] **gc-P3** gc-frame precise JS roots (chained variant) + env slot-address
       inlining; move-everything stress mode.
       *Gate:* stress green; pin-rate delta + spill-cost numbers recorded.
-- [ ] **P4** mostly-copying major compaction + auto-tuned growth target.
+      DONE 2026-07-25 — docs/gc-p3-results.md has the numbers.  Headlines:
+      slot DEMOTION (store at def, load per use) rather than
+      spill/reload — dominance-safe by construction, forwarding-safe
+      because the frame escapes through the chain; per-stack chains
+      swapped by the generator hooks; pin-first ordering (a C-visible
+      object must not move).  The bug measurement caught: the
+      conservative scan pinned every frame-held value through its own
+      stack-resident slot — minors now skip the scanned stack's frame
+      records.  76k relocations/self-compile, pins p50 373→101, net
+      wall cost ~+1% (env slot inlining pays back half the frame cost).
+      Deferred: invoke-form safepoints stay pinned; stackmap variant
+      unmeasured.
+- [ ] **gc-P4** mostly-copying major compaction + auto-tuned growth target.
       *Gate:* heap shrink demonstrated; knob census = 1.
-- [ ] **P5** shapes intersection (sequenced by maam P4): trace bitmaps, inline
+- [ ] **gc-P5** shapes intersection (sequenced by maam P4): trace bitmaps, inline
       slots, object-literal inline allocation, typed-slot elisions.
-- [ ] **P6** collector thread: concurrent mark (SATB) + STW survivor
+- [ ] **gc-P6** collector thread: concurrent mark (SATB) + STW survivor
       evacuation.
       *Gate:* STW independent of live-set size.
-- [ ] **P7** (optional) Brooks + load barrier for concurrent evacuation —
+- [ ] **gc-P7** (optional) Brooks + load barrier for concurrent evacuation —
       only on Phase 6 evidence.
