@@ -81,7 +81,7 @@ Delete the allocations the mover made cheap.  Detail: sinking-plan.md.
       (sinking-P1).
 - [x] **P5.2** epoch-guarded constructor-result sinking — the
       types-bench2 alloc loop (sinking-P2).
-- [ ] **P5.3** flow-sensitive field writes, partial escapes,
+- [x] **P5.3** flow-sensitive field writes, partial escapes,
       rest_args/args_obj (sinking-P3).
 - [ ] **P5.4** optimizer residue: SSA cleanups, type lattice,
       slot-load CSE for toplevel receivers (compiler-P1).

@@ -861,10 +861,31 @@ test("optimize: write-only object literal dies with its stores", () => {
     assertNotContains(printed, "set_prop_atom");
 });
 
-test("optimize: a written key blocks folding its reads", () => {
-    let { printed } = lowerAndOptimize("function f(x) { let o = { a: 1 }; o.a = x; return o.a; }");
-    assertContains(printed, "make_object");
-    assertContains(printed, "get_prop_atom");
+test("optimize: a written key's reads fold flow-sensitively (sinking-P3)", () => {
+    // the read after the write sees the written value; the store and
+    // the allocation drain
+    let { fn, printed } = lowerAndOptimize(
+        "function f(x) { let o = { a: 1 }; o.a = x; return o.a; }"
+    );
+    assertNotContains(printed, "make_object");
+    assertNotContains(printed, "get_prop_atom");
+    assertNotContains(printed, "set_prop_atom");
+    let ret: Inst | null = null;
+    fn.forEachInst((i) => { if (i.op === "return") ret = i; });
+    assert(ret!.operands[0]!.op === "blockparam", "return should see the written param x");
+});
+
+test("optimize: EJS_NO_FLOW_SINK restores the written-key decline", () => {
+    process.env["EJS_NO_FLOW_SINK"] = "1";
+    try {
+        let { printed } = lowerAndOptimize(
+            "function f(x) { let o = { a: 1 }; o.a = x; return o.a; }"
+        );
+        assertContains(printed, "make_object");
+        assertContains(printed, "get_prop_atom");
+    } finally {
+        delete process.env["EJS_NO_FLOW_SINK"];
+    }
 });
 
 test("optimize: non-own-key read keeps the object (prototype chain)", () => {
@@ -2389,6 +2410,9 @@ function shapeOptStats(): OptStats {
         joins_threaded: 0,
         shape_allocs_sunk: 0,
         shape_guards_sunk: 0,
+        args_sunk: 0,
+        flow_allocs_sunk: 0,
+        allocs_materialized: 0,
     };
 }
 
@@ -2997,7 +3021,7 @@ test("born-verify: a boxed value into an f64 slot rejects by type", () => {
 
 // --- shaped-literal sinking -----------------------------------
 
-function lowerShapedSink(src: string): { printed: string; stats: OptStats } {
+function lowerShapedSink(src: string): { fn: Func; printed: string; stats: OptStats } {
     const r = lowerFunctionNode(
         parseFn(src),
         undefined,
@@ -3006,7 +3030,7 @@ function lowerShapedSink(src: string): { printed: string; stats: OptStats } {
     verifyModule(r.module);
     const stats = optimizeFunction(r.fn, r.module);
     verifyModule(r.module);
-    return { printed: printFunction(r.fn), stats };
+    return { fn: r.fn, printed: printFunction(r.fn), stats };
 }
 
 test("sink-shaped: a non-escaping guarded literal scalar-replaces completely", () => {
@@ -3040,15 +3064,34 @@ test("sink-shaped: a call-operand use escapes", () => {
     assertContains(printed, "make_object_shaped");
 });
 
-test("sink-shaped: a written literal declines wholesale", () => {
-    // the store lowers to a slot_store/set_prop_atom use of o — v1 treats
-    // every write as an escape (a write would also invalidate the static
-    // guard resolution)
-    const { printed, stats } = lowerShapedSink(
+test("sink-shaped: a written literal flow-sinks through the generic arms (sinking-P3)", () => {
+    // the store's diamond guards fold FALSE (twin arms; sound under
+    // writes), the generic read folds to the written const, and the
+    // allocation drains
+    const { fn, printed, stats } = lowerShapedSink(
         "function f(a, b) { var o = { x: 1, y: a, s: b }; o.x = 2; return o.x; }"
     );
-    assert(stats.shape_allocs_sunk === 0, `sunk=${stats.shape_allocs_sunk}`);
-    assertContains(printed, "make_object_shaped");
+    assert(stats.flow_allocs_sunk === 1, `flow_sunk=${stats.flow_allocs_sunk}`);
+    assertNotContains(printed, "make_object_shaped");
+    assertNotContains(printed, "slot_store");
+    assertNotContains(printed, "set_prop_atom");
+    assertNotContains(printed, "get_prop_atom");
+    // the written const reaches the return (possibly through the read
+    // diamond's now-single-pred join param — LLVM collapses those)
+    assertContains(printed, 'value=2');
+});
+
+test("sink-shaped: EJS_NO_FLOW_SINK restores the written-literal decline", () => {
+    process.env["EJS_NO_FLOW_SINK"] = "1";
+    try {
+        const { printed, stats } = lowerShapedSink(
+            "function f(a, b) { var o = { x: 1, y: a, s: b }; o.x = 2; return o.x; }"
+        );
+        assert(stats.shape_allocs_sunk === 0, `sunk=${stats.shape_allocs_sunk}`);
+        assertContains(printed, "make_object_shaped");
+    } finally {
+        delete process.env["EJS_NO_FLOW_SINK"];
+    }
 });
 
 test("sink-shaped: a non-own read blocks removal but own reads still fold", () => {
@@ -3129,6 +3172,131 @@ test("sink-shaped: EJS_NO_SHAPED_SINK leaves the allocation alone", () => {
         assertContains(printed, "make_object_shaped");
     } finally {
         delete process.env["EJS_NO_SHAPED_SINK"];
+    }
+});
+
+// --- flow-sensitive sinking + partial escapes (sinking-P3) ------------------
+
+test("sink-flow: writes across branches fold through a minted join param", () => {
+    let { printed } = lowerAndOptimize(
+        "function f(c, x, y) { let o = { a: 0 }; if (c) o.a = x; else o.a = y; return o.a; }"
+    );
+    assertNotContains(printed, "make_object");
+    assertNotContains(printed, "set_prop_atom");
+    assertNotContains(printed, "get_prop_atom");
+});
+
+test("sink-flow: a loop accumulator object drains (loop-carried param)", () => {
+    let { printed } = lowerAndOptimize(
+        "function f(n) { let o = { sum: 0 }; for (let i = 0; i < n; i = i + 1) o.sum = o.sum + i; return o.sum; }"
+    );
+    assertNotContains(printed, "make_object");
+    assertNotContains(printed, "set_prop_atom");
+    assertNotContains(printed, "get_prop_atom");
+});
+
+test("sink-flow: a read before the write sees the initial value", () => {
+    let { fn, printed } = lowerAndOptimize(
+        "function f(x) { let o = { a: 5 }; let r = o.a; o.a = x; return r; }"
+    );
+    assertNotContains(printed, "make_object");
+    let ret: Inst | null = null;
+    fn.forEachInst((i) => { if (i.op === "return") ret = i; });
+    assert(
+        ret!.operands[0]!.op === "const" && ret!.operands[0]!.imms.value === 5,
+        `expected the initial 5, got ${ret!.operands[0]!.op}`
+    );
+});
+
+test("sink-flow: single escape materializes at the escape site", () => {
+    // the write is baked into the materialized literal; the original
+    // allocation and store are gone but a make_object survives AT the
+    // call
+    let { fn, printed } = lowerAndOptimize(
+        "function f(g, x) { let o = { a: 1 }; o.a = x; g(o); return 0; }"
+    );
+    assertContains(printed, "make_object");
+    assertNotContains(printed, "set_prop_atom");
+    // the materialized literal's operand is the written value (param x)
+    let made: Inst | null = null;
+    fn.forEachInst((i) => { if (i.op === "make_object") made = i; });
+    assert(made!.operands[0]!.op === "blockparam", "materialized field should be the written x");
+});
+
+test("sink-flow: refusals leave the object alone", () => {
+    const cases: [string, string][] = [
+        // a read reachable from the escape (the alias could mutate)
+        ["use after escape", "function f(g) { let o = { a: 1 }; o.a = 2; g(o); return o.a; }"],
+        // the escape can re-execute without re-executing the alloc
+        ["escape in loop", "function f(g, n) { let o = { a: 1 }; o.a = 2; for (let i = 0; i < n; i = i + 1) g(o); return 0; }"],
+        // two distinct escape instructions
+        ["two escapes", "function f(g, h, c) { let o = { a: 1 }; o.a = 2; if (c) g(o); else h(o); return 0; }"],
+        // key-adding write ([[Set]] walks the prototype chain)
+        ["key-adding write", "function f(x) { let o = { a: 1 }; o.b = x; return 0; }"],
+        // the escape instruction is itself a write (o.self = o)
+        ["self-write escape", "function f() { let o = { a: 1 }; o.a = o; return 0; }"],
+    ];
+    for (const [name, src] of cases) {
+        let { printed } = lowerAndOptimize(src);
+        if (printed.indexOf("make_object") === -1)
+            throw new Error(`refusal '${name}' unexpectedly sank\n---\n${printed}\n---`);
+    }
+});
+
+test("sink-flow: a catch block in the rename region declines", () => {
+    let { printed } = lowerAndOptimize(
+        "function f(x) { let o = { a: 1 }; try { o.a = x; } catch (e) { } return o.a; }"
+    );
+    assertContains(printed, "make_object");
+});
+
+test("sink-flow: shaped partial escape materializes a shaped literal", () => {
+    const { printed, stats } = lowerShapedSink(
+        "function f(a, b, g) { var o = { x: 1, y: a, s: b }; o.x = 2; g(o); return 0; }"
+    );
+    assert(stats.flow_allocs_sunk === 1, `flow_sunk=${stats.flow_allocs_sunk}`);
+    assert(stats.allocs_materialized === 1, `materialized=${stats.allocs_materialized}`);
+    assertContains(printed, "make_object_shaped"); // the materialized one
+    assertNotContains(printed, "slot_store");
+    assertNotContains(printed, "set_prop_atom");
+});
+
+// --- rest_args / args_obj length sinking (sinking-P3) -----------------------
+
+test("sink-args: length-only arguments folds to arg_len and drains", () => {
+    let { printed } = lowerAndOptimize("function f() { return arguments.length; }");
+    assertContains(printed, "arg_len");
+    assertNotContains(printed, "args_obj");
+});
+
+test("sink-args: length-only rest folds with its start index", () => {
+    let { printed } = lowerAndOptimize("function f(a, b, ...rest) { return rest.length; }");
+    assertContains(printed, "arg_len");
+    assertContains(printed, "index=2");
+    assertNotContains(printed, "rest_args");
+});
+
+test("sink-args: refusals keep the allocation", () => {
+    const cases = [
+        "function f() { return arguments[0]; }", // computed read
+        "function f() { return arguments; }", // escape
+        "function f(...r) { r.length = 0; return r.length; }", // length write
+        "function f(...r) { return r.length + r[0]; }", // partial fold is not enough
+    ];
+    for (const src of cases) {
+        let { printed } = lowerAndOptimize(src);
+        assertNotContains(printed, "arg_len");
+    }
+});
+
+test("sink-args: EJS_NO_ARGS_SINK leaves the allocation alone", () => {
+    process.env["EJS_NO_ARGS_SINK"] = "1";
+    try {
+        let { printed } = lowerAndOptimize("function f() { return arguments.length; }");
+        assertContains(printed, "args_obj");
+        assertNotContains(printed, "arg_len");
+    } finally {
+        delete process.env["EJS_NO_ARGS_SINK"];
     }
 });
 

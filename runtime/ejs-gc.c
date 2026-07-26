@@ -298,6 +298,25 @@ conservative_bounds_add(void* start, size_t size)
     if ((char*)start + size > conservative_hi) conservative_hi = (char*)start + size;
 }
 
+// LOS-only bounds, the second-stage prefilter: a conservative candidate
+// inside [conservative_lo, conservative_hi) that resolves to no arena
+// used to take a LOCKED LINEAR WALK of the whole LOS list — per stack
+// word.  With arenas and LOS blocks scattered by mmap, a deep-recursion
+// minor GC could spend hundreds of ms per pin scan on that walk alone
+// (found while gating sinking-P3: address-layout luck made self-compile
+// wall time bistable, 6s vs 60s, and any allocation-pattern change
+// could flip it).  Grow-only, like the conservative bounds — a freed
+// LOS block just leaves the filter wider than necessary.
+static char *los_lo = (char*)UINTPTR_MAX;
+static char *los_hi = NULL;
+
+static void
+los_bounds_add(void* start, size_t size)
+{
+    if ((char*)start < los_lo) los_lo = (char*)start;
+    if ((char*)start + size > los_hi) los_hi = (char*)start + size;
+}
+
 typedef char BitmapCell;
 
 #define CELL_COLOR_MASK       0x03
@@ -615,6 +634,10 @@ find_page_and_cell_from_arena(GCObjectPtr ptr, uint32_t *cell_idx, Arena *arena)
     // object referenced ONLY through an interior pointer (e.g. a flat
     // string's data) would be collected out from under it.  Callers
     // canonicalize through cell_idx 0, so an interior hit marks the base.
+    // The los bounds reject most non-LOS candidates before the locked
+    // linear walk (see los_bounds_add).
+    if ((char*)ptr < los_lo || (char*)ptr >= los_hi)
+        return NULL;
     LOCK_GC();
     for (LargeObjectInfo *lobj = los_list; lobj; lobj = lobj->next) {
         void* start = lobj->page_info.page_start;
@@ -2908,6 +2931,7 @@ alloc_from_los(size_t size, EJSScanType scan_type)
     rv->alloc_size = size;
 
     conservative_bounds_add (rv, size + sizeof(LargeObjectInfo) + 16);
+    los_bounds_add (rv, size + sizeof(LargeObjectInfo) + 16);
     EJS_LIST_PREPEND (rv, los_list);
     //_ejs_log ("alloc_from_los returning %p\n, los_list = %p\n", rv->page_info.page_start, los_list);
     return rv->page_info.page_start;

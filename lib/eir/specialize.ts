@@ -134,6 +134,7 @@ function ownReturns(fnNode: e.Function): e.ReturnStatement[] {
 const CLONE_FRAME_OPS = new Set([
     "args_obj",
     "rest_args",
+    "arg_len",
     "new_target",
     "construct_super",
     "construct_super_apply",

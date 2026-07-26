@@ -1344,6 +1344,16 @@ export class EIREmitter {
                 );
             }
 
+            case "arg_len": {
+                // max(argc - index, 0) boxed, computed by a pure runtime
+                // helper (the argc register is the only input — no argv
+                // read, no allocation)
+                const index = (inst.imms["index"] as number) || 0;
+                const rv = this.call(rt.arg_length, [this.fn_argc, consts.int32(index)], "arg_len");
+                this.values.set(inst, rv);
+                return rv;
+            }
+
             case "prop_iter_new": {
                 return this.emitCallLike(
                     inst,

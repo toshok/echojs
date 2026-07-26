@@ -63,6 +63,17 @@ _ejs_arguments_new (int numElements, ejsval* args)
     return OBJECT_TO_EJSVAL(arguments);
 }
 
+// the compiler's arg_len op: the length the arguments object (or the
+// rest array starting at `index`) would report for a call that arrived
+// with `argc` arguments, without materializing either object.  Minted
+// by the EIR args sinking (docs/sinking-plan.md, sinking-P3) when the
+// object's only uses are `.length` reads.
+ejsval
+_ejs_arg_length (uint32_t argc, uint32_t index)
+{
+    return NUMBER_TO_EJSVAL(argc > index ? (double)(argc - index) : 0);
+}
+
 void
 _ejs_arguments_init(ejsval global)
 {

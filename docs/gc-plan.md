@@ -506,6 +506,33 @@ through Phase 3 for A/B and differential testing.
   demonstrated heap shrink on a fragmenting benchmark; auto-tuned growth
   target replaces the 60 MB constant, knob census = 1.**
 
+  **FIRST ORDER OF BUSINESS (measured 2026-07-25, while gating
+  sinking-P3): the conservative pin scan has a scaling cliff that
+  dominates self-compile wall time.**  Evidence, so it isn't
+  re-derived: on the desugar.js-closure compile (20 modules), minor-GC
+  pin scans total 41–126 s of a 46–132 s wall — pauses grow from
+  <1 ms early to 500–860 ms during deep-recursion parse/lower phases.
+  Mechanism: `mark_ejsvals_in_range` treats every stack word as a raw
+  pointer candidate; the only rejection before the per-word arena
+  bsearch (and, before the sinking-P3-era fix, a LOCKED LINEAR walk of
+  the whole LOS list) is the `[conservative_lo, conservative_hi)` span
+  — and once a late arena or LOS mmap lands beyond the C/LLVM heap,
+  that span swallows it, so during codegen MILLIONS of stack words
+  pointing into LLVM's own allocations pass the prefilter.  The cost
+  is therefore bistable per RUN (mmap layout luck: the same binary
+  compiles the same input in 6 s or 60 s) and quasi-deterministic per
+  BINARY (any allocation-pattern change — sinking-P3's was +1.4%
+  allocs — shifts when arenas are minted and can lock a binary into
+  the slow mode; its stage1 sat at ~1.5–2× baseline wall).  A
+  bounds prefilter for the LOS walk (`los_lo/los_hi`,
+  ejs-gc.c) landed with sinking-P3; the real fixes belong here:
+  reserve arena address space once at init (span stays tight and
+  disjoint from the C heap forever, and arena lookup becomes two
+  compares + an index instead of a bsearch), and give the LOS a real
+  lookup structure (the P6.3 refactor).  Self-compile wall time should
+  then sit at the fast mode (~6 s for the desugar closure)
+  deterministically — a bigger win than most optimizer phases.
+
 - **gc-P5 — Shapes intersection (floats with maam P4).** When the shapes
   design lands, the collector consumes it: per-shape trace bitmaps replace
   `scan_type` + virtual `Scan`; inline-slot objects copy as memcpy + bitmap

@@ -170,6 +170,13 @@ export const OPS = {
     rest_args: { arity: 0, effects: E.GC, imms: ["index"] },
     // the arguments object (built from the raw argc/args)
     args_obj: { arity: 0, effects: E.THROW | E.GC },
+    // the argument count from imms.index onward, as a boxed number:
+    // max(argc - index, 0).  Minted only by the optimizer's args sinking
+    // (a rest_args/args_obj whose only uses are `.length` reads folds to
+    // this and the allocation drains).  Reads the immutable
+    // calling-convention argc — effect NONE — but it IS a frame op:
+    // never valid in specialized clones or across inlining.
+    arg_len: { arity: 0, effects: E.NONE, imms: ["index"] },
 
     // --- for-in property iteration ------------------------------------------
     // the iterator value is an opaque non-ejsval; it must only be consumed

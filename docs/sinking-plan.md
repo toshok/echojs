@@ -4,8 +4,9 @@ Bucket plan; the ordering spine lives in `docs/plans.md`.  Phase ids
 here are `sinking-P#` (formerly S1/S2/S3 in this doc's first
 revision).
 
-Status: sinking-P1 LANDED (2026-07-25), sinking-P2 LANDED (2026-07-25)
-— see the results sections at the bottom.  Owner doc for extending
+Status: sinking-P1 LANDED (2026-07-25), sinking-P2 LANDED (2026-07-25),
+sinking-P3 LANDED (2026-07-25) — see the results sections at the
+bottom.  Owner doc for extending
 escape analysis + allocation sinking (docs/plans.md, optimization
 phase, first bullet) past what already exists.  Written 2026-07-25,
 after gc-P2.
@@ -168,15 +169,130 @@ allocations — gc-P2's nursery makes that a bump-pointer + minor-GC
 cost rather than a free-list cost, which is the composition the two
 plans always intended.
 
-### sinking-P3 — recorded, not scheduled
+### sinking-P3 — flow-sensitive writes, partial escapes, args (P5.3)
 
-- Flow-sensitive field writes on sunk objects (SSA renaming per field;
-  today any write declines the candidate).
-- Partial escapes / materialization points (allocate lazily on the
-  escaping path only) — subsumes the "options object passed onward
-  sometimes" pattern.
-- `rest_args`/`args_obj` when only indexed or `.length`'d (plans.md
-  rung 4).
+Design written 2026-07-25, scoped by two investigations recorded here
+so the judgments survive:
+
+**(a) Flow-sensitive field writes** (`lib/eir/sink-flow.ts`).  Lifts
+the "any write declines" rule for `make_object` and
+`make_object_shaped` candidates (arrays keep the length-write decline;
+element writes can't reach a literal anyway).  Two structural facts
+make this cheap:
+
+- *Write diamonds are twins.*  `propSet` lowers `o.f = v` to a
+  has_shape diamond whose fast arm slot_stores (a possibly-unboxed) `v`
+  and whose slow arm set_prop_atoms the same `v` — both arms store the
+  same source value, so the after-join tracked value is just `v`.
+  Field phis are needed only at REAL control joins (if/else writing
+  different values, loop headers), never per diamond.
+- *Folding a shape guard FALSE is unconditionally sound* (the P1 twin
+  argument), independent of writes.  A written candidate folds every
+  foldable guard false and resolves everything through the generic
+  arms; the memory ops then vanish entirely, so nothing is lost by
+  skipping the typed arms — the post-fixpoint rawJoin/guard-region
+  passes recover raw f64 flow on the *values* (which is where the
+  arithmetic lives once the object is gone).  This avoids the
+  optimistic repr-invariance simulation folding TRUE would require
+  under writes (a set_prop_atom storing a non-number into an f64 field
+  repr-transitions the runtime shape).
+
+The pass is all-or-nothing per candidate (the ctor-sink discipline):
+every use must be a foldable target-less read (own-key
+get_prop_atom / const-index get_prop on objects), a deletable
+target-less own-key write (set_prop_atom naming a literal key / shape
+field — [[Set]] to an own writable data property on an unaliased
+object is unobservable, the P1 semantics-note judgment; *non-own-key
+writes decline*: a key-adding [[Set]] walks the prototype chain and is
+only epoch-guardable, recorded below), a foldable guard, or (mode b)
+the single escape.  slot_stores are classified as pending writes in
+round 1; guard fold-false unreaches them and the sweep removes them
+before flow resolution — one surviving to the resolution round
+(hand-built IR only) declines.  Reaching values are computed per field
+with a Braun-style renamer over the complete CFG (the builder's
+algorithm, minus lazy sealing), minting boxed block params at joins;
+plan-before-apply screens decline candidates whose walk region touches
+catch blocks (unwind edges never carry the tracked value).  A
+slot_store's tracked value strips the store's `unbox_f64` (sound: the
+diamond's has_tag proved numberness on that arm, so box(unbox(v)) is
+v); reads fold to the reaching value at their program point.  Bisect:
+`EJS_NO_FLOW_SINK`.  Telemetry: `flow_allocs_sunk` on the `EIR-opt:`
+line.
+
+**(b) Partial escapes / materialization.**  The same pass, one escape
+allowed: a candidate whose non-read/write/guard uses are exactly ONE
+instruction E materializes the object immediately before E (a fresh
+`make_object`/`make_object_shaped` of the reaching field values —
+the runtime re-derives the true shape from actual values, so
+tracked-write repr drift is immaterial) and substitutes it into E's
+operands/edge-args.  Fail-closed screens, each with a recorded reason:
+
+- *No use reachable from E* (forward CFG walk from after-E, treating
+  entry into the alloc's block as a fresh-activation barrier): a read
+  after the escape would miss external mutations through the alias.
+- *The same walk finding E again declines* (at-most-once per
+  activation): two materializations of one abstract object would split
+  its identity.
+- At least one read folded or write deleted (else the rewrite is
+  churn — `return {…}` directly is already optimal).
+- Own-key writes only, exactly as in (a).
+
+Identity/typeof/=== against the materialized object are correct by
+construction: it IS the object, created at its last-possible point.
+
+**(c) `rest_args`/`args_obj` — length folds land; index folds
+DECLINED.**  Evidence from the runtime (2026-07-25):
+
+- `_ejs_arguments_new` COPIES argv (ejs-arguments.c:62) and is
+  unmapped; `.length` is synthesized from argc on every get;
+  callee/caller are poison accessors.  `_ejs_array_new_copy` copies.
+  So `.length` of either object is exactly a function of the immutable
+  argc — foldable to a new `arg_len` op (imms.index; boxed
+  `max(argc - index, 0)`; effect NONE; emitted from the raw argc
+  calling-convention value, the rest_args precedent).
+- Late argv reads WOULD be GC-safe (the conservative whole-stack scan
+  still covers the caller's args scratch and pins win over evacuation
+  — ejs-gc.c:1982-1989 — and generator bodies never see caller argv:
+  the desugar materializes arguments/rest in the outer function, so
+  they reach the body through env capture, which classifies as an
+  escape and declines).  But an out-of-bounds `arguments[k]`/`rest[k]`
+  read falls through to the ordinary get path — the prototype chain —
+  and writable INTEGER DATA properties on Array.prototype /
+  Object.prototype do not bump `_ejs_accessor_epoch`
+  (ejs-object.c:2594's screen covers accessor/non-writable defines and
+  setPrototypeOf only).  A sound `arg_load` therefore needs either a
+  new proto-index epoch class in the runtime or an epoch-guarded
+  region with an OOB helper (receiver-free data-prop lookup is only
+  sound while the accessor epoch is 0).  Corpus census: const-index
+  arguments reads are rare and co-occur with uses that decline anyway
+  (iteration, aliasing tests); the recurring foldable pattern is
+  arity-check `.length`.  Decision: implement `arg_len` only; record
+  `arg_load` here as declined-with-design until a workload justifies
+  the runtime extension.
+
+`arg_len` joins the inliner's and specializer's frame-op screens
+(FRAME_OPS / CLONE_FRAME_OPS — it consumes the raw argc, which
+neither an inlined body nor a specialized clone carries; clones can
+never contain a minted arg_len since functions using arguments/rest
+are never cloned, but the screens keep the invariant explicit).  The
+sink itself: a rest_args/args_obj whose every use is a target-less
+`get_prop_atom "length"` folds those reads to `arg_len` and removes
+the allocation in-pass (args_obj's THROW effect keeps it out of
+generic DCE deliberately — the pass, having proven all uses folded,
+removes it explicitly).  Any other use — writes, computed reads,
+`Symbol.iterator`, callee — declines.  Fires on flag-off compiles too
+(like the unshaped sink); the stage matrix is the gate.  Bisect:
+`EJS_NO_ARGS_SINK`; telemetry: `args_sunk`.
+
+**Still recorded, not scheduled** (sinking-P4 material):
+
+- Key-ADDING writes on sunk objects (epoch-guarded; subsumes the
+  `var o = {}; o.a = …` builder pattern under --types, where the
+  literal's birth shape lacks the written key).
+- `arg_load` per the design above.
+- Cross-block env scalar replacement (the same Braun machinery over
+  env slots; today `scalarReplaceEnvs` is same-block only) — belongs
+  with compiler-P1's SSA cleanups.
 - Cross-function sinking via inlining heuristics beyond the current
   single-block IIFE inliner (a multi-block inliner would let sinking-P2's
   "fill operands are formals" restriction relax to arbitrary ctor
@@ -199,6 +315,19 @@ sinking-P2 (when built): everything above plus epoch-bump coverage tests
 (accessor installed mid-loop → slow arm taken from that iteration on),
 and types-bench2 as the phase bench — target is the alloc() loop at
 kern parity (~0.3 s total, from 0.64 s).
+
+sinking-P3: unit tests per feature with refusal attacks (non-own-key
+write, use-after-escape, escape-in-loop-without-alloc, two escapes,
+catch-block join, surviving slot_store, computed read on args, write
+to rest, bisect hooks); semantic probes node-identical incl.
+`EJS_SHAPES=off`, gc-stress (`EJS_GC_EVERY_N_ALLOC=101`), and
+flag-compiled (`EJS_NO_FLOW_SINK` / `EJS_NO_ARGS_SINK`) exes —
+probes must cover write-then-read-across-branches, loop accumulator
+objects, escape-site identity (`===`, mutation through the escaped
+alias), and arguments-length arity dispatch; --types diff lane
+0-divergent; matrix ×7 (args/flow sinking fire flag-off, so the stage
+lanes carry real weight here); a flow-sink loop-accumulator kernel as
+the phase bench, A/B vs `EJS_NO_FLOW_SINK`.
 
 ## sinking-P1 results (2026-07-25)
 
@@ -300,6 +429,105 @@ generic `add` calls (the oracle doesn't type s + p.x, so those adds
 never had diamonds) — all noise next to the construct it replaced.
 Recorded for later phases: slot-load licm and add-diamond coverage
 would shave the rest.
+
+## sinking-P3 results (2026-07-25)
+
+Implementation, per the design above:
+
+- **Flow pass** (`lib/eir/sink-flow.ts`): planOne (classify + all
+  screens, zero mutation) → applyPlan (fold guards false, sweep,
+  Braun-rename per field with minted boxed join params + trivial-param
+  removal, fold reads, materialize at the single escape, delete writes
+  + alloc).  Runs last in the optimizeFunction fixpoint round with its
+  own use scan, one rewrite per invocation.  Bisect:
+  `EJS_NO_FLOW_SINK`; telemetry `flow_allocs_sunk` /
+  `allocs_materialized` (guard folds count into `shape_guards_sunk`).
+- **Args sinking** (`sinkArgsObjects` in optimize.ts): new `arg_len`
+  op (emitted as a call to the new pure `_ejs_arg_length(argc, index)`
+  runtime helper — node-llvm has no SIToFP binding, so the int→boxed
+  conversion lives in C); rest_args/args_obj whose every use is a
+  target-less `.length` read fold and are removed in-pass.  `arg_len`
+  joined FRAME_OPS and CLONE_FRAME_OPS.  Bisect: `EJS_NO_ARGS_SINK`;
+  telemetry `args_sunk`.  `arg_load` declined per the design section
+  (OOB prototype-read hazard uncovered by the epoch; census: rare).
+- Two renamer bugs found by the stage1 self-compile, both worth
+  remembering: (1) the trivial-param scan judged a MID-FILL param
+  (`[null, X]` read as all-equal-X) — unfilled slots now decline
+  judgment; (2) a recursion frame's captured param could be forwarded
+  by a nested trivial-param cascade before installation (its
+  replaceAllUses runs too early to see the use) — a `forwarded` map +
+  `resolve()` at every install point closes it.
+
+Self-compile cost, and what it taught (the stage2 build initially ran
+~2× slow; each finding below is now in the code):
+
+- **Never read process.env in the fixpoint** — under the self-hosted
+  runtime it is a rebuild-the-environment getter.  All sink bisect
+  flags are read once per optimizeFunction (`SinkFlags`), which also
+  hoisted the pre-existing per-round `EJS_NO_SHAPED_SINK` read.
+- **One scan per round** — the driver's `scanRound` gathers the use
+  map AND every sink pass's candidate list in a single `forEachInst`
+  walk; the flow pass consumes the shared map (type-only imports keep
+  optimize↔sink-flow acyclic at runtime) and does no scans of its own.
+- **FLOW_REGION_CAP (32 blocks)** — sinking spreads field values
+  across the rename region as live SSA values, so a function-spanning
+  region trades one heap object for many long-lived gc-frame slots:
+  flow-sinking esprima's `scanPunctuator` token literal measurably
+  worsened every minor GC's conservative pin scan during parses.
+  Small regions (loop accumulators, builder tails) keep the win; the
+  self-compile census after the cap is 3 sites → 0–1 per big module.
+- The remaining ~1.5–2× stage-self-compile wall delta is NOT the
+  passes (it persists with both bisect flags set): it is a
+  pre-existing, mmap-layout-bistable conservative-pin-scan cliff that
+  any allocation-pattern change (+1.4% allocs here) can tip — fully
+  root-caused and recorded as gc-P4's first order of business in
+  gc-plan.md, with a partial mitigation (the LOS bounds prefilter,
+  ejs-gc.c) landed in this phase.
+
+Gate evidence (all green, 2026-07-25):
+
+- 205 EIR unit tests (new: sink-flow ×8 — cross-branch phi, loop
+  accumulator, read-before-write, escape materialization, five-way
+  refusal sweep, catch-region decline, shaped partial escape, bisect
+  hook; sink-args ×4 — arguments/rest length folds, four-way refusal
+  sweep, bisect hook; the two sinking-P1-era "writes decline" pins now
+  assert the flow-sunk behavior with EJS_NO_FLOW_SINK variants
+  pinning the old decline).
+- Probes `test/types-flowsink1.js` (branches, loop accumulator,
+  read-before-write, escape identity + mutation-through-alias, fresh
+  object per loop iteration, key-adding decline, try-write decline,
+  self-reference decline, and an Object.prototype setter intercepting
+  the declined key-adding write) and `test/types-argsink1.js`
+  (length-only folds incl. rest start index, computed-read /
+  forwarding / arrow-capture / generator declines): node-identical
+  under --types, flag-off, `EJS_SHAPES=off`,
+  `EJS_GC_EVERY_N_ALLOC=101`, and `EJS_NO_FLOW_SINK` /
+  `EJS_NO_ARGS_SINK` compiles.  Probe telemetry: 6 flow-sunk
+  (3 materialized) / 5 args objects sunk; every refusal case declines.
+- `--types` diff lane: 474 files, 473 identical, 0 divergent, 1 N/A
+  (tester.js, standing).  (The P2-era 493 count included stale extra
+  copies in the old work tree; the tracked corpus is 472 + the two new
+  probes.)
+- Matrix ×7 green (test-eir, lowtier, stages 0-3 at 421 pass / 22
+  standing xfail / 0 fail each — the 419 + the two new probes —
+  shapes-off lane) — stage1/2/3 self-compiles carry the flow pass
+  live (post-cap it fires on the compiler's own classifier-record
+  pattern: object literal of arrays + flag, pushed into and
+  returned).
+- **Phase bench `test/types/types-bench4.js`** (loop-accumulator
+  object, read+write per iteration, plus a partial-escape twin):
+  **0.04 s vs 0.15 s under EJS_NO_CTOR_SINK-style A/B
+  (`EJS_NO_FLOW_SINK` exes from the same tree), 3.75×; node warm is
+  0.20 s** — the win is the per-iteration slot/diamond memory traffic
+  (GC profile: 625→585 allocs, the 40 per-call accumulator objects).
+- types-bench2 unchanged at 0.27 s (0.26 s landed; noise).
+
+Recorded for sinking-P4 (see the design section's
+"still recorded" list): key-adding writes under an epoch guard,
+`arg_load`, cross-block env scalarization, multi-escape
+materialization (each-path-at-most-once), and forwarding single-pred
+join params left behind by the fold (LLVM collapses them today; an
+EIR-level cleanup would help downstream passes see through).
 
 Gate evidence: 187 EIR unit tests green (8 new: full sink, escape /
 call-operand / write / prototype-read / wrong-shape / hand-built

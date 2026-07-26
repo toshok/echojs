@@ -238,6 +238,16 @@ const runtime_interface = {
             [ty.Int32, ty.EjsValue.pointerTo()]
         );
     },
+    arg_length: function (this: RuntimeContext) {
+        return does_not_throw(
+            does_not_access_memory(
+                this.abi.createExternalFunction(this.module, "_ejs_arg_length", ty.EjsValue, [
+                    ty.Int32,
+                    ty.Int32,
+                ])
+            )
+        );
+    },
     number_new: function (this: RuntimeContext) {
         return does_not_throw(
             does_not_access_memory(

@@ -30,6 +30,7 @@ import {
     sweepUnreachableBlocks,
     threadBooleanJoins,
 } from "./optimize-guards";
+import { sinkFlowAllocations } from "./sink-flow";
 
 export interface OptStats {
     allocs_sunk: number;
@@ -54,6 +55,14 @@ export interface OptStats {
     // and the shape guards on them resolved statically
     shape_allocs_sunk: number;
     shape_guards_sunk: number;
+    // rest_args/args_obj whose only uses were `.length`: reads folded
+    // to arg_len, allocation removed
+    args_sunk: number;
+    // flow-sensitive sinking (sink-flow.ts): written/partially-escaping
+    // allocations drained, and how many of those materialized a fresh
+    // object at their single escape site
+    flow_allocs_sunk: number;
+    allocs_materialized: number;
 }
 
 function newStats(): OptStats {
@@ -73,11 +82,14 @@ function newStats(): OptStats {
         joins_threaded: 0,
         shape_allocs_sunk: 0,
         shape_guards_sunk: 0,
+        args_sunk: 0,
+        flow_allocs_sunk: 0,
+        allocs_materialized: 0,
     };
 }
 
 // uses of `value` within fn, with enough position info to classify
-interface Use {
+export interface Use {
     inst: Inst;
     // operand index, or -1 for a branch-edge argument
     index: number;
@@ -90,10 +102,26 @@ interface Use {
 // allocation churn are far more expensive than under V8.
 const EMPTY_USES: Use[] = [];
 
-type UseMap = (Use[] | undefined)[];
+export type UseMap = (Use[] | undefined)[];
 
-function buildUseMap(fn: Func): UseMap {
+// per-round scan products: the use map plus every sink pass's
+// candidate list, all gathered in ONE forEachInst walk.  Under the
+// self-hosted runtime each extra walk is real allocation churn
+// (for-of iter results per element), and every extra allocation buys
+// minor GCs whose conservative pin scans dominate deep-recursion
+// compile phases — so the round does exactly one scan, shared.
+interface RoundScan {
+    useMap: UseMap;
+    objAllocs: Inst[]; // make_object / make_array (sinkAllocations)
+    shapedAllocs: Inst[]; // make_object_shaped
+    argsAllocs: Inst[]; // rest_args / args_obj
+}
+
+function scanRound(fn: Func): RoundScan {
     const map: UseMap = new Array(fn.next_value_id);
+    const objAllocs: Inst[] = [];
+    const shapedAllocs: Inst[] = [];
+    const argsAllocs: Inst[] = [];
     const add = (v: Inst, inst: Inst, index: number) => {
         const list = map[v.id];
         if (list) list.push({ inst, index });
@@ -104,11 +132,15 @@ function buildUseMap(fn: Func): UseMap {
         if (inst.targets) {
             for (const t of inst.targets) for (const a of t.args) if (a) add(a, inst, -1);
         }
+        const op = inst.op;
+        if (op === "make_object" || op === "make_array") objAllocs.push(inst);
+        else if (op === "make_object_shaped") shapedAllocs.push(inst);
+        else if (op === "rest_args" || op === "args_obj") argsAllocs.push(inst);
     });
-    return map;
+    return { useMap: map, objAllocs, shapedAllocs, argsAllocs };
 }
 
-function usesOf(uses: UseMap, value: Inst): Use[] {
+export function usesOf(uses: UseMap, value: Inst): Use[] {
     return uses[value.id] || EMPTY_USES;
 }
 
@@ -452,14 +484,35 @@ function sinkShapedAlloc(
     return changed;
 }
 
-function sinkAllocations(useMap: UseMap, fn: Func, m: Module | undefined, stats: OptStats): boolean {
-    const candidates: Inst[] = [];
-    const shaped: Inst[] = [];
-    const noShaped = !!process.env["EJS_NO_SHAPED_SINK"];
-    fn.forEachInst((inst) => {
-        if (inst.op === "make_object" || inst.op === "make_array") candidates.push(inst);
-        else if (inst.op === "make_object_shaped" && !noShaped) shaped.push(inst);
-    });
+// the bisect-flag snapshot for one optimizeFunction run.  process.env
+// is a rebuild-the-whole-environment getter under the self-hosted
+// runtime (node-compat), so the flags are read ONCE per function, never
+// in the fixpoint rounds (found the hard way: the stage2 self-compile
+// spent most of its wall time constructing env objects).
+export interface SinkFlags {
+    noShaped: boolean;
+    noArgs: boolean;
+    noFlow: boolean;
+}
+
+function readSinkFlags(): SinkFlags {
+    return {
+        noShaped: !!process.env["EJS_NO_SHAPED_SINK"],
+        noArgs: !!process.env["EJS_NO_ARGS_SINK"],
+        noFlow: !!process.env["EJS_NO_FLOW_SINK"],
+    };
+}
+
+function sinkAllocations(
+    useMap: UseMap,
+    fn: Func,
+    m: Module | undefined,
+    stats: OptStats,
+    noShaped: boolean,
+    candidates: Inst[],
+    shapedCandidates: Inst[]
+): boolean {
+    const shaped = noShaped ? [] : shapedCandidates;
     let changed = false;
     for (const c of candidates) {
         if (!c.block) continue; // removed by an earlier candidate's fold
@@ -470,6 +523,64 @@ function sinkAllocations(useMap: UseMap, fn: Func, m: Module | undefined, stats:
             if (!c.block) continue;
             if (sinkShapedAlloc(useMap, fn, m, c, stats)) changed = true;
         }
+    }
+    return changed;
+}
+
+// --- rest_args / args_obj length sinking -----------------------------------
+//
+// The arguments object copies argv and synthesizes `.length` from the
+// immutable calling-convention argc (before any map or prototype
+// consultation); a rest array's length is max(argc - index, 0) at
+// birth.  So an allocation whose ONLY uses are target-less `.length`
+// reads folds to the pure arg_len op and drains — soundly on any
+// compile (no shapes involved).  Everything else declines: writes
+// (even length writes — a rest array's length is writable), computed
+// reads (index folds are recorded-declined in docs/sinking-plan.md:
+// an out-of-bounds read walks the prototype chain, which the accessor
+// epoch does not cover for writable integer data properties),
+// Symbol.iterator, callee, and any value/edge position.  args_obj's
+// THROW effect keeps it out of generic DCE; this pass, having proven
+// every use folded, removes it explicitly.
+function sinkArgsObjects(
+    useMap: UseMap,
+    fn: Func,
+    stats: OptStats,
+    candidates: Inst[]
+): boolean {
+    let changed = false;
+    for (const alloc of candidates) {
+        if (!alloc.block) continue;
+        if (alloc.targets && alloc.targets.length > 0) continue; // block terminator in a try
+        const reads: Inst[] = [];
+        let ok = true;
+        for (const use of usesOf(useMap, alloc)) {
+            const { inst, index } = use;
+            if (
+                index === 0 &&
+                inst.op === "get_prop_atom" &&
+                inst.imms.atom === "length" &&
+                !inst.targets
+            ) {
+                reads.push(inst);
+            } else {
+                ok = false;
+                break;
+            }
+        }
+        if (!ok || reads.length === 0) continue;
+        const argIndex = alloc.op === "rest_args" ? (alloc.imms.index as number) : 0;
+        for (const read of reads) {
+            const al = new Inst(fn, "arg_len", [], { index: argIndex });
+            const b = read.block!;
+            al.block = b;
+            b.insts.splice(b.insts.indexOf(read), 0, al);
+            foldRead(useMap, fn, read, al);
+            stats.reads_folded++;
+        }
+        removeInst(useMap, alloc);
+        stats.args_sunk++;
+        changed = true;
     }
     return changed;
 }
@@ -489,6 +600,7 @@ function sinkAllocations(useMap: UseMap, fn: Func, m: Module | undefined, stats:
 const FRAME_OPS = new Set([
     "args_obj",
     "rest_args",
+    "arg_len",
     "new_target",
     "construct_super",
     "construct_super_apply",
@@ -848,6 +960,7 @@ function eliminateDead(fn: Func, stats: OptStats): boolean {
 
 export function optimizeFunction(fn: Func, module?: Module, stats?: OptStats): OptStats {
     const s = stats || newStats();
+    const flags = readSinkFlags();
     // to fixpoint: inlining an IIFE exposes its env and literals;
     // sinking an outer literal can un-escape one nested inside it (its
     // only use was as the outer's operand)
@@ -855,11 +968,24 @@ export function optimizeFunction(fn: Func, module?: Module, stats?: OptStats): O
     for (;;) {
         let changed = module ? inlineDirectCalls(module, fn, s) : false;
         if (eliminateDead(fn, s)) changed = true; // kill the closure before judging its env
-        // one use scan per round, kept accurate by the mutation helpers
-        const useMap = buildUseMap(fn);
+        // one scan per round (use map + every sink pass's candidates),
+        // kept accurate by the mutation helpers
+        const scan = scanRound(fn);
+        const useMap = scan.useMap;
         if (scalarReplaceEnvs(useMap, fn, s)) changed = true;
         if (foldIteratorWrappers(useMap, fn, s)) changed = true;
-        if (sinkAllocations(useMap, fn, module, s)) changed = true;
+        if (sinkAllocations(useMap, fn, module, s, flags.noShaped, scan.objAllocs, scan.shapedAllocs))
+            changed = true;
+        if (!flags.noArgs && sinkArgsObjects(useMap, fn, s, scan.argsAllocs)) changed = true;
+        // flow-sensitive sinking (written / partially-escaping
+        // candidates).  Runs LAST in the round sharing the same scan —
+        // it folds guard branches and mints join params, so nothing
+        // after it may consult the map this round
+        if (
+            !flags.noFlow &&
+            sinkFlowAllocations(fn, module, s, useMap, scan.objAllocs, scan.shapedAllocs)
+        )
+            changed = true;
         // shaped sinking folds guard branches; reclaim the dead arms so
         // the next round's use map lets the alloc itself drain
         if (sweepUnreachableBlocks(fn)) changed = true;
