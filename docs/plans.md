@@ -91,8 +91,8 @@ Delete the allocations the mover made cheap.  Detail: sinking-plan.md.
 The heap shrinks; the collector consumes the object model.  Detail:
 gc-plan.md, shapes-plan.md (Step B).
 
-- [ ] **P6.1** mostly-copying major compaction + auto-tuned growth
-      target (gc-P4).
+- [x] **P6.1** mostly-copying major compaction + auto-tuned growth
+      target (gc-P4).  DONE 2026-07-26 — docs/gc-p4-results.md.
 - [ ] **P6.2** shapes intersection: per-shape trace bitmaps, inline
       slots, object-literal inline allocation, typed-slot barrier
       elision (gc-P5; consumes shapes-plan's deferred Step B).

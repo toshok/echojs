@@ -353,6 +353,7 @@ EJS_ATOM(timeEnd)
 
 // gc functions
 EJS_ATOM(collect)
+EJS_ATOM(heapSize)
 EJS_ATOM(dumpAllocationStats)
 EJS_ATOM(dumpLiveStrings)
 

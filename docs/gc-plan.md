@@ -684,8 +684,27 @@ bounds as needed.
       wall cost ~+1% (env slot inlining pays back half the frame cost).
       Deferred: invoke-form safepoints stay pinned; stackmap variant
       unmeasured.
-- [ ] **gc-P4** mostly-copying major compaction + auto-tuned growth target.
+- [x] **gc-P4** mostly-copying major compaction + auto-tuned growth target.
       *Gate:* heap shrink demonstrated; knob census = 1.
+      DONE 2026-07-26 — docs/gc-p4-results.md has the numbers.  The
+      pin-scan cliff died first (the "first order of business"): one
+      PROT_NONE arena reservation at init + direct-map arena lookup +
+      LOS sorted-range bsearch; the A/B was brutal (baseline binary
+      stuck in the slow mode: >13 MINUTES for the self-compile the
+      fixed binary does in ~60s, sampled ~95% inside
+      mark_ejsvals_in_range→find_page_and_cell; fixed binary: 4 runs
+      within 62-64s, minor pause max 10.9ms, GC ≈ 10% of wall).
+      Compaction: conservative hits + registered generators set PINNED;
+      post-sweep sparse-first evacuation with the source set chosen
+      COMPLETELY before any evacuation (one-pass selection let an early
+      destination later become a source via its stale live count);
+      fixup = roots/modules/gc-frames/remset + all live cells.  Shrink
+      gate: frag bench 37.6→8.3MB (4.5×), idempotent second collect;
+      self-compile full GCs free ~5k pages each.  Growth target:
+      full_gc_trigger() = EJS_GC_GROWTH% (default 50) of post-sweep
+      footprint, 2-arena floor; knob census = 1.  EJS_GC_COMPACT=off
+      for A/B.  Drive-bys: LOS tail-page leak on free;
+      young-survivor-page full-sweep list corruption (young_page_freed).
 - [ ] **gc-P5** shapes intersection (sequenced by maam P4): trace bitmaps, inline
       slots, object-literal inline allocation, typed-slot elisions.
 - [ ] **gc-P6** collector thread: concurrent mark (SATB) + STW survivor

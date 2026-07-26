@@ -95,6 +95,15 @@ void _ejs_gc_dump_heap_stats();
 EJSBool gc_disabled;
 int collect_every_alloc = 0;
 
+// two header bits from the gc-reserved range (57-63; see ejs-types.h).
+// YOUNG: set at allocation, cleared on first survival (profiling) or
+// promotion (the nursery).  PINNED: set on every conservative hit during
+// a full collection — the compacting major must sweep that cell in
+// place; cleared by compaction's fixup walk (or the profile census when
+// compaction is off).
+#define EJS_GC_HEADER_YOUNG  (1ULL << 57)
+#define EJS_GC_HEADER_PINNED (1ULL << 58)
+
 #if CONCURRENT
 #error "not implemented"
 #else
@@ -193,17 +202,21 @@ typedef struct _RootSetEntry {
 
 static RootSetEntry *root_set;
 
+#ifndef MAP_NORESERVE
+#define MAP_NORESERVE 0
+#endif
+
 // GC-heap pointers get NaN-boxed into a 47-bit ejsval payload, so every
 // page must map below 2^47.  macOS hands out low addresses naturally;
 // linux (48-bit VA, top-down mmap) does not — ask for a hinted region
 // and bump the hint as regions fill.
 static void*
-mmap_boxable(size_t size)
+mmap_boxable(size_t size, int prot, int extra_flags)
 {
 #ifdef TARGET_LINUX
     static uintptr_t hint = 0x280000000000UL; // well below 2^47
     for (int tries = 0; tries < 64; tries++) {
-        void* res = mmap((void*)hint, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, MAP_FD, 0);
+        void* res = mmap((void*)hint, size, prot, MAP_ANON | MAP_PRIVATE | extra_flags, MAP_FD, 0);
         if (res == MAP_FAILED) return NULL;
         if (((uintptr_t)res + size) < (1UL << 47)) {
             hint = (uintptr_t)res + size;
@@ -215,45 +228,17 @@ mmap_boxable(size_t size)
     }
     return NULL;
 #else
-    void* res = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, MAP_FD, 0);
+    void* res = mmap(NULL, size, prot, MAP_ANON | MAP_PRIVATE | extra_flags, MAP_FD, 0);
     return res == MAP_FAILED ? NULL : res;
 #endif
 }
 
 static void*
-alloc_from_os(size_t size, size_t align)
+alloc_from_os(size_t size)
 {
-    if (align == 0) {
-        size = MAX(size, PAGE_SIZE);
-        void* res = mmap_boxable(size);
-        SPEW(2, _ejs_log ("mmap for 0 alignment = %p\n", res));
-        return res;
-    }
-
-    void* res = mmap_boxable(size*2);
-    if (res == NULL) {
-        return NULL;
-    }
-
-    SPEW(2, _ejs_log ("mmap returned %p\n", res));
-
-    if (((uintptr_t)res % align) == 0) {
-        // the memory was aligned, unmap the second half of our mapping
-        // XXX should we just rejoice and add both halves?
-        SPEW(2, _ejs_log ("already aligned\n"));
-        munmap (res + size, size);
-    }
-    else {
-        SPEW(2, _ejs_log ("not aligned\n"));
-        // align res, and unmap the areas before/after the new mapping
-        void *aligned_res = (void*)EJS_ALIGN(res, align);
-        // the area before
-        munmap (res, (uintptr_t)aligned_res - (uintptr_t)res);
-        // the area after
-        munmap (aligned_res+size, (uintptr_t)res+size*2 - (uintptr_t)(aligned_res+size));
-        res = aligned_res;
-        SPEW(2, _ejs_log ("aligned ptr = %p\n", res));
-    }
+    size = MAX(size, PAGE_SIZE);
+    void* res = mmap_boxable(size, PROT_READ | PROT_WRITE, 0);
+    SPEW(2, _ejs_log ("mmap = %p\n", res));
     return res;
 }
 
@@ -283,12 +268,66 @@ typedef struct _Arena {
 static Arena *heap_arenas[MAX_ARENAS];
 static int num_arenas;
 
+// ---- the arena address-space reservation (gc-P4) ----------------
+//
+// All arenas are carved out of ONE contiguous reservation, mapped
+// PROT_NONE at init and committed ARENA_SIZE at a time.  Two payoffs,
+// both for the conservative scanner:
+//
+//   - the arena span is FIXED and disjoint from the C/LLVM heap for the
+//     life of the process.  Before this, each arena was its own mmap:
+//     once a late arena landed beyond the C heap, the conservative
+//     prefilter span swallowed every malloc'd address, and during
+//     codegen MILLIONS of stack words pointing into LLVM's own
+//     allocations passed the prefilter into a per-word bsearch — the
+//     bistable 6s-vs-60s self-compile (mmap layout luck decided).
+//   - arena lookup is two compares + a shift into a direct map instead
+//     of a bsearch per candidate word.
+//
+// Reserved address space costs nothing until committed; nothing foreign
+// can ever be mapped inside the reservation.
+#define ARENA_SHIFT 25
+_Static_assert((1L << ARENA_SHIFT) == ARENA_SIZE, "ARENA_SHIFT matches ARENA_SIZE");
+
+static char* arena_space;      // base, ARENA_SIZE-aligned
+static char* arena_space_pos;  // next uncommitted chunk
+static char* arena_space_end;  // base + MAX_HEAP_SIZE
+static Arena* arena_map[MAX_ARENAS]; // direct map: (ptr - base) >> ARENA_SHIFT
+
+static void
+arena_space_reserve(void)
+{
+    size_t size = (size_t)MAX_HEAP_SIZE;
+    char* res = mmap_boxable(size + ARENA_SIZE, PROT_NONE, MAP_NORESERVE);
+    if (res == NULL) {
+        _ejs_log ("gc: unable to reserve the arena address space\n");
+        abort();
+    }
+    char* aligned = (char*)EJS_ALIGN(res, ARENA_SIZE);
+    // trim the alignment slop so the reservation is exactly the span
+    if (aligned > res)
+        munmap (res, aligned - res);
+    if (aligned + size < res + size + ARENA_SIZE)
+        munmap (aligned + size, (res + size + ARENA_SIZE) - (aligned + size));
+    arena_space = aligned;
+    arena_space_pos = aligned;
+    arena_space_end = aligned + size;
+}
+
+static inline Arena*
+arena_lookup(GCObjectPtr ptr)
+{
+    uintptr_t off = (uintptr_t)((char*)ptr - arena_space);
+    if (off >= (uintptr_t)MAX_HEAP_SIZE) return NULL;
+    return arena_map[off >> ARENA_SHIFT];
+}
+
 // conservative-scan prefilter: [conservative_lo, conservative_hi) bounds
-// every GC-managed address (arenas + LOS blocks).  The stack scanners
-// reject candidate words with two compares instead of a bsearch + linear
-// LOS walk per word (which made minor pauses grow with heap size).
-// Bounds only ever widen — stale coverage of freed blocks is merely
-// conservative.
+// every GC-managed address (the arena reservation + LOS blocks).  The
+// stack scanners reject candidate words with two compares before any
+// lookup.  Bounds only ever widen — stale coverage of freed LOS blocks
+// is merely conservative, and a candidate inside the reservation that
+// hits no committed arena rejects in the direct map.
 static char *conservative_lo = (char*)UINTPTR_MAX;
 static char *conservative_hi = NULL;
 static inline void
@@ -298,24 +337,17 @@ conservative_bounds_add(void* start, size_t size)
     if ((char*)start + size > conservative_hi) conservative_hi = (char*)start + size;
 }
 
-// LOS-only bounds, the second-stage prefilter: a conservative candidate
-// inside [conservative_lo, conservative_hi) that resolves to no arena
-// used to take a LOCKED LINEAR WALK of the whole LOS list — per stack
-// word.  With arenas and LOS blocks scattered by mmap, a deep-recursion
-// minor GC could spend hundreds of ms per pin scan on that walk alone
-// (found while gating sinking-P3: address-layout luck made self-compile
-// wall time bistable, 6s vs 60s, and any allocation-pattern change
-// could flip it).  Grow-only, like the conservative bounds — a freed
-// LOS block just leaves the filter wider than necessary.
+// ---- LOS lookup: sorted range array -----------------------------
+//
+// A conservative candidate that misses the arena reservation resolves
+// against the LOS by binary search over a sorted array of payload
+// ranges.  This replaces a LOCKED LINEAR WALK of the whole LOS list —
+// per stack word — which, with blocks scattered by mmap, could put
+// hundreds of ms per pin scan on deep-recursion minors (found while
+// gating sinking-P3; the [los_lo, los_hi) bounds prefilter landed then
+// as a stopgap and remains as the quick reject).
 static char *los_lo = (char*)UINTPTR_MAX;
 static char *los_hi = NULL;
-
-static void
-los_bounds_add(void* start, size_t size)
-{
-    if ((char*)start < los_lo) los_lo = (char*)start;
-    if ((char*)start + size > los_hi) los_hi = (char*)start + size;
-}
 
 typedef char BitmapCell;
 
@@ -406,6 +438,88 @@ struct _LargeObjectInfo {
 static EJSList heap_pages[HEAP_PAGELISTS_COUNT];
 static LargeObjectInfo *los_list;
 
+// ---- LOS lookup: sorted range array -----------------------------
+//
+// A conservative candidate that misses the arena reservation resolves
+// against the LOS by binary search over a sorted array of payload
+// ranges.  This replaces a LOCKED LINEAR WALK of the whole LOS list —
+// per stack word — which, with blocks scattered by mmap, could put
+// hundreds of ms per pin scan on deep-recursion minors (found while
+// gating sinking-P3; the [los_lo, los_hi) bounds prefilter landed then
+// as a stopgap and remains as the quick reject).
+typedef struct {
+    char* start; // payload: page_info.page_start
+    char* end;   // start + cell_size
+    LargeObjectInfo* lobj;
+} LOSRange;
+static LOSRange* los_ranges;
+static int los_range_count;
+static int los_range_capacity;
+
+// index of the first range with start > ptr, in [0, count]
+static int
+los_range_upper_bound(char* ptr)
+{
+    int lo = 0, hi = los_range_count;
+    while (lo < hi) {
+        int mid = (lo + hi) / 2;
+        if (los_ranges[mid].start <= ptr) lo = mid + 1;
+        else hi = mid;
+    }
+    return lo;
+}
+
+static void
+los_ranges_add(LargeObjectInfo* lobj)
+{
+    char* start = (char*)lobj->page_info.page_start;
+    if (start < los_lo) los_lo = start;
+    if (start + lobj->page_info.cell_size > los_hi)
+        los_hi = start + lobj->page_info.cell_size;
+
+    if (los_range_count == los_range_capacity) {
+        los_range_capacity = los_range_capacity ? los_range_capacity * 2 : 256;
+        los_ranges = realloc (los_ranges, los_range_capacity * sizeof(LOSRange));
+    }
+    int at = los_range_upper_bound(start);
+    memmove (&los_ranges[at + 1], &los_ranges[at],
+             (los_range_count - at) * sizeof(LOSRange));
+    los_ranges[at].start = start;
+    los_ranges[at].end = start + lobj->page_info.cell_size;
+    los_ranges[at].lobj = lobj;
+    los_range_count++;
+}
+
+static void
+los_ranges_remove(LargeObjectInfo* lobj)
+{
+    char* start = (char*)lobj->page_info.page_start;
+    int at = los_range_upper_bound(start) - 1;
+    EJS_ASSERT(at >= 0 && los_ranges[at].lobj == lobj);
+    memmove (&los_ranges[at], &los_ranges[at + 1],
+             (los_range_count - at - 1) * sizeof(LOSRange));
+    los_range_count--;
+}
+
+// interior pointers match: a conservative reference may be a derived
+// pointer whose base value the optimizer discarded — with an exact-base
+// match a large object referenced ONLY through an interior pointer
+// (e.g. a flat string's data) would be collected out from under it.
+// Callers canonicalize through cell_idx 0, so an interior hit marks the
+// base.
+static PageInfo*
+los_lookup(GCObjectPtr ptr, uint32_t *cell_idx)
+{
+    if ((char*)ptr < los_lo || (char*)ptr >= los_hi)
+        return NULL;
+    int at = los_range_upper_bound((char*)ptr) - 1;
+    if (at < 0 || (char*)ptr >= los_ranges[at].end)
+        return NULL;
+    if (cell_idx)
+        *cell_idx = 0;
+    return &los_ranges[at].lobj->page_info;
+}
+
 // GC profiling instrumentation state (definitions live with the profile
 // block further down, before the mark helpers use them)
 static EJSBool gc_profile;
@@ -427,12 +541,30 @@ static GCObjectPtr alloc_from_page(PageInfo* info);
 static void finalize_object(GCObjectPtr p);
 static void nursery_init(void);
 static void young_normalize_for_full_gc(void);
+static void young_page_freed(PageInfo* info, Arena* arena);
 static void _ejs_gc_minor_collect(const char* reason);
 static GCObjectPtr young_alloc_slow(int idx, size_t cell_size, EJSScanType scan_type);
 // allocator accounting, defined with the allocator further down
 extern size_t alloc_size;
 extern size_t alloc_size_at_last_gc;
 static size_t heap_size_at_last_gc;
+
+// gc-P4: the compacting major (EJS_GC_COMPACT=off for A/B) and THE
+// full-collection growth knob — a full GC triggers when old-gen growth
+// since the last one exceeds gc_growth_pct percent of the post-sweep
+// footprint (floor: two arenas, so small programs keep a sane cadence).
+// The knob replaces the old fixed 60MB constant; with compaction
+// shrinking the heap, the trigger now adapts in BOTH directions.
+static EJSBool compact_enabled;
+static int gc_growth_pct = 50;
+
+static size_t
+full_gc_trigger(void)
+{
+    size_t t = heap_size_at_last_gc * (size_t)gc_growth_pct / 100;
+    size_t floor_ = 2 * (size_t)ARENA_SIZE;
+    return t > floor_ ? t : floor_;
+}
 
 // allocated-ness of a cell: old pages answer from the bitmap; ACTIVE
 // young pages (young==1) answer from the bump rule — everything below
@@ -465,45 +597,30 @@ verify_arena(Arena *arena)
 static Arena*
 arena_new()
 {
-    if (num_arenas == MAX_ARENAS-1)
-        return NULL;
+    if (arena_space_pos == arena_space_end)
+        return NULL; // the reservation IS the heap cap
 
     SPEW(1, _ejs_log ("num_arenas = %d, max = %d\n", num_arenas, MAX_ARENAS));
 
-    void* arena_start = alloc_from_os(ARENA_SIZE, ARENA_SIZE);
-    if (arena_start == NULL)
+    void* arena_start = arena_space_pos;
+    if (mprotect (arena_start, ARENA_SIZE, PROT_READ | PROT_WRITE) != 0)
         return NULL;
 
     Arena* new_arena = arena_start;
 
     memset (new_arena, 0, sizeof(Arena));
 
-    conservative_bounds_add (arena_start, ARENA_SIZE);
     new_arena->end = arena_start + ARENA_SIZE;
     new_arena->pos = (void*)EJS_ALIGN(arena_start + sizeof(Arena), PAGE_SIZE);
 
     LOCK_ARENAS();
-    int insert_point = -1;
-    for (int i = 0; i < num_arenas; i ++) {
-        if (new_arena < heap_arenas[i]) {
-            insert_point = i;
-            break;
-        }
-    }
-    if (insert_point == -1) insert_point = num_arenas;
-    if (num_arenas-insert_point > 0)
-        memmove (&heap_arenas[insert_point + 1], &heap_arenas[insert_point], (num_arenas-insert_point)*sizeof(Arena*));
-    heap_arenas[insert_point] = new_arena;
-    num_arenas++;
+    arena_space_pos += ARENA_SIZE;
+    // sequential carving: heap_arenas stays address-sorted by construction
+    heap_arenas[num_arenas++] = new_arena;
+    arena_map[((char*)arena_start - arena_space) >> ARENA_SHIFT] = new_arena;
     UNLOCK_ARENAS();
 
     return new_arena;
-}
-
-static void
-arena_destroy (Arena* arena)
-{
-    release_to_os (arena, (intptr_t)arena->end - (intptr_t)arena);
 }
 
 static PageInfo*
@@ -554,54 +671,15 @@ alloc_page_from_arena(Arena *arena, size_t cell_size)
     }
 }
 
-static int
-compare_ptrs(const void* v1, const void* v2)
-{
-    Arena **a1 = (Arena**)v1;
-    Arena **a2 = (Arena**)v2;
-    ptrdiff_t diff = (intptr_t)*a1 - (intptr_t)*a2;
-    if (diff < 0) return -1;
-    if (diff == 0) return 0;
-    return 1;
-}
-
-static Arena*
-find_arena(GCObjectPtr ptr)
-{
-    Arena* arena_ptr = PTR_TO_ARENA(ptr);
-
-    LOCK_ARENAS();
-    // inlined bsearch
-    void* rv = NULL;
-    Arena**base = heap_arenas;
-    for (int lim = num_arenas; lim != 0; lim >>= 1) {
-        Arena** p = base + (lim >> 1);
-        ptrdiff_t diff = (intptr_t)arena_ptr - (intptr_t)*p;
-        if (diff == 0) {
-            rv = *p;
-            break;
-        }
-        if (diff > 0) {  /* key > p: move right */
-            base = p + 1;
-            lim--;
-        }               /* else move left */
-    }
-    UNLOCK_ARENAS();
-    if (!rv) return NULL;
-    return *(Arena**)rv;
-}
-
-static Arena*
-find_arena_in_array(GCObjectPtr ptr, Arena** array, int length)
-{
-    void* arena_ptr = PTR_TO_ARENA(ptr);
-    Arena **bsearch_rv = (Arena**)bsearch (&arena_ptr, array, length, sizeof(Arena*), compare_ptrs);
-    return bsearch_rv ? *bsearch_rv : NULL;
-}
-
 static PageInfo*
-find_page_and_cell_from_arena(GCObjectPtr ptr, uint32_t *cell_idx, Arena *arena)
+find_page_and_cell(GCObjectPtr ptr, uint32_t *cell_idx)
 {
+    // bounds prefilter: static data (atoms, module structs) and foreign
+    // pointers reject in two compares
+    if ((char*)ptr < conservative_lo || (char*)ptr >= conservative_hi)
+        return NULL;
+
+    Arena* arena = arena_lookup(ptr);
     if (EJS_LIKELY (arena != NULL)) {
         SANITY(verify_arena(arena));
 
@@ -628,41 +706,7 @@ find_page_and_cell_from_arena(GCObjectPtr ptr, uint32_t *cell_idx, Arena *arena)
         return page;
     }
 
-    // check if it's in the LOS.  Interior pointers match too (a
-    // P0): a conservative reference may be a derived pointer whose base
-    // value the optimizer discarded — with an exact-base match a large
-    // object referenced ONLY through an interior pointer (e.g. a flat
-    // string's data) would be collected out from under it.  Callers
-    // canonicalize through cell_idx 0, so an interior hit marks the base.
-    // The los bounds reject most non-LOS candidates before the locked
-    // linear walk (see los_bounds_add).
-    if ((char*)ptr < los_lo || (char*)ptr >= los_hi)
-        return NULL;
-    LOCK_GC();
-    for (LargeObjectInfo *lobj = los_list; lobj; lobj = lobj->next) {
-        void* start = lobj->page_info.page_start;
-        if (ptr >= start && ptr < start + lobj->page_info.cell_size) {
-            UNLOCK_GC();
-            if (cell_idx)
-                *cell_idx = 0;
-            return &lobj->page_info;
-        }
-    }
-    UNLOCK_GC();
-    return NULL;
-}
-
-static PageInfo*
-find_page_and_cell(GCObjectPtr ptr, uint32_t *cell_idx)
-{
-    // bounds prefilter: static data (atoms, module structs) and foreign
-    // pointers reject in two compares instead of an arena bsearch + a
-    // locked linear LOS walk — the latter made full-GC marking cost
-    // ~13us per object once the (uncollected) LOS list grew
-    if ((char*)ptr < conservative_lo || (char*)ptr >= conservative_hi)
-        return NULL;
-    Arena* arena = find_arena_in_array(ptr, heap_arenas, num_arenas);
-    return find_page_and_cell_from_arena(ptr, cell_idx, arena);
+    return los_lookup(ptr, cell_idx);
 }
 
 static void
@@ -789,6 +833,14 @@ _ejs_finalize_obj(GCObjectPtr ptr, Arena* arena, PageInfo* info, uint32_t cell_i
                 SPEW(2, _ejs_log ("releasing large object (size %zd)!\n", info->los_info->alloc_size));
                 release_to_los (info->los_info);
             }
+            else if (info->young) {
+                // a young survivor page emptied by a FULL sweep lives on
+                // heap_priv.young_pages, not a heap_pages bucket —
+                // detaching from the bucket list would silently unlink
+                // it from its young_pages neighbors while leaving that
+                // list's head/tail stale
+                young_page_freed (info, arena);
+            }
             else {
                 EJS_ASSERT(arena);
                 SPEW(2, _ejs_log ("page %p is empty, putting it on the free list\n", info));
@@ -820,6 +872,22 @@ _ejs_gc_init()
     if (gc_profile)
         atexit (profile_report_shutdown);
 
+    // the compacting major is the default; EJS_GC_COMPACT=off
+    // restores plain mark-sweep for A/B and differential runs
+    {
+        char* e = getenv("EJS_GC_COMPACT");
+        compact_enabled = !(e && (strcmp(e, "off") == 0 || strcmp(e, "0") == 0));
+    }
+
+    // THE growth knob (gc-P4 knob census = 1): a full collection
+    // triggers when old-gen growth exceeds EJS_GC_GROWTH percent of the
+    // post-sweep footprint
+    {
+        char* growth = getenv("EJS_GC_GROWTH");
+        if (growth) gc_growth_pct = atoi(growth);
+        if (gc_growth_pct <= 0) gc_growth_pct = 50;
+    }
+
     // the forwarding helpers are inert until the mover, so
     // exercise them here on a scratch buffer when asked — a build whose
     // header layout breaks the forwarding contract fails loudly instead
@@ -833,6 +901,12 @@ _ejs_gc_init()
         EJS_ASSERT(_ejs_gc_forwarding_addr(&scratch) == (GCObjectPtr)&target);
         _ejs_log ("EJS_GC_SELFTEST: forwarding helpers ok\n");
     }
+
+    // one reservation holds every arena the process will ever commit;
+    // the conservative prefilter covers it from day one (candidates in
+    // uncommitted space reject via the direct map)
+    arena_space_reserve();
+    conservative_bounds_add (arena_space, (size_t)MAX_HEAP_SIZE);
 
     // allocate an initial arenas
     for (int i = 0; i < 10; i ++)
@@ -965,10 +1039,12 @@ mark_pointers_in_range(GCObjectPtr* low, GCObjectPtr* high)
         // cells in place; nothing else is this collection's business
         if (in_minor_gc) { minor_conservative_hit(page, cell_idx); continue; }
 
-        // a conservative hit pins under the mover — recorded even
-        // when the target is already marked (the white check below is a
-        // marking optimization, not a pin filter)
+        // a conservative hit PINS: the compacting major must sweep this
+        // cell in place.  Recorded even when the target is already
+        // marked (the white check below is a marking optimization, not
+        // a pin filter).  profile_note_pin sets the same bit plus stats.
         if (gc_profile) profile_note_pin(page, cell_idx, gcptr);
+        else *(GCObjectHeader*)(page->page_start + ((size_t)cell_idx * page->cell_size)) |= EJS_GC_HEADER_PINNED;
 
         if (!IS_WHITE(cell)) continue; // skip pointers to gray/black cells
 
@@ -1059,9 +1135,10 @@ mark_ejsvals_in_range(void* low, void* high)
             // minor collections only pin young cells here
             if (in_minor_gc) { minor_conservative_hit(page, cell_idx); continue; }
 
-            // a conservative hit pins under the mover — recorded
-            // even when the target is already marked
+            // a conservative hit PINS: the compacting major must sweep
+            // this cell in place (recorded even when already marked)
             if (gc_profile) profile_note_pin(page, cell_idx, gcptr);
+            else *(GCObjectHeader*)(page->page_start + ((size_t)cell_idx * page->cell_size)) |= EJS_GC_HEADER_PINNED;
 
             if (!IS_WHITE(cell)) continue; // skip pointers to gray/black cells
 
@@ -1103,8 +1180,8 @@ static int num_primsym_allocs = 0;
 // The YOUNG bit is set unconditionally (an OR folded into the header
 // store the allocator already does); everything else is gated on
 // gc_profile so the measured path stays clean when profiling is off.
-#define EJS_GC_HEADER_YOUNG  (1ULL << 57)
-#define EJS_GC_HEADER_PINNED (1ULL << 58)
+// (The YOUNG/PINNED #defines live near the top of the file — the mark
+// helpers set PINNED for the compacting major.)
 
 enum {
     PROF_SRC_CSTACK = 0,   // conservative C-stack ranges (incl. suspended segments)
@@ -1195,7 +1272,12 @@ profile_visit_live_cell(GCObjectHeader* h, size_t bytes)
         prof_cycle_ysurv_bytes += bytes;
         *h &= ~EJS_GC_HEADER_YOUNG; // survived one collection: no longer young
     }
-    *h &= ~EJS_GC_HEADER_PINNED; // reset for the next cycle
+    // reset pins for the next cycle — but the census runs PRE-sweep and
+    // the compacting major reads pins POST-sweep (and clears them in its
+    // fixup walk); clearing here would un-pin every C-visible object
+    // right before evacuation decides what may move
+    if (!compact_enabled)
+        *h &= ~EJS_GC_HEADER_PINNED;
 }
 
 static void
@@ -1415,6 +1497,19 @@ young_page_install(int idx, size_t cell_size)
     _ejs_heap.bump[idx] = info->page_start;
     _ejs_heap.limit[idx] = info->page_end;
     return info;
+}
+
+// an emptied young page leaves heap_priv.young_pages for the nursery
+// arena's free list (called from _ejs_finalize_obj when a full sweep
+// kills a survivor page's last cell)
+static void
+young_page_freed(PageInfo* info, Arena* arena)
+{
+    EJS_ASSERT(arena && arena->is_nursery);
+    _ejs_list_detach_node (&heap_priv.young_pages, (EJSListNode*)info);
+    info->young = 0;
+    info->bump_ptr = info->page_start;
+    EJS_LIST_PREPEND (info, arena->free_pages);
 }
 
 // set when a scan leaves a still-young (pinned) referent behind — the
@@ -2191,10 +2286,7 @@ _ejs_gc_minor_collect(const char* reason)
     // promotions grow the old gen; when nearly every allocation is
     // young, this is the only place the full-collection trigger can fire
     if (!gc_disabled) {
-        size_t gc_trigger = 60 * 1024 * 1024;
-        if (heap_size_at_last_gc / 2 > gc_trigger)
-            gc_trigger = heap_size_at_last_gc / 2;
-        if (alloc_size - alloc_size_at_last_gc >= gc_trigger) {
+        if (alloc_size - alloc_size_at_last_gc >= full_gc_trigger()) {
             _ejs_gc_collect("promotion growth");
             alloc_size_at_last_gc = alloc_size;
         }
@@ -2610,6 +2702,262 @@ process_worklist()
     EJS_ASSERT(work_list.list == NULL);
 }
 
+// ============== mostly-copying major compaction (gc-P4) ===================
+//
+// Mark-sweep never shrinks: live old-gen cells sit wherever history put
+// them and sparse pages hold whole pages hostage for a cell or two.
+// After the sweep, this pass evacuates the live UNPINNED cells of the
+// sparsest pages of each size class into the free space of the denser
+// ones, rewrites every reference through the P1 forwarding records, and
+// returns the emptied pages to their arenas — the heap actually shrinks,
+// and the proportional growth target then adapts downward.
+//
+// Pinned cells sweep in place, exactly like the minor's young pins:
+// conservative hits (C stack, spilled registers, generator stacks) set
+// PINNED during marking, and every registered generator object pins too
+// (the registry is an intrusive list of raw pointers).  LOS objects
+// never move.  EJS_GC_COMPACT=off restores plain mark-sweep for A/B and
+// differential runs.
+static uint64_t compact_moved_objs, compact_moved_bytes, compact_freed_pages;
+
+static void
+compact_fixup_slot(ejsval* slot)
+{
+    ejsval v = *slot;
+    if (!EJSVAL_IS_TRACEABLE_IMPL(v)) return;
+    GCObjectPtr p = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(v);
+    if (p == NULL) return;
+    // boxed payloads are object bases, and statics outside the heap have
+    // headers too, so the forwarded-bit read is always safe
+    if (_ejs_gc_is_forwarded(p))
+        rewrite_slot_payload(slot, _ejs_gc_forwarding_addr(p));
+}
+
+static void
+compact_fixup_primstr_child(EJSPrimString** childp)
+{
+    GCObjectPtr p = (GCObjectPtr)*childp;
+    if (p && _ejs_gc_is_forwarded(p))
+        *childp = (EJSPrimString*)_ejs_gc_forwarding_addr(p);
+}
+
+static void
+compact_fixup_object(GCObjectPtr p)
+{
+    GCObjectHeader* h = (GCObjectHeader*)p;
+    if (*h & EJS_GC_HEADER_FORWARDED)
+        return; // an evacuated source; its copy is walked on its own page
+    *h &= ~EJS_GC_HEADER_PINNED; // pins are per-cycle
+    if ((*h & EJS_SCAN_TYPE_OBJECT) != 0) {
+        EJSObject* obj = (EJSObject*)p;
+        if (obj->ops != NULL)
+            OP(obj,Scan)(obj, compact_fixup_slot);
+    }
+    else if ((*h & EJS_SCAN_TYPE_PRIMSTR) != 0) {
+        EJSPrimString* ps = (EJSPrimString*)p;
+        switch (EJS_PRIMSTR_GET_TYPE(ps)) {
+        case EJS_STRING_ROPE:
+            compact_fixup_primstr_child(&ps->data.rope.left);
+            compact_fixup_primstr_child(&ps->data.rope.right);
+            break;
+        case EJS_STRING_DEPENDENT:
+            compact_fixup_primstr_child(&ps->data.dependent.dep);
+            break;
+        case EJS_STRING_FLAT:
+            break;
+        }
+    }
+    else if ((*h & EJS_SCAN_TYPE_PRIMSYM) != 0)
+        compact_fixup_slot(&((EJSPrimSymbol*)p)->description);
+    else if ((*h & EJS_SCAN_TYPE_CLOSUREENV) != 0) {
+        EJSClosureEnv* env = (EJSClosureEnv*)p;
+        for (uint32_t i = 0; i < env->length; i++)
+            compact_fixup_slot(&env->slots[i]);
+    }
+}
+
+static EJSBool
+compact_page_has_pins(PageInfo* pg)
+{
+    GCObjectPtr p = pg->page_start;
+    for (int c = 0; c < pg->num_cells; c++, p += pg->cell_size)
+        if (!IS_FREE(pg->page_bitmap[c])
+            && (*(GCObjectHeader*)p & EJS_GC_HEADER_PINNED))
+            return EJS_TRUE;
+    return EJS_FALSE;
+}
+
+// destination cell in `bucket`: first page (from the cursor on) with
+// free capacity.  Sources were detached from the bucket list before
+// evacuation, so every listed page qualifies.  The selection accounting
+// guarantees capacity; running dry is a bug.
+static GCObjectPtr
+compact_alloc_dest(int bucket, PageInfo** cursor, PageInfo** dest_page)
+{
+    PageInfo* pg = *cursor ? *cursor : (PageInfo*)heap_pages[bucket].head;
+    while (pg && !pg->num_free_cells)
+        pg = pg->next;
+    if (!pg) {
+        _ejs_log ("GC BUG: compaction ran out of destination space (bucket %d)\n", bucket);
+        abort();
+    }
+    *cursor = pg;
+    *dest_page = pg;
+    return alloc_from_page(pg);
+}
+
+static void
+compact_evacuate_page(int bucket, PageInfo* pg, PageInfo** cursor)
+{
+    GCObjectPtr from = pg->page_start;
+    for (int c = 0; c < pg->num_cells; c++, from += pg->cell_size) {
+        if (IS_FREE(pg->page_bitmap[c]))
+            continue;
+        PageInfo* dest_page;
+        GCObjectPtr to = compact_alloc_dest(bucket, cursor, &dest_page);
+        memcpy (to, from, pg->cell_size);
+        // the copy is live THIS cycle: keep it marked so the coming
+        // color flip turns it white with every other survivor
+        SET_BLACK(dest_page->page_bitmap[PTR_TO_CELL(to, dest_page)]);
+        minor_fixup_evacuated(from, to, pg->cell_size);
+        _ejs_gc_forward(from, to);
+        gc_watch_hit ("compact-evacuate-from", from);
+        compact_moved_objs++;
+        compact_moved_bytes += pg->cell_size;
+    }
+}
+
+typedef struct { PageInfo* page; int live; } CompactPageStat;
+
+static int
+compact_stat_cmp(const void* a, const void* b)
+{
+    return ((const CompactPageStat*)a)->live - ((const CompactPageStat*)b)->live;
+}
+
+static void
+compact_old_gen(void)
+{
+    // every registered generator pins: the registry reaches them through
+    // raw intrusive pointers (reg_next/reg_prev), and their machine
+    // state is re-scanned conservatively by their specops
+    for (EJSGenerator* g = _ejs_generator_registry; g; g = g->reg_next)
+        *(GCObjectHeader*)g |= EJS_GC_HEADER_PINNED;
+
+    uint64_t moved_before = compact_moved_objs;
+    uint64_t freed_before = compact_freed_pages;
+
+    EJSList evac_pages;
+    memset (&evac_pages, 0, sizeof(evac_pages));
+
+    // 1. selection + evacuation, per size class: sparse-first, evacuate
+    //    while the rest of the class has room
+    for (int bucket = 0; bucket < HEAP_PAGELISTS_COUNT; bucket++) {
+        int count = 0;
+        for (PageInfo* pg = (PageInfo*)heap_pages[bucket].head; pg; pg = pg->next)
+            count++;
+        if (count < 2)
+            continue;
+
+        CompactPageStat* stats = (CompactPageStat*)malloc (count * sizeof(CompactPageStat));
+        size_t total_free = 0;
+        int n = 0;
+        for (PageInfo* pg = (PageInfo*)heap_pages[bucket].head; pg; pg = pg->next) {
+            stats[n].page = pg;
+            stats[n].live = pg->num_cells - pg->num_free_cells;
+            n++;
+            total_free += pg->num_free_cells;
+        }
+        qsort (stats, n, sizeof(CompactPageStat), compact_stat_cmp);
+
+        // choose the COMPLETE source set first, sparse-first: a page
+        // accepted as a source leaves the destination pool, and the
+        // remaining pool must hold every already-accepted live cell
+        // plus this page's.  (Selecting and evacuating in one pass let
+        // an early DESTINATION later be picked as a source via its
+        // stale live count — evacuating more cells than the accounting
+        // reserved space for.)
+        size_t dest_free = total_free;
+        size_t src_live = 0;
+        EJSList src_pages;
+        memset (&src_pages, 0, sizeof(src_pages));
+        for (int i = 0; i < n; i++) {
+            PageInfo* pg = stats[i].page;
+            size_t live = (size_t)stats[i].live;
+            if (live == 0)
+                continue; // the sweep freelists empties; belt only
+            if (dest_free - pg->num_free_cells < src_live + live)
+                break; // the sparsest candidate doesn't fit; denser ones won't either
+            if (compact_page_has_pins(pg))
+                continue; // pinned cells sweep in place; the page stays a destination
+            _ejs_list_detach_node (&heap_pages[bucket], (EJSListNode*)pg);
+            _ejs_list_append_node (&src_pages, (EJSListNode*)pg);
+            dest_free -= pg->num_free_cells;
+            src_live += live;
+        }
+
+        // sources are off the bucket list now: every listed page is a
+        // pure destination, so the cursor can walk it freely
+        PageInfo* cursor = NULL;
+        PageInfo* src;
+        while ((src = (PageInfo*)src_pages.head) != NULL) {
+            _ejs_list_detach_node (&src_pages, (EJSListNode*)src);
+            compact_evacuate_page (bucket, src, &cursor);
+            _ejs_list_append_node (&evac_pages, (EJSListNode*)src);
+        }
+        free (stats);
+    }
+
+    // 2. fixup: rewrite every reference that can name a moved cell, and
+    //    clear the cycle's pins while walking the live set.  Runs even
+    //    when nothing was evacuated — the pins must reset either way.
+    for (RootSetEntry* e = root_set; e; e = e->next)
+        if (e->root)
+            compact_fixup_slot(e->root);
+    for (int i = 0; i < _ejs_num_modules; i++) {
+        EJSObject* mod = (EJSObject*)_ejs_modules[i];
+        if (mod->ops)
+            OP(mod,Scan)(mod, compact_fixup_slot);
+    }
+    // gc-frame slots' referents were all conservatively pinned (full GC
+    // never skips frame records), so these rewrites are no-ops today;
+    // walked anyway so precision changes can't silently break this pass
+    walk_gc_frames(compact_fixup_slot);
+    for (int i = 0; i < _ejs_heap.remset_count; i++) {
+        GCObjectPtr o = (GCObjectPtr)_ejs_heap.remset[i];
+        if (_ejs_gc_is_forwarded(o))
+            _ejs_heap.remset[i] = _ejs_gc_forwarding_addr(o);
+    }
+    old_gen_walk (compact_fixup_object); // old pages (sources skip via FORWARDED) + LOS
+    for (PageInfo* pg = (PageInfo*)heap_priv.young_pages.head; pg; pg = pg->next) {
+        GCObjectPtr p = pg->page_start;
+        for (int c = 0; c < CELLS_IN_PAGE(pg); c++, p += pg->cell_size)
+            if (!IS_FREE(pg->page_bitmap[c]))
+                compact_fixup_object(p);
+    }
+
+    // 3. release the sources: nothing reads the forwarding records
+    //    anymore; the pages go back to their arenas.  No finalizers run —
+    //    the objects live on at their new addresses.
+    PageInfo* pg;
+    while ((pg = (PageInfo*)evac_pages.head) != NULL) {
+        _ejs_list_detach_node (&evac_pages, (EJSListNode*)pg);
+        memset (pg->page_start, 0xa7, PAGE_SIZE); // 0xa7: FORWARDED must stay clear in poison
+        memset (pg->page_bitmap, CELL_FREE, pg->num_cells * sizeof(BitmapCell));
+        pg->num_free_cells = pg->num_cells;
+        pg->bump_ptr = pg->page_start;
+        Arena* arena = (Arena*)PTR_TO_ARENA(pg->page_start);
+        EJS_LIST_PREPEND (pg, arena->free_pages);
+        compact_freed_pages++;
+    }
+
+    if (gc_profile)
+        _ejs_log ("EJS_GC_PROFILE: compact: moved=%llu freed-pages=%llu\n",
+                  (unsigned long long)(compact_moved_objs - moved_before),
+                  (unsigned long long)(compact_freed_pages - freed_before));
+}
+// ============== end mostly-copying major compaction ======================
+
 static void
 _ejs_gc_collect_inner(EJSBool shutting_down)
 {
@@ -2693,6 +3041,13 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
 #endif
 
     sweep_heap();
+
+    // mostly-copying: evacuate the sparse pages' unpinned live
+    // cells, rewrite every reference, return emptied pages to their
+    // arenas.  (Skipped on the shutdown collection — nothing left to
+    // move for.)
+    if (compact_enabled && !shutting_down)
+        compact_old_gen();
 
     // the remembered state may dangle into cells this sweep just
     // freed — rebuild it from the live old gen
@@ -2787,9 +3142,10 @@ calc_heap_size()
 // growing live set makes total GC work quadratic in heap size (shapes
 // shapes moved per-object property storage into the GC heap, which pushed
 // stage2's self-compile off that cliff — hours of back-to-back full
-// marks of a ~900MB heap).  Letting the heap grow ~50% between full
-// collections keeps total mark work linear; programs whose footprint
-// stays under 120MB see the old 60MB cadence exactly.
+// marks of a ~900MB heap).  Letting the heap grow ~gc_growth_pct%
+// between full collections keeps total mark work linear (see
+// full_gc_trigger; compaction shrinks this after a drop in live set,
+// so the cadence adapts back down too).
 static size_t heap_size_at_last_gc = 0;
 
 void
@@ -2912,7 +3268,7 @@ static GCObjectPtr
 alloc_from_los(size_t size, EJSScanType scan_type)
 {
     // allocate enough space for the object, our header, and our bitmap.  leave room enough to align the return value
-    LargeObjectInfo *rv = alloc_from_os(size + sizeof(LargeObjectInfo) + 16, 0);
+    LargeObjectInfo *rv = alloc_from_os(size + sizeof(LargeObjectInfo) + 16);
     if (rv == NULL)
         return NULL;
 
@@ -2931,7 +3287,7 @@ alloc_from_los(size_t size, EJSScanType scan_type)
     rv->alloc_size = size;
 
     conservative_bounds_add (rv, size + sizeof(LargeObjectInfo) + 16);
-    los_bounds_add (rv, size + sizeof(LargeObjectInfo) + 16);
+    los_ranges_add (rv);
     EJS_LIST_PREPEND (rv, los_list);
     //_ejs_log ("alloc_from_los returning %p\n, los_list = %p\n", rv->page_info.page_start, los_list);
     return rv->page_info.page_start;
@@ -2940,7 +3296,10 @@ alloc_from_los(size_t size, EJSScanType scan_type)
 static void
 release_to_los (LargeObjectInfo *lobj)
 {
-    release_to_os (lobj, lobj->alloc_size);
+    los_ranges_remove (lobj);
+    // the mapping covers the header + bitmap slop too, not just the
+    // payload (releasing only alloc_size leaked the tail page)
+    release_to_os (lobj, lobj->alloc_size + sizeof(LargeObjectInfo) + 16);
 }
 
 size_t alloc_size = 0;
@@ -3003,10 +3362,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
 
     if (!gc_disabled) {
         char *gc_reason = NULL;
-        size_t gc_trigger = 60 * 1024 * 1024;
-        if (heap_size_at_last_gc / 2 > gc_trigger)
-            gc_trigger = heap_size_at_last_gc / 2;
-        if (alloc_size - alloc_size_at_last_gc >= gc_trigger) {
+        if (alloc_size - alloc_size_at_last_gc >= full_gc_trigger()) {
             gc_reason = "alloc_size";
         } else if (!nursery_enabled && collect_every_alloc && collect_every_alloc == num_allocs) {
             gc_reason = "every_n_alloc";
@@ -3216,6 +3572,12 @@ static EJS_NATIVE_FUNC(_ejs_GC_collect) {
     return _ejs_undefined;
 }
 
+// committed old-gen page bytes (the compaction gate's observable:
+// this number DROPS when the heap shrinks)
+static EJS_NATIVE_FUNC(_ejs_GC_heapSize) {
+    return NUMBER_TO_EJSVAL((double)calc_heap_size());
+}
+
 static EJS_NATIVE_FUNC(_ejs_GC_dumpAllocationStats) {
     char* tag = NULL;
 
@@ -3300,6 +3662,7 @@ _ejs_GC_init(ejsval ejs_obj)
 #define OBJ_METHOD(x) EJS_INSTALL_ATOM_FUNCTION(_ejs_GC, x, _ejs_GC_##x)
 
     OBJ_METHOD(collect);
+    OBJ_METHOD(heapSize);
     OBJ_METHOD(dumpAllocationStats);
     OBJ_METHOD(dumpLiveStrings);
 
