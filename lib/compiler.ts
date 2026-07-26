@@ -717,6 +717,22 @@ class LLVMIRVisitor implements VisitorSurface {
             );
         return this.heap_ctx_global;
     }
+    // the runtime's accessor epoch (ejs-object.h): zero while nothing
+    // user-installed can intercept a [[Set]] through a fresh object's
+    // prototype chain.  The check is one load + compare-to-zero.
+    accessor_epoch_global: llvm.GlobalVariable | null = null;
+    emitAccessorEpochCheck(): llvm.Value {
+        if (!this.accessor_epoch_global)
+            this.accessor_epoch_global = new llvm.GlobalVariable(
+                this.module,
+                types.Int64,
+                "_ejs_accessor_epoch",
+                null,
+                true
+            );
+        const epoch = ir.createLoad(types.Int64, this.accessor_epoch_global, "accessor_epoch");
+        return ir.createICmpEq(epoch, consts.int64(0), "epoch_ok");
+    }
     // the inline nursery allocation for closure
     // environments — bump, compare, init header/length/slots, box with
     // the CLOSUREENV tag; the slow thunk (the existing runtime call) is
@@ -1104,7 +1120,9 @@ export function compile(
                           .sort()
                           .map((k) => `${k}:${lowered.fence_declined![k]}`)
                           .join(",")}`
-                    : "")
+                    : "") +
+                // constructor-result sinking telemetry (additive)
+                ((lowered.ctor_sunk ?? 0) > 0 ? ` ctorSunk=${lowered.ctor_sunk}` : "")
         );
     }
 

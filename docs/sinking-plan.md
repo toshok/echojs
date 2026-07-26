@@ -4,9 +4,11 @@ Bucket plan; the ordering spine lives in `docs/plans.md`.  Phase ids
 here are `sinking-P#` (formerly S1/S2/S3 in this doc's first
 revision).
 
-Status: sinking-P1 LANDED (2026-07-25) — see "sinking-P1 results" at the bottom.  Owner doc for extending escape analysis +
-allocation sinking (docs/plans.md, optimization phase, first bullet)
-past what already exists.  Written 2026-07-25, after gc-P2.
+Status: sinking-P1 LANDED (2026-07-25), sinking-P2 LANDED (2026-07-25)
+— see the results sections at the bottom.  Owner doc for extending
+escape analysis + allocation sinking (docs/plans.md, optimization
+phase, first bullet) past what already exists.  Written 2026-07-25,
+after gc-P2.
 
 ## Where we actually are
 
@@ -220,6 +222,84 @@ generic arm — reads still fold to the same operands and the alloc
 still drains; in real compiles the specialized clones box their
 formals, guards resolve true, and the raw path folds.  Both routes
 were pinned by tests.
+
+## sinking-P2 results (2026-07-25)
+
+Implementation, in the three pieces the design called for:
+
+- **Runtime** (`_ejs_accessor_epoch`, ejs-object.{h,c}): one global
+  counter, `== 0` meaning "no user code has installed anything that
+  could intercept a [[Set]] through a fresh object's prototype chain".
+  Bumps at the ordinary `DefineOwnProperty` specop for accessor
+  descriptors and `writable:false` data descriptors, and at both
+  `SetPrototypeOf` implementations (ordinary + proxy trap); zeroed at
+  the end of `_ejs_init` so builtin installs never count (the only
+  builtin accessor on a fresh ordinary chain is `__proto__`, a name the
+  ctor fence never admits).  **The screen that made it viable: only
+  defines on ORDINARY receivers bump.**  A virtualized instance's chain
+  is `ctor.prototype → Object.prototype`, both ordinary, and any other
+  object can only join such a chain through a bumping setPrototypeOf or
+  a statically-declined prototype swap — without the screen, every
+  closure's non-writable name/length and every module's export
+  accessors killed the epoch at startup (found by lldb watchpoint on
+  the first bench run: `_ejs_function_new` at module init).
+- **EIR** `epoch_check` op (arity 0, READ, i1): emitted as one load of
+  the global + compare-to-zero (`emitAccessorEpochCheck`, the
+  `_ejs_heap` global-seam precedent).  No verifier change — the op
+  table's sig covers it.
+- **Optimizer** (`lib/eir/sink-construct.ts`, module pass after
+  specialization in integrate.ts): resolves construct callees through
+  the promoted-`%self`-slot discipline (single closure store,
+  prefix-safe or store-dominated, **every load of the slot used only as
+  a call/construct callee — which also closes the `Point.prototype = X`
+  replacement hole statically**, so exotic protos need a bumping
+  setPrototypeOf); structurally matches the ctor body as exactly the
+  P4.4 guarded fill of the formals plus `return undefined`; requires
+  argc == formal count and the sinking-P1 use classification on the
+  result; computes the single-entry single-exit acyclic use region;
+  runs a fold simulation (the sinkShapedAlloc guard rule) proving every
+  use folds or dies unreachable — the all-or-nothing guarantee that the
+  virtual arm's allocation always drains.  The rewrite splits at the
+  construct, closes the head with `epoch_check` + cond_br, keeps the
+  original region as the slow arm, and clones the region with the
+  construct replaced by `make_object_shaped(args)`; region-defined
+  values used past the exit cross through minted join params (rawJoin
+  for f64).  The existing shaped-literal sink then drains the clone in
+  the post-sink optimizer round.  Bisect: `EJS_NO_CTOR_SINK`;
+  telemetry: `ctorSunk=N` on the `--types:` line, `EIR-ctor-sink` debug
+  line.
+
+Gate evidence (all green, 2026-07-25):
+
+- 192 EIR unit tests (5 new `sink-ctor`: full sink, live-outs across
+  the epoch join, six refusal attacks in one sweep — second store /
+  prototype-touching load / trailing ctor code / swapped fill operands
+  / argc mismatch / escaping result — non-promoted slot, bisect hook).
+- Probes `types-ctorsink1` (epoch coverage: clean run, accessor
+  installed mid-loop through Object.prototype at i=5, then a
+  non-writable data property mid-loop — slow arm and interception from
+  that iteration on) and `types-ctorsink2` (pure-win kernel + escape
+  decline + prototype-method decline): node-identical, including under
+  `EJS_SHAPES=off`, `EJS_GC_EVERY_N_ALLOC=101`, and an
+  `EJS_NO_CTOR_SINK` compile.
+- `--types` diff lane: 493 files, 492 identical, 0 divergent, 1 N/A
+  (tester.js, standing).  ctorSunk fires in types-bench2 (2),
+  types-sink1 (2), and the two new probes — everywhere else the
+  fail-closed screens decline.
+- Matrix ×7 green (test-eir, lowtier, stages 0-3 at 419 pass /
+  22 standing xfail each, shapes-off lane).
+- **types-bench2: 0.70s → 0.26s wall (warm, A/B vs EJS_NO_CTOR_SINK
+  exes from the same tree); allocations 4,000,501 objects + 4,000,061
+  envs → 501 + 61 (EJS_GC_PROFILE).**  The alloc() loop is
+  allocation-free — better than the ~0.3s phase target; the residual
+  0.26s is kern.
+
+What the sunk loop still pays per iteration: one epoch load+compare,
+one `%self` slot load of the ctor (kept live by the slow arm), and two
+generic `add` calls (the oracle doesn't type s + p.x, so those adds
+never had diamonds) — all noise next to the construct it replaced.
+Recorded for later phases: slot-load licm and add-diamond coverage
+would shave the rest.
 
 Gate evidence: 187 EIR unit tests green (8 new: full sink, escape /
 call-operand / write / prototype-read / wrong-shape / hand-built

@@ -78,6 +78,9 @@ export interface ModCtx {
         // typed (raw f64) slot accesses emitted
         typed_loads?: number;
         typed_stores?: number;
+        // construct sites virtualized by the optimizer's
+        // epoch-guarded constructor-result sinking
+        ctor_sunk?: number;
     };
     // --types-dump: per-site shape census lines
     shape_dump?: boolean;

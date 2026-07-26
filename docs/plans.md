@@ -79,7 +79,7 @@ Delete the allocations the mover made cheap.  Detail: sinking-plan.md.
 
 - [x] **P5.1** shaped-literal sinking + own-key folding
       (sinking-P1).
-- [ ] **P5.2** epoch-guarded constructor-result sinking — the
+- [x] **P5.2** epoch-guarded constructor-result sinking — the
       types-bench2 alloc loop (sinking-P2).
 - [ ] **P5.3** flow-sensitive field writes, partial escapes,
       rest_args/args_obj (sinking-P3).

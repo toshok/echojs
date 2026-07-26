@@ -21,6 +21,7 @@ import { DesugarSpread } from "../passes/desugar-spread";
 import { typeSigToEirType, typeSigToShapeRepr } from "./oracle";
 import type { OracleShapeField, TypeOracle, TypeTag } from "./oracle";
 import { optimizeShapeRegions } from "./optimize-guards";
+import { sinkConstructResults } from "./sink-construct";
 import { buildArithDiamond, buildLowTierAdd, buildLowTierLt } from "./lowtier-probe";
 import { DesugarClasses } from "../passes/desugar-classes";
 import { DesugarDestructuring } from "../passes/desugar-destructuring";
@@ -3128,6 +3129,185 @@ test("sink-shaped: EJS_NO_SHAPED_SINK leaves the allocation alone", () => {
         assertContains(printed, "make_object_shaped");
     } finally {
         delete process.env["EJS_NO_SHAPED_SINK"];
+    }
+});
+
+// --- constructor-result sinking ---------------------------------
+
+// a hand-built module in the shape the sink requires: a fence-passing
+// ctor, its closure stored once into promoted %self slot 0 by the
+// toplevel, and a consumer constructing through the slot with guarded
+// reads.  the knobs each break exactly one screen.
+interface CtorSinkOpts {
+    secondStore?: boolean; // a second store to the slot
+    protoWrite?: boolean; // a load used as a set_prop_atom base
+    trailingCtorCode?: boolean; // extra work after the ctor's fill join
+    swappedFill?: boolean; // fill operands not the formals in order
+    argcMismatch?: boolean; // construct passes fewer args than formals
+    escape?: boolean; // result also flows into a call
+    twoDiamonds?: boolean; // interleaved add whose value crosses the exit
+}
+
+function buildCtorSinkModule(opts: CtorSinkOpts): { mod: Module; user: Func } {
+    const mod = new Module("ctor_sink_mod");
+    const PXYKey = mod.internShape([
+        { name: "x", repr: "f64" },
+        { name: "y", repr: "f64" },
+    ]);
+    mod.internShape([]);
+
+    const cb = new FunctionBuilder("Point", ["%env", "%this", "x", "y"]);
+    const cthis = cb.fn.entry!.params[1]!;
+    const cx = cb.fn.entry!.params[2]!;
+    const cy = cb.fn.entry!.params[3]!;
+    const cfast = cb.newBlock("ctor_fill_fast");
+    const cslow = cb.newBlock("ctor_fill_slow");
+    const cjoin = cb.newBlock("ctor_fill_join");
+    const cg = cb.emit("has_shape", [cthis], { shape: "" });
+    cb.condBr(cg, cfast, [], cslow, []);
+    cb.sealBlock(cfast);
+    cb.sealBlock(cslow);
+    cb.setInsertPoint(cfast);
+    cb.emit("fill_object_shaped", opts.swappedFill ? [cthis, cy, cx] : [cthis, cx, cy], {
+        shape: PXYKey,
+    });
+    cb.br(cjoin, []);
+    cb.setInsertPoint(cslow);
+    cb.emit("set_prop_atom", [cthis, cx], { atom: "x" });
+    cb.emit("set_prop_atom", [cthis, cy], { atom: "y" });
+    cb.br(cjoin, []);
+    cb.sealBlock(cjoin);
+    cb.setInsertPoint(cjoin);
+    if (opts.trailingCtorCode) cb.emit("get_prop_atom", [cthis], { atom: "x" });
+    cb.ret(cb.constUndefined());
+    mod.addFunction(cb.finish());
+
+    const tb = new FunctionBuilder("toplevel", ["%env", "%this"]);
+    const tenv = tb.fn.entry!.params[0]!;
+    const cl = tb.emit("make_closure", [tenv], { fn: "Point", name: "Point" });
+    tb.emit("module_slot_store", [cl], { module: "%self", slot: 0 });
+    if (opts.secondStore) tb.emit("module_slot_store", [cl], { module: "%self", slot: 0 });
+    if (opts.protoWrite) {
+        const ld = tb.emit("module_slot_load", [], { module: "%self", slot: 0 });
+        tb.emit("set_prop_atom", [ld, tb.constNumber(1)], { atom: "prototype" });
+    }
+    tb.ret(tb.constUndefined());
+    mod.addFunction(tb.finish());
+
+    const ub = new FunctionBuilder("user", ["%env", "%this", "g"]);
+    const gparam = ub.fn.entry!.params[2]!;
+    const ld = ub.emit("module_slot_load", [], { module: "%self", slot: 0 });
+    const bx = ub.emit("box_f64", [ub.emit("f64_const", [], { value: 1 })], {});
+    const by = ub.emit("box_f64", [ub.emit("f64_const", [], { value: 2 })], {});
+    const p = ub.emit("construct", opts.argcMismatch ? [ld, bx] : [ld, bx, by], {});
+
+    const fast = ub.newBlock("shape_fast");
+    const slow = ub.newBlock("shape_slow");
+    const join = ub.newBlock("shape_join");
+    const r = join.addParam("r");
+    const pg = ub.emit("has_shape", [p], { shape: PXYKey });
+    ub.condBr(pg, fast, [], slow, []);
+    ub.sealBlock(fast);
+    ub.sealBlock(slow);
+    ub.setInsertPoint(fast);
+    const sl = ub.emit("slot_load", [p], { shape: PXYKey, slot: 0, repr: "f64" });
+    sl.type = "f64";
+    ub.br(join, [ub.emit("box_f64", [sl], {})]);
+    ub.setInsertPoint(slow);
+    ub.br(join, [ub.emit("get_prop_atom", [p], { atom: "x" })]);
+    ub.sealBlock(join);
+    ub.setInsertPoint(join);
+
+    if (opts.twoDiamonds) {
+        // a value defined between the diamonds and used past the exit —
+        // it must cross the epoch join through a minted param
+        const s = ub.emit("add", [r, bx], {});
+        const fast2 = ub.newBlock("shape_fast2");
+        const slow2 = ub.newBlock("shape_slow2");
+        const join2 = ub.newBlock("shape_join2");
+        const r2 = join2.addParam("r2");
+        const pg2 = ub.emit("has_shape", [p], { shape: PXYKey });
+        ub.condBr(pg2, fast2, [], slow2, []);
+        ub.sealBlock(fast2);
+        ub.sealBlock(slow2);
+        ub.setInsertPoint(fast2);
+        const sl2 = ub.emit("slot_load", [p], { shape: PXYKey, slot: 1, repr: "f64" });
+        sl2.type = "f64";
+        ub.br(join2, [ub.emit("box_f64", [sl2], {})]);
+        ub.setInsertPoint(slow2);
+        ub.br(join2, [ub.emit("get_prop_atom", [p], { atom: "y" })]);
+        ub.sealBlock(join2);
+        ub.setInsertPoint(join2);
+        ub.ret(ub.emit("add", [s, r2], {}));
+    } else {
+        if (opts.escape) ub.emit("call", [gparam, ub.constUndefined(), p], {});
+        ub.ret(r);
+    }
+    const user = ub.finish();
+    mod.addFunction(user);
+    return { mod, user };
+}
+
+function runCtorSink(opts: CtorSinkOpts = {}): { n: number; printed: string; stats: OptStats } {
+    const { mod, user } = buildCtorSinkModule(opts);
+    verifyModule(mod);
+    const n = sinkConstructResults(mod, new Set([0]), "toplevel");
+    verifyModule(mod);
+    const stats = optimizeFunction(user, mod);
+    verifyModule(mod);
+    return { n, printed: printFunction(user), stats };
+}
+
+test("sink-ctor: a qualifying construct virtualizes behind the epoch check", () => {
+    const { n, printed, stats } = runCtorSink({});
+    assert(n === 1, `sunk=${n}`);
+    assertContains(printed, "epoch_check");
+    assertContains(printed, "construct"); // the slow arm keeps the real one
+    assertNotContains(printed, "make_object_shaped"); // the virtual arm drained
+    assert(stats.shape_allocs_sunk === 1, `allocs=${stats.shape_allocs_sunk}`);
+});
+
+test("sink-ctor: live-outs cross the epoch join through minted params", () => {
+    const { n, printed, stats } = runCtorSink({ twoDiamonds: true });
+    assert(n === 1, `sunk=${n}`);
+    assertContains(printed, "epoch_check");
+    assertNotContains(printed, "make_object_shaped");
+    assert(stats.shape_allocs_sunk === 1, `allocs=${stats.shape_allocs_sunk}`);
+});
+
+test("sink-ctor: refusals leave the construct alone", () => {
+    const attacks: CtorSinkOpts[] = [
+        { secondStore: true },
+        { protoWrite: true },
+        { trailingCtorCode: true },
+        { swappedFill: true },
+        { argcMismatch: true },
+        { escape: true },
+    ];
+    for (const a of attacks) {
+        const { n, printed } = runCtorSink(a);
+        assert(n === 0, `${JSON.stringify(a)}: sunk=${n}`);
+        assertNotContains(printed, "epoch_check");
+    }
+});
+
+test("sink-ctor: a non-promoted slot declines", () => {
+    const { mod, user } = buildCtorSinkModule({});
+    verifyModule(mod);
+    const n = sinkConstructResults(mod, new Set<number>(), "toplevel");
+    assert(n === 0, `sunk=${n}`);
+    verifyModule(mod);
+    assertNotContains(printFunction(user), "epoch_check");
+});
+
+test("sink-ctor: EJS_NO_CTOR_SINK leaves the construct alone", () => {
+    process.env["EJS_NO_CTOR_SINK"] = "1";
+    try {
+        const { n, printed } = runCtorSink({});
+        assert(n === 0, `sunk=${n}`);
+        assertNotContains(printed, "epoch_check");
+    } finally {
+        delete process.env["EJS_NO_CTOR_SINK"];
     }
 });
 

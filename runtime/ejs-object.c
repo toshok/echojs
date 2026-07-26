@@ -1198,6 +1198,10 @@ ejsval _ejs_Object EJSVAL_ALIGNMENT;
 ejsval _ejs_Object__proto__ EJSVAL_ALIGNMENT;
 ejsval _ejs_Object_prototype EJSVAL_ALIGNMENT;
 
+// starts nonzero so a check that somehow runs before init completes
+// fails closed; _ejs_init zeroes it once the builtins are in place
+uint64_t _ejs_accessor_epoch = 1;
+
 // ES2015, June 2015
 // 19.1.1.1 Object ( [ value ] )
 static EJS_NATIVE_FUNC(_ejs_Object_impl) {
@@ -2304,6 +2308,10 @@ _ejs_object_specop_set_prototype_of (ejsval O, ejsval V)
 
 
     // 9. Set the value of the [[Prototype]] internal slot of O to V.
+    // A prototype swap can introduce intercepting properties (or an
+    // exotic object) into some fresh object's [[Set]] path — retire the
+    // virtualized-constructor fast path (ejs-object.h).
+    _ejs_accessor_epoch++;
     O_->proto = V;
     _ejs_gc_remember(O_, V);
 
@@ -2571,6 +2579,22 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
     if (_ejs_property_desc_has_value(Desc))  _ejs_gc_remember(obj, Desc->value);
     if (_ejs_property_desc_has_getter(Desc)) _ejs_gc_remember(obj, Desc->getter);
     if (_ejs_property_desc_has_setter(Desc)) _ejs_gc_remember(obj, Desc->setter);
+
+    // a descriptor that could intercept a later [[Set]] through the
+    // prototype chain — an accessor, or a non-writable data property —
+    // retires the virtualized-constructor fast path (ejs-object.h).
+    // Only ORDINARY receivers count: a virtualized instance's chain is
+    // ctor.prototype -> Object.prototype, both ordinary, and any other
+    // object can only join such a chain through a [[SetPrototypeOf]]
+    // (which bumps unconditionally) or a ctor.prototype swap (which the
+    // compiler declines statically).  Without this screen the fast path
+    // would die at startup: every closure's non-writable name/length
+    // and every module's export accessors land here.  Bumping on a
+    // define that ends up rejected is merely conservative.
+    if (obj->ops == &_ejs_Object_specops &&
+        (_ejs_property_desc_has_getter(Desc) || _ejs_property_desc_has_setter(Desc) ||
+         (_ejs_property_desc_has_writable(Desc) && !_ejs_property_desc_is_writable(Desc))))
+        _ejs_accessor_epoch++;
 
     // shaped mode: route shaped objects up front.  Plain default-
     // attribute data properties live in slot storage; anything the

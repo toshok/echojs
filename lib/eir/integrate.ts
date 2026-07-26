@@ -33,6 +33,7 @@ import { FunctionBuilder } from "./builder";
 import { verifyModule } from "./verifier";
 import { injectLowTierProbes } from "./lowtier-probe";
 import { optimizeModule } from "./optimize";
+import { sinkConstructResults } from "./sink-construct";
 import { printModule } from "./printer";
 import type * as e from "../estree";
 import type { ModuleInfo } from "../module-info";
@@ -64,6 +65,8 @@ export type CollectResult =
           // typed (raw f64) slot accesses emitted
           typed_loads: number;
           typed_stores: number;
+          // construct sites virtualized by constructor-result sinking
+          ctor_sunk: number;
           // specialization stats (null when --types is off or nothing qualified)
           spec: SpecStats | null;
           error?: undefined;
@@ -82,6 +85,7 @@ export type CollectResult =
           fence_declined?: undefined;
           typed_loads?: undefined;
           typed_stores?: undefined;
+          ctor_sunk?: undefined;
           spec?: undefined;
       };
 
@@ -529,6 +533,32 @@ export function collectEIRToplevel(
                 }
                 if (spec_stats.specialized === 0 && spec_stats.rejected === 0) spec_stats = null;
             }
+
+            // constructor-result sinking: epoch-guarded
+            // virtualization of module-local shaped-constructor results
+            // (docs/sinking-plan.md).  Runs after specialization — the
+            // hot construct sites live inside the clones — and re-runs
+            // the optimizer so the shaped-literal sink drains the
+            // planted virtual allocations.  EJS_NO_CTOR_SINK bisects
+            // (checked inside the pass).
+            if (oracle) {
+                const promoted = new Set<number>();
+                if (this_module_info)
+                    this_module_info.exports.forEach((einfo) => {
+                        if (einfo.promoted) promoted.add(einfo.slot_num);
+                    });
+                const n = sinkConstructResults(eir_module, promoted, info.name);
+                if (n > 0) {
+                    verifyModule(eir_module);
+                    optimizeModule(eir_module);
+                    verifyModule(eir_module);
+                    typed_stats.ctor_sunk = n;
+                    debug.log(
+                        1,
+                        `EIR-ctor-sink: ${filename}: ${n} construct site(s) virtualized`
+                    );
+                }
+            }
             if (dumpOptRequested(options)) dumpModule(filename, "optimized", eir_module);
         }
 
@@ -553,6 +583,7 @@ export function collectEIRToplevel(
             fence_declined: typed_stats.fence_declined ?? {},
             typed_loads: typed_stats.typed_loads ?? 0,
             typed_stores: typed_stats.typed_stores ?? 0,
+            ctor_sunk: typed_stats.ctor_sunk ?? 0,
             spec: spec_stats,
         };
     } catch (e) {

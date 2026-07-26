@@ -49,6 +49,9 @@ export interface VisitorSurface {
     // value's payload in the nursery range" (layout knowledge lives in
     // compiler.ts with the other NaN-box tests)
     emitYoungCheck(val: llvm.Value): llvm.Value;
+    // i1: the runtime's accessor epoch is still zero (one global load +
+    // compare; the global lives beside the other runtime seams)
+    emitAccessorEpochCheck(): llvm.Value;
     // inline nursery bump allocation for closure envs
     emitEnvAllocInline(n: number, slowCall: () => llvm.Value): llvm.Value;
     // the gc-frame record (precise relocatable JS roots) and
@@ -793,6 +796,9 @@ export class EIREmitter {
                 );
                 return;
             }
+            case "epoch_check":
+                this.values.set(inst, this.v.emitAccessorEpochCheck());
+                return;
             case "unbox_f64":
                 this.values.set(inst, this.v.unboxDouble(this.val(inst.operands[0])));
                 return;

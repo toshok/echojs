@@ -160,6 +160,8 @@ _ejs_proxy_specop_get_prototype_of (ejsval O)
 static EJSBool
 _ejs_proxy_specop_set_prototype_of (ejsval O, ejsval V)
 {
+    // trapped proto swaps never reach the ordinary specop's bump
+    _ejs_accessor_epoch++;
     EJSProxy* proxy = EJSVAL_TO_PROXY(O);
     // 1. Assert: Either Type(V) is Object or Type(V) is Null. 
 

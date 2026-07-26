@@ -231,6 +231,15 @@ export const OPS = {
     // must take the sequential slow arm, where mid-construction
     // observables behave identically).
     fill_object_shaped: { arity: -1, effects: E.GC | E.WRITE, imms: ["shape"] },
+    // i1: is the runtime's accessor epoch still zero — i.e. has NO user
+    // code installed anything that could intercept a [[Set]] through a
+    // fresh object's prototype chain (accessor property, non-writable
+    // data property, prototype swap; see _ejs_accessor_epoch in
+    // ejs-object.h)?  Minted only by the optimizer's constructor-result
+    // sinking, guarding a virtualized (allocation-free) construct
+    // against the interception the deleted stores could have met.  One
+    // global load + compare; READ because the global is mutable.
+    epoch_check: { arity: 0, effects: E.READ, sig: { params: [], result: "i1" } },
     // a raw f64 constant (imms.value).  minted only by the optimizer
     // (rawJoinParams' const-number edge roots) and the specialization
     // pass; lowering itself always emits boxed `const` numbers.

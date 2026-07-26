@@ -280,6 +280,16 @@ extern ejsval _ejs_Object__proto__;
 extern ejsval _ejs_Object_prototype;
 extern EJSSpecOps _ejs_Object_specops;
 
+// the accessor epoch: 0 while no user code has installed anything that
+// could intercept a [[Set]] on a fresh object's prototype chain — an
+// accessor property, a non-writable data property, or a prototype swap.
+// Compiled construct sites test `== 0` to run virtualized (allocation-
+// free) constructor results; every intercept-capable installation
+// retires that fast path process-wide by bumping the counter.  Builtin
+// init installs (e.g. Object.prototype.__proto__) predate the zeroing
+// at the end of _ejs_init, so they never count.  See docs/sinking-plan.md.
+extern uint64_t _ejs_accessor_epoch;
+
 void _ejs_object_init_proto();
 
 ejsval _ejs_object_new  (ejsval proto, EJSSpecOps* ops);

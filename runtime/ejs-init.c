@@ -435,4 +435,12 @@ _ejs_init(int argc, char** argv)
     _ejs_gc_allocate_oom_exceptions();
 
     EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs__ejs, unhandledException, _ejs_unhandledException, 0);
+
+    // builtin installs above (Object.prototype.__proto__ et al) predate
+    // user code and are audited against the virtualized-constructor
+    // contract (ejs-object.h): the only builtin accessor reachable from
+    // a fresh ordinary object's prototype chain is __proto__, a name the
+    // compiler's constructor fence never admits as a field.  Everything
+    // after this point counts.
+    _ejs_accessor_epoch = 0;
 }
