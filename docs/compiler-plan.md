@@ -29,7 +29,8 @@ shaped-world continuation), shape-guard regions (see shapes-plan).
 
 ## Phases
 
-- [ ] **compiler-P1 — Optimizer residue.**  The items from the
+- [x] **compiler-P1 — Optimizer residue.**  DONE 2026-07-28 —
+      compiler-p1-results.md has the gate numbers.  The items from the
       original optimization list not owned by sinking-plan or
       shapes-plan:
       - the usual SSA passes where they pay: constant/copy
@@ -41,6 +42,60 @@ shaped-world continuation), shape-guard regions (see shapes-plan).
       - slot-load CSE for toplevel receivers (each module-slot access
         currently reloads, which blocks guard-region merging at
         toplevel — noted at shapes-P3).
+      Landed shape (`lib/eir/cleanup.ts`, `lib/eir/devirt.ts`):
+      - **Type lattice**: trust-free flat lattice over boxed values
+        (const kinds, fixed-result generic ops, allocation ops,
+        `add`'s operand rule, block-param meets to fixpoint); sound
+        with no oracle, so it fires on flag-off compiles too.
+      - **Cleanup fixpoint** (runs LAST in optimizeFunction, after the
+        region passes for the same reason foldUnboxOfBox does):
+        primitive-const folding evaluated in the hosting engine
+        (string-minting folds and string relationals excluded —
+        number formatting and collation stay the runtime's; equality
+        on `-0` declined — the runtime's tag-compare quirk (math2.js
+        xfail) would otherwise diverge from the host AND break stage
+        identity under self-compile); typeof folds matching the
+        RUNTIME's mapping (null→"null" quirk included);
+        `typeof x === "T"` → the (previously unminted) `typeof_is`
+        op, now emitted via `_ejs_op_typeof_is_*`; cond_br folding on
+        known truthiness / never-number `has_tag` / never-shaped
+        `has_shape`; `to_boolean(logical_not x)` branch inversion;
+        trivial block-param pruning (the SSA form of copy
+        propagation); lattice-typed f64 lowering — generic
+        add/sub/mul/div both of whose operands are proven numbers
+        compute unboxed with NO guard, and lt/gt feed cond_br via
+        f64_lt when the whole same-block chain rewrites.
+        `EJS_NO_EIR_CLEANUP` bisects.
+      - **Module-slot load CSE** (before the region passes — receiver
+        identity is what lets toplevel shape regions merge):
+        block-local availability with store-to-load forwarding,
+        killed at CALL-effect instructions; plus a dominance tier for
+        STABLE %self slots (exactly one static store, in the toplevel
+        entry block — the init-flag-before-body ordering makes the
+        toplevel run-once, so such a slot never changes during any
+        activation; accessor setters count as stores, so externally
+        writable exports never qualify).  `EJS_NO_SLOT_CSE` bisects.
+      - **Devirtualization** (module pass, runs after specialization
+        so it never starves the strictly-better call_typed rewrite):
+        SSA-visible `call` of a `make_closure` goes direct with the
+        closure's env; calls through a single-store %self slot go
+        direct with an undefined env when the callee's %env param is
+        unused (load-observes-store proven via the specialize.ts
+        prefix rule or same-function dominance).  Functions whose
+        closures could reach set_constructor_kind_* decline (the
+        invoke_closure class-ctor TypeError must survive); an
+        unenumerable marking operand declines the whole module.
+        `EJS_NO_DEVIRT` bisects.
+      - Fallout fixed en route (compiler-p1-results.md has the full
+        stories): `Map.prototype.delete` was an unimplemented runtime
+        stub (first compiler-side caller was this phase's CSE);
+        ejs-llvm lacked every FP IRBuilder binding except createFAdd
+        (flag-off compiles never emitted f64 before the lattice
+        pass); the emitter's double-const cache collided `-0` with
+        `+0` (and the fix's guard had to avoid the strict_eq `-0 ===
+        0` tag-compare quirk to work under self-host); generator
+        suspension makes "stable" slots unstable mid-activation —
+        suspendable functions decline the CSE exemptions.
 - [ ] **compiler-P2 — TypeScript port of the compiler.**  The compiler
       converts from JS to TypeScript (largely done for lib/eir/ and
       lib/*.ts — the strict-TS conversion landed with the EIR work);

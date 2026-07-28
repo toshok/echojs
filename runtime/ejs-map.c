@@ -64,14 +64,25 @@ _ejs_map_delete (ejsval map, ejsval key)
     // our caller should have already validated and thrown appropriate TypeErrors
     EJS_ASSERT(EJSVAL_IS_MAP(map));
 
-    // 4. Let entries be the List that is the value of M’s [[MapData]] internal slot.
-    // 5. Repeat for each Record {[[key]], [[value]]} p that is an element of entries,
-    // a. If p.[[key]] is not empty and SameValueZero(p.[[key]], key) is true, then
-    // i. Set p.[[key]] to empty.
-    // ii. Set p.[[value]] to empty.
-    // iii. Return true.
-    // 6. Return false.
+    EJSMap* _map = EJSVAL_TO_MAP(map);
 
+    // 4. Let entries be the List that is the value of M’s [[MapData]] internal slot.
+    EJSKeyValueEntry* entries = _map->head_insert;
+
+    // 5. Repeat for each Record {[[key]], [[value]]} p that is an element of entries,
+    for (EJSKeyValueEntry* p = entries; p; p = p->next_insert) {
+        // a. If p.[[key]] is not empty and SameValueZero(p.[[key]], key) is true, then
+        if (!EJSVAL_IS_NO_ITER_VALUE_MAGIC(p->key) && SameValueZero (p->key, key)) {
+            // i. Set p.[[key]] to empty.
+            p->key = MAGIC_TO_EJSVAL_IMPL(EJS_NO_ITER_VALUE);
+            // ii. Set p.[[value]] to empty.
+            p->value = MAGIC_TO_EJSVAL_IMPL(EJS_NO_ITER_VALUE);
+            // iii. Return true.
+            return _ejs_true;
+        }
+    }
+
+    // 6. Return false.
     return _ejs_false;
 }
 

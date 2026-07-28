@@ -351,7 +351,15 @@ class LLVMIRVisitor implements VisitorSurface {
     }
 
     loadDoubleEjsValue(n: number): llvm.Value {
-        return this.loadCachedEjsValue(`num_${n}`, (alloca) => this.storeDouble(alloca, n));
+        // -0 stringifies as "0": without the special case it would share
+        // +0's cache slot (whichever the function emits first wins, and
+        // 1/x flips sign — found by the optimizer's neg-of-const fold).
+        // The test is 1/n === -Infinity, NOT `n === 0 && 1/n < 0`: under
+        // the self-hosted runtime `-0 === 0` is false (the strict_eq
+        // tag-compare quirk, math2.js), which silently disabled the
+        // special case exactly where it mattered.
+        const key = 1 / n === -Infinity ? "num_-0" : `num_${n}`;
+        return this.loadCachedEjsValue(key, (alloca) => this.storeDouble(alloca, n));
     }
     loadNullEjsValue(): llvm.Value {
         return this.loadCachedEjsValue("null", (alloca) => this.storeNull(alloca));

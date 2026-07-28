@@ -31,6 +31,7 @@ import {
     threadBooleanJoins,
 } from "./optimize-guards";
 import { sinkFlowAllocations } from "./sink-flow";
+import { cleanupFunction, computeStableSlots, cseModuleSlotLoads } from "./cleanup";
 
 export interface OptStats {
     allocs_sunk: number;
@@ -63,6 +64,13 @@ export interface OptStats {
     // object at their single escape site
     flow_allocs_sunk: number;
     allocs_materialized: number;
+    // cleanup passes (cleanup.ts, compiler-P1)
+    consts_folded: number;
+    branches_folded: number;
+    params_pruned: number;
+    typeof_rewrites: number;
+    lattice_arith: number;
+    slot_loads_cse: number;
 }
 
 function newStats(): OptStats {
@@ -85,6 +93,12 @@ function newStats(): OptStats {
         args_sunk: 0,
         flow_allocs_sunk: 0,
         allocs_materialized: 0,
+        consts_folded: 0,
+        branches_folded: 0,
+        params_pruned: 0,
+        typeof_rewrites: 0,
+        lattice_arith: 0,
+        slot_loads_cse: 0,
     };
 }
 
@@ -493,6 +507,8 @@ export interface SinkFlags {
     noShaped: boolean;
     noArgs: boolean;
     noFlow: boolean;
+    noCse: boolean;
+    noCleanup: boolean;
 }
 
 function readSinkFlags(): SinkFlags {
@@ -500,6 +516,8 @@ function readSinkFlags(): SinkFlags {
         noShaped: !!process.env["EJS_NO_SHAPED_SINK"],
         noArgs: !!process.env["EJS_NO_ARGS_SINK"],
         noFlow: !!process.env["EJS_NO_FLOW_SINK"],
+        noCse: !!process.env["EJS_NO_SLOT_CSE"],
+        noCleanup: !!process.env["EJS_NO_EIR_CLEANUP"],
     };
 }
 
@@ -958,7 +976,15 @@ function eliminateDead(fn: Func, stats: OptStats): boolean {
 
 // --- driver -------------------------------------------------------------------
 
-export function optimizeFunction(fn: Func, module?: Module, stats?: OptStats): OptStats {
+export function optimizeFunction(
+    fn: Func,
+    module?: Module,
+    stats?: OptStats,
+    // the module's stable %self slots (computeStableSlots), for slot-load
+    // CSE.  optimizeModule computes and threads this; standalone callers
+    // (tests) may omit it — CSE then runs block-local only.
+    stableSlots?: Set<string>
+): OptStats {
     const s = stats || newStats();
     const flags = readSinkFlags();
     // to fixpoint: inlining an IIFE exposes its env and literals;
@@ -992,6 +1018,11 @@ export function optimizeFunction(fn: Func, module?: Module, stats?: OptStats): O
         if (eliminateDead(fn, s)) changed = true;
         if (!changed || ++rounds > 10) break;
     }
+    // module-slot load CSE runs BEFORE the region passes: a toplevel
+    // receiver reloaded per access is a distinct SSA value per region,
+    // and receiver identity is exactly what lets adjacent shape regions
+    // merge (the shapes-P3 note).
+    if (!flags.noCse && cseModuleSlotLoads(fn, stableSlots, s)) eliminateDead(fn, s);
     // guard-region passes over the --types diamonds.  They run
     // after the general fixpoint (env scalarization has exposed the SSA
     // values the diamonds guard) and bail immediately when lowering
@@ -1020,11 +1051,28 @@ export function optimizeFunction(fn: Func, module?: Module, stats?: OptStats): O
     // or rewriting const unboxes earlier would refuse valid merges.
     if (foldUnboxOfBox(fn, s)) eliminateDead(fn, s);
     if (threadBooleanJoins(fn, s)) eliminateDead(fn, s);
+    // the compiler-P1 cleanup passes (cleanup.ts): constant folding,
+    // trivial params, to_boolean/typeof elimination, lattice-typed f64
+    // lowering.  They run LAST for the same reason foldUnboxOfBox does:
+    // folding arithmetic earlier would perturb the exact IR shapes the
+    // region matchers verify.
+    if (!flags.noCleanup && cleanupFunction(fn, s)) {
+        foldUnboxOfBox(fn, s);
+        eliminateDead(fn, s);
+    }
     return s;
 }
 
-export function optimizeModule(m: Module): OptStats {
+// exposed for the module-level passes (devirt.ts) that delete uses and
+// want their dead operands swept without a full optimizer run
+export function eliminateDeadInFunction(fn: Func, stats?: OptStats): boolean {
+    return eliminateDead(fn, stats || newStats());
+}
+
+export function optimizeModule(m: Module, toplevelName?: string): OptStats {
     const stats = newStats();
-    for (const fn of m.functions) optimizeFunction(fn, m, stats);
+    const stableSlots =
+        toplevelName !== undefined ? computeStableSlots(m.functions, toplevelName) : undefined;
+    for (const fn of m.functions) optimizeFunction(fn, m, stats, stableSlots);
     return stats;
 }

@@ -678,6 +678,18 @@ export class EIREmitter {
                 return;
             }
 
+            case "typeof_is": {
+                // the single-tag test cleanup.ts rewrites
+                // `typeof x === "T"` into; boxed boolean result via the
+                // runtime's typeof_is_<type> entries
+                const t = String(inst.imms["type"]);
+                const callee = (rt as unknown as Record<string, import("@llvm").EjsFunction | undefined>)[
+                    `typeof_is_${t}`
+                ];
+                if (!callee) throw new Error(`EIR emit: no typeof_is runtime entry for '${t}'`);
+                return this.emitCallLike(inst, callee, [this.val(inst.operands[0])], "typeofis");
+            }
+
             // --- the typed low tier ---------------------------
             // has_tag/unbox/box mirror LLVMIRVisitor's NaN-boxing helpers;
             // the f64_* ops are plain LLVM float arithmetic.  has_tag and

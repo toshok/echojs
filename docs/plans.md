@@ -73,7 +73,7 @@ gc-plan.md; numbers in gc-p0/p2/p3-results.md.
 - [x] **P4.4** emitter gc-frames: precise relocatable JS roots + env
       slot-address inlining + move-everything stress (gc-P3).
 
-## P5 — Allocation elimination  [~]
+## P5 — Allocation elimination  [x]
 
 Delete the allocations the mover made cheap.  Detail: sinking-plan.md.
 
@@ -83,8 +83,9 @@ Delete the allocations the mover made cheap.  Detail: sinking-plan.md.
       types-bench2 alloc loop (sinking-P2).
 - [x] **P5.3** flow-sensitive field writes, partial escapes,
       rest_args/args_obj (sinking-P3).
-- [ ] **P5.4** optimizer residue: SSA cleanups, type lattice,
-      slot-load CSE for toplevel receivers (compiler-P1).
+- [x] **P5.4** optimizer residue: SSA cleanups, type lattice,
+      slot-load CSE for toplevel receivers (compiler-P1).  DONE
+      2026-07-28 — docs/compiler-p1-results.md.
 
 ## P6 — Compacting, shape-fused GC
 

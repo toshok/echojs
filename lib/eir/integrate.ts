@@ -32,7 +32,8 @@ import { Module } from "./ir";
 import { FunctionBuilder } from "./builder";
 import { verifyModule } from "./verifier";
 import { injectLowTierProbes } from "./lowtier-probe";
-import { optimizeModule } from "./optimize";
+import { eliminateDeadInFunction, optimizeModule } from "./optimize";
+import { devirtualizeModule } from "./devirt";
 import { sinkConstructResults } from "./sink-construct";
 import { printModule } from "./printer";
 import type * as e from "../estree";
@@ -469,7 +470,7 @@ export function collectEIRToplevel(
         // both), mirroring the EJS_NO_PROMOTE bisect hook
         let spec_stats: SpecStats | null = null;
         if (options.opt_level > 0 && !process.env["EJS_NO_EIR_OPT"]) {
-            const stats = optimizeModule(eir_module);
+            const stats = optimizeModule(eir_module, info.name);
             if (
                 stats.allocs_sunk ||
                 stats.reads_folded ||
@@ -485,7 +486,13 @@ export function collectEIRToplevel(
                 stats.shape_allocs_sunk ||
                 stats.shape_guards_sunk ||
                 stats.args_sunk ||
-                stats.flow_allocs_sunk
+                stats.flow_allocs_sunk ||
+                stats.consts_folded ||
+                stats.branches_folded ||
+                stats.params_pruned ||
+                stats.typeof_rewrites ||
+                stats.lattice_arith ||
+                stats.slot_loads_cse
             )
                 debug.log(
                     1,
@@ -503,7 +510,13 @@ export function collectEIRToplevel(
                         `${stats.shape_guards_sunk} shape guard branch(es) resolved, ` +
                         `${stats.args_sunk} args object(s) sunk, ` +
                         `${stats.flow_allocs_sunk} flow-sunk alloc(s) ` +
-                        `(${stats.allocs_materialized} materialized)`
+                        `(${stats.allocs_materialized} materialized), ` +
+                        `${stats.consts_folded} const(s) folded, ` +
+                        `${stats.branches_folded} branch(es) folded, ` +
+                        `${stats.params_pruned} trivial param(s) pruned, ` +
+                        `${stats.typeof_rewrites} typeof test(s) rewritten, ` +
+                        `${stats.lattice_arith} lattice-typed op(s) lowered, ` +
+                        `${stats.slot_loads_cse} slot load(s) CSE'd`
                 );
             verifyModule(eir_module);
 
@@ -527,7 +540,7 @@ export function collectEIRToplevel(
                 );
                 if (changed) {
                     verifyModule(eir_module);
-                    optimizeModule(eir_module);
+                    optimizeModule(eir_module, info.name);
                     verifyModule(eir_module);
                     debug.log(
                         1,
@@ -555,12 +568,33 @@ export function collectEIRToplevel(
                 const n = sinkConstructResults(eir_module, promoted, info.name);
                 if (n > 0) {
                     verifyModule(eir_module);
-                    optimizeModule(eir_module);
+                    optimizeModule(eir_module, info.name);
                     verifyModule(eir_module);
                     typed_stats.ctor_sunk = n;
                     debug.log(
                         1,
                         `EIR-ctor-sink: ${filename}: ${n} construct site(s) virtualized`
+                    );
+                }
+            }
+
+            // direct-call devirtualization (devirt.ts).  Runs LAST — a
+            // devirtualized site no longer uses its closure/slot-load as
+            // a plain-call callee, which would make specialize.ts's
+            // closed-world enumeration decline the strictly-better
+            // call_typed rewrite.  EJS_NO_DEVIRT bisects (checked inside
+            // the pass).
+            {
+                const dstats = devirtualizeModule(eir_module, info.name);
+                if (dstats.ssa_sites || dstats.slot_sites) {
+                    // sweep the closures/loads the rewrites just orphaned
+                    for (const fn of eir_module.functions) eliminateDeadInFunction(fn);
+                    verifyModule(eir_module);
+                    debug.log(
+                        1,
+                        `EIR-devirt: ${filename}: ` +
+                            `${dstats.ssa_sites + dstats.slot_sites} call site(s) devirtualized ` +
+                            `(${dstats.ssa_sites} ssa, ${dstats.slot_sites} slot)`
                     );
                 }
             }

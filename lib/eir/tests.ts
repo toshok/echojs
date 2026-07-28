@@ -13,6 +13,7 @@ import { verifyFunction, verifyModule } from "./verifier";
 import { lowerFunctionNode, lowerProgram, lowerAnalyzedFunction } from "./lower";
 import { optimizeFunction, optimizeModule } from "./optimize";
 import type { OptStats } from "./optimize";
+import { devirtualizeModule } from "./devirt";
 import { specializeModule } from "./specialize";
 import { ScopeAnalysis } from "./scopes";
 import { isLowerNotSupported } from "./errors";
@@ -1358,8 +1359,12 @@ test("guard-merge: hypot2 becomes one guard region with one slow path", () => {
     assert(countOps(fn, "has_tag") === 2, `has_tag = ${countOps(fn, "has_tag")}`);
     const ft = guardFalseTargets(fn);
     assert(ft.size === 1, `guard-failure targets = ${ft.size}`);
-    // the full generic computation survives on the (single) slow path
-    assert(countOps(fn, "mul") === 2 && countOps(fn, "add") === 1, "generic ops must survive");
+    // the generic muls survive on the (single) slow path; the slow add
+    // is lattice-lowered afterwards (mul results are proven numbers —
+    // cleanup.ts), so the ToNumber/throw behavior the slow path owes is
+    // exactly the muls'
+    assert(countOps(fn, "mul") === 2, "generic muls must survive");
+    assert(countOps(fn, "add") === 0, `slow add lowers to f64, saw ${countOps(fn, "add")}`);
 });
 
 test("guard-merge: merged fast region is unboxed end-to-end, boxing once", () => {
@@ -1367,9 +1372,11 @@ test("guard-merge: merged fast region is unboxed end-to-end, boxing once", () =>
         "function hypot2(a, b) { return a * a + b * b; }",
         numericStubOracle(["a", "b"])
     );
-    // exactly one box at the region exit; only the region INPUTS unbox
-    assert(countOps(fn, "box_f64") === 1, `box_f64 = ${countOps(fn, "box_f64")}`);
-    assert(countOps(fn, "unbox_f64") === 4, `unbox_f64 = ${countOps(fn, "unbox_f64")}`);
+    // one box at the region exit, one more where cleanup.ts lowers the
+    // slow path's add over the (proven-number) mul results; the region
+    // INPUTS unbox on the fast side, the mul results on the slow side
+    assert(countOps(fn, "box_f64") === 2, `box_f64 = ${countOps(fn, "box_f64")}`);
+    assert(countOps(fn, "unbox_f64") === 6, `unbox_f64 = ${countOps(fn, "unbox_f64")}`);
     // intermediate joins carry raw f64 params (the optimizer-scoped lift
     // of the P2 boxed-edges rule), all marked for the verifier
     let rawParams = 0;
@@ -2413,6 +2420,12 @@ function shapeOptStats(): OptStats {
         args_sunk: 0,
         flow_allocs_sunk: 0,
         allocs_materialized: 0,
+        consts_folded: 0,
+        branches_folded: 0,
+        params_pruned: 0,
+        typeof_rewrites: 0,
+        lattice_arith: 0,
+        slot_loads_cse: 0,
     };
 }
 
@@ -3476,6 +3489,334 @@ test("sink-ctor: EJS_NO_CTOR_SINK leaves the construct alone", () => {
         assertNotContains(printed, "epoch_check");
     } finally {
         delete process.env["EJS_NO_CTOR_SINK"];
+    }
+});
+
+// --- cleanup (compiler-P1): const folding, lattice, CSE, devirt -----------------
+
+function optStatsOf(src: string): { fn: Func; printed: string; stats: OptStats } {
+    let { fn } = lowerOne(src);
+    const stats = optimizeFunction(fn);
+    verifyFunction(fn);
+    return { fn, printed: printFunction(fn), stats };
+}
+
+test("cleanup: numeric constant arithmetic folds", () => {
+    const { fn, stats } = optStatsOf("function f() { return 2 * 3 + 4; }");
+    let ret: Inst | null = null;
+    fn.forEachInst((i) => {
+        if (i.op === "return") ret = i;
+    });
+    assert(ret!.operands[0]!.op === "const", "return operand is a const");
+    assert(ret!.operands[0]!.imms.value === 10, "2*3+4 folds to 10");
+    assert(stats.consts_folded >= 2, `consts_folded=${stats.consts_folded}`);
+});
+
+test("cleanup: string concat folds only for string operands", () => {
+    const { fn } = optStatsOf('function f() { return "a" + "b"; }');
+    let ret: Inst | null = null;
+    fn.forEachInst((i) => {
+        if (i.op === "return") ret = i;
+    });
+    assert(ret!.operands[0]!.op === "const", "atom+atom folds");
+    assert(ret!.operands[0]!.imms.value === "ab", "concat result");
+    // number-to-string formatting is the runtime's business: no fold
+    const { printed } = optStatsOf('function f() { return "a" + 1; }');
+    assertContains(printed, " = add ");
+});
+
+test("cleanup: typeof x === 'T' becomes typeof_is", () => {
+    const { printed, stats } = optStatsOf('function f(x) { return typeof x === "number"; }');
+    assertContains(printed, "typeof_is");
+    assertNotContains(printed, "strict_eq");
+    assertNotContains(printed, " = typeof "); // dead typeof swept
+    assert(stats.typeof_rewrites === 1, `typeof_rewrites=${stats.typeof_rewrites}`);
+});
+
+test("cleanup: typeof of a lattice-known value folds to its tag", () => {
+    const { fn } = optStatsOf("function f() { return typeof 1; }");
+    let ret: Inst | null = null;
+    fn.forEachInst((i) => {
+        if (i.op === "return") ret = i;
+    });
+    assert(ret!.operands[0]!.imms.value === "number", "typeof 1 is 'number'");
+    const o = optStatsOf("function f() { return typeof {}; }");
+    let ret2: Inst | null = null;
+    o.fn.forEachInst((i) => {
+        if (i.op === "return") ret2 = i;
+    });
+    assert(ret2!.operands[0]!.imms.value === "object", "typeof {} is 'object'");
+});
+
+test("cleanup: if (!x) inverts the branch instead of calling not", () => {
+    const { printed, stats } = optStatsOf("function f(x) { if (!x) return 1; return 2; }");
+    assertNotContains(printed, "logical_not");
+    assert(stats.branches_folded >= 1, `branches_folded=${stats.branches_folded}`);
+});
+
+test("cleanup: known-truthiness conditions fold the branch", () => {
+    const { printed } = optStatsOf("function f() { if (null) return 1; return 2; }");
+    assertNotContains(printed, "cond_br");
+    const o = optStatsOf("function f() { if ({}) return 1; return 2; }");
+    assertNotContains(o.printed, "cond_br");
+    let ret: Inst | null = null;
+    o.fn.forEachInst((i) => {
+        if (i.op === "return" && ret === null) ret = i;
+    });
+    assert(ret!.operands[0]!.imms.value === 1, "object condition is truthy");
+});
+
+test("cleanup: lattice-proven number arithmetic lowers to f64 with no guard", () => {
+    // a*1 and b*1 are numbers by the mul result rule; the outer add
+    // then computes unboxed — with no oracle and no has_tag anywhere
+    const { printed, stats } = optStatsOf("function f(a, b) { return (a * 1) + (b * 1); }");
+    assertContains(printed, "f64_add");
+    assertNotContains(printed, "has_tag");
+    assert(stats.lattice_arith >= 1, `lattice_arith=${stats.lattice_arith}`);
+});
+
+test("cleanup: unary_plus on a proven number is the identity", () => {
+    const { printed } = optStatsOf("function f(a) { return +(a * 1); }");
+    assertNotContains(printed, "unary_plus");
+});
+
+test("cleanup: proven-number compare feeds cond_br through f64_lt", () => {
+    const { printed } = optStatsOf(
+        "function f(a, b) { if (a * 1 < b * 1) return 1; return 2; }"
+    );
+    assertContains(printed, "f64_lt");
+    assertNotContains(printed, " = lt ");
+    assertNotContains(printed, "to_boolean");
+});
+
+test("cleanup: trivial block params prune to their single value", () => {
+    const fb = new FunctionBuilder("f", ["%env", "%this"]);
+    const env = fb.fn.entry!.params[0]!;
+    const v = fb.constNumber(7);
+    const cond = fb.emit("to_boolean", [env], {});
+    const a = fb.newBlock("a");
+    const b = fb.newBlock("b");
+    const j = fb.newBlock("join");
+    const p = j.addParam("t");
+    fb.condBr(cond, a, [], b, []);
+    fb.sealBlock(a);
+    fb.sealBlock(b);
+    fb.setInsertPoint(a);
+    fb.br(j, [v]);
+    fb.setInsertPoint(b);
+    fb.br(j, [v]);
+    fb.sealBlock(j);
+    fb.setInsertPoint(j);
+    fb.ret(p);
+    const fn = fb.finish();
+    verifyFunction(fn);
+    const stats = optimizeFunction(fn);
+    verifyFunction(fn);
+    assert(stats.params_pruned === 1, `params_pruned=${stats.params_pruned}`);
+    let ret: Inst | null = null;
+    fn.forEachInst((i) => {
+        if (i.op === "return") ret = i;
+    });
+    assert(ret!.operands[0] === v, "return sees the value directly");
+});
+
+test("cleanup: EJS_NO_EIR_CLEANUP leaves the residue alone", () => {
+    process.env["EJS_NO_EIR_CLEANUP"] = "1";
+    try {
+        const { printed, stats } = optStatsOf("function f() { return 2 * 3 + 4; }");
+        assertContains(printed, " = mul ");
+        assert(stats.consts_folded === 0, `consts_folded=${stats.consts_folded}`);
+    } finally {
+        delete process.env["EJS_NO_EIR_CLEANUP"];
+    }
+});
+
+// --- module-slot load CSE -------------------------------------------------------
+
+test("slot-cse: same-block reloads fold; a call kills availability", () => {
+    const fb = new FunctionBuilder("g", ["%env", "%this"]);
+    const l1 = fb.emit("module_slot_load", [], { module: "%self", slot: 0 });
+    const l2 = fb.emit("module_slot_load", [], { module: "%self", slot: 0 });
+    const sum1 = fb.emit("add", [l1, l2], {});
+    fb.emit("call", [sum1, fb.constUndefined()], {});
+    const l3 = fb.emit("module_slot_load", [], { module: "%self", slot: 0 });
+    fb.ret(fb.emit("add", [sum1, l3], {}));
+    const fn = fb.finish();
+    verifyFunction(fn);
+    const stats = optimizeFunction(fn);
+    verifyFunction(fn);
+    // l2 folds to l1; l3 survives the CALL kill
+    assert(stats.slot_loads_cse === 1, `slot_loads_cse=${stats.slot_loads_cse}`);
+    let loads = 0;
+    fn.forEachInst((i) => {
+        if (i.op === "module_slot_load") loads++;
+    });
+    assert(loads === 2, `loads=${loads}`);
+});
+
+test("slot-cse: a stable slot's loads fold across calls and blocks", () => {
+    // toplevel: store the slot once in entry, read it on both sides of
+    // a call and across a diamond — every post-store load folds to the
+    // stored value
+    const mod = new Module("cse_mod");
+    const fb = new FunctionBuilder("toplevel", ["%env", "%this"]);
+    const obj = fb.emit("make_object", [], { keys: [] });
+    fb.emit("module_slot_store", [obj], { module: "%self", slot: 0 });
+    const l1 = fb.emit("module_slot_load", [], { module: "%self", slot: 0 });
+    fb.emit("call", [l1, fb.constUndefined()], {});
+    const t = fb.newBlock("t");
+    const f = fb.newBlock("f");
+    const j = fb.newBlock("j");
+    const cond = fb.emit("to_boolean", [fb.fn.entry!.params[0]!], {});
+    fb.condBr(cond, t, [], f, []);
+    fb.sealBlock(t);
+    fb.sealBlock(f);
+    fb.setInsertPoint(t);
+    fb.br(j, []);
+    fb.setInsertPoint(f);
+    fb.br(j, []);
+    fb.sealBlock(j);
+    fb.setInsertPoint(j);
+    const l2 = fb.emit("module_slot_load", [], { module: "%self", slot: 0 });
+    fb.ret(l2);
+    mod.addFunction(fb.finish());
+    verifyModule(mod);
+    const stats = optimizeModule(mod, "toplevel");
+    verifyModule(mod);
+    assert(stats.slot_loads_cse >= 2, `slot_loads_cse=${stats.slot_loads_cse}`);
+    let loads = 0;
+    mod.functions[0]!.forEachInst((i) => {
+        if (i.op === "module_slot_load") loads++;
+    });
+    assert(loads === 0, `loads=${loads}`);
+});
+
+test("slot-cse: a suspendable function declines the stable exemptions", () => {
+    // a generator body (post-desugar: generator_yield runtime calls)
+    // can see the toplevel's remaining stores run mid-suspension — its
+    // loads must reload even for stable slots
+    const mod = new Module("cse_gen_mod");
+    const fb = new FunctionBuilder("toplevel", ["%env", "%this"]);
+    const obj = fb.emit("make_object", [], { keys: [] });
+    fb.emit("module_slot_store", [obj], { module: "%self", slot: 0 });
+    fb.ret(fb.constUndefined());
+    mod.addFunction(fb.finish());
+    const gb = new FunctionBuilder("gen_body", ["%env", "%this"]);
+    const l1 = gb.emit("module_slot_load", [], { module: "%self", slot: 0 });
+    gb.emit("call_runtime", [l1], { name: "generator_yield" });
+    const l2 = gb.emit("module_slot_load", [], { module: "%self", slot: 0 });
+    gb.ret(l2);
+    mod.addFunction(gb.finish());
+    verifyModule(mod);
+    const stats = optimizeModule(mod, "toplevel");
+    verifyModule(mod);
+    assert(stats.slot_loads_cse === 0, `slot_loads_cse=${stats.slot_loads_cse}`);
+    let loads = 0;
+    mod.functions[1]!.forEachInst((i) => {
+        if (i.op === "module_slot_load") loads++;
+    });
+    assert(loads === 2, `loads=${loads}`);
+});
+
+test("slot-cse: a second store (an accessor setter) breaks stability", () => {
+    const mod = new Module("cse_mod2");
+    const fb = new FunctionBuilder("toplevel", ["%env", "%this"]);
+    const obj = fb.emit("make_object", [], { keys: [] });
+    fb.emit("module_slot_store", [obj], { module: "%self", slot: 0 });
+    const l1 = fb.emit("module_slot_load", [], { module: "%self", slot: 0 });
+    fb.emit("call", [l1, fb.constUndefined()], {});
+    const l2 = fb.emit("module_slot_load", [], { module: "%self", slot: 0 });
+    fb.ret(l2);
+    mod.addFunction(fb.finish());
+    const sb = new FunctionBuilder("set_export_x", ["%env", "%this", "value"]);
+    sb.emit("module_slot_store", [sb.readVariable("value", sb.cur)], {
+        module: "%self",
+        slot: 0,
+    });
+    sb.ret(sb.constUndefined());
+    mod.addFunction(sb.finish());
+    verifyModule(mod);
+    const stats = optimizeModule(mod, "toplevel");
+    verifyModule(mod);
+    // the load after the CALL must reload (the setter may have run)
+    assert(stats.slot_loads_cse === 1, `slot_loads_cse=${stats.slot_loads_cse}`);
+});
+
+// --- devirtualization -----------------------------------------------------------
+
+function buildDevirtModule(opts: { ctorMark?: boolean; envUse?: boolean }): {
+    mod: Module;
+    ssaCall: Inst;
+    slotCall: Inst;
+} {
+    const mod = new Module("devirt_mod");
+
+    // the callee: returns 1; optionally touches its env
+    const hb = new FunctionBuilder("helper", ["%env", "%this"]);
+    if (opts.envUse) hb.emit("env_load", [hb.fn.entry!.params[0]!], { slot: 0 });
+    hb.ret(hb.constNumber(1));
+    mod.addFunction(hb.finish());
+
+    // toplevel: closure minted, stored to %self slot 0, called via SSA
+    const fb = new FunctionBuilder("toplevel", ["%env", "%this"]);
+    const env = fb.constUndefined();
+    const clo = fb.emit("make_closure", [env], { fn: "helper", name: "helper" });
+    fb.emit("module_slot_store", [clo], { module: "%self", slot: 0 });
+    if (opts.ctorMark) fb.emit("call_runtime", [clo], { name: "set_constructor_kind_base" });
+    const ssaCall = fb.emit("call", [clo, fb.constUndefined()], {});
+    fb.ret(ssaCall);
+    mod.addFunction(fb.finish());
+
+    // another function calls through the slot
+    const gb = new FunctionBuilder("user", ["%env", "%this"]);
+    const load = gb.emit("module_slot_load", [], { module: "%self", slot: 0 });
+    const slotCall = gb.emit("call", [load, gb.constUndefined()], {});
+    gb.ret(slotCall);
+    mod.addFunction(gb.finish());
+
+    verifyModule(mod);
+    return { mod, ssaCall, slotCall };
+}
+
+test("devirt: SSA-visible and stable-slot call sites go direct", () => {
+    const { mod, ssaCall, slotCall } = buildDevirtModule({});
+    const stats = devirtualizeModule(mod, "toplevel");
+    verifyModule(mod);
+    assert(stats.ssa_sites === 1, `ssa_sites=${stats.ssa_sites}`);
+    assert(stats.slot_sites === 1, `slot_sites=${stats.slot_sites}`);
+    assert(ssaCall.imms.direct === "helper", "ssa site direct");
+    assert(slotCall.imms.direct === "helper", "slot site direct");
+    assert(slotCall.operands[0]!.op === "const", "slot site env is undefined const");
+});
+
+test("devirt: a constructor-kind-marked closure declines", () => {
+    const { mod, ssaCall, slotCall } = buildDevirtModule({ ctorMark: true });
+    const stats = devirtualizeModule(mod, "toplevel");
+    verifyModule(mod);
+    assert(stats.ssa_sites === 0 && stats.slot_sites === 0, "no sites rewritten");
+    assert(!ssaCall.imms.direct && !slotCall.imms.direct, "calls stay generic");
+});
+
+test("devirt: an env-using callee declines the cross-function slot site", () => {
+    const { mod, ssaCall, slotCall } = buildDevirtModule({ envUse: true });
+    const stats = devirtualizeModule(mod, "toplevel");
+    verifyModule(mod);
+    // SSA site still fine (the env value is right there); slot site
+    // can't supply the env cross-function
+    assert(stats.ssa_sites === 1, `ssa_sites=${stats.ssa_sites}`);
+    assert(stats.slot_sites === 0, `slot_sites=${stats.slot_sites}`);
+    assert(ssaCall.imms.direct === "helper" && !slotCall.imms.direct, "only the ssa site");
+});
+
+test("devirt: EJS_NO_DEVIRT leaves every site generic", () => {
+    process.env["EJS_NO_DEVIRT"] = "1";
+    try {
+        const { mod, ssaCall } = buildDevirtModule({});
+        const stats = devirtualizeModule(mod, "toplevel");
+        assert(stats.ssa_sites === 0 && stats.slot_sites === 0, "disabled");
+        assert(!ssaCall.imms.direct, "call stays generic");
+    } finally {
+        delete process.env["EJS_NO_DEVIRT"];
     }
 });
 

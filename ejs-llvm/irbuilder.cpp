@@ -126,6 +126,38 @@ namespace ejsllvm {
         return Value_new (_llvm_builder.CreateFAdd(left, right, name));
     }
 
+    static EJS_NATIVE_FUNC(IRBuilder_createFSub) {
+        REQ_LLVM_VAL_ARG(0, left);
+        REQ_LLVM_VAL_ARG(1, right);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
+
+        return Value_new (_llvm_builder.CreateFSub(left, right, name));
+    }
+
+    static EJS_NATIVE_FUNC(IRBuilder_createFMul) {
+        REQ_LLVM_VAL_ARG(0, left);
+        REQ_LLVM_VAL_ARG(1, right);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
+
+        return Value_new (_llvm_builder.CreateFMul(left, right, name));
+    }
+
+    static EJS_NATIVE_FUNC(IRBuilder_createFDiv) {
+        REQ_LLVM_VAL_ARG(0, left);
+        REQ_LLVM_VAL_ARG(1, right);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
+
+        return Value_new (_llvm_builder.CreateFDiv(left, right, name));
+    }
+
+    static EJS_NATIVE_FUNC(IRBuilder_createFCmpOLT) {
+        REQ_LLVM_VAL_ARG(0, left);
+        REQ_LLVM_VAL_ARG(1, right);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
+
+        return Value_new (_llvm_builder.CreateFCmpOLT(left, right, name));
+    }
+
     static EJS_NATIVE_FUNC(IRBuilder_createAlloca) {
         REQ_LLVM_TYPE_ARG(0, ty);
         FALLBACK_EMPTY_UTF8_ARG(1, name);
@@ -408,6 +440,10 @@ namespace ejsllvm {
         OBJ_METHOD(createCall);
         OBJ_METHOD(createInvoke);
         OBJ_METHOD(createFAdd);
+        OBJ_METHOD(createFSub);
+        OBJ_METHOD(createFMul);
+        OBJ_METHOD(createFDiv);
+        OBJ_METHOD(createFCmpOLT);
         OBJ_METHOD(createAlloca);
         OBJ_METHOD(createLoad);
         OBJ_METHOD(createStore);
