@@ -94,9 +94,10 @@ gc-plan.md, shapes-plan.md (Step B).
 
 - [x] **P6.1** mostly-copying major compaction + auto-tuned growth
       target (gc-P4).  DONE 2026-07-26 — docs/gc-p4-results.md.
-- [ ] **P6.2** shapes intersection: per-shape trace bitmaps, inline
+- [x] **P6.2** shapes intersection: per-shape trace bitmaps, inline
       slots, object-literal inline allocation, typed-slot barrier
-      elision (gc-P5; consumes shapes-plan's deferred Step B).
+      elision (gc-P5; consumes shapes-plan's deferred Step B).  DONE
+      2026-07-28 — docs/gc-p5-results.md.
 - [ ] **P6.3** collector structural refactor: cell-lifecycle module,
       LOS lookup, file split (runtime-P4; can land any time after
       P6.1, behavior-preserving).

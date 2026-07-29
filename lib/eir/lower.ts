@@ -579,9 +579,12 @@ class LowerFunction {
                     // static truth, no oracle fact needed (the runtime
                     // derives true reprs from the actual values and falls
                     // back to sequential sets off the shaped fast path).
-                    // Still --types-gated: flag-off lowering is untouched.
+                    // NOT --types-gated (gc-P5): without the oracle the
+                    // static reprs are simply all-boxed; the runtime's
+                    // birth derivation supplies the true ones, and the
+                    // single-cell embedded allocation applies to flag-off
+                    // literals exactly as to typed ones.
                     if (
-                        this.oracle &&
                         !process.env["EJS_NO_BORN_SHAPED"] &&
                         keys.length >= 1 &&
                         keys.length <= EJS_SHAPE_FIELD_CAP_MAX &&

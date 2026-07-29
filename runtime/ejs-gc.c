@@ -434,7 +434,16 @@ struct _LargeObjectInfo {
 #define OBJECT_SIZE_LOW_LIMIT_BITS 4  // smallest object we'll allocate (1<<4 = 16)
 #define OBJECT_SIZE_HIGH_LIMIT_BITS 8 // max object size for the non-LOS allocator = 256
 
-#define HEAP_PAGELISTS_COUNT (OBJECT_SIZE_HIGH_LIMIT_BITS - OBJECT_SIZE_LOW_LIMIT_BITS) + 1 // +1 because we're inclusive on OBJECT_SIZE_HIGH_LIMIT_BITS
+// heap_pages is indexed by ffs(cell_size) - OBJECT_SIZE_LOW_LIMIT_BITS,
+// i.e. 16B -> 1 .. 256B -> 5 ([0] is unused); +2 covers the inclusive
+// top class.  Until gc-P5 the ffs comparisons below routed 256-byte
+// cells to the LOS (ffs(256) = 9 > HIGH_LIMIT_BITS), so the top class
+// existed only on paper — the pre-gc-P4 LOS had a linear lookup that
+// made large cell populations quadratic to mark.  With the LOS bsearch
+// and the direct arena map in, the class is enabled: single-cell shaped
+// objects up to the 14-field cap (32+16+112 = 160) and >14-slot envs
+// now take pages, not the LOS.
+#define HEAP_PAGELISTS_COUNT (OBJECT_SIZE_HIGH_LIMIT_BITS - OBJECT_SIZE_LOW_LIMIT_BITS) + 2
 
 static EJSList heap_pages[HEAP_PAGELISTS_COUNT];
 static LargeObjectInfo *los_list;
@@ -1215,7 +1224,7 @@ static void
 profile_note_alloc(size_t size, int ffs_bucket, EJSScanType scan_type)
 {
     int idx;
-    if (ffs_bucket > OBJECT_SIZE_HIGH_LIMIT_BITS)
+    if (ffs_bucket > OBJECT_SIZE_HIGH_LIMIT_BITS + 1)
         idx = 0; // LOS
     else {
         idx = ffs_bucket - OBJECT_SIZE_LOW_LIMIT_BITS;
@@ -3348,7 +3357,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
     // OLD-gen growth: promotions and direct old allocations).  The
     // every-N stress knob triggers MINOR collections here — the full-GC
     // stress semantics of old mode are unchanged (below).
-    if (nursery_enabled && !gc_disabled && bucket <= OBJECT_SIZE_HIGH_LIMIT_BITS) {
+    if (nursery_enabled && !gc_disabled && bucket <= OBJECT_SIZE_HIGH_LIMIT_BITS + 1) {
         if (in_minor_gc) {
             _ejs_log ("GC BUG: young allocation during a minor collection\n");
             abort();
@@ -3390,7 +3399,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
 
     retry_allocation:
     {
-    if (bucket > OBJECT_SIZE_HIGH_LIMIT_BITS) {
+    if (bucket > OBJECT_SIZE_HIGH_LIMIT_BITS + 1) {
         SPEW(2, _ejs_log ("need to alloc %zd from los!!!\n", size));
         rv = alloc_from_los(size, scan_type);
         if (rv && nursery_enabled) {

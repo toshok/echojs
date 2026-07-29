@@ -753,7 +753,7 @@ class LLVMIRVisitor implements VisitorSurface {
         const value_size = 16 + 8 * n; // EJSClosureEnv: u64 header, u32 length(+pad), slots
         let cell_size = 16;
         while (cell_size < value_size) cell_size *= 2;
-        if (cell_size > 128) return slowCall(); // LOS-routed sizes take the runtime path
+        if (cell_size > 256) return slowCall(); // LOS-routed sizes take the runtime path
         const idx = Math.log2(cell_size) - 4;   // seam word: bump[idx], limit[5+idx]
 
         const g = this.heapContextGlobal();

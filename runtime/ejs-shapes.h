@@ -47,23 +47,20 @@ typedef enum {
    access. */
 #define EJS_SHAPE_NOMATCH 0xFFFFFFu
 
-/* hard ceiling on shaped field count (and EJS_SHAPE_CAP): a full slot
-   array must fit the page allocator's largest cell — 128 bytes: despite
-   the "= 256" comment on OBJECT_SIZE_HIGH_LIMIT_BITS, `ffs(256) = 9 > 8`
-   sends 256-byte allocations to the LOS, whose linear per-reference
-   lookup makes marking quadratic on big heaps (the stage2 self-compile
-   went from minutes to hours before this cap).  16-byte EJSClosureEnv
-   header + 14 * 8-byte slots = 128.  Objects with more fields drop to
-   dictionary mode — the original map world.  Revisit when the gc plan
-   gives the LOS an O(log n) lookup or a 256-byte size class. */
+/* hard ceiling on shaped field count (and EJS_SHAPE_CAP): a full
+   OUT-OF-LINE slot array must fit a page cell without waste — 16-byte
+   EJSClosureEnv header + 14 * 8-byte slots = 128 exactly — and the
+   single-cell embedded form fits the 256-byte class (32+16+112 = 160;
+   the class was LOS-routed by an ffs off-by-one until gc-P5 enabled
+   it on top of gc-P4's LOS bsearch + direct arena map).  Objects with
+   more fields drop to dictionary mode — the original map world. */
 #define EJS_SHAPE_FIELD_CAP_MAX 14
 
 /* single-cell (embedded-slots) allocation cap: object header (32) +
-   embedded env header (16) + 8 * fields must fit the 128-byte top cell,
-   or the cell would round to 256 and take the LOS routing that class
-   currently gets.  Grows to EJS_SHAPE_FIELD_CAP_MAX when the 256-byte
-   size class is enabled (gc-P5). */
-#define EJS_SHAPE_EMBED_FIELD_MAX 10
+   embedded env header (16) + 8 * fields.  With the 256-byte size class
+   enabled (gc-P5), every cap-14 shape fits a page cell (32+16+112 =
+   160 -> 256), so the embed cap IS the field cap. */
+#define EJS_SHAPE_EMBED_FIELD_MAX EJS_SHAPE_FIELD_CAP_MAX
 
 /* the shape index lives in bits 32-55 of the 64-bit GCObjectHeader (bit
    56 is the storage-mode bit; 57-63 belong to the GC) — see the

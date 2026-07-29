@@ -764,8 +764,20 @@ bounds as needed.
       footprint, 2-arena floor; knob census = 1.  EJS_GC_COMPACT=off
       for A/B.  Drive-bys: LOS tail-page leak on free;
       young-survivor-page full-sweep list corruption (young_page_freed).
-- [ ] **gc-P5** shapes intersection (sequenced by maam P4): trace bitmaps, inline
+- [x] **gc-P5** shapes intersection (sequenced by maam P4): trace bitmaps, inline
       slots, object-literal inline allocation, typed-slot elisions.
+      DONE 2026-07-28 — docs/gc-p5-results.md has the numbers.
+      Headlines: single-cell shaped objects (embedded slots behind the
+      unchanged obj->slots ejsval; pointer-identity mode test; ctor
+      birth-capacity hint on EJSFunction), barrier owner flipped to
+      the wrapper object with Scan walking slot values, per-shape
+      f64 trace masks, born-shaped literals extended to flag-off, and
+      the 256-byte size class enabled (LOS allocs −69% on a compile
+      workload).  litbench 1.84×, bench2 cells halved; emitted bump
+      allocation for literals measured at ~6% of an alloc-heavy loop
+      and deferred on that evidence (the ctor sink + hint already
+      cover construction).  Matrix ×7, stress envs, and the --types
+      diff lane (475 files, 0 divergent) green.
 - [ ] **gc-P6** collector thread: concurrent mark (SATB) + STW survivor
       evacuation.
       *Gate:* STW independent of live-set size.
