@@ -601,6 +601,33 @@ shaped_slots_are_embedded (EJSObject* obj)
     return (char*)shaped_env(obj) == (char*)obj + sizeof(EJSObject);
 }
 
+// retiring a slot-storage env: an OLD out-of-line env we are about to
+// disconnect is old-gen garbage until the next full sweep, but the
+// old-gen WALKERS — the minor's remset-overflow fallback and the
+// EJS_GC_VERIFY/EJS_GC_PARANOID checkers — cannot tell garbage from
+// live and will still visit its slots.  Queue the retiree for one
+// precise scan: the next minor rewrites its young refs (live right
+// now, via the surviving copies) to their promoted addresses, after
+// which the cell is inert until swept.  (Found by the P6.3 stress
+// lanes: the promoted env of a young rooted object, orphaned by
+// capacity growth during _ejs_init, kept pre-promotion slot values
+// that only ACCIDENTAL conservative pins of stale stack copies had
+// been rescuing — the file split's codegen shift removed the luck.)
+static void
+shaped_retire_slots (EJSObject* obj)
+{
+    if (_ejs_heap.nursery_base == NULL) // nursery off: no remset
+        return;
+    if (EJSVAL_IS_NULL(obj->slots) || shaped_slots_are_embedded (obj))
+        return; // embedded storage dies inside the object's own cell
+    EJSClosureEnv* env = shaped_env (obj);
+    if (_ejs_gc_is_young (env)) // young garbage is swept precisely
+        return;
+    if (*(GCObjectHeaderWord*)env & EJS_GC_HEADER_DIRTY)
+        return; // already queued
+    _ejs_gc_remember_slow (env);
+}
+
 // grow slot storage to hold at least `needed` values.  May allocate from
 // the GC heap: obj->slots stays attached (and scanned) until the copy is
 // done, so a collection triggered by the new array is safe.  Growth is
@@ -620,9 +647,11 @@ shaped_ensure_capacity (EJSObject* obj, uint32_t needed)
     if (newcap > EJS_SHAPE_FIELD_CAP_MAX)
         newcap = EJS_SHAPE_FIELD_CAP_MAX;
     ejsval newslots = _ejs_closureenv_new (newcap);
-    if (cap)
+    if (cap) {
         memcpy (EJSVAL_TO_CLOSUREENV_IMPL(newslots)->slots, shaped_slots(obj),
                 cap * sizeof(ejsval));
+        shaped_retire_slots (obj);
+    }
     obj->slots = newslots;
     _ejs_gc_remember(obj, newslots);
 }
@@ -653,6 +682,9 @@ _ejs_object_to_dictionary (EJSObject* obj, EJSShapeMigrateReason reason)
         _ejs_property_desc_set_configurable (desc, EJS_TRUE);
         _ejs_propertymap_insert (map, names[i], desc);
     }
+    // the union flip below disconnects the slot array — same
+    // retirement contract as shaped_ensure_capacity
+    shaped_retire_slots (obj);
     obj->map = map;
     _ejs_shape_object_migrate (obj, reason);
 }
