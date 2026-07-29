@@ -190,9 +190,9 @@ _ejs_gc_worklist_pop()
     EJS_MACRO_END
 
 #define WORKLIST_PUSH_AND_GRAY_CELL(x, cell) EJS_MACRO_START    \
-    if (IS_WHITE(cell)) {                                       \
+    if (cell_is_white(cell)) {                                       \
         _ejs_gc_worklist_push((GCObjectPtr)(x));                \
-        SET_GRAY (cell);                                        \
+        cell_set_gray(&cell);                                        \
     }                                                           \
     EJS_MACRO_END
 
@@ -350,64 +350,49 @@ conservative_bounds_add(void* start, size_t size)
 static char *los_lo = (char*)UINTPTR_MAX;
 static char *los_hi = NULL;
 
+// ---- the cell lifecycle ----------------------------------------
+//
+// One bitmap byte per page cell.  A cell is FREE or ALLOCATED, and an
+// allocated cell carries a tri-color mark; every state predicate and
+// transition lives in this block, and the encoding is private to it.
+//
+// White/black are EPOCH-RELATIVE: the color bits hold GRAY or the
+// parity of the mark epoch the cell was last colored in.  color ==
+// (mark_epoch & 1) is black (marked this epoch); the complement is
+// white.  mark_epoch_advance() — called at exactly one site, the end
+// of a full collection — thus turns every surviving black cell white
+// in O(1) without touching a bitmap.  (The old collector expressed
+// the same aging as a white_mask/black_mask swap mutated at the same
+// site; the epoch is that flip made explicit and single-owner.)
+
 typedef char BitmapCell;
 
-#define CELL_COLOR_MASK       0x03
-#define CELL_GRAY_MASK        0x02
-#define CELL_WHITE_MASK_START 0x00
-#define CELL_BLACK_MASK_START 0x01
-#define CELL_FREE             0x04 // cell is in the free list for this page
+#define CELL_COLOR_MASK 0x03
+#define CELL_GRAY       0x02
+#define CELL_FREE       0x04 // cell is in the free list for this page
 
-static unsigned int black_mask = CELL_BLACK_MASK_START;
-static unsigned int white_mask = CELL_WHITE_MASK_START;
+static unsigned int mark_epoch = 1; // parity 1: black starts at color 1
 
-#if CONCURRENT
-#define SET_GRAY(cell) EJS_MACRO_START                                  \
-    BitmapCell _bc;                                                     \
-    do {                                                                \
-        _bc = (cell);                                                   \
-    } while (!__sync_bool_compare_and_swap (&cell, _bc, (_bc & ~CELL_COLOR_MASK) | CELL_GRAY_MASK)); \
-    EJS_MACRO_END
+static inline BitmapCell cell_black_color(void) { return (BitmapCell)(mark_epoch & 1); }
+static inline BitmapCell cell_white_color(void) { return (BitmapCell)((mark_epoch & 1) ^ 1); }
 
-#define SET_WHITE(cell) EJS_MACRO_START                                 \
-    BitmapCell _bc;                                                     \
-    do {                                                                \
-        _bc = (cell);                                                   \
-    } while (!__sync_bool_compare_and_swap (&cell, _bc, (_bc & ~CELL_COLOR_MASK) | white_mask)); \
-    EJS_MACRO_END
+// the ONLY place the white/black meaning ever changes
+static inline void
+mark_epoch_advance(void)
+{
+    mark_epoch++;
+}
 
-#define SET_BLACK(cell) EJS_MACRO_START                                 \
-    BitmapCell _bc;                                                     \
-    do {                                                                \
-        _bc = (cell);                                                   \
-    } while (!__sync_bool_compare_and_swap (&cell, _bc, (_bc & ~CELL_COLOR_MASK) | black_mask)); \
-    EJS_MACRO_END
+static inline EJSBool cell_is_free (BitmapCell c) { return (c & CELL_FREE) == CELL_FREE; }
+static inline EJSBool cell_is_gray (BitmapCell c) { return (c & CELL_COLOR_MASK) == CELL_GRAY; }
+static inline EJSBool cell_is_white(BitmapCell c) { return (c & CELL_COLOR_MASK) == cell_white_color(); }
+static inline EJSBool cell_is_black(BitmapCell c) { return (c & CELL_COLOR_MASK) == cell_black_color(); }
 
-#define SET_FREE(cell) EJS_MACRO_START                                  \
-    BitmapCell _bc;                                                     \
-    do {                                                                \
-        _bc = (cell);                                                   \
-    } while (!__sync_bool_compare_and_swap (&cell, _bc, CELL_FREE));    \
-    EJS_MACRO_END
-
-#define SET_ALLOCATED(cell) EJS_MACRO_START                             \
-    BitmapCell _bc;                                                     \
-    do {                                                                \
-        _bc = (cell);                                                   \
-    } while (!__sync_bool_compare_and_swap (&cell, _bc, (_bc & ~CELL_FREE))); \
-    EJS_MACRO_END
-#else
-#define SET_GRAY(cell) (cell) = (((cell) & ~CELL_COLOR_MASK) | CELL_GRAY_MASK)
-#define SET_WHITE(cell) (cell) = (((cell) & ~CELL_COLOR_MASK) | white_mask)
-#define SET_BLACK(cell) (cell) = (((cell) & ~CELL_COLOR_MASK) | black_mask)
-#define SET_FREE(cell) (cell) = CELL_FREE
-#define SET_ALLOCATED(cell) (cell) = ((cell) & ~CELL_FREE)
-#endif
-
-#define IS_FREE(cell) (((cell) & CELL_FREE) == CELL_FREE)
-#define IS_GRAY(cell) (((cell) & CELL_COLOR_MASK) == CELL_GRAY_MASK)
-#define IS_WHITE(cell) (((cell) & CELL_COLOR_MASK) == white_mask)
-#define IS_BLACK(cell) (((cell) & CELL_COLOR_MASK) == black_mask)
+static inline void cell_set_gray (BitmapCell* c) { *c = (BitmapCell)((*c & ~CELL_COLOR_MASK) | CELL_GRAY); }
+static inline void cell_set_white(BitmapCell* c) { *c = (BitmapCell)((*c & ~CELL_COLOR_MASK) | cell_white_color()); }
+static inline void cell_set_black(BitmapCell* c) { *c = (BitmapCell)((*c & ~CELL_COLOR_MASK) | cell_black_color()); }
+static inline void cell_set_free (BitmapCell* c) { *c = CELL_FREE; }
+static inline void cell_set_allocated(BitmapCell* c) { *c = (BitmapCell)(*c & ~CELL_FREE); }
 
 struct _PageInfo {
     EJS_LIST_HEADER(struct _PageInfo);
@@ -585,7 +570,7 @@ static inline EJSBool
 cell_is_allocated(PageInfo* page, uint32_t cell_idx, BitmapCell cell)
 {
     if (page->young == 1) return young_cell_is_allocated(page, cell_idx);
-    return !IS_FREE(cell);
+    return !cell_is_free(cell);
 }
 
 void* ptr_to_arena(void* ptr) { return PTR_TO_ARENA(ptr); }
@@ -727,7 +712,7 @@ set_gray (GCObjectPtr ptr)
     if (!page)
         return;
 
-    SET_GRAY(page->page_bitmap[cell_idx]);
+    cell_set_gray(&page->page_bitmap[cell_idx]);
 }
 
 static void
@@ -738,7 +723,7 @@ set_black (GCObjectPtr ptr)
     if (!page)
         return;
 
-    SET_BLACK(page->page_bitmap[cell_idx]);
+    cell_set_black(&page->page_bitmap[cell_idx]);
 }
 
 static EJSBool
@@ -749,7 +734,7 @@ is_white (GCObjectPtr ptr)
     if (!page)
         return EJS_FALSE;
 
-    return IS_WHITE(page->page_bitmap[cell_idx]);
+    return cell_is_white(page->page_bitmap[cell_idx]);
 }
 
 static PageInfo*
@@ -816,7 +801,7 @@ static void
 _ejs_finalize_obj(GCObjectPtr ptr, Arena* arena, PageInfo* info, uint32_t cell_idx)
 {
     EJS_ASSERT(info);
-    if (IS_FREE(info->page_bitmap[cell_idx])) {
+    if (cell_is_free(info->page_bitmap[cell_idx])) {
         return;
     }
 
@@ -829,7 +814,7 @@ _ejs_finalize_obj(GCObjectPtr ptr, Arena* arena, PageInfo* info, uint32_t cell_i
 #endif
             info->cell_size);
 
-    SET_FREE(info->page_bitmap[cell_idx]);
+    cell_set_free(&info->page_bitmap[cell_idx]);
     SPEW(3, _ejs_log ("finalized object %p in page %p, num_free_cells == %zd\n", ptr, info, info->num_free_cells + 1));
     // if this page is empty, move it to this arena's free list
     LOCK_PAGE(info);
@@ -1056,7 +1041,7 @@ mark_pointers_in_range(GCObjectPtr* low, GCObjectPtr* high)
         if (gc_profile) profile_note_pin(page, cell_idx, gcptr);
         else *(GCObjectHeader*)(page->page_start + ((size_t)cell_idx * page->cell_size)) |= EJS_GC_HEADER_PINNED;
 
-        if (!IS_WHITE(cell)) continue; // skip pointers to gray/black cells
+        if (!cell_is_white(cell)) continue; // skip pointers to gray/black cells
 
         // canonicalize interior pointers to the start of their cell; the
         // worklist processing reads the object header from the pointer.
@@ -1150,7 +1135,7 @@ mark_ejsvals_in_range(void* low, void* high)
             if (gc_profile) profile_note_pin(page, cell_idx, gcptr);
             else *(GCObjectHeader*)(page->page_start + ((size_t)cell_idx * page->cell_size)) |= EJS_GC_HEADER_PINNED;
 
-            if (!IS_WHITE(cell)) continue; // skip pointers to gray/black cells
+            if (!cell_is_white(cell)) continue; // skip pointers to gray/black cells
 
             // canonicalize interior pointers to the start of their cell; the
             // worklist processing reads the object header from the pointer.
@@ -1300,14 +1285,14 @@ profile_pre_sweep(void)
             GCObjectPtr p = page->page_start;
             for (int c = 0; c < CELLS_IN_PAGE(page); c++, p += page->cell_size) {
                 BitmapCell cell = page->page_bitmap[c];
-                if (IS_FREE(cell) || IS_WHITE(cell)) continue;
+                if (cell_is_free(cell) || cell_is_white(cell)) continue;
                 profile_visit_live_cell((GCObjectHeader*)p, page->cell_size);
             }
         });
     }
     for (LargeObjectInfo* lobj = los_list; lobj; lobj = lobj->next) {
         BitmapCell cell = lobj->page_info.page_bitmap[0];
-        if (IS_FREE(cell) || IS_WHITE(cell)) continue;
+        if (cell_is_free(cell) || cell_is_white(cell)) continue;
         profile_visit_live_cell((GCObjectHeader*)lobj->page_info.page_start,
                                 lobj->page_info.cell_size);
     }
@@ -1502,7 +1487,7 @@ young_page_install(int idx, size_t cell_size)
     heap_priv.young_alloced += PAGE_SIZE;
     // colors start at the CURRENT white (a young cell must never read
     // as black mid-cycle); allocated-ness comes from the bump rule
-    memset (info->page_bitmap, white_mask, info->num_cells * sizeof(BitmapCell));
+    memset (info->page_bitmap, cell_white_color(), info->num_cells * sizeof(BitmapCell));
     heap_priv.young_current[idx] = info;
     _ejs_heap.bump[idx] = info->page_start;
     _ejs_heap.limit[idx] = info->page_end;
@@ -1616,12 +1601,12 @@ minor_conservative_hit(PageInfo* page, uint32_t cell_idx)
 {
     if (!page->young) return;
     if (page->young == 1 && !young_cell_is_allocated(page, cell_idx)) return;
-    if (page->young == 2 && IS_FREE(page->page_bitmap[cell_idx])) return;
+    if (page->young == 2 && cell_is_free(page->page_bitmap[cell_idx])) return;
     BitmapCell cell = page->page_bitmap[cell_idx];
-    if (IS_BLACK(cell)) return; // already pinned this minor
+    if (cell_is_black(cell)) return; // already pinned this minor
     GCObjectPtr base = page->page_start + ((size_t)cell_idx * page->cell_size);
     if (_ejs_gc_is_forwarded(base)) return; // pins precede evacuation; stale hit
-    SET_BLACK(page->page_bitmap[cell_idx]);
+    cell_set_black(&page->page_bitmap[cell_idx]);
     heap_priv.minor_pins++;
     MINOR_SPEW("minor: pin %p\n", base);
     gc_watch_hit ("pin", base);
@@ -1681,7 +1666,7 @@ minor_process_slot(ejsval* slot)
         rewrite_slot_payload(slot, _ejs_gc_forwarding_addr(base));
         return;
     }
-    if (IS_BLACK(page->page_bitmap[cell_idx])) {
+    if (cell_is_black(page->page_bitmap[cell_idx])) {
         // pinned: stays put, already queued for scanning.  The current
         // owner must stay dirty so the edge is revisited next cycle.
         minor_scan_saw_young = EJS_TRUE;
@@ -1720,7 +1705,7 @@ minor_process_primstr_child(EJSPrimString** childp)
         *childp = (EJSPrimString*)_ejs_gc_forwarding_addr(base);
         return;
     }
-    if (IS_BLACK(page->page_bitmap[cell_idx])) { minor_scan_saw_young = EJS_TRUE; return; }
+    if (cell_is_black(page->page_bitmap[cell_idx])) { minor_scan_saw_young = EJS_TRUE; return; }
     GCObjectPtr to = old_alloc_cell_for_promotion(page->cell_size);
     memcpy (to, base, page->cell_size);
     // promoted: not young; and not DIRTY — the memcpy'd bit would make
@@ -1789,13 +1774,13 @@ old_gen_walk(void (*fn)(GCObjectPtr))
             if (!info || info->young) continue;
             GCObjectPtr p = info->page_start;
             for (int c = 0; c < CELLS_IN_PAGE(info); c++, p += info->cell_size) {
-                if (IS_FREE(info->page_bitmap[c])) continue;
+                if (cell_is_free(info->page_bitmap[c])) continue;
                 fn (p);
             }
         }
     }
     for (LargeObjectInfo* lobj = los_list; lobj; lobj = lobj->next) {
-        if (IS_FREE(lobj->page_info.page_bitmap[0])) continue;
+        if (cell_is_free(lobj->page_info.page_bitmap[0])) continue;
         fn (lobj->page_info.page_start);
     }
 }
@@ -1887,7 +1872,7 @@ verify_check_slot(ejsval* slot)
     if (!page) return;
     GCObjectPtr base = page->page_start + ((size_t)cell_idx * page->cell_size);
     if (_ejs_gc_is_forwarded(base)) return;      // will be rewritten by its recorder
-    if (IS_BLACK(page->page_bitmap[cell_idx])) { minor_scan_saw_young = EJS_TRUE; return; } // pinned in place
+    if (cell_is_black(page->page_bitmap[cell_idx])) { minor_scan_saw_young = EJS_TRUE; return; } // pinned in place
     verify_bad_slot = slot;
 }
 static void
@@ -1930,7 +1915,7 @@ verify_check_object(GCObjectPtr p)
             PageInfo* pg = find_page_and_cell(kids[k], &ci);
             if (!pg) continue;
             if (_ejs_gc_is_forwarded(pg->page_start + (size_t)ci * pg->cell_size)) continue;
-            if (IS_BLACK(pg->page_bitmap[ci])) continue;
+            if (cell_is_black(pg->page_bitmap[ci])) continue;
             _ejs_log ("EJS_GC_VERIFY: old primstr %p (type %d) child %d -> unpromoted young %p\n",
                       p, EJS_PRIMSTR_GET_TYPE(ps), k, (void*)kids[k]);
             abort();
@@ -2027,7 +2012,7 @@ paranoid_sweep_check(void)
         for (int c = 0; c < CELLS_IN_PAGE(page); c++, p += page->cell_size) {
             EJSBool allocated = (page->young == 1)
                 ? young_cell_is_allocated(page, (uint32_t)c)
-                : !IS_FREE(page->page_bitmap[c]);
+                : !cell_is_free(page->page_bitmap[c]);
             if (allocated && !_ejs_gc_is_forwarded(p))
                 paranoid_check_object(p);
         }
@@ -2220,21 +2205,21 @@ _ejs_gc_minor_collect(const char* reason)
         for (int c = 0; c < CELLS_IN_PAGE(page); c++, p += page->cell_size) {
             EJSBool allocated = (page->young == 1)
                 ? young_cell_is_allocated(page, (uint32_t)c)
-                : !IS_FREE(page->page_bitmap[c]);
-            if (!allocated) { SET_FREE(page->page_bitmap[c]); continue; }
+                : !cell_is_free(page->page_bitmap[c]);
+            if (!allocated) { cell_set_free(&page->page_bitmap[c]); continue; }
             if (_ejs_gc_is_forwarded(p)) {
                 // evacuated: the space is reusable; poison it now that
                 // every slot has been processed
                 gc_watch_hit ("sweep-poison-forwarded", p);
                 memset (p, 0xa7, page->cell_size); // NOT 0xaf: bit 59 (FORWARDED) must stay clear in poison
-                SET_FREE(page->page_bitmap[c]);
+                cell_set_free(&page->page_bitmap[c]);
                 continue;
             }
-            if (IS_BLACK(page->page_bitmap[c])) {
+            if (cell_is_black(page->page_bitmap[c])) {
                 // pinned survivor: stays young, stays put; back to white
                 // so the next cycle (minor or full) sees it fresh
-                SET_WHITE(page->page_bitmap[c]);
-                SET_ALLOCATED(page->page_bitmap[c]);
+                cell_set_white(&page->page_bitmap[c]);
+                cell_set_allocated(&page->page_bitmap[c]);
                 survivors++;
                 continue;
             }
@@ -2249,7 +2234,7 @@ _ejs_gc_minor_collect(const char* reason)
             gc_watch_hit ("sweep-poison-dead", p);
             finalize_object(p);
             memset (p, 0xa7, page->cell_size); // NOT 0xaf: bit 59 (FORWARDED) must stay clear in poison
-            SET_FREE(page->page_bitmap[c]);
+            cell_set_free(&page->page_bitmap[c]);
         }
         _ejs_list_detach_node (&heap_priv.young_pages, (EJSListNode*)page);
         if (survivors == 0) {
@@ -2360,10 +2345,10 @@ young_normalize_for_full_gc(void)
         int allocated = 0;
         for (int c = 0; c < CELLS_IN_PAGE(page); c++) {
             if (young_cell_is_allocated(page, (uint32_t)c)) {
-                SET_ALLOCATED(page->page_bitmap[c]);
+                cell_set_allocated(&page->page_bitmap[c]);
                 allocated++;
             } else {
-                SET_FREE(page->page_bitmap[c]);
+                cell_set_free(&page->page_bitmap[c]);
             }
         }
         page->num_free_cells = page->num_cells - allocated;
@@ -2441,12 +2426,12 @@ sweep_heap()
                 for (int c = 0, ce = info->num_cells; c < ce; c ++) {
                     BitmapCell cell = info->page_bitmap[c];
 
-                    if (IS_FREE(cell))
+                    if (cell_is_free(cell))
                         continue;
 
                     total_objs++;
 
-                    if (IS_WHITE(cell)) {
+                    if (cell_is_white(cell)) {
                         white_objs++;
 
                         GCObjectPtr gcobj = (GCObjectPtr)(info->page_start + c * info->cell_size);
@@ -2465,7 +2450,7 @@ sweep_heap()
         PageInfo *info = &lobj->page_info;
         BitmapCell cell = info->page_bitmap[0];
         LargeObjectInfo *next = lobj->next;
-        if (IS_WHITE(cell)) {
+        if (cell_is_white(cell)) {
             //            SPEW(2, { _ejs_log ("l"); fflush(stderr); });
             white_objs++;
 
@@ -2501,8 +2486,8 @@ mark_from_roots()
                 continue;
 
             BitmapCell cell = page->page_bitmap[cell_idx];
-            if (IS_FREE(cell))   continue; // skip free cells
-            if (!IS_WHITE(cell)) continue; // skip pointers to gray/black cells
+            if (cell_is_free(cell))   continue; // skip free cells
+            if (!cell_is_white(cell)) continue; // skip pointers to gray/black cells
             WORKLIST_PUSH_AND_GRAY_CELL(root_ptr, page->page_bitmap[cell_idx]);
         }
     }
@@ -2663,7 +2648,7 @@ mark_object_root(GCObjectPtr ptr)
         else minor_wl_push(ptr);
         return;
     }
-    if (!IS_WHITE(cell))
+    if (!cell_is_white(cell))
         return;
     WORKLIST_PUSH_AND_GRAY_CELL(ptr, page->page_bitmap[cell_idx]);
 }
@@ -2804,7 +2789,7 @@ compact_page_has_pins(PageInfo* pg)
 {
     GCObjectPtr p = pg->page_start;
     for (int c = 0; c < pg->num_cells; c++, p += pg->cell_size)
-        if (!IS_FREE(pg->page_bitmap[c])
+        if (!cell_is_free(pg->page_bitmap[c])
             && (*(GCObjectHeader*)p & EJS_GC_HEADER_PINNED))
             return EJS_TRUE;
     return EJS_FALSE;
@@ -2834,14 +2819,14 @@ compact_evacuate_page(int bucket, PageInfo* pg, PageInfo** cursor)
 {
     GCObjectPtr from = pg->page_start;
     for (int c = 0; c < pg->num_cells; c++, from += pg->cell_size) {
-        if (IS_FREE(pg->page_bitmap[c]))
+        if (cell_is_free(pg->page_bitmap[c]))
             continue;
         PageInfo* dest_page;
         GCObjectPtr to = compact_alloc_dest(bucket, cursor, &dest_page);
         memcpy (to, from, pg->cell_size);
         // the copy is live THIS cycle: keep it marked so the coming
         // color flip turns it white with every other survivor
-        SET_BLACK(dest_page->page_bitmap[PTR_TO_CELL(to, dest_page)]);
+        cell_set_black(&dest_page->page_bitmap[PTR_TO_CELL(to, dest_page)]);
         minor_fixup_evacuated(from, to, pg->cell_size);
         _ejs_gc_forward(from, to);
         gc_watch_hit ("compact-evacuate-from", from);
@@ -2955,7 +2940,7 @@ compact_old_gen(void)
     for (PageInfo* pg = (PageInfo*)heap_priv.young_pages.head; pg; pg = pg->next) {
         GCObjectPtr p = pg->page_start;
         for (int c = 0; c < CELLS_IN_PAGE(pg); c++, p += pg->cell_size)
-            if (!IS_FREE(pg->page_bitmap[c]))
+            if (!cell_is_free(pg->page_bitmap[c]))
                 compact_fixup_object(p);
     }
 
@@ -3107,9 +3092,8 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
     _ejs_log ("   garbage objects: %d\n", white_objs);
 #endif
 
-    unsigned int tmp = black_mask;
-    black_mask = white_mask;
-    white_mask = tmp;
+    // age the survivors: this epoch's black is next epoch's white
+    mark_epoch_advance();
 
     if (shutting_down) {
         // NULL out all of our roots
@@ -3140,7 +3124,7 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
         for (int hp = 0; hp < HEAP_PAGELISTS_COUNT; hp++) {
             EJS_LIST_FOREACH (&heap_pages[hp], PageInfo, page, {
                 for (int c = 0; c < CELLS_IN_PAGE (page); c ++) {
-                    if (!IS_FREE(page->page_bitmap[c]) && !IS_WHITE(page->page_bitmap[c]))
+                    if (!cell_is_free(page->page_bitmap[c]) && !cell_is_white(page->page_bitmap[c]))
                         continue;
                 }  
             })
@@ -3263,7 +3247,7 @@ alloc_from_page(PageInfo *info)
     }
     else {
         for (cell = 0; cell < info->num_cells; cell ++) {
-            if (IS_FREE(info->page_bitmap[cell])) {
+            if (cell_is_free(info->page_bitmap[cell])) {
                 rv = info->page_start + (cell * info->cell_size);
                 break;
             }
@@ -3272,8 +3256,8 @@ alloc_from_page(PageInfo *info)
 
     EJS_ASSERT (rv);
 
-    SET_ALLOCATED(info->page_bitmap[cell]);
-    SET_WHITE(info->page_bitmap[cell]);
+    cell_set_allocated(&info->page_bitmap[cell]);
+    cell_set_white(&info->page_bitmap[cell]);
 
     info->num_free_cells --;
 
@@ -3302,8 +3286,8 @@ alloc_from_los(size_t size, EJSScanType scan_type)
     rv->page_info.num_free_cells = 0;
     rv->page_info.los_info = rv;
 
-    SET_WHITE(rv->page_info.page_bitmap[0]);
-    SET_ALLOCATED(rv->page_info.page_bitmap[0]);
+    cell_set_white(&rv->page_info.page_bitmap[0]);
+    cell_set_allocated(&rv->page_info.page_bitmap[0]);
 
     *((GCObjectHeader*)rv->page_info.page_start) = scan_type | EJS_GC_HEADER_YOUNG;
 
@@ -3555,7 +3539,7 @@ _ejs_gc_dump_heap_stats()
         EJS_LIST_FOREACH (&heap_pages[i], PageInfo, page, {
             GCObjectPtr p = page->page_start;
             for (int c = 0; c < CELLS_IN_PAGE (page); c ++, p += page->cell_size) {
-                if (IS_FREE(page->page_bitmap[c]))
+                if (cell_is_free(page->page_bitmap[c]))
                     continue;
                 GCObjectHeader* headerp = (GCObjectHeader*)p;
                 if ((*headerp & EJS_SCAN_TYPE_OBJECT) != 0)          _ejs_log ("O");
@@ -3634,7 +3618,7 @@ static EJS_NATIVE_FUNC(_ejs_GC_dumpLiveStrings) {
         EJS_LIST_FOREACH (&heap_pages[i], PageInfo, page, {
             GCObjectPtr p = page->page_start;
             for (int c = 0; c < CELLS_IN_PAGE (page); c ++, p += page->cell_size) {
-                if (IS_FREE(page->page_bitmap[c]))
+                if (cell_is_free(page->page_bitmap[c]))
                     continue;
                 GCObjectHeader* headerp = (GCObjectHeader*)p;
                 
