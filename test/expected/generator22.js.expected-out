@@ -1,0 +1,15 @@
+{"value":1,"done":false}
+fin
+{"value":5,"done":true}
+{"done":true}
+{"value":1,"done":false}
+{"value":42,"done":true}
+{"done":true}
+{"value":9,"done":true}
+{"done":true}
+{"value":1,"done":false}
+caught x
+kfin
+after
+{"done":true}
+caller caught early

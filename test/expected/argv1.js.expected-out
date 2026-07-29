@@ -1,3 +1,4 @@
-length = 2
-argv[0] = node
-argv[1] = /Users/toshok/src/coffeekit/echo-js/test/argv1.js
+length = 3
+argv[0] = /Users/toshok/.local/share/mise/installs/node/22.4.0/bin/node
+argv[1] = /private/tmp/claude-501/-Users-toshok-src-echojs-echojs/da67aa89-c001-4316-943b-80ac66784ae0/scratchpad/p73-tree/test/harness-run.js
+argv[2] = argv1.js

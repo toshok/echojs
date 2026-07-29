@@ -67,11 +67,34 @@ performance bucket owns.
         wrappers/guarded dispatch for tainted-called internal helpers,
         and a payoff gate that credits call-heavy bodies (a bare
         delegation export currently declines).
-- [ ] **runtime-P3 — Value-based test harness.**  Test baselines are
-      generated live by `node <test>` and are sensitive to node's
+- [x] **runtime-P3 — Value-based test harness.**  Test baselines were
+      generated live by `node <test>` and were sensitive to node's
       console.log inspect-format drift (22.4 → 22.23 changed array
-      formatting); CI pins node 22.4.0.  The durable fix asserts on
-      values rather than inspect output.
+      formatting); CI pinned node 22.4.0.  DONE 2026-07-29 —
+      docs/runtime-p3-results.md.  What landed:
+      - `test/harness-console-shim.js`: a harness-owned value
+        serializer replaces console.log on BOTH sides (node generation
+        via harness-run.js, ejs via a compiled import wrapper), so
+        baselines assert on values; node 22.4.0 and 22.23.2 generate
+        byte-identical baselines and CI floats on `22.x`.  TZ=UTC
+        pinned by the tester.
+      - the stale-baseline un-masking flushed real bugs: FIXED —
+        native error prototypes had null [[Prototype]] (instanceof
+        Error was false for subtypes; message now non-enumerable),
+        DataView wrongly indexed its buffer, typed-array RangeError
+        message aligned with node.  PINNED (xfail) — Annex B.3.3
+        block fundecl hoisting (fundecl1), toLocaleString ICU
+        rounding (toLocaleString3), Date.prototype-is-ordinary
+        (tostring5).  UN-PINNED — number1, date3; esprima1 is
+        `generator: none` (babel-register never could transpile the
+        external-deps ESM).
+      - tester fixes: the scheduler silently skipped the test at index
+        test_threads in both passes (weakmap2 had never actually run);
+        per-test compile TMPDIRs (shim module made concurrent compiler
+        temp names collide); baselines regenerate when the harness
+        itself changes.
+      - gates: stage0-3 + shapes-off all 424/21/0, lowtier OK,
+        test-eir = the 11 standing compiler-P1.1 pins only.
 - [x] **runtime-P4 — Collector structural refactor.**  Recorded during
       the gc-P2 debugging sessions, deliberately deferred while phases
       were landing: extract a cell-lifecycle module (alloc/free/color

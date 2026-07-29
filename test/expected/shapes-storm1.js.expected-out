@@ -1,0 +1,24 @@
+sum 22990
+del keys x,z
+del keys2 x,z,y,w 42 true false
+attr keys p,q 3
+attr names p,q
+dp 7 8 k,m
+acc 42 base,twice
+desc 4.25 true true true true
+idx zero x true 0,name,after
+froz 1 undefined true false
+seal 2 true
+pe 2 undefined false
+forin own1,own2,inherited
+hasOwn true false true
+assign {"t":0,"u":1,"v":"two"}
+assign2 {"r":2,"s":3}
+defprops 1 2 one,two
+sym hidden visible,visible2 1
+wide 780 40 0 39
+churn 60 flip0 flip7 59
+json {"a":1,"b":[1,2,3],"c":{"d":"e"},"f":4}
+pts 14850
+upd replaced z
+pie true false [object Object]

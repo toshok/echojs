@@ -116,8 +116,13 @@ runtime-plan.md, compiler-plan.md.
       guarded clone — maam's constant-domain claims can't cross the
       boundary — plus the escape-taint fence, closing a pre-existing
       cross-module trusted-rewrite miscompile).
-- [ ] **P7.3** value-based test harness, un-pinning node's inspect
-      format (runtime-P3).
+- [x] **P7.3** value-based test harness, un-pinning node's inspect
+      format (runtime-P3).  DONE 2026-07-29 —
+      docs/runtime-p3-results.md (harness-owned serializer on both
+      sides; baselines byte-identical from node 22.4.0 and 22.23.2, CI
+      floats on 22.x; the un-masking flushed 3 runtime bugs fixed +
+      3 pinned, plus a tester scheduler bug that had silently skipped
+      weakmap2 forever).
 - [ ] **P7.4** finish the TypeScript port of the compiler; babel step
       becomes tsc (compiler-P2).
 - [ ] **P7.5** clang-style pass configuration: -O suites define the

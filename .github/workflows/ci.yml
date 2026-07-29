@@ -43,12 +43,13 @@ jobs:
           sudo sh -c 'zstd -qd /tmp/buck2.zst -o /usr/local/bin/buck2 && chmod +x /usr/local/bin/buck2'
           buck2 --version
 
-      # pinned exactly: most test baselines are generated live by
-      # running `node <test>`, and console.log's inspect format drifts
-      # across node releases (22.4 -> 22.23 changed array formatting)
+      # unpinned (runtime-P3): the value-based harness serializes logged
+      # values itself (test/harness-console-shim.js) on both the node and
+      # ejs sides, so baselines no longer depend on node's inspect format
+      # (verified: 22.4.0 and 22.23.2 generate byte-identical baselines)
       - uses: actions/setup-node@v4
         with:
-          node-version: 22.4.0
+          node-version: 22.x
 
       - name: npm ci
         run: npm ci
@@ -117,10 +118,10 @@ jobs:
           sudo sh -c 'zstd -qd /tmp/buck2.zst -o /usr/local/bin/buck2 && chmod +x /usr/local/bin/buck2'
           buck2 --version
 
-      # pinned exactly — see the macOS job's note
+      # unpinned (runtime-P3) — see the macOS job's note
       - uses: actions/setup-node@v4
         with:
-          node-version: 22.4.0
+          node-version: 22.x
 
       - name: npm ci
         run: npm ci
