@@ -541,6 +541,65 @@ through Phase 3 for A/B and differential testing.
   maam-plan; the GC-side work is deliberately small because P1 reserved the
   header bits.
 
+  **Settled design (2026-07-28, the Step B addendum).**  The governing
+  choice: shaped slot storage stays a *closureenv-shaped* region reached
+  through the `obj->slots` ejsval — but born-with-shape allocation places
+  it **inside the object's own cell** (object header, ops, proto, slots
+  ejsval pointing at `obj+32`, then an embedded env header + the slot
+  values).  Embedded-ness is pointer identity (`env == (char*)obj +
+  sizeof(EJSObject)`), no new header bit.  Because the compiled
+  slot-addressing seam (`slotRef`, emit.ts) already loads the slots
+  ejsval and indexes the env, **compiled slot access, has_shape guards,
+  and the verifier's contract change not at all**; only allocation sites
+  and the collector know.  Consequences, each independently gated:
+  - **Single-cell shaped allocation**: `_ejs_object_new_shaped` grows a
+    shape-index-passing form (trusting the module's interned shape,
+    values verified against the f64 mask, fallback = today's
+    re-derivation); one cell of `32 + 16 + 8n` bytes replaces the
+    object-cell + env-cell pair.  Constructor allocations get there via
+    a **birth-capacity hint on EJSFunction** (set from the result's
+    field count after the first construct; ordinary Construct allocates
+    `this` with embedded capacity = hint) — no compiler plumbing, works
+    flag-off.  Growth past embedded capacity falls back to an
+    out-of-line closureenv (today's doubling path); the object stays
+    shaped, the embedded region goes dead.
+  - **Barrier owner flip**: shaped-slot stores remember the *wrapper
+    object* (C sites and emitted slot_store both; today they remember
+    the env), and the ordinary object's Scan walks the slot *values*
+    directly in both modes (plus the env edge only when out-of-line).
+    This makes owner pointers always cell heads — no interior-pointer
+    remset entries — and dirty-object rescans see embedded slots.
+  - **Evacuation**: whole-cell memcpy (the existing routine) + a shaped
+    case in `minor_fixup_evacuated`'s self-interior-pointer fixup (the
+    flat-string/EJSArguments precedent): rebase the slots ejsval when
+    it points into the moved cell.  The embedded slots edge is never
+    presented to the precise slot callbacks (they assume object-base
+    payloads); Scan's mode switch owns that.
+  - **Per-shape trace masks**: the shape record gains an f64 bitmap
+    (u16, built incrementally at intern time from parent | repr); the
+    ordinary-object walk skips f64 slots — precise trace elision — and
+    the three hot collector sites (mark, minor trace, compact fixup)
+    may short-circuit `ops->Scan` for `_ejs_Object_specops` objects
+    into the same inline walk.  Out-of-line arrays keep the closureenv
+    range scan (raw doubles are NaN-box-valid numbers; unchanged).
+  - **The 256-byte size class is enabled**: `ffs(256)=9 >
+    OBJECT_SIZE_HIGH_LIMIT_BITS` routes 256B cells to the LOS today —
+    an off-by-one that predates gc-P4's LOS lookup fix and the direct
+    arena map.  Enabling the already-plumbed class (pagelist, seam
+    words, emitter cap all exist) makes every cap-14 shaped object
+    single-cell (`32+16+112 = 160 ≤ 256`) and takes >14-slot envs off
+    the LOS; A/B-measured at the gate (frag bench + self-compile).
+  - **Emitter inline allocation for `make_object_shaped`** (literals):
+    the make_env bump-sequence precedent, one guard (module shape
+    global != NOMATCH — literal installs are CreateDataProperty, so no
+    epoch/proto check is needed), header stamped with the shape index,
+    initializing stores, no barriers.  Inline `fill_object_shaped` is
+    measured-later work (the ctor hint already single-cells it).
+  - **Typed-slot barrier elision is already true** (emitted f64
+    slot_store skips the barrier; the runtime filter exits on
+    non-traceable values) — the phase audits and documents it; the new
+    elision is the trace mask above.
+
 - **gc-P6 — Concurrent marking + STW survivor evacuation.** Collector
   thread, single-mutator handshake, SATB log becomes live. **Gate: marking off
   the mutator; STW time independent of live-set size; stress-differential

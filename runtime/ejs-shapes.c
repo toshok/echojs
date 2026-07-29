@@ -80,6 +80,11 @@ shape_alloc(uint32_t parent, ejsval name, uint8_t repr, uint32_t field_count)
     shape->field_count = field_count;
     shape->name = name;
     shape->repr = repr;
+    /* the trace bitmap (gc-P5): parent's mask plus this edge's repr bit.
+       the root (field_count 0, parent DICT) gets 0. */
+    shape->f64_mask = (field_count > 0 ? shape_get(parent)->f64_mask : 0)
+        | (repr == EJS_SHAPE_REPR_F64 && field_count > 0
+               ? (1u << (field_count - 1)) : 0);
 
     /* keep the field name alive: shapes are process-global and never freed */
     if (EJSVAL_IS_STRING(name))

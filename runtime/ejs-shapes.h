@@ -58,6 +58,13 @@ typedef enum {
    gives the LOS an O(log n) lookup or a 256-byte size class. */
 #define EJS_SHAPE_FIELD_CAP_MAX 14
 
+/* single-cell (embedded-slots) allocation cap: object header (32) +
+   embedded env header (16) + 8 * fields must fit the 128-byte top cell,
+   or the cell would round to 256 and take the LOS routing that class
+   currently gets.  Grows to EJS_SHAPE_FIELD_CAP_MAX when the 256-byte
+   size class is enabled (gc-P5). */
+#define EJS_SHAPE_EMBED_FIELD_MAX 10
+
 /* the shape index lives in bits 32-55 of the 64-bit GCObjectHeader (bit
    56 is the storage-mode bit; 57-63 belong to the GC) — see the
    layout comment in ejs-types.h */
@@ -101,6 +108,11 @@ typedef struct {
                              this shape; monomorphic construction sites hit
                              it every time and skip the hash entirely */
     uint32_t deaths;      /* census: objects finalized bearing this shape */
+    uint32_t f64_mask;    /* the shape's trace bitmap (gc-P5): bit i set =
+                             field i is EJS_SHAPE_REPR_F64, i.e. a raw
+                             double the collector can skip.  Built
+                             incrementally (parent's mask | this edge) so
+                             every walk is O(1); field cap 14 << 32 bits */
 } EJSShape;
 
 #define EJS_SHAPE_CHUNK_SHIFT 12

@@ -592,6 +592,15 @@ shaped_slots (EJSObject* obj)
     return shaped_env(obj)->slots;
 }
 
+// is the slot storage embedded in the object's own cell (single-cell
+// born-with-shape allocation, gc-P5)?  Pointer identity is the mode
+// test — no header bit to keep coherent through evacuation's memcpy.
+static EJSBool
+shaped_slots_are_embedded (EJSObject* obj)
+{
+    return (char*)shaped_env(obj) == (char*)obj + sizeof(EJSObject);
+}
+
 // grow slot storage to hold at least `needed` values.  May allocate from
 // the GC heap: obj->slots stays attached (and scanned) until the copy is
 // done, so a collection triggered by the new array is safe.  Growth is
@@ -711,16 +720,74 @@ try_fill_shaped (ejsval objval, uint32_t argc, const ejsval* names, ejsval* valu
     }
     shaped_ensure_capacity (obj, argc);
     memcpy (shaped_slots(obj), values, argc * sizeof(ejsval));
+    // the object is the barrier owner for shaped stores: its Scan walks
+    // the slot values directly (embedded storage has no cell of its own)
     for (uint32_t _wb = 0; _wb < (uint32_t)argc; _wb++)
-        _ejs_gc_remember(shaped_env(obj), values[_wb]);
+        _ejs_gc_remember(obj, values[_wb]);
     EJS_OBJECT_SET_SHAPE(obj, shape);
     return EJS_TRUE;
+}
+
+// single-cell born-with-shape allocation (gc-P5): object + embedded
+// slot storage in one GC cell — obj header | ops | proto | slots ejsval
+// pointing at obj+32 | embedded env header | slot values.  The embedded
+// region is a real EJSClosureEnv layout, so every slots consumer
+// (shaped_slots, compiled slotRef addressing, the collector's range
+// walks) is oblivious; embedded-ness is pointer identity.  nfields > 0;
+// no GC can run between the alloc and the last store below.
+static ejsval
+shaped_alloc_embedded (ejsval proto, uint32_t shape, uint32_t nfields,
+                       const ejsval* values)
+{
+    size_t size = sizeof(EJSObject) + sizeof(EJSClosureEnv)
+        + (nfields - 1) * sizeof(ejsval);
+    EJSObject* obj = _ejs_gc_new_obj(EJSObject, size);
+    _ejs_init_object (obj, proto, &_ejs_Object_specops);
+    EJSClosureEnv* env = (EJSClosureEnv*)((char*)obj + sizeof(EJSObject));
+    env->gc_header = EJS_SCAN_TYPE_CLOSUREENV;
+    env->length = nfields;
+    if (values)
+        memcpy (env->slots, values, nfields * sizeof(ejsval));
+    else
+        for (uint32_t i = 0; i < nfields; i ++)
+            env->slots[i] = _ejs_undefined;
+    obj->slots = CLOSUREENV_TO_EJSVAL_IMPL(env);
+    EJS_OBJECT_SET_SHAPE(obj, shape);
+    return OBJECT_TO_EJSVAL(obj);
+}
+
+// ordinary-construct support: allocate the ordinary `this` with
+// embedded slot capacity for `hint` fields (0 = today's bare cell).
+// The object is born empty and root-shaped either way; the hint only
+// pre-sizes the storage so the constructor's fill stays in-cell.
+ejsval
+_ejs_object_new_with_slot_hint (ejsval proto, uint32_t hint)
+{
+    if (!_ejs_shapes_tracking || hint == 0 || hint > EJS_SHAPE_EMBED_FIELD_MAX)
+        return _ejs_object_new (proto, &_ejs_Object_specops);
+    return shaped_alloc_embedded (proto, EJS_SHAPE_ROOT, hint, NULL);
 }
 
 // a statically-keyed object literal: allocate + install in one call
 ejsval
 _ejs_object_new_shaped (uint32_t argc, ejsval* names, ejsval* values)
 {
+    // derive the true shape from the actual values FIRST (pure — the
+    // transition memo makes it ~one compare per field), then birth
+    // object + storage as one cell.  Anything off-script falls back to
+    // the two-cell fill / sequential path, byte-for-byte as before.
+    if (_ejs_shapes_tracking && argc > 0 && argc <= EJS_SHAPE_EMBED_FIELD_MAX
+        && !shaped_proto_intercepts (_ejs_Object_prototype, argc, names)) {
+        uint32_t shape = EJS_SHAPE_ROOT;
+        for (uint32_t i = 0; i < argc; i ++) {
+            EJSShapeMigrateReason reason;
+            shape = _ejs_shape_transition_add_fast (shape, names[i], values[i], &reason);
+            if (shape == EJS_SHAPE_DICT)
+                break;
+        }
+        if (shape != EJS_SHAPE_DICT)
+            return shaped_alloc_embedded (_ejs_Object_prototype, shape, argc, values);
+    }
     ejsval obj = _ejs_object_create (_ejs_Object_prototype);
     if (!try_fill_shaped (obj, argc, names, values)) {
         for (uint32_t i = 0; i < argc; i ++)
@@ -2428,7 +2495,7 @@ _ejs_object_specop_set (ejsval O, ejsval P, ejsval V, ejsval Receiver)
             if (next_shape != EJS_SHAPE_DICT) {
                 EJS_OBJECT_SET_SHAPE(O_, next_shape);
                 shaped_slots(O_)[slot] = V;
-                _ejs_gc_remember(shaped_env(O_), V);
+                _ejs_gc_remember(O_, V);
                 return EJS_TRUE;
             }
             // shape-table overflow: drop to dictionary mode and let the
@@ -2626,7 +2693,7 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
                     else {
                         EJS_OBJECT_SET_SHAPE(obj, next_shape);
                         shaped_slots(obj)[slot] = value;
-                        _ejs_gc_remember(shaped_env(obj), value);
+                        _ejs_gc_remember(obj, value);
                         return EJS_TRUE;
                     }
                 }
@@ -2652,7 +2719,7 @@ _ejs_object_specop_define_own_property (ejsval O, ejsval P, EJSPropertyDesc* Des
                         shaped_ensure_capacity (obj, nfields);
                         EJS_OBJECT_SET_SHAPE(obj, next_shape);
                         shaped_slots(obj)[nfields - 1] = value;
-                        _ejs_gc_remember(shaped_env(obj), value);
+                        _ejs_gc_remember(obj, value);
                         return EJS_TRUE;
                     }
                 }
@@ -2868,12 +2935,29 @@ scan_property_entries (EJSPropertyMap* map, EJSValueFunc scan_func)
 static void
 _ejs_object_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
-    // shaped mode: shaped objects trace their slot array (a closureenv,
-    // which scans its own ejsval range); field names are rooted by the
-    // global shape table
-    if (EJS_OBJECT_SHAPE(obj) != EJS_SHAPE_DICT) {
-        if (!EJSVAL_IS_NULL(obj->slots))
-            scan_func (&(obj->slots));
+    // shaped mode: walk the slot VALUES directly — the object is the
+    // barrier owner for shaped stores, so a dirty-object rescan must
+    // see them, and embedded storage has no cell of its own.  Field
+    // names are rooted by the global shape table.
+    uint32_t obj_shape = EJS_OBJECT_SHAPE(obj);
+    if (obj_shape != EJS_SHAPE_DICT) {
+        if (!EJSVAL_IS_NULL(obj->slots)) {
+            EJSClosureEnv* env = shaped_env(obj);
+            // the shape's trace bitmap (gc-P5): f64-repr slots hold raw
+            // doubles — never references — so the walk skips them.
+            // Slots past field_count (hint slack) are undefined, whose
+            // mask bits are 0, so they scan as the no-ops they are.
+            uint32_t f64_mask = _ejs_shape_get(obj_shape)->f64_mask;
+            for (uint32_t i = 0; i < env->length; i ++)
+                if (!(f64_mask & (1u << i)))
+                    scan_func (&env->slots[i]);
+            // out-of-line storage is a real cell: scan the edge so the
+            // env itself stays alive and the reference moves with it.
+            // The embedded edge is self-interior (not an object base) —
+            // the evacuation fixup rebases it instead.
+            if (!shaped_slots_are_embedded (obj))
+                scan_func (&(obj->slots));
+        }
         scan_func (&(obj->proto));
         return;
     }

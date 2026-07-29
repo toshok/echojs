@@ -317,6 +317,12 @@ ejsval _ejs_object_create (ejsval proto);
 ejsval _ejs_object_new_shaped  (uint32_t argc, ejsval* names, ejsval* values);
 ejsval _ejs_object_fill_shaped (ejsval obj, uint32_t argc, ejsval* names, ejsval* values);
 
+// ordinary-construct support (gc-P5): allocate an empty root-shaped
+// ordinary object whose slot storage for `hint` fields is embedded in
+// the object's own cell (0 = bare object, today's layout).  Constructor
+// birth-capacity hints route here so `new F()` results are single-cell.
+ejsval _ejs_object_new_with_slot_hint (ejsval proto, uint32_t hint);
+
 void _ejs_Object_init (ejsval ejs_global);
 EJS_END_DECLS
 

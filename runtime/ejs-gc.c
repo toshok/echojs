@@ -16,6 +16,7 @@
 #include "ejs-function.h"
 #include "ejs-generator.h"
 #include "ejs-arguments.h"
+#include "ejs-shapes.h"
 #include "ejs-value.h"
 #include "ejs-string.h"
 #include "ejs-symbol.h"
@@ -1560,6 +1561,19 @@ minor_fixup_evacuated(GCObjectPtr from, GCObjectPtr to, size_t cell_size)
             char* d = (char*)a->args;
             if (d >= (char*)from && d < (char*)from + cell_size)
                 a->args = (ejsval*)((char*)to + (d - (char*)from));
+        }
+        // shaped ordinary objects with EMBEDDED slot storage (gc-P5
+        // single-cell allocation): the slots ejsval points into the
+        // cell.  Shape bits are only ever set on ordinary objects, so
+        // the header test suffices; dictionary mode (shape 0) keeps
+        // the map pointer in the union and must not be touched.
+        else if (((h >> EJS_GC_HEADER_SHAPE_SHIFT) & EJS_GC_HEADER_SHAPE_MASK)
+                     != EJS_SHAPE_DICT
+                 && !EJSVAL_IS_NULL(o->slots)) {
+            char* d = (char*)EJSVAL_TO_CLOSUREENV_IMPL(o->slots);
+            if (d >= (char*)from && d < (char*)from + cell_size)
+                rewrite_slot_payload(&o->slots,
+                                     (GCObjectPtr)((char*)to + (d - (char*)from)));
         }
     }
 }

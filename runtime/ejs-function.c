@@ -9,6 +9,7 @@
 #include "ejs-value.h"
 #include "ejs-ops.h"
 #include "ejs-object.h"
+#include "ejs-shapes.h"
 #include "ejs-function.h"
 #include "ejs-proxy.h"
 #include "ejs-array.h"
@@ -548,7 +549,12 @@ _ejs_function_specop_construct (ejsval F, ejsval newTarget, uint32_t argc, ejsva
     if (kind == CONSTRUCTOR_KIND_BASE) {
         // a. Let thisArgument be OrdinaryCreateFromConstructor(newTarget, "%ObjectPrototype%").
         // b. ReturnIfAbrupt(thisArgument).
-        thisArgument = OrdinaryCreateFromConstructor(newTarget, _ejs_Object_prototype, &_ejs_Object_specops);
+        // gc-P5: the birth-capacity hint pre-sizes `this` so the
+        // constructor's slot fills stay in the object's own cell
+        // (single-cell allocation); semantics are unchanged from
+        // OrdinaryCreateFromConstructor with _ejs_Object_specops.
+        ejsval proto = GetPrototypeFromConstructor(newTarget, _ejs_Object_prototype);
+        thisArgument = _ejs_object_new_with_slot_hint (proto, F_->ctor_slot_hint);
     }
 
     // 6. Let calleeContext be PrepareForOrdinaryCall(F, newTarget).
@@ -558,6 +564,20 @@ _ejs_function_specop_construct (ejsval F, ejsval newTarget, uint32_t argc, ejsva
     // 10. Let envRec be constructorEnv’s EnvironmentRecord.
     // 11. Let result be OrdinaryCallEvaluateBody(F, argumentsList).
     ejsval result = F_->func (F_->env, &thisArgument, argc, args, newTarget);
+    // birth-capacity feedback (gc-P5): remember how many fields the
+    // constructor installed so the NEXT base construct births `this`
+    // with embedded slot storage.  One-shot 0 -> count; F_ is pinned by
+    // the conservative scan (it's C-stack-visible), so the pointer is
+    // stable across the body call.
+    if (kind == CONSTRUCTOR_KIND_BASE && F_->ctor_slot_hint == 0
+        && EJSVAL_IS_OBJECT(thisArgument)) {
+        EJSObject* T_ = EJSVAL_TO_OBJECT(thisArgument);
+        if (T_->ops == &_ejs_Object_specops) {
+            uint32_t tshape = EJS_OBJECT_SHAPE(T_);
+            if (tshape != EJS_SHAPE_DICT)
+                F_->ctor_slot_hint = _ejs_shape_field_count (tshape);
+        }
+    }
     // 12. Remove calleeContext from the execution context stack and restore callerContext as the running execution context.
     // 13. If result.[[type]] is return, then
     // a. If Type(result.[[value]]) is Object, return NormalCompletion(result.[[value]]).

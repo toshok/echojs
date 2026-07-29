@@ -155,7 +155,6 @@ export class EIREmitter {
     // the slot-array env loaded by the most recent slotRef —
     // shaped stores must remember the ENV (the storage owner), not the
     // object whose Scan only holds the env reference
-    last_slots_val: llvm.Value | null = null;
     scratch_type: llvm.Type | null = null;
     this_slot!: llvm.AllocaInst;
     // values live across a safepoint are DEMOTED to
@@ -539,7 +538,6 @@ export class EIREmitter {
             "slots_ejsval_ptr"
         );
         const slotsval = ir.createLoad(types.EjsValue, slots_ptr, "slots_ejsval");
-        this.last_slots_val = slotsval; // the barrier's true owner
         // payload-mask the closureenv ejsval to its EJSClosureEnv*
         const envptr = ir.createPointerCast(
             this.v.objectPointer(slotsval),
@@ -762,14 +760,18 @@ export class EIREmitter {
                 return;
             }
             case "slot_store": {
-                const ref = this.slotRef(this.val(inst.operands[0]), inst.imms["slot"] as number);
+                const objval = this.val(inst.operands[0]);
+                const ref = this.slotRef(objval, inst.imms["slot"] as number);
                 if (inst.imms["repr"] === "f64") {
                     // raw doubles are not references: no barrier
                     const dref = ir.createBitCast(ref, types.Double.pointerTo(), "slot_f64_ptr");
                     ir.createStore(this.val(inst.operands[1]), dref);
                 } else {
                     ir.createStore(this.val(inst.operands[1]), ref);
-                    this.emitStoreBarrier(this.last_slots_val!, this.val(inst.operands[1]));
+                    // the barrier owner is the wrapper OBJECT (gc-P5):
+                    // its Scan walks the slot values directly, and
+                    // embedded storage is not a cell of its own
+                    this.emitStoreBarrier(objval, this.val(inst.operands[1]));
                 }
                 this.values.set(inst, this.val(inst.operands[1]));
                 return;
