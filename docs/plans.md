@@ -98,9 +98,10 @@ gc-plan.md, shapes-plan.md (Step B).
       slots, object-literal inline allocation, typed-slot barrier
       elision (gc-P5; consumes shapes-plan's deferred Step B).  DONE
       2026-07-28 — docs/gc-p5-results.md.
-- [ ] **P6.3** collector structural refactor: cell-lifecycle module,
+- [x] **P6.3** collector structural refactor: cell-lifecycle module,
       LOS lookup, file split (runtime-P4; can land any time after
-      P6.1, behavior-preserving).
+      P6.1, behavior-preserving).  DONE 2026-07-29 —
+      docs/runtime-p4-results.md.
 
 ## P7 — Robustness
 

@@ -42,7 +42,7 @@ performance bucket owns.
       console.log inspect-format drift (22.4 → 22.23 changed array
       formatting); CI pins node 22.4.0.  The durable fix asserts on
       values rather than inspect output.
-- [ ] **runtime-P4 — Collector structural refactor.**  Recorded during
+- [x] **runtime-P4 — Collector structural refactor.**  Recorded during
       the gc-P2 debugging sessions, deliberately deferred while phases
       were landing: extract a cell-lifecycle module (alloc/free/color
       in one place), kill the mark-color mask flip in favor of explicit
@@ -50,4 +50,9 @@ performance bucket owns.
       raising the shaped-object field cap past 14), a real root
       registry API, one collection-policy function, and a file split
       (ejs-gc.c is ~3k lines).  Behavior-preserving; gated on the
-      differential lanes.
+      differential lanes.  DONE 2026-07-29 —
+      docs/runtime-p4-results.md (the LOS lookup had already landed
+      with gc-P4; the cap raise is shapes-plan business).  Flushed two
+      pre-existing stack-luck hazards: orphaned old slot-storage envs
+      (retirement now queues one precise scan) and the paranoid
+      checker's self-scan of collector frames.

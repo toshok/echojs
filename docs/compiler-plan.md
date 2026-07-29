@@ -96,6 +96,22 @@ shaped-world continuation), shape-guard regions (see shapes-plan).
         0` tag-compare quirk to work under self-host); generator
         suspension makes "stable" slots unstable mid-activation —
         suspendable functions decline the CSE exemptions.
+- [ ] **compiler-P1.1 — test-eir debt from flag-off born-shaped
+      literals.**  Found RED at runtime-P4 (P6.3) entry, 2026-07-29:
+      11 lib/eir/tests.ts failures, pre-existing (reproduce from
+      sources untouched by that phase).  Three classes: (a) stale
+      expectations still asserting `make_object keys=[...]` where
+      flag-off lowering now mints `make_object_shaped` (gc-P5
+      part 2), including the "flag-off keeps make_object exactly"
+      test that asserts the OLD contract; (b) the sinking /
+      sink-flow fold tests fail knob-independently — the
+      flow-sensitive sinking does not drain `make_object_shaped`
+      allocations (real optimizer gap, not just test rot); (c)
+      `assertNotContains("make_object")` substring-matches
+      `make_object_shaped`, so those assertions can't distinguish
+      the two ops.  Fix the sinking gap (or decide it's deferred and
+      assert the shaped alloc form), then repair the expectations
+      with substring-safe matchers.
 - [ ] **compiler-P2 — TypeScript port of the compiler.**  The compiler
       converts from JS to TypeScript (largely done for lib/eir/ and
       lib/*.ts — the strict-TS conversion landed with the EIR work);
