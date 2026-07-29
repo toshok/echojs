@@ -196,12 +196,25 @@ _ejs_gc_worklist_pop()
     }                                                           \
     EJS_MACRO_END
 
-typedef struct _RootSetEntry {
-    EJS_LIST_HEADER(struct _RootSetEntry);
-    ejsval* root;
-} RootSetEntry;
+// ---- the root registry -----------------------------------------
+//
+// Registered roots are the addresses of ejsval slots in static or
+// malloc'd storage (atoms, well-knowns, the OOM exceptions).  A
+// growable array: O(1) add, swap-with-last remove, and ONE iteration
+// helper every collector phase shares — full-GC mark, minor
+// evacuation, compaction fixup, and the debug walks see the same set
+// by construction.  (The predecessor was a malloc'd linked list with
+// five hand-rolled walks.)
+static ejsval** root_registry;
+static int root_registry_count;
+static int root_registry_capacity;
 
-static RootSetEntry *root_set;
+static void
+root_registry_foreach(void (*fn)(ejsval*))
+{
+    for (int i = 0; i < root_registry_count; i++)
+        fn(root_registry[i]);
+}
 
 #ifndef MAP_NORESERVE
 #define MAP_NORESERVE 0
@@ -542,6 +555,7 @@ static GCObjectPtr young_alloc_slow(int idx, size_t cell_size, EJSScanType scan_
 // allocator accounting, defined with the allocator further down
 extern size_t alloc_size;
 extern size_t alloc_size_at_last_gc;
+extern int num_allocs;
 static size_t heap_size_at_last_gc;
 
 // gc-P4: the compacting major (EJS_GC_COMPACT=off for A/B) and THE
@@ -559,6 +573,70 @@ full_gc_trigger(void)
     size_t t = heap_size_at_last_gc * (size_t)gc_growth_pct / 100;
     size_t floor_ = 2 * (size_t)ARENA_SIZE;
     return t > floor_ ? t : floor_;
+}
+
+// ---- the collection policy -------------------------------------
+//
+// Every collection the runtime initiates on its own behalf is decided
+// HERE (GC.collect() and the shutdown collection are driver requests,
+// not policy).  Two inputs: old-gen growth since the last full
+// collection — alloc_size - alloc_size_at_last_gc, promotions included
+// — against full_gc_trigger(), and the EJS_GC_EVERY_N_ALLOC stress
+// knob (minor cadence in nursery mode, full cadence in old mode).
+// Each event preserves its historical baseline/counter resets exactly:
+// AFTER_MINOR deliberately leaves num_allocs alone (the stress-minor
+// cadence owns it), and ALLOC_FAILED collects even under
+// EJS_GC_DISABLE — it is the allocator's last resort before throwing.
+typedef enum {
+    GC_POLICY_YOUNG_ALLOC, // a nursery allocation is about to run
+    GC_POLICY_OLD_ALLOC,   // an old-gen/LOS allocation is about to run
+    GC_POLICY_AFTER_MINOR, // a minor just retired; promotions grew the old gen
+    GC_POLICY_ALLOC_FAILED // allocator out of memory: forced full
+} GCPolicyEvent;
+
+static void
+gc_policy(GCPolicyEvent ev, const char* reason)
+{
+    if (ev == GC_POLICY_ALLOC_FAILED) {
+        _ejs_gc_collect (reason);
+        alloc_size_at_last_gc = alloc_size;
+        num_allocs = 0;
+        return;
+    }
+
+    if (gc_disabled)
+        return;
+
+    switch (ev) {
+    case GC_POLICY_YOUNG_ALLOC:
+        if (collect_every_alloc && collect_every_alloc == num_allocs) {
+            num_allocs = 0;
+            _ejs_gc_minor_collect ("every_n_alloc");
+        }
+        break;
+    case GC_POLICY_OLD_ALLOC:
+        if (alloc_size - alloc_size_at_last_gc >= full_gc_trigger()) {
+            _ejs_gc_collect ("alloc_size");
+            alloc_size_at_last_gc = alloc_size;
+            num_allocs = 0;
+        }
+        else if (!nursery_enabled && collect_every_alloc && collect_every_alloc == num_allocs) {
+            _ejs_gc_collect ("every_n_alloc");
+            alloc_size_at_last_gc = alloc_size;
+            num_allocs = 0;
+        }
+        break;
+    case GC_POLICY_AFTER_MINOR:
+        // when nearly every allocation is young, this is the only
+        // place the growth trigger can fire
+        if (alloc_size - alloc_size_at_last_gc >= full_gc_trigger()) {
+            _ejs_gc_collect ("promotion growth");
+            alloc_size_at_last_gc = alloc_size;
+        }
+        break;
+    case GC_POLICY_ALLOC_FAILED: // handled above
+        break;
+    }
 }
 
 // allocated-ness of a cell: old pages answer from the bitmap; ACTIVE
@@ -908,8 +986,6 @@ _ejs_gc_init()
         arena_new();
 
     _ejs_gc_worklist_init();
-
-    root_set = NULL;
 
     // the generational nursery (EJS_GC_NURSERY=off selects
     // the old single-generation collector for A/B and differential runs)
@@ -1832,8 +1908,7 @@ paranoid_report_referrers(GCObjectPtr p)
     old_gen_walk (referrer_check_object);
     referrer_ctx = "roots";
     referrer_owner = NULL;
-    for (RootSetEntry *entry = root_set; entry; entry = entry->next)
-        if (entry->root) referrer_check_slot(entry->root);
+    root_registry_foreach (referrer_check_slot);
     referrer_ctx = "modules";
     for (int i = 0; i < _ejs_num_modules; i++) {
         EJSObject* mod = (EJSObject*)_ejs_modules[i];
@@ -1997,8 +2072,7 @@ static void
 paranoid_sweep_check(void)
 {
     paranoid_ctx = "roots";
-    for (RootSetEntry* e = root_set; e; e = e->next)
-        if (e->root) paranoid_check_slot(e->root);
+    root_registry_foreach (paranoid_check_slot);
     paranoid_ctx = "modules";
     for (int i = 0; i < _ejs_num_modules; i++) {
         EJSObject* mod = (EJSObject*)_ejs_modules[i];
@@ -2119,11 +2193,8 @@ _ejs_gc_minor_collect(const char* reason)
         gc_frame_moves = heap_priv.promoted_objs - promoted_before_frames;
     }
 
-    // 2. precise roots: the root list and module exports evacuate
-    for (RootSetEntry *entry = root_set; entry; entry = entry->next) {
-        if (entry->root)
-            minor_process_slot(entry->root);
-    }
+    // 2. precise roots: the root registry and module exports evacuate
+    root_registry_foreach (minor_process_slot);
     for (int i = 0; i < _ejs_num_modules; i++) {
         EJSObject* mod = (EJSObject*)_ejs_modules[i];
         if (mod->ops == NULL) continue;
@@ -2291,14 +2362,8 @@ _ejs_gc_minor_collect(const char* reason)
 #undef PHUS
     }
 
-    // promotions grow the old gen; when nearly every allocation is
-    // young, this is the only place the full-collection trigger can fire
-    if (!gc_disabled) {
-        if (alloc_size - alloc_size_at_last_gc >= full_gc_trigger()) {
-            _ejs_gc_collect("promotion growth");
-            alloc_size_at_last_gc = alloc_size;
-        }
-    }
+    // promotions grow the old gen; the policy may schedule a full
+    gc_policy (GC_POLICY_AFTER_MINOR, NULL);
 }
 
 // the young allocation slow path: refill the class's bump page, running
@@ -2466,31 +2531,31 @@ sweep_heap()
 }
 
 static void
+mark_root_slot(ejsval* root)
+{
+    num_roots++;
+    ejsval rootval = *root;
+    if (!EJSVAL_IS_GCTHING_IMPL(rootval))
+        return;
+    GCObjectPtr root_ptr = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(rootval);
+    if (root_ptr == NULL)
+        return;
+    uint32_t cell_idx;
+    PageInfo* page = find_page_and_cell(root_ptr, &cell_idx);
+    if (!page)
+        return;
+
+    BitmapCell cell = page->page_bitmap[cell_idx];
+    if (cell_is_free(cell))   return; // skip free cells
+    if (!cell_is_white(cell)) return; // skip pointers to gray/black cells
+    WORKLIST_PUSH_AND_GRAY_CELL(root_ptr, page->page_bitmap[cell_idx]);
+}
+
+static void
 mark_from_roots()
 {
     SPEW (2, _ejs_log ("marking from roots"));
-
-    // mark from our registered roots
-    for (RootSetEntry *entry = root_set; entry; entry = entry->next) {
-        num_roots++;
-        if (entry->root) {
-            ejsval rootval = *entry->root;
-            if (!EJSVAL_IS_GCTHING_IMPL(rootval))
-                continue;
-            GCObjectPtr root_ptr = (GCObjectPtr)EJSVAL_TO_GCTHING_IMPL(rootval);
-            if (root_ptr == NULL)
-                continue;
-            uint32_t cell_idx;
-            PageInfo* page = find_page_and_cell(root_ptr, &cell_idx);
-            if (!page)
-                continue;
-
-            BitmapCell cell = page->page_bitmap[cell_idx];
-            if (cell_is_free(cell))   continue; // skip free cells
-            if (!cell_is_white(cell)) continue; // skip pointers to gray/black cells
-            WORKLIST_PUSH_AND_GRAY_CELL(root_ptr, page->page_bitmap[cell_idx]);
-        }
-    }
+    root_registry_foreach (mark_root_slot);
     SPEW (2, _ejs_log ("done marking from roots"));
 }
 
@@ -2919,9 +2984,7 @@ compact_old_gen(void)
     // 2. fixup: rewrite every reference that can name a moved cell, and
     //    clear the cycle's pins while walking the live set.  Runs even
     //    when nothing was evacuated — the pins must reset either way.
-    for (RootSetEntry* e = root_set; e; e = e->next)
-        if (e->root)
-            compact_fixup_slot(e->root);
+    root_registry_foreach (compact_fixup_slot);
     for (int i = 0; i < _ejs_num_modules; i++) {
         EJSObject* mod = (EJSObject*)_ejs_modules[i];
         if (mod->ops)
@@ -3098,15 +3161,11 @@ _ejs_gc_collect_inner(EJSBool shutting_down)
     if (shutting_down) {
         // NULL out all of our roots
 
-        RootSetEntry *entry = root_set;
-        while (entry) {
-            RootSetEntry *next = entry->next;
-            *entry->root = _ejs_null;
-            free (entry);
-            entry = next;
-        }
-
-        root_set = NULL;
+        for (int i = 0; i < root_registry_count; i++)
+            *root_registry[i] = _ejs_null;
+        free (root_registry);
+        root_registry = NULL;
+        root_registry_count = root_registry_capacity = 0;
 
         SPEW(1, _ejs_log ("final gc page statistics:\n");
              for (int hp = 0; hp < HEAP_PAGELISTS_COUNT; hp++) {
@@ -3346,10 +3405,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
             _ejs_log ("GC BUG: young allocation during a minor collection\n");
             abort();
         }
-        if (collect_every_alloc && collect_every_alloc == num_allocs) {
-            num_allocs = 0;
-            _ejs_gc_minor_collect("every_n_alloc");
-        }
+        gc_policy (GC_POLICY_YOUNG_ALLOC, NULL);
         int idx = bucket - OBJECT_SIZE_LOW_LIMIT_BITS - 1; // 16B -> 0
         void* p = _ejs_heap.bump[idx];
         if (EJS_LIKELY((char*)p + bucket_size <= (char*)_ejs_heap.limit[idx])) {
@@ -3367,19 +3423,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
 
     alloc_size += size;
 
-    if (!gc_disabled) {
-        char *gc_reason = NULL;
-        if (alloc_size - alloc_size_at_last_gc >= full_gc_trigger()) {
-            gc_reason = "alloc_size";
-        } else if (!nursery_enabled && collect_every_alloc && collect_every_alloc == num_allocs) {
-            gc_reason = "every_n_alloc";
-        }
-        if (gc_reason) {
-            _ejs_gc_collect(gc_reason);
-            alloc_size_at_last_gc = alloc_size;
-            num_allocs = 0;
-        }
-    }
+    gc_policy (GC_POLICY_OLD_ALLOC, NULL);
 
     retry_allocation:
     {
@@ -3400,9 +3444,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
             else {
                 _ejs_log ("los allocation (size = %d) failed, trying to collect", size);
                 UNLOCK_GC();
-                _ejs_gc_collect ("los allocation fail");
-                alloc_size_at_last_gc = alloc_size;
-                num_allocs = 0;
+                gc_policy (GC_POLICY_ALLOC_FAILED, "los allocation fail");
                 goto retry_allocation;
             }
         }
@@ -3423,9 +3465,7 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
             else {
                 _ejs_log ("page allocation failed, trying to collect");
                 UNLOCK_GC();
-                _ejs_gc_collect ("page allocation fail");
-                alloc_size_at_last_gc = alloc_size;
-                num_allocs = 0;
+                gc_policy (GC_POLICY_ALLOC_FAILED, "page allocation fail");
                 goto retry_allocation;
             }
         }
@@ -3456,21 +3496,19 @@ _ejs_gc_alloc(size_t size, EJSScanType scan_type)
 void
 _ejs_gc_add_root(ejsval* root)
 {
-    RootSetEntry* entry = (RootSetEntry*)malloc(sizeof(RootSetEntry));
-    EJS_LIST_INIT(entry);
-    entry->root = root;
-    EJS_LIST_PREPEND(entry, root_set);
+    if (root_registry_count == root_registry_capacity) {
+        root_registry_capacity = root_registry_capacity ? root_registry_capacity * 2 : 512;
+        root_registry = realloc (root_registry, root_registry_capacity * sizeof(ejsval*));
+    }
+    root_registry[root_registry_count++] = root;
 }
 
 void
 _ejs_gc_remove_root(ejsval* root)
 {
-    RootSetEntry *entry = NULL;
-
-    for (entry = root_set; entry; entry = entry->next) {
-        if (entry->root == root) {
-            EJS_LIST_DETACH(entry, root_set);
-            free (entry);
+    for (int i = 0; i < root_registry_count; i++) {
+        if (root_registry[i] == root) {
+            root_registry[i] = root_registry[--root_registry_count];
             return;
         }
     }
