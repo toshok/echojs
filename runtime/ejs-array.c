@@ -2717,6 +2717,105 @@ _ejs_array_init(ejsval global)
 #undef PROTO_ITER_METHOD
 }
 
+// --- sparse (arraylet) element storage --------------------------------------
+//
+// a sparse array's elements live in fixed-size, chunk-aligned arraylets
+// (start_idx is a multiple of EJS_ARRAYLET_SIZE, alloc == length ==
+// EJS_ARRAYLET_SIZE, every slot initialized — holes are the same magic
+// as dense holes).  The arraylet list is kept sorted by start_idx;
+// aligned chunks can never overlap.
+
+#define EJS_ARRAYLET_SIZE 512
+
+// address of idx's slot, or NULL if its chunk doesn't exist (and
+// create is false).  Newly created chunks are all holes.
+static ejsval*
+sparse_element_addr (EJSArray* arr, int64_t idx, EJSBool create)
+{
+    int64_t chunk_start = idx & ~((int64_t)EJS_ARRAYLET_SIZE - 1);
+
+    int lo = 0, hi = (int)arr->sparse.arraylet_num;
+    while (lo < hi) {
+        int mid = (lo + hi) / 2;
+        if (arr->sparse.arraylets[mid].start_idx < chunk_start)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    if (lo < arr->sparse.arraylet_num && arr->sparse.arraylets[lo].start_idx == chunk_start)
+        return &arr->sparse.arraylets[lo].elements[idx - chunk_start];
+
+    if (!create)
+        return NULL;
+
+    if (arr->sparse.arraylet_num == arr->sparse.arraylet_alloc) {
+        arr->sparse.arraylet_alloc = arr->sparse.arraylet_alloc ? arr->sparse.arraylet_alloc * 2 : 5;
+        arr->sparse.arraylets = (Arraylet*)realloc (arr->sparse.arraylets, arr->sparse.arraylet_alloc * sizeof(Arraylet));
+    }
+    memmove (&arr->sparse.arraylets[lo + 1], &arr->sparse.arraylets[lo],
+             (arr->sparse.arraylet_num - lo) * sizeof(Arraylet));
+    arr->sparse.arraylet_num ++;
+
+    Arraylet* al = &arr->sparse.arraylets[lo];
+    al->start_idx = chunk_start;
+    al->length = EJS_ARRAYLET_SIZE;
+    al->alloc = EJS_ARRAYLET_SIZE;
+    al->elements = (ejsval*)malloc (EJS_ARRAYLET_SIZE * sizeof(ejsval));
+    for (int i = 0; i < EJS_ARRAYLET_SIZE; i ++)
+        al->elements[i] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
+
+    return &al->elements[idx - chunk_start];
+}
+
+// drop element storage at and above new_len (a length shrink)
+static void
+sparse_truncate (EJSArray* arr, int64_t new_len)
+{
+    while (arr->sparse.arraylet_num > 0) {
+        Arraylet* al = &arr->sparse.arraylets[arr->sparse.arraylet_num - 1];
+        if (al->start_idx >= new_len) {
+            free (al->elements);
+            arr->sparse.arraylet_num --;
+            continue;
+        }
+        // sorted: only the last surviving chunk can straddle new_len
+        for (int64_t i = new_len - al->start_idx; i < al->length; i ++)
+            al->elements[i] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
+        break;
+    }
+}
+
+// pushes the name ("0", "1", ...) of every present (non-hole) index
+// property of array onto out (a dense array), in ascending order.
+// Iterates storage, not length — a `new Array(1e9)` has no index
+// properties and costs nothing here.
+void
+_ejs_array_push_own_index_names (ejsval array, ejsval out)
+{
+    if (EJSVAL_IS_SPARSE_ARRAY(array)) {
+        EJSArray* arr = (EJSArray*)EJSVAL_TO_OBJECT(array);
+        for (int i = 0; i < arr->sparse.arraylet_num; i ++) {
+            Arraylet* al = &arr->sparse.arraylets[i];
+            for (int64_t j = 0; j < al->length; j ++) {
+                if (al->start_idx + j >= EJSARRAY_LEN(arr))
+                    break;
+                if (EJSVAL_IS_ARRAY_HOLE_MAGIC(al->elements[j]))
+                    continue;
+                ejsval name = ToString(NUMBER_TO_EJSVAL(al->start_idx + j));
+                _ejs_array_push_dense(out, 1, &name);
+            }
+        }
+    }
+    else {
+        for (int64_t i = 0; i < EJS_ARRAY_LEN(array); i ++) {
+            if (EJSVAL_IS_ARRAY_HOLE_MAGIC(EJS_DENSE_ARRAY_ELEMENTS(array)[i]))
+                continue;
+            ejsval name = ToString(NUMBER_TO_EJSVAL(i));
+            _ejs_array_push_dense(out, 1, &name);
+        }
+    }
+}
+
 static ejsval
 _ejs_array_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
 {
@@ -2741,7 +2840,16 @@ _ejs_array_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
             //printf ("getprop(%d) on an array, returning undefined\n", idx);
             return _ejs_undefined;
         }
-        ejsval rv = EJS_DENSE_ARRAY_ELEMENTS(obj)[idx];
+        ejsval rv;
+        if (EJSVAL_IS_SPARSE_ARRAY(obj)) {
+            ejsval* slot = sparse_element_addr ((EJSArray*)EJSVAL_TO_OBJECT(obj), idx, EJS_FALSE);
+            if (!slot)
+                return _ejs_undefined;
+            rv = *slot;
+        }
+        else {
+            rv = EJS_DENSE_ARRAY_ELEMENTS(obj)[idx];
+        }
         if (EJSVAL_IS_ARRAY_HOLE_MAGIC(rv))
             return _ejs_undefined;
         return rv;
@@ -2777,10 +2885,18 @@ _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName, ejsval *exc
 
     if (is_index) {
         if (idx >= 0 && idx < EJS_ARRAY_LEN(obj)) {
+            ejsval el;
+            if (EJSVAL_IS_SPARSE_ARRAY(obj)) {
+                ejsval* slot = sparse_element_addr ((EJSArray*)EJSVAL_TO_OBJECT(obj), idx, EJS_FALSE);
+                el = slot ? *slot : MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
+            }
+            else {
+                el = EJS_DENSE_ARRAY_ELEMENTS(obj)[idx];
+            }
             // XXX we leak this.  need to change get_own_property to use an out param instead of a return value
             EJSPropertyDesc* desc = (EJSPropertyDesc*)calloc(sizeof(EJSPropertyDesc), 1);
             _ejs_property_desc_set_writable (desc, EJS_TRUE);
-            _ejs_property_desc_set_value (desc, EJS_DENSE_ARRAY_ELEMENTS(obj)[idx]);
+            _ejs_property_desc_set_value (desc, el);
             return desc;
         }
     }
@@ -2835,8 +2951,8 @@ _ejs_array_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval recei
             EJS_GC_REMEMBER(obj, val);
         }
         else {
-            // we're already sparse, just give up as none of this is implemented yet.
-            EJS_NOT_IMPLEMENTED();
+            *sparse_element_addr ((EJSArray*)EJSVAL_TO_OBJECT(obj), idx, EJS_TRUE) = val;
+            EJS_GC_REMEMBER(obj, val);
         }
         EJS_ARRAY_LEN(obj) = MAX(EJS_ARRAY_LEN(obj), idx + 1);
         return EJS_TRUE;
@@ -2857,9 +2973,9 @@ _ejs_array_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval recei
                         EJS_DENSE_ARRAY_ELEMENTS(obj)[i] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
                 }
             }
-            else {
-                // we're already sparse, just give up as none of this is implemented yet.
-                EJS_NOT_IMPLEMENTED();
+            else if (newLen < oldLen) {
+                // growth needs no storage (holes are implicit)
+                sparse_truncate ((EJSArray*)EJSVAL_TO_OBJECT(obj), newLen);
             }
 
             EJS_ARRAY_LEN(obj) = newLen;
@@ -2886,7 +3002,16 @@ _ejs_array_specop_has_property (ejsval obj, ejsval propertyName)
             if (floor(n) == n) {
                 idx = (int)n;
                 if (idx >= 0 && idx < EJS_ARRAY_LEN(obj)) {
-                    ejsval element = EJS_DENSE_ARRAY_ELEMENTS(obj)[idx];
+                    ejsval element;
+                    if (EJSVAL_IS_SPARSE_ARRAY(obj)) {
+                        ejsval* slot = sparse_element_addr ((EJSArray*)EJSVAL_TO_OBJECT(obj), idx, EJS_FALSE);
+                        if (!slot)
+                            return EJS_FALSE;
+                        element = *slot;
+                    }
+                    else {
+                        element = EJS_DENSE_ARRAY_ELEMENTS(obj)[idx];
+                    }
                     if (EJSVAL_IS_ARRAY_HOLE_MAGIC(element))
                         return EJS_FALSE;
                     return EJS_TRUE;
@@ -2921,8 +3046,16 @@ _ejs_array_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
         return _ejs_Object_specops.Delete (obj, propertyName, flag);
 
     // if it's outside the array bounds, do nothing
-    if (idx < EJS_ARRAY_LEN(obj))
-        EJS_DENSE_ARRAY_ELEMENTS(obj)[idx] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
+    if (idx < EJS_ARRAY_LEN(obj)) {
+        if (EJSVAL_IS_SPARSE_ARRAY(obj)) {
+            ejsval* slot = sparse_element_addr ((EJSArray*)EJSVAL_TO_OBJECT(obj), idx, EJS_FALSE);
+            if (slot)
+                *slot = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
+        }
+        else {
+            EJS_DENSE_ARRAY_ELEMENTS(obj)[idx] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
+        }
+    }
     return EJS_TRUE;
 }
 
@@ -2971,8 +3104,8 @@ _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPrope
             EJS_GC_REMEMBER(obj, propertyDescriptor->value);
         }
         else {
-            // we're already sparse, just give up as none of this is implemented yet.
-            EJS_NOT_IMPLEMENTED();
+            *sparse_element_addr ((EJSArray*)EJSVAL_TO_OBJECT(obj), idx, EJS_TRUE) = propertyDescriptor->value;
+            EJS_GC_REMEMBER(obj, propertyDescriptor->value);
         }
         EJS_ARRAY_LEN(obj) = MAX(EJS_ARRAY_LEN(obj), idx + 1);
         return EJS_TRUE;
@@ -2993,9 +3126,9 @@ _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPrope
                         EJS_DENSE_ARRAY_ELEMENTS(obj)[i] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
                 }
             }
-            else {
-                // we're already sparse, just give up as none of this is implemented yet.
-                EJS_NOT_IMPLEMENTED();
+            else if (newLen < oldLen) {
+                // growth needs no storage (holes are implicit)
+                sparse_truncate ((EJSArray*)EJSVAL_TO_OBJECT(obj), newLen);
             }
 
             EJS_ARRAY_LEN(obj) = newLen;

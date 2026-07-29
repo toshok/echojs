@@ -97,6 +97,10 @@ void _ejs_array_init(ejsval global);
 uint32_t _ejs_array_push_dense (ejsval array, int argc, ejsval* args);
 ejsval   _ejs_array_pop_dense (ejsval array);
 
+// ascending "0","1",... names of the present index properties, pushed
+// onto out (used by Object.getOwnPropertyNames)
+void _ejs_array_push_own_index_names (ejsval array, ejsval out);
+
 ejsval _ejs_array_join (ejsval array, ejsval sep);
 ejsval _ejs_array_from_iterables (int argc, ejsval* args);
 

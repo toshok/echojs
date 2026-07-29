@@ -5,7 +5,7 @@
 
 %EjsFuncType = type {  }
 
-define i32 @_ejs_invoke_closure_catch (%EjsValueType* nocapture %retval, %EjsValueType %closure, %EjsValueType* %_this, i32 %argc, %EjsValueType* nocapture readnone %args, %EjsValueType %newTarget) personality i8* bitcast (i32 (i32, i32, i64, i8*, i8*)* @__ejs_personality_v0 to i8*) {
+define i32 @_ejs_invoke_closure_catch_inner (%EjsValueType* nocapture %retval, %EjsValueType %closure, %EjsValueType* %_this, i32 %argc, %EjsValueType* nocapture readnone %args, %EjsValueType %newTarget) personality i8* bitcast (i32 (i32, i32, i64, i8*, i8*)* @__ejs_personality_v0 to i8*) {
 entry:
   %rv_alloc = alloca i32
 
@@ -40,7 +40,7 @@ try_merge:
   ret i32 %rvload
 }
 
-define i32 @_ejs_invoke_func_catch (%EjsValueType* nocapture %retval, i64 (i8*)* %func, i8* %data) personality i8* bitcast (i32 (i32, i32, i64, i8*, i8*)* @__ejs_personality_v0 to i8*) {
+define i32 @_ejs_invoke_func_catch_inner (%EjsValueType* nocapture %retval, i64 (i8*)* %func, i8* %data) personality i8* bitcast (i32 (i32, i32, i64, i8*, i8*)* @__ejs_personality_v0 to i8*) {
 entry:
   %rv_alloc = alloca i32
 

@@ -121,7 +121,12 @@ _ejs_generator_start(EJSGenerator* gen)
 {
     _ejs_gc_push_generator(gen);
     ejsval undef_this = _ejs_undefined;
-    ejsval rv = _ejs_invoke_closure(gen->body, &undef_this, 0, NULL, _ejs_undefined);
+    // catch here: an uncaught throw out of the body must not unwind the
+    // generator stack past this frame (there is nothing above it but the
+    // makecontext trampoline).  The exception is parked in yielded_value
+    // and rethrown by the resume site on the caller's stack.
+    ejsval rv;
+    EJSBool body_returned = _ejs_invoke_closure_catch(&rv, gen->body, &undef_this, 0, NULL, _ejs_undefined);
 
     // the body's return value is the final iteration result's value
     // (`function* g() { return 5; }` -> { value: 5, done: true }).
@@ -130,7 +135,13 @@ _ejs_generator_start(EJSGenerator* gen)
     // collection triggered by this allocation must know that (found the hard way —
     // mark_thread_stack's range depends on the chain).
     gen->completed = EJS_TRUE;
-    gen->yielded_value = _ejs_create_iter_result(rv, _ejs_true);
+    if (body_returned) {
+        gen->yielded_value = _ejs_create_iter_result(rv, _ejs_true);
+    }
+    else {
+        gen->threw_out = EJS_TRUE;
+        gen->yielded_value = rv;
+    }
     _ejs_gc_remember(gen, gen->yielded_value);
     _ejs_gc_pop_generator();
 }
@@ -155,6 +166,7 @@ _ejs_generator_new (ejsval generator_body)
     rv->body = generator_body;
     rv->started = EJS_FALSE;
     rv->completed = EJS_FALSE;
+    rv->threw_out = EJS_FALSE;
     rv->throwing = EJS_FALSE;
     rv->returning = EJS_FALSE;
     rv->yielded_value = _ejs_undefined;
@@ -208,6 +220,20 @@ _ejs_generator_yield (ejsval generator, ejsval arg) {
     return gen->sent_value;
 }
 
+// every swap back from the generator lands here: if the body ended in
+// an uncaught throw, rethrow it now — on the caller's stack
+static ejsval
+_ejs_generator_resume_result (EJSGenerator* gen)
+{
+    if (gen->threw_out) {
+        gen->threw_out = EJS_FALSE;
+        ejsval exc = gen->yielded_value;
+        gen->yielded_value = _ejs_undefined;
+        _ejs_throw (exc);
+    }
+    return gen->yielded_value;
+}
+
 static ejsval
 _ejs_generator_send (ejsval generator, ejsval arg) {
     EJSGenerator* gen = (EJSGenerator*)EJSVAL_TO_OBJECT(generator);
@@ -217,7 +243,7 @@ _ejs_generator_send (ejsval generator, ejsval arg) {
     _ejs_gc_remember(gen, gen->sent_value);
     gen->caller_stack_top = (void*)&gen; // GC: the suspended segment starts here
     swapcontext(&gen->caller_context, &gen->generator_context);
-    return gen->yielded_value;
+    return _ejs_generator_resume_result(gen);
 }
 
 static ejsval
@@ -228,7 +254,7 @@ _ejs_generator_throw (ejsval generator, ejsval arg) {
     gen->throwing = EJS_TRUE;
     gen->caller_stack_top = (void*)&gen; // GC: the suspended segment starts here
     swapcontext(&gen->caller_context, &gen->generator_context);
-    return gen->yielded_value;
+    return _ejs_generator_resume_result(gen);
 }
 
 // the unforgeable value .return() throws through the generator body to
@@ -292,7 +318,7 @@ static EJS_NATIVE_FUNC(_ejs_Generator_prototype_return) {
     _ejs_gc_remember(gen, gen->sent_value);
     gen->caller_stack_top = (void*)&gen; // GC: the suspended segment starts here
     swapcontext(&gen->caller_context, &gen->generator_context);
-    return gen->yielded_value;
+    return _ejs_generator_resume_result(gen);
 }
 
 static EJS_NATIVE_FUNC(_ejs_Generator_prototype_next) {

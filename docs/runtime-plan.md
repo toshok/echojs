@@ -8,28 +8,31 @@ performance bucket owns.
 
 ## Phases
 
-- [ ] **runtime-P1 — Pinned-bug burn-down.**  Each has a pinning test
-      or a recorded repro; fix in any order, keeping the differential
-      lanes green:
-      - `typeof null` → `"null"` (should be `"object"`).
-      - `-0 === 0` evaluates false (should be true).
-      - `Math.round(-2.5)` → `-3` (should be `-2`; ties round toward
-        +∞).
-      - `Number("  7  ")` → `NaN` (whitespace should trim).
-      - `-8 >>> 28` → `0` (should be `15`; unsigned-shift coercion).
-      - `1 + null` aborts in the runtime (ejs-ops.c generic add) —
-        should evaluate to `1`.
-      - `"a" * "b"` aborts (`_ejs_op_mult`) — should be `NaN`.  Repro
-        note: probes must exercise repr-mismatch via reads until fixed.
-      - An uncaught throw out of a generator body aborts (the desugar's
-        outer catch rethrows on the generator stack and the unwinder
-        walks off the makecontext frame; node prints the error in the
-        caller).  Exceptions/coroutine interaction needs an owner.
-      - Sparse-array `set` through the exotic path is NOT_IMPLEMENTED
-        (`new Array(N)` + `arr[i] =` aborts) — tests avoid the pattern
-        today.
-      - `getOwnPropertyNames` on non-enumerable-bearing objects
-        diverges from node (pre-existing, mode-independent).
+- [x] **runtime-P1 — Pinned-bug burn-down.**  All ten fixed; DONE
+      2026-07-29 — docs/runtime-p1-results.md (each entry there
+      records what the bug actually was):
+      - `typeof null` → `"object"` (runtime + compiler fold +
+        typeof_is helpers; typeof_is_object also stopped admitting
+        functions).
+      - `-0 === 0` → true (strict_eq compares numbers before the
+        NaN-box tag; same flaw fixed in loose eq, SameValue — which
+        returned false for `Object.is(0,0)` — and SameValueZero).
+      - `Math.round` ties toward +∞.
+      - `Number("  7  ")` → 7 (real StringToNumber: ES whitespace
+        trim, "Infinity" only, 0x/0b/0o, empty → 0).
+      - `-8 >>> 28` → 15 (shifts + ToUint32 had UB double→unsigned
+        casts; shifts also coerce non-number operands now).
+      - `1 + null` → 1 (ToNumber(null) = 0; add's string test moved
+        to the ToPrimitive results).
+      - `"a" * "b"` → NaN (mult/div/mod are ToNumber-both-sides).
+      - Uncaught generator-body throw propagates to the caller
+        (invoke_closure_catch at the body boundary; resume sites
+        rethrow on the caller's stack).
+      - Sparse-array element storage implemented (aligned 512-slot
+        arraylets); sparsearray1.js un-xfailed.
+      - `getOwnPropertyNames`: non-enumerables included, primitives
+        ToObject-coerced, array/String index properties + `length`
+        reported.
 - [ ] **runtime-P2 — Export-boundary wrapper.**  Escaping entry points
       currently pin down specialization and unguarded-consumption
       opportunities (the compiler buckets decline them).  A generated

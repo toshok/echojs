@@ -2,6 +2,7 @@
  * vim: set ts=4 sw=4 et tw=99 ft=cpp:
  */
 
+#include <ctype.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -205,28 +206,101 @@ ejsval ToString(ejsval exp)
         EJS_NOT_IMPLEMENTED();
 }
 
+// ES WhiteSpace ∪ LineTerminator (the code points StringToNumber strips)
+static EJSBool
+is_js_whitespace(jschar c)
+{
+    switch (c) {
+    case 0x09: case 0x0A: case 0x0B: case 0x0C: case 0x0D: case 0x20:
+    case 0xA0: case 0x1680: case 0x2028: case 0x2029: case 0x202F:
+    case 0x205F: case 0x3000: case 0xFEFF:
+        return EJS_TRUE;
+    default:
+        return (c >= 0x2000 && c <= 0x200A);
+    }
+}
+
+// ES 7.1.3.1 StringToNumber, on the whitespace-trimmed code units.
+// strtod accepts spellings the StrNumericLiteral grammar doesn't
+// ("inf", "nan", hex floats), so those are screened out up front.
+static double
+StringToNumber(const jschar* chars, int32_t len)
+{
+    while (len > 0 && is_js_whitespace(*chars)) { chars++; len--; }
+    while (len > 0 && is_js_whitespace(chars[len-1])) len--;
+
+    if (len == 0)
+        return 0;
+
+    char buf[128];
+    char* num_utf8 = buf;
+    if (len + 1 > (int32_t)sizeof(buf))
+        num_utf8 = (char*)malloc(len + 1);
+    // NaN on any non-ASCII code unit: every StrNumericLiteral is ASCII
+    for (int32_t i = 0; i < len; i++) {
+        if (chars[i] > 0x7f) {
+            if (num_utf8 != buf) free(num_utf8);
+            return nan("");
+        }
+        num_utf8[i] = (char)chars[i];
+    }
+    num_utf8[len] = 0;
+
+    double d;
+    const char* body = num_utf8;
+    double sign = 1;
+    if (*body == '+' || *body == '-') {
+        if (*body == '-') sign = -1;
+        body++;
+    }
+    if ((body[0] == 'i' || body[0] == 'I') || (body[0] == 'n' || body[0] == 'N')) {
+        // of strtod's inf/nan spellings only exactly "Infinity" is a
+        // StrNumericLiteral
+        d = !strcmp(body, "Infinity") ? sign * INFINITY : nan("");
+    }
+    else if (body[0] == '0' && (body[1] == 'b' || body[1] == 'B' ||
+                                body[1] == 'o' || body[1] == 'O')) {
+        // ES6 binary/octal literals (sign is not part of the grammar)
+        int base = (body[1] == 'b' || body[1] == 'B') ? 2 : 8;
+        d = (sign == 1 && body[2] != 0) ? 0 : nan("");
+        for (const char* p = body + 2; *p && !isnan(d); p++) {
+            int digit = *p - '0';
+            d = (digit >= 0 && digit < base) ? d * base + digit : nan("");
+        }
+    }
+    else {
+        if (body[0] == '0' && (body[1] == 'x' || body[1] == 'X')) {
+            // strtod would also take a hex-float exponent, and a sign
+            // isn't part of the grammar
+            EJSBool ok = sign == 1 && body[2] != 0;
+            for (const char* p = body + 2; ok && *p; p++)
+                if (!isxdigit((unsigned char)*p)) ok = EJS_FALSE;
+            if (!ok) {
+                if (num_utf8 != buf) free(num_utf8);
+                return nan("");
+            }
+        }
+        char* endptr;
+        d = strtod(num_utf8, &endptr);
+        if (*endptr != '\0')
+            d = nan("");
+    }
+
+    if (num_utf8 != buf) free(num_utf8);
+    return d;
+}
+
 ejsval ToNumber(ejsval exp)
 {
     if (EJSVAL_IS_NUMBER(exp))
         return exp;
     else if (EJSVAL_IS_BOOLEAN(exp))
         return EJSVAL_TO_BOOLEAN(exp) ? _ejs_one : _ejs_zero;
+    else if (EJSVAL_IS_NULL(exp))
+        return _ejs_zero;
     else if (EJSVAL_IS_STRING(exp)) {
-        char num_utf8_buf[128];
-        memset(num_utf8_buf, 0, sizeof(num_utf8_buf));
-        char* num_utf8 = ucs2_to_utf8_buf(EJSVAL_TO_FLAT_STRING(exp), num_utf8_buf, sizeof(num_utf8_buf));
-        if (num_utf8 == NULL) {
-            num_utf8 = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(exp));
-        }
-        char *endptr;
-        double d = strtod(num_utf8, &endptr);
-        if (*endptr != '\0') {
-            if (num_utf8 != num_utf8_buf) free (num_utf8);
-            return _ejs_nan;
-        }
-        ejsval rv = NUMBER_TO_EJSVAL(d); // XXX NaN
-        if (num_utf8 != num_utf8_buf) free (num_utf8);
-        return rv;
+        EJSPrimString* flat = _ejs_string_flatten(exp);
+        return NUMBER_TO_EJSVAL(StringToNumber(flat->data.flat, flat->length));
     }
     else if (EJSVAL_IS_SYMBOL(exp)) {
         _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, "1"); // XXX
@@ -328,14 +402,14 @@ int64_t ToLength(ejsval exp)
 
 uint32_t ToUint32(ejsval exp)
 {
-    // XXX sorely lacking
-    return (uint32_t)ToDouble(exp);
+    // same modulo-2^32 wrap as ToInt32, reinterpreted unsigned
+    // (casting a negative double straight to uint32_t is UB)
+    return (uint32_t)ToInt32(exp);
 }
 
 uint16_t ToUint16(ejsval exp)
 {
-    // XXX sorely lacking
-    return (uint16_t)ToDouble(exp);
+    return (uint16_t)ToInt32(exp);
 }
 
 ejsval ToObject(ejsval exp)
@@ -481,7 +555,11 @@ SameValue(ejsval x, ejsval y)
     // 2. ReturnIfAbrupt(y).
 
     // 3. If Type(x) is different from Type(y), return false.
-    if (EJSVAL_TO_TAG(x) != EJSVAL_TO_TAG(y)) return EJS_FALSE;
+    //    (numbers checked apart from the tag compare: ±0 and NaNs with
+    //    different payloads carry different NaN-box tags but are the
+    //    same Type)
+    if (EJSVAL_IS_NUMBER(x) != EJSVAL_IS_NUMBER(y)) return EJS_FALSE;
+    if (!EJSVAL_IS_NUMBER(x) && EJSVAL_TO_TAG(x) != EJSVAL_TO_TAG(y)) return EJS_FALSE;
 
     // 4. If Type(x) is Undefined, return true.
     if (EJSVAL_IS_UNDEFINED(x)) return EJS_TRUE;
@@ -491,16 +569,16 @@ SameValue(ejsval x, ejsval y)
 
     // 6. If Type(x) is Number, then
     if (EJSVAL_IS_NUMBER(x)) {
+        double dx = EJSVAL_TO_NUMBER(x);
+        double dy = EJSVAL_TO_NUMBER(y);
         // a. If x is NaN and y is NaN, return true.
-        if (isnan(EJSVAL_TO_NUMBER(x)) && isnan(EJSVAL_TO_NUMBER(y))) return EJS_TRUE;
-        // b. If x is +0 and y is -0, return false.
-        if (EJSVAL_TO_NUMBER(x) == 0.0 && EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(y))) return EJS_FALSE;
-        // c. If x is -0 and y is +0, return false.
-        if (EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(x)) == 0.0 && EJSVAL_TO_NUMBER(y) == 0) return EJS_FALSE;
+        if (isnan(dx) && isnan(dy)) return EJS_TRUE;
+        // b/c. +0 and -0 are different values.
+        if (dx == 0 && dy == 0)
+            return EJSDOUBLE_IS_NEGZERO(dx) == EJSDOUBLE_IS_NEGZERO(dy);
         // d. If x is the same Number value as y, return true.
-        if (EJSVAL_TO_NUMBER(x) == EJSVAL_TO_NUMBER(y)) return EJS_TRUE;
         // e. Return false.
-        return EJS_FALSE;
+        return dx == dy ? EJS_TRUE : EJS_FALSE;
     }
     // 7. If Type(x) is String, then
     if (EJSVAL_IS_STRING(x)) {
@@ -536,9 +614,9 @@ SameValueZero(ejsval x, ejsval y)
     // 2. ReturnIfAbrupt(y).
 
     // 3. If Type(x) is different from Type(y), return false.
-    if ((EJSVAL_IS_NUMBER(x) != EJSVAL_IS_NUMBER(y)) &&
-        (EJSVAL_TO_TAG(x) != EJSVAL_TO_TAG(y)))
-        return EJS_FALSE;
+    //    (numbers checked apart from the tag compare, as in SameValue)
+    if (EJSVAL_IS_NUMBER(x) != EJSVAL_IS_NUMBER(y)) return EJS_FALSE;
+    if (!EJSVAL_IS_NUMBER(x) && EJSVAL_TO_TAG(x) != EJSVAL_TO_TAG(y)) return EJS_FALSE;
 
     // 4. If Type(x) is Undefined, return true.
     if (EJSVAL_IS_UNDEFINED(x)) return EJS_TRUE;
@@ -548,16 +626,13 @@ SameValueZero(ejsval x, ejsval y)
 
     // 6. If Type(x) is Number, then
     if (EJSVAL_IS_NUMBER(x)) {
+        double dx = EJSVAL_TO_NUMBER(x);
+        double dy = EJSVAL_TO_NUMBER(y);
         //    a. If x is NaN and y is NaN, return true.
-        if (isnan(EJSVAL_TO_NUMBER(x)) && isnan(EJSVAL_TO_NUMBER(y))) return EJS_TRUE;
-        //    b. If x is +0 and y is -0, return true.
-        if (EJSVAL_TO_NUMBER(x) == 0.0 && EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(y))) return EJS_TRUE;
-        //    c. If x is -0 and y is +0, return true.
-        if (EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(x)) && EJSVAL_TO_NUMBER(y) == 0) return EJS_TRUE;
-        //    d. If x is the same Number value as y, return true.
-        if (EJSVAL_TO_NUMBER(x) == EJSVAL_TO_NUMBER(y)) return EJS_TRUE;
+        if (isnan(dx) && isnan(dy)) return EJS_TRUE;
+        //    b/c/d. IEEE == : ±0 equal, same value equal.
         //    e. Return false.
-        return EJS_FALSE;
+        return dx == dy ? EJS_TRUE : EJS_FALSE;
     }
     // 7. If Type(x) is String, then
     if (EJSVAL_IS_STRING(x)) {
@@ -604,7 +679,7 @@ _ejs_op_not (ejsval exp)
 ejsval
 _ejs_op_bitwise_not (ejsval val)
 {
-    int val_int = ToInteger(val);
+    int32_t val_int = ToInt32(val);
     return NUMBER_TO_EJSVAL (~val_int);
 }
 
@@ -617,7 +692,9 @@ _ejs_op_void (ejsval exp)
 ejsval
 _ejs_op_typeof_is_object(ejsval exp)
 {
-    return EJSVAL_IS_OBJECT(exp) ? _ejs_true : _ejs_false;
+    // must match _ejs_op_typeof: functions are "function", null is "object"
+    if (EJSVAL_IS_NULL(exp)) return _ejs_true;
+    return (EJSVAL_IS_OBJECT(exp) && !EJSVAL_IS_FUNCTION(exp)) ? _ejs_true : _ejs_false;
 }
 
 ejsval
@@ -659,7 +736,8 @@ _ejs_op_typeof_is_boolean(ejsval exp)
 ejsval
 _ejs_op_typeof_is_null(ejsval exp)
 {
-    return EJSVAL_IS_NULL(exp) ? _ejs_true : _ejs_false;
+    // typeof never evaluates to "null" (typeof null is "object")
+    return _ejs_false;
 }
 
 int
@@ -673,7 +751,7 @@ ejsval
 _ejs_op_typeof (ejsval exp)
 {
     if (EJSVAL_IS_NULL(exp))
-        return _ejs_atom_null;
+        return _ejs_atom_object;
     else if (EJSVAL_IS_BOOLEAN(exp))
         return _ejs_atom_boolean;
     else if (EJSVAL_IS_STRING(exp))
@@ -707,25 +785,9 @@ _ejs_op_delete (ejsval obj, ejsval prop)
 ejsval
 _ejs_op_mod (ejsval lhs, ejsval rhs)
 {
-    if (EJSVAL_IS_NUMBER(lhs)) {
-        if (EJSVAL_IS_NUMBER(rhs)) {
-            return NUMBER_TO_EJSVAL (fmod(EJSVAL_TO_NUMBER(lhs), EJSVAL_TO_NUMBER(rhs)));
-        }
-        else {
-            // need to call valueOf() on the object, or convert the string to a number
-            EJS_NOT_IMPLEMENTED();
-        }
-    }
-    else if (EJSVAL_IS_STRING(lhs)) {
-        // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-        EJS_NOT_IMPLEMENTED();
-    }
-    else {
-        // object+... how does js implement this anyway?
-        EJS_NOT_IMPLEMENTED();
-    }
-
-    return _ejs_nan;
+    double ld = ToDouble(lhs);
+    double rd = ToDouble(rhs);
+    return NUMBER_TO_EJSVAL (fmod(ld, rd));
 }
 
 ejsval
@@ -739,113 +801,41 @@ _ejs_op_bitwise_xor (ejsval lhs, ejsval rhs)
 ejsval
 _ejs_op_bitwise_and (ejsval lhs, ejsval rhs)
 {
-    int lhs_int = ToInteger(lhs);
-    int rhs_int = ToInteger(rhs);
+    int32_t lhs_int = ToInt32(lhs);
+    int32_t rhs_int = ToInt32(rhs);
     return NUMBER_TO_EJSVAL (lhs_int & rhs_int);
 }
 
 ejsval
 _ejs_op_bitwise_or (ejsval lhs, ejsval rhs)
 {
-    int lhs_int = ToInteger(lhs);
-    int rhs_int = ToInteger(rhs);
+    int32_t lhs_int = ToInt32(lhs);
+    int32_t rhs_int = ToInt32(rhs);
     return NUMBER_TO_EJSVAL (lhs_int | rhs_int);
 }
 
 ejsval
 _ejs_op_rsh (ejsval lhs, ejsval rhs)
 {
-    if (EJSVAL_IS_NUMBER(lhs)) {
-        if (EJSVAL_IS_NUMBER(rhs)) {
-            return NUMBER_TO_EJSVAL ((int)((int)EJSVAL_TO_NUMBER(lhs) >> (((unsigned int)EJSVAL_TO_NUMBER(rhs)) & 0x1f)));
-        }
-        else {
-            // need to call valueOf() on the object, or convert the string to a number
-            EJS_NOT_IMPLEMENTED();
-        }
-    }
-    else if (EJSVAL_IS_STRING(lhs)) {
-        // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-        EJS_NOT_IMPLEMENTED();
-    }
-    else {
-        // object+... how does js implement this anyway?
-        EJS_NOT_IMPLEMENTED();
-    }
-
-    return _ejs_nan;
+    return NUMBER_TO_EJSVAL (ToInt32(lhs) >> (ToUint32(rhs) & 0x1f));
 }
 
 ejsval
 _ejs_op_ursh (ejsval lhs, ejsval rhs)
 {
-    if (EJSVAL_IS_NUMBER(lhs)) {
-        if (EJSVAL_IS_NUMBER(rhs)) {
-            return NUMBER_TO_EJSVAL ((unsigned int)((unsigned int)EJSVAL_TO_NUMBER(lhs) >> (((unsigned int)EJSVAL_TO_NUMBER(rhs)) & 0x1f)));
-        }
-        else {
-            // need to call valueOf() on the object, or convert the string to a number
-            EJS_NOT_IMPLEMENTED();
-        }
-    }
-    else if (EJSVAL_IS_STRING(lhs)) {
-        // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-        EJS_NOT_IMPLEMENTED();
-    }
-    else {
-        // object+... how does js implement this anyway?
-        EJS_NOT_IMPLEMENTED();
-    }
-
-    return _ejs_nan;
+    return NUMBER_TO_EJSVAL (ToUint32(lhs) >> (ToUint32(rhs) & 0x1f));
 }
 
 ejsval
 _ejs_op_lsh (ejsval lhs, ejsval rhs)
 {
-    if (EJSVAL_IS_NUMBER(lhs)) {
-        if (EJSVAL_IS_NUMBER(rhs)) {
-            return NUMBER_TO_EJSVAL ((int)((int)EJSVAL_TO_NUMBER(lhs) << (((unsigned int)EJSVAL_TO_NUMBER(rhs)) & 0x1f)));
-        }
-        else {
-            // need to call valueOf() on the object, or convert the string to a number
-            EJS_NOT_IMPLEMENTED();
-        }
-    }
-    else if (EJSVAL_IS_STRING(lhs)) {
-        // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-        EJS_NOT_IMPLEMENTED();
-    }
-    else {
-        // object+... how does js implement this anyway?
-        EJS_NOT_IMPLEMENTED();
-    }
-
-    return _ejs_nan;
+    return NUMBER_TO_EJSVAL ((int32_t)((uint32_t)ToInt32(lhs) << (ToUint32(rhs) & 0x1f)));
 }
 
 ejsval
 _ejs_op_ulsh (ejsval lhs, ejsval rhs)
 {
-    if (EJSVAL_IS_NUMBER(lhs)) {
-        if (EJSVAL_IS_NUMBER(rhs)) {
-            return NUMBER_TO_EJSVAL ((unsigned int)((unsigned int)EJSVAL_TO_NUMBER(lhs) << (((unsigned int)EJSVAL_TO_NUMBER(rhs)) & 0x1f)));
-        }
-        else {
-            // need to call valueOf() on the object, or convert the string to a number
-            EJS_NOT_IMPLEMENTED();
-        }
-    }
-    else if (EJSVAL_IS_STRING(lhs)) {
-        // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-        EJS_NOT_IMPLEMENTED();
-    }
-    else {
-        // object+... how does js implement this anyway?
-        EJS_NOT_IMPLEMENTED();
-    }
-
-    return _ejs_nan;
+    return NUMBER_TO_EJSVAL (ToUint32(lhs) << (ToUint32(rhs) & 0x1f));
 }
 
 ejsval
@@ -858,9 +848,11 @@ _ejs_op_add (ejsval lhs, ejsval rhs)
     lprim = ToPrimitive(lhs, TO_PRIM_HINT_DEFAULT);
     rprim = ToPrimitive(rhs, TO_PRIM_HINT_DEFAULT);
 
-    if (EJSVAL_IS_STRING(lhs) || EJSVAL_IS_STRING(rhs)) {
-        ejsval lhstring = ToString(lhs);
-        ejsval rhstring = ToString(rhs);
+    // ES: the string test is on the ToPrimitive results (an object
+    // whose primitive is a string still concatenates)
+    if (EJSVAL_IS_STRING(lprim) || EJSVAL_IS_STRING(rprim)) {
+        ejsval lhstring = ToString(lprim);
+        ejsval rhstring = ToString(rprim);
 
         ejsval result = _ejs_string_concat (lhstring, rhstring);
         rv = result;
@@ -875,37 +867,17 @@ _ejs_op_add (ejsval lhs, ejsval rhs)
 ejsval
 _ejs_op_mult (ejsval lhs, ejsval rhs)
 {
-    if (EJSVAL_IS_NUMBER(lhs) || EJSVAL_IS_NUMBER(rhs)) {
-        return NUMBER_TO_EJSVAL (ToDouble(lhs) * ToDouble(rhs));
-    }
-    else if (EJSVAL_IS_STRING(lhs)) {
-        // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-        EJS_NOT_IMPLEMENTED();
-    }
-    else {
-        // object+... how does js implement this anyway?
-        EJS_NOT_IMPLEMENTED();
-    }
-
-    return _ejs_nan;
+    double ld = ToDouble(lhs);
+    double rd = ToDouble(rhs);
+    return NUMBER_TO_EJSVAL (ld * rd);
 }
 
 ejsval
 _ejs_op_div (ejsval lhs, ejsval rhs)
 {
-    if (EJSVAL_IS_NUMBER(lhs)) {
-        return NUMBER_TO_EJSVAL (EJSVAL_TO_NUMBER(lhs) / ToDouble (rhs));
-    }
-    else if (EJSVAL_IS_STRING(lhs)) {
-        // string+ with anything we don't implement yet - it will call toString() on objects, and convert a number to a string
-        EJS_NOT_IMPLEMENTED();
-    }
-    else {
-        // object+... how does js implement this anyway?
-        EJS_NOT_IMPLEMENTED();
-    }
-
-    return _ejs_nan;
+    double ld = ToDouble(lhs);
+    double rd = ToDouble(rhs);
+    return NUMBER_TO_EJSVAL (ld / rd);
 }
 
 ejsval
@@ -989,7 +961,9 @@ _ejs_op_ge (ejsval lhs, ejsval rhs)
 ejsval
 _ejs_op_sub (ejsval lhs, ejsval rhs)
 {
-    return NUMBER_TO_EJSVAL(ToDouble(lhs) - ToDouble(rhs));
+    double ld = ToDouble(lhs);
+    double rd = ToDouble(rhs);
+    return NUMBER_TO_EJSVAL(ld - rd);
 }
 
 // ECMA262 7.2.13
@@ -997,34 +971,22 @@ _ejs_op_sub (ejsval lhs, ejsval rhs)
 ejsval
 _ejs_op_strict_eq (ejsval x, ejsval y)
 {
+    // Numbers first: a NaN-box tag compare can't see that -0 and +0
+    // (different bit patterns) are the same Number value.  IEEE ==
+    // handles NaN (false) and ±0 (true) exactly per the spec.
+    if (EJSVAL_IS_NUMBER(x)) {
+        if (!EJSVAL_IS_NUMBER(y)) return _ejs_false;
+        return EJSVAL_TO_NUMBER(x) == EJSVAL_TO_NUMBER(y) ? _ejs_true : _ejs_false;
+    }
+
     // 1. If Type(x) is different from Type(y), return false.
     if (EJSVAL_TO_TAG(x) != EJSVAL_TO_TAG(y)) return _ejs_false;
-    
+
     // 2. If Type(x) is Undefined, return true.
     if (EJSVAL_IS_UNDEFINED(x)) return _ejs_true;
 
     // 3. If Type(x) is Null, return true.
     if (EJSVAL_IS_NULL(x)) return _ejs_true;
-
-    // 4. If Type(x) is Number, then
-    if (EJSVAL_IS_NUMBER(x)) {
-        //    a. If x is NaN, return false.
-        if (isnan(EJSVAL_TO_NUMBER(x))) return _ejs_false;
-
-        //    b. If y is NaN, return false.
-        if (isnan(EJSVAL_TO_NUMBER(y))) return _ejs_false;
-
-        //    c. If x is the same Number value as y, return true.
-        if (EJSVAL_TO_NUMBER(x) == EJSVAL_TO_NUMBER(y)) return _ejs_true;
-        
-        //    d. If x is +0 and y is -0, return true.
-        if (EJSVAL_TO_NUMBER(x) == 0.0 && EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(y))) return _ejs_true;
-        //    e. If x is -0 and y is +0, return true.
-        if (EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(x)) == 0.0 && EJSVAL_TO_NUMBER(y) == 0) return _ejs_true;
-
-        //    f. Return false.
-        return _ejs_false;
-    }
     // 5. If Type(x) is String, then
     if (EJSVAL_IS_STRING(x)) {
         //    a. If x and y are exactly the same sequence of characters (same length and same characters in corresponding positions), return true.
@@ -1062,7 +1024,9 @@ _ejs_op_eq (ejsval x, ejsval y)
     // 1. ReturnIfAbrupt(x).
     // 2. ReturnIfAbrupt(y).
     // 3. If Type(x) is the same as Type(y), then
-    if (EJSVAL_TO_TAG(x) == EJSVAL_TO_TAG(y))
+    //    (numbers checked apart from the tag compare: ±0 carry
+    //    different NaN-box tags but are the same Type)
+    if ((EJSVAL_IS_NUMBER(x) && EJSVAL_IS_NUMBER(y)) || EJSVAL_TO_TAG(x) == EJSVAL_TO_TAG(y))
         // a. Return the result of performing Strict Equality Comparison x === y.
         return _ejs_op_strict_eq(x, y);
     // 4. If x is null and y is undefined, return true.

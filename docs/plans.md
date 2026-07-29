@@ -108,7 +108,8 @@ gc-plan.md, shapes-plan.md (Step B).
 The correctness and ergonomics debts, paid down.  Detail:
 runtime-plan.md, compiler-plan.md.
 
-- [ ] **P7.1** pinned runtime-bug burn-down (runtime-P1).
+- [x] **P7.1** pinned runtime-bug burn-down (runtime-P1).  DONE
+      2026-07-29 — docs/runtime-p1-results.md.
 - [ ] **P7.2** export-boundary wrapper: specialization across escaping
       entry points (runtime-P2).
 - [ ] **P7.3** value-based test harness, un-pinning node's inspect

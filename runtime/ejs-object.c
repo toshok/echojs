@@ -1416,22 +1416,38 @@ static EJS_NATIVE_FUNC(_ejs_Object_getOwnPropertyDescriptor) {
     return FromPropertyDescriptor(desc);
 }
 
-// ECMA262: 19.1.2.7 Object.getOwnPropertyNames ( O ) 
+// ECMA262: 19.1.2.7 Object.getOwnPropertyNames ( O )
 static EJS_NATIVE_FUNC(_ejs_Object_getOwnPropertyNames) {
     ejsval O = _ejs_undefined;
     if (argc > 0) O = args[0];
 
-    /* 1. If Type(O) is not Object throw a TypeError exception. */
-    if (!EJSVAL_IS_OBJECT(O)) {
-        _ejs_log ("throw TypeError, _this isn't an Object\n");
-        EJS_NOT_IMPLEMENTED();
-    }
-    EJSObject* O_ = EJSVAL_TO_OBJECT(O);
+    /* 1. Let obj be ToObject(O) (ES6: primitives coerce; null and
+       undefined throw). */
+    ejsval obj = ToObject(O);
+    EJSObject* O_ = EJSVAL_TO_OBJECT(obj);
 
     /* 2. Let array be the result of creating a new object as if by the expression new Array () where Array is the standard built-in constructor with that name. */
     ejsval arr = _ejs_array_new(0, EJS_FALSE);
 
     /* 3. Let n be 0. */
+
+    // integer indices come first (OrdinaryOwnPropertyKeys order).
+    // Arrays and String objects keep their elements outside the
+    // property map, and both expose a virtual `length`.
+    if (EJSVAL_IS_ARRAY(obj)) {
+        _ejs_array_push_own_index_names(obj, arr);
+        ejsval length_name = _ejs_atom_length;
+        _ejs_array_push_dense(arr, 1, &length_name);
+    }
+    else if (EJSVAL_IS_STRING_OBJECT(obj)) {
+        ejsval prim = ((EJSString*)O_)->primStr;
+        for (int64_t i = 0; i < EJSVAL_TO_STRLEN(prim); i ++) {
+            ejsval idx_name = ToString(NUMBER_TO_EJSVAL(i));
+            _ejs_array_push_dense(arr, 1, &idx_name);
+        }
+        ejsval length_name = _ejs_atom_length;
+        _ejs_array_push_dense(arr, 1, &length_name);
+    }
 
     // shaped mode: shaped objects report their (all-enumerable,
     // string-keyed) shape fields in insertion order
@@ -1445,11 +1461,9 @@ static EJS_NATIVE_FUNC(_ejs_Object_getOwnPropertyNames) {
         return arr;
     }
 
-    /* 4. For each named own property P of O */
+    /* 4. For each named own property P of O (enumerable or not —
+       only Object.keys/enumeration filter on the enumerable bit) */
     for (_EJSPropertyMapEntry* s = O_->map->head_insert; s; s = s->next_insert) {
-        if (!_ejs_property_desc_is_enumerable(s->desc))
-            continue;
-
         /*    a. Let name be the String value that is the name of P. */
         ejsval name = s->name;
 

@@ -276,22 +276,6 @@ const EVAL_BINOPS = new Set([
 
 const RELATIONAL = new Set(["lt", "le", "gt", "ge"]);
 
-// equality ops decline -0 operands: the runtime's strict_eq leads with
-// a NaN-box TAG compare, so `-0 === 0` is FALSE there (the math2.js
-// xfail) while the hosting engine says true — and a self-hosted
-// compiler would fold it the runtime's way, so folding it at all would
-// also break stage byte-identity.  Fail closed; the runtime decides.
-const EQUALITY = new Set(["strict_eq", "strict_neq", "loose_eq", "loose_neq"]);
-
-function isNegZeroConst(c: Inst): boolean {
-    if (c.imms["kind"] !== "number") return false;
-    const v = c.imms["value"] as number;
-    // NOT `v === 0 && 1/v < 0`: under the self-hosted runtime -0 === 0
-    // is FALSE (the same quirk this decline exists for), which would
-    // disable the decline exactly when the compiler runs under ejs
-    return 1 / v === -Infinity;
-}
-
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function evalBinop(op: string, x: any, y: any): unknown {
     switch (op) {
@@ -354,15 +338,14 @@ function evalUnop(op: string, x: any): unknown {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-// the runtime's typeof string for a lattice tag (ejs's typeof maps null
-// to "null", not "object" — _ejs_op_typeof; folds must match the
-// runtime, not the spec)
+// the runtime's typeof string for a lattice tag (_ejs_op_typeof —
+// spec mapping, typeof null is "object")
 const TYPEOF_OF_TAG: Record<string, string | undefined> = {
     number: "number",
     string: "string",
     boolean: "boolean",
     undefined: "undefined",
-    null: "null",
+    null: "object",
     object: "object",
     function: "function",
 };
@@ -390,7 +373,6 @@ function foldConstants(fn: Func, tags: Lattice, stats: OptStats): boolean {
                 (a.imms["kind"] !== "number" || b.imms["kind"] !== "number")
             )
                 return;
-            if (EQUALITY.has(op) && (isNegZeroConst(a) || isNegZeroConst(b))) return;
             const r = evalBinop(op, constPayload(a), constPayload(b));
             if (typeof r === "number" || typeof r === "boolean") {
                 toConst(inst, r, stats);
@@ -424,8 +406,9 @@ function foldConstants(fn: Func, tags: Lattice, stats: OptStats): boolean {
 // `typeof x === "T"` (either operand order) is a single runtime tag
 // test.  The rewrite is exact per _ejs_op_typeof's mapping (the
 // runtime's typeof_is_<T> tests the same predicate typeof compares
-// against, null quirk included); the typeof goes dead and DCE sweeps
-// it.  Only the types with runtime.ts entries qualify.
+// against — typeof_is_object admits null, typeof_is_null is constant
+// false); the typeof goes dead and DCE sweeps it.  Only the types with
+// runtime.ts entries qualify.
 const TYPEOF_IS_TYPES = new Set([
     "object",
     "function",

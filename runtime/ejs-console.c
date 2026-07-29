@@ -42,6 +42,9 @@ console_toString(ejsval arg) {
         return EJSVAL_TO_SYMBOL(arg)->description;
     }
     else if (EJSVAL_IS_NUMBER(arg) || EJSVAL_IS_NUMBER_OBJECT(arg)) {
+        // node's inspect distinguishes -0 (ToString collapses it to "0")
+        if (EJSVAL_IS_NUMBER(arg) && EJSDOUBLE_IS_NEGZERO(EJSVAL_TO_NUMBER(arg)))
+            return _ejs_string_new_utf8("-0");
         return _ejs_number_to_string(arg);
     }
     else if (EJSVAL_IS_ARRAY(arg)) {
@@ -56,8 +59,14 @@ console_toString(ejsval arg) {
             ejsval content_strings = _ejs_array_new(EJS_ARRAY_LEN(arg), EJS_FALSE);
             // XXX the loop below assumes arg is a dense array
             EJS_ASSERT(EJSVAL_IS_DENSE_ARRAY(arg));
+            ejsval quote = _ejs_string_new_utf8("'");
             for (int i = 0; i < EJS_ARRAY_LEN(arg); i ++) {
-                EJS_DENSE_ARRAY_ELEMENTS(content_strings)[i] = console_toString(EJS_DENSE_ARRAY_ELEMENTS(arg)[i]);
+                ejsval el = EJS_DENSE_ARRAY_ELEMENTS(arg)[i];
+                // node's inspect quotes strings nested inside arrays
+                ejsval el_str = EJSVAL_IS_STRING(el)
+                    ? _ejs_string_concatv (quote, el, quote, _ejs_null)
+                    : console_toString(el);
+                EJS_DENSE_ARRAY_ELEMENTS(content_strings)[i] = el_str;
             }
 
             ejsval contents = _ejs_array_join (content_strings, comma_space);

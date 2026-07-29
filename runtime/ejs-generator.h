@@ -36,6 +36,12 @@ typedef struct _EJSGenerator {
     // dead context
     EJSBool completed;
 
+    // the body ended with an uncaught throw; yielded_value holds the
+    // exception, which the resume site rethrows on the CALLER's stack
+    // (unwinding it on the generator stack would walk off the
+    // makecontext frame)
+    EJSBool threw_out;
+
     void* stack;
     size_t stack_size;
 

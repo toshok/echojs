@@ -8,6 +8,7 @@
 
 #include "ejs-value.h"
 #include "ejs-ops.h"
+#include "ejs-gc.h"
 #include "ejs-object.h"
 #include "ejs-shapes.h"
 #include "ejs-function.h"
@@ -428,6 +429,34 @@ _ejs_invoke_closure (ejsval closure, ejsval* _this, uint32_t argc, ejsval* args,
     }
 
     return OP(EJSVAL_TO_OBJECT(closure),Call) (closure, *_this, argc, args);
+}
+
+// the .ll landing-pad wrappers (ejs-invoke-closure-catch.ll)
+EJSBool _ejs_invoke_closure_catch_inner (ejsval* retval, ejsval closure, ejsval* _this, uint32_t argc, ejsval* args, ejsval newTarget);
+EJSBool _ejs_invoke_func_catch_inner (ejsval* retval, ejsval(*func)(void*), void* data);
+
+// A C-side catch discards every emitted frame below it, but only
+// emitted CATCH handlers re-link the gc-frame chain head — a C catcher
+// must restore the head itself or the collector keeps walking the
+// unwound (dead) frame records.
+EJSBool
+_ejs_invoke_closure_catch (ejsval* retval, ejsval closure, ejsval* _this, uint32_t argc, ejsval* args, ejsval newTarget)
+{
+    void* saved_gc_frame_head = _ejs_heap.gc_frame_head;
+    EJSBool ok = _ejs_invoke_closure_catch_inner (retval, closure, _this, argc, args, newTarget);
+    if (!ok)
+        _ejs_heap.gc_frame_head = saved_gc_frame_head;
+    return ok;
+}
+
+EJSBool
+_ejs_invoke_func_catch (ejsval* retval, ejsval(*func)(void*), void* data)
+{
+    void* saved_gc_frame_head = _ejs_heap.gc_frame_head;
+    EJSBool ok = _ejs_invoke_func_catch_inner (retval, func, data);
+    if (!ok)
+        _ejs_heap.gc_frame_head = saved_gc_frame_head;
+    return ok;
 }
 
 ejsval
