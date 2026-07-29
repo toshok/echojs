@@ -1,4 +1,4 @@
-# compiler-plan: the EIR middle-end, optimizer residue, and the TypeScript port
+# compiler-plan: the EIR middle-end, optimizer residue, the TypeScript port, and driver ergonomics
 
 Bucket plan; the ordering spine lives in `docs/plans.md` (milestone
 references look like `compiler-P1`).  Content moved here from the old
@@ -117,3 +117,47 @@ shaped-world continuation), shape-guard regions (see shapes-plan).
       - IR in the manifest: serialize the module's EIR so cross-module
         analysis and inlining through module boundaries work before —
         and instead of — any dynamic-loading story.
+- [ ] **compiler-P5 — Pass-configuration ergonomics: -O suites and
+      -f/-fno- flags.**  Env vars stop being the stable interface for
+      configuring the optimizer; a gcc/clang-style flag surface
+      replaces them, and env reverts to what it should be — a
+      short-lived debugging channel.  Current state: `-O0`..`-O3`
+      exist in the driver but only select the LLVM `default<O#>`
+      pipeline plus one coarse `opt_level > 0` gate on the whole EIR
+      optimizer; the real per-pass surface is ~20 `EJS_*` vars — the
+      `EJS_NO_*` bisect family (EIR_CLEANUP, SLOT_CSE, DEVIRT,
+      EIR_SPEC, SHAPE_GUARDS, POLY_SHAPE_GUARDS, BORN_SHAPED,
+      SHAPE_FUSION, the `*_SINK` family, PROMOTE, INLINE_ALLOC,
+      INLINE_ENV_SLOTS, GC_FRAMES), positive opt-ins
+      (`EJS_EIR_LOWTIER`), and tuning knobs (`EJS_SHAPE_FIELD_CAP_MAX`,
+      `EJS_SHAPE_NOMATCH`).  The shape:
+      - **pass registry**: one table mapping canonical pass name →
+        `CompilerOptions` field → default at each -O level; passes
+        read options, never `process.env` (the per-run flag snapshot
+        in `lib/eir/optimize.ts` generalizes into this).  `--help`
+        and a `--print-passes` "effective configuration" listing are
+        generated from the registry so it can't drift.
+      - **-O suites**: `-O0` = straight lowering (no EIR optimizer,
+        LLVM O0); `-O1` = the cheap always-sound tier (cleanup
+        fixpoint, slot CSE, ...); `-O2` = today's full default.
+        Decide whether `-O3` means anything yet or folds into `-O2`,
+        and whether the EIR suite and the LLVM opt level stay one
+        knob (probably yes, with an escape hatch for the LLVM side).
+      - **-f\<pass\> / -fno-\<pass\>** per-pass overrides, applied
+        after the suite in command-line order, last-wins — gcc
+        semantics.  Tuning knobs become `-f<name>=<value>`.
+      - **migration**: each `EJS_NO_X` maps 1:1 to a `-fno-x`; A/B
+        gate that the old env spelling ≡ the new flag spelling, port
+        `lib/eir/tests.ts` and the CI lanes off `process.env`
+        mutation, then delete the env reads from the passes.  A
+        single generic escape (`EJS_FLAGS=` injected as extra argv)
+        can remain for bisecting inside harnesses that don't thread
+        driver flags.
+      - **open questions**: whether `--types` folds in as `-fmaam`
+        (and eventually defaults on at `-O2`) or stays a separate
+        probe flag; runtime-behavior knobs (`EJS_GC_*` etc.) are
+        explicitly out of scope — they configure the produced
+        binary's runtime, not the compile.
+      Gates: bootstrap matrix green, stage identity, and the
+      env≡flag A/B before the env reads are deleted.  Independent of
+      compiler-P2..P4; can land any time.

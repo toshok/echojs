@@ -103,8 +103,8 @@ gc-plan.md, shapes-plan.md (Step B).
 
 ## P7 — Robustness
 
-The correctness debts, paid down.  Detail: runtime-plan.md,
-compiler-plan.md.
+The correctness and ergonomics debts, paid down.  Detail:
+runtime-plan.md, compiler-plan.md.
 
 - [ ] **P7.1** pinned runtime-bug burn-down (runtime-P1).
 - [ ] **P7.2** export-boundary wrapper: specialization across escaping
@@ -113,6 +113,10 @@ compiler-plan.md.
       format (runtime-P3).
 - [ ] **P7.4** finish the TypeScript port of the compiler; babel step
       becomes tsc (compiler-P2).
+- [ ] **P7.5** clang-style pass configuration: -O suites define the
+      optimizer tiers, -f/-fno- per-pass flags replace the EJS_* env
+      vars, which revert to debugging-only (compiler-P5; independent,
+      can land any time).
 
 ## P8 — Language modernization
 
