@@ -1104,7 +1104,10 @@ export function compile(
                 // specialization telemetry, present only when it ran
                 (lowered.spec
                     ? ` specialized=${lowered.spec.specialized} specSites=${lowered.spec.sites}` +
-                      ` specRejected=${lowered.spec.rejected}`
+                      ` specRejected=${lowered.spec.rejected}` +
+                      // boundary-wrapper telemetry (additive)
+                      (lowered.spec.wrapped > 0 ? ` specWrapped=${lowered.spec.wrapped}` : "") +
+                      (lowered.spec.fenced > 0 ? ` specFenced=${lowered.spec.fenced}` : "")
                     : "") +
                 // shape telemetry, present only when sites were consulted
                 ((lowered.shape_sites ?? 0) > 0

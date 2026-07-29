@@ -33,13 +33,40 @@ performance bucket owns.
       - `getOwnPropertyNames`: non-enumerables included, primitives
         ToObject-coerced, array/String index properties + `length`
         reported.
-- [ ] **runtime-P2 — Export-boundary wrapper.**  Escaping entry points
-      currently pin down specialization and unguarded-consumption
-      opportunities (the compiler buckets decline them).  A generated
-      boundary wrapper — generic signature outside, dispatching to
-      specialized/trusting internals — lets module-internal call graphs
-      optimize while exports keep full dynamic semantics.  (Referenced
-      by maam-plan and sinking-plan as the standing follow-on.)
+- [x] **runtime-P2 — Export-boundary wrapper.**  Escaping entry points
+      previously pinned down specialization entirely (the compiler
+      buckets declined them).  DONE 2026-07-29 —
+      docs/runtime-p2-results.md.  What landed, and why the shape
+      differs from the original sketch ("dispatching to
+      specialized/trusting internals"):
+      - maam's value domain is CONSTANT-PROPAGATION, so its claims
+        about an escaping function's body may hold only for the
+        argument constants it analyzed — boundary tag guards cannot
+        re-establish them for external callers.  The wrapper therefore
+        dispatches to an UNTRUSTED clone: f64 formals boxed once at
+        entry (the optimizer's structural number proof), ordinary
+        guarded diamonds inside (assume-and-guard gate), boxed result.
+        The formal-rooted diamonds fold trust-free to trusted-clone
+        quality — types-bench5 (exported kernel, cross-module hot
+        loop) runs at PARITY with the closed-world trusted path.
+      - the same analysis-coverage argument exposed a PRE-EXISTING
+        cross-module miscompile: trusted rewrites inside escaping
+        functions consumed claims external callers can violate
+        (types-wrapperfence1 pins it: a constant-pruned branch +
+        an external 7 → unguarded unbox of a string).  Fixed by the
+        escape-taint fence: taint = escaping closures, closed under
+        callee-of-tainted-hosted-site and created-in-tainted-host; no
+        trusted clone for escapees, no trusted rewrite of
+        tainted-hosted sites.  Covered (untainted) code runs only
+        during module init — before an external caller can exist — so
+        its trusted machinery keeps its whole-program justification
+        (residual, documented: an import cycle can re-enter mid-init;
+        not modeled).
+      - EJS_NO_EXPORT_WRAPPER bisects the wrapper; the fence has no
+        off-switch (it is a soundness fix).  Follow-on recorded:
+        wrappers/guarded dispatch for tainted-called internal helpers,
+        and a payoff gate that credits call-heavy bodies (a bare
+        delegation export currently declines).
 - [ ] **runtime-P3 — Value-based test harness.**  Test baselines are
       generated live by `node <test>` and are sensitive to node's
       console.log inspect-format drift (22.4 → 22.23 changed array

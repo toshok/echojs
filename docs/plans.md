@@ -110,8 +110,12 @@ runtime-plan.md, compiler-plan.md.
 
 - [x] **P7.1** pinned runtime-bug burn-down (runtime-P1).  DONE
       2026-07-29 — docs/runtime-p1-results.md.
-- [ ] **P7.2** export-boundary wrapper: specialization across escaping
-      entry points (runtime-P2).
+- [x] **P7.2** export-boundary wrapper: specialization across escaping
+      entry points (runtime-P2).  DONE 2026-07-29 —
+      docs/runtime-p2-results.md (wrapper dispatches to an UNTRUSTED
+      guarded clone — maam's constant-domain claims can't cross the
+      boundary — plus the escape-taint fence, closing a pre-existing
+      cross-module trusted-rewrite miscompile).
 - [ ] **P7.3** value-based test harness, un-pinning node's inspect
       format (runtime-P3).
 - [ ] **P7.4** finish the TypeScript port of the compiler; babel step

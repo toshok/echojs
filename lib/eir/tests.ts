@@ -1744,12 +1744,18 @@ function specHarness(src: string, oracle: TypeOracle) {
     verifyModule(module);
     optimizeModule(module);
     verifyModule(module);
-    const stats = { specialized: 0, sites: 0, rejected: 0 };
+    const stats = { specialized: 0, sites: 0, rejected: 0, wrapped: 0, fenced: 0 };
     const changed = specializeModule(module, analysis, oracle, null, mod_ctx, stats);
     verifyModule(module);
     if (changed) {
         optimizeModule(module);
         verifyModule(module);
+        // mirror integrate.ts: wrapper clones take a second pass (their
+        // loop-carried guard proofs need cleanup's param pruning first)
+        if (stats.wrapped > 0) {
+            optimizeModule(module);
+            verifyModule(module);
+        }
     }
     return { module: module, outer: fn, stats: stats };
 }
@@ -1783,11 +1789,14 @@ test("specialize: local closed world clones and rewrites call sites", () => {
     assert(countOps(outer, "make_closure") === 0, "dead closure swept");
 });
 
-test("specialize: escaping closures are rejected even when the oracle lies", () => {
+test("specialize: escaping closures are never trusted, even when the oracle lies", () => {
     // three escapes: as a return value, into an object literal, as a call
     // argument.  The (stub) oracle types everything {number} — a wrong
-    // oracle must not widen what specializes; the STRUCTURAL escape
-    // analysis rejects each one.
+    // oracle must not widen what TRUSTED-specializes; the STRUCTURAL
+    // escape analysis rejects each one.  Since runtime-P2 the escapee
+    // gets the boundary wrapper instead: a guarded (trust-free) clone
+    // behind entry has_tag guards — a lying oracle costs speed, never
+    // behavior.
     for (const src of [
         `function outer() { ${SPEC_KERNEL} var r = k(1); return k; }`,
         // NB: the object must stay LIVE — a dead `{ m: k }` is sunk by the
@@ -1796,9 +1805,88 @@ test("specialize: escaping closures are rejected even when the oracle lies", () 
         `function outer() { ${SPEC_KERNEL} var o = { m: k }; var r = k(1); return o; }`,
         `function outer(h) { ${SPEC_KERNEL} var r = h(k) + k(1); return r; }`,
     ]) {
-        const { stats } = specHarness(src, numericStubOracle(["n", "s", "i", "r"]));
+        const { module, stats } = specHarness(src, numericStubOracle(["n", "s", "i", "r"]));
         assert(stats.specialized === 0, `specialized=${stats.specialized} for ${src}`);
         assert(stats.rejected === 0, `rejected=${stats.rejected} for ${src}`);
+        assert(stats.wrapped === 1, `wrapped=${stats.wrapped} for ${src}`);
+        assert(
+            module.functions.every((f) => f.name.indexOf("$typed") === -1),
+            "no trusted clone"
+        );
+    }
+});
+
+test("specialize: the boundary wrapper dispatches an escapee to a guarded clone", () => {
+    const { module, stats } = specHarness(
+        `function outer(h) { ${SPEC_KERNEL} var r = k(1); h(k); return r; }`,
+        numericStubOracle(["n", "s", "i", "r"])
+    );
+    assert(stats.wrapped === 1, `wrapped=${stats.wrapped}`);
+    assert(stats.specialized === 0, `specialized=${stats.specialized}`);
+    const clone = module.functions.find((f) => f.name.indexOf("$wrap") !== -1);
+    assert(clone !== undefined, "wrapper clone emitted");
+    assert(clone!.sig !== null && clone!.sig.result === "any", "clone result stays boxed");
+    assert(clone!.sig!.formals.length === 1 && clone!.sig!.formals[0] === "f64", "f64 formal");
+    // trust-free payoff: the entry box_f64 proofs fold the formal-rooted
+    // diamonds STRUCTURALLY — raw arithmetic without consuming a single
+    // oracle claim as fact
+    assert(countOps(clone!, "f64_add") >= 1, "clone computes raw");
+    assert(countOps(clone!, "has_tag") === 0, "formal-rooted guards fold");
+    // the generic entry became the wrapper: guard chain, then either the
+    // typed fast path or the original body
+    const generic = module.functions.find((f) => !f.sig && f.name.indexOf(".k") !== -1);
+    assert(generic !== undefined, "generic k survives (it escapes)");
+    const entry = generic!.entry!;
+    assert(entry.params.length === 3, "entry owns the calling convention");
+    assert(entry.insts[0]!.op === "has_tag", "guard chain first");
+    assert(entry.insts[1]!.op === "cond_br", "guard chain branches");
+    assert(countOps(generic!, "call_typed") === 1, "one dispatch to the clone");
+    const dispatch: Inst[] = [];
+    generic!.forEachInst((i) => {
+        if (i.op === "call_typed") dispatch.push(i);
+    });
+    assert(dispatch[0]!.imms["fn"] === clone!.name, "dispatch targets the wrapper clone");
+});
+
+test("specialize: wrapper declines — no payoff, env capture, frame ops", () => {
+    // a body with nothing to fold: judged (rejected), no wrapper
+    const noPayoff = specHarness(
+        `function outer(h) { function k(a) { return "x"; } var r = k(1); h(k); return r; }`,
+        numericStubOracle(["a", "r"])
+    );
+    assert(noPayoff.stats.wrapped === 0, `wrapped=${noPayoff.stats.wrapped}`);
+    assert(noPayoff.stats.rejected === 1, `rejected=${noPayoff.stats.rejected}`);
+    // an env-capturing escapee: the clone can't honor the env-free ABI
+    const cap = specHarness(
+        `function outer(h, c) { function k(n) { var s = 0; while (s < n) { s = s + c; } return s; } h(k); var r = k(1); return r; }`,
+        numericStubOracle(["n", "s", "c", "r"])
+    );
+    assert(cap.stats.wrapped === 0, `wrapped=${cap.stats.wrapped}`);
+    assert(cap.stats.rejected === 1, `rejected=${cap.stats.rejected}`);
+    // arguments-object use: statically declined, not even judged
+    const frame = specHarness(
+        `function outer(h) { function k(n) { var s = arguments.length; while (s < n) { s = s + 1; } return s; } h(k); var r = k(1); return r; }`,
+        numericStubOracle(["n", "s", "r"])
+    );
+    assert(frame.stats.wrapped === 0, `wrapped=${frame.stats.wrapped}`);
+    assert(frame.stats.rejected === 0, `rejected=${frame.stats.rejected}`);
+});
+
+test("specialize: EJS_NO_EXPORT_WRAPPER leaves the escapee fully generic", () => {
+    process.env["EJS_NO_EXPORT_WRAPPER"] = "1";
+    try {
+        const { module, stats } = specHarness(
+            `function outer(h) { ${SPEC_KERNEL} var r = k(1); h(k); return r; }`,
+            numericStubOracle(["n", "s", "i", "r"])
+        );
+        assert(stats.wrapped === 0, `wrapped=${stats.wrapped}`);
+        assert(stats.specialized === 0, `specialized=${stats.specialized}`);
+        assert(
+            module.functions.every((f) => f.sig === null),
+            "no sig'd clones at all"
+        );
+    } finally {
+        delete process.env["EJS_NO_EXPORT_WRAPPER"];
     }
 });
 

@@ -23,11 +23,11 @@ Census as of 2026-07-22 (echojs @ 568efc7, maam @ 8d6a157):
 | types-literals1 | literals mixed with typed vars (incl. the unary-minus literal parse `x - -2`) | 5 | match |
 | types-widen1 | reassignment widening: num→str and undefined→num bindings do NOT diamond (documented; only exact {number} qualifies) | 0 | match |
 | types-loops1 | for/while counters, `<` in loop conditions | 6 | match |
-| types-wrongoracle1 | the wrong-oracle guard: lib.js types `inc`'s param {number} from its only local call, main calls `inc("x")` cross-module → slow path, "x1" | 1 (in lib) | n/a¹ |
+| types-wrongoracle1 | the wrong-oracle guard: lib.js types `inc`'s param {number} from its only local call, main calls `inc("x")` cross-module → slow path, "x1" (since runtime-P2 lib also reports `specWrapped=1` — the exported inc gets the boundary wrapper; the string still routes generic through its guard chain) | 2 (in lib) | n/a¹ |
 | types-bench1 | the Phase 3 microbenchmark kernel (adds/muls/divs/compares over typed locals) | 9 | match |
 | types-spec1 | Phase 3.6 specialization: module-local looping kernel → f64(f64) clone, exact-arity sites rewritten to call_typed (`specialized=1 specSites=2`); the extra-arg site stays generic | 6 | match |
 | types-spec2 | Phase 3.6 cross-function specialization (the hypot2-demo shape): hypot2 called only inside sum, prefix-safe toplevel slot stores → both clone, all four sites rewrite incl. the one inside sum$typed (`specialized=2 specSites=4`) | 7 | match |
-| types-specescape1 | Phase 3.6 escape rejection: f LOOKS numeric-closed but its closure is passed as a call argument → NOT specialized (no `specialized=` in stats); the escaped call feeds a string through the generic path | 2 | match |
+| types-specescape1 | Phase 3.6 escape rejection: f LOOKS numeric-closed but its closure is passed as a call argument → NOT trusted-specialized (`specialized=0`); since runtime-P2 the escapee gets the boundary wrapper instead (`specWrapped=1`), and the escaped string call fails its guard chain onto the generic path | 5 | match |
 
 Shapes probes (shapes-plan P4.3; `shapeGuards=N` from the stats line
 counts has_shape diamonds the way `diamonds=N` counts has_tag ones):
@@ -49,6 +49,21 @@ and rationale live in shapes-plan.md's P4.6 entry):
 |---|---|---|
 | types-accessor1 | proto-getter dispatch kernel, 20M `p.len2` reads (accessor inlining: ~7× headroom recorded, DECLINED pending proto-guard soundness machinery) | match |
 | types-array1 | dense-array element kernel, 20M `a[j]` reads (element shapes: 2.4× headroom vs flag-off recorded, DEFERRED — arrays are outside shaped mode) | match |
+
+runtime-P2 probes (export-boundary wrapper + escape-taint fence,
+2026-07-29; `specWrapped`/`specFenced` from the stats line count
+boundary wrappers installed and call sites the taint fence kept
+generic):
+
+| probe | shape | stats | vs node |
+|---|---|---|---|
+| types-wrapper1 | the exported kernel: never trusted-specialized, but wrapped — has_tag guards at the generic entry dispatch to an UNTRUSTED guarded f64 clone (folds structurally from the entry boxes).  Cross-module number calls take the clone; a string and a missing arg fail the chain onto the generic body | `specWrapped=1` (in lib) | n/a¹ |
+| types-wrapperfence1 | the escape-taint fence: module-private g looks closed-world numeric but one call site is hosted in the exported f; maam's constant-propagation domain prunes g's `y>5` branch under the analyzed 3, so a trusted rewrite of that site would unbox `"s"` unguarded on f(7) — the fence keeps it generic (f(7) → NaN, node-identical); the init-time site still rewrites to g$typed | `specialized=1 specSites=1 specFenced=1 specRejected=1`² (in lib) | n/a¹ |
+| types-bench5 | the types-bench1 workload with the kernel EXPORTED and called cross-module: flag-off 0.34 s → 0.07 s user with the wrapper (~4.9×), PARITY with types-bench1's closed-world trusted path (0.07 s) — the module boundary costs one has_tag per formal per call | `specWrapped=1` (in lib) | n/a¹ |
+
+² the `specRejected` there is f's own wrapper declining on the payoff
+check (its body is a bare delegation call — no diamonds to fold), not a
+failure.
 
 ¹ node cannot execute this file's bare-ESM import layout from test/;
 the check here is flag-off vs `--types` executables producing identical

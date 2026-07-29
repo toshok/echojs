@@ -87,19 +87,33 @@ export interface ModCtx {
 }
 
 // clone-lowering mode (specialize.ts).  The clone gets an
-// unboxed signature (f64 formals, boxed once at entry) and lowers
-// oracle-number arithmetic UNGUARDED — no diamonds, no slow paths.
-// This is the phase's deliberate unguarded-consumption line: oracle
-// claims become facts, backed by the differential harness and by
-// the escape analysis that gates which functions are cloned at all.
+// unboxed signature (f64 formals, boxed once at entry); `trusted`
+// selects how the body consumes the oracle:
+//   - trusted: oracle-number arithmetic lowers UNGUARDED — no diamonds,
+//     no slow paths.  This is the deliberate unguarded-consumption
+//     line: oracle claims become facts, backed by the differential
+//     harness and by the escape analysis that restricts trusted clones
+//     to functions whose every runtime call the analysis covered.
+//   - untrusted (the export-boundary wrapper's clone, runtime-P2): the
+//     body keeps the ordinary guarded diamonds — the oracle is never
+//     consumed as fact, because the clone is entered from escaping
+//     entry points whose callers the analysis did NOT see (maam's
+//     constant-propagation domain may have pruned branches under
+//     call-site constants, so even all-number external arguments can
+//     escape its claims).  The f64 formals are boxed once at entry;
+//     box_f64 is the optimizer's structural number proof, so
+//     formal-rooted diamonds fold trust-free.  The diamond gate widens
+//     to assume-and-guard (see operandPlausiblyNumber).
 export interface SpecMode {
     cloneName: string;
+    trusted: boolean;
     // formal parameter types; "f64" formals arrive raw and are boxed once
     // at entry
     formals: ("any" | "f64")[];
-    // when "f64", `return <expr>` with an oracle-number argument returns
-    // the raw f64 (unguarded unbox); any other return shape survives to
-    // the structural post-check in specialize.ts, which discards the clone
+    // when "f64" (trusted clones only), `return <expr>` with an
+    // oracle-number argument returns the raw f64 (unguarded unbox); any
+    // other return shape survives to the structural post-check in
+    // specialize.ts, which discards the clone
     result: "any" | "f64";
 }
 
@@ -777,12 +791,26 @@ class LowerFunction {
         // has_tag guards decide at runtime; only code size/speed change.
         const f64op = f64ops[n.operator];
         if (f64op && this.operandIsNumber(n.left) && this.operandIsNumber(n.right)) {
-            // specialized-clone bodies consume the oracle UNGUARDED: no
+            // trusted-clone bodies consume the oracle UNGUARDED: no
             // diamond, no slow path — unbox, compute, re-box.  Everywhere
             // else the guarded diamond stands.
-            if (this.spec) return this.trustedNumeric(f64op, l, r);
+            if (this.spec && this.spec.trusted) return this.trustedNumeric(f64op, l, r);
             return this.numericDiamond(f64op, op, l, r);
         }
+        // untrusted (wrapper) clone bodies assume-and-guard: the diamond
+        // is correct for ANY operand values, so a plausibly-number claim
+        // (not provably non-number — incl. nodes the oracle never saw,
+        // the norm for an exported-but-never-called-internally function)
+        // is enough to justify emitting it.  The entry box_f64 proofs
+        // fold the formal-rooted ones; the rest keep their slow paths.
+        if (
+            f64op &&
+            this.spec &&
+            !this.spec.trusted &&
+            this.operandPlausiblyNumber(n.left) &&
+            this.operandPlausiblyNumber(n.right)
+        )
+            return this.numericDiamond(f64op, op, l, r);
         return this.b.emit(op, [l, r], {});
     }
 
@@ -832,6 +860,24 @@ class LowerFunction {
             return true;
         const t = this.oracle.typeOfNode(node);
         return t.tags !== "top" && t.tags.size === 1 && t.tags.has("number");
+    }
+
+    // Could this operand be a number at runtime?  The permissive twin of
+    // operandIsNumber, for untrusted-clone bodies only: a diamond's guard
+    // decides at runtime, so the only reason NOT to emit one is a proof
+    // it can never pass — a non-numeric literal, or an oracle answer that
+    // positively excludes number.  top/unmapped nodes assume-and-guard.
+    operandPlausiblyNumber(node: e.Expression): boolean {
+        if (node.type === "Literal") return typeof node.value === "number";
+        if (
+            node.type === "UnaryExpression" &&
+            (node.operator === "-" || node.operator === "+") &&
+            node.argument.type === "Literal"
+        )
+            return typeof (node.argument as e.Literal).value === "number";
+        if (!this.oracle) return true;
+        const t = this.oracle.typeOfNode(node);
+        return t.tags === "top" || t.tags.has("number");
     }
 
     // has_tag(l) -> has_tag(r) -> fast: unbox both, f64 op, rejoin boxed;
@@ -1706,13 +1752,14 @@ class LowerFunction {
                 if (this.finallyCtx.length > 0) {
                     if (this.runFinalizers(0)) return; // a finalizer overrode control
                 }
-                // specialized clone with an f64 result: return the raw f64
+                // trusted clone with an f64 result: return the raw f64
                 // (unguarded unbox — the same trust as trustedNumeric).
                 // A return this can't prove leaves a boxed return that the
                 // structural post-check in specialize.ts rejects, so a
                 // clone never ships with a sig its returns don't honor.
-                if (this.spec && this.spec.result === "f64" && n.argument &&
-                    this.operandIsNumber(n.argument))
+                // (untrusted clones always carry a boxed "any" result.)
+                if (this.spec && this.spec.trusted && this.spec.result === "f64" &&
+                    n.argument && this.operandIsNumber(n.argument))
                     rv = this.b.emit("unbox_f64", [rv], {});
                 this.b.ret(rv);
                 return;
@@ -2319,7 +2366,7 @@ export function lowerSpecializedClone(
     else {
         // expression-bodied arrow: same typed-return rule as ReturnStatement
         let rv = lf.expr(info.node.body);
-        if (spec.result === "f64" && lf.operandIsNumber(info.node.body as e.Expression))
+        if (spec.trusted && spec.result === "f64" && lf.operandIsNumber(info.node.body as e.Expression))
             rv = lf.b.emit("unbox_f64", [rv], {});
         lf.b.ret(rv);
     }

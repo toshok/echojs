@@ -529,7 +529,7 @@ export function collectEIRToplevel(
             // guards fold; loop joins go raw; dead closures/loads drop).
             // EJS_NO_EIR_SPEC=1 bisects specialization alone.
             if (oracle && !process.env["EJS_NO_EIR_SPEC"]) {
-                spec_stats = { specialized: 0, sites: 0, rejected: 0 };
+                spec_stats = { specialized: 0, sites: 0, rejected: 0, wrapped: 0, fenced: 0 };
                 const changed = specializeModule(
                     eir_module,
                     analysis,
@@ -542,14 +542,31 @@ export function collectEIRToplevel(
                     verifyModule(eir_module);
                     optimizeModule(eir_module, info.name);
                     verifyModule(eir_module);
+                    // untrusted (wrapper) clones need a second pass: the
+                    // loop-carried number proofs that fold their entry
+                    // guards only fit provenNumberAt's depth cap after
+                    // cleanup has pruned the trivial join params, and
+                    // cleanup runs at the tail of a pass.  Wrapper-free
+                    // compiles skip it (byte-pure).
+                    if (spec_stats.wrapped > 0) {
+                        optimizeModule(eir_module, info.name);
+                        verifyModule(eir_module);
+                    }
                     debug.log(
                         1,
                         `EIR-spec: ${filename}: ${spec_stats.specialized} fn(s) specialized, ` +
                             `${spec_stats.sites} call site(s) rewritten, ` +
-                            `${spec_stats.rejected} clone(s) rejected`
+                            `${spec_stats.rejected} clone(s) rejected, ` +
+                            `${spec_stats.wrapped} boundary wrapper(s), ` +
+                            `${spec_stats.fenced} site(s) fenced`
                     );
                 }
-                if (spec_stats.specialized === 0 && spec_stats.rejected === 0) spec_stats = null;
+                if (
+                    spec_stats.specialized === 0 &&
+                    spec_stats.rejected === 0 &&
+                    spec_stats.wrapped === 0
+                )
+                    spec_stats = null;
             }
 
             // constructor-result sinking: epoch-guarded
