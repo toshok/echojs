@@ -4,8 +4,8 @@
 # pushing the tag is the action that runs the release pipeline
 # (.github/workflows/release.yml), so that stays a human decision:
 #
-#     ./packaging/prepare-release.sh 0.1.0
-#     git push origin HEAD "v0.1.0"
+#     ./packaging/prepare-release.sh 0.2.0
+#     git push origin HEAD "v0.2.0"
 #
 # The version lives in exactly two files — package.json (the dist
 # tarball's source of truth, read by buck-dist.sh) and
@@ -54,9 +54,11 @@ awk -v v="$VERSION" -v d="$TODAY" '
 ' CHANGELOG.md > CHANGELOG.md.new
 mv CHANGELOG.md.new CHANGELOG.md
 
-# npm stamps package.json (and the lockfile's mirrored version) in place
-npm version --no-git-tag-version "$VERSION" > /dev/null
-(cd packaging/npm && npm version --no-git-tag-version "$VERSION" > /dev/null)
+# npm stamps package.json (and the lockfile's mirrored version) in
+# place; --allow-same-version because the tree may already carry the
+# to-be-released version (it has since 0.2.0 was pre-stamped)
+npm version --no-git-tag-version --allow-same-version "$VERSION" > /dev/null
+(cd packaging/npm && npm version --no-git-tag-version --allow-same-version "$VERSION" > /dev/null)
 
 git add CHANGELOG.md package.json package-lock.json packaging/npm/package.json
 git commit -q -m "release: v$VERSION"
@@ -68,5 +70,5 @@ echo
 echo "next:"
 echo "    git push origin HEAD \"v$VERSION\"    # runs the release pipeline"
 echo "the pipeline drafts the GitHub release; publishing it (and the"
-echo "npm/tap pushes, if their secrets are configured) is described in"
+echo "OIDC npm publish / tap push, if configured) is described in"
 echo "docs/release-p3-results.md"

@@ -7,7 +7,12 @@ release exercises the pipeline end to end.
 ## The scheme
 
 - Semver, pre-1.0 reading (0.MINOR may break, PATCH may not),
-  documented in CHANGELOG.md's header.
+  documented in CHANGELOG.md's header.  The first pipeline release is
+  **0.2.0**: the 2016-era make-build era already shipped tags up to
+  `0.1.0` (unprefixed — the pipeline's `v`-prefixed tags can't
+  collide, but the version numbers shouldn't be reused).  The tree
+  carries the to-be-released version between releases (0.2.0 now);
+  prepare-release stamps with `--allow-same-version` so that's fine.
 - The version lives in exactly two files — `package.json` (what
   buck-dist.sh stamps into the tarball/dist-info) and
   `packaging/npm/package.json` (what pins the wrapper's download tag)
@@ -20,10 +25,10 @@ release exercises the pipeline end to end.
 
 ## Cutting a release
 
-`./packaging/prepare-release.sh 0.1.0` (local, offline): clean-tree
-check, rolls Unreleased into `## [0.1.0] - <date>`, stamps both
+`./packaging/prepare-release.sh 0.2.0` (local, offline): clean-tree
+check, rolls Unreleased into `## [0.2.0] - <date>`, stamps both
 package.jsons via `npm version --no-git-tag-version` (which also
-updates the lockfile's mirrored version), commits `release: v0.1.0`,
+updates the lockfile's mirrored version), commits `release: v0.2.0`,
 makes the annotated tag.  It deliberately does NOT push — pushing the
 tag is the human act that starts the pipeline.
 
@@ -92,7 +97,7 @@ invoked), since postinstall's cwd is the package directory.
 
 ## First-release checklist (for whoever pushes the button)
 
-1. `./packaging/prepare-release.sh 0.1.0` && `git push origin HEAD v0.1.0`
+1. `./packaging/prepare-release.sh 0.2.0` && `git push origin HEAD v0.2.0`
 2. wait for the Release workflow: green matrix + draft release + smokes
 3. publish the draft release (this makes formula/npm URLs real)
 4. optional, once: create `toshok/homebrew-echojs` and set

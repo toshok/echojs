@@ -1,6 +1,6 @@
 {
   "name": "echojs",
-  "version": "0.0.0",
+  "version": "0.2.0",
   "description": "Compile ES6 to native code",
   "main": "ejs.js",
   "bin": {
