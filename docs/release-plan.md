@@ -29,11 +29,17 @@ answer for people who just want to download a package and go.
       the npm wrapper; every package uses an absolute-path exec shim
       because the driver doesn't chase symlinks.  Hosted asset URLs,
       the real tap, and npm publish are release-P3's.)
-- [ ] **release-P3 — Versioning + release automation.**  Semver
+- [x] **release-P3 — Versioning + release automation.**  DONE
+      2026-07-30 — docs/release-p3-results.md.  Semver
       scheme, a changelog discipline, tagged releases built by CI from
       the bootstrap matrix (a release is a green matrix + packaged
       artifacts + smoke test of the installed package compiling a
-      hello-world on a clean machine/container).
+      hello-world on a clean machine/container).  (Shipped:
+      CHANGELOG.md + prepare-release.sh + reusable bootstrap.yml +
+      release.yml drafting the release and running bare-container/
+      fresh-runner install smokes; the tap push and npm publish legs
+      are shell-gated on their secrets.  The first pushed tag is the
+      end-to-end proof.)
 - [ ] **release-P4 — Getting-started surface.**  A quickstart README
       path that assumes the package (not the repo): install, compile a
       file, link a multi-module program; document the supported

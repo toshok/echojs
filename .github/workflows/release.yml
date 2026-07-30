@@ -1,0 +1,192 @@
+# EchoJS release pipeline (release-P3).  Runs when a v<semver> tag is
+# pushed (prepare-release.sh makes the tag; pushing it is the human
+# act that starts this).  A release is:
+#
+#   version-check   the tag, package.json, the npm wrapper, and the
+#                   CHANGELOG all agree
+#   bootstrap       the SAME full matrix CI runs (bootstrap.yml):
+#                   stage ladder + dist tarballs + package smokes on
+#                   all three platforms
+#   publish         a DRAFT GitHub release holding the three tarballs,
+#                   the generated homebrew formula (hosted urls), and
+#                   the npm wrapper tgz; changelog section = notes.
+#                   Publishing the draft is the go-live act (draft
+#                   asset urls are not public, so the formula and npm
+#                   postinstall only resolve once it's published).
+#                   npm publish / tap push run iff their secrets
+#                   (NPM_TOKEN / HOMEBREW_TAP_TOKEN) are configured.
+#   smoke-*         clean-machine proof: a bare ubuntu container and a
+#                   fresh macos runner install ONLY the tarball + the
+#                   documented prerequisites, then compile and run a
+#                   program through the installed layout.
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+
+jobs:
+  version-check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: tag agrees with the tree
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          for f in package.json packaging/npm/package.json; do
+            V="$(node -p "require('./$f').version")"
+            if [ "$V" != "$TAG" ]; then
+              echo "::error::$f has version $V but the tag says $TAG (use packaging/prepare-release.sh)"
+              exit 1
+            fi
+          done
+          if ! grep -q "^## \[$TAG\] " CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## [$TAG]' section"
+            exit 1
+          fi
+
+  bootstrap:
+    needs: version-check
+    uses: ./.github/workflows/bootstrap.yml
+
+  publish:
+    needs: bootstrap
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: echojs-dist-*
+          merge-multiple: true
+          path: assets
+
+      - name: assemble release assets
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          ls -l assets
+          test -f "assets/echojs-$TAG-arm64-macos.tar.gz"
+          test -f "assets/echojs-$TAG-arm64-linux.tar.gz"
+          test -f "assets/echojs-$TAG-x86_64-linux.tar.gz"
+
+          # homebrew formula: sha from the built tarball, url = the
+          # published asset location
+          ./packaging/homebrew/make-formula.sh \
+            --tarball "assets/echojs-$TAG-arm64-macos.tar.gz" \
+            --url "https://github.com/${GITHUB_REPOSITORY}/releases/download/v$TAG/echojs-$TAG-arm64-macos.tar.gz" \
+            --out assets/echojs.rb
+
+          # the npm wrapper tgz (version already stamped by
+          # prepare-release.sh; its postinstall downloads the tarball
+          # asset for the host platform)
+          npm pack ./packaging/npm --pack-destination assets
+
+          # release notes = this version's changelog section
+          awk -v v="$TAG" '
+            $0 ~ "^## \\[" v "\\] " { f = 1; next }
+            /^## \[/ { f = 0 }
+            f
+          ' CHANGELOG.md > notes.md
+          cat notes.md
+
+      - name: draft the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --draft \
+            --verify-tag \
+            --title "echojs ${GITHUB_REF_NAME#v}" \
+            --notes-file notes.md \
+            assets/*
+
+      # both publish legs are shell-gated on their secrets: absent
+      # secret = loudly-skipped step, not a broken release
+      - name: push the formula to the tap
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "HOMEBREW_TAP_TOKEN not configured — formula is attached to the release instead"
+            exit 0
+          fi
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/toshok/homebrew-echojs.git" tap
+          mkdir -p tap/Formula
+          cp assets/echojs.rb tap/Formula/echojs.rb
+          cd tap
+          git add Formula/echojs.rb
+          git -c user.name="echojs release" -c user.email="toshok@gmail.com" \
+            commit -m "echojs ${GITHUB_REF_NAME#v}"
+          git push
+
+      - name: npm publish
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "NPM_TOKEN not configured — wrapper tgz is attached to the release instead"
+            exit 0
+          fi
+          echo "//registry.npmjs.org/:_authToken=\${NPM_TOKEN}" > "$HOME/.npmrc"
+          npm publish assets/toshok-echojs-*.tgz --access public
+
+  # a machine that has never seen the repo: only the tarball + the
+  # README's documented prerequisites
+  smoke-linux:
+    needs: bootstrap
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+          - arch: x86_64
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    container: ubuntu:24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: echojs-dist-linux-${{ matrix.arch }}
+
+      - name: install prerequisites (the README's list)
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq curl ca-certificates gnupg lsb-release \
+            software-properties-common build-essential libuv1-dev libunwind-dev
+          curl -sSf https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh
+          chmod +x /tmp/llvm.sh
+          /tmp/llvm.sh 22
+
+      - name: install and compile
+        run: |
+          tar xzf echojs-*.tar.gz
+          sh ./echojs-*/install.sh
+          printf 'let xs = [1, 2, 3].map((x) => x * x);\nconsole.log(`squares: ${xs.join(",")}`);\n' > hello.js
+          PATH="/usr/lib/llvm-22/bin:$PATH" ejs -q -o hello hello.js
+          test "$(./hello)" = "squares: 1,4,9"
+
+  smoke-macos:
+    needs: bootstrap
+    runs-on: macos-15
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: echojs-dist-macos-arm64
+
+      - name: install prerequisites (the README's list)
+        run: brew install llvm
+
+      - name: install and compile
+        run: |
+          tar xzf echojs-*.tar.gz
+          sh ./echojs-*/install.sh --prefix "$RUNNER_TEMP/prefix"
+          printf 'let xs = [1, 2, 3].map((x) => x * x);\nconsole.log(`squares: ${xs.join(",")}`);\n' > hello.js
+          "$RUNNER_TEMP/prefix/bin/ejs" -q -o hello hello.js
+          test "$(./hello)" = "squares: 1,4,9"

@@ -82,8 +82,10 @@ stays whole in one directory.
   `toshok/homebrew-echojs` tap, npm publish, version stamping (root
   package.json is still 0.0.0), and deb/rpm if tarball+install.sh
   proves insufficient.
-- The npm package name `echojs` may be taken on the registry —
-  check at first publish (scoped fallback: `@toshok/echojs`).
+- ~~The npm package name `echojs` may be taken on the registry —
+  check at first publish (scoped fallback: `@toshok/echojs`).~~
+  RESOLVED in release-P3: it was taken (an unrelated 0.1.4); the
+  wrapper is `@toshok/echojs`.
 - macos ld's version-min warnings (release-P1 follow-on) now also
   surface through every package's compile smoke; still harmless,
   still noisy.

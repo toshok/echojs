@@ -4,7 +4,7 @@ An ahead-of-time compiler for JavaScript.  This package downloads the
 platform's prebuilt echojs toolchain at install time (macOS arm64,
 Linux arm64/x86_64) and exposes its `ejs` driver on your PATH.
 
-    npm install -g echojs
+    npm install -g @toshok/echojs
     ejs -o hello hello.js && ./hello
 
 Compiling needs an LLVM toolchain with the major version the release

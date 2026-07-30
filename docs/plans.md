@@ -165,8 +165,14 @@ From repo to product.  Detail: release-plan.md, compiler-plan.md.
       `//:test-dist` step, homebrew formula generator + libexec/exec-
       shim layout, npm wrapper with EJS_NPM_TARBALL override; CI
       smokes all three; hosted URLs await release-P3).
-- [ ] **P9.3** versioning + release automation off the bootstrap
-      matrix (release-P3).
+- [x] **P9.3** versioning + release automation off the bootstrap
+      matrix (release-P3).  DONE 2026-07-30 —
+      docs/release-p3-results.md (CHANGELOG discipline +
+      prepare-release.sh stamping/tagging; ci matrix refactored into
+      reusable bootstrap.yml; release.yml on v-tags: version-check →
+      same matrix → draft release with tarballs/formula/npm tgz →
+      clean-machine container+runner smokes; npm wrapper is
+      @toshok/echojs, the bare name was taken).
 - [ ] **P9.4** getting-started surface (release-P4).
 - [ ] **P9.5** reusable native modules + IR-in-manifest cross-module
       linking (compiler-P4).
