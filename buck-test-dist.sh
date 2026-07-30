@@ -86,4 +86,22 @@ if ! grep -q "requires LLVM" nollvm.log; then
 fi
 log "PASS nollvm (exit $status)"
 
+# 4: the bundled prefix installer (release-P2): install into a scratch
+# prefix, compile through the bin/ejs shim, uninstall, assert it's gone
+PREFIX="$WORK/prefix"
+"$ROOT/install.sh" --prefix "$PREFIX" >> "$OUT" 2>&1
+test -x "$PREFIX/bin/ejs"
+"$PREFIX/bin/ejs" -q -o hello-installed.exe hello.js >> "$OUT" 2>&1
+actual="$(./hello-installed.exe)"
+if [ "$actual" != "$expected" ]; then
+    log "FAIL install.sh: got '$actual', want '$expected'"
+    exit 1
+fi
+"$ROOT/install.sh" --prefix "$PREFIX" --uninstall >> "$OUT" 2>&1
+if [ -e "$PREFIX/bin/ejs" ] || [ -e "$PREFIX/lib/echojs" ]; then
+    log "FAIL install.sh: uninstall left files behind"
+    exit 1
+fi
+log "PASS install.sh"
+
 log "test-dist OK"

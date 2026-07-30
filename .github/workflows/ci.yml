@@ -87,6 +87,32 @@ jobs:
           path: dist-out/*.tar.gz
           if-no-files-found: error
 
+      # release-P2 package smokes.  The formula comes from the tarball
+      # just built (file:// url) via a throwaway local tap; the npm
+      # wrapper installs through its EJS_NPM_TARBALL override.
+      # release-P3 points both at hosted release assets instead.
+      - name: package smoke (homebrew + npm)
+        run: |
+          brew tap-new --no-git toshok/echojs-ci
+          ./packaging/homebrew/make-formula.sh \
+            --tarball dist-out/echojs-*.tar.gz \
+            --out "$(brew --repository)/Library/Taps/toshok/homebrew-echojs-ci/Formula/echojs.rb"
+          brew install toshok/echojs-ci/echojs
+          echo 'console.log(`ok ${[1,2].map((x) => x + 1).join("")}`)' > "$RUNNER_TEMP/smoke.js"
+          "$(brew --prefix)/bin/ejs" -q -o "$RUNNER_TEMP/smoke.exe" "$RUNNER_TEMP/smoke.js"
+          test "$("$RUNNER_TEMP/smoke.exe")" = "ok 23"
+          brew test echojs
+          brew uninstall echojs
+
+          cd "$RUNNER_TEMP"
+          npm pack "$GITHUB_WORKSPACE/packaging/npm"
+          mkdir npm-smoke && cd npm-smoke
+          npm init -y > /dev/null
+          EJS_NPM_TARBALL="$(echo "$GITHUB_WORKSPACE"/dist-out/echojs-*.tar.gz)" \
+            npm install --no-fund --no-audit ../echojs-*.tgz
+          ./node_modules/.bin/ejs -q -o smoke.exe ../smoke.js
+          test "$(./smoke.exe)" = "ok 23"
+
       - name: Surface test logs on failure
         if: failure()
         run: |
@@ -165,3 +191,17 @@ jobs:
           name: echojs-dist-linux-${{ matrix.arch }}
           path: dist-out/*.tar.gz
           if-no-files-found: error
+
+      # release-P2 — the npm wrapper against the tarball just built
+      # (the prefix installer is smoke-tested inside //:test-dist)
+      - name: package smoke (npm)
+        run: |
+          cd "$RUNNER_TEMP"
+          npm pack "$GITHUB_WORKSPACE/packaging/npm"
+          mkdir npm-smoke && cd npm-smoke
+          npm init -y > /dev/null
+          EJS_NPM_TARBALL="$(echo "$GITHUB_WORKSPACE"/dist-out/echojs-*.tar.gz)" \
+            npm install --no-fund --no-audit ../echojs-*.tgz
+          echo 'console.log(`ok ${[1,2].map((x) => x + 1).join("")}`)' > smoke.js
+          ./node_modules/.bin/ejs -q -o smoke.exe smoke.js
+          test "$(./smoke.exe)" = "ok 23"

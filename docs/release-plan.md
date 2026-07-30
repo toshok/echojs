@@ -18,12 +18,17 @@ answer for people who just want to download a package and go.
       miscompile taught us "fail loudly").  Deliverable: a `buck2
       build //:dist` (or script) that produces a self-contained,
       relocatable tarball per platform, exercised in CI.
-- [ ] **release-P2 — Platform packages.**  Homebrew formula/cask for
+- [x] **release-P2 — Platform packages.**  DONE 2026-07-30 —
+      docs/release-p2-results.md.  Homebrew formula/cask for
       macOS (arm64 first), a deb/rpm or tarball+install.sh for Linux
       (arm64 + x86_64 — the CI bootstrap matrix already proves the
       targets).  An npm wrapper package is worth considering for the
       node-adjacent audience (postinstall fetches the platform
-      tarball).
+      tarball).  (Shipped: tarball+install.sh — deb/rpm deferred
+      unless it proves insufficient — plus the formula generator and
+      the npm wrapper; every package uses an absolute-path exec shim
+      because the driver doesn't chase symlinks.  Hosted asset URLs,
+      the real tap, and npm publish are release-P3's.)
 - [ ] **release-P3 — Versioning + release automation.**  Semver
       scheme, a changelog discipline, tagged releases built by CI from
       the bootstrap matrix (a release is a green matrix + packaged

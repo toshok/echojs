@@ -27,9 +27,12 @@ SHORT_TRIPLE="$4" # Triple.toShortString(), e.g. arm64-macos
 OSNAME="$5"       # macos | linux
 PKG_JSON="$6"     # //:package.json (version source until release-P3)
 LICENSE="$7"      # LICENSE.txt
+INSTALL_SH="$8"   # packaging/install.sh (shipped at the tarball root)
 
 VERSION="$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$PKG_JSON" | head -1)"
 test -n "$VERSION"
+LLVM_MAJOR="$(sed -n "s/.*LLVM_MAJOR = '\([0-9]*\)'.*/\1/p" "$TREE/lib/host-config.js")"
+test -n "$LLVM_MAJOR"
 
 NAME="echojs-$VERSION-$SHORT_TRIPLE"
 mkdir -p "$OUT"
@@ -60,6 +63,19 @@ cp "$TREE/node-compat/libejsnodecompat-module.a" "$ROOT/lib/$SHORT_TRIPLE/libejs
 
 cp "$LICENSE" "$ROOT/LICENSE.txt"
 
+# machine-readable metadata (sh-sourceable) for the packaging layers:
+# install.sh, the homebrew formula generator, the npm postinstall
+cat > "$ROOT/dist-info" <<EOF
+EJS_VERSION=$VERSION
+EJS_TRIPLE=$TRIPLE
+EJS_SHORT_TRIPLE=$SHORT_TRIPLE
+EJS_OS=$OSNAME
+EJS_LLVM_MAJOR=$LLVM_MAJOR
+EOF
+
+cp "$INSTALL_SH" "$ROOT/install.sh"
+chmod +x "$ROOT/install.sh"
+
 cat > "$ROOT/README.md" <<EOF
 # echojs $VERSION ($SHORT_TRIPLE)
 
@@ -67,7 +83,7 @@ An ahead-of-time compiler for JavaScript.
 
 ## Requirements
 
-- LLVM $(sed -n "s/.*LLVM_MAJOR = '\([0-9]*\)'.*/\1/p" "$TREE/lib/host-config.js") (\`opt\`/\`llc\`) — macos: \`brew install llvm\`;
+- LLVM $LLVM_MAJOR (\`opt\`/\`llc\`) — macos: \`brew install llvm\`;
   linux: https://apt.llvm.org.  \`ejs\` discovers a matching installation
   and refuses to run with a different major; \`LLVM_BINDIR\` in the
   environment points it somewhere specific.
@@ -78,6 +94,8 @@ An ahead-of-time compiler for JavaScript.
     $NAME/bin/ejs -o hello hello.js && ./hello
 
 The directory is relocatable; keep bin/, include/ and lib/ together.
+\`./install.sh [--prefix /usr/local]\` copies it under a prefix and puts
+an \`ejs\` shim on the prefix's bin/ (\`--uninstall\` reverses it).
 EOF
 
 tar -C "$TMP" -czf "$OUT/$NAME.tar.gz" "$NAME"

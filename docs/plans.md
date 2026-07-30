@@ -159,8 +159,12 @@ From repo to product.  Detail: release-plan.md, compiler-plan.md.
       test, CI uploads per-platform artifacts; the driver discovers a
       matching-major opt/llc and fails loudly otherwise, LLVM_MAJOR
       baked into host-config).
-- [ ] **P9.2** platform packages: homebrew, linux, npm wrapper
-      (release-P2).
+- [x] **P9.2** platform packages: homebrew, linux, npm wrapper
+      (release-P2).  DONE 2026-07-30 — docs/release-p2-results.md
+      (packaging/: prefix installer shipped in the tarball +
+      `//:test-dist` step, homebrew formula generator + libexec/exec-
+      shim layout, npm wrapper with EJS_NPM_TARBALL override; CI
+      smokes all three; hosted URLs await release-P3).
 - [ ] **P9.3** versioning + release automation off the bootstrap
       matrix (release-P3).
 - [ ] **P9.4** getting-started surface (release-P4).

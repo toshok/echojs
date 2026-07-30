@@ -97,6 +97,7 @@ genrule(
         "buck-dist.sh",
         "package.json",
         "LICENSE.txt",
+        "packaging/install.sh",
     ],
     out = "dist",
     cmd = 'bash $SRCDIR/buck-dist.sh "$(location :srcdir-tree)" ' +
@@ -104,7 +105,8 @@ genrule(
           ' "' + EJS_TRIPLE + '"' +
           ' "' + EJS_SHORT_TRIPLE + '"' +
           ' "' + EJS_OS + '"' +
-          ' "$SRCDIR/package.json" "$SRCDIR/LICENSE.txt"',
+          ' "$SRCDIR/package.json" "$SRCDIR/LICENSE.txt"' +
+          ' "$SRCDIR/packaging/install.sh"',
 )
 
 # smoke-test the dist artifact as a user would use it: unpack, compile
