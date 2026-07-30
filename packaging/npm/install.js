@@ -38,6 +38,9 @@ async function main() {
     const work = fs.mkdtempSync(path.join(os.tmpdir(), "echojs-npm-"));
     let tarball = process.env["EJS_NPM_TARBALL"];
     if (tarball) {
+        // postinstall runs with cwd = the package dir; a relative
+        // override means relative to where `npm install` was invoked
+        tarball = path.resolve(process.env["INIT_CWD"] || process.cwd(), tarball);
         if (!fs.existsSync(tarball)) fail(`EJS_NPM_TARBALL=${tarball} does not exist`);
         console.log(`echojs install: using ${tarball}`);
     } else {

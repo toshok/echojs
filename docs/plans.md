@@ -172,7 +172,7 @@ From repo to product.  Detail: release-plan.md, compiler-plan.md.
       reusable bootstrap.yml; release.yml on v-tags: version-check →
       same matrix → draft release with tarballs/formula/npm tgz →
       clean-machine container+runner smokes; npm wrapper is
-      @toshok/echojs, the bare name was taken).
+      @pirouette/echojs, the bare name was taken).
 - [ ] **P9.4** getting-started surface (release-P4).
 - [ ] **P9.5** reusable native modules + IR-in-manifest cross-module
       linking (compiler-P4).

@@ -109,7 +109,7 @@ jobs:
           mkdir npm-smoke && cd npm-smoke
           npm init -y > /dev/null
           EJS_NPM_TARBALL="$(echo "$GITHUB_WORKSPACE"/dist-out/echojs-*.tar.gz)" \
-            npm install --no-fund --no-audit ../toshok-echojs-*.tgz
+            npm install --no-fund --no-audit ../pirouette-echojs-*.tgz
           ./node_modules/.bin/ejs -q -o smoke.exe ../smoke.js
           test "$(./smoke.exe)" = "ok 23"
 
@@ -201,7 +201,7 @@ jobs:
           mkdir npm-smoke && cd npm-smoke
           npm init -y > /dev/null
           EJS_NPM_TARBALL="$(echo "$GITHUB_WORKSPACE"/dist-out/echojs-*.tar.gz)" \
-            npm install --no-fund --no-audit ../toshok-echojs-*.tgz
+            npm install --no-fund --no-audit ../pirouette-echojs-*.tgz
           echo 'console.log(`ok ${[1,2].map((x) => x + 1).join("")}`)' > smoke.js
           ./node_modules/.bin/ejs -q -o smoke.exe smoke.js
           test "$(./smoke.exe)" = "ok 23"

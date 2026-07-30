@@ -1,5 +1,5 @@
 {
-  "name": "@toshok/echojs",
+  "name": "@pirouette/echojs",
   "version": "0.0.0",
   "description": "Ahead-of-time compiler for JavaScript — native toolchain wrapper",
   "bin": {

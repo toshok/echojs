@@ -27,7 +27,7 @@ packaged artifacts + a clean-machine install smoke — see
   `EJS_GC_*` debugging knobs.
 - Relocatable per-platform dist tarballs (macOS arm64, Linux
   arm64/x86_64) with a bundled prefix installer, a Homebrew formula
-  generator, and an npm wrapper package (`@toshok/echojs`).
+  generator, and an npm wrapper package (`@pirouette/echojs`).
 - An LLVM toolchain policy: the driver discovers a matching-major
   `opt`/`llc` (env `LLVM_BINDIR` override → build-baked path →
   conventional locations → PATH) and refuses to run against a

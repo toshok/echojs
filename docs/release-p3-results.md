@@ -59,9 +59,11 @@ tag is the human act that starts the pipeline.
 ## npm name
 
 `echojs` is taken on the registry (an unrelated 0.1.4), so the wrapper
-is `@toshok/echojs` (bin is still `ejs`); the release-P2 follow-on is
-resolved.  CI smoke globs updated for the scoped pack filename
-(`toshok-echojs-*.tgz`).
+is `@pirouette/echojs` under the @pirouette npm org (bin is still
+`ejs`); the release-P2 follow-on is resolved.  CI smoke globs updated
+for the scoped pack filename (`pirouette-echojs-*.tgz`).  A relative
+`EJS_NPM_TARBALL` resolves against `INIT_CWD` (where `npm install` was
+invoked), since postinstall's cwd is the package directory.
 
 ## Verified locally
 
