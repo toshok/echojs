@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 function Multiplier(factor) {
     this.factor = factor;

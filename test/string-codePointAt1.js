@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 console.log("ABC".codePointAt(1)); // 66
 console.log("\uD800\uDC00".codePointAt(0)); // 65536

@@ -12,10 +12,9 @@ genrule(
 )
 
 # The compiler as plain ES-module JS: .ts sources compiled through tsc
-# (strict), .js sources copied through unchanged during the incremental
-# TypeScript port.  Layout: $OUT/ejs-es6.js + $OUT/lib/**.js.  This is
-# what stage1+ self-compiles (via //:srcdir-tree) and what the babel
-# step below consumes for the node-hosted stage0.
+# (strict).  Layout: $OUT/ejs-es6.js + $OUT/lib/**.js.  This is what
+# stage1+ self-compiles (via //:srcdir-tree) and what the CommonJS
+# conversion below consumes for the node-hosted stage0.
 genrule(
     name = "tsjs",
     srcs = glob(
@@ -38,9 +37,10 @@ genrule(
     visibility = ["PUBLIC"],
 )
 
-# The node-runnable (stage0) compiler: babel-compiled equivalents of
-# ejs-es6.js, lib/*.js and the esprima/escodegen/... support modules.
-# Layout matches lib/generated/ from the Makefile build.
+# The node-runnable (stage0) compiler: CommonJS (tsc-converted)
+# equivalents of ejs-es6.js, lib/*.js and the esprima/escodegen/...
+# support modules.  Layout matches lib/generated/ from the Makefile
+# build.
 genrule(
     name = "generated",
     srcs = [

@@ -51,9 +51,6 @@
   "homepage": "https://github.com/toshok/echojs",
   "private": true,
   "dependencies": {
-    "@babel/cli": "^7.22.15",
-    "@babel/node": "^7.22.19",
-    "@babel/preset-env": "^7.22.20",
     "colors": "^1.4.0",
     "glob": "^10.3.4",
     "mocha": "^10.2.0",

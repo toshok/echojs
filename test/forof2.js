@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 function foo() {}
 foo.prototype[Symbol.iterator] = function () {

@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 // Array.from from kangax
 class C extends Array {}

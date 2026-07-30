@@ -112,13 +112,19 @@ shaped-world continuation), shape-guard regions (see shapes-plan).
       the two ops.  Fix the sinking gap (or decide it's deferred and
       assert the shaped alloc form), then repair the expectations
       with substring-safe matchers.
-- [ ] **compiler-P2 — TypeScript port of the compiler.**  The compiler
+- [x] **compiler-P2 — TypeScript port of the compiler.**  The compiler
       converts from JS to TypeScript (largely done for lib/eir/ and
       lib/*.ts — the strict-TS conversion landed with the EIR work);
       remaining: the babel step in `//lib:generated` becomes tsc, and
       the residual JS entry points convert.  Sequenced before
       language-plan work (new-feature work is safer with types
-      underneath it).
+      underneath it).  DONE 2026-07-29 — docs/compiler-p2-results.md
+      (one tsc --allowJs pass replaces per-file babel in
+      //lib:generated; tester.ts + gen-atoms.ts ported strict;
+      `// generator: babel-node` → `// generator: esm` with
+      byte-identical baselines; babel removed from package.json/CI;
+      deliberate JS residue: the harness shim + driver, host-config,
+      the external-deps forks — language-P5's).
 - [ ] **compiler-P3 — TypeScript as compiler input (tentative).**
       Slots in at the parser layer (type-stripping or a parser swap,
       coordinated with language-P2).  TS type annotations then seed

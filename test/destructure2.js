@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 let foo = [1, 2];
 let [a, b] = foo;

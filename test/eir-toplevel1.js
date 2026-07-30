@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 // whole-module (toplevel-as-EIR) shapes: toplevel statements, captured
 // toplevel locals, loop envs at toplevel, imports and exports.  runs and

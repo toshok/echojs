@@ -1,69 +1,76 @@
-#!/usr/bin/env node
+// The test-suite runner.  Compiled to tester.js by tsc (see
+// tsconfig.json in this directory); buck-test-stage.sh does that when
+// it stages the test tree, so the staged copy always runs from these
+// sources.
 
-const path = require("path"),
-    os = require("os"),
-    fs = require("fs"),
-    { globSync } = require("glob"),
-    child_process = require("child_process"),
-    spawn = child_process.spawn,
-    exec = child_process.exec,
-    colors = require("colors/safe"),
-    temp = require("temp");
+import * as path from "path";
+import * as os from "os";
+import * as fs from "fs";
+import { globSync } from "glob";
+import * as child_process from "child_process";
+import * as colors from "colors/safe";
+import * as temp from "temp";
+
+const spawn = child_process.spawn;
+const exec = child_process.exec;
+
+type Colorizer = (s: string) => string;
 
 // maps from test_name -> properties as defined in the test file
-const skip_ifs = Object.create(null); // `// skip-if: ...` an expression, evaled.  if true, ignore the test
-const xfails = Object.create(null); // `// xfail: ...`   test is expected to fail.  ... is the reason
-const generators = Object.create(null); // `// generator: ...` ... is the executable used to generate expected output
+const skip_ifs: Record<string, string> = Object.create(null); // `// skip-if: ...` an expression, evaled.  if true, ignore the test
+const xfails: Record<string, string> = Object.create(null); // `// xfail: ...`   test is expected to fail.  ... is the reason
+const generators: Record<string, string> = Object.create(null); // `// generator: ...` how expected output is generated (node | esm | none)
 
-const expected_names = Object.create(null);
-const expected_stdouts = Object.create(null);
-const stdouts = Object.create(null);
+const expected_names: Record<string, string> = Object.create(null);
+const expected_stdouts: Record<string, string> = Object.create(null);
+const stdouts: Record<string, string> = Object.create(null);
 
-const failed_tests = [];
+const failed_tests: string[] = [];
 
 // index here is the stage #.  0 = run it under node, 1 = run it with stage1, 2 = run it with stage2
 const compilers = ["../ejs", "../ejs.exe.stage1", "../ejs.exe.stage2", "../ejs.exe.stage3"];
 
-let runloop_impl = require("../lib/generated/lib/host-config.js").RUNLOOP_IMPL;
-
-const running_in_ci = process.env["CIRCLE_BUILD_NUM"] != null;
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const runloop_impl: string = require("../lib/generated/lib/host-config.js").RUNLOOP_IMPL;
+// referenced from `// skip-if:` expressions, which eval in this scope
+void runloop_impl;
 
 // baselines must not depend on the timezone of the machine that generated
 // them: local-time Date construction (date3.js) feeds the value-based
 // serializer's UTC rendering, so generation and test runs both pin UTC
 process.env.TZ = "UTC";
 
-let platform_to_test = null;
+let platform_to_test: string | null = null;
 
 let stage_to_run = 0;
 
 let test_threads = 4;
 
-const result_types = {
-    fail: { str: "FAIL", colorizer: colors.red.bold },
+// colors' chained styles (red.bold) aren't in its shipped types
+const red_bold = (colors.red as unknown as { bold: Colorizer }).bold;
+
+type ResultKind = "fail" | "xfail" | "xpass" | "pass";
+
+const result_types: Record<ResultKind, { str: string; colorizer: Colorizer }> = {
+    fail: { str: "FAIL", colorizer: red_bold },
     xfail: { str: "xfail", colorizer: colors.yellow },
-    xpass: { str: "ERROR", colorizer: colors.red.bold },
+    xpass: { str: "ERROR", colorizer: red_bold },
     pass: { str: "pass", colorizer: colors.green },
 };
 
-const fail_str = "fail";
-const xfail_str = "xfail";
-const xpass_str = "xpass";
-const pass_str = "pass";
-
-function timerStart() {
+function timerStart(): [number, number] {
     return process.hrtime();
 }
 // from http://stackoverflow.com/questions/10617070/how-to-measure-execution-time-of-javascript-code-with-callbacks
-function getElapsed(start_time) {
+function getElapsed(start_time: [number, number]): string {
     let elapsed = process.hrtime(start_time);
     let elapsed_ms = elapsed[0] * 1000 + elapsed[1] / 1000000;
     return elapsed_ms.toFixed(2); // 2 decimal places
 }
 
-function makeJustifierColumn(columns, leftJustify) {
+function makeJustifierColumn(columns: number, leftJustify: boolean) {
     let spaces = Array(columns).join(" ");
-    return function (str, transformer) {
+    return function (str: string, transformer?: Colorizer): string {
         let padding = spaces.substr(0, columns - str.length);
         if (transformer) str = transformer(str);
         if (leftJustify) return str + padding;
@@ -72,7 +79,7 @@ function makeJustifierColumn(columns, leftJustify) {
 }
 
 function makeNoopColumn() {
-    return function (x) {
+    return function (x: string): string {
         return x;
     };
 }
@@ -82,7 +89,12 @@ const resultColumn = makeJustifierColumn(5, true); // maximum length of fail/xfa
 const timeColumn = makeJustifierColumn(11, false); // enough to hold "XXXXX.XX ms".
 const errStringColumn = makeNoopColumn();
 
-function writeOutput(test_name, result_type, elapsed, err_string) {
+function writeOutput(
+    test_name: string,
+    result_type: ResultKind,
+    elapsed: string | null,
+    err_string?: string
+): void {
     let elapsed_str = elapsed == null ? "?" : elapsed;
 
     console.log(
@@ -93,30 +105,41 @@ function writeOutput(test_name, result_type, elapsed, err_string) {
     );
 }
 
-function testFailure(test_name, err_string, elapsed, additional) {
-    writeOutput(test_name, fail_str, elapsed, "(" + err_string + ")");
+function testFailure(
+    test_name: string,
+    err_string: string,
+    elapsed: string | null,
+    additional?: string
+): void {
+    writeOutput(test_name, "fail", elapsed, "(" + err_string + ")");
     console.log(additional);
     failed_tests.push(test_name);
 }
 
-function testUnexpectedPass(test_name, elapsed) {
-    writeOutput(test_name, xpass_str, elapsed, "(unexpected pass)");
+function testUnexpectedPass(test_name: string, elapsed: string | null): void {
+    writeOutput(test_name, "xpass", elapsed, "(unexpected pass)");
     failed_tests.push(test_name);
 }
 
-function testFailed(test_name, err_string, elapsed, additional) {
-    if (xfails[test_name]) {
-        writeOutput(test_name, xfail_str, elapsed, "(" + xfails[test_name] + ")");
+function testFailed(
+    test_name: string,
+    err_string: string,
+    elapsed: string | null,
+    additional?: string
+): void {
+    const xfail = xfails[test_name];
+    if (xfail) {
+        writeOutput(test_name, "xfail", elapsed, "(" + xfail + ")");
     } else {
         testFailure(test_name, err_string, elapsed, additional);
     }
 }
 
-function checkStdout(test_name, elapsed, cb) {
+function checkStdout(test_name: string, elapsed: string, cb: () => void): void {
     if (stdouts[test_name] != expected_stdouts[test_name]) {
         temp.open("ejstest-received", function (err, info) {
-            fs.writeSync(info.fd, stdouts[test_name]);
-            fs.close(info.fd, function (err) {
+            fs.writeSync(info.fd, stdouts[test_name] ?? "");
+            fs.close(info.fd, function () {
                 exec(
                     "/usr/bin/diff -u " + expected_names[test_name] + " " + info.path,
                     function (err, stdout) {
@@ -130,7 +153,7 @@ function checkStdout(test_name, elapsed, cb) {
         if (xfails[test_name]) {
             testUnexpectedPass(test_name, elapsed);
         } else {
-            writeOutput(test_name, pass_str, elapsed);
+            writeOutput(test_name, "pass", elapsed);
         }
 
         setTimeout(cb, 0);
@@ -143,7 +166,7 @@ function checkStdout(test_name, elapsed, cb) {
 const harness_shim = "harness-console-shim.js";
 const harness_run = "harness-run.js";
 
-function shouldGenerateExpectedOutput(test_file, expected_file) {
+function shouldGenerateExpectedOutput(test_file: string, expected_file: string): boolean {
     try {
         let expected_mtime = fs.statSync(expected_file).mtime.getTime();
         // the harness serializer contributes to the expected output too —
@@ -161,12 +184,100 @@ function shouldGenerateExpectedOutput(test_file, expected_file) {
     }
 }
 
-function processOneTest(gen_expected, test, cb) {
+// import-syntax tests (`// generator: esm`) can't run under plain node:
+// their relative import specifiers are extensionless (the compiler's
+// gather-imports requires import syntax, node's ESM loader requires
+// extensions).  tsc transpiles the test and its relative-import closure
+// to CommonJS in a scratch dir (compiler-P2; babel-node's require hook
+// did this until then) and node runs the transpiled copy through the
+// same harness-run driver.
+function relativeImportClosure(test: string): string[] {
+    const seen = new Set<string>();
+    const files: string[] = [];
+    const visit = function (file: string): void {
+        const resolved = path.resolve(file);
+        if (seen.has(resolved)) return;
+        seen.add(resolved);
+        files.push(resolved);
+        const src = fs.readFileSync(resolved, "utf-8");
+        const import_re = /^\s*(?:import|export)\b[^;]*?["']([^"']+)["']/gm;
+        let m: RegExpExecArray | null;
+        while ((m = import_re.exec(src)) !== null) {
+            const spec = m[1];
+            if (spec == null || spec[0] !== ".") continue;
+            let dep = path.join(path.dirname(resolved), spec);
+            if (!dep.endsWith(".js")) {
+                // extensionless specifiers resolve like the compiler's:
+                // file first, then directory/index.js (modules6)
+                if (fs.existsSync(dep + ".js")) dep += ".js";
+                else dep = path.join(dep, "index.js");
+            }
+            visit(dep);
+        }
+    };
+    visit(test);
+    return files;
+}
+
+const tsc_bin = path.join(path.dirname(require.resolve("typescript/package.json")), "bin", "tsc");
+
+function generateExpectedEsm(
+    test: string,
+    expected_name: string,
+    cb: (err?: Error | null) => void
+): void {
+    const gen_tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), "ejstest-esm-"));
+    const cleanup = function (): void {
+        try {
+            fs.rmSync(gen_tmpdir, { recursive: true, force: true });
+        } catch (e) {}
+    };
+    const closure = relativeImportClosure(test)
+        .map((f) => '"' + f + '"')
+        .join(" ");
+    exec(
+        'node "' +
+            tsc_bin +
+            '" --ignoreConfig --allowJs --target es2016 --module commonjs' +
+            ' --esModuleInterop --outDir "' +
+            gen_tmpdir +
+            '" ' +
+            closure,
+        function (err) {
+            if (err) {
+                cleanup();
+                cb(err);
+                return;
+            }
+            // the harness files are plain ES5 CommonJS — they ride along
+            // unconverted so generation runs the byte-exact serializer
+            for (const f of [harness_shim, harness_run]) {
+                fs.copyFileSync(f, path.join(gen_tmpdir, f));
+            }
+            const transpiled = path.join(gen_tmpdir, path.basename(test));
+            exec(
+                'node "' +
+                    path.join(gen_tmpdir, harness_run) +
+                    '" "' +
+                    transpiled +
+                    '" > ' +
+                    expected_name,
+                function (err) {
+                    cleanup();
+                    cb(err);
+                }
+            );
+        }
+    );
+}
+
+function processOneTest(gen_expected: boolean, test: string, cb: (err?: Error | null) => void): void {
     let test_name = path.basename(test);
 
     //if (!gen_expected) console.log("processOneTest(" + gen_expected + ", " + test_name + ")");
-    if (skip_ifs[test_name]) {
-        if (eval(skip_ifs[test_name])) {
+    const skip_if = skip_ifs[test_name];
+    if (skip_if) {
+        if (eval(skip_if)) {
             //console.log("skipping " + test_name);
             setTimeout(cb, 0);
             return;
@@ -183,19 +294,24 @@ function processOneTest(gen_expected, test, cb) {
         if (should_generate && generator !== "none") {
             console.log("generating expected output for " + test_name + " using " + generator);
 
-            exec(generator + " " + harness_run + " " + test + " > " + expected_name, function (err, stdout) {
+            const generated = function (err?: Error | null): void {
                 if (err) {
                     cb(err);
                     return;
                 }
                 expected_stdouts[test_name] = fs.readFileSync(expected_name).toString();
                 cb();
-            });
+            };
+            if (generator === "esm") {
+                generateExpectedEsm(test, expected_name, generated);
+            } else {
+                exec(generator + " " + harness_run + " " + test + " > " + expected_name, generated);
+            }
         } else {
             try {
                 expected_stdouts[test_name] = fs.readFileSync(expected_name).toString();
             } catch (e) {
-                setTimeout(() => cb(e), 0);
+                setTimeout(() => cb(e as Error), 0);
                 return;
             }
             setTimeout(cb, 0);
@@ -213,14 +329,14 @@ function processOneTest(gen_expected, test, cb) {
             // generated wrapper that imports the console shim, then the
             // test — the mirror of harness-run.js on the node side
             let compile_target = test;
-            let output_args = [];
-            let wrapper_name = null;
+            let output_args: string[] = [];
+            let wrapper_name: string | null = null;
             if (generators[test_name] !== "none") {
                 wrapper_name = ".__wrap__." + test_name;
                 const spec = "./" + test_name.replace(/\.js$/, "");
                 fs.writeFileSync(
                     wrapper_name,
-                    "// generated by tester.js (value-based harness); deleted after compile\n" +
+                    "// generated by tester.ts (value-based harness); deleted after compile\n" +
                         'import "./' + harness_shim.replace(/\.js$/, "") + '";\n' +
                         'import "' + spec + '";\n'
                 );
@@ -233,7 +349,7 @@ function processOneTest(gen_expected, test, cb) {
             // concurrent compiles sharing a TMPDIR would clobber each
             // other's shim .bc/.o
             const compile_tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), "ejstest-compile-"));
-            const removeWrapper = function () {
+            const removeWrapper = function (): void {
                 if (wrapper_name != null) {
                     try {
                         fs.unlinkSync(wrapper_name);
@@ -244,8 +360,10 @@ function processOneTest(gen_expected, test, cb) {
                     fs.rmSync(compile_tmpdir, { recursive: true, force: true });
                 } catch (e) {}
             };
+            const compiler = compilers[stage_to_run];
+            if (compiler == null) throw new Error("bad stage " + stage_to_run);
             const ccomp = spawn(
-                compilers[stage_to_run],
+                compiler,
                 platform_target.concat(extra_flags).concat(output_args).concat([
                     "--srcdir",
                     "--moduledir",
@@ -256,7 +374,7 @@ function processOneTest(gen_expected, test, cb) {
                 ]),
                 { env: Object.assign({}, process.env, { TMPDIR: compile_tmpdir }) }
             );
-            ccomp.on("exit", function (code, errstring) {
+            ccomp.on("exit", function (code) {
                 removeWrapper();
                 if (code !== 0) {
                     const elapsed = getElapsed(start);
@@ -265,7 +383,6 @@ function processOneTest(gen_expected, test, cb) {
                     return;
                 }
                 // XXX check code to make sure we were successful?
-                let env;
                 if (platform_to_test === "sim") {
                     process.env["EJS_FORCE_STDOUT"] = "1";
                     process.env["DYLD_FRAMEWORK_PATH"] =
@@ -276,26 +393,23 @@ function processOneTest(gen_expected, test, cb) {
 
                 const cexec = spawn("./" + test + ".exe");
                 let test_stdout = "";
-                let test_stderr = "";
-                cexec.on("close", function (code, errstring) {
+                cexec.on("close", function () {
                     stdouts[test_name] = test_stdout;
 
                     // XXX check code to make sure we were successful?
 
-                    var elapsed = getElapsed(start);
+                    const elapsed = getElapsed(start);
                     checkStdout(test_name, elapsed, cb);
                 });
                 cexec.on("error", function (err) {
-                    var elapsed = getElapsed(start);
+                    const elapsed = getElapsed(start);
                     testFailed(test_name, err.toString(), elapsed);
                     cb();
                 });
                 cexec.stdout.on("data", function (msg) {
                     test_stdout += msg;
                 });
-                cexec.stderr.on("data", function (msg) {
-                    test_stderr += msg;
-                });
+                cexec.stderr.on("data", function () {});
             });
             ccomp.on("error", function (err) {
                 removeWrapper();
@@ -312,7 +426,11 @@ function processOneTest(gen_expected, test, cb) {
     }
 }
 
-function processTests(gen_expected, tests, cb) {
+function processTests(
+    gen_expected: boolean,
+    tests: string[],
+    cb: (err?: Error | null) => void
+): void {
     // (the old scheduler seeded i=test_threads but incremented i before
     // reading tests[i] in the callback — the test at index test_threads
     // was silently skipped in BOTH passes, which is how weakmap2.js ran
@@ -320,9 +438,10 @@ function processTests(gen_expected, tests, cb) {
     let next = 0;
     let num_outstanding = 0;
 
-    const launch = function () {
+    const launch = function (): void {
         while (num_outstanding < test_threads && next < tests.length) {
             const t = tests[next++];
+            if (t == null) continue;
             num_outstanding++;
             processOneTest(gen_expected, t, function () {
                 num_outstanding--;
@@ -337,7 +456,7 @@ function processTests(gen_expected, tests, cb) {
     launch();
 }
 
-function readTest(test) {
+function readTest(test: string): void {
     const test_name = path.basename(test);
     const contents = fs.readFileSync(test).toString();
     const lines = contents.split("\n");
@@ -345,7 +464,7 @@ function readTest(test) {
     // read the comments at the start, and pull out useful info
     for (let i = 0, e = lines.length; i < e; i++) {
         let line = lines[i];
-        if (line.indexOf("//") !== 0) {
+        if (line == null || line.indexOf("//") !== 0) {
             return;
         }
 
@@ -373,14 +492,15 @@ function readTest(test) {
 
 const args = process.argv.slice(2);
 
-let test_to_run = null;
+let test_to_run: string | null = null;
 
 if (args[0] == "-p") {
     args.shift();
-    if (args.length < 1) {
+    const p = args.shift();
+    if (p == null) {
         throw new Error("-p requires an argument [osx, sim]");
     }
-    platform_to_test = args.shift();
+    platform_to_test = p;
     if (platform_to_test !== "osx" && platform_to_test !== "sim") {
         throw new Error("-p requires an argument [osx, sim]");
     }
@@ -388,19 +508,21 @@ if (args[0] == "-p") {
 
 if (args[0] == "-s") {
     args.shift();
-    if (args.length < 1) throw new Error("-s requires an argument between 0 and 2");
-    stage_to_run = parseInt(args.shift());
-    if (stage_to_run < 0 && stage_to_run > 2)
-        throw new Error("-s requires an argument between 0 and 2");
+    const s = args.shift();
+    if (s == null) throw new Error("-s requires an argument between 0 and 3");
+    stage_to_run = parseInt(s);
+    if (!(stage_to_run >= 0 && stage_to_run < compilers.length))
+        throw new Error("-s requires an argument between 0 and 3");
 }
 if (args[0] == "-t") {
     args.shift();
-    if (args.length < 1) throw new Error("-t requires an argument (the test file to run)");
-    test_to_run = args.shift();
+    const t = args.shift();
+    if (t == null) throw new Error("-t requires an argument (the test file to run)");
+    test_to_run = t;
     test_threads = 1; // XXX workaround for a bug, but we also only need 1 thread when we're running 1 test
 }
 
-function runTests(tests) {
+function runTests(tests: string[]): void {
     tests.forEach(readTest);
 
     if (tests.length == 1)
@@ -431,7 +553,7 @@ function runTests(tests) {
         }
         processTests(false, tests, function () {
             const run_failed = failed_tests.length > 0;
-            if (run_failed > 0) {
+            if (run_failed) {
                 console.log();
                 console.log(testColumn(failed_tests.length + " failed tests"));
                 console.log(testColumn("================"));

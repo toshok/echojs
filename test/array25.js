@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 var arr = [1, 7, 11, "hola", 13.69];
 var res = arr.findIndex(function (element, index, array) {

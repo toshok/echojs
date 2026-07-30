@@ -9,7 +9,8 @@
 //
 // Rules for editing this file:
 //   - conservative ES5 only: it must compile under ejs and run under
-//     node AND babel-node byte-identically;
+//     node byte-identically (including from the esm generator's
+//     transpile dir, where it rides along unconverted);
 //   - no engine-provided formatting (util.inspect, toISOString, ...);
 //     anything observable must be computed here, from values;
 //   - it must not rely on ejs-specific or node-specific behavior: any

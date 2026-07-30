@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 for (var i = 0; i < 5; i++) {
     let i_ = i;

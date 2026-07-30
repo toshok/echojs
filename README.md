@@ -32,7 +32,7 @@ $ buck2 build //:test-stage3      # run the test suite against stage3
 Useful targets:
 
 - `//:ejs.exe.stage{1,2,3}` — the bootstrap stages (`//:ejs.exe` is an alias for stage1)
-- `//:test-stage{1,2,3}` — build a stage and run `test/tester.js` against it; the build fails if any test fails, and the output artifact is the test log
+- `//:test-stage{1,2,3}` — build a stage and run the test suite (`test/tester.ts`) against it; the build fails if any test fails, and the output artifact is the test log
 - `//:srcdir-tree` — the assembled `--srcdir` layout the compiler runs against
 
 If your llvm lives somewhere other than `/opt/homebrew/opt/llvm`, change `[llvm] prefix` in `.buckconfig`.

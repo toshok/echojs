@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 var a = Array.of(7);
 console.log(a.toString());

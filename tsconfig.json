@@ -12,5 +12,5 @@
         "types": ["node"],
         "noEmit": true
     },
-    "include": ["ejs-es6.ts", "lib/**/*.ts"]
+    "include": ["ejs-es6.ts", "lib/**/*.ts", "runtime/gen-atoms.ts"]
 }

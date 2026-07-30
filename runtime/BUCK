@@ -1,7 +1,17 @@
 load("//:defs.bzl", "EJS_COMPILER_FLAGS", "LLC_MTRIPLE", "llvm_bin")
 
-export_file(
-    name = "gen-atoms.js",
+# gen-atoms.ts compiled to node-runnable JS (typescript comes from the
+# repo's node_modules, untracked by buck2 — same treatment as the
+# compiler's tsc steps in //lib)
+genrule(
+    name = "gen-atoms-js",
+    srcs = ["gen-atoms.ts"],
+    out = "gen-atoms.js",
+    cmd = 'REPO="${TMP%%/buck-out/*}"; node "$REPO/node_modules/typescript/bin/tsc" ' +
+          "--ignoreConfig --strict --noUncheckedIndexedAccess --noImplicitOverride " +
+          "--noEmitOnError --target es2016 --module commonjs " +
+          '--types node --typeRoots "$REPO/node_modules/@types" ' +
+          '--outDir "${OUT%/*}" $SRCDIR/gen-atoms.ts',
     visibility = ["PUBLIC"],
 )
 
@@ -9,13 +19,13 @@ genrule(
     name = "atoms",
     srcs = [
         "ejs-atoms.h",
-        "gen-atoms.js",
+        ":gen-atoms-js",
     ],
     out = "ejs-atoms-gen.c",
-    # gen-atoms.js emits definitions only; add the includes it needs to
+    # gen-atoms emits definitions only; add the includes it needs to
     # compile as a standalone translation unit
     cmd = "{ printf '#include \"ejs.h\"\\n#include \"ejs-value.h\"\\n#include \"ejs-string.h\"\\n\\n'; " +
-          "node $SRCDIR/gen-atoms.js $SRCDIR/ejs-atoms.h; } > $OUT",
+          "node $(location :gen-atoms-js) $SRCDIR/ejs-atoms.h; } > $OUT",
 )
 
 genrule(

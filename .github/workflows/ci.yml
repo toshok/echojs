@@ -60,7 +60,9 @@ jobs:
         run: ./node-llvm/build-addon.sh "$(brew --prefix llvm)"
 
       - name: TypeScript typecheck
-        run: node node_modules/typescript/bin/tsc -p tsconfig.json
+        run: |
+          node node_modules/typescript/bin/tsc -p tsconfig.json
+          node node_modules/typescript/bin/tsc -p test --noEmit
 
       - name: buck2 bootstrap matrix
         run: |
@@ -129,11 +131,8 @@ jobs:
       - name: Build the node-llvm addon
         run: ./node-llvm/build-addon.sh /usr/lib/llvm-22
 
-      # babel-node (for `// generator: babel-node` test baselines) comes
-      # from the repo's node_modules
       - name: buck2 bootstrap matrix
         run: |
-          export PATH="$PWD/node_modules/.bin:$PATH"
           buck2 build --config llvm.prefix=/usr/lib/llvm-22 \
             //:test-eir \
             //:test-stage0 \

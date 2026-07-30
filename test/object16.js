@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 let i = 0;
 let foo = {

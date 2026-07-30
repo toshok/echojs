@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 let a, b, c, d;
 [a, b] = ["hello", "world"];

@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 var arr = ["this", "is", "a", "dummy", "array"];
 var iter;

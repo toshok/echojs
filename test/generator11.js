@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 // "yield *, strings" from kangax
 

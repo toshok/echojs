@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 var a = {};
 a[Symbol.toStringTag] = "foo";

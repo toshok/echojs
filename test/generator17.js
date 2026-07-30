@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 // "shorthand generator methods" from kangax
 

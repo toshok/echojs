@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 let a = 5;
 function b() {

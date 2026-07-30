@@ -4,10 +4,10 @@ genrule(
     name = "atoms",
     srcs = [
         "ejs-llvm-atoms.h",
-        "//runtime:gen-atoms.js",
+        "//runtime:gen-atoms-js",
     ],
     out = "ejs-llvm-atoms-gen.c",
-    cmd = "node $SRCDIR/gen-atoms.js $SRCDIR/ejs-llvm-atoms.h > $OUT",
+    cmd = "node $(location //runtime:gen-atoms-js) $SRCDIR/ejs-llvm-atoms.h > $OUT",
 )
 
 # The .ejs module descriptor, with the link flags the EJS compiler must pass

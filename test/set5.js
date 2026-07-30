@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 var set = new Set();
 set.add(+0);

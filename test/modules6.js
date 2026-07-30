@@ -1,3 +1,3 @@
-// generator: babel-node
+// generator: esm
 
 import "./modules6-dep";

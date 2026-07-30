@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 // "%GeneratorPrototype%.return" from kangax
 

@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 // "basic functionality" from kangax
 
 function* generator() {

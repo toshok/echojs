@@ -51,8 +51,8 @@ genrule(
           }),
 )
 
-# stage1: the babel'd compiler running under node (with the node-llvm
-# addon) compiles ejs-es6.js to a native executable.
+# stage1: the generated (CommonJS) compiler running under node (with the
+# node-llvm addon) compiles ejs-es6.js to a native executable.
 genrule(
     name = "ejs.exe.stage1",
     srcs = ["buck-stage.sh"],
@@ -87,7 +87,7 @@ alias(
     actual = ":ejs.exe.stage1",
 )
 
-# EIR unit tests (run under node against the babel'd tree):
+# EIR unit tests (run under node against the generated CommonJS tree):
 # buck2 build //:test-eir
 genrule(
     name = "test-eir",

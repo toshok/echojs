@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 var arr = new Array("hola", "world", "lots", "of", "fun");
 console.log(arr.toString());

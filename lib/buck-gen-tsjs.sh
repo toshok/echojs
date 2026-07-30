@@ -5,11 +5,11 @@
 # layout:
 #   $OUT/ejs-es6.js
 #   $OUT/lib/{*.js, passes/*.js, eir/*.js}
-# Both //lib:generated (babel for the node-hosted stage0) and
-# //:srcdir-tree (stage1+ self-compiles) consume this tree.
+# Both //lib:generated (the CommonJS conversion for the node-hosted
+# stage0) and //:srcdir-tree (stage1+ self-compiles) consume this tree.
 #
 # typescript comes from the repo's node_modules, which buck2 doesn't
-# track as an input (same treatment as babel in buck-gen-js.sh).
+# track as an input (same treatment as in buck-gen-js.sh).
 set -euo pipefail
 
 REPO="${TMP%%/buck-out/*}"

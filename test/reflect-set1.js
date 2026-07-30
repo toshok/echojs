@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 var o = {};
 var fooReceiver = { foo: "hello" };

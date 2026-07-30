@@ -123,8 +123,12 @@ runtime-plan.md, compiler-plan.md.
       floats on 22.x; the un-masking flushed 3 runtime bugs fixed +
       3 pinned, plus a tester scheduler bug that had silently skipped
       weakmap2 forever).
-- [ ] **P7.4** finish the TypeScript port of the compiler; babel step
-      becomes tsc (compiler-P2).
+- [x] **P7.4** finish the TypeScript port of the compiler; babel step
+      becomes tsc (compiler-P2).  DONE 2026-07-29 —
+      docs/compiler-p2-results.md (//lib:generated converts modules
+      with one tsc --allowJs pass; tester.ts and gen-atoms.ts ported;
+      `generator: esm` baselines byte-identical vs babel-node; babel
+      removed from the repo).
 - [ ] **P7.5** clang-style pass configuration: -O suites define the
       optimizer tiers, -f/-fno- per-pass flags replace the EJS_* env
       vars, which revert to debugging-only (compiler-P5; independent,

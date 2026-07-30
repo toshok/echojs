@@ -1,8 +1,8 @@
 #!/bin/bash
 # Invoked by //:test-stage{1,2,3}.  Assembles a repo-shaped tree (the
-# --srcdir tree + test/ + the stage executable) and runs test/tester.js
-# against it.  The genrule fails if any test fails; the test log is the
-# output artifact.
+# --srcdir tree + test/ + the stage executable), compiles the runner
+# (test/tester.ts) in the staged tree, and runs it.  The genrule fails
+# if any test fails; the test log is the output artifact.
 set -euo pipefail
 
 TREE="$1"       # //:srcdir-tree
@@ -15,8 +15,9 @@ EXTRA_FLAGS="${7:-}"  # extra compiler flags, e.g. --ir
 TEST_ENV="${8:-}"     # extra env for the tester run, e.g. EJS_SHAPES=off
                       # (the runtime A/B lanes: shapes-plan P4.1)
 
-# node_modules (glob/colors/temp for the tester) come from the repo, same
-# as the babel step in //lib:generated.
+# node_modules (glob/colors/temp for the tester, typescript for the
+# tester compile + esm baseline generation) come from the repo, same as
+# the tsc steps in //lib.
 REPO="${TMP%%/buck-out/*}"
 
 OUT_ABS="$(cd "$(dirname "$OUT")" && pwd)/$(basename "$OUT")"
@@ -29,7 +30,8 @@ chmod -R u+w "$WORK"
 mkdir -p "$WORK/lib/generated"
 cp -RL "$GENERATED"/. "$WORK/lib/generated/"
 if [ "$STAGE_NUM" = "0" ]; then
-    # stage 0 runs the babel'd compiler under node via the ../ejs driver
+    # stage 0 runs the generated (CommonJS) compiler under node via the
+    # ../ejs driver
     printf '#!/bin/sh\ndir=$(cd `dirname $0`; pwd)\nexec node $dir/lib/generated/ejs-es6.js "$@"\n' > "$WORK/ejs"
     chmod +x "$WORK/ejs"
 else
@@ -39,6 +41,10 @@ fi
 mkdir -p "$WORK/test"
 cp -RL "$TEST_FILES"/. "$WORK/test/"
 chmod -R u+w "$WORK/test"
+
+# the runner is TypeScript (compiler-P2): compile the staged copy in
+# place — tsconfig.json ships with the test tree
+node "$REPO/node_modules/typescript/bin/tsc" -p "$WORK/test"
 
 # the tester regenerates an expected-out (using node) when the test file
 # is newer than it; the copies above have fresh mtimes, so re-stamp the

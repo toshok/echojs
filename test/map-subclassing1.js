@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 // "Map is subclassable" from kangax
 function test() {
     var key = {};

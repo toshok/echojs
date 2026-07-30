@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 // xfail: XXX
 
 // new ES6 math functions

@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 // xfail: generator support isn't 100%
 
 // "yield *, iterator closing" from kangax
