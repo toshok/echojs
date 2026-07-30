@@ -96,7 +96,7 @@ shaped-world continuation), shape-guard regions (see shapes-plan).
         0` tag-compare quirk to work under self-host); generator
         suspension makes "stable" slots unstable mid-activation —
         suspendable functions decline the CSE exemptions.
-- [ ] **compiler-P1.1 — test-eir debt from flag-off born-shaped
+- [x] **compiler-P1.1 — test-eir debt from flag-off born-shaped
       literals.**  Found RED at runtime-P4 (P6.3) entry, 2026-07-29:
       11 lib/eir/tests.ts failures, pre-existing (reproduce from
       sources untouched by that phase).  Three classes: (a) stale
@@ -111,7 +111,26 @@ shaped-world continuation), shape-guard regions (see shapes-plan).
       `make_object_shaped`, so those assertions can't distinguish
       the two ops.  Fix the sinking gap (or decide it's deferred and
       assert the shaped alloc form), then repair the expectations
-      with substring-safe matchers.
+      with substring-safe matchers.  DONE 2026-07-30.  The (b)
+      diagnosis was wrong — there is NO optimizer gap: both shaped
+      sinks (`sinkShapedAlloc`, `sinkFlowAllocations`) resolve the
+      shape through the module's shape table, and the tests' helper
+      `lowerAndOptimize` discarded the module `lowerOne` returns, so
+      every shaped candidate silently declined *in the harness
+      only*.  The real pipeline always threads the module
+      (`optimizeModule` → `optimizeFunction(fn, m, …)`); a stage1
+      `--dump-after eir-opt` probe confirmed non-escaping and
+      written shaped literals drain end-to-end.  Fixes (all
+      tests.ts): `lowerAndOptimize` passes the module; op-exact
+      matchers `assertContainsOp`/`assertNotContainsOp` (word-
+      boundary regex — underscore is a word character, so
+      `\bmake_object\b` rejects `make_object_shaped`); expectations
+      moved to the born-shaped contract (literal + class-accessor
+      lowering assert `make_object_shaped shape="…"`, the flag-off
+      test asserts all-boxed shapes, the escape-materialization test
+      looks for the materialized shaped op, decline/refusal survival
+      assertions are op-exact).  Gates: test-eir all 227 pass, tsc
+      clean, stage0-3 + shapes-off 424/21/0 every lane, lowtier OK.
 - [x] **compiler-P2 — TypeScript port of the compiler.**  The compiler
       converts from JS to TypeScript (largely done for lib/eir/ and
       lib/*.ts — the strict-TS conversion landed with the EIR work);

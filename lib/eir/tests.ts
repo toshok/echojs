@@ -56,6 +56,23 @@ function assertContains(haystack: string, needle: string): void {
         throw new Error(`expected output to contain '${needle}'\n---\n${haystack}\n---`);
 }
 
+// op-exact matchers: `make_object` must not substring-match
+// `make_object_shaped` (underscore is a word character, so \b after the
+// op name rejects the longer op)
+function containsOp(haystack: string, op: string): boolean {
+    return new RegExp("\\b" + op + "\\b").test(haystack);
+}
+
+function assertContainsOp(haystack: string, op: string): void {
+    if (!containsOp(haystack, op))
+        throw new Error(`expected output to contain op '${op}'\n---\n${haystack}\n---`);
+}
+
+function assertNotContainsOp(haystack: string, op: string): void {
+    if (containsOp(haystack, op))
+        throw new Error(`expected output to NOT contain op '${op}'\n---\n${haystack}\n---`);
+}
+
 function findBlock(fn: Func, prefix: string): Block {
     for (let b of fn.blocks) if (b.name.indexOf(prefix) === 0) return b;
     throw new Error(`no block named ${prefix}* in @${fn.name}`);
@@ -314,8 +331,10 @@ test("lower: array and object literals", () => {
     let { fn } = lowerOne("function lit() { return [1, 2, { a: 3, b: 4 }]; }");
     let printed = printFunction(fn);
     assertContains(printed, "make_array");
-    assertContains(printed, 'make_object');
-    assertContains(printed, 'keys=["a", "b"]');
+    // static-key literals are born with their shape (all-boxed reprs
+    // without an oracle)
+    assertContainsOp(printed, "make_object_shaped");
+    assertContains(printed, 'shape="a:boxed,b:boxed"');
 });
 
 test("lower: this expression", () => {
@@ -540,7 +559,7 @@ test("lower: new.target lowers to new_target", () => {
     assertContains(printFunction(r.fn), "new_target");
 });
 
-test("lower: class accessors lower via make_object + defineProperties", () => {
+test("lower: class accessors lower via make_object_shaped + defineProperties", () => {
     let r = lowerFunctionNode(
         parseFnPreEIR(
             "function f() { class T { get n() { return 1; } set n(v) { this._x = v; } } return new T(); }"
@@ -549,8 +568,9 @@ test("lower: class accessors lower via make_object + defineProperties", () => {
     verifyModule(r.module);
     let all = r.module.functions.map((fn) => printFunction(fn)).join("\n");
     // one property entry carrying BOTH accessors (the get/set pair shares
-    // a make_object with keys get,set)
-    assertContains(all, 'keys=["get", "set"]');
+    // a descriptor literal with fields get,set)
+    assertContains(all, 'shape="get:boxed,set:boxed"');
+    assertContains(all, 'atom="defineProperties"');
 });
 
 test("lower: array destructuring lowers via %createIteratorWrapper", () => {
@@ -830,8 +850,11 @@ function assertNotContains(haystack: string, needle: string): void {
 }
 
 function lowerAndOptimize(src: string): { fn: Func; printed: string } {
-    let { fn } = lowerOne(src);
-    optimizeFunction(fn);
+    // the module must ride along: flag-off lowering mints
+    // make_object_shaped for static-key literals, and both shaped sinks
+    // resolve the shape through the module's shape table
+    let { module, fn } = lowerOne(src);
+    optimizeFunction(fn, module);
     verifyFunction(fn);
     return { fn, printed: printFunction(fn) };
 }
@@ -853,7 +876,7 @@ test("optimize: duplicate literal keys fold to the last definition", () => {
 
 test("optimize: escaping object literal is untouched", () => {
     let { printed } = lowerAndOptimize("function f(g) { let o = { a: 1 }; g(o); return o.a; }");
-    assertContains(printed, "make_object");
+    assertContainsOp(printed, "make_object_shaped");
     assertContains(printed, 'get_prop_atom');
 });
 
@@ -882,14 +905,14 @@ test("optimize: -fno-flow-sink restores the written-key decline", () => {
         let { printed } = lowerAndOptimize(
             "function f(x) { let o = { a: 1 }; o.a = x; return o.a; }"
         );
-        assertContains(printed, "make_object");
+        assertContainsOp(printed, "make_object_shaped");
         assertContains(printed, "get_prop_atom");
     });
 });
 
 test("optimize: non-own-key read keeps the object (prototype chain)", () => {
     let { printed } = lowerAndOptimize("function f() { let o = { a: 1 }; return o.toString; }");
-    assertContains(printed, "make_object");
+    assertContainsOp(printed, "make_object_shaped");
 });
 
 test("optimize: array literal const-index and length reads fold", () => {
@@ -929,14 +952,14 @@ test("optimize: object flowing into a block param is an escape", () => {
     let { printed } = lowerAndOptimize(
         "function f(c) { let o = c ? { a: 1 } : { a: 2 }; return o.a; }"
     );
-    assertContains(printed, "make_object");
+    assertContainsOp(printed, "make_object_shaped");
 });
 
 test("optimize: reads inside try (unwind targets) are left alone", () => {
     let { printed } = lowerAndOptimize(
         "function f() { let o = { a: 1 }; try { return o.a; } catch (e) { return 0; } }"
     );
-    assertContains(printed, "make_object");
+    assertContainsOp(printed, "make_object_shaped");
     assertContains(printed, "get_prop_atom");
 });
 
@@ -2838,15 +2861,18 @@ test("born-shaped: a static literal lowers to make_object_shaped under --types",
         "function f(a) { return { x: 1, y: a }; }",
         stubOracle({ a: ["number"] })
     );
-    assertContains(printed, "make_object_shaped");
+    assertContainsOp(printed, "make_object_shaped");
     assertContains(printed, 'shape="x:f64,y:f64"');
-    assertNotContains(printed, "make_object ");
+    assertNotContainsOp(printed, "make_object");
 });
 
-test("born-shaped: flag-off (null oracle) keeps today's make_object exactly", () => {
+test("born-shaped: flag-off (null oracle) mints all-boxed shapes", () => {
+    // keys are static truth, so a null oracle still lowers born-shaped
+    // (gc-P5 part 2) — the reprs just stay boxed without type evidence
     const { printed } = lowerWithOracle("function f(a) { return { x: 1, y: a }; }", null);
-    assertNotContains(printed, "make_object_shaped");
-    assertContains(printed, "make_object");
+    assertContainsOp(printed, "make_object_shaped");
+    assertContains(printed, 'shape="x:boxed,y:boxed"');
+    assertNotContainsOp(printed, "make_object");
 });
 
 test("born-shaped: -fno-born-shaped restores make_object", () => {
@@ -3293,11 +3319,11 @@ test("sink-flow: single escape materializes at the escape site", () => {
     let { fn, printed } = lowerAndOptimize(
         "function f(g, x) { let o = { a: 1 }; o.a = x; g(o); return 0; }"
     );
-    assertContains(printed, "make_object");
+    assertContainsOp(printed, "make_object_shaped");
     assertNotContains(printed, "set_prop_atom");
     // the materialized literal's operand is the written value (param x)
     let made: Inst | null = null;
-    fn.forEachInst((i) => { if (i.op === "make_object") made = i; });
+    fn.forEachInst((i) => { if (i.op === "make_object_shaped") made = i; });
     assert(made!.operands[0]!.op === "blockparam", "materialized field should be the written x");
 });
 
@@ -3325,7 +3351,7 @@ test("sink-flow: a catch block in the rename region declines", () => {
     let { printed } = lowerAndOptimize(
         "function f(x) { let o = { a: 1 }; try { o.a = x; } catch (e) { } return o.a; }"
     );
-    assertContains(printed, "make_object");
+    assertContainsOp(printed, "make_object_shaped");
 });
 
 test("sink-flow: shaped partial escape materializes a shaped literal", () => {
