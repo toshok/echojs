@@ -73,6 +73,20 @@ jobs:
             //:test-stage2 \
             //:test-stage3
 
+      # the relocatable dist artifact + its installed-layout smoke test
+      # (release-P1); the stage builds above are shared, so this only
+      # adds the repack + smoke compile
+      - name: dist artifact
+        run: |
+          buck2 build //:test-dist
+          buck2 build //:dist --out dist-out/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: echojs-dist-macos-arm64
+          path: dist-out/*.tar.gz
+          if-no-files-found: error
+
       - name: Surface test logs on failure
         if: failure()
         run: |
@@ -139,3 +153,15 @@ jobs:
             //:test-stage1 \
             //:test-stage2 \
             //:test-stage3
+
+      # release-P1 — see the macOS job's note
+      - name: dist artifact
+        run: |
+          buck2 build --config llvm.prefix=/usr/lib/llvm-22 //:test-dist
+          buck2 build --config llvm.prefix=/usr/lib/llvm-22 //:dist --out dist-out/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: echojs-dist-linux-${{ matrix.arch }}
+          path: dist-out/*.tar.gz
+          if-no-files-found: error

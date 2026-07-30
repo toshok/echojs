@@ -21,6 +21,7 @@ import { Triple } from "./lib/triple";
 import {
     LLVM_SUFFIX as DEFAULT_LLVM_SUFFIX,
     LLVM_BINDIR as DEFAULT_LLVM_BINDIR,
+    LLVM_MAJOR as EXPECTED_LLVM_MAJOR,
     RUNLOOP_IMPL as DEFAULT_RUNLOOP_IMPL,
 } from "./lib/host-config";
 import {
@@ -552,20 +553,127 @@ function target_path_prepend(triple: TripleT): string {
 }
 
 const llvm_suffix = process.env["LLVM_SUFFIX"] || DEFAULT_LLVM_SUFFIX;
-// spawn the llvm tools from the bindir this compiler was BUILT against
-// (baked into host-config from the buck llvm.prefix config) rather than
-// whatever PATH resolves: a different-major `opt` reading our bitcode
-// doesn't fail loudly — llvm@16 turned llvm-22 module-init stores into
-// `unreachable` traps with exit code 0.  LLVM_BINDIR in the environment
-// overrides the baked path; setting it to "" restores plain PATH lookup.
-const llvm_bindir = process.env["LLVM_BINDIR"] ?? DEFAULT_LLVM_BINDIR;
-const llvm_tool = (tool: string): string =>
-    llvm_bindir ? path.join(llvm_bindir, tool + llvm_suffix) : tool + llvm_suffix;
-const llvm_commands = {
-    opt: llvm_tool("opt"),
-    llc: llvm_tool("llc"),
-    "llvm-as": llvm_tool("llvm-as"),
-} as const;
+
+// The LLVM toolchain policy (release-P1): spawn opt/llc only from a
+// bindir whose major version matches the one this compiler was BUILT
+// against (baked into host-config) — a different-major `opt` reading
+// our bitcode doesn't fail loudly; llvm@16 turned llvm-22 module-init
+// stores into `unreachable` traps with exit code 0.  Resolution order:
+//   1. LLVM_BINDIR in the environment ("" = plain PATH lookup) — the
+//      explicit override, still version-checked;
+//   2. the baked build-machine bindir;
+//   3. conventional install locations for the host os, then PATH.
+// Every candidate is verified by running `opt --version`; if nothing
+// compatible is found the driver fails loudly instead of miscompiling.
+// EJS_LLVM_NO_VERSION_CHECK=1 skips the probe (debugging only).
+
+// capture `opt --version` through a shell redirect to a temp file: the
+// self-hosted spawn is synchronous and returns only the exit status, so
+// this is the one output-capture mechanism both hosts share
+function probeLlvmMajor(opt_path: string): string | null {
+    const probe_file = `${os.tmpdir()}/${genFreshFileName("ejs-llvm-probe")}.txt`;
+    temp_files.push(probe_file);
+    const sh_cmd = `"${opt_path}" --version > "${probe_file}" 2>&1`;
+    let status: number;
+    if (isNode()) {
+        status = child_process.spawnSync("/bin/sh", ["-c", sh_cmd]).status ?? -1;
+    } else {
+        status = spawn("/bin/sh", ["-c", sh_cmd]) as unknown as number;
+    }
+    if (status !== 0) return null;
+    let version_text: string;
+    try {
+        version_text = fs.readFileSync(probe_file, "utf-8").toString();
+    } catch (e) {
+        return null;
+    }
+    const m = version_text.match(/LLVM version (\d+)\./);
+    return m ? m[1]! : null;
+}
+
+function llvm_bindir_candidates(): string[] {
+    const candidates = [DEFAULT_LLVM_BINDIR];
+    if (host_triple.os === "macos") {
+        for (const prefix of ["/opt/homebrew/opt", "/usr/local/opt"]) {
+            candidates.push(`${prefix}/llvm@${EXPECTED_LLVM_MAJOR}/bin`);
+            candidates.push(`${prefix}/llvm/bin`);
+        }
+    } else if (host_triple.os === "linux") {
+        candidates.push(`/usr/lib/llvm-${EXPECTED_LLVM_MAJOR}/bin`);
+    }
+    candidates.push(""); // last resort: whatever PATH resolves
+    return candidates.filter((c, i) => candidates.indexOf(c) === i);
+}
+
+let resolved_llvm_bindir: string | undefined;
+function llvm_bindir(): string {
+    if (resolved_llvm_bindir !== undefined) return resolved_llvm_bindir;
+    const opt_name = "opt" + llvm_suffix;
+    const opt_in = (bindir: string): string => (bindir ? path.join(bindir, opt_name) : opt_name);
+    const env_bindir = process.env["LLVM_BINDIR"];
+    const skip_check = process.env["EJS_LLVM_NO_VERSION_CHECK"] === "1";
+
+    if (env_bindir !== undefined) {
+        if (!skip_check) {
+            const found = probeLlvmMajor(opt_in(env_bindir));
+            if (found !== EXPECTED_LLVM_MAJOR) {
+                console.warn(
+                    `error: LLVM_BINDIR=${env_bindir || "(PATH lookup)"} provides ${
+                        found === null ? `no working ${opt_name}` : `LLVM ${found}`
+                    }; this compiler requires LLVM ${EXPECTED_LLVM_MAJOR}.`
+                );
+                console.warn(
+                    `a mismatched opt/llc can miscompile silently; set EJS_LLVM_NO_VERSION_CHECK=1 to force (debugging only).`
+                );
+                process.exit(-1);
+            }
+        }
+        resolved_llvm_bindir = env_bindir;
+        return resolved_llvm_bindir;
+    }
+
+    if (skip_check) {
+        resolved_llvm_bindir = DEFAULT_LLVM_BINDIR;
+        return resolved_llvm_bindir;
+    }
+
+    const tried: string[] = [];
+    for (const candidate of llvm_bindir_candidates()) {
+        if (candidate !== "") {
+            let present = false;
+            try {
+                present = fs.statSync(opt_in(candidate)).isFile();
+            } catch (e) {
+                // missing is the common case; fall through
+            }
+            if (!present) {
+                tried.push(`${candidate} (no ${opt_name})`);
+                continue;
+            }
+        }
+        const found = probeLlvmMajor(opt_in(candidate));
+        if (found === EXPECTED_LLVM_MAJOR) {
+            resolved_llvm_bindir = candidate;
+            return resolved_llvm_bindir;
+        }
+        tried.push(`${candidate || "$PATH"} (${found === null ? `no working ${opt_name}` : `LLVM ${found}`})`);
+    }
+
+    console.warn(
+        `error: could not find the LLVM ${EXPECTED_LLVM_MAJOR} tools (${opt_name}, llc${llvm_suffix}) this compiler requires.`
+    );
+    for (const t of tried) console.warn(`  tried: ${t}`);
+    console.warn(
+        `install LLVM ${EXPECTED_LLVM_MAJOR} (macos: \`brew install llvm@${EXPECTED_LLVM_MAJOR}\`; linux: https://apt.llvm.org) or set LLVM_BINDIR to its bin directory.`
+    );
+    process.exit(-1);
+    throw new Error("unreachable");
+}
+
+const llvm_tool = (tool: string): string => {
+    const bindir = llvm_bindir();
+    return bindir ? path.join(bindir, tool + llvm_suffix) : tool + llvm_suffix;
+};
 
 // the self-hosted runtime's spawn is synchronous and returns the child's
 // exit status (a number); node's returns a ChildProcess.  This helper is
@@ -663,35 +771,37 @@ function compileFile(
         module_toplevel: (compiled_module as unknown as { toplevel_name: string }).toplevel_name,
     });
 
+    const opt_cmd = llvm_tool("opt");
+    const llc_cmd = llvm_tool("llc");
     if (!isNode()) {
         // in ejs spawn is synchronous.
-        spawnSyncChecked(llvm_commands["opt"], opt_args);
-        spawnSyncChecked(llvm_commands["llc"], llc_args);
+        spawnSyncChecked(opt_cmd, opt_args);
+        spawnSyncChecked(llc_cmd, llc_args);
         o_filenames.push(o_filename);
         compileCallback();
     } else {
-        debug.log(1, `executing '${llvm_commands["opt"]} ${opt_args.join(" ")}'`);
-        let opt = spawn(llvm_commands["opt"], opt_args);
+        debug.log(1, `executing '${opt_cmd} ${opt_args.join(" ")}'`);
+        let opt = spawn(opt_cmd, opt_args);
         opt.stderr.on("data", (data) => console.warn(`${data}`));
         opt.on("error", (err) => {
-            console.warn(`error executing ${llvm_commands["opt"]}: ${err}`);
+            console.warn(`error executing ${opt_cmd}: ${err}`);
             process.exit(-1);
         });
         opt.on("exit", (code) => {
             if (code !== 0) {
-                console.warn(`${llvm_commands["opt"]} failed (exit status ${code})`);
+                console.warn(`${opt_cmd} failed (exit status ${code})`);
                 process.exit(-1);
             }
-            debug.log(1, `executing '${llvm_commands["llc"]} ${llc_args.join(" ")}'`);
-            let llc = spawn(llvm_commands["llc"], llc_args);
+            debug.log(1, `executing '${llc_cmd} ${llc_args.join(" ")}'`);
+            let llc = spawn(llc_cmd, llc_args);
             llc.stderr.on("data", (data) => console.warn(`${data}`));
             llc.on("error", (err) => {
-                console.warn(`error executing ${llvm_commands["llc"]}: ${err}`);
+                console.warn(`error executing ${llc_cmd}: ${err}`);
                 process.exit(-1);
             });
             llc.on("exit", (code) => {
                 if (code !== 0) {
-                    console.warn(`${llvm_commands["llc"]} failed (exit status ${code})`);
+                    console.warn(`${llc_cmd} failed (exit status ${code})`);
                     process.exit(-1);
                 }
                 o_filenames.push(o_filename);

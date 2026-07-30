@@ -153,8 +153,12 @@ Catch up with the language; adopt test262.  Detail: language-plan.md.
 
 From repo to product.  Detail: release-plan.md, compiler-plan.md.
 
-- [ ] **P9.1** relocatable dist artifact + LLVM toolchain policy
-      (release-P1).
+- [x] **P9.1** relocatable dist artifact + LLVM toolchain policy
+      (release-P1).  DONE 2026-07-30 — docs/release-p1-results.md
+      (`//:dist` tarball of the installed layout, `//:test-dist` smoke
+      test, CI uploads per-platform artifacts; the driver discovers a
+      matching-major opt/llc and fails loudly otherwise, LLVM_MAJOR
+      baked into host-config).
 - [ ] **P9.2** platform packages: homebrew, linux, npm wrapper
       (release-P2).
 - [ ] **P9.3** versioning + release automation off the bootstrap

@@ -87,6 +87,36 @@ alias(
     actual = ":ejs.exe.stage1",
 )
 
+# the relocatable dist artifact (release-P1): the installed layout the
+# driver's non---srcdir mode expects, tarred up.  The stage2 binary is
+# the one the bootstrap fixed point (stage3) vouches for.
+# buck2 build //:dist
+genrule(
+    name = "dist",
+    srcs = [
+        "buck-dist.sh",
+        "package.json",
+        "LICENSE.txt",
+    ],
+    out = "dist",
+    cmd = 'bash $SRCDIR/buck-dist.sh "$(location :srcdir-tree)" ' +
+          '"$(location :ejs.exe.stage2)"' +
+          ' "' + EJS_TRIPLE + '"' +
+          ' "' + EJS_SHORT_TRIPLE + '"' +
+          ' "' + EJS_OS + '"' +
+          ' "$SRCDIR/package.json" "$SRCDIR/LICENSE.txt"',
+)
+
+# smoke-test the dist artifact as a user would use it: unpack, compile
+# and run programs WITHOUT --srcdir, and check the fail-loudly LLVM
+# policy.  buck2 build //:test-dist
+genrule(
+    name = "test-dist",
+    srcs = ["buck-test-dist.sh"],
+    out = "test-dist.log",
+    cmd = 'bash $SRCDIR/buck-test-dist.sh "$(location :dist)" ' + llvm_bindir(),
+)
+
 # EIR unit tests (run under node against the generated CommonJS tree):
 # buck2 build //:test-eir
 genrule(

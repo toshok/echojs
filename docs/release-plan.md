@@ -7,7 +7,8 @@ answer for people who just want to download a package and go.
 
 ## Phases
 
-- [ ] **release-P1 — Relocatable binary artifact.**  Define what an
+- [x] **release-P1 — Relocatable binary artifact.**  DONE 2026-07-30 —
+      docs/release-p1-results.md.  Define what an
       installed echojs IS: the `ejs` driver binary, the runtime static
       libraries (`libecho.a` + friends), the srcdir headers/manifests
       the driver needs, and a pinned LLVM toolchain policy (today the
