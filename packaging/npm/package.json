@@ -26,7 +26,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/toshok/echojs.git"
+    "url": "git+https://github.com/toshok/echojs.git",
+    "directory": "packaging/npm"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "author": "Chris Toshok <toshok@gmail.com>",
   "license": "MIT",

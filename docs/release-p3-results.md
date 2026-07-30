@@ -44,10 +44,25 @@ tag is the human act that starts the pipeline.
    tarballs + formula + wrapper tgz.  Publishing the draft is the
    go-live act — draft asset URLs aren't public, so the formula and
    the npm postinstall only resolve after that click.  Two
-   shell-gated legs: push the formula to `toshok/homebrew-echojs` iff
-   `HOMEBREW_TAP_TOKEN` is configured, `npm publish --access public`
-   iff `NPM_TOKEN` is — an absent secret is a loudly-skipped step,
-   not a broken release.
+   shell-gated legs, each loudly skipped when unconfigured rather
+   than breaking the release: the formula push to
+   `toshok/homebrew-echojs` (iff `HOMEBREW_TAP_TOKEN` is set — a git
+   push needs a credential), and `npm publish` via **OIDC trusted
+   publishing** (docs.npmjs.com/trusted-publishers): no token at all —
+   the job has `id-token: write`, npm ≥ 11.5.1 exchanges the GitHub
+   OIDC token for short-lived credentials, and provenance
+   attestations are generated automatically.  Gated on the
+   `NPM_TRUSTED_PUBLISHING` repo *variable* being `true`, flipped
+   after the trusted publisher is configured on npmjs.com.  Two
+   load-bearing details: the publisher config matches owner/repo +
+   the workflow *filename* (`release.yml` — renaming the file breaks
+   publishing; the publish step must also live in this workflow, not
+   a reusable one, since validation checks the calling workflow), and
+   the wrapper's `repository` field must match the repo exactly
+   (`git+https://github.com/toshok/echojs.git` + `directory:
+   packaging/npm`).  The publish uses the package directory, not the
+   tgz, so provenance sees the build context; `publishConfig.access:
+   public` is baked into the wrapper's package.json.
 4. **smoke-linux / smoke-macos** — the clean-machine proof the plan
    asked for: a bare `ubuntu:24.04` container (both arches) and a
    fresh macos runner that never see the repo install only the
@@ -81,8 +96,15 @@ invoked), since postinstall's cwd is the package directory.
 2. wait for the Release workflow: green matrix + draft release + smokes
 3. publish the draft release (this makes formula/npm URLs real)
 4. optional, once: create `toshok/homebrew-echojs` and set
-   `HOMEBREW_TAP_TOKEN`; set `NPM_TOKEN` for registry publishes —
-   until then the formula and wrapper tgz ride on the release page
+   `HOMEBREW_TAP_TOKEN` — until then the formula rides on the release
+   page
+5. optional, once, for npm: on npmjs.com, add a trusted publisher to
+   `@pirouette/echojs` (org `toshok`, repo `echojs`, workflow
+   `release.yml`, allowed action `npm publish`), then set the repo
+   variable `NPM_TRUSTED_PUBLISHING=true`.  If npmjs won't accept a
+   trusted publisher for a never-published package, do the first
+   `npm publish --access public` locally as an @pirouette member,
+   then configure it — every later release publishes via OIDC
 
 ## Follow-ons
 

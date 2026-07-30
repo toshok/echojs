@@ -13,8 +13,16 @@
 #                   Publishing the draft is the go-live act (draft
 #                   asset urls are not public, so the formula and npm
 #                   postinstall only resolve once it's published).
-#                   npm publish / tap push run iff their secrets
-#                   (NPM_TOKEN / HOMEBREW_TAP_TOKEN) are configured.
+#                   The tap push runs iff HOMEBREW_TAP_TOKEN is
+#                   configured.  npm publish uses OIDC trusted
+#                   publishing (docs.npmjs.com/trusted-publishers) —
+#                   no token; npmjs trusts THIS workflow file
+#                   (owner/repo + filename release.yml are what the
+#                   trusted-publisher config matches, so renaming
+#                   this file breaks publishing) — gated on the
+#                   NPM_TRUSTED_PUBLISHING repo variable being "true"
+#                   so releases stay green until the publisher is
+#                   configured on npmjs.com.
 #   smoke-*         clean-machine proof: a bare ubuntu container and a
 #                   fresh macos runner install ONLY the tarball + the
 #                   documented prerequisites, then compile and run a
@@ -58,8 +66,17 @@ jobs:
   publish:
     needs: bootstrap
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write # OIDC token for npm trusted publishing
     steps:
       - uses: actions/checkout@v4
+
+      # trusted publishing needs npm >= 11.5.1 on node >= 22.14
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install -g npm@latest && npm --version
 
       - uses: actions/download-artifact@v4
         with:
@@ -125,16 +142,21 @@ jobs:
             commit -m "echojs ${GITHUB_REF_NAME#v}"
           git push
 
-      - name: npm publish
+      # OIDC trusted publishing: no token, npm exchanges this job's
+      # id-token for short-lived credentials and generates provenance
+      # attestations automatically.  Publishes the package DIRECTORY
+      # (same bits as the attached tgz — both come from packaging/npm
+      # at this ref) so provenance sees the build context.
+      - name: npm publish (trusted publishing)
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          TP_ENABLED: ${{ vars.NPM_TRUSTED_PUBLISHING }}
         run: |
-          if [ -z "$NPM_TOKEN" ]; then
-            echo "NPM_TOKEN not configured — wrapper tgz is attached to the release instead"
+          if [ "$TP_ENABLED" != "true" ]; then
+            echo "NPM_TRUSTED_PUBLISHING repo variable not set — wrapper tgz is attached to the release instead"
+            echo "(configure the trusted publisher on npmjs.com first: owner toshok, repo echojs, workflow release.yml)"
             exit 0
           fi
-          echo "//registry.npmjs.org/:_authToken=\${NPM_TOKEN}" > "$HOME/.npmrc"
-          npm publish assets/pirouette-echojs-*.tgz --access public
+          npm publish ./packaging/npm --access public
 
   # a machine that has never seen the repo: only the tarball + the
   # README's documented prerequisites
