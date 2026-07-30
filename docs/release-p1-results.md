@@ -89,10 +89,11 @@ the tarball: `echojs-dist-macos-arm64`, `echojs-dist-linux-{arm64,x86_64}`.
 
 ## Follow-ons
 
-- The runtime's EXCEPTIONS spew (ejs-exception) is noisy on stderr
-  during every native-module import resolution — cosmetic, pre-existing,
-  but every dist user compiling an `@node-compat` import sees it.
-  Worth silencing before release-P2.
+- ~~The runtime's EXCEPTIONS spew (ejs-exception) is noisy on stderr
+  during every native-module import resolution.~~  FIXED same day:
+  `#define spew 1` had been hardcoded on in ejs-exception.c since
+  forever; now 0 (the ejs-gc-internal.h convention — flip the define
+  to trace exception dispatch).  Full matrix re-run green.
 - `bin/ejs` ships unstripped (~debug-sized); strip at dist time once a
   symbol-preservation story exists.
 - Linux compiled programs need libuv/libunwind dev packages at link

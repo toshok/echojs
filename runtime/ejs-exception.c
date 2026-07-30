@@ -15,7 +15,11 @@
 #include <execinfo.h>
 
 
-#define spew 1
+// off by default (same convention as ejs-gc-internal.h): the compiler
+// resolves module imports by try/catch probing, so with spew on every
+// compiled program logs a full throw/unwind/catch trace to stderr for
+// each import miss (release-P1 follow-on)
+#define spew 0
 #if spew
 #define SPEW(x) x
 #else
