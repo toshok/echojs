@@ -688,8 +688,8 @@ nursery_init(void)
     heap_priv.nursery_arena = arena;
     _ejs_heap.nursery_base = (void*)arena;
     _ejs_heap.nursery_end = arena->end;
-    _ejs_heap.remset = malloc (NURSERY_REMSET_CAPACITY * sizeof(ejsval*));
+    _ejs_heap.remset = malloc (NURSERY_REMSET_CAPACITY * sizeof(void*));
     _ejs_heap.remset_capacity = NURSERY_REMSET_CAPACITY;
-    heap_priv.remset_other = malloc (NURSERY_REMSET_CAPACITY * sizeof(ejsval*));
+    heap_priv.remset_other = malloc (NURSERY_REMSET_CAPACITY * sizeof(void*));
 }
 // ===================== end nursery =========================================

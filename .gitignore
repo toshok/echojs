@@ -13,7 +13,7 @@
 *.s
 
 *.exe
-ejs.js
+/ejs.js
 ejs.exe
 ejs.exe.stage1
 ejs.exe.stage2

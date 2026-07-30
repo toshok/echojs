@@ -263,7 +263,7 @@ typedef struct {
     // front and processes the snapshot; slots whose referent stays young
     // (pinned) re-append into the live buffer — old→young edges CARRY
     // across cycles for as long as the target remains in the nursery.
-    ejsval** remset_other;
+    void** remset_other;
     // stats (reported under EJS_GC_PROFILE)
     uint64_t minors, minor_usec_total, minor_usec_max;
     uint64_t promoted_objs, promoted_bytes, minor_pins, remset_peak, overflow_minors;
