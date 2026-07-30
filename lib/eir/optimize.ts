@@ -32,6 +32,7 @@ import {
 } from "./optimize-guards";
 import { sinkFlowAllocations } from "./sink-flow";
 import { cleanupFunction, computeStableSlots, cseModuleSlotLoads } from "./cleanup";
+import { passes } from "../pass-config";
 
 export interface OptStats {
     allocs_sunk: number;
@@ -498,11 +499,12 @@ function sinkShapedAlloc(
     return changed;
 }
 
-// the bisect-flag snapshot for one optimizeFunction run.  process.env
-// is a rebuild-the-whole-environment getter under the self-hosted
-// runtime (node-compat), so the flags are read ONCE per function, never
-// in the fixpoint rounds (found the hard way: the stage2 self-compile
-// spent most of its wall time constructing env objects).
+// the bisect-flag snapshot for one optimizeFunction run, from the
+// pass-config registry (compiler-P5; this struct is what generalized
+// into it).  The old process.env reads lived here — under the
+// self-hosted runtime env access is a rebuild-the-whole-environment
+// getter, which is why flags are snapshotted per function, never read
+// in the fixpoint rounds.
 export interface SinkFlags {
     noShaped: boolean;
     noArgs: boolean;
@@ -512,12 +514,13 @@ export interface SinkFlags {
 }
 
 function readSinkFlags(): SinkFlags {
+    const cfg = passes();
     return {
-        noShaped: !!process.env["EJS_NO_SHAPED_SINK"],
-        noArgs: !!process.env["EJS_NO_ARGS_SINK"],
-        noFlow: !!process.env["EJS_NO_FLOW_SINK"],
-        noCse: !!process.env["EJS_NO_SLOT_CSE"],
-        noCleanup: !!process.env["EJS_NO_EIR_CLEANUP"],
+        noShaped: !cfg.shapedSink,
+        noArgs: !cfg.argsSink,
+        noFlow: !cfg.flowSink,
+        noCse: !cfg.slotCse,
+        noCleanup: !cfg.eirCleanup,
     };
 }
 

@@ -47,11 +47,12 @@
 //   - the use region is a single-entry single-exit acyclic subgraph of
 //     plain br/cond_br blocks, so it can be duplicated wholesale.
 //
-// EJS_NO_CTOR_SINK=1 bisects this pass alone.
+// -fno-ctor-sink bisects this pass alone.
 
 import { Block, Func, Inst, Module, ShapeField } from "./ir";
 import { Effect, opInfo } from "./ops";
 import { computeRPO, computeDominators, dominates } from "./verifier";
+import { passes } from "../pass-config";
 
 // region size cap: a use region bigger than this is not a constructor
 // kernel, and cloning it would bloat code for a marginal win
@@ -280,7 +281,7 @@ export function sinkConstructResults(
     promotedSlots: Set<number>,
     toplevelName: string | null
 ): number {
-    if (process.env["EJS_NO_CTOR_SINK"]) return 0;
+    if (!passes().ctorSink) return 0;
     if (m.shapes.size === 0) return 0;
 
     const toplevelFn = toplevelName

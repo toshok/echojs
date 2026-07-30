@@ -114,6 +114,7 @@ import {
     shapeFactKey,
 } from "./verifier";
 import type { OptStats } from "./optimize";
+import { passes } from "../pass-config";
 
 // generic ops that (1) lowering pairs with f64 fast ops, and (2) are
 // pure and value-identical to the f64 op when both operands are numbers
@@ -1778,11 +1779,11 @@ export function optimizeShapeRegions(
 
     sweepUnreachableBlocks(fn);
 
-    // EJS_NO_SHAPE_FUSION disables the
+    // -fno-shape-fusion disables the
     // heterogeneous merge + the in-loop numeric folding, leaving exactly
     // the plain shape-region behavior (typed slot ACCESS is a contract
     // change and has no off switch — the verifier owns it).
-    const noFusion = !!process.env["EJS_NO_SHAPE_FUSION"];
+    const noFusion = !passes().shapeFusion;
     let changedAny = false;
     for (let round = 0; round < 50; round++) {
         let changed = false;

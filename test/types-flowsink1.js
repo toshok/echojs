@@ -1,7 +1,7 @@
 // sinking-P3 probe: flow-sensitive field writes + partial-escape
 // materialization (docs/sinking-plan.md).  Every line must match node
 // exactly, with and without --types, under EJS_SHAPES=off, gc-stress,
-// and EJS_NO_FLOW_SINK.
+// and -fno-flow-sink.
 
 function branches(c, x, y) { var o = { a: 0 }; if (c) o.a = x; else o.a = y; return o.a; }
 console.log(branches(true, 1, 2));

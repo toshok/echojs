@@ -49,7 +49,7 @@
 // instruction plays no second role (a `o.self = o` write-escape
 // declines).
 //
-// EJS_NO_FLOW_SINK=1 bisects this pass alone.
+// -fno-flow-sink bisects this pass alone.
 
 import { Block, Func, Inst, Module, replaceAllUses } from "./ir";
 // type-only imports: a value import would make optimize <-> sink-flow a
@@ -485,7 +485,7 @@ function applyPlan(
 // try to flow-sink candidates in `fn`; at most ONE rewrite per call
 // (the rewrite reshapes the CFG, so later candidates re-plan against
 // fresh state on the driver's next fixpoint round).  The bisect flag
-// (EJS_NO_FLOW_SINK) is read by the driver, not here (SinkFlags note),
+// (-fno-flow-sink) is read by the driver, not here (SinkFlags note),
 // and the use map + candidate lists come from the driver's single
 // per-round scan — this pass MUTATES without maintaining the map, so
 // it must stay the round's last consumer.  Returns whether anything

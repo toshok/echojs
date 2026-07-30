@@ -1,6 +1,6 @@
 #!/bin/bash
 # Invoked by //:test-eir-lowtier.  Compiles test/eir-lowtier1.js twice with
-# the stage0 (node-hosted) compiler — once plain, once with EJS_EIR_LOWTIER=1
+# the stage0 (node-hosted) compiler — once plain, once with -flowtier
 # (which swaps the lowtier_* function bodies for hand-built low-tier EIR,
 # see lib/eir/lowtier-probe.ts) — runs both executables, and fails unless:
 #   - both outputs match the committed expected-out byte for byte;
@@ -55,8 +55,8 @@ run() {
 
     echo "== injected build =="
     mkdir -p "$WORK/ltmp"
-    EJS_EIR_LOWTIER=1 TMPDIR="$WORK/ltmp" \
-        node ../lib/generated/ejs-es6.js "${EJS_ARGS[@]}" --leave-temp eir-lowtier1.js \
+    TMPDIR="$WORK/ltmp" \
+        node ../lib/generated/ejs-es6.js "${EJS_ARGS[@]}" --leave-temp -flowtier eir-lowtier1.js \
         || { echo "ERROR: injected compile failed"; return 1; }
     ./eir-lowtier1.js.exe > injected.out \
         || { echo "ERROR: injected executable failed"; return 1; }

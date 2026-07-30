@@ -139,8 +139,17 @@ shaped-world continuation), shape-guard regions (see shapes-plan).
       - IR in the manifest: serialize the module's EIR so cross-module
         analysis and inlining through module boundaries work before —
         and instead of — any dynamic-loading story.
-- [ ] **compiler-P5 — Pass-configuration ergonomics: -O suites and
-      -f/-fno- flags.**  Env vars stop being the stable interface for
+- [x] **compiler-P5 — Pass-configuration ergonomics: -O suites and
+      -f/-fno- flags.**  DONE 2026-07-29 —
+      docs/compiler-p5-results.md (registry in lib/pass-config.ts;
+      suites: -O0 straight lowering, -O1 intra-function tier, -O2 the
+      full pre-P5 default byte-for-byte, -O3 = -O2 EIR-side with LLVM
+      default<O3> and -fllvm-opt as the escape hatch; every EJS_NO_X
+      → -fno-x 1:1 (EJS_EIR_LOWTIER → -flowtier), env reads deleted
+      after a 35-pair env≡flag A/B plus a HEAD-vs-branch default-dump
+      identity check; tests.ts uses withPassConfig; EJS_FLAGS is the
+      one env escape; --types stays a separate probe flag).
+      Original plan follows.  Env vars stop being the stable interface for
       configuring the optimizer; a gcc/clang-style flag surface
       replaces them, and env reverts to what it should be — a
       short-lived debugging channel.  Current state: `-O0`..`-O3`

@@ -80,7 +80,7 @@
 //   full dynamic semantics, external callers included.  Internal
 //   callers reach the same guards through the generic entry (devirt
 //   direct-calls it; LLVM can inline the prologue).
-//   EJS_NO_EXPORT_WRAPPER=1 bisects the wrapper alone.
+//   -fno-export-wrapper bisects the wrapper alone.
 
 import { Module, Func, Inst, Block } from "./ir";
 import { Effect, opInfo } from "./ops";
@@ -90,6 +90,7 @@ import type { ModCtx, SpecMode } from "./lower";
 import type { ScopeAnalysis, FnInfo } from "./scopes";
 import type { TypeOracle } from "./oracle";
 import type * as e from "../estree";
+import { passes } from "../pass-config";
 
 export interface SpecStats {
     // clones emitted
@@ -539,7 +540,7 @@ function specializeRound(
         // per-site dispatch are the recorded follow-on.)
         if (flow.escapes) {
             if (wrapped.has(info)) continue; // judged (installed or declined)
-            if (process.env["EJS_NO_EXPORT_WRAPPER"]) continue;
+            if (!passes().exportWrapper) continue;
             if (!flow.referenced) continue;
 
             // static callee checks (AST side); >=1 formal or the guard

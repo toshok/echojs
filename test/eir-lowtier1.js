@@ -1,4 +1,4 @@
-// Phase 2 low-tier probe.  With EJS_EIR_LOWTIER=1 in the compiler's
+// Phase 2 low-tier probe.  With -flowtier in the compiler's
 // environment these function bodies are swapped for hand-built EIR
 // (has_tag guard -> unbox/f64 op/box fast path vs the generic slow path;
 // see lib/eir/lowtier-probe.ts).  Without it they compile normally.

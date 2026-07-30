@@ -129,10 +129,13 @@ runtime-plan.md, compiler-plan.md.
       with one tsc --allowJs pass; tester.ts and gen-atoms.ts ported;
       `generator: esm` baselines byte-identical vs babel-node; babel
       removed from the repo).
-- [ ] **P7.5** clang-style pass configuration: -O suites define the
+- [x] **P7.5** clang-style pass configuration: -O suites define the
       optimizer tiers, -f/-fno- per-pass flags replace the EJS_* env
       vars, which revert to debugging-only (compiler-P5; independent,
-      can land any time).
+      can land any time).  DONE 2026-07-29 —
+      docs/compiler-p5-results.md (pass registry in lib/pass-config.ts;
+      -O2 byte-identical to the pre-P5 default; env spellings deleted
+      after a 35-pair env≡flag A/B; EJS_FLAGS is the one env escape).
 
 ## P8 — Language modernization
 

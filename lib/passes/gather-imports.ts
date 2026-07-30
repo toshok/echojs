@@ -21,6 +21,7 @@ import * as b from "../ast-builder";
 import * as esprima from "../../external-deps/esprima/esprima-es6";
 import type * as e from "../estree";
 import type { CompilerOptions, ImportVariable } from "../options";
+import { passes } from "../pass-config";
 import type { Triple } from "../triple";
 
 function isNativeModule(source: string): boolean {
@@ -172,13 +173,13 @@ export function dumpModules(): void {
 // with such a nested declaration is excluded entirely.  `const name =
 // <literal>` stays a plain local: it constant-folds instead.
 function promoteModuleVars(moduleInfo: ModuleInfo, tree: e.Program): void {
-    // debugging: EJS_NO_PROMOTE=substr1,substr2 disables promotion for
-    // matching module paths (bisecting promotion-related miscompiles)
-    const no_promote = process.env["EJS_NO_PROMOTE"];
-    if (no_promote) {
-        for (const pat of no_promote.split(",")) {
-            if (pat.length > 0 && moduleInfo.path.indexOf(pat) !== -1) return;
-        }
+    // debugging: -fno-promote disables promotion outright;
+    // -fno-promote=substr1,substr2 only for matching module paths
+    // (bisecting promotion-related miscompiles)
+    const pcfg = passes();
+    if (!pcfg.promote) return;
+    for (const pat of pcfg.promoteExclude) {
+        if (moduleInfo.path.indexOf(pat) !== -1) return;
     }
     // names declared by `var` nested below a direct toplevel statement
     // (but outside any function -- function bodies are their own scope)

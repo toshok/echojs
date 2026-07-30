@@ -1,6 +1,6 @@
 // sinking-P3 probe: rest_args/args_obj length sinking
 // (docs/sinking-plan.md).  Every line must match node exactly, with and
-// without --types and under EJS_NO_ARGS_SINK.
+// without --types and under -fno-args-sink.
 
 function len0() { return arguments.length; }
 function len2(a, b) { return arguments.length; }

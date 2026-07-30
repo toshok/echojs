@@ -5,8 +5,8 @@
 // Hand-built low-tier bodies for the low-tier end-to-end test.  Lowering does
 // does emit has_tag/unbox_f64/f64_*/box_f64 through the oracle path, but to prove
 // the emitted machine code is correct we substitute known bodies into the
-// functions of test/eir-lowtier1.js, gated on EJS_EIR_LOWTIER=1 (a debug/test
-// hook in the EJS_NO_EIR_OPT mold).  With the variable unset nothing here
+// functions of test/eir-lowtier1.js, gated on -flowtier (a debug/test
+// hook in the -fno-eir-opt mold).  With the flag off nothing here
 // runs; the test file behaves identically either way, so it also passes in
 // the normal matrix.
 //

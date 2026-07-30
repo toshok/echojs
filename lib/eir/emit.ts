@@ -20,6 +20,7 @@ import * as consts from "../consts";
 import type { ABI } from "../abi";
 import type { RuntimeInterface } from "../runtime";
 import type { Module as EIRModule, Func, Block, Inst, Target } from "./ir";
+import { passes } from "../pass-config";
 import { computeSpilledValues } from "./liveness";
 
 const ir = llvm.IRBuilder;
@@ -272,7 +273,7 @@ export class EIREmitter {
         // values live across safepoints get frame slots
         this.gc_frame = null;
         this.gc_frame_slots = null;
-        if (!process.env["EJS_NO_GC_FRAMES"]) {
+        if (passes().gcFrames) {
             const spilled = computeSpilledValues(eirFn);
             if (spilled) {
                 const slots = new Map<Inst, number>();
@@ -950,43 +951,41 @@ export class EIREmitter {
                 const n = inst.imms["size"] as number;
                 // envs are 39% of all allocations (the P0
                 // census) — bump-allocate inline; the runtime call is
-                // the slow path/safepoint.  EJS_NO_INLINE_ALLOC=1 is
+                // the slow path/safepoint.  -fno-inline-alloc is
                 // the compile-time bisect hook.
                 const slow = () => this.call(rt.make_closure_env, [consts.int32(n)], "env");
-                const rv = process.env["EJS_NO_INLINE_ALLOC"]
-                    ? slow()
-                    : this.v.emitEnvAllocInline(n, slow);
+                const rv = passes().inlineAlloc ? this.v.emitEnvAllocInline(n, slow) : slow();
                 this.values.set(inst, rv);
                 return;
             }
             case "env_load": {
                 // inline slot addressing, recomputed per use
                 // from the boxed env (a relocated env re-derives) —
-                // deletes a runtime call per access.  EJS_NO_INLINE_ENV_SLOTS
+                // deletes a runtime call per access.  -fno-inline-env-slots
                 // restores the runtime-call path.
-                let ref = process.env["EJS_NO_INLINE_ENV_SLOTS"]
-                    ? this.call(
+                let ref = passes().inlineEnvSlots
+                    ? this.v.emitEnvSlotRef(
+                          this.val(inst.operands[0]),
+                          inst.imms["slot"] as number
+                      )
+                    : this.call(
                           rt.get_env_slot_ref,
                           [this.val(inst.operands[0]), consts.int32((inst.imms["slot"] as number))],
                           "slotref"
-                      )
-                    : this.v.emitEnvSlotRef(
-                          this.val(inst.operands[0]),
-                          inst.imms["slot"] as number
                       );
                 this.values.set(inst, ir.createLoad(types.EjsValue, ref, "slot"));
                 return;
             }
             case "env_store": {
-                let ref = process.env["EJS_NO_INLINE_ENV_SLOTS"]
-                    ? this.call(
+                let ref = passes().inlineEnvSlots
+                    ? this.v.emitEnvSlotRef(
+                          this.val(inst.operands[0]),
+                          inst.imms["slot"] as number
+                      )
+                    : this.call(
                           rt.get_env_slot_ref,
                           [this.val(inst.operands[0]), consts.int32((inst.imms["slot"] as number))],
                           "slotref"
-                      )
-                    : this.v.emitEnvSlotRef(
-                          this.val(inst.operands[0]),
-                          inst.imms["slot"] as number
                       );
                 ir.createStore(this.val(inst.operands[1]), ref);
                 this.emitStoreBarrier(this.val(inst.operands[0]), this.val(inst.operands[1]));

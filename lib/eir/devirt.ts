@@ -42,6 +42,7 @@
 import { Module, Func, Inst, Block } from "./ir";
 import { Effect, opInfo } from "./ops";
 import { computeRPO, computeDominators, dominates } from "./verifier";
+import { passes } from "../pass-config";
 
 export interface DevirtStats {
     // call sites rewritten against an SSA-visible make_closure
@@ -59,7 +60,7 @@ function comesBefore(idom: Map<Block, Block>, a: Inst, b: Inst): boolean {
 
 export function devirtualizeModule(m: Module, toplevelName: string): DevirtStats {
     const stats: DevirtStats = { ssa_sites: 0, slot_sites: 0 };
-    if (process.env["EJS_NO_DEVIRT"]) return stats;
+    if (!passes().devirt) return stats;
 
     const fnByName = new Map<string, Func>();
     for (const fn of m.functions) fnByName.set(fn.name, fn);

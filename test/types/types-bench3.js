@@ -4,7 +4,7 @@
 // fields at different slots).  The oracle reports both terminal shapes;
 // the 2-way guard chain gives each class a fixed-slot fast arm.
 // 2026-07-24 numbers (M-series): 0.31s with the chain — parity with the
-// monomorphic twin — vs 1.67s declined (EJS_NO_POLY_SHAPE_GUARDS=1) and
+// monomorphic twin — vs 1.67s declined (-fno-poly-shape-guards) and
 // 3.64s flag-off.
 function P2(x, y) { this.x = x; this.y = y; }
 function P3(x, y, z) { this.z = z; this.x = x; this.y = y; }

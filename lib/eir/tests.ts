@@ -31,6 +31,7 @@ import { DesugarMetaProperties } from "../passes/desugar-metaproperties";
 import * as esprima from "../../external-deps/esprima/esprima-es6";
 import type * as e from "../estree";
 import type { CompilerOptions } from "../options";
+import { withPassConfig } from "../pass-config";
 
 let failures = 0;
 
@@ -876,17 +877,14 @@ test("optimize: a written key's reads fold flow-sensitively (sinking-P3)", () =>
     assert(ret!.operands[0]!.op === "blockparam", "return should see the written param x");
 });
 
-test("optimize: EJS_NO_FLOW_SINK restores the written-key decline", () => {
-    process.env["EJS_NO_FLOW_SINK"] = "1";
-    try {
+test("optimize: -fno-flow-sink restores the written-key decline", () => {
+    withPassConfig({ flowSink: false }, () => {
         let { printed } = lowerAndOptimize(
             "function f(x) { let o = { a: 1 }; o.a = x; return o.a; }"
         );
         assertContains(printed, "make_object");
         assertContains(printed, "get_prop_atom");
-    } finally {
-        delete process.env["EJS_NO_FLOW_SINK"];
-    }
+    });
 });
 
 test("optimize: non-own-key read keeps the object (prototype chain)", () => {
@@ -1872,9 +1870,8 @@ test("specialize: wrapper declines — no payoff, env capture, frame ops", () =>
     assert(frame.stats.rejected === 0, `rejected=${frame.stats.rejected}`);
 });
 
-test("specialize: EJS_NO_EXPORT_WRAPPER leaves the escapee fully generic", () => {
-    process.env["EJS_NO_EXPORT_WRAPPER"] = "1";
-    try {
+test("specialize: -fno-export-wrapper leaves the escapee fully generic", () => {
+    withPassConfig({ exportWrapper: false }, () => {
         const { module, stats } = specHarness(
             `function outer(h) { ${SPEC_KERNEL} var r = k(1); h(k); return r; }`,
             numericStubOracle(["n", "s", "i", "r"])
@@ -1885,9 +1882,7 @@ test("specialize: EJS_NO_EXPORT_WRAPPER leaves the escapee fully generic", () =>
             module.functions.every((f) => f.sig === null),
             "no sig'd clones at all"
         );
-    } finally {
-        delete process.env["EJS_NO_EXPORT_WRAPPER"];
-    }
+    });
 });
 
 test("specialize: env capture and `this` are structurally rejected post-lowering", () => {
@@ -2189,17 +2184,14 @@ test("shapes: a boxed-field store takes non-numbers fast (swapped tag arms)", ()
     );
 });
 
-test("shapes: EJS_NO_SHAPE_GUARDS disables the diamonds", () => {
-    process.env["EJS_NO_SHAPE_GUARDS"] = "1";
-    try {
+test("shapes: -fno-shape-guards disables the diamonds", () => {
+    withPassConfig({ shapeGuards: false }, () => {
         const { printed } = lowerWithOracle(
             "function f(p) { return p.y; }",
             stubShapeOracle({ p: PXY })
         );
         assertNotContains(printed, "has_shape");
-    } finally {
-        delete process.env["EJS_NO_SHAPE_GUARDS"];
-    }
+    });
 });
 
 // --- 2-way polymorphic guard chains ----------------------------
@@ -2280,9 +2272,8 @@ test("shapes-poly: mixed reprs orient each arm by its own field repr", () => {
     );
 });
 
-test("shapes-poly: EJS_NO_POLY_SHAPE_GUARDS declines 2-shape sites, keeps mono", () => {
-    process.env["EJS_NO_POLY_SHAPE_GUARDS"] = "1";
-    try {
+test("shapes-poly: -fno-poly-shape-guards declines 2-shape sites, keeps mono", () => {
+    withPassConfig({ polyShapeGuards: false }, () => {
         const poly = lowerWithOracle(
             "function f(p) { return p.y; }",
             stubShapeOracle({ p: [PXY, PZXY] })
@@ -2293,9 +2284,7 @@ test("shapes-poly: EJS_NO_POLY_SHAPE_GUARDS declines 2-shape sites, keeps mono",
             stubShapeOracle({ p: PXY })
         ).printed;
         assertContains(mono, "has_shape");
-    } finally {
-        delete process.env["EJS_NO_POLY_SHAPE_GUARDS"];
-    }
+    });
 });
 
 test("shapes-poly: structurally equal shapes reported twice guard once", () => {
@@ -2860,17 +2849,14 @@ test("born-shaped: flag-off (null oracle) keeps today's make_object exactly", ()
     assertContains(printed, "make_object");
 });
 
-test("born-shaped: EJS_NO_BORN_SHAPED restores make_object", () => {
-    process.env["EJS_NO_BORN_SHAPED"] = "1";
-    try {
+test("born-shaped: -fno-born-shaped restores make_object", () => {
+    withPassConfig({ bornShaped: false }, () => {
         const { printed } = lowerWithOracle(
             "function f() { return { x: 1, y: 2 }; }",
             stubOracle({})
         );
         assertNotContains(printed, "make_object_shaped");
-    } finally {
-        delete process.env["EJS_NO_BORN_SHAPED"];
-    }
+    });
 });
 
 test("born-shaped: index-looking and duplicate keys decline to make_object", () => {
@@ -2949,17 +2935,14 @@ test("ctor-fill: a single-store prefix stays sequential (threshold)", () => {
     assertNotContains(printed, "fill_object_shaped");
 });
 
-test("ctor-fill: EJS_NO_BORN_SHAPED disables the fill diamond", () => {
-    process.env["EJS_NO_BORN_SHAPED"] = "1";
-    try {
+test("ctor-fill: -fno-born-shaped disables the fill diamond", () => {
+    withPassConfig({ bornShaped: false }, () => {
         const { printed } = lowerWithOracle(
             "function Pt(x, y) { this.x = x; this.y = y; }",
             stubOracle({})
         );
         assertNotContains(printed, "fill_object_shaped");
-    } finally {
-        delete process.env["EJS_NO_BORN_SHAPED"];
-    }
+    });
 });
 
 // --- born-shaped verifier rules (hand-built attack IR) --------------------------
@@ -3182,17 +3165,14 @@ test("sink-shaped: a written literal flow-sinks through the generic arms (sinkin
     assertContains(printed, 'value=2');
 });
 
-test("sink-shaped: EJS_NO_FLOW_SINK restores the written-literal decline", () => {
-    process.env["EJS_NO_FLOW_SINK"] = "1";
-    try {
+test("sink-shaped: -fno-flow-sink restores the written-literal decline", () => {
+    withPassConfig({ flowSink: false }, () => {
         const { printed, stats } = lowerShapedSink(
             "function f(a, b) { var o = { x: 1, y: a, s: b }; o.x = 2; return o.x; }"
         );
         assert(stats.shape_allocs_sunk === 0, `sunk=${stats.shape_allocs_sunk}`);
         assertContains(printed, "make_object_shaped");
-    } finally {
-        delete process.env["EJS_NO_FLOW_SINK"];
-    }
+    });
 });
 
 test("sink-shaped: a non-own read blocks removal but own reads still fold", () => {
@@ -3263,17 +3243,14 @@ test("sink-shaped: an unprovable f64 operand folds the guard to the generic arm"
     assertNotContains(printed, "get_prop_atom"); // generic arm folded to v
 });
 
-test("sink-shaped: EJS_NO_SHAPED_SINK leaves the allocation alone", () => {
-    process.env["EJS_NO_SHAPED_SINK"] = "1";
-    try {
+test("sink-shaped: -fno-shaped-sink leaves the allocation alone", () => {
+    withPassConfig({ shapedSink: false }, () => {
         const { printed, stats } = lowerShapedSink(
             "function f(a, b) { var o = { x: 1, y: a, s: b }; return o.x + o.y; }"
         );
         assert(stats.shape_allocs_sunk === 0, `sunk=${stats.shape_allocs_sunk}`);
         assertContains(printed, "make_object_shaped");
-    } finally {
-        delete process.env["EJS_NO_SHAPED_SINK"];
-    }
+    });
 });
 
 // --- flow-sensitive sinking + partial escapes (sinking-P3) ------------------
@@ -3390,15 +3367,12 @@ test("sink-args: refusals keep the allocation", () => {
     }
 });
 
-test("sink-args: EJS_NO_ARGS_SINK leaves the allocation alone", () => {
-    process.env["EJS_NO_ARGS_SINK"] = "1";
-    try {
+test("sink-args: -fno-args-sink leaves the allocation alone", () => {
+    withPassConfig({ argsSink: false }, () => {
         let { printed } = lowerAndOptimize("function f() { return arguments.length; }");
         assertContains(printed, "args_obj");
         assertNotContains(printed, "arg_len");
-    } finally {
-        delete process.env["EJS_NO_ARGS_SINK"];
-    }
+    });
 });
 
 // --- constructor-result sinking ---------------------------------
@@ -3569,15 +3543,12 @@ test("sink-ctor: a non-promoted slot declines", () => {
     assertNotContains(printFunction(user), "epoch_check");
 });
 
-test("sink-ctor: EJS_NO_CTOR_SINK leaves the construct alone", () => {
-    process.env["EJS_NO_CTOR_SINK"] = "1";
-    try {
+test("sink-ctor: -fno-ctor-sink leaves the construct alone", () => {
+    withPassConfig({ ctorSink: false }, () => {
         const { n, printed } = runCtorSink({});
         assert(n === 0, `sunk=${n}`);
         assertNotContains(printed, "epoch_check");
-    } finally {
-        delete process.env["EJS_NO_CTOR_SINK"];
-    }
+    });
 });
 
 // --- cleanup (compiler-P1): const folding, lattice, CSE, devirt -----------------
@@ -3708,15 +3679,12 @@ test("cleanup: trivial block params prune to their single value", () => {
     assert(ret!.operands[0] === v, "return sees the value directly");
 });
 
-test("cleanup: EJS_NO_EIR_CLEANUP leaves the residue alone", () => {
-    process.env["EJS_NO_EIR_CLEANUP"] = "1";
-    try {
+test("cleanup: -fno-eir-cleanup leaves the residue alone", () => {
+    withPassConfig({ eirCleanup: false }, () => {
         const { printed, stats } = optStatsOf("function f() { return 2 * 3 + 4; }");
         assertContains(printed, " = mul ");
         assert(stats.consts_folded === 0, `consts_folded=${stats.consts_folded}`);
-    } finally {
-        delete process.env["EJS_NO_EIR_CLEANUP"];
-    }
+    });
 });
 
 // --- module-slot load CSE -------------------------------------------------------
@@ -3896,16 +3864,13 @@ test("devirt: an env-using callee declines the cross-function slot site", () => 
     assert(ssaCall.imms.direct === "helper" && !slotCall.imms.direct, "only the ssa site");
 });
 
-test("devirt: EJS_NO_DEVIRT leaves every site generic", () => {
-    process.env["EJS_NO_DEVIRT"] = "1";
-    try {
+test("devirt: -fno-devirt leaves every site generic", () => {
+    withPassConfig({ devirt: false }, () => {
         const { mod, ssaCall } = buildDevirtModule({});
         const stats = devirtualizeModule(mod, "toplevel");
         assert(stats.ssa_sites === 0 && stats.slot_sites === 0, "disabled");
         assert(!ssaCall.imms.direct, "call stays generic");
-    } finally {
-        delete process.env["EJS_NO_DEVIRT"];
-    }
+    });
 });
 
 // --------------------------------------------------------------------------------

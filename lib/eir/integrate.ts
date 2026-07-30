@@ -39,6 +39,7 @@ import { printModule } from "./printer";
 import type * as e from "../estree";
 import type { ModuleInfo } from "../module-info";
 import type { CompilerOptions } from "../options";
+import { passes } from "../pass-config";
 
 // one export's accessor pair, by EIR function name (compiler.ts resolves
 // them against the emitted module in emitModuleResolution)
@@ -456,20 +457,20 @@ export function collectEIRToplevel(
         // the module in place)
         if (dumpRequested(options)) dumpModule(filename, "toplevel-as-EIR", eir_module);
 
-        // testing: EJS_EIR_LOWTIER=1 swaps the bodies of the lowtier_*
+        // testing: -flowtier swaps the bodies of the lowtier_*
         // probe functions (test/eir-lowtier1.js) for hand-built low-tier
         // EIR, so the low-tier ops can be executed end to end before
-        // lowering emits them.  Same mold as EJS_NO_EIR_OPT.
-        if (process.env["EJS_EIR_LOWTIER"]) {
+        // lowering emits them.  Same mold as -fno-eir-opt.
+        if (passes().lowtier) {
             const n = injectLowTierProbes(eir_module);
             if (n > 0) verifyModule(eir_module);
         }
 
-        // debugging/measurement: EJS_NO_EIR_OPT=1 disables the EIR
-        // optimizer without touching the LLVM pass pipeline (-O0 changes
-        // both), mirroring the EJS_NO_PROMOTE bisect hook
+        // -fno-eir-opt disables the EIR optimizer without touching the
+        // LLVM pass pipeline (-O0 changes both; -fllvm-opt decouples the
+        // LLVM side)
         let spec_stats: SpecStats | null = null;
-        if (options.opt_level > 0 && !process.env["EJS_NO_EIR_OPT"]) {
+        if (passes().eirOpt) {
             const stats = optimizeModule(eir_module, info.name);
             if (
                 stats.allocs_sunk ||
@@ -527,8 +528,8 @@ export function collectEIRToplevel(
             // (never on flag-off compiles).  A second optimizer pass then
             // cleans the clones (entry boxes prove numbers; residual
             // guards fold; loop joins go raw; dead closures/loads drop).
-            // EJS_NO_EIR_SPEC=1 bisects specialization alone.
-            if (oracle && !process.env["EJS_NO_EIR_SPEC"]) {
+            // -fno-eir-spec bisects specialization alone.
+            if (oracle && passes().eirSpec) {
                 spec_stats = { specialized: 0, sites: 0, rejected: 0, wrapped: 0, fenced: 0 };
                 const changed = specializeModule(
                     eir_module,
@@ -574,7 +575,7 @@ export function collectEIRToplevel(
             // (docs/sinking-plan.md).  Runs after specialization — the
             // hot construct sites live inside the clones — and re-runs
             // the optimizer so the shaped-literal sink drains the
-            // planted virtual allocations.  EJS_NO_CTOR_SINK bisects
+            // planted virtual allocations.  -fno-ctor-sink bisects
             // (checked inside the pass).
             if (oracle) {
                 const promoted = new Set<number>();
@@ -599,7 +600,7 @@ export function collectEIRToplevel(
             // devirtualized site no longer uses its closure/slot-load as
             // a plain-call callee, which would make specialize.ts's
             // closed-world enumeration decline the strictly-better
-            // call_typed rewrite.  EJS_NO_DEVIRT bisects (checked inside
+            // call_typed rewrite.  -fno-devirt bisects (checked inside
             // the pass).
             {
                 const dstats = devirtualizeModule(eir_module, info.name);

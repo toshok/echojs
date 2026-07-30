@@ -23,6 +23,13 @@ import {
     LLVM_BINDIR as DEFAULT_LLVM_BINDIR,
     RUNLOOP_IMPL as DEFAULT_RUNLOOP_IMPL,
 } from "./lib/host-config";
+import {
+    formatEffectiveConfig,
+    formatPassHelp,
+    passes,
+    resolvePassConfig,
+    setPassConfig,
+} from "./lib/pass-config";
 
 const spawn = child_process.spawn;
 
@@ -185,19 +192,19 @@ interface ArgSpec {
 const args: Record<string, ArgSpec | undefined> = {
     "-O0": {
         handler: () => (options.opt_level = 0),
-        help: "Optimization level 0.",
+        help: "straight lowering: no EIR optimizer, LLVM O0.",
     },
     "-O1": {
         handler: () => (options.opt_level = 1),
-        help: "Optimization level 1. Similar to clang -O1",
+        help: "the cheap always-sound EIR tier (cleanup, CSE, sinking), LLVM O1.",
     },
     "-O2": {
         handler: () => (options.opt_level = 2),
-        help: "Optimization level 2. Similar to clang -O2 (default)",
+        help: "the full EIR pipeline (adds the module-level tier), LLVM O2 (default).",
     },
     "-O3": {
         handler: () => (options.opt_level = 3),
-        help: "Optimization level 3. Similar to clang -O3",
+        help: "same EIR suite as -O2, LLVM O3.",
     },
     "-g": {
         flag: "debug",
@@ -290,7 +297,18 @@ const args: Record<string, ArgSpec | undefined> = {
         flag: "srcdir",
         help: "internal flag.  if set, will look for libecho/libpcre/etc from source directory locations.",
     },
+    "--print-passes": {
+        handler: () => (print_passes = true),
+        handlerArgc: 0,
+        help: "print the effective pass configuration (after the -O suite and any -f flags) and exit.",
+    },
 };
+
+// -f<pass>/-fno-<pass> tokens, in command-line order (applied after the
+// -O suite by resolvePassConfig; EJS_FLAGS tokens land at the end, so
+// the env escape wins for bisecting)
+const pass_flag_tokens: string[] = [];
+let print_passes = false;
 
 function output_usage() {
     console.warn("Usage:");
@@ -308,6 +326,12 @@ let file_args: string[] | undefined;
 
 if (argv.length > 0) {
     for (let ai = 0, ae = argv.length; ai < ae; ai++) {
+        // pass flags are prefix-matched (every other option is an exact
+        // table key; none start with -f)
+        if (argv[ai]!.indexOf("-f") === 0) {
+            pass_flag_tokens.push(argv[ai]!);
+            continue;
+        }
         const o = args[argv[ai]!];
         if (o) {
             const opts = options as unknown as Record<string, string | boolean>;
@@ -328,10 +352,41 @@ if (argv.length > 0) {
     }
 }
 
+// EJS_FLAGS: extra pass-configuration argv from the environment, for
+// bisecting inside harnesses that don't thread driver flags.  Applied
+// after the real command line (so it wins), and restricted to -O/-f
+// tokens — it configures the optimizer, nothing else.
+for (const token of (process.env["EJS_FLAGS"] || "").split(/\s+/)) {
+    if (token.length === 0) continue;
+    const o = args[token];
+    if (token.indexOf("-f") === 0) {
+        pass_flag_tokens.push(token);
+    } else if (o && token.indexOf("-O") === 0) {
+        o.handler!();
+    } else {
+        console.warn(`EJS_FLAGS supports only -O<n> and -f<pass> flags, got '${token}'`);
+        process.exit(-1);
+    }
+}
+
+const resolved_passes = resolvePassConfig(options.opt_level, pass_flag_tokens);
+if (resolved_passes.errors.length > 0) {
+    for (const err of resolved_passes.errors) console.warn(err);
+    process.exit(-1);
+}
+setPassConfig(resolved_passes.config);
+
 if (options.show_help) {
     output_usage();
     console.warn("");
     output_options();
+    console.warn("");
+    console.warn(formatPassHelp());
+    process.exit(0);
+}
+
+if (print_passes) {
+    console.log(formatEffectiveConfig(resolved_passes, options.opt_level));
     process.exit(0);
 }
 
@@ -573,7 +628,9 @@ function compileFile(
 
     temp_files.push(bc_filename, bc_opt_filename, o_filename);
 
-    let opt_level = options.opt_level > 0 ? `default<O${options.opt_level}>,` : "";
+    // the LLVM pipeline follows the -O level unless -fllvm-opt decouples it
+    const llvm_opt = passes().llvmOpt ?? options.opt_level;
+    let opt_level = llvm_opt > 0 ? `default<O${llvm_opt}>,` : "";
 
     // bitcode end to end: the module serializes straight to .bc (no
     // llvm-as spawn, no textual round trip), opt reads and emits bitcode

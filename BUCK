@@ -97,7 +97,7 @@ genrule(
 )
 
 # the Phase 2 low-tier end-to-end probe: stage0-compile test/eir-lowtier1.js
-# with EJS_EIR_LOWTIER=1 (hand-built low-tier bodies) and check output +
+# with -flowtier (hand-built low-tier bodies) and check output +
 # emitted IR: buck2 build //:test-eir-lowtier
 genrule(
     name = "test-eir-lowtier",

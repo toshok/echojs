@@ -23,6 +23,7 @@ import { eir_intrinsics } from "./intrinsics";
 import type * as e from "../estree";
 import type { ModuleInfo } from "../module-info";
 import type { TypeOracle } from "./oracle";
+import { passes } from "../pass-config";
 
 // --- module-scope interop types (integrate.ts imports these) -----------------
 
@@ -599,7 +600,7 @@ class LowerFunction {
                     // single-cell embedded allocation applies to flag-off
                     // literals exactly as to typed ones.
                     if (
-                        !process.env["EJS_NO_BORN_SHAPED"] &&
+                        passes().bornShaped &&
                         keys.length >= 1 &&
                         keys.length <= EJS_SHAPE_FIELD_CAP_MAX &&
                         new Set(keys).size === keys.length &&
@@ -941,8 +942,8 @@ class LowerFunction {
     // counted decline and today's generic op.  Guarded consumption is
     // correct even when the oracle is wrong: the has_shape compare decides
     // at runtime, and a failed guard costs speed, never behavior.
-    // EJS_NO_SHAPE_GUARDS=1 is the compile-time bisect hook (the
-    // EJS_NO_EIR_OPT mold); runtime EJS_SHAPES=off makes every guard fail.
+    // -fno-shape-guards is the compile-time bisect hook (the
+    // -fno-eir-opt mold); runtime EJS_SHAPES=off makes every guard fail.
 
     shapeDecline(reason: string): null {
         const stats = this.mod_ctx.typed_stats;
@@ -967,14 +968,14 @@ class LowerFunction {
     // Every shape in a multi-shape answer must carry the field: a shape
     // that lacks it would need the fast arm to run proto-lookup semantics,
     // which only the generic path performs (criterion 2 — no near-misses).
-    // EJS_NO_POLY_SHAPE_GUARDS=1 bisects polymorphic chains: 2-shape sites
+    // -fno-poly-shape-guards bisects polymorphic chains: 2-shape sites
     // decline "polymorphic" exactly as they did before the extension.
     shapeFactFor(
         objNode: e.Expression | null,
         atom: string
     ): { key: string; slot: number; repr: "boxed" | "f64" }[] | null {
         if (!objNode || !this.oracle || !this.oracle.receiverShapeOfNode) return null;
-        if (process.env["EJS_NO_SHAPE_GUARDS"]) return null;
+        if (!passes().shapeGuards) return null;
         const stats = this.mod_ctx.typed_stats;
         if (stats) stats.shape_sites = (stats.shape_sites ?? 0) + 1;
         const q = this.oracle.receiverShapeOfNode(objNode);
@@ -982,7 +983,7 @@ class LowerFunction {
             this.shapeDumpSite(objNode, atom, `declined ${q.declined}`);
             return this.shapeDecline(q.declined);
         }
-        if (q.shapes.length > 1 && process.env["EJS_NO_POLY_SHAPE_GUARDS"]) {
+        if (q.shapes.length > 1 && !passes().polyShapeGuards) {
             this.shapeDumpSite(objNode, atom, "declined polymorphic");
             return this.shapeDecline("polymorphic");
         }
@@ -1158,7 +1159,7 @@ class LowerFunction {
     // fail the one-compare guard and run the original sequential stores.
     // The runtime call re-checks everything again (incl. proto-chain
     // accessor interception) and falls back to sequential [[Set]]s, so a
-    // wrong guard can cost speed, never behavior.  EJS_NO_BORN_SHAPED is
+    // wrong guard can cost speed, never behavior.  -fno-born-shaped is
     // the bisect hook.  Returns how many leading statements were consumed.
 
     fenceDecline(reason: string): void {
@@ -1170,7 +1171,7 @@ class LowerFunction {
     }
 
     lowerBornShapedCtorPrefix(body: e.BlockStatement): number {
-        if (!this.oracle || process.env["EJS_NO_BORN_SHAPED"]) return 0;
+        if (!this.oracle || !passes().bornShaped) return 0;
         if (this.isToplevel || this.spec) return 0;
         if (this.info.node.type === "ArrowFunctionExpression") return 0;
 

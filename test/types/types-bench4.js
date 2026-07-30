@@ -3,7 +3,7 @@
 // flow-sensitive sinking the object scalar-replaces into loop-carried
 // values (allocation-free, memory-op-free); without it every iteration
 // pays the read/write diamonds against a real heap object.  A/B:
-// EJS_NO_FLOW_SINK=1 at compile time.
+// -fno-flow-sink at compile time.
 function accum(n) {
     var o = { sum: 0, weighted: 0, count: 0 };
     var i = 0;
