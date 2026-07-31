@@ -770,7 +770,7 @@ export class EIREmitter {
                     ir.createStore(this.val(inst.operands[1]), dref);
                 } else {
                     ir.createStore(this.val(inst.operands[1]), ref);
-                    // the barrier owner is the wrapper OBJECT (gc-P5):
+                    // the barrier owner is the wrapper OBJECT:
                     // its Scan walks the slot values directly, and
                     // embedded storage is not a cell of its own
                     this.emitStoreBarrier(objval, this.val(inst.operands[1]));

@@ -32,7 +32,7 @@ typedef struct {
     EJSFunctionKind function_kind;
     EJSConstructorKind constructor_kind;
 
-    // birth-capacity hint (gc-P5): how many fields this function's
+    // birth-capacity hint: how many fields this function's
     // constructor installed on its first `this` — subsequent base
     // constructs allocate `this` with that many embedded slots so the
     // result is a single cell.  0 = unknown/none.  Occupies the

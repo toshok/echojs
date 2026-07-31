@@ -318,7 +318,7 @@ paranoid_report_referrers(GCObjectPtr p)
     // the sweep loop's own cell cursor, evacuation temporaries — written
     // AFTER the conservative pin scan ran, so a hit there is the checker
     // reading its own machinery, not a missed mutator reference.  (The
-    // P6.3 file split's codegen shift surfaced exactly that self-hit.)
+    // collector file split's codegen shift surfaced exactly that self-hit.)
     referrer_ctx = "stack";
     referrer_owner = NULL;
     void* volatile probe;

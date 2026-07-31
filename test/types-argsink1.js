@@ -1,4 +1,4 @@
-// sinking-P3 probe: rest_args/args_obj length sinking
+// rest_args/args_obj length-sinking probe
 // (docs/sinking-plan.md).  Every line must match node exactly, with and
 // without --types and under -fno-args-sink.
 

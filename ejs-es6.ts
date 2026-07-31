@@ -251,7 +251,7 @@ const args: Record<string, ArgSpec | undefined> = {
     },
     "--parser": {
         option: "parser",
-        help: "which parser to use: acorn (default) or esprima (the pre-language-P2 fork, for bisection)",
+        help: "which parser to use: acorn (default) or esprima (the old fork, for bisection)",
     },
     "--help": {
         flag: "show_help",

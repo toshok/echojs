@@ -6,8 +6,8 @@
 #   "@llvm"        -> "llvm"          (resolved via NODE_PATH to node-llvm)
 #   "@node-compat/"-> ""              (use node's own os/path/fs/...)
 #
-# The module conversion is tsc in --allowJs transpile mode (compiler-P2;
-# this step was babel until then).  typescript comes from the repo's
+# The module conversion is tsc in --allowJs transpile mode (this step
+# was babel previously).  typescript comes from the repo's
 # node_modules, which buck2 doesn't track as an input (same treatment as
 # in buck-gen-tsjs.sh).  The repo root is recovered from $TMP, which
 # buck2 always places under <repo>/buck-out/.

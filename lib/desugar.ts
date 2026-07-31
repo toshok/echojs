@@ -29,7 +29,7 @@ type PassConstructor = new (
 // EIR has no native lowering for arrive there as %-intrinsic calls, which
 // lower through lib/eir/intrinsics.ts.
 //
-// DesugarModernOps and DesugarAsyncFunctions (language-P3) run before the
+// DesugarModernOps and DesugarAsyncFunctions run before the
 // ES6 tier; then DesugarClasses, DesugarDestructuring,
 // DesugarGeneratorFunctions, DesugarSpread: super(...args) desugars into
 // %constructSuper(ref, ...args) first, patterns unfold into

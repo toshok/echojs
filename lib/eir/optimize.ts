@@ -65,7 +65,7 @@ export interface OptStats {
     // object at their single escape site
     flow_allocs_sunk: number;
     allocs_materialized: number;
-    // cleanup passes (cleanup.ts, compiler-P1)
+    // cleanup passes (cleanup.ts)
     consts_folded: number;
     branches_folded: number;
     params_pruned: number;
@@ -500,7 +500,7 @@ function sinkShapedAlloc(
 }
 
 // the bisect-flag snapshot for one optimizeFunction run, from the
-// pass-config registry (compiler-P5; this struct is what generalized
+// pass-config registry (this struct is what generalized
 // into it).  The old process.env reads lived here — under the
 // self-hosted runtime env access is a rebuild-the-whole-environment
 // getter, which is why flags are snapshotted per function, never read
@@ -1024,7 +1024,7 @@ export function optimizeFunction(
     // module-slot load CSE runs BEFORE the region passes: a toplevel
     // receiver reloaded per access is a distinct SSA value per region,
     // and receiver identity is exactly what lets adjacent shape regions
-    // merge (the shapes-P3 note).
+    // merge (the toplevel-receiver note in cleanup.ts).
     if (!flags.noCse && cseModuleSlotLoads(fn, stableSlots, s)) eliminateDead(fn, s);
     // guard-region passes over the --types diamonds.  They run
     // after the general fixpoint (env scalarization has exposed the SSA
@@ -1054,7 +1054,7 @@ export function optimizeFunction(
     // or rewriting const unboxes earlier would refuse valid merges.
     if (foldUnboxOfBox(fn, s)) eliminateDead(fn, s);
     if (threadBooleanJoins(fn, s)) eliminateDead(fn, s);
-    // the compiler-P1 cleanup passes (cleanup.ts): constant folding,
+    // the cleanup passes (cleanup.ts): constant folding,
     // trivial params, to_boolean/typeof elimination, lattice-typed f64
     // lowering.  They run LAST for the same reason foldUnboxOfBox does:
     // folding arithmetic earlier would perturb the exact IR shapes the

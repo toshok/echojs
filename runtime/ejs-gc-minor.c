@@ -130,8 +130,8 @@ minor_fixup_evacuated(GCObjectPtr from, GCObjectPtr to, size_t cell_size)
             if (d >= (char*)from && d < (char*)from + cell_size)
                 a->args = (ejsval*)((char*)to + (d - (char*)from));
         }
-        // shaped ordinary objects with EMBEDDED slot storage (gc-P5
-        // single-cell allocation): the slots ejsval points into the
+        // shaped ordinary objects with EMBEDDED slot storage (single-cell
+        // allocation): the slots ejsval points into the
         // cell.  Shape bits are only ever set on ordinary objects, so
         // the header test suffices; dictionary mode (shape 0) keeps
         // the map pointer in the union and must not be touched.

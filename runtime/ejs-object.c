@@ -593,7 +593,7 @@ shaped_slots (EJSObject* obj)
 }
 
 // is the slot storage embedded in the object's own cell (single-cell
-// born-with-shape allocation, gc-P5)?  Pointer identity is the mode
+// born-with-shape allocation)?  Pointer identity is the mode
 // test — no header bit to keep coherent through evacuation's memcpy.
 static EJSBool
 shaped_slots_are_embedded (EJSObject* obj)
@@ -608,8 +608,8 @@ shaped_slots_are_embedded (EJSObject* obj)
 // live and will still visit its slots.  Queue the retiree for one
 // precise scan: the next minor rewrites its young refs (live right
 // now, via the surviving copies) to their promoted addresses, after
-// which the cell is inert until swept.  (Found by the P6.3 stress
-// lanes: the promoted env of a young rooted object, orphaned by
+// which the cell is inert until swept.  (Found by the collector-refactor
+// stress lanes: the promoted env of a young rooted object, orphaned by
 // capacity growth during _ejs_init, kept pre-promotion slot values
 // that only ACCIDENTAL conservative pins of stale stack copies had
 // been rescuing — the file split's codegen shift removed the luck.)
@@ -760,7 +760,7 @@ try_fill_shaped (ejsval objval, uint32_t argc, const ejsval* names, ejsval* valu
     return EJS_TRUE;
 }
 
-// single-cell born-with-shape allocation (gc-P5): object + embedded
+// single-cell born-with-shape allocation: object + embedded
 // slot storage in one GC cell — obj header | ops | proto | slots ejsval
 // pointing at obj+32 | embedded env header | slot values.  The embedded
 // region is a real EJSClosureEnv layout, so every slots consumer
@@ -1666,7 +1666,7 @@ _ejs_copy_data_properties (ejsval target, ejsval source, ejsval excluded)
     return target;
 }
 
-// class field definition (language-P3): CreateDataPropertyOrThrow with
+// class field definition: CreateDataPropertyOrThrow with
 // the standard field attributes.  a plain Put would fight non-writable
 // inherited props (`name`/`length` for static fields on the class
 // function) and setters on the prototype.
@@ -3074,7 +3074,7 @@ _ejs_object_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     if (obj_shape != EJS_SHAPE_DICT) {
         if (!EJSVAL_IS_NULL(obj->slots)) {
             EJSClosureEnv* env = shaped_env(obj);
-            // the shape's trace bitmap (gc-P5): f64-repr slots hold raw
+            // the shape's trace bitmap: f64-repr slots hold raw
             // doubles — never references — so the walk skips them.
             // Slots past field_count (hint slack) are undefined, whose
             // mask bits are 0, so they scan as the no-ops they are.

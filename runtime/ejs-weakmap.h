@@ -24,7 +24,7 @@ void _ejs_weakmap_init(ejsval global);
 
 ejsval _ejs_weakmap_new ();
 
-// class private-name storage (language-P3: #fields, #methods).  each
+// class private-name storage (#fields, #methods).  each
 // private name desugars to a weakmap in the class's scope; these are the
 // checked accessors the compiler emits.  `name` is a string like "#x",
 // used only for error messages.

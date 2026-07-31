@@ -2,7 +2,7 @@
  * vim: set ts=4 sw=4 et tw=99 ft=typescript:
  */
 //
-// async functions on the generator coroutines (language-P3):
+// async functions on the generator coroutines:
 //
 //   async function f(a) { let v = await p; return v + a; }
 //

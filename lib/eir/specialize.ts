@@ -40,7 +40,7 @@
 // loads and accessor functions), so only promoted slots — invisible
 // outside the module — qualify.
 //
-// --- the escape taint and the export-boundary wrapper (runtime-P2) ---
+// --- the escape taint and the export-boundary wrapper ---
 //
 // The analysis maam runs covers THIS module's executions only.  Any
 // closure that escapes (canonically: stored in a non-promoted export

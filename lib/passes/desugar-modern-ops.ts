@@ -2,7 +2,7 @@
  * vim: set ts=4 sw=4 et tw=99 ft=typescript:
  */
 //
-// desugars the post-ES6 operator forms into plain ES6 (language-P3):
+// desugars the post-ES6 operator forms into plain ES6:
 //
 //   optional chains:
 //     a?.b.c        =>  (() => { let %t = a; if (%t == null) return; return %t.b.c; })()

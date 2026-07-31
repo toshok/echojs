@@ -2,7 +2,7 @@
  * vim: set ts=4 sw=4 et tw=99 ft=typescript:
  */
 
-// compiler-P1 "optimizer residue": the classic SSA cleanups and the
+// The "optimizer residue": the classic SSA cleanups and the
 // type lattice.
 //
 //   (a) a trust-free TYPE LATTICE over the boxed `any` values —
@@ -34,8 +34,7 @@
 //       guard-region soundness inventory's argument), so it lowers to
 //       unbox/f64_*/box with no guard at all.  lt/gt lower to f64_lt
 //       when their only consumer is a same-block to_boolean + cond_br.
-//   (f) MODULE-SLOT LOAD CSE (the toplevel-receiver reload noted at
-//       shapes-P3):
+//   (f) MODULE-SLOT LOAD CSE (the toplevel-receiver reload):
 //         - block-local availability, killed at CALL-effect
 //           instructions (arbitrary JS may re-enter this module's
 //           stores) unless the slot is single-store (below), with

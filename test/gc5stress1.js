@@ -1,4 +1,4 @@
-// gc-P5 embedded-slot stress: single-cell born-with-shape objects,
+// embedded-slot stress: single-cell born-with-shape objects,
 // growth past embedded capacity, ctor birth-capacity hints, dictionary
 // migration out of embedded storage, f64 slots + repr flips, and
 // old->young barrier traffic with the object as owner.  Run under

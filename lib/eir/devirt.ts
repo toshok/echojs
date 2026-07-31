@@ -2,7 +2,7 @@
  * vim: set ts=4 sw=4 et tw=99 ft=typescript:
  */
 
-// direct-call devirtualization beyond the self binding (compiler-P1).
+// direct-call devirtualization beyond the self binding.
 // Lowering only marks direct calls for self-recursion; module
 // functions call each other through their %self slots, and function
 // expressions through their SSA closure values.  When the CALLEE

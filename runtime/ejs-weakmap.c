@@ -319,7 +319,7 @@ _ejs_weakmap_init(ejsval global)
 }
 
 
-// ---- class private-name storage (language-P3) -------------------------
+// ---- class private-name storage ---------------------------------------
 //
 // each #name desugars to a compiler-created weakmap; obj's entry existing
 // IS the "object has this private member / brand" fact.  all of these

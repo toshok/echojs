@@ -1,6 +1,6 @@
 // generator: esm
 
-// "sending" from kangax (was xfail until language-P2: the acorn parse
+// "sending" from kangax (xfailed under the esprima fork; the acorn parse
 // of the array literal around the yields lowers correctly)
 
 var sent;

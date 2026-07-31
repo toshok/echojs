@@ -3,7 +3,7 @@
  */
 
 // full collections: mark orchestration, the sweep, the mostly-copying
-// major compaction (gc-P4), and the post-cycle epoch advance.
+// major compaction, and the post-cycle epoch advance.
 
 #include "ejs-gc-internal.h"
 
@@ -82,7 +82,7 @@ sweep_heap()
     SPEW(2, { _ejs_log ("\n"); });
 }
 
-// ============== mostly-copying major compaction (gc-P4) ===================
+// ============== mostly-copying major compaction ===========================
 //
 // Mark-sweep never shrinks: live old-gen cells sit wherever history put
 // them and sparse pages hold whole pages hostage for a cell or two.

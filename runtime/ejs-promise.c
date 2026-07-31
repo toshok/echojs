@@ -636,7 +636,7 @@ static EJS_NATIVE_FUNC(_ejs_Promise_get_species) {
 // the spec's remainingElementsCount is a record SHARED by all the element
 // functions: here it is a 1-element array every env points at (the old
 // per-env numeric snapshot could never reach 0 — Promise.all had been a
-// stub since 2015; language-P3 flushed it out via async/await)
+// stub since 2015; async/await flushed it out)
 static EJS_NATIVE_FUNC(resolve_element) {
     ejsval x = argc > 0 ? args[0] : _ejs_undefined;
 

@@ -93,7 +93,7 @@ interface AccessorEntry {
     computed: boolean;
 }
 
-// one #name in a class's private scope (language-P3).  fields store per
+// one #name in a class's private scope.  fields store per
 // object in a compiler-created weakmap; methods/accessors are shared
 // closures guarded by the class's brand weakmap.
 interface PrivInfo {
@@ -132,7 +132,7 @@ export class DesugarClasses extends TransformPass {
     // lexically-nested private scopes; resolution walks from the innermost
     private private_scopes: Map<string, PrivInfo>[] = [];
 
-    // ---- private member rewriting (language-P3) --------------------------
+    // ---- private member rewriting ----------------------------------------
 
     private resolvePrivate(name: string, loc: e.SourceLocation | null | undefined): PrivInfo {
         for (let i = this.private_scopes.length - 1; i >= 0; i--) {
@@ -328,7 +328,7 @@ export class DesugarClasses extends TransformPass {
             // super.foo(...) / super[k](...): the target is looked up on
             // %super(.prototype) under the CALLEE's key — building it from
             // the enclosing method's key dispatched super.foo() in bar()
-            // to A.bar (pre-P8.3 miscompile) — and runs with this's this
+            // to A.bar (a long-standing miscompile) — and runs with this's this
             const method = this.method_stack.top;
             const callee = n.callee;
             if (callee.computed) callee.property = this.visitAs(callee.property as e.Expression);
@@ -382,7 +382,7 @@ export class DesugarClasses extends TransformPass {
     }
 
     private generateClassIIFE(n: NamedClass): e.FunctionExpression {
-        // ---- partition the class body (language-P3) ----------------------
+        // ---- partition the class body ------------------------------------
         // public methods go through the ES6 machinery below; fields,
         // private members, and static blocks desugar separately
         const priv_method_elements: e.MethodDefinition[] = [];

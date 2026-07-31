@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// test262 subset probe (language-P1 / plans P8.1).
+// test262 subset probe.
 //
 // Host tooling, runs under node — this is not compiler input.  Compiles
 // each selected test262 test with a built ejs (srcdir layout) and runs
@@ -112,7 +112,7 @@ function assembleSource(suiteDir, testPath, meta) {
     const seen = new Set();
     let out = strict ? '"use strict";\n' : "";
     // doneprintHandle.js reports through print(), which is not an echojs
-    // global (P8.1 gotcha) — shim it so async completions are observable
+    // global — shim it so async completions are observable
     if (meta.flags.includes("async"))
         out += 'var print = typeof print === "function" ? print : function (m) { console.log(m); };\n';
     for (const h of harness) {

@@ -57,7 +57,7 @@ release_to_os(void* ptr, size_t size)
 Arena *heap_arenas[MAX_ARENAS];
 int num_arenas;
 
-// ---- the arena address-space reservation (gc-P4) ----------------
+// ---- the arena address-space reservation ------------------------
 //
 // All arenas are carved out of ONE contiguous reservation, mapped
 // PROT_NONE at init and committed ARENA_SIZE at a time.  Two payoffs,
@@ -132,9 +132,9 @@ conservative_bounds_add(void* start, size_t size)
 // against the LOS by binary search over a sorted array of payload
 // ranges.  This replaces a LOCKED LINEAR WALK of the whole LOS list —
 // per stack word — which, with blocks scattered by mmap, could put
-// hundreds of ms per pin scan on deep-recursion minors (found while
-// gating sinking-P3; the [los_lo, los_hi) bounds prefilter landed then
-// as a stopgap and remains as the quick reject).
+// hundreds of ms per pin scan on deep-recursion minors (the [los_lo,
+// los_hi) bounds prefilter landed first as a stopgap and remains as
+// the quick reject).
 static char *los_lo = (char*)UINTPTR_MAX;
 static char *los_hi = NULL;
 
@@ -147,9 +147,9 @@ LargeObjectInfo *los_list;
 // against the LOS by binary search over a sorted array of payload
 // ranges.  This replaces a LOCKED LINEAR WALK of the whole LOS list —
 // per stack word — which, with blocks scattered by mmap, could put
-// hundreds of ms per pin scan on deep-recursion minors (found while
-// gating sinking-P3; the [los_lo, los_hi) bounds prefilter landed then
-// as a stopgap and remains as the quick reject).
+// hundreds of ms per pin scan on deep-recursion minors (the [los_lo,
+// los_hi) bounds prefilter landed first as a stopgap and remains as
+// the quick reject).
 typedef struct {
     char* start; // payload: page_info.page_start
     char* end;   // start + cell_size

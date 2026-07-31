@@ -95,7 +95,7 @@ export interface ModCtx {
 //     line: oracle claims become facts, backed by the differential
 //     harness and by the escape analysis that restricts trusted clones
 //     to functions whose every runtime call the analysis covered.
-//   - untrusted (the export-boundary wrapper's clone, runtime-P2): the
+//   - untrusted (the export-boundary wrapper's clone): the
 //     body keeps the ordinary guarded diamonds — the oracle is never
 //     consumed as fact, because the clone is entered from escaping
 //     entry points whose callers the analysis did NOT see (maam's
@@ -600,7 +600,7 @@ class LowerFunction {
                     // static truth, no oracle fact needed (the runtime
                     // derives true reprs from the actual values and falls
                     // back to sequential sets off the shaped fast path).
-                    // NOT --types-gated (gc-P5): without the oracle the
+                    // NOT --types-gated: without the oracle the
                     // static reprs are simply all-boxed; the runtime's
                     // birth derivation supplies the true ones, and the
                     // single-cell embedded allocation applies to flag-off

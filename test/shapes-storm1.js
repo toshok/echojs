@@ -1,4 +1,4 @@
-// shapes-plan P4.2 stress: transition churn across every shaped-mode
+// slot-storage stress: transition churn across every shaped-mode
 // boundary — adds, repr flips, deletes, attribute/accessor migration,
 // symbol and index keys, freeze/seal, enumeration order, `in` checks.
 

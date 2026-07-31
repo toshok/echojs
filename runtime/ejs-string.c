@@ -753,7 +753,7 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_indexOf) {
         needle_cstr = EJSVAL_TO_FLAT_STRING(((EJSString*)EJSVAL_TO_OBJECT(needle))->primStr);
     }
 
-    // fromIndex (was ignored until language-P2: acorn's block-comment
+    // fromIndex (was long ignored: acorn's block-comment
     // scanner loops forever without it), clamped to [0, length]
     int64_t haystack_len = EJSVAL_TO_STRLEN(haystack);
     int64_t start = 0;
@@ -793,7 +793,7 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_lastIndexOf) {
         needle_cstr = EJSVAL_TO_FLAT_STRING(((EJSString*)EJSVAL_TO_OBJECT(needle))->primStr);
     }
 
-    // fromIndex (was ignored until language-P2): the match must start
+    // fromIndex (was long ignored): the match must start
     // at an index <= fromIndex, clamped to [0, length]
     int64_t haystack_len = EJSVAL_TO_STRLEN(haystack);
     int64_t needle_len = ucs2_strlen(needle_cstr);

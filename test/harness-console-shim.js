@@ -1,4 +1,4 @@
-// harness-console-shim: the value-based test harness (runtime-P3).
+// harness-console-shim: the value-based test harness.
 //
 // Replaces console.log/warn/error with a serializer OWNED BY THIS FILE.
 // The same code runs under node (expected-output generation, via

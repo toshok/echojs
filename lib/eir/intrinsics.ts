@@ -69,7 +69,7 @@ export const eir_intrinsics: Record<string, IntrinsicEntry> = {
     "%copyDataProps": { runtime: "copy_data_properties" },
     "%objectSpreadMerge": { runtime: "object_spread_merge" },
 
-    // DesugarClasses: class fields + private members (language-P3)
+    // DesugarClasses: class fields + private members
     "%defineField": { runtime: "define_field" },
     "%makePrivateMap": { runtime: "make_private_map" },
     "%privFieldGet": { runtime: "private_field_get" },

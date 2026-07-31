@@ -3,7 +3,7 @@
  */
 
 // Flow-sensitive allocation sinking + partial-escape materialization
-// (docs/sinking-plan.md, sinking-P3).
+// (docs/sinking-plan.md).
 //
 // Extends the flow-insensitive sinks in optimize.ts to object
 // candidates WITH field writes, and to candidates with exactly one
@@ -14,7 +14,7 @@
 //     is just that value — field phis are needed only at REAL control
 //     joins (if/else arms writing different values, loop headers).
 //   - Folding a shape guard FALSE is unconditionally sound (the
-//     sinking-P1 twin argument), independent of writes.  A written
+//     shaped-literal-sinking twin argument), independent of writes.  A written
 //     candidate folds every guard false and resolves everything
 //     through the generic arms; the memory ops then vanish entirely,
 //     and the post-fixpoint rawJoin/guard-region passes recover raw

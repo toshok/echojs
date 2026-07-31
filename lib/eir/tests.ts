@@ -569,7 +569,7 @@ test("lower: class accessors lower via make_object_shaped + defineProperties", (
     let all = r.module.functions.map((fn) => printFunction(fn)).join("\n");
     // one property entry carrying BOTH accessors (the get/set pair shares
     // a descriptor literal with fields get,set + the spec-attribute
-    // configurable:true, language-P3)
+    // configurable:true)
     assertContains(all, 'shape="get:boxed,set:boxed,configurable:boxed"');
     assertContains(all, 'atom="defineProperties"');
 });
@@ -887,7 +887,7 @@ test("optimize: write-only object literal dies with its stores", () => {
     assertNotContains(printed, "set_prop_atom");
 });
 
-test("optimize: a written key's reads fold flow-sensitively (sinking-P3)", () => {
+test("optimize: a written key's reads fold flow-sensitively", () => {
     // the read after the write sees the written value; the store and
     // the allocation drain
     let { fn, printed } = lowerAndOptimize(
@@ -1815,7 +1815,7 @@ test("specialize: escaping closures are never trusted, even when the oracle lies
     // three escapes: as a return value, into an object literal, as a call
     // argument.  The (stub) oracle types everything {number} — a wrong
     // oracle must not widen what TRUSTED-specializes; the STRUCTURAL
-    // escape analysis rejects each one.  Since runtime-P2 the escapee
+    // escape analysis rejects each one.  The escapee now
     // gets the boundary wrapper instead: a guarded (trust-free) clone
     // behind entry has_tag guards — a lying oracle costs speed, never
     // behavior.
@@ -2869,7 +2869,7 @@ test("born-shaped: a static literal lowers to make_object_shaped under --types",
 
 test("born-shaped: flag-off (null oracle) mints all-boxed shapes", () => {
     // keys are static truth, so a null oracle still lowers born-shaped
-    // (gc-P5 part 2) — the reprs just stay boxed without type evidence
+    // — the reprs just stay boxed without type evidence
     const { printed } = lowerWithOracle("function f(a) { return { x: 1, y: a }; }", null);
     assertContainsOp(printed, "make_object_shaped");
     assertContains(printed, 'shape="x:boxed,y:boxed"');
@@ -3175,7 +3175,7 @@ test("sink-shaped: a call-operand use escapes", () => {
     assertContains(printed, "make_object_shaped");
 });
 
-test("sink-shaped: a written literal flow-sinks through the generic arms (sinking-P3)", () => {
+test("sink-shaped: a written literal flow-sinks through the generic arms", () => {
     // the store's diamond guards fold FALSE (twin arms; sound under
     // writes), the generic read folds to the written const, and the
     // allocation drains
@@ -3280,7 +3280,7 @@ test("sink-shaped: -fno-shaped-sink leaves the allocation alone", () => {
     });
 });
 
-// --- flow-sensitive sinking + partial escapes (sinking-P3) ------------------
+// --- flow-sensitive sinking + partial escapes -------------------------------
 
 test("sink-flow: writes across branches fold through a minted join param", () => {
     let { printed } = lowerAndOptimize(
@@ -3366,7 +3366,7 @@ test("sink-flow: shaped partial escape materializes a shaped literal", () => {
     assertNotContains(printed, "set_prop_atom");
 });
 
-// --- rest_args / args_obj length sinking (sinking-P3) -----------------------
+// --- rest_args / args_obj length sinking ------------------------------------
 
 test("sink-args: length-only arguments folds to arg_len and drains", () => {
     let { printed } = lowerAndOptimize("function f() { return arguments.length; }");
@@ -3578,7 +3578,7 @@ test("sink-ctor: -fno-ctor-sink leaves the construct alone", () => {
     });
 });
 
-// --- cleanup (compiler-P1): const folding, lattice, CSE, devirt -----------------
+// --- cleanup: const folding, lattice, CSE, devirt ---------------------------
 
 function optStatsOf(src: string): { fn: Func; printed: string; stats: OptStats } {
     let { fn } = lowerOne(src);

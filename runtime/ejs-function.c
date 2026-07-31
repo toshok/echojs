@@ -578,7 +578,7 @@ _ejs_function_specop_construct (ejsval F, ejsval newTarget, uint32_t argc, ejsva
     if (kind == CONSTRUCTOR_KIND_BASE) {
         // a. Let thisArgument be OrdinaryCreateFromConstructor(newTarget, "%ObjectPrototype%").
         // b. ReturnIfAbrupt(thisArgument).
-        // gc-P5: the birth-capacity hint pre-sizes `this` so the
+        // the birth-capacity hint pre-sizes `this` so the
         // constructor's slot fills stay in the object's own cell
         // (single-cell allocation); semantics are unchanged from
         // OrdinaryCreateFromConstructor with _ejs_Object_specops.
@@ -593,7 +593,7 @@ _ejs_function_specop_construct (ejsval F, ejsval newTarget, uint32_t argc, ejsva
     // 10. Let envRec be constructorEnv’s EnvironmentRecord.
     // 11. Let result be OrdinaryCallEvaluateBody(F, argumentsList).
     ejsval result = F_->func (F_->env, &thisArgument, argc, args, newTarget);
-    // birth-capacity feedback (gc-P5): remember how many fields the
+    // birth-capacity feedback: remember how many fields the
     // constructor installed so the NEXT base construct births `this`
     // with embedded slot storage.  One-shot 0 -> count; F_ is pinned by
     // the conservative scan (it's C-stack-visible), so the pointer is

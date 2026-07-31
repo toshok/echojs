@@ -40,7 +40,7 @@ export interface CompilerOptions {
     srcdir: boolean;
     stdout_writer: OutputWriter;
     quiet?: boolean;
-    // "acorn" (default) or "esprima" (pre-language-P2 fork, kept for
+    // "acorn" (default) or "esprima" (the old fork, kept for
     // bisection during the parser transition)
     parser: string;
 }

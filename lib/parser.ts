@@ -2,7 +2,7 @@
  * vim: set ts=4 sw=4 et tw=99 ft=typescript:
  */
 
-// The parser seam (language-P2): everything upstream of the compiler
+// The parser seam: everything upstream of the compiler
 // goes through parse() here, so the parser is swappable behind one
 // module.  The contract is the ESTree dialect in ./estree — whatever
 // parser sits behind this module must produce that shape.
@@ -14,8 +14,8 @@
 // The adapter also *gates*: syntax acorn parses but the backend does not
 // implement yet (async/await, class fields, object spread, ...) dies
 // here with a clear message instead of miscompiling silently — the
-// census's `async m() {}` hazard class.  language-P3 removes gates as
-// features land.
+// census's `async m() {}` hazard class.  Gates are removed as features
+// land.
 
 import * as acorn from "../external-deps/acorn/acorn-es6";
 import * as esprima from "../external-deps/esprima/esprima-es6";
@@ -25,7 +25,7 @@ export interface ParseOptions {
     loc?: boolean;
     raw?: boolean;
     sourceType?: "script" | "module";
-    // "acorn" (default) or "esprima" (the pre-language-P2 fork)
+    // "acorn" (default) or "esprima" (the old fork)
     parser?: string;
 }
 

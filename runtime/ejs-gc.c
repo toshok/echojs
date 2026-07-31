@@ -51,7 +51,7 @@ root_registry_shutdown(void)
     root_registry_count = root_registry_capacity = 0;
 }
 
-// gc-P4: the compacting major (EJS_GC_COMPACT=off for A/B) and THE
+// The compacting major (EJS_GC_COMPACT=off for A/B) and THE
 // full-collection growth knob — a full GC triggers when old-gen growth
 // since the last one exceeds gc_growth_pct percent of the post-sweep
 // footprint (floor: two arenas, so small programs keep a sane cadence).
@@ -235,7 +235,7 @@ _ejs_gc_init()
         compact_enabled = !(e && (strcmp(e, "off") == 0 || strcmp(e, "0") == 0));
     }
 
-    // THE growth knob (gc-P4 knob census = 1): a full collection
+    // THE growth knob (knob census = 1): a full collection
     // triggers when old-gen growth exceeds EJS_GC_GROWTH percent of the
     // post-sweep footprint
     {
