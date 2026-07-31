@@ -215,10 +215,20 @@ _ejs_array_new (int64_t numElements, EJSBool fill)
 
         rv->dense.array_alloc = numElements + 5;
         rv->dense.elements = (ejsval*)malloc(rv->dense.array_alloc * sizeof (ejsval));
-        if (fill) {
-            for (int i = 0; i < numElements; i ++)
-                rv->dense.elements[i] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
-        }
+        // ALWAYS initialize [0, numElements): array_length is published
+        // below, so the scan specop walks these slots — and a GC can run
+        // before the caller stores a single element.  Recycled malloc
+        // memory holds stale ejsvals (dead young pointers), and the
+        // mover evacuates whatever the scan reads: on glibc this was a
+        // deterministic poison-evacuation crash (fill=false callers
+        // like splice were a scan-of-garbage window on every platform,
+        // macos just kept surviving it by allocator-content luck).
+        // `fill` now only distinguishes "caller wants holes" from
+        // "caller overwrites immediately" — both get holes, the flag
+        // stays for the call sites' documentation value.
+        (void)fill;
+        for (int i = 0; i < numElements; i ++)
+            rv->dense.elements[i] = MAGIC_TO_EJSVAL_IMPL(EJS_ARRAY_HOLE);
     }
 
     rv->array_length = numElements;
