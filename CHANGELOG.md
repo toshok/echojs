@@ -14,6 +14,8 @@ packaged artifacts + a clean-machine install smoke — see
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-30
+
 ### Added
 
 - The EIR compilation pipeline: an SSA IR between the AST and LLVM,
