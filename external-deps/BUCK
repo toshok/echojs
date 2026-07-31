@@ -91,6 +91,8 @@ cxx_library(
 filegroup(
     name = "compiler-js",
     srcs = glob([
+        "acorn/acorn-es6.js",
+        "acorn/acorn-es6.d.ts",
         "esprima/esprima-es6.js",
         "esprima/esprima-es6.d.ts",
         "escodegen/escodegen-es6.js",

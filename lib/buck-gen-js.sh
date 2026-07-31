@@ -45,7 +45,8 @@ cd "$SRCDIR"
 # host-config.js is generated (staged at $SRCDIR root by the genrule)
 stage_one host-config.js "lib/host-config.js"
 
-for f in esprima/esprima-es6.js \
+for f in acorn/acorn-es6.js \
+         esprima/esprima-es6.js \
          escodegen/escodegen-es6.js \
          estraverse/estraverse-es6.js \
          esutils/esutils-es6.js \
