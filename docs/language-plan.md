@@ -15,7 +15,15 @@ safer with types underneath it.
 
 ## Phases
 
-- [ ] **language-P1 — Gap inventory.**  An initial 34-probe census
+- [x] **language-P1 — Gap inventory.**  DONE 2026-07-31 —
+      docs/language-p1-results.md (26,820-test test262 probe via
+      test/test262/run-test262.mjs: 35% pass; the parser is the
+      quantified long pole at 44% of the language area failing to
+      parse; new beyond the census: builtin property attributes wrong
+      everywhere, 589 JS-reachable runtime aborts, `super`-in-object-
+      literal lowering error, 352 early-error gaps mostly regexp
+      validation; prioritized feature list for language-P3 recorded
+      there).  The original census: an initial 34-probe census
       lives in `test/modernization/` (see its README).  Headline: 13
       parser gaps (optional chaining, `??`, class fields, async/await,
       `**`, object spread/rest, BigInt, ...), 4 stdlib gaps

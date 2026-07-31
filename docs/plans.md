@@ -141,7 +141,10 @@ runtime-plan.md, compiler-plan.md.
 
 Catch up with the language; adopt test262.  Detail: language-plan.md.
 
-- [ ] **P8.1** gap inventory + test262 subset probe (language-P1).
+- [x] **P8.1** gap inventory + test262 subset probe (language-P1).
+      DONE 2026-07-31 — docs/language-p1-results.md (26,820-test
+      probe, runner in test/test262/; 35% pass, parser confirmed as
+      the long pole, prioritized language-P3 feature list).
 - [ ] **P8.2** parser replacement behind the ESTree seam
       (language-P2; coordinates with compiler-P3 if TS input
       happens).
