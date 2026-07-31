@@ -273,7 +273,12 @@ function parseFile(filename: string, content: string, options: CompilerOptions):
         // parse at all (tolerant mode used to recover past the spurious
         // script-mode error on every import) and, per spec, makes the
         // parse strict.
-        return parser.parse(content, { loc: true, raw: true, sourceType: "module" });
+        return parser.parse(content, {
+            loc: true,
+            raw: true,
+            sourceType: "module",
+            parser: options.parser,
+        });
     } catch (err) {
         console.warn(`${filename}: ${String(err)}:`);
         return process.exit(-1);
