@@ -96,6 +96,8 @@ An ahead-of-time compiler for JavaScript.
 The directory is relocatable; keep bin/, include/ and lib/ together.
 \`./install.sh [--prefix /usr/local]\` copies it under a prefix and puts
 an \`ejs\` shim on the prefix's bin/ (\`--uninstall\` reverses it).
+
+Full quickstart: https://github.com/toshok/echojs#quickstart
 EOF
 
 tar -C "$TMP" -czf "$OUT/$NAME.tar.gz" "$NAME"

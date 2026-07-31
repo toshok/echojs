@@ -173,7 +173,11 @@ From repo to product.  Detail: release-plan.md, compiler-plan.md.
       same matrix → draft release with tarballs/formula/npm tgz →
       clean-machine container+runner smokes; npm wrapper is
       @pirouette/echojs, the bare name was taken).
-- [ ] **P9.4** getting-started surface (release-P4).
+- [x] **P9.4** getting-started surface (release-P4).  DONE 2026-07-31
+      — docs/release-p4-results.md (README rewritten around the
+      released package: npm/tarball install, verified quickstart,
+      honest language-subset status from language-plan's census, the
+      real flag/env surface; examples proven against a dist tarball).
 - [ ] **P9.5** reusable native modules + IR-in-manifest cross-module
       linking (compiler-P4).
 
