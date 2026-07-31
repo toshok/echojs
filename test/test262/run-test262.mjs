@@ -9,9 +9,14 @@
 //   node test/test262/run-test262.mjs run \
 //     --suite  <test262 checkout> \
 //     --ejs    <workroot with ./ejs + srcdir layout> \
-//     [--jobs N] [--cap-builtins 3] [--filter substr] [--out results.jsonl]
+//     [--jobs N] [--cap-builtins 3] [--stride-language 1] [--filter substr] \
+//     [--out results.jsonl] [--expectations file [--update-expectations]]
 //
 //   node test/test262/run-test262.mjs report --in results.jsonl [--md report.md]
+//
+// The CI lane (language-P4) drives this through lane.sh: a fixed
+// selection (stride/cap) against a pinned suite SHA, checked against
+// the checked-in expectations file.
 
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
@@ -70,7 +75,7 @@ export function parseFrontmatter(src) {
 }
 
 // ---------- selection ----------
-function collectTests(suiteDir, capBuiltins) {
+function collectTests(suiteDir, capBuiltins, strideLanguage = 1) {
     const tests = [];
     const walk = (dir, cb) => {
         for (const ent of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
@@ -81,11 +86,16 @@ function collectTests(suiteDir, capBuiltins) {
     };
     const isTest = (p) => p.endsWith(".js") && !p.includes("_FIXTURE");
 
-    for (const area of ["language", "harness"]) {
-        walk(path.join(suiteDir, "test", area), (p) => {
-            if (isTest(p)) tests.push(p);
-        });
-    }
+    // language: every strideLanguage-th test of the sorted walk (1 = all).
+    // The walk is depth-first sorted, so a global stride samples every
+    // directory proportionally — the lane's knob for fitting a CI budget.
+    let li = 0;
+    walk(path.join(suiteDir, "test", "language"), (p) => {
+        if (isTest(p) && li++ % strideLanguage === 0) tests.push(p);
+    });
+    walk(path.join(suiteDir, "test", "harness"), (p) => {
+        if (isTest(p)) tests.push(p);
+    });
     // built-ins: stratified — first N tests of every leaf directory, so
     // every constructor/method is probed without the full 24k volume.
     const perDir = new Map();
@@ -208,6 +218,66 @@ async function runOne(cfg, testPath) {
     }
 }
 
+// ---------- expectations ----------
+// Format: one `<status> <test path>` line per expected-failing test,
+// sorted by path; `skip <path>` means run it but ignore the outcome
+// (environment-sensitive).  `#` lines are comments.  Checking is by
+// membership — a listed test may fail any way; an unlisted one must
+// pass.
+function loadExpectations(file) {
+    const map = new Map();
+    if (!fs.existsSync(file)) return map;
+    for (const line of fs.readFileSync(file, "utf8").split("\n")) {
+        const l = line.trim();
+        if (!l || l.startsWith("#")) continue;
+        const sp = l.indexOf(" ");
+        map.set(l.slice(sp + 1), l.slice(0, sp));
+    }
+    return map;
+}
+
+function checkExpectations(rows, expected) {
+    const regressions = [], stale = [];
+    for (const r of rows) {
+        if (r.status.startsWith("skip-")) continue;
+        const exp = expected.get(r.test);
+        if (exp === "skip") continue;
+        // harness-error is never baselined (writeExpectations excludes
+        // it) — the runner itself broke, always a failure here
+        if (r.status === "harness-error") {
+            regressions.push(r);
+            continue;
+        }
+        if (r.status === "pass") {
+            if (exp) stale.push(r);
+        } else if (!exp) {
+            regressions.push(r);
+        }
+    }
+    return { regressions, stale };
+}
+
+function writeExpectations(file, rows, prior) {
+    const lines = [
+        "# test262 lane expectations — tests expected to fail (membership is",
+        "# what's checked; the recorded status is documentation).  `skip` =",
+        "# environment-sensitive, outcome ignored.  Regenerate:",
+        "#   test/test262/lane.sh --suite <checkout> --update",
+        "",
+    ];
+    const entries = [];
+    for (const [t, s] of prior) if (s === "skip") entries.push([t, "skip"]);
+    const skips = new Set(entries.map(([t]) => t));
+    for (const r of rows) {
+        if (r.status === "pass" || r.status.startsWith("skip-") || r.status === "harness-error") continue;
+        if (!skips.has(r.test)) entries.push([r.test, r.status]);
+    }
+    entries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+    for (const [t, s] of entries) lines.push(`${s} ${t}`);
+    fs.writeFileSync(file, lines.join("\n") + "\n");
+    return entries.length;
+}
+
 // ---------- driver ----------
 function parseArgs(argv) {
     const opts = {};
@@ -231,7 +301,11 @@ async function cmdRun(opts) {
         tmpRoot: fs.mkdtempSync(path.join(os.tmpdir(), "test262-probe-")),
     };
     if (!fs.existsSync(path.join(cfg.ejsRoot, "ejs"))) throw new Error(`no ./ejs in ${cfg.ejsRoot}`);
-    let tests = collectTests(cfg.suite, parseInt(opts["cap-builtins"] || "3", 10));
+    let tests = collectTests(
+        cfg.suite,
+        parseInt(opts["cap-builtins"] || "3", 10),
+        parseInt(opts["stride-language"] || "1", 10)
+    );
     if (opts.filter) tests = tests.filter((t) => t.includes(opts.filter));
     const outPath = opts.out || "results.jsonl";
     const out = fs.createWriteStream(outPath);
@@ -241,12 +315,14 @@ async function cmdRun(opts) {
         done = 0;
     const t0 = Date.now();
     const counts = {};
+    const rows = [];
     await Promise.all(
         Array.from({ length: cfg.jobs }, async () => {
             while (next < tests.length) {
                 const t = tests[next++];
                 const res = await runOne(cfg, t);
                 counts[res.status] = (counts[res.status] || 0) + 1;
+                rows.push(res);
                 out.write(JSON.stringify(res) + "\n");
                 if (++done % 250 === 0) {
                     const rate = done / ((Date.now() - t0) / 1000);
@@ -260,6 +336,25 @@ async function cmdRun(opts) {
     out.end();
     fs.rmSync(cfg.tmpRoot, { recursive: true, force: true });
     console.log("done:", JSON.stringify(counts, null, 1));
+
+    if (!opts.expectations) return;
+    const expected = loadExpectations(opts.expectations);
+    if (opts["update-expectations"]) {
+        const n = writeExpectations(opts.expectations, rows, expected);
+        console.log(`wrote ${opts.expectations}: ${n} expected failures`);
+        return;
+    }
+    const { regressions, stale } = checkExpectations(rows, expected);
+    for (const r of regressions) console.log(`REGRESSION ${r.status} ${r.test}${r.err ? ` — ${r.err}` : ""}`);
+    for (const r of stale) console.log(`STALE (now passes) ${r.test}`);
+    if (stale.length)
+        console.log(`${stale.length} expected failure(s) now pass — regenerate with --update-expectations`);
+    if (regressions.length || stale.length) {
+        console.log(`expectations check FAILED: ${regressions.length} regression(s), ${stale.length} stale`);
+        process.exitCode = 1;
+    } else {
+        console.log(`expectations check OK (${expected.size} expected failures)`);
+    }
 }
 
 function cmdReport(opts) {

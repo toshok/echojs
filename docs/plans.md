@@ -160,7 +160,10 @@ Catch up with the language; adopt test262.  Detail: language-plan.md.
       super.other() mis-dispatch and Promise.all-never-resolves; still
       gated: async generators, BigInt, dynamic import; matrix 438/20/0
       ×5 lanes).
-- [ ] **P8.4** test262 CI lane (language-P4).
+- [x] **P8.4** test262 CI lane (language-P4).  DONE 2026-07-31 —
+      docs/language-p4-results.md (`test/test262/lane.sh`: curated
+      selection vs pinned suite SHA, checked-in expectations file as a
+      conformance ratchet; runs in the macOS bootstrap job).
 - [ ] **P8.5** un-fork the JS external-deps (language-P5).
 
 ## P9 — Distribution

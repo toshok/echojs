@@ -1,12 +1,38 @@
-# test262 subset probe (language-P1 / plans P8.1)
+# test262: probe + CI lane
 
 Host tooling that runs a curated slice of [tc39/test262] against a
-built `ejs`, classifying every outcome — the exhaustiveness check the
-34-probe census in `test/modernization/` can't provide, and the source
-of the prioritized feature list for language-P3.  The full CI lane is
-language-P4; this probe is deliberately lighter.
+built `ejs`, classifying every outcome.  Two uses:
 
-## Running it
+- **Probe** (language-P1): the full curated selection, reported by
+  feature/area — the exhaustiveness check behind the language-P3
+  payoff list.
+- **CI lane** (language-P4): `lane.sh` — a smaller fixed selection
+  against the pinned suite SHA (`suite.sha`), checked against
+  `expectations.txt`.  CI (the macOS bootstrap job) fails on any
+  regression (expected-pass test failing) or stale expectation
+  (expected-fail test passing).
+
+## The CI lane
+
+```sh
+git clone https://github.com/tc39/test262.git /tmp/test262
+git -C /tmp/test262 checkout "$(cat test/test262/suite.sha)"
+./test/test262/lane.sh --suite /tmp/test262           # check
+./test/test262/lane.sh --suite /tmp/test262 --update  # regenerate expectations
+```
+
+Without `--ejs` the script assembles a workroot from buck2 outputs
+(stage1).  The lane selection is every 6th `test/language/**` test
+(proportional across directories), 2 per `built-ins` leaf directory,
+and all of `harness/` — sized for a CI runner; shrink the stride
+toward 1 as features land.  `expectations.txt` is checked by
+membership (a listed test may fail any way; an unlisted one must
+pass); `skip` entries mark environment-sensitive tests whose outcome
+is ignored.  After feature work, rerun with `--update` and commit the
+diff — the shrinking file is the conformance ratchet.  Bumping
+`suite.sha` requires an `--update` run in the same commit.
+
+## Running the probe
 
 The runner needs (a) a test262 checkout and (b) a workroot: the
 `//:srcdir-tree` layout with `//lib:generated` at `lib/generated/` and

@@ -63,9 +63,17 @@ safer with types underneath it.
       Still gated with located errors: async generator functions,
       BigInt (value-representation decision pending, likely heap-boxed),
       dynamic `import()`/`import.meta` (AOT module-story design).
-- [ ] **language-P4 — test262 lane.**  Stand up a curated test262
-      subset as a CI lane (the kangax harness stays until parity);
-      grow toward the full suite as features land.
+- [x] **language-P4 — test262 lane.**  DONE 2026-07-31 —
+      docs/language-p4-results.md.  `test/test262/lane.sh` runs the
+      curated selection (every 6th language test, 2 per built-ins leaf
+      dir, all of harness) against the suite SHA pinned in
+      `test/test262/suite.sha`, checked against
+      `test/test262/expectations.txt` — CI fails on regressions
+      (expected-pass failing) and stale expectations (expected-fail
+      passing), so the file shrinks as a conformance ratchet.  Runs in
+      the macOS bootstrap job (expectations are generated on
+      macos-arm64).  Grow by shrinking the language stride toward 1 as
+      features land; the kangax harness stays until parity.
 - [ ] **language-P5 — Un-fork the JS external-deps.**
       esprima/escodegen/estraverse/esutils live in `external-deps/` as
       lightly-patched copies (build-system compatibility).  Move to
