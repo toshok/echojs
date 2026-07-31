@@ -633,10 +633,8 @@ static EJS_NATIVE_FUNC(_ejs_Promise_get_species) {
 }
 
 // ECMA262 25.4.4.1.1 Promise.all Resolve Element Functions.
-// the spec's remainingElementsCount is a record SHARED by all the element
-// functions: here it is a 1-element array every env points at (the old
-// per-env numeric snapshot could never reach 0 — Promise.all had been a
-// stub since 2015; async/await flushed it out)
+// the spec's remainingElementsCount is a record SHARED by all the
+// element functions: here it is a 1-element array every env points at
 static EJS_NATIVE_FUNC(resolve_element) {
     ejsval x = argc > 0 ? args[0] : _ejs_undefined;
 

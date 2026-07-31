@@ -270,9 +270,7 @@ function parseFile(filename: string, content: string, options: CompilerOptions):
         // silently miscompile (e.g. `async m() {}` object methods
         // compiled to nonsense).  a program that doesn't parse must fail
         // loudly here.  sourceType "module" is what makes import/export
-        // parse at all (tolerant mode used to recover past the spurious
-        // script-mode error on every import) and, per spec, makes the
-        // parse strict.
+        // parse at all and, per spec, makes the parse strict.
         return parser.parse(content, {
             loc: true,
             raw: true,

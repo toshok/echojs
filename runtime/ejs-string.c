@@ -179,9 +179,8 @@ utf8_to_codepoint (const unsigned char * input, const unsigned char ** end_ptr)
         return input[0];
     }
     // the 4-byte case must precede the 3-byte one: 0xF0 & 0xE0 == 0xE0,
-    // and misreading a 4-byte sequence as 3-byte used to truncate the
-    // string at the leftover continuation byte (astral chars ate the
-    // rest of the file)
+    // and a 4-byte sequence misread as 3-byte truncates the string at
+    // the leftover continuation byte
     if ((input[0] & 0xF8) == 0xF0) {
         if (input[1] == 0 || input[2] == 0 || input[3] == 0)
             return -1;
@@ -753,8 +752,7 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_indexOf) {
         needle_cstr = EJSVAL_TO_FLAT_STRING(((EJSString*)EJSVAL_TO_OBJECT(needle))->primStr);
     }
 
-    // fromIndex (was long ignored: acorn's block-comment
-    // scanner loops forever without it), clamped to [0, length]
+    // fromIndex, clamped to [0, length]
     int64_t haystack_len = EJSVAL_TO_STRLEN(haystack);
     int64_t start = 0;
     if (argc > 1 && !EJSVAL_IS_UNDEFINED(args[1])) {
@@ -793,8 +791,8 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_lastIndexOf) {
         needle_cstr = EJSVAL_TO_FLAT_STRING(((EJSString*)EJSVAL_TO_OBJECT(needle))->primStr);
     }
 
-    // fromIndex (was long ignored): the match must start
-    // at an index <= fromIndex, clamped to [0, length]
+    // fromIndex: the match must start at an index <= fromIndex,
+    // clamped to [0, length]
     int64_t haystack_len = EJSVAL_TO_STRLEN(haystack);
     int64_t needle_len = ucs2_strlen(needle_cstr);
     int64_t start = haystack_len;

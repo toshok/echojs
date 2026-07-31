@@ -289,7 +289,7 @@ export class DesugarDestructuring extends TransformPass {
         }
 
         // expression-bodied arrows have no statement list: writing
-        // n.body.body here used to clobber the body of `() => () => ...`
+        // n.body.body here would clobber the body of `() => () => ...`
         // (the inner arrow's body field) with [undefined].  wrap in a
         // block only when there are decls to prepend.
         if (n.body.type === "BlockStatement") {

@@ -3041,8 +3041,8 @@ _ejs_object_specop_finalize(EJSObject* obj)
 }
 
 // walk the entries directly so every scanned slot is the
-// REAL storage location (the old foreach_property shim passed the name
-// by value — a moved name's rewrite would have landed in a local copy).
+// REAL storage location — a name passed by value would strand the
+// mover's rewrite in a local copy.
 // Property names are content-hashed, so a moving name never invalidates
 // the buckets; descs are malloc'd and stay put.
 static void

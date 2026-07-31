@@ -30,8 +30,8 @@ console.log("del keys2", Object.keys(del).join(","), del.y, "y" in del, "v" in d
 var attr = { p: 1, q: 2 };
 Object.defineProperty(attr, "r", { value: 3, enumerable: false });
 console.log("attr keys", Object.keys(attr).join(","), attr.r);
-// (getOwnPropertyNames on all-enumerable objects only: echojs has a
-// pre-existing, mode-independent bug that filters non-enumerable names)
+// (getOwnPropertyNames on all-enumerable objects only: echojs filters
+// non-enumerable names, mode-independently)
 console.log("attr names", Object.getOwnPropertyNames({ p: 1, q: 2 }).join(","));
 
 // plain defineProperty with default attrs stays shaped

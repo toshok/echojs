@@ -251,7 +251,7 @@ const args: Record<string, ArgSpec | undefined> = {
     },
     "--parser": {
         option: "parser",
-        help: "which parser to use: acorn (default) or esprima (the old fork, for bisection)",
+        help: "which parser to use: acorn (default) or esprima (for bisection)",
     },
     "--help": {
         flag: "show_help",
@@ -761,9 +761,8 @@ function compileFile(
     compiled_module.writeBitcodeToFile(bc_filename);
     debug.log(1, `done writing ${bc_filename}`);
 
-    // textual IR is a debug artifact now: written only under --leave-temp
-    // (buck-test-lowtier.sh greps it for the low-tier float ops — the same
-    // pre-opt module dump the old pipeline fed to llvm-as)
+    // textual IR is a debug artifact: written only under --leave-temp
+    // (buck-test-lowtier.sh greps it for the low-tier float ops)
     if (options.leave_temp_files) {
         let ll_filename = tmpfile(".ll");
         temp_files.push(ll_filename);

@@ -305,11 +305,9 @@ function collectAssignedNames(toplevelBody: e.Statement[]): Set<string> {
 }
 
 // each non-promoted export gets a getter (and setter) function on the
-// module object so importers resolve it lazily.  these used to be tiny
-// AST FunctionExpressions compiled by the legacy visitor — the last
-// thing it compiled; they're built directly as EIR now.  getters fold
-// primitive const exports (matching the legacy getExportGetter);
-// everything else loads the export's slot on "%self".
+// module object so importers resolve it lazily; they're built directly
+// as EIR.  getters fold primitive const exports; everything else loads
+// the export's slot on "%self".
 function uniqueFnName(eir_module: Module, base: string): string {
     let names = new Set(eir_module.functions.map((f) => f.name));
     let name = base;

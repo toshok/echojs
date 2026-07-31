@@ -61,7 +61,7 @@ void _ejs_value_finalize(ejsval val);
 
 // scan callbacks take the SLOT, not the value — the mover
 // rewrites *slot when the referent is evacuated.  Non-moving consumers
-// (the old mark path) simply read through it.
+// (the mark path) simply read through it.
 typedef void (*EJSValueFunc)(ejsval* slot);
 
 EJS_END_DECLS

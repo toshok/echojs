@@ -25,8 +25,8 @@ function methodSpread(xs) {
 }
 
 // a non-spread array-literal-with-spread argument next to a spread arg:
-// the argument used to be silently dropped by DesugarSpread's bogus
-// %arrayFromSpread flattening
+// the literal argument must survive DesugarSpread's %arrayFromSpread
+// flattening
 function mixedArgs(xs, ys) {
     return join3(...xs, [1, ...ys].join("+"));
 }

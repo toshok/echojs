@@ -229,9 +229,7 @@ RegExpInitialize(ejsval obj, ejsval pattern, ejsval flags) {
 
     // JAVASCRIPT_COMPAT: \uXXXX escapes, lone ] as a literal, and
     // friends - without it pcre rejects patterns containing them (e.g.
-    // the \u2028 in acorn's lineBreak regex), and the failure used to
-    // be silently ignored below, leaving a NULL
-    // compiled_pattern that matched anything.
+    // the \u2028 in acorn's lineBreak regex).
     int pcre_options = PCRE_JAVASCRIPT_COMPAT;
     // UTF-16 interpretation only under the /u flag: without it JS
     // regexes match per code unit, and patterns legitimately contain

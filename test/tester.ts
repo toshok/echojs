@@ -188,9 +188,8 @@ function shouldGenerateExpectedOutput(test_file: string, expected_file: string):
 // their relative import specifiers are extensionless (the compiler's
 // gather-imports requires import syntax, node's ESM loader requires
 // extensions).  tsc transpiles the test and its relative-import closure
-// to CommonJS in a scratch dir (babel-node's require hook
-// did this previously) and node runs the transpiled copy through the
-// same harness-run driver.
+// to CommonJS in a scratch dir, and node runs the transpiled copy
+// through the same harness-run driver.
 function relativeImportClosure(test: string): string[] {
     const seen = new Set<string>();
     const files: string[] = [];
@@ -431,10 +430,8 @@ function processTests(
     tests: string[],
     cb: (err?: Error | null) => void
 ): void {
-    // (the old scheduler seeded i=test_threads but incremented i before
-    // reading tests[i] in the callback — the test at index test_threads
-    // was silently skipped in BOTH passes, which is how weakmap2.js ran
-    // on a years-stale baseline)
+    // read tests[i] BEFORE incrementing i: seeding i=test_threads and
+    // bumping first silently skips the test at index test_threads
     let next = 0;
     let num_outstanding = 0;
 

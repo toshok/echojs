@@ -2486,8 +2486,8 @@ test("shapes-verify: slot_store repr proofs — typed f64, tagged boxed", () => 
 });
 
 test("shapes-verify: slot_load result stamp must match its repr", () => {
-    // an f64-repr load left stamped "any" is rejected (the boxed
-    // form no longer verifies)...
+    // an f64-repr load left stamped "any" is rejected (a boxed
+    // form does not verify)...
     assertThrows(
         () => verifyModule(buildSlotAttack({ loadType: "any" }).mod),
         "must have type f64"
@@ -3071,8 +3071,8 @@ test("born-verify: make_object_shaped checks field count and known shape", () =>
     assertThrows(() => verifyModule(mod2), "unknown module shape");
 });
 
-// the optimizer/verifier proof-strength hazard (found by
-// types-bornshapewrong1): foldProvenGuards deletes a has_tag over a
+// the optimizer/verifier proof-strength hazard: foldProvenGuards
+// deletes a has_tag over a
 // const-number join (`c ? 1 : 0`), uncovering the slot_store.  The typed-store form's
 // typed store dissolves the hazard class: the store takes a raw f64
 // (unbox under whatever proof lowering had), so no guard deletion can

@@ -326,9 +326,8 @@ export class DesugarClasses extends TransformPass {
             n.arguments.unshift(super_ref);
         } else if (n.callee.type === "MemberExpression" && n.callee.object.type === "Super") {
             // super.foo(...) / super[k](...): the target is looked up on
-            // %super(.prototype) under the CALLEE's key — building it from
-            // the enclosing method's key dispatched super.foo() in bar()
-            // to A.bar (a long-standing miscompile) — and runs with this's this
+            // %super(.prototype) under the CALLEE's key (not the enclosing
+            // method's) and runs with this's this
             const method = this.method_stack.top;
             const callee = n.callee;
             if (callee.computed) callee.property = this.visitAs(callee.property as e.Expression);

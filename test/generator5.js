@@ -1,7 +1,7 @@
 // generator: esm
 
-// "sending" from kangax (xfailed under the esprima fork; the acorn parse
-// of the array literal around the yields lowers correctly)
+// "sending" from kangax: yield value-sending, array literals around
+// the yields
 
 var sent;
 function* generator() {

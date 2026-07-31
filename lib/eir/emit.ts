@@ -950,10 +950,9 @@ export class EIREmitter {
 
             case "make_env": {
                 const n = inst.imms["size"] as number;
-                // envs are 39% of all allocations (the P0
-                // census) — bump-allocate inline; the runtime call is
-                // the slow path/safepoint.  -fno-inline-alloc is
-                // the compile-time bisect hook.
+                // envs dominate allocation counts — bump-allocate
+                // inline; the runtime call is the slow path/safepoint.
+                // -fno-inline-alloc is the compile-time bisect hook.
                 const slow = () => this.call(rt.make_closure_env, [consts.int32(n)], "env");
                 const rv = passes().inlineAlloc ? this.v.emitEnvAllocInline(n, slow) : slow();
                 this.values.set(inst, rv);

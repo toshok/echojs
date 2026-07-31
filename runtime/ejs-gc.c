@@ -55,8 +55,8 @@ root_registry_shutdown(void)
 // full-collection growth knob — a full GC triggers when old-gen growth
 // since the last one exceeds gc_growth_pct percent of the post-sweep
 // footprint (floor: two arenas, so small programs keep a sane cadence).
-// The knob replaces the old fixed 60MB constant; with compaction
-// shrinking the heap, the trigger now adapts in BOTH directions.
+// With compaction shrinking the heap, the trigger adapts in BOTH
+// directions.
 EJSBool compact_enabled;
 static int gc_growth_pct = 50;
 
@@ -263,8 +263,8 @@ _ejs_gc_init()
 
     _ejs_gc_worklist_init();
 
-    // the generational nursery (EJS_GC_NURSERY=off selects
-    // the old single-generation collector for A/B and differential runs)
+    // the generational nursery (EJS_GC_NURSERY=off selects the
+    // single-generation collector for A/B and differential runs)
     nursery_init();
 }
 

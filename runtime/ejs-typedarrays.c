@@ -2554,9 +2554,7 @@ _ejs_dataview_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 
 // DataView is NOT an integer-indexed exotic object (unlike the
 // TypedArrays): view[i] is an ordinary property, byte access goes
-// through get/setUint8 etc.  ejs used to route indexes at the
-// underlying buffer here, which typedarray5 caught once the harness
-// went value-based.
+// through get/setUint8 etc.
 EJS_DEFINE_CLASS(DataView,
                  OP_INHERIT, // [[GetPrototypeOf]]
                  OP_INHERIT, // [[SetPrototypeOf]]

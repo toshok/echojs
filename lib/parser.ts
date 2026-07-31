@@ -8,14 +8,13 @@
 // parser sits behind this module must produce that shape.
 //
 // The default parser is acorn (external-deps/acorn, standard ESTree),
-// adapted to the dialect below.  The old esprima fork remains available
-// via --parser esprima for bisection while the transition settles.
+// adapted to the dialect below; the esprima fork stays available via
+// --parser esprima for bisection.
 //
 // The adapter also *gates*: syntax acorn parses but the backend does not
-// implement yet (async/await, class fields, object spread, ...) dies
-// here with a clear message instead of miscompiling silently — the
-// census's `async m() {}` hazard class.  Gates are removed as features
-// land.
+// implement (async generator functions, BigInt, dynamic import(), ...)
+// dies here with a clear message instead of miscompiling silently.
+// Gates are deleted as lowering support lands.
 
 import * as acorn from "../external-deps/acorn/acorn-es6";
 import * as esprima from "../external-deps/esprima/esprima-es6";
@@ -25,7 +24,7 @@ export interface ParseOptions {
     loc?: boolean;
     raw?: boolean;
     sourceType?: "script" | "module";
-    // "acorn" (default) or "esprima" (the old fork)
+    // "acorn" (default) or "esprima" (the retained fork, for bisection)
     parser?: string;
 }
 

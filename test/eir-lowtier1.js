@@ -27,7 +27,7 @@ console.log(lowtier_div(1, 0)); // fast: Infinity (only a real fdiv does this)
 console.log(lowtier_div(0, 0)); // fast: NaN
 console.log(lowtier_div(7, 2)); // fast: 3.5
 // (no slow-path div row: the runtime's generic _ejs_op_div aborts on
-// non-number operands — ejs-ops.c:901, pre-existing gap.  Slow routing is
+// non-number operands.  Slow routing is
 // the same parameterized diamond code path add/sub/mul exercise above.)
 console.log(lowtier_lt(1, 2)); // fast: true
 console.log(lowtier_lt(2, 1)); // fast: false

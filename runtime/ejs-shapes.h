@@ -50,10 +50,8 @@ typedef enum {
 /* hard ceiling on shaped field count (and EJS_SHAPE_CAP): a full
    OUT-OF-LINE slot array must fit a page cell without waste — 16-byte
    EJSClosureEnv header + 14 * 8-byte slots = 128 exactly — and the
-   single-cell embedded form fits the 256-byte class (32+16+112 = 160;
-   the class was LOS-routed by an ffs off-by-one until single-cell
-   allocation enabled it on top of the LOS bsearch + direct arena map).  Objects with
-   more fields drop to dictionary mode — the original map world. */
+   single-cell embedded form fits the 256-byte class (32+16+112 = 160).
+   Objects with more fields drop to dictionary mode — the map world. */
 #define EJS_SHAPE_FIELD_CAP_MAX 14
 
 /* single-cell (embedded-slots) allocation cap: object header (32) +

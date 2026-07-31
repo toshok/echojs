@@ -3095,7 +3095,7 @@ _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPrope
     }
 
     if (is_index) {
-        // an attribute-only redefine (Object.freeze/seal walking the new
+        // an attribute-only redefine (Object.freeze/seal walking
         // OwnPropertyKeys) must not clobber the element with the
         // descriptor's absent (zeroed) value.  per-element attributes
         // aren't tracked for array storage; leave the value alone.
@@ -3209,9 +3209,7 @@ _ejs_array_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 // array [[OwnPropertyKeys]]: the elements live outside the property map,
 // and `length` is virtual — integer indices first, then length, then
 // whatever the ordinary implementation finds in the map (named props,
-// symbols).  the inherited map-only version made every OwnPropertyKeys
-// consumer (Reflect.ownKeys, CopyDataProperties/object spread) miss the
-// elements entirely.
+// symbols).
 static ejsval
 _ejs_array_specop_own_property_keys (ejsval O)
 {

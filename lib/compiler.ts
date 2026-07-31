@@ -353,7 +353,7 @@ class LLVMIRVisitor implements VisitorSurface {
     loadDoubleEjsValue(n: number): llvm.Value {
         // -0 stringifies as "0": without the special case it would share
         // +0's cache slot (whichever the function emits first wins, and
-        // 1/x flips sign — found by the optimizer's neg-of-const fold).
+        // 1/x flips sign).
         // The test is 1/n === -Infinity, NOT `n === 0 && 1/n < 0`: under
         // the self-hosted runtime `-0 === 0` is false (the strict_eq
         // tag-compare quirk, math2.js), which silently disabled the

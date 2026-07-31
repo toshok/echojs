@@ -130,11 +130,10 @@ conservative_bounds_add(void* start, size_t size)
 //
 // A conservative candidate that misses the arena reservation resolves
 // against the LOS by binary search over a sorted array of payload
-// ranges.  This replaces a LOCKED LINEAR WALK of the whole LOS list —
-// per stack word — which, with blocks scattered by mmap, could put
-// hundreds of ms per pin scan on deep-recursion minors (the [los_lo,
-// los_hi) bounds prefilter landed first as a stopgap and remains as
-// the quick reject).
+// ranges.  A linear walk of the whole LOS list here — per stack word,
+// with blocks scattered by mmap — costs hundreds of ms per pin scan
+// on deep-recursion minors; the [los_lo, los_hi) bounds check is the
+// quick reject.
 static char *los_lo = (char*)UINTPTR_MAX;
 static char *los_hi = NULL;
 
@@ -145,11 +144,10 @@ LargeObjectInfo *los_list;
 //
 // A conservative candidate that misses the arena reservation resolves
 // against the LOS by binary search over a sorted array of payload
-// ranges.  This replaces a LOCKED LINEAR WALK of the whole LOS list —
-// per stack word — which, with blocks scattered by mmap, could put
-// hundreds of ms per pin scan on deep-recursion minors (the [los_lo,
-// los_hi) bounds prefilter landed first as a stopgap and remains as
-// the quick reject).
+// ranges.  A linear walk of the whole LOS list here — per stack word,
+// with blocks scattered by mmap — costs hundreds of ms per pin scan
+// on deep-recursion minors; the [los_lo, los_hi) bounds check is the
+// quick reject.
 typedef struct {
     char* start; // payload: page_info.page_start
     char* end;   // start + cell_size

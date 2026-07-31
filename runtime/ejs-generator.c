@@ -132,8 +132,8 @@ _ejs_generator_start(EJSGenerator* gen)
     // (`function* g() { return 5; }` -> { value: 5, done: true }).
     // The iter result is allocated BEFORE the generator leaves the active
     // chain: we are still executing on the generator's stack here, and a
-    // collection triggered by this allocation must know that (found the hard way —
-    // mark_thread_stack's range depends on the chain).
+    // collection triggered by this allocation must know that
+    // (mark_thread_stack's range depends on the chain).
     gen->completed = EJS_TRUE;
     if (body_returned) {
         gen->yielded_value = _ejs_create_iter_result(rv, _ejs_true);
@@ -346,11 +346,11 @@ ejsval _ejs_Iterator_prototype EJSVAL_ALIGNMENT;
 void
 _ejs_iterator_init_proto()
 {
-    // used to (erroneously) root _ejs_Generator_prototype here, which
-    // _ejs_generator_init roots itself.  nothing reachable references the
-    // iterator prototype until the other iterator protos are created, so
-    // without this root the first collection after this function freed it
-    // out from under everything that later used it as [[Prototype]].
+    // _ejs_Generator_prototype is rooted by _ejs_generator_init, not
+    // here.  the iterator prototype, though, needs this root: nothing
+    // reachable references it until the other iterator protos are
+    // created, and an unrooted prototype is freed by the first collection
+    // out from under everything that later uses it as [[Prototype]].
     _ejs_gc_add_root (&_ejs_Iterator_prototype);
     _ejs_Iterator_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Object_specops);
 
@@ -439,9 +439,8 @@ _ejs_generator_scan_conservative (EJSGenerator* gen)
 #endif
                          ;
         // The stack grows DOWN: the live suspended frames sit between the
-        // suspension SP and the stack's END.  (This scan used to cover
-        // [stack, sp) — the dead region — and so missed every live frame;
-        // found the hard way.)  An SP outside the range (never-started context,
+        // suspension SP and the stack's END — [stack, sp) is the DEAD
+        // region.  An SP outside the range (never-started context,
         // garbage) degrades to scanning the whole stack, which is merely
         // conservative.
         if (saved_sp < gen->stack || saved_sp > stack_end)

@@ -43,9 +43,8 @@ extern GCObjectPtr _ejs_gc_alloc(size_t size, EJSScanType scan_type);
 
 // ---- forwarding plumbing ---------------------------------------
 //
-// Inert until a mover (minor evacuation / major compaction) consumes it;
-// landed now so the header bit inventory is complete and the helpers are
-// exercised (EJS_GC_SELFTEST=1) with the old collector still active.
+// Consumed by the movers (minor evacuation / major compaction);
+// EJS_GC_SELFTEST=1 exercises the helpers standalone.
 //
 // Forwarding uses the classic first-word overwrite: once an object has been
 // evacuated its old header is dead (the copy carries the real one), so the
