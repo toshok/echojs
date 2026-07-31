@@ -32,16 +32,13 @@ jobs:
 
       - name: Install llvm
         run: |
-          brew install llvm zstd
+          brew install llvm
           "$(brew --prefix llvm)/bin/llvm-config" --version
 
-      # buck2 isn't in homebrew core (locally it comes from the
-      # facebook/fb tap); use the release binary like the linux jobs
-      - name: Install buck2
-        run: |
-          curl -sL "https://github.com/facebook/buck2/releases/download/latest/buck2-aarch64-apple-darwin.zst" -o /tmp/buck2.zst
-          sudo sh -c 'zstd -qd /tmp/buck2.zst -o /usr/local/bin/buck2 && chmod +x /usr/local/bin/buck2'
-          buck2 --version
+      # the facebook/buck2 `latest` release binary, same as before —
+      # the action just owns the platform selection and unpacking
+      - uses: dtolnay/install-buck2@latest
+      - run: buck2 --version
 
       # unpinned (runtime-P3): the value-based harness serializes logged
       # values itself (test/harness-console-shim.js) on both the node and
@@ -131,10 +128,8 @@ jobs:
         include:
           - arch: arm64
             runner: ubuntu-24.04-arm
-            buck2_triple: aarch64-unknown-linux-gnu
           - arch: x86_64
             runner: ubuntu-24.04
-            buck2_triple: x86_64-unknown-linux-gnu
     steps:
       - uses: actions/checkout@v4
         with:
@@ -143,7 +138,7 @@ jobs:
       - name: Install packages
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq build-essential cmake zstd libunwind-dev libuv1-dev
+          sudo apt-get install -y -qq build-essential cmake libunwind-dev libuv1-dev
 
       - name: Install llvm 22
         run: |
@@ -154,11 +149,8 @@ jobs:
           # prelude's cxx toolchain wants a bare clang++ on PATH
           echo "/usr/lib/llvm-22/bin" >> "$GITHUB_PATH"
 
-      - name: Install buck2
-        run: |
-          curl -sL "https://github.com/facebook/buck2/releases/download/latest/buck2-${{ matrix.buck2_triple }}.zst" -o /tmp/buck2.zst
-          sudo sh -c 'zstd -qd /tmp/buck2.zst -o /usr/local/bin/buck2 && chmod +x /usr/local/bin/buck2'
-          buck2 --version
+      - uses: dtolnay/install-buck2@latest
+      - run: buck2 --version
 
       # unpinned (runtime-P3) — see the macOS job's note
       - uses: actions/setup-node@v4
