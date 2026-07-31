@@ -166,8 +166,10 @@ ucs2_strrstr (const jschar *haystack,
 }
 
 
-static jschar
-utf8_to_ucs2 (const unsigned char * input, const unsigned char ** end_ptr)
+// decodes one code point (possibly outside the BMP; the caller emits a
+// surrogate pair for those).  returns -1 on end-of-string or invalid input.
+static int32_t
+utf8_to_codepoint (const unsigned char * input, const unsigned char ** end_ptr)
 {
     *end_ptr = input;
     if (input[0] == 0)
@@ -175,6 +177,20 @@ utf8_to_ucs2 (const unsigned char * input, const unsigned char ** end_ptr)
     if (input[0] < 0x80) {
         * end_ptr = input + 1;
         return input[0];
+    }
+    // the 4-byte case must precede the 3-byte one: 0xF0 & 0xE0 == 0xE0,
+    // and misreading a 4-byte sequence as 3-byte used to truncate the
+    // string at the leftover continuation byte (astral chars ate the
+    // rest of the file)
+    if ((input[0] & 0xF8) == 0xF0) {
+        if (input[1] == 0 || input[2] == 0 || input[3] == 0)
+            return -1;
+        * end_ptr = input + 4;
+        return
+            (input[0] & 0x07)<<18 |
+            (input[1] & 0x3F)<<12 |
+            (input[2] & 0x3F)<<6  |
+            (input[3] & 0x3F);
     }
     if ((input[0] & 0xE0) == 0xE0) {
         if (input[1] == 0 || input[2] == 0)
@@ -194,6 +210,21 @@ utf8_to_ucs2 (const unsigned char * input, const unsigned char ** end_ptr)
             (input[1] & 0x3F);
     }
     return -1;
+}
+
+// appends the UTF-16 encoding of codepoint c at p, returning the new tail
+static jschar*
+append_codepoint (jschar* p, int32_t c)
+{
+    if (c > 0xFFFF) {
+        c -= 0x10000;
+        *p++ = (jschar)(0xD800 + ((c >> 10) & 0x3FF));
+        *p++ = (jschar)(0xDC00 + (c & 0x3FF));
+    }
+    else {
+        *p++ = (jschar)c;
+    }
+    return p;
 }
 
 static int
@@ -713,8 +744,18 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_indexOf) {
     else {
         needle_cstr = EJSVAL_TO_FLAT_STRING(((EJSString*)EJSVAL_TO_OBJECT(needle))->primStr);
     }
-  
-    jschar* p = ucs2_strstr(haystack_cstr, needle_cstr);
+
+    // fromIndex (was ignored until language-P2: acorn's block-comment
+    // scanner loops forever without it), clamped to [0, length]
+    int64_t haystack_len = EJSVAL_TO_STRLEN(haystack);
+    int64_t start = 0;
+    if (argc > 1 && !EJSVAL_IS_UNDEFINED(args[1])) {
+        start = ToInteger(args[1]);
+        if (start < 0) start = 0;
+        if (start > haystack_len) start = haystack_len;
+    }
+
+    jschar* p = ucs2_strstr(haystack_cstr + start, needle_cstr);
     if (p == NULL)
         return NUMBER_TO_EJSVAL(idx);
 
@@ -743,12 +784,28 @@ static EJS_NATIVE_FUNC(_ejs_String_prototype_lastIndexOf) {
     else {
         needle_cstr = EJSVAL_TO_FLAT_STRING(((EJSString*)EJSVAL_TO_OBJECT(needle))->primStr);
     }
-  
-    jschar* p = ucs2_strrstr(haystack_cstr, needle_cstr);
-    if (p == NULL)
-        return NUMBER_TO_EJSVAL(idx);
 
-    return NUMBER_TO_EJSVAL (p - haystack_cstr);
+    // fromIndex (was ignored until language-P2): the match must start
+    // at an index <= fromIndex, clamped to [0, length]
+    int64_t haystack_len = EJSVAL_TO_STRLEN(haystack);
+    int64_t needle_len = ucs2_strlen(needle_cstr);
+    int64_t start = haystack_len;
+    if (argc > 1 && !EJSVAL_IS_UNDEFINED(args[1])) {
+        // NaN -> length per spec (ToInteger(NaN) == 0 would be wrong here,
+        // but ToInteger already maps NaN to 0; only clamp negatives)
+        start = ToInteger(args[1]);
+        if (EJSVAL_IS_NUMBER(args[1]) && isnan(EJSVAL_TO_NUMBER(args[1])))
+            start = haystack_len;
+        if (start < 0) start = 0;
+        if (start > haystack_len) start = haystack_len;
+    }
+    if (start > haystack_len - needle_len) start = haystack_len - needle_len;
+
+    for (int64_t i = start; i >= 0; i--) {
+        if (memcmp(haystack_cstr + i, needle_cstr, needle_len * sizeof(jschar)) == 0)
+            return NUMBER_TO_EJSVAL(i);
+    }
+    return NUMBER_TO_EJSVAL(idx);
 }
 
 static EJS_NATIVE_FUNC(_ejs_String_prototype_localeCompare) {
@@ -1244,7 +1301,8 @@ static EJS_NATIVE_FUNC(_ejs_String_fromCharCode) {
         buf[i] = ToUint16(args[i]);
     }
     buf[length] = 0;
-    ejsval rv = _ejs_string_new_ucs2(buf);
+    // _len variant: the result may legitimately contain U+0000
+    ejsval rv = _ejs_string_new_ucs2_len(buf, length);
     free (buf);
     return rv;
 }
@@ -2022,11 +2080,11 @@ _ejs_string_new_utf8 (const char* str)
     jschar *p = rv->data.flat;
     const unsigned char *stru = (const unsigned char*)str;
     while (*stru) {
-        jschar c = utf8_to_ucs2 (stru, &stru);
-        if (c == (jschar)-1) {
+        int32_t c = utf8_to_codepoint (stru, &stru);
+        if (c == -1) {
             break;
         }
-        *p++ = c;
+        p = append_codepoint (p, c);
     }
     *p = 0;
     rv->length = p - rv->data.flat;
@@ -2056,11 +2114,11 @@ _ejs_string_new_utf8_len (const char* str, int len)
     jschar *p = rv->data.flat;
     const unsigned char *stru = (const unsigned char*)str;
     while (len > 0) {
-        jschar c = utf8_to_ucs2 (stru, &stru);
-        if (c == (jschar)-1) {
+        int32_t c = utf8_to_codepoint (stru, &stru);
+        if (c == -1) {
             break;
         }
-        *p++ = c;
+        p = append_codepoint (p, c);
         len--;
     }
     *p = 0;

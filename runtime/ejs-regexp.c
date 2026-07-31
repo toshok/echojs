@@ -227,13 +227,28 @@ RegExpInitialize(ejsval obj, ejsval pattern, ejsval flags) {
     const char *pcre_error;
     int pcre_erroffset;
 
-    int pcre_options = PCRE_UTF16 | PCRE_NO_UTF16_CHECK;
+    // JAVASCRIPT_COMPAT: \uXXXX escapes, lone ] as a literal, and
+    // friends - without it pcre rejects patterns containing them (e.g.
+    // the \u2028 in acorn's lineBreak regex), and the failure used to
+    // be silently ignored below, leaving a NULL
+    // compiled_pattern that matched anything.
+    int pcre_options = PCRE_JAVASCRIPT_COMPAT;
+    // UTF-16 interpretation only under the /u flag: without it JS
+    // regexes match per code unit, and patterns legitimately contain
+    // lone surrogates (parser identifier tables) that PCRE_UTF16
+    // rejects as invalid code points.
+    if (re->unicode)    pcre_options |= PCRE_UTF16 | PCRE_NO_UTF16_CHECK;
     if (re->ignoreCase) pcre_options |= PCRE_CASELESS;
     if (re->multiline)  pcre_options |= PCRE_MULTILINE;
     re->compiled_pattern = pcre16_compile(chars,
                                           pcre_options,
                                           &pcre_error, &pcre_erroffset,
                                           pcre16_tables);
+    if (re->compiled_pattern == NULL) {
+        _ejs_log ("pcre rejected /%s/: %s (offset %d)\n",
+                  ucs2_to_utf8(chars), pcre_error, pcre_erroffset);
+        _ejs_throw_nativeerror_utf8 (EJS_SYNTAX_ERROR, "Invalid regular expression");
+    }
 
 
     // 14. Let setStatus be Set(obj, "lastIndex", 0, true).

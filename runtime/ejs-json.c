@@ -206,7 +206,7 @@ QuoteJSONString(StringifyState* state, ejsval value) {
             product[pi++] = 'u';
 
             // iii. Let hex be the string result of converting the numeric code unit value of C to a String of four hexadecimal digits. Alphabetic hexadecimal digits are presented as lowercase Latin letters.
-            static char* hexdigits = "012356789abcdef";
+            static char* hexdigits = "0123456789abcdef";
 
             // iv. Let product be the concatenation of product and hex.
             product[pi++] = '0';
