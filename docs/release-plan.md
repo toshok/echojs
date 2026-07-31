@@ -41,8 +41,13 @@ answer for people who just want to download a package and go.
       token, npm publishes via OIDC trusted publishing — no npm
       token exists anywhere.  The first pushed tag is the end-to-end
       proof.)
-- [ ] **release-P4 — Getting-started surface.**  A quickstart README
+- [x] **release-P4 — Getting-started surface.**  DONE 2026-07-31 —
+      docs/release-p4-results.md.  A quickstart README
       path that assumes the package (not the repo): install, compile a
       file, link a multi-module program; document the supported
       language subset honestly (pointing at language-plan status)
       and the flag surface (`--types`, GC knobs) that users may touch.
+      (Every claim verified against the live artifacts: examples
+      compiled from a dist tarball, flags from the real --help,
+      npm/asset availability from the registry and release page;
+      `--types` documented as source-checkout-only.)
