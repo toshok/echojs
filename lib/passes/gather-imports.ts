@@ -18,7 +18,7 @@ import { TreeVisitor, VisitResult } from "../node-visitor";
 import { is_string_literal, underline } from "../echo-util";
 import { JSModuleInfo, NativeModuleInfo, ModuleInfo } from "../module-info";
 import * as b from "../ast-builder";
-import * as esprima from "../../external-deps/esprima/esprima-es6";
+import * as parser from "../parser";
 import type * as e from "../estree";
 import type { CompilerOptions, ImportVariable } from "../options";
 import { passes } from "../pass-config";
@@ -273,7 +273,7 @@ function parseFile(filename: string, content: string, options: CompilerOptions):
         // parse at all (tolerant mode used to recover past the spurious
         // script-mode error on every import) and, per spec, makes the
         // parse strict.
-        return esprima.parse(content, { loc: true, raw: true, sourceType: "module" });
+        return parser.parse(content, { loc: true, raw: true, sourceType: "module" });
     } catch (err) {
         console.warn(`${filename}: ${String(err)}:`);
         return process.exit(-1);

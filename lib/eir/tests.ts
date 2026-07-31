@@ -28,7 +28,7 @@ import { DesugarClasses } from "../passes/desugar-classes";
 import { DesugarDestructuring } from "../passes/desugar-destructuring";
 import { DesugarGeneratorFunctions } from "../passes/desugar-generator-functions";
 import { DesugarMetaProperties } from "../passes/desugar-metaproperties";
-import * as esprima from "../../external-deps/esprima/esprima-es6";
+import * as parser from "../parser";
 import type * as e from "../estree";
 import type { CompilerOptions } from "../options";
 import { withPassConfig } from "../pass-config";
@@ -84,7 +84,7 @@ function findFn(mod: Module, name: string): Func {
 }
 
 function parseFn(src: string): e.FunctionDeclaration {
-    let ast = esprima.parse(src, { loc: true, raw: true });
+    let ast = parser.parse(src, { loc: true, raw: true });
     for (let s of ast.body) if (s.type === "FunctionDeclaration") return s;
     throw new Error("no function declaration in source");
 }
@@ -437,7 +437,7 @@ test("lower: nested captured loops chain their envs", () => {
 
 // parse + the pre-EIR desugar passes, like preEIRConvert in compile()
 function parseFnPreEIR(src: string): e.FunctionDeclaration {
-    let ast = esprima.parse(src, { loc: true, raw: true });
+    let ast = parser.parse(src, { loc: true, raw: true });
     const opts = { debug_passes: new Set<string>() } as CompilerOptions;
     ast = new DesugarClasses(opts).visit(ast) as e.Program;
     ast = new DesugarDestructuring(opts).visit(ast) as e.Program;
@@ -615,7 +615,7 @@ test("lower: arrow lexical this reads the owner's captured this", () => {
 });
 
 test("lower: toplevel-arrow candidates using this still fall back", () => {
-    const ast = esprima.parse("var f = () => this.x;", { loc: true, raw: true });
+    const ast = parser.parse("var f = () => this.x;", { loc: true, raw: true });
     const decl = ast.body[0] as e.VariableDeclaration;
     const arrow = decl.declarations[0]!.init as e.ArrowFunctionExpression;
     let threw = false;
@@ -743,7 +743,7 @@ test("lower: statement-position yield* lowers as a for-of delegate loop", () => 
 });
 
 test("lower: program with several functions", () => {
-    let ast = esprima.parse(
+    let ast = parser.parse(
         "function one() { return 1; } function two() { return one() + 1; }",
         { loc: true, raw: true }
     );
