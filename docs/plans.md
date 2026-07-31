@@ -189,3 +189,16 @@ Pause bounds independent of live-set size.  Detail: gc-plan.md.
       survivor evacuation (gc-P6).
 - [ ] **P10.2** fully concurrent evacuation — only on P10.1's pause
       evidence (gc-P7).
+
+## P11 — Self-hosted type oracle
+
+`--types` in the shipped compiler.  Ordered after P8 (the language
+milestone makes maam's ES2022 output compile as-is — decided
+2026-07-31, see maam-plan.md's self-hosting strategy addendum);
+interleaves freely with P9.5/P10.  Detail: maam-plan.md.
+
+- [ ] **P11.1** compile maam into the bootstrap: ESM build flavor,
+      static-import seam in the oracle, srcdir/BUCK wiring; gate =
+      the --types differential lane run stage0-vs-stage1 (identical
+      typed output), and the README caveat deleted (maam-P5).
+      Consider pairing with the maam repo merge.

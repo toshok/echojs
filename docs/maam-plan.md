@@ -266,6 +266,21 @@ one-file fix). Promotion to self-hosted `--types` waits until either the
 babel-vendored build (a) or the TS port + parser modernization make it moot.
 Until promotion, `--types` in a stage1+ compiler is a no-op with a warning.
 
+**DECIDED 2026-07-31: promotion is sequenced AFTER the language
+modernization milestone (plans P8), as maam-P5 below.**  Option (a)'s
+babel framing is stale — babel left the repo at compiler-P2; the
+mechanical fallback would now be a second tsc build at `target:
+ES2016`.  But an audit of `dist/cjs` (22 files, ~315KB) showed the
+gap is small and shrinking: **zero external requires** (the analysis
+is pure computation — no node APIs at all), no async/BigInt/class
+fields; what the ES2022 target leaves in the output is exactly the
+language-P3 payoff list (`?.` ×19, `??` ×37, object spread ×32, `**`)
+plus six stdlib call sites (`Object.entries`/`fromEntries`,
+`padStart` ×4).  Once those land as language features, promotion
+needs no downleveling at all — just an ESM build flavor and the
+import seam.  Doing language first turns maam-P5 from
+"vendored-transpile maintenance" into "build config + wiring."
+
 ## Validation strategy
 
 - **Bootstrap matrix, every phase:** `//:test-eir`, `//:test-eir-lowtier`
@@ -572,3 +587,30 @@ messages/results docs).
       with gc-plan P1, and the P4.1–P4.6 implementation checklist with
       gates — that checklist lives in shapes-plan.md, which owns the
       phase from here.
+- [ ] **maam-P5** self-hosted oracle: `--types` in the stage1+/shipped
+      compiler (plans P11.1; **sequenced after plans P8** — the
+      language milestone makes the downlevel moot, see the
+      self-hosting strategy addendum above).  The seam is
+      lib/eir/oracle.ts's lazy host-`require()` of
+      `dist/cjs/index.js` located by a `__dirname` walk — the
+      self-hosted compiler has neither, and declines with a warning.
+      Work items: (1) an ESM build flavor in the maam repo (tsc
+      module variant; `import` is what the self-compile's
+      gather-imports follows statically — `require()` never is);
+      (2) the residual stdlib call sites if language-P3 hasn't
+      covered them (Object.entries/fromEntries, padStart — six sites
+      total); (3) oracle.ts loads via static import when self-hosted,
+      keeping the lazy, off-by-default shape so `--types` stays
+      pay-for-use; (4) srcdir-tree/BUCK wiring so the bootstrap
+      compiles maam in (~315KB of JS per stage; deterministic input,
+      byte-identity unthreatened); (5) consider pairing with the
+      planned maam repo merge (separate only for the paper) — a
+      first-class lib/ citizen beats an external-deps fork.
+      Gates: the `--types` differential lane run **stage0-vs-stage1**
+      — node-hosted and self-hosted oracles must produce identical
+      typed output over the corpus; matrix green; the README's
+      "source-checkout-only" caveat deleted.
+      Downstream: prerequisite for the selfhost epic's call-site
+      inlining under oracle evidence (a shipped binary needs a
+      shipped oracle), and opens a typed bootstrap lane (the compiler
+      compiling itself under --types).
