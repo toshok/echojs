@@ -205,6 +205,77 @@ const runtime_interface = {
         ]);
     },
 
+    define_field: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_define_field", ty.EjsValue, [
+            ty.EjsValue,
+            ty.EjsValue,
+            ty.EjsValue,
+        ]);
+    },
+    make_private_map: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_weakmap_new", ty.EjsValue, []);
+    },
+    private_field_get: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_private_field_get", ty.EjsValue, [
+            ty.EjsValue,
+            ty.EjsValue,
+            ty.EjsValue,
+        ]);
+    },
+    private_field_set: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_private_field_set", ty.EjsValue, [
+            ty.EjsValue,
+            ty.EjsValue,
+            ty.EjsValue,
+            ty.EjsValue,
+        ]);
+    },
+    private_field_init: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(
+            this.module,
+            "_ejs_private_field_init",
+            ty.EjsValue,
+            [ty.EjsValue, ty.EjsValue, ty.EjsValue]
+        );
+    },
+    private_brand_check: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(
+            this.module,
+            "_ejs_private_brand_check",
+            ty.EjsValue,
+            [ty.EjsValue, ty.EjsValue, ty.EjsValue]
+        );
+    },
+    private_has: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(this.module, "_ejs_private_has", ty.EjsValue, [
+            ty.EjsValue,
+            ty.EjsValue,
+        ]);
+    },
+    private_write_error: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(
+            this.module,
+            "_ejs_private_write_error",
+            ty.EjsValue,
+            [ty.EjsValue]
+        );
+    },
+    copy_data_properties: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(
+            this.module,
+            "_ejs_copy_data_properties",
+            ty.EjsValue,
+            [ty.EjsValue, ty.EjsValue, ty.EjsValue]
+        );
+    },
+    object_spread_merge: function (this: RuntimeContext) {
+        return this.abi.createExternalFunction(
+            this.module,
+            "_ejs_object_spread_merge",
+            ty.EjsValue,
+            [ty.EjsValue, ty.EjsValue]
+        );
+    },
     object_create: function (this: RuntimeContext) {
         return this.abi.createExternalFunction(this.module, "_ejs_object_create", ty.EjsValue, [
             ty.EjsValue,
@@ -693,6 +764,7 @@ export function createBinopsInterface(
         ">>>": { get: () => createBinop("_ejs_op_ursh") },
         "<<<": { get: () => createBinop("_ejs_op_ulsh") },
         "%": { get: () => createBinop("_ejs_op_mod") },
+        "**": { get: () => createBinop("_ejs_op_exp") },
         "+": { get: () => createBinop("_ejs_op_add") },
         "*": { get: () => createBinop("_ejs_op_mult") },
         "/": { get: () => createBinop("_ejs_op_div") },

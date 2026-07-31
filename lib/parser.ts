@@ -37,6 +37,8 @@ interface Node {
 
 class NotSupportedError extends Error {}
 
+let catch_gen = 0;
+
 function notSupported(node: Node, what: string): never {
     const loc = node["loc"] as { start?: { line: number; column: number } } | undefined;
     const where = loc?.start ? `${loc.start.line}:${loc.start.column + 1}: ` : "";
@@ -47,12 +49,13 @@ function notSupported(node: Node, what: string): never {
 // syntax the emitter has no lowering for
 const BINARY_OPS = new Set([
     "==", "!=", "===", "!==", "<", "<=", ">", ">=", "<<", ">>", ">>>",
-    "+", "-", "*", "/", "%", "|", "^", "&", "in", "instanceof",
+    "+", "-", "*", "/", "%", "**", "|", "^", "&", "in", "instanceof",
 ]);
 const ASSIGN_OPS = new Set([
-    "=", "+=", "-=", "*=", "/=", "%=", "<<=", ">>=", ">>>=", "|=", "^=", "&=",
+    "=", "+=", "-=", "*=", "/=", "%=", "**=", "<<=", ">>=", ">>>=", "|=", "^=", "&=",
+    "&&=", "||=", "??=",
 ]);
-const LOGICAL_OPS = new Set(["||", "&&"]);
+const LOGICAL_OPS = new Set(["||", "&&", "??"]);
 
 // in-place fixups on one node, applied before recursing into it
 function adaptNode(n: Node): void {
@@ -60,7 +63,9 @@ function adaptNode(n: Node): void {
         case "FunctionDeclaration":
         case "FunctionExpression":
         case "ArrowFunctionExpression": {
-            if (n["async"]) notSupported(n, "async function syntax");
+            // plain async functions desugar (DesugarAsyncFunctions); the
+            // async-generator combination still has no lowering
+            if (n["async"] && n["generator"]) notSupported(n, "async generator functions");
             // acorn nests parameter defaults as AssignmentPattern; the
             // dialect wants bare params plus an aligned defaults array
             // (empty when no parameter has a default)
@@ -89,7 +94,10 @@ function adaptNode(n: Node): void {
             break;
         }
         case "CatchClause":
-            if (n["param"] == null) notSupported(n, "catch without a binding");
+            // catch { } — synthesize an unused binding (fresh per clause;
+            // %-names cannot collide with user code)
+            if (n["param"] == null)
+                n["param"] = { type: "Identifier", name: `%unused_catch_${catch_gen++}` };
             break;
         case "MetaProperty": {
             // dialect stores the raw names, not Identifier nodes
@@ -100,37 +108,11 @@ function adaptNode(n: Node): void {
             n["property"] = property["name"];
             break;
         }
-        case "ForOfStatement":
-            if (n["await"]) notSupported(n, "for await");
-            break;
-        case "ObjectExpression":
-            for (const prop of n["properties"] as Node[]) {
-                if (prop.type !== "Property")
-                    notSupported(prop, "spread in object literals");
-            }
-            break;
-        case "ClassBody":
-            for (const el of n["body"] as Node[]) {
-                if (el.type === "PropertyDefinition") notSupported(el, "class field syntax");
-                if (el.type === "StaticBlock") notSupported(el, "class static blocks");
-                if (el.type !== "MethodDefinition") notSupported(el, el.type);
-            }
-            break;
-        case "MethodDefinition":
-            if ((n["key"] as Node).type === "PrivateIdentifier")
-                notSupported(n, "private class members");
-            break;
         case "Literal":
             if (n["bigint"] != null) notSupported(n, "BigInt literal syntax");
             break;
-        case "ChainExpression":
-            notSupported(n, "optional chaining");
-            break;
         case "ImportExpression":
             notSupported(n, "dynamic import()");
-            break;
-        case "AwaitExpression":
-            notSupported(n, "await");
             break;
         case "BinaryExpression":
             if (!BINARY_OPS.has(n["operator"] as string))
@@ -143,9 +125,6 @@ function adaptNode(n: Node): void {
         case "LogicalExpression":
             if (!LOGICAL_OPS.has(n["operator"] as string))
                 notSupported(n, `the ${n["operator"]} operator`);
-            break;
-        case "PrivateIdentifier":
-            notSupported(n, "private class members");
             break;
         default:
             break;

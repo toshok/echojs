@@ -382,8 +382,16 @@ static EJS_NATIVE_FUNC(_ejs_String_impl) {
     // 2. Else,
     else {
         // a. If NewTarget is undefined and Type(value) is Symbol, return SymbolDescriptiveString(value).
-        if (EJSVAL_IS_UNDEFINED(newTarget) && EJSVAL_IS_SYMBOL(args[0]))
-            EJS_NOT_IMPLEMENTED();
+        if (EJSVAL_IS_UNDEFINED(newTarget) && EJSVAL_IS_SYMBOL(args[0])) {
+            ejsval desc = EJSVAL_TO_SYMBOL(args[0])->description;
+            if (EJSVAL_IS_UNDEFINED(desc))
+                desc = _ejs_atom_empty;
+            return _ejs_string_concatv (_ejs_atom_Symbol,
+                                        _ejs_string_new_utf8("("),
+                                        desc,
+                                        _ejs_string_new_utf8(")"),
+                                        _ejs_null);
+        }
 
         // b. Let s be ToString(value).
         s = ToString(args[0]);
@@ -1989,6 +1997,59 @@ _ejs_string_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
     return _ejs_Object_specops.Get (obj, propertyName, receiver);
 }
 
+// string exotic [[GetOwnProperty]]: synthesize the index descriptors
+// (value: the char, writable: false, enumerable: true, configurable:
+// false) — the inherited object implementation only sees the property map
+static EJSPropertyDesc*
+_ejs_string_specop_get_own_property (ejsval obj, ejsval propertyName, ejsval *exc)
+{
+    EJSBool is_index = EJS_FALSE;
+    int idx = 0;
+    if (!EJSVAL_IS_SYMBOL(propertyName)) {
+        ejsval idx_val = ToNumber(propertyName);
+        if (EJSVAL_IS_NUMBER(idx_val)) {
+            double n = EJSVAL_TO_NUMBER(idx_val);
+            if (floor(n) == n) {
+                idx = (int)n;
+                is_index = EJS_TRUE;
+            }
+        }
+    }
+
+    EJSString* estr = (EJSString*)EJSVAL_TO_OBJECT(obj);
+    if (is_index && idx >= 0 && idx < EJSVAL_TO_STRLEN(estr->primStr)) {
+        jschar c = _ejs_string_ucs2_at (EJSVAL_TO_STRING(estr->primStr), idx);
+        // XXX leaked, same as the array specop
+        EJSPropertyDesc* desc = (EJSPropertyDesc*)calloc(sizeof(EJSPropertyDesc), 1);
+        _ejs_property_desc_set_writable (desc, EJS_FALSE);
+        _ejs_property_desc_set_enumerable (desc, EJS_TRUE);
+        _ejs_property_desc_set_configurable (desc, EJS_FALSE);
+        _ejs_property_desc_set_value (desc, _ejs_string_new_ucs2_len (&c, 1));
+        return desc;
+    }
+
+    return _ejs_Object_specops.GetOwnProperty (obj, propertyName, exc);
+}
+
+// string exotic [[OwnPropertyKeys]]: the char indices and `length` are
+// virtual — indices first, then length, then the ordinary map keys
+static ejsval
+_ejs_string_specop_own_property_keys (ejsval O)
+{
+    EJSString* estr = (EJSString*)EJSVAL_TO_OBJECT(O);
+    ejsval keys = _ejs_array_new (0, EJS_FALSE);
+    for (int64_t i = 0; i < EJSVAL_TO_STRLEN(estr->primStr); i ++) {
+        ejsval name = ToString(NUMBER_TO_EJSVAL(i));
+        _ejs_array_push_dense (keys, 1, &name);
+    }
+    ejsval length_name = _ejs_atom_length;
+    _ejs_array_push_dense (keys, 1, &length_name);
+    ejsval mapkeys = _ejs_Object_specops.OwnPropertyKeys (O);
+    for (int64_t i = 0; i < EJS_ARRAY_LEN(mapkeys); i ++)
+        _ejs_array_push_dense (keys, 1, &EJS_DENSE_ARRAY_ELEMENTS(mapkeys)[i]);
+    return keys;
+}
+
 static EJSObject*
 _ejs_string_specop_allocate()
 {
@@ -2008,14 +2069,14 @@ EJS_DEFINE_CLASS(String,
                  OP_INHERIT, // [[SetPrototypeOf]]
                  OP_INHERIT, // [[IsExtensible]]
                  OP_INHERIT, // [[PreventExtensions]]
-                 OP_INHERIT, // [[GetOwnProperty]]
+                 _ejs_string_specop_get_own_property,
                  OP_INHERIT, // [[DefineOwnProperty]]
                  OP_INHERIT, // [[HasProperty]]
                  _ejs_string_specop_get,
                  OP_INHERIT, // [[Set]]
                  OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
-                 OP_INHERIT, // [[OwnPropertyKeys]]
+                 _ejs_string_specop_own_property_keys,
                  OP_INHERIT, // [[Call]]
                  OP_INHERIT, // [[Construct]]
                  _ejs_string_specop_allocate,

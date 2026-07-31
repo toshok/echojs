@@ -79,6 +79,7 @@ const binop_for_op: Record<string, string | undefined> = {
     mul: "*",
     div: "/",
     mod: "%",
+    exp: "**",
     lt: "<",
     le: "<=",
     gt: ">",

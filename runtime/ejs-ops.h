@@ -62,6 +62,8 @@ ejsval _ejs_op_ulsh (ejsval lhs, ejsval rhs);
 ejsval _ejs_op_mod (ejsval lhs, ejsval rhs);
 ejsval _ejs_op_add (ejsval lhs, ejsval rhs);
 ejsval _ejs_op_mult (ejsval lhs, ejsval rhs);
+ejsval _ejs_op_exp (ejsval lhs, ejsval rhs);
+double _ejs_number_exponentiate (double base, double exponent);
 ejsval _ejs_op_lt (ejsval lhs, ejsval rhs);
 EJSBool _ejs_op_lt_ejsbool (ejsval lhs, ejsval rhs);
 ejsval _ejs_op_le (ejsval lhs, ejsval rhs);

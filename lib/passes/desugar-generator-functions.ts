@@ -42,7 +42,12 @@ export class DesugarGeneratorFunctions extends TransformPass {
     private genGen = startGenerator();
 
     override visitFunction(n: e.Function): VisitResult {
-        if (n.generator) this.mapping.unshift(b.identifier(`%_gen_${this.genGen()}`));
+        // pair the unshift/shift on THIS function's generator-ness: the
+        // old unconditional shift let any non-generator function nested in
+        // a generator body pop the generator's own %gen id (pre-P8.3 bug,
+        // flushed out by the async desugar's nested closures)
+        const is_generator = n.generator;
+        if (is_generator) this.mapping.unshift(b.identifier(`%_gen_${this.genGen()}`));
         super.visitFunction(n);
         if (n.generator) {
             const gen_id = this.mapping[0]!;
@@ -85,7 +90,7 @@ export class DesugarGeneratorFunctions extends TransformPass {
             ]);
             n.generator = false;
         }
-        this.mapping.shift();
+        if (is_generator) this.mapping.shift();
         return n;
     }
 

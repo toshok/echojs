@@ -262,6 +262,12 @@ EJSBool _ejs_object_define_accessor_property_desc (ejsval obj, ejsval key, ejsva
 ejsval _ejs_object_setprop (ejsval obj, ejsval key, ejsval value);
 ejsval _ejs_object_getprop (ejsval obj, ejsval key);
 
+// object spread/rest (language-P3): CopyDataProperties and the
+// descriptor-preserving literal-chunk merge
+ejsval _ejs_copy_data_properties (ejsval target, ejsval source, ejsval excluded);
+ejsval _ejs_object_spread_merge (ejsval target, ejsval chunk);
+ejsval _ejs_define_field (ejsval obj, ejsval key, ejsval value);
+
 ejsval _ejs_global_setprop (ejsval key, ejsval value);
 ejsval _ejs_global_getprop (ejsval key);
 

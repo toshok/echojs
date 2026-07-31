@@ -176,10 +176,7 @@ static EJS_NATIVE_FUNC(_ejs_Math_pow) {
 
     double x_ = ToDouble(x);
     double y_ = ToDouble(y);
-    if (isnan(x_) || isnan(y_))
-        return _ejs_nan;
-
-    return NUMBER_TO_EJSVAL(pow(x_, y_));
+    return NUMBER_TO_EJSVAL(_ejs_number_exponentiate(x_, y_));
 }
 
 // ECMA262: 15.8.2.14

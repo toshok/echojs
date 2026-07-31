@@ -10,6 +10,7 @@
 #include "ejs-function.h"
 #include "ejs-proxy.h"
 #include "ejs-ops.h"
+#include "ejs-string.h"
 #include "ejs-symbol.h"
 
 
@@ -317,6 +318,91 @@ _ejs_weakmap_init(ejsval global)
 #undef PROTO_METHOD
 }
 
+
+// ---- class private-name storage (language-P3) -------------------------
+//
+// each #name desugars to a compiler-created weakmap; obj's entry existing
+// IS the "object has this private member / brand" fact.  all of these
+// take the inverted-rep fast path directly — the maps are engine-created,
+// never user-visible.
+
+static ejsval
+private_imap (ejsval obj)
+{
+    if (!EJSVAL_IS_OBJECT(obj))
+        return _ejs_undefined;
+    return _ejs_object_getprop (obj, _ejs_WeakMapData_symbol);
+}
+
+static void _ejs_throw_private_error (ejsval name, const char* what) __attribute__ ((noreturn));
+static void
+_ejs_throw_private_error (ejsval name, const char* what)
+{
+    char msgbuf[256];
+    char* name_utf8 = EJSVAL_IS_STRING(name) ? _ejs_string_to_utf8(_ejs_string_flatten(name)) : NULL;
+    snprintf (msgbuf, sizeof(msgbuf), "Cannot %s private member %s from an object whose class did not declare it",
+              what, name_utf8 ? name_utf8 : "#?");
+    if (name_utf8) free (name_utf8);
+    _ejs_throw_nativeerror_utf8 (EJS_TYPE_ERROR, msgbuf);
+}
+
+ejsval
+_ejs_private_field_get (ejsval map, ejsval obj, ejsval name)
+{
+    ejsval imap = private_imap (obj);
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(imap) || !EJSVAL_TO_BOOLEAN(_ejs_map_has (imap, map)))
+        _ejs_throw_private_error (name, "read");
+    return _ejs_map_get (imap, map);
+}
+
+ejsval
+_ejs_private_field_set (ejsval map, ejsval obj, ejsval name, ejsval value)
+{
+    ejsval imap = private_imap (obj);
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(imap) || !EJSVAL_TO_BOOLEAN(_ejs_map_has (imap, map)))
+        _ejs_throw_private_error (name, "write");
+    _ejs_map_set (imap, map, value);
+    return value;
+}
+
+ejsval
+_ejs_private_field_init (ejsval map, ejsval obj, ejsval value)
+{
+    ejsval imap = private_imap (obj);
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(imap)) {
+        imap = _ejs_map_new();
+        _ejs_object_setprop (obj, _ejs_WeakMapData_symbol, imap);
+    }
+    _ejs_map_set (imap, map, value);
+    return _ejs_undefined;
+}
+
+ejsval
+_ejs_private_brand_check (ejsval map, ejsval obj, ejsval name)
+{
+    ejsval imap = private_imap (obj);
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(imap) || !EJSVAL_TO_BOOLEAN(_ejs_map_has (imap, map)))
+        _ejs_throw_private_error (name, "access");
+    return obj;
+}
+
+// assignment to a private method / read-only private accessor: always a
+// TypeError, but only when the write actually executes (logical
+// assignment can short-circuit past it)
+ejsval
+_ejs_private_write_error (ejsval name)
+{
+    _ejs_throw_private_error (name, "write");
+}
+
+ejsval
+_ejs_private_has (ejsval map, ejsval obj)
+{
+    ejsval imap = private_imap (obj);
+    if (EJSVAL_IS_NULL_OR_UNDEFINED(imap))
+        return _ejs_false;
+    return _ejs_map_has (imap, map);
+}
 
 static EJSObject*
 _ejs_weakmap_specop_allocate()

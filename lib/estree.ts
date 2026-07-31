@@ -39,7 +39,8 @@ export interface ArrayExpression extends BaseNode {
 
 export interface ObjectExpression extends BaseNode {
     type: "ObjectExpression";
-    properties: Property[];
+    // SpreadElement entries are desugared away by DesugarSpread
+    properties: (Property | SpreadElement)[];
 }
 
 export interface Property extends BaseNode {
@@ -89,6 +90,9 @@ export interface FunctionBase extends BaseNode {
     body: BlockStatement | Expression;
     generator: boolean;
     expression: boolean;
+    // async functions desugar in DesugarAsyncFunctions; EIR never sees
+    // async: true (or AwaitExpression)
+    async?: boolean;
     // --- compiler extensions -------------------------------------------------
     // set by insert_toplevel_func on the synthetic module toplevel
     toplevel?: boolean;
@@ -134,20 +138,23 @@ export type BinaryOperator =
     | "==" | "!=" | "===" | "!=="
     | "<" | "<=" | ">" | ">="
     | "<<" | ">>" | ">>>"
-    | "+" | "-" | "*" | "/" | "%"
+    | "+" | "-" | "*" | "/" | "%" | "**"
     | "|" | "^" | "&"
     | "in" | "instanceof";
 
 export interface BinaryExpression extends BaseNode {
     type: "BinaryExpression";
     operator: BinaryOperator;
-    left: Expression;
+    // PrivateIdentifier only for `#x in obj` (desugared by DesugarClasses)
+    left: Expression | PrivateIdentifier;
     right: Expression;
 }
 
 export type AssignmentOperator =
-    | "=" | "+=" | "-=" | "*=" | "/=" | "%="
-    | "<<=" | ">>=" | ">>>=" | "|=" | "^=" | "&=";
+    | "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "**="
+    | "<<=" | ">>=" | ">>>=" | "|=" | "^=" | "&="
+    // consumed by DesugarModernOps; EIR never sees them
+    | "&&=" | "||=" | "??=";
 
 export interface AssignmentExpression extends BaseNode {
     type: "AssignmentExpression";
@@ -158,7 +165,7 @@ export interface AssignmentExpression extends BaseNode {
 
 export interface LogicalExpression extends BaseNode {
     type: "LogicalExpression";
-    operator: "||" | "&&";
+    operator: "||" | "&&" | "??";
     left: Expression;
     right: Expression;
 }
@@ -166,8 +173,11 @@ export interface LogicalExpression extends BaseNode {
 export interface MemberExpression extends BaseNode {
     type: "MemberExpression";
     object: Expression | Super;
-    property: Expression;
+    // PrivateIdentifier members are desugared by DesugarClasses
+    property: Expression | PrivateIdentifier;
     computed: boolean;
+    // inside a ChainExpression: this link is the `?.` one
+    optional?: boolean;
 }
 
 export interface ConditionalExpression extends BaseNode {
@@ -181,6 +191,15 @@ export interface CallExpression extends BaseNode {
     type: "CallExpression";
     callee: Expression | Super;
     arguments: (Expression | SpreadElement)[];
+    // inside a ChainExpression: this link is the `?.()` one
+    optional?: boolean;
+}
+
+// an optional-chain (`a?.b`, `a.b?.()`) — desugared away by
+// DesugarModernOps before EIR ever sees it
+export interface ChainExpression extends BaseNode {
+    type: "ChainExpression";
+    expression: MemberExpression | CallExpression;
 }
 
 export interface NewExpression extends BaseNode {
@@ -205,6 +224,13 @@ export interface YieldExpression extends BaseNode {
     delegate: boolean;
 }
 
+// only inside async functions; DesugarAsyncFunctions rewrites these into
+// yields driving the async coroutine
+export interface AwaitExpression extends BaseNode {
+    type: "AwaitExpression";
+    argument: Expression;
+}
+
 export interface ThisExpression extends BaseNode {
     type: "ThisExpression";
 }
@@ -225,7 +251,8 @@ export interface MetaProperty extends BaseNode {
 
 export interface ObjectPattern extends BaseNode {
     type: "ObjectPattern";
-    properties: Property[];
+    // RestElement entries ({a, ...rest}) desugar in DesugarDestructuring
+    properties: (Property | RestElement)[];
 }
 
 export interface ArrayPattern extends BaseNode {
@@ -370,6 +397,8 @@ export interface ForOfStatement extends BaseNode {
     left: VariableDeclaration | Pattern;
     right: Expression;
     body: Statement;
+    // `for await` — desugared by DesugarAsyncFunctions
+    await?: boolean;
 }
 
 export interface VariableDeclaration extends BaseNode {
@@ -403,16 +432,42 @@ export interface ClassExpression extends ClassBase {
 
 export interface ClassBody extends BaseNode {
     type: "ClassBody";
-    body: MethodDefinition[];
+    // PropertyDefinition/StaticBlock elements are desugared by
+    // DesugarClasses; EIR only ever sees the class-free output
+    body: ClassElement[];
 }
+
+export type ClassElement = MethodDefinition | PropertyDefinition | StaticBlock;
 
 export interface MethodDefinition extends BaseNode {
     type: "MethodDefinition";
-    key: Expression;
+    key: Expression | PrivateIdentifier;
     value: FunctionExpression;
     kind: "init" | "constructor" | "method" | "get" | "set";
     computed?: boolean;
     static?: boolean;
+}
+
+// a class field (public or #private, instance or static)
+export interface PropertyDefinition extends BaseNode {
+    type: "PropertyDefinition";
+    key: Expression | PrivateIdentifier;
+    value: Expression | null;
+    computed: boolean;
+    static: boolean;
+}
+
+// `static { ... }` in a class body
+export interface StaticBlock extends BaseNode {
+    type: "StaticBlock";
+    body: Statement[];
+}
+
+// `#name` — only valid as a member property, a class element key, or the
+// LHS of `#name in obj`
+export interface PrivateIdentifier extends BaseNode {
+    type: "PrivateIdentifier";
+    name: string;
 }
 
 // --- modules ----------------------------------------------------------------
@@ -508,10 +563,12 @@ export type Expression =
     | MemberExpression
     | ConditionalExpression
     | CallExpression
+    | ChainExpression
     | NewExpression
     | SequenceExpression
     | SpreadElement
     | YieldExpression
+    | AwaitExpression
     | ThisExpression
     | Super
     | MetaProperty
@@ -555,6 +612,9 @@ export type Node =
     | TemplateElement
     | ClassBody
     | MethodDefinition
+    | PropertyDefinition
+    | StaticBlock
+    | PrivateIdentifier
     | ImportSpecifier
     | ImportDefaultSpecifier
     | ImportNamespaceSpecifier

@@ -1615,6 +1615,91 @@ static EJS_NATIVE_FUNC(_ejs_Object_assign) {
     return to;
 }
 
+// ECMA262 7.3.25 CopyDataProperties (target, source, excludedItems) — the
+// runtime half of object spread ({...source}) and object rest
+// ({a, ...rest} = o).  target is a fresh ordinary object from the desugar;
+// excluded is a dense array of already-evaluated property keys (or
+// undefined).  own enumerable keys of source are read via Get and defined
+// as enumerable/writable/configurable data properties.  Returns target.
+ejsval
+_ejs_copy_data_properties (ejsval target, ejsval source, ejsval excluded)
+{
+    // spread/rest of null/undefined is a no-op
+    if (EJSVAL_IS_NULL(source) || EJSVAL_IS_UNDEFINED(source))
+        return target;
+
+    ejsval from = ToObject(source);
+    EJSObject* from_ = EJSVAL_TO_OBJECT(from);
+
+    uint32_t nex = 0;
+    ejsval* ex = NULL;
+    if (!EJSVAL_IS_UNDEFINED(excluded)) {
+        nex = ToUint32(Get(excluded, _ejs_atom_length));
+        if (nex > 0) {
+            ex = alloca(sizeof(ejsval) * nex);
+            for (uint32_t i = 0; i < nex; i ++)
+                // the desugar passes computed keys through raw; key them
+                // the way the property reads did
+                ex[i] = ToPropertyKey(Get(excluded, ToString(NUMBER_TO_EJSVAL(i))));
+        }
+    }
+
+    ejsval keysArray = OP(from_,OwnPropertyKeys)(from);
+    uint32_t n = ToUint32(Get(keysArray, _ejs_atom_length));
+    for (uint32_t i = 0; i < n; i ++) {
+        ejsval key = Get(keysArray, ToString(NUMBER_TO_EJSVAL(i)));
+
+        EJSBool skip = EJS_FALSE;
+        for (uint32_t j = 0; j < nex && !skip; j ++)
+            if (SameValue(key, ex[j])) skip = EJS_TRUE;
+        if (skip) continue;
+
+        ejsval exc = _ejs_undefined;
+        EJSPropertyDesc* desc = OP(from_,GetOwnProperty)(from, key, &exc);
+        if (desc && _ejs_property_desc_is_enumerable(desc)) {
+            ejsval propValue = OP(from_,Get)(from, key, from);
+            _ejs_object_define_value_property (target, key, propValue,
+                                               EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
+        }
+    }
+
+    return target;
+}
+
+// class field definition (language-P3): CreateDataPropertyOrThrow with
+// the standard field attributes.  a plain Put would fight non-writable
+// inherited props (`name`/`length` for static fields on the class
+// function) and setters on the prototype.
+ejsval
+_ejs_define_field (ejsval obj, ejsval key, ejsval value)
+{
+    _ejs_object_define_value_property (obj, ToPropertyKey(key), value,
+                                       EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
+    return _ejs_undefined;
+}
+
+// the other half of object spread: fold a post-spread literal chunk into
+// the accumulating object BY DESCRIPTOR, so accessor properties transfer
+// as accessors instead of being read.  chunk is always a literal the
+// desugar just built (all own props enumerable).  Returns target.
+ejsval
+_ejs_object_spread_merge (ejsval target, ejsval chunk)
+{
+    EJSObject* chunk_ = EJSVAL_TO_OBJECT(chunk);
+
+    ejsval keysArray = OP(chunk_,OwnPropertyKeys)(chunk);
+    uint32_t n = ToUint32(Get(keysArray, _ejs_atom_length));
+    for (uint32_t i = 0; i < n; i ++) {
+        ejsval key = Get(keysArray, ToString(NUMBER_TO_EJSVAL(i)));
+        ejsval exc = _ejs_undefined;
+        EJSPropertyDesc* desc = OP(chunk_,GetOwnProperty)(chunk, key, &exc);
+        if (!desc) continue;
+        DefinePropertyOrThrow (target, key, desc, &exc);
+    }
+
+    return target;
+}
+
 static EJS_NATIVE_FUNC(_ejs_Object_defineProperties);
 
 

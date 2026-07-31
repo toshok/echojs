@@ -450,10 +450,15 @@ EJSBool ToEJSBool(ejsval exp)
         return EJS_FALSE;
     else if (EJSVAL_IS_BOOLEAN(exp))
         return EJSVAL_TO_BOOLEAN(exp);
-    else if (EJSVAL_IS_NUMBER(exp))
-        return EJSVAL_TO_NUMBER(exp) != 0;
+    else if (EJSVAL_IS_NUMBER(exp)) {
+        // NaN is falsy (NaN != 0 is true in C)
+        double n = EJSVAL_TO_NUMBER(exp);
+        return n != 0 && !isnan(n);
+    }
     else if (EJSVAL_IS_STRING(exp))
         return EJSVAL_TO_STRLEN(exp) != 0;
+    else if (EJSVAL_IS_SYMBOL(exp))
+        return EJS_TRUE;
     else if (EJSVAL_IS_OBJECT(exp))
         return EJS_TRUE;
     else
@@ -870,6 +875,26 @@ _ejs_op_mult (ejsval lhs, ejsval rhs)
     double ld = ToDouble(lhs);
     double rd = ToDouble(rhs);
     return NUMBER_TO_EJSVAL (ld * rd);
+}
+
+// Number::exponentiate — C pow() except: exponent NaN => NaN (C pow(1,NaN)
+// is 1), |base| 1 with infinite exponent => NaN (C returns 1)
+double
+_ejs_number_exponentiate (double base, double exponent)
+{
+    if (isnan(exponent))
+        return nan("");
+    if (isinf(exponent) && fabs(base) == 1)
+        return nan("");
+    return pow(base, exponent);
+}
+
+ejsval
+_ejs_op_exp (ejsval lhs, ejsval rhs)
+{
+    double ld = ToDouble(lhs);
+    double rd = ToDouble(rhs);
+    return NUMBER_TO_EJSVAL (_ejs_number_exponentiate(ld, rd));
 }
 
 ejsval

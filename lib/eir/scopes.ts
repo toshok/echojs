@@ -31,6 +31,7 @@ export const compound_assign_ops = {
     "*=": "*",
     "/=": "/",
     "%=": "%",
+    "**=": "**",
     "&=": "&",
     "|=": "|",
     "^=": "^",
@@ -842,6 +843,8 @@ export class ScopeAnalysis {
             while (!scope.isFnTop) scope = scope.parent!;
         }
         for (const prop of (d.id as e.ObjectPattern).properties) {
+            if (prop.type === "RestElement")
+                throw LowerNotSupported("rest property in declaration pattern", declStmt.loc);
             if (prop.computed)
                 throw LowerNotSupported("computed key in declaration pattern", declStmt.loc);
             if (prop.key.type !== "Identifier" && prop.key.type !== "Literal")
@@ -885,7 +888,7 @@ export class ScopeAnalysis {
                 return;
             case "BinaryExpression":
             case "LogicalExpression":
-                this.walkExpr(n.left);
+                this.walkExpr(n.left as e.Expression);
                 this.walkExpr(n.right);
                 return;
             case "UnaryExpression":
@@ -943,7 +946,7 @@ export class ScopeAnalysis {
                 return;
             case "MemberExpression":
                 this.walkExpr(n.object);
-                if (n.computed) this.walkExpr(n.property);
+                if (n.computed) this.walkExpr(n.property as e.Expression);
                 return;
             case "ConditionalExpression":
                 this.walkExpr(n.test);
@@ -1000,6 +1003,10 @@ export class ScopeAnalysis {
                 return;
             case "ObjectExpression":
                 for (const p of n.properties) {
+                    if (p.type === "SpreadElement") {
+                        this.walkExpr(p.argument);
+                        continue;
+                    }
                     if (p.computed) this.walkExpr(p.key);
                     this.walkExpr(p.value as e.Expression);
                 }

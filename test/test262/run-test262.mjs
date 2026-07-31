@@ -111,6 +111,10 @@ function assembleSource(suiteDir, testPath, meta) {
     harness.push(...meta.includes);
     const seen = new Set();
     let out = strict ? '"use strict";\n' : "";
+    // doneprintHandle.js reports through print(), which is not an echojs
+    // global (P8.1 gotcha) — shim it so async completions are observable
+    if (meta.flags.includes("async"))
+        out += 'var print = typeof print === "function" ? print : function (m) { console.log(m); };\n';
     for (const h of harness) {
         if (seen.has(h)) continue;
         seen.add(h);

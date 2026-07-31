@@ -64,4 +64,18 @@ export const eir_intrinsics: Record<string, IntrinsicEntry> = {
 
     // DesugarDestructuring (array patterns iterate via a runtime wrapper)
     "%createIteratorWrapper": { runtime: "iterator_wrapper_new" },
+
+    // DesugarSpread / DesugarDestructuring: object spread + object rest
+    "%copyDataProps": { runtime: "copy_data_properties" },
+    "%objectSpreadMerge": { runtime: "object_spread_merge" },
+
+    // DesugarClasses: class fields + private members (language-P3)
+    "%defineField": { runtime: "define_field" },
+    "%makePrivateMap": { runtime: "make_private_map" },
+    "%privFieldGet": { runtime: "private_field_get" },
+    "%privFieldSet": { runtime: "private_field_set" },
+    "%privFieldInit": { runtime: "private_field_init" },
+    "%privBrandCheck": { runtime: "private_brand_check" },
+    "%privHas": { runtime: "private_has" },
+    "%privWriteError": { runtime: "private_write_error" },
 };

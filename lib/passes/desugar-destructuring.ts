@@ -12,6 +12,7 @@ import {
     createIteratorWrapper_id,
     getNextValue_id,
     getRest_id,
+    copyDataProps_id,
 } from "../common-ids";
 import type * as e from "../estree";
 
@@ -76,8 +77,45 @@ function createObjectPatternBindings(
     pattern: e.ObjectPattern,
     bindings: Binding[]
 ): void {
+    // { a, [k]: v, ...rest }: rest gets a CopyDataProperties copy of the
+    // source minus the keys destructured before it.  computed keys hoist
+    // into temps so the member read and the exclusion list share one
+    // evaluation.
+    const hasRest = pattern.properties.some((p) => p.type === "RestElement");
+    const excluded: e.Expression[] = [];
+
     for (const prop of pattern.properties) {
-        const memberexp = b.memberExpression(id, prop.key);
+        if (prop.type === "RestElement") {
+            bindings.push({
+                key: prop.argument as e.Pattern,
+                value: intrinsic(copyDataProps_id, [
+                    b.objectExpression([]),
+                    b.identifier(id.name),
+                    b.arrayExpression(excluded.slice()),
+                ]),
+            });
+            continue;
+        }
+
+        let keyExpr = prop.key;
+        if (hasRest) {
+            if (prop.computed) {
+                const kt = fresh();
+                bindings.push({ key: kt, value: prop.key, need_decl: true });
+                keyExpr = b.identifier(kt.name);
+                excluded.push(b.identifier(kt.name));
+            } else {
+                excluded.push(
+                    b.literal(
+                        prop.key.type === "Identifier"
+                            ? prop.key.name
+                            : String((prop.key as e.Literal).value)
+                    )
+                );
+            }
+        }
+
+        const memberexp = b.memberExpression(id, keyExpr);
         if (prop.computed) memberexp.computed = true;
 
         let target = prop.value as e.Pattern;

@@ -56,6 +56,7 @@ export const OPS = {
     mul: { arity: 2, effects: GENERIC_OP },
     div: { arity: 2, effects: GENERIC_OP },
     mod: { arity: 2, effects: GENERIC_OP },
+    exp: { arity: 2, effects: GENERIC_OP },
     lt: { arity: 2, effects: GENERIC_OP },
     le: { arity: 2, effects: GENERIC_OP },
     gt: { arity: 2, effects: GENERIC_OP },

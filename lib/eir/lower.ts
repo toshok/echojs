@@ -158,6 +158,7 @@ const binops: Record<string, string | undefined> = {
     "*": "mul",
     "/": "div",
     "%": "mod",
+    "**": "exp",
     "<": "lt",
     "<=": "le",
     ">": "gt",
@@ -572,16 +573,21 @@ class LowerFunction {
                 });
             }
             case "ObjectExpression": {
-                let hasAccessors = n.properties.some((p) => p.kind && p.kind !== "init");
+                // SpreadElement properties were desugared by DesugarSpread
+                for (const p of n.properties)
+                    if (p.type === "SpreadElement")
+                        throw LowerNotSupported("object spread survived desugaring", n.loc);
+                const props = n.properties as e.Property[];
+                let hasAccessors = props.some((p) => p.kind && p.kind !== "init");
                 if (hasAccessors) return this.objectWithAccessors(n);
-                let hasComputed = n.properties.some(
+                let hasComputed = props.some(
                     (p) => p.computed || (p.key.type !== "Identifier" && p.key.type !== "Literal")
                 );
-                let hasProto = n.properties.some((p) => this.isProtoProp(p));
+                let hasProto = props.some((p) => this.isProtoProp(p));
                 if (!hasComputed && !hasProto) {
                     const keys: string[] = [];
                     const values: Inst[] = [];
-                    for (const p of n.properties) {
+                    for (const p of props) {
                         keys.push(
                             p.key.type === "Identifier"
                                 ? p.key.name
@@ -606,7 +612,7 @@ class LowerFunction {
                         new Set(keys).size === keys.length &&
                         keys.every((k) => !/^[0-9]/.test(k))
                     ) {
-                        const fields: ShapeField[] = n.properties.map((p, i) => ({
+                        const fields: ShapeField[] = props.map((p, i) => ({
                             name: keys[i]!,
                             repr: this.operandIsNumber(p.value as e.Expression)
                                 ? ("f64" as const)
@@ -623,7 +629,7 @@ class LowerFunction {
                 // + per-property stores in source order (key evaluates
                 // before value, per spec)
                 let obj = this.b.emit("make_object", [], { keys: [] });
-                for (let p of n.properties) {
+                for (let p of props) {
                     if (this.isProtoProp(p)) {
                         const v = this.expr(p.value as e.Expression);
                         this.b.emit("call_runtime", [obj, v], {
@@ -665,10 +671,13 @@ class LowerFunction {
     // order (their keys are distinct evaluations); the runtime merges
     // the partial descriptors.
     objectWithAccessors(n: e.ObjectExpression): Inst {
+        // only reached from the ObjectExpression case, after the
+        // no-SpreadElement assert
+        const props = n.properties as e.Property[];
         let obj = this.b.emit("make_object", [], { keys: [] });
         const done = new Set<string>();
-        for (let i = 0; i < n.properties.length; i++) {
-            const p = n.properties[i]!;
+        for (let i = 0; i < props.length; i++) {
+            const p = props[i]!;
             if (p.computed) {
                 let key = this.expr(p.key);
                 if (p.kind && p.kind !== "init") {
@@ -695,8 +704,8 @@ class LowerFunction {
                 done.add(name);
                 let getter: Inst | null = null;
                 let setter: Inst | null = null;
-                for (let j = i; j < n.properties.length; j++) {
-                    const q = n.properties[j]!;
+                for (let j = i; j < props.length; j++) {
+                    const q = props[j]!;
                     if (q.kind === "init" || q.computed) continue;
                     const qname = q.key.type === "Identifier" ? q.key.name : String((q.key as e.Literal).value);
                     if (qname !== name) continue;
@@ -782,7 +791,7 @@ class LowerFunction {
     binary(n: e.BinaryExpression): Inst {
         let op = binops[n.operator];
         if (!op) throw LowerNotSupported(`binary operator ${n.operator}`, n.loc);
-        let l = this.expr(n.left);
+        let l = this.expr(n.left as e.Expression);
         let r = this.expr(n.right);
         // born-typed guarded arithmetic.  When the oracle types
         // BOTH operands as exactly {number}, split the same diamond shape
@@ -791,7 +800,7 @@ class LowerFunction {
         // consumption is correct even when the oracle is wrong — the
         // has_tag guards decide at runtime; only code size/speed change.
         const f64op = f64ops[n.operator];
-        if (f64op && this.operandIsNumber(n.left) && this.operandIsNumber(n.right)) {
+        if (f64op && this.operandIsNumber(n.left as e.Expression) && this.operandIsNumber(n.right)) {
             // trusted-clone bodies consume the oracle UNGUARDED: no
             // diamond, no slow path — unbox, compute, re-box.  Everywhere
             // else the guarded diamond stands.
@@ -808,7 +817,7 @@ class LowerFunction {
             f64op &&
             this.spec &&
             !this.spec.trusted &&
-            this.operandPlausiblyNumber(n.left) &&
+            this.operandPlausiblyNumber(n.left as e.Expression) &&
             this.operandPlausiblyNumber(n.right)
         )
             return this.numericDiamond(f64op, op, l, r);
@@ -1252,15 +1261,23 @@ class LowerFunction {
 
     logical(n: e.LogicalExpression): Inst {
         let l = this.expr(n.left);
-        let lbool = this.b.emit("to_boolean", [l], {});
 
         let rhs_bb = this.b.newBlock("logical_rhs");
         let join_bb = this.b.newBlock("logical_join");
         let result = join_bb.addParam("logical");
 
-        if (n.operator === "&&") this.b.condBr(lbool, rhs_bb, [], join_bb, [l]);
-        else if (n.operator === "||") this.b.condBr(lbool, join_bb, [l], rhs_bb, []);
-        else throw LowerNotSupported(`logical operator ${n.operator}`, n.loc);
+        if (n.operator === "??") {
+            // nullish: evaluate the rhs only when the lhs is null or
+            // undefined — exactly what `== null` tests (no valueOf hooks)
+            let isnullish = this.b.emit("loose_eq", [l, this.b.constNull()], {});
+            let lbool = this.b.emit("to_boolean", [isnullish], {});
+            this.b.condBr(lbool, rhs_bb, [], join_bb, [l]);
+        } else {
+            let lbool = this.b.emit("to_boolean", [l], {});
+            if (n.operator === "&&") this.b.condBr(lbool, rhs_bb, [], join_bb, [l]);
+            else if (n.operator === "||") this.b.condBr(lbool, join_bb, [l], rhs_bb, []);
+            else throw LowerNotSupported(`logical operator ${n.operator}`, n.loc);
+        }
         this.b.sealBlock(rhs_bb);
 
         this.b.setInsertPoint(rhs_bb);
@@ -1302,7 +1319,7 @@ class LowerFunction {
                 const key =
                     !m.computed && m.property.type === "Identifier"
                         ? this.b.constAtom(m.property.name)
-                        : this.expr(m.property);
+                        : this.expr(m.property as e.Expression);
                 return this.b.emit("delete_prop", [obj, key], {});
             }
             default:
@@ -1384,7 +1401,7 @@ class LowerFunction {
             let key: Inst | null = null;
             if (!n.left.computed && n.left.property.type === "Identifier")
                 atom = n.left.property.name;
-            else key = this.expr(n.left.property);
+            else key = this.expr(n.left.property as e.Expression);
             let v: Inst;
             if (binop) {
                 const cur =
@@ -1421,7 +1438,7 @@ class LowerFunction {
             let atom: string | null = null;
             let key: Inst | null = null;
             if (!m.computed && m.property.type === "Identifier") atom = m.property.name;
-            else key = this.expr(m.property);
+            else key = this.expr(m.property as e.Expression);
             const cur =
                 atom !== null
                     ? this.propGet(objNode, obj, atom)
@@ -1471,7 +1488,7 @@ class LowerFunction {
             if (!n.tag.computed && n.tag.property.type === "Identifier")
                 callee = this.b.emit("get_prop_atom", [thisArg], { atom: n.tag.property.name });
             else {
-                let key = this.expr(n.tag.property);
+                let key = this.expr(n.tag.property as e.Expression);
                 callee = this.b.emit("get_prop", [thisArg, key], {});
             }
         } else {
@@ -1515,7 +1532,7 @@ class LowerFunction {
         let obj = this.expr(n.object);
         if (!n.computed && n.property.type === "Identifier")
             return this.propGet(n.object as e.Expression, obj, n.property.name);
-        let key = this.expr(n.property);
+        let key = this.expr(n.property as e.Expression);
         return this.b.emit("get_prop", [obj, key], {});
     }
 
@@ -1547,7 +1564,7 @@ class LowerFunction {
                     n.callee.property.name
                 );
             else {
-                let key = this.expr(n.callee.property);
+                let key = this.expr(n.callee.property as e.Expression);
                 callee = this.b.emit("get_prop", [thisArg, key], {});
             }
         } else {
@@ -2006,6 +2023,8 @@ class LowerFunction {
     lowerObjectPatternDecl(d: e.VariableDeclarator): void {
         const src = d.init ? this.expr(d.init) : this.b.constUndefined();
         for (const prop of (d.id as e.ObjectPattern).properties) {
+            if (prop.type === "RestElement")
+                throw LowerNotSupported("rest property in declaration pattern", d.loc);
             const keyName =
                 prop.key.type === "Identifier"
                     ? prop.key.name

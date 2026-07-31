@@ -632,36 +632,42 @@ static EJS_NATIVE_FUNC(_ejs_Promise_get_species) {
     return _ejs_Promise;
 }
 
-// ECMA262 25.4.4.1.1 Promise.all Resolve Element Functions
+// ECMA262 25.4.4.1.1 Promise.all Resolve Element Functions.
+// the spec's remainingElementsCount is a record SHARED by all the element
+// functions: here it is a 1-element array every env points at (the old
+// per-env numeric snapshot could never reach 0 — Promise.all had been a
+// stub since 2015; language-P3 flushed it out via async/await)
 static EJS_NATIVE_FUNC(resolve_element) {
-    // 1. If the value of F's [[AlreadyCalled]] internal slot is true, then return undefined. 
+    ejsval x = argc > 0 ? args[0] : _ejs_undefined;
+
+    // 1. If the value of F's [[AlreadyCalled]] internal slot is true, then return undefined.
     if (EJSVAL_TO_BOOLEAN(EJS_RESOLVEELEMENT_GET_ALREADY_CALLED(env)))
         return _ejs_undefined;
 
-    // 2. Set the value of F's [[AlreadyCalled]] internal slot to true. 
+    // 2. Set the value of F's [[AlreadyCalled]] internal slot to true.
     EJS_RESOLVEELEMENT_SET_ALREADY_CALLED(env, _ejs_true);
 
-#if notyet
-    // 3. Let index be the value of F's [[Index]] internal slot. 
+    // 3-6. the internal slots
     ejsval index = EJS_RESOLVEELEMENT_GET_INDEX(env);
-
-    // 4. Let values be the value of F's [[Values]] internal slot. 
     ejsval values = EJS_RESOLVEELEMENT_GET_VALUES(env);
-
-    // 5. Let promiseCapability be the value of F's [[Capabilities]] internal slot. 
     ejsval promiseCapability = EJS_RESOLVEELEMENT_GET_CAPABILITIES(env);
-#endif
+    ejsval counter = EJS_RESOLVEELEMENT_GET_REMAINING_ELEMENTS(env);
 
-    // 6. Let remainingElementsCount be the value of F's [[RemainingElements]] internal slot. 
+    // 7. Let result be CreateDataProperty(values, ToString(index), x).
+    _ejs_object_define_value_property (values, index, x,
+                                       EJS_PROP_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE);
 
-    // XXX remainingElementsCount needs to be a boxed value so that resolve_element functions can update it
-    // XXX maybe an EJSNumber?  supposed to be immutable, but we could fudge.. or another closure.
+    // 9. Set remainingElementsCount.[[value]] to remainingElementsCount.[[value]] - 1.
+    double remaining = EJSVAL_TO_NUMBER(EJS_DENSE_ARRAY_ELEMENTS(counter)[0]) - 1;
+    EJS_DENSE_ARRAY_ELEMENTS(counter)[0] = NUMBER_TO_EJSVAL(remaining);
 
-    // 7. Let result be CreateDataProperty(values, ToString(index), x). 
-    // 8. IfAbruptRejectPromise(result, promiseCapability). 
-    // 9. Set remainingElementsCount.[[value]] to remainingElementsCount.[[value]] - 1. 
-    // 10. If remainingElementsCount.[[value]] is 0, 
-    //     a. Return the result of calling the [[Call]] internal method of promiseCapability.[[Resolve]] with undefined as thisArgument and (values) as argumentsList. 
+    // 10. If remainingElementsCount.[[value]] is 0,
+    if (remaining == 0) {
+        //  a. Return the result of calling the [[Call]] internal method of promiseCapability.[[Resolve]] with undefined as thisArgument and (values) as argumentsList.
+        ejsval undef_this = _ejs_undefined;
+        return _ejs_invoke_closure (EJS_CAPABILITY_GET_RESOLVE(promiseCapability), &undef_this, 1, &values, _ejs_undefined);
+    }
+
     // 11. Return undefined.
     return _ejs_undefined;
 }
@@ -691,11 +697,15 @@ static EJS_NATIVE_FUNC(_ejs_Promise_all) {
         return EJS_CAPABILITY_GET_PROMISE(promiseCapability);
     }
 
-    // 6. Let values be ArrayCreate(0). 
+    // 6. Let values be ArrayCreate(0).
     ejsval values = _ejs_array_new(0, EJS_FALSE);
 
-    // 7. Let remainingElementsCount be a new Record { [[value]]: 1 }. 
-    int remainingElementsCount = 1;
+    // 7. Let remainingElementsCount be a new Record { [[value]]: 1 } —
+    // shared with every resolve-element function (a 1-element array)
+    ejsval remaining = _ejs_array_new(1, EJS_FALSE);
+    EJS_DENSE_ARRAY_ELEMENTS(remaining)[0] = NUMBER_TO_EJSVAL(1);
+#define REMAINING_COUNT() EJSVAL_TO_NUMBER(EJS_DENSE_ARRAY_ELEMENTS(remaining)[0])
+#define REMAINING_SET(v) EJS_DENSE_ARRAY_ELEMENTS(remaining)[0] = NUMBER_TO_EJSVAL(v)
 
     // 8. Let index be 0. 
     int index = 0;
@@ -714,10 +724,10 @@ static EJS_NATIVE_FUNC(_ejs_Promise_all) {
         }
         //    c. If next is false, 
         if (EJSVAL_IS_BOOLEAN(next) && !EJSVAL_TO_BOOLEAN(next)) {
-            //       i. Set remainingElementsCount.[[value]] to remainingElementsCount.[[value]] - 1. 
-            remainingElementsCount --;
-            //       ii. If remainingElementsCount.[[value]] is 0, 
-            if (remainingElementsCount == 0) {
+            //       i. Set remainingElementsCount.[[value]] to remainingElementsCount.[[value]] - 1.
+            REMAINING_SET(REMAINING_COUNT() - 1);
+            //       ii. If remainingElementsCount.[[value]] is 0,
+            if (REMAINING_COUNT() == 0) {
                 //           1. Let resolveResult be the result of calling the [[Call]] internal method of promiseCapability.[[Resolve]] with undefined as thisArgument and (values) as argumentsList. 
                 ejsval resolveResult;
                 ejsval undef_this = _ejs_undefined;
@@ -765,10 +775,10 @@ static EJS_NATIVE_FUNC(_ejs_Promise_all) {
         EJS_RESOLVEELEMENT_SET_VALUES(resolvingElement_env, values);
         //    l. Set the [[Capabilities]] internal slot of resolveElement to promiseCapability. 
         EJS_RESOLVEELEMENT_SET_CAPABILITIES(resolvingElement_env, promiseCapability);
-        //    m. Set the [[RemainingElements]] internal slot of resolveElement to remainingElementsCount. 
-        EJS_RESOLVEELEMENT_SET_REMAINING_ELEMENTS(resolvingElement_env, NUMBER_TO_EJSVAL(remainingElementsCount));
-        //    n. Set remainingElementsCount.[[value]] to remainingElementsCount.[[value]] + 1. 
-        remainingElementsCount++;
+        //    m. Set the [[RemainingElements]] internal slot of resolveElement to remainingElementsCount (the shared record).
+        EJS_RESOLVEELEMENT_SET_REMAINING_ELEMENTS(resolvingElement_env, remaining);
+        //    n. Set remainingElementsCount.[[value]] to remainingElementsCount.[[value]] + 1.
+        REMAINING_SET(REMAINING_COUNT() + 1);
         //    o. Let result be Invoke(nextPromise, "then", (resolveElement, promiseCapability.[[Reject]])). 
         ejsval thenargs[] = { resolveElement, EJS_CAPABILITY_GET_REJECT(promiseCapability) };
         ejsval result;
@@ -782,6 +792,8 @@ static EJS_NATIVE_FUNC(_ejs_Promise_all) {
         //    q. Set index to index + 1.
         index ++;
     }
+#undef REMAINING_COUNT
+#undef REMAINING_SET
 }
 
 // ECMA262 25.4.4.3 Promise.race ( iterable ) 

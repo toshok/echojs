@@ -568,8 +568,9 @@ test("lower: class accessors lower via make_object_shaped + defineProperties", (
     verifyModule(r.module);
     let all = r.module.functions.map((fn) => printFunction(fn)).join("\n");
     // one property entry carrying BOTH accessors (the get/set pair shares
-    // a descriptor literal with fields get,set)
-    assertContains(all, 'shape="get:boxed,set:boxed"');
+    // a descriptor literal with fields get,set + the spec-attribute
+    // configurable:true, language-P3)
+    assertContains(all, 'shape="get:boxed,set:boxed,configurable:boxed"');
     assertContains(all, 'atom="defineProperties"');
 });
 

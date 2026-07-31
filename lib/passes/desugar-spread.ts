@@ -24,6 +24,8 @@ import {
     apply_id,
     constructSuperApply_id,
     constructApply_id,
+    copyDataProps_id,
+    objectSpreadMerge_id,
 } from "../common-ids";
 import type * as e from "../estree";
 
@@ -53,6 +55,42 @@ function holeToUndefined(el: e.Expression | e.SpreadElement | null): e.Expressio
 }
 
 export class DesugarSpread extends TransformPass {
+    // { a: 1, ...x, get b() {} }  =>
+    //   %objectSpreadMerge(%copyDataProps({ a: 1 }, x, undefined), { get b() {} })
+    // consecutive plain properties stay one literal chunk (the emitter's
+    // native path); spread sources copy per CopyDataProperties; post-spread
+    // literal chunks merge by descriptor so accessors survive
+    override visitObjectExpression(n: e.ObjectExpression): VisitResult {
+        super.visitObjectExpression(n);
+        if (!n.properties.some((p) => p.type === "SpreadElement")) return n;
+
+        const chunks: (e.ObjectExpression | { spread: e.Expression })[] = [];
+        let current: e.Property[] = [];
+        for (const prop of n.properties) {
+            if (prop.type === "SpreadElement") {
+                if (current.length > 0) {
+                    chunks.push(b.objectExpression(current));
+                    current = [];
+                }
+                chunks.push({ spread: prop.argument });
+            } else {
+                current.push(prop);
+            }
+        }
+        if (current.length > 0) chunks.push(b.objectExpression(current));
+
+        let acc: e.Expression =
+            chunks[0] && !("spread" in chunks[0])
+                ? (chunks.shift() as e.ObjectExpression)
+                : b.objectExpression([]);
+        for (const chunk of chunks) {
+            if ("spread" in chunk)
+                acc = intrinsic(copyDataProps_id, [acc, chunk.spread, b.undefinedLit()]);
+            else acc = intrinsic(objectSpreadMerge_id, [acc, chunk]);
+        }
+        return acc;
+    }
+
     override visitArrayExpression(n: e.ArrayExpression): VisitResult {
         super.visitArrayExpression(n);
         const needs_desugaring = n.elements.some((el) => el && el.type === "SpreadElement");

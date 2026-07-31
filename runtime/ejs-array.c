@@ -2903,9 +2903,14 @@ _ejs_array_specop_get_own_property (ejsval obj, ejsval propertyName, ejsval *exc
             else {
                 el = EJS_DENSE_ARRAY_ELEMENTS(obj)[idx];
             }
+            // a hole is not an own property
+            if (EJSVAL_IS_ARRAY_HOLE_MAGIC(el))
+                return NULL;
             // XXX we leak this.  need to change get_own_property to use an out param instead of a return value
             EJSPropertyDesc* desc = (EJSPropertyDesc*)calloc(sizeof(EJSPropertyDesc), 1);
             _ejs_property_desc_set_writable (desc, EJS_TRUE);
+            _ejs_property_desc_set_enumerable (desc, EJS_TRUE);
+            _ejs_property_desc_set_configurable (desc, EJS_TRUE);
             _ejs_property_desc_set_value (desc, el);
             return desc;
         }
@@ -3090,6 +3095,12 @@ _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPrope
     }
 
     if (is_index) {
+        // an attribute-only redefine (Object.freeze/seal walking the new
+        // OwnPropertyKeys) must not clobber the element with the
+        // descriptor's absent (zeroed) value.  per-element attributes
+        // aren't tracked for array storage; leave the value alone.
+        if ((propertyDescriptor->flags & EJS_PROP_FLAGS_VALUE_SET) == 0)
+            return EJS_TRUE;
         if (EJSVAL_IS_DENSE_ARRAY(obj)) {
             // we're a dense array, realloc to include up to idx+1
 
@@ -3123,6 +3134,9 @@ _ejs_array_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPrope
 
     if (EJSVAL_IS_STRING(propertyName)) {
         if (!ucs2_strcmp (_ejs_ucs2_length, EJSVAL_TO_FLAT_STRING(propertyName))) {
+            // attribute-only redefine (freeze/seal): leave the length alone
+            if ((propertyDescriptor->flags & EJS_PROP_FLAGS_VALUE_SET) == 0)
+                return EJS_TRUE;
             // XXX more from 15.4.5.1 here
             int newLen = ToUint32(_ejs_property_desc_get_value(propertyDescriptor));
             int oldLen = EJS_ARRAY_LEN(obj);
@@ -3192,6 +3206,25 @@ _ejs_array_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     _ejs_Object_specops.Scan (obj, scan_func);
 }
 
+// array [[OwnPropertyKeys]]: the elements live outside the property map,
+// and `length` is virtual — integer indices first, then length, then
+// whatever the ordinary implementation finds in the map (named props,
+// symbols).  the inherited map-only version made every OwnPropertyKeys
+// consumer (Reflect.ownKeys, CopyDataProperties/object spread) miss the
+// elements entirely.
+static ejsval
+_ejs_array_specop_own_property_keys (ejsval O)
+{
+    ejsval keys = _ejs_array_new (0, EJS_FALSE);
+    _ejs_array_push_own_index_names (O, keys);
+    ejsval length_name = _ejs_atom_length;
+    _ejs_array_push_dense (keys, 1, &length_name);
+    ejsval mapkeys = _ejs_Object_specops.OwnPropertyKeys (O);
+    for (int64_t i = 0; i < EJS_ARRAY_LEN(mapkeys); i ++)
+        _ejs_array_push_dense (keys, 1, &EJS_DENSE_ARRAY_ELEMENTS(mapkeys)[i]);
+    return keys;
+}
+
 EJS_DEFINE_CLASS(Array,
                  OP_INHERIT, // [[GetPrototypeOf]]
                  OP_INHERIT, // [[SetPrototypeOf]]
@@ -3204,7 +3237,7 @@ EJS_DEFINE_CLASS(Array,
                  _ejs_array_specop_set,
                  _ejs_array_specop_delete,
                  OP_INHERIT, // [[Enumerate]]
-                 OP_INHERIT, // [[OwnPropertyKeys]]
+                 _ejs_array_specop_own_property_keys,
                  OP_INHERIT, // [[Call]]
                  OP_INHERIT, // [[Construct]]
                  _ejs_array_specop_allocate,

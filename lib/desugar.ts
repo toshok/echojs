@@ -2,6 +2,8 @@
  * vim: set ts=4 sw=4 et tw=99 ft=typescript:
  */
 
+import { DesugarModernOps } from "./passes/desugar-modern-ops";
+import { DesugarAsyncFunctions } from "./passes/desugar-async-functions";
 import { DesugarClasses } from "./passes/desugar-classes";
 import { DesugarDestructuring } from "./passes/desugar-destructuring";
 import { DesugarGeneratorFunctions } from "./passes/desugar-generator-functions";
@@ -27,11 +29,13 @@ type PassConstructor = new (
 // EIR has no native lowering for arrive there as %-intrinsic calls, which
 // lower through lib/eir/intrinsics.ts.
 //
-// DesugarClasses, then DesugarDestructuring, then
-// DesugarGeneratorFunctions, then DesugarSpread: super(...args) desugars
-// into %constructSuper(ref, ...args) first, patterns unfold into
-// member/iterator reads, generator methods desugar as plain function
-// expressions, and the spread pass then rewrites what remains.
+// DesugarModernOps and DesugarAsyncFunctions (language-P3) run before the
+// ES6 tier; then DesugarClasses, DesugarDestructuring,
+// DesugarGeneratorFunctions, DesugarSpread: super(...args) desugars into
+// %constructSuper(ref, ...args) first, patterns unfold into
+// member/iterator reads, generator methods (and the async desugar's
+// synthesized generators) desugar as plain function expressions, and the
+// spread pass then rewrites what remains.
 //
 // HoistFuncDecls hoists last: nothing after it (spread/meta emit no
 // function declarations) re-creates block-level decls.  it gives v8
@@ -40,6 +44,14 @@ type PassConstructor = new (
 // also moves the closure slot stores to the top, where hoisting says
 // they belong.
 const pre_eir_passes: PassConstructor[] = [
+    // DesugarModernOps first: optional chains / logical assignment desugar
+    // to plain ES6 (arrow iifes) the later passes consume; `super` inside
+    // the synthesized arrows is still rewritten by DesugarClasses below.
+    // DesugarAsyncFunctions next: async methods become plain methods
+    // before the class machinery, and its synthesized generators take the
+    // normal generator/destructuring pipeline.
+    DesugarModernOps,
+    DesugarAsyncFunctions,
     DesugarClasses,
     DesugarDestructuring,
     DesugarGeneratorFunctions,

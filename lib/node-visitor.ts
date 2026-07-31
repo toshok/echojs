@@ -78,6 +78,9 @@ export class TreeVisitor {
             case "AssignmentPattern":
                 rv = this.visitAssignmentPattern(n);
                 break;
+            case "AwaitExpression":
+                rv = this.visitAwaitExpression(n);
+                break;
             case "BinaryExpression":
                 rv = this.visitBinaryExpression(n);
                 break;
@@ -92,6 +95,9 @@ export class TreeVisitor {
                 break;
             case "CatchClause":
                 rv = this.visitCatchClause(n);
+                break;
+            case "ChainExpression":
+                rv = this.visitChainExpression(n);
                 break;
             case "ClassBody":
                 rv = this.visitClassBody(n);
@@ -192,8 +198,14 @@ export class TreeVisitor {
             case "ObjectPattern":
                 rv = this.visitObjectPattern(n);
                 break;
+            case "PrivateIdentifier":
+                rv = this.visitPrivateIdentifier(n);
+                break;
             case "Program":
                 rv = this.visitProgram(n);
+                break;
+            case "PropertyDefinition":
+                rv = this.visitPropertyDefinition(n);
                 break;
             case "Property":
                 rv = this.visitProperty(n);
@@ -209,6 +221,9 @@ export class TreeVisitor {
                 break;
             case "SpreadElement":
                 rv = this.visitSpreadElement(n);
+                break;
+            case "StaticBlock":
+                rv = this.visitStaticBlock(n);
                 break;
             case "Super":
                 rv = this.visitSuper(n);
@@ -417,6 +432,11 @@ export class TreeVisitor {
         return n;
     }
 
+    visitAwaitExpression(n: e.AwaitExpression): VisitResult {
+        n.argument = this.visitAs(n.argument);
+        return n;
+    }
+
     visitVariableDeclaration(n: e.VariableDeclaration): VisitResult {
         n.declarations = this.visitArray(n.declarations);
         return n;
@@ -520,6 +540,11 @@ export class TreeVisitor {
         return n;
     }
 
+    visitChainExpression(n: e.ChainExpression): VisitResult {
+        n.expression = this.visitAs(n.expression);
+        return n;
+    }
+
     visitClassDeclaration(n: e.ClassDeclaration): VisitResult {
         return this.visitClass(n);
     }
@@ -544,6 +569,21 @@ export class TreeVisitor {
 
     visitMethodDefinition(n: e.MethodDefinition): VisitResult {
         n.value = this.visitAs(n.value);
+        return n;
+    }
+
+    visitPropertyDefinition(n: e.PropertyDefinition): VisitResult {
+        if (n.computed) n.key = this.visitAs(n.key);
+        n.value = this.visitNullable(n.value);
+        return n;
+    }
+
+    visitStaticBlock(n: e.StaticBlock): VisitResult {
+        n.body = this.visitArray(n.body);
+        return n;
+    }
+
+    visitPrivateIdentifier(n: e.PrivateIdentifier): VisitResult {
         return n;
     }
 
