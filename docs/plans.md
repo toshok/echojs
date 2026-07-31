@@ -152,7 +152,14 @@ Catch up with the language; adopt test262.  Detail: language-plan.md.
       a self-host probe; unsupported-syntax gates replace silent
       miscompiles; five pre-existing runtime bugs fixed; matrix
       426/20/0, corpus AST-identity vs node).
-- [ ] **P8.3** features in payoff order (language-P3).
+- [x] **P8.3** features in payoff order (language-P3).  DONE 2026-07-31
+      — docs/language-p3-results.md (the payoff list landed: `**`/`**=`,
+      `??`, logical assignment, optional chaining, object spread/rest,
+      bare catch, class fields + private members + static blocks,
+      async/await + `for await`; eight pre-existing bugs fixed incl.
+      super.other() mis-dispatch and Promise.all-never-resolves; still
+      gated: async generators, BigInt, dynamic import; matrix 438/20/0
+      ×5 lanes).
 - [ ] **P8.4** test262 CI lane (language-P4).
 - [ ] **P8.5** un-fork the JS external-deps (language-P5).
 

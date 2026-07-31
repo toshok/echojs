@@ -46,12 +46,23 @@ safer with types underneath it.
       esprima` is the bisection fallback.  Syntax acorn parses but the
       backend can't lower gates at the seam with a located error
       (removed feature-by-feature in language-P3).
-- [ ] **language-P3 — Feature implementation, payoff-ordered.**  Wire
-      probes into CI as they green.  Syntax-only features (optional
-      chaining, `??`, `**`, spread/rest in objects) are desugar
-      candidates; async/await and class fields need runtime + emitter
-      work; BigInt needs a value-representation decision (NaN-boxing
-      has no spare tag appetite — likely heap-boxed).
+- [x] **language-P3 — Feature implementation, payoff-ordered.**  DONE
+      2026-07-31 — docs/language-p3-results.md.  The payoff list landed:
+      `**`/`**=` (real generic binop + spec-correct exponentiate shared
+      with Math.pow), `??` (native EIR lowering), logical assignment +
+      optional chaining (DesugarModernOps), object spread/rest
+      (CopyDataProperties runtime helpers), bare `catch`, class fields +
+      private members (#fields/#methods/accessors via per-class weakmaps
+      + brand checks) + static blocks (DesugarClasses), and async/await
+      + `for await` on the coroutine generators + promises
+      (DesugarAsyncFunctions; Symbol.asyncIterator added).  Eight
+      pre-existing bugs flushed out and fixed (super.other()
+      mis-dispatch, generator-desugar mapping pop, Promise.all stub,
+      array/string OwnPropertyKeys/descriptors, array freeze clobber,
+      ToEJSBool symbol/NaN, String(symbol), class member attributes).
+      Still gated with located errors: async generator functions,
+      BigInt (value-representation decision pending, likely heap-boxed),
+      dynamic `import()`/`import.meta` (AOT module-story design).
 - [ ] **language-P4 — test262 lane.**  Stand up a curated test262
       subset as a CI lane (the kangax harness stays until parity);
       grow toward the full suite as features land.
