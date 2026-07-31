@@ -1,7 +1,7 @@
 // generator: esm
-// xfail: generator support isn't 100%
 
-// "sending" from kangax
+// "sending" from kangax (was xfail until language-P2: the acorn parse
+// of the array literal around the yields lowers correctly)
 
 var sent;
 function* generator() {

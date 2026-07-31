@@ -145,9 +145,13 @@ Catch up with the language; adopt test262.  Detail: language-plan.md.
       DONE 2026-07-31 — docs/language-p1-results.md (26,820-test
       probe, runner in test/test262/; 35% pass, parser confirmed as
       the long pole, prioritized language-P3 feature list).
-- [ ] **P8.2** parser replacement behind the ESTree seam
+- [x] **P8.2** parser replacement behind the ESTree seam
       (language-P2; coordinates with compiler-P3 if TS input
-      happens).
+      happens).  DONE 2026-07-31 — docs/language-p2-results.md
+      (acorn 8.18.0 behind lib/parser.ts, chosen over @babel/parser by
+      a self-host probe; unsupported-syntax gates replace silent
+      miscompiles; five pre-existing runtime bugs fixed; matrix
+      426/20/0, corpus AST-identity vs node).
 - [ ] **P8.3** features in payoff order (language-P3).
 - [ ] **P8.4** test262 CI lane (language-P4).
 - [ ] **P8.5** un-fork the JS external-deps (language-P5).

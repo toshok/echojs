@@ -32,20 +32,20 @@ safer with types underneath it.
       hazard: `async m()` object methods parse but silently
       miscompile).  Remaining work: a test262 subset probe for
       exhaustiveness, and a prioritized feature list from it.
-- [ ] **language-P2 — Parser replacement.**  Keep the slot
-      interface-shaped (the compiler consumes ESTree; parser behind one
-      module) with **@babel/parser + its estree plugin as the default**
-      — it's where stage proposals land first (decorators, pipeline,
-      pattern matching as enableable plugins); it's zero-dependency and
-      bundles flat for vendoring.  Acorn remains the cheap-swap
-      alternative.  The MAAM analysis framework consumes ESTree and has
-      no dependency on any particular parser — the compiler/analysis
-      contract is the ESTree shape of the post-desugar tree, so the
-      parser choice is free on both sides.  Self-hosting wrinkle:
-      either parser's own source is newer JS than echojs parses, so
-      vendor a mechanically-regenerable transpiled build (babel to the
-      supported subset), shrinking the transpile step as modernization
-      features land.
+- [x] **language-P2 — Parser replacement.**  DONE 2026-07-31 —
+      docs/language-p2-results.md.  The slot is interface-shaped as
+      planned (`lib/parser.ts`; the compiler consumes the ESTree
+      dialect), but the probe inverted the pencil-in: **acorn 8.18.0 is
+      the default**, not @babel/parser — acorn self-hosts byte-
+      identically today (537-file corpus proof), while babel's bundle
+      needs stdlib echojs lacks (`Array.prototype.at`, ...) plus 4× the
+      compile time, for stage-proposal coverage nothing on the P8.3
+      list needs.  The seam keeps the babel swap cheap if that changes.
+      Vendored as a mechanically-regenerable ES5 transpiled build
+      (external-deps/acorn/regen.sh) exactly as planned; `--parser
+      esprima` is the bisection fallback.  Syntax acorn parses but the
+      backend can't lower gates at the seam with a located error
+      (removed feature-by-feature in language-P3).
 - [ ] **language-P3 — Feature implementation, payoff-ordered.**  Wire
       probes into CI as they green.  Syntax-only features (optional
       chaining, `??`, `**`, spread/rest in objects) are desugar
