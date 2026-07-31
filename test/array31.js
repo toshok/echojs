@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 // 'Stolen' from the Mozilla's developers docs.
 

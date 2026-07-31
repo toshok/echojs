@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 var obj = { length: 3, 0: "hola", 1: "world", 2: 3.14 };
 

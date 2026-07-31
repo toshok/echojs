@@ -39,6 +39,8 @@ namespace ejsllvm {
         _ejs_gc_add_root (&_ejs_ConstantArray_prototype);
         _ejs_ConstantArray_prototype = _ejs_object_create(_ejs_Object_prototype);
 
+        _ejs_gc_add_root (&_ejs_ConstantArray);
+
         _ejs_ConstantArray = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMConstantArray", (EJSClosureFunc)ConstantArray_impl, _ejs_ConstantArray_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "ConstantArray", _ejs_ConstantArray);

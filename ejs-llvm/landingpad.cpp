@@ -94,6 +94,8 @@ namespace ejsllvm {
         _ejs_gc_add_root (&_ejs_LandingPad_prototype);
         _ejs_LandingPad_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_LandingPad_specops);
 
+        _ejs_gc_add_root (&_ejs_LandingPad);
+
         _ejs_LandingPad = _ejs_function_new_utf8_with_proto  (_ejs_null, "LLVMLandingPad", (EJSClosureFunc)LandingPad_impl, _ejs_LandingPad_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "LandingPad", _ejs_LandingPad);

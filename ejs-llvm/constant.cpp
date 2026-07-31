@@ -73,11 +73,17 @@ namespace ejsllvm {
         REQ_INT_ARG (1, v);
 
         if (argc == 2) {
-            return Value_new (llvm::Constant::getIntegerValue(ty, llvm::APInt(ty->getPrimitiveSizeInBits(), v)));
+            // llvm 20+ asserts on implicit truncation; keep the old
+            // truncating behavior for negative/oversized js numbers
+            return Value_new (llvm::Constant::getIntegerValue(ty, llvm::APInt(ty->getPrimitiveSizeInBits(), v, /*isSigned*/ true, /*implicitTrunc*/ true)));
         }
         else if (argc == 3 && EJSVAL_IS_NUMBER(args[2]) && ty->getPrimitiveSizeInBits() == 64) {
             uint64_t vhi = v;
-            uint32_t vlo = (uint32_t)EJSVAL_TO_NUMBER(args[2]);
+            // convert with ToUint32 (wrapping) semantics: a bare
+            // double->uint32_t cast of a negative value saturates to 0 on
+            // arm64, silently corrupting constants like 0xffffffff that
+            // reach us as -1
+            uint32_t vlo = (uint32_t)(int64_t)EJSVAL_TO_NUMBER(args[2]);
             return Value_new (llvm::Constant::getIntegerValue(ty, llvm::APInt(ty->getPrimitiveSizeInBits(), (int64_t)((vhi << 32) | vlo))));
         }
         else
@@ -89,6 +95,8 @@ namespace ejsllvm {
     {
         _ejs_gc_add_root (&_ejs_Constant_prototype);
         _ejs_Constant_prototype = _ejs_object_create(_ejs_Object_prototype);
+
+        _ejs_gc_add_root (&_ejs_Constant);
 
         _ejs_Constant = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMConstant", (EJSClosureFunc)Constant_impl, _ejs_Constant_prototype);
 

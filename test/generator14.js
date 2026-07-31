@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 // "yield *, instances of iterables" from kangax
 

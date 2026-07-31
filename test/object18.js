@@ -1,5 +1,4 @@
-// generator: babel-node
-// xfail: XXX
+// generator: esm
 
 function test() {
     var x = "y",

@@ -105,6 +105,7 @@ namespace ejsllvm {
         _ejs_Call_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Call_specops);
 
         ejsval tmpobj = _ejs_function_new_utf8 (_ejs_null, "LLVMCall", (EJSClosureFunc)Call_impl);
+        _ejs_gc_add_root (&_ejs_Call);
         _ejs_Call = tmpobj;
 
 
@@ -210,6 +211,8 @@ namespace ejsllvm {
 
         _ejs_gc_add_root (&_ejs_Invoke_prototype);
         _ejs_Invoke_prototype = _ejs_object_new(_ejs_Object_prototype, &_ejs_Invoke_specops);
+
+        _ejs_gc_add_root (&_ejs_Invoke);
 
         _ejs_Invoke = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMInvoke", (EJSClosureFunc)Invoke_impl, _ejs_Invoke_prototype);
 

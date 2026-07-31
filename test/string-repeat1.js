@@ -1,4 +1,4 @@
-//generator: babel-node
+//generator: esm
 
 try {
     console.log("abc".repeat(-1)); // RangeError

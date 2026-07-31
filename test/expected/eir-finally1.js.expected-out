@@ -1,0 +1,7 @@
+try,after,finally
+threw
+ret:7/fin
+5,f0,6,f1,f2
+v/f1,f2
+from-finally
+fin,caught:boom

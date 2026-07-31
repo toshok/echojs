@@ -15,7 +15,11 @@
 #include <execinfo.h>
 
 
-#define spew 1
+// off by default (same convention as ejs-gc-internal.h): the compiler
+// resolves module imports by try/catch probing, so with spew on every
+// compiled program logs a full throw/unwind/catch trace to stderr for
+// each import miss (release-P1 follow-on)
+#define spew 0
 #if spew
 #define SPEW(x) x
 #else
@@ -214,6 +218,10 @@ ejsval _ejs_begin_catch(void *exc_gen)
 #else
     struct ejs_exception *exc = (struct ejs_exception*)__cxa_begin_catch(exc_gen);
 #endif
+    // NOTE: &exc->val is rooted at throw and unrooted by the
+    // __cxa_throw destructor when the exception is released — the
+    // pairing is sound, and removing it here instead would race a
+    // same-address reallocation of the cxa buffer (found the hard way).
     return exc->val;
 }
 
@@ -367,7 +375,7 @@ static intptr_t read_sleb(uintptr_t *pp)
         shift += 7;
     } while (byte & 0x80);
     if ((shift < 8*sizeof(intptr_t))  &&  (byte & 0x40)) {
-        result |= ((intptr_t)-1) << shift;
+        result |= ((uintptr_t)-1) << shift;
     }
     return result;
 }

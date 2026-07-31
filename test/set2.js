@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 var arr = [1, 4, 6, "hallo", "there"];
 var s = new Set(arr);

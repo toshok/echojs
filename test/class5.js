@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 // implicit strict mode from kangax
 class C {

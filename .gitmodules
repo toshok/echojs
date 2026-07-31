@@ -1,3 +1,7 @@
+[submodule "echojs-maam"]
+	path = external-deps/echojs-maam
+	url = https://github.com/toshok/echojs-maam.git
+	branch = ejs-integration
 [submodule "esprima"]
 	path = external-deps/esprima
 	url = https://github.com/toshok/esprima.git
@@ -22,3 +26,6 @@
 [submodule "external-deps/double-conversion"]
 	path = external-deps/double-conversion
 	url = https://github.com/google/double-conversion.git
+[submodule "prelude"]
+	path = prelude
+	url = https://github.com/facebook/buck2-prelude.git

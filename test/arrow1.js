@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 let sq1 = (x) => {
     return x * x;

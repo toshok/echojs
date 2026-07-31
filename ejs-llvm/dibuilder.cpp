@@ -149,6 +149,8 @@ namespace ejsllvm {
         _ejs_gc_add_root (&_ejs_DIBuilder_prototype);
         _ejs_DIBuilder_prototype = _ejs_object_create(_ejs_Object_prototype);
 
+        _ejs_gc_add_root (&_ejs_DIBuilder);
+
         _ejs_DIBuilder = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMDIBuilder", (EJSClosureFunc)DIBuilder_impl, _ejs_DIBuilder_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "DIBuilder", _ejs_DIBuilder);
@@ -219,6 +221,8 @@ namespace ejsllvm {
         _ejs_gc_add_root (&_ejs_DIScope_prototype);
         _ejs_DIScope_prototype = _ejs_object_create(_ejs_Object_prototype);
 
+        _ejs_gc_add_root (&_ejs_DIScope);
+
         _ejs_DIScope = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMDIScope", (EJSClosureFunc)DIScope_impl, _ejs_DIScope_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "DIScope", _ejs_DIScope);
@@ -270,6 +274,8 @@ namespace ejsllvm {
 
         _ejs_gc_add_root (&_ejs_DISubprogram_prototype);
         _ejs_DISubprogram_prototype = _ejs_object_create(_ejs_Object_prototype);
+
+        _ejs_gc_add_root (&_ejs_DISubprogram);
 
         _ejs_DISubprogram = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMDISubprogram", (EJSClosureFunc)DISubprogram_impl, _ejs_DISubprogram_prototype);
 
@@ -325,6 +331,8 @@ namespace ejsllvm {
         _ejs_gc_add_root (&_ejs_DIFile_prototype);
         _ejs_DIFile_prototype = _ejs_object_create(_ejs_Object_prototype);
 
+        _ejs_gc_add_root (&_ejs_DIFile);
+
         _ejs_DIFile = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMDIFile", (EJSClosureFunc)DIFile_impl, _ejs_DIFile_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "DIFile", _ejs_DIFile);
@@ -373,6 +381,8 @@ namespace ejsllvm {
         _ejs_gc_add_root (&_ejs_DICompileUnit_prototype);
         _ejs_DICompileUnit_prototype = _ejs_object_create(_ejs_Object_prototype);
 
+        _ejs_gc_add_root (&_ejs_DICompileUnit);
+
         _ejs_DICompileUnit = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMDICompileUnit", (EJSClosureFunc)DICompileUnit_impl, _ejs_DICompileUnit_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "DICompileUnit", _ejs_DICompileUnit);
@@ -420,6 +430,8 @@ namespace ejsllvm {
 
         _ejs_gc_add_root (&_ejs_DILexicalBlock_prototype);
         _ejs_DILexicalBlock_prototype = _ejs_object_create(_ejs_Object_prototype);
+
+        _ejs_gc_add_root (&_ejs_DILexicalBlock);
 
         _ejs_DILexicalBlock = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMDILexicalBlock", (EJSClosureFunc)DILexicalBlock_impl, _ejs_DILexicalBlock_prototype);
 
@@ -482,6 +494,8 @@ namespace ejsllvm {
 
         _ejs_gc_add_root (&_ejs_DebugLoc_prototype);
         _ejs_DebugLoc_prototype = _ejs_object_create(_ejs_Object_prototype);
+
+        _ejs_gc_add_root (&_ejs_DebugLoc);
 
         _ejs_DebugLoc = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMDebugLoc", (EJSClosureFunc)DebugLoc_impl, _ejs_DebugLoc_prototype);
 

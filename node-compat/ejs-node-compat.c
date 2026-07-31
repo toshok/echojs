@@ -743,16 +743,19 @@ static EJS_NATIVE_FUNC(_ejs_child_process_spawn) {
     for (uint32_t i = 0; i < EJSARRAY_LEN(argv_rest); i ++)
         argv[1+i] = ucs2_to_utf8(EJSVAL_TO_FLAT_STRING(ToString(EJSDENSEARRAY_ELEMENTS(argv_rest)[i])));
 
+    // synchronous: returns the child's exit status (127 = exec failed,
+    // 128+signal for signal deaths, -1 = fork/waitpid failure) so callers
+    // can stop the build instead of silently continuing past a failed tool
+    int exit_status = -1;
     pid_t pid;
     switch (pid = fork()) {
     case -1: /* error */
         perror("fork");
-        printf ("we should totally throw an exception here\n");
         break;
     case 0:  /* child */
         execvp (argv0, argv);
-        perror("execv");
-        EJS_NOT_REACHED();
+        perror(argv0);
+        _exit(127);
         break;
     default: /* parent */ {
         int stat;
@@ -761,17 +764,19 @@ static EJS_NATIVE_FUNC(_ejs_child_process_spawn) {
             wait_rv = waitpid(pid, &stat, 0);
         } while (wait_rv == -1 && errno == EINTR);
 
-        if (wait_rv != pid) {
+        if (wait_rv != pid)
             perror ("waitpid");
-            printf ("we should totally throw an exception here\n");
-        }
+        else if (WIFEXITED(stat))
+            exit_status = WEXITSTATUS(stat);
+        else if (WIFSIGNALED(stat))
+            exit_status = 128 + WTERMSIG(stat);
         break;
     }
     }
     for (uint32_t i = 0; i < EJSARRAY_LEN(argv_rest)+1; i ++)
         free (argv[i]);
     free (argv);
-    return _ejs_undefined;
+    return NUMBER_TO_EJSVAL(exit_status);
 }
 
 ejsval

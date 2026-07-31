@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 import * as foo4 from "./modules1/foo4";
 import defaultFoo4 from "./modules1/foo4";

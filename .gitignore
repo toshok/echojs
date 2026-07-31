@@ -1,3 +1,5 @@
+/buck-out
+.vscode/
 **/.DS_Store
 *.slo
 *.lo
@@ -11,7 +13,7 @@
 *.s
 
 *.exe
-ejs.js
+/ejs.js
 ejs.exe
 ejs.exe.stage1
 ejs.exe.stage2
@@ -21,3 +23,10 @@ echojs-*.tar.gz
 
 node_modules/
 .stamp-*
+
+# tsc output of test/tester.ts (buck-test-stage.sh compiles it when
+# staging; hand-runs compile it in place)
+test/tester.js
+
+# assembled stage0-style work trees (maam diff harness / --types diff lane)
+maam-difftree/

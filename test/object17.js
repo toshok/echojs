@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 // "computed shorthand methods" from kangax
 function test() {
     var x = "y";

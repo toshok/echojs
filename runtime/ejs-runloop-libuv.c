@@ -11,8 +11,9 @@ typedef struct {
   EJSBool repeats;
 } task_timer;
 
+// libuv >= 1.0 timer callbacks take only the handle
 static void
-invoke_task(uv_timer_t* timer, int unused)
+invoke_task(uv_timer_t* timer)
 {
   task_timer* t = (task_timer*)timer->data;
   t->task(t->data);

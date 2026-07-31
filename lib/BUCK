@@ -1,0 +1,60 @@
+load("//:defs.bzl", "EJS_RUNLOOP_IMPL", "llvm_bin", "llvm_bindir", "llvm_suffix")
+
+genrule(
+    name = "host-config.js",
+    srcs = ["host-config.js.in"],
+    out = "host-config.js",
+    # LLVM_MAJOR: the major version of the toolchain this compiler is
+    # built against, baked in so the driver can refuse a mismatched
+    # opt/llc at runtime (the llvm@16-on-PATH miscompile was silent)
+    cmd = 'set -e; LLVM_MAJOR="`' + llvm_bin("llvm-config") + ' --version | cut -d. -f1`"; ' +
+          'sed -e "s,@LLVM_SUFFIX@,' + llvm_suffix() + ',g" ' +
+          '-e "s,@LLVM_BINDIR@,' + llvm_bindir() + ',g" ' +
+          '-e "s,@LLVM_MAJOR@,$LLVM_MAJOR,g" ' +
+          '-e "s,@RUNLOOP_IMPL@,' + EJS_RUNLOOP_IMPL + ',g" ' +
+          "$SRCDIR/host-config.js.in > $OUT",
+    visibility = ["PUBLIC"],
+)
+
+# The compiler as plain ES-module JS: .ts sources compiled through tsc
+# (strict).  Layout: $OUT/ejs-es6.js + $OUT/lib/**.js.  This is what
+# stage1+ self-compiles (via //:srcdir-tree) and what the CommonJS
+# conversion below consumes for the node-hosted stage0.
+genrule(
+    name = "tsjs",
+    srcs = glob(
+        [
+            "*.js",
+            "*.ts",
+            "passes/*.js",
+            "passes/*.ts",
+            "eir/*.js",
+            "eir/*.ts",
+        ],
+        exclude = ["host-config.js"],
+    ) + [
+        "buck-gen-tsjs.sh",
+        "//:ejs-es6.ts",
+        "//external-deps:compiler-js",
+    ],
+    out = "tsjs",
+    cmd = "bash $SRCDIR/buck-gen-tsjs.sh",
+    visibility = ["PUBLIC"],
+)
+
+# The node-runnable (stage0) compiler: CommonJS (tsc-converted)
+# equivalents of ejs-es6.js, lib/*.js and the esprima/escodegen/...
+# support modules.  Layout matches lib/generated/ from the Makefile
+# build.
+genrule(
+    name = "generated",
+    srcs = [
+        "buck-gen-js.sh",
+        ":host-config.js",
+        ":tsjs",
+        "//external-deps:compiler-js",
+    ],
+    out = "generated",
+    cmd = "bash $SRCDIR/buck-gen-js.sh $(location :tsjs)",
+    visibility = ["PUBLIC"],
+)

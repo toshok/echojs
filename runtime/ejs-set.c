@@ -230,6 +230,7 @@ _ejs_set_add(ejsval S, ejsval value)
     // 8. Append value as the last element of entries. 
     e = calloc (1, sizeof (EJSSetValueEntry));
     e->value = value;
+    _ejs_gc_remember(_set, e->value);
 
     if (!_set->head_insert)
         _set->head_insert = e;
@@ -589,7 +590,7 @@ _ejs_set_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
     EJSSet* set = (EJSSet*)obj;
 
     for (EJSSetValueEntry *s = set->head_insert; s; s = s->next_insert)
-        scan_func (s->value);
+        scan_func (&(s->value));
 
     _ejs_Object_specops.Scan (obj, scan_func);
 }
@@ -618,7 +619,7 @@ static void
 _ejs_set_iterator_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSSetIterator* iter = (EJSSetIterator*)obj;
-    scan_func(iter->iterated);
+    scan_func(&(iter->iterated));
     _ejs_Object_specops.Scan (obj, scan_func);
 }
 

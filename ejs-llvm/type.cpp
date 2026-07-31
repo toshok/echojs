@@ -55,7 +55,9 @@ namespace ejsllvm {
 #undef LLVM_TYPE_METHOD
 
     static EJS_NATIVE_FUNC(Type_prototype_pointerTo) {
-        return Type_new(((Type*)EJSVAL_TO_OBJECT(*_this))->type->getPointerTo());
+        // Type::getPointerTo was removed in llvm 21; all pointers are opaque
+        llvm::Type* ty = ((Type*)EJSVAL_TO_OBJECT(*_this))->type;
+        return Type_new(llvm::PointerType::getUnqual(ty->getContext()));
     }
 
     static EJS_NATIVE_FUNC(Type_prototype_isVoid) {
@@ -96,6 +98,8 @@ namespace ejsllvm {
     {
         _ejs_gc_add_root (&_ejs_Type_prototype);
         _ejs_Type_prototype = _ejs_object_create(_ejs_Object_prototype);
+
+        _ejs_gc_add_root (&_ejs_Type);
 
         _ejs_Type = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMType", (EJSClosureFunc)Type_impl, _ejs_Type_prototype);
 

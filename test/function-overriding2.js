@@ -1,4 +1,4 @@
-// babel-node doesn't hoist blocked scope functions
+// node doesn't hoist block-scoped functions the way ejs does here
 // generator: none
 
 if (typeof console !== "undefined") var print = console.log;

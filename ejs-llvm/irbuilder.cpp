@@ -13,6 +13,7 @@
 #include "type.h"
 #include "value.h"
 #include "landingpad.h"
+#include "phinode.h"
 #include "switch.h"
 #include "callinvoke.h"
 #include "basicblock.h"
@@ -123,6 +124,38 @@ namespace ejsllvm {
         FALLBACK_EMPTY_UTF8_ARG(2, name);
 
         return Value_new (_llvm_builder.CreateFAdd(left, right, name));
+    }
+
+    static EJS_NATIVE_FUNC(IRBuilder_createFSub) {
+        REQ_LLVM_VAL_ARG(0, left);
+        REQ_LLVM_VAL_ARG(1, right);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
+
+        return Value_new (_llvm_builder.CreateFSub(left, right, name));
+    }
+
+    static EJS_NATIVE_FUNC(IRBuilder_createFMul) {
+        REQ_LLVM_VAL_ARG(0, left);
+        REQ_LLVM_VAL_ARG(1, right);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
+
+        return Value_new (_llvm_builder.CreateFMul(left, right, name));
+    }
+
+    static EJS_NATIVE_FUNC(IRBuilder_createFDiv) {
+        REQ_LLVM_VAL_ARG(0, left);
+        REQ_LLVM_VAL_ARG(1, right);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
+
+        return Value_new (_llvm_builder.CreateFDiv(left, right, name));
+    }
+
+    static EJS_NATIVE_FUNC(IRBuilder_createFCmpOLT) {
+        REQ_LLVM_VAL_ARG(0, left);
+        REQ_LLVM_VAL_ARG(1, right);
+        FALLBACK_EMPTY_UTF8_ARG(2, name);
+
+        return Value_new (_llvm_builder.CreateFCmpOLT(left, right, name));
     }
 
     static EJS_NATIVE_FUNC(IRBuilder_createAlloca) {
@@ -258,23 +291,20 @@ namespace ejsllvm {
     }
 
     static EJS_NATIVE_FUNC(IRBuilder_createPhi) {
-        EJS_NOT_IMPLEMENTED();
-#if notyet
         REQ_LLVM_TYPE_ARG(0, ty);
         REQ_INT_ARG(1, incoming_values);
         FALLBACK_EMPTY_UTF8_ARG(2, name);
 
-        ejsval rv = Value_new (_llvm_builder.CreatePHI(ty, incoming_values, name));
-        free (name);
-        return rv;
-#endif
+        return PhiNode_new (_llvm_builder.CreatePHI(ty, incoming_values, name));
     }
 
     static EJS_NATIVE_FUNC(IRBuilder_createGlobalStringPtr) {
         REQ_UTF8_ARG(0, val);
         FALLBACK_EMPTY_UTF8_ARG(1, name);
 
-        return Value_new (_llvm_builder.CreateGlobalStringPtr(val, name));
+        // CreateGlobalStringPtr was removed in llvm 20; CreateGlobalString
+        // is identical under opaque pointers
+        return Value_new (_llvm_builder.CreateGlobalString(val, name));
     }
 
     static EJS_NATIVE_FUNC(IRBuilder_createUnreachable) {
@@ -392,6 +422,8 @@ namespace ejsllvm {
         _ejs_gc_add_root (&_ejs_IRBuilder_prototype);
         _ejs_IRBuilder_prototype = _ejs_object_create(_ejs_Object_prototype);
 
+        _ejs_gc_add_root (&_ejs_IRBuilder);
+
         _ejs_IRBuilder = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMIRBuilder", (EJSClosureFunc)IRBuilder_impl, _ejs_IRBuilder_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "IRBuilder", _ejs_IRBuilder);
@@ -408,6 +440,10 @@ namespace ejsllvm {
         OBJ_METHOD(createCall);
         OBJ_METHOD(createInvoke);
         OBJ_METHOD(createFAdd);
+        OBJ_METHOD(createFSub);
+        OBJ_METHOD(createFMul);
+        OBJ_METHOD(createFDiv);
+        OBJ_METHOD(createFCmpOLT);
         OBJ_METHOD(createAlloca);
         OBJ_METHOD(createLoad);
         OBJ_METHOD(createStore);

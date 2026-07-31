@@ -1,0 +1,197 @@
+load("//:defs.bzl", "EJS_COMPILER_FLAGS", "LLC_MTRIPLE", "llvm_bin")
+
+# gen-atoms.ts compiled to node-runnable JS (typescript comes from the
+# repo's node_modules, untracked by buck2 — same treatment as the
+# compiler's tsc steps in //lib)
+genrule(
+    name = "gen-atoms-js",
+    srcs = ["gen-atoms.ts"],
+    out = "gen-atoms.js",
+    cmd = 'REPO="${TMP%%/buck-out/*}"; node "$REPO/node_modules/typescript/bin/tsc" ' +
+          "--ignoreConfig --strict --noUncheckedIndexedAccess --noImplicitOverride " +
+          "--noEmitOnError --target es2016 --module commonjs " +
+          '--types node --typeRoots "$REPO/node_modules/@types" ' +
+          '--outDir "${OUT%/*}" $SRCDIR/gen-atoms.ts',
+    visibility = ["PUBLIC"],
+)
+
+genrule(
+    name = "atoms",
+    srcs = [
+        "ejs-atoms.h",
+        ":gen-atoms-js",
+    ],
+    out = "ejs-atoms-gen.c",
+    # gen-atoms emits definitions only; add the includes it needs to
+    # compile as a standalone translation unit
+    cmd = "{ printf '#include \"ejs.h\"\\n#include \"ejs-value.h\"\\n#include \"ejs-string.h\"\\n\\n'; " +
+          "node $(location :gen-atoms-js) $SRCDIR/ejs-atoms.h; } > $OUT",
+)
+
+genrule(
+    name = "webgl-constants-sorted",
+    srcs = ["ejs-webgl-constants.h"],
+    out = "ejs-webgl-constants-sorted.h",
+    cmd = "grep WEBGL_CONSTANT $SRCDIR/ejs-webgl-constants.h | sort > $OUT",
+)
+
+# The invoke-closure trampoline is hand-written IR; llc it to an object
+# that gets appended into libecho.a when the --srcdir tree is staged
+# (see //:srcdir-tree).
+genrule(
+    name = "platform-icc-o",
+    srcs = ["ejs-invoke-closure-catch.ll"],
+    out = "ejs-invoke-closure-catch.o",
+    cmd = llvm_bin("llc") + " -mtriple=" + LLC_MTRIPLE +
+          " --relocation-model=pic -filetype=obj -O2 -o $OUT $SRCDIR/ejs-invoke-closure-catch.ll",
+    visibility = ["PUBLIC"],
+)
+
+# Staged as runtime/ in the --srcdir tree; the compiler passes -I runtime
+# to the final link.
+filegroup(
+    name = "headers",
+    # exclude the make-generated file that may be lying around in a dirty
+    # worktree; buck generates its own (:webgl-constants-sorted)
+    srcs = glob(["*.h"], exclude = ["ejs-webgl-constants-sorted.h"]),
+    visibility = ["PUBLIC"],
+)
+
+shared_sources = [
+    "ejs-arguments.c",
+    "ejs-array.c",
+    "ejs-boolean.c",
+    "ejs-closureenv.c",
+    "ejs-console.c",
+    "ejs-date.c",
+    "ejs-error.c",
+    "ejs-exception.c",
+    "ejs-function.c",
+    "ejs-gc.c",
+    "ejs-gc-debug.c",
+    "ejs-gc-heap.c",
+    "ejs-gc-major.c",
+    "ejs-gc-mark.c",
+    "ejs-gc-minor.c",
+    "ejs-generator.c",
+    "ejs-init.c",
+    "ejs-json.c",
+    "ejs-map.c",
+    "ejs-math.c",
+    "ejs-module.c",
+    "ejs-number.c",
+    "ejs-object.c",
+    "ejs-ops.c",
+    "ejs-process.c",
+    "ejs-promise.c",
+    "ejs-proxy.c",
+    "ejs-recording.c",
+    "ejs-reflect.c",
+    "ejs-regexp.c",
+    "ejs-require.c",
+    "ejs-set.c",
+    "ejs-shapes.c",
+    "ejs-stream.c",
+    "ejs-string.c",
+    "ejs-symbol.c",
+    "ejs-timers.c",
+    "ejs-typedarrays.c",
+    "ejs-types.c",
+    "ejs-uri.c",
+    "ejs-weakmap.c",
+    "ejs-weakset.c",
+    "main.c",
+]
+
+darwin_sources = [
+    "ejs-jsobjc.m",
+    "ejs-log.m",
+    "ejs-objc.m",
+    "ejs-webgl.m",
+    "ejs-xhr.m",
+    "ejs-runloop-darwin.m",
+]
+
+cxx_library(
+    name = "echo",
+    srcs = shared_sources + [
+        ":atoms",
+        "//external-deps:parson.c",
+    ] + select({
+        # non-darwin platforms use the plain-C log impl (darwin's
+        # ejs-log.m lives in :echo-objc)
+        "DEFAULT": ["ejs-runloop-noop.c", "ejs-log.c"],
+        "config//os:linux": ["ejs-runloop-libuv.c", "ejs-log.c"],
+        # the darwin (objc) sources live in :echo-objc; the system cxx
+        # toolchain has no objc compiler
+        "config//os:macos": [],
+    }),
+    header_namespace = "",
+    exported_headers = glob(["*.h"], exclude = ["ejs-webgl-constants-sorted.h"]),
+    headers = {
+        "ejs-webgl-constants-sorted.h": ":webgl-constants-sorted",
+    },
+    compiler_flags = EJS_COMPILER_FLAGS + select({
+        "DEFAULT": [],
+        # several runtime headers use objc types on macos, so the C sources
+        # get compiled as objective-c, same as the -ObjC in runtime/Makefile
+        "config//os:macos": [
+            "-x",
+            "objective-c",
+            "-fno-objc-arc",
+        ],
+    }),
+    preferred_linkage = "static",
+    deps = [
+        "//external-deps:double-conversion-headers",
+        "//external-deps:parson-headers",
+        "//external-deps:pcre-headers",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+# C++ half of the runtime; kept separate so the -x objective-c above doesn't
+# apply to it.  Merged into libecho.a by //:srcdir-tree.
+cxx_library(
+    name = "echo-dtoa",
+    srcs = ["ejs-dtoa.cpp"],
+    header_namespace = "",
+    compiler_flags = EJS_COMPILER_FLAGS,
+    preferred_linkage = "static",
+    deps = [
+        ":echo",
+        "//external-deps:double-conversion-headers",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+# The prelude's system cxx toolchain can't compile .m files, so alias them
+# to .c and force the language with -x objective-c.  The resulting archive
+# is merged into libecho.a by //:srcdir-tree (libtool -static).
+[
+    genrule(
+        name = m + ".c",
+        srcs = [m],
+        out = m + ".c",
+        cmd = "cp $SRCDIR/" + m + " $OUT",
+    )
+    for m in darwin_sources
+]
+
+cxx_library(
+    name = "echo-objc",
+    srcs = [":" + m + ".c" for m in darwin_sources],
+    header_namespace = "",
+    headers = {
+        "ejs-webgl-constants-sorted.h": ":webgl-constants-sorted",
+    },
+    compiler_flags = EJS_COMPILER_FLAGS + [
+        "-x",
+        "objective-c",
+        "-DOBJC=1",
+        "-fno-objc-arc",
+    ],
+    preferred_linkage = "static",
+    deps = [":echo"],
+    visibility = ["PUBLIC"],
+)

@@ -31,6 +31,7 @@ extern EJSSpecOps _ejs_Arguments_specops;
 
 void   _ejs_arguments_init(ejsval global);
 ejsval _ejs_arguments_new (int numElements, ejsval* args);
+ejsval _ejs_arg_length (uint32_t argc, uint32_t index);
 
 EJS_END_DECLS
 

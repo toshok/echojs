@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 function foo({ x, y }) {
     console.log(x + " + " + y);

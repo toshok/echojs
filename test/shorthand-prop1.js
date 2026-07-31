@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 var hello = "world";
 var obj = { hello };

@@ -1,3 +1,5 @@
+// xfail: block-level function declarations hoist with pre-ES6 web semantics (last decl wins at function entry); ES2015 Annex B.3.3 gives whu/hi/whu/bye.  stale-baseline zombie flushed by runtime-P3
+
 /*
 if (typeof(console) === "undefined") {
   var console = {

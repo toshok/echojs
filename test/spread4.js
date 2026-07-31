@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 // testing closing over rest parameters
 

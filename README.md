@@ -10,37 +10,36 @@ Things only build reliably on OSX.  I have easy access to other platforms, I jus
 
 On OSX
 
-You'll need a couple of external dependencies to get things running:
+The build uses [buck2](https://buck2.build).  You'll need:
 
 1. node.js
-2. llvm 3.6
-3. coffeescript
+2. llvm (homebrew's current keg; the path lives in `.buckconfig` under `[llvm] prefix`)
+3. buck2
 
-The following commands should get you from 0 (well, Homebrew and Xcode) to echo-js built:
+The following commands should get you from 0 (well, Homebrew and Xcode) to echo-js built and tested:
 
 ```sh
-$ brew install node
-$ brew install llvm
-$ export PATH=/usr/local/opt/llvm/bin:$PATH
+$ brew install node llvm
 $ npm install
-$ npm install -g node-gyp babel@5.8.8
-$ export MIN_OSX_VERSION=10.8 # only if you're running 10.8, see below
-$ export IOS_SDK_VERSION=9.3 # or whatever is installed
-$ export LLVM_SUFFIX= # if installed llvm via homebrew, see below
 $ git submodule init
 $ git submodule update
-$ make
+$ ./node-llvm/build-addon.sh      # builds the node addon the stage0 compiler uses
+$ buck2 build //:ejs.exe          # stage1 compiler (node-hosted stage0 compiles ejs-es6.js)
+$ buck2 build //:ejs.exe.stage3   # full bootstrap: stage1 -> stage2 -> stage3
+$ buck2 build //:test-stage3      # run the test suite against stage3
 ```
 
-The environment variable `LLVM_SUFFIX` can be set and its value will be appended to the names of all llvm executables (e.g. `llvm-config-3.6` instead of `llvm-config`.)  The default is `-3.6`.  Change this if you have a different build of
-llvm you want to use.  Homebrew installs llvm 3.6 executables without the suffix, thus `export LLVM_SUFFIX=`.
+Useful targets:
 
-As for `MIN_OSX_VERSION`: homebrew's formula for llvm (3.4, at least.  haven't verified with 3.6) doesn't specify a `-mmacosx-version-min=` flag, so it builds to whatever you have on your machine.  Node.js's gyp support in node-gyp, however, *does* put a `-mmacosx-version-min=10.5` flag.  A mismatch here causes the node-llvm binding to allocate llvm types using incorrect size calculations, and causes all manner of memory corruption.  If you're either running 10.5 or 10.9, you can leave the variable unset.  Otherwise, set it to the version of OSX you're running.  Hopefully some discussion with the homebrew folks will get this fixed upstream.
+- `//:ejs.exe.stage{1,2,3}` — the bootstrap stages (`//:ejs.exe` is an alias for stage1)
+- `//:test-stage{1,2,3}` — build a stage and run the test suite (`test/tester.ts`) against it; the build fails if any test fails, and the output artifact is the test log
+- `//:srcdir-tree` — the assembled `--srcdir` layout the compiler runs against
 
-both of these variable assignments can be placed in `echo-js/build/config-local.mk`.
-
+If your llvm lives somewhere other than `/opt/homebrew/opt/llvm`, change `[llvm] prefix` in `.buckconfig`.
 
 On Linux
+
+The BUCK files carry `config//os:linux` selects for the runtime and deps, but the linux build hasn't been exercised recently.  Patches welcome!
 
 
 

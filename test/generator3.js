@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 // "correct this binding" from kangax
 

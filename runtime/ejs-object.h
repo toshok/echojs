@@ -230,7 +230,15 @@ struct _EJSObject {
     GCObjectHeader   gc_header;
     EJSSpecOps*      ops;
     ejsval           proto; // [[Prototype]]
-    EJSPropertyMap*  map;
+    // property storage is mode-switched on the
+    // header's shape index.  Dictionary mode (shape 0) keeps the map;
+    // shaped mode stores plain data property values in a closureenv
+    // slot array (an ejsval so the GC scan traces it; _ejs_null until
+    // the first property arrives) at shape-determined indices.
+    union {
+        EJSPropertyMap*  map;   // dictionary mode
+        ejsval           slots; // shaped mode
+    };
 };
 
 
@@ -249,6 +257,7 @@ void _ejs_propertymap_foreach_property (EJSPropertyMap *map, EJSPropertyDescFunc
 
 EJSBool _ejs_object_define_value_property (ejsval obj, ejsval key, ejsval value, uint32_t flags);
 EJSBool _ejs_object_define_accessor_property (ejsval obj, ejsval key, ejsval get, ejsval set, uint32_t flags);
+EJSBool _ejs_object_define_accessor_property_desc (ejsval obj, ejsval key, ejsval get, ejsval set, uint32_t flags);
 
 ejsval _ejs_object_setprop (ejsval obj, ejsval key, ejsval value);
 ejsval _ejs_object_getprop (ejsval obj, ejsval key);
@@ -271,6 +280,16 @@ extern ejsval _ejs_Object__proto__;
 extern ejsval _ejs_Object_prototype;
 extern EJSSpecOps _ejs_Object_specops;
 
+// the accessor epoch: 0 while no user code has installed anything that
+// could intercept a [[Set]] on a fresh object's prototype chain — an
+// accessor property, a non-writable data property, or a prototype swap.
+// Compiled construct sites test `== 0` to run virtualized (allocation-
+// free) constructor results; every intercept-capable installation
+// retires that fast path process-wide by bumping the counter.  Builtin
+// init installs (e.g. Object.prototype.__proto__) predate the zeroing
+// at the end of _ejs_init, so they never count.  See docs/sinking-plan.md.
+extern uint64_t _ejs_accessor_epoch;
+
 void _ejs_object_init_proto();
 
 ejsval _ejs_object_new  (ejsval proto, EJSSpecOps* ops);
@@ -285,8 +304,24 @@ extern EJS_NATIVE_FUNC(_ejs_Object_prototype_toString);
 
 // exposed so we can call the native implementation during class creation
 ejsval _ejs_object_set_prototype_of (ejsval obj, ejsval proto);
+ejsval _ejs_object_literal_set_proto (ejsval obj, ejsval proto);
 
 ejsval _ejs_object_create (ejsval proto);
+
+// born-with-shape: batch a statically-keyed literal's
+// (new_shaped) or a fenced constructor prefix's (fill_shaped) field
+// installs into one call.  names are interned atoms and values the
+// initial field values, in source order; both fall back to sequential
+// generic sets whenever the shaped fast path doesn't apply, so behavior
+// is identical to the unbatched lowering (incl. EJS_SHAPES=off).
+ejsval _ejs_object_new_shaped  (uint32_t argc, ejsval* names, ejsval* values);
+ejsval _ejs_object_fill_shaped (ejsval obj, uint32_t argc, ejsval* names, ejsval* values);
+
+// ordinary-construct support (gc-P5): allocate an empty root-shaped
+// ordinary object whose slot storage for `hint` fields is embedded in
+// the object's own cell (0 = bare object, today's layout).  Constructor
+// birth-capacity hints route here so `new F()` results are single-cell.
+ejsval _ejs_object_new_with_slot_hint (ejsval proto, uint32_t hint);
 
 void _ejs_Object_init (ejsval ejs_global);
 EJS_END_DECLS

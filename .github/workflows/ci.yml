@@ -1,0 +1,17 @@
+# EchoJS CI: the full buck2 bootstrap matrix on every push/PR.  The
+# jobs live in bootstrap.yml (a reusable workflow) so release.yml can
+# run the identical matrix on a version tag.
+name: CI
+
+on:
+  push:
+    branches: [main, eir]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bootstrap:
+    uses: ./.github/workflows/bootstrap.yml

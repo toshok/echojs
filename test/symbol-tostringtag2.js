@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 class Foo {
     get [Symbol.toStringTag]() {

@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 // methods aren't enumerable from kangax
 class C {
     foo() {}

@@ -59,7 +59,8 @@ ejsval _ejs_URIError_prototype EJSVAL_ALIGNMENT;
             /* b. Let msgDesc be the PropertyDescriptor{[[Value]]: msg, [[Writable]]: true, [[Enumerable]]: false, [[Configurable]]: true}. */ \
             /* c. Let status be DefinePropertyOrThrow(O, "message", msgDesc). */ \
             /* d. Assert: status is not an abrupt completion. */        \
-            _ejs_object_setprop (*_this, _ejs_atom_message, ToString(args[0])); \
+            _ejs_object_define_value_property (*_this, _ejs_atom_message, msg, \
+                                               EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE); \
         }                                                               \
         /* 5. Return O. */                                              \
         return O;                                                       \
@@ -138,10 +139,13 @@ _ejs_error_init(ejsval global)
     ejsval toString = _ejs_function_new_native (_ejs_null, _ejs_atom_toString, _ejs_Error_prototype_toString);
     _ejs_gc_add_root (&toString);
     
-#define EJS_ADD_NATIVE_ERROR_TYPE(err) EJS_MACRO_START                  \
+// proto_proto: Error.prototype chains to Object.prototype, the
+// NativeError prototypes chain to Error.prototype (ES2015 19.5.6.3) —
+// `e instanceof Error` must hold for every native error
+#define EJS_ADD_NATIVE_ERROR_TYPE(err, proto_proto) EJS_MACRO_START     \
     _ejs_##err = _ejs_function_new_without_proto (_ejs_null, _ejs_atom_##err, _ejs_##err##_impl); \
     _ejs_object_setprop (global, _ejs_atom_##err, _ejs_##err);          \
-    _ejs_##err##_prototype = _ejs_object_new(_ejs_null, &_ejs_Object_specops); \
+    _ejs_##err##_prototype = _ejs_object_new(proto_proto, &_ejs_Object_specops); \
     _ejs_object_setprop (_ejs_##err,       _ejs_atom_prototype,  _ejs_##err##_prototype); \
     _ejs_object_define_value_property (_ejs_##err##_prototype, _ejs_atom_constructor, _ejs_##err,\
                                        EJS_PROP_NOT_ENUMERABLE | EJS_PROP_CONFIGURABLE | EJS_PROP_WRITABLE); \
@@ -150,13 +154,13 @@ _ejs_error_init(ejsval global)
     _ejs_object_setprop (_ejs_##err##_prototype, _ejs_atom_toString, toString); \
 EJS_MACRO_END
 
-    EJS_ADD_NATIVE_ERROR_TYPE(Error);
-    EJS_ADD_NATIVE_ERROR_TYPE(EvalError);
-    EJS_ADD_NATIVE_ERROR_TYPE(RangeError);
-    EJS_ADD_NATIVE_ERROR_TYPE(ReferenceError);
-    EJS_ADD_NATIVE_ERROR_TYPE(SyntaxError);
-    EJS_ADD_NATIVE_ERROR_TYPE(TypeError);
-    EJS_ADD_NATIVE_ERROR_TYPE(URIError);
+    EJS_ADD_NATIVE_ERROR_TYPE(Error, _ejs_Object_prototype);
+    EJS_ADD_NATIVE_ERROR_TYPE(EvalError, _ejs_Error_prototype);
+    EJS_ADD_NATIVE_ERROR_TYPE(RangeError, _ejs_Error_prototype);
+    EJS_ADD_NATIVE_ERROR_TYPE(ReferenceError, _ejs_Error_prototype);
+    EJS_ADD_NATIVE_ERROR_TYPE(SyntaxError, _ejs_Error_prototype);
+    EJS_ADD_NATIVE_ERROR_TYPE(TypeError, _ejs_Error_prototype);
+    EJS_ADD_NATIVE_ERROR_TYPE(URIError, _ejs_Error_prototype);
 
     _ejs_gc_remove_root (&toString);
 }

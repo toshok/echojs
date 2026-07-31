@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 var x = "y";
 console.log({ [x]: 1 }["y"] === 1);

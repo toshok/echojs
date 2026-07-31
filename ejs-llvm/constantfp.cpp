@@ -32,6 +32,8 @@ namespace ejsllvm {
         _ejs_gc_add_root (&_ejs_ConstantFP_prototype);
         _ejs_ConstantFP_prototype = _ejs_object_create(_ejs_Object_prototype);
 
+        _ejs_gc_add_root (&_ejs_ConstantFP);
+
         _ejs_ConstantFP = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMConstantFP", (EJSClosureFunc)ConstantFP_impl, _ejs_ConstantFP_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "ConstantFP", _ejs_ConstantFP);

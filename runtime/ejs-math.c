@@ -196,7 +196,16 @@ static EJS_NATIVE_FUNC(_ejs_Math_round) {
     if (isnan(x_))
         return _ejs_nan;
 
-    return NUMBER_TO_EJSVAL(round (x_));
+    // ES rounds ties toward +∞ (C round() ties away from zero).
+    // floor(x + 0.5) is exact on the remaining range: at |x| >= 2^52
+    // there is no fractional part (and x + 0.5 could tie-to-even past
+    // an odd integer), and below 0.5 the addition can round up to 1.0
+    // (x = 0.49999999999999994) — both screened off first.
+    if (fabs(x_) >= 4503599627370496.0 /* 2^52, also +-inf */)
+        return NUMBER_TO_EJSVAL(x_);
+    if (x_ >= -0.5 && x_ < 0.5)
+        return NUMBER_TO_EJSVAL(signbit(x_) ? -0.0 : 0.0);
+    return NUMBER_TO_EJSVAL(floor(x_ + 0.5));
 }
 
 // ECMA262: 15.8.2.16

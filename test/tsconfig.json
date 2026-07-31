@@ -1,0 +1,21 @@
+{
+    // tester.ts (the suite runner) — compiled to tester.js in place by
+    // buck-test-stage.sh when the test tree is staged.  Same strict
+    // family as the root tsconfig, but CommonJS output so plain node
+    // can run it.  Hand-run: node ../node_modules/typescript/bin/tsc -p .
+    "compilerOptions": {
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "noImplicitOverride": true,
+        "noEmitOnError": true,
+        "target": "es2016",
+        "module": "commonjs",
+        "esModuleInterop": true,
+        // glob's path-scurry .d.ts trips over @types/node 26 (Dirent
+        // gained parentPath); their problem, not ours
+        "skipLibCheck": true,
+        "types": ["node"],
+        "outDir": "."
+    },
+    "files": ["tester.ts", "tester-deps.d.ts"]
+}

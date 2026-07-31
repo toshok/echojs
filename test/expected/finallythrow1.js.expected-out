@@ -1,0 +1,8 @@
+finally ran
+caught: boom
+caught: found:2
+caught: inner
+5,f0,6,f1,f2
+fr ran
+from-try
+no throw

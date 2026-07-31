@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 // lexical "arguments" binding from kangax
 var f = (function () {

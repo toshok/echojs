@@ -1,0 +1,73 @@
+load("//:defs.bzl", "EJS_COMPILER_FLAGS", "llvm_bin", "llvm_prefix")
+
+genrule(
+    name = "atoms",
+    srcs = [
+        "ejs-llvm-atoms.h",
+        "//runtime:gen-atoms-js",
+    ],
+    out = "ejs-llvm-atoms-gen.c",
+    cmd = "node $(location //runtime:gen-atoms-js) $SRCDIR/ejs-llvm-atoms.h > $OUT",
+)
+
+# The .ejs module descriptor, with the link flags the EJS compiler must pass
+# when linking a program that imports @llvm.
+genrule(
+    name = "ejs-llvm.ejs",
+    srcs = ["ejs-llvm.ejs.in"],
+    out = "ejs-llvm.ejs",
+    cmd = 'set -e; LINK_FLAGS="`' + llvm_bin("llvm-config") + " --ldflags --libs | tr '\\n' ' '`" +
+          select({
+              "DEFAULT": "",
+              "config//os:macos": " -lcurses",
+          }) +
+          '"; sed -e "s%@EJS_VERSION@%0.1.0%" -e "s%@LLVM_LINK_FLAGS@%$LINK_FLAGS%" $SRCDIR/ejs-llvm.ejs.in > $OUT',
+    visibility = ["PUBLIC"],
+)
+
+sources = [
+    "allocainst.cpp",
+    "arraytype.cpp",
+    "basicblock.cpp",
+    "callinvoke.cpp",
+    "constant.cpp",
+    "constantarray.cpp",
+    "constantfp.cpp",
+    "dibuilder.cpp",
+    "ejs-llvm.cpp",
+    "function.cpp",
+    "functiontype.cpp",
+    "globalvariable.cpp",
+    "irbuilder.cpp",
+    "landingpad.cpp",
+    "phinode.cpp",
+    "loadinst.cpp",
+    "module.cpp",
+    "structtype.cpp",
+    "switch.cpp",
+    "type.cpp",
+    "value.cpp",
+]
+
+cxx_library(
+    name = "ejs-llvm",
+    srcs = sources,
+    header_namespace = "",
+    headers = dict(
+        [(h, h) for h in glob(["*.h"])] +
+        [("ejs-llvm-atoms-gen.c", ":atoms")],
+    ),
+    compiler_flags = EJS_COMPILER_FLAGS + [
+        "-std=c++17",
+        "-I" + llvm_prefix() + "/include",
+        "-fno-rtti",
+        "-D__STDC_CONSTANT_MACROS",
+        "-D__STDC_FORMAT_MACROS",
+        "-D__STDC_LIMIT_MACROS",
+        "-Wno-c99-extensions",
+        "-Wno-gnu-statement-expression",
+    ],
+    preferred_linkage = "static",
+    deps = ["//runtime:echo"],
+    visibility = ["PUBLIC"],
+)

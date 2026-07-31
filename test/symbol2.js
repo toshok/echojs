@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 // from kangax's table
 

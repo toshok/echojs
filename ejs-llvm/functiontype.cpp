@@ -91,6 +91,8 @@ namespace ejsllvm {
         _ejs_gc_add_root (&_ejs_FunctionType_prototype);
         _ejs_FunctionType_prototype = _ejs_object_create (Type_get_prototype());
 
+        _ejs_gc_add_root (&_ejs_FunctionType);
+
         _ejs_FunctionType = _ejs_function_new_utf8_with_proto (_ejs_null, "LLVMFunctionType", (EJSClosureFunc)FunctionType_impl, _ejs_FunctionType_prototype);
 
         _ejs_object_setprop_utf8 (exports,              "FunctionType", _ejs_FunctionType);

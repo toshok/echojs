@@ -1,0 +1,38 @@
+{
+  "name": "@pirouette/echojs",
+  "version": "0.2.0",
+  "description": "Ahead-of-time compiler for JavaScript — native toolchain wrapper",
+  "bin": {
+    "ejs": "bin/ejs.js"
+  },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "files": [
+    "bin",
+    "install.js",
+    "README.md"
+  ],
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "cpu": [
+    "arm64",
+    "x64"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/toshok/echojs.git",
+    "directory": "packaging/npm"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "Chris Toshok <toshok@gmail.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/toshok/echojs#readme"
+}

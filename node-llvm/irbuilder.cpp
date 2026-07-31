@@ -6,6 +6,7 @@
 #include "value.h"
 #include "instruction.h"
 #include "landingpad.h"
+#include "phinode.h"
 #include "switch.h"
 #include "callinvoke.h"
 #include "basicblock.h"
@@ -41,6 +42,10 @@ namespace jsllvm {
     Nan::SetMethod(ctor_func, "createCall", IRBuilder::CreateCall);
     Nan::SetMethod(ctor_func, "createInvoke", IRBuilder::CreateInvoke);
     Nan::SetMethod(ctor_func, "createFAdd", IRBuilder::CreateFAdd);
+    Nan::SetMethod(ctor_func, "createFSub", IRBuilder::CreateFSub);
+    Nan::SetMethod(ctor_func, "createFMul", IRBuilder::CreateFMul);
+    Nan::SetMethod(ctor_func, "createFDiv", IRBuilder::CreateFDiv);
+    Nan::SetMethod(ctor_func, "createFCmpOLT", IRBuilder::CreateFCmpOLT);
     Nan::SetMethod(ctor_func, "createAlloca", IRBuilder::CreateAlloca);
     Nan::SetMethod(ctor_func, "createLoad", IRBuilder::CreateLoad);
     Nan::SetMethod(ctor_func, "createStore", IRBuilder::CreateStore);
@@ -318,6 +323,58 @@ namespace jsllvm {
     info.GetReturnValue().Set(result);
   }
 
+  NAN_METHOD(IRBuilder::CreateFSub) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+    Nan::HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(context, 0, left);
+    REQ_LLVM_VAL_ARG(context, 1, right);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
+    
+    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateFSub(left, right, *name)));
+    info.GetReturnValue().Set(result);
+  }
+
+  NAN_METHOD(IRBuilder::CreateFMul) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+    Nan::HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(context, 0, left);
+    REQ_LLVM_VAL_ARG(context, 1, right);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
+    
+    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateFMul(left, right, *name)));
+    info.GetReturnValue().Set(result);
+  }
+
+  NAN_METHOD(IRBuilder::CreateFDiv) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+    Nan::HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(context, 0, left);
+    REQ_LLVM_VAL_ARG(context, 1, right);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
+    
+    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateFDiv(left, right, *name)));
+    info.GetReturnValue().Set(result);
+  }
+
+  NAN_METHOD(IRBuilder::CreateFCmpOLT) {
+    v8::Isolate *isolate = info.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();    
+    Nan::HandleScope scope;
+
+    REQ_LLVM_VAL_ARG(context, 0, left);
+    REQ_LLVM_VAL_ARG(context, 1, right);
+    FALLBACK_EMPTY_UTF8_ARG(context, 2, name);
+    
+    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateFCmpOLT(left, right, *name)));
+    info.GetReturnValue().Set(result);
+  }
+
   NAN_METHOD(IRBuilder::CreateAlloca) {
     v8::Isolate *isolate = info.GetIsolate();
     v8::Local<v8::Context> context = isolate->GetCurrentContext();    
@@ -540,7 +597,9 @@ namespace jsllvm {
     REQ_INT_ARG(context, 1, incoming_values);
     FALLBACK_EMPTY_UTF8_ARG(context,  2, name);
 
-    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreatePHI(ty, incoming_values, *name)));
+    // return the PHINode wrapper (not the generic Instruction one) so
+    // callers can use addIncoming
+    Local<v8::Value> result = PHINode::Create(IRBuilder::builder.CreatePHI(ty, incoming_values, *name));
     info.GetReturnValue().Set(result);
   }
 
@@ -552,7 +611,9 @@ namespace jsllvm {
     FALLBACK_EMPTY_UTF8_ARG(context, 0, val);
     FALLBACK_EMPTY_UTF8_ARG(context, 1, name);
 
-    Local<v8::Value> result = Constant::Create(IRBuilder::builder.CreateGlobalStringPtr(*val, *name));
+    // CreateGlobalStringPtr was removed in llvm 20; CreateGlobalString is
+    // identical under opaque pointers
+    Local<v8::Value> result = Constant::Create(IRBuilder::builder.CreateGlobalString(*val, *name));
     info.GetReturnValue().Set(result);
   }
 
@@ -631,7 +692,9 @@ namespace jsllvm {
     REQ_LLVM_VAL_ARG(context, 0, val);
     REQ_LLVM_CONST_INT_ARG(context, 1, size);
 
-    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateLifetimeStart(val, size)));
+    // llvm 22 lifetime intrinsics are size-less; the size arg is ignored
+    (void)size;
+    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateLifetimeStart(val)));
     info.GetReturnValue().Set(result);
   }
 
@@ -643,7 +706,9 @@ namespace jsllvm {
     REQ_LLVM_VAL_ARG(context, 0, val);
     REQ_LLVM_CONST_INT_ARG(context, 1, size);
 
-    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateLifetimeEnd(val, size)));
+    // llvm 22 lifetime intrinsics are size-less; the size arg is ignored
+    (void)size;
+    Local<v8::Value> result = Instruction::Create(static_cast<llvm::Instruction*>(IRBuilder::builder.CreateLifetimeEnd(val)));
     info.GetReturnValue().Set(result);
   }
 

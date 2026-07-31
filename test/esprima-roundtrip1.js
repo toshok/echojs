@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 // skip-if: true
 // revisit the esprima tests now that we have the es6 modules
 

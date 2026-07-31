@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 var m = new Map();
 m.set("__proto__", 5);

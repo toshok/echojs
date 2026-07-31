@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 // adapted from kangax's tests
 
 var key1 = {};

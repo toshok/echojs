@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 function foo(...args) {
     console.log(args.length);

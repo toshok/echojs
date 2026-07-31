@@ -413,18 +413,23 @@ EJS_DATA_VIEW_METHOD_IMPL(Float64, double, 8);
                     /* TypedArray(ArrayBuffer buffer, unsigned long byteOffset, unsigned long length) */ \
                     uint32_t byteOffset = 0;                            \
                     uint32_t byteLength = buffer->size;                 \
+                    uint32_t requestedLength = 0;                       \
                     EJSBool lengthSpecified = EJS_FALSE;                \
                                                                         \
                     if (argc > 1) byteOffset = ToUint32(args[1]);       \
                     if (argc > 2) {                                     \
-                        byteLength = ToUint32(args[2]) * elementSizeInBytes; \
+                        requestedLength = ToUint32(args[2]);            \
+                        byteLength = requestedLength * elementSizeInBytes; \
                         lengthSpecified = EJS_TRUE;                     \
                     }                                                   \
                                                                         \
              if (byteOffset > buffer->size)              byteOffset = buffer->size; \
              if (byteOffset + byteLength > buffer->size) {              \
-                 if (lengthSpecified)                                   \
-                     _ejs_throw_nativeerror_utf8 (EJS_RANGE_ERROR, "Length is out of range."); \
+                 if (lengthSpecified) {                                 \
+                     char rangemsg[64];                                 \
+                     snprintf (rangemsg, sizeof(rangemsg), "Invalid typed array length: %u", requestedLength); \
+                     _ejs_throw_nativeerror_utf8 (EJS_RANGE_ERROR, rangemsg); \
+                 }                                                      \
                  else                                                   \
                      byteLength = buffer->size - byteOffset;            \
              }                                                          \
@@ -2487,7 +2492,7 @@ _ejs_arraybuffer_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSArrayBuffer *arraybuf = (EJSArrayBuffer*)obj;
     if (arraybuf->dependent) {
-        scan_func (arraybuf->data.dependent.buf);
+        scan_func (&(arraybuf->data.dependent.buf));
     }
     _ejs_Object_specops.Scan (obj, scan_func);
 }
@@ -2529,126 +2534,8 @@ static void
 _ejs_typedarray_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSTypedArray *arr = (EJSTypedArray*)obj;
-    scan_func(arr->buffer);
+    scan_func(&(arr->buffer));
     _ejs_Object_specops.Scan (obj, scan_func);
-}
-
-static ejsval
-_ejs_dataview_specop_get (ejsval obj, ejsval propertyName, ejsval receiver)
-{
-    // check if propertyName is an integer, or a string that we can convert to an int
-    EJSBool is_index = EJS_FALSE;
-    int idx = 0;
-    if (EJSVAL_IS_NUMBER(propertyName)) {
-        double n = EJSVAL_TO_NUMBER(propertyName);
-        if (floor(n) == n) {
-            idx = (int)n;
-            is_index = EJS_TRUE;
-        }
-    }
-
-    // Index for DataView is byte-based.
-    if (is_index) {
-        if (idx < 0 || idx > EJS_DATA_VIEW_BYTE_LEN(obj))
-            return _ejs_undefined;
-
-         void *data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(obj));
-         return NUMBER_TO_EJSVAL ((double)((unsigned char*)data)[idx]);
-    }
-
-    // otherwise we fallback to the object implementation
-    return _ejs_Object_specops.Get (obj, propertyName, receiver);
-}
-
-static EJSPropertyDesc*
-_ejs_dataview_specop_get_own_property (ejsval obj, ejsval propertyName, ejsval* exc)
-{
-    if (EJSVAL_IS_NUMBER(propertyName)) {
-        double needle = EJSVAL_TO_NUMBER(propertyName);
-        int needle_int;
-        if (EJSDOUBLE_IS_INT32(needle, &needle_int)) {
-            if (needle_int >= 0 && needle_int < EJS_DATA_VIEW_BYTE_LEN(obj))
-                return NULL; // XXX
-        }
-    }
-
-    return _ejs_Object_specops.GetOwnProperty (obj, propertyName, exc);
-}
-
-static EJSBool
-_ejs_dataview_specop_set (ejsval obj, ejsval propertyName, ejsval val, ejsval receiver)
-{
-     EJSBool is_index = EJS_FALSE;
-     ejsval idx_val;
-     int idx;
-     
-     if (!EJSVAL_IS_SYMBOL(propertyName)) {
-         idx_val = ToNumber(propertyName);
-         if (EJSVAL_IS_NUMBER(idx_val)) {
-             double n = EJSVAL_TO_NUMBER(idx_val);
-             if (floor(n) == n) {
-                 idx = (int)n;
-                 is_index = EJS_TRUE;
-             }
-         }
-     }
-     
-     if (is_index) {
-         if (idx < 0 || idx >= EJS_DATA_VIEW_BYTE_LEN(obj))
-             return EJS_FALSE;
-
-         void* data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(obj));
-         ((unsigned char*)data)[idx] = (unsigned char)EJSVAL_TO_NUMBER(val);
-
-         return EJS_TRUE;
-     }
-
-     return _ejs_Object_specops.Set (obj, propertyName, val, receiver);
-}
-
-static EJSBool
-_ejs_dataview_specop_has_property (ejsval obj, ejsval propertyName)
-{
-    // check if propertyName is a uint32, or a string that we can convert to an uint32
-    int idx = -1;
-    if (EJSVAL_IS_NUMBER(propertyName)) {
-        double n = EJSVAL_TO_NUMBER(propertyName);
-        if (floor(n) == n) {
-            idx = (int)n;
-
-            return idx > 0 && idx < EJS_DATA_VIEW_BYTE_LEN(obj);
-        }
-    }
-
-    return _ejs_Object_specops.HasProperty (obj, propertyName);
-}
-
-static EJSBool
-_ejs_dataview_specop_delete (ejsval obj, ejsval propertyName, EJSBool flag)
-{
-    int idx = -1;
-    if (EJSVAL_IS_NUMBER(propertyName)) {
-        double n = EJSVAL_TO_NUMBER(propertyName);
-        if (floor(n) == n) {
-            idx = (int)n;
-        }
-    }
-
-    if (idx == -1)
-        return _ejs_Object_specops.Delete (obj, propertyName, flag);
-
-    if (idx < EJS_DATA_VIEW_BYTE_LEN(obj)) {
-         //void* data = _ejs_dataview_get_data (EJSVAL_TO_OBJECT(obj));
-         //((unsigned char*)data)[idx] = _ejs_undefined;
-    }
-
-    return EJS_FALSE;
-}
-
-static EJSBool
-_ejs_dataview_specop_define_own_property (ejsval obj, ejsval propertyName, EJSPropertyDesc* propertyDescriptor, EJSBool flag)
-{
-    return _ejs_Object_specops.DefineOwnProperty (obj, propertyName, propertyDescriptor, flag);
 }
 
 static EJSObject*
@@ -2661,21 +2548,26 @@ static void
 _ejs_dataview_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSDataView *view = (EJSDataView*)obj;
-    scan_func (view->buffer);
+    scan_func (&(view->buffer));
     _ejs_Object_specops.Scan (obj, scan_func);
 }
 
+// DataView is NOT an integer-indexed exotic object (unlike the
+// TypedArrays): view[i] is an ordinary property, byte access goes
+// through get/setUint8 etc.  ejs used to route indexes at the
+// underlying buffer here, which typedarray5 caught once the harness
+// went value-based (runtime-P3).
 EJS_DEFINE_CLASS(DataView,
                  OP_INHERIT, // [[GetPrototypeOf]]
                  OP_INHERIT, // [[SetPrototypeOf]]
                  OP_INHERIT, // [[IsExtensible]]
                  OP_INHERIT, // [[PreventExtensions]]
-                 _ejs_dataview_specop_get_own_property,
-                 _ejs_dataview_specop_define_own_property,
-                 _ejs_dataview_specop_has_property,
-                 _ejs_dataview_specop_get,
-                 _ejs_dataview_specop_set,
-                 _ejs_dataview_specop_delete,
+                 OP_INHERIT, // [[GetOwnProperty]]
+                 OP_INHERIT, // [[DefineOwnProperty]]
+                 OP_INHERIT, // [[HasProperty]]
+                 OP_INHERIT, // [[Get]]
+                 OP_INHERIT, // [[Set]]
+                 OP_INHERIT, // [[Delete]]
                  OP_INHERIT, // [[Enumerate]]
                  OP_INHERIT, // [[OwnPropertyKeys]]
                  OP_INHERIT, // [[Call]]

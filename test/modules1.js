@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 import { methodInFoo1 } from "./modules1/foo1";
 import { methodInFoo2 as mfoo2 } from "./modules1/foo2";

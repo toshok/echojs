@@ -127,6 +127,7 @@ static ejsval RejectPromise (ejsval promise, ejsval reason)
 
     // 3. Set the value of promise's [[PromiseResult]] internal slot to reason. 
     _promise->result = reason;
+    _ejs_gc_remember(_promise, _promise->result);
 
     // 4. Set the value of promise's [[PromiseFulfillReactions]] internal slot to undefined. 
     // XXX we need to free our listnodes
@@ -158,6 +159,7 @@ static ejsval FulfillPromise (ejsval promise, ejsval resolutionValue)
     EJSPromiseReaction* reactions = _promise->fulfillReactions;
     // 3. Set the value of promise's [[PromiseResult]] internal slot to resolutionvalue. 
     _promise->result = resolutionValue;
+    _ejs_gc_remember(_promise, _promise->result);
 
     // 4. Set the value of promise's [[PromiseFulfullReactions]] internal slot to undefined. 
     // XXX we need to free our listnodes
@@ -288,6 +290,7 @@ CreateResolvingFunctions(ejsval promise, ejsval* out_resolve, ejsval* out_reject
     ejsval resolvingFunctions_env = _ejs_closureenv_new(2);
     *_ejs_closureenv_get_slot_ref(resolvingFunctions_env, 0) = _ejs_false;
     *_ejs_closureenv_get_slot_ref(resolvingFunctions_env, 1) = promise;
+    EJS_GC_REMEMBER(resolvingFunctions_env, promise);
 
     // 2. Let resolve be a new built-in function object as defined in Promise Resolve Functions (25.4.1.4). 
     // 3. Set the [[Promise]] internal slot of resolve to promise. 
@@ -412,14 +415,14 @@ PromiseReactionTask (EJSPromiseReaction* reaction, ejsval argument)
         handlerResult = argument;
     }
     // 5. Else If handler is "Thrower", then let handlerResult be Completion{[[type]]: throw, [[value]]: argument, [[target]]: empty}. 
-    if (SameValue(handler, _ejs_thrower_function)) {
+    else if (SameValue(handler, _ejs_thrower_function)) {
         success = EJS_FALSE;
         handlerResult = argument;
     }
     // 6. Else, Let let handlerResult be the result of calling the [[Call]] internal method of handler passing undefined as thisArgument and (argument) as argumentsList. 
     else {
         ejsval undef_this = _ejs_undefined;
-        success = _ejs_invoke_closure_catch(&handlerResult, handler, &undef_this, 1, &argument, _ejs_undefined);
+        success =  _ejs_invoke_closure_catch(&handlerResult, handler, &undef_this, 1, &argument, _ejs_undefined);
     }
 
     ejsval status;
@@ -428,7 +431,7 @@ PromiseReactionTask (EJSPromiseReaction* reaction, ejsval argument)
     if (!success) {
         ejsval undef_this = _ejs_undefined;
         //    a. Let status be the result of calling the [[Call]] internal method of promiseCapability.[[Reject]] passing undefined as thisArgument and (handlerResult.[[value]]) as argumentsList. 
-        success = _ejs_invoke_closure_catch(&status, EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &handlerResult, _ejs_undefined);
+        /* notyet success = */ _ejs_invoke_closure_catch(&status, EJS_CAPABILITY_GET_REJECT(promiseCapability), &undef_this, 1, &handlerResult, _ejs_undefined);
 
         //    b. NextTask status. 
         return;//EJS_NOT_IMPLEMENTED();
@@ -436,7 +439,7 @@ PromiseReactionTask (EJSPromiseReaction* reaction, ejsval argument)
     // 8. Let handlerResult be handlerResult.[[value]]. 
     // 9. Let status be the result of calling the [[Call]] internal method of promiseCapability.[[Resolve]] passing undefined as thisArgument and (handlerResult) as argumentsList. 
     ejsval undef_this = _ejs_undefined;
-    success = _ejs_invoke_closure_catch(&status, EJS_CAPABILITY_GET_RESOLVE(promiseCapability), &undef_this, 1, &handlerResult, _ejs_undefined);
+    /* notyet success = */ _ejs_invoke_closure_catch(&status, EJS_CAPABILITY_GET_RESOLVE(promiseCapability), &undef_this, 1, &handlerResult, _ejs_undefined);
     
     // 10. NextTask status. 
 }
@@ -638,6 +641,7 @@ static EJS_NATIVE_FUNC(resolve_element) {
     // 2. Set the value of F's [[AlreadyCalled]] internal slot to true. 
     EJS_RESOLVEELEMENT_SET_ALREADY_CALLED(env, _ejs_true);
 
+#if notyet
     // 3. Let index be the value of F's [[Index]] internal slot. 
     ejsval index = EJS_RESOLVEELEMENT_GET_INDEX(env);
 
@@ -646,6 +650,7 @@ static EJS_NATIVE_FUNC(resolve_element) {
 
     // 5. Let promiseCapability be the value of F's [[Capabilities]] internal slot. 
     ejsval promiseCapability = EJS_RESOLVEELEMENT_GET_CAPABILITIES(env);
+#endif
 
     // 6. Let remainingElementsCount be the value of F's [[RemainingElements]] internal slot. 
 
@@ -955,17 +960,17 @@ _ejs_promise_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSPromise* promise = (EJSPromise*)obj;
 
-    scan_func(promise->result);
-    scan_func(promise->constructor);
+    scan_func(&(promise->result));
+    scan_func(&(promise->constructor));
 
     for (EJSPromiseReaction* reaction = promise->fulfillReactions; reaction; reaction = reaction->next) {
-        scan_func(reaction->capabilities);
-        scan_func(reaction->handler);
+        scan_func(&(reaction->capabilities));
+        scan_func(&(reaction->handler));
     }
 
     for (EJSPromiseReaction* reaction = promise->rejectReactions; reaction; reaction = reaction->next) {
-        scan_func(reaction->capabilities);
-        scan_func(reaction->handler);
+        scan_func(&(reaction->capabilities));
+        scan_func(&(reaction->handler));
     }
 
     _ejs_Object_specops.Scan (obj, scan_func);

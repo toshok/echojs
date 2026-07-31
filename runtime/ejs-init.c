@@ -44,6 +44,10 @@
 #endif
 #include "ejs-proxy.h"
 #include "ejs-reflect.h"
+#include "ejs-shapes.h"
+
+// lives in ejs-atoms-gen.c
+extern void _ejs_init_static_strings();
 
 const ejsval _ejs_undefined EJSVAL_ALIGNMENT = STATIC_BUILD_EJSVAL(EJSVAL_TAG_UNDEFINED, 0);
 ejsval _ejs_nan;
@@ -57,8 +61,6 @@ const ejsval _ejs_one EJSVAL_ALIGNMENT = STATIC_BUILD_DOUBLE_EJSVAL(1);
 ejsval _ejs__ejs EJSVAL_ALIGNMENT;
 ejsval _ejs_global EJSVAL_ALIGNMENT;
 
-/* useful strings literals */
-#include "ejs-atoms-gen.c"
 
 EJS_NATIVE_FUNC(_ejs_eval) {
   _ejs_throw_nativeerror_utf8 (EJS_ERROR, "EJS doesn't support eval()");
@@ -145,9 +147,193 @@ _ejs_init_classes()
 #endif
 }
 
+// root every global ejsval the runtime stores builtins into.  these
+// statics live in the data segment, which the collector does not scan;
+// relying on each *_init function to root (or connect to the object
+// graph) whatever it creates proved fragile -- a missed root means the
+// first collection frees an object that is still referenced (see
+// _ejs_iterator_init_proto).  registering a root for a still-zeroed
+// ejsval is harmless.
+static void
+_ejs_root_builtin_globals(void)
+{
+    extern ejsval _ejs_Array;
+    extern ejsval _ejs_ArrayBuffer;
+    extern ejsval _ejs_ArrayIterator;
+    extern ejsval _ejs_Boolean;
+    extern ejsval _ejs_DataView;
+    extern ejsval _ejs_Date;
+    extern ejsval _ejs_Error;
+    extern ejsval _ejs_Error_prototype;
+    extern ejsval _ejs_EvalError;
+    extern ejsval _ejs_EvalError_prototype;
+    extern ejsval _ejs_Float32Array;
+    extern ejsval _ejs_Float32Array_prototype;
+    extern ejsval _ejs_Float64Array;
+    extern ejsval _ejs_Float64Array_prototype;
+    extern ejsval _ejs_Function;
+    extern ejsval _ejs_Int16Array;
+    extern ejsval _ejs_Int16Array_prototype;
+    extern ejsval _ejs_Int32Array;
+    extern ejsval _ejs_Int32Array_prototype;
+    extern ejsval _ejs_Int8Array;
+    extern ejsval _ejs_Int8Array_prototype;
+    extern ejsval _ejs_JSON;
+    extern ejsval _ejs_Map;
+    extern ejsval _ejs_MapIterator;
+    extern ejsval _ejs_Math;
+    extern ejsval _ejs_Number;
+    extern ejsval _ejs_Object;
+    extern ejsval _ejs_Process;
+    extern ejsval _ejs_Promise;
+    extern ejsval _ejs_Proxy;
+    extern ejsval _ejs_RangeError;
+    extern ejsval _ejs_RangeError_prototype;
+    extern ejsval _ejs_ReferenceError;
+    extern ejsval _ejs_ReferenceError_prototype;
+    extern ejsval _ejs_Reflect;
+    extern ejsval _ejs_RegExp;
+    extern ejsval _ejs_SetIterator;
+    extern ejsval _ejs_String;
+    extern ejsval _ejs_StringIterator;
+    extern ejsval _ejs_Symbol;
+    extern ejsval _ejs_Symbol_create;
+    extern ejsval _ejs_Symbol_hasInstance;
+    extern ejsval _ejs_Symbol_isConcatSpreadable;
+    extern ejsval _ejs_Symbol_iterator;
+    extern ejsval _ejs_Symbol_match;
+    extern ejsval _ejs_Symbol_replace;
+    extern ejsval _ejs_Symbol_search;
+    extern ejsval _ejs_Symbol_species;
+    extern ejsval _ejs_Symbol_split;
+    extern ejsval _ejs_Symbol_toPrimitive;
+    extern ejsval _ejs_Symbol_toStringTag;
+    extern ejsval _ejs_Symbol_unscopables;
+    extern ejsval _ejs_SyntaxError;
+    extern ejsval _ejs_SyntaxError_prototype;
+    extern ejsval _ejs_Timer;
+    extern ejsval _ejs_TypeError;
+    extern ejsval _ejs_TypeError_prototype;
+    extern ejsval _ejs_URIError;
+    extern ejsval _ejs_URIError_prototype;
+    extern ejsval _ejs_Uint16Array;
+    extern ejsval _ejs_Uint16Array_prototype;
+    extern ejsval _ejs_Uint32Array;
+    extern ejsval _ejs_Uint32Array_prototype;
+    extern ejsval _ejs_Uint8Array;
+    extern ejsval _ejs_Uint8Array_prototype;
+    extern ejsval _ejs_Uint8ClampedArray;
+    extern ejsval _ejs_Uint8ClampedArray_prototype;
+    extern ejsval _ejs_WeakMap;
+    extern ejsval _ejs_WeakSet;
+    extern ejsval _ejs__ejs;
+    extern ejsval _ejs_clearInterval;
+    extern ejsval _ejs_clearTimeout;
+    extern ejsval _ejs_console;
+    extern ejsval _ejs_decodeURI;
+    extern ejsval _ejs_decodeURIComponent;
+    extern ejsval _ejs_encodeURI;
+    extern ejsval _ejs_encodeURIComponent;
+    extern ejsval _ejs_isFinite;
+    extern ejsval _ejs_isNaN;
+    extern ejsval _ejs_parseFloat;
+    extern ejsval _ejs_parseInt;
+    extern ejsval _ejs_require;
+    extern ejsval _ejs_setInterval;
+    extern ejsval _ejs_setTimeout;
+
+    _ejs_gc_add_root (&_ejs_Array);
+    _ejs_gc_add_root (&_ejs_ArrayBuffer);
+    _ejs_gc_add_root (&_ejs_ArrayIterator);
+    _ejs_gc_add_root (&_ejs_Boolean);
+    _ejs_gc_add_root (&_ejs_DataView);
+    _ejs_gc_add_root (&_ejs_Date);
+    _ejs_gc_add_root (&_ejs_Error);
+    _ejs_gc_add_root (&_ejs_Error_prototype);
+    _ejs_gc_add_root (&_ejs_EvalError);
+    _ejs_gc_add_root (&_ejs_EvalError_prototype);
+    _ejs_gc_add_root (&_ejs_Float32Array);
+    _ejs_gc_add_root (&_ejs_Float32Array_prototype);
+    _ejs_gc_add_root (&_ejs_Float64Array);
+    _ejs_gc_add_root (&_ejs_Float64Array_prototype);
+    _ejs_gc_add_root (&_ejs_Function);
+    _ejs_gc_add_root (&_ejs_Int16Array);
+    _ejs_gc_add_root (&_ejs_Int16Array_prototype);
+    _ejs_gc_add_root (&_ejs_Int32Array);
+    _ejs_gc_add_root (&_ejs_Int32Array_prototype);
+    _ejs_gc_add_root (&_ejs_Int8Array);
+    _ejs_gc_add_root (&_ejs_Int8Array_prototype);
+    _ejs_gc_add_root (&_ejs_JSON);
+    _ejs_gc_add_root (&_ejs_Map);
+    _ejs_gc_add_root (&_ejs_MapIterator);
+    _ejs_gc_add_root (&_ejs_Math);
+    _ejs_gc_add_root (&_ejs_Number);
+    _ejs_gc_add_root (&_ejs_Object);
+    _ejs_gc_add_root (&_ejs_Process);
+    _ejs_gc_add_root (&_ejs_Promise);
+    _ejs_gc_add_root (&_ejs_Proxy);
+    _ejs_gc_add_root (&_ejs_RangeError);
+    _ejs_gc_add_root (&_ejs_RangeError_prototype);
+    _ejs_gc_add_root (&_ejs_ReferenceError);
+    _ejs_gc_add_root (&_ejs_ReferenceError_prototype);
+    _ejs_gc_add_root (&_ejs_Reflect);
+    _ejs_gc_add_root (&_ejs_RegExp);
+    _ejs_gc_add_root (&_ejs_SetIterator);
+    _ejs_gc_add_root (&_ejs_String);
+    _ejs_gc_add_root (&_ejs_StringIterator);
+    _ejs_gc_add_root (&_ejs_Symbol);
+    _ejs_gc_add_root (&_ejs_Symbol_create);
+    _ejs_gc_add_root (&_ejs_Symbol_hasInstance);
+    _ejs_gc_add_root (&_ejs_Symbol_isConcatSpreadable);
+    _ejs_gc_add_root (&_ejs_Symbol_iterator);
+    _ejs_gc_add_root (&_ejs_Symbol_match);
+    _ejs_gc_add_root (&_ejs_Symbol_replace);
+    _ejs_gc_add_root (&_ejs_Symbol_search);
+    _ejs_gc_add_root (&_ejs_Symbol_species);
+    _ejs_gc_add_root (&_ejs_Symbol_split);
+    _ejs_gc_add_root (&_ejs_Symbol_toPrimitive);
+    _ejs_gc_add_root (&_ejs_Symbol_toStringTag);
+    _ejs_gc_add_root (&_ejs_Symbol_unscopables);
+    _ejs_gc_add_root (&_ejs_SyntaxError);
+    _ejs_gc_add_root (&_ejs_SyntaxError_prototype);
+    _ejs_gc_add_root (&_ejs_Timer);
+    _ejs_gc_add_root (&_ejs_TypeError);
+    _ejs_gc_add_root (&_ejs_TypeError_prototype);
+    _ejs_gc_add_root (&_ejs_URIError);
+    _ejs_gc_add_root (&_ejs_URIError_prototype);
+    _ejs_gc_add_root (&_ejs_Uint16Array);
+    _ejs_gc_add_root (&_ejs_Uint16Array_prototype);
+    _ejs_gc_add_root (&_ejs_Uint32Array);
+    _ejs_gc_add_root (&_ejs_Uint32Array_prototype);
+    _ejs_gc_add_root (&_ejs_Uint8Array);
+    _ejs_gc_add_root (&_ejs_Uint8Array_prototype);
+    _ejs_gc_add_root (&_ejs_Uint8ClampedArray);
+    _ejs_gc_add_root (&_ejs_Uint8ClampedArray_prototype);
+    _ejs_gc_add_root (&_ejs_WeakMap);
+    _ejs_gc_add_root (&_ejs_WeakSet);
+    _ejs_gc_add_root (&_ejs__ejs);
+    _ejs_gc_add_root (&_ejs_clearInterval);
+    _ejs_gc_add_root (&_ejs_clearTimeout);
+    _ejs_gc_add_root (&_ejs_console);
+    _ejs_gc_add_root (&_ejs_decodeURI);
+    _ejs_gc_add_root (&_ejs_decodeURIComponent);
+    _ejs_gc_add_root (&_ejs_encodeURI);
+    _ejs_gc_add_root (&_ejs_encodeURIComponent);
+    _ejs_gc_add_root (&_ejs_isFinite);
+    _ejs_gc_add_root (&_ejs_isNaN);
+    _ejs_gc_add_root (&_ejs_parseFloat);
+    _ejs_gc_add_root (&_ejs_parseInt);
+    _ejs_gc_add_root (&_ejs_require);
+    _ejs_gc_add_root (&_ejs_setInterval);
+    _ejs_gc_add_root (&_ejs_setTimeout);
+}
+
 void
 _ejs_init(int argc, char** argv)
 {
+    // shape tracking must be configured before the first object is created
+    _ejs_shapes_init();
+
     // process class inheritance
     _ejs_init_classes();
 
@@ -156,6 +342,8 @@ _ejs_init(int argc, char** argv)
 
     _ejs_gc_init();
     _ejs_exception_init();
+
+    _ejs_root_builtin_globals();
 
     // initialization or ECMA262 builtins
     _ejs_gc_add_root (&_ejs_global);
@@ -247,4 +435,12 @@ _ejs_init(int argc, char** argv)
     _ejs_gc_allocate_oom_exceptions();
 
     EJS_INSTALL_ATOM_FUNCTION_FLAGS(_ejs__ejs, unhandledException, _ejs_unhandledException, 0);
+
+    // builtin installs above (Object.prototype.__proto__ et al) predate
+    // user code and are audited against the virtualized-constructor
+    // contract (ejs-object.h): the only builtin accessor reachable from
+    // a fresh ordinary object's prototype chain is __proto__, a name the
+    // compiler's constructor fence never admits as a field.  Everything
+    // after this point counts.
+    _ejs_accessor_epoch = 0;
 }

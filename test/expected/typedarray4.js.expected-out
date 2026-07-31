@@ -15,4 +15,4 @@ Int32Array (4, 2):
  byteOffset: 4
  byteLength: 8
  length: 2
-[RangeError: Length is out of range.]
+[RangeError: Invalid typed array length: 4]

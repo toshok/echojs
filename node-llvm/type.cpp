@@ -66,7 +66,8 @@ namespace jsllvm {
 
   NAN_METHOD(Type::pointerTo) {
     auto type = Unwrap(info.This());
-    info.GetReturnValue().Set(Type::Create(type->llvm_obj->getPointerTo()));
+    // Type::getPointerTo was removed in llvm 21; all pointers are opaque
+    info.GetReturnValue().Set(Type::Create(llvm::PointerType::getUnqual(type->llvm_obj->getContext())));
   }
 
   NAN_METHOD(Type::isVoid) {

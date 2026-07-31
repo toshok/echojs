@@ -1,4 +1,4 @@
-// generator: babel-node
+// generator: esm
 
 var str = "To be, or not to be, that is the question.";
 

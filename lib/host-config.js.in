@@ -1,2 +1,4 @@
 export let LLVM_SUFFIX = '@LLVM_SUFFIX@';
+export let LLVM_BINDIR = '@LLVM_BINDIR@';
+export let LLVM_MAJOR = '@LLVM_MAJOR@';
 export let RUNLOOP_IMPL = '@RUNLOOP_IMPL@';

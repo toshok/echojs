@@ -160,6 +160,8 @@ _ejs_proxy_specop_get_prototype_of (ejsval O)
 static EJSBool
 _ejs_proxy_specop_set_prototype_of (ejsval O, ejsval V)
 {
+    // trapped proto swaps never reach the ordinary specop's bump
+    _ejs_accessor_epoch++;
     EJSProxy* proxy = EJSVAL_TO_PROXY(O);
     // 1. Assert: Either Type(V) is Object or Type(V) is Null. 
 
@@ -428,7 +430,9 @@ _ejs_proxy_specop_get_own_property (ejsval O, ejsval P, ejsval* exc)
 
     // 14. Let extensibleTarget be IsExtensible(target). 
     // 15. ReturnIfAbrupt(extensibleTarget). 
+#if notyet
     EJSBool extensibleTarget = EJS_OBJECT_IS_EXTENSIBLE(_target);
+#endif
 
     // 16. Let resultDesc be ToPropertyDescriptor(trapResultObj).
     // 17. ReturnIfAbrupt(resultDesc). 
@@ -836,8 +840,8 @@ static void
 _ejs_proxy_specop_scan (EJSObject* obj, EJSValueFunc scan_func)
 {
     EJSProxy* proxy = (EJSProxy*)obj;
-    scan_func(proxy->target);
-    scan_func(proxy->handler);
+    scan_func(&(proxy->target));
+    scan_func(&(proxy->handler));
     _ejs_Object_specops.Scan (obj, scan_func);
 }
 
